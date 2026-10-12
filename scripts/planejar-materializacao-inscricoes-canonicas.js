@@ -88,6 +88,8 @@ async function inspectTournament(document, token) {
     conflicts: report.conflicts.length,
     unsupported: report.unsupported.length,
     divergent: decision.conflicts.length,
+    unexpectedExisting: decision.unexpectedExisting.length,
+    historicalExisting: decision.historicalExisting.length,
     existing: Object.keys(existing).length,
     creates: decision.creates.length,
     already: decision.already.length

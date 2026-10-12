@@ -23,6 +23,29 @@ const second = M.decideMaterialization('t1', report, stored);
 ok('reaplicar o mesmo plano é no-op', second.creates.length === 0 && second.already.length === 3 && second.conflicts.length === 0);
 stored[first.creates[0].registrationId].participantUid = 'outra-conta';
 ok('nunca sobrescreve uma inscrição canônica divergente', M.decideMaterialization('t1', report, stored).conflicts.length === 1);
+const extra = Object.assign({}, stored, { extra_canonic: { registrationId: 'extra_canonic' } });
+ok('bloqueia documento canônico que a fotografia legada não explica', M.decideMaterialization('t1', report, extra).unexpectedExisting.length === 1);
+const target = first.creates.find((item) => item.participantKey === 'uid:u3');
+const legacyUncategorized = Object.assign({}, stored, {
+  [R.registrationId('uid:u3', R.UNCATEGORIZED_CATEGORY_ID)]: {
+    registrationId: R.registrationId('uid:u3', R.UNCATEGORIZED_CATEGORY_ID), tournamentId: 't1', categoryId: R.UNCATEGORIZED_CATEGORY_ID,
+    participantKey: 'uid:u3', participantKind: 'account', participantUid: 'u3', manualParticipantId: null,
+    status: 'confirmed', validationState: 'legacy_imported', fixedPairId: null,
+  }
+});
+const repairable = M.decideMaterialization('t1', report, legacyUncategorized);
+ok('detecta somente cópia sem categoria importada como candidata a aposentadoria', repairable.reconciliationCandidates.length === 1 && repairable.reconciliationCandidates[0].supersededByRegistrationId === target.registrationId);
+const retired = Object.assign({}, legacyUncategorized, {
+  [R.registrationId('uid:u3', R.UNCATEGORIZED_CATEGORY_ID)]: Object.assign({}, legacyUncategorized[R.registrationId('uid:u3', R.UNCATEGORIZED_CATEGORY_ID)], {
+    status: 'withdrawn', validationState: 'superseded_legacy_category_projection', withdrawnReason: 'category_projection_superseded', supersededByRegistrationId: target.registrationId,
+  })
+});
+const reconciled = M.decideMaterialization('t1', report, retired);
+ok('histórico aposentado deixa de ser uma sobra bloqueante', reconciled.unexpectedExisting.length === 0 && reconciled.historicalExisting.length === 1);
+const pairedOld = Object.assign({}, stored, {
+  [R.registrationId('uid:u3', R.UNCATEGORIZED_CATEGORY_ID)]: Object.assign({}, legacyUncategorized[R.registrationId('uid:u3', R.UNCATEGORIZED_CATEGORY_ID)], { fixedPairId: 'old-pair' })
+});
+ok('não aposenta uma metade de dupla sem a outra metade correspondente', M.decideMaterialization('t1', report, pairedOld).reconciliationCandidates.length === 0);
 bad('recusa plano ainda com exceções', () => M.desiredDocuments('t1', Object.assign({}, report, { unsupported: [{ reason: 'x' }] })));
 
 const server = fs.readFileSync(__dirname + '/index.js', 'utf8');
@@ -38,6 +61,12 @@ ok('migração só é liberada depois das mutações canônicas e conserva a tra
 ok('callable relê registros físicos e recusa plano alterado', helper.includes('lerRegistrosDaParte') && helper.includes('report.fingerprint !== expectedFingerprint'));
 ok('callable cria somente operações decididas pelo núcleo', helper.includes('decision.creates.forEach') && helper.includes('tx.create('));
 ok('callable não reescreve participants nem resultados legados', !/gravar\(tx, ref.*participants/.test(helper) && !/matches\s*:/.test(helper));
+const reconciliationStart = server.indexOf('async function _reconcileLegacyCanonicalRegistrationProjectionForOrganizer');
+const reconciliation = reconciliationStart === -1 ? '' : server.slice(reconciliationStart, server.indexOf('exports.applyCanonicalRegistrationMigrationBatch = onCall', reconciliationStart));
+ok('reconciliação preserva histórico, exige fingerprint e recusa qualquer sobra fora do caso conhecido',
+  reconciliation.includes('expectedFingerprint') && reconciliation.includes('category_projection_superseded') &&
+  reconciliation.includes('decision.unexpectedExisting.length !== candidateIds.size') &&
+  reconciliation.includes('_hasCanonicalTournamentDraw(tournament)'));
 ok('lote usa o mesmo helper transacional e limita dez torneios',
   server.includes('exports.applyCanonicalRegistrationMigrationBatch = onCall') &&
   body.includes('_applyCanonicalRegistrationMigrationForOrganizer(db, callerUid, item.tournamentId, item.fingerprint)') &&

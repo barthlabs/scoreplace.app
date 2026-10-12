@@ -1,5 +1,7 @@
 'use strict';
 
+const { UNCATEGORIZED_CATEGORY_ID } = require('./registration-core');
+
 /*
  * Materialização PURA da migração de inscrições.
  *
@@ -92,10 +94,71 @@ function sameRegistration(existing, desired) {
   ].every((key) => (existing[key] == null ? null : existing[key]) === (desired[key] == null ? null : desired[key]));
 }
 
+function isRetiredCategoryProjectionHistory(existing, desiredById) {
+  const targetId = text(existing && existing.supersededByRegistrationId);
+  const target = desiredById.get(targetId);
+  return !!target &&
+    text(existing && existing.status) === 'withdrawn' &&
+    text(existing && existing.validationState) === 'superseded_legacy_category_projection' &&
+    text(existing && existing.withdrawnReason) === 'category_projection_superseded' &&
+    text(existing && existing.participantKey) === text(target.participantKey) &&
+    text(existing && existing.categoryId) === UNCATEGORIZED_CATEGORY_ID &&
+    !text(existing && existing.fixedPairId);
+}
+
+/* Uma única forma de legado pode ser aposentada sem perder história: a antiga
+ * inscrição confirmada sem categoria, importada automaticamente, quando já
+ * existe exatamente uma inscrição projetada para a mesma identidade. Qualquer
+ * outra sobra permanece bloqueante; em especial, não deduzimos equivalência
+ * entre duas categorias nem tocamos em duplas. */
+function repairCandidate(existing, desired, alreadyIds) {
+  if (!existing || text(existing.status) !== 'confirmed' ||
+      text(existing.validationState) !== 'legacy_imported' ||
+      text(existing.categoryId) !== UNCATEGORIZED_CATEGORY_ID) return null;
+  const key = text(existing.participantKey);
+  const targets = desired.filter((item) => text(item.participantKey) === key &&
+    text(item.categoryId) !== UNCATEGORIZED_CATEGORY_ID && alreadyIds.has(item.registrationId));
+  if (targets.length !== 1) return null;
+  const sourcePairId = text(existing.fixedPairId);
+  const targetPairId = text(targets[0].fixedPairId);
+  // Uma dupla não pode virar dois solos (nem o contrário) durante uma
+  // aposentadoria automática. A coesão dos dois membros é validada abaixo.
+  if (!!sourcePairId !== !!targetPairId) return null;
+  return {
+    registrationId: text(existing.registrationId),
+    supersededByRegistrationId: targets[0].registrationId,
+    sourcePairId: sourcePairId || null,
+    targetPairId: targetPairId || null,
+  };
+}
+
+function coherentRepairCandidates(candidates) {
+  const sourceGroups = new Map();
+  (candidates || []).forEach((candidate) => {
+    const sourcePairId = text(candidate && candidate.sourcePairId);
+    if (!sourcePairId) return;
+    const group = sourceGroups.get(sourcePairId) || [];
+    group.push(candidate);
+    sourceGroups.set(sourcePairId, group);
+  });
+  return (candidates || []).filter((candidate) => {
+    const sourcePairId = text(candidate && candidate.sourcePairId);
+    if (!sourcePairId) return true;
+    const group = sourceGroups.get(sourcePairId) || [];
+    const targets = new Set(group.map((item) => text(item.targetPairId)).filter(Boolean));
+    return group.length === 2 && targets.size === 1;
+  }).map((candidate) => ({
+    registrationId: candidate.registrationId,
+    supersededByRegistrationId: candidate.supersededByRegistrationId,
+  }));
+}
+
 /* Retorna operações idempotentes; conflito nunca é sobrescrito. */
 function decideMaterialization(tournamentId, report, existingById) {
   const desired = desiredDocuments(tournamentId, report);
   const existing = existingById || {};
+  const desiredIds = new Set(desired.map((document) => document.registrationId));
+  const desiredById = new Map(desired.map((document) => [document.registrationId, document]));
   const creates = [];
   const already = [];
   const conflicts = [];
@@ -105,7 +168,36 @@ function decideMaterialization(tournamentId, report, existingById) {
     if (sameRegistration(before, document)) { already.push(document.registrationId); return; }
     conflicts.push(document.registrationId);
   });
-  return { creates: creates, already: already, conflicts: conflicts, desired: desired };
+  // A migração é uma tradução integral do elenco legado, não uma autorização
+  // para coexistir silenciosamente com inscrições que a fotografia atual não
+  // explica. Mantemos a lista separada dos conflitos por ID: ela não pode ser
+  // sobrescrita nem apagada automaticamente, mas precisa bloquear a aplicação
+  // para investigação explícita.
+  const alreadyIds = new Set(already);
+  const historicalExisting = [];
+  const rawCandidates = [];
+  const unexpectedExisting = [];
+  Object.keys(existing).sort().forEach((registrationId) => {
+    if (desiredIds.has(registrationId)) return;
+    const before = existing[registrationId];
+    if (isRetiredCategoryProjectionHistory(before, desiredById)) {
+      historicalExisting.push(registrationId);
+      return;
+    }
+    const candidate = repairCandidate(before, desired, alreadyIds);
+    if (candidate) rawCandidates.push(candidate);
+    unexpectedExisting.push(registrationId);
+  });
+  const reconciliationCandidates = coherentRepairCandidates(rawCandidates);
+  return {
+    creates: creates,
+    already: already,
+    conflicts: conflicts,
+    historicalExisting: historicalExisting,
+    reconciliationCandidates: reconciliationCandidates,
+    unexpectedExisting: unexpectedExisting,
+    desired: desired,
+  };
 }
 
 module.exports = { participantFields, desiredDocuments, decideMaterialization };

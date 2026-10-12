@@ -11,11 +11,14 @@ function ok(condition, label) {
 
 ok(source.includes("registration-migration-core.js"),
   'censo usa o mesmo decisor puro da materialização canônica');
+ok(source.includes("legacy-category-definition-core.js") && source.includes('legacyCategoryDefinitions.resolve'),
+  'censo usa a mesma normalização de categorias da Function e do planejador');
 ok(/canonicalRegistrationsForTournament[\s\S]*?\/registrations/.test(source) &&
    /materialization\.decideMaterialization\(id, report, existing\)/.test(source),
   'censo compara a projeção com os documentos canônicos realmente existentes');
 ok(/inscrições canônicas ainda a materializar/.test(source) &&
    /inscrições canônicas divergentes/.test(source) &&
+   /documentos canônicos fora da projeção/.test(source) &&
    /torneios bloqueados para materialização/.test(source),
   'censo expõe pendência, divergência e bloqueio separadamente');
 ok(!/method:\s*['\"]PATCH['\"]/.test(source) &&

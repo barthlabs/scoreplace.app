@@ -4421,6 +4421,9 @@ async function _previewCanonicalRegistrationMigrationForOrganizer(db, callerUid,
       conflicts: report.conflicts,
       unsupported: report.unsupported,
       divergent: decision.conflicts,
+      unexpectedExisting: decision.unexpectedExisting,
+      historicalExisting: decision.historicalExisting,
+      reconciliationCandidates: decision.reconciliationCandidates,
       fingerprint: report.fingerprint,
       categoryDefinitionMaterialization: { source: categories.source, shouldPersist: categories.shouldPersist, definitions: categories.definitions },
       summary: {
@@ -4429,6 +4432,9 @@ async function _previewCanonicalRegistrationMigrationForOrganizer(db, callerUid,
         conflicts: report.conflicts.length,
         unsupported: report.unsupported.length,
         divergent: decision.conflicts.length,
+        unexpectedExisting: decision.unexpectedExisting.length,
+        historicalExisting: decision.historicalExisting.length,
+        reconciliationCandidates: decision.reconciliationCandidates.length,
         creates: decision.creates.length,
         already: decision.already.length,
       },
@@ -4466,7 +4472,7 @@ exports.previewCanonicalRegistrationMigrationBatch = onCall(
     const reports = await Promise.all(ids.map((id) =>
       _previewCanonicalRegistrationMigrationForOrganizer(admin.firestore(), callerUid, id)
     ));
-    const unsafe = reports.filter((item) => item.summary.conflicts || item.summary.unsupported || item.summary.divergent);
+    const unsafe = reports.filter((item) => item.summary.conflicts || item.summary.unsupported || item.summary.divergent || item.summary.unexpectedExisting);
     if (unsafe.length) {
       return { generatedAt: new Date().toISOString(), reports, ready: false, reason: "exceptions" };
     }
@@ -4516,7 +4522,7 @@ async function _applyCanonicalRegistrationMigrationForOrganizer(db, callerUid, t
     let decision;
     try { decision = _registrationMigration.decideMaterialization(tournamentId, report, existingById); }
     catch (error) { throw new HttpsError("failed-precondition", error.message); }
-    if (decision.conflicts.length) {
+    if (decision.conflicts.length || decision.unexpectedExisting.length) {
       throw new HttpsError("failed-precondition", "há inscrições canônicas divergentes; a migração não sobrescreve dados");
     }
     decision.creates.forEach((document) => {
@@ -4529,7 +4535,7 @@ async function _applyCanonicalRegistrationMigrationForOrganizer(db, callerUid, t
       ...(categories.shouldPersist ? { categoryDefinitions: categories.definitions, canonicalCategoryDefinitionMigration: { source: categories.source, appliedBy: callerUid, appliedAt: _FV.serverTimestamp() } } : {}),
       canonicalRegistrationMigration: {
         fingerprint: report.fingerprint,
-        registrationCount: decision.desired.length,
+        registrationCount: decision.desired.length + decision.historicalExisting.length,
         fixedPairCount: report.formedPairs.length,
         appliedBy: callerUid,
         appliedAt: _FV.serverTimestamp(),
@@ -4560,6 +4566,90 @@ exports.applyCanonicalRegistrationMigration = onCall(
     }
     const db = admin.firestore();
     return _applyCanonicalRegistrationMigrationForOrganizer(db, callerUid, tournamentId, expectedFingerprint);
+  }
+);
+
+/* Reconcilia uma única cicatriz conhecida de uma importação inicial: documentos
+ * `__uncategorized__` confirmados que coexistem com a inscrição tipada da mesma
+ * pessoa. A operação não apaga nada: aposenta somente a cópia inequivocamente
+ * substituída, preserva o documento e faz o recibo voltar a contar a coleção
+ * física inteira. Toda outra sobra continua falhando fechada. */
+async function _reconcileLegacyCanonicalRegistrationProjectionForOrganizer(db, callerUid, tournamentId, expectedFingerprint) {
+  const ref = db.collection("tournaments").doc(tournamentId);
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+    const tournament = await _splitParts.hidratar(tx, ref, snap.data() || {}, ["participants"]);
+    if (!_isTournamentOrgCaller(tournament, callerUid)) {
+      throw new HttpsError("permission-denied", "só a organização reconcilia inscrições");
+    }
+    if (_hasCanonicalTournamentDraw(tournament)) {
+      throw new HttpsError("failed-precondition", "reconciliação de categoria só é permitida antes do sorteio");
+    }
+    const currentMigration = tournament.canonicalRegistrationMigration || {};
+    if (!String(currentMigration.fingerprint || "").trim()) {
+      throw new HttpsError("failed-precondition", "torneio ainda não usa inscrições canônicas");
+    }
+    const records = await _splitParts.lerRegistrosDaParte(tx, ref, "participants");
+    let categories;
+    try { categories = _legacyCategoryDefinitions.resolve(tournament, records); }
+    catch (error) { throw new HttpsError("failed-precondition", error.message); }
+    const report = _registrationCore.projectLegacyRoster(tournamentId, records, categories.categoryIdForLegacyLabel, categories.defaultCategoryId);
+    if (report.fingerprint !== expectedFingerprint) {
+      throw new HttpsError("failed-precondition", "o elenco mudou; gere uma nova prévia antes de reconciliar");
+    }
+    const existingSnap = await tx.get(ref.collection("registrations").orderBy(admin.firestore.FieldPath.documentId()));
+    const existingById = Object.fromEntries(existingSnap.docs.map((doc) => [doc.id, doc.data() || {}]));
+    let decision;
+    try { decision = _registrationMigration.decideMaterialization(tournamentId, report, existingById); }
+    catch (error) { throw new HttpsError("failed-precondition", error.message); }
+    if (decision.conflicts.length) {
+      throw new HttpsError("failed-precondition", "há inscrições canônicas divergentes; a reconciliação não sobrescreve dados");
+    }
+    const candidateIds = new Set(decision.reconciliationCandidates.map((item) => item.registrationId));
+    if (decision.unexpectedExisting.length !== candidateIds.size || decision.unexpectedExisting.some((id) => !candidateIds.has(id))) {
+      throw new HttpsError("failed-precondition", "há documentos canônicos fora da projeção que não podem ser reconciliados automaticamente");
+    }
+    decision.reconciliationCandidates.forEach((item) => {
+      tx.update(ref.collection("registrations").doc(item.registrationId), {
+        status: "withdrawn",
+        validationState: "superseded_legacy_category_projection",
+        withdrawnReason: "category_projection_superseded",
+        supersededByRegistrationId: item.supersededByRegistrationId,
+        fixedPairId: null,
+        updatedAt: _FV.serverTimestamp(),
+      });
+    });
+    tx.update(ref, {
+      canonicalRegistrationMigration: Object.assign({}, currentMigration, {
+        fingerprint: report.fingerprint,
+        registrationCount: Object.keys(existingById).length,
+        reconciledLegacyCategoryProjectionAt: _FV.serverTimestamp(),
+        reconciledLegacyCategoryProjectionBy: callerUid,
+      }),
+      updatedAt: _FV.serverTimestamp(),
+    });
+    return {
+      outcome: decision.reconciliationCandidates.length ? "reconciled" : "already_reconciled",
+      retired: decision.reconciliationCandidates.length,
+      registrations: Object.keys(existingById).length,
+      fingerprint: report.fingerprint,
+    };
+  });
+}
+
+exports.reconcileLegacyCanonicalRegistrationProjection = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+    const data = request.data || {};
+    const tournamentId = String(data.tournamentId || "").trim();
+    const expectedFingerprint = String(data.fingerprint || "").trim();
+    if (!tournamentId || !expectedFingerprint) {
+      throw new HttpsError("invalid-argument", "tournamentId e fingerprint são obrigatórios");
+    }
+    return _reconcileLegacyCanonicalRegistrationProjectionForOrganizer(admin.firestore(), callerUid, tournamentId, expectedFingerprint);
   }
 );
 

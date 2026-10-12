@@ -12,6 +12,7 @@ const path = require('path');
 const split = require(path.join(__dirname, '..', 'js', 'views', 'tournament-split-core.js'));
 const registration = require(path.join(__dirname, '..', 'functions', 'registration-core.js'));
 const materialization = require(path.join(__dirname, '..', 'functions', 'registration-migration-core.js'));
+const legacyCategoryDefinitions = require(path.join(__dirname, '..', 'functions', 'legacy-category-definition-core.js'));
 const { accessTokenForServiceAccount } = require('./firebase-service-account-token');
 
 if (process.argv.length > 2) {
@@ -89,7 +90,7 @@ async function main() {
   const totals = {
     tournaments: tournaments.length, entries: 0, registrations: 0, formedPairs: 0,
     conflicts: 0, unsupported: 0, canonicalExisting: 0, canonicalMissing: 0,
-    canonicalAlready: 0, canonicalDivergent: 0, canonicalBlocked: 0
+    canonicalAlready: 0, canonicalHistorical: 0, canonicalRepairable: 0, canonicalDivergent: 0, canonicalUnexpected: 0, canonicalBlocked: 0
   };
   const unsupportedByReason = {};
   const unsupportedSchemas = {};
@@ -100,11 +101,15 @@ async function main() {
   for (let offset = 0; offset < tournaments.length; offset += 8) {
     const reports = await Promise.all(tournaments.slice(offset, offset + 8).map(async (document) => {
       const id = document.name.split('/').pop();
+      const tournament = documentToObject(document);
       const [entries, existing] = await Promise.all([
         entriesForTournament(document, token),
         canonicalRegistrationsForTournament(document, token)
       ]);
-      const report = registration.dryRunLegacyRoster(id, entries);
+      let categories;
+      try { categories = legacyCategoryDefinitions.resolve(tournament, entries); }
+      catch (error) { return { id: id, entries: entries, report: { registrations: [], formedPairs: [], conflicts: [], unsupported: [] }, existing: existing, decision: null, materializationError: error && error.message ? error.message : String(error) }; }
+      const report = registration.projectLegacyRoster(id, entries, categories.categoryIdForLegacyLabel, categories.defaultCategoryId);
       let decision = null;
       let materializationError = null;
       try { decision = materialization.decideMaterialization(id, report, existing); }
@@ -121,7 +126,10 @@ async function main() {
       if (decision) {
         totals.canonicalMissing += decision.creates.length;
         totals.canonicalAlready += decision.already.length;
+        totals.canonicalHistorical += decision.historicalExisting.length;
+        totals.canonicalRepairable += decision.reconciliationCandidates.length;
         totals.canonicalDivergent += decision.conflicts.length;
+        totals.canonicalUnexpected += decision.unexpectedExisting.length;
       } else {
         totals.canonicalBlocked++;
       }
@@ -133,9 +141,9 @@ async function main() {
         const key = item.reason + ' :: ' + schema;
         unsupportedSchemas[key] = (unsupportedSchemas[key] || 0) + 1;
       });
-      if (report.conflicts.length || report.unsupported.length || (decision && decision.conflicts.length) || materializationError) {
+      if (report.conflicts.length || report.unsupported.length || (decision && (decision.conflicts.length || decision.unexpectedExisting.length)) || materializationError) {
         flagged.push({ id: id, entries: entries.length, conflicts: report.conflicts.length, unsupported: report.unsupported.length,
-          canonicalDivergent: decision ? decision.conflicts.length : 0, blocked: materializationError || '' });
+          canonicalDivergent: decision ? decision.conflicts.length : 0, canonicalUnexpected: decision ? decision.unexpectedExisting.length : 0, canonicalRepairable: decision ? decision.reconciliationCandidates.length : 0, blocked: materializationError || '' });
       }
     });
   }
@@ -148,9 +156,12 @@ async function main() {
   console.log('  conflitos: ' + totals.conflicts);
   console.log('  entradas sem suporte: ' + totals.unsupported);
   console.log('  inscrições canônicas já materializadas: ' + totals.canonicalAlready);
+  console.log('  histórico canônico aposentado: ' + totals.canonicalHistorical);
+  console.log('  cópias sem categoria reparáveis: ' + totals.canonicalRepairable);
   console.log('  documentos canônicos existentes: ' + totals.canonicalExisting);
   console.log('  inscrições canônicas ainda a materializar: ' + totals.canonicalMissing);
   console.log('  inscrições canônicas divergentes: ' + totals.canonicalDivergent);
+  console.log('  documentos canônicos fora da projeção: ' + totals.canonicalUnexpected);
   console.log('  torneios bloqueados para materialização: ' + totals.canonicalBlocked);
   Object.keys(unsupportedByReason).sort().forEach((reason) => {
     console.log('  sem-suporte[' + reason + ']: ' + unsupportedByReason[reason]);
@@ -160,9 +171,9 @@ async function main() {
   });
   flagged.forEach((item) => {
         console.log('  exceção ' + item.id + ': entradas=' + item.entries + ', conflitos=' + item.conflicts + ', sem-suporte=' + item.unsupported +
-          ', canônico-divergente=' + item.canonicalDivergent + (item.blocked ? ', bloqueado=' + item.blocked : ''));
+          ', canônico-divergente=' + item.canonicalDivergent + ', canônico-fora-da-projeção=' + item.canonicalUnexpected + ', canônico-reparável=' + item.canonicalRepairable + (item.blocked ? ', bloqueado=' + item.blocked : ''));
   });
-  process.exit((totals.conflicts || totals.unsupported || totals.canonicalDivergent || totals.canonicalBlocked) ? 2 : 0);
+  process.exit((totals.conflicts || totals.unsupported || totals.canonicalDivergent || totals.canonicalUnexpected || totals.canonicalBlocked) ? 2 : 0);
 }
 
 console.log('Iniciando censo de inscrições canônicas (somente leitura)…');

@@ -34,15 +34,17 @@ function normalizeItem(item) {
   const conflicts = asCount(source.conflicts || 0, 'conflitos');
   const unsupported = asCount(source.unsupported || 0, 'sem-suporte');
   const divergent = asCount(source.divergent || 0, 'divergências');
+  const unexpectedExisting = asCount(source.unexpectedExisting || 0, 'documentos fora da projeção');
+  const historicalExisting = asCount(source.historicalExisting || 0, 'histórico aposentado');
   const creates = asCount(source.creates, 'criações');
   const already = asCount(source.already || 0, 'já materializadas');
   // O manifesto assinado só precisa reter a decisão final (`already`). O
   // contador bruto é útil durante o censo, mas seria redundante no recibo.
   const existing = asCount(source.existing == null ? already : source.existing, 'documentos existentes');
-  if (conflicts || unsupported || divergent) throw new Error('item contém exceção e não pode entrar no lote');
+  if (conflicts || unsupported || divergent || unexpectedExisting) throw new Error('item contém exceção e não pode entrar no lote');
   if (creates + already !== registrations) throw new Error('contagem canônica não confere');
-  if (existing !== already) throw new Error('documentos existentes divergem da decisão');
-  return { tournamentId, fingerprint, updateTime, registrations, formedPairs, creates, already };
+  if (existing !== already + historicalExisting + unexpectedExisting) throw new Error('documentos existentes divergem da decisão');
+  return { tournamentId, fingerprint, updateTime, registrations, formedPairs, creates, already, historicalExisting };
 }
 
 function planBatch(items, generatedAt) {
@@ -61,8 +63,9 @@ function planBatch(items, generatedAt) {
     acc.formedPairs += item.formedPairs;
     acc.creates += item.creates;
     acc.already += item.already;
+    acc.historicalExisting += item.historicalExisting;
     return acc;
-  }, { tournaments: 0, registrations: 0, formedPairs: 0, creates: 0, already: 0 });
+  }, { tournaments: 0, registrations: 0, formedPairs: 0, creates: 0, already: 0, historicalExisting: 0 });
   const unsigned = {
     schemaVersion: 1,
     generatedAt: createdAt,
@@ -90,9 +93,11 @@ function planFromMigrationPreviews(previews, generatedAt) {
       conflicts: summary.conflicts,
       unsupported: summary.unsupported,
       divergent: summary.divergent,
+      unexpectedExisting: summary.unexpectedExisting,
+      historicalExisting: summary.historicalExisting,
       creates: summary.creates,
       already: summary.already,
-      existing: summary.already,
+      existing: (summary.already || 0) + (summary.historicalExisting || 0),
     };
   }), generatedAt);
 }
