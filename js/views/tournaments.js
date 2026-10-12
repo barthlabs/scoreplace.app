@@ -3644,7 +3644,6 @@ function renderTournaments(container, tournamentId = null) {
                 <h4 class="tournament-card-title" style="margin:0;font-weight:800;color:white;text-align:left;">
                   ${window._safeHtml(t.name)}
                 </h4>
-                ${t.venuePlaceId ? '<span data-vlogo-pid="' + window._safeHtml(t.venuePlaceId) + '" title="Logo do local" aria-label="Logo do local" style="width:clamp(34px,8vw,56px);aspect-ratio:1/1;display:none;margin-top:auto;"></span>' : ''}
               </div>
               ${/* v2.7.36: coração de favorito SEMPRE à direita, alinhado à 1ª linha do nome
                     (align-self:flex-start + margin-top centra na primeira linha do h4). */ ''}
@@ -3677,9 +3676,13 @@ function renderTournaments(container, tournamentId = null) {
               ${(!isFinished && t.startDate) ? `<button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._tournamentAddToCalendar('${t.id}');">📅 Adicionar à agenda</button>` : ''}
             </div>` : ''}
 
-            <!-- Below Name: Calendário + Data -->
-            <div style="display: inline-block; font-size: 0.9rem; font-weight: 500; ${_pReadBg ? 'background:' + window._spCor(_pReadBg, 'background')+';color:'+_pReadFg+' !important;border-radius:10px;padding:7px 11px;align-self:flex-start;' : 'opacity: 0.7;'}">
-               ${datesGridHtml}
+            <!-- Datas e logo do local formam um único bloco: o brasão fica ao lado
+                 do período, nunca perdido junto ao título do torneio. -->
+            <div style="display:flex;align-items:center;gap:12px;min-width:0;">
+              <div style="display: inline-block; font-size: 0.9rem; font-weight: 500; ${_pReadBg ? 'background:' + window._spCor(_pReadBg, 'background')+';color:'+_pReadFg+' !important;border-radius:10px;padding:7px 11px;align-self:flex-start;' : 'opacity: 0.7;'}">
+                 ${datesGridHtml}
+              </div>
+              ${t.venuePlaceId ? '<span data-vlogo-pid="' + window._safeHtml(t.venuePlaceId) + '" title="Logo do local" aria-label="Logo do local" style="flex-shrink:0;width:clamp(42px,11vw,64px);aspect-ratio:1/1;display:none;"></span>' : ''}
             </div>
             ${(() => {
               // v0.16.90: linha "Atualizado em..." + toggle Liga "Ativado/

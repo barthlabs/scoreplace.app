@@ -1001,40 +1001,11 @@ function renderDashboard(container) {
             </div>
             ` : ''}
 
-            <!-- Below Name: Calendário + Data + badge contextual (HOJE/AMANHÃ/Em Xd) + logo do local à direita (v4.0.19) -->
+            <!-- Datas e logo do local. A regressiva logo abaixo é a fonte única
+                 para "começa em"; o card não mantém uma segunda contagem. -->
             <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
             <div style="display: ${_pReadBg ? 'inline-flex' : 'flex'}; align-items: center; gap: 8px; font-size: 0.9rem; font-weight: 500; ${_pReadBg ? 'background:' + window._spCor(_pReadBg, 'background')+';color:'+_pReadFg+' !important;border-radius:10px;padding:7px 11px;align-self:flex-start;' : 'opacity: 0.8;'} flex-wrap: wrap;">
                ${datesGridHtml}
-               ${(() => {
-                 // Badge de início — aparece em torneios ativos (nao encerrados)
-                 // com startDate futura ou hoje. Reusa as i18n keys
-                 // tournament.startsToday / startsTomorrow / startsIn que
-                 // estavam órfãs desde alguma refatoração passada.
-                 // v0.17.39: também pula quando torneio já está "Em andamento"
-                 // (sorteioRealizado=true) — info redundante e contraditória.
-                 if (isFinished || !t.startDate || sorteioRealizado) return '';
-                 try {
-                   var _s = new Date(t.startDate);
-                   if (isNaN(_s.getTime())) return '';
-                   // Compara só dia/mês/ano — ignora fuso pra "hoje" bater
-                   // com a definição local do usuário.
-                   var _today = new Date();
-                   var _dayDiff = Math.round((new Date(_s.getFullYear(), _s.getMonth(), _s.getDate()) -
-                                              new Date(_today.getFullYear(), _today.getMonth(), _today.getDate())) / 86400000);
-                   if (_dayDiff < 0) return ''; // já começou, não mostra badge
-                   if (_dayDiff > 14) return ''; // mais de 2 semanas — badge fica irrelevante
-                   var _label, _solid;
-                   if (_dayDiff === 0) { _label = _t('tournament.startsToday'); _solid = '#10b981'; }
-                   else if (_dayDiff === 1) { _label = _t('tournament.startsTomorrow'); _solid = '#f59e0b'; }
-                   else { _label = _t('tournament.startsIn').replace('{days}', _dayDiff); _solid = '#6366f1'; }
-                   // v2.6.21: em tarja escura (_pReadBg) → pílula SÓLIDA + texto branco
-                   // (contraste). No fundo claro → tint suave + texto na cor.
-                   var _bg = _pReadBg ? _solid : (_solid + '2e');
-                   var _color = _pReadBg ? '#fff' : _solid;
-                   var _bd = _pReadBg ? _solid : (_solid + '55');
-                   return '<span style="font-size:0.68rem;font-weight:700;padding:2px 8px;border-radius:10px;background:' + window._spCor(_bg, 'background') + ';color:' + window._spCor(_color, 'color') + ';border:1px solid ' + window._spCor(_bd, 'borda') + ';white-space:nowrap;">' + _label + '</span>';
-                 } catch(e) { return ''; }
-               })()}
             </div>
             ${t.venuePlaceId ? '<span data-vlogo-pid="' + window._safeHtml(t.venuePlaceId) + '" title="Logo do local" style="flex-shrink:0;width:clamp(40px,13vw,58px);aspect-ratio:1/1;display:none;"></span>' : ''}
             </div>
