@@ -58,6 +58,7 @@ const _blockedUsers = require("./blocked-users-core");
 const _phoneVerificationAttempt = require("./phone-verification-attempt-core");
 const _casualMatchHistory = require("./casual-match-history-core");
 const _identityState = require("./identity-state-core");
+const _letzplayWrite = require("./letzplay-write-core");
 
 // v1.8.38 — RARIDADE DO TOKEN, em UM lugar só (os dois caminhos de detecção usam este).
 // O subconjunto de 1 token só vira sinal quando o token existe SÓ nas duas contas
@@ -3723,6 +3724,48 @@ exports.updateOwnCasualScoringPreferences = onCall(
       tx.update(ref, { casualPrefs: preferences });
     });
     return { ok: true, preferences };
+  }
+);
+
+// ─── Letzplay: importação do próprio atleta ─────────────────────────────────
+//
+// O retrato do atleta pertence exclusivamente ao UID autenticado. Esta capability
+// não afirma que o payload é prova de elegibilidade: ela só guarda uma declaração
+// do próprio dono no documento pesado isolado. A varredura de terceiros permanece
+// em fronteira separada até ter verificação de origem e de vínculo de torneio.
+exports.saveOwnLetzplayImport = onCall(
+  { region: "us-central1", memory: "512MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    let imp;
+    try { imp = _letzplayWrite.normalizeOwnImport(request.data && request.data.import); }
+    catch (error) { throw new HttpsError("invalid-argument", error.message); }
+    const db = admin.firestore();
+    const profileRef = db.collection("users").doc(uid);
+    const importRef = profileRef.collection("letzplay").doc("import");
+    let saved;
+    await db.runTransaction(async (tx) => {
+      const [profileSnap, importSnap] = await Promise.all([tx.get(profileRef), tx.get(importRef)]);
+      if (!profileSnap.exists) throw new HttpsError("failed-precondition", "Perfil inexistente");
+      const profile = profileSnap.data() || {};
+      if (profile.letzplayHandle && !_letzplayWrite.isSameHandle(profile.letzplayHandle, imp.handle)) {
+        throw new HttpsError("failed-precondition", "Conta letzplay diferente da vinculada ao perfil");
+      }
+      const prior = importSnap.exists ? (importSnap.data() || {}) : (profile.letzplayImport || {});
+      if (_letzplayWrite.gameCount(imp) < _letzplayWrite.gameCount(prior)) {
+        throw new HttpsError("failed-precondition", "A nova importação tem menos jogos que a já salva");
+      }
+      saved = Object.assign({}, imp, {
+        importedAt: new Date().toISOString(),
+        importedVia: "self",
+        importedByName: null,
+        importedTournamentName: null,
+      });
+      tx.set(importRef, saved);
+      if (!profile.letzplayHandle) tx.update(profileRef, { letzplayHandle: imp.handle });
+    });
+    return { ok: true, import: saved };
   }
 );
 

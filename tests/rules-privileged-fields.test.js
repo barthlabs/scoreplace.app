@@ -129,6 +129,10 @@ const S = v => ({ stringValue: v });
     { fields: { matchId: S('forjado') } });
   out.escreveMatchHistoryVitima = await req('PATCH', 'users/' + V + '/matchHistory/forjado', A,
     { fields: { matchId: S('forjado') } });
+  // Import Letzplay tem um documento pesado próprio, mas também é salvo por
+  // capability: o dono não pode escolher data, procedência ou handle direto.
+  out.escreveProprioLetzplayImport = await req('PATCH', 'users/' + A + '/letzplay/import', A,
+    { fields: { source: S('letzplay'), handle: S('@forjado') } });
 
   // ── CONTROLE: cross-user continua bloqueado (prova que as rules estão ativas) ──
   out.crossUser = await req('PATCH', 'users/' + V + '?updateMask.fieldPaths=displayName', A,
@@ -214,6 +218,8 @@ ok(novo.escreveProprioMatchHistory === 403,
   '🔒 cliente não cria estatística no próprio histórico (got ' + novo.escreveProprioMatchHistory + ')');
 ok(novo.escreveMatchHistoryVitima === 403,
   '🔒 cliente não cria estatística no histórico de terceiro (got ' + novo.escreveMatchHistoryVitima + ')');
+ok(novo.escreveProprioLetzplayImport === 403,
+  '🔒 cliente não grava import Letzplay direto; a capability fixa UID e procedência (got ' + novo.escreveProprioLetzplayImport + ')');
 ok(novo.crossUser === 403, 'controle: editar o perfil de OUTRO segue negado (got ' + novo.crossUser + ')');
 
 // ── loginRedirects (v1.2.9): mapa credencial→dono que o merge grava ─────────

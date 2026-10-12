@@ -116,13 +116,16 @@
     imp.importedVia = 'self';
     imp.importedByName = null;
     imp.importedTournamentName = null;
-    var payload = { letzplayImport: imp };
-    if (!cu.letzplayHandle) payload.letzplayHandle = imp.handle;   // preenche o @ se ainda não tinha
-    window.firebase.firestore().collection('users').doc(cu.uid)
-      .set(payload, { merge: true })
-      .then(function () {
-        cu.letzplayImport = imp;
-        if (!cu.letzplayHandle) cu.letzplayHandle = imp.handle;
+    if (!window.FirestoreDB || typeof window.FirestoreDB.saveOwnLetzplayImport !== 'function') {
+      reply(false, 'serviço-indisponível'); return;
+    }
+    // UID, caminho, relógio e handle inicial são decididos na Function. Não há
+    // fallback de escrita direta: uma versão parcial não pode reabrir a porta.
+    window.FirestoreDB.saveOwnLetzplayImport(imp)
+      .then(function (response) {
+        var saved = (response && response.import) || imp;
+        cu.letzplayImport = saved;
+        if (!cu.letzplayHandle) cu.letzplayHandle = saved.handle;
         // ESCRITA DUPLA (transição): além do letzplayImport (formato antigo, 1 doc por
         // usuário), grava no canônico — 1 doc por competição, 1 por partida. Os dois
         // convivem até os leitores migrarem e o acervo antigo ser backfillado; o beta não
@@ -132,7 +135,7 @@
           // `allGames` = o histórico INTEIRO que a extensão leu (o doc do perfil pode ter
           // ficado só com os recentes). O acervo canônico tem que receber tudo.
           var _todos = Array.isArray(d.allGames) && d.allGames.length ? d.allGames : null;
-          window._lzHistoryWrite(imp, imp.handle, _todos).then(function (r) {
+          window._lzHistoryWrite(saved, saved.handle, _todos).then(function (r) {
             window._log && window._log('[lz história] autoimport:', JSON.stringify(r));
           }).catch(function (e) {
             window._log && window._log('[lz história] autoimport falhou (não bloqueia):', (e && e.message) || e);
@@ -140,7 +143,7 @@
         }
         if (typeof showNotification === 'function') showNotification(
           unchanged ? '🎾 Nada novo no letzplay' : '🎾 Histórico importado',
-          unchanged ? ('@' + imp.handle + ' — sem novidades; só atualizei a data.') : ('@' + imp.handle + ' — ' + gamesCount + ' jogos. Veja em 📊 Estatísticas → Histórico.'),
+          unchanged ? ('@' + saved.handle + ' — sem novidades; só atualizei a data.') : ('@' + saved.handle + ' — ' + gamesCount + ' jogos. Veja em 📊 Estatísticas → Histórico.'),
           'success');
         // Atualiza o que estiver aberto: card nas Estatísticas e/ou a página de Histórico.
         var slot = document.getElementById('letzplay-card-stats-slot');

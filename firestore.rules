@@ -1422,7 +1422,10 @@ service cloud.firestore {
        * ⛔ ESCRITA é só do DONO: o import é prova de posse da conta da outra plataforma. */
       match /letzplay/{docId} {
         allow read: if request.auth != null;
-        allow write: if request.auth != null && request.auth.uid == userId;
+        // A coleta do dono passa pela capability saveOwnLetzplayImport. O
+        // navegador continua lendo em tempo real, mas não escolhe o documento,
+        // o handle vinculado nem o momento da importação.
+        allow write: if false;
       }
 
       match /notifications/{notifId} {

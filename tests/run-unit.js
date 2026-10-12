@@ -936,6 +936,7 @@ const SUITES = [
   'tests/identity-state-server-only.test.js',
   'functions/test-own-library-core.js',
   'tests/own-library-server-only.test.js',
+  'functions/test-letzplay-write-core.js',
   'tests/letzplay-open-profile.test.js',
   'tests/person-gender-not-misto.test.js',
   'tests/rr-gender-balance.test.js',

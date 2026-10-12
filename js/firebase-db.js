@@ -2653,6 +2653,13 @@ window.FirestoreDB = {
     return this._callFn('recordPhoneVerificationAttempt', attempt || {});
   },
 
+  // O import volumoso do Letzplay pertence ao usuário autenticado e é salvo pelo
+  // servidor no subdocumento próprio. O navegador não escolhe mais o caminho nem
+  // atualiza o handle do perfil diretamente.
+  async saveOwnLetzplayImport(imp) {
+    return this._callFn('saveOwnLetzplayImport', { import: imp || {} });
+  },
+
   async materializeOwnCasualMatchHistory(casualMatchId) {
     return this._callFn('materializeOwnCasualMatchHistory', { casualMatchId: String(casualMatchId || '') });
   },

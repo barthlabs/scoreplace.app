@@ -65,15 +65,21 @@ must(!/patch\.letzplayImport = fi;/.test(ST),
 must(!/_selfPopulateFromLetzplayScan/.test(ST),
   '④ ⛔⛔ e o método que fazia isso não existe mais');
 
-// ── ⑤ a Rule existe, e a escrita é só do dono ─────────────────────────────
+// ── ⑤ a Rule existe, e a escrita passa só pela capability ──────────────────
 const RULES = fs.readFileSync(path.join(raiz, 'firestore.rules'), 'utf8');
 const i = RULES.indexOf('match /letzplay/{docId}');
 must(i > 0, '⑤ a subcoleção tem regra — sem ela o Firestore nega por omissão e o card some');
 const bloco = RULES.slice(i, RULES.indexOf('}', RULES.indexOf('allow write', i)));
 must(/allow read: if request\.auth != null;/.test(bloco),
   '⑤ leitura de qualquer autenticado — como já era dentro do perfil; mover não expõe mais nada');
-must(/allow write: if request\.auth != null && request\.auth\.uid == userId;/.test(bloco),
-  '⑤ ⭐ escrita SÓ do dono — o import é prova de posse da conta da outra plataforma');
+must(/allow write: if false;/.test(bloco),
+  '⑤ ⭐ escrita direta fechada — o import passa pela capability do UID autenticado');
+const BRIDGE = codigo('js/views/letzplay-bridge.js');
+must(/saveOwnLetzplayImport\(imp\)/.test(BRIDGE) && !/collection\('users'\)\.doc\(cu\.uid\)\s*\.set/.test(BRIDGE),
+  '⑤ ⭐⭐ a ponte da extensão não preserva fallback de escrita direta');
+const FN = codigo('functions/index.js');
+must(/exports\.saveOwnLetzplayImport = onCall/.test(FN) && /request\.auth && request\.auth\.uid/.test(FN),
+  '⑤ a capability fixa o destino no uid autenticado');
 
 // ── ⑥ a migração é em dois tempos, e confere antes de apagar ──────────────
 const MIG = codigo('scripts/mover-letzplay-import.js');
