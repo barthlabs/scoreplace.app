@@ -24,6 +24,10 @@ const request = core.batchRequest(first);
 assert.strictEqual(request.items.length, 2);
 assert.match(request.requestFingerprint, /^[a-f0-9]{64}$/);
 assert.deepStrictEqual(core.verifyBatchReceipt(first, receipt), { verified: true, tournaments: 2, blocked: 0, nextCursor: 'tour_b' });
+const fromPlan = core.batchRequestFromPlan(plan, { batchSize: 2 });
+assert.deepStrictEqual(fromPlan.batch, first);
+assert.deepStrictEqual(fromPlan.request, request);
+assert.deepStrictEqual(fromPlan.request.items.map((item) => item.tournamentId), ['tour_a', 'tour_b']);
 const blocked = { results: first.items.map((item, index) => ({
   tournamentId: item.tournamentId,
   fingerprint: item.fingerprint,

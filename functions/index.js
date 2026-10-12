@@ -94,6 +94,7 @@ const _categoryEligibility = require("./category-eligibility-core");
 const _registrationCategoryBridge = require("./registration-category-bridge-core");
 const _registrationCore = require("./registration-core");
 const _registrationMigration = require("./registration-migration-core");
+const _registrationBatchPlan = require("./registration-batch-plan-core");
 const _registrationBatchApply = require("./registration-batch-apply-core");
 const _registrationMutations = require("./registration-mutations-core");
 const _registrationClaim = require("./registration-claim-core");
@@ -4378,9 +4379,67 @@ exports.resolveCanonicalParticipantClaim = onCall(
   }
 );
 
+// Lê sempre a fotografia atual, dentro da mesma transação que consulta o
+// espelho dividido e os documentos canônicos já existentes. Esta é a única
+// fonte de prévias unitárias e em lote: não aceita elenco do navegador e nunca
+// cria `registrations`.
+async function _previewCanonicalRegistrationMigrationForOrganizer(db, callerUid, tournamentId) {
+  const ref = db.collection("tournaments").doc(tournamentId);
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+    const tournament = await _splitParts.hidratar(tx, ref, snap.data() || {}, ["participants"]);
+    if (!_isTournamentOrgCaller(tournament, callerUid)) {
+      throw new HttpsError("permission-denied", "só a organização consulta a prévia de migração");
+    }
+    // A prévia usa os IDs físicos da coleção dividida. É proibido derivar a
+    // identidade de convidado da posição do array ou do nome exibido.
+    const records = await _splitParts.lerRegistrosDaParte(tx, ref, "participants");
+    let categoryIdForLegacyLabel;
+    try {
+      categoryIdForLegacyLabel = _registrationCategoryBridge.categoryBridge(
+        _categoryEligibility.normalizeCategoryDefinitions(tournament.categoryDefinitions)
+      );
+    } catch (error) { throw new HttpsError("failed-precondition", error.message); }
+    const report = _registrationCore.projectLegacyRoster(tournamentId, records, categoryIdForLegacyLabel);
+    // Query explícita, sem teto artificial: a prévia precisa enxergar o
+    // conjunto canônico completo para nunca declarar uma migração segura com
+    // registros divergentes fora de uma primeira página.
+    const existingSnap = await tx.get(
+      ref.collection("registrations").orderBy(admin.firestore.FieldPath.documentId())
+    );
+    const existingById = Object.fromEntries(existingSnap.docs.map((doc) => [doc.id, doc.data() || {}]));
+    let decision;
+    try { decision = _registrationMigration.decideMaterialization(tournamentId, report, existingById); }
+    catch (error) { throw new HttpsError("failed-precondition", error.message); }
+    const updateTime = snap.updateTime && typeof snap.updateTime.toDate === "function"
+      ? snap.updateTime.toDate().toISOString() : new Date().toISOString();
+    return {
+      tournamentId,
+      generatedAt: new Date().toISOString(),
+      updateTime,
+      registrations: report.registrations,
+      formedPairs: report.formedPairs,
+      conflicts: report.conflicts,
+      unsupported: report.unsupported,
+      divergent: decision.conflicts,
+      fingerprint: report.fingerprint,
+      summary: {
+        registrations: report.registrations.length,
+        formedPairs: report.formedPairs.length,
+        conflicts: report.conflicts.length,
+        unsupported: report.unsupported.length,
+        divergent: decision.conflicts.length,
+        creates: decision.creates.length,
+        already: decision.already.length,
+      },
+    };
+  });
+}
+
 // Prévia da migração I1: lê o elenco fresco e devolve somente o censo que
-// antecede uma migração-piloto. Não cria `registrations`, não altera projeções
-// legadas e não aceita um elenco enviado pelo navegador.
+// antecede uma conversão explícita. Não cria `registrations` nem altera
+// projeções legadas.
 exports.previewCanonicalRegistrationMigration = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
   async (request) => {
@@ -4388,43 +4447,36 @@ exports.previewCanonicalRegistrationMigration = onCall(
     if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
     const tournamentId = String((request.data && request.data.tournamentId) || "").trim();
     if (!tournamentId) throw new HttpsError("invalid-argument", "tournamentId é obrigatório");
+    return _previewCanonicalRegistrationMigrationForOrganizer(admin.firestore(), callerUid, tournamentId);
+  }
+);
 
-    const db = admin.firestore();
-    const ref = db.collection("tournaments").doc(tournamentId);
-    const report = await db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
-      const tournament = await _splitParts.hidratar(tx, ref, snap.data() || {}, ["participants"]);
-      if (!_isTournamentOrgCaller(tournament, callerUid)) {
-        throw new HttpsError("permission-denied", "só a organização consulta a prévia de migração");
-      }
-      // A prévia usa os IDs físicos da coleção dividida. É proibido derivar a
-      // identidade de convidado da posição do array ou do nome exibido.
-      const records = await _splitParts.lerRegistrosDaParte(tx, ref, "participants");
-      let categoryIdForLegacyLabel;
-      try {
-        categoryIdForLegacyLabel = _registrationCategoryBridge.categoryBridge(
-          _categoryEligibility.normalizeCategoryDefinitions(tournament.categoryDefinitions)
-        );
-      } catch (error) { throw new HttpsError("failed-precondition", error.message); }
-      return _registrationCore.projectLegacyRoster(tournamentId, records, categoryIdForLegacyLabel);
-    });
-
-    return {
-      tournamentId: tournamentId,
-      generatedAt: new Date().toISOString(),
-      registrations: report.registrations,
-      formedPairs: report.formedPairs,
-      conflicts: report.conflicts,
-      unsupported: report.unsupported,
-      fingerprint: report.fingerprint,
-      summary: {
-        registrations: report.registrations.length,
-        formedPairs: report.formedPairs.length,
-        conflicts: report.conflicts.length,
-        unsupported: report.unsupported.length,
-      },
-    };
+/* Prévia administrativa curta para conversões coerentes. O manifesto é um
+ * recibo auditável da fotografia conferida, não uma autorização por si só: a
+ * aplicação relê cada torneio em transação e exige o fingerprint de novo. */
+exports.previewCanonicalRegistrationMigrationBatch = onCall(
+  { region: "us-central1", memory: "512MiB", timeoutSeconds: 180, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+    const ids = Array.isArray(request.data && request.data.tournamentIds)
+      ? request.data.tournamentIds.map((id) => String(id || "").trim()) : [];
+    if (!ids.length || ids.length > 10 || ids.some((id) => !id) || new Set(ids).size !== ids.length) {
+      throw new HttpsError("invalid-argument", "a prévia em lote exige de 1 a 10 torneios distintos");
+    }
+    const reports = await Promise.all(ids.map((id) =>
+      _previewCanonicalRegistrationMigrationForOrganizer(admin.firestore(), callerUid, id)
+    ));
+    const unsafe = reports.filter((item) => item.summary.conflicts || item.summary.unsupported || item.summary.divergent);
+    if (unsafe.length) {
+      return { generatedAt: new Date().toISOString(), reports, ready: false, reason: "exceptions" };
+    }
+    let plan, planned;
+    try {
+      plan = _registrationBatchPlan.planFromMigrationPreviews(reports, new Date().toISOString());
+      planned = _registrationBatchApply.batchRequestFromPlan(plan, { batchSize: ids.length });
+    } catch (error) { throw new HttpsError("failed-precondition", error.message); }
+    return { generatedAt: new Date().toISOString(), reports, ready: true, plan, batch: planned.batch, request: planned.request };
   }
 );
 
@@ -4459,7 +4511,11 @@ async function _applyCanonicalRegistrationMigrationForOrganizer(db, callerUid, t
     if (report.fingerprint !== expectedFingerprint) {
       throw new HttpsError("failed-precondition", "o elenco mudou; gere uma nova prévia antes de migrar");
     }
-    const existingSnap = await tx.get(ref.collection("registrations"));
+    // A aplicação relê exatamente a mesma coleção completa da prévia; nunca
+    // trunca o elenco por uma estimativa de tamanho antes de decidir criar.
+    const existingSnap = await tx.get(
+      ref.collection("registrations").orderBy(admin.firestore.FieldPath.documentId())
+    );
     const existingById = Object.fromEntries(existingSnap.docs.map((doc) => [doc.id, doc.data() || {}]));
     let decision;
     try { decision = _registrationMigration.decideMaterialization(tournamentId, report, existingById); }
@@ -4522,26 +4578,21 @@ exports.applyCanonicalRegistrationMigrationBatch = onCall(
     const data = request.data || {};
     const manifestFingerprint = String(data.manifestFingerprint || "").trim();
     const requestFingerprint = String(data.requestFingerprint || "").trim();
-    const items = Array.isArray(data.items) ? data.items.map((item) => ({
-      tournamentId: String(item && item.tournamentId || "").trim(),
-      fingerprint: String(item && item.fingerprint || "").trim(),
-    })) : [];
-    if (!manifestFingerprint || !requestFingerprint || !items.length || items.length > 10) {
-      throw new HttpsError("invalid-argument", "lote exige manifesto, assinatura e de 1 a 10 torneios");
+    let planned;
+    try {
+      const plan = _registrationBatchPlan.verifyPlan(data.plan);
+      planned = _registrationBatchApply.batchRequestFromPlan(plan, {
+        batchSize: Number(data.batchSize || 0),
+        afterTournamentId: String(data.afterTournamentId || "")
+      });
+    } catch (error) { throw new HttpsError("invalid-argument", error.message); }
+    const batch = planned.batch;
+    const expectedRequest = planned.request;
+    if (!manifestFingerprint || !requestFingerprint || !batch.items.length ||
+        manifestFingerprint !== expectedRequest.manifestFingerprint || requestFingerprint !== expectedRequest.requestFingerprint) {
+      throw new HttpsError("failed-precondition", "a requisição não confere com a prévia em lote");
     }
-    const seen = new Set();
-    items.forEach((item) => {
-      if (!item.tournamentId || !item.fingerprint || seen.has(item.tournamentId)) {
-        throw new HttpsError("invalid-argument", "item de lote inválido ou duplicado");
-      }
-      seen.add(item.tournamentId);
-    });
-    let expectedRequestFingerprint;
-    try { expectedRequestFingerprint = _registrationBatchApply.requestFingerprint({ items: items }); }
-    catch (error) { throw new HttpsError("invalid-argument", error.message); }
-    if (expectedRequestFingerprint !== requestFingerprint) {
-      throw new HttpsError("failed-precondition", "a requisição não confere com o lote assinado");
-    }
+    const items = expectedRequest.items;
     const db = admin.firestore();
     const results = [];
     for (const item of items) {

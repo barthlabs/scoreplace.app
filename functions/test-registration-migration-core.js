@@ -40,9 +40,9 @@ ok('callable cria somente operações decididas pelo núcleo', helper.includes('
 ok('callable não reescreve participants nem resultados legados', !/gravar\(tx, ref.*participants/.test(helper) && !/matches\s*:/.test(helper));
 ok('lote usa o mesmo helper transacional e limita dez torneios',
   server.includes('exports.applyCanonicalRegistrationMigrationBatch = onCall') &&
-  body.includes('_applyCanonicalRegistrationMigrationForOrganizer(db, callerUid, tournamentId, expectedFingerprint)') &&
-  server.includes('items.length > 10') &&
-  server.includes('_registrationBatchApply.requestFingerprint'));
+  body.includes('_applyCanonicalRegistrationMigrationForOrganizer(db, callerUid, item.tournamentId, item.fingerprint)') &&
+  body.includes('_registrationBatchPlan.verifyPlan(data.plan)') &&
+  body.includes('_registrationBatchApply.batchRequestFromPlan'));
 
 console.log((fail ? '❌' : '✅') + ' registration-migration-core: ' + pass + ' ok, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);

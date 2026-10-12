@@ -16,6 +16,8 @@ function positiveInt(value, label) {
   return number;
 }
 
+// Recebe o manifesto inteiro (e não um array cru): a validação abaixo é o
+// portão que impede que um recorte seja calculado a partir de itens adulterados.
 function batchPlan(plan, options) {
   const verified = verifyPlan(plan);
   const opts = options || {};
@@ -60,6 +62,14 @@ function batchRequest(batch) {
   };
 }
 
+/* A prévia e a aplicação obtêm o mesmo recorte e a mesma assinatura por esta
+ * porta. Assim uma mudança no cálculo do cursor ou no payload não deixa os
+ * dois lados da callable concordarem apenas por acaso. */
+function batchRequestFromPlan(plan, options) {
+  const batch = batchPlan(plan, options);
+  return { batch, request: batchRequest(batch) };
+}
+
 function verifyBatchReceipt(batch, receipt) {
   const planned = batch && Array.isArray(batch.items) ? batch.items : [];
   const results = receipt && Array.isArray(receipt.results) ? receipt.results : [];
@@ -86,4 +96,4 @@ function verifyBatchReceipt(batch, receipt) {
   return { verified: true, tournaments: planned.length, blocked, nextCursor: batch.nextCursor };
 }
 
-module.exports = { batchPlan, requestFingerprint, batchRequest, verifyBatchReceipt };
+module.exports = { batchPlan, requestFingerprint, batchRequest, batchRequestFromPlan, verifyBatchReceipt };

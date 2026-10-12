@@ -33,7 +33,10 @@ ok(split.includes('_registrationMutations.splitParticipants(') && split.includes
 const bridgeStart = source.indexOf('exports.previewCanonicalRegistrationMigration = onCall');
 const bridgeEnd = source.indexOf('\nexports.', bridgeStart + 8);
 const bridge = source.slice(bridgeStart, bridgeEnd < 0 ? source.length : bridgeEnd);
-ok(bridge.includes('_registrationCategoryBridge.categoryBridge(') && bridge.includes('normalizeCategoryDefinitions(tournament.categoryDefinitions)'), 'prévia de migração converte rótulo legado uma única vez por definição tipada');
+const previewHelperStart = source.indexOf('async function _previewCanonicalRegistrationMigrationForOrganizer');
+const previewHelperEnd = source.indexOf('// Prévia da migração I1', previewHelperStart);
+const previewHelper = source.slice(previewHelperStart, previewHelperEnd < 0 ? source.length : previewHelperEnd);
+ok(bridge.includes('_previewCanonicalRegistrationMigrationForOrganizer(') && previewHelper.includes('_registrationCategoryBridge.categoryBridge(') && previewHelper.includes('normalizeCategoryDefinitions(tournament.categoryDefinitions)'), 'prévia de migração converte rótulo legado uma única vez por definição tipada');
 const client = fs.readFileSync('js/firebase-db.js', 'utf8');
 const pairUi = fs.readFileSync('js/views/tournaments.js', 'utf8');
 ok(client.includes('projected.categoryId = categoryId') && pairUi.includes('categoryId: _canonicalRoster ? _category1 :'), 'cliente preserva categoryId e envia-o para a mutação canônica de dupla');

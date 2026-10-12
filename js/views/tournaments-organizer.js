@@ -1705,6 +1705,77 @@ window._materializeCanonicalRegistrations = function (tId) {
   });
 };
 
+/* Conversão coordenada de até dez torneios do MESMO organizador. A lista vem
+ * exclusivamente do store que ele já pode visualizar; o servidor relê e
+ * reautoriza cada item por UID. Não há escrita no navegador nem migração
+ * automática ao abrir a tela. */
+window._materializeCanonicalRegistrationsBatch = function (rawIds) {
+  var ids = Array.isArray(rawIds) ? rawIds.map(function (id) { return String(id || '').trim(); }).filter(Boolean) : [];
+  ids = Array.from(new Set(ids)).slice(0, 10);
+  if (!ids.length) return;
+  if (ids.length === 1) { window._materializeCanonicalRegistrations(ids[0]); return; }
+  if (window._canonicalRegistrationMutationsReady !== true || typeof window._callCF !== 'function') {
+    showNotification('Conversão indisponível', 'Atualize o aplicativo e tente novamente.', 'error');
+    return;
+  }
+  window._callCF('previewCanonicalRegistrationMigrationBatch', { tournamentIds: ids }, {
+    unauth: 'Entre na sua conta para conferir as inscrições.',
+    falha: 'Não foi possível gerar a prévia em lote.'
+  }).then(function (response) {
+    var preview = (response && response.data) || {};
+    var reports = Array.isArray(preview.reports) ? preview.reports : [];
+    if (preview.ready !== true || !preview.plan || !preview.batch || !preview.request) {
+      var exceptions = reports.filter(function (item) {
+        var summary = item && item.summary || {};
+        return Number(summary.conflicts || 0) || Number(summary.unsupported || 0) || Number(summary.divergent || 0);
+      }).length;
+      showNotification('Conversão em lote não aplicada',
+        exceptions ? exceptions + ' torneio(s) têm conflitos ou dados sem suporte; nenhum foi alterado.' : 'A prévia não está pronta para conversão.', 'warning');
+      return;
+    }
+    var totals = preview.plan.totals || {};
+    var request = preview.request || {};
+    var batch = preview.batch || {};
+    var body = '<div style="text-align:left;font-size:0.86rem;line-height:1.5;">' +
+      '<p style="margin:0 0 10px;">A conversão cria somente registros canônicos. Chaves, placares, duplas e a projeção legada permanecem intactos.</p>' +
+      '<ul style="margin:0 0 10px;padding-left:20px;">' +
+        '<li><b>' + Number(totals.tournaments || 0) + '</b> torneios</li>' +
+        '<li><b>' + Number(totals.creates || 0) + '</b> inscrições a criar</li>' +
+        '<li><b>' + Number(totals.already || 0) + '</b> inscrições já canônicas</li>' +
+        '<li><b>' + Number(totals.formedPairs || 0) + '</b> duplas formadas preservadas</li>' +
+      '</ul><p style="margin:0;color:var(--sp-c-86efac,#86efac);font-weight:700;">A prévia foi conferida pelo servidor. Cada torneio será relido antes da própria transação.</p></div>';
+    showConfirmDialog('🧬 Converter inscrições em lote', body, function () {
+      window._callCF('applyCanonicalRegistrationMigrationBatch', {
+        plan: preview.plan,
+        batchSize: Number(batch.batchSize || ids.length),
+        afterTournamentId: batch.cursor || '',
+        manifestFingerprint: request.manifestFingerprint,
+        requestFingerprint: request.requestFingerprint
+      }, {
+        unauth: 'Entre na sua conta para converter as inscrições.',
+        falha: 'Não foi possível converter o lote de inscrições.'
+      }).then(function (appliedResponse) {
+        var applied = (appliedResponse && appliedResponse.data) || {};
+        var results = Array.isArray(applied.results) ? applied.results : [];
+        var blocked = results.filter(function (item) { return item && item.outcome === 'blocked'; }).length;
+        var migrated = results.filter(function (item) { return item && item.outcome === 'migrated'; }).length;
+        if (blocked) {
+          showNotification('Lote parcialmente bloqueado', migrated + ' convertido(s) · ' + blocked + ' exigem nova prévia. Nenhum placar ou chave foi alterado.', 'warning');
+        } else {
+          showNotification('Inscrições canônicas confirmadas', migrated + ' torneio(s) convertidos com recibo verificável.', 'success');
+        }
+        if (typeof window._softRefreshView === 'function') window._softRefreshView();
+      }).catch(function (error) {
+        if (window._warn) window._warn('[canonical-registration-migration] lote falhou', error);
+        showNotification('Conversão em lote não aplicada', (error && error.message) || 'Gere uma nova prévia antes de converter.', 'error');
+      });
+    }, null, { confirmText: '🧬 Converter lote', cancelText: 'Cancelar', type: 'info', maxWidth: '520px' });
+  }).catch(function (error) {
+    if (window._warn) window._warn('[canonical-registration-migration] prévia em lote falhou', error);
+    showNotification('Prévia em lote indisponível', (error && error.message) || 'Tente novamente.', 'error');
+  });
+};
+
 window._reopenAbandonedTournament = function (tId, _valores) {
   var t = (typeof window._findTournamentById === 'function') ? window._findTournamentById(tId) : null;
   if (!t) { showNotification('Torneio não encontrado', '', 'error'); return; }

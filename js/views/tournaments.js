@@ -3880,6 +3880,20 @@ function renderTournaments(container, tournamentId = null) {
                 ? 'color:#f1f5f9 !important; text-shadow:0 1px 3px rgba(0,0,0,0.95), 0 0 2px rgba(0,0,0,0.95);'
                 : 'color:var(--text-muted);';
               var _toolsBorder = venuePhotoBg ? 'rgba(255,255,255,0.28)' : 'var(--border-color, rgba(255,255,255,0.12))';
+              // A conversão é sempre explícita. Quando o organizador tem mais
+              // de um torneio ainda legado no store já autorizado, oferecemos
+              // um recorte curto (máx. 10), cuja prévia e cada escrita voltam
+              // a ser conferidas no servidor por UID e fingerprint.
+              var _canonicalBatchIds = (window.AppStore && Array.isArray(window.AppStore.tournaments)
+                ? window.AppStore.tournaments : []).filter(function (candidate) {
+                  return candidate && candidate.id && window._souOrganizador(candidate) &&
+                    !(candidate.canonicalRegistrationMigration && candidate.canonicalRegistrationMigration.fingerprint);
+                }).map(function (candidate) { return String(candidate.id); }).slice(0, 10);
+              var _canonicalBatchArg = encodeURIComponent(JSON.stringify(_canonicalBatchIds));
+              var _canonicalBatchBtn = _canonicalBatchIds.length > 1 && window._canonicalRegistrationMutationsReady === true
+                ? '<button class="btn btn-indigo hover-lift" onclick="event.stopPropagation(); window._materializeCanonicalRegistrationsBatch(' +
+                  'JSON.parse(decodeURIComponent(\'' + _canonicalBatchArg + '\'))' +
+                  ')" title="Confere e converte, em lote curto, somente torneios que você organiza">🧬 Converter ' + _canonicalBatchIds.length + ' torneios</button>' : '';
               // ── ENCERRADO POR INATIVIDADE: a ÚNICA ferramenta é Reabrir ──────────────
               // Ordem do dono (02/ago/2026): _"depois de encerrado, a única ferramenta ativa
               // seria o reabrir torneio"_. Não é decoração: enquanto o torneio está parado,
@@ -3915,6 +3929,7 @@ function renderTournaments(container, tournamentId = null) {
                 ${categoriasBtn}
                 ${enrollmentReportBtn}
                 ${isOrg && !(t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint) && window._canonicalRegistrationMutationsReady === true ? `<button class="btn btn-indigo hover-lift" onclick="event.stopPropagation(); window._materializeCanonicalRegistrations('${t.id}')" title="Confere o elenco atual e só converte se a prévia assinada não tiver conflitos">🧬 Converter inscrições</button>` : ''}
+                ${_canonicalBatchBtn}
                 ${isOrg ? `<button class="btn hover-lift" style="background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;border:none;" onclick="event.stopPropagation(); window._opOpenManage('${t.id}')">📊 Enquete</button>` : ''}
                 ${/* ⛔ 1.8.31 — o chip do grupo do torneio SAIU daqui. Ordem do dono: "existe esse
                       botao la em cima ao lado do inscrever-se/desinscrever-se. nao é o mesmo? tem

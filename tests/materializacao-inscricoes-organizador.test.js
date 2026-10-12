@@ -29,6 +29,12 @@ ok('botão expõe somente a prévia explícita para torneio ainda não convertid
   tournaments.includes("window._materializeCanonicalRegistrations('${t.id}')") &&
   tournaments.includes('!(t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint)') &&
   tournaments.includes('🧬 Converter inscrições'));
+ok('lote curto usa prévia do servidor, confirmação explícita e não escreve Firestore pelo navegador',
+  body.includes('window._materializeCanonicalRegistrationsBatch = function') &&
+  body.includes("_callCF('previewCanonicalRegistrationMigrationBatch'") &&
+  body.includes("_callCF('applyCanonicalRegistrationMigrationBatch'") &&
+  body.includes('showConfirmDialog') &&
+  tournaments.includes('🧬 Converter '));
 ok('nota pública explica o alcance de comunicados para convidados manuais',
   releaseNotes.includes('📣 Comunicados alcançam contas registradas') &&
   releaseNotes.includes('Convidados incluídos manualmente, sem conta vinculada'));

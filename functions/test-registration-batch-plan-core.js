@@ -24,4 +24,11 @@ const tampered = JSON.parse(JSON.stringify(plan));
 tampered.tournaments[0].fingerprint = 'alterado';
 assert.throws(() => core.verifyPlan(tampered), /adulterado/);
 
+const fromPreviews = core.planFromMigrationPreviews([
+  { tournamentId: 'tour_b', fingerprint: 'f-b', updateTime: itemA.updateTime, summary: { registrations: 4, formedPairs: 1, conflicts: 0, unsupported: 0, divergent: 0, creates: 4, already: 0 } },
+  { tournamentId: 'tour_a', fingerprint: 'f-a', updateTime: itemB.updateTime, summary: { registrations: 2, formedPairs: 0, conflicts: 0, unsupported: 0, divergent: 0, creates: 0, already: 2 } }
+], now);
+assert.deepStrictEqual(fromPreviews.totals, plan.totals);
+assert.throws(() => core.planFromMigrationPreviews([{ tournamentId: 'tour_bad', summary: { conflicts: 1 } }], now), /incompleto|exceção/);
+
 console.log('✅ registration-batch-plan-core: manifesto determinístico, validado e sem exceções');

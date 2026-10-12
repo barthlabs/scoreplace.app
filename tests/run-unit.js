@@ -1740,6 +1740,7 @@ const SUITES = [
   'tests/auditoria-inscricoes-canonicas.test.js',
   'functions/test-registration-batch-plan-core.js',
   'functions/test-registration-batch-apply-core.js',
+  'tests/registration-migration-batch-cf.test.js',
   'tests/planejamento-materializacao-inscricoes.test.js',
   'functions/test-profile-preferences-core.js',
   'functions/test-profile-update-core.js',

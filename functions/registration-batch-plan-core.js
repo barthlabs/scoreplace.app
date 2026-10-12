@@ -73,6 +73,30 @@ function planBatch(items, generatedAt) {
   return Object.assign({}, unsigned, { manifestFingerprint: stableHash(unsigned) });
 }
 
+/* Ponte única entre a fotografia de uma Function e o manifesto puro. Mantê-la
+ * aqui evita que a tela ou uma nova callable reconstrua contagens/fingerprints
+ * por conta própria e introduza um segundo formato de lote. */
+function planFromMigrationPreviews(previews, generatedAt) {
+  if (!Array.isArray(previews) || !previews.length) throw new Error('prévia de lote vazia');
+  return planBatch(previews.map((item) => {
+    const source = item || {};
+    const summary = source.summary || {};
+    return {
+      tournamentId: source.tournamentId,
+      fingerprint: source.fingerprint,
+      updateTime: source.updateTime,
+      registrations: summary.registrations,
+      formedPairs: summary.formedPairs,
+      conflicts: summary.conflicts,
+      unsupported: summary.unsupported,
+      divergent: summary.divergent,
+      creates: summary.creates,
+      already: summary.already,
+      existing: summary.already,
+    };
+  }), generatedAt);
+}
+
 function verifyPlan(plan) {
   const source = plan || {};
   const expected = text(source.manifestFingerprint);
@@ -94,4 +118,4 @@ function verifyPlan(plan) {
   return rebuilt;
 }
 
-module.exports = { planBatch, verifyPlan, stableHash };
+module.exports = { planBatch, planFromMigrationPreviews, verifyPlan, stableHash };
