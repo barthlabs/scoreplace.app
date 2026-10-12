@@ -11,8 +11,10 @@ function ok(value, label) {
 
 ok(source.includes('registration-batch-plan-core.js') && source.includes('batch.planBatch(inspected'),
   'planejador produz o manifesto pelo núcleo puro compartilhado');
-ok(source.includes('materialization.decideMaterialization') && source.includes('registration.dryRunLegacyRoster'),
+ok(source.includes('materialization.decideMaterialization') && source.includes('registration.projectLegacyRoster'),
   'planejador reusa a mesma projeção e decisão da materialização individual');
+ok(source.includes('legacy-category-definition-core.js') && source.includes('legacyCategoryDefinitions.resolve'),
+  'planejador traduz categorias legadas pela mesma projeção da Function transacional');
 ok(source.includes('for (let offset = 0; offset < tournaments.length; offset += 8)'),
   'planejador limita leituras concorrentes sem omitir torneios');
 ok(!/method:\s*['\"](?:PATCH|POST|DELETE|PUT)['\"]/.test(source) &&

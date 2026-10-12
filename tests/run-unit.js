@@ -162,6 +162,7 @@ const SUITES = [
   // “Carregando…” mesmo com as pessoas já salvas na subcoleção.
   'functions/test-split-parts-marker.js',
   'functions/test-category-eligibility-core.js',
+  'functions/test-legacy-category-definition-core.js',
   'functions/test-registration-lifecycle-core.js',
   'functions/test-registration-merge-core.js',
   'functions/test-push-token-core.js',

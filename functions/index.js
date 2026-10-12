@@ -92,6 +92,7 @@ const _enrollCore = require("./enroll-core");
 const _emailFail = require("./email-failure-core");
 const _categoryEligibility = require("./category-eligibility-core");
 const _registrationCategoryBridge = require("./registration-category-bridge-core");
+const _legacyCategoryDefinitions = require("./legacy-category-definition-core");
 const _registrationCore = require("./registration-core");
 const _registrationMigration = require("./registration-migration-core");
 const _registrationBatchPlan = require("./registration-batch-plan-core");
@@ -4395,13 +4396,10 @@ async function _previewCanonicalRegistrationMigrationForOrganizer(db, callerUid,
     // A prévia usa os IDs físicos da coleção dividida. É proibido derivar a
     // identidade de convidado da posição do array ou do nome exibido.
     const records = await _splitParts.lerRegistrosDaParte(tx, ref, "participants");
-    let categoryIdForLegacyLabel;
-    try {
-      categoryIdForLegacyLabel = _registrationCategoryBridge.categoryBridge(
-        _categoryEligibility.normalizeCategoryDefinitions(tournament.categoryDefinitions)
-      );
-    } catch (error) { throw new HttpsError("failed-precondition", error.message); }
-    const report = _registrationCore.projectLegacyRoster(tournamentId, records, categoryIdForLegacyLabel);
+    let categories;
+    try { categories = _legacyCategoryDefinitions.resolve(tournament, records); }
+    catch (error) { throw new HttpsError("failed-precondition", error.message); }
+    const report = _registrationCore.projectLegacyRoster(tournamentId, records, categories.categoryIdForLegacyLabel, categories.defaultCategoryId);
     // Query explícita, sem teto artificial: a prévia precisa enxergar o
     // conjunto canônico completo para nunca declarar uma migração segura com
     // registros divergentes fora de uma primeira página.
@@ -4424,6 +4422,7 @@ async function _previewCanonicalRegistrationMigrationForOrganizer(db, callerUid,
       unsupported: report.unsupported,
       divergent: decision.conflicts,
       fingerprint: report.fingerprint,
+      categoryDefinitionMaterialization: { source: categories.source, shouldPersist: categories.shouldPersist, definitions: categories.definitions },
       summary: {
         registrations: report.registrations.length,
         formedPairs: report.formedPairs.length,
@@ -4501,13 +4500,10 @@ async function _applyCanonicalRegistrationMigrationForOrganizer(db, callerUid, t
       throw new HttpsError("permission-denied", "só a organização migra inscrições");
     }
     const records = await _splitParts.lerRegistrosDaParte(tx, ref, "participants");
-    let categoryIdForLegacyLabel;
-    try {
-      categoryIdForLegacyLabel = _registrationCategoryBridge.categoryBridge(
-        _categoryEligibility.normalizeCategoryDefinitions(tournament.categoryDefinitions)
-      );
-    } catch (error) { throw new HttpsError("failed-precondition", error.message); }
-    const report = _registrationCore.projectLegacyRoster(tournamentId, records, categoryIdForLegacyLabel);
+    let categories;
+    try { categories = _legacyCategoryDefinitions.resolve(tournament, records); }
+    catch (error) { throw new HttpsError("failed-precondition", error.message); }
+    const report = _registrationCore.projectLegacyRoster(tournamentId, records, categories.categoryIdForLegacyLabel, categories.defaultCategoryId);
     if (report.fingerprint !== expectedFingerprint) {
       throw new HttpsError("failed-precondition", "o elenco mudou; gere uma nova prévia antes de migrar");
     }
@@ -4530,6 +4526,7 @@ async function _applyCanonicalRegistrationMigrationForOrganizer(db, callerUid, t
       }));
     });
     tx.set(ref, {
+      ...(categories.shouldPersist ? { categoryDefinitions: categories.definitions, canonicalCategoryDefinitionMigration: { source: categories.source, appliedBy: callerUid, appliedAt: _FV.serverTimestamp() } } : {}),
       canonicalRegistrationMigration: {
         fingerprint: report.fingerprint,
         registrationCount: decision.desired.length,

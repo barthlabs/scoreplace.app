@@ -10,7 +10,7 @@
 function text(value) { return typeof value === 'string' ? value.trim() : ''; }
 function normalizedLabel(value) { return text(value).normalize('NFKC').toLocaleLowerCase('pt-BR'); }
 
-function categoryBridge(definitions) {
+function categoryBridge(definitions, options) {
   if (!Array.isArray(definitions) || !definitions.length) {
     throw new Error('a migração exige definições tipadas de categoria');
   }
@@ -24,7 +24,12 @@ function categoryBridge(definitions) {
     }
     byLegacyLabel.set(label, id);
   });
+  const defaultCategoryId = text(options && options.defaultCategoryId);
+  if (defaultCategoryId && !Array.from(byLegacyLabel.values()).includes(defaultCategoryId)) {
+    throw new Error('categoria padrão ausente nas definições tipadas');
+  }
   return function categoryIdForLegacyLabel(legacyLabel) {
+    if (!normalizedLabel(legacyLabel) && defaultCategoryId) return defaultCategoryId;
     const id = byLegacyLabel.get(normalizedLabel(legacyLabel));
     if (!id) throw new Error('categoria legada sem definição tipada correspondente');
     return id;

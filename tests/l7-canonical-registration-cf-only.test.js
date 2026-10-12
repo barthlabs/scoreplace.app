@@ -36,7 +36,11 @@ const bridge = source.slice(bridgeStart, bridgeEnd < 0 ? source.length : bridgeE
 const previewHelperStart = source.indexOf('async function _previewCanonicalRegistrationMigrationForOrganizer');
 const previewHelperEnd = source.indexOf('// Prévia da migração I1', previewHelperStart);
 const previewHelper = source.slice(previewHelperStart, previewHelperEnd < 0 ? source.length : previewHelperEnd);
-ok(bridge.includes('_previewCanonicalRegistrationMigrationForOrganizer(') && previewHelper.includes('_registrationCategoryBridge.categoryBridge(') && previewHelper.includes('normalizeCategoryDefinitions(tournament.categoryDefinitions)'), 'prévia de migração converte rótulo legado uma única vez por definição tipada');
+ok(bridge.includes('_previewCanonicalRegistrationMigrationForOrganizer(') && previewHelper.includes('_legacyCategoryDefinitions.resolve(tournament, records)') && previewHelper.includes('categoryDefinitionMaterialization'), 'prévia e aplicação usam a mesma tradução canônica das categorias legadas');
+const applyStart = source.indexOf('async function _applyCanonicalRegistrationMigrationForOrganizer');
+const applyEnd = source.indexOf('\nexports.applyCanonicalRegistrationMigration =', applyStart);
+const applyHelper = source.slice(applyStart, applyEnd < 0 ? source.length : applyEnd);
+ok(applyHelper.includes('_legacyCategoryDefinitions.resolve(tournament, records)') && applyHelper.includes('categories.shouldPersist') && applyHelper.includes('categoryDefinitions: categories.definitions'), 'aplicação persiste a projeção de categoria apenas na mesma transação da migração');
 const client = fs.readFileSync('js/firebase-db.js', 'utf8');
 const pairUi = fs.readFileSync('js/views/tournaments.js', 'utf8');
 ok(client.includes('projected.categoryId = categoryId') && pairUi.includes('categoryId: _canonicalRoster ? _category1 :'), 'cliente preserva categoryId e envia-o para a mutação canônica de dupla');

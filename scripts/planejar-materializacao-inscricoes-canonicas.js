@@ -12,6 +12,7 @@ const split = require(path.join(__dirname, '..', 'js', 'views', 'tournament-spli
 const registration = require(path.join(__dirname, '..', 'functions', 'registration-core.js'));
 const materialization = require(path.join(__dirname, '..', 'functions', 'registration-migration-core.js'));
 const batch = require(path.join(__dirname, '..', 'functions', 'registration-batch-plan-core.js'));
+const legacyCategoryDefinitions = require(path.join(__dirname, '..', 'functions', 'legacy-category-definition-core.js'));
 const { accessTokenForServiceAccount } = require('./firebase-service-account-token');
 
 if (process.argv.length > 2) {
@@ -67,7 +68,16 @@ async function inspectTournament(document, token) {
   ]);
   const entries = mirror.length ? entriesFromMirror(mirror) : (Array.isArray(tournament.participants) ? tournament.participants : []);
   const existing = Object.fromEntries(canonical.map((doc) => [doc.name.split('/').pop(), documentToObject(doc)]));
-  const report = registration.dryRunLegacyRoster(id, entries);
+  // A prévia administrativa precisa atravessar exatamente a mesma ponte que
+  // a Function transacional. Sem isso um rótulo legado poderia parecer um
+  // categoryId válido no censo e o lote só falharia depois do clique.
+  let categories;
+  try {
+    categories = legacyCategoryDefinitions.resolve(tournament, entries);
+  } catch (error) {
+    throw new Error('torneio ' + id + ': definições de categoria incompatíveis com a migração (' + error.message + ')');
+  }
+  const report = registration.projectLegacyRoster(id, entries, categories.categoryIdForLegacyLabel, categories.defaultCategoryId);
   const decision = materialization.decideMaterialization(id, report, existing);
   return {
     tournamentId: id,

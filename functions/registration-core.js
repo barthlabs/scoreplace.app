@@ -26,14 +26,16 @@ function participantKey(entry) {
   throw new Error('participante sem identidade estável');
 }
 
-function categoryIds(entry, categoryIdForLegacyLabel) {
+function categoryIds(entry, categoryIdForLegacyLabel, defaultCategoryId) {
   const raw = Array.isArray(entry && entry.categories)
     ? entry.categories
     : [entry && entry.category];
   const ids = raw.map(text).filter(Boolean).map((value) => (
     typeof categoryIdForLegacyLabel === 'function' ? categoryIdForLegacyLabel(value) : value
   ));
-  return Array.from(new Set(ids)).sort().length ? Array.from(new Set(ids)).sort() : [UNCATEGORIZED_CATEGORY_ID];
+  if (Array.from(new Set(ids)).sort().length) return Array.from(new Set(ids)).sort();
+  if (typeof categoryIdForLegacyLabel === 'function' && defaultCategoryId) return [categoryIdForLegacyLabel('')];
+  return [UNCATEGORIZED_CATEGORY_ID];
 }
 
 function registrationId(key, categoryId) {
@@ -43,11 +45,11 @@ function registrationId(key, categoryId) {
     Buffer.from(String(categoryId), 'utf8').toString('base64url');
 }
 
-function registrationsForEntry(tournamentId, entry, categoryIdForLegacyLabel) {
+function registrationsForEntry(tournamentId, entry, categoryIdForLegacyLabel, defaultCategoryId) {
   const tid = text(tournamentId);
   if (!tid) throw new Error('tournamentId obrigatório');
   const key = participantKey(entry);
-  return categoryIds(entry, categoryIdForLegacyLabel).map((categoryId) => ({
+  return categoryIds(entry, categoryIdForLegacyLabel, defaultCategoryId).map((categoryId) => ({
     tournamentId: tid,
     participantKey: key,
     categoryId: categoryId,
@@ -111,7 +113,7 @@ function pairId(tournamentId, sourceKey, memberKeys) {
  * documento no espelho split; sem ela, um convidado sem ID continua bloqueado
  * em vez de receber uma identidade que mudaria a cada releitura de um array.
  */
-function projectLegacyRoster(tournamentId, records, categoryIdForLegacyLabel) {
+function projectLegacyRoster(tournamentId, records, categoryIdForLegacyLabel, defaultCategoryId) {
   const registrations = [];
   const formedPairs = [];
   const conflicts = [];
@@ -142,7 +144,7 @@ function projectLegacyRoster(tournamentId, records, categoryIdForLegacyLabel) {
         return;
       }
       let generated;
-      try { generated = registrationsForEntry(tournamentId, Object.assign({}, entry || {}, normalized), categoryIdForLegacyLabel); }
+      try { generated = registrationsForEntry(tournamentId, Object.assign({}, entry || {}, normalized), categoryIdForLegacyLabel, defaultCategoryId); }
       catch (error) { unsupported.push({ index: index, reason: error.message }); return; }
       // Nome manual é apresentação do convidado no torneio; a identidade segue
       // sendo somente manualParticipantId. Nunca copie nome de conta aqui.
@@ -172,7 +174,7 @@ function projectLegacyRoster(tournamentId, records, categoryIdForLegacyLabel) {
         tournamentId: text(tournamentId),
         pairId: pairId(tournamentId, sourceKey, memberKeys),
         memberKeys: memberKeys,
-        categoryIds: categoryIds(entry, categoryIdForLegacyLabel),
+        categoryIds: categoryIds(entry, categoryIdForLegacyLabel, defaultCategoryId),
         sourceKey: sourceKey || null,
       });
     }
