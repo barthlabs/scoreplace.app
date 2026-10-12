@@ -15,7 +15,10 @@ ok(/S\.colecaoDaParte\(nome\)/.test(src), 'a coleção vem do núcleo, não de n
 ok(/S\.montarDoBanco\(/.test(src), 'torneio dividido usa o mesmo montador do app e da CF');
 ok(/S\.dividir\(JSON\.parse\(JSON\.stringify\(montado\)\), nomes\)/.test(src),
   'a prova do dividido inverte montagem → divisão antes de aprovar');
-ok(/tournaments_backup\/\$\{t\.id\}/.test(src), 'backup pré-divisão é obrigatório no gate');
+ok(/tournaments_backup\/\$\{t\.id\}/.test(src) && /tournamentSplitReceipts\/\$\{t\.id\}/.test(src),
+  'o gate distingue backup pré-divisão de recibo canônico auditado');
+ok(/splitProvenance/.test(src) && /born-canonical/.test(src),
+  'torneio que já nasceu dividido tem prova própria, sem backup histórico inventado');
 ok(!/\/participants`, tk\),\n\s*lista\(`\$\{BASE\}\/tournaments\/\$\{t\.id\}\/history/.test(src),
   'não volta a ler a coleção participants fixa');
 ok(/const fora = S\.partesDe\(config\)/.test(src),

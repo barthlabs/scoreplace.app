@@ -144,7 +144,14 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
       };
       PARTES_AO_NASCER.forEach((nome) => { result.persist[nome] = []; });
       tx.create(ref, Object.assign({}, result.persist, _nascendoDividido,
-        { _nascidoEm: FieldValue.serverTimestamp() }));
+        {
+          // Prova de origem, não um novo seletor de formato. Torneios criados
+          // por esta porta nunca tiveram documento inteiro para ser migrado, logo
+          // não podem nem devem receber um "backup pré-divisão" inventado depois.
+          // A leitura segue sendo sempre pelas partes canônicas.
+          splitProvenance: { kind: 'born-canonical', schema: 1, writer: 'createTournament' },
+          _nascidoEm: FieldValue.serverTimestamp()
+        }));
       tx.create(receipt, { uid, hash, expiresAt: Number(match[1]) + WINDOW_MS + 60000 });
       return { ok: true, changed: true, tournament: result.clean };
     });

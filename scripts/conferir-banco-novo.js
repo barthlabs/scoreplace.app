@@ -8,7 +8,7 @@
  * sequer olha a coleção canônica.
  *
  * Este gate prova a fonte única: partes canônicas → montar → dividir de volta, com
- * cada registro aproveitado, contagem de jogos e backup pré-divisão obrigatório.
+ * cada registro aproveitado, contagem de jogos e prova honesta da origem da divisão.
  * O marcador de compatibilidade também é conferido, mas não decide a leitura.
  *
  * ⛔ NÃO ESCREVE NADA. Só lê e compara.
@@ -95,7 +95,28 @@ function contaRegistrosMontados(nome, registros) {
   }).length;
 }
 
-async function confereDividido(config, nomes, partes, backup) {
+function confereProveniencia(config, backup, recibo, tournamentId) {
+  // Migração de documento que antes era inteiro: só o backup pré-divisão prova
+  // a transferência. Não aceitamos substituir isso por um carimbo posterior.
+  if (backup && backup.doc) {
+    if (Array.isArray(backup.doc._semPesados) && backup.doc._semPesados.length) {
+      return 'backup não guarda o documento inteiro';
+    }
+    return null;
+  }
+  // Criação já canônica: nunca houve estado inteiro a congelar. O campo é
+  // gravado exclusivamente por createTournament, junto da criação atômica.
+  const born = config && config.splitProvenance;
+  if (born && born.kind === 'born-canonical' && born.schema === 1 && born.writer === 'createTournament') return null;
+  // Legado sem backup não é "aprovado por ausência": recebe recibo explícito
+  // apenas depois de uma verificação completa das partes vivas. O recibo não se
+  // chama backup e não afirma conhecer o passado que já não está disponível.
+  if (recibo && recibo.kind === 'verified-canonical-v1' && recibo.schema === 1 &&
+      String(recibo.tournamentId || '') === String(tournamentId)) return null;
+  return 'PROVA DE ORIGEM AUSENTE (sem backup pré-divisão, nascimento canônico ou recibo verificado)';
+}
+
+async function confereDividido(config, nomes, partes, backup, recibo, tournamentId) {
   const problemas = [];
   let montado = null;
   try {
@@ -130,13 +151,8 @@ async function confereDividido(config, nomes, partes, backup) {
     problemas.push('matches: _nJogos=' + config._nJogos + ', subcoleção=' + (partes.matches || []).length);
   }
 
-  // O backup é a prova imutável da transferência. Não comparamos seu conteúdo ao vivo:
-  // placares e inscrições podem mudar legitimamente depois do salto. Mas sua ausência
-  // torna impossível auditar uma reclamação ou voltar com segurança, então bloqueia.
-  if (!backup || !backup.doc) problemas.push('BACKUP PRÉ-DIVISÃO AUSENTE');
-  else if (Array.isArray(backup.doc._semPesados) && backup.doc._semPesados.length) {
-    problemas.push('backup não guarda o documento inteiro');
-  }
+  const prova = confereProveniencia(config, backup, recibo, tournamentId);
+  if (prova) problemas.push(prova);
   return problemas;
 }
 
@@ -153,11 +169,12 @@ async function confereTorneio(t, tk) {
 
   // Partes e backup são leituras independentes. Fazê-las em série deixa o gate
   // artificialmente lento e não acrescenta segurança.
-  const [partes, backup] = await Promise.all([
+  const [partes, backup, recibo] = await Promise.all([
     lePartes(t.id, estado.fora, tk),
-    documento(`${BASE}/tournaments_backup/${t.id}`, tk)
+    documento(`${BASE}/tournaments_backup/${t.id}`, tk),
+    documento(`${BASE}/tournamentSplitReceipts/${t.id}`, tk)
   ]);
-  return { id: t.id, nome: config.name, falhas: await confereDividido(config, estado.fora, partes, backup) };
+  return { id: t.id, nome: config.name, falhas: await confereDividido(config, estado.fora, partes, backup, recibo, t.id) };
 }
 
 async function emLotes(items, limite, operacao) {
@@ -198,7 +215,7 @@ async function emLotes(items, limite, operacao) {
     if (problemas.length > 16) console.log('  … e mais', problemas.length - 16);
   }
   console.log('\n' + (problemasN === 0
-    ? '✅ cada torneio é dividido, lido da fonte canônica e tem backup da divisão'
+    ? '✅ cada torneio é dividido, lido da fonte canônica e tem prova honesta da origem'
     : '⛔ NÃO avançar a migração enquanto houver bloqueio'));
   // Não use `process.exit()` aqui: em CI e em chamadas automatizadas o stdout é
   // um pipe e o encerramento forçado pode descartar justamente o veredito que

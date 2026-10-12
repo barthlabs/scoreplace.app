@@ -81,6 +81,8 @@ const Split = require(path.join(ROOT, 'js/views/tournament-split-core.js'));
   });
   assert(!doc._semPesados.includes('grupos'),
     '① ⚠️ `grupos` NÃO nasce fora: só 1 torneio em produção o tem assim, contra 40 com os outros');
+  assert.deepEqual(doc.splitProvenance, { kind: 'born-canonical', schema: 1, writer: 'createTournament' },
+    '① torneio novo prova que nasceu canônico; não inventa backup pré-divisão');
   console.log('✓ ① nasce com marcador e contador');
 
   /* ── ② A FORMA É IDÊNTICA À DO SEPARADOR ──────────────────────────────────
