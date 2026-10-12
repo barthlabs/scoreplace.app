@@ -2,6 +2,8 @@
 // quantas duplas cada time leva e quantos jogos cada dupla disputa em cada categoria.
 // O sorteio preserva a regra de que duplas do mesmo time não se enfrentam quando houver
 // mais de uma dupla do time na categoria, e a previsão reproduz a ocupação contínua das quadras.
+// 2.4.0 — A reabertura de inscrições volta a confirmar no servidor; erros mostram a causa
+// concreta. Carimbos de atualização sem data válida deixam de exibir "Invalid Date".
 // 2.3.356 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.355 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.354 — Atualização consolidada de produção com as correções validadas desde a última publicação.
@@ -643,6 +645,8 @@ window._RELEASE_NOTES_HTML = (function () {
         '<li><b>🤝 Duplas da mesma equipe não se enfrentam:</b> quando uma equipe tem mais de uma dupla na categoria, o sorteio bloqueia confrontos internos e procura adversários de outras equipes.</li>' +
         '<li><b>🗓️ Previsão de quadras sem intervalos inventados:</b> a análise usa a capacidade contínua das quadras e mostra a quantidade real de jogos e janelas necessárias antes da publicação.</li>' +
         '<li><b>🔎 Encontrar jogo pelo número:</b> a busca aceita o número da partida, além do nome de atletas e equipes, para abrir rapidamente o jogo certo.</li>' +
+        '<li><b>📋 Inscrições reabertas com confirmação:</b> abrir ou fechar inscrições é confirmado pelo servidor antes de a tela mudar. Se houver uma restrição real, o app mostra o motivo em vez de pedir para atualizar sem necessidade.</li>' +
+        '<li><b>🗓️ Carimbo de atualização legível:</b> um registro antigo ou incompleto sem data válida não mostra mais <b>Invalid Date</b>; a informação só aparece quando há data e hora confirmáveis.</li>' +
       '</ul>' +
     '</div>' +
     // v2.3 — a faixa que nasce da AUDITORIA: o que mudou aqui quase não se vê na tela, e é
