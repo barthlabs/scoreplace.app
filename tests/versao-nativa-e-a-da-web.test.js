@@ -38,9 +38,13 @@ ok(!/sync-versao-nativa/.test(packageScripts.prerender),
 
 // ── o gate existe e está LIGADO nos dois caminhos de release ────────────────
 ok(fs.existsSync(path.join(ROOT, 'scripts', 'check-versao-nativa.js')), 'o gate existe');
+ok(fs.existsSync(path.join(ROOT, 'scripts', 'check-native-release-candidate.js')),
+  'o contrato único do candidato nativo existe');
 ['ios-archive.sh', 'android-release.sh'].forEach((f) => {
   const sh = fs.readFileSync(path.join(ROOT, 'scripts', f), 'utf8');
   ok(/check-versao-nativa\.js/.test(sh), f + ' chama o gate');
+  ok(/check-native-release-candidate\.js/.test(sh), f + ' chama o contrato do candidato');
+  ok(!/ALLOW_NON_NATIVE_BUILD|native\/v1-submit/.test(sh), f + ' não mantém bypass nem branch paralela obsoleta');
   // ANTES de arquivar: falhar depois custa uma volta na fila da loja
   const iGate = sh.indexOf('check-versao-nativa.js');
   const iBuild = Math.max(sh.indexOf('xcodebuild'), sh.indexOf('gradlew'));

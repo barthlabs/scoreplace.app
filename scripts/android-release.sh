@@ -31,29 +31,17 @@ node "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/scripts/check-native-rele
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ANDROID_DIR="$REPO_ROOT/android"
 
-# ── TRAVA DE TREE NATIVO ────────────────────────────────────────────────────
-# Recusa buildar a partir de um tree SEM a fiação nativa. Buildar do main = app
-# QUEBRADO (sem login nativo, 403 em tudo, unsigned). O marcador
-# _handleGoogleLoginNative em js/views/auth.js só existe no branch native/v1-submit.
-# Bypass consciente: ALLOW_NON_NATIVE_BUILD=1. Ver project_release_pipeline_canonical.
-BR="$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
-if [ "${ALLOW_NON_NATIVE_BUILD:-}" = "1" ]; then
-  echo "⚠ ALLOW_NON_NATIVE_BUILD=1 → trava de tree nativo PULADA (branch: $BR)."
-elif ! grep -q "_handleGoogleLoginNative" "$REPO_ROOT/js/views/auth.js" 2>/dev/null; then
+# ── TRAVA DE INTEGRAÇÃO NATIVA ───────────────────────────────────────────────
+# O release parte do candidato versionado no main. Não há branch paralela nem
+# escape: sem o login nativo, construir produziria um aplicativo que compila,
+# mas falha no fluxo real de autenticação.
+if ! grep -q "_handleGoogleLoginNative" "$REPO_ROOT/js/views/auth.js" 2>/dev/null; then
   echo ""
-  echo "❌ TRAVA DE BUILD — este tree NÃO tem a fiação nativa (branch: $BR)."
-  echo "   Faltou _handleGoogleLoginNative em js/views/auth.js → buildar daqui"
-  echo "   gera app QUEBRADO: sem login nativo, 403 em tudo, unsigned."
-  echo ""
-  echo "   Builde a partir do worktree do native/v1-submit:"
-  echo "     cd .claude/worktrees/native-submit"
-  echo "     git merge main            # traz as features novas"
-  echo "     scripts/android-release.sh"
-  echo ""
-  echo "   (Bypass consciente: ALLOW_NON_NATIVE_BUILD=1 scripts/android-release.sh)"
+  echo "❌ TRAVA DE BUILD — falta _handleGoogleLoginNative em js/views/auth.js."
+  echo "   Este candidato não contém a integração nativa obrigatória."
   exit 1
 fi
-echo "▶ Tree nativo OK (branch: $BR)."
+echo "▶ Integração nativa obrigatória conferida."
 # ────────────────────────────────────────────────────────────────────────────
 
 # ── Toolchain: JDK 21 (Homebrew) + Android SDK (local.properties) ──
@@ -83,7 +71,7 @@ echo "▶ Sincronizando web assets (npm run cap:sync)…"
 # Alerta de assinatura: sem keystore.properties o release sai unsigned (Play recusa).
 if [ ! -f "$ANDROID_DIR/keystore.properties" ]; then
   echo "  ⚠ android/keystore.properties ausente → artefatos SAIRÃO UNSIGNED."
-  echo "    (rode na branch native/v1-submit, onde o keystore vive.)"
+  echo "    Configure a credencial no ambiente seguro deste candidato antes de enviar ao Play."
 fi
 
 echo "▶ Buildando celular (:app) + relógio (:wear)…"

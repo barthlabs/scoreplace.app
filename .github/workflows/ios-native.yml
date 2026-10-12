@@ -53,6 +53,7 @@ jobs:
           xcodebuild -version
           xcodebuild -showsdks | grep -E 'watchos(8|9|10|11|26)'
           node scripts/check-versao-nativa.js ios
+          node scripts/check-native-release-candidate.js
           node scripts/check-release-notes.js
 
       - name: Instalar dependências e montar assets Capacitor

@@ -2,7 +2,7 @@
 
 Documento de referência para submeter os apps nativos (Capacitor 8) às lojas.
 Nada aqui exige pagamento — é a preparação. Os passos pagos estão no fim.
-Base de submissão: branch `native/v1-submit` (login nativo + smartwatch + fix header).
+Base de submissão: candidato versionado no `main` (login nativo, smartwatch e header conferidos pelos gates de release).
 
 > ⚠️ Antes de submeter, revise a seção **"Decisões pendentes"** — há escolhas
 > (versão de marketing, Pro/IAP, iPad, watch na 1ª leva) que mudam a ficha.
@@ -245,7 +245,7 @@ adicionar as impressões digitais da **chave de upload**:
 
 ## 8. Estado atual (verificado, grátis)
 
-- Branch de submissão `native/v1-submit` = login nativo + smartwatch + fix header.
+- Candidato de submissão no `main` = login nativo + smartwatch + fix header; os scripts recusam a ausência dessa integração.
 - Builds locais **OK** nos dois lados:
   - iOS: `App` scheme `BUILD SUCCEEDED`, com `App.app/Watch/ScoreplaceWatch.app` embutido.
   - Android: `app-debug.apk` + `wear-debug.apk`.

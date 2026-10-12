@@ -69,29 +69,16 @@ else
   echo "  o upload falha com 'Failed to Use Accounts' (EXIT 70)."
 fi
 
-# ── TRAVA DE TREE NATIVO ────────────────────────────────────────────────────
-# Recusa arquivar a partir de um tree SEM a fiação nativa. Arquivar do main = app
-# QUEBRADO (sem login nativo, 403 em tudo). O marcador _handleGoogleLoginNative em
-# js/views/auth.js só existe no branch native/v1-submit.
-# Bypass consciente: ALLOW_NON_NATIVE_BUILD=1. Ver project_release_pipeline_canonical.
-BR="$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
-if [ "${ALLOW_NON_NATIVE_BUILD:-}" = "1" ]; then
-  echo "⚠ ALLOW_NON_NATIVE_BUILD=1 → trava de tree nativo PULADA (branch: $BR)."
-elif ! grep -q "_handleGoogleLoginNative" "$REPO_ROOT/js/views/auth.js" 2>/dev/null; then
+# ── TRAVA DE INTEGRAÇÃO NATIVA ───────────────────────────────────────────────
+# O archive parte do candidato versionado no main. Não há branch paralela nem
+# escape: sem o login nativo, o app compila mas falha na autenticação real.
+if ! grep -q "_handleGoogleLoginNative" "$REPO_ROOT/js/views/auth.js" 2>/dev/null; then
   echo ""
-  echo "❌ TRAVA DE BUILD — este tree NÃO tem a fiação nativa (branch: $BR)."
-  echo "   Faltou _handleGoogleLoginNative em js/views/auth.js → arquivar daqui"
-  echo "   gera app QUEBRADO: sem login nativo, 403 em tudo."
-  echo ""
-  echo "   Arquive a partir do worktree do native/v1-submit:"
-  echo "     cd .claude/worktrees/native-submit"
-  echo "     git merge main            # traz as features novas"
-  echo "     scripts/ios-archive.sh"
-  echo ""
-  echo "   (Bypass consciente: ALLOW_NON_NATIVE_BUILD=1 scripts/ios-archive.sh)"
+  echo "❌ TRAVA DE BUILD — falta _handleGoogleLoginNative em js/views/auth.js."
+  echo "   Este candidato não contém a integração nativa obrigatória."
   exit 1
 fi
-echo "▶ Tree nativo OK (branch: $BR)."
+echo "▶ Integração nativa obrigatória conferida."
 # ────────────────────────────────────────────────────────────────────────────
 
 # ── TRAVA: montar o www/ ANTES de copiar ────────────────────────────────
