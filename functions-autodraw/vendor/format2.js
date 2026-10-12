@@ -57,6 +57,20 @@
     };
   }
 
+  // Política pública de uma chave eliminatória. `playin` foi um nome interno
+  // usado pelo primeiro motor para a rodada preliminar; nunca foi um quarto
+  // desenho disponível ao organizador. Ao reler um documento que o tenha
+  // gravado por versões antigas, traduzimos para `repescagem` antes de o
+  // documento passar por qualquer compilador ou projetor de fases.
+  //
+  // Retornar `null` (em vez de assumir repescagem) é proposital: ausência no
+  // legado continua ausência no armazenamento. O normalizador do formulário
+  // materializa o default apenas quando o organizador salva uma configuração.
+  function canonicalEliminationPolicy(value) {
+    if (value === 'playin') return 'repescagem';
+    return ['repescagem', 'bye', 'sobra_unica'].indexOf(value) >= 0 ? value : null;
+  }
+
   // ── PROJEÇÃO DE LEGADO ─────────────────────────────────────────────────────
   // Antes do configurador único, a fase era identificada por strings (`format`,
   // `formatCode`) espalhadas pelo documento. Elas continuam sendo uma fonte de
@@ -260,6 +274,16 @@
           phase.elimination = Object.assign({}, phase.elimination || {}, { bracketType: bracketType });
           changed = true;
         }
+        // `playin` era o dialeto técnico de uma repescagem. Só o traduzimos
+        // quando aparece explicitamente na fase ou no topo legado; campo
+        // ausente não ganha um default silencioso durante uma migração.
+        var rawPolicy = phase.politicaDaChave;
+        if (rawPolicy == null && tournament.politicaDaChave === 'playin') rawPolicy = 'playin';
+        var policy = canonicalEliminationPolicy(rawPolicy);
+        if (policy && phase.politicaDaChave !== policy) {
+          phase.politicaDaChave = policy;
+          changed = true;
+        }
       }
       // Uma vez conhecido o domínio, a fase não volta a carregar `liga` ou
       // `grupos_mata` como se fossem tipos concorrentes. Os adaptadores legados
@@ -293,8 +317,7 @@
       changed = true;
     }
     if (swissIsActive && tournament.p2Resolution === 'swiss' && swissTarget >= 2 && !hasElimination) {
-      var legacyPolicy = ['repescagem', 'bye', 'sobra_unica'].indexOf(tournament.politicaDaChave) >= 0
-        ? tournament.politicaDaChave : 'repescagem';
+      var legacyPolicy = canonicalEliminationPolicy(tournament.politicaDaChave) || 'repescagem';
       phases.push({
         name: 'Eliminatória', kind: 'elimination', format: 'Eliminatórias Simples', formatCode: 'elim_simples',
         elimination: { bracketType: 'single' },
@@ -579,8 +602,8 @@
      * ⛔ E NA DUPLA ELIMINATÓRIA NÃO SE APLICA: ali a "repescagem" é o próprio formato — todo mundo
      * precisa perder duas vezes —, não é tratamento de resto. Forçar o default evita a tela oferecer
      * uma escolha que não muda nada. */
-    var _POLITICAS_DA_CHAVE = ['repescagem', 'bye', 'sobra_unica'];
-    if (_POLITICAS_DA_CHAVE.indexOf(e.politicaDaChave) === -1) e.politicaDaChave = 'repescagem';
+    if (!canonicalEliminationPolicy(e.politicaDaChave)) e.politicaDaChave = 'repescagem';
+    else e.politicaDaChave = canonicalEliminationPolicy(e.politicaDaChave);
     if (e.dupla) e.politicaDaChave = 'repescagem';
     if (!Array.isArray(e.nomes)) e.nomes = [];
     while (e.nomes.length < e.linhas) e.nomes.push('');

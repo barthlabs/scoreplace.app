@@ -54,10 +54,23 @@ const norm = (o) => F.normalize({ eliminatoria: Object.assign({ ativa: true }, o
 ok(norm({}) === 'repescagem', '② ausente = repescagem, que é o que todo torneio existente já é');
 ok(norm({ politicaDaChave: 'bye' }) === 'bye', '② "bye" é aceito');
 ok(norm({ politicaDaChave: 'sobra_unica' }) === 'sobra_unica', '② "sobra_unica" é aceito');
+ok(norm({ politicaDaChave: 'playin' }) === 'repescagem',
+  '② ⛔ dialeto legado "playin" é lido como repescagem, nunca como quarto desenho');
 ok(norm({ politicaDaChave: 'lixo' }) === 'repescagem',
   '② ⛔ valor torto cai no default — configuração antiga não pode virar outra chave em silêncio');
 ok(norm({ dupla: true, politicaDaChave: 'bye' }) === 'repescagem',
   '② ⛔ na DUPLA eliminatória é forçado: ali "repescagem" é o formato, não tratamento de resto');
+
+/* ── ②b O LEGADO É TRADUZIDO ANTES DE VIRAR ESTADO NOVO ─────────────────── */
+const legacyPlayin = F.projectLegacyPhases({
+  id: 'tour-playin-legado', format: 'Eliminatórias Simples', formatCode: 'elim_simples',
+  politicaDaChave: 'playin', phases: [{ name: 'Eliminatória', format: 'Eliminatórias Simples', formatCode: 'elim_simples' }]
+});
+ok(legacyPlayin.changed && legacyPlayin.phases.length === 1 &&
+  legacyPlayin.phases[0].politicaDaChave === 'repescagem',
+  '②b ⛔ torneio legado com "playin" projeta uma fase canônica de repescagem');
+ok(legacyPlayin.phases[0].politicaDaChave !== 'playin',
+  '②b e o dialeto técnico não sobrevive em phases[]');
 
 /* ── ③ O COMPILADOR LEVA AO TOPO E ÀS FASES ────────────────────────────────── */
 ['repescagem', 'bye', 'sobra_unica'].forEach(function (v) {
