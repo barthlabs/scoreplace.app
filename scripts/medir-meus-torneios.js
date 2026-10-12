@@ -10,9 +10,9 @@
  * Uso:  node scripts/medir-meus-torneios.js <uid>
  */
 const path = require('path');
-const { execSync } = require('child_process');
+const { accessTokenForServiceAccountSync } = require('./firebase-service-account-token');
 const BASE = 'https://firestore.googleapis.com/v1/projects/scoreplace-app/databases/(default)/documents';
-const token = () => execSync('gcloud auth print-access-token', { encoding: 'utf8' }).trim();
+const token = () => accessTokenForServiceAccountSync();
 const UID = process.argv[2];
 if (!UID) { console.error('uso: node scripts/medir-meus-torneios.js <uid>'); process.exit(2); }
 

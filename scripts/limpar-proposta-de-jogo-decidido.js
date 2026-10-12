@@ -26,12 +26,12 @@
  */
 'use strict';
 const path = require('path');
-const { execSync } = require('child_process');
+const { accessTokenForServiceAccountSync } = require('./firebase-service-account-token');
 
 const APLICAR = process.argv.includes('--aplicar');
 const SO_ESTE = process.argv.slice(2).find((a) => !a.startsWith('--')) || null;
 const BASE = 'https://firestore.googleapis.com/v1/projects/scoreplace-app/databases/(default)/documents';
-const tk = execSync('gcloud auth print-access-token', { encoding: 'utf8' }).trim();
+const tk = accessTokenForServiceAccountSync();
 
 function f(v) {
   if (v == null) return null;

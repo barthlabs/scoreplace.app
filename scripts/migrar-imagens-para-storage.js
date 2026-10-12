@@ -22,9 +22,9 @@
  *   node scripts/migrar-imagens-para-storage.js           # DRY-RUN
  *   node scripts/migrar-imagens-para-storage.js --apply   # grava
  *
- * Requer: gcloud auth print-access-token.
+ * Requer: a credencial persistente de serviço.
  */
-const { execSync } = require('child_process');
+const { accessTokenForServiceAccountSync } = require('./firebase-service-account-token');
 const crypto = require('crypto');
 
 const PROJ = 'scoreplace-app';
@@ -34,8 +34,8 @@ const APLICAR = process.argv.includes('--apply');
 const CACHE = 'public, max-age=31536000, immutable';
 
 let TK;
-try { TK = execSync('gcloud auth print-access-token', { encoding: 'utf8' }).trim(); }
-catch (e) { console.error('✗ sem token do gcloud:', e.message); process.exit(1); }
+try { TK = accessTokenForServiceAccountSync(); }
+catch (e) { console.error('✗ sem credencial persistente:', e.message); process.exit(1); }
 
 async function api(url, opts) {
   const r = await fetch(url, {

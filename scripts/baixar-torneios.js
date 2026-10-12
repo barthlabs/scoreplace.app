@@ -7,19 +7,19 @@
  * placar em formato antigo…).
  *
  * Uso:  node scripts/baixar-torneios.js
- * Requer: gcloud auth print-access-token (leitura; NÃO escreve nada em produção).
+ * Requer: a credencial persistente de serviço (leitura; NÃO escreve nada em produção).
  */
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
+const { accessTokenForServiceAccountSync } = require('./firebase-service-account-token');
 const https = require('https');
 
 const OUT = path.join(__dirname, '..', 'tests', 'fixtures', 'prod-tournaments.json');
 const PROJ = 'scoreplace-app';
 
 function token() {
-  try { return execSync('gcloud auth print-access-token', { encoding: 'utf8' }).trim(); }
-  catch (e) { console.error('✗ sem token do gcloud:', e.message); process.exit(1); }
+  try { return accessTokenForServiceAccountSync(); }
+  catch (e) { console.error('✗ sem credencial persistente:', e.message); process.exit(1); }
 }
 function get(url, tk) {
   return new Promise(function (res, rej) {

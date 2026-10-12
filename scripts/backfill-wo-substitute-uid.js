@@ -25,13 +25,13 @@
  *      node scripts/backfill-wo-substitute-uid.js --apply    (grava)
  *      SP_TID=<id> node scripts/backfill-wo-substitute-uid.js
  */
-const { execSync } = require('child_process');
+const { accessTokenForServiceAccountSync } = require('./firebase-service-account-token');
 
 const TID = process.env.SP_TID || 'tour_1780009816637';
 const PROJ = 'scoreplace-app';
 const BASE = `https://firestore.googleapis.com/v1/projects/${PROJ}/databases/(default)/documents`;
 const APPLY = process.argv.includes('--apply');
-const token = () => execSync('gcloud auth print-access-token', { encoding: 'utf8' }).trim();
+const token = () => accessTokenForServiceAccountSync();
 
 function fromF(v) {
   if (v == null) return null;

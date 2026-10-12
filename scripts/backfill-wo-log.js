@@ -19,7 +19,7 @@
  */
 const path = require('path');
 const fs = require('fs');
-const { execSync } = require('child_process');
+const { accessTokenForServiceAccountSync } = require('./firebase-service-account-token');
 const ROOT = path.join(__dirname, '..');
 require(path.join(ROOT, 'functions-autodraw', 'draw-core.js'));
 const win = globalThis.window;
@@ -32,7 +32,7 @@ const win = globalThis.window;
 const TID = process.env.SP_TID || 'tour_1780009816637';
 const BASE = 'https://firestore.googleapis.com/v1/projects/scoreplace-app/databases/(default)/documents';
 const APPLY = process.argv.includes('--apply');
-const token = () => execSync('gcloud auth print-access-token', { encoding: 'utf8' }).trim();
+const token = () => accessTokenForServiceAccountSync();
 
 function fromF(v) {
   if (v == null) return null;

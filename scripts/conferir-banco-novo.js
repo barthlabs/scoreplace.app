@@ -19,12 +19,12 @@
  *       node scripts/conferir-banco-novo.js --detalhe  (mostra os motivos)
  */
 const path = require('path');
-const { execSync } = require('child_process');
+const { accessTokenForServiceAccountSync } = require('./firebase-service-account-token');
 const S = require(path.join(__dirname, '..', 'js', 'views', 'tournament-split-core.js'));
 
 const BASE = 'https://firestore.googleapis.com/v1/projects/scoreplace-app/databases/(default)/documents';
 const PARTES_DO_ESPELHO_LEGADO = ['matches', 'participants', 'history'];
-const token = () => execSync('gcloud auth print-access-token', { encoding: 'utf8' }).trim();
+const token = () => accessTokenForServiceAccountSync();
 const DETALHE = process.argv.includes('--detalhe');
 const SO_ESTE = process.argv.slice(2).find((a) => !a.startsWith('--')) || null;
 

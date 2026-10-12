@@ -25,7 +25,7 @@
  *       node scripts/restaurar-conta-do-pitr.js <uid> <readTimeISO> --aplicar  (grava)
  * Ex.:  node scripts/restaurar-conta-do-pitr.js aune9TtJk… 2026-08-27T22:00:00.000000Z
  */
-const { execSync } = require('child_process');
+const { accessTokenForServiceAccountSync } = require('./firebase-service-account-token');
 
 const args = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 const UID = args[0];
@@ -37,7 +37,7 @@ if (!UID || !READ_TIME) {
 }
 
 const BASE = 'https://firestore.googleapis.com/v1/projects/scoreplace-app/databases/(default)/documents';
-const tok = execSync('gcloud auth print-access-token', { encoding: 'utf8' }).trim();
+const tok = accessTokenForServiceAccountSync();
 const H = { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' };
 const DOC = BASE + '/users/' + UID;
 

@@ -27,7 +27,7 @@
  *   SP_FETCH_ESPERA_MS    base da espera progressiva     (padrão 500, teto 4000)
  */
 const path = require('path');
-const { execSync } = require('child_process');
+const { accessTokenForServiceAccountSync } = require('./firebase-service-account-token');
 const Split = require(path.join(__dirname, '..', 'js', 'views', 'tournament-split-core.js'));
 const Roster = require(path.join(__dirname, '..', 'functions', 'match-roster.js'));
 const Leitura = require(path.join(__dirname, 'lib', 'leitura-resiliente.js'));
@@ -36,7 +36,7 @@ const BASE = 'https://firestore.googleapis.com/v1/projects/scoreplace-app/databa
 const DETALHE = process.argv.includes('--detalhe');
 const JSON_OUTPUT = process.argv.includes('--json');
 const SO_ESTE = process.argv.slice(2).find((a) => !a.startsWith('--')) || null;
-const token = () => execSync('gcloud auth print-access-token', { encoding: 'utf8' }).trim();
+const token = () => accessTokenForServiceAccountSync();
 
 const ler = Leitura.criarLeitor({
   timeoutMs: Number(process.env.SP_FETCH_TIMEOUT_MS) || 30000,
@@ -127,7 +127,7 @@ function riscoDoOrfao(doc) {
 }
 
 (async () => {
-  /* ⛔ O PRIMEIRO PASSO TAMBÉM PRECISA FALAR. `token()` é um `execSync` do gcloud, e num
+  /* ⛔ O PRIMEIRO PASSO TAMBÉM PRECISA FALAR. `token()` consulta o cofre de serviço, e num
    * ambiente sem credencial ele lança ANTES de qualquer linha de saída — o que produz uma
    * execução praticamente muda, indistinguível de "rodou e não achou nada". Agora o passo se
    * anuncia e a falha dele vira uma causa nomeada, igual às leituras. */
@@ -137,8 +137,8 @@ function riscoDoOrfao(doc) {
     tk = token();
   } catch (e) {
     throw Object.assign(new Error('não consegui obter o token de acesso'), {
-      spLeituraFalhou: true, spTentativas: 1, spCausa: 'gcloud auth print-access-token falhou: ' + (e && e.message ? String(e.message).split('\n')[0] : e),
-      spOperacao: 'obter credencial de leitura', spUrl: '(local: gcloud auth print-access-token)', cause: e
+      spLeituraFalhou: true, spTentativas: 1, spCausa: 'credencial persistente falhou: ' + (e && e.message ? String(e.message).split('\n')[0] : e),
+      spOperacao: 'obter credencial de leitura', spUrl: '(local: conta de serviço)', cause: e
     });
   }
   const torneios = SO_ESTE

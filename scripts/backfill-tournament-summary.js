@@ -14,7 +14,7 @@
  *      node scripts/backfill-tournament-summary.js --apply    (grava)
  */
 const path = require('path');
-const { execSync } = require('child_process');
+const { accessTokenForServiceAccountSync } = require('./firebase-service-account-token');
 const ROOT = path.join(__dirname, '..');
 // ⛔ os derivados saem das funções do APP (mesmo shim que a Cloud Function usa),
 // nunca de uma cópia — medido: reimplementação divergia em 10 dos 28 torneios.
@@ -29,7 +29,7 @@ const buildSummary = function (t, id) { return M.buildSummary(t, id, _H); };
 
 const BASE = 'https://firestore.googleapis.com/v1/projects/scoreplace-app/databases/(default)/documents';
 const APPLY = process.argv.includes('--apply');
-const token = () => execSync('gcloud auth print-access-token', { encoding: 'utf8' }).trim();
+const token = () => accessTokenForServiceAccountSync();
 
 function fromF(v) {
   if (v == null) return null;

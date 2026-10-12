@@ -36,7 +36,7 @@
  * Uso:  node scripts/reparar-substitutos-do-wo.js <tournamentId>            (ENSAIO, não grava)
  *       node scripts/reparar-substitutos-do-wo.js <tournamentId> --aplicar  (grava)
  */
-const { execSync } = require('child_process');
+const { accessTokenForServiceAccountSync } = require('./firebase-service-account-token');
 
 const ID = process.argv.slice(2).find((a) => !a.startsWith('--'));
 const APLICAR = process.argv.includes('--aplicar');
@@ -44,7 +44,7 @@ if (!ID) { console.error('uso: node scripts/reparar-substitutos-do-wo.js <tourna
 
 const BASE = 'https://firestore.googleapis.com/v1/projects/scoreplace-app/databases/(default)/documents';
 const DOC = BASE + '/tournaments/' + ID;
-const tok = execSync('gcloud auth print-access-token', { encoding: 'utf8' }).trim();
+const tok = accessTokenForServiceAccountSync();
 const H = { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' };
 
 /* ── tradução Firestore REST ↔ JS ──────────────────────────────────────────────

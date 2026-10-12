@@ -12,6 +12,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { spawnSync } = require('child_process');
 const { GoogleAuth } = require('google-auth-library');
 
 const DEFAULT_KEY_FILE = path.join(os.homedir(), '.config', 'scoreplace', 'deploy-sa.json');
@@ -35,7 +36,29 @@ async function accessTokenForServiceAccount(options) {
   return token.token;
 }
 
-module.exports = { DEFAULT_KEY_FILE, credentialPath, accessTokenForServiceAccount };
+function accessTokenForServiceAccountSync(options) {
+  const opts = options || {};
+  const env = Object.assign({}, process.env, opts.env || {});
+  if (opts.keyFile) env.GOOGLE_APPLICATION_CREDENTIALS = opts.keyFile;
+  const result = spawnSync(process.execPath, [__filename], {
+    encoding: 'utf8',
+    env,
+  });
+  if (result.status !== 0) {
+    const detail = String(result.stderr || result.stdout || '').trim();
+    throw new Error(detail || 'a conta de serviço não devolveu access token');
+  }
+  const token = String(result.stdout || '').trim();
+  if (!token) throw new Error('a conta de serviço não devolveu access token');
+  return token;
+}
+
+module.exports = {
+  DEFAULT_KEY_FILE,
+  credentialPath,
+  accessTokenForServiceAccount,
+  accessTokenForServiceAccountSync,
+};
 
 if (require.main === module) {
   accessTokenForServiceAccount()

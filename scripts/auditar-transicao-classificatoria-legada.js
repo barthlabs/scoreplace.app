@@ -9,10 +9,10 @@
  */
 'use strict';
 
-const { execSync } = require('child_process');
+const { accessTokenForServiceAccountSync } = require('./firebase-service-account-token');
 const BASE = 'https://firestore.googleapis.com/v1/projects/scoreplace-app/databases/(default)/documents';
 
-function token() { return execSync('gcloud auth print-access-token', { encoding: 'utf8' }).trim(); }
+function token() { return accessTokenForServiceAccountSync(); }
 function fromFirestore(v) {
   if (v == null) return null;
   if ('stringValue' in v) return v.stringValue;

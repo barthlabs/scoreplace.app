@@ -18,14 +18,14 @@
  */
 'use strict';
 const path = require('path');
-const { execSync } = require('child_process');
+const { accessTokenForServiceAccountSync } = require('./firebase-service-account-token');
 const Split = require(path.join(__dirname, '..', 'js', 'views', 'tournament-split-core.js'));
 const Leitura = require(path.join(__dirname, 'lib', 'leitura-resiliente.js'));
 
 const BASE = 'https://firestore.googleapis.com/v1/projects/scoreplace-app/databases/(default)/documents';
 const DETALHE = process.argv.includes('--detalhe');
 const ALVO = process.argv.slice(2).find((a) => !a.startsWith('--')) || 'Confra';
-const token = () => execSync('gcloud auth print-access-token', { encoding: 'utf8' }).trim();
+const token = () => accessTokenForServiceAccountSync();
 const ler = Leitura.criarLeitor({ timeoutMs: 30000, tentativas: 4, esperaBaseMs: 500 });
 
 function fromF(v) {

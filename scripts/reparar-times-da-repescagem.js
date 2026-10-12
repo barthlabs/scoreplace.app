@@ -28,14 +28,14 @@ if (process.argv.includes('--gravar')) {
 }
 
 const path = require('path');
-const { execSync } = require('child_process');
+const { accessTokenForServiceAccountSync } = require('./firebase-service-account-token');
 const Leitura = require(path.join(__dirname, 'lib', 'leitura-resiliente.js'));
 const BASE = 'https://firestore.googleapis.com/v1/projects/scoreplace-app/databases/(default)/documents';
 const args = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 const ALVO = args[0] || 'Confra';
 const LINHA = args[1] || 'Ouro';
 const GRAVAR = process.argv.includes('--gravar');
-const tk = execSync('gcloud auth print-access-token', { encoding: 'utf8' }).trim();
+const tk = accessTokenForServiceAccountSync();
 const ler = Leitura.criarLeitor({ timeoutMs: 30000, tentativas: 4, esperaBaseMs: 500 });
 
 function fromF(v) {

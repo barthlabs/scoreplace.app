@@ -23,7 +23,7 @@
  *       node scripts/migrar-presenca-para-uid.js <tournamentId> --apply    (grava)
  */
 'use strict';
-const { execSync } = require('child_process');
+const { accessTokenForServiceAccountSync } = require('./firebase-service-account-token');
 
 const APPLY = process.argv.includes('--apply');
 const ID = process.argv.slice(2).find((a) => !a.startsWith('--'));
@@ -31,7 +31,8 @@ if (!ID) { console.error('uso: node scripts/migrar-presenca-para-uid.js <tournam
 
 const RES = 'projects/scoreplace-app/databases/(default)/documents';
 const B = 'https://firestore.googleapis.com/v1/' + RES;
-const H = () => ({ Authorization: 'Bearer ' + execSync('gcloud auth print-access-token', { encoding: 'utf8' }).trim() });
+const TK = accessTokenForServiceAccountSync();
+const H = () => ({ Authorization: 'Bearer ' + TK });
 const ehUid = (k) => /^[A-Za-z0-9]{20,}$/.test(k);
 const norm = (s) => String(s || '').trim().toLowerCase();
 

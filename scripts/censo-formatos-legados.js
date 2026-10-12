@@ -5,11 +5,11 @@
  * como compatibilidade de cliente nativo, nunca como modelo alternativo.
  * Uso: node scripts/censo-formatos-legados.js [--json]
  */
-const { execSync } = require('child_process');
+const { accessTokenForServiceAccountSync } = require('./firebase-service-account-token');
 const { resumir } = require('./censo-formatos-legados-core');
 const BASE = 'https://firestore.googleapis.com/v1/projects/scoreplace-app/databases/(default)/documents/tournaments';
 const JSON_OUTPUT = process.argv.includes('--json');
-const token = () => execSync('gcloud auth print-access-token', { encoding: 'utf8' }).trim();
+const token = () => accessTokenForServiceAccountSync();
 
 function fromF(v) {
   if (v == null) return null;

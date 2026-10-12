@@ -22,7 +22,7 @@
  *      SP_TID=<id> SP_ONLY=<e-mail> ... (limita a um torneio / a um destinatário)
  */
 const path = require('path');
-const { execSync } = require('child_process');
+const { accessTokenForServiceAccountSync } = require('./firebase-service-account-token');
 const ROOT = path.join(__dirname, '..');
 
 const TID = process.env.SP_TID || 'tour_1780009816637';
@@ -31,7 +31,7 @@ const SINCE = process.env.SP_SINCE || '2026-08-02T21:00:00.000Z'; // notificaç�
 const PROJ = 'scoreplace-app';
 const BASE = `https://firestore.googleapis.com/v1/projects/${PROJ}/databases/(default)/documents`;
 const APPLY = process.argv.includes('--apply');
-const token = () => execSync('gcloud auth print-access-token', { encoding: 'utf8' }).trim();
+const token = () => accessTokenForServiceAccountSync();
 
 function fromF(v) {
   if (v == null) return null;

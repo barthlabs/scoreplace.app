@@ -19,13 +19,13 @@
  *       node scripts/backfill-banco-novo.js <id> --apply
  */
 const path = require('path');
-const { execSync } = require('child_process');
+const { accessTokenForServiceAccountSync } = require('./firebase-service-account-token');
 const S = require(path.join(__dirname, '..', 'js', 'views', 'tournament-split-core.js'));
 
 const BASE = 'https://firestore.googleapis.com/v1/projects/scoreplace-app/databases/(default)/documents';
 const APPLY = process.argv.includes('--apply');
 const SO_ESTE = process.argv.slice(2).find((a) => !a.startsWith('--')) || null;
-const token = () => execSync('gcloud auth print-access-token', { encoding: 'utf8' }).trim();
+const token = () => accessTokenForServiceAccountSync();
 
 function fromF(v) {
   if (v == null) return null;

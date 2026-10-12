@@ -30,12 +30,12 @@
  *       node scripts/trocar-vivian-por-jogador-x-grupo-d.js --apply   (grava)
  */
 'use strict';
-const { execSync } = require('child_process');
+const { accessTokenForServiceAccountSync } = require('./firebase-service-account-token');
 
 const APPLY = process.argv.includes('--apply');
 const ID = 'tour_1780009816637';
 const BASE = 'https://firestore.googleapis.com/v1/projects/scoreplace-app/databases/(default)/documents';
-const token = () => execSync('gcloud auth print-access-token', { encoding: 'utf8' }).trim();
+const token = () => accessTokenForServiceAccountSync();
 const H = () => ({ Authorization: 'Bearer ' + token() });
 
 const DE = 'Vivian';

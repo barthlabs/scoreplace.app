@@ -22,7 +22,7 @@
  *      SP_UID=<uid> node scripts/reativar-para-espera.js --apply    (grava)
  */
 const path = require('path');
-const { execSync } = require('child_process');
+const { accessTokenForServiceAccountSync } = require('./firebase-service-account-token');
 const ROOT = path.join(__dirname, '..');
 require(path.join(ROOT, 'functions-autodraw', 'draw-core.js'));
 const win = globalThis.window;
@@ -32,7 +32,7 @@ const UID = process.env.SP_UID || '';
 const PROJ = 'scoreplace-app';
 const BASE = `https://firestore.googleapis.com/v1/projects/${PROJ}/databases/(default)/documents`;
 const APPLY = process.argv.includes('--apply');
-const token = () => execSync('gcloud auth print-access-token', { encoding: 'utf8' }).trim();
+const token = () => accessTokenForServiceAccountSync();
 if (!UID) { console.error('faltou SP_UID=<uid da pessoa>'); process.exit(1); }
 
 function fromF(v) {

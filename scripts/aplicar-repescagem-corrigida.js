@@ -18,7 +18,7 @@
  */
 'use strict';
 const path = require('path');
-const { execSync } = require('child_process');
+const { accessTokenForServiceAccountSync } = require('./firebase-service-account-token');
 const Split = require(path.join(__dirname, '..', 'js', 'views', 'tournament-split-core.js'));
 const Leitura = require(path.join(__dirname, 'lib', 'leitura-resiliente.js'));
 
@@ -26,7 +26,7 @@ const BASE = 'https://firestore.googleapis.com/v1/projects/scoreplace-app/databa
 const GRAVAR = process.argv.includes('--gravar');
 const TID = process.argv.slice(2).find((a) => !a.startsWith('--'));
 if (!TID) { console.error('✗ falta o ID EXATO do torneio (nunca pedaço do nome).'); process.exit(1); }
-const token = () => execSync('gcloud auth print-access-token', { encoding: 'utf8' }).trim();
+const token = () => accessTokenForServiceAccountSync();
 const ler = Leitura.criarLeitor({ timeoutMs: 30000, tentativas: 4, esperaBaseMs: 500 });
 
 function fromF(v) {

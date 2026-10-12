@@ -26,7 +26,7 @@
  */
 'use strict';
 const path = require('path');
-const { execSync } = require('child_process');
+const { accessTokenForServiceAccountSync } = require('./firebase-service-account-token');
 const S = require(path.join(__dirname, '..', 'functions', 'vendor', 'tournament-split-core.js'));
 
 const ARGS = process.argv.slice(2);
@@ -35,7 +35,7 @@ const TID = ARGS.find((a) => !a.startsWith('--'));
 if (!TID) { console.error('✗ uso: node scripts/reparar-inscrito-string.js <tId> [--aplicar]'); process.exit(1); }
 
 const BASE = 'https://firestore.googleapis.com/v1/projects/scoreplace-app/databases/(default)/documents';
-const tk = execSync('gcloud auth print-access-token', { encoding: 'utf8' }).trim();
+const tk = accessTokenForServiceAccountSync();
 const H = { Authorization: 'Bearer ' + tk, 'Content-Type': 'application/json' };
 
 function f(v) {

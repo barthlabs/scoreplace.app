@@ -17,7 +17,7 @@
  *       node scripts/semear-playeruids.js --escrever
  */
 const path = require('path');
-const { execSync } = require('child_process');
+const { accessTokenForServiceAccountSync } = require('./firebase-service-account-token');
 
 require(path.join(__dirname, '..', 'functions-autodraw', 'draw-core.js'));
 const S = require(path.join(__dirname, '..', 'functions-autodraw', 'vendor', 'tournament-split-core.js'));
@@ -27,7 +27,7 @@ if (typeof (global.window || {})._matchPlayerUids !== 'function') {
 }
 
 const BASE = 'https://firestore.googleapis.com/v1/projects/scoreplace-app/databases/(default)/documents';
-const token = () => execSync('gcloud auth print-access-token', { encoding: 'utf8' }).trim();
+const token = () => accessTokenForServiceAccountSync();
 const ESCREVE = process.argv.includes('--escrever');
 const SO_ESTE = process.argv.slice(2).find((a) => !a.startsWith('--')) || null;
 

@@ -16,7 +16,7 @@
  *      node scripts/fix-confra-ghosts.js --apply    (grava)
  */
 const path = require('path');
-const { execSync } = require('child_process');
+const { accessTokenForServiceAccountSync } = require('./firebase-service-account-token');
 const ROOT = path.join(__dirname, '..');
 
 require(path.join(ROOT, 'functions-autodraw', 'draw-core.js'));
@@ -27,7 +27,7 @@ const TID = process.env.SP_TID || 'tour_1780009816637';
 const PROJ = 'scoreplace-app';
 const BASE = `https://firestore.googleapis.com/v1/projects/${PROJ}/databases/(default)/documents`;
 const APPLY = process.argv.includes('--apply');
-const token = () => execSync('gcloud auth print-access-token', { encoding: 'utf8' }).trim();
+const token = () => accessTokenForServiceAccountSync();
 
 // ── conversão Firestore REST ↔ JS ───────────────────────────────────────────
 function fromF(v) {
