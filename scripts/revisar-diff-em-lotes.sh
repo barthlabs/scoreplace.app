@@ -127,7 +127,7 @@ done < "$ALL"
 # lote da Function; a eventual repetição nos lotes próprios é proposital e read-only.
 MIGRATION_BATCH="$(grep -l '^functions/index\.js$' "$TMP"/batch-* 2>/dev/null | head -1 || true)"
 if [[ -n "$MIGRATION_BATCH" ]]; then
-  for context_file in CLAUDE.md js/release-notes.js js/views/tournaments-organizer.js tests/materializacao-inscricoes-organizador.test.js; do
+  for context_file in CLAUDE.md js/release-notes.js js/views/tournaments-organizer.js tests/materializacao-inscricoes-organizador.test.js tests/registro-canonico-dry-run-cf.test.js tests/run-unit.js; do
     grep -qxF "$context_file" "$MIGRATION_BATCH" || printf '%s\n' "$context_file" >> "$MIGRATION_BATCH"
   done
 fi
