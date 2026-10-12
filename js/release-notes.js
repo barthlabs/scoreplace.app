@@ -1,3 +1,4 @@
+// 2.4.1 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.0 — Configuração por categoria para competições por equipes: a organização define
 // quantas duplas cada time leva e quantos jogos cada dupla disputa em cada categoria.
 // O sorteio preserva a regra de que duplas do mesmo time não se enfrentam quando houver
