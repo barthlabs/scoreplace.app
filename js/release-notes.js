@@ -4,6 +4,8 @@
 // mais de uma dupla do time na categoria, e a previsão reproduz a ocupação contínua das quadras.
 // 2.4.0 — A reabertura de inscrições volta a confirmar no servidor; erros mostram a causa
 // concreta. Carimbos de atualização sem data válida deixam de exibir "Invalid Date".
+// 2.4.0 — Datas e horários do torneio compartilham a mesma faixa do logo do local;
+// a regressiva é a única indicação de início, sem a pílula duplicada "Começa em".
 // 2.3.356 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.355 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.354 — Atualização consolidada de produção com as correções validadas desde a última publicação.
@@ -647,6 +649,7 @@ window._RELEASE_NOTES_HTML = (function () {
         '<li><b>🔎 Encontrar jogo pelo número:</b> a busca aceita o número da partida, além do nome de atletas e equipes, para abrir rapidamente o jogo certo.</li>' +
         '<li><b>📋 Inscrições reabertas com confirmação:</b> abrir ou fechar inscrições é confirmado pelo servidor antes de a tela mudar. Se houver uma restrição real, o app mostra o motivo em vez de pedir para atualizar sem necessidade; os arquivos dessa correção são renovados junto da versão para que o navegador não conserve a tela anterior.</li>' +
         '<li><b>🗓️ Carimbo de atualização legível:</b> um registro antigo ou incompleto sem data válida não mostra mais <b>Invalid Date</b>; a informação só aparece quando há data e hora confirmáveis.</li>' +
+        '<li><b>📍 Período e local sem informação repetida:</b> no detalhe, o logo do local acompanha as datas e horários do torneio. A regressiva continua sendo a única indicação de quando o evento começa — a pílula duplicada “Começa em…” saiu da vitrine.</li>' +
       '</ul>' +
     '</div>' +
     // v2.3 — a faixa que nasce da AUDITORIA: o que mudou aqui quase não se vê na tela, e é
