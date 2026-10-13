@@ -548,12 +548,32 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // de inscritos. `_personCount` deduplica a projeção canônica por UID/ID
     // manual e expande cada dupla para seus dois membros.
     if (typeof window._personCount === 'function') return window._personCount(t);
-    var ps = (t && t.participants) || [];
-    var n = 0;
+    // Fallback de carregamento: replica a mesma identidade estrutural do
+    // contador canônico, para não voltar ao antigo "uma linha = uma pessoa"
+    // enquanto store.js termina de carregar.
+    var ps = Array.isArray(t && t.participants) ? t.participants : [];
+    var seen = Object.create(null), n = 0, placeholderSeq = 0;
+    function add(o, name) {
+      var uid = o && typeof o === 'object' && o.uid ? String(o.uid).trim() : '';
+      var manual = o && typeof o === 'object' && o.manualParticipantId ? String(o.manualParticipantId).trim() : '';
+      var ph = !!(o && typeof o === 'object' && (o.isPlaceholder === true || o.genericPlaceholderReservation === true));
+      var label = String(name == null ? '' : name).trim();
+      var key = uid ? 'u:' + uid : (manual ? 'm:' + manual : 'n:' + label.toLocaleLowerCase());
+      if (!uid && !manual && ph) key = 'placeholder:' + (++placeholderSeq);
+      if (key && key !== 'n:' && !seen[key]) { seen[key] = true; n++; }
+    }
     ps.forEach(function (p) {
       if (!p) return;
-      if (p.p2Name || (Array.isArray(p.participants) && p.participants.length > 1)) n += 2;
-      else n += 1;
+      if (typeof p === 'string') {
+        (p.indexOf(' / ') !== -1 ? p.split(' / ') : [p]).forEach(function (name) { add(null, name); });
+      } else if (Array.isArray(p.participants) && p.participants.length) {
+        p.participants.forEach(function (slot) { add(slot, slot && (slot.displayName || slot.name)); });
+      } else if (p.p1Uid || p.p1ManualId || p.p1Name || p.p2Uid || p.p2ManualId || p.p2Name) {
+        add({ uid: p.p1Uid, manualParticipantId: p.p1ManualId, isPlaceholder: p.isPlaceholder === true }, p.p1Name || p.p1Uid);
+        add({ uid: p.p2Uid, manualParticipantId: p.p2ManualId, isPlaceholder: p.isPlaceholder === true }, p.p2Name || p.p2Uid);
+      } else {
+        add(p, p.displayName || p.name || p.uid);
+      }
     });
     return n;
   }
