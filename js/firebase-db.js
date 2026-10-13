@@ -2684,7 +2684,7 @@ window.FirestoreDB = {
       // The split reader may have rebuilt the real registrations from a
       // subcollection while leaving placeholderReservations on the root config.
       // Project the complete canonical roster before any view/count consumes it.
-      this._mergePlaceholderReservationsIntoRoster(_t);
+      _t = this._mergePlaceholderReservationsIntoRoster(_t);
       // Rei/Rainha: o doc traz grupos só com matchIds — reidrata group.matches como refs.
       try { if (typeof window !== 'undefined' && typeof window._hydrateMonarchGroups === 'function') window._hydrateMonarchGroups(_t); } catch (_hmErr) {}
       return (typeof window._projectTournamentPhasesForRead === 'function') ? window._projectTournamentPhasesForRead(_t) : _t;
