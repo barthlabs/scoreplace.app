@@ -355,6 +355,15 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   }
 
   function _expandDuplas(parts, tournament) {
+    // A expansão usa a fila canônica, nunca a posição arbitrária do snapshot.
+    if (tournament && typeof window._ensureEnrollSeqs === 'function') window._ensureEnrollSeqs(tournament);
+    function memberOrder(seq, name, fallback) {
+      var m = String(name || '').match(/(?:jogador|player|inscrito|placeholder)\s*0*(\d+)$/i);
+      if (m) return Number(m[1]);
+      var n = Number(seq);
+      if (isFinite(n)) return n;
+      return fallback;
+    }
     var out = [];
     (parts || []).forEach(function (p, idx) {
       var isPair = p && typeof p === 'object' &&
@@ -373,10 +382,20 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
          * perfil vivo. A marca agora é a do próprio membro, que a porta grava junto do valor. */
         var p1Name = p.p1Name || p.p1DisplayName || ('Participante ' + (p.p1ManualId || p.p1Uid || '1'));
         var p2Name = p.p2Name || p.p2DisplayName || ('Participante ' + (p.p2ManualId || p.p2Uid || '2'));
-        out.push({ uid: p.p1Uid || '', manualParticipantId: p.p1ManualId || '', displayName: p1Name, name: p1Name, categories: baseCats.slice(), category: p.category || '', categoryId: p.categoryId || '', gender: p.p1Gender || '', genderSource: p.p1GenderSource === 'organizador' ? 'organizador' : '', _fromDupla: true, _duplaIdx: idx, _duplaSide: 'p1' });
-        out.push({ uid: p.p2Uid || '', manualParticipantId: p.p2ManualId || '', displayName: p2Name, name: p2Name, categories: baseCats.slice(), category: p.category || '', categoryId: p.categoryId || '', gender: p.p2Gender || '', genderSource: p.p2GenderSource === 'organizador' ? 'organizador' : '', _fromDupla: true, _duplaIdx: idx, _duplaSide: 'p2' });
+        var members = [
+          { uid: p.p1Uid || '', manualParticipantId: p.p1ManualId || '', displayName: p1Name, name: p1Name, gender: p.p1Gender || '', genderSource: p.p1GenderSource === 'organizador' ? 'organizador' : '', _duplaSide: 'p1', _registrationOrder: memberOrder(p.p1Seq, p1Name, idx * 2 + 1) },
+          { uid: p.p2Uid || '', manualParticipantId: p.p2ManualId || '', displayName: p2Name, name: p2Name, gender: p.p2Gender || '', genderSource: p.p2GenderSource === 'organizador' ? 'organizador' : '', _duplaSide: 'p2', _registrationOrder: memberOrder(p.p2Seq, p2Name, idx * 2 + 2) },
+        ];
+        members.sort(function (a, b) { return a._registrationOrder - b._registrationOrder; });
+        members.forEach(function (m) {
+          out.push(Object.assign(m, { categories: baseCats.slice(), category: p.category || '', categoryId: p.categoryId || '', _fromDupla: true, _duplaIdx: idx }));
+        });
       } else {
-        out.push(p);
+        if (p && typeof p === 'object') {
+          var solo = Object.assign({}, p);
+          solo._registrationOrder = memberOrder(solo.enrollSeq, solo.displayName || solo.name, idx + 1);
+          out.push(solo);
+        } else out.push(p);
       }
     });
     return out;
@@ -496,7 +515,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       }
 
       return {
-        order: idx + 1,                     // ordem de inscrição (1-based)
+        order: (p && p._registrationOrder != null) ? Number(p._registrationOrder) : idx + 1,
         name: name,
         email: email,
         uid: uid,
@@ -3051,17 +3070,15 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         + '<span class="toggle-slider"></span></label>';
     }
 
-    // Ordena: EDITADOS (âmbar, ainda não salvos) vão pro FINAL; entre os demais,
-    // VERIFICADOS (apuração letzplay) no topo, depois alfabético. Ao salvar, o
-    // pending limpa → cada um entra no lugar certo (cor + alfabético).
+    // A ordem da análise é a ordem canônica de inscrição. Status de apuração,
+    // edição pendente e nome não podem mover um inscrito para outra posição.
     function sortList(arr) {
       return arr.slice().sort(function (a, b) {
-        var ae = (_pendingEdits[a.order] && Object.keys(_pendingEdits[a.order]).length) ? 1 : 0;
-        var be = (_pendingEdits[b.order] && Object.keys(_pendingEdits[b.order]).length) ? 1 : 0;
-        if (ae !== be) return ae - be; // editados por último
-        var av = a._lzColor ? 0 : 1, bv = b._lzColor ? 0 : 1;
-        if (av !== bv) return av - bv; // verificados no topo
-        return String(a.name || '~').localeCompare(String(b.name || '~'), 'pt', { sensitivity: 'base' });
+        var ao = Number(a && a.order), bo = Number(b && b.order);
+        var av = isFinite(ao), bv = isFinite(bo);
+        if (av && bv && ao !== bo) return ao - bo;
+        if (av !== bv) return av ? -1 : 1;
+        return String(a && a.name || '').localeCompare(String(b && b.name || ''), 'pt', { sensitivity: 'base', numeric: true });
       });
     }
     // Card do atleta — tamanho padrão (min 150px), nome com ellipsis.
@@ -5690,9 +5707,10 @@ window._lzNaoEhEuMesmo = function (uid) {
         }).replace('id="fbwrap-analise"', 'id="fbwrap-analise" class="er-analysis-filter"') + '<div id="er-mx-search-empty" style="display:none;text-align:center;color:var(--text-muted);padding:14px;font-size:0.85rem;">Ninguém encontrado com esse nome.</div>'
       : '';
 
-    container.innerHTML = hdr + _mxBar +
+    container.innerHTML = hdr +
+      '<div class="er-analysis-title" style="max-width:100%;margin:0 auto;padding:10px 1.25rem 0;">' + subtitle + '</div>' +
+      _mxBar +
       '<div style="max-width:100%;margin:0 auto;padding:1rem 1.25rem;">' +
-      subtitle +
       // Seção ÚNICA: Categorias com apuração pelo letzplay (busca + legenda + matriz
       // drag-and-drop). Visão geral, distribuição por categoria e lista de inscritos
       // foram consolidadas aqui (v1.15.44).

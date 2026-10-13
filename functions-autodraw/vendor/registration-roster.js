@@ -83,7 +83,15 @@ var ScoreplaceRegistrationRoster;
         return entry;
     }
     function pairEntry(categoryId, first, second) {
-        const entry = { categoryId, category: categoryId, categories: [categoryId], fixedPair: true };
+        // A dupla é uma unidade visual, mas cada integrante continua tendo o seu
+        // número de inscrição. Sem carregar a sequência para a projeção legada, a
+        // tela precisava recriá-la pela posição do array (que o Firestore não
+        // garante) e os pares apareciam embaralhados a cada leitura.
+        const entry = {
+            categoryId, category: categoryId, categories: [categoryId], fixedPair: true,
+            p1Seq: first.order.rank,
+            p2Seq: second.order.rank,
+        };
         if (first.uid)
             entry.p1Uid = first.uid;
         if (second.uid)
