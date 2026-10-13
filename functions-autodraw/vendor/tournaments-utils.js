@@ -988,6 +988,21 @@ var _num = function (v) { return (typeof v === 'number' && isFinite(v)) ? v : nu
  * [[project_derivado_nao_se_guarda_standings]] */
 window._cardCompetidores = function (t) {
   if (!t) return { people: 0, teams: 0, carregando: false };
+  // Torneios canônicos têm duas fotografias possíveis: registros individuais
+  // brutos e a projeção estrutural (duplas). O resumo legado pode ter sido
+  // calculado antes da materialização de placeholders e, portanto, não é uma
+  // fonte segura para esse caso. Recalcular pela lista canônica evita exibir
+  // 256 quando o roster real é 96 + 32 = 128.
+  var _isCanonical = !!(t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint);
+  if (_isCanonical && Array.isArray(t.participants) && typeof window._countCompetitors === 'function') {
+    var _canonicalCount = window._countCompetitors(t);
+    return {
+      people: _canonicalCount.people,
+      teams: _num(t.teamsCount) || _canonicalCount.teams,
+      carregando: false,
+      confiavel: true
+    };
+  }
   var p = _num(t.competitorsCount);
   // O resumo é publicado no documento-base junto da inscrição. Portanto, mesmo quando
   // a subcoleção `inscritos` ainda está chegando, estes números já são fatos — não são

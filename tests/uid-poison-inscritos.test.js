@@ -140,6 +140,24 @@ console.log('\nDupla que inclui o organizador:');
   ok('4 pessoas inscritas (dupla = 2)', W._personCount(t) === 4, W._personCount(t) + '/4');
 }
 
+// ── 5b · Fotografia canônica + reservas não pode contar duas vezes ───────────
+// A tela pública recebe duplas projetadas; o formulário de edição pode receber
+// a fotografia bruta. As duas representações devem produzir 128 pessoas, não
+// 256 (96 já inscritas + 32 placeholders).
+console.log('\nRoster canônico de 96 + 32 placeholders:');
+{
+  const pairs = [];
+  for (let i = 1; i <= 96; i += 2) pairs.push({ p1Uid: 'canon_' + i, p2Uid: 'canon_' + (i + 1) });
+  const reserves = [];
+  for (let i = 97; i <= 128; i++) reserves.push({ manualParticipantId: 'manual_' + i, name: 'Jogador ' + i, displayName: 'Jogador ' + i, isPlaceholder: true });
+  ok('48 duplas canônicas + 32 reservas = 128 pessoas', W._personCount({ participants: pairs.concat(reserves) }) === 128,
+    W._personCount({ participants: pairs.concat(reserves) }) + '/128');
+  const materialized = [];
+  for (let i = 97; i <= 128; i += 2) materialized.push({ p1ManualId: 'manual_' + i, p2ManualId: 'manual_' + (i + 1), p1Name: 'Jogador ' + i, p2Name: 'Jogador ' + (i + 1) });
+  ok('64 duplas materializadas continuam = 128 pessoas', W._personCount({ participants: pairs.concat(materialized) }) === 128,
+    W._personCount({ participants: pairs.concat(materialized) }) + '/128');
+}
+
 // ── 6 · Inscrição é por uid — nome/e-mail iguais NÃO inscrevem estranho ──────
 console.log('\n"Estou inscrito?" responde por uid:');
 {

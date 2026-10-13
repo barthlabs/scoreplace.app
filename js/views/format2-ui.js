@@ -544,6 +544,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 
   // Conta PESSOAS inscritas (dupla-entry = 2; senão 1). project_count_people_not_entries.
   function _peopleCount(t) {
+    // O formulário de edição precisa usar exatamente a mesma contagem da tela
+    // de inscritos. `_personCount` deduplica a projeção canônica por UID/ID
+    // manual e expande cada dupla para seus dois membros.
+    if (typeof window._personCount === 'function') return window._personCount(t);
     var ps = (t && t.participants) || [];
     var n = 0;
     ps.forEach(function (p) {

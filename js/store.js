@@ -14866,17 +14866,45 @@ window._enrollNumber = function(orderMap, p) {
   return '';
 };
 // total de PESSOAS inscritas (dupla conta 2) — pra a contagem "Inscritos".
+// A entrada pode ser uma projeção de dupla (p1/p2), um registro individual
+// canônico ou uma reserva de placeholder. O número deve contar PESSOAS, não
+// linhas técnicas do roster. A mesma pessoa que aparece em duas fotografias
+// (por exemplo, registro bruto + projeção de dupla) entra uma única vez.
 window._personCount = function(t) {
-  var arr = Array.isArray(t && t.participants) ? t.participants : [];
-  var n = 0;
-  arr.forEach(function(p){
-    // v3.0.x CANON: dupla/time por ESTRUTURA (slots p1/p2 ou participants[]) → conta os membros.
-    // Antes ignorava a forma p.participants[] e a contava como 1 pessoa (subcontagem de inscritos).
-    var m = (typeof window._entryTeamMembers === 'function') ? window._entryTeamMembers(p) : null;
-    if (m) { n += m.length; return; }
-    // String legada "A / B" (helper retorna null pra string solta) → conta os membros.
-    if (typeof p === 'string' && p.indexOf(' / ') !== -1) { n += p.split(' / ').filter(function(s){ return s.trim(); }).length; return; }
-    n += 1;
+  var raw = (typeof window._getCompetitors === 'function') ? window._getCompetitors(t) : (t && t.participants);
+  var arr = Array.isArray(raw) ? raw : (raw ? Object.values(raw) : []);
+  var seen = Object.create(null), n = 0, placeholderSeq = 0;
+  function add(o, name) {
+    var uid = o && typeof o === 'object' && o.uid ? String(o.uid).trim() : '';
+    var manual = o && typeof o === 'object' && o.manualParticipantId ? String(o.manualParticipantId).trim() : '';
+    var isPlaceholder = !!(o && typeof o === 'object' && (o.isPlaceholder === true || o.genericPlaceholderReservation === true));
+    var label = String(name == null ? '' : name).trim();
+    var key = uid ? 'u:' + uid : (manual ? 'm:' + manual : 'n:' + label.toLocaleLowerCase());
+    // Placeholder sem identidade estrutural é uma vaga, não uma pessoa real
+    // identificável pelo nome. Duas reservas com o mesmo rótulo continuam sendo
+    // duas vagas distintas.
+    if (!uid && !manual && isPlaceholder) key = 'placeholder:' + (++placeholderSeq);
+    if (!key || key === 'n:') return;
+    if (!seen[key]) { seen[key] = true; n++; }
+  }
+  arr.forEach(function(p) {
+    if (!p) return;
+    if (typeof p === 'string') {
+      var names = p.indexOf(' / ') !== -1 ? p.split(' / ') : [p];
+      names.forEach(function(name) { add(null, name); });
+      return;
+    }
+    if (typeof p !== 'object') return;
+    if (Array.isArray(p.participants) && p.participants.length) {
+      p.participants.forEach(function(slot) { add(slot, slot && (slot.displayName || slot.name)); });
+      return;
+    }
+    if (p.p1Uid || p.p1ManualId || p.p1Name || p.p2Uid || p.p2ManualId || p.p2Name) {
+      add({ uid: p.p1Uid, manualParticipantId: p.p1ManualId, isPlaceholder: p.isPlaceholder === true }, p.p1Name || p.p1Uid);
+      add({ uid: p.p2Uid, manualParticipantId: p.p2ManualId, isPlaceholder: p.isPlaceholder === true }, p.p2Name || p.p2Uid);
+      return;
+    }
+    add(p, p.displayName || p.name || p.uid);
   });
   return n;
 };

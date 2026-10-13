@@ -106,5 +106,20 @@ console.log('──── o cartão lê o RESUMO ou o DOCUMENTO, com o mesmo res
      '⛔ o dashboard usa os acessadores (senão nada disto vale no ar)');
 }
 
+// ── ⑥ roster canônico não confia em resumo stale ────────────────────────────
+{
+  const pairs = [];
+  for (let i = 1; i <= 96; i += 2) pairs.push({ p1Uid: 'canon_' + i, p2Uid: 'canon_' + (i + 1) });
+  const t = {
+    id: 'canonical-neon',
+    canonicalRegistrationMigration: { fingerprint: 'fp' },
+    competitorsCount: 256,
+    teamsCount: 8,
+    participants: pairs,
+  };
+  ok(W._cardCompetidores(t).people === 96,
+     'roster canônico recalcula pela projeção e não usa resumo antigo (got ' + W._cardCompetidores(t).people + ')');
+}
+
 console.log('\n' + (fail === 0 ? '✅' : '❌') + ' ' + pass + ' ok, ' + fail + ' falha(s)');
 process.exit(fail ? 1 : 0);
