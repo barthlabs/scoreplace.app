@@ -1,7 +1,9 @@
 // 2.4.4 — Participantes e vagas passam a abrir em painel contextual: incluir
 // placeholders não troca a rota, não perde a rolagem do torneio e não revela a
-// tela de chaves. A reserva continua genérica, sem categoria, e entra na Análise
-// imediatamente como vaga reservada — não como pessoa com perfil pendente.
+// tela de chaves. A resposta da Function agora repinta a rota de inscritos, em
+// vez de substituir a lista pela chave vazia. A reserva continua genérica, sem
+// categoria, e entra na Análise imediatamente como vaga reservada — não como
+// pessoa com perfil pendente.
 // 2.4.3 — Placeholders voltam a ser reservas genéricas de vaga: não exigem
 // categoria e não criam uma inscrição incompleta. A reserva é reidratada de
 // forma idempotente em toda leitura canônica.
