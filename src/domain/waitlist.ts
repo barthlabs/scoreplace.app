@@ -396,7 +396,7 @@ namespace ScoreplaceWaitlist {
     // That is still a pre-start roster: new entries belong in participants, not
     // in the late-registration queue. An explicit false is authoritative.
     if (tournament.tournamentStarted === false) return false;
-    const status = text(tournament.status).toLowerCase();
+    const status = text(tournament.status).trim().toLowerCase();
     if (status === 'started' || status === 'in_progress' || status === 'live') return true;
     if (tournament.tournamentStarted === true || tournament.tournamentStartedAt || tournament.phaseStartedAt) return true;
     const startRaw = tournament.startDate || '';

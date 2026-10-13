@@ -269,7 +269,7 @@ window._phaseDrawDone = function (t) {
      (Array.isArray(t.groups) && t.groups.length > 0));
   if (!hasDraw) return false;
   if (t.tournamentStarted === false) return false;
-  var status = String(t.status || '').toLowerCase();
+  var status = String(t.status || '').trim().toLowerCase();
   if (status === 'started' || status === 'in_progress' || status === 'live') return true;
   if (t.tournamentStarted === true || t.tournamentStartedAt || t.phaseStartedAt) return true;
   var startRaw = t.startDate || '';
