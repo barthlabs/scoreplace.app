@@ -4297,16 +4297,27 @@ window._formTeamConfirm = function(tId, name1, uid1, name2, uid2, opts) {
         var fcategory1 = typeof p1final === 'object' ? String(p1final.categoryId || '').trim() : '';
         var fcategory2 = typeof p2final === 'object' ? String(p2final.categoryId || '').trim() : '';
         var fcanonical = !!(t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint);
+        // Reservas de placeholder vivem fora de `registrations` até virarem
+        // pessoas reais. Em torneio de duplas, duas reservas sem categoria
+        // continuam podendo formar uma dupla; a categoria será definida depois.
+        var _placeholderPairNoCategory = !!(
+            fcanonical && !fcategory1 && !fcategory2 &&
+            parseInt(t.teamSize || 1, 10) >= 2 &&
+            p1final && p2final &&
+            (p1final.isPlaceholder === true || p1final.genericPlaceholderReservation === true) &&
+            (p2final.isPlaceholder === true || p2final.genericPlaceholderReservation === true)
+        );
         if (!(window.FirestoreDB && typeof window.FirestoreDB.formPair === 'function')) {
             if (typeof showNotification === 'function') showNotification('Sem conexão', 'Não foi possível formar a dupla agora — tente de novo.', 'warning');
             return;
         }
         var _hasBracketDF = !!((t.matches && t.matches.length) || (t.rounds && t.rounds.length) || (t.groups && t.groups.length));
-        if ((!fuid1 && !fmanual1) || (!fuid2 && !fmanual2) || (fcanonical && (!fcategory1 || fcategory1 !== fcategory2))) {
+        if ((!fuid1 && !fmanual1) || (!fuid2 && !fmanual2) ||
+            (fcanonical && (!fcategory1 || fcategory1 !== fcategory2) && !_placeholderPairNoCategory)) {
             if (typeof showNotification === 'function') showNotification('Dupla sem identidade ou categoria válida', 'Atualize ou materialize o elenco antes de formar a dupla.', 'warning');
             return;
         }
-        window.FirestoreDB.formPair(tId, { uid1: fuid1, manualId1: fmanual1, name1: name1, uid2: fuid2, manualId2: fmanual2, name2: name2, categoryId: fcanonical ? fcategory1 : '', changeRule: !!_changeRule })
+        window.FirestoreDB.formPair(tId, { uid1: fuid1, manualId1: fmanual1, name1: name1, uid2: fuid2, manualId2: fmanual2, name2: name2, categoryId: fcanonical && !_placeholderPairNoCategory ? fcategory1 : '', changeRule: !!_changeRule })
             .then(function () {
                 if (_hasBracketDF && typeof window._triggerLateIntegration === 'function') { try { window._triggerLateIntegration(t, { force: true }); } catch (e) {} }
                 var container = document.getElementById('view-container');

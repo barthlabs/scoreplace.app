@@ -6076,7 +6076,6 @@ exports.formPair = onCall(
       const rawTournament = snap.data() || {};
       if (rawTournament.canonicalRegistrationMigration && rawTournament.canonicalRegistrationMigration.fingerprint) {
         if (opts.changeRule) throw new HttpsError("failed-precondition", "alteração de regra não faz parte da dupla canônica");
-        if (!opts.categoryId) throw new HttpsError("invalid-argument", "categoryId é obrigatório para formar dupla canônica");
         if ((!opts.uid1 && !opts.manualId1) || (!opts.uid2 && !opts.manualId2)) {
           throw new HttpsError("invalid-argument", "dupla canônica exige UID ou ID manual; nome não é identidade");
         }
@@ -6086,6 +6085,38 @@ exports.formPair = onCall(
           throw new HttpsError("permission-denied", "só o organizador ou um dos dois da dupla podem formá-la");
         }
         const checked = await _loadCanonicalRosterForMutation(tx, docRef, rawTournament);
+        // Placeholders são reservas organizacionais, não inscrições canônicas.
+        // Em torneio de duplas o organizador pode formar duas reservas sem
+        // categoria; materializamos ambas como inscrições canônicas na
+        // categoria sentinela e vinculamos a dupla na mesma transação.
+        if (!opts.categoryId && opts.manualId1 && opts.manualId2) {
+          const reservations = Array.isArray(rawTournament.placeholderReservations)
+            ? rawTournament.placeholderReservations : [];
+          const r1 = reservations.find((item) => String(item && item.manualParticipantId || '') === String(opts.manualId1));
+          const r2 = reservations.find((item) => String(item && item.manualParticipantId || '') === String(opts.manualId2));
+          const teamSize = Number(rawTournament.teamSize || 1);
+          if (teamSize < 2 || !r1 || !r2 || r1.isPlaceholder !== true || r2.isPlaceholder !== true) {
+            throw new HttpsError("invalid-argument", "reservas sem categoria só podem formar dupla em torneio de duplas");
+          }
+          const uncategorized = _registrationCore.UNCATEGORIZED_CATEGORY_ID;
+          const key1 = _registrationCore.participantKey({ manualParticipantId: opts.manualId1 });
+          const key2 = _registrationCore.participantKey({ manualParticipantId: opts.manualId2 });
+          const id1 = _registrationCore.registrationId(key1, uncategorized);
+          const id2 = _registrationCore.registrationId(key2, uncategorized);
+          const existing = new Set(checked.registrations.map((item) => String(item.registrationId)));
+          if (existing.has(id1) || existing.has(id2)) {
+            throw new HttpsError("already-exists", "uma das reservas já foi materializada");
+          }
+          const fixedPairId = _registrationMutations.canonicalPairId(tournamentId, uncategorized, [id1, id2]);
+          const manualName = (item, fallback) => String(item && (item.manualDisplayName || item.displayName || item.name) || fallback).trim();
+          const creates = [
+            { registrationId: id1, tournamentId, categoryId: uncategorized, participantKey: key1, status: "confirmed", validationState: "placeholder_pair", migrationFingerprint: rawTournament.canonicalRegistrationMigration.fingerprint, fixedPairId, participantKind: "manual", participantUid: null, manualParticipantId: String(opts.manualId1), manualDisplayName: manualName(r1, opts.name1) },
+            { registrationId: id2, tournamentId, categoryId: uncategorized, participantKey: key2, status: "confirmed", validationState: "placeholder_pair", migrationFingerprint: rawTournament.canonicalRegistrationMigration.fingerprint, fixedPairId, participantKind: "manual", participantUid: null, manualParticipantId: String(opts.manualId2), manualDisplayName: manualName(r2, opts.name2) },
+          ];
+          const next = _writeCanonicalRosterCreates(tx, docRef, rawTournament, checked.registrations, creates);
+          return { outcome: "paired", participants: next.participants, canonical: true };
+        }
+        if (!opts.categoryId) throw new HttpsError("invalid-argument", "categoryId é obrigatório para formar dupla canônica");
         let decision;
         try {
           decision = _registrationMutations.pairParticipants(

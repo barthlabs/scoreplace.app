@@ -2449,6 +2449,9 @@ window.FirestoreDB = {
           var projected = Object.assign({}, entry);
           var categoryId = String(projected.categoryId || projected.category || '').trim();
           var categoryLabel = _categoryLabels[categoryId];
+          // Reservas de placeholder pareadas em torneio de duplas usam a
+          // sentinela canônica até o organizador atribuir a categoria.
+          if (!categoryLabel && categoryId === '__uncategorized__') categoryLabel = 'Sem categoria';
           if (!categoryId || !categoryLabel) throw new Error('categoria canônica sem rótulo tipado');
           // Compatibilidade de desenho: o legado continua exibindo `category`,
           // mas toda ação nova lê `categoryId` (o valor estrutural).
