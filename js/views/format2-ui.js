@@ -765,7 +765,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         var count = Math.max(1, parseInt(pairValues[category], 10) || 1);
         var games = Math.max(1, Math.min(maxGames, parseInt(gameValues[category], 10) || fallbackGames));
         var categoryArg = JSON.stringify(category).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-        return '<div style="padding:7px 8px;border:1px solid rgba(129,140,248,.25);border-radius:8px;font-size:.74rem;color:var(--text-muted);"><div style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:6px;" title="' + _safe(category) + '">' + _safe(category) + '</div><div style="display:flex;gap:8px;align-items:center;justify-content:space-between;"><label>Duplas <input type="number" min="1" max="64" value="' + count + '" aria-label="Duplas por time em ' + _safe(category) + '" onchange="window._f2TeamCategorySchedule(' + categoryArg + ',\'pairs\',this.value,this)" style="width:42px;text-align:center;padding:4px;border-radius:6px;border:1px solid rgba(255,255,255,.2);background:var(--bg-darker,rgba(0,0,0,.25));color:var(--text-main);"></label><label>Jogos <input type="number" min="1" max="' + maxGames + '" value="' + games + '" aria-label="Jogos por dupla em ' + _safe(category) + '" onchange="window._f2TeamCategorySchedule(' + categoryArg + ',\'games\',this.value,this)" style="width:42px;text-align:center;padding:4px;border-radius:6px;border:1px solid rgba(255,255,255,.2);background:var(--bg-darker,rgba(0,0,0,.25));color:var(--text-main);"></label></div></div>';
+        var pairHandler = "window._f2TeamCategorySchedule(" + categoryArg + ",'pairs',this.value,this)";
+        var gameHandler = "window._f2TeamCategorySchedule(" + categoryArg + ",'games',this.value,this)";
+        return '<div style="padding:7px 8px;border:1px solid rgba(129,140,248,.25);border-radius:8px;font-size:.74rem;color:var(--text-muted);"><div style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:6px;" title="' + _safe(category) + '">' + _safe(category) + '</div><div style="display:flex;gap:8px;align-items:center;justify-content:space-between;"><label>Duplas <input type="number" min="1" max="64" value="' + count + '" aria-label="Duplas por time em ' + _safe(category) + '" oninput="' + pairHandler + '" onchange="' + pairHandler + '" style="width:42px;text-align:center;padding:4px;border-radius:6px;border:1px solid rgba(255,255,255,.2);background:var(--bg-darker,rgba(0,0,0,.25));color:var(--text-main);"></label><label>Jogos <input type="number" min="1" max="' + maxGames + '" value="' + games + '" aria-label="Jogos por dupla em ' + _safe(category) + '" oninput="' + gameHandler + '" onchange="' + gameHandler + '" style="width:42px;text-align:center;padding:4px;border-radius:6px;border:1px solid rgba(255,255,255,.2);background:var(--bg-darker,rgba(0,0,0,.25));color:var(--text-main);"></label></div></div>';
       }).join('') + '</div>' +
       '<div style="font-size:.68rem;color:var(--text-muted);margin-top:7px;line-height:1.4;">Cada categoria define vagas e jogos da sua dupla. O sorteio exige exatamente as vagas declaradas por time e não cria vagas artificiais.</div></div>';
   }
@@ -1520,6 +1522,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     }
     if (_teamScheduleRequiresInternalAvoid(tc)) tc.internalMatches = 'avoid';
     _norm(); _rerenderSemAtrapalhar(el);
+    // Atualiza a escada imediatamente. O rerender estrutural é deliberadamente
+    // adiado para não roubar foco do campo, mas a prévia deve refletir cada
+    // alteração de vagas/jogos no mesmo evento (inclusive antes do blur).
+    if (typeof window._renderPhaseEstimate === 'function') window._renderPhaseEstimate();
     if (typeof window._recalcDuration === 'function') window._recalcDuration();
   };
   // Compatibilidade para páginas ainda montadas pela versão anterior da UI.

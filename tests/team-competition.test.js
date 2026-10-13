@@ -54,6 +54,9 @@ ok(C.configurationForTournament({ teamCompetition: incompleteTopLevel }).enabled
 const teamUi = fs.readFileSync('js/views/format2-ui.js', 'utf8');
 ok(teamUi.includes('f2-team-schedule-teams-value') && teamUi.includes('_f2TeamScheduleRefresh(tc)') && teamUi.includes('Agenda por categoria') && teamUi.includes('_f2TeamCategorySchedule') && teamUi.includes('gamesPerPairByCategory'),
   'a UI configura vagas e jogos de cada categoria sem depender de um valor global');
+ok(teamUi.includes('oninput="\' + pairHandler + \'"') && teamUi.includes('oninput="\' + gameHandler + \'"') &&
+  teamUi.includes('window._renderPhaseEstimate'),
+  'alterar duplas/jogos por categoria atualiza a prévia imediatamente, sem esperar perder o foco');
 const createUi = fs.readFileSync('js/views/create-tournament.js', 'utf8');
 ok(!createUi.includes("lines.push(_t('create.gsmPoints'") && !createUi.includes("lines.push(_t('create.gsmNumericPts'"),
   'formato numérico não inventa “pontos para vencer” nem duração a partir de campos técnicos');
