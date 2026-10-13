@@ -1,4 +1,4 @@
-// 2.4.14 — Atualização consolidada de produção com as correções validadas desde a última publicação.
+// 2.4.14 — Duplas formadas agora pintam imediatamente com o roster retornado pela transação, sem releitura possivelmente atrasada; reservas ainda não materializadas permanecem estáveis em “Sem dupla”.
 // 2.4.13 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.12 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.11 — Atualização consolidada de produção com as correções validadas desde a última publicação.
