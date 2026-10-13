@@ -14828,7 +14828,23 @@ window._buildEnrollOrderMap = function(t) {
 };
 // nº de inscrição de UMA pessoa (1-based) — uid primeiro, nome como fallback.
 window._enrollNumber = function(orderMap, p) {
-  if (!orderMap || !p) return '';
+  if (!p) return '';
+  /* Placeholder names are the public registration labels.  Never let a legacy UID,
+   * a re-formed pair, or an old queue position replace the number printed in
+   * "Jogador N".  The previous resolver did exactly that (Jogador 97 became 193).
+   * This check intentionally runs before the map and also works while the roster is
+   * still loading. */
+  var placeholderNames = [];
+  if (typeof p === 'object') {
+    [p.displayName, p.name, p.p1Name, p.p2Name].forEach(function (nm) { if (nm) placeholderNames.push(String(nm)); });
+  } else {
+    placeholderNames.push(String(p));
+  }
+  for (var pi = 0; pi < placeholderNames.length; pi++) {
+    var pm = placeholderNames[pi].trim().match(/^Jogador\s*0*(\d+)$/i);
+    if (pm) return parseInt(pm[1], 10);
+  }
+  if (!orderMap) return '';
   var cand = [];
   if (typeof p === 'object') {
     if (p.uid)   cand.push('u:' + p.uid);
@@ -14842,7 +14858,7 @@ window._enrollNumber = function(orderMap, p) {
     if (p.manualParticipantId)   cand.push('m:' + p.manualParticipantId);
     if (p.p1ManualId)            cand.push('m:' + p.p1ManualId);
     if (p.p2ManualId)            cand.push('m:' + p.p2ManualId);
-    [p.displayName, p.name].forEach(function(nm){ if (nm) cand.push('n:' + String(nm).toLowerCase().trim()); });
+    [p.displayName, p.name, p.p1Name, p.p2Name].forEach(function(nm){ if (nm) cand.push('n:' + String(nm).toLowerCase().trim()); });
   } else {
     cand.push('n:' + String(p).toLowerCase().trim());
   }

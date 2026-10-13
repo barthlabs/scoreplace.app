@@ -72,9 +72,22 @@ window._duplaCard = function (t, p, draggable, ctx) {
     // p1Name/p2Name de quem tem uid → exigir NOME aqui fazia a dupla renderizar como solo.
     // _displayName(uid,'') resolve o nome VIVO pelo uid (+ data-uid-name hidrata assíncrono).
     var _pairMembers = (typeof p === 'object' && p && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name))
-      ? [{ uid: (p.p1Uid || ''), guest: String(p.p1Name || '').trim() }, { uid: (p.p2Uid || ''), guest: String(p.p2Name || '').trim() }]
+      ? [{ uid: (p.p1Uid || ''), manualParticipantId: (p.p1ManualId || ''), guest: String(p.p1Name || '').trim() }, { uid: (p.p2Uid || ''), manualParticipantId: (p.p2ManualId || ''), guest: String(p.p2Name || '').trim() }]
       : (nm.includes('/') ? nm.split('/').map(function (s) { return { uid: '', guest: s.trim() }; }).filter(function (x) { return x.guest; }) : null);
-    var members = _pairMembers ? _pairMembers.map(function (m) { return window._displayName(m.uid, m.guest); }) : null;
+    /* A pair's storage order is mutation data (p1/p2) and must not be changed.
+     * Its visual order, however, is the registration order: Jogador 01 / Jogador 02,
+     * never the reverse merely because a drag or a legacy sort wrote p1 first. */
+    var _pairDisplayMembers = _pairMembers ? _pairMembers.slice().sort(function (a, b) {
+      function n(m) {
+        var resolved = (window._displayName && m.uid) ? window._displayName(m.uid, m.guest) : m.guest;
+        var label = String(resolved || m.guest || '').trim().match(/^Jogador\s*0*(\d+)$/i);
+        if (label) return parseInt(label[1], 10);
+        if (window._enrollNumber) return parseInt(window._enrollNumber(_enrollOrderMapD, { uid: m.uid, manualParticipantId: m.manualParticipantId, displayName: resolved || m.guest, name: resolved || m.guest }), 10) || Number.MAX_SAFE_INTEGER;
+        return Number.MAX_SAFE_INTEGER;
+      }
+      return n(a) - n(b);
+    }) : null;
+    var members = _pairDisplayMembers ? _pairDisplayMembers.map(function (m) { return window._displayName(m.uid, m.guest); }) : null;
     /* A categoria da DUPLA é uma decisão do torneio, não uma inferência do perfil de
      * cada pessoa. Em inscrições em lote (como o Neon), os placeholders não têm perfil:
      * tentar montar os badges por membro produzia dois "sem cat" mesmo quando o registro
@@ -114,7 +127,7 @@ window._duplaCard = function (t, p, draggable, ctx) {
       // existia e se perdia no `.map`. Com o índice ele volta, e o ícone passa a hidratar
       // em vez de nascer mudo quando o perfil ainda não resolveu.
       nameHtml = members.map(function (n, _mi) {
-        var _mUid = (_pairMembers && _pairMembers[_mi] && _pairMembers[_mi].uid) || '';
+        var _mUid = (_pairDisplayMembers && _pairDisplayMembers[_mi] && _pairDisplayMembers[_mi].uid) || '';
         var _mContact = (typeof window._contactPersonIconHtml === 'function')
           ? window._contactPersonIconHtml(t, _mUid, n, { sameGroup: true }) : '';
         return '<div style="display:flex;align-items:center;gap:6px;overflow:hidden;margin-bottom:2px;">' +
@@ -171,12 +184,12 @@ window._duplaCard = function (t, p, draggable, ctx) {
     var _delBtnDupla = (isOrg && !drawDone && draggable)
       ? '<button type="button" class="cancel-x-btn" title="Remover inscrito" onclick="event.stopPropagation();window.removeParticipantFunction(\'' + _safeAttr(tIdStr) + '\',\'' + _safeAttr(_entryName) + '\',\'' + _safeAttr(_removeIdentity) + '\')" style="--cx-size:24px;">✕</button>'
       : '';
-    var _s1 = (members && window._enrollNumber) ? window._enrollNumber(_enrollOrderMapD, { uid: (p && p.p1Uid) || '', manualParticipantId: (p && p.p1ManualId) || '', displayName: (p && p.p1Name) || members[0], name: (p && p.p1Name) || members[0] }) : '';
-    var _s2 = (members && members[1] && window._enrollNumber) ? window._enrollNumber(_enrollOrderMapD, { uid: (p && p.p2Uid) || '', manualParticipantId: (p && p.p2ManualId) || '', displayName: (p && p.p2Name) || members[1], name: (p && p.p2Name) || members[1] }) : '';
+    var _s1 = (members && window._enrollNumber) ? window._enrollNumber(_enrollOrderMapD, { uid: (_pairDisplayMembers[0] && _pairDisplayMembers[0].uid) || '', manualParticipantId: (_pairDisplayMembers[0] && _pairDisplayMembers[0].manualParticipantId) || '', displayName: members[0], name: members[0] }) : '';
+    var _s2 = (members && members[1] && window._enrollNumber) ? window._enrollNumber(_enrollOrderMapD, { uid: (_pairDisplayMembers[1] && _pairDisplayMembers[1].uid) || '', manualParticipantId: (_pairDisplayMembers[1] && _pairDisplayMembers[1].manualParticipantId) || '', displayName: members[1], name: members[1] }) : '';
     var _body;
     if (members) {
       var _memBlock = function (idxM, right) {
-        var _mm = _pairMembers[idxM] || { uid: '', guest: '' };
+        var _mm = _pairDisplayMembers[idxM] || { uid: '', guest: '' };
         var _disp = window._displayName(_mm.uid, _mm.guest);
         var _metaName = _disp || _mm.guest;
         // ⭐ o uid do membro está em `_mm` — o ícone hidrata em vez de nascer mudo

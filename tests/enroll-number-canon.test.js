@@ -52,6 +52,21 @@ const inicial = numeros(novo());
 console.log('  inicial: ' + JSON.stringify(inicial));
 ok('cada um começa com o seu número', JSON.stringify(inicial) === JSON.stringify({ Ana: 1, Bia: 2, Caio: 3, Duda: 4, Edu: 5 }));
 
+// ── placeholder: o rótulo Jogador N é a inscrição, não o UID histórico ─────
+console.log('\nPlaceholder — o número visível vem do próprio rótulo:');
+{
+  const t = novo();
+  t.participants = [
+    { uid: 'legacy-97', displayName: 'Jogador 97', enrollSeq: 193 },
+    { p1Uid: 'legacy-1', p1Name: 'Jogador 01', p1Seq: 14, p2Uid: 'legacy-2', p2Name: 'Jogador 02', p2Seq: 15 },
+  ];
+  const m = W._buildEnrollOrderMap(t);
+  ok('Jogador 97 não vira 193', W._enrollNumber(m, { uid: 'legacy-97', displayName: 'Jogador 97' }) === 97, String(W._enrollNumber(m, { uid: 'legacy-97', displayName: 'Jogador 97' })));
+  ok('Jogador 01 mantém 01 mesmo dentro da dupla', W._enrollNumber(m, { uid: 'legacy-1', displayName: 'Jogador 01' }) === 1, String(W._enrollNumber(m, { uid: 'legacy-1', displayName: 'Jogador 01' })));
+  ok('Jogador 02 mantém 02 mesmo dentro da dupla', W._enrollNumber(m, { uid: 'legacy-2', displayName: 'Jogador 02' }) === 2, String(W._enrollNumber(m, { uid: 'legacy-2', displayName: 'Jogador 02' })));
+  ok('placeholder funciona mesmo sem mapa carregado', W._enrollNumber({}, { displayName: 'Jogador 124' }) === 124, String(W._enrollNumber({}, { displayName: 'Jogador 124' })));
+}
+
 // ── formar dupla: o seq de cada um entra na dupla (p1Seq/p2Seq) ───────────────
 console.log('\nFormar dupla (Bia + Duda) — os números não podem mudar:');
 {
