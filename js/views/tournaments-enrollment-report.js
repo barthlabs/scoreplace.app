@@ -1201,7 +1201,17 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   function _erIsVisibleEnrollmentRow(row) {
     // A generic placeholder reservation is stored alongside the standby queue,
     // but it is a reserved place in the tournament, not a late registration.
-    return !!(row && (!row._wl || row.genericPlaceholderReservation === true));
+    // Older snapshots carried the reservation marker only as `isPlaceholder`
+    // (and a few waitlist projections carried only the generated name). Keep
+    // those rows visible too; otherwise the total includes 128 while the
+    // category matrix silently drops 97–128.
+    var name = row && (row.name || row.displayName);
+    var isPlaceholder = !!(row && (
+      row.isPlaceholder === true ||
+      row.genericPlaceholderReservation === true ||
+      /^\s*(?:jogador|player|inscrito|placeholder)\s*0*\d+\s*$/i.test(String(name || ''))
+    ));
+    return !!(row && (!row._wl || isPlaceholder));
   }
   function _erPairCategory(members) {
     var a = members[0], b = members[1], pe = _pendingEdits[a.order] || _pendingEdits[b.order] || {};

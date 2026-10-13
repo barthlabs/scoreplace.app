@@ -1,3 +1,4 @@
+// 2.4.34 — A Análise mantém reservas de placeholder 97–128 visíveis mesmo quando o snapshot as projeta pela fila, sem descartá-las da matriz de gênero/categoria.
 // 2.4.33 — O editor hidrata o logo pela URL canônica do torneio e a Análise exibe as reservas 97–128 como vagas sem gênero/categoria, sem convertê-las em inscrições; cache-busters alinhados para entregar esses arquivos.
 // 2.4.32 — O listener principal também recompõe as reservas 97–128 antes de publicar o torneio no store; card, detalhe e Análise passam a usar o mesmo roster de 128.
 // 2.4.31 — O resumo do card usa o roster canônico recomposto com placeholders e exibe 128 inscritos, sem alterar vagas, categorias, equipes ou jogos configurados.
