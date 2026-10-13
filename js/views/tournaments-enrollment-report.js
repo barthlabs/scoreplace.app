@@ -2964,6 +2964,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     '</div>';
   }
   function _matrixInner(rows, t) {
+    var enrolledRows = (rows || []).filter(function (r) { return r && !r._wl; });
     // Buckets refletem a configuração explícita do torneio; A-D-FUN só existe
     // quando não há categoria estipulada pelo organizador.
     var skills = _erAnalysisSkills(t);
