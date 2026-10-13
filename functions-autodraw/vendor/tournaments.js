@@ -2067,6 +2067,37 @@ window._detailCheckInBarHtml = function (tId) {
     + '</div>';
 };
 
+// O botão Editar existe no HTML da ficha, então a porta dele precisa existir
+// antes de renderTournaments() (e não somente depois que uma rotina interna de
+// renderização for executada). Em carga direta da ficha essa rotina não roda e
+// o clique ficava sem função, embora o botão estivesse visível.
+if (typeof window.openEditModal !== 'function') {
+    window['openEditModal'] = function (id) {
+        var garantir = window._garanteModal;
+        if (typeof garantir === 'function') {
+            try { garantir('modal-create-tournament'); } catch (e) {}
+        }
+        if (typeof window.openEditTournamentModal !== 'function' &&
+            typeof window.setupCreateTournamentModal === 'function') {
+            try { window.setupCreateTournamentModal(); } catch (e) {}
+        }
+        if (typeof window.openEditTournamentModal === 'function') {
+            try {
+                window.openEditTournamentModal(id);
+                return true;
+            } catch (e) {
+                if (typeof window._captureMessage === 'function') {
+                    window._captureMessage('openEditModal: falha ao abrir editor', 'error');
+                }
+            }
+        }
+        if (typeof window.showNotification === 'function') {
+            window.showNotification('Não consegui abrir a edição', 'Atualize a página e tente de novo.', 'warning');
+        }
+        return false;
+    };
+}
+
 function renderTournaments(container, tournamentId = null) {
     if (!window.AppStore) return;
     if (window._autoKeepScroll) window._autoKeepScroll(); // v2.8.82: re-render por ação não pula scroll
