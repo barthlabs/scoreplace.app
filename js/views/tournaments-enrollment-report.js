@@ -288,11 +288,80 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // linha (só o p1) → o relatório mostrava menos gente do que o nº real de inscritos
   // num torneio de casais. Cada membro carrega o próprio uid (perfil resolve
   // gênero/idade/habilidade) + a categoria do time.
-  function _expandDuplas(parts) {
+  function _erStablePersonKey(p, side) {
+    if (!p || typeof p !== 'object') return '';
+    var pre = side ? 'p' + side : '';
+    var uid = p[pre + 'Uid'] || (!side ? p.uid : '');
+    var manual = p[pre + 'ManualId'] || (!side ? p.manualParticipantId : '');
+    var name = p[pre + 'Name'] || (!side ? (p.displayName || p.name) : '');
+    return uid ? 'uid:' + String(uid) : (manual ? 'manual:' + String(manual) : (name ? 'name:' + _norm(String(name)) : ''));
+  }
+
+  // A leitura canônica já agrupa registros de uma dupla. Fila/espelho legado,
+  // porém, pode repetir os mesmos membros em `waitlist`/`standbyParticipants`.
+  // A Análise não pode contar a mesma identidade duas vezes.
+  function _erRosterKeys(parts) {
+    var keys = Object.create(null);
+    (parts || []).forEach(function (p) {
+      if (!p || typeof p !== 'object') return;
+      [_erStablePersonKey(p), _erStablePersonKey(p, 1), _erStablePersonKey(p, 2)].forEach(function (k) { if (k) keys[k] = true; });
+    });
+    return keys;
+  }
+
+  // Defensive projection for tournaments that contain both the old member
+  // rows and the newer fixed-pair entry. A pair is the stronger structural
+  // record: keep it and remove its two legacy solo copies, otherwise the
+  // analysis reports 96 + 32 as 224 and loses the pair category.
+  function _erDedupeRosterParts(parts) {
+    var out = [], positions = Object.create(null);
+    (parts || []).forEach(function (entry) {
+      if (!entry || typeof entry !== 'object') return;
+      var isPair = !!((entry.p1Uid || entry.p1ManualId || entry.p1Name) && (entry.p2Uid || entry.p2ManualId || entry.p2Name));
+      var keys = [_erStablePersonKey(entry), _erStablePersonKey(entry, 1), _erStablePersonKey(entry, 2)].filter(Boolean);
+      var clashes = keys.map(function (key) { return positions[key]; }).filter(function (idx) { return idx != null; });
+      if (clashes.length && isPair) {
+        var remove = {};
+        clashes.forEach(function (idx) { remove[idx] = true; });
+        out = out.filter(function (_, idx) { return !remove[idx]; });
+        positions = Object.create(null);
+        out.forEach(function (kept, idx) {
+          [_erStablePersonKey(kept), _erStablePersonKey(kept, 1), _erStablePersonKey(kept, 2)].filter(Boolean).forEach(function (key) { positions[key] = idx; });
+        });
+      } else if (clashes.length) {
+        return;
+      }
+      var at = out.length;
+      out.push(entry);
+      keys.forEach(function (key) { positions[key] = at; });
+    });
+    return out;
+  }
+
+  function _erDisplayCategory(t, raw) {
+    var value = String(raw || '').trim();
+    if (!value) return '';
+    if (typeof window._displayTournamentCategory === 'function') return window._displayTournamentCategory(t, value);
+    return value;
+  }
+
+  function _erNormalizeCanonicalEntry(t, p) {
+    if (!p || typeof p !== 'object') return p;
+    var out = Object.assign({}, p);
+    var raw = Array.isArray(out.categories) && out.categories.length ? out.categories : (out.category ? [out.category] : (out.categoryId ? [out.categoryId] : []));
+    var labels = raw.map(function (c) { return _erDisplayCategory(t, c); }).filter(Boolean);
+    if (labels.length) { out.categories = labels; out.category = labels[0]; }
+    return out;
+  }
+
+  function _expandDuplas(parts, tournament) {
     var out = [];
     (parts || []).forEach(function (p, idx) {
-      if (p && typeof p === 'object' && p.p1Name && p.p2Name) {
-        var baseCats = (Array.isArray(p.categories) && p.categories.length) ? p.categories.slice() : (p.category ? [p.category] : []);
+      var isPair = p && typeof p === 'object' &&
+        (p.p1Uid || p.p1ManualId || p.p1Name) && (p.p2Uid || p.p2ManualId || p.p2Name);
+      if (isPair) {
+        p = tournament ? _erNormalizeCanonicalEntry(tournament, p) : p;
+        var baseCats = (Array.isArray(p.categories) && p.categories.length) ? p.categories.slice() : (p.category ? [p.category] : (p.categoryId ? [_erDisplayCategory(tournament, p.categoryId)] : []));
         // v2.8.62: cada membro carrega a identidade da dupla (_duplaIdx = índice em
         // t.participants, _duplaSide = 'p1'/'p2') pra o SAVE conseguir gravar o gênero
         // de volta (p1Gender/p2Gender no doc da dupla). Lê o override per-membro que já
@@ -300,8 +369,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         /* ⛔ VALOR LEGADO NÃO É DECISÃO (23/set/2026). Isto marcava QUALQUER `pNGender` antigo como
          * "do organizador" — e com a precedência nova isso poria gênero velho da dupla ACIMA do
          * perfil vivo. A marca agora é a do próprio membro, que a porta grava junto do valor. */
-        out.push({ uid: p.p1Uid || '', manualParticipantId: p.p1ManualId || '', displayName: p.p1Name, name: p.p1Name, categories: baseCats.slice(), category: p.category || '', gender: p.p1Gender || '', genderSource: p.p1GenderSource === 'organizador' ? 'organizador' : '', _fromDupla: true, _duplaIdx: idx, _duplaSide: 'p1' });
-        out.push({ uid: p.p2Uid || '', manualParticipantId: p.p2ManualId || '', displayName: p.p2Name, name: p.p2Name, categories: baseCats.slice(), category: p.category || '', gender: p.p2Gender || '', genderSource: p.p2GenderSource === 'organizador' ? 'organizador' : '', _fromDupla: true, _duplaIdx: idx, _duplaSide: 'p2' });
+        var p1Name = p.p1Name || p.p1DisplayName || ('Participante ' + (p.p1ManualId || p.p1Uid || '1'));
+        var p2Name = p.p2Name || p.p2DisplayName || ('Participante ' + (p.p2ManualId || p.p2Uid || '2'));
+        out.push({ uid: p.p1Uid || '', manualParticipantId: p.p1ManualId || '', displayName: p1Name, name: p1Name, categories: baseCats.slice(), category: p.category || '', categoryId: p.categoryId || '', gender: p.p1Gender || '', genderSource: p.p1GenderSource === 'organizador' ? 'organizador' : '', _fromDupla: true, _duplaIdx: idx, _duplaSide: 'p1' });
+        out.push({ uid: p.p2Uid || '', manualParticipantId: p.p2ManualId || '', displayName: p2Name, name: p2Name, categories: baseCats.slice(), category: p.category || '', categoryId: p.categoryId || '', gender: p.p2Gender || '', genderSource: p.p2GenderSource === 'organizador' ? 'organizador' : '', _fromDupla: true, _duplaIdx: idx, _duplaSide: 'p2' });
       } else {
         out.push(p);
       }
@@ -867,6 +938,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // Estado vivo (rows + torneio atual) usado pelo re-render client-side dos
   // filtros/sort/busca. Setado em _renderPage; lido por _erRenderInscritos.
   var _liveState = null;
+  var _erCanonicalLoaded = Object.create(null);
+  // Preserve the canonical subcollection projection across legacy AppStore snapshots.
+  var _erCanonicalRosterById = Object.create(null);
   // v2.4.34: mudanças staged (gênero/categoria) por order, aplicadas só no "Salvar".
   var _pendingEdits = {};
   // Seleção da matriz existe só como estado visual/local: atribuições continuam em
@@ -1088,8 +1162,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // manualParticipantId (importação/vaga manual); nome é apenas o último fallback
   // dos torneios antigos. [[analysis_pairing_uses_canonical_identity_flow]]
   function _erPairGroups(rows) {
+    var enrolledRows = (rows || []).filter(function (r) { return r && !r._wl; });
     var byPair = {};
-    (rows || []).forEach(function (r) {
+    enrolledRows.forEach(function (r) {
       if (r && r._duplaIdx != null && !r._wl) {
         (byPair[r._duplaIdx] || (byPair[r._duplaIdx] = [])).push(r);
       }
@@ -1159,7 +1234,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         stored.participants = t.participants;
       }
     }
-    _liveState.rows = _erReconcilePairRows(_buildRows(t, _expandDuplas(t.participants), {
+    _liveState.rows = _erReconcilePairRows(_buildRows(t, _expandDuplas(t.participants, t), {
       byUid: _liveState.profileMap || {}, resolvedFor: _liveState.resolvedFor || {}
     }));
     _pendingEdits = {};
@@ -1294,7 +1369,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // que a dupla volte para “sem categoria” até o snapshot/reload chegar.
       if (r.tournament && _liveState && _liveState.t) {
         _liveState.t = r.tournament;
-        _liveState.rows = _erReconcilePairRows(_buildRows(r.tournament, _expandDuplas(r.tournament.participants || []), {
+        _liveState.rows = _erReconcilePairRows(_buildRows(r.tournament, _expandDuplas(r.tournament.participants || [], r.tournament), {
           byUid: _liveState.profileMap || {}, resolvedFor: _liveState.resolvedFor || {}
         }));
         var stored = _erFindT(r.tournament.id);
@@ -2899,12 +2974,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     (rows || []).forEach(function (r) {
       if (r && r._duplaIdx != null && !r._wl) (byPair[r._duplaIdx] || (byPair[r._duplaIdx] = [])).push(r);
     });
-    var pairGroups = _erPairGroups(rows);
+    var pairGroups = _erPairGroups(enrolledRows);
     var pairedOrders = {};
     Object.keys(byPair).forEach(function (pairKey) {
       if (byPair[pairKey].length === 2) byPair[pairKey].forEach(function (r) { pairedOrders[r.order] = true; });
     });
-    var individualRows = (rows || []).filter(function (r) { return !pairedOrders[r.order]; });
+    var individualRows = enrolledRows.filter(function (r) { return !pairedOrders[r.order]; });
     var fem = emptyBox(), masc = emptyBox(), semG = emptyBox();
     individualRows.forEach(function (r) {
       var g = _mxGenderOf(r), sk = _mxSkillOf(r, t);
@@ -2924,7 +2999,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       });
     }
     function sumBox(b) { return groups.reduce(function (a, g) { return a + b[g].length; }, 0); }
-    var femTotal = sumBox(fem), mascTotal = sumBox(masc), semTotal = sumBox(semG), total = (rows || []).length;
+    var femTotal = sumBox(fem), mascTotal = sumBox(masc), semTotal = sumBox(semG), total = enrolledRows.length;
 
     // FORMALIZAÇÃO de categorias (torneio informal → formal). genderOn = divisão
     // Fem/Masc criada; mistoOn = categoria Misto criada (box indicador acima do grid —
@@ -5868,8 +5943,40 @@ window._lzNaoEhEuMesmo = function (uid) {
       }
       return;
     }
-    // v2.8.56: expande duplas em pessoas individuais (conta todos os inscritos).
-    var parts = _expandDuplas(Array.isArray(t.participants) ? t.participants : []);
+    // Em torneio canônico, a Análise não pode montar a matriz com a fotografia
+    // legada do documento-base. A fonte de verdade é a subcoleção de inscrições;
+    // carregamos uma vez por abertura e só depois expandimos as duplas.
+    var isCanonicalReport = !!(t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint);
+    if (isCanonicalReport && !_erCanonicalLoaded[String(tId)]) {
+      if (!(window.FirestoreDB && typeof window.FirestoreDB.loadCanonicalTournamentRoster === 'function')) {
+        if (typeof showNotification === 'function') showNotification('Erro', 'Não foi possível carregar o roster canônico deste torneio.', 'error');
+        return;
+      }
+      _renderLoading(container, t);
+      window.FirestoreDB.loadCanonicalTournamentRoster(String(tId)).then(function (result) {
+        var data = (result && result.data) ? result.data : (result || {});
+        if (!Array.isArray(data.participants)) throw new Error('roster canônico inválido');
+        _erCanonicalRosterById[String(tId)] = {
+          participants: data.participants,
+          categoryDefinitions: Array.isArray(data.categoryDefinitions) ? data.categoryDefinitions : null
+        };
+        t.participants = data.participants;
+        if (Array.isArray(data.categoryDefinitions)) t.categoryDefinitions = data.categoryDefinitions;
+        _erCanonicalLoaded[String(tId)] = true;
+        if (window.location.hash === '#analise/' + tId) window.renderEnrollmentReportPage(container, tId, true);
+      }).catch(function (err) {
+        if (typeof showNotification === 'function') showNotification('Erro', 'Não foi possível carregar as inscrições atuais: ' + String((err && err.message) || err), 'error');
+      });
+      return;
+    }
+    if (isCanonicalReport && _erCanonicalRosterById[String(tId)]) {
+      var canonicalRoster = _erCanonicalRosterById[String(tId)];
+      t.participants = canonicalRoster.participants;
+      if (Array.isArray(canonicalRoster.categoryDefinitions)) t.categoryDefinitions = canonicalRoster.categoryDefinitions;
+    }
+    // v2.8.56: expande duplas em pessoas individuais (conta cada inscrito uma vez).
+    var rosterParts = _erDedupeRosterParts(Array.isArray(t.participants) ? t.participants : []);
+    var parts = _expandDuplas(rosterParts.map(function (p) { return _erNormalizeCanonicalEntry(t, p); }), t);
     // v1.7.2 — A LISTA DE ESPERA TAMBÉM É INSCRITO. Desde a 1.6.86 quem se inscreve
     // DEPOIS do sorteio vai pra espera e SAI de t.participants; como a Análise lia só
     // `participants`, essa gente sumia da tela e o organizador não tinha onde atribuir
@@ -5879,8 +5986,11 @@ window._lzNaoEhEuMesmo = function (uid) {
     // A ordem canônica da fila é a do _getWaitlist — não reordenar aqui.
     try {
       var _wl = (typeof window._getWaitlist === 'function') ? (window._getWaitlist(t) || []) : [];
+      var rosterKeys = _erRosterKeys(rosterParts);
       _wl.forEach(function (w) {
         if (!w || typeof w !== 'object') return;
+        var wk = [_erStablePersonKey(w), _erStablePersonKey(w, 1), _erStablePersonKey(w, 2)].filter(Boolean);
+        if (wk.some(function (key) { return rosterKeys[key]; })) return;
         var c = {}; for (var k in w) { if (Object.prototype.hasOwnProperty.call(w, k)) c[k] = w[k]; }
         c._wl = true;
         parts.push(c);
