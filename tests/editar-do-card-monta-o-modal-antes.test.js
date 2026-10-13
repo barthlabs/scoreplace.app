@@ -93,8 +93,8 @@ const bloco = src.slice(src.indexOf('window.openEditModal = function'),
                         src.indexOf('window.editModalSetupDone = true;'));
 ok(/_garanteModal\('modal-create-tournament'\)/.test(bloco),
    '⑤ chama `_garanteModal` — quem reimplementar a montagem aqui cria a segunda verdade');
-ok(!/setupCreateTournamentModal\s*\(/.test(bloco),
-   '⑤ e NÃO chama o setup direto: a porta única é quem decide se precisa montar');
+ok(/setupCreateTournamentModal\s*\(/.test(bloco),
+   '⑤ se a porta lazy deixou o DOM sem a função, o fallback inicializa o editor diretamente');
 
 console.log(fail ? ('  ' + fail + ' FALHA(S), ' + pass + ' ok') : ('  ✓ ' + pass + ' asserções'));
 process.exit(fail ? 1 : 0);

@@ -2676,16 +2676,47 @@ function renderTournaments(container, tournamentId = null) {
             if (typeof window._garanteModal === 'function') {
                 try { window._garanteModal('modal-create-tournament'); } catch (e) {}
             }
-            if (typeof window.openEditTournamentModal === 'function') {
-                window.openEditTournamentModal(id);
+            /* A porta do modal é lazy. Em uma navegação rápida ela pode existir no DOM
+             * sem ter terminado de expor as funções do formulário; além disso, o card
+             * pode ter vindo de um resumo/cache. Antes isso virava um retorno silencioso
+             * e o botão parecia morto. Inicialize a porta restante e hidrate o torneio
+             * completo antes de abrir a rota. */
+            if (typeof window.openEditTournamentModal !== 'function' &&
+                typeof window.setupCreateTournamentModal === 'function') {
+                try { window.setupCreateTournamentModal(); } catch (e) {}
+            }
+            var abrir = function () {
+                if (typeof window.openEditTournamentModal === 'function') {
+                    window.openEditTournamentModal(id);
+                    return true;
+                }
+                return false;
+            };
+            var tAtual = typeof window._findTournamentById === 'function'
+                ? window._findTournamentById(id) : null;
+            var incompleto = tAtual && (tAtual._resumo === true || tAtual._doCache === true || tAtual._faltamPesados === true);
+            if ((!tAtual || incompleto) && typeof window._ensureTournamentLoaded === 'function') {
+                if (typeof window.showNotification === 'function') {
+                    window.showNotification('Carregando torneio', 'Abrindo a edição com os dados completos…', 'info');
+                }
+                window._ensureTournamentLoaded(id, function (carregado) {
+                    if (carregado && abrir()) return;
+                    if (typeof window.showNotification === 'function') {
+                        window.showNotification('Não consegui abrir a edição', 'Atualize a página e tente de novo.', 'warning');
+                    }
+                    if (typeof window._captureMessage === 'function') {
+                        window._captureMessage('openEditModal: torneio não carregado ou editor indisponível', 'error');
+                    }
+                });
                 return;
             }
+            if (abrir()) return;
             if (typeof window.showNotification === 'function') {
                 window.showNotification('Não consegui abrir a edição',
-                    'Recarregue a página e tente de novo.', 'warning');
+                    'Atualize a página e tente de novo.', 'warning');
             }
             if (typeof window._captureMessage === 'function') {
-                window._captureMessage('openEditModal: openEditTournamentModal indisponível', 'error');
+                window._captureMessage('openEditModal: editor indisponível', 'error');
             }
         };
         window.editModalSetupDone = true;
