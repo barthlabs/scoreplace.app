@@ -2077,7 +2077,9 @@ if (typeof window.openEditModal !== 'function') {
         if (typeof garantir === 'function') {
             try { garantir('modal-create-tournament'); } catch (e) {}
         }
-        if (typeof window.openEditTournamentModal !== 'function' &&
+        // A montagem só é necessária quando a porta de edição ainda não existe.
+        // Não condicione a montagem à existência da própria função que ela cria.
+        if (!window.openEditTournamentModal &&
             typeof window.setupCreateTournamentModal === 'function') {
             try { window.setupCreateTournamentModal(); } catch (e) {}
         }
