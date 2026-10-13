@@ -4108,7 +4108,7 @@ function renderTournaments(container, tournamentId = null) {
               <div class="org-tools-label" style="${_TOOLS_LABEL_CSS} ${_toolsCss} margin-bottom: 10px;">${_t('org.tools')}</div>
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                 ${hasDraw ? `<button class="btn btn-primary hover-lift" onclick="window._scrollToBracketSection('${t.id}')">🏆 ${_t('btn.viewBracket')}</button>` : ''}
-                ${!isFinished ? `<button class="btn btn-indigo hover-lift btn-shine" onclick="event.stopPropagation(); if (typeof window._navigateToCreateTournament === 'function') { window._navigateToCreateTournament('${_escAttr(t.id)}'); } else { window.location.hash = '#novo-torneio/${_escAttr(t.id)}'; }">✏️ ${_t('btn.edit')}</button>` : ''}
+                ${/* create-tournament.js is deferred after this view; the hash fallback is intentional so a direct detail render never loses Editar during that load window. */ !isFinished ? `<button class="btn btn-indigo hover-lift btn-shine" onclick="event.stopPropagation(); if (typeof window._navigateToCreateTournament === 'function') { window._navigateToCreateTournament('${_escAttr(t.id)}'); } else { window.location.hash = '#novo-torneio/${_escAttr(t.id)}'; }">✏️ ${_t('btn.edit')}</button>` : ''}
                 <button class="btn btn-purple hover-lift" onclick="event.stopPropagation(); window.location.hash='#comunicados/${t.id}'">📢 Comunicados</button>
                 ${addParticipantBtns}
                 ${/* v1.9.98: CSV removido daqui — já está no grid de ações geral do organizador (Regras/Inscritos/Imprimir/CSV/Modo TV). Evita duplicação. */ ''}
