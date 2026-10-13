@@ -1,3 +1,6 @@
+// 2.4.3 — Placeholders voltam a ser reservas genéricas de vaga: não exigem
+// categoria e não criam uma inscrição incompleta. A reserva é reidratada de
+// forma idempotente em toda leitura canônica.
 // 2.4.2 — Reabrir inscrições de um torneio já migrado passa a alterar somente
 // a janela de inscrição canônica. Inscritos e duplas formadas permanecem
 // intactos; torneios antigos continuam promovendo a lista de espera como antes.

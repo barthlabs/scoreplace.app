@@ -484,16 +484,10 @@ window._addPlaceholdersCore = function (id, qtd, onDone, opts) {
     qtd = parseInt(qtd, 10);
     if (isNaN(qtd) || qtd <= 0) { if (!opts.silent) showNotification('Número inválido', 'Informe um número maior que zero.', 'warning'); return false; }
     if (qtd > 200) qtd = 200;
-    // Vagas numeradas eram uma conveniência do espelho legado. No elenco
-    // canônico cada inscrição precisa carregar identidade estável E categoryId;
-    // inventar placeholders sem essa escolha criaria registros que o sorteio não
-    // pode classificar. A inclusão manual segue disponível em “+ Participante”.
-    var _localTournament = window.AppStore && Array.isArray(window.AppStore.tournaments)
-        ? window.AppStore.tournaments.find(function (tour) { return String(tour && tour.id) === String(id); }) : null;
-    if (_localTournament && _localTournament.canonicalRegistrationMigration && _localTournament.canonicalRegistrationMigration.fingerprint) {
-        if (!opts.silent) showNotification('Escolha a categoria', 'Em torneios canônicos, adicione cada vaga em “+ Participante” e escolha a categoria.', 'info');
-        return false;
-    }
+    // Placeholder é uma RESERVA genérica de vaga, não uma inscrição. Por isso ele
+    // não recebe categoria neste momento — a categoria só é obrigatória quando uma
+    // pessoa real for efetivamente inscrita. A Function persiste as reservas
+    // canônicas em `placeholderReservations` e as reidrata no elenco de leitura.
     // O navegador só envia a intenção. A CF relê o documento fresco e usa este
     // mesmo núcleo com `server:true`, devolvendo o torneio canônico à tela.
     if (!opts.server && !opts.tournament) {
@@ -586,7 +580,7 @@ window._addPlaceholdersCore = function (id, qtd, onDone, opts) {
         }
     } catch (_eSeq) {}
     if (!opts.silent && window.AppStore && typeof window.AppStore.logAction === 'function') window.AppStore.logAction(id, qtd + ' placeholder(s) adicionado(s) em ' + dest);
-    return { changed: made.length > 0, added: made.length, destination: dest };
+    return { changed: made.length > 0, added: made.length, destination: dest, placeholders: made };
 };
 
 // v2.7.32: handlers de ação do inscrito (remover/split) definidos no NÍVEL DO MÓDULO

@@ -455,6 +455,36 @@ function _preserveCanonicalRosterProjection(tDepois, tAntes) {
   return true;
 }
 
+/* Placeholder não é inscrição. Em torneio com `registrations` canônicas ele
+ * mora no documento do torneio, fora da coleção de inscrições, e volta a ser
+ * apresentado junto do elenco apenas para análise/organização. Isso permite
+ * reservar vagas antes de decidir sua categoria sem fabricar uma inscrição
+ * incompleta que o motor poderia sortear como válida. */
+function _placeholderReservations(t) {
+  const seen = new Set();
+  return (Array.isArray(t && t.placeholderReservations) ? t.placeholderReservations : [])
+    .filter((entry) => entry && entry.isPlaceholder === true)
+    .map((entry) => ({
+      name: String(entry.name || entry.displayName || '').trim(),
+      displayName: String(entry.displayName || entry.name || '').trim(),
+      manualParticipantId: String(entry.manualParticipantId || '').trim(),
+      isPlaceholder: true,
+      genericPlaceholderReservation: entry.genericPlaceholderReservation === true
+    }))
+    .filter((entry) => entry.name && entry.manualParticipantId && !seen.has(entry.manualParticipantId) && !!seen.add(entry.manualParticipantId));
+}
+
+function _appendPlaceholderReservations(participants, t) {
+  const out = Array.isArray(participants) ? participants.slice() : [];
+  const identities = new Set(out.map((entry) => String(entry && entry.manualParticipantId || '').trim()).filter(Boolean));
+  _placeholderReservations(t).forEach((entry) => {
+    if (identities.has(entry.manualParticipantId)) return;
+    identities.add(entry.manualParticipantId);
+    out.push(entry);
+  });
+  return out;
+}
+
 // Uma única porta para a temporada acabar. A tela a solicita para obter a
 // resposta imediatamente; a decisão e a escrita seguem sendo do servidor.
 async function _closeExpiredLeagueSeason(ref, tId, nowIso) {
@@ -646,6 +676,7 @@ async function _leTorneio(tx, ref, tId) {
     }
     try { montado.participants = _registrationRoster.rosterFromRegistrations(registrations); }
     catch (error) { throw new Error('[canonical-registration] elenco inválido: ' + error.message); }
+    montado.participants = _appendPlaceholderReservations(montado.participants, montado);
   }
   montado.id = tId;
   return montado;
@@ -1377,19 +1408,29 @@ exports.addTournamentPlaceholders = onCall(async request => {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw new HttpsError('permission-denied', 'Só a organização adiciona placeholders.');
-    // A rota histórica só sabe criar uma vaga numerada no espelho de
-    // participants. Depois da materialização canônica, toda vaga exige
-    // manualParticipantId e categoryId no registro físico; aceitar esta chamada
-    // produziria um elenco que a fonte canônica não reconhece. A interface
-    // encaminha a organização para “+ Participante”, que já exige a categoria.
-    if (t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint) {
-      throw new HttpsError('failed-precondition', 'Em torneios canônicos, adicione a vaga por “+ Participante” e escolha a categoria.');
-    }
     const before = _antesDoMotor(t);
     const out = drawWindow._addPlaceholdersCore(tId, quantity, null, { tournament: t, server: true, skipPersist: true, silent: true });
     if (!out || !out.changed) throw new HttpsError('failed-precondition', 'Não foi possível adicionar placeholders.');
+    const canonical = !!(t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint);
+    if (canonical) {
+      const reservations = _placeholderReservations(t);
+      const added = Array.isArray(out.placeholders) ? out.placeholders : [];
+      t.placeholderReservations = reservations.concat(added.map((entry) => ({
+        name: String(entry.name || entry.displayName || '').trim(),
+        displayName: String(entry.displayName || entry.name || '').trim(),
+        manualParticipantId: String(entry.manualParticipantId || '').trim(),
+        isPlaceholder: true,
+        genericPlaceholderReservation: true,
+        createdAt: agoraIso
+      })));
+    }
     const b = _gravaTorneio(tx, ref, t, before, { agoraIso });
-    return { ok: true, added: out.added, destination: out.destination, tournament: b.clean };
+    const clean = b.clean;
+    if (canonical) {
+      clean.placeholderReservations = _placeholderReservations(t);
+      clean.participants = _appendPlaceholderReservations(clean.participants, t);
+    }
+    return { ok: true, added: out.added, destination: out.destination, tournament: clean };
   });
 });
 

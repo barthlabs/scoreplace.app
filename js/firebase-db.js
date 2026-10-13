@@ -2457,6 +2457,23 @@ window.FirestoreDB = {
           projected.categories = [categoryLabel];
           return projected;
         });
+        // Reserva de vaga não é inscrição e portanto não tem categoryId. Ela é
+        // persistida separadamente e só integra a projeção visual/organizacional
+        // até que uma pessoa real seja inscrita na categoria apropriada.
+        var _reservationSeen = {};
+        t.participants.forEach(function (entry) {
+          var existingManualId = String(entry && entry.manualParticipantId || '').trim();
+          if (existingManualId) _reservationSeen[existingManualId] = true;
+        });
+        var _reservations = Array.isArray(t.placeholderReservations) ? t.placeholderReservations : [];
+        _reservations.forEach(function (entry) {
+          if (!entry || entry.isPlaceholder !== true) return;
+          var manualId = String(entry.manualParticipantId || '').trim();
+          var name = String(entry.displayName || entry.name || '').trim();
+          if (!manualId || !name || _reservationSeen[manualId]) return;
+          _reservationSeen[manualId] = true;
+          t.participants.push({ name: name, displayName: name, manualParticipantId: manualId, isPlaceholder: true, genericPlaceholderReservation: entry.genericPlaceholderReservation === true });
+        });
         t.categoryDefinitions = _canonical.categoryDefinitions;
       }
       try { if (window._noteFsReads) window._noteFsReads(lidos, 'abrir-torneio-subcolecao'); } catch (e) {}

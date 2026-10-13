@@ -727,7 +727,11 @@ window._applyMixedOriginCategories = function(t, participants) {
 // ts = teamSize efetivo (duplas mantidas como 1 entrada). NÃO forma duplas — assume que
 // t.participants já tem as entradas certas (o sorteio inicial já rodou _formDoublesTeams).
 window._buildPhase0Pool = function (t, isMon, ts) {
-  var _raw = (Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {}));
+  // Reserva genérica é capacidade planejada, não inscrição apta ao sorteio.
+  // Ela permanece visível para a organização sem ocupar categoria, dupla, jogo
+  // ou vaga de chave até ser preenchida por uma inscrição real.
+  var _raw = (Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {}))
+    .filter(function (p) { return !(p && typeof p === 'object' && p.genericPlaceholderReservation === true); });
   var _pName = window._pName ? window._pName : function (p) { return typeof p === 'string' ? p : (p && (p.displayName || p.name) || ''); };
   var pool;
   if (isMon) {
@@ -3242,6 +3246,7 @@ window.generateDrawFunction = function (tId) {
     if (_tournHasCats) {
         var _allParts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
         var _noCat = _allParts.filter(function(p) {
+            if (p && typeof p === 'object' && p.genericPlaceholderReservation === true) return false;
             if (typeof p !== 'object') return true;
             var cats = window._getParticipantCategories(p);
             return cats.length === 0;
