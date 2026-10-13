@@ -171,8 +171,8 @@ window._duplaCard = function (t, p, draggable, ctx) {
     var _delBtnDupla = (isOrg && !drawDone && draggable)
       ? '<button type="button" class="cancel-x-btn" title="Remover inscrito" onclick="event.stopPropagation();window.removeParticipantFunction(\'' + _safeAttr(tIdStr) + '\',\'' + _safeAttr(_entryName) + '\',\'' + _safeAttr(_removeIdentity) + '\')" style="--cx-size:24px;">✕</button>'
       : '';
-    var _s1 = (members && window._enrollNumber) ? window._enrollNumber(_enrollOrderMapD, { uid: (p && p.p1Uid) || '', displayName: (p && p.p1Name) || members[0], name: (p && p.p1Name) || members[0] }) : '';
-    var _s2 = (members && members[1] && window._enrollNumber) ? window._enrollNumber(_enrollOrderMapD, { uid: (p && p.p2Uid) || '', displayName: (p && p.p2Name) || members[1], name: (p && p.p2Name) || members[1] }) : '';
+    var _s1 = (members && window._enrollNumber) ? window._enrollNumber(_enrollOrderMapD, { uid: (p && p.p1Uid) || '', manualParticipantId: (p && p.p1ManualId) || '', displayName: (p && p.p1Name) || members[0], name: (p && p.p1Name) || members[0] }) : '';
+    var _s2 = (members && members[1] && window._enrollNumber) ? window._enrollNumber(_enrollOrderMapD, { uid: (p && p.p2Uid) || '', manualParticipantId: (p && p.p2ManualId) || '', displayName: (p && p.p2Name) || members[1], name: (p && p.p2Name) || members[1] }) : '';
     var _body;
     if (members) {
       var _memBlock = function (idxM, right) {
@@ -312,6 +312,47 @@ window._buildDoublesInscritosSection = function (t, ctx) {
     var n = (typeof p === 'string' ? p : (p.displayName || p.name || '')).trim().toLowerCase();
     return !(n && _pairedMemberKeys['n:' + n]);
   });
+
+  // A ordem visual não pode depender da ordem em que uma dupla foi regravada após
+  // um arraste. O número denso é o primeiro critério; para placeholders com rótulo
+  // "Jogador N", o N é um fallback explícito e mantém 01, 02, 03... estáveis mesmo
+  // quando dados legados carregam sequências antigas. Nunca altera o array persistido.
+  function _entryOrderNumber(entry) {
+    var names = [];
+    if (entry && typeof entry === 'object' && (entry.p1Name || entry.p2Name || entry.p1Uid || entry.p2Uid)) {
+      names = [entry.p1Name, entry.p2Name].filter(Boolean);
+    } else {
+      names = [typeof entry === 'string' ? entry : (entry && (entry.displayName || entry.name))];
+    }
+    var generic = names.map(function (name) {
+      var m = String(name || '').match(/^Jogador\s*0*(\d+)$/i);
+      return m ? parseInt(m[1], 10) : 0;
+    }).filter(function (n) { return n > 0; });
+    if (generic.length) return Math.min.apply(Math, generic);
+    var mapped = [];
+    if (entry && typeof entry === 'object' && (entry.p1Uid || entry.p2Uid || entry.p1ManualId || entry.p2ManualId)) {
+      [{ uid: entry.p1Uid, manualParticipantId: entry.p1ManualId, displayName: entry.p1Name },
+       { uid: entry.p2Uid, manualParticipantId: entry.p2ManualId, displayName: entry.p2Name }].forEach(function (person) {
+        if (window._enrollNumber) mapped.push(parseInt(window._enrollNumber(_enrollOrderMapD, person), 10) || 0);
+      });
+    }
+    names.forEach(function (name) {
+      if (window._enrollNumber) mapped.push(parseInt(window._enrollNumber(_enrollOrderMapD, { displayName: name, name: name }), 10) || 0);
+    });
+    mapped = mapped.filter(function (n) { return n > 0; });
+    return mapped.length ? Math.min.apply(Math, mapped) : Number.MAX_SAFE_INTEGER;
+  }
+  function _entryOrderLabel(entry) {
+    if (entry && typeof entry === 'object' && (entry.p1Name || entry.p2Name)) return [entry.p1Name, entry.p2Name].filter(Boolean).join(' / ').toLocaleLowerCase();
+    return String(typeof entry === 'string' ? entry : (entry && (entry.displayName || entry.name)) || '').toLocaleLowerCase();
+  }
+  function _compareEntries(a, b) {
+    var na = _entryOrderNumber(a), nb = _entryOrderNumber(b);
+    if (na !== nb) return na - nb;
+    return _entryOrderLabel(a).localeCompare(_entryOrderLabel(b), 'pt-BR');
+  }
+  _pairedParticipants.sort(_compareEntries);
+  _soloParticipants.sort(_compareEntries);
 
   function _safeAttr(s) { return String(s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
 

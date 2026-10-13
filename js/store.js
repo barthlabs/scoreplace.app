@@ -14789,15 +14789,15 @@ window._buildEnrollOrderMap = function(t) {
   if (t && t._faltamPesados) return {};
   if (typeof window._ensureEnrollSeqs === 'function') window._ensureEnrollSeqs(t);
   /* ⛔⛔ O MAPA TAMBÉM CONTA A ESPERA (24/set/2026) — mesma causa do bloco acima.
-   * v4.5.91: o número exibido é o RANK DENSO (1..N na ordem da sequência), não a
-   * sequência crua: remover um inscrito re-numera os demais sem deixar buraco. A
-   * sequência guardada segue estável; só o número mostrado é compactado. */
+   * v4.5.91: o número exibido é o RANK DENSO (1..N). A posição da fila canônica é a
+   * fonte da verdade visual: sequências históricas podem ter sido carimbadas quando
+   * uma dupla ainda era contada como equipe e não podem transformar o 97º inscrito
+   * no número 193. A sequência guardada continua estável; só o número mostrado é
+   * compacto e determinístico. */
   var fila = (typeof window._enrollQueue === 'function') ? window._enrollQueue(t) : [];
   if (fila.length) {
-    var comNumero = fila.filter(function (pessoa) { return pessoa.seq != null; })
-                        .sort(function (a, b) { return a.seq - b.seq; });
     var mapa = {};
-    comNumero.forEach(function (pessoa, i) {
+    fila.forEach(function (pessoa, i) {
       var rank = i + 1;
       var k = String(pessoa.key || '');
       if (!k) return;
