@@ -12765,6 +12765,15 @@ window.AppStore = {
              * "não consegui carregar" ao lado do dado carregado, que é pior que o erro. */
             else if (data && store._partesEmErro) delete store._partesEmErro[String(data.id)];
           }
+          // O listener também é uma porta de abertura da ficha: quando o documento
+          // chega primeiro pela coleção principal, ele pode trazer só os 96 registros
+          // materializados e deixar as reservas 97–128 em `placeholderReservations`.
+          // Projete o roster aqui, antes de publicar o snapshot no store, para que o
+          // card e a Análise recebam exatamente o mesmo elenco (128), sem depender de
+          // uma navegação direta que passe por `loadTournamentById`.
+          if (data && window.FirestoreDB && typeof window.FirestoreDB._mergePlaceholderReservationsIntoRoster === 'function') {
+            data = window.FirestoreDB._mergePlaceholderReservationsIntoRoster(data);
+          }
           // Toda entrada do listener passa pela mesma projeção de leitura da
           // abertura direta. Assim um documento legado não escolhe um ramo por
           // texto só porque ainda não sofreu uma escrita administrativa.

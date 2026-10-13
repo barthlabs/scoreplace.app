@@ -1,3 +1,4 @@
+// 2.4.32 — O listener principal também recompõe as reservas 97–128 antes de publicar o torneio no store; card, detalhe e Análise passam a usar o mesmo roster de 128.
 // 2.4.31 — O resumo do card usa o roster canônico recomposto com placeholders e exibe 128 inscritos, sem alterar vagas, categorias, equipes ou jogos configurados.
 // 2.4.30 — O leitor canônico recompõe as reservas de placeholder do documento raiz após montar as subcoleções. Cabeçalho, detalhe e Análise passam a exibir os 128 inscritos (01–128) sem duplicar inscrições ou perder duplas/categorias.
 // A projeção do roster retorna explicitamente o torneio atualizado, mantendo a chamada e o contrato de mutação legíveis.
