@@ -55,6 +55,26 @@ function _garanteModal(modalId) {
 }
 window._garanteModal = _garanteModal;
 
+// A ficha de torneio pode ser aberta diretamente por link. Nessa rota o
+// renderizador de torneios não é obrigado a executar o bloco que historicamente
+// instalava o botão Editar; a porta, porém, precisa existir antes do clique.
+// UI é carregado no shell, então este é o ponto estável para registrar o handler.
+if (typeof window.openEditModal !== 'function') {
+  window.openEditModal = function (id) {
+    try { _garanteModal('modal-create-tournament'); } catch (e) {}
+    if (!window.openEditTournamentModal && typeof window.setupCreateTournamentModal === 'function') {
+      try { window.setupCreateTournamentModal(); } catch (e) {}
+    }
+    if (typeof window.openEditTournamentModal === 'function') {
+      try { window.openEditTournamentModal(id); return true; } catch (e) {}
+    }
+    if (typeof window.showNotification === 'function') {
+      window.showNotification('Não consegui abrir a edição', 'Atualize a página e tente de novo.', 'warning');
+    }
+    return false;
+  };
+}
+
 function openModal(modalId) {
   _garanteModal(modalId);            // ⭐ constrói agora, se ainda não existir
   const modal = document.getElementById(modalId);
