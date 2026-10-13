@@ -1,4 +1,5 @@
 // 2.4.18 — Atualização consolidada de produção com as correções validadas desde a última publicação.
+// Inscrições feitas antes do início real do torneio permanecem no elenco canônico mesmo quando a chave já foi montada; somente torneio efetivamente iniciado usa a lista de inscrições tardias. Cliente, servidor e fallback compartilham a mesma decisão, com normalização de status e regressão específica para preservar reservas, duplas e categorias.
 // 2.4.17 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // A Análise preserva a ordem canônica de inscrição (inclusive integrantes de duplas) e mantém reservas de placeholder visíveis para atribuição de gênero/categoria; o cabeçalho e a busca permanecem no shell sticky canônico.
 // 2.4.16 — Atualização consolidada de produção com as correções validadas desde a última publicação.
