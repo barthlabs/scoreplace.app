@@ -5150,10 +5150,30 @@ exports.getCanonicalTournamentRoster = onCall(
       // A interface recebe o mapa somente para apresentação. A identidade que
       // acompanha cada entrada é `categoryId` e as portas de mutação nunca
       // aceitam um label em seu lugar.
+      // Reservas de placeholder são persistidas fora da subcoleção de inscrições,
+      // mas fazem parte do roster operacional antes de receberem uma categoria.
+      // Devolvê-las nesta mesma leitura evita que cada cliente reconstrua (ou
+      // perca) as vagas 97–128 a partir de um snapshot legado.
+      const placeholderReservations = Array.isArray(tournament.placeholderReservations)
+        ? tournament.placeholderReservations.map((entry) => {
+          if (!entry || entry.isPlaceholder !== true) return null;
+          const name = String(entry.displayName || entry.name || '').trim();
+          const manualParticipantId = String(entry.manualParticipantId || '').trim();
+          if (!name || !manualParticipantId) return null;
+          return {
+            name,
+            displayName: name,
+            manualParticipantId,
+            isPlaceholder: true,
+            genericPlaceholderReservation: entry.genericPlaceholderReservation === true,
+          };
+        }).filter(Boolean)
+        : [];
       return {
         tournamentId,
         registrationCount: checked.registrations.length,
         participants,
+        placeholderReservations,
         categoryDefinitions: categoryDefinitions.map((definition) => ({ id: definition.id, label: definition.label }))
       };
     });

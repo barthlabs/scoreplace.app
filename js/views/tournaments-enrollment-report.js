@@ -565,7 +565,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // v1.7.6: a LISTA DE ESPERA entra na Análise desde a 1.7.2 (pra dar onde atribuir
     // gênero/categoria a quem chegou pós-sorteio), mas NÃO pode inflar "N inscritos" —
     // quem está na fila não está no torneio. Conta separado e é dito na tela.
-    var totalWaitlist = rows.filter(function (r) { return r && r._wl; }).length;
+    var totalWaitlist = rows.filter(function (r) { return r && r._wl && !r.genericPlaceholderReservation; }).length;
     var totalEnrolled = rows.length - totalWaitlist;
     var byGender = { Fem: 0, Masc: 0, Misto: 0, sem: 0 };
     var DEFAULT_AGE_CATS = ['40+', '50+', '60+', '70+'];
@@ -1191,12 +1191,17 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     });
     var byPair = {};
     enrolledRows.forEach(function (r) {
-      if (r && r._duplaIdx != null && !r._wl) {
+      if (_erIsVisibleEnrollmentRow(r) && r._duplaIdx != null) {
         (byPair[r._duplaIdx] || (byPair[r._duplaIdx] = [])).push(r);
       }
     });
     return Object.keys(byPair).map(function (k) { return byPair[k]; })
       .filter(function (members) { return members.length === 2; });
+  }
+  function _erIsVisibleEnrollmentRow(row) {
+    // A generic placeholder reservation is stored alongside the standby queue,
+    // but it is a reserved place in the tournament, not a late registration.
+    return !!(row && (!row._wl || row.genericPlaceholderReservation === true));
   }
   function _erPairCategory(members) {
     var a = members[0], b = members[1], pe = _pendingEdits[a.order] || _pendingEdits[b.order] || {};
@@ -2988,7 +2993,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     '</div>';
   }
   function _matrixInner(rows, t) {
-    var enrolledRows = (rows || []).filter(function (r) { return r && !r._wl; });
+    var enrolledRows = (rows || []).filter(_erIsVisibleEnrollmentRow);
     // Buckets refletem a configuração explícita do torneio; A-D-FUN só existe
     // quando não há categoria estipulada pelo organizador.
     var skills = _erAnalysisSkills(t);
@@ -2999,7 +3004,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // grade é o card que o organizador arrasta para a categoria.
     var byPair = {};
     (rows || []).forEach(function (r) {
-      if (r && r._duplaIdx != null && !r._wl) (byPair[r._duplaIdx] || (byPair[r._duplaIdx] = [])).push(r);
+      if (_erIsVisibleEnrollmentRow(r) && r._duplaIdx != null) (byPair[r._duplaIdx] || (byPair[r._duplaIdx] = [])).push(r);
     });
     var pairGroups = _erPairGroups(enrolledRows);
     var pairedOrders = {};
@@ -3044,7 +3049,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     function catCount(catName) {
       var d = _decomposeCat(catName, t), n = 0;
       (rows || []).forEach(function (r) {
-        if (!r || r._wl) return;
+        if (!_erIsVisibleEnrollmentRow(r)) return;
         // O resumo deve dizer onde a pessoa FOI ATRIBUÍDA, não inferir uma
         // categoria pelo perfil/gênero. Em dupla importada o gênero individual
         // pode ser vazio, mas `assigned[0]` já é, por exemplo, “Fem Light”.
@@ -5982,9 +5987,11 @@ window._lzNaoEhEuMesmo = function (uid) {
         if (!Array.isArray(data.participants)) throw new Error('roster canônico inválido');
         _erCanonicalRosterById[String(tId)] = {
           participants: data.participants,
+          placeholderReservations: Array.isArray(data.placeholderReservations) ? data.placeholderReservations : [],
           categoryDefinitions: Array.isArray(data.categoryDefinitions) ? data.categoryDefinitions : null
         };
         t.participants = data.participants;
+        t.placeholderReservations = Array.isArray(data.placeholderReservations) ? data.placeholderReservations : [];
         if (Array.isArray(data.categoryDefinitions)) t.categoryDefinitions = data.categoryDefinitions;
         _erCanonicalLoaded[String(tId)] = true;
         if (window.location.hash === '#analise/' + tId) window.renderEnrollmentReportPage(container, tId, true);
@@ -5996,6 +6003,7 @@ window._lzNaoEhEuMesmo = function (uid) {
     if (isCanonicalReport && _erCanonicalRosterById[String(tId)]) {
       var canonicalRoster = _erCanonicalRosterById[String(tId)];
       t.participants = canonicalRoster.participants;
+      t.placeholderReservations = Array.isArray(canonicalRoster.placeholderReservations) ? canonicalRoster.placeholderReservations : [];
       if (Array.isArray(canonicalRoster.categoryDefinitions)) t.categoryDefinitions = canonicalRoster.categoryDefinitions;
     }
     // v2.8.56: expande duplas em pessoas individuais (conta cada inscrito uma vez).
