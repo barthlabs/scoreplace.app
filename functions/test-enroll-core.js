@@ -160,6 +160,15 @@ try { C.normalizeExtraUpdates({ status: 'finished' }); ok('extraUpdates recusa p
   eq('sorteio feito → closed', r.outcome, 'closed');
 })();
 
+// ── Chave montada antes do início ainda aceita inscrição no elenco ───────────
+(() => {
+  const data = { status: 'active', tournamentStarted: false, participants: [], matches: [{ id: 1 }] };
+  const r = C.computeEnroll(data, { uid: 'prestart-uid', displayName: 'Reserva' }, null, NOW);
+  eq('sorteio pré-início → enrolled', r.outcome, 'enrolled');
+  eq('sorteio pré-início não cria espera', r.updateData.standbyParticipants, undefined);
+  eq('sorteio pré-início preserva o elenco', r.updateData.participants.length, 1);
+})();
+
 // ── Liga com inscrição aberta ACEITA mesmo com sorteio — mas o destino é a ESPERA ──
 // ASSERÇÃO REVISADA em v1.6.86 (de 'enrolled' pra 'waitlisted'), de propósito.
 // O invariante que ela defendia CONTINUA travado: Liga com temporada aberta não recusa

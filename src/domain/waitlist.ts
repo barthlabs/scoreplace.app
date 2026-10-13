@@ -388,8 +388,22 @@ namespace ScoreplaceWaitlist {
 
   export function phaseDrawDone(tournament: Tournament | null | undefined): boolean {
     if (!tournament) return false;
-    if (typeof tournament.hasDraw === 'boolean') return tournament.hasDraw;
-    return array(tournament.matches).length > 0 || array(tournament.rounds).length > 0 || array(tournament.groups).length > 0;
+    const hasDraw = typeof tournament.hasDraw === 'boolean'
+      ? tournament.hasDraw
+      : (array(tournament.matches).length > 0 || array(tournament.rounds).length > 0 || array(tournament.groups).length > 0);
+    if (!hasDraw) return false;
+    // A bracket can be generated before the organizer starts the tournament.
+    // That is still a pre-start roster: new entries belong in participants, not
+    // in the late-registration queue. An explicit false is authoritative.
+    if (tournament.tournamentStarted === false) return false;
+    const status = text(tournament.status).toLowerCase();
+    if (status === 'started' || status === 'in_progress' || status === 'live') return true;
+    if (tournament.tournamentStarted === true || tournament.tournamentStartedAt || tournament.phaseStartedAt) return true;
+    const startRaw = tournament.startDate || '';
+    const startMs = new Date(String(startRaw)).getTime();
+    if (startRaw && Number.isFinite(startMs) && startMs > Date.now()) return false;
+    // Legacy documents without a start marker retain the historical draw rule.
+    return true;
   }
 
   export function enrollmentOpenState(tournament: Tournament | null | undefined, nowMs?: number): { open: boolean; ligaOpen: boolean; sorteio: boolean; deadlinePassed: boolean; notOpenYet: boolean; opensAt: number | null } {

@@ -49,7 +49,9 @@ ok(D.isPlayingCurrentPhase(phase, entry('u_ana', 'Ana'), helpers), 'confronto at
 ok(D.isPlayingCurrentPhase(phase, entry('u_bia', 'Bia'), helpers), 'grupo Rei/Rainha marca participante como jogando');
 ok(D.isPlayingCurrentPhase(phase, entry('u_clara', 'Clara'), helpers), 'grupo de fase também marca participante como jogando');
 ok(!D.isPlayingCurrentPhase(phase, entry('u_dora', 'Dora'), helpers), 'folga não vira jogo nem inventa presença');
-ok(D.phaseDrawDone({ hasDraw: true }) && !D.phaseDrawDone({ hasDraw: false }), 'resumo hasDraw é autoridade quando existe');
+ok(D.phaseDrawDone({ hasDraw: true, tournamentStarted: true }) && !D.phaseDrawDone({ hasDraw: false }), 'resumo hasDraw é autoridade quando existe');
+ok(!D.phaseDrawDone({ hasDraw: true, tournamentStarted: false }), 'sorteio pré-início não manda inscrição para espera');
+ok(!D.phaseDrawDone({ matches: [{ id: 'm1' }], status: 'active', startDate: '2099-01-01T18:00:00Z' }), 'chave futura permanece pré-início');
 // REGRESSÃO: Liga pode ficar aberta depois do sorteio, mas uma decisão explícita do
 // organizador de fechar a inscrição prevalece sobre essa permissão de formato.
 ok(!D.enrollmentOpenState({ format: 'Liga', ligaOpenEnrollment: true, status: 'closed', rounds: [{}] }).open, 'fechamento manual também fecha Liga após sorteio');

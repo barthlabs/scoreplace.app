@@ -70,9 +70,23 @@ function computeMemberUids(data) {
 // vai pra LISTA DE ESPERA, nunca pro roster da rodada que já existe.
 function phaseDrawDone(data) {
   if (!data) return false;
-  return (Array.isArray(data.matches) && data.matches.length > 0) ||
+  var hasDraw = typeof data.hasDraw === 'boolean' ? data.hasDraw :
+    ((Array.isArray(data.matches) && data.matches.length > 0) ||
     (Array.isArray(data.rounds) && data.rounds.length > 0) ||
-    (Array.isArray(data.groups) && data.groups.length > 0);
+    (Array.isArray(data.groups) && data.groups.length > 0));
+  if (!hasDraw) return false;
+  // A bracket may exist before the organizer starts the tournament. That is
+  // still the pre-start roster, so a new entry must go to participants, not to
+  // the late-registration queue. Keep the explicit start marker authoritative.
+  if (data.tournamentStarted === false) return false;
+  var status = String(data.status || '').toLowerCase();
+  if (status === 'started' || status === 'in_progress' || status === 'live') return true;
+  if (data.tournamentStarted === true || data.tournamentStartedAt || data.phaseStartedAt) return true;
+  var startRaw = data.startDate || '';
+  var startMs = new Date(String(startRaw)).getTime();
+  if (startRaw && Number.isFinite(startMs) && startMs > Date.now()) return false;
+  // Legacy documents without a start marker retain the historical draw rule.
+  return true;
 }
 
 // Espelha window._cleanUndefined (js/views/persist-core.js).
@@ -124,9 +138,8 @@ function enrollmentOpen(data, nowMs) {
   var allowsLateEnrollment = phase
     ? (phaseLateEnrollment ? phaseLateEnrollment !== 'closed' : (phase.kind === 'classification' && isLegacyLiga))
     : isLegacyLiga;
-  var sorteioRealizado = (Array.isArray(data.matches) && data.matches.length > 0) ||
-    (Array.isArray(data.rounds) && data.rounds.length > 0) ||
-    (Array.isArray(data.groups) && data.groups.length > 0);
+  // A pre-start bracket is only a layout; it must not close the roster.
+  var sorteioRealizado = phaseDrawDone(data);
   var now = typeof nowMs === 'number' ? nowMs : Date.now();
   var opensAt = new Date(data.registrationOpenAt || '').getTime();
   var notOpenYet = !!(data.registrationOpenAt && Number.isFinite(opensAt) && opensAt > now);
