@@ -4318,7 +4318,7 @@ window._formTeamConfirm = function(tId, name1, uid1, name2, uid2, opts) {
             return;
         }
         window.FirestoreDB.formPair(tId, { uid1: fuid1, manualId1: fmanual1, name1: name1, uid2: fuid2, manualId2: fmanual2, name2: name2, categoryId: fcanonical && !_placeholderPairNoCategory ? fcategory1 : '', changeRule: !!_changeRule })
-            .then(function () {
+            .then(function (result) {
                 if (typeof showNotification === 'function') showNotification('👫 Dupla formada!', newName, 'success');
                 if (_hasBracketDF && typeof window._triggerLateIntegration === 'function') { try { window._triggerLateIntegration(t, { force: true }); } catch (e) {} }
                 var repaint = function (fresh) {
@@ -4334,13 +4334,38 @@ window._formTeamConfirm = function(tId, name1, uid1, name2, uid2, opts) {
                     var container = document.getElementById('view-container');
                     if (container) renderTournaments(container, tId);
                 };
-                // O retorno da CF confirma a escrita, mas o objeto `t` ainda é
-                // o retrato anterior. Relê no servidor antes de pintar para que
-                // a dupla formada apareça na mesma interação, sem esperar o
-                // próximo snapshot do Firestore.
-                if (window.FirestoreDB && typeof window.FirestoreDB.loadTournamentById === 'function') {
-                    window.FirestoreDB.loadTournamentById(tId).then(repaint).catch(function () { repaint(null); });
-                } else repaint(null);
+                // A resposta da transação é a fotografia autoritativa do roster.
+                // Não fazemos uma segunda leitura aqui: ela pode voltar do cache
+                // enquanto o listener ainda está entregando o snapshot anterior.
+                // Reservas que ainda não foram materializadas continuam na seção
+                // “Sem dupla”; as duas reservas recém-pareadas já vêm no retorno
+                // como uma entrada `p1*/p2*` e deixam de ser duplicadas.
+                if (result && Array.isArray(result.participants)) {
+                    var fresh = Object.assign({}, t);
+                    var canonical = result.participants.slice();
+                    var represented = {};
+                    canonical.forEach(function (entry) {
+                        if (!entry || typeof entry !== 'object') return;
+                        [entry.manualParticipantId, entry.p1ManualId, entry.p2ManualId].forEach(function (id) {
+                            id = String(id || '').trim();
+                            if (id) represented[id] = true;
+                        });
+                    });
+                    var reservations = Array.isArray(t.placeholderReservations) ? t.placeholderReservations : [];
+                    reservations.forEach(function (entry) {
+                        if (!entry || entry.isPlaceholder !== true) return;
+                        var id = String(entry.manualParticipantId || '').trim();
+                        var label = String(entry.displayName || entry.name || '').trim();
+                        if (id && label && !represented[id]) {
+                            canonical.push({ name: label, displayName: label, manualParticipantId: id,
+                                isPlaceholder: true, genericPlaceholderReservation: entry.genericPlaceholderReservation === true });
+                        }
+                    });
+                    fresh.participants = canonical;
+                    repaint(fresh);
+                } else {
+                    repaint(null);
+                }
             })
             .catch(function (e) { if (typeof showNotification === 'function') showNotification('Não foi possível formar a dupla', (e && e.message) || '', 'warning'); });
     };
