@@ -6009,6 +6009,30 @@ window._lzNaoEhEuMesmo = function (uid) {
     // v2.8.56: expande duplas em pessoas individuais (conta cada inscrito uma vez).
     var rosterParts = _erDedupeRosterParts(Array.isArray(t.participants) ? t.participants : []);
     var parts = _expandDuplas(rosterParts.map(function (p) { return _erNormalizeCanonicalEntry(t, p); }), t);
+    // Reservas genéricas não são inscrições canônicas e, por isso, não vêm na
+    // subcoleção `registrations`. Ainda assim são vagas do torneio e precisam
+    // aparecer na Análise para o organizador atribuir gênero/categoria. Antes
+    // elas só eram devolvidas pela callable e desapareciam no primeiro render.
+    // Incluí-las aqui mantém a identidade manual e não as transforma em
+    // inscrição: continuam marcadas como reserva até serem materializadas.
+    try {
+      var _phSeen = Object.create(null);
+      rosterParts.forEach(function (p) {
+        var _mk = p && typeof p === 'object' ? String(p.manualParticipantId || '').trim() : '';
+        if (_mk) _phSeen[_mk] = true;
+      });
+      (Array.isArray(t.placeholderReservations) ? t.placeholderReservations : []).forEach(function (p) {
+        if (!p || p.isPlaceholder !== true) return;
+        var _id = String(p.manualParticipantId || '').trim();
+        var _nm = String(p.displayName || p.name || '').trim();
+        if (!_id || !_nm || _phSeen[_id]) return;
+        _phSeen[_id] = true;
+        parts.push(_erNormalizeCanonicalEntry(t, {
+          name: _nm, displayName: _nm, manualParticipantId: _id,
+          isPlaceholder: true, genericPlaceholderReservation: true
+        }));
+      });
+    } catch (_phRenderErr) { if (window._warn) window._warn('[analise] reservas não renderizadas', _phRenderErr); }
     // v1.7.2 — A LISTA DE ESPERA TAMBÉM É INSCRITO. Desde a 1.6.86 quem se inscreve
     // DEPOIS do sorteio vai pra espera e SAI de t.participants; como a Análise lia só
     // `participants`, essa gente sumia da tela e o organizador não tinha onde atribuir

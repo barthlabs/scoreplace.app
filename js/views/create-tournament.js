@@ -5117,13 +5117,38 @@ function setupCreateTournamentModal() {
     var _radVal = (t.logoRadius != null && t.logoRadius !== '') ? t.logoRadius : 14;
     if (typeof window._setLogoFormaFromRadius === 'function') window._setLogoFormaFromRadius(_radVal, _isCircle);
     if (typeof window._setLogoAspect === 'function') window._setLogoAspect(t.logoAspect != null ? t.logoAspect : 1);
-    // Restore logo
-    document.getElementById('tourn-logo-data').value = window._tourLogoSrc(t) || '';
-    var _lgEdit = window._tourLogoSrc(t);
+    // Restore logo.  The tournament card is allowed to paint from the Storage URL
+    // before the shared image accessor is installed; the editor cannot depend on
+    // that timing or it silently falls back to "Sem logo".  Read the canonical URL
+    // directly as a defensive fallback (legacy base64 remains supported).
+    var _logoSrcEdit = (typeof window._tourLogoSrc === 'function')
+      ? window._tourLogoSrc(t)
+      : (t.logoUrl || t.logoData || '');
+    document.getElementById('tourn-logo-data').value = _logoSrcEdit || '';
+    var _lgEdit = _logoSrcEdit;
     if (_lgEdit) {
       window._applyTournamentLogo(_lgEdit);
     } else {
       window._clearTournamentLogo();
+      // A summary snapshot can be sufficient for the card but omit image fields.
+      // Fetch the canonical document in the background so opening Edit never loses
+      // a logo merely because the summary arrived first.
+      try {
+        var _logoDb = window.FirestoreDB;
+        if (_logoDb && typeof _logoDb.loadTournamentById === 'function' && !window._editLogoHydrating) {
+          window._editLogoHydrating = String(tId);
+          _logoDb.loadTournamentById(tId).then(function (_fullLogoTournament) {
+            if (!_fullLogoTournament || String((document.getElementById('edit-tournament-id') || {}).value || '') !== String(tId)) return;
+            var _fullLogo = (typeof window._tourLogoSrc === 'function')
+              ? window._tourLogoSrc(_fullLogoTournament)
+              : (_fullLogoTournament.logoUrl || _fullLogoTournament.logoData || '');
+            if (!_fullLogo) return;
+            var _logoInput = document.getElementById('tourn-logo-data');
+            if (_logoInput) _logoInput.value = _fullLogo;
+            if (typeof window._applyTournamentLogo === 'function') window._applyTournamentLogo(_fullLogo);
+          }).catch(function () {}).then(function () { window._editLogoHydrating = ''; });
+        }
+      } catch (_logoHydrateErr) {}
     }
     // Restore lock state
     window._logoLocked = !!t.logoLocked;
