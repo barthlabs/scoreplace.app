@@ -19,12 +19,12 @@ ok('nome só permanece para convidada manual', pair &&
 ok('pendente não entra no elenco de sorteio', roster.every((entry) => entry.uid !== 'u4'));
 ok('projeção expõe categoryId sem depender do rótulo legado', roster.every((entry) => entry.categoryId === entry.category));
 const rosterReordered = R.rosterFromRegistrations([
-  { registrationId: 'c', categoryId: 'cat-b', participantKind: 'account', participantUid: 'u3', status: 'confirmed', fixedPairId: null },
-  { registrationId: 'a', categoryId: 'cat-a', participantKind: 'account', participantUid: 'u1', status: 'confirmed', fixedPairId: null },
+  { registrationId: 'c', categoryId: 'cat-b', participantKind: 'account', participantUid: 'u3', enrollSeq: 2, status: 'confirmed', fixedPairId: null },
+  { registrationId: 'a', categoryId: 'cat-a', participantKind: 'account', participantUid: 'u1', enrollSeq: 1, status: 'confirmed', fixedPairId: null },
 ]);
 const rosterCanonical = R.rosterFromRegistrations([
-  { registrationId: 'a', categoryId: 'cat-a', participantKind: 'account', participantUid: 'u1', status: 'confirmed', fixedPairId: null },
-  { registrationId: 'c', categoryId: 'cat-b', participantKind: 'account', participantUid: 'u3', status: 'confirmed', fixedPairId: null },
+  { registrationId: 'a', categoryId: 'cat-a', participantKind: 'account', participantUid: 'u1', enrollSeq: 1, status: 'confirmed', fixedPairId: null },
+  { registrationId: 'c', categoryId: 'cat-b', participantKind: 'account', participantUid: 'u3', enrollSeq: 2, status: 'confirmed', fixedPairId: null },
 ]);
 ok('leitura canônica mantém a ordem independente da ordem da consulta Firestore',
   JSON.stringify(rosterReordered) === JSON.stringify(rosterCanonical));
@@ -35,6 +35,12 @@ const rosterInterleaved = R.rosterFromRegistrations([
 ]);
 ok('dupla permanece na posição do primeiro registro, sem bloco de duplas ao final',
   rosterInterleaved.length === 2 && rosterInterleaved[0].p1Uid === 'u1' && rosterInterleaved[0].p2Uid === 'u3' && rosterInterleaved[1].uid === 'u2');
+const placeholderPair = R.rosterFromRegistrations([
+  { registrationId: 'z', categoryId: 'cat-a', participantKind: 'manual', manualParticipantId: 'm2', manualDisplayName: 'Jogador 02', status: 'confirmed', fixedPairId: 'pair-p' },
+  { registrationId: 'y', categoryId: 'cat-a', participantKind: 'manual', manualParticipantId: 'm1', manualDisplayName: 'Jogador 01', status: 'confirmed', fixedPairId: 'pair-p' },
+]);
+ok('placeholders preservam a ordem numérica da inscrição, inclusive dentro da dupla',
+  placeholderPair.length === 1 && placeholderPair[0].p1Name === 'Jogador 01' && placeholderPair[0].p2Name === 'Jogador 02');
 bad('recusa dupla incompleta', () => R.rosterFromRegistrations([{ registrationId: 'a', categoryId: 'cat-a', participantKind: 'account', participantUid: 'u1', status: 'confirmed', fixedPairId: 'pair' }]));
 bad('recusa convidada sem rótulo do torneio', () => R.rosterFromRegistrations([{ registrationId: 'a', categoryId: 'cat-a', participantKind: 'manual', manualParticipantId: 'm1', status: 'confirmed' }]));
 

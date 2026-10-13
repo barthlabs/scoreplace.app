@@ -12,15 +12,58 @@ var ScoreplaceRegistrationRoster;
 (function (ScoreplaceRegistrationRoster) {
     function text(value) { return typeof value === 'string' ? value.trim() : ''; }
     function active(doc) { return !!doc && doc.status === 'confirmed'; }
-    function member(doc) {
+    function timestamp(value) {
+        if (value && typeof value.toMillis === 'function') {
+            const n = Number(value.toMillis());
+            return Number.isFinite(n) ? n : null;
+        }
+        if (value && typeof value === 'object' && typeof value.seconds === 'number') {
+            return Number(value.seconds) * 1000;
+        }
+        if (typeof value === 'number' && Number.isFinite(value))
+            return value;
+        if (typeof value === 'string') {
+            const n = Date.parse(value);
+            return Number.isFinite(n) ? n : null;
+        }
+        return null;
+    }
+    function numericName(value) {
+        const match = value.match(/(?:jogador|player|inscrito|placeholder)\s*0*(\d+)$/i);
+        if (!match)
+            return null;
+        const n = Number(match[1]);
+        return Number.isFinite(n) ? n : null;
+    }
+    function orderOf(doc, name, index) {
+        const explicit = [doc.enrollSeq, doc.registrationOrder, doc.p1Seq, doc.p2Seq]
+            .filter((value) => value !== null && value !== undefined && value !== '')
+            .map((value) => Number(value)).find((value) => Number.isFinite(value));
+        if (explicit !== undefined)
+            return { rank: explicit, fallback: '', index };
+        const named = numericName(name);
+        if (named !== null)
+            return { rank: named, fallback: '', index };
+        const created = timestamp(doc.createdAt);
+        if (created !== null)
+            return { rank: created, fallback: '', index };
+        return { rank: Number.POSITIVE_INFINITY, fallback: name.toLocaleLowerCase(), index };
+    }
+    function compareOrder(a, b) {
+        if (a.rank !== b.rank)
+            return a.rank - b.rank;
+        const fallback = a.fallback.localeCompare(b.fallback, 'pt-BR', { sensitivity: 'base', numeric: true });
+        return fallback || a.index - b.index;
+    }
+    function member(doc, index) {
         const kind = text(doc.participantKind), uid = text(doc.participantUid), manualId = text(doc.manualParticipantId);
         if (kind === 'account' && uid && !manualId)
-            return { key: 'uid:' + uid, uid, manualParticipantId: null, name: '' };
+            return { key: 'uid:' + uid, uid, manualParticipantId: null, name: '', order: orderOf(doc, '', index) };
         if (kind === 'manual' && manualId && !uid) {
             const name = text(doc.manualDisplayName);
             if (!name)
                 throw new Error('convidado manual sem nome de exibição');
-            return { key: 'manual:' + manualId, uid: null, manualParticipantId: manualId, name };
+            return { key: 'manual:' + manualId, uid: null, manualParticipantId: manualId, name, order: orderOf(doc, name, index) };
         }
         throw new Error('registro de participante inválido');
     }
@@ -59,30 +102,36 @@ var ScoreplaceRegistrationRoster;
     function rosterFromRegistrations(registrations) {
         const pairs = new Map();
         const ordered = [], seen = new Set();
-        // Firestore não garante a ordem de uma leitura de subcoleção. Ordenar pela
-        // identidade canônica torna a projeção estável entre abas, recargas e lotes;
-        // a ordem dos membros de uma dupla continua sendo resolvida abaixo pela chave.
+        // Firestore não garante a ordem de uma leitura de subcoleção. A ordem de
+        // inscrição (enrollSeq/createdAt) é a fonte principal; para reservas legadas
+        // sem esse campo, "Jogador N" conserva o número cronológico da vaga. O ID
+        // técnico só é desempate final e nunca pode embaralhar a lista visível.
         const list = (Array.isArray(registrations) ? registrations : [])
-            .slice()
-            .sort((a, b) => text(a.registrationId).localeCompare(text(b.registrationId)));
-        list.filter(active).forEach((registration, order) => {
+            .map((registration, index) => ({ registration, index }))
+            .filter((item) => active(item.registration))
+            .sort((a, b) => {
+            const an = text(a.registration.manualDisplayName), bn = text(b.registration.manualDisplayName);
+            const result = compareOrder(orderOf(a.registration, an, a.index), orderOf(b.registration, bn, b.index));
+            return result || text(a.registration.registrationId).localeCompare(text(b.registration.registrationId));
+        });
+        list.forEach(({ registration, index }, order) => {
             const id = text(registration.registrationId), categoryId = text(registration.categoryId);
             if (!id || !categoryId || seen.has(id))
                 throw new Error('registro canônico duplicado ou inválido');
             seen.add(id);
-            const person = member(registration), pairId = text(registration.fixedPairId);
+            const person = member(registration, index), pairId = text(registration.fixedPairId);
             if (!pairId) {
-                ordered.push({ order, entry: soloEntry(registration, person) });
+                ordered.push({ order: person.order, entry: soloEntry(registration, person) });
                 return;
             }
             const key = pairId + '\u0000' + categoryId;
-            const group = pairs.get(key) || { categoryId, people: [], order };
+            const group = pairs.get(key) || { categoryId, people: [], order: person.order };
             group.people.push(person);
             pairs.set(key, group);
         });
         pairs.forEach((group, pairKey) => ordered.push({ order: group.order, pairKey }));
         const entries = [];
-        ordered.sort((a, b) => a.order - b.order).forEach((item) => {
+        ordered.sort((a, b) => compareOrder(a.order, b.order)).forEach((item) => {
             if (item.entry) {
                 entries.push(item.entry);
                 return;
@@ -90,7 +139,7 @@ var ScoreplaceRegistrationRoster;
             const group = pairs.get(item.pairKey);
             if (group.people.length !== 2 || group.people[0].key === group.people[1].key)
                 throw new Error('dupla canônica incompleta ou inválida');
-            group.people.sort((a, b) => a.key.localeCompare(b.key));
+            group.people.sort((a, b) => compareOrder(a.order, b.order));
             entries.push(pairEntry(group.categoryId, group.people[0], group.people[1]));
         });
         return entries;
