@@ -1,3 +1,4 @@
+// 2.4.27 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.25 — O resumo de duração usa a mesma contagem canônica de inscritos do cabeçalho; projeções de duplas não inflacionam mais 128 pessoas para 256. Os cache-busters do shell foram regenerados junto com essa versão.
 // 2.4.24 — A contagem também canonicaliza rótulos numéricos com identidade estrutural, unindo nomes de Jogador N entre duplas materializadas e projeções legadas sem fundir reservas anônimas distintas.
 // 2.4.23 — A contagem canônica une a mesma reserva quando ela aparece como membro de dupla e como projeção legada individual. Cabeçalho, detalhe e Análise deixam de inflar 96 inscritos + 32 placeholders para 256/224; identidades manuais e rótulos legados só se unem quando há evidência estrutural, sem colidir reservas anônimas distintas.
