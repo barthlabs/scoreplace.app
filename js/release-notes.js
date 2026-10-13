@@ -1,4 +1,5 @@
 // 2.4.21 — Atualização consolidada de produção com as correções validadas desde a última publicação.
+// A contagem de inscritos canônicos agora deduplica projeções de duplas e reservas de placeholder pela identidade estrutural, em vez de confiar em resumos legados; o cabeçalho, a análise e o editor passam a usar a mesma contagem real.
 // 2.4.20 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.19 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // Reservas de placeholder agora entram na mesma projeção canônica do roster em todas as telas: as vagas 97–128 aparecem no quadro e na Análise, sem duplicar inscrições, sem virar lista tardia e preservando a ordem de inscrição.
