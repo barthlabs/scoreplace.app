@@ -1,3 +1,4 @@
+// 2.4.13 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.12 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.11 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.10 — Atualização consolidada de produção com as correções validadas desde a última publicação.
