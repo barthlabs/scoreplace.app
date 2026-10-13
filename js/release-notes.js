@@ -1,3 +1,4 @@
+// 2.4.19 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.18 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // Inscrições feitas antes do início real do torneio permanecem no elenco canônico mesmo quando a chave já foi montada; somente torneio efetivamente iniciado usa a lista de inscrições tardias. Cliente, servidor e fallback compartilham a mesma decisão, com normalização de status e regressão específica para preservar reservas, duplas e categorias.
 // 2.4.17 — Atualização consolidada de produção com as correções validadas desde a última publicação.
