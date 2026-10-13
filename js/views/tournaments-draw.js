@@ -4200,7 +4200,8 @@ window.handleDropTeam = function (e, targetIdx) {
             tId: tId,
             sourceName: name1, sourceUid: uid1, sourceManualParticipantId: manualParticipantId1,
             targetName: name2, targetUid: uid2, targetManualParticipantId: manualParticipantId2,
-            ruleAllowsTeam: (t.enrollmentMode !== 'individual'),
+            ruleAllowsTeam: (parseInt(t.teamSize || 1, 10) >= 2) ||
+                (typeof window._isTeamEnrollMode === 'function' && window._isTeamEnrollMode(t.enrollmentMode || t.enrollment)),
             drawDone: _drawDoneD,
             canMerge: _oneRealOneGeneric
         });

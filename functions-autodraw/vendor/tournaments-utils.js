@@ -403,14 +403,15 @@ window._executeMerge = function(sourceName, targetName, tId) {
                      (Array.isArray(t.rounds) && t.rounds.length) ||
                      (Array.isArray(t.groups) && t.groups.length);
     var drawDone = !!hasMatches || t.status === 'started' || t.status === 'in_progress';
-    var allowTeam = !drawDone && t.enrollmentMode !== 'individual';
+    var allowTeam = !drawDone && ((parseInt(t.teamSize || 1, 10) >= 2) ||
+        (typeof window._isTeamEnrollMode === 'function' && window._isTeamEnrollMode(t.enrollmentMode || t.enrollment)));
 
     if (typeof window._showDropChoiceOverlay === 'function') {
         window._showDropChoiceOverlay({
             tId: tId,
             sourceName: personName, sourceUid: uidOf(personName), sourceManualParticipantId: manualIdOf(personName),
             targetName: placeholderName, targetUid: uidOf(placeholderName), targetManualParticipantId: manualIdOf(placeholderName),
-            allowTeam: allowTeam
+            ruleAllowsTeam: allowTeam
         });
     }
 };
