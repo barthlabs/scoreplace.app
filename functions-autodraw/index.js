@@ -452,6 +452,13 @@ function _preserveCanonicalRosterProjection(tDepois, tAntes) {
       delete tDepois[key];
     }
   });
+  // Placeholders são reservas administrativas, não registros canônicos. A projeção
+  // anterior continua sendo a fonte dos inscritos reais, mas as reservas novas da
+  // operação precisam sobreviver à fronteira; antes elas eram descartadas aqui e a
+  // Function respondia sucesso sem que o lote aparecesse na tela ou na próxima leitura.
+  if (Array.isArray(tDepois.placeholderReservations) && tDepois.placeholderReservations.length) {
+    tDepois.participants = _appendPlaceholderReservations(tDepois.participants, tDepois);
+  }
   return true;
 }
 

@@ -52,20 +52,29 @@ namespace ScoreplaceRegistrationRoster {
   }
   /** Retorna entradas estruturais para o motor; pendentes nunca ocupam vaga. */
   export function rosterFromRegistrations(registrations: unknown): Record<string, unknown>[] {
-    const pairs = new Map<string, { categoryId: string; people: Person[] }>();
-    const entries: Record<string, unknown>[] = [], seen = new Set<string>();
-    const list = Array.isArray(registrations) ? registrations as Registration[] : [];
-    list.filter(active).forEach((registration) => {
+    const pairs = new Map<string, { categoryId: string; people: Person[]; order: number }>();
+    const ordered: Array<{ order: number; entry?: Record<string, unknown>; pairKey?: string }> = [], seen = new Set<string>();
+    // Firestore não garante a ordem de uma leitura de subcoleção. Ordenar pela
+    // identidade canônica torna a projeção estável entre abas, recargas e lotes;
+    // a ordem dos membros de uma dupla continua sendo resolvida abaixo pela chave.
+    const list = (Array.isArray(registrations) ? registrations as Registration[] : [])
+      .slice()
+      .sort((a, b) => text(a.registrationId).localeCompare(text(b.registrationId)));
+    list.filter(active).forEach((registration, order) => {
       const id = text(registration.registrationId), categoryId = text(registration.categoryId);
       if (!id || !categoryId || seen.has(id)) throw new Error('registro canônico duplicado ou inválido');
       seen.add(id);
       const person = member(registration), pairId = text(registration.fixedPairId);
-      if (!pairId) { entries.push(soloEntry(registration, person)); return; }
+      if (!pairId) { ordered.push({ order, entry: soloEntry(registration, person) }); return; }
       const key = pairId + '\u0000' + categoryId;
-      const group = pairs.get(key) || { categoryId, people: [] };
+      const group = pairs.get(key) || { categoryId, people: [], order };
       group.people.push(person); pairs.set(key, group);
     });
-    pairs.forEach((group) => {
+    pairs.forEach((group, pairKey) => ordered.push({ order: group.order, pairKey }));
+    const entries: Record<string, unknown>[] = [];
+    ordered.sort((a, b) => a.order - b.order).forEach((item) => {
+      if (item.entry) { entries.push(item.entry); return; }
+      const group = pairs.get(item.pairKey as string) as { categoryId: string; people: Person[]; order: number };
       if (group.people.length !== 2 || group.people[0].key === group.people[1].key) throw new Error('dupla canônica incompleta ou inválida');
       group.people.sort((a, b) => a.key.localeCompare(b.key));
       entries.push(pairEntry(group.categoryId, group.people[0], group.people[1]));

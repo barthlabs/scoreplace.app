@@ -18,6 +18,23 @@ ok('nome só permanece para convidada manual', pair &&
   ((pair.p1Name === 'Convidada' && pair.p2Name === undefined) || (pair.p2Name === 'Convidada' && pair.p1Name === undefined)));
 ok('pendente não entra no elenco de sorteio', roster.every((entry) => entry.uid !== 'u4'));
 ok('projeção expõe categoryId sem depender do rótulo legado', roster.every((entry) => entry.categoryId === entry.category));
+const rosterReordered = R.rosterFromRegistrations([
+  { registrationId: 'c', categoryId: 'cat-b', participantKind: 'account', participantUid: 'u3', status: 'confirmed', fixedPairId: null },
+  { registrationId: 'a', categoryId: 'cat-a', participantKind: 'account', participantUid: 'u1', status: 'confirmed', fixedPairId: null },
+]);
+const rosterCanonical = R.rosterFromRegistrations([
+  { registrationId: 'a', categoryId: 'cat-a', participantKind: 'account', participantUid: 'u1', status: 'confirmed', fixedPairId: null },
+  { registrationId: 'c', categoryId: 'cat-b', participantKind: 'account', participantUid: 'u3', status: 'confirmed', fixedPairId: null },
+]);
+ok('leitura canônica mantém a ordem independente da ordem da consulta Firestore',
+  JSON.stringify(rosterReordered) === JSON.stringify(rosterCanonical));
+const rosterInterleaved = R.rosterFromRegistrations([
+  { registrationId: 'a', categoryId: 'cat-a', participantKind: 'account', participantUid: 'u1', status: 'confirmed', fixedPairId: 'pair-1' },
+  { registrationId: 'b', categoryId: 'cat-b', participantKind: 'account', participantUid: 'u2', status: 'confirmed', fixedPairId: null },
+  { registrationId: 'c', categoryId: 'cat-a', participantKind: 'account', participantUid: 'u3', status: 'confirmed', fixedPairId: 'pair-1' },
+]);
+ok('dupla permanece na posição do primeiro registro, sem bloco de duplas ao final',
+  rosterInterleaved.length === 2 && rosterInterleaved[0].p1Uid === 'u1' && rosterInterleaved[0].p2Uid === 'u3' && rosterInterleaved[1].uid === 'u2');
 bad('recusa dupla incompleta', () => R.rosterFromRegistrations([{ registrationId: 'a', categoryId: 'cat-a', participantKind: 'account', participantUid: 'u1', status: 'confirmed', fixedPairId: 'pair' }]));
 bad('recusa convidada sem rótulo do torneio', () => R.rosterFromRegistrations([{ registrationId: 'a', categoryId: 'cat-a', participantKind: 'manual', manualParticipantId: 'm1', status: 'confirmed' }]));
 
@@ -38,5 +55,6 @@ ok('Function devolve a contagem verificada junto do elenco canônico para o reci
   /registrationCount:\s*checked\.registrations\.length[\s\S]{0,160}participants/.test(functionsIndex));
 ok('leitura canônica devolve o mapa tipado de apresentação de categorias', functionsIndex.includes('categoryDefinitions: categoryDefinitions.map'));
 ok('cliente conserva categoryId e só projeta o label na borda visual', client.includes('projected.categoryId = categoryId') && client.includes('categoria canônica sem rótulo tipado'));
+ok('fronteira canônica preserva placeholders novos junto do roster real', autoDraw.includes('_appendPlaceholderReservations(tDepois.participants, tDepois)'));
 console.log((fail ? '❌' : '✅') + ' registration-roster-core: ' + pass + ' ok, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);
