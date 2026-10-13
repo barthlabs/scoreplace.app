@@ -485,6 +485,21 @@ function _appendPlaceholderReservations(participants, t) {
   return out;
 }
 
+// O resumo publicado no documento pai é usado pelo cartão antes da hidratação
+// das subcoleções. Ao incluir reservas, ele precisa acompanhar o elenco real;
+// manter o número antigo fazia a tela voltar de 160 para 96 após a resposta da
+// callable, embora as reservas já estivessem gravadas.
+function _projectedPeopleCount(participants) {
+  return (Array.isArray(participants) ? participants : []).reduce((total, entry) => {
+    if (!entry || typeof entry !== 'object') return total + 1;
+    if (Array.isArray(entry.participants) && entry.participants.length) return total + entry.participants.length;
+    if (entry.p1Uid || entry.p1ManualId || entry.p1Name || entry.p2Uid || entry.p2ManualId || entry.p2Name) {
+      return total + (entry.p1Uid || entry.p1ManualId || entry.p1Name ? 1 : 0) + (entry.p2Uid || entry.p2ManualId || entry.p2Name ? 1 : 0);
+    }
+    return total + 1;
+  }, 0);
+}
+
 // Uma única porta para a temporada acabar. A tela a solicita para obter a
 // resposta imediatamente; a decisão e a escrita seguem sendo do servidor.
 async function _closeExpiredLeagueSeason(ref, tId, nowIso) {
@@ -1424,12 +1439,18 @@ exports.addTournamentPlaceholders = onCall(async request => {
         createdAt: agoraIso
       })));
     }
+    // O resumo deve ser gravado no mesmo commit, nunca somente na resposta.
+    t.competitorsCount = _projectedPeopleCount(t.participants);
     const b = _gravaTorneio(tx, ref, t, before, { agoraIso });
     const clean = b.clean;
     if (canonical) {
       clean.placeholderReservations = _placeholderReservations(t);
       clean.participants = _appendPlaceholderReservations(clean.participants, t);
     }
+    // Placeholders são pessoas reservadas, não equipes. Atualize somente a
+    // contagem de inscritos; `teamsCount` continua refletindo as equipes reais.
+    const projectedPeople = _projectedPeopleCount(clean.participants);
+    clean.competitorsCount = projectedPeople;
     return { ok: true, added: out.added, destination: out.destination, tournament: clean };
   });
 });

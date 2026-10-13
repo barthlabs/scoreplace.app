@@ -85,8 +85,10 @@ window._duplaCard = function (t, p, draggable, ctx) {
     if (members && p && typeof p === 'object') {
       var _pairCats = (typeof window._getTournamentCategories === 'function')
         ? (window._getTournamentCategories(t) || []) : ((t && t.combinedCategories) || []);
-      var _pairCategoryRaw = String(p.category || ((p.categories || [])[0]) || '').trim();
-      var _pairCategoryKey = _pairCategoryRaw.toLocaleLowerCase();
+      var _pairCategoryRaw = String(p.categoryId || p.category || ((p.categories || [])[0]) || '').trim();
+      var _pairCategoryDisplay = (typeof window._displayTournamentCategory === 'function')
+        ? window._displayTournamentCategory(t, _pairCategoryRaw) : _pairCategoryRaw;
+      var _pairCategoryKey = _pairCategoryDisplay.toLocaleLowerCase();
       for (var _pci = 0; _pci < _pairCats.length; _pci++) {
         if (String(_pairCats[_pci] || '').trim().toLocaleLowerCase() === _pairCategoryKey) {
           _pairTournamentCategory = String(_pairCats[_pci]).trim();

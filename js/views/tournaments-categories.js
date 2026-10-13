@@ -481,6 +481,15 @@ window._updateCategoryPreview = function(genderState) {
 // Get combined tournament categories (cross-product of genders and skills)
 window._getTournamentCategories = function(t) {
     if (!t) return [];
+    // Inscrições canônicas carregam IDs opacos; a tela sempre exibe o rótulo
+    // configurado, nunca o ID (inclusive para torneios legados traduzidos).
+    if (t.canonicalRegistrationMigration && Array.isArray(t.categoryDefinitions) && t.categoryDefinitions.length) {
+        var typedLabels = t.categoryDefinitions
+            .filter(function(def) { return def && def.enabled !== false && def.label; })
+            .map(function(def) { return String(def.label).trim(); })
+            .filter(Boolean);
+        if (typedLabels.length) return typedLabels;
+    }
     if (Array.isArray(t.combinedCategories) && t.combinedCategories.length > 0) return t.combinedCategories;
     // Backward compat: compute from gender/skill arrays if they exist
     // v2.1.80: custom categories são "skill-like" — entram junto da habilidade.
@@ -504,6 +513,23 @@ window._getTournamentCategories = function(t) {
         }
     }
     return combined;
+};
+
+// Traduz a categoria estrutural recebida do servidor para a apresentação da
+// tela. O ID continua sendo usado nas mutações; somente o rótulo sai para o
+// usuário. Sem esta ponte, `legacy-<hash>` aparecia como se fosse categoria e
+// a dupla era marcada como pendente depois de uma atualização do elenco.
+window._displayTournamentCategory = function(t, raw) {
+    var value = String(raw || '').trim();
+    if (!value || !t) return '';
+    var defs = Array.isArray(t.categoryDefinitions) ? t.categoryDefinitions : [];
+    for (var i = 0; i < defs.length; i++) {
+        var def = defs[i];
+        if (!def) continue;
+        if (String(def.id || '').trim() === value) return String(def.label || value).trim();
+        if (String(def.label || '').trim().toLocaleLowerCase() === value.toLocaleLowerCase()) return String(def.label).trim();
+    }
+    return value;
 };
 
 // NOTE: _confirmMergeCategories, _executeMerge, _executeUnmerge are defined

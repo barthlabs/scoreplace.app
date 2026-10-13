@@ -10221,8 +10221,12 @@ window._profileMetaSemCatTag = function(rgb) {
 // mesma categoria no elenco canônico em vez de desenhar dois "sem cat".
 // [[regression_enrollment_card_shows_actual_tournament_category]]
 window._profileMetaTournamentCategory = function(p, pName, t) {
-  var direct = p && typeof p === 'object' && (p.category || (Array.isArray(p.categories) && p.categories[0]));
-  if (direct) return String(direct);
+  var direct = p && typeof p === 'object' && (p.categoryId || p.category || (Array.isArray(p.categories) && p.categories[0]));
+  if (direct) {
+    var directValue = String(direct).trim();
+    return (typeof window._displayTournamentCategory === 'function')
+      ? window._displayTournamentCategory(t, directValue) : directValue;
+  }
   if (!t) return '';
   var wantedUid = p && typeof p === 'object' ? String(p.uid || '') : '';
   var wantedName = String(pName || (p && (p.displayName || p.name)) || '').trim().toLowerCase();
@@ -10231,7 +10235,7 @@ window._profileMetaTournamentCategory = function(p, pName, t) {
   for (var i = 0; i < roster.length; i++) {
     var item = roster[i] && typeof roster[i] === 'object' ? roster[i] : null;
     if (!item) continue;
-    var category = item.category || (Array.isArray(item.categories) && item.categories[0]) || '';
+    var category = item.categoryId || item.category || (Array.isArray(item.categories) && item.categories[0]) || '';
     if (!category) continue;
     var identities = [item.uid, item.p1Uid, item.p2Uid, item.name, item.displayName, item.p1Name, item.p2Name];
     for (var j = 0; j < identities.length; j++) {
@@ -10239,7 +10243,10 @@ window._profileMetaTournamentCategory = function(p, pName, t) {
       // Uid é preferível, mas um elenco de dupla manual pode não tê-lo embora o
       // card já o tenha recebido do perfil. Nesse caso o nome canônico ainda é
       // a identidade correta para recuperar a categoria da inscrição.
-      if ((wantedUid && identity === wantedUid) || (wantedName && identity.toLowerCase() === wantedName)) return String(category);
+      if ((wantedUid && identity === wantedUid) || (wantedName && identity.toLowerCase() === wantedName)) {
+        return (typeof window._displayTournamentCategory === 'function')
+          ? window._displayTournamentCategory(t, category) : String(category);
+      }
     }
   }
   return '';

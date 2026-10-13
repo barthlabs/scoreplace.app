@@ -19,6 +19,7 @@ const y = fn.indexOf('// ─── Reset para inscrições', x);
 const server = fn.slice(x, y);
 ok(/_isTournamentAdmin/.test(server) && /runTransaction/.test(server) && /_gravaTorneio/.test(server), 'CF valida organizador e grava o elenco transacionalmente');
 ok(/placeholderReservations/.test(server) && /_appendPlaceholderReservations/.test(server), 'CF persiste placeholder canônico como reserva genérica, sem inscrição sem categoria');
+ok(/_projectedPeopleCount/.test(server) && /t\.competitorsCount = _projectedPeopleCount\(t\.participants\)/.test(server), 'CF atualiza o resumo de inscritos no mesmo commit das reservas');
 const db = fs.readFileSync('js/firebase-db.js', 'utf8');
 const readStart = db.indexOf('async _montaDeSubcolecoes');
 const readEnd = db.indexOf('  // v2.3.103:', readStart);
@@ -38,4 +39,8 @@ const pool = sandbox.window._buildPhase0Pool({ participants: [
   { name: 'Ana', displayName: 'Ana', manualParticipantId: 'manual-ana', category: 'Light' }
 ] }, false, 1);
 ok(pool.length === 1 && pool[0].displayName === 'Ana', 'sorteio real não inclui a reserva genérica sem categoria');
+const cats = fs.readFileSync('js/views/tournaments-categories.js', 'utf8');
+ok(/_displayTournamentCategory/.test(cats) && /canonicalRegistrationMigration/.test(cats), 'renderer traduz IDs canônicos/legados para o rótulo visível');
+const cards = fs.readFileSync('js/views/tournaments.js', 'utf8');
+ok(/p\.categoryId \|\| p\.category/.test(cards), 'card de dupla lê categoryId antes do rótulo legado');
 process.exitCode = failed ? 1 : 0;
