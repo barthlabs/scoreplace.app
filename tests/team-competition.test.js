@@ -58,6 +58,9 @@ ok(teamUi.includes('oninput="\' + pairHandler + \'"') && teamUi.includes('oninpu
   teamUi.includes('window._renderPhaseEstimate'),
   'alterar duplas/jogos por categoria atualiza a prévia imediatamente, sem esperar perder o foco');
 const createUi = fs.readFileSync('js/views/create-tournament.js', 'utf8');
+const indexHtml = fs.readFileSync('index.html', 'utf8');
+ok(indexHtml.indexOf('js/views/create-tournament.js') < indexHtml.indexOf('js/views/format2-ui.js'),
+  'o editor carrega o renderizador da prévia antes dos handlers de agenda');
 ok(!createUi.includes("lines.push(_t('create.gsmPoints'") && !createUi.includes("lines.push(_t('create.gsmNumericPts'"),
   'formato numérico não inventa “pontos para vencer” nem duração a partir de campos técnicos');
 ok(createUi.includes('[[regression_phase_estimate_uses_actual_team_schedule]]') && createUi.includes('scheduledMatchesInGroup'),

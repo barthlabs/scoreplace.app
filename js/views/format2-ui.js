@@ -1525,6 +1525,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // Atualiza a escada imediatamente. O rerender estrutural é deliberadamente
     // adiado para não roubar foco do campo, mas a prévia deve refletir cada
     // alteração de vagas/jogos no mesmo evento (inclusive antes do blur).
+    // create-tournament.js is loaded immediately before this file (both `defer`),
+    // and defines the global renderer at load time. Keep the guard for legacy/page
+    // shells where the editor is mounted without the create view.
     if (typeof window._renderPhaseEstimate === 'function') window._renderPhaseEstimate();
     if (typeof window._recalcDuration === 'function') window._recalcDuration();
   };
