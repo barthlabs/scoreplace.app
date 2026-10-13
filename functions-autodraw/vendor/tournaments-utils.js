@@ -994,7 +994,13 @@ window._cardCompetidores = function (t) {
   // fonte segura para esse caso. Recalcular pela lista canônica evita exibir
   // 256 quando o roster real é 96 + 32 = 128.
   var _isCanonical = !!(t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint);
-  if (_isCanonical && Array.isArray(t.participants) && typeof window._countCompetitors === 'function') {
+  // A ficha pode carregar o roster canônico já recomposto sem trazer a marca de
+  // migração (é o caso das reservas antigas em `placeholderReservations`). Nesse
+  // caminho o resumo `competitorsCount` ainda é o valor legado (96) e não pode
+  // vencer a lista real (128). Sempre que houver a fonte de reservas, conte a
+  // lista recomposta; o fallback abaixo continua válido para resumos leves.
+  var _hasPlaceholderRoster = Array.isArray(t.placeholderReservations) && t.placeholderReservations.length > 0;
+  if ((_isCanonical || _hasPlaceholderRoster) && Array.isArray(t.participants) && typeof window._countCompetitors === 'function') {
     var _canonicalCount = window._countCompetitors(t);
     return {
       people: _canonicalCount.people,
