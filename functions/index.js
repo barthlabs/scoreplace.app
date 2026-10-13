@@ -6110,8 +6110,8 @@ exports.formPair = onCall(
           const fixedPairId = _registrationMutations.canonicalPairId(tournamentId, uncategorized, [id1, id2]);
           const manualName = (item, fallback) => String(item && (item.manualDisplayName || item.displayName || item.name) || fallback).trim();
           const creates = [
-            { registrationId: id1, tournamentId, categoryId: uncategorized, participantKey: key1, status: "confirmed", validationState: "placeholder_pair", migrationFingerprint: rawTournament.canonicalRegistrationMigration.fingerprint, fixedPairId, participantKind: "manual", participantUid: null, manualParticipantId: String(opts.manualId1), manualDisplayName: manualName(r1, opts.name1) },
-            { registrationId: id2, tournamentId, categoryId: uncategorized, participantKey: key2, status: "confirmed", validationState: "placeholder_pair", migrationFingerprint: rawTournament.canonicalRegistrationMigration.fingerprint, fixedPairId, participantKind: "manual", participantUid: null, manualParticipantId: String(opts.manualId2), manualDisplayName: manualName(r2, opts.name2) },
+            { registrationId: id1, tournamentId, categoryId: uncategorized, participantKey: key1, status: "confirmed", validationState: "approved", migrationFingerprint: rawTournament.canonicalRegistrationMigration.fingerprint, fixedPairId, participantKind: "manual", participantUid: null, manualParticipantId: String(opts.manualId1), manualDisplayName: manualName(r1, opts.name1) },
+            { registrationId: id2, tournamentId, categoryId: uncategorized, participantKey: key2, status: "confirmed", validationState: "approved", migrationFingerprint: rawTournament.canonicalRegistrationMigration.fingerprint, fixedPairId, participantKind: "manual", participantUid: null, manualParticipantId: String(opts.manualId2), manualDisplayName: manualName(r2, opts.name2) },
           ];
           const next = _writeCanonicalRosterCreates(tx, docRef, rawTournament, checked.registrations, creates);
           return { outcome: "paired", participants: next.participants, canonical: true };
