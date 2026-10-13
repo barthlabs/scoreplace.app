@@ -5,6 +5,8 @@
 // categoria, e entra na Análise imediatamente como vaga reservada — não como
 // pessoa com perfil pendente. O painel mantém suas ações e IDs codificados em
 // uma única chave, evitando clique sem handler ou controle que não seja encontrado.
+// O teste de entrada tardia declara a rota da chave, mantendo separados os
+// re-renders da lista de inscritos e do bracket.
 // 2.4.3 — Placeholders voltam a ser reservas genéricas de vaga: não exigem
 // categoria e não criam uma inscrição incompleta. A reserva é reidratada de
 // forma idempotente em toda leitura canônica.

@@ -123,6 +123,9 @@ const nova = { uid: 'Nw1L', p1Uid: 'Nw1L', p2Uid: 'WgGJ', category: 'Misto Obrig
       team1Obj: nova, team2Obj: soUid
     }]
   };
+  // A chave só deve ser repintada quando a rota ativa é o bracket; declarar
+  // isso evita confundir a lista de inscritos com a tela de chaves.
+  W.location = { hash: '#bracket/sb3' };
   W._applyCFTournament('sb3', doc);
   const guardado = W.AppStore.tournaments.find(x => String(x.id) === 'sb3');
   const m = guardado.matches[0];
