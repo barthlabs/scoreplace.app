@@ -15,7 +15,7 @@ function ok(label, condition) {
 const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments.js'), 'utf8');
 
 ok('resolve a categoria a partir do registro da dupla',
-  src.includes("var _pairCategoryRaw = String(p.category || ((p.categories || [])[0]) || '').trim();"));
+  src.includes("var _pairCategoryRaw = String(p.categoryId || p.category || ((p.categories || [])[0]) || '').trim();"));
 ok('valida o rótulo contra as categorias customizadas do torneio',
   src.includes('window._getTournamentCategories(t)') && src.includes('_pairTournamentCategory = String(_pairCats[_pci]).trim();'));
 ok('mostra uma única categoria completa para a dupla',
