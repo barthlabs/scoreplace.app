@@ -1,4 +1,5 @@
 // 2.4.17 — Atualização consolidada de produção com as correções validadas desde a última publicação.
+// A Análise preserva a ordem canônica de inscrição (inclusive integrantes de duplas) e mantém reservas de placeholder visíveis para atribuição de gênero/categoria; o cabeçalho e a busca permanecem no shell sticky canônico.
 // 2.4.16 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.15 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // A Análise passa a reidratar o roster canônico, deduplicar cópias legadas de duplas e contar apenas inscritos ativos; categorias e duplas formadas deixam de desaparecer após snapshots antigos.

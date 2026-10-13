@@ -1183,7 +1183,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // manualParticipantId (importação/vaga manual); nome é apenas o último fallback
   // dos torneios antigos. [[analysis_pairing_uses_canonical_identity_flow]]
   function _erPairGroups(rows) {
-    var enrolledRows = (rows || []).filter(function (r) { return r && !r._wl; });
+    // Reservas de placeholder são vagas já incluídas no torneio: embora vivam no
+    // storage da espera até serem materializadas, precisam aparecer aqui para o
+    // organizador atribuir gênero/categoria e para o total refletir 96 + 32.
+    var enrolledRows = (rows || []).filter(function (r) {
+      return r && (!r._wl || r.genericPlaceholderReservation === true);
+    });
     var byPair = {};
     enrolledRows.forEach(function (r) {
       if (r && r._duplaIdx != null && !r._wl) {
@@ -6012,6 +6017,12 @@ window._lzNaoEhEuMesmo = function (uid) {
         if (wk.some(function (key) { return rosterKeys[key]; })) return;
         var c = {}; for (var k in w) { if (Object.prototype.hasOwnProperty.call(w, k)) c[k] = w[k]; }
         c._wl = true;
+        // Placeholder é uma reserva de vaga, não uma inscrição tardia comum.
+        // Mantê-lo marcado permite salvar no storage correto, mas a Análise deve
+        // mostrá-lo em "Sem gênero" até o organizador materializar a inscrição.
+        c.genericPlaceholderReservation = c.genericPlaceholderReservation === true
+          || c.isPlaceholder === true
+          || /^\s*(?:jogador|player|inscrito|placeholder)\s*0*\d+\s*$/i.test(String(c.displayName || c.name || ''));
         parts.push(c);
       });
     } catch (e) { if (window._warn) window._warn('[analise] espera não carregou', e); }
