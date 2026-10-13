@@ -2530,3 +2530,4 @@ window._RELEASE_NOTES_HTML = (function () {
     '</div>';
   return html;
 })();
+// 2.4.26 — O controle administrativo de inscrições usa somente “Abrir inscrições” ou “Fechar inscrições”, sem rótulo composto ou texto ambíguo.

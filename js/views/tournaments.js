@@ -2722,7 +2722,7 @@ function renderTournaments(container, tournamentId = null) {
                 typeof window.setupCreateTournamentModal === 'function') {
                 try { window.setupCreateTournamentModal(); } catch (e) {}
             }
-            var abrir = function () {
+            var abrirEditorAgora = function () {
                 if (typeof window.openEditTournamentModal === 'function') {
                     window.openEditTournamentModal(id);
                     return true;
@@ -2732,12 +2732,18 @@ function renderTournaments(container, tournamentId = null) {
             var tAtual = typeof window._findTournamentById === 'function'
                 ? window._findTournamentById(id) : null;
             var incompleto = tAtual && (tAtual._resumo === true || tAtual._doCache === true || tAtual._faltamPesados === true);
+            // A tela de detalhes já tem um registro utilizável para preencher o editor.
+            // Não bloqueie o clique esperando `_ensureTournamentLoaded`: em alguns estados
+            // de hidratação ele mantém o aviso de carregamento aberto sem chamar o callback,
+            // deixando o botão aparentemente morto. O editor pode abrir agora; a hidratação
+            // pesada continua sendo responsabilidade da tela de detalhes.
+            if (tAtual && abrirEditorAgora()) return;
             if ((!tAtual || incompleto) && typeof window._ensureTournamentLoaded === 'function') {
                 if (typeof window.showNotification === 'function') {
                     window.showNotification('Carregando torneio', 'Abrindo a edição com os dados completos…', 'info');
                 }
                 window._ensureTournamentLoaded(id, function (carregado) {
-                    if (carregado && abrir()) return;
+                    if (carregado && abrirEditorAgora()) return;
                     if (typeof window.showNotification === 'function') {
                         window.showNotification('Não consegui abrir a edição', 'Atualize a página e tente de novo.', 'warning');
                     }
@@ -2747,7 +2753,7 @@ function renderTournaments(container, tournamentId = null) {
                 });
                 return;
             }
-            if (abrir()) return;
+            if (abrirEditorAgora()) return;
             if (typeof window.showNotification === 'function') {
                 window.showNotification('Não consegui abrir a edição',
                     'Atualize a página e tente de novo.', 'warning');
@@ -3360,7 +3366,7 @@ function renderTournaments(container, tournamentId = null) {
         // "Encerrar inscrições" isolado parecia uma ação única; depois de fechar, o caminho
         // para reabrir não pode sumir nem depender de achar outra tela.
         const _regIsClosed = t.status === 'closed';
-        const _regLabel = _regIsClosed ? '🟢 Inscrições fechadas — abrir' : '🔴 Inscrições abertas — fechar';
+        const _regLabel = _regIsClosed ? 'Abrir inscrições' : 'Fechar inscrições';
         let toggleRegBtn = ((!hasDraw || (lateEnrollManaged && !_r2Started)) && !isLigaOpenEnroll && isOrg) ? `<button class="btn ${_regIsClosed ? 'btn-success' : 'btn-danger'} hover-lift" title="${_regIsClosed ? 'Reabrir inscrições' : 'Encerrar inscrições'}" onclick="event.stopPropagation(); window._regBtnBusy&&window._regBtnBusy(this,'${t.id}','${_regIsClosed ? 'Reabrindo…' : 'Encerrando…'}'); window.toggleRegistrationStatus('${t.id}')">${_regLabel}</button>` : '';
         // v4.1.18: Reabrir/Encerrar EM ANDAMENTO deste torneio → botão cinza "Reabrindo…"/
         // "Encerrando…" (mesma UX do Sortear) mesmo se o detalhe re-renderizar antes de
