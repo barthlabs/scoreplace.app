@@ -3012,6 +3012,21 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // Só uma representação por dupla: os dois integrantes seguem contando no
     // total de inscritos, mas saem dos buckets individuais. A dupla acima da
     // grade é o card que o organizador arrasta para a categoria.
+    // Reservas 97–128 pertencem às duplas já criadas no torneio, mas não têm
+    // registro canônico materializado enquanto continuam sem categoria. O
+    // snapshot antigo, portanto, chega sem `_duplaIdx` e a matriz as tratava
+    // como se não existissem. Reconstitui apenas essa projeção visual pela
+    // ordem de inscrição (97/98, 99/100, ...); a identidade manual permanece
+    // nos próprios rows e é usada na gravação.
+    var _placeholderSingles = enrolledRows.filter(function (r) {
+      return r && r._duplaIdx == null && /^(?:jogador|player|inscrito|placeholder)\s*0*\d+$/i.test(String(r.name || '').trim());
+    }).sort(function (a, b) { return Number(a.order) - Number(b.order); });
+    for (var _pi = 0; _pi + 1 < _placeholderSingles.length; _pi += 2) {
+      var _pa = _placeholderSingles[_pi], _pb = _placeholderSingles[_pi + 1];
+      var _pk = 'placeholder-pair:' + String(_pa.manualId || _pa.order) + ':' + String(_pb.manualId || _pb.order);
+      _pa._duplaIdx = _pk; _pa._duplaSide = 'p1';
+      _pb._duplaIdx = _pk; _pb._duplaSide = 'p2';
+    }
     var byPair = {};
     (rows || []).forEach(function (r) {
       if (_erIsVisibleEnrollmentRow(r) && r._duplaIdx != null) (byPair[r._duplaIdx] || (byPair[r._duplaIdx] = [])).push(r);
