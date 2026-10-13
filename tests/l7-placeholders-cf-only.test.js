@@ -22,6 +22,7 @@ const readEnd = db.indexOf('  // v2.3.103:', readStart);
 const readBlock = db.slice(readStart, readEnd === -1 ? readStart + 9000 : readEnd);
 ok(/placeholderReservations/.test(readBlock) && /isPlaceholder: true/.test(readBlock) && /_reservationSeen\[existingManualId\]/.test(readBlock), 'leitura fresca reidrata reservas genéricas sem duplicá-las');
 const draw = fs.readFileSync('js/views/tournaments-draw.js', 'utf8');
+ok(/_isParticipantsRoute/.test(draw) && /renderParticipants\(document\.getElementById\('view-container'\), tId\)/.test(draw) && /_isBracketRoute/.test(draw), 'resposta da CF mantém a rota de inscritos e não troca a tela pela chave vazia');
 const poolStart = draw.indexOf('window._buildPhase0Pool');
 const poolEnd = draw.indexOf('// INCREMENT 2', poolStart);
 const poolBlock = draw.slice(poolStart, poolEnd);

@@ -2565,7 +2565,19 @@ window._applyCFTournament = function (tId, doc) {
             });
         } catch (e) {}
     }
-    if (typeof window._rerenderBracket === 'function') { try { window._rerenderBracket(tId); } catch (e) {} }
+    // A resposta de uma mutação não pode escolher uma tela diferente da rota atual.
+    // Antes este caminho chamava `_rerenderBracket` sempre; ao adicionar placeholders
+    // em #participants/<id>, a lista era substituída pela chave vazia e as vagas recém
+    // criadas pareciam ter desaparecido. Cada rota repinta somente a sua própria visão.
+    var _hashAfterCF = String((window.location && window.location.hash) || '');
+    var _isParticipantsRoute = /^#participants\//.test(_hashAfterCF);
+    var _isBracketRoute = /^#bracket\//.test(_hashAfterCF);
+    var _isTournamentRoute = /^#tournaments\//.test(_hashAfterCF);
+    if (_isParticipantsRoute && typeof window.renderParticipants === 'function') {
+        try { window.renderParticipants(document.getElementById('view-container'), tId); } catch (e) {}
+    } else if ((_isBracketRoute || (_isTournamentRoute && document.getElementById('inline-bracket-container'))) && typeof window._rerenderBracket === 'function') {
+        try { window._rerenderBracket(tId); } catch (e) {}
+    }
     if (typeof window._softRefreshView === 'function') { window._suppressSoftRefresh = false; try { window._softRefreshView(); } catch (e) {} }
 };
 
