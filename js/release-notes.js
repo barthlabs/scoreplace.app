@@ -1,3 +1,4 @@
+// 2.4.16 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.15 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // A Análise passa a reidratar o roster canônico, deduplicar cópias legadas de duplas e contar apenas inscritos ativos; categorias e duplas formadas deixam de desaparecer após snapshots antigos.
 // A matriz usa a mesma separação para filas de espera, evitando erro de renderização e mantendo a contagem dos inscritos em 128 neste caso.
