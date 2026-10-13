@@ -4321,8 +4321,26 @@ window._formTeamConfirm = function(tId, name1, uid1, name2, uid2, opts) {
             .then(function () {
                 if (typeof showNotification === 'function') showNotification('👫 Dupla formada!', newName, 'success');
                 if (_hasBracketDF && typeof window._triggerLateIntegration === 'function') { try { window._triggerLateIntegration(t, { force: true }); } catch (e) {} }
-                var container = document.getElementById('view-container');
-                if (container) renderTournaments(container, tId);
+                var repaint = function (fresh) {
+                    var A = window.AppStore;
+                    if (fresh && A) {
+                        [A.tournaments, A.publicDiscovery].forEach(function (arr) {
+                            if (!Array.isArray(arr)) return;
+                            for (var i = 0; i < arr.length; i++) {
+                                if (arr[i] && String(arr[i].id) === String(tId)) arr[i] = fresh;
+                            }
+                        });
+                    }
+                    var container = document.getElementById('view-container');
+                    if (container) renderTournaments(container, tId);
+                };
+                // O retorno da CF confirma a escrita, mas o objeto `t` ainda é
+                // o retrato anterior. Relê no servidor antes de pintar para que
+                // a dupla formada apareça na mesma interação, sem esperar o
+                // próximo snapshot do Firestore.
+                if (window.FirestoreDB && typeof window.FirestoreDB.loadTournamentById === 'function') {
+                    window.FirestoreDB.loadTournamentById(tId).then(repaint).catch(function () { repaint(null); });
+                } else repaint(null);
             })
             .catch(function (e) { if (typeof showNotification === 'function') showNotification('Não foi possível formar a dupla', (e && e.message) || '', 'warning'); });
     };
