@@ -4301,7 +4301,7 @@ window._formTeamConfirm = function(tId, name1, uid1, name2, uid2, opts) {
         // pessoas reais. Em torneio de duplas, duas reservas sem categoria
         // continuam podendo formar uma dupla; a categoria será definida depois.
         var _placeholderPairNoCategory = !!(
-            fcanonical && !fcategory1 && !fcategory2 &&
+            fcanonical && (!fcategory1 || fcategory1 === '__uncategorized__') && (!fcategory2 || fcategory2 === '__uncategorized__') &&
             parseInt(t.teamSize || 1, 10) >= 2 &&
             p1final && p2final &&
             (p1final.isPlaceholder === true || p1final.genericPlaceholderReservation === true) &&
@@ -4319,12 +4319,12 @@ window._formTeamConfirm = function(tId, name1, uid1, name2, uid2, opts) {
         }
         window.FirestoreDB.formPair(tId, { uid1: fuid1, manualId1: fmanual1, name1: name1, uid2: fuid2, manualId2: fmanual2, name2: name2, categoryId: fcanonical && !_placeholderPairNoCategory ? fcategory1 : '', changeRule: !!_changeRule })
             .then(function () {
+                if (typeof showNotification === 'function') showNotification('👫 Dupla formada!', newName, 'success');
                 if (_hasBracketDF && typeof window._triggerLateIntegration === 'function') { try { window._triggerLateIntegration(t, { force: true }); } catch (e) {} }
                 var container = document.getElementById('view-container');
                 if (container) renderTournaments(container, tId);
             })
             .catch(function (e) { if (typeof showNotification === 'function') showNotification('Não foi possível formar a dupla', (e && e.message) || '', 'warning'); });
-        if (typeof showNotification === 'function') showNotification('👫 Dupla formada!', newName, 'success');
     };
     if (opts && opts.skipConfirm) { _doForm(); return; }
     var _eNew = window._safeHtml(newName), _e1 = window._safeHtml(name1), _e2 = window._safeHtml(name2); // v3.0.x: escapa nomes (showConfirmDialog renderiza message como HTML)

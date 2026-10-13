@@ -6089,7 +6089,10 @@ exports.formPair = onCall(
         // Em torneio de duplas o organizador pode formar duas reservas sem
         // categoria; materializamos ambas como inscrições canônicas na
         // categoria sentinela e vinculamos a dupla na mesma transação.
-        if (!opts.categoryId && opts.manualId1 && opts.manualId2) {
+        const _uncategorizedId = _registrationCore.UNCATEGORIZED_CATEGORY_ID;
+        // `__uncategorized__` é a forma tipada da mesma reserva sem categoria
+        // que clientes antigos enviavam como string vazia.
+        if ((!opts.categoryId || opts.categoryId === _uncategorizedId) && opts.manualId1 && opts.manualId2) {
           const reservations = Array.isArray(rawTournament.placeholderReservations)
             ? rawTournament.placeholderReservations : [];
           const r1 = reservations.find((item) => String(item && item.manualParticipantId || '') === String(opts.manualId1));
@@ -6098,7 +6101,7 @@ exports.formPair = onCall(
           if (teamSize < 2 || !r1 || !r2 || r1.isPlaceholder !== true || r2.isPlaceholder !== true) {
             throw new HttpsError("invalid-argument", "reservas sem categoria só podem formar dupla em torneio de duplas");
           }
-          const uncategorized = _registrationCore.UNCATEGORIZED_CATEGORY_ID;
+          const uncategorized = _uncategorizedId;
           const key1 = _registrationCore.participantKey({ manualParticipantId: opts.manualId1 });
           const key2 = _registrationCore.participantKey({ manualParticipantId: opts.manualId2 });
           const id1 = _registrationCore.registrationId(key1, uncategorized);
