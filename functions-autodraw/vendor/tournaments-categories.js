@@ -960,6 +960,15 @@ window._buildTimeEstimation = function(t, opts) {
       }
     }
   });
+  // Use the same canonical identity merge as the public "Inscritos" stat.
+  // Materialized duplas and legacy individual projections can otherwise make
+  // the duration summary count the same 128 people twice.
+  try {
+    if (typeof window._countCompetitors === 'function') {
+      var _canonicalPeople = window._countCompetitors(t).people;
+      if (typeof _canonicalPeople === 'number' && _canonicalPeople >= 0) realCount = _canonicalPeople;
+    }
+  } catch (e) {}
 
   /* REGRESSÃO NEON (29/set/2026): a previsão não pode usar apenas as duplas
    * já formadas. Em uma grade por equipes, capacidade + categorias + jogos por
