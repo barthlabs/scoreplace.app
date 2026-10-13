@@ -539,7 +539,7 @@ window._addPlaceholdersCore = function (id, qtd, onDone, opts) {
             var mt = pn.match(/^(?:Jogador|Placeholder)\s+(\d+)$/i); if (mt) _bump(parseInt(mt[1], 10));
         });
     };
-    (t.participants || []).concat(t.standbyParticipants || [], t.waitlist || []).forEach(function (p) {
+    (t.participants || []).concat(t.standbyParticipants || [], t.waitlist || [], t.placeholderReservations || []).forEach(function (p) {
         _addName(typeof p === 'string' ? p : (p && (p.displayName || p.name)));
         // v4.5.92: número do placeholder também vem do uid 'jog_NN' / email fake (o strip do
         // ITEM 3 pode ter apagado o nome) — senão um 2º lote recomeçaria do 01 e duplicaria.

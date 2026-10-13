@@ -104,6 +104,7 @@ const _registrationMutations = require("./registration-mutations-core");
 const _registrationClaim = require("./registration-claim-core");
 const _canonicalRegistrationBoundary = require("./canonical-registration-boundary-core");
 const _canonicalEnrollment = require("./canonical-enrollment-core");
+const _manualNameUnique = require("./manual-name-unique-core");
 const _registrationLifecycle = require("./registration-lifecycle-core");
 const _tournamentVip = require("./tournament-vip-core");
 const _splitParts = require("./split-parts.js");   // torneio dividido: elenco na subcoleção
@@ -3002,6 +3003,25 @@ exports.enrollParticipant = onCall(
       if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
       const _dados = await _splitParts.hidratar(tx, docRef, snap.data());
       const rawTournament = snap.data() || {};
+      // Nomes digitados e placeholders são rótulos humanos e não podem se repetir
+      // no mesmo torneio. A identidade continua sendo UID/manualParticipantId, mas
+      // aceitar dois rótulos iguais torna a tela e a operação da organização
+      // indistinguíveis. A checagem fica dentro da mesma transação da inscrição.
+      const _manualRoster = []
+        .concat(Array.isArray(_dados.participants) ? _dados.participants : [])
+        .concat(Array.isArray(_dados.standbyParticipants) ? _dados.standbyParticipants : [])
+        .concat(Array.isArray(_dados.waitlist) ? _dados.waitlist : []);
+      const _manualAlready = !participantUid && _enrollCore.isAlreadyEnrolled(_manualRoster, sanitizedParticipantObj);
+      if (!participantUid && !_manualAlready) {
+        let _duplicateName = _manualNameUnique.duplicateManualName(_dados, sanitizedParticipantObj)
+          || _manualNameUnique.duplicateManualName(rawTournament, sanitizedParticipantObj);
+        if (!_duplicateName && Array.isArray(rawTournament.placeholderReservations)) {
+          _duplicateName = _manualNameUnique.duplicateManualName({ participants: rawTournament.placeholderReservations }, sanitizedParticipantObj);
+        }
+        if (_duplicateName) {
+          throw new HttpsError('already-exists', 'Já existe um participante com esse nome neste torneio. Use um nome diferente.');
+        }
+      }
       if (rawTournament.canonicalRegistrationMigration && rawTournament.canonicalRegistrationMigration.fingerprint) {
         if (extraUpdates) {
           throw new HttpsError("failed-precondition", "origem de dupla não faz parte da inscrição canônica");
@@ -3018,6 +3038,17 @@ exports.enrollParticipant = onCall(
         }
         const profileSnap = participantUid ? await tx.get(db.collection("users").doc(participantUid)) : null;
         const checked = await _loadCanonicalRosterForMutation(tx, docRef, rawTournament);
+        if (!participantUid) {
+          const _sameManual = checked.registrations.some((registration) => registration
+            && registration.participantKey === 'manual:' + manualParticipantId
+            && registration.status !== 'withdrawn');
+          if (!_sameManual) {
+            const _duplicateRegistrationName = _manualNameUnique.duplicateManualName({ participants: checked.registrations }, sanitizedParticipantObj);
+            if (_duplicateRegistrationName) {
+              throw new HttpsError('already-exists', 'Já existe um participante com esse nome neste torneio. Use um nome diferente.');
+            }
+          }
+        }
         let decision;
         try {
           decision = _canonicalEnrollment.decide({
