@@ -5701,15 +5701,13 @@ window._lzNaoEhEuMesmo = function (uid) {
     // página ela some antes de grudar, que foi o bug medido na chave (1.7.43). Colada no
     // cabeçalho, ela está no topo desde o primeiro pixel de rolagem.
     var _mxBar = (typeof window._inscritosFilterBar === 'function')
-      ? window._inscritosFilterBar({
+      ? '<div class="er-analysis-title" style="max-width:100%;margin:0 auto;padding:10px 1.25rem 0;">' + subtitle + '</div>' + window._inscritosFilterBar({
           stateKey: 'analise', sticky: true, searchOnly: true,
           searchId: 'er-mx-search', onChange: 'window._erApplyMatrixFilter()',
         }).replace('id="fbwrap-analise"', 'id="fbwrap-analise" class="er-analysis-filter"') + '<div id="er-mx-search-empty" style="display:none;text-align:center;color:var(--text-muted);padding:14px;font-size:0.85rem;">Ninguém encontrado com esse nome.</div>'
       : '';
 
-    container.innerHTML = hdr +
-      '<div class="er-analysis-title" style="max-width:100%;margin:0 auto;padding:10px 1.25rem 0;">' + subtitle + '</div>' +
-      _mxBar +
+    container.innerHTML = hdr + _mxBar +
       '<div style="max-width:100%;margin:0 auto;padding:1rem 1.25rem;">' +
       // Seção ÚNICA: Categorias com apuração pelo letzplay (busca + legenda + matriz
       // drag-and-drop). Visão geral, distribuição por categoria e lista de inscritos
