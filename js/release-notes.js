@@ -1,3 +1,4 @@
+// 2.4.5 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.4 — Participantes e vagas passam a abrir em painel contextual: incluir
 // placeholders não troca a rota, não perde a rolagem do torneio e não revela a
 // tela de chaves. A resposta da Function agora repinta a rota de inscritos, em
