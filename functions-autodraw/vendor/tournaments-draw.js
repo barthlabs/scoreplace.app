@@ -2513,6 +2513,25 @@ window._applyCFTournament = function (tId, doc) {
     if (!doc || !window.AppStore || !Array.isArray(window.AppStore.tournaments)) return;
     try {
         doc.id = String(tId);
+        // Reserva genérica vive fora de registrations, pois ainda não é inscrição.
+        // Toda resposta da Function precisa, mesmo assim, expô-la no elenco de leitura
+        // usado por contadores e pela Análise. Não depender do próximo onSnapshot evita
+        // a tela antiga após clicar em "Adicionar vagas".
+        var _seenReservations = {};
+        var _roster = Array.isArray(doc.participants) ? doc.participants : [];
+        _roster.forEach(function (entry) {
+          var key = String(entry && entry.manualParticipantId || '').trim();
+          if (key) _seenReservations[key] = true;
+        });
+        (Array.isArray(doc.placeholderReservations) ? doc.placeholderReservations : []).forEach(function (entry) {
+          if (!entry || entry.isPlaceholder !== true) return;
+          var manualId = String(entry.manualParticipantId || '').trim();
+          var name = String(entry.displayName || entry.name || '').trim();
+          if (!manualId || !name || _seenReservations[manualId]) return;
+          _seenReservations[manualId] = true;
+          _roster.push({ name: name, displayName: name, manualParticipantId: manualId, isPlaceholder: true, genericPlaceholderReservation: entry.genericPlaceholderReservation === true });
+        });
+        doc.participants = _roster;
         var _list = window.AppStore.tournaments, _i = -1;
         for (var _k = 0; _k < _list.length; _k++) { if (String(_list[_k].id) === String(tId)) { _i = _k; break; } }
         // v1.3.145: guarda a presença LOCAL antes de trocar o objeto — o doc da CF pode ter sido

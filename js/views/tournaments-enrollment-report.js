@@ -404,11 +404,18 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // direcionando o org pra ação correta.
       var missing = [];
       var hasUid = !!uid;
+      var genericReservation = !!(p && p.genericPlaceholderReservation === true);
       if (!hasUid) {
+        if (genericReservation) {
+          // A reserva está na Análise para o organizador enxergar a capacidade
+          // aberta, mas não é pessoa e não pede perfil, gênero ou categoria.
+          missing.push('vaga reservada — sem categoria/gênero');
+        } else {
         // Chegou aqui = não tem uid no participantObj E rescue por email/
         // displayName falhou. Pode ser bug de enrollment OU manual-add real.
         // Mensagem reflete os dois casos sem assumir.
         missing.push('uid não vinculado (precisa rastrear pelo email/nome — pode ser bug)');
+        }
       } else {
         if (!gender) missing.push('gênero');
         if (effectiveSkills.length === 0) missing.push('habilidade');
@@ -441,6 +448,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         // que gravar no storage da espera, NUNCA no roster — e nunca cair no fallback
         // posicional (`parts[order-1]`), que gravaria a categoria em OUTRA pessoa.
         _wl: !!(p && p._wl),
+        genericPlaceholderReservation: genericReservation,
       };
     });
   }

@@ -503,8 +503,13 @@ window._addPlaceholdersCore = function (id, qtd, onDone, opts) {
         }
         window.FirestoreDB._callFn('addTournamentPlaceholders', { tournamentId: String(id), quantity: qtd })
             .then(function (result) {
-                if (result && result.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(id, result.tournament);
-                if (!opts.silent) showNotification('Placeholders adicionados', String((result && result.added) || qtd) + ' placeholder(s) em ' + ((result && result.destination) || 'inscritos') + '.', 'success');
+                // `_callFn` devolve o envelope callable ({ data }), enquanto alguns
+                // adapters internos devolvem o payload direto. Ler os dois formatos é
+                // essencial: ignorar o envelope fazia a Function gravar, mas a análise
+                // continuar vendo a fotografia anterior até uma recarga externa.
+                var data = (result && result.data) ? result.data : (result || {});
+                if (data.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(id, data.tournament);
+                if (!opts.silent) showNotification('Placeholders adicionados', String(data.added || qtd) + ' placeholder(s) em ' + (data.destination || 'inscritos') + '.', 'success');
                 _finishRequest();
             }).catch(function (err) {
                 if (window._error) window._error('Erro ao salvar placeholders:', err);
@@ -3152,15 +3157,15 @@ function renderTournaments(container, tournamentId = null) {
         // addPlaceholdersFunction já roteiam pra lista de espera quando o sorteio
         // já saiu. +Time continua só antes do sorteio (o fluxo de time não trata
         // lista de espera).
-        // v4.0.90: "+ Participante" e "Placeholders" consolidados na page-route
-        // #participantes/<tId> (campo nome + Adicionar · campo placeholders + Adicionar).
+        // Participante e vagas ficam no painel contextual: a inclusão não troca a rota,
+        // não perde a rolagem e não expõe a tela de chaves no meio da configuração.
         // v4.5.15 (regra do dono): +Participante ATIVO enquanto a inscrição está aberta; quando
         // fecha (1º resultado/ponto — ou 1º resultado de R2 na inscrição tardia), fica CINZA e
         // INATIVO (não some) — sinaliza "inscrições encerradas, torneio em andamento". Vale pra
         // qualquer formato. Só some quando o torneio ENCERRA (campeão definido).
         const addParticipantBtns = isOrg ? `
              ${isAberto
-               ? `<button class="btn btn-cyan hover-lift" onclick="event.stopPropagation(); window.location.hash='#participantes/${t.id}'">👤 + Participante</button>`
+               ? `<button class="btn btn-cyan hover-lift" onclick="event.stopPropagation(); if(window._openParticipantTools){window._openParticipantTools('${t.id}');}else{window.addParticipantFunction('${t.id}');}">👤 + Participante</button>`
                : (!isFinished
                  ? `<button class="btn" disabled title="Inscrições encerradas — o torneio já começou (primeiro resultado lançado). Não é possível adicionar participantes." style="cursor:not-allowed;background:#64748b;color:var(--sp-c-e2e8f0,#e2e8f0);border:1px solid #475569;box-shadow:none;">👤 + Participante</button>`
                  : '')}

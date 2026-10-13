@@ -1,12 +1,13 @@
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 /* tournaments-org-tools.js — v4.0.90
- * Ferramentas do organizador CONSOLIDADAS em page-routes canônicas (padrão renderXxxPage +
- * _renderBackHeader + caso no router; nunca hack de modal). Tira 2 botões das ferramentas:
+ * Ferramentas do organizador. Comunicados permanece como page-route; participante e vagas
+ * abrem um painel contextual no detalhe, para uma inclusão nunca arrancar o organizador do
+ * torneio que ele está configurando.
  *   • #comunicados/<tId>  = "Comunicar Inscritos" + "Comunicados" num só → escrever no topo,
  *     barra de filtro/busca dividindo, lista de comunicados enviados abaixo, Voltar.
- *   • #participantes/<tId> = "+ Participante" + "Placeholders" num só → campo nome + Adicionar,
- *     campo número de placeholders + Adicionar, Voltar.
+ *   • #participantes/<tId> continua como deep-link legado, mas o botão ativo abre o painel
+ *     contextual com nome e placeholders — sem alterar hash, rolagem ou tela.
  * Reaproveita a lógica EXISTENTE (fonte única): _confirmSendComm / _selectCommLevel (comunicação),
  * _doAddParticipant (enrollment.js), _addPlaceholdersCore (tournaments.js). Funciona em TODOS os
  * torneios. Ver memória feedback_use_centralized_pattern.
@@ -14,6 +15,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 (function () {
   var _t = window._t || function (k) { return k; };
   function _safe(s) { return window._safeHtml ? window._safeHtml(s) : String(s == null ? '' : s); }
+  // IDs de controles nunca recebem o escape de JavaScript usado em onclick. Assim a busca
+  // posterior encontra exatamente o mesmo elemento, inclusive para qualquer id legado atípico.
+  function _participantControlKey(tId) { return encodeURIComponent(String(tId)).replace(/%/g, '_'); }
 
   // guarda: existe + é organizador. Senão volta pro torneio/dashboard.
   function _guard(tId) {
@@ -159,6 +163,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   window.renderAddParticipantPage = function (container, tId) {
     var t = _guard(tId); if (!t) return;
     var safeId = String(tId).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    var controlKey = _participantControlKey(tId);
     // CANÔNICO: conta PESSOAS (dupla=2), nunca entradas. _countCompetitors (tournaments.js).
     var nParts = window._countCompetitors ? window._countCompetitors(t).people : (Array.isArray(t.participants) ? t.participants.length : 0);
 
@@ -172,7 +177,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       ? t.categoryDefinitions.filter(function (d) { return d && d.id && d.label && d.enabled !== false; }) : [];
     var categoryBox = _canonical
       ? ('<label class="form-label" style="display:block;font-size:0.82rem;font-weight:600;margin-top:12px;">Categorias</label>' +
-        '<select id="addpart-category-' + safeId + '" multiple size="' + Math.min(Math.max(_defs.length, 1), 5) + '" style="' + fieldStyle + 'margin-top:6px;min-height:42px;">' +
+        '<select id="addpart-category-' + controlKey + '" multiple size="' + Math.min(Math.max(_defs.length, 1), 5) + '" style="' + fieldStyle + 'margin-top:6px;min-height:42px;">' +
           _defs.map(function (d) { return '<option value="' + _safe(String(d.id)) + '">' + _safe(String(d.label)) + '</option>'; }).join('') +
         '</select>' +
         '<div style="font-size:0.68rem;color:var(--text-muted);margin-top:5px;">Selecione uma ou mais categorias. Combinações excludentes são validadas pelo servidor.</div>')
@@ -182,8 +187,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;padding:1.1rem;margin-bottom:1.1rem;">' +
         '<label class="form-label" style="font-size:0.82rem;font-weight:600;">👤 Nome do participante</label>' +
         '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">' +
-          '<input type="text" id="addpart-name-' + safeId + '" placeholder="Ex.: Maria Silva" style="' + fieldStyle + 'flex:1;min-width:160px;" onkeydown="if(event.key===\'Enter\'){event.preventDefault();window._pageAddParticipant(\'' + safeId + '\');}">' +
-          '<button type="button" id="addpart-name-btn-' + safeId + '" class="btn btn-cyan hover-lift" onclick="window._pageAddParticipant(\'' + safeId + '\')">Adicionar</button>' +
+          '<input type="text" id="addpart-name-' + controlKey + '" placeholder="Ex.: Maria Silva" style="' + fieldStyle + 'flex:1;min-width:160px;" onkeydown="if(event.key===\'Enter\'){event.preventDefault();window._pageAddParticipant(\'' + safeId + '\');}">' +
+          '<button type="button" id="addpart-name-btn-' + controlKey + '" class="btn btn-cyan hover-lift" onclick="window._pageAddParticipant(\'' + safeId + '\')">Adicionar</button>' +
         '</div>' +
         categoryBox +
       '</div>';
@@ -193,21 +198,65 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         '<label class="form-label" style="font-size:0.82rem;font-weight:600;">➕ Reservar vagas (placeholders)</label>' +
         '<p style="font-size:0.66rem;color:var(--text-muted);margin:4px 0 8px;">Cria N vagas "Jogador NN" que entram no sorteio como inscritos normais. Cada vaga pode ser ocupada depois por um jogador real que se inscrever.</p>' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
-          '<input type="number" min="1" max="200" value="8" id="addpart-ph-' + safeId + '" style="' + fieldStyle + 'width:110px;" onkeydown="if(event.key===\'Enter\'){event.preventDefault();window._pageAddPlaceholders(\'' + safeId + '\');}">' +
-          '<button type="button" id="addpart-ph-btn-' + safeId + '" class="btn btn-cyan hover-lift" onclick="window._pageAddPlaceholders(\'' + safeId + '\')">Adicionar</button>' +
+          '<input type="number" min="1" max="200" value="8" id="addpart-ph-' + controlKey + '" style="' + fieldStyle + 'width:110px;" onkeydown="if(event.key===\'Enter\'){event.preventDefault();window._pageAddPlaceholders(\'' + safeId + '\');}">' +
+          '<button type="button" id="addpart-ph-btn-' + controlKey + '" class="btn btn-cyan hover-lift" onclick="window._pageAddPlaceholders(\'' + safeId + '\')">Adicionar</button>' +
         '</div>' +
       '</div>';
 
-    var countLine = '<div id="addpart-count-' + safeId + '" style="text-align:center;font-size:0.78rem;color:var(--text-muted);margin-bottom:1rem;">' + nParts + ' inscrito(s) no momento</div>';
+    var countLine = '<div id="addpart-count-' + controlKey + '" style="text-align:center;font-size:0.78rem;color:var(--text-muted);margin-bottom:1rem;">' + nParts + ' inscrito(s) no momento</div>';
 
     container.innerHTML = _header(tId, '👤 + Participante') +
       '<div style="max-width:560px;margin:0 auto;padding:1rem;">' + countLine + nameBox + phBox + '</div>';
     if (typeof window._reflowChrome === 'function') window._reflowChrome();
   };
 
+  // O organizador normalmente está no detalhe, ajustando inscrições e regras. Abrir uma rota
+  // inteira para reservar vagas o jogava na tela de chaves/tempo durante o refresh. Este painel
+  // reutiliza os mesmos ids e os mesmos cores da página legada, mas não altera location.hash.
+  window._openParticipantTools = function (tId) {
+    var t = _guard(tId); if (!t) return;
+    var old = document.getElementById('organizer-participant-tools');
+    if (old) old.remove();
+    var safeId = String(tId).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    var controlKey = _participantControlKey(tId);
+    var canonical = t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint;
+    var defs = canonical && Array.isArray(t.categoryDefinitions)
+      ? t.categoryDefinitions.filter(function (d) { return d && d.id && d.label && d.enabled !== false; }) : [];
+    var categories = canonical
+      ? ('<label style="display:block;font-size:.8rem;font-weight:700;margin-top:12px;">Categorias do participante</label>' +
+        '<select id="addpart-category-' + controlKey + '" multiple size="' + Math.min(Math.max(defs.length, 1), 4) + '" style="width:100%;box-sizing:border-box;margin-top:6px;padding:9px;border-radius:9px;border:1px solid var(--border-color);background:var(--bg-darker);color:var(--text-color);">' +
+          defs.map(function (d) { return '<option value="' + _safe(String(d.id)) + '">' + _safe(String(d.label)) + '</option>'; }).join('') +
+        '</select><div style="font-size:.68rem;color:var(--text-muted);margin-top:4px;">Obrigatória apenas para pessoa real.</div>') : '';
+    var count = window._countCompetitors ? window._countCompetitors(t).people : (Array.isArray(t.participants) ? t.participants.length : 0);
+    var panel = document.createElement('div');
+    panel.id = 'organizer-participant-tools';
+    panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-modal', 'true');
+    panel.style.cssText = 'position:fixed;inset:0;z-index:10050;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.68);';
+    panel.innerHTML =
+      '<div style="width:min(520px,100%);max-height:calc(100% - 32px);overflow:auto;background:var(--bg-card,#182033);color:var(--text-main,#fff);border:1px solid var(--border-color,#475569);border-radius:16px;box-shadow:0 18px 55px rgba(0,0,0,.55);padding:18px;box-sizing:border-box;">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;"><h2 style="margin:0;font-size:1.05rem;">👤 Inscritos e vagas</h2><button type="button" class="cancel-x-btn" aria-label="Fechar" onclick="window._closeParticipantTools()" style="border:0;background:transparent;color:var(--text-main,#fff);font-size:1.6rem;line-height:1;cursor:pointer;">×</button></div>' +
+        '<div id="addpart-count-' + controlKey + '" style="font-size:.77rem;color:var(--text-muted);margin-bottom:15px;">' + count + ' inscrito(s) no momento</div>' +
+        '<section style="padding:13px;border:1px solid var(--border-color);border-radius:12px;margin-bottom:12px;"><strong>Adicionar participante</strong>' +
+          '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:9px;"><input id="addpart-name-' + controlKey + '" type="text" placeholder="Ex.: Maria Silva" style="flex:1;min-width:170px;padding:10px;border-radius:9px;border:1px solid var(--border-color);background:var(--bg-darker);color:var(--text-color);" onkeydown="if(event.key===\'Enter\'){event.preventDefault();window._pageAddParticipant(\'' + safeId + '\');}"><button id="addpart-name-btn-' + controlKey + '" type="button" class="btn btn-cyan" onclick="window._pageAddParticipant(\'' + safeId + '\')">Adicionar</button></div>' + categories +
+        '</section>' +
+        '<section style="padding:13px;border:1px solid var(--border-color);border-radius:12px;"><strong>Reservar vagas</strong><p style="font-size:.72rem;color:var(--text-muted);margin:5px 0 10px;">Reserva vagas genéricas. Não exige categoria e não entra no sorteio até virar inscrição real.</p>' +
+          '<div style="display:flex;gap:8px;flex-wrap:wrap;"><input id="addpart-ph-' + controlKey + '" type="number" min="1" max="200" value="8" style="width:105px;padding:10px;border-radius:9px;border:1px solid var(--border-color);background:var(--bg-darker);color:var(--text-color);" onkeydown="if(event.key===\'Enter\'){event.preventDefault();window._pageAddPlaceholders(\'' + safeId + '\');}"><button id="addpart-ph-btn-' + controlKey + '" type="button" class="btn btn-cyan" onclick="window._pageAddPlaceholders(\'' + safeId + '\')">Adicionar vagas</button></div>' +
+        '</section>' +
+      '</div>';
+    panel.addEventListener('click', function (event) { if (event.target === panel) window._closeParticipantTools(); });
+    document.body.appendChild(panel);
+    var nameInput = document.getElementById('addpart-name-' + controlKey);
+    if (nameInput) nameInput.focus();
+  };
+
+  window._closeParticipantTools = function () {
+    var panel = document.getElementById('organizer-participant-tools');
+    if (panel) panel.remove();
+  };
+
   function _refreshCount(tId) {
     var t = window._findTournamentById(tId); if (!t) return;
-    var el = document.getElementById('addpart-count-' + tId);
+    var el = document.getElementById('addpart-count-' + _participantControlKey(tId));
     var n = window._countCompetitors ? window._countCompetitors(t).people : (Array.isArray(t.participants) ? t.participants.length : 0);
     if (el) el.textContent = n + ' inscrito(s) no momento';
   }
@@ -238,20 +287,21 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   }
 
   window._pageAddParticipant = function (tId) {
-    var inp = document.getElementById('addpart-name-' + tId);
+    var controlKey = _participantControlKey(tId);
+    var inp = document.getElementById('addpart-name-' + controlKey);
     var name = inp ? inp.value.trim() : '';
     if (!name) { if (typeof showNotification === 'function') showNotification('Nome vazio', 'Digite o nome do participante.', 'warning'); return; }
     var tournament = _guard(tId); if (!tournament) return;
     var categoryIds = null;
     if (tournament.canonicalRegistrationMigration && tournament.canonicalRegistrationMigration.fingerprint) {
-      var select = document.getElementById('addpart-category-' + tId);
+      var select = document.getElementById('addpart-category-' + controlKey);
       categoryIds = select ? Array.prototype.slice.call(select.selectedOptions || []).map(function (option) { return option.value; }).filter(Boolean) : [];
       if (!categoryIds.length) {
         if (typeof showNotification === 'function') showNotification('Categoria necessária', 'Selecione ao menos uma categoria para adicionar este participante.', 'warning');
         return;
       }
     }
-    var btnId = 'addpart-name-btn-' + tId;
+    var btnId = 'addpart-name-btn-' + controlKey;
     _addBtnLoading(btnId, true);
     var _done = false, _finish = function () { if (_done) return; _done = true; _addBtnLoading(btnId, false); };
     var _to = setTimeout(_finish, 8000); // safety
@@ -263,10 +313,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   };
 
   window._pageAddPlaceholders = function (tId) {
-    var inp = document.getElementById('addpart-ph-' + tId);
+    var controlKey = _participantControlKey(tId);
+    var inp = document.getElementById('addpart-ph-' + controlKey);
     var n = inp ? parseInt(inp.value, 10) : NaN;
     if (isNaN(n) || n <= 0) { if (typeof showNotification === 'function') showNotification('Número inválido', 'Informe quantos placeholders (maior que zero).', 'warning'); return; }
-    var btnId = 'addpart-ph-btn-' + tId;
+    var btnId = 'addpart-ph-btn-' + controlKey;
     _addBtnLoading(btnId, true);
     var _done = false, _finish = function () { if (_done) return; _done = true; _addBtnLoading(btnId, false); };
     var _to = setTimeout(_finish, 12000); // safety (N placeholders demora mais)

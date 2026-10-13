@@ -8,6 +8,7 @@ const a = ui.indexOf('window._addPlaceholdersCore');
 const b = ui.indexOf('// v2.7.32:', a);
 const block = ui.slice(a, b);
 ok(/_callFn\('addTournamentPlaceholders'/.test(block) && !/commitTournamentTx/.test(block), 'placeholders só despacham a CF');
+ok(/var data = \(result && result\.data\) \? result\.data : \(result \|\| \{\}\)/.test(block) && /data\.tournament/.test(block), 'retorno callable envelopado atualiza a análise imediatamente');
 ok(!/Escolha a categoria/.test(block) && /placeholders: made/.test(block) && /manualParticipantId: 'manual-'/.test(block), 'cliente permite placeholder genérico, com identidade estável, e devolve as reservas criadas');
 const fn = fs.readFileSync('functions-autodraw/index.js', 'utf8');
 const x = fn.indexOf('exports.addTournamentPlaceholders');

@@ -1664,6 +1664,8 @@ const SUITES = [
   'tests/l7-draw-schedule-cf-only.test.js', // L7: grade estimada nasce no drawRound
   'tests/l7-pair-invite-cf-only.test.js', // L7: convite de dupla só nasce na CF
   'tests/l7-placeholders-cf-only.test.js', // L7: placeholders só nascem na CF
+  'tests/placeholder-panel-keeps-tournament-context.test.js', // reservas não mudam a rota do detalhe
+  'tests/placeholders-analise-realtime.test.js', // retorno da CF atualiza Análise no mesmo instante
   'tests/l7-organizer-roster-cf-only.test.js', // L7: remoção administrativa só na CF
   'tests/l7-reset-enrollment-cf-only.test.js', // L7: reset de chave só é persistido pela Function
   'tests/l7-profile-category-cf-only.test.js', // L7: categoria de perfil só é decidida pela Function
