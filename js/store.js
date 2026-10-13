@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.4.23';
+window.SCOREPLACE_VERSION = '2.4.24';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -14892,7 +14892,7 @@ window._personCount = function(t) {
       : [{ uid: p.uid, manual: p.manualParticipantId, name: p.displayName || p.name, marked: p.isPlaceholder }];
     slots.forEach(function(s) {
       var num = placeholderNumber(s.name);
-      if (num && (legacyUid(s.uid) || (s.marked && (s.uid || s.manual)))) aliasLabels[num] = 1;
+      if (num && (legacyUid(s.uid) || s.uid || s.manual)) aliasLabels[num] = 1;
     });
   });
   function add(o, name) {
@@ -14901,7 +14901,7 @@ window._personCount = function(t) {
     var isPlaceholder = !!(o && typeof o === 'object' && (o.isPlaceholder === true || o.genericPlaceholderReservation === true));
     var label = String(name == null ? '' : name).trim();
     var num = placeholderNumber(label);
-    var key = (num && aliasLabels[num] && (isPlaceholder || legacyUid(uid)))
+    var key = (num && aliasLabels[num])
       ? 'placeholder-label:' + num
       : (uid ? 'u:' + uid : (manual ? 'm:' + manual : 'n:' + label.toLocaleLowerCase()));
     // Placeholder sem identidade estrutural é uma vaga, não uma pessoa real

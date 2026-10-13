@@ -886,7 +886,7 @@ window._countCompetitors = function(t) {
               : [{ uid: p.uid, manual: p.manualParticipantId, name: p.displayName || p.name, marked: p.isPlaceholder }];
             slots.forEach(function(s) {
                 var num = placeholderNumber(s.name);
-                if (num && (legacyUid(s.uid) || (s.marked && (s.uid || s.manual)))) aliasLabels[num] = 1;
+                if (num && (legacyUid(s.uid) || s.uid || s.manual)) aliasLabels[num] = 1;
             });
         });
     };

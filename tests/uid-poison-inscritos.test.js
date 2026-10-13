@@ -165,6 +165,9 @@ console.log('\nRoster canônico de 96 + 32 placeholders:');
   ok('duplas + projeção legada das mesmas reservas não inflacionam = 32 pessoas',
     W._personCount({ participants: legacyProjection }) === 32,
     W._personCount({ participants: legacyProjection }) + '/32');
+  ok('rótulo numérico com UID estrutural também deduplica',
+    W._personCount({ participants: [{ p1Name: 'Jogador 97', p2Name: 'Jogador 98', isPlaceholder: true }, { uid: 'uid-97', displayName: 'Jogador 97' }, { uid: 'uid-98', displayName: 'Jogador 98' }] }) === 2,
+    W._personCount({ participants: [{ p1Name: 'Jogador 97', p2Name: 'Jogador 98', isPlaceholder: true }, { uid: 'uid-97', displayName: 'Jogador 97' }, { uid: 'uid-98', displayName: 'Jogador 98' }] }) + '/2');
 }
 
 // ── 6 · Inscrição é por uid — nome/e-mail iguais NÃO inscrevem estranho ──────

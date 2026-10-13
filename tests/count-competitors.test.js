@@ -78,6 +78,12 @@ ok(c2.teams === 1 && c2.people === 2, 'dedup por uid: dupla repetida conta 1 tim
   const r3 = W._countCompetitors({ participants: legacyProjection, waitlist: [], standbyParticipants: [] });
   ok(r3.people === 32 && r3.teams === 16,
     'dupla + projeção legada das reservas não duplica (got ' + r3.people + '/' + r3.teams + ')');
+  const structuralProjection = [
+    { p1Name: 'Jogador 97', p2Name: 'Jogador 98', isPlaceholder: true },
+    { uid: 'uid-97', displayName: 'Jogador 97' }, { uid: 'uid-98', displayName: 'Jogador 98' }
+  ];
+  const r4 = W._countCompetitors({ participants: structuralProjection, waitlist: [], standbyParticipants: [] });
+  ok(r4.people === 2, 'rótulo numérico com UID estrutural também deduplica (got ' + r4.people + ')');
 })();
 
 // ── OS DOIS CASOS REAIS DA CONFRA (dono, 27/jul) ──────────────────────────────
