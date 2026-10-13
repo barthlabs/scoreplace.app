@@ -1,3 +1,4 @@
+// 2.4.28 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.27 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // A ficha de torneio inicializa a porta do botão Editar antes da renderização; abrir a edição não depende mais de uma visita prévia ao formulário.
 // A porta também fica registrada no shell de UI, cobrindo links diretos em que o renderizador da ficha ainda não executou.
