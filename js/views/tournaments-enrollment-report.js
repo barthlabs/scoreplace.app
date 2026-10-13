@@ -360,7 +360,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       var isPair = p && typeof p === 'object' &&
         (p.p1Uid || p.p1ManualId || p.p1Name) && (p.p2Uid || p.p2ManualId || p.p2Name);
       if (isPair) {
-        p = tournament ? _erNormalizeCanonicalEntry(tournament, p) : p;
+        // The caller normalizes every roster entry before expansion. Do not
+        // normalize pairs a second time: display-label conversion must be
+        // applied exactly once to both pairs and solo registrations.
         var baseCats = (Array.isArray(p.categories) && p.categories.length) ? p.categories.slice() : (p.category ? [p.category] : (p.categoryId ? [_erDisplayCategory(tournament, p.categoryId)] : []));
         // v2.8.62: cada membro carrega a identidade da dupla (_duplaIdx = índice em
         // t.participants, _duplaSide = 'p1'/'p2') pra o SAVE conseguir gravar o gênero
