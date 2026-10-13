@@ -79,7 +79,7 @@ function phaseDrawDone(data) {
   // still the pre-start roster, so a new entry must go to participants, not to
   // the late-registration queue. Keep the explicit start marker authoritative.
   if (data.tournamentStarted === false) return false;
-  var status = String(data.status || '').toLowerCase();
+  var status = String(data.status || '').trim().toLowerCase();
   if (status === 'started' || status === 'in_progress' || status === 'live') return true;
   if (data.tournamentStarted === true || data.tournamentStartedAt || data.phaseStartedAt) return true;
   var startRaw = data.startDate || '';
