@@ -4,6 +4,9 @@ const vm = require('vm');
 let failed = 0;
 function ok(condition, message) { if (condition) console.log('✓ ' + message); else { console.error('✗ ' + message); failed++; } }
 const ui = fs.readFileSync('js/views/tournaments.js', 'utf8');
+const orgTools = fs.readFileSync('js/views/tournaments-org-tools.js', 'utf8');
+ok(/function _guard\(tId\)/.test(orgTools) && /function _safe\(s\)/.test(orgTools) && /window\._pageAddParticipant = function/.test(orgTools) && /window\._pageAddPlaceholders = function/.test(orgTools), 'painel de participantes define todas as funções de ação antes do uso');
+ok(/_participantControlKey\(tId\)/.test(orgTools) && /getElementById\('addpart-ph-' \+ controlKey\)/.test(orgTools), 'painel usa a mesma chave segura ao criar e localizar os controles');
 const a = ui.indexOf('window._addPlaceholdersCore');
 const b = ui.indexOf('// v2.7.32:', a);
 const block = ui.slice(a, b);
