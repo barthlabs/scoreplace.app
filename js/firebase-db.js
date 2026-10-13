@@ -2017,6 +2017,37 @@ window.FirestoreDB = {
     return (result && result.data) ? Object.assign({}, result, { data: projected }) : projected;
   },
 
+  // Split tournaments keep generic placeholder reservations beside the
+  // registration roster.  Every read surface must project those reservations
+  // back into participants; otherwise the detail and analysis screens show a
+  // truncated roster (for example 96 instead of 128) even though the data is
+  // still persisted.  Merge by the stable manual id so this is idempotent.
+  _mergePlaceholderReservationsIntoRoster(tournament) {
+    if (!tournament || !Array.isArray(tournament.participants)) return tournament;
+    var reservations = Array.isArray(tournament.placeholderReservations) ? tournament.placeholderReservations : [];
+    if (!reservations.length) return tournament;
+    var seen = Object.create(null);
+    tournament.participants.forEach(function (entry) {
+      var id = String(entry && entry.manualParticipantId || '').trim();
+      if (id) seen[id] = true;
+    });
+    reservations.forEach(function (entry) {
+      if (!entry || entry.isPlaceholder !== true) return;
+      var id = String(entry.manualParticipantId || '').trim();
+      var name = String(entry.displayName || entry.name || '').trim();
+      if (!id || !name || seen[id]) return;
+      seen[id] = true;
+      tournament.participants.push({
+        name: name,
+        displayName: name,
+        manualParticipantId: id,
+        isPlaceholder: true,
+        genericPlaceholderReservation: entry.genericPlaceholderReservation === true
+      });
+    });
+    return tournament;
+  },
+
   // Sair da lista de espera é decidido no servidor contra o documento fresco.
   // Não há transação ou fallback de escrita no navegador.
   async leaveStandby(tournamentId, user) {
@@ -2650,6 +2681,10 @@ window.FirestoreDB = {
       var _splitAbrir = (typeof window !== 'undefined') ? window._tSplit : null;
       var _fora = (_splitAbrir && typeof _splitAbrir.partesDe === 'function') ? _splitAbrir.partesDe(_t) : null;
       if (_fora && _fora.length) _t = await this._montaDeSubcolecoes(id, _t, _fora);
+      // The split reader may have rebuilt the real registrations from a
+      // subcollection while leaving placeholderReservations on the root config.
+      // Project the complete canonical roster before any view/count consumes it.
+      this._mergePlaceholderReservationsIntoRoster(_t);
       // Rei/Rainha: o doc traz grupos só com matchIds — reidrata group.matches como refs.
       try { if (typeof window !== 'undefined' && typeof window._hydrateMonarchGroups === 'function') window._hydrateMonarchGroups(_t); } catch (_hmErr) {}
       return (typeof window._projectTournamentPhasesForRead === 'function') ? window._projectTournamentPhasesForRead(_t) : _t;

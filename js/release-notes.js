@@ -1,3 +1,4 @@
+// 2.4.30 — O leitor canônico recompõe as reservas de placeholder do documento raiz após montar as subcoleções. Cabeçalho, detalhe e Análise passam a exibir os 128 inscritos (01–128) sem duplicar inscrições ou perder duplas/categorias.
 // 2.4.29 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.28 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.27 — Atualização consolidada de produção com as correções validadas desde a última publicação.
