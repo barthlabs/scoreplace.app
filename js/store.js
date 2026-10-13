@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.4.22';
+window.SCOREPLACE_VERSION = '2.4.23';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -14874,16 +14874,40 @@ window._personCount = function(t) {
   var raw = (typeof window._getCompetitors === 'function') ? window._getCompetitors(t) : (t && t.participants);
   var arr = Array.isArray(raw) ? raw : (raw ? Object.values(raw) : []);
   var seen = Object.create(null), n = 0, placeholderSeq = 0;
+  // O roster legado pode projetar a mesma reserva duas vezes: uma como membro
+  // de dupla e outra como registro individual. Quando existe UID legado
+  // (jog_N/legacy-N), o rótulo "Jogador N" permite unir as duas projeções sem
+  // colidir reservas anônimas distintas.
+  var placeholderNumber = function(name) {
+    var m = String(name == null ? '' : name).trim().match(/^(?:Jogador|Placeholder)\s*0*(\d+)$/i);
+    return m ? String(Number(m[1])) : '';
+  };
+  var legacyUid = function(uid) { return /^(?:jog|legacy)[_-]?\d+$/i.test(String(uid || '').trim()); };
+  var aliasLabels = Object.create(null);
+  arr.forEach(function(p) {
+    if (!p || typeof p !== 'object') return;
+    var slots = (p.p1Name || p.p1Uid || p.p1ManualId || p.p2Name || p.p2Uid || p.p2ManualId)
+      ? [{ uid: p.p1Uid, manual: p.p1ManualId, name: p.p1Name, marked: p.p1Placeholder || p.isPlaceholder },
+         { uid: p.p2Uid, manual: p.p2ManualId, name: p.p2Name, marked: p.p2Placeholder || p.isPlaceholder }]
+      : [{ uid: p.uid, manual: p.manualParticipantId, name: p.displayName || p.name, marked: p.isPlaceholder }];
+    slots.forEach(function(s) {
+      var num = placeholderNumber(s.name);
+      if (num && (legacyUid(s.uid) || (s.marked && (s.uid || s.manual)))) aliasLabels[num] = 1;
+    });
+  });
   function add(o, name) {
     var uid = o && typeof o === 'object' && o.uid ? String(o.uid).trim() : '';
     var manual = o && typeof o === 'object' && o.manualParticipantId ? String(o.manualParticipantId).trim() : '';
     var isPlaceholder = !!(o && typeof o === 'object' && (o.isPlaceholder === true || o.genericPlaceholderReservation === true));
     var label = String(name == null ? '' : name).trim();
-    var key = uid ? 'u:' + uid : (manual ? 'm:' + manual : 'n:' + label.toLocaleLowerCase());
+    var num = placeholderNumber(label);
+    var key = (num && aliasLabels[num] && (isPlaceholder || legacyUid(uid)))
+      ? 'placeholder-label:' + num
+      : (uid ? 'u:' + uid : (manual ? 'm:' + manual : 'n:' + label.toLocaleLowerCase()));
     // Placeholder sem identidade estrutural é uma vaga, não uma pessoa real
     // identificável pelo nome. Duas reservas com o mesmo rótulo continuam sendo
     // duas vagas distintas.
-    if (!uid && !manual && isPlaceholder) key = 'placeholder:' + (++placeholderSeq);
+    if (!uid && !manual && isPlaceholder && key.indexOf('placeholder-label:') !== 0) key = 'placeholder:' + (++placeholderSeq);
     if (!key || key === 'n:') return;
     if (!seen[key]) { seen[key] = true; n++; }
   }

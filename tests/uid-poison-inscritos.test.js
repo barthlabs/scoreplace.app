@@ -156,6 +156,15 @@ console.log('\nRoster canônico de 96 + 32 placeholders:');
   for (let i = 97; i <= 128; i += 2) materialized.push({ p1ManualId: 'manual_' + i, p2ManualId: 'manual_' + (i + 1), p1Name: 'Jogador ' + i, p2Name: 'Jogador ' + (i + 1) });
   ok('64 duplas materializadas continuam = 128 pessoas', W._personCount({ participants: pairs.concat(materialized) }) === 128,
     W._personCount({ participants: pairs.concat(materialized) }) + '/128');
+  const legacyProjection = [];
+  for (let i = 97; i <= 128; i += 2) {
+    legacyProjection.push({ p1Name: 'Jogador ' + i, p2Name: 'Jogador ' + (i + 1), isPlaceholder: true });
+    legacyProjection.push({ uid: 'legacy-' + i, displayName: 'Jogador ' + i });
+    legacyProjection.push({ uid: 'legacy-' + (i + 1), displayName: 'Jogador ' + (i + 1) });
+  }
+  ok('duplas + projeção legada das mesmas reservas não inflacionam = 32 pessoas',
+    W._personCount({ participants: legacyProjection }) === 32,
+    W._personCount({ participants: legacyProjection }) + '/32');
 }
 
 // ── 6 · Inscrição é por uid — nome/e-mail iguais NÃO inscrevem estranho ──────

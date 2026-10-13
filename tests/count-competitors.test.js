@@ -68,6 +68,16 @@ ok(c2.teams === 1 && c2.people === 2, 'dedup por uid: dupla repetida conta 1 tim
   // pro outro lado ([[feedback_uid_controls_everything_name_only_ficticio]]).
   const r2 = W._countCompetitors({ participants: [{ displayName: 'Ana' }, { displayName: 'Bia' }, { displayName: 'Ana' }], waitlist: [], standbyParticipants: [] });
   ok(r2.people === 2, 'fictício :: nome real repetido continua contando 1 (got ' + r2.people + ')');
+
+  const legacyProjection = [];
+  for (let i = 97; i <= 128; i += 2) {
+    legacyProjection.push({ p1Name: 'Jogador ' + i, p2Name: 'Jogador ' + (i + 1), isPlaceholder: true });
+    legacyProjection.push({ uid: 'legacy-' + i, displayName: 'Jogador ' + i });
+    legacyProjection.push({ uid: 'legacy-' + (i + 1), displayName: 'Jogador ' + (i + 1) });
+  }
+  const r3 = W._countCompetitors({ participants: legacyProjection, waitlist: [], standbyParticipants: [] });
+  ok(r3.people === 32 && r3.teams === 16,
+    'dupla + projeção legada das reservas não duplica (got ' + r3.people + '/' + r3.teams + ')');
 })();
 
 // ── OS DOIS CASOS REAIS DA CONFRA (dono, 27/jul) ──────────────────────────────

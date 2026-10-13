@@ -866,6 +866,32 @@ window._drainWaitlistsIfOpen = function(t, opts) {
 // pessoa"). Mantém INSCRITOS/EQUIPES estáveis antes E depois do sorteio.
 window._countCompetitors = function(t) {
     var seenPpl = {}, seenTeam = {}, people = 0, teams = 0, vagaSeq = 0, vagaTeamSeq = 0;
+    // A reserva pode aparecer em duas fotografias do mesmo roster: como membro de
+    // uma dupla materializada e como registro legado individual.  O rótulo
+    // "Jogador N" é a única ponte disponível nesses registros antigos; só o
+    // usamos quando há uma identidade estrutural legada explícita (jog_N/legacy-N),
+    // nunca para duas reservas anônimas com o mesmo texto.
+    var placeholderNumber = function(nm) {
+        var m = String(nm == null ? '' : nm).trim().match(/^(?:Jogador|Placeholder)\s*0*(\d+)$/i);
+        return m ? String(Number(m[1])) : '';
+    };
+    var legacyUid = function(uid) { return /^(?:jog|legacy)[_-]?\d+$/i.test(String(uid || '').trim()); };
+    var aliasLabels = Object.create(null);
+    var scanAliases = function(arr) {
+        (Array.isArray(arr) ? arr : (arr ? Object.values(arr) : [])).forEach(function(p) {
+            if (!p || typeof p !== 'object') return;
+            var slots = (p.p1Name || p.p1Uid || p.p1ManualId || p.p2Name || p.p2Uid || p.p2ManualId)
+              ? [{ uid: p.p1Uid, manual: p.p1ManualId, name: p.p1Name, marked: p.p1Placeholder || p.isPlaceholder },
+                 { uid: p.p2Uid, manual: p.p2ManualId, name: p.p2Name, marked: p.p2Placeholder || p.isPlaceholder }]
+              : [{ uid: p.uid, manual: p.manualParticipantId, name: p.displayName || p.name, marked: p.isPlaceholder }];
+            slots.forEach(function(s) {
+                var num = placeholderNumber(s.name);
+                if (num && (legacyUid(s.uid) || (s.marked && (s.uid || s.manual)))) aliasLabels[num] = 1;
+            });
+        });
+    };
+    var sourceArrays = [t && t.participants, t && t.waitlist, t && t.standbyParticipants];
+    sourceArrays.forEach(scanAliases);
     // VAGA (placeholder) É SEMPRE ÚNICA — nunca deduplica (v1.5.26).
     //
     // BUG MEDIDO (dono, 27/jul, Confra): os placeholders não entravam nos INSCRITOS. A
@@ -884,19 +910,30 @@ window._countCompetitors = function(t) {
         ? window._isPlaceholderName
         : function (n) { return /^(?:Jogador|Placeholder)\s+\d+$/i.test(String(n == null ? '' : n).trim()); };
     var ehVaga = function(o, nm) {
+        // Placeholder com manualParticipantId tem identidade estável e deve
+        // deduplicar entre a reserva e sua dupla materializada.
+        if (o && typeof o === 'object' && o.isPlaceholder && o.manualParticipantId) return false;
         if (o && typeof o === 'object' && o.isPlaceholder) return true;
         // uid 'jog_NN' é vaga LEGADA (identity-core normaliza por aí também)
-        if (o && typeof o === 'object' && o.uid && String(o.uid).indexOf('jog_') === 0) return true;
+        if (o && typeof o === 'object' && o.uid && legacyUid(o.uid)) return true;
         if (o && typeof o === 'object' && (o.uid || o.manualParticipantId)) return false; // tem identidade estrutural
         var s = String(nm == null ? '' : nm).trim();
         return !s || _phName(s);
     };
     var pKey = function(o, nm) {
+        var num = placeholderNumber(nm);
+        if (num && aliasLabels[num] && ((o && o.isPlaceholder) || (o && legacyUid(o.uid)))) return 'placeholder-label:' + num;
         if (o && typeof o === 'object' && o.uid) return 'uid:' + String(o.uid);
         if (o && typeof o === 'object' && o.manualParticipantId) return 'manual:' + String(o.manualParticipantId);
         return 'n:' + String(nm == null ? '' : nm).trim().toLowerCase();
     };
     var addP = function(o, nm) {
+        var num = placeholderNumber(nm);
+        if (num && aliasLabels[num]) {
+            var aliasKey = 'placeholder-label:' + num;
+            if (!seenPpl[aliasKey]) { seenPpl[aliasKey] = 1; people++; }
+            return;
+        }
         if (ehVaga(o, nm)) { seenPpl['vaga:' + (++vagaSeq)] = 1; people++; return; }
         var k = pKey(o, nm); if (k !== 'n:' && !seenPpl[k]) { seenPpl[k] = 1; people++; }
     };
