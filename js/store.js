@@ -11569,7 +11569,10 @@ if (typeof window !== 'undefined' && /[?&]diag=1/.test(String(window.location &&
   }, 3500);   // depois do boot: o que interessa é o estado JÁ montado
 }
 
-window._ensureTournamentLoaded = function (tId, cb) {
+window._ensureTournamentLoaded = function (tId, cb, forceFresh) {
+  // `arguments` mantém compatibilidade com harnesses que extraem só o corpo
+  // histórico desta função; chamadas antigas continuam sem busca forçada.
+  forceFresh = arguments.length > 2 && arguments[2] === true;
   var local = window._findTournamentById(tId);
   // ⭐ 2.0.90 — RESUMO NÃO SERVE PRA ABRIR. A lista passou a receber o documento
   // LEVE (`_resumo: true`, ~11 KB no Confra contra 236 KB), que tem o que o
@@ -11577,6 +11580,7 @@ window._ensureTournamentLoaded = function (tId, cb) {
   // torneio de VERDADE — então um resumo conta como "não carregado" e vai buscar
   // o completo.
   // ⛔ Sem esta linha, abrir um torneio da vitrine mostraria chave vazia.
+  if (forceFresh) local = null;
   if (local && local._resumo === true) local = null;
   // ⛔ E O QUE VEIO DO CACHE TAMBÉM NÃO SERVE PRA ABRIR (ver `_doCache` em _loadFromCache):
   // ele é um retrato de até 24h atrás, e "não é resumo" nunca quis dizer "está atualizado".

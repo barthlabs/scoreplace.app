@@ -1013,7 +1013,8 @@ window._cardCompetidores = function (t) {
   // Se o documento traz a projeção canônica, ela é a autoridade mesmo quando o
   // resumo antigo ainda diz 96. O contador deduplica pessoas e reservas, portanto
   // não infla duplas materializadas para 256.
-  if (typeof window._countCompetitors === 'function' && Array.isArray(t.participants)) {
+  var _listaConfiavel = typeof window._elencoCarregado !== 'function' || window._elencoCarregado(t);
+  if (_listaConfiavel && typeof window._countCompetitors === 'function' && Array.isArray(t.participants)) {
     var _computed = window._countCompetitors(t);
     if (_computed && _computed.people != null && (p == null || _computed.people > p)) {
       return {

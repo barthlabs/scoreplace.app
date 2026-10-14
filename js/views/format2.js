@@ -409,6 +409,11 @@
     var first = projected[0] || {};
     var elimination = projected.filter(function (phase) { return phase && phase.kind === 'elimination'; })[0] || null;
     var cfg = defaultConfig(sport || tournament.sport);
+    var savedTeamCompetition = (first && first.teamCompetition) || tournament.teamCompetition ||
+      (tournament.fmt2 && tournament.fmt2.teamCompetition);
+    if (savedTeamCompetition && typeof savedTeamCompetition === 'object') {
+      cfg.teamCompetition = JSON.parse(JSON.stringify(savedTeamCompetition));
+    }
 
     cfg.disputa = Number(tournament.teamSize) === 1 ? 'individual' : 'dupla';
     if (first.kind === 'elimination') {
@@ -446,6 +451,9 @@
       if (Array.isArray(mapping) && mapping[0] && parseInt(mapping[0].rankTo, 10) > 0) inferredTarget = parseInt(mapping[0].rankTo, 10);
     }
     if (inferredTarget > 0) cfg.classificados = inferredTarget;
+    // A fase can carry the effective team controls even when the historical
+    // fmt2 snapshot is absent or stale. The editor must show the saved motor
+    // configuration, never the default for a new tournament.
     return normalize(cfg, sport || tournament.sport);
   }
 

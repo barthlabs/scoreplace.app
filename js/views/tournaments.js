@@ -2769,7 +2769,7 @@ function renderTournaments(container, tournamentId = null) {
             // suficiente para pintar o cartão, mas não carregam fmt2, logo, vagas nem
             // a configuração real da fase; abrir com eles faz o editor parecer um
             // torneio recém-criado e permite salvar defaults por cima do torneio.
-            if (typeof window._ensureTournamentLoaded === 'function') {
+            if ((!tAtual || incompleto) && typeof window._ensureTournamentLoaded === 'function') {
                 if (typeof window.showNotification === 'function') {
                     window.showNotification('Carregando torneio', 'Abrindo a edição com os dados completos…', 'info');
                 }
@@ -2781,7 +2781,7 @@ function renderTournaments(container, tournamentId = null) {
                     if (typeof window._captureMessage === 'function') {
                         window._captureMessage('openEditModal: torneio não carregado ou editor indisponível', 'error');
                     }
-                });
+                }, true);
                 return;
             }
             if (tAtual && !incompleto && abrirEditorAgora()) return;

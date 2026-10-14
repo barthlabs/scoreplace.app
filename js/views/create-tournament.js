@@ -1743,7 +1743,16 @@ function setupCreateTournamentModal() {
     try { box.insertBefore(mount, box.children[1] || null); } catch (e) { box.appendChild(mount); }
     var sport = (typeof window._currentSportName === 'function' && window._currentSportName()) || 'Beach Tennis';
     var initCfg = null, tourn = null;
-    if (editId && typeof window._findTournamentById === 'function') { tourn = window._findTournamentById(editId); if (tourn && tourn.fmt2) initCfg = tourn.fmt2; }
+    if (editId && typeof window._findTournamentById === 'function') {
+      tourn = window._findTournamentById(editId);
+      if (tourn && tourn.fmt2) {
+        initCfg = JSON.parse(JSON.stringify(tourn.fmt2));
+        var savedTeamCompetition = (tourn.phases && tourn.phases[0] && tourn.phases[0].teamCompetition) || tourn.teamCompetition;
+        if (savedTeamCompetition && typeof savedTeamCompetition === 'object') {
+          initCfg.teamCompetition = JSON.parse(JSON.stringify(savedTeamCompetition));
+        }
+      }
+    }
     // v4.4.x (Camada 2): torneio NOVO a partir de template — inicia da config do template.
     if (!initCfg && window._f2PendingTemplateCfg) { initCfg = window._f2PendingTemplateCfg; window._f2PendingTemplateCfg = null; }
     window._f2MountInForm(mount, sport, initCfg, tourn);

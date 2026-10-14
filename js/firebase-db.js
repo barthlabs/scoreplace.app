@@ -1986,34 +1986,18 @@ window.FirestoreDB = {
   // Leitura privada da fonte canônica: a Function confirma que quem pede já
   // pertence ao elenco (ou à organização) e devolve só a projeção estrutural.
   async loadCanonicalTournamentRoster(tournamentId) {
+    // Consumidores: _montaDeSubcolecoes valida apenas inscrições tipadas;
+    // Análise/card fazem a junção explícita de placeholderReservations.
     var result = await this._callFn('getCanonicalTournamentRoster', { tournamentId: String(tournamentId || '') });
-    // Reservations live outside registrations, but every browser surface must
-    // consume one canonical roster projection. Otherwise the participants page
-    // can show 96 while the organizer has already reserved 32 more places.
+    // A registration is the typed canonical record. Placeholder reservations
+    // stay beside it until the organizer assigns gender/category; callers that
+    // render the complete roster merge them explicitly. Merging here would make
+    // the typed registration reader reject placeholders that intentionally have
+    // no categoryId yet.
     var data = (result && result.data) ? result.data : result;
     if (!data || !Array.isArray(data.participants)) return result;
     var reservations = Array.isArray(data.placeholderReservations) ? data.placeholderReservations : [];
-    var seen = Object.create(null);
-    data.participants.forEach(function (entry) {
-      var id = String(entry && entry.manualParticipantId || '').trim();
-      if (id) seen[id] = true;
-    });
-    var participants = data.participants.slice();
-    reservations.forEach(function (entry) {
-      if (!entry || entry.isPlaceholder !== true) return;
-      var id = String(entry.manualParticipantId || '').trim();
-      var name = String(entry.displayName || entry.name || '').trim();
-      if (!id || !name || seen[id]) return;
-      seen[id] = true;
-      participants.push({
-        name: name,
-        displayName: name,
-        manualParticipantId: id,
-        isPlaceholder: true,
-        genericPlaceholderReservation: entry.genericPlaceholderReservation === true
-      });
-    });
-    var projected = Object.assign({}, data, { participants: participants, placeholderReservations: reservations });
+    var projected = Object.assign({}, data, { participants: data.participants.slice(), placeholderReservations: reservations });
     return (result && result.data) ? Object.assign({}, result, { data: projected }) : projected;
   },
 

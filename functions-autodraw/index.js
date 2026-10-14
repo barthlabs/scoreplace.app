@@ -468,6 +468,9 @@ function _preserveCanonicalRosterProjection(tDepois, tAntes) {
  * reservar vagas antes de decidir sua categoria sem fabricar uma inscrição
  * incompleta que o motor poderia sortear como válida. */
 function _placeholderReservations(t) {
+  // Mantém a mesma projeção usada por addTournamentPlaceholders e pelo novo
+  // leitor getCanonicalTournamentRoster; esta função vive neste módulo, não em
+  // functions/index.js, portanto está no escopo da callable em produção.
   const seen = new Set();
   return (Array.isArray(t && t.placeholderReservations) ? t.placeholderReservations : [])
     .filter((entry) => entry && entry.isPlaceholder === true)
@@ -1459,6 +1462,45 @@ exports.addTournamentPlaceholders = onCall(async request => {
     const projectedPeople = _projectedPeopleCount(clean.participants);
     clean.competitorsCount = projectedPeople;
     return { ok: true, added: out.added, destination: out.destination, tournament: clean };
+  });
+});
+
+// Leitura única do elenco canônico para o editor e para a análise. Inscrições
+// confirmadas são devolvidas já projetadas pelo registro canônico; reservas de
+// placeholder permanecem separadas porque ainda não possuem gênero/categoria.
+// A tela que precisa do roster visual completo faz a junção por
+// `manualParticipantId`, sem transformar reserva em inscrição tipada.
+exports.getCanonicalTournamentRoster = onCall(async request => {
+  const uid = request.auth && request.auth.uid;
+  const data = request.data || {};
+  const tId = String(data.tournamentId || '').trim();
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId) throw new HttpsError('invalid-argument', 'Torneio obrigatório.');
+  const ref = db.collection('tournaments').doc(tId);
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid) && !_isTournamentParticipant(t, uid)) {
+      throw new HttpsError('permission-denied', 'Sem acesso ao elenco deste torneio.');
+    }
+    const migration = t.canonicalRegistrationMigration || {};
+    if (!migration.fingerprint) {
+      return {
+        participants: Array.isArray(t.participants) ? t.participants.filter(p => !(p && p.isPlaceholder === true)) : [],
+        placeholderReservations: _placeholderReservations(t),
+        categoryDefinitions: Array.isArray(t.categoryDefinitions) ? t.categoryDefinitions : [],
+        registrationCount: Array.isArray(t.participants) ? t.participants.filter(p => !(p && p.isPlaceholder === true)).length : 0
+      };
+    }
+    const participants = Array.isArray(t.participants)
+      ? t.participants.filter(p => !(p && p.isPlaceholder === true))
+      : [];
+    return {
+      participants,
+      placeholderReservations: _placeholderReservations(t),
+      categoryDefinitions: Array.isArray(t.categoryDefinitions) ? t.categoryDefinitions : [],
+      registrationCount: Number(migration.registrationCount || participants.length)
+    };
   });
 });
 
