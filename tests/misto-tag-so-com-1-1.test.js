@@ -66,6 +66,15 @@ const dupla = (u1, u2, cat) => ({ p1Uid: u1, p2Uid: u2, p1Name: 'A', p2Name: 'B'
 console.log('──── misto-tag-so-com-1-1 ────');
 
 (function () {
+  const shell = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  const identity = fs.readFileSync(path.join(__dirname, '..', 'js/views/identity-core.js'), 'utf8');
+  ok(identity.includes('window._entryTeamMembers = function'),
+    'contador de duplas usa o helper real de identidade');
+  ok(shell.indexOf('js/views/identity-core.js?') < shell.indexOf('js/views/tournaments-categories.js?'),
+    'helper de identidade é carregado antes das etiquetas de categoria');
+})();
+
+(function () {
   const s = ctx({});
   s._entryTeamMembers = (p) => p && p.p1Name && p.p2Name ? [p.p1Name, p.p2Name] : null;
   const t = { id: 'neon', genderCategories: ['Fem'], skillCategories: ['Light'],

@@ -2846,12 +2846,13 @@ function setupCreateTournamentModal() {
       if (ligaRfHidden) ligaRfHidden.value = isMonarch ? 'rei_rainha' : 'standard';
     }
 
-    // Esconder estimativas de tempo para Liga e Suíço (não fazem sentido)
+    // Suíço antigo é mapeado para Liga ao editar; não existe opção independente.
+    // Assim, uma única condição controla os formatos de pontos corridos.
     var estimContainer = document.getElementById('time-estimates-container');
     if (estimContainer) estimContainer.style.display = isLiga ? 'none' : '';
 
     // Sistema de Pontos Avançado: vale em QUALQUER classificatória com tabela de pontos.
-    // v4.4.59 (pedido do dono): Liga/Suíço OU classificatória do format2 (Fase de Grupos /
+    // v4.4.59 (pedido do dono): Liga (incluindo Suíço mapeado) OU classificatória do format2 (Fase de Grupos /
     // Pontos Corridos). Só some quando não há classificatória (eliminação direta).
     var _f2cAdv = (typeof window._f2GetConfig === 'function') ? window._f2GetConfig() : null;
     var advScoringStandings = isLiga || (_f2cAdv ? _f2cAdv.classifAtiva === true : false);

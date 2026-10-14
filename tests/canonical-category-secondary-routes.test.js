@@ -19,6 +19,9 @@ function between(source, first, last) {
 const categories = fs.readFileSync('js/views/tournaments-categories.js', 'utf8');
 const participantUi = fs.readFileSync('js/views/participants.js', 'utf8');
 const reportUi = fs.readFileSync('js/views/tournaments-enrollment-report.js', 'utf8');
+ok(reportUi.indexOf('window._erUpdateSaveBar = function') > 0 &&
+   reportUi.indexOf('window._erUpdateSaveBar = function') < reportUi.lastIndexOf('window._erUpdateSaveBar();'),
+  'a barra de salvar existe no mesmo módulo antes da montagem final da Análise');
 
 const bridge = between(categories, 'function _isCanonicalCategoryRoster', 'function _assignParticipantCategory');
 ok(bridge.includes('window._isCanonicalCategoryRoster = _isCanonicalCategoryRoster') &&
