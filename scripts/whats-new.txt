@@ -1,17 +1,1 @@
-Esta versão traz mais privacidade, cards de jogo iguais em toda parte e uma navegação que não trava.
-
-• Privacidade: o app deixa de baixar a ficha privada de outras pessoas. Nome e foto vêm do perfil público, e o contato de inscrito, organizador ou co-organizador passa por uma porta no servidor que confere quem está pedindo. Convidar amigos e escolher parceiro também não baixam mais contato de ninguém.
-
-• Card de jogo: a mesma geometria na chave, em Novidades, Próximo Jogo e Últimos Resultados. Abaixo de "Jogo N" aparece o prazo da rodada ("Jogar até"), o horário marcado ou, depois do resultado, a hora do último placar. Ao confirmar um set de partida em andamento, o placar aceito aparece na hora — sem recarregar. O Super Tie-Break aceita 10 e fica na mesma coluna dos sets.
-
-• Placar: um resultado esperando confirmação usa o selo "Aprovação pendente"; a aprovação feita em outro aparelho aparece sem recarregar; editar um placar por sets preserva os zeros já lançados.
-
-• W.O.: o organizador escolhe, no próprio jogo, entre W.O. individual ou da dupla. O individual promove o suplente elegível; desclassificar a dupla dá a vitória ao adversário. Jogo, fila de espera e lista de ausentes mudam juntos, numa só operação.
-
-• Chave: a numeração dos jogos segue rodada e linha (Ouro/Prata) dentro de cada categoria, da menor à maior. A chave usa toda a largura útil — uma, duas ou três colunas só quando os cards continuam legíveis.
-
-• Datas: ao marcar data e hora, o card troca "Propor datas" pelo horário imediatamente, na chave e em Novidades.
-
-• Inscrições durante a fase: o mesmo seletor em criar, editar e na chave — Fechadas/Abertas e Suplentes/Novos Confrontos, com o estado ativo destacado.
-
-• Navegação: abrir um torneio não cobre mais a tela com uma camada que bloqueia toques, não troca o conteúdo por "Carregando…" e não trava quando uma inscrição chega incompleta. Novidades resolve os perfis já na abertura, sem esperar as fotos.
+A versão 2.4.48 reúne as melhorias desde o último pacote das lojas: configuração de vagas e rodadas por categoria, ajustes na análise de inscritos e duplas e no planejamento de jogos. Corrige também a confirmação ao abrir ou fechar inscrições, a exibição de datas e a faixa que invadia o cabeçalho da Análise.
