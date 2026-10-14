@@ -247,6 +247,19 @@ window._duplaCard = function (t, p, draggable, ctx) {
     var _dpOrder = members
       ? (parseInt(_s1 || '0', 10) || 0)
       : (window._enrollNumber ? (parseInt(window._enrollNumber(_enrollOrderMapD, p), 10) || 0) : 0);
+    // O organizador pode deliberadamente manter pessoas acima da lotação para
+    // comparar cenários. Elas não somem nem são movidas por código: a própria
+    // lista as marca com a mesma faixa zebrada da agenda fora da janela.
+    var _capacity = parseInt(t && t.maxParticipants, 10);
+    var _lastMemberOrder = members ? (parseInt(_s2 || '0', 10) || 0) : 0;
+    var _overCapacity = !!((_capacity > 0 && Math.max(_dpOrder, _lastMemberOrder) > _capacity) ||
+      (ctx.overCapacityEntries && ctx.overCapacityEntries.has(p)));
+    var _overCapacityStyle = _overCapacity
+      ? 'background:repeating-linear-gradient(45deg,rgba(239,68,68,.56) 0 10px,rgba(148,163,184,.44) 10px 20px),rgba(15,23,42,.86)!important;border:1px solid rgba(248,113,113,.92)!important;'
+      : '';
+    var _overCapacityNotice = _overCapacity
+      ? '<div style="margin-top:4px;font-size:.62rem;font-weight:900;color:#fff;background:rgba(127,29,29,.9);border-radius:4px;padding:3px 4px;">⚠ EXCEDE AS VAGAS CONFIGURADAS</div>'
+      : '';
     var _dpInactive = (t.allowSelfDeactivation !== false && typeof p === 'object' && p && p.ligaActive === false) ? '1' : '0';
     var _presStyle = (_prs && _prs.styleExtra) ? _prs.styleExtra : '';
     // rowHtml: SOLO → toggle único; DUPLA escopo TIME → um W.O. do time. DUPLA escopo
@@ -255,8 +268,8 @@ window._duplaCard = function (t, p, draggable, ctx) {
     // não numa linha nova — economiza 1 linha por card. Canônico (_duplaCard serve as 2 telas).
     var _presInline = (_prs && _prs.rowHtml) ? _prs.rowHtml : '';
     return '<div class="participant-card" data-part-card="1" data-dupla-card="1" data-card-key="' + window._safeHtml(window._duplaEntryKey(p)) + '" data-part-multi="' + _dpMulti + '" data-part-org="0" data-part-vip="0" data-part-standby="0" data-part-name="' + _dpNameAttr + '" data-part-inactive="' + _dpInactive + '" data-part-gender="' + (_dpGender || 'none') + '" data-part-skill="' + String(_dpSkill).replace(/"/g, '&quot;') + '" data-part-order="' + _dpOrder + '" data-participant-name="' + window._safeHtml(_resolvedCardName || nm) + '" ' + dragAttrs +
-      ' style="' + bgStyle + 'border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;' + (draggable && _canPairDrag ? 'cursor:grab;' : '') + _presStyle + '" onmouseover="this.style.transform=\'translateY(-2px)\'" onmouseout="this.style.transform=\'none\'">' +
-      _enrollBadge + _wmL + _wmR +
+      ' style="' + bgStyle + _overCapacityStyle + 'border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;' + (draggable && _canPairDrag ? 'cursor:grab;' : '') + _presStyle + '" onmouseover="this.style.transform=\'translateY(-2px)\'" onmouseout="this.style.transform=\'none\'">' +
+      _enrollBadge + _wmL + _wmR + _overCapacityNotice +
       (function () {
         // Ações à DIREITA, na MESMA linha. ORDEM CANÔNICA (v1.3.142, dono): ↩️ Desfazer ·
         // palavra(Presente/Ausente) · toggle · W.O. · ✕ EXCLUIR — o **excluir é sempre o ÚLTIMO,
@@ -369,8 +382,27 @@ window._buildDoublesInscritosSection = function (t, ctx) {
 
   function _safeAttr(s) { return String(s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
 
+  // O limite por categoria também é de PESSOAS. Marcar as entradas pelo número
+  // acumulado em ordem de inscrição torna o excesso visível mesmo quando o total
+  // geral ainda não foi atingido; não move nem exclui ninguém.
+  var _overCapacityEntries = new Set();
+  var _categoryPeople = Object.create(null);
+  var _categoryLimits = t.maxParticipantsByCategory || {};
+  _pairedParticipants.concat(_soloParticipants).sort(_compareEntries).forEach(function (entry) {
+    if (!entry || typeof entry !== 'object') return;
+    var raw = String(entry.categoryId || ((entry.categoryIds || [])[0]) || entry.category || ((entry.categories || [])[0]) || '').trim();
+    var label = (typeof window._displayTournamentCategory === 'function')
+      ? String(window._displayTournamentCategory(t, raw) || '').trim() : raw;
+    if (!label) return;
+    var limit = Object.prototype.hasOwnProperty.call(_categoryLimits, label)
+      ? Number(_categoryLimits[label]) : Number(t.maxParticipantsPerCategory);
+    if (!Number.isSafeInteger(limit) || limit <= 0) return;
+    var slots = _isPairEntry(entry) ? 2 : 1;
+    _categoryPeople[label] = (_categoryPeople[label] || 0) + slots;
+    if (_categoryPeople[label] > limit) _overCapacityEntries.add(entry);
+  });
   // v1.3.37: card de dupla via FONTE ÚNICA window._duplaCard (extraído). ctx com as deps.
-  var _dctx = { isOrg: isOrg, drawDone: drawDone, orgUids: _orgUidsShared, cardPresence: _cardPres, memberPresence: ctx.memberPresence, enrollOrderMap: _enrollOrderMapD };
+  var _dctx = { isOrg: isOrg, drawDone: drawDone, orgUids: _orgUidsShared, cardPresence: _cardPres, memberPresence: ctx.memberPresence, enrollOrderMap: _enrollOrderMapD, overCapacityEntries: _overCapacityEntries };
 
   // Convites pendentes → card de dupla PENDENTE (âmbar) na seção "Sem dupla".
   var _cuUid = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) || '';
@@ -427,11 +459,18 @@ window._buildDoublesInscritosSection = function (t, ctx) {
         '👥 Inscritos <span style="font-size:0.8rem;background:var(--sp-g-255-255-255-01,rgba(255,255,255,0.1));padding:3px 10px;border-radius:12px;font-weight:600;margin-left:5px;color:var(--text-muted);">' + individualCountParts + '</span>' +
       '</h3>' + _doublesFilterBar + _countBar)
     : '';
+  var _capacityLimit = parseInt(t.maxParticipants, 10);
+  var _capacityOver = (_capacityLimit > 0 && typeof individualCountParts === 'number')
+    ? Math.max(0, individualCountParts - _capacityLimit) : 0;
+  var _capacityNotice = _capacityOver && isOrg
+    ? '<div role="status" style="margin:0 0 14px;padding:10px 12px;border-radius:8px;border:1px solid rgba(248,113,113,.7);background:repeating-linear-gradient(45deg,rgba(239,68,68,.24) 0 10px,rgba(148,163,184,.18) 10px 20px);color:var(--text-bright);font-size:.8rem;">⚠ ' + _capacityOver + ' inscrito(s) acima das ' + _capacityLimit + ' vagas configuradas. O organizador decide se amplia vagas, remove inscritos ou realiza o sorteio; nenhuma opção é aplicada automaticamente.</div>'
+    : '';
   var _catMgrHtml = (_chrome && _hasTournCats && isOrg) ? ('<div id="inline-cat-mgr-' + t.id + '"></div>') : '';
 
   var html =
     '<div id="sp-inscritos-pairing" class="mt-5 mb-4">' +
       _headerHtml +
+      _capacityNotice +
       ((_soloAvailable.length > 0 || _reqs.length > 0)
         ? ('<div style="margin-bottom:1.2rem;">' +
             '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap;">' +
@@ -3338,24 +3377,14 @@ function renderTournaments(container, tournamentId = null) {
         // de time não trata lista de espera). addParticipantFunction já roteia
         // pra lista de espera quando o sorteio já saiu.
         // v2.2.43: +Participante e +Placeholders seguem o estado REAL da inscrição
-        // (isAberto) — ficam visíveis e funcionais enquanto as inscrições estiverem
-        // abertas, INCLUSIVE depois do sorteio e do início do torneio (Liga aberta,
-        // late enrollment standby/expand). addParticipantFunction e
-        // addPlaceholdersFunction já roteiam pra lista de espera quando o sorteio
-        // já saiu. +Time continua só antes do sorteio (o fluxo de time não trata
-        // lista de espera).
-        // Participante e vagas ficam no painel contextual: a inclusão não troca a rota,
-        // não perde a rolagem e não expõe a tela de chaves no meio da configuração.
-        // v4.5.15 (regra do dono): +Participante ATIVO enquanto a inscrição está aberta; quando
-        // fecha (1º resultado/ponto — ou 1º resultado de R2 na inscrição tardia), fica CINZA e
-        // INATIVO (não some) — sinaliza "inscrições encerradas, torneio em andamento". Vale pra
-        // qualquer formato. Só some quando o torneio ENCERRA (campeão definido).
+        // Regra v4.5.15 substituída pelo pedido explícito do dono em 14/out/2026:
+        // O organizador pode adicionar pessoas para estudar cenários mesmo com
+        // inscrições fechadas ou lotação atingida. O servidor autoriza cada inclusão;
+        // a capacidade não é aumentada automaticamente. O controle só some ao fim.
         const addParticipantBtns = isOrg ? `
-             ${isAberto
+             ${!isFinished
                ? `<button class="btn btn-cyan hover-lift" onclick="event.stopPropagation(); if(window._openParticipantTools){window._openParticipantTools('${t.id}');}else{window.addParticipantFunction('${t.id}');}">👤 + Participante</button>`
-               : (!isFinished
-                 ? `<button class="btn" disabled title="Inscrições encerradas — o torneio já começou (primeiro resultado lançado). Não é possível adicionar participantes." style="cursor:not-allowed;background:#64748b;color:var(--sp-c-e2e8f0,#e2e8f0);border:1px solid #475569;box-shadow:none;">👤 + Participante</button>`
-                 : '')}
+               : ''}
              ${((allowsTeams && !isDoublesMode) && !sorteioRealizado) ? `<button class="btn btn-purple hover-lift" onclick="event.stopPropagation(); window.addTeamFunction('${t.id}')">👥 + Time</button>` : ''}
         ` : '';
 

@@ -43,7 +43,7 @@ try { C.normalizeExtraUpdates({ status: 'finished' }); ok('extraUpdates recusa p
   const enrollmentDecision = block.slice(0, block.indexOf('const withDuplicateSignal'));
   ok('Function mantém a decisão legada e usa núcleo tipado no roster materializado',
     !/accountDisplayName/.test(enrollmentDecision) &&
-    /computeEnroll\(_dados, sanitizedParticipantObj, extraUpdates, nowMs\)/.test(enrollmentDecision) &&
+    /computeEnroll\(_dados, sanitizedParticipantObj, extraUpdates, nowMs,/.test(enrollmentDecision) &&
     /_canonicalEnrollment\.decide\(/.test(enrollmentDecision) &&
     /_writeCanonicalRosterCreates\(/.test(enrollmentDecision));
   ok('Function recusa inscrição durante fusão ou exclusão pela trava transacional do UID',
@@ -191,6 +191,35 @@ try { C.normalizeExtraUpdates({ status: 'finished' }); ok('extraUpdates recusa p
   const data = { status: 'open', maxParticipants: 2, participants: [{ uid: 'a-uid' }, { uid: 'b-uid' }] };
   const r = C.computeEnroll(data, { uid: 'c-uid', displayName: 'C' }, null, NOW);
   eq('lotado → capacityFull', r.outcome, 'capacityFull');
+  const byOrganizer = C.computeEnroll(data, { uid: 'c-uid', displayName: 'C' }, null, NOW, { organizerManual: true });
+  eq('organizador pode incluir acima das vagas', byOrganizer.outcome, 'enrolled');
+  eq('inclusão acima das vagas preserva o elenco', byOrganizer.participants.length, 3);
+  const sixtyThreePairs = Array.from({ length: 63 }, function (_, i) {
+    return { p1Uid: 'pair-a-' + i, p2Uid: 'pair-b-' + i };
+  });
+  const mixed = { status: 'closed', maxParticipants: 128, participants: sixtyThreePairs.concat([{ uid: 'solo-127' }]) };
+  const normalOpen = C.computeEnroll(Object.assign({}, mixed, { status: 'open' }),
+    { p1Uid: 'pair-a-64', p2Uid: 'pair-b-64' }, null, NOW);
+  eq('sem exceção, dupla de duas pessoas excede 128 vagas', normalOpen.outcome, 'capacityFull');
+  const extraPair = C.computeEnroll(mixed, { p1Uid: 'pair-a-64', p2Uid: 'pair-b-64' }, null, NOW, { organizerManual: true });
+  const peopleAfter = extraPair.participants.reduce(function (sum, entry) { return sum + (entry.p1Uid && entry.p2Uid ? 2 : 1); }, 0);
+  eq('organizador mantém dupla excedente visível', extraPair.outcome, 'enrolled');
+  eq('63 duplas, 1 solo e nova dupla contam 129 pessoas', peopleAfter, 129);
+  eq('inclusão manual não altera capacidade de 128', extraPair.updateData.maxParticipants, undefined);
+  const drawMode = C.computeEnroll({ status: 'open', enrollmentLimitMode: 'draw', maxParticipants: 2,
+    participants: [{ uid: 'draw-a' }, { uid: 'draw-b' }] }, { uid: 'draw-c' }, null, NOW, { organizerManual: true });
+  eq('excesso manual não dispara sorteio automático', drawMode.reachedDraw, false);
+  eq('excesso manual não grava aviso de sorteio', drawMode.updateData.waitlistNoticeSent, undefined);
+})();
+
+// ── Inclusão manual da organização também atravessa o prazo, mas não o fim ──
+(() => {
+  const closed = { status: 'closed', participants: [] };
+  eq('organizador inclui com inscrições fechadas',
+    C.computeEnroll(closed, { uid: 'org-add-uid' }, null, NOW, { organizerManual: true }).outcome, 'enrolled');
+  const finished = { status: 'finished', participants: [] };
+  eq('torneio concluído continua bloqueado',
+    C.computeEnroll(finished, { uid: 'org-add-uid' }, null, NOW, { organizerManual: true }).outcome, 'closed');
 })();
 
 // ── Auto-close ao atingir o máximo ───────────────────────────────────────────

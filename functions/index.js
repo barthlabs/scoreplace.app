@@ -2930,6 +2930,9 @@ exports.enrollParticipant = onCall(
 
     const tournamentId = String((request.data && request.data.tournamentId) || "");
     const participantObj = request.data && request.data.participantObj;
+    // Intenção declarada pelo cliente. Ela não concede privilégio: cada ramo
+    // abaixo a combina com `_isTournamentOrgCaller` dentro da transação.
+    const organizerManualRequested = request.data && request.data.organizerManual === true;
     let extraUpdates;
     try { extraUpdates = _enrollCore.normalizeExtraUpdates(request.data && request.data.extraUpdates); }
     catch (error) { throw new HttpsError("invalid-argument", error.message); }
@@ -3057,6 +3060,7 @@ exports.enrollParticipant = onCall(
             participant: sanitizedParticipantObj,
             profile: profileSnap && profileSnap.exists ? (profileSnap.data() || {}) : {},
             nowMs,
+            organizerManual: organizerManualRequested && isOrganizer,
           });
         } catch (error) { throw new HttpsError("failed-precondition", error.message); }
         if (decision.outcome === "rejected" || decision.outcome === "conflict") {
@@ -3080,7 +3084,9 @@ exports.enrollParticipant = onCall(
       if (!participantUid && !isOrganizer) {
         throw new HttpsError("permission-denied", "só o organizador pode incluir participante sem conta");
       }
-      const r = _enrollCore.computeEnroll(_dados, sanitizedParticipantObj, extraUpdates, nowMs);
+      const r = _enrollCore.computeEnroll(_dados, sanitizedParticipantObj, extraUpdates, nowMs, {
+        organizerManual: organizerManualRequested && isOrganizer
+      });
       if (r.updateData) _splitParts.gravar(tx, docRef, _dados, r.updateData);
       return r;
     });

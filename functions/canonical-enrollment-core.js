@@ -14,8 +14,9 @@ function decide(input) {
   const registrations = Array.isArray(value.registrations) ? value.registrations : [];
   const participant = value.participant || {};
   if (participant.p1Uid || participant.p2Uid) throw new Error('dupla deve usar a porta canônica de formar dupla');
+  const organizerManual = value.organizerManual === true && tournament.status !== 'finished';
   const window = enrollCore.enrollmentOpen(tournament, value.nowMs);
-  if (!window.open) return { outcome: window.notOpenYet ? 'notOpenYet' : 'closed' };
+  if (!window.open && !organizerManual) return { outcome: window.notOpenYet ? 'notOpenYet' : 'closed' };
   const definitions = eligibility.normalizeCategoryDefinitions(tournament.categoryDefinitions);
   const categoryIds = categoryBridge.categoryIdsFromTypedIds(definitions, participant.categoryIds);
   const existingCategoryIds = registrations
@@ -33,7 +34,7 @@ function decide(input) {
   });
   if (eligibilityDecision.outcome !== 'accepted') return eligibilityDecision;
   const drawn = enrollCore.phaseDrawDone(tournament);
-  const status = drawn ? 'waitlisted' : (eligibilityDecision.validationState === 'pending_review' ? 'pending' : 'confirmed');
+  const status = drawn && !organizerManual ? 'waitlisted' : (eligibilityDecision.validationState === 'pending_review' ? 'pending' : 'confirmed');
   const enrollment = mutations.enroll(tournament.id || tournament.tournamentId, registrations, participant, categoryIds, {
     status,
     validationState: eligibilityDecision.validationState,
@@ -45,7 +46,7 @@ function decide(input) {
   if (!enrollment.creates.length) {
     return Object.assign({}, eligibilityDecision, { outcome: enrollment.outcome, enrollment, categoryIds });
   }
-  if (!drawn && tournament.enrollmentLimitMode !== 'draw') {
+  if (!organizerManual && !drawn && tournament.enrollmentLimitMode !== 'draw') {
     const byName = tournament.maxParticipantsByCategory || {};
     const general = Number(tournament.maxParticipantsPerCategory);
     const labels = new Map(definitions.map(definition => [definition.id, definition.label]));
@@ -60,7 +61,7 @@ function decide(input) {
     }
   }
   const cap = Number.parseInt(tournament.maxParticipants, 10);
-  if (!drawn && tournament.enrollmentLimitMode !== 'draw' && Number.isFinite(cap) && cap > 0) {
+  if (!organizerManual && !drawn && tournament.enrollmentLimitMode !== 'draw' && Number.isFinite(cap) && cap > 0) {
     const active = registrations.filter((registration) => registration && ['confirmed', 'pending'].includes(registration.status)).length;
     if (active >= cap) return { outcome: 'capacityFull' };
   }

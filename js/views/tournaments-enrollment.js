@@ -1549,12 +1549,15 @@ window.addParticipantFunction = function (tId) {
     if (!t) return;
     // v1.8.40: regra canônica (waitlist-core._enrollmentOpenState — a mesma do servidor).
     var _closedOrDrawn = !window._enrollmentOpenState(t).open;
-    if (_closedOrDrawn && !_allowsLateEnrollment(t)) {
+    // A UI só expressa a intenção; a callable confirma que a sessão é de
+    // organizador antes de permitir esta inclusão manual.
+    var _organizerManual = !!(window._souOrganizador && window._souOrganizador(t) && t.status !== 'finished');
+    if (_closedOrDrawn && !_organizerManual && !_allowsLateEnrollment(t)) {
         showAlertDialog(_t('enroll.enrollClosed'), _t('enroll.enrollClosedMsg'), null, { type: 'warning' });
         return;
     }
     // Overlay com autocomplete de amigos/usuários → delega ao core canônico.
-    window._addParticipantWithAutocomplete(tId, _closedOrDrawn, function(pName, selectedUid, selectedPhoto, categoryIds) {
+    window._addParticipantWithAutocomplete(tId, _closedOrDrawn && !_organizerManual, function(pName, selectedUid, selectedPhoto, categoryIds) {
         window._doAddParticipant(tId, pName, selectedUid, selectedPhoto, null, null, categoryIds);
     });
 };
@@ -1568,9 +1571,9 @@ window._doAddParticipant = function (tId, pName, selectedUid, selectedPhoto, onD
     if (!t) return;
     // v1.8.40: regra canônica (waitlist-core._enrollmentOpenState — a mesma do servidor).
     var _closedOrDrawn = !window._enrollmentOpenState(t).open;
-    // Mesma regra do botão/overlay: torneio fechado SEM inscrição tardia bloqueia o add
-    // (consistência página ↔ overlay; evita "a página deixa, o botão não").
-    if (_closedOrDrawn && !_allowsLateEnrollment(t)) {
+    // A autorização real é conferida novamente pela callable, dentro da transação.
+    var _organizerManual = !!(window._souOrganizador && window._souOrganizador(t) && t.status !== 'finished');
+    if (_closedOrDrawn && !_organizerManual && !_allowsLateEnrollment(t)) {
         if (typeof showAlertDialog === 'function') showAlertDialog(_t('enroll.enrollClosed'), _t('enroll.enrollClosedMsg'), null, { type: 'warning' });
         return;
     }
@@ -1608,13 +1611,13 @@ window._doAddParticipant = function (tId, pName, selectedUid, selectedPhoto, onD
                 participantObj.categoryIds = Array.from(new Set(_ids));
             }
             // If late enrollment, add to standby instead
-            if (_closedOrDrawn) {
+            if (_closedOrDrawn && !_organizerManual) {
                 _enrollToStandby(t, tId, participantObj, function() { _refresh(); });
                 return;
             }
             // Use transactional enroll to prevent race conditions
             if (window.FirestoreDB && typeof window.FirestoreDB.enrollParticipant === 'function') {
-                window.FirestoreDB.enrollParticipant(tId, participantObj).then(function(result) {
+                window.FirestoreDB.enrollParticipant(tId, participantObj, null, _organizerManual).then(function(result) {
                     // v1.8.40: UM leitor pro resultado. Antes o `waitlisted` (Liga aberta com
                     // fase sorteada — o ramo que o ORGANIZADOR realmente percorre) não era
                     // tratado: a pessoa ia pra fila no servidor e SUMIA da tela sem mensagem.

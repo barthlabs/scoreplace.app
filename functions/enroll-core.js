@@ -276,11 +276,15 @@ function normalizeExtraUpdates(extraUpdates) {
 // A CF aplica updateData dentro da transação. NÃO stripa nomes (o servidor não tem
 // perfil vivo pra reidratar — preservar o nome é o comportamento conservador que o
 // próprio cliente adota quando _stripStoredNamesForUidEntries está indisponível).
-function computeEnroll(data, participantObj, extraUpdates, nowMs) {
+function computeEnroll(data, participantObj, extraUpdates, nowMs, options) {
+  options = options || {};
+  // Só a callable pode fornecer este sinal e ela só o faz após confirmar a
+  // organização autenticada. O core continua puro para os demais fluxos.
+  var organizerManual = options.organizerManual === true && data.status !== 'finished';
   participantObj = sanitizeAccountParticipant(participantObj);
   var participants = asParticipantsArray(data);
   var openState = enrollmentOpen(data, nowMs);
-  if (!openState.open) {
+  if (!openState.open && !organizerManual) {
     var upd = {};
     if (openState.deadlinePassed && data.status !== 'closed') upd.status = 'closed';
     return { outcome: openState.notOpenYet ? 'notOpenYet' : 'closed', participants: participants, updateData: (upd.status ? upd : null) };
@@ -298,7 +302,7 @@ function computeEnroll(data, participantObj, extraUpdates, nowMs) {
   // (ligaOpenEnrollment) este era o ramo que NÃO existia: `enrollmentOpen` devolvia
   // open=true e a pessoa era empurrada pra participants depois do sorteio — inscrita,
   // fora dos grupos, fora da espera (Confra ago/2026). Ver waitlist-core._phaseDrawDone.
-  if (phaseDrawDone(data)) {
+  if (phaseDrawDone(data) && !organizerManual) {
     var standby = knownStandby;
     var waitlist = knownWaitlist;
     if (isAlreadyEnrolled(standby, participantObj) || isAlreadyEnrolled(waitlist, participantObj)) {
@@ -334,7 +338,7 @@ function computeEnroll(data, participantObj, extraUpdates, nowMs) {
   };
   // A capacidade mostrada na ficha também limita a inscrição por categoria.
   // Registros legados sem categoria explícita continuam sujeitos ao total geral.
-  if (!isDrawMode && data.maxParticipantsPerCategory && Array.isArray(data.combinedCategories)) {
+  if (!organizerManual && !isDrawMode && data.maxParticipantsPerCategory && Array.isArray(data.combinedCategories)) {
     var categoryNames = function(p) {
       var values = Array.isArray(p.categories) ? p.categories : [];
       if (p.category) values = values.concat([p.category]);
@@ -351,7 +355,7 @@ function computeEnroll(data, participantObj, extraUpdates, nowMs) {
     }
   }
   var occupiedSlots = participants.reduce(function(sum, p) { return sum + personSlots(p); }, 0);
-  if (!isDrawMode && !isNaN(capMax) && capMax > 0 && occupiedSlots + personSlots(participantObj) > capMax) {
+  if (!organizerManual && !isDrawMode && !isNaN(capMax) && capMax > 0 && occupiedSlots + personSlots(participantObj) > capMax) {
     return { outcome: 'capacityFull', participants: participants, updateData: null };
   }
   participants = participants.concat([cleanUndefined(participantObj)]);
@@ -363,10 +367,10 @@ function computeEnroll(data, participantObj, extraUpdates, nowMs) {
   var maxP = parseInt(data.maxParticipants, 10);
   var autoClose = false, reachedDraw = false;
   var enrolledSlots = occupiedSlots + personSlots(participantObj);
-  if (!isDrawMode && !isNaN(maxP) && maxP > 0 && enrolledSlots >= maxP) {
+  if (!organizerManual && !isDrawMode && !isNaN(maxP) && maxP > 0 && enrolledSlots >= maxP) {
     updateData.status = 'closed'; autoClose = true;
   }
-  if (isDrawMode && !isNaN(maxP) && maxP > 0 && enrolledSlots >= maxP && !data.waitlistNoticeSent) {
+  if (!organizerManual && isDrawMode && !isNaN(maxP) && maxP > 0 && enrolledSlots >= maxP && !data.waitlistNoticeSent) {
     updateData.waitlistNoticeSent = true; reachedDraw = true;
   }
   return { outcome: 'enrolled', participants: participants, updateData: updateData, autoClose: autoClose, reachedDraw: reachedDraw };

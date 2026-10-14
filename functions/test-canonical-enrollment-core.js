@@ -21,6 +21,15 @@ result = C.decide(Object.assign({}, input, { tournament: Object.assign({}, base,
   maxParticipants: 3, maxParticipantsPerCategory: 1, maxParticipantsByCategory: { 'Fem A': 2 }
 }), registrations: [confirmed], participant: { uid: 'u2', categoryIds: ['fem-a'] } }));
 ok('exceção de capacidade permite entrada até o limite configurado', result.outcome === 'enrolled');
+result = C.decide(Object.assign({}, input, {
+  tournament: Object.assign({}, base, { status: 'closed', maxParticipants: 1, maxParticipantsPerCategory: 1 }),
+  registrations: [confirmed], participant: { uid: 'u2', categoryIds: ['fem-a'] }, organizerManual: true
+}));
+ok('organizador pode incluir acima da lotação com inscrições fechadas', result.outcome === 'enrolled' && result.enrollment.creates[0].status === 'confirmed');
+result = C.decide(Object.assign({}, input, {
+  tournament: Object.assign({}, base, { status: 'finished' }), participant: { uid: 'u2', categoryIds: ['fem-a'] }, organizerManual: true
+}));
+ok('inclusão manual não reabre torneio encerrado', result.outcome === 'closed');
 try { C.decide(Object.assign({}, input, { participant: { uid: 'u1', categories: ['Fem A'] } })); ok('nunca usa rótulo legado na porta canônica', false); } catch (_) { ok('nunca usa rótulo legado na porta canônica', true); }
 try { C.decide(Object.assign({}, input, { participant: { uid: 'u1', p2Uid: 'u2', categoryIds: ['fem-a'] } })); ok('dupla não entra pela porta solo', false); } catch (_) { ok('dupla não entra pela porta solo', true); }
 console.log((fail ? '❌' : '✅') + ' canonical-enrollment-core: ' + pass + ' ok, ' + fail + ' falharam');

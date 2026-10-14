@@ -830,6 +830,11 @@ window._marcaPartesQueFaltam = function (t, documentoDeTorneio) {
     return 0;
   };
   var _quantoTenho = function (nome) {
+    // Uma dupla é uma entrada do roster, mas são duas pessoas. A contagem
+    // remota de `participants` é sempre de pessoas.
+    if (nome === 'participants' && typeof window._countCompetitors === 'function') {
+      return window._countCompetitors({ participants: t.participants }).people;
+    }
     if (nome === 'matches') {
       var n = _tam(t.matches);
       (t.rounds || []).forEach(function (r) { if (r) n += _tam(r.matches); });
@@ -1040,6 +1045,9 @@ window._partesFaltandoComCerteza = function (t) {
     return 0;
   };
   var _quantoTenho = function (nome) {
+    if (nome === 'participants' && typeof window._countCompetitors === 'function') {
+      return window._countCompetitors({ participants: t.participants }).people;
+    }
     if (nome === 'matches') {
       var n = _tam(t.matches);
       (t.rounds || []).forEach(function (r) { if (r) n += _tam(r.matches); });

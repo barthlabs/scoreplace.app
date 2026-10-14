@@ -1969,12 +1969,13 @@ window.FirestoreDB = {
 
   // Inscrição via Cloud Function (Admin SDK, servidor). Não há fallback de escrita
   // no cliente: autorização, validação e transação pertencem à única porta canônica.
-  async enrollParticipant(tournamentId, participantObj, extraUpdates) {
+  async enrollParticipant(tournamentId, participantObj, extraUpdates, organizerManual) {
     try {
       return await this._callFn('enrollParticipant', {
         tournamentId: String(tournamentId),
         participantObj: participantObj,
-        extraUpdates: extraUpdates || null
+        extraUpdates: extraUpdates || null,
+        organizerManual: organizerManual === true
       });
     } catch (e) {
       if (window._warn) window._warn('[enrollParticipant] CF falhou', e);

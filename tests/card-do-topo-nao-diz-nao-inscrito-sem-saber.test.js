@@ -111,6 +111,22 @@ async function ateDesistir(t) {
     ok(/data-meu-status="carregando"/.test(html), '  → e carimba o estado no atributo, como os outros');
   }
 
+  console.log('\n§2.1 64 DUPLAS SÃO 128 PESSOAS — elenco já está completo');
+  {
+    const duplas = Array.from({ length: 64 }, function (_, i) {
+      return { p1Uid: 'a-' + i, p2Uid: 'b-' + i, p1Name: 'A ' + i, p2Name: 'B ' + i };
+    });
+    const t = noStore(Object.assign(baseSemElenco(), {
+      participants: duplas,
+      opponentHistory: {},
+      _nPartes: { participants: 128, matches: 0, opponentHistory: 0 },
+      _nJogos: 0
+    }));
+    ok(W._elencoCarregado(t) === true, '⭐ 64 duplas satisfazem a parte remota de 128 pessoas');
+    ok(estado(t).code === 'none', '  → sem meu UID, o estado é "none", não "carregando"');
+    ok(!/[Cc]arregando a lista/.test(texto(card(t))), '  → o cartão não inventa carregamento');
+  }
+
   console.log('\n§3 DEPOIS DO TETO — erro recuperável, e ainda assim nunca "não inscrito"');
   {
     const t = noStore(baseSemElenco());
