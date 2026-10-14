@@ -19,6 +19,44 @@ result = C.decide(Object.assign({}, input, { tournament: Object.assign({}, base,
   maxParticipants: 3, maxParticipantsPerCategory: 1, maxParticipantsByCategory: { 'Fem A': 1 }
 }), registrations: [confirmed], participant: { uid: 'u2', categoryIds: ['fem-a'] } }));
 ok('capacidade da categoria bloqueia mesmo com vagas no total', result.outcome === 'capacityFull' && result.categoryId === 'fem-a');
+const parallel = Object.assign({}, base, {
+  maxParticipants: 1,
+  categoryDefinitions: base.categoryDefinitions.concat([{ id: 'fem-b', label: 'Fem B', dimension: 'custom', criteria: {} }]),
+});
+const firstAtLimit = C.decide(Object.assign({}, input, { tournament: parallel }));
+ok('primeira pessoa entra com teto geral de uma', firstAtLimit.outcome === 'enrolled');
+const firstRegistration = firstAtLimit.enrollment.creates[0];
+result = C.decide(Object.assign({}, input, {
+  tournament: parallel, registrations: [firstRegistration], participant: { uid: 'u1', categoryIds: ['fem-b'] },
+}));
+ok('mesma pessoa acrescenta categoria sem ocupar segunda vaga geral', result.outcome === 'enrolled');
+result = C.decide(Object.assign({}, input, {
+  tournament: parallel, registrations: [firstRegistration], participant: { uid: 'u2', categoryIds: ['fem-a'] },
+}));
+ok('segunda pessoa é barrada quando a única vaga geral está ocupada', result.outcome === 'capacityFull');
+result = C.decide(Object.assign({}, input, {
+  tournament: parallel, participant: { uid: 'u1', categoryIds: ['fem-a', 'fem-b'] },
+}));
+ok('uma chamada com duas categorias ocupa uma única vaga geral', result.outcome === 'enrolled' && result.enrollment.creates.length === 2);
+const twoCategoriesOnePerson = result.enrollment.creates;
+result = C.decide(Object.assign({}, input, {
+  tournament: Object.assign({}, parallel, { maxParticipants: 2 }), registrations: twoCategoriesOnePerson,
+  participant: { uid: 'u2', categoryIds: ['fem-a'] },
+}));
+ok('dois registros da primeira pessoa deixam a segunda vaga geral livre', result.outcome === 'enrolled');
+result = C.decide(Object.assign({}, input, {
+  tournament: parallel, registrations: [Object.assign({}, firstRegistration, { status: 'withdrawn' })], participant: { uid: 'u2', categoryIds: ['fem-a'] },
+}));
+ok('inscrição retirada não ocupa vaga geral', result.outcome === 'enrolled');
+result = C.decide(Object.assign({}, input, {
+  tournament: parallel, registrations: [Object.assign({}, firstRegistration, { status: 'waitlisted' })], participant: { uid: 'u2', categoryIds: ['fem-a'] },
+}));
+ok('lista de espera não ocupa vaga geral', result.outcome === 'enrolled');
+result = C.decide(Object.assign({}, input, {
+  tournament: Object.assign({}, parallel, { enrollmentLimitMode: 'draw' }), registrations: [firstRegistration],
+  participant: { uid: 'u3', categoryIds: ['fem-a'] },
+}));
+ok('modo sorteio não bloqueia nova pessoa pelo teto geral', result.outcome === 'enrolled');
 result = C.decide(Object.assign({}, input, { tournament: Object.assign({}, base, {
   maxParticipants: 3, maxParticipantsPerCategory: 1, maxParticipantsByCategory: { 'Fem A': 2 }
 }), registrations: [confirmed], participant: { uid: 'u2', categoryIds: ['fem-a'] } }));

@@ -69,8 +69,12 @@ function decide(input) {
   }
   const cap = Number.parseInt(tournament.maxParticipants, 10);
   if (!organizerManual && !drawn && tournament.enrollmentLimitMode !== 'draw' && Number.isFinite(cap) && cap > 0) {
-    const active = registrations.filter((registration) => registration && ['confirmed', 'pending'].includes(registration.status)).length;
-    if (active >= cap) return { outcome: 'capacityFull' };
+    const activeParticipantKeys = new Set(registrations
+      .filter((registration) => registration && ['confirmed', 'pending'].includes(registration.status))
+      .map((registration) => registration.participantKey));
+    // A mesma pessoa pode adicionar categoria sem consumir outra vaga geral.
+    const requestKey = enrollment.creates[0].participantKey;
+    if (!activeParticipantKeys.has(requestKey) && activeParticipantKeys.size >= cap) return { outcome: 'capacityFull' };
   }
   // A elegibilidade aprovada é um dado da decisão, não seu resultado final.
   // Preserve `enrolled` / `waitlisted` / `alreadyRegistered`, que a callable
