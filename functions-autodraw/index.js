@@ -4299,7 +4299,7 @@ exports.createTournament = onCall(require('./tournament-create').makeCreateTourn
   db, HttpsError, FieldValue, fields: _CAMPOS_CONFIG_TORNEIO,
   cloneConfig: _clonaConfigDeclarativa,
   validateCapacity: config => require('./category-capacity-core').validateCapacityConfig(config, HttpsError),
-  validatePolicy: require('./elimination-policy-config-core').validateExplicitPolicy,
+  validatePolicy: require('./elimination-policy-config-core').validateAndCanonicalizeExplicitPolicy,
   compile: (cfg, ctx) => drawWindow.FORMAT2.compileToPhases(cfg, ctx),
   boundary: _applyWriteBoundary, readTournament: _leTorneio
 }));
@@ -4376,7 +4376,8 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
   });
   // Este handler é definido aqui (não por factory); a criação injeta a mesma função
   // na factory para permitir exercitar o handler real com um banco falso nos testes.
-  require('./elimination-policy-config-core').validateExplicitPolicy(patch, HttpsError);
+  // O patch já é um clone: `playin` legado vira `repescagem` antes da comparação e escrita.
+  require('./elimination-policy-config-core').validateAndCanonicalizeExplicitPolicy(patch, HttpsError);
   const bytes = Buffer.byteLength(JSON.stringify(patch), 'utf8');
   if (bytes > 96 * 1024) throw new HttpsError('invalid-argument', 'Configuração grande demais.');
   const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
