@@ -48,6 +48,17 @@ result = C.decide(Object.assign({}, input, {
   tournament: parallel, registrations: [Object.assign({}, firstRegistration, { status: 'withdrawn' })], participant: { uid: 'u2', categoryIds: ['fem-a'] },
 }));
 ok('inscrição retirada não ocupa vaga geral', result.outcome === 'enrolled');
+const returned = Object.assign({}, firstRegistration, { status: 'withdrawn', withdrawnReason: 'left' });
+result = C.decide(Object.assign({}, input, { tournament: parallel, registrations: [returned] }));
+ok('reinscrição retirada volta pelo mesmo ID sob o limite', result.outcome === 'enrolled' && result.enrollment.creates.length === 0 && result.enrollment.updates.length === 1);
+result = C.decide(Object.assign({}, input, { tournament: parallel, registrations: [returned, Object.assign({}, firstRegistration, { registrationId: R.registrationId('uid:u2', 'fem-a'), participantUid: 'u2', participantKey: 'uid:u2', status: 'confirmed' })] }));
+ok('reinscrição não ganha vaga geral reservada depois da saída', result.outcome === 'capacityFull');
+result = C.decide(Object.assign({}, input, { tournament: Object.assign({}, parallel, { maxParticipants: 3, maxParticipantsPerCategory: 1 }), registrations: [returned, Object.assign({}, firstRegistration, { registrationId: R.registrationId('uid:u2', 'fem-a'), participantUid: 'u2', participantKey: 'uid:u2', status: 'confirmed' })] }));
+ok('reinscrição respeita limite atual da categoria', result.outcome === 'capacityFull' && result.categoryId === 'fem-a');
+result = C.decide(Object.assign({}, input, { tournament: Object.assign({}, parallel, { maxParticipants: 1 }), registrations: [returned, Object.assign({}, firstRegistration, { registrationId: R.registrationId('uid:u1', 'fem-b'), categoryId: 'fem-b', status: 'confirmed' })] }));
+ok('reinscrição noutra categoria não ocupa segunda vaga geral da mesma pessoa', result.outcome === 'enrolled' && result.enrollment.updates.length === 1);
+result = C.decide(Object.assign({}, input, { tournament: Object.assign({}, base, { matches: [{ id: 'm1' }], format: 'liga', ligaOpenEnrollment: true }), registrations: [returned] }));
+ok('reinscrição após sorteio volta somente para espera', result.outcome === 'waitlisted' && result.enrollment.updates.length === 1 && result.enrollment.updates[0].status === 'waitlisted');
 result = C.decide(Object.assign({}, input, {
   tournament: parallel, registrations: [Object.assign({}, firstRegistration, { status: 'waitlisted' })], participant: { uid: 'u2', categoryIds: ['fem-a'] },
 }));

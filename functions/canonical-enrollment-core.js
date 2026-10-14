@@ -50,7 +50,7 @@ function decide(input) {
   // Repetir exatamente a mesma inscrição é sempre uma consulta idempotente:
   // não pode virar "lotado" ou "em espera" só porque o torneio mudou entre
   // os dois cliques.
-  if (!enrollment.creates.length) {
+  if (!enrollment.creates.length && !enrollment.updates.length) {
     return Object.assign({}, eligibilityDecision, { outcome: enrollment.outcome, enrollment, categoryIds });
   }
   if (!organizerManual && !drawn && tournament.enrollmentLimitMode !== 'draw') {
@@ -63,7 +63,8 @@ function decide(input) {
       if (!Number.isSafeInteger(limit) || limit <= 0) continue;
       const occupied = registrations.filter(registration => registration && registration.categoryId === categoryId &&
         ['confirmed', 'pending'].includes(registration.status)).length;
-      const incoming = enrollment.creates.filter(registration => registration.categoryId === categoryId).length;
+      const incoming = enrollment.creates.filter(registration => registration.categoryId === categoryId).length +
+        enrollment.updates.filter(registration => registration.categoryId === categoryId).length;
       if (occupied + incoming > limit) return { outcome: 'capacityFull', categoryId };
     }
   }
@@ -73,7 +74,7 @@ function decide(input) {
       .filter((registration) => registration && ['confirmed', 'pending'].includes(registration.status))
       .map((registration) => registration.participantKey));
     // A mesma pessoa pode adicionar categoria sem consumir outra vaga geral.
-    const requestKey = enrollment.creates[0].participantKey;
+    const requestKey = (enrollment.creates[0] || enrollment.updates[0]).participantKey;
     if (!activeParticipantKeys.has(requestKey) && activeParticipantKeys.size >= cap) return { outcome: 'capacityFull' };
   }
   // A elegibilidade aprovada é um dado da decisão, não seu resultado final.

@@ -55,7 +55,7 @@ function statusCanPair(status) {
   return status === 'confirmed' || status === 'pending';
 }
 
-/* Cria somente inscrições que ainda não existam. A elegibilidade, a janela e
+/* Cria inscrições inéditas ou reativa uma retirada ordinária. A elegibilidade, a janela e
  * a decisão entre confirmado/espera pertencem à Function; este núcleo recebe
  * apenas o resultado já validado para manter a transição testável e livre de
  * perfil, nome ou I/O. Repetir exatamente o mesmo pedido é idempotente. */
@@ -73,11 +73,26 @@ function enroll(tournamentId, registrations, participant, categoryIds, options) 
     ? { participantKind: 'account', participantUid: key.slice(4), manualParticipantId: null }
     : { participantKind: 'manual', participantUid: null, manualParticipantId: key.slice(7) };
   const creates = [];
+  const updates = [];
   const already = [];
   categoryList.forEach((categoryId) => {
     const id = registrationId(key, categoryId);
     const existing = byId.get(id);
-    if (existing) { already.push(id); return; }
+    if (existing) {
+      if (existing.status === 'withdrawn') {
+        const reason = text(existing.withdrawnReason);
+        if (reason && reason !== 'left') throw new Error('inscrição histórica não pode ser reativada por esta porta');
+        updates.push(Object.assign({}, existing, {
+          status,
+          validationState,
+          fixedPairId: null,
+          withdrawnReason: null,
+        }));
+      } else {
+        already.push(id);
+      }
+      return;
+    }
     const next = Object.assign({
       registrationId: id,
       tournamentId: tid,
@@ -92,7 +107,7 @@ function enroll(tournamentId, registrations, participant, categoryIds, options) 
     }
     creates.push(next);
   });
-  return { outcome: creates.length ? 'enrolled' : 'alreadyRegistered', creates, already };
+  return { outcome: creates.length || updates.length ? 'enrolled' : 'alreadyRegistered', creates, updates, already };
 }
 
 function pair(tournamentId, registrations, registrationIds) {

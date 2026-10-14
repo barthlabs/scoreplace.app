@@ -28,6 +28,8 @@ bad('recusa contagem divergente', () => boundary.verifiedRoster(tournament, []))
 bad('recusa documento com identidade divergente', () => boundary.verifiedRoster(tournament, [Object.assign({}, account('u1'), { participantKey: 'uid:u2' })]));
 const changed = boundary.applyUpdates(tournament, [account('u1')], [Object.assign({}, account('u1'), { status: 'withdrawn' })]);
 ok('projeção pós-mutação mantém o recibo e remove inscrito retirado do roster', changed.registrations[0].status === 'withdrawn' && changed.participants.length === 0);
+const restored = boundary.applyChanges(tournament, changed.registrations, [Object.assign({}, changed.registrations[0], { status: 'confirmed', withdrawnReason: null })], []);
+ok('reativação restaura projeção e membro sem alterar quantidade do recibo', restored.participants.length === 1 && restored.tournament.canonicalRegistrationMigration.registrationCount === 1 && JSON.stringify(boundary.memberUids(restored.tournament, restored.registrations)) === JSON.stringify(['u1']));
 bad('recusa atualização de registro fora do recibo', () => boundary.applyUpdates(tournament, [account('u1')], [account('u2')]));
 const moved = Object.assign({}, account('u1'), { registrationId: core.registrationId('uid:u1', 'cat-b'), categoryId: 'cat-b' });
 const afterChanges = boundary.applyChanges(tournament, [account('u1')], [Object.assign({}, account('u1'), { status: 'withdrawn' })], [moved]);

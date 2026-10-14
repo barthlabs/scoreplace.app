@@ -23,6 +23,16 @@ const enrolled = M.enroll('t1', [a], { uid: 'u2' }, ['cat-a', 'cat-b'], { valida
 ok('inscrição canônica cria documentos por UID e categoria', enrolled.outcome === 'enrolled' && enrolled.creates.length === 2 && enrolled.creates.every((item) => item.participantKey === 'uid:u2' && item.status === 'confirmed'));
 const repeatEnrollment = M.enroll('t1', enrolled.creates, { uid: 'u2' }, ['cat-a', 'cat-b'], { validationState: 'approved' });
 ok('inscrição repetida é idempotente', repeatEnrollment.outcome === 'alreadyRegistered' && repeatEnrollment.creates.length === 0 && repeatEnrollment.already.length === 2);
+const ordinaryWithdrawn = Object.assign({}, a, { status: 'withdrawn', withdrawnReason: 'left' });
+const reentered = M.enroll('t1', [ordinaryWithdrawn], { uid: 'u1' }, ['cat-a'], { validationState: 'pending_review' });
+ok('saída ordinária permite reinscrição no mesmo ID e atualiza validação', reentered.outcome === 'enrolled' && reentered.creates.length === 0 && reentered.updates.length === 1 && reentered.updates[0].registrationId === a.registrationId && reentered.updates[0].status === 'confirmed' && reentered.updates[0].validationState === 'pending_review' && reentered.updates[0].withdrawnReason === null);
+const reenteredAgain = M.enroll('t1', reentered.updates, { uid: 'u1' }, ['cat-a'], { validationState: 'pending_review' });
+ok('pedido repetido após reinscrição não escreve novamente', reenteredAgain.outcome === 'alreadyRegistered' && reenteredAgain.creates.length === 0 && reenteredAgain.updates.length === 0);
+for (const reason of ['claimed_by_account', 'account_deleted', 'category_projection_superseded']) {
+  bad('reinscrição comum recusa histórico especial ' + reason, () => M.enroll('t1', [Object.assign({}, a, { status: 'withdrawn', withdrawnReason: reason })], { uid: 'u1' }, ['cat-a']));
+}
+const mixedReentry = M.enroll('t1', [ordinaryWithdrawn], { uid: 'u1' }, ['cat-a', 'cat-b']);
+ok('reativação e nova categoria permanecem na mesma decisão', mixedReentry.outcome === 'enrolled' && mixedReentry.updates.length === 1 && mixedReentry.creates.length === 1);
 const waitlistedEnrollment = M.enroll('t1', [], { manualParticipantId: 'manual-1' }, ['cat-a'], { status: 'waitlisted', manualDisplayName: 'Convidada' });
 ok('espera canônica preserva ID manual e rótulo sem usar nome como chave', waitlistedEnrollment.creates[0].status === 'waitlisted' && waitlistedEnrollment.creates[0].participantKey === 'manual:manual-1' && waitlistedEnrollment.creates[0].manualDisplayName === 'Convidada');
 const paired = M.pair('t1', [a, b, c], [a.registrationId, b.registrationId]);

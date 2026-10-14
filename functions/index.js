@@ -3067,7 +3067,9 @@ exports.enrollParticipant = onCall(
           return Object.assign({ canonical: true, participants: checked.participants }, decision);
         }
         let next = checked;
-        if (decision.enrollment && decision.enrollment.creates.length) {
+        if (decision.enrollment && decision.enrollment.updates.length) {
+          next = _writeCanonicalRosterChanges(tx, docRef, rawTournament, checked.registrations, decision.enrollment);
+        } else if (decision.enrollment && decision.enrollment.creates.length) {
           next = _writeCanonicalRosterCreates(tx, docRef, rawTournament, checked.registrations, decision.enrollment.creates);
         }
         return Object.assign({}, decision, {
@@ -4481,6 +4483,9 @@ function _writeCanonicalRosterChanges(tx, tournamentRef, tournament, registratio
     // faria o núcleo aprovar uma fotografia que nunca é persistida inteira.
     if (Object.prototype.hasOwnProperty.call(item, "withdrawnReason")) {
       patch.withdrawnReason = item.withdrawnReason || null;
+    }
+    if (Object.prototype.hasOwnProperty.call(item, "validationState")) {
+      patch.validationState = item.validationState;
     }
     tx.update(tournamentRef.collection("registrations").doc(item.registrationId), patch);
   });
