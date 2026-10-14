@@ -1,3 +1,4 @@
+// 2.4.40 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.39 — Card, Análise e editor usam uma leitura canônica única: reservas 97–128 entram no roster visual sem serem tratadas como inscrições tipadas, a ordem das duplas é preservada e o editor recupera a configuração efetiva da fase (logo, fundo, categorias personalizadas, equipes e jogos) antes de salvar.
 // 2.4.38 — A Análise ordena duplas e integrantes pela ordem canônica de inscrição, sem depender da ordem de materialização do Firestore.
 // 2.4.37 — O editor só abre depois de carregar o documento canônico; a configuração efetiva e o logo não são substituídos por defaults de resumo/cache.
