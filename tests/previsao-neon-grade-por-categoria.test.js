@@ -41,6 +41,22 @@ ok(current && current.unitCount === 8 && current.matches === 48 && current.minut
 ok(current && current.categoryMatches && current.categoryMatches['Fem Light'] === 24 && current.categoryMatches['Fem Power'] === 12 && current.categoryMatches['Fem Extreme'] === 12,
   'Neon atual: previsão separa 24 jogos Light e 12 em cada uma das demais categorias');
 
+// O plano por equipes usa `unitCount` para os times do organizador. A linha
+// pública deve exibir as duplas correspondentes aos participantes, não chamar
+// esses oito times de oito duplas (regressão observada no Neon em produção).
+const fullNeon = JSON.parse(JSON.stringify(currentNeon));
+fullNeon.maxParticipants = 128;
+fullNeon.combinedCategories = ['Fem Light', 'Fem Power', 'Fem Extreme', 'Masc Light', 'Masc Power', 'Masc Extreme'];
+fullNeon.phases[0].teamCompetition.schedule.pairsPerTeamByCategory['Masc Light'] = 2;
+fullNeon.phases[0].teamCompetition.schedule.pairsPerTeamByCategory['Masc Power'] = 1;
+fullNeon.phases[0].teamCompetition.schedule.pairsPerTeamByCategory['Masc Extreme'] = 1;
+const fullData = W._buildTimeEstimation(fullNeon, { dataOnly: true });
+const fullSummary = W._buildDurationForecast(fullNeon);
+ok(fullData && fullData.unitCount === 8 && fullData.pairCount === 64 && fullData.realCount === 128,
+  'plano completo: 128 participantes, 64 duplas e 8 times têm contagens distintas');
+ok(fullSummary.includes('128 participantes · 64 duplas · 8 times') && !fullSummary.includes('8 duplas'),
+  'card público não rotula os oito times como oito duplas');
+
 const flexibleNeon = JSON.parse(JSON.stringify(currentNeon));
 flexibleNeon.phases[0].teamCompetition.schedule.gamesPerPairByCategory = { 'Fem Light': 3, 'Fem Power': 2, 'Fem Extreme': 1 };
 const flexible = W._buildTimeEstimation(flexibleNeon, { dataOnly: true });

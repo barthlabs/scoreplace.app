@@ -1058,7 +1058,9 @@ window._buildTimeEstimation = function(t, opts) {
     var sharedMatchesPerCategory = categoryMatchValues.length && categoryMatchValues.every(function (value) {
       return value === categoryMatchValues[0];
     }) ? categoryMatchValues[0] : null;
-    return { realCount: people, unitCount: teams, format: format,
+    // `unitCount` is the number of organizer teams in this schedule, not the
+    // number of playing pairs. Keep them separate in the public summary.
+    return { realCount: people, unitCount: teams, pairCount: _ts === 2 ? Math.floor(people / 2) : 0, format: format,
       matches: totalMatches, minutes: minutes,
       categories: catCount, teamsPerCategory: teams,
       matchesPerCategory: sharedMatchesPerCategory,
@@ -1210,8 +1212,9 @@ window._buildDurationForecast = function(t) {
     // Ex.: 96 participantes · 48 duplas · 8 times · 96 jogos.
     var _summary = [d.realCount + (d.realCount === 1 ? ' participante' : ' participantes')];
     var _teamSize = Math.max(1, Number(t.teamSize) || 1);
-    if (_teamSize === 2 && d.unitCount) _summary.push(d.unitCount + (d.unitCount === 1 ? ' dupla' : ' duplas'));
-    else if (d.unitCount && d.unitCount !== d.realCount) _summary.push(d.unitCount + (d.unitCount === 1 ? ' time' : ' times'));
+    var _pairs = d.pairCount == null ? d.unitCount : d.pairCount;
+    if (_teamSize === 2 && _pairs) _summary.push(_pairs + (_pairs === 1 ? ' dupla' : ' duplas'));
+    else if (!d.teamsPerCategory && d.unitCount && d.unitCount !== d.realCount) _summary.push(d.unitCount + (d.unitCount === 1 ? ' time' : ' times'));
     if (d.teamsPerCategory) _summary.push(d.teamsPerCategory + (d.teamsPerCategory === 1 ? ' time' : ' times'));
     _summary.push(d.matches + (d.matches === 1 ? ' jogo' : ' jogos'));
     var partsLbl = _summary.join(' · ');

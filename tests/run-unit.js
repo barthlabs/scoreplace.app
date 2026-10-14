@@ -232,6 +232,7 @@ const SUITES = [
   'tests/limite-por-categoria.test.js',
   'tests/horarios-estimados-editor.test.js',
   'tests/analise-gap-apos-rolagem.test.js',
+  'tests/analise-geometria-real.test.js',
   'tests/analise-header-compacto.test.js',
   'functions-autodraw/test-category-capacity-core.js',
   'tests/test-utils.js',
