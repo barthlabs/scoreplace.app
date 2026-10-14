@@ -2522,6 +2522,14 @@ window.FirestoreDB = {
           projected.categories = [categoryLabel];
           return projected;
         });
+        // O contador `_nPartes.participants` pertence ao espelho legado. No Neon ele
+        // ainda anuncia 192 embora a projeção canônica atual contenha 128 pessoas.
+        // O recibo da callable, conferido acima com o documento do servidor, é a
+        // prova de que ESTA versão do elenco terminou de carregar.
+        Object.defineProperty(t, '_canonicalRosterReceipt', {
+          value: String(_migration.fingerprint) + ':' + _expected,
+          writable: true, configurable: true, enumerable: false
+        });
         // Reserva de vaga não é inscrição e portanto não tem categoryId. Ela é
         // persistida separadamente e só integra a projeção visual/organizacional
         // até que uma pessoa real seja inscrita na categoria apropriada.

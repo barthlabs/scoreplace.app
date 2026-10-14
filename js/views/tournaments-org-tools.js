@@ -176,20 +176,6 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 
     var fieldStyle = 'width:100%;box-sizing:border-box;padding:11px 14px;border-radius:10px;border:1px solid var(--border-color);background:var(--bg-darker);color:var(--text-color);font-size:0.9rem;outline:none;';
 
-    // Depois da materialização, categoria é identidade tipada da vaga. O
-    // organizador pode selecionar mais de uma categoria paralela, mas envia
-    // somente IDs; rótulo é apresentação e jamais participa da mutação.
-    var _canonical = t && t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint;
-    var _defs = _canonical && Array.isArray(t.categoryDefinitions)
-      ? t.categoryDefinitions.filter(function (d) { return d && d.id && d.label && d.enabled !== false; }) : [];
-    var categoryBox = _canonical
-      ? ('<label class="form-label" style="display:block;font-size:0.82rem;font-weight:600;margin-top:12px;">Categorias</label>' +
-        '<select id="addpart-category-' + controlKey + '" multiple size="' + Math.min(Math.max(_defs.length, 1), 5) + '" style="' + fieldStyle + 'margin-top:6px;min-height:42px;">' +
-          _defs.map(function (d) { return '<option value="' + _safe(String(d.id)) + '">' + _safe(String(d.label)) + '</option>'; }).join('') +
-        '</select>' +
-        '<div style="font-size:0.68rem;color:var(--text-muted);margin-top:5px;">Selecione uma ou mais categorias. Combinações excludentes são validadas pelo servidor.</div>')
-      : '';
-
     var nameBox =
       '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;padding:1.1rem;margin-bottom:1.1rem;">' +
         '<label class="form-label" style="font-size:0.82rem;font-weight:600;">👤 Nome do participante</label>' +
@@ -197,13 +183,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           '<input type="text" id="addpart-name-' + controlKey + '" placeholder="Ex.: Maria Silva" style="' + fieldStyle + 'flex:1;min-width:160px;" onkeydown="if(event.key===\'Enter\'){event.preventDefault();window._pageAddParticipant(\'' + safeId + '\');}">' +
           '<button type="button" id="addpart-name-btn-' + controlKey + '" class="btn btn-cyan hover-lift" onclick="window._pageAddParticipant(\'' + safeId + '\')">Adicionar</button>' +
         '</div>' +
-        categoryBox +
       '</div>';
 
     var phBox =
       '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;padding:1.1rem;">' +
-        '<label class="form-label" style="font-size:0.82rem;font-weight:600;">➕ Reservar vagas (placeholders)</label>' +
-        '<p style="font-size:0.66rem;color:var(--text-muted);margin:4px 0 8px;">Cria N vagas "Jogador NN" que entram no sorteio como inscritos normais. Cada vaga pode ser ocupada depois por um jogador real que se inscrever.</p>' +
+        '<label class="form-label" style="font-size:0.82rem;font-weight:600;">➕ Adicionar placeholders</label>' +
+        '<p style="font-size:0.66rem;color:var(--text-muted);margin:4px 0 8px;">Cada "Jogador NN" é um inscrito sem conta; ajuste a categoria na Análise.</p>' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
           '<input type="number" min="1" max="200" value="8" id="addpart-ph-' + controlKey + '" style="' + fieldStyle + 'width:110px;" onkeydown="if(event.key===\'Enter\'){event.preventDefault();window._pageAddPlaceholders(\'' + safeId + '\');}">' +
           '<button type="button" id="addpart-ph-btn-' + controlKey + '" class="btn btn-cyan hover-lift" onclick="window._pageAddPlaceholders(\'' + safeId + '\')">Adicionar</button>' +
@@ -215,11 +200,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var importBox =
       '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;padding:1.1rem;margin-top:1.1rem;">' +
         '<label class="form-label" style="font-size:0.82rem;font-weight:600;">📄 Importar inscritos</label>' +
-        '<p style="font-size:0.66rem;color:var(--text-muted);margin:4px 0 8px;">Aguardando o arquivo de exportação da Track & Field para definir colunas, validação e deduplicação.</p>' +
+        '<p style="font-size:0.66rem;color:var(--text-muted);margin:4px 0 8px;">Disponível após definirmos o formato do arquivo.</p>' +
         '<button type="button" class="btn" disabled title="A importação será ativada quando houver um arquivo de referência." style="opacity:.6;cursor:not-allowed;">Selecionar arquivo (em preparação)</button>' +
       '</div>';
 
-    var countLine = '<div id="addpart-count-' + controlKey + '" style="text-align:center;font-size:0.78rem;color:var(--text-muted);margin-bottom:1rem;">' + (nParts == null ? '—' : nParts) + ' inscrito(s) no momento' + (overCapacity ? ' · ⚠ ' + overCapacity + ' acima das vagas; cabe ao organizador ajustar vagas ou elenco.' : '') + '</div>';
+    var countLine = '<div id="addpart-count-' + controlKey + '" style="text-align:center;font-size:0.78rem;color:var(--text-muted);margin-bottom:1rem;">' + (nParts == null ? '—' : nParts) + ' inscritos' + (overCapacity ? ' · ⚠ ' + overCapacity + ' acima das vagas' : '') + '</div>';
 
     container.innerHTML = _header(tId, '👤 + Participante') +
       '<div style="max-width:560px;margin:0 auto;padding:1rem;">' + countLine + nameBox + phBox + importBox + '</div>';
@@ -235,14 +220,6 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (old) old.remove();
     var safeId = String(tId).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     var controlKey = _participantControlKey(tId);
-    var canonical = t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint;
-    var defs = canonical && Array.isArray(t.categoryDefinitions)
-      ? t.categoryDefinitions.filter(function (d) { return d && d.id && d.label && d.enabled !== false; }) : [];
-    var categories = canonical
-      ? ('<label style="display:block;font-size:.8rem;font-weight:700;margin-top:12px;">Categorias do participante</label>' +
-        '<select id="addpart-category-' + controlKey + '" multiple size="' + Math.min(Math.max(defs.length, 1), 4) + '" style="width:100%;box-sizing:border-box;margin-top:6px;padding:9px;border-radius:9px;border:1px solid var(--border-color);background:var(--bg-darker);color:var(--text-color);">' +
-          defs.map(function (d) { return '<option value="' + _safe(String(d.id)) + '">' + _safe(String(d.label)) + '</option>'; }).join('') +
-        '</select><div style="font-size:.68rem;color:var(--text-muted);margin-top:4px;">Obrigatória apenas para pessoa real.</div>') : '';
     var count = _organizerPeopleCount(t);
     var capacity = parseInt(t.maxParticipants, 10) || 0;
     var overCapacity = count != null && capacity > 0 ? Math.max(0, count - capacity) : 0;
@@ -251,16 +228,16 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-modal', 'true');
     panel.style.cssText = 'position:fixed;inset:0;z-index:10050;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.68);';
     panel.innerHTML =
-      '<div style="width:min(520px,100%);max-height:calc(100% - 32px);overflow:auto;background:var(--bg-card,#182033);color:var(--text-main,#fff);border:1px solid var(--border-color,#475569);border-radius:16px;box-shadow:0 18px 55px rgba(0,0,0,.55);padding:18px;box-sizing:border-box;">' +
+      '<div style="width:min(520px,100%);max-height:calc(100% - 32px);overflow:auto;background:var(--bg-card,#182033);color:var(--text-main,#fff);border:1px solid var(--border-color,#475569);border-radius:16px;box-shadow:0 18px 55px rgba(0,0,0,.55);padding:14px;box-sizing:border-box;">' +
         '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;"><h2 style="margin:0;font-size:1.05rem;">👤 Inscritos e vagas</h2><button type="button" class="cancel-x-btn" aria-label="Fechar" onclick="window._closeParticipantTools()" style="border:0;background:transparent;color:var(--text-main,#fff);font-size:1.6rem;line-height:1;cursor:pointer;">×</button></div>' +
-        '<div id="addpart-count-' + controlKey + '" style="font-size:.77rem;color:var(--text-muted);margin-bottom:15px;">' + (count == null ? '—' : count) + ' inscrito(s) no momento' + (overCapacity ? ' · ⚠ ' + overCapacity + ' acima das vagas; cabe ao organizador ajustar vagas ou elenco.' : '') + '</div>' +
-        '<section style="padding:13px;border:1px solid var(--border-color);border-radius:12px;margin-bottom:12px;"><strong>Adicionar participante</strong>' +
-          '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:9px;"><input id="addpart-name-' + controlKey + '" type="text" placeholder="Ex.: Maria Silva" style="flex:1;min-width:170px;padding:10px;border-radius:9px;border:1px solid var(--border-color);background:var(--bg-darker);color:var(--text-color);" onkeydown="if(event.key===\'Enter\'){event.preventDefault();window._pageAddParticipant(\'' + safeId + '\');}"><button id="addpart-name-btn-' + controlKey + '" type="button" class="btn btn-cyan" onclick="window._pageAddParticipant(\'' + safeId + '\')">Adicionar</button></div>' + categories +
+        '<div id="addpart-count-' + controlKey + '" style="font-size:.77rem;color:var(--text-muted);margin-bottom:9px;">' + (count == null ? '—' : count) + ' inscritos' + (overCapacity ? ' · ⚠ ' + overCapacity + ' acima das vagas' : '') + '</div>' +
+        '<section style="padding:11px;border:1px solid var(--border-color);border-radius:12px;margin-bottom:9px;"><strong>Adicionar participante</strong>' +
+          '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:7px;"><input id="addpart-name-' + controlKey + '" type="text" placeholder="Ex.: Maria Silva" style="flex:1;min-width:170px;padding:10px;border-radius:9px;border:1px solid var(--border-color);background:var(--bg-darker);color:var(--text-color);" onkeydown="if(event.key===\'Enter\'){event.preventDefault();window._pageAddParticipant(\'' + safeId + '\');}"><button id="addpart-name-btn-' + controlKey + '" type="button" class="btn btn-cyan" onclick="window._pageAddParticipant(\'' + safeId + '\')">Adicionar</button></div>' +
         '</section>' +
-        '<section style="padding:13px;border:1px solid var(--border-color);border-radius:12px;"><strong>Adicionar placeholders</strong><p style="font-size:.72rem;color:var(--text-muted);margin:5px 0 10px;">Não exige categoria. Cada "Jogador NN" conta como inscrito e ocupa vaga, mesmo sem conta. O nome pode ser substituído depois.</p>' +
+        '<section style="padding:11px;border:1px solid var(--border-color);border-radius:12px;"><strong>Adicionar placeholders</strong>' +
           '<div style="display:flex;gap:8px;flex-wrap:wrap;"><input id="addpart-ph-' + controlKey + '" type="number" min="1" max="200" value="8" style="width:105px;padding:10px;border-radius:9px;border:1px solid var(--border-color);background:var(--bg-darker);color:var(--text-color);" onkeydown="if(event.key===\'Enter\'){event.preventDefault();window._pageAddPlaceholders(\'' + safeId + '\');}"><button id="addpart-ph-btn-' + controlKey + '" type="button" class="btn btn-cyan" onclick="window._pageAddPlaceholders(\'' + safeId + '\')">Adicionar vagas</button></div>' +
-          '<p style="font-size:.68rem;color:var(--text-muted);margin:12px 0 6px;">📄 Importação: aguardando o arquivo de referência da Track & Field.</p><button type="button" class="btn" disabled title="A importação será ativada quando houver um arquivo de referência." style="opacity:.6;cursor:not-allowed;">Selecionar arquivo (em preparação)</button>' +
         '</section>' +
+        '<button type="button" class="btn" disabled title="A importação será ativada quando houver um arquivo de referência da Track & Field." style="margin-top:9px;opacity:.6;cursor:not-allowed;">📄 Importar arquivo (em preparação)</button>' +
       '</div>';
     panel.addEventListener('click', function (event) { if (event.target === panel) window._closeParticipantTools(); });
     document.body.appendChild(panel);
@@ -279,7 +256,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var n = _organizerPeopleCount(t);
     var limit = parseInt(t.maxParticipants, 10) || 0;
     var over = n != null && limit > 0 ? Math.max(0, n - limit) : 0;
-    if (el) el.textContent = (n == null ? '—' : n) + ' inscrito(s) no momento' + (over ? ' · ⚠ ' + over + ' acima das vagas; cabe ao organizador ajustar vagas ou elenco.' : '');
+    if (el) el.textContent = (n == null ? '—' : n) + ' inscritos' + (over ? ' · ⚠ ' + over + ' acima das vagas' : '');
   }
 
   // v4.4.67: estado "Adicionando…" (cinza, desabilitado) enquanto grava; volta a azul/ativo
@@ -313,15 +290,6 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var name = inp ? inp.value.trim() : '';
     if (!name) { if (typeof showNotification === 'function') showNotification('Nome vazio', 'Digite o nome do participante.', 'warning'); return; }
     var tournament = _guard(tId); if (!tournament) return;
-    var categoryIds = null;
-    if (tournament.canonicalRegistrationMigration && tournament.canonicalRegistrationMigration.fingerprint) {
-      var select = document.getElementById('addpart-category-' + controlKey);
-      categoryIds = select ? Array.prototype.slice.call(select.selectedOptions || []).map(function (option) { return option.value; }).filter(Boolean) : [];
-      if (!categoryIds.length) {
-        if (typeof showNotification === 'function') showNotification('Categoria necessária', 'Selecione ao menos uma categoria para adicionar este participante.', 'warning');
-        return;
-      }
-    }
     var btnId = 'addpart-name-btn-' + controlKey;
     _addBtnLoading(btnId, true);
     var _done = false, _finish = function () { if (_done) return; _done = true; _addBtnLoading(btnId, false); };
@@ -330,7 +298,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       clearTimeout(_to); _finish();
       if (inp) { inp.value = ''; inp.focus(); }
       _refreshCount(tId);
-    }, null, categoryIds);
+    });
   };
 
   window._pageAddPlaceholders = function (tId) {

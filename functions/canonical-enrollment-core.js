@@ -6,6 +6,7 @@
 const eligibility = require('./category-eligibility-core');
 const categoryBridge = require('./registration-category-bridge-core');
 const mutations = require('./registration-mutations-core');
+const registration = require('./registration-core');
 const enrollCore = require('./enroll-core');
 
 function decide(input) {
@@ -18,12 +19,18 @@ function decide(input) {
   const window = enrollCore.enrollmentOpen(tournament, value.nowMs);
   if (!window.open && !organizerManual) return { outcome: window.notOpenYet ? 'notOpenYet' : 'closed' };
   const definitions = eligibility.normalizeCategoryDefinitions(tournament.categoryDefinitions);
-  const categoryIds = categoryBridge.categoryIdsFromTypedIds(definitions, participant.categoryIds);
+  // Inclusão manual da organização pode ficar sem categoria até a Análise.
+  // A sentinela já é o contrato canônico usado pelas reservas migradas.
+  const categoryIds = organizerManual && (!Array.isArray(participant.categoryIds) || !participant.categoryIds.length)
+    ? [registration.UNCATEGORIZED_CATEGORY_ID]
+    : categoryBridge.categoryIdsFromTypedIds(definitions, participant.categoryIds);
   const existingCategoryIds = registrations
     .filter((registration) => registration && registration.participantKey === (participant.uid ? 'uid:' + participant.uid : 'manual:' + participant.manualParticipantId))
     .filter((registration) => registration.status !== 'withdrawn')
     .map((registration) => String(registration.categoryId || ''));
-  const eligibilityDecision = eligibility.decideEnrollment({
+  const eligibilityDecision = categoryIds[0] === registration.UNCATEGORIZED_CATEGORY_ID && organizerManual
+    ? { outcome: 'accepted', validationState: 'approved', reasons: [] }
+    : eligibility.decideEnrollment({
     definitions,
     rigor: tournament.enrollmentRigor || 'casual',
     categoryIds,

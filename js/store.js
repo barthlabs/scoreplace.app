@@ -795,6 +795,13 @@ window._spNameForLetzplay = function (handle, fallback) {
  *   ③ sem contador nem testemunha: `matches`/`grupos` são estruturais e acusam; as de
  *      topo não, senão vira busca em laço a cada eco.
  * Muta `t` (marca `_faltamPesados`/`_faltaOQue`) e devolve true se falta algo. */
+window._elencoCanonicoAtual = function (t) {
+  var receipt = t && t.canonicalRegistrationMigration;
+  if (!receipt || !receipt.fingerprint || !Number.isSafeInteger(Number(receipt.registrationCount))) return false;
+  return t._canonicalRosterReceipt === String(receipt.fingerprint) + ':' + Number(receipt.registrationCount) &&
+    Array.isArray(t.participants);
+};
+
 window._marcaPartesQueFaltam = function (t, documentoDeTorneio) {
   if (!t) return false;
   /* ⛔⛔ "TORNEIO INTEIRO" NÃO EXISTE MAIS. Todo torneio nasce dividido (2.3.113) e os 37 que
@@ -860,6 +867,7 @@ window._marcaPartesQueFaltam = function (t, documentoDeTorneio) {
   };
   var falta = false, oQue = [];
   _foraDaqui.forEach(function (nome) {
+    if (nome === 'participants' && typeof window._elencoCanonicoAtual === 'function' && window._elencoCanonicoAtual(t)) return;
     var tenho = _quantoTenho(nome);
     var n = _conta(nome);
     if (n != null) {
@@ -917,6 +925,16 @@ window._preservaPartesMontadas = function (novo, velho, documentoDeTorneio) {
         if (nome === 'matches' || nome === 'grupos') return;   // aninhados: ② e ③
         if (_vazio(novo[nome]) && _cheio(velho[nome])) novo[nome] = velho[nome];
       });
+      // Um eco magro do documento não apaga a prova de leitura do elenco canônico
+      // enquanto o fingerprint e a contagem do recibo continuarem os mesmos.
+      if (!novo._canonicalRosterReceipt && typeof window._elencoCanonicoAtual === 'function' && window._elencoCanonicoAtual(velho) &&
+          novo.canonicalRegistrationMigration && velho.canonicalRegistrationMigration &&
+          String(novo.canonicalRegistrationMigration.fingerprint || '') === String(velho.canonicalRegistrationMigration.fingerprint || '') &&
+          Number(novo.canonicalRegistrationMigration.registrationCount) === Number(velho.canonicalRegistrationMigration.registrationCount)) {
+        Object.defineProperty(novo, '_canonicalRosterReceipt', {
+          value: velho._canonicalRosterReceipt, writable: true, configurable: true, enumerable: false
+        });
+      }
     }
 
     // ② GRUPOS, aninhados em rounds[] — rodada é APPEND-ONLY, o índice é estável.
@@ -1063,6 +1081,7 @@ window._partesFaltandoComCerteza = function (t) {
   };
   var fora = [];
   _foraDaqui2.forEach(function (nome) {
+    if (nome === 'participants' && typeof window._elencoCanonicoAtual === 'function' && window._elencoCanonicoAtual(t)) return;
     var n = null;
     if (t._nPartes && typeof t._nPartes[nome] === 'number') n = t._nPartes[nome];
     else if (nome === 'matches' && typeof t._nJogos === 'number') n = t._nJogos;
@@ -14181,6 +14200,13 @@ window.AppStore = {
               _soltar(tid); return;
             }
             Object.keys(montado).forEach(function (k) { vivo[k] = montado[k]; });
+            // Prova transitória: nunca vai para o cache, mas acompanha a projeção
+            // recém-conferida com o servidor na mesma referência que a UI usa.
+            if (montado._canonicalRosterReceipt) {
+              Object.defineProperty(vivo, '_canonicalRosterReceipt', {
+                value: montado._canonicalRosterReceipt, writable: true, configurable: true, enumerable: false
+              });
+            } else if (vivo._canonicalRosterReceipt) delete vivo._canonicalRosterReceipt;
             /* ⭐ REI/RAINHA: OS JOGOS SÓ EXISTEM DEPOIS DAQUI — e os grupos apontam pra eles
              * por `matchIds`. `remontar` devolve um CLONE do config, então tudo o que fosse
              * hidratado ANTES da montagem é jogado fora aqui em cima; e `rounds[].matches`

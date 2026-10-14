@@ -30,6 +30,7 @@ const H = require('./render-harness');
 const W = H.sandbox;
 const ROOT = path.join(__dirname, '..');
 const SRC_STORE = fs.readFileSync(path.join(ROOT, 'js', 'store.js'), 'utf8');
+const SRC_DB = fs.readFileSync(path.join(ROOT, 'js', 'firebase-db.js'), 'utf8');
 const SRC_PART = fs.readFileSync(path.join(ROOT, 'js', 'views', 'participants.js'), 'utf8');
 const SRC_DET = fs.readFileSync(path.join(ROOT, 'js', 'views', 'tournaments.js'), 'utf8');
 
@@ -125,6 +126,37 @@ async function ateDesistir(t) {
     ok(W._elencoCarregado(t) === true, '⭐ 64 duplas satisfazem a parte remota de 128 pessoas');
     ok(estado(t).code === 'none', '  → sem meu UID, o estado é "none", não "carregando"');
     ok(!/[Cc]arregando a lista/.test(texto(card(t))), '  → o cartão não inventa carregamento');
+  }
+
+  console.log('\n§2.2 NEON — recibo canônico supera contador do espelho legado');
+  {
+    const duplas = Array.from({ length: 64 }, function (_, i) {
+      return { p1Uid: 'a-' + i, p2Uid: 'b-' + i, p1Name: 'A ' + i, p2Name: 'B ' + i };
+    });
+    const t = noStore(Object.assign(baseSemElenco(), {
+      participants: duplas,
+      canonicalRegistrationMigration: { fingerprint: 'neon-v1', registrationCount: 162 },
+      _canonicalRosterReceipt: 'neon-v1:162',
+      _nPartes: { participants: 192, matches: 0, opponentHistory: 0 },
+      _nJogos: 0
+    }));
+    ok(W._elencoCarregado(t) === true, 'leitura canônica confirmada não espera os 192 do espelho legado');
+    ok(SRC_DB.indexOf("Object.defineProperty(t, '_canonicalRosterReceipt'") >= 0 &&
+      SRC_DB.indexOf("value: String(_migration.fingerprint) + ':' + _expected") >= 0,
+      'leitor só marca o recibo após conferir a resposta canônica com o servidor');
+    ok(estado(t).code === 'none' && !/[Cc]arregando/.test(texto(card(t))),
+      'card não mantém carregamento quando as 128 pessoas já estão na tela');
+    const eco = W._preservaPartesMontadas(Object.assign({}, t, {
+      participants: [], _canonicalRosterReceipt: undefined
+    }), t, true);
+    ok(W._elencoCarregado(eco) === true, 'eco magro da mesma versão conserva a prova da leitura');
+    ok(JSON.stringify(eco).indexOf('_canonicalRosterReceipt') === -1,
+      'prova transitória não entra no cache local nem substitui leitura do servidor no próximo boot');
+    const alterado = W._preservaPartesMontadas(Object.assign({}, t, {
+      participants: [], _canonicalRosterReceipt: undefined,
+      canonicalRegistrationMigration: { fingerprint: 'neon-v1', registrationCount: 163 }
+    }), t, true);
+    ok(W._elencoCarregado(alterado) === false, 'novo recibo invalida a prova antiga e exige releitura');
   }
 
   console.log('\n§3 DEPOIS DO TETO — erro recuperável, e ainda assim nunca "não inscrito"');

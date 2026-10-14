@@ -1,5 +1,6 @@
 'use strict';
 const C = require('./canonical-enrollment-core');
+const R = require('./registration-core');
 let pass = 0, fail = 0;
 function ok(name, value) { if (value) pass++; else { fail++; console.error('✗ ' + name); } }
 const base = { id: 't1', status: 'open', categoryDefinitions: [{ id: 'fem-a', label: 'Fem A', dimension: 'skill', exclusivityGroup: 'skill', criteria: {} }], enrollmentRigor: 'casual' };
@@ -26,6 +27,14 @@ result = C.decide(Object.assign({}, input, {
   registrations: [confirmed], participant: { uid: 'u2', categoryIds: ['fem-a'] }, organizerManual: true
 }));
 ok('organizador pode incluir acima da lotação com inscrições fechadas', result.outcome === 'enrolled' && result.enrollment.creates[0].status === 'confirmed');
+result = C.decide(Object.assign({}, input, {
+  tournament: Object.assign({}, base, { status: 'closed', maxParticipants: 1 }),
+  registrations: [confirmed], participant: { manualParticipantId: 'manual-2', displayName: 'Pessoa 2' }, organizerManual: true
+}));
+ok('organizador inclui sem categoria para atribuir na Análise', result.outcome === 'enrolled' &&
+  result.enrollment.creates[0].categoryId === R.UNCATEGORIZED_CATEGORY_ID);
+try { C.decide(Object.assign({}, input, { participant: { uid: 'u2' } })); ok('inscrição comum ainda exige categoria', false); }
+catch (_) { ok('inscrição comum ainda exige categoria', true); }
 result = C.decide(Object.assign({}, input, {
   tournament: Object.assign({}, base, { status: 'finished' }), participant: { uid: 'u2', categoryIds: ['fem-a'] }, organizerManual: true
 }));

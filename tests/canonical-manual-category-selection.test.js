@@ -15,15 +15,14 @@ const core = enrollment.slice(coreStart, coreEnd < 0 ? enrollment.length : coreE
 const pickerStart = enrollment.indexOf('window._addParticipantWithAutocomplete = function');
 const picker = enrollment.slice(pickerStart);
 
-ok(core.includes('participantObj.categoryIds = Array.from(new Set(_ids))') &&
-  core.includes('Categoria necessária'),
-  'inclusão manual canônica exige e transporta categoryIds');
+ok(core.includes('if (!_ids.length && !_organizerManual)') &&
+  core.includes('if (_ids.length) participantObj.categoryIds = Array.from(new Set(_ids))'),
+  'organizador pode adiar categoria; inscrição comum continua exigindo IDs');
 ok(!/participantObj\.categories\s*=/.test(core) && !/participantObj\.category\s*=/.test(core),
   'inclusão manual não envia rótulo legado como categoria');
-ok(picker.includes('id="ap-category-ids"') && picker.includes('onConfirm(sel.name, sel.uid, sel.photo, categoryIds)'),
-  'atalho geral coleta IDs no seletor múltiplo e os entrega ao core');
-ok(tools.includes('id="addpart-category-') && tools.includes('select.selectedOptions') &&
-  tools.includes('null, categoryIds)'),
-  'página da organização também coleta IDs e os entrega ao core');
+ok(!picker.includes('id="ap-category-ids"') && picker.includes('onConfirm(sel.name, sel.uid, sel.photo)'),
+  'atalho da organização não exige categoria antes da Análise');
+ok(!tools.includes('id="addpart-category-') && !tools.includes('select.selectedOptions'),
+  'painel e página da organização não exibem seletor de categoria');
 
 process.exit(fail ? 1 : 0);
