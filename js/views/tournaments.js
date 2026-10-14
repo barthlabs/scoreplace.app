@@ -2770,7 +2770,11 @@ function renderTournaments(container, tournamentId = null) {
             // de hidratação ele mantém o aviso de carregamento aberto sem chamar o callback,
             // deixando o botão aparentemente morto. O editor pode abrir agora; a hidratação
             // pesada continua sendo responsabilidade da tela de detalhes.
-            if (tAtual && abrirEditorAgora()) return;
+            // Nunca abra o formulário em cima de resumo/cache. Esses objetos têm nome
+            // suficiente para pintar o cartão, mas não carregam fmt2, logo, vagas nem
+            // a configuração real da fase; abrir com eles faz o editor parecer um
+            // torneio recém-criado e permite salvar defaults por cima do torneio.
+            if (tAtual && !incompleto && abrirEditorAgora()) return;
             if ((!tAtual || incompleto) && typeof window._ensureTournamentLoaded === 'function') {
                 if (typeof window.showNotification === 'function') {
                     window.showNotification('Carregando torneio', 'Abrindo a edição com os dados completos…', 'info');

@@ -7807,12 +7807,23 @@ window.renderCreateTournamentPage = function (container, editId) {
       modalInner = modalEl ? modalEl.querySelector('.modal') : null;
       if (!modalInner) return;
     } else if (!window._f2EditRetry) {
-      // Torneios ainda não carregaram do Firestore — tenta de novo em 600ms.
+      // Deep-link/refresh: não monte defaults enquanto o documento canônico não chegou.
+      // Antes apenas repetíamos a rota em 600 ms, o que deixava o formulário com 96
+      // vagas e 1 dupla/4 jogos mesmo quando o torneio salvo tinha outra configuração.
       window._f2EditRetry = true;
-      setTimeout(function () {
-        window._f2EditRetry = false;
-        if (window.location.hash === '#novo-torneio/' + editId && typeof window.initRouter === 'function') window.initRouter();
-      }, 600);
+      var _loadEdit = (typeof window._ensureTournamentLoaded === 'function')
+        ? window._ensureTournamentLoaded : null;
+      if (_loadEdit) {
+        _loadEdit(editId, function (_loadedEdit) {
+          window._f2EditRetry = false;
+          if (_loadedEdit && window.location.hash === '#novo-torneio/' + editId && typeof window.initRouter === 'function') window.initRouter();
+        });
+      } else {
+        setTimeout(function () {
+          window._f2EditRetry = false;
+          if (window.location.hash === '#novo-torneio/' + editId && typeof window.initRouter === 'function') window.initRouter();
+        }, 600);
+      }
     }
   }
 
