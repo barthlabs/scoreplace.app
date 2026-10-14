@@ -1,3 +1,4 @@
+// 2.4.38 — A Análise ordena duplas e integrantes pela ordem canônica de inscrição, sem depender da ordem de materialização do Firestore.
 // 2.4.37 — O editor só abre depois de carregar o documento canônico; a configuração efetiva e o logo não são substituídos por defaults de resumo/cache.
 // 2.4.36 — A Análise trata __uncategorized__ como “sem categoria” e volta a mostrar as 16 duplas reservadas 97–128 para atribuição.
 // 2.4.35 — A Análise reconstrói visualmente as duplas 97–128 sem categoria quando o snapshot ainda não materializou seus IDs canônicos, mantendo-as arrastáveis para atribuição.

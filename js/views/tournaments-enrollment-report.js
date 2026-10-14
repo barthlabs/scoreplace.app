@@ -1195,8 +1195,21 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         (byPair[r._duplaIdx] || (byPair[r._duplaIdx] = [])).push(r);
       }
     });
-    return Object.keys(byPair).map(function (k) { return byPair[k]; })
-      .filter(function (members) { return members.length === 2; });
+    // A dupla não deve aparecer na ordem em que o array foi materializado pela
+    // Firestore. O roster canônico tem a ordem de inscrição em `order`; usar a
+    // ordem do objeto fazia, por exemplo, 103/104 aparecer antes de 97/98.
+    return Object.keys(byPair).map(function (k) {
+      return byPair[k].slice().sort(function (a, b) {
+        var ao = Number(a && a.order), bo = Number(b && b.order);
+        if (isFinite(ao) && isFinite(bo) && ao !== bo) return ao - bo;
+        return String(a && a.name || '').localeCompare(String(b && b.name || ''), 'pt', { sensitivity: 'base', numeric: true });
+      });
+    }).filter(function (members) { return members.length === 2; })
+      .sort(function (a, b) {
+        var ao = Number(a[0] && a[0].order), bo = Number(b[0] && b[0].order);
+        if (isFinite(ao) && isFinite(bo) && ao !== bo) return ao - bo;
+        return String(a[0] && a[0].name || '').localeCompare(String(b[0] && b[0].name || ''), 'pt', { sensitivity: 'base', numeric: true });
+      });
   }
   function _erIsVisibleEnrollmentRow(row) {
     // A generic placeholder reservation is stored alongside the standby queue,
