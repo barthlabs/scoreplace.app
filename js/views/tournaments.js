@@ -2765,17 +2765,11 @@ function renderTournaments(container, tournamentId = null) {
             var tAtual = typeof window._findTournamentById === 'function'
                 ? window._findTournamentById(id) : null;
             var incompleto = tAtual && (tAtual._resumo === true || tAtual._doCache === true || tAtual._faltamPesados === true);
-            // A tela de detalhes já tem um registro utilizável para preencher o editor.
-            // Não bloqueie o clique esperando `_ensureTournamentLoaded`: em alguns estados
-            // de hidratação ele mantém o aviso de carregamento aberto sem chamar o callback,
-            // deixando o botão aparentemente morto. O editor pode abrir agora; a hidratação
-            // pesada continua sendo responsabilidade da tela de detalhes.
-            // Nunca abra o formulário em cima de resumo/cache. Esses objetos têm nome
+            // O editor precisa do documento canônico, nunca de resumo/cache. Esses objetos têm nome
             // suficiente para pintar o cartão, mas não carregam fmt2, logo, vagas nem
             // a configuração real da fase; abrir com eles faz o editor parecer um
             // torneio recém-criado e permite salvar defaults por cima do torneio.
-            if (tAtual && !incompleto && abrirEditorAgora()) return;
-            if ((!tAtual || incompleto) && typeof window._ensureTournamentLoaded === 'function') {
+            if (typeof window._ensureTournamentLoaded === 'function') {
                 if (typeof window.showNotification === 'function') {
                     window.showNotification('Carregando torneio', 'Abrindo a edição com os dados completos…', 'info');
                 }
@@ -2790,6 +2784,7 @@ function renderTournaments(container, tournamentId = null) {
                 });
                 return;
             }
+            if (tAtual && !incompleto && abrirEditorAgora()) return;
             if (abrirEditorAgora()) return;
             if (typeof window.showNotification === 'function') {
                 window.showNotification('Não consegui abrir a edição',

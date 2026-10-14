@@ -5849,7 +5849,10 @@ window._lzNaoEhEuMesmo = function (uid) {
     var naoMedido = e.naoMedidos
       ? '<div style="font-size:0.78rem;color:var(--sp-c-fbbf24,#fbbf24);margin-top:9px;line-height:1.45;">' +
         'ℹ️ <b>' + e.naoMedidos + '</b> ' + (e.naoMedidos === 1 ? 'participante sem conta não entra' : 'participantes sem conta não entram') +
-        ' na análise de contas duplicadas — total do torneio: <b>' + (_liveState && Array.isArray(_liveState.rows) ? _liveState.rows.length : 0) + '</b>.</div>'
+        ' na análise de contas duplicadas — total do torneio: <b>' +
+        (_liveState && _liveState.t && typeof window._countCompetitors === 'function'
+          ? window._countCompetitors(_liveState.t).people
+          : (_liveState && Array.isArray(_liveState.rows) ? _liveState.rows.length : 0)) + '</b>.</div>'
       : '';
 
     if (!e.pares.length) {

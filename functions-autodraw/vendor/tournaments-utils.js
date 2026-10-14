@@ -1010,6 +1010,20 @@ window._cardCompetidores = function (t) {
     };
   }
   var p = _num(t.competitorsCount);
+  // Se o documento traz a projeção canônica, ela é a autoridade mesmo quando o
+  // resumo antigo ainda diz 96. O contador deduplica pessoas e reservas, portanto
+  // não infla duplas materializadas para 256.
+  if (typeof window._countCompetitors === 'function' && Array.isArray(t.participants)) {
+    var _computed = window._countCompetitors(t);
+    if (_computed && _computed.people != null && (p == null || _computed.people > p)) {
+      return {
+        people: _computed.people,
+        teams: _num(t.teamsCount) || _computed.teams,
+        carregando: false,
+        confiavel: true
+      };
+    }
+  }
   // O resumo é publicado no documento-base junto da inscrição. Portanto, mesmo quando
   // a subcoleção `inscritos` ainda está chegando, estes números já são fatos — não são
   // uma lista parcial. Sem esta marca o cartão chamava `_dashNum`, via a hidratação
