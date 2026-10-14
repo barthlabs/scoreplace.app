@@ -1373,8 +1373,6 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       if (n > 0) { inline.style.display = 'flex'; inlineBtn.disabled = false; inlineBtn.textContent = '💾 Salvar (' + n + ')'; }
       else { inline.style.display = 'none'; inlineBtn.disabled = true; inlineBtn.textContent = '💾 Salvar'; }
     }
-    var analysisHeader = document.querySelector('.er-analysis-back-header');
-    if (analysisHeader) analysisHeader.classList.toggle('er-analysis-editing', n > 0 || _erBtnOcupado(inlineBtn));
     // Barra da lista de inscritos legada (er-save-bar), se existir.
     var bar = document.getElementById('er-save-bar'); var btn = document.getElementById('er-save-btn');
     if (bar && btn && !_erBtnOcupado(btn)) {
@@ -5756,7 +5754,6 @@ window._lzNaoEhEuMesmo = function (uid) {
     if (!container) return;
     scanMap = scanMap || {};
     var _isOrgHdr = window._souOrganizador(t);
-    var tName = _esc(t.name || 'Torneio');
     // Cancelar/Salvar DENTRO da barra Voltar (canônico rightHtml) — sempre visível
     // com a barra fixa, nunca atrás dela. Escondido até haver alteração.
     var _saveInline = _isOrgHdr
@@ -5769,10 +5766,13 @@ window._lzNaoEhEuMesmo = function (uid) {
       ? window._renderBackHeader({
         href: '#tournaments/' + t.id,
         label: 'Voltar',
-        middleHtml: '<span class="er-analysis-heading"><span class="er-analysis-heading-label">📊 Análise de Inscritos</span><span class="er-analysis-tournament" title="' + tName + '">' + tName + '</span></span>',
+        middleHtml: '<span style="flex:1;font-size:0.88rem;font-weight:700;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">📊 Análise de Inscritos</span>',
         rightHtml: _saveInline,
         }).replace('class="sticky-back-header"', 'class="sticky-back-header er-analysis-back-header"')
       : '';
+
+    var tName = _esc(t.name || 'Torneio');
+    var subtitle = '<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:14px;">' + tName + '</div>';
 
     // Estado vivo pra busca/sort/filtros da lista de inscritos.
     var _isOrg = window._souOrganizador(t);
@@ -5800,9 +5800,7 @@ window._lzNaoEhEuMesmo = function (uid) {
     // página ela some antes de grudar, que foi o bug medido na chave (1.7.43). Colada no
     // cabeçalho, ela está no topo desde o primeiro pixel de rolagem.
     var _mxBar = (typeof window._inscritosFilterBar === 'function')
-      // Âncora no fluxo para medir a distância da barra fixa. O nome já está
-      // no próprio cabeçalho; outra linha aqui criava espaço vazio antes da busca.
-      ? '<div class="er-analysis-title" aria-hidden="true" style="height:1px;"></div>' + window._inscritosFilterBar({
+      ? '<div class="er-analysis-title" style="max-width:100%;margin:0 auto;padding:10px 1.25rem 0;">' + subtitle + '</div>' + window._inscritosFilterBar({
           stateKey: 'analise', sticky: true, searchOnly: true,
           searchId: 'er-mx-search', onChange: 'window._erApplyMatrixFilter()',
         }).replace('id="fbwrap-analise"', 'id="fbwrap-analise" class="er-analysis-filter"') + '<div id="er-mx-search-empty" style="display:none;text-align:center;color:var(--text-muted);padding:14px;font-size:0.85rem;">Ninguém encontrado com esse nome.</div>'

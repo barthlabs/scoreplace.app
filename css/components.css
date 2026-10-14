@@ -304,49 +304,23 @@ input[type="time"].sp-team-draw-time::-webkit-datetime-edit-minute-field {
 .sticky-back-header + * {
   margin-top: 50px;
 }
-/* A análise usa uma matriz longa com cards que criam camadas próprias. Em
-   larguras desktop intermediárias, o arredondamento de altura entre a topbar,
-   este header fixo e a busca sticky deixava uma fenda onde a matriz aparecia.
-   A superfície extra é deliberadamente opaca e só vale nesta rota. */
+/* A superfície da Análise é opaca, mas não pode pintar ACIMA do Voltar:
+   a antiga sombra de 24px invadia o cabeçalho principal. */
 .sticky-back-header.er-analysis-back-header {
   overflow: hidden;
   width: 100%;
   max-width: 100%;
-  box-shadow: 0 -24px 0 var(--bg-darker);
+  box-shadow: 0 2px 0 var(--bg-darker);
+}
+.sticky-back-header.er-analysis-back-header::before {
+  top: 0;
+  bottom: 0;
 }
 #fbwrap-analise.er-analysis-filter {
   overflow: hidden;
   width: 100%;
   max-width: 100%;
   box-shadow: 0 -8px 0 var(--bg-darker);
-}
-.er-analysis-heading {
-  display: flex;
-  flex: 1;
-  align-items: baseline;
-  gap: 0.65rem;
-  min-width: 0;
-  color: var(--text-bright);
-  white-space: nowrap;
-}
-.er-analysis-heading-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: 0.88rem;
-  font-weight: 700;
-}
-.er-analysis-tournament {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--text-muted);
-  font-size: 0.76rem;
-}
-@media (max-width: 620px) {
-  .er-analysis-tournament { display: none; }
-  /* Com edições pendentes, Voltar e Salvar precisam caber sem esmagar o título. */
-  .er-analysis-back-header.er-analysis-editing .er-analysis-heading { display: none; }
 }
 /* Hamburger button inside back header — hidden on regular pages (topbar handles it).
    Shown ONLY inside fullscreen overlays where the topbar is hidden behind the z-index. */
