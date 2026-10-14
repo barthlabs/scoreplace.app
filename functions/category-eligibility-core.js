@@ -23,6 +23,24 @@ function normalizeCategoryDefinitions(input) {
     if (exclusivityGroup !== null && !ID_RE.test(exclusivityGroup)) fail('grupo de exclusividade inválido');
     const criteria = raw.criteria == null ? {} : raw.criteria;
     if (!criteria || typeof criteria !== 'object' || Array.isArray(criteria)) fail('critério de categoria inválido');
+    if (Object.keys(criteria).some((key) => !['age', 'gender', 'skill'].includes(key))) fail('critério de categoria desconhecido');
+    for (const [key, allowedKey] of [['age', 'minYears'], ['gender', 'allowed'], ['skill', 'allowed']]) {
+      if (!own(criteria, key)) continue;
+      const rule = criteria[key];
+      if (!rule || typeof rule !== 'object' || Array.isArray(rule) ||
+          Object.keys(rule).length !== 1 || !own(rule, allowedKey)) fail('critério de categoria inválido');
+      if (key === 'age' && (!Number.isInteger(rule.minYears) || rule.minYears < 0 || rule.minYears > 120)) {
+        fail('idade mínima inválida');
+      }
+      if (key === 'gender' && (!Array.isArray(rule.allowed) || !rule.allowed.length ||
+          rule.allowed.some((value) => !['feminino', 'masculino', 'misto'].includes(value)))) {
+        fail('gêneros permitidos inválidos');
+      }
+      if (key === 'skill' && (!Array.isArray(rule.allowed) || !rule.allowed.length ||
+          rule.allowed.some((value) => typeof value !== 'string' || !value.trim()))) {
+        fail('habilidades permitidas inválidas');
+      }
+    }
     return { id, label, dimension, exclusivityGroup, criteria, enabled: raw.enabled !== false };
   });
 }

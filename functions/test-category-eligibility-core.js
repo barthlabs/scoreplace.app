@@ -11,6 +11,18 @@ const definitions = [
 ok('preserva IDs, não rótulos como chave', C.normalizeCategoryDefinitions(definitions)[0].id === 'skill-b');
 bad('rejeita ID duplicado', () => C.normalizeCategoryDefinitions([definitions[0], definitions[0]]));
 bad('rejeita campo arbitrário', () => C.normalizeCategoryDefinitions([{ id: 'x', label: 'X', dimension: 'custom', injected: true }]));
+const withCriteria = (criteria) => [{ id: 'x', label: 'X', dimension: 'custom', criteria }];
+bad('rejeita critério desconhecido', () => C.normalizeCategoryDefinitions(withCriteria({ agge: { minYears: 18 } })));
+bad('rejeita chave extra em idade', () => C.normalizeCategoryDefinitions(withCriteria({ age: { minYears: 18, maxYears: 60 } })));
+bad('rejeita idade como texto', () => C.normalizeCategoryDefinitions(withCriteria({ age: { minYears: '18' } })));
+bad('rejeita idade fora do intervalo', () => C.normalizeCategoryDefinitions(withCriteria({ age: { minYears: 121 } })));
+bad('rejeita chave extra em gênero', () => C.normalizeCategoryDefinitions(withCriteria({ gender: { allowed: ['feminino'], inferred: true } })));
+bad('rejeita lista de gênero vazia', () => C.normalizeCategoryDefinitions(withCriteria({ gender: { allowed: [] } })));
+bad('rejeita valor de gênero desconhecido', () => C.normalizeCategoryDefinitions(withCriteria({ gender: { allowed: ['outro'] } })));
+bad('rejeita chave extra em habilidade', () => C.normalizeCategoryDefinitions(withCriteria({ skill: { allowed: ['B'], fallback: 'C' } })));
+bad('rejeita lista de habilidade vazia', () => C.normalizeCategoryDefinitions(withCriteria({ skill: { allowed: [] } })));
+bad('rejeita habilidade não textual', () => C.normalizeCategoryDefinitions(withCriteria({ skill: { allowed: [5] } })));
+ok('preserva critérios válidos', C.normalizeCategoryDefinitions(withCriteria({ age: { minYears: 18 }, gender: { allowed: ['feminino'] }, skill: { allowed: ['B'] } })).length === 1);
 const profile = { birthDate: '1970-01-01', skillBySport: { 'Beach Tennis': 'B' } };
 const at = new Date('2026-09-21T12:00:00Z');
 let r = C.decideEnrollment({ definitions, rigor: 'official', categoryIds: ['skill-b', 'age-50'], profile, sport: 'Beach Tennis', now: at });
