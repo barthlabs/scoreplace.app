@@ -45,7 +45,7 @@ function withoutRuntimeState(value) {
   }, {});
 }
 // Dependências injetadas: este é o handler real, também executado pelos testes.
-function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig, compile, boundary, readTournament, now = Date.now }) {
+function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig, validateCapacity, compile, boundary, readTournament, now = Date.now }) {
   const fail = (code, message) => { throw new HttpsError(code, message); };
   return async function createTournament(request) {
     const uid = request.auth && request.auth.uid;
@@ -68,6 +68,7 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
       config[key] = cloneConfig(raw[key], 0, [key]);
     });
     checkNested(config, fail);
+    if (validateCapacity) validateCapacity(config);
     const hasFmt2 = !!(config.fmt2 && typeof config.fmt2 === 'object' && !Array.isArray(config.fmt2));
     if (typeof config.name !== 'string' || !config.name.trim() || config.name.length > 240 ||
         typeof config.sport !== 'string' || !config.sport.trim() || config.sport.length > 120 ||

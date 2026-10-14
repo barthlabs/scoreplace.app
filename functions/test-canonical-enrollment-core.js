@@ -13,6 +13,14 @@ result = C.decide(Object.assign({}, input, { tournament: Object.assign({}, base,
 ok('capacidade confirmada bloqueia entrada antes do sorteio', result.outcome === 'capacityFull');
 result = C.decide(Object.assign({}, input, { tournament: Object.assign({}, base, { maxParticipants: 1 }), registrations: [confirmed] }));
 ok('repetição idêntica vence teto de vagas e continua idempotente', result.outcome === 'alreadyRegistered');
+result = C.decide(Object.assign({}, input, { tournament: Object.assign({}, base, {
+  maxParticipants: 3, maxParticipantsPerCategory: 1, maxParticipantsByCategory: { 'Fem A': 1 }
+}), registrations: [confirmed], participant: { uid: 'u2', categoryIds: ['fem-a'] } }));
+ok('capacidade da categoria bloqueia mesmo com vagas no total', result.outcome === 'capacityFull' && result.categoryId === 'fem-a');
+result = C.decide(Object.assign({}, input, { tournament: Object.assign({}, base, {
+  maxParticipants: 3, maxParticipantsPerCategory: 1, maxParticipantsByCategory: { 'Fem A': 2 }
+}), registrations: [confirmed], participant: { uid: 'u2', categoryIds: ['fem-a'] } }));
+ok('exceção de capacidade permite entrada até o limite configurado', result.outcome === 'enrolled');
 try { C.decide(Object.assign({}, input, { participant: { uid: 'u1', categories: ['Fem A'] } })); ok('nunca usa rótulo legado na porta canônica', false); } catch (_) { ok('nunca usa rótulo legado na porta canônica', true); }
 try { C.decide(Object.assign({}, input, { participant: { uid: 'u1', p2Uid: 'u2', categoryIds: ['fem-a'] } })); ok('dupla não entra pela porta solo', false); } catch (_) { ok('dupla não entra pela porta solo', true); }
 console.log((fail ? '❌' : '✅') + ' canonical-enrollment-core: ' + pass + ' ok, ' + fail + ' falharam');

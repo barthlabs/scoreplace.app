@@ -45,6 +45,20 @@ function decide(input) {
   if (!enrollment.creates.length) {
     return Object.assign({}, eligibilityDecision, { outcome: enrollment.outcome, enrollment, categoryIds });
   }
+  if (!drawn && tournament.enrollmentLimitMode !== 'draw') {
+    const byName = tournament.maxParticipantsByCategory || {};
+    const general = Number(tournament.maxParticipantsPerCategory);
+    const labels = new Map(definitions.map(definition => [definition.id, definition.label]));
+    for (const categoryId of categoryIds) {
+      const label = labels.get(categoryId);
+      const limit = Object.prototype.hasOwnProperty.call(byName, label) ? Number(byName[label]) : general;
+      if (!Number.isSafeInteger(limit) || limit <= 0) continue;
+      const occupied = registrations.filter(registration => registration && registration.categoryId === categoryId &&
+        ['confirmed', 'pending'].includes(registration.status)).length;
+      const incoming = enrollment.creates.filter(registration => registration.categoryId === categoryId).length;
+      if (occupied + incoming > limit) return { outcome: 'capacityFull', categoryId };
+    }
+  }
   const cap = Number.parseInt(tournament.maxParticipants, 10);
   if (!drawn && tournament.enrollmentLimitMode !== 'draw' && Number.isFinite(cap) && cap > 0) {
     const active = registrations.filter((registration) => registration && ['confirmed', 'pending'].includes(registration.status)).length;

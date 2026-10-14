@@ -13,7 +13,7 @@ await p.evaluate((src)=>{
  window._allowSelfDeactEl=()=>null;window._f2GetConfig=()=>({classifAtiva:false,eliminatoria:{ativa:true}});
  window._spinButton=(btn,label)=>{btn.disabled=true;btn.innerHTML='<span class="btn-spinner"></span>'+label;};
  window._spinButtonDone=(btn)=>{btn.disabled=false;btn.innerHTML='Salvar';};
- window._canCreateTournament=()=>true;window._getCreateFormCategoryData=()=>({});window.closeModal=()=>{};
+ window._canCreateTournament=()=>true;window._getCreateFormCategoryData=()=>({});window._readEstimatedGameHours=()=>null;window.closeModal=()=>{};
  window._notes=[];window.showNotification=(...x)=>window._notes.push(x);window.showAlertDialog=(...x)=>window._notes.push(x);
  window._error=(...x)=>window._notes.push(x.map(y=>String(y)));
  window.AppStore={currentUser:{uid:'owner'},tournaments:[{id:'e',name:'Antigo',format:'Eliminatórias Simples'}],addTournament:async data=>{window._sent=data;return data.id||'CREATED';}};

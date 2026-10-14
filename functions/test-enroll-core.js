@@ -195,6 +195,28 @@ try { C.normalizeExtraUpdates({ status: 'finished' }); ok('extraUpdates recusa p
 
 // ── Auto-close ao atingir o máximo ───────────────────────────────────────────
 (() => {
+  const data = { status: 'open', maxParticipants: 4, maxParticipantsPerCategory: 1,
+    maxParticipantsByCategory: { 'Fem Light': 2 }, combinedCategories: ['Fem Light', 'Masc Light'],
+    participants: [{ uid: 'a-uid', category: 'Fem Light' }, { uid: 'b-uid', category: 'Fem Light' }] };
+  eq('categoria Light cheia bloqueia mesmo com total livre',
+    C.computeEnroll(data, { uid: 'c-uid', category: 'Fem Light' }, null, NOW).outcome, 'capacityFull');
+  eq('outra categoria ainda recebe participante',
+    C.computeEnroll(data, { uid: 'c-uid', category: 'Masc Light' }, null, NOW).outcome, 'enrolled');
+  const pairs = Object.assign({}, data, { maxParticipantsByCategory: { 'Fem Light': 3 },
+    participants: [{ p1Uid: 'a-uid', p2Uid: 'b-uid', category: 'Fem Light' }] });
+  eq('dupla ocupa duas vagas, não uma',
+    C.computeEnroll(pairs, { p1Uid: 'c-uid', p2Uid: 'd-uid', category: 'Fem Light' }, null, NOW).outcome, 'capacityFull');
+  const totalPairs = { status: 'open', maxParticipants: 4,
+    participants: [{ p1Uid: 'a-uid', p2Uid: 'b-uid' }] };
+  const lastPair = C.computeEnroll(totalPairs, { p1Uid: 'c-uid', p2Uid: 'd-uid' }, null, NOW);
+  eq('limite geral conta quatro pessoas em duas duplas', lastPair.outcome, 'enrolled');
+  eq('limite geral fecha ao alcançar quatro pessoas', lastPair.autoClose, true);
+  eq('limite geral rejeita dupla que ultrapassaria vagas',
+    C.computeEnroll({ ...totalPairs, maxParticipants: 3 }, { p1Uid: 'c-uid', p2Uid: 'd-uid' }, null, NOW).outcome, 'capacityFull');
+})();
+
+// ── Auto-close ao atingir o máximo ───────────────────────────────────────────
+(() => {
   const data = { status: 'open', maxParticipants: 2, participants: [{ uid: 'a-uid' }] };
   const r = C.computeEnroll(data, { uid: 'b-uid', displayName: 'B' }, null, NOW);
   eq('atinge máx → enrolled', r.outcome, 'enrolled');

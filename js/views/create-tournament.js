@@ -56,7 +56,81 @@ window._allowSelfDeactEl = function () {
 };
 
 
+// A mesma janela diária que o planejamento do sorteio lê e confirma. Não há uma
+// segunda regra de horários no editor; sem alteração, o campo nem entra no patch.
+function _estimatedGameDays() {
+  var start = (document.getElementById('tourn-start-date') || {}).value || '';
+  var end = (document.getElementById('tourn-end-date') || {}).value || '';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end) || end < start) return [];
+  var days = [], cursor = start;
+  while (cursor <= end && days.length <= 8) {
+    days.push(cursor);
+    var next = new Date(cursor + 'T12:00:00Z');
+    next.setUTCDate(next.getUTCDate() + 1);
+    cursor = next.toISOString().slice(0, 10);
+  }
+  return days;
+}
+
+window._renderEstimatedGameHours = function (datesChanged) {
+  var mount = document.getElementById('estimated-games-window-days');
+  if (!mount) return;
+  var state = window._estimatedGameHoursState || (window._estimatedGameHoursState = { saved:null, valuesByDay:{}, touched:false, locked:false });
+  if (datesChanged && !state.locked) state.touched = true;
+  var days = _estimatedGameDays();
+  if (!days.length) { mount.textContent = 'Informe as datas de início e fim da fase.'; return; }
+  if (days.length > 8) { mount.textContent = 'Esta agenda permite até 8 dias. Ajuste as datas da fase.'; return; }
+  var saved = (state.saved && Array.isArray(state.saved.days)) ? state.saved.days : [];
+  var defaultStart = (document.getElementById('tourn-start-time') || {}).value || '09:00';
+  var defaultEnd = (document.getElementById('tourn-end-time') || {}).value || '22:00';
+  mount.innerHTML = days.map(function (day) {
+    var existing = state.valuesByDay[day] || saved.find(function (item) { return item && item.day === day; }) || {};
+    var start = /^\d{2}:\d{2}$/.test(existing.startTime || '') ? existing.startTime : defaultStart;
+    var end = /^\d{2}:\d{2}$/.test(existing.endTime || '') ? existing.endTime : defaultEnd;
+    var label = new Date(day + 'T12:00:00').toLocaleDateString('pt-BR', { weekday:'short', day:'2-digit', month:'2-digit' });
+    return '<div class="estimated-games-day" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08))">'
+      + '<strong style="min-width:110px">' + label + '</strong>'
+      + '<label>Das <input type="time" class="form-control" style="width:110px;display:inline-block" value="' + start + '" data-day="' + day + '" data-kind="startTime" oninput="window._setEstimatedGameHour(this)"' + (state.locked ? ' disabled' : '') + '></label>'
+      + '<label>às <input type="time" class="form-control" style="width:110px;display:inline-block" value="' + end + '" data-day="' + day + '" data-kind="endTime" oninput="window._setEstimatedGameHour(this)"' + (state.locked ? ' disabled' : '') + '></label>'
+      + '</div>';
+  }).join('');
+  if (state.locked) mount.insertAdjacentHTML('beforeend', '<div style="color:var(--text-muted);font-size:.75rem;margin-top:8px">Agenda já sorteada: estes horários são exibidos sem alterar os jogos publicados.</div>');
+};
+
+window._setEstimatedGameHour = function (input) {
+  var state = window._estimatedGameHoursState;
+  if (!state || state.locked) return;
+  var day = input.dataset.day, kind = input.dataset.kind;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || (kind !== 'startTime' && kind !== 'endTime')) return;
+  var values = state.valuesByDay[day] || (state.valuesByDay[day] = {});
+  values[kind] = input.value;
+  state.touched = true;
+};
+
+window._readEstimatedGameHours = function () {
+  var state = window._estimatedGameHoursState;
+  if (!state || !state.touched || state.locked) return null;
+  var days = _estimatedGameDays();
+  if (!days.length || days.length > 8) return { error:'Informe uma fase válida de até 8 dias.' };
+  var saved = (state.saved && Array.isArray(state.saved.days)) ? state.saved.days : [];
+  var defaultStart = (document.getElementById('tourn-start-time') || {}).value || '09:00';
+  var defaultEnd = (document.getElementById('tourn-end-time') || {}).value || '22:00';
+  var result = days.map(function (day) {
+    var original = saved.find(function (item) { return item && item.day === day; }) || {};
+    var values = state.valuesByDay[day] || {};
+    return Object.assign({}, original, { day:day,
+      startTime:values.startTime !== undefined ? values.startTime : (original.startTime || defaultStart),
+      endTime:values.endTime !== undefined ? values.endTime : (original.endTime || defaultEnd) });
+  });
+  if (result.some(function (item) { return !/^\d{2}:\d{2}$/.test(item.startTime) || !/^\d{2}:\d{2}$/.test(item.endTime) || item.endTime <= item.startTime; })) {
+    return { error:'Em cada dia, o horário final deve ser posterior ao inicial.' };
+  }
+  return { version:1, days:result };
+};
+
 function setupCreateTournamentModal() {
+  window._categoryCapacityLoadGuard = null;
+  window._estimatedGameHoursState = null;
   // Abriu o formulário: esquece a escalação do torneio anterior. Sem isto, abrir "criar" logo
   // depois de editar um torneio só de mulheres esconderia a proporção num torneio sem ninguém.
   window._ctRatioGeneros = null;
@@ -291,15 +365,15 @@ function setupCreateTournamentModal() {
               <!-- Logo do Torneio -->
               <div id="logo-section" style="background: rgba(99,102,241,0.06); border: 1px solid rgba(99,102,241,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
                 <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: var(--sp-c-a5b4fc,#a5b4fc); font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.logoSection')}</p>
-                <div style="display: flex; align-items: flex-start; gap: 1rem; flex-wrap: wrap;">
-                  <div id="logo-preview" style="width: 80px; height: 80px; border-radius: 16px; border: 2px dashed rgba(99,102,241,0.3); display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; background: var(--sp-g-0-0-0-02,rgba(0,0,0,0.2));">
+                <div style="display:flex;flex-direction:column;align-items:center;gap:10px;">
+                  <div id="logo-preview" style="width:min(200px,100%); height:200px; max-width:100%; border-radius:16px; border:2px dashed rgba(99,102,241,0.3); display:flex; align-items:center; justify-content:center; overflow:hidden; background:var(--sp-g-0-0-0-02,rgba(0,0,0,0.2));">
                     <span style="font-size: 0.7rem; color: var(--text-muted); text-align: center; padding: 4px;">${_t('create.noLogo')}</span>
                   </div>
-                  <div style="display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 180px;">
-                    <button type="button" onclick="window._generateTournamentLogo()" style="padding: 8px 16px; border-radius: 10px; border: 1px solid rgba(99,102,241,0.3); background: rgba(99,102,241,0.15); color: var(--sp-c-a5b4fc,#a5b4fc); font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 6px; justify-content: center;" onmouseover="this.style.background='rgba(99,102,241,0.25)'" onmouseout="this.style.background='rgba(99,102,241,0.15)'">
+                  <div style="display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;max-width:100%;">
+                    <button type="button" onclick="window._generateTournamentLogo()" style="padding:7px 10px;border-radius:10px;border:1px solid rgba(99,102,241,0.3);background:rgba(99,102,241,0.15);color:var(--sp-c-a5b4fc,#a5b4fc);font-size:0.8rem;font-weight:600;cursor:pointer;white-space:nowrap;">
                       🎨 ${_t('create.genLogo')}
                     </button>
-                    <div style="display: flex; gap: 6px;">
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;">
                       <button type="button" onclick="window._generateTournamentLogo()" title="Regerar logo" style="padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(99,102,241,0.2); background: rgba(99,102,241,0.08); color: var(--sp-c-a5b4fc,#a5b4fc); font-size: 0.8rem; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(99,102,241,0.18)'" onmouseout="this.style.background='rgba(99,102,241,0.08)'">
                         🔄
                       </button>
@@ -463,17 +537,22 @@ function setupCreateTournamentModal() {
                   <div style="flex:1; min-width:0; display:flex; flex-direction:column; background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03)); border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08)); border-radius:10px; padding:8px 6px;">
                     <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">${_t('create.phaseStart')}</div>
                     <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:auto;">
-                      <input type="date" class="form-control" id="tourn-start-date" aria-label="Data de início da fase" style="padding:5px 3px; font-size:0.68rem; flex:1 1 0; min-width:0; white-space:nowrap; box-sizing:border-box;" required oninput="window._recalcDuration(); window._checkWeather(); window._f2RecalcRoundsFromWindow && window._f2RecalcRoundsFromWindow()">
-                      <input type="time" class="form-control" id="tourn-start-time" aria-label="Hora de início da fase" style="padding:5px 3px; font-size:0.74rem; width:58px; flex-shrink:0; box-sizing:border-box;" oninput="window._recalcDuration(); window._f2RecalcRoundsFromWindow && window._f2RecalcRoundsFromWindow()">
+                      <input type="date" class="form-control" id="tourn-start-date" aria-label="Data de início da fase" style="padding:5px 3px; font-size:0.68rem; flex:1 1 0; min-width:0; white-space:nowrap; box-sizing:border-box;" required oninput="window._recalcDuration(); window._checkWeather(); window._f2RecalcRoundsFromWindow && window._f2RecalcRoundsFromWindow(); window._renderEstimatedGameHours(true)">
+                      <input type="time" class="form-control" id="tourn-start-time" aria-label="Hora de início da fase" style="padding:5px 3px; font-size:0.74rem; width:58px; flex-shrink:0; box-sizing:border-box;" oninput="window._recalcDuration(); window._f2RecalcRoundsFromWindow && window._f2RecalcRoundsFromWindow(); window._renderEstimatedGameHours(true)">
                     </div>
                   </div>
                   <div style="flex:1; min-width:0; display:flex; flex-direction:column; background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03)); border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08)); border-radius:10px; padding:8px 6px;">
                     <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">${_t('create.phaseEnd')}</div>
                     <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:auto;">
-                      <input type="date" class="form-control" id="tourn-end-date" aria-label="Data de término da fase" style="padding:5px 3px; font-size:0.68rem; flex:1 1 0; min-width:0; white-space:nowrap; box-sizing:border-box;" required oninput="window._recalcDuration(); window._f2RecalcRoundsFromWindow && window._f2RecalcRoundsFromWindow()">
-                      <input type="time" class="form-control" id="tourn-end-time" aria-label="Hora de término da fase" style="padding:5px 3px; font-size:0.74rem; width:58px; flex-shrink:0; box-sizing:border-box;" oninput="window._recalcDuration(); window._f2RecalcRoundsFromWindow && window._f2RecalcRoundsFromWindow()">
+                      <input type="date" class="form-control" id="tourn-end-date" aria-label="Data de término da fase" style="padding:5px 3px; font-size:0.68rem; flex:1 1 0; min-width:0; white-space:nowrap; box-sizing:border-box;" required oninput="window._recalcDuration(); window._f2RecalcRoundsFromWindow && window._f2RecalcRoundsFromWindow(); window._renderEstimatedGameHours(true)">
+                      <input type="time" class="form-control" id="tourn-end-time" aria-label="Hora de término da fase" style="padding:5px 3px; font-size:0.74rem; width:58px; flex-shrink:0; box-sizing:border-box;" oninput="window._recalcDuration(); window._f2RecalcRoundsFromWindow && window._f2RecalcRoundsFromWindow(); window._renderEstimatedGameHours(true)">
                     </div>
                   </div>
+                </div>
+                <div id="estimated-games-window-section" style="margin-top:12px;padding:12px;border:1px solid rgba(96,165,250,.3);border-radius:10px">
+                  <div style="font-weight:700">🕒 Horários estimados das atividades (jogos)</div>
+                  <div style="color:var(--text-muted);font-size:.75rem;margin-top:4px">Defina o início e o fim de cada dia. Esses horários aparecerão para confirmação no planejamento do sorteio; não são prazos das rodadas.</div>
+                  <div id="estimated-games-window-days" style="margin-top:8px"></div>
                 </div>
                 <!-- ⏱️ 2.1.98 — DIVISÃO DAS RODADAS (slider de stops).
                      Pedido do dono: "um slider com x stops. em cada stop a data dd/mm e entre
@@ -838,7 +917,13 @@ function setupCreateTournamentModal() {
                      os dois inputs editáveis, pois 16 × 6 não pode salvar como 95. -->
                 <div id="category-capacity-section" style="display:none; margin-top:0.9rem; padding:10px 12px; background:rgba(16,185,129,0.07); border:1px solid rgba(16,185,129,0.28); border-radius:9px;">
                   <label class="form-label" style="margin-bottom:6px;">Máx. participantes por categoria</label>
-                  <input type="number" class="form-control" id="tourn-max-per-category" min="1" inputmode="numeric" placeholder="Ex.: 16" oninput="window._syncCategoryCapacity()">
+                  <input type="number" class="form-control" id="tourn-max-per-category" min="1" inputmode="numeric" placeholder="Ex.: 16" oninput="window._syncCategoryCapacity({userChanged:true})">
+                  <label style="display:flex;align-items:center;gap:9px;margin-top:10px;font-size:0.8rem;color:var(--text-main);cursor:pointer;">
+                    <span class="toggle-switch toggle-sm"><input type="checkbox" id="tourn-custom-category-capacity" onchange="window._toggleCategoryCapacity(this.checked)"><span class="toggle-slider"></span></span>
+                    Personalizar vagas por categoria
+                  </label>
+                  <input type="hidden" id="tourn-max-by-category" value="{}">
+                  <div id="category-capacity-grid" style="display:none;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:10px;"></div>
                   <div id="category-capacity-summary" style="margin-top:7px; font-size:0.78rem; color:var(--sp-c-6ee7b7,#6ee7b7); line-height:1.4;"></div>
                 </div>
               </div>
@@ -2657,8 +2742,8 @@ function setupCreateTournamentModal() {
     if (el) el.value = n;
     var preview = document.getElementById('logo-preview');
     if (preview) {
-      preview.style.width = (n >= 1 ? 80 : Math.round(80 * n)) + 'px';
-      preview.style.height = (n >= 1 ? Math.round(80 / n) : 80) + 'px';
+      preview.style.width = (n >= 1 ? 200 : Math.round(200 * n)) + 'px';
+      preview.style.height = (n >= 1 ? Math.round(200 / n) : 200) + 'px';
     }
   };
 
@@ -3327,13 +3412,24 @@ function setupCreateTournamentModal() {
     options = options || {};
     var section = document.getElementById('category-capacity-section');
     var perCategory = document.getElementById('tourn-max-per-category');
+    var custom = document.getElementById('tourn-custom-category-capacity');
+    var mapInput = document.getElementById('tourn-max-by-category');
+    var grid = document.getElementById('category-capacity-grid');
     var total = document.getElementById('tourn-max-participants');
     var legacyContainer = document.getElementById('cap-max-container');
     var summary = document.getElementById('category-capacity-summary');
-    if (!section || !perCategory || !total) return;
+    if (!section || !perCategory || !total || !custom || !mapInput || !grid) return;
 
     var catData = window._getCreateFormCategoryData ? window._getCreateFormCategoryData() : {};
-    var count = Array.isArray(catData.combinedCategories) ? catData.combinedCategories.length : 0;
+    var categories = Array.isArray(catData.combinedCategories) ? catData.combinedCategories : [];
+    var count = categories.length;
+    var guard = window._categoryCapacityLoadGuard;
+    var sameGuardCategories = guard && categories.length === guard.categories.length &&
+      categories.every(function(category) { return guard.categories.indexOf(category) >= 0; });
+    if (guard && (options.userChanged || !sameGuardCategories)) {
+      window._categoryCapacityLoadGuard = null;
+      guard = null;
+    }
     section.style.display = count > 0 ? '' : 'none';
     if (legacyContainer) legacyContainer.style.display = count > 0 ? 'none' : '';
     total.readOnly = count > 0;
@@ -3345,15 +3441,64 @@ function setupCreateTournamentModal() {
       if (savedTotal > 0 && savedTotal % count === 0) perCategory.value = String(savedTotal / count);
     }
 
-    var per = parseInt(perCategory.value, 10);
-    if (count > 0 && per > 0) {
-      var calculated = per * count;
-      total.value = String(calculated);
-      if (summary) summary.textContent = count + ' categoria' + (count === 1 ? '' : 's') + ' × ' + per + ' participante' + (per === 1 ? '' : 's') + ' = ' + calculated + ' vagas no total.';
-    } else if (count > 0) {
-      if (summary) summary.textContent = 'Defina a capacidade de cada uma das ' + count + ' categorias para calcular o total de vagas.';
+    var per = Number(perCategory.value);
+    var validGeneral = Number.isSafeInteger(per) && per > 0;
+    var saved = {};
+    try { saved = JSON.parse(mapInput.value || '{}') || {}; } catch (e) {}
+    var effective = {};
+    if (custom.checked) {
+      categories.forEach(function(category) {
+        var hasSaved = Object.prototype.hasOwnProperty.call(saved, category);
+        var value = Number(saved[category]);
+        effective[category] = hasSaved ? (Number.isSafeInteger(value) && value > 0 ? value : 0) : (validGeneral ? per : 0);
+      });
+    }
+    mapInput.value = JSON.stringify(effective);
+    grid.style.display = count > 0 && custom.checked ? 'grid' : 'none';
+    if (custom.checked && count > 0) {
+      var escape = function(s) { return String(s).replace(/[&<>"']/g, function(ch) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]; }); };
+      grid.innerHTML = categories.map(function(category) {
+        return '<label style="display:block;padding:8px;border:1px solid rgba(16,185,129,.28);border-radius:8px;font-size:.76rem;color:var(--text-main);">' + escape(category) +
+          '<input type="number" min="1" inputmode="numeric" data-category="' + encodeURIComponent(category) + '" value="' + (effective[category] || '') + '" oninput="window._setCategoryCapacityValue(this)" aria-label="Máximo de participantes em ' + escape(category) + '" style="display:block;width:100%;margin-top:5px;padding:7px;border-radius:6px;border:1px solid rgba(255,255,255,.2);background:var(--bg-darker,rgba(0,0,0,.25));color:var(--text-main);box-sizing:border-box;"></label>';
+      }).join('');
+    } else grid.innerHTML = '';
+    if (guard && !custom.checked && validGeneral && guard.total > 0 && guard.total !== per * count) {
+      total.value = String(guard.total);
+      if (summary) summary.textContent = 'O total gravado (' + guard.total + ') difere de ' + count + ' × ' + per + '. Personalize as categorias ou altere o valor geral antes de salvar novas vagas.';
+    } else if (count > 0 && (custom.checked || validGeneral)) {
+      var calculated = custom.checked ? categories.reduce(function(sum, category) { return sum + (effective[category] || 0); }, 0) : per * count;
+      if (calculated > 0) total.value = String(calculated);
+      if (summary) summary.textContent = custom.checked
+        ? categories.map(function(category) { return category + ': ' + effective[category]; }).join(' · ') + ' = ' + calculated + ' vagas no total.'
+        : count + ' categoria' + (count === 1 ? '' : 's') + ' × ' + per + ' participante' + (per === 1 ? '' : 's') + ' = ' + calculated + ' vagas no total.';
+    } else if (count > 0 && summary) {
+      summary.textContent = 'Defina a capacidade por categoria para calcular o total de vagas.';
     }
     if (typeof window._updateAutoCloseVisibility === 'function') window._updateAutoCloseVisibility();
+    if (typeof window._recalcDuration === 'function') window._recalcDuration();
+  };
+
+  window._toggleCategoryCapacity = function(enabled) {
+    var input = document.getElementById('tourn-max-by-category');
+    if (!enabled && input) input.value = '{}';
+    window._syncCategoryCapacity({userChanged:true});
+  };
+  window._setCategoryCapacityValue = function(input) {
+    var hidden = document.getElementById('tourn-max-by-category');
+    if (!hidden || !input) return;
+    var map = {};
+    try { map = JSON.parse(hidden.value || '{}') || {}; } catch (e) {}
+    var category = decodeURIComponent(input.getAttribute('data-category') || '');
+    var value = Number(input.value);
+    map[category] = Number.isSafeInteger(value) && value > 0 ? value : 0;
+    hidden.value = JSON.stringify(map);
+    // Não recriar o campo durante a digitação; o cursor permanece na mesma posição.
+    var total = document.getElementById('tourn-max-participants');
+    var summary = document.getElementById('category-capacity-summary');
+    var categories = (window._getCreateFormCategoryData() || {}).combinedCategories || [];
+    var calculated = categories.reduce(function(sum, name) { return sum + (Number(map[name]) || 0); }, 0);
+    if (total) total.value = String(calculated);
+    if (summary) summary.textContent = categories.map(function(name) { return name + ': ' + (map[name] || '—'); }).join(' · ') + ' = ' + calculated + ' vagas no total.';
     if (typeof window._recalcDuration === 'function') window._recalcDuration();
   };
 
@@ -4977,6 +5122,11 @@ function setupCreateTournamentModal() {
     document.getElementById('tourn-start-time').value = startT;
     document.getElementById('tourn-end-date').value = endD;
     document.getElementById('tourn-end-time').value = endT;
+    window._estimatedGameHoursState = {
+      saved:t.scheduleWindow || null, valuesByDay:{}, touched:false,
+      locked:typeof window._tournamentHasDraw === 'function' && window._tournamentHasDraw(t)
+    };
+    window._renderEstimatedGameHours();
     /* ⏱️ 2.1.98 — a divisão das rodadas da FASE ATUAL volta pro slider. Lê da fase (é onde
      * o cartão de progresso procura) e cai no campo do topo só na fase 0, pela mesma regra
      * do `_limitesDasRodadas`. `window._editingTournament` fica pro slider poder descobrir
@@ -5408,6 +5558,12 @@ function setupCreateTournamentModal() {
     }
     var _catCapEdit = document.getElementById('tourn-max-per-category');
     if (_catCapEdit && t.maxParticipantsPerCategory) _catCapEdit.value = t.maxParticipantsPerCategory;
+    var _catMapEdit = document.getElementById('tourn-max-by-category');
+    var _catCustomEdit = document.getElementById('tourn-custom-category-capacity');
+    var _savedCatMap = t.maxParticipantsByCategory && typeof t.maxParticipantsByCategory === 'object' ? t.maxParticipantsByCategory : {};
+    if (_catMapEdit) _catMapEdit.value = JSON.stringify(_savedCatMap);
+    if (_catCustomEdit) _catCustomEdit.checked = Object.keys(_savedCatMap).length > 0;
+    window._categoryCapacityLoadGuard = { total: Number(t.maxParticipants) || 0, categories: (t.combinedCategories || []).slice() };
     window._updateCategoryPreview();
     // Legado com total exato ganha a leitura por categoria; se não for exato,
     // preserva-se o total antigo e pede-se uma decisão explícita do organizador.
@@ -5862,6 +6018,11 @@ window._saveTournamentClickHandler = async function() {
         const endDateRaw = document.getElementById('tourn-end-date').value || '';
         const endTimeRaw = document.getElementById('tourn-end-time').value || '';
         const endDateVal = endTimeRaw ? endDateRaw + 'T' + endTimeRaw : endDateRaw;
+        const estimatedGameHours = window._readEstimatedGameHours();
+        if (estimatedGameHours && estimatedGameHours.error) {
+          showAlertDialog('Horários dos jogos', estimatedGameHours.error, null, { type:'warning' });
+          return;
+        }
         const regOpenDateRaw = document.getElementById('tourn-reg-open-date').value || '';
         const regOpenTimeRaw = document.getElementById('tourn-reg-open-time').value || '';
         const regOpenDateVal = regOpenTimeRaw ? regOpenDateRaw + 'T' + regOpenTimeRaw : regOpenDateRaw;
@@ -5872,6 +6033,29 @@ window._saveTournamentClickHandler = async function() {
         const teamSizeVal = parseInt(document.getElementById('tourn-team-size').value) || 1;
         const maxPartsVal = parseInt(document.getElementById('tourn-max-participants').value) || null;
         const maxPerCategoryVal = parseInt((document.getElementById('tourn-max-per-category') || {}).value, 10) || null;
+        const customCategoryCapacity = !!((document.getElementById('tourn-custom-category-capacity') || {}).checked);
+        const capacityCategories = ((window._getCreateFormCategoryData && window._getCreateFormCategoryData()) || {}).combinedCategories || [];
+        let maxByCategoryVal = {};
+        if (customCategoryCapacity) {
+          try { maxByCategoryVal = JSON.parse((document.getElementById('tourn-max-by-category') || {}).value || '{}'); } catch (e) { maxByCategoryVal = {}; }
+        }
+        if (capacityCategories.length) {
+          const validGeneral = Number.isSafeInteger(maxPerCategoryVal) && maxPerCategoryVal > 0;
+          const validMap = !customCategoryCapacity || (maxByCategoryVal && typeof maxByCategoryVal === 'object' && !Array.isArray(maxByCategoryVal) &&
+            Object.keys(maxByCategoryVal).length === capacityCategories.length &&
+            capacityCategories.every(function(c) { return Number.isSafeInteger(maxByCategoryVal[c]) && maxByCategoryVal[c] > 0; }));
+          const expectedCapacity = customCategoryCapacity
+            ? capacityCategories.reduce(function(sum, c) { return sum + (maxByCategoryVal[c] || 0); }, 0)
+            : maxPerCategoryVal * capacityCategories.length;
+          const capacityGuard = window._categoryCapacityLoadGuard;
+          const preservedLegacyTotal = capacityGuard && !customCategoryCapacity && maxPartsVal === capacityGuard.total &&
+            capacityCategories.length === capacityGuard.categories.length &&
+            capacityCategories.every(function(c) { return capacityGuard.categories.indexOf(c) >= 0; });
+          if (!validGeneral || !validMap || (!preservedLegacyTotal && expectedCapacity !== maxPartsVal)) {
+            showAlertDialog('Vagas por categoria', 'Defina números inteiros positivos para todas as categorias. O total deve ser a soma exata das vagas.', null, { type: 'warning' });
+            return;
+          }
+        }
         const autoCloseVal = document.getElementById('tourn-auto-close').checked;
         // Sorteio de Vagas: modelo de inscrição + vagas + chamada da fila
         const enrollLimitModeVal = (document.getElementById('enrollment-limit-mode') || {}).value || 'cap';
@@ -5948,6 +6132,7 @@ window._saveTournamentClickHandler = async function() {
           sport: sportClean,
           startDate: startDateVal,
           endDate: endDateVal,
+          ...(estimatedGameHours ? { scheduleWindow:estimatedGameHours } : {}),
           /* ⏱️ 2.1.98 — a divisão das rodadas que o organizador arrastou (N-1 datas).
            * VAZIO é o padrão e significa "dias iguais": não se grava um arranjo igual, senão
            * ele congelaria e deixaria de acompanhar uma mudança de data depois. A validação
@@ -5988,6 +6173,7 @@ window._saveTournamentClickHandler = async function() {
           // recalcula `maxParticipants` a partir das categorias antes de chegar aqui.
           // Persistir a unidade deixa template/edição reconstituírem 16 × 6 = 96.
           maxParticipantsPerCategory: maxPerCategoryVal,
+          maxParticipantsByCategory: maxByCategoryVal,
           autoCloseOnFull: isDrawMode ? false : autoCloseVal,
           enrollmentLimitMode: enrollLimitModeVal,
           targetSlots: isDrawMode ? targetSlotsVal : null,
@@ -6416,16 +6602,19 @@ window._saveTournamentClickHandler = async function() {
   };
   const btnSave = document.getElementById('btn-save-tournament');
   if (btnSave) btnSave.addEventListener('click', window._saveTournamentClickHandler);
+  window._renderEstimatedGameHours();
 }
 
 // ─── v2.1.33: datas/horários NUNCA são sugeridos — ficam em branco por padrão.
 // Limpa os 6 campos de data/hora. Chamado ao abrir torneio NOVO e ao aplicar
 // template (templates não carregam datas — são específicas de cada evento).
 window._blankTournamentDates = function() {
+  window._estimatedGameHoursState = null;
   ['tourn-reg-open-date', 'tourn-reg-open-time', 'tourn-reg-date', 'tourn-reg-time', 'tourn-start-date', 'tourn-start-time', 'tourn-end-date', 'tourn-end-time'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.value = '';
   });
+  window._renderEstimatedGameHours();
 };
 
 // ─── v2.1.32: Locais preferidos do organizador (1 clique no Criar Torneio) ──
@@ -7677,6 +7866,12 @@ window._prefillFromTemplate = function(tpl) {
   }
   var _tplCatCap = document.getElementById('tourn-max-per-category');
   if (_tplCatCap && tpl.maxParticipantsPerCategory) _tplCatCap.value = tpl.maxParticipantsPerCategory;
+  var _tplCatMap = document.getElementById('tourn-max-by-category');
+  var _tplCatCustom = document.getElementById('tourn-custom-category-capacity');
+  var _tplMap = tpl.maxParticipantsByCategory && typeof tpl.maxParticipantsByCategory === 'object' ? tpl.maxParticipantsByCategory : {};
+  if (_tplCatMap) _tplCatMap.value = JSON.stringify(_tplMap);
+  if (_tplCatCustom) _tplCatCustom.checked = Object.keys(_tplMap).length > 0;
+  window._categoryCapacityLoadGuard = { total: Number(tpl.maxParticipants) || 0, categories: (tpl.combinedCategories || []).slice() };
   if (typeof window._syncCategoryCapacity === 'function') { try { window._syncCategoryCapacity({ deriveFromTotal: true }); } catch (e) {} }
 
   // v4.4.x (Camada 2): CONFIG DE FORMATO — restaura a config do configurador único (format2)
@@ -8131,6 +8326,7 @@ window._saveCurrentFormAsTemplate = function(saveButton) {
       gameTypes: get('tourn-game-types') || 'duplas',
       maxParticipants: parseInt(get('tourn-max-participants')) || '',
       maxParticipantsPerCategory: parseInt(get('tourn-max-per-category')) || '',
+      maxParticipantsByCategory: (function() { try { return getChecked('tourn-custom-category-capacity') ? JSON.parse(get('tourn-max-by-category') || '{}') : {}; } catch (e) { return {}; } })(),
       autoCloseOnFull: getChecked('tourn-auto-close'),
       enrollmentLimitMode: get('enrollment-limit-mode') || 'cap',
       targetSlots: parseInt(get('tourn-target-slots')) || '',

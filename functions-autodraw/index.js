@@ -4187,7 +4187,7 @@ const _CAMPOS_CONFIG_TORNEIO = new Set([
   // A capacidade por categoria é declarativa; o total que a tela calcula continua
   // em maxParticipants para os fluxos legados de inscrição. Os dois precisam passar
   // pela mesma porta de edição, senão a ficha salva recusaria 16 × 6 = 96.
-  'maxParticipants','maxParticipantsPerCategory','autoCloseOnFull','enrollmentLimitMode','targetSlots','callPolicy',
+  'maxParticipants','maxParticipantsPerCategory','maxParticipantsByCategory','autoCloseOnFull','enrollmentLimitMode','targetSlots','callPolicy',
   'resultEntry','woScope','lateEnrollment','newMatchups','venue','venueAccess','venueLat',
   'venueLon','venueAddress','venuePlaceId','venueCity','venueState','venueCountry',
   'venuePhotoUrl','coverUrl','coverMode','coverColor','coverGradientColor','coverGradientEnabled','coverGradientAngle','logoUrl','logoLocked','logoShape','logoRadius','logoAspect','courtCount',
@@ -4257,7 +4257,7 @@ function _clonaConfigDeclarativa(value, depth, path) {
   if (keys.length > 64) throw new HttpsError('invalid-argument', 'Objeto de configuração grande demais.');
   const out = {};
   const parent = at.join('.');
-  const categoryMap = ['pairsPerTeamByCategory', 'gamesPerPairByCategory'].some(map =>
+  const categoryMap = parent === 'maxParticipantsByCategory' || ['pairsPerTeamByCategory', 'gamesPerPairByCategory'].some(map =>
     parent === 'teamCompetition.schedule.' + map ||
     parent === 'fmt2.teamCompetition.schedule.' + map ||
     parent === 'phases.*.teamCompetition.schedule.' + map);
@@ -4298,6 +4298,7 @@ exports.saveTournamentReplay = onCall(require('./tournament-replay').makeSaveTou
 exports.createTournament = onCall(require('./tournament-create').makeCreateTournament({
   db, HttpsError, FieldValue, fields: _CAMPOS_CONFIG_TORNEIO,
   cloneConfig: _clonaConfigDeclarativa,
+  validateCapacity: config => require('./category-capacity-core').validateCapacityConfig(config, HttpsError),
   compile: (cfg, ctx) => drawWindow.FORMAT2.compileToPhases(cfg, ctx),
   boundary: _applyWriteBoundary, readTournament: _leTorneio
 }));
@@ -4379,6 +4380,7 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização atualiza a configuração.', { tId, uid });
+    require('./category-capacity-core').validateCapacityConfig(patch, HttpsError, t);
     const hasDraw = hasDrawnBracket(t);
     const requestedOpeningAt = Date.parse(String(patch.registrationOpenAt || ''));
     // Mesmo que o horário já esteja gravado, uma edição precisa recuperar o estado

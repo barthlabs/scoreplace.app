@@ -327,7 +327,31 @@ function computeEnroll(data, participantObj, extraUpdates, nowMs) {
   }
   var capMax = parseInt(data.maxParticipants, 10);
   var isDrawMode = data.enrollmentLimitMode === 'draw';
-  if (!isDrawMode && !isNaN(capMax) && capMax > 0 && participants.length >= capMax) {
+  var personSlots = function(p) {
+    if (!p || typeof p !== 'object') return 1;
+    if (Array.isArray(p.participants) && p.participants.length) return p.participants.length;
+    return (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name) ? 2 : 1;
+  };
+  // A capacidade mostrada na ficha também limita a inscrição por categoria.
+  // Registros legados sem categoria explícita continuam sujeitos ao total geral.
+  if (!isDrawMode && data.maxParticipantsPerCategory && Array.isArray(data.combinedCategories)) {
+    var categoryNames = function(p) {
+      var values = Array.isArray(p.categories) ? p.categories : [];
+      if (p.category) values = values.concat([p.category]);
+      return values.filter(function(name, i) { return data.combinedCategories.indexOf(name) >= 0 && values.indexOf(name) === i; });
+    };
+    var limits = data.maxParticipantsByCategory || {};
+    var newCategories = categoryNames(participantObj);
+    for (var ci = 0; ci < newCategories.length; ci++) {
+      var cat = newCategories[ci];
+      var limit = Object.prototype.hasOwnProperty.call(limits, cat) ? Number(limits[cat]) : Number(data.maxParticipantsPerCategory);
+      if (!Number.isSafeInteger(limit) || limit <= 0) continue;
+      var occupied = participants.reduce(function(sum, p) { return sum + (categoryNames(p).indexOf(cat) >= 0 ? personSlots(p) : 0); }, 0);
+      if (occupied + personSlots(participantObj) > limit) return { outcome: 'capacityFull', participants: participants, updateData: null };
+    }
+  }
+  var occupiedSlots = participants.reduce(function(sum, p) { return sum + personSlots(p); }, 0);
+  if (!isDrawMode && !isNaN(capMax) && capMax > 0 && occupiedSlots + personSlots(participantObj) > capMax) {
     return { outcome: 'capacityFull', participants: participants, updateData: null };
   }
   participants = participants.concat([cleanUndefined(participantObj)]);
@@ -338,10 +362,11 @@ function computeEnroll(data, participantObj, extraUpdates, nowMs) {
   }
   var maxP = parseInt(data.maxParticipants, 10);
   var autoClose = false, reachedDraw = false;
-  if (!isDrawMode && !isNaN(maxP) && maxP > 0 && participants.length >= maxP) {
+  var enrolledSlots = occupiedSlots + personSlots(participantObj);
+  if (!isDrawMode && !isNaN(maxP) && maxP > 0 && enrolledSlots >= maxP) {
     updateData.status = 'closed'; autoClose = true;
   }
-  if (isDrawMode && !isNaN(maxP) && maxP > 0 && participants.length >= maxP && !data.waitlistNoticeSent) {
+  if (isDrawMode && !isNaN(maxP) && maxP > 0 && enrolledSlots >= maxP && !data.waitlistNoticeSent) {
     updateData.waitlistNoticeSent = true; reachedDraw = true;
   }
   return { outcome: 'enrolled', participants: participants, updateData: updateData, autoClose: autoClose, reachedDraw: reachedDraw };

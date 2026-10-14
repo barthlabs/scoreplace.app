@@ -5871,6 +5871,15 @@ window._reflowChrome = function() {
     el.style.setProperty('margin-top', valor, 'important');
     el.setAttribute('data-sp-chrome-mt', '1');
   }
+  // O título da Análise está no fluxo; o cabeçalho está fixed. Comparar os dois
+  // rects diretamente só funciona no scroll 0: depois de rolar, o título sobe
+  // no viewport e o header não. Normalizar o título para sua posição no documento
+  // impede que um reflow durante a rolagem transforme scrollY em margem vazia.
+  function _gapInicialDaAnalise(title, header) {
+    var doc = document.scrollingElement || document.documentElement;
+    var y = (doc && doc.scrollTop) || window.scrollY || 0;
+    return title.getBoundingClientRect().top + y - header.getBoundingClientRect().bottom;
+  }
   var bhOffset = topbarH + ddH - 1;
   // v3.0.91: expõe a altura do back-header FIXO visível em `--backheader-h`.
   // Qualquer barra sticky que precise grudar ABAIXO do back-header (ex.: a barra
@@ -5919,7 +5928,7 @@ window._reflowChrome = function() {
           // realmente renderizada; uma passagem só falha nas larguras em que
           // o cabeçalho muda de altura.
           for (var ajuste = 0; ajuste < 4; ajuste++) {
-            var gap = next.getBoundingClientRect().top - bh.getBoundingClientRect().bottom;
+            var gap = _gapInicialDaAnalise(next, bh);
             if (Math.abs(gap - 8) <= 1) break;
             var margemAtual = parseFloat(next.style.marginTop) || 0;
             _aplicarMargemDeConteudo(next, (margemAtual + 8 - gap) + 'px');
@@ -5968,7 +5977,7 @@ window._reflowChrome = function() {
   var analysisHeader = document.querySelector('.er-analysis-back-header');
   var analysisTitle = document.querySelector('.er-analysis-title');
   if (analysisHeader && analysisTitle && window.getComputedStyle(analysisHeader).position === 'fixed') {
-    var analysisGap = analysisTitle.getBoundingClientRect().top - analysisHeader.getBoundingClientRect().bottom;
+    var analysisGap = _gapInicialDaAnalise(analysisTitle, analysisHeader);
     if (Math.abs(analysisGap - 8) > 1) {
       _aplicarMargemDeConteudo(analysisTitle,
         ((parseFloat(analysisTitle.style.marginTop) || 0) + 8 - analysisGap) + 'px');

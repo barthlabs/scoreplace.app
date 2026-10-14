@@ -3880,8 +3880,8 @@ function renderTournaments(container, tournamentId = null) {
               // Um `updatedAt` vindo de documento legado, cache parcial ou um Timestamp
               // ainda não serializado não é motivo para exibir "Invalid Date". A linha é
               // puramente informativa: sem instante válido, ela simplesmente não existe.
-              // `_spTsData` é o parser canônico do app; o tratamento de Timestamp mantém a
-              // compatibilidade com snapshots que chegam antes da normalização.
+              // `_spTsData` interpreta strings ISO como data civil e descarta a hora.
+              // Este carimbo é um INSTANTE, então só aceita timestamp completo.
               var _updatedAtMs = 0;
               if (tournamentId && t.updatedAt != null) {
                 try {
@@ -3889,19 +3889,38 @@ function renderTournaments(container, tournamentId = null) {
                     _updatedAtMs = Number(t.updatedAt.toMillis()) || 0;
                   } else if (typeof t.updatedAt === 'object' && t.updatedAt.seconds != null) {
                     _updatedAtMs = Number(t.updatedAt.seconds) * 1000;
-                  } else if (typeof window._spTsData === 'function') {
-                    _updatedAtMs = window._spTsData(t.updatedAt, { fallback: 0 });
+                  } else if (t.updatedAt instanceof Date) {
+                    _updatedAtMs = t.updatedAt.getTime();
+                  } else if (typeof t.updatedAt === 'number') {
+                    _updatedAtMs = t.updatedAt;
                   } else {
-                    _updatedAtMs = Date.parse(String(t.updatedAt)) || 0;
+                    var _updatedRaw = String(t.updatedAt);
+                    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/.test(_updatedRaw)) {
+                      _updatedAtMs = Date.parse(_updatedRaw) || 0;
+                    }
                   }
                 } catch (_updatedAtErr) { _updatedAtMs = 0; }
               }
               var _hasUpdated = Number.isFinite(_updatedAtMs) && _updatedAtMs > 0;
               if (!_hasUpdated && !ligaActiveToggleHtml) return '';
-              var _updatedHtml = _hasUpdated
+              var _updatedLabel = '';
+              if (_hasUpdated) {
+                try {
+                  var _viewerProfile = (window.AppStore && window.AppStore.currentUser) || {};
+                  var _zoneResult = window._venueGeo && window._venueGeo.resolverFuso
+                    ? window._venueGeo.resolverFuso(t, _viewerProfile) : null;
+                  var _zone = _zoneResult && _zoneResult.tz;
+                  var _formatOptions = _zone ? { timeZone: _zone } : {};
+                  var _when = new Date(_updatedAtMs);
+                  _updatedLabel = _when.toLocaleDateString('pt-BR', _formatOptions) + ' às ' +
+                    _when.toLocaleTimeString('pt-BR', Object.assign({}, _formatOptions, { hour:'2-digit', minute:'2-digit' })) +
+                    (_zone ? '' : ' (horário deste dispositivo)');
+                } catch (_zoneErr) { _updatedLabel = ''; }
+              }
+              var _updatedHtml = _updatedLabel
                 ? `<div style="display:inline-flex;align-items:center;gap:8px;font-size:0.75rem;font-weight:400;${_pReadBg ? 'background:' + window._spCor(_pReadBg, 'background')+';color:'+_pReadFg+' !important;border-radius:10px;padding:6px 10px;' : 'opacity:0.5;'}">
                      <span>🔄</span>
-                     <span>Atualizado em ${(() => { var d = new Date(_updatedAtMs); return d.toLocaleDateString('pt-BR') + ' às ' + d.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'}); })()}</span>
+                     <span>Atualizado em ${_updatedLabel}</span>
                    </div>`
                 : '<div></div>';
               // v2.6.21: o toggle agora é pílula sólida verde/vermelha (cor própria)
