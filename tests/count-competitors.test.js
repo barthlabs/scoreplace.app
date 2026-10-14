@@ -84,6 +84,55 @@ ok(c2.teams === 1 && c2.people === 2, 'dedup por uid: dupla repetida conta 1 tim
   ];
   const r4 = W._countCompetitors({ participants: structuralProjection, waitlist: [], standbyParticipants: [] });
   ok(r4.people === 2, 'rótulo numérico com UID estrutural também deduplica (got ' + r4.people + ')');
+
+  // Reservas canônicas vivem fora de participants até serem materializadas,
+  // mas continuam sendo inscritos iguais para o contador do card.
+  const reservas = Array.from({ length: 16 }, (_, i) => ({
+    manualParticipantId: 'res-' + i,
+    displayName: 'Jogador ' + (97 + i),
+    isPlaceholder: true,
+  }));
+const r5 = W._countCompetitors({
+    participants: Array.from({ length: 48 }, (_, i) => ({ uid: 'p-' + i })),
+    placeholderReservations: reservas,
+    waitlist: [],
+    standbyParticipants: [],
+  });
+  ok(r5.people === 64, 'reservas canônicas entram no total (got ' + r5.people + ')');
+
+  // O resumo do Neon lê a subcoleção de inscrições, não a fotografia antiga
+  // de 48 duplas. Fontes divergentes nunca podem voltar a afirmar 96/48.
+  const { canonicalCounts } = require('../functions-autodraw/tournament-summary-core');
+  const registrations = Array.from({ length: 128 }, (_, i) => ({
+    registrationId: 'reg-' + i,
+    participantKey: 'manual-' + i,
+    status: 'confirmed',
+    fixedPairId: 'pair-' + Math.floor(i / 2),
+  }));
+  const canonical = canonicalCounts(registrations, 128);
+  ok(canonical.people === 128 && canonical.teams === 64,
+    'resumo canônico: 128 inscrições / 64 duplas, sem depender da fotografia 96/48');
+  ok(canonicalCounts(registrations.concat([{ registrationId: 'old', participantKey: 'old', status: 'withdrawn' }]), 129).people === 128,
+    'inscrição retirada é histórico, não novo participante');
+  let incompletePairRejected = false;
+  try { canonicalCounts(registrations.slice(1), 127); } catch (_) { incompletePairRejected = true; }
+  ok(incompletePairRejected, 'dupla incompleta não produz contador de resumo aparentemente válido');
+
+  load('../firebase-db.js');
+  const merged = W.FirestoreDB._mergePlaceholderReservationsIntoRoster({
+    participants: [
+      { p1Name: 'Jogador 01', p2Name: 'Jogador 02', p1ManualId: 'legacy-01', p2ManualId: 'legacy-02' },
+      { p1Name: 'Jogador 97', p2Name: 'Jogador 98', p1ManualId: 'manual-97', p2ManualId: 'manual-98' },
+    ],
+    placeholderReservations: [1, 2, 97, 98].map((n) => ({
+      manualParticipantId: 'reservation-' + n,
+      displayName: 'Jogador ' + String(n).padStart(2, '0'),
+      isPlaceholder: true,
+      genericPlaceholderReservation: true,
+    })),
+  });
+  ok(merged.participants.length === 2,
+    'leitor não duplica integrantes das duplas canônicas quando reserva antiga tem outro ID');
 })();
 
 // ── OS DOIS CASOS REAIS DA CONFRA (dono, 27/jul) ──────────────────────────────

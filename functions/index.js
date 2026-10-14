@@ -4524,7 +4524,17 @@ exports.reclassifyCanonicalRegistration = onCall(
       let definitions;
       try { definitions = _categoryEligibility.normalizeCategoryDefinitions(tournament.categoryDefinitions); }
       catch (error) { throw new HttpsError("failed-precondition", error.message); }
-      try { _registrationCategoryBridge.categoryIdsFromTypedIds(definitions, [fromCategoryId, toCategoryId]); }
+      // Uma dupla formada antes da classificação usa a sentinela canônica
+      // `__uncategorized__` como categoria de origem. Ela não é uma definição
+      // visível do torneio, portanto não pode passar pela validação de IDs
+      // normais; o destino, porém, continua obrigatoriamente tipado.
+      try {
+        if (fromCategoryId === _registrationCore.UNCATEGORIZED_CATEGORY_ID) {
+          _registrationCategoryBridge.categoryIdsFromTypedIds(definitions, [toCategoryId]);
+        } else {
+          _registrationCategoryBridge.categoryIdsFromTypedIds(definitions, [fromCategoryId, toCategoryId]);
+        }
+      }
       catch (error) { throw new HttpsError("invalid-argument", error.message); }
       const checked = await _loadCanonicalRosterForMutation(tx, ref, tournament);
       let changes;

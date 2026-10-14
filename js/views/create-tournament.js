@@ -4857,9 +4857,14 @@ function setupCreateTournamentModal() {
     }
   };
 
-  window.openEditTournamentModal = function (tId, skipNav) {
-    const t = window._findTournamentById(tId);
-    if (!t) return;
+  window.openEditTournamentModal = function (tId, skipNav, loadedTournament) {
+    // A rota de edição carrega o documento canônico de forma assíncrona. Quando
+    // o callback voltava a procurar pelo id, _findTournamentById podia devolver
+    // um resumo duplicado (ou o objeto antigo) antes da substituição das listas.
+    // Isso fazia o formulário abrir com defaults apesar da leitura do servidor
+    // ter sido concluída. Use o objeto retornado pela leitura quando fornecido.
+    const t = loadedTournament || window._findTournamentById(tId);
+    if (!t) return false;
 
     // v1.6.2-beta: defensive reinit — modal may not exist if setupCreateTournamentModal
     // was skipped at boot (script load race on iOS). Sentry #7475975789 (count=2).
@@ -4869,7 +4874,7 @@ function setupCreateTournamentModal() {
     var _titleEl = document.getElementById('create-modal-title');
     if (!_titleEl) {
       window._warn('[openEditTournamentModal] create-modal-title not found — modal init failed');
-      return;
+      return false;
     }
     _titleEl.innerText = _t('create.editTournament');
     document.getElementById('edit-tournament-id').value = tId;
@@ -5424,6 +5429,7 @@ function setupCreateTournamentModal() {
       }
     }
     if (typeof window._refreshTemplateBtn === 'function') window._refreshTemplateBtn();
+    return true;
   };
 
   // NOTE: btn-create-tournament não existe no HTML.
@@ -7804,9 +7810,11 @@ window.renderCreateTournamentPage = function (container, editId) {
         container.innerHTML = '<div style="padding:3rem;text-align:center;color:var(--sp-c-f87171,#f87171);">Não foi possível carregar a configuração do torneio.</div>';
         return;
       }
-      if (typeof window.openEditTournamentModal === 'function') {
-        window.openEditTournamentModal(editId, true);
-      }
+      // O modal ainda não existe necessariamente neste primeiro passe da rota.
+      // Guarde exatamente o documento retornado pelo servidor; o passe seguinte,
+      // depois de montar o DOM do formulário, fará a hidratação sem voltar ao
+      // resumo local.
+      window._editRouteLoadedTournament = { id: String(editId), tournament: _loadedEdit };
       window._editRouteFreshId = String(editId);
       if (window.location.hash === '#novo-torneio/' + editId && typeof window.initRouter === 'function') window.initRouter();
     }, true);
@@ -7825,6 +7833,26 @@ window.renderCreateTournamentPage = function (container, editId) {
     modalInner = modalEl ? modalEl.querySelector('.modal') : null;
   }
   if (!modalInner) return;
+
+  // Aplique o documento canônico somente depois que setupCreateTournamentModal
+  // terminou de criar todos os campos. O código anterior tentava abrir antes
+  // deste ponto e, em carga direta, a chamada era perdida; a tela então ficava
+  // com logo/fundo/configuração padrão.
+  var _pendingEdit = window._editRouteLoadedTournament;
+  if (editId && _pendingEdit && _pendingEdit.id === String(editId)
+      && typeof window.openEditTournamentModal === 'function') {
+    var _hydrated = false;
+    try { _hydrated = window.openEditTournamentModal(editId, true, _pendingEdit.tournament) === true; } catch (_hydrateErr) {}
+    if (!_hydrated) {
+      window._editRouteFreshId = '';
+      container.innerHTML = '<div style="padding:3rem;text-align:center;color:var(--sp-c-f87171,#f87171);">Não foi possível montar a configuração carregada.</div>';
+      return;
+    }
+    window._editRouteLoadedTournament = null;
+    modalEl = document.getElementById('modal-create-tournament');
+    modalInner = modalEl ? modalEl.querySelector('.modal') : null;
+    if (!modalInner) return;
+  }
 
   // v4.4.17: deep-link/refresh em #novo-torneio/<tId> → repopula o form ANTES de
   // mover pro container (o wrapper #modal-create-tournament ainda existe, então

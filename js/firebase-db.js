@@ -2011,16 +2011,34 @@ window.FirestoreDB = {
     var reservations = Array.isArray(tournament.placeholderReservations) ? tournament.placeholderReservations : [];
     if (!reservations.length) return tournament;
     var seen = Object.create(null);
+    var seenPlaceholderNumbers = Object.create(null);
+    var markNumber = function (name) {
+      var match = String(name || '').trim().match(/^Jogador\s+0*(\d+)$/i);
+      if (match) seenPlaceholderNumbers[Number(match[1])] = true;
+    };
     tournament.participants.forEach(function (entry) {
-      var id = String(entry && entry.manualParticipantId || '').trim();
-      if (id) seen[id] = true;
+      if (!entry || typeof entry !== 'object') return;
+      [entry.manualParticipantId, entry.p1ManualId, entry.p2ManualId].forEach(function (value) {
+        var id = String(value || '').trim();
+        if (id) seen[id] = true;
+      });
+      (Array.isArray(entry.participants) ? entry.participants : []).forEach(function (member) {
+        var id = String(member && member.manualParticipantId || '').trim();
+        if (id) seen[id] = true;
+        markNumber(member && (member.displayName || member.name));
+      });
+      markNumber(entry.p1Name);
+      markNumber(entry.p2Name);
+      markNumber(entry.displayName || entry.name);
     });
     reservations.forEach(function (entry) {
       if (!entry || entry.isPlaceholder !== true) return;
       var id = String(entry.manualParticipantId || '').trim();
       var name = String(entry.displayName || entry.name || '').trim();
-      if (!id || !name || seen[id]) return;
+      var number = name.match(/^Jogador\s+0*(\d+)$/i);
+      if (!id || !name || seen[id] || (entry.genericPlaceholderReservation === true && number && seenPlaceholderNumbers[Number(number[1])])) return;
       seen[id] = true;
+      markNumber(name);
       tournament.participants.push({
         name: name,
         displayName: name,
@@ -2507,17 +2525,35 @@ window.FirestoreDB = {
         // persistida separadamente e só integra a projeção visual/organizacional
         // até que uma pessoa real seja inscrita na categoria apropriada.
         var _reservationSeen = {};
+        var _reservationNumbers = {};
+        var _markReservationNumber = function (name) {
+          var match = String(name || '').trim().match(/^Jogador\s+0*(\d+)$/i);
+          if (match) _reservationNumbers[Number(match[1])] = true;
+        };
         t.participants.forEach(function (entry) {
-          var existingManualId = String(entry && entry.manualParticipantId || '').trim();
-          if (existingManualId) _reservationSeen[existingManualId] = true;
+          if (!entry || typeof entry !== 'object') return;
+          [entry.manualParticipantId, entry.p1ManualId, entry.p2ManualId].forEach(function (value) {
+            var id = String(value || '').trim();
+            if (id) _reservationSeen[id] = true;
+          });
+          (Array.isArray(entry.participants) ? entry.participants : []).forEach(function (member) {
+            var id = String(member && member.manualParticipantId || '').trim();
+            if (id) _reservationSeen[id] = true;
+            _markReservationNumber(member && (member.displayName || member.name));
+          });
+          _markReservationNumber(entry.p1Name);
+          _markReservationNumber(entry.p2Name);
+          _markReservationNumber(entry.displayName || entry.name);
         });
         var _reservations = Array.isArray(t.placeholderReservations) ? t.placeholderReservations : [];
         _reservations.forEach(function (entry) {
           if (!entry || entry.isPlaceholder !== true) return;
           var manualId = String(entry.manualParticipantId || '').trim();
           var name = String(entry.displayName || entry.name || '').trim();
-          if (!manualId || !name || _reservationSeen[manualId]) return;
+          var number = name.match(/^Jogador\s+0*(\d+)$/i);
+          if (!manualId || !name || _reservationSeen[manualId] || (entry.genericPlaceholderReservation === true && number && _reservationNumbers[Number(number[1])])) return;
           _reservationSeen[manualId] = true;
+          _markReservationNumber(name);
           t.participants.push({ name: name, displayName: name, manualParticipantId: manualId, isPlaceholder: true, genericPlaceholderReservation: entry.genericPlaceholderReservation === true });
         });
         t.categoryDefinitions = _canonical.categoryDefinitions;

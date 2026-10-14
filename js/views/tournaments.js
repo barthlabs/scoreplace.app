@@ -890,7 +890,12 @@ window._countCompetitors = function(t) {
             });
         });
     };
-    var sourceArrays = [t && t.participants, t && t.waitlist, t && t.standbyParticipants];
+    // Reservas genéricas são inscrições do torneio para fins de capacidade e
+    // contagem. Elas ficam fora de `participants` até serem materializadas, mas
+    // precisam aparecer no mesmo total do card/análise (uma vaga não é uma
+    // segunda classe de inscrito). A chave manualParticipantId faz a deduplicação
+    // quando a reserva já também foi materializada no roster.
+    var sourceArrays = [t && t.participants, t && t.waitlist, t && t.standbyParticipants, t && t.placeholderReservations];
     sourceArrays.forEach(scanAliases);
     // VAGA (placeholder) É SEMPRE ÚNICA — nunca deduplica (v1.5.26).
     //
@@ -969,6 +974,7 @@ window._countCompetitors = function(t) {
     tally(activeArr);
     tally(t && t.waitlist);
     tally(t && t.standbyParticipants);
+    tally(t && t.placeholderReservations);
     return { people: people, teams: teams };
 };
 
@@ -2767,6 +2773,7 @@ function renderTournaments(container, tournamentId = null) {
             // Cada clique em Editar é uma nova leitura canônica. Não reutilize
             // o marco da navegação anterior, mesmo que seja o mesmo torneio.
             window._editRouteFreshId = '';
+            window._editRouteLoadedTournament = null;
             // Editar é uma operação de configuração, não uma leitura de vitrine:
             // sempre busca o documento canônico no servidor antes de montar o form.
             // Um objeto local pode ter nome suficiente para o card e ainda estar
@@ -2777,9 +2784,11 @@ function renderTournaments(container, tournamentId = null) {
                 }
                 window._ensureTournamentLoaded(id, function (carregado) {
                     if (carregado) {
-                        if (typeof window.openEditTournamentModal === 'function') {
-                            window.openEditTournamentModal(id, true);
-                        }
+                        // A rota monta o modal de forma lazy. Passe o documento
+                        // recém-lido para ela depois da montagem; não reconsulte
+                        // _findTournamentById, que pode ainda apontar para um
+                        // resumo duplicado.
+                        window._editRouteLoadedTournament = { id: String(id), tournament: carregado };
                         // A rota usa este marco para não refazer a busca na
                         // mesma navegação; uma nova abertura limpa o marco.
                         window._editRouteFreshId = String(id);

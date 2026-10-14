@@ -15,8 +15,13 @@ const root = path.join(__dirname, '..');
 
 // ── lado do SERVIDOR: o resumo publica o contador ────────────────────────────
 const resumo = fs.readFileSync(path.join(root, 'functions-autodraw/tournament-summary-core.js'), 'utf8');
-assert.match(resumo, /participantsCount:\s*participantes\.length/,
-  'o resumo publica o CONTADOR de inscritos (o elenco fica fora de propósito)');
+assert.match(resumo, /participantsCount:\s*\(typeof H\.canonicalParticipants === 'number'\)/,
+  'o resumo prioriza a contagem canônica quando o elenco está fora do documento');
+const { buildSummary } = require('../functions-autodraw/tournament-summary-core');
+assert.equal(buildSummary({ name: 'Neon', participants: Array(48) }, 'neon', { canonicalParticipants: 128 }).participantsCount, 128,
+  'torneio canônico dividido publica 128 mesmo com fotografia local de 48 entradas');
+assert.equal(buildSummary({ name: 'Outro', participants: Array(2) }, 'outro', {}).participantsCount, 2,
+  'torneio não canônico conserva a contagem do próprio elenco');
 
 // ── lado da TELA: recorta o bloco pelo próprio identificador ─────────────────
 const dash = fs.readFileSync(path.join(root, 'js/views/dashboard.js'), 'utf8');

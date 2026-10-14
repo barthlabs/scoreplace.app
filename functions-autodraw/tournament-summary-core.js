@@ -52,6 +52,25 @@ function _tokens(partes) {
 
 function _arr(x) { return Array.isArray(x) ? x : []; }
 
+// O torneio canônico não guarda o elenco completo em `participants`: as
+// inscrições e as duplas vivem em `registrations`. Contar a fotografia dividida
+// devolvia 96/48 mesmo com 128 inscrições e 64 duplas confirmadas no servidor.
+function canonicalCounts(registrations, expectedCount) {
+  if (!Array.isArray(registrations) || registrations.length !== expectedCount) {
+    throw new Error('contagem de inscrições canônicas divergente');
+  }
+  var active = registrations.filter(function (r) { return r && r.status !== 'withdrawn'; });
+  var pairs = Object.create(null);
+  active.forEach(function (r) {
+    if (!r.registrationId || !r.participantKey) throw new Error('inscrição canônica sem identidade');
+    if (r.fixedPairId) pairs[String(r.fixedPairId)] = (pairs[String(r.fixedPairId)] || 0) + 1;
+  });
+  Object.keys(pairs).forEach(function (id) {
+    if (pairs[id] !== 2) throw new Error('dupla canônica incompleta: ' + id);
+  });
+  return { people: active.length, teams: Object.keys(pairs).length };
+}
+
 
 // ⛔ AQUI NÃO SE REIMPLEMENTA REGRA. Os derivados (progresso, competidores, espera)
 // vêm das MESMAS funções que a tela usa, injetadas em `H`. MEDIDO em 25/ago/2026:
@@ -170,7 +189,7 @@ function buildSummary(t, id, H) {
 
     // ── CONTAGENS E PROGRESSO: o cálculo sai do aparelho e vem pra cá ─────
     // contagens CRUAS (não são regra: é tamanho de lista)
-    participantsCount: participantes.length,
+    participantsCount: (typeof H.canonicalParticipants === 'number') ? H.canonicalParticipants : participantes.length,
     standbyCount: _arr(t.standbyParticipants).length,
     // ── DERIVADOS: vêm das funções do APP (H). Sem elas, NULL — nunca chute ──
     competitorsCount: comp ? comp.people : null,   // _countCompetitors(t).people
@@ -197,7 +216,7 @@ var CAMPOS_QUE_IMPORTAM = [
   'venuePlaceId', 'startDate', 'endDate', 'createdAt', 'updatedAt', 'finishedAt',
   'autoClosed', 'tournamentStarted', 'creatorUid', 'coHosts', 'memberUids',
   'enrollmentMode', 'lateEnrollment', 'registrationLimit', 'ligaSeasonMonths',
-  'combinedCategories', 'categories', 'participants',
+  'combinedCategories', 'categories', 'participants', 'placeholderReservations',
   'waitlist', 'standbyParticipants', 'matches', 'rounds', 'groups', 'phases',
   'coverUrl', 'logoUrl'
 ];
@@ -226,4 +245,4 @@ function helpersDe(win) {
   return H;
 }
 
-module.exports = { buildSummary: buildSummary, summaryMudou: summaryMudou, helpersDe: helpersDe, CAMPOS_QUE_IMPORTAM: CAMPOS_QUE_IMPORTAM };
+module.exports = { buildSummary: buildSummary, summaryMudou: summaryMudou, helpersDe: helpersDe, canonicalCounts: canonicalCounts, CAMPOS_QUE_IMPORTAM: CAMPOS_QUE_IMPORTAM };

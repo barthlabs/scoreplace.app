@@ -1153,7 +1153,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         participant: {
           uid: row.uid || '',
           manualParticipantId: row.manualId || '',
-          categoryId: row.categoryId,
+          // A linha pode trazer o rótulo de apresentação como categoryId após
+          // a projeção do roster. Normalize para o ID tipado antes da mutação.
+          categoryId: (typeof window._canonicalCategoryIdForDisplay === 'function'
+            ? (window._canonicalCategoryIdForDisplay(t, row.categoryId) || row.categoryId)
+            : row.categoryId),
           category: (row.assigned && row.assigned[0]) || ''
         },
         targetCategory: edit.category

@@ -54,6 +54,14 @@ const pairedForMove = M.pair('t1', [a, b], [a.registrationId, b.registrationId])
 const movedPair = M.reclassify('t1', pairedForMove.updates, { uid: 'u1' }, 'cat-a', 'cat-b');
 ok('troca de categoria leva a dupla inteira e recalcula o vínculo',
   movedPair.updates.filter((item) => item.status === 'withdrawn').length === 2 && movedPair.creates.length === 2 && movedPair.creates.every((item) => item.categoryId === 'cat-b' && item.fixedPairId === movedPair.fixedPairId));
+const uncategorized = R.UNCATEGORIZED_CATEGORY_ID;
+const manualA = M.enroll('t1', [], { manualParticipantId: 'vaga-97' }, [uncategorized], { manualDisplayName: 'Jogador 97' }).creates[0];
+const manualB = M.enroll('t1', [], { manualParticipantId: 'vaga-98' }, [uncategorized], { manualDisplayName: 'Jogador 98' }).creates[0];
+const manualPair = M.pair('t1', [manualA, manualB], [manualA.registrationId, manualB.registrationId]);
+const movedUncategorizedPair = M.reclassify('t1', manualPair.updates, { manualParticipantId: 'vaga-97' }, uncategorized, 'cat-a');
+ok('dupla 97–98 sem categoria vai junta para categoria tipada, sem usar nome como identidade',
+  movedUncategorizedPair.updates.length === 2 && movedUncategorizedPair.creates.length === 2 &&
+  movedUncategorizedPair.creates.every((item) => item.categoryId === 'cat-a' && item.fixedPairId === movedUncategorizedPair.fixedPairId));
 bad('recusa categoria destino já ativa', () => M.reclassify('t1', [a, aSecondCategory], { uid: 'u1' }, 'cat-a', 'cat-b'));
 console.log((fail ? '✗' : '✓') + ' registration-mutations-core: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);

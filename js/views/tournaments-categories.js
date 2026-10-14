@@ -2813,8 +2813,12 @@ function _reclassifyCanonicalCategory(t, tId, participant, targetCategory, sourc
     if (!identity || identity.legacyName) {
         return Promise.reject(new Error('inscrição canônica sem identidade estável'));
     }
-    var fromCategoryId = String((participant && participant.categoryId) || '').trim() ||
-        _canonicalCategoryIdForDisplay(t, sourceCategory);
+    // A projeção visual pode carregar o rótulo legado em categoryId (ou um ID
+    // antigo) enquanto categoryDefinitions já contém os IDs tipados atuais.
+    // Sempre tente resolver pelo mapa canônico antes de enviar à Function;
+    // enviar esse rótulo como ID produz exatamente "categoryId desconhecido".
+    var fromRaw = String((participant && participant.categoryId) || '').trim() || String(sourceCategory || '').trim();
+    var fromCategoryId = _canonicalCategoryIdForDisplay(t, fromRaw) || fromRaw;
     var toCategoryId = _canonicalCategoryIdForDisplay(t, targetCategory);
     if (!fromCategoryId || !toCategoryId) {
         return Promise.reject(new Error('categoria canônica sem ID tipado'));

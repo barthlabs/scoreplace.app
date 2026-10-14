@@ -6489,6 +6489,15 @@ exports.tournamentSummary = onDocumentWritten(
         console.error('[tournamentSummary] shim sem os helpers do app — resumo NÃO gravado', id);
         return;
       }
+      if (depois.canonicalRegistrationMigration && depois.canonicalRegistrationMigration.fingerprint) {
+        const expected = Number(depois.canonicalRegistrationMigration.registrationCount);
+        if (!Number.isInteger(expected) || expected < 0) throw new Error('recibo canônico inválido');
+        const registrationSnap = await db.collection('tournaments').doc(id)
+          .collection('registrations').limit(expected + 1).get();
+        const canonical = _tourSummary.canonicalCounts(registrationSnap.docs.map((doc) => doc.data()), expected);
+        H.competitors = () => canonical;
+        H.canonicalParticipants = canonical.people;
+      }
 
       /* ⛔ TORNEIO DIVIDIDO: O RESUMO SAIRIA ZERADO (regressão medida em 26/ago).
        * `buildSummary` deriva do DOCUMENTO. Com os jogos fora dele, o Confra passou de
