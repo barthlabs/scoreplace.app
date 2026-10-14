@@ -1215,7 +1215,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   }
   function _erPairCategory(members) {
     var a = members[0], b = members[1], pe = _pendingEdits[a.order] || _pendingEdits[b.order] || {};
-    return Object.prototype.hasOwnProperty.call(pe, 'category') ? pe.category : ((a.assigned && a.assigned[0]) || '');
+    var value = Object.prototype.hasOwnProperty.call(pe, 'category') ? pe.category : ((a.assigned && a.assigned[0]) || '');
+    // Categoria sentinela da reserva canônica não é uma categoria visível:
+    // significa exatamente “a dupla ainda aguarda atribuição”.
+    return value === '__uncategorized__' ? '' : value;
   }
   function _erPairCard(members) {
       var a = members[0], b = members[1], pe = _pendingEdits[a.order] || _pendingEdits[b.order] || {};

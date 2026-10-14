@@ -1,3 +1,4 @@
+// 2.4.36 — A Análise trata __uncategorized__ como “sem categoria” e volta a mostrar as 16 duplas reservadas 97–128 para atribuição.
 // 2.4.35 — A Análise reconstrói visualmente as duplas 97–128 sem categoria quando o snapshot ainda não materializou seus IDs canônicos, mantendo-as arrastáveis para atribuição.
 // 2.4.34 — A Análise mantém reservas de placeholder 97–128 visíveis mesmo quando o snapshot as projeta pela fila, sem descartá-las da matriz de gênero/categoria.
 // 2.4.33 — O editor hidrata o logo pela URL canônica do torneio e a Análise exibe as reservas 97–128 como vagas sem gênero/categoria, sem convertê-las em inscrições; cache-busters alinhados para entregar esses arquivos.
