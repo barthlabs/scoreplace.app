@@ -4233,8 +4233,9 @@ const _CONFIG_ESTRUTURAL = new Set([
   'politicaDaChave'
 ]);
 const _CONFIG_FASE_ATIVA = new Set(['name','startDate','endDate','roundBounds']);
-function _clonaConfigDeclarativa(value, depth) {
+function _clonaConfigDeclarativa(value, depth, path) {
   const d = depth || 0;
+  const at = Array.isArray(path) ? path : [];
   if (d > 6) throw new HttpsError('invalid-argument', 'Configuração profunda demais.');
   if (value === null || typeof value === 'boolean') return value;
   if (typeof value === 'number') {
@@ -4247,7 +4248,7 @@ function _clonaConfigDeclarativa(value, depth) {
   }
   if (Array.isArray(value)) {
     if (value.length > 128) throw new HttpsError('invalid-argument', 'Lista de configuração grande demais.');
-    return value.map(v => _clonaConfigDeclarativa(v, d + 1));
+    return value.map(v => _clonaConfigDeclarativa(v, d + 1, at.concat('*')));
   }
   if (!value || Object.getPrototypeOf(value) !== Object.prototype) {
     throw new HttpsError('invalid-argument', 'Objeto de configuração inválido.');
@@ -4255,9 +4256,21 @@ function _clonaConfigDeclarativa(value, depth) {
   const keys = Object.keys(value);
   if (keys.length > 64) throw new HttpsError('invalid-argument', 'Objeto de configuração grande demais.');
   const out = {};
+  const parent = at.join('.');
+  const categoryMap = ['pairsPerTeamByCategory', 'gamesPerPairByCategory'].some(map =>
+    parent === 'teamCompetition.schedule.' + map ||
+    parent === 'fmt2.teamCompetition.schedule.' + map ||
+    parent === 'phases.*.teamCompetition.schedule.' + map);
   keys.forEach(k => {
-    if (['__proto__', 'constructor', 'prototype'].includes(k) || !/^[A-Za-z0-9_-]{1,80}$/.test(k)) throw new HttpsError('invalid-argument', 'Chave de configuração inválida.');
-    out[k] = _clonaConfigDeclarativa(value[k], d + 1);
+    const unsafe = ['__proto__', 'constructor', 'prototype'].includes(k);
+    const allowed = categoryMap
+      ? !!k.trim() && k.length <= 160 && !/[\x00-\x1f\x7f]/.test(k)
+      : /^[A-Za-z0-9_-]{1,80}$/.test(k);
+    if (unsafe || !allowed) throw new HttpsError('invalid-argument', 'Chave de configuração inválida.');
+    if (categoryMap && (typeof value[k] !== 'number' || !Number.isFinite(value[k]))) {
+      throw new HttpsError('invalid-argument', 'Número de configuração inválido.');
+    }
+    out[k] = _clonaConfigDeclarativa(value[k], d + 1, at.concat(k));
   });
   return out;
 }
@@ -4270,7 +4283,7 @@ function _fasesDeConfiguracaoAtualizaveis(atual, proposta) {
     if (!input || typeof input !== 'object' || Array.isArray(input)) throw new HttpsError('invalid-argument', 'Fase inválida.');
     const out = Object.assign({}, fase);
     Object.keys(input).forEach(k => {
-      if (_CONFIG_FASE_ATIVA.has(k)) out[k] = _clonaConfigDeclarativa(input[k]);
+      if (_CONFIG_FASE_ATIVA.has(k)) out[k] = _clonaConfigDeclarativa(input[k], 0, ['phases', '*', k]);
     });
     return out;
   });
@@ -4357,7 +4370,7 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     if (!_CAMPOS_CONFIG_TORNEIO.has(key)) {
       throw new HttpsError('permission-denied', 'Este campo não pode ser alterado pela ficha do torneio.');
     }
-    patch[key] = _clonaConfigDeclarativa(raw[key]);
+    patch[key] = _clonaConfigDeclarativa(raw[key], 0, [key]);
   });
   const bytes = Buffer.byteLength(JSON.stringify(patch), 'utf8');
   if (bytes > 96 * 1024) throw new HttpsError('invalid-argument', 'Configuração grande demais.');

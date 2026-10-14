@@ -53,7 +53,7 @@ function pairKey(a, b) { return [a, b].sort().join(' x '); }
 // ---------- 2b. TIMES: quadro agregado, derivado de resultados reais ----------
 (function () {
   const t = {
-    teamCompetition: { enabled: true, teamCount: 2, formation: 'draw', internalMatches: 'avoid', scoring: { win: 3, draw: 1, loss: 0 } },
+    teamCompetition: { enabled: true, teamCount: 2, formation: 'draw', internalMatches: 'avoid', ranking: 'games_diff', scoring: { win: 3, draw: 1, loss: 0 } },
     competitionTeams: [{ id: 'azul', name: 'Azul' }, { id: 'verde', name: 'Verde' }],
     matches: [
       { p1: 'Dupla Azul', p2: 'Dupla Verde', p1CompetitionTeamId: 'azul', p2CompetitionTeamId: 'verde', winner: 'p1', scoreP1: 6, scoreP2: 2 },
@@ -70,11 +70,18 @@ function pairKey(a, b) { return [a, b].sort().join(' x '); }
   t.matches[0].category = 'Light';
   t.matches.push({ p1: 'Dupla Azul 2', p2: 'Dupla Verde 2', p1CompetitionTeamId: 'azul', p2CompetitionTeamId: 'verde', winner: 'p2', category: 'Power' });
   const separated = W._renderCompetitionTeamStandings(t) || '';
-  ok(/Classificação geral dos times/.test(separated) && /Classificação · Light/.test(separated) && /Classificação · Power/.test(separated) &&
-    /<details class="card" data-competition-team-category-standings="1"/.test(separated) &&
-    separated.indexOf('Classificação geral dos times') < separated.indexOf('Classificação por categorias') &&
+  ok(!/Classificação geral dos times/.test(separated) && /Classificação dos times · Light/.test(separated) && /Classificação dos times · Power/.test(separated) &&
     !/<th[^>]*>E<\/th>/.test(separated),
-    'geral de times vem aberta antes dos recortes por categoria, que ficam recolhidos');
+    'Por categoria mostra somente os rankings independentes de times');
+  t.teamCompetition.ranking = 'points';
+  t.teamCompetition.classificationUnit = 'pair';
+  const byPairCategory = W._renderCompetitionTeamStandings(t) || '';
+  ok(/Classificação das duplas · Light/.test(byPairCategory) && /Classificação das duplas · Power/.test(byPairCategory) && /<th[^>]*>Pts<\/th>/.test(byPairCategory),
+    'Por categoria por dupla usa pontos configurados e não saldo forçado');
+  t.teamCompetition.aggregation = 'overall';
+  const byPairOverall = W._renderCompetitionTeamStandings(t) || '';
+  ok(/Classificação geral das duplas/.test(byPairOverall) && !/Classificação das duplas ·/.test(byPairOverall),
+    'Geral por dupla produz uma classificação única');
 })();
 
 // ---------- 3. STANDINGS por grupo: quem venceu todos lidera ----------

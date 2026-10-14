@@ -32,6 +32,9 @@ ok(named.teamCount === 2 && named.teamNames[0] === 'Laranja' && named.teamNames[
 const legacyNames = C.normalize({ enabled: true, teamCount: 3 });
 ok(legacyNames.teamNames.join(',') === 'Time 1,Time 2,Time 3',
   'configuração antiga sem lista de nomes continua legível sem migração destrutiva');
+ok(C.normalize({ enabled: true, schedule: { enabled: true } }).classificationUnit === 'team' &&
+  C.normalize({ enabled: true, classificationUnit: 'pair' }).classificationUnit === 'pair',
+  'documento antigo abre Por time e a escolha explícita Por dupla é preservada');
 const neonSchedule = C.normalize({ enabled: true, teamNames: ['Venom', 'Blackout', 'Eclipse', 'Volt', 'Phantom', 'Panic', 'Vortex', 'Blast'], schedule: { enabled: true, teamsPerGroup: 8, gamesPerTeam: 4, mode: 'structured' } });
 ok(neonSchedule.schedule.enabled && neonSchedule.schedule.teamsPerGroup === 8 && neonSchedule.schedule.gamesPerTeam === 4 && neonSchedule.schedule.mode === 'structured',
   'grade por times preserva 8 times, 4 jogos por time e o modo estruturado');
@@ -52,11 +55,11 @@ ok(C.configurationForTournament({ teamCompetition: incompleteTopLevel }).enabled
   'sem plano completo, a competição ativa ainda é retornada para bloquear sorteio sem escolha explícita');
 
 const teamUi = fs.readFileSync('js/views/format2-ui.js', 'utf8');
-ok(teamUi.includes('f2-team-schedule-teams-value') && teamUi.includes('_f2TeamScheduleRefresh(tc)') && teamUi.includes('Agenda por categoria') && teamUi.includes('_f2TeamCategorySchedule') && teamUi.includes('gamesPerPairByCategory'),
-  'a UI configura vagas e jogos de cada categoria sem depender de um valor global');
-ok(teamUi.includes('oninput="\' + pairHandler + \'"') && teamUi.includes('oninput="\' + gameHandler + \'"') &&
+ok(teamUi.includes('f2-team-schedule-teams-value') && teamUi.includes('_f2TeamScheduleRefresh(tc)') && teamUi.includes('Rodadas por dupla') && teamUi.includes('_f2TeamScheduleByCategory') && teamUi.includes('gamesPerPairByCategory') && !teamUi.includes('Duplas por time em '),
+  'a UI mostra rodadas gerais e personalização opcional sem o input Duplas');
+ok(teamUi.includes('oninput="\' + gameHandler + \'"') &&
   teamUi.includes('window._renderPhaseEstimate'),
-  'alterar duplas/jogos por categoria atualiza a prévia imediatamente, sem esperar perder o foco');
+  'alterar rodadas por categoria atualiza a prévia imediatamente, sem esperar perder o foco');
 const createUi = fs.readFileSync('js/views/create-tournament.js', 'utf8');
 const indexHtml = fs.readFileSync('index.html', 'utf8');
 ok(indexHtml.indexOf('js/views/create-tournament.js') < indexHtml.indexOf('js/views/format2-ui.js'),
@@ -109,6 +112,41 @@ const partial = C.standings(teams, [
 ], Object.assign({}, config, { ranking: 'games_diff' }));
 ok(row(partial, 'a').played === 0 && row(partial, 'a').gamesDiff === 0 && row(partial, 'b').gamesDiff === 0,
   'vencedor incompatível não altera pontos nem saldo enquanto o resultado está parcial');
+
+const pairMatches = [
+  { p1: 'A-Light', p2: 'B-Light', p1CompetitionTeamId: 'a', p2CompetitionTeamId: 'b', category: 'Light', winner: 'p1', scoreP1: 6, scoreP2: 5 },
+  { p1: 'A-Light', p2: 'B-Light', p1CompetitionTeamId: 'a', p2CompetitionTeamId: 'b', category: 'Light', winner: 'p1', scoreP1: 6, scoreP2: 5 },
+  { p1: 'A-Power', p2: 'B-Power', p1CompetitionTeamId: 'a', p2CompetitionTeamId: 'b', category: 'Power', winner: 'p2', scoreP1: 0, scoreP2: 6 },
+  { p1: 'A-Power', p2: 'B-Power', p1CompetitionTeamId: 'a', p2CompetitionTeamId: 'b', category: 'Power', winner: 'p2', scoreP1: 0, scoreP2: 6 },
+  { p1: 'A-Power', p2: 'B-Power', p1CompetitionTeamId: 'a', p2CompetitionTeamId: 'b', category: 'Power', winner: 'p2', scoreP1: 0, scoreP2: 6 },
+  { p1: 'A-Light', p2: 'B-Light', category: 'Light', isBye: true, winner: 'p1' },
+  { p1: 'A-Power', p2: 'B-Power', category: 'Power' }
+];
+const fourCfg = { enabled: true, teamNames: ['A','B'], ranking: 'points', scoring: { win: 3, draw: 1, loss: 0 } };
+const pairOverall = C.pairStandings([], pairMatches, fourCfg);
+const pairLight = C.pairStandings([], pairMatches, fourCfg, 'Light');
+const pairPower = C.pairStandings([], pairMatches, fourCfg, 'Power');
+ok(pairOverall.length === 4 && row(pairOverall, 'B-Power').points === 9 && row(pairOverall, 'A-Light').points === 6 && pairOverall[0].id === 'B-Power',
+  'Geral por dupla soma pontos de jogos reais, sem BYE e pendência');
+ok(pairLight.length === 2 && pairLight[0].id === 'A-Light' && pairPower.length === 2 && pairPower[0].id === 'B-Power',
+  'Por categoria por dupla filtra jogos antes de classificar');
+const teamLight = C.standings(teams, pairMatches.filter(m => m.category === 'Light'), fourCfg);
+const teamPower = C.standings(teams, pairMatches.filter(m => m.category === 'Power'), fourCfg);
+ok(row(C.standings(teams, pairMatches, fourCfg), 'b').points === 9 && teamLight[0].id === 'a' && teamPower[0].id === 'b',
+  'Geral por time agrega categorias e Por categoria por time classifica separadamente');
+ok(row(C.pairStandings([], pairMatches, { ...fourCfg, ranking: 'games_diff' }), 'B-Power').gamesDiff === 18,
+  'critério Saldo aplica games do mesmo conjunto de jogos');
+const homonyms = C.pairStandings([
+  { id: 'par-a', name: 'Dupla X', category: 'Light' },
+  { id: 'par-b', name: 'Dupla X', category: 'Light' },
+  { id: 'par-c', name: 'Dupla sem jogo', category: 'Light' }
+], [
+  { p1: 'Dupla X', p2: 'Dupla X', team1Obj: { id: 'par-a' }, team2Obj: { id: 'par-b' },
+    category: 'Light', winner: 'p1', scoreP1: 6, scoreP2: 3 }
+], fourCfg);
+ok(homonyms.length === 3 && row(homonyms, 'par-a').points === 3 &&
+  row(homonyms, 'par-b').losses === 1 && row(homonyms, 'par-c').played === 0,
+  'IDs dos lados distinguem duplas homônimas e elenco sem jogo aparece com zero');
 
 console.log(fail ? '❌ team-competition: ' + fail + ' falharam, ' + pass + ' ok' : '✅ team-competition: ' + pass + ' ok');
 process.exit(fail ? 1 : 0);

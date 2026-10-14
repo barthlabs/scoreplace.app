@@ -62,13 +62,13 @@ assert(/regression_round_heading_never_overlaps_category_tabs/.test(bracket) && 
   'o cabeçalho da rodada não invade a faixa das categorias nem deixa fresta visual');
 assert(/regression_score_submit_never_jumps_bracket/.test(require('fs').readFileSync(path.join(__dirname, '..', 'js/store.js'), 'utf8')),
   'a confirmação do placar preserva a âncora da chave em vez de reiniciar a página');
-assert(/Object\.assign\({}, configuredCfg, \{ ranking: 'games_diff' \}\)/.test(bracket),
-  'a classificação dos times usa saldo acumulado de games, não pontos por vitória');
+assert(/var cfg = core\.normalize\(configuredCfg\)/.test(bracket),
+  'a classificação respeita o critério gravado, sem forçar saldo de games');
 assert(/regression_team_competition_hides_pair_standings/.test(bracket) && /pairStandingsHtml = _isTeamCompetitionGS \? ''/.test(bracket),
   'agenda entre times não mostra classificação técnica por participantes/duplas');
-assert(/regression_team_standings_general_first/.test(bracket) && /Classificação geral dos times/.test(bracket),
-  'a classificação geral de todos os times antecede qualquer detalhamento por categoria');
-assert(/data-competition-team-category-standings="1"/.test(bracket) && /Classificação por categorias/.test(bracket),
-  'as classificações por categoria permanecem disponíveis, mas recolhidas');
+assert(/cfg\.aggregation !== 'per_category'/.test(bracket) && /Classificação geral /.test(bracket),
+  'a classificação geral aparece quando esse é o escopo configurado');
+assert(/_competitionTeamCategoryView: category/.test(bracket) && /data-competition-team-category="1"/.test(bracket),
+  'o escopo por categoria gera tabelas independentes');
 
 console.log('✅ Neon: quatro rodadas planejadas, sem Grupo A visível');

@@ -100,6 +100,7 @@ var ScoreplaceTeamCompetition;
             // Geral soma categorias (por exemplo, feminino + masculino) no mesmo time.
             // Por categoria mantém tabelas independentes sem alterar os confrontos.
             aggregation: raw.aggregation === 'per_category' ? 'per_category' : 'overall',
+            classificationUnit: raw.classificationUnit === 'pair' ? 'pair' : 'team',
             // Estruturado fixa a ordem pelo ID do time, não pelo rótulo. Renomear VENOM
             // nunca pode redesenhar os confrontos. Livre embaralha cada categoria.
             // Ausência de `schedule` é legado e preserva o todos-contra-todos completo.
@@ -225,6 +226,103 @@ var ScoreplaceTeamCompetition;
             : (b.points - a.points) || (b.wins - a.wins) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
     }
     ScoreplaceTeamCompetition.standings = standings;
+    /** Classificação das duplas da competição por times, sem alterar a classificação global das outras modalidades. */
+    function pairStandings(pairs, matches, config, categoryFilter) {
+        const cfg = normalize(config);
+        if (!cfg.enabled)
+            return [];
+        const rows = Object.create(null);
+        const names = Object.create(null);
+        (Array.isArray(pairs) ? pairs : []).forEach((raw) => {
+            const pair = record(raw), name = text(pair.name), stableId = text(pair.id);
+            const category = text(pair.category);
+            if (!name || (categoryFilter && category && category !== categoryFilter))
+                return;
+            const id = stableId || name;
+            if (rows[id])
+                return;
+            rows[id] = { id, name, teamId: text(pair.competitionTeamId), category, points: 0,
+                wins: 0, draws: 0, losses: 0, played: 0, gamesWon: 0, gamesLost: 0, gamesDiff: 0 };
+            (names[name] || (names[name] = [])).push(id);
+        });
+        const sideId = (match, side) => {
+            const name = text(match[side]);
+            const sideObject = record(match[side === 'p1' ? 'team1Obj' : 'team2Obj']);
+            const explicit = text(match[side + 'PairId']) || text(match[side + 'EntryId']) ||
+                text(sideObject.id) || text(sideObject.entryId);
+            if (explicit) {
+                if (!rows[explicit])
+                    rows[explicit] = { id: explicit, name: name || explicit,
+                        teamId: matchTeamId(match, side), category: text(match.category), points: 0,
+                        wins: 0, draws: 0, losses: 0, played: 0, gamesWon: 0, gamesLost: 0, gamesDiff: 0 };
+                if (name) {
+                    const linked = names[name] || (names[name] = []);
+                    if (!linked.includes(explicit))
+                        linked.push(explicit);
+                }
+                return explicit;
+            }
+            const candidates = names[name] || [];
+            if (candidates.length === 1)
+                return candidates[0];
+            if (candidates.length > 1)
+                return ''; // homônimos sem referência inequívoca
+            if (!name)
+                return '';
+            // Uma dupla pode constar do jogo antes de aparecer no elenco local.
+            if (!rows[name])
+                rows[name] = { id: name, name, teamId: matchTeamId(match, side),
+                    category: text(match.category), points: 0, wins: 0, draws: 0, losses: 0, played: 0,
+                    gamesWon: 0, gamesLost: 0, gamesDiff: 0 };
+            names[name] = [name];
+            return name;
+        };
+        (Array.isArray(matches) ? matches : []).forEach((raw) => {
+            const match = record(raw);
+            if (categoryFilter && text(match.category) !== categoryFilter)
+                return;
+            if (match.isBye === true || match.isSitOut === true)
+                return;
+            // Mesmo sem resultado, as duplas de um confronto real aparecem com zero.
+            const a = sideId(match, 'p1'), b = sideId(match, 'p2');
+            if (!a || !b || a === b)
+                return;
+            const winner = text(match.winner);
+            if (!winner)
+                return;
+            const draw = winner === 'draw' || match.draw === true;
+            const p1Won = winner === text(match.p1) || winner === 'p1';
+            const p2Won = winner === text(match.p2) || winner === 'p2';
+            if (!draw && !p1Won && !p2Won)
+                return;
+            const games = gamesOf(match);
+            rows[a].gamesWon += games.p1;
+            rows[a].gamesLost += games.p2;
+            rows[b].gamesWon += games.p2;
+            rows[b].gamesLost += games.p1;
+            rows[a].gamesDiff = rows[a].gamesWon - rows[a].gamesLost;
+            rows[b].gamesDiff = rows[b].gamesWon - rows[b].gamesLost;
+            rows[a].played++;
+            rows[b].played++;
+            if (draw) {
+                rows[a].draws++;
+                rows[b].draws++;
+                rows[a].points += cfg.scoring.draw;
+                rows[b].points += cfg.scoring.draw;
+            }
+            else {
+                const win = p1Won ? rows[a] : rows[b], loss = p1Won ? rows[b] : rows[a];
+                win.wins++;
+                win.points += cfg.scoring.win;
+                loss.losses++;
+                loss.points += cfg.scoring.loss;
+            }
+        });
+        return Object.keys(rows).map((id) => rows[id]).sort((a, b) => cfg.ranking === 'games_diff'
+            ? (b.gamesDiff - a.gamesDiff) || (b.gamesWon - a.gamesWon) || (b.wins - a.wins) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id)
+            : (b.points - a.points) || (b.wins - a.wins) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+    }
+    ScoreplaceTeamCompetition.pairStandings = pairStandings;
 })(ScoreplaceTeamCompetition || (ScoreplaceTeamCompetition = {}));
 if (typeof module !== 'undefined' && module)
     module.exports = ScoreplaceTeamCompetition;

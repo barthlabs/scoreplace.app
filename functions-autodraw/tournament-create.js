@@ -65,7 +65,7 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
     const config = {};
     Object.keys(raw).forEach(key => {
       if (!fields.has(key) || key === 'phases' || key === 'ligaRRSchedule') fail('invalid-argument', 'Campo de criação não permitido: ' + key);
-      config[key] = cloneConfig(raw[key]);
+      config[key] = cloneConfig(raw[key], 0, [key]);
     });
     checkNested(config, fail);
     const hasFmt2 = !!(config.fmt2 && typeof config.fmt2 === 'object' && !Array.isArray(config.fmt2));

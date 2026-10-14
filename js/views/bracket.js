@@ -2393,45 +2393,46 @@ function _renderCompetitionTeamStandings(t) {
   if (!core || typeof core.standings !== 'function' || !t) return '';
   var configuredCfg = (t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition);
   if (!configuredCfg || configuredCfg.enabled !== true) return '';
-  // A competição entre times é definida pelo saldo acumulado de games. Não
-  // reutilizar a pontuação de vitória das duplas, que é outro critério.
-  var cfg = Object.assign({}, configuredCfg, { ranking: 'games_diff' });
+  var cfg = core.normalize(configuredCfg);
   var matches = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (t.matches || []);
-  // A classificação aberta é sempre a geral dos times, somando todas as categorias.
-  // As tabelas por categoria são apenas um detalhamento recolhido abaixo dela: jamais
-  // podem substituir a leitura geral nem antecedê-la. [[regression_team_standings_general_first]]
-  // A chamada recursiva recebe um retrato mínimo para `_collectAllMatches` não puxar,
-  // por acidente, jogos de outra categoria.
+  // A entrada de uma dupla pode estar no elenco antes do primeiro jogo. Inscritos
+  // individuais não viram linhas de dupla apenas por terem nome/categoria.
+  var competitionPairs = Array.isArray(t.competitionPairs) && t.competitionPairs.length ? t.competitionPairs :
+    (Array.isArray(t.participants) ? t.participants.filter(function (entry) {
+      return entry && entry.displayName &&
+        ((Array.isArray(entry.participants) && entry.participants.length === 2) || (entry.p1Uid && entry.p2Uid));
+    }).map(function (entry) {
+      return { id: entry.id || entry.entryId || '', name: entry.displayName,
+        category: entry.category, competitionTeamId: entry.competitionTeamId };
+    }) : []);
+  // Escopo e unidade são escolhas independentes do organizador. A chamada recursiva
+  // recebe um retrato mínimo para não puxar jogos de outra categoria.
   if (!t._competitionTeamCategoryView && !t._competitionTeamOverallView) {
     var categories = {};
     matches.forEach(function (match) {
-      if (!match || !match.p1CompetitionTeamId || !match.p2CompetitionTeamId) return;
+      if (!match || !match.category) return;
       categories[String(match.category || 'Sem categoria')] = true;
     });
-    var overallCfg = Object.assign({}, cfg, { aggregation: 'overall' });
-    var overallHtml = _renderCompetitionTeamStandings({
-      teamCompetition: overallCfg,
-      competitionTeams: t.competitionTeams || [],
-      matches: matches,
-      sport: t.sport,
+    if (cfg.aggregation !== 'per_category') return _renderCompetitionTeamStandings({
+      teamCompetition: cfg, competitionTeams: t.competitionTeams || [],
+      competitionPairs: competitionPairs, matches: matches, sport: t.sport,
       _competitionTeamOverallView: true
     });
-    var categoryHtml = Object.keys(categories).sort().map(function (category) {
-      var sectionCfg = Object.assign({}, cfg, { aggregation: 'overall' });
+    return Object.keys(categories).sort().map(function (category) {
       return _renderCompetitionTeamStandings({
-        teamCompetition: sectionCfg,
+        teamCompetition: cfg,
         competitionTeams: t.competitionTeams || [],
+        competitionPairs: competitionPairs,
         matches: matches.filter(function (match) { return String((match && match.category) || 'Sem categoria') === category; }),
         sport: t.sport,
         _competitionTeamCategoryView: category
       });
     }).join('');
-    if (!categoryHtml) return overallHtml;
-    return overallHtml + '<details class="card" data-competition-team-category-standings="1" style="margin:0 0 1rem;border-color:rgba(148,163,184,.32);">' +
-      '<summary style="cursor:pointer;padding:13px 14px;font-weight:800;color:var(--text-bright);">Classificação por categorias <span style="color:var(--text-muted);font-size:.78rem;">▸</span></summary>' +
-      '<div style="padding:0 12px 12px;">' + categoryHtml + '</div></details>';
   }
-  var rows = core.standings(t.competitionTeams || [], matches, cfg);
+  var byPair = cfg.classificationUnit === 'pair';
+  var rows = byPair && typeof core.pairStandings === 'function'
+    ? core.pairStandings(competitionPairs, matches, cfg, t._competitionTeamCategoryView || undefined)
+    : core.standings(t.competitionTeams || [], matches, cfg);
   if (!rows.length) return '';
   var byGames = cfg.ranking === 'games_diff';
   // Beach Tennis não admite jogo empatado: mesmo placar de games é decidido no
@@ -2462,13 +2463,13 @@ function _renderCompetitionTeamStandings(t) {
       '<td style="padding:9px 10px;text-align:center;color:var(--text-muted);">' + row.played + '</td></tr>';
   }).join('');
   var heading = t._competitionTeamCategoryView
-    ? 'Classificação · ' + safe(t._competitionTeamCategoryView)
-    : '🏆 Classificação geral dos times';
-  return '<section class="card" data-competition-team-standings="1"' + (t._competitionTeamCategoryView ? ' data-competition-team-category="1"' : ' data-competition-team-general="1"') + ' style="margin:0 0 1rem;border-color:rgba(251,191,36,.38);overflow:auto;">' +
+    ? 'Classificação ' + (byPair ? 'das duplas' : 'dos times') + ' · ' + safe(t._competitionTeamCategoryView)
+    : '🏆 Classificação geral ' + (byPair ? 'das duplas' : 'dos times');
+  return '<section class="card" data-competition-team-standings="1" data-competition-unit="' + (byPair ? 'pair' : 'team') + '"' + (t._competitionTeamCategoryView ? ' data-competition-team-category="1"' : ' data-competition-team-general="1"') + ' style="margin:0 0 1rem;border-color:rgba(251,191,36,.38);overflow:auto;">' +
     '<div style="padding:12px 14px 8px;font-weight:800;color:var(--sp-c-fde68a,#fde68a);">' + heading + '</div>' +
-    '<div style="padding:0 14px 12px;font-size:.74rem;color:var(--text-muted);">Saldo acumulado: games feitos menos games sofridos.</div>' +
+    '<div style="padding:0 14px 12px;font-size:.74rem;color:var(--text-muted);">' + (byGames ? 'Saldo acumulado: games feitos menos games sofridos.' : 'Pontos somados dos resultados: vitória, empate e derrota conforme a configuração.') + '</div>' +
     '<table style="width:100%;border-collapse:collapse;min-width:440px;font-size:.84rem;"><thead><tr style="text-align:left;color:var(--text-muted);font-size:.68rem;text-transform:uppercase;letter-spacing:.35px;">' +
-      '<th style="padding:8px 10px;">#</th><th style="padding:8px 10px;">Time</th>' + (byGames ? '<th style="padding:8px 10px;text-align:center;">Saldo</th><th style="padding:8px 10px;text-align:center;">Games</th>' : '<th style="padding:8px 10px;text-align:center;">Pts</th>') + '<th style="padding:8px 10px;text-align:center;">V</th>' + (showDraws ? '<th style="padding:8px 10px;text-align:center;">E</th>' : '') + '<th style="padding:8px 10px;text-align:center;">D</th><th style="padding:8px 10px;text-align:center;">J</th>' +
+      '<th style="padding:8px 10px;">#</th><th style="padding:8px 10px;">' + (byPair ? 'Dupla' : 'Time') + '</th>' + (byGames ? '<th style="padding:8px 10px;text-align:center;">Saldo</th><th style="padding:8px 10px;text-align:center;">Games</th>' : '<th style="padding:8px 10px;text-align:center;">Pts</th>') + '<th style="padding:8px 10px;text-align:center;">V</th>' + (showDraws ? '<th style="padding:8px 10px;text-align:center;">E</th>' : '') + '<th style="padding:8px 10px;text-align:center;">D</th><th style="padding:8px 10px;text-align:center;">J</th>' +
     '</tr></thead><tbody>' + body + '</tbody></table></section>';
 }
 window._renderCompetitionTeamStandings = _renderCompetitionTeamStandings;
@@ -9699,19 +9700,12 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
     </div>`;
   }).join('');
 
-  // Em competição por times, a dupla é unidade de jogo, não de classificação.
-  // A tabela principal mostra somente os times; o recorte por categoria continua
-  // disponível abaixo, fechado, para consulta sem competir com a leitura principal.
+  // Na competição por times, escopo e unidade da tabela vêm da configuração.
+  // Não anexar a tabela técnica genérica: ela ignora essas duas escolhas.
   var _hasCompetitionTeams = Array.isArray(t && t.competitionTeams) && t.competitionTeams.length > 0;
   if (_hasCompetitionTeams) {
     var _teamStandingsHtml = _renderCompetitionTeamStandings(t);
-    var _categoryStandingsHtml = standingsTablesHtml
-      ? '<details class="card" data-category-standings="1" style="margin:0 0 1rem;">' +
-          '<summary style="cursor:pointer;user-select:none;padding:12px 14px;font-weight:800;color:var(--text-bright);">▸ Classificação por categorias</summary>' +
-          '<div style="padding:0 14px 12px;">' + standingsTablesHtml + '</div>' +
-        '</details>'
-      : '';
-    standingsTablesHtml = _teamStandingsHtml + _categoryStandingsHtml;
+    if (_teamStandingsHtml) standingsTablesHtml = _teamStandingsHtml;
   }
 
   // ── Previous rounds (collapsed, expandable) ──────────────────────────────

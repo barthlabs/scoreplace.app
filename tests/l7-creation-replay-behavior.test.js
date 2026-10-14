@@ -33,6 +33,37 @@ const auth={uid:'owner',token:{email:'org@example.com',email_verified:true}};
 const read=async(tx,ref,id)=>{const snap=await tx.get(ref);return snap.exists?{...snap.data(),id}:null;};
 function creator(db,time=clock){return makeCreateTournament({db,HttpsError,FieldValue:{serverTimestamp:()=> 'server-time'},...config,compile:(c,x)=>win.FORMAT2.compileToPhases(c,x),boundary,readTournament:read,now:()=>time});}
 (async()=>{
+ await test('validador aceita categorias nomeadas só nos seis mapas de agenda declarados',async()=>{
+  const maps=['pairsPerTeamByCategory','gamesPerPairByCategory'];
+  for (const map of maps) {
+   const schedule={ [map]: { 'Fem Light': 2 } };
+   const variants=[
+    ['teamCompetition',{schedule}],
+    ['fmt2',{teamCompetition:{schedule}}],
+    ['phases',[{teamCompetition:{schedule}}]]
+   ];
+   for (const [key,value] of variants) {
+    const cloned=config.cloneConfig(value,0,[key]);
+    const result=key==='teamCompetition'?cloned.schedule[map]:key==='fmt2'?cloned.teamCompetition.schedule[map]:cloned[0].teamCompetition.schedule[map];
+    assert.equal(result['Fem Light'],2,key+' / '+map);
+    const bad=JSON.parse('{"__proto__":2}');
+    const unsafeSchedule={ [map]: bad };
+    const unsafeValue=key==='teamCompetition'?{schedule:unsafeSchedule}:key==='fmt2'?{teamCompetition:{schedule:unsafeSchedule}}:[{teamCompetition:{schedule:unsafeSchedule}}];
+    assert.throws(()=>config.cloneConfig(unsafeValue,0,[key]),{code:'invalid-argument'});
+   }
+  }
+  assert.throws(()=>config.cloneConfig({'Campo inválido':1},0,['fmt2']),{code:'invalid-argument'});
+ });
+ await test('criação preserva rodadas por categoria com nomes reais',async()=>{
+  const db=fakeDB();
+  const tournamentId='tour_'+(clock+1)+'_'+'b'.repeat(32);
+  const teamCompetition={enabled:false,schedule:{enabled:true,gamesPerPair:3,
+    pairsPerTeamByCategory:{'Fem Light':2},gamesPerPairByCategory:{'Fem Light':3}}};
+  await creator(db)({auth,data:{tournamentId,config:{...payload.config,teamCompetition}}});
+  const saved=db.docs.get('tournaments/'+tournamentId);
+  assert.equal(saved.teamCompetition.schedule.gamesPerPairByCategory['Fem Light'],3);
+  assert.equal(saved.teamCompetition.schedule.pairsPerTeamByCategory['Fem Light'],2);
+ });
  await test('criação concorrente/retry grava uma vez e identidade vem do servidor',async()=>{
   const db=fakeDB();db.docs.set('users/owner',{displayName:'Organizador real'});
   const fn=creator(db), request={auth,data:copy(payload)};
