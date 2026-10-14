@@ -2848,13 +2848,13 @@ function setupCreateTournamentModal() {
 
     // Esconder estimativas de tempo para Liga e Suíço (não fazem sentido)
     var estimContainer = document.getElementById('time-estimates-container');
-    if (estimContainer) estimContainer.style.display = (isLiga || isSuico) ? 'none' : '';
+    if (estimContainer) estimContainer.style.display = isLiga ? 'none' : '';
 
     // Sistema de Pontos Avançado: vale em QUALQUER classificatória com tabela de pontos.
     // v4.4.59 (pedido do dono): Liga/Suíço OU classificatória do format2 (Fase de Grupos /
     // Pontos Corridos). Só some quando não há classificatória (eliminação direta).
     var _f2cAdv = (typeof window._f2GetConfig === 'function') ? window._f2GetConfig() : null;
-    var advScoringStandings = isLiga || isSuico || (_f2cAdv ? _f2cAdv.classifAtiva === true : false);
+    var advScoringStandings = isLiga || (_f2cAdv ? _f2cAdv.classifAtiva === true : false);
     var advSection = document.getElementById('adv-scoring-section');
     if (advSection) advSection.style.display = advScoringStandings ? 'block' : 'none';
     document.querySelectorAll('#tiebreaker-list li[data-tb="pontos_avancados"], #tiebreaker-excluded-list li[data-tb="pontos_avancados"]').forEach(function(tbAdv) {
@@ -7842,7 +7842,11 @@ window.renderCreateTournamentPage = function (container, editId) {
   if (editId && _pendingEdit && _pendingEdit.id === String(editId)
       && typeof window.openEditTournamentModal === 'function') {
     var _hydrated = false;
-    try { _hydrated = window.openEditTournamentModal(editId, true, _pendingEdit.tournament) === true; } catch (_hydrateErr) {}
+    try { _hydrated = window.openEditTournamentModal(editId, true, _pendingEdit.tournament) === true; }
+    catch (_hydrateErr) {
+      if (typeof window._captureMessage === 'function') window._captureMessage(_hydrateErr, 'editor-hydration');
+      if (typeof window._warn === 'function') window._warn('[editor] falha ao montar configuração', _hydrateErr);
+    }
     if (!_hydrated) {
       window._editRouteFreshId = '';
       container.innerHTML = '<div style="padding:3rem;text-align:center;color:var(--sp-c-f87171,#f87171);">Não foi possível montar a configuração carregada.</div>';

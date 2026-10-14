@@ -1134,8 +1134,15 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // Mantemos as chamadas em série para que uma falha não gere corridas entre
   // transações; pares recebem uma única mudança, pois a Function move a dupla toda.
   function _erSaveCanonicalCategoryEdits(t, rows, edits) {
-    if (edits.some(function (edit) { return Object.prototype.hasOwnProperty.call(edit, 'gender'); })) {
-      return Promise.reject(new Error('O gênero não é editável por esta tela em um torneio com inscrições canônicas. Ajuste a categoria tipada da inscrição.'));
+    // Soltar uma dupla numa coluna de categoria marca também o gênero para a
+    // prévia visual. No roster canônico, porém, o ID tipado da categoria já
+    // determina esse gênero: não há segunda escrita de gênero a fazer. Só uma
+    // mudança isolada de gênero continua proibida.
+    if (edits.some(function (edit) {
+      return Object.prototype.hasOwnProperty.call(edit, 'gender') &&
+        !Object.prototype.hasOwnProperty.call(edit, 'category');
+    })) {
+      return Promise.reject(new Error('Escolha uma categoria para gravar a alteração de gênero neste torneio.'));
     }
     var seen = Object.create(null), moves = [];
     edits.forEach(function (edit) {
@@ -3417,7 +3424,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     _erCommitCats(t);
   };
   function _erSelectRange(from, to) {
-    var rows = (_liveState && _liveState.rows) || [];
+    var rows = ((_liveState && _liveState.rows) || []).slice().sort(function (a, b) { return a.order - b.order; });
     var a = rows.findIndex(function (r) { return r.order === from; });
     var b = rows.findIndex(function (r) { return r.order === to; });
     if (a < 0 || b < 0) { _erSelectedOrders[to] = true; return; }
@@ -3459,13 +3466,33 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (!row || row._duplaIdx == null) return [order];
     return rows.filter(function (r) { return r._duplaIdx === row._duplaIdx; }).map(function (r) { return r.order; });
   }
+  function _erSelectVisiblePairRange(from, to, targetElement) {
+    var grid = targetElement && targetElement.closest && targetElement.closest('.sp-dnd-host');
+    if (!grid) return false;
+    var cards = Array.from(grid.querySelectorAll('[data-er-pair-order]'));
+    var a = cards.findIndex(function (card) { return Number(card.getAttribute('data-er-pair-order')) === from; });
+    var b = cards.findIndex(function (card) { return Number(card.getAttribute('data-er-pair-order')) === to; });
+    if (a < 0 || b < 0) return false;
+    cards.slice(Math.min(a, b), Math.max(a, b) + 1).forEach(function (card) {
+      _erPairOrdersFrom(Number(card.getAttribute('data-er-pair-order'))).forEach(function (order) {
+        _erSelectedOrders[order] = true;
+      });
+    });
+    return true;
+  }
   window._erMxPairClick = function (ev, order) {
     if (Date.now() - _erLastMatrixDragAt < 250) { ev.preventDefault(); return; }
     if (!_erHasFinePointer()) return;
     ev.preventDefault(); ev.stopPropagation();
     var pairOrders = _erPairOrdersFrom(order);
     if (ev.shiftKey && _erSelectionAnchor != null) {
-      _erSelectRange(_erSelectionAnchor, order);
+      // Shift seleciona o intervalo que o organizador VÊ na grade. O array de
+      // inscrições pode estar em outra ordem; usá-lo incluía 111/112 e pulava
+      // 121/122 no bloco 113–128. Sem Cmd/Ctrl, substitui a seleção anterior.
+      if (!ev.metaKey && !ev.ctrlKey) _erSelectedOrders = {};
+      if (!_erSelectVisiblePairRange(_erSelectionAnchor, order, ev.currentTarget)) {
+        _erSelectRange(_erSelectionAnchor, order);
+      }
       pairOrders.forEach(function (o) { _erSelectedOrders[o] = true; });
     } else if (ev.metaKey || ev.ctrlKey) {
       var remove = pairOrders.every(function (o) { return !!_erSelectedOrders[o]; });
@@ -5748,8 +5775,24 @@ window._lzNaoEhEuMesmo = function (uid) {
 
     // Estado vivo pra busca/sort/filtros da lista de inscritos.
     var _isOrg = window._souOrganizador(t);
+    // Perfis e snapshots podem terminar de carregar enquanto o organizador
+    // arrasta duplas. Recriar a página não equivale a clicar em Cancelar: remapeie
+    // as edições pela identidade da pessoa, jamais pela posição da linha.
+    var priorState = _liveState, priorEdits = _pendingEdits, retainedEdits = {};
+    if (priorState && priorState.t && String(priorState.t.id) === String(t.id)) {
+      Object.keys(priorEdits).forEach(function (oldOrder) {
+        var oldRow = (priorState.rows || []).filter(function (r) { return r.order === Number(oldOrder); })[0];
+        if (!oldRow) return;
+        var newRow = rows.filter(function (r) {
+          if (oldRow.uid) return r.uid && r.uid === oldRow.uid;
+          if (oldRow.manualId) return r.manualId && r.manualId === oldRow.manualId;
+          return r.order === oldRow.order && r.name === oldRow.name;
+        })[0];
+        if (newRow) retainedEdits[newRow.order] = priorEdits[oldOrder];
+      });
+    }
     _liveState = { rows: rows, t: t, isOrg: _isOrg, profileMap: profileMap || {}, resolvedFor: resolvedFor || {} };
-    _pendingEdits = {}; // v2.4.34: cada carga da página começa sem edições pendentes
+    _pendingEdits = retainedEdits;
 
     // A barra é a 1ª IRMÃ DEPOIS DO CABEÇALHO, fora do container com padding. `sticky` só
     // gruda depois que a rolagem leva a posição natural até o `top` — enterrada no meio da
@@ -5779,6 +5822,7 @@ window._lzNaoEhEuMesmo = function (uid) {
     // Popula a lista (defaults: ordem de inscrição ↑, sem filtros).
     if (typeof window._erRenderInscritos === 'function') window._erRenderInscritos();
     if (typeof window._erCarregarDuplicatas === 'function') window._erCarregarDuplicatas(t.id);
+    window._erUpdateSaveBar();
 
     if (typeof window._reflowChrome === 'function') window._reflowChrome();
     // Reaplica a busca depois que este HTML aterrissa no DOM (aqui ainda é string) e

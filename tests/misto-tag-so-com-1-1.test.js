@@ -65,6 +65,16 @@ const dupla = (u1, u2, cat) => ({ p1Uid: u1, p2Uid: u2, p1Name: 'A', p2Name: 'B'
 
 console.log('──── misto-tag-so-com-1-1 ────');
 
+(function () {
+  const s = ctx({});
+  s._entryTeamMembers = (p) => p && p.p1Name && p.p2Name ? [p.p1Name, p.p2Name] : null;
+  const t = { id: 'neon', genderCategories: ['Fem'], skillCategories: ['Light'],
+    combinedCategories: ['Fem Light'],
+    participants: Array.from({ length: 8 }, (_, i) => dupla('a' + i, 'b' + i, 'Fem Light')) };
+  ok(s._buildCategoryCountHtml(t).indexOf('>16<') !== -1,
+    '[duplas] etiqueta Fem Light conta 16 inscritos, não 8 cards de dupla');
+})();
+
 // ═══ (1) O CASO REAL: Confra BT Alta da Clínica 2026 ══════════════════════════
 (function () {
   const uids = ['lqHRqvHJ', 'QKNGiCqy', 'tN0To8Ji', 'yjNjUNXd', 'M7fdUxce', 'nWPV2jiA', 'FzTG3nei'];

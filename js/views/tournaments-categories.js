@@ -657,8 +657,12 @@ window._buildCategoryCountHtml = function(t) {
     parts.forEach(function(p) {
         if (typeof p !== 'object' && typeof p !== 'string') return;
         var pCats = window._getParticipantCategories(p);
+        // Uma entrada de dupla ocupa duas inscrições. A etiqueta do torneio
+        // informa pessoas, enquanto os cards de duplas informam equipes.
+        var members = typeof window._entryTeamMembers === 'function' ? window._entryTeamMembers(p) : null;
+        var peopleInEntry = members && members.length ? members.length : 1;
         pCats.forEach(function(pc) {
-            if (counts.hasOwnProperty(pc)) counts[pc]++;
+            if (counts.hasOwnProperty(pc)) counts[pc] += peopleInEntry;
         });
     });
 

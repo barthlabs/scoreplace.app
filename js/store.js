@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.4.42';
+window.SCOREPLACE_VERSION = '2.4.43';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -5909,7 +5909,24 @@ window._reflowChrome = function() {
         var bhH = Math.ceil(_bhRectH);
         // Use !important because overlay CSS uses `margin-top: 0 !important`
         // to suppress the default 50px spacer — our dynamic value has to win.
-        _aplicarMargemDeConteudo(next, (ddH + bhH + 8) + 'px');
+        if (bh.classList.contains('er-analysis-back-header') && next.classList.contains('er-analysis-title')) {
+          // A Análise já começa dentro de #view-container, com padding próprio.
+          // Somar a altura inteira da faixa fixa a esse padding abria o vão
+          // enorme entre "Análise de Inscritos" e o nome/busca. Meça a lacuna
+          // real, sem a margem da passagem anterior, e complete só até 8px.
+          _aplicarMargemDeConteudo(next, '0px');
+          // A margem pode colapsar com o container. Ajuste pela geometria
+          // realmente renderizada; uma passagem só falha nas larguras em que
+          // o cabeçalho muda de altura.
+          for (var ajuste = 0; ajuste < 4; ajuste++) {
+            var gap = next.getBoundingClientRect().top - bh.getBoundingClientRect().bottom;
+            if (Math.abs(gap - 8) <= 1) break;
+            var margemAtual = parseFloat(next.style.marginTop) || 0;
+            _aplicarMargemDeConteudo(next, (margemAtual + 8 - gap) + 'px');
+          }
+        } else {
+          _aplicarMargemDeConteudo(next, (ddH + bhH + 8) + 'px');
+        }
       }
     } else {
       var next = _firstVisibleSibling(bh);
@@ -5943,6 +5960,18 @@ window._reflowChrome = function() {
       if (vc.style.paddingTop !== _vpt) vc.style.paddingTop = _vpt;
     } else if (vc.style.paddingTop) {
       vc.style.paddingTop = '';
+    }
+  }
+  // O ajuste de padding do container acima muda a posição final da Análise.
+  // Complete a medição depois dele; medir só antes reproduz o vão no primeiro
+  // quadro e só o segundo reflow o corrige.
+  var analysisHeader = document.querySelector('.er-analysis-back-header');
+  var analysisTitle = document.querySelector('.er-analysis-title');
+  if (analysisHeader && analysisTitle && window.getComputedStyle(analysisHeader).position === 'fixed') {
+    var analysisGap = analysisTitle.getBoundingClientRect().top - analysisHeader.getBoundingClientRect().bottom;
+    if (Math.abs(analysisGap - 8) > 1) {
+      _aplicarMargemDeConteudo(analysisTitle,
+        ((parseFloat(analysisTitle.style.marginTop) || 0) + 8 - analysisGap) + 'px');
     }
   }
   // v2.8.47: expõe a altura REAL da topbar + a do dropdown do hamburger (0 fechado).
@@ -11608,7 +11637,7 @@ window._ensureTournamentLoaded = function (tId, cb, forceFresh) {
   var _acabou = false;
   var _tempo = setTimeout(function () {
     _terminar(null, 'tempo esgotado');
-  }, 8000);
+  }, forceFresh ? 30000 : 8000);
   var _terminar = function (torneio, motivo) {
     if (_acabou) return;
     _acabou = true;

@@ -604,7 +604,15 @@ function initRouter() {
               // o que há é resumo. ⛔ Sem isto, abrir um torneio da vitrine mostraria
               // chave e inscritos vazios.
               if (typeof window._ensureTournamentLoaded === 'function' && cleanParam) {
-                window._ensureTournamentLoaded(cleanParam, function () { if (_routeIsCurrent()) _pintaTorneio(); });
+                // A navegação explícita precisa do documento e do elenco atuais do
+                // servidor. Um objeto em memória pode parecer completo e ainda ser
+                // a fotografia anterior à atribuição de categorias (96/48 no Neon).
+                window._ensureTournamentLoaded(cleanParam, function (loaded) {
+                  if (!_routeIsCurrent()) return;
+                  if (loaded) { _pintaTorneio(); return; }
+                  viewContainer.innerHTML = '<div style="padding:2rem;color:var(--sp-c-f87171,#f87171);">Não foi possível carregar o torneio atualizado do servidor. Tente abrir novamente.</div>';
+                  _fecharTour();
+                }, true);
                 return;
               }
               _pintaTorneio();
