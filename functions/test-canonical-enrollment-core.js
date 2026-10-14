@@ -3,6 +3,7 @@ const C = require('./canonical-enrollment-core');
 const R = require('./registration-core');
 let pass = 0, fail = 0;
 function ok(name, value) { if (value) pass++; else { fail++; console.error('✗ ' + name); } }
+ok('sentinela canônica de categoria está exportada e é estável', R.UNCATEGORIZED_CATEGORY_ID === '__uncategorized__');
 const base = { id: 't1', status: 'open', categoryDefinitions: [{ id: 'fem-a', label: 'Fem A', dimension: 'skill', exclusivityGroup: 'skill', criteria: {} }], enrollmentRigor: 'casual' };
 const input = { tournament: base, registrations: [], participant: { uid: 'u1', categoryIds: ['fem-a'] }, nowMs: Date.UTC(2026, 0, 1) };
 let result = C.decide(input);

@@ -1012,6 +1012,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       ? (window._getTournamentCategories(_liveState.t) || []) : [];
     var rowCat = (r.assigned && r.assigned.length > 0) ? r.assigned[0] : '';
     var curCat = (pe && 'category' in pe) ? pe.category : rowCat;
+    if (curCat === '__uncategorized__') curCat = '';
     // v2.8.63: categoria por inscrito SÓ aparece quando há 2+ categorias. Em torneio de
     // categoria única (ex.: só Misto) não há o que escolher — esconde o seletor/badge
     // (mesmo princípio da seção de categorias, v2.8.55). Gênero continua (importa pra

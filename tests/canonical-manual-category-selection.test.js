@@ -9,6 +9,7 @@ function ok(value, message) { console.log((value ? '✓ ' : '✗ ') + message); 
 
 const enrollment = fs.readFileSync('js/views/tournaments-enrollment.js', 'utf8');
 const tools = fs.readFileSync('js/views/tournaments-org-tools.js', 'utf8');
+const analysis = fs.readFileSync('js/views/tournaments-enrollment-report.js', 'utf8');
 const coreStart = enrollment.indexOf('window._doAddParticipant = function');
 const coreEnd = enrollment.indexOf('\n\n\n})();', coreStart);
 const core = enrollment.slice(coreStart, coreEnd < 0 ? enrollment.length : coreEnd);
@@ -24,5 +25,10 @@ ok(!picker.includes('id="ap-category-ids"') && picker.includes('onConfirm(sel.na
   'atalho da organização não exige categoria antes da Análise');
 ok(!tools.includes('id="addpart-category-') && !tools.includes('select.selectedOptions'),
   'painel e página da organização não exibem seletor de categoria');
+ok(core.includes('window._doAddParticipant = function (tId, pName, selectedUid, selectedPhoto, onDone, _resolved, categoryIds)') &&
+  tools.includes('window._doAddParticipant(tId, name, null, null, function'),
+  'página de inclusão chama a assinatura canônica de sete argumentos sem impor categoria');
+ok(analysis.includes("if (curCat === '__uncategorized__') curCat = '';"),
+  'Análise apresenta a inscrição canônica sem categoria como pendente de classificação');
 
 process.exit(fail ? 1 : 0);

@@ -1,4 +1,4 @@
-// 2.4.47 — Atualização consolidada de produção com as correções validadas desde a última publicação.
+// 2.4.47 — A ficha deixa de exibir “Carregando a lista” quando o roster canônico atual já foi confirmado, mesmo se o contador legado divergir. O organizador pode incluir participante manual sem categoria e classificá-lo depois na Análise, que o apresenta como “sem categoria”; o painel de inclusão tem texto mais compacto.
 // 2.4.46 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.45 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.44 — Atualização consolidada de produção com as correções validadas desde a última publicação.
