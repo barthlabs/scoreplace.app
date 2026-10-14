@@ -229,6 +229,7 @@ const SUITES = [
   'tests/tardio-entra-em-torneio-dividido.test.js',
   'tests/torneio-nasce-dividido.test.js',
   'tests/l7-creation-replay-behavior.test.js',
+  'tests/elimination-policy-config-core.test.js',
   'tests/limite-por-categoria.test.js',
   'tests/horarios-estimados-editor.test.js',
   'tests/analise-gap-apos-rolagem.test.js',
