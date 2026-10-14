@@ -1,3 +1,4 @@
+// 2.4.46 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.45 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.44 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.43 — A abertura explícita da ficha refaz a leitura do servidor; a Análise seleciona intervalos pela ordem visível e envia mudanças de categoria em lote pela rota canônica sem tentar gravar gênero separadamente. As etiquetas de categoria contam participantes da dupla. Corrigida a referência indefinida que interrompia a montagem do editor e ajustado o espaçamento do cabeçalho da Análise. Os testes verificam que os helpers de identidade e da barra de salvar estão disponíveis; gravação autenticada em produção ainda exige validação de ponta a ponta.
