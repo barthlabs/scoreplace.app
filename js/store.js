@@ -11629,7 +11629,12 @@ window._ensureTournamentLoaded = function (tId, cb, forceFresh) {
      * duas portas. O teste `abrir-torneio-nao-usa-o-cache` pegou: aqui é a corrida (outra
      * busca resolveu enquanto esta estava em voo), e aceitar um objeto com parte faltando
      * devolve à tela exatamente o que a busca completa foi evitar. */
-    if (jaTem && jaTem._resumo !== true && jaTem._doCache !== true && jaTem._faltamPesados !== true) {
+    // Uma abertura solicitada com `forceFresh` nunca pode aceitar o objeto que
+    // já está em memória: ele pode ser um documento antigo que parece completo
+    // (foi exatamente o que fazia o Editor mostrar defaults/logo vazio depois
+    // de o cartão já estar com 128 inscritos). Nas leituras normais, a corrida
+    // continua podendo reaproveitar somente um objeto comprovadamente completo.
+    if (!forceFresh && jaTem && jaTem._resumo !== true && jaTem._doCache !== true && jaTem._faltamPesados !== true) {
       _terminar(jaTem); return;
     }
     var A = window.AppStore;

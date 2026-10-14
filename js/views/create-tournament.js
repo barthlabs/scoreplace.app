@@ -7790,6 +7790,25 @@ window._navigateToCreateTournament = function (editId) {
 
 window.renderCreateTournamentPage = function (container, editId) {
   if (!container) return;
+  // A rota pode ser aberta diretamente por refresh/deep-link. Mesmo que exista
+  // um objeto local aparentemente completo, o Editor deve começar do servidor.
+  // O marco é consumido somente nesta navegação; um novo clique em Editar limpa
+  // e cria outro marco em tournaments.js.
+  if (editId && window._editRouteFreshId !== String(editId)
+      && typeof window._ensureTournamentLoaded === 'function') {
+    window._editRouteFreshId = '__loading__:' + String(editId);
+    container.innerHTML = '<div style="padding:3rem;text-align:center;color:var(--text-muted);">Carregando configuração real do torneio…</div>';
+    window._ensureTournamentLoaded(editId, function (_loadedEdit) {
+      if (!_loadedEdit) {
+        window._editRouteFreshId = '';
+        container.innerHTML = '<div style="padding:3rem;text-align:center;color:var(--sp-c-f87171,#f87171);">Não foi possível carregar a configuração do torneio.</div>';
+        return;
+      }
+      window._editRouteFreshId = String(editId);
+      if (window.location.hash === '#novo-torneio/' + editId && typeof window.initRouter === 'function') window.initRouter();
+    }, true);
+    return;
+  }
   // Garantir que setupCreateTournamentModal já criou a estrutura DOM
   if (!document.getElementById('modal-create-tournament') && typeof window.setupCreateTournamentModal === 'function') {
     window.setupCreateTournamentModal();

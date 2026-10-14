@@ -5846,13 +5846,19 @@ window._lzNaoEhEuMesmo = function (uid) {
 
     // ⚠️ O NÃO MEDIDO APARECE, sempre. É agregado de propósito: marcar individualmente
     // exigiria devolver identidade correlacionável, que é o que esta porta não faz.
+    // O trecho desta seção também é carregado isoladamente por alguns fluxos/testes;
+    // não transforme a mensagem opcional em uma referência obrigatória ao estado da
+    // análise inteira. Quando o estado ainda não existe, o total é preenchido pelo
+    // renderizador principal na próxima pintura.
+    var _liveDupState = (typeof _liveState !== 'undefined') ? _liveState : null;
+    var _totalTorneio = (_liveDupState && _liveDupState.t && typeof window._countCompetitors === 'function')
+      ? window._countCompetitors(_liveDupState.t).people
+      : (_liveDupState && Array.isArray(_liveDupState.rows) ? _liveDupState.rows.length : 0);
+    var _verificaveis = Math.max(0, _totalTorneio - (Number(e.naoMedidos) || 0));
     var naoMedido = e.naoMedidos
       ? '<div style="font-size:0.78rem;color:var(--sp-c-fbbf24,#fbbf24);margin-top:9px;line-height:1.45;">' +
-        'ℹ️ <b>' + e.naoMedidos + '</b> ' + (e.naoMedidos === 1 ? 'participante sem conta não entra' : 'participantes sem conta não entram') +
-        ' na análise de contas duplicadas — total do torneio: <b>' +
-        (_liveState && _liveState.t && typeof window._countCompetitors === 'function'
-          ? window._countCompetitors(_liveState.t).people
-          : (_liveState && Array.isArray(_liveState.rows) ? _liveState.rows.length : 0)) + '</b>.</div>'
+        'ℹ️ Análise de contas duplicadas: <b>' + _verificaveis + '</b> com conta e <b>' + e.naoMedidos + '</b> sem conta. ' +
+        'Os sem conta não podem ser verificados por esta análise. <b>Total do torneio: ' + _totalTorneio + ' inscritos.</b></div>'
       : '';
 
     if (!e.pares.length) {

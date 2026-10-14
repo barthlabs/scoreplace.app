@@ -2764,17 +2764,29 @@ function renderTournaments(container, tournamentId = null) {
             };
             var tAtual = typeof window._findTournamentById === 'function'
                 ? window._findTournamentById(id) : null;
-            var incompleto = tAtual && (tAtual._resumo === true || tAtual._doCache === true || tAtual._faltamPesados === true);
-            // O editor precisa do documento canônico, nunca de resumo/cache. Esses objetos têm nome
-            // suficiente para pintar o cartão, mas não carregam fmt2, logo, vagas nem
-            // a configuração real da fase; abrir com eles faz o editor parecer um
-            // torneio recém-criado e permite salvar defaults por cima do torneio.
-            if ((!tAtual || incompleto) && typeof window._ensureTournamentLoaded === 'function') {
+            // Cada clique em Editar é uma nova leitura canônica. Não reutilize
+            // o marco da navegação anterior, mesmo que seja o mesmo torneio.
+            window._editRouteFreshId = '';
+            // Editar é uma operação de configuração, não uma leitura de vitrine:
+            // sempre busca o documento canônico no servidor antes de montar o form.
+            // Um objeto local pode ter nome suficiente para o card e ainda estar
+            // velho ou sem logo/fmt2/configuração efetiva.
+            if (typeof window._ensureTournamentLoaded === 'function' && typeof window._findTournamentById === 'function') {
                 if (typeof window.showNotification === 'function') {
                     window.showNotification('Carregando torneio', 'Abrindo a edição com os dados completos…', 'info');
                 }
                 window._ensureTournamentLoaded(id, function (carregado) {
-                    if (carregado && abrirEditorAgora()) return;
+                    if (carregado) {
+                        // A rota usa este marco para não refazer a busca na
+                        // mesma navegação; uma nova abertura limpa o marco.
+                        window._editRouteFreshId = String(id);
+                        if (typeof window._navigateToCreateTournament === 'function') {
+                            window._navigateToCreateTournament(id);
+                        } else if (abrirEditorAgora()) {
+                            return;
+                        }
+                        return;
+                    }
                     if (typeof window.showNotification === 'function') {
                         window.showNotification('Não consegui abrir a edição', 'Atualize a página e tente de novo.', 'warning');
                     }
@@ -2784,7 +2796,7 @@ function renderTournaments(container, tournamentId = null) {
                 }, true);
                 return;
             }
-            if (tAtual && !incompleto && abrirEditorAgora()) return;
+            if (tAtual && abrirEditorAgora()) return;
             if (abrirEditorAgora()) return;
             if (typeof window.showNotification === 'function') {
                 window.showNotification('Não consegui abrir a edição',
