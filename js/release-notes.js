@@ -1,3 +1,4 @@
+// 2.4.42 — O resumo do torneio canônico conta inscrições e duplas na subcoleção tipada; o leitor evita duplicar reservas já presentes em duplas, o editor recebe o documento completo do servidor após montar o formulário, e a atribuição de categoria aceita a origem sem categoria com destino tipado válido.
 // 2.4.41 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.40 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.39 — Card, Análise e editor usam uma leitura canônica única: reservas 97–128 entram no roster visual sem serem tratadas como inscrições tipadas, a ordem das duplas é preservada e o editor recupera a configuração efetiva da fase (logo, fundo, categorias personalizadas, equipes e jogos) antes de salvar.
