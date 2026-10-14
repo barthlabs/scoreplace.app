@@ -7797,12 +7797,15 @@ window.renderCreateTournamentPage = function (container, editId) {
   if (editId && window._editRouteFreshId !== String(editId)
       && typeof window._ensureTournamentLoaded === 'function') {
     window._editRouteFreshId = '__loading__:' + String(editId);
-    container.innerHTML = '<div style="padding:3rem;text-align:center;color:var(--text-muted);">Carregando configuração real do torneio…</div>';
+    container.innerHTML = '<div aria-busy="true" style="min-height:2rem;"></div>';
     window._ensureTournamentLoaded(editId, function (_loadedEdit) {
       if (!_loadedEdit) {
         window._editRouteFreshId = '';
         container.innerHTML = '<div style="padding:3rem;text-align:center;color:var(--sp-c-f87171,#f87171);">Não foi possível carregar a configuração do torneio.</div>';
         return;
+      }
+      if (typeof window.openEditTournamentModal === 'function') {
+        window.openEditTournamentModal(editId, true);
       }
       window._editRouteFreshId = String(editId);
       if (window.location.hash === '#novo-torneio/' + editId && typeof window.initRouter === 'function') window.initRouter();

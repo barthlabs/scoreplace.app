@@ -2777,6 +2777,9 @@ function renderTournaments(container, tournamentId = null) {
                 }
                 window._ensureTournamentLoaded(id, function (carregado) {
                     if (carregado) {
+                        if (typeof window.openEditTournamentModal === 'function') {
+                            window.openEditTournamentModal(id, true);
+                        }
                         // A rota usa este marco para não refazer a busca na
                         // mesma navegação; uma nova abertura limpa o marco.
                         window._editRouteFreshId = String(id);

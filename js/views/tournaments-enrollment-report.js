@@ -5854,11 +5854,10 @@ window._lzNaoEhEuMesmo = function (uid) {
     var _totalTorneio = (_liveDupState && _liveDupState.t && typeof window._countCompetitors === 'function')
       ? window._countCompetitors(_liveDupState.t).people
       : (_liveDupState && Array.isArray(_liveDupState.rows) ? _liveDupState.rows.length : 0);
-    var _verificaveis = Math.max(0, _totalTorneio - (Number(e.naoMedidos) || 0));
     var naoMedido = e.naoMedidos
       ? '<div style="font-size:0.78rem;color:var(--sp-c-fbbf24,#fbbf24);margin-top:9px;line-height:1.45;">' +
-        'ℹ️ Análise de contas duplicadas: <b>' + _verificaveis + '</b> com conta e <b>' + e.naoMedidos + '</b> sem conta. ' +
-        'Os sem conta não podem ser verificados por esta análise. <b>Total do torneio: ' + _totalTorneio + ' inscritos.</b></div>'
+        'ℹ️ Análise de contas duplicadas disponível apenas para contas autenticadas. ' +
+        '<b>Total do torneio: ' + _totalTorneio + ' inscritos.</b></div>'
       : '';
 
     if (!e.pares.length) {
