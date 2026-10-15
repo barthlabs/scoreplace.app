@@ -1,3 +1,4 @@
+// 2.4.51 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.50 — A política da chave passa a orientar a criação e o avanço da eliminatória.
 // Uma entrada tardia em linha com folga só redesenha a chave após decisão explícita do
 // organizador e é recusada se algum jogo afetado já começou. A decisão de posição da
