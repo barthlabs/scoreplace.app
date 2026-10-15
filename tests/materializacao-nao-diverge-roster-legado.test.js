@@ -13,7 +13,7 @@ function bodyAfter(marker, nextMarker) {
   return start === -1 ? '' : source.slice(start, end === -1 ? source.length : end);
 }
 
-const guard = bodyAfter('function _assertLegacyRosterStillAuthoritative', '// Prévia da migração I1');
+const guard = bodyAfter('function _assertLegacyRosterStillAuthoritative', '\n}\n');
 ok('a trava reconhece apenas o marcador estrutural da migração',
   guard.includes('canonicalRegistrationMigration') &&
   guard.includes('migration.fingerprint') &&

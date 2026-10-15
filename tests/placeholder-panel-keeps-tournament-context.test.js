@@ -24,7 +24,7 @@ ok(/window\._pageAddPlaceholders/.test(panel), 'painel reutiliza o núcleo únic
 ok(!/location\.hash/.test(panel), 'abrir o painel não altera hash nem rota');
 ok(!/Categorias do participante|addpart-category-/.test(panel), 'painel deixa a categoria para a Análise');
 ok(!/Não exige categoria|Cada "Jogador NN" conta como inscrito/.test(panel), 'painel não repete explicações longas que forçam rolagem');
-ok(/Importar arquivo \(em preparação\)/.test(panel), 'entrada futura de arquivo permanece visível e desativada');
+ok(/_openTournamentImport/.test(panel) && /Importar fotos ou planilhas/.test(panel), 'entrada de arquivos abre revisão contextual de inscritos');
 const participantHandler = tools.slice(tools.indexOf('window._pageAddParticipant = function'), tools.indexOf('window._pageAddPlaceholders = function'));
 const placeholderHandler = tools.slice(tools.indexOf('window._pageAddPlaceholders = function'), tools.indexOf('// Compat:', tools.indexOf('window._pageAddPlaceholders = function')));
 ok(/function _guard\(tId\)/.test(tools), 'painel mantém a guarda local de torneio e organização');

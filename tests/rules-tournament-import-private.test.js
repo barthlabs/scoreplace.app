@@ -1,0 +1,33 @@
+'use strict';
+const { rodarNoEmulador } = require('./emulador');
+const fs = require('fs'), os = require('os'), path = require('path');
+const ROOT = path.join(__dirname, '..'), PORT = 8126, PROJECT = 'demo-scoreplace';
+const DRIVER = `
+const P='${PROJECT}',H='http://127.0.0.1:${PORT}',b=o=>Buffer.from(JSON.stringify(o)).toString('base64url');
+const tok=u=>b({alg:'none',typ:'JWT'})+'.'+b({iss:'https://securetoken.google.com/'+P,aud:P,sub:u,user_id:u,iat:Math.floor(Date.now()/1000),exp:Math.floor(Date.now()/1000)+3600,firebase:{identities:{},sign_in_provider:'google.com'}})+'.';
+const base=H+'/v1/projects/'+P+'/databases/(default)/documents/',S=v=>({stringValue:v});
+async function req(method,p,uid,body){const h={'Content-Type':'application/json'};if(uid)h.Authorization=uid==='owner'?'Bearer owner':'Bearer '+tok(uid);const r=await fetch(base+p,{method,headers:h,body:body?JSON.stringify(body):undefined});return r.status;}
+(async()=>{const body={fields:{organizerUid:S('org'),tournamentId:S('t1')}};const out={};
+out.setupParent=await req('PATCH','tournamentImports/i1','owner',body);
+out.setupBlock=await req('PATCH','tournamentImports/i1/blocks/0','owner',body);
+out.create=await req('PATCH','tournamentImports/i2','org',body);
+out.read=await req('GET','tournamentImports/i1','org');
+out.update=await req('PATCH','tournamentImports/i1','org',body);
+out.delete=await req('DELETE','tournamentImports/i1','org');
+out.blockRead=await req('GET','tournamentImports/i1/blocks/0','org');
+out.blockWrite=await req('PATCH','tournamentImports/i1/blocks/1','org',body);
+out.ocrQuotaRead=await req('GET','tournamentImports/ocrUsage/days/2026-10-15_org','org');
+out.ocrQuotaWrite=await req('PATCH','tournamentImports/ocrUsage/days/2026-10-15_org','org',body);
+out.searchQuotaRead=await req('GET','tournamentImports/searchUsage/days/2026-10-15_org','org');
+out.searchQuotaWrite=await req('PATCH','tournamentImports/searchUsage/days/2026-10-15_org','org',body);
+out.anonRead=await req('GET','tournamentImports/i1',null);
+console.log('__JSON__'+JSON.stringify(out));})();`;
+const dir=fs.mkdtempSync(path.join(os.tmpdir(),'sp-import-rules-'));
+const config=path.join(dir,'firebase.json'),driver=path.join(dir,'driver.js');
+fs.writeFileSync(config,JSON.stringify({firestore:{rules:path.join(ROOT,'firestore.rules')},emulators:{firestore:{port:PORT},ui:{enabled:false},singleProjectMode:true}}));
+fs.writeFileSync(driver,DRIVER);
+const output=rodarNoEmulador(['emulators:exec','--only','firestore','--config',config,'--project',PROJECT,'node '+JSON.stringify(driver)],{cwd:ROOT,encoding:'utf8',stdio:['ignore','pipe','pipe'],env:Object.assign({},process.env,{PATH:'/opt/homebrew/opt/openjdk/bin:'+process.env.PATH})});
+const match=/__JSON__(\{.*\})/.exec(output);if(!match)throw new Error('driver sem resultado: '+output.slice(-800));
+const out=JSON.parse(match[1]);
+if (out.setupParent!==200 || out.setupBlock!==200 || Object.keys(out).some((key)=>!key.startsWith('setup') && out[key]!==403)) throw new Error('import receipts não são server-only: '+JSON.stringify(out));
+console.log('✓ recibos e cotas de importação: cliente organizador e anônimo negados; Admin SDK permitido');

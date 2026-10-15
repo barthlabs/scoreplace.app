@@ -104,6 +104,7 @@ const _registrationMutations = require("./registration-mutations-core");
 const _registrationClaim = require("./registration-claim-core");
 const _canonicalRegistrationBoundary = require("./canonical-registration-boundary-core");
 const _canonicalEnrollment = require("./canonical-enrollment-core");
+const _tournamentImport = require("./tournament-import-core");
 const _manualNameUnique = require("./manual-name-unique-core");
 const _registrationLifecycle = require("./registration-lifecycle-core");
 const _tournamentVip = require("./tournament-vip-core");
@@ -4487,6 +4488,9 @@ function _writeCanonicalRosterChanges(tx, tournamentRef, tournament, registratio
     if (Object.prototype.hasOwnProperty.call(item, "validationState")) {
       patch.validationState = item.validationState;
     }
+    if (item.participantKind === "manual" && Object.prototype.hasOwnProperty.call(item, "manualDisplayName")) {
+      patch.manualDisplayName = item.manualDisplayName;
+    }
     tx.update(tournamentRef.collection("registrations").doc(item.registrationId), patch);
   });
   creates.forEach((item) => {
@@ -4502,6 +4506,216 @@ function _writeCanonicalRosterChanges(tx, tournamentRef, tournament, registratio
   }, extraTournamentPatch || {}));
   return next;
 }
+
+/* Importação externa só ocupa duplas-placeholder canônicas. Prévia e bloco
+ * são portas separadas: fotos/planilhas jamais escrevem por si. */
+async function _consumeTournamentImportQuota(db, kind, uid, maximum) {
+  // Dia UTC: a mesma chave é usada por todas as instâncias da Function.
+  const day = new Date().toISOString().slice(0, 10);
+  const usageRef = db.collection("tournamentImports").doc(kind + "Usage").collection("days").doc(day + "_" + uid);
+  await db.runTransaction(async (tx) => {
+    const current = await tx.get(usageRef);
+    const used = Number(current.exists && current.data().count || 0);
+    if (used >= maximum) throw new HttpsError("resource-exhausted", "limite diário de " + maximum + " " + (kind === "ocr" ? "fotos" : "buscas") + " atingido (UTC)");
+    // Intencionalmente conta tentativas, mesmo se o serviço subsequente falhar.
+    tx.set(usageRef, { uid, day, count: used + 1, updatedAt: _FV.serverTimestamp() });
+  });
+}
+
+exports.previewTournamentImport = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    const tournamentId = String(request.data && request.data.tournamentId || "").trim();
+    if (!uid) throw new HttpsError("unauthenticated", "login necessário");
+    if (!tournamentId) throw new HttpsError("invalid-argument", "torneio obrigatório");
+    const ref = admin.firestore().collection("tournaments").doc(tournamentId);
+    const snap = await ref.get();
+    if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+    if (!_isTournamentOrgCaller(snap.data(), uid)) throw new HttpsError("permission-denied", "só a organização importa inscritos");
+    if (!_CANONICAL_REGISTRATION_MUTATIONS_READY) throw new HttpsError("failed-precondition", "inscrições canônicas indisponíveis");
+    const tournament = Object.assign({ id: tournamentId }, await _splitParts.hidratar(null, ref, snap.data() || {}));
+    if (_hasCanonicalTournamentDraw(tournament) || tournament.drawCompleted || tournament.substitutions && tournament.substitutions.length) {
+      throw new HttpsError("failed-precondition", "importação indisponível após o sorteio");
+    }
+    const migration = _canonicalRegistrationBoundary.migrationOf(tournament);
+    const regSnap = await ref.collection("registrations").limit(migration.expectedCount + 1).get();
+    const registrations = regSnap.docs.map((doc) => doc.data());
+    _canonicalRegistrationBoundary.verifiedRoster(tournament, registrations);
+    return {
+      fingerprint: _tournamentImport.fingerprint(tournament, registrations),
+      slots: _tournamentImport.slots(registrations),
+      count: registrations.filter((item) => item.status !== "withdrawn").length,
+      categories: (Array.isArray(tournament.categoryDefinitions) ? tournament.categoryDefinitions : [])
+        .map((item) => {
+          const id = String(item && item.id || "");
+          const label = String(item && (item.label || item.name || item.id) || "");
+          const override = tournament.maxParticipantsByCategory && tournament.maxParticipantsByCategory[label];
+          const rawLimit = override == null ? tournament.maxParticipantsPerCategory : override;
+          const limit = Number(rawLimit);
+          return { id, label, activeCount: registrations.filter((registration) =>
+            registration.categoryId === id && registration.status !== "withdrawn").length,
+          capacity: Number.isSafeInteger(limit) && limit > 0 ? limit : null };
+        }).filter((item) => item.id),
+      photoImportEnabled: true,
+    };
+  }
+);
+
+exports.extractTournamentImportImage = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    const tournamentId = String(request.data && request.data.tournamentId || "").trim();
+    const image = String(request.data && request.data.imageBase64 || "");
+    const mime = String(request.data && request.data.mime || "");
+    if (!uid) throw new HttpsError("unauthenticated", "login necessário");
+    if (request.data && request.data.visionConsent !== true) {
+      throw new HttpsError("failed-precondition", "confirme o envio da foto ao Google Cloud Vision para leitura");
+    }
+    if (!tournamentId || !["image/jpeg", "image/png", "image/webp"].includes(mime) ||
+        !/^[A-Za-z0-9+/]+={0,2}$/.test(image) || image.length > 5_600_000) {
+      throw new HttpsError("invalid-argument", "imagem inválida ou grande demais");
+    }
+    const bytes = Buffer.from(image, "base64");
+    const signatureOk = mime === "image/png" ? bytes.subarray(0, 8).equals(Buffer.from("89504e470d0a1a0a", "hex"))
+      : mime === "image/jpeg" ? bytes.subarray(0, 3).equals(Buffer.from("ffd8ff", "hex"))
+      : bytes.subarray(0, 4).toString() === "RIFF" && bytes.subarray(8, 12).toString() === "WEBP";
+    if (!signatureOk) throw new HttpsError("invalid-argument", "o conteúdo não corresponde ao tipo de imagem informado");
+    const db = admin.firestore();
+    const snap = await db.collection("tournaments").doc(tournamentId).get();
+    if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+    if (!_isTournamentOrgCaller(snap.data(), uid)) throw new HttpsError("permission-denied", "só a organização importa inscritos");
+    // A imagem não é guardada. Cota conta tentativas, inclusive indisponibilidade do Vision.
+    await _consumeTournamentImportQuota(db, "ocr", uid, 50);
+    const { GoogleAuth } = require("google-auth-library");
+    const client = await new GoogleAuth({ scopes: ["https://www.googleapis.com/auth/cloud-platform"] }).getClient();
+    let response;
+    try {
+      response = await client.request({
+        url: "https://vision.googleapis.com/v1/images:annotate", method: "POST",
+        data: { requests: [{ image: { content: image }, features: [{ type: "DOCUMENT_TEXT_DETECTION" }] }] },
+      });
+    } catch (error) {
+      console.error("[tournament-import] OCR indisponível:", error && error.message);
+      throw new HttpsError("unavailable", "leitura da imagem indisponível; nenhum inscrito foi alterado, mas a tentativa contou na cota diária");
+    }
+    const result = response.data && response.data.responses && response.data.responses[0] || {};
+    if (result.error) throw new HttpsError("unavailable", "não foi possível ler a imagem; nenhum inscrito foi alterado, mas a tentativa contou na cota diária");
+    return { text: String(result.fullTextAnnotation && result.fullTextAnnotation.text || "").slice(0, 30000) };
+  }
+);
+
+exports.searchTournamentImportCandidates = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    const tournamentId = String(request.data && request.data.tournamentId || "").trim();
+    const query = String(request.data && request.data.query || "").trim().toLocaleLowerCase("pt-BR");
+    if (!uid) throw new HttpsError("unauthenticated", "login necessário");
+    if (!tournamentId || query.length < 3 || query.length > 80) throw new HttpsError("invalid-argument", "consulta curta ou inválida");
+    const db = admin.firestore();
+    const snap = await db.collection("tournaments").doc(tournamentId).get();
+    if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+    if (!_isTournamentOrgCaller(snap.data(), uid)) throw new HttpsError("permission-denied", "só a organização consulta candidatos");
+    await _consumeTournamentImportQuota(db, "search", uid, 300);
+    try {
+      // user-vivo:isento — esta busca só apresenta candidatos; lápides, perfis apagados
+      // e fundidos são filtrados abaixo antes de qualquer UID ser oferecido à organização.
+      const hits = await db.collection("users").where("displayName_lower", ">=", query)
+        .where("displayName_lower", "<", query + "\uf8ff").limit(10).get();
+      return { candidates: hits.docs.filter((doc) => {
+        const p = doc.data() || {};
+        return !p.deleted && !p.deletedAt && !p.mergedInto;
+      }).map((doc) => {
+        const p = doc.data() || {};
+        return { uid: doc.id, name: String(p.displayName || p.name || "") };
+      }) };
+    } catch (error) {
+      console.error("[tournament-import] candidate search failed:", error && error.message);
+      throw new HttpsError("unavailable", "busca de contas indisponível; tente novamente (a tentativa contou na cota diária)");
+    }
+  }
+);
+
+exports.applyTournamentImportBlock = onCall(
+  { region: "us-central1", memory: "512MiB", timeoutSeconds: 120, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "login necessário");
+    const input = request.data || {};
+    const tournamentId = String(input.tournamentId || "").trim();
+    const importId = String(input.importId || "").trim();
+    const index = Number(input.blockIndex);
+    const expected = String(input.fingerprint || "");
+    if (!tournamentId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(importId) ||
+        !Number.isInteger(index) || index < 0 || index > 999 || !/^[0-9a-f]{64}$/i.test(expected)) {
+      throw new HttpsError("invalid-argument", "identidade da importação inválida");
+    }
+    let block, hash;
+    try { block = _tournamentImport.normalizedBlock(input.block); hash = _tournamentImport.payloadHash(block); }
+    catch (error) { throw new HttpsError("invalid-argument", error.message); }
+    const db = admin.firestore();
+    const tournamentRef = db.collection("tournaments").doc(tournamentId);
+    const importRef = db.collection("tournamentImports").doc(importId);
+    const receiptRef = importRef.collection("blocks").doc(String(index));
+    return db.runTransaction(async (tx) => {
+      const tournamentSnap = await tx.get(tournamentRef);
+      if (!tournamentSnap.exists) throw new HttpsError("not-found", "torneio não existe");
+      const raw = tournamentSnap.data() || {};
+      if (!_isTournamentOrgCaller(raw, uid)) throw new HttpsError("permission-denied", "só a organização importa inscritos");
+      if (!_CANONICAL_REGISTRATION_MUTATIONS_READY) throw new HttpsError("failed-precondition", "inscrições canônicas indisponíveis");
+      const importSnap = await tx.get(importRef);
+      if (importSnap.exists && (importSnap.data().tournamentId !== tournamentId || importSnap.data().organizerUid !== uid)) {
+        throw new HttpsError("permission-denied", "importação vinculada a outro organizador ou torneio");
+      }
+      const receiptSnap = await tx.get(receiptRef);
+      if (receiptSnap.exists) {
+        if (receiptSnap.data().payloadHash !== hash) throw new HttpsError("already-exists", "bloco já aplicado com outros dados");
+        return Object.assign({ alreadyApplied: true }, receiptSnap.data());
+      }
+      const tournament = Object.assign({ id: tournamentId }, await _splitParts.hidratar(tx, tournamentRef, raw));
+      if (_hasCanonicalTournamentDraw(tournament) || tournament.drawCompleted || tournament.substitutions && tournament.substitutions.length) {
+        throw new HttpsError("failed-precondition", "importação indisponível após o sorteio");
+      }
+      const checked = await _loadCanonicalRosterForMutation(tx, tournamentRef, raw);
+      if (_tournamentImport.fingerprint(tournament, checked.registrations) !== expected) {
+        throw new HttpsError("aborted", "elenco alterado; atualize a prévia antes de gravar");
+      }
+      const validCategories = new Set((Array.isArray(tournament.categoryDefinitions) ? tournament.categoryDefinitions : [])
+        .map((item) => String(item && item.id || "")).filter(Boolean));
+      if (block.some((row) => !validCategories.has(row.categoryId))) {
+        throw new HttpsError("invalid-argument", "categoria final não existe no torneio");
+      }
+      const selectedUids = Array.from(new Set(block.flatMap((row) => row.people.map((person) => person.uid).filter(Boolean))));
+      const userSnaps = await Promise.all(selectedUids.map((selectedUid) => tx.get(db.collection("users").doc(selectedUid))));
+      userSnaps.forEach((snap) => {
+        const profile = snap.exists ? snap.data() || {} : {};
+        if (!snap.exists || profile.mergedInto || profile.deleted || profile.deletedAt) {
+          throw new HttpsError("failed-precondition", "uma conta selecionada não está ativa");
+        }
+      });
+      let changes;
+      try { changes = _tournamentImport.applyReviewedBlock(tournament, checked.registrations, block); }
+      catch (error) { throw new HttpsError("failed-precondition", error.message); }
+      if (!changes.updates.length && !changes.creates.length) throw new HttpsError("failed-precondition", "bloco sem alteração");
+      const next = _writeCanonicalRosterChanges(tx, tournamentRef, raw, checked.registrations, changes);
+      const receipt = {
+        tournamentId, organizerUid: uid, blockIndex: index, payloadHash: hash,
+        names: _tournamentImport.receiptNames(block),
+        pairs: block.map((row) => ({ pairId: row.pairId,
+          sourceCategoryId: checked.registrations.find((item) => item.fixedPairId === row.pairId).categoryId,
+          targetCategoryId: row.categoryId })),
+        count: next.registrations.filter((item) => item.status !== "withdrawn").length,
+        fingerprint: _tournamentImport.fingerprint(next.tournament, next.registrations),
+        appliedAt: new Date().toISOString(),
+      };
+      if (!importSnap.exists) tx.create(importRef, { tournamentId, organizerUid: uid, createdAt: _FV.serverTimestamp() });
+      tx.create(receiptRef, receipt);
+      return Object.assign({ alreadyApplied: false }, receipt);
+    });
+  }
+);
 
 /* Mudança administrativa de categoria usa IDs tipados e a subcoleção canônica.
  * Nome, rótulo visual e fotografia de `participants` não participam do pedido.

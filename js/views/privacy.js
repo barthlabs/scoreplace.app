@@ -11,7 +11,7 @@
   function renderPrivacyPage(container) {
     var _t = window._t || function (k) { return k; };
     var supportEmail = 'contato@barthlabs.com';
-    var lastUpdated = '17 de Agosto de 2026';
+    var lastUpdated = '15 de Outubro de 2026';
 
     var html = '';
 
