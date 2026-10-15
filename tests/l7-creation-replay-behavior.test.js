@@ -38,6 +38,7 @@ function creator(db,time=clock){return makeCreateTournament({db,HttpsError,Field
   for (const configPatch of [{politicaDaChave:'lixo'},{fmt2:{eliminatoria:{politicaDaChave:'lixo'}}}]) {
    await assert.rejects(fn({auth,data:{...payload,config:{...payload.config,...configPatch}}}),{code:'invalid-argument'});
   }
+  await assert.rejects(fn({auth,data:{...payload,config:{...payload.config,politicaDaChave:'bye',fmt2:{eliminatoria:{ativa:true,politicaDaChave:'repescagem'}}}}}),{code:'invalid-argument'});
   assert.equal(db.writes,0);
   assert.equal(db.docs.size,0);
  });

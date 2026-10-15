@@ -25,6 +25,15 @@ assert.equal(clone.politicaDaChave, 'repescagem');
 assert.equal(clone.fmt2.eliminatoria.politicaDaChave, 'repescagem');
 assert.equal(request.politicaDaChave, 'playin', 'request original fica intacto');
 assert.equal(request.fmt2.eliminatoria.politicaDaChave, 'playin');
+const equivalent = { politicaDaChave: 'playin', fmt2: { eliminatoria: { politicaDaChave: 'repescagem' } } };
+validateAndCanonicalizeExplicitPolicy(equivalent, HttpsError);
+assert.equal(equivalent.politicaDaChave, 'repescagem');
+for (const [top, nested] of [['bye', 'repescagem'], ['sobra_unica', 'bye'], ['playin', 'bye']]) {
+  const conflicting = { politicaDaChave: top, fmt2: { eliminatoria: { politicaDaChave: nested } } };
+  assert.throws(() => validateAndCanonicalizeExplicitPolicy(conflicting, HttpsError), { code: 'invalid-argument' });
+  assert.equal(conflicting.politicaDaChave, top, 'conflito não altera o objeto antes da recusa');
+  assert.equal(conflicting.fmt2.eliminatoria.politicaDaChave, nested);
+}
 
 const source = fs.readFileSync('functions-autodraw/index.js', 'utf8');
 const create = source.slice(source.indexOf('exports.createTournament ='), source.indexOf('exports.cleanupTournamentCreationRequests ='));

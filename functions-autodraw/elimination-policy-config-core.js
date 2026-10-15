@@ -17,6 +17,12 @@ function validateAndCanonicalizeExplicitPolicy(config, HttpsError) {
       throw new HttpsError('invalid-argument', 'Política de chave inválida em ' + path + '.');
     }
   });
+  if (entries.length === 2) {
+    const canonical = ([target, key]) => target[key] === 'playin' ? 'repescagem' : target[key];
+    if (canonical(entries[0]) !== canonical(entries[1])) {
+      throw new HttpsError('invalid-argument', 'As políticas de chave informadas não coincidem.');
+    }
+  }
   // O request já foi clonado pela fronteira de escrita. Só esse clone é alterado;
   // `playin` continua legível em documentos antigos, mas não nasce em novos writes.
   entries.forEach(([target, key]) => { if (target[key] === 'playin') target[key] = 'repescagem'; });
