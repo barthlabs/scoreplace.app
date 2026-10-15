@@ -603,8 +603,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // diferença máxima em um jogo e gera floor(N×jogos/2) confrontos.
       groupGames += Math.floor(u * perUnit / 2);
     }
-    // O compilador só materializa ida e volta numa tabela única. A prévia usa
-    // a mesma regra: cada confronto da ida ganha a volta com mando invertido.
+    // FORMAT2.compileToPhases só propaga turnos='ida_volta' para a fase 0
+    // quando há uma tabela única. Com vários grupos o pedido é compilado como
+    // ida simples; a prévia deve espelhar a fase compilada, não o gerador isolado.
     if (cfg.grupos === 1 && cfg.rodadas && cfg.rodadas.turnos === 'ida_volta') groupGames *= 2;
     var elimGames = 0;
     if (cfg.eliminatoria.ativa) {

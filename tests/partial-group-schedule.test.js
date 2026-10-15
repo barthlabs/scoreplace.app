@@ -96,13 +96,34 @@ for (let n = 2; n <= 64; n++) {
 const uiSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'format2-ui.js'), 'utf8');
 const estimateLine = new Function('_groupInfo', '_minPartidaForm', '_scoringInicial', '_elimEffScoring', 'document',
   extractFunction(uiSource, 'function _estimateLine') + '; return _estimateLine;'
-)(() => ({ people: 16, units: 8, ng: 1, base: 8, rem: 0, isDupla: true, t: { courtCount: 1 } }),
+)(cfg => ({ people: 16, units: 8, ng: cfg.grupos, base: 8 / cfg.grupos, rem: 0, isDupla: true, t: { courtCount: 1 } }),
   () => 20, () => null, () => null, { getElementById: () => null });
 const baseCfg = { grupos: 1, disputa: 'dupla', classificationSchedule: { gamesPerUnit: 3 }, eliminatoria: { ativa: false } };
 ok(estimateLine({ ...baseCfg, rodadas: { turnos: 'ida' } }).includes('(12 jogos'),
   'prévia: 8 duplas × 3 jogos = 12 confrontos');
 ok(estimateLine({ ...baseCfg, rodadas: { turnos: 'ida_volta' } }).includes('(24 jogos'),
   'prévia: ida e volta dobram os confrontos e a duração');
+ok(estimateLine({ ...baseCfg, grupos: 2, rodadas: { turnos: 'ida_volta' } }).includes('(12 jogos'),
+  'prévia: dois grupos não dobram, conforme a fase compilada');
+
+// O compilador é a fronteira que decide se o pedido de volta chega ao gerador.
+// Testar só genGroupsFromPool com turnos forçados aprovaria uma configuração
+// que o editor não salva para múltiplos grupos.
+const vm = require('vm');
+const sandbox = { console };
+sandbox.window = sandbox;
+vm.createContext(sandbox);
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'format2.js'), 'utf8'), sandbox);
+for (const ng of [1, 2]) {
+  const cfg = sandbox.FORMAT2.normalize({ ...baseCfg, grupos: ng, rodadas: { modo: 'todos', turnos: 'ida_volta' } }, 'Beach Tennis');
+  const compiled = sandbox.FORMAT2.compileToPhases(cfg, { sport: 'Beach Tennis' });
+  const phase = compiled.phases[0];
+  ok(phase.turnos === (ng === 1 ? 'ida_volta' : 'ida'),
+    ng + ' grupo(s): compilador propaga somente os turnos materializáveis');
+  const matches = E.genGroupsFromPool(players(8), phase, 'compiled-' + ng).matches;
+  ok(matches.length === (ng === 1 ? 24 : 12),
+    ng + ' grupo(s): gerador consome a fase compilada com a mesma contagem da prévia');
+}
 
 console.log(fail ? `❌ partial-group-schedule: ${pass} ok, ${fail} falharam` : `✅ partial-group-schedule: ${pass} verificações`);
 process.exit(fail ? 1 : 0);
