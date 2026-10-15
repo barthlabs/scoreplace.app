@@ -3048,3 +3048,132 @@ dialog.sp-native-update::backdrop { background: var(--bg-overlay, rgba(0,0,0,0.6
   .sp-late-mode-row { column-gap:7px; }
   .sp-late-mode-label { font-size:.72rem; }
 }
+/* Importação assistida: superfícies e controles seguem o tema, sem chrome nativo de botão. */
+#tournament-import-dialog.sp-import-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 10100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+  background: rgba(0, 0, 0, 0.8);
+}
+[data-theme="light"] #tournament-import-dialog.sp-import-dialog { background: rgba(0, 0, 0, 0.55); }
+.sp-import-panel {
+  width: min(890px, 100%);
+  max-height: calc(100dvh - 28px);
+  overflow: auto;
+  box-sizing: border-box;
+  padding: clamp(14px, 3vw, 22px);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  background: var(--bg-card);
+  color: var(--text-main);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.3);
+}
+.sp-import-header, .sp-import-summary, .sp-import-toolbar,
+.sp-import-pair-head, .sp-import-search-row, .sp-import-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.sp-import-header { margin-bottom: 12px; }
+.sp-import-header h2 { margin: 0; font-size: clamp(1.1rem, 4vw, 1.45rem); line-height: 1.2; }
+.sp-import-panel button, .sp-import-upload {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 44px;
+  max-width: 100%;
+  padding: 9px 13px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-text);
+  font: 600 0.86rem/1.25 var(--font-display);
+  text-align: center;
+  white-space: normal;
+  cursor: pointer;
+}
+.sp-import-panel button:hover:not(:disabled), .sp-import-upload:hover { background: var(--btn-secondary-hover); }
+.sp-import-panel button:focus-visible, .sp-import-panel input:focus-visible,
+.sp-import-panel select:focus-visible, .sp-import-panel summary:focus-visible,
+#tournament-import-files:focus-visible + .sp-import-upload {
+  outline: 3px solid var(--border-focus);
+  outline-offset: 2px;
+}
+.sp-import-panel button:disabled {
+  background: var(--bg-dark);
+  color: var(--text-muted);
+  border-color: var(--border-color);
+  cursor: not-allowed;
+}
+.sp-import-header button[data-act="close"] { width: 44px; padding: 0; font-size: 1.45rem; flex: 0 0 44px; }
+.sp-import-summary { justify-content: flex-start; gap: 8px; }
+.sp-import-summary span {
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--bg-dark);
+  color: var(--text-main);
+  font-size: 0.82rem;
+}
+.sp-import-lead { margin: 11px 0; font-size: 0.9rem; line-height: 1.4; }
+.sp-import-upload-area, .sp-import-pair {
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-dark);
+}
+.sp-import-upload-area { padding: 12px; }
+.sp-import-upload { min-width: 180px; }
+.sp-import-disclosure { margin: 8px 0 0; color: var(--text-muted); font-size: 0.76rem; line-height: 1.4; }
+.sp-import-help { margin: 9px 0; color: var(--text-muted); font-size: 0.78rem; }
+.sp-import-help summary { width: fit-content; cursor: pointer; }
+.sp-import-help p { margin: 7px 0; line-height: 1.45; }
+.sp-import-toolbar { margin: 12px 0; color: var(--text-muted); font-size: 0.77rem; }
+.sp-import-status {
+  margin: 8px 0 12px;
+  padding: 9px 11px;
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+  background: var(--bg-dark);
+  color: var(--text-main);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+.sp-import-pair { padding: 12px; margin: 10px 0; }
+.sp-import-pair-head strong { font-size: 0.94rem; }
+.sp-import-source { margin: 4px 0 9px; color: var(--text-muted); font-size: 0.75rem; overflow-wrap: anywhere; }
+.sp-import-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 9px 0; }
+.sp-import-field { display: block; min-width: 0; font-size: 0.78rem; font-weight: 600; }
+.sp-import-panel input:not([type="file"]), .sp-import-panel select {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  box-sizing: border-box;
+  margin-top: 4px;
+  padding: 9px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-darker);
+  color: var(--text-main);
+  font: inherit;
+}
+.sp-import-people { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.sp-import-person { min-width: 0; padding: 10px; border: 1px solid var(--border-color); border-radius: 9px; }
+.sp-import-decision { margin: 7px 0; color: var(--text-muted); font-size: 0.76rem; overflow-wrap: anywhere; }
+.sp-import-search-row { justify-content: flex-start; }
+.sp-import-search-row input { flex: 1 1 150px; margin-top: 0 !important; }
+.sp-import-candidate { display: block !important; width: 100%; margin-top: 5px; text-align: left !important; overflow-wrap: anywhere; }
+.sp-import-pagination { margin: 12px 0; justify-content: center; font-size: 0.8rem; }
+.sp-import-panel .sp-import-save { width: 100%; margin-top: 12px; border: 2px solid var(--border-focus); font-weight: 700; }
+@media (max-width: 600px) {
+  .sp-import-fields, .sp-import-people { grid-template-columns: minmax(0, 1fr); }
+  .sp-import-upload, .sp-import-toolbar button, .sp-import-panel .sp-import-save { width: 100%; }
+  .sp-import-toolbar { align-items: stretch; }
+}

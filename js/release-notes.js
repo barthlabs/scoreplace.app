@@ -1,3 +1,6 @@
+// 2.4.56 — Importar inscritos agora apresenta resumo curto, ajuda recolhível e
+// controles legíveis e acessíveis no celular, nos temas claro e escuro. A revisão
+// das duplas e a gravação continuam sob decisão explícita do organizador.
 // 2.4.55 — O botão de importar inscritos usa cores legíveis nos temas claro e escuro
 // tanto no painel de vagas quanto na página de participante. A ação não mudou.
 // 2.4.54 — Importação assistida de inscrições externas por foto (OCR com confirmação

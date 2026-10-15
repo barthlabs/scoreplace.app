@@ -1,3 +1,8 @@
+## 2.4.56 — 15/out/2026 (apresentação da importação)
+
+- O painel de importação troca o texto longo por orientação curta, ajuda recolhível e aviso visível sobre o envio de fotos ao Google Cloud Vision. Seleção de arquivos e demais ações usam controles temáticos de 44 px, com foco visível e layout sem estouro horizontal no celular.
+- A prévia, a revisão humana, o consentimento antes do OCR e a gravação não tiveram suas regras alteradas. Nenhuma inscrição, Function ou versão nativa foi alterada.
+
 ## 2.4.55 — 15/out/2026 (contraste da importação)
 
 - As duas entradas de importação tinham `.btn` com texto branco sem fundo definido, tornando o rótulo ilegível sobre o fundo claro padrão. Ambas agora usam a variante secundária existente, cujo fundo e texto seguem juntos os temas claro/escuro. A ação e o espaçamento foram mantidos; há regressão para os dois pontos de entrada.

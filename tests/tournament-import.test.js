@@ -148,6 +148,18 @@ for (const format of ['csv', 'txt', 'xls', 'xlsx']) {
 assert.deepStrictEqual(rows[0].people.map((person) => person.name), ['Ana Souza', 'Bia Lima'], `${format}: nomes`);
 }
 const view = fs.readFileSync(path.join(__dirname, '..', 'js/views/tournaments-import.js'), 'utf8');
+const styles = fs.readFileSync(path.join(__dirname, '..', 'css/components.css'), 'utf8');
 assert(view.includes("window._callCF('applyTournamentImportBlock'"), 'gravação usa o transporte autenticado canônico');
 assert(!view.includes('firebase.functions().httpsCallable('), 'importação não usa transporte compat sem token');
+assert(view.includes('class="sp-import-panel"') && view.includes("box.className = 'sp-import-dialog'"), 'painel e overlay usam os estilos próprios');
+assert(view.includes('id="tournament-import-title"') && view.includes("box.setAttribute('aria-labelledby', 'tournament-import-title')"), 'diálogo anuncia seu título');
+assert(/id="tournament-import-files" class="sr-only"[^>]*>\s*' \+\s*'<label class="sp-import-upload" for="tournament-import-files"/.test(view), 'seletor de arquivos invisível visualmente conserva foco e label associado');
+assert(view.includes('Fotos são enviadas ao Google Cloud Vision somente após sua confirmação.'), 'divulgação de OCR permanece visível antes do envio');
+assert(view.includes("window.confirm('Enviar a foto"), 'cada foto continua exigindo consentimento');
+assert(view.includes('data-act="add-row"') && view.includes('data-act="save"') && view.includes('data-act="none"'), 'ações de revisão continuam disponíveis');
+assert(view.includes("state.busy || !state.rows.some(function (r) { return !r.saved; }) ? ' disabled'"), 'gravação segue desativada sem duplas pendentes');
+assert(!view.includes('style=') && !view.includes('style.cssText'), 'nenhum estilo inline atropela o tema');
+assert(styles.includes('#tournament-import-dialog.sp-import-dialog') && styles.includes('z-index: 10100'), 'overlay mantém sua camada no CSS');
+assert(styles.includes('background: var(--bg-card)') && styles.includes('color: var(--text-main)'), 'fundo e texto do painel seguem o tema juntos');
+assert(styles.includes('#tournament-import-files:focus-visible + .sp-import-upload'), 'seletor de arquivo conserva foco visível');
 console.log('✓ importação assistida: pares, UID/nenhum, slots, hash, parser');

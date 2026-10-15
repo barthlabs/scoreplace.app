@@ -39,41 +39,46 @@
       var decision = person.uid === undefined ? 'Ainda sem decisão' : (person.uid === null ? 'Nenhum destes' :
         'Conta: ' + (person.chosenName || person.uid) + ' · ' + person.uid);
       var hits = (person.candidates || []).map(function (candidate, candidateIndex) {
-        return '<button type="button" data-act="choose" data-row="' + idx + '" data-side="' + side + '" data-candidate="' + candidateIndex + '"' + disabled + ' style="display:block;margin:4px 0;padding:6px;max-width:100%;text-align:left;">' + esc(candidate.name) + ' · ' + esc(candidate.uid) + '</button>';
+        return '<button type="button" class="sp-import-candidate" data-act="choose" data-row="' + idx + '" data-side="' + side + '" data-candidate="' + candidateIndex + '"' + disabled + '>' + esc(candidate.name) + ' · ' + esc(candidate.uid) + '</button>';
       }).join('');
-      return '<div style="padding:8px;border:1px solid #495467;border-radius:9px;min-width:230px;flex:1;">' +
-        '<label>Pessoa ' + (side + 1) + '<input data-act="name" data-row="' + idx + '" data-side="' + side + '" value="' + esc(person.name) + '"' + disabled + ' style="display:block;width:100%;box-sizing:border-box;padding:8px;"></label>' +
-        '<div style="font-size:.76rem;margin:6px 0;">' + esc(decision) + '</div>' +
-        '<input data-act="query" data-row="' + idx + '" data-side="' + side + '" value="' + esc(person.query || person.name) + '" aria-label="Buscar conta"' + disabled + ' style="width:60%;box-sizing:border-box;padding:6px;"> ' +
-        '<button type="button" data-act="search" data-row="' + idx + '" data-side="' + side + '"' + disabled + '>Buscar</button> ' +
-        '<button type="button" data-act="none" data-row="' + idx + '" data-side="' + side + '"' + disabled + '>Nenhum destes</button>' + hits +
+      return '<div class="sp-import-person">' +
+        '<label class="sp-import-field">Pessoa ' + (side + 1) + '<input data-act="name" data-row="' + idx + '" data-side="' + side + '" value="' + esc(person.name) + '"' + disabled + '></label>' +
+        '<div class="sp-import-decision">' + esc(decision) + '</div>' +
+        '<div class="sp-import-search-row"><input data-act="query" data-row="' + idx + '" data-side="' + side + '" value="' + esc(person.query || person.name) + '" aria-label="Buscar conta"' + disabled + '>' +
+        '<button type="button" data-act="search" data-row="' + idx + '" data-side="' + side + '"' + disabled + '>Buscar</button>' +
+        '<button type="button" data-act="none" data-row="' + idx + '" data-side="' + side + '"' + disabled + '>Nenhum destes</button></div>' + hits +
       '</div>';
     }).join('');
-    return '<section style="border:1px solid #506079;border-radius:12px;padding:10px;margin:10px 0;">' +
-      '<div style="display:flex;justify-content:space-between;"><strong>Dupla ' + (idx + 1) + (row.saved ? ' · gravada' : '') + '</strong><button type="button" data-act="remove" data-row="' + idx + '"' + (row.saved ? ' disabled' : '') + '>Remover</button></div>' +
-      '<div style="font-size:.72rem;color:var(--text-muted);">Origem: ' + esc(row.source || 'entrada manual') + '</div>' +
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0;">' +
-        '<label>Categoria final<select data-act="category" data-row="' + idx + '"' + disabled + ' style="display:block;max-width:220px;padding:7px;">' + options + '</select></label>' +
-        '<label>Vaga de origem<select data-act="slot" data-row="' + idx + '"' + disabled + ' style="display:block;max-width:260px;padding:7px;">' + slotOptions + '</select></label>' +
-      '</div><div style="display:flex;gap:8px;flex-wrap:wrap;">' + people + '</div></section>';
+    return '<section class="sp-import-pair">' +
+      '<div class="sp-import-pair-head"><strong>Dupla ' + (idx + 1) + (row.saved ? ' · gravada' : '') + '</strong><button type="button" data-act="remove" data-row="' + idx + '"' + (row.saved ? ' disabled' : '') + '>Remover</button></div>' +
+      '<div class="sp-import-source">Origem: ' + esc(row.source || 'entrada manual') + '</div>' +
+      '<div class="sp-import-fields">' +
+        '<label class="sp-import-field">Categoria final<select data-act="category" data-row="' + idx + '"' + disabled + '>' + options + '</select></label>' +
+        '<label class="sp-import-field">Vaga de origem<select data-act="slot" data-row="' + idx + '"' + disabled + '>' + slotOptions + '</select></label>' +
+      '</div><div class="sp-import-people">' + people + '</div></section>';
   }
   function render() {
     var box = el(); if (!box || !state) return;
     var start = state.page * 8, visible = state.rows.slice(start, start + 8);
-    var content = !state.preview ? '<p>Consultando vagas atuais…</p>' :
-      '<p style="font-size:.78rem;">' + state.preview.count + ' inscrições canônicas · ' + state.preview.slots.length + ' duplas-placeholder disponíveis. Fotos e planilhas geram só uma prévia. Escolha uma conta ou <em>Nenhum destes</em> para cada pessoa e selecione a vaga de origem. A categoria final pode ser outra; essa troca é gravada no banco.</p>' +
-      '<p style="font-size:.74rem;">' + (state.preview.photoImportEnabled
-        ? 'Fotos são enviadas ao Google Cloud Vision para leitura; planilhas são lidas neste dispositivo.'
-        : 'Leitura de fotos ainda não habilitada. Use planilhas ou digite as duplas abaixo.') + ' Confira todos os nomes antes de gravar.</p>' +
-      '<input id="tournament-import-files" type="file" multiple accept="' + (state.preview.photoImportEnabled ? 'image/jpeg,image/png,image/webp,' : '') + '.csv,.tsv,.xls,.xlsx" aria-label="Fotos ou planilhas de inscritos">' +
-      '<button type="button" data-act="add-row">+ Dupla para revisar</button>' +
-      '<div style="font-size:.75rem;">' + state.rows.length + ' duplas na prévia · ' + state.rows.filter(function (r) { return r.saved; }).length + ' gravadas</div>' +
+    var content = !state.preview ? '<p class="sp-import-lead">Consultando vagas atuais…</p>' :
+      '<div class="sp-import-summary"><span><strong>' + state.preview.count + '</strong> inscritos</span><span><strong>' + state.preview.slots.length + '</strong> duplas para preencher</span></div>' +
+      '<p class="sp-import-lead">Envie fotos ou planilhas. Confira cada dupla antes de gravar.</p>' +
+      '<div class="sp-import-upload-area">' +
+        '<input id="tournament-import-files" class="sr-only" type="file" multiple accept="' + (state.preview.photoImportEnabled ? 'image/jpeg,image/png,image/webp,' : '') + '.csv,.tsv,.xls,.xlsx" aria-label="Fotos ou planilhas de inscritos">' +
+        '<label class="sp-import-upload" for="tournament-import-files">📄 Selecionar arquivos</label>' +
+        '<p class="sp-import-disclosure">' + (state.preview.photoImportEnabled
+          ? 'Fotos são enviadas ao Google Cloud Vision somente após sua confirmação. Planilhas são lidas neste dispositivo.'
+          : 'Fotos indisponíveis no momento. Planilhas são lidas neste dispositivo.') + '</p>' +
+      '</div>' +
+      '<details class="sp-import-help"><summary>Como funciona</summary><p>Arquivos geram uma prévia. Para cada pessoa, escolha uma conta ou Nenhum destes; depois escolha a vaga de origem e a categoria final. Nada é gravado antes da sua confirmação.</p></details>' +
+      '<div class="sp-import-toolbar"><button type="button" data-act="add-row">+ Adicionar dupla manualmente</button>' +
+      '<span>' + state.rows.length + ' na prévia · ' + state.rows.filter(function (r) { return r.saved; }).length + ' gravadas</span></div>' +
       visible.map(function (row, i) { return rowMarkup(row, start + i); }).join('') +
-      (state.rows.length > 8 ? '<div><button type="button" data-act="prev"' + (state.page === 0 ? ' disabled' : '') + '>Anterior</button> Página ' + (state.page + 1) + ' de ' + Math.ceil(state.rows.length / 8) + ' <button type="button" data-act="next"' + (start + 8 >= state.rows.length ? ' disabled' : '') + '>Próxima</button></div>' : '') +
-      '<button type="button" data-act="save"' + (state.busy || !state.rows.some(function (r) { return !r.saved; }) ? ' disabled' : '') + ' style="margin-top:12px;padding:10px;">Confirmar e gravar blocos revisados</button>';
-    box.innerHTML = '<div style="width:min(890px,100%);max-height:calc(100% - 28px);overflow:auto;background:#202531;color:#fff;padding:16px;border-radius:14px;box-sizing:border-box;">' +
-      '<div style="display:flex;justify-content:space-between;align-items:center;"><h2 style="margin:0;">Importar inscritos</h2><button type="button" data-act="close" aria-label="Fechar">×</button></div>' +
-      (state.message ? '<p role="status" style="color:#fbbf24;">' + esc(state.message) + '</p>' : '') + content + '</div>';
+      (state.rows.length > 8 ? '<div class="sp-import-pagination"><button type="button" data-act="prev"' + (state.page === 0 ? ' disabled' : '') + '>Anterior</button><span>Página ' + (state.page + 1) + ' de ' + Math.ceil(state.rows.length / 8) + '</span><button type="button" data-act="next"' + (start + 8 >= state.rows.length ? ' disabled' : '') + '>Próxima</button></div>' : '') +
+      '<button type="button" class="sp-import-save" data-act="save"' + (state.busy || !state.rows.some(function (r) { return !r.saved; }) ? ' disabled' : '') + '>Gravar duplas revisadas</button>';
+    box.innerHTML = '<div class="sp-import-panel">' +
+      '<div class="sp-import-header"><h2 id="tournament-import-title">Importar inscritos</h2><button type="button" data-act="close" aria-label="Fechar">×</button></div>' +
+      (state.message ? '<p role="status" class="sp-import-status">' + esc(state.message) + '</p>' : '') + content + '</div>';
   }
   function loadXlsx() {
     if (window.XLSX) return Promise.resolve(window.XLSX);
@@ -211,7 +216,8 @@
       blockIndex: 0, rows: [], page: 0, preview: null, message: '', busy: false };
     var box = document.createElement('div'); box.id = 'tournament-import-dialog';
     box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true');
-    box.style.cssText = 'position:fixed;inset:0;z-index:10100;background:rgba(0,0,0,.8);display:flex;align-items:center;justify-content:center;padding:14px;';
+    box.setAttribute('aria-labelledby', 'tournament-import-title');
+    box.className = 'sp-import-dialog';
     document.body.appendChild(box); render();
     try {
       state.preview = await callable('previewTournamentImport', { tournamentId: state.tournamentId });
