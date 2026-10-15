@@ -1323,8 +1323,10 @@
       }).filter(Boolean);
     }
     // v4.4.x: ida-e-volta (turnos=2) — repete a grade com mando invertido.
-    // GATED: só quando phaseCfg.turnos==='ida_volta' (ou _doubleRR); ausente = single-RR (comportamento legado).
-    var _turnos = (phaseCfg && (phaseCfg.turnos === 'ida_volta' || phaseCfg._doubleRR)) ? 2 : 1;
+    // O turno explícito da fase vence o sinal legado _doubleRR.
+    var _turnos = (phaseCfg && phaseCfg.turnos === 'ida_volta') ? 2
+      : (phaseCfg && phaseCfg.turnos === 'ida') ? 1
+      : (phaseCfg && phaseCfg._doubleRR) ? 2 : 1;
     groups.forEach(function (g) {
       // O grupo é sempre composto pelas unidades que efetivamente jogam (uma dupla ou
       // um individual). `roundRobinSchedule` cria só jogos reais; BYE pertence somente
@@ -1333,7 +1335,7 @@
       // BALANCEADAS dentro do grupo. Estático: todos os jogos existem de uma vez.
       var normalizedCompetition = _teamCompetitionCore && typeof _teamCompetitionCore.normalize === 'function'
         ? _teamCompetitionCore.normalize(_teamCompetition) : null;
-      var teamSchedule = normalizedCompetition && normalizedCompetition.enabled && normalizedCompetition.schedule.enabled ? normalizedCompetition.schedule : null;
+      var teamSchedule = normalizedCompetition && normalizedCompetition.enabled && normalizedCompetition.schedule && normalizedCompetition.schedule.enabled ? normalizedCompetition.schedule : null;
       var classificationSchedule = phaseCfg && phaseCfg.classification && phaseCfg.classification.schedule;
       var genericSchedule = classificationSchedule && parseInt(classificationSchedule.gamesPerUnit, 10) >= 1
         ? classificationSchedule : null;

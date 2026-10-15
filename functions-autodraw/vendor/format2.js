@@ -85,6 +85,25 @@
       unequalGroups: unequal, limitedGroups: limited };
   }
 
+  // Recebe somente a configuração já normalizada. A grade técnica de times
+  // pode materializar mais grupos que o slider geral, mas nunca autoriza uma
+  // volta que a própria classificatória não comporta.
+  function resolveTurnos(cfg) {
+    var groups = Math.max(1, parseInt(cfg.grupos, 10) || 1);
+    var tc = cfg.teamCompetition;
+    var schedule = tc && tc.schedule;
+    if (!cfg.classificationSchedule && tc && tc.enabled && schedule && schedule.enabled && tc.teamCount >= 2) {
+      var map = schedule.pairsPerTeamByCategory;
+      var values = map && typeof map === 'object' ? Object.keys(map).map(function (key) {
+        return Math.max(1, parseInt(map[key], 10) || 1);
+      }) : [];
+      var maxPairs = values.length ? Math.max.apply(Math, values) : 1;
+      groups = Math.max(1, Math.ceil((tc.teamCount * maxPairs) / schedule.teamsPerGroup));
+    }
+    var turnos = groups === 1 && cfg.rodadas && cfg.rodadas.turnos === 'ida_volta' ? 'ida_volta' : 'ida';
+    return { groups: groups, turnos: turnos, ligaTurnos: turnos === 'ida_volta' ? 2 : 1 };
+  }
+
   // Política pública de uma chave eliminatória. `playin` foi um nome interno
   // usado pelo primeiro motor para a rodada preliminar; nunca foi um quarto
   // desenho disponível ao organizador. Ao reler um documento que o tenha
@@ -686,6 +705,7 @@
     // tem a classificatória onde a tabela de times existe. Desligar nesses casos evita
     // uma configuração visualmente possível, mas sem unidade estável para representar o time.
     if (!isDupla || out.parceria !== 'fixa' || !out.classifAtiva) out.teamCompetition.enabled = false;
+    if (out.classifAtiva && resolveTurnos(out).groups > 1) out.rodadas.turnos = 'ida';
     // v1.6.80: término PRÓPRIO da eliminatória — só faz sentido quando ela é 2ª fase. Na
     // eliminação DIRETA ela É a fase inicial e já usa as datas do form (t.startDate/t.endDate),
     // então aqui fica vazio pra não haver duas fontes pro mesmo fim. Só aceita 'AAAA-MM-DD';
@@ -716,14 +736,15 @@
       parts.push('elim ' + cfg.eliminatoria.linhas + (cfg.eliminatoria.linhas > 1 ? ' linhas' : ' linha'));
       return parts.join(' · ');
     }
-    parts.push(cfg.grupos === 1 ? 'Pontos Corridos' : (cfg.grupos + ' grupos'));
+    var resolved = resolveTurnos(cfg);
+    parts.push(resolved.groups === 1 ? 'Pontos Corridos' : (resolved.groups + ' grupos'));
     if (cfg.disputa === 'dupla') {
       if (cfg.parceria === 'rei_rainha') parts.push('Rei/Rainha');
       else if (cfg.parceria === 'sorteio_rodada') parts.push('sorteio/rodada');
       else parts.push(cfg.formacaoDupla === 'manual' ? 'duplas montadas' : 'duplas sorteadas');
     }
-    if (cfg.grupos === 1) {
-      parts.push(cfg.rodadas.modo === 'fixo' ? (cfg.rodadas.n + ' rodadas') : ('todos ' + (cfg.rodadas.turnos === 'ida_volta' ? 'ida/volta' : 'ida')));
+    if (resolved.groups === 1) {
+      parts.push(cfg.rodadas.modo === 'fixo' ? (cfg.rodadas.n + ' rodadas') : ('todos ' + (resolved.turnos === 'ida_volta' ? 'ida/volta' : 'ida')));
     }
     if (cfg.eliminatoria.ativa) parts.push('elim ' + cfg.eliminatoria.linhas + (cfg.eliminatoria.linhas > 1 ? ' linhas' : ' linha') + ' · top ' + cfg.classificados);
     return parts.join(' · ');
@@ -958,14 +979,8 @@
       // parcial apenas limita jogos por unidade, não cria outro formato de torneio.
       // Há uma grade técnica por CATEGORIA. Com duas duplas Light por time,
       // por exemplo, cada grupo recebe 2× mais unidades sem inventar times.
-      var _maxPairsPerTeam = (function () {
-        var map = cfg.teamCompetition && cfg.teamCompetition.schedule && cfg.teamCompetition.schedule.pairsPerTeamByCategory;
-        var values = map && typeof map === 'object' ? Object.keys(map).map(function (key) { return Math.max(1, parseInt(map[key], 10) || 1); }) : [];
-        return values.length ? Math.max.apply(Math, values) : 1;
-      })();
-      var _teamGroupCount = (!cfg.classificationSchedule && cfg.teamCompetition && cfg.teamCompetition.enabled && cfg.teamCompetition.schedule.enabled && cfg.teamCompetition.teamCount >= 2)
-        ? Math.max(1, Math.ceil((cfg.teamCompetition.teamCount * _maxPairsPerTeam) / cfg.teamCompetition.schedule.teamsPerGroup))
-        : cfg.grupos;
+      var _turns = resolveTurnos(cfg);
+      var _teamGroupCount = _turns.groups;
       top.format = 'Fase de Grupos';
       top.drawMode = 'sorteio';
       top.teamSize = teamSize;
@@ -974,8 +989,8 @@
       top.gruposClassified = cfg.classificados;
       if (cfg.teamCompetition && cfg.teamCompetition.enabled) top.teamCompetition = cfg.teamCompetition;
       // ida-e-volta só vale em tabela única (grupos=1) todos-contra-todos.
-      var idaVolta = (_teamGroupCount === 1 && cfg.rodadas.turnos === 'ida_volta');
-      top.turnos = idaVolta ? 'ida_volta' : 'ida';   // _buildPhase0Cfg propaga p/ genGroupsFromPool
+      var idaVolta = _turns.turnos === 'ida_volta';
+      top.turnos = _turns.turnos;   // _buildPhase0Cfg propaga p/ genGroupsFromPool
       if (idaVolta) top.ligaTurnos = 2;
       var _classification = { structure: 'groups' };
       if (cfg.classificationSchedule) _classification.schedule = cfg.classificationSchedule;
@@ -987,8 +1002,8 @@
         groupsBy: 'sorteio', rounds: 1,
         // O motor de grupos materializa a volta com o mando invertido. Este campo
         // continua na fase porque é a configuração, não uma particularidade do rótulo.
-        turnos: idaVolta ? 'ida_volta' : 'ida',
-        _doubleRR: idaVolta,
+        turnos: _turns.turnos,
+        _doubleRR: _turns.turnos === 'ida_volta',
         source: { type: 'enrollment' },
         fixedPairs: isDupla,                   // teamSize>1 forma duplas fixas no sorteio
         teamCompetition: (cfg.teamCompetition && cfg.teamCompetition.enabled) ? cfg.teamCompetition : null,
@@ -1125,6 +1140,7 @@
     summary: summary,
     projectLegacyPhases: projectLegacyPhases,
     compileToPhases: compileToPhases,
-    assessGroupSchedule: assessGroupSchedule
+    assessGroupSchedule: assessGroupSchedule,
+    resolveTurnos: resolveTurnos
   };
 })();

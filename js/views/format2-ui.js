@@ -583,9 +583,14 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var people = _peopleCount(t);
     var isDupla = cfg.disputa === 'dupla';
     var units = isDupla ? Math.floor(people / 2) : people;
+    if (cfg.teamCompetition && cfg.teamCompetition.enabled && t && typeof window._diagnoseAll === 'function') {
+      var diagnosis = window._diagnoseAll(t);
+      if (diagnosis && Number.isFinite(Number(diagnosis.effectiveTeams))) units = Math.max(0, Number(diagnosis.effectiveTeams));
+    }
+    var resolved = window.FORMAT2.resolveTurnos(cfg);
     var equalOnly = cfg.gruposEqualOnly != null ? cfg.gruposEqualOnly : !!(t && t.gruposEqualOnly);
-    var assessment = window.FORMAT2.assessGroupSchedule(units, cfg.grupos, cfg.classificationSchedule,
-      equalOnly, cfg.rodadas && cfg.rodadas.turnos === 'ida_volta');
+    var assessment = window.FORMAT2.assessGroupSchedule(units, resolved.groups, cfg.classificationSchedule,
+      equalOnly, resolved.turnos === 'ida_volta');
     var ng = assessment.groups;
     var base = assessment.base, rem = assessment.remainder;
     var small = base, big = base + (rem > 0 ? 1 : 0);
@@ -922,8 +927,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // A competição por times tem grade parcial própria. Os modos antigos descrevem
       // liga e esconderiam os dois controles que determinam os confrontos.
       // [[regression_team_schedule_replaces_round_mode_buttons]]
-      rInner = _toggleRight('Ida e volta', cfg.rodadas.turnos === 'ida_volta', 'window._f2Turnos(this.checked ? \'ida_volta\' : \'ida\')') +
-        '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">Vagas e jogos por dupla são definidos em cada categoria' + (cfg.rodadas.turnos === 'ida_volta' ? ' em cada turno — ida e volta dobra o total.' : '.') + '</div>';
+      var teamTurnos = window.FORMAT2.resolveTurnos(cfg);
+      rInner = (teamTurnos.groups === 1
+        ? _toggleRight('Ida e volta', teamTurnos.turnos === 'ida_volta', 'window._f2Turnos(this.checked ? \'ida_volta\' : \'ida\')')
+        : '<div style="font-size:0.72rem;color:var(--text-muted);">Vários grupos: classificatória somente de ida.</div>') +
+        '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">Vagas e jogos por dupla são definidos em cada categoria' + (teamTurnos.turnos === 'ida_volta' ? ' em cada turno — ida e volta dobra o total.' : '.') + '</div>';
     } else if (um) {
       // Pontos corridos: Nº de rodadas (PADRÃO, primeiro) × Todos contra todos.
       rInner = _pill(rModo === 'fixo', 'window._f2Modo(\'fixo\')', '🔢 Nº de rodadas') +
@@ -1280,7 +1288,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     _norm(); _rerender();
   };
   window._f2Modo = function (v) { S.cfg.rodadas.modo = v; _norm(); _rerender(); };
-  window._f2Turnos = function (v) { S.cfg.rodadas.turnos = v; _norm(); _rerender(); };
+  window._f2Turnos = function (v) {
+    if (!S) return;
+    if (v === 'ida_volta' && window.FORMAT2.resolveTurnos(S.cfg).groups > 1) { _rerender(); return; }
+    S.cfg.rodadas.turnos = v; _norm(); _rerender();
+  };
   // CANON (v4.5.24, regra-mãe): editar o Nº de RODADAS → MOVE a DATA FINAL (mantém V). Fim =
   // 1º + N×repetição (última rodada tem 1 intervalo pra ser jogada → todos os N sorteios disparam).
   // Só cai no legado (deriva o intervalo pela janela) quando não dá pra derivar o fim (sem V/1º sorteio).

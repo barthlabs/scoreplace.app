@@ -17,11 +17,18 @@ window._grupos_f2Direct = function(tId) {
         if (typeof window._setDrawDecision === 'function') window._setDrawDecision(tId,{closeEnrollment:true});
         if (typeof window.generateDrawFunction === 'function') window.generateDrawFunction(tId);
     };
-    var schedule = t.fmt2.classificationSchedule;
+    var phase0 = Array.isArray(t.phases) && t.phases[0];
+    var intent = window.FORMAT2 && window.FORMAT2.normalize ? window.FORMAT2.normalize(t.fmt2, t.sport) : null;
+    var schedule = intent && intent.classificationSchedule;
+    var resolved = intent && window.FORMAT2.resolveTurnos ? window.FORMAT2.resolveTurnos(intent) : null;
+    var turnos = phase0 && phase0.turnos != null ? phase0.turnos : (resolved ? resolved.turnos : 'ida');
+    var groups = phase0 && phase0.turnos != null
+        ? (phase0.gruposCount != null ? phase0.gruposCount : t.gruposCount)
+        : (resolved ? resolved.groups : t.gruposCount);
     var diagnose = window._diagnoseAll && window._diagnoseAll(t);
     var assessment = schedule && diagnose && window.FORMAT2 && window.FORMAT2.assessGroupSchedule(
-        diagnose.effectiveTeams, t.gruposCount, schedule, t.gruposEqualOnly,
-        !!(t.fmt2.rodadas && t.fmt2.rodadas.turnos === 'ida_volta'));
+        diagnose.effectiveTeams, groups, schedule, t.gruposEqualOnly,
+        turnos === 'ida_volta');
     if (assessment && assessment.known && (assessment.unequalGroups || assessment.limitedGroups) && typeof showConfirmDialog === 'function') {
         var unit = _t(diagnose.isTeam ? 'format2.scheduleUnitPair' : 'format2.scheduleUnitPerson');
         var detail = assessment.minGames === assessment.maxGames

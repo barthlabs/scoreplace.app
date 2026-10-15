@@ -2357,7 +2357,23 @@ window._buildPhase0Cfg = function (t) {
     if (code === 'liga') cfg.ligaCadence = ((phase0 && phase0.ligaDrawMode) || t.ligaDrawMode) === 'round_robin' ? 'round_robin' : 'incremental';
     // v4.4.x: ida-e-volta em Fase de Grupos (tabela única de duplas fixas) — propaga o
     // turnos pro genGroupsFromPool. Ausente/ida = single-RR (legado). Ver format2.
-    if (code === 'grupos_mata') cfg.turnos = (((phase0 && phase0.turnos) || t.turnos) === 'ida_volta' || parseInt((phase0 && phase0.ligaTurnos) != null ? phase0.ligaTurnos : t.ligaTurnos, 10) === 2) ? 'ida_volta' : 'ida';
+    if (code === 'grupos_mata') {
+        if (phase0 && phase0.turnos != null) {
+            cfg.turnos = phase0.turnos === 'ida_volta' ? 'ida_volta' : 'ida';
+        } else if (t.fmt2) {
+            if (!window.FORMAT2 || typeof window.FORMAT2.normalize !== 'function' || typeof window.FORMAT2.resolveTurnos !== 'function') {
+                throw new Error('Configuração de turnos indisponível; sorteio não iniciado.');
+            }
+            var intent = window.FORMAT2.normalize(t.fmt2, t.sport);
+            var resolved = window.FORMAT2.resolveTurnos(intent);
+            // Sem fase explícita, a mesma configuração que o editor mostra define
+            // tanto grupos quanto turnos; um contador legado não divide a decisão.
+            cfg.gruposCount = resolved.groups;
+            cfg.turnos = resolved.turnos;
+        } else {
+            cfg.turnos = (t.turnos === 'ida_volta' || parseInt((phase0 && phase0.ligaTurnos) != null ? phase0.ligaTurnos : t.ligaTurnos, 10) === 2) ? 'ida_volta' : 'ida';
+        }
+    }
     return cfg;
 };
 

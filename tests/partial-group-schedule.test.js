@@ -114,6 +114,8 @@ const vm = require('vm');
 const sandbox = { console };
 sandbox.window = sandbox;
 vm.createContext(sandbox);
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'sport-rules.js'), 'utf8'), sandbox);
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'domain', 'team-competition.js'), 'utf8'), sandbox);
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'format2.js'), 'utf8'), sandbox);
 const warning = new Function('window', '_groupInfo',
   extractFunction(uiSource, 'function _groupScheduleWarning') + '; return _groupScheduleWarning;'
@@ -185,6 +187,57 @@ for (const ng of [1, 2]) {
   ok(matches.length === (ng === 1 ? 24 : 12),
     ng + ' grupo(s): gerador consome a fase compilada com a mesma contagem da prévia');
 }
+
+// Turno efetivo é um contrato único para a grade, resumo e motor. A configuração
+// antiga de volta em múltiplos grupos não pode dobrar jogos ao ser reaberta.
+const teamIntent = { disputa: 'dupla', parceria: 'fixa', classifAtiva: true, grupos: 1,
+  rodadas: { modo: 'todos', turnos: 'ida_volta' }, eliminatoria: { ativa: false },
+  teamCompetition: { enabled: true, teamCount: 8, schedule: { enabled: true, teamsPerGroup: 8,
+    pairsPerTeamByCategory: { 'Fem Light': 2 } } } };
+const teamCfg = sandbox.FORMAT2.normalize(teamIntent, 'Beach Tennis');
+const turns = sandbox.FORMAT2.resolveTurnos(teamCfg);
+ok(turns.groups === 2 && turns.turnos === 'ida' && turns.ligaTurnos === 1,
+  'grade técnica de 2 grupos neutraliza ida/volta residual sem alterar jogos');
+ok(teamCfg.rodadas.turnos === 'ida', 'normalize descarta volta invisível em múltiplos grupos');
+const teamCompiled = sandbox.FORMAT2.compileToPhases(teamIntent, { sport: 'Beach Tennis' });
+ok(teamCompiled.topLevel.gruposCount === 2 && teamCompiled.phases[0].turnos === 'ida' && teamCompiled.phases[0]._doubleRR === false,
+  'topo e fase compilada concordam sobre os 2 grupos e somente ida');
+ok(sandbox.FORMAT2.summary(teamCfg).includes('2 grupos') && !sandbox.FORMAT2.summary(teamCfg).includes('Pontos Corridos'),
+  'resumo não promete tabela única numa grade técnica de 2 grupos');
+const teamPreview = new Function('window', 'S', '_peopleCount',
+  extractFunction(uiSource, 'function _groupInfo') + '; return _groupInfo;'
+)({ FORMAT2: sandbox.FORMAT2, _diagnoseAll: () => ({ effectiveTeams: 16 }) }, { t: { gruposEqualOnly: false } }, () => 32)(teamCfg);
+ok(teamPreview.units === 16 && teamPreview.ng === 2 && teamPreview.assessment.matches === 56,
+  'editor usa 16 duplas efetivas e 2 grupos técnicos sem inventar volta');
+const emptyTeamPreview = new Function('window', 'S', '_peopleCount',
+  extractFunction(uiSource, 'function _groupInfo') + '; return _groupInfo;'
+)({ FORMAT2: sandbox.FORMAT2, _diagnoseAll: () => ({ effectiveTeams: 0 }) }, { t: { gruposEqualOnly: false } }, () => 32)(teamCfg);
+ok(emptyTeamPreview.units === 0 && emptyTeamPreview.assessment.known === false,
+  'editor não inventa jogos se há times cadastrados mas nenhuma dupla inscrita');
+const commonPreview = new Function('window', 'S', '_peopleCount',
+  extractFunction(uiSource, 'function _groupInfo') + '; return _groupInfo;'
+)({ FORMAT2: sandbox.FORMAT2, _diagnoseAll: () => ({ effectiveTeams: 99 }) }, { t: {} }, () => 3)(
+  sandbox.FORMAT2.normalize({ disputa: 'dupla', grupos: 1, rodadas: { modo: 'todos' } }, 'Beach Tennis'));
+ok(commonPreview.units === 1, 'torneio comum com inscrição incompleta mantém contagem original de duplas');
+
+const singleTeamIntent = { ...teamIntent, teamCompetition: { ...teamIntent.teamCompetition,
+  schedule: { ...teamIntent.teamCompetition.schedule, pairsPerTeamByCategory: { 'Fem Light': 1 } } } };
+const singleTeamCfg = sandbox.FORMAT2.normalize(singleTeamIntent, 'Beach Tennis');
+ok(sandbox.FORMAT2.resolveTurnos(singleTeamCfg).turnos === 'ida_volta',
+  'tabela única com times preserva a volta configurada');
+const individual = sandbox.FORMAT2.normalize({ ...teamIntent, disputa: 'individual' }, 'Tênis');
+ok(individual.teamCompetition.enabled === false && individual.rodadas.turnos === 'ida_volta',
+  'individual desliga competição por times antes de resolver turnos');
+ok(sandbox.FORMAT2.compileToPhases(individual, { sport: 'Tênis' }).phases[0]._doubleRR === true,
+  'individual em tabela única mantém volta no motor');
+
+const conflictBase = { gruposCount: 1 };
+ok(E.genGroupsFromPool(players(4), { ...conflictBase, turnos: 'ida', _doubleRR: true }, 'explicit-ida').matches.length === 6,
+  'turnos=ida explícito vence _doubleRR legado');
+ok(E.genGroupsFromPool(players(4), { ...conflictBase, turnos: 'ida_volta', _doubleRR: false }, 'explicit-volta').matches.length === 12,
+  'turnos=ida_volta explícito vence _doubleRR falso');
+ok(E.genGroupsFromPool(players(4), { ...conflictBase, _doubleRR: true }, 'legacy-volta').matches.length === 12,
+  '_doubleRR permanece fallback para fase sem turnos');
 
 console.log(fail ? `❌ partial-group-schedule: ${pass} ok, ${fail} falharam` : `✅ partial-group-schedule: ${pass} verificações`);
 process.exit(fail ? 1 : 0);

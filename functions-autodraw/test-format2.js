@@ -98,6 +98,36 @@ console.log('══════════════════════�
 
 const core = require('./draw-core.js');
 
+// O sorteio inicial roda no mesmo adaptador vendorado que o navegador. Uma
+// fase explícita prevalece; sem ela, o intent é normalizado antes da leitura.
+(function () {
+  const build = core._window._buildPhase0Cfg;
+  const raw = { disputa: 'dupla', parceria: 'fixa', grupos: 1, classifAtiva: true,
+    rodadas: { modo: 'todos', turnos: 'ida_volta' }, eliminatoria: { ativa: false },
+    teamCompetition: { enabled: true, teamCount: 8, schedule: { enabled: true, teamsPerGroup: 8,
+      pairsPerTeamByCategory: { 'Fem Light': 2 } } } };
+  const base = { format: 'Fase de Grupos', sport: SPORT, fmt2: raw, gruposCount: 2,
+    turnos: 'ida_volta', ligaTurnos: 2 };
+  const normalized = A.normalize(raw, SPORT);
+  eq('intent residual: cliente e vendor normalizam igual', B.normalize(raw, SPORT), normalized);
+  eq('intent residual: cliente e vendor compilam igual', B.compileToPhases(raw, OPTS), A.compileToPhases(raw, OPTS));
+  ok('intent residual: fase 0 somente ida', A.compileToPhases(raw, OPTS).phases[0].turnos === 'ida');
+  ok('intent residual: resumo mostra 2 grupos', B.summary(B.normalize(raw, SPORT)).includes('2 grupos'));
+  ok('adaptador: fase explícita ida vence legado de volta', build({ ...base,
+    phases: [{ kind: 'classification', classification: { structure: 'groups' }, turnos: 'ida' }] }).turnos === 'ida');
+  ok('adaptador: intent sem fase vence legado de volta', build({ ...base }).turnos === 'ida');
+  const stale = build({ ...base, gruposCount: 1 });
+  ok('adaptador: contador antigo não reduz grade técnica', stale.gruposCount === 2 && stale.turnos === 'ida');
+  ok('adaptador: legado sem fmt2 conserva ligaTurnos=2', build({ ...base, fmt2: null, turnos: 'ida' }).turnos === 'ida_volta');
+  const single = { ...raw, teamCompetition: { ...raw.teamCompetition,
+    schedule: { ...raw.teamCompetition.schedule, pairsPerTeamByCategory: { 'Fem Light': 1 } } } };
+  ok('adaptador: tabela única cru mantém ida/volta', build({ ...base, fmt2: single, gruposCount: 1 }).turnos === 'ida_volta');
+  const singleStale = build({ ...base, fmt2: single, gruposCount: 2 });
+  ok('adaptador: contador antigo não cria grupo extra', singleStale.gruposCount === 1 && singleStale.turnos === 'ida_volta');
+  ok('adaptador: fase explícita volta vence intent de ida', build({ ...base,
+    phases: [{ kind: 'classification', classification: { structure: 'groups' }, turnos: 'ida_volta' }] }).turnos === 'ida_volta');
+})();
+
 // Espelha create-tournament.js:5229-5236: topLevel aplicado no doc, phases gravadas,
 // fmt2 regravado normalizado, e o ajuste de Fase de Grupos.
 (function () {

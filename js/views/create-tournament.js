@@ -4297,6 +4297,8 @@ function setupCreateTournamentModal() {
     var f2cfg = null;
     try { f2cfg = (typeof window._f2GetConfig === 'function') ? window._f2GetConfig() : null; } catch (e) {}
     var tc = f2cfg && f2cfg.teamCompetition;
+    var effectiveTurnos = f2cfg && window.FORMAT2 && typeof window.FORMAT2.resolveTurnos === 'function'
+      ? window.FORMAT2.resolveTurnos(f2cfg) : null;
     /* REGRESSÃO — Neon, 29/set/2026: `schedule.enabled` é detalhe de normalização
      * legado; a competição por times já habilitada COM a grade é a fonte de verdade.
      * Exigir os dois fazia a estimativa cair na eliminatória (7 jogos/categoria) e
@@ -4312,7 +4314,7 @@ function setupCreateTournamentModal() {
       gamesPerPairByCategory: tc.schedule.gamesPerPairByCategory || {},
       categories: (window._getCreateFormCategoryData ? ((window._getCreateFormCategoryData() || {}).combinedCategories || []) : []),
       teamCount: tc.teamCount,
-      turns: f2cfg.rodadas && f2cfg.rodadas.turnos === 'ida_volta' ? 2 : 1,
+      turns: effectiveTurnos && effectiveTurnos.ligaTurnos === 2 ? 2 : 1,
       unitLabel: teamSize >= 2 ? 'dupla' : 'time'
     } : null;
     ladder.innerHTML = window._buildPhaseEstimate({

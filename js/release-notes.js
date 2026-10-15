@@ -1,3 +1,9 @@
+// 2.4.53 — Editor, resumo, estimativa, pré-sorteio e motor usam a mesma regra de
+// turnos da classificatória. Ida e volta continua em tabela única; com vários
+// grupos, a fase já jogava somente ida e não terá confrontos dobrados.
+// Configurações antigas que ainda dizem ida e volta em vários grupos são mostradas
+// como somente ida; o campo antigo só é alinhado ao salvar a edição. Não há
+// atualização em massa nem alteração de jogos, resultados ou torneios existentes.
 // 2.4.52 — A prévia da agenda de grupos mostra quantos jogos cada dupla ou participante
 // realmente poderá disputar com os inscritos atuais, inclusive grupos iguais e ida e volta.
 // Antes do sorteio, o organizador é avisado quando a divisão deixa alguém com menos jogos
