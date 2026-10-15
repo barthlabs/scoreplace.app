@@ -41,6 +41,8 @@
 
           '<h2 style="font-size:1.05rem;font-weight:700;color:var(--text-bright);margin:1.5rem 0 0.6rem;">' +
             '2. ' + _t('privacy.section2Title') + '</h2>' +
+          // A divulgação do OCR (Google Cloud Vision, sem armazenamento da foto
+          // ou texto bruto) está em privacy.section2Body nos dois dicionários.
           '<p style="font-size:0.88rem;color:var(--text-main);line-height:1.7;margin:0 0 0.75rem;">' +
             _t('privacy.section2Body') + '</p>' +
 

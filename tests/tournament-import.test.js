@@ -8,6 +8,13 @@ const mutations = require('../functions/registration-mutations-core');
 const boundary = require('../functions/canonical-registration-boundary-core');
 const parser = require('../js/views/tournaments-import-parser');
 const XLSX = require('../js/vendor/xlsx.full.min.js');
+const privacyView = fs.readFileSync(path.join(__dirname, '..', 'js/views/privacy.js'), 'utf8');
+assert(privacyView.includes("_t('privacy.section2Body')"), 'a política mostra a seção de tratamento');
+for (const language of ['pt', 'en']) {
+  const dictionary = fs.readFileSync(path.join(__dirname, '..', 'js/i18n-' + language + '.js'), 'utf8');
+  assert(/'privacy\.section2Body':[^\n]*Google Cloud Vision/.test(dictionary),
+    'a política ' + language + ' deve divulgar o processamento das fotos pelo Google Cloud Vision');
+}
 
 function fixture() {
   const tournament = { id: 'test-import', canonicalRegistrationMigration: { fingerprint: 'materialized-test', registrationCount: 4 } };
