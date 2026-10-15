@@ -77,7 +77,7 @@
       (state.rows.length > 8 ? '<div class="sp-import-pagination"><button type="button" data-act="prev"' + (state.page === 0 ? ' disabled' : '') + '>Anterior</button><span>Página ' + (state.page + 1) + ' de ' + Math.ceil(state.rows.length / 8) + '</span><button type="button" data-act="next"' + (start + 8 >= state.rows.length ? ' disabled' : '') + '>Próxima</button></div>' : '') +
       '<button type="button" class="sp-import-save" data-act="save"' + (state.busy || !state.rows.some(function (r) { return !r.saved; }) ? ' disabled' : '') + '>Gravar duplas revisadas</button>';
     box.innerHTML = '<div class="sp-import-panel">' +
-      '<div class="sp-import-header"><h2 id="tournament-import-title">Importar inscritos</h2><button type="button" data-act="close" aria-label="Fechar"' + (state.busy ? ' disabled' : '') + '>×</button></div>' +
+      '<div class="sp-import-header"><h2 id="tournament-import-title">Importar inscritos</h2><button type="button" data-act="close" aria-label="Fechar"' + (state.saving ? ' disabled' : '') + '>×</button></div>' +
       (state.message ? '<p role="status" class="sp-import-status">' + esc(state.message) + '</p>' : '') + content + '</div>';
   }
   function loadXlsx() {
@@ -195,7 +195,7 @@
       report('A mesma conta foi escolhida para duas pessoas. Corrija antes de gravar.'); return;
     }
     if (!window.confirm('Gravar ' + pending.length + ' dupla(s) revisadas nas vagas de suas categorias? Cada bloco salvo é definitivo; arquivos e OCR não serão armazenados.')) return;
-    state.busy = true; render();
+    state.busy = true; state.saving = true; render();
     try {
       for (var i = 0; i < pending.length; i += 8) {
         var part = pending.slice(i, i + 8);
@@ -215,7 +215,7 @@
       }
       state.message = 'Blocos gravados. Reabra o torneio para conferir o elenco atualizado.';
     } catch (error) { state.message = 'Gravação interrompida: ' + (error.message || error) + '. Os blocos anteriores permanecem salvos; não reinicie a importação às cegas.'; }
-    state.busy = false; render();
+    state.busy = false; state.saving = false; render();
   }
   window._openTournamentImport = async function (tournamentId) {
     if (typeof window._closeParticipantTools === 'function') window._closeParticipantTools();
@@ -223,7 +223,7 @@
     if (!tournament) return;
     if (el()) el().remove();
     state = { tournamentId: String(tournamentId), categories: categories(tournament), importId: crypto.randomUUID(),
-      blockIndex: 0, rows: [], page: 0, preview: null, message: '', busy: false, candidateCache: new Map() };
+      blockIndex: 0, rows: [], page: 0, preview: null, message: '', busy: false, saving: false, candidateCache: new Map() };
     var session = state;
     var box = document.createElement('div'); box.id = 'tournament-import-dialog';
     box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true');
@@ -261,8 +261,8 @@
     if (!state || !el() || !el().contains(event.target)) return;
     var button = event.target.closest('[data-act]'); if (!button) return;
     var action = button.dataset.act, index = Number(button.dataset.row), side = Number(button.dataset.side);
+    if (action === 'close' && !state.saving) { el().remove(); state = null; return; }
     if (state.busy) return;
-    if (action === 'close') { el().remove(); state = null; return; }
     if (action === 'prev') { state.page--; render(); return; }
     if (action === 'next') { state.page++; render(); return; }
     if (action === 'remove') { if (!state.rows[index] || state.rows[index].saved) return;

@@ -274,6 +274,16 @@ async function testVisibleFlow() {
   assert.deepStrictEqual(Array.from(applied[0][0].people, (person) => person.name), ['Bia Lima', 'Ana Souza'],
     'payload respeita a ordem interna do backend sem trocar a posição visual');
   assert.strictEqual(applied[0][0].people[1].uid, 'uid-ana', 'vínculo foi resultado de clique humano, nunca da busca');
+  const originalCall = app._callCF;
+  app._callCF = (name, data) => name === 'extractTournamentImportImage'
+    ? new Promise(() => {}) : originalCall(name, data);
+  await app._openTournamentImport('fixture');
+  listeners.change({ target: { id: 'tournament-import-files', files: [
+    { name: 'lenta.png', type: 'image/png', size: 100 },
+  ] } });
+  assert(dialog.innerHTML.includes('Lendo 1 arquivo'), 'leitura lenta marca o diálogo como ocupado');
+  click('close', 0, 0);
+  assert.strictEqual(dialog, null, 'o organizador pode fechar durante leitura lenta sem alterar dados');
   console.log('✓ prévia real: ordem da foto, cards, candidato verde e payload canônico');
 }
 testVisibleFlow().catch((error) => { console.error(error); process.exitCode = 1; });

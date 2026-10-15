@@ -3164,6 +3164,7 @@ dialog.sp-native-update::backdrop { background: var(--bg-overlay, rgba(0,0,0,0.6
   font-size: .72rem;
   font-weight: 700;
 }
+[data-theme="light"] .sp-import-category { background: #e5e7ff; border-color: #818cf8; color: #1c1c1e; }
 .sp-import-saved { color: var(--text-main); font-size: .75rem; }
 .sp-import-source { margin: 4px 0 9px; color: var(--text-muted); font-size: 0.75rem; overflow-wrap: anywhere; }
 .sp-import-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 9px 0; }
