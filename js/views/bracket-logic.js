@@ -4374,6 +4374,13 @@ window._applyRoundCloseToTournament = function (t, roundIdx) {
 // motor canônico (buildPhaseBrackets, seed 1×N pela classificação). Rodada DENTRO
 // de commitTournamentTx sobre o estado FRESCO. Retorna o nº de classificados.
 window._applySwissEliminationTransition = function (t, roundIdx) {
+  // O recibo da sobra única é uma decisão persistente de posição na chave.
+  // Mesmo uma chamada direta desta função no navegador não pode criá-lo: a
+  // transição autoritativa roda no draw-core, que marca _SP_SERVIDOR.
+  if (t.politicaDaChave === 'sobra_unica' &&
+      (typeof window === 'undefined' || window._SP_SERVIDOR !== true)) {
+    throw new Error('A decisão da sobra única exige a transição no servidor.');
+  }
   var _targetCount = t.p2TargetCount;
   var _allParts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
 

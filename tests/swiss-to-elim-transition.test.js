@@ -100,7 +100,15 @@ for (const n of [5, 7]) {
       winner: 'S' + (i * 2), winnerUid: 'sw-' + (i * 2), scoreP1: 6, scoreP2: 2
     })) }]
   };
+  const beforeClient = JSON.stringify(t);
+  let clientError = null;
+  try { sb.window._applySwissEliminationTransition(t, 0); } catch (e) { clientError = e; }
+  ok(!!clientError && /servidor/i.test(clientError.message),
+    'Suíço N=' + n + ' recusa decisão de sobra única no navegador');
+  eq(JSON.stringify(t), beforeClient, 'Suíço N=' + n + ' não altera torneio após recusa no navegador');
+  sb._SP_SERVIDOR = true;
   sb.window._applySwissEliminationTransition(t, 0);
+  sb._SP_SERVIDOR = false;
   eq(t.currentStage, 'elimination', 'Suíço N=' + n + ' transiciona');
   const receipts = Object.values(t.sobraUnicaDecisoesV1 || {});
   eq(receipts.length, 1, 'Suíço N=' + n + ' grava exatamente uma decisão R1');
