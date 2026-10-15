@@ -583,30 +583,21 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var people = _peopleCount(t);
     var isDupla = cfg.disputa === 'dupla';
     var units = isDupla ? Math.floor(people / 2) : people;
-    var ng = units > 0 ? Math.min(cfg.grupos, units) : cfg.grupos;
-    var base = units > 0 ? Math.floor(units / ng) : 0, rem = units > 0 ? units % ng : 0;
+    var equalOnly = cfg.gruposEqualOnly != null ? cfg.gruposEqualOnly : !!(t && t.gruposEqualOnly);
+    var assessment = window.FORMAT2.assessGroupSchedule(units, cfg.grupos, cfg.classificationSchedule,
+      equalOnly, cfg.rodadas && cfg.rodadas.turnos === 'ida_volta');
+    var ng = assessment.groups;
+    var base = assessment.base, rem = assessment.remainder;
     var small = base, big = base + (rem > 0 ? 1 : 0);
     var perU = units > 0 ? (small + (rem ? '–' + big : '')) : '—';
     var perP = units > 0 ? (isDupla ? (small * 2 + (rem ? '–' + big * 2 : '')) : perU) : '—';
-    return { t: t, people: people, isDupla: isDupla, units: units, ng: ng, base: base, rem: rem, perU: perU, perP: perP };
+    return { t: t, people: people, isDupla: isDupla, units: units, ng: ng, base: base, rem: rem, perU: perU, perP: perP, assessment: assessment };
   }
   // Linha de estimativa (inscritos + tempo de jogos).
   function _estimateLine(cfg) {
     var gi = _groupInfo(cfg);
     if (!gi.people) return '<div style="margin-top:8px;font-size:0.72rem;color:var(--text-muted);">Sem inscritos ainda — a divisão dos grupos e o tempo aparecem quando houver gente inscrita.</div>';
-    var groupGames = 0;
-    var wanted = cfg.classificationSchedule && parseInt(cfg.classificationSchedule.gamesPerUnit, 10);
-    for (var g = 0; g < gi.ng; g++) {
-      var u = gi.base + (g < gi.rem ? 1 : 0);
-      var perUnit = wanted ? Math.min(Math.max(1, wanted), Math.max(0, u - 1)) : Math.max(0, u - 1);
-      // N×jogos ímpar não admite grau idêntico para todos: o motor mantém a
-      // diferença máxima em um jogo e gera floor(N×jogos/2) confrontos.
-      groupGames += Math.floor(u * perUnit / 2);
-    }
-    // FORMAT2.compileToPhases só propaga turnos='ida_volta' para a fase 0
-    // quando há uma tabela única. Com vários grupos o pedido é compilado como
-    // ida simples; a prévia deve espelhar a fase compilada, não o gerador isolado.
-    if (cfg.grupos === 1 && cfg.rodadas && cfg.rodadas.turnos === 'ida_volta') groupGames *= 2;
+    var groupGames = gi.assessment.matches;
     var elimGames = 0;
     if (cfg.eliminatoria.ativa) {
       var q = (cfg.grupos > 1) ? cfg.grupos * cfg.classificados : cfg.classificados;
@@ -676,6 +667,15 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // Agenda da fase de grupos. O valor é sempre por UNIDADE que joga (jogador no
   // individual, dupla na disputa em dupla), nunca por "time" agregado. Ausência
   // do objeto significa todos-contra-todos, preservando exatamente o legado.
+  function _groupScheduleWarning(cfg) {
+    var gi = _groupInfo(cfg), a = gi.assessment;
+    if (!a.known || !cfg.classificationSchedule || (!a.unequalGroups && !a.limitedGroups)) return '';
+    var unit = window._t(gi.isDupla ? 'format2.scheduleUnitPair' : 'format2.scheduleUnitPerson');
+    var message = a.minGames === a.maxGames
+      ? window._t('format2.scheduleLimited', { games: a.maxGames, unit: unit })
+      : window._t('format2.scheduleUnequal', { min: a.minGames, max: a.maxGames, unit: unit });
+    return '<div role="status" style="margin-top:8px;padding:9px 11px;border:1px solid var(--sp-c-f59e0b,#f59e0b);border-radius:8px;color:var(--text-main);background:rgba(245,158,11,.12);font-size:.75rem;line-height:1.45;">' + message + '</div>';
+  }
   function _groupScheduleControls(cfg) {
     var gi = _groupInfo(cfg);
     var sched = cfg.classificationSchedule;
@@ -693,6 +693,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (!isShort) return html;
     html += '<div style="margin-top:12px;font-size:.72rem;color:var(--text-muted);">Jogos por ' + unit + ' no grupo <b id="f2-group-schedule-games-value" style="color:var(--text-main);">' + current + '</b></div>' +
       '<input id="f2-group-schedule-games" type="range" min="1" max="' + max + '" value="' + current + '" oninput="window._f2GroupSchedule(this.value,this)" style="width:100%;">' +
+      '<div id="f2-group-schedule-warning" aria-live="polite">' + _groupScheduleWarning(cfg) + '</div>' +
       '<div style="margin-top:10px;font-size:.72rem;color:var(--text-muted);margin-bottom:6px;">Montagem dos confrontos</div>' +
       _pill(sched.mode !== 'structured', 'window._f2GroupScheduleMode(\'free\')', '🎲 Sorteio livre') +
       _pill(sched.mode === 'structured', 'window._f2GroupScheduleMode(\'structured\')', '📋 Estruturado') +
@@ -1217,7 +1218,14 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       current.gamesPerUnit = Math.max(1, parseInt(v, 10) || 1);
       var out = document.getElementById('f2-group-schedule-games-value'); if (out) out.textContent = current.gamesPerUnit;
       // Range é atualização de valor; não desmonta o controle sob o dedo.
-      if (input) { S.cfg.classificationSchedule = current; return; }
+      if (input) {
+        S.cfg.classificationSchedule = current;
+        var warning = document.getElementById('f2-group-schedule-warning');
+        if (warning) warning.innerHTML = _groupScheduleWarning(S.cfg);
+        var estimate = document.getElementById('f2-estrutura-block');
+        if (estimate) estimate.innerHTML = _estruturaBlock(S.cfg);
+        return;
+      }
     }
     S.cfg.classificationSchedule = current;
     _norm(); _rerender();

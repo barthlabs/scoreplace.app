@@ -13,8 +13,23 @@ var _t = window._t || function(k) { return k; };
 window._grupos_f2Direct = function(tId) {
     var t = window._findTournamentById ? window._findTournamentById(tId) : null;
     if (!t || !t.fmt2 || !(parseInt(t.gruposCount, 10) >= 1)) return false;
-    if (typeof window._setDrawDecision === 'function') window._setDrawDecision(tId,{closeEnrollment:true});
-    if (typeof window.generateDrawFunction === 'function') window.generateDrawFunction(tId);
+    var proceed = function() {
+        if (typeof window._setDrawDecision === 'function') window._setDrawDecision(tId,{closeEnrollment:true});
+        if (typeof window.generateDrawFunction === 'function') window.generateDrawFunction(tId);
+    };
+    var schedule = t.fmt2.classificationSchedule;
+    var diagnose = window._diagnoseAll && window._diagnoseAll(t);
+    var assessment = schedule && diagnose && window.FORMAT2 && window.FORMAT2.assessGroupSchedule(
+        diagnose.effectiveTeams, t.gruposCount, schedule, t.gruposEqualOnly, t.turnos === 'ida_volta');
+    if (assessment && assessment.known && (assessment.unequalGroups || assessment.limitedGroups) && typeof showConfirmDialog === 'function') {
+        var unit = _t(diagnose.isTeam ? 'format2.scheduleUnitPair' : 'format2.scheduleUnitPerson');
+        var detail = assessment.minGames === assessment.maxGames
+            ? _t('format2.scheduleLimited', { games: assessment.maxGames, unit: unit })
+            : _t('format2.scheduleUnequal', { min: assessment.minGames, max: assessment.maxGames, unit: unit });
+        showConfirmDialog(_t('format2.scheduleConfirmTitle'), detail, proceed);
+        return true;
+    }
+    proceed();
     return true;
 };
 

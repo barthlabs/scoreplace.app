@@ -96,7 +96,8 @@ for (let n = 2; n <= 64; n++) {
 const uiSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'format2-ui.js'), 'utf8');
 const estimateLine = new Function('_groupInfo', '_minPartidaForm', '_scoringInicial', '_elimEffScoring', 'document',
   extractFunction(uiSource, 'function _estimateLine') + '; return _estimateLine;'
-)(cfg => ({ people: 16, units: 8, ng: cfg.grupos, base: 8 / cfg.grupos, rem: 0, isDupla: true, t: { courtCount: 1 } }),
+)(cfg => ({ people: 16, units: 8, ng: cfg.grupos, base: 8 / cfg.grupos, rem: 0, isDupla: true, t: { courtCount: 1 },
+  assessment: { matches: cfg.grupos === 1 ? (cfg.rodadas.turnos === 'ida_volta' ? 24 : 12) : 12 } }),
   () => 20, () => null, () => null, { getElementById: () => null });
 const baseCfg = { grupos: 1, disputa: 'dupla', classificationSchedule: { gamesPerUnit: 3 }, eliminatoria: { ativa: false } };
 ok(estimateLine({ ...baseCfg, rodadas: { turnos: 'ida' } }).includes('(12 jogos'),
@@ -114,6 +115,63 @@ const sandbox = { console };
 sandbox.window = sandbox;
 vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'format2.js'), 'utf8'), sandbox);
+const warning = new Function('window', '_groupInfo',
+  extractFunction(uiSource, 'function _groupScheduleWarning') + '; return _groupScheduleWarning;'
+)({ _t: (key, vars) => key + ' ' + JSON.stringify(vars) },
+  cfg => ({ isDupla: true, assessment: sandbox.FORMAT2.assessGroupSchedule(
+    cfg.units, cfg.grupos, cfg.classificationSchedule, false, false) }));
+ok(warning({ units: 7, grupos: 1, classificationSchedule: { gamesPerUnit: 3 } }).includes('format2.scheduleUnequal'),
+  'editor avisa quando a paridade impede três jogos para todas as duplas');
+ok(warning({ units: 8, grupos: 1, classificationSchedule: { gamesPerUnit: 3 } }) === '',
+  'editor não alerta falsamente no cenário 8 duplas × 3 jogos');
+ok(warning({ units: 3, grupos: 1, classificationSchedule: { gamesPerUnit: 4 } }).includes('format2.scheduleLimited'),
+  'editor avisa quando o grupo limita o número pedido');
+const groupInfo = new Function('window', 'S', '_peopleCount',
+  extractFunction(uiSource, 'function _groupInfo') + '; return _groupInfo;'
+)({ FORMAT2: sandbox.FORMAT2 }, { t: { gruposEqualOnly: true } }, () => 13);
+const equalPreview = groupInfo({ disputa: 'individual', grupos: 3, classificationSchedule: { gamesPerUnit: 2 } });
+ok(equalPreview.assessment.waitlist === 1 && equalPreview.assessment.placed === 12,
+  'editor lê grupos iguais do documento real e não conta suplente como jogador da agenda');
+const prepSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments-draw-prep.js'), 'utf8');
+let drawCalls = 0, confirmCalls = 0, confirmProceed;
+const drawWindow = {
+  FORMAT2: sandbox.FORMAT2,
+  _findTournamentById: () => ({ fmt2: { classificationSchedule: { gamesPerUnit: 3 } }, gruposCount: 1 }),
+  _diagnoseAll: () => ({ effectiveTeams: 7, isTeam: true }),
+  _setDrawDecision: () => { drawCalls++; },
+  generateDrawFunction: () => { drawCalls++; }
+};
+new Function('window', 'showConfirmDialog', '_t',
+  extractFunction(prepSource, 'window._grupos_f2Direct = function(tId)') + ';'
+)(drawWindow, (title, detail, proceed) => { confirmCalls++; confirmProceed = proceed; }, key => key);
+ok(drawWindow._grupos_f2Direct('t1') === true && confirmCalls === 1 && drawCalls === 0,
+  'pré-sorteio avisa antes de fechar inscrições ou gerar confrontos desiguais');
+confirmProceed();
+ok(drawCalls === 2, 'pré-sorteio só avança após confirmação do organizador');
+// A prévia usa o mesmo número de partidas, limites e paridade do sorteio real,
+// inclusive nos grupos desiguais e na opção de grupos estritamente iguais.
+for (const n of [0, 1, 2, 3, 5, 7, 8, 17, 23, 64]) {
+  for (const groups of [1, 2, 3, 5]) {
+    for (const equalOnly of [false, true]) {
+      for (const wanted of [1, 2, 3, 7]) {
+        const cfg = { gruposCount: groups, gruposEqualOnly: equalOnly,
+          classification: { schedule: { gamesPerUnit: wanted, mode: 'structured' } } };
+        const preview = sandbox.FORMAT2.assessGroupSchedule(n, groups, cfg.classification.schedule, equalOnly, false);
+        const actual = E.genGroupsFromPool(players(n), cfg, 'preview-' + n + '-' + groups);
+        ok(preview.matches === actual.matches.length,
+          `prévia ${n}/${groups}/${equalOnly}/${wanted}: ${preview.matches} = ${actual.matches.length} jogos`);
+        ok(preview.groups === (actual.groups.length || 1),
+          `prévia ${n}/${groups}/${equalOnly}/${wanted}: grupos efetivos`);
+        if (n >= 2 && !equalOnly && groups === 1) {
+          const degree = Object.fromEntries(players(n).map(p => [p.uid, 0]));
+          actual.matches.forEach(m => { degree[m.p1Uid]++; degree[m.p2Uid]++; });
+          ok(preview.minGames === Math.min(...Object.values(degree)) && preview.maxGames === Math.max(...Object.values(degree)),
+            `prévia ${n}/${wanted}: extremos reais por unidade`);
+        }
+      }
+    }
+  }
+}
 for (const ng of [1, 2]) {
   const cfg = sandbox.FORMAT2.normalize({ ...baseCfg, grupos: ng, rodadas: { modo: 'todos', turnos: 'ida_volta' } }, 'Beach Tennis');
   const compiled = sandbox.FORMAT2.compileToPhases(cfg, { sport: 'Beach Tennis' });

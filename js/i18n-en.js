@@ -1,5 +1,10 @@
 // ─── English translations ───────────────────────────────────────────────────
 window._translations['en'] = {
+  'format2.scheduleUnequal': '⚠️ With the current entrants, not everyone plays the same number: {min} to {max} matches per {unit}. Adjust groups or schedule before the draw.',
+  'format2.scheduleLimited': '⚠️ Group size limits the schedule to {games} matches per {unit}. Adjust groups or the requested number.',
+  'format2.scheduleConfirmTitle': 'Confirm group schedule?',
+  'format2.scheduleUnitPair': 'pair',
+  'format2.scheduleUnitPerson': 'player',
   "nativeUpdate.requiredTitle": "Update to continue",
   "nativeUpdate.noticeTitle": "Update required",
   "nativeUpdate.requiredBody": "Update scoreplace from the store to continue.",

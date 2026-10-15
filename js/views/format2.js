@@ -57,6 +57,34 @@
     };
   }
 
+  // Prévia da agenda técnica; não altera confrontos nem resultados. Espelha os
+  // limites de grupos e a paridade usados por genGroupsFromPool.
+  function assessGroupSchedule(units, requestedGroups, schedule, equalOnly, returnLeg) {
+    units = Math.max(0, Math.floor(Number(units) || 0));
+    var requested = Math.max(1, Math.floor(Number(requestedGroups) || 1));
+    var groups = Math.min(requested, Math.max(1, Math.floor(units / 2)));
+    var placed = equalOnly && units ? Math.floor(units / groups) * groups : units;
+    var base = Math.floor(placed / groups), remainder = placed % groups;
+    var wanted = schedule && Math.floor(Number(schedule.gamesPerUnit));
+    var total = 0, min = Infinity, max = 0, unequal = 0, limited = 0;
+    for (var i = 0; i < groups; i++) {
+      var size = base + (i < remainder ? 1 : 0);
+      var per = wanted >= 1 ? Math.min(wanted, Math.max(0, size - 1)) : Math.max(0, size - 1);
+      var matches = Math.floor(size * per / 2);
+      // Um grupo ímpar com grau ímpar exige uma folga: um integrante joga menos.
+      var lower = per - (size * per % 2);
+      total += matches;
+      if (size > 0) { min = Math.min(min, lower); max = Math.max(max, per); }
+      if (size * per % 2) unequal++;
+      if (wanted >= 1 && wanted > size - 1) limited++;
+    }
+    var legs = returnLeg && requested === 1 ? 2 : 1;
+    return { known: units > 0, units: units, placed: placed, waitlist: units - placed,
+      groups: groups, base: base, remainder: remainder, matches: total * legs,
+      minGames: min === Infinity ? 0 : min * legs, maxGames: max * legs,
+      unequalGroups: unequal, limitedGroups: limited };
+  }
+
   // Política pública de uma chave eliminatória. `playin` foi um nome interno
   // usado pelo primeiro motor para a rodada preliminar; nunca foi um quarto
   // desenho disponível ao organizador. Ao reler um documento que o tenha
@@ -1096,6 +1124,7 @@
     normalize: normalize,
     summary: summary,
     projectLegacyPhases: projectLegacyPhases,
-    compileToPhases: compileToPhases
+    compileToPhases: compileToPhases,
+    assessGroupSchedule: assessGroupSchedule
   };
 })();
