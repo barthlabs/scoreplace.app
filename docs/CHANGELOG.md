@@ -1,3 +1,8 @@
+## 2.4.55 — 15/out/2026 (contraste da importação)
+
+- As duas entradas de importação tinham `.btn` com texto branco sem fundo definido, tornando o rótulo ilegível sobre o fundo claro padrão. Ambas agora usam a variante secundária existente, cujo fundo e texto seguem juntos os temas claro/escuro. A ação e o espaçamento foram mantidos; há regressão para os dois pontos de entrada.
+- Não houve alteração de inscrições, categorias, Functions ou versões nativas.
+
 ## 2.3.322 — 10/out/2026 (categorias canônicas em todas as telas do organizador)
 
 - **A troca de categoria deixou de ter atalhos legados nas telas secundárias.** O cartão de nível de Participantes e o salvamento em lote da Análise agora detectam o roster canônico e usam a mesma reclassificação tipada do gerenciador de categorias: identidade por `uid` ou `manualParticipantId`, origem e destino por `categoryId`.

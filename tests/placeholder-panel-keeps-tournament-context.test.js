@@ -16,6 +16,10 @@ ok(/window\._openParticipantTools/.test(activeButton), 'botão do organizador ab
 ok(!/window\.location\.hash='#participantes\//.test(activeButton), 'botão do organizador não navega para a rota de participantes');
 
 const tools = fs.readFileSync('js/views/tournaments-org-tools.js', 'utf8');
+const pageStart = tools.indexOf('window.renderAddParticipantPage = function');
+const pageEnd = tools.indexOf('window._openParticipantTools = function', pageStart);
+const page = tools.slice(pageStart, pageEnd);
+ok(pageStart >= 0 && pageEnd > pageStart && /class="btn btn-secondary"[^>]*_openTournamentImport/.test(page), 'entrada de arquivos na página de participante usa contraste de tema sem perder a ação');
 const start = tools.indexOf('window._openParticipantTools = function');
 const end = tools.indexOf('window._closeParticipantTools = function', start);
 const panel = tools.slice(start, end);
@@ -25,6 +29,7 @@ ok(!/location\.hash/.test(panel), 'abrir o painel não altera hash nem rota');
 ok(!/Categorias do participante|addpart-category-/.test(panel), 'painel deixa a categoria para a Análise');
 ok(!/Não exige categoria|Cada "Jogador NN" conta como inscrito/.test(panel), 'painel não repete explicações longas que forçam rolagem');
 ok(/_openTournamentImport/.test(panel) && /Importar fotos ou planilhas/.test(panel), 'entrada de arquivos abre revisão contextual de inscritos');
+ok(/class="btn btn-secondary"[^>]*_openTournamentImport/.test(panel), 'botão de importação no painel usa contraste de tema sem perder a ação');
 const participantHandler = tools.slice(tools.indexOf('window._pageAddParticipant = function'), tools.indexOf('window._pageAddPlaceholders = function'));
 const placeholderHandler = tools.slice(tools.indexOf('window._pageAddPlaceholders = function'), tools.indexOf('// Compat:', tools.indexOf('window._pageAddPlaceholders = function')));
 ok(/function _guard\(tId\)/.test(tools), 'painel mantém a guarda local de torneio e organização');

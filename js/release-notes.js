@@ -1,3 +1,5 @@
+// 2.4.55 — O botão de importar inscritos usa cores legíveis nos temas claro e escuro
+// tanto no painel de vagas quanto na página de participante. A ação não mudou.
 // 2.4.54 — Importação assistida de inscrições externas por foto (OCR com confirmação
 // de envio ao Google Cloud Vision) ou planilha local. O organizador revisa nomes,
 // vínculos de conta e categoria antes de ocupar duplas-placeholder; “Nenhum destes”
