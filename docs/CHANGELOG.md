@@ -1,3 +1,9 @@
+## 2.4.57 — 15/out/2026 (prévia da importação na ordem da fonte)
+
+- A primeira dupla da foto/planilha ocupa a primeira dupla-placeholder disponível da mesma categoria, ordenada pelo número de Jogador, e a prévia abre na primeira linha. Categoria e vaga não são mais escolhas manuais nesse painel; falta de categoria ou vaga bloqueia a gravação, sem usar outra categoria silenciosamente.
+- Os pares aparecem em cards compactos, com pessoa em verde quando há conta candidata e em branco quando não há. Busca sugere, mas nunca vincula por nome sozinha; o organizador confirma a conta ou “Nenhum destes”. Corridas de busca antigas não sobrescrevem correções de nome; UID repetido no lote inteiro é recusado antes da primeira gravação.
+- A ordem do payload respeita a associação visual entre o primeiro nome e o menor placeholder mesmo quando os IDs internos se invertem. Testes de parser, alocação e fluxo de prévia/gravação foram ampliados. Sem mudança em Functions, Rules, inscrições existentes ou versões nativas.
+
 ## 2.4.56 — 15/out/2026 (apresentação da importação)
 
 - O painel de importação troca o texto longo por orientação curta, ajuda recolhível e aviso visível sobre o envio de fotos ao Google Cloud Vision. Seleção de arquivos e demais ações usam controles temáticos de 44 px, com foco visível e layout sem estouro horizontal no celular.

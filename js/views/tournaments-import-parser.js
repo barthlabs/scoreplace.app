@@ -29,7 +29,8 @@
       var category = categoryFor(value, categories);
       if (category && !splitPair(value)) { currentCategory = category; return; }
       var pair = splitPair(value);
-      if (pair) rows.push({ categoryId: currentCategory, people: pair.map(function (name) { return { name: name, uid: undefined }; }), source: value });
+      if (pair) rows.push({ categoryId: currentCategory, ordinal: Number((value.match(/^(\d+)[.)]/) || [])[1]) || null,
+        people: pair.map(function (name) { return { name: name, uid: undefined }; }), source: value });
       else ignored.push(value);
     });
     return { rows: rows, ignored: ignored };
@@ -48,7 +49,8 @@
           !/^(dupla|equipe|categoria|atleta|jogador|participante|nome|partner|player)\b/i.test(cell); });
         if (names.length >= 2 && names[0].length > 1 && names[1].length > 1) pair = names.slice(0, 2);
       }
-      if (pair) rows.push({ categoryId: category || currentCategory, people: pair.map(function (name) { return { name: name, uid: undefined }; }), source: joined });
+      if (pair) rows.push({ categoryId: category || currentCategory, ordinal: Number((joined.match(/^(\d+)[.)]/) || [])[1]) || null,
+        people: pair.map(function (name) { return { name: name, uid: undefined }; }), source: joined });
       else ignored.push(joined);
     });
     return { rows: rows, ignored: ignored };

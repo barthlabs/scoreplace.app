@@ -3145,8 +3145,26 @@ dialog.sp-native-update::backdrop { background: var(--bg-overlay, rgba(0,0,0,0.6
   font-size: 0.82rem;
   line-height: 1.4;
 }
-.sp-import-pair { padding: 12px; margin: 10px 0; }
+.sp-import-pair {
+  padding: 12px;
+  margin: 10px 0;
+  background: linear-gradient(135deg, rgba(15,118,110,.35), rgba(20,184,166,.12));
+  border-color: rgba(20,184,166,.55);
+}
+[data-theme="light"] .sp-import-pair { background: linear-gradient(135deg, #e1f7f0, #f5fffb); }
 .sp-import-pair-head strong { font-size: 0.94rem; }
+.sp-import-pair-head { margin-bottom: 9px; justify-content: flex-start; }
+.sp-import-pair-head button[data-act="remove"] { margin-left: auto; min-height: 36px; padding: 5px 10px; }
+.sp-import-category {
+  padding: 3px 8px;
+  border: 1px solid rgba(129,140,248,.58);
+  border-radius: 7px;
+  color: var(--text-main);
+  background: rgba(99,102,241,.2);
+  font-size: .72rem;
+  font-weight: 700;
+}
+.sp-import-saved { color: var(--text-main); font-size: .75rem; }
 .sp-import-source { margin: 4px 0 9px; color: var(--text-muted); font-size: 0.75rem; overflow-wrap: anywhere; }
 .sp-import-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 9px 0; }
 .sp-import-field { display: block; min-width: 0; font-size: 0.78rem; font-weight: 600; }
@@ -3165,15 +3183,32 @@ dialog.sp-native-update::backdrop { background: var(--bg-overlay, rgba(0,0,0,0.6
   font: inherit;
 }
 .sp-import-people { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.sp-import-person { min-width: 0; padding: 10px; border: 1px solid var(--border-color); border-radius: 9px; }
-.sp-import-decision { margin: 7px 0; color: var(--text-muted); font-size: 0.76rem; overflow-wrap: anywhere; }
+.sp-import-person { min-width: 0; padding: 10px; border: 1px solid #d1d5db; border-radius: 9px; background: #fff; color: #1c1c1e; }
+.sp-import-person-match { background: #d9fbe8; border-color: #047857; }
+.sp-import-person-name { font-size: .9rem; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+.sp-import-decision { margin: 5px 0; color: #374151; font-size: 0.75rem; overflow-wrap: anywhere; }
+.sp-import-candidates { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+.sp-import-panel .sp-import-candidates .sp-import-candidate { display: inline-flex !important; width: auto; background: #047857; color: #fff; border-color: #065f46; }
+.sp-import-panel .sp-import-candidates .sp-import-candidate:hover { background: #065f46; }
+.sp-import-panel .sp-import-candidates button { min-height: 36px; padding: 6px 9px; }
+.sp-import-panel .sp-import-none { min-height: 36px; padding: 6px 9px; margin-top: 5px; }
+.sp-import-edit { margin-top: 7px; font-size: .72rem; }
+.sp-import-edit summary { cursor: pointer; color: #374151; }
+.sp-import-edit[open] { display: grid; gap: 6px; }
+.sp-import-edit .sp-import-field { color: #1c1c1e; }
+.sp-import-edit input { background: #fff !important; color: #1c1c1e !important; border-color: #9ca3af !important; }
+.sp-import-destination { margin-top: 8px; color: var(--text-main); font-size: .72rem; }
+.sp-import-error { margin: 8px 0 0; color: #fff; background: #991b1b; border-radius: 7px; padding: 7px 9px; font-size: .78rem; }
 .sp-import-search-row { justify-content: flex-start; }
 .sp-import-search-row input { flex: 1 1 150px; margin-top: 0 !important; }
 .sp-import-candidate { display: block !important; width: 100%; margin-top: 5px; text-align: left !important; overflow-wrap: anywhere; }
 .sp-import-pagination { margin: 12px 0; justify-content: center; font-size: 0.8rem; }
 .sp-import-panel .sp-import-save { width: 100%; margin-top: 12px; border: 2px solid var(--border-focus); font-weight: 700; }
 @media (max-width: 600px) {
-  .sp-import-fields, .sp-import-people { grid-template-columns: minmax(0, 1fr); }
+  .sp-import-fields { grid-template-columns: minmax(0, 1fr); }
+  .sp-import-people { gap: 7px; }
+  .sp-import-person { padding: 8px; }
+  .sp-import-panel .sp-import-candidates button, .sp-import-panel .sp-import-none { width: 100%; }
   .sp-import-upload, .sp-import-toolbar button, .sp-import-panel .sp-import-save { width: 100%; }
   .sp-import-toolbar { align-items: stretch; }
 }

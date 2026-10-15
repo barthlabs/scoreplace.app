@@ -1,3 +1,7 @@
+// 2.4.57 — A prévia de importação segue a ordem da foto/planilha e atribui
+// automaticamente as vagas da categoria indicada. Cards mostram possíveis contas
+// em verde; o organizador confirma cada vínculo antes de gravar. Categorias e
+// gêneros são ajustados depois na Análise.
 // 2.4.56 — Importar inscritos agora apresenta resumo curto, ajuda recolhível e
 // controles legíveis e acessíveis no celular, nos temas claro e escuro. A revisão
 // das duplas e a gravação continuam sob decisão explícita do organizador.
