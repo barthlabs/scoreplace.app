@@ -20,7 +20,8 @@ window._grupos_f2Direct = function(tId) {
     var schedule = t.fmt2.classificationSchedule;
     var diagnose = window._diagnoseAll && window._diagnoseAll(t);
     var assessment = schedule && diagnose && window.FORMAT2 && window.FORMAT2.assessGroupSchedule(
-        diagnose.effectiveTeams, t.gruposCount, schedule, t.gruposEqualOnly, t.turnos === 'ida_volta');
+        diagnose.effectiveTeams, t.gruposCount, schedule, t.gruposEqualOnly,
+        !!(t.fmt2.rodadas && t.fmt2.rodadas.turnos === 'ida_volta'));
     if (assessment && assessment.known && (assessment.unequalGroups || assessment.limitedGroups) && typeof showConfirmDialog === 'function') {
         var unit = _t(diagnose.isTeam ? 'format2.scheduleUnitPair' : 'format2.scheduleUnitPerson');
         var detail = assessment.minGames === assessment.maxGames

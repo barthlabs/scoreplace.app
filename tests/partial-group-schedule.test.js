@@ -133,19 +133,22 @@ const equalPreview = groupInfo({ disputa: 'individual', grupos: 3, classificatio
 ok(equalPreview.assessment.waitlist === 1 && equalPreview.assessment.placed === 12,
   'editor lê grupos iguais do documento real e não conta suplente como jogador da agenda');
 const prepSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments-draw-prep.js'), 'utf8');
-let drawCalls = 0, confirmCalls = 0, confirmProceed;
+let drawCalls = 0, confirmCalls = 0, confirmProceed, confirmDetail = '';
 const drawWindow = {
   FORMAT2: sandbox.FORMAT2,
-  _findTournamentById: () => ({ fmt2: { classificationSchedule: { gamesPerUnit: 3 } }, gruposCount: 1 }),
+  _findTournamentById: () => ({ fmt2: { classificationSchedule: { gamesPerUnit: 3 }, rodadas: { turnos: 'ida_volta' } }, gruposCount: 1 }),
   _diagnoseAll: () => ({ effectiveTeams: 7, isTeam: true }),
   _setDrawDecision: () => { drawCalls++; },
   generateDrawFunction: () => { drawCalls++; }
 };
 new Function('window', 'showConfirmDialog', '_t',
   extractFunction(prepSource, 'window._grupos_f2Direct = function(tId)') + ';'
-)(drawWindow, (title, detail, proceed) => { confirmCalls++; confirmProceed = proceed; }, key => key);
+)(drawWindow, (title, detail, proceed) => { confirmCalls++; confirmDetail = detail; confirmProceed = proceed; },
+  (key, vars) => key + ' ' + JSON.stringify(vars || {}));
 ok(drawWindow._grupos_f2Direct('t1') === true && confirmCalls === 1 && drawCalls === 0,
   'pré-sorteio avisa antes de fechar inscrições ou gerar confrontos desiguais');
+ok(confirmDetail.includes('"min":4') && confirmDetail.includes('"max":6'),
+  'pré-sorteio lê ida/volta do fmt2 e avisa 4–6 jogos reais, não 2–3');
 confirmProceed();
 ok(drawCalls === 2, 'pré-sorteio só avança após confirmação do organizador');
 // A prévia usa o mesmo número de partidas, limites e paridade do sorteio real,
