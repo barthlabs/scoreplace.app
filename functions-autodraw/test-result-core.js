@@ -285,7 +285,7 @@ for (const action of ['reset-match', 'reopen-result', 'revert-wo']) {
   t(action + ' não deixa proposta órfã nem altera o torneio', JSON.stringify(T) === before);
 }
 
-// 14c) A verificação percorre mais de uma aresta e falha fechada para rota quebrada.
+// 14b.2) BYE automática descendente não bloqueia reset nem retém rota propagada.
 {
   const T = mkT(); const m = win._findMatch(T, 'm1');
   const bye = { id: 'bye-m2', p1: 'Ana / Bia', p2: 'BYE', winner: 'Ana / Bia',
