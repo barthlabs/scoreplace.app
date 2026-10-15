@@ -1,3 +1,4 @@
+// 2.4.52 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.51 — A grade parcial de grupos completa os confrontos possíveis com número ímpar
 // de unidades e separa as rodadas da volta das rodadas da ida, mesmo quando há lacunas.
 // A estimativa do editor acompanha a fase compilada: ida e volta dobra os jogos em
