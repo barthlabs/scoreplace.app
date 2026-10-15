@@ -54,5 +54,55 @@ x = inspect(6, 3);
 ok(x.pairs.size === 9, '6 unidades × 3 jogos gera 9 confrontos');
 ok(Object.values(x.degree).every(d => d === 3), '6 unidades × 3 jogos dá grau 3 a cada unidade');
 
+// A mesma agenda alimenta a Fase 0 e as fases posteriores. Exercitar o gerador
+// real, inclusive ida e volta, evita aprovar apenas a função auxiliar.
+for (let n = 2; n <= 64; n++) {
+  for (let wanted = 1; wanted < n; wanted++) {
+    const list = players(n);
+    const cfg = { gruposCount: 1, turnos: 'ida_volta', classification: { schedule: { gamesPerUnit: wanted, mode: 'structured' } } };
+    const generated = E.genGroupsFromPool(list, cfg, 'matrix-' + n + '-' + wanted);
+    const ida = generated.matches.filter(m => m.label.startsWith('Ida'));
+    const volta = generated.matches.filter(m => m.label.startsWith('Volta'));
+    const expected = Math.floor(n * wanted / 2);
+    ok(ida.length === expected, n + '×' + wanted + ': ida contém o máximo matemático de confrontos');
+    ok(volta.length === expected, n + '×' + wanted + ': volta espelha a ida sem perder confronto');
+    ok(Math.max(...ida.map(m => m.round)) < Math.min(...volta.map(m => m.round)),
+      n + '×' + wanted + ': toda rodada da volta ocorre depois da ida');
+    const seen = new Set();
+    const degree = Object.fromEntries(list.map(p => [p.uid, 0]));
+    const occupied = new Set();
+    ida.forEach(m => {
+      const key = [m.p1Uid, m.p2Uid].sort().join('|');
+      ok(!seen.has(key), n + '×' + wanted + ': confronto da ida não se repete');
+      seen.add(key);
+      degree[m.p1Uid]++;
+      degree[m.p2Uid]++;
+      for (const uid of [m.p1Uid, m.p2Uid]) {
+        const slot = m.round + '|' + uid;
+        ok(!occupied.has(slot), n + '×' + wanted + ': ninguém joga duas vezes na mesma rodada');
+        occupied.add(slot);
+      }
+      ok(volta.some(v => v.p1Uid === m.p2Uid && v.p2Uid === m.p1Uid),
+        n + '×' + wanted + ': volta inverte os mesmos lados');
+    });
+    const degrees = Object.values(degree);
+    ok(Math.max(...degrees) === wanted && Math.min(...degrees) >= wanted - 1,
+      n + '×' + wanted + ': rodadas por unidade equilibradas sem vagas artificiais');
+  }
+}
+
+// A prévia do editor deve contar as mesmas partidas que o gerador cria. Em
+// particular, 8 duplas × 3 confrontos = 12 jogos na ida e 24 com volta.
+const uiSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'format2-ui.js'), 'utf8');
+const estimateLine = new Function('_groupInfo', '_minPartidaForm', '_scoringInicial', '_elimEffScoring', 'document',
+  extractFunction(uiSource, 'function _estimateLine') + '; return _estimateLine;'
+)(() => ({ people: 16, units: 8, ng: 1, base: 8, rem: 0, isDupla: true, t: { courtCount: 1 } }),
+  () => 20, () => null, () => null, { getElementById: () => null });
+const baseCfg = { grupos: 1, disputa: 'dupla', classificationSchedule: { gamesPerUnit: 3 }, eliminatoria: { ativa: false } };
+ok(estimateLine({ ...baseCfg, rodadas: { turnos: 'ida' } }).includes('(12 jogos'),
+  'prévia: 8 duplas × 3 jogos = 12 confrontos');
+ok(estimateLine({ ...baseCfg, rodadas: { turnos: 'ida_volta' } }).includes('(24 jogos'),
+  'prévia: ida e volta dobram os confrontos e a duração');
+
 console.log(fail ? `❌ partial-group-schedule: ${pass} ok, ${fail} falharam` : `✅ partial-group-schedule: ${pass} verificações`);
 process.exit(fail ? 1 : 0);

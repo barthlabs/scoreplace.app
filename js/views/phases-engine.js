@@ -1304,14 +1304,18 @@
         }
       } else {
         // Não existe grau ímpar igual para N ímpar. Começa no grau par inferior e
-        // completa o máximo de pares possíveis, mantendo a diferença em no máximo 1.
+        // completa com um emparelhamento quase perfeito. A escolha gulosa das
+        // rodadas deixava um confronto possível de fora (ex.: 23×19). O passo
+        // (N−1)/2 é coprimo com N ímpar: percorre todos os vértices num ciclo e
+        // fornece floor(N/2) arestas disjuntas fora da base circular.
         var base = wanted - 1;
         for (var d = 1; d <= Math.floor(base / 2); d++) {
           for (var x = 0; x < ordered.length; x++) choose(x, (x + d) % ordered.length);
         }
-        all.forEach(function (round) {
-          round.pairs.forEach(function (pair) { choose(indexOf.get(pair.a), indexOf.get(pair.b)); });
-        });
+        var step = (ordered.length - 1) / 2;
+        for (var k = 0; k + 1 < ordered.length; k += 2) {
+          choose((k * step) % ordered.length, ((k + 1) * step) % ordered.length);
+        }
       }
       return all.map(function (round) {
         var pairs = round.pairs.filter(function (pair) { return !!selected[edgeKey(indexOf.get(pair.a), indexOf.get(pair.b))]; });
@@ -1344,7 +1348,10 @@
               return _teamCompetitionCore && _teamCompetitionCore.teamIdOf ? _teamCompetitionCore.teamIdOf(entry) : '';
             })
           : roundRobinSchedule(g.players));
-      var nRounds = sched.length;
+      // Uma grade parcial pode ter lacunas nos números originais do método do
+      // círculo. A volta começa APÓS a última rodada da ida, não após a
+      // quantidade de rodadas ocupadas (que podia sobrepor ida e volta).
+      var nRounds = sched.reduce(function (last, rd) { return Math.max(last, rd.round); }, 0);
       for (var turn = 0; turn < _turnos; turn++) {
         sched.forEach(function (rd) {
           rd.pairs.forEach(function (pr) {

@@ -603,6 +603,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // diferença máxima em um jogo e gera floor(N×jogos/2) confrontos.
       groupGames += Math.floor(u * perUnit / 2);
     }
+    // O compilador só materializa ida e volta numa tabela única. A prévia usa
+    // a mesma regra: cada confronto da ida ganha a volta com mando invertido.
+    if (cfg.grupos === 1 && cfg.rodadas && cfg.rodadas.turnos === 'ida_volta') groupGames *= 2;
     var elimGames = 0;
     if (cfg.eliminatoria.ativa) {
       var q = (cfg.grupos > 1) ? cfg.grupos * cfg.classificados : cfg.classificados;
