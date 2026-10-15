@@ -1,4 +1,7 @@
-// 2.4.52 — Atualização consolidada de produção com as correções validadas desde a última publicação.
+// 2.4.52 — A prévia da agenda de grupos mostra quantos jogos cada dupla ou participante
+// realmente poderá disputar com os inscritos atuais, inclusive grupos iguais e ida e volta.
+// Antes do sorteio, o organizador é avisado quando a divisão deixa alguém com menos jogos
+// ou limita o número solicitado. Nenhum confronto existente ou regra do sorteio foi alterado.
 // 2.4.51 — A grade parcial de grupos completa os confrontos possíveis com número ímpar
 // de unidades e separa as rodadas da volta das rodadas da ida, mesmo quando há lacunas.
 // A estimativa do editor acompanha a fase compilada: ida e volta dobra os jogos em
