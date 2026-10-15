@@ -4471,7 +4471,7 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
   // Determine which rounds are complete (all matches have a winner)
   const isRoundComplete = (roundNum) => {
     const matches = roundsMap[roundNum] || [];
-    return matches.length > 0 && matches.every(m => m.winner || m.isBye);
+    return matches.length > 0 && matches.every(m => m.winner || (m.isBye && !m.sobraAguardaDecisao));
   };
 
   // A chave é um mapa completo: rodadas nunca somem da visualização. Ocultar uma
@@ -4789,9 +4789,16 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
   }
 
   // v3.1.21: canônico — lista de espera logo APÓS as chaves e ANTES da classificação geral.
+  const pendingSurplusRounds = Object.keys(roundsMap).filter(r =>
+    (roundsMap[r] || []).some(m => m && m.sobraAguardaDecisao));
+  const pendingSurplusHtml = pendingSurplusRounds.length
+    ? '<div role="status" style="margin:0 0 12px;padding:10px 14px;border:1px solid rgba(245,158,11,.45);border-radius:10px;color:var(--text-bright);background:rgba(245,158,11,.08);">' +
+      '⏳ Folga pendente: a dupla beneficiada será definida no servidor quando todos os jogos da rodada anterior terminarem.' +
+      '</div>' : '';
   return `
     ${championHtml}
     ${toolbarHtml}
+    ${pendingSurplusHtml}
     <div class="bracket-sticky-scroll-wrapper" data-hscroll="main" style="overflow-x:scroll!important;overflow-y:visible;display:block;width:100%;max-width:100%;">
       <div class="bracket-scroll-content" style="display:inline-flex;gap:32px;align-items:flex-start;padding:1rem 0;min-width:max-content;${zoomTransform}">
         ${roundsHtml}

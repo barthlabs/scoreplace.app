@@ -111,13 +111,32 @@ function clearAdvancedSlot(m, side) {
   }
 }
 
+// Uma folga automática pode carregar winner e já ter propagado esse vencedor.
+// Ela não foi disputada; ao retirar a fonte, desfaça a cadeia derivada até o
+// primeiro jogo real ainda intocado. O guard de descendentes roda antes disso.
+function undoDerivedBye(t, m, seen) {
+  if (!m || !(m.isBye || m.isSitOut) || !m.winner) return;
+  seen = seen || new Set();
+  if (seen.has(String(m.id))) return;
+  seen.add(String(m.id));
+  const target = m.nextMatchId && win._findMatch(t, m.nextMatchId);
+  if (target) {
+    if ((target.isBye || target.isSitOut) && target.winner) undoDerivedBye(t, target, seen);
+    const slot = m.nextSlot === 'p1' || m.nextSlot === 'p2' ? m.nextSlot :
+      (target.p1 === m.winner ? 'p1' : (target.p2 === m.winner ? 'p2' : null));
+    if (slot && target[slot] === m.winner) clearAdvancedSlot(target, slot);
+  }
+  clearResultFields(m);
+}
+
 function undoAdvancement(t, m) {
   const side = winnerSide(m);
   const prevWinner = m.winner;
   const oldLoser = side === 1 ? m.p2 : m.p1;
   if (m.nextMatchId) {
     const next = win._findMatch(t, m.nextMatchId);
-    if (next && !next.winner) {
+    if (next && (next.isBye || next.isSitOut) && next.winner) undoDerivedBye(t, next);
+    if (next && !descendantIsDecided(next)) {
       if (next.p1 === prevWinner) clearAdvancedSlot(next, 'p1');
       if (next.p2 === prevWinner) clearAdvancedSlot(next, 'p2');
     }
@@ -127,6 +146,20 @@ function undoAdvancement(t, m) {
     if (loserMatch && !loserMatch.winner) {
       if (loserMatch.p1 === oldLoser) clearAdvancedSlot(loserMatch, 'p1');
       if (loserMatch.p2 === oldLoser) clearAdvancedSlot(loserMatch, 'p2');
+    }
+  }
+  if (m.loserNextMatchId) {
+    const loserNext = win._findMatch(t, m.loserNextMatchId);
+    if (loserNext && !descendantIsDecided(loserNext)) {
+      const slot = m.loserNextSlot === 'p1' || m.loserNextSlot === 'p2'
+        ? m.loserNextSlot
+        : (loserNext.p1 === oldLoser ? 'p1' : (loserNext.p2 === oldLoser ? 'p2' : null));
+      const repFill = Array.isArray(loserNext.repFill) && loserNext.repFill.some(item => item && item.slot === slot);
+      // Repescagem é preenchida pelo ranking coletivo da rodada, não pertence
+      // individualmente ao perdedor deste jogo.
+      if (slot && !loserNext[slot + 'FromRepechage'] && !repFill && loserNext[slot] === oldLoser) {
+        clearAdvancedSlot(loserNext, slot);
+      }
     }
   }
   removeClassificationSlot(t, prevWinner, typeof win._slotUids === 'function' ? win._slotUids(m, side === 1 ? 'p1' : 'p2') : []);
@@ -139,6 +172,37 @@ function hasRealPlay(m) {
   if (Array.isArray(m.sets) && m.sets.length > 0) return true;
   const numeric = v => typeof v === 'number' && v > 0;
   return (numeric(m.scoreP1) || numeric(m.scoreP2)) && !m.wo;
+}
+
+function descendantIsDecided(m) {
+  if (!m || typeof m !== 'object') return false;
+  // Uma proposta ainda sem aprovação já pertence aos participantes deste jogo.
+  // Retirar o avanço da origem a deixaria pendurada num slot agora vazio.
+  if (m.pendingResult != null) return true;
+  if ((m.isBye || m.isSitOut) && !m.wo && m.draw !== true && !hasRealPlay(m)) return false;
+  if (m.winner || m.draw === true || m.wo || m.resultAt || m.startedAt || m.liveScored === true) return true;
+  if (Array.isArray(m.sets) && m.sets.length) return true;
+  return [m.scoreP1, m.scoreP2].some(value => typeof value === 'number' && value > 0);
+}
+
+// Checa a árvore estrutural, não nomes dos participantes: um homônimo ou slot
+// ainda preenchido não prova disputa. Uma aresta sem destino é erro de integridade,
+// nunca licença para limpar o resultado de origem.
+function checkDescendantsBeforeReopen(t, source) {
+  const visited = new Set([String(source.id)]);
+  const pending = [source.nextMatchId, source.loserMatchId, source.loserNextMatchId].filter(Boolean);
+  while (pending.length) {
+    const id = String(pending.pop());
+    if (visited.has(id)) continue;
+    visited.add(id);
+    const next = win._findMatch(t, id);
+    if (!next) return { ok: false, reason: 'descendant-route-missing' };
+    if (descendantIsDecided(next)) return { ok: false, reason: 'descendant-already-decided' };
+    if (next.nextMatchId) pending.push(next.nextMatchId);
+    if (next.loserMatchId) pending.push(next.loserMatchId);
+    if (next.loserNextMatchId) pending.push(next.loserNextMatchId);
+  }
+  return { ok: true };
 }
 
 function clearAbsenceAndWoHistory(t, side) {
@@ -162,13 +226,11 @@ function clearAbsenceAndWoHistory(t, side) {
   });
 }
 
-function reopenMatch(t, m, action) {
-  if (action === 'reset-match') {
-    clearResultFields(m);
-  } else {
+function reopenMatch(t, m) {
+  if (m.winner || m.wo) {
     undoAdvancement(t, m);
-    clearResultFields(m);
   }
+  clearResultFields(m);
   if (typeof win._propagateMatchUpdate === 'function') win._propagateMatchUpdate(t, m);
 }
 
@@ -230,6 +292,8 @@ function applyResult(t, opts) {
   if (payload.action === 'reset-match' || payload.action === 'reopen-result' || payload.action === 'revert-wo') {
     const admin = organizerOnly(t, m, actor);
     if (!admin.ok) return admin;
+    const descendants = checkDescendantsBeforeReopen(t, m);
+    if (!descendants.ok) return descendants;
     if (payload.action === 'revert-wo') {
       if (!m.wo) return { ok: false, reason: 'not-a-wo' };
       if (hasRealPlay(m)) return { ok: false, reason: 'wo-has-real-play' };
@@ -249,7 +313,7 @@ function applyResult(t, opts) {
       if (o.logMessage) pushHistory(t, o.logMessage, o.now);
       return { ok: true, outcome: 'wo-reverted', reason: '' };
     }
-    reopenMatch(t, m, payload.action);
+    reopenMatch(t, m);
     if (o.logMessage) pushHistory(t, o.logMessage, o.now);
     return { ok: true, outcome: payload.action === 'reset-match' ? 'match-reset' : 'result-reopened', reason: '' };
   }

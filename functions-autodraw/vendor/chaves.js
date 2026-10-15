@@ -424,8 +424,9 @@
    * @param {'simples'|'dupla'} formato
    * @returns {{plano, rodadas, jogos: Array, porId: Object, totalJogos: number, ordem: string[]}}
    */
-  function chave(N, formato, politica) {
+  function chave(N, formato, politica, decisoes) {
     formato = formato === 'dupla' ? 'dupla' : 'simples';
+    decisoes = decisoes || null;
     var pl = plano(N, formato, politica);
     var rodadas = pl.rodadasSup;
     var jogos = [];
@@ -531,6 +532,23 @@
           // emparelhamento adjacente nunca dá revanche imediata (o vencedor do
           // jogo-fonte está no começo da lista).
           if (x.rodada === 2 && repsParaR2.length) entrantes = entrantes.concat(repsParaR2);
+        }
+        // A posição da sobra é uma decisão persistida da rodada, não uma
+        // escolha implícita do último slot. Sem decisão, preservar exatamente
+        // o desenho legado; o adapter mantém a folga pendente até a rodada
+        // anterior fechar e uma decisão canônica ser gravada.
+        if (politica === 'sobra_unica' && x.acao === 'bye' && entrantes.length % 2 === 1 && decisoes) {
+          var escolhido = decisoes['VC-R' + x.rodada];
+          if (escolhido != null) {
+            var posEscolhido = entrantes.findIndex(function (e) {
+              return e.tipo === 'seed' ? String(escolhido) === 'seed:' + e.seed :
+                e.tipo === 'vencedor' && String(escolhido) === 'winner:' + e.de;
+            });
+            if (posEscolhido < 0) throw new Error('sobra escolhida não pertence à rodada');
+            if (posEscolhido !== entrantes.length - 1) {
+              entrantes.push(entrantes.splice(posEscolhido, 1)[0]);
+            }
+          }
         }
         VC[x.rodada] = montarRodada('VC', x.rodada, entrantes, x.acao);
         // NORMALIZAÇÃO DA R2 — escolhida AQUI, logo após montar a R1 e ANTES de

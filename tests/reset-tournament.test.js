@@ -38,6 +38,7 @@ function mkPlayed() {
     ligaGhosts: ['Jogador X'],
     monarchWaitlist: { _default_: ['E'] },
     woHistory: { A: { matchNum: 1 } },
+    sobraUnicaDecisoesV1: { 'fase-1': { recipientSourceId: 'seed:1' } },
     opponentHistory: { _default_: { A: ['B'] } },
     // datas/estado de sorteio
     lastAutoDrawAt: 999, nextDrawAt: 888, tournamentStarted: 777, finishedAt: 555,
@@ -74,6 +75,7 @@ W._countCompetitors = W._countCompetitors || function (t) { return { people: (t.
   ok(!t.ligaGhosts || t.ligaGhosts.length === 0 || t.ligaGhosts === null, 'ligaGhosts (Jogador X) zerado');
   ok(!t.monarchWaitlist || Object.keys(t.monarchWaitlist).length === 0, 'monarchWaitlist (folgas) zerado');
   ok(!t.woHistory, 'woHistory zerado');
+  ok(t.sobraUnicaDecisoesV1 === null, 'recibo da sobra da chave anterior é limpo de modo merge-safe');
 
   // ── DATAS/ESTADO DE SORTEIO ──
   ok(!t.lastAutoDrawAt, 'lastAutoDrawAt zerado');

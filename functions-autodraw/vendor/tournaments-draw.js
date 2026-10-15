@@ -74,6 +74,9 @@ window._clearDrawRuntimeFlags = function (t) {
     '_autoClosedByDeadline',
     // Sorteio de Vagas + snapshots + flags internos do motor
     'drawSelectionDone', 'waitlistOrder', 'preDrawEnrollees', 'pendingDraw',
+    // recibos de posição pertencem à chave publicada, nunca à configuração do torneio.
+    // null é necessário para limpar também no documento salvo com merge:true.
+    'sobraUnicaDecisoesV1',
     '_drawBalanceMode', '_canonicalDraw', '_cleanupApplied', '_skipCatValidation',
     // v1.2.53: "Flexibilizar equilíbrio" formou as duplas mesmo-gênero → o resto vira só
     // os avulsos (não a sobra pow2). Cancelar/resetar volta ao estado sem-flexibilizar.
@@ -2316,7 +2319,7 @@ window._buildPhase0Cfg = function (t) {
          * em recálculo e em fase posterior, o que é pior que não funcionar — funcionaria pela metade.
          * ⚠️ A Cloud Function do sorteio monta esta MESMA cfg pelo vendor. Um caminho só.
          * [[feedback_enumerar_todos_os_caminhos_antes_de_dar_por_pronto]] */
-        politicaDaChave: t.politicaDaChave || (phase0 && phase0.politicaDaChave) || null,
+        politicaDaChave: (phase0 && phase0.politicaDaChave) || t.politicaDaChave || null,
         drawMode: phaseDrawMode || t.drawMode || (rei ? 'rei_rainha' : 'sorteio'),
         reiRainha: rei,
         gruposCount: parseInt((phase0 && phase0.gruposCount) != null ? phase0.gruposCount : t.gruposCount, 10) || 4,

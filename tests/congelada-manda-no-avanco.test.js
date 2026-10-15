@@ -426,9 +426,11 @@ console.log('──── ⑩ por fonte: o avanço usa a porta, e a porta transp
     sinteticos + ' chamador(es) deixam o retrato pra trás — é o defeito de 01/set voltando');
   ok('  → e a única chamada do motor é a da porta (uma porta só)', chamadas.length === 1,
     'achei ' + chamadas.length + ' — se passou de uma, alguém abriu um caminho paralelo');
-  const av = src.slice(src.indexOf('function advanceMultiPhase'));
+  const avStart = src.indexOf('function advanceMultiPhase');
+  const avEnd = src.indexOf('\n  // (resolveRepechage REMOVIDO', avStart);
+  const av = avStart >= 0 && avEnd > avStart ? src.slice(avStart, avEnd) : '';
   ok('⭐⭐ `advanceMultiPhase` usa a porta extraída, não uma cópia local',
-    /standingsDaFaseAnterior\(/.test(av.slice(0, 4000)));
+    /standingsDaFaseAnterior\(/.test(av));
 }
 
 console.log(falhas === 0 ? '\n✅ congelada-manda-no-avanco: OK' : '\n❌ ' + falhas + ' falha(s)');

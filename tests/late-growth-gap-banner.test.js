@@ -117,7 +117,7 @@ ok(/display:none/.test(tag), 'a etiqueta "aguardando" nasce oculta');
     const roster = A.rosterDoBracket(base);
     const solo = duplas(1, 200 + N);
     const r = A.recalcularComTardio(base, roster.length + 1, 'simples',
-      { participantes: roster.concat(solo), ns: 'p0' });
+      { participantes: roster.concat(solo), ns: 'gp' });
     ok(r.ok, 'motor: com a chave cheia de ' + N + ', 1 tardio SOZINHO entra (got ' + (r.ok ? 'ok' : r.motivo) + ')');
     if (!r.ok) return;
     const nm = solo[0].displayName;

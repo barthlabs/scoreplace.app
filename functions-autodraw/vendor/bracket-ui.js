@@ -2959,6 +2959,25 @@ function _notifyMatchParticipants(t, m, notifData) {
 // O organizador zera o placar (volta a 0×0 / sem resultado) para que a
 // partida seja jogada novamente. Limpa pendingResult + disputed. Notifica
 // todos os participantes individuais. Só autoridade (org/co-host) pode.
+async function _confirmAdministrativeResultFromServer(tId, matchId, title, detail) {
+  // A resposta leve da callable não contém todos os jogos de torneio dividido.
+  // Confirmar pela leitura canônica antes de anunciar que a chave foi atualizada.
+  var db = window.FirestoreDB;
+  var fresh = db && typeof db.loadTournamentById === 'function'
+    ? await db.loadTournamentById(tId) : null;
+  var allMatches = fresh && typeof window._collectAllMatches === 'function'
+    ? window._collectAllMatches(fresh) : (fresh && fresh.matches);
+  if (!fresh || !Array.isArray(allMatches) ||
+      !allMatches.some(function (game) { return game && String(game.id) === String(matchId); }) ||
+      typeof window._applyCFTournament !== 'function') {
+    showNotification('Gravado, mas tela não conferida',
+      'Não foi possível reler a chave do servidor. Recarregue antes de continuar.', 'warning');
+    return false;
+  }
+  window._applyCFTournament(tId, fresh);
+  showNotification(title, detail, 'success');
+  return true;
+}
 window._organizerResetMatch = function(tId, matchId) {
   var t = window._findTournamentById(tId);
   if (!t) return;
@@ -2976,10 +2995,13 @@ window._organizerResetMatch = function(tId, matchId) {
     function() {
       // A CF relê o jogo fresco, grava o recibo e cria o aviso na outbox no mesmo commit.
       Promise.resolve(window.AppStore.commitResultTx(tId, matchId, { action: 'reset-match' },
-        'Organizador refez a partida (placar zerado): ' + m.p1 + ' vs ' + m.p2)).then(function(saved) {
+        'Organizador refez a partida (placar zerado): ' + m.p1 + ' vs ' + m.p2)).then(async function(saved) {
         if (!saved) return;
-        showNotification('🔄 Partida reaberta', 'O placar foi zerado. A partida deve ser jogada novamente.', 'success');
-        _rerenderBracket(tId, matchId);
+        await _confirmAdministrativeResultFromServer(tId, matchId, '🔄 Partida reaberta',
+          'O placar foi zerado. A partida deve ser jogada novamente.');
+      }).catch(function() {
+        showNotification('Não foi possível confirmar a operação',
+          'Recarregue a chave antes de tentar novamente.', 'warning');
       });
     }
   );
@@ -3023,10 +3045,13 @@ window._revertWO = function(tId, matchId) {
       var _message = 'W.O. revertido: ' + m.p1 + ' vs ' + m.p2 + ' — partida reaberta';
       // A CF relê a chave, a ausência e o W.O. fresco. Ela também desfaz os avanços,
       // registra o recibo e entrega o aviso pela outbox; este browser não escreve nada.
-      Promise.resolve(window.AppStore.commitResultTx(tId, matchId, { action: 'revert-wo' }, _message)).then(function(saved) {
+      Promise.resolve(window.AppStore.commitResultTx(tId, matchId, { action: 'revert-wo' }, _message)).then(async function(saved) {
         if (!saved) return;
-        showNotification('↩️ W.O. revertido', 'A partida foi reaberta (0×0). Os jogadores voltam a ficar disponíveis.', 'success');
-        _rerenderBracket(tId, matchId);
+        await _confirmAdministrativeResultFromServer(tId, matchId, '↩️ W.O. revertido',
+          'A partida foi reaberta (0×0). Os jogadores voltam a ficar disponíveis.');
+      }).catch(function() {
+        showNotification('Não foi possível confirmar a operação',
+          'Recarregue a chave antes de tentar novamente.', 'warning');
       });
     },
     null,
@@ -3276,9 +3301,13 @@ window._editResult = function (tId, matchId) {
 
       // O navegador não desmonta a chave nem a classificação: pede a transição
       // administrativa, e só abre os campos depois da confirmação canônica.
-      window.AppStore.commitResultTx(tId, matchId, { action: 'reopen-result' }, _message).then(function(saved) {
+      window.AppStore.commitResultTx(tId, matchId, { action: 'reopen-result' }, _message).then(async function(saved) {
       if (!saved) return;
-      _rerenderBracket(tId);
+      await _confirmAdministrativeResultFromServer(tId, matchId, 'Resultado reaberto',
+        'A chave foi relida do servidor.');
+      }).catch(function() {
+        showNotification('Não foi possível confirmar a operação',
+          'Recarregue a chave antes de tentar novamente.', 'warning');
       });
     },
     null,

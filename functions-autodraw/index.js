@@ -52,6 +52,9 @@ let groupTeamStandingsFn = null;    // fecho de rodada no servidor (Suíço-pow2
 let canRecompile = null;
 let hasDrawnBracket = null;  // régua de 'já tem chave' — a MESMA do cliente (matches/rounds/groups)
 let drawWindow = null; // window do shim Node — expõe _calcNextDrawDate (prazo p/ lançar resultado)
+let reconcileSurplusDecisionsFn = null;
+let assertSurplusMatchMayStartFn = null;
+let assertNoPrematureLaterPlayFn = null;
 
 /* ⛔ L16.P2 — HIDRATAÇÃO QUE FALHA CALADA NÃO É "BEST-EFFORT".
  * MEDIDO: `_hydrateMonarchGroups` era chamada em OITO lugares deste arquivo e TODOS os oito
@@ -115,8 +118,29 @@ try {
   canRecompile = _dc.canRecompile;
   hasDrawnBracket = _dc.hasDrawnBracket;
   drawWindow = _dc._window;
+  const surplusCore = require('./surplus-reconcile-core.js');
+  reconcileSurplusDecisionsFn = surplusCore.reconcileSurplusDecisions;
+  assertSurplusMatchMayStartFn = surplusCore.assertSurplusMatchMayStart;
+  assertNoPrematureLaterPlayFn = surplusCore.assertNoPrematureLaterPlay;
 } catch (e) {
   console.error('[autoDraw] draw-core indisponível — autoDraw vai pular:', e && e.message);
+}
+
+function _reconcileSurplusBeforeWrite(t, tId, before) {
+  const _hasPending = drawWindow && typeof drawWindow._collectAllMatches === 'function' &&
+    drawWindow._collectAllMatches(t).some(m => m && m.sobraAguardaDecisao != null);
+  if (!_hasPending && !Object.keys((t && t.sobraUnicaDecisoesV1) || {}).length) return { changed: false };
+  if (typeof reconcileSurplusDecisionsFn !== 'function') {
+    throw _drawFail('internal', 'Motor da decisão de folga indisponível.', { tId });
+  }
+  try {
+    if (typeof assertNoPrematureLaterPlayFn !== 'function') throw new Error('Trava da folga indisponível.');
+    assertNoPrematureLaterPlayFn(before, t);
+    return reconcileSurplusDecisionsFn(t);
+  }
+  catch (e) {
+    throw _drawFail('failed-precondition', (e && e.message) || 'Não foi possível reconciliar a folga.', { tId });
+  }
 }
 
 // v1.7: AUTORIZAÇÃO + aplicação do RESULTADO no servidor (result-core.js). Require
@@ -800,7 +824,7 @@ const _CAMPOS_RASCUNHO_SORTEIO_INICIAL = [
   'standings', 'sitOutHistory', 'opponentHistory', 'monarchWaitlist',
   'waitlist', 'standbyParticipants', 'checkedIn', 'absent',
   'status', 'currentStage', 'currentPhaseIndex', '_phaseMaterialized',
-  'phaseStartedAt', '_canonicalDraw', 'history', 'lastAutoDrawAt',
+  'phaseStartedAt', '_canonicalDraw', 'sobraUnicaDecisoesV1', 'history', 'lastAutoDrawAt',
   'tournamentStarted', 'drawSlotAt', 'nextDrawAt'
 ];
 function _rascunhoDoSorteioInicial(t) {
@@ -2245,11 +2269,20 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
       return { ok: false, reason: 'permission-denied' };
     }
     _hidrataGrupos(t, 'aplicaPlacarNaTransacao', tId);
+    if (typeof assertSurplusMatchMayStartFn !== 'function') {
+      throw _drawFail('internal', 'Trava da folga indisponível.', { tId, matchId });
+    }
+    // Desfazer um resultado é o caminho de reparo de uma chave antiga; a trava
+    // vale para iniciar/confirmar jogo, não para retirar um placar já lançado.
+    const _desfazResultado = ['reset-match', 'reopen-result', 'revert-wo'].includes(String((payload && payload.action) || ''));
+    try { if (!_desfazResultado) assertSurplusMatchMayStartFn(t, matchId); }
+    catch (e) { throw _drawFail('failed-precondition', (e && e.message) || 'Folga ainda pendente.', { tId, matchId }); }
     const res = applyResultFn(t, {
       matchId: matchId, payload: payload, actor: { uid: ator.uid, email: ator.email || '', name: ator.name || '' },
       logMessage: logMessage
     });
     if (!res || !res.ok) return { ok: false, reason: (res && res.reason) || 'apply-failed' };
+    _reconcileSurplusBeforeWrite(t, tId, _tAntes);
     const b = _gravaTorneio(tx, ref, t, _tAntes, { agoraIso: _agoraIsoTx }); // clobber-free; divide se o marcador mandar
     // O mesmo commit do placar contém o antes/depois. Diferentemente do histórico de
     // interface, este recibo não depende de um cliente chegar ao fim da operação e não é
@@ -2825,6 +2858,7 @@ exports.manageWOClaim = onCall(async request => {
       }
       motor = applyWoFn(t, motorOpts);
       if (!motor || !motor.ok) throw _drawFail('failed-precondition', 'O motor recusou aplicar este W.O.', { tId, action, reason: motor && motor.reason });
+      _reconcileSurplusBeforeWrite(t, tId, before);
       claim.status = 'applied'; claim.resolvedAt = agoraIso;
       if (step.choice) claim.outcomeStage = 'resolved';
     }
@@ -2958,6 +2992,7 @@ exports.applyTournamentWO = onCall(async (request) => {
       });
     }
     if (!result || !result.ok) return { ok: false, result: result || { outcome: 'error' } };
+    _reconcileSurplusBeforeWrite(t, tId, before);
     /* O recibo vem exclusivamente do motor que acabou de alterar `t` dentro desta
      * transação. Ele não é dado da tela e é comparado de novo na guarda de repescagem.
      * Assim uma vaga carimbada fica protegida contra qualquer save antigo, mas o W.O.
@@ -3082,6 +3117,7 @@ exports.setTournamentPresenceWithWOSubstitution = onCall(async (request) => {
     const before = _antesDoMotor(t);
     const result = setPresenceWithWOSubstitutionFn(t, { uid: resolvedUid, name: canonicalName, action, at: Date.now() });
     if (!result || !result.ok) return { ok: false, result: result || { reason: 'error' } };
+    _reconcileSurplusBeforeWrite(t, tId, before);
     const boundary = _gravaTorneio(tx, ref, t, before, { agoraIso });
     return { ok: true, result, tournament: boundary.clean };
   });
@@ -3124,6 +3160,7 @@ exports.resolveWOSubstitutionChoice = onCall(async (request) => {
     const before = _antesDoMotor(t);
     const result = resolveWOSubstitutionChoiceFn(t, absentUid, substituteUid);
     if (!result || !result.ok) return { ok: false, result: result || { reason: 'error' } };
+    _reconcileSurplusBeforeWrite(t, tId, before);
     const boundary = _gravaTorneio(tx, ref, t, before, { agoraIso });
     return { ok: true, result, tournament: boundary.clean };
   });
@@ -3337,6 +3374,7 @@ exports.setTournamentWOAbsence = onCall(async (request) => {
     const before = _antesDoMotor(t);
     const result = setTournamentWOAbsenceFn(t, identities, wantAbsent);
     if (!result || !result.ok) return { ok: false, result: result || { reason: 'error' } };
+    _reconcileSurplusBeforeWrite(t, tId, before);
     const boundary = _gravaTorneio(tx, ref, t, before, { agoraIso });
     return { ok: true, result, tournament: boundary.clean };
   });
@@ -4376,8 +4414,9 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
   });
   // Este handler é definido aqui (não por factory); a criação injeta a mesma função
   // na factory para permitir exercitar o handler real com um banco falso nos testes.
-  // O patch já é um clone: `playin` legado vira `repescagem` antes da comparação e escrita.
-  require('./elimination-policy-config-core').validateAndCanonicalizeExplicitPolicy(patch, HttpsError);
+  // O patch já é um clone. A validação efetiva acontece com o documento fresco
+  // dentro da transação, preservando aliases históricos não alterados.
+  const _policyConfig = require('./elimination-policy-config-core');
   const bytes = Buffer.byteLength(JSON.stringify(patch), 'utf8');
   if (bytes > 96 * 1024) throw new HttpsError('invalid-argument', 'Configuração grande demais.');
   const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
@@ -4385,6 +4424,8 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização atualiza a configuração.', { tId, uid });
+    const _policyBeforeShape = _policyConfig.policyShape(t);
+    _policyConfig.canonicalizePolicyAliases(patch, t);
     require('./category-capacity-core').validateCapacityConfig(patch, HttpsError, t);
     const hasDraw = hasDrawnBracket(t);
     const requestedOpeningAt = Date.parse(String(patch.registrationOpenAt || ''));
@@ -4449,6 +4490,19 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
         t[key] = patch[key];
       }
     });
+    if (_policyBeforeShape !== _policyConfig.policyShape(t)) {
+      // Apenas uma alteração da política ou de seu formato exige revalidar o
+      // conjunto efetivo. Nome/prazo de fase e outros patches não são vetados
+      // por uma combinação legada que já estava gravada e permanece intacta.
+      // Ao mudar a política, o documento fresco completo continua sendo o gate.
+      const effectivePolicy = JSON.parse(JSON.stringify({
+        politicaDaChave: t.politicaDaChave,
+        fmt2: t.fmt2,
+        eliminatoria: t.eliminatoria,
+        phases: t.phases
+      }));
+      _policyConfig.validateAndCanonicalizeExplicitPolicy(effectivePolicy, HttpsError);
+    }
     /* Uma abertura futura é um comando declarativo: o status precisa estar apto a
      * abrir quando o relógio chegar, enquanto enrollmentOpen mantém a porta fechada
      * até lá. Não é bypass: só vale antes da chave e só a organização grava o campo.
@@ -4532,9 +4586,13 @@ exports.applyTournamentFormat = onCall(async (request) => {
       throw _drawFail('permission-denied', 'Só a organização configura o formato.', { tId, uid });
     }
     if (hasDrawnBracket(t)) throw _drawFail('failed-precondition', 'already-drawn', { tId });
+    // A terceira porta de gravação recebe fmt2 cru; clonar e validar ANTES de
+    // compilar impede a normalização tolerante de esconder uma escolha inválida.
+    const fmt2Clone = _clonaConfigDeclarativa(fmt2, 0, ['fmt2']);
+    require('./elimination-policy-config-core').validateAndCanonicalizeExplicitPolicy(fmt2Clone, HttpsError);
     let out;
     try {
-      out = drawWindow.FORMAT2.compileToPhases(fmt2, {
+      out = drawWindow.FORMAT2.compileToPhases(fmt2Clone, {
         sport: t.sport,
         resultEntry: t.resultEntry || ['organizer'],
         lateEnrollment: t.lateEnrollment,

@@ -57,8 +57,10 @@ const dentro = iTx > 0 ? bloco.slice(iTx) : '';
 ].forEach(function (par) {
   ok(motor.indexOf(par[0]) >= 0, par[1]);
 });
-ok(/m\.winner \|\| m\.scoreP1 != null \|\| m\.scoreP2 != null \|\| m\.pendingResult/.test(motor),
-  '① ⛔ e recusa se houver resultado, placar ou placar esperando — redesenhar apagaria resultado');
+ok(['m.winner', 'm.scoreP1 != null', 'm.scoreP2 != null', 'm.pendingResult != null',
+  'm.wo != null', 'm.resultAt != null', 'm.startedAt != null', 'm.liveScored', 'm.sets.length']
+  .every(campo => motor.includes(campo)),
+  '① ⛔ recusa resultado, W.O., placar e partida iniciada antes de redesenhar');
 /* ⛔⛔ E CONFERE O RETRATO INTEIRO, não só "tem placar?": a proposta guardou id, p1 e p2. Uma troca
  * de duplas sem placar passava batido e seria apagada pelo redesenho. */
 ok(/String\(m\.p1 == null \? '' : m\.p1\) !== String\(\(c && c\.p1\) \|\| ''\)/.test(motor),
@@ -263,6 +265,17 @@ ok(/const nsDaLinha = String\(prop\.linha/.test(motor),
   ok(out && out.aplicados === 1,
     '④d ⛔⛔ e confirmar FUNCIONA para quem não tem conta (aplicados=' + ((out || {}).aplicados) + ')');
   ok(t.matches.length !== antes || out.aplicados === 1, '④d a chave foi refeita');
+  const tIniciado = { id: 'tm-iniciado', politicaDaChave: 'bye',
+    matches: A.build(16, 'simples', { participantes: gente(16), politicaDaChave: 'bye' }).matches };
+  A.integrarTardiosElim(tIniciado, [manual]);
+  const propIniciada = tIniciado.tardiosPendentesPorLinha._principal;
+  tIniciado.matches.find(function (m) { return m.round > 1 && !m.isBye; }).startedAt = '2026-10-15T00:00:00.000Z';
+  const fotoIniciada = JSON.stringify(tIniciado.matches);
+  const recusa = A.integrarTardiosElim(tIniciado, [manual],
+    { decisaoDoOrganizador: true, linhaDaDecisao: propIniciada.linha,
+      assinaturasDaDecisao: [(propIniciada.inscritos[0].chaves || []).join('|')] });
+  ok(recusa.aplicados === 0 && JSON.stringify(tIniciado.matches) === fotoIniciada,
+    '④d confirmação não redesenha nenhuma rodada depois que um jogo começou');
 })();
 
 /* ── ④e A PENDÊNCIA SEM DESTINO TEM SAÍDA ──────────────────────────────────
@@ -460,6 +473,17 @@ ok(/já não está na lista de espera/.test(motor),
     ok(r.ok === false && /apagaria resultado/.test(String(r.mensagem || '')),
       '⑧ ⛔⛔ resultado lançado barra o redesenho');
   })();
+
+  for (const [campo, valor] of [['wo', true], ['resultAt', '2026-10-15T12:00:00Z'],
+    ['startedAt', '2026-10-15T12:00:00Z'], ['liveScored', true], ['sets', [{ a: 6, b: 4 }]]]) {
+    const t = montaT();
+    t.matches[1][campo] = valor;
+    const antes = JSON.stringify(t);
+    const r = D(t, { linha: '', revisao: 'r1', acao: 'confirmar', agoraIso: 'i',
+      integrar: function () { ok(false, '⑧ motor não pode refazer partida iniciada: ' + campo); return { ok: true }; } });
+    ok(r.ok === false && JSON.stringify(t) === antes,
+      '⑧ ⛔⛔ ' + campo + ' impede redesenho sem alterar torneio');
+  }
 
   /* ── caso 7: arquivar ───────────────────────────────────────────────────── */
   (function () {

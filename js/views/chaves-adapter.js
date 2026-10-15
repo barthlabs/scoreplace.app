@@ -153,6 +153,34 @@
     var C = _resolveChaves();
     if (!C) throw new Error('chaves-adapter: window._chaves não carregado');
     if (N < 2) return { matches: [], meta: { N: N, formato: formato, vazio: true } };
+    var ns = opts.ns ? (String(opts.ns) + '-') : '';
+    var decisoes = opts.decisoes || null;
+    if (formato === 'simples' && opts.politicaDaChave === 'sobra_unica' &&
+        typeof opts.prepareSurplusDecision === 'function') {
+      var primeira = C.plano(N, formato, opts.politicaDaChave).rodadas.filter(function (r) {
+        return r.fase === 'VC' && r.rodada === 1;
+      })[0];
+      if (primeira && primeira.acao === 'bye') {
+        var policy = (typeof window !== 'undefined') && window._bracketPolicy;
+        if (!policy || typeof policy.surplusEntryIdentity !== 'function') {
+          throw new Error('contrato de identidade da sobra indisponível');
+        }
+        var scope = { phaseIndex: opts.phaseIndex || 0, category: opts.category || '',
+          line: ns, bracket: opts.bracketKey || 'main', round: 1 };
+        var eligible = parts.map(function (entry, index) {
+          return { sourceId: 'seed:' + (index + 1), identity: policy.surplusEntryIdentity(entry) };
+        });
+        if (eligible.some(function (entry) { return !entry.identity; })) {
+          throw new Error('sobra única exige identidade persistente de cada inscrito');
+        }
+        var receipt = opts.prepareSurplusDecision({ scope: scope, eligible: eligible });
+        var source = receipt && receipt.decision && receipt.decision.recipientSourceId;
+        if (!source || !eligible.some(function (entry) { return entry.sourceId === source; })) {
+          throw new Error('decisão da sobra da primeira rodada inválida');
+        }
+        decisoes = Object.assign({}, decisoes || {}, { 'VC-R1': source });
+      }
+    }
 
     /* ⛔⛔ A POLÍTICA DA CHAVE ATRAVESSA AQUI, E ISTO FOI ACHADO NA REVISÃO DO PLANO (bloco 7).
      * Eu havia ensinado as três políticas ao motor (`chaves.js`) e deixado ESTE ponto chamando sem
@@ -162,12 +190,11 @@
      * ⚠️ Este é o ÚNICO construtor: `phases-engine` chama `build`, `build` chama `C.chave`, e a
      * Cloud Function do sorteio roda a MESMA cópia por vendor. Quem acrescentar um segundo caminho
      * para desenhar chave recria o defeito. */
-    var desenho = C.chave(N, formato, opts.politicaDaChave);
+    var desenho = C.chave(N, formato, opts.politicaDaChave, decisoes);
     // Namespace determinístico (fase + categoria). Sem ele, a fase 0 e a fase 1 —
     // ou duas categorias — teriam, cada uma, um jogo chamado 'VC-R1-P1', e
     // _findMatch acharia o errado. NUNCA pode conter timestamp: o id precisa
     // continuar derivável de (fase, categoria, N, formato).
-    var ns = opts.ns ? (String(opts.ns) + '-') : '';
     var byId = {};   // id ESTRUTURAL CRU (sem ns) -> match do app
     var matches = [];
 
@@ -185,6 +212,11 @@
       };
       if (opts.category != null) m.category = opts.category;
       if (j.tipo === 'repescagem') m.isRepechageSlot = true;
+      if (j.tipo === 'bye' && j.fase === 'VC' && j.rodada > 1 &&
+          formato === 'simples' && opts.politicaDaChave === 'sobra_unica' &&
+          !(decisoes && decisoes['VC-R' + j.rodada])) {
+        m.sobraAguardaDecisao = true;
+      }
       if (j.id === 'GF-EXTRA') { m.isExtra = true; m.condicional = true; }
       // ASSINATURA ESTRUTURAL — o que torna a reconciliação segura.
       //
@@ -699,6 +731,11 @@
       };
       if (opts.category != null) nm.category = opts.category;
       if (j.tipo === 'repescagem') nm.isRepechageSlot = true;
+      if (formato === 'simples' && opts.politicaDaChave === 'sobra_unica' &&
+          j.tipo === 'bye' && !(opts.decisoes && opts.decisoes['VC-R' + j.rodada])) {
+        nm.isBye = true;
+        nm.sobraAguardaDecisao = true;
+      }
       downById[j.id] = nm;
       down.push(nm);
     });
@@ -857,13 +894,25 @@
     // fazia o guard recusar crescimento normal e legítimo (9→10, 10→11, 17→18…), que é
     // exatamente o que a migração veio destravar. Placar de jogo realmente disputado
     // continua protegido pelo `rec.perdidos` logo abaixo — são guardas complementares.
-    var SO_SEMENTES = /^\d+\|normal:#\d+ x #\d+$/;
+    // Assinaturas atuais são `normal:#a x #b`; documentos antigos também
+    // trazem o prefixo `N|`. Ambos representam confronto já anunciado.
+    var SO_SEMENTES = /^(?:\d+\|)?normal:#\d+ x #\d+$/;
     var quebrados = (matchesAtuais || []).filter(function (m) {
       if (!m || !m._sig || !SO_SEMENTES.test(String(m._sig))) return false;
       var n = novoPorId[String(m.id)];
       return !n || !n._sig || n._sig !== m._sig;
     });
-    if (quebrados.length) {
+    // A confirmação transacional do organizador é a única exceção ao bloqueio de
+    // confrontos publicados. Mesmo nela, um jogo iniciado ou decidido não pode
+    // ser descartado pelo redesenho (inclusive W.O. e placar ainda pendente).
+    var redesenhoConfirmado = opts.politicaDaChave === 'bye' &&
+      opts.redesenhoConfirmado === true;
+    // A autorização para alterar a R1 não autoriza apagar uma rodada seguinte
+    // que já começou, mesmo que a assinatura estrutural daquele jogo coincida.
+    var confrontoEmAndamento = (matchesAtuais || []).some(function (m) {
+      return _jogouDeVerdade(m) || !!(m && m.winner && !m.isBye);
+    });
+    if (quebrados.length && (!redesenhoConfirmado || confrontoEmAndamento)) {
       return {
         ok: false,
         motivo: 'confronto-publicado-mudaria',
@@ -1043,11 +1092,27 @@
       assinaturasAplicadas: [], semMudanca: true };
     if (!t || !Array.isArray(t.matches) || !t.matches.length) return res;
 
-    var elim = t.matches.filter(_ehElim);
+    // `t.matches` conserva as fases anteriores. Um tardio da fase atual jamais
+    // pode reconstruir uma chave histórica; ausência do carimbo significa fase 0
+    // nos documentos legados, como em phases-engine.phaseGames.
+    var faseAtiva = Number(opts && opts.phaseIndex != null ? opts.phaseIndex : (t.currentPhaseIndex || 0));
+    var faseCfg = Array.isArray(t.phases) ? t.phases[faseAtiva] : null;
+    var faseClassificatoria = faseCfg && (faseCfg.kind === 'classification' ||
+      faseCfg.formatCode === 'grupos_mata' || faseCfg.formatCode === 'liga');
+    if (faseClassificatoria) return res;
+    // A fase dupla continua no motor de dupla eliminação; o formato do topo pode
+    // ser classificatório (grupos → dupla), portanto não o usamos como atalho.
+    var faseDupla = !!(faseCfg && ((faseCfg.elimination && faseCfg.elimination.bracketType === 'double') ||
+      (faseCfg.kind !== 'elimination' && (faseCfg.formatCode === 'elim_dupla' ||
+        /dupla eliminat/i.test(String(faseCfg.format || ''))))));
+    var elim = t.matches.filter(function (m) {
+      return _ehElim(m) && Number(m.phaseIndex || 0) === faseAtiva;
+    });
     if (!elim.length) return res;
 
-    var dupla = /dupla/i.test(String(t.format || ''));
+    var dupla = faseDupla || (!faseCfg && /dupla eliminat/i.test(String(t.format || '')));
     var formato = dupla ? 'dupla' : 'simples';
+    var politicaDaFase = (faseCfg && faseCfg.politicaDaChave) || t.politicaDaChave || 'repescagem';
 
     // agrupa por namespace (fase + categoria + linha)
     var grupos = {}, legado = 0;
@@ -1114,7 +1179,57 @@
        * ⇒ Então aqui a chave NÃO é mexida. O tardio fica registrado como pendente e quem decide é o
        * organizador: refazer a chave (e aí os confrontos mudam, com ele sabendo) ou deixar para o
        * próximo torneio. Refazer é um gesto dele, nunca um efeito colateral de uma inscrição. */
-      var _politicaAqui = (t && t.politicaDaChave) || 'repescagem';
+      var _politicaAqui = politicaDaFase;
+      var _sobraCtx = null;
+      if (_politicaAqui === 'sobra_unica') {
+        var _policySobra = (typeof window !== 'undefined') && window._bracketPolicy;
+        var _scopeSobra = { phaseIndex: faseAtiva, category: cat || '',
+          line: ns ? ns + '-' : '', bracket: (doGrupo[0] && doGrupo[0].bracket) || 'main', round: 1 };
+        if (!_policySobra || typeof _policySobra.prepareSurplusDecision !== 'function') {
+          res.recusados.push({ ns: ns, motivo: 'decisao-da-sobra-indisponivel', entrantes: novos.length });
+          return;
+        }
+        var _mapaSobra = t.sobraUnicaDecisoesV1 || {};
+        var _keySobra = _policySobra.surplusDecisionKey(_scopeSobra);
+        var _posteriorDecidida = Object.keys(_mapaSobra).some(function (key) {
+          var parsed;
+          try { parsed = JSON.parse(key); } catch (e) { return false; }
+          return Array.isArray(parsed) && parsed[0] === faseAtiva &&
+            parsed[1] === String(cat || '') && parsed[2] === _scopeSobra.line &&
+            parsed[3] === _scopeSobra.bracket && parsed[4] > 1;
+        });
+        if (_posteriorDecidida) {
+          res.recusados.push({ ns: ns, motivo: 'sobra-posterior-ja-decidida', entrantes: novos.length });
+          return;
+        }
+        var _oldSobra = _mapaSobra[_keySobra];
+        var _stagedSobra = null;
+        _sobraCtx = {
+          key: _keySobra,
+          prepare: function (request) {
+            var freshMap = Object.assign({}, _mapaSobra);
+            delete freshMap[_keySobra];
+            var receipt = _policySobra.prepareSurplusDecision(freshMap, request.scope, request.eligible);
+            if (_oldSobra) {
+              var original = request.eligible.filter(function (e) {
+                return e.sourceId === _oldSobra.recipientSourceId && e.identity === _oldSobra.recipientIdentity;
+              })[0];
+              if (!original) throw new Error('beneficiário publicado da sobra não está mais elegível');
+              receipt.decision.recipientSourceId = original.sourceId;
+              receipt.decision.recipientIdentity = original.identity;
+            }
+            _stagedSobra = receipt;
+            return receipt;
+          },
+          discard: function () { _stagedSobra = null; },
+          apply: function () {
+            if (!_oldSobra && !_stagedSobra) return;
+            t.sobraUnicaDecisoesV1 = Object.assign({}, _mapaSobra);
+            if (_stagedSobra) t.sobraUnicaDecisoesV1[_keySobra] = _stagedSobra.decision;
+            else delete t.sobraUnicaDecisoesV1[_keySobra];
+          }
+        };
+      }
       /* ⛔⛔ A ÚNICA PORTA QUE REDESENHA CHAVE DE FOLGA É A DECISÃO DO ORGANIZADOR. Este interruptor
        * existe só para a callable de decisão: ela reabre o caminho DEPOIS de reler o torneio,
        * autorizar quem pede e conferir que a proposta ainda vale. Nenhum caminho automático o liga —
@@ -1223,12 +1338,14 @@
       var elenco = roster.concat(novos);
       var r = recalcularComTardio(doGrupo, elenco.length, formato, {
         participantes: elenco,
+        prepareSurplusDecision: _sobraCtx && _sobraCtx.prepare,
         /* ⛔ A política vem do DOCUMENTO DO TORNEIO (`t`), que é o parâmetro desta função — e acompanha
          * o tardio: recalcular sem ela trocaria o desenho no meio do torneio.
          * ⭐ Eu escrevi `opts` aqui, que não existe neste escopo. O `ReferenceError` era ENGOLIDO por um
          * catch do integrador, o recálculo devolvia zero jogos, e 16 suítes de tardio ficaram vermelhas
          * de uma vez. [[feedback_engolir_erro_custa_horas_do_dono]] — e [[feedback_funcao_dentro_de_outra_nao_existe]]. */
-        politicaDaChave: (t && t.politicaDaChave) || null,
+        politicaDaChave: politicaDaFase,
+        redesenhoConfirmado: _decidida && _politicaAqui === 'bye',
         ns: ns || null,
         category: cat,
         phaseIndex: (doGrupo[0] && doGrupo[0].phaseIndex) || 0,
@@ -1244,6 +1361,7 @@
       // confronto já publicado (só acontece na potência de 2 exata); o crescimento
       // congela a R1 e abre um jogo novo pros tardios, aos pares. Ver crescerComPrefixo.
       if (!r.ok && r.motivo === 'confronto-publicado-mudaria') {
+        if (_sobraCtx) _sobraCtx.discard();
         var g = crescerComPrefixo(doGrupo, novos, formato, {
           /* ⛔⛔ E AQUI TAMBÉM — era o último caminho do tardio sem política. Ele redesenha o downstream
            * chamando o motor, então sem esta linha o crescimento caía em repescagem em SILÊNCIO e a
@@ -1253,12 +1371,13 @@
            * automático burla a confirmação que o desenho exige. É o ponto onde a leva 7.3 põe a recusa
            * com pedido de confirmação — hoje quem barra é o guarda de confronto PUBLICADO, e ele não
            * cobre o caso de ainda não haver confronto publicado. */
-          politicaDaChave: (t && t.politicaDaChave) || null,
+          politicaDaChave: politicaDaFase,
           ns: ns || null, category: cat,
           phaseIndex: (doGrupo[0] && doGrupo[0].phaseIndex) || 0,
           tournamentId: t.id
         });
         if (g.ok) {
+          if (_sobraCtx) _sobraCtx.apply();
           var idsAntigos = {};
           doGrupo.forEach(function (m) { idsAntigos[String(m.id)] = 1; });
           t.matches = t.matches.filter(function (m) { return !idsAntigos[String(m.id)]; }).concat(g.matches);
@@ -1283,6 +1402,7 @@
       }
 
       // troca os matches DESTE grupo, preservando o resto do doc
+      if (_sobraCtx) _sobraCtx.apply();
       var doGrupoIds = {};
       doGrupo.forEach(function (m) { doGrupoIds[String(m.id)] = 1; });
       t.matches = t.matches.filter(function (m) { return !doGrupoIds[String(m.id)]; }).concat(r.matches);

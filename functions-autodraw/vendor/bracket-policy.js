@@ -137,6 +137,107 @@
     }, '');
   }
 
+  function surplusDecisionKey(scope) {
+    scope = scope || {};
+    var phase = Number(scope.phaseIndex);
+    var round = Number(scope.round);
+    if (!_isInteger(phase) || phase < 0 || !_isInteger(round) || round < 1) {
+      throw new Error('fase e rodada da sobra devem ser inteiros válidos');
+    }
+    return JSON.stringify([phase, String(scope.category || ''), String(scope.line || ''),
+      String(scope.bracket || 'main'), round]);
+  }
+
+  function surplusEntryIdentity(entry) {
+    if (!entry || typeof entry !== 'object') return '';
+    var ids = [];
+    function add(value, prefix) {
+      var id = String(value || '').trim();
+      if (id && ids.indexOf(prefix + id) < 0) ids.push(prefix + id);
+    }
+    [entry.uid, entry.p1Uid, entry.p2Uid, entry.p3Uid, entry.p4Uid]
+      .concat(Array.isArray(entry.uids) ? entry.uids : [])
+      .forEach(function (uid) { add(uid, 'uid:'); });
+    [entry.manualParticipantId, entry.registrationId, entry.p1ManualId,
+      entry.p2ManualId, entry.p3ManualId, entry.p4ManualId]
+      .forEach(function (manual) { add(manual, 'manual:'); });
+    (Array.isArray(entry.participants) ? entry.participants : []).forEach(function (member) {
+      if (!member) return;
+      add(member.uid, 'uid:');
+      add(member.manualParticipantId || member.registrationId, 'manual:');
+    });
+    if (!ids.length) return '';
+    ids.sort();
+    if (ids.length === 1) return ids[0];
+    if (ids.every(function (id) { return id.indexOf('uid:') === 0; })) {
+      return 'uid:' + ids.map(function (id) { return id.slice(4); }).join('+');
+    }
+    return 'members:' + ids.join('+');
+  }
+
+  // Não grava no torneio: recebe um mapa clonado do documento fresco e devolve
+  // um recibo determinístico. O chamador transacional persiste o recibo junto
+  // dos jogos, ou recusa toda a operação. `sourceId` identifica uma vaga na
+  // árvore; `identity` identifica a equipe (UID real ou inscrição manual).
+  function prepareSurplusDecision(existing, scope, eligible, priorRecipients) {
+    var key = surplusDecisionKey(scope);
+    if (!Array.isArray(eligible) || eligible.length < 3 || eligible.length % 2 !== 1) {
+      throw new Error('sobra exige rodada ímpar com ao menos três equipes');
+    }
+    var sources = Object.create(null), identities = Object.create(null);
+    eligible.forEach(function (entry) {
+      var source = String(entry && entry.sourceId || '');
+      var identity = String(entry && entry.identity || '');
+      if (!source || !identity || sources[source] || identities[identity]) {
+        throw new Error('sobra exige fontes e identidades únicas');
+      }
+      sources[source] = true; identities[identity] = source;
+    });
+    var revision = eligible.map(function (entry) {
+      return String(entry.sourceId) + '\u0001' + String(entry.identity);
+    }).join('\u0002');
+    var old = existing && existing[key];
+    if (old) {
+      if (old.revision !== revision || !sources[String(old.recipientSourceId)] ||
+          identities[String(old.recipientIdentity)] !== String(old.recipientSourceId)) {
+        throw new Error('decisão da sobra está obsoleta; é preciso revalidar a chave');
+      }
+      return { key: key, decision: old, reused: true };
+    }
+    var recipientIdentity = selectSurplusRecipient(eligible.map(function (entry) {
+      return String(entry.identity);
+    }), priorRecipients || []);
+    var decision = {
+      schema: 1, revision: revision,
+      recipientIdentity: recipientIdentity,
+      recipientSourceId: identities[recipientIdentity],
+      sourceIds: eligible.map(function (entry) { return String(entry.sourceId); })
+    };
+    return { key: key, decision: decision, reused: false };
+  }
+
+  function prepareTournamentSurplusDecision(tournament, scope, eligible, priorRecipients) {
+    if (!tournament || typeof tournament !== 'object') {
+      throw new Error('torneio ausente para decisão da sobra');
+    }
+    var existing = tournament.sobraUnicaDecisoesV1 || {};
+    if (!Array.isArray(priorRecipients)) {
+      priorRecipients = Object.keys(existing).filter(function (key) {
+        var parsed;
+        try { parsed = JSON.parse(key); } catch (e) { return false; }
+        return Array.isArray(parsed) && parsed[0] === Number(scope.phaseIndex) &&
+          parsed[1] === String(scope.category || '') && parsed[2] === String(scope.line || '') &&
+          parsed[3] === String(scope.bracket || 'main') && parsed[4] < Number(scope.round);
+      }).map(function (key) { return existing[key] && existing[key].recipientIdentity; }).filter(Boolean);
+    }
+    var receipt = prepareSurplusDecision(existing, scope, eligible, priorRecipients);
+    if (!receipt.reused) {
+      tournament.sobraUnicaDecisoesV1 = Object.assign({}, existing);
+      tournament.sobraUnicaDecisoesV1[receipt.key] = receipt.decision;
+    }
+    return receipt;
+  }
+
   // Devolve somente a decisão de UMA rodada. O chamador continua responsável por
   // formar os confrontos e por informar quem é elegível conforme a chave viva.
   function planRound(opts) {
@@ -175,6 +276,10 @@
     planRepechage: planRepechage,
     planSingleSurplus: planSingleSurplus,
     selectSurplusRecipient: selectSurplusRecipient,
+    surplusDecisionKey: surplusDecisionKey,
+    surplusEntryIdentity: surplusEntryIdentity,
+    prepareSurplusDecision: prepareSurplusDecision,
+    prepareTournamentSurplusDecision: prepareTournamentSurplusDecision,
     planRound: planRound
   });
   if (root) root._bracketPolicy = api;

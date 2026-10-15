@@ -793,6 +793,18 @@ function drawInitial(t, opts) {
   else { t.checkedIn = {}; t.absent = {}; }
 
   const _pool0 = win._buildPhase0Pool(t, _isMon0, _ts0);
+  // A decisão da primeira folga usa o elenco efetivamente sorteado (já com
+  // duplas formadas). O hook roda dentro da transação do sorteio; a mesma escrita
+  // publica confrontos e recibo, e um retry reutiliza o recibo do documento fresco.
+  if (_cfg0 && _cfg0.politicaDaChave === 'sobra_unica') {
+    const _policy = win._bracketPolicy;
+    if (!_policy || typeof _policy.prepareTournamentSurplusDecision !== 'function') {
+      throw new Error('contrato de decisão da sobra indisponível');
+    }
+    _cfg0._prepareSurplusDecision = function ({ scope, eligible }) {
+      return _policy.prepareTournamentSurplusDecision(t, scope, eligible);
+    };
+  }
   const _built0 = _E0.generatePhase(_pool0, _cfg0, {
     t: t, idPrefix: 'p0-' + (opts.idStamp || Date.now()),
     isVip: function (e) { return win._entryHasVip(t, e); },
@@ -924,6 +936,7 @@ function integrateLateEntries(t, opts) {
       if (pend.length) {
         const r = A.integrarTardiosElim(t, pend, {
           agora: _agoraDaOperacao,
+          phaseIndex: t.currentPhaseIndex || 0,
           /* só a callable de decisão do organizador liga isto; o caminho automático nunca */
           decisaoDoOrganizador: !!(opts && opts.decisaoDoOrganizador),
           /* a decisão vale para UMA linha; sem isto, confirmar uma redesenharia as outras */
@@ -1323,7 +1336,9 @@ function decidirTardioNaFolga(t, opts) {
   }
   const sujos = (prop.confrontosAfetados || []).filter((c) => {
     const m = porId[String(c && c.id)];
-    return !!(m && (m.winner || m.scoreP1 != null || m.scoreP2 != null || m.pendingResult));
+    return !!(m && (m.winner || m.wo != null || m.resultAt != null || m.startedAt != null ||
+      m.liveScored || m.scoreP1 != null || m.scoreP2 != null || m.pendingResult != null ||
+      (Array.isArray(m.sets) && m.sets.length)));
   });
   if (sujos.length) {
     return nao('failed-precondition',
@@ -1357,6 +1372,12 @@ function decidirTardioNaFolga(t, opts) {
   const aplicadas = Array.isArray(r.assinaturasAplicadas) ? r.assinaturasAplicadas.map(String) : [];
   const faltaram = assinaturas.filter((a) => aplicadas.indexOf(String(a)) < 0);
   if (faltaram.length) {
+    const recusa = Array.isArray(r.recusas) && r.recusas.find((item) => item && item.motivo);
+    if (recusa) {
+      return nao('failed-precondition',
+        'A chave não pôde ser refeita com segurança (' + String(recusa.motivo) + '). A pendência foi preservada.',
+        { faltaram: faltaram.length, motivo: String(recusa.motivo) });
+    }
     return nao('failed-precondition',
       'Quem este pedido nomeia já não está na lista de espera. Confira a inscrição e decida de novo.',
       { faltaram: faltaram.length });

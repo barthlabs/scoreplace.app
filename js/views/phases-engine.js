@@ -992,7 +992,10 @@
        * não do organizador). Não confundir: aquilo é outra coisa, e o comentário acima explica.
        * [[feedback_enumerar_todos_os_caminhos_antes_de_dar_por_pronto]] — terceira vez nesta leva. */
       var res = _genElimFromChaves(byDest[dest],
-        { _terceiroNestaChave: _tierThird, politicaDaChave: (phaseCfg && phaseCfg.politicaDaChave) || null },
+        { _terceiroNestaChave: _tierThird, politicaDaChave: (phaseCfg && phaseCfg.politicaDaChave) || null,
+          _prepareSurplusDecision: phaseCfg && phaseCfg._prepareSurplusDecision,
+          _surplusPhaseIndex: phaseCfg && phaseCfg._surplusPhaseIndex,
+          _surplusCategory: phaseCfg && phaseCfg._surplusCategory },
         idPrefix + '-' + bracketKey, false, bracketKey);
       // Nome da chave = o que o ORGANIZADOR digitou (mapping[].label). Sem nome, com 2+ chaves →
       // default POSICIONAL "Chave N" (ordem da chave). NUNCA Ouro/Prata (exemplo ≠ regra,
@@ -1595,6 +1598,9 @@
     var _daInscricao = !!(cfg && cfg.source && cfg.source.type === 'enrollment');
     var built = A.build(pool.length, dupla ? 'dupla' : 'simples', {
       participantes: pool,
+      prepareSurplusDecision: cfg && cfg._prepareSurplusDecision,
+      phaseIndex: cfg && cfg._surplusPhaseIndex,
+      category: cfg && cfg._surplusCategory,
       /* ⛔⛔⛔ A DISPUTA DE 3º LUGAR EXISTE SEMPRE — CONCEITO, não regra de ninguém: é o jogo entre os
        * dois perdedores das semifinais, anterior à final, sempre previsto e sempre contado. O conceito
        * inteiro (incluindo por que tratá-lo como opcional quebra a contagem de jogos e a classificação)
@@ -1756,7 +1762,8 @@
         cats.forEach(function (cat, ci) {
           var catPool = pool.filter(function (e) { return String(ctx.catOf(e) || '') === String(cat); });
           if (!catPool.length) return;
-          var b = _genElimFromPool(catPool, cfg, idPrefix + '-c' + ci);
+          var b = _genElimFromPool(catPool,
+            Object.assign({}, cfg, { _surplusCategory: cat }), idPrefix + '-c' + ci);
           (b.matches || []).forEach(function (m) {
             m.category = cat;
             // repFill do single-elim (genTierBracket) nasce sem categoria (não a conhece).
@@ -1782,7 +1789,10 @@
         // categoria, tagueia os jogos com ela (o filtro por categoria em _computeStandings
         // exige a tag). Igual ao ramo do split: matches taggeados + repMeta.category setado
         // → _buildRepechageDoubleElim carimba os jogos que cria depois (upper R2+/lower/grand).
-        built = _genElimFromPool(pool, cfg, idPrefix);
+        built = _genElimFromPool(pool, Object.assign({}, cfg, {
+          _surplusCategory: (cfg && Array.isArray(cfg.categories) && cfg.categories.length === 1)
+            ? cfg.categories[0] : (cfg && cfg.category)
+        }), idPrefix);
         var _loneCat = (cfg && Array.isArray(cfg.categories) && cfg.categories.length === 1) ? cfg.categories[0] : null;
         if (_loneCat != null) {
           (built.matches || []).forEach(function (m) { if (m.category == null) m.category = _loneCat; });
@@ -2147,7 +2157,7 @@
   // comportamento antigo (que a golden trava) não a considerava. Mantido como estava.
   function _jogoResolvido(m, ehGrupo) {
     if (!m) return true;
-    return !!(m.winner || m.isBye || (ehGrupo && m.isSitOut));
+    return !!(m.winner || (m.isBye && !m.sobraAguardaDecisao) || (ehGrupo && m.isSitOut));
   }
 
   // A fase ATUAL está completa? (libera o avanço)
@@ -2441,6 +2451,14 @@
          * possível, pior que não ter a funcionalidade.
          * ⚠️ A cópia é de propósito: a configuração guardada do torneio não é tocada. */
         politicaDaChave: (cfg && cfg.politicaDaChave) || t.politicaDaChave || null,
+        _surplusPhaseIndex: nextIdx,
+        _prepareSurplusDecision: (typeof window !== 'undefined' && window._SP_SERVIDOR === true) ? function (request) {
+          var policy = (typeof window !== 'undefined') && window._bracketPolicy;
+          if (!policy || typeof policy.prepareTournamentSurplusDecision !== 'function') {
+            throw new Error('contrato de decisão da sobra indisponível');
+          }
+          return policy.prepareTournamentSurplusDecision(t, request.scope, request.eligible);
+        } : null,
         _prevRRRodadaUnica: _prevRRUnica,
         _promotionTiebreakers: t.tiebreakers,
         _promotionBirthByName: (typeof window !== 'undefined' && typeof window._tbBirthByName === 'function') ? window._tbBirthByName(t) : {},
@@ -2639,6 +2657,39 @@
         window._showPhasePromotePanel(tId);
         return;
       }
+    }
+
+    // Primeiro a decisão de promoção de linhas; só depois a posição da sobra
+    // pode ser materializada pelo servidor. Não criar chave otimista diferente
+    // no navegador: apenas o recibo canônico altera a tela.
+    if (_nextCfg && ((_nextCfg.politicaDaChave || t.politicaDaChave) === 'sobra_unica')) {
+      if (typeof window._callCF !== 'function') {
+        if (window.showNotification) window.showNotification('Não foi possível avançar',
+          'Conexão com o servidor indisponível. Nenhuma nova chave foi criada nesta tela.', 'error');
+        return;
+      }
+      var _choices = (t.phases || []).map(function (phase) {
+        return { bracketResolution: phase && phase.bracketResolution,
+          classificationRounds: phase && phase.rounds };
+      });
+      window._callCF('advanceTournamentPhase',
+        { tournamentId: String(tId), phaseChoices: _choices },
+        'Entre na sua conta para avançar a fase.').then(function (response) {
+        var out = (response && response.data) || {};
+        if (!out.ok || !out.tournament || typeof window._applyCFTournament !== 'function') {
+          throw new Error(out.reason || 'phase-snapshot-missing');
+        }
+        window._applyCFTournament(String(tId), out.tournament);
+        if (window._rerenderBracket) window._rerenderBracket(tId);
+        var name = (t.phases[out.phaseIndex] || {}).name || ('Fase ' + (Number(out.phaseIndex) + 1));
+        if (window.showNotification) window.showNotification('Avançou para ' + name,
+          'Chave confirmada pelo servidor.', 'success');
+      }).catch(function (error) {
+        if (window._warn) window._warn('[advancePhase] CF falhou', error);
+        if (window.showNotification) window.showNotification('Não foi possível avançar',
+          'Nenhuma nova chave foi confirmada nesta tela. Atualize para conferir o servidor.', 'error');
+      });
+      return;
     }
 
     // ⛔ CONGELA A CLASSIFICAÇÃO DO GRUPO NO AVANÇO — ela vira FATO PUBLICADO.
@@ -2931,7 +2982,7 @@
         _byeChg = true; changed = true;
       });
       all.forEach(function (m) {
-        if (!m || m.winner || m.awaitsLatePartner) return;
+        if (!m || m.winner || m.awaitsLatePartner || m.sobraAguardaDecisao) return;
         var b1 = (m.p1 === 'BYE (Avança Direto)'), b2 = (m.p2 === 'BYE (Avança Direto)');
         if (b1 === b2) return;
         var rs = b1 ? 'p2' : 'p1', rv = m[rs];

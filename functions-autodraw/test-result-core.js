@@ -251,6 +251,96 @@ console.log('\n──── result-core: reabertura administrativa ────'
   t('refazer remove placar e pendência', !m.winner && !m.pendingResult && m.scoreP1 === undefined && m.scoreP2 === undefined);
 }
 
+// 14a) Refazer resultado publicado retira o avanço, como reabrir resultado.
+{
+  const T = mkT(); const m = win._findMatch(T, 'm1');
+  const next = { id: 'm2', p1: 'Ana / Bia', p2: 'TBD', team1Uids: [UID_A1, UID_A2] };
+  T.matches.push(next); m.nextMatchId = next.id; m.winner = 'Ana / Bia';
+  const r = core.applyResult(T, { matchId: m.id, payload: { action: 'reset-match' }, actor: { uid: UID_ORG } });
+  t('refazer partida limpa avanço ainda não disputado', r.ok && next.p1 === 'TBD' && next.team1Uids.length === 0 && !m.winner);
+}
+
+// 14b) Uma decisão descendente, inclusive W.O., barra a reabertura antes de qualquer mutação.
+for (const action of ['reset-match', 'reopen-result', 'revert-wo']) {
+  const T = mkT(); const m = win._findMatch(T, 'm1');
+  const next = { id: 'm2', p1: 'Ana / Bia', p2: 'Outra dupla', wo: true, winner: 'Ana / Bia' };
+  T.matches.push(next); m.nextMatchId = next.id; m.winner = 'Ana / Bia';
+  if (action === 'revert-wo') { m.wo = true; m.woAbsentSide = 2; }
+  const before = JSON.stringify(T);
+  const r = core.applyResult(T, { matchId: m.id, payload: { action }, actor: { uid: UID_ORG } });
+  t(action + ' recusa descendente decidido por W.O. sem jogo real', !r.ok && r.reason === 'descendant-already-decided');
+  t(action + ' recusado não altera o torneio', JSON.stringify(T) === before);
+}
+
+// 14b.1) Proposta pendente também ocupa o confronto descendente, mesmo sem placar final.
+for (const action of ['reset-match', 'reopen-result', 'revert-wo']) {
+  const T = mkT(); const m = win._findMatch(T, 'm1');
+  const next = { id: 'm2', p1: 'Ana / Bia', p2: 'Outra dupla',
+    team1Uids: [UID_A1, UID_A2], pendingResult: { proposedBy: UID_A1, scoreP1: 6, scoreP2: 4 } };
+  T.matches.push(next); m.nextMatchId = next.id; m.nextSlot = 'p1'; m.winner = 'Ana / Bia';
+  if (action === 'revert-wo') { m.wo = true; m.woAbsentSide = 2; }
+  const before = JSON.stringify(T);
+  const r = core.applyResult(T, { matchId: m.id, payload: { action }, actor: { uid: UID_ORG } });
+  t(action + ' recusa proposta pendente no descendente', !r.ok && r.reason === 'descendant-already-decided');
+  t(action + ' não deixa proposta órfã nem altera o torneio', JSON.stringify(T) === before);
+}
+
+// 14c) A verificação percorre mais de uma aresta e falha fechada para rota quebrada.
+{
+  const T = mkT(); const m = win._findMatch(T, 'm1');
+  const bye = { id: 'bye-m2', p1: 'Ana / Bia', p2: 'BYE', winner: 'Ana / Bia',
+    isBye: true, nextMatchId: 'm3', nextSlot: 'p1', team1Uids: [UID_A1, UID_A2] };
+  const next = { id: 'm3', p1: 'Ana / Bia', p2: 'TBD', team1Uids: [UID_A1, UID_A2] };
+  T.matches.push(bye, next); m.nextMatchId = bye.id; m.nextSlot = 'p1'; m.winner = 'Ana / Bia';
+  const r = core.applyResult(T, { matchId: m.id, payload: { action: 'reset-match' }, actor: { uid: UID_ORG } });
+  t('BYE automática descendente não barra reset sem jogo real', r.ok && !bye.winner);
+  t('reset retira a rota propagada através da BYE', bye.p1 === 'TBD' && next.p1 === 'TBD' &&
+    next.team1Uids.length === 0, JSON.stringify(T.matches));
+}
+
+// 14c) A verificação percorre mais de uma aresta e falha fechada para rota quebrada.
+{
+  const T = mkT(); const m = win._findMatch(T, 'm1');
+  const next = { id: 'm2', p1: 'Ana / Bia', p2: 'TBD', nextMatchId: 'm3' };
+  T.matches.push(next, { id: 'm3', p1: 'TBD', p2: 'TBD', scoreP1: 1 });
+  m.nextMatchId = next.id; m.winner = 'Ana / Bia';
+  const before = JSON.stringify(T);
+  const r = core.applyResult(T, { matchId: m.id, payload: { action: 'reset-match' }, actor: { uid: UID_ORG } });
+  t('descendente transitivo em andamento bloqueia reset', !r.ok && r.reason === 'descendant-already-decided' && JSON.stringify(T) === before);
+  next.nextMatchId = 'missing';
+  const withoutMatch = JSON.stringify(T);
+  const missing = core.applyResult(T, { matchId: m.id, payload: { action: 'reset-match' }, actor: { uid: UID_ORG } });
+  t('aresta estrutural sem destino falha fechada', !missing.ok && missing.reason === 'descendant-route-missing' && JSON.stringify(T) === withoutMatch);
+}
+
+// 14d) O perdedor da semifinal também pode alimentar o 3º lugar por loserNextMatchId.
+for (const action of ['reset-match', 'reopen-result', 'revert-wo']) {
+  const T = mkT(); const m = win._findMatch(T, 'm1');
+  const third = { id: '3P', p1: 'Caio / Dora', p2: 'Outra dupla',
+    team1Uids: [UID_B1, UID_B2], winner: 'Outra dupla' };
+  T.matches.push(third); m.loserNextMatchId = third.id; m.loserNextSlot = 'p1';
+  m.winner = 'Ana / Bia';
+  if (action === 'revert-wo') { m.wo = true; m.woAbsentSide = 2; }
+  const before = JSON.stringify(T);
+  const r = core.applyResult(T, { matchId: m.id, payload: { action }, actor: { uid: UID_ORG } });
+  t(action + ' recusa 3º lugar já decidido', !r.ok && r.reason === 'descendant-already-decided' && JSON.stringify(T) === before);
+}
+{
+  const T = mkT(); const m = win._findMatch(T, 'm1');
+  const third = { id: '3P', p1: 'Caio / Dora', p2: 'TBD', team1Uids: [UID_B1, UID_B2] };
+  T.matches.push(third); m.loserNextMatchId = third.id; m.loserNextSlot = 'p1'; m.winner = 'Ana / Bia';
+  const r = core.applyResult(T, { matchId: m.id, payload: { action: 'reset-match' }, actor: { uid: UID_ORG } });
+  t('reset retira perdedor do 3º lugar ainda intocado', r.ok && third.p1 === 'TBD' && third.team1Uids.length === 0);
+}
+{
+  const T = mkT(); const m = win._findMatch(T, 'm1');
+  const rep = { id: 'rep', p1: 'Caio / Dora', p2: 'TBD', p1FromRepechage: true,
+    team1Uids: [UID_B1, UID_B2] };
+  T.matches.push(rep); m.loserNextMatchId = rep.id; m.loserNextSlot = 'p1'; m.winner = 'Ana / Bia';
+  const r = core.applyResult(T, { matchId: m.id, payload: { action: 'reset-match' }, actor: { uid: UID_ORG } });
+  t('reset não apaga vaga de repescagem coletiva', r.ok && rep.p1 === 'Caio / Dora' && rep.team1Uids.length === 2);
+}
+
 // 15) Reverter W.O. desfaz avanço, ausência e encerramento, mas nunca apaga jogo real.
 {
   const T = mkT({ status: 'finished', finishedAt: 'x', absent: { Ana: true, Bia: true }, woHistory: { Ana: { name: 'Ana' }, Bia: { name: 'Bia' } } });

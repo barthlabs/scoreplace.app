@@ -38,6 +38,7 @@ vm.createContext(sb);
 
 const ROOT = path.join(__dirname, '..');
 ['js/views/sport-rules.js', 'js/views/tournaments-utils.js', 'js/views/tournaments-categories.js',
+ 'js/views/bracket-policy.js',
  'js/views/bracket-model.js', 'js/views/bracket-logic.js', 'js/views/team-formation.js',
  // motor de chaves determinístico — ANTES do phases-engine, que o consome
  'js/views/chaves.js', 'js/views/chaves-adapter.js',
@@ -84,6 +85,30 @@ function eq(a, b, m) { ok(a === b, m + ' (esperado ' + JSON.stringify(b) + ', ve
   ['A', 'B', 'C', 'D'].forEach(function (n) { ok(names.indexOf(n) !== -1, 'classificado ' + n + ' está na chave'); });
   ok(!(t.rounds && t.rounds.length > 0 && t.rounds[0].matches && t.rounds[0].matches.some(function (m) { return m.id && String(m.id).indexOf('s') !== 0 && !m.winner; })), 'não regenerou rodada de liga no lugar da chave');
 })();
+
+// A ponte legada Suíço → eliminatória é uma terceira porta de criação de R1.
+// A política explícita precisa sobreviver à transição, inclusive para N ímpar.
+for (const n of [5, 7]) {
+  const players = Array.from({ length: 8 }, (_, i) => ({ uid: 'sw-' + i, displayName: 'S' + i }));
+  const t = {
+    id: 'swx-surplus-' + n, currentStage: 'swiss', classifyFormat: 'swiss',
+    p2Resolution: 'swiss', p2TargetCount: n, swissRounds: 1,
+    politicaDaChave: 'sobra_unica', participants: players,
+    rounds: [{ matches: Array.from({ length: 4 }, (_, i) => ({
+      id: 's' + i, p1: 'S' + (i * 2), p1Uid: 'sw-' + (i * 2),
+      p2: 'S' + (i * 2 + 1), p2Uid: 'sw-' + (i * 2 + 1),
+      winner: 'S' + (i * 2), winnerUid: 'sw-' + (i * 2), scoreP1: 6, scoreP2: 2
+    })) }]
+  };
+  sb.window._applySwissEliminationTransition(t, 0);
+  eq(t.currentStage, 'elimination', 'Suíço N=' + n + ' transiciona');
+  const receipts = Object.values(t.sobraUnicaDecisoesV1 || {});
+  eq(receipts.length, 1, 'Suíço N=' + n + ' grava exatamente uma decisão R1');
+  eq(receipts[0] && receipts[0].sourceIds.length, n,
+    'Suíço N=' + n + ' decide com o elenco classificado');
+  ok(t.matches.some(m => m.round === 1 && m.isBye && m.winner),
+    'Suíço N=' + n + ' publica a folga escolhida');
+}
 
 // Dois atletas podem exibir o mesmo nome. A classificação chega com o UID de
 // cada slot; a transição precisa preservar ambos, em vez de procurar o primeiro

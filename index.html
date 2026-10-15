@@ -695,7 +695,7 @@
   <script src="js/views/schedule-organizer.js?v=2.3.315" defer></script>
   <script src="js/views/wa-group.js?v=2.3.312" defer></script>
   <script src="js/views/tournaments-draw-prep.js?v=2.4.1" defer></script>
-  <script src="js/views/tournaments-draw.js?v=2.4.14" defer></script>
+  <script src="js/views/tournaments-draw.js?v=2.4.49" defer></script>
   <!-- Núcleos PUROS da aplicação das decisões do pré-sorteio (resto/pow2/ímpar/sem-dupla/
        chamada). Os painéis chamam DAQUI e a Cloud Function drawRound carrega o MESMO
        arquivo (vendorado) — um dono só pra cada conta. Ver docs/sorteio-ciclo-decisoes.md -->
@@ -705,20 +705,20 @@
   <script src="js/views/create-tournament.js?v=2.4.45" defer></script>
   <!-- v4.4.x — reescrita do motor de formato: configurador único (substitui empilhamento de fases) -->
   <script src="js/views/format2.js?v=2.4.40" defer></script>
-  <script src="js/views/format2-ui.js?v=2.4.45" defer></script>
-  <script src="js/views/bracket-logic.js?v=2.3.351" defer></script>
-  <script src="js/views/bracket-model.js?v=2.3.350" defer></script>
-<script src="js/views/bracket.js?v=2.4.44" defer></script>
+  <script src="js/views/format2-ui.js?v=2.4.49" defer></script>
+  <script src="js/views/bracket-logic.js?v=2.4.49" defer></script>
+  <script src="js/views/bracket-model.js?v=2.4.49" defer></script>
+<script src="js/views/bracket.js?v=2.4.49" defer></script>
   <script src="js/views/live-now.js?v=2.3.24" defer></script>
-  <script src="js/views/bracket-ui.js?v=2.3.311" defer></script>
+  <script src="js/views/bracket-ui.js?v=2.4.49" defer></script>
   <script src="js/pwa-migrate-banner.js?v=2.0.118" defer></script>
   <!-- Ponte pro smartwatch (fase 4). Inerte na web; só liga no app nativo. -->
   <script src="js/watch-bridge.js?v=2.3.88" defer></script>
   <!-- Motor de chaves determinístico: chave = f(nº de participantes, formato).
        Precisa vir ANTES de phases-engine.js, que consome window._chavesAdapter. -->
-  <script src="js/views/chaves.js?v=2.3.111" defer></script>
-  <script src="js/views/chaves-adapter.js?v=2.3.258" defer></script>
-  <script src="js/views/phases-engine.js?v=2.3.356" defer></script>
+  <script src="js/views/chaves.js?v=2.4.49" defer></script>
+  <script src="js/views/chaves-adapter.js?v=2.4.49" defer></script>
+  <script src="js/views/phases-engine.js?v=2.4.49" defer></script>
   <script src="js/views/team-formation.js?v=2.0.118" defer></script>
   <!-- wo-log ANTES de liga-substitution: é o REGISTRO de W.O. (fonte única do histórico),
        e quem aplica/reverte grava nele no ato. Puro, sem DOM. -->

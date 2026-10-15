@@ -396,7 +396,7 @@ function _checkGroupRoundComplete(t, groupIndex) {
   const g = t.groups[groupIndex];
   const activeRound = (g.rounds || []).find(r => r.status === 'active');
   if (!activeRound) return;
-  const allDone = (activeRound.matches || []).every(m => m.winner || m.isBye || m.isSitOut);
+  const allDone = (activeRound.matches || []).every(m => m.winner || (m.isBye && !m.sobraAguardaDecisao) || m.isSitOut);
   if (allDone) {
     activeRound.status = 'complete';
     // Activate next pending round
@@ -1285,7 +1285,7 @@ function _getChampion(t, activeRounds) {
 
   // Champion only exists when ALL active rounds are complete (every non-BYE match has a winner)
   const allDone = activeRounds.every(r =>
-    (roundsMap[r] || []).every(m => m.winner || m.isBye)
+    (roundsMap[r] || []).every(m => m.winner || (m.isBye && !m.sobraAguardaDecisao))
   );
   if (!allDone) return null;
 
@@ -1345,6 +1345,10 @@ function _findMatch(t, matchId) {
 
 // ─── Auto-resolve BYE match when a real player is placed ─────────────────────
 function _autoResolveBye(t, match) {
+  // Na sobra única posterior à estreia, o beneficiário só é conhecido após
+  // fechar TODAS as fontes da rodada. O primeiro vencedor que chegar não pode
+  // ganhar a folga por ordem de lançamento do placar.
+  if (match && match.sobraAguardaDecisao) return;
   if (!match || match.winner) return; // already resolved
   var byeLabel = _t('bui.byeLabel');
   var p1Real = match.p1 && match.p1 !== 'TBD' && match.p1 !== byeLabel;
@@ -2130,7 +2134,7 @@ function _advanceWinner(t, completedMatch) {
   // Swiss/Liga: check if round is fully complete
   if (completedMatch.roundIndex !== undefined) {
     const round = (t.rounds || [])[completedMatch.roundIndex];
-    if (round && (round.matches || []).every(m => m.winner || m.isBye || m.isSitOut)) {
+    if (round && (round.matches || []).every(m => m.winner || (m.isBye && !m.sobraAguardaDecisao) || m.isSitOut)) {
       round.status = 'complete';
       _poeStandings(t);
     }
@@ -4154,7 +4158,7 @@ function _maybeGenerate3rdPlace(t) {
   // o 3º sai pelo contador corrido da classificação e o 4º vem do degrau seguinte —
   // sem jogo impossível na tela e sem posição reservada para ninguém.
   const semisDecididas = semis.length > 0 &&
-    semis.every(m => m.winner || m.isBye || m.isSitOut);
+    semis.every(m => m.winner || (m.isBye && !m.sobraAguardaDecisao) || m.isSitOut);
   if (semisDecididas && losers.length < 2) {
     if (t.thirdPlaceMatch && !t.thirdPlaceMatch.winner) delete t.thirdPlaceMatch;
     return;
@@ -4438,6 +4442,12 @@ window._applySwissEliminationTransition = function (t, roundIdx) {
     if (!key || _advancedKeys[key]) throw new Error('Classificação ambígua: participante sem identidade única.');
     _advancedKeys[key] = true;
   });
+  // Validar a dependência antes de transformar o documento em eliminatória.
+  // A mesma rotina roda sobre o torneio fresco na transação da Cloud Function.
+  if (t.politicaDaChave === 'sobra_unica' &&
+      (!window._bracketPolicy || typeof window._bracketPolicy.prepareTournamentSurplusDecision !== 'function')) {
+    throw new Error('contrato de decisão da sobra indisponível na transição');
+  }
   t.swissStandings = _finalStandings;
   t.swissRoundsData = (t.rounds || []).slice();
   t.currentStage = 'elimination';
@@ -4462,8 +4472,14 @@ window._applySwissEliminationTransition = function (t, roundIdx) {
   });
   var _elimCfg = {
     source: { mapping: [{ dest: 'main', rankFrom: 1, rankTo: 999, label: '' }], scope: 'overall', rankingBasis: (_tsE > 1 ? 'team' : 'individual') },
-    pairingStrategy: 'seed', bracketResolution: 'bye', fixedPairs: false, grandFinal: false, thirdPlace: true /* sempre */
+    pairingStrategy: 'seed', bracketResolution: 'bye', fixedPairs: false, grandFinal: false, thirdPlace: true, /* sempre */
+    politicaDaChave: t.politicaDaChave || 'repescagem', _surplusPhaseIndex: 0
   };
+  if (_elimCfg.politicaDaChave === 'sobra_unica') {
+    _elimCfg._prepareSurplusDecision = function (request) {
+      return window._bracketPolicy.prepareTournamentSurplusDecision(t, request.scope, request.eligible);
+    };
+  }
   var _built = window._phasesEngine.buildPhaseBrackets([{ standings: _rankedPool }], _elimCfg, function (g) { return g.standings || []; }, 'swelim-' + roundIdx);
   _built.matches.forEach(function (m) { if (m.phaseIndex == null) m.phaseIndex = 0; if (m.category === undefined) m.category = null; });
   t.matches = _built.matches;

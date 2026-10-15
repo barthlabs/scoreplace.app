@@ -157,7 +157,7 @@ window._rotaMostraAChaveDeste = function (hash, id) {
   function _matchComplete(m) {
     // v2.3.9: sit-out (folga) e BYE não são jogos a disputar — contam como
     // "resolvidos" pra fins de rodada completa, mesmo sem winner.
-    return !!(m && (m.winner || m.isBye || m.isSitOut));
+    return !!(m && (m.winner || (m.isBye && !m.sobraAguardaDecisao) || m.isSitOut));
   }
 
   function _roundStatus(matches) {

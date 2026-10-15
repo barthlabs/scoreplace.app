@@ -1658,10 +1658,22 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   };
 
   window._f2GrandFinal = function (checked) { if (!S) return; S.cfg.eliminatoria.grandFinal = !!checked; _norm(); _rerender(); };
-  // v4.4.58: Dupla Eliminatória (repescagem). ON força 1 linha (chave única) no normalize.
-  window._f2ElimDupla = function (checked) { S.cfg.eliminatoria.dupla = !!checked; _norm(); _rerender(); };
-  /* ⛔ A escolha dos três desenhos. `_norm()` é quem valida: valor torto cai em `repescagem`, e na
-   * dupla eliminatória o campo é forçado — a tela não precisa saber disso, e não deve. */
+  // Dupla eliminação não usa BYE/sobra única. A troca solicitada pelo organizador
+  // é explícita e visível antes da normalização tolerante de documentos antigos.
+  window._f2ElimDupla = function (checked) {
+    if (!S || !S.cfg || !S.cfg.eliminatoria) return;
+    var e = S.cfg.eliminatoria;
+    var previous = e.politicaDaChave;
+    e.dupla = !!checked;
+    if (e.dupla && previous && previous !== 'repescagem' && previous !== 'playin') {
+      e.politicaDaChave = 'repescagem';
+      if (window.showNotification) window.showNotification('Política da chave alterada',
+        'Dupla eliminação usa repescagem; BYE e sobra única não se aplicam.', 'warning');
+    }
+    _norm(); _rerender();
+  };
+  // A escolha simples é normalizada para leitura; writes explícitos incompatíveis
+  // continuam recusados pela Function, independentemente desta interface.
   window._f2PoliticaDaChave = function (v) { S.cfg.eliminatoria.politicaDaChave = String(v || ''); _norm(); _rerender(); };
   // A direita do seletor é Abertas: ON abre inscrições; OFF fecha. Novos
   // Confrontos continua independente e não é alterado por esta escolha.

@@ -39,6 +39,10 @@ const source = fs.readFileSync('functions-autodraw/index.js', 'utf8');
 const create = source.slice(source.indexOf('exports.createTournament ='), source.indexOf('exports.cleanupTournamentCreationRequests ='));
 const update = source.slice(source.indexOf('exports.updateTournamentConfiguration ='), source.indexOf('exports.', source.indexOf('exports.updateTournamentConfiguration =') + 8));
 assert(create.includes("validatePolicy: require('./elimination-policy-config-core').validateAndCanonicalizeExplicitPolicy"), 'criação injeta o validador');
-assert(update.indexOf("validateAndCanonicalizeExplicitPolicy(patch, HttpsError)") > update.indexOf('patch[key] = _clonaConfigDeclarativa'), 'edição valida após clonar');
-assert(update.indexOf("validateAndCanonicalizeExplicitPolicy(patch, HttpsError)") < update.indexOf('return db.runTransaction'), 'edição valida antes da transação');
+assert(update.indexOf('_policyConfig.canonicalizePolicyAliases(patch, t)') > update.indexOf('const t = await _leTorneio'),
+  'edição preserva aliases legados iguais ao documento fresco');
+assert(update.indexOf('_policyConfig.validateAndCanonicalizeExplicitPolicy(effectivePolicy, HttpsError)') > update.indexOf('return db.runTransaction'),
+  'edição valida a configuração efetiva dentro da transação fresca');
+assert(update.includes('_policyBeforeShape !== _policyConfig.policyShape(t)'),
+  'edição de dados não relacionados não recusa política legada intacta');
 console.log('✓ política explícita validada nas duas portas de escrita');

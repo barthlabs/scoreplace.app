@@ -83,8 +83,8 @@ ok(legacyPlayin.phases[0].politicaDaChave !== 'playin',
 });
 /* ⛔ O sorteio da fase 0 tem de LER do documento — foi o último elo que eu enxerguei. */
 const draw = semCom(fs.readFileSync(path.join(ROOT, 'js/views/tournaments-draw.js'), 'utf8'));
-ok(/politicaDaChave: t\.politicaDaChave/.test(draw),
-  '③ ⛔⛔ o sorteio da FASE 0 lê a política do documento do torneio');
+ok(/politicaDaChave:\s*\(phase0 && phase0\.politicaDaChave\) \|\| t\.politicaDaChave/.test(draw),
+  '③ a política da fase 0 prevalece sobre o topo, com fallback para documento legado');
 
 /* ── ④ DEPOIS DO SORTEIO, NÃO MUDA — E A TRAVA É DO SERVIDOR ─────────────────
  * ⭐ Eu tinha escrito esta trava no CLIENTE, lendo o objeto do formulário em vez do torneio gravado:
