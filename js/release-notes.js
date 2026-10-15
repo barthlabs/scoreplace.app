@@ -1,3 +1,4 @@
+// 2.4.54 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.53 — Editor, resumo, estimativa, pré-sorteio e motor usam a mesma regra de
 // turnos da classificatória. Ida e volta continua em tabela única; com vários
 // grupos, novos sorteios usam somente ida, inclusive se uma fase antiga ainda
