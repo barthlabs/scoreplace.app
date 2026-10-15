@@ -4620,17 +4620,18 @@ exports.searchTournamentImportCandidates = onCall(
     if (!_isTournamentOrgCaller(snap.data(), uid)) throw new HttpsError("permission-denied", "só a organização consulta candidatos");
     await _consumeTournamentImportQuota(db, "search", uid, 300);
     try {
-      // user-vivo:isento — esta busca só apresenta candidatos; lápides, perfis apagados
-      // e fundidos são filtrados abaixo antes de qualquer UID ser oferecido à organização.
+      // A busca por nome pode encontrar uma lápide de conta fundida. A porta canônica
+      // resolve o sobrevivente e colapsa duplicatas antes de expor candidatos.
       const hits = await db.collection("users").where("displayName_lower", ">=", query)
         .where("displayName_lower", "<", query + "\uf8ff").limit(10).get();
-      return { candidates: hits.docs.filter((doc) => {
-        const p = doc.data() || {};
-        return !p.deleted && !p.deletedAt && !p.mergedInto;
-      }).map((doc) => {
-        const p = doc.data() || {};
-        return { uid: doc.id, name: String(p.displayName || p.name || "") };
-      }) };
+      const resolved = await _userVivo.userVivo(db, hits, { strict: true });
+      return { candidates: (resolved ? resolved.docs : []).filter((candidate) => {
+        const p = candidate.data || {};
+        return !p.deleted && !p.deletedAt;
+      }).map((candidate) => ({
+        uid: candidate.uid,
+        name: String(candidate.data.displayName || candidate.data.name || ""),
+      })) };
     } catch (error) {
       console.error("[tournament-import] candidate search failed:", error && error.message);
       throw new HttpsError("unavailable", "busca de contas indisponível; tente novamente (a tentativa contou na cota diária)");
@@ -4689,14 +4690,29 @@ exports.applyTournamentImportBlock = onCall(
       }
       const selectedUids = Array.from(new Set(block.flatMap((row) => row.people.map((person) => person.uid).filter(Boolean))));
       const userSnaps = await Promise.all(selectedUids.map((selectedUid) => tx.get(db.collection("users").doc(selectedUid))));
-      userSnaps.forEach((snap) => {
-        const profile = snap.exists ? snap.data() || {} : {};
-        if (!snap.exists || profile.mergedInto || profile.deleted || profile.deletedAt) {
+      const resolvedUids = new Map();
+      for (let i = 0; i < selectedUids.length; i++) {
+        const alive = await _userVivo.userVivo(db, userSnaps[i], {
+          strict: true,
+          get: async (candidateUid) => {
+            const snap = await tx.get(db.collection("users").doc(candidateUid));
+            return snap.exists ? { uid: snap.id, data: snap.data() || {} } : null;
+          },
+        });
+        if (!alive || alive.data.deleted || alive.data.deletedAt) {
           throw new HttpsError("failed-precondition", "uma conta selecionada não está ativa");
         }
-      });
+        resolvedUids.set(selectedUids[i], alive.uid);
+      }
+      const resolvedBlock = block.map((row) => Object.assign({}, row, {
+        people: row.people.map((person) => Object.assign({}, person, {
+          uid: person.uid ? resolvedUids.get(person.uid) : null,
+        })),
+      }));
+      try { _tournamentImport.normalizedBlock(resolvedBlock); }
+      catch (error) { throw new HttpsError("failed-precondition", error.message); }
       let changes;
-      try { changes = _tournamentImport.applyReviewedBlock(tournament, checked.registrations, block); }
+      try { changes = _tournamentImport.applyReviewedBlock(tournament, checked.registrations, resolvedBlock); }
       catch (error) { throw new HttpsError("failed-precondition", error.message); }
       if (!changes.updates.length && !changes.creates.length) throw new HttpsError("failed-precondition", "bloco sem alteração");
       const next = _writeCanonicalRosterChanges(tx, tournamentRef, raw, checked.registrations, changes);
@@ -12146,6 +12162,16 @@ exports.purgeTournamentCopies = onDocumentDeleted(
       } catch (e) {
         console.error(`[purgeTournamentCopies] ${col} falhou em ${tid}:`, e && e.message);
       }
+    }
+
+    // Recibos de importação contêm nomes revisados. Apagar só o documento-pai
+    // deixaria blocks/{index} órfão; recursiveDelete remove ambos.
+    try {
+      const imports = await _db.collection("tournamentImports").where("tournamentId", "==", tid).get();
+      for (const imported of imports.docs) await _db.recursiveDelete(imported.ref);
+      if (imports.size) conta.tournamentImports = imports.size;
+    } catch (e) {
+      console.error(`[purgeTournamentCopies] tournamentImports falhou em ${tid}:`, e && e.message);
     }
 
     // ── (3) FILA DE E-MAIL — não tem tournamentId, só a URL ─────────────────

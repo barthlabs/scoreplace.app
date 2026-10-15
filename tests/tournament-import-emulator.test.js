@@ -21,10 +21,12 @@ async function driver() {
   const organizer = 'organizer-import';
   const outsider = 'outsider-import';
   const linkedUid = 'linked-import';
+  const mergedUid = 'merged-import';
   for (const [uid, email] of [[organizer, 'organizer@example.com'], [outsider, 'outsider@example.com']]) {
     await admin.auth().createUser({ uid, email, password: 'senha123' });
   }
   await db.doc('users/' + linkedUid).set({ displayName: 'Beatriz Teste', displayName_lower: 'beatriz teste' });
+  await db.doc('users/' + mergedUid).set({ displayName: 'Betina Antiga', displayName_lower: 'betina antiga', mergedInto: linkedUid });
   const people = [1, 2, 3, 4].map((number) => {
     const manualParticipantId = 'emulator-slot-' + number;
     const participantKey = registration.participantKey({ manualParticipantId });
@@ -63,6 +65,9 @@ async function driver() {
   const candidates = await call('searchTournamentImportCandidates', { tournamentId: tid, query: 'bea' });
   assert(candidates.candidates.some((item) => item.uid === linkedUid));
   assert(candidates.candidates.every((item) => !Object.prototype.hasOwnProperty.call(item, 'photoURL')));
+  const mergedCandidates = await call('searchTournamentImportCandidates', { tournamentId: tid, query: 'bet' });
+  assert(mergedCandidates.candidates.some((item) => item.uid === linkedUid));
+  assert(mergedCandidates.candidates.every((item) => item.uid !== mergedUid));
   const today = new Date().toISOString().slice(0, 10);
   const searchQuotaPath = 'tournamentImports/searchUsage/days/' + today + '_' + organizer;
   await db.doc(searchQuotaPath).set({ uid: organizer, day: today, count: 300 });
@@ -82,7 +87,7 @@ async function driver() {
   assert.strictEqual((await db.doc(quotaPath).get()).data().count, 50);
   const importId = 'a1b2c3d4-1234-4123-8123-123456789abc';
   const block0 = [{ pairId: people[0].fixedPairId, categoryId: 'fem-light', people: [
-    { name: 'Ana Exemplo', uid: null }, { name: 'Beatriz Teste', uid: linkedUid },
+    { name: 'Ana Exemplo', uid: null }, { name: 'Beatriz Teste', uid: mergedUid },
   ] }];
   const first = await call('applyTournamentImportBlock', { ...previewData, importId, blockIndex: 0,
     fingerprint: initial.fingerprint, block: block0 });

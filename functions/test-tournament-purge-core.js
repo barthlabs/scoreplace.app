@@ -228,6 +228,10 @@ const torneio = {
   const idx = ler('functions/index.js');
   const bloco = idx.slice(idx.indexOf('exports.purgeTournamentCopies'));
   ok(/TOPLEVEL_COLLECTIONS_BY_TOURNAMENT/.test(bloco), 'o gatilho consome essa lista');
+  ok(/collection\("tournamentImports"\)\.where\("tournamentId", "==", tid\)/.test(bloco),
+     'o gatilho encontra recibos de importação do torneio apagado');
+  ok(/recursiveDelete\(imported\.ref\)/.test(bloco),
+     'o gatilho apaga também os blocos de recibo, não só o pai');
 }
 
 // ── (10c) A FILA DE E-MAIL casa por FRONTEIRA, não por includes ──────────
