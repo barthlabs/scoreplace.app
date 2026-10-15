@@ -178,6 +178,22 @@ diff_do_escopo() {
   local f
   while IFS= read -r f; do
     [[ -n "$f" ]] || continue
+    if [[ "$f" == "js/vendor/xlsx.full.min.js" ]]; then
+      # Minificado de terceiros: quase 1 MB numa linha só excede o contexto do
+      # revisor sem lhe dar código legível. Ele recebe a identidade verificável,
+      # a licença/proveniência e os testes; divergência no hash bloqueia o gate.
+      local declarado real
+      declarado=$(sed -n 's/^SHA-256: `\([0-9a-f]\{64\}\)`.*/\1/p' js/vendor/README.md)
+      real=$(node -e 'const fs=require("fs"),c=require("crypto");process.stdout.write(c.createHash("sha256").update(fs.readFileSync("js/vendor/xlsx.full.min.js")).digest("hex"))')
+      if [[ -z "$declarado" || "$declarado" != "$real" ]]; then
+        echo "✗ vendor XLSX diverge do SHA-256 declarado no README" >&2
+        return 1
+      fi
+      printf 'Arquivo minificado de terceiro: %s\nSHA-256 conferido: %s\n' "$f" "$real"
+      printf 'Tamanho: %s bytes. Conteúdo minificado não incluído no prompt; o gate de hash o conferiu.\n' "$(wc -c < "$f" | tr -d ' ')"
+      git diff "$BASE_DIFF"...HEAD -- js/vendor/README.md js/vendor/XLSX-LICENSE.txt 2>/dev/null || true
+      continue
+    fi
     git diff "$BASE_DIFF"...HEAD -- "$f" 2>/dev/null || true
     git diff HEAD -- "$f" 2>/dev/null || true
   done < "$LISTA"
