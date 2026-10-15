@@ -238,6 +238,9 @@ ok(E.genGroupsFromPool(players(4), { ...conflictBase, turnos: 'ida_volta', _doub
   'turnos=ida_volta explícito vence _doubleRR falso');
 ok(E.genGroupsFromPool(players(4), { ...conflictBase, _doubleRR: true }, 'legacy-volta').matches.length === 12,
   '_doubleRR permanece fallback para fase sem turnos');
+const legacyGroupPhase = { gruposCount: 2, turnos: 'ida', _doubleRR: true };
+ok(E.genGroupsFromPool(players(16), legacyGroupPhase, 'legacy-two-groups').matches.length === 56,
+  'fase legada de 2 grupos normalizada pelo adaptador gera 56 jogos de ida');
 
 console.log(fail ? `❌ partial-group-schedule: ${pass} ok, ${fail} falharam` : `✅ partial-group-schedule: ${pass} verificações`);
 process.exit(fail ? 1 : 0);

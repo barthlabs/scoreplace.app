@@ -2359,7 +2359,9 @@ window._buildPhase0Cfg = function (t) {
     // turnos pro genGroupsFromPool. Ausente/ida = single-RR (legado). Ver format2.
     if (code === 'grupos_mata') {
         if (phase0 && phase0.turnos != null) {
-            cfg.turnos = phase0.turnos === 'ida_volta' ? 'ida_volta' : 'ida';
+            // A fase explícita vence o intent, mas volta só é válida em tabela
+            // única. Uma fase legada residual não pode divergir do editor.
+            cfg.turnos = phase0.turnos === 'ida_volta' && cfg.gruposCount === 1 ? 'ida_volta' : 'ida';
         } else if (t.fmt2) {
             if (!window.FORMAT2 || typeof window.FORMAT2.normalize !== 'function' || typeof window.FORMAT2.resolveTurnos !== 'function') {
                 throw new Error('Configuração de turnos indisponível; sorteio não iniciado.');

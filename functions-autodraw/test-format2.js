@@ -124,8 +124,10 @@ const core = require('./draw-core.js');
   ok('adaptador: tabela única cru mantém ida/volta', build({ ...base, fmt2: single, gruposCount: 1 }).turnos === 'ida_volta');
   const singleStale = build({ ...base, fmt2: single, gruposCount: 2 });
   ok('adaptador: contador antigo não cria grupo extra', singleStale.gruposCount === 1 && singleStale.turnos === 'ida_volta');
-  ok('adaptador: fase explícita volta vence intent de ida', build({ ...base,
-    phases: [{ kind: 'classification', classification: { structure: 'groups' }, turnos: 'ida_volta' }] }).turnos === 'ida_volta');
+  ok('adaptador: fase legada de volta em 2 grupos não dobra jogos', build({ ...base,
+    phases: [{ kind: 'classification', classification: { structure: 'groups' }, turnos: 'ida_volta' }] }).turnos === 'ida');
+  ok('adaptador: fase explícita de volta em tabela única permanece válida', build({ ...base, gruposCount: 1,
+    phases: [{ kind: 'classification', classification: { structure: 'groups' }, gruposCount: 1, turnos: 'ida_volta' }] }).turnos === 'ida_volta');
 })();
 
 // Espelha create-tournament.js:5229-5236: topLevel aplicado no doc, phases gravadas,
