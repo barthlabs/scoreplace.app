@@ -1050,6 +1050,11 @@ service cloud.firestore {
       match /advanceReceipts/{reciboId} {
         allow read, write: if false;
       }
+      // Tokens de reconhecimento de inscrição são provas do servidor. Nem o
+      // organizador nem o convidado leem o hash diretamente: só as Functions.
+      match /manualClaimInvites/{inviteId} {
+        allow read, write: if false;
+      }
       match /outbox/{itemId} {
         allow read, write: if false;
       }

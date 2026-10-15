@@ -4861,6 +4861,154 @@ exports.resolveCanonicalParticipantClaim = onCall(
   }
 );
 
+// Convites individuais para trocar uma inscrição manual já nomeada pelo UID da
+// própria pessoa. O segredo existe em texto claro somente no retorno da emissão
+// e no fragmento local do link; Firestore armazena exclusivamente o SHA-256.
+const _manualClaimActive = (item) => item && ['pending', 'confirmed', 'waitlisted'].includes(item.status);
+const _manualClaimKey = (manualId) => crypto.createHash('sha256').update(String(manualId)).digest('hex');
+const _manualClaimInviteRef = (tournamentRef, manualId) => tournamentRef.collection('manualClaimInvites').doc(_manualClaimKey(manualId));
+function _manualClaimRecord(registrations, manualId) {
+  const found = registrations.filter((item) => item.participantKind === 'manual' &&
+    item.manualParticipantId === manualId && _manualClaimActive(item));
+  if (found.length !== 1) throw new HttpsError('failed-precondition', 'inscrição manual indisponível');
+  const name = String(found[0].manualDisplayName || '').trim();
+  if (!name || /^Jogador\s*\d+$/i.test(name)) throw new HttpsError('failed-precondition', 'a vaga ainda não tem uma pessoa identificada');
+  return found[0];
+}
+function _manualClaimTokenMatches(invite, token) {
+  if (!invite || typeof invite.tokenHash !== 'string' || !/^[a-f0-9]{64}$/.test(invite.tokenHash) ||
+      !/^[a-f0-9]{64}$/.test(token)) return false;
+  const actual = crypto.createHash('sha256').update(token).digest();
+  const expected = Buffer.from(invite.tokenHash, 'hex');
+  return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
+}
+function _manualClaimValidInvite(invite, token, manualId) {
+  if (!invite || invite.manualParticipantId !== manualId || invite.consumedAt ||
+      !Number.isSafeInteger(invite.expiresAtMs) || invite.expiresAtMs <= Date.now() ||
+      !_manualClaimTokenMatches(invite, token)) {
+    throw new HttpsError('failed-precondition', 'convite expirado, revogado ou já utilizado');
+  }
+}
+function _manualClaimInput(data, withToken) {
+  const tournamentId = String((data && data.tournamentId) || '').trim();
+  const manualParticipantId = String((data && data.manualParticipantId) || '').trim();
+  const token = String((data && data.token) || '').trim();
+  if (!tournamentId || tournamentId.length > 180 || tournamentId.includes('/') ||
+      !manualParticipantId || manualParticipantId.length > 240 || manualParticipantId.includes('/') ||
+      (withToken && !/^[a-f0-9]{64}$/.test(token))) {
+    throw new HttpsError('invalid-argument', 'convite inválido');
+  }
+  return { tournamentId, manualParticipantId, token };
+}
+
+exports.listManualClaimInvites = onCall(
+  { region: 'us-central1', memory: '256MiB', timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError('unauthenticated', 'login necessário');
+    const tournamentId = String((request.data && request.data.tournamentId) || '').trim();
+    if (!tournamentId || tournamentId.length > 180 || tournamentId.includes('/')) throw new HttpsError('invalid-argument', 'torneio inválido');
+    const db = admin.firestore(), ref = db.collection('tournaments').doc(tournamentId);
+    return db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new HttpsError('not-found', 'torneio não existe');
+      const tournament = snap.data() || {};
+      if (!_isTournamentOrgCaller(tournament, callerUid)) throw new HttpsError('permission-denied', 'somente a organização pode ver estas vagas');
+      const checked = await _loadCanonicalRosterForMutation(tx, ref, tournament);
+      const counts = new Map();
+      checked.registrations.filter((item) => item.participantKind === 'manual' && _manualClaimActive(item))
+        .forEach((item) => counts.set(item.manualParticipantId, (counts.get(item.manualParticipantId) || 0) + 1));
+      const people = checked.registrations.filter((item) => item.participantKind === 'manual' &&
+        _manualClaimActive(item) && counts.get(item.manualParticipantId) === 1 &&
+        String(item.manualDisplayName || '').trim() && !/^Jogador\s*\d+$/i.test(String(item.manualDisplayName || '').trim()))
+        .map((item) => ({ manualParticipantId: item.manualParticipantId,
+          name: String(item.manualDisplayName).trim(), categoryId: item.categoryId }));
+      return { people, canInvite: !_hasCanonicalTournamentDraw(tournament) };
+    });
+  }
+);
+
+exports.createManualClaimInvite = onCall(
+  { region: 'us-central1', memory: '256MiB', timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError('unauthenticated', 'login necessário');
+    const { tournamentId, manualParticipantId } = _manualClaimInput(request.data, false);
+    const token = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const db = admin.firestore(), ref = db.collection('tournaments').doc(tournamentId);
+    const inviteRef = _manualClaimInviteRef(ref, manualParticipantId);
+    const expiresAtMs = Date.now() + 14 * 24 * 60 * 60 * 1000;
+    const result = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new HttpsError('not-found', 'torneio não existe');
+      const tournament = snap.data() || {};
+      if (!_isTournamentOrgCaller(tournament, callerUid)) throw new HttpsError('permission-denied', 'somente a organização cria convites');
+      if (_hasCanonicalTournamentDraw(tournament)) throw new HttpsError('failed-precondition', 'vínculo indisponível após o sorteio');
+      const checked = await _loadCanonicalRosterForMutation(tx, ref, tournament);
+      const manual = _manualClaimRecord(checked.registrations, manualParticipantId);
+      const claims = Array.isArray(tournament.pendingCanonicalParticipantClaims) ? tournament.pendingCanonicalParticipantClaims : [];
+      const remaining = claims.filter((item) => item && item.manualParticipantId !== manualParticipantId);
+      tx.set(inviteRef, { manualParticipantId, tokenHash, expiresAtMs, createdByUid: callerUid,
+        createdAt: _FV.serverTimestamp(), consumedAt: null });
+      if (remaining.length !== claims.length) tx.update(ref, { pendingCanonicalParticipantClaims: remaining, updatedAt: _FV.serverTimestamp() });
+      return { name: String(manual.manualDisplayName).trim(), categoryId: manual.categoryId };
+    });
+    return Object.assign({ token, expiresAtMs }, result);
+  }
+);
+
+exports.previewManualClaimInvite = onCall(
+  { region: 'us-central1', memory: '256MiB', timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    if (!(request.auth && request.auth.uid)) throw new HttpsError('unauthenticated', 'entre para reconhecer sua inscrição');
+    const { tournamentId, manualParticipantId, token } = _manualClaimInput(request.data, true);
+    const db = admin.firestore(), ref = db.collection('tournaments').doc(tournamentId);
+    return db.runTransaction(async (tx) => {
+      const [snap, inviteSnap] = await Promise.all([tx.get(ref), tx.get(_manualClaimInviteRef(ref, manualParticipantId))]);
+      if (!snap.exists) throw new HttpsError('not-found', 'torneio não existe');
+      const tournament = snap.data() || {};
+      if (_hasCanonicalTournamentDraw(tournament)) throw new HttpsError('failed-precondition', 'vínculo indisponível após o sorteio');
+      _manualClaimValidInvite(inviteSnap.exists ? inviteSnap.data() : null, token, manualParticipantId);
+      const checked = await _loadCanonicalRosterForMutation(tx, ref, tournament);
+      const manual = _manualClaimRecord(checked.registrations, manualParticipantId);
+      return { tournamentName: String(tournament.name || 'Torneio'), name: String(manual.manualDisplayName).trim(), categoryId: manual.categoryId };
+    });
+  }
+);
+
+exports.acceptManualClaimInvite = onCall(
+  { region: 'us-central1', memory: '256MiB', timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError('unauthenticated', 'login necessário');
+    const { tournamentId, manualParticipantId, token } = _manualClaimInput(request.data, true);
+    const db = admin.firestore(), ref = db.collection('tournaments').doc(tournamentId);
+    const inviteRef = _manualClaimInviteRef(ref, manualParticipantId);
+    return db.runTransaction(async (tx) => {
+      const [snap, inviteSnap] = await Promise.all([tx.get(ref), tx.get(inviteRef)]);
+      if (!snap.exists) throw new HttpsError('not-found', 'torneio não existe');
+      const tournament = snap.data() || {};
+      if (_hasCanonicalTournamentDraw(tournament)) throw new HttpsError('failed-precondition', 'vínculo indisponível após o sorteio');
+      _manualClaimValidInvite(inviteSnap.exists ? inviteSnap.data() : null, token, manualParticipantId);
+      const checked = await _loadCanonicalRosterForMutation(tx, ref, tournament);
+      _manualClaimRecord(checked.registrations, manualParticipantId);
+      if (checked.registrations.some((item) => item.participantKind === 'account' &&
+          item.participantUid === callerUid && _manualClaimActive(item))) {
+        throw new HttpsError('failed-precondition', 'sua conta já ocupa outra inscrição neste torneio');
+      }
+      let changes;
+      try { changes = _registrationClaim.claimManualParticipant(tournamentId, checked.registrations, manualParticipantId, callerUid); }
+      catch (error) { throw new HttpsError('failed-precondition', error.message); }
+      const claims = Array.isArray(tournament.pendingCanonicalParticipantClaims) ? tournament.pendingCanonicalParticipantClaims : [];
+      const remaining = claims.filter((item) => item && item.manualParticipantId !== manualParticipantId);
+      _writeCanonicalRosterChanges(tx, ref, tournament, checked.registrations, changes, { pendingCanonicalParticipantClaims: remaining });
+      tx.update(inviteRef, { consumedAt: _FV.serverTimestamp(), consumedByUid: callerUid });
+      return { ok: true, outcome: changes.outcome, tournamentId };
+    });
+  }
+);
+
 // Lê sempre a fotografia atual, dentro da mesma transação que consulta o
 // espelho dividido e os documentos canônicos já existentes. Esta é a única
 // fonte de prévias unitárias e em lote: não aceita elenco do navegador e nunca

@@ -10,12 +10,16 @@ async function req(method,p,uid,body){const h={'Content-Type':'application/json'
 (async()=>{const body={fields:{organizerUid:S('org'),tournamentId:S('t1')}};const out={};
 out.setupParent=await req('PATCH','tournamentImports/i1','owner',body);
 out.setupBlock=await req('PATCH','tournamentImports/i1/blocks/0','owner',body);
+out.setupInvite=await req('PATCH','tournaments/t1/manualClaimInvites/invite1','owner',body);
 out.create=await req('PATCH','tournamentImports/i2','org',body);
 out.read=await req('GET','tournamentImports/i1','org');
 out.update=await req('PATCH','tournamentImports/i1','org',body);
 out.delete=await req('DELETE','tournamentImports/i1','org');
 out.blockRead=await req('GET','tournamentImports/i1/blocks/0','org');
 out.blockWrite=await req('PATCH','tournamentImports/i1/blocks/1','org',body);
+out.inviteRead=await req('GET','tournaments/t1/manualClaimInvites/invite1','org');
+out.inviteWrite=await req('PATCH','tournaments/t1/manualClaimInvites/invite1','org',body);
+out.inviteAnon=await req('GET','tournaments/t1/manualClaimInvites/invite1',null);
 out.ocrQuotaRead=await req('GET','tournamentImports/ocrUsage/days/2026-10-15_org','org');
 out.ocrQuotaWrite=await req('PATCH','tournamentImports/ocrUsage/days/2026-10-15_org','org',body);
 out.searchQuotaRead=await req('GET','tournamentImports/searchUsage/days/2026-10-15_org','org');

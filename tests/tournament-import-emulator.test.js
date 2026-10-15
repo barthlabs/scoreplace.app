@@ -22,7 +22,9 @@ async function driver() {
   const outsider = 'outsider-import';
   const linkedUid = 'linked-import';
   const mergedUid = 'merged-import';
-  for (const [uid, email] of [[organizer, 'organizer@example.com'], [outsider, 'outsider@example.com']]) {
+  for (const [uid, email] of [[organizer, 'organizer@example.com'], [outsider, 'outsider@example.com'],
+    ['claimant-one', 'claimant-one@example.com'], ['claimant-two', 'claimant-two@example.com'],
+    ['claimant-three', 'claimant-three@example.com']]) {
     await admin.auth().createUser({ uid, email, password: 'senha123' });
   }
   await db.doc('users/' + linkedUid).set({ displayName: 'Beatriz Teste', displayName_lower: 'beatriz teste' });
@@ -119,6 +121,72 @@ async function driver() {
     ] }] });
   assert.strictEqual(second.count, 4);
   assert.strictEqual((await call('previewTournamentImport', previewData)).slots.length, 0);
+  const claimable = await call('listManualClaimInvites', previewData);
+  assert(claimable.people.some((person) => person.name === 'Ana Exemplo'));
+  assert(claimable.people.every((person) => !Object.prototype.hasOwnProperty.call(person, 'email')));
+  const ana = claimable.people.find((person) => person.name === 'Ana Exemplo');
+  const cris = claimable.people.find((person) => person.name === 'Cris Exemplo');
+  const dani = claimable.people.find((person) => person.name === 'Dani Exemplo');
+  const firstInvite = await call('createManualClaimInvite', { tournamentId: tid, manualParticipantId: ana.manualParticipantId });
+  assert.match(firstInvite.token, /^[a-f0-9]{64}$/);
+  const inviteDoc = await db.doc('tournaments/' + tid + '/manualClaimInvites/' + require('crypto').createHash('sha256').update(ana.manualParticipantId).digest('hex')).get();
+  assert(!JSON.stringify(inviteDoc.data()).includes(firstInvite.token), 'token cru nunca vai ao banco');
+  const firstPair = saved.find((person) => person.manualParticipantId === ana.manualParticipantId).fixedPairId;
+  await app.auth().signOut();
+  await app.auth().signInWithEmailAndPassword('outsider@example.com', 'senha123');
+  await rejectsCode(call('listManualClaimInvites', previewData), 'permission-denied');
+  await rejectsCode(call('createManualClaimInvite', { tournamentId: tid, manualParticipantId: ana.manualParticipantId }), 'permission-denied');
+  await app.auth().signOut();
+  await app.auth().signInWithEmailAndPassword('claimant-one@example.com', 'senha123');
+  const previewClaim = await call('previewManualClaimInvite', { tournamentId: tid, manualParticipantId: ana.manualParticipantId, token: firstInvite.token });
+  assert.strictEqual(previewClaim.name, 'Ana Exemplo');
+  await call('acceptManualClaimInvite', { tournamentId: tid, manualParticipantId: ana.manualParticipantId, token: firstInvite.token });
+  await rejectsCode(call('acceptManualClaimInvite', { tournamentId: tid, manualParticipantId: ana.manualParticipantId, token: firstInvite.token }), 'failed-precondition');
+  const claimed = (await db.collection('tournaments/' + tid + '/registrations').get()).docs.map((doc) => doc.data());
+  const newAna = claimed.find((person) => person.participantUid === 'claimant-one' && person.status === 'confirmed');
+  assert(newAna && newAna.fixedPairId && newAna.fixedPairId !== firstPair);
+  const partner = claimed.find((person) => person.participantUid === linkedUid && person.status === 'confirmed');
+  assert.strictEqual(partner.fixedPairId, newAna.fixedPairId, 'parceira permanece na dupla após o vínculo');
+  const retired = claimed.find((person) => person.manualParticipantId === ana.manualParticipantId && person.status === 'withdrawn');
+  assert(retired, 'vaga manual fica no histórico como retirada');
+  await app.auth().signOut();
+  await app.auth().signInWithEmailAndPassword('organizer@example.com', 'senha123');
+  const oldCris = await call('createManualClaimInvite', { tournamentId: tid, manualParticipantId: cris.manualParticipantId });
+  const newCris = await call('createManualClaimInvite', { tournamentId: tid, manualParticipantId: cris.manualParticipantId });
+  await rejectsCode(call('previewManualClaimInvite', { tournamentId: tid, manualParticipantId: cris.manualParticipantId, token: oldCris.token }), 'failed-precondition');
+  const expiredDani = await call('createManualClaimInvite', { tournamentId: tid, manualParticipantId: dani.manualParticipantId });
+  const daniInviteRef = db.doc('tournaments/' + tid + '/manualClaimInvites/' + require('crypto').createHash('sha256').update(dani.manualParticipantId).digest('hex'));
+  await daniInviteRef.update({ expiresAtMs: Date.now() - 1 });
+  await rejectsCode(call('previewManualClaimInvite', { tournamentId: tid, manualParticipantId: dani.manualParticipantId, token: expiredDani.token }), 'failed-precondition');
+  const daniInvite = await call('createManualClaimInvite', { tournamentId: tid, manualParticipantId: dani.manualParticipantId });
+  const daniRegistration = claimed.find((person) => person.manualParticipantId === dani.manualParticipantId);
+  const daniRegistrationRef = db.doc('tournaments/' + tid + '/registrations/' + daniRegistration.registrationId);
+  await daniRegistrationRef.update({ status: 'withdrawn' });
+  await rejectsCode(call('previewManualClaimInvite', { tournamentId: tid, manualParticipantId: dani.manualParticipantId, token: daniInvite.token }), 'failed-precondition');
+  await daniRegistrationRef.update({ status: 'confirmed' });
+  await app.auth().signOut();
+  await app.auth().signInWithEmailAndPassword('claimant-one@example.com', 'senha123');
+  await rejectsCode(call('acceptManualClaimInvite', { tournamentId: tid, manualParticipantId: dani.manualParticipantId, token: daniInvite.token }), 'failed-precondition');
+  await app.auth().signOut();
+  await app.auth().signInWithEmailAndPassword('claimant-two@example.com', 'senha123');
+  await call('acceptManualClaimInvite', { tournamentId: tid, manualParticipantId: cris.manualParticipantId, token: newCris.token });
+  await db.doc('tournaments/' + tid).update({ rounds: [{ id: 'round-1' }] });
+  await rejectsCode(call('acceptManualClaimInvite', { tournamentId: tid, manualParticipantId: dani.manualParticipantId, token: daniInvite.token }), 'failed-precondition');
+  await app.auth().signOut();
+  await app.auth().signInWithEmailAndPassword('organizer@example.com', 'senha123');
+  await rejectsCode(call('createManualClaimInvite', { tournamentId: tid, manualParticipantId: dani.manualParticipantId }), 'failed-precondition');
+  await db.doc('tournaments/' + tid).update({ rounds: [] });
+  await app.auth().signOut();
+  const secondApp = firebase.initializeApp({ apiKey: 'fake', projectId, authDomain: 'localhost' }, 'claim-concurrency');
+  secondApp.auth().useEmulator('http://127.0.0.1:9092', { disableWarnings: true });
+  secondApp.functions('us-central1').useEmulator('127.0.0.1', 5011);
+  await app.auth().signInWithEmailAndPassword('outsider@example.com', 'senha123');
+  await secondApp.auth().signInWithEmailAndPassword('claimant-three@example.com', 'senha123');
+  const concurrentPayload = { tournamentId: tid, manualParticipantId: dani.manualParticipantId, token: daniInvite.token };
+  const race = await Promise.allSettled([call('acceptManualClaimInvite', concurrentPayload),
+    secondApp.functions('us-central1').httpsCallable('acceptManualClaimInvite')(concurrentPayload)]);
+  assert.strictEqual(race.filter((item) => item.status === 'fulfilled').length, 1, 'somente um dos dois consumidores ganha a vaga');
+  await secondApp.delete();
   console.log('✓ EMULATOR_IMPORT_OK: autorização, transação, reclassificação, UID, retry, conflito e 2 blocos');
   process.exit(0);
 }

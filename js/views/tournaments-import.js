@@ -2,6 +2,7 @@
 (function () {
   'use strict';
   var state = null;
+  var nextViewKey = 1;
   function esc(value) { return String(value == null ? '' : value).replace(/[&<>"']/g, function (ch) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]; }); }
   function el() { return document.getElementById('tournament-import-dialog'); }
   function callable(name, data) {
@@ -35,13 +36,11 @@
       var hits = (person.candidates || []).map(function (candidate, candidateIndex) {
         return '<button type="button" class="sp-import-candidate" data-act="choose" data-row="' + idx + '" data-side="' + side + '" data-token="' + esc(person.lookupToken) + '" data-candidate="' + candidateIndex + '"' + disabled + '>' + esc(candidate.name) + '</button>';
       }).join('');
-      return '<div class="sp-import-person' + (hasCandidates ? ' sp-import-person-match' : '') + '">' +
+      return '<div class="sp-import-person' + (hasCandidates && person.uid === undefined ? ' sp-import-person-match' : '') + '" data-person="' + row.viewKey + '-' + side + '" tabindex="-1">' +
         '<div class="sp-import-person-name">' + esc(person.name) + '</div>' +
         '<div class="sp-import-decision">' + esc(decision) + '</div>' +
         (!row.saved && !state.busy && person.uid === undefined && hasCandidates ? '<div class="sp-import-candidates">' + hits + '<button type="button" data-act="none" data-row="' + idx + '" data-side="' + side + '">Nenhum destes</button></div>' : '') +
-        (!row.saved && !state.busy && person.uid === undefined && !hasCandidates && person.lookupStatus !== 'loading' && person.lookupStatus !== 'error' ?
-          '<button type="button" class="sp-import-none" data-act="none" data-row="' + idx + '" data-side="' + side + '">Confirmar sem conta</button>' : '') +
-        (!row.saved && !state.busy ? '<details class="sp-import-edit"><summary>Corrigir nome ou busca</summary>' +
+        (!row.saved && !state.busy ? '<details class="sp-import-edit" data-edit-key="' + row.viewKey + '-' + side + '"><summary>Corrigir nome ou busca</summary>' +
           '<label class="sp-import-field">Nome<input data-act="name" data-row="' + idx + '" data-side="' + side + '" value="' + esc(person.name) + '"></label>' +
           '<div class="sp-import-search-row"><input data-act="query" data-row="' + idx + '" data-side="' + side + '" value="' + esc(person.query || person.name) + '" aria-label="Buscar conta">' +
           '<button type="button" data-act="search" data-row="' + idx + '" data-side="' + side + '">Buscar</button></div></details>' : '') +
@@ -59,6 +58,22 @@
   }
   function render() {
     var box = el(); if (!box || !state) return;
+    var oldPanel = box.querySelector && box.querySelector('.sp-import-panel');
+    var oldScroll = oldPanel ? oldPanel.scrollTop : 0;
+    var opened = new Set();
+    if (oldPanel && oldPanel.querySelectorAll) {
+      oldPanel.querySelectorAll('details[open]').forEach(function (detail) {
+        opened.add(detail.dataset.editKey || (detail.classList.contains('sp-import-help') ? 'help' : ''));
+      });
+    }
+    var focused = document.activeElement;
+    var focusData = focused && box.contains(focused) && focused.dataset ? {
+      act: focused.dataset.act, row: focused.dataset.row, side: focused.dataset.side,
+      candidate: focused.dataset.candidate, value: focused.value,
+      start: focused.selectionStart, end: focused.selectionEnd,
+      personKey: focused.closest && focused.closest('[data-person]') && focused.closest('[data-person]').dataset.person,
+    } : null;
+    var resetScroll = state.resetScroll || state.renderedPage !== state.page;
     var start = state.page * 8, visible = state.rows.slice(start, start + 8);
     var plans = state.preview ? window.TournamentImportAllocation.allocate(state.rows, state.preview.slots) : [];
     var content = !state.preview ? '<p class="sp-import-lead">Consultando vagas atuais…</p>' :
@@ -79,6 +94,34 @@
     box.innerHTML = '<div class="sp-import-panel">' +
       '<div class="sp-import-header"><h2 id="tournament-import-title">Importar inscritos</h2><button type="button" data-act="close" aria-label="Fechar"' + (state.saving ? ' disabled' : '') + '>×</button></div>' +
       (state.message ? '<p role="status" class="sp-import-status">' + esc(state.message) + '</p>' : '') + content + '</div>';
+    var newPanel = box.querySelector && box.querySelector('.sp-import-panel');
+    if (newPanel) {
+      newPanel.querySelectorAll('details').forEach(function (detail) {
+        if (opened.has(detail.dataset.editKey || (detail.classList.contains('sp-import-help') ? 'help' : ''))) detail.open = true;
+      });
+      newPanel.scrollTop = resetScroll ? 0 : Math.min(oldScroll, Math.max(0, newPanel.scrollHeight - newPanel.clientHeight));
+      if (focusData && focusData.act) {
+        var selector = '[data-act="' + focusData.act + '"][data-row="' + focusData.row + '"][data-side="' + focusData.side + '"]';
+        if (focusData.candidate !== undefined) selector += '[data-candidate="' + focusData.candidate + '"]';
+        var target = newPanel.querySelector(selector);
+        if ((!target || target.disabled) && focusData.personKey) target = newPanel.querySelector('[data-person="' + focusData.personKey + '"]');
+        if (target && typeof target.focus === 'function') {
+          if (target.value !== undefined && focusData.value !== undefined && target.dataset.act === focusData.act) target.value = focusData.value;
+          target.focus({ preventScroll: true });
+          if (typeof target.setSelectionRange === 'function' && typeof focusData.start === 'number') {
+            try { target.setSelectionRange(focusData.start, focusData.end); } catch (_error) {}
+          }
+        }
+      }
+      if (state.focusPersonKey) {
+        var postRemoval = newPanel.querySelector('[data-person="' + state.focusPersonKey + '"]');
+        if (postRemoval) postRemoval.focus({ preventScroll: true });
+      }
+      newPanel.scrollTop = resetScroll ? 0 : Math.min(oldScroll, Math.max(0, newPanel.scrollHeight - newPanel.clientHeight));
+    }
+    state.focusPersonKey = '';
+    state.renderedPage = state.page;
+    state.resetScroll = false;
   }
   function loadXlsx() {
     if (window.XLSX) return Promise.resolve(window.XLSX);
@@ -130,7 +173,7 @@
             parsed.ignored.push.apply(parsed.ignored, next.ignored);
           });
         } else throw new Error(file.name + ': formato não suportado');
-        parsed.rows.forEach(function (row) { row.source = file.name + ' · ' + row.source; row.people.forEach(function (p) { p.uid = undefined; }); });
+        parsed.rows.forEach(function (row) { row.source = file.name + ' · ' + row.source; row.viewKey = nextViewKey++; row.people.forEach(function (p) { p.uid = undefined; }); });
         state.rows.push.apply(state.rows, parsed.rows);
         imported.push.apply(imported, parsed.rows);
         added += parsed.rows.length; ignored += parsed.ignored.length;
@@ -138,6 +181,7 @@
       state.message = added + ' duplas na ordem dos arquivos. Confirme as contas antes de gravar.' +
         (ignored ? ' ' + ignored + ' linha(s) não interpretada(s).' : '');
       state.page = 0;
+      state.resetScroll = true;
       render();
       await discoverCandidates(imported);
     } catch (error) { if (state === session) state.message = error.message + '. Nenhuma inscrição foi gravada.'; }
@@ -146,10 +190,11 @@
   }
   async function searchPerson(row, side) {
     var person = row.people[side];
+    if (person.uid === null && person.autoNoAccount) { person.uid = undefined; person.autoNoAccount = false; }
     var query = String(person.query || person.name || '').trim();
     var token = (person.lookupToken || 0) + 1;
     person.lookupToken = token;
-    if (query.length < 3 || query.length > 80) { person.lookupStatus = 'invalid'; if (!state.busy) render(); return; }
+    if (query.length < 3 || query.length > 80) { person.candidates = []; person.lookupStatus = 'invalid'; if (!state.busy) render(); return; }
     var key = state.tournamentId + '|' + query.toLocaleLowerCase('pt-BR');
     var cache = state.candidateCache;
     person.lookupStatus = 'loading'; if (!state.busy) render();
@@ -159,7 +204,13 @@
           .catch(function (error) { cache.delete(key); throw error; }));
       var result = await cache.get(key);
       if (!state || !state.rows.includes(row) || row.people[side] !== person || person.lookupToken !== token) return;
-      person.candidates = result.candidates || [];
+      if (!result || typeof result !== 'object' || !Array.isArray(result.candidates)) {
+        cache.delete(key);
+        person.candidates = []; person.lookupStatus = 'error'; if (!state.busy) render(); return;
+      }
+      person.candidates = result.candidates;
+      if (person.candidates.length && person.uid === null) { person.uid = undefined; person.autoNoAccount = false; }
+      if (!person.candidates.length && person.uid === undefined) { person.uid = null; person.autoNoAccount = true; }
       person.lookupStatus = 'done'; if (!state.busy) render();
     } catch (error) {
       if (!state || !state.rows.includes(row) || row.people[side] !== person || person.lookupToken !== token) return;
@@ -194,7 +245,10 @@
     if (window.TournamentImportAllocation.repeatedUid(state.rows)) {
       report('A mesma conta foi escolhida para duas pessoas. Corrija antes de gravar.'); return;
     }
-    if (!window.confirm('Gravar ' + pending.length + ' dupla(s) revisadas nas vagas de suas categorias? Cada bloco salvo é definitivo; arquivos e OCR não serão armazenados.')) return;
+    var withoutAccount = pending.flatMap(function (entry) { return entry.row.people.filter(function (p) { return p.uid === null; }).map(function (p) { return p.name; }); });
+    if (!window.confirm('Gravar ' + pending.length + ' dupla(s) revisadas nas vagas de suas categorias?\n' +
+      withoutAccount.length + ' pessoa(s) ficarão sem conta vinculada' + (withoutAccount.length ? ': ' + withoutAccount.join(', ') : '.') +
+      '\nCada bloco salvo é definitivo; arquivos e OCR não serão armazenados.')) return;
     state.busy = true; state.saving = true; render();
     try {
       for (var i = 0; i < pending.length; i += 8) {
@@ -223,7 +277,7 @@
     if (!tournament) return;
     if (el()) el().remove();
     state = { tournamentId: String(tournamentId), categories: categories(tournament), importId: crypto.randomUUID(),
-      blockIndex: 0, rows: [], page: 0, preview: null, message: '', busy: false, saving: false, candidateCache: new Map() };
+      blockIndex: 0, rows: [], page: 0, renderedPage: -1, resetScroll: true, preview: null, message: '', busy: false, saving: false, candidateCache: new Map() };
     var session = state;
     var box = document.createElement('div'); box.id = 'tournament-import-dialog';
     box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true');
@@ -239,23 +293,43 @@
     }
     catch (error) { if (state === session) report('Prévia indisponível: ' + (error.message || error) + '. Nenhum dado foi alterado.'); }
   };
+  document.addEventListener('input', function (event) {
+    if (!state || !el() || !el().contains(event.target)) return;
+    var action = event.target.dataset.act;
+    if (action !== 'name' && action !== 'query') return;
+    var row = state.rows[Number(event.target.dataset.row)]; if (!row || row.saved) return;
+    var person = row.people[Number(event.target.dataset.side)]; if (!person) return;
+    if (action === 'query') {
+      person.query = event.target.value.trim();
+      person.lookupToken = (person.lookupToken || 0) + 1;
+      person.candidates = []; person.lookupStatus = '';
+      if (person.uid === null && person.autoNoAccount) { person.uid = undefined; person.autoNoAccount = false; }
+    } else {
+      person.name = event.target.value.trim(); person.query = person.name;
+      person.uid = undefined; person.chosenName = ''; person.autoNoAccount = false;
+      person.candidates = []; person.lookupStatus = '';
+      person.lookupToken = (person.lookupToken || 0) + 1;
+      var queryInput = event.target.closest('.sp-import-person').querySelector('[data-act="query"]');
+      if (queryInput) queryInput.value = person.query;
+      var nameNode = event.target.closest('.sp-import-person').querySelector('.sp-import-person-name');
+      if (nameNode) nameNode.textContent = person.name;
+    }
+    var card = event.target.closest('.sp-import-person');
+    if (card) {
+      var decisionNode = card.querySelector('.sp-import-decision');
+      if (decisionNode && person.uid === undefined) decisionNode.textContent = 'Conta a revisar — use Buscar';
+      var candidatesNode = card.querySelector('.sp-import-candidates');
+      if (candidatesNode) candidatesNode.remove();
+    }
+  });
+  document.addEventListener('keydown', function (event) {
+    if (event.key !== 'Enter' || !state || !el() || !el().contains(event.target) || event.target.dataset.act !== 'query') return;
+    event.preventDefault();
+    if (!state.busy) search(Number(event.target.dataset.row), Number(event.target.dataset.side));
+  });
   document.addEventListener('change', function (event) {
     if (!state || !el() || !el().contains(event.target)) return;
     if (event.target.id === 'tournament-import-files') { processFiles(Array.from(event.target.files || [])); return; }
-    var action = event.target.dataset.act, row = state.rows[Number(event.target.dataset.row)];
-    if (state.busy) return;
-    if (!row) return;
-    if (action === 'name') {
-      var p = row.people[Number(event.target.dataset.side)];
-      p.name = event.target.value.trim(); p.query = p.name; p.uid = undefined; p.chosenName = '';
-      p.candidates = []; p.lookupToken = (p.lookupToken || 0) + 1;
-      searchPerson(row, Number(event.target.dataset.side));
-    }
-    if (action === 'query') {
-      var person = row.people[Number(event.target.dataset.side)];
-      person.query = event.target.value.trim(); person.candidates = []; person.lookupToken = (person.lookupToken || 0) + 1;
-      person.lookupStatus = ''; person.uid = undefined; person.chosenName = ''; render();
-    }
   });
   document.addEventListener('click', function (event) {
     if (!state || !el() || !el().contains(event.target)) return;
@@ -263,18 +337,21 @@
     var action = button.dataset.act, index = Number(button.dataset.row), side = Number(button.dataset.side);
     if (action === 'close' && !state.saving) { el().remove(); state = null; return; }
     if (state.busy) return;
-    if (action === 'prev') { state.page--; render(); return; }
-    if (action === 'next') { state.page++; render(); return; }
+    if (action === 'prev') { state.page--; state.resetScroll = true; render(); return; }
+    if (action === 'next') { state.page++; state.resetScroll = true; render(); return; }
     if (action === 'remove') { if (!state.rows[index] || state.rows[index].saved) return;
-      state.rows.splice(index, 1); state.page = Math.min(state.page, Math.max(0, Math.ceil(state.rows.length / 8) - 1)); render(); return; }
+      state.rows.splice(index, 1); state.page = Math.min(state.page, Math.max(0, Math.ceil(state.rows.length / 8) - 1));
+      var nextRow = state.rows[Math.min(index, state.rows.length - 1)];
+      state.focusPersonKey = nextRow ? nextRow.viewKey + '-0' : '';
+      render(); return; }
     if (action === 'search') { search(index, side); return; }
     if (action === 'none') { if (!state.rows[index] || state.rows[index].saved) return;
-      state.rows[index].people[side].uid = null; state.rows[index].people[side].chosenName = ''; render(); return; }
+      state.rows[index].people[side].uid = null; state.rows[index].people[side].autoNoAccount = false; state.rows[index].people[side].chosenName = ''; render(); return; }
     if (action === 'choose') { if (!state.rows[index] || state.rows[index].saved) return;
       var person = state.rows[index].people[side];
       if (String(person.lookupToken) !== button.dataset.token) return;
       var selected = person.candidates[Number(button.dataset.candidate)]; if (!selected) return;
-      person.uid = selected.uid; person.chosenName = selected.name; render(); return; }
+      person.uid = selected.uid; person.autoNoAccount = false; person.chosenName = selected.name; render(); return; }
     if (action === 'save') save();
   });
 })();

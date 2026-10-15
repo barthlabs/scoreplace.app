@@ -1,3 +1,7 @@
+// 2.4.58 — A importação preserva a posição na lista ao confirmar uma conta.
+// Sem conta provável, não há confirmação extra; candidatos exigem escolha.
+// O organizador pode criar link individual para a pessoa sem conta reconhecer
+// sua inscrição após entrar no app. O vínculo exige clique dela.
 // 2.4.57 — A prévia de importação segue a ordem da foto/planilha e atribui
 // automaticamente as vagas da categoria indicada. Cards mostram possíveis contas
 // em verde; o organizador confirma cada vínculo antes de gravar. Categorias e

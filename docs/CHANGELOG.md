@@ -1,3 +1,9 @@
+## 2.4.58 — 15/out/2026 (navegação da importação e convite individual)
+
+- Confirmar conta provável ou “Nenhum destes” mantém rolagem, foco e edição aberta na dupla em revisão. Sem conta provável, a busca válida deixa a pessoa sem vínculo automaticamente; erro de busca bloqueia a gravação. A confirmação final enumera quem ficará sem conta.
+- O organizador pode criar um link individual para uma inscrição manual nomeada. A pessoa entra/cria conta, vê a inscrição e confirma que é sua; só então o servidor substitui a vaga manual pelo UID, preservando a dupla. Token de 14 dias, de uso único, com hash privado, revogado por nova emissão. O fluxo é pré-sorteio e não altera resultados nem torneios por iniciativa própria.
+- Regra privada, transação canônica e testes em emulador de autorização, expiração, revogação, consumo concorrente e dupla fixa. Nenhuma inscrição real foi alterada nos testes; versões nativas não foram modificadas.
+
 ## 2.4.57 — 15/out/2026 (prévia da importação na ordem da fonte)
 
 - A primeira dupla da foto/planilha ocupa a primeira dupla-placeholder disponível da mesma categoria, ordenada pelo número de Jogador, e a prévia abre na primeira linha. Categoria e vaga não são mais escolhas manuais nesse painel; falta de categoria ou vaga bloqueia a gravação, sem usar outra categoria silenciosamente.

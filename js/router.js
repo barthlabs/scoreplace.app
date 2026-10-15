@@ -81,7 +81,8 @@ function initRouter() {
     // Cada abertura recebe uma época. Retornos assíncronos de uma tela que o
     // usuário já deixou não podem escrever por cima do destino atual, nem esconder
     // o loader pertencente ao destino novo.
-    var _routeRequestKey = hash + '|' + ((window.AppStore && window.AppStore.currentUser) ? '1' : '0');
+    var _routeRequestKey = (view === 'claim-registration' ? '#claim-registration/' + (cleanParam || '') : hash) +
+      '|' + ((window.AppStore && window.AppStore.currentUser) ? '1' : '0');
     if (window._spRouteRequestKey !== _routeRequestKey) {
       window._spRouteRequestKey = _routeRequestKey;
       window._spRouteEpoch = (window._spRouteEpoch || 0) + 1;
@@ -301,12 +302,16 @@ function initRouter() {
     var _isLoggedInNow = !!(window.AppStore && window.AppStore.currentUser);
     var _hasAuthCacheNow = false;
     try { _hasAuthCacheNow = !!localStorage.getItem('scoreplace_authCache'); } catch(e) {}
-    window._log('[scoreplace-router] route', hash, 'loggedIn:', _isLoggedInNow, 'authCache:', _hasAuthCacheNow, 'authResolved:', !!window._authStateResolved);
+    window._log('[scoreplace-router] route', view === 'claim-registration' ? '#claim-registration' : hash,
+      'loggedIn:', _isLoggedInNow, 'authCache:', _hasAuthCacheNow, 'authResolved:', !!window._authStateResolved);
 
     // v2.1.94-beta: gate expandido para TODAS as rotas. Usuário não logado
     // nunca vê dados de torneio (evita confusão com dados desatualizados).
     // Exceções: #terms, #privacy e #delete-account (páginas legais sempre públicas).
     var _isLegalView = (view === 'privacy' || view === 'terms' || view === 'delete-account');
+    // O convite individual precisa mostrar o CTA de login sem ler inscrição
+    // enquanto deslogado. A Function continua exigindo autenticação.
+    if (view === 'claim-registration') _isLegalView = true;
     if (!_isLoggedInNow && !_isLegalView && typeof renderLanding === 'function') {
 
       /* ⛔ QUEM ESTÁ ENTRANDO NÃO VOLTA PRA LANDING NEM PRO LOGIN (2.1.45).
@@ -855,6 +860,14 @@ function initRouter() {
       case 'invite':
         if (typeof window.renderInvitePage === 'function') {
           window.renderInvitePage(viewContainer);
+        } else {
+          window.location.replace('#dashboard');
+          return;
+        }
+        break;
+      case 'claim-registration':
+        if (typeof window.renderClaimRegistrationPage === 'function') {
+          window.renderClaimRegistrationPage(viewContainer, param, parts[2], parts[3]);
         } else {
           window.location.replace('#dashboard');
           return;

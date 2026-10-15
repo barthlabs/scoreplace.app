@@ -3213,3 +3213,24 @@ dialog.sp-native-update::backdrop { background: var(--bg-overlay, rgba(0,0,0,0.6
   .sp-import-upload, .sp-import-toolbar button, .sp-import-panel .sp-import-save { width: 100%; }
   .sp-import-toolbar { align-items: stretch; }
 }
+
+/* Convites de reconhecimento: rótulos legíveis e ações sem overflow no celular. */
+.sp-participant-import-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 9px; }
+.sp-manual-invites-dialog { position: fixed; inset: 0; z-index: 10100; display: flex; align-items: center; justify-content: center; padding: 14px; background: rgba(0,0,0,.72); }
+.sp-manual-invites-panel { width: min(560px,100%); max-height: 100%; overflow: auto; box-sizing: border-box; padding: 16px; border-radius: 16px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-main); }
+.sp-manual-invites-panel header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.sp-manual-invites-panel h2 { margin: 0; font-size: 1.15rem; }
+.sp-manual-invites-panel header button { border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-darker); color: var(--text-main); font-size: 1.4rem; min-width: 44px; min-height: 44px; cursor: pointer; }
+.sp-manual-invites-panel p { color: var(--text-muted); font-size: .85rem; line-height: 1.4; }
+.sp-manual-invite-row { padding: 11px 0; border-top: 1px solid var(--border-color); display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.sp-manual-invite-row > div:first-child { min-width: 170px; flex: 1 1 170px; }
+.sp-manual-invite-row strong, .sp-manual-invite-row small { display: block; overflow-wrap: anywhere; }
+.sp-manual-invite-row small { color: var(--text-muted); }
+.sp-manual-invite-result { flex: 1 0 100%; font-size: .8rem; }
+.sp-manual-invite-link { display: block; box-sizing: border-box; width: 100%; margin-bottom: 8px; padding: 8px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-darker); color: var(--text-main); font: inherit; }
+.sp-claim-page { box-sizing: border-box; max-width: 520px; margin: 0 auto; padding: 24px 16px; color: var(--text-main); }
+.sp-claim-page h1 { font-size: 1.4rem; }
+.sp-claim-page p { line-height: 1.5; color: var(--text-muted); }
+.sp-claim-person { display: grid; gap: 4px; padding: 14px; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-card); }
+.sp-claim-person strong { overflow-wrap: anywhere; }
+.sp-claim-person span { color: var(--text-muted); font-size: .85rem; }

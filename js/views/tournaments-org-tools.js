@@ -200,6 +200,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         '<label class="form-label" style="font-size:0.82rem;font-weight:600;">📄 Importar inscritos</label>' +
         '<p style="font-size:0.66rem;color:var(--text-muted);margin:4px 0 8px;">Fotos ou planilhas. Revise duplas e contas antes de gravar.</p>' +
         '<button type="button" class="btn btn-secondary" onclick="window._openTournamentImport(\'' + safeId + '\')">Selecionar arquivos</button>' +
+        '<button type="button" class="btn btn-secondary" onclick="window._openManualClaimInvites(\'' + safeId + '\')">Links de reconhecimento</button>' +
       '</div>';
 
     var countLine = '<div id="addpart-count-' + controlKey + '" style="text-align:center;font-size:0.78rem;color:var(--text-muted);margin-bottom:1rem;">' + (nParts == null ? '—' : nParts) + ' inscritos' + (overCapacity ? ' · ⚠ ' + overCapacity + ' acima das vagas' : '') + '</div>';
@@ -235,7 +236,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         '<section style="padding:11px;border:1px solid var(--border-color);border-radius:12px;"><strong>Adicionar placeholders</strong>' +
           '<div style="display:flex;gap:8px;flex-wrap:wrap;"><input id="addpart-ph-' + controlKey + '" type="number" min="1" max="200" value="8" style="width:105px;padding:10px;border-radius:9px;border:1px solid var(--border-color);background:var(--bg-darker);color:var(--text-color);" onkeydown="if(event.key===\'Enter\'){event.preventDefault();window._pageAddPlaceholders(\'' + safeId + '\');}"><button id="addpart-ph-btn-' + controlKey + '" type="button" class="btn btn-cyan" onclick="window._pageAddPlaceholders(\'' + safeId + '\')">Adicionar vagas</button></div>' +
         '</section>' +
-        '<button type="button" class="btn btn-secondary" onclick="window._openTournamentImport(\'' + safeId + '\')" style="margin-top:9px;">📄 Importar fotos ou planilhas</button>' +
+        '<div class="sp-participant-import-actions"><button type="button" class="btn btn-secondary" onclick="window._openTournamentImport(\'' + safeId + '\')">📄 Importar fotos ou planilhas</button>' +
+        '<button type="button" class="btn btn-secondary" onclick="window._openManualClaimInvites(\'' + safeId + '\')">🔗 Links de reconhecimento</button></div>' +
       '</div>';
     panel.addEventListener('click', function (event) { if (event.target === panel) window._closeParticipantTools(); });
     document.body.appendChild(panel);

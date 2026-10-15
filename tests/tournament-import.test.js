@@ -206,7 +206,9 @@ async function testVisibleFlow() {
   const listeners = {};
   let dialog;
   let resolveOldLookup;
+  let malformedSearch = false;
   const applied = [];
+  const confirms = [];
   const document = {
     getElementById(id) { return id === 'tournament-import-dialog' ? dialog : null; },
     createElement() { return { setAttribute() {}, contains() { return true; }, remove() { dialog = null; } }; },
@@ -221,7 +223,7 @@ async function testVisibleFlow() {
   const app = {
     TournamentImportParser: parser, TournamentImportAllocation: allocation,
     _findTournamentById() { return { categoryDefinitions: cats }; },
-    confirm() { return true; },
+    confirm(message) { confirms.push(message); return true; },
     _callCF(name, data) {
       if (name === 'previewTournamentImport') return Promise.resolve({ data: preview });
       if (name === 'extractTournamentImportImage') return Promise.resolve({ data: {
@@ -229,6 +231,9 @@ async function testVisibleFlow() {
       } });
       if (name === 'searchTournamentImportCandidates' && data.query === 'Gina Antiga') {
         return new Promise((resolve) => { resolveOldLookup = resolve; });
+      }
+      if (name === 'searchTournamentImportCandidates' && malformedSearch && data.query === 'Bia Lima X') {
+        return Promise.resolve({ data: { broken: true } });
       }
       if (name === 'searchTournamentImportCandidates') return Promise.resolve({ data: {
         candidates: data.query === 'Ana Souza' ? [{ uid: 'uid-ana', name: 'Ana Souza' }] : [],
@@ -254,19 +259,36 @@ async function testVisibleFlow() {
     dialog.innerHTML.indexOf('Carla Souza') < dialog.innerHTML.indexOf('Eduardo Lima'), 'cards seguem a ordem da foto');
   assert(!dialog.innerHTML.includes('Categoria final') && !dialog.innerHTML.includes('Escolha a dupla-placeholder'),
     'prévia não pede escolhas redundantes');
-  const editName = (name) => listeners.change({ target: { dataset: { act: 'name', row: '0', side: '1' }, value: name } });
-  editName('Gina Antiga');
-  editName('Bia Lima');
-  resolveOldLookup({ data: { candidates: [{ uid: 'uid-gina', name: 'Gina Antiga' }] } });
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  assert(!dialog.innerHTML.includes('uid-gina') && !dialog.innerHTML.includes('Gina Antiga'),
-    'resposta de busca antiga não reaparece após corrigir o nome');
   const click = (act, row, side, candidate, token) => listeners.click({ target: {
     closest: () => ({ dataset: { act, row: String(row), side: String(side), candidate: String(candidate), token: String(token) } }),
   } });
+  const fakeCard = { querySelector() { return null; } };
+  const editName = (name) => listeners.input({ target: { dataset: { act: 'name', row: '0', side: '1' }, value: name,
+    closest: () => fakeCard } });
+  editName('Gina Antiga');
+  click('search', 0, 1);
+  editName('Bia Lima');
+  resolveOldLookup({ data: { candidates: [{ uid: 'uid-gina', name: 'Gina Antiga' }] } });
+  click('search', 0, 1);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert(!dialog.innerHTML.includes('uid-gina') && !dialog.innerHTML.includes('Gina Antiga'),
+    'resposta de busca antiga não reaparece após corrigir o nome');
+  assert(!dialog.innerHTML.includes('Confirmar sem conta'), 'sem conta provável dispensa confirmação individual');
+  malformedSearch = true;
+  listeners.input({ target: { dataset: { act: 'query', row: '0', side: '1' }, value: 'Bia Lima X', closest: () => fakeCard } });
+  click('search', 0, 1);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert(dialog.innerHTML.includes('Busca falhou'), 'resposta estruturalmente inválida não significa ausência de conta');
+  click('save', 0, 0);
+  assert.strictEqual(applied.length, 0, 'busca falha bloqueia gravação');
+  malformedSearch = false;
+  listeners.input({ target: { dataset: { act: 'query', row: '0', side: '1' }, value: 'Bia Lima', closest: () => fakeCard } });
+  click('search', 0, 1);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert(dialog.innerHTML.includes('Sem conta vinculada'), 'busca válida sem candidatos dispensa clique');
   const token = dialog.innerHTML.match(/data-act="choose"[^>]*data-token="(\d+)"/)[1];
   click('choose', 0, 0, 0, token);
-  for (const [row, side] of [[0, 1], [1, 0], [1, 1], [2, 0], [2, 1]]) click('none', row, side);
+  for (let i = 0; i < 20 && dialog.innerHTML.includes('Buscando conta'); i++) await new Promise((resolve) => setTimeout(resolve, 0));
   click('save', 0, 0);
   for (let i = 0; i < 20 && !applied.length; i++) await new Promise((resolve) => setTimeout(resolve, 0));
   assert.strictEqual(applied.length, 1, 'bloco foi enviado uma única vez');
@@ -274,6 +296,8 @@ async function testVisibleFlow() {
   assert.deepStrictEqual(Array.from(applied[0][0].people, (person) => person.name), ['Bia Lima', 'Ana Souza'],
     'payload respeita a ordem interna do backend sem trocar a posição visual');
   assert.strictEqual(applied[0][0].people[1].uid, 'uid-ana', 'vínculo foi resultado de clique humano, nunca da busca');
+  assert(confirms.some((message) => message.includes('5 pessoa(s) ficarão sem conta vinculada') && message.includes('Bia Lima')),
+    'confirmação final informa nomes e quantidade sem conta');
   const originalCall = app._callCF;
   app._callCF = (name, data) => name === 'extractTournamentImportImage'
     ? new Promise(() => {}) : originalCall(name, data);
