@@ -1,4 +1,8 @@
-// 2.4.54 — Atualização consolidada de produção com as correções validadas desde a última publicação.
+// 2.4.54 — Importação assistida de inscrições externas por foto (OCR com confirmação
+// de envio ao Google Cloud Vision) ou planilha local. O organizador revisa nomes,
+// vínculos de conta e categoria antes de ocupar duplas-placeholder; “Nenhum destes”
+// mantém a pessoa sem conta vinculada. A política explica o processamento das fotos.
+// Nenhuma lista externa nem imagem é aplicada automaticamente a torneios existentes.
 // 2.4.53 — Editor, resumo, estimativa, pré-sorteio e motor usam a mesma regra de
 // turnos da classificatória. Ida e volta continua em tabela única; com vários
 // grupos, novos sorteios usam somente ida, inclusive se uma fase antiga ainda
