@@ -1,4 +1,8 @@
-// 2.4.50 — Atualização consolidada de produção com as correções validadas desde a última publicação.
+// 2.4.50 — A política da chave passa a orientar a criação e o avanço da eliminatória.
+// Uma entrada tardia em linha com folga só redesenha a chave após decisão explícita do
+// organizador e é recusada se algum jogo afetado já começou. A decisão de posição da
+// sobra única é registrada na transação do servidor; uma chamada direta do navegador
+// não pode criar esse recibo na transição do Suíço para a eliminatória.
 // 2.4.49 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.48 — O cabeçalho da Análise deixa de pintar uma faixa de 24px para cima do botão Voltar, que invadia o cabeçalho principal. O conteúdo e os controles permanecem nas posições anteriores.
 // 2.4.47 — A ficha deixa de exibir “Carregando a lista” quando o roster canônico atual já foi confirmado, mesmo se o contador legado divergir. O organizador pode incluir participante manual sem categoria e classificá-lo depois na Análise, que o apresenta como “sem categoria”; o painel de inclusão tem texto mais compacto.
