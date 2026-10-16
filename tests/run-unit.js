@@ -54,6 +54,7 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 const SUITES = [
+  'tests/regulamento-neon.test.js',
   'tests/neon-sequencia-fotos.test.js',
   'tests/tournament-import.test.js',
   'tests/manual-name-unique-core.test.js',

@@ -1,3 +1,4 @@
+// 2.4.69 — O botão Regras do Neon passa a se chamar Regulamento e exibe o texto do evento atualizado para 24 duplas Light Feminino (duas por time na quinta e uma na sexta), oito duplas em cada outra categoria e 16 atletas por equipe. Não altera inscritos, confrontos ou cálculo de pontos.
 // 2.4.68 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.67 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.66 — Atualização consolidada de produção com as correções validadas desde a última publicação.

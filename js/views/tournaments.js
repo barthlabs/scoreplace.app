@@ -3760,6 +3760,7 @@ function renderTournaments(container, tournamentId = null) {
             const editModalHtml = '';
 
             const tournamentStarted = !!t.tournamentStarted;
+            const rulesActionLabel = (window._isNeonTournament && window._isNeonTournament(t)) ? 'Regulamento' : 'Regras';
 
             if (isOrg) {
                 // Botão "Iniciar Torneio" — SÓ aparece após sorteio realizado, antes de iniciar
@@ -3816,7 +3817,7 @@ function renderTournaments(container, tournamentId = null) {
                     actionsHtml = `
                    ${inviteModalHtml}
                    <div class="tournament-action-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:1rem;">
-                     <button class="btn btn-outline btn-sm hover-lift" onclick="window.location.hash='#rules/${t.id}'">📋 Regras</button>
+                     <button class="btn btn-outline btn-sm hover-lift" onclick="window.location.hash='#rules/${t.id}'">📋 ${rulesActionLabel}</button>
                      <button class="btn btn-outline btn-sm hover-lift" onclick="window.location.hash='#participants/${t.id}'">👥 Inscritos</button>
                      <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._printTournament('${t.id}')">🖨️ Imprimir</button>
                      <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._exportTournamentCSV('${t.id}')">📊 Exportar CSV</button>
@@ -3831,7 +3832,7 @@ function renderTournaments(container, tournamentId = null) {
                    ${isCurrentLeaguePhase ? '' : startedBadge}
                    ${autoDrawCountdownHtml ? `<div style="margin-top:1rem;text-align:center;">${autoDrawCountdownHtml}</div>` : ''}
                    <div class="tournament-action-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:1rem;">
-                     <button class="btn btn-outline btn-sm hover-lift" onclick="window.location.hash='#rules/${t.id}'">📋 Regras</button>
+                     <button class="btn btn-outline btn-sm hover-lift" onclick="window.location.hash='#rules/${t.id}'">📋 ${rulesActionLabel}</button>
                      <button class="btn btn-outline btn-sm hover-lift" onclick="window.location.hash='#participants/${t.id}'">👥 Inscritos</button>
                      <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._printTournament('${t.id}')">🖨️ Imprimir</button>
                      <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._exportTournamentCSV('${t.id}')">📊 Exportar CSV</button>
@@ -3845,7 +3846,7 @@ function renderTournaments(container, tournamentId = null) {
                    ${inviteModalHtml}
                    ${teamEnrollModalHtml}
                    <div class="tournament-action-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:1rem;">
-                     <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window.location.hash='#rules/${t.id}'">📋 Regras</button>
+                     <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window.location.hash='#rules/${t.id}'">📋 ${rulesActionLabel}</button>
                      <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window.location.hash='#participants/${t.id}'">👥 Inscritos</button>
                    </div>
                    ${autoDrawCountdownHtml ? `<div style="margin-top:1rem;text-align:center;">${autoDrawCountdownHtml}</div>` : ''}
@@ -3896,13 +3897,13 @@ function renderTournaments(container, tournamentId = null) {
                <div style="margin-top:1rem;">
                  <button class="btn btn-primary hover-lift" style="width:100%;font-size:0.95rem;padding:12px;margin-bottom:10px;" onclick="window._scrollToBracketSection('${t.id}')">🏆 Ver Chaves</button>
                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-                   <button class="btn btn-outline btn-sm hover-lift" onclick="window.location.hash='#rules/${t.id}'">📋 Regras</button>
+                   <button class="btn btn-outline btn-sm hover-lift" onclick="window.location.hash='#rules/${t.id}'">📋 ${rulesActionLabel}</button>
                    <button class="btn btn-outline btn-sm hover-lift" onclick="window.location.hash='#participants/${t.id}'">👥 Inscritos</button>
                  </div>
                </div>` : `
                <div class="d-flex justify-between align-center mt-4 pt-4" style="border-top: 1px solid var(--sp-b-255-255-255-015,rgba(255,255,255,0.15));">
                   <div class="d-flex gap-2">
-                     <button class="btn btn-sm hover-lift" style="background: var(--sp-g-255-255-255-02,rgba(255,255,255,0.2)); color: white; border: none; font-weight: 600;" onclick="window.location.hash='#rules/${t.id}'">Regras</button>
+                     <button class="btn btn-sm hover-lift" style="background: var(--sp-g-255-255-255-02,rgba(255,255,255,0.2)); color: white; border: none; font-weight: 600;" onclick="window.location.hash='#rules/${t.id}'">${rulesActionLabel}</button>
                   </div>
                </div>`}
              `;

@@ -178,17 +178,73 @@ function renderRules(container, tournamentId) {
     : `<p style="color:var(--text-muted);font-size:0.85rem;">${_t('rules.noActions')}</p>`;
 
   const isOrg = window._souOrganizador(t);
+  const isNeon = !!(window._isNeonTournament && window._isNeonTournament(t));
+
+  // Regulamento publicado do Neon. Mudanças editoriais de 16/10/2026: 24 duplas
+  // Fem Light (duas por time na quinta e a terceira na sexta), cinco outras
+  // categorias com oito duplas cada. Isso NÃO altera o motor nem os dados.
+  const neonRegulationHtml = isNeon ? `
+    <section class="card" data-neon-regulation style="max-width:900px;margin:0 auto 1.5rem;color:var(--text-main);line-height:1.65;">
+      <h3 style="color:var(--text-bright);margin:0 0 1rem;">NEON NIGHTMARE – THE TOURNAMENT</h3>
+      <p>O NEON NIGHTMARE – THE TOURNAMENT é um torneio de Beach Tennis organizado pela Diretoria Social de Beach Tennis do Clube Paineiras do Morumby, exclusivo para sócios a partir de 14 anos.</p>
+
+      <h4 style="color:var(--text-bright);margin:1.5rem 0 0.5rem;">DATAS</h4>
+      <p>Quinta-feira, 22/10/2026: duplas femininas Light 1 e 2 de cada equipe, Power e Extreme.<br>
+      Sexta-feira, 23/10/2026: dupla feminina Light 3 de cada equipe e duplas masculinas Light, Power e Extreme.<br>
+      Início dos jogos: 18h<br>Chegada obrigatória: 17h30<br>Quadras: 4, 5, 6, 7, 8 e 9.</p>
+
+      <h4 style="color:var(--text-bright);margin:1.5rem 0 0.5rem;">INSCRIÇÕES</h4>
+      <p>As inscrições serão realizadas em duplas previamente formadas por atletas do mesmo sexo.</p>
+      <p>Apenas um dos atletas deverá iniciar a inscrição pelo app TFSports e enviar o link ao parceiro, que terá 1 hora para concluir sua própria inscrição. A vaga da dupla somente estará garantida após a conclusão das inscrições dos dois atletas.</p>
+      <p>Valor individual: R$ 149,90 + taxa de serviço de R$ 9,90.</p>
+
+      <h4 style="color:var(--text-bright);margin:1.5rem 0 0.5rem;">CATEGORIAS</h4>
+      <p>LIGHT – Iniciante/D<br>POWER – C/B<br>EXTREME – B/A</p>
+      <p>Serão disponibilizadas 64 vagas para duplas: 24 Light Feminino, 8 Power Feminino, 8 Extreme Feminino, 8 Light Masculino, 8 Power Masculino e 8 Extreme Masculino.</p>
+      <p>Na quinta-feira jogarão 32 duplas: 16 Light Feminino, 8 Power Feminino e 8 Extreme Feminino. Na sexta-feira jogarão 32 duplas: 8 Light Feminino e 8 de cada categoria masculina.</p>
+      <p>Cada dupla competirá exclusivamente contra duplas da mesma categoria. As duplas Light Feminino de sexta-feira jogarão apenas entre si; não haverá jogos mistos.</p>
+      <p>A escolha da categoria é de responsabilidade dos atletas no momento da inscrição. A organização reserva-se o direito de realocar atletas e/ou duplas para uma categoria superior ou inferior caso identifique incompatibilidade de nível ou sempre que necessário para garantir o equilíbrio técnico do torneio.</p>
+      <p>Não será permitida a participação em mais de uma categoria.</p>
+
+      <h4 style="color:var(--text-bright);margin:1.5rem 0 0.5rem;">EQUIPES</h4>
+      <p>Após o encerramento das inscrições, os atletas serão distribuídos por sorteio em 8 equipes:</p>
+      <p>BLACKOUT · BLAST · ECLIPSE · PANIC · PHANTOM · VENOM · VOLT · VORTEX</p>
+      <p>Cada equipe será formada por 3 duplas Light Feminino e por 1 dupla de cada uma das outras categorias: Power Feminino, Extreme Feminino, Light Masculino, Power Masculino e Extreme Masculino. Ao final dos dois dias, cada equipe terá 8 duplas e 16 atletas: 10 mulheres e 6 homens.</p>
+
+      <h4 style="color:var(--text-bright);margin:1.5rem 0 0.5rem;">FORMATO DE DISPUTA</h4>
+      <p>As partidas serão disputadas em 1 set até 6 games. Em caso de 5x5, será disputado tie-break. Cada dupla disputará 3 jogos.</p>
+      <p>A classificação será definida pelo SALDO DE GAMES, calculado pela diferença entre games ganhos e games perdidos.</p>
+      <p>No dia 22/10, as duplas femininas Light 1 e 2, Power e Extreme iniciam o saldo de suas equipes. No dia 23/10, a terceira dupla Light Feminino de cada equipe e as duplas masculinas continuam a disputa a partir do saldo acumulado na quinta-feira.</p>
+      <p>Ao final dos jogos de sexta-feira, será campeã a equipe que apresentar o maior saldo geral de games, considerando os resultados femininos e masculinos.</p>
+      <p>Não haverá semifinal ou final. Haverá uma única equipe campeã.</p>
+      <p>Em caso de empate no saldo geral de games, os critérios serão, nesta ordem:</p>
+      <ol><li>Maior número total de vitórias</li><li>Maior número total de games vencidos</li><li>Sorteio realizado pela organização</li></ol>
+
+      <h4 style="color:var(--text-bright);margin:1.5rem 0 0.5rem;">KIT ATLETA</h4>
+      <p>Todos os participantes regularmente inscritos receberão o kit atleta oficial do evento. A retirada será realizada na Track&amp;Field Pátio Guedala, em data e horário a serem comunicados posteriormente.</p>
+      <p>O uso da camiseta oficial do evento será obrigatório durante as partidas.</p>
+
+      <h4 style="color:var(--text-bright);margin:1.5rem 0 0.5rem;">PREMIAÇÃO</h4>
+      <p>A equipe campeã será formada por 16 atletas: 10 mulheres e 6 homens das categorias Light, Power e Extreme.</p>
+      <p>A cerimônia de premiação acontecerá no sábado, 24/10, durante o THE HORROR EXPERIENCE – THE FINAL CHAPTER OF NEON NIGHTMARE: THE AWARDS.</p>
+
+      <h4 style="color:var(--text-bright);margin:1.5rem 0 0.5rem;">IMPORTANTE</h4>
+      <p>A inscrição implica a aceitação integral do regulamento e das decisões da organização e da arbitragem.</p>
+      <p>O torneio preza pelo fair play, respeito e espírito esportivo. Casos omissos ou situações excepcionais serão resolvidos pela organização em conjunto com a arbitragem.</p>
+    </section>` : '';
 
   container.innerHTML = `
     ${window._renderBackHeader({ href: '#tournaments/' + t.id, label: _t('rules.back') })}
 
     <div class="d-flex justify-between align-center mb-4" style="flex-wrap:wrap;gap:1rem;">
       <div>
-        <h2 style="margin:0;">${_t('rules.title')}</h2>
-        <p class="text-muted" style="margin:4px 0 0;">${_t('rules.subtitle')}</p>
+        <h2 style="margin:0;">${isNeon ? 'Regulamento' : _t('rules.title')}</h2>
+        ${isNeon ? '' : `<p class="text-muted" style="margin:4px 0 0;">${_t('rules.subtitle')}</p>`}
       </div>
       <span class="badge badge-info" style="font-size:0.85rem;padding:6px 14px;">${t.name}</span>
     </div>
+
+    ${neonRegulationHtml}
 
     <div style="display:grid;grid-template-columns:2fr 1fr;gap:1.5rem;" class="rules-grid">
 

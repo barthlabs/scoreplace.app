@@ -2,6 +2,12 @@
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 // Normalize format: 'Ranking' → 'Liga' (unificado em v0.2.6)
 var _t = window._t || function(k) { return k; };
+// Regulamento editorial do evento real: identificação fechada por ID + nome.
+// Não inferir pelo nome isolado (um sandbox pode copiá-lo) nem alterar dados do torneio.
+window._isNeonTournament = function(t) {
+    return !!t && t.id === 'tour_1790628592058_c342a1e8f5068424887f1702a1633a44'
+        && t.name === 'NEON NIGHTMARE – THE TOURNAMENT';
+};
 /* ⛔ CASA ÚNICA DE "ESTE TORNEIO É UMA LIGA?" (23/set/2026).
  *
  * MEDIDO: esta função estava definida DUAS VEZES — aqui e em
