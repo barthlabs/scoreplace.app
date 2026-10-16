@@ -664,9 +664,19 @@ function _alvoDeEntrada() {
       try { window._chaveMontaTudo(document); } catch (e) {}
       _cardAlvo = document.getElementById('card-' + String(_pm));
     }
-    if (_cardAlvo) return _cardAlvo;
-    // ainda não montado (lote preguiçoso que ainda não aterrissou): o pedido de grupo abaixo
-    // resolve, e o pedido de jogo fica guardado para a próxima passada do laço de reafirmação.
+    if (_cardAlvo) {
+      // O jogo pedido pode morar nos "Demais jogos" fechados. Abrir os
+      // ancestrais ANTES de medir o scroll; rolar um card oculto não move a tela.
+      var _paiCard = _cardAlvo.parentElement;
+      while (_paiCard) {
+        if (_paiCard.tagName === 'DETAILS') _paiCard.open = true;
+        _paiCard = _paiCard.parentElement;
+      }
+      return _cardAlvo;
+    }
+    // Nunca substitua um ID explícito pelo banner, por outro grupo ou pelo
+    // primeiro jogo do usuário. O laço de entrada aguarda o card nascer.
+    return null;
   }
   // Fase concluída + organizador: sem alvo explícito, o banner "🏆 Avançar"
   // é de fato a próxima ação útil. Ele só pode ser fallback — nunca pode
@@ -1972,6 +1982,26 @@ function _applyMyMatchesFilter() {
 
   if (window._bracketPendingScroll) {
     window._bracketPendingScroll = null;
+    var _entryHash = window.location.hash;
+    var _entryCancelled = false;
+    var _removeEntryListeners = function () {
+      window.removeEventListener('wheel', _cancelEntry);
+      window.removeEventListener('touchstart', _cancelEntry);
+      window.removeEventListener('pointerdown', _cancelEntry);
+    };
+    var _cancelEntry = function () {
+      _entryCancelled = true;
+      window._suppressSoftRefresh = false;
+      _removeEntryListeners();
+      if (window.location.hash === _entryHash) {
+        try { sessionStorage.removeItem('sp_scrollToGroup'); sessionStorage.removeItem('sp_scrollToMatch'); } catch (e) {}
+      }
+    };
+    try {
+      window.addEventListener('wheel', _cancelEntry, { passive: true, once: true });
+      window.addEventListener('touchstart', _cancelEntry, { passive: true, once: true });
+      window.addEventListener('pointerdown', _cancelEntry, { passive: true, once: true });
+    } catch (_entryInputError) {}
     // SCROLL VISÍVEL (smooth — "tem que ver scrollando", pedido do dono) e à prova da
     // corrida com o snapshot de entrada: SUPRIME o soft-refresh durante a animação
     // (mesmo mecanismo do _rerenderBracket) — senão o re-render do snapshot matava a
@@ -1981,7 +2011,7 @@ function _applyMyMatchesFilter() {
     clearTimeout(window._pendingSoftRefresh);
     var _goMine = function (behavior) {
       try {
-        if (window._travaRolagemDaChave) return;   // 2.1.21: lançando placar não se rola
+        if (_entryCancelled || window.location.hash !== _entryHash || window._travaRolagemDaChave) { _removeEntryListeners(); return; }
         // Re-mede o chrome AGORA. `--scroll-anchor` (topbar + dropdown do hamburger +
         // back-header + barra STICKY de busca + 12px) é o que o `scroll-margin-top` dos
         // cards e dos boxes de grupo consome. Medir no instante do scroll cobre o caso
@@ -2026,7 +2056,7 @@ function _applyMyMatchesFilter() {
         // topo. O resultado é a tela pulando a cada confirmação.
         // ⚠️ Não dá pra "ajustar o tempo": não existe instante certo — a rolagem de entrada
         // e o lançamento são intenções DIFERENTES, e a do dedo ganha sempre.
-        if (window._travaRolagemDaChave) return;
+        if (_entryCancelled || window.location.hash !== _entryHash || window._travaRolagemDaChave) return;
         _voltas++;
         var _el = _alvoDeEntrada();   // MESMO alvo do _goMine — senão um desfaz o outro
         /* ⛔ ALVO AINDA NÃO EXISTE NÃO É "DESISTIR" — É "AINDA NÃO". Relato do dono
@@ -2051,6 +2081,7 @@ function _applyMyMatchesFilter() {
           _esperas++;
           if (_esperas < 60) { setTimeout(_tick, 100); return; }
           try { sessionStorage.removeItem('sp_scrollToGroup'); sessionStorage.removeItem('sp_scrollToMatch'); } catch (e) {}
+          _removeEntryListeners();
           return;
         }
         var _topo = Math.round(_el.getBoundingClientRect().top);
@@ -2077,6 +2108,7 @@ function _applyMyMatchesFilter() {
         // acabou (estabilizou ou estourou o teto): só agora a chave sai, senão a
         // próxima entrada na chave herdaria um pedido velho.
         try { sessionStorage.removeItem('sp_scrollToGroup'); sessionStorage.removeItem('sp_scrollToMatch'); } catch (e) {}
+        _removeEntryListeners();
       };
       setTimeout(_tick, 220);
     };
@@ -2090,7 +2122,7 @@ function _applyMyMatchesFilter() {
     // Quem posiciona é UM só: o laço. Aqui sobra apenas soltar a supressão do
     // soft-refresh, que é o outro papel deste timeout — e ele passa a esperar o laço
     // terminar, senão um re-render no meio da correção mataria o alvo.
-    setTimeout(function () { window._suppressSoftRefresh = false; }, 3400);
+    setTimeout(function () { window._suppressSoftRefresh = false; _removeEntryListeners(); }, 6800);
   }
 }
 
@@ -6897,17 +6929,15 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   const _setCountAttr = (_plan && _plan.columns) ? (' data-sp-set-count="' + _plan.columns.length + '"') : '';
   const _setFormatAttr = (_plan && _plan.bestOf) ? (' data-sp-best-of="' + _plan.bestOf + '"') : '';
   const _mostraCabecaSet = _multiSet;
-  /* ⭐ 2.3.83 · Ordem do dono (18/set/2026): no card canônico, "Melhor de 3 · 0 × 2" sobe
-     para debaixo de "Jogo N" e a linha do tempo ("Jogado em" / "Agendado" / "Jogar até")
-     desce para a primeira linha do cabeçalho de sets — a informação compõe melhor.
-     A linha do tempo continua sendo UM slot (data-match-time-status) atualizado ao vivo
-     por schedule-poll, onde quer que ele more. Card de set único não muda. */
+  /* REGRA DO CARD (16/out): prazo/horário fica AO LADO de "Jogo N" também
+   * em melhor de 3/5 e na dashboard. O slot continua único e identificável
+   * para a agenda atualizar ao vivo; nunca devolvê-lo ao rodapé, que pertence
+   * às ações Propor datas / Criar grupo dos jogos. */
   var _timelineSlot = '<span data-match-time-status data-match-time-tournament-id="' + window._safeHtml(String(tId || '')) +
     '" data-match-time-match-id="' + window._safeHtml(String(m.id || '')) + '">' + _matchCardTimelineTextHtml(t, m) + '</span>';
   const _headlineSlot = _mostraCabecaSet ? '<span class="sp-set-head-ttl">' + window._safeHtml(_plan.headline) + '</span>' : '';
   const _setHeadHtml = _mostraCabecaSet
     ? '<div id="sethead-' + m.id + '" class="sp-set-head">' +
-        _timelineSlot +
         '<div class="sp-set-head-linha2">' +
           '<span class="sp-set-head-sets">' + window._safeHtml(_t('bracket.setsLabel')) + '</span>' +
           '<div class="sp-set-grid"' + _setCountAttr + _setFormatAttr + ' style="' + _numFsVar + '">' + _setLabelsHtml() + '</div>' +
@@ -7512,8 +7542,8 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     _headerHtml = `
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px;border-bottom:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));padding-bottom:6px;">
         <div style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;">
-          <span style="font-size:0.7rem;font-weight:700;color:var(--sp-c-38bdf8,#38bdf8);text-transform:uppercase;">${window._safeHtml(matchLabel)}</span>
-          ${_mostraCabecaSet ? _headlineSlot : _timelineSlot}
+          <span style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;"><span style="font-size:0.7rem;font-weight:700;color:var(--sp-c-38bdf8,#38bdf8);text-transform:uppercase;">${window._safeHtml(matchLabel)}</span>${_timelineSlot}</span>
+          ${_mostraCabecaSet ? _headlineSlot : ''}
           <span title="proposto por ${window._safeHtml(_proposerName)} · ${_agoLabel}" style="font-size:0.6rem;color:var(--text-muted);line-height:1.3;white-space:normal;overflow-wrap:anywhere;">proposto por <b style="color:var(--sp-c-fbbf24,#fbbf24);">${_proposerName}</b> · ${_agoLabel}</span>
         </div>
         <div id="header-btns-${m.id}" style="display:flex;flex-wrap:nowrap;justify-content:flex-end;align-items:center;gap:4px 6px;flex-shrink:0;min-width:0;text-align:right;">
@@ -7525,11 +7555,12 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     _headerHtml = `
       <div class="sp-mc-head">
         <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start;min-width:0;">
-          <div style="display:flex;align-items:center;gap:7px;min-width:0;">
+          <div style="display:flex;align-items:center;gap:7px;min-width:0;flex-wrap:wrap;">
             <span style="font-size:0.7rem;font-weight:700;color:var(--sp-c-38bdf8,#38bdf8);text-transform:uppercase;white-space:nowrap;">${window._safeHtml(matchLabel)}</span>
+            ${_timelineSlot}
             ${readyBadge}
           </div>
-          ${_mostraCabecaSet ? _headlineSlot : _timelineSlot}
+          ${_mostraCabecaSet ? _headlineSlot : ''}
         </div>
         <div id="header-btns-${m.id}" class="btn-row sp-mc-acts">${_headerActions}</div>
       </div>`;
@@ -7628,7 +7659,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   var _operationalPresence = _isConcentratedEvent && !isDecided && !isByeMatch
     ? (matchReady ? 'complete' : (matchPartial ? 'partial' : 'none')) : '';
   return `
-    <div id="card-${m.id}" class="sp-match-card" data-players="${_searchNames}" data-player-uids="${_searchUids}" data-bracket-tab-category="${window._safeHtml(_tabCategory)}" data-bracket-tab-gender="${_tabGender}" data-bracket-tab-source="${_tabSource}" data-bracket-tab-round="${m.round != null ? window._safeHtml(String(m.round)) : ''}" data-bracket-scheduled-at="${_scheduledMs || ''}" data-bracket-result-at="${_playedMs || ''}" data-bracket-complete="${isDecided || m.wo ? '1' : '0'}" data-bracket-court="${window._safeHtml(String(m.court || ''))}" data-bracket-upcoming="${_isConcentratedEvent && matchReady ? '1' : '0'}" data-bracket-presence="${_operationalPresence}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:var(--scroll-anchor,120px);background:${window._spCor(_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)', 'background')};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
+    <div id="card-${m.id}" class="sp-match-card" data-players="${_searchNames}" data-player-uids="${_searchUids}" data-bracket-tab-category="${window._safeHtml(_tabCategory)}" data-bracket-tab-gender="${_tabGender}" data-bracket-tab-source="${_tabSource}" data-bracket-tab-round="${m.round != null ? window._safeHtml(String(m.round)) : ''}" data-bracket-scheduled-at="${_scheduledMs || ''}" data-bracket-result-at="${_playedMs || ''}" data-bracket-complete="${isDecided || m.wo ? '1' : '0'}" data-bracket-court="${window._safeHtml(String(m.court || ''))}" data-bracket-upcoming="${_isConcentratedEvent && matchReady ? '1' : '0'}" data-bracket-presence="${_operationalPresence}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:var(--scroll-anchor,120px);background:${window._spCor(_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)', 'background')};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};">
       ${_headerHtml}
       ${_pendingBtnsRow}
       ${pendingBanner}
@@ -7651,12 +7682,20 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
 // jogo sem resultado) — fonte única nos helpers do schedule-poll.js.
 // Os dois chips retornam elemento PURO; a centralização é aqui.
 function _cardFooterChips(t, m, opts) {
+  // A agenda pode devolver uma data clicável mesmo com TBD. O estado de
+  // confronto incompleto tem precedência: não abrir enquete/grupo sem o rival.
+  var pendingActions = window._pendingMatchActionChips && window._pendingMatchActionChips(t, m);
+  if (pendingActions) return '<div class="btn-row" style="display:flex;justify-content:flex-start;align-items:center;gap:6px;flex-wrap:wrap;margin:8px 0 2px;">' + pendingActions + '</div>';
   // A enquete de data existe para torneios distribuídos. Em evento concentrado
   // a agenda é do organizador e o card não deve convidar atletas a negociar data.
   var sch = (!window._isConcentratedTournament || !window._isConcentratedTournament(t)) && typeof window._schCardChip === 'function' ? window._schCardChip(t, m) : '';
   // Grupo de jogo serve para a dupla combinar data. Em evento concentrado a
   // organização chama os jogos, portanto não há negociação nem grupo por jogo.
   var wa = (!window._isConcentratedTournament || !window._isConcentratedTournament(t)) && typeof window._waGrpCardChip === 'function' ? window._waGrpCardChip(t, m, opts) : '';
+  // Um lado conhecido já precisa ENXERGAR as duas ações, mesmo antes de
+  // sair o vencedor da partida anterior. Elas não podem executar: enquete e
+  // grupo pressupõem os dois lados; `disabled` impede clique e gravação.
+  // Este é o MESMO estado para chave e dashboard, sem uma segunda regra visual.
   if (!sch && !wa) return '';
   /* ⭐ ALINHADOS À ESQUERDA. Ordem do dono (12/set/2026): _"os botões do whats deveriam estar
    * alinhados na esquerda de cada card"_. Centralizado, cada card punha o botão num lugar
@@ -7669,6 +7708,21 @@ function _cardFooterChips(t, m, opts) {
     window._safeHtml(String(m && m.id || '')) + '" style="display:contents;">' + sch + '</span>';
   return '<div class="btn-row" style="display:flex;justify-content:flex-start;align-items:center;gap:6px;flex-wrap:wrap;margin:8px 0 2px;">' + _schSlot + wa + '</div>';
 }
+window._pendingMatchActionChips = function (t, m) {
+  if (!t || !m || m.winner || m.isBye || m.isSitOut ||
+      (window._isConcentratedTournament && window._isConcentratedTournament(t))) return '';
+  var a = m.p1, b = m.p2;
+  if (!((a && a !== 'TBD' && (!b || b === 'TBD')) ||
+        (b && b !== 'TBD' && (!a || a === 'TBD')))) return '';
+  var cu = window.AppStore && window.AppStore.currentUser;
+  if (!cu || !cu.uid || !window._schPodeGerirJogo || !window._schPodeGerirJogo(t, m, cu)) return '';
+  var title = window._t('bracket.pendingOpponentActions');
+  var style = 'color:var(--text-bright);background:var(--bg-card);border:1px solid var(--border-color);opacity:1;cursor:not-allowed;';
+  var propose = window._t('bracket.proposeDates');
+  var group = window._t('bracket.createGameGroup');
+  return '<button type="button" class="btn btn-micro" disabled title="' + window._safeHtml(title) + '" aria-label="' + window._safeHtml(propose + ' — ' + title) + '" style="' + style + '">📅 ' + window._safeHtml(propose) + '</button>' +
+    '<button type="button" class="btn btn-micro" disabled title="' + window._safeHtml(title) + '" aria-label="' + window._safeHtml(group + ' — ' + title) + '" style="' + style + '">💬 ' + window._safeHtml(group) + '</button>';
+};
 // v2.3.46: exposto pra que _saveResultInline possa re-renderizar UM card
 // individual in-place (sem re-render do bracket inteiro), preservando scroll,
 // o estado <details> aberto dos "Demais jogos" e a posição da classificação.

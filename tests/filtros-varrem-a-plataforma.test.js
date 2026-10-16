@@ -489,7 +489,7 @@ if (codPools && codCont) {
     'só conta como estável quando ESTÁ no lugar certo E parou de mexer');
   // a chave é consumida quando o LAÇO termina — não no timeout de 1400ms, que rodaria
   // no meio da correção e faria o laço cair na regra antiga (outro grupo).
-  const iRemove = br.indexOf("sessionStorage.removeItem('sp_scrollToGroup')");
+  const iRemove = br.indexOf("sessionStorage.removeItem('sp_scrollToGroup')", br.indexOf('var _reafirmar = function'));
   const iLaco = br.indexOf('var _reafirmar = function');
   ok(iRemove > iLaco, 'a chave é consumida DENTRO do laço, ao terminar');
   ok(!/_goMine\('auto'\);\s*\n\s*try \{ sessionStorage\.removeItem\('sp_scrollToGroup'\)/.test(br),
@@ -513,12 +513,12 @@ if (codPools && codCont) {
     'só DUAS chamadas de _goMine: a inicial (smooth) e a do laço (corretiva). Achadas: ' + chamadas);
   ok(!/setTimeout\(function \(\) \{\s*\n\s*_goMine\('auto'\);/.test(br),
     'o passe fixo de 1400ms NÃO rola mais — era ele que desfazia a posição certa');
-  ok(/setTimeout\(function \(\) \{ window\._suppressSoftRefresh = false; \}, 3400\);/.test(br),
-    'a supressão do soft-refresh só é solta DEPOIS do laço (3400ms > teto do laço)');
+  ok(/setTimeout\(function \(\) \{ window\._suppressSoftRefresh = false; _removeEntryListeners\(\); \}, 6800\);/.test(br),
+    'a supressão do soft-refresh cobre também a espera pelo card assíncrono (6800ms)');
   // o teto do laço tem que caber dentro da supressão, senão um re-render entra no meio
   const mTeto = br.match(/_voltas < (\d+)/);
-  ok(!!mTeto && (220 + Number(mTeto[1]) * 100) <= 3400,
-    'o teto do laço cabe dentro da janela de supressão (laço ~' + (mTeto ? 220 + Number(mTeto[1]) * 100 : '?') + 'ms < 3400ms)');
+  ok(!!mTeto && (220 + Number(mTeto[1]) * 100) <= 6800,
+    'o teto do laço cabe dentro da janela de supressão (laço ~' + (mTeto ? 220 + Number(mTeto[1]) * 100 : '?') + 'ms < 6800ms)');
 })();
 
 console.log('\n' + pass + ' ok, ' + fail + ' falhas');

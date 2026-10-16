@@ -377,7 +377,7 @@ async function cabecalhoPendenteEmUmaLinha(browser) {
       return { linhas: tops.size, texto: bloco.textContent.replace(/\s+/g,' ').trim(),
                transbordo: Math.round(card.scrollWidth - card.clientWidth),
                larguraCard: Math.round(card.getBoundingClientRect().width),
-               esquerdaTexto: esquerda.textContent.replace(/\s+/g,' ').trim().slice(0, 60) };
+               esquerdaTexto: esquerda.textContent.replace(/\s+/g,' ').trim() };
     }, alvo.id);
     ok(r.linhas === 1, 'raiz ' + raiz + 'px: o selo ocupa uma linha (obtido ' + r.linhas + ')');
     ok(r.texto === 'APROVAÇÃO PENDENTE',

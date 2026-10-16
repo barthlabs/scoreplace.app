@@ -22,24 +22,25 @@ ok(dashboard.includes('function _bracketTabForMatch') && dashboard.includes("win
 ok(dashboard.includes('href="#tournaments/') && dashboard.includes('event.preventDefault()') && dashboard.includes('window._goToTournamentMatch'),
   'Ir para o torneio navega diretamente ao detalhe canônico com o alvo preservado');
 ok(dashboard.includes('window._goToMyNextTournamentMatch') && dashboard.includes('var _cardTab = _bracketTabForMatch(item.m)') &&
-  tournaments.includes('resolveForCurrentUser: !!(options && options.resolveForCurrentUser)'),
-  'o card de próximo jogo pede que o detalhe recalcule o próximo confronto do usuário');
+  tournaments.includes('resolveForCurrentUser: !!(options && options.resolveForCurrentUser)') &&
+  tournaments.includes('function(tId, matchId, tab)') && tournaments.includes('resolveForCurrentUser: !matchId'),
+  'o card de jogo preserva o ID clicado e o atalho antigo sem ID continua retrocompatível');
 ok(dashboard.includes('window._matchCardTimelineTextHtml(_ngT, _ngM)'),
   'Seu próximo jogo mantém fallback visual da linha Agendado se o módulo de agenda ainda não carregou');
-ok(dashboard.includes('footerHtml: _nextTimeline') &&
+ok(dashboard.includes('timelineHtml: _nextTimeline') &&
   dashboard.includes('showScheduleChip: true') &&
   dashboard.includes('showMatchGroupChip: true') &&
   dashboard.includes("window._schCardChip(tRef, item.m)") &&
   dashboard.includes('window._waGrpCardChip(tRef, item.m, { semCabecalhoDeGrupo: true })') &&
   dashboard.includes('data-next-game-schedule="1"') &&
+  dashboard.includes('data-match-time-status') &&
   dashboard.includes('justify-content:flex-start') &&
   dashboard.includes('gap:6px;flex-wrap:wrap;min-height:30px;') &&
-  dashboard.includes('border:1px solid var(--sp-c-38bdf8,#38bdf8)') &&
-  dashboard.includes('background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06))') &&
+  dashboard.includes('window._pendingMatchActionChips(tRef, item.m)') &&
   !dashboard.includes('rgba(56,189,248,0.5)') &&
   !dashboard.includes('rgba(14,165,233,0.12)') &&
   !dashboard.includes("(_nextTimeline ? '<div style=\"margin-top:5px;\">' + _nextTimeline + '</div>' : '')"),
-  'o botão canônico de agendamento e o grupo ficam juntos no rodapé esquerdo do próximo card, sem reservar linha acima e respeitando os temas');
+  'prazo fica com Jogo N; ações canônicas ficam no rodapé, visíveis e inertes enquanto falta adversário');
 const lightPaletteStart = paleta.indexOf('[data-theme="light"]');
 const lightPaletteEnd = paleta.indexOf('/* ── A TARJA DE LEITURA', lightPaletteStart);
 const lightPalette = paleta.slice(lightPaletteStart, lightPaletteEnd);

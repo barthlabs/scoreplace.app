@@ -1080,6 +1080,7 @@ const SUITES = [
   'tests/bracket-geral-agenda.test.js',
   'tests/neon-agenda-categoria-contract.test.js',
   'tests/dashboard-atalho-aba-e-agenda.test.js',
+  'tests/confra-jogo-pendente-na-dashboard.test.js',
   'tests/rodada-antecipada-regressiva.test.js',
   'tests/apply-result.test.js',
   'tests/apply-round-close.test.js',

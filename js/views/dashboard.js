@@ -2145,7 +2145,7 @@ function renderDashboard(container) {
         var matchInfo = {
           tId: t.id, tName: t.name || '', sport: t.sport || '', m: m,
           opp: inP1 ? (m.p2 || '') : (m.p1 || ''),
-          subLine: _subLine
+          subLine: _subLine, phaseLabel: _phaseLabel
         };
 
         if (m.winner) {
@@ -2211,6 +2211,25 @@ function renderDashboard(container) {
       return (b.gameSeq || 0) - (a.gameSeq || 0);
     });
     recentConfirmed = recentConfirmed.slice(0, 3);
+
+    // REGRESSÃO CONFRA R4/R5: o espelho de resultados chega antes da chave
+    // completa no torneio dividido. Sem as partes pesadas, o nome canônico
+    // da rodada não existe e "Seus últimos resultados" mostra "Rodada 4"
+    // em vez de "Oitavas de Final". Hidrate uma vez por torneio e repinte;
+    // não deduza a fase pelo ordinal isolado do espelho.
+    function _hydrateDashboardRoundLabels(t) {
+      if (!t || !(t._faltamPesados || t._resumo) || typeof window._ensureTournamentLoaded !== 'function') return;
+      window._dashPendingGameLoads = window._dashPendingGameLoads || {};
+      if (window._dashPendingGameLoads[t.id]) return;
+      window._dashPendingGameLoads[t.id] = 'loading';
+      window._ensureTournamentLoaded(t.id, function(loaded) {
+        window._dashPendingGameLoads[t.id] = loaded ? 'done' : '';
+        if (loaded && window.location.hash === '#dashboard' && typeof window._softRefreshView === 'function') window._softRefreshView();
+      });
+    }
+    recentConfirmed.concat(othersResults).forEach(function(item) {
+      _hydrateDashboardRoundLabels(participacoes.find(function(t) { return t.id === item.tId; }));
+    });
 
     // ⚠️ `othersResults` entra na conta: quem se inscreveu e AINDA NÃO JOGOU não tem
     // jogo nenhum nas outras listas, e sem isto o retorno antecipado levava junto a
@@ -2440,8 +2459,9 @@ function renderDashboard(container) {
       var p1 = item.m.p1 || '';
       var p2 = item.m.p2 || '';
       var _esc = function(s) { return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); };
-      // v3.1.26: adversário "a definir" (TBD/vazio) → mostra "a definir" e NÃO permite
-      // lançar placar/Ao Vivo (não há contra quem jogar ainda).
+      // Adversário ainda sem nome pode ter ORIGEM EXPLÍCITA. A dashboard usa
+      // a mesma aresta da chave: "Vencedor do jogo X". Sem aresta ou sem parte
+      // carregada, mantém "a definir"; nunca adivinha X. Placar segue bloqueado.
       var _isTbdSide = function(s) { return !s || s === 'TBD'; };
       var _hasTbdSide = _isTbdSide(p1) || _isTbdSide(p2);
       if (_hasTbdSide) canLaunch = false;
@@ -2553,12 +2573,14 @@ function renderDashboard(container) {
         return '<div style="display:flex;align-items:center;gap:6px;min-width:0;">' + avatarEl + nameEl + '</div>';
       }
       // Time: jogadores EMPILHADOS verticalmente (um em cima do outro)
-      function _teamHtml(teamStr, uids) {
-        // v3.1.26: lado "a definir" (TBD/vazio) — placeholder discreto, sem avatar.
+      function _teamHtml(teamStr, uids, side) {
+        // Slot TBD conserva a origem da chave, quando ela já está carregada.
         if (!teamStr || teamStr === 'TBD') {
+          var sourceLabel = (tRef && typeof window._directBracketSlotLabel === 'function')
+            ? window._directBracketSlotLabel(tRef, item.m, side) : '';
           return '<div style="flex:1;min-width:0;display:flex;align-items:center;gap:6px;color:var(--sp-c-64748b,#64748b);font-style:italic;font-size:0.82rem;">' +
             '<span style="width:28px;height:28px;border-radius:50%;background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));border:1px dashed rgba(255,255,255,0.18);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;font-size:0.9rem;font-style:normal;">⏳</span>' +
-            '<span>a definir</span></div>';
+            '<span>' + _sf(sourceLabel || 'a definir') + '</span></div>';
         }
         var parts = String(teamStr).split(/\s*\/\s*/).filter(Boolean);
         return '<div class="sp-mc-col" style="flex:1;min-width:0;">' +
@@ -2590,23 +2612,18 @@ function renderDashboard(container) {
       // azul informa/abre o agendamento e o botão verde cria ou abre a conversa.
       // O mesmo chip canônico decide as permissões; não há uma segunda regra da
       // dashboard. Em resultados e demais cards este slot continua ausente.
-      var _nextGroupChip = (opts.showMatchGroupChip && tRef &&
+      var _pendingActions = (opts.showScheduleChip && tRef && typeof window._pendingMatchActionChips === 'function')
+        ? window._pendingMatchActionChips(tRef, item.m) : '';
+      var _nextGroupChip = (!_pendingActions && opts.showMatchGroupChip && tRef &&
         typeof window._waGrpCardChip === 'function')
         ? window._waGrpCardChip(tRef, item.m, { semCabecalhoDeGrupo: true }) : '';
-      var _nextScheduleChip = (opts.showScheduleChip && tRef &&
+      var _nextScheduleChip = (!_pendingActions && opts.showScheduleChip && tRef &&
         typeof window._schCardChip === 'function')
         ? window._schCardChip(tRef, item.m) : '';
-      // `footerHtml` é apenas a reserva visual para o caso excepcional de o
-      // módulo de agenda não estar carregado. No caminho normal, o chip acima
-      // tem precedência para preservar o click de alterar agendamento.
-      var _nextScheduleFallback = (!_nextScheduleChip && opts.footerHtml) ? opts.footerHtml : '';
-      var cardFooterHtml = (_nextScheduleChip || _nextScheduleFallback || _nextGroupChip)
+      // O rodapé é das AÇÕES; o prazo fica na mesma linha de Jogo N, acima.
+      var cardFooterHtml = (_nextScheduleChip || _nextGroupChip || _pendingActions)
         ? '<div data-next-game-schedule="1" style="margin-top:10px;padding-top:9px;border-top:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));display:flex;justify-content:flex-start;align-items:center;gap:6px;flex-wrap:wrap;min-height:30px;">' +
-            (_nextScheduleChip
-              ? _nextScheduleChip
-              : (_nextScheduleFallback
-                ? '<span style="display:inline-flex;align-items:center;min-height:28px;padding:4px 10px;border:1px solid var(--sp-c-38bdf8,#38bdf8);border-radius:999px;background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--sp-c-7dd3fc,#7dd3fc);font-size:0.72rem;font-weight:800;">' + _nextScheduleFallback + '</span>'
-                : '')) + _nextGroupChip +
+            (_pendingActions || (_nextScheduleChip + _nextGroupChip)) +
           '</div>'
         : '';
 
@@ -2702,11 +2719,13 @@ function renderDashboard(container) {
       // (mesma fonte/padding/raio, flat) só com a cor índigo — antes era .btn .btn-sm
       // (maior, com volume) e quebrava pra outra linha. Fica na MESMA linha dos outros
       // 2, FORA do #header-btns (que é reescrito in-place no fluxo de aprovação).
-      // O cartão é uma fotografia da dashboard e pode envelhecer enquanto a
-      // pessoa navega. Ao entrar no torneio, a chave completa recalcula o
-      // próximo confronto do USUÁRIO autenticado; nunca fixa este `mId` como
-      // destino só porque ele estava visível no resumo.
-      var goToBtn = '<button class="btn btn-indigo btn-micro" onclick="event.stopPropagation();window._goToMyNextTournamentMatch(\'' + _esc(tId) + '\')" style="flex-shrink:0;font-size:0.72rem;line-height:1.05;text-align:center;">Ir para<br>Torneio →</button>';
+      // O card escolhe este jogo exato. JSON.stringify protege as strings JS;
+      // _sf protege TODO o handler como atributo HTML (inclusive aspas, & e <
+      // numa categoria digitada pelo organizador). Nunca concatenar _tabArg cru.
+      var _tabArg = _cardTab.category ? JSON.stringify({ category: _cardTab.category, gender: _cardTab.gender, round: _cardTab.round }) : 'null';
+      var _goHandler = 'event.stopPropagation();window._goToMyNextTournamentMatch(' +
+        JSON.stringify(String(tId)) + ',' + JSON.stringify(String(mId)) + ',' + _tabArg + ')';
+      var goToBtn = '<button class="btn btn-indigo btn-micro" onclick="' + _sf(_goHandler) + '" style="flex-shrink:0;font-size:0.72rem;line-height:1.05;text-align:center;">Ir para<br>Torneio →</button>';
 
       // v1.7.83: o box era `min-width:300px;max-width:360px` — px CRAVADO. Com a
       // escala grande (até 1.7) os 3 botões do cabeçalho (Ao Vivo · Confirmar ·
@@ -2726,16 +2745,17 @@ function renderDashboard(container) {
           '</div>') +
         '<div id="card-' + mId + '" class="sp-match-card" style="background:' + window._spCor(cardBgStr, 'background') + ';border:2px solid ' + window._spCor(cardBorderStr, 'borda') + ';border-radius:12px;padding:14px;box-shadow:' + cardShadow + ';">' +
           '<div class="btn-row" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;border-bottom:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));padding-bottom:8px;gap:8px;flex-wrap:wrap;">' +
-            '<span style="font-size:0.7rem;font-weight:700;color:var(--sp-c-38bdf8,#38bdf8);text-transform:uppercase;flex-shrink:0;display:inline-flex;align-items:center;">' + (item.m.isMonarch ? '<span style="font-size:1.05rem;line-height:1;margin-right:5px;">👑</span>' : '') + _sf(_monarchBoxLabel || opts.boxLabelOverride || matchLabel) + '</span>' +
+            '<span style="font-size:0.7rem;font-weight:700;color:var(--sp-c-38bdf8,#38bdf8);text-transform:uppercase;display:inline-flex;align-items:center;gap:7px;flex-wrap:wrap;">' + (item.m.isMonarch ? '<span style="font-size:1.05rem;line-height:1;margin-right:5px;">👑</span>' : '') + _sf(_monarchBoxLabel || opts.boxLabelOverride || matchLabel) +
+              (opts.timelineHtml ? '<span data-match-time-status data-match-time-tournament-id="' + tId + '" data-match-time-match-id="' + mId + '" style="text-transform:none;color:var(--text-muted);font-weight:600;">' + opts.timelineHtml + '</span>' : '') + '</span>' +
             '<div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;justify-content:flex-end;min-width:0;margin-left:auto;">' +
               '<div id="header-btns-' + mId + '" style="display:flex;align-items:center;gap:4px;flex-wrap:nowrap;">' + finalHeaderBtns + '</div>' +
               goToBtn +
             '</div>' +
           '</div>' +
           _setHead +
-          '<div style="' + rowStyle + '">' + _teamHtml(p1, _p1Uids) + '<div id="score-p1-' + mId + '" style="display:flex;align-items:center;flex-shrink:0;">' + p1ScoreHtml + '</div></div>' +
+          '<div style="' + rowStyle + '">' + _teamHtml(p1, _p1Uids, 'p1') + '<div id="score-p1-' + mId + '" style="display:flex;align-items:center;flex-shrink:0;">' + p1ScoreHtml + '</div></div>' +
           '<div style="text-align:center;font-size:0.65rem;color:var(--text-muted);font-weight:800;letter-spacing:2px;padding:3px 0;">VS</div>' +
-          '<div style="' + rowStyle + '">' + _teamHtml(p2, _p2Uids) + '<div id="score-p2-' + mId + '" style="display:flex;align-items:center;flex-shrink:0;">' + p2ScoreHtml + '</div></div>' +
+          '<div style="' + rowStyle + '">' + _teamHtml(p2, _p2Uids, 'p2') + '<div id="score-p2-' + mId + '" style="display:flex;align-items:center;flex-shrink:0;">' + p2ScoreHtml + '</div></div>' +
           cardFooterHtml +
         '</div>' +
       '</div>';
@@ -2841,11 +2861,14 @@ function renderDashboard(container) {
       var _ng = _ngEntry.item;
       var _ngM = _ng.m;
       var _ngT = participacoes.find(function(tt) { return tt.id === _ng.tId; });
-      // meta: Rodada X · Fase Y (multi-fase) · Linha (Ouro/Prata) — coroa se Rei/Rainha
+      // A rodada nomeada da chave vence o ordinal cru (Confra R5 = Quartas,
+      // R4 = Oitavas). Só sem rótulo canônico mostramos "Rodada X".
       var _meta = [];
       var _rdM = String(_ngM.label || '').match(/R(?:odada)?\s*(\d+)/i);
       var _rnum = _rdM ? Number(_rdM[1]) : ((_ngM.round != null && !isNaN(Number(_ngM.round))) ? window._matchRoundDisplayNum(_ngT || t, _ngM) : null); // 1-based, nunca R0
-      if (_rnum != null) _meta.push('Rodada ' + _rnum);
+      var _namedRound = (_ngT && typeof window._canonicalElimLabelForMatch === 'function')
+        ? window._canonicalElimLabelForMatch(_ngT, _ngM) : '';
+      _meta.push(_namedRound || (_rnum != null ? 'Rodada ' + _rnum : ''));
       if (_ngT && window._isMultiPhase && window._isMultiPhase(_ngT) && _ngM.phaseIndex != null) {
         var _phN = (_ngT.phases && _ngT.phases[_ngM.phaseIndex] && _ngT.phases[_ngM.phaseIndex].name) || ('Fase ' + ((Number(_ngM.phaseIndex) || 0) + 1));
         _meta.push(_phN);
@@ -2863,6 +2886,9 @@ function renderDashboard(container) {
       // pessoa abrir a chave, não somente depois.
       var _nextTimeline = (_ngT && typeof window._matchCardTimelineTextHtml === 'function')
         ? window._matchCardTimelineTextHtml(_ngT, _ngM) : '';
+      // O mesmo carregamento resolve a aresta de origem do adversário e
+      // a fase nomeada do próximo jogo, sem segunda fonte de verdade.
+      _hydrateDashboardRoundLabels(_ngT);
       // v4.1.20: "JOGO N" GLOBAL (fonte única). Antes parseava _ngM.label — que muitas
       // vezes não traz número → caía em "Jogo" pelado (bug reportado na dashboard).
       // v1.2.37: Rei/Rainha NÃO é exceção — o `!isMonarch` daqui era o bug do "JOGO 73"
@@ -2898,7 +2924,7 @@ function renderDashboard(container) {
         _miniBracketCard(_ng, _ngEntry.canLaunch, {
           hideFaseHeader: true,
           boxLabelOverride: _boxU,
-          footerHtml: _nextTimeline,
+          timelineHtml: _nextTimeline,
           showScheduleChip: true,
           showMatchGroupChip: true
         }) +

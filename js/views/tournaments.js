@@ -1347,8 +1347,12 @@ window._goToTournamentMatch = function(tId, matchId, tab) {
 
 // Atalho da dashboard: o cartão é só a porta de entrada. O destino é sempre
 // recalculado no detalhe, com o usuário autenticado e a chave completa.
-window._goToMyNextTournamentMatch = function(tId) {
-  window._setTournamentMatchTarget(tId, null, null, { resolveForCurrentUser: true });
+window._goToMyNextTournamentMatch = function(tId, matchId, tab) {
+  // O card de jogo é uma escolha EXPLÍCITA: seu botão leva ao próprio jogo,
+  // inclusive quando a outra vaga ainda espera vencedor. Chamadores antigos
+  // sem matchId continuam resolvendo o próximo jogo no detalhe.
+  window._setTournamentMatchTarget(tId, matchId || null, tab || null,
+    { resolveForCurrentUser: !matchId });
   window.location.hash = '#tournaments/' + tId;
 };
 
@@ -1448,17 +1452,35 @@ window._focusTournamentMatchWhenReady = function(tId, matchId, options) {
   var attempts = 0;
   var maxAttempts = 60;
   var behavior = options && options.behavior ? options.behavior : 'auto';
+  var startedHash = window.location.hash;
+  var cancelled = false;
+  var cleanup = function() {
+    window.removeEventListener('wheel', cancel);
+    window.removeEventListener('touchstart', cancel);
+    window.removeEventListener('pointerdown', cancel);
+  };
+  var cancel = function() { cancelled = true; cleanup(); };
+  try {
+    window.addEventListener('wheel', cancel, { passive: true, once: true });
+    window.addEventListener('touchstart', cancel, { passive: true, once: true });
+    window.addEventListener('pointerdown', cancel, { passive: true, once: true });
+  } catch (eInput) {}
   var focus = function() {
-    if (window._travaRolagemDaChave) return;
+    // Não roubar a rolagem de quem já interagiu ou mudou de rota/aba.
+    if (cancelled || window.location.hash !== startedHash || window._travaRolagemDaChave) { cleanup(); return; }
     var target = document.getElementById('card-' + String(matchId));
     if (target && getComputedStyle(target).display !== 'none') {
-      try { if (typeof window._reflowChrome === 'function') window._reflowChrome(); } catch (eChrome) {}
-      try { target.scrollIntoView({ behavior: behavior, block: 'start', inline: 'nearest' }); }
-      catch (eScroll) { try { target.scrollIntoView(); } catch (eFallback) {} }
-      return;
+      if (!(target.closest && target.closest('[hidden], details:not([open])'))) {
+        try { if (typeof window._reflowChrome === 'function') window._reflowChrome(); } catch (eChrome) {}
+        try { target.scrollIntoView({ behavior: behavior, block: 'start', inline: 'nearest' }); }
+        catch (eScroll) { try { target.scrollIntoView(); } catch (eFallback) {} }
+        cleanup();
+        return;
+      }
     }
     attempts += 1;
     if (attempts < maxAttempts) setTimeout(focus, 100);
+    else cleanup();
   };
   focus();
 };

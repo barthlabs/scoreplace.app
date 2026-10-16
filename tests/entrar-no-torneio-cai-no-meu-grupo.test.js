@@ -78,7 +78,7 @@ function comDom(mapa, grupoPedido) {
     querySelector: function (sel) { const v = mapa[sel]; return Array.isArray(v) ? (v[0] || null) : (v || null); },
     querySelectorAll: function (sel) { const v = mapa[sel]; return Array.isArray(v) ? v : (v ? [v] : []); }
   };
-  W.sessionStorage = { getItem: function () { return grupoPedido || null; }, setItem: function () {}, removeItem: function () {} };
+  W.sessionStorage = { getItem: function (key) { return key === 'sp_scrollToGroup' ? (grupoPedido || null) : null; }, setItem: function () {}, removeItem: function () {} };
   return function () { W.document = docAntigo; W.sessionStorage = ssAntigo; };
 }
 

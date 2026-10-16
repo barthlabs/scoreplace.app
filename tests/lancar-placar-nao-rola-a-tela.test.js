@@ -61,10 +61,10 @@ ok(iGuard > 0 && iScroll > iGuard,
 // ── e o laço de entrada também para ─────────────────────────────────────────
 const iTick = bracket.indexOf('var _tick = function ()');
 const corpoTick = bracket.slice(iTick, iTick + 1600);
-ok(/if \(window\._travaRolagemDaChave\) return;/.test(corpoTick),
+ok(/if \([^\n]*window\._travaRolagemDaChave\) return;/.test(corpoTick),
    '⛔ o laço que re-afirma a posição de ENTRADA para na hora em que se lança placar');
 const iGoMine = bracket.indexOf('var _goMine = function (behavior)');
-ok(/if \(window\._travaRolagemDaChave\) return;/.test(bracket.slice(iGoMine, iGoMine + 700)),
+ok(/if \([^\n]*window\._travaRolagemDaChave\) \{ _removeEntryListeners\(\); return; \}/.test(bracket.slice(iGoMine, iGoMine + 1600)),
    'e a rolagem de entrada em si também respeita a trava');
 
 // ── o que NÃO pode ter sido perdido no caminho ──────────────────────────────

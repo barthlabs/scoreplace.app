@@ -76,7 +76,7 @@ sb.document = {
   getElementById: () => null,
   querySelectorAll: () => []
 };
-sb.sessionStorage = { getItem: () => 'r1-grupo-q', removeItem() {} };
+sb.sessionStorage = { getItem: (key) => key === 'sp_scrollToGroup' ? 'r1-grupo-q' : null, removeItem() {} };
 sb.window._chaveMontaTudo = function () { feitos.push('montou'); sb.document._tem = true; };
 vm.createContext(sb);
 const ini = bracket.indexOf('function _alvoDeEntrada()');
