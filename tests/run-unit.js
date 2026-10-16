@@ -1725,6 +1725,7 @@ const SUITES = [
   // Inscritos (individual E duplas) usam GRID responsivo — várias colunas em tela larga, nunca
   // coluna única. Trava contra regressão (dono: "não pode regredir"). v1.3.101.
   'tests/inscritos-grid-canon.test.js',
+  'tests/barra-ficha-inscritos-canon.test.js',
   // v1.7.2: a Análise enxerga a LISTA DE ESPERA (desde a 1.6.86 quem entra pós-sorteio sai
   // de participants) e grava no storage dela por UID — o fallback posicional gravaria a
   // categoria em outra pessoa, em silêncio.

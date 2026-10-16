@@ -4329,10 +4329,10 @@ function renderTournaments(container, tournamentId = null) {
     // presença, filtros e W.O. ficam exclusivamente em #participants/:id.
     let detailParticipantsHtml = '';
     var _organizersHtml = '';
-    // v3.0.x: barra de filtro/busca CANÔNICA dos inscritos (mesma de #participants).
-    // Montada dentro do ramo de grade individual e injetada no back-header (belowHtml)
-    // pra ficar sempre visível e ser empurrada pelo hambúrguer.
+    // Barra canônica dos inscritos: nasce uma vez, no fluxo logo abaixo do
+    // back-header da ficha, e permanece sticky enquanto se percorre o elenco.
     var _inscritosFilterBarHtml = '';
+    var _detailCompetitorCount = 0;
 
     // v3.1.44: pop-up da enquete pro inscrito que ainda não votou — roda em TODO render
     // do detalhe (não no bloco one-time): a trava interna (_opPoppedPollId + hashchange)
@@ -4624,6 +4624,7 @@ function renderTournaments(container, tournamentId = null) {
         // Snapshot de transição pode conter lacunas. A lista canônica que alimenta cards,
         // ordenação e perfis nunca carrega uma entrada nula para o restante da tela.
         const parts = (typeof window._getCompetitors === 'function' ? window._getCompetitors(t) : (t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : [])).filter(function (p) { return p != null; });
+        _detailCompetitorCount = parts.length;
 
         // v4.5.63: PERFIS DOS PARTICIPANTES = PRÉ-REQUISITO DO RENDER. Junta os uids de
         // TODOS os inscritos (incl. p1Uid/p2Uid de dupla) e garante os perfis no cache.
@@ -5022,6 +5023,9 @@ function renderTournaments(container, tournamentId = null) {
       (Array.isArray(visible[0].rounds) && visible[0].rounds.length > 0) ||
       (Array.isArray(visible[0].groups) && visible[0].groups.length > 0)
     );
+    if (detailParticipantsHtml && !hasDrawn && typeof window._inscritosBar === 'function') {
+      _inscritosFilterBarHtml = window._inscritosBar(visible[0], _detailCompetitorCount > 1);
+    }
 
     // Poll banner for tournament detail view
     var pollBannerHtml = '';
@@ -5065,6 +5069,7 @@ function renderTournaments(container, tournamentId = null) {
           pai segue sendo o #view-container, não o container do chaveamento. */''}
     ${hasDrawn && typeof window._bracketBar === 'function' ? window._bracketBar(true) : ''}
     ${filterBarHtml}
+    ${_inscritosFilterBarHtml}
     ${pollBannerHtml}
 
     <div class="tournaments-grid" id="tourn-grid-container" style="display: grid; grid-template-columns: ${tournamentId ? '1fr' : 'repeat(auto-fill, minmax(300px, 1fr))'}; gap: 1.5rem;">
@@ -5117,9 +5122,8 @@ function renderTournaments(container, tournamentId = null) {
         if (typeof requestAnimationFrame === 'function') requestAnimationFrame(window._measureInscritosStickyBars);
     }
 
-    // v3.0.x: aplica a barra de filtro/busca CANÔNICA dos inscritos (sort/gênero/
-    // habilidade/busca) após o render — idêntico ao #participants. Ordena a grade
-    // pela ordem padrão (name-asc) e respeita filtros ativos persistidos.
+    // Aplica a barra canônica após o render — ordem de inscrição se o elenco tem
+    // sequência densa, A-Z nos demais; respeita escolhas manuais persistidas.
     if (_inscritosFilterBarHtml) {
         setTimeout(function () { try { if (window._partApplyFilter) window._partApplyFilter(); } catch (e) {} }, 0);
     }
