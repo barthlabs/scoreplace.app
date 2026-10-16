@@ -1,4 +1,7 @@
-// 2.4.75 — Atualização consolidada de produção com as correções validadas desde a última publicação.
+// 2.4.75 — A Análise do sandbox lê as mesmas inscrições canônicas da ficha,
+// resolve nomes de contas sem mostrar UIDs e bloqueia edição quando o recibo
+// do elenco diverge ou o torneio não tem ID confirmado. A cópia continua
+// privada do organizador e com notificações desativadas. Nenhuma inscrição foi alterada.
 // 2.4.74 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.73 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.72 — No jogo que ainda aguarda adversário, Propor datas e Criar grupo dos jogos têm exatamente a aparência dos botões ativos: cores, relevo, fonte, ícone e quebra de linha. Continuam desativados até o confronto estar definido; nenhum jogo ou dado foi alterado.
