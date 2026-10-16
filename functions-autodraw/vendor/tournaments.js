@@ -351,8 +351,8 @@ window._buildDoublesInscritosSection = function (t, ctx) {
     return n.indexOf('/') !== -1;
   }
   var _pairedParticipants = _allParts.filter(_isPairEntry);
-  var _enrollOrderMapD = window._buildEnrollOrderMap(t);
   var _canonicalDenseSeq = window._canonicalDenseRegistrationSeq(t);
+  var _enrollOrderMapD = window._buildEnrollOrderMap(t);
   var _pairedMemberKeys = {};
   _pairedParticipants.forEach(function (pp) {
     if (pp.p1Uid) _pairedMemberKeys['u:' + pp.p1Uid] = 1;
@@ -520,7 +520,7 @@ window._buildDoublesInscritosSection = function (t, ctx) {
       (_pairedParticipants.length > 0
         ? ('<div>' +
             '<div style="font-size:0.75rem;font-weight:700;color:var(--sp-c-34d399,#34d399);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;">👫 Duplas formadas (' + _pairedParticipants.length + ')</div>' +
-            '<div class="sp-dnd-host" style="' + window._INSCRITO_GRID_DUPLA + '">' +
+            '<div class="sp-dnd-host"' + (_canonicalDenseSeq ? ' data-part-keep-order="1"' : '') + ' style="' + window._INSCRITO_GRID_DUPLA + '">' +
               _pairedParticipants.map(function (p) { return window._duplaCard(t, p, false, _dctx); }).join('') +
             '</div>' +
           '</div>')
