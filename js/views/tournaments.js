@@ -247,9 +247,22 @@ window._duplaCard = function (t, p, draggable, ctx) {
         // DENTRO do bloco dele (esquerda p/ o da esquerda, direita p/ o da direita).
         var _mPres = (typeof ctx.memberPresence === 'function') ? ctx.memberPresence(_mm, right) : null;
         var _mPresHtml = (_mPres && _mPres.html) ? _mPres.html : '';
-        return '<div style="min-width:0;display:flex;flex-direction:column;gap:4px;flex:1 1 42%;' + (right ? 'align-items:flex-end;text-align:right;' : 'align-items:flex-start;') + '">' + _av + _meta + _mPresHtml + '</div>';
+        var _column = right ? '2' : '1';
+        return {
+          header: '<div data-dupla-member-header="' + _column + '" style="grid-column:' + _column + ';grid-row:1;min-width:0;' + (right ? 'justify-self:end;text-align:right;' : '') + '">' + _av + _meta + '</div>',
+          actions: _mPresHtml ? '<div data-dupla-member-actions="' + _column + '" style="grid-column:' + _column + ';grid-row:2;min-width:0;' + (right ? 'justify-self:end;text-align:right;' : '') + '">' + _mPresHtml + '</div>' : ''
+        };
       };
-      _body = '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">' + _memBlock(0, false) + (_pairMembers[1] ? _memBlock(1, true) : '') + '</div>' + _pairCategoryBadge;
+      var _leftMember = _memBlock(0, false);
+      var _rightMember = _pairDisplayMembers[1] ? _memBlock(1, true) : null;
+      /* Os dois cabeçalhos compartilham a linha 1 da grade; presença e W.O. compartilham
+       * a linha 2. Nunca volte a empilhar nome + ação separadamente em cada coluna:
+       * um nome de duas linhas desloca só os controles daquele jogador. Esta é a
+       * fonte canônica dos cards de dupla em Inscritos, detalhe e chaves. */
+      _body = '<div data-dupla-member-grid="1" style="display:grid;grid-template-columns:' + (_rightMember ? 'minmax(0,1fr) minmax(0,1fr)' : 'minmax(0,1fr)') + ';column-gap:12px;row-gap:4px;align-items:start;">' +
+        _leftMember.header + (_rightMember ? _rightMember.header : '') +
+        _leftMember.actions + (_rightMember ? _rightMember.actions : '') +
+        '</div>' + _pairCategoryBadge;
     } else {
       _body = nameHtml + ((typeof window._profileMetaSlots === 'function') ? window._profileMetaSlots(p, nm, false, t, isOrg) : '');
     }
