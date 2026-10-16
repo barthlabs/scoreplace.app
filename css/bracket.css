@@ -355,6 +355,9 @@ summary::-webkit-details-marker { display: none; }
   padding-left: 0.5rem;
   padding-right: 0.5rem;
 }
+[data-bracket-tab-category][hidden], [data-bracket-line-section][hidden] {
+  display: none !important;
+}
 /* ⚠️ NÃO adiantou mexer nos recuos internos (o <details> e o wrapper): MEDI com
    `!important` e o card ficou nos MESMOS 292px — o espaço deles não é o que aperta o
    conteúdo. Regra que não muda pixel é regra morta, então não fica aqui. Se um dia

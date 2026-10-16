@@ -34,8 +34,8 @@ must(/removeItem\('sp_scrollToGroup'\); sessionStorage\.removeItem\('sp_scrollTo
 
 // ② a barra de busca não duplica
 must(/querySelectorAll\('#fbwrap-chaves'\)/.test(store), 'o DOM é varrido atrás de barras repetidas');
-must(/querySelectorAll\('#bracket-search-empty'\)/.test(store), 'e do aviso de "nenhum jogo" repetido');
-must(/for \(var _i = 1; _i < _todas\.length; _i\+\+\)/.test(store),
-  '⛔ sobra a PRIMEIRA barra — as demais saem (id repetido quebra o getElementById)');
+must(/'bracket-competitor-index', 'bracket-search-empty'/.test(store), 'e do índice/aviso repetidos');
+must(/wraps\.forEach\(function \(w\)/.test(store) && /w !== chosen/.test(store),
+  '⛔ só a barra escolhida sobrevive — IDs repetidos quebrariam o getElementById');
 
 console.log('✅ ' + ok + ' asserções — o botão leva ao jogo e a barra de busca é uma só');

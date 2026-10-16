@@ -1,5 +1,9 @@
 // ─── English translations ───────────────────────────────────────────────────
 window._translations['en'] = {
+  'bracket.competitorIndex': 'Competitors in the bracket',
+  'bracket.filterNoMatches': 'No matches found with these filters.',
+  'bracket.filterOtherTab': 'Matching games are in another bracket tab.',
+  'analysis.filterNoCompetitors': 'No competitors found with these filters.',
   'format2.scheduleUnequal': '⚠️ With the current entrants, not everyone plays the same number: {min} to {max} matches per {unit}. Adjust groups or schedule before the draw.',
   'format2.scheduleLimited': '⚠️ Group size limits the schedule to {games} matches per {unit}. Adjust groups or the requested number.',
   'format2.scheduleConfirmTitle': 'Confirm group schedule?',

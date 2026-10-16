@@ -768,6 +768,8 @@ const SUITES = [
   // Busca nas CHAVES: filtro DOM dos cards de jogo (acento-insensitive, membro de dupla,
   // coluna vazia some, limpar restaura). Verificado também no navegador real.
   'tests/bracket-search.test.js',
+  'tests/barra-global-competidores.test.js',
+  'tests/barra-global-browser.test.js',
   // Com teclado virtual aberto, busca deve usar o viewport VISÍVEL, não o layout inteiro.
   'tests/busca-rola-no-viewport-visivel.test.js',
   // Snapshot parcial não pode derrubar o detalhe ao encontrar um participante nulo.

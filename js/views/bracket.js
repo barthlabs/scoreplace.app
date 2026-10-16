@@ -1458,6 +1458,7 @@ function _bracketTabsApply(tid, gender, category, requestedRound) {
 }
 window._bracketSelectCategoryTab = function (tid, gender, category, round) {
   _bracketTabsApply(String(tid), String(gender), String(category), round == null ? '' : String(round));
+  if (typeof window._bracketApplyFilter === 'function') window._bracketApplyFilter();
 };
 // A faixa de abas pode existir em mais de uma chave na mesma tela. O resize é
 // global e único: cada mount só registra o seu contêiner, evitando N listeners
@@ -2854,7 +2855,7 @@ function renderBracket(container, tournamentId, isInline) {
   // chaveamento, e `position:sticky` morre junto com o pai: a barra descolava do cabeçalho
   // antes do fim da página (v1.7.10). Emitir nos dois lugares duplicaria o input.
   if (!isInline && hasContent && typeof window._bracketBar === 'function') {
-    headerHtml += window._bracketBar(true);
+    headerHtml += window._bracketBar(t, true);
   }
 
   // v1.8.82: previsão do tempo do LOCAL também na CHAVE (pedido do dono). É aqui que se
@@ -10388,11 +10389,15 @@ window._bracketApplyFilter = function () {
   var inp = document.getElementById('bracket-search');
   var q = window._bracketNorm(inp ? inp.value : '').trim();
   var onlyMine = !!window._showOnlyMyMatches;
+  var _barState = window._filterBarState && window._filterBarState.chaves || {};
+  var _genderFilter = _barState.gender || 'all';
+  var _skillFilter = _barState.skill || 'all';
+  var _filterActive = !!(q || onlyMine || _genderFilter !== 'all' || _skillFilter !== 'all');
   // ⛔ 2.0.88 — BUSCAR OBRIGA A MONTAR TUDO. Os demais grupos passaram a nascer só
   // ao abrir; se alguém procura um jogador que está num deles, os cards nem existem
   // no DOM e a busca diria 'nenhum resultado' — mentindo. Filtrar é justamente
   // 'pedir para ver o que não está à vista', então aqui o adiamento acaba.
-  if ((q || onlyMine) && typeof window._chaveMontaTudo === 'function') window._chaveMontaTudo();
+  if (_filterActive && typeof window._chaveMontaTudo === 'function') window._chaveMontaTudo();
   /* ⭐ NOME SE PUXA SEMPRE, POR UID — ordem do dono (03/set/2026): _"precisa puxar sempre os
    * nomes por uid. não pode isso de o nome não ter vindo e ficar por isso mesmo. tem que ir
    * puxando sempre"_.
@@ -10505,7 +10510,7 @@ window._bracketApplyFilter = function () {
   // TUDO seria escondido — inclusive a própria barra de busca, e o dono ficaria preso).
   var root = document.getElementById('view-container') || document.body;
   var searchEls = [inp, document.getElementById('bracket-search-empty'),
-                   document.getElementById('fbwrap-chaves')].filter(Boolean);
+                   document.getElementById('fbwrap-chaves'), document.getElementById('bracket-competitor-index')].filter(Boolean);
   // Container que ABRIGA a barra de busca nunca some (caso inline, em que a chave e a barra
   // podem dividir o mesmo cartão da página do torneio).
   var holdsSearch = function (el) {
@@ -10517,7 +10522,7 @@ window._bracketApplyFilter = function () {
     if (el.dataset.fbDisp === undefined) el.dataset.fbDisp = el.style.display || '';
     el.style.display = visible ? el.dataset.fbDisp : 'none';
   };
-  var shown = 0;
+  var shown = 0, hitsTotal = 0, hitsVisiveis = 0, markerVisivel = 0;
   var _hitsDiag = [];
   var conts = [];            // ancestrais candidatos, na ordem em que aparecem
   var contHasHit = [];       // paralelo a conts: algum card casando lá dentro?
@@ -10604,7 +10609,13 @@ window._bracketApplyFilter = function () {
         if (!_casa && _indeciso) _casa = true;
       }
     }
-    var hit = _casa && (!onlyMine || c.getAttribute('data-my-match') !== '0');
+    var _cardCategory = String(c.getAttribute('data-bracket-tab-category') || '');
+    var _cardGender = String(c.getAttribute('data-bracket-tab-gender') || '');
+    var _gWanted = _genderFilter === 'Masc' ? 'masc' : (_genderFilter === 'Fem' ? 'fem' : _genderFilter);
+    var _gMatch = _genderFilter === 'all' || (_genderFilter === 'none' ? (!_cardGender || _cardGender === 'linhas') : _cardGender === _gWanted);
+    var _sMatch = _skillFilter === 'all' || (_skillFilter === 'none' ? !_cardCategory.trim() :
+      window._bracketNorm(_cardCategory).split(/\s+/).indexOf(window._bracketNorm(_skillFilter)) !== -1);
+    var hit = _casa && _gMatch && _sMatch && (!onlyMine || c.getAttribute('data-my-match') !== '0');
     if (hit && q) _hitsDiag.push(c);
     // ⭐ MARCADOR (`data-fb-marker`) DECLARA, NÃO É RESULTADO. A linha da classificação de
     // quem levou W.O. e a pílula "🔁 Fulana W.O. → Beltrana" existem pra dizer DE QUAL GRUPO
@@ -10616,12 +10627,26 @@ window._bracketApplyFilter = function () {
     // Então: marcador nunca mexe no próprio `display` e só empurra "tem gente aqui" pros
     // ancestrais QUANDO casa. Sem casar, ele não conta como ausência de ninguém.
     if (c.getAttribute('data-fb-marker') === '1') {
-      if (hit) { shown++; markHit(c.parentElement); }
+      if (hit) {
+        shown++; markHit(c.parentElement);
+        var _markerHidden = c.hidden;
+        for (var _mp = c.parentElement; !_markerHidden && _mp && _mp !== root; _mp = _mp.parentElement) {
+          if (_mp.hidden) _markerHidden = true;
+        }
+        if (!_markerHidden) markerVisivel++;
+      }
       continue;
     }
     // Guarda o display original UMA vez — o card pode ter display próprio (flex/grid).
     setDisp(c, hit);
-    if (hit) shown++;
+    if (hit) {
+      shown++; hitsTotal++;
+      var _tabHidden = c.hidden;
+      for (var _ancestor = c.parentElement; !_tabHidden && _ancestor && _ancestor !== root; _ancestor = _ancestor.parentElement) {
+        if (_ancestor.hidden) _tabHidden = true;
+      }
+      if (!_tabHidden) hitsVisiveis++;
+    }
     // Busca na chave é por GRUPO. Encontrar Jogador X (inclusive numa pílula
     // de W.O.) não pode deixar só um card solto: a classificação e os jogos
     // rotativos daquele grupo explicam a vaga. Guarda o box mais próximo para
@@ -10686,7 +10711,7 @@ window._bracketApplyFilter = function () {
     if (!sm) continue;
     var lbl = sm.querySelector('span') || sm;
     if (lbl.dataset.fbTxt === undefined) lbl.dataset.fbTxt = lbl.textContent;
-    if (!q && !onlyMine) {
+    if (!_filterActive) {
       lbl.textContent = lbl.dataset.fbTxt;
       /* ⭐ Busca limpa: quem foi aberto PELA busca fecha de novo. Só quem ela abriu —
        * `data-fb-auto-open` — pra não fechar o que a pessoa abriu com a própria mão.
@@ -10720,15 +10745,18 @@ window._bracketApplyFilter = function () {
    * MOTIVO — vale em todo torneio, com ou sem consulta, sem caso particular. */
   var empty = document.getElementById('bracket-search-empty');
   if (empty) {
-    var _vazio = (q || onlyMine) && shown === 0;
+    var _vazio = _filterActive && hitsVisiveis === 0 && markerVisivel === 0;
     empty.style.display = _vazio ? 'block' : 'none';
     if (_vazio) {
       empty.textContent = onlyMine
         ? (q ? 'Nenhum jogo seu com esse nome. Desligue "Só meus jogos" para ver a chave inteira.'
              : 'Você não tem jogos nesta chave. Desligue "Só meus jogos" para ver todos.')
-        : 'Nenhum jogo encontrado.';
+        : (hitsTotal > 0
+            ? (window._t ? window._t('bracket.filterOtherTab') : 'Há jogos com esses filtros em outra aba.')
+            : (window._t ? window._t('bracket.filterNoMatches') : 'Nenhum jogo encontrado.'));
     }
   }
+  if (typeof window._bracketRefreshIndex === 'function') window._bracketRefreshIndex(cards);
   /* ── INSTRUMENTAÇÃO (2.1.114) — só quando a busca escondeu TUDO, uma vez por consulta ──
    * O dono vê "não acha" e eu não consigo ver a tela dele. Então a própria tela grava o que
    * ela enxergava: todos os data-players, os nomes de inscritos que a chave conhecia e como

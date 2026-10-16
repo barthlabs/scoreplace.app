@@ -38,7 +38,7 @@ ok(/_woBuscaLinha = \(_isRed \|\| _isAmb\)[\s\S]{0,200}data-players="/.test(brac
   'a linha continua declarando data-players (buscar quem tomou W.O. acha o grupo)');
 
 // ── 2. o filtro respeita o marcador ─────────────────────────────────────────────────
-ok(/data-fb-marker'\) === '1'\) \{\s*\n\s*if \(hit\) \{ shown\+\+; markHit/.test(bracket),
+ok(/data-fb-marker'\) === '1'\) \{\s*\n\s*if \(hit\) \{\s*shown\+\+; markHit/.test(bracket),
   'o filtro nunca mexe no display de um marcador');
 
 // ── 3. o comportamento, no DOM (o caso do print: Grupo F com W.O.) ──────────────────

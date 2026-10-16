@@ -96,6 +96,24 @@ ok(vis()[0]===false && vis()[1]===false,'…e os demais seguem filtrados pela bu
 input.value=''; F();
 ok(vis().every(Boolean),'limpar tudo devolve todos os cards');
 
+// A barra completa filtra metadados dos jogos, mas não reordena nem troca a aba.
+cards[0].getAttribute=(k)=>({'data-players':'José Silva | Ana','data-match-num':'167','data-bracket-tab-gender':'fem','data-bracket-tab-category':'Fem Light'})[k];
+cards[1].getAttribute=(k)=>({'data-players':'Bruno / Carla | Bruno | Carla','data-match-num':'168','data-bracket-tab-gender':'masc','data-bracket-tab-category':'Masc Power'})[k];
+cards[2].getAttribute=(k)=>({'data-players':'Dinho 168 | Elza','data-match-num':'169','data-bracket-tab-gender':'fem','data-bracket-tab-category':'Fem Extreme'})[k];
+sandbox.window._filterBarState={chaves:{gender:'Fem',skill:'Light'}};
+F();
+ok(JSON.stringify(vis())==='[true,false,false]','Fem + Light encontra somente o jogo Fem Light');
+ok(empty.style.display==='none','um jogo compatível não mostra vazio');
+cards[0].hidden=true; F();
+ok(empty.style.display==='block' && /outra aba/.test(empty.textContent),'jogo compatível em aba oculta indica outra aba');
+cards[0].hidden=false;
+sandbox.window._filterBarState.chaves.skill='Power'; F();
+ok(vis().every(v=>!v) && empty.style.display==='block','filtros incompatíveis não mostram falso positivo');
+sandbox.window._filterBarState.chaves.gender='all'; F();
+ok(vis()[1]===true && vis()[0]===false,'categoria Power sem gênero restringe somente o jogo Power');
+sandbox.window._filterBarState.chaves.skill='all'; F();
+ok(vis().every(Boolean),'limpar gênero/categoria restaura os jogos');
+
 // Jogador X é uma VAGA — encontrá-lo pede o contexto completo do grupo (os três
 // jogos e a classificação), enquanto a busca por pessoa real acima continua cirúrgica.
 const ghostCard=mkEl({'data-players':'Jogador X | Ana'},colA);
@@ -129,8 +147,8 @@ ok(vis().every(Boolean),'limpar a busca do Jogador X restaura os jogos');
   const brGateiaInline = !!(m && m[1].indexOf('isInline') !== -1);
 
   // O invariante REAL: a tela inline (#tournaments/<id>) emite a barra em ALGUM lugar.
-  const tEmite = /window\._bracketBar\s*===\s*'function'\s*\?\s*window\._bracketBar\(true\)/.test(tSrc)
-              || /window\._bracketBar\(true\)/.test(tSrc);
+  const tEmite = /window\._bracketBar\s*===\s*'function'\s*\?\s*window\._bracketBar\(visible\[0\],\s*true\)/.test(tSrc)
+              || /window\._bracketBar\(visible\[0\],\s*true\)/.test(tSrc);
   ok(brGateiaInline ? tEmite : true,
     'REGRESSÃO: bracket.js gateia por isInline e o renderTournaments NÃO emite a barra — a busca some do chaveamento inline');
   ok(!brGateiaInline ? !tEmite : true,
@@ -149,11 +167,11 @@ ok(vis().every(Boolean),'limpar a busca do Jogador X restaura os jogos');
   // chaveamento, senão o `sticky` morre junto com o pai (o defeito que a 1.7.14 consertou) —
   // continua travado abaixo, e agora com o pai correto sendo o #view-container.
   if (tEmite) {
-    const bloco = tSrc.slice(tSrc.indexOf('window._bracketBar(true)'),
-                             tSrc.indexOf('window._bracketBar(true)') + 260);
+    const bloco = tSrc.slice(tSrc.indexOf('window._bracketBar(visible[0], true)'),
+                             tSrc.indexOf('window._bracketBar(visible[0], true)') + 260);
     ok(/\$\{filterBarHtml\}/.test(bloco) || /id="inline-bracket-container"/.test(bloco),
       'a barra do inline fica no TOPO do fluxo (logo após o cabeçalho), não no meio da página');
-    const antesDaBarra = tSrc.slice(0, tSrc.indexOf('window._bracketBar(true)'));
+    const antesDaBarra = tSrc.slice(0, tSrc.indexOf('window._bracketBar(visible[0], true)'));
     ok(!/id="inline-bracket-container"[\s\S]*$/.test(antesDaBarra.slice(-400)),
       'a barra NUNCA nasce DENTRO/depois do #inline-bracket-container (sticky morre com o pai)');
   }

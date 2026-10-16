@@ -82,7 +82,7 @@ ok('quem decide visibilidade continua sendo _bracketApplyFilter, por [data-playe
   //     procurar aquela pessoa nunca achava — medido pelo dono: "ro mostra, mo não".
   // As duas são PRÓLOGO: garantem que o filtro veja a chave inteira e com os nomes. A
   // decisão de quem aparece segue aqui, por [data-players], que é o que esta trava guarda.
-  /window\._bracketApplyFilter = function[\s\S]{0,4200}querySelectorAll\('\[data-players\]'\)/.test(bracket));
+  /window\._bracketApplyFilter = function[\s\S]*?var cards = document\.querySelectorAll\('\[data-players\]'\)/.test(bracket));
 
 // ── 4. a regra vale para o caso REAL do Confra ───────────────────────────────────────
 // Simula o que o filtro faz: normaliza e procura o trecho no data-players declarado.

@@ -24,9 +24,9 @@ const SRC = fs.readFileSync(path.join(ROOT, 'js', 'views', 'tournaments-enrollme
 sec(function () {
   ok(/_inscritosFilterBar\(\{[\s\S]{0,200}stateKey: 'analise'/.test(SRC),
      'a página usa a barra canônica window._inscritosFilterBar (nada de barra pirata)');
-  ok(/stateKey: 'analise', sticky: true, searchOnly: true/.test(SRC),
-     'em modo sticky + searchOnly, igual à barra da chave');
-  ok(/searchId: 'er-mx-search', onChange: 'window\._erApplyMatrixFilter\(\)'/.test(SRC),
+  ok(/stateKey: 'analise', sticky: true,/.test(SRC) && !/stateKey: 'analise', sticky: true, searchOnly: true/.test(SRC),
+     'em modo sticky com ordenação, gênero e categoria');
+  ok(/searchId: 'er-mx-search', sortId: 'er-mx-sort', genderId: 'er-mx-gender', skillId: 'er-mx-skill'/.test(SRC),
      'ligada ao filtro da matriz');
   // O sticky só gruda depois que a rolagem leva a posição natural até o `top`. Enterrada no
   // meio da página, a barra some antes de grudar — foi o bug medido na chave (1.7.43).
@@ -44,7 +44,7 @@ sec(function () {
   ok(/data-er-person="' \+ _esc\(r\.name/.test(SRC), 'cada card de pessoa carrega data-er-person com o nome');
   // Uma dupla agora é um card único, mas vale por duas pessoas no total da caixa.
   // O contrato da busca é usar o total efetivamente exibido, não apenas os solos.
-  ok(/data-er-box="1" data-er-total="' \+ boxTotal/.test(SRC), 'cada caixa de categoria carrega data-er-box + o total real, incluindo duplas');
+  ok(/data-er-box="1" data-er-gender="'/.test(SRC) && /data-er-total="' \+ boxTotal/.test(SRC), 'cada caixa de categoria carrega gênero e o total real, incluindo duplas');
   ok(/<span data-er-count/.test(SRC), 'a contagem do título é marcada (vira "x de N" enquanto filtra)');
 });
 
@@ -63,9 +63,9 @@ sec(function () {
       return out;
     },
   });
-  const pessoa = (n) => el({ 'data-er-person': n });
+  const pessoa = (n, g, s) => el({ 'data-er-person': n, 'data-er-gender': g, 'data-er-skill': s });
   const caixa = (arr) => el({ 'data-er-box': '1', 'data-er-total': String(arr.length) },
-    [el({ 'data-er-count': '' })].concat(arr.map(pessoa)));
+    [el({ 'data-er-count': '' })].concat(arr.map((n) => pessoa(n, 'feminino', 'Light'))));
   const raiz = el({ id: 'er-cat-matrix' }, [
     caixa(['Erika de Paula', 'Kelly Barth', 'Nádia Santiago Lazarin']),
     caixa(['danielacsimao', 'Carol Capucho', 'Livia Morais']),
@@ -78,7 +78,9 @@ sec(function () {
   global.window = win;
   win.document = {
     getElementById: function (id) { return id === 'er-mx-search' ? campo : id === 'er-cat-matrix' ? raiz : id === 'er-mx-search-empty' ? vazio : null; },
+    querySelector: function () { return null; },
   };
+  win._filterBarState = { analise: { gender: 'all', skill: 'all', sort: 'order-asc' } };
   global.document = win.document;
   // extrai a função REAL do arquivo (contagem de chaves) + o _norm que ela usa
   function extrai(marca) {
@@ -110,6 +112,13 @@ sec(function () {
   ok(visiveis().length === 6, 'limpar a busca traz todo mundo de volta, voltaram ' + visiveis().length);
   ok(caixasVisiveis() === 2, 'e as caixas todas de volta');
   ok(raiz.querySelectorAll('[data-er-count]').every((e) => e.textContent === '(3)'), 'com a contagem original');
+  win._filterBarState.analise.gender = 'Masc';
+  win._erApplyMatrixFilter();
+  ok(visiveis().length === 0 && vazio.style.display === '', 'filtro de gênero sem correspondência mostra vazio');
+  win._filterBarState.analise.gender = 'Fem';
+  win._filterBarState.analise.skill = 'Light';
+  win._erApplyMatrixFilter();
+  ok(visiveis().length === 6, 'gênero Fem + categoria Light recuperam os chips sem mudar sua ordem');
 });
 
 console.log((fail === 0 ? '✅' : '❌') + ' analise-barra-de-busca: ' + pass + ' asserções, ' + fail + ' falhas');

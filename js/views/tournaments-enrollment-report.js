@@ -1252,7 +1252,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // O X não pode depender de uid: importados sem conta também têm dupla e
       // carregam manualParticipantId. A operação valida a identidade no servidor.
       var split = '<button type="button" class="cancel-x-btn" title="Desfazer dupla" aria-label="Desfazer dupla ' + _esc(a.name + ' e ' + b.name) + '" onclick="event.stopPropagation();window._erSplitPair(' + a.order + ',this)" style="--cx-size:23px;position:absolute;top:7px;right:7px;">✕</button>';
-      return '<div draggable="true" data-er-pair-order="' + a.order + '" data-er-person="' + _esc(a.name + ' ' + b.name) + '" ondragstart="window._erMxPairDragStart(event,' + a.order + ')" onclick="window._erMxPairClick(event,' + a.order + ')" aria-pressed="' + (selected ? 'true' : 'false') + '" title="Arraste a dupla para uma categoria" style="position:relative;cursor:grab;display:flex;flex-direction:column;gap:5px;padding:10px 38px 10px 11px;border:' + (selected ? '2px solid #38bdf8' : ('1px solid ' + (changed ? 'rgba(245,158,11,.65)' : 'rgba(168,85,247,.45)'))) + ';border-radius:9px;background:' + (selected ? 'rgba(14,165,233,0.20)' : (changed ? 'rgba(245,158,11,.07)' : 'rgba(168,85,247,.08)')) + ';user-select:none;">' +
+      var pairCat = _decomposeCat(_erPairCategory(members), _liveState && _liveState.t || {});
+      return '<div draggable="true" data-er-pair-order="' + a.order + '" data-er-person="' + _esc(a.name + ' ' + b.name) + '" data-er-gender="' + (_mxGenderOf(a) || '') + '" data-er-skill="' + _esc(pairCat.skill || '') + '" ondragstart="window._erMxPairDragStart(event,' + a.order + ')" onclick="window._erMxPairClick(event,' + a.order + ')" aria-pressed="' + (selected ? 'true' : 'false') + '" title="Arraste a dupla para uma categoria" style="position:relative;cursor:grab;display:flex;flex-direction:column;gap:5px;padding:10px 38px 10px 11px;border:' + (selected ? '2px solid #38bdf8' : ('1px solid ' + (changed ? 'rgba(245,158,11,.65)' : 'rgba(168,85,247,.45)'))) + ';border-radius:9px;background:' + (selected ? 'rgba(14,165,233,0.20)' : (changed ? 'rgba(245,158,11,.07)' : 'rgba(168,85,247,.08)')) + ';user-select:none;">' +
         '<div style="font-size:14px;font-weight:750;color:var(--text-bright);line-height:1.25;overflow-wrap:anywhere;">' + _esc(a.name) + '</div>' +
         '<div style="font-size:14px;font-weight:750;color:var(--text-bright);line-height:1.25;overflow-wrap:anywhere;">' + _esc(b.name) + '</div>' + split +
       '</div>';
@@ -3178,7 +3179,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // v1.7.55: `data-er-person` é o que a barra de busca varre. Nome VIVO (o mesmo que o
       // card mostra) — indexar rótulo velho faz a busca achar quem a tela não mostra, que
       // foi exatamente o defeito da busca da chave na 1.7.47.
-      return '<div draggable="true" data-er-order="' + r.order + '" data-er-person="' + _esc(r.name || '') + '" ondragstart="window._erMxDragStart(event,' + r.order + ')" ondragover="window._erMxOver(event)" ondrop="window._erMxDropOnSolo(event,' + r.order + ')"' + click + selectionClick + ' ' +
+      return '<div draggable="true" data-er-order="' + r.order + '" data-er-person="' + _esc(r.name || '') + '" data-er-gender="' + (_mxGenderOf(r) || '') + '" data-er-skill="' + _esc(_mxSkillOf(r, t) || '') + '" ondragstart="window._erMxDragStart(event,' + r.order + ')" ondragover="window._erMxOver(event)" ondrop="window._erMxDropOnSolo(event,' + r.order + ')"' + click + selectionClick + ' ' +
         'aria-pressed="' + (selected ? 'true' : 'false') + '" style="cursor:' + (canOpen ? 'pointer' : 'grab') + ';font-size:0.74rem;font-weight:600;padding:4px 7px;border-radius:6px;min-width:0;background:' + (selected ? 'rgba(14,165,233,0.20)' : 'var(--bg-card,rgba(0,0,0,0.25))') + ';color:' + window._spCor(nameCol, 'color') + ';border:' + (selected ? '2px solid #38bdf8' : ('1px solid ' + window._spCor(border, 'borda'))) + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + tip + '">' + _esc(r.name || '(sem nome)') + '</div>';
     }
     function cardGrid(arr, pairs) {
@@ -3205,7 +3206,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // com dezenas de caixas vazias e o achado perdido no meio — o defeito que a busca da
       // chave levou a 1.6.87 pra corrigir. `data-er-total` guarda o número REAL pra que a
       // contagem do título vire "(x de N)" enquanto o filtro está ligado e não minta.
-      return '<div data-er-box="1" data-er-total="' + boxTotal + '" ondragover="window._erMxOver(event)" ondrop="window._erMxDrop(event,\'' + (genderKey || '') + '\',\'' + sk + '\')" ' +
+      return '<div data-er-box="1" data-er-gender="' + (genderKey || '') + '" data-er-skill="' + _esc(sk === '__none__' ? '' : sk) + '" data-er-total="' + boxTotal + '" ondragover="window._erMxOver(event)" ondrop="window._erMxDrop(event,\'' + (genderKey || '') + '\',\'' + sk + '\')" ' +
         'style="border:1.5px solid ' + window._spCor(tint, 'borda') + ';border-radius:10px;padding:8px 10px;background:var(--bg-darker,rgba(0,0,0,0.15));">' +
         '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:5px;min-width:0;"><span style="font-size:14px;font-weight:800;color:' + window._spCor(color, 'color') + ';min-width:0;">' + label + ' <span data-er-count style="opacity:0.7;font-weight:700;">(' + boxTotal + ')</span></span>' + btn + '</div>' +
         cardGrid(arr, pairs) + '</div>';
@@ -3315,14 +3316,21 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     try {
       var inp = document.getElementById('er-mx-search');
       var q = _norm(inp ? (inp.value || '') : '');
+      var barState = window._filterBarState && window._filterBarState.analise || {};
+      var gender = barState.gender || 'all', skill = barState.skill || 'all';
+      var active = !!(q || gender !== 'all' || skill !== 'all');
       var raiz = document.getElementById('er-cat-matrix');
       if (!raiz) return;
       var achou = 0;
       var chips = raiz.querySelectorAll('[data-er-person]');
       for (var i = 0; i < chips.length; i++) {
-        var casa = !q || _norm(chips[i].getAttribute('data-er-person') || '').indexOf(q) !== -1;
+        var chipGender = chips[i].getAttribute('data-er-gender') || '';
+        var chipSkill = chips[i].getAttribute('data-er-skill') || '';
+        var genderOk = gender === 'all' || (gender === 'none' ? !chipGender : chipGender === (gender === 'Fem' ? 'feminino' : 'masculino'));
+        var skillOk = skill === 'all' || (skill === 'none' ? !chipSkill : _norm(chipSkill) === _norm(skill));
+        var casa = (!q || _norm(chips[i].getAttribute('data-er-person') || '').indexOf(q) !== -1) && genderOk && skillOk;
         chips[i].style.display = casa ? '' : 'none';
-        if (casa && q) achou++;
+        if (casa) achou++;
       }
       // Caixa sem ninguém visível some junto — e a contagem do título passa a dizer
       // "(x de N)" pra não afirmar um número que a tela não está mostrando.
@@ -3331,13 +3339,40 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         var vis = caixas[j].querySelectorAll('[data-er-person]');
         var n = 0;
         for (var k = 0; k < vis.length; k++) if (vis[k].style.display !== 'none') n++;
-        caixas[j].style.display = (q && n === 0) ? 'none' : '';
+        caixas[j].style.display = (active && n === 0) ? 'none' : '';
         var cnt = caixas[j].querySelector('[data-er-count]');
         var tot = caixas[j].getAttribute('data-er-total') || '0';
-        if (cnt) cnt.textContent = q ? ('(' + n + ' de ' + tot + ')') : ('(' + tot + ')');
+        if (cnt) cnt.textContent = active ? ('(' + n + ' de ' + tot + ')') : ('(' + tot + ')');
+      }
+      var index = document.querySelector('#er-mx-competitor-index [data-er-index-list]');
+      if (index && _liveState) {
+        var names = (_liveState.rows || []).filter(function (r) {
+          return r && r.name && Array.prototype.some.call(chips, function (chip) {
+            return chip.style.display !== 'none' && _norm(chip.getAttribute('data-er-person') || '').indexOf(_norm(r.name)) !== -1;
+          });
+        }).slice();
+        var sort = barState.sort || 'order-asc';
+        names.sort(function (a, b) {
+          var cmp = sort.indexOf('name') === 0 ? String(a.name).localeCompare(String(b.name), 'pt', { sensitivity: 'base', numeric: true }) : Number(a.order) - Number(b.order);
+          return sort.indexOf('desc') !== -1 ? -cmp : cmp;
+        });
+        index.textContent = '';
+        names.forEach(function (r) {
+          var btn = document.createElement('button'); btn.type = 'button'; btn.textContent = r.name;
+          btn.dataset.erIndexName = r.name;
+          btn.style.cssText = 'border:1px solid var(--text-muted);border-radius:8px;padding:6px 9px;background:var(--bg-card);color:var(--text-bright);cursor:pointer;';
+          index.appendChild(btn);
+        });
+        index.onclick = function (ev) {
+          var btn = ev.target && ev.target.closest && ev.target.closest('[data-er-index-name]');
+          if (!btn) return;
+          var search = document.getElementById('er-mx-search'); if (!search) return;
+          search.value = btn.dataset.erIndexName;
+          window._fbSearchInput('analise', search);
+        };
       }
       var vazio = document.getElementById('er-mx-search-empty');
-      if (vazio) vazio.style.display = (q && achou === 0) ? '' : 'none';
+      if (vazio) vazio.style.display = (active && achou === 0) ? '' : 'none';
       if (typeof window._syncStickyBarOffset === 'function') window._syncStickyBarOffset();
     } catch (e) {}
   };
@@ -5794,6 +5829,11 @@ window._lzNaoEhEuMesmo = function (uid) {
     }
     _liveState = { rows: rows, t: t, isOrg: _isOrg, profileMap: profileMap || {}, resolvedFor: resolvedFor || {} };
     _pendingEdits = retainedEdits;
+    var matrixBarState = window._filterBarState.analise || (window._filterBarState.analise = {});
+    if (matrixBarState.sortFor !== String(t.id)) {
+      matrixBarState.sortFor = String(t.id);
+      matrixBarState.sort = 'order-asc'; matrixBarState.gender = 'all'; matrixBarState.skill = 'all'; matrixBarState.search = '';
+    }
 
     // A barra é a 1ª IRMÃ DEPOIS DO CABEÇALHO, fora do container com padding. `sticky` só
     // gruda depois que a rolagem leva a posição natural até o `top` — enterrada no meio da
@@ -5801,9 +5841,12 @@ window._lzNaoEhEuMesmo = function (uid) {
     // cabeçalho, ela está no topo desde o primeiro pixel de rolagem.
     var _mxBar = (typeof window._inscritosFilterBar === 'function')
       ? '<div class="er-analysis-title" style="max-width:100%;margin:0 auto;padding:10px 1.25rem 0;">' + subtitle + '</div>' + window._inscritosFilterBar({
-          stateKey: 'analise', sticky: true, searchOnly: true,
-          searchId: 'er-mx-search', onChange: 'window._erApplyMatrixFilter()',
-        }).replace('id="fbwrap-analise"', 'id="fbwrap-analise" class="er-analysis-filter"') + '<div id="er-mx-search-empty" style="display:none;text-align:center;color:var(--text-muted);padding:14px;font-size:0.85rem;">Ninguém encontrado com esse nome.</div>'
+          stateKey: 'analise', sticky: true,
+          searchId: 'er-mx-search', sortId: 'er-mx-sort', genderId: 'er-mx-gender', skillId: 'er-mx-skill',
+          skillCategories: _erAnalysisSkills(t), onChange: 'window._erApplyMatrixFilter()',
+        }).replace('id="fbwrap-analise"', 'id="fbwrap-analise" class="er-analysis-filter"') +
+        '<details id="er-mx-competitor-index" style="margin:0 1.25rem 8px;color:var(--text-bright);"><summary style="cursor:pointer;padding:5px 8px;">' + (window._t ? window._t('bracket.competitorIndex') : 'Índice de competidores') + '</summary><div data-er-index-list style="display:flex;flex-wrap:wrap;gap:6px;padding:8px;"></div></details>' +
+        '<div id="er-mx-search-empty" style="display:none;text-align:center;color:var(--text-muted);padding:14px;font-size:0.85rem;">' + (window._t ? window._t('analysis.filterNoCompetitors') : 'Ninguém encontrado com esses filtros.') + '</div>'
       : '';
 
     container.innerHTML = hdr + _mxBar +

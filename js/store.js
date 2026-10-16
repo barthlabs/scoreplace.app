@@ -8932,7 +8932,8 @@ window._inscritosFilterBar = function (opts) {
         // folga: a barra cobre qualquer rounding antialiased acima dos controles.
         wrapStyle = ' style="position:sticky;top:calc(var(--topbar-h,60px) + var(--hamburger-dd-h,0px) + var(--backheader-h,0px) - 1px);z-index:30;background:var(--bg-darker,#111114);margin-left:0;margin-right:0;margin-bottom:6px;padding:9px 10px 7px;box-sizing:border-box;"';
     }
-    return '<div id="fbwrap-' + key + '"' + wrapStyle + '>' + window._fbInner(key) + '</div>';
+    var instanceAttrs = opts.instanceId ? ' data-bracket-bar-tid="' + (window._safeHtml || String)(opts.tournamentId || '') + '" data-bracket-bar-instance="' + (window._safeHtml || String)(opts.instanceId) + '"' : '';
+    return '<div id="fbwrap-' + key + '"' + instanceAttrs + wrapStyle + '>' + window._fbInner(key) + '</div>';
 };
 // v3.1.47 CANÔNICO: a barra de filtro/busca dos CARDS DE INSCRITO viaja JUNTO com os
 // cards. REGRA (dono): "onde há card de participante numa seção, essa barra deve estar
@@ -8947,37 +8948,104 @@ window._inscritosFilterBar = function (opts) {
 // nome, pra achar uma pessoa e os jogos dela no meio de dezenas de confrontos. O filtro é
 // DOM puro (window._bracketApplyFilter lê data-players dos cards) — não re-renderiza o
 // bracket, então scroll, <details> aberto e placar em edição sobrevivem.
-window._bracketBar = function (show) {
+window._bracketBar = function (t, show) {
+    // Compatibilidade com callers externos/testes que ainda passam só `show`.
+    if (typeof t === 'boolean' && show === undefined) { show = t; t = null; }
     if (!show || typeof window._inscritosFilterBar !== 'function') return '';
+    var tid = String((t && t.id) || '');
+    var state = window._filterBarState.chaves || (window._filterBarState.chaves = {});
+    if (state.sortFor !== tid) {
+        state.sortFor = tid;
+        state.sort = 'order-asc'; state.gender = 'all'; state.skill = 'all'; state.search = '';
+    }
+    window._bracketBarCurrentTid = tid;
+    var instance = String(window._bracketBarSerial = (window._bracketBarSerial || 0) + 1);
+    window._bracketBarTournament = t;
     var bar = window._inscritosFilterBar({
-        stateKey: 'chaves', sticky: true, searchOnly: true,
-        searchId: 'bracket-search', onChange: 'window._bracketApplyFilter()'
+        stateKey: 'chaves', sticky: true, tournamentId: tid, instanceId: instance,
+        searchId: 'bracket-search', sortId: 'bracket-sort', genderId: 'bracket-gender', skillId: 'bracket-skill',
+        skillCategories: (t && t.skillCategories) || [], onChange: 'window._bracketApplyFilter()'
     });
     // O texto digitado sobrevive ao re-render (estado da barra), mas os CARDS voltam sem
     // filtro. Reaplica assim que o DOM novo aterrissa — daqui, e não de cada render site do
     // bracket (são 7). setTimeout(0) porque este HTML ainda é string quando esta função roda.
     setTimeout(function () {
-      /* ⛔ UMA BARRA SÓ, E O NAVEGADOR NÃO DESEMPATA ID REPETIDO.
-       * Relato do dono (11/set/2026, print): a tela do torneio mostrava DUAS barras de busca —
-       * a de cima com o texto digitado e outra logo abaixo do rótulo da chave. Dois emissores
-       * (a tela do torneio e o cabeçalho do chaveamento) podem coincidir, e aí nascem dois
-       * `#bracket-search`: `getElementById` devolve o PRIMEIRO, então quem digitava na outra
-       * filtrava nada. Em vez de adivinhar qual dos dois emissores calar — os dois têm razão
-       * em contextos diferentes —, o DOM decide: sobra a PRIMEIRA, as demais saem.
-       * Feito aqui porque é o ponto único por onde toda barra de chave passa. */
+      // Um render antigo nunca remove os controles do torneio que o substituiu.
+      if (window._bracketBarCurrentTid !== tid) return;
       try {
-        var _todas = document.querySelectorAll('#fbwrap-chaves');
-        for (var _i = 1; _i < _todas.length; _i++) {
-          if (_todas[_i] && _todas[_i].parentNode) _todas[_i].parentNode.removeChild(_todas[_i]);
-        }
-        var _vazios = document.querySelectorAll('#bracket-search-empty');
-        for (var _j = 1; _j < _vazios.length; _j++) {
-          if (_vazios[_j] && _vazios[_j].parentNode) _vazios[_j].parentNode.removeChild(_vazios[_j]);
-        }
+        var wraps = Array.prototype.slice.call(document.querySelectorAll('#fbwrap-chaves'));
+        var eligible = wraps.filter(function (w) { return w.getAttribute('data-bracket-bar-tid') === tid; });
+        var external = eligible.filter(function (w) { return !w.closest || !w.closest('#inline-bracket-container'); });
+        var chosen = external.length ? external[0] : eligible[eligible.length - 1];
+        if (!chosen) return;
+        var chosenInstance = chosen && chosen.getAttribute('data-bracket-bar-instance');
+        wraps.forEach(function (w) { if (w !== chosen && w.parentNode) w.parentNode.removeChild(w); });
+        ['bracket-competitor-index', 'bracket-search-empty'].forEach(function (id) {
+          Array.prototype.slice.call(document.querySelectorAll('#' + id)).forEach(function (el) {
+            if (el.getAttribute('data-bracket-bar-instance') !== chosenInstance && el.parentNode) el.parentNode.removeChild(el);
+          });
+        });
       } catch (e) {}
       if (typeof window._bracketApplyFilter === 'function') window._bracketApplyFilter();
     }, 0);
-    return bar + '<div id="bracket-search-empty" style="display:none;text-align:center;color:var(--text-muted);padding:14px;font-size:0.85rem;">Nenhum jogo encontrado.</div>';
+    var attrs = ' data-bracket-bar-tid="' + (window._safeHtml || String)(tid) + '" data-bracket-bar-instance="' + instance + '"';
+    return bar + '<details id="bracket-competitor-index"' + attrs + ' style="margin:0 10px 6px;color:var(--text-bright);"><summary style="cursor:pointer;padding:5px 8px;">' + (window._t ? window._t('bracket.competitorIndex') : 'Índice de competidores') + '</summary><div data-bracket-index-list style="display:flex;flex-wrap:wrap;gap:6px;padding:8px;"></div></details>'
+      + '<div id="bracket-search-empty"' + attrs + ' style="display:none;text-align:center;color:var(--text-muted);padding:14px;font-size:0.85rem;">' + (window._t ? window._t('bracket.filterNoMatches') : 'Nenhum jogo encontrado.') + '</div>';
+};
+// Índice de localização, nunca uma segunda árvore de jogos. Só inclui pessoas que
+// aparecem em cards da chave corrente; o clique usa a busca já existente.
+window._bracketRefreshIndex = function (cards) {
+    var host = document.querySelector('#bracket-competitor-index [data-bracket-index-list]');
+    var t = window._bracketBarTournament;
+    if (!host || !t || host.parentElement.getAttribute('data-bracket-bar-tid') !== String(t.id || '')) return;
+    var st = window._filterBarState.chaves || {};
+    var norm = function (v) { return String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(); };
+    var seen = {}, people = [];
+    var present = Array.prototype.filter.call(cards || [], function (c) { return c.getAttribute('data-fb-marker') !== '1'; })
+      .map(function (c) { return { card: c, names: norm(c.getAttribute('data-players') || ''), uids: String(c.getAttribute('data-player-uids') || '').split(',') }; });
+    var parts = (typeof window._getCompetitors === 'function' ? window._getCompetitors(t) : (t.participants || []));
+    if (!Array.isArray(parts)) parts = Object.values(parts || {});
+    function add(name, uid, order) {
+        name = String(name || '').trim();
+        var key = norm(name); if (!key || seen[key]) return;
+        var matching = present.filter(function (c) {
+            return (uid && c.uids.indexOf(String(uid)) !== -1) || c.names.indexOf(key) !== -1;
+        }).map(function (c) { return c.card; });
+        if (!matching.length) return;
+        seen[key] = true;
+        people.push({ name: name, order: order, cards: matching });
+    }
+    parts.forEach(function (p, i) {
+        if (!p || typeof p !== 'object') return;
+        var order = Number(p.registrationOrder || p.order || i + 1);
+        if (!isFinite(order)) order = i + 1;
+        if (p.p1Name || p.p2Name) {
+            add(p.p1Name, p.p1Uid, order); add(p.p2Name, p.p2Uid, order + .001);
+        } else if (Array.isArray(p.participants) && p.participants.length) {
+            p.participants.forEach(function (member, j) { add(member && (member.displayName || member.name), member && member.uid, order + j * .001); });
+        } else add(p.displayName || p.name, p.uid, order);
+    });
+    var sort = st.sort || 'order-asc';
+    people.sort(function (a, b) {
+        var cmp = sort.indexOf('name') === 0 ? a.name.localeCompare(b.name, 'pt', { sensitivity: 'base', numeric: true }) : a.order - b.order;
+        return sort.indexOf('desc') !== -1 ? -cmp : cmp;
+    });
+    host.textContent = '';
+    people.forEach(function (p) {
+        if (!p.cards.some(function (c) { return c.style.display !== 'none' && !c.hidden; })) return;
+        var button = document.createElement('button');
+        button.type = 'button'; button.textContent = p.name; button.dataset.bracketIndexName = p.name;
+        button.style.cssText = 'border:1px solid var(--text-muted);border-radius:8px;padding:6px 9px;background:var(--bg-card);color:var(--text-bright);cursor:pointer;';
+        host.appendChild(button);
+    });
+    host.onclick = function (ev) {
+        var btn = ev.target && ev.target.closest && ev.target.closest('[data-bracket-index-name]');
+        if (!btn) return;
+        var input = document.getElementById('bracket-search');
+        if (!input) return;
+        input.value = btn.dataset.bracketIndexName;
+        window._fbSearchInput('chaves', input);
+    };
 };
 window._inscritosBar = function (t, show) {
     if (!show || typeof window._inscritosFilterBar !== 'function') return '';

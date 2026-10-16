@@ -1,5 +1,9 @@
 // ─── Portuguese (pt-BR) translations ────────────────────────────────────────
 window._translations['pt'] = {
+  'bracket.competitorIndex': 'Competidores na chave',
+  'bracket.filterNoMatches': 'Nenhum jogo encontrado com esses filtros.',
+  'bracket.filterOtherTab': 'Há jogos com esses filtros em outra aba da chave.',
+  'analysis.filterNoCompetitors': 'Ninguém encontrado com esses filtros.',
   'format2.scheduleUnequal': '⚠️ Com os inscritos atuais, nem todos jogam o mesmo número: {min} a {max} jogos por {unit}. Ajuste os grupos ou a agenda antes do sorteio.',
   'format2.scheduleLimited': '⚠️ O tamanho dos grupos limita a agenda a {games} jogos por {unit}. Ajuste os grupos ou o número pedido.',
   'format2.scheduleConfirmTitle': 'Confirmar agenda de grupos?',

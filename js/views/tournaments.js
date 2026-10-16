@@ -5067,7 +5067,7 @@ function renderTournaments(container, tournamentId = null) {
           cabeçalho ela já nasce em 124 (o fundo do header) e fica lá o tempo todo, sem
           precisar de `fixed` nem de compensação de espaço. A 1.7.14 continua valendo: o
           pai segue sendo o #view-container, não o container do chaveamento. */''}
-    ${hasDrawn && typeof window._bracketBar === 'function' ? window._bracketBar(true) : ''}
+    ${hasDrawn && typeof window._bracketBar === 'function' ? window._bracketBar(visible[0], true) : ''}
     ${filterBarHtml}
     ${_inscritosFilterBarHtml}
     ${pollBannerHtml}
