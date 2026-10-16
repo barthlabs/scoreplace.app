@@ -1,3 +1,4 @@
+// 2.4.74 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.73 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.72 — No jogo que ainda aguarda adversário, Propor datas e Criar grupo dos jogos têm exatamente a aparência dos botões ativos: cores, relevo, fonte, ícone e quebra de linha. Continuam desativados até o confronto estar definido; nenhum jogo ou dado foi alterado.
 // 2.4.71 — Ações de propor datas e criar grupo dos jogos preservam os botões canônicos azul/verde também enquanto o adversário não está definido, visíveis porém desativadas. A faixa de busca do dashboard cobre o vão natural sob o cabeçalho sem afetar outras telas. Não altera torneios, jogos ou inscrições.
