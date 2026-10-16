@@ -2833,6 +2833,9 @@ function _reclassifyCanonicalCategory(t, tId, participant, targetCategory, sourc
     if (fromCategoryId === toCategoryId) return Promise.resolve({ ok: true, outcome: 'unchanged' });
     var payload = {
         tournamentId: tId,
+        // O sandbox usa a MESMA porta canônica; só a coleção física muda no
+        // servidor. Nunca gravar uma edição do clone no torneio original.
+        sandbox: !!(t && t.isSandbox === true),
         fromCategoryId: fromCategoryId,
         toCategoryId: toCategoryId
     };

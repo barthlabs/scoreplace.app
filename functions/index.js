@@ -4418,8 +4418,17 @@ function _assertLegacyRosterStillAuthoritative(tournament) {
 /* Carrega e grava o elenco materializado como uma única fonte. A query é
  * limitada pelo recibo e lê um documento a mais para detectar excesso; cada
  * update toca somente status/vínculo de dupla, jamais a projeção legada. */
-async function _loadCanonicalRosterForMutation(tx, tournamentRef, tournament) {
+function _canonicalMutationTournament(tournamentRef, tournament, logicalId) {
+  // A cópia fiel guarda registrations com tournamentId/registrationId do
+  // original. O ref físico continua apontando ao sandbox; só a identidade
+  // usada pelo núcleo canônico muda. Sem logicalId, as portas existentes
+  // preservam exatamente a montagem anterior.
   const canonicalTournament = Object.assign({ id: tournamentRef.id }, tournament || {});
+  if (logicalId) canonicalTournament.id = logicalId;
+  return canonicalTournament;
+}
+async function _loadCanonicalRosterForMutation(tx, tournamentRef, tournament, logicalId) {
+  const canonicalTournament = _canonicalMutationTournament(tournamentRef, tournament, logicalId);
   let migration;
   try { migration = _canonicalRegistrationBoundary.migrationOf(canonicalTournament); }
   catch (error) { throw new HttpsError("failed-precondition", error.message); }
@@ -4435,8 +4444,8 @@ async function _loadCanonicalRosterForMutation(tx, tournamentRef, tournament) {
   catch (error) { throw new HttpsError("failed-precondition", error.message); }
 }
 
-function _writeCanonicalRosterUpdates(tx, tournamentRef, tournament, registrations, updates) {
-  const canonicalTournament = Object.assign({ id: tournamentRef.id }, tournament || {});
+function _writeCanonicalRosterUpdates(tx, tournamentRef, tournament, registrations, updates, logicalId) {
+  const canonicalTournament = _canonicalMutationTournament(tournamentRef, tournament, logicalId);
   let next;
   try { next = _canonicalRegistrationBoundary.applyUpdates(canonicalTournament, registrations, updates); }
   catch (error) { throw new HttpsError("failed-precondition", error.message); }
@@ -4461,8 +4470,8 @@ function _writeCanonicalRosterUpdates(tx, tournamentRef, tournament, registratio
  * de `registrationCount`, a próxima leitura trataria o novo documento como
  * corrupção; sem `memberUids`, a pessoa acabaria inscrita mas invisível no
  * listener do app. */
-function _writeCanonicalRosterCreates(tx, tournamentRef, tournament, registrations, creates) {
-  const canonicalTournament = Object.assign({ id: tournamentRef.id }, tournament || {});
+function _writeCanonicalRosterCreates(tx, tournamentRef, tournament, registrations, creates, logicalId) {
+  const canonicalTournament = _canonicalMutationTournament(tournamentRef, tournament, logicalId);
   let next;
   try { next = _canonicalRegistrationBoundary.applyCreates(canonicalTournament, registrations, creates); }
   catch (error) { throw new HttpsError("failed-precondition", error.message); }
@@ -4484,8 +4493,8 @@ function _writeCanonicalRosterCreates(tx, tournamentRef, tournament, registratio
  * origem permanece como histórico retirado e o recibo avança apenas com os
  * novos documentos de destino. Separar essas duas partes permitiria uma
  * metade da mudança sobreviver a retry/transação concorrente. */
-function _writeCanonicalRosterChanges(tx, tournamentRef, tournament, registrations, changes, extraTournamentPatch) {
-  const canonicalTournament = Object.assign({ id: tournamentRef.id }, tournament || {});
+function _writeCanonicalRosterChanges(tx, tournamentRef, tournament, registrations, changes, extraTournamentPatch, logicalId) {
+  const canonicalTournament = _canonicalMutationTournament(tournamentRef, tournament, logicalId);
   const updates = Array.isArray(changes && changes.updates) ? changes.updates : [];
   const creates = Array.isArray(changes && changes.creates) ? changes.creates : [];
   let next;
@@ -4769,14 +4778,22 @@ exports.reclassifyCanonicalRegistration = onCall(
       throw new HttpsError("invalid-argument", "identidade e categorias tipadas são obrigatórias");
     }
     const db = admin.firestore();
-    const ref = db.collection("tournaments").doc(tournamentId);
+    // Mesmo motor para original e cópia: a flag escolhe UMA coleção, sem
+    // fallback. Um teste no sandbox jamais pode alterar registrations do real.
+    const sandbox = data.sandbox === true;
+    const ref = db.collection(sandbox ? "sandboxes" : "tournaments").doc(tournamentId);
     return db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
       const tournament = snap.data() || {};
-      if (!_isTournamentOrgCaller(tournament, callerUid)) {
+      if (sandbox) await _sandboxAutorizado(db, snap, callerUid, (sourceRef) => tx.get(sourceRef));
+      else if (tournament.isSandbox === true) throw new HttpsError("not-found", "torneio não existe");
+      else if (!_isTournamentOrgCaller(tournament, callerUid)) {
         throw new HttpsError("permission-denied", "só a organização altera categoria de inscrição");
       }
+      // O clone preserva IDs determinísticos do original. A identidade lógica
+      // valida o roster; o ref físico acima continua sendo sandboxes/{id}.
+      const logicalId = sandbox ? String(tournament.sandboxOf) : "";
       if (!(tournament.canonicalRegistrationMigration && tournament.canonicalRegistrationMigration.fingerprint)) {
         throw new HttpsError("failed-precondition", "torneio ainda não usa inscrições canônicas");
       }
@@ -4795,18 +4812,18 @@ exports.reclassifyCanonicalRegistration = onCall(
         }
       }
       catch (error) { throw new HttpsError("invalid-argument", error.message); }
-      const checked = await _loadCanonicalRosterForMutation(tx, ref, tournament);
+      const checked = await _loadCanonicalRosterForMutation(tx, ref, tournament, logicalId);
       let changes;
       try {
         changes = _registrationMutations.reclassify(
-          tournamentId,
+          logicalId || tournamentId,
           checked.registrations,
           userUid ? { uid: userUid } : { manualParticipantId },
           fromCategoryId,
           toCategoryId
         );
       } catch (error) { throw new HttpsError("failed-precondition", error.message); }
-      const next = _writeCanonicalRosterChanges(tx, ref, tournament, checked.registrations, changes);
+      const next = _writeCanonicalRosterChanges(tx, ref, tournament, checked.registrations, changes, null, logicalId);
       return {
         ok: true,
         outcome: changes.outcome,

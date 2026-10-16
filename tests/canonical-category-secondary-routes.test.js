@@ -27,6 +27,17 @@ const bridge = between(categories, 'function _isCanonicalCategoryRoster', 'funct
 ok(bridge.includes('window._isCanonicalCategoryRoster = _isCanonicalCategoryRoster') &&
    bridge.includes('window._reclassifyCanonicalCategory = _reclassifyCanonicalCategory'),
   'a ponte canônica é compartilhada explicitamente, em vez de cada tela inferir o marker');
+const sandboxPayloads = [];
+const reclassifyBridge = vm.runInNewContext(
+  between(categories, 'function _reclassifyCanonicalCategory', 'function _assignParticipantCategory') + '\n_reclassifyCanonicalCategory',
+  { Promise, _assignmentParticipantIdentity: () => ({ uid: 'u1' }),
+    _canonicalCategoryIdForDisplay: (_t, value) => value,
+    window: { FirestoreDB: { _callFn: (_name, payload) => { sandboxPayloads.push(payload); return Promise.resolve({ ok: true }); } } } }
+);
+reclassifyBridge({ isSandbox: true, categoryDefinitions: [] }, 'sb_t1', { categoryId: 'cat-a' }, 'cat-b');
+reclassifyBridge({ isSandbox: false, categoryDefinitions: [] }, 't1', { categoryId: 'cat-a' }, 'cat-b');
+ok(sandboxPayloads.length === 2 && sandboxPayloads[0].sandbox === true && sandboxPayloads[1].sandbox === false,
+  'ponte canônica envia sandbox=true somente para a cópia privada');
 
 const skill = between(participantUi, 'window._setParticipantSkillCategory', '// ═══════════════════════════════════════════════════════════════════════════');
 ok(skill.includes('isCanonicalRoster') && skill.includes('window._reclassifyCanonicalCategory') &&

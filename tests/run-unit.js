@@ -1772,6 +1772,7 @@ const SUITES = [
   'tests/canonical-participant-claim.test.js',
   'tests/canonical-participant-claim-ui.test.js',
   'tests/canonical-registration-reclassify.test.js',
+  'tests/canonical-sandbox-reclassify-isolation.test.js',
   'tests/canonical-category-manager-route.test.js',
   'tests/canonical-category-secondary-routes.test.js',
   'tests/canonical-manual-category-selection.test.js',
