@@ -124,6 +124,7 @@ const SUITES = [
   'tests/novidades-le-o-espelho.test.js',
   'tests/grupo-do-whats-em-todo-card-da-tela-inicial.test.js',
   'tests/ir-para-o-jogo-espera-a-chave-nascer.test.js',
+  'tests/ir-para-o-jogo-scroll-horizontal.test.js',
   'tests/cache-podre-do-firestore-se-joga-fora.test.js',
   'tests/sem-credencial-guardada-abre-o-seletor.test.js',
   'tests/mesmo-link-do-grupo-nao-avisa-de-novo.test.js',

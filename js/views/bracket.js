@@ -1057,6 +1057,25 @@ function _bracketFocusOperationalCard(root, card, behavior) {
 }
 window._bracketFocusOperationalCard = _bracketFocusOperationalCard;
 
+// A chave de fases usa um scroller HORIZONTAL próprio. `scrollIntoView` sozinho
+// pode acertar o Y e deixar a coluna do jogo fora da viewport (Confra J195).
+// A entrada da dashboard e sua reafirmação devem medir ambos os eixos; no fim
+// da faixa, o limite do scroller é uma posição válida, sem laço infinito.
+// [[regression_entry_match_aligns_phase_bracket_horizontally]]
+function _bracketEntryHorizontalGap(card, align) {
+  var scroller = card && card.closest ? card.closest('.bracket-scroll-container') : null;
+  if (!scroller) return 0; // Geral/Próximos tem geometria própria.
+  var column = card.closest('.bracket-round-column') || card;
+  var columnRect = column.getBoundingClientRect();
+  var scrollerRect = scroller.getBoundingClientRect();
+  var maxLeft = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
+  var desired = Math.min(maxLeft, Math.max(0, scroller.scrollLeft + columnRect.left - scrollerRect.left - 8));
+  var gap = Math.abs(desired - scroller.scrollLeft);
+  if (align && gap > 1) scroller.scrollLeft = desired;
+  return gap;
+}
+window._bracketEntryHorizontalGap = _bracketEntryHorizontalGap;
+
 function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame) {
   if (!root) return false;
   var scope = root._bracketTabsScope || (root.closest && root.closest('#view-container, #inline-bracket-container'));
@@ -2028,7 +2047,10 @@ function _applyMyMatchesFilter() {
           window._bracketFocusOperationalCard(_operationalRoot, _target, behavior);
           return;
         }
-        _target.scrollIntoView({ behavior: behavior, block: 'start' });
+        _bracketEntryHorizontalGap(_target, true);
+        _target.scrollIntoView({ behavior: behavior, block: 'start', inline: 'nearest' });
+        // `scrollIntoView` pode reajustar X depois do alinhamento inicial.
+        _bracketEntryHorizontalGap(_target, true);
       } catch (e) {}
     };
     setTimeout(function () { _goMine('smooth'); }, 80);
@@ -2099,7 +2121,8 @@ function _applyMyMatchesFilter() {
           if (!_recuo && _el.style) _recuo = Math.round(parseFloat(getComputedStyle(_el).scrollMarginTop) || 0);
         } catch (e) {}
         var _erro = Math.abs(_topo - _recuo);
-        if (_erro <= 3 && _ultimo !== null && Math.abs(_topo - _ultimo) <= 2) _estaveis++;
+        var _erroX = _bracketEntryHorizontalGap(_el, false);
+        if (_erro <= 3 && _erroX <= 3 && _ultimo !== null && Math.abs(_topo - _ultimo) <= 2) _estaveis++;
         else { _estaveis = 0; _goMine('auto'); }   // fora do lugar ou ainda mexendo → corrige
         _ultimo = _topo;
         // para quando ficou parado em 3 medições seguidas, ou depois de ~3s.
