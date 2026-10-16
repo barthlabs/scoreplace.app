@@ -2481,6 +2481,11 @@ window.FirestoreDB = {
     var lidos = 0;
     try {
       var t = await S.montarDoBanco(config, async function (colecao) {
+        /* ⛔ Um torneio migrado tem UM elenco: registrations via callable. Não
+         * consultar `inscritos` nem por um instante; o espelho antigo de 96
+         * Jogador NN já foi exibido como se fosse a verdade em produção. */
+        if (colecao === 'inscritos' && config && config.canonicalRegistrationMigration &&
+            config.canonicalRegistrationMigration.fingerprint) return [];
         // pela porta única (`_tSub`): é ela que decide entre tournaments e sandboxes
         /* A abertura de uma chave decide W.O., dupla e placar. A resposta padrão do
          * Firestore pode ser o IndexedDB local; tratá-la como "carregado" transforma

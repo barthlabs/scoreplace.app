@@ -1960,6 +1960,17 @@ function renderParticipants(container, tournamentId) {
     container.innerHTML = `<div class="card" style="text-align:center;padding:3rem;"><h3>${_t('participants.notFound')}</h3><a href="#dashboard" class="btn btn-primary" style="margin-top:1rem;display:inline-block;">Dashboard</a></div>`;
     return;
   }
+  /* ⛔ Lista canônica incompleta não é elenco de 96. Nunca pintar os cards
+   * do espelho antigo enquanto a callable de registrations não comprovou
+   * fingerprint e contagem; todas as telas usam a mesma fonte. */
+  if (t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint &&
+      (!window._elencoCanonicoAtual || !window._elencoCanonicoAtual(t))) {
+    var _retryRoster = typeof window._botaoTentarPartes === 'function' ? window._botaoTentarPartes(t.id) : '';
+    container.innerHTML = '<div class="card" style="padding:1.5rem;text-align:center;">' +
+      '<h3>Inscritos em atualização</h3><p>A lista canônica ainda não foi confirmada. Nenhum inscrito foi removido.</p>' +
+      _retryRoster + '</div>';
+    return;
+  }
 
   // v4.5.64: PERFIS DOS PARTICIPANTES = PRÉ-REQUISITO DO RENDER. Nome resolve vivo por
   // uid (users/{uid}); sem fallback pra nome gravado. Garante os perfis e re-renderiza

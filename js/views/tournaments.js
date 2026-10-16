@@ -2183,6 +2183,19 @@ if (typeof window.openEditModal !== 'function') {
 
 function renderTournaments(container, tournamentId = null) {
     if (!window.AppStore) return;
+    /* ⛔ Detalhe e chave não podem usar outra coleção ou exibir o espelho
+     * `inscritos` enquanto registrations ainda não foi comprovada. */
+    if (tournamentId) {
+      var _tRoster = window._findTournamentById && window._findTournamentById(tournamentId);
+      if (_tRoster && _tRoster.canonicalRegistrationMigration && _tRoster.canonicalRegistrationMigration.fingerprint &&
+          (!window._elencoCanonicoAtual || !window._elencoCanonicoAtual(_tRoster))) {
+        var _retryCanonical = typeof window._botaoTentarPartes === 'function' ? window._botaoTentarPartes(_tRoster.id) : '';
+        container.innerHTML = '<div class="card" style="padding:1.5rem;text-align:center;">' +
+          '<h3>Torneio em atualização</h3><p>O elenco canônico ainda não foi confirmado. Os dados do torneio foram preservados.</p>' +
+          _retryCanonical + '</div>';
+        return;
+      }
+    }
     if (window._autoKeepScroll) window._autoKeepScroll(); // v2.8.82: re-render por ação não pula scroll
     // Clear one-time check flags for OTHER tournaments (keep current)
     if (tournamentId) {

@@ -17,6 +17,14 @@ function tournament(extra) {
   }, extra || {});
 }
 function render(t) {
+  // A ficha de torneio migrado só abre depois do recibo da leitura canônica.
+  // Este teste exercita a barra, então fornece o recibo que a carga real instala.
+  if (t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint) {
+    t.canonicalRegistrationMigration.registrationCount = 128;
+    Object.defineProperty(t, '_canonicalRosterReceipt', {
+      value: t.canonicalRegistrationMigration.fingerprint + ':128', configurable: true
+    });
+  }
   const el = { innerHTML: '', style: {}, dataset: {}, appendChild() {},
     querySelector() { return null; }, querySelectorAll() { return []; },
     addEventListener() {}, classList: { add() {}, remove() {}, contains() { return false; } } };

@@ -867,6 +867,15 @@ window._marcaPartesQueFaltam = function (t, documentoDeTorneio) {
   };
   var falta = false, oQue = [];
   _foraDaqui.forEach(function (nome) {
+    /* ⛔ Em torneio com registrations canônicas, `inscritos` e `_nPartes` são
+     * espelhos de compatibilidade, nunca prova de elenco. Isto vale para cache,
+     * abertura fria, detalhe, inscritos e chave: todos recebem a MESMA projeção
+     * comprovada pela callable, ou aguardam/mostram erro recuperável. */
+    if (nome === 'participants' && documentoDeTorneio &&
+        t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint) {
+      if (!window._elencoCanonicoAtual(t)) { falta = true; oQue.push(nome); }
+      return;
+    }
     if (nome === 'participants' && typeof window._elencoCanonicoAtual === 'function' && window._elencoCanonicoAtual(t)) return;
     var tenho = _quantoTenho(nome);
     var n = _conta(nome);
@@ -11742,6 +11751,8 @@ window._ensureTournamentLoaded = function (tId, cb, forceFresh) {
    * ⭐ `loadTournamentById` já busca as subcoleções — bastava deixar de atalhar até ele.
    * [[feedback_cache_quente_satisfaz_metade_da_pergunta]] */
   if (local && local._faltamPesados === true) local = null;
+  if (local && local.canonicalRegistrationMigration && local.canonicalRegistrationMigration.fingerprint &&
+      !window._elencoCanonicoAtual(local)) local = null;
   if (local) { cb(local); return; }
 
   var DB = window.FirestoreDB;
@@ -11781,7 +11792,8 @@ window._ensureTournamentLoaded = function (tId, cb, forceFresh) {
     // (foi exatamente o que fazia o Editor mostrar defaults/logo vazio depois
     // de o cartão já estar com 128 inscritos). Nas leituras normais, a corrida
     // continua podendo reaproveitar somente um objeto comprovadamente completo.
-    if (!forceFresh && jaTem && jaTem._resumo !== true && jaTem._doCache !== true && jaTem._faltamPesados !== true) {
+    if (!forceFresh && jaTem && jaTem._resumo !== true && jaTem._doCache !== true && jaTem._faltamPesados !== true &&
+        !(jaTem.canonicalRegistrationMigration && jaTem.canonicalRegistrationMigration.fingerprint && !window._elencoCanonicoAtual(jaTem))) {
       _terminar(jaTem); return;
     }
     var A = window.AppStore;
@@ -12943,6 +12955,16 @@ window.AppStore = {
          * fala sobre eles — nem pra remover, nem pra esvaziar. Id, partes montadas,
          * inscritos, jogos, congeladas e rota aberta seguem exatamente como estavam. */
         store.tournaments = window._preservaSandboxes(tournaments, _sbGuardados);
+        /* ⛔ A migração pode chegar DURANTE uma tela aberta. Nesse caso o
+         * listener legado de `inscritos` já está ativo; cancelá-lo no mesmo eco
+         * que trouxe o fingerprint evita que reponha Jogador NN sobre o cânone. */
+        if (store._jogosSub && store._jogosSub.id) {
+          var _subAtual = store._jogosSub;
+          var _torneioAberto = (store.tournaments || []).find(function (x) { return x && String(x.id) === _subAtual.id; });
+          var _fpAtual = String(_torneioAberto && _torneioAberto.canonicalRegistrationMigration &&
+            _torneioAberto.canonicalRegistrationMigration.fingerprint || '');
+          if (_fpAtual !== _subAtual.rosterFingerprint) store.ouvirPartesDoTorneio(_subAtual.id);
+        }
         // ⭐ e SÓ AGORA (com o store montado) a busca do que falta é disparada — de fora
         // do laço síncrono, uma de cada vez, e repintando quando chegar.
         if (_paraMontar.length && typeof store._montaPesadosQueFaltam === 'function') {
@@ -14001,9 +14023,12 @@ window.AppStore = {
   ouvirPartesDoTorneio(tournamentId) {
     var id = String(tournamentId || '');
     if (!id || !window.FirestoreDB || !window.FirestoreDB.db) return;
-    if (this._jogosSub && this._jogosSub.id === id) return;   // já ouvindo este
-    this.pararDeOuvirJogos();
     var t = (this.tournaments || []).find(function (x) { return x && String(x.id) === id; });
+    var _rosterFingerprint = String(t && t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint || '');
+    if (this._jogosSub && this._jogosSub.id === id && this._jogosSub.rosterFingerprint === _rosterFingerprint) return;
+    // Ao ganhar um fingerprint, o listener antigo de `inscritos` TEM que ser
+    // cancelado antes de qualquer novo eco; senão ele ressuscita Jogador NN.
+    this.pararDeOuvirJogos();
 
     /* ⛔⛔⛔ ESTE OUVINTE EXISTIA E NÃO RESOLVIA NADA — porque DESISTIA CALADO.
      *
@@ -14053,6 +14078,7 @@ window.AppStore = {
      * [[project_torneio_nasce_dividido]] */
     var fora = S.partesDe(t);
     var alvos = this._partesQueMudamAoVivo(fora);
+    if (_rosterFingerprint) alvos = alvos.filter(function (nome) { return nome !== 'participants'; });
     if (!alvos.length) {
       if (window._warn) window._warn('[torneio] nenhuma parte ouvível em ' + id + ' (declaradas: ' + fora.join(', ') + ')');
       return;
@@ -14151,7 +14177,7 @@ window.AppStore = {
         if (window._error) window._error('[fase2] não consegui ouvir ' + nome + ' de ' + id, e);
       }
     });
-    if (uns.length) this._jogosSub = { id: id, uns: uns };
+    if (uns.length) this._jogosSub = { id: id, uns: uns, rosterFingerprint: _rosterFingerprint };
   },
 
   /* ⛔ Soltar ao sair é obrigatório: assinatura esquecida continua baixando delta de um
