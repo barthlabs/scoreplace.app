@@ -273,9 +273,14 @@ window._duplaCard = function (t, p, draggable, ctx) {
       var _dpCatStr = (typeof p === 'object' && p) ? (p.category || '') : '';
       for (var _dpi = 0; _dpi < _dpCats.length; _dpi++) { if (_dpCatStr === _dpCats[_dpi] || _dpCatStr.endsWith(' ' + _dpCats[_dpi])) { _dpSkill = _dpCats[_dpi]; break; } }
     }
-    var _dpOrder = members
-      ? (parseInt(_s1 || '0', 10) || 0)
-      : (window._enrollNumber ? (parseInt(window._enrollNumber(_enrollOrderMapD, p), 10) || 0) : 0);
+    // O filtro usa este inteiro para reordenar os cards depois do render. Em
+    // torneio migrado com categorias explícitas, a ordem da foto é categoria
+    // seguida da posição original DENTRO dela; o número individual de inscrição
+    // continua sendo p1Seq/p2Seq, sem renumerar nem gravar registrations.
+    var _dpOrder = ctx.displayOrderMap && ctx.displayOrderMap.has(p)
+      ? ctx.displayOrderMap.get(p)
+      : (members ? (parseInt(_s1 || '0', 10) || 0)
+        : (window._enrollNumber ? (parseInt(window._enrollNumber(_enrollOrderMapD, p), 10) || 0) : 0));
     // O organizador pode deliberadamente manter pessoas acima da lotação para
     // comparar cenários. Elas não somem nem são movidas por código: a própria
     // lista as marca com a mesma faixa zebrada da agenda fora da janela.
@@ -353,6 +358,29 @@ window._buildDoublesInscritosSection = function (t, ctx) {
   var _pairedParticipants = _allParts.filter(_isPairEntry);
   var _canonicalDenseSeq = window._canonicalDenseRegistrationSeq(t);
   var _enrollOrderMapD = window._buildEnrollOrderMap(t);
+  // Só elenco migrado COMPLETO com categorias declaradas usa blocos. Não
+  // alterar o array persistido: _pairedParticipants é cópia feita por filter.
+  var _declaredCategoryNames = Array.isArray(t.combinedCategories) && t.combinedCategories.length
+    ? t.combinedCategories : (Array.isArray(t.categoryDefinitions)
+      ? t.categoryDefinitions.filter(function (d) { return d && d.enabled !== false; }).map(function (d) { return d.label; }) : []);
+  var _categoryBlockRank = new Map();
+  if (_canonicalDenseSeq && _declaredCategoryNames.length > 1) {
+    _declaredCategoryNames.forEach(function (label, index) {
+      var key = String(label || '').trim().toLocaleLowerCase();
+      if (key && !_categoryBlockRank.has(key)) _categoryBlockRank.set(key, index);
+    });
+  }
+  function _entryCategoryRank(entry) {
+    if (!_categoryBlockRank.size || !entry || typeof entry !== 'object') return Number.MAX_SAFE_INTEGER;
+    var raw = String(entry.categoryId || entry.category || ((entry.categories || [])[0]) || '').trim();
+    var label = typeof window._displayTournamentCategory === 'function'
+      ? window._displayTournamentCategory(t, raw) : raw;
+    var key = String(label || '').trim().toLocaleLowerCase();
+    if (_categoryBlockRank.has(key)) return _categoryBlockRank.get(key);
+    var definition = (t.categoryDefinitions || []).find(function (d) { return d && String(d.id) === raw; });
+    key = String(definition && definition.label || '').trim().toLocaleLowerCase();
+    return _categoryBlockRank.has(key) ? _categoryBlockRank.get(key) : Number.MAX_SAFE_INTEGER;
+  }
   var _pairedMemberKeys = {};
   _pairedParticipants.forEach(function (pp) {
     if (pp.p1Uid) _pairedMemberKeys['u:' + pp.p1Uid] = 1;
@@ -409,12 +437,20 @@ window._buildDoublesInscritosSection = function (t, ctx) {
     return String(typeof entry === 'string' ? entry : (entry && (entry.displayName || entry.name)) || '').toLocaleLowerCase();
   }
   function _compareEntries(a, b) {
+    if (_canonicalDenseSeq && _categoryBlockRank.size) {
+      var ca = _entryCategoryRank(a), cb = _entryCategoryRank(b);
+      if (ca !== cb) return ca - cb;
+    }
     var na = _entryOrderNumber(a), nb = _entryOrderNumber(b);
     if (na !== nb) return na - nb;
     return _entryOrderLabel(a).localeCompare(_entryOrderLabel(b), 'pt-BR');
   }
   _pairedParticipants.sort(_compareEntries);
   _soloParticipants.sort(_compareEntries);
+  var _displayOrderMap = new Map();
+  if (_canonicalDenseSeq && _categoryBlockRank.size) {
+    _pairedParticipants.forEach(function (entry, index) { _displayOrderMap.set(entry, index + 1); });
+  }
 
   function _safeAttr(s) { return String(s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
 
@@ -438,7 +474,7 @@ window._buildDoublesInscritosSection = function (t, ctx) {
     if (_categoryPeople[label] > limit) _overCapacityEntries.add(entry);
   });
   // v1.3.37: card de dupla via FONTE ÚNICA window._duplaCard (extraído). ctx com as deps.
-  var _dctx = { isOrg: isOrg, drawDone: drawDone, orgUids: _orgUidsShared, cardPresence: _cardPres, memberPresence: ctx.memberPresence, enrollOrderMap: _enrollOrderMapD, canonicalDenseSeq: _canonicalDenseSeq, overCapacityEntries: _overCapacityEntries };
+  var _dctx = { isOrg: isOrg, drawDone: drawDone, orgUids: _orgUidsShared, cardPresence: _cardPres, memberPresence: ctx.memberPresence, enrollOrderMap: _enrollOrderMapD, canonicalDenseSeq: _canonicalDenseSeq, displayOrderMap: _displayOrderMap, overCapacityEntries: _overCapacityEntries };
 
   // Convites pendentes → card de dupla PENDENTE (âmbar) na seção "Sem dupla".
   var _cuUid = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) || '';

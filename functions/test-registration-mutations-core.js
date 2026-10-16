@@ -64,6 +64,10 @@ const pairedForMove = M.pair('t1', [a, b], [a.registrationId, b.registrationId])
 const movedPair = M.reclassify('t1', pairedForMove.updates, { uid: 'u1' }, 'cat-a', 'cat-b');
 ok('troca de categoria leva a dupla inteira e recalcula o vínculo',
   movedPair.updates.filter((item) => item.status === 'withdrawn').length === 2 && movedPair.creates.length === 2 && movedPair.creates.every((item) => item.categoryId === 'cat-b' && item.fixedPairId === movedPair.fixedPairId));
+const fridayOrigin = pairedForMove.updates.map((item) => Object.assign({}, item, { originCategoryId: 'cat-a' }));
+const fridayMoved = M.reclassify('t1', fridayOrigin, { uid: 'u1' }, 'cat-a', 'cat-b');
+ok('arrastar a dupla preserva a categoria de inscrição original para distinguir o dia de jogo',
+  fridayMoved.creates.length === 2 && fridayMoved.creates.every((item) => item.originCategoryId === 'cat-a' && item.categoryId === 'cat-b'));
 const uncategorized = R.UNCATEGORIZED_CATEGORY_ID;
 const manualA = M.enroll('t1', [], { manualParticipantId: 'vaga-97' }, [uncategorized], { manualDisplayName: 'Jogador 97' }).creates[0];
 const manualB = M.enroll('t1', [], { manualParticipantId: 'vaga-98' }, [uncategorized], { manualDisplayName: 'Jogador 98' }).creates[0];

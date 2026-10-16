@@ -39,6 +39,45 @@ const visibleOrder = [...all64Html.matchAll(/data-part-order="(\d+)"/g)].map(m =
 assert.deepStrictEqual(visibleOrder, Array.from({ length: 64 }, (_, i) => i * 2 + 1));
 assert.deepStrictEqual(shuffled64, all64.slice().reverse(), 'render não muda o array persistido');
 
+// Importações em etapas deixaram sequências globais intercaladas entre as
+// categorias. A ficha precisa agrupar os seis blocos das fotos sem renumerar
+// a inscrição nem regravar o roster. A barra usa exatamente a mesma ordem.
+const categoryNames = ['Fem Light', 'Fem Power', 'Fem Extreme', 'Masc Light', 'Masc Power', 'Masc Extreme'];
+const categoryCounts = [16, 8, 8, 16, 8, 8];
+const sourcePairs = [];
+let ordinal = 0;
+categoryNames.forEach((category, ci) => {
+  for (let i = 0; i < categoryCounts[ci]; i++) {
+    ordinal++;
+    sourcePairs.push(pair('C' + ci + ' P' + String(i + 1).padStart(2, '0'),
+      'Parceira ' + ordinal, ordinal * 2 - 1, ordinal * 2, { category }));
+  }
+});
+const staggered = [];
+for (let i = 0; i < 16; i++) for (let ci = 0; ci < 6; ci++) {
+  if (i < categoryCounts[ci]) staggered.push(sourcePairs.filter(p => p.category === categoryNames[ci])[i]);
+}
+staggered.forEach((p, i) => { p.p1Seq = i * 2 + 1; p.p2Seq = i * 2 + 2; });
+const groupedTournament = tournament(staggered.slice().reverse(), { combinedCategories: categoryNames });
+const beforeGrouped = JSON.stringify(groupedTournament.participants);
+const groupedHtml = W._buildDoublesInscritosSection(groupedTournament, { drawDone: false }).html;
+let previousIndex = -1;
+sourcePairs.forEach((p) => {
+  const at = groupedHtml.indexOf(p.p1Name);
+  assert(at > previousIndex, 'grupo/categoria e ordem interna da foto: ' + p.p1Name);
+  previousIndex = at;
+});
+assert.deepStrictEqual([...groupedHtml.matchAll(/data-part-order="(\d+)"/g)].map(m => Number(m[1])),
+  Array.from({ length: 64 }, (_, i) => i + 1), 'o filtro recebe a mesma ordem visual inteira');
+assert.strictEqual(JSON.stringify(groupedTournament.participants), beforeGrouped,
+  'agrupar a tela não altera nem um campo do roster persistido');
+const unknown = pair('Categoria não mapeada', 'Segunda', 1, 2, { category: 'Extra' });
+const withUnknown = tournament([unknown, pair('Conhecida', 'Segunda', 3, 4, { category: 'Fem Light' })],
+  { combinedCategories: categoryNames });
+const unknownHtml = W._buildDoublesInscritosSection(withUnknown, { drawDone: false }).html;
+assert(unknownHtml.indexOf('Conhecida') < unknownHtml.indexOf('Categoria não mapeada'),
+  'categoria não declarada fica ao fim, sem NaN');
+
 // A ficha real também tem barra de filtro: #part-sort é hidden e seu valor
 // inicial era name-asc, que reordenava os 64 cards após carregar os perfis.
 W._filterBarState.inscritos = { sort: 'name-asc', sortFor: 'outro' };

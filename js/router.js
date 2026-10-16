@@ -711,7 +711,37 @@ function initRouter() {
         }
         break;
       case 'participants':
-        renderParticipants(viewContainer, cleanParam);
+        // A chamada direta precisa do MESMO elenco canônico que o detalhe. Sem
+        // esta carga, um refresh em #participants mostrava o espelho antigo ou
+        // ficava indefinidamente em "Inscritos em atualização". Re-render do
+        // listener com recibo válido não faz nova consulta nem perde o scroll.
+        if (cleanParam && typeof window._ensureTournamentLoaded === 'function') {
+          var _localParticipants = typeof window._findTournamentById === 'function'
+            ? window._findTournamentById(cleanParam) : null;
+          var _readyParticipants = _localParticipants && _localParticipants._resumo !== true &&
+            _localParticipants._doCache !== true && _localParticipants._faltamPesados !== true &&
+            (!_localParticipants.canonicalRegistrationMigration ||
+              (typeof window._elencoCanonicoAtual === 'function' && window._elencoCanonicoAtual(_localParticipants)));
+          if (window._isSoftRefresh && _readyParticipants) {
+            renderParticipants(viewContainer, cleanParam);
+            break;
+          }
+          if (window._participantsLoadPending && window._participantsLoadPending.id === String(cleanParam) &&
+              window._participantsLoadPending.epoch === _routeEpoch) break;
+          var _participantsRequest = { id: String(cleanParam), epoch: _routeEpoch };
+          window._participantsLoadPending = _participantsRequest;
+          viewContainer.innerHTML = '<div class="card" style="padding:1.5rem;text-align:center;">Carregando inscritos atualizados…</div>';
+          window._ensureTournamentLoaded(cleanParam, function (loaded) {
+            if (window._participantsLoadPending === _participantsRequest) window._participantsLoadPending = null;
+            if (!_routeIsCurrent()) return;
+            if (loaded) { renderParticipants(viewContainer, cleanParam); return; }
+            viewContainer.innerHTML = '<div class="card" role="alert" style="padding:1.5rem;text-align:center;">' +
+              '<h3>Não foi possível carregar os inscritos</h3><p>Nenhum dado foi alterado. Tente abrir esta tela novamente.</p>' +
+              '<a class="btn btn-primary" href="#tournaments/' + encodeURIComponent(cleanParam) + '">Voltar ao torneio</a></div>';
+          }, !window._isSoftRefresh);
+        } else {
+          renderParticipants(viewContainer, cleanParam);
+        }
         break;
       case 'rules':
         renderRules(viewContainer, cleanParam);
