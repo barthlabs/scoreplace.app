@@ -485,8 +485,8 @@ if (codPools && codCont) {
     'a régua é o ERRO de posição, não a estabilidade');
   // ⚠️ a distinção que fez o conserto funcionar: parar por "não se mexeu mais" deixava
   // o alvo parado no lugar ERRADO, que é exatamente o sintoma relatado.
-  ok(/_erro <= 3 && _ultimo !== null/.test(br),
-    'só conta como estável quando ESTÁ no lugar certo E parou de mexer');
+  ok(/_erro <= 3 && _erroX <= 3 && _ultimo !== null/.test(br),
+    'só conta como estável quando ESTÁ no lugar certo nos dois eixos E parou de mexer');
   // a chave é consumida quando o LAÇO termina — não no timeout de 1400ms, que rodaria
   // no meio da correção e faria o laço cair na regra antiga (outro grupo).
   const iRemove = br.indexOf("sessionStorage.removeItem('sp_scrollToGroup')", br.indexOf('var _reafirmar = function'));
