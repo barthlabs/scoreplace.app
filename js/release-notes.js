@@ -1,3 +1,6 @@
+// 2.4.76 — Propor datas e Criar grupo dos jogos ficam disponíveis assim que
+// um lado do confronto é conhecido; marcar data por consenso continua exigindo
+// os dois lados. O sandbox persiste essas ações na própria cópia, sem avisos.
 // 2.4.75 — A Análise do sandbox lê as mesmas inscrições canônicas da ficha,
 // resolve nomes de contas sem mostrar UIDs e bloqueia edição quando o recibo
 // do elenco diverge ou o torneio não tem ID confirmado. A cópia continua

@@ -36,11 +36,11 @@ ok(dashboard.includes('timelineHtml: _nextTimeline') &&
   dashboard.includes('data-match-time-status') &&
   dashboard.includes('justify-content:flex-start') &&
   dashboard.includes('gap:6px;flex-wrap:wrap;min-height:30px;') &&
-  dashboard.includes('window._pendingMatchActionChips(tRef, item.m)') &&
+  !dashboard.includes('window._pendingMatchActionChips(tRef, item.m)') &&
   !dashboard.includes('rgba(56,189,248,0.5)') &&
   !dashboard.includes('rgba(14,165,233,0.12)') &&
   !dashboard.includes("(_nextTimeline ? '<div style=\"margin-top:5px;\">' + _nextTimeline + '</div>' : '')"),
-  'prazo fica com Jogo N; ações canônicas ficam no rodapé, visíveis e inertes enquanto falta adversário');
+  'prazo fica com Jogo N; ações canônicas ativas ficam no rodapé mesmo enquanto falta adversário');
 const lightPaletteStart = paleta.indexOf('[data-theme="light"]');
 const lightPaletteEnd = paleta.indexOf('/* ── A TARJA DE LEITURA', lightPaletteStart);
 const lightPalette = paleta.slice(lightPaletteStart, lightPaletteEnd);

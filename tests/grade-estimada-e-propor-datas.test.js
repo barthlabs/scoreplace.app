@@ -211,6 +211,13 @@ ok(/m\.scheduledKind = 'organizer'/.test(srcSch), '  → e o que ele aponta é c
 ok(/m\.scheduledKind = 'consensus'/.test(srcSch), 'o consenso dos jogadores carimba consensus');
 ok(!/Combinar jogo/.test(srcSch.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n')),
   'nenhum "Combinar jogo" sobrou no código vivo (só em comentário histórico)');
+const slotUidsBeforeGuestTest = W._slotUids;
+W._slotUids = (_m, side) => side === 'p1' ? ['uA'] : [];
+ok(W._schKnownSidesValid({ p1: 'label:Guest A', p2: '' }, { p1: 'Guest A', p2: 'TBD' }),
+  'guest vinculado a UID no mesmo slot conserva propostas por nome idêntico');
+ok(!W._schKnownSidesValid({ p1: 'label:Guest A', p2: '' }, { p1: 'Outra pessoa', p2: 'TBD' }),
+  'outro nome no slot não herda propostas do guest');
+W._slotUids = slotUidsBeforeGuestTest;
 
 /* ⛔ "NÃO SALVOU (_crCache is not defined)" — medido pelo dono na 2.1.115. A 2.1.98 apagou
  * `var _crCache` e deixou duas atribuições órfãs DEPOIS do `_save`: em 'use strict' é
@@ -226,7 +233,8 @@ ok(!/Combinar jogo/.test(srcSch.split('\n').filter(l => !/^\s*\/\//.test(l)).joi
   const tS = { id: 'TS', name: 'S', format: 'Liga', status: 'active', startDate: '2026-09-05', endDate: '2026-09-06',
     participants: [{ uid: 'u1' }, { uid: 'u2' }], matches: [],
     rounds: [{ round: 1, status: 'active', matches: [{ id: 'mS', p1: 'A', p2: 'B', team1Uids: ['u1'], team2Uids: ['u2'], round: 1,
-      schedule: { options: [{ id: 'o1', kind: 'date', dateISO: '2026-09-05', time: '17:00', byUid: 'u2' }], votes: {} } }] }] };
+      schedule: { options: [{ id: 'o1', kind: 'date', dateISO: '2026-09-05', time: '17:00', byUid: 'u2' }], votes: {},
+        knownSides: { p1: 'uid:u1', p2: 'uid:u2' } } }] }] };
   W.AppStore.tournaments = [tS]; W.AppStore.currentUser = { uid: 'u1', displayName: 'A', email: 'a@x' };
   W._findTournamentById = () => tS; W._currentBracketTournament = tS;
   W._schVote('TS', 'mS', 'o1', 1);
@@ -234,8 +242,24 @@ ok(!/Combinar jogo/.test(srcSch.split('\n').filter(l => !/^\s*\/\//.test(l)).joi
   const m = tS.rounds[0].matches[0];
   ok(!notas.some(n => /Não salvou/.test(n)), 'propor/votar com o save resolvendo NÃO acusa "Não salvou" (era ReferenceError depois de gravar)');
   ok(m.schedule && m.schedule.votes && m.schedule.votes.u1 && m.schedule.votes.u1.o1 === 1, '  → e o voto fica registrado na tela (não é revertido)');
+  ok(m.schedule.knownSides.p1 === 'uid:u1' && m.schedule.knownSides.p2 === 'uid:u2',
+    'sem helper de UID na tela, o carimbo por UID e os votos não são apagados nem degradados');
   ok(chamadas.length === 1 && chamadas[0].nome === 'setMatchSchedule', '⛔ e a gravação vai pela PORTA setMatchSchedule, não por saveTournament (torneio dividido não grava jogo pelo doc)');
   ok(chamadas[0] && /^[0-9a-f-]{36}$/.test(String(chamadas[0].data.operationId)) && chamadas[0].data.jogos[0].matchId === 'mS' && chamadas[0].data.jogos[0].schedule.votes.u1.o1 === 1, '  → com operationId UUID v4 e o schedule do jogo');
+  const tPendente = { ...tS, id: 'sb_teste', isSandbox: true, notificationsMuted: true,
+    rounds: [{ round: 2, status: 'active', matches: [{ id: 'mP', p1: 'Dupla conhecida', p2: 'TBD',
+      team1Uids: ['u1', 'u2'], team2Uids: [], schedule: { options: [{ id: 'oP', kind: 'date', dateISO: '2026-11-05', time: '18:00', byUid: 'u1' }], votes: {} } }] }] };
+  W.AppStore.tournaments = [tPendente]; W._findTournamentById = () => tPendente;
+  W._schVote(tPendente.id, 'mP', 'oP', 1);
+  await new Promise(r => setImmediate(r)); await new Promise(r => setImmediate(r));
+  W.AppStore.currentUser = { uid: 'u2', displayName: 'Parceiro', email: 'b@x' };
+  W._schVote(tPendente.id, 'mP', 'oP', 1);
+  await new Promise(r => setImmediate(r)); await new Promise(r => setImmediate(r));
+  const pendente = tPendente.rounds[0].matches[0];
+  ok(pendente.schedule.votes.u1.oP === 1 && pendente.schedule.votes.u2.oP === 1 && !pendente.scheduledAt,
+    'duas pessoas do lado conhecido propõem/votam, mas não há falso consenso antes do rival');
+  ok(chamadas.slice(-2).every(c => c.nome === 'setMatchSchedule' && c.data.sandbox === true),
+    'sandbox é enviado explicitamente à porta tipada, sem cair na coleção de produção');
   console.log((fail ? '✗' : '✓') + ' grade-estimada-e-propor-datas: ' + pass + ' ok, ' + fail + ' falhas');
   process.exit(fail ? 1 : 0);
 })();

@@ -111,7 +111,8 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
     var ids = lista.map(function (m) { return String(m.id); });
     var k = _schOpKey(t.id, ids);
     var payload = {
-      tournamentId: String(t.id), operationId: _schOpIdPara(k), espelharGrupo: !!espelharGrupo,
+      tournamentId: String(t.id), sandbox: t.isSandbox === true,
+      operationId: _schOpIdPara(k), espelharGrupo: !!espelharGrupo,
       jogos: lista.map(function (m) {
         return { matchId: String(m.id), schedule: m.schedule ? JSON.parse(JSON.stringify(m.schedule)) : null,
           scheduledAt: m.scheduledAt || null, scheduledBy: m.scheduledBy || null, scheduledKind: m.scheduledKind || null };
@@ -279,13 +280,12 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
   // reclamou. Pela regra nova, os mesmos 99 jogos dão 35 liberados: exatamente a R1, que é
   // o que se está jogando.
   //
-  // A regra nova não depende de coluna, de rodada nem de fase — e é por isso que ela também
-  // entrega o que o dono pediu: um jogo da R3 cujos dois lados já saíram (não dependia de
-  // repescagem) pode ser combinado antes de a R2 acabar. Quem ainda espera vencedor tem TBD
-  // nos slots e continua de fora, sozinho.
+  // Este predicado estrito continua necessário para CONFIRMAR consenso: todos os votos
+  // de uma dupla só não podem marcar a data enquanto o adversário ainda é TBD.
+  // Preparar a partida (propor datas/criar grupo) usa _schPodePrepararJogo abaixo.
   //
-  // O gate de quem vê os dois chips TEM que ser o mesmo — fonte única aqui, nunca
-  // reimplementado em wa-group.js.
+  // Não usar este gate estrito para renderizar os chips: ambos compartilham
+  // _schPodePrepararJogo, fonte única, sem cópia em wa-group.js.
   function _schJogoLiberado(t, m) {
     if (!m) return false;
     if (m.isBye || m.isSitOut) return false;
@@ -293,6 +293,48 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
     return !!(a && b && a !== 'TBD' && b !== 'TBD' && a !== 'BYE' && b !== 'BYE');
   }
   window._schJogoLiberado = _schJogoLiberado;
+
+  // ⛔ AÇÕES ANTECIPADAS (16/out/2026): propor datas e criar o grupo NÃO dependem
+  // do adversário já definido. Um lado real basta para abrir as duas ações; TBD
+  // recebe as propostas depois. Isto NÃO é o gate do consenso/placar: estes só
+  // podem fechar com os dois lados conhecidos. BYE, folga e jogo terminado nunca
+  // ganham ação nova. Os dois chips usam esta mesma porta, sem cópias na dashboard.
+  function _schPodePrepararJogo(t, m) {
+    if (!m || m.isBye || m.isSitOut || m.winner || m.wo || m.completedAt || m.resultAt ||
+        (m.pendingResult && m.pendingResult.proposedAt)) return false;
+    // BYE pode chegar como rótulo do slot mesmo sem isBye no registro legado.
+    if (m.p1 === 'BYE' || m.p2 === 'BYE') return false;
+    function conhecido(v) { return !!(v && v !== 'TBD' && v !== 'BYE'); }
+    return conhecido(m.p1) || conhecido(m.p2);
+  }
+  window._schPodePrepararJogo = _schPodePrepararJogo;
+  function _schKnownSides(m) {
+    function side(key) {
+      var label = String(m && m[key] || '').trim();
+      if (!label || label === 'TBD' || label === 'BYE') return '';
+      var ids = typeof window._slotUids === 'function' ? window._slotUids(m, key).filter(Boolean).map(String).sort() : [];
+      return ids.length ? 'uid:' + ids.join('|') : 'label:' + label;
+    }
+    return { p1: side('p1'), p2: side('p2') };
+  }
+  function _schKnownSidesValid(stamp, m) {
+    if (!stamp) return true; // legado sem carimbo continua legível
+    var now = _schKnownSides(m);
+    function valid(saved, current, side) {
+      // Se o helper de UIDs não carregou, um rótulo não prova que a dupla
+      // mudou. Preservar os votos locais e deixar o servidor validar o UID.
+      if (typeof window._slotUids !== 'function' && saved &&
+          saved.indexOf('uid:') === 0 && current.indexOf('label:') === 0) return true;
+      // O mesmo guest ganhou UID sem sair da vaga: conserva a conversa e votos
+      // quando o nome do MESMO slot continua igual. Outro nome invalida.
+      if (saved && saved.indexOf('label:') === 0 && current.indexOf('uid:') === 0 &&
+          saved.slice(6).trim().toLocaleLowerCase('pt-BR') ===
+            String(m && m[side] || '').trim().toLocaleLowerCase('pt-BR')) return true;
+      return !saved || saved === current;
+    }
+    return valid(stamp.p1, now.p1, 'p1') && valid(stamp.p2, now.p2, 'p2');
+  }
+  window._schKnownSidesValid = _schKnownSidesValid;
 
   // ─── uids dos jogadores do match (singles + duplas + monarch) ──────────────────
   // IDENTIDADE = uid DO SLOT, nunca o nome. Isto já foi "procurar em t.participants
@@ -538,8 +580,21 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
   }
   window._schFindMatch = _schFindMatch;
   function _ensureSchedule(m) {
+    // A proposta segue quando um slot TBD é preenchido; uma dupla já conhecida
+    // TROCADA não herda votos/data do confronto anterior. O próximo save cria
+    // a enquete nova no mesmo jogo canônico, com carimbo atualizado no servidor.
+    if (m.schedule && !_schKnownSidesValid(m.schedule.knownSides, m)) {
+      m.schedule = null; delete m.scheduledAt; delete m.scheduledBy; delete m.scheduledKind;
+    }
     if (!m.schedule || typeof m.schedule !== 'object') m.schedule = { options: [], votes: {}, dayVotes: {} };
     var s = m.schedule;
+    var currentSides = _schKnownSides(m);
+    // Nunca degradar um carimbo por UID para rótulo porque o helper não estava
+    // disponível neste render. Na gravação, a Function reconcilia o snapshot fresco.
+    s.knownSides = {
+      p1: (typeof window._slotUids !== 'function' && s.knownSides && String(s.knownSides.p1 || '').indexOf('uid:') === 0 && currentSides.p1.indexOf('label:') === 0) ? s.knownSides.p1 : currentSides.p1,
+      p2: (typeof window._slotUids !== 'function' && s.knownSides && String(s.knownSides.p2 || '').indexOf('uid:') === 0 && currentSides.p2.indexOf('label:') === 0) ? s.knownSides.p2 : currentSides.p2
+    };
     if (!Array.isArray(s.options)) s.options = [];
     if (!s.votes || typeof s.votes !== 'object') s.votes = {};
     if (!s.dayVotes || typeof s.dayVotes !== 'object') s.dayVotes = {};
@@ -602,6 +657,9 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
   // weekly) → agenda na ocorrência mais próxima. Roda DENTRO do voto, ANTES do save
   // → escrita atômica. Retorna true se fechou agora.
   function _schTrySchedule(t, m) {
+    // Proposta pode nascer antes do rival; consenso NÃO. Em dupla, os dois UIDs
+    // do lado conhecido já somam 2 e antes fechavam falsamente a votação.
+    if (!_schJogoLiberado(t, m)) return false;
     var uids = _schMatchUids(t, m);
     if (uids.length < 2) return false;
     var s = m.schedule || {}; var votes = s.votes || {}, dayVotes = s.dayVotes || {};
@@ -653,6 +711,7 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
     };
   }
   function _schNotifyScheduled(t, m) {
+    if (t && (t.isSandbox === true || t.notificationsMuted === true)) return;
     if (typeof window._sendUserNotification !== 'function') return;
     var data = _schScheduledData(t, m);
     var uids = _schMatchUids(t, m);
@@ -1142,21 +1201,19 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
        * [[feedback_a_defesa_vaza_pela_borda]] */
       var _jaDisputado = !!(m.resultAt || m.completedAt || m.winner || m.wo ||
         (m.pendingResult && m.pendingResult.proposedAt));
-      if (m.scheduledAt && !_jaDisputado) {
+      var _staleSchedule = m.schedule && !_schKnownSidesValid(m.schedule.knownSides, m);
+      if (m.scheduledAt && !_jaDisputado && !_staleSchedule) {
         var open = 'event.stopPropagation(); window._schOpenMatch(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')';
         return _chipData(m.scheduledAt, m.scheduledKind, open);
       }
       if (m.isMonarch) return '';
       if (m.winner || m.isBye || m.isSitOut) return '';
-      if (!m.p1 || !m.p2 || m.p1 === 'BYE' || m.p2 === 'BYE' || m.p1 === 'TBD' || m.p2 === 'TBD') return '';
+      if (!_schPodePrepararJogo(t, m)) return '';
       var cu = _cu(); if (!cu || !cu.uid) return '';
       // 2.1.7: PORTA ÚNICA — jogador do confronto OU organizador/co-host.
       if (!_schPodeGerirJogo(t, m, cu)) return '';
-      // O organizador FURA o gate (espelha wa-group.js): é ele quem monta a grade antes,
-      // inclusive de jogo que ainda tem TBD. Pro jogador vale a regra do dono: assim que as
-      // duas duplas existem, dá pra combinar — ver `_schJogoLiberado`.
-      if (!_schEhAdmin(t, cu) && !_schJogoLiberado(t, m)) return '';
-      var n = (m.schedule && Array.isArray(m.schedule.options)) ? m.schedule.options.length : 0;
+      // O rival pode estar pendente: proposta é preparação, não confirmação.
+      var n = (!_staleSchedule && m.schedule && Array.isArray(m.schedule.options)) ? m.schedule.options.length : 0;
       // v4.1.25: volume + altura PADRÃO (mesmas classes dos botões do header do card):
       // .btn dá o volume almofadado, .btn-shine o brilho, .btn-micro a altura padrão.
       // ⭐ COM PROPOSTA NA MESA o botão MUDA (pedido do dono, 03/set): recebe o brilho PADRÃO que
@@ -1398,13 +1455,18 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
   };
 
   function _renderMatch(t, m) {
+    // Render é leitura: proposta de adversário substituído fica OCULTA, com aviso,
+    // mas não apagamos o modelo local até uma ação de salvar. _ensureSchedule no
+    // save limpa o estado obsoleto; o servidor valida o confronto fresco de novo.
+    var staleProposal = !!(m.schedule && !_schKnownSidesValid(m.schedule.knownSides, m));
     var cu = _cu();
     var uid = cu && cu.uid;
     var isPlayer = _schUserIsPlayer(t, m, cu);
     var isOrg = _isOrg(t);
     var win = window._schWindow(t);
     var allUids = _schMatchUids(t, m);
-    var sched = m.scheduledAt ? (m.schedule || {}) : _ensureSchedule(m);
+    var sched = staleProposal ? { options: [], votes: {}, dayVotes: {} } :
+      (m.scheduledAt ? (m.schedule || {}) : _ensureSchedule(m));
     // modo GRUPO Rei/Rainha: m é o m0 portador; mesmos 4 jogadores nos 3 jogos.
     var groupMode = !!(_schGroupMode && String(m.id) === _schGroupMode);
     var titleTxt = '📅 Propor datas';
@@ -1424,7 +1486,7 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
     }
 
     // ── estado AGENDADO (colapsado) ──
-    if (m.scheduledAt) {
+    if (m.scheduledAt && !staleProposal) {
       var canUndo = isPlayer && !(typeof window._matchHasRealPlay === 'function' && window._matchHasRealPlay(m));
       var body =
         '<div style="padding:1.1rem;">' + matchLine +
@@ -1574,7 +1636,11 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
     ) : (isOrg ? '<div style="margin-top:10px;font-size:0.78rem;color:var(--text-muted);text-align:center;">Você não joga este confronto — acompanhando como organizador.</div>' : '');
 
     var body = '<div style="padding:1rem 1.1rem;">' + matchLine +
-      '<div style="font-size:0.7rem;color:var(--text-muted);margin:0 0 8px;">Proponha horários e marque os que consegue. Todos ✅ no mesmo = jogo marcado.</div>' +
+      (staleProposal ? '<div role="status" style="color:var(--sp-c-fbbf24,#fbbf24);font-size:0.76rem;margin:8px 0;">Os participantes deste jogo mudaram. Propostas do confronto anterior não serão reutilizadas; proponha uma nova data.</div>' : '') +
+      '<div style="font-size:0.7rem;color:var(--text-muted);margin:0 0 8px;">' +
+        (_schJogoLiberado(t, m) ? 'Proponha horários e marque os que consegue. Todos ✅ no mesmo = jogo marcado.' :
+          'Você já pode propor horários. O jogo só será marcado por consenso depois que o adversário estiver definido.') +
+      '</div>' +
       optsHtml + addHtml + (isOrg ? _orgBloco(t, m) : '') + '</div>';
     _overlay('sch-overlay', header + body);
   }
@@ -1824,6 +1890,7 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
 
   window._schNotifyRound = function (tId) {
     var t = _findT(tId); if (!t || !_isOrg(t)) return;
+    if (t.isSandbox === true || t.notificationsMuted === true) return;
     if (typeof window._sendUserNotification !== 'function') { if (typeof showNotification === 'function') showNotification('Indisponível', 'Notificações indisponíveis.', 'warning'); return; }
     var cr = window._schCurrentRoundMatches(t);
     var n = 0;

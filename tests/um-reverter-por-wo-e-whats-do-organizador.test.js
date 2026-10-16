@@ -298,8 +298,8 @@ sec('em todos os jogos', function () {
   // dele chega"_ (o gate era `_schIsCurrentRoundMatch`). Ordem do dono (02/set/2026):
   // _"os botões têm que aparecer no jogo (todos os botões) assim que tem as duplas
   // definidas. assim a r3 pode começar em alguns jogos mesmo antes de terminar a r2 — se
-  // não dependerem de repescagem"_. Quem espera vencedor tem TBD e continua fora — é o
-  // que o segundo par de asserções guarda.
+  // não dependerem de repescagem"_. Em 16/out o dono liberou a PREPARAÇÃO mesmo
+  // com o rival TBD; só a confirmação por consenso ainda espera os dois lados.
   const t2 = torneio().t;
   comoOrganizador(t2);
   const avulso = { id: 'av1', round: 9, p1: 'Fernanda Biojone', p2: 'Eduardo Mange',
@@ -309,13 +309,13 @@ sec('em todos os jogos', function () {
   W.AppStore.currentUser = { uid: 'u_fer', displayName: 'Fernanda Biojone', notifyWhatsApp: true };
   ok(W._waGrpCardChip(t2, avulso) !== '',
      '⭐ duplas definidas: o jogador JÁ vê, mesmo a rodada não sendo a atual');
-  // e o que ainda não tem adversário segue escondido — pra os dois
+  // O lado conhecido pode preparar datas e grupo enquanto espera o rival.
   const emEspera = { id: 'av2', round: 9, p1: 'Fernanda Biojone', p2: 'TBD',
     p1Uid: 'u_fer', winner: null };
   t2.rounds[0].matches.push(emEspera);
-  ok(W._waGrpCardChip(t2, emEspera) === '', 'jogo esperando adversário (TBD) não abre grupo pro jogador');
+  ok(W._waGrpCardChip(t2, emEspera) !== '', 'jogador conhecido já pode abrir grupo enquanto adversário é TBD');
   comoOrganizador(t2);
-  ok(W._waGrpCardChip(t2, emEspera) === '', 'nem pro organizador — sem os dois lados não há grupo');
+  ok(W._waGrpCardChip(t2, emEspera) !== '', 'organizador também pode preparar grupo antes da definição do rival');
 
   // (c) jogo já decidido
   comoOrganizador(t2);

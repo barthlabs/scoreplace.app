@@ -20,6 +20,10 @@ assert.ok(ini > 0 && fim > ini, 'âncoras do chip do card');
 const ctx = {
   window: {
     _schUserIsPlayer: () => true,
+    _schPodePrepararJogo: (_t, m) => !!(m && !m.isBye && !m.isSitOut && !m.winner &&
+      m.p1 !== 'BYE' && m.p2 !== 'BYE' &&
+      ((m.p1 && m.p1 !== 'TBD' && m.p1 !== 'BYE') ||
+       (m.p2 && m.p2 !== 'TBD' && m.p2 !== 'BYE'))),
     _isOrg: () => false
   },
   chamadasDoChip: 0
@@ -43,8 +47,8 @@ must(chip(t, reiRainha, { semCabecalhoDeGrupo: true }) !== '',
 must(chip(t, comum) !== '', '① jogo comum continua com chip nos dois contextos');
 must(chip(t, { id: 'm3', p1: 'A', p2: 'BYE' }, { semCabecalhoDeGrupo: true }) === '',
   '① ⛔ e BYE continua sem chip em qualquer tela — folga não é jogo');
-must(chip(t, { id: 'm4', p1: 'TBD', p2: 'C / D' }, { semCabecalhoDeGrupo: true }) === '',
-  '① ⛔ nem jogo com lado indefinido');
+must(chip(t, { id: 'm4', p1: 'TBD', p2: 'C / D' }, { semCabecalhoDeGrupo: true }) !== '',
+  '① ⭐ um lado conhecido já pode abrir o grupo antes da definição do rival');
 must(chip(t, { id: 'm5', p1: 'A / B', p2: 'C / D', winner: 'A / B' }) === '',
   '① ⛔ jogo já encerrado sem grupo não convida a criar conversa tardia');
 

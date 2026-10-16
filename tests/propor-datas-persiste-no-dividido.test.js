@@ -49,6 +49,7 @@ function bancoDeMentira(tid, doc, subs, users) {
 
   const colRef = (nome) => ({ _tipo: 'col', _nome: nome, doc: (id) => ({ _tipo: 'doc', _sub: nome, _id: String(id) }) });
   const tRef = { _tipo: 'doc', _raiz: true, _id: tid, collection: colRef };
+  const sourceRef = { _tipo: 'doc', _source: true };
 
   function alvoDe(ref, pend) {
     if (ref._raiz) return { get: () => (pend.docApagado ? null : Object.assign({}, b.doc, pend.doc)), tipo: 'raiz' };
@@ -81,6 +82,7 @@ function bancoDeMentira(tid, doc, subs, users) {
             const m = b.subs[ref._nome] || {};
             return { docs: Object.keys(m).sort().map((k) => ({ id: k, data: () => clone(m[k]) })) };
           }
+          if (ref._source) return { exists: !!b.sourceDoc, data: () => clone(b.sourceDoc || {}) };
           if (ref._raiz) return { exists: true, data: () => clone(b.doc) };
           const a = alvoDe(ref, pend).get();
           return { exists: !!a, data: () => clone(a) };
@@ -138,7 +140,11 @@ function bancoDeMentira(tid, doc, subs, users) {
   };
 
   b.collection = function (nome) {
-    if (nome === 'tournaments') return { doc: (id) => (String(id) === tid ? tRef : { _tipo: 'doc', _raiz: false, _sub: '__inexistente', _id: String(id), collection: colRef }) };
+    if (nome === 'tournaments') return { doc: (id) => (String(id) === tid ? tRef :
+      (b.sourceDoc && String(id) === String(b.doc.sandboxOf) ? sourceRef :
+        { _tipo: 'doc', _raiz: false, _sub: '__inexistente', _id: String(id), collection: colRef })) };
+    if (nome === 'sandboxes') return { doc: (id) => (String(id) === tid ? tRef :
+      { _tipo: 'doc', _raiz: false, _sub: '__inexistente', _id: String(id), collection: colRef }) };
     if (nome === 'users') {
       return { doc: (uid) => ({ get: async () => ({ exists: !!b.users[uid], data: () => clone(b.users[uid] || {}) }) }) };
     }
@@ -204,21 +210,99 @@ function torneio() {
   };
 }
 // divide como o banco de produção: jogos e inscritos na subcoleção, doc só com a config
-function bancoDividido() {
+function bancoDividido(tid) {
+  tid = tid || 'T1';
   const t = torneio();
+  t.id = tid;
+  if (tid.startsWith('sb_')) Object.assign(t, { isSandbox: true, sandboxOf: 'T1',
+    sandboxOwnerUid: 'uOrg', sbState: 'ready', notificationsMuted: true });
   const partes = S.dividir(clone(t), ['matches', 'participants']);
   const doc = Object.assign({}, partes.config, { _semPesados: ['matches', 'participants'], _nJogos: partes.matches.length,
     _nPartes: { matches: partes.matches.length, participants: partes.participants.length } });
   const subs = {};
   subs[S.colecaoDaParte('matches')] = {}; partes.matches.forEach((r) => { subs[S.colecaoDaParte('matches')][S.chaveDoRegistro(r)] = r; });
   subs[S.colecaoDaParte('participants')] = {}; partes.participants.forEach((r) => { subs[S.colecaoDaParte('participants')][S.chaveDoRegistro(r)] = r; });
-  return bancoDeMentira('T1', doc, subs, {});
+  const b = bancoDeMentira(tid, doc, subs, {});
+  if (tid.startsWith('sb_')) b.sourceDoc = { id: 'T1', creatorUid: 'uOrg' };
+  return b;
 }
 const jogoNoBanco = (b, id) => { const col = b.subs[S.colecaoDaParte('matches')]; const k = Object.keys(col).find((k) => col[k].jogo && col[k].jogo.id === id); return k ? col[k].jogo : null; };
 const PROPOSTA = { options: [{ id: 'so_1', kind: 'date', dateISO: '2026-09-10', time: '19:00', byUid: 'uA' }], votes: {}, dayVotes: {}, enabledAt: '2026-09-04T00:00:00.000Z' };
 
 (async () => {
   console.log('\n──── propor datas persiste no torneio dividido ────');
+
+  // O jogo pode receber proposta antes de sair o vencedor anterior. A porta
+  // autoriza pelo UID do lado conhecido e grava no MESMO registro canônico.
+  BANCO = bancoDividido();
+  const regPendente = Object.values(BANCO.subs[S.colecaoDaParte('matches')]).find((r) => r.jogo.id === 'g0-1');
+  regPendente.jogo.p2 = 'TBD'; regPendente.jogo.team2Uids = [];
+  const propostaPendente = await chamar('uA', { tournamentId: 'T1', matchId: 'g0-1',
+    operationId: UUID(8), schedule: PROPOSTA, scheduledAt: null, scheduledBy: null, scheduledKind: null });
+  ok('lado conhecido propõe antes de sair o adversário', propostaPendente.ok &&
+    jogoNoBanco(BANCO, 'g0-1').schedule.options.length === 1);
+  const pendingBeforeConsensus = clone(jogoNoBanco(BANCO, 'g0-1'));
+  const prematureConsensus = await erroDe(chamar('uA', { tournamentId: 'T1', matchId: 'g0-1',
+    operationId: UUID(9), schedule: PROPOSTA, scheduledAt: '2026-09-10T19:00:00.000Z',
+    scheduledBy: 'uA', scheduledKind: 'consensus' }));
+  ok('servidor recusa data de consenso enquanto o rival é TBD',
+    prematureConsensus && prematureConsensus.code === 'failed-precondition');
+  ok('consenso recusado não altera a proposta nem marca o jogo',
+    JSON.stringify(jogoNoBanco(BANCO, 'g0-1')) === JSON.stringify(pendingBeforeConsensus));
+  const missingKindConsensus = await erroDe(chamar('uA', { tournamentId: 'T1', matchId: 'g0-1',
+    operationId: UUID(9), scheduledAt: '2026-09-10T19:00:00.000Z', scheduledBy: 'uA',
+    scheduledKind: null }));
+  ok('scheduledKind nulo também não burla o adversário TBD',
+    missingKindConsensus && missingKindConsensus.code === 'failed-precondition');
+  const swappedMatch = jogoNoBanco(BANCO, 'g0-1');
+  swappedMatch.p1 = 'Nova dupla'; swappedMatch.team1Uids = ['uE', 'uF'];
+  const oldScheduleAfterSwap = clone(swappedMatch.schedule);
+  const staleWithoutStamp = await erroDe(chamar('uOrg', { tournamentId: 'T1', matchId: 'g0-1',
+    operationId: UUID(9), schedule: { ...PROPOSTA, knownSides: {} } }));
+  ok('troca da dupla recusa proposta antiga sem carimbo do confronto atual',
+    staleWithoutStamp && staleWithoutStamp.code === 'failed-precondition');
+  ok('recusa não regrava votos antigos na nova dupla',
+    JSON.stringify(jogoNoBanco(BANCO, 'g0-1').schedule) === JSON.stringify(oldScheduleAfterSwap));
+  const newSchedule = { options: [], votes: {}, dayVotes: {},
+    knownSides: { p1: 'uid:uE|uF', p2: '' } };
+  const resetAfterSwap = await chamar('uOrg', { tournamentId: 'T1', matchId: 'g0-1',
+    operationId: UUID(9), schedule: newSchedule });
+  ok('proposta limpa com identidade exata da nova dupla é aceita', resetAfterSwap.ok &&
+    jogoNoBanco(BANCO, 'g0-1').schedule.knownSides.p1 === 'uid:uE|uF');
+  BANCO = bancoDividido();
+  const orgPending = jogoNoBanco(BANCO, 'g0-1');
+  orgPending.p2 = 'TBD'; orgPending.team2Uids = [];
+  const orgDirect = await chamar('uOrg', { tournamentId: 'T1', matchId: 'g0-1',
+    operationId: UUID(9), scheduledAt: '2026-09-10T19:00:00.000Z',
+    scheduledBy: 'uOrg', scheduledKind: 'organizer' });
+  ok('organizador ainda pode apontar data diretamente com rival TBD', orgDirect.ok &&
+    jogoNoBanco(BANCO, 'g0-1').scheduledKind === 'organizer');
+  BANCO = bancoDividido();
+  const guestMatch = jogoNoBanco(BANCO, 'g0-1');
+  guestMatch.p1 = 'Guest A'; guestMatch.team1Uids = []; guestMatch.p1Uid = null;
+  await chamar('uOrg', { tournamentId: 'T1', matchId: 'g0-1', operationId: UUID(9),
+    schedule: PROPOSTA });
+  ok('guest sem conta grava carimbo por rótulo',
+    jogoNoBanco(BANCO, 'g0-1').schedule.knownSides.p1 === 'label:Guest A');
+  jogoNoBanco(BANCO, 'g0-1').team1Uids = ['uA'];
+  const guestBoundSchedule = clone(jogoNoBanco(BANCO, 'g0-1').schedule);
+  const guestBound = await chamar('uOrg', { tournamentId: 'T1', matchId: 'g0-1',
+    operationId: UUID(8), schedule: guestBoundSchedule });
+  ok('vincular UID no mesmo slot preserva proposta do guest', guestBound.ok &&
+    jogoNoBanco(BANCO, 'g0-1').schedule.options.length === 1 &&
+    jogoNoBanco(BANCO, 'g0-1').schedule.knownSides.p1 === 'uid:uA');
+  BANCO = bancoDividido('sb_T1');
+  const beforeSandboxOriginal = clone(BANCO.sourceDoc);
+  const denySandbox = await erroDe(chamar('uA', { tournamentId: 'sb_T1', sandbox: true,
+    matchId: 'g0-1', operationId: UUID(7), schedule: PROPOSTA }));
+  ok('sandbox só aceita o dono ainda organizador', denySandbox && denySandbox.code === 'not-found');
+  const sandboxSaved = await chamar('uOrg', { tournamentId: 'sb_T1', sandbox: true,
+    matchId: 'g0-1', operationId: UUID(8), schedule: PROPOSTA });
+  ok('sandbox grava a proposta só na cópia', sandboxSaved.ok &&
+    jogoNoBanco(BANCO, 'g0-1').schedule.options.length === 1 &&
+    JSON.stringify(BANCO.sourceDoc) === JSON.stringify(beforeSandboxOriginal));
+  ok('ID de sandbox sem tipo explícito falha fechado',
+    (await erroDe(chamar('uOrg', { tournamentId: 'sb_T1', matchId: 'g0-1', operationId: UUID(9), schedule: PROPOSTA }))).code === 'invalid-argument');
 
   console.log('① quem joga propõe — e a proposta chega à SUBCOLEÇÃO, não ao documento');
   BANCO = bancoDividido();

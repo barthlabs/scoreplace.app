@@ -1,3 +1,9 @@
+## 2.4.76 — 16/out/2026 (preparação de jogos com adversário pendente)
+
+- Propor datas e Criar grupo dos jogos usam os mesmos botões ativos da chave também quando apenas um lado está definido. A data só pode ser confirmada por consenso depois de conhecidos os dois lados.
+- Propostas e links são gravados no registro canônico do jogo, com isolamento da cópia sandbox e bloqueio de notificações nesse modo. A identidade do lado já conhecido impede reutilizar proposta ou link após troca de participantes.
+- Testes de regressão cobrem os cards, a persistência dividida e a autorização do sandbox.
+
 ## 2.4.58 — 15/out/2026 (navegação da importação e convite individual)
 
 - Confirmar conta provável ou “Nenhum destes” mantém rolagem, foco e edição aberta na dupla em revisão. Sem conta provável, a busca válida deixa a pessoa sem vínculo automaticamente; erro de busca bloqueia a gravação. A confirmação final enumera quem ficará sem conta.

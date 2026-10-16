@@ -7715,20 +7715,15 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
 // jogo sem resultado) — fonte única nos helpers do schedule-poll.js.
 // Os dois chips retornam elemento PURO; a centralização é aqui.
 function _cardFooterChips(t, m, opts) {
-  // A agenda pode devolver uma data clicável mesmo com TBD. O estado de
-  // confronto incompleto tem precedência: não abrir enquete/grupo sem o rival.
-  var pendingActions = window._pendingMatchActionChips && window._pendingMatchActionChips(t, m);
-  if (pendingActions) return '<div class="btn-row" style="display:flex;justify-content:flex-start;align-items:center;gap:6px;flex-wrap:wrap;margin:8px 0 2px;">' + pendingActions + '</div>';
   // A enquete de data existe para torneios distribuídos. Em evento concentrado
   // a agenda é do organizador e o card não deve convidar atletas a negociar data.
   var sch = (!window._isConcentratedTournament || !window._isConcentratedTournament(t)) && typeof window._schCardChip === 'function' ? window._schCardChip(t, m) : '';
   // Grupo de jogo serve para a dupla combinar data. Em evento concentrado a
   // organização chama os jogos, portanto não há negociação nem grupo por jogo.
   var wa = (!window._isConcentratedTournament || !window._isConcentratedTournament(t)) && typeof window._waGrpCardChip === 'function' ? window._waGrpCardChip(t, m, opts) : '';
-  // Um lado conhecido já precisa ENXERGAR as duas ações, mesmo antes de
-  // sair o vencedor da partida anterior. Elas não podem executar: enquete e
-  // grupo pressupõem os dois lados; `disabled` impede clique e gravação.
-  // Este é o MESMO estado para chave e dashboard, sem uma segunda regra visual.
+  // ⛔ Com um lado conhecido, ambas as ações são REAIS mesmo que o rival ainda
+  // dependa de outro jogo. O consenso da data, não a proposta/criação do grupo,
+  // espera os dois lados. Não reintroduzir botões disabled aqui ou na dashboard.
   if (!sch && !wa) return '';
   /* ⭐ ALINHADOS À ESQUERDA. Ordem do dono (12/set/2026): _"os botões do whats deveriam estar
    * alinhados na esquerda de cada card"_. Centralizado, cada card punha o botão num lugar
@@ -7741,32 +7736,6 @@ function _cardFooterChips(t, m, opts) {
     window._safeHtml(String(m && m.id || '')) + '" style="display:contents;">' + sch + '</span>';
   return '<div class="btn-row" style="display:flex;justify-content:flex-start;align-items:center;gap:6px;flex-wrap:wrap;margin:8px 0 2px;">' + _schSlot + wa + '</div>';
 }
-window._pendingMatchActionChips = function (t, m) {
-  if (!t || !m || m.winner || m.isBye || m.isSitOut ||
-      (window._isConcentratedTournament && window._isConcentratedTournament(t))) return '';
-  var a = m.p1, b = m.p2;
-  if (!((a && a !== 'TBD' && (!b || b === 'TBD')) ||
-        (b && b !== 'TBD' && (!a || a === 'TBD')))) return '';
-  var cu = window.AppStore && window.AppStore.currentUser;
-  if (!cu || !cu.uid || !window._schPodeGerirJogo || !window._schPodeGerirJogo(t, m, cu)) return '';
-  var title = window._t('bracket.pendingOpponentActions');
-  var propose = window._t('bracket.proposeDates');
-  var group = window._t('bracket.createGameGroup');
-  // Pedido do dono: aparência IDÊNTICA ao botão ativo, com a mesma fonte de markup;
-  // somente disabled e a nota visível diferem. O wrapper engole cliques no card.
-  var icon = window._WA_ICON_SVG || '💬';
-  var groupHtml = window._waMatchCreateLabelHtml ? window._waMatchCreateLabelHtml(false) : 'Criar grupo<br>dos jogos';
-  return '<div class="sp-pending-match-actions" onclick="event.stopPropagation()">' +
-    window._spMatchActionButtonHtml('schedule', '📅 ' + window._safeHtml(propose), '', {
-      disabled: true, title: window._safeHtml(title),
-      ariaLabel: window._safeHtml(propose + ' — ' + title)
-    }) +
-    window._spMatchActionButtonHtml('group', groupHtml, '', {
-      disabled: true, title: window._safeHtml(title),
-      ariaLabel: window._safeHtml(group + ' — ' + title), iconHtml: icon
-    }) +
-    '<div class="sp-pending-actions-note">' + window._safeHtml(title) + '</div></div>';
-};
 // v2.3.46: exposto pra que _saveResultInline possa re-renderizar UM card
 // individual in-place (sem re-render do bracket inteiro), preservando scroll,
 // o estado <details> aberto dos "Demais jogos" e a posição da classificação.

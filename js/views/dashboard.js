@@ -2612,18 +2612,16 @@ function renderDashboard(container) {
       // azul informa/abre o agendamento e o botão verde cria ou abre a conversa.
       // O mesmo chip canônico decide as permissões; não há uma segunda regra da
       // dashboard. Em resultados e demais cards este slot continua ausente.
-      var _pendingActions = (opts.showScheduleChip && tRef && typeof window._pendingMatchActionChips === 'function')
-        ? window._pendingMatchActionChips(tRef, item.m) : '';
-      var _nextGroupChip = (!_pendingActions && opts.showMatchGroupChip && tRef &&
+      var _nextGroupChip = (opts.showMatchGroupChip && tRef &&
         typeof window._waGrpCardChip === 'function')
         ? window._waGrpCardChip(tRef, item.m, { semCabecalhoDeGrupo: true }) : '';
-      var _nextScheduleChip = (!_pendingActions && opts.showScheduleChip && tRef &&
+      var _nextScheduleChip = (opts.showScheduleChip && tRef &&
         typeof window._schCardChip === 'function')
         ? window._schCardChip(tRef, item.m) : '';
       // O rodapé é das AÇÕES; o prazo fica na mesma linha de Jogo N, acima.
-      var cardFooterHtml = (_nextScheduleChip || _nextGroupChip || _pendingActions)
+      var cardFooterHtml = (_nextScheduleChip || _nextGroupChip)
         ? '<div data-next-game-schedule="1" style="margin-top:10px;padding-top:9px;border-top:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));display:flex;justify-content:flex-start;align-items:center;gap:6px;flex-wrap:wrap;min-height:30px;">' +
-            (_pendingActions || (_nextScheduleChip + _nextGroupChip)) +
+            _nextScheduleChip + _nextGroupChip +
           '</div>'
         : '';
 

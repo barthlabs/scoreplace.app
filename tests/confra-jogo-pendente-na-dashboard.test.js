@@ -79,46 +79,17 @@ ok(bracket.includes('Nunca substitua um ID explícito pelo banner') &&
   bracket.includes('if (_cardAlvo) {') && bracket.includes('return null;'),
   'alvo ainda ausente é aguardado, não trocado por banner ou primeiro jogo');
 
-const chipStart = bracket.indexOf('window._pendingMatchActionChips = function');
-const chipEnd = bracket.indexOf('// v2.3.46:', chipStart);
-ok(chipStart >= 0 && chipEnd > chipStart, 'estado das ações pendentes localizado');
-const chipWindow = {
-  AppStore: { currentUser: { uid: 'uid-conhecido' } },
-  _isConcentratedTournament: () => false,
-  _schPodeGerirJogo: () => true,
-  _t: key => ({ 'bracket.pendingOpponentActions': 'Disponível quando o adversário estiver definido',
-    'bracket.proposeDates': 'Propor datas', 'bracket.createGameGroup': 'Criar grupo dos jogos',
-    'bracket.createGameGroupLine1': 'Criar grupo', 'bracket.createGameGroupLine2': 'dos jogos' })[key],
-  _safeHtml: escapeHtml
-};
-const sharedButtonStart = schedule.indexOf('window._spMatchActionButtonHtml = function');
-const sharedButtonEnd = schedule.indexOf('// schedule-poll.js', sharedButtonStart);
-ok(sharedButtonStart >= 0 && sharedButtonEnd > sharedButtonStart, 'gerador único dos botões localizado');
-vm.runInNewContext(schedule.slice(sharedButtonStart, sharedButtonEnd), { window: chipWindow });
-vm.runInNewContext(bracket.slice(chipStart, chipEnd), { window: chipWindow });
-const chips = chipWindow._pendingMatchActionChips(t, target);
-ok(chips.includes('Propor datas') && chips.includes('Criar grupo') &&
-  (chips.match(/ disabled /g) || []).length === 2 &&
-  (chips.match(/<button[^>]*onclick=/g) || []).length === 0,
-  'ações aparecem, mas não executam enquanto o vencedor do 186 não saiu');
-ok(chips.includes('sp-match-action--schedule') && chips.includes('sp-match-action--group') &&
-  chips.includes('sp-pending-actions-note') && chips.includes('Disponível quando o adversário estiver definido'),
-  'ações pendentes reutilizam as cores canônicas e explicam o bloqueio visivelmente');
-ok(chips.includes('btn-shine') && chips.includes('Criar grupo<br>dos jogos') &&
-  !chips.includes('hover-lift') && chips.includes('onclick="event.stopPropagation()"'),
-  'botões pendentes têm forma e quebra canônicas, sem hover ou clique herdado do card');
-ok(!chips.includes('background:var(--bg-card)') && !chips.includes('💬 Criar grupo'),
-  'estado pendente não volta aos botões cinza com emoji genérico');
+ok(!bracket.includes('window._pendingMatchActionChips = function') &&
+  !dash.includes('window._pendingMatchActionChips'),
+  'chave e dashboard não reintroduzem estado disabled para adversário pendente');
+ok(schedule.includes('window._schPodePrepararJogo = _schPodePrepararJogo') &&
+  schedule.includes('if (!_schJogoLiberado(t, m)) return false;'),
+  'propostas antecipadas têm gate único, mas consenso exige dois lados');
 ok(componentsCss.includes('.btn-micro.sp-match-action--schedule { background:#3b82f6') &&
-  componentsCss.includes('.btn-micro.sp-match-action--group { background:var(--sp-match-action-bg') &&
-  componentsCss.includes('.sp-match-action:disabled { opacity:1; cursor:not-allowed;') &&
-  componentsCss.includes('.sp-pending-match-actions { display:grid; grid-template-columns:repeat(2,minmax(0,max-content)); align-items:stretch; gap:6px; cursor:not-allowed; }') &&
-  componentsCss.includes('.sp-pending-actions-note { color:var(--text-muted); font-size:0.7rem; grid-column:1/-1;'),
-  'cores e alturas iguais dos botões pendentes, inclusive em tela estreita');
-ok(chipWindow._pendingMatchActionChips(t, { ...target, p2: 'Vencedor definido' }) === '',
-  'com ambos os lados, os helpers canônicos voltam a comandar os botões ativos');
+  componentsCss.includes('.btn-micro.sp-match-action--group { background:var(--sp-match-action-bg'),
+  'botões ativos mantêm cores e altura canônicas');
 ok(dash.includes('timelineHtml: _nextTimeline') && dash.includes('data-match-time-status') &&
   !dash.includes('footerHtml: _nextTimeline') && bracket.includes('${_timelineSlot}') &&
-  dash.includes('(_pendingActions || (_nextScheduleChip + _nextGroupChip))'),
+  dash.includes('_nextScheduleChip + _nextGroupChip'),
   'prazo junto ao número; rodapé reservado para as ações em ambas as telas');
 console.log('✅ Confra J195 pendente: ' + n + ' verificações');

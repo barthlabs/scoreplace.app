@@ -136,7 +136,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (!DB || typeof DB._callFn !== 'function') return Promise.reject(new Error('FirestoreDB indisponível'));
     try {
       return Promise.resolve(DB._callFn('setMatchWhatsAppGroup', {
-        tournamentId: tId, matchId: mId, link: link, operationId: _opIdPara(tId, mId)
+        tournamentId: tId, sandbox: ctx.t.isSandbox === true,
+        matchId: mId, link: link, operationId: _opIdPara(tId, mId)
       })).then(function (r) { _opQueimar(tId, mId); return r || {}; });
     } catch (e) { return Promise.reject(e); }
   }
@@ -196,6 +197,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var t = _findT(tId); if (!t) return null;
     if (!matchId) return { t: t, target: t, scope: 'tournament', groupMode: false };
     var m = window._schFindMatch(t, matchId); if (!m) return null;
+    if (m.waGroup && typeof window._schKnownSidesValid === 'function' &&
+        !window._schKnownSidesValid(m.waGroup.knownSides, m)) {
+      // Link de uma dupla substituída não pode levar o novo adversário ao grupo
+      // antigo. A porta permite gravar outro link, nunca reutilizar o mesmo.
+      delete m.waGroup;
+    }
     return { t: t, target: m, m: m, scope: 'match', groupMode: !!(groupMode && groupMode !== '0') };
   }
   function _isOrg(t, cu) {
@@ -367,21 +374,22 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // pessoa clicar no botão errado na v1.7.24. O grupo é DOS JOGADORES; ele só monta.
     var _souJogador = !!window._schUserIsPlayer(t, m, cu);
     var _pos = _souJogador ? 'Seu grupo<br>' + _mine : 'Grupo<br>' + _mine;
-    if (m.waGroup && m.waGroup.link) {
+    var _linkAtual = !!(m.waGroup && m.waGroup.link &&
+      (typeof window._schKnownSidesValid !== 'function' ||
+       window._schKnownSidesValid(m.waGroup.knownSides, m)));
+    if (_linkAtual) {
       // "Abrir grupo" é VERBO — clicar faz o que diz (abre o WhatsApp), sem tela
       // intermediária. O ✎ ao lado é a saída pra trocar o link (grupo refeito).
       return '<span style="display:inline-flex;align-items:stretch;align-self:stretch;gap:2px;min-width:0;">' +
         _btn(_pos, 'event.stopPropagation(); window._waGrpOpenLink(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')') +
         _editBtn(open, 'Trocar o link do grupo ' + _mine) + '</span>';
     }
-    // 2.1.98 — o gate é "as duas duplas já existem?", não "é a rodada atual?". Ordem do
-    // dono; a medição que provou o estrago está em `_schJogoLiberado` (schedule-poll.js),
-    // que é a FONTE ÚNICA — aqui só se delega. O organizador continua furando: ele prepara
-    // a grade antes, inclusive de jogo que ainda tem TBD.
-    // Se a fonte não carregou, LIBERA: quem chama (`_waGrpCardChip`) já verificou p1/p2
-    // definidos logo acima, e um erro de carga não pode ser mais um jeito de esconder o botão.
-    var _liberado = (typeof window._schJogoLiberado === 'function') ? window._schJogoLiberado(t, m) : true;
-    if (!_isOrg(t, cu) && !_liberado) return '';
+    // Porta única para ações antecipadas: quem já está no jogo pode criar o
+    // grupo antes da definição do rival, tal como pode propor datas. A outra
+    // pessoa entra no mesmo grupo quando a chave resolver seu slot.
+    if (!_linkAtual &&
+        (typeof window._schPodePrepararJogo !== 'function' ||
+         !window._schPodePrepararJogo(t, m))) return '';
     // v1.7.25 (dono): ANTES de existir link, os dois botões começam com "Criar grupo" —
     // é a ação, e o complemento diz DE QUEM: "geral oficial do torneio" × "dos seus jogos".
     return _btn(window._waMatchCreateLabelHtml(_souJogador), open);
@@ -408,7 +416,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
        * repetição nenhuma, só tira o acesso. Quem sabe se há cabeçalho é a tela, e ela diz. */
       if (m.isMonarch && !(opts && opts.semCabecalhoDeGrupo)) return '';
       if (m.isBye || m.isSitOut) return '';   // folga/BYE não é jogo, pra ninguém
-      if (!m.p1 || !m.p2 || m.p1 === 'BYE' || m.p2 === 'BYE' || m.p1 === 'TBD' || m.p2 === 'TBD') return '';
+      if (typeof window._schPodePrepararJogo !== 'function' ||
+          !window._schPodePrepararJogo(t, m)) {
+        if (!(m.waGroup && m.waGroup.link && _matchHasResult(m) &&
+          (typeof window._schKnownSidesValid !== 'function' ||
+           window._schKnownSidesValid(m.waGroup.knownSides, m)))) return '';
+      }
       if (_matchHasResult(m) && !(m.waGroup && m.waGroup.link)) return '';
       return _matchChip(t, m, false);
     } catch (e) { return ''; }
@@ -882,6 +895,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   }
 
   function _notifyOthers(ctx) {
+    if (ctx.t && (ctx.t.isSandbox === true || ctx.t.notificationsMuted === true)) return;
     var cu = _cu(); var mine = (cu && cu.uid) || '';
     var who = (cu && (cu.displayName || cu.name)) || 'Alguém';
     var _wlink = (ctx.target && ctx.target.waGroup && ctx.target.waGroup.link) || '';

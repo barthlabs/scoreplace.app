@@ -5815,6 +5815,43 @@ function _waSlotDoJogo(t, loc) {
   return { campo: "matches", arr: t.matches, i: loc.mi };
 }
 
+// Identidade do lado JÁ CONHECIDO quando data/link são criados. Um slot TBD
+// entra vazio; preenchê-lo depois preserva o material. Trocar um lado que já
+// tinha UID (ou nome manual legado) não pode reciclar proposta/link do rival
+// anterior. UID precede rótulo de exibição, para troca de nome não invalidar.
+function _matchKnownSides(m) {
+  const side = (key) => {
+    const label = String(m && m[key] || "").trim();
+    if (!label || label === "TBD" || label === "BYE") return "";
+    const uids = _waRoster.slotUids(m, key).filter(Boolean).map(String).sort();
+    return uids.length ? "uid:" + uids.join("|") : "label:" + label;
+  };
+  return { p1: side("p1"), p2: side("p2") };
+}
+function _matchKnownSidesValid(stamp, current, match) {
+  if (!stamp) return true;
+  const same = (key) => {
+    const saved = String(stamp[key] || ""), now = String(current[key] || "");
+    if (!saved || saved === now) return true;
+    // Vincular o guest à conta acrescenta UID sem trocar a vaga. O rótulo
+    // legado é o único dado de identidade desse slot; só preservamos link/votos
+    // quando ele ainda coincide com o nome do MESMO lado do jogo. Nome diferente
+    // falha fechado, inclusive se houver homônimos em outro slot.
+    return saved.startsWith("label:") && now.startsWith("uid:") &&
+      saved.slice(6).trim().toLocaleLowerCase("pt-BR") ===
+        String(match && match[key] || "").trim().toLocaleLowerCase("pt-BR");
+  };
+  return same("p1") && same("p2");
+}
+function _matchKnownSidesMerged(stamp, current) {
+  return { p1: current.p1 || (stamp && stamp.p1) || "",
+    p2: current.p2 || (stamp && stamp.p2) || "" };
+}
+function _matchKnownSidesExact(client, current) {
+  return !!client && String(client.p1 || "") === current.p1 &&
+    String(client.p2 || "") === current.p2;
+}
+
 // Deploy:  firebase deploy --only functions:setMatchWhatsAppGroup
 exports.setMatchWhatsAppGroup = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
@@ -5826,6 +5863,7 @@ exports.setMatchWhatsAppGroup = onCall(
     const tournamentId = String(pedido.tournamentId || "");
     const matchId = String(pedido.matchId || "");
     const operationId = String(pedido.operationId || "");
+    const sandbox = pedido.sandbox === true;
     if (!tournamentId || !matchId) {
       throw new HttpsError("invalid-argument", "tournamentId e matchId são obrigatórios");
     }
@@ -5858,10 +5896,14 @@ exports.setMatchWhatsAppGroup = onCall(
     const agoraMs = Date.now();
     const agoraIso = new Date(agoraMs).toISOString();
 
-    const docRef = db.collection("tournaments").doc(tournamentId);
+    // ⛔ Coleção explícita: um ID sb_ nunca cai silenciosamente no torneio real.
+    if (sandbox !== tournamentId.startsWith("sb_")) throw new HttpsError("invalid-argument", "destino sandbox inválido");
+    const docRef = db.collection(sandbox ? "sandboxes" : "tournaments").doc(tournamentId);
     return await db.runTransaction(async (tx) => {
       const snap = await tx.get(docRef);
       if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+      if (sandbox) await _sandboxAutorizado(db, snap, callerUid, (sourceRef) => tx.get(sourceRef));
+      else if ((snap.data() || {}).isSandbox === true) throw new HttpsError("not-found", "torneio não existe");
       /* Torneio DIVIDIDO: os jogos e o elenco moram nas subcoleções. Monta ANTES de decidir
        * — sem isto se autoriza contra `rounds[].matches: []` e nenhum jogo existe.
        *
@@ -5910,6 +5952,18 @@ exports.setMatchWhatsAppGroup = onCall(
        * perde, o app tenta de novo com o MESMO `operationId`. Reconhecer isso é a diferença
        * entre "salvou" e "salvou duas vezes com `at` diferente". */
       const atual = (alvo.jogo && alvo.jogo.waGroup) || null;
+      const knownSides = _matchKnownSides(alvo.jogo);
+      // Preparar o jogo pede só um lado real. Não criar grupo em BYE/folga,
+      // jogo sem ninguém ou partida encerrada; link já existente continua gerenciável.
+      if (!apagar && !atual && (alvo.jogo.isBye || alvo.jogo.isSitOut ||
+          alvo.jogo.p1 === "BYE" || alvo.jogo.p2 === "BYE" ||
+          (!knownSides.p1 && !knownSides.p2) || _scheduleHasRealPlay(alvo.jogo))) {
+        throw new HttpsError("failed-precondition", "jogo não aceita grupo novo");
+      }
+      const staleLink = !!(atual && !_matchKnownSidesValid(atual.knownSides, knownSides, alvo.jogo));
+      if (staleLink && !apagar && link === atual.link) {
+        throw new HttpsError("failed-precondition", "grupo do confronto anterior: crie outro link");
+      }
       if (atual && atual.opId === operationId) {
         return { ok: true, jaAplicado: true, waGroup: atual, espelhados: [] };
       }
@@ -5917,7 +5971,8 @@ exports.setMatchWhatsAppGroup = onCall(
       if (apagar && !atual) return { ok: true, jaAplicado: true, waGroup: null, espelhados: [] };
 
       const valor = apagar ? null
-        : { link: link, byUid: callerUid, byName: byName, at: agoraMs, opId: operationId };
+        : { link: link, byUid: callerUid, byName: byName, at: agoraMs, opId: operationId,
+          knownSides: staleLink ? knownSides : _matchKnownSidesMerged(atual && atual.knownSides, knownSides) };
 
       /* ⭐ O ESPELHO LEVA SÓ O LINK. Ordem do dono (26/ago): _"cada grupo de jogo tem 1 link
        * pequeno para o grupo do whats"_. O registro (quem criou, quando, o opId) fica no
@@ -6343,6 +6398,10 @@ function _schSaneiaSchedule(s) {
   });
   out.votes = (s.votes && typeof s.votes === "object" && !Array.isArray(s.votes)) ? s.votes : {};
   out.dayVotes = (s.dayVotes && typeof s.dayVotes === "object" && !Array.isArray(s.dayVotes)) ? s.dayVotes : {};
+  if (s.knownSides && typeof s.knownSides === "object") {
+    out.knownSides = { p1: String(s.knownSides.p1 || "").slice(0, 500),
+      p2: String(s.knownSides.p2 || "").slice(0, 500) };
+  }
   if (s.enabledAt) out.enabledAt = String(s.enabledAt);
   if (JSON.stringify(out).length > 24000) throw new HttpsError("invalid-argument", "schedule grande demais");
   return out;
@@ -6355,7 +6414,9 @@ exports.setMatchSchedule = onCall(
     const pedido = request.data || {};
     const tournamentId = String(pedido.tournamentId || "");
     const operationId = String(pedido.operationId || "");
+    const sandbox = pedido.sandbox === true;
     if (!tournamentId) throw new HttpsError("invalid-argument", "tournamentId é obrigatório");
+    if (sandbox !== tournamentId.startsWith("sb_")) throw new HttpsError("invalid-argument", "destino sandbox inválido");
     if (!_WA_UUID_V4_RE.test(operationId)) throw new HttpsError("invalid-argument", "operationId tem que ser um UUID v4");
     const espelharGrupo = !!pedido.espelharGrupo;
     const operational = pedido.operational === true;
@@ -6399,10 +6460,12 @@ exports.setMatchSchedule = onCall(
     });
     const db = admin.firestore();
     const agoraIso = new Date().toISOString();
-    const docRef = db.collection("tournaments").doc(tournamentId);
+    const docRef = db.collection(sandbox ? "sandboxes" : "tournaments").doc(tournamentId);
     return await db.runTransaction(async (tx) => {
       const snap = await tx.get(docRef);
       if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+      if (sandbox) await _sandboxAutorizado(db, snap, callerUid, (sourceRef) => tx.get(sourceRef));
+      else if ((snap.data() || {}).isSandbox === true) throw new HttpsError("not-found", "torneio não existe");
       const t = await _tSplitFn.montarDoBanco(snap.data(), async (colecao) => {
         const s = await tx.get(docRef.collection(colecao));
         return s.docs.map((x) => x.data());
@@ -6418,6 +6481,33 @@ exports.setMatchSchedule = onCall(
       const alvos = itens.map((it) => {
         const alvo = regs.find((r) => r && r.jogo && r.jogo.id != null && String(r.jogo.id) === it.matchId);
         if (!alvo) throw new HttpsError("not-found", "jogo " + it.matchId + " não existe neste torneio");
+        const freshSides = _matchKnownSides(alvo.jogo);
+        // A UI permite PROPOR com um lado só. CONFIRMAR por consenso é outra
+        // operação: a porta também exige os dois lados, mesmo se chamada fora da UI.
+        // Estimativas da grade e decisão expressa do organizador não são consenso.
+        if (it.scheduledAt && it.scheduledKind !== "organizer" &&
+            it.scheduledKind !== "estimate" &&
+            (!freshSides.p1 || !freshSides.p2)) {
+          throw new HttpsError("failed-precondition", "consenso exige os dois lados definidos");
+        }
+        if (it.temSchedule) {
+          const currentSides = freshSides;
+          // Proposta antecipada pode ter um lado TBD, mas não pode nascer num
+          // jogo vazio, BYE/folga ou já disputado. Consenso segue mais estrito.
+          if (alvo.jogo.isBye || alvo.jogo.isSitOut ||
+              alvo.jogo.p1 === "BYE" || alvo.jogo.p2 === "BYE" ||
+              (!currentSides.p1 && !currentSides.p2) || _scheduleHasRealPlay(alvo.jogo)) {
+            throw new HttpsError("failed-precondition", "jogo não aceita propostas novas");
+          }
+          const oldSides = alvo.jogo.schedule && alvo.jogo.schedule.knownSides;
+          if (!_matchKnownSidesValid(oldSides, currentSides, alvo.jogo) &&
+              !_matchKnownSidesExact(it.schedule.knownSides, currentSides)) {
+            throw new HttpsError("failed-precondition", "proposta do confronto anterior: recarregue o jogo");
+          }
+          // Carimbo é derivado do snapshot fresco, nunca da string do cliente.
+          it.schedule.knownSides = _matchKnownSidesValid(oldSides, currentSides, alvo.jogo)
+            ? _matchKnownSidesMerged(oldSides, currentSides) : currentSides;
+        }
         if (!souOrg) {
           const elenco = _waRoster.matchRoster(t, alvo.jogo) || [];
           if (elenco.indexOf(callerUid) === -1) throw new HttpsError("permission-denied", "só quem joga este confronto — ou quem organiza o torneio — mexe nas datas");

@@ -65,6 +65,7 @@ function bancoDeMentira(tid, doc, subs, users) {
 
   const colRef = (nome) => ({ _tipo: 'col', _nome: nome, doc: (id) => ({ _tipo: 'doc', _sub: nome, _id: String(id) }) });
   const tRef = { _tipo: 'doc', _raiz: true, _id: tid, collection: colRef };
+  const sourceRef = { _tipo: 'doc', _source: true };
 
   function alvoDe(ref, pend) {
     if (ref._raiz) return { get: () => (pend.docApagado ? null : Object.assign({}, b.doc, pend.doc)), tipo: 'raiz' };
@@ -97,6 +98,7 @@ function bancoDeMentira(tid, doc, subs, users) {
             const m = b.subs[ref._nome] || {};
             return { docs: Object.keys(m).sort().map((k) => ({ id: k, data: () => clone(m[k]) })) };
           }
+          if (ref._source) return { exists: !!b.sourceDoc, data: () => clone(b.sourceDoc || {}) };
           if (ref._raiz) return { exists: true, data: () => clone(b.doc) };
           const a = alvoDe(ref, pend).get();
           return { exists: !!a, data: () => clone(a) };
@@ -154,7 +156,11 @@ function bancoDeMentira(tid, doc, subs, users) {
   };
 
   b.collection = function (nome) {
-    if (nome === 'tournaments') return { doc: (id) => (String(id) === tid ? tRef : { _tipo: 'doc', _raiz: false, _sub: '__inexistente', _id: String(id), collection: colRef }) };
+    if (nome === 'tournaments') return { doc: (id) => (String(id) === tid ? tRef :
+      (b.sourceDoc && String(id) === String(b.doc.sandboxOf) ? sourceRef :
+        { _tipo: 'doc', _raiz: false, _sub: '__inexistente', _id: String(id), collection: colRef })) };
+    if (nome === 'sandboxes') return { doc: (id) => (String(id) === tid ? tRef :
+      { _tipo: 'doc', _raiz: false, _sub: '__inexistente', _id: String(id), collection: colRef }) };
     if (nome === 'users') {
       return { doc: (uid) => ({ get: async () => ({ exists: !!b.users[uid], data: () => clone(b.users[uid] || {}) }) }) };
     }
@@ -255,8 +261,12 @@ const USERS = { uA: { displayName: 'Ana' }, uOrg: { displayName: 'Olga' }, uAdm:
  * registro por jogo. `playerUids` é INJETADO — no navegador quem o produz é
  * `window._matchPlayerUids`, que não existe em node; o banco real TEM o campo, e é
  * justamente ele que a gravação não pode derrubar. */
-function bancoDividido() {
+function bancoDividido(tid) {
+  tid = tid || 'T1';
   const t = torneio();
+  t.id = tid;
+  if (tid.startsWith('sb_')) Object.assign(t, { isSandbox: true, sandboxOf: 'T1',
+    sandboxOwnerUid: 'uOrg', sbState: 'ready', notificationsMuted: true });
   const p = S.dividir(clone(t), ['matches']);
   const subs = { matches: {} };
   p.matches.forEach((r) => {
@@ -264,7 +274,9 @@ function bancoDividido() {
     subs.matches[S.chaveDoRegistro(r)] = r;
   });
   const doc = Object.assign(p.config, { _semPesados: ['matches'], _nJogos: p.matches.length, updatedAt: '2026-09-01T00:00:00.000Z' });
-  return bancoDeMentira('T1', doc, subs, USERS);
+  const b = bancoDeMentira(tid, doc, subs, USERS);
+  if (tid.startsWith('sb_')) b.sourceDoc = { id: 'T1', creatorUid: 'uOrg' };
+  return b;
 }
 function bancoInteiro() {
   const t = torneio();
@@ -439,6 +451,49 @@ const jogoDoDoc = (b, id) => (b.doc.rounds[0].matches || []).find((m) => m && m.
   // ═══ ③ QUEM PODE ═══════════════════════════════════════════════════════════
   console.log('\n③ quem pode mexer no grupo (por UID, nunca por nome)');
   {
+    BANCO = bancoDividido();
+    const regPendente = regDe(BANCO, 'g0-1');
+    regPendente.jogo.p2 = 'TBD'; regPendente.jogo.team2Uids = [];
+    const criadoAntes = await chamar('uA', { tournamentId: 'T1', matchId: 'g0-1',
+      link: LINK('1'), operationId: UUID(8) });
+    ok('⭐ lado conhecido cria o grupo antes de sair o adversário', criadoAntes.ok &&
+      regDe(BANCO, 'g0-1').jogo.waGroup.link === LINK('1'));
+    const trocado = regDe(BANCO, 'g0-1').jogo;
+    trocado.p1 = 'Nova dupla'; trocado.team1Uids = ['uE', 'uF'];
+    const staleSameLink = await erroDe(chamar('uOrg', { tournamentId: 'T1', matchId: 'g0-1',
+      link: LINK('1'), operationId: UUID(9) }));
+    ok('⛔ link da dupla antiga não é reutilizado após substituição',
+      staleSameLink && staleSameLink.code === 'failed-precondition');
+    const freshLink = await chamar('uOrg', { tournamentId: 'T1', matchId: 'g0-1',
+      link: LINK('2'), operationId: UUID(9) });
+    ok('⭐ novo grupo substitui o antigo com identidade da nova dupla', freshLink.ok &&
+      regDe(BANCO, 'g0-1').jogo.waGroup.link === LINK('2'));
+    BANCO = bancoDividido();
+    const guestMatch = regDe(BANCO, 'g0-1').jogo;
+    guestMatch.p1 = 'Guest A'; guestMatch.team1Uids = []; guestMatch.p1Uid = null;
+    await chamar('uOrg', { tournamentId: 'T1', matchId: 'g0-1', link: LINK('3'),
+      operationId: UUID(9) });
+    ok('grupo do guest começa com identidade por rótulo',
+      regDe(BANCO, 'g0-1').jogo.waGroup.knownSides.p1 === 'label:Guest A');
+    regDe(BANCO, 'g0-1').jogo.team1Uids = ['uA'];
+    const sameGuestGroup = await chamar('uOrg', { tournamentId: 'T1', matchId: 'g0-1',
+      link: LINK('3'), operationId: UUID(8) });
+    ok('vincular UID no mesmo slot mantém o link sem criar outro grupo', sameGuestGroup.ok &&
+      regDe(BANCO, 'g0-1').jogo.waGroup.link === LINK('3') &&
+      regDe(BANCO, 'g0-1').jogo.waGroup.knownSides.p1 === 'uid:uA');
+    BANCO = bancoDividido('sb_T1');
+    const originalAntes = clone(BANCO.sourceDoc);
+    const sandboxDenied = await erroDe(chamar('uA', { tournamentId: 'sb_T1', sandbox: true,
+      matchId: 'g0-1', link: LINK('1'), operationId: UUID(7) }));
+    ok('⛔ sandbox só aceita dono ainda organizador', sandboxDenied && sandboxDenied.code === 'not-found');
+    const sandboxCreated = await chamar('uOrg', { tournamentId: 'sb_T1', sandbox: true,
+      matchId: 'g0-1', link: LINK('1'), operationId: UUID(8) });
+    ok('⭐ grupo do sandbox fica somente na cópia', sandboxCreated.ok &&
+      regDe(BANCO, 'g0-1').jogo.waGroup.link === LINK('1') &&
+      JSON.stringify(BANCO.sourceDoc) === JSON.stringify(originalAntes));
+    ok('⛔ sb_ sem tipo explícito não redireciona para produção',
+      (await erroDe(chamar('uOrg', { tournamentId: 'sb_T1', matchId: 'g0-1',
+        link: LINK('2'), operationId: UUID(9) }))).code === 'invalid-argument');
     for (const [uid, rot] of [['uA', 'jogador do confronto'], ['uOrg', 'organizador'], ['uAdm', 'admin do torneio'], ['uCo', 'co-organizador ATIVO']]) {
       BANCO = bancoDividido();
       const e = await erroDe(chamar(uid, { tournamentId: 'T1', matchId: 'g0-1', link: LINK('1'), operationId: UUID(1) }));

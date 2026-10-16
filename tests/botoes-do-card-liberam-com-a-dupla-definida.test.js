@@ -111,8 +111,9 @@ ok((W._waGrpCardChip(T, R3_PRONTO) || '').indexOf('grupo') !== -1,
    '④ ⭐ R3 com os dois lados definidos libera mesmo com a R2 em aberto');
 ok((W._schCardChip(T, R3_PRONTO) || '').indexOf('Propor') !== -1,
    '④ ⭐ e o "Propor datas" acompanha');
-ok((W._waGrpCardChip(T, R3_ESPERA) || '') === '',
-   '④ mas o jogo que depende de vencedor (TBD) segue escondido');
+ok((W._waGrpCardChip(T, R3_ESPERA) || '').indexOf('Criar grupo') !== -1 &&
+   (W._schCardChip(T, R3_ESPERA) || '').indexOf('Propor datas') !== -1,
+   '④ um lado conhecido já pode criar grupo e propor datas antes de sair o vencedor');
 
 // ── ⑤ nada disso abriu porta pra quem não é do jogo ───────────────────────────
 como(ESTRANHO);
@@ -120,8 +121,11 @@ ok((W._waGrpCardChip(T, R1) || '') === '', '⑤ quem não joga nem organiza cont
 ok((W._schCardChip(T, R1) || '') === '', '⑤ idem no "Propor datas"');
 como(ORG);
 ok((W._waGrpCardChip(T, R1) || '') !== '', '⑤ o organizador segue vendo');
-ok((W._waGrpCardChip(T, R3_ESPERA) || '') === '',
-   '⑤ e nem pro organizador o TBD abre grupo — sem os dois lados não há com quem falar');
+ok((W._waGrpCardChip(T, R3_ESPERA) || '').indexOf('Criar grupo') !== -1,
+   '⑤ o organizador também prepara o grupo enquanto aguarda o rival');
+ok(W._schPodePrepararJogo(T, { p1: 'TBD', p2: 'BYE' }) === false &&
+   W._schPodePrepararJogo(T, { p1: 'A', p2: 'TBD', winner: 'A' }) === false,
+   '⑤ BYE ou jogo concluído não ganha ação antecipada');
 
 console.log(fail ? ('  ' + fail + ' FALHA(S), ' + pass + ' ok') : ('  ✓ ' + pass + ' asserções'));
 process.exit(fail ? 1 : 0);

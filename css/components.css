@@ -697,23 +697,14 @@ body.hamburger-open .topbar {
 }
 
 /* Ações de um jogo: UMA aparência para agenda/WhatsApp na chave e no dashboard.
-   Pedido do dono: pendente tem EXATAMENTE a cor, relevo e tipografia do ativo;
-   a indisponibilidade vem do disabled nativo e da nota visível, sem opacidade. */
-.btn-micro.sp-match-action { color:#fff; font-size:0.72rem; font-weight:800; text-align:center; }
+   Com rival pendente estes continuam botões ATIVOS: a espera só bloqueia o
+   consenso da data, nunca a proposta nem a criação antecipada do grupo. */
+.btn-micro.sp-match-action { color:#fff; font-size:0.72rem; font-weight:800; text-align:center; min-height:2.75rem; align-self:stretch; }
 /* A agenda conserva o volume original do .btn-micro; o grupo conserva o seu
    padding/raio próprios. Só as cores e tipos viajam com o estado pendente. */
 .btn-micro.sp-match-action--schedule { background:#3b82f6; line-height:1.15; }
 .btn-micro.sp-match-action--group { background:var(--sp-match-action-bg, linear-gradient(135deg,#25D366,#128C7E)); padding:4px 9px; line-height:1.05; border-radius:10px; }
 .btn-micro.sp-match-action--compact { font-size:0.62rem; }
-.sp-match-action:disabled { opacity:1; cursor:not-allowed; transform:none !important; animation:none !important; }
-.sp-match-action:disabled::before, .sp-match-action:disabled::after { animation:none !important; }
-/* Os dois botões pendentes usam o mesmo gerador dos ativos, mas este wrapper não
-   é .btn-row. A grade mantém os dois na MESMA linha, até em tela estreita;
-   stretch iguala a altura do botão de uma linha à do botão de duas linhas.
-   A nota ocupa a linha de baixo, na chave e no dashboard. */
-.sp-pending-match-actions { display:grid; grid-template-columns:repeat(2,minmax(0,max-content)); align-items:stretch; gap:6px; cursor:not-allowed; }
-.sp-pending-match-actions > .sp-match-action { min-width:0; }
-.sp-pending-actions-note { color:var(--text-muted); font-size:0.7rem; grid-column:1/-1; margin-top:4px; }
 /* Pedido do dono: sem vazamento colorido no vão entre topbar e filtro da
    dashboard. O top sticky canônico está certo; esta cobertura é SÓ para o
    espaço natural de 0.75rem (margin-bottom das pílulas antes da lista).
