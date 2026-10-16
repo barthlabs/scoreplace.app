@@ -3066,7 +3066,9 @@ window.FirestoreDB = {
    * que o solicitante organiza o torneio e que cada linha pertence ao elenco;
    * não há leitura de `users` pelo navegador e nenhum e-mail retorna. */
   async carregarPerfisDaAnalise(tournamentId, rows) {
-    if (!tournamentId || !Array.isArray(rows) || !rows.length) return [];
+    var tournament = tournamentId && typeof tournamentId === 'object' ? tournamentId : null;
+    var id = String((tournament && tournament.id) || tournamentId || '');
+    if (!id || !Array.isArray(rows) || !rows.length) return [];
     var clean = rows.slice(0, 500).map(function (row, index) {
       row = row || {};
       return {
@@ -3076,12 +3078,16 @@ window.FirestoreDB = {
     });
     try {
       var resposta = await this._callFn('getTournamentEnrollmentProfiles', {
-        tournamentId: String(tournamentId), rows: clean
+        // A Análise passa o objeto já carregado, portanto o tipo não depende de
+        // o listener global reconhecer o ID antes desta chamada (URL direta).
+        tournamentId: id, sandbox: this._ehSandbox(tournament || id), rows: clean
       });
       return resposta && Array.isArray(resposta.rows) ? resposta.rows : [];
     } catch (e) {
       window._warn('[análise de inscritos] perfis restritos falharam:', e && e.message);
-      return [];
+      // Falhar fechado: [] fazia a Análise pintar UID como nome e aparentar
+      // um elenco diferente do canônico, especialmente no sandbox dividido.
+      throw e;
     }
   },
 

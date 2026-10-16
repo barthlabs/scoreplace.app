@@ -41,13 +41,20 @@ ok(projection.displayName === 'Ana' && projection.birthDate === '1980-01-02', 'p
 ok(!Object.prototype.hasOwnProperty.call(projection, 'email') && !Object.prototype.hasOwnProperty.call(projection, 'phone'), 'projeção não devolve e-mail nem telefone');
 
 ok(!/collection\(['"]users['"]\)/.test(report), 'a tela de análise não lê users no navegador');
-ok(/function _fetchProfiles\(tId, parts\)/.test(report) && /carregarPerfisDaAnalise\(tId, requested\)/.test(report), 'a tela passa pelo client restrito com o torneio');
+ok(/function _fetchProfiles\(t, parts\)/.test(report) && /carregarPerfisDaAnalise\(t, requested\)/.test(report), 'a tela passa o torneio carregado ao client restrito');
 ok(/getTournamentEnrollmentProfiles/.test(db) && !/carregarPerfisDaAnalise[\s\S]{0,1000}collection\(['"]users['"]\)/.test(db), 'o client chama a callable, sem consulta privada');
+ok(/getTournamentEnrollmentProfiles'[\s\S]{0,280}sandbox: this\._ehSandbox\(tournament \|\| id\)/.test(db), 'perfil da Análise declara explicitamente o sandbox pelo objeto carregado');
+ok(/carregarPerfisDaAnalise[\s\S]*?throw e;[\s\S]*?\/\* Pares de CONTA DUPLICADA/.test(db), 'erro de perfil não vira elenco vazio silenciosamente');
+ok(!/Participante '\s*\+\s*\(p\.p[12]ManualId\s*\|\|\s*p\.p[12]Uid/.test(report), 'UID nunca é nome de participante');
 ok(/exports\.getTournamentEnrollmentProfiles\s*=\s*onCall/.test(fn), 'a callable da análise existe');
+ok(/const sandbox = data\.sandbox === true;[\s\S]{0,320}collection\(sandbox \? "sandboxes" : "tournaments"\)/.test(fn), 'perfil consulta uma coleção tipada, sem fallback');
+ok(/_sandboxAutorizado\(db, tournamentSnap, callerUid/.test(fn), 'sandbox valida dono, estado e organização no servidor');
 ok(/_isTournamentOrgCaller\(tournament, callerUid\)/.test(fn), 'a callable confirma organização no servidor');
 ok(/pertenceAoRelatorio\(entries, candidate\)/.test(fn), 'a callable limita cada linha ao elenco do torneio');
 ok(/perfilDaAnalise\(found\.data\)/.test(fn), 'a callable entrega somente a projeção permitida');
 const callable = fn.slice(fn.indexOf('exports.getTournamentEnrollmentProfiles'), fn.indexOf('// ─── getOwnEmailMergeCandidates'));
+ok(/const sandbox = data\.sandbox === true;/.test(callable) && /const tournamentRef = db\.collection\(sandbox \? "sandboxes" : "tournaments"\)/.test(callable), 'a PRÓPRIA callable de perfis escolhe a coleção tipada');
+ok(/if \(!sandbox && !_isTournamentOrgCaller\(tournament, callerUid\)\)/.test(callable), 'produção exige organização e sandbox passa pelo helper');
 ok(!/where\("email|where\("displayName|candidate\.email|candidate\.name/.test(callable), 'a callable não busca perfil por e-mail ou nome');
 
 console.log('\n✅ ' + checks + ' verificações');

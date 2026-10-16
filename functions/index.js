@@ -150,6 +150,24 @@ async function _lerTorneioComElenco(db, tournamentId) {
   if (!snap.exists) return null;
   return await _splitParts.hidratar(null, ref, snap.data() || {}, ["participants"]);
 }
+// Sandbox é uma coleção privada, não um ID com prefixo especial. Toda callable
+// que o lê/escreve deve validar também o ORIGINAL: sandboxes antigos e donos que
+// perderam a função de organizador não podem continuar acessando dados reais.
+async function _sandboxAutorizado(db, snap, callerUid, read) {
+  const t = snap.exists ? snap.data() || {} : {};
+  if (t.isSandbox !== true || t.sbState !== "ready" ||
+      t.notificationsMuted !== true || !String(t.sandboxOf || "") ||
+      t.sandboxOwnerUid !== callerUid) {
+    throw new HttpsError("not-found", "torneio não existe");
+  }
+  const source = await read(db.collection("tournaments").doc(String(t.sandboxOf)));
+  if (!source.exists || !_isTournamentOrgCaller(source.data() || {}, callerUid)) {
+    // Mesmo erro de sandbox ausente/dono diferente: não revelar a existência
+    // nem o estado de uma cópia privada a quem perdeu autorização no original.
+    throw new HttpsError("not-found", "torneio não existe");
+  }
+  return t;
+}
 const _partesPerm = require("./partes-permissao.js");   // allowlist: quem pode mexer em que
 const _tSplitFn = require("./vendor/tournament-split-core.js"); // colecaoDaParte
 const _splitResultMirror = require("./match-result-mirror-core.js");
@@ -5527,10 +5545,7 @@ exports.getCanonicalTournamentRoster = onCall(
       const tournamentSnap = await tx.get(ref);
       const tournament = tournamentSnap.exists ? tournamentSnap.data() || {} : {};
       if (sandbox) {
-        if (tournament.isSandbox !== true || tournament.sbState !== "ready" ||
-            !String(tournament.sandboxOf || "") || tournament.sandboxOwnerUid !== callerUid) {
-          throw new HttpsError("not-found", "torneio não existe");
-        }
+        await _sandboxAutorizado(db, tournamentSnap, callerUid, (sourceRef) => tx.get(sourceRef));
       } else if (!tournamentSnap.exists) {
         throw new HttpsError("not-found", "torneio não existe");
       }
@@ -12823,13 +12838,42 @@ exports.getTournamentEnrollmentProfiles = onCall(
     if (!requested.length) return { rows: [] };
 
     const db = admin.firestore();
-    const tournament = await _lerTorneioComElenco(db, tournamentId);
+    const sandbox = data.sandbox === true;
+    const tournamentRef = db.collection(sandbox ? "sandboxes" : "tournaments").doc(tournamentId);
+    const tournamentSnap = await tournamentRef.get();
+    if (sandbox) await _sandboxAutorizado(db, tournamentSnap, callerUid, (sourceRef) => sourceRef.get());
+    const tournament = tournamentSnap.exists ? tournamentSnap.data() || {} : null;
     if (!tournament) throw new HttpsError("not-found", "Torneio não encontrado");
-    if (!_isTournamentOrgCaller(tournament, callerUid)) {
+    if (!sandbox && !_isTournamentOrgCaller(tournament, callerUid)) {
       throw new HttpsError("permission-denied", "Só a organização pode analisar os inscritos");
     }
 
-    const entries = _enrollmentProfiles.entradasDoRelatorio(tournament);
+    // A Análise e Inscritos precisam autorizar perfis sobre o MESMO roster.
+    // No Neon canônico `participants` é vazio e as inscrições vivem somente
+    // em registrations; hidratar a coleção legada produz zero nomes/UIDs.
+    let roster;
+    if (tournament.canonicalRegistrationMigration && tournament.canonicalRegistrationMigration.fingerprint) {
+      let migration;
+      try { migration = _canonicalRegistrationBoundary.migrationOf(tournament); }
+      catch (error) { throw new HttpsError("failed-precondition", error.message); }
+      const registrationsSnap = await tournamentRef.collection("registrations")
+        .limit(migration.expectedCount + 1).get();
+      // O doc do Firestore não é obrigado a repetir seu ID. A fronteira
+      // canônica precisa da identidade lógica em AMBOS os caminhos: ID físico
+      // para produção; ID original para a cópia sandbox cujo fingerprint foi
+      // assinado antes da clonagem. Nunca validar pelo ID técnico `sb_*`.
+      const identity = Object.assign({}, tournament, {
+        id: sandbox ? String(tournament.sandboxOf) : tournamentId,
+      });
+      try {
+        roster = _canonicalRegistrationBoundary.verifiedRoster(identity,
+          registrationsSnap.docs.map((doc) => doc.data() || {})).participants;
+      } catch (error) { throw new HttpsError("failed-precondition", error.message); }
+    } else {
+      const legacy = await _splitParts.hidratar(null, tournamentRef, tournament, ["participants"]);
+      roster = legacy.participants || [];
+    }
+    const entries = _enrollmentProfiles.entradasDoRelatorio(Object.assign({}, tournament, { participants: roster }));
     const cache = new Map();
     const resolve = async (candidate) => {
       const uid = String(candidate.uid || "").trim();
@@ -13287,6 +13331,16 @@ exports.createSandbox = onCall(
     const origId = String(((request.data || {}).originalTournamentId) || "");
     if (!origId) throw new HttpsError("invalid-argument", "originalTournamentId é obrigatório");
 
+    // A identidade de teste não é autorização para clonar o torneio de terceiros.
+    // Validar ANTES do retorno idempotente protege também sandboxes já existentes.
+    const origRef = db.collection("tournaments").doc(origId);
+    const origSnap = await origRef.get();
+    if (!origSnap.exists) throw new HttpsError("not-found", "torneio original não existe");
+    const cfg = origSnap.data() || {};
+    if (cfg.isSandbox === true || !_isTournamentOrgCaller(cfg, callerUid)) {
+      throw new HttpsError("permission-denied", "só a organização pode criar o sandbox");
+    }
+
     // ── ② IDEMPOTÊNCIA: já existe um sandbox PRONTO deste original para este dono? ──
     const jaTem = await db.collection("sandboxes")
       .where("sandboxOwnerUid", "==", callerUid)
@@ -13295,11 +13349,7 @@ exports.createSandbox = onCall(
     if (!jaTem.empty) return { ok: true, id: jaTem.docs[0].id, reaproveitado: true };
 
     // ── ③ LÊ O ORIGINAL CANÔNICO E COMPLETO ─────────────────────────────────
-    const origRef = db.collection("tournaments").doc(origId);
-    const origSnap = await origRef.get();
-    if (!origSnap.exists) throw new HttpsError("not-found", "torneio original não existe");
-    const cfg = origSnap.data() || {};
-    if (cfg.isSandbox === true) throw new HttpsError("failed-precondition", "não se cria sandbox de sandbox");
+    // O original foi lido e autorizado acima, antes mesmo da busca idempotente.
 
     // TODAS as subcoleções que o original de fato tem — enumeradas, não adivinhadas.
     const subRefs = await origRef.listCollections();

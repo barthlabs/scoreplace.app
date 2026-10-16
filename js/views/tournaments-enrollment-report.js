@@ -245,7 +245,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // Registro manual histórico permanece sem perfil de conta; nome é só apresentação.
   // Inscrição nova exige conta e não cria esta forma.
 
-  function _fetchProfiles(tId, parts) {
+  function _fetchProfiles(t, parts) {
     if (!parts || parts.length === 0) return Promise.resolve({ byUid: {}, resolvedFor: {} });
     if (!window.FirestoreDB || typeof window.FirestoreDB.carregarPerfisDaAnalise !== 'function') {
       return Promise.resolve({ byUid: {}, resolvedFor: {} });
@@ -258,7 +258,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         key: String(idx), uid: p.uid || ''
       };
     });
-    return window.FirestoreDB.carregarPerfisDaAnalise(tId, requested).then(function (rows) {
+    return window.FirestoreDB.carregarPerfisDaAnalise(t, requested).then(function (rows) {
       (rows || []).forEach(function (row) {
         if (!row || !row.uid || !row.profile) return;
         byUid[row.uid] = row.profile;
@@ -380,8 +380,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         /* ⛔ VALOR LEGADO NÃO É DECISÃO (23/set/2026). Isto marcava QUALQUER `pNGender` antigo como
          * "do organizador" — e com a precedência nova isso poria gênero velho da dupla ACIMA do
          * perfil vivo. A marca agora é a do próprio membro, que a porta grava junto do valor. */
-        var p1Name = p.p1Name || p.p1DisplayName || ('Participante ' + (p.p1ManualId || p.p1Uid || '1'));
-        var p2Name = p.p2Name || p.p2DisplayName || ('Participante ' + (p.p2ManualId || p.p2Uid || '2'));
+        // UID é identidade técnica, jamais nome. O perfil autorizado resolve o
+        // nome vivo; se faltar, a tela mostra a falha sem vazar o identificador.
+        var p1Name = p.p1Name || p.p1DisplayName || (p.p1Uid ? 'Nome não confirmado' : (p.p1ManualId ? 'Participante manual' : 'Nome não confirmado'));
+        var p2Name = p.p2Name || p.p2DisplayName || (p.p2Uid ? 'Nome não confirmado' : (p.p2ManualId ? 'Participante manual' : 'Nome não confirmado'));
         var members = [
           { uid: p.p1Uid || '', manualParticipantId: p.p1ManualId || '', displayName: p1Name, name: p1Name, gender: p.p1Gender || '', genderSource: p.p1GenderSource === 'organizador' ? 'organizador' : '', _duplaSide: 'p1', _registrationOrder: memberOrder(p.p1Seq, p1Name, idx * 2 + 1) },
           { uid: p.p2Uid || '', manualParticipantId: p.p2ManualId || '', displayName: p2Name, name: p2Name, gender: p.p2Gender || '', genderSource: p.p2GenderSource === 'organizador' ? 'organizador' : '', _duplaSide: 'p2', _registrationOrder: memberOrder(p.p2Seq, p2Name, idx * 2 + 2) },
@@ -6239,7 +6241,7 @@ window._lzNaoEhEuMesmo = function (uid) {
     // v1.3.24-beta: _fetchProfiles tenta rescue por email/displayName sem uid.
     // v1.15.35: os scans letzplay são GLOBAIS por uid (letzplayScans/{uid}) — precisamos
     // dos perfis primeiro pra saber quem autorizou-sem-import, e só então buscar os scans.
-    _fetchProfiles(tId, parts).then(function (fetchResult) {
+    _fetchProfiles(t, parts).then(function (fetchResult) {
       if (window.location.hash !== '#analise/' + tId) { _doneLoading(); return; }
       var byUid = fetchResult.byUid || {};
       // Candidatos = TODO inscrito com @ no perfil (2.0.50: letzplay é público, o
@@ -6264,8 +6266,15 @@ window._lzNaoEhEuMesmo = function (uid) {
       window._error('[EnrollmentReport] erro:', err);
       _doneLoading();
       if (window.location.hash !== '#analise/' + tId) return;
-      var rows = _buildRows(t, parts, { byUid: {}, resolvedFor: {} });
-      _renderPage(container, t, rows, {}, parts, {}, {});
+      // Não oferecer arrasto/edição sobre uma análise sem perfis: isso já
+      // apresentou dezenas de UIDs como “Participante ...” no sandbox Neon.
+      var inconsistent = err && /failed-precondition/.test(String(err.code || ''));
+      container.innerHTML = '<div class="card" role="alert" style="margin:24px;padding:20px;">' +
+        '<h2>' + (inconsistent ? 'Elenco canônico inconsistente' : 'Não foi possível confirmar os perfis do elenco') + '</h2>' +
+        '<p>' + (inconsistent
+          ? 'O recibo de migração e as inscrições canônicas não conferem. A Análise foi bloqueada para não editar o elenco errado; os dados foram preservados e exigem reconciliação.'
+          : 'Os dados do torneio foram preservados. Reabra a Análise após a leitura voltar.') + '</p>' +
+        '<button class="btn" type="button" onclick="window.location.reload()">Tentar novamente</button></div>';
     });
   };
 

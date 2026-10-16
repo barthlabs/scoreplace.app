@@ -340,6 +340,7 @@ const SUITES = [
   // fidelidade em si é provada no Emulator (tests/sandbox-cf-emulador.test.js, fora da
   // suíte unitária porque sobe Firestore+Auth+Functions).
   'tests/sandbox-cliente-roteia-e-nao-fabrica.test.js',
+  'tests/sandbox-autorizacao-perfis.test.js',
   // O sandbox no banco já era réplica fiel (CONFRA.QA.S1: 0 divergências) e a TELA mostrava
   // torneio vazio — o defeito era só o caminho de LEITURA: o ouvinte de `sandboxes` não
   // passava pela porta de hidratação que o de `tournaments` usa. Executa o `_sbIngest` REAL

@@ -1513,7 +1513,17 @@ exports.getCanonicalTournamentRoster = onCall(async request => {
       const sbSnap = await tx.get(ref);
       const sb = sbSnap.exists ? sbSnap.data() || {} : {};
       if (sb.isSandbox !== true || sb.sbState !== 'ready' ||
-          String(sb.sandboxOf || '') === '' || sb.sandboxOwnerUid !== uid) {
+          sb.notificationsMuted !== true || String(sb.sandboxOf || '') === '' ||
+          sb.sandboxOwnerUid !== uid) {
+        throw new HttpsError('not-found', 'Torneio não encontrado.');
+      }
+      // A cópia preserva UIDs reais. Também em sandboxes antigos, o dono só
+      // conserva acesso enquanto organizar o torneio original. Sem fallback.
+      const originalSnap = await tx.get(db.collection('tournaments').doc(String(sb.sandboxOf)));
+      const original = originalSnap.exists ? originalSnap.data() || {} : {};
+      const cohost = Array.isArray(original.coHosts) && original.coHosts.some(c =>
+        c && c.uid === uid && (c.status === 'active' || c.status === 'accepted'));
+      if (!originalSnap.exists || (!_isTournamentAdmin(original, uid) && !cohost)) {
         throw new HttpsError('not-found', 'Torneio não encontrado.');
       }
     }
