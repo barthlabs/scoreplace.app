@@ -1253,7 +1253,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // carregam manualParticipantId. A operação valida a identidade no servidor.
       var split = '<button type="button" class="cancel-x-btn" title="Desfazer dupla" aria-label="Desfazer dupla ' + _esc(a.name + ' e ' + b.name) + '" onclick="event.stopPropagation();window._erSplitPair(' + a.order + ',this)" style="--cx-size:23px;position:absolute;top:7px;right:7px;">✕</button>';
       var pairCat = _decomposeCat(_erPairCategory(members), _liveState && _liveState.t || {});
-      return '<div draggable="true" data-er-pair-order="' + a.order + '" data-er-person="' + _esc(a.name + ' ' + b.name) + '" data-er-gender="' + (_mxGenderOf(a) || '') + '" data-er-skill="' + _esc(pairCat.skill || '') + '" ondragstart="window._erMxPairDragStart(event,' + a.order + ')" onclick="window._erMxPairClick(event,' + a.order + ')" aria-pressed="' + (selected ? 'true' : 'false') + '" title="Arraste a dupla para uma categoria" style="position:relative;cursor:grab;display:flex;flex-direction:column;gap:5px;padding:10px 38px 10px 11px;border:' + (selected ? '2px solid #38bdf8' : ('1px solid ' + (changed ? 'rgba(245,158,11,.65)' : 'rgba(168,85,247,.45)'))) + ';border-radius:9px;background:' + (selected ? 'rgba(14,165,233,0.20)' : (changed ? 'rgba(245,158,11,.07)' : 'rgba(168,85,247,.08)')) + ';user-select:none;">' +
+      return '<div draggable="true" data-er-pair-order="' + a.order + '" data-er-person="' + _esc(a.name + ' ' + b.name) + '" data-er-gender="' + (_erPairPlacementGender(members, _liveState && _liveState.t || {}) || '') + '" data-er-skill="' + _esc(pairCat.skill || '') + '" ondragstart="window._erMxPairDragStart(event,' + a.order + ')" onclick="window._erMxPairClick(event,' + a.order + ')" aria-pressed="' + (selected ? 'true' : 'false') + '" title="Arraste a dupla para uma categoria" style="position:relative;cursor:grab;display:flex;flex-direction:column;gap:5px;padding:10px 38px 10px 11px;border:' + (selected ? '2px solid #38bdf8' : ('1px solid ' + (changed ? 'rgba(245,158,11,.65)' : 'rgba(168,85,247,.45)'))) + ';border-radius:9px;background:' + (selected ? 'rgba(14,165,233,0.20)' : (changed ? 'rgba(245,158,11,.07)' : 'rgba(168,85,247,.08)')) + ';user-select:none;">' +
         '<div style="font-size:14px;font-weight:750;color:var(--text-bright);line-height:1.25;overflow-wrap:anywhere;">' + _esc(a.name) + '</div>' +
         '<div style="font-size:14px;font-weight:750;color:var(--text-bright);line-height:1.25;overflow-wrap:anywhere;">' + _esc(b.name) + '</div>' + split +
       '</div>';
@@ -2938,6 +2938,19 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (g.indexOf('masc') === 0) return 'masculino';
     return null;
   }
+  // Na Análise, o gênero da POSIÇÃO da dupla vem da categoria atribuída no
+  // torneio, não do perfil do primeiro membro. Importados podem não ter gênero
+  // pessoal, mas Fem/Masc Light/Power/Extreme continuam ocupando suas colunas.
+  // Sem categoria ou em Misto, o gênero pessoal é apenas o fallback existente.
+  // [[regression_analysis_gender_header_matches_category_boxes]]
+  function _erPairPlacementGender(members, t) {
+    if (!members || !members.length) return null;
+    var d = _decomposeCat(_erPairCategory(members), t);
+    if (d.gender === 'Fem') return 'feminino';
+    if (d.gender === 'Masc') return 'masculino';
+    return _mxGenderOf(members[0]);
+  }
+  window._erPairPlacementGender = _erPairPlacementGender;
   function _erIsMistoTok(v) { return /^misto/i.test(String(v || '')); }
   function _erIsFMTok(v) { var s = String(v || '').toLowerCase(); return s.indexOf('fem') === 0 || s.indexOf('masc') === 0; }
   function _mxSkillOf(r, t) {
@@ -3077,10 +3090,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         var category = _erPairCategory(members);
         if (!category) return false;
         var d = _decomposeCat(category, t);
-        var memberGender = _mxGenderOf(members[0]);
-        var genderMatches = d.gender === 'Fem' ? genderKey === 'feminino'
-          : d.gender === 'Masc' ? genderKey === 'masculino'
-          : memberGender === genderKey;
+        var genderMatches = _erPairPlacementGender(members, t) === genderKey;
         return genderMatches && ((sk === '__none__' && !d.skill) || (sk !== '__none__' && d.skill === sk));
       });
     }
@@ -3228,8 +3238,13 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // categorizadas: categorias → duplas formadas → participantes sem dupla.
     // Antes o mesmo grid misturava os três papéis e fazia o painel de duplas
     // parecer ficar acima das categorias, além de duplicar a leitura visual.
-    var pairFemTotal = pairGroups.reduce(function (n, members) { return n + (_mxGenderOf(members[0]) === 'feminino' ? 2 : 0); }, 0);
-    var pairMascTotal = pairGroups.reduce(function (n, members) { return n + (_mxGenderOf(members[0]) === 'masculino' ? 2 : 0); }, 0);
+    // Os cabeçalhos contam as MESMAS posições dos boxes: uma dupla Fem/Masc
+    // soma duas pessoas ao respectivo gênero, independentemente do perfil.
+    // Mover sua categoria muda a prévia (+2/-2) e a gravação conserva essa
+    // posição. Se houver dupla sem categoria, ela não pertence a box algum e
+    // só então o gênero pessoal serve como fallback do cabeçalho.
+    var pairFemTotal = pairGroups.reduce(function (n, members) { return n + (_erPairPlacementGender(members, t) === 'feminino' ? 2 : 0); }, 0);
+    var pairMascTotal = pairGroups.reduce(function (n, members) { return n + (_erPairPlacementGender(members, t) === 'masculino' ? 2 : 0); }, 0);
     var gridRows = ghead('♀', 'feminino', 'Feminino', femCol, femTotal + pairFemTotal) + ghead('♂', 'masculino', 'Masculino', mascCol, mascTotal + pairMascTotal);
     groups.forEach(function (sk) {
       gridRows += catBox('feminino', sk, [], femCol, femTint) + catBox('masculino', sk, [], mascCol, mascTint);

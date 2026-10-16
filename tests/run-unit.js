@@ -1075,6 +1075,7 @@ const SUITES = [
   'tests/area-scaling-canon.test.js',
   'tests/duplas-teams-enrollmode.test.js',
   'tests/analise-duplas-arrastaveis.test.js',
+  'tests/analise-cabecalho-soma-categorias.test.js',
   'tests/chaves-abas-categoria.test.js',
   'tests/chaves-abas-estaveis.test.js',
   'tests/superficies-abas-resize-observer.test.js',
