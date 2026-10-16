@@ -1,3 +1,4 @@
+// 2.4.61 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.60 — Duplas importadas das fotos começam pela ordem de inscrição e permanecem nessa ordem depois que os nomes de perfil carregam. Quem escolher A-Z manualmente mantém essa opção na mesma tela. O grid e as inscrições não mudaram.
 // 2.4.59 — As duplas importadas aparecem na ordem original das fotos, com os dois nomes e números na sequência de inscrição. Nenhuma inscrição foi alterada.
 // 2.4.58 — A importação preserva a posição na lista ao confirmar uma conta.
