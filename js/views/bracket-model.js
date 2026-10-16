@@ -130,17 +130,32 @@ window._rotaMostraAChaveDeste = function (hash, id) {
   function _jogosDeVerdade(matches) {
     if (!Array.isArray(matches)) return 0;
     return matches.filter(function (m) {
-      return m && !m.isBye && !m.isSitOut && !m.isThirdPlace;
+      return m && !m.isBye && !m.isSitOut && !m.isThirdPlace &&
+        m.p1 !== 'BYE' && m.p2 !== 'BYE' && m.p1 !== 'FOLGA' && m.p2 !== 'FOLGA';
     }).length;
   }
 
-  function _labelElimRound(roundNum, positiveRounds, byRound) {
+  function _labelElimRound(roundNum, positiveRounds, byRound, allowFutureNotMaterialized) {
     if (roundNum === 0) return _tr('bracket.playIn', LABELS.playin);
     if (roundNum < 0) return _tr('bracket.repechage', LABELS.repechage) +
       (Math.abs(roundNum) > 1 ? ' ' + Math.abs(roundNum) : '');
     var idx = positiveRounds.indexOf(roundNum);
     var fromEnd = positiveRounds.length - idx;          // 1 = última
     var generico = _tr('bracket.round', 'Rodada ' + roundNum, { n: roundNum });
+    if (allowFutureNotMaterialized) {
+      // Em fase progressiva a próxima coluna pode ainda não existir. O número de
+      // jogos desta coluna já permite nomeá-la; colunas seguintes EXISTENTES
+      // precisam continuar a cadeia (8→4→2→1). Não chamar 17/16 de Oitavas,
+      // nem chamar 8→2 de Oitavas quando as quartas foram puladas.
+      var count = _jogosDeVerdade(byRound && byRound[roundNum]);
+      var candidate = _NOMES_POR_JOGOS.find(function (n) { return n.jogos === count; });
+      if (!candidate) return generico;
+      for (var next = idx + 1; next < positiveRounds.length; next++) {
+        var expected = count / Math.pow(2, next - idx);
+        if (_jogosDeVerdade(byRound && byRound[positiveRounds[next]]) !== expected) return generico;
+      }
+      return _tr(candidate.chave, candidate.txt);
+    }
     if (fromEnd < 1 || fromEnd > _NOMES_POR_JOGOS.length) return generico;
     /* ⛔ AS DUAS CONDIÇÕES: a posição desde o fim E o número de jogos. E a cadeia não pode ter
      * buraco — se a rodada mais próxima da final já não merecia o nome dela, esta também não merece,
@@ -1016,6 +1031,44 @@ window._rotaMostraAChaveDeste = function (hash, id) {
       for (var j = 0; j < col.matches.length; j++) {
         if (col.matches[j] && col.matches[j].id != null) labels[String(col.matches[j].id)] = col.label;
       }
+    }
+    // REGRESSÃO CONFRA R4/R5: torneios multifase guardam Ouro/Prata em `matches`
+    // com `phaseIndex` e `bracket`. A chave exibe uma coluna POR LINHA; o modelo
+    // unificado pode classificar essas partidas como Liga (formato da fase inicial)
+    // ou misturar as linhas. Dashboard, resultados e chave devem nomear a MESMA
+    // coluna: 8 jogos = Oitavas, 4 = Quartas, 2 = Semifinais, 1 = Final, sempre
+    // exigindo a cadeia completa até a final. Nunca inferir pelo ordinal R4/R5.
+    if (Array.isArray(t.phases) && Array.isArray(t.matches)) {
+      var tiers = {};
+      t.matches.forEach(function (m) {
+        if (!m || m.id == null || m.isThirdPlace) return;
+        var phaseIndex = Number(m.phaseIndex || 0);
+        var phase = t.phases[phaseIndex];
+        if (!phase || phase.kind !== 'elimination') return;
+        var bracket = m.bracket || 'main';
+        if (bracket === 'grandfinal' || bracket === 'thirdplace' ||
+            bracket === 'upper' || bracket === 'lower' || bracket === 'grand') return;
+        var key = phaseIndex + '|' + bracket;
+        if (!tiers[key]) tiers[key] = { phaseIndex: phaseIndex, byRound: {} };
+        var round = (m.round == null) ? 1 : Number(m.round);
+        if (!Number.isFinite(round)) return;
+        if (!tiers[key].byRound[round]) tiers[key].byRound[round] = [];
+        tiers[key].byRound[round].push(m);
+      });
+      Object.keys(tiers).forEach(function (key) {
+        var tier = tiers[key];
+        var rounds = Object.keys(tier.byRound).map(Number).filter(function (r) { return r > 0; })
+          .sort(function (a, b) { return a - b; });
+        rounds.forEach(function (round, idx) {
+          var label = _labelElimRound(round, rounds, tier.byRound, true);
+          if (label === _tr('bracket.round', 'Rodada ' + round, { n: round })) {
+            var globalRound = (typeof window._numeroGlobalDaRodada === 'function')
+              ? window._numeroGlobalDaRodada(t, tier.phaseIndex, idx) : round;
+            label = _tr('bracket.round', 'Rodada ' + globalRound, { n: globalRound });
+          }
+          tier.byRound[round].forEach(function (m) { labels[String(m.id)] = label; });
+        });
+      });
     }
     return labels;
   };

@@ -5137,8 +5137,17 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
   // O card recebe somente o carimbo canônico `m._gameNum`. Um contador desta tela
   // começava no recorte de fase e renumerava Ouro R2 como 124, embora a Prata R1
   // seja o 124 do torneio. Nenhum renderer pode calcular "Jogo N" localmente.
+  var _phaseRoundLabelsByMatchId = (typeof window._canonicalElimLabelsByMatchId === 'function')
+    ? window._canonicalElimLabelsByMatchId(t) : {};
   function roundLabel(cols, idx) {
     var col = cols[idx];
+    // A dashboard e a chave devem ler o mesmo nome da coluna multifase. Se a
+    // Confra chama R3 local de Oitavas e R4 local de Quartas, nenhum card pode
+    // voltar a publicar "Rodada 4/5" para essas mesmas partidas.
+    var firstMatch = col.matches && col.matches[0];
+    var canonical = firstMatch && firstMatch.id != null
+      ? _phaseRoundLabelsByMatchId[String(firstMatch.id)] : '';
+    if (canonical) return canonical;
     var games = window._realGameCount(col.matches);   // bye não é jogo — v1.5.18
     var fromEnd = cols.length - idx;
     if (fromEnd === 1) return _t('bracket.final');

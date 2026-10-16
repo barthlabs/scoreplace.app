@@ -85,6 +85,45 @@ ok(W._canonicalElimLabelForMatch({ id: 'confra', format: 'Liga', matches: confra
   W._canonicalElimLabelForMatch({ id: 'confra', format: 'Liga', matches: confraMatches }, confraMatches[8]) === 'Quartas de Final',
   '① dashboard/agenda consultam a mesma porta: Liga com eliminatória reconhece R4 como Oitavas e R5 como Quartas');
 
+/* A Confra real NÃO tem essa forma simplificada: começa em Liga, depois tem uma
+ * fase eliminatória com chaves Ouro/Prata, e o round do jogo é LOCAL à fase.
+ * O teste anterior passava enquanto a dashboard real ainda dizia Rodada 4/5. */
+const confraMulti = {
+  id: 'confra-multifase', format: 'Liga', currentPhaseIndex: 1,
+  phases: [{ kind: 'classification' }, { kind: 'elimination' }],
+  matches: []
+};
+['gold', 'silver'].forEach(function (bracket) {
+  [bracket === 'gold' ? 18 : 17, 16, 8, 4, 2, 1].forEach(function (count, idx) {
+    for (let k = 0; k < count; k++) confraMulti.matches.push({
+      id: 'ph-confra-1-' + bracket + '-VC-R' + (idx + 1) + '-P' + (k + 1),
+      phaseIndex: 1, bracket: bracket, round: idx + 1, p1: 'A', p2: 'B'
+    });
+  });
+  confraMulti.matches.push({ id: 'ph-confra-1-' + bracket + '-3P',
+    phaseIndex: 1, bracket: bracket, round: 6, isThirdPlace: true, p1: 'A', p2: 'B' });
+});
+const faseR3 = confraMulti.matches.find(m => m.id === 'ph-confra-1-silver-VC-R3-P1');
+const faseR4 = confraMulti.matches.find(m => m.id === 'ph-confra-1-silver-VC-R4-P1');
+ok(W._canonicalElimLabelForMatch(confraMulti, faseR3) === 'Oitavas de Final' &&
+  W._canonicalElimLabelForMatch(confraMulti, faseR4) === 'Quartas de Final',
+  '① Confra multifase/Prata: R3 local=Oitavas, R4 local=Quartas (J185/J195), não Rodada 4/5');
+ok(W._canonicalElimLabelForMatch(confraMulti, confraMulti.matches[0]) === 'Rodada 1',
+  '① fase inicial com 18 jogos mantém nome genérico, sem inventar oitavas');
+const prataParcial = Object.assign({}, confraMulti, {
+  matches: confraMulti.matches.filter(m => m.bracket !== 'silver' || m.round <= 3)
+});
+ok(W._canonicalElimLabelForMatch(prataParcial, faseR3) === 'Oitavas de Final',
+  '① Prata com só 8 jogos na R3 já nomeia Oitavas, mesmo sem quartas futuras geradas');
+ok(W._canonicalElimLabelForMatch(prataParcial,
+  confraMulti.matches.find(m => m.id === 'ph-confra-1-gold-VC-R3-P1')) === 'Oitavas de Final',
+  '① Ouro continua com rótulo próprio mesmo quando a Prata está parcial');
+const prataComSalto = Object.assign({}, confraMulti, {
+  matches: confraMulti.matches.filter(m => m.bracket !== 'silver' || (m.round <= 3 || m.round >= 5))
+});
+ok(W._canonicalElimLabelForMatch(prataComSalto, faseR3) === 'Rodada 3',
+  '① 8 jogos seguidos diretamente por 2 quebram a cadeia e mantêm Rodada 3');
+
 /* ── ② A CONTAGEM ERRADA PERDE O NOME, mesmo na distância certa ─────────────
  * ⛔ É o defeito que este arquivo existe para travar: 2 jogos na antepenúltima NÃO é "Quartas". */
 const torto = nomes([9, 4, 2, 2, 1]);
