@@ -3067,7 +3067,10 @@ window.FirestoreDB = {
    * não há leitura de `users` pelo navegador e nenhum e-mail retorna. */
   async carregarPerfisDaAnalise(tournamentId, rows) {
     var tournament = tournamentId && typeof tournamentId === 'object' ? tournamentId : null;
-    var id = String((tournament && tournament.id) || tournamentId || '');
+    // Objeto sem ID não pode virar a string técnica "[object Object]". A
+    // Análise falha fechada e explicita que a fotografia ainda não está pronta.
+    var id = tournament ? String(tournament.id || '') : String(tournamentId || '');
+    if (!id && tournament) throw Object.assign(new Error('torneio sem identidade confirmada'), { code: 'functions/failed-precondition' });
     if (!id || !Array.isArray(rows) || !rows.length) return [];
     var clean = rows.slice(0, 500).map(function (row, index) {
       row = row || {};

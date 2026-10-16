@@ -46,6 +46,8 @@ ok(/getTournamentEnrollmentProfiles/.test(db) && !/carregarPerfisDaAnalise[\s\S]
 ok(/getTournamentEnrollmentProfiles'[\s\S]{0,280}sandbox: this\._ehSandbox\(tournament \|\| id\)/.test(db), 'perfil da Análise declara explicitamente o sandbox pelo objeto carregado');
 ok(/carregarPerfisDaAnalise[\s\S]*?throw e;[\s\S]*?\/\* Pares de CONTA DUPLICADA/.test(db), 'erro de perfil não vira elenco vazio silenciosamente');
 ok(!/Participante '\s*\+\s*\(p\.p[12]ManualId\s*\|\|\s*p\.p[12]Uid/.test(report), 'UID nunca é nome de participante');
+ok(db.includes("var id = tournament ? String(tournament.id || '') : String(tournamentId || '')") &&
+  db.includes('if (!id && tournament) throw'), 'objeto sem ID falha fechado, sem enviar [object Object]');
 ok(/exports\.getTournamentEnrollmentProfiles\s*=\s*onCall/.test(fn), 'a callable da análise existe');
 ok(/const sandbox = data\.sandbox === true;[\s\S]{0,320}collection\(sandbox \? "sandboxes" : "tournaments"\)/.test(fn), 'perfil consulta uma coleção tipada, sem fallback');
 ok(/_sandboxAutorizado\(db, tournamentSnap, callerUid/.test(fn), 'sandbox valida dono, estado e organização no servidor');
