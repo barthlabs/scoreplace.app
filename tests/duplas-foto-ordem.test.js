@@ -37,7 +37,6 @@ const photoTournament = tournament(shuffled64);
 const all64Html = W._buildDoublesInscritosSection(photoTournament, { drawDone: false }).html;
 const visibleOrder = [...all64Html.matchAll(/data-part-order="(\d+)"/g)].map(m => Number(m[1]));
 assert.deepStrictEqual(visibleOrder, Array.from({ length: 64 }, (_, i) => i * 2 + 1));
-assert(all64Html.includes('data-part-keep-order="1"'), 'host com sequência canônica preserva a ordem renderizada');
 assert.deepStrictEqual(shuffled64, all64.slice().reverse(), 'render não muda o array persistido');
 
 // A ficha real também tem barra de filtro: #part-sort é hidden e seu valor
@@ -46,6 +45,7 @@ W._filterBarState.inscritos = { sort: 'name-asc', sortFor: 'outro' };
 const photoBar = W._inscritosBar(photoTournament, true);
 assert.strictEqual(W._filterBarState.inscritos.sort, 'order-asc');
 assert(photoBar.includes('id="part-sort" value="order-asc"'));
+const photoDefaultSort = W._filterBarState.inscritos.sort;
 W._filterBarState.inscritos.sort = 'name-asc'; // escolha explícita na pílula A-Z
 W._inscritosBar(photoTournament, true);
 assert.strictEqual(W._filterBarState.inscritos.sort, 'name-asc', 're-render respeita ordenação manual');
@@ -58,6 +58,11 @@ assert.strictEqual(W._filterBarState.inscritos.sort, 'name-asc', 'leitura parcia
 partialTournament.participants[1].p2Seq = 4;
 W._inscritosBar(partialTournament, true);
 assert.strictEqual(W._filterBarState.inscritos.sort, 'order-asc', 'leitura completa troca o default uma vez');
+const noIdTournament = tournament([pair('Eva', 'Fê', 1, 2)], { id: undefined });
+W._inscritosBar(noIdTournament, true);
+W._filterBarState.inscritos.sort = 'name-desc';
+W._inscritosBar(noIdTournament, true);
+assert.strictEqual(W._filterBarState.inscritos.sort, 'name-desc', 'id ausente não reinicia a escolha a cada render');
 
 // A regra direta é indivisível: sequência faltante/esparsa, espera ou legado
 // mantêm os números densos anteriores, inclusive em card chamado sem ctx.
@@ -71,8 +76,6 @@ for (const degraded of [
   tournament([pair('Ana', 'Bia', 1, 2)], { canonicalRegistrationMigration: null })
 ]) {
   assert.strictEqual(W._canonicalDenseRegistrationSeq(degraded), false);
-  assert(!W._buildDoublesInscritosSection(degraded, { drawDone: false }).html.includes('data-part-keep-order="1"'),
-    'torneio sem sequência canônica mantém a ordenação anterior');
   const card = W._duplaCard(degraded, degraded.participants[0], false);
   assert(!card.includes('>10</text>') && !card.includes('>20</text>'),
     'badge esparso não pode vazar');
@@ -89,7 +92,6 @@ function runFilterScenario(names, options) {
   options = options || {};
   const host = {
     items: [],
-    getAttribute(key) { return key === 'data-part-keep-order' && options.keepOrder ? '1' : null; },
     appendChild(card) { this.items.splice(this.items.indexOf(card), 1); this.items.push(card); }
   };
   names.forEach((name, i) => {
@@ -112,8 +114,11 @@ function runFilterScenario(names, options) {
   browser.window._partApplyFilter();
   return { firstPass, afterHydration: host.items.map(c => c.name), cards: host.items };
 }
+const oldPhotoHost = runFilterScenario(['Andrea', 'Adriana', 'Larissa'], { sort: 'name-asc' });
+assert.deepStrictEqual(oldPhotoHost.firstPass, ['Adriana', 'Andrea', 'Larissa'],
+  'hidden antigo em A-Z reproduz o defeito visto no Chrome');
 const photoHost = runFilterScenario(['Andrea', 'Adriana', 'Larissa'],
-  { keepOrder: true, sort: 'order-asc', search: 'andrea' });
+  { sort: photoDefaultSort, search: 'andrea' });
 assert.deepStrictEqual(photoHost.firstPass, ['Andrea', 'Adriana', 'Larissa']);
 assert.deepStrictEqual(photoHost.afterHydration, photoHost.firstPass);
 assert.deepStrictEqual(photoHost.cards.map(c => c.style.display), ['', 'none', 'none']);
@@ -122,7 +127,7 @@ const regularHost = runFilterScenario(['Bia', 'Ana', 'Zélia', 'Yara'],
 assert.deepStrictEqual(regularHost.firstPass, ['Zélia', 'Yara', 'Ana', 'Bia'],
   'lista comum continua priorizando organização, VIP e A-Z');
 const explicitlySortedPhotoHost = runFilterScenario(['Bia', 'Ana', 'Clara'],
-  { keepOrder: true, sort: 'name-asc' });
+  { sort: 'name-asc' });
 assert.deepStrictEqual(explicitlySortedPhotoHost.firstPass, ['Ana', 'Bia', 'Clara'],
   'controle de ordenação explícito continua funcional no host marcado');
 console.log('✅ duplas-foto-ordem: ordem dos cards, membros e guarda canônica');

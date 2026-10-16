@@ -1295,8 +1295,7 @@ window._partApplyFilter = function () {
   var inp = document.getElementById('part-search');
   if (inp) window._partSearch = inp.value;
   var q = (window._partSearch || '').trim().toLowerCase();
-  var sortControl = document.getElementById('part-sort');
-  var sort = (sortControl || {}).value || 'name-asc';
+  var sort = (document.getElementById('part-sort') || {}).value || 'name-asc';
   var gf = (document.getElementById('part-gender') || {}).value || 'all';
   var sk = (document.getElementById('part-skill') || {}).value || 'all';
   var cf = (document.getElementById('part-category') || {}).value || 'all';
@@ -1382,10 +1381,6 @@ window._partApplyFilter = function () {
     grp.items.push(c);
   });
   _groups.forEach(function (grp) {
-    // A ficha de duplas com sequência canônica já foi ordenada pelo renderer.
-    // Sem controle de ordenação nessa tela, hidratar nomes não pode reordená-la
-    // alfabeticamente. Com #part-sort presente, a escolha explícita prevalece.
-    if (!sortControl && grp.parent.getAttribute && grp.parent.getAttribute('data-part-keep-order') === '1') return;
     grp.items.slice().sort(_cmp).forEach(function (c) { grp.parent.appendChild(c); });
   });
   /* ⛔ FILTRO NUNCA ESVAZIA A TELA EM SILÊNCIO (2.1.34).
