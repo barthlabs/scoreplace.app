@@ -112,8 +112,9 @@ ok(!chips.includes('background:var(--bg-card)') && !chips.includes('💬 Criar g
 ok(componentsCss.includes('.btn-micro.sp-match-action--schedule { background:#3b82f6') &&
   componentsCss.includes('.btn-micro.sp-match-action--group { background:var(--sp-match-action-bg') &&
   componentsCss.includes('.sp-match-action:disabled { opacity:1; cursor:not-allowed;') &&
-  componentsCss.includes('.sp-pending-match-actions { display:flex; align-items:center; gap:6px;'),
-  'cores, opacidade e espaçamento dos botões pendentes iguais ao padrão ativo');
+  componentsCss.includes('.sp-pending-match-actions { display:grid; grid-template-columns:repeat(2,minmax(0,max-content)); align-items:stretch; gap:6px; cursor:not-allowed; }') &&
+  componentsCss.includes('.sp-pending-actions-note { color:var(--text-muted); font-size:0.7rem; grid-column:1/-1;'),
+  'cores e alturas iguais dos botões pendentes, inclusive em tela estreita');
 ok(chipWindow._pendingMatchActionChips(t, { ...target, p2: 'Vencedor definido' }) === '',
   'com ambos os lados, os helpers canônicos voltam a comandar os botões ativos');
 ok(dash.includes('timelineHtml: _nextTimeline') && dash.includes('data-match-time-status') &&
