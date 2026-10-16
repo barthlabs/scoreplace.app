@@ -1,4 +1,4 @@
-// 2.4.60 — A ordem das duplas importadas das fotos permanece estável também depois que os nomes de perfil carregam. A ficha respeita a sequência de inscrição e mantém o grid responsivo; a ordenação manual continua disponível onde houver controle. Nenhuma inscrição foi alterada.
+// 2.4.60 — Duplas importadas das fotos começam pela ordem de inscrição e permanecem nessa ordem depois que os nomes de perfil carregam. O grid responsivo continua; quem escolher A-Z manualmente mantém essa opção na mesma tela. Nenhuma inscrição foi alterada.
 // 2.4.59 — As duplas importadas aparecem na ordem original das fotos, com os dois nomes e números na sequência de inscrição. Nenhuma inscrição foi alterada.
 // 2.4.58 — A importação preserva a posição na lista ao confirmar uma conta.
 // Sem conta provável, não há confirmação extra; candidatos exigem escolha.

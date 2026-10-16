@@ -8981,8 +8981,22 @@ window._bracketBar = function (show) {
 };
 window._inscritosBar = function (t, show) {
     if (!show || typeof window._inscritosFilterBar !== 'function') return '';
+    // O estado da barra é compartilhado entre torneios. A ficha com sequência
+    // canônica (importação das fotos) começa pela ordem de inscrição, não pelo
+    // A-Z herdado de outra visita. Re-render do mesmo elenco preserva a escolha
+    // manual nas pílulas; a passagem de leitura parcial para canônica reinicia
+    // apenas o default uma vez.
+    var _denseSeq = !!(typeof window._canonicalDenseRegistrationSeq === 'function' &&
+        window._canonicalDenseRegistrationSeq(t));
+    var _sortState = window._filterBarState.inscritos || (window._filterBarState.inscritos = {});
+    var _sortFor = String((t && t.id) || '');
+    if (_sortState.sortFor !== _sortFor || _sortState.sortForCanonical !== _denseSeq) {
+        _sortState.sort = _denseSeq ? 'order-asc' : 'name-asc';
+        _sortState.sortFor = _sortFor;
+        _sortState.sortForCanonical = _denseSeq;
+    }
     var bar = window._inscritosFilterBar({
-        stateKey: 'inscritos', sort: 'name-asc', sticky: true,
+        stateKey: 'inscritos', sort: _denseSeq ? 'order-asc' : 'name-asc', sticky: true,
         searchId: 'part-search', sortId: 'part-sort', genderId: 'part-gender', skillId: 'part-skill',
         onChange: 'window._partApplyFilter()',
         skillCategories: ((t && t.skillCategories) || []),

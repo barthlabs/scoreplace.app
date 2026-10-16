@@ -33,11 +33,31 @@ assert(adrianaCard.includes('>4</text>'));
 const all64 = Array.from({ length: 64 }, (_, i) => pair('Pessoa ' + (i * 2 + 1),
   'Pessoa ' + (i * 2 + 2), i * 2 + 1, i * 2 + 2));
 const shuffled64 = all64.slice().reverse();
-const all64Html = W._buildDoublesInscritosSection(tournament(shuffled64), { drawDone: false }).html;
+const photoTournament = tournament(shuffled64);
+const all64Html = W._buildDoublesInscritosSection(photoTournament, { drawDone: false }).html;
 const visibleOrder = [...all64Html.matchAll(/data-part-order="(\d+)"/g)].map(m => Number(m[1]));
 assert.deepStrictEqual(visibleOrder, Array.from({ length: 64 }, (_, i) => i * 2 + 1));
 assert(all64Html.includes('data-part-keep-order="1"'), 'host com sequência canônica preserva a ordem renderizada');
 assert.deepStrictEqual(shuffled64, all64.slice().reverse(), 'render não muda o array persistido');
+
+// A ficha real também tem barra de filtro: #part-sort é hidden e seu valor
+// inicial era name-asc, que reordenava os 64 cards após carregar os perfis.
+W._filterBarState.inscritos = { sort: 'name-asc', sortFor: 'outro' };
+const photoBar = W._inscritosBar(photoTournament, true);
+assert.strictEqual(W._filterBarState.inscritos.sort, 'order-asc');
+assert(photoBar.includes('id="part-sort" value="order-asc"'));
+W._filterBarState.inscritos.sort = 'name-asc'; // escolha explícita na pílula A-Z
+W._inscritosBar(photoTournament, true);
+assert.strictEqual(W._filterBarState.inscritos.sort, 'name-asc', 're-render respeita ordenação manual');
+const otherTournament = tournament([pair('Eva', 'Fê', 1, 2)], { id: 'outro', canonicalRegistrationMigration: null });
+W._inscritosBar(otherTournament, true);
+assert.strictEqual(W._filterBarState.inscritos.sort, 'name-asc', 'outro torneio usa seu default');
+const partialTournament = tournament([pair('Eva', 'Fê', 1, 2), pair('Gabi', 'Hana', 3, undefined)], { id: 'parcial' });
+W._inscritosBar(partialTournament, true);
+assert.strictEqual(W._filterBarState.inscritos.sort, 'name-asc', 'leitura parcial não antecipa a guarda');
+partialTournament.participants[1].p2Seq = 4;
+W._inscritosBar(partialTournament, true);
+assert.strictEqual(W._filterBarState.inscritos.sort, 'order-asc', 'leitura completa troca o default uma vez');
 
 // A regra direta é indivisível: sequência faltante/esparsa, espera ou legado
 // mantêm os números densos anteriores, inclusive em card chamado sem ctx.
@@ -79,7 +99,7 @@ function runFilterScenario(names, options) {
     host.items.push({ name, attrs, parentNode: host, style: {}, getAttribute(k) { return this.attrs[k] || null; } });
   });
   const search = { value: options.search || '' };
-  const sort = options.sort ? { value: options.sort } : null;
+  const sort = options.sort ? { type: 'hidden', value: options.sort } : null;
   const doc = { scrollingElement: { scrollTop: 0 }, documentElement: { scrollTop: 0 },
     getElementById(id) { return id === 'part-search' ? search : id === 'part-sort' ? sort : null; },
     querySelectorAll(selector) { return selector === '[data-part-card]' ? host.items.slice() : []; } };
@@ -93,7 +113,7 @@ function runFilterScenario(names, options) {
   return { firstPass, afterHydration: host.items.map(c => c.name), cards: host.items };
 }
 const photoHost = runFilterScenario(['Andrea', 'Adriana', 'Larissa'],
-  { keepOrder: true, search: 'andrea' });
+  { keepOrder: true, sort: 'order-asc', search: 'andrea' });
 assert.deepStrictEqual(photoHost.firstPass, ['Andrea', 'Adriana', 'Larissa']);
 assert.deepStrictEqual(photoHost.afterHydration, photoHost.firstPass);
 assert.deepStrictEqual(photoHost.cards.map(c => c.style.display), ['', 'none', 'none']);
