@@ -7752,12 +7752,19 @@ window._pendingMatchActionChips = function (t, m) {
   var title = window._t('bracket.pendingOpponentActions');
   var propose = window._t('bracket.proposeDates');
   var group = window._t('bracket.createGameGroup');
-  // Mesmo componente visual das ações ativas; somente a disponibilidade muda.
-  // Não criar um terceiro botão cinza neste estado nem permitir onclick sem rival.
-  var cls = 'btn btn-micro sp-match-action ';
+  // Pedido do dono: aparência IDÊNTICA ao botão ativo, com a mesma fonte de markup;
+  // somente disabled e a nota visível diferem. O wrapper engole cliques no card.
   var icon = window._WA_ICON_SVG || '💬';
-  return '<div class="sp-pending-match-actions"><button type="button" class="' + cls + 'sp-match-action--schedule" disabled title="' + window._safeHtml(title) + '" aria-label="' + window._safeHtml(propose + ' — ' + title) + '">📅 ' + window._safeHtml(propose) + '</button>' +
-    '<button type="button" class="' + cls + 'sp-match-action--group" disabled title="' + window._safeHtml(title) + '" aria-label="' + window._safeHtml(group + ' — ' + title) + '">' + icon + window._safeHtml(group) + '</button>' +
+  var groupHtml = window._waMatchCreateLabelHtml ? window._waMatchCreateLabelHtml(false) : 'Criar grupo<br>dos jogos';
+  return '<div class="sp-pending-match-actions" onclick="event.stopPropagation()">' +
+    window._spMatchActionButtonHtml('schedule', '📅 ' + window._safeHtml(propose), '', {
+      disabled: true, title: window._safeHtml(title),
+      ariaLabel: window._safeHtml(propose + ' — ' + title)
+    }) +
+    window._spMatchActionButtonHtml('group', groupHtml, '', {
+      disabled: true, title: window._safeHtml(title),
+      ariaLabel: window._safeHtml(group + ' — ' + title), iconHtml: icon
+    }) +
     '<div class="sp-pending-actions-note">' + window._safeHtml(title) + '</div></div>';
 };
 // v2.3.46: exposto pra que _saveResultInline possa re-renderizar UM card

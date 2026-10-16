@@ -697,17 +697,18 @@ body.hamburger-open .topbar {
 }
 
 /* Ações de um jogo: UMA aparência para agenda/WhatsApp na chave e no dashboard.
-   O estado aguardando adversário mantém as cores reconhecíveis, mas nunca parece
-   clicável: sem brilho/elevação e com motivo visível junto aos botões. */
+   Pedido do dono: pendente tem EXATAMENTE a cor, relevo e tipografia do ativo;
+   a indisponibilidade vem do disabled nativo e da nota visível, sem opacidade. */
 .btn-micro.sp-match-action { color:#fff; font-size:0.72rem; font-weight:800; text-align:center; }
 /* A agenda conserva o volume original do .btn-micro; o grupo conserva o seu
    padding/raio próprios. Só as cores e tipos viajam com o estado pendente. */
 .btn-micro.sp-match-action--schedule { background:#3b82f6; line-height:1.15; }
 .btn-micro.sp-match-action--group { background:var(--sp-match-action-bg, linear-gradient(135deg,#25D366,#128C7E)); padding:4px 9px; line-height:1.05; border-radius:10px; }
 .btn-micro.sp-match-action--compact { font-size:0.62rem; }
-.sp-match-action:disabled { opacity:0.68; cursor:not-allowed; transform:none !important; animation:none !important; }
-.sp-match-action:disabled::before, .sp-match-action:disabled::after { animation:none !important; display:none !important; }
-.sp-pending-actions-note { color:var(--text-muted); font-size:0.7rem; margin-top:4px; }
+.sp-match-action:disabled { opacity:1; cursor:not-allowed; transform:none !important; animation:none !important; }
+.sp-match-action:disabled::before, .sp-match-action:disabled::after { animation:none !important; }
+.sp-pending-match-actions { display:flex; align-items:center; gap:6px; flex-wrap:wrap; cursor:not-allowed; }
+.sp-pending-actions-note { color:var(--text-muted); font-size:0.7rem; flex-basis:100%; margin-top:4px; }
 /* Pedido do dono: sem vazamento colorido no vão entre topbar e filtro da
    dashboard. O top sticky canônico está certo; esta cobertura é SÓ para o
    espaço natural de 0.75rem (margin-bottom das pílulas antes da lista).

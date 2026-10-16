@@ -331,10 +331,16 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // CLAUDE.md (border-radius 10px).
   // `bg` opcional: sem ele o botão é VERDE (grupo do jogo). O do torneio passa WA_BLUE.
   function _btn(label, onclick, extra, bg) {
-    return '<button type="button" class="btn btn-micro btn-shine hover-lift sp-match-action sp-match-action--group" onclick="' + onclick + '" ' +
-      'style="--sp-match-action-bg:' + window._spCor((bg || WA_GREEN), 'background') + ';' + (extra || '') + '">' +
-      _icon() + label + '</button>';
+    return window._spMatchActionButtonHtml('group', label, onclick, {
+      iconHtml: _icon(),
+      style: '--sp-match-action-bg:' + window._spCor((bg || WA_GREEN), 'background') + ';' + (extra || '')
+    });
   }
+  // Rótulo único do organizador e do estado pendente, sem alterar o texto legado
+  // dos botões ativos. O jogador conserva o possessivo próprio do botão ativo.
+  window._waMatchCreateLabelHtml = function (isPlayer) {
+    return isPlayer ? 'Criar grupo<br>dos seus jogos' : 'Criar grupo<br>dos jogos';
+  };
   function _editBtn(onclick, title) {
     return '<button type="button" class="btn btn-micro hover-lift" title="' + title + '" onclick="' + onclick + '" ' +
       'style="background:var(--sp-g-255-255-255-008,rgba(255,255,255,0.08));color:var(--text-muted);font-size:0.72rem;font-weight:800;padding:4px 5px;">✎</button>';
@@ -378,7 +384,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (!_isOrg(t, cu) && !_liberado) return '';
     // v1.7.25 (dono): ANTES de existir link, os dois botões começam com "Criar grupo" —
     // é a ação, e o complemento diz DE QUEM: "geral oficial do torneio" × "dos seus jogos".
-    return _btn(_souJogador ? 'Criar grupo<br>dos seus jogos' : 'Criar grupo<br>dos jogos', open);
+    return _btn(window._waMatchCreateLabelHtml(_souJogador), open);
   }
 
   // Um grupo novo só tem utilidade antes do resultado. Depois do placar, o

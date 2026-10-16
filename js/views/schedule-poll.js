@@ -1,5 +1,20 @@
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
+// O mesmo botão é renderizado na chave e no dashboard, ativo ou aguardando rival.
+// labelHtml vem somente de rótulos constantes/fragmentos já escapados; não passar dados do torneio.
+window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
+  opts = opts || {};
+  var disabled = !!opts.disabled;
+  var cls = 'btn btn-micro btn-shine' + (disabled ? '' : ' hover-lift') +
+    ' sp-match-action sp-match-action--' + kind + (opts.extraClass ? ' ' + opts.extraClass : '');
+  var type = (kind === 'group' || disabled) ? ' type="button"' : '';
+  var action = disabled
+    ? ' disabled title="' + opts.title + '" aria-label="' + opts.ariaLabel + '"'
+    : ' onclick="' + onclick + '"';
+  var style = opts.style ? ' style="' + opts.style + '"' : '';
+  return '<button' + type + ' class="' + cls + '"' + action + style + '>' +
+    (opts.iconHtml || '') + labelHtml + '</button>';
+};
 // schedule-poll.js — "Propor datas" (agendamento POR JOGO) — Frente F (v3.1.46)
 // ⚠️ O botão se chamava "Combinar jogos" até a 2.0.75; o dono renomeou pra "Propor
 // datas" porque o que ele faz é PROPOR data/hora — e porque agora há três origens pra
@@ -1149,7 +1164,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // há pra ver — "Veja data proposta", em fonte menor — em vez de convidar a propor de novo.
       // O dado é POR JOGO (m.schedule deste confronto), nunca do grupo vizinho.
       var _temProposta = n > 0;
-      return '<button class="btn btn-micro btn-shine hover-lift sp-match-action sp-match-action--schedule' + (_temProposta ? ' sp-match-action--compact sp-shine-dica' : '') + '" onclick="event.stopPropagation(); window._schOpenMatch(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')" ' +
+      return window._spMatchActionButtonHtml('schedule',
         // ⭐ DUAS LINHAS, COMO OS VIZINHOS (dono, 04/set/2026: _"o veja data proposta pode ter
         // menos largura se dividir o texto em 2 linhas como no aplicar WO e seu grupo de whats
         // de jogo"_). O idioma da casa é o `<br>` no próprio rótulo — 'Aplicar<br>W.O.'
@@ -1157,10 +1172,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         // ⛔ E A FONTE NÃO SOBE. Eu ia devolver o 0.72rem dos irmãos "já que agora cabe" — mas
         // o pedido era MENOS LARGURA, e no celular a fileira de botões do card já está
         // estourando a tela. Aumentar a fonte andaria na direção contrária do que ele pediu.
-        '>' +
         (_temProposta ? '📅 Veja<br>data proposta' : '📅 Propor datas') +
-        (n ? ' <span style="background:var(--sp-g-255-255-255-025,rgba(255,255,255,0.25));border-radius:999px;padding:1px 7px;font-size:0.62rem;">' + n + '</span>' : '') +
-        '</button>';
+        (n ? ' <span style="background:var(--sp-g-255-255-255-025,rgba(255,255,255,0.25));border-radius:999px;padding:1px 7px;font-size:0.62rem;">' + n + '</span>' : ''),
+        'event.stopPropagation(); window._schOpenMatch(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')',
+        { extraClass: _temProposta ? 'sp-match-action--compact sp-shine-dica' : '' });
     } catch (e) { return ''; }
   };
 

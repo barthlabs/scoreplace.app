@@ -9,6 +9,7 @@ H.load('bracket-model.js');
 const root = path.join(__dirname, '..');
 const dash = fs.readFileSync(path.join(root, 'js/views/dashboard.js'), 'utf8');
 const bracket = fs.readFileSync(path.join(root, 'js/views/bracket.js'), 'utf8');
+const schedule = fs.readFileSync(path.join(root, 'js/views/schedule-poll.js'), 'utf8');
 const tournaments = fs.readFileSync(path.join(root, 'js/views/tournaments.js'), 'utf8');
 const componentsCss = fs.readFileSync(path.join(root, 'css/components.css'), 'utf8');
 let n = 0;
@@ -86,23 +87,33 @@ const chipWindow = {
   _isConcentratedTournament: () => false,
   _schPodeGerirJogo: () => true,
   _t: key => ({ 'bracket.pendingOpponentActions': 'Disponível quando o adversário estiver definido',
-    'bracket.proposeDates': 'Propor datas', 'bracket.createGameGroup': 'Criar grupo dos jogos' })[key],
+    'bracket.proposeDates': 'Propor datas', 'bracket.createGameGroup': 'Criar grupo dos jogos',
+    'bracket.createGameGroupLine1': 'Criar grupo', 'bracket.createGameGroupLine2': 'dos jogos' })[key],
   _safeHtml: escapeHtml
 };
+const sharedButtonStart = schedule.indexOf('window._spMatchActionButtonHtml = function');
+const sharedButtonEnd = schedule.indexOf('// schedule-poll.js', sharedButtonStart);
+ok(sharedButtonStart >= 0 && sharedButtonEnd > sharedButtonStart, 'gerador único dos botões localizado');
+vm.runInNewContext(schedule.slice(sharedButtonStart, sharedButtonEnd), { window: chipWindow });
 vm.runInNewContext(bracket.slice(chipStart, chipEnd), { window: chipWindow });
 const chips = chipWindow._pendingMatchActionChips(t, target);
 ok(chips.includes('Propor datas') && chips.includes('Criar grupo') &&
-  (chips.match(/ disabled /g) || []).length === 2 && !chips.includes('onclick='),
+  (chips.match(/ disabled /g) || []).length === 2 &&
+  (chips.match(/<button[^>]*onclick=/g) || []).length === 0,
   'ações aparecem, mas não executam enquanto o vencedor do 186 não saiu');
 ok(chips.includes('sp-match-action--schedule') && chips.includes('sp-match-action--group') &&
   chips.includes('sp-pending-actions-note') && chips.includes('Disponível quando o adversário estiver definido'),
   'ações pendentes reutilizam as cores canônicas e explicam o bloqueio visivelmente');
+ok(chips.includes('btn-shine') && chips.includes('Criar grupo<br>dos jogos') &&
+  !chips.includes('hover-lift') && chips.includes('onclick="event.stopPropagation()"'),
+  'botões pendentes têm forma e quebra canônicas, sem hover ou clique herdado do card');
 ok(!chips.includes('background:var(--bg-card)') && !chips.includes('💬 Criar grupo'),
   'estado pendente não volta aos botões cinza com emoji genérico');
 ok(componentsCss.includes('.btn-micro.sp-match-action--schedule { background:#3b82f6') &&
   componentsCss.includes('.btn-micro.sp-match-action--group { background:var(--sp-match-action-bg') &&
-  componentsCss.includes('.sp-match-action:disabled { opacity:0.68; cursor:not-allowed;'),
-  'cores canônicas preservadas e estado bloqueado distinguível');
+  componentsCss.includes('.sp-match-action:disabled { opacity:1; cursor:not-allowed;') &&
+  componentsCss.includes('.sp-pending-match-actions { display:flex; align-items:center; gap:6px;'),
+  'cores, opacidade e espaçamento dos botões pendentes iguais ao padrão ativo');
 ok(chipWindow._pendingMatchActionChips(t, { ...target, p2: 'Vencedor definido' }) === '',
   'com ambos os lados, os helpers canônicos voltam a comandar os botões ativos');
 ok(dash.includes('timelineHtml: _nextTimeline') && dash.includes('data-match-time-status') &&
