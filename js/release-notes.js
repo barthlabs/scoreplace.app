@@ -1,3 +1,6 @@
+// 2.4.77 — A Análise permite salvar mudanças de categoria no sandbox privado,
+// usando o mesmo elenco canônico da produção sem alterar o torneio original.
+// A autorização exige que o dono continue organizador do torneio original.
 // 2.4.76 — Propor datas e Criar grupo dos jogos ficam disponíveis assim que
 // um lado do confronto é conhecido; marcar data por consenso continua exigindo
 // os dois lados. O sandbox persiste essas ações na própria cópia, sem avisos.
