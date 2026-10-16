@@ -1,3 +1,4 @@
+// 2.4.67 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.66 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.65 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.64 — Atualização consolidada de produção com as correções validadas desde a última publicação.
