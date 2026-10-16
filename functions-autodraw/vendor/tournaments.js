@@ -30,6 +30,33 @@ var _t = window._t || function(k) { return k; };
 window._INSCRITO_GRID_SOLO = 'display:grid;grid-template-columns:repeat(auto-fill, minmax(min(100%, 260px), 1fr));gap:1rem;align-items:stretch;';
 window._INSCRITO_GRID_DUPLA = 'display:grid;grid-template-columns:repeat(auto-fill, minmax(min(100%, 340px), 1fr));gap:8px;align-items:stretch;';
 
+// A sequência gravada só pode virar número visível quando TODO o elenco confirmado
+// possui números individuais contínuos. Em dados legados/esparsos, mantém o rank
+// denso já usado pelo Scoreplace; não mistura as duas regras no mesmo card.
+window._canonicalDenseRegistrationSeq = function (t) {
+  if (!t || !t.canonicalRegistrationMigration || !t.canonicalRegistrationMigration.fingerprint ||
+      t._faltamPesados === true ||
+      (Array.isArray(t.waitlist) && t.waitlist.length) ||
+      (Array.isArray(t.standbyParticipants) && t.standbyParticipants.length) ||
+      (t.monarchWaitlist && Object.keys(t.monarchWaitlist).length)) return false;
+  var parts = t.participants;
+  if (!Array.isArray(parts) || !parts.length) return false;
+  var seen = new Set(), max = 0, count = 0;
+  for (var i = 0; i < parts.length; i++) {
+    var p = parts[i];
+    if (!p || typeof p !== 'object') return false;
+    var isPair = (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name);
+    var nums = isPair ? [p.p1Seq, p.p2Seq] : [p.enrollSeq];
+    for (var j = 0; j < nums.length; j++) {
+      var n = Number(nums[j]);
+      if (!Number.isSafeInteger(n) || n <= 0 || seen.has(n)) return false;
+      seen.add(n); count++;
+      if (n > max) max = n;
+    }
+  }
+  return max === count;
+};
+
 // v1.3.84: chave ESTÁVEL da entrada (dupla ou solo) pra achar o card no DOM no update in-place.
 window._duplaEntryKey = function (p) {
   if (!p) return '';
@@ -56,6 +83,7 @@ window._duplaCard = function (t, p, draggable, ctx) {
   var _orgUidsShared = ctx.orgUids || {};
   var _cardPres = (typeof ctx.cardPresence === 'function') ? ctx.cardPresence : null;
   var _enrollOrderMapD = ctx.enrollOrderMap || (typeof window._buildEnrollOrderMap === 'function' ? window._buildEnrollOrderMap(t) : {});
+  var _canonicalDenseSeq = (typeof ctx.canonicalDenseSeq === 'boolean') ? ctx.canonicalDenseSeq : window._canonicalDenseRegistrationSeq(t);
   function _safeAttr(s) { return String(s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
   var tIdStr = String((t && t.id) || '');
     // Presença (só na chamada): estilo verde/vermelho + linha do toggle; pode PULAR
@@ -72,13 +100,14 @@ window._duplaCard = function (t, p, draggable, ctx) {
     // p1Name/p2Name de quem tem uid → exigir NOME aqui fazia a dupla renderizar como solo.
     // _displayName(uid,'') resolve o nome VIVO pelo uid (+ data-uid-name hidrata assíncrono).
     var _pairMembers = (typeof p === 'object' && p && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name))
-      ? [{ uid: (p.p1Uid || ''), manualParticipantId: (p.p1ManualId || ''), guest: String(p.p1Name || '').trim() }, { uid: (p.p2Uid || ''), manualParticipantId: (p.p2ManualId || ''), guest: String(p.p2Name || '').trim() }]
+      ? [{ uid: (p.p1Uid || ''), manualParticipantId: (p.p1ManualId || ''), guest: String(p.p1Name || '').trim(), seq: p.p1Seq }, { uid: (p.p2Uid || ''), manualParticipantId: (p.p2ManualId || ''), guest: String(p.p2Name || '').trim(), seq: p.p2Seq }]
       : (nm.includes('/') ? nm.split('/').map(function (s) { return { uid: '', guest: s.trim() }; }).filter(function (x) { return x.guest; }) : null);
     /* A pair's storage order is mutation data (p1/p2) and must not be changed.
      * Its visual order, however, is the registration order: Jogador 01 / Jogador 02,
      * never the reverse merely because a drag or a legacy sort wrote p1 first. */
     var _pairDisplayMembers = _pairMembers ? _pairMembers.slice().sort(function (a, b) {
       function n(m) {
+        if (_canonicalDenseSeq && Number.isSafeInteger(Number(m.seq)) && Number(m.seq) > 0) return Number(m.seq);
         var resolved = (window._displayName && m.uid) ? window._displayName(m.uid, m.guest) : m.guest;
         var label = String(resolved || m.guest || '').trim().match(/^Jogador\s*0*(\d+)$/i);
         if (label) return parseInt(label[1], 10);
@@ -184,8 +213,8 @@ window._duplaCard = function (t, p, draggable, ctx) {
     var _delBtnDupla = (isOrg && !drawDone && draggable)
       ? '<button type="button" class="cancel-x-btn" title="Remover inscrito" onclick="event.stopPropagation();window.removeParticipantFunction(\'' + _safeAttr(tIdStr) + '\',\'' + _safeAttr(_entryName) + '\',\'' + _safeAttr(_removeIdentity) + '\')" style="--cx-size:24px;">✕</button>'
       : '';
-    var _s1 = (members && window._enrollNumber) ? window._enrollNumber(_enrollOrderMapD, { uid: (_pairDisplayMembers[0] && _pairDisplayMembers[0].uid) || '', manualParticipantId: (_pairDisplayMembers[0] && _pairDisplayMembers[0].manualParticipantId) || '', displayName: members[0], name: members[0] }) : '';
-    var _s2 = (members && members[1] && window._enrollNumber) ? window._enrollNumber(_enrollOrderMapD, { uid: (_pairDisplayMembers[1] && _pairDisplayMembers[1].uid) || '', manualParticipantId: (_pairDisplayMembers[1] && _pairDisplayMembers[1].manualParticipantId) || '', displayName: members[1], name: members[1] }) : '';
+    var _s1 = (_canonicalDenseSeq && _pairDisplayMembers && Number.isSafeInteger(Number(_pairDisplayMembers[0].seq)) && Number(_pairDisplayMembers[0].seq) > 0) ? Number(_pairDisplayMembers[0].seq) : ((members && window._enrollNumber) ? window._enrollNumber(_enrollOrderMapD, { uid: (_pairDisplayMembers[0] && _pairDisplayMembers[0].uid) || '', manualParticipantId: (_pairDisplayMembers[0] && _pairDisplayMembers[0].manualParticipantId) || '', displayName: members[0], name: members[0] }) : '');
+    var _s2 = (_canonicalDenseSeq && _pairDisplayMembers && _pairDisplayMembers[1] && Number.isSafeInteger(Number(_pairDisplayMembers[1].seq)) && Number(_pairDisplayMembers[1].seq) > 0) ? Number(_pairDisplayMembers[1].seq) : ((members && members[1] && window._enrollNumber) ? window._enrollNumber(_enrollOrderMapD, { uid: (_pairDisplayMembers[1] && _pairDisplayMembers[1].uid) || '', manualParticipantId: (_pairDisplayMembers[1] && _pairDisplayMembers[1].manualParticipantId) || '', displayName: members[1], name: members[1] }) : '');
     var _body;
     if (members) {
       var _memBlock = function (idxM, right) {
@@ -323,6 +352,7 @@ window._buildDoublesInscritosSection = function (t, ctx) {
   }
   var _pairedParticipants = _allParts.filter(_isPairEntry);
   var _enrollOrderMapD = window._buildEnrollOrderMap(t);
+  var _canonicalDenseSeq = window._canonicalDenseRegistrationSeq(t);
   var _pairedMemberKeys = {};
   _pairedParticipants.forEach(function (pp) {
     if (pp.p1Uid) _pairedMemberKeys['u:' + pp.p1Uid] = 1;
@@ -344,6 +374,12 @@ window._buildDoublesInscritosSection = function (t, ctx) {
   // "Jogador N", o N é um fallback explícito e mantém 01, 02, 03... estáveis mesmo
   // quando dados legados carregam sequências antigas. Nunca altera o array persistido.
   function _entryOrderNumber(entry) {
+    // A projeção canônica carrega o número original de cada inscrito. No Neon ele
+    // corresponde à posição na foto; não recalcular pela fila nem desempatar pelo nome.
+    if (_canonicalDenseSeq && entry && typeof entry === 'object') {
+      if (_isPairEntry(entry)) return Math.min(Number(entry.p1Seq), Number(entry.p2Seq));
+      return Number(entry.enrollSeq);
+    }
     var names = [];
     if (entry && typeof entry === 'object' && (entry.p1Name || entry.p2Name || entry.p1Uid || entry.p2Uid)) {
       names = [entry.p1Name, entry.p2Name].filter(Boolean);
@@ -402,7 +438,7 @@ window._buildDoublesInscritosSection = function (t, ctx) {
     if (_categoryPeople[label] > limit) _overCapacityEntries.add(entry);
   });
   // v1.3.37: card de dupla via FONTE ÚNICA window._duplaCard (extraído). ctx com as deps.
-  var _dctx = { isOrg: isOrg, drawDone: drawDone, orgUids: _orgUidsShared, cardPresence: _cardPres, memberPresence: ctx.memberPresence, enrollOrderMap: _enrollOrderMapD, overCapacityEntries: _overCapacityEntries };
+  var _dctx = { isOrg: isOrg, drawDone: drawDone, orgUids: _orgUidsShared, cardPresence: _cardPres, memberPresence: ctx.memberPresence, enrollOrderMap: _enrollOrderMapD, canonicalDenseSeq: _canonicalDenseSeq, overCapacityEntries: _overCapacityEntries };
 
   // Convites pendentes → card de dupla PENDENTE (âmbar) na seção "Sem dupla".
   var _cuUid = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) || '';

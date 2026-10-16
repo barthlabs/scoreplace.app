@@ -1205,6 +1205,8 @@ const SUITES = [
   'tests/inscritos-em-fatias.test.js',
   // Nº de inscrição é da PESSOA: formar/desfazer dupla NÃO mexe; só a saída renumera.
   'tests/enroll-number-canon.test.js',
+  // Foto do Neon: 64 duplas e seus 128 números permanecem na ordem de inscrição.
+  'tests/duplas-foto-ordem.test.js',
   // Flexibilizar equilíbrio: forma duplas mesmo-gênero da sobra em vez de deixar gente de fora.
   'tests/flexibilize-balance.test.js',
   // Flexibilizado não mira pow2: o resto vira só o avulso (3→1); pow2 é a próxima tela.

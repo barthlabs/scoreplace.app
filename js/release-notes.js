@@ -1,3 +1,4 @@
+// 2.4.59 — As duplas importadas aparecem na ordem original das fotos, com os dois nomes e números na sequência de inscrição. Nenhuma inscrição foi alterada.
 // 2.4.58 — A importação preserva a posição na lista ao confirmar uma conta.
 // Sem conta provável, não há confirmação extra; candidatos exigem escolha.
 // O organizador pode criar link individual para a pessoa sem conta reconhecer
