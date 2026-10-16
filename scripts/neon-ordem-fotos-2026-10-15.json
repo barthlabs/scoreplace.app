@@ -1,0 +1,270 @@
+{
+  "Fem Light": [
+    {
+      "pairId": "legacy-pair-fbad2a6019547d236e89cc9dc2fd2f0c",
+      "oldSeq": 1
+    },
+    {
+      "pairId": "pair-d171729e63821aaac87cb7309b9565be",
+      "oldSeq": 3
+    },
+    {
+      "pairId": "pair-9a7f957a9c1b7d533613010ee59ec073",
+      "oldSeq": 5
+    },
+    {
+      "pairId": "pair-1a367df55267056aaaa280ed5252ae48",
+      "oldSeq": 7
+    },
+    {
+      "pairId": "pair-6f8744832e4edde1c8cf3ed532b36ae9",
+      "oldSeq": 9
+    },
+    {
+      "pairId": "pair-877b93b56a85bf25e78beac142698f76",
+      "oldSeq": 11
+    },
+    {
+      "pairId": "pair-92012296fb5d0068564f55220b32ac5c",
+      "oldSeq": 13
+    },
+    {
+      "pairId": "pair-5001bedd2f9b9eaa56589bf7b80fe822",
+      "oldSeq": 15
+    },
+    {
+      "pairId": "pair-80aaf22a167b5a76619169a87e476b34",
+      "oldSeq": 97
+    },
+    {
+      "pairId": "pair-e66b8ae1aa72e481b356366136614dc9",
+      "oldSeq": 99
+    },
+    {
+      "pairId": "pair-6d3af75073f7e45d7ced819b09c832a5",
+      "oldSeq": 101
+    },
+    {
+      "pairId": "pair-9bebf328f319de3777695cd5ead54e63",
+      "oldSeq": 103
+    },
+    {
+      "pairId": "pair-bd3213e5bb7555396a7efc4691d57a5b",
+      "oldSeq": 105
+    },
+    {
+      "pairId": "pair-b0790f8fafe1c5bf7b3fea35568be9f9",
+      "oldSeq": 107
+    },
+    {
+      "pairId": "pair-7f2aa81cda6bcca93b5433017d0c126c",
+      "oldSeq": 109
+    },
+    {
+      "pairId": "pair-f082f397d5b3ae15203f2d4f75ea2012",
+      "oldSeq": 111
+    }
+  ],
+  "Fem Power": [
+    {
+      "pairId": "legacy-pair-aa866f1dd64960a9bdfe618c99e96e32",
+      "oldSeq": 17
+    },
+    {
+      "pairId": "pair-2ede3d4088b8e34b0dd815d51b99baab",
+      "oldSeq": 19
+    },
+    {
+      "pairId": "legacy-pair-a144842838d26c3bba77ece24a3d3204",
+      "oldSeq": 21
+    },
+    {
+      "pairId": "pair-ce3f1eebd91541b71aa95a6396b38da7",
+      "oldSeq": 23
+    },
+    {
+      "pairId": "pair-9bab64674856e05b7a43ee2baa75b78e",
+      "oldSeq": 25
+    },
+    {
+      "pairId": "pair-3236b4cc9a714ed8d7a047e6dbf81231",
+      "oldSeq": 27
+    },
+    {
+      "pairId": "legacy-pair-65a4b408662326001706eb6cd14ea22b",
+      "oldSeq": 29
+    },
+    {
+      "pairId": "pair-8fd4d19d19d5e81b88e9426e529673d3",
+      "oldSeq": 31
+    }
+  ],
+  "Fem Extreme": [
+    {
+      "pairId": "legacy-pair-83da906c4b7cbe8b4d02ae8db0f511bb",
+      "oldSeq": 33
+    },
+    {
+      "pairId": "legacy-pair-3e335b29e03f7af88219b55ceea9e9ea",
+      "oldSeq": 35
+    },
+    {
+      "pairId": "pair-fe48c344fe5f0e5ef4812d2cfb106145",
+      "oldSeq": 37
+    },
+    {
+      "pairId": "legacy-pair-05051759560af81f60bb3ba09ffdd009",
+      "oldSeq": 39
+    },
+    {
+      "pairId": "legacy-pair-767bcaf90f16b577e3e4516089d5b17c",
+      "oldSeq": 41
+    },
+    {
+      "pairId": "legacy-pair-737fc0ee951ba6b6ae9c0f3d5cf56d46",
+      "oldSeq": 43
+    },
+    {
+      "pairId": "legacy-pair-e325487a0556b4d39e2d6f7337d1e94e",
+      "oldSeq": 45
+    },
+    {
+      "pairId": "legacy-pair-e4159bad1aa70efe201b0851d9b844ad",
+      "oldSeq": 47
+    }
+  ],
+  "Masc Light": [
+    {
+      "pairId": "pair-1e25a79312b0ad08d4f9eecc80b8475f",
+      "oldSeq": 49
+    },
+    {
+      "pairId": "pair-bd7c3e39bc940b7be7da99249c2de924",
+      "oldSeq": 51
+    },
+    {
+      "pairId": "legacy-pair-d8b04209652f2bd01a6902c0d3593e08",
+      "oldSeq": 53
+    },
+    {
+      "pairId": "legacy-pair-309a3e17a3bd554bc74feaba7653c1ca",
+      "oldSeq": 55
+    },
+    {
+      "pairId": "pair-ba779597c284f4e221d3764e28ff1dbc",
+      "oldSeq": 57
+    },
+    {
+      "pairId": "legacy-pair-56ef21bba119ae423d46381acaf938e7",
+      "oldSeq": 59
+    },
+    {
+      "pairId": "pair-59b48f95b040d6c02533ee4b316ea5aa",
+      "oldSeq": 61
+    },
+    {
+      "pairId": "pair-58814043957cb65ea64a254c38c13301",
+      "oldSeq": 63
+    },
+    {
+      "pairId": "pair-de4550938d06b53fb62916c09570b96d",
+      "oldSeq": 113
+    },
+    {
+      "pairId": "pair-40d4af201b50e949fc3ec96573505ad8",
+      "oldSeq": 115
+    },
+    {
+      "pairId": "pair-2065c1b07d2f242f1834124e46656cc8",
+      "oldSeq": 117
+    },
+    {
+      "pairId": "pair-095cb6f47d9835349e16a0d9fe33416b",
+      "oldSeq": 119
+    },
+    {
+      "pairId": "pair-2f98f56d5c91dc30e1ac43eb3e2d6d7b",
+      "oldSeq": 121
+    },
+    {
+      "pairId": "pair-0bc487b426cb5067d6727459ff041f84",
+      "oldSeq": 123
+    },
+    {
+      "pairId": "pair-d0f145204c4c1ffa8af747415588b893",
+      "oldSeq": 125
+    },
+    {
+      "pairId": "pair-d15806871f25ff2895a23e4ed5871732",
+      "oldSeq": 127
+    }
+  ],
+  "Masc Power": [
+    {
+      "pairId": "legacy-pair-7e0ccbd55142e10918abca52e3f0f825",
+      "oldSeq": 65
+    },
+    {
+      "pairId": "legacy-pair-a0d9688035445af881d3be4faeac2e83",
+      "oldSeq": 67
+    },
+    {
+      "pairId": "legacy-pair-ff8033da28180812e03f87b7ea93822a",
+      "oldSeq": 69
+    },
+    {
+      "pairId": "legacy-pair-d65b0ce8cd9968cd5970c3356c3ecc84",
+      "oldSeq": 71
+    },
+    {
+      "pairId": "legacy-pair-2d35290247cf3b95abc4246cdd6c5dd6",
+      "oldSeq": 73
+    },
+    {
+      "pairId": "pair-bc2e20d1aede982e789e3ca821d8015e",
+      "oldSeq": 75
+    },
+    {
+      "pairId": "legacy-pair-74c068efb8a933ef02a4223a4293d5bd",
+      "oldSeq": 77
+    },
+    {
+      "pairId": "legacy-pair-d35eb8c4ac01c774f4e820784a5b5937",
+      "oldSeq": 79
+    }
+  ],
+  "Masc Extreme": [
+    {
+      "pairId": "legacy-pair-97e14e8cb8993e511a60fa363e0a539c",
+      "oldSeq": 81
+    },
+    {
+      "pairId": "legacy-pair-4a9f97410d70a958ce4c7e547a26d535",
+      "oldSeq": 83
+    },
+    {
+      "pairId": "legacy-pair-10b67878a6ad4572a34b6c00fff99db4",
+      "oldSeq": 85
+    },
+    {
+      "pairId": "legacy-pair-cc547cf54fa4e0d9f39055cc9bdb81b3",
+      "oldSeq": 87
+    },
+    {
+      "pairId": "pair-b04de5842d69a7a57748ce07ec30bb63",
+      "oldSeq": 89
+    },
+    {
+      "pairId": "pair-a922f2852bb8e8c04f0864072debaaab",
+      "oldSeq": 91
+    },
+    {
+      "pairId": "legacy-pair-cb423350ad05ea342de409a7aa6487cc",
+      "oldSeq": 93
+    },
+    {
+      "pairId": "legacy-pair-6591418ef5dda603c01ccf3b358af765",
+      "oldSeq": 95
+    }
+  ]
+}

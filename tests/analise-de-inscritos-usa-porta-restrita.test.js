@@ -19,12 +19,19 @@ const entries = core.entradasDoRelatorio({
   participants: [
     { uid: 'ana', displayName: 'Ana' },
     { p1Uid: 'bia', p1Name: 'Bia', p2Uid: 'cai', p2Name: 'Cai' },
+    { p1Uid: 'dora', p2Uid: 'eva' },
+    { p1Uid: 'fabi', p2ManualId: 'manual-gabi', p2Name: 'Gabi' },
     { displayName: 'Nome Repetido' }, { displayName: 'Nome Repetido' }
   ],
-  waitlist: [{ email: 'legada@example.com', displayName: 'Legada' }]
+  waitlist: [{ email: 'legada@example.com', displayName: 'Legada' }, { p1Uid: 'heli', p2Uid: 'iris' }],
+  monarchWaitlist: { Fem: [{ p1Uid: 'jo', p2Uid: 'kika' }] }
 });
 ok(core.pertenceAoRelatorio(entries, { uid: 'ana' }), 'uid do elenco é autorizado');
 ok(core.pertenceAoRelatorio(entries, { uid: 'bia' }), 'membro de dupla é autorizado');
+ok(core.pertenceAoRelatorio(entries, { uid: 'dora' }) && core.pertenceAoRelatorio(entries, { uid: 'eva' }), 'dupla canônica somente com UIDs é autorizada');
+ok(core.pertenceAoRelatorio(entries, { uid: 'fabi' }) && !core.pertenceAoRelatorio(entries, { uid: 'manual-gabi' }), 'dupla mista autoriza apenas a pessoa com UID');
+ok(core.pertenceAoRelatorio(entries, { uid: 'heli' }) && core.pertenceAoRelatorio(entries, { uid: 'iris' }), 'dupla na espera usa a mesma regra');
+ok(core.pertenceAoRelatorio(entries, { uid: 'jo' }) && core.pertenceAoRelatorio(entries, { uid: 'kika' }), 'dupla na espera monarch usa a mesma regra');
 ok(!core.pertenceAoRelatorio(entries, { email: 'LEGADA@example.com' }), 'inscrição legada por e-mail não resolve perfil de conta');
 ok(!core.pertenceAoRelatorio(entries, { uid: 'estranha' }), 'uid fora do elenco é recusado');
 ok(!core.pertenceAoRelatorio(entries, { name: 'Nome Repetido' }), 'nome não resolve perfil de conta');

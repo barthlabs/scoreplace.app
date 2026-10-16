@@ -25,7 +25,10 @@ function entradasDoRelatorio(tournament) {
   const out = [];
   const add = (entry) => {
     if (!entry || typeof entry !== 'object') return;
-    if (entry.p1Name && entry.p2Name) {
+    // O elenco canônico retira nomes de contas e mantém os UIDs. Não exigir
+    // p1Name/p2Name aqui: isso esconderia perfis reais da Análise.
+    if ((entry.p1Uid || entry.p1ManualId || entry.p1Name) &&
+        (entry.p2Uid || entry.p2ManualId || entry.p2Name)) {
       out.push({ uid: entry.p1Uid || '', name: entry.p1Name || '' });
       out.push({ uid: entry.p2Uid || '', name: entry.p2Name || '' });
       return;
