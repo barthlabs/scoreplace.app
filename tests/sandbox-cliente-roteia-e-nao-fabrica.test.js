@@ -82,6 +82,12 @@ const ok = (n, c, x) => { if (c) console.log('  ✓ ' + n); else { console.log('
       real._tRef('nunca_visto').path === 'tournaments/nunca_visto', real._tRef('nunca_visto').path);
     ok('⛔ e NÃO decide por nome: "sb_" num id desconhecido não vira sandbox',
       real._tRef('sb_desconhecido').path === 'tournaments/sb_desconhecido', real._tRef('sb_desconhecido').path);
+    let rosterPayload = null;
+    real._callFn = async (_name, payload) => { rosterPayload = payload; return { data: { participants: [], registrationCount: 0 } }; };
+    await real.loadCanonicalTournamentRoster('sb_2');
+    ok('⭐⭐ leitura canônica declara sandbox pelo fato persistido', rosterPayload && rosterPayload.sandbox === true);
+    await real.loadCanonicalTournamentRoster('real_1');
+    ok('⭐⭐ leitura canônica do torneio normal não troca coleção', rosterPayload && rosterPayload.sandbox === false);
     console.log('\n── ④ results → resultsSandbox só no sandbox ──');
     ok('⭐⭐ sandbox: results vira resultsSandbox', real._subNome('sb_2', 'results') === 'resultsSandbox');
     ok('⭐⭐ torneio real: results continua results', real._subNome('real_1', 'results') === 'results');

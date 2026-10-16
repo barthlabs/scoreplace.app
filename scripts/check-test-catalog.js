@@ -49,6 +49,8 @@ const EMULADOR_MANUAL = {
     'firebase emulators:exec --only functions,firestore,auth --project demo-scoreplace "node functions/test-contato-email-emu.js"',
   'functions-autodraw/test-reconciliacao-marca-emu.js':
     'cd functions-autodraw && firebase emulators:exec --only functions,firestore,auth --config firebase.emulator.json --project demo-scoreplace "node test-reconciliacao-marca-emu.js"',
+  'functions-autodraw/test-canonical-sandbox-emu.js':
+    'npm run test:emu:autodraw',
   'functions/test-pair-replicate.js':
     'firebase emulators:exec --only firestore --config firebase.emulator.json --project demo-scoreplace "FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 node functions/test-pair-replicate.js"',
   'functions/test-sandbox-replicate.js':

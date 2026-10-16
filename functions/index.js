@@ -5519,11 +5519,21 @@ exports.getCanonicalTournamentRoster = onCall(
     const tournamentId = String((request.data && request.data.tournamentId) || "").trim();
     if (!tournamentId) throw new HttpsError("invalid-argument", "tournamentId é obrigatório");
     const db = admin.firestore();
-    const ref = db.collection("tournaments").doc(tournamentId);
+    // ⛔ O tipo explícito decide UMA coleção; jamais buscar no original como
+    // fallback. No sandbox, memberUids/adminUids são cópia fiel e não autorizam.
+    const sandbox = request.data && request.data.sandbox === true;
+    const ref = db.collection(sandbox ? "sandboxes" : "tournaments").doc(tournamentId);
     return await db.runTransaction(async (tx) => {
       const tournamentSnap = await tx.get(ref);
-      if (!tournamentSnap.exists) throw new HttpsError("not-found", "torneio não existe");
-      const tournament = tournamentSnap.data() || {};
+      const tournament = tournamentSnap.exists ? tournamentSnap.data() || {} : {};
+      if (sandbox) {
+        if (tournament.isSandbox !== true || tournament.sbState !== "ready" ||
+            !String(tournament.sandboxOf || "") || tournament.sandboxOwnerUid !== callerUid) {
+          throw new HttpsError("not-found", "torneio não existe");
+        }
+      } else if (!tournamentSnap.exists) {
+        throw new HttpsError("not-found", "torneio não existe");
+      }
       // O recibo de migração é o limite exato do elenco. Lemos no máximo um
       // documento além dele: isso preserva a detecção de divergência sem uma
       // varredura ilimitada se uma coleção ficar corrompida ou crescer por erro.
@@ -5535,7 +5545,11 @@ exports.getCanonicalTournamentRoster = onCall(
       );
       const registrations = registrationsSnap.docs.map((doc) => doc.data() || {});
       let checked;
-      try { checked = _canonicalRegistrationBoundary.verifiedRoster(tournament, registrations); }
+      // A cópia fiel preserva tournamentId e os IDs determinísticos das inscrições
+      // do ORIGINAL. Validar como se fossem registros recém-criados para o ID sb_
+      // rejeitaria uma cópia correta; a identidade lógica continua sandboxOf.
+      const rosterIdentity = sandbox ? Object.assign({}, tournament, { id: tournament.sandboxOf }) : tournament;
+      try { checked = _canonicalRegistrationBoundary.verifiedRoster(rosterIdentity, registrations); }
       catch (error) { throw new HttpsError("failed-precondition", error.message); }
       let categoryDefinitions;
       try { categoryDefinitions = _categoryEligibility.normalizeCategoryDefinitions(tournament.categoryDefinitions); }
@@ -5543,7 +5557,7 @@ exports.getCanonicalTournamentRoster = onCall(
       const participants = checked.participants;
       const belongsToRoster = participants.some((entry) => [entry.uid, entry.p1Uid, entry.p2Uid]
         .filter(Boolean).map(String).indexOf(String(callerUid)) !== -1);
-      if (!_isTournamentOrgCaller(tournament, callerUid) && !belongsToRoster) {
+      if (!sandbox && !_isTournamentOrgCaller(tournament, callerUid) && !belongsToRoster) {
         throw new HttpsError("permission-denied", "elenco indisponível neste torneio");
       }
       // A interface recebe o mapa somente para apresentação. A identidade que

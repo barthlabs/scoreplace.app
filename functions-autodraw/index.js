@@ -1498,13 +1498,28 @@ exports.getCanonicalTournamentRoster = onCall(async request => {
   const uid = request.auth && request.auth.uid;
   const data = request.data || {};
   const tId = String(data.tournamentId || '').trim();
+  const sandbox = data.sandbox === true;
   if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
   if (!tId) throw new HttpsError('invalid-argument', 'Torneio obrigatório.');
-  const ref = db.collection('tournaments').doc(tId);
+  // ⛔ Não inferir tipo pelo prefixo do ID nem tentar a outra coleção em caso de
+  // falha: um ID pode existir em ambas. A flag só escolhe o caminho, NÃO autoriza.
+  const ref = db.collection(sandbox ? 'sandboxes' : 'tournaments').doc(tId);
   return db.runTransaction(async tx => {
+    if (sandbox) {
+      // O sandbox copia memberUids/adminUids do original byte a byte. Por isso
+      // _isTournamentAdmin/_isTournamentParticipant NÃO concedem acesso aqui.
+      // Confira o pai antes de _leTorneio para que inexistente e não dono tenham
+      // o mesmo erro, sem revelar nem o recibo de um sandbox alheio.
+      const sbSnap = await tx.get(ref);
+      const sb = sbSnap.exists ? sbSnap.data() || {} : {};
+      if (sb.isSandbox !== true || sb.sbState !== 'ready' ||
+          String(sb.sandboxOf || '') === '' || sb.sandboxOwnerUid !== uid) {
+        throw new HttpsError('not-found', 'Torneio não encontrado.');
+      }
+    }
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
-    if (!_isTournamentAdmin(t, uid) && !_isTournamentParticipant(t, uid)) {
+    if (!sandbox && !_isTournamentAdmin(t, uid) && !_isTournamentParticipant(t, uid)) {
       throw new HttpsError('permission-denied', 'Sem acesso ao elenco deste torneio.');
     }
     const migration = t.canonicalRegistrationMigration || {};

@@ -1989,7 +1989,13 @@ window.FirestoreDB = {
   async loadCanonicalTournamentRoster(tournamentId) {
     // Consumidores: _montaDeSubcolecoes valida apenas inscrições tipadas;
     // Análise/card fazem a junção explícita de placeholderReservations.
-    var result = await this._callFn('getCanonicalTournamentRoster', { tournamentId: String(tournamentId || '') });
+    // ⛔ Sandbox e produção têm o MESMO esquema de registrations, mas coleções e
+    // permissões diferentes. O tipo explícito escolhe a coleção no servidor; a
+    // callable ainda confere o carimbo e o dono, sem fallback para o original.
+    var result = await this._callFn('getCanonicalTournamentRoster', {
+      tournamentId: String(tournamentId || ''),
+      sandbox: typeof this._ehSandbox === 'function' && this._ehSandbox(tournamentId)
+    });
     // A registration is the typed canonical record. Placeholder reservations
     // stay beside it until the organizer assigns gender/category; callers that
     // render the complete roster merge them explicitly. Merging here would make

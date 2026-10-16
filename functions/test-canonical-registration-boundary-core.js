@@ -12,6 +12,12 @@ function account(uid) {
 const tournament = { id: 't1', canonicalRegistrationMigration: { fingerprint: 'fp-1', registrationCount: 1 } };
 const valid = boundary.verifiedRoster(tournament, [account('u1')]);
 ok('recibo com marcador, contagem e identidade válidos libera roster', valid.participants.length === 1 && valid.migration.fingerprint === 'fp-1');
+// A cópia fiel do sandbox mantém tournamentId/registrationId do original. A
+// callable de functions/ projeta sandboxOf como identidade lógica só na leitura.
+const sandbox = Object.assign({}, tournament, { id: 'sb_t1', sandboxOf: 't1' });
+bad('sandbox não passa se validado pelo id físico sb_', () => boundary.verifiedRoster(sandbox, [account('u1')]));
+const sandboxRoster = boundary.verifiedRoster(Object.assign({}, sandbox, { id: sandbox.sandboxOf }), [account('u1')]);
+ok('cópia fiel valida pelo id lógico original e preserva a inscrição', sandboxRoster.participants.length === 1 && sandboxRoster.registrations[0].tournamentId === 't1');
 bad('recusa torneio sem marcador canônico', () => boundary.verifiedRoster({ id: 't1' }, [account('u1')]));
 bad('recusa recibo sem contagem íntegra', () => boundary.verifiedRoster({ id: 't1', canonicalRegistrationMigration: { fingerprint: 'fp' } }, [account('u1')]));
 
