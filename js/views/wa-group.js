@@ -331,9 +331,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // CLAUDE.md (border-radius 10px).
   // `bg` opcional: sem ele o botão é VERDE (grupo do jogo). O do torneio passa WA_BLUE.
   function _btn(label, onclick, extra, bg) {
-    return '<button type="button" class="btn btn-micro btn-shine hover-lift" onclick="' + onclick + '" ' +
-      'style="background:' + window._spCor((bg || WA_GREEN), 'background') + ';color:#fff;font-size:0.72rem;font-weight:800;' +
-      'padding:4px 9px;line-height:1.05;text-align:center;border-radius:10px;' + (extra || '') + '">' +
+    return '<button type="button" class="btn btn-micro btn-shine hover-lift sp-match-action sp-match-action--group" onclick="' + onclick + '" ' +
+      'style="--sp-match-action-bg:' + window._spCor((bg || WA_GREEN), 'background') + ';' + (extra || '') + '">' +
       _icon() + label + '</button>';
   }
   function _editBtn(onclick, title) {

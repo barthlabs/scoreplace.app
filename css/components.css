@@ -695,6 +695,24 @@ body.hamburger-open .topbar {
     inset 0 -4px 6px rgba(0,0,0,0.20),
     0 1px 3px rgba(0,0,0,0.18);
 }
+
+/* Ações de um jogo: UMA aparência para agenda/WhatsApp na chave e no dashboard.
+   O estado aguardando adversário mantém as cores reconhecíveis, mas nunca parece
+   clicável: sem brilho/elevação e com motivo visível junto aos botões. */
+.btn-micro.sp-match-action { color:#fff; font-size:0.72rem; font-weight:800; text-align:center; }
+/* A agenda conserva o volume original do .btn-micro; o grupo conserva o seu
+   padding/raio próprios. Só as cores e tipos viajam com o estado pendente. */
+.btn-micro.sp-match-action--schedule { background:#3b82f6; line-height:1.15; }
+.btn-micro.sp-match-action--group { background:var(--sp-match-action-bg, linear-gradient(135deg,#25D366,#128C7E)); padding:4px 9px; line-height:1.05; border-radius:10px; }
+.btn-micro.sp-match-action--compact { font-size:0.62rem; }
+.sp-match-action:disabled { opacity:0.68; cursor:not-allowed; transform:none !important; animation:none !important; }
+.sp-match-action:disabled::before, .sp-match-action:disabled::after { animation:none !important; display:none !important; }
+.sp-pending-actions-note { color:var(--text-muted); font-size:0.7rem; margin-top:4px; }
+/* Pedido do dono: sem vazamento colorido no vão entre topbar e filtro da
+   dashboard. O top sticky canônico está certo; esta cobertura é SÓ para o
+   espaço natural de 0.75rem (margin-bottom das pílulas antes da lista).
+   Não copiar para as barras de outras telas. */
+#fbwrap-dashTourn { box-shadow:0 -0.75rem 0 var(--bg-darker,#111114); }
 .btn-micro:active { transform: translateY(1px); box-shadow: inset 0 1px 0 rgba(255,255,255,0.25), inset 0 -3px 5px rgba(0,0,0,0.18); }
 .btn-sm, .btn-pill {
   box-shadow:

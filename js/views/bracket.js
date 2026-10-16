@@ -7750,11 +7750,15 @@ window._pendingMatchActionChips = function (t, m) {
   var cu = window.AppStore && window.AppStore.currentUser;
   if (!cu || !cu.uid || !window._schPodeGerirJogo || !window._schPodeGerirJogo(t, m, cu)) return '';
   var title = window._t('bracket.pendingOpponentActions');
-  var style = 'color:var(--text-bright);background:var(--bg-card);border:1px solid var(--border-color);opacity:1;cursor:not-allowed;';
   var propose = window._t('bracket.proposeDates');
   var group = window._t('bracket.createGameGroup');
-  return '<button type="button" class="btn btn-micro" disabled title="' + window._safeHtml(title) + '" aria-label="' + window._safeHtml(propose + ' — ' + title) + '" style="' + style + '">📅 ' + window._safeHtml(propose) + '</button>' +
-    '<button type="button" class="btn btn-micro" disabled title="' + window._safeHtml(title) + '" aria-label="' + window._safeHtml(group + ' — ' + title) + '" style="' + style + '">💬 ' + window._safeHtml(group) + '</button>';
+  // Mesmo componente visual das ações ativas; somente a disponibilidade muda.
+  // Não criar um terceiro botão cinza neste estado nem permitir onclick sem rival.
+  var cls = 'btn btn-micro sp-match-action ';
+  var icon = window._WA_ICON_SVG || '💬';
+  return '<div class="sp-pending-match-actions"><button type="button" class="' + cls + 'sp-match-action--schedule" disabled title="' + window._safeHtml(title) + '" aria-label="' + window._safeHtml(propose + ' — ' + title) + '">📅 ' + window._safeHtml(propose) + '</button>' +
+    '<button type="button" class="' + cls + 'sp-match-action--group" disabled title="' + window._safeHtml(title) + '" aria-label="' + window._safeHtml(group + ' — ' + title) + '">' + icon + window._safeHtml(group) + '</button>' +
+    '<div class="sp-pending-actions-note">' + window._safeHtml(title) + '</div></div>';
 };
 // v2.3.46: exposto pra que _saveResultInline possa re-renderizar UM card
 // individual in-place (sem re-render do bracket inteiro), preservando scroll,
