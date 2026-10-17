@@ -8,8 +8,8 @@
       "mode": "only"
     },
     "updateTournamentConfiguration": {
-      "backendCommit": "fb7eb6f309c7ff0ac5b0dda1233ec2524d6eea61",
-      "deployedAt": "2026-10-17T08:17:37.427Z",
+      "backendCommit": "f2aa93d697a641c762fcfa392501a8f16eeb1132",
+      "deployedAt": "2026-10-17T10:04:41.010Z",
       "result": "success",
       "mode": "only"
     },
@@ -46,6 +46,12 @@
     "autoDraw": {
       "backendCommit": "fb7eb6f309c7ff0ac5b0dda1233ec2524d6eea61",
       "deployedAt": "2026-10-17T08:17:37.427Z",
+      "result": "success",
+      "mode": "only"
+    },
+    "uploadTournamentImage": {
+      "backendCommit": "f2aa93d697a641c762fcfa392501a8f16eeb1132",
+      "deployedAt": "2026-10-17T10:04:41.010Z",
       "result": "success",
       "mode": "only"
     }
