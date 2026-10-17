@@ -25,6 +25,8 @@ assert.equal(next.matches.length, 3);
 assert.deepEqual(next.matches[0].team1Uids, ['uid-a']);
 assert.equal(next.competitionPairAssignments[0].fixedPairId, 'new');
 assert.equal(draft.participants[0].p1ManualId, 'a');
+const withoutTeams = { participants: [side], matches: [{ id: 1, team1Obj: side }] };
+assert.equal(core.replaceDraftIdentity(withoutTeams, 'a', 'old', 'new', 'uid-a').participants[0].p1Uid, 'uid-a');
 assert.throws(() => core.replaceDraftIdentity(Object.assign({}, draft, { matches: [] }), 'a', 'old', 'new', 'uid-a'));
 assert.throws(() => core.replaceDraftIdentity(Object.assign({}, draft, { participants: [side, side] }), 'a', 'old', 'new', 'uid-a'));
 console.log('✓ vínculo compartilhado: nome, dupla existente e substituição do rascunho');

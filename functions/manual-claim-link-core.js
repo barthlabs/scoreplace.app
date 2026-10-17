@@ -31,7 +31,7 @@ function existingPair(registrations, uid) {
 
 function replaceDraftIdentity(draft, manualId, oldPairId, newPairId, uid) {
   if (!draft || !Array.isArray(draft.participants) || !Array.isArray(draft.matches) ||
-      !Array.isArray(draft.competitionPairAssignments)) throw new Error('rascunho incompleto');
+      (draft.competitionPairAssignments != null && !Array.isArray(draft.competitionPairAssignments))) throw new Error('rascunho incompleto');
   const next = JSON.parse(JSON.stringify(draft));
   let participantCount = 0, matchCount = 0, assignmentCount = 0;
   function replaceSide(side) {
@@ -57,10 +57,10 @@ function replaceDraftIdentity(draft, manualId, oldPairId, newPairId, uid) {
       match['p' + n + 'Uid'] = match['team' + n + 'Uids'].length === 1 ? match['team' + n + 'Uids'][0] : null;
     });
   });
-  next.competitionPairAssignments.forEach((assignment) => {
+  (next.competitionPairAssignments || []).forEach((assignment) => {
     if (assignment && assignment.fixedPairId === oldPairId) { assignment.fixedPairId = newPairId; assignmentCount++; }
   });
-  if (participantCount !== 1 || matchCount < 1 || assignmentCount !== 1) throw new Error('referências incompletas no rascunho');
+  if (participantCount !== 1 || matchCount < 1 || assignmentCount > 1) throw new Error('referências incompletas no rascunho');
   function hasStaleIdentity(value) {
     if (!value || typeof value !== 'object') return false;
     return Object.keys(value).some((key) => {
