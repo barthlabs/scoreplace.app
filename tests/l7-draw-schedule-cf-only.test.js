@@ -7,4 +7,9 @@ ok(/drawWindow\._schAplicarGrade\(t\)/.test(srv)&&/estimatedScheduleApplied/.tes
 ok(/t\.checkedIn = \{\}; t\.absent = \{\};/.test(srv),'drawRound limpa a presença antes de gerar a nova chave');
 const core=fs.readFileSync('functions-autodraw/draw-core.js','utf8'),copy=fs.readFileSync('functions-autodraw/copy-vendor.js','utf8');
 ok(/vendor\/schedule-poll\.js/.test(core)&&/'schedule-poll\.js'/.test(copy),'núcleo de grade compartilhado viaja para o servidor');
+const writes=require('../functions-autodraw/write-plan.js'),split=require('../functions-autodraw/vendor/tournament-split-core.js');
+const scheduled={id:'schedule-write-test',matches:[{id:'m1',scheduledAt:'2026-10-22T21:00:00.000Z',scheduledKind:'estimate'}],participants:[],history:[]};
+const writePlan=writes.planWrites(null,scheduled,{split,boundary:data=>({persist:data,clean:data}),agoraIso:'2026-10-17T08:00:00.000Z'});
+ok(writePlan.ops.some(op=>op.colecao==='matches'&&op.chave==='m1'&&op.doc.jogo&&op.doc.jogo.scheduledAt==='2026-10-22T21:00:00.000Z'),
+  'horário estimado atravessa o delta do write-plan até a subcoleção de jogos');
 process.exitCode=bad?1:0;

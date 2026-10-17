@@ -10,6 +10,8 @@ const organizerSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'views'
 const bracketLogicSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'bracket-logic.js'), 'utf8');
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };
+ok(/Uma partida já começou ou terminou\. Atualize a página/.test(organizerSource),
+  'cliente antigo recebe explicação específica quando servidor protege partida iniciada ou concluída');
 console.log('──── agenda operacional e quadras ────');
 ok(/if \(m\.winner != null\) return true;/.test(fs.readFileSync(path.join(__dirname, '..', 'js', 'store.js'), 'utf8')),
   'o helper global também congela partida com vencedor, igual à validação do servidor');
@@ -397,9 +399,10 @@ ok(!board.gridHtml.includes('position:sticky'), 'Agenda não recebe sticky');
 ok(board.days.length === 1 && /data-agenda-day/.test(board.html),
   'a grade cria abas por dia quando há agenda');
 ok(/VENOM/.test(board.html) && /BLACKOUT/.test(board.html) && /Fem Power/.test(board.html) &&
-  /data-agenda-reveal-match="A"/.test(board.html) && /Participantes ocultos/.test(board.html) &&
+  /data-agenda-reveal-all/.test(board.html) && /VENOM 1/.test(board.html) && /BLACKOUT 1/.test(board.html) &&
+  !/data-agenda-reveal-match/.test(board.html) && !/Participantes ocultos/.test(board.html) &&
   !/<div>Ana<\/div>/.test(board.html),
-  'a célula mostra time e categoria, mas oculta participantes até o organizador tocar no olho');
+  'a célula mostra TIME 1 e categoria, mas oculta nomes até o olho geral');
 ok(/grid-template-columns:72px repeat\(2, minmax\(176px,1fr\)\)/.test(board.html),
   'a grade tem uma coluna de horário e uma coluna para cada quadra');
 ok(/draggable="true"/.test(board.html) && !/type="time"/.test(board.html) && !/type="datetime-local"/.test(board.html),
@@ -409,9 +412,9 @@ ok(/Jogo 1/.test(board.html) && !/Jogo A/.test(board.html),
 const numberedBoard = W._operationalScheduleGrid(t, p, { prefix:'agenda', renumberBySchedule:true });
 ok(/Jogo 1/.test(numberedBoard.html) && /Jogo 2/.test(numberedBoard.html),
   'a prévia da agenda apresenta numeração contínua pela ordem dos slots');
-const revealedBoard = W._operationalScheduleGrid(t, p, { prefix:'agenda', revealedNames:{ A:true } });
-ok(/<div>Ana<\/div><div>Bia<\/div>/.test(revealedBoard.html) && /Ocultar participantes/.test(revealedBoard.html),
-  'o olho revela apenas a dupla do jogo selecionado, com jogadores em linhas separadas');
+const revealedBoard = W._operationalScheduleGrid(t, p, { prefix:'agenda', revealNames:true });
+ok(/<div>Ana<\/div><div>Bia<\/div>/.test(revealedBoard.html) && /Ocultar nomes/.test(revealedBoard.html),
+  'o olho geral revela os jogadores em linhas separadas');
 const uidFixture = Object.assign({}, t, { matches:t.matches.map(function (match) {
   if (match.id !== 'A') return match;
   return Object.assign({}, match, {
@@ -421,7 +424,7 @@ const uidFixture = Object.assign({}, t, { matches:t.matches.map(function (match)
     team2Obj:{ participants:[{ uid:'uidMuitoLongoDePessoa02' }, { name:'Outra' }], category:'Fem Power' }
   });
 }) });
-const uidBoard = W._operationalScheduleGrid(uidFixture, p, { prefix:'agenda', revealedNames:{ A:true } });
+const uidBoard = W._operationalScheduleGrid(uidFixture, p, { prefix:'agenda', revealNames:true });
 ok(uidBoard.html.includes('data-uid-name="uidMuitoLongoDePessoa01"') &&
    uidBoard.html.includes('data-uid-name="uidMuitoLongoDePessoa02"') &&
    uidBoard.html.includes('<div>Convidada</div>') && uidBoard.html.includes('<div>Outra</div>') &&
@@ -429,6 +432,29 @@ ok(uidBoard.html.includes('data-uid-name="uidMuitoLongoDePessoa01"') &&
   'duplas mistas e participantes aninhados hidratam UIDs sem apagar convidados nem mostrar IDs como nomes');
 ok(!W._operationalScheduleGrid(uidFixture, p, { prefix:'agenda' }).html.includes('data-uid-name='),
   'sem tocar no olho a grade não expõe UIDs nem cria alvos de hidratação invisíveis');
+const ordinalFixture = Object.assign({}, t, {
+  participants:[
+    { fixedPairId:'volt-c', category:'Fem Light', competitionTeamId:'team-1', competitionPlayDay:'2026-10-23', p1Uid:'c1', p2Uid:'c2' },
+    { fixedPairId:'volt-b', category:'Fem Light', competitionTeamId:'team-1', competitionPlayDay:'2026-10-22', p1Uid:'b1', p2Uid:'b2' },
+    { fixedPairId:'volt-a', category:'Fem Light', competitionTeamId:'team-1', competitionPlayDay:'2026-10-22', p1Uid:'a1', p2Uid:'a2' }
+  ],
+  matches:t.matches.map(function (match) { return match.id === 'A' ? Object.assign({}, match, {
+    category:'Fem Light', team1Obj:{ fixedPairId:'volt-c', category:'Fem Light' }, team2Obj:{ category:'Fem Light' }
+  }) : match; })
+});
+ok(W._operationalScheduleGrid(ordinalFixture, p, { prefix:'agenda' }).html.includes('VENOM 3'),
+  'Fem Light mostra TIME 3 pela identidade e dia da dupla, mesmo com inscrições fora de ordem');
+ordinalFixture.matches[0].category = 'Fem Power';
+ordinalFixture.matches[0].team1Obj.category = 'Fem Power';
+ok(W._operationalScheduleGrid(ordinalFixture, p, { prefix:'agenda' }).html.includes('VENOM 1') &&
+  !W._operationalScheduleGrid(ordinalFixture, p, { prefix:'agenda' }).html.includes('VENOM 3'),
+  'fora de Fem Light a dupla do time é sempre TIME 1');
+ordinalFixture.matches[0].category = 'Fem Light';
+ordinalFixture.matches[0].team1Obj.category = 'Fem Light';
+ordinalFixture.matches[0].team1Obj = { category:'Fem Light' };
+ordinalFixture.matches[0].team1Uids = ['c2','c1'];
+ok(W._operationalScheduleGrid(ordinalFixture, p, { prefix:'agenda' }).html.includes('VENOM 3'),
+  'o ordinal Fem Light também é recuperado por UID quando o jogo não tem fixedPairId');
 ok(/ondrop/.test(organizerSource) && /manual\[from\.matchId\].*to\.court/.test(organizerSource),
   'soltar um card sobre outro troca os slots de horário e quadra');
 ok(/← Voltar/.test(bracketLogicSource) && /data-pis-apply/.test(bracketLogicSource) && /data-pis-publish/.test(bracketLogicSource) &&

@@ -842,6 +842,97 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
     return out;
   };
 
+  // Empacota partidas independentes de TODAS as categorias no mesmo horário.
+  // A agenda estruturada por equipes ocupa a capacidade global de quadras;
+  // reservar ondas inteiras para uma categoria fabricava quadras vazias.
+  function _schPackStructuredDay(t, matches, day, dayIndex, courts, slotMs) {
+    var count = Math.floor((day.fimMs - day.iniMs) / slotMs), capacity = count * courts;
+    if (!count || count > 30 || matches.length > capacity) return null;
+    var entries = matches.map(function (m) {
+      var left = m.team1Obj || {}, right = m.team2Obj || {};
+      function key(obj, side) {
+        var pair = String(obj.fixedPairId || '');
+        var ids = _schMatchUids(t, m);
+        return pair ? 'pair:' + pair : 'side:' + side + ':' + ids.join('|');
+      }
+      return { m:m, round:Number(m.round || 0), units:Array.from(new Set([key(left, 'p1'), key(right, 'p2')].concat(_schMatchUids(t, m).map(function (id) { return 'uid:' + id; })))) };
+    });
+    var related = entries.map(function (entry) { return entries.map(function (other, index) {
+      return entry !== other && entry.units.some(function (unit) { return other.units.indexOf(unit) >= 0; }) ? index : -1;
+    }).filter(function (index) { return index >= 0; }); });
+    var waves = Array.from({ length:count }, function () { return []; }), used = {}, assignedWave = entries.map(function () { return -1; }), nodes = 0, limit = 200000;
+    var threeRoundFullGrid = count === 8 && matches.length === capacity && entries.every(function (entry) { return entry.round >= 1 && entry.round <= 3; });
+    function available(index, wave) {
+      var entry = entries[index];
+      if (threeRoundFullGrid && ((entry.round === 1 && wave >= 4) || (entry.round === 3 && wave < 4))) return false;
+      return waves[wave].length < courts && entry.units.every(function (unit) { return !((used[unit] || 0) & (1 << wave)); }) &&
+        related[index].every(function (otherIndex) {
+          var otherWave = assignedWave[otherIndex], otherRound = entries[otherIndex].round;
+          return otherWave < 0 || otherRound === entry.round || (otherRound < entry.round ? otherWave < wave : otherWave > wave);
+        });
+    }
+    function fastPack(seed) {
+      waves.forEach(function (wave) { wave.length = 0; }); used = {};
+      assignedWave.fill(-1);
+      var remaining = entries.map(function (_, index) { return index; });
+      for (var wave = 0; wave < count && remaining.length; wave++) {
+        while (waves[wave].length < courts && remaining.length) {
+          var ready = remaining.filter(function (index) {
+            return available(index, wave) && related[index].every(function (other) {
+              return entries[other].round >= entries[index].round || (assignedWave[other] >= 0 && assignedWave[other] < wave);
+            });
+          });
+          if (!ready.length) break;
+          ready.sort(function (a, b) {
+            if (entries[a].round !== entries[b].round) return entries[a].round - entries[b].round;
+            function rank(index) { var n = (index + 1) * 2654435761 + (seed + 1) * 2246822519; return (n ^ (n >>> 16)) >>> 0; }
+            return rank(a) - rank(b);
+          });
+          var selected = ready[0], entry = entries[selected];
+          waves[wave].push(selected); assignedWave[selected] = wave;
+          entry.units.forEach(function (unit) { used[unit] = (used[unit] || 0) | (1 << wave); });
+          remaining.splice(remaining.indexOf(selected), 1);
+        }
+      }
+      return remaining.length === 0;
+    }
+    function solve(remaining) {
+      if (!remaining.length) return true;
+      if (++nodes > limit) return false;
+      var chosen = -1, choices = null;
+      for (var i = 0; i < remaining.length; i++) {
+        var possible = [];
+        for (var w = 0; w < count; w++) if (available(remaining[i], w)) possible.push(w);
+        if (!possible.length) return false;
+        if (!choices || possible.length < choices.length || (possible.length === choices.length && entries[remaining[i]].round < entries[remaining[chosen]].round)) { chosen = i; choices = possible; if (choices.length === 1) break; }
+      }
+      var index = remaining[chosen], entry = entries[index];
+      choices.sort(function (a, b) { return waves[b].length - waves[a].length || a - b; });
+      var next = remaining.slice(); next.splice(chosen, 1);
+      for (var j = 0; j < choices.length; j++) {
+        var wave = choices[j]; waves[wave].push(index); assignedWave[index] = wave;
+        entry.units.forEach(function (unit) { used[unit] = (used[unit] || 0) | (1 << wave); });
+        if (solve(next)) return true;
+        waves[wave].pop(); assignedWave[index] = -1;
+        entry.units.forEach(function (unit) { used[unit] &= ~(1 << wave); });
+      }
+      return false;
+    }
+    var solved = false;
+    for (var seed = 0; seed < 256 && !solved; seed++) solved = fastPack(seed);
+    if (!solved) {
+      waves.forEach(function (wave) { wave.length = 0; }); used = {}; assignedWave.fill(-1);
+      solved = solve(entries.map(function (_, index) { return index; }));
+    }
+    if (!solved) return null;
+    var result = [];
+    waves.forEach(function (wave, waveIndex) { wave.forEach(function (index) {
+      var at = day.iniMs + waveIndex * slotMs;
+      result.push({ matchId:String(entries[index].m.id), ms:at, iso:new Date(at).toISOString(), dia:dayIndex, onda:waveIndex, extrapolaJanela:false });
+    }); });
+    return result;
+  }
+
   // Plano PURO: devolve { slots: [{matchId, ms, iso, dia, onda}], slotMin, quadras,
   // dias, cabe } sem tocar em nada. Testável sem DOM e sem Firebase.
   //
@@ -917,6 +1008,35 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
         if (ordemDoDia(ad) === 'rounds') return (A.fase - B.fase) || (A.rodada - B.rodada) || (ao - bo) || A.categoria.localeCompare(B.categoria);
         return (ad - bd) || (ao - bo) || A.categoria.localeCompare(B.categoria) || (A.fase - B.fase) || (A.rodada - B.rodada);
       });
+
+      var teamSchedule = t.teamCompetition && t.teamCompetition.schedule;
+      var structured = teamSchedule && teamSchedule.enabled === true && teamSchedule.mode === 'structured' &&
+        t.categorySchedule && t.categorySchedule.confirmed === true && jogos.some(function (m) { return !!m.requiredDay; });
+      if (structured) {
+        var byDay = jan.dias.map(function () { return []; }), assigned = true;
+        chaves.forEach(function (key) {
+          var block = porChave[key], day = block.agenda && indiceDia[block.agenda.day];
+          if (day == null) assigned = false;
+          else byDay[day] = byDay[day].concat(block.ms);
+        });
+        var durationMinutes = window._minutosDaPartida(t, window._faseDoTorneio(t, (jogos[0] && jogos[0].phaseIndex) || 0)) || 30;
+        var sameDuration = jogos.every(function (m) { return (window._minutosDaPartida(t, window._faseDoTorneio(t, m.phaseIndex || 0)) || 30) === durationMinutes; });
+        if (assigned && sameDuration) {
+          var packed = [], full = true;
+          byDay.forEach(function (matches, index) {
+            var result = _schPackStructuredDay(t, matches, jan.dias[index], index, quadras, durationMinutes * _MIN);
+            if (!result) full = false; else packed = packed.concat(result);
+          });
+          if (full && packed.length === jogos.length) return {
+            slots:packed, quadras:quadras, dias:jan.dias.length, cabe:true,
+            fimMs:packed.reduce(function (max, slot) { return Math.max(max, slot.ms + durationMinutes * _MIN); }, jan.dias[0].iniMs),
+            extraPorDia:jan.dias.map(function () { return 0; }), extraMs:0, executionOrder:ordemLegada, slotMin:durationMinutes
+          };
+        }
+        // Se não couber, o caminho legado abaixo mantém cada requiredDay no
+        // mesmo dia e marca o excedente (cabe:false). A prévia e a publicação
+        // bloqueiam esse estado; nunca inventamos um terceiro dia.
+      }
 
       var slots = [], cursores = jan.dias.map(function (dia) { return dia.iniMs; }), onda = 0, estourou = false, fimMs = cursores[0], extraPorDia = jan.dias.map(function () { return 0; });
       // A memória é por categoria: uma espera em Fem Light não compra nem
@@ -1117,6 +1237,14 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
     } catch (e) { return null; }
   };
 
+  window._schPartidaImovel = function (m) {
+    if (!m || typeof m !== 'object') return false;
+    if (m.liveScored === true || m.startedAt || m.resultAt || m.completedAt || m.wo === true || m.winner != null ||
+        (m.pendingResult && m.pendingResult.proposedAt)) return true;
+    if (Array.isArray(m.sets) && m.sets.length) return true;
+    return (typeof m.scoreP1 === 'number' && m.scoreP1 > 0) || (typeof m.scoreP2 === 'number' && m.scoreP2 > 0);
+  };
+
   // GRAVA o plano nos jogos. Devolve quantos carimbou. Nunca toca em data combinada
   // por gente (kind 'organizer'/'consensus') — a invariante do topo desta seção.
   // Jogo legado com scheduledAt e SEM kind é tratado como combinado: veio de antes
@@ -1128,6 +1256,7 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
     plano.slots.forEach(function (s) {
       var m = _schFindMatch(t, s.matchId);
       if (!m) return;
+      if (window._schPartidaImovel(m)) return;
       if (m.scheduledAt && m.scheduledKind !== 'estimate') return; // combinado manda
       if (m.scheduledAt === s.iso && m.scheduledKind === 'estimate') return; // já está lá
       m.scheduledAt = s.iso;
@@ -1204,8 +1333,7 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
        * (`_matchCardTimelineTextHtml`): havendo resultado, a linha do tempo manda, e o combinado
        * some. Não pode haver duas datas discordando no mesmo card.
        * [[feedback_a_defesa_vaza_pela_borda]] */
-      var _jaDisputado = !!(m.resultAt || m.completedAt || m.winner || m.wo ||
-        (m.pendingResult && m.pendingResult.proposedAt));
+      var _jaDisputado = window._schPartidaImovel(m);
       var _staleSchedule = m.schedule && !_schKnownSidesValid(m.schedule.knownSides, m);
       if (m.scheduledAt && !_jaDisputado && !_staleSchedule) {
         var open = 'event.stopPropagation(); window._schOpenMatch(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')';

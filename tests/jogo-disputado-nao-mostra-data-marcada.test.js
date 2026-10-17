@@ -31,6 +31,9 @@ const codigo = src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*
 const i0 = codigo.indexOf('window._schCardChip = function');
 const bloco = i0 < 0 ? '' : codigo.slice(i0, codigo.indexOf('\n  };', i0));
 ok(bloco.length > 300, '① o chip da agenda foi achado pelo identificador');
+const iImovel = codigo.indexOf('window._schPartidaImovel = function');
+const guarda = iImovel < 0 ? '' : codigo.slice(iImovel, codigo.indexOf('\n  };', iImovel));
+ok(guarda.length > 200, '① a guarda compartilhada foi achada');
 
 /* ── ① A GUARDA EXISTE E VEM ANTES DA SAÍDA COM A DATA ─────────────────────── */
 const iGuarda = bloco.indexOf('_jaDisputado');
@@ -49,9 +52,10 @@ const iTl = br.indexOf('function _matchCardTimelineTextHtml(');
 const tl = iTl < 0 ? '' : br.slice(iTl, br.indexOf('\n}', iTl));
 ok(tl.length > 200, '② a linha do tempo do card foi achada');
 ['resultAt', 'completedAt', 'winner', 'wo', 'pendingResult'].forEach(function (campo) {
-  ok(bloco.indexOf(campo) >= 0 && tl.indexOf(campo) >= 0,
+  ok(guarda.indexOf(campo) >= 0 && tl.indexOf(campo) >= 0,
     '② "' + campo + '" conta nos DOIS lugares — critérios diferentes trariam o defeito de volta');
 });
+ok(bloco.indexOf('window._schPartidaImovel(m)') >= 0, '② o chip usa a guarda compartilhada');
 
 /* ── ③ A REGRA, EXERCIDA ───────────────────────────────────────────────────── */
 const fn = new Function('m', 'return !!(m.resultAt || m.completedAt || m.winner || m.wo || (m.pendingResult && m.pendingResult.proposedAt));');

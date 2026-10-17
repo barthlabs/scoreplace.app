@@ -1,4 +1,5 @@
-/* Agenda operacional — uma sugestão de quadras que só vira agenda após Aplicar.
+/* Agenda operacional — módulo somente do navegador, não carregado pelo servidor.
+ * Uma sugestão de quadras que só vira agenda após Aplicar.
  * O plano é puro: a tela pode recalcular antes da publicação da chave e também
  * depois, sem mover jogos que já começaram, terminaram ou foram travados pelo org. */
 (function () {
@@ -6,14 +7,15 @@
   var MIN = 60000;
   function all(t) { return (window._collectAllMatches ? window._collectAllMatches(t) : (t.matches || [])).filter(Boolean); }
   function esc(x) { return window._safeHtml ? window._safeHtml(String(x == null ? '' : x)) : String(x == null ? '' : x); }
-  // ⚠️ DUPLICAÇÃO INTENCIONAL — usa primeiro `_matchHasRealPlay()` de js/store.js e,
-  // se ele ainda não estiver carregado, replica `_scheduleHasRealPlay()` de functions/index.js.
+  // ⚠️ DUPLICAÇÃO INTENCIONAL — a agenda usa a proteção operacional de
+  // `_schPartidaImovel` (cliente/vendor) e `_scheduleHasRealPlayAgenda` (servidor).
   // Servidor valida a aplicação; cliente calcula o plano local sem round-trip. Ao mudar a
   // definição de partida realizada, os dois lados precisam mudar juntos.
   function played(m) {
     if (!m || typeof m !== 'object') return false;
+    if (typeof window._schPartidaImovel === 'function') return window._schPartidaImovel(m);
     if (typeof window._matchHasRealPlay === 'function' && window._matchHasRealPlay(m)) return true;
-    if (m.liveScored === true || m.startedAt || m.resultAt || m.wo === true || m.winner != null) return true;
+    if (m.liveScored === true || m.startedAt || m.resultAt || m.completedAt || m.wo === true || m.winner != null || (m.pendingResult && m.pendingResult.proposedAt)) return true;
     if (Array.isArray(m.sets) && m.sets.length) return true;
     return ((typeof m.scoreP1 === 'number' && m.scoreP1 > 0) || (typeof m.scoreP2 === 'number' && m.scoreP2 > 0)) && !m.wo;
   }
@@ -92,7 +94,7 @@
       // há prova de que eram estimativa, preservamos a alocação até o organizador
       // decidir de novo. Só estimativa EXPLÍCITA é automaticamente compactável.
       var legacyAllocated = !!(m.court && m.scheduledAt && m.scheduleLocked == null && !m.scheduleSource);
-      var manual = m.scheduleLocked === true || m.scheduleSource === 'organizer' || legacyAllocated || !!change;
+      var manual = m.scheduleLocked === true || m.scheduleSource === 'organizer' || m.scheduledKind === 'organizer' || m.scheduledKind === 'consensus' || legacyAllocated || !!change;
       if (played(m) || manual) blocked.push(m); else pending.push(m);
     });
     var occupied = {};
@@ -114,7 +116,7 @@
     ms.forEach(function (m) {
       var change = changesByMatch[String(m.id)];
       var legacyAllocated = !!(m.court && m.scheduledAt && m.scheduleLocked == null && !m.scheduleSource);
-      var manual = m.scheduleLocked === true || m.scheduleSource === 'organizer' || legacyAllocated || !!change;
+      var manual = m.scheduleLocked === true || m.scheduleSource === 'organizer' || m.scheduledKind === 'organizer' || m.scheduledKind === 'consensus' || legacyAllocated || !!change;
       if (played(m)) return;
       if (manual) {
         var a = change ? change.scheduledAt : m.scheduledAt;
@@ -248,7 +250,27 @@
     });
     return names;
   }
-  function sideHtml(t, m, side, names, revealNames) {
+  function pairOrdinals(t) {
+    var groups = {}, ordinals = {};
+    (Array.isArray(t && t.participants) ? t.participants : []).forEach(function (entry) {
+      if (!entry || !entry.competitionTeamId || !entry.category) return;
+      var key = String(entry.competitionTeamId) + '|' + String(entry.category);
+      (groups[key] || (groups[key] = [])).push(entry);
+    });
+    Object.keys(groups).forEach(function (group) {
+      groups[group].sort(function (a, b) {
+        return String(a.competitionPlayDay || '').localeCompare(String(b.competitionPlayDay || '')) ||
+          String(a.fixedPairId || '').localeCompare(String(b.fixedPairId || ''));
+      }).forEach(function (entry, index) {
+        if (entry.fixedPairId) ordinals['pair:' + String(entry.fixedPairId)] = index + 1;
+        var ids = Array.isArray(entry.participants) ? entry.participants.map(function (p) { return String(p && p.uid || ''); }).filter(Boolean).sort() :
+          [entry.p1Uid, entry.p2Uid].filter(Boolean).map(String).sort();
+        if (ids.length) ordinals['uid:' + ids.join('|')] = index + 1;
+      });
+    });
+    return ordinals;
+  }
+  function sideHtml(t, m, side, names, ordinals, revealNames) {
     var object = m && m[side === 'p1' ? 'team1Obj' : 'team2Obj'] || {};
     var id = String(m && m[side === 'p1' ? 'p1CompetitionTeamId' : 'p2CompetitionTeamId'] || object.competitionTeamId || '');
     var team = names[id] || {};
@@ -280,14 +302,21 @@
       if (uid) return '<div data-uid-name="' + esc(uid) + '">' + esc((window._nameForUid && window._nameForUid(uid)) || 'Carregando perfil…') + '</div>';
       return '<div>' + esc(safeStoredName(stored) || 'Jogador a identificar') + '</div>';
     }
-    var players = !revealNames ? '<div>Participantes ocultos</div>'
+    var teamName = team.name || id || 'Time a definir';
+    var pairId = String(object.fixedPairId || '');
+    var uidKey = members.map(function (member) { return String(member.uid || ''); }).filter(Boolean).sort().join('|');
+    // Só Fem Light tem três duplas por time neste formato; nas demais categorias
+    // a única dupla do time é sempre a 1, independentemente da ordem do elenco.
+    var ordinal = String(category).trim().toLowerCase() === 'fem light'
+      ? (ordinals['pair:' + pairId] || ordinals['uid:' + uidKey] || 1) : 1;
+    var label = teamName + ' ' + ordinal;
+    var players = !revealNames ? ''
       : members.length ? members.map(function (member) { return playerName(member.uid, member.name); }).join('')
       : '<div>' + esc(safeStoredName(pair) || 'Jogador a identificar') + '</div>';
-    var teamName = team.name || id || 'Time a definir';
     var color = 'hsl(' + hue + ' ' + saturation + '% 55%)';
     return '<div style="border-left:4px solid ' + esc(color) + ';background:hsl(' + hue + ' ' + saturation + '% 14%);border-radius:7px;padding:5px 6px;margin-top:4px;min-width:0;">' +
-      '<div style="font-size:.66rem;font-weight:800;color:' + esc(color) + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(teamName) + '</div>' +
-      '<div style="font-size:.69rem;font-weight:700;line-height:1.2;overflow:hidden;">' + players + '</div>' +
+      '<div style="font-size:.72rem;font-weight:800;color:' + esc(color) + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(label) + '</div>' +
+      (players ? '<div style="font-size:.69rem;font-weight:700;line-height:1.2;overflow:hidden;">' + players + '</div>' : '') +
       '<div style="font-size:.61rem;opacity:.78;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(category) + '</div></div>';
   }
   // Grade comum para o rascunho e para a agenda publicada. Cada linha é um horário;
@@ -295,9 +324,9 @@
   window._operationalScheduleGrid = function (t, plan, options) {
     options = options || {};
     var prefix = String(options.prefix || 'agenda'), sticky = options.scrollOwner === 'parent', matchById = {};
-    var revealedNames = options.revealedNames || {};
+    var revealNames = options.revealNames === true;
     all(t).forEach(function (m) { if (m) matchById[String(m.id)] = m; });
-    var names = teamLookup(t), byDay = {}, numberByMatch = {};
+    var names = teamLookup(t), ordinals = pairOrdinals(t), byDay = {}, numberByMatch = {};
     // Durante a revisão do sorteio, o número é a sequência da agenda que o
     // organizador está vendo — trocar dois cards renumera imediatamente todos os
     // jogos. Ao aplicar, a Function grava esta mesma sequência no rascunho.
@@ -335,14 +364,14 @@
         var m = matchById[String(item.matchId)] || {};
         var excedente = item.extrapolaJanela === true;
         return '<article draggable="true" data-' + prefix + '-match="' + esc(item.matchId) + '"' + (excedente ? ' data-' + prefix + '-outside-window="true"' : '') + ' title="' + (excedente ? 'Este jogo ultrapassa o horário configurado do evento' : 'Arraste este jogo para trocar o horário e a quadra') + '" style="min-height:132px;border:1px solid ' + (excedente ? 'rgba(248,113,113,.9)' : 'rgba(56,189,248,.32)') + ';border-radius:8px;padding:6px;background:' + (excedente ? 'repeating-linear-gradient(45deg,rgba(239,68,68,.55) 0 10px,rgba(148,163,184,.42) 10px 20px),rgba(15,23,42,.86)' : 'rgba(15,23,42,.72)') + ';box-sizing:border-box;overflow:hidden;cursor:grab;">' +
-          '<div style="font-size:.68rem;color:#7dd3fc;font-weight:900;display:flex;justify-content:space-between;gap:8px;align-items:center"><span>' + esc(gameLabel(t, item.matchId, numberByMatch[String(item.matchId)])) + '</span><span>R' + esc(String(m.round || '—')) + ' <button type="button" draggable="false" data-' + prefix + '-reveal-match="' + esc(item.matchId) + '" aria-label="' + (revealedNames[String(item.matchId)] ? 'Ocultar participantes' : 'Revelar participantes') + '" title="' + (revealedNames[String(item.matchId)] ? 'Ocultar participantes' : 'Revelar participantes') + '" style="border:0;background:transparent;color:#7dd3fc;cursor:pointer;font-size:1rem">' + (revealedNames[String(item.matchId)] ? '🙈' : '👁️') + '</button></span></div>' +
+          '<div style="font-size:.68rem;color:#7dd3fc;font-weight:900;display:flex;justify-content:space-between;gap:8px;align-items:center"><span>' + esc(gameLabel(t, item.matchId, numberByMatch[String(item.matchId)])) + '</span><span>R' + esc(String(m.round || '—')) + '</span></div>' +
           (excedente ? '<div style="margin-top:4px;font-size:.62rem;font-weight:900;color:#fff;background:rgba(127,29,29,.88);border-radius:4px;padding:3px 4px;">⚠ FORA DO HORÁRIO</div>' : '') +
-          sideHtml(t, m, 'p1', names, revealedNames[String(item.matchId)] === true) + sideHtml(t, m, 'p2', names, revealedNames[String(item.matchId)] === true) +
+          sideHtml(t, m, 'p1', names, ordinals, revealNames) + sideHtml(t, m, 'p2', names, ordinals, revealNames) +
           '</article>';
       }).join('');
       return '<div style="display:grid;grid-template-columns:72px repeat(' + plan.courts.length + ', minmax(176px,1fr));gap:6px;margin-top:6px;align-items:stretch"><div style="' + stickyTime + 'font-size:.82rem;font-weight:900;color:#fbbf24;display:flex;align-items:center;justify-content:center;text-align:center;">' + esc(timeLabel(slot)) + '</div>' + cells + '</div>';
     }).join('');
-    var tabsHtml = '<div style="display:flex;gap:7px;flex-wrap:wrap;">' + tabs + '</div>';
+    var tabsHtml = '<div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center;">' + tabs + '<button type="button" data-' + prefix + '-reveal-all class="btn btn-outline" aria-pressed="' + revealNames + '" style="margin-left:auto;padding:6px 10px;font-size:.76rem;">' + (revealNames ? '🙈 Ocultar nomes' : '👁️ Revelar nomes') + '</button></div>';
     var frameStart = sticky
       ? '<div style="border-top:1px solid rgba(148,163,184,.2);padding-top:7px;">'
       : '<div data-' + prefix + '-grid-scroll style="overflow:auto;border-top:1px solid rgba(148,163,184,.2);padding-top:7px;">';
@@ -351,21 +380,22 @@
   };
   window._renderOperationalSchedule = function (slot, t) {
     if (!slot || !t || !window._souOrganizador || !window._souOrganizador(t)) return;
-    var manual = {}, activeDay = '', revealedNames = {};
+    var manual = {}, activeDay = '', revealNames = false;
     function draftForFresh() {
       var fresh = (window._findTournamentById && window._findTournamentById(t.id)) || t;
       return { fresh:fresh, plan:window._operationalSchedulePlan(fresh, Object.keys(manual).map(function (id) { return manual[id]; })) };
     }
     function render() {
       var current = draftForFresh(), fresh = current.fresh, plan = current.plan, total = plan.items.length;
-      var board = window._operationalScheduleGrid(fresh, plan, { prefix:'agenda', activeDay:activeDay, revealedNames:revealedNames }); activeDay = board.activeDay;
+      var board = window._operationalScheduleGrid(fresh, plan, { prefix:'agenda', activeDay:activeDay, revealNames:revealNames }); activeDay = board.activeDay;
       slot.innerHTML = '<section class="sp-operational-schedule" style="margin:12px 0;padding:12px 14px;border:1px solid rgba(56,189,248,.35);border-radius:12px;background:rgba(14,116,144,.10);display:flex;gap:12px;align-items:center;flex-wrap:wrap">' +
         '<div style="flex:1;min-width:220px"><strong>📍 Agenda operacional</strong><div style="font-size:.82rem;opacity:.78;margin-top:3px">' + total + ' jogos pendentes · ' + plan.courts.map(esc).join(' · ') + '. Cada horário aparece uma vez na régua vertical; arraste um jogo sobre outro para trocar seus slots. Nada é salvo antes de aplicar.</div></div>' +
         (!plan.cabe ? '<div style="width:100%;color:#fbbf24;font-size:.8rem;font-weight:700">A agenda não cabe nas janelas configuradas: ' + (plan.unscheduledCount ? plan.unscheduledCount + ' jogo(s) sem horário. ' : '') + (plan.extraMs ? 'Excedente de ' + Math.ceil(plan.extraMs / MIN) + ' min. ' : '') + 'Nenhum jogo novo será colocado fora dos dias/horários do evento.</div>' : '') +
         '<button type="button" class="btn btn-primary" id="sp-agenda-apply-' + esc(fresh.id) + '"' + (!plan.cabe ? ' disabled aria-disabled="true" style="opacity:.45;cursor:not-allowed"' : '') + '>Aplicar agenda</button>' +
         '<div style="width:100%;margin-top:2px">' + board.html + '</div></section>';
       if (typeof window._hydrateUidNames === 'function') window._hydrateUidNames(slot);
-      Array.prototype.forEach.call(slot.querySelectorAll('[data-agenda-reveal-match]'), function (button) { button.onclick = function (event) { event.stopPropagation(); var id = button.getAttribute('data-agenda-reveal-match'); revealedNames[id] = !revealedNames[id]; render(); }; });
+      var revealButton = slot.querySelector('[data-agenda-reveal-all]');
+      if (revealButton) revealButton.onclick = function () { revealNames = !revealNames; render(); };
       Array.prototype.forEach.call(slot.querySelectorAll('[data-agenda-day]'), function (control) { control.onclick = function () { activeDay = control.getAttribute('data-agenda-day'); render(); }; });
       Array.prototype.forEach.call(slot.querySelectorAll('[data-agenda-match]'), function (card) {
         card.ondragstart = function (event) { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', card.getAttribute('data-agenda-match')); };
@@ -406,7 +436,13 @@
           // horário e/ou quadra nesta própria tela.
           jogos:draft.items.map(function (i) { return { matchId:i.matchId, court:i.court, scheduledAt:i.scheduledAt, scheduledGameNumber:i.scheduledGameNumber, scheduledKind:'estimate', scheduleLocked:true, scheduleSource:'organizer' }; })
         }).then(function () { msg('Agenda aplicada', draft.items.length + ' jogos pendentes foram distribuídos pelas quadras.', 'success'); if (window.renderBracket) window.renderBracket(fresh.id); })
-          .catch(function (e) { msg('Agenda não salva', (e && e.details && e.details.code === 'schedule-revision-stale') ? 'A agenda mudou em outra tela. A sugestão foi recalculada; aplique novamente.' : 'Não foi possível aplicar a agenda. Tente novamente.', 'error'); })
+          .catch(function (e) {
+            var stale = e && e.details && e.details.code === 'schedule-revision-stale';
+            var playedOnServer = e && /failed-precondition/.test(String(e.code || '')) && /já começou ou terminou/.test(String(e.message || ''));
+            msg('Agenda não salva', stale ? 'A agenda mudou em outra tela. A sugestão foi recalculada; aplique novamente.' :
+              playedOnServer ? 'Uma partida já começou ou terminou. Atualize a página; essa partida não pode ser realocada.' :
+              'Não foi possível aplicar a agenda. Tente novamente.', 'error');
+          })
           .finally(function () { button.disabled=false; button.textContent='Aplicar agenda'; });
       };
     }

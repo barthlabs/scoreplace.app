@@ -14,6 +14,7 @@
 
 const path = require('path');
 const fs = require('fs');
+const vm = require('vm');
 const core = require('./draw-core.js');
 const competitionAssignments = require('./competition-assignment-core.js');
 
@@ -190,7 +191,7 @@ const CASES = [
     return { fixedPairId:entry.fixedPairId, day:index < 16 ? '2026-10-22' : '2026-10-23' };
   });
   const realConfig = Object.assign({}, neonConfig, { schedule:Object.assign({}, neonConfig.schedule, {
-    gamesPerPair:3, gamesPerTeam:3, mode:'free',
+    gamesPerPair:3, gamesPerTeam:3, mode:'structured',
     pairsPerTeamByCategory:{ 'Fem Light':3, 'Fem Power':1, 'Fem Extreme':1, 'Masc Light':1, 'Masc Power':1, 'Masc Extreme':1 },
     pairDayAssignments, rosterSnapshot
   }) });
@@ -252,19 +253,69 @@ const CASES = [
   ok('Neon 64: mapa de dupla excluída não fabrica inscrição',
     competitionAssignments.overlay(projectedAgain.slice(1), savedAssignments).length === 63);
   const estimated = core._window._schGradeEstimada(neon64);
-  // 96 jogos em janelas de 4h40 podem exceder o tempo com descansos. O
-  // planejador deve mostrar o excesso e jamais gravar um horário no outro dia.
+  // 96 jogos devem preencher exatamente 6 quadras x 8 ondas em cada dia.
   const plannedDaysValid = estimated && estimated.slots.every(function (slot) {
     const match = realMatches.find(function (m) { return String(m.id) === slot.matchId; });
     return !match.requiredDay || match.requiredDay === ['2026-10-22','2026-10-23'][slot.dia];
   });
   const applied = core._window._schAplicarGrade(neon64, []);
-  ok('Neon 64: grade insuficiente é sinalizada e não aplicada fora do dia', estimated && estimated.slots.length === 96 &&
-    plannedDaysValid && (estimated.cabe || applied === 0) &&
-    (!estimated.cabe || estimated.slots.every(function (slot) {
+  const waves = estimated && ['2026-10-22','2026-10-23'].map(function (_, day) {
+    const counts = {};
+    estimated.slots.filter(function (slot) { return slot.dia === day; }).forEach(function (slot) { counts[slot.ms] = (counts[slot.ms] || 0) + 1; });
+    return Object.values(counts);
+  });
+  ok('Neon 64: 96 jogos em 48 por dia, oito ondas completas de seis quadras', estimated && estimated.cabe === true && estimated.slots.length === 96 &&
+    plannedDaysValid && applied === 96 && waves.every(function (day) { return day.length === 8 && day.every(function (count) { return count === 6; }); }) &&
+    estimated.slots.every(function (slot) {
       const match = realMatches.find(function (m) { return String(m.id) === slot.matchId; });
       return !match.requiredDay || new Date(slot.iso).toLocaleDateString('en-CA', { timeZone:'America/Sao_Paulo' }) === match.requiredDay;
-    })), JSON.stringify(estimated && { slots:estimated.slots.length, days:estimated.dias, extra:estimated.extraMs, applied }));
+    }), JSON.stringify(estimated && { slots:estimated.slots.length, days:estimated.dias, extra:estimated.extraMs, applied, waves }));
+  const opponents = {};
+  realMatches.forEach(function (match) {
+    const a = match.team1Obj && match.team1Obj.fixedPairId, b = match.team2Obj && match.team2Obj.fixedPairId;
+    (opponents[a] || (opponents[a] = [])).push(b);
+    (opponents[b] || (opponents[b] = [])).push(a);
+  });
+  ok('Neon 64: toda dupla faz três jogos contra três adversários distintos', realPairs.every(function (entry) {
+    const rivals = opponents[entry.fixedPairId] || [];
+    return rivals.length === 3 && new Set(rivals).size === 3;
+  }));
+  const matchesById = new Map(realMatches.map(function (match) { return [String(match.id), match]; }));
+  const simultaneous = {};
+  estimated.slots.forEach(function (slot) {
+    const match = matchesById.get(slot.matchId), key = String(slot.ms);
+    if (!match) return;
+    (simultaneous[key] || (simultaneous[key] = [])).push(match.team1Obj.fixedPairId, match.team2Obj.fixedPairId);
+  });
+  ok('Neon 64: nenhuma dupla joga em duas quadras no mesmo horário', Object.keys(simultaneous).every(function (key) {
+    return new Set(simultaneous[key]).size === simultaneous[key].length;
+  }));
+  const slotById = new Map(estimated.slots.map(function (slot) { return [slot.matchId, slot.ms]; }));
+  const roundTimes = {};
+  realMatches.forEach(function (match) {
+    [match.team1Obj.fixedPairId, match.team2Obj.fixedPairId].forEach(function (id) {
+      (roundTimes[id] || (roundTimes[id] = [])).push({ round:Number(match.round || 0), ms:slotById.get(String(match.id)) });
+    });
+  });
+  ok('Neon 64: rodadas de cada dupla seguem ordem cronológica', Object.keys(roundTimes).every(function (id) {
+    const times = roundTimes[id].sort(function (a, b) { return a.round - b.round; });
+    return times.every(function (item, index) { return index === 0 || item.ms > times[index - 1].ms; });
+  }));
+  const browser = require('../tests/render-harness').sandbox;
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'schedule-poll.js'), 'utf8'), browser);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'schedule-organizer.js'), 'utf8'), browser);
+  const operational = browser._operationalSchedulePlan(neon64);
+  ok('Neon 64: planejamento operacional mostra os 96 jogos sem excedente', operational.cabe === true &&
+    operational.items.length === 96 && operational.unscheduledCount === 0 && operational.extraMs === 0);
+  const blockedTournament = Object.assign({}, neon64, { matches:realMatches.map(function (match, index) {
+    return index === 0 ? Object.assign({}, match, {
+      scheduledAt:'2026-10-23T01:40:00.000Z', court:'Quadra 4', scheduleLocked:true, scheduleSource:'organizer'
+    }) : Object.assign({}, match);
+  }) });
+  const blockedPlan = browser._operationalSchedulePlan(blockedTournament);
+  ok('Neon 64: jogo manual fora da janela não é movido e bloqueia publicação', blockedPlan.cabe === false &&
+    blockedPlan.items.some(function (item) { return item.matchId === String(realMatches[0].id) &&
+      item.scheduledAt === '2026-10-23T01:40:00.000Z' && item.scheduleLocked === true; }));
   const stale = realTournament();
   stale.participants[0].categoryId = 'changed-category';
   const staleResult = core.assignCompetitionTeamsAtInitialDraw(stale, realConfig);

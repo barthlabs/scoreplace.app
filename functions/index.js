@@ -6415,16 +6415,16 @@ exports.setTournamentWhatsAppGroup = onCall(
  * Aceita UM jogo ou um LOTE (`jogos[]`, ≤300 — a grade estimada escreve dezenas de uma vez).
  * Idempotente por `operationId` (UUID v4): o retry da quadra sem sinal não grava duas vezes. */
 const _SCH_KINDS = ["estimate", "organizer", "consensus"];
-// ⚠️ DUPLICAÇÃO INTENCIONAL — replica `played()` de js/views/schedule-organizer.js.
-// Servidor valida a CF; cliente calcula o plano sem round-trip. Ao mudar a definição
-// de partida realizada, os dois lados precisam mudar juntos.
-// Agenda operacional: resultado, W.O. ou início real congela a partida. A sugestão
-// pode reorganizar somente o que ainda não aconteceu.
+// Regra legada das propostas/grupos. A agenda operacional tem a guarda adicional
+// `_scheduleHasRealPlayAgenda`, espelhada por `_schPartidaImovel` no cliente/vendor.
 function _scheduleHasRealPlay(m) {
   if (!m || typeof m !== "object") return false;
   if (m.liveScored === true || m.startedAt || m.resultAt || m.wo === true || m.winner != null) return true;
   if (Array.isArray(m.sets) && m.sets.length > 0) return true;
   return ((typeof m.scoreP1 === "number" && m.scoreP1 > 0) || (typeof m.scoreP2 === "number" && m.scoreP2 > 0)) && !m.wo;
+}
+function _scheduleHasRealPlayAgenda(m) {
+  return _scheduleHasRealPlay(m) || !!(m && (m.completedAt || (m.pendingResult && m.pendingResult.proposedAt)));
 }
 function _scheduleDayInSaoPaulo(iso) {
   const parts = new Intl.DateTimeFormat('en-US', {
@@ -6573,7 +6573,7 @@ exports.setMatchSchedule = onCall(
           if (it.scheduledKind === "organizer" || it.scheduledKind === "estimate") throw new HttpsError("permission-denied", "só o organizador aponta ou estima horário");
         }
         if ((it.temCourt || it.temScheduleLocked || it.temScheduleSource) && !souOrg) throw new HttpsError("permission-denied", "só a organização define quadra e trava agenda");
-        if (operational && _scheduleHasRealPlay(alvo.jogo)) throw new HttpsError("failed-precondition", "jogo " + it.matchId + " já começou ou terminou e não pode ser realocado");
+        if (operational && _scheduleHasRealPlayAgenda(alvo.jogo)) throw new HttpsError("failed-precondition", "jogo " + it.matchId + " já começou ou terminou e não pode ser realocado");
         return { it, alvo };
       });
       // idempotência: a MESMA operação já foi aplicada (retry da quadra sem sinal)

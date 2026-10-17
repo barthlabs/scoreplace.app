@@ -142,6 +142,18 @@ const t6b = mkDia(1, 2);
 t6b.matches[0].scheduledAt = '2026-09-05T20:00:00.000Z'; // sem scheduledKind
 W._schAplicarGrade(t6b);
 ok(t6b.matches[0].scheduledAt === '2026-09-05T20:00:00.000Z', 'doc LEGADO (data sem origem) é tratado como combinado — intocado');
+const t6c = mkDia(1, 2);
+t6c.matches[0].scheduledAt = '2026-10-22T21:00:00.000Z';
+t6c.matches[0].scheduledKind = 'estimate';
+t6c.matches[0].pendingResult = { proposedAt:'2026-10-22T21:05:00.000Z' };
+W._schAplicarGrade(t6c);
+ok(t6c.matches[0].scheduledAt === '2026-10-22T21:00:00.000Z', 'resultado proposto congela horário estimado ao reaplicar grade');
+const t6d = mkDia(1, 2);
+t6d.matches[0].scheduledAt = '2026-10-22T21:00:00.000Z';
+t6d.matches[0].scheduledKind = 'estimate';
+t6d.matches[0].winner = 'p1';
+W._schAplicarGrade(t6d);
+ok(t6d.matches[0].scheduledAt === '2026-10-22T21:00:00.000Z', 'vencedor congela horário estimado ao reaplicar grade');
 
 // ── 7. IDEMPOTENTE: rodar de novo não muda nada ───────────────────────────────
 const t7 = mkDia(1, 2);
@@ -196,6 +208,17 @@ ok(W._schGroupChip(tg2, tg2.matches.filter(m => m.groupIdx === 0)) === '',
 
 // ── 12. FIAÇÃO: as peças continuam ligadas onde precisam ─────────────────────
 const srcBracket = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'bracket.js'), 'utf8');
+const srcMainFunctions = fs.readFileSync(path.join(__dirname, '..', 'functions', 'index.js'), 'utf8');
+const guardStart = srcMainFunctions.indexOf('function _scheduleHasRealPlay(m)');
+const guardEnd = srcMainFunctions.indexOf('function _scheduleDayInSaoPaulo(', guardStart);
+const serverAgendaPlayed = new Function(srcMainFunctions.slice(guardStart, guardEnd) + '\nreturn _scheduleHasRealPlayAgenda;')();
+ok(serverAgendaPlayed({ pendingResult:{ proposedAt:'2026-10-22T18:00:00Z' } }), 'CF bloqueia realocação operacional com resultado pendente');
+ok(serverAgendaPlayed({ completedAt:'2026-10-22T18:00:00Z' }), 'CF bloqueia realocação operacional concluída');
+ok(!serverAgendaPlayed({ scheduledAt:'2026-10-22T18:00:00Z' }), 'CF permite realocação de mera estimativa');
+ok(/function _scheduleHasRealPlayAgenda\(m\)/.test(srcMainFunctions) &&
+  /operational && _scheduleHasRealPlayAgenda\(alvo\.jogo\)/.test(srcMainFunctions) &&
+  /_scheduleHasRealPlay\(alvo\.jogo\)/.test(srcMainFunctions),
+  'CF mantém a regra de proposta e acrescenta guarda restrita à realocação operacional');
 ok(/var _schGrpBtn = \(typeof window\._schGroupChip === 'function'\)/.test(srcBracket),
   'bracket: o gate isMyGroup saiu do call site do grupo (senão a data some nos outros grupos)');
 const srcDraw = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments-draw.js'), 'utf8');
