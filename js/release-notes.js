@@ -1,3 +1,6 @@
+// 2.4.80 — Corrigida a abertura da configuração de sorteio por times do Neon:
+// o painel mostra as 24 duplas Feminino Light e seus dias sem erro de código.
+// Não altera inscrições, categorias, times nem jogos.
 // 2.4.79 — Sorteio do Neon aceita 64 duplas no sandbox e exige confirmar as
 // 24 Feminino Light: 16 jogam quinta (duas por time), oito sexta (uma por time).
 // A distribuição persiste na cópia privada sem alterar inscrições nem produção.

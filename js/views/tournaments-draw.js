@@ -2890,6 +2890,9 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
     var lightPairs = neonQuota ? entries.filter(function (entry) { return String(entry.category || '') === lightCategory; }) : [];
     var pairIds = entries.map(function (entry) { return String(entry.fixedPairId || ''); });
     if (neonQuota && (pairIds.some(function (id) { return !id; }) || new Set(pairIds).size !== entries.length || days.length !== 2)) valid = false;
+    // O HTML das duplas Fem Light usa safe() já durante esta construção.
+    // Inicializar antes de pairDayHtml: var é içado, mas a atribuição não é.
+    var safe = window._safeHtml || function (value) { return String(value == null ? '' : value); };
     var savedPairDays = {};
     ((cfg.schedule && cfg.schedule.pairDayAssignments) || []).forEach(function (item) {
       if (item && item.fixedPairId) savedPairDays[String(item.fixedPairId)] = String(item.day || '');
@@ -2904,7 +2907,6 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
     var overlay = document.createElement('div');
     overlay.id = 'team-draw-review-panel';
     overlay.style.cssText = 'position:fixed;inset:0;z-index:100001;background:rgba(2,6,23,.94);backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;padding:16px;';
-    var safe = window._safeHtml || function (value) { return String(value == null ? '' : value); };
     function categoryCard(category, removable) {
       return '<div draggable="true" data-team-category-card="' + safe(category) + '" style="display:flex;align-items:center;gap:6px;padding:7px 8px;border:1px solid rgba(74,222,128,.45);border-radius:8px;background:#132a27;color:var(--text-bright,#ebebf5);font-size:.78rem;font-weight:800;cursor:grab;user-select:none;">' +
         '<span aria-hidden="true" style="color:#86efac;">⠿</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">' + safe(category) + '</span>' +
