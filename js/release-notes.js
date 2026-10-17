@@ -1,3 +1,4 @@
+// 2.4.78 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.77 — A Análise permite salvar mudanças de categoria no sandbox privado,
 // usando o mesmo elenco canônico da produção sem alterar o torneio original.
 // A autorização exige que o dono continue organizador do torneio original.
