@@ -1,3 +1,7 @@
+// 2.4.81 — No painel do sorteio Neon, as duplas exibem nomes de perfil em vez
+// de identificadores internos; cartões e seleção do dia cabem no celular e desktop.
+// A sugestão 16/8 respeita dias já salvos e numeração com lacunas.
+// Nenhum dia, inscrição ou sorteio é alterado por esta atualização visual.
 // 2.4.80 — Corrigida a abertura da configuração de sorteio por times do Neon:
 // o painel mostra as 24 duplas Feminino Light e seus dias sem erro de código.
 // Não altera inscrições, categorias, times nem jogos.

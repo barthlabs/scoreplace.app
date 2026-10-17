@@ -2892,17 +2892,49 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
     if (neonQuota && (pairIds.some(function (id) { return !id; }) || new Set(pairIds).size !== entries.length || days.length !== 2)) valid = false;
     // O HTML das duplas Fem Light usa safe() já durante esta construção.
     // Inicializar antes de pairDayHtml: var é içado, mas a atribuição não é.
-    var safe = window._safeHtml || function (value) { return String(value == null ? '' : value); };
+    var safe = window._safeHtml || function (value) { return String(value == null ? '' : value).replace(/[&<>"']/g, function (c) { return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]; }); };
     var savedPairDays = {};
     ((cfg.schedule && cfg.schedule.pairDayAssignments) || []).forEach(function (item) {
       if (item && item.fixedPairId) savedPairDays[String(item.fixedPairId)] = String(item.day || '');
     });
-    var pairDayHtml = neonQuota ? '<section style="margin:12px 0;border:1px solid #86efac;border-radius:12px;padding:12px;"><h3 style="margin:0 0 6px;color:#86efac;">Fem Light: 2 duplas/time na quinta, 1 na sexta</h3><p style="font-size:.78rem;color:#cbd5e1;">Confira o dia de cada dupla. A sugestão usa a ordem original das inscrições; a confirmação grava a identidade da dupla, não a posição.</p><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:6px;">' + lightPairs.map(function (entry) {
-      var id = String(entry.fixedPairId || ''), seq = Number(entry.p1Seq || 0);
-      var suggested = savedPairDays[id] || (seq >= 1 && seq <= 32 ? days[0] : days[1]);
-      var label = String(entry.p1Name || entry.p1Uid || 'Atleta') + ' + ' + String(entry.p2Name || entry.p2Uid || 'Atleta');
-      return '<label style="display:grid;gap:3px;padding:6px;border:1px solid #475569;border-radius:6px;font-size:.75rem;"><span>' + safe(label) + '</span><select data-pair-day="' + safe(id) + '">' + days.map(function (day) { return '<option value="' + safe(day) + '"' + (day === suggested ? ' selected' : '') + '>' + safe(dayLabel(day)) + '</option>'; }).join('') + '</select></label>';
-    }).join('') + '</div><p style="font-size:.75rem;color:#fbbf24;">É obrigatório confirmar exatamente 16 duplas na quinta e 8 na sexta; não há jogos entre os dois grupos.</p></section>' : '';
+    // A numeração pode ter buracos e atravessar categorias. A sugestão é por
+    // ordem relativa das 24 duplas, descontando dias já salvos, nunca por <=32.
+    var suggestedPairDays = {}, thursdayCount = 0;
+    lightPairs.forEach(function (entry) { if (savedPairDays[String(entry.fixedPairId || '')] === days[0]) thursdayCount++; });
+    lightPairs.slice().sort(function (a, b) {
+      var aSeq = Number(a.p1Seq), bSeq = Number(b.p1Seq);
+      if (!Number.isFinite(aSeq) || aSeq <= 0) aSeq = Infinity;
+      if (!Number.isFinite(bSeq) || bSeq <= 0) bSeq = Infinity;
+      return aSeq - bSeq || String(a.fixedPairId || '').localeCompare(String(b.fixedPairId || ''));
+    }).forEach(function (entry) {
+      var id = String(entry.fixedPairId || '');
+      if (days.indexOf(savedPairDays[id]) >= 0) return;
+      suggestedPairDays[id] = thursdayCount < 16 ? days[0] : days[1];
+      if (suggestedPairDays[id] === days[0]) thursdayCount++;
+    });
+    // ⛔ A inscrição canônica guarda UID, não nome, para contas. Nunca imprimir o
+    // UID como rótulo: o mesmo hidratador dos cards do torneio resolve o perfil
+    // vivo após inserir o painel. O fixedPairId continua sendo só identidade.
+    function pairMemberHtml(entry, side) {
+      var uid = String(entry[side + 'Uid'] || '');
+      var manualName = String(entry[side + 'Name'] || '').trim();
+      if (uid && uid.indexOf('jog_') === 0) {
+        return '<span>' + safe((window._displayName && window._displayName(uid, manualName)) || manualName || 'Nome não confirmado') + '</span>';
+      }
+      if (uid) {
+        var liveName = typeof window._nameForUid === 'function' ? window._nameForUid(uid) : '';
+        return '<span data-uid-name="' + safe(uid) + '">' + safe(liveName || 'Nome ainda não carregado') + '</span>';
+      }
+      return '<span>' + safe(manualName || 'Nome não confirmado') + '</span>';
+    }
+    var pairDayHtml = neonQuota ? '<section class="sp-team-pair-days"><h3>Fem Light: 2 duplas/time na quinta, 1 na sexta</h3><p>Confira o dia de cada dupla. A sugestão usa a ordem original das inscrições; só será gravada ao confirmar o sorteio.</p><div class="sp-team-pair-grid">' + lightPairs.map(function (entry, index) {
+      var id = String(entry.fixedPairId || '');
+      var savedDay = days.indexOf(savedPairDays[id]) >= 0 ? savedPairDays[id] : '';
+      var selectedDay = savedDay || suggestedPairDays[id];
+      return '<label class="sp-team-pair-card"><span class="sp-team-pair-card-head"><strong>Dupla ' + (index + 1) + '</strong><small>' + (savedDay ? 'Dia salvo' : 'Sugestão') + '</small></span>' +
+        '<span class="sp-team-pair-members">' + pairMemberHtml(entry, 'p1') + pairMemberHtml(entry, 'p2') + '</span>' +
+        '<select data-pair-day="' + safe(id) + '" aria-label="Dia da dupla ' + (index + 1) + '">' + days.map(function (day) { return '<option value="' + safe(day) + '"' + (day === selectedDay ? ' selected' : '') + '>' + safe(dayLabel(day)) + '</option>'; }).join('') + '</select></label>';
+    }).join('') + '</div><p class="sp-team-pair-days-rule">Confirme exatamente 16 duplas na quinta e 8 na sexta; não há jogos entre os dois grupos.</p></section>' : '';
     var old = document.getElementById('team-draw-review-panel'); if (old) old.remove();
     var overlay = document.createElement('div');
     overlay.id = 'team-draw-review-panel';
@@ -2951,7 +2983,7 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
       // ⛔ Cabeçalho sticky: em telas estreitas o único caminho de volta precisa
       // permanecer visível e clicável enquanto o organizador edita os dias.
       '<div style="position:sticky;top:0;z-index:3;display:flex;align-items:center;justify-content:space-between;gap:14px;margin:-18px -18px 12px;padding:18px;background:#101827;border-bottom:1px solid rgba(59,130,246,.25);"><div><h2 id="team-draw-review-title" style="margin:0;color:var(--text-bright);font-size:1.18rem;">🎲 Configurar sorteio</h2><span style="font-size:.75rem;color:#94a3b8;">' + entries.length * 2 + ' participantes · ' + entries.length + ' duplas · ' + categories.length + ' categorias · ' + cfg.teamCount + ' times</span></div><button type="button" id="team-draw-cancel-top" class="btn" style="flex:none;background:#182235!important;color:var(--text-bright)!important;border:1px solid #64748b!important;text-shadow:none!important;box-shadow:none!important;">← Voltar</button></div>' +
-      '<style>@media (max-width:780px){#team-draw-review-panel [data-team-draw-layout]{grid-template-columns:1fr!important;}#team-draw-review-panel [data-team-day-lane]{min-width:135px!important;}}</style><div data-team-draw-layout style="display:grid;grid-template-columns:minmax(270px,.8fr) minmax(420px,1.35fr) minmax(190px,.62fr);gap:14px;align-items:start;">' +
+      '<style>#team-draw-review-panel .sp-team-pair-days{margin:12px 0;border:1px solid #86efac;border-radius:12px;padding:14px;min-width:0;}#team-draw-review-panel .sp-team-pair-days h3{margin:0 0 8px;color:#86efac;font-size:1rem;}#team-draw-review-panel .sp-team-pair-days p{margin:0 0 12px;color:#cbd5e1;font-size:.82rem;line-height:1.4;}#team-draw-review-panel .sp-team-pair-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;min-width:0;}#team-draw-review-panel .sp-team-pair-card{display:grid;grid-template-rows:auto 1fr auto;gap:10px;min-width:0;max-width:100%;padding:12px;border:1px solid #475569;border-radius:10px;background:var(--bg-card);box-sizing:border-box;}#team-draw-review-panel .sp-team-pair-card-head{display:flex;justify-content:space-between;gap:8px;align-items:baseline;color:var(--text-bright);font-size:.84rem;}#team-draw-review-panel .sp-team-pair-card-head small{color:var(--text-muted);font-size:.7rem;}#team-draw-review-panel .sp-team-pair-members{display:grid;gap:5px;min-width:0;color:var(--text-main);font-size:.88rem;line-height:1.3;}#team-draw-review-panel .sp-team-pair-members>span{min-width:0;overflow-wrap:anywhere;word-break:break-word;}#team-draw-review-panel .sp-team-pair-members>span+span:before{content:"+ ";color:var(--text-muted);}#team-draw-review-panel .sp-team-pair-card select{display:block;width:100%;min-width:0;max-width:100%;box-sizing:border-box;padding:8px;font-size:.82rem;}#team-draw-review-panel .sp-team-pair-days .sp-team-pair-days-rule{margin:12px 0 0;color:#fbbf24;}@media (max-width:780px){#team-draw-review-panel [data-team-draw-layout]{grid-template-columns:1fr!important;}#team-draw-review-panel [data-team-day-lane]{min-width:135px!important;}#team-draw-review-panel .sp-team-pair-grid{grid-template-columns:minmax(0,1fr);}}</style><div data-team-draw-layout style="display:grid;grid-template-columns:minmax(270px,.8fr) minmax(420px,1.35fr) minmax(190px,.62fr);gap:14px;align-items:start;">' +
         '<section style="border:1px solid rgba(167,139,250,.34);border-radius:12px;padding:13px;">' +
           presenceChoiceHtml +
           '<section data-team-toggle-group="mode"><b style="font-size:.88rem;color:#c4b5fd;">Confrontos</b><div style="display:flex;gap:8px;margin-top:7px;"><button type="button" data-team-toggle="structured" class="btn" style="flex:1;">Estruturado</button><button type="button" data-team-toggle="free" class="btn" style="flex:1;">Livre</button></div><p data-team-toggle-copy style="margin:7px 0 0;color:#c4b5fd;font-size:.76rem;line-height:1.35;"></p></section>' +
@@ -2969,6 +3001,11 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
       (!valid ? '<p style="margin:0 0 14px;color:var(--sp-c-f87171,#f87171);font-weight:700;">O sorteio está bloqueado: são necessárias ' + expectedPairs + ' duplas já formadas. Categorias divergentes: ' + safe(invalidCategories.join(', ') || 'total de inscritos') + '.</p>' : '') +
       '<div style="display:flex;justify-content:flex-end;"><button type="button" id="team-draw-confirm" class="btn btn-primary"' + (valid ? '' : ' disabled aria-disabled="true" style="opacity:.45;cursor:not-allowed;"') + '>🎲 Sortear times e confrontos</button></div></section>';
     document.body.appendChild(overlay);
+    // A leitura canônica acima substitui o snapshot por entradas UID-only.
+    // Hidratar em TODA abertura; alterar um select não recria o painel.
+    if (neonQuota && typeof window._hydrateUidNames === 'function') {
+      try { window._hydrateUidNames(overlay); } catch (_e) {}
+    }
     var close = function () { overlay.remove(); };
     overlay.querySelector('#team-draw-cancel-top').onclick = function () { close(); if (typeof opts.onCancel === 'function') opts.onCancel(); };
     // Os dois pares de escolhas usam o mesmo padrão visual dos toggles do
