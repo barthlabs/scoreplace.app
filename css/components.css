@@ -322,6 +322,16 @@ input[type="time"].sp-team-draw-time::-webkit-datetime-edit-minute-field {
   max-width: 100%;
   box-shadow: 0 -8px 0 var(--bg-darker);
 }
+/* Um marcador por integrante distingue nomes longos que quebram em várias linhas. */
+[data-er-pair-order] > div::before {
+  content: '';
+  flex: 0 0 5px;
+  width: 5px;
+  height: 5px;
+  margin: 6px 7px 0 0;
+  border-radius: 50%;
+  background: #34d399;
+}
 /* Hamburger button inside back header — hidden on regular pages (topbar handles it).
    Shown ONLY inside fullscreen overlays where the topbar is hidden behind the z-index. */
 .back-hdr-ham { display: none !important; }
