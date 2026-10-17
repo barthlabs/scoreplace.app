@@ -77,8 +77,9 @@ function section(from, to) {
     'a entrada não reescreve a rolagem da agenda com o cálculo vertical legado');
   ok(result.scrolled.indexOf('inline-bracket-container') === -1,
     'a classificação inline nunca é usada como fallback quando há agenda');
-  ok(tournaments.includes('var operationalCard = !!(root && root._bracketGeneralView &&') &&
+  ok(tournaments.includes("var operationalCard = !!(root && destination.hasAttribute('data-bracket-tab-category')") &&
     tournaments.includes("root._bracketGeneralView.contains(destination)") &&
+    tournaments.includes("root._bracketTabsScope.contains(destination)") &&
     tournaments.includes("destination.hasAttribute('data-bracket-tab-category')"),
     'a geometria operacional só recebe cards realmente montados na agenda; a própria seção continua no fallback correto');
   const lateTarget = await page.evaluate(() => {

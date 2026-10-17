@@ -2578,9 +2578,11 @@ function renderDashboard(container) {
         if (!teamStr || teamStr === 'TBD') {
           var sourceLabel = (tRef && typeof window._directBracketSlotLabel === 'function')
             ? window._directBracketSlotLabel(tRef, item.m, side) : '';
+          var sourceLink = sourceLabel && typeof window._directBracketSlotLinkHtml === 'function'
+            ? window._directBracketSlotLinkHtml(tRef, item.m, side) : '';
           return '<div style="flex:1;min-width:0;display:flex;align-items:center;gap:6px;color:var(--sp-c-64748b,#64748b);font-style:italic;font-size:0.82rem;">' +
             '<span style="width:28px;height:28px;border-radius:50%;background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));border:1px dashed rgba(255,255,255,0.18);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;font-size:0.9rem;font-style:normal;">⏳</span>' +
-            '<span>' + _sf(sourceLabel || 'a definir') + '</span></div>';
+            '<span>' + (sourceLink || _sf(sourceLabel || 'a definir')) + '</span></div>';
         }
         var parts = String(teamStr).split(/\s*\/\s*/).filter(Boolean);
         return '<div class="sp-mc-col" style="flex:1;min-width:0;">' +

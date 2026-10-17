@@ -82,7 +82,7 @@ ok(tournaments.includes('window._bracketPendingScroll = String(tournamentId);') 
   'a âncora pendente da entrada é consumida pela chave depois de os cards existirem');
 ok(bracket.includes('window._directBracketSlotLabel') && bracket.includes("? 'Perdedor' : 'Vencedor'") && bracket.includes("_origem || 'A definir'"),
   'vagas ligadas diretamente mostram vencedor/perdedor do jogo; A definir fica para classificação');
-const labelStart = bracket.indexOf('window._directBracketSlotLabel = function');
+const labelStart = bracket.indexOf('window._directBracketSlotSource = function');
 const labelEnd = bracket.indexOf('// ─── Player avatars helper', labelStart);
 const labelSandbox = { window: {} };
 try {

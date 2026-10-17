@@ -30,7 +30,7 @@ const t = { id: 'confra-fixture', format: 'Liga', matches };
 ok(H.window._canonicalElimLabelForMatch(t, target) === 'Quartas de Final', 'R5 precisa ser Quartas de Final');
 ok(H.window._canonicalElimLabelForMatch(t, matches[0]) === 'Oitavas de Final', 'R4 precisa ser Oitavas de Final');
 
-const start = bracket.indexOf('window._directBracketSlotLabel = function');
+const start = bracket.indexOf('window._directBracketSlotSource = function');
 const end = bracket.indexOf('// ─── Player avatars helper', start);
 ok(start >= 0 && end > start, 'resolvedor canônico de origem localizado');
 const slotContext = { window: { _collectAllMatches: x => x.matches } };
@@ -38,7 +38,8 @@ vm.runInNewContext(bracket.slice(start, end), slotContext);
 ok(slotContext.window._directBracketSlotLabel(t, target, 'p2') === 'Vencedor do jogo 186', 'J195 aponta para J186');
 ok(slotContext.window._directBracketSlotLabel({ matches: [] }, target, 'p2') === '', 'resumo sem aresta não inventa origem');
 ok(dash.includes('window._directBracketSlotLabel(tRef, item.m, side)') &&
-  dash.includes("_sf(sourceLabel || 'a definir')"), 'dashboard consome origem canônica e tem fallback honesto');
+  dash.includes("_sf(sourceLabel || 'a definir')") &&
+  dash.includes('window._directBracketSlotLinkHtml(tRef, item.m, side)'), 'dashboard consome origem canônica, link e fallback honesto');
 ok(dash.includes("_meta.push(_namedRound || (_rnum != null ? 'Rodada ' + _rnum : ''))"),
   'meta usa o nome da fase antes do ordinal');
 ok(dash.includes('_hydrateDashboardRoundLabels(_ngT)') &&

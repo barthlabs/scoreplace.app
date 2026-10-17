@@ -1369,6 +1369,69 @@ window._goToMyNextTournamentMatch = function(tId, matchId, tab) {
   window.location.hash = '#tournaments/' + tId;
 };
 
+// Navegação da vaga "Vencedor/Perdedor do jogo X": o destino é o ID da
+// partida-fonte, não o card pai. No detalhe, a aba deve existir ANTES do foco;
+// fora dele, a intenção de entrada já usada pela dashboard faz essa seleção.
+// [[regression_pending_source_match_navigation]]
+window._goToBracketSourceMatch = function(tId, sourceId) {
+  tId = String(tId == null ? '' : tId);
+  sourceId = String(sourceId == null ? '' : sourceId);
+  if (!tId || !sourceId) return;
+  var t = (window._currentBracketTournament && String(window._currentBracketTournament.id) === tId)
+    ? window._currentBracketTournament
+    : (typeof window._findTournamentById === 'function' ? window._findTournamentById(tId) : null);
+  var matches = t && typeof window._collectAllMatches === 'function' ? window._collectAllMatches(t) : [];
+  var source = matches.find(function(m) { return m && String(m.id) === sourceId; });
+  if (!source) return;
+  var category = String(source.category || source.tierLabel || source.bracket || '').trim();
+  var label = category.toLowerCase();
+  var gender = /(^|\s)(fem|femin|female)/.test(label) ? 'fem'
+    : (/(^|\s)(masc|mascul|male)/.test(label) ? 'masc'
+      : (/(^|\s)(mist|mixed)/.test(label) ? 'misto' : 'linhas'));
+  var tab = category ? { category: category, gender: gender,
+    round: source.round == null ? '' : String(source.round) } : null;
+  if (window.location.hash.split('?')[0] !== '#tournaments/' + tId) {
+    window._goToTournamentMatch(tId, sourceId, tab);
+    return;
+  }
+  var startedHash = window.location.hash;
+  var attempts = 0;
+  var focusSource = function() {
+    if (window.location.hash !== startedHash || window._travaRolagemDaChave) return;
+    if (tab && typeof window._bracketSelectCategoryTab === 'function') {
+      window._bracketSelectCategoryTab(tId, tab.gender, tab.category, tab.round);
+    }
+    if (typeof window._chaveMontaTudo === 'function') {
+      try { window._chaveMontaTudo(document); } catch (eMount) {}
+    }
+    var card = document.getElementById('card-' + sourceId);
+    if (card && !card.closest('[hidden], details:not([open])') && card.getClientRects().length) {
+      window._focusTournamentMatchWhenReady(tId, sourceId, { behavior: 'smooth' });
+      return;
+    }
+    if (++attempts < 60) { setTimeout(focusSource, 100); return; }
+    try { if (sessionStorage.getItem('sp_scrollToMatch') === sourceId) sessionStorage.removeItem('sp_scrollToMatch'); } catch (eStore) {}
+  };
+  focusSource();
+};
+
+// Captura antes do onclick inline do card da dashboard: bubbling no document
+// chegaria tarde e abriria o jogo DESTINO em vez do jogo de origem.
+if (typeof document !== 'undefined' && typeof document.addEventListener === 'function' && !window.__spSourceLinkBound) {
+  window.__spSourceLinkBound = true;
+  var _spActivateSourceLink = function(event) {
+    if (event.type === 'keydown' && event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') return;
+    var link = event.target && event.target.closest && event.target.closest('[data-source-match-id][data-source-tournament-id]');
+    if (!link) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+    window._goToBracketSourceMatch(link.dataset.sourceTournamentId, link.dataset.sourceMatchId);
+  };
+  document.addEventListener('click', _spActivateSourceLink, true);
+  document.addEventListener('keydown', _spActivateSourceLink, true);
+}
+
 // Um destino de chave não pode depender de qual tela originou a navegação.
 // Dashboard, card do torneio e URL direta abrem o MESMO detalhe: quando há
 // partida pendente da pessoa, todos precisam cair na categoria e no jogo dela.
@@ -1485,8 +1548,14 @@ window._focusTournamentMatchWhenReady = function(tId, matchId, options) {
     if (target && getComputedStyle(target).display !== 'none') {
       if (!(target.closest && target.closest('[hidden], details:not([open])'))) {
         try { if (typeof window._reflowChrome === 'function') window._reflowChrome(); } catch (eChrome) {}
-        try { target.scrollIntoView({ behavior: behavior, block: 'start', inline: 'nearest' }); }
-        catch (eScroll) { try { target.scrollIntoView(); } catch (eFallback) {} }
+        var root = typeof window._bracketOperationalRootForCard === 'function'
+          ? window._bracketOperationalRootForCard(target, tId) : null;
+        if (root && typeof window._bracketFocusOperationalCard === 'function') {
+          window._bracketFocusOperationalCard(root, target, behavior);
+        } else {
+          try { target.scrollIntoView({ behavior: behavior, block: 'start', inline: 'nearest' }); }
+          catch (eScroll) { try { target.scrollIntoView(); } catch (eFallback) {} }
+        }
         cleanup();
         return;
       }
@@ -1571,7 +1640,8 @@ window._focusTournamentUpcomingWhenReady = function(tId, options) {
       if (window._travaRolagemDaChave || userInterrupted || window._tournamentUpcomingEntryToken !== entryToken) return;
       var liveTarget = targetId && document.getElementById(targetId);
       var destination = liveTarget && getComputedStyle(liveTarget).display !== 'none' ? liveTarget : null;
-      var root = Array.prototype.find.call(document.querySelectorAll('[data-bracket-tabs-root]'), function(node) {
+      var root = (destination && typeof window._bracketOperationalRootForCard === 'function'
+        ? window._bracketOperationalRootForCard(destination, tId) : null) || Array.prototype.find.call(document.querySelectorAll('[data-bracket-tabs-root]'), function(node) {
         return node.getAttribute('data-tournament-id') === String(tId);
       }) || null;
       if (!destination) destination = root && root._bracketGeneralView;
@@ -1584,9 +1654,9 @@ window._focusTournamentUpcomingWhenReady = function(tId, options) {
       // A rodada é promovida para uma camada fixa após cruzar as abas. Esta
       // entrada antes repetia uma conta que não sabia dessa camada e, 140ms ou
       // mais tarde, escondia o cabeçalho do jogo já corretamente focado.
-      var operationalCard = !!(root && root._bracketGeneralView &&
-        root._bracketGeneralView.contains(destination) &&
-        destination.hasAttribute('data-bracket-tab-category'));
+      var operationalCard = !!(root && destination.hasAttribute('data-bracket-tab-category') &&
+        ((root._bracketGeneralView && root._bracketGeneralView.contains(destination)) ||
+         (root._bracketTabsScope && root._bracketTabsScope.contains(destination))));
       if (operationalCard && typeof window._bracketFocusOperationalCard === 'function') {
         window._bracketFocusOperationalCard(root, destination, reasserting ? 'auto' : behavior);
         return;

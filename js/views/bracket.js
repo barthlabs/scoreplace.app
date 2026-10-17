@@ -1021,7 +1021,7 @@ function _bracketToggleEmptySourceRounds(root, hide) {
 // caminho calculava um topo diferente e o último callback cortava o card.
 // [[regression_operational_card_focus_has_one_geometry]]
 function _bracketFocusOperationalCard(root, card, behavior) {
-  if (!root || !card || !card.isConnected || card.hidden || window._travaRolagemDaChave) return null;
+  if (!root || !card || !card.isConnected || card.hidden || !card.getClientRects().length || window._travaRolagemDaChave) return null;
   var track = card.closest ? card.closest('.bracket-general-rounds-track') : null;
   if (track) {
     var beforeRect = card.getBoundingClientRect();
@@ -1031,7 +1031,19 @@ function _bracketFocusOperationalCard(root, card, behavior) {
     try { track.scrollTo({ left: targetLeft, behavior: 'instant' }); }
     catch (eTrack) {}
   }
+  else _bracketEntryHorizontalGap(card, true);
   var cardRect = card.getBoundingClientRect();
+  var safeTop = _bracketOperationalSafeTop(root, card);
+  var currentTop = window.scrollY || window.pageYOffset || 0;
+  var targetTop = Math.max(0, currentTop + cardRect.top - safeTop);
+  var scrollRoot = document.scrollingElement || document.documentElement || document.body;
+  if (scrollRoot) scrollRoot.scrollTop = targetTop;
+  try { window.scrollTo({ top: targetTop, behavior: behavior || 'auto' }); }
+  catch (eScroll) { try { window.scrollTo(0, targetTop); } catch (eLegacyScroll) {} }
+  _bracketSyncRoundHeadingOffsets();
+  return targetTop;
+}
+function _bracketOperationalSafeTop(root, card) {
   var rootRect = root.getBoundingClientRect();
   var roundColumn = card.closest ? card.closest('.bracket-general-round-column, .bracket-round-column') : null;
   var roundHeading = roundColumn && roundColumn.querySelector ? roundColumn.querySelector('.bracket-round-heading') : null;
@@ -1046,16 +1058,18 @@ function _bracketFocusOperationalCard(root, card, behavior) {
     var portalBottom = Math.ceil(portal.getBoundingClientRect().bottom || 0) + 12;
     if (portalBottom > safeTop) safeTop = portalBottom;
   }
-  var currentTop = window.scrollY || window.pageYOffset || 0;
-  var targetTop = Math.max(0, currentTop + cardRect.top - safeTop);
-  var scrollRoot = document.scrollingElement || document.documentElement || document.body;
-  if (scrollRoot) scrollRoot.scrollTop = targetTop;
-  try { window.scrollTo({ top: targetTop, behavior: behavior || 'auto' }); }
-  catch (eScroll) { try { window.scrollTo(0, targetTop); } catch (eLegacyScroll) {} }
-  _bracketSyncRoundHeadingOffsets();
-  return targetTop;
+  return safeTop;
 }
 window._bracketFocusOperationalCard = _bracketFocusOperationalCard;
+window._bracketOperationalSafeTop = _bracketOperationalSafeTop;
+window._bracketOperationalRootForCard = function(card, tId) {
+  if (!card || !card.closest) return null;
+  return Array.prototype.find.call(document.querySelectorAll('[data-bracket-tabs-root]'), function(root) {
+    return (!tId || root.getAttribute('data-tournament-id') === String(tId)) &&
+      !!((root._bracketGeneralView && root._bracketGeneralView.contains(card)) ||
+         (root._bracketTabsScope && root._bracketTabsScope.contains(card)));
+  }) || null;
+};
 
 // A chave de fases usa um scroller HORIZONTAL próprio. `scrollIntoView` sozinho
 // pode acertar o Y e deixar a coluna do jogo fora da viewport (Confra J195).
@@ -1792,6 +1806,9 @@ window._bracketCategoryTabsMount = function () {
   // contrato evita que uma remontagem perca a superfície opaca que protege as
   // abas e a busca do conteúdo rolável abaixo.
   root.setAttribute('data-sp-sticky-surface', 'tabs');
+  // Um root reutilizado depois de trocar de torneio não pode manter o id antigo:
+  // a seleção de aba e a âncora da dashboard filtram pelo torneio atual.
+  if (id !== 'current') root.setAttribute('data-tournament-id', id);
   root._bracketTabsScope = scope;
   root._bracketCardsScope = detailScope;
   // Fase classificatória comum pode trocar de rodada. Já a agenda concentrada
@@ -2040,10 +2057,9 @@ function _applyMyMatchesFilter() {
         if (typeof window._reflowChrome === 'function') window._reflowChrome();
         var _target = _alvoDeEntrada();
         if (!_target) return;
-        var _operationalRoot = Array.prototype.find.call(document.querySelectorAll('[data-bracket-tabs-root]'), function (_root) {
-          return !!(_root._bracketGeneralView && _root._bracketGeneralView.contains(_target));
-        }) || null;
+        var _operationalRoot = window._bracketOperationalRootForCard(_target);
         if (_operationalRoot && typeof window._bracketFocusOperationalCard === 'function') {
+          _bracketEntryHorizontalGap(_target, true);
           window._bracketFocusOperationalCard(_operationalRoot, _target, behavior);
           return;
         }
@@ -2114,11 +2130,15 @@ function _applyMyMatchesFilter() {
         // grupo pousou ACIMA da viewport e nada mais se mexeu. Estabilidade ali é o
         // sintoma, não a cura. Agora comparo o topo com o recuo ATUAL: enquanto os
         // dois não baterem, corrige.
+        var _operationalRoot = window._bracketOperationalRootForCard(_el);
         var _recuo = 0;
         try {
-          var _cs = getComputedStyle(document.documentElement).getPropertyValue('--scroll-anchor');
-          _recuo = Math.round(parseFloat(_cs) || 0);
-          if (!_recuo && _el.style) _recuo = Math.round(parseFloat(getComputedStyle(_el).scrollMarginTop) || 0);
+          if (_operationalRoot) _recuo = Math.round(window._bracketOperationalSafeTop(_operationalRoot, _el));
+          else {
+            var _cs = getComputedStyle(document.documentElement).getPropertyValue('--scroll-anchor');
+            _recuo = Math.round(parseFloat(_cs) || 0);
+            if (!_recuo && _el.style) _recuo = Math.round(parseFloat(getComputedStyle(_el).scrollMarginTop) || 0);
+          }
         } catch (e) {}
         var _erro = Math.abs(_topo - _recuo);
         var _erroX = _bracketEntryHorizontalGap(_el, false);
@@ -6074,13 +6094,13 @@ async function _preloadPlayerPhotos(tournament) {
 // direta, porém, a origem já é conhecida pelo fio `nextMatchId`/`loserMatchId`:
 // esconder isso atrapalha a leitura de quem espera o resultado. Esta função lê
 // só essas arestas explícitas — nunca tenta adivinhar classificação por posição.
-window._directBracketSlotLabel = function (t, match, slot) {
-  if (!t || !match || (slot !== 'p1' && slot !== 'p2')) return '';
+window._directBracketSlotSource = function (t, match, slot) {
+  if (!t || !match || (slot !== 'p1' && slot !== 'p2')) return null;
   // Melhor perdedor/classificação é deliberadamente indefinido até o critério fechar.
-  if (match[slot + 'AguardaMelhor']) return '';
+  if (match[slot + 'AguardaMelhor']) return null;
   var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (t.matches || []);
   var targetId = match.id == null ? '' : String(match.id);
-  if (!targetId) return '';
+  if (!targetId) return null;
   var source = null, kind = '';
   for (var i = 0; i < all.length; i++) {
     var candidate = all[i];
@@ -6092,14 +6112,32 @@ window._directBracketSlotLabel = function (t, match, slot) {
       source = candidate; kind = 'loser'; break;
     }
   }
-  if (!source) return '';
+  if (!source) return null;
   var n = Number(source._gameNum || source.matchNumber || source.gameNumber || source.number);
   if (!Number.isFinite(n) || n < 1) {
     // Apenas para dados legados ainda sem o carimbo global; a ordem do array é o
     // último fallback visual, nunca uma decisão de classificatória.
     n = all.indexOf(source) + 1;
   }
-  return (kind === 'loser' ? 'Perdedor' : 'Vencedor') + ' do jogo ' + n;
+  return { match: source, label: (kind === 'loser' ? 'Perdedor' : 'Vencedor') + ' do jogo ' + n };
+};
+window._directBracketSlotLabel = function(t, match, slot) {
+  var source = window._directBracketSlotSource(t, match, slot);
+  return source ? source.label : '';
+};
+// A mesma vaga pendente é renderizada na chave e no próximo jogo. O link usa
+// a aresta explícita; nunca constrói um ID de jogo a partir do número visível.
+// [[regression_pending_source_links_to_actual_match]]
+window._directBracketSlotLinkHtml = function(t, match, slot) {
+  var source = window._directBracketSlotSource(t, match, slot);
+  if (!source || !source.match || source.match.id == null || !t || t.id == null) return '';
+  var esc = window._safeHtml;
+  return '<span role="link" tabindex="0" class="sp-source-match-link"' +
+    ' data-source-tournament-id="' + esc(String(t.id)) + '"' +
+    ' data-source-match-id="' + esc(String(source.match.id)) + '"' +
+    ' aria-label="Ir para ' + esc(source.label) + '"' +
+    ' style="color:var(--text-main);text-decoration:underline;text-underline-offset:2px;cursor:pointer;outline-offset:3px;">' +
+    esc(source.label) + '</span>';
 };
 
 // Competições por times (como o Neon) guardam o vínculo no confronto, não no
@@ -6166,7 +6204,8 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m, slot, showIndividu
     var _slot = slot === 'p2' ? 'p2' : 'p1';
     var _origem = (typeof window._directBracketSlotLabel === 'function')
       ? window._directBracketSlotLabel(t, m, _slot) : '';
-    return `<span style="font-weight:600;font-size:0.85rem;opacity:0.62;font-style:italic;">${window._safeHtml(_origem || 'A definir')}</span>`;
+    var _linkOrigem = _origem && window._directBracketSlotLinkHtml(t, m, _slot);
+    return `<span style="font-weight:600;font-size:0.85rem;${_linkOrigem ? '' : 'opacity:0.62;'}font-style:italic;">${_linkOrigem || window._safeHtml(_origem || 'A definir')}</span>`;
   }
   if (teamName === 'BYE') {
     return `<span style="font-weight:600;font-size:0.85rem;opacity:0.5;">BYE</span>`;
