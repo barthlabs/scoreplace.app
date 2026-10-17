@@ -87,7 +87,7 @@
     explore: 1, 'todos-torneios': 1, 'todas-pessoas': 1, notifications: 1,
     live: 1, casual: 1, presence: 1, venues: 1, place: 1, 'my-venues': 1,
     profile: 1, analise: 1, categorias: 1, comunicados: 1, participantes: 1,
-    help: 1, 'novo-torneio': 1, support: 1, invite: 1, 'claim-registration': 1, privacy: 1, terms: 1,
+    help: 1, 'novo-torneio': 1, support: 1, invite: 1, 'claim-registration': 1, 'tournament-claim': 1, privacy: 1, terms: 1,
     'delete-account': 1, trofeus: 1, arbitros: 1, historico: 1,
     'importar-letzplay': 1, 'fase-final': 1
   };

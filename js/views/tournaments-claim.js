@@ -10,8 +10,9 @@
     else if (name === 'createManualClaimInvite') request = window._callCF('createManualClaimInvite', data, 'Entre para reconhecer sua inscrição.');
     else if (name === 'previewManualClaimInvite') request = window._callCF('previewManualClaimInvite', data, 'Entre para reconhecer sua inscrição.');
     else if (name === 'acceptManualClaimInvite') request = window._callCF('acceptManualClaimInvite', data, 'Entre para reconhecer sua inscrição.');
-    else if (['createTournamentClaimLink', 'previewTournamentClaimLink', 'acceptTournamentClaimLink'].indexOf(name) !== -1)
-      request = window._callCF(name, data, 'Entre para reconhecer sua vaga.');
+    else if (name === 'createTournamentClaimLink') request = window._callCF('createTournamentClaimLink', data, 'Entre para reconhecer sua vaga.');
+    else if (name === 'previewTournamentClaimLink') request = window._callCF('previewTournamentClaimLink', data, 'Entre para reconhecer sua vaga.');
+    else if (name === 'acceptTournamentClaimLink') request = window._callCF('acceptTournamentClaimLink', data, 'Entre para reconhecer sua vaga.');
     else return Promise.reject(new Error('Operação de convite desconhecida'));
     return request.then(function (response) { return response.data; });
   }
@@ -173,6 +174,7 @@
     if (!sharedPage() || shared !== current) return;
     var details = sharedPage().querySelector('[data-shared-details]');
     if (!details) return;
+    details.onclick = null;
     var preview = current.preview;
     if (preview.alreadyRegistered) {
       sharedStatus('Você já está nesta dupla.');
@@ -191,8 +193,9 @@
         ' · Parceiro(a): ' + esc(item.partnerName) + '</span><button type="button" class="btn btn-primary" data-shared-choice="' +
         i + '">Sou esta pessoa — ocupar vaga</button></div>';
     }).join('');
-    details.querySelectorAll('[data-shared-choice]').forEach(function (button) {
-      button.addEventListener('click', function () {
+    details.onclick = function (event) {
+      var button = event.target.closest('[data-shared-choice]');
+      if (!button || !details.contains(button)) return;
         if (current.busy) return;
         var selected = candidates[Number(button.getAttribute('data-shared-choice'))];
         if (!selected) return;
@@ -211,8 +214,7 @@
             sharedStatus(error.message || 'Não foi possível ocupar a vaga.');
             details.querySelectorAll('button').forEach(function (item) { item.disabled = false; });
           });
-      });
-    });
+    };
   }
 
   window._openTournamentClaimLink = function (tournamentId, sandbox) {
