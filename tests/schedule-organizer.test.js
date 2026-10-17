@@ -432,6 +432,43 @@ ok(uidBoard.html.includes('data-uid-name="uidMuitoLongoDePessoa01"') &&
   'duplas mistas e participantes aninhados hidratam UIDs sem apagar convidados nem mostrar IDs como nomes');
 ok(!W._operationalScheduleGrid(uidFixture, p, { prefix:'agenda' }).html.includes('data-uid-name='),
   'sem tocar no olho a grade não expõe UIDs nem cria alvos de hidratação invisíveis');
+const originalNameForUid = W._nameForUid;
+W._nameForUid = function (uid) { return { 'uid-conta-a':'Conta A', 'uid-conta-b':'Conta B' }[uid] || ''; };
+function mixedSide(object, uids, nested) {
+  const fixture = Object.assign({}, t, { matches:t.matches.map(function (match) {
+    return match.id === 'A' ? Object.assign({}, match, {
+      p1CompetitionTeamId:'team-1', p2CompetitionTeamId:'team-2',
+      team1Obj:nested ? { p1Uid:'uid-conta-a', p2Name:'Parceira', category:'Fem Power' } : object,
+      team1Uids:nested ? ['uid-conta-a'] : uids,
+      team2Obj:nested ? object : { p1Name:'Outra', p2Name:'Pessoa', category:'Fem Power' },
+      team2Uids:nested ? uids : []
+    }) : match;
+  }) });
+  return W._operationalScheduleGrid(fixture, p, { prefix:'agenda', revealNames:true }).html;
+}
+const manualFirst = mixedSide({ p1Name:'Manual A', p1ManualId:'manual-a', p2Uid:'uid-conta-b', category:'Fem Power' }, ['uid-conta-b']);
+ok(manualFirst.includes('<div>Manual A</div><div data-uid-name="uid-conta-b">Conta B</div>') &&
+  !manualFirst.includes('data-uid-name="uid-conta-b">Conta B</div><div data-uid-name="uid-conta-b"') && manualFirst.includes('VENOM 1'),
+  'manual antes de UID não duplica a pessoa com conta');
+const manualSecond = mixedSide({ p1Uid:'uid-conta-a', p2Name:'Manual B', p2ManualId:'manual-b', category:'Fem Power' }, ['uid-conta-a']);
+ok(manualSecond.includes('<div data-uid-name="uid-conta-a">Conta A</div><div>Manual B</div>'),
+  'UID antes de manual mantém cada integrante na sua posição');
+const nestedManualFirst = mixedSide({ participants:[{ name:'Manual A', manualParticipantId:'manual-a' }, { uid:'uid-conta-b' }], category:'Fem Power' }, ['uid-conta-b'], true);
+ok(nestedManualFirst.includes('<div>Manual A</div><div data-uid-name="uid-conta-b">Conta B</div>') && nestedManualFirst.includes('BLACKOUT 1'),
+  'participants aninhados: manual antes do UID não duplica o perfil');
+const nestedManualSecond = mixedSide({ participants:[{ uid:'uid-conta-a' }, { name:'Manual B', manualParticipantId:'manual-b' }], category:'Fem Power' }, ['uid-conta-a'], true);
+ok(nestedManualSecond.includes('<div data-uid-name="uid-conta-a">Conta A</div><div>Manual B</div>'),
+  'participants aninhados: manual após UID permanece sem UID');
+const emptyFirst = mixedSide({ p2Name:'Manual B', p2ManualId:'manual-b', category:'Fem Power' }, ['uid-conta-a']);
+ok(emptyFirst.includes('<div data-uid-name="uid-conta-a">Conta A</div><div>Manual B</div>'),
+  'UID único preenche o único slot vazio, sem invadir o membro manual');
+const explicitReversed = mixedSide({ p1Uid:'uid-conta-b', p2Name:'', category:'Fem Power' }, ['uid-conta-a','uid-conta-b']);
+ok(explicitReversed.includes('<div data-uid-name="uid-conta-b">Conta B</div><div data-uid-name="uid-conta-a">Conta A</div>'),
+  'UID explicitamente ocupado é removido antes de preencher o outro slot');
+const nestedReversed = mixedSide({ participants:[{ uid:'uid-conta-b' }, {}], category:'Fem Power' }, ['uid-conta-a','uid-conta-b'], true);
+ok(nestedReversed.includes('<div data-uid-name="uid-conta-b">Conta B</div><div data-uid-name="uid-conta-a">Conta A</div>'),
+  'participants aninhados também não reutilizam UID explícito no outro slot');
+W._nameForUid = originalNameForUid;
 const ordinalFixture = Object.assign({}, t, {
   participants:[
     { fixedPairId:'volt-c', category:'Fem Light', competitionTeamId:'team-1', competitionPlayDay:'2026-10-23', p1Uid:'c1', p2Uid:'c2' },

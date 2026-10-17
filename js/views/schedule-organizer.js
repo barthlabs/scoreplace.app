@@ -282,18 +282,27 @@
     var slots = Array.isArray(object.participants) ? object.participants : [];
     var uids = m && m[side === 'p1' ? 'team1Uids' : 'team2Uids'];
     if (slots.length) {
-      slots.forEach(function (slot, index) {
+      slots.forEach(function (slot) {
         var value = slot && typeof slot === 'object' ? slot : {};
-        members.push({ uid:value.uid || (Array.isArray(uids) && uids[index]) || '', name:value.displayName || value.name || '' });
+        members.push({ uid:value.uid || '', name:value.displayName || value.name || (typeof slot === 'string' ? slot : ''), manualId:value.manualParticipantId || value.manualId || '' });
       });
     } else if (object.p1Uid || object.p2Uid || object.p1Name || object.p2Name) {
-      members.push({ uid:object.p1Uid || (Array.isArray(uids) && uids[0]) || '', name:object.p1Name || '' });
-      if (object.p2Uid || object.p2Name || (Array.isArray(uids) && uids[1])) members.push({ uid:object.p2Uid || (Array.isArray(uids) && uids[1]) || '', name:object.p2Name || '' });
+      members.push({ uid:object.p1Uid || '', name:object.p1Name || '', manualId:object.p1ManualId || '' });
+      if (object.p2Uid || object.p2Name || object.p2ManualId || (Array.isArray(uids) && uids.length >= 2)) members.push({ uid:object.p2Uid || '', name:object.p2Name || '', manualId:object.p2ManualId || '' });
     } else if (Array.isArray(uids) && uids.length) {
       uids.forEach(function (uid) { members.push({ uid:uid, name:'' }); });
     } else if (m && m[side + 'Uid']) {
       members.push({ uid:m[side + 'Uid'], name:'' });
     }
+    // O array do jogo contém apenas UIDs, sem posições para integrantes manuais.
+    // Retire os já associados e preencha só quando cada slot vazio tiver um UID
+    // inequívoco; do contrário um único perfil aparece nos dois lados da dupla.
+    var usedUids = members.map(function (member) { return String(member.uid || ''); }).filter(Boolean);
+    var freeUids = (Array.isArray(uids) ? uids : []).map(String).filter(function (uid, index, all) {
+      return uid && usedUids.indexOf(uid) < 0 && all.indexOf(uid) === index;
+    });
+    var emptyMembers = members.filter(function (member) { return !member.uid && !member.name && !member.manualId; });
+    if (freeUids.length && freeUids.length === emptyMembers.length) emptyMembers.forEach(function (member, index) { member.uid = freeUids[index]; });
     function safeStoredName(value) {
       value = String(value || '').trim();
       return value && !/jogador sem perfil|^[A-Za-z0-9_-]{20,}$/.test(value) ? value : '';

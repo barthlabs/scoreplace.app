@@ -903,6 +903,14 @@ function initRouter() {
           return;
         }
         break;
+      case 'tournament-claim':
+        if (typeof window.renderTournamentClaimPage === 'function') {
+          window.renderTournamentClaimPage(viewContainer, param, parts[2], parts[3]);
+        } else {
+          window.location.replace('#dashboard');
+          return;
+        }
+        break;
       case 'privacy':
         if (typeof window.renderPrivacy === 'function') {
           window.renderPrivacy(viewContainer);

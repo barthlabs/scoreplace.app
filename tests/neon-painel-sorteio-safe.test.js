@@ -32,6 +32,14 @@ sandbox.document.createElement = () => {
 if (!W._showTeamCompetitionDrawReview(tournament.id, { _canonicalRosterLoaded:true }) || !overlay) {
   throw new Error('Painel Neon não abriu');
 }
+const backAt = overlay.innerHTML.indexOf('id="team-draw-cancel-top"');
+const drawAt = overlay.innerHTML.indexOf('id="team-draw-confirm"');
+const contentAt = overlay.innerHTML.indexOf('<style>');
+if (backAt < 0 || drawAt <= backAt || drawAt >= contentAt ||
+    (overlay.innerHTML.match(/id="team-draw-confirm"/g) || []).length !== 1 ||
+    overlay.innerHTML.includes('<div style="display:flex;justify-content:flex-end;"><button type="button" id="team-draw-confirm"')) {
+  throw new Error('Voltar e Sortear devem aparecer uma única vez, nessa ordem, no cabeçalho fixo');
+}
 if (/<select data-pair-day=|<label class="sp-team-pair-card"|Confirme o dia de cada dupla/.test(overlay.innerHTML)) {
   throw new Error('Painel ainda oferece atribuição manual de dia');
 }
@@ -43,7 +51,7 @@ if (/uid-(?:first|second)-/.test(visibleHtml)) throw new Error('UID cru vazou no
 const savedOrigin = participants[0].originCategoryLabel;
 participants[0].originCategoryLabel = '';
 W._showTeamCompetitionDrawReview(tournament.id, { _canonicalRosterLoaded:true });
-if (!/não têm categoria de inscrição original registrada/.test(overlay.innerHTML) || !/disabled aria-disabled="true"/.test(overlay.innerHTML)) {
+if (!/não têm categoria de inscrição original registrada/.test(overlay.innerHTML) || !/id="team-draw-confirm"[^>]*disabled aria-disabled="true"/.test(overlay.innerHTML)) {
   throw new Error('Elenco legado sem origem deve bloquear com motivo específico, sem inventar o dia');
 }
 participants[0].originCategoryLabel = savedOrigin;

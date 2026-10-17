@@ -10,6 +10,8 @@
     else if (name === 'createManualClaimInvite') request = window._callCF('createManualClaimInvite', data, 'Entre para reconhecer sua inscrição.');
     else if (name === 'previewManualClaimInvite') request = window._callCF('previewManualClaimInvite', data, 'Entre para reconhecer sua inscrição.');
     else if (name === 'acceptManualClaimInvite') request = window._callCF('acceptManualClaimInvite', data, 'Entre para reconhecer sua inscrição.');
+    else if (['createTournamentClaimLink', 'previewTournamentClaimLink', 'acceptTournamentClaimLink'].indexOf(name) !== -1)
+      request = window._callCF(name, data, 'Entre para reconhecer sua vaga.');
     else return Promise.reject(new Error('Operação de convite desconhecida'));
     return request.then(function (response) { return response.data; });
   }
@@ -131,5 +133,112 @@
         list.appendChild(row);
       });
     }).catch(function (error) { if (organizer && organizer.dialog === dialog) dialog.querySelector('[data-invite-list]').textContent = error.message || 'Lista indisponível.'; });
+  };
+
+  var shared = null;
+  window.addEventListener('hashchange', function () {
+    if (String(location.hash || '').indexOf('#tournament-claim/') !== 0) shared = null;
+  });
+  function sharedPage() { return document.getElementById('sp-tournament-claim-page'); }
+  function sharedStatus(value) {
+    var node = sharedPage() && sharedPage().querySelector('[data-shared-status]');
+    if (node) node.textContent = value;
+  }
+  window.renderTournamentClaimPage = function (container, rawTournamentId, rawToken, rawSandbox) {
+    var tournamentId = safeId(rawTournamentId), token = String(rawToken || '');
+    var sandbox = rawSandbox === 'sandbox';
+    if (token && auth() && /^[a-f0-9]{64}$/.test(token)) {
+      shared = { tournamentId: tournamentId, token: token, sandbox: sandbox, busy: false };
+      history.replaceState(null, '', location.pathname + location.search + '#tournament-claim/' + encodeURIComponent(tournamentId));
+    }
+    var current = shared && shared.tournamentId === tournamentId ? shared : null;
+    var header = typeof window._renderBackHeader === 'function' ? window._renderBackHeader({
+      href: '#dashboard', label: 'Voltar', middleHtml: '<span>Reconhecer vaga no torneio</span>'
+    }) : '';
+    container.innerHTML = header + '<main id="sp-tournament-claim-page" class="sp-claim-page">' +
+      '<h1>Reconhecer minha dupla</h1>' +
+      (!auth() ? '<p>Entre ou crie sua conta para conferir sua vaga.</p><button type="button" class="btn btn-primary" data-shared-login>Entrar ou criar conta</button>' :
+        (!current ? '<p>O link não está mais nesta sessão. Reabra o link enviado pelo organizador.</p>' :
+          '<p data-shared-status>Conferindo sua dupla…</p><div data-shared-details></div>')) + '</main>';
+    if (typeof window._reflowChrome === 'function') window._reflowChrome();
+    var login = sharedPage() && sharedPage().querySelector('[data-shared-login]');
+    if (login) login.addEventListener('click', function () { if (typeof openModal === 'function') openModal('modal-login'); });
+    if (!current) return;
+    if (current.preview) { showSharedPreview(current); return; }
+    call('previewTournamentClaimLink', { tournamentId: tournamentId, token: current.token, sandbox: current.sandbox })
+      .then(function (result) { if (shared !== current || !sharedPage()) return; current.preview = result; showSharedPreview(current); })
+      .catch(function (error) { if (shared === current) sharedStatus(error.message || 'Link indisponível.'); });
+  };
+  function showSharedPreview(current) {
+    if (!sharedPage() || shared !== current) return;
+    var details = sharedPage().querySelector('[data-shared-details]');
+    if (!details) return;
+    var preview = current.preview;
+    if (preview.alreadyRegistered) {
+      sharedStatus('Você já está nesta dupla.');
+      details.innerHTML = '<div class="sp-claim-person"><strong>' + esc(preview.tournamentName) + '</strong><span>' +
+        esc(preview.pair.categoryId) + ' · ' + esc(preview.pair.name) + ' + ' + esc(preview.pair.partnerName) + '</span></div>';
+      return;
+    }
+    var candidates = Array.isArray(preview.candidates) ? preview.candidates : [];
+    if (!candidates.length) {
+      sharedStatus('Nenhuma vaga com seu nome de perfil foi encontrada. Peça ao organizador para conferir o nome digitado na Análise.');
+      return;
+    }
+    sharedStatus('Confira a dupla antes de vincular sua conta.');
+    details.innerHTML = '<p>' + esc(preview.tournamentName) + '</p>' + candidates.map(function (item, i) {
+      return '<div class="sp-claim-person"><strong>' + esc(item.name) + '</strong><span>' + esc(item.categoryId) +
+        ' · Parceiro(a): ' + esc(item.partnerName) + '</span><button type="button" class="btn btn-primary" data-shared-choice="' +
+        i + '">Sou esta pessoa — ocupar vaga</button></div>';
+    }).join('');
+    details.querySelectorAll('[data-shared-choice]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        if (current.busy) return;
+        var selected = candidates[Number(button.getAttribute('data-shared-choice'))];
+        if (!selected) return;
+        current.busy = true;
+        details.querySelectorAll('button').forEach(function (item) { item.disabled = true; });
+        sharedStatus('Vinculando sua conta…');
+        call('acceptTournamentClaimLink', { tournamentId: current.tournamentId, token: current.token,
+          sandbox: current.sandbox, manualParticipantId: selected.manualParticipantId })
+          .then(function (result) {
+            if (shared !== current || !sharedPage()) return;
+            current.preview = { alreadyRegistered: true, pair: result.pair, tournamentName: preview.tournamentName };
+            current.token = ''; showSharedPreview(current);
+          }).catch(function (error) {
+            if (shared !== current || !sharedPage()) return;
+            current.busy = false;
+            sharedStatus(error.message || 'Não foi possível ocupar a vaga.');
+            details.querySelectorAll('button').forEach(function (item) { item.disabled = false; });
+          });
+      });
+    });
+  }
+
+  window._openTournamentClaimLink = function (tournamentId, sandbox) {
+    var old = document.getElementById('sp-shared-claim-dialog'); if (old) old.remove();
+    var dialog = document.createElement('div'); dialog.id = 'sp-shared-claim-dialog'; dialog.className = 'sp-manual-invites-dialog';
+    dialog.setAttribute('role', 'dialog'); dialog.setAttribute('aria-modal', 'true'); dialog.setAttribute('aria-label', 'Link de reconhecimento de vagas');
+    dialog.innerHTML = '<div class="sp-manual-invites-panel"><header><h2>Vincular contas às vagas</h2><button type="button" data-close aria-label="Fechar">×</button></header>' +
+      '<p>Um link para todas as pessoas já inscritas. Compartilhe apenas com elas: nome de perfil não é prova de identidade. Gerar outro link revoga este.</p>' +
+      '<div data-result role="status">Gerando link…</div></div>';
+    document.body.appendChild(dialog);
+    dialog.querySelector('[data-close]').addEventListener('click', function () { dialog.remove(); });
+    dialog.addEventListener('click', function (event) { if (event.target === dialog) dialog.remove(); });
+    call('createTournamentClaimLink', { tournamentId: tournamentId, sandbox: !!sandbox }).then(function (created) {
+      if (!dialog.isConnected) return;
+      var url = (window.SCOREPLACE_URL || location.origin) + '/#tournament-claim/' + encodeURIComponent(tournamentId) + '/' +
+        created.token + (sandbox ? '/sandbox' : '');
+      var result = dialog.querySelector('[data-result]'); result.textContent = '';
+      var field = document.createElement('input'); field.type = 'text'; field.readOnly = true;
+      field.className = 'sp-manual-invite-link'; field.value = url; field.setAttribute('aria-label', 'Link de reconhecimento das vagas');
+      var copy = document.createElement('button'); copy.type = 'button'; copy.className = 'btn btn-primary'; copy.textContent = 'Copiar link';
+      copy.addEventListener('click', function () {
+        if (!navigator.clipboard || !navigator.clipboard.writeText) { field.select(); return; }
+        navigator.clipboard.writeText(url).then(function () { copy.textContent = 'Link copiado'; })
+          .catch(function () { field.select(); copy.textContent = 'Selecione e copie o link'; });
+      });
+      result.appendChild(field); result.appendChild(copy);
+    }).catch(function (error) { if (dialog.isConnected) dialog.querySelector('[data-result]').textContent = error.message || 'Não foi possível gerar o link.'; });
   };
 })();

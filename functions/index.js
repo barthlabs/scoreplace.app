@@ -102,6 +102,7 @@ const _registrationBatchPlan = require("./registration-batch-plan-core");
 const _registrationBatchApply = require("./registration-batch-apply-core");
 const _registrationMutations = require("./registration-mutations-core");
 const _registrationClaim = require("./registration-claim-core");
+const _manualClaimLink = require("./manual-claim-link-core");
 const _canonicalRegistrationBoundary = require("./canonical-registration-boundary-core");
 const _canonicalEnrollment = require("./canonical-enrollment-core");
 const _tournamentImport = require("./tournament-import-core");
@@ -4418,9 +4419,34 @@ function _isTournamentOrgCaller(t, callerUid) {
 
 function _hasCanonicalTournamentDraw(tournament) {
   const t = tournament || {};
-  return [t.matches, t.rounds, t.groups, t.phaseRounds].some((value) => (
+  return [t.matches, t.rounds, t.groups, t.grupos, t.phaseRounds].some((value) => (
     Array.isArray(value) ? value.length > 0 : (value && typeof value === "object" && Object.keys(value).length > 0)
   ));
+}
+
+// A parte de jogos é dividida; olhar somente o pai permite vincular uma vaga
+// depois da publicação. `grupos` não faz parte de partesDe e exige query própria.
+async function _manualClaimReadState(tx, ref, raw) {
+  const tournament = await _splitParts.hidratar(tx, ref, raw, ['matches']);
+  const [groups, privateDraw] = await Promise.all([
+    tx.get(ref.collection(_tSplitFn.colecaoDaParte('grupos')).limit(1)),
+    tx.get(ref.collection('privateDraws').doc('initial')),
+  ]);
+  return { tournament, hasPublishedDraw: _hasCanonicalTournamentDraw(tournament) || !groups.empty,
+    privateDraw: privateDraw.exists ? privateDraw.data() : null, privateDrawRef: ref.collection('privateDraws').doc('initial') };
+}
+function _manualClaimGuard(state, allowPrivate) {
+  const pending = state.tournament.pendingDraw;
+  if (state.hasPublishedDraw) throw new HttpsError('failed-precondition', 'vínculo indisponível após publicar a chave');
+  if (!pending) {
+    if (state.privateDraw) throw new HttpsError('failed-precondition', 'rascunho inconsistente');
+    return;
+  }
+  if (!allowPrivate || pending.kind !== 'initial' || pending.private !== true ||
+      !state.privateDraw || state.privateDraw.kind !== 'initial' || !state.privateDraw.draft ||
+      !Array.isArray(state.privateDraw.draft.participants) || !Array.isArray(state.privateDraw.draft.matches)) {
+    throw new HttpsError('failed-precondition', 'vínculo indisponível neste estado do sorteio');
+  }
 }
 
 /* Uma materialização não pode deixar duas fontes concorrentes de verdade.
@@ -4879,8 +4905,10 @@ exports.requestCanonicalParticipantClaim = onCall(
       if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
       const tournament = snap.data() || {};
       if (!_isTournamentOrgCaller(tournament, callerUid)) throw new HttpsError("permission-denied", "só a organização pede o vínculo");
-      if (!_hasCanonicalTournamentDraw(tournament)) {
-        const checked = await _loadCanonicalRosterForMutation(tx, ref, tournament);
+      const state = await _manualClaimReadState(tx, ref, tournament);
+      _manualClaimGuard(state, false);
+      if (!state.hasPublishedDraw) {
+        const checked = await _loadCanonicalRosterForMutation(tx, ref, state.tournament);
         const exists = checked.registrations.some((item) => item.participantKind === "manual" && item.manualParticipantId === manualParticipantId && item.status !== "withdrawn");
         if (!exists) throw new HttpsError("not-found", "vaga manual ativa não encontrada");
       } else throw new HttpsError("failed-precondition", "vínculo de identidade só é permitido antes do sorteio");
@@ -4911,8 +4939,9 @@ exports.resolveCanonicalParticipantClaim = onCall(
       if (claim.accountUid !== callerUid) throw new HttpsError("permission-denied", "só a conta indicada decide o vínculo");
       const remaining = claims.filter((item) => item && item.id !== claimId);
       if (action === "reject") { tx.update(ref, { pendingCanonicalParticipantClaims: remaining, updatedAt: _FV.serverTimestamp() }); return { ok: true, changed: true, action }; }
-      if (_hasCanonicalTournamentDraw(tournament)) throw new HttpsError("failed-precondition", "vínculo de identidade só é permitido antes do sorteio");
-      const checked = await _loadCanonicalRosterForMutation(tx, ref, tournament);
+      const state = await _manualClaimReadState(tx, ref, tournament);
+      _manualClaimGuard(state, false);
+      const checked = await _loadCanonicalRosterForMutation(tx, ref, state.tournament);
       let changes; try { changes = _registrationClaim.claimManualParticipant(tournamentId, checked.registrations, claim.manualParticipantId, callerUid); }
       catch (error) { throw new HttpsError("failed-precondition", error.message); }
       _writeCanonicalRosterChanges(tx, ref, tournament, checked.registrations, changes, { pendingCanonicalParticipantClaims: remaining });
@@ -4974,7 +5003,8 @@ exports.listManualClaimInvites = onCall(
       if (!snap.exists) throw new HttpsError('not-found', 'torneio não existe');
       const tournament = snap.data() || {};
       if (!_isTournamentOrgCaller(tournament, callerUid)) throw new HttpsError('permission-denied', 'somente a organização pode ver estas vagas');
-      const checked = await _loadCanonicalRosterForMutation(tx, ref, tournament);
+      const state = await _manualClaimReadState(tx, ref, tournament);
+      const checked = await _loadCanonicalRosterForMutation(tx, ref, state.tournament);
       const counts = new Map();
       checked.registrations.filter((item) => item.participantKind === 'manual' && _manualClaimActive(item))
         .forEach((item) => counts.set(item.manualParticipantId, (counts.get(item.manualParticipantId) || 0) + 1));
@@ -4983,7 +5013,7 @@ exports.listManualClaimInvites = onCall(
         String(item.manualDisplayName || '').trim() && !/^Jogador\s*\d+$/i.test(String(item.manualDisplayName || '').trim()))
         .map((item) => ({ manualParticipantId: item.manualParticipantId,
           name: String(item.manualDisplayName).trim(), categoryId: item.categoryId }));
-      return { people, canInvite: !_hasCanonicalTournamentDraw(tournament) };
+      return { people, canInvite: !state.hasPublishedDraw && !state.tournament.pendingDraw && !state.privateDraw };
     });
   }
 );
@@ -5004,8 +5034,9 @@ exports.createManualClaimInvite = onCall(
       if (!snap.exists) throw new HttpsError('not-found', 'torneio não existe');
       const tournament = snap.data() || {};
       if (!_isTournamentOrgCaller(tournament, callerUid)) throw new HttpsError('permission-denied', 'somente a organização cria convites');
-      if (_hasCanonicalTournamentDraw(tournament)) throw new HttpsError('failed-precondition', 'vínculo indisponível após o sorteio');
-      const checked = await _loadCanonicalRosterForMutation(tx, ref, tournament);
+      const state = await _manualClaimReadState(tx, ref, tournament);
+      _manualClaimGuard(state, false);
+      const checked = await _loadCanonicalRosterForMutation(tx, ref, state.tournament);
       const manual = _manualClaimRecord(checked.registrations, manualParticipantId);
       const claims = Array.isArray(tournament.pendingCanonicalParticipantClaims) ? tournament.pendingCanonicalParticipantClaims : [];
       const remaining = claims.filter((item) => item && item.manualParticipantId !== manualParticipantId);
@@ -5028,9 +5059,10 @@ exports.previewManualClaimInvite = onCall(
       const [snap, inviteSnap] = await Promise.all([tx.get(ref), tx.get(_manualClaimInviteRef(ref, manualParticipantId))]);
       if (!snap.exists) throw new HttpsError('not-found', 'torneio não existe');
       const tournament = snap.data() || {};
-      if (_hasCanonicalTournamentDraw(tournament)) throw new HttpsError('failed-precondition', 'vínculo indisponível após o sorteio');
+      const state = await _manualClaimReadState(tx, ref, tournament);
+      _manualClaimGuard(state, false);
       _manualClaimValidInvite(inviteSnap.exists ? inviteSnap.data() : null, token, manualParticipantId);
-      const checked = await _loadCanonicalRosterForMutation(tx, ref, tournament);
+      const checked = await _loadCanonicalRosterForMutation(tx, ref, state.tournament);
       const manual = _manualClaimRecord(checked.registrations, manualParticipantId);
       return { tournamentName: String(tournament.name || 'Torneio'), name: String(manual.manualDisplayName).trim(), categoryId: manual.categoryId };
     });
@@ -5049,9 +5081,10 @@ exports.acceptManualClaimInvite = onCall(
       const [snap, inviteSnap] = await Promise.all([tx.get(ref), tx.get(inviteRef)]);
       if (!snap.exists) throw new HttpsError('not-found', 'torneio não existe');
       const tournament = snap.data() || {};
-      if (_hasCanonicalTournamentDraw(tournament)) throw new HttpsError('failed-precondition', 'vínculo indisponível após o sorteio');
+      const state = await _manualClaimReadState(tx, ref, tournament);
+      _manualClaimGuard(state, false);
       _manualClaimValidInvite(inviteSnap.exists ? inviteSnap.data() : null, token, manualParticipantId);
-      const checked = await _loadCanonicalRosterForMutation(tx, ref, tournament);
+      const checked = await _loadCanonicalRosterForMutation(tx, ref, state.tournament);
       _manualClaimRecord(checked.registrations, manualParticipantId);
       if (checked.registrations.some((item) => item.participantKind === 'account' &&
           item.participantUid === callerUid && _manualClaimActive(item))) {
@@ -5065,6 +5098,142 @@ exports.acceptManualClaimInvite = onCall(
       _writeCanonicalRosterChanges(tx, ref, tournament, checked.registrations, changes, { pendingCanonicalParticipantClaims: remaining });
       tx.update(inviteRef, { consumedAt: _FV.serverTimestamp(), consumedByUid: callerUid });
       return { ok: true, outcome: changes.outcome, tournamentId };
+    });
+  }
+);
+
+// Um único link compartilhável por torneio. O token não é consumido por uma
+// pessoa; cada vaga manual, porém, só pode ser ocupada uma vez na transação.
+function _sharedClaimInput(data, withToken) {
+  const tournamentId = String(data && data.tournamentId || '').trim();
+  const token = String(data && data.token || '').trim();
+  const sandbox = data && data.sandbox === true;
+  if (!tournamentId || tournamentId.length > 180 || tournamentId.includes('/') ||
+      sandbox !== tournamentId.startsWith('sb_') ||
+      (withToken && !/^[a-f0-9]{64}$/.test(token))) {
+    throw new HttpsError('invalid-argument', 'link de vaga inválido');
+  }
+  return { tournamentId, token, sandbox };
+}
+function _sharedClaimRef(ref) { return ref.collection('manualClaimInvites').doc('shared'); }
+function _sharedClaimValid(doc, token) {
+  if (!doc || !Number.isSafeInteger(doc.expiresAtMs) || doc.expiresAtMs <= Date.now() ||
+      !_manualClaimTokenMatches(doc, token)) throw new HttpsError('failed-precondition', 'link expirado ou revogado');
+}
+async function _sharedClaimPreview(tx, db, pair, tournament, selfName) {
+  const { entry, partner } = pair;
+  let partnerName = String(partner.manualDisplayName || '').trim();
+  if (partner.participantKind === 'account' && partner.participantUid) {
+    const partnerSnap = await tx.get(db.collection('users').doc(partner.participantUid));
+    partnerName = partnerSnap.exists ? String(partnerSnap.data().displayName || '').trim() : '';
+  }
+  return { manualParticipantId: entry.participantKind === 'manual' ? entry.manualParticipantId : null,
+    name: entry.participantKind === 'manual' ? String(entry.manualDisplayName || '') : String(selfName || ''),
+    partnerName: partnerName || 'Participante cadastrado(a)',
+    categoryId: entry.categoryId, tournamentName: String(tournament.name || 'Torneio') };
+}
+exports.createTournamentClaimLink = onCall(
+  { region: 'us-central1', memory: '256MiB', timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError('unauthenticated', 'login necessário');
+    const { tournamentId, sandbox } = _sharedClaimInput(request.data, false);
+    const db = admin.firestore(), ref = db.collection(sandbox ? 'sandboxes' : 'tournaments').doc(tournamentId);
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAtMs = Date.now() + 14 * 24 * 60 * 60 * 1000;
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new HttpsError('not-found', 'torneio não existe');
+      const raw = snap.data() || {};
+      if (sandbox) await _sandboxAutorizado(db, snap, callerUid, (sourceRef) => tx.get(sourceRef));
+      else if (raw.isSandbox === true || !_isTournamentOrgCaller(raw, callerUid)) throw new HttpsError('permission-denied', 'somente a organização gera o link');
+      const state = await _manualClaimReadState(tx, ref, raw);
+      _manualClaimGuard(state, true);
+      await _loadCanonicalRosterForMutation(tx, ref, state.tournament, sandbox ? String(raw.sandboxOf) : '');
+      tx.set(_sharedClaimRef(ref), { tokenHash: crypto.createHash('sha256').update(token).digest('hex'),
+        expiresAtMs, createdByUid: callerUid, createdAt: _FV.serverTimestamp() });
+    });
+    return { token, expiresAtMs, tournamentId, sandbox };
+  }
+);
+
+exports.previewTournamentClaimLink = onCall(
+  { region: 'us-central1', memory: '256MiB', timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError('unauthenticated', 'login necessário');
+    const { tournamentId, token, sandbox } = _sharedClaimInput(request.data, true);
+    const db = admin.firestore(), ref = db.collection(sandbox ? 'sandboxes' : 'tournaments').doc(tournamentId);
+    return db.runTransaction(async (tx) => {
+      const [snap, inviteSnap, profileSnap] = await Promise.all([
+        tx.get(ref), tx.get(_sharedClaimRef(ref)), tx.get(db.collection('users').doc(callerUid))
+      ]);
+      if (!snap.exists) throw new HttpsError('not-found', 'torneio não existe');
+      const raw = snap.data() || {};
+      if (sandbox && (raw.isSandbox !== true || raw.sbState !== 'ready' || raw.notificationsMuted !== true)) throw new HttpsError('not-found', 'torneio não existe');
+      if (!sandbox && raw.isSandbox === true) throw new HttpsError('not-found', 'torneio não existe');
+      _sharedClaimValid(inviteSnap.exists ? inviteSnap.data() : null, token);
+      const state = await _manualClaimReadState(tx, ref, raw);
+      _manualClaimGuard(state, true);
+      const checked = await _loadCanonicalRosterForMutation(tx, ref, state.tournament, sandbox ? String(raw.sandboxOf) : '');
+      let existing, candidates;
+      try {
+        existing = _manualClaimLink.existingPair(checked.registrations, callerUid);
+        candidates = existing ? [] : _manualClaimLink.suggestions(checked.registrations, profileSnap.exists && profileSnap.data().displayName);
+      } catch (error) { throw new HttpsError('failed-precondition', error.message); }
+      const pairPreview = existing ? await _sharedClaimPreview(tx, db, existing, state.tournament, profileSnap.exists && profileSnap.data().displayName) : null;
+      const candidatePreviews = await Promise.all(candidates.map((item) => _sharedClaimPreview(tx, db, item, state.tournament)));
+      return { alreadyRegistered: !!existing, pair: pairPreview,
+        candidates: candidatePreviews,
+        tournamentName: String(state.tournament.name || 'Torneio') };
+    });
+  }
+);
+
+exports.acceptTournamentClaimLink = onCall(
+  { region: 'us-central1', memory: '256MiB', timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError('unauthenticated', 'login necessário');
+    const { tournamentId, token, sandbox } = _sharedClaimInput(request.data, true);
+    const manualParticipantId = String(request.data && request.data.manualParticipantId || '').trim();
+    if (!manualParticipantId || manualParticipantId.includes('/') || manualParticipantId.length > 240) throw new HttpsError('invalid-argument', 'vaga inválida');
+    const db = admin.firestore(), ref = db.collection(sandbox ? 'sandboxes' : 'tournaments').doc(tournamentId);
+    return db.runTransaction(async (tx) => {
+      const [snap, inviteSnap, profileSnap] = await Promise.all([
+        tx.get(ref), tx.get(_sharedClaimRef(ref)), tx.get(db.collection('users').doc(callerUid))
+      ]);
+      if (!snap.exists) throw new HttpsError('not-found', 'torneio não existe');
+      const raw = snap.data() || {};
+      if (sandbox && (raw.isSandbox !== true || raw.sbState !== 'ready' || raw.notificationsMuted !== true)) throw new HttpsError('not-found', 'torneio não existe');
+      if (!sandbox && raw.isSandbox === true) throw new HttpsError('not-found', 'torneio não existe');
+      _sharedClaimValid(inviteSnap.exists ? inviteSnap.data() : null, token);
+      const state = await _manualClaimReadState(tx, ref, raw);
+      _manualClaimGuard(state, true);
+      const logicalId = sandbox ? String(raw.sandboxOf) : tournamentId;
+      const checked = await _loadCanonicalRosterForMutation(tx, ref, state.tournament, sandbox ? logicalId : '');
+      let pair;
+      try {
+        if (_manualClaimLink.existingPair(checked.registrations, callerUid)) throw new Error('sua conta já ocupa uma dupla');
+        const candidates = _manualClaimLink.suggestions(checked.registrations, profileSnap.exists && profileSnap.data().displayName);
+        pair = candidates.find((item) => item.entry.manualParticipantId === manualParticipantId);
+        if (!pair) throw new Error('vaga não corresponde mais ao seu perfil');
+      } catch (error) { throw new HttpsError('failed-precondition', error.message); }
+      let changes;
+      try { changes = _registrationClaim.claimManualParticipant(logicalId, checked.registrations, manualParticipantId, callerUid); }
+      catch (error) { throw new HttpsError('failed-precondition', error.message); }
+      const target = changes.creates.concat(changes.updates).find((item) => item.participantKind === 'account' && item.participantUid === callerUid && item.fixedPairId);
+      if (!target) throw new HttpsError('failed-precondition', 'dupla resultante indisponível');
+      const pairPreview = await _sharedClaimPreview(tx, db, { entry: target, partner: pair.partner }, state.tournament,
+        profileSnap.exists && profileSnap.data().displayName);
+      if (state.privateDraw) {
+        let draft;
+        try { draft = _manualClaimLink.replaceDraftIdentity(state.privateDraw.draft, manualParticipantId, pair.entry.fixedPairId, target.fixedPairId, callerUid); }
+        catch (error) { throw new HttpsError('failed-precondition', error.message); }
+        tx.update(state.privateDrawRef, { draft, updatedAt: _FV.serverTimestamp() });
+      }
+      _writeCanonicalRosterChanges(tx, ref, state.tournament, checked.registrations, changes, null, sandbox ? logicalId : '');
+      return { ok: true, pair: pairPreview };
     });
   }
 );
