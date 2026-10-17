@@ -1,3 +1,10 @@
+## 2.4.86 — 17/out/2026 (edição de vagas e busca na Análise)
+
+- Um selo “3” identifica, na Análise, cada dupla em categoria feminina cuja inscrição canônica veio de categoria masculina. A marca usa a origem registrada dos dois integrantes e não altera inscrições.
+- O organizador pode corrigir o nome de uma vaga manual ou substituir uma conta com UID por outra pessoa antes da publicação da chave. A substituição retira apenas a inscrição daquela vaga, conserva o perfil da conta e atualiza a dupla e o rascunho privado de jogos em uma transação. No sandbox, somente a cópia privada é alterada.
+- Na busca da Análise, aparecem apenas pessoas correspondentes e a dupla de cada achado, enquanto todas as categorias seguem disponíveis para arrastar e realocar.
+- Uma correção pontual de nome foi feita separadamente no sandbox Neon; este release não altera automaticamente as categorias nem as inscrições do torneio original em produção.
+
 ## 2.4.79 — 16/out/2026 (sorteio Neon no sandbox)
 
 - O sorteio por equipes aceita o elenco canônico de 128 pessoas/64 duplas: 24 Feminino Light e oito duplas em cada uma das outras cinco categorias. O organizador confirma quais 16 duplas Light jogam na quinta-feira e quais oito jogam na sexta-feira antes do sorteio; cada time recebe duas na quinta e uma na sexta.

@@ -1,3 +1,7 @@
+// 2.4.86 — A Análise identifica com "3" a dupla feminina transferida de categoria masculina. Permite ao organizador corrigir nomes digitados e substituir
+// uma pessoa vinculada por UID em uma vaga antes de publicar a chave, sem renomear
+// o perfil dela. A busca mostra só os participantes correspondentes, preserva a
+// dupla no resultado e mantém todas as categorias visíveis para realocação.
 // 2.4.85 — O sorteio distribui as duplas por dia e mantém o botão Sortear no cabeçalho.
 // A agenda identifica time e número da dupla, permite revelar todos os nomes de uma vez
 // e sinaliza jogos sem horário dentro dos dias configurados. O organizador pode gerar um

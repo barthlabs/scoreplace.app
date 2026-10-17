@@ -45,10 +45,12 @@ sec(function () {
   // Uma dupla agora é um card único, mas vale por duas pessoas no total da caixa.
   // O contrato da busca é usar o total efetivamente exibido, não apenas os solos.
   ok(/data-er-box="1" data-er-gender="'/.test(SRC) && /data-er-total="' \+ boxTotal/.test(SRC), 'cada caixa de categoria carrega gênero e o total real, incluindo duplas');
+  ok(/data-er-person="' \+ _esc\(a\.name \+ ' ' \+ b\.name\)/.test(SRC), 'card da dupla indexa os dois nomes para a busca');
+  ok(/!q \|\| _norm\(r\.name\)\.indexOf\(q\) !== -1/.test(SRC), 'índice lista só a pessoa buscada, sem incluir parceiro por contexto');
   ok(/<span data-er-count/.test(SRC), 'a contagem do título é marcada (vira "x de N" enquanto filtra)');
 });
 
-// ── 3. O FILTRO: esconde quem não casa, some com caixa vazia, não mente na conta ─
+// ── 3. O FILTRO: esconde quem não casa, mantém destinos vazios, não mente na conta ─
 sec(function () {
   // DOM mínimo com o MESMO markup que chip()/catBox() emitem.
   const feito = {};
@@ -63,7 +65,10 @@ sec(function () {
       return out;
     },
   });
-  const pessoa = (n, g, s) => el({ 'data-er-person': n, 'data-er-gender': g, 'data-er-skill': s });
+  const orders = { 'Erika de Paula': 1, 'Kelly Barth': 2, 'Nádia Santiago Lazarin': 3,
+    danielacsimao: 4, 'Carol Capucho': 5, 'Livia Morais': 6 };
+  const pessoa = (n, g, s) => el({ 'data-er-person': n, 'data-er-order': String(orders[n] || ''),
+    'data-er-gender': g, 'data-er-skill': s });
   const caixa = (arr) => el({ 'data-er-box': '1', 'data-er-total': String(arr.length) },
     [el({ 'data-er-count': '' })].concat(arr.map((n) => pessoa(n, 'feminino', 'Light'))));
   const raiz = el({ id: 'er-cat-matrix' }, [
@@ -73,14 +78,19 @@ sec(function () {
   raiz.filhos.forEach(function (c) { c.querySelector('[data-er-count]').textContent = ''; });
   const campo = { value: '', style: {} };
   const vazio = { style: { display: 'none' } };
+  const index = { items: [], appendChild: function (item) { this.items.push(item); } };
+  Object.defineProperty(index, 'textContent', { set: function () { this.items = []; } });
 
   const win = {};
   global.window = win;
   win.document = {
     getElementById: function (id) { return id === 'er-mx-search' ? campo : id === 'er-cat-matrix' ? raiz : id === 'er-mx-search-empty' ? vazio : null; },
-    querySelector: function () { return null; },
+    querySelector: function (selector) { return selector === '#er-mx-competitor-index [data-er-index-list]' ? index : null; },
+    createElement: function () { return { dataset: {}, style: {} }; },
   };
   win._filterBarState = { analise: { gender: 'all', skill: 'all', sort: 'order-asc' } };
+  win._liveState = { rows: ['Erika de Paula', 'Kelly Barth', 'Nádia Santiago Lazarin', 'danielacsimao', 'Carol Capucho', 'Livia Morais']
+    .map(function (name, i) { return { name: name, order: i + 1 }; }) };
   global.document = win.document;
   // extrai a função REAL do arquivo (contagem de chaves) + o _norm que ela usa
   function extrai(marca) {
@@ -98,10 +108,22 @@ sec(function () {
   campo.value = 'dani';
   win._erApplyMatrixFilter();
   ok(visiveis().length === 1 && visiveis()[0] === 'danielacsimao', 'buscar "dani" deixa só a danielacsimao, deixou: ' + visiveis().join(', '));
-  ok(caixasVisiveis() === 1, 'a caixa sem ninguém visível SOME (não fica caixa vazia poluindo), visíveis: ' + caixasVisiveis());
+  ok(index.items.length === 1 && index.items[0].textContent === 'danielacsimao', 'índice lateral lista apenas a pessoa que corresponde à busca');
+  ok(caixasVisiveis() === 2, 'todas as categorias continuam visíveis para receber a dupla arrastada');
   const conts = raiz.querySelectorAll('[data-er-count]').map((e) => e.textContent);
   ok(conts.indexOf('(1 de 3)') !== -1, 'a contagem vira "(1 de 3)" — não mente o total enquanto filtra: ' + conts.join(' '));
   ok(vazio.style.display === 'none', 'com resultado, o aviso de "ninguém encontrado" fica escondido');
+
+  const dupla = pessoa('Ana Busca Beatriz Parceira', 'feminino', 'Light');
+  dupla.attrs['data-er-member-orders'] = '7,8';
+  win._liveState.rows.push({ name: 'Ana Busca', order: 7 }, { name: 'Beatriz Parceira', order: 8 });
+  raiz.filhos[0].filhos.push(dupla);
+  campo.value = 'beatriz';
+  win._erApplyMatrixFilter();
+  ok(visiveis().length === 1 && visiveis()[0] === 'Ana Busca Beatriz Parceira', 'buscar uma integrante preserva o card da dupla inteira');
+  ok(index.items.length === 1 && index.items[0].textContent === 'Beatriz Parceira', 'índice da dupla mostra só a integrante buscada');
+  raiz.filhos[0].filhos.pop();
+  win._liveState.rows.pop(); win._liveState.rows.pop();
 
   campo.value = 'zzz-nao-existe';
   win._erApplyMatrixFilter();
@@ -119,6 +141,13 @@ sec(function () {
   win._filterBarState.analise.skill = 'Light';
   win._erApplyMatrixFilter();
   ok(visiveis().length === 6, 'gênero Fem + categoria Light recuperam os chips sem mudar sua ordem');
+  const homonimo = pessoa('Ana Maria', 'masculino', 'Light');
+  homonimo.attrs['data-er-order'] = '9';
+  win._liveState.rows.push({ name: 'Ana Maria', order: 9 });
+  raiz.filhos[0].filhos.push(homonimo);
+  campo.value = 'ana';
+  win._erApplyMatrixFilter();
+  ok(index.items.length === 0, 'índice não inclui nome de card oculto pelo filtro de gênero');
 });
 
 console.log((fail === 0 ? '✅' : '❌') + ' analise-barra-de-busca: ' + pass + ' asserções, ' + fail + ' falhas');

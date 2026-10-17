@@ -1029,6 +1029,7 @@ const SUITES = [
   'tests/nao-se-desinscreve-do-sorteio.test.js',
   // a busca da Análise existia no código e nunca chegava à tela (função órfã).
   'tests/analise-barra-de-busca.test.js',
+  'tests/analise-marca-dupla-3.test.js',
   'tests/analise-categorias-configuradas.test.js',
   'tests/duplas-rehydrate-drag-ghost.test.js',
   'tests/jogo-so-com-placar.test.js',

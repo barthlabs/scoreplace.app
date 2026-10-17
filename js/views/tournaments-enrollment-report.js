@@ -390,7 +390,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         ];
         members.sort(function (a, b) { return a._registrationOrder - b._registrationOrder; });
         members.forEach(function (m) {
-          out.push(Object.assign(m, { categories: baseCats.slice(), category: p.category || '', categoryId: p.categoryId || '', _fromDupla: true, _duplaIdx: idx }));
+          out.push(Object.assign(m, { categories: baseCats.slice(), category: p.category || '', categoryId: p.categoryId || '', originCategoryId: p.originCategoryId || '', _fromDupla: true, _duplaIdx: idx }));
         });
       } else {
         if (p && typeof p === 'object') {
@@ -527,6 +527,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         ageBuckets: ageBks,
         assigned: assigned,
         categoryId: (p && p.categoryId) || '',
+        originCategoryId: (p && p.originCategoryId) || '',
         assignedSkills: assignedSkills,
         profileSkill: profileSkill,        // skill auto-declarado no perfil
         effectiveSkills: effectiveSkills,  // skill efetivo (assigned > profile)
@@ -1247,6 +1248,17 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // significa exatamente “a dupla ainda aguarda atribuição”.
     return value === '__uncategorized__' ? '' : value;
   }
+  function _erIsTransferredFemalePair(members, t) {
+    if (!members || members.length !== 2 || !t) return false;
+    var origin = String(members[0].originCategoryId || '').trim();
+    if (!origin || origin !== String(members[1].originCategoryId || '').trim()) return false;
+    var defs = Array.isArray(t.categoryDefinitions) ? t.categoryDefinitions : [];
+    // An old/removed category ID is not proof of the pair's original gender.
+    if (!defs.some(function (def) { return def && String(def.id || '').trim() === origin; })) return false;
+    var from = _decomposeCat(_erDisplayCategory(t, origin), t);
+    var to = _decomposeCat(_erPairCategory(members), t);
+    return from.gender === 'Masc' && to.gender === 'Fem';
+  }
   function _erPairCard(members) {
       var a = members[0], b = members[1], pe = _pendingEdits[a.order] || _pendingEdits[b.order] || {};
       var changed = Object.prototype.hasOwnProperty.call(pe, 'category');
@@ -1254,12 +1266,55 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // O X não pode depender de uid: importados sem conta também têm dupla e
       // carregam manualParticipantId. A operação valida a identidade no servidor.
       var split = '<button type="button" class="cancel-x-btn" title="Desfazer dupla" aria-label="Desfazer dupla ' + _esc(a.name + ' e ' + b.name) + '" onclick="event.stopPropagation();window._erSplitPair(' + a.order + ',this)" style="--cx-size:23px;position:absolute;top:7px;right:7px;">✕</button>';
+      var canEdit = !!(_liveState && _liveState.isOrg && _liveState.t && _liveState.t.canonicalRegistrationMigration && _liveState.t.canonicalRegistrationMigration.fingerprint);
+      var thirdPair = _erIsTransferredFemalePair(members, _liveState && _liveState.t);
+      function memberLine(person) {
+        var pencil = canEdit ? '<button type="button" title="Editar esta vaga" aria-label="Editar vaga de ' + _esc(person.name) + '" onclick="event.stopPropagation();window._erEditPairMember(' + person.order + ')" style="background:transparent;border:0;color:var(--text-bright);cursor:pointer;font-size:15px;padding:2px 6px;">✏️</button>' : '';
+        return '<div style="display:flex;align-items:center;min-width:0;font-size:14px;font-weight:750;color:var(--text-bright);line-height:1.25;overflow-wrap:anywhere;">' + _esc(person.name) + pencil + '</div>';
+      }
       var pairCat = _decomposeCat(_erPairCategory(members), _liveState && _liveState.t || {});
-      return '<div draggable="true" data-er-pair-order="' + a.order + '" data-er-person="' + _esc(a.name + ' ' + b.name) + '" data-er-gender="' + (_erPairPlacementGender(members, _liveState && _liveState.t || {}) || '') + '" data-er-skill="' + _esc(pairCat.skill || '') + '" ondragstart="window._erMxPairDragStart(event,' + a.order + ')" onclick="window._erMxPairClick(event,' + a.order + ')" aria-pressed="' + (selected ? 'true' : 'false') + '" title="Arraste a dupla para uma categoria" style="position:relative;cursor:grab;display:flex;flex-direction:column;gap:5px;padding:10px 38px 10px 11px;border:' + (selected ? '2px solid #38bdf8' : ('1px solid ' + (changed ? 'rgba(245,158,11,.65)' : 'rgba(168,85,247,.45)'))) + ';border-radius:9px;background:' + (selected ? 'rgba(14,165,233,0.20)' : (changed ? 'rgba(245,158,11,.07)' : 'rgba(168,85,247,.08)')) + ';user-select:none;">' +
-        '<div style="font-size:14px;font-weight:750;color:var(--text-bright);line-height:1.25;overflow-wrap:anywhere;">' + _esc(a.name) + '</div>' +
-        '<div style="font-size:14px;font-weight:750;color:var(--text-bright);line-height:1.25;overflow-wrap:anywhere;">' + _esc(b.name) + '</div>' + split +
+      return '<div draggable="true" data-er-pair-order="' + a.order + '" data-er-member-orders="' + a.order + ',' + b.order + '" data-er-person="' + _esc(a.name + ' ' + b.name) + '" data-er-gender="' + (_erPairPlacementGender(members, _liveState && _liveState.t || {}) || '') + '" data-er-skill="' + _esc(pairCat.skill || '') + '" ondragstart="window._erMxPairDragStart(event,' + a.order + ')" onclick="window._erMxPairClick(event,' + a.order + ')" aria-pressed="' + (selected ? 'true' : 'false') + '" title="Arraste a dupla para uma categoria" style="position:relative;cursor:grab;display:flex;flex-direction:column;gap:5px;padding:10px 38px 10px 11px;border:' + (selected ? '2px solid #38bdf8' : ('1px solid ' + (changed ? 'rgba(245,158,11,.65)' : 'rgba(168,85,247,.45)'))) + ';border-radius:9px;background:' + (selected ? 'rgba(14,165,233,0.20)' : (changed ? 'rgba(245,158,11,.07)' : 'rgba(168,85,247,.08)')) + ';user-select:none;">' +
+        (thirdPair ? '<span class="badge badge-info" title="Dupla 3: inscrição originalmente masculina" aria-label="Dupla 3" style="align-self:flex-start;">3</span>' : '') + memberLine(a) + memberLine(b) + split +
       '</div>';
   }
+  window._erEditPairMember = function (order) {
+    if (!_liveState || !_liveState.isOrg || !(_liveState.t.canonicalRegistrationMigration || {}).fingerprint) return;
+    var row = (_liveState.rows || []).find(function (item) { return item.order === Number(order); });
+    if (!row || row._duplaIdx == null || !(row.uid || row.manualId) || !row.categoryId) return;
+    var replacing = !!row.uid;
+    if (typeof showInputDialog !== 'function' || typeof window._callCF !== 'function') return;
+    showInputDialog(replacing ? 'Substituir integrante' : 'Corrigir nome da vaga',
+      replacing ? 'A conta de ' + _esc(row.name) + ' sairá desta dupla. Digite o nome de quem ocupará a vaga; o perfil da conta antiga não será alterado.'
+        : 'Digite o nome correto para a vaga de ' + _esc(row.name) + '.',
+      function (value) {
+        var newName = String(value || '').trim();
+        if (newName.length < 2 || newName.length > 120) {
+          if (typeof showNotification === 'function') showNotification('Nome inválido', 'Digite um nome entre 2 e 120 caracteres.', 'warning');
+          return;
+        }
+        function submit() {
+          window._callCF('editCanonicalTournamentSlot', { tournamentId: String(_liveState.t.id),
+            sandbox: _liveState.t.isSandbox === true, uid: row.uid || '', manualParticipantId: row.manualId || '',
+            categoryId: (typeof window._canonicalCategoryIdForDisplay === 'function'
+              ? (window._canonicalCategoryIdForDisplay(_liveState.t, row.categoryId) || row.categoryId)
+              : row.categoryId), expectedName: row.name, newName: newName },
+          'Entre na sua conta para editar a vaga.').then(function () {
+            var tId = String(_liveState.t.id);
+            delete _erCanonicalLoaded[tId];
+            delete _erCanonicalRosterById[tId];
+            var container = document.getElementById('view-container');
+            if (container) window.renderEnrollmentReportPage(container, tId);
+            if (typeof showNotification === 'function') showNotification('Vaga atualizada', 'A dupla foi atualizada no torneio.', 'success');
+          }).catch(function (error) {
+            if (typeof showNotification === 'function') showNotification('Não foi possível editar', String((error && error.message) || error), 'error');
+          });
+        }
+        if (replacing && typeof showConfirmDialog === 'function') {
+          showConfirmDialog('Substituir esta conta?', 'A inscrição de ' + _esc(row.name) + ' será retirada desta vaga e substituída por ' + _esc(newName) + '.', submit,
+            function () {}, { type: 'warning', confirmText: 'Substituir', cancelText: 'Cancelar' });
+        } else submit();
+      }, { placeholder: 'Nome completo', okText: replacing ? 'Continuar' : 'Salvar nome' });
+  };
   function _erFormedPairsPanel(rows, t) {
     // Duplas sem categoria ficam no bloco de duplas; depois do drop elas saem
     // daqui e entram no box da categoria, em âmbar até o Salvar confirmar.
@@ -3349,14 +3404,14 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         chips[i].style.display = casa ? '' : 'none';
         if (casa) achou++;
       }
-      // Caixa sem ninguém visível some junto — e a contagem do título passa a dizer
-      // "(x de N)" pra não afirmar um número que a tela não está mostrando.
+      // As caixas permanecem como destinos de drop mesmo sem resultados; apenas
+      // os cards são filtrados. A contagem distingue achados do total real.
       var caixas = raiz.querySelectorAll('[data-er-box]');
       for (var j = 0; j < caixas.length; j++) {
         var vis = caixas[j].querySelectorAll('[data-er-person]');
         var n = 0;
         for (var k = 0; k < vis.length; k++) if (vis[k].style.display !== 'none') n++;
-        caixas[j].style.display = (active && n === 0) ? 'none' : '';
+        caixas[j].style.display = '';
         var cnt = caixas[j].querySelector('[data-er-count]');
         var tot = caixas[j].getAttribute('data-er-total') || '0';
         if (cnt) cnt.textContent = active ? ('(' + n + ' de ' + tot + ')') : ('(' + tot + ')');
@@ -3364,8 +3419,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       var index = document.querySelector('#er-mx-competitor-index [data-er-index-list]');
       if (index && _liveState) {
         var names = (_liveState.rows || []).filter(function (r) {
-          return r && r.name && Array.prototype.some.call(chips, function (chip) {
-            return chip.style.display !== 'none' && _norm(chip.getAttribute('data-er-person') || '').indexOf(_norm(r.name)) !== -1;
+          return r && r.name && (!q || _norm(r.name).indexOf(q) !== -1) && Array.prototype.some.call(chips, function (chip) {
+            return chip.style.display !== 'none' && (chip.getAttribute('data-er-order') === String(r.order) ||
+              (',' + (chip.getAttribute('data-er-member-orders') || '') + ',').indexOf(',' + r.order + ',') !== -1);
           });
         }).slice();
         var sort = barState.sort || 'order-asc';
