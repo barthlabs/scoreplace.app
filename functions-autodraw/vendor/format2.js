@@ -456,8 +456,11 @@
     var first = projected[0] || {};
     var elimination = projected.filter(function (phase) { return phase && phase.kind === 'elimination'; })[0] || null;
     var cfg = defaultConfig(sport || tournament.sport);
-    var savedTeamCompetition = (first && first.teamCompetition) || tournament.teamCompetition ||
-      (tournament.fmt2 && tournament.fmt2.teamCompetition);
+    var savedTeamCompetition = window.ScoreplaceTeamCompetition && window.ScoreplaceTeamCompetition.configurationForTournament
+      ? window.ScoreplaceTeamCompetition.configurationForTournament(tournament)
+      : (tournament.teamCompetition || (first && first.teamCompetition) ||
+        (tournament.fmt2 && tournament.fmt2.teamCompetition));
+    if (!savedTeamCompetition || savedTeamCompetition.enabled !== true) savedTeamCompetition = tournament.teamCompetition || (first && first.teamCompetition) || (tournament.fmt2 && tournament.fmt2.teamCompetition);
     if (savedTeamCompetition && typeof savedTeamCompetition === 'object') {
       cfg.teamCompetition = JSON.parse(JSON.stringify(savedTeamCompetition));
     }

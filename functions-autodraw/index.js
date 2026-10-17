@@ -4437,6 +4437,8 @@ exports.uploadTournamentImage = onCall({ timeoutSeconds: 60, memory: '512MiB' },
   const tipo = String(data.type || '').trim();
   const dataUrl = String(data.dataUrl || '');
   if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  const sandbox = tId.startsWith('sb_');
+  if (data.sandbox !== undefined && data.sandbox !== sandbox) throw new HttpsError('not-found', 'Torneio não encontrado.');
   if (!tId || !['logo', 'cover'].includes(tipo)) throw new HttpsError('invalid-argument', 'Imagem inválida.');
   const match = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl);
   if (!match) throw new HttpsError('invalid-argument', 'Envie uma imagem JPG, PNG ou WebP.');
@@ -4444,16 +4446,19 @@ exports.uploadTournamentImage = onCall({ timeoutSeconds: 60, memory: '512MiB' },
   if (!bytes.length || bytes.length > 5 * 1024 * 1024) {
     throw new HttpsError('invalid-argument', 'A imagem final deve ter no máximo 5 MB.');
   }
-  const ref = db.collection('tournaments').doc(tId);
-  const snap = await ref.get();
-  if (!snap.exists) throw new HttpsError('not-found', 'Torneio não encontrado.');
-  if (!_isTournamentAdmin(snap.data(), uid)) {
-    throw new HttpsError('permission-denied', 'Só a organização pode enviar a imagem do torneio.');
-  }
+  const ref = db.collection(sandbox ? 'sandboxes' : 'tournaments').doc(tId);
+  await db.runTransaction(async tx => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (sandbox) await _assertSandboxDrawOwner(tx, snap, uid);
+    if (!_isTournamentAdmin(snap.data(), uid)) {
+      throw new HttpsError('permission-denied', 'Só a organização pode enviar a imagem do torneio.');
+    }
+  });
   const mime = match[1];
   const ext = mime === 'image/png' ? 'png' : (mime === 'image/webp' ? 'webp' : 'jpg');
   const bucket = getStorage().bucket();
-  const file = bucket.file('tournaments/' + tId + '/' + tipo + '-' + Date.now() + '.' + ext);
+  const file = bucket.file((sandbox ? 'sandboxes/' : 'tournaments/') + tId + '/' + tipo + '-' + Date.now() + '.' + ext);
   const token = randomUUID();
   await file.save(bytes, {
     resumable: false,
@@ -4470,8 +4475,8 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
   const uid = request.auth && request.auth.uid;
   const data = request.data || {};
   const tId = String(data.tournamentId || '').trim();
-  const sandbox = data.sandbox === true;
-  if (sandbox !== tId.startsWith('sb_')) throw new HttpsError('not-found', 'Torneio não encontrado.');
+  const sandbox = tId.startsWith('sb_');
+  if (data.sandbox !== undefined && data.sandbox !== sandbox) throw new HttpsError('not-found', 'Torneio não encontrado.');
   const raw = data.patch;
   if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
   if (!tId || !raw || typeof raw !== 'object' || Array.isArray(raw)) {

@@ -324,7 +324,7 @@ function setupCreateTournamentModal() {
               <input type="hidden" id="edit-tournament-id">
 
               <!-- Nome e Modalidade -->
-              <div class="d-flex gap-2 mb-3">
+              <div class="mb-3" style="display:flex;flex-direction:column;gap:12px;min-width:0;">
                 <div class="form-group full-width">
                   <label class="form-label">${_t('create.nameLabel')}</label>
                   <input type="text" class="form-control" id="tourn-name" placeholder="Ex: Copa de Inverno 2026" required>
@@ -519,7 +519,7 @@ function setupCreateTournamentModal() {
               <!-- Datas da fase (logo abaixo do Formato) — v2.6.46 -->
               <div id="phase-dates-box" style="background:rgba(99,102,241,0.04); border:1px solid rgba(129,140,248,0.18); border-radius:10px; padding:0.6rem 0.4rem; margin-bottom:1rem;">
                 <div style="font-size:0.72rem; color:var(--sp-c-a5b4fc,#a5b4fc); font-weight:700; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:0.5rem; padding-left:0.35rem;">📅 ${_t('create.phaseDatesTitle')}</div>
-                <div class="dates-row" style="display:flex; gap:8px; align-items:stretch; flex-wrap:wrap;">
+                <div class="dates-row" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:8px;align-items:stretch;">
                   <div id="reg-open-date-container" style="flex:1; min-width:0; display:flex; flex-direction:column; background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03)); border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08)); border-radius:10px; padding:8px 6px;">
                     <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">ABERTURA DAS INSCRIÇÕES</div>
                     <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:auto;">
@@ -1834,7 +1834,10 @@ function setupCreateTournamentModal() {
       tourn = window._findTournamentById(editId);
       if (tourn && tourn.fmt2) {
         initCfg = JSON.parse(JSON.stringify(tourn.fmt2));
-        var savedTeamCompetition = (tourn.phases && tourn.phases[0] && tourn.phases[0].teamCompetition) || tourn.teamCompetition;
+        var savedTeamCompetition = window.ScoreplaceTeamCompetition && window.ScoreplaceTeamCompetition.configurationForTournament
+          ? window.ScoreplaceTeamCompetition.configurationForTournament(tourn)
+          : (tourn.teamCompetition || (tourn.phases && tourn.phases[0] && tourn.phases[0].teamCompetition));
+        if (!savedTeamCompetition || savedTeamCompetition.enabled !== true) savedTeamCompetition = tourn.teamCompetition || (tourn.phases && tourn.phases[0] && tourn.phases[0].teamCompetition) || initCfg.teamCompetition;
         if (savedTeamCompetition && typeof savedTeamCompetition === 'object') {
           initCfg.teamCompetition = JSON.parse(JSON.stringify(savedTeamCompetition));
         }

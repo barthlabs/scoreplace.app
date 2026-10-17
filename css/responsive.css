@@ -1191,6 +1191,17 @@ body.hamburger-open #header-notif-bell { display: none !important; }
   }
 }
 
+.dates-row > div > div:last-child {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: end;
+}
+.dates-row input[type="date"], .dates-row input[type="time"] {
+  width: 100% !important;
+  min-width: 0 !important;
+  font-size: .8rem !important;
+}
+
 /* ====================================================
    COURTS ROW — side by side on desktop/tablet/landscape,
    stacked on portrait mobile

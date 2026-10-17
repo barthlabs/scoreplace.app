@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.4.82';
+window.SCOREPLACE_VERSION = '2.4.83';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -2538,7 +2538,7 @@ window._formatLabel = function (t) {
     // upload no navegador apesar de a configuração ser autorizada no servidor.
     if (typeof window._callCF !== 'function') throw new Error('Atualize o aplicativo para enviar a imagem do torneio.');
     var resposta = await window._callCF('uploadTournamentImage', {
-      tournamentId: String(tournamentId), type: String(tipo), dataUrl: valor
+      tournamentId: String(tournamentId), sandbox: String(tournamentId).startsWith('sb_'), type: String(tipo), dataUrl: valor
     }, { unauth: 'Entre na sua conta para enviar a imagem.', falha: 'Não foi possível enviar a imagem do torneio.' });
     var url = resposta && resposta.data && resposta.data.url;
     if (!url || !/^https?:\/\//i.test(url)) throw new Error('O servidor não confirmou o upload da imagem.');
@@ -14582,7 +14582,7 @@ window.AppStore = {
       })).then(function () {
         if (!Object.keys(_editPatch).length) return { data: { ok: true, changed: false, tournament: tourData } };
         if (typeof window._callCF !== 'function') throw new Error('Função de atualização indisponível.');
-        return window._callCF('updateTournamentConfiguration', { tournamentId: String(id), patch: _editPatch }, 'Entre na sua conta para atualizar o torneio.');
+        return window._callCF('updateTournamentConfiguration', { tournamentId: String(id), sandbox: String(id).startsWith('sb_'), patch: _editPatch }, 'Entre na sua conta para atualizar o torneio.');
       }).then(function (out) {
         var fresh = out && out.data && out.data.tournament;
         if (!fresh || String(fresh.id) !== String(id)) throw new Error('O servidor não confirmou a atualização.');

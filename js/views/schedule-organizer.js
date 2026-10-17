@@ -109,6 +109,8 @@
     });
     function free(court, at, len) { return !(occupied[court] || []).some(function (x) { return at < x.b && at + len > x.a; }); }
     var cursor = start(t), items = [];
+    var configuredDays = window._schJanelaTorneio && window._schJanelaTorneio(t);
+    var unscheduled = 0;
     ms.forEach(function (m) {
       var change = changesByMatch[String(m.id)];
       var legacyAllocated = !!(m.court && m.scheduledAt && m.scheduleLocked == null && !m.scheduleSource);
@@ -127,14 +129,17 @@
       // capacidade para este jogo, ele fica sem slot e a aplicação é bloqueada.
       // Nunca use o cursor de fallback para empurrá-lo para outro dia/horário:
       // isso já exibiu um sábado inexistente em evento de quinta e sexta.
-      if (hasGrade && !isFinite(preferred[String(m.id)])) return;
-      var len = duration(t, m), at = isFinite(preferred[String(m.id)]) ? preferred[String(m.id)] : cursor, cidx = 0, guard = 0;
-      while (guard++ < 2000) {
-        var found = cs.find(function (c) { return free(c, at, len); });
-        if (found) { cidx = cs.indexOf(found); break; }
-        at += 5 * MIN;
+      if (hasGrade && !isFinite(preferred[String(m.id)])) { unscheduled++; return; }
+      var len = duration(t, m), at = isFinite(preferred[String(m.id)]) ? preferred[String(m.id)] : cursor;
+      var day = configuredDays && configuredDays.dias && configuredDays.dias.find(function (d) { return at >= Number(d.iniMs) && at < Number(d.fimMs); });
+      if (configuredDays && !day) { unscheduled++; return; }
+      var limit = day ? Number(day.fimMs) : at + 2000 * 5 * MIN;
+      var court = '';
+      for (; at + len <= limit; at += 5 * MIN) {
+        court = cs.find(function (c) { return free(c, at, len); }) || '';
+        if (court) break;
       }
-      var court = cs[cidx];
+      if (!court) { unscheduled++; return; }
       reserve(m, iso(at), court);
       items.push({ matchId:String(m.id), court:court, scheduledAt:iso(at), scheduleLocked:false, scheduleSource:'estimate', extrapolaJanela:exceedsConfiguredWindow(t, m, iso(at)) });
       cursor = Math.max(cursor, at);
@@ -170,8 +175,8 @@
     return { baseScheduleRevision:Number(t.scheduleRevision || 0), items:items, courts:cs,
       // A agenda por categoria não pode ser aplicada se uma categoria explicitamente
       // presa a um dia ultrapassa a janela desse dia.
-      cabe: !actualOutside, extraMs:actualExtraMs,
-      unscheduledCount:Math.max(0, pending.filter(function (m) { return !items.some(function (item) { return item.matchId === String(m.id); }); }).length) };
+      cabe: !actualOutside && unscheduled === 0, extraMs:actualExtraMs,
+      unscheduledCount:unscheduled };
   };
   function uid() { return (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c){ var r=Math.random()*16|0; return (c==='x'?r:(r&3|8)).toString(16); }); }
   function msg(title, body, type) { if (typeof window.showNotification === 'function') window.showNotification(title, body, type); }
@@ -243,7 +248,7 @@
     });
     return names;
   }
-  function sideHtml(t, m, side, names) {
+  function sideHtml(t, m, side, names, revealNames) {
     var object = m && m[side === 'p1' ? 'team1Obj' : 'team2Obj'] || {};
     var id = String(m && m[side === 'p1' ? 'p1CompetitionTeamId' : 'p2CompetitionTeamId'] || object.competitionTeamId || '');
     var team = names[id] || {};
@@ -251,9 +256,33 @@
     var saturation = Math.max(35, Math.min(100, Number(object.competitionTeamSaturation) || 58));
     var category = m && m.category || object.category || 'Sem categoria';
     var pair = m && m[side] || object.displayName || object.name || 'Dupla a definir';
-    var players = object.p1Name && object.p2Name
-      ? '<div>' + esc(object.p1Name) + '</div><div>' + esc(object.p2Name) + '</div>'
-      : '<div>' + esc(pair) + '</div>';
+    var members = [];
+    var slots = Array.isArray(object.participants) ? object.participants : [];
+    var uids = m && m[side === 'p1' ? 'team1Uids' : 'team2Uids'];
+    if (slots.length) {
+      slots.forEach(function (slot, index) {
+        var value = slot && typeof slot === 'object' ? slot : {};
+        members.push({ uid:value.uid || (Array.isArray(uids) && uids[index]) || '', name:value.displayName || value.name || '' });
+      });
+    } else if (object.p1Uid || object.p2Uid || object.p1Name || object.p2Name) {
+      members.push({ uid:object.p1Uid || (Array.isArray(uids) && uids[0]) || '', name:object.p1Name || '' });
+      if (object.p2Uid || object.p2Name || (Array.isArray(uids) && uids[1])) members.push({ uid:object.p2Uid || (Array.isArray(uids) && uids[1]) || '', name:object.p2Name || '' });
+    } else if (Array.isArray(uids) && uids.length) {
+      uids.forEach(function (uid) { members.push({ uid:uid, name:'' }); });
+    } else if (m && m[side + 'Uid']) {
+      members.push({ uid:m[side + 'Uid'], name:'' });
+    }
+    function safeStoredName(value) {
+      value = String(value || '').trim();
+      return value && !/jogador sem perfil|^[A-Za-z0-9_-]{20,}$/.test(value) ? value : '';
+    }
+    function playerName(uid, stored) {
+      if (uid) return '<div data-uid-name="' + esc(uid) + '">' + esc((window._nameForUid && window._nameForUid(uid)) || 'Carregando perfil…') + '</div>';
+      return '<div>' + esc(safeStoredName(stored) || 'Jogador a identificar') + '</div>';
+    }
+    var players = !revealNames ? '<div>Participantes ocultos</div>'
+      : members.length ? members.map(function (member) { return playerName(member.uid, member.name); }).join('')
+      : '<div>' + esc(safeStoredName(pair) || 'Jogador a identificar') + '</div>';
     var teamName = team.name || id || 'Time a definir';
     var color = 'hsl(' + hue + ' ' + saturation + '% 55%)';
     return '<div style="border-left:4px solid ' + esc(color) + ';background:hsl(' + hue + ' ' + saturation + '% 14%);border-radius:7px;padding:5px 6px;margin-top:4px;min-width:0;">' +
@@ -266,6 +295,7 @@
   window._operationalScheduleGrid = function (t, plan, options) {
     options = options || {};
     var prefix = String(options.prefix || 'agenda'), sticky = options.scrollOwner === 'parent', matchById = {};
+    var revealedNames = options.revealedNames || {};
     all(t).forEach(function (m) { if (m) matchById[String(m.id)] = m; });
     var names = teamLookup(t), byDay = {}, numberByMatch = {};
     // Durante a revisão do sorteio, o número é a sequência da agenda que o
@@ -305,9 +335,9 @@
         var m = matchById[String(item.matchId)] || {};
         var excedente = item.extrapolaJanela === true;
         return '<article draggable="true" data-' + prefix + '-match="' + esc(item.matchId) + '"' + (excedente ? ' data-' + prefix + '-outside-window="true"' : '') + ' title="' + (excedente ? 'Este jogo ultrapassa o horário configurado do evento' : 'Arraste este jogo para trocar o horário e a quadra') + '" style="min-height:132px;border:1px solid ' + (excedente ? 'rgba(248,113,113,.9)' : 'rgba(56,189,248,.32)') + ';border-radius:8px;padding:6px;background:' + (excedente ? 'repeating-linear-gradient(45deg,rgba(239,68,68,.55) 0 10px,rgba(148,163,184,.42) 10px 20px),rgba(15,23,42,.86)' : 'rgba(15,23,42,.72)') + ';box-sizing:border-box;overflow:hidden;cursor:grab;">' +
-          '<div style="font-size:.68rem;color:#7dd3fc;font-weight:900;display:flex;justify-content:space-between;gap:8px;"><span>' + esc(gameLabel(t, item.matchId, numberByMatch[String(item.matchId)])) + '</span><span>R' + esc(String(m.round || '—')) + '</span></div>' +
+          '<div style="font-size:.68rem;color:#7dd3fc;font-weight:900;display:flex;justify-content:space-between;gap:8px;align-items:center"><span>' + esc(gameLabel(t, item.matchId, numberByMatch[String(item.matchId)])) + '</span><span>R' + esc(String(m.round || '—')) + ' <button type="button" draggable="false" data-' + prefix + '-reveal-match="' + esc(item.matchId) + '" aria-label="' + (revealedNames[String(item.matchId)] ? 'Ocultar participantes' : 'Revelar participantes') + '" title="' + (revealedNames[String(item.matchId)] ? 'Ocultar participantes' : 'Revelar participantes') + '" style="border:0;background:transparent;color:#7dd3fc;cursor:pointer;font-size:1rem">' + (revealedNames[String(item.matchId)] ? '🙈' : '👁️') + '</button></span></div>' +
           (excedente ? '<div style="margin-top:4px;font-size:.62rem;font-weight:900;color:#fff;background:rgba(127,29,29,.88);border-radius:4px;padding:3px 4px;">⚠ FORA DO HORÁRIO</div>' : '') +
-          sideHtml(t, m, 'p1', names) + sideHtml(t, m, 'p2', names) +
+          sideHtml(t, m, 'p1', names, revealedNames[String(item.matchId)] === true) + sideHtml(t, m, 'p2', names, revealedNames[String(item.matchId)] === true) +
           '</article>';
       }).join('');
       return '<div style="display:grid;grid-template-columns:72px repeat(' + plan.courts.length + ', minmax(176px,1fr));gap:6px;margin-top:6px;align-items:stretch"><div style="' + stickyTime + 'font-size:.82rem;font-weight:900;color:#fbbf24;display:flex;align-items:center;justify-content:center;text-align:center;">' + esc(timeLabel(slot)) + '</div>' + cells + '</div>';
@@ -321,19 +351,21 @@
   };
   window._renderOperationalSchedule = function (slot, t) {
     if (!slot || !t || !window._souOrganizador || !window._souOrganizador(t)) return;
-    var manual = {}, activeDay = '';
+    var manual = {}, activeDay = '', revealedNames = {};
     function draftForFresh() {
       var fresh = (window._findTournamentById && window._findTournamentById(t.id)) || t;
       return { fresh:fresh, plan:window._operationalSchedulePlan(fresh, Object.keys(manual).map(function (id) { return manual[id]; })) };
     }
     function render() {
       var current = draftForFresh(), fresh = current.fresh, plan = current.plan, total = plan.items.length;
-      var board = window._operationalScheduleGrid(fresh, plan, { prefix:'agenda', activeDay:activeDay }); activeDay = board.activeDay;
+      var board = window._operationalScheduleGrid(fresh, plan, { prefix:'agenda', activeDay:activeDay, revealedNames:revealedNames }); activeDay = board.activeDay;
       slot.innerHTML = '<section class="sp-operational-schedule" style="margin:12px 0;padding:12px 14px;border:1px solid rgba(56,189,248,.35);border-radius:12px;background:rgba(14,116,144,.10);display:flex;gap:12px;align-items:center;flex-wrap:wrap">' +
         '<div style="flex:1;min-width:220px"><strong>📍 Agenda operacional</strong><div style="font-size:.82rem;opacity:.78;margin-top:3px">' + total + ' jogos pendentes · ' + plan.courts.map(esc).join(' · ') + '. Cada horário aparece uma vez na régua vertical; arraste um jogo sobre outro para trocar seus slots. Nada é salvo antes de aplicar.</div></div>' +
-        (!plan.cabe ? '<div style="width:100%;color:#fbbf24;font-size:.8rem;font-weight:700">A agenda não cabe nas janelas configuradas: faltam ' + Math.ceil((plan.extraMs || 0) / MIN) + ' min. Nenhum jogo será colocado fora dos dias/horários do evento.</div>' : '') +
+        (!plan.cabe ? '<div style="width:100%;color:#fbbf24;font-size:.8rem;font-weight:700">A agenda não cabe nas janelas configuradas: ' + (plan.unscheduledCount ? plan.unscheduledCount + ' jogo(s) sem horário. ' : '') + (plan.extraMs ? 'Excedente de ' + Math.ceil(plan.extraMs / MIN) + ' min. ' : '') + 'Nenhum jogo novo será colocado fora dos dias/horários do evento.</div>' : '') +
         '<button type="button" class="btn btn-primary" id="sp-agenda-apply-' + esc(fresh.id) + '"' + (!plan.cabe ? ' disabled aria-disabled="true" style="opacity:.45;cursor:not-allowed"' : '') + '>Aplicar agenda</button>' +
         '<div style="width:100%;margin-top:2px">' + board.html + '</div></section>';
+      if (typeof window._hydrateUidNames === 'function') window._hydrateUidNames(slot);
+      Array.prototype.forEach.call(slot.querySelectorAll('[data-agenda-reveal-match]'), function (button) { button.onclick = function (event) { event.stopPropagation(); var id = button.getAttribute('data-agenda-reveal-match'); revealedNames[id] = !revealedNames[id]; render(); }; });
       Array.prototype.forEach.call(slot.querySelectorAll('[data-agenda-day]'), function (control) { control.onclick = function () { activeDay = control.getAttribute('data-agenda-day'); render(); }; });
       Array.prototype.forEach.call(slot.querySelectorAll('[data-agenda-match]'), function (card) {
         card.ondragstart = function (event) { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', card.getAttribute('data-agenda-match')); };

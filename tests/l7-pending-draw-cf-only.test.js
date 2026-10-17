@@ -51,5 +51,5 @@ ok(agenda.includes('_scheduleLocalDay(item.scheduledAt) !== requiredDay')&&
   'agenda privada e agenda operacional recusam trocar quinta por sexta');
 const pendingScheduleStart=b.indexOf('window._openPendingInitialSchedule = function');
 const pendingSchedule=b.slice(pendingScheduleStart, b.indexOf('window._rememberPendingDrawMarker = function', pendingScheduleStart));
-ok(!/if \(!latest\.cabe\)[\s\S]{0,220}?return;/.test(pendingSchedule)&&pendingSchedule.includes('Publicando horários estimados…')&&pendingSchedule.includes("Sorteio não publicado"),'excesso de janela mantém todos os jogos zebrado e não bloqueia a publicação; erro de publicação volta ao botão com mensagem');
+ok(/if \(!latest\.cabe\)[\s\S]{0,220}?return;/.test(pendingSchedule)&&pendingSchedule.includes('Publicando…')&&pendingSchedule.includes("Sorteio não publicado"),'agenda incompleta bloqueia a publicação; erro de publicação volta ao botão com mensagem');
 process.exit(f?1:0);

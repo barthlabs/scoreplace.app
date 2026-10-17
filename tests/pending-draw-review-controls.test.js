@@ -41,6 +41,6 @@ ok(/data-pis-shuffle/.test(ui) && /data-pis-copy-other-day/.test(ui) && /functio
 const scheduleStart = ui.indexOf('window._openPendingInitialSchedule = function');
 const scheduleEnd = ui.indexOf('window._rememberPendingDrawMarker = function', scheduleStart);
 const schedule = scheduleStart >= 0 && scheduleEnd > scheduleStart ? ui.slice(scheduleStart, scheduleEnd) : '';
-ok(/Horários são estimados/.test(schedule) && !/if \(!latest\.cabe\)[\s\S]{0,220}?return;/.test(schedule) && /Publicando horários estimados/.test(schedule) && /\.catch\(function \(e\)/.test(schedule),
-  'agenda excedente continua visível como estimativa e a publicação não fica bloqueada nem silenciosa');
+ok(/Horários são estimados/.test(schedule) && /if \(!latest\.cabe\)[\s\S]{0,220}?return;/.test(schedule) && /Publicando…/.test(schedule) && /\.catch\(function \(e\)/.test(schedule),
+  'agenda incompleta é mostrada e bloqueia publicação sem ocultar erros de gravação');
 process.exitCode = fail ? 1 : 0;

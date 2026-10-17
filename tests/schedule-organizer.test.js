@@ -273,8 +273,8 @@ const gradeJanelaFechada = W._schGradeEstimada(janelaFechada);
 ok(gradeJanelaFechada && gradeJanelaFechada.cabe === false && gradeJanelaFechada.extraMs === 30 * 60000 &&
   gradeJanelaFechada.slots.length === 3 && gradeJanelaFechada.slots.filter(function (slot) { return slot.extrapolaJanela; }).length === 1,
   'a grade mantém todos os jogos no próprio dia e marca o excedente da janela');
-ok(W._operationalSchedulePlan(janelaFechada).cabe === false && W._operationalSchedulePlan(janelaFechada).extraMs === 30 * 60000,
-  'a agenda operacional também bloqueia uma distribuição que ultrapassaria a janela');
+ok(W._operationalSchedulePlan(janelaFechada).cabe === false && W._operationalSchedulePlan(janelaFechada).unscheduledCount === 1,
+  'a agenda operacional bloqueia e explicita o jogo sem slot dentro da janela');
 const janelaTrocada = W._operationalSchedulePlan(janelaFechada, [
   { matchId:'J1', court:'Quadra 1', scheduledAt:new Date('2026-10-22T19:00:00-03:00').toISOString() },
   { matchId:'J3', court:'Quadra 1', scheduledAt:new Date('2026-10-22T18:00:00-03:00').toISOString() }
@@ -307,10 +307,10 @@ const janelaDoisDiasRigidos = W._schJanelaTorneio(doisDiasRigidos);
 ok(janelaDoisDiasRigidos && janelaDoisDiasRigidos.dias.length === 2 && gradeDoisDiasRigidos && gradeDoisDiasRigidos.cabe === false &&
   gradeDoisDiasRigidos.slots.every(function (slot) { return slot.iso.slice(0, 10) !== '2026-10-24'; }),
   'janelas explícitas não herdam um terceiro dia da data final legada');
-ok(planDoisDiasRigidos.cabe === false && planDoisDiasRigidos.unscheduledCount === 0 &&
+ok(planDoisDiasRigidos.cabe === false && planDoisDiasRigidos.unscheduledCount === 1 &&
   planDoisDiasRigidos.items.every(function (item) { return item.scheduledAt.slice(0, 10) !== '2026-10-24'; }) &&
-  planDoisDiasRigidos.items.some(function (item) { return item.extrapolaJanela; }),
-  'a prévia não cria terceiro dia: mantém o jogo excedente no dia configurado e o sinaliza');
+  !planDoisDiasRigidos.items.some(function (item) { return item.extrapolaJanela; }),
+  'a prévia não cria terceiro dia nem horário excedente: deixa o jogo sem vaga explicitamente pendente');
 const sequenciaCategorias = {
   startDate:'2026-10-22T18:00', endDate:'2026-10-22T23:00', courtCount:1, gameDuration:30,
   scheduleWindow:{ version:1, days:[{ day:'2026-10-22', startTime:'18:00', endTime:'23:00', categoryFlow:'categories' }] },
@@ -396,8 +396,10 @@ ok(board.gridHtml.includes('data-agenda-grid-scroll'), 'Agenda conserva wrapper 
 ok(!board.gridHtml.includes('position:sticky'), 'Agenda não recebe sticky');
 ok(board.days.length === 1 && /data-agenda-day/.test(board.html),
   'a grade cria abas por dia quando há agenda');
-ok(/VENOM/.test(board.html) && /BLACKOUT/.test(board.html) && /Ana/.test(board.html) && /Bia/.test(board.html) && /Fem Power/.test(board.html),
-  'a célula informa times, nomes das duplas e categoria');
+ok(/VENOM/.test(board.html) && /BLACKOUT/.test(board.html) && /Fem Power/.test(board.html) &&
+  /data-agenda-reveal-match="A"/.test(board.html) && /Participantes ocultos/.test(board.html) &&
+  !/<div>Ana<\/div>/.test(board.html),
+  'a célula mostra time e categoria, mas oculta participantes até o organizador tocar no olho');
 ok(/grid-template-columns:72px repeat\(2, minmax\(176px,1fr\)\)/.test(board.html),
   'a grade tem uma coluna de horário e uma coluna para cada quadra');
 ok(/draggable="true"/.test(board.html) && !/type="time"/.test(board.html) && !/type="datetime-local"/.test(board.html),
@@ -407,8 +409,26 @@ ok(/Jogo 1/.test(board.html) && !/Jogo A/.test(board.html),
 const numberedBoard = W._operationalScheduleGrid(t, p, { prefix:'agenda', renumberBySchedule:true });
 ok(/Jogo 1/.test(numberedBoard.html) && /Jogo 2/.test(numberedBoard.html),
   'a prévia da agenda apresenta numeração contínua pela ordem dos slots');
-ok(/<div>Ana<\/div><div>Bia<\/div>/.test(board.html),
-  'os dois jogadores da dupla aparecem em linhas separadas');
+const revealedBoard = W._operationalScheduleGrid(t, p, { prefix:'agenda', revealedNames:{ A:true } });
+ok(/<div>Ana<\/div><div>Bia<\/div>/.test(revealedBoard.html) && /Ocultar participantes/.test(revealedBoard.html),
+  'o olho revela apenas a dupla do jogo selecionado, com jogadores em linhas separadas');
+const uidFixture = Object.assign({}, t, { matches:t.matches.map(function (match) {
+  if (match.id !== 'A') return match;
+  return Object.assign({}, match, {
+    p1:'uidMuitoLongoDePessoa01 / Convidada', team1Uids:['uidMuitoLongoDePessoa01'],
+    team1Obj:{ p1Uid:'uidMuitoLongoDePessoa01', p2Name:'Convidada', category:'Fem Power' },
+    p2:'uidMuitoLongoDePessoa02 / Outra',
+    team2Obj:{ participants:[{ uid:'uidMuitoLongoDePessoa02' }, { name:'Outra' }], category:'Fem Power' }
+  });
+}) });
+const uidBoard = W._operationalScheduleGrid(uidFixture, p, { prefix:'agenda', revealedNames:{ A:true } });
+ok(uidBoard.html.includes('data-uid-name="uidMuitoLongoDePessoa01"') &&
+   uidBoard.html.includes('data-uid-name="uidMuitoLongoDePessoa02"') &&
+   uidBoard.html.includes('<div>Convidada</div>') && uidBoard.html.includes('<div>Outra</div>') &&
+   !uidBoard.html.includes('>uidMuitoLongoDePessoa01<') && !uidBoard.html.includes('>uidMuitoLongoDePessoa02<'),
+  'duplas mistas e participantes aninhados hidratam UIDs sem apagar convidados nem mostrar IDs como nomes');
+ok(!W._operationalScheduleGrid(uidFixture, p, { prefix:'agenda' }).html.includes('data-uid-name='),
+  'sem tocar no olho a grade não expõe UIDs nem cria alvos de hidratação invisíveis');
 ok(/ondrop/.test(organizerSource) && /manual\[from\.matchId\].*to\.court/.test(organizerSource),
   'soltar um card sobre outro troca os slots de horário e quadra');
 ok(/← Voltar/.test(bracketLogicSource) && /data-pis-apply/.test(bracketLogicSource) && /data-pis-publish/.test(bracketLogicSource) &&
@@ -418,13 +438,13 @@ ok(/tabsHtml:tabsHtml/.test(organizerSource) && /gridHtml:gridHtml/.test(organiz
   'a grade expõe abas e conteúdo separadamente para manter o seletor de dias fixo fora da rolagem');
 ok(/gridScroll = \{ top:0, left:0 \}/.test(bracketLogicSource) && /previousScroll\.scrollTop/.test(bracketLogicSource) && /restoredScroll\.scrollTop = gridScroll\.top/.test(bracketLogicSource) && /restoredScroll\.scrollLeft = gridScroll\.left/.test(bracketLogicSource),
   'recalcular a grade após arrastar preserva a rolagem vertical e horizontal do ponto em edição');
-ok(/data-\' \+ prefix \+ \'-outside-window/.test(organizerSource) && /repeating-linear-gradient\(45deg,rgba\(239,68,68/.test(organizerSource) && /Todos os jogos continuam exibidos/.test(bracketLogicSource),
-  'jogos que ultrapassam a janela seguem na grade com faixa zebrada vermelha e cinza');
+ok(/data-\' \+ prefix \+ \'-outside-window/.test(organizerSource) && /repeating-linear-gradient\(45deg,rgba\(239,68,68/.test(organizerSource) && /jogo\(s\) sem horário/.test(bracketLogicSource),
+  'slots manuais excedentes são zebrados e jogos não alocados são informados');
 const pendingScheduleStart = bracketLogicSource.indexOf('window._openPendingInitialSchedule = function');
 const pendingScheduleEnd = bracketLogicSource.indexOf('window._rememberPendingDrawMarker = function', pendingScheduleStart);
 const pendingSchedule = bracketLogicSource.slice(pendingScheduleStart, pendingScheduleEnd);
-ok(!/if \(!latest\.cabe\)[\s\S]{0,220}?return;/.test(pendingSchedule) && /Publicando horários estimados/.test(pendingSchedule) && /if \(!draft\.cabe\)/.test(organizerSource),
-  'a revisão inicial pode publicar agenda excedente sinalizada; a aplicação operacional comum continua validando distribuição inválida');
+ok(/if \(!latest\.cabe\)/.test(pendingSchedule) && /if \(!draft\.cabe\)/.test(organizerSource),
+  'revisão inicial e aplicação operacional bloqueiam agenda incompleta');
 const timezoneRoundTrip = execFileSync(process.execPath, ['-e', [
   "const fs=require('fs'),vm=require('vm');",
   "const s={window:{},console};vm.createContext(s);",

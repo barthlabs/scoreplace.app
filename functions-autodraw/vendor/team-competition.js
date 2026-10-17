@@ -29,13 +29,13 @@ var ScoreplaceTeamCompetition;
     function configurationForTournament(value) {
         const tournament = record(value);
         const phases = Array.isArray(tournament.phases) ? tournament.phases : [];
-        const candidates = [tournament.teamCompetition].concat(phases.map((phase) => record(phase).teamCompetition));
+        const candidates = [tournament.teamCompetition].concat(phases.map((phase) => record(phase).teamCompetition), [record(tournament.fmt2).teamCompetition]);
         const active = candidates.filter((candidate) => record(candidate).enabled === true);
         const planned = active.find((candidate) => {
             const schedule = record(record(candidate).schedule);
-            return Object.keys(schedule).length > 0 && schedule.enabled !== false;
+            return Object.keys(schedule).length > 0 && schedule.enabled !== false && (schedule.modeChosen === true || schedule.modeConfirmed === true);
         });
-        return record(planned || active[0]);
+        return record(planned || active.find((candidate) => Object.keys(record(record(candidate).schedule)).length > 0) || active[0]);
     }
     ScoreplaceTeamCompetition.configurationForTournament = configurationForTournament;
     /** Normaliza a escolha feita ANTES do sorteio; ausência mantém torneios existentes intactos. */

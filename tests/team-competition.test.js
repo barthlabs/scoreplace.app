@@ -55,6 +55,12 @@ const incompleteTopLevel = { enabled: true, teamNames: ['Venom', 'Blackout'] };
 const resolvedPlan = C.configurationForTournament({ teamCompetition: incompleteTopLevel, phases: [{ teamCompetition: phasePlan }] });
 ok(resolvedPlan === phasePlan,
   'configuração parcial no topo não esconde o modo, a agenda e a confirmação guardados na fase');
+const fmt2Plan = { enabled:true, schedule:{ enabled:true, mode:'structured', modeChosen:true } };
+const legacyDefault = { enabled:true, schedule:{ enabled:true, mode:'structured' } };
+ok(C.configurationForTournament({ teamCompetition:legacyDefault, fmt2:{ teamCompetition:fmt2Plan } }) === fmt2Plan,
+  'escolha explícita no configurador vence um modo legado sem confirmação');
+ok(C.configurationForTournament({ teamCompetition:legacyDefault }).schedule.modeChosen !== true,
+  'valor estruturado legado sem marca não vira escolha explícita');
 ok(C.configurationForTournament({ teamCompetition: incompleteTopLevel }).enabled === true,
   'sem plano completo, a competição ativa ainda é retornada para bloquear sorteio sem escolha explícita');
 

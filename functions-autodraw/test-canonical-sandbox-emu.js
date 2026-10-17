@@ -84,9 +84,28 @@ const categories = [{ id: 'light', label: 'Light' }];
   assert.equal(configResult.status, 200, JSON.stringify(configResult.body));
   assert.deepEqual((await routed.get()).data().courtOrder, ['Quadra 1']);
   assert.equal(JSON.stringify((await real.get()).data()), realBefore, 'configuração do sandbox não altera original');
-  assert.notEqual((await callFn('updateTournamentConfiguration', { tournamentId:routedId,
-    patch:{ courtOrder:['Quadra 2'] } }, owner)).status, 200, 'sem flag não cai no original');
+  const legacyConfig = await callFn('updateTournamentConfiguration', { tournamentId:routedId,
+    patch:{ courtOrder:['Quadra 2'] } }, owner);
+  assert.equal(legacyConfig.status, 200, 'cliente sem flag usa o prefixo privado do ID');
+  assert.deepEqual((await routed.get()).data().courtOrder, ['Quadra 2']);
+  assert.equal(JSON.stringify((await real.get()).data()), realBefore, 'cliente sem flag não altera original');
   console.log('✓ configuração do sandbox grava só na coleção privada');
+
+  const imageRequest = { tournamentId:routedId, sandbox:true, type:'logo',
+    dataUrl:'data:image/png;base64,iVBORw0KGgo=' };
+  const deniedImage = await callFn('uploadTournamentImage', imageRequest, stranger);
+  assert.notEqual(deniedImage.status, 200, 'não dono não pode enviar imagem do sandbox');
+  assert.equal(deniedImage.body.error.status, 'NOT_FOUND', 'sandbox privado não revela existência ao não dono');
+  assert.equal(JSON.stringify((await real.get()).data()), realBefore, 'upload negado não altera o original');
+  const ownerImage = await callFn('uploadTournamentImage', imageRequest, owner);
+  assert.equal(ownerImage.status, 200, JSON.stringify(ownerImage.body));
+  const imageUrl = new URL(ownerImage.body.result.url);
+  const imageBucket = decodeURIComponent(imageUrl.pathname.split('/b/')[1].split('/o/')[0]);
+  const imagePath = decodeURIComponent(imageUrl.pathname.split('/o/')[1]);
+  assert.ok(imagePath.startsWith('sandboxes/' + routedId + '/logo-'), 'imagem do dono fica no namespace privado');
+  assert.equal((await admin.storage().bucket(imageBucket).file(imagePath).exists())[0], true,
+    'upload autorizado gravou o objeto no emulador de Storage');
+  assert.equal(JSON.stringify((await real.get()).data()), realBefore, 'upload autorizado não altera original');
 
   for (const state of ['creating', 'failed']) {
     await sb.update({ sbState: state });

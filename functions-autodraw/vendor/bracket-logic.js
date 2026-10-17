@@ -6873,7 +6873,7 @@ window._openPendingInitialSchedule = function (tId) {
     return;
   }
   var esc = window._safeHtml || function (s) { return String(s == null ? '' : s); };
-  var manual = {}, activeDay = '', gridScroll = { top:0, left:0 };
+  var manual = {}, activeDay = '', gridScroll = { top:0, left:0 }, revealedNames = {};
   var old = document.getElementById('sp-pending-schedule-overlay'); if (old) old.remove();
   var overlay = document.createElement('div'); overlay.id = 'sp-pending-schedule-overlay';
   // A grade rola lateralmente no seu próprio painel. O overlay nunca pode rolar
@@ -6914,7 +6914,7 @@ window._openPendingInitialSchedule = function (tId) {
      * preservada entre um drop e o próximo render. */
     var previousScroll = overlay.querySelector('[data-pis-scroll]');
     if (previousScroll) gridScroll = { top:previousScroll.scrollTop, left:previousScroll.scrollLeft };
-    var p = plan(), board = window._operationalScheduleGrid(view(), p, { prefix:'pis', activeDay:activeDay, renumberBySchedule:true, scrollOwner:'parent' }); activeDay = board.activeDay;
+    var p = plan(), board = window._operationalScheduleGrid(view(), p, { prefix:'pis', activeDay:activeDay, renumberBySchedule:true, scrollOwner:'parent', revealedNames:revealedNames }); activeDay = board.activeDay;
     overlay.innerHTML = '<div role="dialog" aria-modal="true" style="width:100%;max-width:1600px;height:100%;margin:0 auto;background:#111827;border:1px solid rgba(56,189,248,.5);border-radius:16px;box-sizing:border-box;overflow:hidden;color:var(--text-main);box-shadow:0 24px 70px rgba(0,0,0,.55);display:flex;flex-direction:column;isolation:isolate">' +
       /* ⛔ REGRESSÃO DO CABEÇALHO DA AGENDA: este bloco é IRMÃO do painel que
        * rola, e não `sticky` dentro dele. Sticky deixava a grade pintar por trás
@@ -6924,10 +6924,12 @@ window._openPendingInitialSchedule = function (tId) {
       '<div data-pis-toolbar style="position:relative;z-index:2;flex:none;padding:16px;background:#111827;border-bottom:1px solid rgba(148,163,184,.28);box-shadow:0 8px 16px rgba(2,6,23,.55)"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><button type="button" data-pis-close class="btn btn-outline" style="flex:none">← Voltar</button><h2 style="margin:0;min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;font-size:1.05rem">📍 Planejar antes de publicar</h2><div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;flex:none;flex-wrap:wrap"><button type="button" data-pis-shuffle class="btn btn-outline" title="Mantém os slots de quadra e horário; troca os jogos do dia">↻ Embaralhar</button><button type="button" data-pis-copy-other-day class="btn btn-outline" title="Repete no dia aberto os mesmos horários e quadras do outro dia">⧉ Copiar estrutura</button><button type="button" data-pis-apply class="btn btn-outline">Salvar ajustes</button><button type="button" data-pis-publish class="btn btn-shine" style="background:#10b981;color:#fff">🚀 Publicar</button></div></div><p style="margin:8px 0 0;font-size:.82rem;line-height:1.4;color:#cbd5e1">A estrutura desta grade é o contrato da chave: dia, horário, quadra, ordem e confronto só mudam por ação explícita da organização.</p></div>' +
       '<div data-pis-day-tabs style="position:relative;z-index:2;flex:none;padding:10px 16px;background:#111827;border-bottom:1px solid rgba(148,163,184,.28);box-shadow:0 6px 12px rgba(2,6,23,.4)">' + board.tabsHtml + '</div>' +
       '<div data-pis-scroll style="position:relative;z-index:1;flex:1;min-height:0;overflow:auto;padding:16px;box-sizing:border-box"><div style="font-size:.76rem;color:#94a3b8;margin-bottom:6px">' + p.items.length + ' jogos · ' + p.courts.length + ' quadras. Cada linha é um horário; cada coluna é uma quadra. Horários são estimados e podem mudar conforme o andamento.</div>' +
-      (!p.cabe ? '<div style="margin:0 0 10px;color:#fbbf24;font-size:.82rem;font-weight:700">⚠ Ao publicar assim, a programação excede a janela determinada pela organização em ' + Math.ceil((p.extraMs || 0) / 60000) + ' min. Todos os jogos continuam exibidos; os excedentes aparecem em faixa zebrada vermelha e cinza.</div>' : '') + board.gridHtml +
+      (!p.cabe ? '<div style="margin:0 0 10px;color:#fbbf24;font-size:.82rem;font-weight:700">⚠ Agenda incompleta: ' + (p.unscheduledCount || 0) + ' jogo(s) sem horário dentro dos dias configurados' + (p.extraMs ? '; excedente de ' + Math.ceil(p.extraMs / 60000) + ' min' : '') + '. Corrija as janelas ou a distribuição antes de salvar/publicar.</div>' : '') + board.gridHtml +
       '</div></div>';
     var restoredScroll = overlay.querySelector('[data-pis-scroll]');
+    if (typeof window._hydrateUidNames === 'function') window._hydrateUidNames(overlay);
     if (restoredScroll) { restoredScroll.scrollTop = gridScroll.top; restoredScroll.scrollLeft = gridScroll.left; }
+    Array.prototype.forEach.call(overlay.querySelectorAll('[data-pis-reveal-match]'), function (button) { button.onclick = function (event) { event.stopPropagation(); var id = button.getAttribute('data-pis-reveal-match'); revealedNames[id] = !revealedNames[id]; render(); }; });
     overlay.querySelector('[data-pis-close]').onclick = returnToPendingDetail;
     Array.prototype.forEach.call(overlay.querySelectorAll('[data-pis-day]'), function (control) { control.onclick = function () { activeDay = control.getAttribute('data-pis-day'); render(); }; });
     function orderSlots(items) {
@@ -7065,6 +7067,7 @@ window._openPendingInitialSchedule = function (tId) {
     });
     overlay.querySelector('[data-pis-apply]').onclick = function (event) {
       var button = event.currentTarget, latest = plan();
+      if (!latest.cabe) { if (window.showNotification) window.showNotification('Agenda incompleta', 'Há jogos sem horário dentro dos dias configurados.', 'error'); return; }
       button.disabled = true; button.textContent = 'Salvando agenda…';
       saveSchedule(latest)
         .then(function () { if (window.showNotification) window.showNotification('Agenda do rascunho salva', 'A chave continua em revisão até você publicar.', 'success'); returnToPendingDetail(); })
@@ -7073,10 +7076,10 @@ window._openPendingInitialSchedule = function (tId) {
     Array.prototype.forEach.call(overlay.querySelectorAll('[data-pis-publish]'), function (publishButton) {
       publishButton.onclick = function (event) {
         var button = event.currentTarget, latest = plan();
-        /* ⛔ NÃO BLOQUEAR PUBLICAÇÃO POR EXCESSO DE HORÁRIO. A agenda deve conter
-         * todos os jogos; os que excedem a janela ficam na faixa zebrada para a
-         * organização enxergar e ajustar, mas não tornam a chave impossível de finalizar. */
-        button.disabled = true; button.textContent = latest.cabe ? 'Publicando…' : 'Publicando horários estimados…';
+        // Decisão explícita da organização (17/out/2026): não publicar jogos
+        // fora dos dias/horários do torneio só porque quadras ficaram livres.
+        if (!latest.cabe) { if (window.showNotification) window.showNotification('Publicação bloqueada', 'Há jogos sem horário dentro dos dias configurados.', 'error'); return; }
+        button.disabled = true; button.textContent = 'Publicando…';
         saveSchedule(latest)
           .then(function () { return window._publishPendingDraw(tId); })
           .then(function (published) { if (published) overlay.remove(); else { button.disabled = false; button.textContent = '🚀 Publicar'; } })
