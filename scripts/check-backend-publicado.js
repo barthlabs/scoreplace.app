@@ -22,6 +22,7 @@
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
+const { autodrawExports, checkTargetedPublication } = require('./backend-publication-core');
 const RAIZ = path.join(__dirname, '..');
 /* ⛔ UM CARIMBO POR ESCOPO. Um carimbo único era furado: qualquer execução do publicador de
  * Functions — inclusive `--dry-run` ou o codebase `main` — o gravava, e ele passava a "provar" que
@@ -33,6 +34,10 @@ const ESCOPOS = {
 };
 
 const git = (args) => execFileSync('git', args, { cwd: RAIZ, encoding: 'utf8' }).trim();
+const receiptPath = path.join(RAIZ, '.backend-publicado-autodraw-funcoes.json');
+const manifestPath = path.join(RAIZ, '.backend-requerido-autodraw.json');
+const exportsAutodraw = () => autodrawExports(fs.readFileSync(path.join(RAIZ, 'functions-autodraw/index.js'), 'utf8'));
+const readJson = (file) => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (_) { return null; } };
 
 const iCarimbar = process.argv.indexOf('--carimbar');
 const escopoPedido = iCarimbar !== -1 ? String(process.argv[iCarimbar + 1] || '') : '';
@@ -77,6 +82,32 @@ if (iCarimbar !== -1) {
   process.exit(0);
 }
 
+// Chamado exclusivamente após um lote --only terminar com exit 0 no publicador.
+// Não escreve o carimbo integral: um recibo por função não declara que as demais
+// 100 callables foram atualizadas. O arquivo é versionado antes do Hosting.
+if (process.argv[2] === '--registrar-funcoes') {
+  if (process.env.SP_DEPLOY_CONFIRMED !== '1') {
+    console.error('✗ recibo exige lote confirmado pelo publicador'); process.exit(1);
+  }
+  const raw = String(process.argv[3] || '');
+  const names = raw.split(',').map(target => target.replace(/^functions:/, ''));
+  const exported = exportsAutodraw();
+  if (!raw || new Set(names).size !== names.length || names.some(name => !exported.has(name))) {
+    console.error('✗ recibo contém função inexistente ou repetida'); process.exit(1);
+  }
+  const sha = ultimoAutodrawImplantavel();
+  if (!sha) { console.error('✗ SHA de autodraw indisponível'); process.exit(1); }
+  const old = readJson(receiptPath);
+  const entries = old && old.schema === 1 && old.entries && typeof old.entries === 'object' ? old.entries : {};
+  const deployedAt = new Date().toISOString();
+  names.forEach(name => { entries[name] = { backendCommit:sha, deployedAt, result:'success', mode:'only' }; });
+  const temp = receiptPath + '.tmp-' + process.pid;
+  fs.writeFileSync(temp, JSON.stringify({ schema:1, entries }, null, 2) + '\n');
+  fs.renameSync(temp, receiptPath);
+  console.log('✓ recibo direcionado: ' + names.join(', ') + ' (' + sha.slice(0, 8) + ')');
+  process.exit(0);
+}
+
 let falhou = false;
 Object.keys(ESCOPOS).forEach((nome) => {
   const e = ESCOPOS[nome];
@@ -103,6 +134,15 @@ Object.keys(ESCOPOS).forEach((nome) => {
   let jaContem = false;
   try { git(['merge-base', '--is-ancestor', ultimo, carimbado]); jaContem = true; } catch (e2) { jaContem = false; }
   if (jaContem) { console.log('✓ ' + nome + ' publicado (carimbo ' + carimbado.slice(0, 8) + ' já contém)'); return; }
+  if (nome === 'autodraw') {
+    const result = checkTargetedPublication(readJson(manifestPath), readJson(receiptPath), ultimo, exportsAutodraw());
+    if (result.ok) {
+      console.log('✓ autodraw direcionado — VERIFICADAS: ' + result.verified.join(', '));
+      console.log('  NÃO verificadas neste corte: ' + result.unverified + ' funções do codebase');
+      return;
+    }
+    console.error('  recibo direcionado recusado: ' + result.reason);
+  }
   console.error('\n✗ ' + nome.toUpperCase() + ' MUDOU E NÃO FOI PUBLICADO.');
   console.error('  última mudança: ' + ultimo.slice(0, 8) + '   ·   carimbo: ' + carimbado.slice(0, 8));
   falhou = true;

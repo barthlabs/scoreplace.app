@@ -166,9 +166,16 @@ _deploy_batch() { # $1=dir $2=targets (máx. 10) $3=descrição
       rm -f "$_log"
       die "$desc: firebase saiu com código $_rc sem confirmar 'Deploy complete!' — abortando"
     fi
+    if [ "$ALVO" = "autodraw" ] && [ -n "$ONLY" ]; then
+      rm -f "$_log"
+      die "$desc: deploy direcionado saiu com código $_rc — não emitir recibo mesmo com marcador final"
+    fi
     echo "⚠ firebase saiu com código $_rc DEPOIS de confirmar o deploy; seguindo pela evidência do CLI."
   fi
   rm -f "$_log"
+  if [ "$ALVO" = "autodraw" ] && [ -n "$ONLY" ]; then
+    SP_DEPLOY_CONFIRMED=1 node "$ROOT/scripts/check-backend-publicado.js" --registrar-funcoes "$targets"
+  fi
 }
 
 do_main() {
@@ -183,6 +190,8 @@ do_autodraw() {
   all="$(targets_cjs "$ROOT/functions-autodraw/index.js" 'functions:')"
   targets="$(selected_targets "$all" 'functions:')" || return $?
   if [ "$DRY" != 1 ]; then
+    [ -z "$(git -C "$ROOT" status --porcelain)" ] || die "autodraw: árvore suja; recusado carimbar SHA diferente do artefato"
+    node "$ROOT/scripts/check-vendor-fresh.js" || die "autodraw: vendor desatualizado"
     [ -d "$ROOT/functions-autodraw/node_modules" ] || (cd "$ROOT/functions-autodraw" && npm ci)
     (cd "$ROOT/functions-autodraw" && node copy-vendor.js && node test-draw.js) \
       || die "autodraw: test-draw.js falhou — NÃO deployar sorteio quebrado"

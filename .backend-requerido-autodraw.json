@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "backendCommit": "ad116e7df4b7cb3b9118660902c310d92255f6fc",
+  "functions": [
+    "drawRound",
+    "updateTournamentConfiguration",
+    "resolvePendingDraw",
+    "setPendingInitialSchedule",
+    "getPendingInitialDraw",
+    "getPendingDrawReviewState"
+  ]
+}
