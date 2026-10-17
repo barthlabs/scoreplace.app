@@ -1266,7 +1266,6 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // O X não pode depender de uid: importados sem conta também têm dupla e
       // carregam manualParticipantId. A operação valida a identidade no servidor.
       var split = '<button type="button" class="cancel-x-btn" title="Desfazer dupla" aria-label="Desfazer dupla ' + _esc(a.name + ' e ' + b.name) + '" onclick="event.stopPropagation();window._erSplitPair(' + a.order + ',this)" style="--cx-size:23px;position:absolute;top:7px;right:7px;">✕</button>';
-      var canEdit = !!(_liveState && _liveState.isOrg && _liveState.t && _liveState.t.canonicalRegistrationMigration && _liveState.t.canonicalRegistrationMigration.fingerprint);
       var thirdPair = _erIsTransferredFemalePair(members, _liveState && _liveState.t);
       function memberLine(person) {
         var name = _esc(person.name);
@@ -1275,7 +1274,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           : verdict === _LZ_COL.yellow ? 'var(--er-lz-yellow,#f0b445)'
           : verdict === _LZ_COL.red ? 'var(--er-lz-red,#f26a6a)'
           : window._spCor(verdict, 'color');
-        var content = canEdit ? '<button type="button" title="Clique para editar esta vaga" aria-label="Editar vaga de ' + name + '" onclick="event.stopPropagation();window._erEditPairMember(' + person.order + ')" style="background:none;border:0;color:inherit;cursor:pointer;font:inherit;text-align:left;padding:0;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;overflow-wrap:anywhere;">' + name + '</button>' : name;
+        var content = '<button type="button" title="Abrir ficha de ' + name + '" aria-label="Abrir ficha de ' + name + '" onclick="event.stopPropagation();window._erOpenParticipantFicha(' + person.order + ')" style="background:none;border:0;color:inherit;cursor:pointer;font:inherit;text-align:left;padding:0;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;overflow-wrap:anywhere;">' + name + '</button>';
         return '<div style="display:flex;align-items:center;min-width:0;font-size:14px;font-weight:750;color:' + nameColor + ';line-height:1.25;overflow-wrap:anywhere;">' + content + '</div>';
       }
       var pairCat = _decomposeCat(_erPairCategory(members), _liveState && _liveState.t || {});
@@ -1283,27 +1282,31 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         memberLine(a) + memberLine(b) + split + (thirdPair ? '<span class="badge badge-info" title="Dupla 3: inscrição originalmente masculina" aria-label="Dupla 3" style="position:absolute;right:8px;bottom:7px;font-size:10px;line-height:1;padding:2px 5px;">3</span>' : '') +
       '</div>';
   }
+  window._erOpenParticipantFicha = function (order) {
+    var row = (_liveState && _liveState.rows || []).find(function (item) { return item.order === Number(order); });
+    if (row && typeof window._lzAthleteDialog === 'function') window._lzAthleteDialog(row.uid || '', row.order);
+  };
+  var _erReplacementChoice = '';
+  window._erChooseReplacement = function (uid) { _erReplacementChoice = String(uid || ''); };
   window._erEditPairMember = function (order) {
     if (!_liveState || !_liveState.isOrg || !(_liveState.t.canonicalRegistrationMigration || {}).fingerprint) return;
     var row = (_liveState.rows || []).find(function (item) { return item.order === Number(order); });
     if (!row || row._duplaIdx == null || !(row.uid || row.manualId) || !row.categoryId) return;
-    var replacing = !!row.uid;
     if (typeof showInputDialog !== 'function' || typeof window._callCF !== 'function') return;
-    showInputDialog(replacing ? 'Substituir integrante' : 'Corrigir nome da vaga',
-      replacing ? 'A conta de ' + _esc(row.name) + ' sairá desta dupla. Digite o nome de quem ocupará a vaga; o perfil da conta antiga não será alterado.'
-        : 'Digite o nome correto para a vaga de ' + _esc(row.name) + '.',
+    showInputDialog('Trocar participante',
+      'Digite o nome de quem vai ocupar a vaga de ' + _esc(row.name) + '. Depois escolha a conta existente, se houver, ou uma vaga digitada.',
       function (value) {
         var newName = String(value || '').trim();
         if (newName.length < 2 || newName.length > 120) {
           if (typeof showNotification === 'function') showNotification('Nome inválido', 'Digite um nome entre 2 e 120 caracteres.', 'warning');
           return;
         }
-        function submit() {
+        function submit(targetUid) {
           window._callCF('editCanonicalTournamentSlot', { tournamentId: String(_liveState.t.id),
             sandbox: _liveState.t.isSandbox === true, uid: row.uid || '', manualParticipantId: row.manualId || '',
             categoryId: (typeof window._canonicalCategoryIdForDisplay === 'function'
               ? (window._canonicalCategoryIdForDisplay(_liveState.t, row.categoryId) || row.categoryId)
-              : row.categoryId), expectedName: row.name, newName: newName },
+              : row.categoryId), expectedName: row.name, newName: targetUid ? '' : newName, targetUid: targetUid || '' },
           'Entre na sua conta para editar a vaga.').then(function () {
             var tId = String(_liveState.t.id);
             delete _erCanonicalLoaded[tId];
@@ -1315,11 +1318,33 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
             if (typeof showNotification === 'function') showNotification('Não foi possível editar', String((error && error.message) || error), 'error');
           });
         }
-        if (replacing && typeof showConfirmDialog === 'function') {
-          showConfirmDialog('Substituir esta conta?', 'A inscrição de ' + _esc(row.name) + ' será retirada desta vaga e substituída por ' + _esc(newName) + '.', submit,
-            function () {}, { type: 'warning', confirmText: 'Substituir', cancelText: 'Cancelar' });
-        } else submit();
-      }, { placeholder: 'Nome completo', okText: replacing ? 'Continuar' : 'Salvar nome' });
+        if (typeof showConfirmDialog !== 'function') return;
+        var db = window.FirestoreDB && window.FirestoreDB.db;
+        if (!db) {
+          if (typeof showNotification === 'function') showNotification('Busca de contas indisponível', 'Recarregue a Análise antes de trocar esta vaga.', 'error');
+          return;
+        }
+        // user-vivo:isento — esta é uma LISTA de contas candidatas; lápides são
+        // removidas abaixo e o servidor revalida mergedInto antes de vincular.
+        var query = db.collection(window._COLECAO_PERFIL_PUBLICO || 'usersPublic')
+          .where('displayName_lower', '>=', newName.toLowerCase())
+          .where('displayName_lower', '<', newName.toLowerCase() + '\uf8ff').limit(20).get();
+        Promise.resolve(query).then(function (snap) {
+          var accounts = [];
+          if (snap) snap.forEach(function (doc) {
+            var profile = doc.data() || {};
+            if (!profile.mergedInto && profile.displayName) accounts.push({ uid: doc.id, name: profile.displayName });
+          });
+          _erReplacementChoice = '';
+          var choices = '<label style="display:block;margin:8px 0;"><input type="radio" name="er-replacement" checked onchange="window._erChooseReplacement(\'\')"> Nome digitado: <b>' + _esc(newName) + '</b></label>' +
+            accounts.map(function (account) { return '<label style="display:block;margin:8px 0;"><input type="radio" name="er-replacement" onchange="window._erChooseReplacement(\'' + _escAttr(account.uid) + '\')"> Conta: <b>' + _esc(account.name) + '</b></label>'; }).join('');
+          showConfirmDialog('Confirmar troca da vaga', '<div style="text-align:left;">' + _esc(row.name) + ' sairá desta vaga. Escolha a identidade de destino:' + choices + '</div>',
+            function () { submit(_erReplacementChoice); }, function () {},
+            { type: 'warning', confirmText: 'Trocar participante', cancelText: 'Cancelar' });
+        }).catch(function (error) {
+          if (typeof showNotification === 'function') showNotification('Busca de contas indisponível', String(error && error.message || error), 'error');
+        });
+      }, { placeholder: 'Nome completo', okText: 'Continuar' });
   };
   function _erFormedPairsPanel(rows, t) {
     // Duplas sem categoria ficam no bloco de duplas; depois do drop elas saem
@@ -3253,7 +3278,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // card mostra) — indexar rótulo velho faz a busca achar quem a tela não mostra, que
       // foi exatamente o defeito da busca da chave na 1.7.47.
       return '<div draggable="true" data-er-order="' + r.order + '" data-er-person="' + _esc(r.name || '') + '" data-er-gender="' + (_mxGenderOf(r) || '') + '" data-er-skill="' + _esc(_mxSkillOf(r, t) || '') + '" ondragstart="window._erMxDragStart(event,' + r.order + ')" ondragover="window._erMxOver(event)" ondrop="window._erMxDropOnSolo(event,' + r.order + ')"' + click + selectionClick + ' ' +
-        'aria-pressed="' + (selected ? 'true' : 'false') + '" style="cursor:' + (canOpen ? 'pointer' : 'grab') + ';font-size:0.74rem;font-weight:600;padding:4px 7px;border-radius:6px;min-width:0;background:' + (selected ? 'rgba(14,165,233,0.20)' : 'var(--bg-card,rgba(0,0,0,0.25))') + ';color:' + window._spCor(nameCol, 'color') + ';border:' + (selected ? '2px solid #38bdf8' : ('1px solid ' + window._spCor(border, 'borda'))) + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + tip + '">' + _esc(r.name || '(sem nome)') + '</div>';
+        'aria-pressed="' + (selected ? 'true' : 'false') + '" style="cursor:' + (canOpen ? 'pointer' : 'grab') + ';font-size:0.74rem;font-weight:600;padding:4px 7px;border-radius:6px;min-width:0;background:' + (selected ? 'rgba(14,165,233,0.20)' : 'var(--bg-card,rgba(0,0,0,0.25))') + ';color:' + window._spCor(nameCol, 'color') + ';border:' + (selected ? '2px solid #38bdf8' : ('1px solid ' + window._spCor(border, 'borda'))) + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + tip + '"><button type="button" onclick="event.stopPropagation();window._erOpenParticipantFicha(' + r.order + ')" style="background:none;border:0;color:inherit;font:inherit;cursor:pointer;padding:0;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;max-width:100%;overflow:hidden;text-overflow:ellipsis;">' + _esc(r.name || '(sem nome)') + '</button></div>';
     }
     function cardGrid(arr, pairs) {
       // minmax(0,...) e o que impede o estouro: com min-width:auto o nome longo
@@ -4114,7 +4139,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     return { g: { x: gX, y: gY }, t: { x: tX, y: tY }, r: { x: rX, y: rY } };
   };
 
-  window._lzAthleteDialog = function (uid) {
+  window._lzAthleteDialog = function (uid, order) {
+    var _slotRow = order != null && _liveState && (_liveState.rows || []).find(function (item) { return item.order === Number(order); });
     var ctx = window._lzScanCtx || {};
     var tg = ctx.byUid && ctx.byUid[uid];
     // ── A FICHA É DE QUEM TEM JOGO, NÃO DE QUEM AUTORIZOU ─────────────────────────
@@ -4127,7 +4153,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // (o @, as barras do perfil público e o botão de puxar).
     if (!tg) {
       var _pf = (window._lzRenderCtx && window._lzRenderCtx.profileMap && window._lzRenderCtx.profileMap[uid]) || {};
-      tg = { name: _pf.displayName || _pf.name || _lzNomeDoUid(uid) || 'Atleta', handle: null, semLetzplay: true };
+      tg = { name: (_slotRow && _slotRow.name) || _pf.displayName || _pf.name || _lzNomeDoUid(uid) || 'Atleta', handle: null, semLetzplay: true };
     }
     var _temLz = !tg.semLetzplay;
     window._lzDialogUid = uid;      // a barra do topo age sobre este atleta
@@ -4358,16 +4384,26 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
             'color:var(--text-main,#e8ecf3);white-space:nowrap;">← Voltar</button>' +
             // Sem letzplay não há o que puxar — o botão sumiria de qualquer jeito no
             // primeiro clique (a leitura precisa do @). Melhor não oferecer.
-            (_temLz ? _botaoPuxar() : '') });
+            (_temLz ? _botaoPuxar() : '') +
+            (_slotRow && _slotRow._duplaIdx != null && _liveState && _liveState.isOrg &&
+              _liveState.t && (_liveState.t.canonicalRegistrationMigration || {}).fingerprint
+              ? '<button type="button" onclick="window._erEditFromFicha(' + _slotRow.order + ')" style="padding:8px 12px;border-radius:9px;cursor:pointer;font-size:0.78rem;font-weight:700;border:1px solid #f59e0b;background:rgba(245,158,11,.12);color:#fbbf24;">✏️ Trocar participante</button>' : '') });
       // a aba de torneios já está montada; isto só pinta o botão ativo
       setTimeout(function () { if (typeof window._lzAba === 'function') window._lzAba('tour'); }, 0);
       if (_temLz) _lzConferirExtensao();
       // Completa os "de y" das barras AO VIVO com os totais do perfil público
       // (a extensão lê "472 Jogos · 29 Rankings · 35 Torneios" e devolve).
-      setTimeout(function () { _lzAskProfileCounts(tg.handle); }, 60);
+      if (_temLz) setTimeout(function () { _lzAskProfileCounts(tg.handle); }, 60);
     } else {
-      window._lzAthleteImport(uid);
+      // Sem o diálogo não há ficha; importar sem @ do letzplay não inicia
+      // leitura válida e só gerava uma ação silenciosa para vagas manuais.
+      if (uid && _temLz) window._lzAthleteImport(uid);
     }
+  };
+  window._erEditFromFicha = function (order) {
+    var dialog = document.getElementById('custom-confirm-dialog');
+    if (dialog) dialog.remove();
+    window._erEditPairMember(order);
   };
   // Pede os TOTAIS do perfil público à extensão e atualiza as barras do dialog aberto.
   function _lzAskProfileCounts(handle) {

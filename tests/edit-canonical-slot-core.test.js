@@ -41,6 +41,11 @@ assert.equal(renamedDraft.matches[0].createdAt, stamp);
 assert.equal(draft.participants[0].p1Name, 'Nome anterior');
 assert.throws(() => core.plan(tid, [a, b], { manualParticipantId: 'a' }, categoryId, 'Outro nome', 'Nome corrigido'));
 assert.throws(() => core.patchDraft({ participants: [side], matches: [] }, rename));
+assert.equal(core.patchPair({ p1ManualId: 'a', p2Uid: 'unrelated' }, rename), false,
+  'lado sem fixedPairId de outra dupla é ignorado');
+assert.throws(() => core.patchDraft({ participants: [{ p1ManualId: 'a', p2Uid: 'unrelated' }],
+  matches: [{ team1Obj: { p1ManualId: 'a', p2Uid: 'unrelated' } }] }, rename), /referências incompletas/,
+  'um alvo ausente no rascunho impede o commit inteiro');
 
 const replace = core.plan(tid, [a, b], { uid: 'b' }, categoryId, 'Parceiro', 'Novo parceiro', 'replacement');
 assert.equal(replace.changes.creates.length, 1);
@@ -113,6 +118,38 @@ assert.equal(core.findLegacyMirror([{ ref: 'sandboxes/sb-test/inscritos/pair', d
 assert.equal(core.hasIdentity(['x', 'b'], { uid: 'b' }), true);
 assert.equal(core.hasIdentity({ absent: ['b'] }, { uid: 'b' }), true);
 assert.equal(core.hasIdentity({ absent: ['another'] }, { uid: 'b' }), false);
+for (const [source, sourceSide] of [[a, 'p1'], [b, 'p2']]) {
+  const target = core.plan(tid, [a, b], source.participantKind === 'account' ? { uid: 'b' } : { manualParticipantId: 'a' },
+    categoryId, source.participantKind === 'account' ? 'Parceiro' : 'Nome anterior', 'Conta nova', null, 'new-uid');
+  const changed = { ...side, fixedPair: true };
+  assert.equal(core.sourceSlot(changed, target), sourceSide);
+  assert.equal(core.patchPair(changed, target, { legacyMirror: true }), true);
+  assert.equal(changed[sourceSide + 'Uid'], 'new-uid');
+  assert.equal(changed[sourceSide + 'ManualId'], undefined);
+  const patch = core.mirrorWritePatch(changed, target, deleted, sourceSide);
+  assert.equal(patch[sourceSide + 'Uid'], 'new-uid');
+  assert.equal(patch[sourceSide + 'ManualId'], deleted);
+  const nextDraft = core.patchDraft(draft, target);
+  assert.equal(nextDraft.matches[0].team1Obj[sourceSide + 'Uid'], 'new-uid');
+  assert.equal(target.changes.creates[0].participantKind, 'account');
+  assert.equal(target.changes.updates[0].withdrawnReason, 'organizer_replaced');
+}
+const withdrawnTarget = registration('uid:returned', '');
+withdrawnTarget.status = 'withdrawn'; withdrawnTarget.withdrawnReason = 'organizer_replaced';
+const reactivate = core.plan(tid, [a, b, withdrawnTarget], { manualParticipantId: 'a' }, categoryId,
+  'Nome anterior', 'Conta de volta', null, 'returned');
+assert.equal(reactivate.changes.creates.length, 0);
+assert.equal(reactivate.changes.updates[2].withdrawnReason, null);
+const reactivated = boundary.applyChanges({ id: tid, creatorUid: 'organizer', canonicalRegistrationMigration: {
+  fingerprint: 'reactivate-test', registrationCount: 3,
+} }, [a, b, withdrawnTarget], reactivate.changes.updates, reactivate.changes.creates);
+assert.equal(reactivated.tournament.canonicalRegistrationMigration.registrationCount, 3);
+assert.equal(reactivated.registrations.find((item) => item.participantUid === 'returned').status, 'confirmed');
+assert.throws(() => core.plan(tid, [a, b], { manualParticipantId: 'a' }, categoryId,
+  'Nome anterior', 'Parceiro', null, 'b'), /já ocupa/);
+const homonym = core.plan(tid, [a, b], { manualParticipantId: 'a' }, categoryId,
+  'Nome anterior', 'Nome anterior', null, 'homonym-uid');
+assert.equal(homonym.newIdentity.uid, 'homonym-uid', 'conta e manual homônimos são identidades distintas');
 const next = [a, replace.changes.updates[0], replace.changes.creates[0]];
 assert.throws(() => claimManualParticipant(tid, next, 'replacement', 'b'), /retirada/);
 const source = fs.readFileSync(path.join(__dirname, '../functions/index.js'), 'utf8');
@@ -125,6 +162,6 @@ assert.match(callable, /_slotPublishedExtras\(state\.tournament\)/);
 assert.match(callable, /pendingCanonicalParticipantClaims/);
 assert.match(callable, /_writeCanonicalRosterChanges\(tx/);
 assert.match(callable, /_editCanonicalSlot\.findLegacyMirror\(mirrorDocuments, edit\)/);
-assert.match(callable, /tx\.update\(match\.ref, _editCanonicalSlot\.mirrorWritePatch\(patchedMirror, edit, _FV\.delete\(\)\)\)/);
+assert.match(callable, /tx\.update\(match\.ref, _editCanonicalSlot\.mirrorWritePatch\(patchedMirror, edit, _FV\.delete\(\), oldSlot\)\)/);
 assert.match(callable, /tx\.update\(state\.privateDrawRef, \{ draft/);
 console.log('✓ edição canônica da vaga: nome manual, troca de UID, três jogos e isolamento do rascunho');

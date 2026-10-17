@@ -8,9 +8,10 @@ const { normalizeName } = require('./manual-name-unique-core');
 const text = (value) => typeof value === 'string' ? value.trim() : '';
 const active = (item) => item && item.status === 'confirmed';
 
-function plan(tournamentId, registrations, identity, categoryId, expectedName, newName, manualId) {
+function plan(tournamentId, registrations, identity, categoryId, expectedName, newName, manualId, targetUid) {
   const name = text(newName).replace(/\s+/g, ' ');
   if (name.length < 2 || name.length > 120 || /[<>\x00-\x1f]/.test(name)) throw new Error('nome inválido');
+  const target = text(targetUid);
   const all = Array.from(indexRegistrations(tournamentId, registrations).values());
   const source = all.filter((item) => active(item) && item.categoryId === categoryId &&
     (identity.uid ? item.participantUid === identity.uid : item.manualParticipantId === identity.manualParticipantId));
@@ -26,9 +27,30 @@ function plan(tournamentId, registrations, identity, categoryId, expectedName, n
   if (!partner) throw new Error('parceiro não encontrado');
   const partnerName = partner.participantKind === 'manual' ? partner.manualDisplayName : '';
   if (partnerName && normalizeName(partnerName) === normalizeName(name)) throw new Error('os integrantes da dupla precisam ser diferentes');
-  if (all.some((item) => active(item) && item.registrationId !== current.registrationId &&
+  // Nome de conta vem do perfil público verificado pelo servidor; identidade é UID.
+  // Homônimos conta/manual são válidos, mas nomes manuais seguem únicos.
+  if (!target && all.some((item) => active(item) && item.registrationId !== current.registrationId &&
     item.participantKind === 'manual' && normalizeName(item.manualDisplayName) === normalizeName(name))) {
     throw new Error('já existe inscrito com este nome');
+  }
+  if (target) {
+    if (target === current.participantUid || target === partner.participantUid) throw new Error('conta já ocupa esta dupla');
+    const key = 'uid:' + target;
+    const id = registrationId(key, categoryId);
+    const existing = all.find((item) => item.registrationId === id);
+    if (existing && (existing.participantKind !== 'account' || existing.participantUid !== target)) throw new Error('identidade de destino divergente');
+    if (existing && existing.status !== 'withdrawn') throw new Error('conta já inscrita nesta categoria');
+    if (existing && !['', 'left', 'organizer_replaced'].includes(text(existing.withdrawnReason))) throw new Error('inscrição histórica não pode ser reativada');
+    const newPairId = canonicalPairId(tournamentId, categoryId, [id, partner.registrationId]);
+    const updates = [Object.assign({}, current, { status: 'withdrawn', fixedPairId: null, withdrawnReason: 'organizer_replaced' }),
+      Object.assign({}, partner, { fixedPairId: newPairId })];
+    const creates = [];
+    if (existing) updates.push(Object.assign({}, existing, { status: 'confirmed', validationState: 'approved', fixedPairId: newPairId, withdrawnReason: null }));
+    else creates.push({ registrationId: id, tournamentId, categoryId, originCategoryId: categoryId,
+      participantKey: key, participantKind: 'account', participantUid: target, manualParticipantId: null,
+      status: 'confirmed', validationState: 'approved', fixedPairId: newPairId });
+    return { source: current, partner, newName: name, newIdentity: { uid: target }, newPairId,
+      changes: { updates, creates } };
   }
   if (current.participantKind === 'manual') {
     if (normalizeName(current.manualDisplayName) === normalizeName(name)) throw new Error('nome sem alteração');
@@ -70,6 +92,18 @@ function findLegacyMirror(documents, edit) {
   return matches[0];
 }
 
+function sourceSlot(entry, edit) {
+  const field = edit.source.participantKind === 'account' ? 'Uid' : 'ManualId';
+  const value = edit.source.participantKind === 'account' ? edit.source.participantUid : edit.source.manualParticipantId;
+  const matches = ['p1', 'p2'].filter((slot) => entry[slot + field] === value);
+  if (matches.length !== 1) throw new Error('vaga de origem ausente ou ambígua');
+  const slot = matches[0], other = slot === 'p1' ? 'p2' : 'p1';
+  const partnerField = edit.partner.participantKind === 'account' ? 'Uid' : 'ManualId';
+  const partnerValue = edit.partner.participantKind === 'account' ? edit.partner.participantUid : edit.partner.manualParticipantId;
+  if (entry[other + partnerField] !== partnerValue) throw new Error('parceiro divergente');
+  return slot;
+}
+
 function patchPair(entry, edit, options) {
   if (!entry || typeof entry !== 'object') return false;
   const oldField = edit.source.participantKind === 'account' ? 'Uid' : 'ManualId';
@@ -77,19 +111,29 @@ function patchPair(entry, edit, options) {
   const slots = ['p1', 'p2'].filter((slot) => entry[slot + oldField] === oldValue);
   if (!slots.length) return false;
   const legacyMirror = !!(options && options.legacyMirror);
-  if (slots.length !== 1 || (!legacyMirror && entry.fixedPairId !== edit.source.fixedPairId) ||
-      (legacyMirror && (entry.fixedPair !== true || (entry.fixedPairId && entry.fixedPairId !== edit.source.fixedPairId)))) {
+  if (slots.length !== 1 || (legacyMirror && entry.fixedPair !== true)) {
     throw new Error('referência de dupla ambígua');
+  }
+  if (entry.fixedPairId && entry.fixedPairId !== edit.source.fixedPairId) {
+    if (legacyMirror) throw new Error('referência de dupla ambígua');
+    return false;
   }
   const slot = slots[0];
   const other = slot === 'p1' ? 'p2' : 'p1';
   const partnerField = edit.partner.participantKind === 'account' ? 'Uid' : 'ManualId';
   const partnerValue = edit.partner.participantKind === 'account' ? edit.partner.participantUid : edit.partner.manualParticipantId;
-  if (entry[other + partnerField] !== partnerValue) throw new Error('parceiro divergente');
-  if (edit.source.participantKind === 'account') {
+  if (entry[other + partnerField] !== partnerValue) {
+    // No rascunho, outra categoria pode repetir o mesmo UID sem ser a dupla
+    // procurada. O chamador exige exatamente um participante e >=1 jogo alterado.
+    if (!entry.fixedPairId) return false;
+    throw new Error('parceiro divergente');
+  }
+  if (edit.source.participantKind !== 'manual' || edit.newIdentity.uid) {
     delete entry[slot + 'Uid'];
-    entry[slot + 'ManualId'] = edit.newIdentity.manualParticipantId;
-    if (!legacyMirror || entry.fixedPairId) entry.fixedPairId = edit.newPairId;
+    delete entry[slot + 'ManualId'];
+    if (edit.newIdentity.uid) entry[slot + 'Uid'] = edit.newIdentity.uid;
+    else entry[slot + 'ManualId'] = edit.newIdentity.manualParticipantId;
+    if (entry.fixedPairId) entry.fixedPairId = edit.newPairId;
   }
   const oldName = entry[slot + 'Name'];
   entry[slot + 'Name'] = edit.newName;
@@ -99,16 +143,18 @@ function patchPair(entry, edit, options) {
   return true;
 }
 
-function mirrorWritePatch(document, edit, deleteFieldValue) {
+function mirrorWritePatch(document, edit, deleteFieldValue, oldSlot) {
   const mirror = legacyItem(document);
   const prefix = mirror === document ? '' : 'item.';
-  const slot = mirror.p1ManualId === edit.newIdentity.manualParticipantId ? 'p1' :
-    (mirror.p2ManualId === edit.newIdentity.manualParticipantId ? 'p2' : '');
+  const matches = (slot) => edit.newIdentity.uid
+    ? mirror[slot + 'Uid'] === edit.newIdentity.uid
+    : mirror[slot + 'ManualId'] === edit.newIdentity.manualParticipantId;
+  const slot = oldSlot || (matches('p1') !== matches('p2') ? (matches('p1') ? 'p1' : 'p2') : '');
   if (!slot) throw new Error('vaga substituta ausente do espelho');
   const patch = { [prefix + slot + 'Name']: edit.newName };
-  if (edit.source.participantKind === 'account') {
-    patch[prefix + slot + 'Uid'] = deleteFieldValue;
-    patch[prefix + slot + 'ManualId'] = edit.newIdentity.manualParticipantId;
+  if (edit.source.participantKind !== 'manual' || edit.newIdentity.uid) {
+    patch[prefix + slot + 'Uid'] = edit.newIdentity.uid || deleteFieldValue;
+    patch[prefix + slot + 'ManualId'] = edit.newIdentity.manualParticipantId || deleteFieldValue;
     if (mirror.fixedPairId) patch[prefix + 'fixedPairId'] = edit.newPairId;
   }
   if (typeof mirror[slot] === 'string') patch[prefix + slot] = mirror[slot];
@@ -163,4 +209,4 @@ function patchDraft(draft, edit) {
   return next;
 }
 
-module.exports = { plan, legacyItem, findLegacyMirror, patchPair, mirrorWritePatch, patchDraft, hasIdentity };
+module.exports = { plan, legacyItem, findLegacyMirror, sourceSlot, patchPair, mirrorWritePatch, patchDraft, hasIdentity };

@@ -4477,9 +4477,11 @@ exports.editCanonicalTournamentSlot = onCall(
     const categoryId = String(data.categoryId || '').trim();
     const expectedName = String(data.expectedName || '').trim();
     const newName = String(data.newName || '').trim();
+    const targetUid = String(data.targetUid || '').trim();
     if (!tournamentId || tournamentId.length > 180 || tournamentId.includes('/') ||
         sandbox !== tournamentId.startsWith('sb_') || !!uid === !!manualParticipantId ||
-        !categoryId || categoryId.length > 180 || !newName || !expectedName) {
+        !categoryId || categoryId.length > 180 || !expectedName ||
+        (!!targetUid === !!newName) || targetUid.includes('/') || targetUid.length > 128) {
       throw new HttpsError('invalid-argument', 'vaga ou nome inválido');
     }
     const db = admin.firestore();
@@ -4500,8 +4502,17 @@ exports.editCanonicalTournamentSlot = onCall(
       const logicalId = sandbox ? String(raw.sandboxOf) : tournamentId;
       const checked = await _loadCanonicalRosterForMutation(tx, ref, state.tournament, sandbox ? logicalId : '');
       const identity = uid ? { uid } : { manualParticipantId };
+      let destinationName = newName;
+      if (targetUid) {
+        const profileSnap = await tx.get(db.collection('usersPublic').doc(targetUid));
+        const profile = profileSnap.exists ? profileSnap.data() || {} : {};
+        if (!profileSnap.exists || profile.mergedInto || !String(profile.displayName || '').trim()) {
+          throw new HttpsError('failed-precondition', 'conta de destino sem perfil público válido');
+        }
+        destinationName = String(profile.displayName).trim();
+      }
       let edit;
-      try { edit = _editCanonicalSlot.plan(logicalId, checked.registrations, identity, categoryId, expectedName, newName); }
+      try { edit = _editCanonicalSlot.plan(logicalId, checked.registrations, identity, categoryId, expectedName, destinationName, null, targetUid); }
       catch (error) { throw new HttpsError('failed-precondition', error.message); }
       const auxiliary = ['waitlist', 'standbyParticipants', 'sorteioRealizado', 'placeholderReservations',
         'monarchWaitlist', 'woHistory', 'woSubstituteFor', 'checkedIn', 'absent', 'vips'];
@@ -4512,6 +4523,10 @@ exports.editCanonicalTournamentSlot = onCall(
       if (claims.some((item) => _slotHasIdentity(item, identity))) {
         throw new HttpsError('failed-precondition', 'vaga com vínculo de conta pendente');
       }
+      if (targetUid && (auxiliary.some((key) => _slotHasIdentity(state.tournament[key], { uid: targetUid })) ||
+          claims.some((item) => _slotHasIdentity(item, { uid: targetUid })))) {
+        throw new HttpsError('failed-precondition', 'conta de destino referenciada em outra etapa do torneio');
+      }
       const mirrorCol = ref.collection(_tSplitFn.colecaoDaParte('participants'));
       const mirrorSnap = await tx.get(mirrorCol);
       const mirrorDocuments = mirrorSnap.docs.map((doc) => ({ ref: doc.ref, data: doc.data() || {} }));
@@ -4519,14 +4534,16 @@ exports.editCanonicalTournamentSlot = onCall(
       try { match = _editCanonicalSlot.findLegacyMirror(mirrorDocuments, edit); }
       catch (error) { throw new HttpsError('failed-precondition', error.message); }
       const mirror = Object.assign({}, _editCanonicalSlot.legacyItem(match.data));
-      const oldSlot = mirror.p1Uid === uid || mirror.p1ManualId === manualParticipantId ? 'p1' : 'p2';
+      let oldSlot;
+      try { oldSlot = _editCanonicalSlot.sourceSlot(mirror, edit); }
+      catch (error) { throw new HttpsError('failed-precondition', error.message); }
       if (!uid && _manualNameUnique.normalizeName(mirror[oldSlot + 'Name']) !== _manualNameUnique.normalizeName(expectedName)) {
         throw new HttpsError('failed-precondition', 'o nome da vaga mudou; atualize a análise');
       }
-      if (_manualNameUnique.normalizeName(mirror[oldSlot === 'p1' ? 'p2Name' : 'p1Name']) === _manualNameUnique.normalizeName(edit.newName) ||
-          mirrorDocuments.some((doc) => doc.ref.path !== match.ref.path &&
+      if ((!targetUid && _manualNameUnique.normalizeName(mirror[oldSlot === 'p1' ? 'p2Name' : 'p1Name']) === _manualNameUnique.normalizeName(edit.newName)) ||
+          (!targetUid && mirrorDocuments.some((doc) => doc.ref.path !== match.ref.path &&
             ['p1Name', 'p2Name'].some((key) =>
-              _manualNameUnique.normalizeName((_editCanonicalSlot.legacyItem(doc.data) || {})[key]) === _manualNameUnique.normalizeName(edit.newName)))) {
+              _manualNameUnique.normalizeName((_editCanonicalSlot.legacyItem(doc.data) || {})[key]) === _manualNameUnique.normalizeName(edit.newName))))) {
         throw new HttpsError('failed-precondition', 'já existe inscrito com este nome');
       }
       try {
@@ -4540,9 +4557,9 @@ exports.editCanonicalTournamentSlot = onCall(
       const next = _writeCanonicalRosterChanges(tx, ref, state.tournament, checked.registrations,
         edit.changes, null, sandbox ? logicalId : '');
       const patchedMirror = match.data.item ? Object.assign({}, match.data, { item: mirror }) : mirror;
-      tx.update(match.ref, _editCanonicalSlot.mirrorWritePatch(patchedMirror, edit, _FV.delete()));
+      tx.update(match.ref, _editCanonicalSlot.mirrorWritePatch(patchedMirror, edit, _FV.delete(), oldSlot));
       if (draft) tx.update(state.privateDrawRef, { draft, updatedAt: _FV.serverTimestamp() });
-      return { ok: true, participants: next.participants, replacedAccount: !!uid };
+      return { ok: true, participantsCount: next.participants.length, replacedAccount: !!uid };
     });
   }
 );

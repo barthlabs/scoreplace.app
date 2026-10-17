@@ -264,6 +264,7 @@ const SUITES = [
   'tests/l9-censo-formatos-legados.test.js',
   'tests/l7-rename-participant-core.test.js',
   'tests/edit-canonical-slot-core.test.js',
+  'tests/edit-canonical-slot-emulator.test.js',
   'tests/l7-liga-availability-cf.test.js',
   'tests/l7-liga-availability-package-boundary.test.js',
   'tests/l7-host-organization-cf.test.js',
@@ -1030,6 +1031,7 @@ const SUITES = [
   // a busca da Análise existia no código e nunca chegava à tela (função órfã).
   'tests/analise-barra-de-busca.test.js',
   'tests/analise-marca-dupla-3.test.js',
+  'tests/analise-ficha-vaga-manual.test.js',
   'tests/analise-categorias-configuradas.test.js',
   'tests/duplas-rehydrate-drag-ghost.test.js',
   'tests/jogo-so-com-placar.test.js',

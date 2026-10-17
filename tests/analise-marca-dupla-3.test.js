@@ -52,7 +52,8 @@ const renderEditable = new Function('window', '_LZ_COL', '_erIsTransferredFemale
 );
 const editable = renderEditable(pair('cat-m', 'Fem Light').map((member, index) => Object.assign(member,
   { order: index + 1, name: 'Pessoa ' + (index + 1), assigned: ['Fem Light'] })));
-assert.strictEqual((editable.match(/window\._erEditPairMember\(/g) || []).length, 2, 'cada nome abre a própria vaga');
+assert.strictEqual((editable.match(/window\._erOpenParticipantFicha\(/g) || []).length, 2, 'cada nome abre a própria ficha');
+assert(!editable.includes('onclick="event.stopPropagation();window._erEditPairMember('), 'edição não aparece no card');
 assert(!editable.includes('✏️'), 'nenhum lápis na dupla');
 const statusMembers = pair('cat-m', 'Fem Light').map((member, index) => Object.assign(member,
   { order: index + 1, name: 'Pessoa ' + (index + 1), _lzColor: index ? lzColors.red : lzColors.green }));
