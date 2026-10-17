@@ -2085,6 +2085,13 @@ input[type="date"].form-control::-webkit-calendar-picker-indicator:hover {
   min-width:100% !important;
   gap:1rem !important;
 }
+.bracket-zoom-controls button {
+  border:0;background:transparent;color:var(--text-main);font-size:1.1rem;
+  line-height:1;min-width:32px;min-height:32px;cursor:pointer;border-radius:50%;
+}
+.bracket-zoom-controls button:hover,.bracket-zoom-controls button:focus-visible {
+  color:var(--text-bright);background:rgba(129,140,248,.18);
+}
 .bracket-scroll-content > .bracket-round-column,
 .bracket-columns-track > .bracket-round-column {
   box-sizing:border-box;

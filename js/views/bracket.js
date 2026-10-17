@@ -857,88 +857,103 @@ function _bracketIsEliminationTree(t) {
   var format = String((phase && (phase.format || phase.formatCode || phase.kind)) || (t && (t.format || t.classifyFormat)) || '').toLowerCase();
   return !!(t && t.currentStage === 'elimination') || /eliminat|knockout/.test(format);
 }
-function _bracketDirectVisibleCards(column) {
-  return Array.prototype.filter.call(column ? column.children : [], function (node) {
-    return node && node.classList && node.classList.contains('sp-match-card') && !node.hidden;
-  });
-}
-// Em eliminatória, o par de jogos da coluna anterior alimenta um único jogo na
-// seguinte. Desenhamos os conectores no mesmo trilho horizontal, preservando o
-// layout dos cards. Classificatórias não passam por aqui: suas rodadas são
-// independentes e nunca devem ganhar linhas que insinuem avanço.
+// Apenas arestas explícitas de vitória entram no desenho. Contar cartões por
+// coluna falha com BYEs, filtros e jogos de 3º lugar, e pode ligar confrontos
+// que nunca se enfrentariam.
 function _bracketLayoutEliminationTree(root) {
-  if (!root || !_bracketIsEliminationTree(window._currentBracketTournament || {})) return;
+  var tournament = window._currentBracketTournament || {};
+  if (!root) return;
+  if (!_bracketIsEliminationTree(tournament)) {
+    var stale = root.closest ? root.closest('#view-container, #inline-bracket-container') : document;
+    if (stale) stale.querySelectorAll('svg[data-bracket-tree-lines]').forEach(function (svg) { svg.remove(); });
+    return;
+  }
   if (window._bracketTreeLayoutFrame) cancelAnimationFrame(window._bracketTreeLayoutFrame);
   window._bracketTreeLayoutFrame = requestAnimationFrame(function () {
     var scope = root.closest ? root.closest('#view-container, #inline-bracket-container') : document;
     var tracks = scope ? scope.querySelectorAll('.bracket-scroll-content, .bracket-columns-track') : [];
+    var matches = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(tournament) : (tournament.matches || []);
     for (var ti = 0; ti < tracks.length; ti++) {
       var track = tracks[ti];
       var oldSvg = track.querySelector(':scope > svg[data-bracket-tree-lines]');
       if (oldSvg) oldSvg.remove();
-      var columns = Array.prototype.filter.call(track.children, function (node) {
-        return node && node.classList && node.classList.contains('bracket-round-column');
+      var cards = Array.prototype.filter.call(track.querySelectorAll('.sp-match-card'), function (card) {
+        if (card.hasAttribute('data-bracket-tree-margin')) {
+          card.style.marginTop = '';
+          card.removeAttribute('data-bracket-tree-margin');
+        }
+        return !card.hidden && card.getClientRects().length > 0 && card.closest('.bracket-round-column');
       });
-      var cardColumns = columns.map(_bracketDirectVisibleCards).filter(function (cards) { return cards.length; });
-      if (cardColumns.length < 2) continue;
-      // Só é árvore quando cada rodada reduz exatamente à metade. Isso também
-      // protege grupos, suíço e qualquer layout paralelo que use as mesmas classes.
-      var isTree = true;
-      for (var ci = 1; ci < cardColumns.length; ci++) {
-        if (cardColumns[ci - 1].length !== cardColumns[ci].length * 2) { isTree = false; break; }
-      }
-      if (!isTree) continue;
-      var allCards = [].concat.apply([], cardColumns);
-      allCards.forEach(function (card) {
-        if (card.getAttribute('data-bracket-tree-position') === '1') {
-          card.style.position = ''; card.style.top = ''; card.style.left = ''; card.style.right = '';
-          card.removeAttribute('data-bracket-tree-position');
+      var byId = Object.create(null);
+      cards.forEach(function (card) { byId[String(card.id).replace(/^card-/, '')] = card; });
+      var incoming = Object.create(null);
+      matches.forEach(function (match) {
+        if (!match || !match.nextMatchId || !byId[String(match.id)] || !byId[String(match.nextMatchId)]) return;
+        var source = byId[String(match.id)], target = byId[String(match.nextMatchId)];
+        if (source === target || source.closest('.bracket-round-column') === target.closest('.bracket-round-column')) return;
+        var from = source.getBoundingClientRect(), to = target.getBoundingClientRect();
+        if (from.right >= to.left) return; // espelhado/retorno: nunca ligar ao contrário
+        (incoming[String(match.nextMatchId)] = incoming[String(match.nextMatchId)] || []).push(source);
+      });
+      var targets = Object.keys(incoming).map(function (id) { return byId[id]; });
+      targets.sort(function (a, b) { return a.getBoundingClientRect().left - b.getBoundingClientRect().left || a.getBoundingClientRect().top - b.getBoundingClientRect().top; });
+      // Quando há espaço, a próxima rodada desce até o centro dos dois jogos
+      // de origem. Nunca puxar um card sobre o anterior ou tirá-lo do fluxo.
+      targets.forEach(function (target) {
+        var sources = incoming[String(target.id).replace(/^card-/, '')];
+        if (sources.length !== 2) return;
+        var goal = (sources[0].getBoundingClientRect().top + sources[0].getBoundingClientRect().height / 2 + sources[1].getBoundingClientRect().top + sources[1].getBoundingClientRect().height / 2) / 2;
+        var rect = target.getBoundingClientRect();
+        var delta = goal - (rect.top + rect.height / 2);
+        if (delta > 1) {
+          var scale = track.offsetWidth ? track.getBoundingClientRect().width / track.offsetWidth : 1;
+          target.style.marginTop = Math.round(delta / (scale || 1)) + 'px';
+          target.setAttribute('data-bracket-tree-margin', '1');
         }
       });
+      if (!targets.length) continue;
       var trackRect = track.getBoundingClientRect();
-      var centers = cardColumns[0].map(function (card) {
+      var scale = track.offsetWidth ? trackRect.width / track.offsetWidth : 1;
+      if (!scale) scale = 1;
+      var point = function (card) {
         var rect = card.getBoundingClientRect();
-        return { left: rect.left - trackRect.left, right: rect.right - trackRect.left, center: rect.top - trackRect.top + rect.height / 2, height: rect.height };
-      });
-      var links = [];
-      for (var round = 1; round < cardColumns.length; round++) {
-        var targetCards = cardColumns[round], nextCenters = [];
-        for (var mi = 0; mi < targetCards.length; mi++) {
-          var a = centers[mi * 2], b = centers[mi * 2 + 1], target = targetCards[mi];
-          if (!a || !b) continue;
-          var rect = target.getBoundingClientRect();
-          // Nunca tirar um jogo do fluxo da sua coluna. A tentativa de centralizar
-          // com position:absolute fez a Ouro aparentar vazia em produção. O SVG
-          // conecta os dois jogos ao próximo sem mudar a posição de nenhum deles.
-          var targetCenter = rect.top - trackRect.top + rect.height / 2;
-          var targetLeft = rect.left - trackRect.left;
-          var targetRight = rect.right - trackRect.left;
-          nextCenters.push({ left: targetLeft, right: targetRight, center: targetCenter, height: rect.height });
-          links.push({ a: a, b: b, target: { left: targetLeft, center: targetCenter } });
-        }
-        centers = nextCenters;
-      }
-      if (!links.length) continue;
-      var height = Math.max.apply(null, allCards.map(function (card) { var r = card.getBoundingClientRect(); return r.bottom - trackRect.top; })) + 14;
-      track.style.position = 'relative'; track.style.minHeight = Math.ceil(height) + 'px';
+        return { left: (rect.left - trackRect.left) / scale, right: (rect.right - trackRect.left) / scale, y: (rect.top - trackRect.top + rect.height / 2) / scale };
+      };
+      track.style.position = 'relative';
       var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       svg.setAttribute('data-bracket-tree-lines', '1');
       svg.setAttribute('width', String(Math.ceil(track.scrollWidth)));
-      svg.setAttribute('height', String(Math.ceil(height)));
-      svg.setAttribute('viewBox', '0 0 ' + Math.ceil(track.scrollWidth) + ' ' + Math.ceil(height));
+      svg.setAttribute('height', String(Math.ceil(track.scrollHeight)));
+      svg.setAttribute('viewBox', '0 0 ' + Math.ceil(track.scrollWidth) + ' ' + Math.ceil(track.scrollHeight));
       svg.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:0;overflow:visible;';
-      links.forEach(function (link) {
-        var bend = Math.round((link.a.right + link.target.left) / 2);
-        var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        path.setAttribute('d', 'M ' + link.a.right + ' ' + link.a.center + ' H ' + bend + ' V ' + link.target.center + ' H ' + link.target.left + ' M ' + link.b.right + ' ' + link.b.center + ' H ' + bend);
-        path.setAttribute('fill', 'none'); path.setAttribute('stroke', 'rgba(129,140,248,.72)'); path.setAttribute('stroke-width', '2');
-        path.setAttribute('stroke-linecap', 'round'); path.setAttribute('stroke-linejoin', 'round');
-        svg.appendChild(path);
+      targets.forEach(function (target) {
+        var sources = incoming[String(target.id).replace(/^card-/, '')], end = point(target);
+        var bend = Math.round((Math.max.apply(null, sources.map(function (source) { return point(source).right; })) + end.left) / 2);
+        sources.forEach(function (source) {
+          var start = point(source);
+          var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          path.setAttribute('d', 'M ' + Math.round(start.right) + ' ' + Math.round(start.y) + ' H ' + bend + ' V ' + Math.round(end.y) + ' H ' + Math.round(end.left));
+          path.setAttribute('data-source-match', String(source.id).replace(/^card-/, ''));
+          path.setAttribute('data-target-match', String(target.id).replace(/^card-/, ''));
+          path.setAttribute('fill', 'none'); path.setAttribute('stroke', 'rgba(129,140,248,.8)'); path.setAttribute('stroke-width', '2');
+          path.setAttribute('stroke-linecap', 'round'); path.setAttribute('stroke-linejoin', 'round');
+          svg.appendChild(path);
+        });
       });
       track.insertBefore(svg, track.firstChild);
-      allCards.forEach(function (card) { card.style.zIndex = '1'; });
+      Array.prototype.forEach.call(track.querySelectorAll('.bracket-round-column'), function (column) {
+        column.style.position = 'relative'; column.style.zIndex = '1';
+      });
     }
+    if (window._bracketZoom !== 1 && typeof window._applyBracketZoom === 'function') window._applyBracketZoom(window._bracketZoom);
   });
+  if (!window._bracketTreeResizeAttached) {
+    window._bracketTreeResizeAttached = true;
+    window.addEventListener('resize', function () {
+      var current = document.querySelector('[data-bracket-tabs-root]');
+      if (current) _bracketLayoutEliminationTree(current);
+    });
+  }
 }
 // A régua fixa de rodadas é uma única faixa horizontal, espelhando o trilho
 // ativo. Ela substitui o resumo que quebrava em três linhas ("Linha / Rodada /
@@ -4463,6 +4478,15 @@ function _setupFixedScrollbar(container) {
 if (window._bracketMirrorMode === undefined) window._bracketMirrorMode = false;
 if (window._bracketZoom === undefined) window._bracketZoom = 1;
 
+function _bracketZoomControlHtml() {
+  var percent = Math.round((window._bracketZoom || 1) * 100);
+  return '<div class="bracket-zoom-controls" style="display:inline-flex;align-items:center;gap:6px;background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));border:1px solid var(--sp-b-255-255-255-012,rgba(255,255,255,0.12));border-radius:20px;padding:4px 10px;">' +
+    '<button type="button" onclick="window._setBracketZoom(null,-1)" aria-label="Diminuir zoom da chave" title="Diminuir zoom">−</button>' +
+    '<input type="range" id="bracket-zoom-slider" min="5" max="150" value="' + percent + '" step="1" aria-label="Zoom da chave" oninput="window._applyBracketZoom(this.value/100)" style="width:110px;accent-color:#818cf8;cursor:pointer;">' +
+    '<span id="bracket-zoom-label" title="Clique para voltar a 100%" onclick="window._resetBracketZoom()" style="font-size:.75rem;color:var(--text-muted);min-width:38px;text-align:center;cursor:pointer;">' + percent + '%</span>' +
+    '<button type="button" onclick="window._setBracketZoom(null,1)" aria-label="Aumentar zoom da chave" title="Aumentar zoom">+</button></div>';
+}
+
 
 function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
   var _t = window._t || function(k) { return k; };
@@ -4814,29 +4838,11 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
 
   const showAllHiddenBtnHtml = '';
 
-  // Zoom controls with slider
-  const zoomPct = Math.round(window._bracketZoom * 100);
-  const zoomSteps = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
-  const zoomIdx = zoomSteps.indexOf(window._bracketZoom) >= 0 ? zoomSteps.indexOf(window._bracketZoom) : zoomSteps.length - 1;
   const toolbarHtml = `
     <div style="display:flex;justify-content:flex-end;align-items:center;margin-bottom:0.75rem;gap:10px;flex-wrap:wrap;">
       ${showAllHiddenBtnHtml}
       ${toggleBtnHtml}
-      <div style="display:inline-flex;align-items:center;gap:6px;background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));border:1px solid var(--sp-b-255-255-255-012,rgba(255,255,255,0.12));border-radius:20px;padding:4px 10px;">
-        <button onclick="window._setBracketZoom('${String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', -1)"
-          style="background:transparent;border:none;color:var(--text-muted);font-size:1rem;cursor:pointer;padding:3px 6px;line-height:1;border-radius:50%;"
-          onmouseover="this.style.color='var(--text-bright)'" onmouseout="this.style.color='var(--text-muted)'"
-          title="Zoom out">−</button>
-        <input type="range" id="bracket-zoom-slider" min="0" max="${zoomSteps.length - 1}" value="${zoomIdx}" step="1"
-          style="width:80px;height:4px;accent-color:#818cf8;cursor:pointer;vertical-align:middle;"
-          oninput="var steps=[0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0];window._bracketZoom=steps[this.value];var lbl=document.getElementById('bracket-zoom-label');if(lbl)lbl.textContent=Math.round(steps[this.value]*100)+'%';var el=document.querySelector('.bracket-scroll-content');if(el){el.style.transform=steps[this.value]===1?'':'scale('+steps[this.value]+')';el.style.transformOrigin='top left';}" />
-        <span id="bracket-zoom-label" style="font-size:0.7rem;font-weight:600;color:var(--text-muted);min-width:36px;text-align:center;cursor:pointer;user-select:none;"
-          onclick="window._resetBracketZoom('${String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')" title="Resetar zoom">${zoomPct}%</span>
-        <button onclick="window._setBracketZoom('${String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', 1)"
-          style="background:transparent;border:none;color:var(--text-muted);font-size:1rem;cursor:pointer;padding:3px 6px;line-height:1;border-radius:50%;"
-          onmouseover="this.style.color='var(--text-bright)'" onmouseout="this.style.color='var(--text-muted)'"
-          title="Zoom in">+</button>
-      </div>
+      ${_bracketZoomControlHtml()}
     </div>`;
 
   // Both modes use min-width:max-content + scrollable wrapper (no clipping)
@@ -5056,6 +5062,7 @@ function renderDoubleElimBracket(t, canEnterResult, standbyHtml) {
   // Superior (logo após a Final dela); a Chave Inferior vem embaixo.
   return `
     <div>
+      <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">${_bracketZoomControlHtml()}</div>
       ${renderSection(upperCols, 'Chave Superior', '#10b981', _grandColHtml)}
       ${renderSection(lowerCols, 'Chave Inferior', '#f59e0b')}
       ${standbyHtml || ''}
@@ -5802,7 +5809,9 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
       : '';
     body = tiersHtml + _gfBoxes + _sb;
   }
-  return '<div>' + header + body + '</div>';
+  var zoomToolbar = (!_isMonarchPhase && !_isLeaguePhase && !_isGroupPhase)
+    ? '<div style="display:flex;justify-content:flex-end;margin-bottom:10px;">' + _bracketZoomControlHtml() + '</div>' : '';
+  return '<div>' + header + zoomToolbar + body + '</div>';
 }
 window._renderPhaseBracket = _renderPhaseBracket;
 

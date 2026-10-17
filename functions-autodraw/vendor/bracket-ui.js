@@ -1245,40 +1245,27 @@ window._toggleBracketMode = function (tId) {
   _rerenderBracket(tId);
 };
 
-window._setBracketZoom = function (tId, delta) {
-  const steps = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
-  let cur = steps.indexOf(window._bracketZoom);
-  if (cur === -1) cur = steps.length - 1; // default to 1.0
-  cur = Math.max(0, Math.min(steps.length - 1, cur + delta));
-  window._bracketZoom = steps[cur];
-  // Apply zoom without full re-render for smooth experience
-  const content = document.querySelector('.bracket-scroll-content');
-  if (content) {
-    content.style.transform = `scale(${window._bracketZoom})`;
+window._applyBracketZoom = function (value) {
+  window._bracketZoom = Math.max(0.05, Math.min(1.5, Number(value) || 1));
+  document.querySelectorAll('.bracket-scroll-content, .bracket-columns-track').forEach(function (content) {
+    content.style.transform = window._bracketZoom === 1 ? '' : 'scale(' + window._bracketZoom + ')';
     content.style.transformOrigin = 'top left';
-  }
-  // Update zoom label
+    var wrapper = content.closest('.bracket-sticky-scroll-wrapper, .bracket-scroll-container');
+    if (wrapper) wrapper.style.height = window._bracketZoom === 1 ? '' : Math.ceil(content.scrollHeight * window._bracketZoom + 8) + 'px';
+  });
   const label = document.getElementById('bracket-zoom-label');
   if (label) label.textContent = Math.round(window._bracketZoom * 100) + '%';
-  // Sync slider
   const slider = document.getElementById('bracket-zoom-slider');
-  if (slider) slider.value = cur;
-  // Recalculate fixed scrollbar width
+  if (slider) slider.value = Math.round(window._bracketZoom * 100);
   _recalcFixedScrollbar();
 };
 
+window._setBracketZoom = function (tId, delta) {
+  window._applyBracketZoom(Math.round((window._bracketZoom + delta * 0.1) * 100) / 100);
+};
+
 window._resetBracketZoom = function (tId) {
-  window._bracketZoom = 1;
-  const content = document.querySelector('.bracket-scroll-content');
-  if (content) {
-    content.style.transform = '';
-    content.style.transformOrigin = '';
-  }
-  const label = document.getElementById('bracket-zoom-label');
-  if (label) label.textContent = '100%';
-  const slider = document.getElementById('bracket-zoom-slider');
-  if (slider) slider.value = 7; // index of 1.0 in steps array
-  _recalcFixedScrollbar();
+  window._applyBracketZoom(1);
 };
 
 function _recalcFixedScrollbar() {
