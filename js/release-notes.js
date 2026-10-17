@@ -1,3 +1,4 @@
+// 2.4.92 — Ao abrir "Vencedor do jogo X" na chave, a busca é limpa e o jogo de origem aparece mesmo que o filtro anterior o ocultasse.
 // 2.4.91 — O perfil guarda dias e horários em que a pessoa pode ou não jogar por modalidade.
 // Ao abrir Propor datas em jogos sem horário fixo, as faixas compatíveis aparecem como
 // propostas visíveis aos participantes do jogo, sem confirmar horário nem alterar outros jogos.

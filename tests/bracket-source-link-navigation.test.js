@@ -50,20 +50,44 @@ const navigationCode = tournaments.slice(tournaments.indexOf('window._goToBracke
       location.hash = '#tournaments/confra';
       window.tabCalls = [];
       window.focusCalls = [];
+      window._filterBarState = { chaves: { search: 'Rodrigo' }, inscritos: { search: 'manter' } };
+      window._fbAction = (key, field, value) => {
+        window._filterBarState[key][field] = value;
+        document.getElementById('card-src&"<').style.display = value ? 'none' : '';
+      };
       window._bracketSelectCategoryTab = (...args) => window.tabCalls.push(args);
       window._focusTournamentMatchWhenReady = (...args) => window.focusCalls.push(args);
+      const input = document.createElement('input');
+      input.id = 'bracket-search';
+      input.value = 'Rodrigo';
+      document.body.appendChild(input);
+      const clear = document.createElement('button');
+      clear.id = 'bracket-search-clear';
+      clear.style.display = '';
+      document.body.appendChild(clear);
       const card = document.createElement('article');
       card.id = 'card-src&"<';
       card.textContent = 'Jogo 186';
+      card.style.display = 'none';
       document.body.appendChild(card);
     });
     await page.locator('#bracket .sp-source-match-link').focus();
     await page.keyboard.press('Enter');
     await page.keyboard.press('Space');
-    const fromBracket = await page.evaluate(() => ({ tabs: window.tabCalls, focus: window.focusCalls }));
+    const fromBracket = await page.evaluate(() => ({ tabs: window.tabCalls, focus: window.focusCalls,
+      input: document.getElementById('bracket-search').value,
+      search: window._filterBarState.chaves.search,
+      unrelatedSearch: window._filterBarState.inscritos.search,
+      cardDisplay: document.getElementById('card-src&"<').style.display,
+      clearDisplay: document.getElementById('bracket-search-clear').style.display }));
     assert.deepEqual(fromBracket.tabs[0], ['confra', 'linhas', 'silver', '4']);
     assert.equal(fromBracket.focus[0][1], 'src&"<');
     assert.equal(fromBracket.focus[1][1], 'src&"<', 'Espaço também ativa o link de forma acessível');
+    assert.equal(fromBracket.input, '', 'o campo da busca da chave é esvaziado');
+    assert.equal(fromBracket.search, '', 'a busca não reaparece após re-render');
+    assert.equal(fromBracket.unrelatedSearch, 'manter', 'a busca dos inscritos não é alterada');
+    assert.equal(fromBracket.cardDisplay, '', 'o jogo de origem volta a ficar visível');
+    assert.equal(fromBracket.clearDisplay, 'none', 'o botão de limpar some junto com o filtro');
     console.log('✅ Vaga pendente: origem real, escape, clique e teclado sem acionar card pai');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

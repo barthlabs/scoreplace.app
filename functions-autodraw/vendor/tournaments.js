@@ -1391,6 +1391,20 @@ window._goToBracketSourceMatch = function(tId, sourceId) {
       : (/(^|\s)(mist|mixed)/.test(label) ? 'misto' : 'linhas'));
   var tab = category ? { category: category, gender: gender,
     round: source.round == null ? '' : String(source.round) } : null;
+  // O jogo de origem pode não conter o nome buscado no card de destino.
+  // Limpar só a busca da chave (DOM e estado persistido no re-render) antes
+  // de selecionar a aba/focar o card; não toca na busca dos inscritos.
+  var bracketSearch = document.getElementById('bracket-search');
+  if (bracketSearch) bracketSearch.value = '';
+  if (typeof window._fbAction === 'function') {
+    window._fbAction('chaves', 'search', '', true);
+  } else {
+    var bracketState = window._filterBarState && window._filterBarState.chaves;
+    if (bracketState) bracketState.search = '';
+    if (bracketSearch && typeof window._bracketApplyFilter === 'function') window._bracketApplyFilter();
+  }
+  var clearSearch = document.getElementById('bracket-search-clear');
+  if (clearSearch) clearSearch.style.display = 'none';
   if (window.location.hash.split('?')[0] !== '#tournaments/' + tId) {
     window._goToTournamentMatch(tId, sourceId, tab);
     return;
