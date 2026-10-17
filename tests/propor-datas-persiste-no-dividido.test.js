@@ -373,6 +373,20 @@ const PROPOSTA = { options: [{ id: 'so_1', kind: 'date', dateISO: '2026-09-10', 
   ok('scheduledKind inventado → invalid-argument', (await erroDe(chamar('uOrg', { tournamentId: 'T1', matchId: 'g1-1', operationId: UUID(9), scheduledKind: 'magia' }))).code === 'invalid-argument');
   ok('jogo inexistente → not-found', (await erroDe(chamar('uOrg', { tournamentId: 'T1', matchId: 'nao-existe', operationId: UUID(9) }))).code === 'not-found');
 
+  console.log('⑩ disponibilidade de perfis se mescla na transação, sem apagar a proposta rival');
+  BANCO = bancoDividido();
+  const perfilA = { id: 'sp_av_uA_4_1800', kind: 'weekly', weekdays: [4], time: '18:00', byUid: 'uA' };
+  const perfilC = { id: 'sp_av_uC_5_1900', kind: 'weekly', weekdays: [5], time: '19:00', byUid: 'uC' };
+  await chamar('uA', { tournamentId: 'T1', operationId: UUID(1), jogos: [{ matchId: 'g0-1', profileOptions: [perfilA] }] });
+  await chamar('uC', { tournamentId: 'T1', operationId: UUID(2), jogos: [{ matchId: 'g0-1', profileOptions: [perfilC] }] });
+  ok('as duas propostas coexistem', jogoNoBanco(BANCO, 'g0-1').schedule.options.length === 2);
+  await chamar('uA', { tournamentId: 'T1', operationId: UUID(3), jogos: [{ matchId: 'g0-1', profileOptions: [] }] });
+  ok('atualização vazia remove só a própria proposta', (() => { const o = jogoNoBanco(BANCO, 'g0-1').schedule.options; return o.length === 1 && o[0].byUid === 'uC'; })());
+  const semVaga = await erroDe(chamar('uE', { tournamentId: 'T1', operationId: UUID(4), jogos: [{ matchId: 'g0-1', profileOptions: [perfilA] }] }));
+  ok('outro jogador não pode semear o jogo', !!(semVaga && ['failed-precondition', 'permission-denied'].includes(semVaga.code)));
+  const spoof = await erroDe(chamar('uA', { tournamentId: 'T1', operationId: UUID(5), jogos: [{ matchId: 'g0-1', profileOptions: [perfilC] }] }));
+  ok('não pode semear em nome de terceiro', !!(spoof && spoof.code === 'invalid-argument'));
+
   console.log('\n' + (falhas ? '❌ ' + falhas + ' falha(s)' : '✅ propor-datas-persiste-no-dividido: OK') + '  (' + passou + ' ok)');
   process.exit(falhas ? 1 : 0);
 })().catch((e) => { console.error('✗ estourou:', e && e.stack || e); process.exit(1); });

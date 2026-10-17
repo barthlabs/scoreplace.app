@@ -1,3 +1,6 @@
+// 2.4.91 — O perfil guarda dias e horários em que a pessoa pode ou não jogar por modalidade.
+// Ao abrir Propor datas em jogos sem horário fixo, as faixas compatíveis aparecem como
+// propostas da própria pessoa, sem confirmar horário nem alterar outros jogos.
 // 2.4.90 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.89 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.88 — Atualização consolidada de produção com as correções validadas desde a última publicação.

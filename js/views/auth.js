@@ -4808,6 +4808,9 @@ async function simulateLoginSuccess(user) {
     _setVal('profile-edit-city', cu.city || '');
     _setVal('profile-edit-hrmax', cu.hrMax ? String(cu.hrMax) : '');
     _setVal('profile-edit-letzplay', cu.letzplayHandle ? ('@' + cu.letzplayHandle) : '');
+    window._profileAvailabilityBySport = JSON.parse(JSON.stringify(cu.availabilityBySport || {}));
+    window._profileAvailabilityDirty = false;
+    if (typeof window._renderProfileAvailability === 'function') window._renderProfileAvailability();
     // v1.8: o card "Seu nível (letzplay)" saiu daqui — agora vive nas
     // Estatísticas do jogador (📊 _showPlayerStats). O perfil só guarda @ +
     // consentimento (config), sem renderizar o histórico (não pesa o perfil).
@@ -6392,6 +6395,55 @@ window._toggleProfileSport = function(sport) {
   }
 };
 
+// Janelas recorrentes são preferências, não confirmação de presença num jogo.
+// 0=domingo..6=sábado; horários são locais da modalidade/evento.
+window._profileAvailabilitySports = ['Beach Tennis', 'Pickleball', 'Tênis', 'Tênis de Mesa', 'Padel', 'Vôlei de Praia', 'Futevôlei'];
+window._profileAvailabilitySport = window._profileAvailabilitySport || 'Beach Tennis';
+window._renderProfileAvailability = function() {
+  var root = document.getElementById('profile-availability'); if (!root) return;
+  var esc = window._safeHtml || function(s) { return String(s); };
+  var sport = window._profileAvailabilitySport;
+  var all = window._profileAvailabilityBySport || {};
+  var slots = Array.isArray(all[sport]) ? all[sport] : [];
+  var days = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  root.innerHTML = '<label class="form-label" for="profile-availability-sport">Modalidade</label>' +
+    '<select id="profile-availability-sport" class="form-control" onchange="window._profileAvailabilitySport=this.value;window._renderProfileAvailability()" style="width:100%;margin-bottom:10px;">' +
+    window._profileAvailabilitySports.map(function(s) { return '<option value="' + esc(s) + '"' + (s === sport ? ' selected' : '') + '>' + esc(s) + '</option>'; }).join('') + '</select>' +
+    '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:10px;">Informe quando costuma poder ou não poder jogar. Os horários seguem o fuso do local do torneio; confirme a proposta em cada jogo. Sem faixas, o app não presume disponibilidade.</div>' +
+    slots.map(function(slot, i) {
+      return '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px;padding:8px;border:1px solid var(--border-color);border-radius:9px;">' +
+        '<select aria-label="Dia da semana" class="form-control" onchange="window._profileAvailabilitySet(' + i + ',\'day\',Number(this.value))" style="flex:1;min-width:70px;">' +
+          days.map(function(d, n) { return '<option value="' + n + '"' + (slot.day === n ? ' selected' : '') + '>' + d + '</option>'; }).join('') + '</select>' +
+        '<select aria-label="Situação" class="form-control" onchange="window._profileAvailabilitySet(' + i + ',\'status\',this.value)" style="flex:1;min-width:95px;">' +
+          '<option value="available"' + (slot.status === 'available' ? ' selected' : '') + '>✅ Posso</option><option value="unavailable"' + (slot.status === 'unavailable' ? ' selected' : '') + '>🚫 Não posso</option></select>' +
+        '<input type="time" aria-label="Início" class="form-control" value="' + esc(slot.start) + '" onchange="window._profileAvailabilitySet(' + i + ',\'start\',this.value)" style="flex:1;min-width:100px;">' +
+        '<span>–</span><input type="time" aria-label="Fim" class="form-control" value="' + esc(slot.end) + '" onchange="window._profileAvailabilitySet(' + i + ',\'end\',this.value)" style="flex:1;min-width:100px;">' +
+        '<button type="button" class="cancel-x-btn" aria-label="Remover faixa" onclick="window._profileAvailabilityRemove(' + i + ')" style="--cx-size:20px;">✕</button></div>';
+    }).join('') +
+    '<button type="button" class="btn btn-sm" onclick="window._profileAvailabilityAdd()" style="color:#34d399;border:1px solid #10b981;">＋ Adicionar faixa</button>';
+};
+window._profileAvailabilitySet = function(i, field, value) {
+  var slots = (window._profileAvailabilityBySport || {})[window._profileAvailabilitySport] || [];
+  if (!slots[i] || ['day', 'status', 'start', 'end'].indexOf(field) === -1) return;
+  slots[i][field] = value; window._profileDirty = true; window._profileAvailabilityDirty = true;
+};
+window._profileAvailabilityAdd = function() {
+  var all = window._profileAvailabilityBySport = window._profileAvailabilityBySport || {};
+  var slots = all[window._profileAvailabilitySport] = all[window._profileAvailabilitySport] || [];
+  if (slots.length >= 42) return;
+  slots.push({ day: 1, status: 'available', start: '18:00', end: '22:00' });
+  window._profileDirty = true; window._profileAvailabilityDirty = true; window._renderProfileAvailability();
+};
+window._profileAvailabilityRemove = function(i) {
+  var slots = (window._profileAvailabilityBySport || {})[window._profileAvailabilitySport] || [];
+  slots.splice(i, 1); window._profileDirty = true; window._profileAvailabilityDirty = true; window._renderProfileAvailability();
+};
+window._profileAvailabilityPatch = function(cu, dirty, availability) {
+  if (!dirty) return null; // salvar outro campo nunca apaga preferências ainda não carregadas
+  if (!cu || !cu._profileLoaded) throw new Error('profile-loading');
+  return JSON.parse(JSON.stringify(availability || {}));
+};
+
 window._setProfileSkillForSport = function(sport, skill) {
   window._profileDirty = true; // v2.4.21
   if (!window._profileSkillBySport || typeof window._profileSkillBySport !== 'object') {
@@ -6931,6 +6983,10 @@ function setupProfileModal() {
               // modalidades são selecionadas. Vazio quando não há modalidade ativa.
               '<div id="profile-skill-by-sport" style="margin-top:8px;display:flex;flex-direction:column;gap:4px;"></div>' +
               '<input type="hidden" id="profile-edit-skill-by-sport" value="">' +
+            '</div>' +
+            '<div class="form-group" style="margin:16px 0;padding:12px;border:1px solid var(--border-color);border-radius:12px;">' +
+              '<div style="font-weight:800;margin-bottom:4px;">📅 Disponibilidade para jogos</div>' +
+              '<div id="profile-availability"></div>' +
             '</div>' +
             // Conta letzplay: handle + consentimento (pré-requisito do import do
             // histórico). Campo aditivo/opcional; a LEITURA dos dados (extensão do
@@ -9354,6 +9410,25 @@ window._askDuplicateAccount = function () {
       // deseleciona todas as modalidades — Firestore merge preserva
       // null/undefined, então usar {} explicitamente quando vazio.
       payload.skillBySport = skillBySport;
+      var availability = window._profileAvailabilityBySport || {};
+      var invalidAvailability = window._profileAvailabilityDirty && Object.keys(availability).some(function(sport) {
+        return !window._profileAvailabilitySports.includes(sport) || !Array.isArray(availability[sport]) || availability[sport].some(function(slot) {
+          return !slot || !Number.isInteger(slot.day) || slot.day < 0 || slot.day > 6 ||
+            ['available', 'unavailable'].indexOf(slot.status) === -1 ||
+            !/^([01]\d|2[0-3]):[0-5]\d$/.test(slot.start) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(slot.end) || slot.start >= slot.end;
+        });
+      });
+      if (invalidAvailability) {
+        if (typeof showNotification === 'function') showNotification('Disponibilidade inválida', 'Confira as faixas: o fim deve ser depois do início, no mesmo dia.', 'warning');
+        return;
+      }
+      try {
+        var availabilityPatch = window._profileAvailabilityPatch(cu, window._profileAvailabilityDirty, availability);
+        if (availabilityPatch !== null) payload.availabilityBySport = availabilityPatch;
+      } catch (availabilityError) {
+        if (typeof showNotification === 'function') showNotification('Perfil carregando', 'Aguarde carregar suas preferências antes de alterar a disponibilidade.', 'warning');
+        return;
+      }
 
       // v1.6.1-beta: canRefereeBySport + refereeSports (array para query Firestore).
       var canRefereeBySport = {};

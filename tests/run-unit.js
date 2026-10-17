@@ -1806,6 +1806,7 @@ const SUITES = [
   'tests/planejamento-materializacao-inscricoes.test.js',
   'functions/test-profile-preferences-core.js',
   'functions/test-profile-update-core.js',
+  'tests/disponibilidade-perfil-proposta.test.js',
   'functions/test-profile-name-claim-core.js',
   'functions/test-profile-eligibility-core.js',
   'functions/test-profile-locations-core.js',

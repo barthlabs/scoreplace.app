@@ -13565,6 +13565,10 @@ window.AppStore = {
         if (profile.skillBySport && typeof profile.skillBySport === 'object') {
           this.currentUser.skillBySport = profile.skillBySport;
         }
+        // Preferências semanais são privadas do perfil e devem sobreviver ao login.
+        if (profile.availabilityBySport && typeof profile.availabilityBySport === 'object') {
+          this.currentUser.availabilityBySport = profile.availabilityBySport;
+        }
         if (profile.displayName) this.currentUser.displayName = profile.displayName;
         if (profile.birthDate) this.currentUser.birthDate = profile.birthDate;
         if (profile.age) this.currentUser.age = profile.age;

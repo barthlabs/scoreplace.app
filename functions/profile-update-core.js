@@ -9,6 +9,8 @@ const STRING_FIELDS = new Set([
 ]);
 const ARRAY_FIELDS = new Set(['preferredCeps', 'preferredSports', 'refereeSports']);
 const MAP_FIELDS = new Set(['skillBySport', 'canRefereeBySport']);
+const AVAILABILITY_SPORTS = new Set(['Beach Tennis', 'Pickleball', 'Tênis', 'Tênis de Mesa', 'Padel', 'Vôlei de Praia', 'Futevôlei']);
+const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 const ERASEABLE_FIELDS = new Set([
   'gender', 'birthDate', 'age', 'city', 'hrMax', 'letzplayHandle',
   'letzplaySource', 'preferredCeps', 'preferredSports'
@@ -21,6 +23,23 @@ function isPlainObject(value) {
 function text(value, field) {
   if (typeof value !== 'string') throw new Error(field + ' deve ser texto');
   return value.trim();
+}
+
+function normalizeAvailability(value) {
+  if (!isPlainObject(value)) throw new Error('availabilityBySport deve ser objeto');
+  const out = {};
+  for (const sport of Object.keys(value)) {
+    if (!AVAILABILITY_SPORTS.has(sport)) throw new Error('modalidade de disponibilidade inválida');
+    const slots = value[sport];
+    if (!Array.isArray(slots) || slots.length > 42) throw new Error('disponibilidade: no máximo 42 faixas por modalidade');
+    out[sport] = slots.map((slot) => {
+      if (!isPlainObject(slot) || !Number.isInteger(slot.day) || slot.day < 0 || slot.day > 6 ||
+          !['available', 'unavailable'].includes(slot.status) || !TIME.test(slot.start) || !TIME.test(slot.end) ||
+          slot.start >= slot.end) throw new Error('faixa de disponibilidade inválida');
+      return { day: slot.day, status: slot.status, start: slot.start, end: slot.end };
+    });
+  }
+  return out;
 }
 
 function normalize(input) {
@@ -41,6 +60,10 @@ function normalize(input) {
     if (MAP_FIELDS.has(field)) {
       if (!isPlainObject(value)) throw new Error(field + ' deve ser objeto');
       patch[field] = value;
+      return;
+    }
+    if (field === 'availabilityBySport') {
+      patch[field] = normalizeAvailability(value);
       return;
     }
     if (field === 'age') {

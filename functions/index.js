@@ -6776,6 +6776,10 @@ exports.setMatchSchedule = onCall(
       const temScheduleSource = j.scheduleSource !== undefined;
       const scheduleSource = temScheduleSource ? String(j.scheduleSource || "") : null;
       if (temScheduleSource && ["estimate", "organizer"].indexOf(scheduleSource) === -1) throw new HttpsError("invalid-argument", "scheduleSource inválido");
+      const profileOptions = j.profileOptions === undefined ? null : j.profileOptions;
+      if (profileOptions !== null && (!Array.isArray(profileOptions) || profileOptions.length > 24 || j.schedule != null || at != null || kind != null)) {
+        throw new HttpsError("invalid-argument", "propostas do perfil inválidas");
+      }
       return {
         matchId: String(j.matchId),
         // ⛔ só escreve `schedule` quando ele VEM como objeto. Ausente/null = não toca: o organizador
@@ -6789,6 +6793,7 @@ exports.setMatchSchedule = onCall(
         temCourt: temCourt, court: court,
         temScheduleLocked: temScheduleLocked, scheduleLocked: j.scheduleLocked,
         temScheduleSource: temScheduleSource, scheduleSource: scheduleSource,
+        profileOptions: profileOptions,
       };
     });
     const db = admin.firestore();
@@ -6856,6 +6861,35 @@ exports.setMatchSchedule = onCall(
           if (elenco.indexOf(callerUid) === -1) throw new HttpsError("permission-denied", "só quem joga este confronto — ou quem organiza o torneio — mexe nas datas");
           if (it.scheduledKind === "organizer" || it.scheduledKind === "estimate") throw new HttpsError("permission-denied", "só o organizador aponta ou estima horário");
         }
+        if (it.profileOptions !== null) {
+          const elenco = _waRoster.matchRoster(t, alvo.jogo) || [];
+          if (elenco.indexOf(callerUid) === -1 || alvo.jogo.scheduledAt) throw new HttpsError("failed-precondition", "proposta de perfil exige jogador em jogo não agendado");
+          const sanitized = _schSaneiaSchedule({ options: it.profileOptions }).options;
+          const prefix = "sp_av_" + callerUid + "_";
+          const seen = new Set();
+          sanitized.forEach((o) => {
+            const day = Number((o.weekdays || [])[0]);
+            const expectedId = prefix + day + "_" + String(o.time || "").replace(":", "");
+            if (o.kind !== "weekly" || o.byUid !== callerUid || o.weekdays.length !== 1 ||
+                !Number.isInteger(day) || day < 0 || day > 6 || !/^([01]\d|2[0-3]):[0-5]\d$/.test(o.time) ||
+                o.id !== expectedId || seen.has(o.id)) throw new HttpsError("invalid-argument", "proposta semanal de perfil inválida");
+            seen.add(o.id);
+          });
+          const fresh = alvo.jogo.schedule && _matchKnownSidesValid(alvo.jogo.schedule.knownSides, freshSides, alvo.jogo)
+            ? _schSaneiaSchedule(alvo.jogo.schedule) : _schSaneiaSchedule({});
+          const oldAuto = fresh.options.filter((o) => o.byUid === callerUid && o.id.startsWith(prefix));
+          const kept = fresh.options.filter((o) => !(o.byUid === callerUid && o.id.startsWith(prefix)));
+          if (kept.length + sanitized.length > 80) throw new HttpsError("failed-precondition", "limite de propostas deste jogo atingido");
+          const removed = new Set(oldAuto.map((o) => o.id).filter((id) => !seen.has(id)));
+          [fresh.votes, fresh.dayVotes].forEach((votes) => Object.keys(votes || {}).forEach((uid) => {
+            removed.forEach((id) => { if (votes[uid]) delete votes[uid][id]; });
+          }));
+          fresh.options = kept.concat(sanitized);
+          fresh.knownSides = freshSides;
+          if (!fresh.enabledAt) fresh.enabledAt = agoraIso;
+          it.schedule = _schSaneiaSchedule(fresh);
+          it.temSchedule = true;
+        }
         if ((it.temCourt || it.temScheduleLocked || it.temScheduleSource) && !souOrg) throw new HttpsError("permission-denied", "só a organização define quadra e trava agenda");
         if (operational && _scheduleHasRealPlayAgenda(alvo.jogo)) throw new HttpsError("failed-precondition", "jogo " + it.matchId + " já começou ou terminou e não pode ser realocado");
         return { it, alvo };
@@ -6870,6 +6904,7 @@ exports.setMatchSchedule = onCall(
       const espelhados = [];
       const saida = [];
       const camposDe = (it) => {
+        if (it.profileOptions !== null) return { schedule: it.schedule, scheduleOpId: operationId, scheduleTouchedAt: agoraIso };
         const c = { scheduledAt: it.scheduledAt, scheduledBy: it.scheduledBy, scheduledKind: it.scheduledKind, scheduleOpId: operationId, scheduleTouchedAt: agoraIso };
         if (it.temScheduledGameNumber) c.scheduledGameNumber = it.scheduledGameNumber;
         if (it.temSchedule) c.schedule = it.schedule;

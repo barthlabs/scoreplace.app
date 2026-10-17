@@ -596,6 +596,9 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
       p2: (typeof window._slotUids !== 'function' && s.knownSides && String(s.knownSides.p2 || '').indexOf('uid:') === 0 && currentSides.p2.indexOf('label:') === 0) ? s.knownSides.p2 : currentSides.p2
     };
     if (!Array.isArray(s.options)) s.options = [];
+    // A Function legada serializa weekdays como texto. O painel e o consenso
+    // comparam dias numéricos; normalize antes de usar propostas persistidas.
+    s.options.forEach(function(o) { if (o && o.kind === 'weekly' && Array.isArray(o.weekdays)) o.weekdays = o.weekdays.map(Number).filter(function(w) { return Number.isInteger(w) && w >= 0 && w <= 6; }); });
     if (!s.votes || typeof s.votes !== 'object') s.votes = {};
     if (!s.dayVotes || typeof s.dayVotes !== 'object') s.dayVotes = {};
     // migração legado: avail (posso) → votes ; confirms vira voto posso na opção
@@ -1493,6 +1496,7 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
     var m0 = _schFindMatch(t, firstMatchId); if (!m0) return;
     _schGroupMode = String(m0.id);
     _renderMatch(t, m0);
+    _schSeedOwnProfile(t, m0);
   };
 
   // ─── overlay por jogo ──────────────────────────────────────────────────────────
@@ -1501,7 +1505,73 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
     var m = _schFindMatch(t, matchId); if (!m) return;
     _schGroupMode = null;
     _renderMatch(t, m);
+    _schSeedOwnProfile(t, m);
   };
+
+  // A preferência recorrente vira proposta DO PRÓPRIO JOGADOR neste confronto,
+  // nunca voto nem horário confirmado. A identidade da opção é estável: reabrir
+  // não duplica; editar o perfil substitui apenas opções geradas pelo perfil.
+  var _schSeeding = {}, _schSeedRetryAt = {};
+  window._schProfileOptions = function(cu, sport, limit) {
+    var slots = (((cu || {}).availabilityBySport || {})[sport] || []);
+    if (!Array.isArray(slots)) return [];
+    var unavailable = slots.filter(function(x) { return x && x.status === 'unavailable'; });
+    var prefix = 'sp_av_' + cu.uid + '_';
+    var desired = slots.filter(function(x) {
+      return x && x.status === 'available' && Number.isInteger(x.day) && /^\d\d:\d\d$/.test(x.start) &&
+        !unavailable.some(function(no) { return no.day === x.day && no.start <= x.start && x.start < no.end; });
+    }).slice(0, Math.max(0, Math.min(24, limit))).map(function(x) {
+      return { id: prefix + x.day + '_' + x.start.replace(':', ''), kind: 'weekly', weekdays: [x.day], time: x.start, byUid: cu.uid };
+    });
+    return desired.filter(function(o, i, all) { return all.findIndex(function(x) { return x.id === o.id; }) === i; });
+  };
+  function _schProfileHint(cu, sport, day, time) {
+    var slots = (((cu || {}).availabilityBySport || {})[sport] || []);
+    if (!Array.isArray(slots)) return '';
+    var hit = slots.filter(function(x) { return x && x.day === day && x.start <= time && time < x.end; });
+    if (hit.some(function(x) { return x.status === 'unavailable'; })) return '🚫 Seu perfil: não posso';
+    if (hit.some(function(x) { return x.status === 'available'; })) return '✅ Seu perfil: posso';
+    return '';
+  }
+  function _schSeedOwnProfile(t, m) {
+    var cu = _cu();
+    if (!cu || !cu.uid || !cu._profileLoaded || !_schUserIsPlayer(t, m, cu) ||
+        m.scheduledAt || (m.schedule && !_schKnownSidesValid(m.schedule.knownSides, m))) return;
+    var key = String(t.id) + ':' + String(m.id) + ':' + cu.uid;
+    if (_schSeeding[key] || Date.now() < (_schSeedRetryAt[key] || 0)) return;
+    var sport = String(t.sport || '');
+    var prefix = 'sp_av_' + cu.uid + '_';
+    var old = (m.schedule && m.schedule.options || []).filter(function(o) { return o && o.byUid === cu.uid && String(o.id || '').indexOf(prefix) === 0; });
+    var otherCount = (m.schedule && m.schedule.options || []).length - old.length;
+    var win = window._schWindow(t);
+    var desired = window._schProfileOptions(cu, sport, 80 - otherCount).filter(function(o) {
+      var occurrence = _schResolveDayISO(o.time, o.weekdays[0], t);
+      return occurrence && new Date(occurrence).getTime() <= win.endMs &&
+        (!m.requiredDay || _schYmdNoFuso(new Date(occurrence).getTime(), t) === String(m.requiredDay));
+    });
+    var fingerprint = function(list) { return JSON.stringify(list.map(function(o) { return [o.id, o.kind, o.weekdays, o.time, o.byUid]; }).sort(function(a,b) { return a[0].localeCompare(b[0]); })); };
+    if (fingerprint(old) === fingerprint(desired)) return;
+    var DB = window.FirestoreDB;
+    if (!DB || typeof DB._callFn !== 'function') return;
+    _schSeeding[key] = true;
+    var opKey = _schOpKey(t.id, [m.id]) + ':profile:' + cu.uid;
+    Promise.resolve(DB._callFn('setMatchSchedule', {
+      tournamentId: String(t.id), sandbox: t.isSandbox === true,
+      operationId: _schOpIdPara(opKey),
+      jogos: [{ matchId: String(m.id), profileOptions: desired }]
+    })).then(function(result) {
+      _schOpQueimar(opKey);
+      var saved = result && result.jogos && result.jogos[0];
+      if (saved && saved.schedule) {
+        m.schedule = saved.schedule;
+        if (typeof window._schRefreshCardChip === 'function') window._schRefreshCardChip(t, m);
+        _renderMatch(t, m);
+      }
+    }).catch(function(err) {
+      _schSeedRetryAt[key] = Date.now() + 60000;
+      try { console.warn('[schedule-poll] proposta do perfil não enviada:', err); } catch (e) {}
+    }).finally(function() { delete _schSeeding[key]; });
+  }
 
   function _userName(t, u) { return (typeof window._opVoterName === 'function') ? window._opVoterName(t, u) : 'Jogador'; }
   function _avatarImg(t, u, size) {
@@ -1697,7 +1767,10 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
       if (o.kind === 'date') {
         var yesU = allUids.filter(function (u) { return (votes[u] || {})[o.id] === 1; });
         var noN = allUids.filter(function (u) { return (votes[u] || {})[o.id] === -1; }).length;
+        var dateDay = new Date(String(o.dateISO || '') + 'T12:00:00-03:00').getDay();
+        var dateHint = isPlayer ? _schProfileHint(cu, t.sport, dateDay, o.time || '') : '';
         rows =
+          (dateHint ? '<div style="font-size:0.7rem;color:var(--text-muted);margin-top:5px;">' + dateHint + ' · confirme seu voto para este jogo</div>' : '') +
           (yesU.length ? '<div style="display:flex;align-items:center;padding-left:6px;margin-top:8px;">' + _avatarsFor(t, yesU) + '</div>' : '') +
           (isPlayer ? '<div style="display:flex;gap:8px;margin-top:9px;">' +
             _voteBtn(1, myVotes[o.id], 'window._schVote(' + oa + ',1)', true) +
@@ -1716,8 +1789,9 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
         var nc = allUids.filter(function (u) { return (((dayVotes[u] || {})[o.id]) || {})[wd] === -1; }).length;
         var mv = (myDayVotes[o.id] || {})[wd];
         var da = oa + ',' + wd;
+        var profileHint = isPlayer ? _schProfileHint(cu, t.sport, wd, o.time || '') : '';
         return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--sp-b-255-255-255-006,rgba(255,255,255,0.06));">' +
-          '<span style="font-weight:700;font-size:0.85rem;color:var(--text-bright);min-width:52px;">' + WD[wd] + (o.time ? ' <span style="color:var(--text-muted);font-weight:600;">' + _esc(o.time) + '</span>' : '') + '</span>' +
+          '<span style="font-weight:700;font-size:0.85rem;color:var(--text-bright);min-width:52px;">' + WD[wd] + (o.time ? ' <span style="color:var(--text-muted);font-weight:600;">' + _esc(o.time) + '</span>' : '') + (profileHint ? '<small style="display:block;font-weight:500;color:var(--text-muted);">' + profileHint + '</small>' : '') + '</span>' +
           '<span style="font-size:0.7rem;color:var(--text-muted);font-weight:700;flex:1;text-align:right;">' + yc + '/' + (allUids.length || '?') + ' ✅' + (nc ? ' · ' + nc + ' 🚫' : '') + '</span>' +
           (isPlayer ? '<span style="display:inline-flex;gap:5px;flex-shrink:0;">' +
             _voteBtn(1, mv, 'window._schVoteDay(' + da + ',1)', false) +
@@ -1727,7 +1801,7 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
       }).join('');
       return '<div style="background:rgba(16,185,129,0.05);border:1px solid rgba(16,185,129,0.22);border-radius:11px;padding:10px 12px;margin-bottom:9px;">' +
         '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">' +
-          '<span style="font-weight:800;font-size:0.9rem;color:var(--sp-c-34d399,#34d399);">📆 Dias da semana ' + (o.time ? '· ' + _esc(o.time) : '') + '</span>' + manage +
+          '<span style="font-weight:800;font-size:0.9rem;color:var(--sp-c-34d399,#34d399);">📆 Dias da semana ' + (o.time ? '· ' + _esc(o.time) : '') + (String(o.id || '').indexOf('sp_av_') === 0 ? ' <small style="font-weight:500;color:var(--text-muted);">(do perfil)</small>' : '') + '</span>' + manage +
         '</div>' + dayRows + '</div>';
     }
 
