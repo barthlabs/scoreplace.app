@@ -1,3 +1,4 @@
+// 2.4.87 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.86 — A Análise identifica com "3" a dupla feminina transferida de categoria masculina. Permite ao organizador corrigir nomes digitados e substituir
 // uma pessoa vinculada por UID em uma vaga antes de publicar a chave, sem renomear
 // o perfil dela. A busca mostra só os participantes correspondentes, preserva a
