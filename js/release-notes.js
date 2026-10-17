@@ -1,3 +1,8 @@
+// 2.4.83 — A edição de configuração e imagem do sandbox usa a cópia privada,
+// sem alterar o torneio original. A tela do sorteio recupera o modo de confrontos
+// configurado. Na prévia da agenda, nomes ficam ocultos até abrir o olho de cada
+// jogo; jogos sem horário nos dias do torneio impedem salvar ou publicar a chave.
+// O editor mostra o nome inteiro e os campos de data sem sobreposição.
 // 2.4.82 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.81 — No painel do sorteio Neon, as duplas exibem nomes de perfil em vez
 // de identificadores internos; cartões e seleção do dia cabem no celular e desktop.
