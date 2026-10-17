@@ -1,4 +1,8 @@
-// 2.4.85 — Atualização consolidada de produção com as correções validadas desde a última publicação.
+// 2.4.85 — O sorteio distribui as duplas por dia e mantém o botão Sortear no cabeçalho.
+// A agenda identifica time e número da dupla, permite revelar todos os nomes de uma vez
+// e sinaliza jogos sem horário dentro dos dias configurados. O organizador pode gerar um
+// link único para pessoas com vaga manual já alocada reconhecerem sua dupla após entrar;
+// o vínculo substitui o nome manual pelo UID, e no sandbox altera somente a cópia privada.
 // 2.4.84 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.83 — A edição de configuração e imagem do sandbox usa a cópia privada,
 // sem alterar o torneio original. A tela do sorteio recupera o modo de confrontos
