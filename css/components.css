@@ -330,7 +330,7 @@ input[type="time"].sp-team-draw-time::-webkit-datetime-edit-minute-field {
   height: 5px;
   margin: 6px 7px 0 0;
   border-radius: 50%;
-  background: #34d399;
+  background: currentColor;
 }
 /* Hamburger button inside back header — hidden on regular pages (topbar handles it).
    Shown ONLY inside fullscreen overlays where the topbar is hidden behind the z-index. */

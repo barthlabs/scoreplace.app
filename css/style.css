@@ -71,6 +71,8 @@
   --bg-dark: #1c1c1e;          /* systemGray6 dark */
   --bg-card: #2c2c2e;          /* systemGray5 dark */
   --bg-card-hover: #3a3a3c;    /* systemGray4 dark */
+  --er-lz-yellow: #f0b445;
+  --er-lz-red: #ff8f8f;
 
   --primary-color: #0a84ff;    /* systemBlue dark */
   --primary-hover: #5ac8fa;    /* systemTeal dark */
@@ -124,6 +126,8 @@
   --bg-dark: #ffffff;          /* systemBackground */
   --bg-card: #ffffff;
   --bg-card-hover: #f9f9fb;
+  --er-lz-yellow: #92400e;
+  --er-lz-red: #b91c1c;
 
   --primary-color: #007aff;    /* systemBlue */
   --primary-hover: #0051d5;

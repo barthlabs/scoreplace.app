@@ -1270,8 +1270,13 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       var thirdPair = _erIsTransferredFemalePair(members, _liveState && _liveState.t);
       function memberLine(person) {
         var name = _esc(person.name);
+        var verdict = person._lzColor;
+        var nameColor = !verdict ? 'var(--text-bright)'
+          : verdict === _LZ_COL.yellow ? 'var(--er-lz-yellow,#f0b445)'
+          : verdict === _LZ_COL.red ? 'var(--er-lz-red,#f26a6a)'
+          : window._spCor(verdict, 'color');
         var content = canEdit ? '<button type="button" title="Clique para editar esta vaga" aria-label="Editar vaga de ' + name + '" onclick="event.stopPropagation();window._erEditPairMember(' + person.order + ')" style="background:none;border:0;color:inherit;cursor:pointer;font:inherit;text-align:left;padding:0;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;overflow-wrap:anywhere;">' + name + '</button>' : name;
-        return '<div style="display:flex;align-items:center;min-width:0;font-size:14px;font-weight:750;color:var(--text-bright);line-height:1.25;overflow-wrap:anywhere;">' + content + '</div>';
+        return '<div style="display:flex;align-items:center;min-width:0;font-size:14px;font-weight:750;color:' + nameColor + ';line-height:1.25;overflow-wrap:anywhere;">' + content + '</div>';
       }
       var pairCat = _decomposeCat(_erPairCategory(members), _liveState && _liveState.t || {});
       return '<div draggable="true" data-er-pair-order="' + a.order + '" data-er-member-orders="' + a.order + ',' + b.order + '" data-er-person="' + _esc(a.name + ' ' + b.name) + '" data-er-gender="' + (_erPairPlacementGender(members, _liveState && _liveState.t || {}) || '') + '" data-er-skill="' + _esc(pairCat.skill || '') + '" ondragstart="window._erMxPairDragStart(event,' + a.order + ')" onclick="window._erMxPairClick(event,' + a.order + ')" aria-pressed="' + (selected ? 'true' : 'false') + '" title="Arraste a dupla para uma categoria" style="position:relative;cursor:grab;display:flex;flex-direction:column;gap:5px;padding:10px 38px 10px 11px;border:' + (selected ? '2px solid #38bdf8' : ('1px solid ' + (changed ? 'rgba(245,158,11,.65)' : 'rgba(168,85,247,.45)'))) + ';border-radius:9px;background:' + (selected ? 'rgba(14,165,233,0.20)' : (changed ? 'rgba(245,158,11,.07)' : 'rgba(168,85,247,.08)')) + ';user-select:none;">' +
@@ -3364,6 +3369,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var el = document.getElementById('er-cat-matrix');
     if (el && _liveState) {
       _liveState.rows = _erReconcilePairRows(_liveState.rows || []);
+      var lzCtx = window._lzRenderCtx;
+      // O scan já classifica seu contexto; uma edição pode reconstruir as linhas da matriz.
+      if (lzCtx && lzCtx.t && _liveState.t && String(lzCtx.t.id) === String(_liveState.t.id)) {
+        _erApplyLzToRows(_liveState.rows, _liveState.profileMap || {}, lzCtx.scanMap || {});
+        lzCtx.rows = _liveState.rows;
+      }
       el.innerHTML = _matrixInner(_liveState.rows, _liveState.t);
     }
     // O texto digitado sobrevive ao re-render (é estado da barra), mas os cards voltam sem

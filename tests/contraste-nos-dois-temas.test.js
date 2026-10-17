@@ -279,6 +279,33 @@ console.log('\n== Contraste nos DOIS temas ==');
     });
   });
 
+  // Letzplay nas duplas: os dois tons exclusivos precisam vencer o overlay real
+  // dos cards, tanto no repouso quanto quando a dupla está selecionada.
+  function lzTokens(bloco) {
+    return Object.fromEntries(['--er-lz-yellow', '--er-lz-red'].map((key) => {
+      const m = bloco.match(new RegExp(key + ':\\s*(#[0-9a-fA-F]{6})'));
+      return [key, m && m[1]];
+    }));
+  }
+  function overlay(base, tint, alpha) {
+    return { r: Math.round(base.r * (1 - alpha) + tint.r * alpha),
+      g: Math.round(base.g * (1 - alpha) + tint.g * alpha),
+      b: Math.round(base.b * (1 - alpha) + tint.b * alpha) };
+  }
+  const darkLz = lzTokens(style.slice(style.indexOf(':root, [data-theme="dark"]'), iLight));
+  const lightLz = lzTokens(style.slice(iLight, style.indexOf(':root {', iLight)));
+  [['ESCURO', escuro, darkLz], ['CLARO', claro, lightLz]].forEach(([nome, theme, colors]) => {
+    ['--er-lz-yellow', '--er-lz-red'].forEach((key) => {
+      ok(!!colors[key], 'tema ' + nome + ': token ' + key + ' existe');
+      if (!colors[key] || !theme['--bg-card']) return;
+      [[{ r: 168, g: 85, b: 247 }, 0.08], [{ r: 14, g: 165, b: 233 }, 0.20]].forEach(([tint, alpha]) => {
+        const bg = overlay(hex(theme['--bg-card']), tint, alpha);
+        const ratio = contraste(hex(colors[key]), bg);
+        ok(ratio >= 4.5, 'tema ' + nome + ': ' + key + ' sobre card com overlay ' + alpha + ' = ' + ratio.toFixed(2) + ':1');
+      });
+    });
+  });
+
   // 9b. A polaridade é OPOSTA entre os temas — é isso que faz a regra ser "a mesma
   // regra dos dois lados" em vez de dois conjuntos de cores soltos.
   ok(lum(hex(escuro['--bg-darker'])) < 0.2, 'o tema escuro tem fundo escuro');
