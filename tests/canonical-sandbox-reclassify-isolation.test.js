@@ -7,6 +7,7 @@ const ROOT = path.join(__dirname, '..');
 process.env.GCLOUD_PROJECT = process.env.GCLOUD_PROJECT || 'scoreplace-testes';
 const admin = require(path.join(ROOT, 'functions/node_modules/firebase-admin'));
 const core = require(path.join(ROOT, 'functions/registration-core.js'));
+const split = require(path.join(ROOT, 'functions/vendor/tournament-split-core.js'));
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const account = (uid) => ({
   registrationId: core.registrationId('uid:' + uid, 'cat-a'), tournamentId: 't1',
@@ -64,13 +65,16 @@ const db = {
         assert(!record(r), 'create não pode sobrescrever documento');
         writes.push({ kind: 'create', r, value });
       },
+      set: (r, value) => { startedWriting = true; writes.push({ kind: 'set', r, value }); },
+      delete: (r) => { startedWriting = true; writes.push({ kind: 'delete', r }); },
     };
     const result = await callback(tx);
     for (const write of writes) {
       const parent = state[write.r.group][write.r.id];
       const target = write.r.sub ? parent[write.r.sub] : parent;
       const key = write.r.sub ? write.r.subid : 'doc';
-      target[key] = write.kind === 'create'
+      if (write.kind === 'delete') delete target[key];
+      else target[key] = write.kind === 'create' || write.kind === 'set'
         ? Object.assign({}, write.value)
         : Object.assign({}, target[key], write.patch);
     }
@@ -88,6 +92,7 @@ const fs = require('fs');
 const serverCode = fs.readFileSync(path.join(ROOT, 'functions/index.js'), 'utf8');
 const clientCode = fs.readFileSync(path.join(ROOT, 'js/firebase-db.js'), 'utf8');
 const directCode = fs.readFileSync(path.join(ROOT, 'js/views/tournaments.js'), 'utf8');
+const format2Code = fs.readFileSync(path.join(ROOT, 'js/views/format2-ui.js'), 'utf8');
 const callableNames = ['enrollParticipant', 'deenrollParticipant', 'leaveStandby', 'formPair', 'splitPair', 'setTournamentPresence'];
 for (const name of callableNames) {
   const start = serverCode.indexOf('exports.' + name + ' = onCall(');
@@ -98,10 +103,15 @@ for (const name of callableNames) {
   assert(/_sandboxAutorizado\(db, (snap|_pre), callerUid/.test(block), name + ' confere dono e original');
   assert(/sandbox !== tournamentId\.startsWith\("sb_"\)/.test(block), name + ' rejeita flag e ID divergentes');
   assert(/isSandbox === true/.test(block), name + ' rejeita clone no ramo de produção');
+  if (['enrollParticipant', 'deenrollParticipant', 'leaveStandby', 'formPair', 'splitPair'].includes(name)) {
+    assert(/_splitParts\.gravar\(tx, docRef,/.test(block), name + ' grava o resultado legado na referência já roteada dentro da transação');
+    assert(/if \(!sandbox && !out\.canonical\)/.test(block), name + ' não replica a mutação do sandbox para outro torneio');
+  }
   const clientStart = clientCode.indexOf("_callFn('" + name + "'");
   assert(clientStart >= 0 && /sandbox: this\._ehSandbox\(tournamentId\)/.test(clientCode.slice(clientStart, clientStart + 600)), name + ' passa flag no cliente');
 }
 assert(/_removePayload\.sandbox = window\.FirestoreDB\._ehSandbox\(tId\)/.test(directCode), 'remoção administrativa direta passa flag');
+assert(/var gamesInput = document\.getElementById\('f2-team-schedule-games'\);\s*if \(gamesInput\)/.test(format2Code), 'leitor do campo genérico de rodadas tolera ausência quando há valores por categoria');
 const enrollStart = serverCode.indexOf('exports.enrollParticipant = onCall(');
 const enrollEnd = serverCode.indexOf('exports.deenrollParticipant = onCall(', enrollStart);
 const enrollBlock = serverCode.slice(enrollStart, enrollEnd);
@@ -147,4 +157,21 @@ const request = (sandboxFlag) => ({
   await assert.rejects(call({ ...request(true), fromCategoryId: 'cat-b', toCategoryId: 'cat-a' }), /torneio não existe/);
   assert.strictEqual(state.sandboxes.sb_t1.registrations[movedId].status, 'withdrawn');
   console.log('✓ perda de autorização no original bloqueia a cópia');
+
+  const legacyOriginal = { id: 't2', creatorUid: 'org', status: 'open', enrollmentMode: 'time', teamSize: 2,
+    participants: [{ uid: 'u2', name: 'Pessoa de teste' }], memberUids: ['org', 'u2'] };
+  const legacySandbox = Object.assign({}, clone(legacyOriginal), { id: 'sb_t2', isSandbox: true,
+    sandboxOf: 't2', sandboxOwnerUid: 'org', sbState: 'ready', notificationsMuted: true });
+  const seedSplit = (t) => {
+    const parts = split.dividir(t, ['participants']);
+    return { doc: parts.config, registrations: {}, inscritos: Object.fromEntries(parts.participants.map((entry) => [split.chaveDoRegistro(entry), entry])) };
+  };
+  state.tournaments.t2 = seedSplit(legacyOriginal);
+  state.sandboxes.sb_t2 = seedSplit(legacySandbox);
+  const legacyBefore = clone(state.tournaments.t2);
+  const legacyRemoved = await leave({ tournamentId: 'sb_t2', sandbox: true, userUid: 'u2' });
+  assert.strictEqual(legacyRemoved.notFound, false);
+  assert.strictEqual(Object.keys(state.sandboxes.sb_t2.inscritos).length, 0, 'ramo legado grava a subcoleção de inscritos do sandbox na transação');
+  assert.deepStrictEqual(clone(state.tournaments.t2), legacyBefore, 'ramo legado não replica escrita no original');
+  console.log('✓ desinscrição legada atualiza a subcoleção de inscritos do sandbox sem tocar em produção');
 })().catch((error) => { console.error(error); process.exitCode = 1; });
