@@ -49,13 +49,38 @@ function plan(tournamentId, registrations, identity, categoryId, expectedName, n
       Object.assign({}, partner, { fixedPairId: newPairId })], creates: [replacement] } };
 }
 
-function patchPair(entry, edit) {
+function legacyItem(document) {
+  return document && document.item && typeof document.item === 'object' ? document.item : document;
+}
+
+function findLegacyMirror(documents, edit) {
+  const sourceField = edit.source.participantKind === 'account' ? 'Uid' : 'ManualId';
+  const sourceValue = edit.source.participantKind === 'account' ? edit.source.participantUid : edit.source.manualParticipantId;
+  const partnerField = edit.partner.participantKind === 'account' ? 'Uid' : 'ManualId';
+  const partnerValue = edit.partner.participantKind === 'account' ? edit.partner.participantUid : edit.partner.manualParticipantId;
+  const matches = (documents || []).filter((document) => {
+    const entry = legacyItem(document.data);
+    if (!entry || entry.fixedPair !== true) return false;
+    return ['p1', 'p2'].some((slot) => {
+      const other = slot === 'p1' ? 'p2' : 'p1';
+      return entry[slot + sourceField] === sourceValue && entry[other + partnerField] === partnerValue;
+    });
+  });
+  if (matches.length !== 1) throw new Error('espelho da dupla ausente ou ambíguo');
+  return matches[0];
+}
+
+function patchPair(entry, edit, options) {
   if (!entry || typeof entry !== 'object') return false;
   const oldField = edit.source.participantKind === 'account' ? 'Uid' : 'ManualId';
   const oldValue = edit.source.participantKind === 'account' ? edit.source.participantUid : edit.source.manualParticipantId;
   const slots = ['p1', 'p2'].filter((slot) => entry[slot + oldField] === oldValue);
   if (!slots.length) return false;
-  if (slots.length !== 1 || entry.fixedPairId !== edit.source.fixedPairId) throw new Error('referência de dupla ambígua');
+  const legacyMirror = !!(options && options.legacyMirror);
+  if (slots.length !== 1 || (!legacyMirror && entry.fixedPairId !== edit.source.fixedPairId) ||
+      (legacyMirror && (entry.fixedPair !== true || (entry.fixedPairId && entry.fixedPairId !== edit.source.fixedPairId)))) {
+    throw new Error('referência de dupla ambígua');
+  }
   const slot = slots[0];
   const other = slot === 'p1' ? 'p2' : 'p1';
   const partnerField = edit.partner.participantKind === 'account' ? 'Uid' : 'ManualId';
@@ -64,7 +89,7 @@ function patchPair(entry, edit) {
   if (edit.source.participantKind === 'account') {
     delete entry[slot + 'Uid'];
     entry[slot + 'ManualId'] = edit.newIdentity.manualParticipantId;
-    entry.fixedPairId = edit.newPairId;
+    if (!legacyMirror || entry.fixedPairId) entry.fixedPairId = edit.newPairId;
   }
   const oldName = entry[slot + 'Name'];
   entry[slot + 'Name'] = edit.newName;
@@ -74,14 +99,21 @@ function patchPair(entry, edit) {
   return true;
 }
 
-function mirrorWritePatch(mirror, edit, deleteFieldValue) {
-  const patch = Object.assign({}, mirror);
+function mirrorWritePatch(document, edit, deleteFieldValue) {
+  const mirror = legacyItem(document);
+  const prefix = mirror === document ? '' : 'item.';
+  const slot = mirror.p1ManualId === edit.newIdentity.manualParticipantId ? 'p1' :
+    (mirror.p2ManualId === edit.newIdentity.manualParticipantId ? 'p2' : '');
+  if (!slot) throw new Error('vaga substituta ausente do espelho');
+  const patch = { [prefix + slot + 'Name']: edit.newName };
   if (edit.source.participantKind === 'account') {
-    const slot = mirror.p1ManualId === edit.newIdentity.manualParticipantId ? 'p1' :
-      (mirror.p2ManualId === edit.newIdentity.manualParticipantId ? 'p2' : '');
-    if (!slot) throw new Error('vaga substituta ausente do espelho');
-    patch[slot + 'Uid'] = deleteFieldValue;
+    patch[prefix + slot + 'Uid'] = deleteFieldValue;
+    patch[prefix + slot + 'ManualId'] = edit.newIdentity.manualParticipantId;
+    if (mirror.fixedPairId) patch[prefix + 'fixedPairId'] = edit.newPairId;
   }
+  if (typeof mirror[slot] === 'string') patch[prefix + slot] = mirror[slot];
+  if (typeof mirror.name === 'string') patch[prefix + 'name'] = mirror.name;
+  if (typeof mirror.displayName === 'string') patch[prefix + 'displayName'] = mirror.displayName;
   return patch;
 }
 
@@ -131,4 +163,4 @@ function patchDraft(draft, edit) {
   return next;
 }
 
-module.exports = { plan, patchPair, mirrorWritePatch, patchDraft, hasIdentity };
+module.exports = { plan, legacyItem, findLegacyMirror, patchPair, mirrorWritePatch, patchDraft, hasIdentity };

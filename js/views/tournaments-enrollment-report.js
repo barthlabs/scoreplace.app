@@ -1269,12 +1269,13 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       var canEdit = !!(_liveState && _liveState.isOrg && _liveState.t && _liveState.t.canonicalRegistrationMigration && _liveState.t.canonicalRegistrationMigration.fingerprint);
       var thirdPair = _erIsTransferredFemalePair(members, _liveState && _liveState.t);
       function memberLine(person) {
-        var pencil = canEdit ? '<button type="button" title="Editar esta vaga" aria-label="Editar vaga de ' + _esc(person.name) + '" onclick="event.stopPropagation();window._erEditPairMember(' + person.order + ')" style="background:transparent;border:0;color:var(--text-bright);cursor:pointer;font-size:15px;padding:2px 6px;">✏️</button>' : '';
-        return '<div style="display:flex;align-items:center;min-width:0;font-size:14px;font-weight:750;color:var(--text-bright);line-height:1.25;overflow-wrap:anywhere;">' + _esc(person.name) + pencil + '</div>';
+        var name = _esc(person.name);
+        var content = canEdit ? '<button type="button" title="Clique para editar esta vaga" aria-label="Editar vaga de ' + name + '" onclick="event.stopPropagation();window._erEditPairMember(' + person.order + ')" style="background:none;border:0;color:inherit;cursor:pointer;font:inherit;text-align:left;padding:0;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;overflow-wrap:anywhere;">' + name + '</button>' : name;
+        return '<div style="display:flex;align-items:center;min-width:0;font-size:14px;font-weight:750;color:var(--text-bright);line-height:1.25;overflow-wrap:anywhere;">' + content + '</div>';
       }
       var pairCat = _decomposeCat(_erPairCategory(members), _liveState && _liveState.t || {});
       return '<div draggable="true" data-er-pair-order="' + a.order + '" data-er-member-orders="' + a.order + ',' + b.order + '" data-er-person="' + _esc(a.name + ' ' + b.name) + '" data-er-gender="' + (_erPairPlacementGender(members, _liveState && _liveState.t || {}) || '') + '" data-er-skill="' + _esc(pairCat.skill || '') + '" ondragstart="window._erMxPairDragStart(event,' + a.order + ')" onclick="window._erMxPairClick(event,' + a.order + ')" aria-pressed="' + (selected ? 'true' : 'false') + '" title="Arraste a dupla para uma categoria" style="position:relative;cursor:grab;display:flex;flex-direction:column;gap:5px;padding:10px 38px 10px 11px;border:' + (selected ? '2px solid #38bdf8' : ('1px solid ' + (changed ? 'rgba(245,158,11,.65)' : 'rgba(168,85,247,.45)'))) + ';border-radius:9px;background:' + (selected ? 'rgba(14,165,233,0.20)' : (changed ? 'rgba(245,158,11,.07)' : 'rgba(168,85,247,.08)')) + ';user-select:none;">' +
-        (thirdPair ? '<span class="badge badge-info" title="Dupla 3: inscrição originalmente masculina" aria-label="Dupla 3" style="align-self:flex-start;">3</span>' : '') + memberLine(a) + memberLine(b) + split +
+        memberLine(a) + memberLine(b) + split + (thirdPair ? '<span class="badge badge-info" title="Dupla 3: inscrição originalmente masculina" aria-label="Dupla 3" style="position:absolute;right:8px;bottom:7px;font-size:10px;line-height:1;padding:2px 5px;">3</span>' : '') +
       '</div>';
   }
   window._erEditPairMember = function (order) {

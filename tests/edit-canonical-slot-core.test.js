@@ -71,6 +71,45 @@ Object.keys(mirrorPatch).forEach((field) => {
 });
 assert.equal(Object.prototype.hasOwnProperty.call(stored, 'p2Uid'), false);
 assert.equal(stored.p2ManualId, 'replacement');
+const legacy = { _idx: 5, _k: 'pair-key', item: {
+  p1ManualId: 'a', p1Name: 'Nome anterior', p2Uid: 'b', p2Name: 'Parceiro',
+  fixedPair: true, categoryId: 'old-category',
+} };
+const found = core.findLegacyMirror([{ ref: 'right', data: legacy }], rename);
+assert.equal(found.ref, 'right');
+const renamedLegacy = Object.assign({}, core.legacyItem(found.data));
+assert.equal(core.patchPair(renamedLegacy, rename, { legacyMirror: true }), true);
+assert.equal(renamedLegacy.p1Name, 'Nome corrigido');
+assert.equal(renamedLegacy.fixedPairId, undefined);
+assert.deepEqual(core.mirrorWritePatch({ ...legacy, item: renamedLegacy }, rename, deleted),
+  { 'item.p1Name': 'Nome corrigido' });
+const replacedLegacy = Object.assign({}, legacy.item);
+assert.equal(core.patchPair(replacedLegacy, replace, { legacyMirror: true }), true);
+const nestedPatch = core.mirrorWritePatch({ ...legacy, item: replacedLegacy }, replace, deleted);
+assert.deepEqual(nestedPatch, {
+  'item.p2Name': 'Novo parceiro', 'item.p2Uid': deleted, 'item.p2ManualId': 'replacement',
+});
+const committedLegacy = { ...legacy, item: { ...legacy.item } };
+Object.entries(nestedPatch).forEach(([key, value]) => {
+  const field = key.slice('item.'.length);
+  if (value === deleted) delete committedLegacy.item[field];
+  else committedLegacy.item[field] = value;
+});
+assert.equal(committedLegacy.item.p2Uid, undefined);
+assert.equal(committedLegacy.item.p2ManualId, 'replacement');
+assert.equal(committedLegacy.item.p1ManualId, 'a');
+assert.equal(committedLegacy._idx, 5);
+assert.equal(committedLegacy._k, 'pair-key');
+assert.throws(() => core.findLegacyMirror([{ data: legacy }, { data: { ...legacy, item: { ...legacy.item, categoryId: 'other' } } }], rename), /ambíguo/);
+assert.throws(() => core.findLegacyMirror([{ data: { ...legacy, item: { ...legacy.item, p2Uid: 'other' } } }], rename), /ambíguo/);
+assert.equal(core.findLegacyMirror([{ data: { ...legacy.item } }], rename).data.fixedPair, true);
+const topLevel = { ...legacy.item };
+assert.equal(core.patchPair(topLevel, rename, { legacyMirror: true }), true);
+assert.deepEqual(core.mirrorWritePatch(topLevel, rename, deleted), { p1Name: 'Nome corrigido' });
+// O ID físico do sandbox não participa do casamento; a dupla conserva o ID lógico do torneio original.
+assert.equal(core.findLegacyMirror([{ ref: 'sandboxes/sb-test/inscritos/pair', data: legacy }],
+  core.plan(tid, [a, b], { manualParticipantId: 'a' }, categoryId, 'Nome anterior', 'Outro nome')).ref,
+  'sandboxes/sb-test/inscritos/pair');
 assert.equal(core.hasIdentity(['x', 'b'], { uid: 'b' }), true);
 assert.equal(core.hasIdentity({ absent: ['b'] }, { uid: 'b' }), true);
 assert.equal(core.hasIdentity({ absent: ['another'] }, { uid: 'b' }), false);
@@ -85,6 +124,7 @@ assert.match(callable, /_manualClaimGuard\(state, true\)/);
 assert.match(callable, /_slotPublishedExtras\(state\.tournament\)/);
 assert.match(callable, /pendingCanonicalParticipantClaims/);
 assert.match(callable, /_writeCanonicalRosterChanges\(tx/);
-assert.match(callable, /tx\.update\(matches\[0\]\.ref, _editCanonicalSlot\.mirrorWritePatch\(mirror, edit, _FV\.delete\(\)\)\)/);
+assert.match(callable, /_editCanonicalSlot\.findLegacyMirror\(mirrorDocuments, edit\)/);
+assert.match(callable, /tx\.update\(match\.ref, _editCanonicalSlot\.mirrorWritePatch\(patchedMirror, edit, _FV\.delete\(\)\)\)/);
 assert.match(callable, /tx\.update\(state\.privateDrawRef, \{ draft/);
 console.log('✓ edição canônica da vaga: nome manual, troca de UID, três jogos e isolamento do rascunho');

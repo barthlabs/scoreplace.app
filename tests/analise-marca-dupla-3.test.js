@@ -40,4 +40,14 @@ const render = new Function('_erIsTransferredFemalePair', '_liveState', '_pendin
 const html = render(pair('cat-m', 'Fem Light').map((member, index) => Object.assign(member,
   { order: index + 1, name: 'Pessoa ' + (index + 1), assigned: ['Fem Light'] })));
 assert.strictEqual((html.match(/aria-label="Dupla 3"/g) || []).length, 1, 'a renderização real mostra um único selo 3');
+assert(html.includes('right:8px;bottom:7px;font-size:10px'), 'selo 3 pequeno no canto inferior direito');
+const renderEditable = new Function('_erIsTransferredFemalePair', '_liveState', '_pendingEdits', '_erSelectedOrders',
+  '_erPairCategory', '_decomposeCat', '_erPairPlacementGender', '_esc', card + '\nreturn _erPairCard;')(
+  classify, { t: { ...t, canonicalRegistrationMigration: { fingerprint: 'verified' } }, isOrg: true }, {}, {},
+  (members) => members[0].category, (label) => ({ skill: label.split(' ')[1] || '' }), () => 'feminino', String
+);
+const editable = renderEditable(pair('cat-m', 'Fem Light').map((member, index) => Object.assign(member,
+  { order: index + 1, name: 'Pessoa ' + (index + 1), assigned: ['Fem Light'] })));
+assert.strictEqual((editable.match(/window\._erEditPairMember\(/g) || []).length, 2, 'cada nome abre a própria vaga');
+assert(!editable.includes('✏️'), 'nenhum lápis na dupla');
 console.log('✓ Análise: selo 3 só para dupla feminina com origem masculina canônica');

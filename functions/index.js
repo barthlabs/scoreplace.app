@@ -4514,25 +4514,23 @@ exports.editCanonicalTournamentSlot = onCall(
       }
       const mirrorCol = ref.collection(_tSplitFn.colecaoDaParte('participants'));
       const mirrorSnap = await tx.get(mirrorCol);
-      const matches = mirrorSnap.docs.filter((doc) => {
-        const item = doc.data() || {};
-        return ['p1', 'p2'].some((slot) => item[slot + (uid ? 'Uid' : 'ManualId')] === (uid || manualParticipantId) &&
-          item.fixedPairId === edit.source.fixedPairId);
-      });
-      if (matches.length !== 1) throw new HttpsError('failed-precondition', 'espelho da dupla ausente ou ambíguo');
-      const mirror = Object.assign({}, matches[0].data());
+      const mirrorDocuments = mirrorSnap.docs.map((doc) => ({ ref: doc.ref, data: doc.data() || {} }));
+      let match;
+      try { match = _editCanonicalSlot.findLegacyMirror(mirrorDocuments, edit); }
+      catch (error) { throw new HttpsError('failed-precondition', error.message); }
+      const mirror = Object.assign({}, _editCanonicalSlot.legacyItem(match.data));
       const oldSlot = mirror.p1Uid === uid || mirror.p1ManualId === manualParticipantId ? 'p1' : 'p2';
       if (!uid && _manualNameUnique.normalizeName(mirror[oldSlot + 'Name']) !== _manualNameUnique.normalizeName(expectedName)) {
         throw new HttpsError('failed-precondition', 'o nome da vaga mudou; atualize a análise');
       }
       if (_manualNameUnique.normalizeName(mirror[oldSlot === 'p1' ? 'p2Name' : 'p1Name']) === _manualNameUnique.normalizeName(edit.newName) ||
-          mirrorSnap.docs.some((doc) => doc.id !== matches[0].id &&
+          mirrorDocuments.some((doc) => doc.ref.path !== match.ref.path &&
             ['p1Name', 'p2Name'].some((key) =>
-              _manualNameUnique.normalizeName((doc.data() || {})[key]) === _manualNameUnique.normalizeName(edit.newName)))) {
+              _manualNameUnique.normalizeName((_editCanonicalSlot.legacyItem(doc.data) || {})[key]) === _manualNameUnique.normalizeName(edit.newName)))) {
         throw new HttpsError('failed-precondition', 'já existe inscrito com este nome');
       }
       try {
-        if (!_editCanonicalSlot.patchPair(mirror, edit)) throw new Error('espelho sem identidade');
+        if (!_editCanonicalSlot.patchPair(mirror, edit, { legacyMirror: true })) throw new Error('espelho sem identidade');
       } catch (error) { throw new HttpsError('failed-precondition', error.message); }
       let draft = null;
       if (state.privateDraw) {
@@ -4541,7 +4539,8 @@ exports.editCanonicalTournamentSlot = onCall(
       }
       const next = _writeCanonicalRosterChanges(tx, ref, state.tournament, checked.registrations,
         edit.changes, null, sandbox ? logicalId : '');
-      tx.update(matches[0].ref, _editCanonicalSlot.mirrorWritePatch(mirror, edit, _FV.delete()));
+      const patchedMirror = match.data.item ? Object.assign({}, match.data, { item: mirror }) : mirror;
+      tx.update(match.ref, _editCanonicalSlot.mirrorWritePatch(patchedMirror, edit, _FV.delete()));
       if (draft) tx.update(state.privateDrawRef, { draft, updatedAt: _FV.serverTimestamp() });
       return { ok: true, participants: next.participants, replacedAccount: !!uid };
     });
