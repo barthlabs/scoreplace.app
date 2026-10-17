@@ -408,7 +408,7 @@ const achou = (c, p) => D.detectarMesmaPessoa(c, p).suspeito;
     idx.indexOf('_detectarDuplicataNoTorneio(db, participantUid') < idx.indexOf('await db.runTransaction'));
   ok('  → o ORGANIZADOR inscrevendo TERCEIRO não aciona o sinal da própria conta',
     /participantUid && participantUid !== callerUid && !_preIsOrganizer/.test(idx) &&
-    /if \(participantUid === callerUid && _pre\.exists\)/.test(idx));
+    /if \(!sandbox && participantUid === callerUid && _pre\.exists && \(_pre\.data\(\) \|\| \{\}\)\.isSandbox !== true\)/.test(idx));
   ok('  → devolve dupSuspect junto do resultado normal',
     /withDuplicateSignal[\s\S]{0,160}dupSuspect: duplicateSignal/.test(idx));
   // O cliente NUNCA recebe o uid da outra conta — só o contato mascarado.
@@ -438,8 +438,10 @@ const achou = (c, p) => D.detectarMesmaPessoa(c, p).suspeito;
   // cliente". O app NATIVO embarca o JS e não tem auto-update — a pergunta da 1.7.41 só
   // chega numa submissão nova, dias depois. Notificação é DADO: alcança toda versão.
   ok('a CF AVISA a pessoa (não depende da tela nova)', /_avisarDuplicataSuspeita\(db, participantUid/.test(idx));
-  ok('  → o aviso é acompanhado de sinal, não de recusa',
-    /_avisarDuplicataSuspeita\(db, participantUid[\s\S]{0,700}duplicateSignal/.test(idx));
+  const enrollBlock = idx.slice(idx.indexOf('exports.enrollParticipant = onCall('), idx.indexOf('exports.deenrollParticipant = onCall('));
+  ok('  → o aviso só sai após inscrição confirmada e nunca no sandbox',
+    enrollBlock.indexOf('await _avisarDuplicataSuspeita(db, participantUid') > enrollBlock.indexOf('const out = await db.runTransaction') &&
+    /if \(!sandbox && duplicateNotice &&/.test(enrollBlock));
   ok('  → usa a MESMA fila de e-mail do app (nunca escrita direta em `mail`)',
     /_avisarDuplicataSuspeita[\s\S]{0,3000}collection\("notif_email_queue"\)/.test(idx));
   ok('  → id determinístico: reinscrever não vira spam',

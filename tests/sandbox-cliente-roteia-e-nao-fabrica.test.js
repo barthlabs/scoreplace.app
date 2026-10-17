@@ -80,8 +80,8 @@ const ok = (n, c, x) => { if (c) console.log('  ✓ ' + n); else { console.log('
     ok('⭐⭐ sandbox pelo REGISTRO do ouvinte → sandboxes', real._tRef('sb_3').path === 'sandboxes/sb_3', real._tRef('sb_3').path);
     ok('⛔ id desconhecido cai em tournaments (sem fato, não inventa)',
       real._tRef('nunca_visto').path === 'tournaments/nunca_visto', real._tRef('nunca_visto').path);
-    ok('⛔ e NÃO decide por nome: "sb_" num id desconhecido não vira sandbox',
-      real._tRef('sb_desconhecido').path === 'tournaments/sb_desconhecido', real._tRef('sb_desconhecido').path);
+    ok('⭐⭐ prefixo reservado "sb_" roteia deep link antes do ouvinte',
+      real._tRef('sb_desconhecido').path === 'sandboxes/sb_desconhecido', real._tRef('sb_desconhecido').path);
     let rosterPayload = null;
     real._callFn = async (_name, payload) => { rosterPayload = payload; return { data: { participants: [], registrationCount: 0 } }; };
     await real.loadCanonicalTournamentRoster('sb_2');

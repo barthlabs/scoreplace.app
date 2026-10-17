@@ -10,6 +10,7 @@ namespace ScoreplaceRegistrationRoster {
   interface Registration {
     registrationId?: unknown;
     categoryId?: unknown;
+    originCategoryId?: unknown;
     participantKind?: unknown;
     participantUid?: unknown;
     manualParticipantId?: unknown;
@@ -22,7 +23,7 @@ namespace ScoreplaceRegistrationRoster {
     registrationOrder?: unknown;
     createdAt?: unknown;
   }
-  interface Person { key: string; uid: string | null; manualParticipantId: string | null; name: string; order: OrderKey; }
+  interface Person { key: string; uid: string | null; manualParticipantId: string | null; name: string; originCategoryId: string; order: OrderKey; }
   interface OrderKey { rank: number; fallback: string; index: number; }
   function text(value: unknown): string { return typeof value === 'string' ? value.trim() : ''; }
   function active(doc: Registration): boolean { return !!doc && doc.status === 'confirmed'; }
@@ -65,11 +66,11 @@ namespace ScoreplaceRegistrationRoster {
   }
   function member(doc: Registration, index: number): Person {
     const kind = text(doc.participantKind), uid = text(doc.participantUid), manualId = text(doc.manualParticipantId);
-    if (kind === 'account' && uid && !manualId) return { key: 'uid:' + uid, uid, manualParticipantId: null, name: '', order: orderOf(doc, '', index) };
+    if (kind === 'account' && uid && !manualId) return { key: 'uid:' + uid, uid, manualParticipantId: null, name: '', originCategoryId: text(doc.originCategoryId), order: orderOf(doc, '', index) };
     if (kind === 'manual' && manualId && !uid) {
       const name = text(doc.manualDisplayName);
       if (!name) throw new Error('convidado manual sem nome de exibição');
-      return { key: 'manual:' + manualId, uid: null, manualParticipantId: manualId, name, order: orderOf(doc, name, index) };
+      return { key: 'manual:' + manualId, uid: null, manualParticipantId: manualId, name, originCategoryId: text(doc.originCategoryId), order: orderOf(doc, name, index) };
     }
     throw new Error('registro de participante inválido');
   }
@@ -94,6 +95,7 @@ namespace ScoreplaceRegistrationRoster {
       p1Seq: first.order.rank,
       p2Seq: second.order.rank,
     };
+    if (first.originCategoryId && first.originCategoryId === second.originCategoryId) entry.originCategoryId = first.originCategoryId;
     if (first.uid) entry.p1Uid = first.uid;
     if (second.uid) entry.p2Uid = second.uid;
     if (first.manualParticipantId) entry.p1ManualId = first.manualParticipantId;

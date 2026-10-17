@@ -2791,6 +2791,7 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
         t.participants = roster.participants.map(function (entry) {
           var copy = Object.assign({}, entry), label = labels[String(copy.categoryId || '')];
           if (label) { copy.category = label; copy.categories = [label]; }
+          copy.originCategoryLabel = labels[String(copy.originCategoryId || '')] || '';
           return copy;
         });
         window._showTeamCompetitionDrawReview(tId, Object.assign({}, opts, { _canonicalRosterLoaded:true }));
@@ -2890,51 +2891,18 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
     var lightPairs = neonQuota ? entries.filter(function (entry) { return String(entry.category || '') === lightCategory; }) : [];
     var pairIds = entries.map(function (entry) { return String(entry.fixedPairId || ''); });
     if (neonQuota && (pairIds.some(function (id) { return !id; }) || new Set(pairIds).size !== entries.length || days.length !== 2)) valid = false;
-    // O HTML das duplas Fem Light usa safe() já durante esta construção.
-    // Inicializar antes de pairDayHtml: var é içado, mas a atribuição não é.
     var safe = window._safeHtml || function (value) { return String(value == null ? '' : value).replace(/[&<>"']/g, function (c) { return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]; }); };
-    var savedPairDays = {};
-    ((cfg.schedule && cfg.schedule.pairDayAssignments) || []).forEach(function (item) {
-      if (item && item.fixedPairId) savedPairDays[String(item.fixedPairId)] = String(item.day || '');
-    });
-    // A numeração pode ter buracos e atravessar categorias. A sugestão é por
-    // ordem relativa das 24 duplas, descontando dias já salvos, nunca por <=32.
-    var suggestedPairDays = {}, thursdayCount = 0;
-    lightPairs.forEach(function (entry) { if (savedPairDays[String(entry.fixedPairId || '')] === days[0]) thursdayCount++; });
-    lightPairs.slice().sort(function (a, b) {
-      var aSeq = Number(a.p1Seq), bSeq = Number(b.p1Seq);
-      if (!Number.isFinite(aSeq) || aSeq <= 0) aSeq = Infinity;
-      if (!Number.isFinite(bSeq) || bSeq <= 0) bSeq = Infinity;
-      return aSeq - bSeq || String(a.fixedPairId || '').localeCompare(String(b.fixedPairId || ''));
-    }).forEach(function (entry) {
-      var id = String(entry.fixedPairId || '');
-      if (days.indexOf(savedPairDays[id]) >= 0) return;
-      suggestedPairDays[id] = thursdayCount < 16 ? days[0] : days[1];
-      if (suggestedPairDays[id] === days[0]) thursdayCount++;
-    });
-    // ⛔ A inscrição canônica guarda UID, não nome, para contas. Nunca imprimir o
-    // UID como rótulo: o mesmo hidratador dos cards do torneio resolve o perfil
-    // vivo após inserir o painel. O fixedPairId continua sendo só identidade.
-    function pairMemberHtml(entry, side) {
-      var uid = String(entry[side + 'Uid'] || '');
-      var manualName = String(entry[side + 'Name'] || '').trim();
-      if (uid && uid.indexOf('jog_') === 0) {
-        return '<span>' + safe((window._displayName && window._displayName(uid, manualName)) || manualName || 'Nome não confirmado') + '</span>';
-      }
-      if (uid) {
-        var liveName = typeof window._nameForUid === 'function' ? window._nameForUid(uid) : '';
-        return '<span data-uid-name="' + safe(uid) + '">' + safe(liveName || 'Nome ainda não carregado') + '</span>';
-      }
-      return '<span>' + safe(manualName || 'Nome não confirmado') + '</span>';
-    }
-    var pairDayHtml = neonQuota ? '<section class="sp-team-pair-days"><h3>Fem Light: 2 duplas/time na quinta, 1 na sexta</h3><p>Confira o dia de cada dupla. A sugestão usa a ordem original das inscrições; só será gravada ao confirmar o sorteio.</p><div class="sp-team-pair-grid">' + lightPairs.map(function (entry, index) {
-      var id = String(entry.fixedPairId || '');
-      var savedDay = days.indexOf(savedPairDays[id]) >= 0 ? savedPairDays[id] : '';
-      var selectedDay = savedDay || suggestedPairDays[id];
-      return '<label class="sp-team-pair-card"><span class="sp-team-pair-card-head"><strong>Dupla ' + (index + 1) + '</strong><small>' + (savedDay ? 'Dia salvo' : 'Sugestão') + '</small></span>' +
-        '<span class="sp-team-pair-members">' + pairMemberHtml(entry, 'p1') + pairMemberHtml(entry, 'p2') + '</span>' +
-        '<select data-pair-day="' + safe(id) + '" aria-label="Dia da dupla ' + (index + 1) + '">' + days.map(function (day) { return '<option value="' + safe(day) + '"' + (day === selectedDay ? ' selected' : '') + '>' + safe(dayLabel(day)) + '</option>'; }).join('') + '</select></label>';
-    }).join('') + '</div><p class="sp-team-pair-days-rule">Confirme exatamente 16 duplas na quinta e 8 na sexta; não há jogos entre os dois grupos.</p></section>' : '';
+    // A inscrição de origem decide o dia. Nenhum seletor manual participa do plano.
+    var pairDayAssignments = neonQuota ? lightPairs.map(function (entry) {
+      var origin = String(entry.originCategoryLabel || '');
+      var day = origin === lightCategory ? days[0] : /^Masc (Light|Extreme)$/i.test(origin) ? days[1] : '';
+      return { fixedPairId:String(entry.fixedPairId || ''), day:day };
+    }) : [];
+    var missingOriginCount = neonQuota ? lightPairs.filter(function (entry) { return !entry.originCategoryLabel; }).length : 0;
+    if (neonQuota && (pairDayAssignments.length !== 24 ||
+        pairDayAssignments.filter(function (item) { return item.day === days[0]; }).length !== 16 ||
+        pairDayAssignments.filter(function (item) { return item.day === days[1]; }).length !== 8 ||
+        pairDayAssignments.some(function (item) { return !item.fixedPairId || !item.day; }))) valid = false;
     var old = document.getElementById('team-draw-review-panel'); if (old) old.remove();
     var overlay = document.createElement('div');
     overlay.id = 'team-draw-review-panel';
@@ -2948,12 +2916,13 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
     var categoryDayLanes = days.map(function (day) {
       var cards = categories.filter(function (category, index) {
         var stored = byCategory[category];
-        return (stored && stored.some(function (slot) { return slot.day === day; })) || (!stored && defaultCategorySlot(category, index).day === day);
+        return (neonQuota && category === lightCategory && days.indexOf(day) >= 0) ||
+          (stored && stored.some(function (slot) { return slot.day === day; })) || (!stored && defaultCategorySlot(category, index).day === day);
       }).sort(function (a, b) {
         var aSlot = (byCategory[a] || []).filter(function (slot) { return slot.day === day; })[0] || defaultCategorySlot(a, categories.indexOf(a));
         var bSlot = (byCategory[b] || []).filter(function (slot) { return slot.day === day; })[0] || defaultCategorySlot(b, categories.indexOf(b));
         return aSlot.order - bSlot.order;
-      }).map(function (category) { return categoryCard(category, true); }).join('');
+      }).map(function (category) { return categoryCard(category, !(neonQuota && category === lightCategory)); }).join('');
       var win = windowByDay[day];
       return '<section data-team-day-lane data-day="' + safe(day) + '" style="min-width:0;border:1px dashed rgba(74,222,128,.5);border-radius:10px;padding:8px;background:rgba(6,78,59,.12);">' +
         /* ⛔ Horários nunca dividem a mesma largura: controles nativos de hora
@@ -2972,9 +2941,10 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
     // normalizador usa um valor de compatibilidade para torneios legados, mas ele
     // nunca pode virar uma decisão implícita no primeiro sorteio deste torneio.
     var modeConfirmed = cfg.schedule && cfg.schedule.modeConfirmed === true;
+    var modeChosen = cfg.schedule && cfg.schedule.modeChosen === true;
     // Livre é o padrão do primeiro sorteio. Uma escolha já persistida pela
     // organização sempre vence o padrão, inclusive se ela for estruturada.
-    var selectedMode = modeConfirmed && (cfg.schedule.mode === 'structured' || cfg.schedule.mode === 'free') ? cfg.schedule.mode : 'free';
+    var selectedMode = (modeChosen || modeConfirmed) && (cfg.schedule.mode === 'structured' || cfg.schedule.mode === 'free') ? cfg.schedule.mode : 'free';
     var rounds = Math.min(cfg.schedule.gamesPerTeam, Math.max(1, cfg.teamCount - 1));
     var includePresenceChoice = opts.includePresenceChoice === true;
     var defaultScope = opts.defaultScope === 'present' ? 'present' : 'all';
@@ -2997,15 +2967,12 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
         '<section style="border:1px solid rgba(56,189,248,.38);border-radius:12px;padding:13px;">' +
           '<h3 style="font-size:.94rem;margin:0 0 4px;color:#7dd3fc;">📍 Quadras</h3><p style="font-size:.75rem;color:#cbd5e1;margin:0 0 9px;line-height:1.3;">Arraste para definir a prioridade.</p><div data-team-court-list style="display:grid;gap:6px;">' + courtPriorityCards + '</div>' +
         '</section>' +
-      '</div>' + pairDayHtml +
-      (!valid ? '<p style="margin:0 0 14px;color:var(--sp-c-f87171,#f87171);font-weight:700;">O sorteio está bloqueado: são necessárias ' + expectedPairs + ' duplas já formadas. Categorias divergentes: ' + safe(invalidCategories.join(', ') || 'total de inscritos') + '.</p>' : '') +
+      '</div>' +
+      (!valid ? '<p style="margin:0 0 14px;color:var(--sp-c-f87171,#f87171);font-weight:700;">' +
+        (missingOriginCount ? 'Sorteio bloqueado: ' + missingOriginCount + ' dupla(s) Fem Light não têm categoria de inscrição original registrada. Os dados foram preservados; a origem precisa ser corrigida antes do sorteio.' :
+        'O sorteio está bloqueado: são necessárias ' + expectedPairs + ' duplas já formadas. Categorias divergentes: ' + safe(invalidCategories.join(', ') || 'total de inscritos') + '.') + '</p>' : '') +
       '<div style="display:flex;justify-content:flex-end;"><button type="button" id="team-draw-confirm" class="btn btn-primary"' + (valid ? '' : ' disabled aria-disabled="true" style="opacity:.45;cursor:not-allowed;"') + '>🎲 Sortear times e confrontos</button></div></section>';
     document.body.appendChild(overlay);
-    // A leitura canônica acima substitui o snapshot por entradas UID-only.
-    // Hidratar em TODA abertura; alterar um select não recria o painel.
-    if (neonQuota && typeof window._hydrateUidNames === 'function') {
-      try { window._hydrateUidNames(overlay); } catch (_e) {}
-    }
     var close = function () { overlay.remove(); };
     overlay.querySelector('#team-draw-cancel-top').onclick = function () { close(); if (typeof opts.onCancel === 'function') opts.onCancel(); };
     // Os dois pares de escolhas usam o mesmo padrão visual dos toggles do
@@ -3130,14 +3097,11 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
         var nextCompetition = JSON.parse(JSON.stringify(cfg));
         nextCompetition.schedule = Object.assign({}, nextCompetition.schedule || {}, { enabled:true, mode:selectedDrawMode, modeConfirmed:true });
         if (neonQuota) {
-          var pairDayAssignments = Array.prototype.map.call(overlay.querySelectorAll('[data-pair-day]'), function (input) { return { fixedPairId:input.getAttribute('data-pair-day'), day:input.value }; });
-          if (pairDayAssignments.length !== 24 || pairDayAssignments.filter(function (item) { return item.day === days[0]; }).length !== 16 || pairDayAssignments.filter(function (item) { return item.day === days[1]; }).length !== 8) {
-            if (window.showNotification) window.showNotification('Dias das duplas inválidos', 'Confirme 16 Fem Light na quinta e 8 na sexta.', 'error'); return;
-          }
           var rosterSnapshot = entries.map(function (entry) { return { fixedPairId:String(entry.fixedPairId), categoryId:String(entry.categoryId || '') }; }).sort(function (a, b) { return a.fixedPairId.localeCompare(b.fixedPairId); });
           nextCompetition.schedule.pairsPerTeamByCategory = categories.reduce(function (out, category) { out[category] = required(category); return out; }, {});
           nextCompetition.schedule.pairDayAssignments = pairDayAssignments;
           nextCompetition.schedule.rosterSnapshot = rosterSnapshot;
+          nextCompetition.schedule.originDayPolicy = 'female-light-enrollment-origin';
         }
         db._callFn('updateTournamentConfiguration', { tournamentId:String(tId), sandbox:typeof db._ehSandbox === 'function' && db._ehSandbox(tId), patch:{ categorySchedule:{ version:1, confirmed:true, slots:slots }, scheduleWindow:{ version:1, days:scheduleWindowDays }, courtOrder:selectedCourtOrder, teamCompetition:nextCompetition } }).then(function () {
           t.categorySchedule = { version:1, confirmed:true, slots:slots };

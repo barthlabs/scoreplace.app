@@ -52,7 +52,7 @@ ok(/if \(isCurrentDrawLeague && !isCurrentDrawMonarch\)/.test(manual),
 
 // o salvar pergunta ANTES de montar/gravar, e repete o salvar depois da resposta
 const save = src.slice(src.search(/window\._saveTournamentClickHandler = (?:async )?function/),
-                       src.search(/window\._saveTournamentClickHandler = (?:async )?function/) + 2600);
+                       src.search(/window\._saveTournamentClickHandler = (?:async )?function/) + 3300);
 ok(/_perguntarEquilibrio\(function \(\) \{ window\._saveTournamentClickHandler\(\); \}\)/.test(save),
   'responder a pergunta re-executa o salvar (mesmo padrão da reconciliação de pontuação)');
 ok(/!window\._drawBalanceConfirmed/.test(save), 'e não pergunta de novo depois de respondida');

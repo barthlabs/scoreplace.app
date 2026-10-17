@@ -768,9 +768,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var fallbackGames = Math.max(1, parseInt(tc.schedule && (tc.schedule.gamesPerPair || tc.schedule.gamesPerTeam), 10) || 1);
     var maxGames = Math.max(1, parseInt(tc.schedule && tc.schedule.teamsPerGroup, 10) || 2) - 1;
     return '<div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(129,140,248,.22);">' +
-      '<label for="f2-team-schedule-games" style="display:block;font-size:.78rem;color:var(--text-main);margin-bottom:6px;">Rodadas por dupla</label>' +
+      (!Object.keys(gameValues).length ? '<label for="f2-team-schedule-games" style="display:block;font-size:.78rem;color:var(--text-main);margin-bottom:6px;">Rodadas por dupla</label>' +
       '<input id="f2-team-schedule-games" type="number" min="1" max="' + maxGames + '" value="' + fallbackGames + '" oninput="window._f2TeamSchedule(\'gamesPerPair\',this.value,this)" onchange="window._f2TeamSchedule(\'gamesPerPair\',this.value,this)" style="width:68px;padding:7px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:var(--bg-darker,rgba(0,0,0,.25));color:var(--text-main);">' +
-      '<div style="font-size:.7rem;color:var(--text-muted);margin-top:6px;">Cada rodada é um confronto por dupla. Ida e volta dobra os confrontos.</div>' +
+      '<div style="font-size:.7rem;color:var(--text-muted);margin-top:6px;">Cada rodada é um confronto por dupla. Ida e volta dobra os confrontos.</div>' : '') +
       '<label style="display:flex;align-items:center;gap:9px;margin-top:12px;font-size:.78rem;color:var(--text-main);cursor:pointer;"><span class="toggle-switch toggle-sm"><input type="checkbox" ' + (Object.keys(gameValues).length ? 'checked ' : '') + (!categories.length ? 'disabled ' : '') + 'onchange="window._f2TeamScheduleByCategory(this.checked)" aria-label="Personalizar rodadas por categoria"><span class="toggle-slider"></span></span>Personalizar rodadas por categoria</label>' +
       (Object.keys(gameValues).length ? (!categories.length
         ? '<div style="font-size:.72rem;color:var(--text-muted);margin-top:8px;">Defina as categorias para personalizar as rodadas.</div>'
@@ -1538,7 +1538,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (!S || !S.cfg.teamCompetition) return;
     var tc = S.cfg.teamCompetition;
     tc.schedule = tc.schedule || {};
-    if (field === 'mode') tc.schedule.mode = value === 'structured' ? 'structured' : 'free';
+    if (field === 'mode') { tc.schedule.mode = value === 'structured' ? 'structured' : 'free'; tc.schedule.modeChosen = true; }
     else if (field === 'teamsPerGroup') tc.schedule.teamsPerGroup = value;
     else if (field === 'gamesPerPair' || field === 'gamesPerTeam') {
       tc.schedule.gamesPerPair = value;

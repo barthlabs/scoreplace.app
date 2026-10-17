@@ -48,6 +48,11 @@ try { C.normalizeExtraUpdates({ status: 'finished' }); ok('extraUpdates recusa p
     /_writeCanonicalRosterCreates\(/.test(enrollmentDecision));
   ok('Function recusa inscrição durante fusão ou exclusão pela trava transacional do UID',
     /_amizadeLock\.exigirAtivos\(tx, db, \[callerUid, participantUid\], nowMs\)/.test(enrollmentDecision));
+  const transactionAt = block.indexOf('const out = await db.runTransaction');
+  const noticeAt = block.indexOf('await _avisarDuplicataSuspeita(db, participantUid');
+  ok('aviso de duplicata só sai depois da transação confirmada',
+    transactionAt >= 0 && noticeAt > transactionAt &&
+    /if \(!sandbox && duplicateNotice &&/.test(block.slice(transactionAt, noticeAt)));
 })();
 
 (() => {
@@ -229,6 +234,13 @@ try { C.normalizeExtraUpdates({ status: 'finished' }); ok('extraUpdates recusa p
     participants: [{ uid: 'a-uid', category: 'Fem Light' }, { uid: 'b-uid', category: 'Fem Light' }] };
   eq('categoria Light cheia bloqueia mesmo com total livre',
     C.computeEnroll(data, { uid: 'c-uid', category: 'Fem Light' }, null, NOW).outcome, 'capacityFull');
+  const mapOnly = Object.assign({}, data, { maxParticipantsPerCategory: null,
+    maxParticipantsByCategory: { 'Fem Light': 2, 'Masc Light': 2 } });
+  eq('mapa completo também bloqueia categoria cheia sem limite genérico',
+    C.computeEnroll(mapOnly, { uid: 'c-uid', category: 'Fem Light' }, null, NOW).outcome, 'capacityFull');
+  eq('mapa parcial legado ainda aplica categoria que tem limite',
+    C.computeEnroll(Object.assign({}, mapOnly, { maxParticipantsByCategory: { 'Fem Light': 2 } }),
+      { uid: 'c-uid', category: 'Fem Light' }, null, NOW).outcome, 'capacityFull');
   eq('outra categoria ainda recebe participante',
     C.computeEnroll(data, { uid: 'c-uid', category: 'Masc Light' }, null, NOW).outcome, 'enrolled');
   const pairs = Object.assign({}, data, { maxParticipantsByCategory: { 'Fem Light': 3 },

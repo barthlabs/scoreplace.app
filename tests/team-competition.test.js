@@ -38,6 +38,10 @@ ok(C.normalize({ enabled: true, schedule: { enabled: true } }).classificationUni
 const neonSchedule = C.normalize({ enabled: true, teamNames: ['Venom', 'Blackout', 'Eclipse', 'Volt', 'Phantom', 'Panic', 'Vortex', 'Blast'], schedule: { enabled: true, teamsPerGroup: 8, gamesPerTeam: 4, mode: 'structured' } });
 ok(neonSchedule.schedule.enabled && neonSchedule.schedule.teamsPerGroup === 8 && neonSchedule.schedule.gamesPerTeam === 4 && neonSchedule.schedule.mode === 'structured',
   'grade por times preserva 8 times, 4 jogos por time e o modo estruturado');
+ok(C.normalize({ enabled:true, schedule:{ mode:'structured', modeChosen:true } }).schedule.modeChosen === true &&
+  C.normalize({ enabled:true, schedule:{ mode:'free', modeChosen:true } }).schedule.modeChosen === true &&
+  /if \(field === 'mode'\) \{ tc\.schedule\.mode = value === 'structured' \? 'structured' : 'free'; tc\.schedule\.modeChosen = true; \}/.test(fs.readFileSync('js/views/format2-ui.js', 'utf8')),
+  'clique em Livre ou Estruturado persiste escolha pelo normalizador');
 const neonFourPairs = C.normalize({ enabled: true, teamNames: ['Venom', 'Blackout', 'Eclipse', 'Volt', 'Phantom', 'Panic', 'Vortex', 'Blast'], schedule: { enabled: true, teamsPerGroup: 8, gamesPerPair: 3, pairsPerTeamByCategory: { 'Fem Light': 2, 'Fem Power': 1, 'Fem Extreme': 1 }, gamesPerPairByCategory: { 'Fem Light': 3, 'Fem Power': 2, 'Fem Extreme': 1 }, mode: 'structured' } });
 ok(neonFourPairs.schedule.gamesPerPair === 3 && neonFourPairs.schedule.gamesPerTeam === 3 &&
   neonFourPairs.schedule.pairsPerTeamByCategory['Fem Light'] === 2 &&

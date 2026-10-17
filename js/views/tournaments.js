@@ -906,6 +906,7 @@ window.removeParticipantFunction = function (tId, participantName, memberUid) {
                         return;
                     }
                     var _removePayload = { tournamentId: String(tId) };
+                    _removePayload.sandbox = window.FirestoreDB._ehSandbox(tId);
                     if (_manualId) _removePayload.manualParticipantId = _manualId;
                     else _removePayload.userUid = String(memberUid);
                     window.FirestoreDB._callFn('deenrollParticipant', _removePayload).then(function(result) {

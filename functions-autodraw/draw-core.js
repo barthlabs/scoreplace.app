@@ -430,11 +430,20 @@ function assignCompetitionTeamsAtInitialDraw(t, rawConfig) {
     const days = Array.from(new Set(slots)).sort();
     pairDayById = new Map(assignments.map(function (item) { return [String(item.fixedPairId || ''), String(item.day || '')]; }));
     const counts = days.map(function (day) { return assignments.filter(function (item) { return String(item.day || '') === day; }).length; });
+    const originLabels = new Map((Array.isArray(t.categoryDefinitions) ? t.categoryDefinitions : [])
+      .filter(function (definition) { return definition && definition.id && definition.label; })
+      .map(function (definition) { return [String(definition.id), String(definition.label)]; }));
+    const expectedByOrigin = (byCategory.get(neonLight) || []).map(function (entry) {
+      const origin = originLabels.get(String(entry.originCategoryId || '')) || '';
+      return { id:String(entry.fixedPairId || ''), day:origin === neonLight ? days[0] : /^Masc (Light|Extreme)$/i.test(origin) ? days[1] : '' };
+    });
+    const originCounts = days.map(function (day) { return expectedByOrigin.filter(function (item) { return item.day === day; }).length; });
     if (entries.length !== 64 || expectedSnapshot.some(function (item) { return !item.fixedPairId || !item.categoryId; }) ||
         new Set(expectedSnapshot.map(function (item) { return item.fixedPairId; })).size !== 64 ||
         JSON.stringify(savedSnapshot) !== JSON.stringify(expectedSnapshot) ||
         days.length !== 2 || assignments.length !== 24 || pairDayById.size !== 24 ||
-        counts[0] !== 16 || counts[1] !== 8 ||
+        counts[0] !== 16 || counts[1] !== 8 || originCounts[0] !== 16 || originCounts[1] !== 8 ||
+        expectedByOrigin.some(function (item) { return !item.id || !item.day || pairDayById.get(item.id) !== item.day; }) ||
         (byCategory.get(neonLight) || []).some(function (entry) { return !pairDayById.has(String(entry.fixedPairId || '')); }) ||
         assignments.some(function (item) { return !(byCategory.get(neonLight) || []).some(function (entry) { return String(entry.fixedPairId || '') === String(item.fixedPairId || ''); }); })) {
       return { ok:false, reason:'competition-pair-day-plan-invalid' };

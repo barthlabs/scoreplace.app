@@ -84,6 +84,30 @@ Object.defineProperty(admin, 'initializeApp', { value: () => ({}), writable: tru
 Object.defineProperty(admin, 'firestore', { value: firestoreStub, writable: true, configurable: true });
 assert.strictEqual(admin.firestore, firestoreStub);
 const CF = require(path.join(ROOT, 'functions/index.js'));
+const fs = require('fs');
+const serverCode = fs.readFileSync(path.join(ROOT, 'functions/index.js'), 'utf8');
+const clientCode = fs.readFileSync(path.join(ROOT, 'js/firebase-db.js'), 'utf8');
+const directCode = fs.readFileSync(path.join(ROOT, 'js/views/tournaments.js'), 'utf8');
+const callableNames = ['enrollParticipant', 'deenrollParticipant', 'leaveStandby', 'formPair', 'splitPair', 'setTournamentPresence'];
+for (const name of callableNames) {
+  const start = serverCode.indexOf('exports.' + name + ' = onCall(');
+  assert(start >= 0, name + ' existe');
+  const next = serverCode.indexOf('\nexports.', start + 1);
+  const block = serverCode.slice(start, next < 0 ? undefined : next);
+  assert(/sandbox \? "sandboxes" : "tournaments"/.test(block), name + ' escolhe coleção isolada');
+  assert(/_sandboxAutorizado\(db, (snap|_pre), callerUid/.test(block), name + ' confere dono e original');
+  assert(/sandbox !== tournamentId\.startsWith\("sb_"\)/.test(block), name + ' rejeita flag e ID divergentes');
+  assert(/isSandbox === true/.test(block), name + ' rejeita clone no ramo de produção');
+  const clientStart = clientCode.indexOf("_callFn('" + name + "'");
+  assert(clientStart >= 0 && /sandbox: this\._ehSandbox\(tournamentId\)/.test(clientCode.slice(clientStart, clientStart + 600)), name + ' passa flag no cliente');
+}
+assert(/_removePayload\.sandbox = window\.FirestoreDB\._ehSandbox\(tId\)/.test(directCode), 'remoção administrativa direta passa flag');
+const enrollStart = serverCode.indexOf('exports.enrollParticipant = onCall(');
+const enrollEnd = serverCode.indexOf('exports.deenrollParticipant = onCall(', enrollStart);
+const enrollBlock = serverCode.slice(enrollStart, enrollEnd);
+assert(enrollBlock.indexOf('await _avisarDuplicataSuspeita(') > enrollBlock.indexOf('const out = await db.runTransaction'), 'aviso de duplicata só depois do commit');
+assert(/if \(!sandbox && duplicateNotice &&/.test(enrollBlock), 'sandbox não enfileira aviso');
+console.log('✓ seis callables e clientes usam a mesma coleção isolada; aviso só após commit');
 const call = (data, uid = 'org') => CF.reclassifyCanonicalRegistration.run({
   data, auth: { uid, token: { uid } }, rawRequest: { headers: {} }, acceptsStreaming: false,
 });
@@ -109,8 +133,18 @@ const request = (sandboxFlag) => ({
   assert.deepStrictEqual(clone(state.tournaments), originalBefore);
   console.log('✓ flag incorreta, ID errado e outro usuário falham fechados');
 
+  const leave = (data, uid = 'org') => CF.deenrollParticipant.run({
+    data, auth: { uid, token: { uid } }, rawRequest: { headers: {} }, acceptsStreaming: false,
+  });
+  const removed = await leave({ tournamentId: 'sb_t1', sandbox: true, userUid: 'u1' });
+  assert.strictEqual(removed.notFound, false);
+  assert.strictEqual(state.sandboxes.sb_t1.registrations[movedId].status, 'withdrawn');
+  assert.deepStrictEqual(clone(state.tournaments), originalBefore);
+  await assert.rejects(leave({ tournamentId: 'sb_t1', userUid: 'u1' }), /torneio não existe/);
+  console.log('✓ desinscrição usa o mesmo núcleo canônico, mas grava somente no sandbox');
+
   state.tournaments.t1.doc.creatorUid = 'outro';
   await assert.rejects(call({ ...request(true), fromCategoryId: 'cat-b', toCategoryId: 'cat-a' }), /torneio não existe/);
-  assert.strictEqual(state.sandboxes.sb_t1.registrations[movedId].status, 'confirmed');
+  assert.strictEqual(state.sandboxes.sb_t1.registrations[movedId].status, 'withdrawn');
   console.log('✓ perda de autorização no original bloqueia a cópia');
 })().catch((error) => { console.error(error); process.exitCode = 1; });

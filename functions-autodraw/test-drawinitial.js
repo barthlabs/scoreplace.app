@@ -180,6 +180,7 @@ const CASES = [
       const pair = dupla(300 + realPairs.length, category);
       pair.fixedPairId = 'pair-' + realPairs.length;
       pair.categoryId = 'category-' + ci;
+      pair.originCategoryId = ci === 0 && i >= 16 ? (i < 22 ? 'category-3' : 'category-5') : pair.categoryId;
       realPairs.push(pair);
     }
   });
@@ -199,6 +200,7 @@ const CASES = [
     courtCount:6, gameDuration:25, callTime:5, warmupTime:5,
     scheduleWindow:{ days:[{ day:'2026-10-22', startTime:'18:00', endTime:'22:40', categoryFlow:'rounds' }, { day:'2026-10-23', startTime:'18:00', endTime:'22:40', categoryFlow:'rounds' }] },
     combinedCategories:realCategories, participants:realPairs.map(function (entry) { return JSON.parse(JSON.stringify(entry)); }),
+    categoryDefinitions:realCategories.map(function (label, index) { return { id:'category-' + index, label:label }; }),
     teamCompetition:realConfig, phases:[{ teamCompetition:realConfig }],
     categorySchedule:{ confirmed:true, slots:realCategories.flatMap(function (category) {
       return (category === 'Fem Light' ? ['2026-10-22','2026-10-23'] : [/^Fem /.test(category) ? '2026-10-22' : '2026-10-23'])
@@ -273,6 +275,31 @@ const CASES = [
   const wrongResult = core.assignCompetitionTeamsAtInitialDraw(wrongDayPair, wrongAssignment);
   ok('Neon 64: mapa 16/8 com dupla de outra categoria é recusado', wrongResult.ok === false &&
     wrongResult.reason === 'competition-pair-day-plan-invalid' && !wrongDayPair.competitionTeams);
+  const swappedOrigins = realTournament();
+  swappedOrigins.participants[0].originCategoryId = 'category-3';
+  const swappedResult = core.assignCompetitionTeamsAtInitialDraw(swappedOrigins, realConfig);
+  ok('Neon 64: origem 15/9 é recusada mesmo com mapa 16/8', swappedResult.ok === false &&
+    swappedResult.reason === 'competition-pair-day-plan-invalid' && !swappedOrigins.competitionTeams);
+  const reverseOrigins = realTournament();
+  reverseOrigins.participants[16].originCategoryId = 'category-0';
+  const reverseResult = core.assignCompetitionTeamsAtInitialDraw(reverseOrigins, realConfig);
+  ok('Neon 64: origem 17/7 é recusada mesmo com mapa 16/8', reverseResult.ok === false &&
+    reverseResult.reason === 'competition-pair-day-plan-invalid' && !reverseOrigins.competitionTeams);
+  const forgedPlan = realTournament();
+  const forgedConfig = JSON.parse(JSON.stringify(realConfig));
+  forgedConfig.schedule.originDayPolicy = 'female-light-enrollment-origin';
+  const firstDay = forgedConfig.schedule.pairDayAssignments[0];
+  const secondDay = forgedConfig.schedule.pairDayAssignments[16];
+  firstDay.day = '2026-10-23';
+  secondDay.day = '2026-10-22';
+  const forgedResult = core.assignCompetitionTeamsAtInitialDraw(forgedPlan, forgedConfig);
+  ok('Neon 64: flag não autoriza mapa trocado com contagem 16/8', forgedResult.ok === false &&
+    forgedResult.reason === 'competition-pair-day-plan-invalid' && !forgedPlan.competitionTeams);
+  const missingOrigin = realTournament();
+  delete missingOrigin.participants[0].originCategoryId;
+  const missingResult = core.assignCompetitionTeamsAtInitialDraw(missingOrigin, realConfig);
+  ok('Neon 64: origem ausente é recusada', missingResult.ok === false &&
+    missingResult.reason === 'competition-pair-day-plan-invalid' && !missingOrigin.competitionTeams);
 
   // Estruturas multifase guardam a configuração na fase inicial. O servidor
   // chama a mesma `_buildPhase0Cfg` da web e precisa enxergar essa fonte.

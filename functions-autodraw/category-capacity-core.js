@@ -19,8 +19,8 @@ function validateCapacityConfig(config, HttpsError, previous) {
   const general = c.maxParticipantsPerCategory;
   const hasGeneral = general !== null && general !== undefined && general !== '';
   if (hasGeneral && (!Number.isSafeInteger(general) || general <= 0)) fail('Vagas gerais por categoria devem ser um inteiro positivo.');
-  if (keys.length && !hasGeneral) fail('Defina vagas gerais antes das exceções por categoria.');
-  if (!categories.length || !hasGeneral) return;
+  if (keys.length && !hasGeneral && keys.length !== categories.length) fail('Defina vagas gerais antes das exceções por categoria.');
+  if (!categories.length || (!hasGeneral && !keys.length)) return;
   const expected = categories.reduce((sum, key) => sum + (Object.prototype.hasOwnProperty.call(map, key) ? map[key] : general), 0);
   if (c.enrollmentLimitMode === 'draw' && (c.maxParticipants === null || c.maxParticipants === undefined)) return;
   const previousCategories = previous && Array.isArray(previous.combinedCategories) ? previous.combinedCategories : [];

@@ -18,6 +18,16 @@ ok('nome só permanece para convidada manual', pair &&
   ((pair.p1Name === 'Convidada' && pair.p2Name === undefined) || (pair.p2Name === 'Convidada' && pair.p1Name === undefined)));
 ok('pendente não entra no elenco de sorteio', roster.every((entry) => entry.uid !== 'u4'));
 ok('projeção expõe categoryId sem depender do rótulo legado', roster.every((entry) => entry.categoryId === entry.category));
+const sameOrigin = R.rosterFromRegistrations([
+  { registrationId:'a', categoryId:'fem-light', originCategoryId:'masc-light', participantKind:'account', participantUid:'u1', status:'confirmed', fixedPairId:'pair' },
+  { registrationId:'b', categoryId:'fem-light', originCategoryId:'masc-light', participantKind:'account', participantUid:'u2', status:'confirmed', fixedPairId:'pair' },
+]);
+ok('dupla conserva origem concordante dos dois registros', sameOrigin[0].originCategoryId === 'masc-light');
+const mixedOrigin = R.rosterFromRegistrations([
+  { registrationId:'a', categoryId:'fem-light', originCategoryId:'fem-light', participantKind:'account', participantUid:'u1', status:'confirmed', fixedPairId:'pair' },
+  { registrationId:'b', categoryId:'fem-light', originCategoryId:'masc-light', participantKind:'account', participantUid:'u2', status:'confirmed', fixedPairId:'pair' },
+]);
+ok('dupla com origens divergentes não recebe origem inferida', !Object.prototype.hasOwnProperty.call(mixedOrigin[0], 'originCategoryId'));
 const rosterReordered = R.rosterFromRegistrations([
   { registrationId: 'c', categoryId: 'cat-b', participantKind: 'account', participantUid: 'u3', enrollSeq: 2, status: 'confirmed', fixedPairId: null },
   { registrationId: 'a', categoryId: 'cat-a', participantKind: 'account', participantUid: 'u1', enrollSeq: 1, status: 'confirmed', fixedPairId: null },

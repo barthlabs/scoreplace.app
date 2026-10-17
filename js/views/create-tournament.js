@@ -916,8 +916,10 @@ function setupCreateTournamentModal() {
                      maxParticipants é sempre a multiplicação mostrada abaixo. Não deixe
                      os dois inputs editáveis, pois 16 × 6 não pode salvar como 95. -->
                 <div id="category-capacity-section" style="display:none; margin-top:0.9rem; padding:10px 12px; background:rgba(16,185,129,0.07); border:1px solid rgba(16,185,129,0.28); border-radius:9px;">
-                  <label class="form-label" style="margin-bottom:6px;">Máx. participantes por categoria</label>
-                  <input type="number" class="form-control" id="tourn-max-per-category" min="1" inputmode="numeric" placeholder="Ex.: 16" oninput="window._syncCategoryCapacity({userChanged:true})">
+                  <div id="category-capacity-general">
+                    <label class="form-label" for="tourn-max-per-category" style="margin-bottom:6px;">Máx. participantes por categoria</label>
+                    <input type="number" class="form-control" id="tourn-max-per-category" min="1" inputmode="numeric" placeholder="Ex.: 16" oninput="window._syncCategoryCapacity({userChanged:true})">
+                  </div>
                   <label style="display:flex;align-items:center;gap:9px;margin-top:10px;font-size:0.8rem;color:var(--text-main);cursor:pointer;">
                     <span class="toggle-switch toggle-sm"><input type="checkbox" id="tourn-custom-category-capacity" onchange="window._toggleCategoryCapacity(this.checked)"><span class="toggle-slider"></span></span>
                     Personalizar vagas por categoria
@@ -3418,6 +3420,7 @@ function setupCreateTournamentModal() {
     var total = document.getElementById('tourn-max-participants');
     var legacyContainer = document.getElementById('cap-max-container');
     var summary = document.getElementById('category-capacity-summary');
+    var generalControl = document.getElementById('category-capacity-general');
     if (!section || !perCategory || !total || !custom || !mapInput || !grid) return;
 
     var catData = window._getCreateFormCategoryData ? window._getCreateFormCategoryData() : {};
@@ -3431,12 +3434,13 @@ function setupCreateTournamentModal() {
       guard = null;
     }
     section.style.display = count > 0 ? '' : 'none';
+    if (generalControl) generalControl.style.display = custom.checked ? 'none' : '';
     if (legacyContainer) legacyContainer.style.display = count > 0 ? 'none' : '';
     total.readOnly = count > 0;
 
     // Torneios legados só têm o total. Na primeira edição, recuperamos o valor por
     // categoria quando a divisão é exata; nunca arredondamos e inventamos vagas.
-    if (count > 0 && options.deriveFromTotal && !parseInt(perCategory.value, 10)) {
+    if (count > 0 && !custom.checked && options.deriveFromTotal && !parseInt(perCategory.value, 10)) {
       var savedTotal = parseInt(total.value, 10);
       if (savedTotal > 0 && savedTotal % count === 0) perCategory.value = String(savedTotal / count);
     }
@@ -5932,7 +5936,9 @@ window._saveTournamentClickHandler = async function() {
         if (!name) { showAlertDialog(window._t('create.nameRequired'), window._t('create.nameRequiredMsg'), null, { type: 'warning' }); return; }
 
         // Impede nome duplicado (ignora o próprio torneio em edição)
-        const nomeDuplicado = window.AppStore.tournaments.some(function(t) {
+        const editingTournament = editId && window.AppStore.tournaments.find(function(t) { return String(t.id) === String(editId); });
+        const unchangedName = editingTournament && String(editingTournament.name || '').trim().toLowerCase() === name.toLowerCase();
+        const nomeDuplicado = !unchangedName && window.AppStore.tournaments.some(function(t) {
           if (editId && String(t.id) === String(editId)) return false;
           return t.name && t.name.trim().toLowerCase() === name.toLowerCase();
         });
@@ -6033,7 +6039,7 @@ window._saveTournamentClickHandler = async function() {
         const regDateVal = regTimeRaw ? regDateRaw + 'T' + regTimeRaw : regDateRaw;
         const enrollmentVal = document.getElementById('select-inscricao').value || 'individual';
         const teamSizeVal = parseInt(document.getElementById('tourn-team-size').value) || 1;
-        const maxPartsVal = parseInt(document.getElementById('tourn-max-participants').value) || null;
+        let maxPartsVal = parseInt(document.getElementById('tourn-max-participants').value) || null;
         const maxPerCategoryVal = parseInt((document.getElementById('tourn-max-per-category') || {}).value, 10) || null;
         const customCategoryCapacity = !!((document.getElementById('tourn-custom-category-capacity') || {}).checked);
         const capacityCategories = ((window._getCreateFormCategoryData && window._getCreateFormCategoryData()) || {}).combinedCategories || [];
@@ -6053,7 +6059,8 @@ window._saveTournamentClickHandler = async function() {
           const preservedLegacyTotal = capacityGuard && !customCategoryCapacity && maxPartsVal === capacityGuard.total &&
             capacityCategories.length === capacityGuard.categories.length &&
             capacityCategories.every(function(c) { return capacityGuard.categories.indexOf(c) >= 0; });
-          if (!validGeneral || !validMap || (!preservedLegacyTotal && expectedCapacity !== maxPartsVal)) {
+          if (customCategoryCapacity && validMap) maxPartsVal = expectedCapacity;
+          if (!validMap || (!customCategoryCapacity && !validGeneral) || (!preservedLegacyTotal && expectedCapacity !== maxPartsVal)) {
             showAlertDialog('Vagas por categoria', 'Defina números inteiros positivos para todas as categorias. O total deve ser a soma exata das vagas.', null, { type: 'warning' });
             return;
           }

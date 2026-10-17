@@ -2948,6 +2948,7 @@ exports.enrollParticipant = onCall(
     if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
 
     const tournamentId = String((request.data && request.data.tournamentId) || "");
+    const sandbox = request.data && request.data.sandbox === true;
     const participantObj = request.data && request.data.participantObj;
     // Intenção declarada pelo cliente. Ela não concede privilégio: cada ramo
     // abaixo a combina com `_isTournamentOrgCaller` dentro da transação.
@@ -2958,6 +2959,7 @@ exports.enrollParticipant = onCall(
     if (!tournamentId || !participantObj || typeof participantObj !== "object") {
       throw new HttpsError("invalid-argument", "tournamentId e participantObj são obrigatórios");
     }
+    if (sandbox !== tournamentId.startsWith("sb_")) throw new HttpsError("not-found", "torneio não existe");
     // Uma inscrição é uma conta (uid) ou participante sem conta (id estável criado pelo
     // organizador). A intenção é validada uma única vez; autoria e data são do servidor.
     let sanitizedParticipantObj;
@@ -2967,15 +2969,18 @@ exports.enrollParticipant = onCall(
     const manualParticipantId = String(sanitizedParticipantObj.manualParticipantId || "");
 
     const db = admin.firestore();
-    const docRef = db.collection("tournaments").doc(tournamentId);
+    const docRef = db.collection(sandbox ? "sandboxes" : "tournaments").doc(tournamentId);
     const nowMs = Date.now();
     let duplicateSignal = null;
+    let duplicateNotice = null;
 
     // A leitura prévia só confirma a autorização do intent. Unicidade de inscrição é
     // decidida na transação pelo UID/manualParticipantId, nunca por sinal de perfil.
     const _pre = await docRef.get();
     if (_pre.exists) {
       const _preTournament = _pre.data() || {};
+      if (sandbox) await _sandboxAutorizado(db, _pre, callerUid, (sourceRef) => sourceRef.get());
+      else if (_preTournament.isSandbox === true) throw new HttpsError("not-found", "torneio não existe");
       const _preIsOrganizer = _isTournamentOrgCaller(_preTournament, callerUid);
       if (participantUid && participantUid !== callerUid && !_preIsOrganizer) {
         throw new HttpsError("permission-denied", "só o organizador pode inscrever outra pessoa");
@@ -2987,12 +2992,12 @@ exports.enrollParticipant = onCall(
 
     // Sinais de possível segunda conta são privados e não bloqueiam inscrição. A pessoa
     // continua pelo mesmo UID; revisão/prova de posse é um fluxo separado.
-    if (participantUid === callerUid && _pre.exists) {
+    if (!sandbox && participantUid === callerUid && _pre.exists && (_pre.data() || {}).isSandbox !== true) {
       try {
         const _d0 = await _detectarDuplicataNoTorneio(db, participantUid, _pre.data());
         if (_d0) {
           const _tNome0 = (_pre.data() || {}).name || "";
-          await _avisarDuplicataSuspeita(db, participantUid, tournamentId, _tNome0, _d0);
+          duplicateNotice = { tournamentName: _tNome0, duplicate: _d0 };
           duplicateSignal = { // sem UID nem contato completo da outra conta
             motivo: _d0.motivo, nome: _d0.nome,
             maskedEmail: _d0.maskedEmail, maskedPhone: _d0.maskedPhone,
@@ -3023,8 +3028,11 @@ exports.enrollParticipant = onCall(
       catch (error) { throw new HttpsError("aborted", error.message); }
       const snap = await tx.get(docRef);
       if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+      if (sandbox) await _sandboxAutorizado(db, snap, callerUid, (sourceRef) => tx.get(sourceRef));
+      else if ((snap.data() || {}).isSandbox === true) throw new HttpsError("not-found", "torneio não existe");
       const _dados = await _splitParts.hidratar(tx, docRef, snap.data());
       const rawTournament = snap.data() || {};
+      const logicalId = sandbox ? String(rawTournament.sandboxOf) : tournamentId;
       // Nomes digitados e placeholders são rótulos humanos e não podem se repetir
       // no mesmo torneio. A identidade continua sendo UID/manualParticipantId, mas
       // aceitar dois rótulos iguais torna a tela e a operação da organização
@@ -3059,7 +3067,7 @@ exports.enrollParticipant = onCall(
           throw new HttpsError("permission-denied", "só o organizador pode incluir participante sem conta");
         }
         const profileSnap = participantUid ? await tx.get(db.collection("users").doc(participantUid)) : null;
-        const checked = await _loadCanonicalRosterForMutation(tx, docRef, rawTournament);
+        const checked = await _loadCanonicalRosterForMutation(tx, docRef, rawTournament, logicalId);
         if (!participantUid) {
           const _sameManual = checked.registrations.some((registration) => registration
             && registration.participantKey === 'manual:' + manualParticipantId
@@ -3074,7 +3082,7 @@ exports.enrollParticipant = onCall(
         let decision;
         try {
           decision = _canonicalEnrollment.decide({
-            tournament: Object.assign({ id: tournamentId }, _dados),
+            tournament: Object.assign({}, _dados, { id: logicalId }),
             registrations: checked.registrations,
             participant: sanitizedParticipantObj,
             profile: profileSnap && profileSnap.exists ? (profileSnap.data() || {}) : {},
@@ -3087,9 +3095,9 @@ exports.enrollParticipant = onCall(
         }
         let next = checked;
         if (decision.enrollment && decision.enrollment.updates.length) {
-          next = _writeCanonicalRosterChanges(tx, docRef, rawTournament, checked.registrations, decision.enrollment);
+          next = _writeCanonicalRosterChanges(tx, docRef, rawTournament, checked.registrations, decision.enrollment, null, logicalId);
         } else if (decision.enrollment && decision.enrollment.creates.length) {
-          next = _writeCanonicalRosterCreates(tx, docRef, rawTournament, checked.registrations, decision.enrollment.creates);
+          next = _writeCanonicalRosterCreates(tx, docRef, rawTournament, checked.registrations, decision.enrollment.creates, logicalId);
         }
         return Object.assign({}, decision, {
           canonical: true,
@@ -3111,12 +3119,15 @@ exports.enrollParticipant = onCall(
       if (r.updateData) _splitParts.gravar(tx, docRef, _dados, r.updateData);
       return r;
     });
+    if (!sandbox && duplicateNotice && (out.outcome === "enrolled" || out.outcome === "waitlisted" || out.outcome === "accepted")) {
+      await _avisarDuplicataSuspeita(db, participantUid, tournamentId, duplicateNotice.tournamentName, duplicateNotice.duplicate);
+    }
     const withDuplicateSignal = (payload) => duplicateSignal
       ? Object.assign(payload, { dupSuspect: duplicateSignal })
       : payload;
 
     // Sandbox: a MESMA CF replica a inscrição no SB via o MESMO core (best-effort).
-    if (!out.canonical) {
+    if (!sandbox && !out.canonical) {
       await _replicateRosterToSandbox(db, tournamentId, function (sbData) {
         return _enrollCore.computeEnroll(sbData, sanitizedParticipantObj, extraUpdates, nowMs);
       });
@@ -4073,20 +4084,24 @@ exports.setTournamentPresence = onCall(
     if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
     const data = request.data || {};
     const tournamentId = String(data.tournamentId || "").trim();
+    const sandbox = data.sandbox === true;
     const targetKey = String(data.targetKey || "").trim();
     let legacyKey = String(data.legacyKey || "").trim();
     const action = String(data.action || "");
     if (!tournamentId || !_partesPerm.idDeDocumentoValido(targetKey)) {
       throw new HttpsError("invalid-argument", "torneio e participante válidos são obrigatórios");
     }
+    if (sandbox !== tournamentId.startsWith("sb_")) throw new HttpsError("not-found", "torneio não existe");
     if (action !== "present" && action !== "confirmed" && action !== "clear") {
       throw new HttpsError("invalid-argument", "ação de presença inválida");
     }
     const db = admin.firestore();
-    const ref = db.collection("tournaments").doc(tournamentId);
+    const ref = db.collection(sandbox ? "sandboxes" : "tournaments").doc(tournamentId);
     const snap = await ref.get();
     if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
     const t = snap.data() || {};
+    if (sandbox) await _sandboxAutorizado(db, snap, callerUid, (sourceRef) => sourceRef.get());
+    else if (t.isSandbox === true) throw new HttpsError("not-found", "torneio não existe");
     const isOrg = _isTournamentOrgCaller(t, callerUid);
     const isOwnEnrolledPresence = targetKey === callerUid && Array.isArray(t.memberUids) &&
       t.memberUids.map(String).indexOf(callerUid) !== -1;
@@ -4255,18 +4270,23 @@ exports.deenrollParticipant = onCall(
     if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
 
     const tournamentId = String((request.data && request.data.tournamentId) || "");
+    const sandbox = request.data && request.data.sandbox === true;
     const userUid = String((request.data && request.data.userUid) || "");
     const manualParticipantId = String((request.data && request.data.manualParticipantId) || "");
     if (!tournamentId || (!userUid && !manualParticipantId) || (userUid && manualParticipantId)) {
       throw new HttpsError("invalid-argument", "tournamentId e uma identidade única são obrigatórios");
     }
+    if (sandbox !== tournamentId.startsWith("sb_")) throw new HttpsError("not-found", "torneio não existe");
 
     const db = admin.firestore();
-    const docRef = db.collection("tournaments").doc(tournamentId);
+    const docRef = db.collection(sandbox ? "sandboxes" : "tournaments").doc(tournamentId);
     const out = await db.runTransaction(async (tx) => {
       const snap = await tx.get(docRef);
       if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
       const rawTournament = snap.data() || {};
+      if (sandbox) await _sandboxAutorizado(db, snap, callerUid, (sourceRef) => tx.get(sourceRef));
+      else if (rawTournament.isSandbox === true) throw new HttpsError("not-found", "torneio não existe");
+      const logicalId = sandbox ? String(rawTournament.sandboxOf) : tournamentId;
       if (rawTournament.canonicalRegistrationMigration && rawTournament.canonicalRegistrationMigration.fingerprint) {
         const isOrg = _isTournamentOrgCaller(rawTournament, callerUid);
         // Vaga manual não pertence a uma conta: somente a organização pode
@@ -4274,10 +4294,10 @@ exports.deenrollParticipant = onCall(
         if ((manualParticipantId && !isOrg) || (userUid && userUid !== callerUid && !isOrg)) {
           throw new HttpsError("permission-denied", "só a própria pessoa ou o organizador podem desinscrever");
         }
-        const checked = await _loadCanonicalRosterForMutation(tx, docRef, rawTournament);
-        const decision = _registrationMutations.withdraw(tournamentId, checked.registrations,
+        const checked = await _loadCanonicalRosterForMutation(tx, docRef, rawTournament, logicalId);
+        const decision = _registrationMutations.withdraw(logicalId, checked.registrations,
           userUid ? { uid: userUid } : { manualParticipantId: manualParticipantId });
-        const next = _writeCanonicalRosterUpdates(tx, docRef, rawTournament, checked.registrations, decision.updates);
+        const next = _writeCanonicalRosterUpdates(tx, docRef, rawTournament, checked.registrations, decision.updates, logicalId);
         return { outcome: decision.outcome === "changed" ? "removed" : "notFound", participants: next.participants, canonical: true };
       }
       if (manualParticipantId) {
@@ -4298,7 +4318,7 @@ exports.deenrollParticipant = onCall(
     });
 
     // Sandbox: a MESMA CF replica a desinscrição no SB via o MESMO core (best-effort).
-    if (!out.canonical) {
+    if (!sandbox && !out.canonical) {
       await _replicateRosterToSandbox(db, tournamentId, function (sbData) {
         return _enrollCore.computeDeenroll(sbData, userUid);
       });
@@ -4320,17 +4340,22 @@ exports.leaveStandby = onCall(
     if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
     const tournamentId = String((request.data && request.data.tournamentId) || "");
     if (!tournamentId) throw new HttpsError("invalid-argument", "tournamentId é obrigatório");
+    const sandbox = request.data && request.data.sandbox === true;
+    if (sandbox !== tournamentId.startsWith("sb_")) throw new HttpsError("not-found", "torneio não existe");
 
     const db = admin.firestore();
-    const docRef = db.collection("tournaments").doc(tournamentId);
+    const docRef = db.collection(sandbox ? "sandboxes" : "tournaments").doc(tournamentId);
     const out = await db.runTransaction(async (tx) => {
       const snap = await tx.get(docRef);
       if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
       const rawTournament = snap.data() || {};
+      if (sandbox) await _sandboxAutorizado(db, snap, callerUid, (sourceRef) => tx.get(sourceRef));
+      else if (rawTournament.isSandbox === true) throw new HttpsError("not-found", "torneio não existe");
+      const logicalId = sandbox ? String(rawTournament.sandboxOf) : tournamentId;
       if (rawTournament.canonicalRegistrationMigration && rawTournament.canonicalRegistrationMigration.fingerprint) {
-        const checked = await _loadCanonicalRosterForMutation(tx, docRef, rawTournament);
-        const decision = _registrationMutations.leaveWaitlist(tournamentId, checked.registrations, { uid: callerUid });
-        const next = _writeCanonicalRosterUpdates(tx, docRef, rawTournament, checked.registrations, decision.updates);
+        const checked = await _loadCanonicalRosterForMutation(tx, docRef, rawTournament, logicalId);
+        const decision = _registrationMutations.leaveWaitlist(logicalId, checked.registrations, { uid: callerUid });
+        const next = _writeCanonicalRosterUpdates(tx, docRef, rawTournament, checked.registrations, decision.updates, logicalId);
         return { outcome: decision.outcome === "changed" ? "removed" : "notFound", participants: next.participants, canonical: true };
       }
       const t = await _splitParts.hidratar(tx, docRef, snap.data());
@@ -4340,7 +4365,7 @@ exports.leaveStandby = onCall(
       return r;
     });
 
-    if (!out.canonical) {
+    if (!sandbox && !out.canonical) {
       await _replicateRosterToSandbox(db, tournamentId, function (sbData) {
         return _enrollCore.computeLeaveStandby(sbData, callerUid);
       });
@@ -6633,19 +6658,24 @@ exports.formPair = onCall(
 
     const tournamentId = String((request.data && request.data.tournamentId) || "");
     const d = request.data || {};
+    const sandbox = d.sandbox === true;
     const opts = { uid1: d.uid1 || "", manualId1: d.manualId1 || "", name1: d.name1 || "", uid2: d.uid2 || "", manualId2: d.manualId2 || "", name2: d.name2 || "", categoryId: d.categoryId || "", changeRule: !!d.changeRule };
     // Nome serve para exibir a dupla, nunca para selecionar quem será alterado.
     // Esta fronteira protege inclusive clientes antigos que ainda tenham JS em cache.
     if (!tournamentId || (!opts.uid1 && !opts.manualId1) || (!opts.uid2 && !opts.manualId2)) {
       throw new HttpsError("invalid-argument", "tournamentId e os dois IDs de participante são obrigatórios; nome não é identidade");
     }
+    if (sandbox !== tournamentId.startsWith("sb_")) throw new HttpsError("not-found", "torneio não existe");
 
     const db = admin.firestore();
-    const docRef = db.collection("tournaments").doc(tournamentId);
+    const docRef = db.collection(sandbox ? "sandboxes" : "tournaments").doc(tournamentId);
     const out = await db.runTransaction(async (tx) => {
       const snap = await tx.get(docRef);
       if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
       const rawTournament = snap.data() || {};
+      if (sandbox) await _sandboxAutorizado(db, snap, callerUid, (sourceRef) => tx.get(sourceRef));
+      else if (rawTournament.isSandbox === true) throw new HttpsError("not-found", "torneio não existe");
+      const logicalId = sandbox ? String(rawTournament.sandboxOf) : tournamentId;
       if (rawTournament.canonicalRegistrationMigration && rawTournament.canonicalRegistrationMigration.fingerprint) {
         if (opts.changeRule) throw new HttpsError("failed-precondition", "alteração de regra não faz parte da dupla canônica");
         if ((!opts.uid1 && !opts.manualId1) || (!opts.uid2 && !opts.manualId2)) {
@@ -6656,7 +6686,7 @@ exports.formPair = onCall(
         if (!isOrg && !involvesCaller) {
           throw new HttpsError("permission-denied", "só o organizador ou um dos dois da dupla podem formá-la");
         }
-        const checked = await _loadCanonicalRosterForMutation(tx, docRef, rawTournament);
+        const checked = await _loadCanonicalRosterForMutation(tx, docRef, rawTournament, logicalId);
         // Placeholders são reservas organizacionais, não inscrições canônicas.
         // Em torneio de duplas o organizador pode formar duas reservas sem
         // categoria; materializamos ambas como inscrições canônicas na
@@ -6682,26 +6712,26 @@ exports.formPair = onCall(
           if (existing.has(id1) || existing.has(id2)) {
             throw new HttpsError("already-exists", "uma das reservas já foi materializada");
           }
-          const fixedPairId = _registrationMutations.canonicalPairId(tournamentId, uncategorized, [id1, id2]);
+          const fixedPairId = _registrationMutations.canonicalPairId(logicalId, uncategorized, [id1, id2]);
           const manualName = (item, fallback) => String(item && (item.manualDisplayName || item.displayName || item.name) || fallback).trim();
           const creates = [
-            { registrationId: id1, tournamentId, categoryId: uncategorized, participantKey: key1, status: "confirmed", validationState: "approved", migrationFingerprint: rawTournament.canonicalRegistrationMigration.fingerprint, fixedPairId, participantKind: "manual", participantUid: null, manualParticipantId: String(opts.manualId1), manualDisplayName: manualName(r1, opts.name1) },
-            { registrationId: id2, tournamentId, categoryId: uncategorized, participantKey: key2, status: "confirmed", validationState: "approved", migrationFingerprint: rawTournament.canonicalRegistrationMigration.fingerprint, fixedPairId, participantKind: "manual", participantUid: null, manualParticipantId: String(opts.manualId2), manualDisplayName: manualName(r2, opts.name2) },
+            { registrationId: id1, tournamentId: logicalId, categoryId: uncategorized, participantKey: key1, status: "confirmed", validationState: "approved", migrationFingerprint: rawTournament.canonicalRegistrationMigration.fingerprint, fixedPairId, participantKind: "manual", participantUid: null, manualParticipantId: String(opts.manualId1), manualDisplayName: manualName(r1, opts.name1) },
+            { registrationId: id2, tournamentId: logicalId, categoryId: uncategorized, participantKey: key2, status: "confirmed", validationState: "approved", migrationFingerprint: rawTournament.canonicalRegistrationMigration.fingerprint, fixedPairId, participantKind: "manual", participantUid: null, manualParticipantId: String(opts.manualId2), manualDisplayName: manualName(r2, opts.name2) },
           ];
-          const next = _writeCanonicalRosterCreates(tx, docRef, rawTournament, checked.registrations, creates);
+          const next = _writeCanonicalRosterCreates(tx, docRef, rawTournament, checked.registrations, creates, logicalId);
           return { outcome: "paired", participants: next.participants, canonical: true };
         }
         if (!opts.categoryId) throw new HttpsError("invalid-argument", "categoryId é obrigatório para formar dupla canônica");
         let decision;
         try {
           decision = _registrationMutations.pairParticipants(
-            tournamentId, checked.registrations,
+            logicalId, checked.registrations,
             opts.uid1 ? { uid: opts.uid1 } : { manualParticipantId: opts.manualId1 },
             opts.uid2 ? { uid: opts.uid2 } : { manualParticipantId: opts.manualId2 },
             opts.categoryId
           );
         } catch (error) { throw new HttpsError("failed-precondition", error.message); }
-        const next = _writeCanonicalRosterUpdates(tx, docRef, rawTournament, checked.registrations, decision.updates);
+        const next = _writeCanonicalRosterUpdates(tx, docRef, rawTournament, checked.registrations, decision.updates, logicalId);
         return { outcome: "paired", participants: next.participants, canonical: true };
       }
       // Torneio DIVIDIDO: o elenco mora na subcoleção. Hidrata ANTES de decidir —
@@ -6721,7 +6751,7 @@ exports.formPair = onCall(
     });
 
     // Sandbox: a MESMA CF replica a formação no SB via o MESMO core (best-effort).
-    if (!out.canonical) {
+    if (!sandbox && !out.canonical) {
       await _replicateRosterToSandbox(db, tournamentId, function (sbData) {
         return _pairCore.computeFormPair(sbData, opts);
       });
@@ -6746,29 +6776,34 @@ exports.splitPair = onCall(
 
     const tournamentId = String((request.data && request.data.tournamentId) || "");
     const d = request.data || {};
+    const sandbox = d.sandbox === true;
     const opts = { id1: d.id1, id2: d.id2, uid1: d.uid1 || "", manualId1: d.manualId1 || "", uid2: d.uid2 || "", manualId2: d.manualId2 || "", categoryId: d.categoryId || "" };
     // Não aceitar id1/id2 textual: uma dupla só pode ser desfeita pelos dois
     // UID/manualParticipantId que a compõem.
     if (!tournamentId || (!opts.uid1 && !opts.manualId1) || (!opts.uid2 && !opts.manualId2)) {
       throw new HttpsError("invalid-argument", "tournamentId e os dois IDs de participante são obrigatórios; nome não é identidade");
     }
+    if (sandbox !== tournamentId.startsWith("sb_")) throw new HttpsError("not-found", "torneio não existe");
 
     const db = admin.firestore();
-    const docRef = db.collection("tournaments").doc(tournamentId);
+    const docRef = db.collection(sandbox ? "sandboxes" : "tournaments").doc(tournamentId);
     const out = await db.runTransaction(async (tx) => {
       const snap = await tx.get(docRef);
       if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
       const rawTournament = snap.data() || {};
+      if (sandbox) await _sandboxAutorizado(db, snap, callerUid, (sourceRef) => tx.get(sourceRef));
+      else if (rawTournament.isSandbox === true) throw new HttpsError("not-found", "torneio não existe");
+      const logicalId = sandbox ? String(rawTournament.sandboxOf) : tournamentId;
       if (rawTournament.canonicalRegistrationMigration && rawTournament.canonicalRegistrationMigration.fingerprint) {
         if (!opts.categoryId) throw new HttpsError("invalid-argument", "categoryId é obrigatório para desfazer dupla canônica");
         if ((!opts.uid1 && !opts.manualId1) || (!opts.uid2 && !opts.manualId2)) {
           throw new HttpsError("invalid-argument", "dupla canônica exige UID ou ID manual; nome não é identidade");
         }
-        const checked = await _loadCanonicalRosterForMutation(tx, docRef, rawTournament);
+        const checked = await _loadCanonicalRosterForMutation(tx, docRef, rawTournament, logicalId);
         let decision;
         try {
           decision = _registrationMutations.splitParticipants(
-            tournamentId, checked.registrations,
+            logicalId, checked.registrations,
             opts.uid1 ? { uid: opts.uid1 } : { manualParticipantId: opts.manualId1 },
             opts.uid2 ? { uid: opts.uid2 } : { manualParticipantId: opts.manualId2 },
             opts.categoryId
@@ -6779,7 +6814,7 @@ exports.splitPair = onCall(
         if (!isOrg && !isMember) {
           throw new HttpsError("permission-denied", "só o organizador ou um membro da dupla podem desfazê-la");
         }
-        const next = _writeCanonicalRosterUpdates(tx, docRef, rawTournament, checked.registrations, decision.updates);
+        const next = _writeCanonicalRosterUpdates(tx, docRef, rawTournament, checked.registrations, decision.updates, logicalId);
         return { outcome: "split", participants: next.participants, canonical: true };
       }
       // Torneio DIVIDIDO: o elenco mora na subcoleção. Hidrata ANTES de decidir —
@@ -6798,7 +6833,7 @@ exports.splitPair = onCall(
     });
 
     // Sandbox: a MESMA CF replica o desfazer no SB via o MESMO core (best-effort).
-    if (!out.canonical) {
+    if (!sandbox && !out.canonical) {
       await _replicateRosterToSandbox(db, tournamentId, function (sbData) {
         return _pairCore.computeSplitPair(sbData, opts);
       });

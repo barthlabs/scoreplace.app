@@ -18,6 +18,18 @@ const custom = Object.assign({}, base, { maxParticipants: 128, maxParticipantsBy
   'Fem Light': 32, 'Fem Power': 16, 'Fem Extreme': 16, 'Masc Light': 32, 'Masc Power': 16, 'Masc Extreme': 16
 } });
 check('capacidade personalizada soma 128', () => validateCapacityConfig(custom, HttpsError), false);
+const mapOnly = Object.assign({}, custom, { maxParticipantsPerCategory: null });
+check('mapa completo dispensa vagas gerais', () => validateCapacityConfig(mapOnly, HttpsError), false);
+check('mapa completo sem geral ainda exige total correto', () => validateCapacityConfig(Object.assign({}, mapOnly, { maxParticipants: 127 }), HttpsError), true);
+check('mapa parcial sem geral é recusado', () => validateCapacityConfig(Object.assign({}, mapOnly, {
+  maxParticipantsByCategory: { 'Fem Light': 32 }
+}), HttpsError), true);
+check('sem categorias de capacidade não inventa limite', () => validateCapacityConfig(Object.assign({}, base, {
+  maxParticipantsPerCategory: null, maxParticipantsByCategory: {}, maxParticipants: null
+}), HttpsError), false);
+check('modo sorteio aceita capacidade personalizada sem total de inscrições', () => validateCapacityConfig(Object.assign({}, mapOnly, {
+  maxParticipants: null, enrollmentLimitMode: 'draw'
+}), HttpsError), false);
 for (const bad of [-5, 0, 0.5, 'abc']) {
   check('rejeita valor inválido ' + bad, () => validateCapacityConfig(Object.assign({}, custom, {
     maxParticipantsByCategory: Object.assign({}, custom.maxParticipantsByCategory, { 'Fem Light': bad })

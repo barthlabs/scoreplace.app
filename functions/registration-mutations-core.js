@@ -97,6 +97,7 @@ function enroll(tournamentId, registrations, participant, categoryIds, options) 
       registrationId: id,
       tournamentId: tid,
       categoryId: categoryId,
+      originCategoryId: categoryId,
       participantKey: key,
       status: status,
       validationState: validationState,

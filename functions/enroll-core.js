@@ -338,7 +338,7 @@ function computeEnroll(data, participantObj, extraUpdates, nowMs, options) {
   };
   // A capacidade mostrada na ficha também limita a inscrição por categoria.
   // Registros legados sem categoria explícita continuam sujeitos ao total geral.
-  if (!organizerManual && !isDrawMode && data.maxParticipantsPerCategory && Array.isArray(data.combinedCategories)) {
+  if (!organizerManual && !isDrawMode && (data.maxParticipantsPerCategory || Object.keys(data.maxParticipantsByCategory || {}).length) && Array.isArray(data.combinedCategories)) {
     var categoryNames = function(p) {
       var values = Array.isArray(p.categories) ? p.categories : [];
       if (p.category) values = values.concat([p.category]);

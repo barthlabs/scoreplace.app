@@ -19,6 +19,14 @@ result = C.decide(Object.assign({}, input, { tournament: Object.assign({}, base,
   maxParticipants: 3, maxParticipantsPerCategory: 1, maxParticipantsByCategory: { 'Fem A': 1 }
 }), registrations: [confirmed], participant: { uid: 'u2', categoryIds: ['fem-a'] } }));
 ok('capacidade da categoria bloqueia mesmo com vagas no total', result.outcome === 'capacityFull' && result.categoryId === 'fem-a');
+result = C.decide(Object.assign({}, input, { tournament: Object.assign({}, base, {
+  maxParticipants: 3, maxParticipantsPerCategory: null, maxParticipantsByCategory: { 'Fem A': 1 }
+}), registrations: [confirmed], participant: { uid: 'u2', categoryIds: ['fem-a'] } }));
+ok('porta canônica bloqueia categoria cheia sem limite genérico', result.outcome === 'capacityFull' && result.categoryId === 'fem-a');
+result = C.decide(Object.assign({}, input, { tournament: Object.assign({}, base, {
+  maxParticipants: 3, maxParticipantsPerCategory: null, maxParticipantsByCategory: { 'Fem A': 1 }
+}), registrations: [confirmed], participant: { uid: 'u2', categoryIds: ['fem-a'] } }));
+ok('mapa parcial legado mantém limite da categoria configurada', result.outcome === 'capacityFull' && result.categoryId === 'fem-a');
 const parallel = Object.assign({}, base, {
   maxParticipants: 1,
   categoryDefinitions: base.categoryDefinitions.concat([{ id: 'fem-b', label: 'Fem B', dimension: 'custom', criteria: {} }]),

@@ -314,15 +314,14 @@ window.FirestoreDB = {
    * E a fuga não se fecha escopando `memberUids`, porque preservá-lo byte a byte é
    * exatamente o que o invariante do dono exige. A COLEÇÃO é o isolamento.
    *
-   * ⚠️ A ROTA NÃO SAI DO NOME DO ID. Este projeto já pagou caro por heurística de nome
-   * ("heurística de nome não é identidade"). Ela sai de FATO: ou o id está no registro que
-   * o ouvinte de `sandboxes` preenche, ou o objeto em memória diz `isSandbox === true`.
-   * Sem fato → `tournaments`, que é o caso de 100% dos torneios reais. */
+   * O prefixo estrutural `sb_` é reservado para IDs de cópias, e o servidor ainda
+   * valida isSandbox, dono e original. Isso cobre ações em deep link antes do ouvinte. */
   _ehSandbox(idOuT) {
     try {
       if (idOuT && typeof idOuT === 'object') return idOuT.isSandbox === true;
       var id = String(idOuT || '');
       if (!id) return false;
+      if (id.indexOf('sb_') === 0) return true;
       if (window._sbIdsConhecidos && window._sbIdsConhecidos[id]) return true;
       var lista = (window.AppStore && window.AppStore.tournaments) || [];
       for (var i = 0; i < lista.length; i++) {
@@ -1478,7 +1477,8 @@ window.FirestoreDB = {
      * mapas, chaves extras nem timestamp. */
     return this._callFn('setTournamentPresence', {
       tournamentId: String(tournamentId), targetKey: String(targetKey || ''),
-      action: action, legacyKey: legacyKey ? String(legacyKey) : ''
+      action: action, legacyKey: legacyKey ? String(legacyKey) : '',
+      sandbox: this._ehSandbox(tournamentId)
     });
   },
 
@@ -1973,6 +1973,7 @@ window.FirestoreDB = {
     try {
       return await this._callFn('enrollParticipant', {
         tournamentId: String(tournamentId),
+        sandbox: this._ehSandbox(tournamentId),
         participantObj: participantObj,
         extraUpdates: extraUpdates || null,
         organizerManual: organizerManual === true
@@ -2061,7 +2062,7 @@ window.FirestoreDB = {
   // Não há transação ou fallback de escrita no navegador.
   async leaveStandby(tournamentId, user) {
     void user;
-    return await this._callFn('leaveStandby', { tournamentId: String(tournamentId) });
+    return await this._callFn('leaveStandby', { tournamentId: String(tournamentId), sandbox: this._ehSandbox(tournamentId) });
   },
 
 
@@ -2073,6 +2074,7 @@ window.FirestoreDB = {
     try {
       return await this._callFn('deenrollParticipant', {
         tournamentId: String(tournamentId),
+        sandbox: this._ehSandbox(tournamentId),
         userUid: String(userUid || '')
       });
     } catch (e) {
@@ -2089,6 +2091,7 @@ window.FirestoreDB = {
   async formPair(tournamentId, opts) {
     return await this._callFn('formPair', {
       tournamentId: String(tournamentId),
+      sandbox: this._ehSandbox(tournamentId),
       uid1: (opts && opts.uid1) || '', manualId1: (opts && opts.manualId1) || '', name1: (opts && opts.name1) || '',
       uid2: (opts && opts.uid2) || '', manualId2: (opts && opts.manualId2) || '', name2: (opts && opts.name2) || '',
       categoryId: (opts && opts.categoryId) || '',
@@ -2108,6 +2111,7 @@ window.FirestoreDB = {
   async splitPair(tournamentId, opts) {
     return await this._callFn('splitPair', {
       tournamentId: String(tournamentId),
+      sandbox: this._ehSandbox(tournamentId),
       id1: (opts && opts.id1) != null ? opts.id1 : '',
       id2: (opts && opts.id2) != null ? opts.id2 : '',
       uid1: (opts && opts.uid1) || '', manualId1: (opts && opts.manualId1) || '',

@@ -370,7 +370,8 @@ ok(/sp-team-draw-time/.test(drawSource) && /__openingPendingInitialScheduleFromD
   'os horários do sorteio usam controle compacto e uma revisão nova vai de Sorteando direto ao planejamento privado, sem voltar ao detalhe');
 ok(!/data-team-court-rank-label/.test(drawSource) && !/paintCourtRanks/.test(drawSource) && /data-team-court-card/.test(drawSource),
   'a prioridade das quadras é definida pela ordem dos cards, sem prefixos ordinais redundantes');
-ok(/var selectedMode = modeConfirmed && \(cfg\.schedule\.mode === 'structured' \|\| cfg\.schedule\.mode === 'free'\) \? cfg\.schedule\.mode : 'free';/.test(drawSource),
+ok(/var modeChosen = cfg\.schedule && cfg\.schedule\.modeChosen === true;/.test(drawSource) &&
+   /var selectedMode = \(modeChosen \|\| modeConfirmed\) && \(cfg\.schedule\.mode === 'structured' \|\| cfg\.schedule\.mode === 'free'\) \? cfg\.schedule\.mode : 'free';/.test(drawSource),
   'Livre é o padrão no primeiro sorteio; uma escolha já confirmada permanece');
 ok((drawSource.match(/background:#182235!important;color:var\(--text-bright\)!important/g) || []).length >= 1 && !/id="team-draw-cancel" class=/.test(drawSource),
   'Voltar tem contraste explícito no modal de configuração e Cancelar redundante não existe');
