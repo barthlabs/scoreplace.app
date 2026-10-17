@@ -359,6 +359,7 @@ fi
 # ── o pedido ao revisor ──────────────────────────────────────────────────────────────
 PROMPT="$(mktemp "${TMPDIR:-/tmp}/sp-revisao-prompt.XXXXXX")"
 EVIDENCIA_REVISAO=""
+EVIDENCIA_FORNECIDA="${SP_REVIEW_EVIDENCE:-}"
 if [[ "$MODO" == diff && "${SP_REVIEW_VALIDATE:-0}" == 1 ]]; then
   EVIDENCIA_REVISAO="$(mktemp "${TMPDIR:-/tmp}/sp-evidencia-revisao.XXXXXX")"
   LOG_VALIDACAO="$(mktemp "${TMPDIR:-/tmp}/sp-evidencia-log.XXXXXX")"
@@ -385,6 +386,13 @@ if [[ "$MODO" == diff && "${SP_REVIEW_VALIDATE:-0}" == 1 ]]; then
   } > "$EVIDENCIA_REVISAO"; then
     cat "$EVIDENCIA_REVISAO"
     exit 1
+  fi
+  if [[ -n "$EVIDENCIA_FORNECIDA" && -f "$EVIDENCIA_FORNECIDA" ]]; then
+    {
+      echo
+      echo "Evidência operacional fornecida a este corte:"
+      cat "$EVIDENCIA_FORNECIDA"
+    } >> "$EVIDENCIA_REVISAO"
   fi
   export SP_REVIEW_EVIDENCE="$EVIDENCIA_REVISAO"
 fi
