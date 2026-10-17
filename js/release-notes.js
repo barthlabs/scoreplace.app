@@ -1,3 +1,4 @@
+// 2.4.82 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.81 — No painel do sorteio Neon, as duplas exibem nomes de perfil em vez
 // de identificadores internos; cartões e seleção do dia cabem no celular e desktop.
 // A sugestão 16/8 respeita dias já salvos e numeração com lacunas.
