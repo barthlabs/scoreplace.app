@@ -1,7 +1,7 @@
 ## 2.4.93 — 17/out/2026 (linhas reais e zoom contínuo na chave)
 
 - Em eliminatórias, cada linha segue `nextMatchId` do jogo de origem para o confronto seguinte; BYEs, jogos ocultos e classificatórias não geram ligações presumidas. Quando há espaço, o cartão da rodada seguinte desce até o centro dos dois jogos de origem sem se sobrepor aos demais.
-- O controle existente de zoom passa a cobrir de 5% a 150%, inclusive nas linhas independentes, sem criar um modo separado de visão geral. Nenhum jogo, resultado ou inscrição é alterado.
+- O zoom contínuo cobre de 1% a 800% nas eliminatórias e classificatórias, com pinça nos dois sentidos no celular e Cmd/Ctrl + rolagem no desktop. Enquadrar ajusta todos os jogos da chave ou rodada à tela no mesmo controle; Voltar ao meu jogo reencontra o confronto. A chave ampliada permanece rolável até a ponta direita, sem modo separado de visão geral. Nenhum jogo, resultado ou inscrição é alterado.
 
 ## 2.4.86 — 17/out/2026 (edição de vagas e busca na Análise)
 

@@ -863,6 +863,8 @@ function _bracketIsEliminationTree(t) {
 function _bracketLayoutEliminationTree(root) {
   var tournament = window._currentBracketTournament || {};
   if (!root) return;
+  var zoomScope = root.closest ? root.closest('#view-container, #inline-bracket-container') : document;
+  if (typeof window._bindBracketZoomGestures === 'function') window._bindBracketZoomGestures(zoomScope);
   if (!_bracketIsEliminationTree(tournament)) {
     var stale = root.closest ? root.closest('#view-container, #inline-bracket-container') : document;
     if (stale) stale.querySelectorAll('svg[data-bracket-tree-lines]').forEach(function (svg) { svg.remove(); });
@@ -4482,9 +4484,11 @@ function _bracketZoomControlHtml() {
   var percent = Math.round((window._bracketZoom || 1) * 100);
   return '<div class="bracket-zoom-controls" style="display:inline-flex;align-items:center;gap:6px;background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));border:1px solid var(--sp-b-255-255-255-012,rgba(255,255,255,0.12));border-radius:20px;padding:4px 10px;">' +
     '<button type="button" onclick="window._setBracketZoom(null,-1)" aria-label="Diminuir zoom da chave" title="Diminuir zoom">−</button>' +
-    '<input type="range" id="bracket-zoom-slider" min="5" max="150" value="' + percent + '" step="1" aria-label="Zoom da chave" oninput="window._applyBracketZoom(this.value/100)" style="width:110px;accent-color:#818cf8;cursor:pointer;">' +
+    '<input type="range" id="bracket-zoom-slider" min="1" max="800" value="' + percent + '" step="1" aria-label="Zoom da chave" oninput="window._applyBracketZoom(this.value/100)" style="width:110px;accent-color:#818cf8;cursor:pointer;">' +
     '<span id="bracket-zoom-label" title="Clique para voltar a 100%" onclick="window._resetBracketZoom()" style="font-size:.75rem;color:var(--text-muted);min-width:38px;text-align:center;cursor:pointer;">' + percent + '%</span>' +
-    '<button type="button" onclick="window._setBracketZoom(null,1)" aria-label="Aumentar zoom da chave" title="Aumentar zoom">+</button></div>';
+    '<button type="button" onclick="window._setBracketZoom(null,1)" aria-label="Aumentar zoom da chave" title="Aumentar zoom">+</button>' +
+    '<button type="button" onclick="window._fitBracketZoom()" aria-label="Enquadrar chave inteira" title="Enquadrar chave inteira">⛶</button>' +
+    '<button type="button" onclick="window._zoomToMyBracketMatch()" aria-label="Voltar ao meu jogo" title="Voltar ao meu jogo">⌖</button></div>';
 }
 
 
@@ -8344,6 +8348,7 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
   }).join('');
 
   return `
+    ${!(opts && opts.suppressAutoAdvance) ? '<div style="display:flex;justify-content:flex-end;margin-bottom:10px;">' + _bracketZoomControlHtml() + '</div>' : ''}
     <div style="${_isTeamScheduleGS ? 'display:block;' : 'display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:1.5rem;'}">
       ${groupsHtml}
     </div>

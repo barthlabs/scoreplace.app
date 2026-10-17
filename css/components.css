@@ -2076,6 +2076,7 @@ input[type="date"].form-control::-webkit-calendar-picker-indicator:hover {
   container-type:inline-size;
   min-width:0;
   max-width:100%;
+  touch-action:pan-x pan-y;
 }
 .bracket-scroll-content,
 .bracket-columns-track {

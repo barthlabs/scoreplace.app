@@ -18,7 +18,7 @@ const zoom = ui.slice(ui.indexOf('window._applyBracketZoom = function'), ui.inde
       '<div class="bracket-round-column"><div id="card-a" class="sp-match-card"></div><div id="card-b" class="sp-match-card"></div><div id="card-c" class="sp-match-card"></div><div id="card-d" class="sp-match-card"></div></div>' +
       '<div class="bracket-round-column"><div id="card-semi1" class="sp-match-card"></div><div id="card-semi2" class="sp-match-card"></div></div>' +
       '<div class="bracket-round-column"><div id="card-final" class="sp-match-card"></div></div></div></div></div>' +
-      '<input id="bracket-zoom-slider" type="range" min="5" max="150"><span id="bracket-zoom-label"></span></div>');
+      '<input id="bracket-zoom-slider" type="range" min="1" max="800"><span id="bracket-zoom-label"></span></div>');
     await page.addScriptTag({ content: tree + '\n' + zoom });
     await page.evaluate(() => {
       window._bracketZoom = 1;
@@ -50,9 +50,38 @@ const zoom = ui.slice(ui.indexOf('window._applyBracketZoom = function'), ui.inde
     assert.equal(result.label, '5%');
     assert.equal(result.transform, 'scale(0.05)');
     await page.evaluate(() => window._setBracketZoom(null, -1));
-    assert.equal(await page.locator('#bracket-zoom-label').textContent(), '5%', 'zoom out respeita o limite mínimo');
+    assert.equal(await page.locator('#bracket-zoom-label').textContent(), '1%', 'zoom out permite mostrar chaves grandes inteiras');
     await page.evaluate(() => window._resetBracketZoom());
     assert.equal(await page.locator('#bracket-zoom-label').textContent(), '100%');
+    const gestures = await page.evaluate(() => {
+      const wrapper = document.querySelector('.bracket-scroll-container');
+      const ordinaryWheel = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: -100, clientX: 200 });
+      wrapper.dispatchEvent(ordinaryWheel);
+      const unchanged = window._bracketZoom;
+      const wheel = new WheelEvent('wheel', { bubbles: true, cancelable: true, ctrlKey: true, deltaY: -500, clientX: 200 });
+      wrapper.dispatchEvent(wheel);
+      const desktopZoom = window._bracketZoom;
+      const touch = (x) => new Touch({ identifier: x, target: wrapper, clientX: x, clientY: 100 });
+      wrapper.dispatchEvent(new TouchEvent('touchstart', { bubbles: true, touches: [touch(100), touch(200)] }));
+      const pinchOut = new TouchEvent('touchmove', { bubbles: true, cancelable: true, touches: [touch(75), touch(225)] });
+      wrapper.dispatchEvent(pinchOut);
+      const openedZoom = window._bracketZoom;
+      const pinchIn = new TouchEvent('touchmove', { bubbles: true, cancelable: true, touches: [touch(125), touch(175)] });
+      wrapper.dispatchEvent(pinchIn);
+      const closedZoom = window._bracketZoom;
+      window._applyBracketZoom(20);
+      return { unchanged, desktopZoom, openedZoom, closedZoom: openedZoom > closedZoom,
+        wheelCanceled: wheel.defaultPrevented, pinchCanceled: pinchOut.defaultPrevented,
+        maxZoom: window._bracketZoom, spacer: !!wrapper.querySelector('.bracket-zoom-spacer'),
+        scrollWidth: wrapper.scrollWidth, expectedWidth: wrapper.querySelector('.bracket-columns-track').scrollWidth * 8 };
+    });
+    assert.equal(gestures.unchanged, 1, 'rolagem comum não altera zoom');
+    assert.ok(gestures.desktopZoom > 1.5 && gestures.wheelCanceled, 'Ctrl+rolagem amplia além de 150%');
+    assert.ok(gestures.openedZoom > gestures.desktopZoom && gestures.closedZoom && gestures.pinchCanceled, 'pinça abre e fecha o zoom: ' + JSON.stringify(gestures));
+    assert.equal(gestures.maxZoom, 8, 'limite é 800%');
+    assert.ok(gestures.spacer, 'largura ampliada continua rolável');
+    assert.ok(gestures.scrollWidth >= gestures.expectedWidth - 1, 'é possível rolar até o fim da chave ampliada');
+    await page.evaluate(() => window._resetBracketZoom());
     await page.evaluate(() => {
       window._currentBracketTournament.matches.find(m => m.id === 'a').nextMatchId = 'semi2';
       window._currentBracketTournament.matches.find(m => m.id === 'c').nextMatchId = 'semi1';
@@ -63,6 +92,13 @@ const zoom = ui.slice(ui.indexOf('window._applyBracketZoom = function'), ui.inde
       'trocar a origem altera o conector, mesmo sem mudar a posição dos cartões');
     await page.evaluate(() => { window._currentBracketTournament.phases[0].kind = 'classification'; _bracketLayoutEliminationTree(document.querySelector('[data-bracket-tabs-root]')); });
     assert.equal(await page.locator('svg[data-bracket-tree-lines]').count(), 0, 'a classificatória não mostra conectores');
+    const groupZoom = await page.evaluate(() => {
+      const wrapper = document.querySelector('.bracket-scroll-container');
+      window._applyBracketZoom(1);
+      wrapper.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, metaKey: true, deltaY: 100, clientX: 200 }));
+      return window._bracketZoom;
+    });
+    assert.ok(groupZoom < 1, 'a classificatória também aceita zoom out');
     console.log('bracket-tree-zoom: OK');
   } finally { await browser.close(); }
 })().catch(err => { console.error(err); process.exitCode = 1; });

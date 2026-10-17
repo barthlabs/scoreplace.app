@@ -1246,12 +1246,28 @@ window._toggleBracketMode = function (tId) {
 };
 
 window._applyBracketZoom = function (value) {
-  window._bracketZoom = Math.max(0.05, Math.min(1.5, Number(value) || 1));
+  window._bracketZoom = Math.max(0.01, Math.min(8, Number(value) || 1));
   document.querySelectorAll('.bracket-scroll-content, .bracket-columns-track').forEach(function (content) {
     content.style.transform = window._bracketZoom === 1 ? '' : 'scale(' + window._bracketZoom + ')';
     content.style.transformOrigin = 'top left';
     var wrapper = content.closest('.bracket-sticky-scroll-wrapper, .bracket-scroll-container');
-    if (wrapper) wrapper.style.height = window._bracketZoom === 1 ? '' : Math.ceil(content.scrollHeight * window._bracketZoom + 8) + 'px';
+    if (wrapper) {
+      wrapper.style.height = window._bracketZoom === 1 ? '' : Math.ceil(content.scrollHeight * window._bracketZoom + 8) + 'px';
+      // CSS transform não aumenta scrollWidth. A área invisível mantém alcançável
+      // a ponta direita da chave ampliada, sem criar outro modo de visualização.
+      var spacer = wrapper.querySelector(':scope > .bracket-zoom-spacer');
+      if (window._bracketZoom > 1) {
+        if (!spacer) {
+          spacer = document.createElement('div');
+          spacer.className = 'bracket-zoom-spacer';
+          spacer.setAttribute('aria-hidden', 'true');
+          spacer.style.cssText = 'position:absolute;left:0;top:0;height:1px;pointer-events:none;visibility:hidden;';
+          wrapper.appendChild(spacer);
+        }
+        wrapper.style.position = 'relative';
+        spacer.style.width = Math.ceil(content.scrollWidth * window._bracketZoom) + 'px';
+      } else if (spacer) spacer.remove();
+    }
   });
   const label = document.getElementById('bracket-zoom-label');
   if (label) label.textContent = Math.round(window._bracketZoom * 100) + '%';
@@ -1261,11 +1277,68 @@ window._applyBracketZoom = function (value) {
 };
 
 window._setBracketZoom = function (tId, delta) {
-  window._applyBracketZoom(Math.round((window._bracketZoom + delta * 0.1) * 100) / 100);
+  var current = window._bracketZoom || 1;
+  window._applyBracketZoom(Math.round((current + delta * Math.max(0.1, current * 0.2)) * 100) / 100);
 };
 
 window._resetBracketZoom = function (tId) {
   window._applyBracketZoom(1);
+};
+
+window._fitBracketZoom = function () {
+  var wrapper = Array.prototype.find.call(document.querySelectorAll('.bracket-sticky-scroll-wrapper, .bracket-scroll-container'), function (candidate) {
+    return candidate.getClientRects().length > 0 && candidate.querySelector('.bracket-scroll-content, .bracket-columns-track');
+  });
+  var content = wrapper && wrapper.querySelector('.bracket-scroll-content, .bracket-columns-track');
+  if (!content) return;
+  var scale = Math.min(1, wrapper.clientWidth / content.scrollWidth,
+    (window.innerHeight * 0.78) / content.scrollHeight);
+  window._applyBracketZoom(scale);
+  wrapper.scrollLeft = 0;
+  wrapper.scrollIntoView({ block: 'center', behavior: 'smooth' });
+};
+
+window._zoomToMyBracketMatch = function () {
+  var target = typeof window._bracketEntryTarget === 'function' ? window._bracketEntryTarget() : null;
+  if (!target) return;
+  window._applyBracketZoom(1);
+  requestAnimationFrame(function () { target.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' }); });
+};
+
+// O mesmo zoom atende pinça no celular e Cmd/Ctrl + rolagem no desktop.
+// A posição horizontal sob os dedos/cursor permanece estável durante a escala.
+window._bindBracketZoomGestures = function (scope) {
+  (scope || document).querySelectorAll('.bracket-sticky-scroll-wrapper, .bracket-scroll-container').forEach(function (wrapper) {
+    if (wrapper._spZoomGesturesBound || !wrapper.querySelector('.bracket-scroll-content, .bracket-columns-track')) return;
+    wrapper._spZoomGesturesBound = true;
+    function zoomAt(value, clientX) {
+      var oldZoom = window._bracketZoom || 1;
+      var x = clientX - wrapper.getBoundingClientRect().left;
+      var contentX = (wrapper.scrollLeft + x) / oldZoom;
+      window._applyBracketZoom(value);
+      wrapper.scrollLeft = Math.max(0, contentX * window._bracketZoom - x);
+    }
+    wrapper.addEventListener('wheel', function (event) {
+      if (!event.ctrlKey && !event.metaKey) return;
+      event.preventDefault();
+      zoomAt((window._bracketZoom || 1) * Math.exp(-event.deltaY * 0.004), event.clientX);
+    }, { passive: false });
+    var pinch = null;
+    wrapper.addEventListener('touchstart', function (event) {
+      if (event.touches.length !== 2) { pinch = null; return; }
+      var a = event.touches[0], b = event.touches[1];
+      pinch = { distance: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), zoom: window._bracketZoom || 1 };
+    }, { passive: true });
+    wrapper.addEventListener('touchmove', function (event) {
+      if (!pinch || event.touches.length !== 2 || !pinch.distance) return;
+      event.preventDefault();
+      var a = event.touches[0], b = event.touches[1];
+      var distance = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+      zoomAt(pinch.zoom * distance / pinch.distance, (a.clientX + b.clientX) / 2);
+    }, { passive: false });
+    wrapper.addEventListener('touchend', function (event) { if (event.touches.length !== 2) pinch = null; }, { passive: true });
+    wrapper.addEventListener('touchcancel', function () { pinch = null; }, { passive: true });
+  });
 };
 
 function _recalcFixedScrollbar() {
