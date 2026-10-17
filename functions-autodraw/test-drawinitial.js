@@ -15,6 +15,7 @@
 const path = require('path');
 const fs = require('fs');
 const core = require('./draw-core.js');
+const competitionAssignments = require('./competition-assignment-core.js');
 
 let pass = 0, fail = 0;
 function ok(name, cond, got) {
@@ -168,6 +169,110 @@ const CASES = [
   const malformedNeon = { combinedCategories: neonCategories, participants: neonPairs.slice(0, 47) };
   const rejectedNeon = core.assignCompetitionTeamsAtInitialDraw(malformedNeon, neonConfig);
   ok('Neon: não sorteia grade incompleta', rejectedNeon.ok === false && rejectedNeon.reason === 'competition-team-category-coverage', JSON.stringify(rejectedNeon));
+
+  // Neon 2026: 24 Fem Light, as primeiras 16 na quinta e as últimas oito
+  // na sexta. O recibo de pares é canônico; trocar uma categoria o invalida.
+  const realCategories = ['Fem Light', 'Fem Power', 'Fem Extreme', 'Masc Light', 'Masc Power', 'Masc Extreme'];
+  const realPairs = [];
+  realCategories.forEach(function (category, ci) {
+    const count = ci === 0 ? 24 : 8;
+    for (let i = 0; i < count; i++) {
+      const pair = dupla(300 + realPairs.length, category);
+      pair.fixedPairId = 'pair-' + realPairs.length;
+      pair.categoryId = 'category-' + ci;
+      realPairs.push(pair);
+    }
+  });
+  const rosterSnapshot = realPairs.map(function (entry) { return { fixedPairId:entry.fixedPairId, categoryId:entry.categoryId }; })
+    .sort(function (a, b) { return a.fixedPairId.localeCompare(b.fixedPairId); });
+  const pairDayAssignments = realPairs.slice(0, 24).map(function (entry, index) {
+    return { fixedPairId:entry.fixedPairId, day:index < 16 ? '2026-10-22' : '2026-10-23' };
+  });
+  const realConfig = Object.assign({}, neonConfig, { schedule:Object.assign({}, neonConfig.schedule, {
+    gamesPerPair:3, gamesPerTeam:3, mode:'free',
+    pairsPerTeamByCategory:{ 'Fem Light':3, 'Fem Power':1, 'Fem Extreme':1, 'Masc Light':1, 'Masc Power':1, 'Masc Extreme':1 },
+    pairDayAssignments, rosterSnapshot
+  }) });
+  function realTournament() { return {
+    id:'neon-64', name:'Neon 64', status:'open', format:'Fase de Grupos', teamSize:2, enrollmentMode:'teams',
+    startDate:'2026-10-22T18:00:00-03:00', endDate:'2026-10-23T22:40:00-03:00',
+    courtCount:6, gameDuration:25, callTime:5, warmupTime:5,
+    scheduleWindow:{ days:[{ day:'2026-10-22', startTime:'18:00', endTime:'22:40', categoryFlow:'rounds' }, { day:'2026-10-23', startTime:'18:00', endTime:'22:40', categoryFlow:'rounds' }] },
+    combinedCategories:realCategories, participants:realPairs.map(function (entry) { return JSON.parse(JSON.stringify(entry)); }),
+    teamCompetition:realConfig, phases:[{ teamCompetition:realConfig }],
+    categorySchedule:{ confirmed:true, slots:realCategories.flatMap(function (category) {
+      return (category === 'Fem Light' ? ['2026-10-22','2026-10-23'] : [/^Fem /.test(category) ? '2026-10-22' : '2026-10-23'])
+        .map(function (day) { return { category, day, order:1 }; });
+    }) }
+  }; }
+  const neon64 = realTournament(), realDraw = core.drawInitial(neon64, { idStamp:'neon-64' });
+  const realMatches = neon64.matches || [];
+  const lightMatches = realMatches.filter(function (match) { return match.category === 'Fem Light'; });
+  ok('Neon 64: gera 96 jogos com 24 Fem Light', realDraw.ok && realMatches.length === 96 && lightMatches.length === 36,
+    JSON.stringify({ result:realDraw.ok, reason:realDraw.reason, matches:realMatches.length, light:lightMatches.length }));
+  ok('Neon 64: cada time leva 2 Fem Light quinta e 1 sexta', neon64.competitionTeams && neon64.competitionTeams.every(function (team) {
+    return [2,1].every(function (want, index) {
+      return neon64.participants.filter(function (entry) { return entry.category === 'Fem Light' && entry.competitionTeamId === team.id && entry.competitionPlayDay === ['2026-10-22','2026-10-23'][index]; }).length === want;
+    });
+  }));
+  ok('Neon 64: jogos Light não cruzam dias nem times e cada dupla joga três vezes',
+    lightMatches.length === 36 && lightMatches.every(function (match) {
+      return match.team1Obj && match.team2Obj && match.team1Obj.competitionPlayDay === match.requiredDay &&
+        match.team2Obj.competitionPlayDay === match.requiredDay && match.p1CompetitionTeamId !== match.p2CompetitionTeamId;
+    }) && neon64.participants.filter(function (entry) { return entry.category === 'Fem Light'; }).every(function (entry) {
+      return lightMatches.filter(function (match) { return match.team1Obj.fixedPairId === entry.fixedPairId || match.team2Obj.fixedPairId === entry.fixedPairId; }).length === 3;
+    }));
+  const savedAssignments = competitionAssignments.snapshot(neon64.participants);
+  const projectedAgain = realPairs.map(function (entry) {
+    const copy = Object.assign({}, entry);
+    delete copy.competitionTeamId;
+    delete copy.competitionPlayDay;
+    return copy;
+  });
+  const restored = competitionAssignments.overlay(projectedAgain, savedAssignments);
+  ok('Neon 64: releitura canônica recupera time e dia sem usar espelho antigo', savedAssignments.length === 64 &&
+    restored.every(function (entry) {
+      const before = neon64.participants.find(function (p) { return p.fixedPairId === entry.fixedPairId; });
+      return before && entry.competitionTeamId === before.competitionTeamId &&
+        entry.competitionPlayDay === before.competitionPlayDay;
+    }));
+  const changedCategory = projectedAgain.map(function (entry, index) {
+    return index === 0 ? Object.assign({}, entry, { categoryId:'moved-category' }) : entry;
+  });
+  ok('Neon 64: troca de categoria invalida só o time da dupla alterada',
+    !competitionAssignments.overlay(changedCategory, savedAssignments)[0].competitionTeamId &&
+    !!competitionAssignments.overlay(changedCategory, savedAssignments)[1].competitionTeamId);
+  const remade = projectedAgain.map(function (entry, index) {
+    return index === 0 ? Object.assign({}, entry, { fixedPairId:'remade-pair' }) : entry;
+  });
+  ok('Neon 64: dupla refeita não herda time da identidade antiga',
+    !competitionAssignments.overlay(remade, savedAssignments)[0].competitionTeamId);
+  ok('Neon 64: mapa de dupla excluída não fabrica inscrição',
+    competitionAssignments.overlay(projectedAgain.slice(1), savedAssignments).length === 63);
+  const estimated = core._window._schGradeEstimada(neon64);
+  // 96 jogos em janelas de 4h40 podem exceder o tempo com descansos. O
+  // planejador deve mostrar o excesso e jamais gravar um horário no outro dia.
+  const plannedDaysValid = estimated && estimated.slots.every(function (slot) {
+    const match = realMatches.find(function (m) { return String(m.id) === slot.matchId; });
+    return !match.requiredDay || match.requiredDay === ['2026-10-22','2026-10-23'][slot.dia];
+  });
+  const applied = core._window._schAplicarGrade(neon64, []);
+  ok('Neon 64: grade insuficiente é sinalizada e não aplicada fora do dia', estimated && estimated.slots.length === 96 &&
+    plannedDaysValid && (estimated.cabe || applied === 0) &&
+    (!estimated.cabe || estimated.slots.every(function (slot) {
+      const match = realMatches.find(function (m) { return String(m.id) === slot.matchId; });
+      return !match.requiredDay || new Date(slot.iso).toLocaleDateString('en-CA', { timeZone:'America/Sao_Paulo' }) === match.requiredDay;
+    })), JSON.stringify(estimated && { slots:estimated.slots.length, days:estimated.dias, extra:estimated.extraMs, applied }));
+  const stale = realTournament();
+  stale.participants[0].categoryId = 'changed-category';
+  const staleResult = core.assignCompetitionTeamsAtInitialDraw(stale, realConfig);
+  ok('Neon 64: mapa velho falha antes de atribuir qualquer time', staleResult.ok === false && staleResult.reason === 'competition-pair-day-plan-invalid' && !stale.competitionTeams);
+  const wrongDayPair = realTournament();
+  const wrongAssignment = JSON.parse(JSON.stringify(realConfig));
+  wrongAssignment.schedule.pairDayAssignments[0].fixedPairId = realPairs[24].fixedPairId;
+  const wrongResult = core.assignCompetitionTeamsAtInitialDraw(wrongDayPair, wrongAssignment);
+  ok('Neon 64: mapa 16/8 com dupla de outra categoria é recusado', wrongResult.ok === false &&
+    wrongResult.reason === 'competition-pair-day-plan-invalid' && !wrongDayPair.competitionTeams);
 
   // Estruturas multifase guardam a configuração na fase inicial. O servidor
   // chama a mesma `_buildPhase0Cfg` da web e precisa enxergar essa fonte.

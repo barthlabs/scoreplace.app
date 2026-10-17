@@ -26,6 +26,13 @@ async function call(id, sandbox, idToken) {
     body: JSON.stringify({ data: { tournamentId: id, ...(sandbox === undefined ? {} : { sandbox }) } }) });
   return { status: response.status, body: await response.json() };
 }
+async function callFn(name, data, idToken) {
+  const url = base.replace('/getCanonicalTournamentRoster', '/' + name);
+  const response = await fetch(url, { method:'POST',
+    headers: { 'Content-Type':'application/json', Authorization:'Bearer ' + idToken },
+    body: JSON.stringify({ data }) });
+  return { status:response.status, body:await response.json() };
+}
 function registration(id, name) {
   return { registrationId: id, status: 'confirmed', participantKind: 'manual',
     participantKey: 'manual:' + id, manualParticipantId: id, manualDisplayName: name,
@@ -41,9 +48,9 @@ const categories = [{ id: 'light', label: 'Light' }];
   const id = 'same-id-in-both-collections';
   const real = db.collection('tournaments').doc(id);
   const sb = db.collection('sandboxes').doc(id);
-  await real.set({ id, creatorUid: 'sb-member', memberUids: ['sb-member'],
+  await real.set({ id, creatorUid: 'sb-member', adminUids:['sb-owner'], memberUids: ['sb-member'],
     canonicalRegistrationMigration: receipt, categoryDefinitions: categories, participants: [] });
-  await sb.set({ id, isSandbox: true, sandboxOf: id, sandboxOwnerUid: 'sb-owner', sbState: 'ready',
+  await sb.set({ id, isSandbox: true, sandboxOf: id, sandboxOwnerUid: 'sb-owner', sbState: 'ready', notificationsMuted:true,
     creatorUid: 'sb-member', memberUids: ['sb-member'],
     canonicalRegistrationMigration: receipt, categoryDefinitions: categories, participants: [] });
   await real.collection('registrations').doc('real').set(registration('real', 'Pessoa real'));
@@ -62,6 +69,24 @@ const categories = [{ id: 'light', label: 'Light' }];
   const denied = await call(id, true, member);
   assert.equal(absent.body.error.status, denied.body.error.status, 'inexistente e não dono são indistinguíveis');
   assert.notEqual((await call(id, true, null)).status, 200, 'sem autenticação é negado');
+
+  // Mutação real do sandbox no emulador: o doc original é comparado byte a
+  // byte. Isto pega a antiga rota que buscava `tournaments/{sb_id}`.
+  const routedId = 'sb_' + id;
+  const routed = db.collection('sandboxes').doc(routedId);
+  await routed.set({ id:routedId, isSandbox:true, sandboxOf:id, sandboxOwnerUid:'sb-owner',
+    sbState:'ready', notificationsMuted:true, creatorUid:'sb-owner', adminUids:['sb-owner'],
+    canonicalRegistrationMigration:receipt, categoryDefinitions:categories, participants:[] });
+  await routed.collection('registrations').doc('copy').set(registration('copy', 'Pessoa da cópia'));
+  const realBefore = JSON.stringify((await real.get()).data());
+  const configResult = await callFn('updateTournamentConfiguration', { tournamentId:routedId,
+    sandbox:true, patch:{ courtOrder:['Quadra 1'] } }, owner);
+  assert.equal(configResult.status, 200, JSON.stringify(configResult.body));
+  assert.deepEqual((await routed.get()).data().courtOrder, ['Quadra 1']);
+  assert.equal(JSON.stringify((await real.get()).data()), realBefore, 'configuração do sandbox não altera original');
+  assert.notEqual((await callFn('updateTournamentConfiguration', { tournamentId:routedId,
+    patch:{ courtOrder:['Quadra 2'] } }, owner)).status, 200, 'sem flag não cai no original');
+  console.log('✓ configuração do sandbox grava só na coleção privada');
 
   for (const state of ['creating', 'failed']) {
     await sb.update({ sbState: state });

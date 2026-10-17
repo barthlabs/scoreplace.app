@@ -1,3 +1,6 @@
+// 2.4.79 — Sorteio do Neon aceita 64 duplas no sandbox e exige confirmar as
+// 24 Feminino Light: 16 jogam quinta (duas por time), oito sexta (uma por time).
+// A distribuição persiste na cópia privada sem alterar inscrições nem produção.
 // 2.4.78 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.77 — A Análise permite salvar mudanças de categoria no sandbox privado,
 // usando o mesmo elenco canônico da produção sem alterar o torneio original.

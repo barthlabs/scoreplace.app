@@ -33,5 +33,9 @@ ok(/if \(!_rosterCanonico\) \{[\s\S]*?_rosterState\.reconcileRosterStates/.test(
   'reconciliador legado não roda em inscrições canônicas');
 ok(!/if \(_rosterCanonico\) \{[\s\S]*?_rosterState\.reconcileRosterStates/.test(write),
   'não existe rota canônica que reative o reconciliador do espelho');
+ok(source.includes("'competitionPairAssignments', 'teamOrigins'") &&
+  source.includes('t.competitionPairAssignments = _competitionAssignments.snapshot(t.participants)') &&
+  source.includes('_competitionAssignments.overlay(montado.participants, montado.competitionPairAssignments)'),
+  'times e dias do sorteio atravessam rascunho e releitura por fixedPairId, sem gravar o espelho');
 
 process.exitCode = failed ? 1 : 0;

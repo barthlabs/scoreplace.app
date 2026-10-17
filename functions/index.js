@@ -6401,6 +6401,13 @@ function _scheduleHasRealPlay(m) {
   if (Array.isArray(m.sets) && m.sets.length > 0) return true;
   return ((typeof m.scoreP1 === "number" && m.scoreP1 > 0) || (typeof m.scoreP2 === "number" && m.scoreP2 > 0)) && !m.wo;
 }
+function _scheduleDayInSaoPaulo(iso) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone:'America/Sao_Paulo', year:'numeric', month:'2-digit', day:'2-digit'
+  }).formatToParts(new Date(iso));
+  const value = type => (parts.find(part => part.type === type) || {}).value;
+  return `${value('year')}-${value('month')}-${value('day')}`;
+}
 function _schSaneiaSchedule(s) {
   if (s === null || s === undefined) return null;
   if (typeof s !== "object" || Array.isArray(s)) throw new HttpsError("invalid-argument", "schedule tem que ser objeto");
@@ -6498,6 +6505,16 @@ exports.setMatchSchedule = onCall(
       const alvos = itens.map((it) => {
         const alvo = regs.find((r) => r && r.jogo && r.jogo.id != null && String(r.jogo.id) === it.matchId);
         if (!alvo) throw new HttpsError("not-found", "jogo " + it.matchId + " não existe neste torneio");
+        // ⛔ O dia é propriedade da dupla sorteada, não sugestão da UI. Vale para
+        // grade automática, escolha do organizador e proposta do participante.
+        const requiredDay = String(alvo.jogo.requiredDay || "");
+        if (requiredDay && it.scheduledAt && _scheduleDayInSaoPaulo(it.scheduledAt) !== requiredDay) {
+          throw new HttpsError("failed-precondition", "jogo " + it.matchId + " deve ocorrer em " + requiredDay);
+        }
+        if (requiredDay && it.temSchedule && it.schedule.options.some((option) =>
+          option.kind === "date" && String(option.dateISO || "").slice(0, 10) !== requiredDay)) {
+          throw new HttpsError("failed-precondition", "proposta fora do dia obrigatório do jogo " + it.matchId);
+        }
         const freshSides = _matchKnownSides(alvo.jogo);
         // A UI permite PROPOR com um lado só. CONFIRMAR por consenso é outra
         // operação: a porta também exige os dois lados, mesmo se chamada fora da UI.

@@ -409,6 +409,37 @@ function assignCompetitionTeamsAtInitialDraw(t, rawConfig) {
       } };
     }
   }
+  const neonLight = categoriesToValidate.find(function (category) { return /^Fem Light$/i.test(category); });
+  const dayPlanRequired = teams.length === 8 && categoriesToValidate.length === 6 && neonLight &&
+    pairsRequired(neonLight) === 3;
+  let pairDayById = null;
+  if (dayPlanRequired) {
+    // ⛔ O 3º par Fem Light joga na sexta, não com os dois pares de quinta.
+    // Um roster antigo, um mapa parcial ou mudança de categoria abortam antes
+    // de atribuir times/jogos. `fixedPairId` é a identidade da DUPLA canônica.
+    const schedule = cfg.schedule || {}, assignments = schedule.pairDayAssignments || [];
+    const expectedSnapshot = entries.map(function (entry) {
+      return { fixedPairId:String(entry.fixedPairId || ''), categoryId:String(entry.categoryId || '') };
+    }).sort(function (a, b) { return a.fixedPairId.localeCompare(b.fixedPairId); });
+    const savedSnapshot = (schedule.rosterSnapshot || []).slice().sort(function (a, b) {
+      return String(a.fixedPairId || '').localeCompare(String(b.fixedPairId || ''));
+    });
+    const slots = (t.categorySchedule && t.categorySchedule.slots || [])
+      .filter(function (slot) { return String(slot.category || '') === neonLight; })
+      .map(function (slot) { return String(slot.day || '').slice(0, 10); });
+    const days = Array.from(new Set(slots)).sort();
+    pairDayById = new Map(assignments.map(function (item) { return [String(item.fixedPairId || ''), String(item.day || '')]; }));
+    const counts = days.map(function (day) { return assignments.filter(function (item) { return String(item.day || '') === day; }).length; });
+    if (entries.length !== 64 || expectedSnapshot.some(function (item) { return !item.fixedPairId || !item.categoryId; }) ||
+        new Set(expectedSnapshot.map(function (item) { return item.fixedPairId; })).size !== 64 ||
+        JSON.stringify(savedSnapshot) !== JSON.stringify(expectedSnapshot) ||
+        days.length !== 2 || assignments.length !== 24 || pairDayById.size !== 24 ||
+        counts[0] !== 16 || counts[1] !== 8 ||
+        (byCategory.get(neonLight) || []).some(function (entry) { return !pairDayById.has(String(entry.fixedPairId || '')); }) ||
+        assignments.some(function (item) { return !(byCategory.get(neonLight) || []).some(function (entry) { return String(entry.fixedPairId || '') === String(item.fixedPairId || ''); }); })) {
+      return { ok:false, reason:'competition-pair-day-plan-invalid' };
+    }
+  }
   if (cfg.formation === 'manual') {
     t.competitionTeams = teams;
     const known = new Set(teams.map(function (team) { return team.id; }));
@@ -429,17 +460,24 @@ function assignCompetitionTeamsAtInitialDraw(t, rawConfig) {
     return 70;
   }
   byCategory.forEach(function (categoryEntries, category) {
-    for (let i = categoryEntries.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      const temp = categoryEntries[i]; categoryEntries[i] = categoryEntries[j]; categoryEntries[j] = temp;
-    }
-    categoryEntries.forEach(function (entry, index) {
-      const team = teams[index % teams.length];
-      const saturation = saturationFor(category);
-      entry.competitionTeamId = team.id;
-      entry.competitionTeamHue = team.hue;
-      entry.competitionTeamSaturation = saturation;
-      entry.competitionTeamColor = 'hsl(' + team.hue + ' ' + saturation + '% 52%)';
+    const strata = dayPlanRequired && category === neonLight
+      ? Array.from(new Set(Array.from(pairDayById.values()))).sort().map(function (day) {
+          return categoryEntries.filter(function (entry) { return pairDayById.get(String(entry.fixedPairId)) === day; });
+        }) : [categoryEntries];
+    strata.forEach(function (group) {
+      for (let i = group.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const temp = group[i]; group[i] = group[j]; group[j] = temp;
+      }
+      group.forEach(function (entry, index) {
+        const team = teams[index % teams.length];
+        const saturation = saturationFor(category);
+        if (dayPlanRequired && category === neonLight) entry.competitionPlayDay = pairDayById.get(String(entry.fixedPairId));
+        entry.competitionTeamId = team.id;
+        entry.competitionTeamHue = team.hue;
+        entry.competitionTeamSaturation = saturation;
+        entry.competitionTeamColor = 'hsl(' + team.hue + ' ' + saturation + '% 52%)';
+      });
     });
   });
   return { ok: true, config: cfg };

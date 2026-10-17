@@ -2764,15 +2764,42 @@ window._setPhaseLateEnrollment = function (tId, mode) {
 };
 
 /* ── Pré-sorteio de competição por times ─────────────────────────────────────
- * A descoberta dos times e confrontos é parte do próprio sorteio. Antes dele a
- * organização pode conferir somente a GRADE (48 duplas, 6 categorias, 8 por
- * categoria), sem revelar uma atribuição parcial que depois mude no servidor.
+ * A descoberta dos times e confrontos é parte do próprio sorteio. A grade
+ * vem das inscrições canônicas: nunca da fotografia legada `inscritos`.
  * A confirmação é efêmera: não grava nem times nem confrontos no torneio. */
 window._teamDrawReviewApproved = window._teamDrawReviewApproved || {};
 window._showTeamCompetitionDrawReview = function (tId, opts) {
     opts = opts || {};
     var t = window._findTournamentById && window._findTournamentById(tId);
     if (!t) return false;
+    if (t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint && !opts._canonicalRosterLoaded) {
+      var rosterDb = window.FirestoreDB;
+      if (!rosterDb || typeof rosterDb.loadCanonicalTournamentRoster !== 'function') return false;
+      // ⛔ Mesmo que o AppStore pareça completo, uma reclassificação na Análise
+      // pode ter ocorrido depois do snapshot. O sorteio relê sempre a fonte
+      // canônica fresca; falha de rede não autoriza voltar ao espelho antigo.
+      rosterDb.loadCanonicalTournamentRoster(tId).then(function (raw) {
+        var roster = raw && raw.data && Array.isArray(raw.data.participants) ? raw.data : raw;
+        if (!roster || !Array.isArray(roster.participants) ||
+            Number(roster.registrationCount) !== Number(t.canonicalRegistrationMigration.registrationCount)) {
+          throw new Error('Recibo e inscrições canônicas divergentes.');
+        }
+        var labels = {};
+        (roster.categoryDefinitions || []).forEach(function (definition) {
+          if (definition && definition.id && definition.label) labels[String(definition.id)] = String(definition.label);
+        });
+        t.participants = roster.participants.map(function (entry) {
+          var copy = Object.assign({}, entry), label = labels[String(copy.categoryId || '')];
+          if (label) { copy.category = label; copy.categories = [label]; }
+          return copy;
+        });
+        window._showTeamCompetitionDrawReview(tId, Object.assign({}, opts, { _canonicalRosterLoaded:true }));
+      }).catch(function (error) {
+        if (typeof window._drawBtnDone === 'function') window._drawBtnDone();
+        if (window.showNotification) window.showNotification('Sorteio bloqueado', (error && error.message) || 'Não foi possível confirmar o elenco canônico.', 'error');
+      });
+      return true;
+    }
     var core = window.ScoreplaceTeamCompetition;
     var rawCompetition = core && core.configurationForTournament
       ? core.configurationForTournament(t)
@@ -2849,8 +2876,30 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
         var category = String(found[0] || entry.category || '').trim();
         countByCategory[category] = (countByCategory[category] || 0) + 1;
     });
-    var expectedPairs = categories.length * cfg.teamCount;
-    var valid = entries.length === expectedPairs && entries.every(isPair) && categories.length > 0 && categories.every(function (category) { return countByCategory[category] === cfg.teamCount; });
+    var quotas = cfg.schedule && cfg.schedule.pairsPerTeamByCategory || {};
+    var neonQuota = categories.length === 6 && cfg.teamCount === 8 &&
+      categories.some(function (category) { return /^Fem Light$/i.test(category) && countByCategory[category] === 24; });
+    // ⛔ A capacidade declarada não troca silenciosamente a regra de outro
+    // torneio. O Neon com 64 duplas exige o mapa 3/1, que será persistido no
+    // mesmo plano confirmado; nenhum jogo pode nascer só por passar este gate.
+    var required = function (category) { return neonQuota && /^Fem Light$/i.test(category) ? 3 : Math.max(1, Number(quotas[category]) || 1); };
+    var expectedPairs = categories.reduce(function (sum, category) { return sum + cfg.teamCount * required(category); }, 0);
+    var invalidCategories = categories.filter(function (category) { return countByCategory[category] !== cfg.teamCount * required(category); });
+    var valid = entries.length === expectedPairs && entries.every(isPair) && categories.length > 0 && !invalidCategories.length;
+    var lightCategory = categories.find(function (category) { return /^Fem Light$/i.test(category); });
+    var lightPairs = neonQuota ? entries.filter(function (entry) { return String(entry.category || '') === lightCategory; }) : [];
+    var pairIds = entries.map(function (entry) { return String(entry.fixedPairId || ''); });
+    if (neonQuota && (pairIds.some(function (id) { return !id; }) || new Set(pairIds).size !== entries.length || days.length !== 2)) valid = false;
+    var savedPairDays = {};
+    ((cfg.schedule && cfg.schedule.pairDayAssignments) || []).forEach(function (item) {
+      if (item && item.fixedPairId) savedPairDays[String(item.fixedPairId)] = String(item.day || '');
+    });
+    var pairDayHtml = neonQuota ? '<section style="margin:12px 0;border:1px solid #86efac;border-radius:12px;padding:12px;"><h3 style="margin:0 0 6px;color:#86efac;">Fem Light: 2 duplas/time na quinta, 1 na sexta</h3><p style="font-size:.78rem;color:#cbd5e1;">Confira o dia de cada dupla. A sugestão usa a ordem original das inscrições; a confirmação grava a identidade da dupla, não a posição.</p><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:6px;">' + lightPairs.map(function (entry) {
+      var id = String(entry.fixedPairId || ''), seq = Number(entry.p1Seq || 0);
+      var suggested = savedPairDays[id] || (seq >= 1 && seq <= 32 ? days[0] : days[1]);
+      var label = String(entry.p1Name || entry.p1Uid || 'Atleta') + ' + ' + String(entry.p2Name || entry.p2Uid || 'Atleta');
+      return '<label style="display:grid;gap:3px;padding:6px;border:1px solid #475569;border-radius:6px;font-size:.75rem;"><span>' + safe(label) + '</span><select data-pair-day="' + safe(id) + '">' + days.map(function (day) { return '<option value="' + safe(day) + '"' + (day === suggested ? ' selected' : '') + '>' + safe(dayLabel(day)) + '</option>'; }).join('') + '</select></label>';
+    }).join('') + '</div><p style="font-size:.75rem;color:#fbbf24;">É obrigatório confirmar exatamente 16 duplas na quinta e 8 na sexta; não há jogos entre os dois grupos.</p></section>' : '';
     var old = document.getElementById('team-draw-review-panel'); if (old) old.remove();
     var overlay = document.createElement('div');
     overlay.id = 'team-draw-review-panel';
@@ -2914,8 +2963,8 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
         '<section style="border:1px solid rgba(56,189,248,.38);border-radius:12px;padding:13px;">' +
           '<h3 style="font-size:.94rem;margin:0 0 4px;color:#7dd3fc;">📍 Quadras</h3><p style="font-size:.75rem;color:#cbd5e1;margin:0 0 9px;line-height:1.3;">Arraste para definir a prioridade.</p><div data-team-court-list style="display:grid;gap:6px;">' + courtPriorityCards + '</div>' +
         '</section>' +
-      '</div>' +
-      (!valid ? '<p style="margin:0 0 14px;color:var(--sp-c-f87171,#f87171);font-weight:700;">O sorteio está bloqueado: são necessárias ' + expectedPairs + ' duplas já formadas, com ' + cfg.teamCount + ' em cada categoria.</p>' : '') +
+      '</div>' + pairDayHtml +
+      (!valid ? '<p style="margin:0 0 14px;color:var(--sp-c-f87171,#f87171);font-weight:700;">O sorteio está bloqueado: são necessárias ' + expectedPairs + ' duplas já formadas. Categorias divergentes: ' + safe(invalidCategories.join(', ') || 'total de inscritos') + '.</p>' : '') +
       '<div style="display:flex;justify-content:flex-end;"><button type="button" id="team-draw-confirm" class="btn btn-primary"' + (valid ? '' : ' disabled aria-disabled="true" style="opacity:.45;cursor:not-allowed;"') + '>🎲 Sortear times e confrontos</button></div></section>';
     document.body.appendChild(overlay);
     var close = function () { overlay.remove(); };
@@ -3024,6 +3073,10 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
         var validCourtOrder = selectedCourtOrder.length === courtNames.length && new Set(selectedCourtOrder).size === courtNames.length;
         var scheduledCategories = {}; slots.forEach(function (slot) { scheduledCategories[slot.category] = true; });
         var validSlots = slots.length >= categories.length && categories.every(function (category) { return scheduledCategories[category]; }) && slots.every(function (slot) { return days.indexOf(slot.day) >= 0; });
+        if (neonQuota) validSlots = validSlots && days.every(function (day) { return slots.some(function (slot) { return slot.category === lightCategory && slot.day === day; }); }) && slots.every(function (slot) {
+          if (slot.category === lightCategory) return true;
+          return slot.day === (/^Fem /i.test(slot.category) ? days[0] : days[1]);
+        });
         if (!validSlots) { if (window.showNotification) window.showNotification('Agenda incompleta', 'Arraste cada categoria para pelo menos um dia do torneio.', 'error'); return; }
         if (selectedDrawMode !== 'structured' && selectedDrawMode !== 'free') { if (window.showNotification) window.showNotification('Formato não escolhido', 'Escolha sorteio estruturado ou livre antes de continuar.', 'error'); return; }
         if (!validWindow) { if (window.showNotification) window.showNotification('Horário inválido', 'Em cada dia, o fim do evento deve ser posterior ao início.', 'error'); return; }
@@ -3037,7 +3090,17 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
         if (!db || typeof db._callFn !== 'function') { confirm.disabled = false; confirm.textContent = '🎲 Sortear times e confrontos'; if (window.showNotification) window.showNotification('Agenda não salva', 'Conexão indisponível.', 'error'); return; }
         var nextCompetition = JSON.parse(JSON.stringify(cfg));
         nextCompetition.schedule = Object.assign({}, nextCompetition.schedule || {}, { enabled:true, mode:selectedDrawMode, modeConfirmed:true });
-        db._callFn('updateTournamentConfiguration', { tournamentId:String(tId), patch:{ categorySchedule:{ version:1, confirmed:true, slots:slots }, scheduleWindow:{ version:1, days:scheduleWindowDays }, courtOrder:selectedCourtOrder, teamCompetition:nextCompetition } }).then(function () {
+        if (neonQuota) {
+          var pairDayAssignments = Array.prototype.map.call(overlay.querySelectorAll('[data-pair-day]'), function (input) { return { fixedPairId:input.getAttribute('data-pair-day'), day:input.value }; });
+          if (pairDayAssignments.length !== 24 || pairDayAssignments.filter(function (item) { return item.day === days[0]; }).length !== 16 || pairDayAssignments.filter(function (item) { return item.day === days[1]; }).length !== 8) {
+            if (window.showNotification) window.showNotification('Dias das duplas inválidos', 'Confirme 16 Fem Light na quinta e 8 na sexta.', 'error'); return;
+          }
+          var rosterSnapshot = entries.map(function (entry) { return { fixedPairId:String(entry.fixedPairId), categoryId:String(entry.categoryId || '') }; }).sort(function (a, b) { return a.fixedPairId.localeCompare(b.fixedPairId); });
+          nextCompetition.schedule.pairsPerTeamByCategory = categories.reduce(function (out, category) { out[category] = required(category); return out; }, {});
+          nextCompetition.schedule.pairDayAssignments = pairDayAssignments;
+          nextCompetition.schedule.rosterSnapshot = rosterSnapshot;
+        }
+        db._callFn('updateTournamentConfiguration', { tournamentId:String(tId), sandbox:typeof db._ehSandbox === 'function' && db._ehSandbox(tId), patch:{ categorySchedule:{ version:1, confirmed:true, slots:slots }, scheduleWindow:{ version:1, days:scheduleWindowDays }, courtOrder:selectedCourtOrder, teamCompetition:nextCompetition } }).then(function () {
           t.categorySchedule = { version:1, confirmed:true, slots:slots };
           t.scheduleWindow = { version:1, days:scheduleWindowDays };
           t.courtOrder = selectedCourtOrder;
@@ -3379,7 +3442,7 @@ window.generateDrawFunction = function (tId) {
         // Some sozinho no hashchange do #bracket (sucesso) ou no _hideLoading do catch (erro).
         if (typeof window._showLoading === 'function') window._showLoading('🎾 Sorteando…');
         var _doDrawDispatch = function () {
-        window._callDrawRound({ tournamentId: String(tId), allowRedraw: _redraw, decisions: _decisions }).then(function (_res) {
+        window._callDrawRound({ tournamentId: String(tId), sandbox:!!(window.FirestoreDB && typeof window.FirestoreDB._ehSandbox === 'function' && window.FirestoreDB._ehSandbox(tId)), allowRedraw: _redraw, decisions: _decisions }).then(function (_res) {
             if (window._dtrace) window._dtrace('cf:ok', { matchCount: (_res && _res.data && _res.data.matchCount) });
             var d = (_res && _res.data) || {};
             if (!d.ok || !d.tournament) throw new Error('resposta inválida do servidor');

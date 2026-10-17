@@ -83,13 +83,14 @@ namespace ScoreplaceRegistrationRoster {
     else { entry.manualParticipantId = person.manualParticipantId as string; entry.displayName = person.name; entry.name = person.name; }
     return entry;
   }
-  function pairEntry(categoryId: string, first: Person, second: Person): Record<string, unknown> {
+  function pairEntry(categoryId: string, pairId: string, first: Person, second: Person): Record<string, unknown> {
     // A dupla é uma unidade visual, mas cada integrante continua tendo o seu
     // número de inscrição. Sem carregar a sequência para a projeção legada, a
     // tela precisava recriá-la pela posição do array (que o Firestore não
     // garante) e os pares apareciam embaralhados a cada leitura.
     const entry: Record<string, unknown> = {
       categoryId, category: categoryId, categories: [categoryId], fixedPair: true,
+      fixedPairId: pairId,
       p1Seq: first.order.rank,
       p2Seq: second.order.rank,
     };
@@ -134,7 +135,7 @@ namespace ScoreplaceRegistrationRoster {
       const group = pairs.get(item.pairKey as string) as { categoryId: string; people: Person[]; order: OrderKey };
       if (group.people.length !== 2 || group.people[0].key === group.people[1].key) throw new Error('dupla canônica incompleta ou inválida');
       group.people.sort((a, b) => compareOrder(a.order, b.order));
-      entries.push(pairEntry(group.categoryId, group.people[0], group.people[1]));
+      entries.push(pairEntry(group.categoryId, (item.pairKey as string).split('\u0000')[0], group.people[0], group.people[1]));
     });
     return entries;
   }

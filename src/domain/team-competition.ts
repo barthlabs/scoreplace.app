@@ -38,6 +38,8 @@ namespace ScoreplaceTeamCompetition {
       pairsPerTeamByCategory: Record<string, number>;
       /** Quantos jogos cada dupla disputa em cada categoria. */
       gamesPerPairByCategory: Record<string, number>;
+      pairDayAssignments: Array<{ fixedPairId: string; day: string }>;
+      rosterSnapshot: Array<{ fixedPairId: string; categoryId: string }>;
       mode: ScheduleMode;
       modeConfirmed?: boolean;
     };
@@ -165,6 +167,12 @@ namespace ScoreplaceTeamCompetition {
         gamesPerTeam: gamesPerPair,
         pairsPerTeamByCategory,
         gamesPerPairByCategory,
+        // Identidades canônicas, não índices do espelho: preservam o dia de
+        // cada dupla entre reloads e permitem ao servidor detectar roster velho.
+        pairDayAssignments: Array.isArray(schedule.pairDayAssignments)
+          ? schedule.pairDayAssignments.map(item => ({ fixedPairId:text(record(item).fixedPairId), day:text(record(item).day) })) : [],
+        rosterSnapshot: Array.isArray(schedule.rosterSnapshot)
+          ? schedule.rosterSnapshot.map(item => ({ fixedPairId:text(record(item).fixedPairId), categoryId:text(record(item).categoryId) })) : [],
         mode: schedule.mode === 'structured' ? 'structured' : 'free',
         modeConfirmed: schedule.modeConfirmed === true,
       },

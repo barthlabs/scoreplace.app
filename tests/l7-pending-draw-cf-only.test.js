@@ -40,6 +40,15 @@ ok(!d.includes('!cfg.schedule || !cfg.schedule.enabled')&&d.includes('if (!cfg |
 ok(tournamentView.includes('var _teamPanelOpened = false;')&&tournamentView.includes('if (_teamPanelOpened) return;')&&tournamentView.includes('Configuração do sorteio indisponível'),'Falha ao abrir a tela obrigatória restaura o botão e explica o erro; nunca retorna silenciosamente');
 ok(d.includes('var _openedTeamReview = false;')&&d.includes('if (_openedTeamReview) return;')&&d.includes("window.showNotification('Configuração do sorteio indisponível'"),'Atalhos também não iniciam sorteio por times se a tela obrigatória não abrir');
 ok(agenda.includes('match.scheduledGameNumber = scheduledGameNumber.get(item.matchId)')&&agenda.includes('courtRank'),'Agenda do rascunho numera jogos continuamente pela ordem de horário e quadra, preservando o contrato da prévia');
+ok(['resolvePendingDraw','setPendingInitialSchedule','getPendingInitialDraw','getPendingDrawReviewState'].every(function (name) {
+  const start=i.indexOf('exports.'+name+' = onCall');
+  const next=i.indexOf('\nexports.',start+1);
+  const section=i.slice(start,next<0?undefined:next);
+  return section.includes("sandbox?'sandboxes':'tournaments'") && section.includes("tId.startsWith('sb_') !== sandbox");
+})&&b.includes('sandbox:String(tId).indexOf(\'sb_\')===0'),'revisão, agenda e publicação do sandbox usam só o documento privado');
+ok(agenda.includes('_scheduleLocalDay(item.scheduledAt) !== requiredDay')&&
+  fs.readFileSync('functions/index.js','utf8').includes('_scheduleDayInSaoPaulo(it.scheduledAt) !== requiredDay'),
+  'agenda privada e agenda operacional recusam trocar quinta por sexta');
 const pendingScheduleStart=b.indexOf('window._openPendingInitialSchedule = function');
 const pendingSchedule=b.slice(pendingScheduleStart, b.indexOf('window._rememberPendingDrawMarker = function', pendingScheduleStart));
 ok(!/if \(!latest\.cabe\)[\s\S]{0,220}?return;/.test(pendingSchedule)&&pendingSchedule.includes('Publicando horários estimados…')&&pendingSchedule.includes("Sorteio não publicado"),'excesso de janela mantém todos os jogos zebrado e não bloqueia a publicação; erro de publicação volta ao botão com mensagem');

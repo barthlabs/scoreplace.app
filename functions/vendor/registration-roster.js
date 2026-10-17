@@ -82,13 +82,14 @@ var ScoreplaceRegistrationRoster;
         }
         return entry;
     }
-    function pairEntry(categoryId, first, second) {
+    function pairEntry(categoryId, pairId, first, second) {
         // A dupla é uma unidade visual, mas cada integrante continua tendo o seu
         // número de inscrição. Sem carregar a sequência para a projeção legada, a
         // tela precisava recriá-la pela posição do array (que o Firestore não
         // garante) e os pares apareciam embaralhados a cada leitura.
         const entry = {
             categoryId, category: categoryId, categories: [categoryId], fixedPair: true,
+            fixedPairId: pairId,
             p1Seq: first.order.rank,
             p2Seq: second.order.rank,
         };
@@ -148,7 +149,7 @@ var ScoreplaceRegistrationRoster;
             if (group.people.length !== 2 || group.people[0].key === group.people[1].key)
                 throw new Error('dupla canônica incompleta ou inválida');
             group.people.sort((a, b) => compareOrder(a.order, b.order));
-            entries.push(pairEntry(group.categoryId, group.people[0], group.people[1]));
+            entries.push(pairEntry(group.categoryId, item.pairKey.split('\u0000')[0], group.people[0], group.people[1]));
         });
         return entries;
     }

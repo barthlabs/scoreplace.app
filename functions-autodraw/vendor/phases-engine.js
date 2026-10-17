@@ -1730,26 +1730,36 @@
         groupCats.forEach(function (cat, ci) {
           var catPool = pool.filter(function (entry) { return String(ctx.catOf(entry) || '') === String(cat); });
           if (!catPool.length) return;
+          // ⛔ Fem Light do Neon tem a mesma categoria para pontos, mas dois
+          // estratos de jogo: duplas 1/2 de cada time na quinta e dupla 3 na
+          // sexta. Particionar antes de criar grupos impede confronto cruzado.
+          var allHaveDay = catPool.every(function (entry) { return !!entry.competitionPlayDay; });
+          var playDays = allHaveDay ? Array.from(new Set(catPool.map(function (entry) { return String(entry.competitionPlayDay); }))).sort() : [];
+          var strata = playDays.length > 1 ? playDays.map(function (day) {
+            return { day:day, players:catPool.filter(function (entry) { return entry.competitionPlayDay === day; }) };
+          }) : [{ day:playDays[0] || '', players:catPool }];
+          strata.forEach(function (stratum, di) {
           var groupCfg = Object.assign({}, cfg);
           // A grade por times define quantos times cabem em cada grupo. Com oito
           // times e oito por grupo (Neon), portanto, há uma única rodada de grupos
           // por categoria — quatro rodadas, quatro jogos por time.
           var tc = cfg.teamCompetition;
           if (tc && tc.enabled && tc.schedule && tc.schedule.enabled) {
-            groupCfg.gruposCount = Math.max(1, Math.ceil(catPool.length / Math.max(2, Number(tc.schedule.teamsPerGroup) || catPool.length)));
+            groupCfg.gruposCount = Math.max(1, Math.ceil(stratum.players.length / Math.max(2, Number(tc.schedule.teamsPerGroup) || stratum.players.length)));
           }
           // A agenda pode variar por categoria; a identidade precisa chegar ao
           // gerador antes que ele selecione a grade parcial de confrontos.
           groupCfg.category = cat;
-          var one = genGroupsFromPool(catPool, groupCfg, idPrefix + '-c' + ci);
-          (one.matches || []).forEach(function (match) { match.category = cat; });
+          var one = genGroupsFromPool(stratum.players, groupCfg, idPrefix + '-c' + ci + '-d' + di);
+          (one.matches || []).forEach(function (match) { match.category = cat; if (stratum.day) match.requiredDay = stratum.day; });
           (one.groups || []).forEach(function (group) {
             group.category = cat;
-            group.name = String(cat) + ' · ' + String(group.name || 'Grupo');
+            group.name = String(cat) + (stratum.day ? ' · ' + stratum.day : '') + ' · ' + String(group.name || 'Grupo');
           });
           allGroupMatches = allGroupMatches.concat(one.matches || []);
           allGroups = allGroups.concat(one.groups || []);
           groupWaitlist = groupWaitlist.concat(one.waitlist || []);
+          });
         });
         built = { matches: allGroupMatches, groups: allGroups };
         if (groupWaitlist.length) built.waitlist = groupWaitlist;

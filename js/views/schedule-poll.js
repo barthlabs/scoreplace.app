@@ -876,9 +876,14 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
         var f = (m.phaseIndex != null) ? m.phaseIndex : (t.currentPhaseIndex || 0);
         var r = (m.round == null) ? 0 : m.round;
         var categoria = _schCategoriaDoJogo(m), agenda = agendaCategorias[categoria];
-        var k = (agenda ? categoria : '') + '|' + f + '|' + r;
+        var requiredDay = String(m.requiredDay || '').slice(0, 10);
+        var fixedSlot = requiredDay && agenda && agenda.find(function (slot) { return slot.day === requiredDay; });
+        // ⛔ A dupla Fem Light da sexta jamais pode migrar para quinta por
+        // balanceamento automático de rodadas ou janela curta.
+        if (requiredDay && !fixedSlot) throw new Error('Dia obrigatório da partida ausente da agenda.');
+        var k = (agenda ? categoria : '') + '|' + f + '|' + r + '|' + requiredDay;
         if (!porChave[k]) {
-          porChave[k] = { fase:f, rodada:r, categoria:categoria, agendas:agenda || null, agenda:null, ms:[] };
+          porChave[k] = { fase:f, rodada:r, categoria:categoria, agendas:agenda || null, agenda:fixedSlot || null, requiredDay:requiredDay, ms:[] };
           chaves.push(k);
         }
         porChave[k].ms.push(m);
@@ -886,7 +891,7 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
       // Distribui blocos consecutivos de cada categoria pelos dias escolhidos.
       // Ex.: 4 rodadas em dois dias = R1/R2 no primeiro, R3/R4 no segundo.
       var keysByCategory = {};
-      chaves.forEach(function (key) { var block = porChave[key], name = block.categoria; if (block.agendas && name) (keysByCategory[name] || (keysByCategory[name] = [])).push(key); });
+      chaves.forEach(function (key) { var block = porChave[key], name = block.categoria; if (block.agendas && name && !block.requiredDay) (keysByCategory[name] || (keysByCategory[name] = [])).push(key); });
       Object.keys(keysByCategory).forEach(function (category) {
         var keys = keysByCategory[category];
         keys.sort(function (a, b) { var A = porChave[a], B = porChave[b]; return (A.fase - B.fase) || (A.rodada - B.rodada); });

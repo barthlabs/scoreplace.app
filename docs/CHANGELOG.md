@@ -1,3 +1,9 @@
+## 2.4.79 — 16/out/2026 (sorteio Neon no sandbox)
+
+- O sorteio por equipes aceita o elenco canônico de 128 pessoas/64 duplas: 24 Feminino Light e oito duplas em cada uma das outras cinco categorias. O organizador confirma quais 16 duplas Light jogam na quinta-feira e quais oito jogam na sexta-feira antes do sorteio; cada time recebe duas na quinta e uma na sexta.
+- A configuração, o sorteio e a revisão pendente usam a coleção privada do sandbox quando ele está ativo. A distribuição por time e dia persiste separadamente das inscrições e só é reaplicada enquanto a identidade e a categoria da dupla coincidirem. Agenda e servidor recusam agendamento fora do dia atribuído.
+- Nenhum sorteio foi executado nesta publicação. O torneio original e as inscrições não foram alterados.
+
 ## 2.4.76 — 16/out/2026 (preparação de jogos com adversário pendente)
 
 - Propor datas e Criar grupo dos jogos usam os mesmos botões ativos da chave também quando apenas um lado está definido. A data só pode ser confirmada por consenso depois de conhecidos os dois lados.

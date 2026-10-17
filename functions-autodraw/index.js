@@ -16,6 +16,7 @@ const _matchHistory = require('./match-history-core.js');
 const _rosterState = require('./roster-state-core.js');
 const _tSplit = require('./vendor/tournament-split-core.js');   // fonte única: js/views/ (copy-vendor)
 const _registrationRoster = require('./vendor/registration-roster.js');
+const _competitionAssignments = require('./competition-assignment-core.js');
 // fonte única: functions/match-roster.js (copy-vendor) — monta o subdoc de resultado,
 // incluindo o carregar-adiante do `replay`, que o servidor não sabe recalcular.
 let _mrEspelho = null;
@@ -725,10 +726,44 @@ async function _leTorneio(tx, ref, tId) {
     }
     try { montado.participants = _registrationRoster.rosterFromRegistrations(registrations); }
     catch (error) { throw new Error('[canonical-registration] elenco inválido: ' + error.message); }
+    const labels = new Map((Array.isArray(montado.categoryDefinitions) ? montado.categoryDefinitions : [])
+      .filter(def => def && def.id && def.label).map(def => [String(def.id), String(def.label)]));
+    montado.participants = montado.participants.map(entry => {
+      const label = labels.get(String(entry.categoryId || ''));
+      return label ? Object.assign({}, entry, { category:label, categories:[label] }) : entry;
+    });
+    montado.participants = _competitionAssignments.overlay(montado.participants, montado.competitionPairAssignments);
     montado.participants = _appendPlaceholderReservations(montado.participants, montado);
   }
   montado.id = tId;
   return montado;
+}
+
+// ⛔ Sandbox é um documento privado, não um torneio com prefixo diferente.
+// Toda mutação deve validar o dono E a autorização atual no original dentro da
+// própria transação. Nunca procurar em tournaments se sandboxes falhar.
+async function _assertSandboxDrawOwner(tx, snap, uid) {
+  const sb = snap.exists ? snap.data() || {} : {};
+  if (sb.isSandbox !== true || sb.sbState !== 'ready' ||
+      sb.notificationsMuted !== true || !String(sb.sandboxOf || '') ||
+      sb.sandboxOwnerUid !== uid) {
+    throw new HttpsError('not-found', 'Torneio não encontrado.');
+  }
+  const originalSnap = await tx.get(db.collection('tournaments').doc(String(sb.sandboxOf)));
+  const original = originalSnap.exists ? originalSnap.data() || {} : {};
+  const cohost = Array.isArray(original.coHosts) && original.coHosts.some(c =>
+    c && c.uid === uid && (c.status === 'active' || c.status === 'accepted'));
+  if (!originalSnap.exists || (!_isTournamentAdmin(original, uid) && !cohost)) {
+    throw new HttpsError('not-found', 'Torneio não encontrado.');
+  }
+}
+
+function _scheduleLocalDay(iso) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone:'America/Sao_Paulo', year:'numeric', month:'2-digit', day:'2-digit'
+  }).formatToParts(new Date(iso));
+  const value = type => (parts.find(part => part.type === type) || {}).value;
+  return `${value('year')}-${value('month')}-${value('day')}`;
 }
 
 // O marcador de revisão fica no documento do torneio para o motor pausar e a
@@ -819,7 +854,7 @@ function _consumirSlotAgendado(t, nowMs, tz) {
  * estrutura planejada para que todas as rodadas apareçam na chave.
  */
 const _CAMPOS_RASCUNHO_SORTEIO_INICIAL = [
-  'participants', 'competitionTeams', 'teamOrigins',
+  'participants', 'competitionTeams', 'competitionPairAssignments', 'teamOrigins',
   'matches', 'groups', 'rounds', 'phaseGroups', 'phaseRounds',
   'standings', 'sitOutHistory', 'opponentHistory', 'monarchWaitlist',
   'waitlist', 'standbyParticipants', 'checkedIn', 'absent',
@@ -1226,6 +1261,8 @@ exports.drawRound = onCall(async (request) => {
 
   const tId = String((request.data && request.data.tournamentId) || '').trim();
   if (!tId) throw new HttpsError('invalid-argument', 'tournamentId é obrigatório.');
+  const sandbox = request.data && request.data.sandbox === true;
+  if (sandbox !== tId.startsWith('sb_')) throw new HttpsError('not-found', 'Torneio não encontrado.');
   const allowRedraw = !!(request.data && request.data.allowRedraw);
   // Pacote de decisões do pré-sorteio (o organizador ESCOLHEU nos painéis; aqui a gente
   // APLICA, com as mesmas funções do cliente, sobre o doc fresco). Ver
@@ -1237,12 +1274,16 @@ exports.drawRound = onCall(async (request) => {
     throw _drawFail('internal', 'Motor de sorteio indisponível no servidor.', { tId });
   }
 
-  const ref = db.collection('tournaments').doc(tId);
+  const ref = db.collection(sandbox ? 'sandboxes' : 'tournaments').doc(tId);
 
   // Leitura FORA da transação só pra (a) falhar cedo em authz e (b) pré-carregar os nomes
   // vivos (N reads em users/ — transação exige todo read ANTES de qualquer write, e nome é
   // dado advisory de display; o autoDraw faz igual).
-  const pre = await ref.get();
+  const pre = sandbox ? await db.runTransaction(async tx => {
+    const snap = await tx.get(ref);
+    await _assertSandboxDrawOwner(tx, snap, uid);
+    return snap;
+  }) : await ref.get();
   if (!pre.exists) throw _drawFail('not-found', 'Torneio não encontrado.', { tId, uid });
   if (!_isTournamentAdmin(pre.data(), uid)) {
     const _p = pre.data();
@@ -1269,6 +1310,7 @@ exports.drawRound = onCall(async (request) => {
      * cada tentativa produzir espelho e plano diferentes. */
     const _agoraIsoTx = new Date().toISOString();
     out = await db.runTransaction(async (tx) => {
+    if (sandbox) await _assertSandboxDrawOwner(tx, await tx.get(ref), uid);
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     const _tAntes = _antesDoMotor(t);
@@ -1345,6 +1387,13 @@ exports.drawRound = onCall(async (request) => {
     const _tcCfg = _tcCore && typeof _tcCore.configurationForTournament === 'function'
       ? _tcCore.configurationForTournament(t)
       : (t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition || null);
+    if (t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint &&
+        _tcCfg && _tcCfg.enabled && Array.isArray(t.competitionTeams) && t.competitionTeams.length) {
+      // A fronteira canônica restaura participants antes da gravação. Persistir
+      // somente a atribuição operacional, por fixedPairId, no rascunho privado;
+      // registrations continua a única fonte de nomes/categorias/identidade.
+      t.competitionPairAssignments = _competitionAssignments.snapshot(t.participants);
+    }
     const _stageInitial = !hadBracket && (t.stagedDraw === true || !!(_tcCfg && _tcCfg.enabled));
     if (_stageInitial) {
       const tEspera = JSON.parse(JSON.stringify(_tAntes));
@@ -4421,6 +4470,8 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
   const uid = request.auth && request.auth.uid;
   const data = request.data || {};
   const tId = String(data.tournamentId || '').trim();
+  const sandbox = data.sandbox === true;
+  if (sandbox !== tId.startsWith('sb_')) throw new HttpsError('not-found', 'Torneio não encontrado.');
   const raw = data.patch;
   if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
   if (!tId || !raw || typeof raw !== 'object' || Array.isArray(raw)) {
@@ -4444,8 +4495,9 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
   const _policyConfig = require('./elimination-policy-config-core');
   const bytes = Buffer.byteLength(JSON.stringify(patch), 'utf8');
   if (bytes > 96 * 1024) throw new HttpsError('invalid-argument', 'Configuração grande demais.');
-  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  const ref = db.collection(sandbox ? 'sandboxes' : 'tournaments').doc(tId), agoraIso = new Date().toISOString();
   return db.runTransaction(async tx => {
+    if (sandbox) await _assertSandboxDrawOwner(tx, await tx.get(ref), uid);
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização atualiza a configuração.', { tId, uid });
@@ -4766,10 +4818,13 @@ exports.resolvePendingDraw = onCall(async (request) => {
   const uid=request.auth && request.auth.uid;
   if (!uid) throw new HttpsError('unauthenticated','Entre na sua conta.');
   const tId=String((request.data&&request.data.tournamentId)||'').trim();
+  const sandbox=request.data&&request.data.sandbox===true;
   const action=String((request.data&&request.data.action)||'').trim();
   if (!tId || !['publish','annul'].includes(action)) throw new HttpsError('invalid-argument','Ação de sorteio inválida.');
-  const ref=db.collection('tournaments').doc(tId), agoraIso=new Date().toISOString();
+  if (tId.startsWith('sb_') !== sandbox) throw new HttpsError('not-found','Torneio não encontrado.');
+  const ref=db.collection(sandbox?'sandboxes':'tournaments').doc(tId), agoraIso=new Date().toISOString();
   return db.runTransaction(async tx=>{
+    if(sandbox) await _assertSandboxDrawOwner(tx,await tx.get(ref),uid);
     const t=await _leTorneio(tx,ref,tId); if(!t) throw new HttpsError('not-found','Torneio não encontrado.');
     if(!_isTournamentAdmin(t,uid)) throw _drawFail('permission-denied','Só a organização altera o sorteio em revisão.',{tId,uid});
     let pd=t.pendingDraw; if(!pd) return {ok:true,changed:false};
@@ -4847,11 +4902,13 @@ exports.setPendingInitialSchedule = onCall(async (request) => {
   const uid = request.auth && request.auth.uid;
   const data = request.data || {};
   const tId = String(data.tournamentId || '').trim();
+  const sandbox = data.sandbox === true;
   const raw = Array.isArray(data.jogos) ? data.jogos : null;
   if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
   if (!tId || !raw || !raw.length || raw.length > 300) {
     throw new HttpsError('invalid-argument', 'Agenda do rascunho inválida.');
   }
+  if (tId.startsWith('sb_') !== sandbox) throw new HttpsError('not-found','Torneio não encontrado.');
   const itens = raw.map((item) => {
     if (!item || item.matchId == null) throw new HttpsError('invalid-argument', 'Cada jogo precisa de identidade.');
     const matchId = String(item.matchId);
@@ -4868,8 +4925,9 @@ exports.setPendingInitialSchedule = onCall(async (request) => {
   if (new Set(itens.map((item) => item.matchId)).size !== itens.length) {
     throw new HttpsError('invalid-argument', 'Há jogo repetido na agenda.');
   }
-  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  const ref = db.collection(sandbox?'sandboxes':'tournaments').doc(tId), agoraIso = new Date().toISOString();
   return db.runTransaction(async (tx) => {
+    if (sandbox) await _assertSandboxDrawOwner(tx, await tx.get(ref), uid);
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização reorganiza este rascunho.', { tId, uid });
@@ -4887,6 +4945,14 @@ exports.setPendingInitialSchedule = onCall(async (request) => {
     if (itens.length !== byId.size || itens.some((item) => !byId.has(item.matchId))) {
       throw new HttpsError('invalid-argument', 'A agenda precisa cobrir exatamente os jogos do rascunho.');
     }
+    // ⛔ Uma dupla da sexta não pode receber horário de quinta (ou vice-versa),
+    // inclusive quando a agenda é reordenada na prévia antes da publicação.
+    itens.forEach((item) => {
+      const requiredDay = String(byId.get(item.matchId).requiredDay || '');
+      if (requiredDay && _scheduleLocalDay(item.scheduledAt) !== requiredDay) {
+        throw new HttpsError('failed-precondition', `Jogo ${item.matchId} deve ocorrer em ${requiredDay}.`);
+      }
+    });
     const antes = _antesDoMotor(t);
     const courtNames = Array.isArray(t.courtNames) ? t.courtNames.filter(Boolean).map(String) : [];
     const courtCount = Math.max(1, Number.parseInt(t.courtCount, 10) || courtNames.length || 1);
@@ -4933,10 +4999,13 @@ exports.setPendingInitialSchedule = onCall(async (request) => {
 exports.getPendingInitialDraw = onCall(async (request) => {
   const uid = request.auth && request.auth.uid;
   const tId = String((request.data && request.data.tournamentId) || '').trim();
+  const sandbox = request.data && request.data.sandbox === true;
   if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
   if (!tId) throw new HttpsError('invalid-argument', 'Torneio obrigatório.');
-  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  if (tId.startsWith('sb_') !== sandbox) throw new HttpsError('not-found','Torneio não encontrado.');
+  const ref = db.collection(sandbox?'sandboxes':'tournaments').doc(tId), agoraIso = new Date().toISOString();
   return db.runTransaction(async (tx) => {
+    if (sandbox) await _assertSandboxDrawOwner(tx, await tx.get(ref), uid);
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização vê este rascunho.', { tId, uid });
@@ -4964,12 +5033,24 @@ exports.getPendingInitialDraw = onCall(async (request) => {
 exports.getPendingDrawReviewState = onCall(async (request) => {
   const uid = request.auth && request.auth.uid;
   const tId = String((request.data && request.data.tournamentId) || '').trim();
+  const sandbox = request.data && request.data.sandbox === true;
   if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
   if (!tId) throw new HttpsError('invalid-argument', 'Torneio obrigatório.');
-  const ref = db.collection('tournaments').doc(tId);
+  if (tId.startsWith('sb_') !== sandbox) throw new HttpsError('not-found','Torneio não encontrado.');
+  const ref = db.collection(sandbox?'sandboxes':'tournaments').doc(tId);
   const snap = await ref.get();
   if (!snap.exists) throw new HttpsError('not-found', 'Torneio não encontrado.');
   const t = Object.assign({ id:tId }, snap.data() || {});
+  if (sandbox) {
+    const originalSnap = await db.collection('tournaments').doc(String(t.sandboxOf || '')).get();
+    const original = originalSnap.exists ? originalSnap.data() || {} : {};
+    const cohost = Array.isArray(original.coHosts) && original.coHosts.some(c =>
+      c && c.uid === uid && (c.status === 'active' || c.status === 'accepted'));
+    if (t.isSandbox !== true || t.sbState !== 'ready' || t.notificationsMuted !== true ||
+        t.sandboxOwnerUid !== uid || !originalSnap.exists || (!_isTournamentAdmin(original,uid) && !cohost)) {
+      throw new HttpsError('not-found','Torneio não encontrado.');
+    }
+  }
   /* Autorização UID-only, declarada aqui para esta leitura estreita: é exatamente
    * o contrato de `_isTournamentAdmin` (creatorUid ou adminUids), sem e-mail/nome.
    * A Function usa Admin SDK; portanto este gate não pode depender das rules. */

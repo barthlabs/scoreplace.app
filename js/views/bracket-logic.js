@@ -6862,7 +6862,7 @@ window._openPendingInitialSchedule = function (tId) {
   var t = getTournament(tId), cache = window.__pendingInitialDraws || (window.__pendingInitialDraws = {}), pd = t && (cache[String(tId)] || t.pendingDraw), draft = pd && pd.kind === 'initial' && pd.draft;
   if (t && pd && pd.kind === 'initial' && !draft) {
     if (window.showNotification) window.showNotification('Abrindo revisão…', 'Carregando o rascunho protegido da organização.', 'info');
-    window._callCF('getPendingInitialDraw', { tournamentId:String(tId) }, 'Entre na sua conta para revisar o sorteio.')
+    window._callCF('getPendingInitialDraw', { tournamentId:String(tId), sandbox:String(tId).indexOf('sb_')===0 }, 'Entre na sua conta para revisar o sorteio.')
       .then(function (res) { var dado = (res && res.data && res.data.pendingDraw) || null; if (!dado) throw new Error('Rascunho indisponível.'); cache[String(tId)] = dado; window._openPendingInitialSchedule(tId); if (window._rerenderBracket) window._rerenderBracket(tId); })
       .catch(function (e) { finishDrawToPlanningTransition(); if (window.showNotification) window.showNotification('Revisão indisponível', (e && e.message) || 'Tente novamente.', 'error'); });
     return;
@@ -6895,7 +6895,7 @@ window._openPendingInitialSchedule = function (tId) {
     return x;
   }
   function saveSchedule(latest) {
-    return window._callCF('setPendingInitialSchedule', { tournamentId:String(t.id), jogos:latest.items.map(function (i) { return { matchId:i.matchId, court:i.court, scheduledAt:i.scheduledAt, scheduledGameNumber:i.scheduledGameNumber, scheduleLocked:true }; }) }, 'Entre na sua conta para salvar a agenda.')
+    return window._callCF('setPendingInitialSchedule', { tournamentId:String(t.id), sandbox:String(t.id).indexOf('sb_')===0, jogos:latest.items.map(function (i) { return { matchId:i.matchId, court:i.court, scheduledAt:i.scheduledAt, scheduledGameNumber:i.scheduledGameNumber, scheduleLocked:true }; }) }, 'Entre na sua conta para salvar a agenda.')
       .then(function (res) {
         /* Mantém o cofre já aberto coerente até a próxima leitura autenticada. */
         latest.items.forEach(function (item) {
@@ -7117,7 +7117,7 @@ window._hydratePendingDrawMarker = function (tId) {
   if (!id || !(window._callCF)) return Promise.resolve(null);
   var state = window.__pendingDrawMarkerLoads || (window.__pendingDrawMarkerLoads = {});
   if (state[id] && state[id].promise) return state[id].promise;
-  var promise = window._callCF('getPendingDrawReviewState', { tournamentId:id }, 'Entre na sua conta para revisar o sorteio.')
+  var promise = window._callCF('getPendingDrawReviewState', { tournamentId:id, sandbox:id.indexOf('sb_')===0 }, 'Entre na sua conta para revisar o sorteio.')
     .then(function (res) {
       var out = (res && res.data) || res || {}, marker = out.pendingDraw || null;
       if (marker) window._rememberPendingDrawMarker(id, marker);
@@ -7145,7 +7145,7 @@ window._openPendingDrawReview = function (tId) {
   var cache = window.__pendingInitialDraws || (window.__pendingInitialDraws = {}), draft = cache[String(tId)];
   if (!draft && marker.kind === 'initial') {
     if (window.showNotification) window.showNotification('Abrindo revisão…', 'Carregando a chave protegida da organização.', 'info');
-    window._callCF('getPendingInitialDraw', { tournamentId:String(tId) }, 'Entre na sua conta para revisar o sorteio.')
+    window._callCF('getPendingInitialDraw', { tournamentId:String(tId), sandbox:String(tId).indexOf('sb_')===0 }, 'Entre na sua conta para revisar o sorteio.')
       .then(function (res) { var out = (res && res.data) || res || {}; if (!out.pendingDraw) throw new Error('Rascunho indisponível.'); cache[String(tId)] = out.pendingDraw; window._openPendingDrawReview(tId); })
       .catch(function (e) { if (window.showNotification) window.showNotification('Revisão indisponível', (e && e.message) || 'Tente novamente.', 'error'); });
     return;
@@ -7191,7 +7191,7 @@ window._renderPendingDrawBanner = function (t) {
 
 window._publishPendingDraw = async function (tId) {
   try {
-    var res=await window._callCF('resolvePendingDraw',{ tournamentId:String(tId), action:'publish' },'Entre na sua conta para publicar o sorteio.');
+    var res=await window._callCF('resolvePendingDraw',{ tournamentId:String(tId), sandbox:String(tId).indexOf('sb_')===0, action:'publish' },'Entre na sua conta para publicar o sorteio.');
     var out=(res&&res.data)||{};
     if(!out.changed) return false;
     if (window.__pendingInitialDraws) delete window.__pendingInitialDraws[String(tId)];
@@ -7209,7 +7209,7 @@ window._publishPendingDraw = async function (tId) {
   } catch(e) { if(window._warn) window._warn('[publishPendingDraw] CF falhou',e); if(window.showNotification) window.showNotification('Sorteio não publicado','Não foi possível publicar o sorteio. Tente novamente.','error'); return false; }
 };
 window._annulPendingDraw = function (tId) {
-  var go=function(){ return window._callCF('resolvePendingDraw',{ tournamentId:String(tId), action:'annul' },'Entre na sua conta para anular o sorteio.').then(function(res){
+  var go=function(){ return window._callCF('resolvePendingDraw',{ tournamentId:String(tId), sandbox:String(tId).indexOf('sb_')===0, action:'annul' },'Entre na sua conta para anular o sorteio.').then(function(res){
     var out=(res&&res.data)||{};
     if(window.__pendingInitialDraws) delete window.__pendingInitialDraws[String(tId)];
     if(window.__pendingDrawMarkers) delete window.__pendingDrawMarkers[String(tId)];
