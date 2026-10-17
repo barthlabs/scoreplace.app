@@ -103,6 +103,7 @@ const TABELA = [
   { nome: "deleteEmptyTournamentCategory", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "deleteOwnTournamentTemplate", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "deleteTournament", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
+  { nome: "editCanonicalTournamentSlot", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "desfazerFusao", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "dismissDuplicateAccount", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "dismissDuplicateSuspicion", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },

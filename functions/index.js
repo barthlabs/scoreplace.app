@@ -102,6 +102,7 @@ const _registrationBatchPlan = require("./registration-batch-plan-core");
 const _registrationBatchApply = require("./registration-batch-apply-core");
 const _registrationMutations = require("./registration-mutations-core");
 const _registrationClaim = require("./registration-claim-core");
+const _editCanonicalSlot = require("./edit-canonical-slot-core");
 const _manualClaimLink = require("./manual-claim-link-core");
 const _canonicalRegistrationBoundary = require("./canonical-registration-boundary-core");
 const _canonicalEnrollment = require("./canonical-enrollment-core");
@@ -4448,6 +4449,104 @@ function _manualClaimGuard(state, allowPrivate) {
     throw new HttpsError('failed-precondition', 'vínculo indisponível neste estado do sorteio');
   }
 }
+
+function _slotHasIdentity(value, identity) {
+  return _editCanonicalSlot.hasIdentity(value, identity);
+}
+
+function _slotPublishedExtras(tournament) {
+  return ['classification', 'standings'].some((key) => {
+    const value = tournament && tournament[key];
+    return Array.isArray(value) ? value.length > 0 : !!(value && typeof value === 'object' && Object.keys(value).length);
+  });
+}
+
+/* Edição de uma vaga da dupla antes da publicação da chave. O UID é identidade,
+ * não um nome editável: substituí-lo cria uma vaga manual e preserva a inscrição
+ * anterior como histórico retirado. Sandbox e produção usam esta mesma porta. */
+exports.editCanonicalTournamentSlot = onCall(
+  { region: 'us-central1', memory: '512MiB', timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError('unauthenticated', 'login necessário');
+    const data = request.data || {};
+    const tournamentId = String(data.tournamentId || '').trim();
+    const sandbox = data.sandbox === true;
+    const uid = String(data.uid || '').trim();
+    const manualParticipantId = String(data.manualParticipantId || '').trim();
+    const categoryId = String(data.categoryId || '').trim();
+    const expectedName = String(data.expectedName || '').trim();
+    const newName = String(data.newName || '').trim();
+    if (!tournamentId || tournamentId.length > 180 || tournamentId.includes('/') ||
+        sandbox !== tournamentId.startsWith('sb_') || !!uid === !!manualParticipantId ||
+        !categoryId || categoryId.length > 180 || !newName || !expectedName) {
+      throw new HttpsError('invalid-argument', 'vaga ou nome inválido');
+    }
+    const db = admin.firestore();
+    const ref = db.collection(sandbox ? 'sandboxes' : 'tournaments').doc(tournamentId);
+    return db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new HttpsError('not-found', 'torneio não existe');
+      const raw = snap.data() || {};
+      if (sandbox) {
+        // Não revelar a existência da cópia privada a quem não é seu dono.
+        await _sandboxAutorizado(db, snap, callerUid, (sourceRef) => tx.get(sourceRef));
+      } else if (raw.isSandbox === true || !_isTournamentOrgCaller(raw, callerUid)) {
+        throw new HttpsError('permission-denied', 'somente a organização pode editar vagas');
+      }
+      const state = await _manualClaimReadState(tx, ref, raw);
+      _manualClaimGuard(state, true);
+      if (_slotPublishedExtras(state.tournament)) throw new HttpsError('failed-precondition', 'chave ou classificação já publicada');
+      const logicalId = sandbox ? String(raw.sandboxOf) : tournamentId;
+      const checked = await _loadCanonicalRosterForMutation(tx, ref, state.tournament, sandbox ? logicalId : '');
+      const identity = uid ? { uid } : { manualParticipantId };
+      let edit;
+      try { edit = _editCanonicalSlot.plan(logicalId, checked.registrations, identity, categoryId, expectedName, newName); }
+      catch (error) { throw new HttpsError('failed-precondition', error.message); }
+      const auxiliary = ['waitlist', 'standbyParticipants', 'sorteioRealizado', 'placeholderReservations',
+        'monarchWaitlist', 'woHistory', 'woSubstituteFor', 'checkedIn', 'absent', 'vips'];
+      if (auxiliary.some((key) => _slotHasIdentity(state.tournament[key], identity))) {
+        throw new HttpsError('failed-precondition', 'vaga referenciada em outra etapa do torneio');
+      }
+      const claims = Array.isArray(raw.pendingCanonicalParticipantClaims) ? raw.pendingCanonicalParticipantClaims : [];
+      if (claims.some((item) => _slotHasIdentity(item, identity))) {
+        throw new HttpsError('failed-precondition', 'vaga com vínculo de conta pendente');
+      }
+      const mirrorCol = ref.collection(_tSplitFn.colecaoDaParte('participants'));
+      const mirrorSnap = await tx.get(mirrorCol);
+      const matches = mirrorSnap.docs.filter((doc) => {
+        const item = doc.data() || {};
+        return ['p1', 'p2'].some((slot) => item[slot + (uid ? 'Uid' : 'ManualId')] === (uid || manualParticipantId) &&
+          item.fixedPairId === edit.source.fixedPairId);
+      });
+      if (matches.length !== 1) throw new HttpsError('failed-precondition', 'espelho da dupla ausente ou ambíguo');
+      const mirror = Object.assign({}, matches[0].data());
+      const oldSlot = mirror.p1Uid === uid || mirror.p1ManualId === manualParticipantId ? 'p1' : 'p2';
+      if (!uid && _manualNameUnique.normalizeName(mirror[oldSlot + 'Name']) !== _manualNameUnique.normalizeName(expectedName)) {
+        throw new HttpsError('failed-precondition', 'o nome da vaga mudou; atualize a análise');
+      }
+      if (_manualNameUnique.normalizeName(mirror[oldSlot === 'p1' ? 'p2Name' : 'p1Name']) === _manualNameUnique.normalizeName(edit.newName) ||
+          mirrorSnap.docs.some((doc) => doc.id !== matches[0].id &&
+            ['p1Name', 'p2Name'].some((key) =>
+              _manualNameUnique.normalizeName((doc.data() || {})[key]) === _manualNameUnique.normalizeName(edit.newName)))) {
+        throw new HttpsError('failed-precondition', 'já existe inscrito com este nome');
+      }
+      try {
+        if (!_editCanonicalSlot.patchPair(mirror, edit)) throw new Error('espelho sem identidade');
+      } catch (error) { throw new HttpsError('failed-precondition', error.message); }
+      let draft = null;
+      if (state.privateDraw) {
+        try { draft = _editCanonicalSlot.patchDraft(state.privateDraw.draft, edit); }
+        catch (error) { throw new HttpsError('failed-precondition', error.message); }
+      }
+      const next = _writeCanonicalRosterChanges(tx, ref, state.tournament, checked.registrations,
+        edit.changes, null, sandbox ? logicalId : '');
+      tx.update(matches[0].ref, _editCanonicalSlot.mirrorWritePatch(mirror, edit, _FV.delete()));
+      if (draft) tx.update(state.privateDrawRef, { draft, updatedAt: _FV.serverTimestamp() });
+      return { ok: true, participants: next.participants, replacedAccount: !!uid };
+    });
+  }
+);
 
 /* Uma materialização não pode deixar duas fontes concorrentes de verdade.
  * O leitor e o sorteador passam a usar `registrations` assim que o marcador

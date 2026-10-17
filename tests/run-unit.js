@@ -263,6 +263,7 @@ const SUITES = [
   'tests/revisar-com-gpt-faixa.test.js',
   'tests/l9-censo-formatos-legados.test.js',
   'tests/l7-rename-participant-core.test.js',
+  'tests/edit-canonical-slot-core.test.js',
   'tests/l7-liga-availability-cf.test.js',
   'tests/l7-liga-availability-package-boundary.test.js',
   'tests/l7-host-organization-cf.test.js',

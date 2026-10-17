@@ -30,6 +30,7 @@ function cloneForAccount(item, tournamentId, accountUid, fixedPairId) {
     fixedPairId: fixedPairId || null,
   });
   delete next.manualDisplayName;
+  delete next.replacedParticipantUid;
   return next;
 }
 
@@ -57,6 +58,9 @@ function claimManualParticipant(tournamentId, registrations, manualParticipantId
   };
 
   manual.forEach((source) => {
+    if (text(source.replacedParticipantUid) === uid) {
+      throw new Error('a conta retirada não pode reivindicar a própria vaga substituta');
+    }
     const targetId = registrationId('uid:' + uid, source.categoryId);
     const existing = byId.get(targetId);
     if (existing && active(existing)) {
