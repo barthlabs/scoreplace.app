@@ -6409,7 +6409,7 @@ window._renderProfileAvailability = function() {
   root.innerHTML = '<label class="form-label" for="profile-availability-sport">Modalidade</label>' +
     '<select id="profile-availability-sport" class="form-control" onchange="window._profileAvailabilitySport=this.value;window._renderProfileAvailability()" style="width:100%;margin-bottom:10px;">' +
     window._profileAvailabilitySports.map(function(s) { return '<option value="' + esc(s) + '"' + (s === sport ? ' selected' : '') + '>' + esc(s) + '</option>'; }).join('') + '</select>' +
-    '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:10px;">Informe quando costuma poder ou não poder jogar. Os horários seguem o fuso do local do torneio; confirme a proposta em cada jogo. Sem faixas, o app não presume disponibilidade.</div>' +
+    '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:10px;">Informe quando costuma poder ou não poder jogar. Em jogos sem horário fixo, horários que você pode viram propostas visíveis aos participantes do confronto; os horários seguem o fuso do local do torneio. Sem faixas, o app não presume disponibilidade.</div>' +
     slots.map(function(slot, i) {
       return '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px;padding:8px;border:1px solid var(--border-color);border-radius:9px;">' +
         '<select aria-label="Dia da semana" class="form-control" onchange="window._profileAvailabilitySet(' + i + ',\'day\',Number(this.value))" style="flex:1;min-width:70px;">' +
@@ -9711,6 +9711,7 @@ window._askDuplicateAccount = function () {
       // transação. Sem este corte, um nome rejeitado pelo servidor ainda podia
       // vazar para Firebase Auth ou caminhos legados de apresentação.
       if (saveError) return;
+      if (payload.availabilityBySport) window._profileAvailabilityDirty = false;
 
       // ── 8. HINTS — só toggle quando state REALMENTE mudou ──────────────
       // Antes: enable/disable era chamado incondicionalmente a cada save,

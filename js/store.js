@@ -13565,7 +13565,7 @@ window.AppStore = {
         if (profile.skillBySport && typeof profile.skillBySport === 'object') {
           this.currentUser.skillBySport = profile.skillBySport;
         }
-        // Preferências semanais são privadas do perfil e devem sobreviver ao login.
+        // Preferências ficam no perfil; propostas derivadas aparecem aos participantes do jogo.
         if (profile.availabilityBySport && typeof profile.availabilityBySport === 'object') {
           this.currentUser.availabilityBySport = profile.availabilityBySport;
         }
