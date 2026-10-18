@@ -174,12 +174,43 @@ window._bracketIsPendingMatch = function(m) {
   return defined(m.p1, m.p1Uid || m.team1Uids) && defined(m.p2, m.p2Uid || m.team2Uids);
 };
 window._togglePendingMatches = function(checked) {
+  var anchor = null, topBefore = 0;
+  if (!checked) {
+    var current = document.querySelectorAll('[data-bracket-pending-match="1"]');
+    for (var j = 0; j < current.length; j++) {
+      if (current[j].style.display === 'none' || !current[j].getBoundingClientRect) continue;
+      var rect = current[j].getBoundingClientRect();
+      if (rect.bottom > 0) { anchor = current[j]; topBefore = rect.top; break; }
+    }
+  }
   window._showOnlyPendingMatches = !!checked;
   window._bracketSyncHeaderFilterButtons();
   _applyMyMatchesFilter();
   var spacer = document.getElementById('sp-sticky-spacer');
   if (spacer) spacer.style.height = '0px';
   if (typeof window._reflowChrome === 'function') window._reflowChrome();
+  var focus = function() {
+    if (window._travaRolagemDaChave) return;
+    if (checked) {
+      var cards = document.querySelectorAll('[data-bracket-pending-match="1"]');
+      for (var i = 0; i < cards.length; i++) {
+        if (cards[i].style.display === 'none') continue;
+        var hidden = false;
+        for (var p = cards[i].parentElement; p && p !== document.body; p = p.parentElement) {
+          if (p.hidden || p.style.display === 'none') { hidden = true; break; }
+        }
+        if (!hidden && cards[i].scrollIntoView) {
+          cards[i].scrollIntoView({ behavior:'smooth', block:'start' });
+          break;
+        }
+      }
+    } else if (anchor && anchor.getBoundingClientRect && typeof window.scrollBy === 'function') {
+      var delta = anchor.getBoundingClientRect().top - topBefore;
+      if (Math.abs(delta) > 1) window.scrollBy(0, delta);
+    }
+  };
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(function() { requestAnimationFrame(focus); });
+  else setTimeout(focus, 0);
 };
 /* ⛔ LIGAR O FILTRO É UM PEDIDO DE FOCO — não é um re-render qualquer.
  * Ordem do dono (04/set/2026): _"ao ativá-lo role a tela até o jogo do usuário e suprima o

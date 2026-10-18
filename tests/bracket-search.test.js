@@ -53,6 +53,23 @@ ok(!pending({p1:'Ana',p2:'Vencedor do jogo 186'}),'referência de origem não é
 ok(!pending({p1:'Ana',p2:'Bia',isBye:true}),'BYE não é jogo pendente');
 ok(pending({p1:'',p1Uid:'uid-a',p2:'Bia'}),'UID canônico basta para definir um lado sem nome hidratado');
 ok(!pending({p1:'',team1Uids:[],p2:'Bia'}),'lista vazia de UIDs não define adversário');
+const toggleStart=src.indexOf('window._togglePendingMatches = function');
+const toggleEnd=src.indexOf('window._toggleMyMatches = function',toggleStart);
+let focused=0, filtered=0;
+const body={style:{},parentElement:null};
+const pendingCard={style:{},parentElement:body,
+  getBoundingClientRect:()=>({top:90,bottom:160}),scrollIntoView:()=>{focused++;}};
+const toggleSandbox={window:null,document:{body,
+  querySelectorAll:()=>[pendingCard],getElementById:()=>null},
+  requestAnimationFrame:(fn)=>fn(),setTimeout:(fn)=>fn(),
+  _applyMyMatchesFilter:()=>{filtered++;}};
+toggleSandbox.window=toggleSandbox;
+toggleSandbox.window._bracketSyncHeaderFilterButtons=()=>{};
+vm.createContext(toggleSandbox);
+vm.runInContext(src.slice(toggleStart,toggleEnd),toggleSandbox,{filename:'bracket-pending-toggle'});
+toggleSandbox.window._togglePendingMatches(true);
+ok(toggleSandbox.window._showOnlyPendingMatches===true && filtered===1 && focused===1,
+  'ativar pendentes aplica o filtro e leva ao primeiro jogo visível');
 const i=src.indexOf('window._bracketNorm = function');
 vm.runInContext(src.slice(i),sandbox,{filename:'bracket-filter'});
 const F=sandbox.window._bracketApplyFilter;
