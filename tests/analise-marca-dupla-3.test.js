@@ -11,7 +11,8 @@ assert(start >= 0 && end > start, 'classificador da dupla 3 existe');
 const classify = new Function('_erDisplayCategory', '_decomposeCat', '_erPairCategory',
   source.slice(start, end) + '\nreturn _erIsTransferredFemalePair;')(
   (t, id) => (t.categoryDefinitions.find((d) => d.id === id) || {}).label || id,
-  (label) => ({ gender: /^Masc(?:\s|$)/.test(label) ? 'Masc' : /^Fem(?:\s|$)/.test(label) ? 'Fem' : null }),
+  (label) => ({ gender: /^Masc(?:\s|$)/.test(label) ? 'Masc' : /^Fem(?:\s|$)/.test(label) ? 'Fem' : null,
+    skill: label.split(' ')[1] || '' }),
   (members) => members[0].category
 );
 const t = { categoryDefinitions: [
@@ -22,12 +23,18 @@ const pair = (origin, category, otherOrigin = origin) => [
   { originCategoryId: origin, category }, { originCategoryId: otherOrigin, category }
 ];
 assert.strictEqual(classify(pair('cat-m', 'Fem Light'), t), true, 'origem masculina e destino feminino recebe 3');
+assert.strictEqual(classify(pair('cat-m', 'Fem Power'), t), false, 'realocada para Fem Power não é dupla 3 Light');
+assert.strictEqual(classify(pair('cat-m', 'Fem Extreme'), t), false, 'realocada para Fem Extreme não é dupla 3 Light');
 assert.strictEqual(classify(pair('cat-f', 'Fem Light'), t), false, 'inscrição feminina original não recebe 3');
 assert.strictEqual(classify(pair('cat-m', 'Masc Light'), t), false, 'destino masculino não recebe 3');
 assert.strictEqual(classify(pair('cat-misto', 'Fem Light'), t), false, 'origem mista não recebe 3');
 assert.strictEqual(classify(pair('', 'Fem Light'), t), false, 'sem origem não recebe 3');
 assert.strictEqual(classify(pair('removed', 'Fem Light'), t), false, 'ID de origem removido não recebe 3');
 assert.strictEqual(classify(pair('cat-m', 'Fem Light', 'cat-f'), t), false, 'origens divergentes não recebem 3');
+const drawn = { ...t, categorySchedule:{ slots:[{ category:'Fem Light', day:'2026-10-22' }, { category:'Fem Light', day:'2026-10-23' }] },
+  teamCompetition:{ schedule:{ pairDayAssignments:[{ fixedPairId:'pair-lottery', day:'2026-10-23' }] } } };
+assert.strictEqual(classify(pair('cat-f', 'Fem Light').map((member) => ({ ...member, fixedPairId:'pair-lottery' })), drawn), true,
+  'as três sorteadas passam a mostrar 3 após a confirmação do plano');
 assert(source.includes('originCategoryId: p.originCategoryId || \'\''), 'origem passa pela expansão da dupla');
 assert(source.includes('originCategoryId: (p && p.originCategoryId) || \'\''), 'origem passa para as linhas da matriz');
 const card = source.slice(source.indexOf('  function _erPairCard('), source.indexOf('  window._erEditPairMember', source.indexOf('  function _erPairCard(')));

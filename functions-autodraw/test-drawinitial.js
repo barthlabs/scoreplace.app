@@ -352,6 +352,49 @@ const CASES = [
   ok('Neon 64: origem ausente é recusada', missingResult.ok === false &&
     missingResult.reason === 'competition-pair-day-plan-invalid' && !missingOrigin.competitionTeams);
 
+  // Regra vigente: só cinco das duplas atuais vieram das inscrições
+  // masculinas; três das outras 19 completam a sexta em qualquer ambiente.
+  const provisional = realTournament();
+  provisional.id = 'neon_five_plus_three'; provisional.name = 'Neon Nightmare';
+  provisional.participants.slice(16, 19).forEach(function (entry) { entry.originCategoryId = 'category-0'; });
+  const provisionalConfig = JSON.parse(JSON.stringify(realConfig));
+  provisionalConfig.schedule.originDayPolicy = 'female-light-five-plus-three';
+  provisionalConfig.schedule.pairDayAssignments = provisional.participants.slice(0, 24).map(function (entry, index) {
+    return { fixedPairId:entry.fixedPairId, day:index >= 19 || (index >= 16 && index < 19) ? '2026-10-23' : '2026-10-22' };
+  });
+  const provisionalResult = core.assignCompetitionTeamsAtInitialDraw(provisional, provisionalConfig);
+  ok('Neon: cinco marcadas + três sorteadas geram 16/8 e 2/1 por time', provisionalResult.ok === true &&
+    provisional.competitionTeams.every(function (team) {
+      return [2,1].every(function (want, index) {
+        return provisional.participants.filter(function (entry) { return entry.category === 'Fem Light' &&
+          entry.competitionTeamId === team.id && entry.competitionPlayDay === ['2026-10-22','2026-10-23'][index]; }).length === want;
+      });
+    }));
+  const provisionalDrawTournament = realTournament();
+  provisionalDrawTournament.id = 'neon_five_plus_three_draw'; provisionalDrawTournament.name = 'Neon Nightmare';
+  provisionalDrawTournament.participants.slice(16, 19).forEach(function (entry) { entry.originCategoryId = 'category-0'; });
+  provisionalDrawTournament.teamCompetition = provisionalConfig;
+  provisionalDrawTournament.phases[0].teamCompetition = provisionalConfig;
+  const provisionalDraw = core.drawInitial(provisionalDrawTournament, { idStamp:'provisional-neon' });
+  const provisionalMatches = provisionalDrawTournament.matches || [];
+  ok('Neon: sorteio 5+3 gera 96 jogos e 24/12 Fem Light por dia sem cruzar dias',
+    provisionalDraw.ok === true && provisionalMatches.length === 96 &&
+    provisionalMatches.filter(function (match) { return match.category === 'Fem Light' && match.requiredDay === '2026-10-22'; }).length === 24 &&
+    provisionalMatches.filter(function (match) { return match.category === 'Fem Light' && match.requiredDay === '2026-10-23'; }).length === 12 &&
+    provisionalMatches.filter(function (match) { return match.category === 'Fem Light'; }).every(function (match) {
+      return match.team1Obj.competitionPlayDay === match.requiredDay && match.team2Obj.competitionPlayDay === match.requiredDay;
+    }), JSON.stringify({ result:provisionalDraw.ok, reason:provisionalDraw.reason, games:provisionalMatches.length,
+      days:['2026-10-22','2026-10-23'].map(function (day) { return provisionalMatches.filter(function (match) { return match.requiredDay === day; }).length; }) }));
+  const forgedProvisional = realTournament();
+  forgedProvisional.id = 'neon_forged'; forgedProvisional.name = 'Neon Nightmare';
+  forgedProvisional.participants.slice(16, 19).forEach(function (entry) { entry.originCategoryId = 'category-0'; });
+  const forgedProvisionalConfig = JSON.parse(JSON.stringify(provisionalConfig));
+  forgedProvisionalConfig.schedule.pairDayAssignments[19].day = '2026-10-22';
+  forgedProvisionalConfig.schedule.pairDayAssignments[0].day = '2026-10-23';
+  const forgedProvisionalResult = core.assignCompetitionTeamsAtInitialDraw(forgedProvisional, forgedProvisionalConfig);
+  ok('Neon: dupla marcada movida à quinta é rejeitada', forgedProvisionalResult.ok === false &&
+    forgedProvisionalResult.reason === 'competition-pair-day-plan-invalid' && !forgedProvisional.competitionTeams);
+
   // Estruturas multifase guardam a configuração na fase inicial. O servidor
   // chama a mesma `_buildPhase0Cfg` da web e precisa enxergar essa fonte.
   const neonInPhase = {

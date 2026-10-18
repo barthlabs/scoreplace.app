@@ -8,12 +8,12 @@ const participants = categories.flatMap((category, categoryIndex) => Array.from(
   const p1Seq = sequence + 100;
   sequence += 2;
   return { category, categoryId:'category-' + categoryIndex, fixedPairId:'pair-' + p1Seq, p1Seq,
-    originCategoryId:categoryIndex === 0 && index >= 16 ? 'category-3' : 'category-' + categoryIndex,
-    originCategoryLabel:categoryIndex === 0 && index >= 16 ? 'Masc Light' : category,
+    originCategoryId:categoryIndex === 0 && index >= 19 ? 'category-3' : 'category-' + categoryIndex,
+    originCategoryLabel:categoryIndex === 0 && index >= 19 ? 'Masc Light' : category,
     p1Uid:'uid-first-' + p1Seq, p2Uid:'uid-second-' + p1Seq };
 }));
 const tournament = {
-  id:'sb_neon_regression', startDate:'2026-10-22T18:00', endDate:'2026-10-23T22:40',
+  id:'neon_regression', name:'Neon Nightmare', startDate:'2026-10-22T18:00', endDate:'2026-10-23T22:40',
   categories, participants, courtCount:6,
   teamCompetition:{ enabled:true, teamCount:8,
     teamNames:['Blackout', 'Blast', 'Eclipse', 'Panic', 'Phantom', 'Venom', 'Volt', 'Vortex'],
@@ -44,6 +44,7 @@ if (/<select data-pair-day=|<label class="sp-team-pair-card"|Confirme o dia de c
   throw new Error('Painel ainda oferece atribuição manual de dia');
 }
 if (/O sorteio está bloqueado/.test(overlay.innerHTML)) throw new Error('Elenco Neon válido foi bloqueado');
+if (!/Regra vigente: 5 duplas Fem Light marcadas \+ 3 sorteadas/.test(overlay.innerHTML)) throw new Error('Regra 5+3 não aparece no torneio');
 const lightCards = overlay.innerHTML.match(/data-team-category-card="Fem Light"/g) || [];
 if (lightCards.length < 3) throw new Error('Fem Light deve aparecer na fonte e nos dois dias');
 const visibleHtml = overlay.innerHTML.replace(/\sdata-[^=]+="[^"]*"/g, '');
@@ -55,4 +56,8 @@ if (!/não têm categoria de inscrição original registrada/.test(overlay.inner
   throw new Error('Elenco legado sem origem deve bloquear com motivo específico, sem inventar o dia');
 }
 participants[0].originCategoryLabel = savedOrigin;
+participants[18].originCategoryLabel = 'Masc Light';
+W._showTeamCompetitionDrawReview(tournament.id, { _canonicalRosterLoaded:true });
+if (!/exatamente 5 duplas Fem Light marcadas/.test(overlay.innerHTML)) throw new Error('Seis duplas marcadas deveriam bloquear a regra 5+3');
+participants[18].originCategoryLabel = savedOrigin;
 console.log('✓ Painel Neon: sem seletores manuais, Fem Light nos dois dias e sem UID visível');

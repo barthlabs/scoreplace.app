@@ -2889,16 +2889,35 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
     var valid = entries.length === expectedPairs && entries.every(isPair) && categories.length > 0 && !invalidCategories.length;
     var lightCategory = categories.find(function (category) { return /^Fem Light$/i.test(category); });
     var lightPairs = neonQuota ? entries.filter(function (entry) { return String(entry.category || '') === lightCategory; }) : [];
+    var fivePlusThreePlan = neonQuota && /neon nightmare/i.test(String(t.name || ''));
     var pairIds = entries.map(function (entry) { return String(entry.fixedPairId || ''); });
     if (neonQuota && (pairIds.some(function (id) { return !id; }) || new Set(pairIds).size !== entries.length || days.length !== 2)) valid = false;
     var safe = window._safeHtml || function (value) { return String(value == null ? '' : value).replace(/[&<>"']/g, function (c) { return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]; }); };
-    // A inscrição de origem decide o dia. Nenhum seletor manual participa do plano.
+    // Regra vigente do Neon: as cinco duplas Fem Light vindas
+    // das inscrições masculinas ficam na sexta; três das demais são sorteadas.
+    // O seed do torneio estabiliza o resultado ao reabrir o painel sem gravar nada.
+    var markedLight = lightPairs.filter(function (entry) { return /^Masc /i.test(String(entry.originCategoryLabel || '')); });
+    var originalLight = lightPairs.filter(function (entry) { return String(entry.originCategoryLabel || '') === lightCategory; });
+    var selectedExtraIds = {};
+    if (fivePlusThreePlan && markedLight.length === 5 && originalLight.length === 19) {
+      var candidates = originalLight.slice().sort(function (a, b) { return String(a.fixedPairId).localeCompare(String(b.fixedPairId)); });
+      var seedText = String(tId), seed = 2166136261;
+      for (var si = 0; si < seedText.length; si++) { seed ^= seedText.charCodeAt(si); seed = Math.imul(seed, 16777619); }
+      for (var ci = candidates.length - 1; ci > 0; ci--) {
+        seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5;
+        var swap = (seed >>> 0) % (ci + 1), temp = candidates[ci]; candidates[ci] = candidates[swap]; candidates[swap] = temp;
+      }
+      candidates.slice(0, 3).forEach(function (entry) { selectedExtraIds[String(entry.fixedPairId)] = true; });
+    }
     var pairDayAssignments = neonQuota ? lightPairs.map(function (entry) {
-      var origin = String(entry.originCategoryLabel || '');
-      var day = origin === lightCategory ? days[0] : /^Masc (Light|Extreme)$/i.test(origin) ? days[1] : '';
-      return { fixedPairId:String(entry.fixedPairId || ''), day:day };
+      var origin = String(entry.originCategoryLabel || ''), id = String(entry.fixedPairId || '');
+      var day = fivePlusThreePlan
+        ? (/^Masc /i.test(origin) || selectedExtraIds[id] ? days[1] : origin === lightCategory ? days[0] : '')
+        : (origin === lightCategory ? days[0] : /^Masc (Light|Extreme)$/i.test(origin) ? days[1] : '');
+      return { fixedPairId:id, day:day };
     }) : [];
     var missingOriginCount = neonQuota ? lightPairs.filter(function (entry) { return !entry.originCategoryLabel; }).length : 0;
+    if (fivePlusThreePlan && (markedLight.length !== 5 || originalLight.length !== 19)) valid = false;
     if (neonQuota && (pairDayAssignments.length !== 24 ||
         pairDayAssignments.filter(function (item) { return item.day === days[0]; }).length !== 16 ||
         pairDayAssignments.filter(function (item) { return item.day === days[1]; }).length !== 8 ||
@@ -2957,7 +2976,7 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
         '<section style="border:1px solid rgba(167,139,250,.34);border-radius:12px;padding:13px;">' +
           presenceChoiceHtml +
           '<section data-team-toggle-group="mode"><b style="font-size:.88rem;color:#c4b5fd;">Confrontos</b><div style="display:flex;gap:8px;margin-top:7px;"><button type="button" data-team-toggle="structured" class="btn" style="flex:1;">Estruturado</button><button type="button" data-team-toggle="free" class="btn" style="flex:1;">Livre</button></div><p data-team-toggle-copy style="margin:7px 0 0;color:#c4b5fd;font-size:.76rem;line-height:1.35;"></p></section>' +
-          '<div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(148,163,184,.18);font-size:.74rem;color:#94a3b8;">São ' + rounds + ' rodadas por categoria. Em cada dia, escolha se as categorias ficam concentradas ou alternadas.</div>' +
+          '<div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(148,163,184,.18);font-size:.74rem;color:#94a3b8;">São ' + rounds + ' rodadas por categoria. Em cada dia, escolha se as categorias ficam concentradas ou alternadas.' + (fivePlusThreePlan ? ' Regra vigente: 5 duplas Fem Light marcadas + 3 sorteadas jogam sexta; as outras 16 jogam quinta.' : '') + '</div>' +
         '</section>' +
         '<section style="border:1px solid rgba(34,197,94,.38);border-radius:12px;padding:13px;">' +
           '<h3 style="font-size:.94rem;margin:0 0 4px;color:#86efac;">📅 Dias e ordem das categorias</h3><p style="font-size:.75rem;color:#cbd5e1;margin:0 0 9px;line-height:1.3;">Arraste uma categoria para os dias em que ela joga e ordene dentro de cada dia. Em dois dias, as rodadas seguem em sequência; em um só, a categoria termina nele.</p>' +
@@ -2970,6 +2989,7 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
       '</div>' +
       (!valid ? '<p style="margin:0 0 14px;color:var(--sp-c-f87171,#f87171);font-weight:700;">' +
         (missingOriginCount ? 'Sorteio bloqueado: ' + missingOriginCount + ' dupla(s) Fem Light não têm categoria de inscrição original registrada. Os dados foram preservados; a origem precisa ser corrigida antes do sorteio.' :
+        fivePlusThreePlan && (markedLight.length !== 5 || originalLight.length !== 19) ? 'Sorteio bloqueado: a regra 5+3 exige exatamente 5 duplas Fem Light marcadas e 19 demais duplas Fem Light; confira as reclassificações.' :
         'O sorteio está bloqueado: são necessárias ' + expectedPairs + ' duplas já formadas. Categorias divergentes: ' + safe(invalidCategories.join(', ') || 'total de inscritos') + '.') + '</p>' : '') +
       '</section>';
     document.body.appendChild(overlay);
@@ -3101,7 +3121,7 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
           nextCompetition.schedule.pairsPerTeamByCategory = categories.reduce(function (out, category) { out[category] = required(category); return out; }, {});
           nextCompetition.schedule.pairDayAssignments = pairDayAssignments;
           nextCompetition.schedule.rosterSnapshot = rosterSnapshot;
-          nextCompetition.schedule.originDayPolicy = 'female-light-enrollment-origin';
+          nextCompetition.schedule.originDayPolicy = fivePlusThreePlan ? 'female-light-five-plus-three' : 'female-light-enrollment-origin';
         }
         db._callFn('updateTournamentConfiguration', { tournamentId:String(tId), sandbox:typeof db._ehSandbox === 'function' && db._ehSandbox(tId), patch:{ categorySchedule:{ version:1, confirmed:true, slots:slots }, scheduleWindow:{ version:1, days:scheduleWindowDays }, courtOrder:selectedCourtOrder, teamCompetition:nextCompetition } }).then(function () {
           t.categorySchedule = { version:1, confirmed:true, slots:slots };

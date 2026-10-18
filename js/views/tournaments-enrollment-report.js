@@ -390,7 +390,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         ];
         members.sort(function (a, b) { return a._registrationOrder - b._registrationOrder; });
         members.forEach(function (m) {
-          out.push(Object.assign(m, { categories: baseCats.slice(), category: p.category || '', categoryId: p.categoryId || '', originCategoryId: p.originCategoryId || '', _fromDupla: true, _duplaIdx: idx }));
+          out.push(Object.assign(m, { categories: baseCats.slice(), category: p.category || '', categoryId: p.categoryId || '', originCategoryId: p.originCategoryId || '', fixedPairId:p.fixedPairId || '', _fromDupla: true, _duplaIdx: idx }));
         });
       } else {
         if (p && typeof p === 'object') {
@@ -528,6 +528,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         assigned: assigned,
         categoryId: (p && p.categoryId) || '',
         originCategoryId: (p && p.originCategoryId) || '',
+        fixedPairId: (p && p.fixedPairId) || '',
         assignedSkills: assignedSkills,
         profileSkill: profileSkill,        // skill auto-declarado no perfil
         effectiveSkills: effectiveSkills,  // skill efetivo (assigned > profile)
@@ -1250,14 +1251,26 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   }
   function _erIsTransferredFemalePair(members, t) {
     if (!members || members.length !== 2 || !t) return false;
+    var to = _decomposeCat(_erPairCategory(members), t);
+    if (to.gender !== 'Fem' || !/^Light$/i.test(String(to.skill || ''))) return false;
+    var pairId = String(members[0].fixedPairId || '');
+    var plan = t.teamCompetition && t.teamCompetition.schedule && t.teamCompetition.schedule.pairDayAssignments;
+    var lightDays = (t.categorySchedule && t.categorySchedule.slots || []).filter(function (slot) {
+      return /^Fem Light$/i.test(String(slot.category || ''));
+    }).map(function (slot) { return String(slot.day || '').slice(0, 10); }).sort();
+    if (pairId && Array.isArray(plan) && lightDays.length === 2) {
+      var assigned = plan.find(function (item) { return String(item.fixedPairId || '') === pairId; });
+      if (assigned) return String(assigned.day || '') === lightDays[1];
+    }
     var origin = String(members[0].originCategoryId || '').trim();
     if (!origin || origin !== String(members[1].originCategoryId || '').trim()) return false;
     var defs = Array.isArray(t.categoryDefinitions) ? t.categoryDefinitions : [];
     // An old/removed category ID is not proof of the pair's original gender.
     if (!defs.some(function (def) { return def && String(def.id || '').trim() === origin; })) return false;
     var from = _decomposeCat(_erDisplayCategory(t, origin), t);
-    var to = _decomposeCat(_erPairCategory(members), t);
-    return from.gender === 'Masc' && to.gender === 'Fem';
+    // Antes do sorteio, as cinco remanescentes aparecem marcadas; após a
+    // confirmação, o plano persistido inclui também as três sorteadas.
+    return from.gender === 'Masc';
   }
   function _erPairCard(members) {
       var a = members[0], b = members[1], pe = _pendingEdits[a.order] || _pendingEdits[b.order] || {};
