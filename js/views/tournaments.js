@@ -5133,15 +5133,8 @@ function renderTournaments(container, tournamentId = null) {
           (Array.isArray(visible[0].rounds) && visible[0].rounds.length > 0) ||
           (Array.isArray(visible[0].groups) && visible[0].groups.length > 0)
         );
-        const _cuUser = window.AppStore && window.AppStore.currentUser;
-        const _myToggleHtml = _cuUser && _hasDrawContent ? `
-          <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;" class="no-print">
-            <span style="font-size:0.68rem;font-weight:600;color:var(--text-muted);line-height:1.05;text-align:right;">Só<br>meus<br>jogos</span>
-            <label class="toggle-switch toggle-sm" style="--toggle-on-bg:#f59e0b;--toggle-on-glow:rgba(245,158,11,0.3);--toggle-on-border:#f59e0b;">
-              <input type="checkbox" id="my-matches-toggle" onchange="window._toggleMyMatches(this.checked)">
-              <span class="toggle-slider"></span>
-            </label>
-          </div>` : '';
+        const _myToggleHtml = window._bracketHeaderFilterButtons
+          ? window._bracketHeaderFilterButtons(isOrg, _hasDrawContent) : '';
 
         // Navegação de grupos é da FASE ATUAL. `format`/`currentStage` no topo
         // são ponte de documentos antigos; num torneio híbrido eles podem continuar

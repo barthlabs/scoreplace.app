@@ -433,3 +433,8 @@ summary::-webkit-details-marker { display: none; }
    conteúdo. Regra que não muda pixel é regra morta, então não fica aqui. Se um dia
    precisar de mais largura, o caminho é outro (a largura do próprio card de jogo),
    não empilhar seletor que não faz efeito. */
+.sp-bracket-header-filters { display:flex; align-items:center; gap:6px; flex-shrink:0; }
+.sp-bracket-header-filter { border:1px solid var(--border-color); border-radius:18px; background:var(--bg-card); color:var(--text-main); padding:6px 10px; font-family:inherit; font-size:.72rem; font-weight:600; line-height:1.15; cursor:pointer; white-space:nowrap; }
+.sp-bracket-header-filter[aria-pressed="true"] { border-color:var(--sp-c-fbbf24); background:var(--bg-card-hover); color:var(--sp-c-fbbf24); }
+.sp-bracket-header-filter:focus-visible { outline:2px solid #60a5fa; outline-offset:2px; }
+@media (max-width:600px) { .sp-bracket-header-filters { gap:3px; } .sp-bracket-header-filter { padding:6px 5px; font-size:.63rem; white-space:normal; max-width:72px; } }

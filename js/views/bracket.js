@@ -146,6 +146,41 @@ window._resultEntryIncludes = function(t, role, match) {
 
 // "Só meus jogos" toggle — hides non-user match cards
 window._showOnlyMyMatches = false;
+window._showOnlyPendingMatches = false;
+window._bracketHeaderFilterButtons = function(isOrg, hasContent) {
+  if (!hasContent) return '';
+  var mine = window.AppStore && window.AppStore.currentUser;
+  if (!isOrg && !mine) return '';
+  return '<div class="sp-bracket-header-filters no-print">' +
+    (isOrg ? '<button type="button" class="sp-bracket-header-filter" data-bracket-filter="pending" aria-pressed="' + (!!window._showOnlyPendingMatches) + '" onclick="window._togglePendingMatches(!window._showOnlyPendingMatches)">Jogos pendentes</button>' : '') +
+    (mine ? '<button type="button" class="sp-bracket-header-filter" data-bracket-filter="mine" aria-pressed="' + (!!window._showOnlyMyMatches) + '" onclick="window._toggleMyMatches(!window._showOnlyMyMatches)">Só meus jogos</button>' : '') +
+    '</div>';
+};
+window._bracketSyncHeaderFilterButtons = function() {
+  var buttons = document.querySelectorAll('[data-bracket-filter]');
+  for (var i = 0; i < buttons.length; i++) {
+    var on = buttons[i].getAttribute('data-bracket-filter') === 'pending'
+      ? !!window._showOnlyPendingMatches : !!window._showOnlyMyMatches;
+    buttons[i].setAttribute('aria-pressed', String(on));
+  }
+};
+window._bracketIsPendingMatch = function(m) {
+  if (!m || m.winner || m.draw || m.wo || m.isBye || m.isSitOut || m.p1AguardaMelhor || m.p2AguardaMelhor) return false;
+  var defined = function(side, uid) {
+    var s = String(side || '').trim();
+    if (/^(?:TBD|BYE|A definir|Vencedor do jogo\s*\d+|Perdedor do jogo\s*\d+)$/i.test(s)) return false;
+    return !!(s || (Array.isArray(uid) ? uid.some(Boolean) : uid));
+  };
+  return defined(m.p1, m.p1Uid || m.team1Uids) && defined(m.p2, m.p2Uid || m.team2Uids);
+};
+window._togglePendingMatches = function(checked) {
+  window._showOnlyPendingMatches = !!checked;
+  window._bracketSyncHeaderFilterButtons();
+  _applyMyMatchesFilter();
+  var spacer = document.getElementById('sp-sticky-spacer');
+  if (spacer) spacer.style.height = '0px';
+  if (typeof window._reflowChrome === 'function') window._reflowChrome();
+};
 /* ⛔ LIGAR O FILTRO É UM PEDIDO DE FOCO — não é um re-render qualquer.
  * Ordem do dono (04/set/2026): _"ao ativá-lo role a tela até o jogo do usuário e suprima o
  * espaço que agora está vazio. ao desativar deve colocar tudo nos seus lugares mas continuar
@@ -177,6 +212,7 @@ window._toggleMyMatches = function(checked) {
     catch (e) { _ancora = null; }
   }
   window._showOnlyMyMatches = !!checked;
+  window._bracketSyncHeaderFilterButtons();
   _applyMyMatchesFilter();
   try {
     var _sp = document.getElementById('sp-sticky-spacer');
@@ -2979,17 +3015,10 @@ function renderBracket(container, tournamentId, isInline) {
       }
     </style>`;
 
-  // "Só meus jogos" toggle — build HTML for use in sticky header
+  // Filtros operacionais do cabeçalho — mesmos controles da visualização inline.
   window._showOnlyMyMatches = false;
-  const _cu = window.AppStore && window.AppStore.currentUser;
-  const _myMatchesToggleHtml = _cu && hasContent ? `
-      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;" class="no-print">
-        <span style="font-size:0.68rem;font-weight:600;color:var(--text-muted);line-height:1.05;text-align:right;">Só<br>meus<br>jogos</span>
-        <label class="toggle-switch toggle-sm" style="--toggle-on-bg:#f59e0b;--toggle-on-glow:rgba(245,158,11,0.3);--toggle-on-border:#f59e0b;">
-          <input type="checkbox" id="my-matches-toggle" onchange="window._toggleMyMatches(this.checked)">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>` : '';
+  window._showOnlyPendingMatches = false;
+  const _myMatchesToggleHtml = window._bracketHeaderFilterButtons(isOrg, hasContent);
 
   // Group nav buttons for Fase de Grupos (also shown inline)
   const _hasGroupStage = t.groups && t.groups.length > 0;
@@ -6837,6 +6866,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   const isDecided = !!m.winner;
   const isByeMatch = m.isBye || m.p2 === 'BYE';
   const hasTBD = !m.p1 || m.p1 === 'TBD' || !m.p2 || m.p2 === 'TBD';
+  const _isPendingMatch = window._bracketIsPendingMatch(m);
 
   // v0.17.1: estado pendente — placar lançado por jogador aguardando aprovação
   // do time adversário (ou organizador). Quando true, suprime inputs e mostra
@@ -7861,7 +7891,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   var _operationalPresence = _isConcentratedEvent && !isDecided && !isByeMatch
     ? (matchReady ? 'complete' : (matchPartial ? 'partial' : 'none')) : '';
   return `
-    <div id="card-${m.id}" class="sp-match-card" data-players="${_searchNames}" data-player-uids="${_searchUids}" data-bracket-tab-category="${window._safeHtml(_tabCategory)}" data-bracket-tab-gender="${_tabGender}" data-bracket-tab-source="${_tabSource}" data-bracket-tab-round="${m.round != null ? window._safeHtml(String(m.round)) : ''}" data-bracket-scheduled-at="${_scheduledMs || ''}" data-bracket-result-at="${_playedMs || ''}" data-bracket-complete="${isDecided || m.wo ? '1' : '0'}" data-bracket-court="${window._safeHtml(String(m.court || ''))}" data-bracket-upcoming="${_isConcentratedEvent && matchReady ? '1' : '0'}" data-bracket-presence="${_operationalPresence}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:var(--scroll-anchor,120px);background:${window._spCor(_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)', 'background')};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};">
+    <div id="card-${m.id}" class="sp-match-card" data-players="${_searchNames}" data-player-uids="${_searchUids}" data-bracket-tab-category="${window._safeHtml(_tabCategory)}" data-bracket-tab-gender="${_tabGender}" data-bracket-tab-source="${_tabSource}" data-bracket-tab-round="${m.round != null ? window._safeHtml(String(m.round)) : ''}" data-bracket-scheduled-at="${_scheduledMs || ''}" data-bracket-result-at="${_playedMs || ''}" data-bracket-complete="${isDecided || m.wo ? '1' : '0'}" data-bracket-pending-match="${_isPendingMatch ? '1' : '0'}" data-bracket-court="${window._safeHtml(String(m.court || ''))}" data-bracket-upcoming="${_isConcentratedEvent && matchReady ? '1' : '0'}" data-bracket-presence="${_operationalPresence}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:var(--scroll-anchor,120px);background:${window._spCor(_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)', 'background')};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};">
       ${_headerHtml}
       ${_pendingBtnsRow}
       ${pendingBanner}
@@ -10626,10 +10656,11 @@ window._bracketApplyFilter = function () {
   var inp = document.getElementById('bracket-search');
   var q = window._bracketNorm(inp ? inp.value : '').trim();
   var onlyMine = !!window._showOnlyMyMatches;
+  var onlyPending = !!window._showOnlyPendingMatches;
   var _barState = window._filterBarState && window._filterBarState.chaves || {};
   var _genderFilter = _barState.gender || 'all';
   var _skillFilter = _barState.skill || 'all';
-  var _filterActive = !!(q || onlyMine || _genderFilter !== 'all' || _skillFilter !== 'all');
+  var _filterActive = !!(q || onlyMine || onlyPending || _genderFilter !== 'all' || _skillFilter !== 'all');
   // ⛔ 2.0.88 — BUSCAR OBRIGA A MONTAR TUDO. Os demais grupos passaram a nascer só
   // ao abrir; se alguém procura um jogador que está num deles, os cards nem existem
   // no DOM e a busca diria 'nenhum resultado' — mentindo. Filtrar é justamente
@@ -10766,7 +10797,7 @@ window._bracketApplyFilter = function () {
   // "Jogador X" é uma vaga, não uma pessoa: encontrá-lo exige o retrato do grupo
   // inteiro. Para atletas reais, preserva o filtro cirúrgico (só os jogos daquela
   // pessoa), com a classificação estrutural já mantida pelos marcadores.
-  var showGhostGroupContext = !onlyMine && /(^|\s)jogador(?:\s+x)?(?=\s|$)/.test(q);
+  var showGhostGroupContext = !onlyMine && !onlyPending && /(^|\s)jogador(?:\s+x)?(?=\s|$)/.test(q);
   var hitGroups = [];        // somente os grupos achados pela busca de Jogador X
   var markHit = function (el) {
     for (var p = el; p && p !== root && p !== document.body; p = p.parentElement) {
@@ -10852,7 +10883,8 @@ window._bracketApplyFilter = function () {
     var _gMatch = _genderFilter === 'all' || (_genderFilter === 'none' ? (!_cardGender || _cardGender === 'linhas') : _cardGender === _gWanted);
     var _sMatch = _skillFilter === 'all' || (_skillFilter === 'none' ? !_cardCategory.trim() :
       window._bracketNorm(_cardCategory).split(/\s+/).indexOf(window._bracketNorm(_skillFilter)) !== -1);
-    var hit = _casa && _gMatch && _sMatch && (!onlyMine || c.getAttribute('data-my-match') !== '0');
+    var hit = _casa && _gMatch && _sMatch && (!onlyMine || c.getAttribute('data-my-match') !== '0') &&
+      (!onlyPending || c.getAttribute('data-bracket-pending-match') === '1');
     if (hit && q) _hitsDiag.push(c);
     // ⭐ MARCADOR (`data-fb-marker`) DECLARA, NÃO É RESULTADO. A linha da classificação de
     // quem levou W.O. e a pílula "🔁 Fulana W.O. → Beltrana" existem pra dizer DE QUAL GRUPO
@@ -10985,7 +11017,10 @@ window._bracketApplyFilter = function () {
     var _vazio = _filterActive && hitsVisiveis === 0 && markerVisivel === 0;
     empty.style.display = _vazio ? 'block' : 'none';
     if (_vazio) {
-      empty.textContent = onlyMine
+      empty.textContent = onlyPending
+        ? (q ? 'Nenhum jogo pendente com confrontos definidos corresponde à busca.'
+             : 'Nenhum jogo pendente com confrontos definidos nesta chave.')
+        : onlyMine
         ? (q ? 'Nenhum jogo seu com esse nome. Desligue "Só meus jogos" para ver a chave inteira.'
              : 'Você não tem jogos nesta chave. Desligue "Só meus jogos" para ver todos.')
         : (hitsTotal > 0

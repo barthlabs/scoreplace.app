@@ -32,6 +32,27 @@ const sandbox={window:null,document:{
 sandbox.window=sandbox; vm.createContext(sandbox);
 // carrega só as 2 funções do fim do bracket.js
 const src=fs.readFileSync(path.join(ROOT,'js','views','bracket.js'),'utf8');
+const headerStart=src.indexOf('window._bracketHeaderFilterButtons = function');
+const headerEnd=src.indexOf('window._bracketSyncHeaderFilterButtons = function',headerStart);
+vm.runInContext(src.slice(headerStart,headerEnd),sandbox,{filename:'bracket-header-filters'});
+sandbox.window.AppStore={currentUser:{uid:'user'}};
+const header=sandbox.window._bracketHeaderFilterButtons;
+ok(/Jogos pendentes<\/button>.*Só meus jogos<\/button>/.test(header(true,true)),'organizador vê os dois botões na ordem correta');
+ok(!/Jogos pendentes/.test(header(false,true)) && /Só meus jogos/.test(header(false,true)),'participante não vê o filtro administrativo');
+ok(header(true,false)==='','sem sorteio não mostra filtros de jogos');
+const pendingStart=src.indexOf('window._bracketIsPendingMatch = function');
+const pendingEnd=src.indexOf('window._togglePendingMatches = function',pendingStart);
+vm.runInContext(src.slice(pendingStart,pendingEnd),sandbox,{filename:'bracket-pending-match'});
+const pending=sandbox.window._bracketIsPendingMatch;
+ok(pending({p1:'Ana',p2:'Bia'}),'dois confrontantes definidos, sem vencedor: pendente');
+ok(pending({p1:'Ana',p2:'Bia',pendingResult:{score:'6-4'}}),'placar proposto ainda não definitivo: pendente');
+ok(!pending({p1:'Ana',p2:'Bia',winner:'Ana'}),'resultado definitivo não é pendente');
+ok(!pending({p1:'Ana',p2:'Bia',draw:true}),'empate definitivo não é pendente');
+ok(!pending({p1:'Ana',p2:'TBD'}),'oponente da fase anterior indefinido não é pendente');
+ok(!pending({p1:'Ana',p2:'Vencedor do jogo 186'}),'referência de origem não é confronto definido');
+ok(!pending({p1:'Ana',p2:'Bia',isBye:true}),'BYE não é jogo pendente');
+ok(pending({p1:'',p1Uid:'uid-a',p2:'Bia'}),'UID canônico basta para definir um lado sem nome hidratado');
+ok(!pending({p1:'',team1Uids:[],p2:'Bia'}),'lista vazia de UIDs não define adversário');
 const i=src.indexOf('window._bracketNorm = function');
 vm.runInContext(src.slice(i),sandbox,{filename:'bracket-filter'});
 const F=sandbox.window._bracketApplyFilter;
@@ -113,6 +134,18 @@ sandbox.window._filterBarState.chaves.gender='all'; F();
 ok(vis()[1]===true && vis()[0]===false,'categoria Power sem gênero restringe somente o jogo Power');
 sandbox.window._filterBarState.chaves.skill='all'; F();
 ok(vis().every(Boolean),'limpar gênero/categoria restaura os jogos');
+
+// O novo filtro compõe com busca e "Só meus jogos"; não aceita cards sem jogo.
+cards[0].getAttribute=(k)=>({'data-players':'José Silva | Ana','data-match-num':'167','data-my-match':'1','data-bracket-pending-match':'1'})[k];
+cards[1].getAttribute=(k)=>({'data-players':'Bruno / Carla | Bruno | Carla','data-match-num':'168','data-my-match':'0','data-bracket-pending-match':'0'})[k];
+cards[2].getAttribute=(k)=>({'data-players':'Dinho 168 | Elza','data-match-num':'169','data-my-match':'0','data-bracket-pending-match':'1'})[k];
+sandbox.window._showOnlyPendingMatches=true; F();
+ok(JSON.stringify(vis())==='[true,false,true]','pendentes escondem apenas jogo definitivo/indefinido');
+sandbox.window._showOnlyMyMatches=true; F();
+ok(JSON.stringify(vis())==='[true,false,false]','pendentes + meus jogos: interseção');
+input.value='dinho'; F();
+ok(vis().every(v=>!v),'busca + pendentes + meus jogos preservam interseção');
+input.value=''; sandbox.window._showOnlyMyMatches=false; sandbox.window._showOnlyPendingMatches=false; F();
 
 // Jogador X é uma VAGA — encontrá-lo pede o contexto completo do grupo (os três
 // jogos e a classificação), enquanto a busca por pessoa real acima continua cirúrgica.

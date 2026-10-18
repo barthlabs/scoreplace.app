@@ -71,8 +71,8 @@ const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'bracket.j
   const iQ = topo.indexOf("querySelectorAll('[data-players]')");
   ok(iM > 0 && iQ > iM,
      '⛔ e nessa ordem — procurar antes de montar acharia menos cards do que existem');
-  ok(/_filterActive && typeof window\._chaveMontaTudo/.test(topo) && /q \|\| onlyMine \|\| _genderFilter/.test(topo),
-     'vale pra busca por texto, só meus jogos, gênero e categoria');
+  ok(/_filterActive && typeof window\._chaveMontaTudo/.test(topo) && /q \|\| onlyMine \|\| onlyPending \|\| _genderFilter/.test(topo),
+     'vale pra busca por texto, só meus jogos, jogos pendentes, gênero e categoria');
 }
 
 // ── ⑤ montar é UMA VEZ SÓ ───────────────────────────────────────────────────
