@@ -118,6 +118,24 @@ const zoom = ui.slice(ui.indexOf('window._applyBracketZoom = function'), ui.inde
       return window._bracketZoom;
     });
     assert.ok(groupZoom < 1, 'a classificatória também aceita zoom out');
+    const zoomFocus = await page.evaluate(() => {
+      const wrapper = document.querySelector('.bracket-scroll-container');
+      const content = wrapper.querySelector('.bracket-columns-track');
+      document.body.style.paddingTop = '1000px';
+      document.body.style.paddingBottom = '1200px';
+      content.style.minHeight = '900px';
+      window._applyBracketZoom(.5);
+      window.scrollTo(0, 940);
+      const beforeRect = content.getBoundingClientRect();
+      const wrapperRect = wrapper.getBoundingClientRect();
+      const centerY = (Math.max(0, wrapperRect.top) + Math.min(window.innerHeight, wrapperRect.bottom)) / 2;
+      const logicalY = (centerY - beforeRect.top) / .5;
+      window._applyBracketZoom(1);
+      const afterRect = content.getBoundingClientRect();
+      return { before: centerY, after: afterRect.top + logicalY, scrollTop: window.scrollY };
+    });
+    assert.ok(Math.abs(zoomFocus.before - zoomFocus.after) < 3,
+      'ampliar após reduzir mantém o ponto central da chave no mesmo lugar: ' + JSON.stringify(zoomFocus));
     console.log('bracket-tree-zoom: OK');
   } finally { await browser.close(); }
 })().catch(err => { console.error(err); process.exitCode = 1; });

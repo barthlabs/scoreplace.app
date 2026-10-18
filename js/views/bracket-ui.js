@@ -1245,8 +1245,28 @@ window._toggleBracketMode = function (tId) {
   _rerenderBracket(tId);
 };
 
-window._applyBracketZoom = function (value) {
-  window._bracketZoom = Math.max(0.01, Math.min(8, Number(value) || 1));
+window._applyBracketZoom = function (value, anchor) {
+  var previousZoom = window._bracketZoom || 1;
+  var nextZoom = Math.max(0.01, Math.min(8, Number(value) || 1));
+  var wrapper = anchor && anchor.wrapper;
+  if (!wrapper) wrapper = Array.prototype.find.call(document.querySelectorAll('.bracket-sticky-scroll-wrapper, .bracket-scroll-container'), function (candidate) {
+    var rect = candidate.getBoundingClientRect();
+    return rect.width > 0 && rect.bottom > 0 && rect.top < window.innerHeight && candidate.querySelector('.bracket-scroll-content, .bracket-columns-track');
+  });
+  var focusedContent = wrapper && wrapper.querySelector('.bracket-scroll-content, .bracket-columns-track');
+  var focus = null;
+  if (focusedContent && nextZoom !== previousZoom) {
+    var wrapperRect = wrapper.getBoundingClientRect();
+    var contentRect = focusedContent.getBoundingClientRect();
+    var clientX = anchor && Number.isFinite(anchor.clientX) ? anchor.clientX : (Math.max(0, wrapperRect.left) + Math.min(window.innerWidth, wrapperRect.right)) / 2;
+    var clientY = anchor && Number.isFinite(anchor.clientY) ? anchor.clientY : (Math.max(0, wrapperRect.top) + Math.min(window.innerHeight, wrapperRect.bottom)) / 2;
+    focus = {
+      content: focusedContent, wrapper: wrapper, clientX: clientX, clientY: clientY,
+      x: Math.max(0, Math.min(focusedContent.scrollWidth, (clientX - contentRect.left) / previousZoom)),
+      y: Math.max(0, Math.min(focusedContent.scrollHeight, (clientY - contentRect.top) / previousZoom))
+    };
+  }
+  window._bracketZoom = nextZoom;
   document.querySelectorAll('.bracket-scroll-content, .bracket-columns-track').forEach(function (content) {
     content.style.transform = window._bracketZoom === 1 ? '' : 'scale(' + window._bracketZoom + ')';
     content.style.transformOrigin = 'top left';
@@ -1274,6 +1294,14 @@ window._applyBracketZoom = function (value) {
   const slider = document.getElementById('bracket-zoom-slider');
   if (slider) slider.value = Math.round(window._bracketZoom * 100);
   _recalcFixedScrollbar();
+  if (focus) {
+    // O mesmo ponto da chave permanece sob o centro visível (ou sob a pinça/cursor).
+    // Preservar também Y: só corrigir scrollLeft fazia a página saltar ao ampliar.
+    var rect = focus.content.getBoundingClientRect();
+    focus.wrapper.scrollLeft += rect.left + focus.x * nextZoom - focus.clientX;
+    var deltaY = rect.top + focus.y * nextZoom - focus.clientY;
+    if (Math.abs(deltaY) > 0.5) window.scrollBy(0, deltaY);
+  }
 };
 
 window._setBracketZoom = function (tId, delta) {
@@ -1295,7 +1323,7 @@ window._fitBracketZoom = function () {
     (window.innerHeight * 0.78) / content.scrollHeight);
   window._applyBracketZoom(scale);
   wrapper.scrollLeft = 0;
-  wrapper.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  wrapper.scrollIntoView({ block: 'center', behavior: 'auto' });
 };
 
 window._zoomToMyBracketMatch = function () {
@@ -1306,22 +1334,18 @@ window._zoomToMyBracketMatch = function () {
 };
 
 // O mesmo zoom atende pinça no celular e Cmd/Ctrl + rolagem no desktop.
-// A posição horizontal sob os dedos/cursor permanece estável durante a escala.
+// O ponto sob os dedos/cursor permanece estável nos dois eixos durante a escala.
 window._bindBracketZoomGestures = function (scope) {
   (scope || document).querySelectorAll('.bracket-sticky-scroll-wrapper, .bracket-scroll-container').forEach(function (wrapper) {
     if (wrapper._spZoomGesturesBound || !wrapper.querySelector('.bracket-scroll-content, .bracket-columns-track')) return;
     wrapper._spZoomGesturesBound = true;
-    function zoomAt(value, clientX) {
-      var oldZoom = window._bracketZoom || 1;
-      var x = clientX - wrapper.getBoundingClientRect().left;
-      var contentX = (wrapper.scrollLeft + x) / oldZoom;
-      window._applyBracketZoom(value);
-      wrapper.scrollLeft = Math.max(0, contentX * window._bracketZoom - x);
+    function zoomAt(value, clientX, clientY) {
+      window._applyBracketZoom(value, { wrapper: wrapper, clientX: clientX, clientY: clientY });
     }
     wrapper.addEventListener('wheel', function (event) {
       if (!event.ctrlKey && !event.metaKey) return;
       event.preventDefault();
-      zoomAt((window._bracketZoom || 1) * Math.exp(-event.deltaY * 0.004), event.clientX);
+      zoomAt((window._bracketZoom || 1) * Math.exp(-event.deltaY * 0.004), event.clientX, event.clientY);
     }, { passive: false });
     var pinch = null;
     wrapper.addEventListener('touchstart', function (event) {
@@ -1334,7 +1358,7 @@ window._bindBracketZoomGestures = function (scope) {
       event.preventDefault();
       var a = event.touches[0], b = event.touches[1];
       var distance = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
-      zoomAt(pinch.zoom * distance / pinch.distance, (a.clientX + b.clientX) / 2);
+      zoomAt(pinch.zoom * distance / pinch.distance, (a.clientX + b.clientX) / 2, (a.clientY + b.clientY) / 2);
     }, { passive: false });
     wrapper.addEventListener('touchend', function (event) { if (event.touches.length !== 2) pinch = null; }, { passive: true });
     wrapper.addEventListener('touchcancel', function () { pinch = null; }, { passive: true });

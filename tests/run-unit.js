@@ -131,6 +131,7 @@ const SUITES = [
   'tests/next-game-card-focus-geometry.test.js',
   'tests/bracket-source-link-navigation.test.js',
   'tests/bracket-tree-zoom.test.js',
+  'tests/bracket-round-toggle.test.js',
   'tests/cache-podre-do-firestore-se-joga-fora.test.js',
   'tests/sem-credencial-guardada-abre-o-seletor.test.js',
   'tests/mesmo-link-do-grupo-nao-avisa-de-novo.test.js',

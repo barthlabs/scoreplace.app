@@ -847,6 +847,21 @@ function _bracketLineSection(card) {
   return scroller && scroller.parentElement && scroller.parentElement.parentElement
     ? scroller.parentElement.parentElement : null;
 }
+// A navegação é irmã da busca, fora do contêiner da chave. Procurá-la só em
+// `scope` criava uma segunda faixa Ouro/Prata em cada remontagem/filtro.
+function _bracketFindTabsRoot(host, scope, tournamentId) {
+  var area = host || scope;
+  if (!area) return null;
+  var candidates = Array.prototype.filter.call(area.querySelectorAll('[data-bracket-tabs-root]'), function (node) {
+    return node.getAttribute('data-tournament-id') === String(tournamentId);
+  });
+  var root = candidates[0] || null;
+  for (var i = 1; i < candidates.length; i++) {
+    if (candidates[i]._bracketRoundHeadingPortal) candidates[i]._bracketRoundHeadingPortal.remove();
+    candidates[i].remove();
+  }
+  return root;
+}
 function _bracketIsEliminationTree(t, viewedPhaseIndex) {
   var phaseIndex = viewedPhaseIndex == null ? (t.currentPhaseIndex || 0) : viewedPhaseIndex;
   var phase = t && t.phases && t.phases[phaseIndex];
@@ -981,8 +996,8 @@ window._setBracketPresentation = function (mode, button) {
 function _bracketPresentationControlHtml() {
   var jogos = window._bracketPresentation === 'jogos';
   return '<div class="bracket-presentation-switch" role="group" aria-label="Apresentação da eliminatória">' +
-    '<button type="button" data-bracket-presentation="jogos" aria-pressed="' + jogos + '" class="' + (jogos ? 'active' : '') + '" onclick="window._setBracketPresentation(\'jogos\',this)">Jogos</button>' +
-    '<button type="button" data-bracket-presentation="chaves" aria-pressed="' + !jogos + '" class="' + (jogos ? '' : 'active') + '" onclick="window._setBracketPresentation(\'chaves\',this)">Chaves</button>' +
+    '<button type="button" data-bracket-presentation="jogos" aria-pressed="' + jogos + '" class="' + (jogos ? 'active' : '') + '" title="Jogos sem linhas" onclick="window._setBracketPresentation(\'jogos\',this)">Condensado</button>' +
+    '<button type="button" data-bracket-presentation="chaves" aria-pressed="' + !jogos + '" class="' + (jogos ? '' : 'active') + '" title="Chave com linhas de avanço" onclick="window._setBracketPresentation(\'chaves\',this)">Expandido</button>' +
     '</div>';
 }
 // A régua fixa de rodadas é uma única faixa horizontal, espelhando o trilho
@@ -1563,6 +1578,32 @@ function _bracketSyncRoundHeadingOffsets() {
     _bracketUpdateRoundHeadingPortal(root, scope);
   }
 }
+// Ocultar é uma preferência de leitura local: não altera nem elimina jogos.
+// O botão do cabeçalho fixo tem a mesma chave e controla a coluna original.
+window._toggleBracketRound = function (button) {
+  var key = button && button.getAttribute('data-round-hide-key');
+  if (!key) return;
+  var hidden = window._bracketRoundHidden || (window._bracketRoundHidden = Object.create(null));
+  hidden[key] = !hidden[key];
+  document.querySelectorAll('.bracket-round-column[data-round-hide-key]').forEach(function (column) {
+    if (column.getAttribute('data-round-hide-key') !== key) return;
+    var body = column.querySelector(':scope > .bracket-round-body');
+    if (!body) return;
+    body.style.display = hidden[key] ? 'none' : (body.getAttribute('data-round-body-display') || '');
+    column.setAttribute('data-bracket-round-collapsed', hidden[key] ? '1' : '0');
+    column.querySelectorAll('[data-round-hide-key]').forEach(function (control) {
+      control.textContent = hidden[key] ? 'Mostrar' : 'Ocultar';
+      control.setAttribute('aria-expanded', hidden[key] ? 'false' : 'true');
+    });
+  });
+  var root = document.querySelector('[data-bracket-tabs-root]');
+  if (root) _bracketLayoutEliminationTree(root);
+  _bracketSyncRoundHeadingOffsets();
+};
+window._bracketRoundToggleHtml = function (key, complete, hidden) {
+  if (!complete && !hidden) return '';
+  return '<button type="button" class="btn btn-micro btn-outline" data-round-hide-key="' + key + '" aria-expanded="' + (!hidden) + '" onclick="window._toggleBracketRound(this)" style="pointer-events:auto;white-space:nowrap;">' + (hidden ? 'Mostrar' : 'Ocultar') + '</button>';
+};
 // O trilho da chave rola horizontalmente. CSS sticky dentro dele fica preso a
 // esse rolagem e não acompanha o scroll vertical da página. Espelhamos somente
 // os cabeçalhos que já passaram sob as abas para uma camada fixa, no mesmo x e
@@ -1795,7 +1836,7 @@ window._bracketCategoryTabsMount = function () {
   var tid = (window._currentBracketTournament && window._currentBracketTournament.id) || scope.getAttribute('data-tournament-id') || 'current';
   var id = String(tid);
   var isOnlyLines = order.length === 1 && order[0] === 'linhas';
-  var root = scope.querySelector('[data-bracket-tabs-root]');
+  var root = _bracketFindTabsRoot(tabsHost, scope, id);
   if (!root) {
     root = document.createElement('nav');
     root.setAttribute('data-bracket-tabs-root', '1');
@@ -1938,11 +1979,16 @@ window._bracketCategoryTabsMount = function () {
   // permanentes: inline quando a LARGURA DO PAINEL suporta tudo, ou uma linha
   // própria segura quando split-screen/webview deixariam abas e busca colidirem.
   if (searchWrap && root.contains(searchWrap) && root.parentNode) root.parentNode.insertBefore(searchWrap, root);
+  var presentationTabs = _bracketIsEliminationTree(currentTournament) ? _bracketPresentationControlHtml() : '';
   root.innerHTML = '<div data-bracket-tabs-primary style="display:flex;align-items:flex-end;gap:5px;flex-wrap:nowrap;width:100%;min-width:0;border-bottom:1px solid rgba(129,140,248,.6);padding:0 4px;">' + genderHtml + '<div data-bracket-search-slot="inline" hidden style="margin-left:auto;flex:1 1 260px;max-width:390px;min-width:220px;"></div></div>'
     + '<div data-bracket-search-slot="stack" hidden style="width:100%;min-width:0;padding:8px 4px 0;box-sizing:border-box;"></div>'
     + (isOnlyLines ? '' : '<div style="display:flex;align-items:flex-end;gap:5px;flex-wrap:wrap;width:100%;padding:9px 4px 0;border-bottom:1px solid rgba(129,140,248,.42);">' + categoryHtml + '</div>')
+    + (presentationTabs ? '<div data-bracket-presentation-tabs style="display:flex;justify-content:flex-end;padding:6px 4px 0;">' + presentationTabs + '</div>' : '')
     + (roundHtml ? '<div style="display:flex;gap:7px;flex-wrap:wrap;width:100%;padding:8px 4px 0;border-top:1px solid rgba(255,255,255,.07);">' + roundHtml + '</div>' : '')
     + (isRoundBased ? '' : '<div data-bracket-round-rail aria-label="Rodadas da chave" hidden style="overflow-x:auto;overflow-y:hidden;max-width:100%;background:#111114;border-bottom:1px solid rgba(255,255,255,.08);scrollbar-width:thin;"></div>');
+  document.querySelectorAll('[data-bracket-presentation-fallback]').forEach(function (fallback) {
+    fallback.style.display = presentationTabs ? 'none' : '';
+  });
   _bracketTabsPlaceSearch(root, searchWrap, true);
   _bracketTabsObserveSearchLayout(root, searchWrap);
   // As abas filtram apenas os cards. Esconder um ancestral estrutural escondia
@@ -4607,14 +4653,10 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
     return matches.length > 0 && matches.every(m => m.winner || (m.isBye && !m.sobraAguardaDecisao));
   };
 
-  // A chave é um mapa completo: rodadas nunca somem da visualização. Ocultar uma
-  // rodada concluída fazia parecer que o torneio tinha só R1 e escondia os
-  // confrontos futuros que o organizador precisa conferir.
-  const hiddenSet = new Set();
-
-  // Find the highest hidden round number (for "mostrar" button)
-  let maxHiddenRound = -1;
-  hiddenSet.forEach(r => { if (r > maxHiddenRound) maxHiddenRound = r; });
+  // Só o corpo da rodada concluída é recolhido; o cabeçalho fica para restaurá-la.
+  const roundHideKey = (roundNum) => encodeURIComponent(String(t.id || '') + ':single:' + roundNum);
+  const roundHidden = (roundNum) => !!(window._bracketRoundHidden && window._bracketRoundHidden[roundHideKey(roundNum)]);
+  const roundHideButton = (roundNum, complete) => window._bracketRoundToggleHtml(roundHideKey(roundNum), complete, roundHidden(roundNum));
 
   // Swiss-past match numbers are reserved first so the elim phase continues the
   // count rather than restarting at Jogo 1. There can never be more than one
@@ -4690,18 +4732,18 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
       const idx = activeRounds.indexOf(roundNum);
       const label = getRoundLabel(roundNum, idx);
       const complete = isRoundComplete(roundNum);
-      const hideBtn = '';
+      const hideBtn = roundHideButton(roundNum, complete);
       const matchesHtml = matches.filter(m => !window._isByeMatch(m)).map(m => {
         globalMatchNum++;
         return renderMatchCard(m, canEnterResult, t.id, globalMatchNum);
       }).join('');
       return `
-        <div class="bracket-round-column" data-round-num="${roundNum}" style="display:flex;flex-direction:column;gap:1rem;min-width:280px;">
+        <div class="bracket-round-column" data-round-num="${roundNum}" data-round-hide-key="${roundHideKey(roundNum)}" data-bracket-round-collapsed="${roundHidden(roundNum) ? '1' : '0'}" style="display:flex;flex-direction:column;gap:1rem;min-width:280px;">
           <div class="bracket-round-heading" style="display:flex;align-items:center;gap:8px;">
             <h4 style="color:var(--text-bright);font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:0;border-left:3px solid var(--primary-color);padding-left:8px;flex:1;">${label}${suffix ? ' ' + suffix : ''}</h4>
             ${hideBtn}
           </div>
-          <div style="margin-top:0.5rem;display:flex;flex-direction:column;gap:1.5rem;">${matchesHtml}</div>
+          <div class="bracket-round-body" data-round-body-display="flex" style="margin-top:0.5rem;display:${roundHidden(roundNum) ? 'none' : 'flex'};flex-direction:column;gap:1.5rem;">${matchesHtml}</div>
         </div>`;
     };
 
@@ -4741,10 +4783,13 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
       </div>` : '';
 
     const centerCol = `
-      <div class="bracket-round-column" style="display:flex;flex-direction:column;gap:1rem;min-width:280px;justify-content:center;">
-        <h4 style="color:var(--text-bright);font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:.5rem;border-left:3px solid #fbbf24;padding-left:8px;">🏆 ${finalLabel}</h4>
-        ${finalMatchHtml}
-        ${thirdPlaceCol}
+      <div class="bracket-round-column" data-round-hide-key="${roundHideKey(finalRoundNum)}" data-bracket-round-collapsed="${roundHidden(finalRoundNum) ? '1' : '0'}" style="display:flex;flex-direction:column;gap:1rem;min-width:280px;justify-content:center;">
+        <div class="bracket-round-heading" style="display:flex;align-items:center;gap:8px;">
+          <h4 style="color:var(--text-bright);font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:.5rem;border-left:3px solid #fbbf24;padding-left:8px;flex:1;">🏆 ${finalLabel}</h4>
+          ${roundHideButton(finalRoundNum, isRoundComplete(finalRoundNum))}
+        </div>
+        <div class="bracket-round-body" style="display:${roundHidden(finalRoundNum) ? 'none' : 'block'};">
+        ${finalMatchHtml}${thirdPlaceCol}</div>
       </div>`;
 
     // Assemble: left → center → right
@@ -4755,14 +4800,11 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
   } else {
     // ── Normal left-to-right layout ──
     activeRounds.forEach((roundNum, idx) => {
-      if (hiddenSet.has(roundNum)) return; // Skip hidden rounds
-
       const label = getRoundLabel(roundNum, idx);
       const isFinalRound = (positiveRounds.length > 0 && roundNum === positiveRounds[positiveRounds.length - 1]);
       const complete = isRoundComplete(roundNum);
 
-      // "Ocultar" button — only for completed rounds that are not the final
-      const hideBtn = '';
+      const hideBtn = roundHideButton(roundNum, complete);
 
       const matchesHtml = roundsMap[roundNum].filter(m => !window._isByeMatch(m)).map(m => {
         if (isFinalRound && hasThirdPlace) {
@@ -4780,12 +4822,12 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
         </div>` : '';
 
       roundColumns.push(`
-        <div class="bracket-round-column" data-round-num="${roundNum}" style="display:flex;flex-direction:column;gap:1rem;min-width:280px;">
+        <div class="bracket-round-column" data-round-num="${roundNum}" data-round-hide-key="${roundHideKey(roundNum)}" data-bracket-round-collapsed="${roundHidden(roundNum) ? '1' : '0'}" style="display:flex;flex-direction:column;gap:1rem;min-width:280px;">
           <div class="bracket-round-heading" style="display:flex;align-items:center;gap:8px;">
             <h4 style="color:var(--text-bright);font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:0;border-left:3px solid var(--primary-color);padding-left:8px;flex:1;">${label}</h4>
             ${hideBtn}
           </div>
-          <div style="margin-top:0.5rem;display:flex;flex-direction:column;gap:1.5rem;">
+          <div class="bracket-round-body" data-round-body-display="flex" style="margin-top:0.5rem;display:${roundHidden(roundNum) ? 'none' : 'flex'};flex-direction:column;gap:1.5rem;">
             ${matchesHtml}
             ${thirdPlaceCol}
           </div>
@@ -4874,7 +4916,7 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
     <div style="display:flex;justify-content:flex-end;align-items:center;margin-bottom:0.75rem;gap:10px;flex-wrap:wrap;">
       ${showAllHiddenBtnHtml}
       ${toggleBtnHtml}
-      ${_bracketPresentationControlHtml()}
+      <span data-bracket-presentation-fallback>${_bracketPresentationControlHtml()}</span>
       ${_bracketZoomControlHtml()}
     </div>`;
 
@@ -5571,11 +5613,14 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
       var thirdHtml = (isFinalCol && thirdM)
         ? '<h5 style="color:var(--sp-c-cd7f32,#cd7f32);font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;margin:1rem 0 .5rem;border-left:3px solid #cd7f32;padding-left:8px;">🥉 3º lugar</h5>' + renderMatchCard(thirdM, canEnterResult, t.id, thirdNum)
         : '';
-      // botão Ocultar (direita, alinhado ao box) só em rodada CONCLUÍDA e não-final
-      var hideBtn = '';
-      return '<div class="bracket-round-column" style="display:flex;flex-direction:column;gap:1rem;min-width:280px;">' +
-        '<div class="bracket-round-heading" style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><h5 style="color:' + window._spCor(color, 'color') + ';font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;margin:0;border-left:3px solid ' + window._spCor(color, 'borda') + ';padding-left:8px;"><span>' + label + '</span>' + hideBtn + '</h5></div>' +
-        cards + thirdHtml + '</div>';
+      var roundMatches = isFinalCol && thirdM ? realMatches.concat(thirdM) : realMatches;
+      var complete = roundMatches.length > 0 && roundMatches.every(function (m) { return !!m.winner; });
+      var hideKey = encodeURIComponent(String(t.id || '') + ':' + curPhase + ':' + bracketKey + ':' + col.round);
+      var hidden = !!(window._bracketRoundHidden && window._bracketRoundHidden[hideKey]);
+      var hideBtn = window._bracketRoundToggleHtml(hideKey, complete, hidden);
+      return '<div class="bracket-round-column" data-round-hide-key="' + hideKey + '" data-bracket-round-collapsed="' + (hidden ? '1' : '0') + '" style="display:flex;flex-direction:column;gap:1rem;min-width:280px;">' +
+        '<div class="bracket-round-heading" style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><h5 style="color:' + window._spCor(color, 'color') + ';font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;margin:0;border-left:3px solid ' + window._spCor(color, 'borda') + ';padding-left:8px;"><span>' + label + '</span></h5>' + hideBtn + '</div>' +
+        '<div class="bracket-round-body" data-round-body-display="flex" style="display:' + (hidden ? 'none' : 'flex') + ';flex-direction:column;gap:1rem;">' + cards + thirdHtml + '</div></div>';
     }).join('');
     var showHiddenBtn = '';
     // Título da chave suprimido quando vazio (chave única → sem rótulo, igual categoria única).
@@ -5844,7 +5889,7 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
   }
   var zoomToolbar = (!_isMonarchPhase && !_isLeaguePhase && !_isGroupPhase)
     ? '<div style="display:flex;justify-content:flex-end;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">' +
-      (_bracketIsEliminationTree(t, curPhase) ? _bracketPresentationControlHtml() : '') + _bracketZoomControlHtml() + '</div>' : '';
+      (_bracketIsEliminationTree(t, curPhase) ? '<span data-bracket-presentation-fallback>' + _bracketPresentationControlHtml() + '</span>' : '') + _bracketZoomControlHtml() + '</div>' : '';
   return '<div>' + header + zoomToolbar + body + '</div>';
 }
 window._renderPhaseBracket = _renderPhaseBracket;
@@ -6151,8 +6196,26 @@ window._directBracketSlotSource = function (t, match, slot) {
     if (String(candidate.nextMatchId || '') === targetId && String(candidate.nextSlot || 'p1') === slot) {
       source = candidate; kind = 'winner'; break;
     }
-    if (String(candidate.loserMatchId || '') === targetId && String(candidate.loserSlot || 'p1') === slot) {
+    if ((String(candidate.loserNextMatchId || '') === targetId && String(candidate.loserNextSlot || 'p1') === slot) ||
+        (String(candidate.loserMatchId || '') === targetId && String(candidate.loserSlot || 'p1') === slot)) {
       source = candidate; kind = 'loser'; break;
+    }
+  }
+  // Chaves antigas guardam o 3º lugar em `t.thirdPlaceMatch` sem arestas de
+  // perdedor. Só deduzimos a origem quando as DUAS semifinais apontam para a
+  // mesma final; em qualquer outro desenho, mantemos a vaga indefinida.
+  if (!source && t.thirdPlaceMatch && String(t.thirdPlaceMatch.id || '') === targetId) {
+    var finals = all.filter(function (candidate) {
+      return candidate && candidate.id != null && String(candidate.id) !== targetId && !candidate.nextMatchId && !candidate.isThirdPlace;
+    });
+    var pairs = finals.map(function (final) {
+      return all.filter(function (candidate) {
+        return candidate && String(candidate.nextMatchId || '') === String(final.id);
+      });
+    }).filter(function (pair) { return pair.length === 2; });
+    if (pairs.length === 1) {
+      source = pairs[0][slot === 'p2' ? 1 : 0];
+      kind = 'loser';
     }
   }
   if (!source) return null;

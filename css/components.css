@@ -2133,6 +2133,14 @@ input[type="date"].form-control::-webkit-calendar-picker-indicator:hover {
   }
 }
 
+.bracket-scroll-content > .bracket-round-column[data-bracket-round-collapsed="1"],
+.bracket-columns-track > .bracket-round-column[data-bracket-round-collapsed="1"] {
+  width:180px !important;
+  min-width:180px !important;
+  max-width:180px !important;
+  flex:0 0 180px !important;
+}
+
 /* Barra de scroll fixa (fallback para sticky scroll via JS) */
 .bracket-fixed-scrollbar {
   position: fixed;

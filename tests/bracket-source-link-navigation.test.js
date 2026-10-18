@@ -41,6 +41,25 @@ const navigationCode = tournaments.slice(tournaments.indexOf('window._goToBracke
     assert.match(initial.html, /src&amp;&quot;&lt;/);
     assert.equal(initial.noEdge, '');
     assert.equal(initial.bestLoser, '');
+    const thirdPlace = await page.evaluate(() => {
+      const semifinalA = { id: 'semi-a', _gameNum: 199, loserNextMatchId: 'third', loserNextSlot: 'p1' };
+      const semifinalB = { id: 'semi-b', _gameNum: 200, loserNextMatchId: 'third', loserNextSlot: 'p2' };
+      const third = { id: 'third', isThirdPlace: true, p1: 'TBD', p2: 'TBD' };
+      const tournament = { id: 'confra', matches: [semifinalA, semifinalB, third] };
+      return [window._directBracketSlotLabel(tournament, third, 'p1'), window._directBracketSlotLabel(tournament, third, 'p2')];
+    });
+    assert.deepEqual(thirdPlace, ['Perdedor do jogo 199', 'Perdedor do jogo 200'],
+      'o terceiro lugar lê as duas arestas reais de perdedor, não exibe A definir');
+    const legacyThirdPlace = await page.evaluate(() => {
+      const semifinalA = { id: 'old-semi-a', _gameNum: 199, nextMatchId: 'old-final' };
+      const semifinalB = { id: 'old-semi-b', _gameNum: 200, nextMatchId: 'old-final' };
+      const final = { id: 'old-final', _gameNum: 204 };
+      const third = { id: 'old-third', p1: 'TBD', p2: 'TBD' };
+      const tournament = { id: 'old-confra', matches: [semifinalA, semifinalB, final], thirdPlaceMatch: third };
+      return [window._directBracketSlotLabel(tournament, third, 'p1'), window._directBracketSlotLabel(tournament, third, 'p2')];
+    });
+    assert.deepEqual(legacyThirdPlace, ['Perdedor do jogo 199', 'Perdedor do jogo 200'],
+      'o terceiro lugar legado usa as duas semifinais da final, sem adivinhar outras vagas');
     await page.locator('#card-parent .sp-source-match-link').click();
     const fromDashboard = await page.evaluate(() => ({ routeCalls: window.routeCalls, parentClicks: window.parentClicks }));
     assert.equal(fromDashboard.parentClicks, 0, 'o onclick inline do card pai não dispara');

@@ -1,3 +1,4 @@
+// 2.4.96 — Zoom centrado, rodadas concluídas recolhíveis, 3º lugar com perdedores de origem, abas sem duplicação na busca e alternância Condensado/Expandido.
 // 2.4.95 — Jogos e Chaves também podem ser alternados na fase eliminatória de torneios com várias fases.
 // 2.4.94 — Na eliminatória, alterne entre Jogos (grade prática sem conectores) e Chaves (linhas de avanço), sem perder zoom ou os jogos.
 // 2.4.93 — Chaves eliminatórias mostram linhas entre jogos de origem e destino. Zoom contínuo de 1% a 800% também na classificatória, por pinça ou Cmd/Ctrl + rolagem; enquadrar jogos e voltar ao meu jogo no mesmo controle.

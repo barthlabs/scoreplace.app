@@ -1,3 +1,10 @@
+## 2.4.96 — 18/out/2026 (navegação e apresentação das chaves)
+
+- Ampliar após reduzir o zoom mantém o ponto central visível da chave sob o cursor/centro, sem salto horizontal ou vertical. Enquadrar deixa de disputar a rolagem com uma animação suave.
+- Cada rodada concluída pode ser recolhida e reaberta em seu próprio cabeçalho, inclusive na eliminatória multifase. Os jogos e resultados permanecem intactos; o cabeçalho fica visível.
+- A disputa de 3º lugar identifica os perdedores dos jogos de origem enquanto os confrontos ainda não foram decididos.
+- A busca reutiliza as abas existentes, sem duplicar Ouro/Prata. Nas abas da eliminatória, Condensado mostra a grade sem linhas e Expandido mostra a chave com linhas de avanço.
+
 ## 2.4.95 — 18/out/2026 (alternância na eliminatória multifase)
 
 - A alternância Jogos/Chaves também aparece na eliminatória de torneios com fase classificatória anterior e linhas independentes, como Ouro e Prata.
