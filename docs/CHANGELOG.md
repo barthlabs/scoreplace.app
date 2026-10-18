@@ -1,3 +1,7 @@
+## 2.4.102 — 18/out/2026 (filtro de jogos pendentes)
+
+- Ao ativar Jogos pendentes ou Só meus jogos, a busca anterior é limpa automaticamente, inclusive o estado usado numa remontagem da chave. É possível pesquisar dentro da lista depois de ativar o botão.
+
 ## 2.4.101 — 18/out/2026 (abas da chave ao filtrar)
 
 - Buscar ou aplicar filtros e remontar a chave reutiliza a mesma barra de abas Ouro/Prata, sem duplicar a navegação. O campo de busca mantém valor e listeners, inclusive ao mudar a largura da tela.

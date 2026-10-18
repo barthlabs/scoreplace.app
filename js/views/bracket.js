@@ -173,8 +173,22 @@ window._bracketIsPendingMatch = function(m) {
   };
   return defined(m.p1, m.p1Uid || m.team1Uids) && defined(m.p2, m.p2Uid || m.team2Uids);
 };
+function _bracketClearSearchForHeaderFilter() {
+  var search = document.getElementById('bracket-search');
+  if (search) search.value = '';
+  // A barra canônica recria o input a partir deste estado. Limpar só o DOM
+  // faria a consulta antiga reaparecer na próxima montagem da chave.
+  window._filterBarState = window._filterBarState || {};
+  window._filterBarState.chaves = window._filterBarState.chaves || {};
+  window._filterBarState.chaves.search = '';
+  var clear = document.getElementById('bracket-search-clear');
+  if (clear) clear.style.display = 'none';
+}
 window._togglePendingMatches = function(checked) {
   var anchor = null, topBefore = 0;
+  // Um clique novo abre a lista sem herdar uma consulta textual anterior.
+  // A busca feita DEPOIS do clique continua refinando os pendentes.
+  if (checked) _bracketClearSearchForHeaderFilter();
   if (!checked) {
     var current = document.querySelectorAll('[data-bracket-pending-match="1"]');
     for (var j = 0; j < current.length; j++) {
@@ -232,6 +246,7 @@ window._togglePendingMatches = function(checked) {
  * dele → último), e `--scroll-anchor` já vive no `scroll-margin-top` do card e do box.
  * ⛔ `_travaRolagemDaChave` continua mandando: com placar em edição, ninguém rola nada. */
 window._toggleMyMatches = function(checked) {
+  if (checked) _bracketClearSearchForHeaderFilter();
   var _ancora = null, _topoAntes = 0;
   var _alvo = function () {
     try { return (typeof window._bracketEntryTarget === 'function') ? window._bracketEntryTarget() : null; }

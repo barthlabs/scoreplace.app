@@ -57,19 +57,36 @@ const toggleStart=src.indexOf('window._togglePendingMatches = function');
 const toggleEnd=src.indexOf('window._toggleMyMatches = function',toggleStart);
 let focused=0, filtered=0;
 const body={style:{},parentElement:null};
+const pendingSearch={value:'inga'};
+const pendingClear={style:{display:'block'}};
 const pendingCard={style:{},parentElement:body,
   getBoundingClientRect:()=>({top:90,bottom:160}),scrollIntoView:()=>{focused++;}};
 const toggleSandbox={window:null,document:{body,
-  querySelectorAll:()=>[pendingCard],getElementById:()=>null},
+  querySelectorAll:()=>[pendingCard],getElementById:(id)=>id==='bracket-search'?pendingSearch:(id==='bracket-search-clear'?pendingClear:null)},
   requestAnimationFrame:(fn)=>fn(),setTimeout:(fn)=>fn(),
   _applyMyMatchesFilter:()=>{filtered++;}};
 toggleSandbox.window=toggleSandbox;
+toggleSandbox.window._filterBarState={chaves:{search:'inga'}};
 toggleSandbox.window._bracketSyncHeaderFilterButtons=()=>{};
 vm.createContext(toggleSandbox);
-vm.runInContext(src.slice(toggleStart,toggleEnd),toggleSandbox,{filename:'bracket-pending-toggle'});
+const clearStart=src.indexOf('function _bracketClearSearchForHeaderFilter()');
+vm.runInContext(src.slice(clearStart,toggleEnd),toggleSandbox,{filename:'bracket-pending-toggle'});
 toggleSandbox.window._togglePendingMatches(true);
 ok(toggleSandbox.window._showOnlyPendingMatches===true && filtered===1 && focused===1,
   'ativar pendentes aplica o filtro e leva ao primeiro jogo visível');
+ok(pendingSearch.value==='' && toggleSandbox.window._filterBarState.chaves.search==='' && pendingClear.style.display==='none',
+  'ativar pendentes limpa input, estado persistido e botão de limpar');
+pendingSearch.value='nova busca'; toggleSandbox.window._filterBarState.chaves.search='nova busca';
+toggleSandbox.window._togglePendingMatches(false);
+ok(pendingSearch.value==='nova busca' && toggleSandbox.window._filterBarState.chaves.search==='nova busca',
+  'desligar pendentes preserva a busca feita depois da ativação');
+const mineStart=src.indexOf('window._toggleMyMatches = function');
+const mineEnd=src.indexOf('// ── PINTAR EM ETAPAS',mineStart);
+vm.runInContext(src.slice(mineStart,mineEnd),toggleSandbox,{filename:'bracket-mine-toggle'});
+toggleSandbox.window._bracketEntryTarget=()=>pendingCard;
+toggleSandbox.window._toggleMyMatches(true);
+ok(pendingSearch.value==='' && toggleSandbox.window._filterBarState.chaves.search==='' && pendingClear.style.display==='none',
+  'ativar Só meus jogos também limpa a busca anterior por completo');
 const i=src.indexOf('window._bracketNorm = function');
 vm.runInContext(src.slice(i),sandbox,{filename:'bracket-filter'});
 const F=sandbox.window._bracketApplyFilter;
