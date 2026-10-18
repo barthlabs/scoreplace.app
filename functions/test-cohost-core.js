@@ -120,5 +120,24 @@ function baseDoc() {
   eq('tipo inválido', C.computeRespondHostInvite(baseDoc(), CO, 'xpto', 'accept').outcome, 'notFound');
 })();
 
+// Reserva manual não dá acesso; reivindicação autenticada gera convite, não admin.
+(() => {
+  const d = { creatorUid: ORG, coHosts: [], coHostReservations: [
+    { manualParticipantId: 'slot-2', enrollSeq: 2 },
+    { manualParticipantId: 'slot-85', enrollSeq: 85 }
+  ] };
+  eq('reserva não entra em adminUids', C.computeAdminUids(d), [ORG]);
+  eq('outro slot não promove', C.claimReservedOrganizer(d, {
+    outcome: 'claimed', manualParticipantId: 'slot-3', participantUid: CO
+  }), null);
+  const patch = C.claimReservedOrganizer(d, {
+    outcome: 'claimed', manualParticipantId: 'slot-85', participantUid: CO
+  });
+  ok('reserva vira convite pendente por UID', patch && patch.coHosts.length === 1 &&
+    patch.coHosts[0].uid === CO && patch.coHosts[0].status === 'pending');
+  eq('demais reservas permanecem', patch.coHostReservations.map(x => x.enrollSeq), [2]);
+  eq('convite pendente ainda não é admin', C.computeAdminUids(Object.assign({}, d, patch)), [ORG]);
+})();
+
 console.log('\ncohost-core: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);

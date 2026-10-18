@@ -116,7 +116,7 @@ window._duplaCard = function (t, p, draggable, ctx) {
       }
       return n(a) - n(b);
     }) : null;
-    var members = _pairDisplayMembers ? _pairDisplayMembers.map(function (m) { return window._displayName(m.uid, m.guest); }) : null;
+    var members = _pairDisplayMembers ? _pairDisplayMembers.map(function (m) { return window._displayName(m.uid, m.guest) || m.guest; }) : null;
     /* A categoria da DUPLA é uma decisão do torneio, não uma inferência do perfil de
      * cada pessoa. Em inscrições em lote (como o Neon), os placeholders não têm perfil:
      * tentar montar os badges por membro produzia dois "sem cat" mesmo quando o registro
@@ -4768,6 +4768,29 @@ function renderTournaments(container, tournamentId = null) {
             }
           });
         }
+        // Reserva por identidade manual: mostra a escolha da organização sem
+        // conceder acesso por nome. O UID só vira convite após reivindicar a vaga.
+        (Array.isArray(_t.coHostReservations) ? _t.coHostReservations : []).forEach(function(reservation) {
+          if (!reservation || !reservation.manualParticipantId) return;
+          var _member = null;
+          (_competitors || []).some(function(entry) {
+            if (!entry || typeof entry !== 'object') return false;
+            if (entry.p1ManualId === reservation.manualParticipantId) {
+              _member = entry.p1Name || ''; return true;
+            }
+            if (entry.p2ManualId === reservation.manualParticipantId) {
+              _member = entry.p2Name || ''; return true;
+            }
+            if (entry.manualParticipantId === reservation.manualParticipantId) {
+              _member = entry.displayName || entry.name || ''; return true;
+            }
+            return false;
+          });
+          if (!_member) return;
+          _orgCards += '<div class="sp-org-card sp-org-reserved" data-players="' + window._safeHtml(_member) + '" data-my-match="1" style="box-sizing:border-box;padding:8px 12px;border-radius:10px;border:1px dashed rgba(251,191,36,.65);background:rgba(251,191,36,.07);flex:1 1 13.5rem;max-width:100%;min-height:58px;">' +
+            '<div style="font-weight:700;color:var(--text-bright);">' + window._safeHtml(_member) + '</div>' +
+            '<div style="font-size:.65rem;color:var(--sp-c-fbbf24,#fbbf24);">⭐ Organização designada · aguardando vínculo e aceite</div></div>';
+        });
         // VAGA de co-organização (alvo de drag + toque) — só pra quem pode promover.
         if (_isCreatorNow) _orgCards += _buildDropzone();
         // "Falar com o organizador" — visível só pra quem NÃO faz parte da

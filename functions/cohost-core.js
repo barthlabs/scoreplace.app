@@ -66,6 +66,23 @@ function coHostsArray(data) {
   return Array.isArray(data && data.coHosts) ? data.coHosts : [];
 }
 
+// A designação de uma vaga digitada não concede acesso. Só o vínculo canônico,
+// autenticado pelo titular, a transforma em convite pendente para o UID real.
+function claimReservedOrganizer(data, changes) {
+  const reservations = Array.isArray(data && data.coHostReservations) ? data.coHostReservations : [];
+  if (!changes || changes.outcome !== 'claimed' || !changes.manualParticipantId || !changes.participantUid) return null;
+  const matching = reservations.filter((item) => item && item.manualParticipantId === changes.manualParticipantId);
+  if (matching.length !== 1) return null;
+  const uid = String(changes.participantUid);
+  if (coHostsArray(data).some((item) => item && item.uid === uid)) return null;
+  return {
+    coHostReservations: reservations.filter((item) => item !== matching[0]),
+    coHosts: coHostsArray(data).map(coHostUidRecord).concat([{
+      uid, status: 'pending', type: 'cohost', invitedAt: new Date().toISOString()
+    }])
+  };
+}
+
 // Coorganização é uma relação de conta: o documento guarda uid + estado, jamais uma
 // fotografia de perfil. Campos de contato e display sobreviviam em documentos antigos e
 // eram reenviados a cada convite/cancelamento; limpar a cópia aqui impede essa regressão.
@@ -275,5 +292,6 @@ function computeMutateHostOrganization(data, callerUid, input) {
 
 module.exports = {
   computeAdminUids, computeAdminEmails, pendingCoHostIndex, computeRespondHostInvite,
-  tournamentHasMember, participantDisplayName, computeMutateHostOrganization
+  tournamentHasMember, participantDisplayName, computeMutateHostOrganization,
+  claimReservedOrganizer
 };

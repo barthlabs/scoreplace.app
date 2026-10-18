@@ -4692,11 +4692,12 @@ function _writeCanonicalRosterChanges(tx, tournamentRef, tournament, registratio
       updatedAt: _FV.serverTimestamp(),
     }));
   });
+  const reservedOrganizerPatch = _coHostCore.claimReservedOrganizer(tournament, changes);
   tx.update(tournamentRef, Object.assign({
     canonicalRegistrationMigration: next.tournament.canonicalRegistrationMigration,
     memberUids: _canonicalRegistrationBoundary.memberUids(next.tournament, next.registrations),
     updatedAt: _FV.serverTimestamp(),
-  }, extraTournamentPatch || {}));
+  }, extraTournamentPatch || {}, reservedOrganizerPatch || {}));
   return next;
 }
 

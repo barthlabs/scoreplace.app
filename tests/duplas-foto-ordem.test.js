@@ -29,6 +29,15 @@ const visibleNames = [...adrianaCard.matchAll(/<span class="sp-fit-name"[^>]*>([
 assert.deepStrictEqual(visibleNames, ['Adriana de Marco Pilli', 'Adriana Rosa']);
 assert(adrianaCard.includes('>3</text>'));
 assert(adrianaCard.includes('>4</text>'));
+// Um placeholder sem UID continua pesquisável pelo nome visível, mesmo quando
+// _displayName ainda não hidrata a vaga manual (regressão da busca por Rolf 85).
+const originalDisplayName = W._displayName;
+W._displayName = (uid, guest) => uid ? originalDisplayName(uid, guest) : '';
+const manualCard = W._duplaCard(tournament([pair('Rolf Stauffenegger', 'Saulo Sanchez', 85, 86)]),
+  pair('Rolf Stauffenegger', 'Saulo Sanchez', 85, 86), false);
+W._displayName = originalDisplayName;
+assert(manualCard.includes('data-part-name="rolf stauffenegger saulo sanchez"'),
+  'filtro inclui o nome do placeholder e o parceiro');
 
 const all64 = Array.from({ length: 64 }, (_, i) => pair('Pessoa ' + (i * 2 + 1),
   'Pessoa ' + (i * 2 + 2), i * 2 + 1, i * 2 + 2));
