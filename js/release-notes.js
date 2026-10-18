@@ -2,7 +2,7 @@
 // transferidas de categorias masculinas mais três selecionadas entre as demais.
 // Cada time tem duas duplas na quinta e uma na sexta, identificada como dupla 3.
 // Fem Power e Extreme jogam quinta; categorias masculinas, sexta. A regra vale
-// para o torneio e para futuros testes em sandbox, sem alterar automaticamente
+// para o Neon identificado pelo ID e para futuros testes em sandbox, sem alterar automaticamente
 // inscrições, categorias ou jogos antes da confirmação do sorteio.
 // 2.4.99 — Na chave, “Só meus jogos” virou botão; organizadores têm “Jogos pendentes” para ver confrontos definidos ainda sem resultado definitivo.
 // 2.4.98 — O botão lateral de rodadas não fica sob o cabeçalho e não se duplica com o de fase. A classificação mostra o nome conhecido pelo UID, sem alterar posições.
