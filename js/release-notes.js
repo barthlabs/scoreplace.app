@@ -1,3 +1,4 @@
+// 2.4.94 — Na eliminatória, alterne entre Jogos (grade prática sem conectores) e Chaves (linhas de avanço), sem perder zoom ou os jogos.
 // 2.4.93 — Chaves eliminatórias mostram linhas entre jogos de origem e destino. Zoom contínuo de 1% a 800% também na classificatória, por pinça ou Cmd/Ctrl + rolagem; enquadrar jogos e voltar ao meu jogo no mesmo controle.
 // 2.4.92 — Ao abrir "Vencedor do jogo X" na chave, a busca é limpa e o jogo de origem aparece mesmo que o filtro anterior o ocultasse.
 // 2.4.91 — O perfil guarda dias e horários em que a pessoa pode ou não jogar por modalidade.

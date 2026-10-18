@@ -865,12 +865,17 @@ function _bracketLayoutEliminationTree(root) {
   if (!root) return;
   var zoomScope = root.closest ? root.closest('#view-container, #inline-bracket-container') : document;
   if (typeof window._bindBracketZoomGestures === 'function') window._bindBracketZoomGestures(zoomScope);
-  if (!_bracketIsEliminationTree(tournament)) {
-    var stale = root.closest ? root.closest('#view-container, #inline-bracket-container') : document;
-    if (stale) stale.querySelectorAll('svg[data-bracket-tree-lines]').forEach(function (svg) { svg.remove(); });
+  if (window._bracketTreeLayoutFrame) cancelAnimationFrame(window._bracketTreeLayoutFrame);
+  if (!_bracketIsEliminationTree(tournament) || window._bracketPresentation === 'jogos') {
+    if (zoomScope) {
+      zoomScope.querySelectorAll('svg[data-bracket-tree-lines]').forEach(function (svg) { svg.remove(); });
+      zoomScope.querySelectorAll('[data-bracket-tree-margin]').forEach(function (card) {
+        card.style.marginTop = '';
+        card.removeAttribute('data-bracket-tree-margin');
+      });
+    }
     return;
   }
-  if (window._bracketTreeLayoutFrame) cancelAnimationFrame(window._bracketTreeLayoutFrame);
   window._bracketTreeLayoutFrame = requestAnimationFrame(function () {
     var scope = root.closest ? root.closest('#view-container, #inline-bracket-container') : document;
     var tracks = scope ? scope.querySelectorAll('.bracket-scroll-content, .bracket-columns-track') : [];
@@ -957,6 +962,18 @@ function _bracketLayoutEliminationTree(root) {
     });
   }
 }
+window._setBracketPresentation = function (mode, button) {
+  if (mode !== 'jogos' && mode !== 'chaves') return;
+  window._bracketPresentation = mode;
+  var scope = button && button.closest ? button.closest('#inline-bracket-container, #view-container') : document;
+  if (!scope) scope = document;
+  scope.querySelectorAll('[data-bracket-presentation]').forEach(function (item) {
+    var selected = item.getAttribute('data-bracket-presentation') === mode;
+    item.setAttribute('aria-pressed', selected ? 'true' : 'false');
+    item.classList.toggle('active', selected);
+  });
+  _bracketLayoutEliminationTree(scope.querySelector('[data-bracket-tabs-root]') || scope);
+};
 // A régua fixa de rodadas é uma única faixa horizontal, espelhando o trilho
 // ativo. Ela substitui o resumo que quebrava em três linhas ("Linha / Rodada /
 // Oitavas...") e não usa botões: cada nome continua sendo apenas o cabeçalho
@@ -4846,6 +4863,10 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
     <div style="display:flex;justify-content:flex-end;align-items:center;margin-bottom:0.75rem;gap:10px;flex-wrap:wrap;">
       ${showAllHiddenBtnHtml}
       ${toggleBtnHtml}
+      <div class="bracket-presentation-switch" role="group" aria-label="Apresentação da eliminatória">
+        <button type="button" data-bracket-presentation="jogos" aria-pressed="${window._bracketPresentation === 'jogos'}" class="${window._bracketPresentation === 'jogos' ? 'active' : ''}" onclick="window._setBracketPresentation('jogos',this)">Jogos</button>
+        <button type="button" data-bracket-presentation="chaves" aria-pressed="${window._bracketPresentation !== 'jogos'}" class="${window._bracketPresentation === 'jogos' ? '' : 'active'}" onclick="window._setBracketPresentation('chaves',this)">Chaves</button>
+      </div>
       ${_bracketZoomControlHtml()}
     </div>`;
 

@@ -90,6 +90,12 @@ const zoom = ui.slice(ui.indexOf('window._applyBracketZoom = function'), ui.inde
     await page.waitForFunction(() => !!document.querySelector('path[data-source-match="a"][data-target-match="semi2"]'));
     assert.equal(await page.locator('path[data-source-match="a"][data-target-match="semi1"]').count(), 0,
       'trocar a origem altera o conector, mesmo sem mudar a posição dos cartões');
+    await page.evaluate(() => window._setBracketPresentation('jogos'));
+    assert.equal(await page.locator('svg[data-bracket-tree-lines]').count(), 0, 'Jogos remove os conectores sem recriar os cards');
+    assert.equal(await page.locator('[data-bracket-tree-margin]').count(), 0, 'Jogos devolve os cards à posição compacta');
+    await page.evaluate(() => window._setBracketPresentation('chaves'));
+    await page.waitForFunction(() => !!document.querySelector('path[data-source-match="a"][data-target-match="semi2"]'));
+    assert.equal(await page.locator('.sp-match-card').count(), 7, 'alternar de volta preserva os jogos');
     await page.evaluate(() => { window._currentBracketTournament.phases[0].kind = 'classification'; _bracketLayoutEliminationTree(document.querySelector('[data-bracket-tabs-root]')); });
     assert.equal(await page.locator('svg[data-bracket-tree-lines]').count(), 0, 'a classificatória não mostra conectores');
     const groupZoom = await page.evaluate(() => {

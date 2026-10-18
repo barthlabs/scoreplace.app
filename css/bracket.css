@@ -3,6 +3,32 @@ details[open] > summary .standings-toggle-show { display: none; }
 details[open] > summary .standings-toggle-hide { display: inline !important; }
 summary::-webkit-details-marker { display: none; }
 
+.bracket-presentation-switch {
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-card);
+}
+.bracket-presentation-switch button {
+  min-height: 36px;
+  padding: 5px 12px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-bright);
+  font: inherit;
+  font-size: .78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.bracket-presentation-switch button.active {
+  border-color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 20%, var(--bg-card));
+}
+.bracket-presentation-switch button:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+
 /* Cabeçalho de cada rodada no layout empilhado. A grade de colunas tem portal
  * próprio; Liga/Ranking usa este mesmo ponto de ancoragem sob o cabeçalho global. */
 .sp-bracket-round-heading {

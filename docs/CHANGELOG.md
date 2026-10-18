@@ -1,3 +1,7 @@
+## 2.4.94 — 18/out/2026 (Jogos e Chaves)
+
+- A eliminatória alterna entre Jogos, a grade compacta de partidas, e Chaves, o desenho com conectores entre jogos de origem e destino. A alternância não altera confrontos, filtros, resultados ou dados do torneio.
+
 ## 2.4.93 — 17/out/2026 (linhas reais e zoom contínuo na chave)
 
 - Em eliminatórias, cada linha segue `nextMatchId` do jogo de origem para o confronto seguinte; BYEs, jogos ocultos e classificatórias não geram ligações presumidas. Quando há espaço, o cartão da rodada seguinte desce até o centro dos dois jogos de origem sem se sobrepor aos demais.
