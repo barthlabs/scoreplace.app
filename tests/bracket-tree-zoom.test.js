@@ -96,6 +96,19 @@ const zoom = ui.slice(ui.indexOf('window._applyBracketZoom = function'), ui.inde
     await page.evaluate(() => window._setBracketPresentation('chaves'));
     await page.waitForFunction(() => !!document.querySelector('path[data-source-match="a"][data-target-match="semi2"]'));
     assert.equal(await page.locator('.sp-match-card').count(), 7, 'alternar de volta preserva os jogos');
+    await page.evaluate(() => {
+      window._currentBracketTournament.phases = [{ kind: 'group' }, { kind: 'elimination' }];
+      window._currentBracketTournament.currentPhaseIndex = 0;
+      document.querySelector('.bracket-columns-track').setAttribute('data-bracket-phase-index', '1');
+      _bracketLayoutEliminationTree(document.querySelector('[data-bracket-tabs-root]'));
+    });
+    await page.waitForFunction(() => !!document.querySelector('path[data-source-match="a"][data-target-match="semi2"]'));
+    assert.equal(await page.locator('svg[data-bracket-tree-lines] path').count(), 6,
+      'a eliminatória consultada mantém os conectores mesmo quando a fase atual é de grupos');
+    await page.evaluate(() => window._currentBracketTournament.phases[1].kind = 'classification');
+    await page.evaluate(() => _bracketLayoutEliminationTree(document.querySelector('[data-bracket-tabs-root]')));
+    await page.waitForFunction(() => !document.querySelector('svg[data-bracket-tree-lines]'));
+    assert.equal(await page.locator('svg[data-bracket-tree-lines]').count(), 0, 'fase não eliminatória não desenha conectores');
     await page.evaluate(() => { window._currentBracketTournament.phases[0].kind = 'classification'; _bracketLayoutEliminationTree(document.querySelector('[data-bracket-tabs-root]')); });
     assert.equal(await page.locator('svg[data-bracket-tree-lines]').count(), 0, 'a classificatória não mostra conectores');
     const groupZoom = await page.evaluate(() => {

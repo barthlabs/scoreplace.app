@@ -1,3 +1,7 @@
+## 2.4.95 — 18/out/2026 (alternância na eliminatória multifase)
+
+- A alternância Jogos/Chaves também aparece na eliminatória de torneios com fase classificatória anterior e linhas independentes, como Ouro e Prata.
+
 ## 2.4.94 — 18/out/2026 (Jogos e Chaves)
 
 - A eliminatória alterna entre Jogos, a grade compacta de partidas, e Chaves, o desenho com conectores entre jogos de origem e destino. A alternância não altera confrontos, filtros, resultados ou dados do torneio.

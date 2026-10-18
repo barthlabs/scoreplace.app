@@ -847,8 +847,9 @@ function _bracketLineSection(card) {
   return scroller && scroller.parentElement && scroller.parentElement.parentElement
     ? scroller.parentElement.parentElement : null;
 }
-function _bracketIsEliminationTree(t) {
-  var phase = t && t.phases && t.phases[t.currentPhaseIndex || 0];
+function _bracketIsEliminationTree(t, viewedPhaseIndex) {
+  var phaseIndex = viewedPhaseIndex == null ? (t.currentPhaseIndex || 0) : viewedPhaseIndex;
+  var phase = t && t.phases && t.phases[phaseIndex];
   // A fase canônica vence qualquer rótulo que sobrou do formato de origem.
   // Sem isto, uma classificatória convertida que ainda carregasse `formatCode:
   // 'elim'` poderia receber conectores de chave, sugerindo avanço entre rodadas
@@ -866,7 +867,7 @@ function _bracketLayoutEliminationTree(root) {
   var zoomScope = root.closest ? root.closest('#view-container, #inline-bracket-container') : document;
   if (typeof window._bindBracketZoomGestures === 'function') window._bindBracketZoomGestures(zoomScope);
   if (window._bracketTreeLayoutFrame) cancelAnimationFrame(window._bracketTreeLayoutFrame);
-  if (!_bracketIsEliminationTree(tournament) || window._bracketPresentation === 'jogos') {
+  if (window._bracketPresentation === 'jogos') {
     if (zoomScope) {
       zoomScope.querySelectorAll('svg[data-bracket-tree-lines]').forEach(function (svg) { svg.remove(); });
       zoomScope.querySelectorAll('[data-bracket-tree-margin]').forEach(function (card) {
@@ -884,11 +885,14 @@ function _bracketLayoutEliminationTree(root) {
       var track = tracks[ti];
       var oldSvg = track.querySelector(':scope > svg[data-bracket-tree-lines]');
       if (oldSvg) oldSvg.remove();
+      track.querySelectorAll('[data-bracket-tree-margin]').forEach(function (card) {
+        card.style.marginTop = '';
+        card.removeAttribute('data-bracket-tree-margin');
+      });
+      var viewedPhaseIndex = track.hasAttribute('data-bracket-phase-index')
+        ? Number(track.getAttribute('data-bracket-phase-index')) : null;
+      if (!_bracketIsEliminationTree(tournament, viewedPhaseIndex)) continue;
       var cards = Array.prototype.filter.call(track.querySelectorAll('.sp-match-card'), function (card) {
-        if (card.hasAttribute('data-bracket-tree-margin')) {
-          card.style.marginTop = '';
-          card.removeAttribute('data-bracket-tree-margin');
-        }
         return !card.hidden && card.getClientRects().length > 0 && card.closest('.bracket-round-column');
       });
       var byId = Object.create(null);
@@ -974,6 +978,13 @@ window._setBracketPresentation = function (mode, button) {
   });
   _bracketLayoutEliminationTree(scope.querySelector('[data-bracket-tabs-root]') || scope);
 };
+function _bracketPresentationControlHtml() {
+  var jogos = window._bracketPresentation === 'jogos';
+  return '<div class="bracket-presentation-switch" role="group" aria-label="Apresentação da eliminatória">' +
+    '<button type="button" data-bracket-presentation="jogos" aria-pressed="' + jogos + '" class="' + (jogos ? 'active' : '') + '" onclick="window._setBracketPresentation(\'jogos\',this)">Jogos</button>' +
+    '<button type="button" data-bracket-presentation="chaves" aria-pressed="' + !jogos + '" class="' + (jogos ? '' : 'active') + '" onclick="window._setBracketPresentation(\'chaves\',this)">Chaves</button>' +
+    '</div>';
+}
 // A régua fixa de rodadas é uma única faixa horizontal, espelhando o trilho
 // ativo. Ela substitui o resumo que quebrava em três linhas ("Linha / Rodada /
 // Oitavas...") e não usa botões: cada nome continua sendo apenas o cabeçalho
@@ -4863,10 +4874,7 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
     <div style="display:flex;justify-content:flex-end;align-items:center;margin-bottom:0.75rem;gap:10px;flex-wrap:wrap;">
       ${showAllHiddenBtnHtml}
       ${toggleBtnHtml}
-      <div class="bracket-presentation-switch" role="group" aria-label="Apresentação da eliminatória">
-        <button type="button" data-bracket-presentation="jogos" aria-pressed="${window._bracketPresentation === 'jogos'}" class="${window._bracketPresentation === 'jogos' ? 'active' : ''}" onclick="window._setBracketPresentation('jogos',this)">Jogos</button>
-        <button type="button" data-bracket-presentation="chaves" aria-pressed="${window._bracketPresentation !== 'jogos'}" class="${window._bracketPresentation === 'jogos' ? '' : 'active'}" onclick="window._setBracketPresentation('chaves',this)">Chaves</button>
-      </div>
+      ${_bracketPresentationControlHtml()}
       ${_bracketZoomControlHtml()}
     </div>`;
 
@@ -5579,7 +5587,7 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
       _tardioPendenteHtml(bracketKey, color) +
       '<div style="display:flex;align-items:flex-start;gap:10px;">' +
         showHiddenBtn +
-        '<div class="bracket-scroll-container" data-hscroll="tier:' + _hsKey(bracketKey) + '" style="display:flex;gap:32px;overflow-x:auto;padding-bottom:8px;flex:1;min-width:0;"><div class="bracket-columns-track" style="display:flex;gap:32px;min-width:max-content;">' + colsHtml + '<div style="min-width:120px;flex-shrink:0;">&nbsp;</div></div></div>' +
+        '<div class="bracket-scroll-container" data-hscroll="tier:' + _hsKey(bracketKey) + '" style="display:flex;gap:32px;overflow-x:auto;padding-bottom:8px;flex:1;min-width:0;"><div class="bracket-columns-track" data-bracket-phase-index="' + curPhase + '" style="display:flex;gap:32px;min-width:max-content;">' + colsHtml + '<div style="min-width:120px;flex-shrink:0;">&nbsp;</div></div></div>' +
       '</div>' +
       // A chave vem antes; a classificação é consulta e fica recolhível abaixo.
       (showClassif === false ? '' : _tierClassifHtml(bracketKey, color)) +
@@ -5835,7 +5843,8 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
     body = tiersHtml + _gfBoxes + _sb;
   }
   var zoomToolbar = (!_isMonarchPhase && !_isLeaguePhase && !_isGroupPhase)
-    ? '<div style="display:flex;justify-content:flex-end;margin-bottom:10px;">' + _bracketZoomControlHtml() + '</div>' : '';
+    ? '<div style="display:flex;justify-content:flex-end;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">' +
+      (_bracketIsEliminationTree(t, curPhase) ? _bracketPresentationControlHtml() : '') + _bracketZoomControlHtml() + '</div>' : '';
   return '<div>' + header + zoomToolbar + body + '</div>';
 }
 window._renderPhaseBracket = _renderPhaseBracket;
