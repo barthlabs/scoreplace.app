@@ -74,9 +74,12 @@ function claimReservedOrganizer(data, changes) {
   const matching = reservations.filter((item) => item && item.manualParticipantId === changes.manualParticipantId);
   if (matching.length !== 1) return null;
   const uid = String(changes.participantUid);
-  if (coHostsArray(data).some((item) => item && item.uid === uid)) return null;
+  const remaining = reservations.filter((item) => item !== matching[0]);
+  if (uid === data.creatorUid || coHostsArray(data).some((item) => item && item.uid === uid)) {
+    return { coHostReservations: remaining };
+  }
   return {
-    coHostReservations: reservations.filter((item) => item !== matching[0]),
+    coHostReservations: remaining,
     coHosts: coHostsArray(data).map(coHostUidRecord).concat([{
       uid, status: 'pending', type: 'cohost', invitedAt: new Date().toISOString()
     }])

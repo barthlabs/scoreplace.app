@@ -137,6 +137,18 @@ function baseDoc() {
     patch.coHosts[0].uid === CO && patch.coHosts[0].status === 'pending');
   eq('demais reservas permanecem', patch.coHostReservations.map(x => x.enrollSeq), [2]);
   eq('convite pendente ainda não é admin', C.computeAdminUids(Object.assign({}, d, patch)), [ORG]);
+  const existing = C.claimReservedOrganizer(Object.assign({}, d, {
+    coHosts: [{ uid: CO, status: 'active', type: 'cohost' }]
+  }), { outcome: 'claimed', manualParticipantId: 'slot-85', participantUid: CO });
+  eq('cohost existente só consome a reserva', existing, {
+    coHostReservations: [{ manualParticipantId: 'slot-2', enrollSeq: 2 }]
+  });
+  const creator = C.claimReservedOrganizer(d, {
+    outcome: 'claimed', manualParticipantId: 'slot-2', participantUid: ORG
+  });
+  eq('criador não recebe convite redundante', creator, {
+    coHostReservations: [{ manualParticipantId: 'slot-85', enrollSeq: 85 }]
+  });
 })();
 
 console.log('\ncohost-core: ' + pass + ' passaram, ' + fail + ' falharam');
