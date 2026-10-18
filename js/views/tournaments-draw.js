@@ -2998,7 +2998,8 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
         '</section>' +
       '</div>' +
       (!valid ? '<p style="margin:0 0 14px;color:var(--sp-c-f87171,#f87171);font-weight:700;">' +
-        (organizationFinal && (savedPairDays.size !== 24 || savedOriginPolicy !== 'female-light-organization-final') ? 'Sorteio bloqueado: a lista final dos 24 dias das duplas Fem Light ainda não foi importada da planilha.' :
+        (organizationFinal && savedOriginPolicy !== 'female-light-organization-final' ? 'Sorteio bloqueado: a política de dias salva não corresponde à distribuição final definida pela organização.' :
+        organizationFinal && savedPairDays.size !== 24 ? 'Sorteio bloqueado: a lista final dos 24 dias das duplas Fem Light ainda não foi importada da planilha.' :
         !organizationFinal && missingOriginCount ? 'Sorteio bloqueado: ' + missingOriginCount + ' dupla(s) Fem Light não têm categoria de inscrição original registrada. Os dados foram preservados; a origem precisa ser corrigida antes do sorteio.' :
         fivePlusThreePlan && (markedLight.length !== 5 || originalLight.length !== 19) ? 'Sorteio bloqueado: a regra 5+3 exige exatamente 5 duplas Fem Light marcadas e 19 demais duplas Fem Light; confira as reclassificações.' :
         'O sorteio está bloqueado: são necessárias ' + expectedPairs + ' duplas já formadas. Categorias divergentes: ' + safe(invalidCategories.join(', ') || 'total de inscritos') + '.') + '</p>' : '') +

@@ -70,7 +70,7 @@ if (/Sorteio bloqueado/.test(overlay.innerHTML) || !/8 duplas Fem Light de sexta
 }
 tournament.teamCompetition.schedule.originDayPolicy = '';
 W._showTeamCompetitionDrawReview(tournament.id, { _canonicalRosterLoaded:true });
-if (!/lista final dos 24 dias das duplas Fem Light ainda não foi importada/.test(overlay.innerHTML)) {
+if (!/política de dias salva não corresponde à distribuição final/.test(overlay.innerHTML)) {
   throw new Error('ID do Neon exige política nominal explícita');
 }
 tournament.id = 'other_tournament';
