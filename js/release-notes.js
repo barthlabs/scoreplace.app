@@ -1,4 +1,4 @@
-// 2.4.99 — Atualização consolidada de produção com as correções validadas desde a última publicação.
+// 2.4.99 — Na chave, “Só meus jogos” virou botão; organizadores têm “Jogos pendentes” para ver confrontos definidos ainda sem resultado definitivo.
 // 2.4.98 — O botão lateral de rodadas não fica sob o cabeçalho e não se duplica com o de fase. A classificação mostra o nome conhecido pelo UID, sem alterar posições.
 // 2.4.97 — Rodadas anteriores voltam uma por clique pelo controle lateral; Condensado/Expandido ocupa a mesma linha das abas.
 // 2.4.96 — Zoom centrado, rodadas concluídas recolhíveis, 3º lugar com perdedores de origem, abas sem duplicação na busca e alternância Condensado/Expandido.
@@ -822,6 +822,7 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #38bdf8;border-radius:12px;padding:14px 16px;background:rgba(56,189,248,0.08);">' +
       '<div style="font-weight:800; color:var(--sp-c-7dd3fc,#7dd3fc); font-size:1rem; margin-bottom:8px;">🚀 v2.4 — Equipes configuráveis, grade contínua e sorteio mais justo <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Outubro, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🎮 Filtros da chave:</b> “Só meus jogos” virou botão. A organização também pode mostrar apenas <b>Jogos pendentes</b> com os dois adversários definidos e resultado ainda não aprovado em definitivo, inclusive placares em análise.</li>' +
         '<li><b>🎾 Vagas por categoria na mão da organização:</b> em torneios por equipes, a organização escolhe separadamente quantas <b>duplas de cada equipe</b> entram em cada categoria e quantos <b>jogos cada dupla</b> disputa. Light, Power e Extreme podem ter formatos diferentes no mesmo torneio.</li>' +
         '<li><b>🤝 Duplas da mesma equipe não se enfrentam:</b> quando uma equipe tem mais de uma dupla na categoria, o sorteio bloqueia confrontos internos e procura adversários de outras equipes.</li>' +
         '<li><b>🗓️ Previsão de quadras sem intervalos inventados:</b> a análise usa a capacidade contínua das quadras e mostra a quantidade real de jogos e janelas necessárias antes da publicação.</li>' +
