@@ -102,7 +102,10 @@ function isRetiredCategoryProjectionHistory(existing, desiredById) {
     text(existing && existing.validationState) === 'superseded_legacy_category_projection' &&
     text(existing && existing.withdrawnReason) === 'category_projection_superseded' &&
     text(existing && existing.participantKey) === text(target.participantKey) &&
-    text(existing && existing.categoryId) === UNCATEGORIZED_CATEGORY_ID &&
+    (text(existing && existing.categoryId) === UNCATEGORIZED_CATEGORY_ID ||
+      (text(existing && existing.categoryId) !== UNCATEGORIZED_CATEGORY_ID &&
+        text(target.categoryId) === UNCATEGORIZED_CATEGORY_ID &&
+        text(target.status) === 'confirmed')) &&
     !text(existing && existing.fixedPairId);
 }
 
@@ -113,11 +116,13 @@ function isRetiredCategoryProjectionHistory(existing, desiredById) {
  * entre duas categorias nem tocamos em duplas. */
 function repairCandidate(existing, desired, alreadyIds) {
   if (!existing || text(existing.status) !== 'confirmed' ||
-      text(existing.validationState) !== 'legacy_imported' ||
-      text(existing.categoryId) !== UNCATEGORIZED_CATEGORY_ID) return null;
+      text(existing.validationState) !== 'legacy_imported') return null;
   const key = text(existing.participantKey);
+  const sourceUncategorized = text(existing.categoryId) === UNCATEGORIZED_CATEGORY_ID;
   const targets = desired.filter((item) => text(item.participantKey) === key &&
-    text(item.categoryId) !== UNCATEGORIZED_CATEGORY_ID && alreadyIds.has(item.registrationId));
+    (sourceUncategorized ? text(item.categoryId) !== UNCATEGORIZED_CATEGORY_ID :
+      text(item.categoryId) === UNCATEGORIZED_CATEGORY_ID) &&
+    alreadyIds.has(item.registrationId));
   if (targets.length !== 1) return null;
   const sourcePairId = text(existing.fixedPairId);
   const targetPairId = text(targets[0].fixedPairId);

@@ -46,6 +46,53 @@ const pairedOld = Object.assign({}, stored, {
   [R.registrationId('uid:u3', R.UNCATEGORIZED_CATEGORY_ID)]: Object.assign({}, legacyUncategorized[R.registrationId('uid:u3', R.UNCATEGORIZED_CATEGORY_ID)], { fixedPairId: 'old-pair' })
 });
 ok('não aposenta uma metade de dupla sem a outra metade correspondente', M.decideMaterialization('t1', report, pairedOld).reconciliationCandidates.length === 0);
+
+const inverseReport = R.projectLegacyRoster('t2', [
+  { sourceKey: 'pair-inverse', entry: { p1Uid: 'a', p2Uid: 'b' } },
+]);
+const inverseDesired = M.desiredDocuments('t2', inverseReport);
+ok('projeção inversa preserva o lote sem categoria e a dupla', inverseDesired.length === 2 &&
+  inverseDesired.every((item) => item.categoryId === R.UNCATEGORIZED_CATEGORY_ID && !!item.fixedPairId));
+const inverseExisting = Object.fromEntries(inverseDesired.map((item) => [item.registrationId, item]));
+const typedOld = inverseDesired.map((item) => Object.assign({}, item, {
+  registrationId: R.registrationId(item.participantKey, 'cat-old'), categoryId: 'cat-old',
+}));
+typedOld.forEach((item) => { inverseExisting[item.registrationId] = item; });
+const inverseDecision = M.decideMaterialization('t2', inverseReport, inverseExisting);
+ok('detecta as duas cópias tipadas antigas da dupla como candidatas coerentes',
+  inverseDecision.reconciliationCandidates.length === 2 && inverseDecision.unexpectedExisting.length === 2 &&
+  inverseDecision.creates.length === 0 && inverseDecision.conflicts.length === 0);
+const inverseRetired = Object.assign({}, inverseExisting);
+inverseDecision.reconciliationCandidates.forEach((candidate) => {
+  inverseRetired[candidate.registrationId] = Object.assign({}, inverseRetired[candidate.registrationId], {
+    status: 'withdrawn', validationState: 'superseded_legacy_category_projection',
+    withdrawnReason: 'category_projection_superseded', supersededByRegistrationId: candidate.supersededByRegistrationId,
+    fixedPairId: null,
+  });
+});
+const inverseAgain = M.decideMaterialization('t2', inverseReport, inverseRetired);
+ok('segundo exame do estado aposentado é idempotente e classifica histórico',
+  inverseAgain.reconciliationCandidates.length === 0 && inverseAgain.unexpectedExisting.length === 0 &&
+  inverseAgain.historicalExisting.length === 2);
+const inverseActive = Object.assign({}, inverseExisting, {
+  [typedOld[0].registrationId]: Object.assign({}, typedOld[0], { status: 'waitlisted' }),
+});
+ok('não aposenta cópia que deixou de estar confirmada', M.decideMaterialization('t2', inverseReport, inverseActive).reconciliationCandidates.length === 0);
+const inverseWrongCategory = Object.assign({}, inverseExisting, {
+  [typedOld[0].registrationId]: Object.assign({}, typedOld[0], { categoryId: R.UNCATEGORIZED_CATEGORY_ID }),
+});
+ok('não confunde outra cópia sem categoria com o ramo inverso',
+  M.decideMaterialization('t2', inverseReport, inverseWrongCategory).reconciliationCandidates.length === 0);
+const inverseWrongPair = Object.assign({}, inverseExisting, {
+  [typedOld[0].registrationId]: Object.assign({}, typedOld[0], { fixedPairId: 'different-pair' }),
+});
+ok('não aposenta dupla incoerente', M.decideMaterialization('t2', inverseReport, inverseWrongPair).reconciliationCandidates.length === 0);
+const inverseAmbiguousReport = R.projectLegacyRoster('t3', [
+  { sourceKey: 'solo-a', entry: { uid: 'a' } },
+  { sourceKey: 'solo-a-again', entry: { uid: 'a' } },
+]);
+ok('duplicidade na projeção continua identificada como conflito', inverseAmbiguousReport.conflicts.length > 0);
+bad('duplicidade na projeção não libera reconciliação', () => M.decideMaterialization('t3', inverseAmbiguousReport, {}));
 bad('recusa plano ainda com exceções', () => M.desiredDocuments('t1', Object.assign({}, report, { unsupported: [{ reason: 'x' }] })));
 
 const server = fs.readFileSync(__dirname + '/index.js', 'utf8');
