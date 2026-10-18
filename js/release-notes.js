@@ -1,4 +1,4 @@
-// 2.4.103 — Atualização consolidada de produção com as correções validadas desde a última publicação.
+// 2.4.103 — “Só meus jogos” e “Jogos pendentes” não se sobrepõem; o filtro abre a aba do jogo encontrado.
 // 2.4.102 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.101 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.100 — No Neon, 16 duplas Fem Light jogam quinta e oito sexta: as cinco
@@ -831,7 +831,7 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #38bdf8;border-radius:12px;padding:14px 16px;background:rgba(56,189,248,0.08);">' +
       '<div style="font-weight:800; color:var(--sp-c-7dd3fc,#7dd3fc); font-size:1rem; margin-bottom:8px;">🚀 v2.4 — Equipes configuráveis, grade contínua e sorteio mais justo <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Outubro, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
-        '<li><b>🎮 Filtros da chave:</b> “Só meus jogos” virou botão. A organização também pode mostrar apenas <b>Jogos pendentes</b> com os dois adversários definidos e resultado ainda não aprovado em definitivo, inclusive placares em análise.</li>' +
+        '<li><b>🎮 Filtros da chave:</b> “Só meus jogos” virou botão. A organização também pode mostrar apenas <b>Jogos pendentes</b> com os dois adversários definidos e resultado ainda não aprovado em definitivo, inclusive placares em análise. Ao ativar um desses filtros, o outro desliga, a busca anterior é limpa e a aba com o jogo encontrado aparece.</li>' +
         '<li><b>🎾 Vagas por categoria na mão da organização:</b> em torneios por equipes, a organização escolhe separadamente quantas <b>duplas de cada equipe</b> entram em cada categoria e quantos <b>jogos cada dupla</b> disputa. Light, Power e Extreme podem ter formatos diferentes no mesmo torneio.</li>' +
         '<li><b>🤝 Duplas da mesma equipe não se enfrentam:</b> quando uma equipe tem mais de uma dupla na categoria, o sorteio bloqueia confrontos internos e procura adversários de outras equipes.</li>' +
         '<li><b>🗓️ Previsão de quadras sem intervalos inventados:</b> a análise usa a capacidade contínua das quadras e mostra a quantidade real de jogos e janelas necessárias antes da publicação.</li>' +
