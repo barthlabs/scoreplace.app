@@ -1,3 +1,4 @@
+// 2.4.99 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.98 — O botão lateral de rodadas não fica sob o cabeçalho e não se duplica com o de fase. A classificação mostra o nome conhecido pelo UID, sem alterar posições.
 // 2.4.97 — Rodadas anteriores voltam uma por clique pelo controle lateral; Condensado/Expandido ocupa a mesma linha das abas.
 // 2.4.96 — Zoom centrado, rodadas concluídas recolhíveis, 3º lugar com perdedores de origem, abas sem duplicação na busca e alternância Condensado/Expandido.
