@@ -106,7 +106,8 @@ const tabCard=(category,pending)=>({style:{display:''},getAttribute:(k)=>({
   'data-bracket-tab-round':'2', 'data-my-pending':pending?'1':'0'
 })[k]});
 const ownCards=[tabCard('Ouro',false),tabCard('Prata',true)];
-const tabRoot={getAttribute:(k)=>({'data-tournament-id':'torneio','data-bracket-round-tabs':'1'})[k],
+let hasRoundTabs='1';
+const tabRoot={getAttribute:(k)=>({'data-tournament-id':'torneio','data-bracket-round-tabs':hasRoundTabs})[k],
   querySelectorAll:(sel)=>sel.includes('data-my-match')?ownCards:[ownCards[1]]};
 const tabSandbox={window:null,document:{querySelector:(sel)=>sel==='[data-bracket-tabs-root]'?tabRoot:null},
   _bracketTabsApply:(...args)=>tabCalls.push(args)};
@@ -120,6 +121,10 @@ ok(tabCalls.length===1 && tabCalls[0][2]==='Prata' && tabCalls[0][3]==='2',
 tabSandbox.window._bracketTabState.torneio={gender:'',category:'Prata',round:'2'};
 tabSandbox.window._bracketTabsRevealFilteredMatch('pending');
 ok(tabCalls.length===1,'aba já correta não é remontada ao aplicar pendentes');
+hasRoundTabs='0';
+tabSandbox.window._bracketTabState.torneio={gender:'',category:'Prata',round:''};
+tabSandbox.window._bracketTabsRevealFilteredMatch('mine');
+ok(tabCalls.length===1,'sem abas de rodada, round do card não remonta a categoria já selecionada');
 const i=src.indexOf('window._bracketNorm = function');
 vm.runInContext(src.slice(i),sandbox,{filename:'bracket-filter'});
 const F=sandbox.window._bracketApplyFilter;

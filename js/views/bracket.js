@@ -2209,7 +2209,7 @@ window._bracketTabsRevealFilteredMatch = function (kind) {
   var round = target.getAttribute('data-bracket-tab-round') || '';
   if (!category) return;
   var state = window._bracketTabState && window._bracketTabState[tid];
-  if (state && state.gender === gender && state.category === category && (!root.getAttribute('data-bracket-round-tabs') || state.round === round)) return;
+  if (state && state.gender === gender && state.category === category && (root.getAttribute('data-bracket-round-tabs') !== '1' || state.round === round)) return;
   _bracketTabsApply(tid, gender, category, round);
 };
 
