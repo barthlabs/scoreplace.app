@@ -1,3 +1,8 @@
+## 2.4.97 — 18/out/2026 (controles da chave)
+
+- Na chave eliminatória, o controle lateral “Mostrar rodada anterior” reabre uma rodada por clique, sem ocupar espaço com colunas de rodadas recolhidas.
+- Condensado/Expandido usa fonte menor e fica na mesma linha das abas principais, sem adicionar uma faixa vertical.
+
 ## 2.4.96 — 18/out/2026 (navegação e apresentação das chaves)
 
 - Ampliar após reduzir o zoom mantém o ponto central visível da chave sob o cursor/centro, sem salto horizontal ou vertical. Enquadrar deixa de disputar a rolagem com uma animação suave.

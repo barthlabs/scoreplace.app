@@ -1,3 +1,4 @@
+// 2.4.97 — Rodadas anteriores voltam uma por clique pelo controle lateral; Condensado/Expandido ocupa a mesma linha das abas.
 // 2.4.96 — Zoom centrado, rodadas concluídas recolhíveis, 3º lugar com perdedores de origem, abas sem duplicação na busca e alternância Condensado/Expandido.
 // 2.4.95 — Jogos e Chaves também podem ser alternados na fase eliminatória de torneios com várias fases.
 // 2.4.94 — Na eliminatória, alterne entre Jogos (grade prática sem conectores) e Chaves (linhas de avanço), sem perder zoom ou os jogos.

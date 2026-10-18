@@ -1604,6 +1604,19 @@ window._bracketRoundToggleHtml = function (key, complete, hidden) {
   if (!complete && !hidden) return '';
   return '<button type="button" class="btn btn-micro btn-outline" data-round-hide-key="' + key + '" aria-expanded="' + (!hidden) + '" onclick="window._toggleBracketRound(this)" style="pointer-events:auto;white-space:nowrap;">' + (hidden ? 'Mostrar' : 'Ocultar') + '</button>';
 };
+window._revealBracketPreviousRound = function (button) {
+  var scope = button && button.closest('[data-bracket-round-reveal-scope]');
+  if (!scope) return;
+  var columns = Array.prototype.slice.call(scope.querySelectorAll('.bracket-round-column[data-bracket-round-collapsed="1"]'));
+  // A rodada mais próxima da chave visível volta primeiro. Colunas espelhadas
+  // compartilham a chave; _toggleBracketRound reabre as duas em um só clique.
+  columns.sort(function (a, b) { return Number(b.getAttribute('data-round-num')) - Number(a.getAttribute('data-round-num')); });
+  var control = columns[0] && columns[0].querySelector('[data-round-hide-key]');
+  if (control) window._toggleBracketRound(control);
+};
+function _bracketPreviousRoundButtonHtml() {
+  return '<button type="button" class="bracket-previous-round-button" aria-label="Mostrar rodada anterior" title="Mostrar rodada anterior" onclick="window._revealBracketPreviousRound(this)">Mostrar rodada anterior</button>';
+}
 // O trilho da chave rola horizontalmente. CSS sticky dentro dele fica preso a
 // esse rolagem e não acompanha o scroll vertical da página. Espelhamos somente
 // os cabeçalhos que já passaram sob as abas para uma camada fixa, no mesmo x e
@@ -1797,6 +1810,9 @@ function _bracketTabsObserveSearchLayout(root, searchWrap) {
     window.addEventListener('resize', window._bracketTabsFallbackResizeListener, { passive: true });
   }
 }
+window._bracketPrimaryTabsHtml = function (genderHtml, presentationTabs) {
+  return '<div data-bracket-tabs-primary style="display:flex;align-items:flex-end;gap:5px;flex-wrap:nowrap;width:100%;min-width:0;border-bottom:1px solid rgba(129,140,248,.6);padding:0 4px;">' + '<div data-bracket-main-tabs style="display:flex;align-items:flex-end;gap:5px;flex:0 1 auto;min-width:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;">' + genderHtml + '</div>' + (presentationTabs ? '<div data-bracket-presentation-tabs style="margin-left:auto;flex:0 0 auto;align-self:center;">' + presentationTabs + '</div>' : '') + '<div data-bracket-search-slot="inline" hidden style="margin-left:auto;flex:1 1 260px;max-width:390px;min-width:220px;"></div></div>';
+};
 window._bracketCategoryTabsMount = function () {
   var cards = Array.prototype.slice.call(document.querySelectorAll('[data-bracket-tab-category]'));
   if (!cards.length) return;
@@ -1980,10 +1996,11 @@ window._bracketCategoryTabsMount = function () {
   // própria segura quando split-screen/webview deixariam abas e busca colidirem.
   if (searchWrap && root.contains(searchWrap) && root.parentNode) root.parentNode.insertBefore(searchWrap, root);
   var presentationTabs = _bracketIsEliminationTree(currentTournament) ? _bracketPresentationControlHtml() : '';
-  root.innerHTML = '<div data-bracket-tabs-primary style="display:flex;align-items:flex-end;gap:5px;flex-wrap:nowrap;width:100%;min-width:0;border-bottom:1px solid rgba(129,140,248,.6);padding:0 4px;">' + genderHtml + '<div data-bracket-search-slot="inline" hidden style="margin-left:auto;flex:1 1 260px;max-width:390px;min-width:220px;"></div></div>'
+  // Só as abas rolam em painéis estreitos; a linha inteira não pode ter
+  // overflow porque também hospeda a busca e suas sugestões.
+  root.innerHTML = window._bracketPrimaryTabsHtml(genderHtml, presentationTabs)
     + '<div data-bracket-search-slot="stack" hidden style="width:100%;min-width:0;padding:8px 4px 0;box-sizing:border-box;"></div>'
     + (isOnlyLines ? '' : '<div style="display:flex;align-items:flex-end;gap:5px;flex-wrap:wrap;width:100%;padding:9px 4px 0;border-bottom:1px solid rgba(129,140,248,.42);">' + categoryHtml + '</div>')
-    + (presentationTabs ? '<div data-bracket-presentation-tabs style="display:flex;justify-content:flex-end;padding:6px 4px 0;">' + presentationTabs + '</div>' : '')
     + (roundHtml ? '<div style="display:flex;gap:7px;flex-wrap:wrap;width:100%;padding:8px 4px 0;border-top:1px solid rgba(255,255,255,.07);">' + roundHtml + '</div>' : '')
     + (isRoundBased ? '' : '<div data-bracket-round-rail aria-label="Rodadas da chave" hidden style="overflow-x:auto;overflow-y:hidden;max-width:100%;background:#111114;border-bottom:1px solid rgba(255,255,255,.08);scrollbar-width:thin;"></div>');
   document.querySelectorAll('[data-bracket-presentation-fallback]').forEach(function (fallback) {
@@ -4783,7 +4800,7 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
       </div>` : '';
 
     const centerCol = `
-      <div class="bracket-round-column" data-round-hide-key="${roundHideKey(finalRoundNum)}" data-bracket-round-collapsed="${roundHidden(finalRoundNum) ? '1' : '0'}" style="display:flex;flex-direction:column;gap:1rem;min-width:280px;justify-content:center;">
+      <div class="bracket-round-column" data-round-num="${finalRoundNum}" data-round-hide-key="${roundHideKey(finalRoundNum)}" data-bracket-round-collapsed="${roundHidden(finalRoundNum) ? '1' : '0'}" style="display:flex;flex-direction:column;gap:1rem;min-width:280px;justify-content:center;">
         <div class="bracket-round-heading" style="display:flex;align-items:center;gap:8px;">
           <h4 style="color:var(--text-bright);font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:.5rem;border-left:3px solid #fbbf24;padding-left:8px;flex:1;">🏆 ${finalLabel}</h4>
           ${roundHideButton(finalRoundNum, isRoundComplete(finalRoundNum))}
@@ -4957,11 +4974,14 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
     ${championHtml}
     ${toolbarHtml}
     ${pendingSurplusHtml}
-    <div class="bracket-sticky-scroll-wrapper" data-hscroll="main" style="overflow-x:scroll!important;overflow-y:visible;display:block;width:100%;max-width:100%;">
+    <div class="bracket-round-reveal-scope" data-bracket-round-reveal-scope>
+    ${_bracketPreviousRoundButtonHtml()}
+    <div class="bracket-sticky-scroll-wrapper" data-hscroll="main" style="overflow-x:scroll!important;overflow-y:visible;display:block;flex:1;min-width:0;max-width:100%;">
       <div class="bracket-scroll-content" style="display:inline-flex;gap:32px;align-items:flex-start;padding:1rem 0;min-width:max-content;${zoomTransform}">
         ${roundsHtml}
         <div style="min-width:200px;flex-shrink:0;">&nbsp;</div>
       </div>
+    </div>
     </div>
     ${standbyHtml || ''}
     ${classifHtml}
@@ -5618,11 +5638,10 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
       var hideKey = encodeURIComponent(String(t.id || '') + ':' + curPhase + ':' + bracketKey + ':' + col.round);
       var hidden = !!(window._bracketRoundHidden && window._bracketRoundHidden[hideKey]);
       var hideBtn = window._bracketRoundToggleHtml(hideKey, complete, hidden);
-      return '<div class="bracket-round-column" data-round-hide-key="' + hideKey + '" data-bracket-round-collapsed="' + (hidden ? '1' : '0') + '" style="display:flex;flex-direction:column;gap:1rem;min-width:280px;">' +
+      return '<div class="bracket-round-column" data-round-num="' + col.round + '" data-round-hide-key="' + hideKey + '" data-bracket-round-collapsed="' + (hidden ? '1' : '0') + '" style="display:flex;flex-direction:column;gap:1rem;min-width:280px;">' +
         '<div class="bracket-round-heading" style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><h5 style="color:' + window._spCor(color, 'color') + ';font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;margin:0;border-left:3px solid ' + window._spCor(color, 'borda') + ';padding-left:8px;"><span>' + label + '</span></h5>' + hideBtn + '</div>' +
         '<div class="bracket-round-body" data-round-body-display="flex" style="display:' + (hidden ? 'none' : 'flex') + ';flex-direction:column;gap:1rem;">' + cards + thirdHtml + '</div></div>';
     }).join('');
-    var showHiddenBtn = '';
     // Título da chave suprimido quando vazio (chave única → sem rótulo, igual categoria única).
     var _titleH4 = title ? '<h4 data-bracket-tier-title style="color:' + window._spCor(color, 'color') + ';font-size:0.85rem;text-transform:uppercase;letter-spacing:2px;border-left:4px solid ' + window._spCor(color, 'borda') + ';padding-left:10px;margin-bottom:1rem;">' + title + '</h4>' : '';
     return '<div style="margin-bottom:2rem;">' +
@@ -5630,8 +5649,8 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
       /* ⛔ o pedido pendente aparece SEMPRE que existir, mesmo com a classificação escondida: ele é
        * uma decisão esperando a organização, não parte da tabela. */
       _tardioPendenteHtml(bracketKey, color) +
-      '<div style="display:flex;align-items:flex-start;gap:10px;">' +
-        showHiddenBtn +
+      '<div class="bracket-round-reveal-scope" data-bracket-round-reveal-scope>' +
+        _bracketPreviousRoundButtonHtml() +
         '<div class="bracket-scroll-container" data-hscroll="tier:' + _hsKey(bracketKey) + '" style="display:flex;gap:32px;overflow-x:auto;padding-bottom:8px;flex:1;min-width:0;"><div class="bracket-columns-track" data-bracket-phase-index="' + curPhase + '" style="display:flex;gap:32px;min-width:max-content;">' + colsHtml + '<div style="min-width:120px;flex-shrink:0;">&nbsp;</div></div></div>' +
       '</div>' +
       // A chave vem antes; a classificação é consulta e fica recolhível abaixo.
