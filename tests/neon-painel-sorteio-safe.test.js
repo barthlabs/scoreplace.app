@@ -2,6 +2,7 @@
 // O painel real não pede ao organizador a atribuição manual das 24 duplas.
 const { window: W, sandbox } = require('./render-harness');
 const categories = ['Fem Light', 'Fem Power', 'Fem Extreme', 'Masc Light', 'Masc Power', 'Masc Extreme'];
+const neonId = 'tour_1790628592058_c342a1e8f5068424887f1702a1633a44';
 const counts = [24, 8, 8, 8, 8, 8];
 let sequence = 1;
 const participants = categories.flatMap((category, categoryIndex) => Array.from({ length: counts[categoryIndex] }, (_, index) => {
@@ -13,7 +14,7 @@ const participants = categories.flatMap((category, categoryIndex) => Array.from(
     p1Uid:'uid-first-' + p1Seq, p2Uid:'uid-second-' + p1Seq };
 }));
 const tournament = {
-  id:'neon_regression', name:'Neon Nightmare', startDate:'2026-10-22T18:00', endDate:'2026-10-23T22:40',
+  id:neonId, name:'Neon Nightmare', startDate:'2026-10-22T18:00', endDate:'2026-10-23T22:40',
   categories, participants, courtCount:6,
   teamCompetition:{ enabled:true, teamCount:8,
     teamNames:['Blackout', 'Blast', 'Eclipse', 'Panic', 'Phantom', 'Venom', 'Volt', 'Vortex'],
@@ -65,5 +66,16 @@ tournament.teamCompetition.schedule.originDayPolicy = 'female-light-five-plus-th
 W._showTeamCompetitionDrawReview(tournament.id, { _canonicalRosterLoaded:true });
 if (/O sorteio está bloqueado/.test(overlay.innerHTML) || !/Regra vigente: 5 duplas Fem Light marcadas/.test(overlay.innerHTML)) {
   throw new Error('Plano 5+3 salvo deve continuar valendo após renomeação');
+}
+tournament.teamCompetition.schedule.originDayPolicy = '';
+W._showTeamCompetitionDrawReview(tournament.id, { _canonicalRosterLoaded:true });
+if (!/Regra vigente: 5 duplas Fem Light marcadas/.test(overlay.innerHTML)) {
+  throw new Error('ID do Neon deve inicializar o plano mesmo com nome alterado');
+}
+tournament.id = 'other_tournament';
+tournament.name = 'Neon Nightmare';
+W._showTeamCompetitionDrawReview(tournament.id, { _canonicalRosterLoaded:true });
+if (/Regra vigente: 5 duplas Fem Light marcadas/.test(overlay.innerHTML)) {
+  throw new Error('Nome Neon em outro torneio não pode ativar a regra 5+3');
 }
 console.log('✓ Painel Neon: sem seletores manuais, Fem Light nos dois dias e sem UID visível');

@@ -114,6 +114,22 @@ if rg -q '^functions-autodraw/vendor/' "$ALL" 2>/dev/null; then
   } > "$CROSS_EVIDENCE"
 fi
 
+# O recibo por função é produzido pelo publicador somente após o Firebase CLI
+# confirmar sucesso. Quando ele integra o diff, dê ao revisor o caminho de
+# geração e o log operacional disponível; reverter o recibo esconderia o backend
+# já implantado e faria o gate de paridade acusar uma implantação real como ausente.
+if rg -q '^\.backend-publicado-autodraw-funcoes\.json$' "$ALL" 2>/dev/null; then
+  {
+    echo 'Proveniência verificável do recibo de função no corte:'
+    rg -n 'SP_DEPLOY_CONFIRMED|registrar-funcoes|recibo direcionado' scripts/deploy-functions.sh scripts/check-backend-publicado.js
+    if [[ -f /tmp/scoreplace-neon-deploy-function-final.log ]]; then
+      rg 'functions\[drawRound\(us-central1\)\] Successful update operation|Deploy complete!|recibo direcionado: drawRound' \
+        /tmp/scoreplace-neon-deploy-function-final.log
+    fi
+    echo 'O recibo é resultado desse publicador, não uma declaração manual de implantação.'
+  } >> "$CROSS_EVIDENCE"
+fi
+
 batch=1; bytes=0; current="$TMP/batch-$batch"
 touch "$current"
 while IFS= read -r file; do

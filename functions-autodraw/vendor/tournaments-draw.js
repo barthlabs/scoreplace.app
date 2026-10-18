@@ -2889,10 +2889,14 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
     var valid = entries.length === expectedPairs && entries.every(isPair) && categories.length > 0 && !invalidCategories.length;
     var lightCategory = categories.find(function (category) { return /^Fem Light$/i.test(category); });
     var lightPairs = neonQuota ? entries.filter(function (entry) { return String(entry.category || '') === lightCategory; }) : [];
-    // O nome só inicializa o plano do Neon existente. Depois de salvo, o
-    // marcador persistido mantém a regra mesmo se o torneio for renomeado.
-    var fivePlusThreePlan = neonQuota && ((cfg.schedule || {}).originDayPolicy === 'female-light-five-plus-three' ||
-      /neon nightmare/i.test(String(t.name || '')));
+    // Antes da primeira confirmação, reconheça apenas o ID canônico do Neon
+    // (ou um futuro sandbox derivado dele). Nome igual não autoriza a regra.
+    // Depois, o marcador persistido continua valendo mesmo após renomeação.
+    var neonId = 'tour_1790628592058_c342a1e8f5068424887f1702a1633a44';
+    var savedOriginPolicy = String((cfg.schedule || {}).originDayPolicy || '');
+    var neonLineage = String(tId) === neonId || String(tId).indexOf('sb_' + neonId + '_') === 0;
+    var fivePlusThreePlan = neonQuota && (savedOriginPolicy === 'female-light-five-plus-three' ||
+      (!savedOriginPolicy && neonLineage));
     var pairIds = entries.map(function (entry) { return String(entry.fixedPairId || ''); });
     if (neonQuota && (pairIds.some(function (id) { return !id; }) || new Set(pairIds).size !== entries.length || days.length !== 2)) valid = false;
     var safe = window._safeHtml || function (value) { return String(value == null ? '' : value).replace(/[&<>"']/g, function (c) { return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]; }); };
