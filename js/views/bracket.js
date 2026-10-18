@@ -1919,7 +1919,21 @@ window._bracketCategoryTabsMount = function () {
   // A chave continua no #inline-bracket-container; somente sua navegação sobe
   // para a borda estável do detalhe.
   var searchWrap = document.getElementById('fbwrap-chaves');
-  var tabsHost = searchWrap && searchWrap.parentNode ? searchWrap.parentNode : null;
+  // A busca passa a morar num slot DENTRO da navegação. Na próxima montagem,
+  // seu parentNode é o slot, não o host das abas: procurar/criar ali produz
+  // uma segunda faixa Ouro/Prata (e pode aninhar mais faixas a cada filtro).
+  // Volte ao host da navegação mais externa antes de localizar e reconstruir
+  // a faixa. Mover o mesmo nó preserva valor, foco e listeners da busca.
+  var mountedTabs = searchWrap && searchWrap.closest ? searchWrap.closest('[data-bracket-tabs-root]') : null;
+  while (mountedTabs && mountedTabs.parentElement && mountedTabs.parentElement.closest) {
+    var parentTabs = mountedTabs.parentElement.closest('[data-bracket-tabs-root]');
+    if (!parentTabs) break;
+    mountedTabs = parentTabs;
+  }
+  var tabsHost = mountedTabs ? mountedTabs.parentNode : (searchWrap && searchWrap.parentNode);
+  if (mountedTabs && tabsHost && mountedTabs.contains(searchWrap)) {
+    tabsHost.insertBefore(searchWrap, mountedTabs);
+  }
   var tid = (window._currentBracketTournament && window._currentBracketTournament.id) || scope.getAttribute('data-tournament-id') || 'current';
   var id = String(tid);
   var isOnlyLines = order.length === 1 && order[0] === 'linhas';

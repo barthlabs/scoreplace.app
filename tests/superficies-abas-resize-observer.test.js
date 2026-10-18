@@ -62,6 +62,8 @@ async function measure(page) {
       layout: root && root.getAttribute('data-bracket-search-layout'),
       rootWidth: rr && Math.round(rr.width),
       oneInput: document.querySelectorAll('#bracket-search').length,
+      tabRoots: document.querySelectorAll('[data-bracket-tabs-root]').length,
+      primaryBars: document.querySelectorAll('[data-bracket-tabs-primary]').length,
       identity: input && input.__identity,
       inputParent: input && input.closest('[data-bracket-search-slot]') && input.closest('[data-bracket-search-slot]').getAttribute('data-bracket-search-slot'),
       inlineHidden: inline && inline.hidden,
@@ -102,18 +104,30 @@ async function measure(page) {
     let state = await measure(page);
     ok('viewport 1024 + host 400: não usa a largura da janela', state.layout === 'stack' && state.rootWidth === 400, JSON.stringify(state));
     ok('host conectado usa ResizeObserver', state.observer, JSON.stringify(state));
+    // A busca já está dentro da aba após o primeiro mount. Filtro/placar podem
+    // remontar sem recriar a página; isso não pode criar uma segunda navegação.
+    await page.evaluate(() => {
+      const input = document.getElementById('bracket-search');
+      input.focus();
+      input.value = 'inga';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      window._bracketCategoryTabsMount();
+      window._bracketCategoryTabsMount();
+    });
+    state = await measure(page);
+    ok('remontagens com busca ativa mantêm uma faixa e uma barra', state.tabRoots === 1 && state.primaryBars === 1, JSON.stringify(state));
+    ok('remontagens preservam o input, valor e listener', state.oneInput === 1 && state.identity === 'canonical-input' && state.value === 'inga');
     await page.evaluate(() => { document.getElementById('view-container').style.width = '1024px'; });
     await page.waitForTimeout(100);
     state = await measure(page);
-    ok('resize 400→1024 promove a mesma busca ao slot inline', state.layout === 'inline' && state.identity === 'canonical-input' && state.value === '185', JSON.stringify(state));
+    ok('resize 400→1024 promove a mesma busca ao slot inline', state.layout === 'inline' && state.identity === 'canonical-input' && state.value === 'inga', JSON.stringify(state));
     await page.evaluate(() => { document.getElementById('view-container').style.width = '400px'; });
     await page.waitForTimeout(100);
     state = await measure(page);
-    ok('resize 1024→400 devolve a mesma busca ao slot seguro', state.layout === 'stack' && state.identity === 'canonical-input' && state.value === '185', JSON.stringify(state));
+    ok('resize 1024→400 devolve a mesma busca ao slot seguro', state.layout === 'stack' && state.identity === 'canonical-input' && state.value === 'inga', JSON.stringify(state));
   } finally {
     await browser.close();
   }
   console.log(failed ? '\n❌ superficies-abas-resize-observer: ' + failed + ' falha(s)' : '\n✅ superficies-abas-resize-observer: OK');
   process.exitCode = failed ? 1 : 0;
 })();
-

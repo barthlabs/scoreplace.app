@@ -1,3 +1,7 @@
+## 2.4.101 — 18/out/2026 (abas da chave ao filtrar)
+
+- Buscar ou aplicar filtros e remontar a chave reutiliza a mesma barra de abas Ouro/Prata, sem duplicar a navegação. O campo de busca mantém valor e listeners, inclusive ao mudar a largura da tela.
+
 ## 2.4.97 — 18/out/2026 (controles da chave)
 
 - Na chave eliminatória, o controle lateral “Mostrar rodada anterior” reabre uma rodada por clique, sem ocupar espaço com colunas de rodadas recolhidas.
