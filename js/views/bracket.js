@@ -197,9 +197,13 @@ window._togglePendingMatches = function(checked) {
       if (rect.bottom > 0) { anchor = current[j]; topBefore = rect.top; break; }
     }
   }
+  // Os botões representam visões alternativas. Manter "Só meus jogos" ligado
+  // reduziria pendentes à interseção, parecendo que faltam jogos do torneio.
+  if (checked) window._showOnlyMyMatches = false;
   window._showOnlyPendingMatches = !!checked;
   window._bracketSyncHeaderFilterButtons();
   _applyMyMatchesFilter();
+  if (checked && typeof window._bracketTabsRevealFilteredMatch === 'function') window._bracketTabsRevealFilteredMatch('pending');
   var spacer = document.getElementById('sp-sticky-spacer');
   if (spacer) spacer.style.height = '0px';
   if (typeof window._reflowChrome === 'function') window._reflowChrome();
@@ -257,9 +261,13 @@ window._toggleMyMatches = function(checked) {
     try { if (_ancora && _ancora.getBoundingClientRect) _topoAntes = _ancora.getBoundingClientRect().top; }
     catch (e) { _ancora = null; }
   }
+  // Quem sai de "Jogos pendentes" quer todos os próprios jogos, inclusive os
+  // concluídos; não uma interseção silenciosa dos dois filtros.
+  if (checked) window._showOnlyPendingMatches = false;
   window._showOnlyMyMatches = !!checked;
   window._bracketSyncHeaderFilterButtons();
   _applyMyMatchesFilter();
+  if (checked && typeof window._bracketTabsRevealFilteredMatch === 'function') window._bracketTabsRevealFilteredMatch('mine');
   try {
     var _sp = document.getElementById('sp-sticky-spacer');
     if (_sp) _sp.style.height = '0px';
@@ -2172,6 +2180,37 @@ window._bracketTabsRevealSearch = function () {
     _bracketTabsApply(root.getAttribute('data-tournament-id'), cards[i].getAttribute('data-bracket-tab-gender'), cards[i].getAttribute('data-bracket-tab-category'), cards[i].getAttribute('data-bracket-tab-round'));
     return;
   }
+};
+
+// O filtro pode encontrar jogos numa aba diferente da atual. Trocar só a
+// visibilidade dos cards deixava a tela aparentemente vazia (Ouro/Prata, etc.).
+window._bracketTabsRevealFilteredMatch = function (kind) {
+  var root = document.querySelector('[data-bracket-tabs-root]');
+  if (!root) return;
+  var tid = root.getAttribute('data-tournament-id');
+  var selector = kind === 'pending'
+    ? '[data-bracket-pending-match="1"][data-match-num]'
+    : '[data-my-match="1"][data-match-num]';
+  var cards = root.querySelectorAll(selector);
+  var target = null;
+  if (kind === 'mine') {
+    for (var p = 0; p < cards.length; p++) {
+      if (cards[p].getAttribute('data-my-pending') === '1' && cards[p].style.display !== 'none') { target = cards[p]; break; }
+    }
+  }
+  if (!target) {
+    for (var i = 0; i < cards.length; i++) {
+      if (cards[i].style.display !== 'none') { target = cards[i]; break; }
+    }
+  }
+  if (!target) return;
+  var gender = target.getAttribute('data-bracket-tab-gender');
+  var category = target.getAttribute('data-bracket-tab-category');
+  var round = target.getAttribute('data-bracket-tab-round') || '';
+  if (!category) return;
+  var state = window._bracketTabState && window._bracketTabState[tid];
+  if (state && state.gender === gender && state.category === category && (!root.getAttribute('data-bracket-round-tabs') || state.round === round)) return;
+  _bracketTabsApply(tid, gender, category, round);
 };
 
 function _applyMyMatchesFilter() {

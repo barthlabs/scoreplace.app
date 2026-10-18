@@ -55,7 +55,7 @@ ok(pending({p1:'',p1Uid:'uid-a',p2:'Bia'}),'UID canônico basta para definir um 
 ok(!pending({p1:'',team1Uids:[],p2:'Bia'}),'lista vazia de UIDs não define adversário');
 const toggleStart=src.indexOf('window._togglePendingMatches = function');
 const toggleEnd=src.indexOf('window._toggleMyMatches = function',toggleStart);
-let focused=0, filtered=0;
+let focused=0, filtered=0, revealed=[];
 const body={style:{},parentElement:null};
 const pendingSearch={value:'inga'};
 const pendingClear={style:{display:'block'}};
@@ -68,12 +68,14 @@ const toggleSandbox={window:null,document:{body,
 toggleSandbox.window=toggleSandbox;
 toggleSandbox.window._filterBarState={chaves:{search:'inga'}};
 toggleSandbox.window._bracketSyncHeaderFilterButtons=()=>{};
+toggleSandbox.window._bracketTabsRevealFilteredMatch=(kind)=>revealed.push(kind);
 vm.createContext(toggleSandbox);
 const clearStart=src.indexOf('function _bracketClearSearchForHeaderFilter()');
 vm.runInContext(src.slice(clearStart,toggleEnd),toggleSandbox,{filename:'bracket-pending-toggle'});
 toggleSandbox.window._togglePendingMatches(true);
 ok(toggleSandbox.window._showOnlyPendingMatches===true && filtered===1 && focused===1,
   'ativar pendentes aplica o filtro e leva ao primeiro jogo visível');
+ok(revealed[0]==='pending','ativar pendentes abre a aba do primeiro jogo pendente');
 ok(pendingSearch.value==='' && toggleSandbox.window._filterBarState.chaves.search==='' && pendingClear.style.display==='none',
   'ativar pendentes limpa input, estado persistido e botão de limpar');
 pendingSearch.value='nova busca'; toggleSandbox.window._filterBarState.chaves.search='nova busca';
@@ -84,9 +86,40 @@ const mineStart=src.indexOf('window._toggleMyMatches = function');
 const mineEnd=src.indexOf('// ── PINTAR EM ETAPAS',mineStart);
 vm.runInContext(src.slice(mineStart,mineEnd),toggleSandbox,{filename:'bracket-mine-toggle'});
 toggleSandbox.window._bracketEntryTarget=()=>pendingCard;
+toggleSandbox.window._showOnlyPendingMatches=true;
 toggleSandbox.window._toggleMyMatches(true);
 ok(pendingSearch.value==='' && toggleSandbox.window._filterBarState.chaves.search==='' && pendingClear.style.display==='none',
   'ativar Só meus jogos também limpa a busca anterior por completo');
+ok(toggleSandbox.window._showOnlyMyMatches===true && toggleSandbox.window._showOnlyPendingMatches===false && revealed.at(-1)==='mine',
+  'Só meus jogos desliga pendentes e abre a aba do jogo do usuário');
+toggleSandbox.window._togglePendingMatches(true);
+ok(toggleSandbox.window._showOnlyPendingMatches===true && toggleSandbox.window._showOnlyMyMatches===false,
+  'voltar aos pendentes desliga Só meus jogos');
+
+// Ouro/Prata em abas: o filtro tem que revelar a aba que contém o jogo,
+// senão os cards certos ficam atrás de uma seção `hidden` e parecem sumir.
+const revealStart=src.indexOf('window._bracketTabsRevealFilteredMatch = function');
+const revealEnd=src.indexOf('function _applyMyMatchesFilter()',revealStart);
+const tabCalls=[];
+const tabCard=(category,pending)=>({style:{display:''},getAttribute:(k)=>({
+  'data-bracket-tab-gender':'', 'data-bracket-tab-category':category,
+  'data-bracket-tab-round':'2', 'data-my-pending':pending?'1':'0'
+})[k]});
+const ownCards=[tabCard('Ouro',false),tabCard('Prata',true)];
+const tabRoot={getAttribute:(k)=>({'data-tournament-id':'torneio','data-bracket-round-tabs':'1'})[k],
+  querySelectorAll:(sel)=>sel.includes('data-my-match')?ownCards:[ownCards[1]]};
+const tabSandbox={window:null,document:{querySelector:(sel)=>sel==='[data-bracket-tabs-root]'?tabRoot:null},
+  _bracketTabsApply:(...args)=>tabCalls.push(args)};
+tabSandbox.window=tabSandbox;
+tabSandbox.window._bracketTabState={torneio:{gender:'',category:'Ouro',round:'1'}};
+vm.createContext(tabSandbox);
+vm.runInContext(src.slice(revealStart,revealEnd),tabSandbox,{filename:'bracket-reveal-filtered-tab'});
+tabSandbox.window._bracketTabsRevealFilteredMatch('mine');
+ok(tabCalls.length===1 && tabCalls[0][2]==='Prata' && tabCalls[0][3]==='2',
+  'Só meus jogos abre Prata e a rodada do próximo jogo próprio, mesmo partindo de Ouro');
+tabSandbox.window._bracketTabState.torneio={gender:'',category:'Prata',round:'2'};
+tabSandbox.window._bracketTabsRevealFilteredMatch('pending');
+ok(tabCalls.length===1,'aba já correta não é remontada ao aplicar pendentes');
 const i=src.indexOf('window._bracketNorm = function');
 vm.runInContext(src.slice(i),sandbox,{filename:'bracket-filter'});
 const F=sandbox.window._bracketApplyFilter;
