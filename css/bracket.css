@@ -50,7 +50,7 @@ summary::-webkit-details-marker { display: none; }
 }
 .bracket-previous-round-button {
   position: sticky;
-  top: var(--scroll-anchor, 120px);
+  top: var(--bracket-round-reveal-top, var(--scroll-anchor, 120px));
   z-index: 9;
   flex: 0 0 44px;
   width: 44px;

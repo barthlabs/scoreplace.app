@@ -15569,6 +15569,34 @@ window._renderClassifBlock = function (t, clMap, opts) {
   if (!entries.length) return '';
   var esc = window._safeHtml || function (s) { return String(s == null ? '' : s); };
   var nameHtml = function (n) { return (typeof window._nameWithCrown === 'function' && t) ? window._nameWithCrown(n, t) : esc(n); };
+  // Posição e identidade vêm da classificação; o texto acompanha o UID. Em
+  // jogos históricos, um perfil ainda frio pode ter deixado no placar o rótulo
+  // neutro "Jogador sem perfil (xxxx)". Um jogo posterior do MESMO UID pode
+  // fornecer o nome gravado, sem trocar a equipe nem recalcular o resultado.
+  var displayName = function (entry) {
+    var original = entry.name;
+    var ids = entry.uids;
+    var resolved = (ids.length && typeof window._resolveSideLive === 'function')
+      ? window._resolveSideLive(t, original, ids) : original;
+    if (!window._isOrphanLabel || !window._isOrphanLabel(resolved)) return resolved;
+    var parts = String(resolved).split(' / ');
+    if (parts.length !== ids.length) return resolved;
+    var games = Array.isArray(t && t.matches) ? t.matches : [];
+    parts.forEach(function (part, index) {
+      if (!window._isOrphanLabel(part) || !ids[index]) return;
+      games.some(function (match) {
+        return ['p1', 'p2'].some(function (side) {
+          var slotIds = ((typeof window._slotUids === 'function') ? window._slotUids(match, side) : []) || [];
+          var names = String(match && match[side] || '').split(' / ');
+          var at = slotIds.indexOf(ids[index]);
+          if (at < 0 || names.length !== slotIds.length || !names[at] || window._isOrphanLabel(names[at])) return false;
+          parts[index] = names[at];
+          return true;
+        });
+      });
+    });
+    return parts.join(' / ');
+  };
   var color = opts.color || '#fbbf24', label = opts.label || '📊 Classificação', open = !!opts.open;
   var mode = opts.mode || window._classifModeFor(t, opts.phaseIdx);
   entries.sort(function (a, b) { return a.pos - b.pos; });
@@ -15593,7 +15621,8 @@ window._renderClassifBlock = function (t, clMap, opts) {
         '<div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.5px;font-weight:800;color:' + window._spCor(bc, 'color') + ';margin-bottom:3px;">' + rng + (g.entries.length > 1 ? ' · ' + g.entries.length + ' times' : '') + '</div>' +
         g.entries.map(function (entry) {
           var _meB = (typeof window._classifEntryIsMe === 'function') && window._classifEntryIsMe(t, entry);
-          return '<div data-classif-name="' + esc(entry.name) + '" style="font-size:0.84rem;font-weight:' + (_meB ? '800' : '600') + ';color:' + window._spCor((_meB ? '#34d399' : 'var(--text-bright,#f1f5f9)'), 'color') + ';padding:1px 0;">' + nameHtml(entry.name) + '</div>';
+          var shown = displayName(entry);
+          return '<div data-classif-name="' + esc(shown) + '" style="font-size:0.84rem;font-weight:' + (_meB ? '800' : '600') + ';color:' + window._spCor((_meB ? '#34d399' : 'var(--text-bright,#f1f5f9)'), 'color') + ';padding:1px 0;">' + nameHtml(shown) + '</div>';
         }).join('') +
         '</div>';
     }).join('');
@@ -15602,6 +15631,7 @@ window._renderClassifBlock = function (t, clMap, opts) {
     var medals = { 1: '🥇', 2: '🥈', 3: '🥉' };
     inner = entries.map(function (e) {
       var pos = e.pos;
+      var shown = displayName(e);
       var c = pos === 1 ? '#fbbf24' : pos === 2 ? '#94a3b8' : pos === 3 ? '#cd7f32' : 'var(--text-muted)';
       // v1.4.19: VERDE pra linha do próprio usuário (nome + posição) — achar-se na lista é
       // mais útil que a cor de pódio, que o emoji da medalha continua comunicando. Fundo
@@ -15611,9 +15641,9 @@ window._renderClassifBlock = function (t, clMap, opts) {
       var _rowSt = _me
         ? 'display:flex;align-items:center;gap:8px;padding:4px 12px;background:rgba(52,211,153,0.10);border-left:3px solid #34d399;'
         : 'display:flex;align-items:center;gap:8px;padding:4px 12px;';
-      return '<div data-classif-name="' + esc(e.name) + '" style="' + _rowSt + '">' +
+      return '<div data-classif-name="' + esc(shown) + '" style="' + _rowSt + '">' +
         '<span style="min-width:30px;text-align:center;font-size:0.85rem;font-weight:800;color:' + window._spCor(c, 'color') + ';">' + pos + 'º</span>' +
-        '<span style="font-weight:' + (_me ? '800' : '600') + ';color:' + window._spCor(c, 'color') + ';font-size:0.85rem;flex:1;min-width:0;">' + nameHtml(e.name) + '</span>' +
+        '<span style="font-weight:' + (_me ? '800' : '600') + ';color:' + window._spCor(c, 'color') + ';font-size:0.85rem;flex:1;min-width:0;">' + nameHtml(shown) + '</span>' +
         (pos <= 3 ? '<span style="font-size:1.05rem;flex-shrink:0;padding-right:4px;">' + medals[pos] + '</span>' : '') +
         '</div>';
     }).join('');

@@ -97,6 +97,21 @@ if (iniRender >= 0 && fimRender > iniRender) {
     '②b ⛔ o modo por faixas também mantém as duas vagas homônimas');
   ok((htmlBlocos.match(/color:#34d399/g) || []).length === 1,
     '②b o modo por faixas também destaca somente a entrada com o uid da conta');
+
+  // Confra: o slot antigo da Prata ficou com rótulo órfão, embora o mesmo
+  // UID apareça nominalmente num jogo posterior com outra parceira. Só o
+  // texto muda; a posição 34 e o UID histórico permanecem intactos.
+  W._isOrphanLabel = (s) => /jogador sem perfil \(/i.test(String(s));
+  W._resolveSideLive = (_t, name) => name;
+  W._slotUids = (m, side) => side === 'p1' ? m.team1Uids : m.team2Uids;
+  const oldPair = { name: 'Jogador sem perfil (5TxV) / Mayra Espanha', pos: 34, uids: ['uVanessa', 'uMayra'] };
+  const current = { participants: [], matches: [
+    { p1: oldPair.name, team1Uids: oldPair.uids },
+    { p1: 'Vanessa Kaufmann / Paula Caldeira Brant', team1Uids: ['uVanessa', 'uPaula'] }
+  ] };
+  const historical = W._renderClassifBlock(current, [oldPair], { label: 'Prata' });
+  ok(historical.includes('34º') && historical.includes('Vanessa Kaufmann / Mayra Espanha') && !historical.includes('Jogador sem perfil'),
+    '②c classificação histórica mostra o nome conhecido do UID sem mudar a posição');
 }
 
 /* ── ③ A COMPARAÇÃO É DO CONJUNTO, NÃO DE UM MEMBRO ────────────────────────

@@ -40,8 +40,9 @@ function ok(cond, msg) {
 
 /* ── 1. ESTÁTICO ──────────────────────────────────────────────────────────────────── */
 function varrerTopFixo() {
-  console.log('\n① Sticky vertical ancorado em --scroll-anchor, nunca em px cravado');
+  console.log('\n① Sticky vertical ancorado abaixo do portal, com fallback em --scroll-anchor');
   const src = read('js/views/bracket.js');
+  const css = read('css/bracket.css');
   // toda declaração de sticky que acompanha um writing-mode (= botão/aba vertical)
   const trechos = src.split('writing-mode');
   let comVar = 0;
@@ -54,10 +55,12 @@ function varrerTopFixo() {
     if (/var\(--scroll-anchor/.test(mSticky[1])) comVar++;
     else cravados.push(mSticky[1]);
   }
-  // Todas as rodadas agora ficam desenhadas; os antigos quatro reveladores verticais
-  // foram removidos de propósito. O controle de fase que resta continua obrigado a
-  // usar a âncora canônica, sem exigir botões mortos só para satisfazer a contagem.
-  ok(comVar >= 1, comVar + ' sticky(s) vertical(is) ancorado(s) em --scroll-anchor (esperado ≥ 1)');
+  // O único controle vertical agora mora no CSS e usa a base REAL do portal de
+  // títulos; --scroll-anchor continua como fallback antes da medição inicial.
+  const rule = (css.match(/\.bracket-previous-round-button\s*\{([^}]*)\}/) || [])[1] || '';
+  ok(/position:\s*sticky/.test(rule) && /top:\s*var\(--bracket-round-reveal-top,\s*var\(--scroll-anchor/.test(rule),
+    'controle lateral usa a base do portal e recua para --scroll-anchor');
+  ok(comVar === 0, 'o antigo botão vertical de fase foi removido');
   ok(cravados.length === 0, 'nenhum com top cravado' + (cravados.length ? ' — ' + cravados.join(', ') : ''));
 }
 

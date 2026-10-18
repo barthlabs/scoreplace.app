@@ -2411,3 +2411,8 @@ processo.
 - **Abrir o detalhe pelo card do torneio na dashboard agora entra em Próximos jogos e ancora no primeiro confronto pendente que já tem horário.** A ordem é horário, quadra e número do jogo; partidas sem horário não são escolhidas como alvo operacional.
 - O alvo persiste até a chave montar os cards, portanto a aba pode nascer correta sem a rolagem cair na classificação geral antes de o card existir.
 - A regressão cobre timestamps do Firestore nas formas `.seconds` e `.toMillis()`, jogos sem horário, seleção da aba e o caminho persistido até o leitor da chave.
+## 2.4.98 — 18/out/2026 (controle lateral e nome na classificação)
+
+- A chave mantém um único controle lateral para revelar a rodada anterior, abaixo do cabeçalho fixo. O acesso à fase anterior permanece em botão horizontal.
+- A classificação exibe o nome conhecido pelo UID quando um jogo histórico guardou o rótulo provisório “Jogador sem perfil”. Posições, UIDs e resultados não são alterados.
+- Na Confra, a Ouro tem a segunda rodada completa (16/16); na Prata há dois jogos sem vencedor (14/16), portanto as demais posições dessa rodada ainda não são definitivas. A Prata registra 34 duplas na estreia e 36 formações históricas após duas substituições de parceira; esta versão não recalcula nem muda esse critério.

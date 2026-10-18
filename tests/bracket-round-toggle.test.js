@@ -7,7 +7,10 @@ const { chromium } = require('@playwright/test');
 const source = fs.readFileSync(path.join(__dirname, '../js/views/bracket.js'), 'utf8');
 const toggle = source.slice(source.indexOf('window._toggleBracketRound = function'), source.indexOf('function _bracketEnsureRoundHeadingResizeListener'));
 const findTabs = source.slice(source.indexOf('function _bracketFindTabsRoot'), source.indexOf('function _bracketIsEliminationTree'));
+const portal = source.slice(source.indexOf('function _bracketUpdateRoundHeadingPortal'), source.indexOf('function _bracketEnsureRoundHeadingResizeListener'));
 const primaryTabs = source.slice(source.indexOf('window._bracketPrimaryTabsHtml = function'), source.indexOf('window._bracketCategoryTabsMount = function'));
+assert.match(source, /--bracket-round-reveal-top/, 'controle lateral usa base inferior da faixa fixa');
+assert.doesNotMatch(source, /var _prevBtn = '[^\n]*writing-mode:vertical-rl/, 'fase anterior não cria segundo botão vertical');
 
 (async () => {
   const browser = await chromium.launch();
@@ -60,6 +63,29 @@ const primaryTabs = source.slice(source.indexOf('window._bracketPrimaryTabsHtml 
     });
     assert.deepEqual(previousRound, { afterFirst: ['1', '1', '0'], afterSecond: ['1', '0', '0'], afterThird: ['0', '0', '0'] },
       'controle lateral revela uma rodada anterior por clique');
+    await page.setContent('<div id="scope"><nav id="tabs"></nav><div class="bracket-round-reveal-scope" data-bracket-round-reveal-scope><button class="bracket-previous-round-button">Mostrar rodada anterior</button><div class="bracket-round-column"><div class="bracket-round-heading">Rodada 3</div></div></div></div>');
+    await page.addStyleTag({ path: path.join(__dirname, '../css/bracket.css') });
+    await page.addScriptTag({ content: portal });
+    const portalPlacement = await page.evaluate(() => {
+      const scope = document.querySelector('#scope');
+      const root = document.querySelector('#tabs');
+      const heading = scope.querySelector('.bracket-round-heading');
+      const column = scope.querySelector('.bracket-round-column');
+      const button = scope.querySelector('.bracket-previous-round-button');
+      root.getBoundingClientRect = () => ({ top: 100, bottom: 160, left: 20, width: 600 });
+      heading.getBoundingClientRect = () => ({ top: 120, height: 30, left: 64, width: 280 });
+      column.getBoundingClientRect = () => ({ bottom: 800 });
+      _bracketUpdateRoundHeadingPortal(root, scope);
+      const visibleTop = Number.parseInt(getComputedStyle(button).top, 10);
+      const portalBottom = Number.parseInt(root._bracketRoundHeadingPortal.style.top, 10) + Number.parseInt(root._bracketRoundHeadingPortal.style.height, 10);
+      heading.getBoundingClientRect = () => ({ top: 180, height: 30, left: 64, width: 280 });
+      _bracketUpdateRoundHeadingPortal(root, scope);
+      return { inScope: scope.contains(button), visibleTop, portalBottom,
+        hiddenTop: Number.parseInt(getComputedStyle(button).top, 10), hidden: root._bracketRoundHeadingPortal.style.display };
+    });
+    assert.equal(portalPlacement.inScope && portalPlacement.visibleTop > portalPlacement.portalBottom &&
+      portalPlacement.hiddenTop === 168 && portalPlacement.hidden === 'none', true,
+    'botão herda o deslocamento abaixo do portal visível e mantém posição válida sem portal');
     assert.match(source, /class="bracket-round-column" data-round-num="\$\{finalRoundNum\}"/, 'a final espelhada informa o número da rodada para o controle lateral');
     const tabs = await page.evaluate(() => {
       const host = document.createElement('div');

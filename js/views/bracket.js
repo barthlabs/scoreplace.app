@@ -1664,6 +1664,7 @@ function _bracketUpdateRoundHeadingPortal(root, scope) {
   }
   if (!visibleHeadings.length || rootRect.width < 1) {
     portal.style.display = 'none';
+    scope.style.setProperty('--bracket-round-reveal-top', Math.ceil(anchorBottom + 8) + 'px');
     return;
   }
   // O portal é uma faixa ÚNICA e recortada exatamente na largura das abas.
@@ -1675,6 +1676,9 @@ function _bracketUpdateRoundHeadingPortal(root, scope) {
     return Math.ceil(item.rect.height || 0) + 18;
   }));
   portalHeight = Math.max(38, portalHeight);
+  // O controle lateral não pode começar sob a faixa fixa de títulos das rodadas.
+  // A faixa termina em anchorBottom + portalHeight - 1; somamos folga visível.
+  scope.style.setProperty('--bracket-round-reveal-top', Math.ceil(anchorBottom + portalHeight + 8) + 'px');
   // A primeira faixa de cards pode cruzar a base das abas ANTES do seu
   // cabeçalho alcançar o portal (especialmente no fullscreen, onde a grade
   // larga é repintada em camada própria). Portanto a máscara começa 24px
@@ -3124,7 +3128,7 @@ function renderBracket(container, tournamentId, isInline) {
       var _prevOpen = !!window._phasePrevOpen[t.id];
       // Todas as rodadas permanecem visíveis. A fase anterior não depende mais de
       // um estado oculto da chave atual.
-      var _prevBtn = '<button class="btn btn-micro btn-outline" onclick="window._togglePhasePrev(\'' + _tIdEsc2 + '\')" title="Ver resultados e chaves das fases anteriores (encerradas) sem sair da fase atual" style="position:sticky;top:var(--scroll-anchor,112px);align-self:flex-start;writing-mode:vertical-rl;transform:rotate(180deg);padding:14px 7px;flex-shrink:0;margin:0;line-height:1.15;white-space:nowrap;z-index:5;">' + (_prevOpen ? '✕ Ocultar anterior' : '👁 Fase anterior') + '</button>';
+      var _prevBtn = '<button class="btn btn-micro btn-outline" onclick="window._togglePhasePrev(\'' + _tIdEsc2 + '\')" title="Ver resultados e chaves das fases anteriores (encerradas) sem sair da fase atual" style="padding:7px 10px;line-height:1.15;white-space:nowrap;">' + (_prevOpen ? '✕ Ocultar fase anterior' : '👁 Ver fase anterior') + '</button>';
       var _prevSections = '';
       if (_prevOpen) {
         for (var _ppi = _curPh - 1; _ppi >= 0; _ppi--) {
@@ -3148,14 +3152,15 @@ function renderBracket(container, tournamentId, isInline) {
         }
       }
       // ADITIVO + HORIZONTAL: fase(s) anterior(es) à ESQUERDA, fase atual à DIREITA, num
-      // único scroll horizontal (mais antigo → mais novo). Botão vertical sticky à esquerda.
+      // único scroll horizontal (mais antigo → mais novo). A fase anterior usa um
+      // botão horizontal: o ÚNICO controle lateral da chave é o de revelar rodada.
       var _revealBody = _prevOpen
         ? '<div style="flex:1;min-width:0;overflow-x:auto;padding-bottom:8px;"><div style="display:flex;align-items:flex-start;min-width:max-content;">' +
             _prevSections +
             '<div style="flex-shrink:0;padding-left:22px;border-left:2px dashed rgba(129,140,248,0.5);">' + _currentContent + '</div>' +
           '</div></div>'
         : '<div style="flex:1;min-width:0;">' + _currentContent + '</div>';
-      var _bodyWrap = '<div style="display:flex;align-items:flex-start;gap:10px;">' + _prevBtn + _revealBody + '</div>';
+      var _bodyWrap = '<div><div style="display:flex;justify-content:flex-end;margin:0 0 6px;">' + _prevBtn + '</div>' + _revealBody + '</div>';
 
       container.innerHTML = headerHtml + _subChoiceBanner + startTournamentBanner + progressBarHtml + _nextBanner + _bodyWrap;
       _applyMyMatchesFilter();
