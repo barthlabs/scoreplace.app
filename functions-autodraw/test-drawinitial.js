@@ -352,6 +352,27 @@ const CASES = [
   ok('Neon 64: origem ausente é recusada', missingResult.ok === false &&
     missingResult.reason === 'competition-pair-day-plan-invalid' && !missingOrigin.competitionTeams);
 
+  // A organização fornece os oito IDs de sexta; não se infere o dia da
+  // categoria original nem se sorteiam três duplas adicionais.
+  const organizationPlan = realTournament();
+  const organizationConfig = JSON.parse(JSON.stringify(realConfig));
+  organizationConfig.schedule.originDayPolicy = 'female-light-organization-final';
+  const fridayIds = new Set(organizationPlan.participants.slice(3, 11).map(function (entry) { return entry.fixedPairId; }));
+  organizationConfig.schedule.pairDayAssignments = organizationPlan.participants.slice(0, 24).map(function (entry) {
+    return { fixedPairId:entry.fixedPairId, day:fridayIds.has(entry.fixedPairId) ? '2026-10-23' : '2026-10-22' };
+  });
+  const organizationResult = core.assignCompetitionTeamsAtInitialDraw(organizationPlan, organizationConfig);
+  ok('Neon: oito duplas nominais de sexta independem da origem e formam 16/8', organizationResult.ok === true &&
+    organizationPlan.participants.slice(0, 24).every(function (entry) {
+      return entry.competitionPlayDay === (fridayIds.has(entry.fixedPairId) ? '2026-10-23' : '2026-10-22');
+    }));
+  const invalidOrganizationPlan = realTournament();
+  const invalidOrganizationConfig = JSON.parse(JSON.stringify(organizationConfig));
+  invalidOrganizationConfig.schedule.pairDayAssignments[3].day = '2026-10-22';
+  const invalidOrganizationResult = core.assignCompetitionTeamsAtInitialDraw(invalidOrganizationPlan, invalidOrganizationConfig);
+  ok('Neon: lista nominal com apenas sete duplas na sexta é rejeitada', invalidOrganizationResult.ok === false &&
+    invalidOrganizationResult.reason === 'competition-pair-day-plan-invalid');
+
   // Regra vigente: só cinco das duplas atuais vieram das inscrições
   // masculinas; três das outras 19 completam a sexta em qualquer ambiente.
   const provisional = realTournament();

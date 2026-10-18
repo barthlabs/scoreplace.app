@@ -18,7 +18,8 @@ const tournament = {
   categories, participants, courtCount:6,
   teamCompetition:{ enabled:true, teamCount:8,
     teamNames:['Blackout', 'Blast', 'Eclipse', 'Panic', 'Phantom', 'Venom', 'Volt', 'Vortex'],
-    schedule:{ enabled:true, gamesPerTeam:3 } }
+    schedule:{ enabled:true, gamesPerTeam:3, originDayPolicy:'female-light-organization-final',
+      pairDayAssignments:participants.slice(0, 24).map((entry, index) => ({ fixedPairId:entry.fixedPairId, day:index < 16 ? '2026-10-22' : '2026-10-23' })) } }
 };
 W._findTournamentById = () => tournament;
 let overlay;
@@ -45,37 +46,37 @@ if (/<select data-pair-day=|<label class="sp-team-pair-card"|Confirme o dia de c
   throw new Error('Painel ainda oferece atribuição manual de dia');
 }
 if (/O sorteio está bloqueado/.test(overlay.innerHTML)) throw new Error('Elenco Neon válido foi bloqueado');
-if (!/Regra vigente: 5 duplas Fem Light marcadas \+ 3 sorteadas/.test(overlay.innerHTML)) throw new Error('Regra 5+3 não aparece no torneio');
+if (!/8 duplas Fem Light de sexta já foram definidas pela organização/.test(overlay.innerHTML)) throw new Error('Plano nominal da organização não aparece no torneio');
 const lightCards = overlay.innerHTML.match(/data-team-category-card="Fem Light"/g) || [];
 if (lightCards.length < 3) throw new Error('Fem Light deve aparecer na fonte e nos dois dias');
 const visibleHtml = overlay.innerHTML.replace(/\sdata-[^=]+="[^"]*"/g, '');
 if (/uid-(?:first|second)-/.test(visibleHtml)) throw new Error('UID cru vazou no conteúdo visível');
+const savedAssignments = tournament.teamCompetition.schedule.pairDayAssignments;
+tournament.teamCompetition.schedule.pairDayAssignments = savedAssignments.slice(1);
+W._showTeamCompetitionDrawReview(tournament.id, { _canonicalRosterLoaded:true });
+if (!/lista final dos 24 dias das duplas Fem Light ainda não foi importada/.test(overlay.innerHTML) || !/id="team-draw-confirm"[^>]*disabled aria-disabled="true"/.test(overlay.innerHTML)) {
+  throw new Error('Mapa nominal incompleto deve bloquear o sorteio');
+}
+tournament.teamCompetition.schedule.pairDayAssignments = savedAssignments;
 const savedOrigin = participants[0].originCategoryLabel;
 participants[0].originCategoryLabel = '';
 W._showTeamCompetitionDrawReview(tournament.id, { _canonicalRosterLoaded:true });
-if (!/não têm categoria de inscrição original registrada/.test(overlay.innerHTML) || !/id="team-draw-confirm"[^>]*disabled aria-disabled="true"/.test(overlay.innerHTML)) {
-  throw new Error('Elenco legado sem origem deve bloquear com motivo específico, sem inventar o dia');
-}
+if (/Sorteio bloqueado/.test(overlay.innerHTML)) throw new Error('Plano nominal não depende da categoria original');
 participants[0].originCategoryLabel = savedOrigin;
-participants[18].originCategoryLabel = 'Masc Light';
-W._showTeamCompetitionDrawReview(tournament.id, { _canonicalRosterLoaded:true });
-if (!/exatamente 5 duplas Fem Light marcadas/.test(overlay.innerHTML)) throw new Error('Seis duplas marcadas deveriam bloquear a regra 5+3');
-participants[18].originCategoryLabel = savedOrigin;
 tournament.name = 'Torneio renomeado';
-tournament.teamCompetition.schedule.originDayPolicy = 'female-light-five-plus-three';
 W._showTeamCompetitionDrawReview(tournament.id, { _canonicalRosterLoaded:true });
-if (/O sorteio está bloqueado/.test(overlay.innerHTML) || !/Regra vigente: 5 duplas Fem Light marcadas/.test(overlay.innerHTML)) {
-  throw new Error('Plano 5+3 salvo deve continuar valendo após renomeação');
+if (/Sorteio bloqueado/.test(overlay.innerHTML) || !/8 duplas Fem Light de sexta já foram definidas pela organização/.test(overlay.innerHTML)) {
+  throw new Error('Plano nominal salvo deve continuar valendo após renomeação');
 }
 tournament.teamCompetition.schedule.originDayPolicy = '';
 W._showTeamCompetitionDrawReview(tournament.id, { _canonicalRosterLoaded:true });
-if (!/Regra vigente: 5 duplas Fem Light marcadas/.test(overlay.innerHTML)) {
-  throw new Error('ID do Neon deve inicializar o plano mesmo com nome alterado');
+if (!/lista final dos 24 dias das duplas Fem Light ainda não foi importada/.test(overlay.innerHTML)) {
+  throw new Error('ID do Neon exige política nominal explícita');
 }
 tournament.id = 'other_tournament';
 tournament.name = 'Neon Nightmare';
 W._showTeamCompetitionDrawReview(tournament.id, { _canonicalRosterLoaded:true });
-if (/Regra vigente: 5 duplas Fem Light marcadas/.test(overlay.innerHTML)) {
-  throw new Error('Nome Neon em outro torneio não pode ativar a regra 5+3');
+if (/8 duplas Fem Light de sexta já foram definidas pela organização/.test(overlay.innerHTML)) {
+  throw new Error('Nome Neon em outro torneio não pode ativar a regra nominal');
 }
 console.log('✓ Painel Neon: sem seletores manuais, Fem Light nos dois dias e sem UID visível');

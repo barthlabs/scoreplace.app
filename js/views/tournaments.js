@@ -1391,6 +1391,23 @@ window._goToBracketSourceMatch = function(tId, sourceId) {
       : (/(^|\s)(mist|mixed)/.test(label) ? 'misto' : 'linhas'));
   var tab = category ? { category: category, gender: gender,
     round: source.round == null ? '' : String(source.round) } : null;
+  // Um link de origem é uma navegação explícita, não um refinamento da visão
+  // atual. Desligar ambos os atalhos antes de reaplicar a busca impede que o
+  // jogo-fonte continue oculto por "Só meus jogos" ou "Jogos pendentes".
+  window._showOnlyMyMatches = false;
+  window._showOnlyPendingMatches = false;
+  if (typeof window._bracketSyncHeaderFilterButtons === 'function') {
+    window._bracketSyncHeaderFilterButtons();
+  }
+  var bracketState = window._filterBarState && window._filterBarState.chaves;
+  if (bracketState) {
+    bracketState.gender = 'all';
+    bracketState.skill = 'all';
+  }
+  var bracketGender = document.getElementById('bracket-gender');
+  var bracketSkill = document.getElementById('bracket-skill');
+  if (bracketGender) bracketGender.value = 'all';
+  if (bracketSkill) bracketSkill.value = 'all';
   // O jogo de origem pode não conter o nome buscado no card de destino.
   // Limpar só a busca da chave (DOM e estado persistido no re-render) antes
   // de selecionar a aba/focar o card; não toca na busca dos inscritos.
@@ -1399,12 +1416,18 @@ window._goToBracketSourceMatch = function(tId, sourceId) {
   if (typeof window._fbAction === 'function') {
     window._fbAction('chaves', 'search', '', true);
   } else {
-    var bracketState = window._filterBarState && window._filterBarState.chaves;
     if (bracketState) bracketState.search = '';
     if (bracketSearch && typeof window._bracketApplyFilter === 'function') window._bracketApplyFilter();
   }
   var clearSearch = document.getElementById('bracket-search-clear');
   if (clearSearch) clearSearch.style.display = 'none';
+  // Se houver botões de gênero/habilidade nessa instância da barra, refletir
+  // também o reset visual; só mudar o estado deixaria um filtro "aceso" falso.
+  var bracketWrap = document.getElementById('fbwrap-chaves');
+  if (bracketWrap && typeof window._fbInner === 'function') {
+    bracketWrap.innerHTML = window._fbInner('chaves');
+  }
+  if (typeof window._bracketApplyFilter === 'function') window._bracketApplyFilter();
   if (window.location.hash.split('?')[0] !== '#tournaments/' + tId) {
     window._goToTournamentMatch(tId, sourceId, tab);
     return;

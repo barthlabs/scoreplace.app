@@ -434,6 +434,7 @@ function assignCompetitionTeamsAtInitialDraw(t, rawConfig) {
       .filter(function (definition) { return definition && definition.id && definition.label; })
       .map(function (definition) { return [String(definition.id), String(definition.label)]; }));
     const fivePlusThree = schedule.originDayPolicy === 'female-light-five-plus-three';
+    const organizationFinal = schedule.originDayPolicy === 'female-light-organization-final';
     const expectedByOrigin = (byCategory.get(neonLight) || []).map(function (entry) {
       const origin = originLabels.get(String(entry.originCategoryId || '')) || '';
       return { id:String(entry.fixedPairId || ''), origin:origin,
@@ -457,7 +458,9 @@ function assignCompetitionTeamsAtInitialDraw(t, rawConfig) {
       }
       candidates.slice(0, 3).forEach(function (item) { selectedExtraIds.add(item.id); });
     }
-    const originPlanValid = fivePlusThree
+    const originPlanValid = organizationFinal
+      ? true // A lista nominal da organização é o plano persistido; não há seleção por origem nem sorteio de dias.
+      : fivePlusThree
       ? originCounts[0] === 19 && originCounts[1] === 5 && selectedMarked === 5 && selectedOriginal === 3 &&
         expectedByOrigin.every(function (item) { return item.day && pairDayById.get(item.id) ===
           (item.day === days[1] || selectedExtraIds.has(item.id) ? days[1] : days[0]); })
@@ -468,7 +471,7 @@ function assignCompetitionTeamsAtInitialDraw(t, rawConfig) {
         JSON.stringify(savedSnapshot) !== JSON.stringify(expectedSnapshot) ||
         days.length !== 2 || assignments.length !== 24 || pairDayById.size !== 24 ||
         counts[0] !== 16 || counts[1] !== 8 || !originPlanValid ||
-        expectedByOrigin.some(function (item) { return !item.id || !item.day; }) ||
+        (!organizationFinal && expectedByOrigin.some(function (item) { return !item.id || !item.day; })) ||
         (byCategory.get(neonLight) || []).some(function (entry) { return !pairDayById.has(String(entry.fixedPairId || '')); }) ||
         assignments.some(function (item) { return !(byCategory.get(neonLight) || []).some(function (entry) { return String(entry.fixedPairId || '') === String(item.fixedPairId || ''); }); })) {
       return { ok:false, reason:'competition-pair-day-plan-invalid' };

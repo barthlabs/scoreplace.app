@@ -69,10 +69,21 @@ const navigationCode = tournaments.slice(tournaments.indexOf('window._goToBracke
       location.hash = '#tournaments/confra';
       window.tabCalls = [];
       window.focusCalls = [];
-      window._filterBarState = { chaves: { search: 'Rodrigo' }, inscritos: { search: 'manter' } };
+      window._filterBarState = { chaves: { search: 'Rodrigo', gender: 'fem', skill: 'light' }, inscritos: { search: 'manter' } };
+      window._showOnlyMyMatches = true;
+      window._showOnlyPendingMatches = false;
       window._fbAction = (key, field, value) => {
         window._filterBarState[key][field] = value;
-        document.getElementById('card-src&"<').style.display = value ? 'none' : '';
+        window._bracketApplyFilter();
+      };
+      window._bracketApplyFilter = () => {
+        const state = window._filterBarState.chaves;
+        const hidden = window._showOnlyMyMatches || window._showOnlyPendingMatches || !!state.search || state.gender !== 'all' || state.skill !== 'all';
+        document.getElementById('card-src&"<').style.display = hidden ? 'none' : '';
+      };
+      window._bracketSyncHeaderFilterButtons = () => {
+        document.querySelector('[data-bracket-filter="mine"]').setAttribute('aria-pressed', String(window._showOnlyMyMatches));
+        document.querySelector('[data-bracket-filter="pending"]').setAttribute('aria-pressed', String(window._showOnlyPendingMatches));
       };
       window._bracketSelectCategoryTab = (...args) => window.tabCalls.push(args);
       window._focusTournamentMatchWhenReady = (...args) => window.focusCalls.push(args);
@@ -84,6 +95,12 @@ const navigationCode = tournaments.slice(tournaments.indexOf('window._goToBracke
       clear.id = 'bracket-search-clear';
       clear.style.display = '';
       document.body.appendChild(clear);
+      for (const kind of ['mine', 'pending']) {
+        const button = document.createElement('button');
+        button.dataset.bracketFilter = kind;
+        button.setAttribute('aria-pressed', kind === 'mine' ? 'true' : 'false');
+        document.body.appendChild(button);
+      }
       const card = document.createElement('article');
       card.id = 'card-src&"<';
       card.textContent = 'Jogo 186';
@@ -96,6 +113,8 @@ const navigationCode = tournaments.slice(tournaments.indexOf('window._goToBracke
     const fromBracket = await page.evaluate(() => ({ tabs: window.tabCalls, focus: window.focusCalls,
       input: document.getElementById('bracket-search').value,
       search: window._filterBarState.chaves.search,
+      gender: window._filterBarState.chaves.gender,
+      skill: window._filterBarState.chaves.skill,
       unrelatedSearch: window._filterBarState.inscritos.search,
       cardDisplay: document.getElementById('card-src&"<').style.display,
       clearDisplay: document.getElementById('bracket-search-clear').style.display }));
@@ -104,9 +123,23 @@ const navigationCode = tournaments.slice(tournaments.indexOf('window._goToBracke
     assert.equal(fromBracket.focus[1][1], 'src&"<', 'Espaço também ativa o link de forma acessível');
     assert.equal(fromBracket.input, '', 'o campo da busca da chave é esvaziado');
     assert.equal(fromBracket.search, '', 'a busca não reaparece após re-render');
+    assert.equal(fromBracket.gender, 'all', 'o filtro de gênero também é limpo');
+    assert.equal(fromBracket.skill, 'all', 'o filtro de categoria também é limpo');
     assert.equal(fromBracket.unrelatedSearch, 'manter', 'a busca dos inscritos não é alterada');
     assert.equal(fromBracket.cardDisplay, '', 'o jogo de origem volta a ficar visível');
     assert.equal(fromBracket.clearDisplay, 'none', 'o botão de limpar some junto com o filtro');
+    assert.equal(await page.evaluate(() => window._showOnlyMyMatches), false, 'o link desliga Só meus jogos');
+    assert.equal(await page.locator('[data-bracket-filter="mine"]').getAttribute('aria-pressed'), 'false');
+    await page.evaluate(() => {
+      window._showOnlyPendingMatches = true;
+      window._filterBarState.chaves.search = 'outra busca';
+      document.getElementById('bracket-search').value = 'outra busca';
+      window._bracketApplyFilter();
+    });
+    await page.locator('#bracket .sp-source-match-link').click();
+    assert.equal(await page.evaluate(() => window._showOnlyPendingMatches), false, 'o link desliga Jogos pendentes');
+    assert.equal(await page.locator('[data-bracket-filter="pending"]').getAttribute('aria-pressed'), 'false');
+    assert.equal(await page.evaluate(() => document.getElementById('card-src&"<').style.display), '');
     console.log('✅ Vaga pendente: origem real, escape, clique e teclado sem acionar card pai');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -180,18 +180,17 @@ function renderRules(container, tournamentId) {
   const isOrg = window._souOrganizador(t);
   const isNeon = !!(window._isNeonTournament && window._isNeonTournament(t));
 
-  // Regulamento publicado do Neon. Mudanças editoriais de 16/10/2026: 24 duplas
-  // Fem Light (duas por time na quinta e a terceira na sexta), cinco outras
-  // categorias com oito duplas cada. Isso NÃO altera o motor nem os dados.
+  // Regulamento oficial final fornecido pela organização em 18/10/2026.
   const neonRegulationHtml = isNeon ? `
     <section class="card" data-neon-regulation style="max-width:900px;margin:0 auto 1.5rem;color:var(--text-main);line-height:1.65;">
       <h3 style="color:var(--text-bright);margin:0 0 1rem;">NEON NIGHTMARE – THE TOURNAMENT</h3>
       <p>O NEON NIGHTMARE – THE TOURNAMENT é um torneio de Beach Tennis organizado pela Diretoria Social de Beach Tennis do Clube Paineiras do Morumby, exclusivo para sócios a partir de 14 anos.</p>
+      <p>A inscrição implica aceitação integral deste regulamento e das decisões da organização e da arbitragem. A plataforma oficial de gestão é a Scoreplace. A data do sorteio das equipes será divulgada pela organização.</p>
 
       <h4 style="color:var(--text-bright);margin:1.5rem 0 0.5rem;">DATAS</h4>
-      <p>Quinta-feira, 22/10/2026: duplas femininas Light 1 e 2 de cada equipe, Power e Extreme.<br>
-      Sexta-feira, 23/10/2026: dupla feminina Light 3 de cada equipe e duplas masculinas Light, Power e Extreme.<br>
-      Início dos jogos: 18h<br>Chegada obrigatória: 17h30<br>Quadras: 4, 5, 6, 7, 8 e 9.</p>
+      <p>Quinta-feira, 22/10/2026: jogos exclusivamente femininos, com 16 duplas Light, 8 Power e 8 Extreme.<br>
+      Sexta-feira, 23/10/2026: 8 duplas femininas Light adicionais, em chave exclusiva, e 8 duplas de cada categoria masculina.<br>
+      Início dos jogos: 18h<br>Chegada obrigatória: 30 minutos antes do início dos jogos<br>Quadras: 4, 5, 6, 7, 8 e 9.</p>
 
       <h4 style="color:var(--text-bright);margin:1.5rem 0 0.5rem;">INSCRIÇÕES</h4>
       <p>As inscrições serão realizadas em duplas previamente formadas por atletas do mesmo sexo.</p>
@@ -207,30 +206,37 @@ function renderRules(container, tournamentId) {
       <p>Não será permitida a participação em mais de uma categoria.</p>
 
       <h4 style="color:var(--text-bright);margin:1.5rem 0 0.5rem;">EQUIPES</h4>
-      <p>Após o encerramento das inscrições, os atletas serão distribuídos por sorteio em 8 equipes:</p>
+      <p>Os atletas serão distribuídos por sorteio em 8 equipes. A distribuição dos dias das duplas já foi definida pela organização e não integra esse sorteio:</p>
       <p>BLACKOUT · BLAST · ECLIPSE · PANIC · PHANTOM · VENOM · VOLT · VORTEX</p>
       <p>Cada equipe será formada por 3 duplas Light Feminino e por 1 dupla de cada uma das outras categorias: Power Feminino, Extreme Feminino, Light Masculino, Power Masculino e Extreme Masculino. Ao final dos dois dias, cada equipe terá 8 duplas e 16 atletas: 10 mulheres e 6 homens.</p>
 
       <h4 style="color:var(--text-bright);margin:1.5rem 0 0.5rem;">FORMATO DE DISPUTA</h4>
-      <p>As partidas serão disputadas em 1 set até 6 games. Em caso de 5x5, será disputado tie-break. Cada dupla disputará 3 jogos.</p>
+      <p>Os confrontos e horários obedecerão à grade oficial divulgada pela organização. Cada dupla disputará 3 partidas contra duplas da mesma categoria e de equipes diferentes, sem repetição de adversários. As 8 duplas femininas Light de sexta-feira enfrentarão exclusivamente outras duplas dessa chave. Não haverá jogos mistos.</p>
+      <p>As partidas serão disputadas em 1 set até 6 games. Em caso de 5x5, será disputado tie-break. A grade considera janelas aproximadas de 35 minutos; esse tempo é referência operacional e não interrompe a partida em andamento.</p>
       <p>A classificação será definida pelo SALDO DE GAMES, calculado pela diferença entre games ganhos e games perdidos.</p>
-      <p>No dia 22/10, as duplas femininas Light 1 e 2, Power e Extreme iniciam o saldo de suas equipes. No dia 23/10, a terceira dupla Light Feminino de cada equipe e as duplas masculinas continuam a disputa a partir do saldo acumulado na quinta-feira.</p>
+      <p>Na quinta-feira, as duplas femininas iniciam o saldo de suas equipes. Na sexta-feira, os resultados masculinos e da chave feminina Light adicional serão somados ao saldo acumulado.</p>
       <p>Ao final dos jogos de sexta-feira, será campeã a equipe que apresentar o maior saldo geral de games, considerando os resultados femininos e masculinos.</p>
       <p>Não haverá semifinal ou final. Haverá uma única equipe campeã.</p>
       <p>Em caso de empate no saldo geral de games, os critérios serão, nesta ordem:</p>
-      <ol><li>Maior número total de vitórias</li><li>Maior número total de games vencidos</li><li>Sorteio realizado pela organização</li></ol>
+      <ol><li>Maior número total de vitórias</li><li>Maior número total de games vencidos</li><li>Sorteio realizado pela organização na presença de representantes das equipes envolvidas</li></ol>
+
+      <h4 style="color:var(--text-bright);margin:1.5rem 0 0.5rem;">W.O., AUSÊNCIAS E LESÕES</h4>
+      <p>O W.O. deve ser evitado, pois interfere diretamente no resultado coletivo. Cada atleta é responsável por cumprir sua participação e os horários previstos. Em caso de W.O., a partida será registrada por 6x0 para a dupla presente.</p>
+      <p>Se uma lesão impedir a continuidade da partida, a arbitragem encerrará o jogo e definirá o placar conforme o estágio da partida, computando os games necessários para a conclusão em favor da dupla adversária. Ausências e situações excepcionais serão avaliadas pela organização e pela arbitragem.</p>
 
       <h4 style="color:var(--text-bright);margin:1.5rem 0 0.5rem;">KIT ATLETA</h4>
-      <p>Todos os participantes regularmente inscritos receberão o kit atleta oficial do evento. A retirada será realizada na Track&amp;Field Pátio Guedala, em data e horário a serem comunicados posteriormente.</p>
+      <p>Todos os participantes regularmente inscritos receberão o kit atleta oficial do evento. A retirada será na Track&amp;Field Pátio Guedala, Av. Comendador Adibo Ares, 129, loja B160: quarta-feira, 21/10, das 10h às 19h, e quinta-feira, 22/10, das 10h às 16h.</p>
       <p>O uso da camiseta oficial do evento será obrigatório durante as partidas.</p>
 
       <h4 style="color:var(--text-bright);margin:1.5rem 0 0.5rem;">PREMIAÇÃO</h4>
       <p>A equipe campeã será formada por 16 atletas: 10 mulheres e 6 homens das categorias Light, Power e Extreme.</p>
       <p>A cerimônia de premiação acontecerá no sábado, 24/10, durante o THE HORROR EXPERIENCE – THE FINAL CHAPTER OF NEON NIGHTMARE: THE AWARDS.</p>
+      <p>A ausência do atleta na cerimônia não implica perda da premiação. O prêmio será guardado para entrega posterior.</p>
 
       <h4 style="color:var(--text-bright);margin:1.5rem 0 0.5rem;">IMPORTANTE</h4>
-      <p>A inscrição implica a aceitação integral do regulamento e das decisões da organização e da arbitragem.</p>
-      <p>O torneio preza pelo fair play, respeito e espírito esportivo. Casos omissos ou situações excepcionais serão resolvidos pela organização em conjunto com a arbitragem.</p>
+      <p>O torneio preza pelo fair play, respeito e espírito esportivo. Condutas antidesportivas poderão resultar em advertência, perda de ponto, perda de game ou desclassificação, conforme decisão da arbitragem. A arbitragem é a autoridade máxima da parte técnica; suas decisões durante as partidas são soberanas e definitivas.</p>
+      <p>Ao se inscrever, o participante declara estar em condições físicas adequadas para a prática esportiva e autoriza o uso de sua imagem em fotos e vídeos do evento para divulgação institucional e de parceiros. Cancelamentos e reembolsos seguem as condições da plataforma de inscrição e a legislação aplicável.</p>
+      <p>Em caso de condições climáticas adversas ou força maior, a organização e a arbitragem poderão ajustar horários ou o sistema de disputa, preservando a segurança e a viabilidade do evento. Casos omissos serão resolvidos pela organização em conjunto com a arbitragem.</p>
     </section>` : '';
 
   container.innerHTML = `

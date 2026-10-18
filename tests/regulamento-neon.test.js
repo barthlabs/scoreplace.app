@@ -47,7 +47,7 @@ for (const sentence of [
   '16 Light Feminino',
   '8 duplas e 16 atletas: 10 mulheres e 6 homens',
   'As duplas Light Feminino de sexta-feira jogarão apenas entre si',
-  'Cada dupla disputará 3 jogos',
+  'Cada dupla disputará 3 partidas',
 ]) assert(html.includes(sentence), `regra ausente: ${sentence}`);
 assert(!html.includes('24 vagas para duplas'));
 assert(!html.includes('12 atletas: 6 mulheres e 6 homens'));

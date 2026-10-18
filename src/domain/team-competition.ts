@@ -178,7 +178,9 @@ namespace ScoreplaceTeamCompetition {
         mode: schedule.mode === 'structured' ? 'structured' : 'free',
         modeConfirmed: schedule.modeConfirmed === true,
         modeChosen: schedule.modeChosen === true,
-        originDayPolicy: schedule.originDayPolicy === 'female-light-five-plus-three'
+        originDayPolicy: schedule.originDayPolicy === 'female-light-organization-final'
+          ? 'female-light-organization-final'
+          : schedule.originDayPolicy === 'female-light-five-plus-three'
           ? 'female-light-five-plus-three'
           : schedule.originDayPolicy === 'female-light-enrollment-origin' ? 'female-light-enrollment-origin' : '',
       },

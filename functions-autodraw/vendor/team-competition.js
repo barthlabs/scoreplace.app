@@ -123,9 +123,11 @@ var ScoreplaceTeamCompetition;
                 mode: schedule.mode === 'structured' ? 'structured' : 'free',
                 modeConfirmed: schedule.modeConfirmed === true,
                 modeChosen: schedule.modeChosen === true,
-                originDayPolicy: schedule.originDayPolicy === 'female-light-five-plus-three'
-                    ? 'female-light-five-plus-three'
-                    : schedule.originDayPolicy === 'female-light-enrollment-origin' ? 'female-light-enrollment-origin' : '',
+                originDayPolicy: schedule.originDayPolicy === 'female-light-organization-final'
+                    ? 'female-light-organization-final'
+                    : schedule.originDayPolicy === 'female-light-five-plus-three'
+                        ? 'female-light-five-plus-three'
+                        : schedule.originDayPolicy === 'female-light-enrollment-origin' ? 'female-light-enrollment-origin' : '',
             },
             // A escala padrão é a mesma da classificatória atual: 3/1/0. O organizador
             // pode substituí-la, inclusive com valores zero ou negativos, de forma explícita.
