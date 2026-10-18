@@ -122,9 +122,9 @@ if rg -q '^\.backend-publicado-autodraw-funcoes\.json$' "$ALL" 2>/dev/null; then
   {
     echo 'Proveniência verificável do recibo de função no corte:'
     rg -n 'SP_DEPLOY_CONFIRMED|registrar-funcoes|recibo direcionado' scripts/deploy-functions.sh scripts/check-backend-publicado.js
-    if [[ -f /tmp/scoreplace-neon-deploy-function-final.log ]]; then
+    if [[ -n "${SP_FUNCTION_DEPLOY_LOG:-}" && -f "$SP_FUNCTION_DEPLOY_LOG" ]]; then
       rg 'functions\[drawRound\(us-central1\)\] Successful update operation|Deploy complete!|recibo direcionado: drawRound' \
-        /tmp/scoreplace-neon-deploy-function-final.log
+        "$SP_FUNCTION_DEPLOY_LOG"
     fi
     echo 'O recibo é resultado desse publicador, não uma declaração manual de implantação.'
   } >> "$CROSS_EVIDENCE"
