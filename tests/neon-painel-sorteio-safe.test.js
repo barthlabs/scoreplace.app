@@ -60,4 +60,10 @@ participants[18].originCategoryLabel = 'Masc Light';
 W._showTeamCompetitionDrawReview(tournament.id, { _canonicalRosterLoaded:true });
 if (!/exatamente 5 duplas Fem Light marcadas/.test(overlay.innerHTML)) throw new Error('Seis duplas marcadas deveriam bloquear a regra 5+3');
 participants[18].originCategoryLabel = savedOrigin;
+tournament.name = 'Torneio renomeado';
+tournament.teamCompetition.schedule.originDayPolicy = 'female-light-five-plus-three';
+W._showTeamCompetitionDrawReview(tournament.id, { _canonicalRosterLoaded:true });
+if (/O sorteio está bloqueado/.test(overlay.innerHTML) || !/Regra vigente: 5 duplas Fem Light marcadas/.test(overlay.innerHTML)) {
+  throw new Error('Plano 5+3 salvo deve continuar valendo após renomeação');
+}
 console.log('✓ Painel Neon: sem seletores manuais, Fem Light nos dois dias e sem UID visível');

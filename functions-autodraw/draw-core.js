@@ -442,9 +442,25 @@ function assignCompetitionTeamsAtInitialDraw(t, rawConfig) {
     const originCounts = days.map(function (day) { return expectedByOrigin.filter(function (item) { return item.day === day; }).length; });
     const selectedMarked = expectedByOrigin.filter(function (item) { return item.day === days[1] && pairDayById.get(item.id) === days[1]; }).length;
     const selectedOriginal = expectedByOrigin.filter(function (item) { return item.day === days[0] && pairDayById.get(item.id) === days[1]; }).length;
+    // Espelho da seleção determinística apresentada no painel. O servidor
+    // confere os IDs escolhidos, não só o total 5+3, antes de sortear jogos.
+    const selectedExtraIds = new Set();
+    if (fivePlusThree && originCounts[0] === 19 && originCounts[1] === 5) {
+      const candidates = expectedByOrigin.filter(function (item) { return item.day === days[0]; })
+        .sort(function (a, b) { return a.id.localeCompare(b.id); });
+      const seedText = String(t.id || ''), seedStart = 2166136261;
+      let seed = seedStart;
+      for (let si = 0; si < seedText.length; si++) { seed ^= seedText.charCodeAt(si); seed = Math.imul(seed, 16777619); }
+      for (let ci = candidates.length - 1; ci > 0; ci--) {
+        seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5;
+        const swap = (seed >>> 0) % (ci + 1), temp = candidates[ci]; candidates[ci] = candidates[swap]; candidates[swap] = temp;
+      }
+      candidates.slice(0, 3).forEach(function (item) { selectedExtraIds.add(item.id); });
+    }
     const originPlanValid = fivePlusThree
-      ? /neon nightmare/i.test(String(t.name || '')) && originCounts[0] === 19 && originCounts[1] === 5 && selectedMarked === 5 && selectedOriginal === 3 &&
-        expectedByOrigin.every(function (item) { return item.day && (item.day === days[0] || pairDayById.get(item.id) === days[1]); })
+      ? originCounts[0] === 19 && originCounts[1] === 5 && selectedMarked === 5 && selectedOriginal === 3 &&
+        expectedByOrigin.every(function (item) { return item.day && pairDayById.get(item.id) ===
+          (item.day === days[1] || selectedExtraIds.has(item.id) ? days[1] : days[0]); })
       : originCounts[0] === 16 && originCounts[1] === 8 &&
         expectedByOrigin.every(function (item) { return item.day && pairDayById.get(item.id) === item.day; });
     if (entries.length !== 64 || expectedSnapshot.some(function (item) { return !item.fixedPairId || !item.categoryId; }) ||

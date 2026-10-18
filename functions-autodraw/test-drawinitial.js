@@ -359,8 +359,16 @@ const CASES = [
   provisional.participants.slice(16, 19).forEach(function (entry) { entry.originCategoryId = 'category-0'; });
   const provisionalConfig = JSON.parse(JSON.stringify(realConfig));
   provisionalConfig.schedule.originDayPolicy = 'female-light-five-plus-three';
+  const candidates = provisional.participants.slice(0, 19).sort(function (a, b) { return a.fixedPairId.localeCompare(b.fixedPairId); });
+  let selectionSeed = 2166136261;
+  for (const letter of provisional.id) { selectionSeed ^= letter.charCodeAt(0); selectionSeed = Math.imul(selectionSeed, 16777619); }
+  for (let ci = candidates.length - 1; ci > 0; ci--) {
+    selectionSeed ^= selectionSeed << 13; selectionSeed ^= selectionSeed >>> 17; selectionSeed ^= selectionSeed << 5;
+    const swap = (selectionSeed >>> 0) % (ci + 1), temp = candidates[ci]; candidates[ci] = candidates[swap]; candidates[swap] = temp;
+  }
+  const selectedExtraIds = new Set(candidates.slice(0, 3).map(function (entry) { return entry.fixedPairId; }));
   provisionalConfig.schedule.pairDayAssignments = provisional.participants.slice(0, 24).map(function (entry, index) {
-    return { fixedPairId:entry.fixedPairId, day:index >= 19 || (index >= 16 && index < 19) ? '2026-10-23' : '2026-10-22' };
+    return { fixedPairId:entry.fixedPairId, day:index >= 19 || selectedExtraIds.has(entry.fixedPairId) ? '2026-10-23' : '2026-10-22' };
   });
   const provisionalResult = core.assignCompetitionTeamsAtInitialDraw(provisional, provisionalConfig);
   ok('Neon: cinco marcadas + três sorteadas geram 16/8 e 2/1 por time', provisionalResult.ok === true &&
@@ -371,7 +379,7 @@ const CASES = [
       });
     }));
   const provisionalDrawTournament = realTournament();
-  provisionalDrawTournament.id = 'neon_five_plus_three_draw'; provisionalDrawTournament.name = 'Neon Nightmare';
+  provisionalDrawTournament.id = provisional.id; provisionalDrawTournament.name = 'Neon renomeado';
   provisionalDrawTournament.participants.slice(16, 19).forEach(function (entry) { entry.originCategoryId = 'category-0'; });
   provisionalDrawTournament.teamCompetition = provisionalConfig;
   provisionalDrawTournament.phases[0].teamCompetition = provisionalConfig;
@@ -385,12 +393,24 @@ const CASES = [
       return match.team1Obj.competitionPlayDay === match.requiredDay && match.team2Obj.competitionPlayDay === match.requiredDay;
     }), JSON.stringify({ result:provisionalDraw.ok, reason:provisionalDraw.reason, games:provisionalMatches.length,
       days:['2026-10-22','2026-10-23'].map(function (day) { return provisionalMatches.filter(function (match) { return match.requiredDay === day; }).length; }) }));
+  const forgedSelection = realTournament();
+  forgedSelection.id = provisional.id; forgedSelection.name = 'Neon renomeado';
+  forgedSelection.participants.slice(16, 19).forEach(function (entry) { entry.originCategoryId = 'category-0'; });
+  const forgedSelectionConfig = JSON.parse(JSON.stringify(provisionalConfig));
+  const chosenExtra = forgedSelectionConfig.schedule.pairDayAssignments.find(function (item) { return selectedExtraIds.has(item.fixedPairId); });
+  const unchosenExtra = forgedSelectionConfig.schedule.pairDayAssignments.find(function (item) {
+    return !selectedExtraIds.has(item.fixedPairId) && forgedSelection.participants.slice(0, 19).some(function (entry) { return entry.fixedPairId === item.fixedPairId; });
+  });
+  chosenExtra.day = '2026-10-22'; unchosenExtra.day = '2026-10-23';
+  const forgedSelectionResult = core.assignCompetitionTeamsAtInitialDraw(forgedSelection, forgedSelectionConfig);
+  ok('Neon: troca de uma das três sorteadas é rejeitada, mesmo mantendo 16/8', forgedSelectionResult.ok === false &&
+    forgedSelectionResult.reason === 'competition-pair-day-plan-invalid' && !forgedSelection.competitionTeams);
   const forgedProvisional = realTournament();
-  forgedProvisional.id = 'neon_forged'; forgedProvisional.name = 'Neon Nightmare';
+  forgedProvisional.id = provisional.id; forgedProvisional.name = 'Neon Nightmare';
   forgedProvisional.participants.slice(16, 19).forEach(function (entry) { entry.originCategoryId = 'category-0'; });
   const forgedProvisionalConfig = JSON.parse(JSON.stringify(provisionalConfig));
   forgedProvisionalConfig.schedule.pairDayAssignments[19].day = '2026-10-22';
-  forgedProvisionalConfig.schedule.pairDayAssignments[0].day = '2026-10-23';
+  forgedProvisionalConfig.schedule.pairDayAssignments.find(function (item) { return item.fixedPairId === unchosenExtra.fixedPairId; }).day = '2026-10-23';
   const forgedProvisionalResult = core.assignCompetitionTeamsAtInitialDraw(forgedProvisional, forgedProvisionalConfig);
   ok('Neon: dupla marcada movida à quinta é rejeitada', forgedProvisionalResult.ok === false &&
     forgedProvisionalResult.reason === 'competition-pair-day-plan-invalid' && !forgedProvisional.competitionTeams);
