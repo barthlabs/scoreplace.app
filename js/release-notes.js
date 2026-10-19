@@ -1,3 +1,6 @@
+// 2.4.123 — O organizador confirma a chamada do jogo para a quadra pelo botão OK.
+// O card passa a mostrar o tempo desde a chamada; no placar ao vivo, mostra o
+// tempo de jogo. Trocar a quadra cancela a chamada anterior até novo OK.
 // 2.4.122 — No resumo “Seu próximo jogo” e nos cards da dashboard, torneios de
 // times com agenda concentrada mostram a rodada publicada, sem inventar fase
 // de grupos nem “Grupo B” quando a competição não tem grupos. A chave e os
