@@ -374,8 +374,16 @@ ok(/sp-team-draw-time/.test(drawSource) && /__openingPendingInitialScheduleFromD
   'os horários do sorteio usam controle compacto e uma revisão nova vai de Sorteando direto ao planejamento privado, sem voltar ao detalhe');
 ok(!/data-team-court-rank-label/.test(drawSource) && !/paintCourtRanks/.test(drawSource) && /data-team-court-card/.test(drawSource),
   'a prioridade das quadras é definida pela ordem dos cards, sem prefixos ordinais redundantes');
-ok(/var selectedMode = cfg\.schedule\.mode === 'structured' \? 'structured' : 'free';/.test(drawSource),
-  'o primeiro sorteio usa o modo configurado no torneio, mesmo antes da confirmação da grade');
+ok(/_pill\(tc\.schedule\.mode === 'structured',/.test(fs.readFileSync('js/views/format2-ui.js', 'utf8')) &&
+   /var selectedMode = cfg\.schedule\.mode === 'structured' \? 'structured' : 'free';/.test(drawSource) &&
+   !/\(modeChosen \|\| modeConfirmed\)/.test(drawSource),
+  'editor e primeiro sorteio exibem o mesmo modo configurado, mesmo sem flags de confirmação');
+const configuredModeExpression = drawSource.match(/var selectedMode = ([^;]+);/);
+const configuredMode = configuredModeExpression && new Function('cfg', 'return ' + configuredModeExpression[1]);
+ok(configuredMode && configuredMode({ schedule: { mode: 'structured' } }) === 'structured' &&
+   configuredMode({ schedule: { mode: 'free' } }) === 'free' &&
+   configuredMode({ schedule: {} }) === 'free',
+  'sorteio respeita modo Estruturado implícito ou explícito e usa Livre sem modo definido');
 ok((drawSource.match(/class="cancel-x-btn" data-team-remove-category/g) || []).length === 2 &&
   !/width:19px;height:19px;flex:none;border:2px solid white/.test(drawSource),
   'remover categoria de um dia reutiliza o X canônico sem CSS paralelo');

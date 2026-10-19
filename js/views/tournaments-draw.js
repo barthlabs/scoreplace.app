@@ -2969,14 +2969,13 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
        * de um ranking, quando a organização só precisa arrastar a sequência. */
       return '<div draggable="true" data-team-court-card="' + safe(court) + '" style="display:flex;align-items:center;gap:7px;padding:8px;border:1px solid rgba(56,189,248,.48);border-radius:8px;background:#102838;color:var(--text-bright,#ebebf5);font-size:.8rem;font-weight:800;cursor:grab;user-select:none;"><span aria-hidden="true" style="color:#7dd3fc;">⠿</span><span>' + safe(court) + '</span></div>';
     }).join('');
-    // Dias/ordem e o formato de confrontos são escolhas da organização. O
-    // normalizador usa um valor de compatibilidade para torneios legados, mas ele
-    // nunca pode virar uma decisão implícita no primeiro sorteio deste torneio.
-    var modeConfirmed = cfg.schedule && cfg.schedule.modeConfirmed === true;
-    var modeChosen = cfg.schedule && cfg.schedule.modeChosen === true;
-    // A agenda configurada no torneio é a fonte de verdade mesmo antes da
-    // primeira confirmação de sorteio. As flags registram a escolha no fluxo,
-    // mas não podem inverter o modo que a organização já salvou.
+    // A configuração e a confirmação precisam exibir o MESMO modo. No editor,
+    // o botão Estruturado é selecionado pelo campo schedule.mode mesmo quando
+    // modeChosen/modeConfirmed ainda não existem; iniciar esta tela em Livre
+    // contradizia o que o organizador acabara de ver. Ordem de 19/out/2026:
+    // a primeira abertura do sorteio deve refletir o modo configurado.
+    // O editor pode ter o padrão Estruturado sem flags de confirmação; ele
+    // também deve ser exibido aqui. Um cfg.schedule sem mode usa Livre.
     var selectedMode = cfg.schedule.mode === 'structured' ? 'structured' : 'free';
     var rounds = Math.min(cfg.schedule.gamesPerTeam, Math.max(1, cfg.teamCount - 1));
     var includePresenceChoice = opts.includePresenceChoice === true;
