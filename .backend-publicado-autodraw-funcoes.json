@@ -2,26 +2,26 @@
   "schema": 1,
   "entries": {
     "drawRound": {
-      "backendCommit": "f526388e31217161ba5aba1f383f3643950b7b32",
-      "deployedAt": "2026-10-19T15:56:39.676Z",
+      "backendCommit": "f5dad9e5bcdeab7201b384d2fba9fd0eda3e61dc",
+      "deployedAt": "2026-10-19T17:29:07.759Z",
       "result": "success",
       "mode": "only"
     },
     "updateTournamentConfiguration": {
-      "backendCommit": "f526388e31217161ba5aba1f383f3643950b7b32",
-      "deployedAt": "2026-10-19T15:56:39.676Z",
+      "backendCommit": "f5dad9e5bcdeab7201b384d2fba9fd0eda3e61dc",
+      "deployedAt": "2026-10-19T17:29:07.759Z",
       "result": "success",
       "mode": "only"
     },
     "resolvePendingDraw": {
-      "backendCommit": "f526388e31217161ba5aba1f383f3643950b7b32",
-      "deployedAt": "2026-10-19T15:56:39.676Z",
+      "backendCommit": "f5dad9e5bcdeab7201b384d2fba9fd0eda3e61dc",
+      "deployedAt": "2026-10-19T17:29:07.759Z",
       "result": "success",
       "mode": "only"
     },
     "setPendingInitialSchedule": {
-      "backendCommit": "f526388e31217161ba5aba1f383f3643950b7b32",
-      "deployedAt": "2026-10-19T15:58:52.273Z",
+      "backendCommit": "f5dad9e5bcdeab7201b384d2fba9fd0eda3e61dc",
+      "deployedAt": "2026-10-19T17:29:07.759Z",
       "result": "success",
       "mode": "only"
     },
@@ -38,14 +38,14 @@
       "mode": "only"
     },
     "createTournament": {
-      "backendCommit": "f526388e31217161ba5aba1f383f3643950b7b32",
-      "deployedAt": "2026-10-19T15:58:52.273Z",
+      "backendCommit": "f5dad9e5bcdeab7201b384d2fba9fd0eda3e61dc",
+      "deployedAt": "2026-10-19T17:31:02.558Z",
       "result": "success",
       "mode": "only"
     },
     "autoDraw": {
-      "backendCommit": "f526388e31217161ba5aba1f383f3643950b7b32",
-      "deployedAt": "2026-10-19T15:56:39.676Z",
+      "backendCommit": "f5dad9e5bcdeab7201b384d2fba9fd0eda3e61dc",
+      "deployedAt": "2026-10-19T17:29:07.759Z",
       "result": "success",
       "mode": "only"
     },
@@ -56,74 +56,80 @@
       "mode": "only"
     },
     "autoDrawReconcile": {
-      "backendCommit": "f526388e31217161ba5aba1f383f3643950b7b32",
-      "deployedAt": "2026-10-19T15:56:39.676Z",
+      "backendCommit": "f5dad9e5bcdeab7201b384d2fba9fd0eda3e61dc",
+      "deployedAt": "2026-10-19T17:29:07.759Z",
       "result": "success",
       "mode": "only"
     },
     "tournamentSummary": {
-      "backendCommit": "f526388e31217161ba5aba1f383f3643950b7b32",
-      "deployedAt": "2026-10-19T15:56:39.676Z",
+      "backendCommit": "f5dad9e5bcdeab7201b384d2fba9fd0eda3e61dc",
+      "deployedAt": "2026-10-19T17:29:07.759Z",
       "result": "success",
       "mode": "only"
     },
     "sendPushNotification": {
-      "backendCommit": "f526388e31217161ba5aba1f383f3643950b7b32",
-      "deployedAt": "2026-10-19T15:56:39.676Z",
+      "backendCommit": "f5dad9e5bcdeab7201b384d2fba9fd0eda3e61dc",
+      "deployedAt": "2026-10-19T17:29:07.759Z",
       "result": "success",
       "mode": "only"
     },
     "queueMatchReadyNotifications": {
-      "backendCommit": "f526388e31217161ba5aba1f383f3643950b7b32",
-      "deployedAt": "2026-10-19T15:56:39.676Z",
+      "backendCommit": "f5dad9e5bcdeab7201b384d2fba9fd0eda3e61dc",
+      "deployedAt": "2026-10-19T17:29:07.759Z",
       "result": "success",
       "mode": "only"
     },
     "reconcileMatchReadyNotifications": {
-      "backendCommit": "f526388e31217161ba5aba1f383f3643950b7b32",
-      "deployedAt": "2026-10-19T15:56:39.676Z",
+      "backendCommit": "f5dad9e5bcdeab7201b384d2fba9fd0eda3e61dc",
+      "deployedAt": "2026-10-19T17:31:02.558Z",
       "result": "success",
       "mode": "only"
     },
     "deliverScoreNotification": {
-      "backendCommit": "f526388e31217161ba5aba1f383f3643950b7b32",
-      "deployedAt": "2026-10-19T15:56:39.676Z",
+      "backendCommit": "f5dad9e5bcdeab7201b384d2fba9fd0eda3e61dc",
+      "deployedAt": "2026-10-19T17:31:02.558Z",
       "result": "success",
       "mode": "only"
     },
     "startTournament": {
-      "backendCommit": "f526388e31217161ba5aba1f383f3643950b7b32",
-      "deployedAt": "2026-10-19T15:58:52.273Z",
+      "backendCommit": "f5dad9e5bcdeab7201b384d2fba9fd0eda3e61dc",
+      "deployedAt": "2026-10-19T17:31:02.558Z",
       "result": "success",
       "mode": "only"
     },
     "applyTournamentFormat": {
-      "backendCommit": "f526388e31217161ba5aba1f383f3643950b7b32",
-      "deployedAt": "2026-10-19T15:58:52.273Z",
+      "backendCommit": "f5dad9e5bcdeab7201b384d2fba9fd0eda3e61dc",
+      "deployedAt": "2026-10-19T17:31:02.558Z",
       "result": "success",
       "mode": "only"
     },
     "advanceTournamentPhase": {
-      "backendCommit": "f526388e31217161ba5aba1f383f3643950b7b32",
-      "deployedAt": "2026-10-19T15:58:52.273Z",
+      "backendCommit": "f5dad9e5bcdeab7201b384d2fba9fd0eda3e61dc",
+      "deployedAt": "2026-10-19T17:31:02.558Z",
       "result": "success",
       "mode": "only"
     },
     "setTournamentEnrollmentStatus": {
-      "backendCommit": "f526388e31217161ba5aba1f383f3643950b7b32",
-      "deployedAt": "2026-10-19T15:58:52.273Z",
+      "backendCommit": "f5dad9e5bcdeab7201b384d2fba9fd0eda3e61dc",
+      "deployedAt": "2026-10-19T17:31:02.558Z",
       "result": "success",
       "mode": "only"
     },
     "runEnrollmentSlotsDraw": {
-      "backendCommit": "f526388e31217161ba5aba1f383f3643950b7b32",
-      "deployedAt": "2026-10-19T15:58:52.273Z",
+      "backendCommit": "f5dad9e5bcdeab7201b384d2fba9fd0eda3e61dc",
+      "deployedAt": "2026-10-19T17:31:02.558Z",
       "result": "success",
       "mode": "only"
     },
     "closeExpiredLeagueSeason": {
-      "backendCommit": "f526388e31217161ba5aba1f383f3643950b7b32",
-      "deployedAt": "2026-10-19T15:58:52.273Z",
+      "backendCommit": "f5dad9e5bcdeab7201b384d2fba9fd0eda3e61dc",
+      "deployedAt": "2026-10-19T17:31:02.558Z",
+      "result": "success",
+      "mode": "only"
+    },
+    "saveTournamentReplay": {
+      "backendCommit": "f5dad9e5bcdeab7201b384d2fba9fd0eda3e61dc",
+      "deployedAt": "2026-10-19T17:29:07.759Z",
       "result": "success",
       "mode": "only"
     }
