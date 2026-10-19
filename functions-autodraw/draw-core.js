@@ -413,7 +413,36 @@ function assignCompetitionTeamsAtInitialDraw(t, rawConfig) {
   const dayPlanRequired = teams.length === 8 && categoriesToValidate.length === 6 && neonLight &&
     pairsRequired(neonLight) === 3;
   let pairDayById = null;
-  if (dayPlanRequired) {
+  // Pedido do organizador em 19/out: o plano nominal passa a ser editado no app,
+  // inclusive no Neon; a antiga exceção 16/8 por origem não pode impedir uma
+  // distribuição nova escolhida explicitamente. Mantemos roster e equilíbrio
+  // por time/dia como travas do plano operacional.
+  const genericDayPlan = cfg.schedule && cfg.schedule.originDayPolicy === 'organizer-pair-days';
+  if (genericDayPlan) {
+    const schedule = cfg.schedule, assignments = Array.isArray(schedule.pairDayAssignments) ? schedule.pairDayAssignments : [];
+    const expectedSnapshot = entries.map(function (entry) {
+      return { fixedPairId:String(entry.fixedPairId || ''), categoryId:String(entry.categoryId || '') };
+    }).sort(function (a, b) { return a.fixedPairId.localeCompare(b.fixedPairId); });
+    const savedSnapshot = (schedule.rosterSnapshot || []).slice().sort(function (a, b) {
+      return String(a.fixedPairId || '').localeCompare(String(b.fixedPairId || ''));
+    });
+    pairDayById = new Map(assignments.map(function (item) { return [String(item.fixedPairId || ''), String(item.day || '')]; }));
+    const slots = t.categorySchedule && Array.isArray(t.categorySchedule.slots) ? t.categorySchedule.slots : [];
+    const complete = entries.length === assignments.length && pairDayById.size === entries.length &&
+      new Set(expectedSnapshot.map(function (item) { return item.fixedPairId; })).size === entries.length &&
+      expectedSnapshot.every(function (item) { return item.fixedPairId && item.categoryId; }) &&
+      JSON.stringify(savedSnapshot) === JSON.stringify(expectedSnapshot) &&
+      categoriesToValidate.every(function (category) {
+        const categoryEntries = byCategory.get(category) || [];
+        const available = Array.from(new Set(slots.filter(function (slot) { return String(slot.category || '') === category; })
+          .map(function (slot) { return String(slot.day || '').slice(0, 10); }))).filter(Boolean);
+        return available.length > 0 && available.every(function (day) {
+          const count = categoryEntries.filter(function (entry) { return pairDayById.get(String(entry.fixedPairId)) === day; }).length;
+          return count > 0 && count % teams.length === 0;
+        }) && categoryEntries.every(function (entry) { return available.includes(pairDayById.get(String(entry.fixedPairId))); });
+      });
+    if (!complete) return { ok:false, reason:'competition-pair-day-plan-invalid' };
+  } else if (dayPlanRequired) {
     // ⛔ O 3º par Fem Light joga na sexta, não com os dois pares de quinta.
     // Um roster antigo, um mapa parcial ou mudança de categoria abortam antes
     // de atribuir times/jogos. `fixedPairId` é a identidade da DUPLA canônica.
@@ -497,7 +526,7 @@ function assignCompetitionTeamsAtInitialDraw(t, rawConfig) {
     return 70;
   }
   byCategory.forEach(function (categoryEntries, category) {
-    const strata = dayPlanRequired && category === neonLight
+    const strata = (genericDayPlan || (dayPlanRequired && category === neonLight))
       ? Array.from(new Set(Array.from(pairDayById.values()))).sort().map(function (day) {
           return categoryEntries.filter(function (entry) { return pairDayById.get(String(entry.fixedPairId)) === day; });
         }) : [categoryEntries];
@@ -509,7 +538,7 @@ function assignCompetitionTeamsAtInitialDraw(t, rawConfig) {
       group.forEach(function (entry, index) {
         const team = teams[index % teams.length];
         const saturation = saturationFor(category);
-        if (dayPlanRequired && category === neonLight) entry.competitionPlayDay = pairDayById.get(String(entry.fixedPairId));
+        if (genericDayPlan || (dayPlanRequired && category === neonLight)) entry.competitionPlayDay = pairDayById.get(String(entry.fixedPairId));
         entry.competitionTeamId = team.id;
         entry.competitionTeamHue = team.hue;
         entry.competitionTeamSaturation = saturation;

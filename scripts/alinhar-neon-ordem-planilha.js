@@ -70,6 +70,8 @@ async function load(read) {
       root.data().name !== 'NEON NIGHTMARE – THE TOURNAMENT')
     fail('alvo de produção não corresponde ao Neon esperado');
   const state = { root: root.data(), registrations: docsOf(regs), mirror: docsOf(mirror) };
+  if (state.root.teamCompetition?.schedule?.originDayPolicy === 'organizer-pair-days')
+    fail('dias das duplas agora são definidos no app; esta planilha histórica não pode substituir o plano do organizador');
   if (state.root.canonicalRegistrationMigration?.registrationCount !== state.registrations.length ||
       state.registrations.filter(x => x.data.status === 'confirmed').length !== 128 ||
       state.mirror.length !== 64 || (state.root.participants || []).length !== 0)

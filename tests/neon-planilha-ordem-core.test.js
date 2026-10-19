@@ -59,6 +59,9 @@ assert.equal(repaired.staleIds, 1, 'substitui um vínculo de dupla obsoleto no p
 assert.equal(repaired.assignments[0].fixedPairId, light[0].pair.id);
 assert.throws(() => core.alignedDayAssignments(result, slots, {
   originDayPolicy:'female-light-organization-final', pairDayAssignments:oldDays.slice(1) }), /incompleto/);
+assert.throws(() => core.alignedDayAssignments(result, slots, {
+  originDayPolicy:'organizer-pair-days', pairDayAssignments:oldDays }), /definidos no app/,
+  'planilha histórica não substitui dia definido pelo organizador no app');
 assert.throws(() => core.align(rows, pairs.slice(1)), /64 duplas/);
 assert.equal(core.nameScore('Maria Helena', 'Maria Hélena'), 1);
 assert.equal(core.nameScore('Nome longo da pessoa', 'Nome pessoa'), 2 / 3);

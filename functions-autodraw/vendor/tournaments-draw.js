@@ -2926,12 +2926,8 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
       return { fixedPairId:id, day:day };
     }) : [];
     var missingOriginCount = neonQuota ? lightPairs.filter(function (entry) { return !entry.originCategoryLabel; }).length : 0;
-    if (fivePlusThreePlan && (markedLight.length !== 5 || originalLight.length !== 19)) valid = false;
-    if (organizationFinal && (savedPairDays.size !== 24 || savedOriginPolicy !== 'female-light-organization-final')) valid = false;
-    if (neonQuota && (pairDayAssignments.length !== 24 ||
-        pairDayAssignments.filter(function (item) { return item.day === days[0]; }).length !== 16 ||
-        pairDayAssignments.filter(function (item) { return item.day === days[1]; }).length !== 8 ||
-        pairDayAssignments.some(function (item) { return !item.fixedPairId || !item.day; }))) valid = false;
+    if ((neonQuota || savedOriginPolicy === 'organizer-pair-days') && (entries.some(function (entry) { return !entry.fixedPairId || !entry.categoryId; }) ||
+        new Set(entries.map(function (entry) { return String(entry.fixedPairId); })).size !== entries.length)) valid = false;
     var old = document.getElementById('team-draw-review-panel'); if (old) old.remove();
     var overlay = document.createElement('div');
     overlay.id = 'team-draw-review-panel';
@@ -2939,19 +2935,19 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
     function categoryCard(category, removable) {
       return '<div draggable="true" data-team-category-card="' + safe(category) + '" style="display:flex;align-items:center;gap:6px;padding:7px 8px;border:1px solid rgba(74,222,128,.45);border-radius:8px;background:#132a27;color:var(--text-bright,#ebebf5);font-size:.78rem;font-weight:800;cursor:grab;user-select:none;">' +
         '<span aria-hidden="true" style="color:#86efac;">⠿</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">' + safe(category) + '</span>' +
-        (removable ? '<button type="button" data-team-remove-category title="Remover deste dia" aria-label="Remover ' + safe(category) + ' deste dia" style="border:0;background:transparent;color:var(--sp-c-f87171,#f87171);font-size:1rem;cursor:pointer;padding:0 2px;">×</button>' : '') + '</div>';
+        (removable ? '<button type="button" data-team-remove-category title="Remover deste dia" aria-label="Remover ' + safe(category) + ' deste dia" style="width:19px;height:19px;flex:none;border:2px solid white;border-radius:50%;background:#dc2626;color:white;font-size:14px;font-weight:900;line-height:14px;cursor:pointer;padding:0;display:grid;place-items:center;">×</button>' : '') + '</div>';
     }
     var categorySourceCards = categories.map(function (category) { return categoryCard(category, false); }).join('');
     var categoryDayLanes = days.map(function (day) {
       var cards = categories.filter(function (category, index) {
         var stored = byCategory[category];
-        return (neonQuota && category === lightCategory && days.indexOf(day) >= 0) ||
-          (stored && stored.some(function (slot) { return slot.day === day; })) || (!stored && defaultCategorySlot(category, index).day === day);
+        return (stored && stored.some(function (slot) { return slot.day === day; })) || (!stored && defaultCategorySlot(category, index).day === day) ||
+          (!stored && neonQuota && category === lightCategory && day === days[1]);
       }).sort(function (a, b) {
         var aSlot = (byCategory[a] || []).filter(function (slot) { return slot.day === day; })[0] || defaultCategorySlot(a, categories.indexOf(a));
         var bSlot = (byCategory[b] || []).filter(function (slot) { return slot.day === day; })[0] || defaultCategorySlot(b, categories.indexOf(b));
         return aSlot.order - bSlot.order;
-      }).map(function (category) { return categoryCard(category, !(neonQuota && category === lightCategory)); }).join('');
+      }).map(function (category) { return categoryCard(category, true); }).join('');
       var win = windowByDay[day];
       return '<section data-team-day-lane data-day="' + safe(day) + '" style="min-width:0;border:1px dashed rgba(74,222,128,.5);border-radius:10px;padding:8px;background:rgba(6,78,59,.12);">' +
         /* ⛔ Horários nunca dividem a mesma largura: controles nativos de hora
@@ -2983,27 +2979,24 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
       // pode atravessar sua borda, inclusive quando os botões quebram linha.
       '<div style="flex:none;position:relative;z-index:1;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px;padding:18px;background:#101827;border-bottom:1px solid rgba(59,130,246,.25);"><div><h2 id="team-draw-review-title" style="margin:0;color:var(--text-bright);font-size:1.18rem;">🎲 Configurar sorteio</h2><span style="font-size:.75rem;color:#94a3b8;">' + entries.length * 2 + ' participantes · ' + entries.length + ' duplas · ' + categories.length + ' categorias · ' + cfg.teamCount + ' times</span></div><div style="display:flex;flex:none;flex-wrap:wrap;gap:8px;align-items:center;"><button type="button" id="team-draw-cancel-top" class="btn" style="flex:none;white-space:nowrap;background:#182235!important;color:var(--text-bright)!important;border:1px solid #64748b!important;text-shadow:none!important;box-shadow:none!important;">← Voltar</button><button type="button" id="team-draw-confirm" class="btn btn-primary"' + (valid ? ' style="flex:none;white-space:nowrap;"' : ' disabled aria-disabled="true" style="flex:none;white-space:nowrap;opacity:.45;cursor:not-allowed;"') + '>🎲 Sortear times e confrontos</button></div></div>' +
       '<div data-team-draw-scroll style="flex:1;min-height:0;overflow:auto;padding:18px;box-sizing:border-box;">' +
-      '<style>#team-draw-review-panel .sp-team-pair-days{margin:12px 0;border:1px solid #86efac;border-radius:12px;padding:14px;min-width:0;}#team-draw-review-panel .sp-team-pair-days h3{margin:0 0 8px;color:#86efac;font-size:1rem;}#team-draw-review-panel .sp-team-pair-days p{margin:0 0 12px;color:#cbd5e1;font-size:.82rem;line-height:1.4;}#team-draw-review-panel .sp-team-pair-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;min-width:0;}#team-draw-review-panel .sp-team-pair-card{display:grid;grid-template-rows:auto 1fr auto;gap:10px;min-width:0;max-width:100%;padding:12px;border:1px solid #475569;border-radius:10px;background:var(--bg-card);box-sizing:border-box;}#team-draw-review-panel .sp-team-pair-card-head{display:flex;justify-content:space-between;gap:8px;align-items:baseline;color:var(--text-bright);font-size:.84rem;}#team-draw-review-panel .sp-team-pair-card-head small{color:var(--text-muted);font-size:.7rem;}#team-draw-review-panel .sp-team-pair-members{display:grid;gap:5px;min-width:0;color:var(--text-main);font-size:.88rem;line-height:1.3;}#team-draw-review-panel .sp-team-pair-members>span{min-width:0;overflow-wrap:anywhere;word-break:break-word;}#team-draw-review-panel .sp-team-pair-members>span+span:before{content:"+ ";color:var(--text-muted);}#team-draw-review-panel .sp-team-pair-card select{display:block;width:100%;min-width:0;max-width:100%;box-sizing:border-box;padding:8px;font-size:.82rem;}#team-draw-review-panel .sp-team-pair-days .sp-team-pair-days-rule{margin:12px 0 0;color:#fbbf24;}@media (max-width:780px){#team-draw-review-panel [data-team-draw-layout]{grid-template-columns:1fr!important;}#team-draw-review-panel [data-team-day-lane]{min-width:135px!important;}#team-draw-review-panel .sp-team-pair-grid{grid-template-columns:minmax(0,1fr);}}</style><div data-team-draw-layout style="display:grid;grid-template-columns:minmax(270px,.8fr) minmax(420px,1.35fr) minmax(190px,.62fr);gap:14px;align-items:start;">' +
+      '<style>#team-draw-review-panel .sp-team-pair-days{margin:12px 0;border:1px solid #86efac;border-radius:12px;padding:14px;min-width:0;}#team-draw-review-panel .sp-team-pair-days p{margin:8px 0 12px;color:#cbd5e1;font-size:.82rem;line-height:1.4;}#team-draw-review-panel .sp-team-pair-days select{color:white;background:#182235;border:1px solid #64748b;border-radius:7px;}#team-draw-review-panel .sp-team-pair-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;min-width:0;}#team-draw-review-panel .sp-team-pair-card{display:grid;gap:8px;min-width:0;max-width:100%;padding:10px;border:1px solid #475569;border-radius:10px;background:#192132;box-sizing:border-box;}#team-draw-review-panel .sp-team-pair-members{display:grid;gap:5px;min-width:0;color:white;font-size:.88rem;line-height:1.3;}#team-draw-review-panel .sp-team-pair-members>span{min-width:0;overflow-wrap:anywhere;word-break:break-word;}#team-draw-review-panel .sp-team-pair-members>span+span:before{content:"+ ";color:#cbd5e1;}#team-draw-review-panel .sp-team-pair-card select{display:block;width:100%;min-width:0;max-width:100%;box-sizing:border-box;padding:8px;font-size:.82rem;}#team-draw-review-panel .sp-team-pair-days .sp-team-pair-days-rule{margin:12px 0 0;color:#fbbf24;}@media (max-width:780px){#team-draw-review-panel [data-team-draw-layout]{grid-template-columns:1fr!important;}#team-draw-review-panel [data-team-day-lane]{min-width:135px!important;}#team-draw-review-panel .sp-team-pair-grid{grid-template-columns:minmax(0,1fr);}}</style><div data-team-draw-layout style="display:grid;grid-template-columns:minmax(270px,.8fr) minmax(420px,1.35fr) minmax(190px,.62fr);gap:14px;align-items:start;">' +
         '<section style="border:1px solid rgba(167,139,250,.34);border-radius:12px;padding:13px;">' +
           presenceChoiceHtml +
           '<section data-team-toggle-group="mode"><b style="font-size:.88rem;color:#c4b5fd;">Confrontos</b><div style="display:flex;gap:8px;margin-top:7px;"><button type="button" data-team-toggle="structured" class="btn" style="flex:1;">Estruturado</button><button type="button" data-team-toggle="free" class="btn" style="flex:1;">Livre</button></div><p data-team-toggle-copy style="margin:7px 0 0;color:#c4b5fd;font-size:.76rem;line-height:1.35;"></p></section>' +
-          '<div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(148,163,184,.18);font-size:.74rem;color:#94a3b8;">São ' + rounds + ' rodadas por categoria. Em cada dia, escolha se as categorias ficam concentradas ou alternadas.' + (organizationFinal ? ' As 8 duplas Fem Light de sexta já foram definidas pela organização; este sorteio não altera o dia de nenhuma dupla.' : fivePlusThreePlan ? ' Regra legada: 5 duplas Fem Light marcadas + 3 sorteadas jogam sexta.' : '') + '</div>' +
+          '<div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(148,163,184,.18);font-size:.74rem;color:#94a3b8;">São ' + rounds + ' rodadas por categoria. Em cada dia, escolha se as categorias ficam concentradas ou alternadas. Confira os dias nominais das duplas antes de sortear.</div>' +
         '</section>' +
         '<section style="border:1px solid rgba(34,197,94,.38);border-radius:12px;padding:13px;">' +
           '<h3 style="font-size:.94rem;margin:0 0 4px;color:#86efac;">📅 Dias e ordem das categorias</h3><p style="font-size:.75rem;color:#cbd5e1;margin:0 0 9px;line-height:1.3;">Arraste uma categoria para os dias em que ela joga e ordene dentro de cada dia. Em dois dias, as rodadas seguem em sequência; em um só, a categoria termina nele.</p>' +
           '<div style="display:grid;grid-template-columns:repeat(' + Math.max(1, days.length) + ',minmax(150px,1fr));gap:8px;">' + categoryDayLanes + '</div>' +
           '<div style="margin-top:9px;"><b style="font-size:.74rem;color:#94a3b8;">Categorias disponíveis — arraste para um dia</b><div data-team-category-source style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">' + categorySourceCards + '</div></div>' +
+          '<details class="sp-team-pair-days"><summary style="cursor:pointer;font-weight:800;color:#86efac;">Dias das duplas — conferir e ajustar</summary><p>Quando uma categoria joga em mais de um dia, escolha o dia de cada dupla. Cada dia precisa receber a mesma quantidade de duplas por time.</p><div data-team-pair-day-editor></div></details>' +
         '</section>' +
         '<section style="border:1px solid rgba(56,189,248,.38);border-radius:12px;padding:13px;">' +
           '<h3 style="font-size:.94rem;margin:0 0 4px;color:#7dd3fc;">📍 Quadras</h3><p style="font-size:.75rem;color:#cbd5e1;margin:0 0 9px;line-height:1.3;">Arraste para definir a prioridade.</p><div data-team-court-list style="display:grid;gap:6px;">' + courtPriorityCards + '</div>' +
         '</section>' +
       '</div>' +
       (!valid ? '<p style="margin:0 0 14px;color:var(--sp-c-f87171,#f87171);font-weight:700;">' +
-        (organizationFinal && savedOriginPolicy !== 'female-light-organization-final' ? 'Sorteio bloqueado: a política de dias salva não corresponde à distribuição final definida pela organização.' :
-        organizationFinal && savedPairDays.size !== 24 ? 'Sorteio bloqueado: a lista final dos 24 dias das duplas Fem Light ainda não foi importada da planilha.' :
-        !organizationFinal && missingOriginCount ? 'Sorteio bloqueado: ' + missingOriginCount + ' dupla(s) Fem Light não têm categoria de inscrição original registrada. Os dados foram preservados; a origem precisa ser corrigida antes do sorteio.' :
-        fivePlusThreePlan && (markedLight.length !== 5 || originalLight.length !== 19) ? 'Sorteio bloqueado: a regra 5+3 exige exatamente 5 duplas Fem Light marcadas e 19 demais duplas Fem Light; confira as reclassificações.' :
-        'O sorteio está bloqueado: são necessárias ' + expectedPairs + ' duplas já formadas. Categorias divergentes: ' + safe(invalidCategories.join(', ') || 'total de inscritos') + '.') + '</p>' : '') +
+        'O sorteio está bloqueado: são necessárias ' + expectedPairs + ' duplas canônicas já formadas. Categorias divergentes: ' + safe(invalidCategories.join(', ') || 'total de inscritos/identidade das duplas') + '.</p>' : '') +
       '</div></section>';
     document.body.appendChild(overlay);
     var close = function () { overlay.remove(); };
@@ -3037,6 +3030,82 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
     var getDrawMode = wireToggle('mode', selectedDrawMode, function (value) {
       return value === 'structured' ? 'Em cada rodada, os mesmos dois times se enfrentam em todas as categorias.' : 'Cada categoria sorteia adversários próprios, sem repetir oponente nas rodadas.';
     });
+    // O plano nominal do Neon é migrado para a configuração editável a pedido
+    // da organização (19/out). Outros torneios preservam a agenda por rodadas
+    // até o organizador ativar explicitamente os dias por dupla.
+    var pairDaysEnabled = neonQuota || savedOriginPolicy === 'organizer-pair-days';
+    var pairDayChoices = new Map(pairDayAssignments.map(function (item) { return [item.fixedPairId, item.day]; }));
+    savedPairDays.forEach(function (day, id) { if (days.indexOf(day) >= 0) pairDayChoices.set(id, day); });
+    function laneDays(category) {
+      return days.filter(function (day) {
+        var lane = overlay.querySelector('[data-team-day-lane][data-day="' + day + '"]');
+        return categoryExists(lane, category);
+      });
+    }
+    function pairCategory(entry) { return String(entry.category || '').trim(); }
+    function refreshPairDays() {
+      var holder = overlay.querySelector('[data-team-pair-day-editor]'); if (!holder) return;
+      if (!pairDaysEnabled) {
+        holder.innerHTML = '<button type="button" class="btn" data-team-enable-pair-days>Ativar dias por dupla</button>';
+        holder.querySelector('[data-team-enable-pair-days]').onclick = function () { pairDaysEnabled = true; refreshPairDays(); };
+        return;
+      }
+      var blocks = categories.map(function (category) {
+        var available = laneDays(category), categoryEntries = entries.filter(function (entry) { return pairCategory(entry) === category; });
+        if (available.length < 2) return '';
+        var quota = required(category);
+        var options = '<option value="">Escolha o dia</option>' + available.map(function (day) { return '<option value="' + safe(day) + '">' + safe(dayLabel(day)) + '</option>'; }).join('');
+        var batches = Array.from({ length:quota }, function (_, batch) {
+          var batchEntries = categoryEntries.slice(batch * cfg.teamCount, (batch + 1) * cfg.teamCount);
+          return '<label style="display:flex;align-items:center;gap:7px;min-width:0;font-size:.76rem;color:#e2e8f0;">Lote ' + (batch + 1) + ' (' + batchEntries.length + ' duplas)<select data-team-pair-batch="' + safe(category) + '" data-batch-index="' + batch + '" aria-label="Dia do lote ' + (batch + 1) + ' de ' + safe(category) + '" style="min-width:0;max-width:150px;font-size:.75rem;"><option value="">Misto ou indefinido</option>' + available.map(function (day) { return '<option value="' + safe(day) + '">' + safe(dayLabel(day)) + '</option>'; }).join('') + '</select></label>';
+        }).join('');
+        return '<section data-team-pair-category="' + safe(category) + '" style="margin:12px 0;"><b style="color:#cbd5e1;">' + safe(category) + ' · ' + categoryEntries.length + ' duplas · ' + quota + ' por time</b><div style="display:flex;flex-wrap:wrap;gap:8px;margin:8px 0;">' + batches + '</div><div class="sp-team-pair-grid" style="margin-top:8px;">' + categoryEntries.map(function (entry, index) {
+          var id = String(entry.fixedPairId || ''), chosen = pairDayChoices.get(id);
+          if (available.indexOf(chosen) < 0) chosen = organizationFinal || savedOriginPolicy === 'organizer-pair-days' ? '' : available[Math.min(available.length - 1, Math.floor(index / (Math.ceil(quota / available.length) * cfg.teamCount)))];
+          pairDayChoices.set(id, chosen);
+          var first = entry.p1Name || (entry.participants && entry.participants[0] && entry.participants[0].name) || 'Participante 1';
+          var second = entry.p2Name || (entry.participants && entry.participants[1] && entry.participants[1].name) || 'Participante 2';
+          return '<label class="sp-team-pair-card"><span class="sp-team-pair-members"><span>' + safe(first) + '</span><span>' + safe(second) + '</span></span><select data-team-pair-day="' + safe(id) + '" aria-label="Dia da dupla ' + safe(first) + ' e ' + safe(second) + '">' + options + '</select></label>';
+        }).join('') + '</div><p data-team-pair-count="' + safe(category) + '" class="sp-team-pair-days-rule"></p></section>';
+      }).join('');
+      holder.innerHTML = blocks || '<p>Cada categoria está em um único dia; as duplas seguem o dia da categoria.</p>';
+      Array.prototype.forEach.call(holder.querySelectorAll('[data-team-pair-day]'), function (select) {
+        select.value = pairDayChoices.get(select.getAttribute('data-team-pair-day')) || '';
+        select.onchange = function () { pairDayChoices.set(select.getAttribute('data-team-pair-day'), select.value); paintPairCounts(); };
+      });
+      Array.prototype.forEach.call(holder.querySelectorAll('[data-team-pair-batch]'), function (select) {
+        select.onchange = function () {
+          var category = select.getAttribute('data-team-pair-batch'), batch = Number(select.getAttribute('data-batch-index'));
+          entries.filter(function (entry) { return pairCategory(entry) === category; })
+            .slice(batch * cfg.teamCount, (batch + 1) * cfg.teamCount).forEach(function (entry) {
+              pairDayChoices.set(String(entry.fixedPairId), select.value);
+              var control = Array.prototype.find.call(holder.querySelectorAll('[data-team-pair-day]'), function (item) {
+                return item.getAttribute('data-team-pair-day') === String(entry.fixedPairId);
+              });
+              if (control) control.value = select.value;
+            });
+          paintPairCounts();
+        };
+      });
+      paintPairCounts();
+    }
+    function paintPairCounts() {
+      Array.prototype.forEach.call(overlay.querySelectorAll('[data-team-pair-category]'), function (block) {
+        var category = block.getAttribute('data-team-pair-category'), count = block.querySelector('[data-team-pair-count]');
+        var tally = laneDays(category).map(function (day) {
+          var n = entries.filter(function (entry) { return pairCategory(entry) === category && pairDayChoices.get(String(entry.fixedPairId)) === day; }).length;
+          return dayLabel(day) + ': ' + n + ' duplas (' + (n / cfg.teamCount) + ' por time)';
+        });
+        if (count) count.textContent = tally.join(' · ');
+        Array.prototype.forEach.call(block.querySelectorAll('[data-team-pair-batch]'), function (select) {
+          var batch = Number(select.getAttribute('data-batch-index'));
+          var values = entries.filter(function (entry) { return pairCategory(entry) === category; })
+            .slice(batch * cfg.teamCount, (batch + 1) * cfg.teamCount).map(function (entry) { return pairDayChoices.get(String(entry.fixedPairId)) || ''; });
+          select.value = values.length && values.every(function (value) { return value === values[0]; }) ? values[0] : '';
+        });
+      });
+    }
+    refreshPairDays();
     function bindDayFlows() {
       Array.prototype.forEach.call(overlay.querySelectorAll('[data-team-day-flow]'), function (group) {
         var day = group.getAttribute('data-day'), selected = (windowByDay[day] || {}).categoryFlow === 'rounds' ? 'rounds' : 'categories';
@@ -3065,7 +3134,7 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
       card.ondragstart = function (event) { draggingCategory = card.getAttribute('data-team-category-card'); draggingCategoryCard = card.closest('[data-team-day-lane]') ? card : null; if (event.dataTransfer) event.dataTransfer.effectAllowed = draggingCategoryCard ? 'move' : 'copy'; };
       card.ondragend = function () { draggingCategory = null; draggingCategoryCard = null; };
       var remove = card.querySelector('[data-team-remove-category]');
-      if (remove) remove.onclick = function () { card.remove(); };
+      if (remove) remove.onclick = function () { card.remove(); refreshPairDays(); };
     }
     Array.prototype.forEach.call(overlay.querySelectorAll('[data-team-category-card]'), bindCategoryCard);
     Array.prototype.forEach.call(overlay.querySelectorAll('[data-team-day-lane]'), function (lane) {
@@ -3084,8 +3153,8 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
         })[0];
         if (!source) return;
         var copy = source.cloneNode(true); var remove = copy.querySelector('[data-team-remove-category]');
-        if (!remove) { copy.insertAdjacentHTML('beforeend', '<button type="button" data-team-remove-category title="Remover deste dia" aria-label="Remover deste dia" style="border:0;background:transparent;color:var(--sp-c-f87171,#f87171);font-size:1rem;cursor:pointer;padding:0 2px;">×</button>'); }
-        bindCategoryCard(copy); if (target) holder.insertBefore(copy, target); else holder.appendChild(copy);
+        if (!remove) { copy.insertAdjacentHTML('beforeend', '<button type="button" data-team-remove-category title="Remover deste dia" aria-label="Remover deste dia" style="width:19px;height:19px;flex:none;border:2px solid white;border-radius:50%;background:#dc2626;color:white;font-size:14px;font-weight:900;line-height:14px;cursor:pointer;padding:0;display:grid;place-items:center;">×</button>'); }
+        bindCategoryCard(copy); if (target) holder.insertBefore(copy, target); else holder.appendChild(copy); refreshPairDays();
       };
     });
     Array.prototype.forEach.call(overlay.querySelectorAll('[data-team-court-card]'), function (card) {
@@ -3112,11 +3181,26 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
         var validCourtOrder = selectedCourtOrder.length === courtNames.length && new Set(selectedCourtOrder).size === courtNames.length;
         var scheduledCategories = {}; slots.forEach(function (slot) { scheduledCategories[slot.category] = true; });
         var validSlots = slots.length >= categories.length && categories.every(function (category) { return scheduledCategories[category]; }) && slots.every(function (slot) { return days.indexOf(slot.day) >= 0; });
-        if (neonQuota) validSlots = validSlots && days.every(function (day) { return slots.some(function (slot) { return slot.category === lightCategory && slot.day === day; }); }) && slots.every(function (slot) {
-          if (slot.category === lightCategory) return true;
-          return slot.day === (/^Fem /i.test(slot.category) ? days[0] : days[1]);
+        var selectedPairDays = entries.map(function (entry) {
+          var category = pairCategory(entry), available = slots.filter(function (slot) { return slot.category === category; }).map(function (slot) { return slot.day; });
+          return { fixedPairId:String(entry.fixedPairId || ''), day:available.length === 1 ? available[0] : pairDayChoices.get(String(entry.fixedPairId || '')) || '' };
+        });
+        var selectedDayById = new Map(selectedPairDays.map(function (item) { return [item.fixedPairId, item.day]; }));
+        var validPairDays = categories.every(function (category) {
+          var available = slots.filter(function (slot) { return slot.category === category; }).map(function (slot) { return slot.day; });
+          return available.length > 0 && available.every(function (day) {
+            var count = entries.filter(function (entry) { return pairCategory(entry) === category && selectedDayById.get(String(entry.fixedPairId)) === day; }).length;
+            return count > 0 && count % cfg.teamCount === 0;
+          }) && entries.filter(function (entry) { return pairCategory(entry) === category; }).every(function (entry) {
+            return available.indexOf(selectedDayById.get(String(entry.fixedPairId))) >= 0;
+          });
         });
         if (!validSlots) { if (window.showNotification) window.showNotification('Agenda incompleta', 'Arraste cada categoria para pelo menos um dia do torneio.', 'error'); return; }
+        if (pairDaysEnabled && (entries.some(function (entry) { return !entry.fixedPairId || !entry.categoryId; }) ||
+            new Set(entries.map(function (entry) { return String(entry.fixedPairId); })).size !== entries.length)) {
+          if (window.showNotification) window.showNotification('Duplas sem identidade canônica', 'Corrija as inscrições antes de atribuir dias por dupla.', 'error'); return;
+        }
+        if (pairDaysEnabled && !validPairDays) { if (window.showNotification) window.showNotification('Dias das duplas incompletos', 'Cada dia de cada categoria precisa ter uma quantidade positiva e igual de duplas por time.', 'error'); return; }
         if (selectedDrawMode !== 'structured' && selectedDrawMode !== 'free') { if (window.showNotification) window.showNotification('Formato não escolhido', 'Escolha sorteio estruturado ou livre antes de continuar.', 'error'); return; }
         if (!validWindow) { if (window.showNotification) window.showNotification('Horário inválido', 'Em cada dia, o fim do evento deve ser posterior ao início.', 'error'); return; }
         if (!validCourtOrder) { if (window.showNotification) window.showNotification('Prioridade das quadras inválida', 'Cada quadra precisa ter uma posição diferente.', 'error'); return; }
@@ -3129,12 +3213,12 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
         if (!db || typeof db._callFn !== 'function') { confirm.disabled = false; confirm.textContent = '🎲 Sortear times e confrontos'; if (window.showNotification) window.showNotification('Agenda não salva', 'Conexão indisponível.', 'error'); return; }
         var nextCompetition = JSON.parse(JSON.stringify(cfg));
         nextCompetition.schedule = Object.assign({}, nextCompetition.schedule || {}, { enabled:true, mode:selectedDrawMode, modeConfirmed:true });
-        if (neonQuota) {
+        if (pairDaysEnabled) {
           var rosterSnapshot = entries.map(function (entry) { return { fixedPairId:String(entry.fixedPairId), categoryId:String(entry.categoryId || '') }; }).sort(function (a, b) { return a.fixedPairId.localeCompare(b.fixedPairId); });
           nextCompetition.schedule.pairsPerTeamByCategory = categories.reduce(function (out, category) { out[category] = required(category); return out; }, {});
-          nextCompetition.schedule.pairDayAssignments = pairDayAssignments;
+          nextCompetition.schedule.pairDayAssignments = selectedPairDays;
           nextCompetition.schedule.rosterSnapshot = rosterSnapshot;
-          nextCompetition.schedule.originDayPolicy = organizationFinal ? 'female-light-organization-final' : fivePlusThreePlan ? 'female-light-five-plus-three' : 'female-light-enrollment-origin';
+          nextCompetition.schedule.originDayPolicy = 'organizer-pair-days';
         }
         db._callFn('updateTournamentConfiguration', { tournamentId:String(tId), sandbox:typeof db._ehSandbox === 'function' && db._ehSandbox(tId), patch:{ categorySchedule:{ version:1, confirmed:true, slots:slots }, scheduleWindow:{ version:1, days:scheduleWindowDays }, courtOrder:selectedCourtOrder, teamCompetition:nextCompetition } }).then(function () {
           t.categorySchedule = { version:1, confirmed:true, slots:slots };

@@ -1256,7 +1256,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var pairId = String(members[0].fixedPairId || '');
     var plan = t.teamCompetition && t.teamCompetition.schedule && t.teamCompetition.schedule.pairDayAssignments;
     var finalDays = t.teamCompetition && t.teamCompetition.schedule &&
-      t.teamCompetition.schedule.originDayPolicy === 'female-light-organization-final';
+      ['female-light-organization-final', 'organizer-pair-days'].includes(t.teamCompetition.schedule.originDayPolicy);
     var lightDays = (t.categorySchedule && t.categorySchedule.slots || []).filter(function (slot) {
       return /^Fem Light$/i.test(String(slot.category || ''));
     }).map(function (slot) { return String(slot.day || '').slice(0, 10); }).sort();

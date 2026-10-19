@@ -1,5 +1,5 @@
 'use strict';
-// O painel real não pede ao organizador a atribuição manual das 24 duplas.
+// O painel real expõe dias nominais por dupla, sem mudar o mapa salvo sozinho.
 const { window: W, sandbox } = require('./render-harness');
 const categories = ['Fem Light', 'Fem Power', 'Fem Extreme', 'Masc Light', 'Masc Power', 'Masc Extreme'];
 const neonId = 'tour_1790628592058_c342a1e8f5068424887f1702a1633a44';
@@ -42,21 +42,19 @@ if (backAt < 0 || drawAt <= backAt || drawAt >= contentAt ||
     overlay.innerHTML.includes('<div style="display:flex;justify-content:flex-end;"><button type="button" id="team-draw-confirm"')) {
   throw new Error('Voltar e Sortear devem aparecer uma única vez, nessa ordem, no cabeçalho fixo');
 }
-if (/<select data-pair-day=|<label class="sp-team-pair-card"|Confirme o dia de cada dupla/.test(overlay.innerHTML)) {
-  throw new Error('Painel ainda oferece atribuição manual de dia');
-}
+if (!/data-team-pair-day-editor/.test(overlay.innerHTML)) throw new Error('Editor de dias das duplas ausente');
 if (/O sorteio está bloqueado/.test(overlay.innerHTML)) throw new Error('Elenco Neon válido foi bloqueado');
-if (!/8 duplas Fem Light de sexta já foram definidas pela organização/.test(overlay.innerHTML)) throw new Error('Plano nominal da organização não aparece no torneio');
 const lightCards = overlay.innerHTML.match(/data-team-category-card="Fem Light"/g) || [];
 if (lightCards.length < 3) throw new Error('Fem Light deve aparecer na fonte e nos dois dias');
+if (!/aria-label="Remover Fem Light deste dia"/.test(overlay.innerHTML) || !/background:#dc2626;color:white/.test(overlay.innerHTML)) {
+  throw new Error('Fem Light deve ter o X branco no círculo vermelho');
+}
 const visibleHtml = overlay.innerHTML.replace(/\sdata-[^=]+="[^"]*"/g, '');
 if (/uid-(?:first|second)-/.test(visibleHtml)) throw new Error('UID cru vazou no conteúdo visível');
 const savedAssignments = tournament.teamCompetition.schedule.pairDayAssignments;
 tournament.teamCompetition.schedule.pairDayAssignments = savedAssignments.slice(1);
 W._showTeamCompetitionDrawReview(tournament.id, { _canonicalRosterLoaded:true });
-if (!/lista final dos 24 dias das duplas Fem Light ainda não foi importada/.test(overlay.innerHTML) || !/id="team-draw-confirm"[^>]*disabled aria-disabled="true"/.test(overlay.innerHTML)) {
-  throw new Error('Mapa nominal incompleto deve bloquear o sorteio');
-}
+if (!/data-team-pair-day-editor/.test(overlay.innerHTML)) throw new Error('Mapa parcial ainda precisa do editor de dias');
 tournament.teamCompetition.schedule.pairDayAssignments = savedAssignments;
 const savedOrigin = participants[0].originCategoryLabel;
 participants[0].originCategoryLabel = '';
@@ -65,18 +63,14 @@ if (/Sorteio bloqueado/.test(overlay.innerHTML)) throw new Error('Plano nominal 
 participants[0].originCategoryLabel = savedOrigin;
 tournament.name = 'Torneio renomeado';
 W._showTeamCompetitionDrawReview(tournament.id, { _canonicalRosterLoaded:true });
-if (/Sorteio bloqueado/.test(overlay.innerHTML) || !/8 duplas Fem Light de sexta já foram definidas pela organização/.test(overlay.innerHTML)) {
+if (/Sorteio bloqueado/.test(overlay.innerHTML) || !/data-team-pair-day-editor/.test(overlay.innerHTML)) {
   throw new Error('Plano nominal salvo deve continuar valendo após renomeação');
 }
 tournament.teamCompetition.schedule.originDayPolicy = '';
 W._showTeamCompetitionDrawReview(tournament.id, { _canonicalRosterLoaded:true });
-if (!/política de dias salva não corresponde à distribuição final/.test(overlay.innerHTML)) {
-  throw new Error('ID do Neon exige política nominal explícita');
-}
+if (!/data-team-pair-day-editor/.test(overlay.innerHTML)) throw new Error('Editor independe do marcador legado');
 tournament.id = 'other_tournament';
 tournament.name = 'Neon Nightmare';
 W._showTeamCompetitionDrawReview(tournament.id, { _canonicalRosterLoaded:true });
-if (/8 duplas Fem Light de sexta já foram definidas pela organização/.test(overlay.innerHTML)) {
-  throw new Error('Nome Neon em outro torneio não pode ativar a regra nominal');
-}
-console.log('✓ Painel Neon: sem seletores manuais, Fem Light nos dois dias e sem UID visível');
+if (!/data-team-pair-day-editor/.test(overlay.innerHTML)) throw new Error('Editor independe do nome do torneio');
+console.log('✓ Painel Neon: dias configuráveis, Fem Light nos dois dias, X correto e sem UID visível');

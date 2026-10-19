@@ -128,6 +128,44 @@ const CASES = [
   ok('times vazios não permitem sorteio fictício', withoutNames.ok === false && withoutNames.reason === 'competition-team-names-required', JSON.stringify(withoutNames));
   const duplicateNames = core.assignCompetitionTeamsAtInitialDraw({ participants: [dupla(7, 'A')] }, { enabled: true, teamNames: ['Neon', 'neon'], formation: 'draw' });
   ok('homônimos não permitem sorteio ambíguo', duplicateNames.ok === false && duplicateNames.reason === 'competition-team-names-required', JSON.stringify(duplicateNames));
+  const smallPairs = [1,2,3,4].map(function (n) {
+    return Object.assign(dupla(800 + n, 'A'), { fixedPairId:'small-' + n, categoryId:'category-a' });
+  });
+  const smallSchedule = { originDayPolicy:'organizer-pair-days', pairsPerTeamByCategory:{ A:2 },
+    rosterSnapshot:smallPairs.map(function (entry) { return { fixedPairId:entry.fixedPairId, categoryId:entry.categoryId }; }),
+    pairDayAssignments:smallPairs.map(function (entry, index) { return { fixedPairId:entry.fixedPairId, day:index < 2 ? '2026-10-22' : '2026-10-23' }; }) };
+  const smallTournament = { participants:smallPairs, combinedCategories:['A'],
+    categorySchedule:{ slots:[{ category:'A', day:'2026-10-22' }, { category:'A', day:'2026-10-23' }] } };
+  const smallResult = core.assignCompetitionTeamsAtInitialDraw(smallTournament, Object.assign({}, cfg, { schedule:smallSchedule }));
+  ok('plano configurável funciona com dois times e uma categoria', smallResult.ok === true &&
+    smallTournament.competitionTeams.every(function (team) { return ['2026-10-22','2026-10-23'].every(function (day) {
+      return smallTournament.participants.filter(function (entry) { return entry.competitionTeamId === team.id && entry.competitionPlayDay === day; }).length === 1;
+    }); }));
+  const extraPairs = [1,2].map(function (n) { return Object.assign(dupla(900 + n, 'B'), { fixedPairId:'extra-' + n, categoryId:'category-b' }); });
+  const twoCategoryTournament = { participants:smallPairs.concat(extraPairs).map(function (entry) {
+    const copy = Object.assign({}, entry); delete copy.competitionTeamId; delete copy.competitionPlayDay; return copy;
+  }), combinedCategories:['A','B'],
+    categorySchedule:{ slots:[{ category:'A', day:'2026-10-22' }, { category:'A', day:'2026-10-23' },
+      { category:'B', day:'2026-10-22' }] } };
+  const twoCategorySchedule = Object.assign({}, smallSchedule, {
+    pairsPerTeamByCategory:{ A:2, B:1 },
+    rosterSnapshot:smallSchedule.rosterSnapshot.concat(extraPairs.map(function (entry) { return { fixedPairId:entry.fixedPairId, categoryId:entry.categoryId }; })),
+    pairDayAssignments:smallSchedule.pairDayAssignments.concat(extraPairs.map(function (entry) { return { fixedPairId:entry.fixedPairId, day:'2026-10-22' }; }))
+  });
+  const twoCategoryResult = core.assignCompetitionTeamsAtInitialDraw(twoCategoryTournament,
+    Object.assign({}, cfg, { schedule:twoCategorySchedule }));
+  ok('plano configurável combina categoria de dois dias com categoria de um dia fora do Neon', twoCategoryResult.ok === true &&
+    twoCategoryTournament.participants.filter(function (entry) { return entry.category === 'B'; }).every(function (entry) {
+      return entry.competitionPlayDay === '2026-10-22';
+    }));
+  const legacyTwoCategory = { participants:smallPairs.concat(extraPairs).map(function (entry) {
+    const copy = Object.assign({}, entry); delete copy.competitionTeamId; delete copy.competitionPlayDay; return copy;
+  }), combinedCategories:['A','B'] };
+  const legacyResult = core.assignCompetitionTeamsAtInitialDraw(legacyTwoCategory, Object.assign({}, cfg, {
+    schedule:{ pairsPerTeamByCategory:{ A:2, B:1 } }
+  }));
+  ok('sem opt-in, torneio comum mantém distribuição legada sem dia nominal', legacyResult.ok === true &&
+    legacyTwoCategory.participants.every(function (entry) { return !entry.competitionPlayDay; }));
 
   const full = mkT('team-full', {
     format: 'Fase de Grupos', gruposCount: 1, gruposClassified: 1, teamSize: 2,
@@ -409,6 +447,26 @@ const CASES = [
   const invalidOrganizationResult = core.assignCompetitionTeamsAtInitialDraw(invalidOrganizationPlan, invalidOrganizationConfig);
   ok('Neon: lista nominal com apenas sete duplas na sexta é rejeitada', invalidOrganizationResult.ok === false &&
     invalidOrganizationResult.reason === 'competition-pair-day-plan-invalid');
+
+  // Plano configurável: o dia pertence à identidade canônica da dupla, não à
+  // categoria em que ela se inscreveu originalmente nem ao ID do torneio.
+  const configurablePlan = realTournament();
+  const configurableConfig = JSON.parse(JSON.stringify(realConfig));
+  configurableConfig.schedule.originDayPolicy = 'organizer-pair-days';
+  configurableConfig.schedule.pairDayAssignments = configurablePlan.participants.map(function (entry, index) {
+    return { fixedPairId:entry.fixedPairId, day:index < 16 || (index >= 24 && index < 40) ? '2026-10-22' : '2026-10-23' };
+  });
+  const configurableResult = core.assignCompetitionTeamsAtInitialDraw(configurablePlan, configurableConfig);
+  ok('plano configurável preserva o dia nominal de todas as 64 duplas', configurableResult.ok === true &&
+    configurablePlan.participants.every(function (entry) {
+      return entry.competitionPlayDay === configurableConfig.schedule.pairDayAssignments.find(function (item) { return item.fixedPairId === entry.fixedPairId; }).day;
+    }));
+  const unbalancedPlan = realTournament();
+  const unbalancedConfig = JSON.parse(JSON.stringify(configurableConfig));
+  unbalancedConfig.schedule.pairDayAssignments[0].day = '2026-10-23';
+  const unbalancedResult = core.assignCompetitionTeamsAtInitialDraw(unbalancedPlan, unbalancedConfig);
+  ok('plano configurável recusa distribuição 15/9 na Fem Light antes de atribuir times', unbalancedResult.ok === false &&
+    unbalancedResult.reason === 'competition-pair-day-plan-invalid' && !unbalancedPlan.competitionTeams);
 
   // Regra vigente: só cinco das duplas atuais vieram das inscrições
   // masculinas; três das outras 19 completam a sexta em qualquer ambiente.

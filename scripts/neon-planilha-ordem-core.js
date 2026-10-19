@@ -88,6 +88,10 @@ function align(rows, pairs) {
 }
 
 function alignedDayAssignments(aligned, slots, schedule) {
+  // Ferramenta histórica da importação da planilha. Após o organizador passar
+  // a definir os dias no app, ela não pode reimpor os dias antigos do arquivo.
+  if (schedule && schedule.originDayPolicy === 'organizer-pair-days')
+    throw new Error('dias das duplas agora são definidos no app; a planilha histórica não pode substituí-los');
   if (!schedule || schedule.originDayPolicy !== 'female-light-organization-final')
     throw new Error('política final de dias Fem Light ausente');
   const days = [...new Set((slots || []).filter(slot => slot.category === 'Fem Light')
