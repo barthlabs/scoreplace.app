@@ -1,3 +1,4 @@
+// 2.4.119 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.118 — Visibilidade do torneio em Geral, Inscritos ou Apenas organizadores,
 // sem notificar participantes enquanto estiver restrito. A proteção também cobre
 // consultas de torneios, resumos, resultados e espelhos de jogos usados pelo app nativo.
