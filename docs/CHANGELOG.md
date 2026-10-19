@@ -1,3 +1,8 @@
+## 2.4.107 — 18/out/2026 (card de organização sem corte)
+
+- Aumentada a área reservada ao nome em duas linhas e removido o recorte vertical do card de organização. O nome, a estrela e a função continuam legíveis em três colunas e em largura móvel, sem alterar os vínculos ou permissões.
+- Adicionado teste de geometria com Chromium nas larguras de 340 e 280 px.
+
 ## 2.4.106 — 18/out/2026 (organização designada por UID)
 
 - Uma vaga de co-organização previamente designada ativa o UID no mesmo vínculo individual verificado da inscrição, sem segundo aceite. O link compartilhado do torneio não concede privilégios de organização por semelhança de nome.

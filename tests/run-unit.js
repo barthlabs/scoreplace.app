@@ -2150,6 +2150,7 @@ const SUITES = [
   // Agora há um PONTO ÚNICO (_personAvatarHtml/_personNameHtml) e este teste cobra que os
   // cards de pessoa passem por ele — pra não existir um quarto lugar.
   'tests/pessoa-na-tela-hidrata.test.js',
+  'tests/card-organizador-nao-corta-nome.test.js',
   // E o INVENTÁRIO fechado: todo ponto que semeia avatar pelo NOME está declarado, com o
   // que é. Ponto novo fora da lista reprova — quem acrescentar decide na hora se aquilo é
   // gente com uid (ponto único) ou não é (declara o motivo). É o que impede o quarto lugar.
