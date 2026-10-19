@@ -1,3 +1,9 @@
+## 2.4.115 — 19/out/2026 (regulamento original do Neon e botão de súmula)
+
+- A tela de Regulamento do Neon incorpora o PDF final fornecido pela organização, sem transcrição HTML, e permite abrir ou baixar o mesmo arquivo. O SHA-256 do asset corresponde ao original recebido.
+- O botão Súmula (PDF) fica visível para a organização mesmo antes do sorteio; sem jogos com dia, hora e quadra definidos, informa essa condição sem gerar PDF vazio.
+- Nenhum dado de torneio, inscrição, dupla ou grade foi alterado.
+
 ## 2.4.108 — 18/out/2026 (papel da organização pelo contexto do torneio)
 
 - Quando o gênero não está disponível no perfil, o papel da organização usa a categoria feminina ou masculina da dupla daquele torneio para escolher “Co-organizadora” ou “Co-organizador”. A hidratação posterior do nome não apaga essa forma; o perfil explícito continua tendo precedência.

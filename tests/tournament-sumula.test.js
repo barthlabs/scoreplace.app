@@ -1,6 +1,20 @@
 'use strict';
 const assert = require('assert');
+const fs = require('fs');
 require('../js/views/tournament-sumula.js');
+const detailSource = fs.readFileSync('js/views/tournaments.js', 'utf8');
+assert(detailSource.includes("typeof window._downloadTournamentSumula === 'function' ?"),
+  'organizador vê o botão Súmula mesmo sem sorteio publicado');
+let warning = null;
+globalThis._findTournamentById = () => ({ id:'sem-grade', name:'Sem grade', matches:[] });
+globalThis._souOrganizador = () => true;
+globalThis.showNotification = (...args) => { warning = args; };
+globalThis._downloadTournamentSumula('sem-grade');
+assert.deepStrictEqual(warning, ['Súmula indisponível', 'Não há jogos com dia, hora e quadra definidos.', 'warning'],
+  'sem grade: informa a condição e não gera um PDF vazio');
+delete globalThis._findTournamentById;
+delete globalThis._souOrganizador;
+delete globalThis.showNotification;
 const core = globalThis.ScoreplaceSumula;
 const at = (day, hour) => new Date(day + 'T' + hour + ':00-03:00').toISOString();
 const t = { name:'NEON NIGHTMARE', competitionTeams:[{ id:'team-1', name:'Venom' }, { id:'team-2', name:'Volt' }] };

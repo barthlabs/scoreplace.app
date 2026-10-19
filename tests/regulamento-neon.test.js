@@ -1,5 +1,6 @@
 'use strict';
 const assert = require('assert');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
@@ -41,21 +42,15 @@ assert(!browser._isNeonTournament({ id: neonId, name: 'Outro torneio' }));
 const html = page({ id: neonId, name: neonName });
 assert(html.includes('data-neon-regulation'), 'regulamento aparece no Neon');
 assert(html.includes('<h2 style="margin:0;">Regulamento</h2>'));
-for (const sentence of [
-  '24 Light Feminino', '8 Power Feminino', '8 Extreme Feminino',
-  '8 Light Masculino', '8 Power Masculino', '8 Extreme Masculino',
-  '16 Light Feminino',
-  '8 duplas e 16 atletas: 10 mulheres e 6 homens',
-  'As duplas Light Feminino de sexta-feira jogarão apenas entre si',
-  'Cada dupla disputará 3 partidas',
-]) assert(html.includes(sentence), `regra ausente: ${sentence}`);
-assert(!html.includes('24 vagas para duplas'));
-assert(!html.includes('12 atletas: 6 mulheres e 6 homens'));
-
-const section = html.match(/<section class="card" data-neon-regulation[\s\S]*?<\/section>/);
-assert(section, 'seção própria do regulamento');
-assert(!/#[0-9a-f]{3,8}\b/i.test(section[0]), 'sem cores hexadecimais inline');
-assert(section[0].includes('var(--text-main)') && section[0].includes('var(--text-bright)'), 'tokens dos dois temas');
+assert(html.includes('src="/assets/regulamento-neon-nightmare-2026.pdf#toolbar=1"'));
+assert(html.includes('download="Regulamento_NEON_NIGHTMARE_2026.pdf"'));
+assert(!html.includes('rules.currentParams'), 'sem parâmetros genéricos junto ao PDF original');
+assert(!html.includes('A inscrição implica'), 'sem transcrição divergente do documento');
+const pdf = fs.readFileSync(path.join(root, 'assets/regulamento-neon-nightmare-2026.pdf'));
+assert(pdf.subarray(0, 5).toString() === '%PDF-', 'arquivo PDF válido');
+assert.strictEqual(crypto.createHash('sha256').update(pdf).digest('hex'),
+  'e9ed5135d2cd57dd980410b484ca0d406b7024c97f27593d73a35a11d1e5a56a',
+  'PDF exibido deve ser idêntico ao original aprovado pela organização');
 
 const other = page({ id: 'outro', name: 'Outro torneio' });
 assert(!other.includes('data-neon-regulation'));
@@ -68,4 +63,4 @@ assert.strictEqual((bracket.match(/\$\{rulesActionLabel\}<\/a>/g) || []).length,
   'rótulo das chaves usa o helper');
 assert(bracket.includes("window._isNeonTournament(t)) ? 'Regulamento' : 'Regras'"));
 
-console.log('✓ Regulamento Neon: texto, composição, dias, tema e rótulos canônicos');
+console.log('✓ Regulamento Neon: PDF original idêntico, sem transcrição divergente, e rótulos canônicos');

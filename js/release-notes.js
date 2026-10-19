@@ -1,3 +1,6 @@
+// 2.4.115 — Regulamento do Neon exibido pelo PDF original da organização,
+// preservando conteúdo e diagramação. O botão Súmula aparece ao organizador
+// mesmo antes da publicação da grade e informa quando ainda faltam jogos marcados.
 // 2.4.114 — Organizadores de torneios com grade marcada podem baixar uma súmula
 // em PDF: jogos por quadra e dia, com espaço para placar, e lista diária de
 // presença com parceiro, equipe e adversários do primeiro jogo.

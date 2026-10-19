@@ -180,77 +180,33 @@ function renderRules(container, tournamentId) {
   const isOrg = window._souOrganizador(t);
   const isNeon = !!(window._isNeonTournament && window._isNeonTournament(t));
 
-  // Regulamento oficial final fornecido pela organização em 18/10/2026.
-  const neonRegulationHtml = isNeon ? `
-    <section class="card" data-neon-regulation style="max-width:900px;margin:0 auto 1.5rem;color:var(--text-main);line-height:1.65;">
-      <h3 style="color:var(--text-bright);margin:0 0 1rem;">NEON NIGHTMARE – THE TOURNAMENT</h3>
-      <p>O NEON NIGHTMARE – THE TOURNAMENT é um torneio de Beach Tennis organizado pela Diretoria Social de Beach Tennis do Clube Paineiras do Morumby, exclusivo para sócios a partir de 14 anos.</p>
-      <p>A inscrição implica aceitação integral deste regulamento e das decisões da organização e da arbitragem. A plataforma oficial de gestão é a Scoreplace. A data do sorteio das equipes será divulgada pela organização.</p>
-
-      <h4 style="color:var(--text-bright);margin:1.5rem 0 0.5rem;">DATAS</h4>
-      <p>Quinta-feira, 22/10/2026: jogos exclusivamente femininos, com 16 duplas Light, 8 Power e 8 Extreme.<br>
-      Sexta-feira, 23/10/2026: 8 duplas femininas Light adicionais, em chave exclusiva, e 8 duplas de cada categoria masculina.<br>
-      Início dos jogos: 18h<br>Chegada obrigatória: 30 minutos antes do início dos jogos<br>Quadras: 4, 5, 6, 7, 8 e 9.</p>
-
-      <h4 style="color:var(--text-bright);margin:1.5rem 0 0.5rem;">INSCRIÇÕES</h4>
-      <p>As inscrições serão realizadas em duplas previamente formadas por atletas do mesmo sexo.</p>
-      <p>Apenas um dos atletas deverá iniciar a inscrição pelo app TFSports e enviar o link ao parceiro, que terá 1 hora para concluir sua própria inscrição. A vaga da dupla somente estará garantida após a conclusão das inscrições dos dois atletas.</p>
-      <p>Valor individual: R$ 149,90 + taxa de serviço de R$ 9,90.</p>
-
-      <h4 style="color:var(--text-bright);margin:1.5rem 0 0.5rem;">CATEGORIAS</h4>
-      <p>LIGHT – Iniciante/D<br>POWER – C/B<br>EXTREME – B/A</p>
-      <p>Serão disponibilizadas 64 vagas para duplas: 24 Light Feminino, 8 Power Feminino, 8 Extreme Feminino, 8 Light Masculino, 8 Power Masculino e 8 Extreme Masculino.</p>
-      <p>Na quinta-feira jogarão 32 duplas: 16 Light Feminino, 8 Power Feminino e 8 Extreme Feminino. Na sexta-feira jogarão 32 duplas: 8 Light Feminino e 8 de cada categoria masculina.</p>
-      <p>Cada dupla competirá exclusivamente contra duplas da mesma categoria. As duplas Light Feminino de sexta-feira jogarão apenas entre si; não haverá jogos mistos.</p>
-      <p>A escolha da categoria é de responsabilidade dos atletas no momento da inscrição. A organização reserva-se o direito de realocar atletas e/ou duplas para uma categoria superior ou inferior caso identifique incompatibilidade de nível ou sempre que necessário para garantir o equilíbrio técnico do torneio.</p>
-      <p>Não será permitida a participação em mais de uma categoria.</p>
-
-      <h4 style="color:var(--text-bright);margin:1.5rem 0 0.5rem;">EQUIPES</h4>
-      <p>Os atletas serão distribuídos por sorteio em 8 equipes. A distribuição dos dias das duplas já foi definida pela organização e não integra esse sorteio:</p>
-      <p>BLACKOUT · BLAST · ECLIPSE · PANIC · PHANTOM · VENOM · VOLT · VORTEX</p>
-      <p>Cada equipe será formada por 3 duplas Light Feminino e por 1 dupla de cada uma das outras categorias: Power Feminino, Extreme Feminino, Light Masculino, Power Masculino e Extreme Masculino. Ao final dos dois dias, cada equipe terá 8 duplas e 16 atletas: 10 mulheres e 6 homens.</p>
-
-      <h4 style="color:var(--text-bright);margin:1.5rem 0 0.5rem;">FORMATO DE DISPUTA</h4>
-      <p>Os confrontos e horários obedecerão à grade oficial divulgada pela organização. Cada dupla disputará 3 partidas contra duplas da mesma categoria e de equipes diferentes, sem repetição de adversários. As 8 duplas femininas Light de sexta-feira enfrentarão exclusivamente outras duplas dessa chave. Não haverá jogos mistos.</p>
-      <p>As partidas serão disputadas em 1 set até 6 games. Em caso de 5x5, será disputado tie-break. A grade considera janelas aproximadas de 35 minutos; esse tempo é referência operacional e não interrompe a partida em andamento.</p>
-      <p>A classificação será definida pelo SALDO DE GAMES, calculado pela diferença entre games ganhos e games perdidos.</p>
-      <p>Na quinta-feira, as duplas femininas iniciam o saldo de suas equipes. Na sexta-feira, os resultados masculinos e da chave feminina Light adicional serão somados ao saldo acumulado.</p>
-      <p>Ao final dos jogos de sexta-feira, será campeã a equipe que apresentar o maior saldo geral de games, considerando os resultados femininos e masculinos.</p>
-      <p>Não haverá semifinal ou final. Haverá uma única equipe campeã.</p>
-      <p>Em caso de empate no saldo geral de games, os critérios serão, nesta ordem:</p>
-      <ol><li>Maior número total de vitórias</li><li>Maior número total de games vencidos</li><li>Sorteio realizado pela organização na presença de representantes das equipes envolvidas</li></ol>
-
-      <h4 style="color:var(--text-bright);margin:1.5rem 0 0.5rem;">W.O., AUSÊNCIAS E LESÕES</h4>
-      <p>O W.O. deve ser evitado, pois interfere diretamente no resultado coletivo. Cada atleta é responsável por cumprir sua participação e os horários previstos. Em caso de W.O., a partida será registrada por 6x0 para a dupla presente.</p>
-      <p>Se uma lesão impedir a continuidade da partida, a arbitragem encerrará o jogo e definirá o placar conforme o estágio da partida, computando os games necessários para a conclusão em favor da dupla adversária. Ausências e situações excepcionais serão avaliadas pela organização e pela arbitragem.</p>
-
-      <h4 style="color:var(--text-bright);margin:1.5rem 0 0.5rem;">KIT ATLETA</h4>
-      <p>Todos os participantes regularmente inscritos receberão o kit atleta oficial do evento. A retirada será na Track&amp;Field Pátio Guedala, Av. Comendador Adibo Ares, 129, loja B160: quarta-feira, 21/10, das 10h às 19h, e quinta-feira, 22/10, das 10h às 16h.</p>
-      <p>O uso da camiseta oficial do evento será obrigatório durante as partidas.</p>
-
-      <h4 style="color:var(--text-bright);margin:1.5rem 0 0.5rem;">PREMIAÇÃO</h4>
-      <p>A equipe campeã será formada por 16 atletas: 10 mulheres e 6 homens das categorias Light, Power e Extreme.</p>
-      <p>A cerimônia de premiação acontecerá no sábado, 24/10, durante o THE HORROR EXPERIENCE – THE FINAL CHAPTER OF NEON NIGHTMARE: THE AWARDS.</p>
-      <p>A ausência do atleta na cerimônia não implica perda da premiação. O prêmio será guardado para entrega posterior.</p>
-
-      <h4 style="color:var(--text-bright);margin:1.5rem 0 0.5rem;">IMPORTANTE</h4>
-      <p>O torneio preza pelo fair play, respeito e espírito esportivo. Condutas antidesportivas poderão resultar em advertência, perda de ponto, perda de game ou desclassificação, conforme decisão da arbitragem. A arbitragem é a autoridade máxima da parte técnica; suas decisões durante as partidas são soberanas e definitivas.</p>
-      <p>Ao se inscrever, o participante declara estar em condições físicas adequadas para a prática esportiva e autoriza o uso de sua imagem em fotos e vídeos do evento para divulgação institucional e de parceiros. Cancelamentos e reembolsos seguem as condições da plataforma de inscrição e a legislação aplicável.</p>
-      <p>Em caso de condições climáticas adversas ou força maior, a organização e a arbitragem poderão ajustar horários ou o sistema de disputa, preservando a segurança e a viabilidade do evento. Casos omissos serão resolvidos pela organização em conjunto com a arbitragem.</p>
-    </section>` : '';
+  // O documento aprovado pela organização é a fonte visual e textual única.
+  // Não reconstruir o PDF em HTML: isso perde diagramação e pode divergir do original.
+  if (isNeon) {
+    const pdfUrl = '/assets/regulamento-neon-nightmare-2026.pdf';
+    container.innerHTML = `
+      ${window._renderBackHeader({ href: '#tournaments/' + t.id, label: _t('rules.back') })}
+      <div class="d-flex justify-between align-center mb-4" style="flex-wrap:wrap;gap:1rem;">
+        <h2 style="margin:0;">Regulamento</h2>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+          <a class="btn btn-primary" href="${pdfUrl}" target="_blank" rel="noopener">Abrir PDF original</a>
+          <a class="btn btn-secondary" href="${pdfUrl}" download="Regulamento_NEON_NIGHTMARE_2026.pdf">Baixar PDF</a>
+        </div>
+      </div>
+      <iframe data-neon-regulation title="Regulamento oficial NEON NIGHTMARE 2026" src="${pdfUrl}#toolbar=1" style="display:block;width:100%;height:min(78vh,1100px);min-height:600px;border:1px solid var(--border-color);border-radius:12px;background:#fff;"></iframe>`;
+    return;
+  }
 
   container.innerHTML = `
     ${window._renderBackHeader({ href: '#tournaments/' + t.id, label: _t('rules.back') })}
 
     <div class="d-flex justify-between align-center mb-4" style="flex-wrap:wrap;gap:1rem;">
       <div>
-        <h2 style="margin:0;">${isNeon ? 'Regulamento' : _t('rules.title')}</h2>
-        ${isNeon ? '' : `<p class="text-muted" style="margin:4px 0 0;">${_t('rules.subtitle')}</p>`}
+        <h2 style="margin:0;">${_t('rules.title')}</h2>
+        <p class="text-muted" style="margin:4px 0 0;">${_t('rules.subtitle')}</p>
       </div>
       <span class="badge badge-info" style="font-size:0.85rem;padding:6px 14px;">${t.name}</span>
     </div>
-
-    ${neonRegulationHtml}
 
     <div style="display:grid;grid-template-columns:2fr 1fr;gap:1.5rem;" class="rules-grid">
 
