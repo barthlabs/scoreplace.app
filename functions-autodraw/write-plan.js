@@ -99,7 +99,9 @@ function planWrites(tAntes, tDepois, ctx) {
     /* ESPELHO DE `results` — a CF é quem escreve desde a 2.1.30. Continua aqui, com o
      * MESMO cuidado de antes, só que agora como OPERAÇÃO DO PLANO (e por isso contada no
      * teto e visível no teste) e com o instante vindo por argumento. */
-    if (nome === 'matches' && o.espelho && typeof o.espelho.buildMirrorDoc === 'function' && d.mudaram.length) {
+    // O resultado indexado por playerUids é legível até pelo nativo antigo.
+    // Enquanto oculto, o jogo existe só na parte canônica, não no espelho.
+    if (nome === 'matches' && tDepois.organizerOnly !== true && o.espelho && typeof o.espelho.buildMirrorDoc === 'function' && d.mudaram.length) {
       d.mudaram.forEach((reg) => {
         const jogo = reg && reg.jogo;
         if (!jogo || jogo.id == null || jogo.id === '') return;

@@ -25,7 +25,7 @@
  * Dados 100% sintéticos. Nada de produção é lido ou escrito.
  * Rodado por: npm run test:rules
  */
-const { execFileSync } = require('child_process');
+const { rodarNoEmulador } = require('./emulador');
 const fs=require('fs'), path=require('path'), os=require('os');
 const ROOT=path.join(__dirname,'..');
 const PORT=8093;   // 8094+ são das outras suítes de rules
@@ -77,7 +77,7 @@ const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'spq-'));
 fs.writeFileSync(path.join(tmp,'firebase.json'),JSON.stringify({firestore:{rules:path.join(ROOT,'firestore.rules')},
   emulators:{firestore:{port:PORT},ui:{enabled:false},singleProjectMode:true}}));
 fs.writeFileSync(path.join(tmp,'d.js'),DRIVER);
-const out=execFileSync('firebase',['emulators:exec','--only','firestore','--config',path.join(tmp,'firebase.json'),
+const out=rodarNoEmulador(['emulators:exec','--only','firestore','--config',path.join(tmp,'firebase.json'),
   '--project',PROJECT,'node '+JSON.stringify(path.join(tmp,'d.js'))],
   {cwd:ROOT,encoding:'utf8',stdio:['ignore','pipe','pipe'],
    env:Object.assign({},process.env,{PATH:'/opt/homebrew/opt/openjdk/bin:'+process.env.PATH})});

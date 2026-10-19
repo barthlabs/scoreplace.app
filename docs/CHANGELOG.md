@@ -1,3 +1,13 @@
+## 2.4.118 — 19/out/2026 (visibilidade e consentimento)
+
+- O Neon foi colocado em “Apenas organizadores” antes do sorteio. Firestore Rules, índice principal e resumo foram conferidos no banco; ambos os índices entregam somente dois UIDs de organização. Inscrições, duplas e jogos não foram alterados por essa restrição.
+- As 20 Functions principais afetadas, incluindo `listDiscoverableUsers`, e 18 Functions do sorteio foram publicadas por nome antes do Hosting. `getPendingInitialDraw`, `getPendingDrawReviewState` e `uploadTournamentImage` não mudaram neste corte e permanecem na versão já publicada; não foram republicadas.
+- “+ Participante” não envia mais UID de terceiro como inscrição consumada: o próprio titular precisa aceitar. A lista de pessoas recebe apenas chaves normalizadas dos locais compartilhados, sem endereço.
+- No modo “Apenas organizadores”, os resultados deixam de aparecer temporariamente no histórico global dos atletas, inclusive no app nativo antigo; placares e confrontos canônicos permanecem íntegros. Ao liberar o torneio, o índice do histórico é reconstruído. O gatilho de limpeza tenta novamente em caso de falha e reconcilia escritas posteriores. O Neon foi conferido sem resultados previamente indexados.
+- A descoberta por local compartilhado exibe nome, foto e cidade para pessoas que frequentam o mesmo local, conforme a regra de descoberta definida pela organização; não retorna endereço. A busca atual examina até 2.000 perfis por chamada e exige acompanhamento de custo/performance.
+- Isolamento de sandbox: o código grava sandboxes em `sandboxes/{id}`, não em `tournaments/{id}`; as consultas de produção em 19/out encontraram zero documentos com `isSandbox:true` tanto em `tournaments` quanto em `tournaments_summary`. Por isso a consulta pública existente continua compatível com clientes nativos antigos; um sandbox não pode ser criado nessas coleções por cliente (Rules: escrita fechada).
+- Correção complementar antes da abertura do Neon: `syncSplitMatchResult`, `syncMatchRosters`, `backfillMatchResultDocs` e `listDiscoverableUsers` no codebase principal; `saveTournamentReplay` e as funções de sorteio afetadas no codebase autodraw. A publicação de Rules, Functions e Hosting é conferida separadamente.
+
 ## 2.4.115 — 19/out/2026 (regulamento original do Neon e botão de súmula)
 
 - A tela de Regulamento do Neon incorpora o PDF final fornecido pela organização, sem transcrição HTML, e permite abrir ou baixar o mesmo arquivo. O SHA-256 do asset corresponde ao original recebido.

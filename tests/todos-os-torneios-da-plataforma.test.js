@@ -36,12 +36,13 @@ function mkDb(docs) {
     collection(nome) {
       if (nome !== 'tournaments_summary') throw new Error('coleção inesperada: ' + nome);
       let val = null;
+      let filtro = null;
       const q = {
-        where(campo, op, v) { if (campo !== 'isPublic') throw new Error('filtro inesperado'); val = v; return q; },
+        where(campo, op, v) { if (campo !== 'isPublic' && campo !== 'memberUids') throw new Error('filtro inesperado'); filtro = campo; val = v; return q; },
         limit() { return q; },
         async get() {
-          const sel = docs.filter(d => !!d.isPublic === !!val);
-          if (val) lidos.publicos++; else lidos.privados++;
+          const sel = docs.filter(d => filtro === 'memberUids' ? (d.memberUids || []).includes(val) : !!d.isPublic === !!val);
+          if (filtro === 'memberUids') lidos.privados++; else lidos.publicos++;
           return { size: sel.length, forEach: (cb) => sel.forEach(d => cb({ id: d.id, data: () => d })) };
         }
       };
@@ -122,7 +123,7 @@ const BASE = [
   // ── balde 2 · TORNEIO ENCERRADO ──
   { id: 'z', name: 'Zulu Finals', sport: 'Beach Tennis', venueName: 'Clube Z', format: 'Liga', status: 'finished', isPublic: true, hasDraw: true, competitorsCount: 4, startDate: '2026-07-01T10:00' },
   // ── fora da vitrine ──
-  { id: 'p', name: 'SEGREDO do Fulano', sport: 'Padel', venueName: 'Casa', format: 'Liga', status: 'open', isPublic: false, competitorsCount: 4 },
+  { id: 'p', name: 'SEGREDO do Fulano', sport: 'Padel', venueName: 'Casa', format: 'Liga', status: 'open', isPublic: false, memberUids: ['u1'], competitorsCount: 4 },
   { id: 's', name: 'SANDBOX do dev',    sport: 'Padel', venueName: 'Lab',  format: 'Liga', status: 'open', isPublic: true, isSandbox: true }
 ];
 
@@ -145,8 +146,8 @@ const BASE = [
      '⛔ torneio PRIVADO não pode ser LISTADO (ele é lido só pra contar — se vazar pro html, é vazamento)');
   ok(html.indexOf('SANDBOX') === -1,
      '⛔ o torneio de teste do dev não entra na vitrine');
-  ok(/1 privado ocultado/.test(conta),
-     'a contagem DIZ "1 privado ocultado" (ordem do dono: indicar quantos ficaram de fora). Veio: ' + conta);
+  ok(/1 privado vinculado a você/.test(conta),
+     'a contagem inclui apenas privados vinculados ao usuário. Veio: ' + conta);
   ok(/>8<\/b> torneios/.test(conta),
      'a conta mostra os 8 públicos (privado e sandbox fora). Veio: ' + conta.slice(0, 160));
 

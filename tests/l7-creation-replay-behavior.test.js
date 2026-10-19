@@ -156,6 +156,12 @@ function creator(db,time=clock){return makeCreateTournament({db,HttpsError,Field
   await assert.rejects(fn({auth:{uid:'player'},data:{...data,tournamentId:'s',sandbox:true}}),{code:'permission-denied'});
   await fn({auth:{uid:'dev'},data:{...data,tournamentId:'s',sandbox:true}});assert(db.docs.has('sandboxes/s/resultsSandbox/m'));assert(!db.docs.has('sandboxes/s/results/m'));
  });
+ await test('replay de torneio restrito não indexa atletas no histórico global',async()=>{
+  const db=fakeDB(),fn=replayHandler(db);
+  db.docs.set('tournaments/oculto',{creatorUid:'owner',organizerOnly:true,matches:[{id:'m',p1Uid:'player',p2Uid:'opponent',p1:'A',p2:'B'}]});
+  await fn({auth:{uid:'owner'},data:{tournamentId:'oculto',matchId:'m',replay}});
+  assert.deepEqual(db.docs.get('tournaments/oculto/results/m').playerUids,[]);
+ });
  const source=fs.readFileSync('js/store.js','utf8');
  function browser(){
   let saves=0, calls=[], uploads=0;const context={window:{},console,Uint8Array};const w=context.window;

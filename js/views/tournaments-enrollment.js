@@ -1388,6 +1388,11 @@ window._doAddParticipant = function (tId, pName, selectedUid, selectedPhoto, onD
     var _closedOrDrawn = !window._enrollmentOpenState(t).open;
     // A autorização real é conferida novamente pela callable, dentro da transação.
     var _organizerManual = !!(window._souOrganizador && window._souOrganizador(t) && t.status !== 'finished');
+    var _currentUid = window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid;
+    if (selectedUid && selectedUid !== _currentUid) {
+        showAlertDialog('Convite necessário', 'Uma conta só pode se inscrever após a própria pessoa aceitar. Convide-a; não é possível incluí-la diretamente.', null, { type: 'warning' });
+        return;
+    }
     if (_closedOrDrawn && !_organizerManual && !_allowsLateEnrollment(t)) {
         if (typeof showAlertDialog === 'function') showAlertDialog(_t('enroll.enrollClosed'), _t('enroll.enrollClosedMsg'), null, { type: 'warning' });
         return;

@@ -2189,7 +2189,10 @@ window.FirestoreDB = {
       return [];
     }
     try {
-      var snap = await this.db.collection('tournaments').get({ source: 'server' });
+      // O fallback sem usuário só pode enumerar torneios gerais. Uma consulta
+      // sem filtro falha diante de organizerOnly e revelaria dados privados.
+      var snap = await this.db.collection('tournaments')
+        .where('isPublic', '==', true).get({ source: 'server' });
       try { if (window._noteFsReads) window._noteFsReads(snap.size, 'load-all-tourns'); } catch (e) {}
       var tournaments = [];
       snap.forEach(function(doc) {
@@ -2440,10 +2443,10 @@ window.FirestoreDB = {
   async loadOpenTournaments() {
     if (!this.db) return [];
     try {
-      // Sem filtro server-side de status — busca todos os docs e filtra na
-      // memória. Em collection com milhares de docs isso fica caro; mas o
-      // call site único (notifier) já era uma varredura full anyway.
-      var snap = await this.db.collection('tournaments').get();
+      // O aviso de proximidade divulga torneios a quem não está inscrito:
+      // somente os gerais entram nessa consulta, inclusive no app antigo.
+      var snap = await this.db.collection('tournaments')
+        .where('isPublic', '==', true).get();
       try { if (window._noteFsReads) window._noteFsReads(snap.size, 'load-all-tourns2'); } catch (e) {}
       var tournaments = [];
       snap.forEach(function(doc) {

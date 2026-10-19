@@ -157,8 +157,9 @@ ok(!/function _dualWriteResult/.test(bui) && !/_dualWriteResult\(tId/.test(bui),
    'bracket-ui.js não tem mais o wrapper nem as 7 chamadas dele');
 
 console.log('\n7. A CF escreve o subdoc — e com as travas certas');
-const bloco = ad.slice(ad.indexOf("if (nome === 'matches' && o.espelho"),
-                       ad.indexOf("if (nome === 'matches' && o.espelho") + 2400);
+const marcoEspelho = ad.indexOf("if (nome === 'matches' && tDepois.organizerOnly !== true && o.espelho");
+ok(marcoEspelho >= 0, 'o espelho só é escrito quando o torneio não está restrito à organização');
+const bloco = ad.slice(marcoEspelho, marcoEspelho + 2400);
 ok(/buildMirrorDoc\(/.test(bloco),
    'usa buildMirrorDoc — a MESMA fonte de functions/, não uma segunda cópia do formato');
 /* 2.2: o planejador é PURO — ele DECLARA `apagarCampos:['pendingResult']` e só o executor

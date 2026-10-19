@@ -66,6 +66,13 @@ ok(JSON.stringify(espelhoDe(p1)) === JSON.stringify(espelhoDe(p2)),
    '① ⭐ o documento de `results` é idêntico — inclusive o carimbo do espelho');
 ok(espelhoDe(p1).length > 0, '① (e o espelho realmente foi planejado, senão a asserção acima é vazia)');
 ok(espelhoDe(p1)[0].doc.at === '2026-09-02T10:00:00.000Z', '① o carimbo é o instante RECEBIDO, não um novo');
+const oculto = torneio(3);
+oculto.organizerOnly = true;
+const planoOculto = WP.planWrites(null, oculto, {
+  split: split, boundary: boundary, agoraIso: '2026-09-02T10:00:00.000Z', espelho: espelho, tournamentId: 't1'
+});
+ok(espelhoDe(planoOculto).length === 0 && planoOculto.ops.some(o => o.colecao === 'matches'),
+   '① torneio oculto guarda jogos canônicos sem indexar resultados para o app antigo');
 
 /* ② instante diferente ⇒ plano diferente. É o que provaria a divergência entre tentativas
  *    se o `new Date()` tivesse ficado dentro do callback. */

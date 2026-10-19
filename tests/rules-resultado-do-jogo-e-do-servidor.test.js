@@ -21,7 +21,7 @@
  * Dados 100% sintéticos. Nada de produção é lido ou escrito.
  * Rodado por: npm run test:rules  (e pelo catálogo de npm test)
  */
-const { execFileSync } = require('child_process');
+const { rodarNoEmulador } = require('./emulador');
 const fs = require('fs'), path = require('path'), os = require('os');
 const ROOT = path.join(__dirname, '..');
 const PORT_ATUAL = 8108;      // portas livres conferidas antes de escrever o teste
@@ -149,7 +149,7 @@ function rodar(rulesPath, porta, rotulo) {
     emulators: { firestore: { port: porta }, ui: { enabled: false }, singleProjectMode: true },
   }));
   fs.writeFileSync(path.join(tmp, 'd.js'), DRIVER(porta));
-  const out = execFileSync('firebase', ['emulators:exec', '--only', 'firestore',
+  const out = rodarNoEmulador(['emulators:exec', '--only', 'firestore',
     '--config', path.join(tmp, 'firebase.json'), '--project', PROJECT,
     'node ' + JSON.stringify(path.join(tmp, 'd.js'))],
   { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],

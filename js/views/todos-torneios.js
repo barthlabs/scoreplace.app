@@ -87,14 +87,15 @@
       try { window._warn('[todos-torneios] falhou:', e && e.message); } catch (_) {}
       return;
     }
-    // contagem dos privados — os documentos NÃO ficam guardados nem desenhados.
+    // Contar apenas privados vinculados ao usuário. Contar todos os privados
+    // revelaria torneios ocultos e a query ampla não é autorizada pelas Rules.
     E.privados = 0;
     if (window.AppStore && window.AppStore.currentUser) {
       try {
         var sp = await db.collection('tournaments_summary')
-          .where('isPublic', '==', false).limit(TETO_PRIVADOS).get();
+          .where('memberUids', 'array-contains', window.AppStore.currentUser.uid).limit(TETO_PRIVADOS).get();
         var n = 0;
-        sp.forEach(function (doc) { var d = doc.data(); if (d && !d.isSandbox) n++; });
+        sp.forEach(function (doc) { var d = doc.data(); if (d && d.isPublic === false && !d.isSandbox) n++; });
         E.privados = n;
       } catch (e) { E.privados = 0; }   // sem permissão → não promete número nenhum
     }
@@ -237,7 +238,7 @@
     // ocultados" seria ruído sobre uma decisão que não afetou nada nesta tela.
     if (E.privados > 0) {
       p.push('<span title="Torneios não públicos não entram na lista — só a contagem.">🔒 ' +
-        E.privados + ' privado' + (E.privados === 1 ? '' : 's') + ' ocultado' + (E.privados === 1 ? '' : 's') + '</span>');
+        E.privados + ' privado' + (E.privados === 1 ? '' : 's') + ' vinculado' + (E.privados === 1 ? '' : 's') + ' a você</span>');
     }
     if (E.cortou) p.push('<span title="A lista para em ' + TETO + ' — use a busca pra achar o que falta.">⚠️ mostrando os ' + TETO + ' primeiros</span>');
     return p.join(' · ');

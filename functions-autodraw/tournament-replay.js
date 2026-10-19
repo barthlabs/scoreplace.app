@@ -52,6 +52,9 @@ function makeSaveTournamentReplay({ db, HttpsError, readTournament, findMatch, i
       const snap = await tx.get(resultRef);
       const result = snap.exists ? snap.data() : buildMirror(t, m, data.tournamentId, iso);
       if (!result) throw new HttpsError('failed-precondition', 'Projeção do jogo indisponível.');
+      // No modo somente organizadores, o índice global de histórico não pode
+      // expor o confronto ao app nativo antigo.
+      if (!sandbox && t.organizerOnly === true && !snap.exists) result.playerUids = [];
       if (JSON.stringify(result.replay) === JSON.stringify(replay)) return { ok: true, changed: false, replay };
       // Só o replay muda; placar, roster e proposta concorrentes permanecem intactos.
       if (snap.exists) tx.update(resultRef, { replay }); else tx.create(resultRef, Object.assign({}, result, { replay }));

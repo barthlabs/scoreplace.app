@@ -4619,7 +4619,12 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
     if (wasOrganizerOnly && t.organizerOnly !== true && !t.isSandbox) {
       const admins = new Set([t.creatorUid].concat(Array.isArray(t.adminUids) ? t.adminUids : []).map(String));
-      const recipients = Array.from(new Set((Array.isArray(t.memberUids) ? t.memberUids : []).map(String)))
+      // No modo restrito memberUids contém só admins. O elenco carregado de
+      // registrations por _leTorneio é a fonte de quem deve receber a liberação.
+      const participantUids = (Array.isArray(t.participants) ? t.participants : [])
+        .flatMap(p => (typeof drawWindow._participantUids === 'function' ? drawWindow._participantUids(p) : [p && p.uid, p && p.p1Uid, p && p.p2Uid]))
+        .map(String);
+      const recipients = Array.from(new Set(participantUids))
         .filter(memberUid => memberUid && !admins.has(memberUid));
       if (recipients.length) tx.set(ref.collection('notificationOutbox').doc('visibility-release-' + Date.parse(agoraIso)), {
         schema: 1, kind: 'tournament-notification', type: 'tournament_visible',

@@ -25,6 +25,9 @@ const vm = require('vm');
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };
 console.log('──── pessoas: amigos aqui, exploração na outra tela ────');
+const discoveryServer = fs.readFileSync(path.join(__dirname, '..', 'functions', 'index.js'), 'utf8');
+ok(/preferredLocations: locations\(p\)\.map\(\(key\) => \(\{ label: key \}\)\)/.test(discoveryServer),
+  'a callable preserva chaves de locais sem expor endereços para o agrupamento no cliente');
 
 const PAINEIRAS_PERFIL  = 'Clube Paineiras do Morumby — Av. Dr. Alberto Penteado, 60';
 const PAINEIRAS_TORNEIO = 'Clube Paineiras do Morumby, São Paulo';

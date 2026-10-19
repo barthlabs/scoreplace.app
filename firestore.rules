@@ -276,7 +276,12 @@ service cloud.firestore {
        * é o remendo que a reforma existe para desfazer.
        * ⚠️ Enquanto isto estiver aberto, nada que dependa de privacidade pode ser prometido no rótulo.
        */
-      allow read: if canReadTournamentData(resource.data);
+      allow get: if canReadTournamentData(resource.data);
+      // Listagens não podem usar o ramo legado "qualquer autenticado" como prova
+      // de acesso: uma query por isPublic=false incluiria torneios ocultos.
+      allow list: if resource.data.get('isPublic', false) == true
+        || (request.auth != null && request.auth.uid in resource.data.get('memberUids', []))
+        || (request.auth != null && request.auth.uid == resource.data.get('creatorUid', ''));
       allow write: if false;   // só a Cloud Function (admin SDK ignora regras)
     }
 
@@ -679,7 +684,10 @@ service cloud.firestore {
       // terceiro NEM por link/id — só quem está no memberUids dele (= o dev). Sem esta
       // linha a invisibilidade era 100% client-side: bastava a regra genérica "authed lê
       // qualquer torneio" pra qualquer um puxar o SB. Fecha o item (3) do isolamento.
-      allow read: if canReadTournamentData(resource.data);
+      allow get: if canReadTournamentData(resource.data);
+      allow list: if resource.data.get('isPublic', false) == true
+        || (request.auth != null && request.auth.uid in resource.data.get('memberUids', []))
+        || (request.auth != null && request.auth.uid == resource.data.get('creatorUid', ''));
 
       // ⛔ CREATE: FECHADO. Torneio NASCE NO SERVIDOR — a porta é a Function
       // `createTournament` (`functions-autodraw/index.js:3355`), que roda com Admin SDK,

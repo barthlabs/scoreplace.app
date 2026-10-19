@@ -12282,6 +12282,9 @@ exports.syncSplitMatchResult = onDocumentWritten(
     const configSnap = await tournamentRef.get();
     if (!configSnap.exists) return;
     const config = configSnap.data() || {};
+    // O histórico nativo consulta o índice global por playerUids. Enquanto o
+    // torneio estiver restrito à organização, não criar esse índice.
+    if (config.organizerOnly === true) return;
     /* ⛔ JOGO DIVIDIDO NÃO DEPENDE DO MARCADOR LEGADO.
      * Todo torneio guarda `matches` fora do documento; `_semPesados` só continua gravado
      * para o nativo antigo. Se este gatilho retornar porque uma fotografia chegou sem o
@@ -12316,7 +12319,7 @@ exports.syncSplitMatchResult = onDocumentWritten(
 );
 
 exports.syncMatchRosters = onDocumentWritten(
-  { document: "tournaments/{tid}", region: "us-central1", memory: "256MiB", timeoutSeconds: 60 },
+  { document: "tournaments/{tid}", region: "us-central1", memory: "256MiB", timeoutSeconds: 60, retry: true },
   async (event) => {
     const tid = event.params.tid;
     const after  = event.data.after.exists  ? (event.data.after.data()  || {}) : null;
@@ -12438,19 +12441,45 @@ exports.syncMatchRosters = onDocumentWritten(
       console.error("[wo-reconcilia] " + tid + " falhou:", _woErr && _woErr.message);
     }
 
+    // O histórico global consulta results por playerUids, inclusive no nativo
+    // antigo. Na transição para somente organizadores, removemos o índice dos
+    // espelhos existentes; nenhum placar ou confronto canônico é apagado. A
+    // checagem roda em TODA escrita oculta e o trigger tenta novamente se falhar
+    // no meio de um lote, para reconciliar uma atualização parcial.
+    if (after.organizerOnly === true) {
+      const hiddenResults = await admin.firestore().collection("tournaments").doc(tid).collection("results").get();
+      let batch = admin.firestore().batch();
+      let count = 0;
+      for (const result of hiddenResults.docs) {
+        if (!Array.isArray(result.data().playerUids) || !result.data().playerUids.length) continue;
+        batch.update(result.ref, { playerUids: [] });
+        count++;
+        if (count % 400 === 0) { await batch.commit(); batch = admin.firestore().batch(); }
+      }
+      if (count % 400) await batch.commit();
+      return;
+    }
+
+    // Ao liberar um torneio dividido, o pai não contém os jogos. Reidratar a
+    // parte canônica força a reconstrução do índice de histórico, sem depender
+    // de um novo sorteio nem alterar placares.
+    let afterForResults = after;
+    if (before && before.organizerOnly === true && after.organizerOnly !== true && !collectMatches(after).length) {
+      afterForResults = await _montarTorneioCanonico(admin.firestore().collection("tournaments").doc(tid), after);
+    }
     // Assinatura (roster+resultado) de cada jogo ANTES → só processa os que mudaram.
     const beforeSig = {};
-    collectMatches(before || {}).forEach((m) => {
+    collectMatches(before && before.organizerOnly !== true ? before : {}).forEach((m) => {
       if (m && m.id != null && m.id !== "") beforeSig[String(m.id)] = subdocSignature(buildSeedDoc(before, m));
     });
     const candidates = [];
     const seenId = {};
-    collectMatches(after).forEach((m) => {
+    collectMatches(afterForResults).forEach((m) => {
       if (!m || m.id == null || m.id === "") return;
       const id = String(m.id);
       if (seenId[id]) return;
       seenId[id] = true;
-      const sig = subdocSignature(buildSeedDoc(after, m));
+      const sig = subdocSignature(buildSeedDoc(afterForResults, m));
       if (beforeSig[id] !== sig) candidates.push({ id, m, sig });
     });
     if (!candidates.length) return; // nada mudou no espelho → barato, sai
@@ -12478,7 +12507,7 @@ exports.syncMatchRosters = onDocumentWritten(
         const existia = snap.exists;
         if (existia && subdocSignature(snap.data()) === sig) continue; // espelho já bate → idempotente
         // `anterior` carrega adiante o que o espelho não sabe recalcular (replay).
-        await ref.set(buildMirrorDoc(after, m, tid, nowIso, existia ? snap.data() : null));
+        await ref.set(buildMirrorDoc(afterForResults, m, tid, nowIso, existia ? snap.data() : null));
         synced++;
       } catch (e) {
         console.error(`[syncMatchRosters] ${tid}/${id}:`, e);
@@ -12534,6 +12563,8 @@ exports.backfillMatchResultDocs = onRequest(
     for (const tdoc of docs) {
       tournaments++;
       const bruto = tdoc.data() || {};
+      // Backfill também não pode tornar um sorteio oculto visível no histórico.
+      if (bruto.organizerOnly === true) { skipped++; continue; }
       let t;
       try {
         // `backfill` também é reparo dos torneios já divididos: o documento pai é
@@ -13440,6 +13471,9 @@ exports.listDiscoverableUsers = onCall(
       if (!eligible.has(doc.id) && !sharedLocation) return;
       users.push({ _docId: doc.id, displayName: p.displayName || "",
         photoURL: p.photoURL || "", city: p.city || "", sharedLocation: !!sharedLocation,
+        // Só a chave do local, sem endereço. A tela Pessoas usa esta mesma
+        // projeção para a seção "joga nos meus locais".
+        preferredLocations: locations(p).map((key) => ({ label: key })),
         preferredSports: p.preferredSports || [],
         updatedAt: p.updatedAt || "", createdAt: p.createdAt || "", lastSeenAt: p.lastSeenAt || "" });
     });
