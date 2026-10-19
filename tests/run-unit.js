@@ -1225,6 +1225,8 @@ const SUITES = [
   'tests/enroll-number-canon.test.js',
   // Foto do Neon: seis blocos na ordem das fotos, 64 duplas e 128 pessoas.
   'tests/duplas-foto-ordem.test.js',
+  // Planilha final: 64 duplas e os dois membros de cada dupla em sequência exata.
+  'tests/neon-planilha-ordem-core.test.js',
   'tests/dupla-presenca-alinhada.test.js',
   'tests/participants-route-canonical-load.test.js',
   'tests/neon-roster-single-source.test.js',

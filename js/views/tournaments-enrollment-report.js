@@ -1255,6 +1255,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (to.gender !== 'Fem' || !/^Light$/i.test(String(to.skill || ''))) return false;
     var pairId = String(members[0].fixedPairId || '');
     var plan = t.teamCompetition && t.teamCompetition.schedule && t.teamCompetition.schedule.pairDayAssignments;
+    var finalDays = t.teamCompetition && t.teamCompetition.schedule &&
+      t.teamCompetition.schedule.originDayPolicy === 'female-light-organization-final';
     var lightDays = (t.categorySchedule && t.categorySchedule.slots || []).filter(function (slot) {
       return /^Fem Light$/i.test(String(slot.category || ''));
     }).map(function (slot) { return String(slot.day || '').slice(0, 10); }).sort();
@@ -1262,6 +1264,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       var assigned = plan.find(function (item) { return String(item.fixedPairId || '') === pairId; });
       if (assigned) return String(assigned.day || '') === lightDays[1];
     }
+    // Na distribuição final, '3' significa Fem Light de sexta, inclusive as
+    // três que já eram femininas. Origem masculina sozinha não comprova o dia.
+    if (finalDays) return false;
     var origin = String(members[0].originCategoryId || '').trim();
     if (!origin || origin !== String(members[1].originCategoryId || '').trim()) return false;
     var defs = Array.isArray(t.categoryDefinitions) ? t.categoryDefinitions : [];
@@ -1292,7 +1297,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       }
       var pairCat = _decomposeCat(_erPairCategory(members), _liveState && _liveState.t || {});
       return '<div draggable="true" data-er-pair-order="' + a.order + '" data-er-member-orders="' + a.order + ',' + b.order + '" data-er-person="' + _esc(a.name + ' ' + b.name) + '" data-er-gender="' + (_erPairPlacementGender(members, _liveState && _liveState.t || {}) || '') + '" data-er-skill="' + _esc(pairCat.skill || '') + '" ondragstart="window._erMxPairDragStart(event,' + a.order + ')" onclick="window._erMxPairClick(event,' + a.order + ')" aria-pressed="' + (selected ? 'true' : 'false') + '" title="Arraste a dupla para uma categoria" style="position:relative;cursor:grab;display:flex;flex-direction:column;gap:5px;padding:10px 38px 10px 11px;border:' + (selected ? '2px solid #38bdf8' : ('1px solid ' + (changed ? 'rgba(245,158,11,.65)' : 'rgba(168,85,247,.45)'))) + ';border-radius:9px;background:' + (selected ? 'rgba(14,165,233,0.20)' : (changed ? 'rgba(245,158,11,.07)' : 'rgba(168,85,247,.08)')) + ';user-select:none;">' +
-        memberLine(a) + memberLine(b) + split + (thirdPair ? '<span class="badge badge-info" title="Dupla 3: inscrição originalmente masculina" aria-label="Dupla 3" style="position:absolute;right:8px;bottom:7px;font-size:10px;line-height:1;padding:2px 5px;">3</span>' : '') +
+        memberLine(a) + memberLine(b) + split + (thirdPair ? '<span class="badge badge-info" title="Dupla 3: Fem Light de sexta-feira" aria-label="Dupla 3" style="position:absolute;right:8px;bottom:7px;font-size:10px;line-height:1;padding:2px 5px;">3</span>' : '') +
       '</div>';
   }
   window._erOpenParticipantFicha = function (order) {

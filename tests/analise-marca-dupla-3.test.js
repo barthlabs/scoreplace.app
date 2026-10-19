@@ -35,6 +35,16 @@ const drawn = { ...t, categorySchedule:{ slots:[{ category:'Fem Light', day:'202
   teamCompetition:{ schedule:{ pairDayAssignments:[{ fixedPairId:'pair-lottery', day:'2026-10-23' }] } } };
 assert.strictEqual(classify(pair('cat-f', 'Fem Light').map((member) => ({ ...member, fixedPairId:'pair-lottery' })), drawn), true,
   'as três sorteadas passam a mostrar 3 após a confirmação do plano');
+const finalPlan = { ...drawn, teamCompetition:{ schedule:{ originDayPolicy:'female-light-organization-final',
+  pairDayAssignments:[{ fixedPairId:'pair-friday', day:'2026-10-23' },
+    { fixedPairId:'pair-thursday', day:'2026-10-22' }] } } };
+const withId = (origin, id) => pair(origin, 'Fem Light').map((member) => ({ ...member, fixedPairId:id }));
+assert.strictEqual(classify(withId('cat-f', 'pair-friday'), finalPlan), true,
+  'dupla originalmente feminina de sexta recebe 3');
+assert.strictEqual(classify(withId('cat-m', 'pair-thursday'), finalPlan), false,
+  'origem masculina de quinta não recebe 3');
+assert.strictEqual(classify(withId('cat-m', 'pair-unknown'), finalPlan), false,
+  'sem dia persistido na distribuição final não recebe 3 por origem');
 assert(source.includes('originCategoryId: p.originCategoryId || \'\''), 'origem passa pela expansão da dupla');
 assert(source.includes('originCategoryId: (p && p.originCategoryId) || \'\''), 'origem passa para as linhas da matriz');
 const card = source.slice(source.indexOf('  function _erPairCard('), source.indexOf('  window._erEditPairMember', source.indexOf('  function _erPairCard(')));
@@ -52,6 +62,7 @@ const html = render(pair('cat-m', 'Fem Light').map((member, index) => Object.ass
   { order: index + 1, name: 'Pessoa ' + (index + 1), assigned: ['Fem Light'] })));
 assert.strictEqual((html.match(/aria-label="Dupla 3"/g) || []).length, 1, 'a renderização real mostra um único selo 3');
 assert(html.includes('right:8px;bottom:7px;font-size:10px'), 'selo 3 pequeno no canto inferior direito');
+assert(card.includes('Dupla 3: Fem Light de sexta-feira'), 'selo identifica o dia, não a origem masculina');
 const renderEditable = new Function('window', '_LZ_COL', '_erIsTransferredFemalePair', '_liveState', '_pendingEdits', '_erSelectedOrders',
   '_erPairCategory', '_decomposeCat', '_erPairPlacementGender', '_esc', card + '\nreturn _erPairCard;')(
   fakeWindow, lzColors, classify, { t: { ...t, canonicalRegistrationMigration: { fingerprint: 'verified' } }, isOrg: true }, {}, {},
@@ -77,4 +88,4 @@ assert(/\[data-er-pair-order\] > div::before\s*\{[^}]*background:\s*currentColor
 const matrixRender = source.slice(source.indexOf('  window._erRenderMatrix = function'), source.indexOf('  // ── BUSCA DA ANÁLISE', source.indexOf('  window._erRenderMatrix = function')));
 assert(matrixRender.indexOf('_erReconcilePairRows') < matrixRender.indexOf('_erApplyLzToRows') && matrixRender.indexOf('_erApplyLzToRows') < matrixRender.indexOf('_matrixInner'), 'reclassifica depois de reconciliar e antes de renderizar');
 assert(matrixRender.includes('lzCtx.scanMap || {}') && matrixRender.includes('lzCtx.rows = _liveState.rows'), 'usa scan atualizado e sincroniza linhas');
-console.log('✓ Análise: selo 3 só para dupla feminina com origem masculina canônica');
+console.log('✓ Análise: selo 3 nas duplas Fem Light de sexta conforme o plano salvo');
