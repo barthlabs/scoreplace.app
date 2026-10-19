@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "backendCommit": "f2aa93d697a641c762fcfa392501a8f16eeb1132",
+  "backendCommit": "a6c7ffd779037470b7195a477ada84f049072dff",
   "functions": [
     "drawRound",
     "updateTournamentConfiguration",
