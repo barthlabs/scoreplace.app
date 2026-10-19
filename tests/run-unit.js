@@ -1227,6 +1227,7 @@ const SUITES = [
   'tests/duplas-foto-ordem.test.js',
   // Planilha final: 64 duplas e os dois membros de cada dupla em sequência exata.
   'tests/neon-planilha-ordem-core.test.js',
+  'tests/tournament-sumula.test.js',
   'tests/dupla-presenca-alinhada.test.js',
   'tests/participants-route-canonical-load.test.js',
   'tests/neon-roster-single-source.test.js',

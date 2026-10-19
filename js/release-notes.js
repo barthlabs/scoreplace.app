@@ -1,3 +1,6 @@
+// 2.4.114 — Organizadores de torneios com grade marcada podem baixar uma súmula
+// em PDF: jogos por quadra e dia, com espaço para placar, e lista diária de
+// presença com parceiro, equipe e adversários do primeiro jogo.
 // 2.4.113 — A lista de inscritos do Neon segue a sequência global das abas e linhas
 // da planilha dos organizadores, preservando a identidade, a categoria e a dupla
 // de cada pessoa. O primeiro par é Marcelo Ferrari / Denys Paulon.
