@@ -1,4 +1,7 @@
 'use strict';
+// A súmula usa o fuso local do navegador; fixe o fuso do torneio de teste para
+// que a paginação não mude entre o macOS do desenvolvedor e o runner em UTC.
+process.env.TZ = 'America/Sao_Paulo';
 const assert = require('assert');
 const fs = require('fs');
 require('../js/views/tournament-sumula.js');

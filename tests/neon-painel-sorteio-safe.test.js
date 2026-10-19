@@ -47,8 +47,9 @@ if (!/data-team-pair-day-editor/.test(overlay.innerHTML)) throw new Error('Edito
 if (/O sorteio está bloqueado/.test(overlay.innerHTML)) throw new Error('Elenco Neon válido foi bloqueado');
 const lightCards = overlay.innerHTML.match(/data-team-category-card="Fem Light"/g) || [];
 if (lightCards.length < 3) throw new Error('Fem Light deve aparecer na fonte e nos dois dias');
-if (!/aria-label="Remover Fem Light deste dia"/.test(overlay.innerHTML) || !/background:#dc2626;color:white/.test(overlay.innerHTML)) {
-  throw new Error('Fem Light deve ter o X branco no círculo vermelho');
+if (!/class="cancel-x-btn" data-team-remove-category[^>]*aria-label="Remover Fem Light deste dia"/.test(overlay.innerHTML) ||
+    !/--cx-size:20px/.test(overlay.innerHTML)) {
+  throw new Error('Fem Light deve usar o X canônico no círculo vermelho');
 }
 const visibleHtml = overlay.innerHTML.replace(/\sdata-[^=]+="[^"]*"/g, '');
 if (/uid-(?:first|second)-/.test(visibleHtml)) throw new Error('UID cru vazou no conteúdo visível');

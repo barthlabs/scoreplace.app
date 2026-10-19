@@ -59,7 +59,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
 
       # ⛔ 5 suítes exigem `functions/node_modules/firebase-admin` e o emulador do Firestore
       # (porta-unica-de-escrita-fina, link-do-grupo-do-jogo-persiste, deploy-liga-firebase-admin,
