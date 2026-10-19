@@ -1,3 +1,8 @@
+## 2.4.125 — 19/out/2026 (busca por time e W.O. por jogo)
+
+- A busca da chave considera o nome oficial dos times vinculado a cada confronto, aceitando nome completo ou parcial sem confundir o texto dos botões com os resultados.
+- Na grade concentrada, a ação de W.O. aparece em cada card e aponta ao ID daquele jogo; o botão geral do grupo técnico deixa de ser exibido. O fluxo de confirmação e o motor de W.O. não foram alterados.
+
 ## 2.4.118 — 19/out/2026 (visibilidade e consentimento)
 
 - O Neon foi colocado em “Apenas organizadores” antes do sorteio. Firestore Rules, índice principal e resumo foram conferidos no banco; ambos os índices entregam somente dois UIDs de organização. Inscrições, duplas e jogos não foram alterados por essa restrição.

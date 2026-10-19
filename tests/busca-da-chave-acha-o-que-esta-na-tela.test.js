@@ -35,13 +35,13 @@ const bloco = src.slice(ini, src.indexOf('\n};', ini) + 3);
  * que o filtro varre. ⛔ NÃO se devolve o texto do card inteiro: foi assim que a 1ª versão
  * quebrou a busca em produção (o card carrega "Aplicar W.O.", "Cheguei", "Ao Vivo", e
  * digitar "ar" casava com "Aplicar" em todos). O fixture tem que ter a MESMA forma. */
-function card(id, dataPlayers, nomesNaTela, myMatch) {
+function card(id, dataPlayers, nomesNaTela, myMatch, teamNames) {
   const nomes = (Array.isArray(nomesNaTela) ? nomesNaTela : [nomesNaTela])
     .map((t) => ({ textContent: String(t == null ? '' : t) }));
   const el = {
     id: id, style: {}, dataset: {},
     textContent: 'JOGO 116 Aplicar W.O. Cheguei Ao Vivo Propor datas ' + nomes.map((n) => n.textContent).join(' '),
-    _attrs: { 'data-players': dataPlayers, 'data-my-match': myMatch || '1' },
+    _attrs: { 'data-players': dataPlayers, 'data-team-names': teamNames || '', 'data-my-match': myMatch || '1' },
     getAttribute: function (k) { return Object.prototype.hasOwnProperty.call(this._attrs, k) ? this._attrs[k] : null; },
     setAttribute: function (k, v) { this._attrs[k] = v; },
     contains: function () { return false; },
@@ -102,6 +102,16 @@ ok(vis.length === 1, '①b mas casa com o NOME que está na tela');
 const porAtributo = card('card-a', 'Mariana Ciocci / Arnaldo Menezes | Arnaldo Menezes', ['texto qualquer']);
 vis = monta([porAtributo, card('card-b', 'Outra Pessoa', ['Outra Pessoa'])], 'arnaldo');
 ok(vis.length === 1 && vis[0] === porAtributo, '② quem casa pelo `data-players` continua casando');
+
+/* ── ②b Neon: nome do time é identidade própria do confronto ───────────── */
+const panic = card('card-neon-1', 'Jogadora A | Jogadora B', ['Jogadora A', 'Jogadora B'], '0', 'PANIC 1 | BLAST 2');
+const venom = card('card-neon-2', 'Jogadora C | Jogadora D', ['Jogadora C', 'Jogadora D'], '0', 'VENOM | VOLT');
+vis = monta([panic, venom], 'pan');
+ok(vis.length === 1 && vis[0] === panic, '②b parte do nome do time encontra só o jogo desse time');
+vis = monta([panic, venom], 'panic 1');
+ok(vis.length === 1 && vis[0] === panic, '②b nome completo do time também encontra o jogo');
+vis = monta([panic, venom], 'ven');
+ok(vis.length === 1 && vis[0] === venom, '②b outro time encontra outro jogo');
 
 /* ── ③ acento e caixa não atrapalham (é o que a pessoa digita no celular) ─── */
 vis = monta([card('card-c', '', ['Verônica Frasso', 'Maria Betânia'])], 'veronica');

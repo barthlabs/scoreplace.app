@@ -7953,7 +7953,8 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
 
   // v4.1.19 CANÔNICO: botão W.O. compacto no HEADER, à esquerda do "Ao Vivo" (substitui o
   // "⚠️ Faltou alguém?" largo que ficava embaixo do card). Mesmo gate do chip antigo.
-  var _woHeaderChip = (!_setsEdit && !_readOnly && typeof window._woClaimChip === 'function' && typeof window._woIsKnockoutMatch === 'function' && window._woIsKnockoutMatch(t, m))
+  var _woHeaderChip = (!_setsEdit && !_readOnly && typeof window._woClaimChip === 'function' &&
+    (_isConcentratedEvent || (typeof window._woIsKnockoutMatch === 'function' && window._woIsKnockoutMatch(t, m))))
     ? window._woClaimChip(t, { scope: 'match', matchId: m.id, compact: true })
     : '';
   // v1.8.79: REPLAY — só existe se o jogo tem ponto a ponto gravado no doc do jogo
@@ -8088,6 +8089,11 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     } catch (e) {}
     return window._safeHtml(out.join(' | '));
   })();
+  // Nome do time vem do vínculo estrutural do confronto, não dos nomes da dupla.
+  // Assim buscar "PAN" encontra PANIC, sem depender de quem joga por ele.
+  var _searchTeamNames = (typeof window._competitionTeamNameForMatch === 'function')
+    ? ['p1', 'p2'].map(function (side) { return window._competitionTeamNameForMatch(t, m, side); }).filter(Boolean).join(' | ')
+    : '';
   /* ⭐ OS UIDS DO CONFRONTO VIAJAM NO CARD.
    * `data-players` é o palheiro do caminho quente, mas depende de HIDRATAÇÃO: num grupo
    * recém-materializado ele nasce vazio. O uid não — ele já é conhecido no render. É por
@@ -8127,7 +8133,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   var _operationalPresence = _isConcentratedEvent && !isDecided && !isByeMatch
     ? (matchReady ? 'complete' : (matchPartial ? 'partial' : 'none')) : '';
   return `
-    <div id="card-${m.id}" class="sp-match-card" data-players="${_searchNames}" data-player-uids="${_searchUids}" data-bracket-tab-category="${window._safeHtml(_tabCategory)}" data-bracket-tab-gender="${_tabGender}" data-bracket-tab-source="${_tabSource}" data-bracket-tab-round="${m.round != null ? window._safeHtml(String(m.round)) : ''}" data-bracket-scheduled-at="${_scheduledMs || ''}" data-bracket-result-at="${_playedMs || ''}" data-bracket-complete="${isDecided || m.wo ? '1' : '0'}" data-bracket-pending-match="${_isPendingMatch ? '1' : '0'}" data-bracket-court="${window._safeHtml(String(m.court || ''))}" data-bracket-upcoming="${_isConcentratedEvent && matchReady ? '1' : '0'}" data-bracket-presence="${_operationalPresence}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:var(--scroll-anchor,120px);background:${window._spCor(_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)', 'background')};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};">
+    <div id="card-${m.id}" class="sp-match-card" data-players="${_searchNames}" data-team-names="${window._safeHtml(_searchTeamNames)}" data-player-uids="${_searchUids}" data-bracket-tab-category="${window._safeHtml(_tabCategory)}" data-bracket-tab-gender="${_tabGender}" data-bracket-tab-source="${_tabSource}" data-bracket-tab-round="${m.round != null ? window._safeHtml(String(m.round)) : ''}" data-bracket-scheduled-at="${_scheduledMs || ''}" data-bracket-result-at="${_playedMs || ''}" data-bracket-complete="${isDecided || m.wo ? '1' : '0'}" data-bracket-pending-match="${_isPendingMatch ? '1' : '0'}" data-bracket-court="${window._safeHtml(String(m.court || ''))}" data-bracket-upcoming="${_isConcentratedEvent && matchReady ? '1' : '0'}" data-bracket-presence="${_operationalPresence}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:var(--scroll-anchor,120px);background:${window._spCor(_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)', 'background')};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};">
       ${_headerHtml}
       ${_pendingBtnsRow}
       ${pendingBanner}
@@ -8683,7 +8689,8 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
 
     var _woGsMatches = gRounds.reduce(function (a, r) { return a.concat(r.matches || []); }, []).filter(function (m) { return m && !m.isBye && !m.isSitOut; });
     var _woGsPlayers = (sg.players && sg.players.length) ? sg.players : sorted.map(function (s) { return s.name; });
-    var _woGsChip = (typeof window._woClaimChip === 'function') ? window._woClaimChip(t, { scope: 'group', roundIndex: (t.currentPhaseIndex || 0), groupName: sg.name, players: _woGsPlayers, matches: _woGsMatches }) : '';
+    var _woGsChip = (!_isTeamScheduleGS && typeof window._woClaimChip === 'function')
+      ? window._woClaimChip(t, { scope: 'group', roundIndex: (t.currentPhaseIndex || 0), groupName: sg.name, players: _woGsPlayers, matches: _woGsMatches }) : '';
     // A agenda concentrada tem um grupo técnico para cálculo, não uma entidade
     // exibível. Esta guarda é deliberadamente separada do estilo do container:
     // o título "Grupo A" não pode voltar por regressão. [[regression_neon_hides_technical_group_header]]
@@ -11065,7 +11072,8 @@ window._bracketApplyFilter = function () {
      * ele é palheiro de busca, não estrutura. */
     var _casa = !q;
     if (!_casa) {
-      _casa = window._buscaCasa(c.getAttribute('data-players') || '', q);
+      _casa = window._buscaCasa(c.getAttribute('data-players') || '', q) ||
+        window._buscaCasa(c.getAttribute('data-team-names') || '', q);
       // O número é identidade operacional do jogo, não nome de atleta. Mantemos a
       // busca textual normal (inclusive alguém chamado "168"), mas uma consulta só
       // numérica também encontra o card cujo JOGO tem aquele número. O prefixo permite

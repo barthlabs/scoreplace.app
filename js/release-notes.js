@@ -1,3 +1,6 @@
+// 2.4.125 — A busca da chave encontra jogos pelo nome completo ou parcial do
+// time. Na grade concentrada, o W.O. fica no card de cada jogo, sem ação geral
+// no cabeçalho técnico.
 // 2.4.124 — Em torneios concentrados com jogos em mais de um dia, as abas da
 // chave mostram as datas. Geral, Próximos jogos e categorias exibem apenas
 // partidas da data selecionada, sem misturar as rodadas do dia seguinte.

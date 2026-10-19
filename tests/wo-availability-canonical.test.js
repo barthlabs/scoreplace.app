@@ -97,6 +97,25 @@ ok('JOGADOR · 1 dia · resultEntry=[organizer,players] · aberto → chip PRESE
 ok('JOGADOR · 1 dia · resultEntry=[organizer] (sem players) → chip AUSENTE',
   chip(mkT('t7', ['organizer'], true, false), false, 'uA') === '');
 
+// Em grade por horários, cada card abre um contexto identificado pelo seu jogo.
+// Um apontamento pendente em m1 não pode trocar o botão de m2.
+(function () {
+  var t = mkT('neon-scope', ['organizer'], true, false);
+  t.matches.push({ id: 'm2', p1: 'Ana', p2: 'Bia', team1Uids: ['uA'], team2Uids: ['uB'] });
+  sandbox._IS_ORG = true;
+  sandbox.AppStore.currentUser = { uid: 'org1' };
+  sandbox.AppStore.tournaments = [t];
+  var first = sandbox.window._woClaimChip(t, { scope: 'match', matchId: 'm1', compact: true });
+  var second = sandbox.window._woClaimChip(t, { scope: 'match', matchId: 'm2', compact: true });
+  ok('cada botão de W.O. aponta para seu próprio ID de jogo',
+    first.includes('m|m1') && second.includes('m|m2'));
+  t.woClaims.push({ id: 'claim-m1', scope: 'match', matchId: 'm1', status: 'pending' });
+  first = sandbox.window._woClaimChip(t, { scope: 'match', matchId: 'm1', compact: true });
+  second = sandbox.window._woClaimChip(t, { scope: 'match', matchId: 'm2', compact: true });
+  ok('W.O. pendente de um jogo não altera o botão do outro',
+    first.includes('Apontado') && second.includes('Aplicar'));
+})();
+
 // CONSISTÊNCIA: dois torneios de config idêntica → resultado idêntico (dias/ids diferentes).
 (function () {
   var a = chip(mkT('cfgA', ['organizer', 'players'], true, false), false, 'uA').length > 0;
