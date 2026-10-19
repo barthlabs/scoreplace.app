@@ -1544,7 +1544,7 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
   return true;
 }
 
-function _bracketTabsApply(tid, gender, category, requestedRound) {
+function _bracketTabsApply(tid, gender, category, requestedRound, forceCanonical) {
   // IDs de torneio não devem ser interpolados em seletores CSS. Além de ser
   // mais seguro para IDs legados, a busca por atributo preserva as abas após
   // salvar um placar mesmo que o ID contenha caracteres especiais.
@@ -1584,7 +1584,7 @@ function _bracketTabsApply(tid, gender, category, requestedRound) {
         card.getAttribute('data-bracket-tab-category') === category;
     });
   var isScheduledCategory = root.getAttribute('data-bracket-team-schedule') === '1' &&
-    !isGeneral && !isUpcoming && root.getAttribute('data-bracket-line-tabs') !== '1' &&
+    !forceCanonical && !isGeneral && !isUpcoming && root.getAttribute('data-bracket-line-tabs') !== '1' &&
     !_bracketIsEliminationTree(window._currentBracketTournament || {}) &&
     scheduledCategoryCards.length > 0 && scheduledCategoryCards.every(function (card) {
       return Number(card.getAttribute('data-bracket-scheduled-at')) > 0;
@@ -1649,12 +1649,7 @@ function _bracketTabsApply(tid, gender, category, requestedRound) {
       // troca de rota pode impedir a montagem da agenda. Devolver os cards à
       // chave canônica evita uma categoria inteira em branco.
       _bracketGeneralView(root, false, gender);
-      _bracketOperationalCards(root, root._bracketTabsScope).forEach(function (card) {
-        if (card.classList && card.classList.contains('sp-match-card')) {
-          card.hidden = card.getAttribute('data-bracket-tab-category') !== category;
-        }
-      });
-      return;
+      return _bracketTabsApply(tid, gender, category, requestedRound, true);
     }
     // Dados legados sem horário não podem esconder a chave inteira quando a
     // aba Geral foi restaurada de uma visita anterior. Volta para uma categoria

@@ -206,13 +206,17 @@ function trecho(inicio, fim) {
 
     // Se a rota desmontou o escopo antes da agenda montar, o horário sozinho
     // não pode deixar a categoria em branco: o card canônico continua visível.
-    document.body.innerHTML = '<nav id="orphan-root" data-bracket-tabs-root="1" data-tournament-id="orphan-team" data-bracket-team-schedule="1" data-bracket-line-tabs="0" data-bracket-round-tabs="0">' +
-      '<button data-bracket-primary-tab="fem">Feminina</button><button data-bracket-subtab="Fem Light" data-bracket-tab-gender="fem">Light</button></nav>' +
+    document.body.innerHTML = '<nav id="orphan-root" data-bracket-tabs-root="1" data-tournament-id="orphan-team" data-bracket-team-schedule="1" data-bracket-line-tabs="0" data-bracket-round-tabs="1">' +
+      '<button data-bracket-primary-tab="fem">Feminina</button><button data-bracket-subtab="Fem Light" data-bracket-tab-gender="fem">Light</button>' +
+      '<button data-bracket-round-tab="1" data-bracket-tab-category="Fem Light" data-bracket-tab-gender="fem">R1</button>' +
+      '<button data-bracket-round-tab="2" data-bracket-tab-category="Fem Light" data-bracket-tab-gender="fem">R2</button></nav>' +
       '<section id="orphan-source" class="bracket-scroll-container">' +
-      card('orphan-scheduled', 'fem', 'Fem Light', at(22, 18), 'Quadra 4', true, 2) + '</section>';
-    window._bracketSelectCategoryTab('orphan-team', 'fem', 'Fem Light', '');
-    categorySchedule.missingScopeFallback = !document.getElementById('orphan-scheduled').hidden &&
-      document.getElementById('orphan-source').contains(document.getElementById('orphan-scheduled'));
+      card('orphan-r1', 'fem', 'Fem Light', at(22, 18), 'Quadra 4', true, 1) +
+      card('orphan-r2', 'fem', 'Fem Light', at(22, 18, 35), 'Quadra 5', true, 2) + '</section>';
+    window._bracketSelectCategoryTab('orphan-team', 'fem', 'Fem Light', '2');
+    categorySchedule.missingScopeFallback = document.getElementById('orphan-r1').hidden &&
+      !document.getElementById('orphan-r2').hidden &&
+      document.getElementById('orphan-source').contains(document.getElementById('orphan-r2'));
 
     // Ao abrir Geral/Próximos, a âncora é sempre o primeiro jogo sem placar
     // por horário e quadra — presença ainda incompleta não pode fazer um jogo
@@ -288,7 +292,7 @@ function trecho(inicio, fim) {
   ok(result.categorySchedule.stickyContract, 'cabeçalhos da categoria usam o mesmo contrato sticky da Geral');
   ok(result.categorySchedule.generalAfterCategory === 4 && result.categorySchedule.powerAfterGeneral === 1, 'alternar categoria → Geral → outra categoria conserva todos os cards');
   ok(result.categorySchedule.partialFallback, 'categoria com jogo sem horário volta à chave canônica sem esconder a partida');
-  ok(result.categorySchedule.missingScopeFallback, 'falha de montagem da agenda preserva o card da categoria na chave canônica');
+  ok(result.categorySchedule.missingScopeFallback, 'falha de montagem executa o filtro canônico e preserva só a rodada selecionada');
 
   await browser.close();
   console.log('\n' + (fail ? '❌' : '✅') + ' bracket-geral-agenda: ' + pass + ' ok, ' + fail + ' falharam');
