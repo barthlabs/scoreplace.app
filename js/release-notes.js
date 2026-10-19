@@ -1,3 +1,4 @@
+// 2.4.116 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.115 — Regulamento do Neon exibido pelo PDF original da organização,
 // preservando conteúdo e diagramação. O botão Súmula aparece ao organizador
 // mesmo antes da publicação da grade e informa quando ainda faltam jogos marcados.
