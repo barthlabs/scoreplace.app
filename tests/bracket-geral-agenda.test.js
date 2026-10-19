@@ -204,6 +204,31 @@ function trecho(inicio, fim) {
       Array.from(document.querySelectorAll('#team-source .sp-match-card:not([hidden])')).filter(el =>
         el.getAttribute('data-bracket-tab-category') === 'Fem Light').length === 4;
 
+    // Abas por data recortam a agenda antes de formar as colunas. Na sexta há
+    // categorias femininas e masculinas; voltar à quinta restaura os wrappers.
+    document.body.innerHTML = '<main id="date-scope"><nav id="date-root" data-bracket-tabs-root="1" data-tournament-id="dated" data-bracket-date-tabs="1" data-bracket-team-schedule="1" data-bracket-line-tabs="0" data-bracket-round-tabs="0">' +
+      '<button data-bracket-primary-tab="2026-10-22">22/10</button><button data-bracket-primary-tab="2026-10-23">23/10</button>' +
+      '<button data-bracket-subtab="__general" data-bracket-tab-gender="2026-10-22">Geral</button>' +
+      '<button data-bracket-subtab="__general" data-bracket-tab-gender="2026-10-23">Geral</button>' +
+      '<button data-bracket-subtab="Fem Light" data-bracket-tab-gender="2026-10-23">Fem Light</button></nav>' +
+      '<section id="date-source" class="bracket-scroll-container">' +
+      card('thu-r8', 'fem', 'Fem Light', at(22, 22, 5), 'Quadra 4', true).replace('data-bracket-court=', 'data-bracket-tab-day="2026-10-22" data-bracket-court=') +
+      card('fri-fem-r1', 'fem', 'Fem Light', at(23, 18), 'Quadra 4', true).replace('data-bracket-court=', 'data-bracket-tab-day="2026-10-23" data-bracket-court=') +
+      card('fri-masc-r1', 'masc', 'Masc Extreme', at(23, 18), 'Quadra 5', true).replace('data-bracket-court=', 'data-bracket-tab-day="2026-10-23" data-bracket-court=') +
+      '</section></main>';
+    const dateRoot = document.getElementById('date-root');
+    dateRoot._bracketTabsScope = document.getElementById('date-scope');
+    window._bracketSelectCategoryTab('dated', '2026-10-22', '__general', '');
+    const thursday = Array.from(dateRoot._bracketGeneralView.querySelectorAll('.sp-match-card')).map(el => el.id);
+    window._bracketSelectCategoryTab('dated', '2026-10-23', '__general', '');
+    const friday = Array.from(dateRoot._bracketGeneralView.querySelectorAll('.sp-match-card')).map(el => el.id);
+    window._bracketSelectCategoryTab('dated', '2026-10-23', 'Fem Light', '');
+    const fridayCategory = Array.from(dateRoot._bracketGeneralView.querySelectorAll('.sp-match-card')).map(el => el.id);
+    window._bracketSelectCategoryTab('dated', '2026-10-22', '__general', '');
+    const thursdayAgain = Array.from(dateRoot._bracketGeneralView.querySelectorAll('.sp-match-card')).map(el => el.id);
+    const dateTabs = { thursday, friday, fridayCategory, thursdayAgain,
+      noDuplicate: document.querySelectorAll('#thu-r8').length === 1 && document.querySelectorAll('#fri-fem-r1').length === 1 };
+
     // Se a rota desmontou o escopo antes da agenda montar, o horário sozinho
     // não pode deixar a categoria em branco: o card canônico continua visível.
     document.body.innerHTML = '<nav id="orphan-root" data-bracket-tabs-root="1" data-tournament-id="orphan-team" data-bracket-team-schedule="1" data-bracket-line-tabs="0" data-bracket-round-tabs="1">' +
@@ -245,7 +270,7 @@ function trecho(inicio, fim) {
       moved: !!focusRoot._bracketGeneralView.querySelector('#focus-pending'),
       track: !!focusRoot._bracketGeneralView.querySelector('.bracket-general-rounds-track')
     };
-    return { generalState, upcomingState, freshUpcomingResults, justScoredResults, restored, generalReentry, cleanup, noSchedule, nested, externalSource, categorySchedule, nextFocus };
+    return { generalState, upcomingState, freshUpcomingResults, justScoredResults, restored, generalReentry, cleanup, noSchedule, nested, externalSource, categorySchedule, dateTabs, nextFocus };
   });
 
   console.log('\n📋 Geral é a agenda completa do torneio, não uma cópia por gênero');
@@ -292,6 +317,9 @@ function trecho(inicio, fim) {
   ok(result.categorySchedule.stickyContract, 'cabeçalhos da categoria usam o mesmo contrato sticky da Geral');
   ok(result.categorySchedule.generalAfterCategory === 4 && result.categorySchedule.powerAfterGeneral === 1, 'alternar categoria → Geral → outra categoria conserva todos os cards');
   ok(result.categorySchedule.partialFallback, 'categoria com jogo sem horário volta à chave canônica sem esconder a partida');
+  ok(result.dateTabs.thursday.join(',') === 'thu-r8' && result.dateTabs.thursdayAgain.join(',') === 'thu-r8', 'quinta termina na sua rodada 8 mesmo depois de alternar dias');
+  ok(result.dateTabs.friday.join(',') === 'fri-fem-r1,fri-masc-r1', 'sexta reúne jogos femininos e masculinos sem mostrar quinta');
+  ok(result.dateTabs.fridayCategory.join(',') === 'fri-fem-r1' && result.dateTabs.noDuplicate, 'categoria da sexta respeita a data e nenhum card é duplicado');
   ok(result.categorySchedule.missingScopeFallback, 'falha de montagem executa o filtro canônico e preserva só a rodada selecionada');
 
   await browser.close();

@@ -923,6 +923,15 @@ function _bracketTabLabel(category, gender) {
   if (gender === 'masc') s = s.replace(/^masculino\s*/i, '').replace(/^masc\s*/i, '');
   return s || 'Sem categoria';
 }
+function _bracketScheduledDay(card, zone) {
+  var at = Number(card && card.getAttribute('data-bracket-scheduled-at'));
+  if (!isFinite(at) || at <= 0) return '';
+  var parts = {};
+  new Intl.DateTimeFormat('en-GB', {
+    timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit'
+  }).formatToParts(new Date(at)).forEach(function (part) { parts[part.type] = part.value; });
+  return parts.year + '-' + parts.month + '-' + parts.day;
+}
 // A faixa de abas pertence ao trilho inteiro, nunca à primeira coluna. Quando
 // ela era inserida antes do primeiro card, caía depois do título de Rodada 2 e
 // deslocava somente aquela coluna — exatamente a quebra visível na Confra.
@@ -1320,7 +1329,8 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
     // já agendadas. A fila precisa mostrar todos os jogos sem placar, em ordem
     // cronológica e, no mesmo horário, por quadra.
     var scheduledCards = cards.filter(function (card) {
-      return Number(card.getAttribute('data-bracket-scheduled-at')) > 0;
+      return Number(card.getAttribute('data-bracket-scheduled-at')) > 0 &&
+        (root.getAttribute('data-bracket-date-tabs') !== '1' || card.getAttribute('data-bracket-tab-day') === gender);
     });
     root._bracketGeneralSlotTimes = scheduledCards.map(function (card) {
       return Number(card.getAttribute('data-bracket-scheduled-at'));
@@ -1554,6 +1564,7 @@ function _bracketTabsApply(tid, gender, category, requestedRound, forceCanonical
   ) || null;
   if (!root) return;
   var usesRoundTabs = root.getAttribute('data-bracket-round-tabs') === '1';
+  var usesDateTabs = root.getAttribute('data-bracket-date-tabs') === '1';
   var roundButtons = root.querySelectorAll('[data-bracket-round-tab]');
   var availableRounds = [];
   for (var r = 0; r < roundButtons.length; r++) {
@@ -1581,7 +1592,8 @@ function _bracketTabsApply(tid, gender, category, requestedRound, forceCanonical
     .concat((root._bracketGeneralEntries || []).map(function (entry) { return entry.card; }))
     .filter(function (card) {
       return card && card.isConnected && card.parentNode && card.classList && card.classList.contains('sp-match-card') &&
-        card.getAttribute('data-bracket-tab-category') === category;
+        card.getAttribute('data-bracket-tab-category') === category &&
+        (!usesDateTabs || card.getAttribute('data-bracket-tab-day') === gender);
     });
   var isScheduledCategory = root.getAttribute('data-bracket-team-schedule') === '1' &&
     !forceCanonical && !isGeneral && !isUpcoming && root.getAttribute('data-bracket-line-tabs') !== '1' &&
@@ -1601,7 +1613,9 @@ function _bracketTabsApply(tid, gender, category, requestedRound, forceCanonical
   var cards = _bracketOperationalCards(root, root._bracketTabsScope);
   for (var i = 0; i < cards.length; i++) {
     var card = cards[i];
-    card.hidden = isOperationalView || card.getAttribute('data-bracket-tab-category') !== category || (usesRoundTabs && card.getAttribute('data-bracket-tab-round') !== round);
+    card.hidden = isOperationalView || card.getAttribute('data-bracket-tab-category') !== category ||
+      (usesDateTabs && card.getAttribute('data-bracket-tab-day') !== gender) ||
+      (usesRoundTabs && card.getAttribute('data-bracket-tab-round') !== round);
   }
   // A camada de cima é a aba principal: Ouro/Prata em linhas independentes;
   // Feminina/Masculina quando as categorias pertencem a um gênero. A ativa vem
@@ -2099,13 +2113,31 @@ window._bracketCategoryTabsMount = function () {
   root.setAttribute('data-bracket-line-tabs', isOnlyLines ? '1' : '0');
   root.setAttribute('data-bracket-round-tabs', isRoundBased ? '1' : '0');
   root.setAttribute('data-bracket-team-schedule', isTeamSchedule ? '1' : '0');
+  // A grade concentrada publicada pode ocupar vários dias. As datas passam a
+  // ser as abas principais apenas quando todos os cards têm horário: assim
+  // nenhum jogo sem agenda desaparece. O dia é o do fuso do torneio.
+  var zone = typeof _matchCardTimeZone === 'function' ? _matchCardTimeZone(currentTournament) : 'America/Sao_Paulo';
+  var dateCategories = {}, dates = [];
+  var hasUnscheduledCard = false;
+  cards.forEach(function (card) {
+    var day = _bracketScheduledDay(card, zone);
+    if (!day) { hasUnscheduledCard = true; return; }
+    card.setAttribute('data-bracket-tab-day', day);
+    var cat = card.getAttribute('data-bracket-tab-category');
+    if (!dateCategories[day]) { dateCategories[day] = []; dates.push(day); }
+    if (cat && dateCategories[day].indexOf(cat) === -1) dateCategories[day].push(cat);
+  });
+  var dateMode = isTeamSchedule && !isOnlyLines && !hasUnscheduledCard && dates.length > 1;
+  root.setAttribute('data-bracket-date-tabs', dateMode ? '1' : '0');
+  if (dateMode) { dates.sort(); byGender = dateCategories; order = dates; }
   var titles = { fem: '♀ Feminina', masc: '♂ Masculina', misto: '⚥ Mista' };
   // Geral só existe quando a agenda publicada tem uma data/hora válida para o
   // dia que esta aba representa. Sem isso, mostrar um botão que abre uma tela
   // vazia seria uma promessa falsa — torneio distribuído continua nas categorias.
   var generalAgendaByGender = {};
   cards.forEach(function (card) {
-    var cardGender = card.getAttribute('data-bracket-tab-gender') || _bracketTabGender(card.getAttribute('data-bracket-tab-category') || '');
+    var cardGender = dateMode ? card.getAttribute('data-bracket-tab-day') :
+      (card.getAttribute('data-bracket-tab-gender') || _bracketTabGender(card.getAttribute('data-bracket-tab-category') || ''));
     if (Number(card.getAttribute('data-bracket-scheduled-at')) > 0) {
       generalAgendaByGender[cardGender] = true;
     }
@@ -2116,7 +2148,9 @@ window._bracketCategoryTabsMount = function () {
       return '<button type="button" data-bracket-primary-tab="' + String(cat).replace(/"/g, '&quot;') + '" onclick="window._bracketSelectCategoryTab(\'' + String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'linhas\',\'' + escaped + '\')" style="border:1px solid;border-radius:12px 12px 0 0;padding:10px 24px;min-width:106px;font-size:.94rem;font-weight:850;cursor:pointer;box-shadow:none;">' + (window._safeHtml ? window._safeHtml(_bracketTabLabel(cat, 'linhas')) : _bracketTabLabel(cat, 'linhas')) + '</button>';
     }).join('')
     : order.filter(function (gender) { return gender !== 'linhas'; }).map(function (gender) {
-      return '<button type="button" data-bracket-primary-tab="' + gender + '" onclick="window._bracketSelectCategoryTab(\'' + String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'' + gender + '\',\'' + String(byGender[gender][0]).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')" style="border:1px solid;border-radius:12px 12px 0 0;padding:10px 24px;min-width:132px;font-size:.94rem;font-weight:850;cursor:pointer;box-shadow:none;">' + (titles[gender] || gender) + '</button>';
+      var firstCategory = dateMode && generalAgendaByGender[gender] ? '__general' : byGender[gender][0];
+      var title = dateMode ? gender.slice(8, 10) + '/' + gender.slice(5, 7) : (titles[gender] || gender);
+      return '<button type="button" data-bracket-primary-tab="' + gender + '" onclick="window._bracketSelectCategoryTab(\'' + String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'' + gender + '\',\'' + String(firstCategory).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')" style="border:1px solid;border-radius:12px 12px 0 0;padding:10px 24px;min-width:132px;font-size:.94rem;font-weight:850;cursor:pointer;box-shadow:none;">' + title + '</button>';
     }).join(''));
   var categoryHtml = order.map(function (gender) {
     var generalSubtab = isTeamSchedule && gender !== 'linhas' && generalAgendaByGender[gender]
@@ -2127,7 +2161,8 @@ window._bracketCategoryTabsMount = function () {
       : '';
     return generalSubtab + upcomingSubtab + byGender[gender].map(function (cat) {
       var safe = String(cat).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-      return '<button type="button" data-bracket-tab-gender="' + gender + '" data-bracket-subtab="' + String(cat).replace(/"/g, '&quot;') + '" onclick="window._bracketSelectCategoryTab(\'' + String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'' + gender + '\',\'' + safe + '\')" style="border:1px solid;border-radius:8px;padding:6px 10px;font-size:.78rem;font-weight:750;cursor:pointer;">' + (window._safeHtml ? window._safeHtml(_bracketTabLabel(cat, gender)) : _bracketTabLabel(cat, gender)) + '</button>';
+      var label = dateMode ? cat : _bracketTabLabel(cat, gender);
+      return '<button type="button" data-bracket-tab-gender="' + gender + '" data-bracket-subtab="' + String(cat).replace(/"/g, '&quot;') + '" onclick="window._bracketSelectCategoryTab(\'' + String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'' + gender + '\',\'' + safe + '\')" style="border:1px solid;border-radius:8px;padding:6px 10px;font-size:.78rem;font-weight:750;cursor:pointer;">' + (window._safeHtml ? window._safeHtml(label) : label) + '</button>';
     }).join('');
   }).join('');
   var roundHtml = '';
@@ -2211,9 +2246,10 @@ window._bracketCategoryTabsMount = function () {
       return;
     }
   }
-  var targetGender = Object.keys(byGender).find(function (candidate) {
-    return byGender[candidate].indexOf(state.category) !== -1;
-  });
+  var targetGender = byGender[state.gender] && byGender[state.gender].indexOf(state.category) !== -1
+    ? state.gender : Object.keys(byGender).find(function (candidate) {
+      return byGender[candidate].indexOf(state.category) !== -1;
+    });
   var gender = targetGender || (byGender[state.gender] ? state.gender : order[0]);
   var category = byGender[gender].indexOf(state.category) !== -1 ? state.category : byGender[gender][0];
   _bracketTabsApply(id, gender, category, state.round);
@@ -2226,7 +2262,9 @@ window._bracketTabsRevealSearch = function () {
   for (var i = 0; i < cards.length; i++) {
     // O filtro já decidiu o display; mesmo escondido pela aba, este é o acerto real.
     if (cards[i].style.display === 'none') continue;
-    _bracketTabsApply(root.getAttribute('data-tournament-id'), cards[i].getAttribute('data-bracket-tab-gender'), cards[i].getAttribute('data-bracket-tab-category'), cards[i].getAttribute('data-bracket-tab-round'));
+    var primary = root.getAttribute('data-bracket-date-tabs') === '1'
+      ? cards[i].getAttribute('data-bracket-tab-day') : cards[i].getAttribute('data-bracket-tab-gender');
+    _bracketTabsApply(root.getAttribute('data-tournament-id'), primary, cards[i].getAttribute('data-bracket-tab-category'), cards[i].getAttribute('data-bracket-tab-round'));
     return;
   }
 };
@@ -2253,7 +2291,8 @@ window._bracketTabsRevealFilteredMatch = function (kind) {
     }
   }
   if (!target) return;
-  var gender = target.getAttribute('data-bracket-tab-gender');
+  var gender = root.getAttribute('data-bracket-date-tabs') === '1'
+    ? target.getAttribute('data-bracket-tab-day') : target.getAttribute('data-bracket-tab-gender');
   var category = target.getAttribute('data-bracket-tab-category');
   var round = target.getAttribute('data-bracket-tab-round') || '';
   if (!category) return;

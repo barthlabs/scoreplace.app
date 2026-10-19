@@ -66,8 +66,8 @@ ok(bracket.includes('typeof value.toMillis === \'function\'') &&
   bracket.includes('value.seconds != null') &&
   bracket.indexOf('var scheduledAt = _matchCardTimestamp(m.scheduledAt);') < bracket.indexOf('var deadline = _matchCardRoundDeadlineMs(t, m);'),
   'o horário marcado aceita Timestamp do Firestore e prevalece sobre o prazo da rodada');
-ok(tournaments.includes('_pendingBracketTarget.tab') && tournaments.includes('window._bracketTabState[String(tournamentId)]') && bracket.includes('var targetGender = Object.keys(byGender).find') && bracket.includes('byGender[candidate].indexOf(state.category)'),
-  'o detalhe seleciona a aba antes de desenhar e localizar o card');
+ok(tournaments.includes('_pendingBracketTarget.tab') && tournaments.includes('window._bracketTabState[String(tournamentId)]') && bracket.includes('var targetGender = byGender[state.gender]') && bracket.includes('byGender[candidate].indexOf(state.category)'),
+  'o detalhe seleciona a aba antes de desenhar e localizar o card, mantendo a data escolhida');
 ok(tournaments.includes('window._nextParticipantTournamentMatchTarget') && tournaments.includes('próximo confronto PENDENTE do usuário autenticado') && tournaments.includes('window._navScrollTid') && tournaments.includes("sessionStorage.setItem('sp_scrollToMatch'"),
   'a entrada pelo detalhe encontra o próximo jogo do usuário, prepara a aba e ancora no card');
 ok(tournaments.includes('não deixa de ser dela só porque o ADVERSÁRIO') && !tournaments.includes("m.p1 && m.p1 !== 'TBD' && m.p2 && m.p2 !== 'TBD'"),

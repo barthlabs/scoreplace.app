@@ -1,3 +1,6 @@
+// 2.4.124 — Em torneios concentrados com jogos em mais de um dia, as abas da
+// chave mostram as datas. Geral, Próximos jogos e categorias exibem apenas
+// partidas da data selecionada, sem misturar as rodadas do dia seguinte.
 // 2.4.123 — O organizador confirma a chamada do jogo para a quadra pelo botão OK.
 // O card passa a mostrar o tempo desde a chamada; no placar ao vivo, mostra o
 // tempo de jogo. Trocar a quadra cancela a chamada anterior até novo OK.
