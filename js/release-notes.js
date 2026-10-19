@@ -1,3 +1,4 @@
+// 2.4.110 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.109 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.108 — Cards de organização compactos, sem espaço sobrando entre nome e cargo. O tratamento feminino ou masculino pode vir da categoria da dupla quando o perfil ainda não informa gênero.
 // 2.4.107 — Os cards de organização agora mostram nomes e funções completos mesmo em telas estreitas.
