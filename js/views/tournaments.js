@@ -225,8 +225,13 @@ window._duplaCard = function (t, p, draggable, ctx) {
         var _img = window._personAvatarHtml(_mm.uid || '', _metaName,
           'width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;');
         var _nmFs = (window._INSCRITO_NAME_FONT_PX || 17);
-        var _uidAttr = _mm.uid ? (' data-uid-name="' + window._safeHtml(_mm.uid) + '"') : '';
-        var _nmSpan = '<span class="sp-fit-name"' + _uidAttr + ' title="' + window._safeHtml(_disp) + '" data-fit-h="44" data-fit-max="' + _nmFs + '" style="font-weight:700;font-size:' + _nmFs + 'px;color:var(--text-bright);line-height:1.18;max-height:44px;overflow:hidden;word-break:break-word;min-width:0;">' + window._safeHtml(_disp) + '</span>';
+        // O mesmo card atende detalhe e Inscritos: só o UID estrutural abre a
+        // ficha. O helper canônico mantém hidratação, teclado e texto comum
+        // (sem sublinhado) para a vaga manual ainda sem conta.
+        var _profileUid = (_mm.uid && String(_mm.uid).indexOf('jog_') !== 0) ? _mm.uid : '';
+        var _nmSpan = window._personNameHtml(_profileUid, _disp,
+          'font-weight:700;font-size:' + _nmFs + 'px;color:var(--text-bright);line-height:1.18;max-height:44px;overflow:hidden;word-break:break-word;min-width:0;',
+          'sp-fit-name', ' title="' + window._safeHtml(_disp) + '" data-fit-h="44" data-fit-max="' + _nmFs + '"');
         var _av = right
           ? '<div style="display:flex;align-items:center;gap:7px;max-width:100%;min-width:0;justify-content:flex-end;">' + _nmSpan + _img + '</div>'
           : '<div style="display:flex;align-items:center;gap:7px;max-width:100%;min-width:0;">' + _img + _nmSpan + '</div>';

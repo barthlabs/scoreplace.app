@@ -25,7 +25,7 @@ assert(html.includes('Duplas formadas (3)'));
 assert(html.indexOf('Andrea Ruschmann') < html.indexOf('Adriana de Marco Pilli'));
 assert(html.indexOf('Adriana de Marco Pilli') < html.indexOf('Larissa Garcia'));
 const adrianaCard = W._duplaCard(t, adriana, false);
-const visibleNames = [...adrianaCard.matchAll(/<span class="sp-fit-name"[^>]*>([^<]+)/g)].map(m => m[1]);
+const visibleNames = [...adrianaCard.matchAll(/<span class="sp-fit-name"[^>]*><span[^>]*>([^<]+)/g)].map(m => m[1]);
 assert.deepStrictEqual(visibleNames, ['Adriana de Marco Pilli', 'Adriana Rosa']);
 assert(adrianaCard.includes('>3</text>'));
 assert(adrianaCard.includes('>4</text>'));

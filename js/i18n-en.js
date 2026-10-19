@@ -1404,6 +1404,8 @@ window._translations['en'] = {
   'casual.someone': 'Someone',
   'casual.liveTitle': 'Live',
   'casual.liveConnectedMsg': "Connected to {name}'s match.",
+  'auth.entryHelp': 'With email and password, sign in if you already have an account. If not, we will ask you to confirm your password and name before creating one. Phone numbers are verified by SMS. If your account uses Apple or Google, use the matching button below.',
+  'auth.enterOrCreate': 'Sign in or create account',
   'auth.simLogin': 'Simulated Auth',
   'auth.simLoginMsg': 'Google login simulated locally.',
   'auth.firebaseError': 'Firebase was not initialized correctly.',

@@ -41,12 +41,20 @@ const ui = semComent(fs.readFileSync(path.join(__dirname, '..', 'js', 'ui.js'), 
 const modalStart = auth.indexOf('function setupLoginModal()');
 ok(modalStart !== -1, 'setupLoginModal existe');
 const modalSrc = auth.slice(modalStart, modalStart + 24000);
+const pt = fs.readFileSync(path.join(__dirname, '..', 'js', 'i18n-pt.js'), 'utf8');
+const en = fs.readFileSync(path.join(__dirname, '..', 'js', 'i18n-en.js'), 'utf8');
 const iGoogle = modalSrc.indexOf('login-google-btn');
 const iApple = modalSrc.indexOf('login-apple-btn');
 const iMain = modalSrc.indexOf('login-block-main');
 ok(iGoogle !== -1 && iMain !== -1 && iGoogle < iMain,
   'Google vem ANTES do bloco e-mail/senha no modal (topo)');
 ok(iApple !== -1 && iApple < iMain, 'Apple vem ANTES do bloco e-mail/senha no modal (topo)');
+ok(modalSrc.includes("_t('auth.entryHelp')") && modalSrc.includes("_t('auth.enterOrCreate')") &&
+   /auth\.entryHelp.*Se ainda não tiver.*confirm.*nome.*Apple ou Google/.test(pt) &&
+   /auth\.entryHelp.*If not.*confirm.*name.*Apple or Google/.test(en),
+  'modal explica cadastro por e-mail/senha, confirmação e acesso Apple/Google em PT/EN');
+ok(/_resetEntrarUI[\s\S]*?_t\('auth.enterOrCreate'\)/.test(auth),
+  'reset mantém o CTA Entrar ou criar conta');
 ok(/Entre do mesmo jeito da última vez/.test(modalSrc),
   'o modal avisa: entrar por outro caminho cria conta separada');
 ok(/_plat === 'ios'\) \? \(appleBtn \+ googleBtn\) : \(googleBtn \+ appleBtn\)/.test(modalSrc),

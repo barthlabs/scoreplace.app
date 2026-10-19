@@ -1,3 +1,7 @@
+// 2.4.117 — O acesso por e-mail e senha explica quando uma conta nova será criada,
+// sem confundir esse caminho com Apple ou Google. Nos cards das duplas, só nomes
+// vinculados a uma conta abrem as estatísticas; na lista de presença, estado e
+// W.O. dos dois atletas ficam alinhados em telas estreitas.
 // 2.4.116 — O sorteio abre no modo de confrontos mostrado nas configurações do
 // torneio, inclusive no padrão Estruturado ainda sem escolha confirmada; isso
 // substitui o antigo Livre implícito na primeira abertura. O botão de sortear

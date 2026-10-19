@@ -2021,12 +2021,12 @@ window._entrarStatus = function(html, kind) {
   el.innerHTML = html;
 };
 
-// Reset do modal pro estado inicial (fecha cadastro, limpa status, botão "Entrar").
+// Reset do modal pro estado inicial (fecha cadastro, limpa status e CTA).
 window._resetEntrarUI = function() {
   var reg = document.getElementById('register-expand');
   if (reg) reg.style.display = 'none';
   var btn = document.getElementById('btn-entrar');
-  if (btn) btn.textContent = 'Entrar';
+  if (btn) btn.textContent = _t('auth.enterOrCreate');
   window._entrarRegisterMode = false;
   if (typeof window._entrarSetInFlight === 'function') window._entrarSetInFlight(false);
   else window._entrarInFlight = false;
@@ -5832,7 +5832,7 @@ function setupLoginModal() {
           // aparecer o DDI 🇧🇷+55 à esquerda. Senha única. Botão Entrar resolve
           // tudo (login / cadastro inline / recuperação) via window._handleEntrar.
           '<div id="login-block-main" style="margin-bottom:4px;background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.22);border-radius:12px;padding:16px 14px 14px;">' +
-            '<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px;line-height:1.45;">Entre com seu <b>e-mail</b> ou <b>celular</b>. É o mesmo lugar pra entrar e pra criar conta.</div>' +
+            '<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px;line-height:1.45;">' + _t('auth.entryHelp') + '</div>' +
             '<form id="form-entrar" novalidate onsubmit="event.preventDefault(); window._handleEntrar && window._handleEntrar();">' +
               '<div style="font-size:0.8rem;color:var(--text-bright);margin-bottom:4px;font-weight:600;">E-mail ou celular</div>' +
               '<div id="login-id-row" style="display:grid;grid-template-columns:1fr;gap:6px;align-items:center;margin-bottom:12px;">' +
@@ -5864,7 +5864,7 @@ function setupLoginModal() {
                 '<div style="font-size:0.8rem;color:var(--text-bright);margin-bottom:4px;font-weight:600;">Nome de exibição <span style="font-style:italic;font-size:0.72rem;font-weight:400;color:var(--text-muted);">(como vão te ver)</span></div>' +
                 '<input type="text" id="reg-displayname" class="form-control" placeholder="Seu nome" style="font-size:0.92rem;margin-bottom:6px;">' +
               '</div>' +
-              '<button type="submit" id="btn-entrar" class="btn btn-block" style="font-size:0.98rem;font-weight:800;padding:13px;background:linear-gradient(135deg,#10b981,#059669);border:none;color:#fff;margin-top:4px;">Entrar</button>' +
+              '<button type="submit" id="btn-entrar" class="btn btn-block" style="font-size:0.98rem;font-weight:800;padding:13px;background:linear-gradient(135deg,#10b981,#059669);border:none;color:#fff;margin-top:4px;">' + _t('auth.enterOrCreate') + '</button>' +
             '</form>' +
             // Redefinir senha sem entrar: digita e-mail/celular acima e recebe o link.
             '<div style="margin-top:10px;">' +

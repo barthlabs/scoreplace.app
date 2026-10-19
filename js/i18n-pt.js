@@ -1420,6 +1420,8 @@ window._translations['pt'] = {
   'casual.someone': 'Alguém',
   'casual.liveTitle': 'Ao Vivo',
   'casual.liveConnectedMsg': 'Conectado à partida de {name}.',
+  'auth.entryHelp': 'Com e-mail e senha, você entra se já tiver conta. Se ainda não tiver, pediremos a confirmação da senha e seu nome antes de criar. Celular é confirmado por SMS. Se sua conta usa Apple ou Google, entre pelo botão correspondente abaixo.',
+  'auth.enterOrCreate': 'Entrar ou criar conta',
   'auth.simLogin': 'Autenticação Simulada',
   'auth.simLoginMsg': 'Login com Google simulado localmente.',
   'auth.firebaseError': 'Firebase não foi inicializado corretamente.',

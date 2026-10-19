@@ -1271,8 +1271,13 @@ window._rollCallPresenceCtx = function (t, opts) {
         : '';
       var word = '<span style="font-size:0.7rem;font-weight:800;color:' + window._spCor(color, 'color') + ';white-space:nowrap;">' + label + '</span>';
       var toggle = '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:' + _oncM + ';--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:' + _oncM + ';flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ' + ((mc || blu) ? 'checked' : '') + ' onclick="event.stopPropagation(); window._toggleCheckIn(\'' + t.id + '\', \'' + _e + '\', \'' + _mUidEsc + '\');"><span class="toggle-slider"></span></label>';
-      var inner = right ? (wo + toggle + word) : (word + toggle + wo);
-      return { present: mc, absent: abs, html: '<div style="display:flex;align-items:center;gap:5px;margin-top:3px;flex-wrap:wrap;' + (right ? 'justify-content:flex-end;' : '') + '" onclick="event.stopPropagation();">' + inner + '</div>' };
+      // Estado/toggle ficam sempre na primeira linha, W.O. na segunda. A
+      // inversão antiga no lado direito (W.O. antes do toggle) quebrava a linha
+      // em cards estreitos e deixava os dois membros desalinhados.
+      var align = right ? 'justify-content:flex-end;' : '';
+      var statusRow = '<div data-dupla-presence-status style="display:flex;align-items:center;gap:5px;min-height:22px;' + align + '">' + word + toggle + '</div>';
+      var woRow = '<div data-dupla-presence-wo style="display:flex;align-items:center;min-height:22px;' + align + '">' + wo + '</div>';
+      return { present: mc, absent: abs, html: '<div style="display:grid;grid-template-rows:22px 22px;row-gap:3px;margin-top:3px;min-width:0;" onclick="event.stopPropagation();">' + statusRow + woRow + '</div>' };
     }
   };
 };
