@@ -423,6 +423,54 @@ ok(/draggable="true"/.test(board.html) && !/type="time"/.test(board.html) && !/t
   'o card é arrastável, sem controles redundantes; hora fica na régua e data na aba');
 ok(/Jogo 1/.test(board.html) && !/Jogo A/.test(board.html),
   'o card mostra o número único do jogo no torneio, nunca o ID técnico');
+const horarioLocal = function (day, hour, minute) { return new Date(2026, 9, day, hour, minute).toISOString(); };
+const rodadaVisualFixture = {
+  id:'rodadas-visuais', courtCount:2,
+  matches:[
+    { id:'D1A', round:7, p1:'A', p2:'B' },
+    { id:'D1B', round:2, p1:'C', p2:'D' },
+    { id:'D1C', round:6, p1:'E', p2:'F' },
+    { id:'D2A', round:7, p1:'G', p2:'H' },
+    { id:'D2B', round:1, p1:'I', p2:'J' }
+  ]
+};
+const rodadaVisualPlan = { courts:['Quadra 1', 'Quadra 2'], items:[
+  { matchId:'D1A', court:'Quadra 1', scheduledAt:horarioLocal(22, 18, 0) },
+  { matchId:'D1B', court:'Quadra 2', scheduledAt:horarioLocal(22, 18, 0) },
+  { matchId:'D1C', court:'Quadra 1', scheduledAt:horarioLocal(22, 18, 35) },
+  { matchId:'D2A', court:'Quadra 1', scheduledAt:horarioLocal(23, 18, 0) },
+  { matchId:'D2B', court:'Quadra 1', scheduledAt:horarioLocal(23, 18, 35) }
+] };
+const rodadaDia1 = W._operationalScheduleGrid(rodadaVisualFixture, rodadaVisualPlan, { prefix:'agenda' });
+const rodadaDia2 = W._operationalScheduleGrid(rodadaVisualFixture, rodadaVisualPlan, { prefix:'pis', activeDay:'2026-10-23' });
+ok(/data-agenda-match="D1A" data-agenda-round="1"/.test(rodadaDia1.gridHtml) &&
+   /data-agenda-match="D1B" data-agenda-round="1"/.test(rodadaDia1.gridHtml) &&
+   /data-agenda-match="D1C" data-agenda-round="2"/.test(rodadaDia1.gridHtml) &&
+   !/data-agenda-round="7"/.test(rodadaDia1.gridHtml),
+  'R1/R2 da grade seguem horários compartilhados pelas quadras, nunca o round técnico do confronto');
+ok(/data-pis-match="D2A" data-pis-round="1"/.test(rodadaDia2.gridHtml) &&
+   /data-pis-match="D2B" data-pis-round="2"/.test(rodadaDia2.gridHtml),
+  'as rodadas visuais reiniciam em R1 no segundo dia');
+const oitoHorarios = Array.from({ length:8 }, function (_, index) { return {
+  matchId:'H' + index, court:'Quadra 1', scheduledAt:horarioLocal(22, 18 + Math.floor(index * 35 / 60), index * 35 % 60)
+}; });
+const rodadaOito = W._operationalScheduleGrid({ matches:oitoHorarios.map(function (item) { return { id:item.matchId, round:1, p1:'A', p2:'B' }; }) },
+  { courts:['Quadra 1'], items:oitoHorarios }, { prefix:'pis' });
+ok(/data-pis-match="H7" data-pis-round="8"/.test(rodadaOito.gridHtml),
+  'o oitavo horário do dia aparece como R8, mesmo que o round técnico seja R1');
+const rodadaDepoisDeJogar = W._operationalScheduleGrid({
+  matches:[
+    { id:'JOGADO', winner:'A', scheduledAt:horarioLocal(22, 18, 0), court:'Quadra 1' },
+    { id:'PENDENTE', round:7, p1:'B', p2:'C' }
+  ]
+}, { courts:['Quadra 1'], items:[{ matchId:'PENDENTE', court:'Quadra 1', scheduledAt:horarioLocal(22, 18, 35) }] }, { prefix:'agenda' });
+ok(/data-agenda-match="PENDENTE" data-agenda-round="2"/.test(rodadaDepoisDeJogar.gridHtml),
+  'um jogo já encerrado preserva a numeração da rodada visual seguinte');
+const rodadaSemHorario = W._operationalScheduleGrid({ matches:[{ id:'SEM-HORA', round:2, p1:'A', p2:'B' }] },
+  { courts:['Quadra 1'], items:[{ matchId:'SEM-HORA', court:'Quadra 1', scheduledAt:'' }] }, { prefix:'agenda' });
+ok(/data-agenda-match="SEM-HORA" data-agenda-round="—"/.test(rodadaSemHorario.gridHtml) &&
+   /Rodada do horário neste dia">R—/.test(rodadaSemHorario.gridHtml),
+  'horário ausente mostra rodada indeterminada, não R sem número');
 const numberedBoard = W._operationalScheduleGrid(t, p, { prefix:'agenda', renumberBySchedule:true });
 ok(/Jogo 1/.test(numberedBoard.html) && /Jogo 2/.test(numberedBoard.html),
   'a prévia da agenda apresenta numeração contínua pela ordem dos slots');

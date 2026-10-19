@@ -357,6 +357,21 @@
     (byDay[activeDay] || []).forEach(function (item) {
       var key = String(item.scheduledAt || ''); (slots[key] || (slots[key] = [])).push(item);
     });
+    // "Rodada" nesta grade é a faixa de horário do dia, não `match.round`:
+    // o motor pode guardar R1..R7 para os confrontos, embora cada dia tenha
+    // oito horários operacionais. Partidas já jogadas saem de plan.items, mas
+    // seus horários continuam contando para não renumerar a agenda em andamento.
+    var roundTimes = {};
+    function includeRoundTime(at) {
+      var ms = Date.parse(at || '');
+      if (isFinite(ms) && dayKey(at) === activeDay) roundTimes[String(ms)] = ms;
+    }
+    (byDay[activeDay] || []).forEach(function (item) { includeRoundTime(item.scheduledAt); });
+    all(t).forEach(function (m) { if (played(m) && m.scheduledAt) includeRoundTime(m.scheduledAt); });
+    var roundByTime = {};
+    Object.keys(roundTimes).sort(function (a, b) { return roundTimes[a] - roundTimes[b]; }).forEach(function (key, index) {
+      roundByTime[key] = index + 1;
+    });
     // Cabeçalhos sticky pertencem à mesma superfície canônica da busca/abas.
     // Token, não hex: em tema claro continuam legíveis e nunca abrem uma
     // emenda de cor diferente no topo da grade.
@@ -366,19 +381,20 @@
     var stickyTime = sticky ? 'position:sticky;left:0;z-index:3;background:' + stickySurface + ';' : '';
     var headers = plan.courts.map(function (court) { return '<div style="' + stickyHeader + 'font-size:.72rem;font-weight:800;text-align:center;padding:7px 4px;background:' + (sticky ? stickySurface : 'rgba(30,41,59,.92)') + ';border-radius:7px;white-space:nowrap;">' + esc(court) + '</div>'; }).join('');
     var rows = Object.keys(slots).sort().map(function (slot) {
+      var visualRound = roundByTime[String(Date.parse(slot))] || '—';
       var byCourt = {}; slots[slot].forEach(function (item) { byCourt[String(item.court)] = item; });
       var cells = plan.courts.map(function (court) {
         var item = byCourt[String(court)];
         if (!item) return '<div data-' + prefix + '-empty-slot data-' + prefix + '-court="' + esc(court) + '" data-' + prefix + '-time="' + esc(String(slot)) + '" title="Solte um jogo aqui" style="min-height:118px;border:1px dashed rgba(148,163,184,.25);border-radius:8px;background:rgba(15,23,42,.24);box-sizing:border-box;"></div>';
         var m = matchById[String(item.matchId)] || {};
         var excedente = item.extrapolaJanela === true;
-        return '<article draggable="true" data-' + prefix + '-match="' + esc(item.matchId) + '"' + (excedente ? ' data-' + prefix + '-outside-window="true"' : '') + ' title="' + (excedente ? 'Este jogo ultrapassa o horário configurado do evento' : 'Arraste este jogo para trocar o horário e a quadra') + '" style="min-height:132px;border:1px solid ' + (excedente ? 'rgba(248,113,113,.9)' : 'rgba(56,189,248,.32)') + ';border-radius:8px;padding:6px;background:' + (excedente ? 'repeating-linear-gradient(45deg,rgba(239,68,68,.55) 0 10px,rgba(148,163,184,.42) 10px 20px),rgba(15,23,42,.86)' : 'rgba(15,23,42,.72)') + ';box-sizing:border-box;overflow:hidden;cursor:grab;">' +
-          '<div style="font-size:.68rem;color:#7dd3fc;font-weight:900;display:flex;justify-content:space-between;gap:8px;align-items:center"><span>' + esc(gameLabel(t, item.matchId, numberByMatch[String(item.matchId)])) + '</span><span>R' + esc(String(m.round || '—')) + '</span></div>' +
+        return '<article draggable="true" data-' + prefix + '-match="' + esc(item.matchId) + '" data-' + prefix + '-round="' + esc(visualRound) + '"' + (excedente ? ' data-' + prefix + '-outside-window="true"' : '') + ' title="' + (excedente ? 'Este jogo ultrapassa o horário configurado do evento' : 'Arraste este jogo para trocar o horário e a quadra') + '" style="min-height:132px;border:1px solid ' + (excedente ? 'rgba(248,113,113,.9)' : 'rgba(56,189,248,.32)') + ';border-radius:8px;padding:6px;background:' + (excedente ? 'repeating-linear-gradient(45deg,rgba(239,68,68,.55) 0 10px,rgba(148,163,184,.42) 10px 20px),rgba(15,23,42,.86)' : 'rgba(15,23,42,.72)') + ';box-sizing:border-box;overflow:hidden;cursor:grab;">' +
+          '<div style="font-size:.68rem;color:#7dd3fc;font-weight:900;display:flex;justify-content:space-between;gap:8px;align-items:center"><span>' + esc(gameLabel(t, item.matchId, numberByMatch[String(item.matchId)])) + '</span><span title="Rodada do horário neste dia">R' + esc(visualRound) + '</span></div>' +
           (excedente ? '<div style="margin-top:4px;font-size:.62rem;font-weight:900;color:#fff;background:rgba(127,29,29,.88);border-radius:4px;padding:3px 4px;">⚠ FORA DO HORÁRIO</div>' : '') +
           sideHtml(t, m, 'p1', names, ordinals, revealNames) + sideHtml(t, m, 'p2', names, ordinals, revealNames) +
           '</article>';
       }).join('');
-      return '<div style="display:grid;grid-template-columns:72px repeat(' + plan.courts.length + ', minmax(176px,1fr));gap:6px;margin-top:6px;align-items:stretch"><div style="' + stickyTime + 'font-size:.82rem;font-weight:900;color:#fbbf24;display:flex;align-items:center;justify-content:center;text-align:center;">' + esc(timeLabel(slot)) + '</div>' + cells + '</div>';
+      return '<div style="display:grid;grid-template-columns:72px repeat(' + plan.courts.length + ', minmax(176px,1fr));gap:6px;margin-top:6px;align-items:stretch"><div style="' + stickyTime + 'font-size:.82rem;font-weight:900;color:#fbbf24;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;"><span style="color:#7dd3fc">R' + esc(visualRound) + '</span><span>' + esc(timeLabel(slot)) + '</span></div>' + cells + '</div>';
     }).join('');
     var tabsHtml = '<div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center;">' + tabs + '<button type="button" data-' + prefix + '-reveal-all class="btn btn-outline" aria-pressed="' + revealNames + '" style="margin-left:auto;padding:6px 10px;font-size:.76rem;">' + (revealNames ? '🙈 Ocultar nomes' : '👁️ Revelar nomes') + '</button></div>';
     var frameStart = sticky
