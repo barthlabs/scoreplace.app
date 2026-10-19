@@ -424,12 +424,6 @@ window._dashNum = function (n, t, fonteConfirmada) {
 };
 
 function renderDashboard(container) {
-  function _isDashboardConcentratedSchedule(t) {
-    if (!t) return false;
-    if (window._isConcentratedTournament && window._isConcentratedTournament(t)) return true;
-    var cfg = t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition || {};
-    return !!(cfg.enabled && cfg.schedule && cfg.schedule.enabled);
-  }
   // v2.8.40: torneios ocultados pelo usuário somem de TODAS as seções (filtro na
   // fonte) e reaparecem só na seção "Torneios ocultados" no fim.
   const _hidIds = (typeof window._getHidden === 'function') ? window._getHidden() : [];
@@ -1731,6 +1725,12 @@ function renderDashboard(container) {
   }
 
   function _buildMyResultsHtml() {
+    function _isDashboardConcentratedSchedule(t) {
+      if (!t) return false;
+      if (window._isConcentratedTournament && window._isConcentratedTournament(t)) return true;
+      var cfg = t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition || {};
+      return !!(cfg.enabled && cfg.schedule && cfg.schedule.enabled);
+    }
     var cu = window.AppStore.currentUser;
     if (!cu) return '';
 
