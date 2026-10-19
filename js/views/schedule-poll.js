@@ -949,7 +949,7 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
       return penalty;
     }
     var solved = false, best = null, bestQuality = Infinity;
-    for (var seed = 0; seed < (optimizeDistribution ? 256 : 1); seed++) {
+    for (var seed = 0; seed < 256 && (optimizeDistribution || !solved); seed++) {
       if (!fastPack(seed)) continue;
       solved = true;
       var candidateQuality = quality();

@@ -323,6 +323,21 @@ const CASES = [
     backToBack <= 50 && diversity.length === 16 && diversity.every(function (count) { return count >= 4; }) &&
       diversity.reduce(function (sum, count) { return sum + count; }, 0) >= 76 && averageSpan >= 3,
     JSON.stringify({ backToBack, averageSpan, diversity }));
+  // No fluxo por categorias, a primeira semente pode falhar. A grade abaixo
+  // depende de uma semente posterior e deve continuar igual à grade histórica.
+  const scheduleSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'schedule-poll.js'), 'utf8');
+  const packStart = scheduleSource.indexOf('  function _schPackStructuredDay(');
+  const packEnd = scheduleSource.indexOf('\n  // Plano PURO:', packStart);
+  const legacyPack = vm.runInNewContext(scheduleSource.slice(packStart, packEnd) + '\n_schPackStructuredDay', {
+    _schMatchUids: function () { return []; }
+  });
+  const categoryFixture = [[3,4,3], [1,5,0], [2,2,1], [2,3,6], [1,0,7], [2,1,4]].map(function (entry, index) {
+    return { id:String(index), round:entry[0], team1Obj:{ fixedPairId:'p' + entry[1] }, team2Obj:{ fixedPairId:'p' + entry[2] } };
+  });
+  const categorySlots = legacyPack({}, categoryFixture, { iniMs:0, fimMs:3, categoryFlow:'categories' }, 0, 2, 1);
+  ok('fluxo por categorias preserva a primeira semente viável após falha da semente zero',
+    categorySlots && categorySlots.map(function (slot) { return slot.matchId; }).join(',') === '4,3,1,5,2,0',
+    categorySlots && categorySlots.map(function (slot) { return slot.matchId; }).join(','));
   const browser = require('../tests/render-harness').sandbox;
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'schedule-poll.js'), 'utf8'), browser);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'schedule-organizer.js'), 'utf8'), browser);
