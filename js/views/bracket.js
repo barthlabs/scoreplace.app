@@ -1240,7 +1240,7 @@ function _bracketEntryHorizontalGap(card, align) {
 }
 window._bracketEntryHorizontalGap = _bracketEntryHorizontalGap;
 
-function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame) {
+function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categoryFilter) {
   if (!root) return false;
   var scope = root._bracketTabsScope || (root.closest && root.closest('#view-container, #inline-bracket-container'));
   if (!scope) return false;
@@ -1337,6 +1337,7 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame) {
     var justScoredMatchId = String(justScoredByTournament[String(root.getAttribute('data-tournament-id') || '')] || '');
     var waitingPresence = 0;
     scheduledCards.forEach(function (card) {
+      if (categoryFilter && card.getAttribute('data-bracket-tab-category') !== categoryFilter) return;
       var at = Number(card.getAttribute('data-bracket-scheduled-at'));
       if (!isFinite(at) || at <= 0 || !card.parentNode) return;
       // O aviso é de PRESENÇA PARCIAL: presença completa já aparece nos
@@ -1572,10 +1573,27 @@ function _bracketTabsApply(tid, gender, category, requestedRound) {
   try { sessionStorage.setItem('scoreplace_bracket_tab_state_' + String(tid), JSON.stringify(window._bracketTabState[String(tid)])); } catch (e) {}
   var isGeneral = category === '__general';
   var isUpcoming = category === '__upcoming';
-  var isOperationalView = isGeneral || isUpcoming;
-  if (!isOperationalView) {
+  // Numa grade concentrada, a categoria também deve seguir as faixas de hora
+  // da Geral. As colunas internas do sorteio misturam horários e dias. Se algum
+  // jogo da categoria ainda não tem horário, preservar a chave canônica para
+  // não escondê-lo na agenda.
+  var scheduledCategoryCards = _bracketOperationalCards(root, root._bracketTabsScope)
+    .concat((root._bracketGeneralEntries || []).map(function (entry) { return entry.card; }))
+    .filter(function (card) {
+      return card && card.classList && card.classList.contains('sp-match-card') &&
+        card.getAttribute('data-bracket-tab-category') === category;
+    });
+  var isScheduledCategory = root.getAttribute('data-bracket-team-schedule') === '1' &&
+    !isGeneral && !isUpcoming && root.getAttribute('data-bracket-line-tabs') !== '1' &&
+    scheduledCategoryCards.length > 0 && scheduledCategoryCards.every(function (card) {
+      return Number(card.getAttribute('data-bracket-scheduled-at')) > 0;
+    });
+  var isOperationalView = isGeneral || isUpcoming || isScheduledCategory;
+  if (!isGeneral && !isUpcoming) {
     root._bracketLastCategoryByGender = root._bracketLastCategoryByGender || {};
     root._bracketLastCategoryByGender[gender] = category;
+  }
+  if (!isOperationalView) {
     _bracketGeneralView(root, false, gender);
   }
   var lineMode = root.getAttribute('data-bracket-line-tabs') === '1';
@@ -1623,11 +1641,12 @@ function _bracketTabsApply(tid, gender, category, requestedRound) {
     qb.style.borderColor = onRound ? 'rgba(16,185,129,.72)' : 'rgba(255,255,255,.12)';
   }
   if (isOperationalView) {
-    var operationalShown = _bracketGeneralView(root, true, gender, isUpcoming, true);
+    var operationalShown = _bracketGeneralView(root, true, gender, isUpcoming, true,
+      isScheduledCategory ? category : '');
     // Dados legados sem horário não podem esconder a chave inteira quando a
     // aba Geral foi restaurada de uma visita anterior. Volta para uma categoria
     // real em vez de deixar a tela preta.
-    if (!operationalShown) {
+    if (!operationalShown && !isScheduledCategory) {
       var fallbackCategory = (root._bracketLastCategoryByGender || {})[gender] || '';
       if (!fallbackCategory) {
         var fallbackButton = root.querySelector('[data-bracket-subtab]:not([data-bracket-subtab="__general"]):not([data-bracket-subtab="__upcoming"])[data-bracket-tab-gender="' + String(gender).replace(/"/g, '\\"') + '"]');

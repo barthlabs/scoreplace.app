@@ -44,7 +44,7 @@ function trecho(inicio, fim) {
     window._bracketSyncRoundHeadingOffsets = function () {};
     const at = (day, hour, minute = 0) => Date.UTC(2026, 9, day, hour + 3, minute);
     const card = (id, gender, category, when, court, upcoming, round, presence, resultAt) =>
-      '<div class="wrap" data-wrap="' + id + '"><article id="' + id + '" data-bracket-tab-category="' + category +
+      '<div class="wrap" data-wrap="' + id + '"><article class="sp-match-card" id="' + id + '" data-bracket-tab-category="' + category +
       '" data-bracket-tab-gender="' + gender + '" data-bracket-tab-round="' + (round || 1) + '" data-bracket-scheduled-at="' + when +
       '" data-bracket-court="' + court + '" data-bracket-upcoming="' + (upcoming ? '1' : '0') + '" data-bracket-presence="' + (presence || '') + '" data-bracket-result-at="' + (resultAt || '') + '">' + id + '</article></div>';
     document.body.innerHTML =
@@ -169,6 +169,27 @@ function trecho(inicio, fim) {
       emptyHeadingHidden: document.querySelector('#inline-bracket-container .bracket-round-column:not(.bracket-general-round-column) .bracket-round-heading').hidden
     };
 
+    // A categoria de evento com grade usa as MESMAS faixas horárias da Geral,
+    // mesmo quando o round interno do sorteio cruza dias e horários.
+    document.body.innerHTML = '<main id="team-scope"><nav id="team-root" data-bracket-tabs-root="1" data-tournament-id="neon-team" data-bracket-team-schedule="1" data-bracket-line-tabs="0" data-bracket-round-tabs="0">' +
+      '<button data-bracket-primary-tab="fem">Feminina</button>' +
+      '<button data-bracket-subtab="__general" data-bracket-tab-gender="fem">Geral</button>' +
+      '<button data-bracket-subtab="Fem Light" data-bracket-tab-gender="fem">Light</button>' +
+      '<button data-bracket-subtab="Fem Power" data-bracket-tab-gender="fem">Power</button></nav>' +
+      '<section id="team-source" class="bracket-scroll-container">' +
+      card('light-r2-early', 'fem', 'Fem Light', at(22, 18), 'Quadra 4', true, 2) +
+      card('light-r1-late', 'fem', 'Fem Light', at(22, 18, 35), 'Quadra 5', true, 1) +
+      card('light-day2', 'fem', 'Fem Light', at(23, 18), 'Quadra 4', true, 3) +
+      card('power-early', 'fem', 'Fem Power', at(22, 18), 'Quadra 6', true, 1) +
+      '</section></main>';
+    const teamRoot = document.getElementById('team-root');
+    teamRoot._bracketTabsScope = document.getElementById('team-scope');
+    window._bracketSelectCategoryTab('neon-team', 'fem', 'Fem Light', '');
+    const categorySchedule = {
+      headings: Array.from(teamRoot._bracketGeneralView.querySelectorAll('.bracket-general-round-column h4')).map(el => el.textContent.trim()),
+      games: Array.from(teamRoot._bracketGeneralView.querySelectorAll('[data-bracket-tab-category]')).map(el => el.id)
+    };
+
     // Ao abrir Geral/Próximos, a âncora é sempre o primeiro jogo sem placar
     // por horário e quadra — presença ainda incompleta não pode fazer um jogo
     // posterior saltar para o topo da agenda.
@@ -196,7 +217,7 @@ function trecho(inicio, fim) {
       moved: !!focusRoot._bracketGeneralView.querySelector('#focus-pending'),
       track: !!focusRoot._bracketGeneralView.querySelector('.bracket-general-rounds-track')
     };
-    return { generalState, upcomingState, freshUpcomingResults, justScoredResults, restored, generalReentry, cleanup, noSchedule, nested, externalSource, nextFocus };
+    return { generalState, upcomingState, freshUpcomingResults, justScoredResults, restored, generalReentry, cleanup, noSchedule, nested, externalSource, categorySchedule, nextFocus };
   });
 
   console.log('\n📋 Geral é a agenda completa do torneio, não uma cópia por gênero');
@@ -238,6 +259,8 @@ function trecho(inicio, fim) {
   ok(result.nextFocus.top === 120,
     'o foco reserva a régua fixa da Rodada (50px de abas + 40px de título + 30px), sem cortar o topo do card');
   ok(result.externalSource.emptyHeadingHidden, 'Geral remove cabeçalho de rodada sem jogo da chave inline');
+  ok(result.categorySchedule.headings.join(',') === 'Rodada 1 · 22/10 · 18:00,Rodada 2 · 22/10 · 18:35,Rodada 1 · 23/10 · 18:00', 'a categoria usa as faixas da grade, não m.round');
+  ok(result.categorySchedule.games.join(',') === 'light-r2-early,light-r1-late,light-day2', 'a categoria conserva só seus jogos reais em ordem cronológica');
 
   await browser.close();
   console.log('\n' + (fail ? '❌' : '✅') + ' bracket-geral-agenda: ' + pass + ' ok, ' + fail + ' falharam');
