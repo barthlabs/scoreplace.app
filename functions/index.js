@@ -12319,7 +12319,7 @@ exports.syncSplitMatchResult = onDocumentWritten(
 );
 
 exports.syncMatchRosters = onDocumentWritten(
-  { document: "tournaments/{tid}", region: "us-central1", memory: "256MiB", timeoutSeconds: 60, retry: true },
+  { document: "tournaments/{tid}", region: "us-central1", memory: "256MiB", timeoutSeconds: 60 },
   async (event) => {
     const tid = event.params.tid;
     const after  = event.data.after.exists  ? (event.data.after.data()  || {}) : null;
@@ -12444,8 +12444,7 @@ exports.syncMatchRosters = onDocumentWritten(
     // O histórico global consulta results por playerUids, inclusive no nativo
     // antigo. Na transição para somente organizadores, removemos o índice dos
     // espelhos existentes; nenhum placar ou confronto canônico é apagado. A
-    // checagem roda em TODA escrita oculta e o trigger tenta novamente se falhar
-    // no meio de um lote, para reconciliar uma atualização parcial.
+    // checagem roda em TODA escrita oculta para reconciliar atualizações parciais.
     if (after.organizerOnly === true) {
       const hiddenResults = await admin.firestore().collection("tournaments").doc(tid).collection("results").get();
       let batch = admin.firestore().batch();
