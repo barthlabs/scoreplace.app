@@ -645,33 +645,18 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   window._waGrpOpen = function (tId, matchId, groupMode) { _open(tId, matchId, groupMode); };
   window._waGrpOpenTournament = function (tId) { _open(tId, '', false); };
 
-  // SÓ copia o nome. NÃO tenta abrir o WhatsApp.
-  // Isto já foi `_openExt('https://wa.me/')` e era um BUG: wa.me exige um número de
-  // destino, e sem ele o iOS responde "Não foi possível abrir este link" — no meio
-  // de um fluxo em que a pessoa nem quer falar com ninguém, quer CRIAR um grupo.
-  // Não existe deep link pra "novo grupo" (nem wa.me, nem whatsapp://) — a Meta não
-  // expõe isso. Então o botão faz o que sabe fazer e o texto diz o resto.
-  // ABRIR O WHATSAPP — o esquema importa, e a diferenca e DOCUMENTADA:
-  //   · `whatsapp://` (esquema customizado) -> abre o WhatsApp BUSINESS por padrao.
-  //     Testado no aparelho do dono (jul/2026): abriu o Business, que ele nem usa.
-  //     NAO e aleatorio nem depende de qual app a pessoa usa — e o default do iOS.
-  //   · `https://api.whatsapp.com/...` (Universal Link) -> abre o WhatsApp PESSOAL.
-  //   · `https://wa.me/` -> mesma familia, MAS exige numero de destino; sem ele o iOS
-  //     responde "Nao foi possivel abrir este link" (foi o 1o bug desta feature).
-  // Por isso: universal link + `send?text=` (o text dispensa o numero e cai na lista de
-  // contatos). Nao existe deep link pra "criar grupo" em nenhum dos dois — o maximo e
-  // abrir o app CERTO com o nome ja no clipboard.
+  // O nome é copiado antes da abertura. Nenhum link público cria um grupo novo:
+  // a pessoa faz isso no WhatsApp e cola o nome. `wa.me/` e
+  // `api.whatsapp.com/` sem destino falhou no Android filmado. No iOS, manter
+  // esse URL: um teste anterior no aparelho do dono mostrou que o esquema
+  // `whatsapp://` abriu o WhatsApp Business em vez do Messenger pessoal.
   function _openWhatsAppApp() {
-    // SEM parametro. Cada peca aqui foi paga com um teste no aparelho do dono:
-    //   · `?text=...`  -> abre o app CERTO, mas cai em "enviar pra quem?" (o text
-    //                     dispara o fluxo de ENVIO). Sem ele, so abre o app.
-    //   · `whatsapp://`-> esquema customizado: o iOS entrega pro BUSINESS por padrao.
-    //   · `wa.me/`     -> deu "Nao foi possivel abrir este link".
-    // Resta `https://api.whatsapp.com/` puro: universal link (=> WhatsApp PESSOAL,
-    // e o default documentado) e sem params (=> nao pede pra enviar nada).
-    // Deep link pra "criar grupo" NAO existe — o maximo e abrir o app com o nome ja
-    // no clipboard. Nao inventar um; ja custou 3 tentativas.
-    try { window.location.href = 'https://api.whatsapp.com/'; } catch (e) {}
+    try {
+      var ua = navigator.userAgent || '';
+      window.location.href = /Android/i.test(ua) ? 'whatsapp://app'
+        : /iPhone|iPad|iPod/i.test(ua) ? 'https://api.whatsapp.com/'
+          : 'https://web.whatsapp.com/';
+    } catch (e) {}
   }
 
   window._waGrpCopyName = function (tId, matchId, groupMode) {

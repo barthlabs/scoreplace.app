@@ -1,3 +1,5 @@
+// 2.4.126 — Ao copiar o nome de um grupo de jogo no Android, o botão abre
+// o aplicativo sem navegar para um link de conversa vazio.
 // 2.4.125 — A busca da chave encontra jogos pelo nome completo ou parcial do
 // time. Na grade concentrada, o W.O. fica no card de cada jogo, sem ação geral
 // no cabeçalho técnico.

@@ -1,3 +1,8 @@
+## 2.4.126 — 19/out/2026 (abrir WhatsApp após copiar nome do grupo)
+
+- Corrigido o botão de criar grupo no Android: após copiar o nome, abre o aplicativo pelo esquema `whatsapp://app`, em vez de navegar para `api.whatsapp.com/` sem destino, que produzia “Não foi possível abrir o link” no vídeo. iOS conserva a abertura anterior por compatibilidade com WhatsApp Business; desktop abre o WhatsApp Web.
+- Nenhum link de grupo, inscrição, jogo ou torneio é alterado por este corte.
+
 ## 2.4.125 — 19/out/2026 (busca por time e W.O. por jogo)
 
 - A busca da chave considera o nome oficial dos times vinculado a cada confronto, aceitando nome completo ou parcial sem confundir o texto dos botões com os resultados.
