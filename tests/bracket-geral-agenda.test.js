@@ -322,6 +322,31 @@ function trecho(inicio, fim) {
   ok(result.dateTabs.fridayCategory.join(',') === 'fri-fem-r1' && result.dateTabs.noDuplicate, 'categoria da sexta respeita a data e nenhum card é duplicado');
   ok(result.categorySchedule.missingScopeFallback, 'falha de montagem executa o filtro canônico e preserva só a rodada selecionada');
 
+  // O portal usa retângulos de viewport, mas nasce dentro do body com zoom.
+  // Medir três colunas prova que o erro não cresce a cada rodada.
+  await page.addScriptTag({ content: trecho('_bracketUpdateRoundHeadingPortal', '_bracketEnsureRoundHeadingResizeListener') });
+  const alignment = await page.evaluate(() => [1, 1.2].map((zoom) => {
+    document.body.style.zoom = String(zoom);
+    document.body.innerHTML = '<main><nav id="round-tabs" style="position:fixed;top:0;left:20px;width:960px;height:70px;"></nav>' +
+      '<section id="rounds" style="display:flex;gap:20px;margin-top:45px;">' +
+      [1, 2, 3].map((round) => '<div class="bracket-round-column" style="flex:0 0 280px;height:220px;">' +
+        '<h4 class="bracket-round-heading" style="margin:0;height:40px;">Rodada ' + round + '</h4>' +
+        '<article style="height:160px;">Jogo ' + round + '</article></div>').join('') + '</section></main>';
+    const root = document.getElementById('round-tabs');
+    const scope = document.getElementById('rounds');
+    root._bracketGeneralView = scope;
+    _bracketUpdateRoundHeadingPortal(root, scope);
+    const headings = [...scope.querySelectorAll('.bracket-round-heading')];
+    const clones = [...root._bracketRoundHeadingPortal.querySelectorAll('.bracket-round-heading-portal')];
+    const portalTop = root._bracketRoundHeadingPortal.getBoundingClientRect().top;
+    const expectedTop = Math.floor(root.getBoundingClientRect().bottom) - 24;
+    return { zoom, count: clones.length, topError: Math.abs(portalTop - expectedTop), maxError: Math.max(...clones.map((clone, index) =>
+      Math.max(Math.abs(clone.getBoundingClientRect().left - headings[index].getBoundingClientRect().left),
+        Math.abs(clone.getBoundingClientRect().width - headings[index].getBoundingClientRect().width)))) };
+  }));
+  ok(alignment.every((item) => item.count === 3 && item.maxError < 1 && item.topError < 1),
+    'cabeçalhos fixos seguem as três colunas e o topo das abas com zoom normal e ampliado');
+
   await browser.close();
   console.log('\n' + (fail ? '❌' : '✅') + ' bracket-geral-agenda: ' + pass + ' ok, ' + fail + ' falharam');
   process.exitCode = fail ? 1 : 0;

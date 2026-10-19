@@ -1,3 +1,8 @@
+## 2.4.129 — 19/out/2026 (alinhamento dos cabeçalhos de rodada)
+
+- Converte as coordenadas do portal fixo das rodadas para a escala CSS do documento. Cada título volta a acompanhar a coluna de jogos correspondente ao rolar a chave com zoom.
+- Sem alterações em sorteio, partidas, quadras ou resultados.
+
 ## 2.4.128 — 19/out/2026 (busca da chave sem trocar abas)
 
 - Digitar nome de time ou atleta na chave não seleciona automaticamente a categoria do primeiro resultado. A aba Geral continua clicável com a busca ativa; trocar a data preserva o texto e filtra os jogos daquele dia.

@@ -1829,6 +1829,16 @@ function _bracketUpdateRoundHeadingPortal(root, scope) {
     return Math.ceil(item.rect.height || 0) + 18;
   }));
   portalHeight = Math.max(38, portalHeight);
+  // getBoundingClientRect() já inclui o zoom do documento; left/top/width em
+  // CSS são ampliados de novo porque o portal vive dentro desse mesmo corpo.
+  // Sem converter para coordenadas de layout, cada coluna fixa avança mais
+  // que o seu card (o desvio cresce uma vez por rodada no Neon).
+  var portalZoom = 1;
+  for (var zoomAncestor = portal.parentElement; zoomAncestor; zoomAncestor = zoomAncestor.parentElement) {
+    var ancestorZoom = parseFloat(window.getComputedStyle(zoomAncestor).zoom);
+    if (Number.isFinite(ancestorZoom) && ancestorZoom > 0) portalZoom *= ancestorZoom;
+  }
+  var portalPx = function (viewportPx) { return (viewportPx / portalZoom) + 'px'; };
   // O controle lateral não pode começar sob a faixa fixa de títulos das rodadas.
   // A faixa termina em anchorBottom + portalHeight - 1; somamos folga visível.
   scope.style.setProperty('--bracket-round-reveal-top', Math.ceil(anchorBottom + portalHeight + 8) + 'px');
@@ -1840,7 +1850,7 @@ function _bracketUpdateRoundHeadingPortal(root, scope) {
   // tentava atravessá-las. A cópia recebe o mesmo deslocamento para continuar
   // exatamente na base canônica da faixa.
   // [[regression_round_portal_masks_cards_before_round_heading]]
-  portal.style.cssText = 'display:block;position:fixed;top:' + (Math.floor(anchorBottom) - 24) + 'px;left:' + Math.round(rootRect.left) + 'px;width:' + Math.round(rootRect.width) + 'px;max-width:100%;height:' + (portalHeight + 23) + 'px;box-sizing:border-box;overflow:hidden;isolation:isolate;pointer-events:none;z-index:30;background:#111114;border-bottom:1px solid rgba(255,255,255,.08);box-shadow:none;';
+  portal.style.cssText = 'display:block;position:fixed;top:' + portalPx(Math.floor(anchorBottom) - 24) + ';left:' + portalPx(Math.round(rootRect.left)) + ';width:' + portalPx(Math.round(rootRect.width)) + ';max-width:100%;height:' + portalPx(portalHeight + 23) + ';box-sizing:border-box;overflow:hidden;isolation:isolate;pointer-events:none;z-index:30;background:#111114;border-bottom:1px solid rgba(255,255,255,.08);box-shadow:none;';
   for (var p = 0; p < visibleHeadings.length; p++) {
     var item = visibleHeadings[p];
     var heading = item.heading;
@@ -1855,7 +1865,7 @@ function _bracketUpdateRoundHeadingPortal(root, scope) {
     // um pixel por baixo da faixa (z-index 29 contra 31), eliminando a emenda
     // sem deslocar a tipografia do título.
     // [[regression_round_portal_overlaps_tabs_subpixel_seam]]
-    clone.style.cssText = 'position:absolute;top:24px;left:' + Math.round(rect.left - rootRect.left) + 'px;width:' + Math.round(rect.width) + 'px;box-sizing:border-box;background:var(--bg-darker,#111114);padding:8px 0 9px;';
+    clone.style.cssText = 'position:absolute;top:' + portalPx(24) + ';left:' + portalPx(Math.round(rect.left - rootRect.left)) + ';width:' + portalPx(Math.round(rect.width)) + ';box-sizing:border-box;background:var(--bg-darker,#111114);padding:8px 0 9px;';
     // O portal só acompanha o título da rodada. A máscara que avançava para
     // baixo escondia busca e cards ao rolar em telas estreitas.
     clone.style.background = '#111114';
