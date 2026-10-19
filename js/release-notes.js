@@ -1,6 +1,8 @@
 // 2.4.118 — Visibilidade do torneio em Geral, Inscritos ou Apenas organizadores,
-// sem notificar participantes enquanto estiver restrito. O sorteio livre preserva
-// três jogos por dupla e a grade evita quadras vazias quando há confronto elegível.
+// sem notificar participantes enquanto estiver restrito. A proteção também cobre
+// consultas de torneios, resumos, resultados e espelhos de jogos usados pelo app nativo.
+// O sorteio livre preserva três jogos por dupla e a grade evita quadras vazias
+// quando há confronto elegível.
 // 2.4.117 — O acesso por e-mail e senha explica quando uma conta nova será criada,
 // sem confundir esse caminho com Apple ou Google. Nos cards das duplas, só nomes
 // vinculados a uma conta abrem as estatísticas; na lista de presença, estado e
