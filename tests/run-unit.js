@@ -1784,6 +1784,7 @@ const SUITES = [
   'functions/test-registration-mutations-core.js',
   'functions/test-canonical-registration-boundary-core.js',
   'functions/test-registration-claim-core.js',
+  'functions/test-published-claim-core.js',
   'tests/canonical-participant-claim.test.js',
   'tests/canonical-participant-claim-ui.test.js',
   'tests/manual-claim-link-core.test.js',

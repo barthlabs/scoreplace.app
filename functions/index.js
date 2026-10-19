@@ -104,6 +104,7 @@ const _registrationMutations = require("./registration-mutations-core");
 const _registrationClaim = require("./registration-claim-core");
 const _editCanonicalSlot = require("./edit-canonical-slot-core");
 const _manualClaimLink = require("./manual-claim-link-core");
+const _publishedClaim = require("./published-claim-core");
 const _canonicalRegistrationBoundary = require("./canonical-registration-boundary-core");
 const _canonicalEnrollment = require("./canonical-enrollment-core");
 const _tournamentImport = require("./tournament-import-core");
@@ -4439,6 +4440,7 @@ async function _manualClaimReadState(tx, ref, raw) {
     tx.get(ref.collection('privateDraws').doc('initial')),
   ]);
   return { tournament, hasPublishedDraw: _hasCanonicalTournamentDraw(tournament) || !groups.empty,
+    hasPublishedGroups: !groups.empty,
     privateDraw: privateDraw.exists ? privateDraw.data() : null, privateDrawRef: ref.collection('privateDraws').doc('initial') };
 }
 function _manualClaimGuard(state, allowPrivate) {
@@ -5229,6 +5231,15 @@ function _sharedClaimValid(doc, token) {
   if (!doc || !Number.isSafeInteger(doc.expiresAtMs) || doc.expiresAtMs <= Date.now() ||
       !_manualClaimTokenMatches(doc, token)) throw new HttpsError('failed-precondition', 'link expirado ou revogado');
 }
+function _sharedClaimGuard(state) {
+  if (!state.hasPublishedDraw) return _manualClaimGuard(state, true);
+  if (state.tournament.pendingDraw || state.privateDraw) {
+    throw new HttpsError('failed-precondition', 'sorteio em transição; chame a organização');
+  }
+  if (state.hasPublishedGroups || (Array.isArray(state.tournament.groups) && state.tournament.groups.length)) {
+    throw new HttpsError('failed-precondition', 'vaga em chave de grupos; chame a organização');
+  }
+}
 async function _sharedClaimPreview(tx, db, pair, tournament, selfName) {
   const { entry, partner } = pair;
   let partnerName = String(partner.manualDisplayName || '').trim();
@@ -5257,7 +5268,7 @@ exports.createTournamentClaimLink = onCall(
       if (sandbox) await _sandboxAutorizado(db, snap, callerUid, (sourceRef) => tx.get(sourceRef));
       else if (raw.isSandbox === true || !_isTournamentOrgCaller(raw, callerUid)) throw new HttpsError('permission-denied', 'somente a organização gera o link');
       const state = await _manualClaimReadState(tx, ref, raw);
-      _manualClaimGuard(state, true);
+      _sharedClaimGuard(state);
       await _loadCanonicalRosterForMutation(tx, ref, state.tournament, sandbox ? String(raw.sandboxOf) : '');
       tx.set(_sharedClaimRef(ref), { tokenHash: crypto.createHash('sha256').update(token).digest('hex'),
         expiresAtMs, createdByUid: callerUid, createdAt: _FV.serverTimestamp() });
@@ -5283,7 +5294,7 @@ exports.previewTournamentClaimLink = onCall(
       if (!sandbox && raw.isSandbox === true) throw new HttpsError('not-found', 'torneio não existe');
       _sharedClaimValid(inviteSnap.exists ? inviteSnap.data() : null, token);
       const state = await _manualClaimReadState(tx, ref, raw);
-      _manualClaimGuard(state, true);
+      _sharedClaimGuard(state);
       const checked = await _loadCanonicalRosterForMutation(tx, ref, state.tournament, sandbox ? String(raw.sandboxOf) : '');
       let existing, candidates;
       try {
@@ -5318,7 +5329,7 @@ exports.acceptTournamentClaimLink = onCall(
       if (!sandbox && raw.isSandbox === true) throw new HttpsError('not-found', 'torneio não existe');
       _sharedClaimValid(inviteSnap.exists ? inviteSnap.data() : null, token);
       const state = await _manualClaimReadState(tx, ref, raw);
-      _manualClaimGuard(state, true);
+      _sharedClaimGuard(state);
       const logicalId = sandbox ? String(raw.sandboxOf) : tournamentId;
       const checked = await _loadCanonicalRosterForMutation(tx, ref, state.tournament, sandbox ? logicalId : '');
       let pair;
@@ -5335,11 +5346,55 @@ exports.acceptTournamentClaimLink = onCall(
       if (!target) throw new HttpsError('failed-precondition', 'dupla resultante indisponível');
       const pairPreview = await _sharedClaimPreview(tx, db, { entry: target, partner: pair.partner }, state.tournament,
         profileSnap.exists && profileSnap.data().displayName);
+      let publishedPlan = null;
+      let publishedAuditRef = null;
+      if (state.hasPublishedDraw) {
+        if (checked.registrations.filter((item) => item.participantKind === 'manual' &&
+            item.manualParticipantId === manualParticipantId && _manualClaimActive(item)).length !== 1) {
+          throw new HttpsError('failed-precondition', 'vaga em mais de uma categoria; chame a organização');
+        }
+        const auxiliary = ['standbyParticipants', 'waitlist', 'checkedIn', 'absent',
+          'woHistory', 'woSubstituteFor', 'pendingCanonicalParticipantClaims'];
+        if (_slotPublishedExtras(state.tournament) || auxiliary.some((key) =>
+          _editCanonicalSlot.hasIdentity(state.tournament[key], { manualParticipantId }))) {
+          throw new HttpsError('failed-precondition', 'vaga com classificação ou reserva; chame a organização');
+        }
+        publishedAuditRef = ref.collection('manualClaimAudits').doc(manualParticipantId);
+        const [participantSnap, matchSnap, resultSnap, auditSnap] = await Promise.all([
+          tx.get(ref.collection(_tSplitFn.colecaoDaParte('participants'))),
+          tx.get(ref.collection(_tSplitFn.colecaoDaParte('matches'))),
+          tx.get(ref.collection('results')),
+          tx.get(publishedAuditRef),
+        ]);
+        if (auditSnap.exists) throw new HttpsError('failed-precondition', 'vaga já vinculada antes; chame a organização');
+        try {
+          publishedPlan = _publishedClaim.plan(manualParticipantId, pair.entry.fixedPairId,
+            target.fixedPairId, callerUid,
+            participantSnap.docs.map((doc) => ({ id: doc.id, data: doc.data() })),
+            matchSnap.docs.map((doc) => ({ id: doc.id, data: doc.data() })),
+            resultSnap.docs.map((doc) => ({ id: doc.id, data: doc.data() })));
+        } catch (error) { throw new HttpsError('failed-precondition', error.message); }
+      }
       if (state.privateDraw) {
         let draft;
         try { draft = _manualClaimLink.replaceDraftIdentity(state.privateDraw.draft, manualParticipantId, pair.entry.fixedPairId, target.fixedPairId, callerUid); }
         catch (error) { throw new HttpsError('failed-precondition', error.message); }
         tx.update(state.privateDrawRef, { draft, updatedAt: _FV.serverTimestamp() });
+      }
+      if (publishedPlan) {
+        const item = publishedPlan.participants[0];
+        tx.create(ref.collection(_tSplitFn.colecaoDaParte('participants')).doc(item.newId), item.data);
+        tx.delete(ref.collection(_tSplitFn.colecaoDaParte('participants')).doc(item.id));
+        publishedPlan.matches.forEach((match) => {
+          tx.set(ref.collection(_tSplitFn.colecaoDaParte('matches')).doc(match.id), match.data);
+        });
+        tx.create(publishedAuditRef, {
+          manualParticipantId, claimedByUid: callerUid, oldPairId: pair.entry.fixedPairId,
+          newPairId: target.fixedPairId, oldParticipantDocId: item.id,
+          newParticipantDocId: item.newId,
+          matchIds: publishedPlan.matches.map((match) => match.id),
+          claimedAt: _FV.serverTimestamp(),
+        });
       }
       _writeCanonicalRosterChanges(tx, ref, state.tournament, checked.registrations, changes, null, sandbox ? logicalId : '');
       return { ok: true, pair: pairPreview };
