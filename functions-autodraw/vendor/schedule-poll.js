@@ -851,6 +851,9 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
   function _schPackStructuredDay(t, matches, day, dayIndex, courts, slotMs) {
     var count = Math.floor((day.fimMs - day.iniMs) / slotMs), capacity = count * courts;
     if (!count || count > 30 || matches.length > capacity) return null;
+    // A organização pode concentrar categorias em vez de intercalar rodadas.
+    // Nesse modo conservamos o primeiro encaixe histórico, sem reordená-lo.
+    var optimizeDistribution = day.categoryFlow === 'rounds' && matches.length <= 128;
     var entries = matches.map(function (m) {
       var left = m.team1Obj || {}, right = m.team2Obj || {};
       function key(obj, side) {
@@ -858,7 +861,11 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
         var ids = _schMatchUids(t, m);
         return pair ? 'pair:' + pair : 'side:' + side + ':' + ids.join('|');
       }
-      return { m:m, round:Number(m.round || 0), units:Array.from(new Set([key(left, 'p1'), key(right, 'p2')].concat(_schMatchUids(t, m).map(function (id) { return 'uid:' + id; })))) };
+      var pairUnits = [key(left, 'p1'), key(right, 'p2')];
+      return { m:m, round:Number(m.round || 0),
+        units:Array.from(new Set(pairUnits.concat(_schMatchUids(t, m).map(function (id) { return 'uid:' + id; })))),
+        restUnits:pairUnits.some(function (unit) { return unit.indexOf('pair:') === 0; }) ? pairUnits : _schMatchUids(t, m).map(function (id) { return 'uid:' + id; }),
+        teams:Array.from(new Set([m.p1CompetitionTeamId || left.competitionTeamId, m.p2CompetitionTeamId || right.competitionTeamId].filter(Boolean).map(String))) };
     });
     var related = entries.map(function (entry) { return entries.map(function (other, index) {
       return entry !== other && entry.units.some(function (unit) { return other.units.indexOf(unit) >= 0; }) ? index : -1;
@@ -921,13 +928,79 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
       }
       return false;
     }
-    var solved = false;
-    for (var seed = 0; seed < 256 && !solved; seed++) solved = fastPack(seed);
+    // A primeira grade válida costumava amontoar os três jogos de uma dupla
+    // em horários consecutivos. Descanso e diversidade são preferências, mas
+    // capacidade, dia, ordem das rodadas e ausência de simultaneidade são leis.
+    function quality() {
+      var unitWaves = {}, penalty = 0;
+      waves.forEach(function (wave, waveIndex) {
+        var teams = {};
+        wave.forEach(function (index) {
+          entries[index].restUnits.forEach(function (unit) { (unitWaves[unit] || (unitWaves[unit] = [])).push(waveIndex); });
+          entries[index].teams.forEach(function (team) { teams[team] = (teams[team] || 0) + 1; });
+        });
+        Object.keys(teams).forEach(function (team) { penalty += 120 * Math.max(0, teams[team] - 1) ** 2; });
+      });
+      Object.keys(unitWaves).forEach(function (unit) {
+        var times = unitWaves[unit].sort(function (a, b) { return a - b; });
+        for (var i = 1; i < times.length; i++) if (times[i] - times[i - 1] === 1) penalty += 1000;
+        if (times.length > 1) penalty -= 30 * (times[times.length - 1] - times[0]);
+      });
+      return penalty;
+    }
+    var solved = false, best = null, bestQuality = Infinity;
+    for (var seed = 0; seed < (optimizeDistribution ? 256 : 1); seed++) {
+      if (!fastPack(seed)) continue;
+      solved = true;
+      var candidateQuality = quality();
+      if (candidateQuality < bestQuality) {
+        bestQuality = candidateQuality;
+        best = waves.map(function (wave) { return wave.slice(); });
+      }
+    }
+    if (best) {
+      best.forEach(function (wave, index) { waves[index] = wave; });
+      assignedWave.fill(-1);
+      waves.forEach(function (wave, index) { wave.forEach(function (entry) { assignedWave[entry] = index; }); });
+    }
     if (!solved) {
       waves.forEach(function (wave) { wave.length = 0; }); used = {}; assignedWave.fill(-1);
       solved = solve(entries.map(function (_, index) { return index; }));
     }
     if (!solved) return null;
+    if (!isFinite(bestQuality)) bestQuality = quality();
+    // Trocas preservam o número de quadras ocupadas em cada horário. Aceitamos
+    // apenas melhorias estritas: empate conserva a grade determinística.
+    function canMove(index, target) {
+      var entry = entries[index];
+      if (threeRoundFullGrid && ((entry.round === 1 && target >= 4) || (entry.round === 3 && target < 4))) return false;
+      return related[index].every(function (other) {
+        var otherWave = assignedWave[other], otherRound = entries[other].round;
+        return otherWave !== target && (otherRound === entry.round || (otherRound < entry.round ? otherWave < target : otherWave > target));
+      });
+    }
+    for (var pass = 0; optimizeDistribution && pass < 64; pass++) {
+      var improvement = 0, bestSwap = null;
+      for (var a = 0; a < entries.length; a++) for (var b = a + 1; b < entries.length; b++) {
+        var wa = assignedWave[a], wb = assignedWave[b];
+        if (wa === wb) continue;
+        assignedWave[a] = wb; assignedWave[b] = wa;
+        if (canMove(a, wb) && canMove(b, wa)) {
+          var posA = waves[wa].indexOf(a), posB = waves[wb].indexOf(b);
+          waves[wa][posA] = b; waves[wb][posB] = a;
+          var gain = bestQuality - quality();
+          if (gain > improvement) { improvement = gain; bestSwap = [a, b]; }
+          waves[wa][posA] = a; waves[wb][posB] = b;
+        }
+        assignedWave[a] = wa; assignedWave[b] = wb;
+      }
+      if (!bestSwap) break;
+      var first = bestSwap[0], second = bestSwap[1], firstWave = assignedWave[first], secondWave = assignedWave[second];
+      waves[firstWave][waves[firstWave].indexOf(first)] = second;
+      waves[secondWave][waves[secondWave].indexOf(second)] = first;
+      assignedWave[first] = secondWave; assignedWave[second] = firstWave;
+      bestQuality -= improvement;
+    }
     var result = [];
     waves.forEach(function (wave, waveIndex) { wave.forEach(function (index) {
       var at = day.iniMs + waveIndex * slotMs;

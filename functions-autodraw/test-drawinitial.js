@@ -301,6 +301,28 @@ const CASES = [
     const times = roundTimes[id].sort(function (a, b) { return a.round - b.round; });
     return times.every(function (item, index) { return index === 0 || item.ms > times[index - 1].ms; });
   }));
+  const restByPair = {}, teamsByWave = {};
+  estimated.slots.forEach(function (slot) {
+    const match = matchesById.get(slot.matchId), waveKey = slot.dia + ':' + slot.onda;
+    if (!match) return;
+    [match.team1Obj.fixedPairId, match.team2Obj.fixedPairId].forEach(function (pair) {
+      (restByPair[pair] || (restByPair[pair] = [])).push(slot.onda);
+    });
+    const teams = teamsByWave[waveKey] || (teamsByWave[waveKey] = new Set());
+    teams.add(match.p1CompetitionTeamId); teams.add(match.p2CompetitionTeamId);
+  });
+  const backToBack = Object.values(restByPair).reduce(function (sum, waves) {
+    waves.sort(function (a, b) { return a - b; });
+    return sum + waves.filter(function (wave, index) { return index > 0 && wave - waves[index - 1] === 1; }).length;
+  }, 0);
+  const averageSpan = Object.values(restByPair).reduce(function (sum, waves) {
+    return sum + waves[waves.length - 1] - waves[0];
+  }, 0) / Object.keys(restByPair).length;
+  const diversity = Object.values(teamsByWave).map(function (teams) { return teams.size; });
+  ok('Neon 64: grade prioriza descanso e variedade de times sem perder ocupação',
+    backToBack <= 50 && diversity.length === 16 && diversity.every(function (count) { return count >= 4; }) &&
+      diversity.reduce(function (sum, count) { return sum + count; }, 0) >= 76 && averageSpan >= 3,
+    JSON.stringify({ backToBack, averageSpan, diversity }));
   const browser = require('../tests/render-harness').sandbox;
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'schedule-poll.js'), 'utf8'), browser);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'schedule-organizer.js'), 'utf8'), browser);
