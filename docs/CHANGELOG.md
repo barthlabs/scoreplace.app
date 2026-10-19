@@ -1,3 +1,8 @@
+## 2.4.108 — 18/out/2026 (papel da organização pelo contexto do torneio)
+
+- Quando o gênero não está disponível no perfil, o papel da organização usa a categoria feminina ou masculina da dupla daquele torneio para escolher “Co-organizadora” ou “Co-organizador”. A hidratação posterior do nome não apaga essa forma; o perfil explícito continua tendo precedência.
+- O perfil global não é alterado, assim como inscrições e permissões. Adicionado teste do fallback por UID de ambos os lados da dupla.
+
 ## 2.4.107 — 18/out/2026 (card de organização sem corte)
 
 - Aumentada a área reservada ao nome em duas linhas e removido o recorte vertical do card de organização. O nome, a estrela e a função continuam legíveis em três colunas e em largura móvel, sem alterar os vínculos ou permissões.

@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.4.107';
+window.SCOREPLACE_VERSION = '2.4.108';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -1614,7 +1614,7 @@ window._hydrateUidNames = function (root) {
       var m = e.getAttribute('data-role-m') || '';
       var f = e.getAttribute('data-role-f') || '';
       if (!u || !m || !f) return;
-      e.textContent = window._genderWord(window._genderForUid(u), m, f);
+      e.textContent = window._genderWord(window._genderForUid(u) || e.getAttribute('data-role-tournament-gender'), m, f);
     });
     // v1.3.45: atualiza o LABEL DE ARRASTE (data-participant-name) dos cards de inscrito com o
     // nome VIVO resolvido por uid. O CSS do modo compacto (body.sp-drag-compact

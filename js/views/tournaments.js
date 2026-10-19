@@ -4584,7 +4584,7 @@ function renderTournaments(container, tournamentId = null) {
         // v1.9.26: `roleUid` + `roleM`/`roleF` — o rótulo declara de QUEM ele fala e
         // quais são as duas formas, pra `_hydrateUidNames` corrigi-lo quando o perfil
         // chegar (abertura fria). Sem uid, nada muda: fica o texto passado.
-        function _buildOrgCard(name, role, bgStyle, canRemove, removeEmail, isTapPicker, roleUid, roleM, roleF) {
+        function _buildOrgCard(name, role, bgStyle, canRemove, removeEmail, isTapPicker, roleUid, roleM, roleF, roleTournamentGender) {
           var _safeTId = window._safeHtml(String(_t.id));
           // v2.8.52: card do organizador principal (criador) é TOCÁVEL → abre o seletor
           // de quem promover (entrada por toque, mobile). O ALVO de soltar é a VAGA
@@ -4631,7 +4631,8 @@ function renderTournaments(container, tournamentId = null) {
                 (roleUid && roleM && roleF
                   ? ' data-uid-role="' + window._safeHtml(String(roleUid)) + '"' +
                     ' data-role-m="' + window._safeHtml(String(roleM)) + '"' +
-                    ' data-role-f="' + window._safeHtml(String(roleF)) + '"'
+                    ' data-role-f="' + window._safeHtml(String(roleF)) + '"' +
+                    (roleTournamentGender ? ' data-role-tournament-gender="' + window._safeHtml(String(roleTournamentGender)) + '"' : '')
                   : '') +
               '>' + role + '</div>' +
             '</div>' +
@@ -4736,6 +4737,20 @@ function renderTournaments(container, tournamentId = null) {
               if (uid && _pp.uid === uid) return _pp.gender;
             }
           }
+          // Em torneios com categoria por gênero, a inscrição da dupla também
+          // resolve o tratamento do card NESTE torneio. Não escreve no perfil:
+          // a categoria competitiva não é uma declaração global da pessoa.
+          for (var _ci = 0; uid && _ci < _competitors.length; _ci++) {
+            var _pair = _competitors[_ci];
+            if (!_pair || typeof _pair !== 'object') continue;
+            var _side = _pair.p1Uid === uid ? 'p1' : (_pair.p2Uid === uid ? 'p2' : '');
+            if (!_side) continue;
+            var _memberGender = typeof window._pGenderMembro === 'function' ? window._pGenderMembro(_pair, _side) : _pair[_side + 'Gender'];
+            if (_memberGender) return _memberGender;
+            var _cat = String(_pair.category || '').trim();
+            if (/^(?:Fem|Feminino)(?:\s|$)/i.test(_cat)) return 'feminino';
+            if (/^(?:Masc|Masculino)(?:\s|$)/i.test(_cat)) return 'masculino';
+          }
           return '';
         };
         // v2.4.36: cada card de organização usa o gênero INDIVIDUAL daquela
@@ -4748,7 +4763,7 @@ function renderTournaments(container, tournamentId = null) {
         // v2.8.50/52: o card do organizador NÃO é o alvo de soltar (sem dashed em
         // volta); o alvo é a VAGA separada (_buildDropzone, só aparece no arraste). O
         // card do CRIADOR é tocável → abre o seletor (entrada por toque no mobile).
-        _orgCards += _buildOrgCard(_orgDisplayName, _orgRoleLabel, _orgBgPrimary, false, '', _isCreatorNow, _t.creatorUid || _t.organizerId, 'Organizador', 'Organizadora');
+        _orgCards += _buildOrgCard(_orgDisplayName, _orgRoleLabel, _orgBgPrimary, false, '', _isCreatorNow, _t.creatorUid || _t.organizerId, 'Organizador', 'Organizadora', _primaryGender);
         if (Array.isArray(_t.coHosts)) {
           _t.coHosts.forEach(function(ch) {
             if (!ch) return;
@@ -4760,7 +4775,7 @@ function renderTournaments(container, tournamentId = null) {
             if (ch.status === 'active') {
               var _chGender = ch.gender || _resolveOrgGender(ch.uid);
               var _chLabel = _gw(_chGender, 'Co-organizador', 'Co-organizadora');
-              _orgCards += _buildOrgCard(_chName, _chLabel, _orgBgCohost, _isCreatorNow, ch.uid || '', false, ch.uid, 'Co-organizador', 'Co-organizadora');
+              _orgCards += _buildOrgCard(_chName, _chLabel, _orgBgCohost, _isCreatorNow, ch.uid || '', false, ch.uid, 'Co-organizador', 'Co-organizadora', _chGender);
             } else if (ch.status === 'pending') {
               // v2.8.48: convidado pendente aparece AQUI (box âmbar pontilhado, ao
               // lado do organizador), não mais só na lista de inscritos.
