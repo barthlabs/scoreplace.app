@@ -1,3 +1,8 @@
+## 2.4.128 — 19/out/2026 (busca da chave sem trocar abas)
+
+- Digitar nome de time ou atleta na chave não seleciona automaticamente a categoria do primeiro resultado. A aba Geral continua clicável com a busca ativa; trocar a data preserva o texto e filtra os jogos daquele dia.
+- Apenas a navegação e a apresentação da busca mudam. Sorteio, confrontos, quadras e resultados permanecem como publicados.
+
 ## 2.4.127 — 19/out/2026 (próximo jogo marcado na dashboard)
 
 - A seção “Seu próximo jogo” escolhe primeiro o jogo da menor rodada pendente de cada torneio e compara esses jogos pela data publicada e pela prontidão. Assim, uma rodada posterior da mesma chave não ultrapassa a anterior, enquanto o compromisso de sexta em outro torneio vence uma partida sem data e adversário. Datas estimadas preservam seu rótulo e participam da ordem cronológica.

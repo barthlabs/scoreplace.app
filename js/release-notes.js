@@ -1,3 +1,5 @@
+// 2.4.128 — A busca por nome de time mantém a aba escolhida. Em Geral,
+// alternar o dia conserva o filtro e mostra os jogos correspondentes daquela data.
 // 2.4.127 — “Seu próximo jogo” mostra primeiro a partida com data e adversário
 // definidos, antes de uma eliminatória sem data ainda dependente de outro jogo.
 // 2.4.126 — Ao copiar o nome de um grupo de jogo no Android, o botão abre

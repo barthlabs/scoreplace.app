@@ -1,6 +1,6 @@
 /* Regressão: categorias paralelas da chave não podem voltar a ser uma pilha.
- * A navegação é visual: os jogos permanecem a fonte canônica e a busca abre a
- * aba que contém o resultado. node tests/chaves-abas-categoria.test.js */
+ * A navegação é visual: os jogos permanecem a fonte canônica e a aba escolhida
+ * permanece estável durante a busca. node tests/chaves-abas-categoria.test.js */
 const fs = require('fs');
 const path = require('path');
 const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'bracket.js'), 'utf8');
@@ -15,9 +15,9 @@ ok(tabs.includes("return 'fem'") && tabs.includes("return 'masc'"), 'separa abas
 ok(tabs.includes('data-bracket-primary-tab') && tabs.includes('data-bracket-subtab'), 'gênero é aba principal e suas categorias aparecem como subabas');
 ok(tabs.includes('card.hidden ='), 'trocar aba oculta os cards fora da categoria sem duplicar a chave');
 ok(tabs.includes('window._bracketTabState'), 'a aba escolhida permanece ao re-renderizar placar ou W.O.');
-ok(tabs.includes('window._bracketTabsRevealSearch'), 'há caminho explícito para a busca revelar a aba do resultado');
+ok(!tabs.includes('window._bracketTabsRevealSearch'), 'digitar na busca não seleciona outra aba automaticamente');
 ok(card.includes('data-bracket-tab-category=') && card.includes('data-bracket-tab-gender='), 'card declara categoria e gênero para a navegação');
-ok(src.includes('window._bracketTabsRevealSearch();'), 'o filtro da busca chama a revelação da aba correspondente');
+ok(!src.includes('window._bracketTabsRevealSearch();'), 'o filtro preserva Geral, categoria e dia selecionados');
 ok(card.includes('tierLabel') && card.includes('gold|silver|line'), 'linhas independentes como Ouro/Prata também recebem abas');
 ok(tabs.includes('tiersMeetAtFinal') && tabs.includes("data-bracket-tab-source") && card.includes('data-bracket-tab-source='), 'Ouro/Prata só se separam quando não convergem em uma grande final');
 ok(tabs.includes("rail.hidden = true") && tabs.includes("rail.innerHTML = ''") && card.includes('border-left:3px solid'), 'cada rodada usa seu cabeçalho canônico, alinhado à própria coluna, sem uma régua concorrente');

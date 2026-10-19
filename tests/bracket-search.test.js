@@ -128,6 +128,8 @@ ok(tabCalls.length===1,'sem abas de rodada, round do card não remonta a categor
 const i=src.indexOf('window._bracketNorm = function');
 vm.runInContext(src.slice(i),sandbox,{filename:'bracket-filter'});
 const F=sandbox.window._bracketApplyFilter;
+let automaticTabChanges=0;
+sandbox.window._bracketTabsRevealSearch=()=>{ automaticTabChanges++; };
 
 // O filtro não pode depender só deste DOM de mentira: o renderizador real do
 // card precisa expor o número operacional que a busca consulta.
@@ -150,6 +152,13 @@ ok(vis()[0]===true,'acento-insensitive: "jose" devia achar "José"');
 
 input.value='carla'; F();
 ok(vis()[1]===true,'membro de dupla devia casar sozinho');
+ok(automaticTabChanges===0,'digitar nome não muda a aba selecionada');
+
+cards[1].getAttribute=(k)=>({ 'data-players':'Bruno / Carla | Bruno | Carla',
+  'data-team-names':'VORTEX 1', 'data-match-num':'168' })[k];
+input.value='vortex'; F();
+ok(JSON.stringify(vis())==='[false,true,false]' && automaticTabChanges===0,
+  'nome parcial do time filtra o jogo sem mudar Geral/categoria/dia');
 
 // A mesma busca numérica encontra tanto o número operacional do JOGO quanto uma pessoa
 // cujo nome contenha os mesmos dígitos; ela não depende do texto visual "JOGO 168".

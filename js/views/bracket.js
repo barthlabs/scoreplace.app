@@ -2254,21 +2254,6 @@ window._bracketCategoryTabsMount = function () {
   var category = byGender[gender].indexOf(state.category) !== -1 ? state.category : byGender[gender][0];
   _bracketTabsApply(id, gender, category, state.round);
 };
-window._bracketTabsRevealSearch = function () {
-  var root = document.querySelector('[data-bracket-tabs-root]');
-  var input = document.getElementById('bracket-search');
-  if (!root || !input || !String(input.value || '').trim()) return;
-  var cards = document.querySelectorAll('[data-bracket-tab-category]');
-  for (var i = 0; i < cards.length; i++) {
-    // O filtro já decidiu o display; mesmo escondido pela aba, este é o acerto real.
-    if (cards[i].style.display === 'none') continue;
-    var primary = root.getAttribute('data-bracket-date-tabs') === '1'
-      ? cards[i].getAttribute('data-bracket-tab-day') : cards[i].getAttribute('data-bracket-tab-gender');
-    _bracketTabsApply(root.getAttribute('data-tournament-id'), primary, cards[i].getAttribute('data-bracket-tab-category'), cards[i].getAttribute('data-bracket-tab-round'));
-    return;
-  }
-};
-
 // O filtro pode encontrar jogos numa aba diferente da atual. Trocar só a
 // visibilidade dos cards deixava a tela aparentemente vazia (Ouro/Prata, etc.).
 window._bracketTabsRevealFilteredMatch = function (kind) {
@@ -11353,12 +11338,10 @@ window._bracketApplyFilter = function () {
   // Avisar aqui é barato (a função é idempotente e já roda a cada scroll) e fecha o
   // buraco na fonte: é o próprio ato de filtrar que reposiciona o chrome.
   if (typeof window._reflowChrome === 'function') window._reflowChrome();
-  // Busca encontra uma pessoa dentro da categoria, não só o card: abre a aba de
-  // gênero/categoria que contém o resultado. Com a busca limpa, a escolha manual
-  // da aba permanece intacta.
-  if (typeof window._bracketTabsRevealSearch === 'function') {
-    try { window._bracketTabsRevealSearch(); } catch (e) {}
-  }
+  // A busca apenas filtra a aba que a pessoa escolheu. Mudar de categoria aqui
+  // fazia "Geral" saltar para o primeiro resultado e impedia voltar enquanto
+  // o texto permanecia no campo. Em grade por datas, a pessoa alterna o dia e
+  // continua vendo todas as categorias na Geral com a mesma consulta.
   /* ⛔ E QUEM FILTRA TAMBÉM TEM QUE MANTER O PAI ALTO — era o que faltava aqui.
    * `position:sticky` só segura ENQUANTO o bloco-pai está na viewport. Filtrar de 55 cards
    * para 5 encolhe o `#view-container`, o pai deixa de ter por onde viajar e a barra
