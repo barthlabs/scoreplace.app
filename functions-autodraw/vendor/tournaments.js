@@ -1495,9 +1495,13 @@ window._nextParticipantTournamentMatchTarget = function(t) {
     return !!(m && !m.winner && !m.isBye &&
       window._userTeamInMatch(t, m, cu) > 0);
   });
-  // Mesma régua da dashboard para "Seu próximo jogo": rodada e, dentro dela,
-  // número global do jogo. Não usar a ordem incidental de campos do Firestore.
+  // Mesma régua da dashboard para "Seu próximo jogo": nesta chave, a rodada
+  // anterior vem primeiro; data e prontidão decidem dentro da rodada.
+  // O fallback mantém a navegação funcional se a dashboard não carregou.
   matches.sort(function(a, b) {
+    if (typeof window._dashboardWithinTournamentCompare === 'function') {
+      return window._dashboardWithinTournamentCompare({ item: { m: a, tId: t.id } }, { item: { m: b, tId: t.id } });
+    }
     var ar = Number(a.round || 0), br = Number(b.round || 0);
     if (ar !== br) return ar - br;
     var an = Number(a._gameNum || 0), bn = Number(b._gameNum || 0);

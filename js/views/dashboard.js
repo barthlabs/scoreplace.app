@@ -17,6 +17,54 @@ window._dashCardClick = function(event, tournamentId) {
   window._openTournamentCard(event, tournamentId);
 };
 
+// “Seu próximo jogo” atravessa torneios. Primeiro se escolhe o jogo da menor
+// rodada de CADA chave; depois esses representantes competem pela agenda.
+// Prazo para jogar não é data marcada.
+window._dashboardNextMatchCompare = function(a, b) {
+  function info(entry) {
+    var m = entry.item.m || {};
+    function known(side) {
+      var value = String(side || '').trim();
+      return !!value && !/^(?:TBD|BYE|a definir|(?:vencedor|vencedora|perdedor|perdedora) d[oea] jogo\b|(?:winner|loser) of match\b)/i.test(value);
+    }
+    var side1 = m.p1 || (Array.isArray(m.team1) ? m.team1.join(' / ') : '');
+    var side2 = m.p2 || (Array.isArray(m.team2) ? m.team2.join(' / ') : '');
+    var ready = known(side1) && known(side2);
+    var rawAt = m.scheduledAt;
+    var at = rawAt ? new Date(rawAt).getTime() : NaN;
+    var scheduled = Number.isFinite(at) && at > 0;
+    var tier = ready ? (scheduled ? 0 : 1) : (scheduled ? 2 : 3);
+    var labelNum = String(m.label || '').match(/Jogo\s*(\d+)/i);
+    return { tier: tier, at: scheduled ? at : 0, round: Number(m.round || 0),
+      game: m._gameNum != null ? Number(m._gameNum) : (labelNum ? Number(labelNum[1]) : 0),
+      id: String(m.id || '') };
+  }
+  var x = info(a), y = info(b);
+  if (x.tier !== y.tier) return x.tier - y.tier;
+  if (x.at !== y.at) return x.at - y.at;
+  if (x.round !== y.round) return x.round - y.round;
+  if (x.game !== y.game) return x.game - y.game;
+  return x.id.localeCompare(y.id);
+};
+window._dashboardWithinTournamentCompare = function(a, b) {
+  var x = a.item.m || {}, y = b.item.m || {};
+  var xr = Number(x.round || 0), yr = Number(y.round || 0);
+  if (xr !== yr) return xr - yr;
+  return window._dashboardNextMatchCompare(a, b);
+};
+window._dashboardSelectNextMatch = function(entries) {
+  var byTournament = Object.create(null);
+  (entries || []).forEach(function(entry) {
+    var key = String(entry.item.tId || '');
+    if (!byTournament[key] || window._dashboardWithinTournamentCompare(entry, byTournament[key]) < 0) {
+      byTournament[key] = entry;
+    }
+  });
+  var representatives = Object.keys(byTournament).map(function(key) { return byTournament[key]; });
+  representatives.sort(window._dashboardNextMatchCompare);
+  return representatives[0] || null;
+};
+
 // A tela só solicita o fecho. O servidor decide pelo documento fresco, calcula
 // a classificação e registra a notificação; nunca mutar/persistir durante render.
 window._requestExpiredLeagueSeasonClose = window._requestExpiredLeagueSeasonClose || (function() {
@@ -2857,16 +2905,9 @@ function renderDashboard(container) {
     var allUpcoming = [];
     noResult.forEach(function(i) { allUpcoming.push({ item: i, canLaunch: true }); });
     upcoming.forEach(function(i) { allUpcoming.push({ item: i, canLaunch: false }); });
-    // ordena por rodada e, dentro da rodada, pelo nº do Jogo (o próximo a jogar primeiro)
-    var _jogoSeqU = function(m) { if (m && m._gameNum != null) return Number(m._gameNum); var mm = String(m.label || '').match(/Jogo\s*(\d+)/i); return mm ? Number(mm[1]) : 0; };
-    allUpcoming.sort(function(a, b) {
-      var ra = (a.item.m.round || 0), rb = (b.item.m.round || 0);
-      if (ra !== rb) return ra - rb;
-      return _jogoSeqU(a.item.m) - _jogoSeqU(b.item.m);
-    });
+    var _ngEntry = window._dashboardSelectNextMatch(allUpcoming);
 
-    if (allUpcoming.length > 0) {
-      var _ngEntry = allUpcoming[0];
+    if (_ngEntry) {
       var _ng = _ngEntry.item;
       var _ngM = _ng.m;
       var _ngT = participacoes.find(function(tt) { return tt.id === _ng.tId; });

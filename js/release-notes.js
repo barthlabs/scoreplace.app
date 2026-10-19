@@ -1,3 +1,5 @@
+// 2.4.127 — “Seu próximo jogo” mostra primeiro a partida com data e adversário
+// definidos, antes de uma eliminatória sem data ainda dependente de outro jogo.
 // 2.4.126 — Ao copiar o nome de um grupo de jogo no Android, o botão abre
 // o aplicativo sem navegar para um link de conversa vazio.
 // 2.4.125 — A busca da chave encontra jogos pelo nome completo ou parcial do

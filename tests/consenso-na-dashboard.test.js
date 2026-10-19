@@ -72,6 +72,7 @@ function confra(opts) {
 }
 
 const SRC = fs.readFileSync(path.join(ROOT, 'js', 'views', 'dashboard.js'), 'utf8');
+H.installDashboardNextHelpers(W, SRC);
 
 /* ⚠️ A pílula "ver mais/ver menos" foi IÇADA pra fora de `renderDashboard` (26/ago) — presa
  * lá dentro, ela só existia depois de a dashboard renderizar, e quem abria um TORNEIO

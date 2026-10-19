@@ -28,6 +28,7 @@ const H = require('./render-harness');
 const W = H.sandbox;
 const ROOT = path.join(__dirname, '..');
 const SRC_DASH = fs.readFileSync(path.join(ROOT, 'js', 'views', 'dashboard.js'), 'utf8');
+H.installDashboardNextHelpers(W, SRC_DASH);
 const SRC_DB = fs.readFileSync(path.join(ROOT, 'js', 'firebase-db.js'), 'utf8');
 
 let pass = 0, fail = 0; const fails = [];

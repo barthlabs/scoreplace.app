@@ -26,6 +26,7 @@ const W = H.sandbox;
 const ROOT = path.join(__dirname, '..');
 const SRC_STORE = fs.readFileSync(path.join(ROOT, 'js', 'store.js'), 'utf8');
 const SRC_DASH = fs.readFileSync(path.join(ROOT, 'js', 'views', 'dashboard.js'), 'utf8');
+H.installDashboardNextHelpers(W, SRC_DASH);
 const SRC_DET = fs.readFileSync(path.join(ROOT, 'js', 'views', 'tournaments.js'), 'utf8');
 
 let pass = 0, fail = 0; const fails = [];

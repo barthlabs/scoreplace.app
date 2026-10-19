@@ -55,6 +55,7 @@ function ok(c, m) { if (c) pass++; else { fail++; fails.push(m); } }
 function contar(s, needle) { let n = 0, i = 0; while ((i = s.indexOf(needle, i)) !== -1) { n++; i += needle.length; } return n; }
 
 const SRC = fs.readFileSync(process.env.SP_DASHBOARD_SRC || path.join(ROOT, 'js', 'views', 'dashboard.js'), 'utf8');
+H.installDashboardNextHelpers(W, SRC);
 
 /* ⚠️ A pílula "ver mais/ver menos" foi IÇADA pra fora de `renderDashboard` (26/ago) — presa
  * lá dentro, ela só existia depois de a dashboard renderizar, e quem abria um TORNEIO

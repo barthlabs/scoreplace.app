@@ -101,6 +101,7 @@ function confra(matches) {
 //   git show HEAD:js/views/dashboard.js > /tmp/dash-antigo.js
 //   SP_DASHBOARD_SRC=/tmp/dash-antigo.js node tests/ultimos-resultados-mostra-o-ultimo.test.js
 const SRC = fs.readFileSync(process.env.SP_DASHBOARD_SRC || path.join(ROOT, 'js', 'views', 'dashboard.js'), 'utf8');
+H.installDashboardNextHelpers(W, SRC);
 
 /* ⚠️ A pílula "ver mais/ver menos" foi IÇADA pra fora de `renderDashboard` (26/ago) — presa
  * lá dentro, ela só existia depois de a dashboard renderizar, e quem abria um TORNEIO

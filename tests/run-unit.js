@@ -837,6 +837,7 @@ const SUITES = [
   'tests/draw-schedule.test.js',
   'tests/wa-group-link.test.js',
   'tests/wa-group-copy-open-app.test.js',
+  'tests/dashboard-proximo-jogo-agendado.test.js',
   // O grupo de WhatsApp é DO GRUPO. Reproduz o incidente do Confra (03/ago/2026):
   // identidade lida por NOME (que o strip do save apaga) → chave de irmãos vazia →
   // o link de UM grupo espelhado nos 81 jogos dos 27 grupos.

@@ -216,4 +216,14 @@ function lowerCadence(t) {
   return u.columns.filter(function (c) { return c.bracket === 'lower'; }).map(function (c) { return (c.matches || []).length; });
 }
 
-module.exports = { window: sandbox, sandbox, E: E, buildDupla: buildDupla, buildViaDraw: buildViaDraw, hydrateMonarchGroups: hydrateMonarchGroups, hydrateGroups: hydrateGroups, simulate: simulate, simulateRounds: simulateRounds, lowerCadence: lowerCadence, mkPool: mkPool };
+// As suítes que extraem só _buildMyResultsHtml precisam também dos helpers
+// reais declarados antes dele. Fonte antiga sem esse helper continua suportada.
+function installDashboardNextHelpers(target, source) {
+  var start = source.indexOf('window._dashboardNextMatchCompare = function');
+  if (start < 0) return;
+  var end = source.indexOf('// A tela só solicita o fecho', start);
+  if (end < start) throw new Error('fim dos helpers de próximo jogo não encontrado');
+  new Function('window', source.slice(start, end))(target);
+}
+
+module.exports = { window: sandbox, sandbox, E: E, buildDupla: buildDupla, buildViaDraw: buildViaDraw, hydrateMonarchGroups: hydrateMonarchGroups, hydrateGroups: hydrateGroups, simulate: simulate, simulateRounds: simulateRounds, lowerCadence: lowerCadence, mkPool: mkPool, installDashboardNextHelpers: installDashboardNextHelpers };

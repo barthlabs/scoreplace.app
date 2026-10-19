@@ -13,6 +13,7 @@ const H = require('./render-harness');
 const W = H.sandbox;
 const ROOT = path.join(__dirname, '..');
 const SRC = fs.readFileSync(path.join(ROOT, 'js', 'views', 'dashboard.js'), 'utf8');
+H.installDashboardNextHelpers(W, SRC);
 let fail = 0;
 function ok(cond, msg) { if (cond) console.log('  ✓ ' + msg); else { console.error('  ✗ ' + msg); fail++; } }
 

@@ -1,3 +1,9 @@
+## 2.4.127 — 19/out/2026 (próximo jogo marcado na dashboard)
+
+- A seção “Seu próximo jogo” escolhe primeiro o jogo da menor rodada pendente de cada torneio e compara esses jogos pela data publicada e pela prontidão. Assim, uma rodada posterior da mesma chave não ultrapassa a anterior, enquanto o compromisso de sexta em outro torneio vence uma partida sem data e adversário. Datas estimadas preservam seu rótulo e participam da ordem cronológica.
+- Sem jogo datado e jogável, mostra um confronto jogável sem data; partidas ainda à espera do adversário ficam como fallback. O atalho genérico para o torneio segue a mesma ordem. Prazos para jogar não são tratados como data marcada.
+- Nenhum jogo, adversário, agenda ou resultado foi alterado; apenas a seleção exibida e o destino do atalho.
+
 ## 2.4.126 — 19/out/2026 (abrir WhatsApp após copiar nome do grupo)
 
 - Corrigido o botão de criar grupo no Android: após copiar o nome, abre o aplicativo pelo esquema `whatsapp://app`, em vez de navegar para `api.whatsapp.com/` sem destino, que produzia “Não foi possível abrir o link” no vídeo. iOS conserva a abertura anterior por compatibilidade com WhatsApp Business; desktop abre o WhatsApp Web.
