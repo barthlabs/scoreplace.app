@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "backendCommit": "f526388e31217161ba5aba1f383f3643950b7b32",
+  "backendCommit": "f5dad9e5bcdeab7201b384d2fba9fd0eda3e61dc",
   "scopeNote": "Somente funções afetadas por este corte. getPendingInitialDraw, getPendingDrawReviewState e uploadTournamentImage continuam publicadas do corte anterior e não foram alteradas; republicá-las seria redundante.",
   "unchangedExportsNotRedeployed": ["getPendingInitialDraw", "getPendingDrawReviewState", "uploadTournamentImage"],
   "functions": [
