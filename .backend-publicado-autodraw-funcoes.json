@@ -2,38 +2,38 @@
   "schema": 1,
   "entries": {
     "drawRound": {
-      "backendCommit": "edfeac47c75b4334d8b3b3ef7cc7d8b4939d70ec",
-      "deployedAt": "2026-10-18T22:29:01.257Z",
+      "backendCommit": "a6c7ffd779037470b7195a477ada84f049072dff",
+      "deployedAt": "2026-10-19T03:53:22.374Z",
       "result": "success",
       "mode": "only"
     },
     "updateTournamentConfiguration": {
-      "backendCommit": "edfeac47c75b4334d8b3b3ef7cc7d8b4939d70ec",
-      "deployedAt": "2026-10-18T22:29:01.257Z",
+      "backendCommit": "a6c7ffd779037470b7195a477ada84f049072dff",
+      "deployedAt": "2026-10-19T03:53:22.374Z",
       "result": "success",
       "mode": "only"
     },
     "resolvePendingDraw": {
-      "backendCommit": "f2aa93d697a641c762fcfa392501a8f16eeb1132",
-      "deployedAt": "2026-10-17T10:09:54.114Z",
+      "backendCommit": "a6c7ffd779037470b7195a477ada84f049072dff",
+      "deployedAt": "2026-10-19T03:53:22.374Z",
       "result": "success",
       "mode": "only"
     },
     "setPendingInitialSchedule": {
-      "backendCommit": "f2aa93d697a641c762fcfa392501a8f16eeb1132",
-      "deployedAt": "2026-10-17T10:09:54.114Z",
+      "backendCommit": "a6c7ffd779037470b7195a477ada84f049072dff",
+      "deployedAt": "2026-10-19T03:53:22.374Z",
       "result": "success",
       "mode": "only"
     },
     "getPendingInitialDraw": {
-      "backendCommit": "f2aa93d697a641c762fcfa392501a8f16eeb1132",
-      "deployedAt": "2026-10-17T10:09:54.114Z",
+      "backendCommit": "a6c7ffd779037470b7195a477ada84f049072dff",
+      "deployedAt": "2026-10-19T03:53:22.374Z",
       "result": "success",
       "mode": "only"
     },
     "getPendingDrawReviewState": {
-      "backendCommit": "f2aa93d697a641c762fcfa392501a8f16eeb1132",
-      "deployedAt": "2026-10-17T10:09:54.114Z",
+      "backendCommit": "a6c7ffd779037470b7195a477ada84f049072dff",
+      "deployedAt": "2026-10-19T03:53:22.374Z",
       "result": "success",
       "mode": "only"
     },
@@ -50,8 +50,8 @@
       "mode": "only"
     },
     "uploadTournamentImage": {
-      "backendCommit": "f2aa93d697a641c762fcfa392501a8f16eeb1132",
-      "deployedAt": "2026-10-17T10:04:41.010Z",
+      "backendCommit": "a6c7ffd779037470b7195a477ada84f049072dff",
+      "deployedAt": "2026-10-19T03:53:22.374Z",
       "result": "success",
       "mode": "only"
     },
