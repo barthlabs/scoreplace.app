@@ -38,6 +38,7 @@ function trecho(inicio, fim) {
   const result = await page.evaluate(async () => {
     window._bracketTabsRefreshRoundRail = function () {};
     window._bracketLayoutEliminationTree = function () {};
+    window._bracketIsEliminationTree = function () { return false; };
     // A Geral sincroniza a régua após mover os cards. Este teste carrega só o
     // recorte da função real, então fornece a mesma dependência inofensiva que
     // existe no arquivo completo sem iniciar outro portal dentro do Chromium.
@@ -187,8 +188,21 @@ function trecho(inicio, fim) {
     window._bracketSelectCategoryTab('neon-team', 'fem', 'Fem Light', '');
     const categorySchedule = {
       headings: Array.from(teamRoot._bracketGeneralView.querySelectorAll('.bracket-general-round-column h4')).map(el => el.textContent.trim()),
-      games: Array.from(teamRoot._bracketGeneralView.querySelectorAll('[data-bracket-tab-category]')).map(el => el.id)
+      games: Array.from(teamRoot._bracketGeneralView.querySelectorAll('[data-bracket-tab-category]')).map(el => el.id),
+      stickyContract: Array.from(teamRoot._bracketGeneralView.querySelectorAll('.bracket-general-round-column')).every(col =>
+        col.classList.contains('bracket-round-column') && !!col.querySelector('h4.bracket-round-heading'))
     };
+    window._bracketSelectCategoryTab('neon-team', 'fem', '__general', '');
+    categorySchedule.generalAfterCategory = teamRoot._bracketGeneralView.querySelectorAll('.sp-match-card').length;
+    window._bracketSelectCategoryTab('neon-team', 'fem', 'Fem Power', '');
+    categorySchedule.powerAfterGeneral = teamRoot._bracketGeneralView.querySelectorAll('.sp-match-card').length;
+    document.getElementById('team-source').insertAdjacentHTML('beforeend',
+      card('light-unscheduled', 'fem', 'Fem Light', 0, 'Quadra 4', false, 4));
+    window._bracketSelectCategoryTab('neon-team', 'fem', 'Fem Light', '');
+    categorySchedule.partialFallback = !document.getElementById('team-source').hidden &&
+      teamRoot._bracketGeneralView.style.display === 'none' &&
+      Array.from(document.querySelectorAll('#team-source .sp-match-card:not([hidden])')).filter(el =>
+        el.getAttribute('data-bracket-tab-category') === 'Fem Light').length === 4;
 
     // Ao abrir Geral/Próximos, a âncora é sempre o primeiro jogo sem placar
     // por horário e quadra — presença ainda incompleta não pode fazer um jogo
@@ -261,6 +275,9 @@ function trecho(inicio, fim) {
   ok(result.externalSource.emptyHeadingHidden, 'Geral remove cabeçalho de rodada sem jogo da chave inline');
   ok(result.categorySchedule.headings.join(',') === 'Rodada 1 · 22/10 · 18:00,Rodada 2 · 22/10 · 18:35,Rodada 1 · 23/10 · 18:00', 'a categoria usa as faixas da grade, não m.round');
   ok(result.categorySchedule.games.join(',') === 'light-r2-early,light-r1-late,light-day2', 'a categoria conserva só seus jogos reais em ordem cronológica');
+  ok(result.categorySchedule.stickyContract, 'cabeçalhos da categoria usam o mesmo contrato sticky da Geral');
+  ok(result.categorySchedule.generalAfterCategory === 4 && result.categorySchedule.powerAfterGeneral === 1, 'alternar categoria → Geral → outra categoria conserva todos os cards');
+  ok(result.categorySchedule.partialFallback, 'categoria com jogo sem horário volta à chave canônica sem esconder a partida');
 
   await browser.close();
   console.log('\n' + (fail ? '❌' : '✅') + ' bracket-geral-agenda: ' + pass + ' ok, ' + fail + ' falharam');

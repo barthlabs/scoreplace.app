@@ -1585,6 +1585,7 @@ function _bracketTabsApply(tid, gender, category, requestedRound) {
     });
   var isScheduledCategory = root.getAttribute('data-bracket-team-schedule') === '1' &&
     !isGeneral && !isUpcoming && root.getAttribute('data-bracket-line-tabs') !== '1' &&
+    !_bracketIsEliminationTree(window._currentBracketTournament || {}) &&
     scheduledCategoryCards.length > 0 && scheduledCategoryCards.every(function (card) {
       return Number(card.getAttribute('data-bracket-scheduled-at')) > 0;
     });
