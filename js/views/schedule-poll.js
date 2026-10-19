@@ -1086,9 +1086,12 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
       });
 
       var teamSchedule = t.teamCompetition && t.teamCompetition.schedule;
-      var structured = teamSchedule && teamSchedule.enabled === true && teamSchedule.mode === 'structured' &&
+      // Livre altera os confrontos, não a obrigação de ocupar a grade. O
+      // encaixe por blocos abaixo deixava buracos mesmo com 48 jogos por dia.
+      var packedTeamDay = teamSchedule && teamSchedule.enabled === true &&
+        (teamSchedule.mode === 'structured' || teamSchedule.mode === 'free') &&
         t.categorySchedule && t.categorySchedule.confirmed === true && jogos.some(function (m) { return !!m.requiredDay; });
-      if (structured) {
+      if (packedTeamDay) {
         var byDay = jan.dias.map(function () { return []; }), assigned = true;
         chaves.forEach(function (key) {
           var block = porChave[key], day = block.agenda && indiceDia[block.agenda.day];

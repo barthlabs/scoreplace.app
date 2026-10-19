@@ -54,11 +54,13 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 const SUITES = [
+  'tests/team-enroll-consent.test.js',
   'tests/neon-painel-sorteio-safe.test.js',
   'tests/backend-targeted-publication.test.js',
   'tests/regulamento-neon.test.js',
   'tests/neon-sequencia-fotos.test.js',
   'tests/tournament-import.test.js',
+  'tests/discovery-cache-account-scope.test.js',
   'tests/manual-name-unique-core.test.js',
   'tests/native-update-policy.test.js',
   'tests/native-release-candidate.test.js',

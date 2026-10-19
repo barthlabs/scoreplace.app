@@ -186,15 +186,12 @@ assert(view.includes("window.confirm('Enviar a foto"), 'cada foto continua exigi
 assert(!view.includes('data-act="add-row"') && !view.includes('data-act="category"') && !view.includes('data-act="slot"'),
   'organizador não escolhe vaga ou categoria final neste fluxo');
 assert(view.includes('data-act="save"') && view.includes('data-act="none"'), 'decisão humana e gravação continuam disponíveis');
-assert(view.includes('state.page = 0;') && view.includes('discoverCandidates(imported)'), 'prévia abre na primeira dupla e consulta contas');
-assert(view.includes('person.lookupToken !== token') && view.includes('person.lookupStatus = \'error\''),
-  'resposta obsoleta é descartada e falha de busca não vira ausência de conta');
+assert(view.includes('state.page = 0;') && view.includes('p.uid = null'), 'prévia abre na primeira dupla sem vincular contas');
 assert(view.includes('repeatedUid(state.rows)') && view.indexOf('repeatedUid(state.rows)') < view.indexOf('window.confirm(\'Gravar '),
   'UID duplicado em toda a importação é barrado antes da primeira gravação');
 assert(view.includes('if (!state.rows[index] || state.rows[index].saved) return;'), 'linha gravada não pode ser removida');
 assert(view.includes('entry.plan.slot.categoryId'), 'a categoria enviada é sempre a categoria da vaga mapeada');
-assert(styles.includes('.sp-import-person-match') && styles.includes('background: #d9fbe8'), 'candidato provável é identificado em verde');
-assert(styles.includes('.sp-import-person {') && styles.includes('background: #fff'), 'sem candidato provável permanece branco');
+assert(styles.includes('.sp-import-person {') && styles.includes('background: #fff'), 'cartão manual permanece legível');
 assert(view.includes("state.busy || !state.rows.some(function (r) { return !r.saved; }) ? ' disabled'"), 'gravação segue desativada sem duplas pendentes');
 assert(!view.includes('style=') && !view.includes('style.cssText'), 'nenhum estilo inline atropela o tema');
 assert(styles.includes('#tournament-import-dialog.sp-import-dialog') && styles.includes('z-index: 10100'), 'overlay mantém sua camada no CSS');
@@ -205,10 +202,7 @@ console.log('✓ importação assistida: pares, UID/nenhum, slots, hash, parser'
 async function testVisibleFlow() {
   const listeners = {};
   let dialog;
-  let resolveOldLookup;
-  let malformedSearch = false;
   const applied = [];
-  const confirms = [];
   const document = {
     getElementById(id) { return id === 'tournament-import-dialog' ? dialog : null; },
     createElement() { return { setAttribute() {}, contains() { return true; }, remove() { dialog = null; } }; },
@@ -223,20 +217,11 @@ async function testVisibleFlow() {
   const app = {
     TournamentImportParser: parser, TournamentImportAllocation: allocation,
     _findTournamentById() { return { categoryDefinitions: cats }; },
-    confirm(message) { confirms.push(message); return true; },
+    confirm() { return true; },
     _callCF(name, data) {
       if (name === 'previewTournamentImport') return Promise.resolve({ data: preview });
       if (name === 'extractTournamentImportImage') return Promise.resolve({ data: {
         text: 'LIGHT FEMININO\n1. Ana Souza + Bia Lima\n2. Carla Souza + Dora Lima\nLIGHT MASCULINO\n1. Eduardo Lima + Fabio Souza',
-      } });
-      if (name === 'searchTournamentImportCandidates' && data.query === 'Gina Antiga') {
-        return new Promise((resolve) => { resolveOldLookup = resolve; });
-      }
-      if (name === 'searchTournamentImportCandidates' && malformedSearch && data.query === 'Bia Lima X') {
-        return Promise.resolve({ data: { broken: true } });
-      }
-      if (name === 'searchTournamentImportCandidates') return Promise.resolve({ data: {
-        candidates: data.query === 'Ana Souza' ? [{ uid: 'uid-ana', name: 'Ana Souza' }] : [],
       } });
       if (name === 'applyTournamentImportBlock') {
         applied.push(data.block);
@@ -252,62 +237,20 @@ async function testVisibleFlow() {
   listeners.change({ target: { id: 'tournament-import-files', files: [
     { name: 'foto.png', type: 'image/png', size: 100 },
   ] } });
-  for (let i = 0; i < 20 && !dialog.innerHTML.includes('Conta provável'); i++) await new Promise((resolve) => setTimeout(resolve, 0));
-  assert(dialog.innerHTML.includes('Conta provável'), 'conta candidata aparece na prévia');
-  assert(dialog.innerHTML.includes('sp-import-person-match'), 'conta candidata recebe o card verde');
+  for (let i = 0; i < 20 && !dialog.innerHTML.includes('duplas na ordem dos arquivos'); i++) await new Promise((resolve) => setTimeout(resolve, 0));
   assert(dialog.innerHTML.indexOf('Ana Souza') < dialog.innerHTML.indexOf('Carla Souza') &&
-    dialog.innerHTML.indexOf('Carla Souza') < dialog.innerHTML.indexOf('Eduardo Lima'), 'cards seguem a ordem da foto');
-  assert(!dialog.innerHTML.includes('Categoria final') && !dialog.innerHTML.includes('Escolha a dupla-placeholder'),
-    'prévia não pede escolhas redundantes');
-  const click = (act, row, side, candidate, token) => listeners.click({ target: {
-    closest: () => ({ dataset: { act, row: String(row), side: String(side), candidate: String(candidate), token: String(token) } }),
+    dialog.innerHTML.indexOf('Carla Souza') < dialog.innerHTML.indexOf('Eduardo Lima'),
+    'cards seguem a ordem da foto');
+  assert(!dialog.innerHTML.includes('data-act="search"') && !dialog.innerHTML.includes('data-act="choose"'),
+    'importação não oferece vinculação de conta sem consentimento');
+  const click = (act, row, side) => listeners.click({ target: {
+    closest: () => ({ dataset: { act, row: String(row), side: String(side) } }),
   } });
-  const fakeCard = { querySelector() { return null; } };
-  const editName = (name) => listeners.input({ target: { dataset: { act: 'name', row: '0', side: '1' }, value: name,
-    closest: () => fakeCard } });
-  editName('Gina Antiga');
-  click('search', 0, 1);
-  editName('Bia Lima');
-  resolveOldLookup({ data: { candidates: [{ uid: 'uid-gina', name: 'Gina Antiga' }] } });
-  click('search', 0, 1);
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  assert(!dialog.innerHTML.includes('uid-gina') && !dialog.innerHTML.includes('Gina Antiga'),
-    'resposta de busca antiga não reaparece após corrigir o nome');
-  assert(!dialog.innerHTML.includes('Confirmar sem conta'), 'sem conta provável dispensa confirmação individual');
-  malformedSearch = true;
-  listeners.input({ target: { dataset: { act: 'query', row: '0', side: '1' }, value: 'Bia Lima X', closest: () => fakeCard } });
-  click('search', 0, 1);
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  assert(dialog.innerHTML.includes('Busca falhou'), 'resposta estruturalmente inválida não significa ausência de conta');
-  click('save', 0, 0);
-  assert.strictEqual(applied.length, 0, 'busca falha bloqueia gravação');
-  malformedSearch = false;
-  listeners.input({ target: { dataset: { act: 'query', row: '0', side: '1' }, value: 'Bia Lima', closest: () => fakeCard } });
-  click('search', 0, 1);
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  assert(dialog.innerHTML.includes('Sem conta vinculada'), 'busca válida sem candidatos dispensa clique');
-  const token = dialog.innerHTML.match(/data-act="choose"[^>]*data-token="(\d+)"/)[1];
-  click('choose', 0, 0, 0, token);
-  for (let i = 0; i < 20 && dialog.innerHTML.includes('Buscando conta'); i++) await new Promise((resolve) => setTimeout(resolve, 0));
   click('save', 0, 0);
   for (let i = 0; i < 20 && !applied.length; i++) await new Promise((resolve) => setTimeout(resolve, 0));
-  assert.strictEqual(applied.length, 1, 'bloco foi enviado uma única vez');
-  assert.deepStrictEqual(Array.from(applied[0], (row) => row.pairId), ['z', 'a', 'b'], 'mapeamento usa a ordem da foto por categoria');
-  assert.deepStrictEqual(Array.from(applied[0][0].people, (person) => person.name), ['Bia Lima', 'Ana Souza'],
-    'payload respeita a ordem interna do backend sem trocar a posição visual');
-  assert.strictEqual(applied[0][0].people[1].uid, 'uid-ana', 'vínculo foi resultado de clique humano, nunca da busca');
-  assert(confirms.some((message) => message.includes('5 pessoa(s) ficarão sem conta vinculada') && message.includes('Bia Lima')),
-    'confirmação final informa nomes e quantidade sem conta');
-  const originalCall = app._callCF;
-  app._callCF = (name, data) => name === 'extractTournamentImportImage'
-    ? new Promise(() => {}) : originalCall(name, data);
-  await app._openTournamentImport('fixture');
-  listeners.change({ target: { id: 'tournament-import-files', files: [
-    { name: 'lenta.png', type: 'image/png', size: 100 },
-  ] } });
-  assert(dialog.innerHTML.includes('Lendo 1 arquivo'), 'leitura lenta marca o diálogo como ocupado');
-  click('close', 0, 0);
-  assert.strictEqual(dialog, null, 'o organizador pode fechar durante leitura lenta sem alterar dados');
-  console.log('✓ prévia real: ordem da foto, cards, candidato verde e payload canônico');
+  assert.strictEqual(applied.length, 1, dialog.innerHTML.match(/sp-import-error[^<]*<[^>]*>[^<]*/g));
+  assert(applied[0].every((row) => row.people.every((person) => person.uid === null)),
+    'importação grava apenas vagas manuais para aceite posterior');
+  console.log('✓ prévia real: ordem da foto e nenhum vínculo de conta sem aceite');
 }
 testVisibleFlow().catch((error) => { console.error(error); process.exitCode = 1; });

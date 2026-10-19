@@ -226,6 +226,10 @@ function renderNotifications(container) {
         actionHtml = '<div style="display: flex; gap: 6px; margin-top: 8px;">' +
           '<button class="btn btn-sm" style="background: transparent; color: var(--danger-color); border: 1px solid var(--danger-color); padding: 4px 14px; font-size: 0.75rem;" onclick="event.stopPropagation(); window._cancelHostInvite(\'' + safeTournamentId + '\',\'' + _cancelType + '\'); _markNotifRead(\'' + safeNotifId + '\')">' + _t('notif.cancelInvite') + '</button>' +
         '</div>';
+      } else if (n.type === 'tournament_invite' && n.tournamentId) {
+        // Convite não inscreve: a própria pessoa abre a ficha e escolhe
+        // Inscrever-se. Isso também funciona depois de marcar o aviso como lido.
+        actionHtml = '<div style="margin-top:8px;"><button class="btn btn-sm" style="background:var(--primary-color);color:#fff;border:none;padding:6px 14px;font-size:0.78rem;font-weight:700;" onclick="event.stopPropagation();window.location.hash=\'#tournaments/' + safeTournamentId + '\';_markNotifRead(\'' + safeNotifId + '\')">' + _t('notif.viewTournamentDecide') + '</button></div>';
       } else if (n.type === 'friend_request' && isUnread) {
         actionHtml = '<div style="display: flex; gap: 6px; margin-top: 8px;">' +
           '<button class="btn btn-sm" style="background: transparent; color: var(--danger-color); border: 1px solid var(--danger-color); padding: 4px 14px; font-size: 0.75rem;" onclick="event.stopPropagation(); _rejectFriend(\'' + safeFromUid + '\'); _markNotifRead(\'' + safeNotifId + '\')">' + _t('notif.reject') + '</button>' +

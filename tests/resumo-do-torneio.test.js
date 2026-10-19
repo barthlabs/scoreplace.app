@@ -38,6 +38,16 @@ const fx = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'confra-p
 const t = fx.tournament || fx;
 const s = buildSummary(t, t.id);
 
+// Co-organizador ativo pode não constar no memberUids legado do documento completo.
+// O índice de acesso do resumo precisa incluí-lo nos dois modos restritos.
+for (const mode of ['organizerOnly', 'membersOnly']) {
+  const restricted = buildSummary({ ...t, creatorUid:'org', adminUids:['org', 'cohost'], memberUids:['org', 'player'],
+    organizerOnly:mode === 'organizerOnly', membersOnly:mode === 'membersOnly' }, 'restricted-' + mode);
+  ok(restricted.memberUids.includes('cohost') &&
+    (mode !== 'organizerOnly' || !restricted.memberUids.includes('player')),
+  'resumo ' + mode + ' inclui co-organizador e limita inscritos conforme o escopo');
+}
+
 // ── ① leve de verdade, no documento REAL ──────────────────────────────────────
 const kbCompleto = JSON.stringify(t).length / 1024;
 const kbResumo = JSON.stringify(s).length / 1024;

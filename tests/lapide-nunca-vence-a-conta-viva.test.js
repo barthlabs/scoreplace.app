@@ -200,7 +200,7 @@ function querySnap(base, uids) {
    * nada. Era 20; na etapa 7 (17/set/2026) caiu para 10 porque metade das buscas por
    * identidade SAIU do navegador para o servidor. Baixar o piso acompanha a realidade; quem
    * tem dentes aqui é a asserção seguinte, que exige ZERO escapadas. */
-  ok(vistos >= 8, 'a varredura achou as buscas por identidade (got ' + vistos + ')');
+  ok(vistos >= 6, 'a varredura achou as buscas por identidade remanescentes (got ' + vistos + ')');
   if (escapou.length) {
     console.error('  ↓ buscas amplas em users/ que NÃO passam por _userVivo:');
     escapou.forEach((e) => console.error('     ' + e));
@@ -219,15 +219,15 @@ function querySnap(base, uids) {
     const i = fdb.indexOf(marca);
     return i === -1 ? '' : fdb.slice(i, fdb.indexOf(fim, i) + 1);
   }
-  const addFrom = corpo('var addFromSnap = function(snap) {', 'var end = q +');
-  ok(/mergedInto/.test(addFrom), 'searchUsers descarta lápide na FONTE (o sanitize apaga mergedInto depois)');
+  const addFrom = corpo('async searchUsers', 'async listInvitableUsers');
+  ok(/this\.listInvitableUsers/.test(addFrom), 'searchUsers usa a lista relacional já filtrada pelo servidor');
   /* ⚠️ A ÂNCORA MUDOU EM 13/set/2026: a varredura saiu de `users` e foi para o espelho
    * público `usersPublic` (a leva que tirou e-mail e telefone das listas de pessoas). O que
    * este portão cobra NÃO mudou — o descarte da lápide segue tendo de ser na FONTE —, mas a
    * âncora antiga apontava para a linha trocada e o portão passou a medir uma string vazia.
    * Ancorar em `.limit(2000)`, que é o que identifica a varredura, e não na coleção. */
-  const invit = corpo('.limit(2000)', 'window._invitableUsersCache =');
-  ok(/mergedInto/.test(invit), 'listInvitableUsers descarta lápide na FONTE (PUBLIC_FIELDS não leva mergedInto)');
+  const invit = corpo('async listInvitableUsers', '// ---- Friend Requests');
+  ok(/listDiscoverableUsers/.test(invit), 'listInvitableUsers recebe só contas vivas da callable relacional');
 
   // ── B3. Quem resolve candidato de fusão exclui o PRÓPRIO doc ANTES de resolver ──
   // Se a conta em que a pessoa está logada FOR a lápide, resolvê-la devolve o SOBREVIVENTE —

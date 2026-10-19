@@ -68,6 +68,12 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
       config[key] = cloneConfig(raw[key], 0, [key]);
     });
     checkNested(config, fail);
+    if ('membersOnly' in config || 'organizerOnly' in config) {
+      if (typeof config.isPublic !== 'boolean' || typeof config.membersOnly !== 'boolean' || typeof config.organizerOnly !== 'boolean'
+        || [config.isPublic, config.membersOnly, config.organizerOnly].filter(Boolean).length !== 1) {
+        fail('invalid-argument', 'Selecione uma única visibilidade para o torneio.');
+      }
+    }
     if (validatePolicy) validatePolicy(config, HttpsError);
     if (validateCapacity) validateCapacity(config);
     const hasFmt2 = !!(config.fmt2 && typeof config.fmt2 === 'object' && !Array.isArray(config.fmt2));

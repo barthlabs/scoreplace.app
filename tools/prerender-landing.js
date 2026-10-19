@@ -110,7 +110,14 @@ async function main() {
   let browser;
   try {
     console.log('[prerender] abrindo Chromium headless…');
-    browser = await chromium.launch();
+    // O pacote de testes pode ser atualizado antes de baixar sua revisão de
+    // Chromium. No Mac de deploy, o Chrome instalado é um fallback local.
+    const bundled = chromium.executablePath();
+    const systemChrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+    const launchOptions = !fs.existsSync(bundled) && fs.existsSync(systemChrome)
+      ? { executablePath: systemChrome }
+      : {};
+    browser = await chromium.launch(launchOptions);
     const context = await browser.newContext({
       // viewport mobile pra capturar layout responsivo da landing
       viewport: { width: 390, height: 844 },

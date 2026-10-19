@@ -135,6 +135,10 @@ function memberUids(tournament, registrations) {
   (Array.isArray(tournament && tournament.coHosts) ? tournament.coHosts : []).forEach((coHost) => {
     if (coHost && (coHost.status === 'active' || coHost.status === 'accepted')) add(coHost.uid);
   });
+  // O índice também determina quais documentos versões nativas antigas recebem.
+  // As inscrições continuam canônicas, mas um torneio reservado à organização
+  // não pode manter os participantes na consulta memberUids.
+  if (tournament && tournament.organizerOnly === true) return Array.from(values).sort();
   checked.registrations.forEach((registration) => {
     if (registration.status !== 'withdrawn' && registration.participantKind === 'account') add(registration.participantUid);
   });

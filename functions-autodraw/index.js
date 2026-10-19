@@ -550,7 +550,7 @@ async function _closeExpiredLeagueSeason(ref, tId, nowIso) {
     if (!result.changed) return { ok: true, changed: false, reason: result.reason };
     const recipients = _seasonRecipientUids(t);
     const boundary = _gravaTorneio(tx, ref, t, before, { agoraIso: nowIso });
-    if (recipients.length && !t.isSandbox && !t.notificationsMuted) {
+    if (recipients.length && !t.isSandbox && !t.notificationsMuted && !t.organizerOnly) {
       tx.set(ref.collection('notificationOutbox').doc('season-finished'), {
         schema: 1, kind: 'score-notification', type: 'tournament_finished',
         title: '🏁 Torneio encerrado',
@@ -2649,14 +2649,14 @@ async function _criarOutboxDeJogoLiberado(tournamentId, tournament, specs, nowMs
 }
 
 async function _notificarJogosProntosDoTorneio(tournamentId, rawTournament, includeDeadlineReminders) {
-  if (!rawTournament || !drawWindow || typeof drawWindow._collectAllMatches !== 'function') return;
+  if (!rawTournament || rawTournament.organizerOnly === true || !drawWindow || typeof drawWindow._collectAllMatches !== 'function') return;
   let tournament = rawTournament;
   const ref = db.collection('tournaments').doc(String(tournamentId));
   /* ⛔ A NOTIFICAÇÃO SEMPRE LÊ O TORNEIO MONTADO. O marcador legado pode faltar na
    * fotografia, mas os jogos canônicos continuam na subcoleção; usar o doc magro aqui
    * silenciaria precisamente os avisos de confrontos liberados. [[project_torneio_nasce_dividido]] */
   tournament = await _leTorneio(_TX_LEITURA, ref, String(tournamentId));
-  if (!tournament) return;
+  if (!tournament || tournament.organizerOnly === true) return;
   const matches = drawWindow._collectAllMatches(tournament);
   const now = Date.now();
   const ready = _matchReadyNotifications.readySpecs(tournament, matches);
@@ -2790,6 +2790,12 @@ exports.deliverScoreNotification = onDocumentWritten(
       }
     }
     const recipients = Array.isArray(item.recipients) ? Array.from(new Set(item.recipients.map(String).filter(Boolean))) : [];
+    const visibilitySnap = await db.collection('tournaments').doc(tId).get();
+    const visibility = visibilitySnap.exists ? (visibilitySnap.data() || {}) : {};
+    if (visibility.organizerOnly === true) {
+      await after.ref.set({ dispatchStatus: 'suppressed', suppressedAt: new Date().toISOString() }, { merge: true });
+      return;
+    }
     const profiles = await _loadLiveNames(new Set(recipients));
     const now = Date.now();
     const day = String(item.createdAt || new Date(now).toISOString()).slice(0, 10);
@@ -3909,7 +3915,7 @@ exports.applyCategoryCommunicationMarkers = onCall(async (request) => {
 
 function _queueProfileCategoryNotice(tx, ref, t, eventId, recipients, type, level, message, nowIso) {
   const unique = Array.from(new Set((recipients || []).map(String).filter(Boolean)));
-  if (!unique.length || t.isSandbox || t.notificationsMuted) return;
+  if (!unique.length || t.isSandbox || t.notificationsMuted || t.organizerOnly) return;
   tx.set(ref.collection('notificationOutbox').doc(_outboxDocIdPart(eventId)), {
     schema: 1, kind: 'tournament-notification', type, title: '🏷️ Categoria atualizada', message,
     tournamentId: String(t.id || ''), tournamentName: String(t.name || ''), level: level || 'all', recipients: unique,
@@ -4294,7 +4300,7 @@ exports.setTournamentFlyerPrefs = onCall(async (request) => {
 // detalhe de identidade, elenco, fila, jogos, resultados, fases materializadas ou
 // ciclo de vida fica fora desta lista e só possui comandos próprios no servidor.
 const _CAMPOS_CONFIG_TORNEIO = new Set([
-  'name','isPublic','format','sport','startDate','endDate','roundBounds','roundBoundsEditorEnabled','registrationOpenAt','registrationLimit',
+  'name','isPublic','membersOnly','organizerOnly','format','sport','startDate','endDate','roundBounds','roundBoundsEditorEnabled','registrationOpenAt','registrationLimit',
   'enrollmentMode','mixedPairingSeparated','manualPairing','teamSize','gameTypes',
   // A capacidade por categoria é declarativa; o total que a tela calcula continua
   // em maxParticipants para os fluxos legados de inscrição. Os dois precisam passar
@@ -4506,6 +4512,21 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização atualiza a configuração.', { tId, uid });
+    if ('membersOnly' in patch || 'organizerOnly' in patch) {
+      const effective = {
+        isPublic: 'isPublic' in patch ? patch.isPublic : t.isPublic === true,
+        membersOnly: 'membersOnly' in patch ? patch.membersOnly : t.membersOnly === true,
+        organizerOnly: 'organizerOnly' in patch ? patch.organizerOnly : t.organizerOnly === true
+      };
+      if (['isPublic', 'membersOnly', 'organizerOnly'].some(key => typeof effective[key] !== 'boolean')
+        || Object.values(effective).filter(Boolean).length !== 1) {
+        throw new HttpsError('invalid-argument', 'Selecione uma única visibilidade para o torneio.');
+      }
+    }
+    if ('isPublic' in patch && !('membersOnly' in patch) && !('organizerOnly' in patch)
+      && (t.organizerOnly === true || t.membersOnly === true)) {
+      throw new HttpsError('failed-precondition', 'Atualize o app para alterar a visibilidade deste torneio.');
+    }
     const _policyBeforeShape = _policyConfig.policyShape(t);
     _policyConfig.canonicalizePolicyAliases(patch, t);
     require('./category-capacity-core').validateCapacityConfig(patch, HttpsError, t);
@@ -4554,6 +4575,7 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
           { tId, recusados: _recusados });
       }
     }
+    const wasOrganizerOnly = t.organizerOnly === true;
     const antes = _antesDoMotor(t);
     Object.keys(patch).forEach(key => {
       if (key === 'phases' && hasDraw) {
@@ -4595,6 +4617,18 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     if (!Array.isArray(t.history)) t.history = [];
     t.history.push({ date: agoraIso, message: 'Regras atualizadas pela organização.' });
     const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
+    if (wasOrganizerOnly && t.organizerOnly !== true && !t.isSandbox) {
+      const admins = new Set([t.creatorUid].concat(Array.isArray(t.adminUids) ? t.adminUids : []).map(String));
+      const recipients = Array.from(new Set((Array.isArray(t.memberUids) ? t.memberUids : []).map(String)))
+        .filter(memberUid => memberUid && !admins.has(memberUid));
+      if (recipients.length) tx.set(ref.collection('notificationOutbox').doc('visibility-release-' + Date.parse(agoraIso)), {
+        schema: 1, kind: 'tournament-notification', type: 'tournament_visible',
+        title: '🏆 Torneio liberado', message: 'O torneio ' + String(t.name || '') + ' já está disponível para você.',
+        tournamentId: tId, tournamentName: t.name || '', level: 'important', recipients,
+        ctaLabel: 'Ver torneio', ctaUrl: 'https://scoreplace.app/#tournaments/' + encodeURIComponent(tId),
+        createdAt: agoraIso, createdAtMs: Date.parse(agoraIso), dispatchStatus: 'pending'
+      });
+    }
     return { ok:true, changed:true, tournament:b.clean };
   });
 });
@@ -4767,7 +4801,7 @@ exports.advanceTournamentPhase = onCall(async (request) => {
 });
 
 async function _notifyAdvancedPhase(t, tId, phaseIndex, nowIso) {
-  if (!t || t.isSandbox || t.notificationsMuted) return;
+  if (!t || t.isSandbox || t.notificationsMuted || t.organizerOnly) return;
   const ids = new Set();
   // A fase pode armazenar jogos em matches, rounds ou phaseRounds. A novidade é do
   // torneio e deve chegar aos inscritos mesmo se o formato ainda não expõe um match plano.
@@ -5218,7 +5252,7 @@ function _hasTournamentDraw(t) {
 }
 function _enqueueEnrollmentNotice(tx, ref, t, type, title, message, nowIso) {
   const recipients = _seasonRecipientUids(t);
-  if (!recipients.length || t.isSandbox || t.notificationsMuted) return;
+  if (!recipients.length || t.isSandbox || t.notificationsMuted || t.organizerOnly) return;
   tx.set(ref.collection('notificationOutbox').doc(type + '-' + String(Date.parse(nowIso))), {
     schema: 1, kind: 'tournament-notification', type, title, message,
     tournamentId: String(t.id || ref.id), tournamentName: String(t.name || ''),
@@ -5721,7 +5755,7 @@ exports.setPhasePromotion = onCall(async (request) => {
 
 async function _notifyPublishedPendingDraw(t,tId,roundIndex,nowIso) {
   // ⛔ A finalização privada nunca comunica jogadores: só torneio explicitamente público.
-  if(!_drawCanBePublishedPublicly(t) || t.notificationsMuted) return;
+  if(!_drawCanBePublishedPublicly(t) || t.notificationsMuted || t.organizerOnly) return;
   const ids=new Set(); (t.participants||[]).forEach(p=>[p&&p.uid,p&&p.p1Uid,p&&p.p2Uid].forEach(u=>u&&ids.add(String(u))));
   const {profByUid}=await _loadLiveNames(ids); const mailed=new Set();
   for(const uid of ids){ const profile=profByUid[uid]; if(!profile) continue; const msg='🔄 Chave e horários estimados publicados no torneio '+(t.name||'')+'. Confira seus jogos: os horários podem mudar conforme o andamento.';
@@ -6078,7 +6112,7 @@ exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
         };
 
         // Sandbox/killswitch: o SB SORTEIA na mesma CF (fidelidade), mas NÃO notifica.
-        const _sbMuteAuto = (t.isSandbox === true || t.notificationsMuted === true);
+        const _sbMuteAuto = (t.isSandbox === true || t.notificationsMuted === true || t.organizerOnly === true);
         if (_sbMuteAuto) console.log(`Auto-draw: ${tId} é sandbox/mudo — sorteio feito, notificações suprimidas`);
         const notifiedUids = new Set();
         const _mailedTo = new Set();   // dedup de E-MAIL da rodada (a mesma pessoa por 2 uids)
@@ -6257,7 +6291,7 @@ async function _autoDrawIncrementalPhaseRound(t, tId, now) {
     return '🔄 Nova rodada no torneio ' + (t.name || '') + '!\n\n' + gamesText + (t.venue ? '\n\n📍 ' + t.venue : '');
   };
   // Sandbox/killswitch: SB sorteia na mesma CF, mas não notifica.
-  const _sbMuteAuto = (t.isSandbox === true || t.notificationsMuted === true);
+  const _sbMuteAuto = (t.isSandbox === true || t.notificationsMuted === true || t.organizerOnly === true);
   const notified = new Set();
   const _mailedToPh = new Set();   // dedup de e-mail desta rodada de fase
   let _mailedPh = 0;
@@ -6288,6 +6322,7 @@ async function _autoDrawIncrementalPhaseRound(t, tId, now) {
 
 // Notificação de rodada incremental manual/automática: uma única entrega server-side.
 async function _notifyIncrementalPhaseRound(t, tId, phaseIdx, nowIso) {
+  if (t.organizerOnly === true) return;
   const slot = (t.phaseRounds && t.phaseRounds[phaseIdx]) || {};
   const rounds = slot.rounds || [];
   const maxR = rounds.reduce((mx, r) => Math.max(mx, (r && r.round) || 1), 0);
@@ -6558,6 +6593,11 @@ exports.sendPushNotification = onDocumentCreated('users/{userId}/notifications/{
 
   const userId = event.params.userId;
   const notifData = snap.data();
+  if (notifData && notifData.tournamentId) {
+    const tournamentSnap = await db.collection('tournaments').doc(String(notifData.tournamentId)).get();
+    const tournament = tournamentSnap.exists ? (tournamentSnap.data() || {}) : {};
+    if (tournament.organizerOnly === true && !_isTournamentAdmin(tournament, userId)) return;
+  }
 
   const userDoc = await db.collection('users').doc(userId).get();
   if (!userDoc.exists) return;

@@ -125,9 +125,16 @@ function renderExplore(container) {
   // #todas-pessoas apurou e guardou; antes da 1ª visita fica SEM número — mesmo desenho
   // (e mesma honestidade) da 2.1.11: melhor calar do que exibir um total de outra fonte.
   var _totalPessoasHtml = '';
+  try {
+    if (!localStorage.getItem('scoreplace_discovery_cache_migrated_v1')) {
+      localStorage.removeItem('scoreplace_invitable_v1');
+      localStorage.removeItem('scoreplace_totalPessoas');
+      localStorage.setItem('scoreplace_discovery_cache_migrated_v1', '1');
+    }
+  } catch (_) {}
   var _temTotal = false;
   try {
-    var _tp = parseInt(localStorage.getItem('scoreplace_totalPessoas'), 10);
+    var _tp = parseInt(localStorage.getItem('scoreplace_totalPessoas_' + String(cu.uid || '')), 10);
     if (_tp > 0) { _totalPessoasHtml = ' <span data-total-pessoas>' + _tp + '</span>'; _temTotal = true; }
   } catch (e) {}
   if (!_temTotal) _totalPessoasHtml = ' <span data-total-pessoas></span>';
@@ -209,7 +216,7 @@ function renderExplore(container) {
         return uid && uid !== meu;
       }).length;
       if (!n) return;
-      try { localStorage.setItem('scoreplace_totalPessoas', String(n)); } catch (e) {}
+      try { localStorage.setItem('scoreplace_totalPessoas_' + String(cu.uid || ''), String(n)); } catch (e) {}
       // pinta só o número — re-renderizar a tela inteira por causa dele tiraria a pessoa
       // do lugar onde ela já está lendo.
       var el = document.querySelector('[data-total-pessoas]');
@@ -711,8 +718,10 @@ function _performUserSearch(query, myUid, myFriends, mySent, myReceived) {
   // Antes o cache era só em memória → cada reload/reabertura do PWA refazia o scan
   // de TODA a coleção users (Sentry WEB-5E: ~302 reads/abertura). Agora o scan roda
   // no máximo ~1x/30min por aparelho. Dados já vêm sanitizados (campos públicos).
-  var _INV_CACHE_KEY = 'scoreplace_invitable_v1';
+  var _INV_CACHE_KEY = 'scoreplace_discoverable_v1_' + String(myUid || '');
   var _INV_CACHE_TTL = 30 * 60 * 1000;
+  if (window._exploreInvitableCacheUid !== String(myUid || '')) window._exploreInvitableCache = null;
+  window._exploreInvitableCacheUid = String(myUid || '');
   if (!Array.isArray(window._exploreInvitableCache)) {
     try {
       var _rawC = localStorage.getItem(_INV_CACHE_KEY);
@@ -728,6 +737,7 @@ function _performUserSearch(query, myUid, myFriends, mySent, myReceived) {
     _runSubstringSearch();
   } else {
     window.FirestoreDB.listInvitableUsers().then(function(all) {
+      if (String((window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) || '') !== String(myUid || '')) return;
       window._exploreInvitableCache = all || [];
       try { localStorage.setItem(_INV_CACHE_KEY, JSON.stringify({ t: Date.now(), users: all || [] })); } catch (_se) {}
       _runSubstringSearch();

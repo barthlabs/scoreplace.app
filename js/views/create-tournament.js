@@ -454,14 +454,17 @@ function setupCreateTournamentModal() {
                 <input type="hidden" id="tourn-cover-data" value="">
               </div>
 
-              <!-- Visibilidade do torneio: os dois estados ficam sempre explícitos,
-                   tal qual Inscrições durante a fase. REGRESSÃO: não volte ao rótulo
-                   único “Público”; com o switch desligado ele escondia “Privado” e
-                   fazia o estado gravado em #tourn-public parecer o oposto. -->
+              <!-- Acesso explícito: geral, somente inscritos ou somente organização. -->
               <div class="form-group mb-2" style="background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.18);border-radius:12px;padding:1rem;">
                 <p style="margin:0 0 0.75rem;font-size:0.8rem;color:var(--sp-c-60a5fa,#60a5fa);font-weight:600;text-transform:uppercase;letter-spacing:1px;">🌐 ${_t('create.visibilitySection')}</p>
                 <input type="hidden" id="tourn-public" value="true">
-                ${window._lateEnrollmentModeSwitchHtml({ id: 'tournament-visibility-mode', inputId: 'toggle-public', mode: 'visibility', on: true, left: _t('create.privateLabel'), right: _t('create.publicLabel'), leftColor: '#f87171', rightColor: '#60a5fa', leftToggleBg: 'rgba(248,113,113,0.28)', rightGlow: 'rgba(96,165,250,0.36)', ariaPrefix: _t('create.visibilitySection'), onchange: "window._setVisibility(this.checked ? 'public' : 'private')", descId: 'vis-desc', desc: _t('create.publicDesc') })}
+                <input type="hidden" id="tourn-visibility" value="public">
+                <div id="tournament-visibility-mode" role="group" aria-label="${_t('create.visibilitySection')}" style="display:flex;gap:6px;flex-wrap:wrap;">
+                  <button type="button" class="btn" data-visibility="public" onclick="window._setVisibility('public')">${_t('create.visibilityGeneral')}</button>
+                  <button type="button" class="btn" data-visibility="members" onclick="window._setVisibility('members')">${_t('create.visibilityMembers')}</button>
+                  <button type="button" class="btn" data-visibility="organizers" onclick="window._setVisibility('organizers')">${_t('create.visibilityOrganizers')}</button>
+                </div>
+                <p id="vis-desc" style="margin:8px 0 0;font-size:0.8rem;color:var(--text-muted);">${_t('create.publicDesc')}</p>
               </div>
 
               <!-- ═══════════ BOX FASE 1 ═══════════
@@ -2816,23 +2819,20 @@ function setupCreateTournamentModal() {
 
   // ── Visibility toggle ──
   window._setVisibility = function(vis) {
-    var toggle = document.getElementById('toggle-public');
     var hidden = document.getElementById('tourn-public');
+    var scope = document.getElementById('tourn-visibility');
     var desc = document.getElementById('vis-desc');
-    var isPublic = vis === 'public';
-    // Fonte de verdade única: o valor salvo continua booleano em #tourn-public.
-    // O switch e suas duas legendas são apenas a representação visual desse valor.
-    if (isPublic) {
-      if (toggle) toggle.checked = true;
-      if (hidden) hidden.value = 'true';
-      if (desc) desc.textContent = _t('create.publicDesc');
-    } else {
-      if (toggle) toggle.checked = false;
-      if (hidden) hidden.value = 'false';
-      if (desc) desc.textContent = _t('create.privateDesc');
-    }
+    var chosen = vis === 'organizers' ? 'organizers' : (vis === 'members' || vis === 'private' ? 'members' : 'public');
+    if (hidden) hidden.value = chosen === 'public' ? 'true' : 'false';
+    if (scope) scope.value = chosen;
+    if (desc) desc.textContent = _t(chosen === 'public' ? 'create.publicDesc' : chosen === 'members' ? 'create.visibilityMembersDesc' : 'create.visibilityOrganizersDesc');
     var row = document.getElementById('tournament-visibility-mode');
-    if (typeof window._setLateEnrollmentModeVisual === 'function') window._setLateEnrollmentModeVisual(row, isPublic);
+    if (row) row.querySelectorAll('[data-visibility]').forEach(function(btn) {
+      var selected = btn.getAttribute('data-visibility') === chosen;
+      btn.setAttribute('aria-pressed', selected ? 'true' : 'false');
+      btn.style.border = selected ? '2px solid #60a5fa' : '1px solid rgba(255,255,255,0.2)';
+      btn.style.background = selected ? 'rgba(59,130,246,0.3)' : 'rgba(255,255,255,0.05)';
+    });
   };
 
   window._onSportChange = function () {
@@ -5231,7 +5231,7 @@ function setupCreateTournamentModal() {
     if (_cpLock) _cpLock.checked = _cpEdit === 'locked';
     if (typeof window._syncCallPolicy === 'function') window._syncCallPolicy();
     if (typeof window._syncEnrollLimitMode === 'function') window._syncEnrollLimitMode();
-    window._setVisibility(t.isPublic !== false ? 'public' : 'private');
+    window._setVisibility(t.organizerOnly === true ? 'organizers' : t.membersOnly === true ? 'members' : t.isPublic !== false ? 'public' : 'members');
     // W.O. não é mais configuração: sempre inicia em individual; a organização escolhe
     // individual ou dupla inteira diretamente no card, com confirmação explícita.
     var _woEl = document.getElementById('wo-scope'); if (_woEl) _woEl.value = 'individual';
@@ -6080,6 +6080,7 @@ window._saveTournamentClickHandler = async function() {
         // Normalize single-element array to string for backward compat
         if (Array.isArray(resultEntryVal) && resultEntryVal.length === 1) resultEntryVal = resultEntryVal[0];
         const isPublicVal = document.getElementById('tourn-public').value === 'true';
+        const visibilityVal = (document.getElementById('tourn-visibility') || {}).value || (isPublicVal ? 'public' : 'members');
 
         // Venue / Courts / Time
         const venueVal = document.getElementById('tourn-venue').value.trim();
@@ -6140,6 +6141,8 @@ window._saveTournamentClickHandler = async function() {
           storageCanonico: true,
           name,
           isPublic: isPublicVal,
+          membersOnly: visibilityVal === 'members',
+          organizerOnly: visibilityVal === 'organizers',
           format,
           sport: sportClean,
           startDate: startDateVal,
@@ -6521,7 +6524,7 @@ window._saveTournamentClickHandler = async function() {
               var _cuEdit = window.AppStore && window.AppStore.currentUser;
               if (_cuEdit && _cuEdit.uid && typeof window._syncTournamentPresencePlan === 'function') window._syncTournamentPresencePlan(_freshEdit, _cuEdit);
             } catch (_se) {}
-            if (_changes.length > 0 && window._notifyTournamentParticipants) {
+            if (_changes.length > 0 && _freshEdit.organizerOnly !== true && window._notifyTournamentParticipants) {
               var changeMsg = 'O torneio "' + name + '" foi atualizado: ' + _changes.join(', ') + '.';
               window._notifyTournamentParticipants(_freshEdit, {
                 type: 'tournament_updated', message: changeMsg, level: 'important'
@@ -7789,7 +7792,7 @@ window._prefillFromTemplate = function(tpl) {
   if (tpl.isPublic !== undefined) {
     // Template, edição e toque manual devem passar pelo mesmo sincronizador;
     // gravar apenas o hidden regressa o texto/posição visual para “Público”.
-    if (typeof window._setVisibility === 'function') window._setVisibility(tpl.isPublic ? 'public' : 'private');
+    if (typeof window._setVisibility === 'function') window._setVisibility(tpl.organizerOnly ? 'organizers' : tpl.membersOnly ? 'members' : tpl.isPublic ? 'public' : 'members');
   }
   // Tipo de jogo, lotação, lançamento de resultado, W.O. já tratado, encerrar ao lotar
   _setV('tourn-game-types', tpl.gameTypes);
@@ -8326,6 +8329,8 @@ window._saveCurrentFormAsTemplate = function(saveButton) {
       format: format,
       drawMode: drawModeValue || 'sorteio',
       isPublic: get('tourn-public') === 'true',
+      membersOnly: get('tourn-visibility') === 'members',
+      organizerOnly: get('tourn-visibility') === 'organizers',
       scoring: scoring,
       genderCategories: genderCats,
       skillCategories: skillCats,

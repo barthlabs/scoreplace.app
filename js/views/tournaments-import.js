@@ -28,7 +28,7 @@
     var people = row.people.map(function (person, side) {
       var hasCandidates = (person.candidates || []).length > 0;
       var decision = person.uid ? '✓ Conta vinculada: ' + (person.chosenName || person.uid)
-        : person.uid === null ? 'Sem conta vinculada'
+        : person.uid === null ? 'Sem conta vinculada — vínculo só após aceite da pessoa'
           : person.lookupStatus === 'loading' ? 'Buscando conta…'
             : person.lookupStatus === 'error' ? 'Busca falhou — tente novamente'
               : hasCandidates ? 'Conta provável — confirme uma opção'
@@ -40,10 +40,8 @@
         '<div class="sp-import-person-name">' + esc(person.name) + '</div>' +
         '<div class="sp-import-decision">' + esc(decision) + '</div>' +
         (!row.saved && !state.busy && person.uid === undefined && hasCandidates ? '<div class="sp-import-candidates">' + hits + '<button type="button" data-act="none" data-row="' + idx + '" data-side="' + side + '">Nenhum destes</button></div>' : '') +
-        (!row.saved && !state.busy ? '<details class="sp-import-edit" data-edit-key="' + row.viewKey + '-' + side + '"><summary>Corrigir nome ou busca</summary>' +
-          '<label class="sp-import-field">Nome<input data-act="name" data-row="' + idx + '" data-side="' + side + '" value="' + esc(person.name) + '"></label>' +
-          '<div class="sp-import-search-row"><input data-act="query" data-row="' + idx + '" data-side="' + side + '" value="' + esc(person.query || person.name) + '" aria-label="Buscar conta">' +
-          '<button type="button" data-act="search" data-row="' + idx + '" data-side="' + side + '">Buscar</button></div></details>' : '') +
+        (!row.saved && !state.busy ? '<details class="sp-import-edit" data-edit-key="' + row.viewKey + '-' + side + '"><summary>Corrigir nome</summary>' +
+          '<label class="sp-import-field">Nome<input data-act="name" data-row="' + idx + '" data-side="' + side + '" value="' + esc(person.name) + '"></label></details>' : '') +
       '</div>';
     }).join('');
     return '<section class="sp-import-pair">' +
@@ -86,7 +84,7 @@
           ? 'Fotos são enviadas ao Google Cloud Vision somente após sua confirmação. Planilhas são lidas neste dispositivo.'
           : 'Fotos indisponíveis no momento. Planilhas são lidas neste dispositivo.') + '</p>' +
       '</div>' +
-      '<details class="sp-import-help"><summary>Como funciona</summary><p>As duplas seguem a ordem do arquivo e ocupam as vagas da mesma categoria automaticamente. Confirme as contas; ajuste categorias e gêneros depois na Análise. Nada é gravado antes da sua confirmação.</p></details>' +
+      '<details class="sp-import-help"><summary>Como funciona</summary><p>As duplas seguem a ordem do arquivo e ocupam as vagas da mesma categoria automaticamente. A importação não vincula contas; cada pessoa decide esse vínculo por convite. Nada é gravado antes da sua confirmação.</p></details>' +
       '<div class="sp-import-toolbar"><span>' + state.rows.length + ' na prévia · ' + state.rows.filter(function (r) { return r.saved; }).length + ' gravadas</span></div>' +
       visible.map(function (row, i) { return rowMarkup(row, start + i, plans[start + i]); }).join('') +
       (state.rows.length > 8 ? '<div class="sp-import-pagination"><button type="button" data-act="prev"' + (state.page === 0 ? ' disabled' : '') + '>Anterior</button><span>Página ' + (state.page + 1) + ' de ' + Math.ceil(state.rows.length / 8) + '</span><button type="button" data-act="next"' + (start + 8 >= state.rows.length ? ' disabled' : '') + '>Próxima</button></div>' : '') +
@@ -173,17 +171,16 @@
             parsed.ignored.push.apply(parsed.ignored, next.ignored);
           });
         } else throw new Error(file.name + ': formato não suportado');
-        parsed.rows.forEach(function (row) { row.source = file.name + ' · ' + row.source; row.viewKey = nextViewKey++; row.people.forEach(function (p) { p.uid = undefined; }); });
+        parsed.rows.forEach(function (row) { row.source = file.name + ' · ' + row.source; row.viewKey = nextViewKey++; row.people.forEach(function (p) { p.uid = null; }); });
         state.rows.push.apply(state.rows, parsed.rows);
         imported.push.apply(imported, parsed.rows);
         added += parsed.rows.length; ignored += parsed.ignored.length;
       }
-      state.message = added + ' duplas na ordem dos arquivos. Confirme as contas antes de gravar.' +
+      state.message = added + ' duplas na ordem dos arquivos, sem vincular contas. Confira os nomes antes de gravar.' +
         (ignored ? ' ' + ignored + ' linha(s) não interpretada(s).' : '');
       state.page = 0;
       state.resetScroll = true;
       render();
-      await discoverCandidates(imported);
     } catch (error) { if (state === session) state.message = error.message + '. Nenhuma inscrição foi gravada.'; }
     if (state !== session) return;
     state.busy = false; render();
@@ -306,7 +303,7 @@
       if (person.uid === null && person.autoNoAccount) { person.uid = undefined; person.autoNoAccount = false; }
     } else {
       person.name = event.target.value.trim(); person.query = person.name;
-      person.uid = undefined; person.chosenName = ''; person.autoNoAccount = false;
+      person.uid = null; person.chosenName = ''; person.autoNoAccount = false;
       person.candidates = []; person.lookupStatus = '';
       person.lookupToken = (person.lookupToken || 0) + 1;
       var queryInput = event.target.closest('.sp-import-person').querySelector('[data-act="query"]');

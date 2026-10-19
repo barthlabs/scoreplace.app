@@ -106,9 +106,9 @@ function mkContainer(sb) {
   ok(h.indexOf('Eu Mesmo') === -1, 'o próprio usuário não aparece na lista');
 
   // ── o total guardado é o que a lista MOSTRA (lição da 2.1.11) ──────────────
-  ok(S.localStorage.getItem('scoreplace_totalPessoas') === '4',
+  ok(S.localStorage.getItem('scoreplace_totalPessoas_EU') === '4',
      'guarda o total pro botão — e é o número da própria lista, não de outra fonte. Veio: ' +
-     S.localStorage.getItem('scoreplace_totalPessoas'));
+     S.localStorage.getItem('scoreplace_totalPessoas_EU'));
 
   // ── ordem CRONOLÓGICA por padrão (oposta à de #explore, de propósito) ──────
   // ⚠️ A cronologia vale DENTRO de cada seção — a seção é o critério primário, igual ao

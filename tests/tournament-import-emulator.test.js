@@ -65,15 +65,10 @@ async function driver() {
   assert.strictEqual(initial.count, 4);
   assert.strictEqual(initial.photoImportEnabled, true);
   const candidates = await call('searchTournamentImportCandidates', { tournamentId: tid, query: 'bea' });
-  assert(candidates.candidates.some((item) => item.uid === linkedUid));
-  assert(candidates.candidates.every((item) => !Object.prototype.hasOwnProperty.call(item, 'photoURL')));
+  assert.deepStrictEqual(candidates.candidates, [], 'nome não descobre conta para vínculo automático');
   const mergedCandidates = await call('searchTournamentImportCandidates', { tournamentId: tid, query: 'bet' });
-  assert(mergedCandidates.candidates.some((item) => item.uid === linkedUid));
-  assert(mergedCandidates.candidates.every((item) => item.uid !== mergedUid));
+  assert.deepStrictEqual(mergedCandidates.candidates, []);
   const today = new Date().toISOString().slice(0, 10);
-  const searchQuotaPath = 'tournamentImports/searchUsage/days/' + today + '_' + organizer;
-  await db.doc(searchQuotaPath).set({ uid: organizer, day: today, count: 300 });
-  await rejectsCode(call('searchTournamentImportCandidates', { tournamentId: tid, query: 'bea' }), 'resource-exhausted');
   await rejectsCode(call('extractTournamentImportImage', {
     tournamentId: tid, mime: 'image/png', imageBase64: 'aGVsbG8=',
   }), 'failed-precondition');
@@ -91,6 +86,9 @@ async function driver() {
   const block0 = [{ pairId: people[0].fixedPairId, categoryId: 'fem-light', people: [
     { name: 'Ana Exemplo', uid: null }, { name: 'Beatriz Teste', uid: mergedUid },
   ] }];
+  await rejectsCode(call('applyTournamentImportBlock', { ...previewData, importId, blockIndex: 0,
+    fingerprint: initial.fingerprint, block: block0 }), 'permission-denied');
+  block0[0].people[1].uid = null;
   const first = await call('applyTournamentImportBlock', { ...previewData, importId, blockIndex: 0,
     fingerprint: initial.fingerprint, block: block0 });
   assert.strictEqual(first.alreadyApplied, false);
@@ -109,8 +107,8 @@ async function driver() {
   const saved = (await db.collection('tournaments/' + tid + '/registrations').get()).docs.map((d) => d.data());
   assert.strictEqual(saved.filter((p) => p.status !== 'withdrawn' && p.categoryId === 'fem-light').length, 2);
   assert.strictEqual(saved.filter((p) => p.status === 'withdrawn' && p.categoryId === 'masc-light').length, 2);
-  assert(saved.some((p) => p.status !== 'withdrawn' && p.categoryId === 'fem-light' && p.participantUid === linkedUid));
-  assert((await db.doc('tournaments/' + tid).get()).data().memberUids.includes(linkedUid));
+  assert(saved.every((p) => p.status === 'withdrawn' || p.participantUid === null));
+  assert(!(await db.doc('tournaments/' + tid).get()).data().memberUids.includes(linkedUid));
   await rejectsCode(call('applyTournamentImportBlock', { ...previewData, importId, blockIndex: 1,
     fingerprint: initial.fingerprint, block: [{ pairId: people[2].fixedPairId, categoryId: 'masc-light', people: [
       { name: 'Cris Exemplo', uid: null }, { name: 'Dani Exemplo', uid: null },
@@ -145,7 +143,7 @@ async function driver() {
   const claimed = (await db.collection('tournaments/' + tid + '/registrations').get()).docs.map((doc) => doc.data());
   const newAna = claimed.find((person) => person.participantUid === 'claimant-one' && person.status === 'confirmed');
   assert(newAna && newAna.fixedPairId && newAna.fixedPairId !== firstPair);
-  const partner = claimed.find((person) => person.participantUid === linkedUid && person.status === 'confirmed');
+  const partner = claimed.find((person) => person.manualDisplayName === 'Beatriz Teste' && person.status === 'confirmed');
   assert.strictEqual(partner.fixedPairId, newAna.fixedPairId, 'parceira permanece na dupla após o vínculo');
   const retired = claimed.find((person) => person.manualParticipantId === ana.manualParticipantId && person.status === 'withdrawn');
   assert(retired, 'vaga manual fica no histórico como retirada');
@@ -187,6 +185,38 @@ async function driver() {
     secondApp.functions('us-central1').httpsCallable('acceptManualClaimInvite')(concurrentPayload)]);
   assert.strictEqual(race.filter((item) => item.status === 'fulfilled').length, 1, 'somente um dos dois consumidores ganha a vaga');
   await secondApp.delete();
+  await app.auth().signOut();
+  await app.auth().signInWithEmailAndPassword('organizer@example.com', 'senha123');
+  await rejectsCode(call('enrollParticipant', { tournamentId: tid,
+    participantObj: { uid: outsider, displayName: 'Pessoa sem aceite' } }), 'permission-denied');
+  await rejectsCode(call('enrollParticipant', { tournamentId: tid,
+    participantObj: { uid: organizer, p1Uid: organizer, p1Name: 'Organizador', p2Uid: outsider, p2Name: 'Pessoa sem aceite' } }), 'permission-denied');
+  const selfTid = 'test-self-enrollment-consent';
+  await db.doc('tournaments/' + selfTid).set({ creatorUid: organizer, adminUids: [organizer],
+    memberUids: [organizer], name: 'Autoinscrição com aceite', status: 'open', participants: [] });
+  await app.auth().signOut();
+  await app.auth().signInWithEmailAndPassword('outsider@example.com', 'senha123');
+  const selfEnrollment = await call('enrollParticipant', { tournamentId: selfTid, participantObj: { uid: outsider } });
+  assert.strictEqual(selfEnrollment.alreadyEnrolled, false, 'a própria conta mantém a autoinscrição');
+  assert((await db.doc('tournaments/' + selfTid).get()).data().memberUids.includes(outsider));
+  await app.auth().signOut();
+  await app.auth().signInWithEmailAndPassword('organizer@example.com', 'senha123');
+  await db.doc('users/' + organizer).set({ displayName: 'Organizador', preferredLocations: [{ label: 'Clube X — Rua A' }] });
+  await db.doc('users/' + linkedUid).set({ displayName: 'Amiga', acceptFriendRequests: true });
+  await db.doc('users/mutual-import').set({ displayName: 'Amiga da amiga', acceptFriendRequests: true });
+  await db.doc('users/venue-import').set({ displayName: 'Mesmo local', acceptFriendRequests: true,
+    preferredLocations: [{ label: 'Clube X, São Paulo' }] });
+  await db.doc('users/shared-import').set({ displayName: 'Mesmo torneio', acceptFriendRequests: true });
+  await db.doc('users/hidden-import').set({ displayName: 'Sem relação', acceptFriendRequests: true });
+  await db.doc('friendAccess/' + organizer + '/accepted/' + linkedUid).set({ friendUid: linkedUid });
+  await db.doc('friendAccess/' + linkedUid + '/accepted/mutual-import').set({ friendUid: 'mutual-import' });
+  await db.doc('tournaments/discovery-import').set({ memberUids: [organizer, 'shared-import'] });
+  const visible = (await call('listDiscoverableUsers', {})).users;
+  const visibleIds = visible.map((user) => user._docId);
+  for (const id of [linkedUid, 'mutual-import', 'venue-import', 'shared-import']) assert(visibleIds.includes(id), id + ' é descobrível');
+  assert(!visibleIds.includes('hidden-import'), 'pessoa sem relação não aparece');
+  assert(visible.every((user) => !Object.prototype.hasOwnProperty.call(user, 'preferredLocations')),
+    'locais individuais não são enviados ao cliente');
   console.log('✓ EMULATOR_IMPORT_OK: autorização, transação, reclassificação, UID, retry, conflito e 2 blocos');
   process.exit(0);
 }

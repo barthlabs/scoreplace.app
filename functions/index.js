@@ -2970,6 +2970,15 @@ exports.enrollParticipant = onCall(
     const participantUid = String(sanitizedParticipantObj.uid || "");
     const manualParticipantId = String(sanitizedParticipantObj.manualParticipantId || "");
 
+    // Uma conta real só entra por decisão da própria sessão autenticada. Ser
+    // organizador (ou amigo) não é consentimento para inscrever outra pessoa.
+    // Convites ficam pendentes fora do elenco; aceitar = chamar esta função
+    // com o próprio UID. Também protege clientes nativos antigos.
+    const linkedUids = [participantUid, sanitizedParticipantObj.p1Uid, sanitizedParticipantObj.p2Uid].filter(Boolean);
+    if (linkedUids.some((linkedUid) => linkedUid !== callerUid)) {
+      throw new HttpsError("permission-denied", "Convide a pessoa; só ela pode aceitar e concluir sua inscrição.");
+    }
+
     const db = admin.firestore();
     const docRef = db.collection(sandbox ? "sandboxes" : "tournaments").doc(tournamentId);
     const nowMs = Date.now();
@@ -2984,9 +2993,6 @@ exports.enrollParticipant = onCall(
       if (sandbox) await _sandboxAutorizado(db, _pre, callerUid, (sourceRef) => sourceRef.get());
       else if (_preTournament.isSandbox === true) throw new HttpsError("not-found", "torneio não existe");
       const _preIsOrganizer = _isTournamentOrgCaller(_preTournament, callerUid);
-      if (participantUid && participantUid !== callerUid && !_preIsOrganizer) {
-        throw new HttpsError("permission-denied", "só o organizador pode inscrever outra pessoa");
-      }
       if (!participantUid && !_preIsOrganizer) {
         throw new HttpsError("permission-denied", "só o organizador pode incluir participante sem conta");
       }
@@ -3062,9 +3068,7 @@ exports.enrollParticipant = onCall(
           throw new HttpsError("failed-precondition", "duplas usam a porta canônica de formar dupla");
         }
         const isOrganizer = _isTournamentOrgCaller(rawTournament, callerUid);
-        if (participantUid && participantUid !== callerUid && !isOrganizer) {
-          throw new HttpsError("permission-denied", "só o organizador pode inscrever outra pessoa");
-        }
+        if (participantUid && participantUid !== callerUid) throw new HttpsError("permission-denied", "inscrição de conta exige a própria sessão");
         if (!participantUid && !isOrganizer) {
           throw new HttpsError("permission-denied", "só o organizador pode incluir participante sem conta");
         }
@@ -3109,9 +3113,7 @@ exports.enrollParticipant = onCall(
       }
       _assertLegacyRosterStillAuthoritative(_dados);
       const isOrganizer = _isTournamentOrgCaller(_dados, callerUid);
-      if (participantUid && participantUid !== callerUid && !isOrganizer) {
-        throw new HttpsError("permission-denied", "só o organizador pode inscrever outra pessoa");
-      }
+      if (participantUid && participantUid !== callerUid) throw new HttpsError("permission-denied", "inscrição de conta exige a própria sessão");
       if (!participantUid && !isOrganizer) {
         throw new HttpsError("permission-denied", "só o organizador pode incluir participante sem conta");
       }
@@ -3937,6 +3939,9 @@ exports.sendRelatedNotification = onCall(
       const members = new Set(_enrollCore.computeMemberUids(tournament));
       facts.callerOrganizer = _isTournamentOrgCaller(tournament, callerUid);
       facts.targetOrganizer = _isTournamentOrgCaller(tournament, targetUid);
+      if (tournament.organizerOnly === true && !facts.targetOrganizer) {
+        throw new HttpsError("failed-precondition", "O torneio ainda está visível apenas à organização.");
+      }
       facts.callerParticipant = members.has(callerUid);
       facts.targetParticipant = members.has(targetUid);
       // O nome é de apresentação e vem do documento fonte; o navegador não
@@ -4812,24 +4817,9 @@ exports.searchTournamentImportCandidates = onCall(
     const snap = await db.collection("tournaments").doc(tournamentId).get();
     if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
     if (!_isTournamentOrgCaller(snap.data(), uid)) throw new HttpsError("permission-denied", "só a organização consulta candidatos");
-    await _consumeTournamentImportQuota(db, "search", uid, 300);
-    try {
-      // A busca por nome pode encontrar uma lápide de conta fundida. A porta canônica
-      // resolve o sobrevivente e colapsa duplicatas antes de expor candidatos.
-      const hits = await db.collection("users").where("displayName_lower", ">=", query)
-        .where("displayName_lower", "<", query + "\uf8ff").limit(10).get();
-      const resolved = await _userVivo.userVivo(db, hits, { strict: true });
-      return { candidates: (resolved ? resolved.docs : []).filter((candidate) => {
-        const p = candidate.data || {};
-        return !p.deleted && !p.deletedAt;
-      }).map((candidate) => ({
-        uid: candidate.uid,
-        name: String(candidate.data.displayName || candidate.data.name || ""),
-      })) };
-    } catch (error) {
-      console.error("[tournament-import] candidate search failed:", error && error.message);
-      throw new HttpsError("unavailable", "busca de contas indisponível; tente novamente (a tentativa contou na cota diária)");
-    }
+    // Importar nomes de uma planilha não concede direito de descobrir contas
+    // pelo nome. O vínculo posterior exige convite e aceite da própria conta.
+    return { candidates: [] };
   }
 );
 
@@ -4883,6 +4873,9 @@ exports.applyTournamentImportBlock = onCall(
         throw new HttpsError("invalid-argument", "categoria final não existe no torneio");
       }
       const selectedUids = Array.from(new Set(block.flatMap((row) => row.people.map((person) => person.uid).filter(Boolean))));
+      if (selectedUids.length) {
+        throw new HttpsError("permission-denied", "A importação cria apenas vagas sem UID; cada pessoa deve aceitar o vínculo da própria conta.");
+      }
       const userSnaps = await Promise.all(selectedUids.map((selectedUid) => tx.get(db.collection("users").doc(selectedUid))));
       const resolvedUids = new Map();
       for (let i = 0; i < selectedUids.length; i++) {
@@ -7344,7 +7337,7 @@ exports.sendOrgCommunication = onCall(
     };
 
     // Sandbox/killswitch: torneio com notificações mudas não dispara comunicado.
-    if (t && (t.isSandbox === true || t.notificationsMuted === true)) {
+    if (t && (t.isSandbox === true || t.notificationsMuted === true || t.organizerOnly === true)) {
       return { ok: true, muted: true, sent: 0 };
     }
 
@@ -12222,7 +12215,7 @@ exports.syncDiscoveryFeed = onDocumentWritten(
     const feedRef = admin.firestore().collection("discoveryFeed").doc(tid);
 
     // Deletado OU deixou de ser público → remover do feed (se lá estava).
-    if (!after || after.isPublic !== true) {
+    if (!after || after.isPublic !== true || after.organizerOnly === true) {
       if (before && before.isPublic === true) {
         await feedRef.delete().catch(() => {});
         console.log(`[syncDiscoveryFeed] removed ${tid} (deleted/private)`);
@@ -12429,7 +12422,9 @@ exports.syncMatchRosters = onDocumentWritten(
            * recria a divergência que este gatilho existe pra fechar. */
           if (plano.novosInscritos.length) {
             const _nP = Object.assign({}, after._nPartes || {}, { participants: _ins.length + plano.novosInscritos.length });
-            const _mem = Array.from(new Set((after.memberUids || []).concat(plano.novosInscritos.map((n) => n.item.uid))));
+            const _mem = after.organizerOnly === true
+              ? Array.from(new Set([after.creatorUid].concat(after.adminUids || []).filter(Boolean)))
+              : Array.from(new Set((after.memberUids || []).concat(plano.novosInscritos.map((n) => n.item.uid))));
             lote.update(_ref2, { _nPartes: _nP, memberUids: _mem });
           }
           await lote.commit();
@@ -13383,6 +13378,75 @@ exports.getTournamentEnrollmentProfiles = onCall(
   }
 );
 
+// A descoberta de pessoas não é um diretório global. A relação precisa existir
+// antes de um perfil ser entregue: amizade aceita, torneio em comum, local
+// preferido em comum ou amigo em comum. Nenhuma dessas relações é inscrição.
+exports.listDiscoverableUsers = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Entre para descobrir pessoas");
+    const db = admin.firestore();
+    const ownSnap = await db.collection("users").doc(uid).get();
+    if (!ownSnap.exists) return { users: [] };
+    const own = ownSnap.data() || {};
+    const eligible = new Set();
+    const friendsSnap = await db.collection("friendAccess").doc(uid).collection("accepted").get();
+    const friendUids = friendsSnap.docs.map((doc) => doc.id).filter((id) => id !== uid);
+    friendUids.forEach((id) => eligible.add(id));
+    const tournaments = await db.collection("tournaments").where("memberUids", "array-contains", uid).get();
+    tournaments.forEach((doc) => {
+      const t = doc.data() || {};
+      if (t.organizerOnly === true && !_isTournamentOrgCaller(t, uid)) return;
+      (Array.isArray(t.memberUids) ? t.memberUids : []).forEach((id) => {
+        if (id && id !== uid) eligible.add(String(id));
+      });
+    });
+    // A projeção de amizade é mantida pelo servidor e nunca por friends[] do cliente.
+    for (let i = 0; i < friendUids.length; i += 20) {
+      const groups = await Promise.all(friendUids.slice(i, i + 20).map((id) =>
+        db.collection("friendAccess").doc(id).collection("accepted").get()));
+      groups.forEach((snap) => snap.forEach((doc) => {
+        if (doc.id !== uid) eligible.add(doc.id);
+      }));
+    }
+    const locationKey = (value) => String(value || "").normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "").split("—")[0].split(",")[0]
+      .replace(/[^a-zA-Z0-9 ]/g, "").trim().toLowerCase();
+    const locations = (profile) => (Array.isArray(profile.preferredLocations) ? profile.preferredLocations : [])
+      .map((p) => locationKey(p && (p.label || p.name))).filter(Boolean);
+    const ownLocations = new Set(locations(own));
+    // Relações explícitas não podem sumir quando a base crescer além do scan
+    // usado para a coincidência de local. Leia-as sempre por UID, em lotes.
+    const profiles = new Map();
+    const eligibleIds = Array.from(eligible);
+    for (let i = 0; i < eligibleIds.length; i += 100) {
+      const refs = eligibleIds.slice(i, i + 100).map((id) => db.collection("users").doc(id));
+      if (refs.length) (await db.getAll(...refs)).forEach((doc) => { if (doc.exists) profiles.set(doc.id, doc); });
+    }
+    // Busca limitada apenas para descobrir a coincidência de local.
+    if (ownLocations.size) {
+      const nearby = await db.collection("users").limit(2000).get();
+      nearby.forEach((doc) => {
+        if (locations(doc.data() || {}).some((key) => ownLocations.has(key))) profiles.set(doc.id, doc);
+      });
+    }
+    const users = [];
+    profiles.forEach((doc) => {
+      if (doc.id === uid) return;
+      const p = doc.data() || {};
+      if (p.mergedInto || p.acceptFriendRequests === false) return;
+      const sharedLocation = ownLocations.size && locations(p).some((key) => ownLocations.has(key));
+      if (!eligible.has(doc.id) && !sharedLocation) return;
+      users.push({ _docId: doc.id, displayName: p.displayName || "",
+        photoURL: p.photoURL || "", city: p.city || "", sharedLocation: !!sharedLocation,
+        preferredSports: p.preferredSports || [],
+        updatedAt: p.updatedAt || "", createdAt: p.createdAt || "", lastSeenAt: p.lastSeenAt || "" });
+    });
+    return { users };
+  }
+);
+
 // ─── getOwnEmailMergeCandidates (etapa 7) ──────────────────────────────────
 // A conta recém-autenticada pode precisar encontrar uma conta anterior com o
 // mesmo e-mail verificado para continuar a fusão. O token é a prova; o
@@ -13506,7 +13570,7 @@ exports.setParticipantContactPhone = onCall(
     // A pessoa PRECISA saber. Sem este aviso, isto vira "mexeram no meu cadastro".
     // O opt-out do sininho é respeitado; o registro no perfil, não — ele é o fato.
     try {
-      if (alvo.notifyPlatform !== false) {
+      if (alvo.notifyPlatform !== false && t.organizerOnly !== true) {
         const orgSnap = await db.collection("users").doc(callerUid).get();
         const orgNome = (orgSnap.exists && orgSnap.data() && orgSnap.data().displayName) || "O organizador";
         const aviso = _contactPhone.buildContactPhoneNotice({
@@ -13587,7 +13651,7 @@ exports.setParticipantLetzplay = onCall(
     // A pessoa PRECISA saber — mesma regra do celular: registro com procedência é
     // diferente de "mexeram no meu cadastro" exatamente porque ela fica sabendo.
     try {
-      if (alvo.notifyPlatform !== false) {
+      if (alvo.notifyPlatform !== false && t.organizerOnly !== true) {
         const orgSnap = await db.collection("users").doc(callerUid).get();
         const orgNome = (orgSnap.exists && orgSnap.data() && orgSnap.data().displayName) || "O organizador";
         const aviso = _contactPhone.buildContactLetzplayNotice({

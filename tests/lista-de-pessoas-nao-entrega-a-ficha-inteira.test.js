@@ -16,15 +16,15 @@ must((D.match(/window\._CAMPOS_DE_LISTA = \[/g) || []).length === 1,
 must(/^window\._perfilDeLista = function \(raw\) \{/m.test(D), '① e uma porta única que a aplica');
 
 const rec = D.slice(D.indexOf('async listRecentUsers'), D.indexOf('async listRecentUsers') + 1600);
-must(/window\._perfilDeLista\(data\)/.test(rec), '② a lista de recentes passa pela porta');
+must(/this\.listInvitableUsers\(\)/.test(rec), '② recentes usa a descoberta relacional');
 must(!/results\[doc\.id\] = data;/.test(rec), '② ⛔ e não guarda mais o documento cru');
 
 const bus = D.slice(D.indexOf('async searchUsers'), D.indexOf('async searchUsers') + 2200);
-must(/var sanitize = window\._perfilDeLista;/.test(bus), '② a busca por nome usa a MESMA porta');
+must(/this\.listInvitableUsers\(\)/.test(bus), '② busca por nome usa a MESMA descoberta relacional');
 must(!/var PUBLIC_FIELDS = \[\s*\n/.test(D),
   '② ⛔ nenhuma cópia da lista escrita à mão sobrou');
-must(/var PUBLIC_FIELDS = window\._CAMPOS_DE_LISTA\.concat\(\['city', 'preferredLocations'\]\)/.test(D),
-  '② a terceira lista ESTENDE a base em vez de repeti-la — city e preferredLocations servem pra AGRUPAR, não pra exibir');
+must(/this\._callFn\('listDiscoverableUsers'/.test(D),
+  '② a lista de pessoas vem da autorização relacional no servidor');
 
 /* ③ o que a porta deixa passar — fixado por escrito, para mudança ser deliberada */
 const campos = /window\._CAMPOS_DE_LISTA = \[([\s\S]*?)\]/.exec(D)[1];

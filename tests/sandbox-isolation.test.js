@@ -63,6 +63,14 @@ ok(merged.indexOf('uid_pedro') !== -1,
    'D: ⭐⭐ _mergeMemberUids NÃO encolhe no sandbox (o ramo que substituía saiu)');
 var mergedN = W._mergeMemberUids({ id: 'N1' }, ['uORGx', 'uPedro'], ['uORGx']);
 ok(mergedN.indexOf('uPedro') !== -1, 'D: torneio normal continua NUNCA encolhendo (união)');
+var privateTour = { id: 'N2', organizerOnly: true, creatorUid: 'uid_organizador_real',
+  coHosts: [{ uid: 'uid_cohost', status: 'active' }], participants: [{ uid: 'uid_pedro' }] };
+var privateIndex = W._mergeMemberUids(privateTour, ['uid_organizador_real', 'uid_pedro'],
+  W._computeMemberUids(privateTour));
+ok(privateIndex.join(',') === 'uid_organizador_real,uid_cohost',
+   'D: torneio só para organizadores indexa apenas admins; inscrito antigo não recebe doc na versão nativa');
+ok(privateTour.participants[0].uid === 'uid_pedro',
+   'D: reduzir o índice não altera inscrição nem elenco');
 // admin: mesma regra dos dois lados
 ok(W._computeAdminUids(sbRaw).join(',') === 'uid_organizador_real,uid_cohost',
    'D: ⭐⭐ adminUids do sandbox = os do ORIGINAL (criador + co-host ativo)');

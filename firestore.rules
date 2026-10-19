@@ -37,6 +37,16 @@ service cloud.firestore {
       );
     }
 
+    function canReadTournamentData(data) {
+      return data.get('organizerOnly', false) == true
+        ? isTournamentAdmin(data)
+        : (data.get('membersOnly', false) == true
+          ? (isTournamentAdmin(data) || isTournamentParticipant(data))
+        : ((data.get('isSandbox', false) == true)
+          ? (request.auth != null && request.auth.uid in data.get('memberUids', []))
+          : (data.get('isPublic', false) == true || request.auth != null)));
+    }
+
     /* ⛔⛔ ESTA REGRA OLHAVA SÓ *QUAIS* CAMPOS MUDARAM — NUNCA QUEM ESCREVE NEM O QUÊ.
      *
      * PROVADO NO EMULADOR em 13/set/2026, contra estas Rules, com controles nos dois lados
@@ -266,13 +276,7 @@ service cloud.firestore {
        * é o remendo que a reforma existe para desfazer.
        * ⚠️ Enquanto isto estiver aberto, nada que dependa de privacidade pode ser prometido no rótulo.
        */
-      allow read: if (
-        (resource.data.get('isSandbox', false) != true
-          && ((resource.data.isPublic == true) || (request.auth != null)))
-        || (resource.data.get('isSandbox', false) == true
-          && request.auth != null
-          && (request.auth.uid in resource.data.get('memberUids', [])))
-      );
+      allow read: if canReadTournamentData(resource.data);
       allow write: if false;   // só a Cloud Function (admin SDK ignora regras)
     }
 
@@ -675,13 +679,7 @@ service cloud.firestore {
       // terceiro NEM por link/id — só quem está no memberUids dele (= o dev). Sem esta
       // linha a invisibilidade era 100% client-side: bastava a regra genérica "authed lê
       // qualquer torneio" pra qualquer um puxar o SB. Fecha o item (3) do isolamento.
-      allow read: if (
-        (resource.data.get('isSandbox', false) != true
-          && ((resource.data.isPublic == true) || (request.auth != null)))
-        || (resource.data.get('isSandbox', false) == true
-          && request.auth != null
-          && (request.auth.uid in resource.data.get('memberUids', [])))
-      );
+      allow read: if canReadTournamentData(resource.data);
 
       // ⛔ CREATE: FECHADO. Torneio NASCE NO SERVIDOR — a porta é a Function
       // `createTournament` (`functions-autodraw/index.js:3355`), que roda com Admin SDK,
@@ -760,7 +758,14 @@ service cloud.firestore {
         && (faseIntacta() || ehResetOk())
         && elencoIntacto()
         && rosterLegadoProtegidoAposMigracao()
-        && categoriasTipadasIntactas();
+        && categoriasTipadasIntactas()
+        && (igual('organizerOnly') || isTournamentAdmin(resource.data))
+        && (igual('membersOnly') || isTournamentAdmin(resource.data))
+        && !(request.resource.data.get('organizerOnly', false) == true
+          && request.resource.data.get('membersOnly', false) == true)
+        && ((request.resource.data.get('organizerOnly', false) != true
+          && request.resource.data.get('membersOnly', false) != true)
+          || request.resource.data.get('isPublic', false) != true);
 
       // Delete: admins only.
       // ⛔ E TORNEIO DIVIDIDO NÃO SE APAGA PELO CLIENTE. Apagar o documento aqui deixaria
@@ -826,7 +831,7 @@ service cloud.firestore {
         // jogos de um uid sem carregar torneio) eficiente. Semântica idêntica à
         // ordem anterior (authed já lia qualquer result subdoc); só evita 1 get()
         // por doc na listagem. Público (sem auth) ainda cai no parentT().isPublic.
-        allow read: if (request.auth != null) || (parentT().isPublic == true);
+        allow read: if canReadTournamentData(parentT());
         // ⛔ RESERVADOS A PROCESSO PRIVILEGIADO — o cliente escrevia o resultado do jogo
         // direto neste documento; quem lança placar hoje fala com a Function. Ver
         // tests/pontos-frageis.js.
@@ -873,7 +878,7 @@ service cloud.firestore {
         // `playerUids` do jogo (campo derivado por caminho de confiança), grava com o
         // admin SDK — que não passa por regra — e é a ÚNICA porta. `playerUids` continua
         // sendo gravado: ele deixou de ser insumo DESTA regra e virou insumo da CF.
-        allow read: if (request.auth != null) || (parentTm().isPublic == true);
+        allow read: if canReadTournamentData(parentTm());
         allow write: if false;
       }
 
@@ -898,7 +903,7 @@ service cloud.firestore {
         function parentTq() {
           return get(/databases/$(database)/documents/tournaments/$(tournamentId)).data;
         }
-        allow read: if request.auth != null;
+        allow read: if canReadTournamentData(parentTq());
         allow create: if request.auth != null
           && request.resource.data.actorUid == request.auth.uid
           && request.resource.data.matchId is string
@@ -919,7 +924,7 @@ service cloud.firestore {
         function parentTc() {
           return get(/databases/$(database)/documents/tournaments/$(tournamentId)).data;
         }
-        allow read: if request.auth != null;
+        allow read: if canReadTournamentData(parentTc());
         allow write: if false;
       }
 
@@ -933,7 +938,7 @@ service cloud.firestore {
         function parentTo() {
           return get(/databases/$(database)/documents/tournaments/$(tournamentId)).data;
         }
-        allow read: if (request.auth != null) || (parentTo().isPublic == true);
+        allow read: if canReadTournamentData(parentTo());
         allow write: if false;
       }
 
@@ -946,7 +951,7 @@ service cloud.firestore {
         function parentTg() {
           return get(/databases/$(database)/documents/tournaments/$(tournamentId)).data;
         }
-        allow read: if (request.auth != null) || (parentTg().isPublic == true);
+        allow read: if canReadTournamentData(parentTg());
         allow write: if false;
       }
 
@@ -962,15 +967,15 @@ service cloud.firestore {
         function parentTp() {
           return get(/databases/$(database)/documents/tournaments/$(tournamentId)).data;
         }
-        allow read: if (request.auth != null) || (parentTp().isPublic == true);
+        allow read: if canReadTournamentData(parentTp());
         allow write: if false;
       }
       match /woClaims/{claimId} {
-        allow read: if request.auth != null;
+        allow read: if canReadTournamentData(get(/databases/$(database)/documents/tournaments/$(tournamentId)).data);
         allow write: if false;
       }
       match /woLog/{logId} {
-        allow read: if request.auth != null;
+        allow read: if canReadTournamentData(get(/databases/$(database)/documents/tournaments/$(tournamentId)).data);
         allow write: if false;
       }
 
@@ -985,7 +990,7 @@ service cloud.firestore {
         function parentTi() {
           return get(/databases/$(database)/documents/tournaments/$(tournamentId)).data;
         }
-        allow read: if (request.auth != null) || (parentTi().isPublic == true);
+        allow read: if canReadTournamentData(parentTi());
         allow write: if false;
       }
 
@@ -1011,7 +1016,7 @@ service cloud.firestore {
         function parentTh() {
           return get(/databases/$(database)/documents/tournaments/$(tournamentId)).data;
         }
-        allow read: if (request.auth != null) || (parentTh().isPublic == true);
+        allow read: if canReadTournamentData(parentTh());
         allow write: if false;
       }
 
@@ -1024,7 +1029,7 @@ service cloud.firestore {
         function parentTs() {
           return get(/databases/$(database)/documents/tournaments/$(tournamentId)).data;
         }
-        allow read: if (request.auth != null) || (parentTs().isPublic == true);
+        allow read: if canReadTournamentData(parentTs());
         allow create, update: if request.auth != null
           && (isTournamentAdmin(parentTs()) || isTournamentAdminByUid(parentTs()));
         allow delete: if request.auth != null

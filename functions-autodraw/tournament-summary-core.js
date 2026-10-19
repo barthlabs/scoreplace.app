@@ -158,7 +158,9 @@ function buildSummary(t, id, H) {
     sport: esporte,
     format: String(t.format || ''),
     status: String(t.status || ''),
-    isPublic: t.isPublic === true,
+    isPublic: t.isPublic === true && t.organizerOnly !== true,
+    organizerOnly: t.organizerOnly === true,
+    membersOnly: t.membersOnly === true,
     isSandbox: t.isSandbox === true,
     venueName: local,
     venuePlaceId: String(t.venuePlaceId || ''),
@@ -172,10 +174,17 @@ function buildSummary(t, id, H) {
 
     // ── quem manda / quem está dentro (é o que responde "meus torneios") ───
     creatorUid: String(t.creatorUid || ''),
+    adminUids: _arr(t.adminUids).map(String).filter(Boolean),
     coHostUids: _arr(t.coHosts).map(function (c) {
       return String((c && (c.uid || c)) || '');
     }).filter(Boolean),
-    memberUids: _arr(t.memberUids).map(String),
+    // Rascunho reservado à organização: o índice de "meus torneios" não
+    // entrega o resumo aos inscritos antes da liberação explícita.
+    memberUids: (t.organizerOnly === true
+      ? _arr(t.adminUids).concat([t.creatorUid])
+      : t.membersOnly === true
+        ? _arr(t.memberUids).concat(_arr(t.adminUids), [t.creatorUid])
+        : _arr(t.memberUids)).filter(Boolean).map(String).filter(function (uid, i, all) { return all.indexOf(uid) === i; }),
 
     // ── configuração que o cartão mostra ──────────────────────────────────
     enrollmentMode: String(t.enrollmentMode || ''),
@@ -212,9 +221,9 @@ function buildSummary(t, id, H) {
 
 /** Os campos do documento completo que MUDAM o resumo. Fora daqui, não regrava. */
 var CAMPOS_QUE_IMPORTAM = [
-  'name', 'sport', 'format', 'status', 'isPublic', 'isSandbox', 'venueName', 'venue',
+  'name', 'sport', 'format', 'status', 'isPublic', 'organizerOnly', 'membersOnly', 'isSandbox', 'venueName', 'venue',
   'venuePlaceId', 'startDate', 'endDate', 'createdAt', 'updatedAt', 'finishedAt',
-  'autoClosed', 'tournamentStarted', 'creatorUid', 'coHosts', 'memberUids',
+  'autoClosed', 'tournamentStarted', 'creatorUid', 'coHosts', 'adminUids', 'memberUids',
   'enrollmentMode', 'lateEnrollment', 'registrationLimit', 'ligaSeasonMonths',
   'combinedCategories', 'categories', 'participants', 'placeholderReservations',
   'waitlist', 'standbyParticipants', 'matches', 'rounds', 'groups', 'phases',

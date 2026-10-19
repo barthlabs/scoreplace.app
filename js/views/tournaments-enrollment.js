@@ -120,14 +120,11 @@ var _t = window._t || function(k) { return k; };
 // conta entra pelo uid; só cai pra nome quem realmente não tem conta (informal).
 // Nome é único entre uids → normalmente resolve pra 0 (informal) ou 1 conta;
 // 2+ (homônimo legado) PERGUNTA qual, nunca grava às cegas. cb(uid|null).
-window._resolveEnrolleeUid = function (name, cb) {
-    cb = cb || function () {};
-    if (!name || !window.FirestoreDB || typeof window.FirestoreDB.resolveNameToAccounts !== 'function') { cb(null); return; }
-    window.FirestoreDB.resolveNameToAccounts(name).then(function (res) {
-        if (res && res.status === 'unique') { cb(res.uid || null); return; }
-        if (res && res.status === 'ambiguous') { window._pickHomonym(name, res.candidates, cb); return; }
-        cb(null); // none → sem conta (participante informal)
-    }).catch(function () { cb(null); });
+window._resolveEnrolleeUid = function (_name, cb) {
+    // Nome digitado nunca prova posse de conta nem autoriza descobrir quem a
+    // possui. A organização cria vaga manual; a própria pessoa decide o vínculo
+    // por convite e sessão autenticada. Não consultar usersPublic por nome.
+    (cb || function () {})(null);
 };
 
 // Resolve uma LISTA de nomes → lista de uids (mesma ordem; null p/ informal).
@@ -1154,6 +1151,8 @@ window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
     }
 };
 
+// SEM CONSENTIMENTO NÃO HÁ DUPLA: o formulário antigo criava a vaga do parceiro
+// junto com a própria e o notificava como fato consumado (19/out/2026).
 window.submitTeamEnroll = function (tId) {
     const t = window._findTournamentById(tId);
     // LGPD: identidade verificada contra Firebase Auth
@@ -1176,206 +1175,22 @@ window.submitTeamEnroll = function (tId) {
         return;
     }
 
-    // ── IDENTIDADE = uid: resolve os nomes DIGITADOS de parceiros → conta ANTES
-    // de gravar. Parceiro escolhido no picker já traz dataset.partnerUid; nome
-    // digitado à mão passa por resolveNameToAccounts (pergunta se homônimo). Grava
-    // o uid no dataset e RE-ENTRA (o dataset.partnerResolved evita loop). Cobre o
-    // caminho normal E o de lista de espera (ambos leem .team-member-name-).
-    var _teamInputs = Array.prototype.slice.call(document.querySelectorAll('.team-member-name-' + tId));
-    var _pend = _teamInputs.filter(function (inp) {
-        return inp.value.trim() && !(inp.dataset && inp.dataset.partnerUid) && !(inp.dataset && inp.dataset.partnerResolved);
-    });
-    if (_pend.length) {
-        window._resolveEnrolleeUids(_pend.map(function (i) { return i.value.trim(); }), function (uids) {
-            _pend.forEach(function (inp, k) {
-                inp.dataset.partnerResolved = '1';
-                if (uids[k]) inp.dataset.partnerUid = uids[k];
-            });
-            window.submitTeamEnroll(tId);
-        });
+    if (Number(t.teamSize || 2) > 2) {
+        if (typeof showAlertDialog === 'function') showAlertDialog('Inscrição de equipe indisponível', 'Cada integrante precisa confirmar a própria inscrição. Peça à organização para orientar a formação da equipe.', null, { type: 'warning' });
         return;
     }
 
-    // Verifica se as inscrições estão realmente abertas
-    if (t.status === 'finished') {
-        showAlertDialog(_t('enroll.tournamentFinished'), _t('enroll.tournamentFinishedMsg'), null, { type: 'warning' });
-        return;
-    }
-    // v1.8.40: regra canônica (waitlist-core._enrollmentOpenState) — era a 3ª cópia
-    // divergente (esta nem checava `finished` no ligaAberta).
-    const inscricoesAbertas = window._enrollmentOpenState(t).open;
-    if (!inscricoesAbertas) {
-        if (_allowsLateEnrollment(t) && t.status !== 'finished') {
-            // Late enrollment for teams — collect names first, then send to standby
-            const inputs2 = document.querySelectorAll('.team-member-name-' + tId);
-            let teamNames2 = [user.displayName];
-            let allOk = true;
-            inputs2.forEach(function(inp) { var v = inp.value.trim(); if (!v) allOk = false; teamNames2.push(v); });
-            if (!allOk) { showAlertDialog(_t('enroll.requiredFields'), _t('enroll.requiredFieldsMsg'), null, { type: 'warning' }); return; }
-            var teamStr = teamNames2.join(' / ');
-            // IDENTIDADE = uid: monta a dupla por slots (p1 = quem inscreve; parceiro
-            // pelo uid já resolvido no dataset), não só por nome — igual ao caminho normal.
-            var _sbP2Uid = (inputs2[0] && inputs2[0].dataset && inputs2[0].dataset.partnerUid) || '';
-            var partObj = {
-                name: teamStr, displayName: teamStr, uid: user.uid, ligaActive: true,
-                p1Name: teamNames2[0] || '', p1Uid: user.uid,
-                p2Name: teamNames2[1] || '', p2Uid: _sbP2Uid
-            };
-            _enrollToStandby(t, tId, partObj, function() {
-                var mod2 = document.getElementById('team-enroll-modal-' + tId);
-                if (mod2) mod2.style.display = 'none';
-                var container = document.getElementById('view-container');
-                if (container && typeof renderTournaments === 'function') renderTournaments(container, tId);
-            });
-            return;
-        }
-        showAlertDialog(_t('enroll.enrollClosed'), _t('enroll.enrollClosedMsg'), null, { type: 'warning' });
-        return;
-    }
-
-    const inputs = document.querySelectorAll('.team-member-name-' + tId);
-    let allFilled = true;
-    let teamNames = [user.displayName];
-    let partnerUids = []; // v1.8.48: uids de parceiros selecionados via picker
-
-    inputs.forEach(input => {
-        const val = input.value.trim();
-        if (!val) allFilled = false;
-        teamNames.push(val);
-        // Captura uid do parceiro se selecionado via picker inteligente
-        if (input.dataset && input.dataset.partnerUid) {
-            partnerUids.push(input.dataset.partnerUid);
-        }
-    });
-
-    if (!allFilled) {
-        showAlertDialog(_t('enroll.requiredFields'), _t('enroll.requiredFieldsMsg'), null, { type: 'warning' });
-        return;
-    }
-
-    const teamString = teamNames.join(' / ');
-    const participantObj = {
-        name: teamString, displayName: teamString, ligaActive: true,
-        uid: user.uid,
-        // v1.8.88: sempre salvar p1Name/p1Uid/p2Name/p2Uid para garantir
-        // que memberUids inclua todos os membros da dupla
-        p1Name: teamNames[0] || '', p1Uid: user.uid,
-        p2Name: teamNames[1] || '', p2Uid: partnerUids[0] || ''
-    };
-    // Registrar origem da equipe via extraUpdates
-    var _teamOrigins = t.teamOrigins || {};
-    if (typeof window._setTeamOriginOf === 'function') window._setTeamOriginOf(_teamOrigins, participantObj, 'inscrita');
-    else _teamOrigins[teamString] = 'inscrita';
-
-    const mod = document.getElementById('team-enroll-modal-' + tId);
-    if (mod) mod.style.display = 'none';
-
-    // --- Optimistic UI: update locally FIRST, then sync to Firestore ---
-    // ⚠️ v1.8.1 — O PUSH É DA TELA, NÃO DO BANCO. Marca transiente `_pendingEnroll`:
-    // este objeto existe pra a interface responder na hora, mas NÃO é inscrição
-    // confirmada — quem confirma é a CF, que devolve o
-    // array autoritativo logo abaixo. Sem a marca, quando a resposta NUNCA chega (4G
-    // caindo na quadra, aba fechada, timeout) o push ficava e qualquer save posterior
-    // o gravava: a pessoa virava "inscrita" sem nunca ter passado pela LISTA DE ESPERA,
-    // que é onde a regra da 1.6.86 manda quem chega depois do sorteio. Foi assim que
-    // M.Delia, Marcos e Debora ficaram invisíveis na rodada do Confra (10/ago).
-    // O `saveTournament` remove entradas marcadas antes de persistir.
-    if (!Array.isArray(t.participants)) t.participants = t.participants ? Object.values(t.participants) : [];
-    // v1.8.40: referência guardada pro rollback (o push é uma CÓPIA — ver _doEnrollCurrentUser).
-    var _pushedTeam = Object.assign({}, participantObj, { _pendingEnroll: true });
-    t.participants.push(_pushedTeam);
-    t.teamOrigins = _teamOrigins;
-
-    // Show success and navigate immediately (no wait for network)
-    if (window._sound) window._sound('sino');
-    if (typeof showNotification !== 'undefined') showNotification(_t('enroll.enrolledTitle'), _t('enroll.teamEnrolledMsg', { name: window._safeHtml(t.name) }), 'success');
-    window._scrollToParticipant(tId, teamString);
-    // v2.8.86: enquete ativa → notifica cada novo inscrito da dupla (fundamental).
-    try {
-      if (typeof window._opNotifyNewEnrollee === 'function') {
-        var _newUids = (typeof window._participantUids === 'function') ? window._participantUids(participantObj) : [participantObj && participantObj.uid];
-        (_newUids || []).forEach(function(_u){ if (_u) window._opNotifyNewEnrollee(t, _u); });
-      }
-    } catch (_op) {}
-
-    // --- Background: Firestore transaction for consistency ---
-    if (window.FirestoreDB && window.FirestoreDB.enrollParticipant) {
-        window.FirestoreDB.enrollParticipant(tId, participantObj, { teamOrigins: _teamOrigins }).then(function(result) {
-            // v1.8.40: UM leitor pro resultado. Antes o `waitlisted` (Liga aberta com fase
-            // sorteada) caía no ramo genérico: `t.participants = result.participants` e a
-            // dupla SUMIA da tela sem mensagem nenhuma.
-            var _verdictTeam = window._applyEnrollResult(t, tId, result, {
-                name: teamString,
-                self: true,
-                optimistic: _pushedTeam,
-                successToast: false,
-                excludeEmail: user.email
-            });
-            if (_verdictTeam !== 'enrolled') return;
-
-            // Notify organizer (fire-and-forget)
-            /* ⛔ QUEM DECIDE É O UID (24/set/2026). A guarda era
-             * `t.organizerEmail && t.organizerEmail !== user.email`, e o e-mail nunca foi usado
-             * pra ENVIAR — o envio já é por uid. Ele só respondia "existe organizador?" e "sou
-             * eu?", e respondia MAL: torneio SEM `organizerEmail` (legado, ou depois que o campo
-             * sair do doc público) NUNCA avisava o organizador, mesmo com `creatorUid` certinho; e
-             * organizador que TROCOU o e-mail da conta passava a receber aviso da própria
-             * inscrição. Identidade é uid, nunca texto. */
-            if (typeof window._resolveOrganizerUid === 'function') {
-                window._resolveOrganizerUid(t).then(function(orgUid) {
-                    /* ⛔ QUEM DECIDE É O UID, não o e-mail (inscrição de DUPLA). Este aviso comparava
-                     * `t.organizerEmail` com o e-mail do usuário: quem entrou por conta Google não
-                     * recebia, e torneio antigo, sem e-mail gravado, não avisava ninguém.
-                     * Ver tests/pontos-frageis.js. */
-                    if (orgUid && orgUid !== (user && user.uid)) {
-                        window._sendUserNotification(orgUid, {
-                            type: 'enrollment_new',
-                            message: _t('enroll.orgTeamEnrollMsg', {team: window._safeHtml(teamString), tourn: window._safeHtml(t.name)}),
-                            tournamentId: String(t.id),
-                            tournamentName: t.name || '',
-                            level: 'all'
-                        });
-                    }
-                }).catch(function(e) { window._warn('Notify organizer error:', e); });
-            }
-
-            // Notificar parceiro selecionado via picker (fire-and-forget)
-            if (partnerUids.length > 0 && typeof window._sendUserNotification === 'function') {
-                partnerUids.forEach(function(pUid) {
-                    if (!pUid || pUid === user.uid) return;
-                    window._sendUserNotification(pUid, {
-                        type: 'enrollment_new',
-                        title: '🎾 Você foi escolhido como parceiro(a)!',
-                        message: (user.displayName || 'Alguém') + ' formou dupla com você no torneio ' + window._safeHtml(t.name) + '.',
-                        tournamentId: String(t.id),
-                        tournamentName: t.name || '',
-                        level: 'fundamental'
-                    });
-                });
-            }
-
-            // Auto-amizade (fire-and-forget)
-            try {
-                var _refUid3 = null;
-                var _h3 = window.location.hash || '';
-                var _rm3 = _h3.match(/[?&]ref=([^&]+)/);
-                if (_rm3) _refUid3 = decodeURIComponent(_rm3[1]);
-                if (!_refUid3) _refUid3 = sessionStorage.getItem('_inviteRefUid');
-                if (_refUid3 && typeof _autoFriendOnInvite === 'function') {
-                    _autoFriendOnInvite(_refUid3, user);
-                    try { sessionStorage.removeItem('_inviteRefUid'); } catch(e2) {}
-                }
-            } catch(e) { window._warn('Auto-friend error:', e); }
-        }).catch(function(err) {
-            // Rollback: remove from local state and re-render
-            window._warn('Team enroll transaction error:', err);
-            // v1.8.40: o que entrou no array foi a CÓPIA _pushedTeam (filtrar pelo
-            // participantObj original nunca removia nada).
-            t.participants = t.participants.filter(function(p) { return p !== _pushedTeam; });
-            if (typeof showNotification !== 'undefined') showNotification(_t('enroll.error'), _t('enroll.errorMsg'), 'error');
-            var container = document.getElementById('view-container');
-            if (container && typeof renderTournaments === 'function') renderTournaments(container, tId);
-        });
+    // Uma dupla exige duas decisões de inscrição. O formulário antigo enviava o
+    // UID do parceiro no mesmo enrollParticipant, o que agora é corretamente
+    // recusado pelo servidor. Inscreva apenas a sessão atual; depois que o
+    // parceiro se inscrever por conta própria, o convite de dupla existente
+    // (requestTournamentPair) poderá ser enviado e aceito por ele.
+    if (typeof showAlertDialog === 'function') {
+        showAlertDialog('Inscrição individual primeiro',
+            'Cada atleta precisa confirmar a própria inscrição. Você será inscrito(a) agora; depois que seu parceiro se inscrever, convide-o para formar a dupla.',
+            function () { window.enrollCurrentUser(tId); }, { type: 'info' });
+    } else {
+        window.enrollCurrentUser(tId);
     }
 };
 
@@ -1981,7 +1796,7 @@ window._addParticipantWithAutocomplete = function(tId, isLate, onConfirm) {
     if (txt)  txt.textContent = name;
     if (sel)  sel.style.display = 'flex';
     if (dd)   dd.style.display = 'none';
-    if (btn)  { btn.disabled = false; btn.style.opacity = '1'; btn.style.cursor = 'pointer'; }
+    if (btn)  { btn.disabled = false; btn.style.opacity = '1'; btn.style.cursor = 'pointer'; btn.textContent = 'Convidar'; }
   };
 
   window._apClear = function() {
@@ -1991,7 +1806,7 @@ window._addParticipantWithAutocomplete = function(tId, isLate, onConfirm) {
     var btn = document.getElementById('ap-confirm');
     if (inp) { inp.value = ''; inp.style.display = 'block'; inp.focus(); }
     if (sel) sel.style.display = 'none';
-    if (btn) { btn.disabled = true; btn.style.opacity = '0.4'; btn.style.cursor = 'not-allowed'; }
+    if (btn) { btn.disabled = true; btn.style.opacity = '0.4'; btn.style.cursor = 'not-allowed'; btn.textContent = 'Adicionar'; }
   };
 
   window._apConfirm = function() {
@@ -2001,31 +1816,31 @@ window._addParticipantWithAutocomplete = function(tId, isLate, onConfirm) {
       var v = (document.getElementById('ap-input')||{}).value || '';
       if (!v.trim()) return;
       sel = { name: v.trim(), uid: '', photo: '' };
-      // v2.1.72: se o nome digitado bate EXATAMENTE (e de forma ÚNICA) com um
-      // amigo, vincula a conta (uid) automaticamente — evita inscrever um amigo
-      // como "texto solto" só porque o organizador não clicou na sugestão.
-      // Nome que não bate com ninguém continua entrando como convidado de fora.
-      try {
-        var _cu = window.AppStore && window.AppStore.currentUser;
-        var _fr = (_cu && Array.isArray(_cu.friends)) ? _cu.friends : [];
-        var _cache = window._friendProfilesCache || {};
-        var _norm = function(s) { return window._normalizeName ? window._normalizeName(s) : String(s || '').trim().toLowerCase(); };
-        var _target = _norm(sel.name);
-        var _matches = [];
-        _fr.forEach(function(u) {
-          var pr = _cache[u];
-          var nm = pr && pr.displayName;
-          if (nm && _norm(nm) === _target) _matches.push({ uid: u, photo: (pr.photoURL || ''), name: nm });
-        });
-        if (_matches.length === 1) {
-          sel.uid = _matches[0].uid;
-          sel.photo = _matches[0].photo;
-          sel.name = _matches[0].name;
-          if (typeof showNotification !== 'undefined') showNotification('🔗 Conta vinculada', sel.name + ' foi reconhecido(a) como seu amigo e vinculado à conta dele(a).', 'info');
-        }
-      } catch (e) {}
     }
     document.getElementById('add-participant-overlay') && document.getElementById('add-participant-overlay').remove();
+    if (sel.uid) {
+      // Um amigo com conta recebe apenas um convite. Só a própria conta pode
+      // aceitar na ficha do torneio; amizade não equivale a inscrição.
+      var _me = window.AppStore && window.AppStore.currentUser;
+      if (!_me || !_me.uid || !t || typeof window._sendUserNotification !== 'function') {
+        if (typeof showNotification === 'function') showNotification('Convite não enviado', 'Não foi possível enviar o convite agora.', 'error');
+        return;
+      }
+      Promise.resolve(window._sendUserNotification(sel.uid, {
+        type: 'tournament_invite', tournamentId: String(tId), tournamentName: t.name || '',
+        message: (_me.displayName || 'Um amigo') + ' convidou você para o torneio "' + (t.name || '') + '". Abra a ficha e inscreva-se se quiser participar.'
+      })).then(function (out) {
+        if (out && out.suppressed) {
+          if (typeof showNotification === 'function') showNotification('Convite recente', 'O convite já foi enviado ou está silenciado neste torneio.', 'info');
+          return;
+        }
+        if (!out) throw new Error('O convite não pôde ser entregue.');
+        if (typeof showNotification === 'function') showNotification('Convite enviado', sel.name + ' só entrará no torneio se aceitar e se inscrever.', 'success');
+      }).catch(function (e) {
+        if (typeof showNotification === 'function') showNotification('Convite não enviado', (e && e.message) || 'Tente novamente.', 'error');
+      });
+      return;
+    }
     onConfirm(sel.name, sel.uid, sel.photo);
   };
 };

@@ -65,7 +65,7 @@
       // ⭐ guarda o total pro botão da tela de Pessoas — MESMO desenho de #todos-torneios.
       // O número é o que ESTA lista mostra, nunca um total de outra fonte: foi exatamente
       // a divergência que fez o botão de torneios dizer 3 tendo 39 (ver 2.1.11).
-      try { localStorage.setItem('scoreplace_totalPessoas', String(E.pessoas.length)); } catch (e) {}
+      try { localStorage.setItem('scoreplace_totalPessoas_' + meu, String(E.pessoas.length)); } catch (e) {}
     } catch (e) {
       E.estado = 'erro';
       E.erro = (e && e.code) || 'falhou';
@@ -141,7 +141,7 @@
     var vis = _visiveis();
     var daqui = [], outros = [];
     vis.forEach(function (u) {
-      var casa = temMeus && _locaisDe(u).some(function (k) { return !!meus[k]; });
+      var casa = temMeus && (u.sharedLocation === true || _locaisDe(u).some(function (k) { return !!meus[k]; }));
       (casa ? daqui : outros).push(u);
     });
     if (!vis.length) {

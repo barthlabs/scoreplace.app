@@ -2,7 +2,7 @@
 /* O AVISO AO ORGANIZADOR DECIDE POR UID, NÃO POR E-MAIL.
  * node tests/aviso-ao-organizador-e-por-uid.test.js
  *
- * ⛔ O DEFEITO, medido no código em 24/set/2026: os três avisos (inscrição individual, de dupla e
+ * ⛔ O DEFEITO, medido no código em 24/set/2026: os avisos (inscrição individual, de dupla e
  * cancelamento) tinham a guarda `t.organizerEmail && t.organizerEmail !== user.email`. O e-mail
  * NUNCA foi usado para enviar — o envio já é por uid (`_sendUserNotification(orgUid, …)`). Ele só
  * respondia "existe organizador?" e "sou eu?", e respondia MAL:
@@ -14,7 +14,8 @@
  * `notFound`. Com a guarda por e-mail isso passava porque ela barrava casos por acidente; com uid o
  * aviso alcança mais gente, e um cancelamento que NÃO ocorreu passaria a avisar.
  *
- * ⚠️ Este teste lê o FONTE dos três blocos. É de propósito: o que se está travando é a FORMA da
+ * A inscrição de dupla sem aceite saiu em 19/out: restam dois blocos (inscrição própria e
+ * cancelamento). Este teste lê o FONTE desses blocos para travar a FORMA da
  * guarda — exercitar o fluxo inteiro exigiria simular Function, elenco e notificação, e mediria
  * outra coisa.
  */
@@ -34,11 +35,11 @@ const linhas = src.split('\n');
 const vivas = linhas.filter((l) => /organizerEmail\s*!==\s*user\.email/.test(l) && !/^\s*(\*|\/\*|\/\/)/.test(l));
 ok(vivas.length === 0, '① nenhuma guarda viva por e-mail — achei ' + vivas.length);
 
-/* ── ② os três blocos resolvem o uid e comparam UID ──────────────────────────────── */
+/* ── ② os dois blocos resolvem o uid e comparam UID ──────────────────────────────── */
 const porUid = (src.match(/orgUid && orgUid !== \(user && user\.uid\)/g) || []).length;
-ok(porUid === 3, '② ⭐ os TRÊS avisos comparam uid com uid — achei ' + porUid);
+ok(porUid === 2, '② ⭐ os DOIS avisos comparam uid com uid — achei ' + porUid);
 const resolve = (src.match(/if \(typeof window\._resolveOrganizerUid === 'function'\) \{/g) || []).length;
-ok(resolve === 3, '② e os três entram pelo resolvedor de uid — achei ' + resolve);
+ok(resolve === 2, '② e os dois entram pelo resolvedor de uid — achei ' + resolve);
 
 /* ── ③ o resolvedor é uid puro (não volta a olhar e-mail pelas costas) ──────────── */
 const org = fs.readFileSync(path.join(ROOT, 'js/views/tournaments-organizer.js'), 'utf8');
@@ -71,7 +72,7 @@ for (let de = 0; ; ) {
   inicios.push(k); de = k + ABRE.length;
 }
 const blocos = inicios.map((k) => ateFechar(src, k));
-ok(blocos.length === 3, '④ achei os três blocos de aviso');
+ok(blocos.length === 2, '④ achei os dois blocos de aviso');
 /* ⛔ Procurar no texto CRU faria a própria ANOTAÇÃO reprovar: a nota que explica o defeito
  * precisa citar o campo pelo nome, e citar não é ler. Então a busca é no código mascarado —
  * o mesmo leitor da trava de anotação, que apaga comentários e strings preservando o offset.
@@ -87,7 +88,7 @@ ok(blocos.every((b) => /orgUid !== \(user && user\.uid\)/.test(b)),
   '⑤ ⭐ organizador que se inscreve não recebe aviso da própria inscrição (comparação por uid)');
 
 /* ── ⑥ os SEIS vereditos não-`enrolled` não avisam ──────────────────────────────── */
-/* A guarda é `if (_verdict !== 'enrolled') return;` ANTES do bloco de aviso, nos dois fluxos
+/* A guarda é `if (_verdict !== 'enrolled') return;` ANTES do bloco de aviso, no fluxo
  * de inscrição. O teste FIXA isso: uma reordenação futura mandaria "novo inscrito" de quem não
  * entrou. ⚠️ `waitlisted` é o que mais engana: `_applyEnrollResult` o considera "ok", mas quem
  * entrou na FILA não entrou no elenco. */
@@ -103,7 +104,7 @@ const derivador = src.slice(src.indexOf('window._applyEnrollResult = function'),
 VEREDITOS.forEach(([payload, v]) => ok(new RegExp("verdict = '" + v + "'").test(derivador),
   '⑥ o veredito `' + v + '` é derivado de ' + payload));
 const guardas = (src.match(/if \(_verdict(Team)? !== 'enrolled'\) return;/g) || []).length;
-ok(guardas === 2, '⑥ ⭐ os dois fluxos de inscrição param ANTES do aviso quando não é `enrolled` — achei ' + guardas);
+ok(guardas === 1, '⑥ ⭐ a inscrição própria para ANTES do aviso quando não é `enrolled` — achei ' + guardas);
 
 /* ── ⑦ cancelamento que NÃO aconteceu não avisa ─────────────────────────────────── */
 ok(/if \(!result \|\| result\.notFound\) return;/.test(src),

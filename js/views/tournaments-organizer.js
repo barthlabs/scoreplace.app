@@ -204,7 +204,7 @@ function _notifDedupCheck(uid, type, tId, matchId) {
 // usado por "Falar com o organizador". v1.2.9: não há mais auto-dispatch de
 // WhatsApp pra pular — `skipWhatsApp` virou no-op e só a cópia por e-mail importa.
 window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
-    if (!window.FirestoreDB || !window.FirestoreDB.db || !uid) return;
+    if (!window.FirestoreDB || !window.FirestoreDB.db || !uid) return null;
     // Sandbox/killswitch: se a notif é de um torneio com notificações mudas, não dispara.
     // v1.4.12 — À PROVA DE FALHA. Antes dependia SÓ de _findTournamentById resolver o doc;
     // quando o SB não estava na lista local (ou o payload vinha de outro caminho) o lookup
@@ -216,11 +216,11 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
         // Os 3 sinais (id `_sb`, nome '(SB) ', doc com isSandbox) moram em UMA função só
         // (store.js `_isSandboxRef`), compartilhada com as STATS — o SB tinha que ser mudo
         // nos dois lugares e a regra estava escrita só aqui.
-        if (window._isSandboxRef && window._isSandboxRef(_tid, notifData.tournamentName)) return;
+        if (window._isSandboxRef && window._isSandboxRef(_tid, notifData.tournamentName)) return { suppressed: true };
         // killswitch explícito por torneio (t.notificationsMuted), que é só de notificação
         if (_tid && typeof window._findTournamentById === 'function' && window._tournamentNotificationsMuted) {
             var _tMute = window._findTournamentById(_tid);
-            if (_tMute && window._tournamentNotificationsMuted(_tMute)) return;
+            if (_tMute && window._tournamentNotificationsMuted(_tMute)) return { suppressed: true };
         }
     }
     var _skipOpt = (_skipDispatch && typeof _skipDispatch === 'object') ? _skipDispatch : null;
@@ -229,7 +229,7 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
     // Dedup guard: mesma notificação pro mesmo uid dentro de 5 min é silenciada.
     if (_notifDedupCheck(uid, notifData.type || '', notifData.tournamentId || '', notifData.matchId || '')) {
         window._log('[notif] dedup suprimiu', notifData.type, 'para uid', uid.substring(0, 8) + '...');
-        return;
+        return { suppressed: true };
     }
     // v0.17.8: defesa contra self-notification. cu.friends pode conter o
     // próprio uid em casos edge (auto-friendship via bugs históricos ou
@@ -240,7 +240,7 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
     // igual ao comunicado do org via CF). Fora isso, self continua sendo suprimido.
     var _cu = window.AppStore && window.AppStore.currentUser;
     if (_cu && _cu.uid && uid === _cu.uid && !(notifData && notifData._allowSelf)) {
-        return;
+        return { suppressed: true };
     }
     try {
         /* ⛔ AVISAR ALGUÉM NÃO PRECISA DA FICHA DELE. Esta linha lia `users/{uid}` INTEIRO —
@@ -252,7 +252,7 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
          * e quem resolve para qual caixa mandar é o SERVIDOR, na hora de enviar. Ver
          * `queueNotifEmail` e `flushNotifEmailDigest`. */
         var profile = await window.FirestoreDB.carregarPerfilPublico(uid);
-        if (!profile) return;
+        if (!profile) return null;
         // 🔴 O DESLIGAMENTO DO "AO VIVO" É POR TIPO, e mora aqui — a porta única por onde
         // TODA notificação passa. Pôr o teste em quem dispara (a vitrine) deixaria de
         // fora qualquer caminho novo que avise sobre placar ao vivo. Ver live-now.js.
@@ -262,13 +262,13 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
             // DELE — all | friends (só amigos dele) | none (ninguém). O boolean antigo
             // do DESTINATÁRIO segue respeitado como opt-out de receber (quem salvou
             // 'não me avise' antes da mudança continua sem ser incomodado).
-            if (profile.liveAlerts === false && !profile.liveAlertsWho) return;
+            if (profile.liveAlerts === false && !profile.liveAlertsWho) return { suppressed: true };
             var _laSender = _cu || {};
             var _laWho = _laSender.liveAlertsWho || (_laSender.liveAlerts === false ? 'none' : 'all');
-            if (_laWho === 'none') return;
+            if (_laWho === 'none') return { suppressed: true };
             if (_laWho === 'friends') {
                 var _laFriends = Array.isArray(_laSender.friends) ? _laSender.friends : [];
-                if (_laFriends.indexOf(uid) === -1) return;
+                if (_laFriends.indexOf(uid) === -1) return { suppressed: true };
             }
         }
         /* ⛔ O NÍVEL É DE QUEM RECEBE, não do tipo — nos avisos de PLACAR.
@@ -302,7 +302,7 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
         var notifLevel = (typeof window._nivelDoAviso === 'function')
             ? window._nivelDoAviso(notifData.type, _papelNoAviso, notifData.level)
             : (notifData.level || 'all');
-        if (!window._notifLevelAllowed(userLevel, notifLevel)) return;
+        if (!window._notifLevelAllowed(userLevel, notifLevel)) return { suppressed: true };
 
         // LGPD: identidade de quem envia deve ser verificada contra Firebase Auth
         var cu = (typeof window._verifiedCurrentUser === 'function')
@@ -432,6 +432,7 @@ window._notifyTournamentParticipants = async function(tournament, notifData, exc
     // Sandbox/killswitch: torneio com notificações mudas NÃO dispara nada (nem app,
     // nem e-mail). Ver _tournamentNotificationsMuted. É a rede de segurança do SB.
     if (window._tournamentNotificationsMuted && window._tournamentNotificationsMuted(t)) return;
+    if (t && t.organizerOnly === true) return;
     var parts = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
 
     // Destinatários são contas, portanto entram somente por UID. Contato digitado

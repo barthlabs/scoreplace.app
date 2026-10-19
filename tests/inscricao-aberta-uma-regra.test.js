@@ -112,8 +112,8 @@ const enr = semComent(fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 
 const tour = semComent(fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments.js'), 'utf8'));
 const dash = semComent(fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'dashboard.js'), 'utf8'));
 
-ok((enr.match(/_enrollmentOpenState\(/g) || []).length >= 5,
-  'tournaments-enrollment: os 5 gates (self, time, +participante, core, +time) usam a fonte única');
+ok((enr.match(/_enrollmentOpenState\(/g) || []).length >= 4 && /window\.enrollCurrentUser\(tId\)/.test(enr),
+  'tournaments-enrollment: os gates ativos usam a fonte única; dupla delega à inscrição própria');
 ok(/ligaOpenEnrollment !== false && sorteioRealizado/.test(enr) === false,
   'REGRESSÃO: nenhuma cópia local de ligaAberta-com-sorteio pode voltar no enrollment');
 ok(/_enrollmentOpenState\(t\)/.test(tour), 'tournaments.js (render do detalhe) usa a fonte única');

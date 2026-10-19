@@ -2240,6 +2240,7 @@ window.FirestoreDB = {
       snapS.forEach(function (doc) {
         var d = doc.data();
         if (!d) return;
+        if (d.organizerOnly === true && d.creatorUid !== uid && !(Array.isArray(d.memberUids) && d.memberUids.indexOf(uid) !== -1)) return;
         d._docId = doc.id;
         if (!d.id) d.id = doc.id;
         // sentinela: se alguém pedir jogo/inscrito a este documento leve, o app avisa
@@ -3135,186 +3136,51 @@ window.FirestoreDB = {
     }
   },
 
-  // Recently-active users (created or updated in the last N days). Used to
-  // populate the Explore page with suggestions when the search box is empty —
-  // feels better than a "Nenhum usuário encontrado" dead end. Ordered by the
-  // most recent signal (`updatedAt` preferred, `createdAt` as a fallback for
-  // profiles that never re-saved after signup). Requires a single-field index
-  // on `updatedAt desc`, which Firestore provides automatically.
+  // Recentes apenas entre as pessoas que o servidor autorizou descobrir.
   async listRecentUsers(days, limit) {
-    if (!this.db) return [];
-    var d = Math.max(1, parseInt(days, 10) || 7);
-    var lim = Math.max(1, Math.min(50, parseInt(limit, 10) || 30));
-    var cutoff = new Date(Date.now() - d * 24 * 3600 * 1000).toISOString();
     try {
-      var results = {};
-      var addFromSnap = function(snap) {
-        snap.forEach(function(doc) {
-          if (results[doc.id]) return;
-          var data = doc.data();
-          data._docId = doc.id;
-          // mesma régua da busca por nome: a tela mostra nome e foto, não a ficha inteira.
-          if (data.acceptFriendRequests !== false) results[doc.id] = window._perfilDeLista(data);
-        });
-      };
-      // Two parallel queries — some profiles have updatedAt (active users),
-      // others only carry createdAt from first login. Union them client-side.
-      await Promise.all([
-        this.db.collection(window._COLECAO_PERFIL_PUBLICO)
-          .where('updatedAt', '>=', cutoff)
-          .orderBy('updatedAt', 'desc')
-          .limit(lim).get().then(addFromSnap).catch(function(e) { window._warn('recent-updatedAt err', e && e.message); }),
-        this.db.collection(window._COLECAO_PERFIL_PUBLICO)
-          .where('createdAt', '>=', cutoff)
-          .orderBy('createdAt', 'desc')
-          .limit(lim).get().then(addFromSnap).catch(function(e) { window._warn('recent-createdAt err', e && e.message); })
-      ]);
-      return Object.keys(results).map(function(k) { return results[k]; });
-    } catch (e) {
-      window._error('Erro ao carregar usuários recentes:', e);
-      return [];
-    }
+      var scoped = await this.listInvitableUsers();
+      return scoped.sort(function (a, b) {
+        return new Date(b.lastSeenAt || b.updatedAt || b.createdAt || 0) -
+          new Date(a.lastSeenAt || a.updatedAt || a.createdAt || 0);
+      }).slice(0, Math.max(1, Math.min(50, parseInt(limit, 10) || 30)));
+    } catch (e) { window._warn('listRecentUsers err', e && e.message); return []; }
   },
 
   // ---- Explore: list users who accept friend requests ----
 
-  // Resolve um NOME DIGITADO → a(s) conta(s) que têm EXATAMENTE esse displayName.
-  // IDENTIDADE = uid: usado no enroll/pareamento pra nunca gravar um titular de
-  // conta só por nome (a classe de bug que sumiu o Adriano). Há no máximo um
-  // perfil vivo novo por nome; 2+ é resíduo legado, a ser tratado com cuidado.
-  // Ignora contas mescladas (mergedInto) e nomes "não-amigáveis" (dupla "A / B",
-  // email, telefone, placeholder) — esses não são nome de pessoa.
-  /* ⛔ NOME DE EXIBIÇÃO NÃO IDENTIFICA PESSOA.
-   * A resolução abaixo só LÊ candidatas para permitir que o organizador escolha
-   * conscientemente uma conta pelo UID. A reserva global impede novos homônimos;
-   * ambiguidade só existe enquanto um legado ainda aguarda revisão. */
-  // ⛔ NOME DE EXIBIÇÃO NÃO IDENTIFICA PESSOA. Retorna:
-  //   { status:'none' }                      → sem conta (participante informal)
-  //   { status:'unique', uid, profile }      → 1 conta
-  //   { status:'ambiguous', candidates:[…] } → 2+ homônimos (perguntar qual)
-  // Fail-open: erro de consulta devolve 'none' (grava informal, não bloqueia).
+  // ⛔ NOME DE EXIBIÇÃO NÃO IDENTIFICA PESSOA. Nome digitado nunca resolve
+  // conta ou concede consentimento para vínculo.
   async resolveNameToAccounts(name) {
-    if (!name || !this.db) return { status: 'none' };
-    var q = String(name).trim().toLowerCase();
-    if (!q || q.indexOf(' / ') !== -1) return { status: 'none' };
-    if (typeof window._isUnfriendlyName === 'function' && window._isUnfriendlyName(name)) return { status: 'none' };
-    try {
-      // user-vivo:isento — candidatos pra ESCOLHA humana entre homônimos: lápide não entra
-      // na lista (seria oferecer uma conta morta), e o filtro abaixo já a descarta.
-      var snap = await this.db.collection(window._COLECAO_PERFIL_PUBLICO).where('displayName_lower', '==', q).limit(8).get();
-      var cands = [];
-      snap.forEach(function (doc) {
-        var d = doc.data() || {};
-        if (d.mergedInto) return;
-        cands.push({ uid: doc.id, displayName: d.displayName || name, email: d.email || '', phone: d.phone || '', photoURL: d.photoURL || '' });
-      });
-      if (cands.length === 0) return { status: 'none' };
-      if (cands.length === 1) return { status: 'unique', uid: cands[0].uid, profile: cands[0] };
-      return { status: 'ambiguous', candidates: cands };
-    } catch (e) {
-      if (window._warn) window._warn('[resolveNameToAccounts] fail-open:', e);
-      return { status: 'none' };
-    }
+    return { status: 'none' }; // nome não autoriza descobrir nem vincular uma conta
   },
 
-  // Search users by name or email prefix. Server-side range queries on the
-  // denormalized `displayName_lower` / `email_lower` fields — bounded by
-  // the per-query `limit`, not the total user count. Empty query returns
-  // []: a blind scan across all users is exactly what we moved away from.
+  // Busca local na lista já autorizada; e-mail não é chave de descoberta.
   async searchUsers(queryText, opts) {
-    if (!this.db) return [];
-    var q = String(queryText || '').trim().toLowerCase();
-    if (!q) return [];
-    opts = opts || {};
-    var perQueryLimit = Math.max(1, Math.min(50, opts.limit || 20));
-    var results = {};
-    // v1.0.5-beta: PRIVACY — sanitizar resultado de searchUsers pra retornar só
-    // campos públicos. Antes retornava o doc inteiro de users/{uid}, expondo
-    // phone/phoneCountry/birthDate/gender/preferredCeps/preferredLocations
-    // pra qualquer um que rodasse FirestoreDB.searchUsers no console (#explore
-    // chama isso pra busca de amigos). Fix em 1 camada client-side; security
-    // rules ainda permitem leitura do doc inteiro — fix definitivo em rules
-    // fica pra round dedicado com testes.
-    var sanitize = window._perfilDeLista;
-    var addFromSnap = function(snap) {
-      snap.forEach(function(doc) {
-        if (results[doc.id]) return;
-        var data = doc.data();
-        data._docId = doc.id;
-        // LÁPIDE (conta já mesclada) não é gente pra convidar: fora da lista, na FONTE.
-        // Filtrar só lá na frente não funcionava — o `sanitize` abaixo apaga `mergedInto`,
-        // então o filtro do explore.js recebia o campo já sumido e deixava a conta morta passar.
-        if (data.mergedInto) return;
-        // Default acceptFriendRequests to true (undefined means not set yet)
-        if (data.acceptFriendRequests !== false) {
-          results[doc.id] = sanitize(data);
-        }
-      });
-    };
-    var end = q + '\uf8ff';
-    // user-vivo:isento — searchUsers devolve uma LISTA pra pessoa escolher: lápide é
-    // DESCARTADA no addFromSnap (nem aparece), nunca redirecionada pro sobrevivente.
-    var queries = [
-      this.db.collection(window._COLECAO_PERFIL_PUBLICO)
-        .where('displayName_lower', '>=', q)
-        .where('displayName_lower', '<', end)
-        .limit(perQueryLimit).get().then(addFromSnap).catch(function(e) {
-          window._warn('displayName search error:', e && e.message);
-        }),
-      // user-vivo:isento — idem: lista pra escolha, lápide descartada no addFromSnap.
-      this.db.collection(window._COLECAO_PERFIL_PUBLICO)
-        .where('email_lower', '>=', q)
-        .where('email_lower', '<', end)
-        .limit(perQueryLimit).get().then(addFromSnap).catch(function(e) {
-          window._warn('email search error:', e && e.message);
-        })
-    ];
-    await Promise.all(queries);
-    return Object.keys(results).map(function(k) { return results[k]; });
+    try {
+      var scoped = await this.listInvitableUsers();
+      var qScoped = String(queryText || '').trim().toLowerCase();
+      if (!qScoped) return [];
+      return scoped.filter(function (u) {
+        return String(u.displayName || '').toLowerCase().indexOf(qScoped) !== -1;
+      }).slice(0, Math.max(1, Math.min(50, (opts && opts.limit) || 20)));
+    } catch (e) { window._warn('searchUsers err', e && e.message); return []; }
   },
 
-  // Carrega TODOS os usuários que aceitam pedido de amizade (toggle do perfil),
-  // sanitizados (só campos públicos). Usado pela busca da página Pessoas para
-  // filtrar por SUBSTRING client-side — o searchUsers normal só faz prefix
-  // match em displayName_lower (não acha "Vieira" em "Fabiana Vieira").
-  // Escala-ok pra base beta (dezenas/centenas). Quando crescer, migrar pra
-  // índice de busca dedicado. limit defensivo de 2000.
+  // O servidor decide a relação; o cliente só mantém cache curto dessa resposta.
   async listInvitableUsers() {
     if (!this.db) return [];
-    // v4.5.68: cache de sessão (TTL 5min). Abrir #explore fazia um scan de até
-    // 2000 docs da coleção `users` TODA VEZ (Sentry: "read spike searchUsers-scan
-    // =306 · rota=#explore"). Sem cache, cada reabertura da tela Explorar relia a
-    // base inteira. Novos cadastros aparecem no máx 5min depois — trade-off aceito
-    // pra lista de convite. Ver memória project_firestore_read_efficiency.
-    var _c = window._invitableUsersCache;
-    if (_c && (Date.now() - _c.at) < 300000) return _c.data.slice();
-    // ⚠️ 2.1.14 — `preferredLocations` ENTROU AQUI, e é uma decisão de privacidade, não
-    // um campo a mais. A tela #todas-pessoas agrupa por "joga nos meus locais" (ordem do
-    // dono), e pra isso o local preferido do OUTRO precisa chegar ao cliente. O campo não
-    // é EXIBIDO — serve só pra decidir a seção. Ele é da mesma família de `city`, que já
-    // viajava aqui. MEDIDO em 27/ago: 40 dos 259 perfis (15%) têm o campo preenchido.
-    /* a base é a mesma das outras duas listas; aqui ela é ESTENDIDA com os dois campos que
-     * esta tela precisa para AGRUPAR (não para exibir), e isso está declarado logo acima. */
-    var PUBLIC_FIELDS = window._CAMPOS_DE_LISTA.concat(['city', 'preferredLocations']);
-    var out = [];
+    var scopedCache = window._invitableUsersCache;
+    var viewerUid = String((window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) || '');
+    if (!viewerUid) return [];
+    if (scopedCache && scopedCache.uid === viewerUid && Date.now() - scopedCache.at < 300000) return scopedCache.data.slice();
     try {
-      var snap = await this.db.collection(window._COLECAO_PERFIL_PUBLICO).limit(2000).get();
-      try { if (window._noteFsReads) window._noteFsReads(snap.size, 'searchUsers-scan'); } catch (e) {}
-      snap.forEach(function(doc) {
-        var data = doc.data();
-        if (data.mergedInto) return;                     // lápide não é convidável (ver searchUsers)
-        if (data.acceptFriendRequests === false) return; // respeita o toggle
-        var o = { _docId: doc.id };
-        for (var i = 0; i < PUBLIC_FIELDS.length; i++) {
-          if (data[PUBLIC_FIELDS[i]] !== undefined) o[PUBLIC_FIELDS[i]] = data[PUBLIC_FIELDS[i]];
-        }
-        out.push(o);
-      });
-      window._invitableUsersCache = { at: Date.now(), data: out };
-    } catch (e) {
-      window._warn('listInvitableUsers err', e && e.message);
-    }
-    return out.slice();
+      var answer = await this._callFn('listDiscoverableUsers', {});
+      if (String((window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) || '') !== viewerUid) return [];
+      var scopedUsers = answer && Array.isArray(answer.users) ? answer.users : [];
+      window._invitableUsersCache = { uid: viewerUid, at: Date.now(), data: scopedUsers };
+      return scopedUsers.slice();
+    } catch (e) { window._warn('listInvitableUsers err', e && e.message); return []; }
   },
 
   // ---- Friend Requests ----

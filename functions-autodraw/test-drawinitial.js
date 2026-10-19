@@ -308,6 +308,51 @@ const CASES = [
       const match = realMatches.find(function (m) { return String(m.id) === slot.matchId; });
       return !match.requiredDay || new Date(slot.iso).toLocaleDateString('en-CA', { timeZone:'America/Sao_Paulo' }) === match.requiredDay;
     }), JSON.stringify(estimated && { slots:estimated.slots.length, days:estimated.dias, extra:estimated.extraMs, applied, waves }));
+  const neonFree64 = realTournament();
+  neonFree64.id = 'neon-64-free';
+  neonFree64.teamCompetition = Object.assign({}, realConfig, { schedule:Object.assign({}, realConfig.schedule, { mode:'free' }) });
+  neonFree64.phases = [{ teamCompetition:neonFree64.teamCompetition }];
+  const freeDraw = core.drawInitial(neonFree64, { idStamp:'neon-64-free' });
+  const freeGrade = freeDraw.ok && core._window._schGradeEstimada(neonFree64);
+  const freeWaves = freeGrade && [0, 1].map(function (day) {
+    const counts = {};
+    freeGrade.slots.filter(function (slot) { return slot.dia === day; }).forEach(function (slot) {
+      counts[slot.ms] = (counts[slot.ms] || 0) + 1;
+    });
+    return Object.values(counts);
+  });
+  ok('Neon 64 livre: três jogos por dupla e seis quadras ocupadas nas oito ondas de cada dia',
+    freeDraw.ok && neonFree64.matches.length === 96 && freeGrade && freeGrade.cabe === true &&
+    freeGrade.slots.length === 96 && freeWaves.every(function (day) {
+      return day.length === 8 && day.every(function (count) { return count === 6; });
+    }) && neonFree64.participants.every(function (entry) {
+      return neonFree64.matches.filter(function (match) {
+        return match.team1Obj.fixedPairId === entry.fixedPairId || match.team2Obj.fixedPairId === entry.fixedPairId;
+      }).length === 3;
+    }), JSON.stringify({ drawn:freeDraw.ok, reason:freeDraw.reason, matches:neonFree64.matches && neonFree64.matches.length, waves:freeWaves }));
+  const neonSandbox64 = realTournament();
+  neonSandbox64.id = 'sb_neon-64-free';
+  neonSandbox64.isSandbox = true;
+  neonSandbox64.notificationsMuted = true;
+  neonSandbox64.teamCompetition = JSON.parse(JSON.stringify(neonFree64.teamCompetition));
+  neonSandbox64.phases = [{ teamCompetition:neonSandbox64.teamCompetition }];
+  const sandboxDraw = core.drawInitial(neonSandbox64, { idStamp:'neon-64-free' });
+  const sandboxGrade = sandboxDraw.ok && core._window._schGradeEstimada(neonSandbox64);
+  const sandboxWaves = sandboxGrade && [0, 1].map(function (day) {
+    const counts = {};
+    sandboxGrade.slots.filter(function (slot) { return slot.dia === day; }).forEach(function (slot) {
+      counts[slot.ms] = (counts[slot.ms] || 0) + 1;
+    });
+    return Object.values(counts);
+  });
+  ok('Neon 64 livre: sandbox e produção usam o mesmo motor e satisfazem a mesma grade',
+    sandboxDraw.ok && sandboxGrade && sandboxGrade.cabe === true && neonSandbox64.matches.length === neonFree64.matches.length &&
+    sandboxWaves.every(function (day) { return day.length === 8 && day.every(function (count) { return count === 6; }); }) &&
+    neonSandbox64.participants.every(function (entry) {
+      return neonSandbox64.matches.filter(function (match) {
+        return match.team1Obj.fixedPairId === entry.fixedPairId || match.team2Obj.fixedPairId === entry.fixedPairId;
+      }).length === 3;
+    }), JSON.stringify({ drawn:sandboxDraw.ok, reason:sandboxDraw.reason, matches:neonSandbox64.matches && neonSandbox64.matches.length, waves:sandboxWaves }));
   const opponents = {};
   realMatches.forEach(function (match) {
     const a = match.team1Obj && match.team1Obj.fixedPairId, b = match.team2Obj && match.team2Obj.fixedPairId;

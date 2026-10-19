@@ -157,8 +157,8 @@ const DB = fs.readFileSync(path.join(raiz, 'js/firebase-db.js'), 'utf8');
 must(/window\._COLECAO_PERFIL_PUBLICO = 'usersPublic';/.test(DB),
   '⑧ o nome da coleção mora numa constante só');
 const lidasDoEspelho = (DB.match(/collection\(window\._COLECAO_PERFIL_PUBLICO\)/g) || []).length;
-must(lidasDoEspelho >= 6,
-  '⑧ ⭐ as leituras de gente desconhecida vêm do espelho (' + lidasDoEspelho + ')');
+must(lidasDoEspelho >= 1 && /this\._callFn\('listDiscoverableUsers'/.test(DB),
+  '⑧ ⭐ perfis diretos usam o espelho e descoberta passa pelo servidor (' + lidasDoEspelho + ')');
 must(!/collection\('users'\)\.limit\(2000\)/.test(DB),
   '⑧ ⛔ sumiu a varredura de 2000 perfis INTEIROS — era a maior exposição da coleção');
 must(!/collection\('users'\)\.where\('displayName_lower'/.test(DB),

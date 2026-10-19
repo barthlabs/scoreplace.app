@@ -1,5 +1,17 @@
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
+// Discovery results are scoped to an authenticated account and must not survive logout.
+if (typeof window !== 'undefined') window._clearDiscoveryCache = function () {
+  window._invitableUsersCache = null;
+  window._exploreInvitableCache = null;
+  window._exploreInvitableCacheUid = '';
+  try {
+    for (var i = localStorage.length - 1; i >= 0; i--) {
+      var key = localStorage.key(i);
+      if (key && (key.indexOf('scoreplace_discoverable_v1_') === 0 || key.indexOf('scoreplace_totalPessoas_') === 0)) localStorage.removeItem(key);
+    }
+  } catch (_discoveryCacheError) {}
+};
 // ========================================
 // scoreplace.app — Firebase Auth + Firestore Init
 // ========================================
@@ -791,6 +803,7 @@ if (typeof firebase !== 'undefined' && firebase.auth) {
     }
 
     window._log('[scoreplace-auth] onAuthStateChanged: committing sign-out after grace period');
+    if (typeof window._clearDiscoveryCache === 'function') window._clearDiscoveryCache();
     try { localStorage.removeItem('scoreplace_authCache'); } catch(e) {}
     if (window.AppStore) {
       window.AppStore.currentUser = null;
@@ -3971,6 +3984,8 @@ async function simulateLoginSuccess(user) {
   var inProgressUid = window._simulateLoginInProgressUid || '';
   var STALE_MS = 10000; // 10s
   var newUid = user && user.uid;
+  var previousUid = window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid;
+  if (previousUid && newUid && previousUid !== newUid && typeof window._clearDiscoveryCache === 'function') window._clearDiscoveryCache();
   window._log('[scoreplace-auth] simulateLoginSuccess called for', user && user.email,
     'inProgressAt:', inProgressAt, 'staleAfter:', STALE_MS + 'ms', 'isStale:', (now - inProgressAt) > STALE_MS);
   if (inProgressAt && (now - inProgressAt) <= STALE_MS) {
@@ -5959,6 +5974,7 @@ function setupLoginModal() {
 }
 
 function handleLogout() {
+  if (typeof window._clearDiscoveryCache === 'function') window._clearDiscoveryCache();
   // O nome que a Apple mandou é de QUEM ESTÁ SAINDO — não pode sobrar pra próxima conta.
   window._applePendingName = null;
   window._missingNameAsked = false;

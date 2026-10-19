@@ -406,8 +406,9 @@ const achou = (c, p) => D.detectarMesmaPessoa(c, p).suspeito;
     !/RECUSADO por duplicata/.test(idx) && !/duplicateSignal[\s\S]{0,300}alreadyEnrolled: true/.test(idx));
   ok('  → a detecção roda antes da transação, sem substituir a decisão por UID',
     idx.indexOf('_detectarDuplicataNoTorneio(db, participantUid') < idx.indexOf('await db.runTransaction'));
-  ok('  → o ORGANIZADOR inscrevendo TERCEIRO não aciona o sinal da própria conta',
-    /participantUid && participantUid !== callerUid && !_preIsOrganizer/.test(idx) &&
+  ok('  → nem organizador inscreve UID de terceiro; só a própria conta recebe o sinal',
+    /linkedUids\.some\(\(linkedUid\) => linkedUid !== callerUid\)/.test(idx) &&
+    /Convide a pessoa; só ela pode aceitar e concluir sua inscrição/.test(idx) &&
     /if \(!sandbox && participantUid === callerUid && _pre\.exists && \(_pre\.data\(\) \|\| \{\}\)\.isSandbox !== true\)/.test(idx));
   ok('  → devolve dupSuspect junto do resultado normal',
     /withDuplicateSignal[\s\S]{0,160}dupSuspect: duplicateSignal/.test(idx));

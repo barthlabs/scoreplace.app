@@ -1062,6 +1062,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   window._opNotifyEnrolled = function (t, poll, opts) {
     opts = opts || {};
     if (!t || !poll) return;
+    if (t.organizerOnly === true || t.notificationsMuted === true) return;
     if (poll.notifiedAt && !opts.force) return;
     window._opNotifiedThisSession = window._opNotifiedThisSession || {};
     if (window._opNotifiedThisSession[poll.id] && !opts.force) return;
@@ -1092,6 +1093,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   window._opNotifyNewEnrollee = function (t, uid) {
     try {
       if (!t || !uid) return;
+      if (t.organizerOnly === true || t.notificationsMuted === true) return;
       var poll = window._opActivePoll(t); if (!poll || poll.closed) return;
       if (_opHasVotedAny(poll, uid)) return;
       var q = (window._opSections(poll)[0] || {}).question || 'a enquete';

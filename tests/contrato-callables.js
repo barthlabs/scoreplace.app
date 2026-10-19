@@ -125,6 +125,7 @@ const TABELA = [
   { nome: "getCanonicalTournamentRoster", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "getOwnIdentityStatus", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "getOwnEmailMergeCandidates", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
+  { nome: "listDiscoverableUsers", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "getTournamentDuplicateAccounts", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "getTournamentEnrollmentProfiles", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "getTournamentParticipantContact", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },

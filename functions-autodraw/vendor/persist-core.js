@@ -103,6 +103,11 @@ window._isSandboxData = function (data) { return !!(data && data.isSandbox === t
 // Merge canônico de memberUids no limite de escrita: UNIÃO (nunca encolhe — um uid que só
 // existe no denormalizado não pode sumir e derrubar o listener de quem depende dele).
 window._mergeMemberUids = function (data, prev, next) {
+  // O índice é também a consulta de versões nativas antigas. Em visibilidade
+  // exclusiva, manter inscritos aqui faz a query incluir um documento que as
+  // Rules lhes negam e pode derrubar a lista inteira de "meus torneios".
+  // A inscrição permanece em participants; só o índice de leitura encolhe.
+  if (data && data.organizerOnly === true) return window._computeAdminUids(data);
   var n = Array.isArray(next) ? next : [];
   var p = Array.isArray(prev) ? prev : [];
   return Array.from(new Set(p.concat(n)));

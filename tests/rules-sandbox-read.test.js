@@ -129,17 +129,14 @@ function makeOldRules() {
    * TODAS é o que a intenção sempre foi.
    * ⭐ E o `esperadas` abaixo trava o alvo: se um dia o bloco sumir de uma das coleções, o
    * teste ACUSA em vez de gerar um "velho" que não é velho coisa nenhuma. */
-  const NEW_BLOCK = /allow read: if \(\s*\n\s*\(resource\.data\.get\('isSandbox'[\s\S]*?\n\s*\);/g;
-  const achadas = (cur.match(NEW_BLOCK) || []).length;
-  if (achadas < 1) {
-    throw new Error('não achei o bloco novo de allow read em firestore.rules — ajuste o teste');
+  // A regra atual centraliza a leitura do torneio neste helper. O controle
+  // histórico reabre apenas a leitura autenticada para provar o vazamento.
+  const NEW_BLOCK = /function canReadTournamentData\(data\) \{[\s\S]*?\n    \}/;
+  if (!NEW_BLOCK.test(cur)) {
+    throw new Error('não achei canReadTournamentData em firestore.rules — ajuste o teste');
   }
   const old = cur.replace(NEW_BLOCK,
-    "allow read: if (resource.data.isPublic == true) || (request.auth != null);");
-  const sobraram = (old.match(NEW_BLOCK) || []).length;
-  if (sobraram !== 0) {
-    throw new Error('o "velho" gerado ainda tem ' + sobraram + ' bloco(s) NOVO(s) — o controle não provaria nada');
-  }
+    "function canReadTournamentData(data) { return data.get('isPublic', false) == true || request.auth != null; }");
   const p = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'spsbold-')), 'old.rules');
   fs.writeFileSync(p, old);
   return p;
