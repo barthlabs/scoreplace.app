@@ -1,3 +1,4 @@
+// 2.4.109 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.108 — Cards de organização compactos, sem espaço sobrando entre nome e cargo. O tratamento feminino ou masculino pode vir da categoria da dupla quando o perfil ainda não informa gênero.
 // 2.4.107 — Os cards de organização agora mostram nomes e funções completos mesmo em telas estreitas.
 // 2.4.106 — No Neon, a inscrita nº 2 foi vinculada à conta Apple e à organização. Os demais organizadores designados recebem acesso após vínculo individual verificado, sem segundo aceite; o link geral não concede acesso administrativo.
