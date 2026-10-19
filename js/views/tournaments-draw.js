@@ -2871,10 +2871,17 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
     var savedCourtOrder = Array.isArray(t.courtOrder) ? t.courtOrder.map(String) : [];
     var normalizedCourtOrder = savedCourtOrder.filter(function (court, index) { return courtNames.indexOf(court) >= 0 && savedCourtOrder.indexOf(court) === index; });
     courtNames.forEach(function (court) { if (normalizedCourtOrder.indexOf(court) < 0) normalizedCourtOrder.push(court); });
+    var categoryLabelById = {};
+    (Array.isArray(t.categoryDefinitions) ? t.categoryDefinitions : []).forEach(function (definition) {
+      if (definition && definition.id && definition.label) categoryLabelById[String(definition.id)] = String(definition.label);
+    });
+    function pairCategory(entry) {
+      var found = (typeof window._getParticipantCategories === 'function' ? window._getParticipantCategories(entry) : []) || [];
+      return String(found[0] || entry.category || categoryLabelById[String(entry.categoryId || '')] || '').trim();
+    }
     var countByCategory = {};
     entries.forEach(function (entry) {
-        var found = (typeof window._getParticipantCategories === 'function' ? window._getParticipantCategories(entry) : []) || [];
-        var category = String(found[0] || entry.category || '').trim();
+        var category = pairCategory(entry);
         countByCategory[category] = (countByCategory[category] || 0) + 1;
     });
     var quotas = cfg.schedule && cfg.schedule.pairsPerTeamByCategory || {};
@@ -2888,7 +2895,7 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
     var invalidCategories = categories.filter(function (category) { return countByCategory[category] !== cfg.teamCount * required(category); });
     var valid = entries.length === expectedPairs && entries.every(isPair) && categories.length > 0 && !invalidCategories.length;
     var lightCategory = categories.find(function (category) { return /^Fem Light$/i.test(category); });
-    var lightPairs = neonQuota ? entries.filter(function (entry) { return String(entry.category || '') === lightCategory; }) : [];
+    var lightPairs = neonQuota ? entries.filter(function (entry) { return pairCategory(entry) === lightCategory; }) : [];
     // Antes da primeira confirmação, reconheça apenas o ID canônico do Neon
     // (ou um futuro sandbox derivado dele). Nome igual não autoriza a regra.
     // Depois, o marcador persistido continua valendo mesmo após renomeação.
@@ -3042,7 +3049,6 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
         return categoryExists(lane, category);
       });
     }
-    function pairCategory(entry) { return String(entry.category || '').trim(); }
     function refreshPairDays() {
       var holder = overlay.querySelector('[data-team-pair-day-editor]'); if (!holder) return;
       if (!pairDaysEnabled) {

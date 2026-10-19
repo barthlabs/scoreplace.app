@@ -16,6 +16,7 @@ const participants = categories.flatMap((category, categoryIndex) => Array.from(
 const tournament = {
   id:neonId, name:'Neon Nightmare', startDate:'2026-10-22T18:00', endDate:'2026-10-23T22:40',
   categories, participants, courtCount:6,
+  categoryDefinitions:categories.map((label, index) => ({ id:'category-' + index, label })),
   teamCompetition:{ enabled:true, teamCount:8,
     teamNames:['Blackout', 'Blast', 'Eclipse', 'Panic', 'Phantom', 'Venom', 'Volt', 'Vortex'],
     schedule:{ enabled:true, gamesPerTeam:3, originDayPolicy:'female-light-organization-final',
@@ -73,4 +74,9 @@ tournament.id = 'other_tournament';
 tournament.name = 'Neon Nightmare';
 W._showTeamCompetitionDrawReview(tournament.id, { _canonicalRosterLoaded:true });
 if (!/data-team-pair-day-editor/.test(overlay.innerHTML)) throw new Error('Editor independe do nome do torneio');
+const category = participants[0].category;
+delete participants[0].category;
+W._showTeamCompetitionDrawReview(tournament.id, { _canonicalRosterLoaded:true });
+if (/O sorteio está bloqueado/.test(overlay.innerHTML)) throw new Error('Categoria canônica sem rótulo legado não deve bloquear o painel');
+participants[0].category = category;
 console.log('✓ Painel Neon: dias configuráveis, Fem Light nos dois dias, X correto e sem UID visível');
