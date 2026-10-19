@@ -1,3 +1,8 @@
+## 2.4.106 — 18/out/2026 (organização designada por UID)
+
+- Uma vaga de co-organização previamente designada ativa o UID no mesmo vínculo individual verificado da inscrição, sem segundo aceite. O link compartilhado do torneio não concede privilégios de organização por semelhança de nome.
+- No Neon, a conta Apple da inscrita nº 2 foi vinculada em transação à sua dupla e ativada como co-organizadora; as outras designações continuam reservadas até terem UID comprovado.
+
 ## 2.4.102 — 18/out/2026 (filtro de jogos pendentes)
 
 - Ao ativar Jogos pendentes ou Só meus jogos, a busca anterior é limpa automaticamente, inclusive o estado usado numa remontagem da chave. É possível pesquisar dentro da lista depois de ativar o botão.

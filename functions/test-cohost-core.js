@@ -120,7 +120,7 @@ function baseDoc() {
   eq('tipo inválido', C.computeRespondHostInvite(baseDoc(), CO, 'xpto', 'accept').outcome, 'notFound');
 })();
 
-// Reserva manual não dá acesso; reivindicação autenticada gera convite, não admin.
+// Reserva manual não dá acesso; reivindicação autenticada ativa o UID sem aceite extra.
 (() => {
   const d = { creatorUid: ORG, coHosts: [], coHostReservations: [
     { manualParticipantId: 'slot-2', enrollSeq: 2 },
@@ -129,25 +129,38 @@ function baseDoc() {
   eq('reserva não entra em adminUids', C.computeAdminUids(d), [ORG]);
   eq('outro slot não promove', C.claimReservedOrganizer(d, {
     outcome: 'claimed', manualParticipantId: 'slot-3', participantUid: CO
-  }), null);
+  }, true), null);
   const patch = C.claimReservedOrganizer(d, {
     outcome: 'claimed', manualParticipantId: 'slot-85', participantUid: CO
-  });
-  ok('reserva vira convite pendente por UID', patch && patch.coHosts.length === 1 &&
-    patch.coHosts[0].uid === CO && patch.coHosts[0].status === 'pending');
+  }, true);
+  ok('reserva ativa organização por UID', patch && patch.coHosts.length === 1 &&
+    patch.coHosts[0].uid === CO && patch.coHosts[0].status === 'active');
   eq('demais reservas permanecem', patch.coHostReservations.map(x => x.enrollSeq), [2]);
-  eq('convite pendente ainda não é admin', C.computeAdminUids(Object.assign({}, d, patch)), [ORG]);
+  ok('vínculo põe UID no adminUids no mesmo patch', patch.adminUids.includes(CO) && patch.adminUids.includes(ORG));
   const existing = C.claimReservedOrganizer(Object.assign({}, d, {
     coHosts: [{ uid: CO, status: 'active', type: 'cohost' }]
-  }), { outcome: 'claimed', manualParticipantId: 'slot-85', participantUid: CO });
+  }), { outcome: 'claimed', manualParticipantId: 'slot-85', participantUid: CO }, true);
   eq('cohost existente só consome a reserva', existing, {
     coHostReservations: [{ manualParticipantId: 'slot-2', enrollSeq: 2 }]
   });
   const creator = C.claimReservedOrganizer(d, {
     outcome: 'claimed', manualParticipantId: 'slot-2', participantUid: ORG
-  });
+  }, true);
   eq('criador não recebe convite redundante', creator, {
     coHostReservations: [{ manualParticipantId: 'slot-85', enrollSeq: 85 }]
+  });
+  eq('link geral não ativa organização por nome', C.claimReservedOrganizer(d, {
+    outcome: 'claimed', manualParticipantId: 'slot-85', participantUid: CO
+  }, false), null);
+  const pending = C.claimReservedOrganizer(Object.assign({}, d, {
+    coHosts: [{ uid: CO, status: 'pending', type: 'cohost' }]
+  }), { outcome: 'claimed', manualParticipantId: 'slot-85', participantUid: CO }, true);
+  ok('convite antigo pendente é ativado sem novo aceite', pending.coHosts[0].status === 'active' && pending.adminUids.includes(CO));
+  const revoked = C.claimReservedOrganizer(Object.assign({}, d, {
+    coHosts: [{ uid: CO, status: 'revoked', type: 'cohost' }]
+  }), { outcome: 'claimed', manualParticipantId: 'slot-85', participantUid: CO }, true);
+  eq('revogação não bloqueia a inscrição nem restaura acesso', revoked, {
+    coHostReservations: [{ manualParticipantId: 'slot-2', enrollSeq: 2 }]
   });
 })();
 

@@ -4769,7 +4769,7 @@ function renderTournaments(container, tournamentId = null) {
           });
         }
         // Reserva por identidade manual: mostra a escolha da organização sem
-        // conceder acesso por nome. O UID só vira convite após reivindicar a vaga.
+        // conceder acesso por nome. O UID vira organizador após reivindicar a vaga.
         (Array.isArray(_t.coHostReservations) ? _t.coHostReservations : []).forEach(function(reservation) {
           if (!reservation || !reservation.manualParticipantId) return;
           var _member = null;
@@ -4789,7 +4789,7 @@ function renderTournaments(container, tournamentId = null) {
           if (!_member) return;
           _orgCards += '<div class="sp-org-card sp-org-reserved" data-players="' + window._safeHtml(_member) + '" data-my-match="1" style="box-sizing:border-box;padding:8px 12px;border-radius:10px;border:1px dashed rgba(251,191,36,.65);background:rgba(251,191,36,.07);flex:1 1 13.5rem;max-width:100%;min-height:58px;">' +
             '<div style="font-weight:700;color:var(--text-bright);">' + window._safeHtml(_member) + '</div>' +
-            '<div style="font-size:.65rem;color:var(--sp-c-fbbf24,#fbbf24);">⭐ Organização designada · aguardando vínculo e aceite</div></div>';
+            '<div style="font-size:.65rem;color:var(--sp-c-fbbf24,#fbbf24);">⭐ Organização designada · aguardando vínculo da conta</div></div>';
         });
         // VAGA de co-organização (alvo de drag + toque) — só pra quem pode promover.
         if (_isCreatorNow) _orgCards += _buildDropzone();

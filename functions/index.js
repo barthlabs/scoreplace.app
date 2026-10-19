@@ -4659,7 +4659,7 @@ function _writeCanonicalRosterCreates(tx, tournamentRef, tournament, registratio
  * origem permanece como histórico retirado e o recibo avança apenas com os
  * novos documentos de destino. Separar essas duas partes permitiria uma
  * metade da mudança sobreviver a retry/transação concorrente. */
-function _writeCanonicalRosterChanges(tx, tournamentRef, tournament, registrations, changes, extraTournamentPatch, logicalId) {
+function _writeCanonicalRosterChanges(tx, tournamentRef, tournament, registrations, changes, extraTournamentPatch, logicalId, approvedOrganizerIdentity) {
   const canonicalTournament = _canonicalMutationTournament(tournamentRef, tournament, logicalId);
   const updates = Array.isArray(changes && changes.updates) ? changes.updates : [];
   const creates = Array.isArray(changes && changes.creates) ? changes.creates : [];
@@ -4692,7 +4692,7 @@ function _writeCanonicalRosterChanges(tx, tournamentRef, tournament, registratio
       updatedAt: _FV.serverTimestamp(),
     }));
   });
-  const reservedOrganizerPatch = _coHostCore.claimReservedOrganizer(tournament, changes);
+  const reservedOrganizerPatch = _coHostCore.claimReservedOrganizer(tournament, changes, approvedOrganizerIdentity === true);
   tx.update(tournamentRef, Object.assign({
     canonicalRegistrationMigration: next.tournament.canonicalRegistrationMigration,
     memberUids: _canonicalRegistrationBoundary.memberUids(next.tournament, next.registrations),
@@ -5060,7 +5060,7 @@ exports.resolveCanonicalParticipantClaim = onCall(
       const checked = await _loadCanonicalRosterForMutation(tx, ref, state.tournament);
       let changes; try { changes = _registrationClaim.claimManualParticipant(tournamentId, checked.registrations, claim.manualParticipantId, callerUid); }
       catch (error) { throw new HttpsError("failed-precondition", error.message); }
-      _writeCanonicalRosterChanges(tx, ref, tournament, checked.registrations, changes, { pendingCanonicalParticipantClaims: remaining });
+      _writeCanonicalRosterChanges(tx, ref, tournament, checked.registrations, changes, { pendingCanonicalParticipantClaims: remaining }, '', true);
       return { ok: true, changed: true, action, outcome: changes.outcome };
     });
   }
@@ -5211,7 +5211,7 @@ exports.acceptManualClaimInvite = onCall(
       catch (error) { throw new HttpsError('failed-precondition', error.message); }
       const claims = Array.isArray(tournament.pendingCanonicalParticipantClaims) ? tournament.pendingCanonicalParticipantClaims : [];
       const remaining = claims.filter((item) => item && item.manualParticipantId !== manualParticipantId);
-      _writeCanonicalRosterChanges(tx, ref, tournament, checked.registrations, changes, { pendingCanonicalParticipantClaims: remaining });
+      _writeCanonicalRosterChanges(tx, ref, tournament, checked.registrations, changes, { pendingCanonicalParticipantClaims: remaining }, '', true);
       tx.update(inviteRef, { consumedAt: _FV.serverTimestamp(), consumedByUid: callerUid });
       return { ok: true, outcome: changes.outcome, tournamentId };
     });

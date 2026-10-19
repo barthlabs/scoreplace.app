@@ -67,22 +67,32 @@ function coHostsArray(data) {
 }
 
 // A designação de uma vaga digitada não concede acesso. Só o vínculo canônico,
-// autenticado pelo titular, a transforma em convite pendente para o UID real.
-function claimReservedOrganizer(data, changes) {
+// autenticado pelo titular, ativa a organização para o UID real, sem aceite extra.
+function claimReservedOrganizer(data, changes, approvedIdentity) {
   const reservations = Array.isArray(data && data.coHostReservations) ? data.coHostReservations : [];
-  if (!changes || changes.outcome !== 'claimed' || !changes.manualParticipantId || !changes.participantUid) return null;
+  if (!approvedIdentity || !changes || changes.outcome !== 'claimed' || !changes.manualParticipantId || !changes.participantUid) return null;
   const matching = reservations.filter((item) => item && item.manualParticipantId === changes.manualParticipantId);
   if (matching.length !== 1) return null;
   const uid = String(changes.participantUid);
   const remaining = reservations.filter((item) => item !== matching[0]);
-  if (uid === data.creatorUid || coHostsArray(data).some((item) => item && item.uid === uid)) {
+  if (uid === data.creatorUid) {
     return { coHostReservations: remaining };
   }
+  const existing = coHostsArray(data).find((item) => item && item.uid === uid);
+  if (existing) {
+    if (existing.status === 'active') return { coHostReservations: remaining };
+    if (existing.status !== 'pending') return { coHostReservations: remaining };
+    const coHosts = coHostsArray(data).map(coHostUidRecord).map((item) =>
+      item.uid === uid ? Object.assign({}, item, { status: 'active', acceptedAt: new Date().toISOString() }) : item);
+    return { coHostReservations: remaining, coHosts, adminUids: computeAdminUids(Object.assign({}, data, { coHosts })) };
+  }
+  const coHosts = coHostsArray(data).map(coHostUidRecord).concat([{
+    uid, status: 'active', type: 'cohost', acceptedAt: new Date().toISOString()
+  }]);
   return {
     coHostReservations: remaining,
-    coHosts: coHostsArray(data).map(coHostUidRecord).concat([{
-      uid, status: 'pending', type: 'cohost', invitedAt: new Date().toISOString()
-    }])
+    coHosts,
+    adminUids: computeAdminUids(Object.assign({}, data, { coHosts }))
   };
 }
 
