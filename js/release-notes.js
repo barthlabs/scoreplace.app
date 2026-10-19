@@ -1,3 +1,4 @@
+// 2.4.106 — No Neon, a inscrita nº 2 foi vinculada à conta Apple e à organização. Os demais organizadores designados recebem acesso após vínculo individual verificado, sem segundo aceite; o link geral não concede acesso administrativo.
 // 2.4.105 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.104 — O link “Vencedor do jogo” limpa os filtros e abre a partida de origem. O sorteio do Neon usa os dias definidos pela organização para cada dupla Fem Light; regulamento atualizado. Se a política de dias estiver divergente ou incompleta, o aviso distingue os dois casos.
 // 2.4.103 — “Só meus jogos” e “Jogos pendentes” não se sobrepõem; o filtro abre a aba do jogo encontrado.
