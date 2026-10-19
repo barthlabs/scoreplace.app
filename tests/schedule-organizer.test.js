@@ -364,8 +364,10 @@ ok(/grid-template-columns:1fr;gap:5px;width:100%;min-width:0/.test(drawSource) &
   'início e fim ocupam linhas inteiras, sem se sobrepor ou truncar em nenhuma largura');
 ok(/flex:0 1 auto;min-width:0;font-size:\.62rem/.test(drawSource),
   'os toggles Concentradas/Alternadas permanecem compactos em cada dia');
-ok(/position:sticky;top:0;z-index:3/.test(drawSource) && !/id="team-draw-cancel" class=/.test(drawSource),
-  'Voltar fica sempre visível no cabeçalho e não há Cancelar duplicado no rodapé');
+ok(/id="team-draw-cancel-top"/.test(drawSource) && /data-team-draw-scroll/.test(drawSource) &&
+  drawSource.indexOf('id="team-draw-cancel-top"') < drawSource.indexOf('data-team-draw-scroll') &&
+  !/id="team-draw-cancel" class=/.test(drawSource),
+  'Voltar fica fora da área rolável do modal e não há Cancelar duplicado no rodapé');
 ok(/data-\' \+ prefix \+ \'-empty-slot/.test(organizerSource) && /data-pis-empty-slot/.test(bracketLogicSource) && /Solte um jogo aqui/.test(organizerSource),
   'quadras vazias aceitam arrastar e soltar tanto na agenda quanto na revisão privada');
 ok(/sp-team-draw-time/.test(drawSource) && /__openingPendingInitialScheduleFromDraw/.test(drawSource) && /_openPendingInitialSchedule\(tId\)/.test(drawSource) && !/window\.location\.hash = d\.staged \? '#tournaments\/'/.test(drawSource),
