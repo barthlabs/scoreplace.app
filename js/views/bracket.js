@@ -1580,7 +1580,7 @@ function _bracketTabsApply(tid, gender, category, requestedRound) {
   var scheduledCategoryCards = _bracketOperationalCards(root, root._bracketTabsScope)
     .concat((root._bracketGeneralEntries || []).map(function (entry) { return entry.card; }))
     .filter(function (card) {
-      return card && card.classList && card.classList.contains('sp-match-card') &&
+      return card && card.isConnected && card.parentNode && card.classList && card.classList.contains('sp-match-card') &&
         card.getAttribute('data-bracket-tab-category') === category;
     });
   var isScheduledCategory = root.getAttribute('data-bracket-team-schedule') === '1' &&
@@ -1644,6 +1644,18 @@ function _bracketTabsApply(tid, gender, category, requestedRound) {
   if (isOperationalView) {
     var operationalShown = _bracketGeneralView(root, true, gender, isUpcoming, true,
       isScheduledCategory ? category : '');
+    if (!operationalShown && isScheduledCategory) {
+      // Mesmo com todos os horários válidos, um escopo desmontado durante a
+      // troca de rota pode impedir a montagem da agenda. Devolver os cards à
+      // chave canônica evita uma categoria inteira em branco.
+      _bracketGeneralView(root, false, gender);
+      _bracketOperationalCards(root, root._bracketTabsScope).forEach(function (card) {
+        if (card.classList && card.classList.contains('sp-match-card')) {
+          card.hidden = card.getAttribute('data-bracket-tab-category') !== category;
+        }
+      });
+      return;
+    }
     // Dados legados sem horário não podem esconder a chave inteira quando a
     // aba Geral foi restaurada de uma visita anterior. Volta para uma categoria
     // real em vez de deixar a tela preta.
