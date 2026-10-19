@@ -2153,6 +2153,7 @@ const SUITES = [
   // cards de pessoa passem por ele — pra não existir um quarto lugar.
   'tests/pessoa-na-tela-hidrata.test.js',
   'tests/card-organizador-nao-corta-nome.test.js',
+  'tests/cabecalho-sorteio-sem-vazamento.test.js',
   'tests/organizacao-genero-por-categoria.test.js',
   // E o INVENTÁRIO fechado: todo ponto que semeia avatar pelo NOME está declarado, com o
   // que é. Ponto novo fora da lista reprova — quem acrescentar decide na hora se aquilo é
