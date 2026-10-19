@@ -1,13 +1,24 @@
 {
   "schema": 1,
-  "backendCommit": "3e4277a9911ad927d686c0bd038de7fe94944339",
+  "backendCommit": "f526388e31217161ba5aba1f383f3643950b7b32",
   "functions": [
     "drawRound",
     "updateTournamentConfiguration",
     "resolvePendingDraw",
     "setPendingInitialSchedule",
-    "getPendingInitialDraw",
-    "getPendingDrawReviewState",
-    "uploadTournamentImage"
+    "autoDraw",
+    "autoDrawReconcile",
+    "tournamentSummary",
+    "sendPushNotification",
+    "queueMatchReadyNotifications",
+    "reconcileMatchReadyNotifications",
+    "deliverScoreNotification",
+    "createTournament",
+    "startTournament",
+    "applyTournamentFormat",
+    "advanceTournamentPhase",
+    "setTournamentEnrollmentStatus",
+    "runEnrollmentSlotsDraw",
+    "closeExpiredLeagueSeason"
   ]
 }
