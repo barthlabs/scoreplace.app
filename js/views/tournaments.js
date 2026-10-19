@@ -4604,7 +4604,7 @@ function renderTournaments(container, tournamentId = null) {
           // `data-my-match="1"`: organizador não é JOGO, então o toggle "Só meus jogos"
           // não pode apagá-lo — mesma decisão dos chips de quem ficou de fora (1.6.93).
           var _orgFiltro = ' data-players="' + window._safeHtml(String(name || '') + ' ' + String(role || '')) + '" data-my-match="1"';
-          return '<div class="sp-org-card"' + _tapAttrs + _orgFiltro + ' style="box-sizing:border-box;position:relative;' + (isTapPicker ? 'cursor:pointer;' : '') + 'display:flex;align-items:center;gap:8px;padding:8px 12px;' + bgStyle + 'border-radius:10px;flex:1 1 13.5rem;max-width:100%;min-height:76px;">' +
+          return '<div class="sp-org-card"' + _tapAttrs + _orgFiltro + ' style="box-sizing:border-box;position:relative;' + (isTapPicker ? 'cursor:pointer;' : '') + 'display:flex;align-items:center;gap:8px;padding:8px 12px;' + bgStyle + 'border-radius:10px;flex:1 1 13.5rem;max-width:100%;min-height:48px;">' +
             // ⭐ AVATAR PELO PONTO ÚNICO (_personAvatarHtml). Antes o ícone era semeado
             // pelo NOME e a foto vinha de `_playerPhotoCache[name]` — com o perfil ainda
             // não resolvido o nome é VAZIO, a seed vazia devolvia o MESMO círculo mudo
@@ -4620,7 +4620,7 @@ function renderTournaments(container, tournamentId = null) {
               // esse ciclo. A estrela é um pseudo-elemento DO PRÓPRIO nome: acompanha o
               // fim do texto com uma folga curta, em vez de ocupar uma coluna no card.
               '<div class="sp-org-name-row" style="display:flex;align-items:center;min-width:0;width:min(100%,12rem);">' +
-                '<div class="sp-org-name-box" style="flex:1;min-width:0;height:2.25rem;display:flex;align-items:center;">' +
+                '<div class="sp-org-name-box" style="flex:1;min-width:0;min-height:1.15rem;display:flex;align-items:center;">' +
                   // e o NOME pelo mesmo caminho: escrito no render, ele CONGELAVA vazio
                   // (a tela não se redesenha só porque um perfil chegou depois).
                   window._personNameHtml(roleUid, name,

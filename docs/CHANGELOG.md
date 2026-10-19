@@ -2,6 +2,7 @@
 
 - Quando o gênero não está disponível no perfil, o papel da organização usa a categoria feminina ou masculina da dupla daquele torneio para escolher “Co-organizadora” ou “Co-organizador”. A hidratação posterior do nome não apaga essa forma; o perfil explícito continua tendo precedência.
 - O perfil global não é alterado, assim como inscrições e permissões. Adicionado teste do fallback por UID de ambos os lados da dupla.
+- O card ativo reserva só a altura do avatar e ajusta a caixa do nome ao conteúdo, sem a folga vertical introduzida na 2.4.107. O teste em Chromium verifica também o espaço nome/cargo e a altura total.
 
 ## 2.4.107 — 18/out/2026 (card de organização sem corte)
 

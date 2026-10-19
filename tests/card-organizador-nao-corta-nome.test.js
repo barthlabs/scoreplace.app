@@ -23,7 +23,7 @@ const fitSource = store.slice(store.lastIndexOf('\n(function() {', fitEnd), stor
       await page.setContent('<style>' + read('css/components.css') + '</style><main style="width:' + width + 'px"></main>');
       const geometry = await page.evaluate(({ cardSource, fitSource }) => {
         window._safeHtml = (value) => String(value);
-        window._personAvatarHtml = () => '<span style="display:block;width:2rem;height:2rem;flex-shrink:0"></span>';
+        window._personAvatarHtml = () => '<span style="display:block;width:2rem;height:2rem;border:2px solid #6366f1;flex-shrink:0"></span>';
         window._personNameHtml = (_, name, style, cls, attrs) => '<span class="' + cls + '" style="' + style + '"' + attrs + '>' + name + '</span>';
         eval('var _t = { id: "test" };' + cardSource + '; window._testOrgCard = _buildOrgCard;');
         const names = ['Carolina Oliveira', 'Alexandre Albuquerque', 'Fernando de Figueiredo'];
@@ -36,15 +36,19 @@ const fitSource = store.slice(store.lastIndexOf('\n(function() {', fitEnd), stor
           const name = box.querySelector('.sp-name-fit');
           const label = box.parentElement.nextElementSibling;
           const c = card.getBoundingClientRect(), n = name.getBoundingClientRect(), l = label.getBoundingClientRect();
-          return { name: name.textContent, cardHeight: c.height,
+          const avatar = card.firstElementChild.getBoundingClientRect();
+          return { name: name.textContent, cardHeight: c.height, avatarHeight: avatar.height,
             nameVisible: n.top >= c.top - 1 && n.bottom <= c.bottom + 1,
             labelVisible: l.top >= n.bottom - 1 && l.bottom <= c.bottom + 1,
-            boxFits: name.scrollHeight <= box.clientHeight + 1 };
+            boxFits: name.scrollHeight <= box.clientHeight + 1,
+            nameRoleGap: l.top - n.bottom };
         });
       }, { cardSource, fitSource });
       assert.equal(geometry.length, 3);
       for (const card of geometry) {
-        assert.ok(card.cardHeight >= 76, `card ${card.name} tem altura suficiente em ${width}px`);
+        assert.ok(card.cardHeight >= card.avatarHeight + 16, `card ${card.name} comporta o avatar em ${width}px`);
+        assert.ok(card.cardHeight <= card.avatarHeight + 18, `card ${card.name} não desperdiça altura em ${width}px: ${JSON.stringify(card)}`);
+        assert.ok(card.nameRoleGap <= 4, `nome e função ficam próximos em ${width}px: ${JSON.stringify(card)}`);
         assert.ok(card.nameVisible && card.labelVisible && card.boxFits,
           `nome e papel visíveis no card ${card.name} em ${width}px: ${JSON.stringify(card)}`);
       }
