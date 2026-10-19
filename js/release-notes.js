@@ -1,4 +1,8 @@
-// 2.4.112 — Atualização consolidada de produção com as correções validadas desde a última publicação.
+// 2.4.112 — O organizador pode definir o dia de cada dupla no sorteio por times,
+// incluindo as três Fem Light por time do Neon. A categoria é resolvida também
+// pela identidade canônica quando falta o rótulo legado no participante; a
+// configuração só é gravada ao confirmar o sorteio. O X de cada categoria usa
+// o padrão branco no círculo vermelho.
 // 2.4.111 — O cabeçalho da configuração do sorteio não deixa o conteúdo rolável vazar por cima dos botões em telas estreitas.
 // 2.4.110 — A grade estruturada distribui melhor os jogos das duplas entre horários e varia os times por horário, sem abrir quadras vagas nem sair dos dias definidos. A agenda por categorias mantém o encaixe anterior.
 // 2.4.109 — Atualização consolidada de produção com as correções validadas desde a última publicação.
