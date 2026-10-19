@@ -1,3 +1,6 @@
+// 2.4.122 — No resumo “Seu próximo jogo” e nos cards da dashboard, torneios de
+// times com agenda concentrada mostram a rodada publicada, sem inventar fase
+// de grupos nem “Grupo B” quando a competição não tem grupos.
 // 2.4.121 — Nas categorias de torneios com grade completa, as rodadas da chave
 // seguem os horários publicados em cada dia, como na aba Geral. Grades parciais
 // e fases eliminatórias mantêm a apresentação própria da chave; se a agenda

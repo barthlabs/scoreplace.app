@@ -424,6 +424,12 @@ window._dashNum = function (n, t, fonteConfirmada) {
 };
 
 function renderDashboard(container) {
+  function _isDashboardConcentratedSchedule(t) {
+    if (!t) return false;
+    if (window._isConcentratedTournament && window._isConcentratedTournament(t)) return true;
+    var cfg = t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition || {};
+    return !!(cfg.enabled && cfg.schedule && cfg.schedule.enabled);
+  }
   // v2.8.40: torneios ocultados pelo usuário somem de TODAS as seções (filtro na
   // fonte) e reaparecem só na seção "Torneios ocultados" no fim.
   const _hidIds = (typeof window._getHidden === 'function') ? window._getHidden() : [];
@@ -2053,9 +2059,7 @@ function renderDashboard(container) {
         // ⚠️ Calculado ANTES do desvio de "não sou deste jogo": desde a seção
         // "Novidades no seu torneio" os DOIS ramos precisam deste rótulo.
         var _phaseLabel = '';
-        var _teamCfgDash = t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition || {};
-        var _isConcentratedTeamSchedule = !!((window._isConcentratedTournament && window._isConcentratedTournament(t)) ||
-          (_teamCfgDash.enabled && _teamCfgDash.schedule && _teamCfgDash.schedule.enabled));
+        var _isConcentratedTeamSchedule = _isDashboardConcentratedSchedule(t);
         // A agenda por times não possui grupos. Alguns espelhos legados ainda
         // carregam no label "Grupo A • Jogador …" do sorteio anterior; nunca
         // exponha esse metadado como fase do torneio. A rodada publicada é a
@@ -2070,6 +2074,8 @@ function renderDashboard(container) {
         var _formatLabel = '';
         if (m.isMonarch) {
           _formatLabel = _matchPhaseDash && _matchPhaseDash.kind === 'classification' ? 'Pontos Corridos · Rei/Rainha' : 'Rei/Rainha';
+        } else if (_isConcentratedTeamSchedule) {
+          _formatLabel = '';
         } else if (_matchPhaseDash) {
           _formatLabel = _matchPhaseDash.kind === 'elimination' ? 'Eliminatória'
             : ((_matchPhaseDash.classification && _matchPhaseDash.classification.structure === 'groups') ? 'Fase de grupos' : 'Pontos Corridos');
@@ -2380,6 +2386,9 @@ function renderDashboard(container) {
           ? window._canonicalElimLabelForMatch(t, m) : '';
         if (_canonicalElimLabel) return _canonicalElimLabel;
       } catch (_roundLabelError) {}
+      if (_isDashboardConcentratedSchedule(t) && m && m.round != null) {
+        return 'Rodada ' + window._matchRoundDisplayNum(t, m);
+      }
       // Liga/Suíço/Ranking e jogos Rei/Rainha NÃO têm fase de eliminatória
       // (Final/Semi/Quartas). Para esses, o rótulo correto é o label próprio do
       // jogo ("R1 Grupo F • Jogo 1") ou "Rodada N". Sem este guard, a derivação
@@ -2869,16 +2878,17 @@ function renderDashboard(container) {
       var _namedRound = (_ngT && typeof window._canonicalElimLabelForMatch === 'function')
         ? window._canonicalElimLabelForMatch(_ngT, _ngM) : '';
       _meta.push(_namedRound || (_rnum != null ? 'Rodada ' + _rnum : ''));
-      if (_ngT && window._isMultiPhase && window._isMultiPhase(_ngT) && _ngM.phaseIndex != null) {
+      var _ngIsTeamSchedule = _isDashboardConcentratedSchedule(_ngT);
+      if (!_ngIsTeamSchedule && _ngT && window._isMultiPhase && window._isMultiPhase(_ngT) && _ngM.phaseIndex != null) {
         var _phN = (_ngT.phases && _ngT.phases[_ngM.phaseIndex] && _ngT.phases[_ngM.phaseIndex].name) || ('Fase ' + ((Number(_ngM.phaseIndex) || 0) + 1));
         _meta.push(_phN);
-      } else if (_ngT && _ngT.format) {
+      } else if (!_ngIsTeamSchedule && _ngT && _ngT.format) {
         // Fase única: o "nome da fase" é o próprio formato (rótulo de exibição —
         // 'Liga'→'Pontos Corridos', 'Fase de Grupos + Eliminatórias'→'Fase de Grupos').
         var _fmtN = (typeof window._formatLabel === 'function') ? window._formatLabel(_ngT) : _ngT.format;
         if (_fmtN) _meta.push(_fmtN);
       }
-      if (_ngM.tierLabel) _meta.push(String(_ngM.tierLabel).trim());
+      if (!_ngIsTeamSchedule && _ngM.tierLabel) _meta.push(String(_ngM.tierLabel).trim());
       // v4.0.2: a coroa fica SÓ ao lado do "JOGO N" (no card) — não repetir aqui.
       var _metaStr = _meta.join(' · ');
       // Mesma régua do card canônico: resultado > horário confirmado > prazo.
