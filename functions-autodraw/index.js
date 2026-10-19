@@ -3695,6 +3695,7 @@ exports.assignMatchCourt = onCall(async (request) => {
   const tId = String((request.data && request.data.tournamentId) || '').trim();
   const matchId = String((request.data && request.data.matchId) || '').trim();
   const court = String((request.data && request.data.court) || '').trim().slice(0, 120);
+  const confirmCall = request.data && request.data.confirmCall === true;
   if (!tId || !matchId) throw new HttpsError('invalid-argument', 'Torneio e jogo são obrigatórios.');
   if (!drawWindow || typeof drawWindow._findMatch !== 'function') {
     throw _drawFail('internal', 'Motor de chave indisponível no servidor.', { tId, matchId });
@@ -3718,10 +3719,15 @@ exports.assignMatchCourt = onCall(async (request) => {
       if (jaEmJogo) throw _drawFail('failed-precondition', 'Jogo iniciado ou concluído não pode mudar de quadra.', { tId, matchId });
       const antes = _antesDoMotor(t);
       const atual = String(m.court || '');
-      if (atual === court) return { ok: true, changed: false };
+      if (confirmCall && !court) throw _drawFail('failed-precondition', 'Escolha uma quadra antes de chamar o jogo.', { tId, matchId });
+      if (atual === court && (!confirmCall || m.courtCalledAt)) return { ok: true, changed: false, courtCalledAt: m.courtCalledAt || null };
       if (court) m.court = court; else delete m.court;
+      // Mudar/remover a quadra desfaz a chamada anterior. Confirmar em outra
+      // quadra cria uma chamada nova; repetir na mesma conserva o instante.
+      if (confirmCall) m.courtCalledAt = agoraIso;
+      else if (atual !== court) delete m.courtCalledAt;
       const b = _gravaTorneio(tx, ref, t, antes, { agoraIso: agoraIso });
-      return { ok: true, changed: true, court, tournament: b.clean };
+      return { ok: true, changed: true, court, courtCalledAt: m.courtCalledAt || null, tournament: b.clean };
     });
   } catch (e) {
     if (e instanceof HttpsError) throw e;

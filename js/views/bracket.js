@@ -3730,6 +3730,51 @@ window._assignMatchCourt = function(tId, matchId, court) {
     });
 };
 
+// A confirmação grava quadra e instante na mesma transação. O relógio é derivado
+// desse instante, para sobreviver a reload e coincidir em todas as telas.
+window._confirmMatchCourtCall = function(button, tId, matchId) {
+  var row = button && button.closest('.sp-match-operational');
+  var select = row && row.querySelector('select');
+  var court = select && String(select.value || '').trim();
+  if (!court) {
+    if (typeof showNotification === 'function') showNotification('Escolha a quadra', 'Selecione uma quadra antes de chamar o jogo.', 'error');
+    return;
+  }
+  if (typeof window._callCF !== 'function') return;
+  button.disabled = true;
+  window._callCF('assignMatchCourt', { tournamentId: String(tId), matchId: String(matchId), court: court, confirmCall: true }, 'Entre na sua conta para chamar o jogo.')
+    .then(function(res) {
+      var d = (res && res.data) || {};
+      if (!d.ok) throw new Error(d.reason || 'Não foi possível chamar o jogo.');
+      if (typeof showNotification === 'function') showNotification('Jogo chamado', court, 'success');
+      button.textContent = '✓ OK';
+      var time = row && row.querySelector('.sp-match-estimated-time');
+      var start = Date.parse(d.courtCalledAt || '');
+      if (time && Number.isFinite(start)) {
+        time.title = 'Tempo desde a chamada';
+        time.style.color = 'var(--sp-c-4ade80,#4ade80)';
+        time.innerHTML = '⏱ Chamado <span class="sp-match-call-timer" data-start-ms="' + start + '">' + window._spFormatElapsed(start, Date.now()) + '</span>';
+      }
+    }).catch(function(err) {
+      button.disabled = false;
+      if (typeof window._warn === 'function') window._warn('[assignMatchCourt] chamada falhou', err);
+      if (typeof showNotification === 'function') showNotification('Chamada não confirmada', err && err.message || 'Tente novamente.', 'error');
+    });
+};
+
+window._spFormatElapsed = function(start, now) {
+  var seconds = Math.max(0, Math.floor((now - start) / 1000));
+  return String(Math.floor(seconds / 3600)).padStart(2, '0') + ':' +
+    String(Math.floor(seconds / 60) % 60).padStart(2, '0') + ':' +
+    String(seconds % 60).padStart(2, '0');
+};
+if (!window._spCourtCallClock && typeof setInterval === 'function') window._spCourtCallClock = setInterval(function() {
+  document.querySelectorAll('.sp-match-call-timer[data-start-ms]').forEach(function(el) {
+    var start = Number(el.getAttribute('data-start-ms'));
+    if (Number.isFinite(start) && start > 0) el.textContent = window._spFormatElapsed(start, Date.now());
+  });
+}, 1000);
+
 // ─── Formação de duplas na LISTA DE ESPERA durante a R1 (inscrição tardia aberta) ──────
 // v4.5.18 (regra do dono): num torneio de DUPLAS com a janela da inscrição tardia ABERTA
 // (R1 da fase — ver window._lateEnrollWindowOpen), a lista de espera abaixo da chave vira
@@ -7431,18 +7476,22 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // organização pode ajustar o chamado dos jogos ao longo do evento.
   var _scheduledMs = _isConcentratedEvent ? _matchCardTimestamp(m.scheduledAt) : null;
   var _playedMs = _isConcentratedEvent ? _matchCardResultTimestamp(m) : null;
+  var _calledMs = _isConcentratedEvent && !_playedMs ? _matchCardTimestamp(m.courtCalledAt) : null;
+  var _liveStartMs = _isConcentratedEvent && !_playedMs && m.startedAt ? _matchCardTimestamp(m.startedAt) : null;
   // Um único slot operacional de horário: azul enquanto é previsão; verde
   // quando o resultado confirmou o horário real. Não exibir "Jogado em" duas
   // vezes, nem perder a categoria do card concluído.
   var _matchTimeMs = _playedMs || _scheduledMs;
-  var _estimatedTimeHtml = _matchTimeMs
+  var _estimatedTimeHtml = (_calledMs || _liveStartMs)
+    ? '<span class="sp-match-estimated-time" title="' + (_liveStartMs ? 'Tempo de jogo' : 'Tempo desde a chamada') + '" style="margin-left:auto;white-space:nowrap;text-align:right;font-size:.78rem;font-weight:800;color:var(--sp-c-4ade80,#4ade80);">' + (_liveStartMs ? '⏱ Em jogo ' : '⏱ Chamado ') + '<span class="sp-match-call-timer" data-start-ms="' + (_liveStartMs || _calledMs) + '">' + window._spFormatElapsed(_liveStartMs || _calledMs, Date.now()) + '</span></span>'
+    : _matchTimeMs
     ? '<span class="sp-match-estimated-time" title="' + (_playedMs ? 'Horário jogado' : 'Horário estimado do jogo') + '" style="margin-left:auto;white-space:nowrap;text-align:right;font-size:.78rem;font-weight:800;color:' + (_playedMs ? 'var(--sp-c-4ade80,#4ade80)' : 'var(--sp-c-7dd3fc,#7dd3fc)') + ';">🕒 ' + (_playedMs ? '' : '≈ ') + window._safeHtml(_matchCardDateTime(_matchTimeMs, t)) + '</span>'
     : '';
   if (_canChangeCardCourt && _cardCourts.length) {
     var _courtOpts = '<option value="">Sem quadra</option>' + _cardCourts.map(function (court) {
       return '<option value="' + window._safeHtml(court) + '"' + (String(m.court || '') === court ? ' selected' : '') + '>' + window._safeHtml(court) + '</option>';
     }).join('');
-    _courtCardHtml = '<div class="sp-match-operational" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><label class="sp-match-court"><select aria-label="Quadra" onclick="event.stopPropagation()" onchange="window._assignMatchCourt(\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\',this.value)">' + _courtOpts + '</select></label>' + _estimatedTimeHtml + '</div>';
+    _courtCardHtml = '<div class="sp-match-operational" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><label class="sp-match-court"><select aria-label="Quadra" onclick="event.stopPropagation()" onchange="window._assignMatchCourt(\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\',this.value)">' + _courtOpts + '</select></label>' + (m.courtCalledAt ? '<span style="font-size:.72rem;font-weight:800;color:var(--sp-c-4ade80,#4ade80);">✓ OK</span>' : '<button type="button" aria-label="Confirmar chamada para a quadra" onclick="event.stopPropagation();window._confirmMatchCourtCall(this,\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\')" style="padding:4px 9px;border-radius:7px;border:1px solid #22c55e;background:#166534;color:#fff;font-weight:800;cursor:pointer;">OK</button>') + _estimatedTimeHtml + '</div>';
   } else if (_isConcentratedEvent && m.court) {
     _courtCardHtml = '<div class="sp-match-operational" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><div class="sp-match-court sp-match-court--readonly">' + window._safeHtml(String(m.court)) + '</div>' + _estimatedTimeHtml + '</div>';
   } else if (_estimatedTimeHtml) {
