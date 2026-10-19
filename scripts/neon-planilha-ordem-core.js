@@ -57,29 +57,33 @@ function workbookRows(workbook) {
       throw new Error(`quantidade inesperada em ${category}`);
   }
   if (rows.length !== 64) throw new Error('planilha não contém 64 duplas');
-  return CATEGORY_ORDER.flatMap(category => rows.filter(row => row.category === category));
+  // A ordem global é a ordem física das abas e das duplas na planilha.
+  // Agrupar por categoria aqui renumera os inscritos em outra sequência.
+  return rows;
 }
 function align(rows, pairs) {
   if (rows.length !== 64 || pairs.length !== 64) throw new Error('elenco não tem 64 duplas');
   const result = [];
-  for (const [index, category] of CATEGORY_ORDER.entries()) {
-    const todo = rows.filter(row => row.category === category);
+  const availableByCategory = new Map(CATEGORY_ORDER.map((category, index) => {
     const available = pairs.filter(pair => pair.category === category);
     if (available.length !== EXPECTED_PAIRS[index]) throw new Error(`categoria atual diverge: ${category}`);
-    for (const row of todo) {
-      const ranked = available.map(pair => ({ pair, ...pairScore(row, pair) }))
-        .sort((a, b) => b.score - a.score);
-      const best = ranked[0], runner = ranked[1];
-      if (!best || best.score < 0.45 || best.orientationGap < 0.12 ||
-          (runner && best.score - runner.score < 0.16)) {
-        throw new Error(`pareamento ambíguo em ${row.sheetName}:${row.row}: ` +
-          JSON.stringify(ranked.slice(0, 2).map(x => ({ id: x.pair.id, score: x.score }))));
-      }
-      result.push({ row, pair: best.pair, reversed: best.reversed, score: best.score });
-      available.splice(available.indexOf(best.pair), 1);
+    return [category, available];
+  }));
+  for (const row of rows) {
+    const available = availableByCategory.get(row.category);
+    const ranked = available.map(pair => ({ pair, ...pairScore(row, pair) }))
+      .sort((a, b) => b.score - a.score);
+    const best = ranked[0], runner = ranked[1];
+    if (!best || best.score < 0.45 || best.orientationGap < 0.12 ||
+        (runner && best.score - runner.score < 0.16)) {
+      throw new Error(`pareamento ambíguo em ${row.sheetName}:${row.row}: ` +
+        JSON.stringify(ranked.slice(0, 2).map(x => ({ id: x.pair.id, score: x.score }))));
     }
-    if (available.length) throw new Error(`sobraram duplas em ${category}`);
+    result.push({ row, pair: best.pair, reversed: best.reversed, score: best.score });
+    available.splice(available.indexOf(best.pair), 1);
   }
+  for (const [category, available] of availableByCategory)
+    if (available.length) throw new Error(`sobraram duplas em ${category}`);
   if (new Set(result.map(x => x.pair.id)).size !== 64) throw new Error('dupla repetida');
   return result.map((entry, index) => ({ ...entry,
     first: entry.pair.members[entry.reversed ? 1 : 0],

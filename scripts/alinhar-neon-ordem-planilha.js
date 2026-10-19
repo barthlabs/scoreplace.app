@@ -12,7 +12,7 @@ const path = require('path');
 const crypto = require('crypto');
 const XLSX = require('xlsx');
 const admin = require('../functions/node_modules/firebase-admin');
-const { workbookRows, align, alignedDayAssignments, nameScore, validateNumbering, reorderedMirror } = require('./neon-planilha-ordem-core');
+const { workbookRows, align, nameScore, validateNumbering, reorderedMirror } = require('./neon-planilha-ordem-core');
 
 const PROJECT = 'scoreplace-app';
 const TOURNAMENT = 'tour_1790628592058_c342a1e8f5068424887f1702a1633a44';
@@ -51,6 +51,7 @@ const identitySet = keys => keys.slice().sort().join('\u0000');
 const docsOf = snapshot => snapshot.docs.map(doc => ({ id: doc.id, data: doc.data() }));
 function snapshotHash(state) {
   return sha(canonicalJson({ root: [state.root.name, state.root.canonicalRegistrationMigration,
+      state.root.registrationDisplayOrder,
       state.root.categoryDefinitions, state.root._nPartes, (state.root.participants || []).length,
       state.root.waitlist, state.root.standbyParticipants, state.root.monarchWaitlist,
       state.root.categorySchedule?.slots, state.root.teamCompetition?.schedule?.originDayPolicy,
@@ -70,8 +71,6 @@ async function load(read) {
       root.data().name !== 'NEON NIGHTMARE – THE TOURNAMENT')
     fail('alvo de produção não corresponde ao Neon esperado');
   const state = { root: root.data(), registrations: docsOf(regs), mirror: docsOf(mirror) };
-  if (state.root.teamCompetition?.schedule?.originDayPolicy === 'organizer-pair-days')
-    fail('dias das duplas agora são definidos no app; esta planilha histórica não pode substituir o plano do organizador');
   if (state.root.canonicalRegistrationMigration?.registrationCount !== state.registrations.length ||
       state.registrations.filter(x => x.data.status === 'confirmed').length !== 128 ||
       state.mirror.length !== 64 || (state.root.participants || []).length !== 0)
@@ -106,15 +105,6 @@ async function plan(state) {
     return { id, category: labels.get(members[0].categoryId), members };
   });
   const aligned = align(rows, pairs);
-  aligned.dayPlan = alignedDayAssignments(aligned, state.root.categorySchedule?.slots,
-    state.root.teamCompetition?.schedule);
-  aligned.rosterSnapshot = aligned.map(entry => ({ fixedPairId: entry.pair.id,
-    categoryId: entry.first.categoryId })).sort((a, b) => a.fixedPairId.localeCompare(b.fixedPairId));
-  const priorRoster = state.root.teamCompetition?.schedule?.rosterSnapshot || [];
-  if (priorRoster.length !== 64) fail('snapshot de duplas incompleto');
-  aligned.rosterChanges = aligned.rosterSnapshot.filter(entry => !priorRoster.some(item =>
-    item.fixedPairId === entry.fixedPairId && item.categoryId === entry.categoryId)).length;
-  if (aligned.rosterChanges > 1) fail('snapshot diverge demais das duplas atuais');
   const byIdentity = new Map();
   state.mirror.forEach(doc => {
     const item = doc.data.item || {}, keys = [memberKey(item, 'p1'), memberKey(item, 'p2')];
@@ -138,10 +128,7 @@ function predictedState(state, aligned) {
     sequence.set(entry.second.id, entry.seq + 1);
     mirrors.set(entry.mirror.id, reorderedMirror(entry.mirror.data.item, entry.first.key, entry.seq));
   });
-  return { root: { ...state.root, teamCompetition: { ...state.root.teamCompetition,
-    schedule: { ...state.root.teamCompetition.schedule,
-      pairDayAssignments: aligned.dayPlan.assignments,
-      rosterSnapshot: aligned.rosterSnapshot } } },
+  return { root: { ...state.root, registrationDisplayOrder: 'enrollSeq' },
     registrations: state.registrations.map(doc => ({ id: doc.id, data: sequence.has(doc.id)
       ? { ...doc.data, enrollSeq: sequence.get(doc.id) } : doc.data })),
     mirror: state.mirror.map(doc => ({ id: doc.id, data: mirrors.has(doc.id)
@@ -168,8 +155,6 @@ function backupAt(filename) {
   const detail = { mode, targetId, workbookSha256, pairs: aligned.length, people: aligned.length * 2,
     reorderedPairs: changes.length, flippedPairs: aligned.filter(e => e.reversed).length,
     mirrorFlips: aligned.filter(e => e.mirrorReversed).length,
-    correctedDays: aligned.dayPlan.changes, staleDayIds: aligned.dayPlan.staleIds,
-    rosterChanges: aligned.rosterChanges, fridayPairs: aligned.dayPlan.fridayPairIds.length,
     weakestScore: Math.min(...aligned.map(e => e.score)), stateSha256: hash };
   if (mode === 'dry-run') {
     if (flag('--detalhes')) aligned.forEach(e => {
@@ -179,8 +164,7 @@ function backupAt(filename) {
         current: [e.first.name, e.second.name], scores }));
     });
     const filename = backupFile();
-    const before = { pairDayAssignments: current.root.teamCompetition.schedule.pairDayAssignments,
-      rosterSnapshot: current.root.teamCompetition.schedule.rosterSnapshot,
+    const before = { registrationDisplayOrder: current.root.registrationDisplayOrder,
       registrations: current.registrations.map(x => ({ id: x.id, seq: x.data.enrollSeq })),
       mirror: current.mirror.map(x => ({ id: x.id, item: x.data.item })) };
     const backup = { project: PROJECT, tournamentId: targetId, workbookSha256,
@@ -204,9 +188,7 @@ function backupAt(filename) {
         live.root._canonicalDraw || live.root.drawSelectionDone === true)
       fail('sorteio ou jogos surgiram durante a transação; operação cancelada');
     if (mode === 'apply') {
-      if (aligned.dayPlan.changes || aligned.rosterChanges) tx.update(rootRef, {
-        'teamCompetition.schedule.pairDayAssignments': aligned.dayPlan.assignments,
-        'teamCompetition.schedule.rosterSnapshot': aligned.rosterSnapshot });
+      tx.update(rootRef, { registrationDisplayOrder: 'enrollSeq' });
       for (const entry of aligned) {
         tx.update(regRef.doc(entry.first.id), { enrollSeq: entry.seq });
         tx.update(regRef.doc(entry.second.id), { enrollSeq: entry.seq + 1 });
@@ -214,9 +196,9 @@ function backupAt(filename) {
           item: reorderedMirror(entry.mirror.data.item, entry.first.key, entry.seq) });
       }
     } else {
-      tx.update(rootRef, {
-        'teamCompetition.schedule.pairDayAssignments': backup.before.pairDayAssignments,
-        'teamCompetition.schedule.rosterSnapshot': backup.before.rosterSnapshot });
+      tx.update(rootRef, { registrationDisplayOrder:
+        backup.before.registrationDisplayOrder === undefined
+          ? admin.firestore.FieldValue.delete() : backup.before.registrationDisplayOrder });
       for (const entry of backup.before.registrations) {
         if (entry.seq !== undefined) tx.update(regRef.doc(entry.id), { enrollSeq: entry.seq });
       }
@@ -228,8 +210,7 @@ function backupAt(filename) {
   if (mode === 'apply') {
     if (afterHash !== backup.expectedAfterStateSha256) fail('hash pós-aplicação divergiu do backup');
     const updated = await plan(after);
-    if (updated.dayPlan.changes || updated.rosterChanges ||
-        updated.some(e => e.first.seq !== e.seq || e.second.seq !== e.seq + 1 || e.mirrorReversed ||
+    if (updated.some(e => e.first.seq !== e.seq || e.second.seq !== e.seq + 1 || e.mirrorReversed ||
         e.mirror.data.item.p1Seq !== e.seq || e.mirror.data.item.p2Seq !== e.seq + 1))
       fail('verificação pós-aplicação falhou');
   } else if (afterHash !== backup.stateSha256) fail('restauração não reproduziu a prévia');

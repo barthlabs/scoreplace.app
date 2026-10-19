@@ -1,5 +1,7 @@
 'use strict';
 const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
 const XLSX = require('xlsx');
 const core = require('../scripts/neon-planilha-ordem-core');
 
@@ -34,9 +36,13 @@ for (const [sheetName, label, count] of categories) {
 }
 const rows = core.workbookRows(book);
 assert.equal(rows.length, 64);
+assert.equal(rows[0].sheetName, 'LIGHT FEM', 'a primeira aba da planilha inicia a numeração');
+assert.equal(rows[16].sheetName, 'LIGHT MASC', 'a próxima aba continua a sequência global');
 const result = core.align(rows, pairs.reverse());
 assert.equal(result.length, 64);
 assert.deepEqual(result.map(x => x.seq), Array.from({ length: 64 }, (_, i) => i * 2 + 1));
+assert.deepEqual(result.slice(0, 2).map(x => x.row.sheetName), ['LIGHT FEM', 'LIGHT FEM']);
+assert.equal(result[16].seq, 33, 'a segunda aba não é reagrupada por categoria');
 assert(result.every(x => x.first.name === x.row.members[0] && x.second.name === x.row.members[1]));
 assert(result.every(x => x.reversed));
 assert.deepEqual(core.CATEGORY_ORDER.map(c => result.filter(x => x.row.category === c).length),
@@ -84,4 +90,9 @@ assert.equal(mirrored.p2Seq, 38);
 assert.equal(mirrored.name, 'Primeiro / Segundo');
 assert.equal(mirrored.categoryId, 'intocado');
 assert.equal(oldMirror.p1Uid, 'u2', 'o original e o backup não sofrem mutação');
+const tournamentView = fs.readFileSync(path.join(__dirname, '../js/views/tournaments.js'), 'utf8');
+assert(tournamentView.includes("t.registrationDisplayOrder !== 'enrollSeq'"),
+  'o detalhe não pode reordenar por categoria quando a sequência global foi definida');
+assert(tournamentView.includes('_pairedParticipants.sort(_compareEntries)'),
+  'os cards devem usar a ordem canônica atualizada');
 console.log('✅ Neon: ordem das 64 duplas e lados da planilha, sem mudar identidade/categoria');

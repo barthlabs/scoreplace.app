@@ -1,3 +1,6 @@
+// 2.4.113 — A lista de inscritos do Neon segue a sequência global das abas e linhas
+// da planilha dos organizadores, preservando a identidade, a categoria e a dupla
+// de cada pessoa. O primeiro par é Marcelo Ferrari / Denys Paulon.
 // 2.4.112 — O organizador pode definir o dia de cada dupla no sorteio por times,
 // incluindo as três Fem Light por time do Neon. A categoria é resolvida também
 // pela identidade canônica quando falta o rótulo legado no participante; a

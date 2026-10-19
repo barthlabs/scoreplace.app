@@ -287,9 +287,9 @@ window._duplaCard = function (t, p, draggable, ctx) {
       for (var _dpi = 0; _dpi < _dpCats.length; _dpi++) { if (_dpCatStr === _dpCats[_dpi] || _dpCatStr.endsWith(' ' + _dpCats[_dpi])) { _dpSkill = _dpCats[_dpi]; break; } }
     }
     // O filtro usa este inteiro para reordenar os cards depois do render. Em
-    // torneio migrado com categorias explícitas, a ordem da foto é categoria
-    // seguida da posição original DENTRO dela; o número individual de inscrição
-    // continua sendo p1Seq/p2Seq, sem renumerar nem gravar registrations.
+    // torneio com blocos explícitos, o índice visual pode seguir a categoria.
+    // registrationDisplayOrder='enrollSeq' deixa a sequência global prevalecer;
+    // o número individual continua sendo p1Seq/p2Seq.
     var _dpOrder = ctx.displayOrderMap && ctx.displayOrderMap.has(p)
       ? ctx.displayOrderMap.get(p)
       : (members ? (parseInt(_s1 || '0', 10) || 0)
@@ -377,7 +377,7 @@ window._buildDoublesInscritosSection = function (t, ctx) {
     ? t.combinedCategories : (Array.isArray(t.categoryDefinitions)
       ? t.categoryDefinitions.filter(function (d) { return d && d.enabled !== false; }).map(function (d) { return d.label; }) : []);
   var _categoryBlockRank = new Map();
-  if (_canonicalDenseSeq && _declaredCategoryNames.length > 1) {
+  if (_canonicalDenseSeq && t.registrationDisplayOrder !== 'enrollSeq' && _declaredCategoryNames.length > 1) {
     _declaredCategoryNames.forEach(function (label, index) {
       var key = String(label || '').trim().toLocaleLowerCase();
       if (key && !_categoryBlockRank.has(key)) _categoryBlockRank.set(key, index);
@@ -415,8 +415,8 @@ window._buildDoublesInscritosSection = function (t, ctx) {
   // "Jogador N", o N é um fallback explícito e mantém 01, 02, 03... estáveis mesmo
   // quando dados legados carregam sequências antigas. Nunca altera o array persistido.
   function _entryOrderNumber(entry) {
-    // A projeção canônica carrega o número original de cada inscrito. No Neon ele
-    // corresponde à posição na foto; não recalcular pela fila nem desempatar pelo nome.
+    // A projeção canônica carrega o número original de cada inscrito. Quando a
+    // organização define a sequência global, ela prevalece sobre blocos por categoria.
     if (_canonicalDenseSeq && entry && typeof entry === 'object') {
       if (_isPairEntry(entry)) return Math.min(Number(entry.p1Seq), Number(entry.p2Seq));
       return Number(entry.enrollSeq);
