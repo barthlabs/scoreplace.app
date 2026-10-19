@@ -1292,6 +1292,7 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame) {
     for (var s = 0; s < oldSources.length; s++) oldSources[s].hidden = false;
     root._bracketGeneralEntries = [];
     root._bracketGeneralSources = [];
+    root._bracketGeneralSlotTimes = [];
     _bracketToggleEmptySourceRounds(root, false);
     view.style.display = 'none';
     view.innerHTML = '';
@@ -1320,6 +1321,9 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame) {
     // cronológica e, no mesmo horário, por quadra.
     var scheduledCards = cards.filter(function (card) {
       return Number(card.getAttribute('data-bracket-scheduled-at')) > 0;
+    });
+    root._bracketGeneralSlotTimes = scheduledCards.map(function (card) {
+      return Number(card.getAttribute('data-bracket-scheduled-at'));
     });
     // A data de referência não pode depender de haver jogo pronto: se todos
     // aguardam presença, Próximos jogos ainda precisa mostrar o aviso no topo.
@@ -1399,10 +1403,10 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame) {
   });
   _bracketToggleEmptySourceRounds(root, true);
   view.innerHTML = '';
-  // Geral preserva a leitura da chave: cada coluna é uma rodada. Dentro dela,
-  // os jogos seguem o planejamento (horário e, no empate, a ordem da quadra).
-  // Assim R1 contém todos os primeiros jogos, R2 todos os segundos etc., sem
-  // apagar os que já foram concluídos. [[regression_general_round_columns]]
+  // Na grade publicada, "rodada" é o horário de jogo de CADA dia. m.round é a
+  // rodada interna do sorteio e pode misturar 18:00 e 18:35 (ou dois dias).
+  // Preservar m.round no banco: só a apresentação da agenda usa scheduledAt.
+  // [[regression_general_round_columns]]
   var agendaEntries = onlyReady ? entries.filter(function (entry) { return !entry.waitingPresence; }) : entries;
   var waitingEntries = onlyReady ? entries.filter(function (entry) { return entry.waitingPresence; }) : [];
   if (onlyReady && !agendaEntries.length) {
@@ -1412,21 +1416,35 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame) {
     view.appendChild(noneReady);
   }
   var groups = {};
+  var daySlots = {};
+  var zone = typeof _matchCardTimeZone === 'function'
+    ? _matchCardTimeZone(window._currentBracketTournament || {}) : 'America/Sao_Paulo';
+  var slotFormatter = new Intl.DateTimeFormat('en-GB', {
+    timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+  });
+  (root._bracketGeneralSlotTimes || agendaEntries.map(function (entry) { return entry.at; })).forEach(function (at) {
+    var parts = {};
+    slotFormatter.formatToParts(new Date(at)).forEach(function (part) { parts[part.type] = part.value; });
+    var day = parts.year + '-' + parts.month + '-' + parts.day;
+    var hour = parts.hour + ':' + parts.minute;
+    if (!daySlots[day]) daySlots[day] = [];
+    if (daySlots[day].indexOf(hour) === -1) daySlots[day].push(hour);
+  });
   agendaEntries.forEach(function (entry) {
-    var key = String(entry.round || 1);
+    var parts = {};
+    slotFormatter.formatToParts(new Date(entry.at)).forEach(function (part) { parts[part.type] = part.value; });
+    var day = parts.year + '-' + parts.month + '-' + parts.day;
+    var hour = parts.hour + ':' + parts.minute;
+    var key = day + '|' + hour;
     if (!groups[key]) groups[key] = [];
     groups[key].push(entry);
   });
+  Object.keys(daySlots).forEach(function (day) { daySlots[day].sort(); });
   var roundsTrack = document.createElement('div');
   roundsTrack.className = 'bracket-general-rounds-track';
   roundsTrack.style.cssText = 'display:flex;align-items:flex-start;gap:20px;width:100%;max-width:100%;min-width:0;box-sizing:border-box;overflow-x:auto;overflow-y:clip;padding:0 0 14px;scroll-snap-type:x proximity;';
-  Object.keys(groups).sort(function (a, b) {
-    // A rodada cuja primeira partida vem antes também vem antes na fila. O
-    // número da rodada só desempata agendas simultâneas.
-    var aAt = groups[a][0] ? groups[a][0].at : 0;
-    var bAt = groups[b][0] ? groups[b][0].at : 0;
-    return aAt - bAt || Number(a) - Number(b);
-  }).forEach(function (key) {
+  Object.keys(groups).sort().forEach(function (key) {
     groups[key].sort(function (a, b) {
       if (a.at !== b.at) return a.at - b.at;
       return String(a.court).localeCompare(String(b.court), 'pt-BR', { numeric: true });
@@ -1436,7 +1454,11 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame) {
     // rodada da Geral é fixado pelo portal enquanto seus cards rolam.
     group.className = 'bracket-round-column bracket-general-round-column';
     group.style.cssText = 'flex:0 0 min(380px,88vw);min-width:280px;scroll-snap-align:start;';
-    group.innerHTML = '<h4 class="bracket-round-heading" style="margin:0 0 10px;padding:0 0 9px 10px;border-left:4px solid var(--sp-c-fbbf24,#fbbf24);border-bottom:1px solid rgba(255,255,255,.10);color:var(--sp-c-fde68a,#fde68a);font-size:.82rem;letter-spacing:1px;text-transform:uppercase;">Rodada ' + (window._safeHtml ? window._safeHtml(String(key)) : String(key)) + '</h4>';
+    var slotParts = key.split('|');
+    var dateParts = slotParts[0].split('-');
+    var slotRound = daySlots[slotParts[0]].indexOf(slotParts[1]) + 1;
+    var heading = 'Rodada ' + slotRound + ' · ' + dateParts[2] + '/' + dateParts[1] + ' · ' + slotParts[1];
+    group.innerHTML = '<h4 class="bracket-round-heading" style="margin:0 0 10px;padding:0 0 9px 10px;border-left:4px solid var(--sp-c-fbbf24,#fbbf24);border-bottom:1px solid rgba(255,255,255,.10);color:var(--sp-c-fde68a,#fde68a);font-size:.82rem;letter-spacing:1px;text-transform:uppercase;">' + heading + '</h4>';
     var grid = document.createElement('div');
     grid.style.cssText = 'display:grid;grid-template-columns:minmax(0,1fr);gap:14px;align-items:start;';
     groups[key].forEach(function (entry) { grid.appendChild(entry.wrapper); });
