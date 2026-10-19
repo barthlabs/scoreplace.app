@@ -353,6 +353,17 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       'style="background:var(--sp-g-255-255-255-008,rgba(255,255,255,0.08));color:var(--text-muted);font-size:0.72rem;font-weight:800;padding:4px 5px;">✎</button>';
   }
 
+  // Partida com agenda e quadra da organização não precisa de conversa para
+  // combinar o jogo. O gate fica aqui para valer na chave E na dashboard.
+  // Um link já existente continua acessível, sem oferecer criação de outro.
+  function _matchHasOperationalSchedule(t, m) {
+    if (typeof window._isConcentratedTournament === 'function' &&
+        window._isConcentratedTournament(t)) return true;
+    // scheduledAt pode ser ISO, epoch ou Timestamp do Firestore antes da
+    // serialização; a presença do campo é o contrato da agenda publicada.
+    return !!(m && m.court && String(m.court).trim() && m.scheduledAt);
+  }
+
   // Chip do JOGO. Regra de exibição idêntica ao irmão (_schCardChip): só jogador do
   // confronto, só rodada atual, só enquanto o jogo não terminou. Com link, aparece
   // mesmo fora da rodada atual — quem já tem grupo continua achando ele.
@@ -384,6 +395,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         _btn(_pos, 'event.stopPropagation(); window._waGrpOpenLink(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')') +
         _editBtn(open, 'Trocar o link do grupo ' + _mine) + '</span>';
     }
+    if (_matchHasOperationalSchedule(t, m)) return '';
     // Porta única para ações antecipadas: quem já está no jogo pode criar o
     // grupo antes da definição do rival, tal como pode propor datas. A outra
     // pessoa entra no mesmo grupo quando a chave resolver seu slot.

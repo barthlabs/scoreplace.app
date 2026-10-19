@@ -100,6 +100,26 @@ ok(/sp-match-team-tag--vertical/.test(cardConcentrado) && />VENOM<\/span>/.test(
   'o nome do time vira uma tag vertical colorida e não repete “Time:”');
 ok(!/Criar grupo/.test(cardConcentrado),
   'evento concentrado não oferece grupo de jogo: atletas não negociam a partida');
+ok(W._waGrpCardChip(tConcentrado, mConcentrado, { semCabecalhoDeGrupo: true }) === '',
+  'dashboard também não oferece criar grupo em torneio com agenda operacional');
+
+const tComQuadra = mkLiga();
+const mComQuadra = tComQuadra.rounds[0].matches[0];
+mComQuadra.scheduledAt = '2026-10-22T21:00:00.000Z';
+mComQuadra.court = 'Quadra 4';
+comUsuario(tComQuadra, { uid: 'u1', displayName: 'J1' });
+ok(W._waGrpCardChip(tComQuadra, mComQuadra, { semCabecalhoDeGrupo: true }) === '',
+  'jogo com data, hora e quadra definidos não oferece criar grupo mesmo fora da agenda concentrada');
+mComQuadra.scheduledAt = { seconds: 1792702800, nanoseconds: 0 };
+ok(W._waGrpCardChip(tComQuadra, mComQuadra, { semCabecalhoDeGrupo: true }) === '',
+  'Timestamp do Firestore também conta como horário definido');
+mComQuadra.waGroup = { link: 'https://chat.whatsapp.com/ABC123' };
+ok(/_waGrpOpenLink/.test(W._waGrpCardChip(tComQuadra, mComQuadra, { semCabecalhoDeGrupo: true })),
+  'link de grupo já existente continua acessível no jogo agendado');
+delete mComQuadra.waGroup;
+delete mComQuadra.court;
+ok(/Criar grupo/.test(W._waGrpCardChip(tComQuadra, mComQuadra, { semCabecalhoDeGrupo: true })),
+  'data sem quadra em torneio distribuído ainda permite combinar pelo WhatsApp');
 
 const tDistribuido = mkLiga();
 tDistribuido.rounds[0].matches[0].court = 'Quadra 9';
