@@ -104,18 +104,32 @@ window._tvLiveToggle();
 assert.match(toast, /Permita abrir/, 'popup bloqueado informa o organizador');
 const tvRoot = { innerHTML: '' };
 let wakeRequests = 0;
+const tvTimer = { start:Date.now() - 15000, getAttribute() { return String(this.start); }, textContent:'', className:'', title:'' };
+t.callTime = 1;
+t.warmupTime = 1;
+t.gameDuration = 1;
 const fakePopup = { closed: false, navigator: { wakeLock: { request: type => {
   assert.equal(type, 'screen'); wakeRequests++; return Promise.resolve({ addEventListener() {}, release: () => Promise.resolve() });
 } } }, document: {
   open() {}, write() {}, close() {},
   visibilityState: 'visible', addEventListener() {},
   getElementById: id => id === 'tv-root' ? tvRoot : { addEventListener() {} },
-  querySelectorAll: () => []
+  querySelectorAll: selector => selector === '[data-tv-start]' ? [tvTimer] : []
 }, focus() {}, close() { this.closed = true; } };
 window.open = () => fakePopup;
 window._findTournamentById = () => t;
 window._tvLiveToggle();
 assert.equal(wakeRequests, 1, 'NO AR solicita bloqueio de repouso da tela');
+assert.match(tvTimer.textContent, /^Chamado 00:00:\d\d$/, 'a chamada aparece como Chamado hh:mm:ss');
+tvTimer.start = Date.now() - 90000;
+window._tvLiveRefresh();
+assert.match(tvTimer.textContent, /^Aquecimento 00:01:\d\d$/, 'o rótulo acompanha o tempo de aquecimento');
+tvTimer.start = Date.now() - 150000;
+window._tvLiveRefresh();
+assert.match(tvTimer.textContent, /^Em jogo 00:02:\d\d$/, 'o rótulo acompanha o tempo de jogo');
+tvTimer.start = Date.now() - 210000;
+window._tvLiveRefresh();
+assert.match(tvTimer.textContent, /^Tempo excedido 00:03:\d\d$/, 'o tempo excedido tem rótulo próprio');
 assert.match(tvRoot.innerHTML, /ÚLTIMOS RESULTADOS/);
 assert.doesNotMatch(tvRoot.innerHTML, /CHAMADO|EM JOGO/);
 assert.match(tvRoot.innerHTML, /class="tv-team-tag">VORTEX<\/span><div class="tv-players"><span>VORTEX 1<\/span><span>Parceira<\/span>/,

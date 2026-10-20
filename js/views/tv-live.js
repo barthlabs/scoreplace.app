@@ -253,7 +253,7 @@
           !snapshot.timing.game || minutes < gameEnd ? 'game' : 'overdue';
         node.className = 'tv-phase-' + phase;
         node.title = { call: 'Tempo de chamada', warmup: 'Aquecimento', game: 'Tempo de jogo', overdue: 'Tempo previsto excedido' }[phase];
-        node.textContent = elapsed(start);
+        node.textContent = { call: 'Chamado', warmup: 'Aquecimento', game: 'Em jogo', overdue: 'Tempo excedido' }[phase] + ' ' + elapsed(start);
       });
       var now = popup.document.getElementById('tv-now');
       if (now) now.textContent = new Date().toLocaleTimeString('pt-BR');
