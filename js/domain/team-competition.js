@@ -41,10 +41,16 @@ var ScoreplaceTeamCompetition;
     /** A classificação pública do Neon soma todas as categorias pelo time, inclusive no sandbox. */
     function rankingConfigForTournament(value) {
         const tournament = record(value);
-        const cfg = normalize(configurationForTournament(tournament));
         const neonId = 'tour_1790628592058_c342a1e8f5068424887f1702a1633a44';
-        if (text(tournament.name) === 'NEON NIGHTMARE – THE TOURNAMENT' &&
-            (text(tournament.id) === neonId || (tournament.isSandbox === true && text(tournament.sandboxOf) === neonId))) {
+        const isNeon = text(tournament.name) === 'NEON NIGHTMARE – THE TOURNAMENT' &&
+            (text(tournament.id) === neonId || (tournament.isSandbox === true && text(tournament.sandboxOf) === neonId));
+        // A classificação dos demais torneios sempre leu topo ou fase zero.
+        // A resolução de todas as fases é necessária somente para a agenda do Neon.
+        const phases = Array.isArray(tournament.phases) ? tournament.phases : [];
+        const source = isNeon ? configurationForTournament(tournament)
+            : (tournament.teamCompetition || record(phases[0]).teamCompetition);
+        const cfg = normalize(source);
+        if (isNeon) {
             cfg.aggregation = 'overall';
             cfg.classificationUnit = 'team';
         }

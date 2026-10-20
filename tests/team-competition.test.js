@@ -14,6 +14,10 @@ function row(rows, id) { return rows.find(function (r) { return r.id === id; });
 
 const config = { enabled: true, teamCount: 8, formation: 'draw', internalMatches: 'avoid', scoring: { win: 2, draw: 1, loss: -1 } };
 const neonId = 'tour_1790628592058_c342a1e8f5068424887f1702a1633a44';
+ok(['src/domain/team-competition.ts', 'js/domain/team-competition.js',
+    'functions-autodraw/vendor/team-competition.js', 'js/views/tournaments-utils.js']
+  .every(file => fs.readFileSync(file, 'utf8').includes(neonId)),
+  'identidade do Neon é idêntica na fonte, cliente, servidor e PDF');
 const neonBase = { name: 'NEON NIGHTMARE – THE TOURNAMENT', teamCompetition: { enabled:true, aggregation:'per_category', classificationUnit:'pair' } };
 const neonRanking = C.rankingConfigForTournament({ ...neonBase, id:neonId });
 ok(neonRanking.aggregation === 'overall' && neonRanking.classificationUnit === 'team', 'Neon: classificação única geral por time');

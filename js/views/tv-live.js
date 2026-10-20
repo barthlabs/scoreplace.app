@@ -58,7 +58,7 @@
   }
   function rankingSections(t, matches, teams) {
     var core = window.ScoreplaceTeamCompetition;
-    var configured = core && typeof core.configurationForTournament === 'function'
+    var configured = window._isNeonTournament && window._isNeonTournament(t) && core && typeof core.configurationForTournament === 'function'
       ? core.configurationForTournament(t) : (t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition);
     if (!core || !configured || configured.enabled !== true) return [];
     var cfg = typeof core.rankingConfigForTournament === 'function' ? core.rankingConfigForTournament(t) : core.normalize(configured);

@@ -2854,7 +2854,7 @@ window._bracketTentarPartesDeNovo = function (tId) {
 function _renderCompetitionTeamStandings(t) {
   var core = window.ScoreplaceTeamCompetition;
   if (!core || typeof core.standings !== 'function' || !t) return '';
-  var configuredCfg = typeof core.configurationForTournament === 'function'
+  var configuredCfg = window._isNeonTournament && window._isNeonTournament(t) && typeof core.configurationForTournament === 'function'
     ? core.configurationForTournament(t) : (t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition);
   if (!configuredCfg || configuredCfg.enabled !== true) return '';
   var cfg = typeof core.rankingConfigForTournament === 'function' ? core.rankingConfigForTournament(t) : core.normalize(configuredCfg);

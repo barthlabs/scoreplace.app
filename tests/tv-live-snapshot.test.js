@@ -11,6 +11,7 @@ const context = vm.createContext({ window, document: { querySelectorAll: () => [
 vm.runInContext(fs.readFileSync(path.join(root, 'js/domain/team-competition.js'), 'utf8'), context);
 window.ScoreplaceTeamCompetition = context.ScoreplaceTeamCompetition;
 vm.runInContext(fs.readFileSync(path.join(root, 'js/views/tv-live.js'), 'utf8'), context);
+window._isNeonTournament = tournament => tournament.id === 'tour_1790628592058_c342a1e8f5068424887f1702a1633a44';
 
 const teams = ['VORTEX', 'BLAST', 'ECLIPSE', 'VENOM', 'PANIC', 'PHANTOM', 'VOLT', 'BLACKOUT']
   .map((name, i) => ({ id: `t${i}`, name, hue: i * 42 }));
@@ -29,6 +30,19 @@ const t = { id: 'neon-test', name: 'NEON NIGHTMARE', logo: 'logo.png', courtName
     match(7, 'Quadra 7', 'PHANTOM', 'VORTEX', { winner: 'p2', scoreP1: 1, scoreP2: 6, resultAt: '2026-10-22T19:00:00Z' })
   ] };
 const snapshot = window._tvLiveBuildSnapshot(t);
+const multiPhaseConfig = { enabled:true, aggregation:'per_category', classificationUnit:'pair' };
+const plannedLaterPhase = { enabled:true, aggregation:'overall', classificationUnit:'team',
+  schedule:{ enabled:true, modeChosen:true, mode:'structured' } };
+const unrelatedMultiPhase = window._tvLiveBuildSnapshot({ ...t, id:'other-tournament',
+  teamCompetition:multiPhaseConfig, phases:[{ teamCompetition:multiPhaseConfig }, { teamCompetition:plannedLaterPhase }] });
+assert.equal(unrelatedMultiPhase.rankings[0].title, 'Fem Light',
+  'torneio multifase comum preserva o escopo por categoria já usado na TV');
+const neonMultiPhase = window._tvLiveBuildSnapshot({ ...t,
+  id:'tour_1790628592058_c342a1e8f5068424887f1702a1633a44',
+  name:'NEON NIGHTMARE – THE TOURNAMENT',
+  teamCompetition:multiPhaseConfig, phases:[{ teamCompetition:multiPhaseConfig }, { teamCompetition:plannedLaterPhase }] });
+assert.equal(neonMultiPhase.rankings[0].title, 'Times',
+  'Neon usa a configuração planejada e a classificação geral por time');
 assert.equal(snapshot.courts.length, 6);
 assert.equal(snapshot.courts[0].number, 1);
 assert.equal(snapshot.courts[0].scoreA, '0', 'a chamada mostra o mesmo placar inicial da chave');
