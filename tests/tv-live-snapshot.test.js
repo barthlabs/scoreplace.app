@@ -3,8 +3,11 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 const root = path.join(__dirname, '..');
-const window = { _collectAllMatches: t => t.matches, _tourLogoSrc: t => t.logo };
-const context = vm.createContext({ window, document: { querySelectorAll: () => [] }, Date, Number, String, Array, Set });
+const window = { _collectAllMatches: t => t.matches, _tourLogoSrc: t => t.logo,
+  _tournamentUrl: id => `https://scoreplace.app/#tournaments/${id}`,
+  _qrCodeUrl: url => `https://qr.example/?data=${encodeURIComponent(url)}` };
+const context = vm.createContext({ window, document: { querySelectorAll: () => [] }, Date, Number, String, Array, Set,
+  setInterval: () => 1, clearInterval: () => {} });
 vm.runInContext(fs.readFileSync(path.join(root, 'js/domain/team-competition.js'), 'utf8'), context);
 window.ScoreplaceTeamCompetition = context.ScoreplaceTeamCompetition;
 vm.runInContext(fs.readFileSync(path.join(root, 'js/views/tv-live.js'), 'utf8'), context);
@@ -14,7 +17,7 @@ const teams = ['VORTEX', 'BLAST', 'ECLIPSE', 'VENOM', 'PANIC', 'PHANTOM', 'VOLT'
 const match = (id, court, a, b, extra = {}) => ({ id, _gameNum: id, court, category: 'Fem Light',
   p1: `${a} 1 / Parceira`, p2: `${b} 1 / Parceira`, p1CompetitionTeamId: teams.find(t => t.name === a).id,
   p2CompetitionTeamId: teams.find(t => t.name === b).id, ...extra });
-const t = { name: 'NEON NIGHTMARE', logo: 'logo.png', courtNames: [4, 5, 6, 7, 8, 9].map(n => `Quadra ${n}`),
+const t = { id: 'neon-test', name: 'NEON NIGHTMARE', logo: 'logo.png', courtNames: [4, 5, 6, 7, 8, 9].map(n => `Quadra ${n}`),
   competitionTeams: teams, teamCompetition: { enabled: true, aggregation: 'overall', classificationUnit: 'team', ranking: 'games_diff' },
   matches: [
     match(1, 'Quadra 4', 'VORTEX', 'BLAST', { courtCalledAt: '2026-10-22T21:00:00Z' }),
@@ -39,6 +42,11 @@ assert.equal(snapshot.rankings.length, 1, 'classificação geral, sem categoria 
 assert.equal(snapshot.rankings[0].rows.length, 8);
 assert.equal(snapshot.rankings[0].rows[0].name, 'VORTEX');
 assert.equal(snapshot.rankings[0].rows[0].gamesDiff, 8);
+assert.equal(snapshot.rankings[0].rows[0].gamesWon, 12);
+assert.equal(snapshot.rankings[0].rows[0].wins, 2);
+assert.equal(snapshot.rankings[0].rows[0].played, 2);
+assert.equal(snapshot.qrUrl, 'https://scoreplace.app/#tournaments/neon-test');
+assert.match(snapshot.qrImage, /neon-test/);
 const multi = { ...t, matches: [
   match(8, 'Quadra 4', 'VORTEX', 'BLAST', { courtCalledAt: '2026-10-22T21:00:00Z', startedAt: '2026-10-22T21:03:00Z',
     sets: [{ gamesP1: 6, gamesP2: 4 }, { gamesP1: 2, gamesP2: 3 }] }),
@@ -56,6 +64,22 @@ window.open = () => null;
 window.showToast = message => { toast = message; };
 window._tvLiveToggle();
 assert.match(toast, /Permita abrir/, 'popup bloqueado informa o organizador');
+const tvRoot = { innerHTML: '' };
+const fakePopup = { closed: false, document: {
+  open() {}, write() {}, close() {},
+  getElementById: id => id === 'tv-root' ? tvRoot : { addEventListener() {} },
+  querySelectorAll: () => []
+}, focus() {}, close() { this.closed = true; } };
+window.open = () => fakePopup;
+window._findTournamentById = () => t;
+window._tvLiveToggle();
+assert.match(tvRoot.innerHTML, /ÚLTIMOS RESULTADOS/);
+assert.doesNotMatch(tvRoot.innerHTML, /ÚLTIMOS 3 RESULTADOS/);
+assert.match(tvRoot.innerHTML, /<span>GAMES<\/span><span>V<\/span><span>D<\/span><span>J<\/span>/);
+assert.match(tvRoot.innerHTML, /class="tv-ranking-team"[^>]*>VORTEX<\/strong><b>\+8<\/b><span>12–4<\/span><span>2<\/span><span>0<\/span><span>2<\/span>/);
+assert.match(tvRoot.innerHTML, /class="tv-qr-code"[^>]*neon-test/);
+assert.match(tvRoot.innerHTML, /scoreplace\.app\/icons\/logo-podium\.svg/);
+window._tvLiveToggle();
 const liveSource = fs.readFileSync(path.join(root, 'js/views/tv-live.js'), 'utf8');
 assert.match(liveSource, /id=\\?"tv-fullscreen-action/, 'janela NO AR oferece entrada em tela cheia na própria janela');
 assert.match(liveSource, /root\.requestFullscreen\(\)/, 'tela cheia é acionada pela janela que será exibida na TV');

@@ -2916,7 +2916,7 @@ function _renderCompetitionTeamStandings(t) {
     var color = colorsByTeam[String(row.id)] || '#94a3b8';
     return '<tr style="border-bottom:1px solid var(--border-color);">' +
       '<td style="padding:9px 10px;font-weight:800;color:var(--text-muted);">' + medal + '</td>' +
-      '<td style="padding:9px 10px;font-weight:700;color:var(--text-bright);"><span aria-hidden="true" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + color + ';margin-right:7px;box-shadow:0 0 10px ' + color + ';"></span>' + safe(row.name) + '</td>' +
+      '<td style="padding:9px 10px;font-weight:700;color:var(--text-bright);"><span style="display:inline-block;padding:5px 10px;border:1px solid ' + color + ';border-left:5px solid ' + color + ';border-radius:8px;background:color-mix(in srgb,' + color + ' 15%,transparent);color:var(--text-bright);white-space:nowrap;">' + safe(row.name) + '</span></td>' +
       (byGames
         ? '<td style="padding:9px 10px;text-align:center;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);">' + (row.gamesDiff >= 0 ? '+' : '') + row.gamesDiff + '</td><td style="padding:9px 10px;text-align:center;color:var(--text-muted);">' + row.gamesWon + '-' + row.gamesLost + '</td>'
         : '<td style="padding:9px 10px;text-align:center;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);">' + row.points + '</td>') +

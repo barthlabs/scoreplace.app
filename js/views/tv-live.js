@@ -61,7 +61,12 @@
       var rows = cfg.classificationUnit === 'pair'
         ? core.pairStandings(pairs, selected, cfg, category || undefined)
         : core.standings(teams, selected, cfg);
-      return { title: category || (cfg.classificationUnit === 'pair' ? 'Duplas' : 'Times'), rows: rows, ranking: cfg.ranking };
+      return { title: category || (cfg.classificationUnit === 'pair' ? 'Duplas' : 'Times'), rows: rows, ranking: cfg.ranking,
+        colors: teams.reduce(function (map, team) {
+          var hue = Number(team.hue);
+          if (team.id && Number.isFinite(hue)) map[String(team.id)] = 'hsl(' + hue + ' 78% 56%)';
+          return map;
+        }, {}) };
     });
   }
   window._tvLiveBuildSnapshot = function (t) {
@@ -88,7 +93,12 @@
         return { number: m._gameNum || m.matchNumber || '', category: String(m.category || ''), a: String(m.p1 || ''), b: String(m.p2 || ''),
           ta: teamFor(m, 1, teams), tb: teamFor(m, 2, teams), scoreA: m.wo ? 'W.O.' : gameScore(m, 1, true), scoreB: m.wo ? 'W.O.' : gameScore(m, 2, true) };
       });
+    var site = String(window.SCOREPLACE_URL || 'https://scoreplace.app').replace(/\/$/, '');
+    var qrUrl = t.id ? (typeof window._tournamentUrl === 'function' ? window._tournamentUrl(t.id) : site + '/#tournaments/' + encodeURIComponent(t.id)) : site;
     return { name: String(t.name || ''), logo: typeof window._tourLogoSrc === 'function' ? window._tourLogoSrc(t) : '',
+      qrUrl: qrUrl, qrImage: typeof window._qrCodeUrl === 'function' ? window._qrCodeUrl(qrUrl, 320, false) :
+        'https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=' + encodeURIComponent(qrUrl) + '&bgcolor=ffffff&color=1a1e2e&margin=10',
+      scoreplaceLogo: site + '/icons/logo-podium.svg',
       courts: courtCards, rankings: rankingSections(t, matches, teams), results: results };
   };
   function sideHtml(label, team, score) {
@@ -102,9 +112,11 @@
       '<div class="tv-timer"><span>' + esc(card.timerLabel) + '</span><strong data-tv-start="' + card.timerStart + '">00:00:00</strong></div></article>';
   }
   function rankingHtml(section) {
-    return '<div class="tv-ranking-group"><h3>' + esc(section.title) + '</h3>' + section.rows.map(function (row, index) {
+    var byGames = section.ranking === 'games_diff';
+    return '<div class="tv-ranking-group"><h3>' + esc(section.title) + '</h3><div class="tv-ranking-head"><span>#</span><span>' + (section.title === 'Duplas' ? 'DUPLA' : 'TIME') + '</span><span>' + (byGames ? 'SALDO' : 'PTS') + '</span><span>GAMES</span><span>V</span><span>D</span><span>J</span></div>' + section.rows.map(function (row, index) {
       var value = section.ranking === 'games_diff' ? (row.gamesDiff >= 0 ? '+' : '') + row.gamesDiff : row.points;
-      return '<div class="tv-ranking-row"><span>' + (index + 1) + '</span><strong>' + esc(row.name) + '</strong><b>' + esc(value) + '</b></div>';
+      var color = section.colors[String(row.teamId || row.id)] || '#94a3b8';
+      return '<div class="tv-ranking-row"><span>' + (index + 1) + '</span><strong class="tv-ranking-team" style="--team:' + esc(color) + '">' + esc(row.name) + '</strong><b>' + esc(value) + '</b><span>' + esc(row.gamesWon) + '–' + esc(row.gamesLost) + '</span><span>' + esc(row.wins) + '</span><span>' + esc(row.losses) + '</span><span>' + esc(row.played) + '</span></div>';
     }).join('') + '</div>';
   }
   function resultHtml(result) {
@@ -115,11 +127,32 @@
       '<main class="tv-board"><section class="tv-courts">' + snapshot.courts.map(cardHtml).join('') + '</section>' +
       '<aside class="tv-sidebar"><section class="tv-rankings"><h2>CLASSIFICAÇÃO</h2>' +
       (snapshot.rankings.length ? snapshot.rankings.map(rankingHtml).join('') : '<p>Classificação ainda não configurada</p>') +
-      '</section><section class="tv-results"><h2>ÚLTIMOS 3 RESULTADOS</h2>' +
+      '</section><section class="tv-results"><div class="tv-results-list"><h2>ÚLTIMOS RESULTADOS</h2>' +
       (snapshot.results.length ? snapshot.results.map(resultHtml).join('') : '<p>Aguardando o primeiro resultado</p>') +
+      '</div><div class="tv-qr"><img class="tv-qr-code" src="' + esc(snapshot.qrImage) + '" alt="QR para abrir o torneio no Scoreplace"><div class="tv-qr-brand"><img src="' + esc(snapshot.scoreplaceLogo) + '" alt=""><span>Abra no<br>Scoreplace</span></div></div>' +
       '</section></aside></main>';
   }
   var styles = '<style>*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#060d1a;color:#ffffff;font-family:Arial,Helvetica,sans-serif}.tv-header{height:9vh;min-height:62px;display:flex;align-items:center;gap:1.2vw;padding:1vh 2vw;border-bottom:2px solid #19314b}.tv-header img{height:100%;max-width:8vw;object-fit:contain}.tv-header h1{font-size:clamp(1.3rem,2.5vw,3rem);margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tv-header time{margin-left:auto;color:#67e8f9;font-size:1.25vw;white-space:nowrap}.tv-board{height:91vh;display:grid;grid-template-columns:1fr 1fr;gap:1vw;padding:1vw}.tv-courts{min-height:0;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(3,minmax(0,1fr));gap:.75vw}.tv-court,.tv-rankings,.tv-results{min-height:0;background:#0d1b2e;border:1px solid #1b3f61;border-radius:1vw;padding:.8vw}.tv-court{display:flex;flex-direction:column;overflow:hidden}.tv-court-top{display:flex;align-items:center;justify-content:space-between;gap:.5vw;color:#7dd3fc;min-height:1.5vw}.tv-court h2{font-size:clamp(.8rem,1.2vw,1.5rem);margin:0}.tv-court h2 small{font-size:.7em}.tv-court-top>span{color:#fbbf24;font-size:.85vw;font-weight:700}.tv-side{display:grid;grid-template-columns:1fr auto;grid-template-rows:auto auto;align-items:center;border-left:.35vw solid var(--team);background:#081321;margin-top:.35vw;padding:.3vw .55vw;min-height:0;flex:1}.tv-team{grid-column:1;font-size:1.2vw;font-weight:900;color:var(--team)}.tv-pair{grid-column:1;font-size:.7vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#cbd5e1}.tv-score{grid-column:2;grid-row:1/span 2;font-size:1.9vw}.tv-versus{text-align:center;color:#94a3b8;font-weight:900;line-height:1}.tv-timer{display:flex;justify-content:space-between;color:#34d399;font-size:.8vw;margin-top:.3vw}.tv-timer strong{font-variant-numeric:tabular-nums;font-size:1vw}.tv-court.empty{align-items:center;justify-content:center;color:#64748b}.tv-court.empty h2{color:#7dd3fc}.tv-sidebar{min-height:0;display:grid;grid-template-rows:1fr 1fr;gap:.75vw}.tv-rankings,.tv-results{overflow:hidden}.tv-sidebar h2{margin:0 0 .5vw;color:#fbbf24;font-size:1.3vw}.tv-ranking-group{overflow:auto;max-height:calc(100% - 2vw)}.tv-ranking-group h3{font-size:.9vw;margin:.4vw 0;color:#7dd3fc}.tv-ranking-row{display:grid;grid-template-columns:2vw 1fr 4vw;gap:.4vw;padding:.24vw;border-bottom:1px solid #1e3349;font-size:.9vw}.tv-ranking-row b{text-align:right;color:#fbbf24}.tv-result{border-bottom:1px solid #1e3349;padding:.4vw 0}.tv-result small{color:#7dd3fc;font-size:.7vw}.tv-result>div{display:grid;grid-template-columns:1fr auto 1fr;gap:.5vw;align-items:center;font-size:.8vw}.tv-result>div strong{text-align:center;font-size:1vw;color:#fff}.tv-result>div span:last-child{text-align:right}#tv-fullscreen-action{position:fixed;z-index:100;right:1vw;bottom:1vw;padding:.65em 1em;border:1px solid #67e8f9;border-radius:.5em;background:#123047;color:#fff;font:700 16px Arial,sans-serif;cursor:pointer;box-shadow:0 2px 12px #0009}#tv-fullscreen-action:focus-visible{outline:3px solid #fbbf24}html:fullscreen #tv-fullscreen-action{display:none}@media(orientation:portrait){.tv-header{height:7vh}.tv-header h1{font-size:3vw}.tv-header time{font-size:2vw}.tv-board{height:93vh;grid-template-columns:1fr;grid-template-rows:55% 45%;gap:1vh;padding:1vh}.tv-courts{gap:1vw}.tv-court{padding:1vw}.tv-court h2,.tv-sidebar h2{font-size:2vw}.tv-court-top>span,.tv-team,.tv-score{font-size:1.6vw}.tv-pair,.tv-timer,.tv-timer strong{font-size:1.2vw}.tv-sidebar{grid-template-rows:60% 40%;gap:1vh}.tv-ranking-row,.tv-result>div{font-size:1.3vw}.tv-ranking-group h3{font-size:1.5vw}.tv-result small{font-size:1vw}}</style>';
+  styles = styles.replace('</style>',
+    '.tv-sidebar h2{font-size:clamp(1.2rem,1.5vw,2rem)}' +
+    '.tv-sidebar{grid-template-rows:60% 40%}' +
+    '.tv-ranking-group{max-height:calc(100% - 2.3vw)}' +
+    '.tv-ranking-group h3{font-size:clamp(.9rem,1.05vw,1.35rem)}' +
+    '.tv-ranking-head,.tv-ranking-row{display:grid;grid-template-columns:2vw minmax(0,1fr) 4vw 5.5vw repeat(3,2vw);gap:.35vw;align-items:center}' +
+    '.tv-ranking-head{padding:.4vw .3vw;border-bottom:1px solid #45617b;color:#9cbed5;font-size:clamp(.7rem,.75vw,1rem);font-weight:800}' +
+    '.tv-ranking-row{min-height:2.6vw;padding:.3vw;border-bottom:1px solid #1e3349;font-size:clamp(.9rem,1.05vw,1.35rem);font-variant-numeric:tabular-nums}' +
+    '.tv-ranking-row>span:not(:first-child),.tv-ranking-head>span:not(:nth-child(2)){text-align:center}' +
+    '.tv-ranking-row b{text-align:center;color:#fbbf24}' +
+    '.tv-ranking-team{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:.3em .55em;border:1px solid var(--team);border-left:.3em solid var(--team);border-radius:.5em;background:color-mix(in srgb,var(--team) 16%,#0d1b2e);color:#fff}' +
+    '.tv-results{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1vw}' +
+    '.tv-results-list{min-width:0;overflow:hidden}' +
+    '.tv-qr{display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:.55vw;width:clamp(112px,9vw,190px)}' +
+    '.tv-qr-code{display:block;width:100%;aspect-ratio:1;background:#fff;padding:.25vw;border-radius:.5vw;object-fit:contain}' +
+    '.tv-qr-brand{display:flex;align-items:center;justify-content:center;gap:.3vw;width:100%;color:#e2e8f0;font-size:clamp(.65rem,.75vw,1rem);font-weight:800;line-height:1.1}' +
+    '.tv-qr-brand img{width:2vw;min-width:26px;height:auto}' +
+    '#tv-fullscreen-action{top:1vw;bottom:auto}' +
+    '@media(orientation:portrait){.tv-sidebar{grid-template-rows:70% 30%}.tv-ranking-head,.tv-ranking-row{grid-template-columns:3vw minmax(0,1fr) 7vw 10vw repeat(3,4vw);gap:.5vw;font-size:clamp(.75rem,1.4vw,1.2rem)}.tv-ranking-row{min-height:2.9vh}.tv-qr{width:clamp(90px,17vw,180px)}.tv-qr-brand img{width:3vw}}' +
+    '</style>');
   function syncButton() {
     var on = !!(popup && !popup.closed);
     window._tvLiveWindow = on ? popup : null;
