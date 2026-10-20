@@ -126,8 +126,9 @@
     function fillRect(x, y, w, h, rgb) {
       commands.push(rgb + ' rg ' + x + ' ' + (height-y-h) + ' ' + w + ' ' + h + ' re f');
     }
-    function logo(x, y, w, h) {
-      commands.push('q ' + w + ' 0 0 ' + h + ' ' + x + ' ' + (height-y-h) + ' cm /OfficialLogo Do Q');
+    function logo(x, y, size) {
+      var scale = size / 36;
+      commands.push('q ' + scale + ' 0 0 ' + scale + ' ' + x + ' ' + (height-y-size) + ' cm /OfficialLogo Do Q');
     }
     function box(x, y, w, h) {
       commands.push('0.3 G 0.7 w ' + x + ' ' + (height-y-h) + ' ' + w + ' ' + h + ' re S');
@@ -140,42 +141,24 @@
     return { width:width, height:height, commands:commands, line:line, rect:rect,
       fillRect:fillRect, logo:logo, box:box, write:write };
   }
-  // Rasterização integral de icons/logo-podium.svg, o mesmo arquivo usado na
-  // interface. Gerar novamente com scripts/generate-sumula-logo.py se mudar.
+  // Forma vetorial gerada do SVG canônico no cabeçalho do app (index.html).
+  // Gerar novamente com scripts/generate-sumula-logo.py se o cabeçalho mudar.
   // BEGIN OFFICIAL PDF LOGO
-  var officialLogoWidth = 320, officialLogoHeight = 240;
-  var officialLogoSourceSha256 = 'd2b415a6ddd9eb94c4e5f5fa73741180fa5c9fbb475a6b24fd801e0739ff3d70';
-  var officialLogoRgbZ =
-    'eNrt3d9v1WcdwPF7KMnSmKXRSXTuFOivA5TSnh/GxIgDitEyoYCJNo1Dpy1lLWBSEmhRk0VapSoDJt34ES924QBxIkQvhskY20hM' +
-    '2Q+YCZuXYrLBFjOIN36TY5ouAUP5dhnP93kl73/gec73lefzfM8pVD/YVq2M1ta6qHXpIvsghdhPuh5Msg9SiP3tZ9UTu6vtgxTi' +
-    '8Pzvp2cnGaGlEIfnil8jtBTi8Fzxa4SWAh2ejdBSuMOzEVoKd3g2QktBD89GaCnc4dkILYU7PBuhpaCHZyO0FO7wbISWwh2ejdBS' +
-    '0MOzEVoKd3g2QkvhDs9GaCno4dkILYU7PBuhpXCHZyO0FPTwbISWwh2ejdBSuMOzEVqawR79+rx3n6q6c3r3Ttd+U9X7zVqfoCLv' +
-    'S6X8W7+4Lyy8V8buW/bFRp+dlJRrWPKXnfeHgveFXZ+a39TsU5Mmu/8LrSPf/dy9j/epnrk1uVaflxTWddiFVwr0OuzCKwV6HXbh' +
-    'lQK9DrvwSiFeh114pUCvwy68UqDXYRdeKdDrsAuvFOJ12IVXCvQ67MIrBXodduGVAr0Ou/BKd1jjosUDnbk/bq+5uLv6XwfmhPiX' +
-    'v1NLlpAsJFlOsqiGhU5wZba6fHNy0r0/XhW62dv1wfjsZ7d+Or94sc9aGWv9irqr+zMrd2pX98/pXF7nE1dm2rruoeRsigHv5EG8' +
-    'pTPnc1c2Tt6o8E4Sdgor9OrzzZGMzbccpBfkvdFSwD3T90CceCsd7P2sZ0DhflWU4bfNd1Ky/HpHsMJsS2cuZryVHl/rB9UKsucH' +
-    'a/g9OVjjSVCIvT7ySf0zdLPuHb8X/V8tCrNo3zx/9C10lSdBIQZvJU+C+OVXyqjfWfxKzl9+JX75Fb/8Sln0O4tfyfnLr8Qvv+KX' +
-    'XymLfmfxKzl/+ZX45Vf88ivxy6/EL78Sv/yKX34lfvmV+OVX/PIr8cuvxC+/Er/8il9+JX75lfjlV/zyK/HLr8QvvxK//IpffiV+' +
-    '+ZX45Vcil1/xy6/EL78Sv/yKX34lfvmV+OVX4pdf8cuvxC+/Er/8il9+JX75lfjlV+KXX/HLr8QvvxK//IpfeRLEL78Sv/xK/PIr' +
-    'fvmV+OVX4pdfiV9+xS+/Er/8SvzyK375lfjlV+KXX4lffsUvv/qYmt/a3t03tO/o74+dOffXC2+98vo/gi5ZQrKQZDldm3bOW7qK' +
-    'X36zWq5l5fDo+PmLb4du9na9/No7oweeXVD4Gr/8ZqxVG3rPXricVblTO/vqpfb1Pfzym5m6N+9KzqYY8E4exN19w/zym42TNyq8' +
-    'k4Rn5BQml99PsNqW9kjG5lsO0rmWFfzyG24/HTsUJ95Ku37+DL/8hvtVUYbfNt9JyfKTCYRffoN8bdU3HDPeSl29O/jlN8T2HTnB' +
-    '797Dx/nlN8RO/Pk8v8fOnOOX3xCL9s3zR95CX7jML78hBm8lfvnll19+xS+//Ipffvnll19++eWXX37FL7/8il9++eWXX3L55Zdf' +
-    'fsUvv/zyyy+//PLLL7/il19+xS+//PLLL7/88ssvv+KXX3755Zdffvnll1/xyy+/4pdffvnll19++eWXX/HLL78il19++eVXNPHL' +
-    'L7/il98M+G3Kt23tKJ4ZKL05XLo+Wv7PL8MuWUKykGQ5WzoKjfkCv/xm1W99Y9vTG4s3xoI3e7tujpV/11vKLyzwy2/G/H5rWfHa' +
-    'aGblTu29kfKGZQV++c2M3x89Urw5FgXeyYN42+oiv/xmwG9y8kaFd5LwXZ/C5PJ7j/htaCpEMjbfcpCua+KX34D9Hv1eMU68lQ5t' +
-    'LPLLb6B+m/JtN8bKMftNlp9MIPzyG6LfbaujPnwrDXQU+eU3RL+n+0v8nuov88tviH7/vqvM75vDJX75DdFvtG+ep5ZsAr/8hugX' +
-    '3kr88ssvv/zyyy+//PLLL7/88ssvv/zyyy+//PLLL7/88ssvv/zyyy+//PLLL7/88ssvv/zyyy+//PLLL7/88ssvv/zyyy+/5PLL' +
-    'L7/8il9++eWXX3755Zdffvnll19++eWXX3755Zdffvnll19++eWXX37J5Zdffvnll19++eWXX3755Zdffvnll19++eWXX3755Zdf' +
-    'fvnll1/xyy+//PLLL7/88ssvv/zyyy+//PLLL7/88ssvv/zyyy+//PLLL7n88ssvv+KXX3755Zdffvnll19++eWXX3755Zdffvnl' +
-    'l19++eWXX3755Zdffvnll19++eWXX3755ZdffvnNqt+zFy7D+8Irl9I8e1f3V8H7z31z0uzhtVF4y++OTNvvsTPn+H3u9Itpnr2J' +
-    '3dX8JpuQZg8vDZf4fWOoNN1923fkBL97Dx9P8+w9P1jD78nBmjR7eLqf3/Kp/mmfv12bdvL7nZ4daZ69gc4cv31ratPs4ZaOAr/9' +
-    '3yhOd9/mLV11/uLbMeN9aeJKbUt7mmevYWHz++NRX4GvH6yqzzen2cPGfOHGWNR4P9xTbmgq3MXW/XjPoZj9Do2Op3nwKo1veiBm' +
-    'vwd65qbfw8MbizH7HX+0eHf7lmtZefbVS9G+eX5oyfL0z15dvvnq/jnRvnme39Scfg/rG9veG4n3zfOCxrvfuofXfD/CKfrl195Z' +
-    'ue6H6R+8So8sq49wiv5gfHbn8rqZ2sM1X45xir45Vl7/lULKrevuG06e56jwdvcNzdSD97+XMJ255HmOCu9AZ25m93Db6uLNsbjw' +
-    'bu0ozsjWta/viWSQTsbmFZ0/mNkHr1JyGEUySCdj89qH6z6OPdywrBDJIJ2MzetSn7xT+/yir25/Yv9LE1cyfOw+8eujM3Lnve37' +
-    'hIYlv3ps7vWDVRk+do9u/syM3HlvV21925PdxQ/3ZPnY/e1jpTR33v+3ey3tXb07njxy4rnTL2bgB5bJEpKF7D18/Nu9O1N+VTSN' +
-    'tzH55sfX1v5he83E7uoM/MAyWUKykJODNZvX1qb8qmgaX8w1FQY6in/qL70xVMrADyyTJSQLOdVf7u8oTverov8C0gQU7w==';
+  var officialLogoSourceSha256 = 'b4d9b4333a0b09f5f1f0460ee49d8db61bf7304c8417c46d4bba02a58d963fb9';
+  var officialLogoVector =
+    'MSAwIDAgLTEgMCAzNiBjbQpxCjAuNzk2MDc4IDAuODM1Mjk0IDAuODgyMzUzIHJnIC9hMCBncwo2IDE5LjUgbSAxMC41IDE5LjUg' +
+    'bCAxMS4zMjggMTkuNSAxMiAyMC4xNzIgMTIgMjEgYyAxMiAyOC41IGwgMTIgMjkuMzI4IAoxMS4zMjggMzAgMTAuNSAzMCBjIDYg' +
+    'MzAgbCA1LjE3MiAzMCA0LjUgMjkuMzI4IDQuNSAyOC41IGMgNC41IDIxIGwgNC41IDIwLjE3MgogNS4xNzIgMTkuNSA2IDE5LjUg' +
+    'YyBoCjYgMTkuNSBtIGYKMC45NjA3ODQgMC42MTk2MDggMC4wNDMxMzczIHJnIDE1Ljc1IDEyIG0gMjAuMjUgMTIgbCAyMS4wNzgg' +
+    'MTIgMjEuNzUgMTIuNjcyIDIxLjc1IDEzLjUgYyAyMS43NSAyOC41IGwgCjIxLjc1IDI5LjMyOCAyMS4wNzggMzAgMjAuMjUgMzAg' +
+    'YyAxNS43NSAzMCBsIDE0LjkyMiAzMCAxNC4yNSAyOS4zMjggMTQuMjUKIDI4LjUgYyAxNC4yNSAxMy41IGwgMTQuMjUgMTIuNjcy' +
+    'IDE0LjkyMiAxMiAxNS43NSAxMiBjIGgKMTUuNzUgMTIgbSBmCjAuOTg0MzE0IDAuNTcyNTQ5IDAuMjM1Mjk0IHJnIDI1LjUgMjIu' +
+    'NSBtIDMwIDIyLjUgbCAzMC44MjggMjIuNSAzMS41IDIzLjE3MiAzMS41IDI0IGMgMzEuNSAyOC41IGwgMzEuNQogMjkuMzI4IDMw' +
+    'LjgyOCAzMCAzMCAzMCBjIDI1LjUgMzAgbCAyNC42NzIgMzAgMjQgMjkuMzI4IDI0IDI4LjUgYyAyNCAyNCAKbCAyNCAyMy4xNzIg' +
+    'MjQuNjcyIDIyLjUgMjUuNSAyMi41IGMgaAoyNS41IDIyLjUgbSBmCjAuOTYwNzg0IDAuNjE5NjA4IDAuMDQzMTM3MyByZyAxOCA2' +
+    'LjYwMiBtIDE4Ljc1IDguNjk5IGwgMjAuODUyIDguNjk5IGwgMTkuMTk5IDEwLjA1MSBsIDE5LjgwMSAxMiBsIDE4IAoxMC44MDEg' +
+    'bCAxNi4xOTkgMTIgbCAxNi44MDEgMTAuMDUxIGwgMTUuMTQ4IDguNjk5IGwgMTcuMjUgOC42OTkgbCBoCjE4IDYuNjAyIG0gZgpR' +
+    'Cg==';
   // END OFFICIAL PDF LOGO
   function binaryFromBase64(value) {
     if (typeof atob === 'function') return atob(value);
@@ -272,7 +255,7 @@
       left, 42, 8, false, 85, '1 1 1');
     p.write('Anote a quadra usada. Após lançar o resultado, cada atleta assina uma vez nesta página.',
       left, 56, portrait ? 6.8 : 8, false, portrait ? 90 : 118, '1 1 1');
-    p.logo(right - 46, 9, 44, 33);
+    p.logo(right - 60, 4, 60);
     p.line(divider, 79, divider, bodyTop + 12*rowHeight, 0.55);
     p.rect(left, top, divider-left-8, 19, 0.92);
     p.rect(divider+8, top, right-divider-8, 19, 0.92);
@@ -377,10 +360,10 @@
     function add(s) { objects.push(s); return objects.length-1; }
     var font = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
     var bold = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
-    var rgb = binaryFromBase64(officialLogoRgbZ);
-    var officialLogo = add('<< /Type /XObject /Subtype /Image /Width ' + officialLogoWidth +
-      ' /Height ' + officialLogoHeight + ' /ColorSpace /DeviceRGB /BitsPerComponent 8' +
-      ' /Filter /FlateDecode /Length ' + rgb.length + ' >>\nstream\n' + rgb + '\nendstream');
+    var vector = binaryFromBase64(officialLogoVector);
+    var officialLogo = add('<< /Type /XObject /Subtype /Form /FormType 1' +
+      ' /BBox [0 0 36 36] /Resources << /ExtGState << /a0 << /CA 1 /ca 1 >> >> >>' +
+      ' /Length ' + vector.length + ' >>\nstream\n' + vector + '\nendstream');
     var tree = add('');
     var pageIds = pages.map(function (page) {
       var stream = page.commands.join('\n') + '\n';

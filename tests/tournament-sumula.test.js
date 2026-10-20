@@ -7,9 +7,10 @@ const fs = require('fs');
 const crypto = require('crypto');
 require('../js/views/tournament-sumula.js');
 const sumulaSource = fs.readFileSync('js/views/tournament-sumula.js', 'utf8');
-const officialSvg = fs.readFileSync('icons/logo-podium.svg');
+const officialSvg = fs.readFileSync('index.html', 'utf8')
+  .match(/<svg width="48" height="48" viewBox="0 0 24 24".*?<\/svg>/s)[0];
 assert(sumulaSource.includes(crypto.createHash('sha256').update(officialSvg).digest('hex')),
-  'a imagem embutida declara o hash do SVG canônico usado pelo app');
+  'o vetor embutido declara o hash do SVG canônico do cabeçalho');
 const detailSource = fs.readFileSync('js/views/tournaments.js', 'utf8');
 assert(detailSource.includes("typeof window._downloadTournamentSumula === 'function' ?"),
   'organizador vê o botão Súmula no bloco de ações do torneio');
@@ -136,9 +137,11 @@ const landscapeWrap = core.makePages(core.collect(t, [{ id:'wrap', category:'Fem
 assert(landscapeWrap.includes('(Maria Eduarda Corazza Pozzi dos Santos de)') &&
   landscapeWrap.includes('(Almeida)'), 'paisagem mantém o nome longo em duas linhas');
 assert(core.makePages(model)[0].commands.some(s => s.includes('/OfficialLogo Do')),
-  'a súmula usa a imagem do logo oficial, sem redesenho manual');
-assert(pdf.toString('latin1').includes('/Subtype /Image /Width 320 /Height 240'),
-  'PDF incorpora a rasterização integral do SVG canônico');
+  'a súmula usa o logo oficial, sem redesenho manual');
+assert(pdf.toString('latin1').includes('/Subtype /Form /FormType 1 /BBox [0 0 36 36]'),
+  'PDF incorpora o SVG do cabeçalho como forma vetorial');
+assert(!pdf.toString('latin1').includes('/Subtype /Image'),
+  'o logo da súmula não é uma imagem rasterizada');
 assert(!sumulaSource.includes('function podiumLogo') && !sumulaSource.includes('fillPolygon'),
   'não mantém estrela ou barras reconstruídas por coordenadas');
 const signatureCommands = core.makePages(longNames)[0].commands.filter(s =>
