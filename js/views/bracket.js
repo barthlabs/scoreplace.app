@@ -3233,7 +3233,7 @@ function renderBracket(container, tournamentId, isInline) {
 
   const _tIdSafe = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 
-  // Action buttons — ordered: Regulamento/Regras, Inscritos, Imprimir, Exportar CSV, Modo TV
+  // Action buttons — ordered: Regulamento/Regras, Inscritos, Imprimir, Exportar CSV
   // On mobile: 2-column grid; on desktop: flex wrap
   const rulesActionLabel = (window._isNeonTournament && window._isNeonTournament(t)) ? 'Regulamento' : 'Regras';
   const actionBtnsHtml = `
@@ -3242,7 +3242,6 @@ function renderBracket(container, tournamentId, isInline) {
       <a href="#participants/${t.id}" class="btn btn-secondary btn-sm hover-lift" style="text-align:center;text-decoration:none;">👥 Inscritos</a>
       ${hasContent ? `<button class="btn btn-secondary btn-sm hover-lift no-print" onclick="window._printTournament('${_tIdSafe}')">🖨️ Imprimir</button>` : '<span></span>'}
       ${hasContent ? `<button class="btn btn-secondary btn-sm hover-lift" onclick="window._exportTournamentCSV('${_tIdSafe}')">📊 CSV</button>` : '<span></span>'}
-      ${hasContent ? `<button class="btn btn-secondary btn-sm hover-lift no-print" onclick="window._tvLiveToggle()">📺 Modo TV</button>` : '<span></span>'}
       ${isOrg && !hasContent ? `<button class="btn btn-primary btn-sm hover-lift" style="grid-column:span 2;" onclick="if(window._handleSortearClick)window._handleSortearClick('${_tIdSafe}',false);else window.generateDrawFunction('${_tIdSafe}')">🎲 Realizar Sorteio</button>` : ''}
       ${/* Reset + Simular fase: SÓ no SB e só pro dev (removidos dos torneios normais). */ ''}
       ${(hasContent && window._isSandboxTournament && window._isSandboxTournament(t) && typeof window._isTestIdentity === 'function' && window._isTestIdentity()) ? `<button class="btn btn-warning btn-sm hover-lift no-print" style="grid-column:span 2;" onclick="window._resetTournamentToEnrollment('${_tIdSafe}')" title="SB: re-sincroniza o roster do original agora e apaga sorteio/resultados/adições de teste">🔄 Resetar (manter inscritos)</button>` : ''}

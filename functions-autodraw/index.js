@@ -3689,7 +3689,9 @@ exports.closeRound = onCall(async (request) => {
 });
 
 // ─── Atribuição de quadra: intenção administrativa estreita ─────────────────
-exports.assignMatchCourt = onCall(async (request) => {
+// O preflight CORS chega sem o ID token; o invoker do Cloud Run precisa admitir
+// essa entrada para que a callable valide login e papel de organizador abaixo.
+exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
   const uid = request.auth && request.auth.uid;
   if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
   const tId = String((request.data && request.data.tournamentId) || '').trim();

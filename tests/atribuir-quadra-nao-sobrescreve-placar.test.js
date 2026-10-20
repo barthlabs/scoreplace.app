@@ -9,6 +9,8 @@ ok(body.includes("_callCF('assignMatchCourt'"), 'atribuição despacha assignMat
 ok(!body.includes('AppStore.mutate') && !body.includes('saveTournament'), 'atribuição não persiste fotografia pelo cliente');
 const cf=fs.readFileSync('functions-autodraw/index.js','utf8');
 ok(cf.includes('exports.assignMatchCourt = onCall') && cf.includes('_isTournamentAdmin(t, uid)'), 'Function exige organização no documento fresco');
+ok(cf.includes("exports.assignMatchCourt = onCall({ invoker: 'public' }") && cf.includes("if (!uid) throw new HttpsError('unauthenticated'"),
+  'preflight CORS alcança a callable, que continua exigindo login');
 ok(cf.includes("const m = drawWindow._findMatch(t, matchId)") && cf.includes('_gravaTorneio(tx, ref, t, antes'), 'Function encontra jogo e grava pelo plano canônico');
 ok(cf.includes('Jogo iniciado ou concluído não pode mudar de quadra.'), 'Function bloqueia alteração de quadra em jogo iniciado ou concluído');
 ok(src.includes('regression_played_match_court_is_immutable') && src.includes('sp-match-court'), 'card mostra a quadra e só libera o seletor em jogo futuro');

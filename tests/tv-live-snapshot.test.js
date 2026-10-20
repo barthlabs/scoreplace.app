@@ -56,4 +56,12 @@ window.open = () => null;
 window.showToast = message => { toast = message; };
 window._tvLiveToggle();
 assert.match(toast, /Permita abrir/, 'popup bloqueado informa o organizador');
+const liveSource = fs.readFileSync(path.join(root, 'js/views/tv-live.js'), 'utf8');
+assert.match(liveSource, /id=\\?"tv-fullscreen-action/, 'janela NO AR oferece entrada em tela cheia na própria janela');
+assert.match(liveSource, /root\.requestFullscreen\(\)/, 'tela cheia é acionada pela janela que será exibida na TV');
+assert.match(liveSource, /html:fullscreen #tv-fullscreen-action\{display:none\}/, 'controle some da saída limpa');
+assert.doesNotMatch(fs.readFileSync(path.join(root, 'js/views/tournaments.js'), 'utf8'), /window\._tvMode\(/,
+  'ficha do torneio não exibe mais o modo antigo');
+assert.doesNotMatch(fs.readFileSync(path.join(root, 'js/views/bracket-ui.js'), 'utf8'), /window\._tvMode =/,
+  'implementação antiga removida');
 console.log('✓ TV: 6 quadras chamadas, relógio, placar ao vivo, 3 resultados e saldo geral por time');

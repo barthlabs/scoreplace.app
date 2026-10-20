@@ -3951,7 +3951,6 @@ function renderTournaments(container, tournamentId = null) {
                      <button class="btn btn-outline btn-sm hover-lift" onclick="window.location.hash='#participants/${t.id}'">👥 Inscritos</button>
                      <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._printTournament('${t.id}')">🖨️ Imprimir</button>
                      <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._exportTournamentCSV('${t.id}')">📊 Exportar CSV</button>
-                     <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._tvMode('${t.id}')">📺 Modo TV</button>
                      ${isOrg && typeof window._downloadTournamentSumula === 'function' ? `<button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation();window._downloadTournamentSumula('${_escAttr(t.id)}', 'both')">📋 Súmulas</button><button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation();window._downloadTournamentSumula('${_escAttr(t.id)}', 'landscape', true)">📋 Presença</button>` : ''}
                    </div>
                  `;
@@ -3967,7 +3966,6 @@ function renderTournaments(container, tournamentId = null) {
                      <button class="btn btn-outline btn-sm hover-lift" onclick="window.location.hash='#participants/${t.id}'">👥 Inscritos</button>
                      <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._printTournament('${t.id}')">🖨️ Imprimir</button>
                      <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._exportTournamentCSV('${t.id}')">📊 Exportar CSV</button>
-                     <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._tvMode('${t.id}')">📺 Modo TV</button>
                      ${isOrg && typeof window._downloadTournamentSumula === 'function' ? `<button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation();window._downloadTournamentSumula('${_escAttr(t.id)}', 'both')">📋 Súmulas</button><button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation();window._downloadTournamentSumula('${_escAttr(t.id)}', 'landscape', true)">📋 Presença</button>` : ''}
                    </div>
                  `;
@@ -4423,7 +4421,7 @@ function renderTournaments(container, tournamentId = null) {
                 <button class="btn btn-purple hover-lift" onclick="event.stopPropagation(); window.location.hash='#comunicados/${t.id}'">📢 Comunicados</button>
                 ${addParticipantBtns}
                 ${isOrg && !hasDraw && t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint ? `<button class="btn btn-indigo hover-lift" onclick="event.stopPropagation(); window._openTournamentClaimLink('${_escAttr(t.id)}', ${window._isSandboxTournament && window._isSandboxTournament(t) ? 'true' : 'false'})">🔗 Vincular contas às vagas</button>` : ''}
-                ${/* v1.9.98: CSV removido daqui — já está no grid de ações geral do organizador (Regras/Inscritos/Imprimir/CSV/Modo TV). Evita duplicação. */ ''}
+                ${/* v1.9.98: CSV removido daqui — já está no grid de ações geral do organizador (Regras/Inscritos/Imprimir/CSV). Evita duplicação. */ ''}
                 ${isOrg ? `<button class="btn btn-tool-amber hover-lift" onclick="event.stopPropagation(); window._saveAsTemplate('${t.id}')">💾 ${window._t ? window._t('btn.saveTemplate') : 'Salvar como Template'}</button>` : ''}
                 ${categoriasBtn}
                 ${enrollmentReportBtn}
@@ -4488,7 +4486,7 @@ function renderTournaments(container, tournamentId = null) {
                   só pra inscrito comum (autoridade marca pela chamada). */ ''}
             ${(tournamentId && typeof window._myPresenceCard === 'function') ? window._myPresenceCard(t) : ''}
 
-            ${/* v2.1.13: ações gerais (Regras/Inscritos/Imprimir/CSV/Modo TV + pódio
+            ${/* v2.1.13: ações gerais (Regras/Inscritos/Imprimir/CSV + pódio
                   quando encerrado) movidas pra DEPOIS das Ferramentas do Organizador,
                   ficando no pé do card. */ ''}
             ${actionsHtml}

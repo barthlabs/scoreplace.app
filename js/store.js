@@ -4689,11 +4689,6 @@ window._softRefreshView = function() {
   var openModal = document.querySelector('.modal-overlay.active') ||
                   document.getElementById('qr-modal-overlay') ||
                   document.getElementById('player-stats-overlay') ||
-                  // v3.0.x: era querySelector('.tv-overlay') — classe que NÃO existe;
-                  // o elemento é id="tv-mode-overlay". Sem isto, um snapshot do Firestore
-                  // disparava _softRefreshView → initRouter → _dismissAllOverlays e fechava
-                  // o Modo TV sozinho (resultado lançado em outro device, poller da Liga).
-                  document.getElementById('tv-mode-overlay') ||
                   document.getElementById('live-scoring-overlay') ||
                   document.getElementById('casual-match-overlay') ||
                   document.getElementById('unified-resolution-panel') ||
@@ -5707,7 +5702,6 @@ window._dismissAllOverlays = function(opts) {
 
   // 1. Named overlays (fast path — always remove unless kept).
   var overlayIds = [
-    'tv-mode-overlay',
     'set-scoring-overlay',
     'qr-modal-overlay',
     'player-stats-overlay',

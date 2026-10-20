@@ -447,7 +447,6 @@ function setupHelpModal() {
           '<p><b>Exportar CSV</b> — Baixe resultados em planilha.</p>' +
           '<p><b>Salvar Template</b> — Salve configurações para reusar em futuros torneios.</p>' +
           '<p><b>QR Code</b> — Gere QR para projetar no evento.</p>' +
-          '<p><b>Modo TV</b> — Projete placar ao vivo em telão (fullscreen, auto-refresh 30s).</p>' +
           '<p><b>Apagar Torneio</b> — Remove permanentemente o torneio e todos os dados. Disponível apenas para o criador original (co-organizadores não têm acesso). Requer confirmação dupla — a operação não tem desfazer.</p>' +
         '</div>' +
         '<div style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.15);border-radius:10px;padding:12px;margin-bottom:12px;">' +
@@ -525,7 +524,6 @@ function setupHelpModal() {
         '</div>' +
         '<div style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:10px;padding:12px;">' +
           '<div style="font-weight:700;font-size:0.85rem;color:var(--text-bright);margin-bottom:8px;">Ferramentas</div>' +
-          '<p><b>Modo TV</b> — Fullscreen para projetar em telão. Auto-refresh 30s. Sair com ESC.</p>' +
           '<p><b>Imprimir</b> — CSS otimizado para impressão (paisagem, bordas, fundo branco).</p>' +
           '<p><b>Exportar CSV</b> — Classificação ou resultados em planilha.</p>' +
           '<p><b>Compartilhar resultado</b> — Cada partida tem botão de compartilhar (WhatsApp/clipboard).</p>' +
@@ -1053,7 +1051,6 @@ function setupHelpModal() {
             '• <b>Exportar CSV</b> — Excel / Google Sheets<br>' +
             '• <b>Ordenar colunas</b> — Clique nos cabeçalhos<br>' +
             '• <b>Compartilhar resultado</b> — WhatsApp / clipboard<br>' +
-            '• <b>Modo TV</b> — Telão fullscreen, auto-refresh 30s<br>' +
             '• <b>Placar inline</b> — Digitar direto no card<br>' +
             '• <b>Confirmar placar</b> — Registrar resultado<br>' +
             '• <b>Editar resultado</b> — Reabrir campos<br>' +
