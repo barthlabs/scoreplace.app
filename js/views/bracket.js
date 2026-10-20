@@ -11060,8 +11060,10 @@ window._bracketApplyFilter = function () {
   // Limite de subida: nunca passar do container da view (senão, numa busca sem resultado,
   // TUDO seria escondido — inclusive a própria barra de busca, e o dono ficaria preso).
   var root = document.getElementById('view-container') || document.body;
-  var _scheduledPhaseRoot = document.querySelector('[data-bracket-tabs-root][data-bracket-team-schedule="1"]');
-  _bracketReleaseEmptyScheduledPhase(_scheduledPhaseRoot);
+  var _scheduledPhaseRoot = root && root.querySelector
+    ? root.querySelector('[data-bracket-tabs-root][data-bracket-team-schedule="1"]') : null;
+  if (typeof _bracketReleaseEmptyScheduledPhase === 'function')
+    _bracketReleaseEmptyScheduledPhase(_scheduledPhaseRoot);
   var searchEls = [inp, document.getElementById('bracket-search-empty'),
                    document.getElementById('fbwrap-chaves'), document.getElementById('bracket-competitor-index')].filter(Boolean);
   // Container que ABRIGA a barra de busca nunca some (caso inline, em que a chave e a barra
@@ -11253,7 +11255,8 @@ window._bracketApplyFilter = function () {
   // Container sem NENHUM card casando some inteiro (grid, coluna de rodada, box de grupo,
   // <details> de "Demais jogos da rodada"…). Com filtro limpo, todos voltam.
   for (var k = 0; k < conts.length; k++) setDisp(conts[k], contHasHit[k]);
-  _bracketSyncEmptyScheduledPhase(_scheduledPhaseRoot);
+  if (typeof _bracketSyncEmptyScheduledPhase === 'function')
+    _bracketSyncEmptyScheduledPhase(_scheduledPhaseRoot);
   // O contador do <details> é a QUANTIDADE DA SEÇÃO, não a quantidade temporariamente
   // visível pela busca. "Demais jogos da rodada (N)" responde quantos jogos existem
   // ali; trocar por (0) ao buscar Jogador X fazia parecer que não havia mais jogos.
