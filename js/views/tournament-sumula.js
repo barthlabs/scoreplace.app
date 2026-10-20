@@ -45,10 +45,22 @@
     var n = Number(m.scheduledGameNumber || m.number || m.matchNumber || m._gameNum);
     return Number.isFinite(n) && n > 0 ? n : null;
   }
+  function scoringFor(t) {
+    var defaults = typeof root._sportScoringDefaultsMap === 'function'
+      ? root._sportScoringDefaultsMap() : {};
+    var scoring = t.scoring || (t.phases && t.phases[0] && t.phases[0].scoring)
+      || defaults[t.sport] || defaults._default || {};
+    var setsToWin = Math.max(1, Math.min(3, parseInt(scoring.setsToWin, 10) || 1));
+    return {
+      slots: Math.min(5, 2 * setsToWin - 1),
+      gamesPerSet: Math.max(1, parseInt(scoring.gamesPerSet, 10) || 6),
+      type: text(scoring.type)
+    };
+  }
   function collect(t, allMatches) {
     var seen = new Set();
     var matches = (allMatches || []).filter(function (m) {
-      if (!m || m.isBye || m.isSitOut || !m.court || !m.scheduledAt || !localDay(m.scheduledAt)) return false;
+      if (!m || m.isBye || m.isSitOut || !m.scheduledAt || !localDay(m.scheduledAt)) return false;
       var key = text(m.id) || [m.scheduledAt, m.court, m.p1, m.p2].join('|');
       if (seen.has(key)) return false;
       seen.add(key);
@@ -57,6 +69,7 @@
       return {
         id: text(m.id), day: localDay(m.scheduledAt), time: localTime(m.scheduledAt), at: timestamp(m.scheduledAt),
         court: text(m.court), number: matchNumber(m), category: text(m.category || m.categoryName),
+        group: text(m.groupName || m.groupLabel || (typeof m.group === 'string' ? m.group : '')),
         round: m.round == null ? '' : String(m.round),
         p1: displaySide(t, m, 'p1'), p2: displaySide(t, m, 'p2'),
         team1: teamName(t, m, 'p1'), team2: teamName(t, m, 'p2'),
@@ -67,7 +80,8 @@
     });
     var days = [];
     matches.forEach(function (m) { if (days.indexOf(m.day) < 0) days.push(m.day); });
-    return { tournament: text(t.name || t.title || 'Torneio'), matches: matches, days: days };
+    return { tournament: text(t.name || t.title || 'Torneio'), matches: matches, days: days,
+      scoring: scoringFor(t) };
   }
   function attendance(model, day) {
     var first = new Map();
@@ -110,42 +124,135 @@
     function rect(x, y, w, h, fill) {
       commands.push((fill == null ? '0.95' : fill) + ' g ' + x + ' ' + (height-y-h) + ' ' + w + ' ' + h + ' re f');
     }
+    function fillRect(x, y, w, h, rgb) {
+      commands.push(rgb + ' rg ' + x + ' ' + (height-y-h) + ' ' + w + ' ' + h + ' re f');
+    }
+    function fillPolygon(points, rgb) {
+      if (!points.length) return;
+      var path = points.map(function (point, i) {
+        return point[0] + ' ' + (height-point[1]) + (i ? ' l' : ' m');
+      }).join(' ');
+      commands.push(rgb + ' rg ' + path + ' h f');
+    }
     function box(x, y, w, h) {
       commands.push('0.3 G 0.7 w ' + x + ' ' + (height-y-h) + ' ' + w + ' ' + h + ' re S');
     }
-    function write(value, x, y, size, bold, maxChars) {
+    function write(value, x, y, size, bold, maxChars, rgb) {
       var str = latin(value);
       if (maxChars && str.length > maxChars) str = str.slice(0, maxChars - 3) + '...';
-      commands.push('0 g BT /F' + (bold ? '2' : '1') + ' ' + (size || 9) + ' Tf 1 0 0 1 ' + x + ' ' + (height-y) + ' Tm ' + pdfString(str) + ' Tj ET');
+      commands.push((rgb || '0 0 0') + ' rg BT /F' + (bold ? '2' : '1') + ' ' + (size || 9) + ' Tf 1 0 0 1 ' + x + ' ' + (height-y) + ' Tm ' + pdfString(str) + ' Tj ET');
     }
-    return { width:width, height:height, commands:commands, line:line, rect:rect, box:box, write:write };
+    return { width:width, height:height, commands:commands, line:line, rect:rect,
+      fillRect:fillRect, fillPolygon:fillPolygon, box:box, write:write };
   }
-  function courtPage(model, day, court, matches, part, total) {
-    var p = pdfPage(595, 842), x = 32;
-    p.write('SÚMULA DE QUADRA', x, 40, 17, true);
-    p.write(model.tournament, x, 61, 10, false, 88);
-    p.write('Dia ' + dayLabel(day) + '   |   ' + court + (total > 1 ? '   |   Folha ' + part + '/' + total : ''), x, 82, 12, true, 85);
-    p.line(x, 92, 563, 92, 0.2);
-    var row = Math.min(72, Math.floor(684 / Math.max(1, matches.length)));
-    matches.forEach(function (m, i) {
-      var top = 104 + i * row;
-      if (i % 2 === 0) p.rect(x, top-5, 531, row-2, 0.97);
-      p.write('JOGO ' + (m.number || '-') + '  ' + m.time + '  ' + (m.category || '') + (m.round ? '  R' + m.round : ''), x+5, top+7, 8, true, 95);
-      p.write(m.team1 || ' ', x+5, top+20, 7, true, 36);
-      p.write(m.team2 || ' ', x+302, top+20, 7, true, 36);
-      (members(m.p1).length ? members(m.p1) : [m.p1]).slice(0, 2).forEach(function (s, j) { p.write(s, x+5, top+33+j*13, 8, false, 39); });
-      (members(m.p2).length ? members(m.p2) : [m.p2]).slice(0, 2).forEach(function (s, j) { p.write(s, x+302, top+33+j*13, 8, false, 39); });
-      p.write('SETS', x+240, top+20, 7, true);
-      for (var s = 0; s < 3; s++) {
-        p.write(String(s+1), x+235+s*21, top+29, 7);
-        p.box(x+231+s*21, top+32, 18, 15);
-        p.box(x+231+s*21, top+48, 18, 15);
-      }
-      p.line(x, top+row-3, 563, top+row-3, 0.7);
+  function podiumLogo(p, x, y) {
+    p.fillRect(x, y + 22, 12, 23, '0.796 0.835 0.882');
+    p.fillRect(x + 16, y + 7, 12, 38, '0.961 0.620 0.043');
+    p.fillRect(x + 32, y + 29, 12, 16, '0.984 0.573 0.235');
+    p.fillPolygon([[x+22,y],[x+25,y+7],[x+32,y+7],[x+27,y+11],
+      [x+29,y+18],[x+22,y+14],[x+15,y+18],[x+17,y+11],
+      [x+12,y+7],[x+19,y+7]], '0.961 0.620 0.043');
+  }
+  function uniqueAthletes(matches) {
+    var found = new Map();
+    matches.forEach(function (m) {
+      [['p1','uids1'],['p2','uids2']].forEach(function (side) {
+        var names = members(m[side[0]]), uids = m[side[1]] || [];
+        names.forEach(function (name, i) {
+          var key = text(uids[i]) ? 'uid:' + text(uids[i])
+            : 'name:' + name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
+          if (!found.has(key)) found.set(key, name);
+        });
+      });
     });
-    p.write('Anotações / ocorrências:', x, 805, 8, true);
-    p.line(145, 807, 563, 807);
-    p.write('scoreplace.app  |  Gerado da grade publicada', x, 826, 7);
+    return Array.from(found.values()).sort(function (a,b) { return a.localeCompare(b, 'pt-BR', { sensitivity:'base' }); });
+  }
+  function splitLabel(value, limit) {
+    var label = text(value);
+    if (label.length <= limit) return [label];
+    var cut = label.lastIndexOf(' ', limit);
+    if (cut < Math.floor(limit * 0.55)) cut = limit;
+    var tail = label.slice(cut).trim();
+    return [label.slice(0, cut).trim(), tail];
+  }
+  function writeSide(p, team, names, x, top, width, portrait) {
+    var limit = portrait ? Math.max(12, Math.floor(width / 4.1)) : Math.max(16, Math.floor(width / 4.2));
+    p.write(team || '', x + 3, top + 8, 6.5, false, limit, '0.32 0.40 0.48');
+    var people = members(names);
+    if (!people.length) people = [names];
+    people.slice(0, 2).forEach(function (name, i) {
+      if (!portrait) {
+        p.write(name, x + 3, top + 19 + 11*i, 8, true, limit);
+      } else {
+        var chunks = splitLabel(name, limit);
+        var y = top + 19 + 17*i;
+        p.write(chunks[0], x + 3, y, 7, true, limit);
+        if (chunks[1]) p.write(chunks[1], x + 3, y + 7, 6.5, true, limit);
+      }
+    });
+  }
+  // Uma página por categoria e dia, no máximo 12 jogos. A quadra é escrita na chamada.
+  function scorePage(model, day, category, matches, part, total, orientation) {
+    var portrait = orientation === 'portrait';
+    var p = portrait ? pdfPage(595, 842) : pdfPage(842, 595);
+    var left = portrait ? 18 : 20, right = p.width - left;
+    var divider = portrait ? 397 : 559, top = 86, bodyTop = 105;
+    var rowHeight = portrait ? 54 : 36;
+    var slots = model.scoring && model.scoring.slots || 1;
+    var gamesPerSet = model.scoring && model.scoring.gamesPerSet || 6;
+    var gameLabel = slots === 1 ? '1 set de ' + gamesPerSet + ' games' : 'melhor de ' + slots + ' sets';
+    p.fillRect(0, 0, p.width, 69, '0.071 0.133 0.220');
+    p.write(model.tournament + '  |  ' + category, left, 25, portrait ? 11 : 13, true,
+      portrait ? 56 : 83, '1 1 1');
+    p.write(dayLabel(day) + '  |  ' + gameLabel + '  |  Página ' + part + '/' + total,
+      left, 42, 8, false, 85, '1 1 1');
+    p.write('Anote a quadra usada. Após lançar o resultado, cada atleta assina uma vez nesta página.',
+      left, 56, portrait ? 6.8 : 8, false, portrait ? 90 : 118, '1 1 1');
+    podiumLogo(p, right - 46, 9);
+    p.line(divider, 79, divider, bodyTop + 12*rowHeight, 0.55);
+    p.rect(left, top, divider-left-8, 19, 0.92);
+    p.rect(divider+8, top, right-divider-8, 19, 0.92);
+    var hourX = left + (portrait ? 22 : 24);
+    var courtX = left + (portrait ? 59 : 64);
+    var namesX = left + (portrait ? 99 : 111);
+    var contentRight = divider - 8;
+    var scoreWidth = slots === 1 ? (portrait ? 61 : 69) : Math.min(154, slots*29 + 6);
+    var sideWidth = (contentRight - namesX - scoreWidth) / 2;
+    var scoreX = namesX + sideWidth, secondX = scoreX + scoreWidth;
+    p.write('Nº', left+3, top+13, 7, true);
+    p.write('Hora', hourX+3, top+13, 7, true);
+    p.write('Quadra', courtX+3, top+13, 7, true);
+    p.write('Placar', scoreX+3, top+13, 7, true);
+    p.write('ASSINATURAS DOS ATLETAS', divider+12, top+13, 7, true);
+    matches.forEach(function (m, i) {
+      var y = bodyTop + i*rowHeight;
+      if (!(i%2)) p.rect(left, y, contentRight-left, rowHeight, 0.97);
+      p.line(left, y+rowHeight, contentRight, y+rowHeight, 0.75);
+      p.write(String(m.number || '-'), left+3, y+rowHeight/2+3, 8, true);
+      p.write(m.time, hourX+3, y+rowHeight/2+3, 7.5);
+      p.line(courtX+7, y+rowHeight-10, namesX-10, y+rowHeight-10, 0.55);
+      writeSide(p, m.team1, m.p1, namesX, y, sideWidth, portrait);
+      writeSide(p, m.team2, m.p2, secondX, y, sideWidth, portrait);
+      var cellWidth = scoreWidth / slots;
+      for (var s=0;s<slots;s++) {
+        var sx = scoreX + s*cellWidth, bw = slots === 1 ? 22 : Math.max(7, Math.floor((cellWidth-12)/2));
+        if (slots > 1) p.write(String(s+1), sx+cellWidth/2-2, y+9, 6, true);
+        p.box(sx+3, y+rowHeight-27, bw, 19);
+        p.write('x', sx+cellWidth/2-2, y+rowHeight-13, 7, true);
+        p.box(sx+cellWidth-bw-3, y+rowHeight-27, bw, 19);
+      }
+    });
+    var people = uniqueAthletes(matches);
+    var step = Math.min(24, (12*rowHeight-14) / Math.max(1, people.length));
+    people.forEach(function (name, i) {
+      var y = bodyTop + 11 + i*step;
+      var limit = portrait ? 22 : 29;
+      var labels = step < 16 ? [name] : splitLabel(name, limit);
+      p.write(labels[0], divider+12, y, portrait ? 6.3 : (step < 12 ? 6.3 : 7), false, limit);
+      if (labels[1]) p.write(labels[1], divider+12, y+7, portrait ? 6 : 6.4, false, limit);
+      p.line(divider + (portrait ? 106 : 141), y+3, right-3, y+3, 0.45);
+    });
+    p.write('scoreplace.app  |  Súmula da grade atual; a quadra prevista pode mudar.', left, p.height-24, 7);
     return p;
   }
   function attendancePage(model, day, rows, part, total) {
@@ -170,20 +277,33 @@
     p.write('scoreplace.app  |  Gerado da grade publicada', x, 583, 7);
     return p;
   }
-  function makePages(model) {
+  function makePages(model, options) {
+    options = options || {};
+    var orientation = options.orientation === 'portrait' ? 'portrait' : 'landscape';
+    var pages = [];
+    var categories = Array.from(new Set(model.matches.map(function (m) {
+      return m.category || 'Sem categoria';
+    })));
+    categories.forEach(function (category) {
+      var chunks = [];
+      model.days.forEach(function (day) {
+        var matches = model.matches.filter(function (m) {
+          return m.day === day && (m.category || 'Sem categoria') === category;
+        });
+        for (var i=0;i<matches.length;i+=12) chunks.push({ day:day, matches:matches.slice(i,i+12) });
+      });
+      chunks.forEach(function (chunk, index) {
+        pages.push(scorePage(model, chunk.day, category, chunk.matches, index+1, chunks.length, orientation));
+      });
+    });
+    if (options.attendance) pages.push.apply(pages, makeAttendancePages(model));
+    return pages;
+  }
+  function makeAttendancePages(model) {
     var pages = [];
     model.days.forEach(function (day) {
-      var dayMatches = model.matches.filter(function (m) { return m.day === day; });
-      var courts = [];
-      dayMatches.forEach(function (m) { if (courts.indexOf(m.court) < 0) courts.push(m.court); });
-      courts.sort(function (a, b) { return a.localeCompare(b, 'pt-BR', { numeric:true }); });
-      courts.forEach(function (court) {
-        var matches = dayMatches.filter(function (m) { return m.court === court; });
-        var parts = Math.ceil(matches.length/10);
-        for (var i=0;i<parts;i++) pages.push(courtPage(model, day, court, matches.slice(i*10, (i+1)*10), i+1, parts));
-      });
-      var rows = attendance(model, day), total = Math.max(1, Math.ceil(rows.length/22));
-      for (var j=0;j<total;j++) pages.push(attendancePage(model, day, rows.slice(j*22, (j+1)*22), j+1, total));
+      var rows = attendance(model, day), total = Math.max(1, Math.ceil(rows.length / 22));
+      for (var i = 0; i < total; i++) pages.push(attendancePage(model, day, rows.slice(i * 22, (i + 1) * 22), i + 1, total));
     });
     return pages;
   }
@@ -213,10 +333,10 @@
     for (var b=0;b<output.length;b++) bytes[b] = output.charCodeAt(b) & 255;
     return bytes;
   }
-  function filename(model) {
-    return 'sumula-' + model.tournament.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0,45) + '.pdf';
+  function filename(model, orientation, onlyAttendance) {
+    return (onlyAttendance ? 'presenca-' : 'sumula-') + model.tournament.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0,45) + (onlyAttendance ? '' : '-' + (orientation === 'portrait' ? 'vertical' : 'horizontal')) + '.pdf';
   }
-  function download(id) {
+  function download(id, orientation, onlyAttendance) {
     var t = root._findTournamentById && root._findTournamentById(id);
     if (!t) return;
     var authorized = typeof root._souOrganizador === 'function' ? root._souOrganizador(t)
@@ -225,16 +345,17 @@
     var list = typeof root._collectAllMatches === 'function' ? root._collectAllMatches(t) : (t.matches || []);
     var model = collect(t, list);
     if (!model.matches.length) {
-      if (typeof root.showNotification === 'function') root.showNotification('Súmula indisponível', 'Não há jogos com dia, hora e quadra definidos.', 'warning');
+      if (typeof root.showNotification === 'function') root.showNotification('Súmula indisponível', 'Não há jogos com dia e hora definidos.', 'warning');
       return;
     }
-    var bytes = encodePdf(makePages(model));
+    orientation = orientation === 'portrait' ? 'portrait' : 'landscape';
+    var bytes = encodePdf(onlyAttendance ? makeAttendancePages(model) : makePages(model, { orientation:orientation }));
     var url = URL.createObjectURL(new Blob([bytes], { type:'application/pdf' }));
     var anchor = document.createElement('a');
-    anchor.href = url; anchor.download = filename(model); anchor.style.display = 'none';
+    anchor.href = url; anchor.download = filename(model, orientation, onlyAttendance); anchor.style.display = 'none';
     document.body.appendChild(anchor); anchor.click(); anchor.remove();
     setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
   }
-  root.ScoreplaceSumula = { collect:collect, attendance:attendance, makePages:makePages, encodePdf:encodePdf, filename:filename };
+  root.ScoreplaceSumula = { collect:collect, attendance:attendance, makePages:makePages, makeAttendancePages:makeAttendancePages, encodePdf:encodePdf, filename:filename };
   root._downloadTournamentSumula = download;
 })(typeof window !== 'undefined' ? window : globalThis);
