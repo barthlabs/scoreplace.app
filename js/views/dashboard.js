@@ -64,6 +64,14 @@ window._dashboardSelectNextMatch = function(entries) {
   representatives.sort(window._dashboardNextMatchCompare);
   return representatives[0] || null;
 };
+window._dashboardUpcomingCards = function(entries, limit) {
+  var first = window._dashboardSelectNextMatch(entries);
+  if (!first) return [];
+  // Depois do primeiro, jogos da mesma chave também podem preencher colunas
+  // largas: é a fila do participante, não uma lista de torneios distintos.
+  return [first].concat((entries || []).filter(function (entry) { return entry !== first; })
+    .sort(window._dashboardNextMatchCompare).slice(0, Math.max(0, (limit || 1) - 1)));
+};
 
 // A tela só solicita o fecho. O servidor decide pelo documento fresco, calcula
 // a classificação e registra a notificação; nunca mutar/persistir durante render.
@@ -2899,13 +2907,16 @@ function renderDashboard(container) {
     }
 
     // A primeira posição continua sendo o jogo mais imediato. Em painéis largos,
-    // os dois seguintes usam as colunas que antes ficavam vazias.
+    // os dois seguintes usam as colunas que antes ficavam vazias. O pedido da
+    // dashboard do Neon inclui expressamente jogos SEGUINTES do mesmo torneio:
+    // a regra antiga de um card por torneio continua apenas para escolher o
+    // primeiro, e não limita os cards extras.
     var allUpcoming = [];
     noResult.forEach(function(i) { allUpcoming.push({ item: i, canLaunch: true }); });
     upcoming.forEach(function(i) { allUpcoming.push({ item: i, canLaunch: false }); });
-    var _ngEntry = window._dashboardSelectNextMatch(allUpcoming);
-    var _ngExtras = allUpcoming.filter(function (entry) { return entry !== _ngEntry; })
-      .sort(window._dashboardNextMatchCompare).slice(0, 2);
+    var _ngCards = window._dashboardUpcomingCards(allUpcoming, 3);
+    var _ngEntry = _ngCards[0];
+    var _ngExtras = _ngCards.slice(1);
 
     if (_ngEntry) {
       var _ng = _ngEntry.item;
@@ -2987,7 +2998,7 @@ function renderDashboard(container) {
         var timeline = tournament && typeof window._matchCardTimelineTextHtml === 'function'
           ? window._matchCardTimelineTextHtml(tournament, match) : '';
         _upHtml += '<div data-mr-card="1" class="sp-dashboard-next-extra" style="min-width:0;">' +
-          (item.tName !== _ng.tName ? '<div style="font-size:.72rem;font-weight:800;color:var(--sp-c-a5b4fc,#a5b4fc);margin-bottom:5px;">' + _sf(item.tName) + '</div>' : '') +
+          '<div style="font-size:.72rem;font-weight:800;color:var(--sp-c-a5b4fc,#a5b4fc);margin-bottom:5px;">' + _sf(item.tName) + '</div>' +
           _miniBracketCard(item, entry.canLaunch, {
             hideFaseHeader: true,
             boxLabelOverride: gameLabel,

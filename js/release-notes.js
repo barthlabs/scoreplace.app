@@ -1,4 +1,5 @@
-// 2.4.132 — Atualização consolidada de produção com as correções validadas desde a última publicação.
+// 2.4.132 — Busca mais larga na chave em tela ampla e vários próximos jogos
+// no painel quando a largura disponível permite.
 // 2.4.131 — Nas abas por data do Neon, a chave deixa de mostrar uma fase e
 // rodadas vazias abaixo dos jogos. A classificação e os jogos continuam visíveis.
 // 2.4.130 — Atualização consolidada de produção com as correções validadas desde a última publicação.

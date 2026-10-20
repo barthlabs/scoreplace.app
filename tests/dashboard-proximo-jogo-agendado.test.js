@@ -16,6 +16,7 @@ vm.runInNewContext(source.slice(start, end), context);
 const compare = context.window._dashboardNextMatchCompare;
 const within = context.window._dashboardWithinTournamentCompare;
 const selectNext = context.window._dashboardSelectNextMatch;
+const upcomingCards = context.window._dashboardUpcomingCards;
 const entry = (m, tId) => ({ item: { m, tId } });
 const friday = entry({ id: 'neon-friday', round: 1, _gameNum: 20,
   p1: 'Dupla A', p2: 'Dupla B', scheduledAt: '2026-10-23T18:00:00-03:00', scheduledKind: 'organizer' }, 'neon');
@@ -52,6 +53,13 @@ for (const order of [
   [firstT1, secondT1, firstT2], [firstT1, firstT2, secondT1]
 ]) assert.equal(selectNext(order), firstT2,
   'três jogos de dois torneios escolhem o mesmo representante em qualquer ordem de entrada');
+const neonSecond = entry({ id: 'neon-r7', round: 7, _gameNum: 86,
+  p1: 'Dupla A', p2: 'Dupla C', scheduledAt: '2026-10-23T21:30:00-03:00' }, 'neon');
+const neonThird = entry({ id: 'neon-r8', round: 8, _gameNum: 92,
+  p1: 'Dupla A', p2: 'Dupla D', scheduledAt: '2026-10-23T22:05:00-03:00' }, 'neon');
+assert.equal(upcomingCards([neonThird, confra, neonSecond, friday], 3).map(e => e.item.m.id).join(','),
+  'neon-friday,neon-r7,neon-r8',
+  'painel largo mostra os três próximos jogos do Neon, inclusive do mesmo torneio');
 assert.equal([entry({ id: 'loser', round: 1, p1: 'Dupla A', p2: 'Perdedor do jogo 186' }), readyNoDate].sort(compare)[0], readyNoDate,
   'slot do perdedor de outra partida também não é adversário definido');
 const navStart = tournamentSource.indexOf('window._nextParticipantTournamentMatchTarget = function');
@@ -69,4 +77,4 @@ const tournament = { matches: [
 ] };
 assert.equal(tournamentContext.window._nextParticipantTournamentMatchTarget(tournament).matchId,
   'neon-friday', 'entrada genérica no torneio escolhe o mesmo próximo jogo datado');
-console.log('✓ dashboard-proximo-jogo-agendado: 12 cenários');
+console.log('✓ dashboard-proximo-jogo-agendado: 13 cenários');
