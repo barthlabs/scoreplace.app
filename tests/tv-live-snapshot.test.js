@@ -4,6 +4,7 @@ const vm = require('node:vm');
 const path = require('node:path');
 const root = path.join(__dirname, '..');
 const window = { _collectAllMatches: t => t.matches, _tourLogoSrc: t => t.logo,
+  addEventListener() {},
   location: { origin: 'https://scoreplace.app' },
   _tournamentUrl: id => `https://scoreplace.app/#tournaments/${id}`,
   _qrCodeUrl: url => `https://qr.example/?data=${encodeURIComponent(url)}` };
@@ -32,6 +33,8 @@ const t = { id: 'neon-test', name: 'NEON NIGHTMARE', logo: 'logo.png', courtName
     match(7, 'Quadra 7', 'PHANTOM', 'VORTEX', { winner: 'p2', scoreP1: 1, scoreP2: 6, resultAt: '2026-10-22T19:00:00Z' })
   ] };
 const snapshot = window._tvLiveBuildSnapshot(t, Date.parse('2026-10-22T21:02:10Z'));
+assert.equal(window._tvLiveIsComplete({ ...t, _nJogos: 8 }), false, 'NO AR recusa fotografia com um jogo faltando');
+assert.equal(window._tvLiveIsComplete({ ...t, _nJogos: 7 }), true, 'NO AR aceita os sete IDs canônicos completos');
 const multiPhaseConfig = { enabled:true, aggregation:'per_category', classificationUnit:'pair' };
 const plannedLaterPhase = { enabled:true, aggregation:'overall', classificationUnit:'team',
   schedule:{ enabled:true, modeChosen:true, mode:'structured' } };
@@ -175,8 +178,8 @@ assert.match(tvRoot.innerHTML, /<h2>Quadra 4 · JOGO 1<\/h2><span>Fem Light<\/sp
 assert.match(tvRoot.innerHTML, /class="tv-court-footer"><strong data-tv-start=/,
   'timer aparece sozinho abaixo do confronto');
 assert.doesNotMatch(tvRoot.innerHTML, /ÚLTIMOS 3 RESULTADOS/);
-assert.match(tvRoot.innerHTML, /<article class="tv-court tv-court-latest">/, 'slot da transição mais recente recebe destaque');
-assert.match(tvRoot.innerHTML, /tv-result-left.*tv-result-score.*tv-result-right/, 'resultados exibem times nas pontas e placares no centro');
+assert.match(tvRoot.innerHTML, /<article class="tv-court tv-court-active tv-court-latest">/, 'slot da transição mais recente recebe destaque');
+assert.match(tvRoot.innerHTML, /tv-result-left.*tv-result-side-score.*tv-result-versus">VS.*tv-result-right/, 'resultados exibem placares dentro dos boxes e VS entre eles');
 assert.match(tvRoot.innerHTML, /<span>GAMES<\/span><span class="tv-win">V<\/span><span class="tv-loss">D<\/span><span>J<\/span>/);
 assert.match(tvRoot.innerHTML, /class="tv-ranking-team"[^>]*>VORTEX<\/strong><b>\+8<\/b><span>12 - 4<\/span><span class="tv-win">2<\/span><span class="tv-loss">0<\/span><span>2<\/span>/);
 assert.doesNotMatch(tvRoot.innerHTML, /<h3>Times<\/h3>/, 'classificação geral usa somente o cabeçalho da tabela');
@@ -186,11 +189,11 @@ const childSource = popupHtml.match(/<script>\(function\(\)\{"use strict";[\s\S]
 assert(childSource, 'NO AR inclui um relógio próprio na janela, independente do intervalo da aba');
 const childRoot = { innerHTML: '' };
 const childWarning = { hidden: true };
-const childOwner = { _findTournamentById: () => t, _tvLiveBuildSnapshot: window._tvLiveBuildSnapshot,
+const childOwner = { _findTournamentById: () => t, _tvLiveIsComplete: () => true, _tvLiveBuildSnapshot: window._tvLiveBuildSnapshot,
   _tvLiveBodyHtml: window._tvLiveBodyHtml };
 const childWindow = { opener: childOwner, ScoreplaceMatchTiming: timingCore, __tvParentBeat: 0 };
 let childTick;
-const childDocument = { getElementById: id => id === 'tv-root' ? childRoot : id === 'tv-connection' ? childWarning : null,
+const childDocument = { addEventListener() {}, getElementById: id => id === 'tv-root' ? childRoot : id === 'tv-connection' ? childWarning : null,
   querySelectorAll: () => [] };
 vm.runInNewContext(childSource[0].slice(8, -9), { window: childWindow, document: childDocument,
   setInterval: fn => { childTick = fn; return 1; }, Date, Number });
@@ -206,7 +209,7 @@ window._tvLiveToggle();
 assert.equal(window._tvLiveRefresh, null, 'janela fechada solta o refresh em tempo real');
 const liveSource = fs.readFileSync(path.join(root, 'js/views/tv-live.js'), 'utf8');
 assert.match(liveSource, /id=\\?"tv-fullscreen-action/, 'janela NO AR oferece entrada em tela cheia na própria janela');
-assert.match(liveSource, /root\.requestFullscreen\(\)/, 'tela cheia é acionada pela janela que será exibida na TV');
+assert.match(liveSource, /target\.requestFullscreen\(\)/, 'tela cheia é acionada pela janela que será exibida na TV');
 assert.match(liveSource, /html:fullscreen #tv-fullscreen-action\{display:none\}/, 'controle some da saída limpa');
 assert.doesNotMatch(fs.readFileSync(path.join(root, 'js/views/tournaments.js'), 'utf8'), /window\._tvMode\(/,
   'ficha do torneio não exibe mais o modo antigo');
@@ -236,23 +239,24 @@ vm.runInNewContext(bracketSource.slice(bracketClockStart, bracketClockEnd), {
   Number, String
 });
 const clockHtml = bracketClockWindow._spCourtClockHtml(phaseBase, phaseTournament, clockNow);
-assert.match(clockHtml, /sp-match-phase-call.*Chamado 00:00:45/, 'chave nasce com fase e hora idênticas ao NO AR');
+assert.match(clockHtml, /sp-match-phase-call.*sp-match-clock-label">Chamado<.*sp-match-call-timer[^>]*>00:00:45/, 'chave nasce com fase e hora idênticas ao NO AR');
 assert.doesNotMatch(clockHtml, /Reiniciar etapa do relógio|Próxima etapa do relógio/,
   'sem controles, o relógio não mostra REW nem FF');
 const organizerClockHtml = bracketClockWindow._spCourtClockHtml(phaseBase, phaseTournament, clockNow, 'sb_tour', 'match-1', true);
 const rewPosition = organizerClockHtml.indexOf('Reiniciar etapa do relógio');
-const timerPosition = organizerClockHtml.indexOf('Chamado 00:00:45');
+const labelPosition = organizerClockHtml.indexOf('sp-match-clock-label">Chamado');
 const ffPosition = organizerClockHtml.indexOf('Próxima etapa do relógio');
-assert(rewPosition >= 0 && rewPosition < timerPosition && timerPosition < ffPosition,
-  'no card do organizador: REW, texto do relógio, FF');
+const timerPosition = organizerClockHtml.indexOf('>00:00:45</span>');
+assert(rewPosition >= 0 && rewPosition < labelPosition && labelPosition < ffPosition && ffPosition < timerPosition,
+  'no card do organizador: REW, fase, FF e HH:MM:SS');
 const clockIcons = organizerClockHtml.match(/<svg[^>]*>[\s\S]*?<\/svg>/g) || [];
 assert.equal(clockIcons.length, 2, 'os dois controles usam ícones');
 assert(clockIcons.every(icon => /aria-hidden="true"/.test(icon) && /currentColor/.test(icon) && !/#[0-9a-f]{3,8}/i.test(icon)),
   'ícones decorativos usam a cor do tema');
 const overdueClockHtml = bracketClockWindow._spCourtClockHtml(phaseBase, phaseTournament,
   phaseBase + 210000, 'sb_tour', 'match-1', true);
-assert.match(overdueClockHtml, /sp-match-clock-next[^>]* disabled/,
-  'FF permanece indisponível quando o jogo já está atrasado');
+assert.doesNotMatch(overdueClockHtml, /Próxima etapa do relógio/,
+  'FF desaparece quando o jogo já está atrasado');
 assert(!courtLocked && !okLocked, 'quadra e OK permanecem editáveis durante a chamada');
 for (const [seconds, label, colorClass] of [
   [90, 'Aquecimento 00:00:30', 'sp-match-phase-warmup'],
@@ -261,7 +265,7 @@ for (const [seconds, label, colorClass] of [
 ]) {
   clockNow = phaseBase + seconds * 1000;
   clockTick();
-  assert.equal(clockNode.textContent, label, 'chave atualiza ' + label);
+  assert.equal(clockNode.textContent, label.split(' ').at(-1), 'chave atualiza ' + label);
   assert(clockClasses.has(colorClass), 'chave atualiza a cor para ' + colorClass);
 }
 assert(courtLocked && okLocked, 'quadra e OK deixam de ser controles ao iniciar aquecimento');

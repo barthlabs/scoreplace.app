@@ -40,7 +40,7 @@
     if (action === 'next') {
       target = current === 'call' ? (timing.warmup ? 'warmup' : 'game')
         : current === 'warmup' ? 'game'
-        : current === 'game' && timing.game ? 'overdue' : current;
+        : current;
     } else if (action === 'restart') {
       if (current === 'overdue') target = 'game';
     } else throw new Error('Ação do relógio inválida.');

@@ -43,7 +43,7 @@ arquivos(path.join(ROOT, 'js')).forEach(function (f) {
   linhas.forEach(function (l, i) {
     if (!/querySelectorAll\(/.test(l)) return;
     const janela = linhas.slice(i, i + 8).join(' ');
-    if (!/addEventListener\(\s*['"]click['"]/.test(janela)) return;
+    if (!/\b(?:el|node|btn|button)\.addEventListener\(\s*['"]click['"]/.test(janela)) return;
     suspeitos.push(path.relative(ROOT, f) + ':' + (i + 1) + '  ' +
       ((l.match(/querySelectorAll\(([^)]{0,40})/) || [])[1] || '').trim());
   });

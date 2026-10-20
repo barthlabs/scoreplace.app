@@ -2663,7 +2663,8 @@ function renderDashboard(container) {
         // O cartão de próximo jogo e os cartões de resultados são jogos MEUS:
         // participantes podem falar com os envolvidos, e organizadores continuam
         // cobertos pelo mesmo gate canônico. Não reimplementa permissão aqui.
-        var _contato = (typeof window._contactPersonIconHtml === 'function')
+        var _contato = (typeof window._contactPersonIconHtml === 'function' &&
+          !(window._isConcentratedTournament && window._isConcentratedTournament(tRef || item.t || null)))
           ? window._contactPersonIconHtml(tRef || item.t || null, uid, name, { sameGroup: true, dentroDaCaixa: true }) : '';
         if (!_geoMini) {
           return '<div style="display:flex;align-items:center;gap:6px;min-width:0;">' + avatarEl +

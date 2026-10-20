@@ -132,6 +132,44 @@ ok(/_marcaPartesQueFaltam\(t, true\)/.test(srcB),
   'A: a chave declara que recebe documento, nunca cartão-resumo');
 ok(/_splitPub\.partesDe\(t\)/.test(srcB),
   'B: o espectador monta pelas partes canônicas quando o marcador legado faltar');
+// Eco parcial durante a exibição: jogos já pintados não podem desaparecer.
+{
+  const t = magro(); s.AppStore.tournaments = [t]; s.__pediu = [];
+  const originalCreate = s.document.createElement;
+  s.document.createElement = () => ({ style: {}, setAttribute(){}, appendChild(){}, addEventListener(){}, querySelector(){ return null; } });
+  let status = null;
+  const root = {
+    getAttribute(name) { return name === 'data-tournament-id' ? 'T' : null; },
+    querySelector() { return null; }
+  };
+  const c = mkContainer(); c.innerHTML = '<div>JOGO 1</div>';
+  c.querySelector = selector => selector === '[data-bracket-tabs-root]' ? root
+    : selector === '.sp-match-card' ? {} : status;
+  c.insertBefore = node => { status = node; };
+  ok(portao(t, c, 'T') === true, 'A2: eco parcial segura o render');
+  ok(c.innerHTML === '<div>JOGO 1</div>', 'A2: conserva a grade completa durante a recuperação');
+  ok(status && /Atualizando/.test(status.textContent), 'A2: informa que os jogos estão sendo atualizados');
+  root._bracketGeneralEntries = [{ card: { isConnected: true } }];
+  c.querySelector = selector => selector === '[data-bracket-tabs-root]' ? root
+    : selector === '.sp-match-card' ? null : status;
+  ok(portao(t, c, 'T') === true && c.innerHTML === '<div>JOGO 1</div>',
+     'A2: preserva a Geral mesmo quando os cards foram movidos para fora da navegação');
+  const originalFindRoots = s.document.querySelectorAll;
+  root._bracketCardsScope = c;
+  s.document.querySelectorAll = () => [root];
+  c.querySelector = selector => selector === '[data-bracket-tabs-root]' ? null
+    : selector === '.sp-match-card' ? null : status;
+  ok(portao(t, c, 'T') === true && c.innerHTML === '<div>JOGO 1</div>',
+     'A2: reconhece a barra de abas irmã do contêiner da chave');
+  s.document.querySelectorAll = originalFindRoots;
+  c.querySelector = selector => selector === '[data-bracket-tabs-root]' ? root
+    : selector === '.sp-match-card' ? null : status;
+  s.AppStore._partesEmErro.T = true;
+  ok(portao(t, c, 'T') === true && c.innerHTML === '<div>JOGO 1</div>',
+     'A2: erro de hidratação também conserva a grade visível');
+  delete s.AppStore._partesEmErro.T;
+  s.document.createElement = originalCreate;
+}
 // ── B · torneio MAGRO só em publicDiscovery (espectador) ─────────────────────
 {
   const t = magro(); s.AppStore.tournaments = []; s.AppStore.publicDiscovery = [t]; s.__pediu = [];

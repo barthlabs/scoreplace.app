@@ -911,6 +911,7 @@ const SUITES = [
   // (`_contactPersonIconHtml`), e o chip fica FORA da `.sp-mc-box` — dentro dela mudaria a
   // fonte de todos os nomes, e a geometria do card é cânone.
   'tests/balaozinho-do-whats-em-todo-card-de-jogo.test.js',
+  'tests/baloes-agenda-concentrada.test.js',
   // 2.1.99 — a busca da chave voltava VAZIA (e vazio esconde tudo, então a tela ficava
   // preta) quando o nome visível do card vinha da hidratação e o `data-players`, escrito no
   // render, ainda tinha o rótulo provisório. O filtro passou a casar também com o texto do
@@ -1096,9 +1097,11 @@ const SUITES = [
   'tests/analise-cabecalho-soma-categorias.test.js',
   'tests/chaves-abas-categoria.test.js',
   'tests/chaves-abas-estaveis.test.js',
+  'tests/bracket-agenda-order.test.js',
   'tests/superficies-abas-resize-observer.test.js',
   'tests/bracket-geral-agenda.test.js',
   'tests/tv-live-snapshot.test.js',
+  'tests/court-occupancy.test.js',
   'tests/controle-relogio-quadra.test.js',
   'tests/neon-agenda-categoria-contract.test.js',
   'tests/dashboard-atalho-aba-e-agenda.test.js',

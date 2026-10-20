@@ -362,6 +362,47 @@ function trecho(inicio, fim) {
     'a agenda esconde rodadas vazias, preserva tabelas de classificação e restaura a chave ao trocar de modo');
   ok(result.categorySchedule.missingScopeFallback, 'falha de montagem executa o filtro canônico e preserva só a rodada selecionada');
 
+  const stableAgenda = await page.evaluate(() => {
+    const at = Date.UTC(2026, 9, 22, 21);
+    const make = (num, court) => '<div class="wrap"><article class="sp-match-card" id="card-m' + num +
+      '" data-bracket-scheduled-at="' + at + '" data-bracket-tab-day="2026-10-22" data-bracket-tab-category="Fem Light"' +
+      ' data-bracket-tab-round="1" data-scheduled-game-number="' + num + '" data-bracket-court="Quadra ' + court + '">Jogo ' + num + '</article></div>';
+    document.body.innerHTML = '<main id="view-container"><nav id="agenda-root" data-bracket-date-tabs="1"></nav>' +
+      '<section id="agenda-source" class="bracket-scroll-container">' + make(3, 4) + make(2, 5) + make(1, 6) + '</section></main>';
+    const root = document.getElementById('agenda-root');
+    root._bracketTabsScope = document.getElementById('view-container');
+    window._matchCardTimestamp = value => Date.parse(value);
+    window._collectAllMatches = t => t.matches || [];
+    window._currentBracketTournament = { _nJogos: 3, matches: [1, 2, 3].map(num => ({
+      id: 'm' + num, scheduledAt: '2026-10-22T18:00:00-03:00', category: 'Fem Light'
+    })) };
+    window._bracketGeneralView(root, true, '2026-10-22');
+    const order = () => [...root._bracketGeneralView.querySelectorAll('.sp-match-card')].map(c => c.id);
+    const initial = order();
+    document.getElementById('card-m1').setAttribute('data-bracket-court', 'Quadra 9');
+    window._bracketGeneralView(root, true, '2026-10-22');
+    const afterCourt = order();
+    window._currentBracketTournament.matches.pop();
+    window._bracketGeneralView(root, true, '2026-10-22');
+    const afterPartial = order();
+    window._currentBracketTournament.matches = [1, 2, 3].map(num => ({
+      id: 'm' + num, scheduledAt: num === 1 ? '2026-10-23T18:00:00-03:00' : '2026-10-22T18:00:00-03:00',
+      category: 'Fem Light'
+    }));
+    document.getElementById('card-m1').setAttribute('data-bracket-tab-day', '2026-10-23');
+    document.getElementById('card-m1').setAttribute('data-bracket-scheduled-at', String(Date.UTC(2026, 9, 23, 21)));
+    window._bracketGeneralView(root, true, '2026-10-22');
+    const afterReschedule = order();
+    return { initial, afterCourt, afterPartial, afterReschedule };
+  });
+  ok(stableAgenda.initial.join(',') === 'card-m1,card-m2,card-m3' &&
+    stableAgenda.afterCourt.join(',') === stableAgenda.initial.join(','),
+    'Geral ordena pelo JOGO canônico e não muda ao redesignar quadra');
+  ok(stableAgenda.afterPartial.join(',') === stableAgenda.initial.join(','),
+    'eco parcial não apaga jogos já exibidos na Geral');
+  ok(stableAgenda.afterReschedule.join(',') === 'card-m2,card-m3',
+    'reagendamento completo retira o jogo do dia antigo sem congelar a Geral');
+
   // O portal usa retângulos de viewport, mas nasce dentro do body com zoom.
   // Medir três colunas prova que o erro não cresce a cada rodada.
   await page.addScriptTag({ content: trecho('_bracketUpdateRoundHeadingPortal', '_bracketEnsureRoundHeadingResizeListener') });

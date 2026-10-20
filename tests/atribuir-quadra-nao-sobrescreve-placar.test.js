@@ -1,6 +1,7 @@
 /* L7.P1.18 — quadra é uma intenção CF; o cliente não grava jogo. */
 'use strict'; const fs=require('fs');
 const vm=require('vm');
+;(async () => {
 const src=fs.readFileSync('js/views/bracket.js','utf8');
 const begin=src.indexOf('window._assignMatchCourt = function'); const end=src.indexOf('// ─── Formação de duplas',begin);
 let fail=0; function ok(v,s){if(v)console.log('✓ '+s);else{fail++;console.error('✗ '+s)}}
@@ -25,37 +26,43 @@ const courtBlockStart=cf.indexOf("const atual = String(m.court || '');",cf.index
 const courtBlockEnd=cf.indexOf('const b = _gravaTorneio',courtBlockStart);
 ok(courtBlockStart>=0 && courtBlockEnd>courtBlockStart, 'regra real da chamada localizada na Function');
 if(courtBlockStart>=0 && courtBlockEnd>courtBlockStart){
-  const apply=new Function('m','court','confirmCall','agoraIso','_drawFail','tId','matchId','t','drawWindow','_matchTiming',
+  const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
+  const apply=new AsyncFunction('m','court','confirmCall','agoraIso','_drawFail','tId','matchId','t','drawWindow','_matchTiming','sandbox','_courtOccupancy','_agenda',
     cf.slice(courtBlockStart,courtBlockEnd)+' return {ok:true,changed:true,courtCalledAt:m.courtCalledAt||null};');
   const _matchTiming=require('../js/domain/match-timing.js');
+  const occupancy=require('../js/domain/court-occupancy.js');
+  const agenda=require('../functions-autodraw/agenda-core.js');
+  const testApply=(m,court,confirmCall,agoraIso,fail,tId,matchId,t,drawWindow) =>
+    apply(m,court,confirmCall,agoraIso,fail,tId,matchId,t,
+      drawWindow || {_collectAllMatches:()=>[m]},_matchTiming,true,occupancy,agenda);
   const m={court:'Quadra 4'};
   const event={callTime:5};
   const fail=()=>new Error('precondition');
-  apply(m,'Quadra 4',true,'2026-10-19T18:00:00Z',fail,'t','j',event,undefined,_matchTiming);
+  await testApply(m,'Quadra 4',true,'2026-10-19T18:00:00Z',fail,'t','j',event);
   ok(m.courtCalledAt==='2026-10-19T18:00:00Z','OK inicial carimba a chamada');
-  const repeat=apply(m,'Quadra 4',true,'2026-10-19T18:01:00Z',fail,'t','j',event,undefined,_matchTiming);
+  const repeat=await testApply(m,'Quadra 4',true,'2026-10-19T18:01:00Z',fail,'t','j',event);
   ok(repeat.changed===false && m.courtCalledAt==='2026-10-19T18:00:00Z','OK repetido conserva o início');
-  apply(m,'Quadra 5',false,'2026-10-19T18:02:00Z',fail,'t','j',event,undefined,_matchTiming);
+  await testApply(m,'Quadra 5',false,'2026-10-19T18:02:00Z',fail,'t','j',event);
   ok(m.court==='Quadra 5' && m.courtCalledAt==='2026-10-19T18:00:00Z','mudar quadra durante chamada conserva o relógio');
-  apply(m,'Quadra 5',true,'2026-10-19T18:03:00Z',fail,'t','j',event,undefined,_matchTiming);
+  await testApply(m,'Quadra 5',true,'2026-10-19T18:03:00Z',fail,'t','j',event);
   ok(m.courtCalledAt==='2026-10-19T18:00:00Z','novo OK não reinicia a chamada');
   let afterWarmup=false;
-  try { apply(m,'Quadra 4',false,'2026-10-19T18:05:00Z',fail,'t','j',event,undefined,_matchTiming); } catch (_) { afterWarmup=true; }
+  try { await testApply(m,'Quadra 4',false,'2026-10-19T18:05:00Z',fail,'t','j',event); } catch (_) { afterWarmup=true; }
   ok(afterWarmup && m.court==='Quadra 5','ao começar aquecimento, troca de quadra é bloqueada');
   let removal=false;
-  try { apply(m,'',false,'2026-10-19T18:04:00Z',fail,'t','j',event,undefined,_matchTiming); } catch (_) { removal=true; }
+  try { await testApply(m,'',false,'2026-10-19T18:04:00Z',fail,'t','j',event); } catch (_) { removal=true; }
   ok(removal && m.courtCalledAt==='2026-10-19T18:00:00Z','chamada não pode ser reiniciada ao remover a quadra');
   const first={id:'j1',court:'Quadra 8',scheduledAt:'2026-10-22T18:00:00Z'};
   const second={id:'j2',court:'Quadra 9',scheduledAt:'2026-10-22T18:00:00Z'};
   const later={id:'j3',court:'Quadra 9',scheduledAt:'2026-10-22T18:35:00Z'};
   const t={courtNames:['Quadra 8','Quadra 9'],games:[first,second,later]};
   const drawWindow={_collectAllMatches: tournament=>tournament.games};
-  apply(first,'Quadra 9',false,'2026-10-22T17:00:00Z',fail,'t','j1',t,drawWindow,_matchTiming);
+  await testApply(first,'Quadra 9',false,'2026-10-22T17:00:00Z',fail,'t','j1',t,drawWindow);
   ok(first.court==='Quadra 9' && second.court==='Quadra 8' && later.court==='Quadra 9',
     'troca quadras de dois jogos futuros no mesmo horário sem mexer em rodada posterior');
   second.courtCalledAt='2026-10-22T17:01:00Z';
   let locked=false;
-  try { apply(first,'Quadra 8',false,'2026-10-22T17:02:00Z',fail,'t','j1',t,drawWindow,_matchTiming); } catch (_) { locked=true; }
+  try { await testApply(first,'Quadra 8',false,'2026-10-22T17:02:00Z',fail,'t','j1',t,drawWindow); } catch (_) { locked=true; }
   ok(locked && first.court==='Quadra 9' && second.court==='Quadra 8', 'jogo chamado bloqueia nova troca');
 }
 ok(src.includes('data-start-ms') && src.includes('_matchCardTimestamp(m.courtClockBaseAt || m.courtCalledAt)') && src.includes('_matchCardTimestamp(m.startedAt)'),
@@ -70,3 +77,4 @@ if(formatSource){
     ctx.window._spFormatElapsed(1000,0)==='00:00:00', 'relógio usa hh:mm:ss e não mostra tempo negativo');
 }
 process.exit(fail?1:0);
+})().catch(err => { console.error(err); process.exit(1); });

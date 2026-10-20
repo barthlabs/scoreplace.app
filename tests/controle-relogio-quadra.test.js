@@ -18,13 +18,16 @@ assert.equal(timing.text(timing.phaseAt(shifted.start, config, at + 90000), at +
 shifted = timing.adjust(shifted.start, config, at + 100000, 'next');
 assert.equal(phase(shifted.start, at + 100000), 'game');
 shifted = timing.adjust(shifted.start, config, at + 110000, 'next');
-assert.equal(phase(shifted.start, at + 110000), 'overdue');
-assert.equal(timing.text(timing.phaseAt(shifted.start, config, at + 110000), at + 110000), 'Atrasado 00:30:00');
-assert.equal(timing.adjust(shifted.start, config, at + 115000, 'next').changed, false,
+assert.equal(shifted.changed, false, 'FF não atua durante o tempo de jogo');
+assert.equal(phase(shifted.start, at + 110000), 'game');
+const overdueAt = at + 100000 + config.game * 60000;
+assert.equal(phase(shifted.start, overdueAt), 'overdue');
+assert.equal(timing.text(timing.phaseAt(shifted.start, config, overdueAt), overdueAt), 'Atrasado 00:30:00');
+assert.equal(timing.adjust(shifted.start, config, overdueAt + 5000, 'next').changed, false,
   'FF no atraso não volta o tempo do jogo para trás');
-shifted = timing.adjust(shifted.start, config, at + 120000, 'restart');
-assert.equal(phase(shifted.start, at + 120000), 'game');
-assert.equal(timing.text(timing.phaseAt(shifted.start, config, at + 120000), at + 120000), 'Tempo de jogo 00:00:00');
+shifted = timing.adjust(shifted.start, config, overdueAt + 10000, 'restart');
+assert.equal(phase(shifted.start, overdueAt + 10000), 'game');
+assert.equal(timing.text(timing.phaseAt(shifted.start, config, overdueAt + 10000), overdueAt + 10000), 'Tempo de jogo 00:00:00');
 
 const server = fs.readFileSync('functions-autodraw/index.js', 'utf8');
 const bracket = fs.readFileSync('js/views/bracket.js', 'utf8');

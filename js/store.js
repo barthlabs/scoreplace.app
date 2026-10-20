@@ -8903,7 +8903,7 @@ window._fbInner = function (key) {
     return hidden
         + '<div style="display:flex;flex-wrap:nowrap;align-items:center;gap:6px;">'
         + (key === 'chaves' && window._currentBracketTournament && typeof window._souOrganizador === 'function' && window._souOrganizador(window._currentBracketTournament)
-          ? '<button type="button" data-tv-live-button="1" aria-pressed="' + (!!(window._tvLiveWindow && !window._tvLiveWindow.closed)) + '" onclick="window._tvLiveToggle()" title="Abrir ou fechar a tela limpa de TV" style="flex:0 0 auto;height:44px;min-height:44px;padding:0 10px;border-radius:7px;border:2px solid #ef4444;background:' + (window._tvLiveWindow && !window._tvLiveWindow.closed ? '#dc2626' : '#451a1a') + ';color:#fff;font-size:.73rem;font-weight:900;cursor:pointer;box-shadow:' + (window._tvLiveWindow && !window._tvLiveWindow.closed ? '0 0 16px rgba(239,68,68,.7)' : 'none') + ';">■ NO AR</button>'
+          ? '<button type="button" data-tv-live-button="1" aria-pressed="' + (!!(window._tvLiveWindow && !window._tvLiveWindow.closed)) + '" onclick="window._tvLiveToggle()" title="Abrir ou fechar a tela limpa de TV" style="flex:0 0 auto;height:44px;min-height:44px;padding:0 10px;border-radius:7px;border:2px solid #ef4444;background:' + (window._tvLiveWindow && !window._tvLiveWindow.closed ? '#dc2626' : '#451a1a') + ';color:#fff;font-size:.73rem;font-weight:900;cursor:pointer;box-shadow:' + (window._tvLiveWindow && !window._tvLiveWindow.closed ? '0 0 16px rgba(239,68,68,.7)' : 'none') + ';">NO AR</button>'
           : '')
         + azPill + clockPill + activePill
         + '<span style="flex:0 0 auto;width:1px;height:22px;background:var(--sp-g-255-255-255-012,rgba(255,255,255,0.12));margin:0 1px;"></span>'

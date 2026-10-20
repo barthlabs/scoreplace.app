@@ -1170,6 +1170,38 @@ function _bracketOperationalCards(root, fallbackScope) {
   });
 }
 
+function _bracketAgendaCompare(a, b) {
+  if (a.at !== b.at) return a.at - b.at;
+  var an = Number(a.num), bn = Number(b.num);
+  if (an > 0 && bn > 0 && an !== bn) return an - bn;
+  var byCourt = String(a.court).localeCompare(String(b.court), 'pt-BR', { numeric: true });
+  return byCourt || (Number(a.position) || 0) - (Number(b.position) || 0);
+}
+
+function _bracketAgendaExpected(t, day, category, zone) {
+  if (!t || typeof window._collectAllMatches !== 'function') return null;
+  var all = window._collectAllMatches(t) || [];
+  var ids = new Set(), scoped = new Set();
+  var formatter = new Intl.DateTimeFormat('en-GB', {
+    timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit'
+  });
+  all.forEach(function (m) {
+    if (!m || m.id == null) return;
+    var id = String(m.id);
+    ids.add(id);
+    var at = _matchCardTimestamp(m.scheduledAt);
+    if (!at || at <= 0 || (category && String(m.category || m.tierLabel || '') !== category)) return;
+    if (day) {
+      var parts = {};
+      formatter.formatToParts(new Date(at)).forEach(function (part) { parts[part.type] = part.value; });
+      if (parts.year + '-' + parts.month + '-' + parts.day !== day) return;
+    }
+    scoped.add(id);
+  });
+  var total = Number(t._nJogos);
+  return { count: scoped.size, ids: scoped, complete: !(total > 0 && ids.size < total) };
+}
+
 function _bracketToggleEmptySourceRounds(root, hide) {
   var scope = root && (root._bracketCardsScope || root._bracketTabsScope);
   if (!scope || !scope.querySelectorAll) return;
@@ -1347,6 +1379,27 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
     _bracketSyncRoundHeadingOffsets();
   });
   var entries = root._bracketGeneralEntries || [];
+  if (show && entries.length && root._bracketGeneralDay === gender &&
+      root._bracketGeneralCategory === (categoryFilter || '') &&
+      root._bracketGeneralMode === (onlyReady ? 'upcoming' : 'general')) {
+    var model = window._currentBracketTournament;
+    var zone = typeof _matchCardTimeZone === 'function' ? _matchCardTimeZone(model || {}) : 'America/Sao_Paulo';
+    var day = root.getAttribute('data-bracket-date-tabs') === '1' ? gender : '';
+    var expected = _bracketAgendaExpected(model, day, categoryFilter, zone);
+    var present = new Set();
+    _bracketOperationalCards(root, scope).concat(entries.map(function (entry) { return entry.card; })).forEach(function (card) {
+      if (!card || !card.id || Number(card.getAttribute('data-bracket-scheduled-at')) <= 0) return;
+      if (day && card.getAttribute('data-bracket-tab-day') !== day) return;
+      if (categoryFilter && card.getAttribute('data-bracket-tab-category') !== categoryFilter) return;
+      present.add(card.id);
+    });
+    // Um eco incompleto não substitui uma agenda já montada. Na primeira
+    // abertura, sem visão anterior, os cards disponíveis continuam visíveis.
+    var oldGamesStillScheduled = expected && entries.every(function (entry) {
+      return entry.card && expected.ids.has(String(entry.card.id || '').replace(/^card-/, ''));
+    });
+    if (expected && (!expected.complete || (oldGamesStillScheduled && expected.count > present.size))) return true;
+  }
   if (!show) {
     for (var r = 0; r < entries.length; r++) {
       var old = entries[r];
@@ -1402,7 +1455,7 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
     var justScoredByTournament = window._bracketJustScoredByTournament || {};
     var justScoredMatchId = String(justScoredByTournament[String(root.getAttribute('data-tournament-id') || '')] || '');
     var waitingPresence = 0;
-    scheduledCards.forEach(function (card) {
+    scheduledCards.forEach(function (card, position) {
       if (categoryFilter && card.getAttribute('data-bracket-tab-category') !== categoryFilter) return;
       var at = Number(card.getAttribute('data-bracket-scheduled-at'));
       if (!isFinite(at) || at <= 0 || !card.parentNode) return;
@@ -1429,12 +1482,9 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
       // wrapper. O container de origem é ocultado separadamente logo abaixo.
       // [[regression_general_agenda_moves_visible_cards]]
       card.hidden = false;
-      entries.push({ card: card, wrapper: wrapper, placeholder: placeholder, at: at, court: card.getAttribute('data-bracket-court') || '', round: Number(card.getAttribute('data-bracket-tab-round')) || 1, waitingPresence: isWaitingPresence, justScored: isJustScored });
+      entries.push({ card: card, wrapper: wrapper, placeholder: placeholder, at: at, court: card.getAttribute('data-bracket-court') || '', num: Number(card.getAttribute('data-scheduled-game-number')) || 0, position: position, round: Number(card.getAttribute('data-bracket-tab-round')) || 1, waitingPresence: isWaitingPresence, justScored: isJustScored });
     });
-    entries.sort(function (a, b) {
-      if (a.at !== b.at) return a.at - b.at;
-      return String(a.court).localeCompare(String(b.court), 'pt-BR', { numeric: true });
-    });
+    entries.sort(_bracketAgendaCompare);
     var sources = [];
     entries.forEach(function (entry) {
       var source = entry.placeholder.parentElement && entry.placeholder.parentElement.closest
@@ -1444,6 +1494,8 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
     root._bracketGeneralEntries = entries;
     root._bracketGeneralSources = sources;
     root._bracketGeneralMode = requestedMode;
+    root._bracketGeneralDay = gender;
+    root._bracketGeneralCategory = categoryFilter || '';
     root._bracketUpcomingWaitingPresence = waitingPresence;
   }
   if (!entries.length) {
@@ -1512,10 +1564,7 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
   roundsTrack.className = 'bracket-general-rounds-track';
   roundsTrack.style.cssText = 'display:flex;align-items:flex-start;gap:20px;width:100%;max-width:100%;min-width:0;box-sizing:border-box;overflow-x:auto;overflow-y:clip;padding:0 0 14px;scroll-snap-type:x proximity;';
   Object.keys(groups).sort().forEach(function (key) {
-    groups[key].sort(function (a, b) {
-      if (a.at !== b.at) return a.at - b.at;
-      return String(a.court).localeCompare(String(b.court), 'pt-BR', { numeric: true });
-    });
+    groups[key].sort(_bracketAgendaCompare);
     var group = document.createElement('section');
     // Usa o mesmo contrato das colunas canônicas: assim o cabeçalho de cada
     // rodada da Geral é fixado pelo portal enquanto seus cards rolam.
@@ -1533,10 +1582,7 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
     roundsTrack.appendChild(group);
   });
   if (waitingEntries.length) {
-    waitingEntries.sort(function (a, b) {
-      if (a.at !== b.at) return a.at - b.at;
-      return String(a.court).localeCompare(String(b.court), 'pt-BR', { numeric: true });
-    });
+    waitingEntries.sort(_bracketAgendaCompare);
     var waitingSection = document.createElement('section');
     waitingSection.setAttribute('data-bracket-upcoming-waiting', '1');
     // A chamada pendente vem ANTES dos jogos prontos: é a informação que o
@@ -2766,13 +2812,56 @@ function _bracketSeguraSemPartes(t, container, tId) {
 
   var AS = window.AppStore;
   var id = String(tId || t.id);
+  // Um eco parcial não deve apagar a última grade completa enquanto as partes são
+  // relidas. A identidade do torneio impede reaproveitar a grade de outra navegação.
+  var previousRoot = null;
+  try {
+    previousRoot = container.querySelector && container.querySelector('[data-bracket-tabs-root]');
+    // Na ficha, a barra de abas é movida para junto da busca e pode ser irmã
+    // do contêiner dos cards, não descendente dele.
+    if (!previousRoot && typeof document.querySelectorAll === 'function') {
+      previousRoot = Array.prototype.find.call(document.querySelectorAll('[data-bracket-tabs-root]'), function (root) {
+        return root.getAttribute('data-tournament-id') === id &&
+          (root._bracketCardsScope === container || root._bracketTabsScope === container ||
+            (container.contains && (container.contains(root) || container.contains(root._bracketCardsScope))));
+      }) || null;
+    }
+    var cardsInContainer = container.querySelector && container.querySelector('.sp-match-card');
+    var cardsInGeneral = previousRoot && (previousRoot._bracketGeneralEntries || []).some(function (entry) {
+      return entry.card && entry.card.isConnected;
+    });
+    if (!previousRoot || previousRoot.getAttribute('data-tournament-id') !== id ||
+        (!cardsInContainer && !cardsInGeneral)) previousRoot = null;
+  } catch (e) { previousRoot = null; }
+  if (previousRoot && !container.querySelector('[data-bracket-hydration-status]')) {
+    var status = document.createElement('div');
+    status.setAttribute('data-bracket-hydration-status', '1');
+    status.setAttribute('role', 'status');
+    status.style.cssText = 'padding:8px 12px;color:var(--text-muted);font-size:.85rem;';
+    container.insertBefore(status, container.firstChild);
+  }
 
   /* ① ESTADO EXPLÍCITO, NUNCA ÁREA VAZIA. Desistir também é estado: quando o agendador
    *    esgota as tentativas (`_partesEmErro`), a tela DIZ isso e oferece o botão — girar
    *    para sempre foi o defeito que a 2.1.71 pagou. */
   var _erro = AS && AS._partesEmErro && AS._partesEmErro[id];
+  if (previousRoot) {
+    var oldStatus = container.querySelector('[data-bracket-hydration-status]');
+    if (oldStatus) {
+      oldStatus.textContent = _erro ? 'Falha ao atualizar os jogos. Exibindo a última grade carregada. ' :
+        'Atualizando os jogos. Exibindo a última grade carregada.';
+      if (_erro && !oldStatus.querySelector('button')) {
+        var retry = document.createElement('button');
+        retry.type = 'button';
+        retry.className = 'btn btn-secondary';
+        retry.textContent = 'Tentar de novo';
+        retry.addEventListener('click', function () { window._bracketTentarPartesDeNovo(id); });
+        oldStatus.appendChild(retry);
+      }
+    }
+  }
   if (_erro) {
-    container.innerHTML =
+    if (!previousRoot) container.innerHTML =
       '<div class="card" style="text-align:center;padding:2.5rem 1rem;">' +
         '<div style="font-size:2rem;margin-bottom:10px;">🎾</div>' +
         '<h3 style="color:var(--text-bright);margin-bottom:8px;">Não consegui carregar os jogos</h3>' +
@@ -2781,9 +2870,11 @@ function _bracketSeguraSemPartes(t, container, tId) {
       '</div>';
     return true;
   }
-  container.innerHTML = (typeof window._renderBallLoader === 'function')
-    ? window._renderBallLoader('Carregando chaveamento…', { minHeight: '40vh', bar: true })
-    : '<div style="text-align:center;padding:2rem;color:var(--text-muted);">Carregando chaveamento…</div>';
+  if (!previousRoot) {
+    container.innerHTML = (typeof window._renderBallLoader === 'function')
+      ? window._renderBallLoader('Carregando chaveamento…', { minHeight: '40vh', bar: true })
+      : '<div style="text-align:center;padding:2rem;color:var(--text-muted);">Carregando chaveamento…</div>';
+  }
 
   /* ② A PORTA CANÔNICA. */
   var naLista = !!(AS && Array.isArray(AS.tournaments) &&
@@ -3759,9 +3850,11 @@ window._renderReadyMatchesBanner = function _renderReadyMatchesBanner(t, opts) {
     const _mid = String(e.match.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     if (isReady && _isOrg && _courts.length > 0 && e.match.id) {
       const cur = e.match.court || '';
+      const all = typeof window._collectAllMatches === 'function' ? window._collectAllMatches(t) : [];
+      const occupancy = window.ScoreplaceCourtOccupancy;
       const opts = '<option value="">📍 Definir quadra…</option>' +
-        _courts.map(function(c){ return '<option value="' + _sh(c) + '"' + (cur === c ? ' selected' : '') + '>' + _sh(c) + '</option>'; }).join('');
-      courtHtml = '<select onclick="event.stopPropagation()" onchange="window._assignMatchCourt(\'' + _tIdSafe + '\',\'' + _mid + '\',this.value)" ' +
+        _courts.map(function(c){ var busy = occupancy && occupancy.occupant(all, c, e.match.id); return '<option value="' + _sh(c) + '"' + (cur === c ? ' selected' : '') + (busy ? ' disabled class="sp-court-occupied"' : '') + '>' + _sh(c) + (busy ? ' · ocupada' : '') + '</option>'; }).join('');
+      courtHtml = '<select data-persisted-court="' + _sh(cur) + '" onclick="event.stopPropagation()" onchange="window._assignMatchCourtFromSelect(this,\'' + _tIdSafe + '\',\'' + _mid + '\')" ' +
         'style="margin-top:4px;width:100%;box-sizing:border-box;padding:6px 8px;border-radius:8px;background:rgba(16,185,129,0.14);border:1px solid rgba(16,185,129,0.4);color:var(--sp-c-bbf7d0,#bbf7d0);font-size:0.78rem;font-weight:700;cursor:pointer;">' + opts + '</select>';
     } else if (e.match.court) {
       courtHtml = '<div style="margin-top:4px;font-size:0.74rem;font-weight:800;color:var(--sp-c-34d399,#34d399);display:flex;align-items:center;gap:4px;">📍 ' + _sh(e.match.court) + '</div>';
@@ -3817,9 +3910,19 @@ window._assignMatchCourt = function(tId, matchId, court) {
       return d;
     }).catch(function(err) {
       if (typeof window._warn === 'function') window._warn('[assignMatchCourt] CF falhou', err);
-      if (typeof showNotification === 'function') showNotification('Quadra não salva', 'Não foi possível salvar a alteração. Tente novamente.', 'error');
+      if (typeof showNotification === 'function') showNotification('Quadra não salva', err && err.message || 'Não foi possível salvar a alteração.', 'error');
       throw err;
     });
+};
+window._assignMatchCourtFromSelect = function(select, tId, matchId) {
+  var prior = select.getAttribute('data-persisted-court') || '';
+  return window._assignMatchCourt(tId, matchId, select.value).then(function(result) {
+    select.setAttribute('data-persisted-court', select.value);
+    return result;
+  }).catch(function(error) {
+    select.value = prior;
+    throw error;
+  });
 };
 
 // A confirmação grava quadra e instante na mesma transação. O relógio é derivado
@@ -3908,10 +4011,11 @@ window._spCourtClockHtml = function(start, tournament, now, tId, matchId, contro
   var rewindIcon = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="currentColor"><path d="M11 5 3 12l8 7V5Zm9 0-8 7 8 7V5Z"/></svg>';
   var forwardIcon = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="currentColor"><path d="m4 5 8 7-8 7V5Zm9 0 8 7-8 7V5Z"/></svg>';
   var restartBtn = controls ? '<button type="button" class="sp-match-clock-action" aria-label="Reiniciar etapa do relógio" title="REW · reiniciar tempo" onclick="event.stopPropagation();window._adjustMatchCourtClock(this,\'' + String(tId) + '\',\'' + String(matchId) + '\',\'restart\')">' + rewindIcon + '</button>' : '';
-  var nextBtn = controls ? '<button type="button" class="sp-match-clock-action sp-match-clock-next" aria-label="Próxima etapa do relógio" title="FF · próxima etapa"' + (state.phase === 'overdue' ? ' disabled' : '') + ' onclick="event.stopPropagation();window._adjustMatchCourtClock(this,\'' + String(tId) + '\',\'' + String(matchId) + '\',\'next\')">' + forwardIcon + '</button>' : '';
-  var timerHtml = '⏱ <span class="sp-match-call-timer" data-start-ms="' + start + '" data-call-min="' + timing.call + '" data-warmup-min="' + timing.warmup + '" data-game-min="' + timing.game + '">' + clock.text(state, now) + '</span>';
+  var canAdvance = state.phase === 'call' || state.phase === 'warmup';
+  var nextBtn = controls && canAdvance ? '<button type="button" class="sp-match-clock-action sp-match-clock-next" aria-label="Próxima etapa do relógio" title="FF · próxima etapa" onclick="event.stopPropagation();window._adjustMatchCourtClock(this,\'' + String(tId) + '\',\'' + String(matchId) + '\',\'next\')">' + forwardIcon + '</button>' : '';
+  var timerHtml = '<span class="sp-match-clock-label">' + clock.label(state.phase) + '</span><span class="sp-match-clock-next-slot">' + nextBtn + '</span><span class="sp-match-call-timer" data-start-ms="' + start + '" data-call-min="' + timing.call + '" data-warmup-min="' + timing.warmup + '" data-game-min="' + timing.game + '">' + clock.elapsed(state.phaseStart, now) + '</span>';
   return '<span class="sp-match-estimated-time sp-match-court-clock sp-match-phase-' + state.phase + '" title="' + clock.title(state.phase) + '" style="margin-left:auto;white-space:nowrap;text-align:right;font-size:.78rem;font-weight:800;">' +
-    restartBtn + timerHtml + nextBtn + '</span>';
+    restartBtn + timerHtml + '</span>';
 };
 window._spRefreshCourtClocks = function() {
   var clock = window.ScoreplaceMatchTiming;
@@ -3923,14 +4027,16 @@ window._spRefreshCourtClocks = function() {
       warmup: Number(el.getAttribute('data-warmup-min')) || 0,
       game: Number(el.getAttribute('data-game-min')) || 0 };
     var state = clock.phaseAt(start, timing, now);
-    el.textContent = clock.text(state, now);
+    el.textContent = clock.elapsed(state.phaseStart, now);
     var parent = el.closest('.sp-match-estimated-time');
     if (parent) {
       parent.classList.remove('sp-match-phase-call', 'sp-match-phase-warmup', 'sp-match-phase-game', 'sp-match-phase-overdue');
       parent.classList.add('sp-match-phase-' + state.phase);
       parent.title = clock.title(state.phase);
+      var label = parent.querySelector('.sp-match-clock-label');
+      if (label) label.textContent = clock.label(state.phase);
       var next = parent.querySelector('.sp-match-clock-next');
-      if (next) next.disabled = state.phase === 'overdue';
+      if (next && state.phase !== 'call' && state.phase !== 'warmup') next.remove();
     }
     if (state.phase !== 'call') {
       var row = el.closest('.sp-match-operational');
@@ -6705,7 +6811,7 @@ window._competitionTeamTagForMatch = function (t, match, slot, compact, vertical
 
 // ─── Player avatars helper for bracket cards ────────────────────────────────
 function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m, slot, showIndividualCheckIn) {
-  /* ⭐ 2.1.99 — O 💬 DE CADA PESSOA, EM TODO CARD DE JOGO.
+  /* ⭐ O 💬 DE CADA PESSOA NOS JOGOS SEM AGENDA DEFINIDA.
    * Ordem do dono (02/set/2026): _"precisa me devolver os balõezinhos em todos os jogos
    * para que as pessoas se encontrem pelo whats"_ e _"para os participantes do grupo (e
    * para organizadores de todos)"_.
@@ -6714,6 +6820,7 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m, slot, showIndividu
    * e da lista de espera. O gate (organizador vê todos; participante só onde joga; nunca o
    * próprio balãozinho) mora lá dentro. Uma segunda régua aqui seria a divergência que já
    * aconteceu entre a chave e a classificação.
+   * Em evento concentrado, horário e quadra já estão definidos; não emitimos o balão.
    * `m` é opcional: sem ele, `sameGroup` é falso e só o organizador vê — que é o
    * comportamento seguro pra qualquer chamador que ainda não passe o jogo. */
   var _souDoJogo = false;
@@ -6933,7 +7040,8 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m, slot, showIndividu
        * Agora ele entra DENTRO do span medido — que é exatamente o que o card da tela inicial
        * (`_playerRow`, dashboard.js) já fazia e por isso não cortava. A hidratação do nome vivo
        * continua intacta: ela escreve no `[data-uid-name]` interno, não no span do ajuste. */
-      (typeof window._contactPersonIconHtml === 'function'
+      (typeof window._contactPersonIconHtml === 'function' &&
+        !(window._isConcentratedTournament && window._isConcentratedTournament(t))
         ? window._contactPersonIconHtml(t, _slotUid, name, { sameGroup: _souDoJogo, dentroDaCaixa: true }) : '') +
       `</span></div>` +
     `</div>`;
@@ -7681,6 +7789,25 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // `scheduledKind: estimate` vem do planejador; o ≈ deixa explícito que a
   // organização pode ajustar o chamado dos jogos ao longo do evento.
   var _scheduledMs = _isConcentratedEvent ? _matchCardTimestamp(m.scheduledAt) : null;
+  var _callAllowedToday = true, _callDayMessage = '';
+  if (_isConcentratedEvent && t && t.isSandbox !== true && !String(tId).startsWith('sb_') && !m.courtCalledAt) {
+    var _callProfile = window.AppStore && window.AppStore.currentUser || null;
+    var _resolvedCallZone = window._venueGeo && typeof window._venueGeo.resolverFuso === 'function'
+      ? window._venueGeo.resolverFuso(t, _callProfile) : null;
+    var _zoneForCall = _resolvedCallZone && _resolvedCallZone.tz;
+    var _dayForCall = function (ms) {
+      var parts = new Intl.DateTimeFormat('en-GB', { timeZone: _zoneForCall,
+        year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(ms));
+      var part = function (type) { return (parts.find(function (p) { return p.type === type; }) || {}).value; };
+      return part('year') + '-' + part('month') + '-' + part('day');
+    };
+    var _requiredCallDay = /^\d{4}-\d{2}-\d{2}$/.test(String(m.requiredDay || ''))
+      ? String(m.requiredDay) : (_scheduledMs && _zoneForCall ? _dayForCall(_scheduledMs) : '');
+    _callAllowedToday = !!_zoneForCall && !!_requiredCallDay && _dayForCall(Date.now()) >= _requiredCallDay;
+    if (!_callAllowedToday) _callDayMessage = _zoneForCall && _requiredCallDay
+      ? 'Chamada disponível no dia ' + _requiredCallDay.split('-').reverse().join('/')
+      : 'Chamada indisponível: data ou fuso do jogo não definido';
+  }
   var _playedMs = _isConcentratedEvent ? _matchCardResultTimestamp(m) : null;
   var _calledMs = _isConcentratedEvent && !_playedMs ? _matchCardTimestamp(m.courtClockBaseAt || m.courtCalledAt) : null;
   var _liveStartMs = _isConcentratedEvent && !_playedMs && m.startedAt ? _matchCardTimestamp(m.startedAt) : null;
@@ -7697,10 +7824,13 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   if (_canChangeCardCourt && _cardCourts.length) {
     var _suggestedCourt = (typeof window._suggestFreedCourtForMatch === 'function') ? window._suggestFreedCourtForMatch(t, m) : '';
     var _displayCourt = _suggestedCourt || String(m.court || '');
+    var _allForCourts = typeof window._collectAllMatches === 'function' ? window._collectAllMatches(t) : [];
+    var _occupancy = window.ScoreplaceCourtOccupancy;
     var _courtOpts = (m.courtCalledAt ? '' : '<option value="">Sem quadra</option>') + _cardCourts.map(function (court) {
-      return '<option value="' + window._safeHtml(court) + '"' + (_displayCourt === court ? ' selected' : '') + '>' + window._safeHtml(court) + '</option>';
+      var busy = _occupancy && _occupancy.occupant(_allForCourts, court, m.id);
+      return '<option value="' + window._safeHtml(court) + '"' + (_displayCourt === court ? ' selected' : '') + (busy ? ' disabled class="sp-court-occupied"' : '') + '>' + window._safeHtml(court) + (busy ? ' · ocupada' : '') + '</option>';
     }).join('');
-    _courtCardHtml = '<div class="sp-match-operational" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><label class="sp-match-court"><select aria-label="Quadra" onclick="event.stopPropagation()" onchange="window._assignMatchCourt(\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\',this.value)">' + _courtOpts + '</select></label><button type="button" class="sp-match-confirm" aria-label="Confirmar chamada para a quadra" onclick="event.stopPropagation();window._confirmMatchCourtCall(this,\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\')" style="padding:4px 9px;border-radius:7px;border:1px solid #22c55e;background:#166534;color:#fff;font-weight:800;cursor:pointer;">' + (m.courtCalledAt ? '✓ OK' : 'OK') + '</button>' + _estimatedTimeHtml + '</div>';
+    _courtCardHtml = '<div class="sp-match-operational" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><label class="sp-match-court"><select aria-label="Quadra" data-persisted-court="' + window._safeHtml(String(m.court || '')) + '" onclick="event.stopPropagation()" onchange="window._assignMatchCourtFromSelect(this,\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\')">' + _courtOpts + '</select></label><button type="button" class="sp-match-confirm" aria-label="Confirmar chamada para a quadra"' + (!_callAllowedToday ? ' disabled title="' + window._safeHtml(_callDayMessage) + '"' : '') + ' onclick="event.stopPropagation();window._confirmMatchCourtCall(this,\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\')" style="padding:4px 9px;border-radius:7px;border:1px solid #22c55e;background:#166534;color:#fff;font-weight:800;cursor:pointer;">' + (m.courtCalledAt ? '✓ OK' : 'OK') + '</button>' + (!_callAllowedToday ? '<span class="sp-match-call-day-hint">' + window._safeHtml(_callDayMessage) + '</span>' : '') + _estimatedTimeHtml + '</div>';
   } else if (_isConcentratedEvent && m.court) {
     _courtCardHtml = '<div class="sp-match-operational" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><div class="sp-match-court sp-match-court--readonly">' + window._safeHtml(String(m.court)) + '</div>' + (m.courtCalledAt && typeof window._souOrganizador === 'function' && window._souOrganizador(t) ? '<span class="sp-match-confirm sp-match-confirm--locked">✓ OK</span>' : '') + _estimatedTimeHtml + '</div>';
   } else if (_estimatedTimeHtml) {
@@ -8304,7 +8434,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   var _operationalPresence = _isConcentratedEvent && !isDecided && !isByeMatch
     ? (matchReady ? 'complete' : (matchPartial ? 'partial' : 'none')) : '';
   return `
-    <div id="card-${m.id}" class="sp-match-card" data-players="${_searchNames}" data-team-names="${window._safeHtml(_searchTeamNames)}" data-player-uids="${_searchUids}" data-bracket-tab-category="${window._safeHtml(_tabCategory)}" data-bracket-tab-gender="${_tabGender}" data-bracket-tab-source="${_tabSource}" data-bracket-tab-round="${m.round != null ? window._safeHtml(String(m.round)) : ''}" data-bracket-scheduled-at="${_scheduledMs || ''}" data-bracket-result-at="${_playedMs || ''}" data-bracket-complete="${isDecided || m.wo ? '1' : '0'}" data-bracket-pending-match="${_isPendingMatch ? '1' : '0'}" data-bracket-court="${window._safeHtml(String(m.court || ''))}" data-bracket-upcoming="${_isConcentratedEvent && matchReady ? '1' : '0'}" data-bracket-presence="${_operationalPresence}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:var(--scroll-anchor,120px);background:${window._spCor(_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)', 'background')};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};">
+    <div id="card-${m.id}" class="sp-match-card" data-players="${_searchNames}" data-team-names="${window._safeHtml(_searchTeamNames)}" data-player-uids="${_searchUids}" data-bracket-tab-category="${window._safeHtml(_tabCategory)}" data-bracket-tab-gender="${_tabGender}" data-bracket-tab-source="${_tabSource}" data-bracket-tab-round="${m.round != null ? window._safeHtml(String(m.round)) : ''}" data-bracket-scheduled-at="${_scheduledMs || ''}" data-bracket-result-at="${_playedMs || ''}" data-bracket-complete="${isDecided || m.wo ? '1' : '0'}" data-bracket-pending-match="${_isPendingMatch ? '1' : '0'}" data-bracket-court="${window._safeHtml(String(m.court || ''))}" data-bracket-upcoming="${_isConcentratedEvent && matchReady ? '1' : '0'}" data-bracket-presence="${_operationalPresence}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-scheduled-game-number="${_plannedGameNumber > 0 ? _plannedGameNumber : ''}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:var(--scroll-anchor,120px);background:${window._spCor(_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)', 'background')};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};">
       ${_headerHtml}
       ${_pendingBtnsRow}
       ${pendingBanner}

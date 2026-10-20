@@ -17,6 +17,7 @@ const _rosterState = require('./roster-state-core.js');
 const _tSplit = require('./vendor/tournament-split-core.js');   // fonte única: js/views/ (copy-vendor)
 const _registrationRoster = require('./vendor/registration-roster.js');
 const _matchTiming = require('./vendor/match-timing.js');
+const _courtOccupancy = require('./vendor/court-occupancy.js');
 const _competitionAssignments = require('./competition-assignment-core.js');
 // fonte única: functions/match-roster.js (copy-vendor) — monta o subdoc de resultado,
 // incluindo o carregar-adiante do `replay`, que o servidor não sabe recalcular.
@@ -795,13 +796,14 @@ const _TX_LEITURA = { get: (r) => r.get() };
  * (d) nada seguro → `{ tz: null, motivo }` e quem chama NÃO GERA.
  * ⛔ O passo (c) é a ÚNICA razão de isto ser async: ler o perfil custa uma leitura, então
  * só acontece quando o evento sozinho não resolveu. */
-async function _fusoDoEvento(t) {
+async function _fusoDoEvento(t, tx) {
   const r = _agenda.resolverFuso(t, null);
   if (r.tz) return r;
   const uid = t && (t.creatorUid || t.organizerUid);
   if (!uid) return r;
   try {
-    const s = await db.collection('users').doc(String(uid)).get();
+    const userRef = db.collection('users').doc(String(uid));
+    const s = await (tx ? tx.get(userRef) : userRef.get());
     if (s.exists) return _agenda.resolverFuso(t, s.data() || {});
   } catch (e) { /* perfil ilegível: continua "não determinado", que é o desfecho seguro */ }
   return r;
@@ -3770,23 +3772,57 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
         throw _drawFail('failed-precondition', 'A chamada terminou; não é mais possível mudar a quadra.', { tId, matchId });
       }
       if (confirmCall && !court) throw _drawFail('failed-precondition', 'Escolha uma quadra antes de chamar o jogo.', { tId, matchId });
+      if (confirmCall && !m.courtCalledAt && !sandbox) {
+        // A coleção foi resolvida acima pelo ID e pelo flag. O dia do jogo é
+        // civil no fuso do evento: uma data UTC pode ser o dia anterior aqui.
+        const zone = (await _fusoDoEvento(t, tx)).tz;
+        const scheduledMs = Date.parse(String(m.scheduledAt || ''));
+        const requiredDay = /^\d{4}-\d{2}-\d{2}$/.test(String(m.requiredDay || ''))
+          ? String(m.requiredDay) : '';
+        if (!zone || (!requiredDay && !Number.isFinite(scheduledMs))) {
+          throw _drawFail('failed-precondition', 'Data ou fuso do jogo indisponível; chamada não iniciada.', { tId, matchId });
+        }
+        const localDay = ms => {
+          const parts = new Intl.DateTimeFormat('en-GB', {
+            timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit'
+          }).formatToParts(new Date(ms));
+          const part = type => (parts.find(p => p.type === type) || {}).value;
+          return `${part('year')}-${part('month')}-${part('day')}`;
+        };
+        const gameDay = requiredDay || localDay(scheduledMs);
+        if (localDay(Date.parse(agoraIso)) < gameDay) {
+          throw _drawFail('failed-precondition', 'Jogo programado para ' + gameDay + '; a chamada ainda não está disponível.', { tId, matchId });
+        }
+      }
+      if (!drawWindow || typeof drawWindow._collectAllMatches !== 'function') {
+        throw _drawFail('internal', 'Não foi possível conferir a ocupação das quadras.', { tId, matchId });
+      }
+      const all = drawWindow._collectAllMatches(t);
+      if (!Array.isArray(all)) throw _drawFail('internal', 'Não foi possível conferir a ocupação das quadras.', { tId, matchId });
+      if (court && (court !== atual || (confirmCall && !m.courtCalledAt))) {
+        const occupant = _courtOccupancy.occupant(all, court, matchId);
+        if (occupant) {
+          const number = occupant._gameNum || occupant.scheduledGameNumber || occupant.matchNumber;
+          const label = number ? 'Jogo ' + String(number) : 'outro jogo';
+          throw _drawFail('failed-precondition', 'Quadra ocupada pelo ' + label + '. Lance o resultado ou aplique W.O. para liberar a quadra.', { tId, matchId, court });
+        }
+      }
       if (atual === court && (!confirmCall || m.courtCalledAt)) return { ok: true, changed: false, courtCalledAt: m.courtCalledAt || null };
       const reassigned = [];
-      if (court && court !== atual && m.scheduledAt && typeof drawWindow._collectAllMatches === 'function') {
+      if (court && m.scheduledAt && (court !== atual || (confirmCall && !m.courtCalledAt))) {
         // A troca vale só para o mesmo horário. Jogos de rodadas posteriores
         // podem usar a mesma quadra; jogos já chamados ou iniciados são intocáveis.
-        const all = drawWindow._collectAllMatches(t);
         const slot = Date.parse(String(m.scheduledAt));
         const other = Number.isFinite(slot) ? all.find(item => item && String(item.id) !== matchId &&
-          String(item.court || '') === court && Date.parse(String(item.scheduledAt || '')) === slot) : null;
+          String(item.court || '') === court && !_courtOccupancy.isFinished(item) &&
+          Date.parse(String(item.scheduledAt || '')) === slot) : null;
         if (other) {
-          const locked = other.courtCalledAt || other.startedAt || other.resultAt || other.winner || other.wo || other.liveScored ||
-            (Array.isArray(other.sets) && other.sets.length > 0);
-          if (locked) throw _drawFail('failed-precondition', 'A quadra já tem um jogo chamado ou iniciado neste horário.', { tId, matchId, court });
           const occupied = new Set(all.filter(item => item && String(item.id) !== matchId && String(item.id) !== String(other.id) &&
-            Date.parse(String(item.scheduledAt || '')) === slot).map(item => String(item.court || '')));
+            !_courtOccupancy.isFinished(item) && Date.parse(String(item.scheduledAt || '')) === slot).map(item => String(item.court || '')));
           const names = Array.isArray(t.courtNames) ? t.courtNames.map(String) : [];
-          const replacement = atual && !occupied.has(atual) ? atual : names.find(name => name !== court && !occupied.has(name)) || '';
+          const free = name => name && name !== court && !occupied.has(name) &&
+            !_courtOccupancy.occupant(all.filter(item => item && String(item.id) !== matchId), name, other.id);
+          const replacement = free(atual) ? atual : names.find(free) || '';
           all.filter(item => item && String(item.id) === String(other.id)).forEach(item => {
             if (replacement) item.court = replacement; else delete item.court;
             delete item.courtCalledAt;
