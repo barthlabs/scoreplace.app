@@ -431,6 +431,14 @@ nunca o código-fonte. **TRÊS** codebases (o 3º nasceu depois deste texto):
   (`project_whatsapp_is_wame_only`). **O servidor NÃO envia SMS**: quem envia é o Firebase,
   pelo cliente (`signInWithPhoneNumber`) — saber isso evita projetar fluxo que não existe.
 
+  **Balões nos cards de jogos (ordem do dono, 20/out/2026):** em torneios com agenda
+  operacional definida por `scheduleWindow.days` ou `teamCompetition.schedule`, não
+  mostrar o balão de WhatsApp ao lado dos atletas na chave nem nos cards de jogos da
+  tela inicial: dia, hora e quadra já estão combinados. Torneios distribuídos, nos
+  quais os atletas ainda combinam os jogos, mantêm os balões. Esta regra atualiza
+  para os eventos concentrados a orientação de 02/set/2026 de exibir contato em
+  todos os jogos; não altera as permissões de contato nas demais telas.
+
   **Módulos PUROS ao lado do index** (`*-core.js` + `merge-rules.js`/`uid-sweep.js`): o
   `index.js` não é `require`-ável em teste (registra onCall/onSchedule e lê secrets no
   import), então toda regra que dói errar mora num módulo puro, com `functions/test-*.js`

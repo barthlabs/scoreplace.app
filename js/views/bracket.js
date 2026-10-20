@@ -6820,7 +6820,8 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m, slot, showIndividu
    * e da lista de espera. O gate (organizador vê todos; participante só onde joga; nunca o
    * próprio balãozinho) mora lá dentro. Uma segunda régua aqui seria a divergência que já
    * aconteceu entre a chave e a classificação.
-   * Em evento concentrado, horário e quadra já estão definidos; não emitimos o balão.
+   * Ordem posterior do dono (20/out/2026): em evento concentrado, horário e quadra
+   * já estão definidos; não emitimos o balão. Nos distribuídos, a regra anterior vale.
    * `m` é opcional: sem ele, `sameGroup` é falso e só o organizador vê — que é o
    * comportamento seguro pra qualquer chamador que ainda não passe o jogo. */
   var _souDoJogo = false;
