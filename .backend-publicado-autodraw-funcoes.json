@@ -134,8 +134,14 @@
       "mode": "only"
     },
     "assignMatchCourt": {
-      "backendCommit": "003492608b61488dfddda8d58bfcb0965af1eda7",
-      "deployedAt": "2026-10-20T13:22:40.623Z",
+      "backendCommit": "07c482df82a4d697fe98a0bb40e28d75bd62c063",
+      "deployedAt": "2026-10-20T15:03:28.493Z",
+      "result": "success",
+      "mode": "only"
+    },
+    "applyMatchResult": {
+      "backendCommit": "07c482df82a4d697fe98a0bb40e28d75bd62c063",
+      "deployedAt": "2026-10-20T15:03:28.493Z",
       "result": "success",
       "mode": "only"
     }
