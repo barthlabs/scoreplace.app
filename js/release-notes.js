@@ -1,5 +1,6 @@
-// 2.4.133 — Botão NO AR abre saída limpa para TV em janela separada: quadras chamadas,
-// relógios, classificação e os três últimos resultados atualizados no torneio.
+// 2.4.133 — Botão NO AR e Modo TV abrem saída limpa em janela separada, no lugar
+// da visualização antiga na mesma tela: quadras chamadas, relógios,
+// classificação e os três últimos resultados atualizados no torneio.
 // 2.4.132 — Busca mais larga na chave em tela ampla e vários próximos jogos
 // no painel quando a largura disponível permite.
 // 2.4.131 — Nas abas por data do Neon, a chave deixa de mostrar uma fase e

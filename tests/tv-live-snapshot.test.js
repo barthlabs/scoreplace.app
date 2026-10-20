@@ -4,7 +4,7 @@ const vm = require('node:vm');
 const path = require('node:path');
 const root = path.join(__dirname, '..');
 const window = { _collectAllMatches: t => t.matches, _tourLogoSrc: t => t.logo };
-const context = vm.createContext({ window, document: {}, Date, Number, String, Array, Set });
+const context = vm.createContext({ window, document: { querySelectorAll: () => [] }, Date, Number, String, Array, Set });
 vm.runInContext(fs.readFileSync(path.join(root, 'js/domain/team-competition.js'), 'utf8'), context);
 window.ScoreplaceTeamCompetition = context.ScoreplaceTeamCompetition;
 vm.runInContext(fs.readFileSync(path.join(root, 'js/views/tv-live.js'), 'utf8'), context);
@@ -39,4 +39,21 @@ assert.equal(snapshot.rankings.length, 1, 'classificação geral, sem categoria 
 assert.equal(snapshot.rankings[0].rows.length, 8);
 assert.equal(snapshot.rankings[0].rows[0].name, 'VORTEX');
 assert.equal(snapshot.rankings[0].rows[0].gamesDiff, 8);
+const multi = { ...t, matches: [
+  match(8, 'Quadra 4', 'VORTEX', 'BLAST', { courtCalledAt: '2026-10-22T21:00:00Z', startedAt: '2026-10-22T21:03:00Z',
+    sets: [{ gamesP1: 6, gamesP2: 4 }, { gamesP1: 2, gamesP2: 3 }] }),
+  match(9, 'Quadra 5', 'ECLIPSE', 'VENOM', { winner: 'p1', resultAt: '2026-10-22T21:30:00Z',
+    sets: [{ gamesP1: 6, gamesP2: 4 }, { gamesP1: 3, gamesP2: 6 }, { gamesP1: 10, gamesP2: 8 }] })
+] };
+const multiSnapshot = window._tvLiveBuildSnapshot(multi);
+assert.equal(multiSnapshot.courts[0].scoreA, '2', 'placar ao vivo usa set atual');
+assert.equal(multiSnapshot.courts[0].scoreB, '3');
+assert.equal(multiSnapshot.results[0].scoreA, '6 / 3 / 10', 'resultado mostra todos os sets');
+assert.equal(multiSnapshot.results[0].scoreB, '4 / 6 / 8');
+let toast = '';
+window._currentBracketTournament = t;
+window.open = () => null;
+window.showToast = message => { toast = message; };
+window._tvLiveToggle();
+assert.match(toast, /Permita abrir/, 'popup bloqueado informa o organizador');
 console.log('✓ TV: 6 quadras chamadas, relógio, placar ao vivo, 3 resultados e saldo geral por time');
