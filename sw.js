@@ -149,6 +149,7 @@ var STATIC_ASSETS = [
   '/js/views/bracket-model.js',
   '/js/views/bracket.js',
   '/js/views/bracket-ui.js',
+  '/js/views/tv-live.js',
   '/js/views/phases-engine.js',
   '/js/views/team-formation.js',
   '/js/views/liga-substitution.js',
