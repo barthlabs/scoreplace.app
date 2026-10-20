@@ -134,8 +134,8 @@
       "mode": "only"
     },
     "assignMatchCourt": {
-      "backendCommit": "f83d83ad2ba9856e390faed12cc56643c9de586b",
-      "deployedAt": "2026-10-20T15:13:59.325Z",
+      "backendCommit": "f9fd02f2e4ade14b7ac768d02c2a60ca0754732f",
+      "deployedAt": "2026-10-20T16:54:13.238Z",
       "result": "success",
       "mode": "only"
     },
