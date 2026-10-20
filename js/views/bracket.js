@@ -3841,6 +3841,7 @@ window._confirmMatchCourtCall = function(button, tId, matchId) {
       if (!d.ok) throw new Error(d.reason || 'Não foi possível chamar o jogo.');
       if (typeof showNotification === 'function') showNotification('Jogo chamado', court, 'success');
       button.textContent = '✓ OK';
+      button.disabled = false;
       var time = row && row.querySelector('.sp-match-estimated-time');
       var start = Date.parse(d.courtCalledAt || '');
       var current = typeof window._findTournamentById === 'function' ? window._findTournamentById(tId) : null;
@@ -3894,6 +3895,25 @@ if (!window._spCourtCallClock && typeof setInterval === 'function') window._spCo
       parent.classList.remove('sp-match-phase-call', 'sp-match-phase-warmup', 'sp-match-phase-game', 'sp-match-phase-overdue');
       parent.classList.add('sp-match-phase-' + state.phase);
       parent.title = clock.title(state.phase);
+    }
+    if (state.phase !== 'call') {
+      var row = el.closest('.sp-match-operational');
+      if (row) {
+        var select = row.querySelector('.sp-match-court select');
+        if (select) {
+          var readonly = document.createElement('div');
+          readonly.className = 'sp-match-court sp-match-court--readonly';
+          readonly.textContent = select.value;
+          select.closest('.sp-match-court').replaceWith(readonly);
+        }
+        var confirm = row.querySelector('button.sp-match-confirm');
+        if (confirm) {
+          var status = document.createElement('span');
+          status.className = 'sp-match-confirm sp-match-confirm--locked';
+          status.textContent = '✓ OK';
+          confirm.replaceWith(status);
+        }
+      }
     }
   });
 }, 1000);
@@ -7611,7 +7631,12 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     return out;
   })();
   var _isConcentratedEvent = !!(window._isConcentratedTournament && window._isConcentratedTournament(t));
-  var _canChangeCardCourt = !!(_isConcentratedEvent && t && typeof window._souOrganizador === 'function' && window._souOrganizador(t) && !_matchAlreadyInPlay && !isByeMatch && !m.isSitOut);
+  var _callStartedMs = _matchCardTimestamp(m.courtCalledAt);
+  var _callMinutes = window.ScoreplaceMatchTiming
+    ? window.ScoreplaceMatchTiming.config(t).call
+    : Math.max(0, Number(t && t.callTime) || 0);
+  var _withinCallWindow = !_callStartedMs || Date.now() < _callStartedMs + _callMinutes * 60000;
+  var _canChangeCardCourt = !!(_isConcentratedEvent && t && typeof window._souOrganizador === 'function' && window._souOrganizador(t) && !_matchAlreadyInPlay && !isByeMatch && !m.isSitOut && _withinCallWindow);
   var _courtCardHtml = '';
   // Na agenda concentrada a quadra e o horário formam um único dado operacional.
   // `scheduledKind: estimate` vem do planejador; o ≈ deixa explícito que a
@@ -7632,12 +7657,12 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   if (_canChangeCardCourt && _cardCourts.length) {
     var _suggestedCourt = (typeof window._suggestFreedCourtForMatch === 'function') ? window._suggestFreedCourtForMatch(t, m) : '';
     var _displayCourt = _suggestedCourt || String(m.court || '');
-    var _courtOpts = '<option value="">Sem quadra</option>' + _cardCourts.map(function (court) {
+    var _courtOpts = (m.courtCalledAt ? '' : '<option value="">Sem quadra</option>') + _cardCourts.map(function (court) {
       return '<option value="' + window._safeHtml(court) + '"' + (_displayCourt === court ? ' selected' : '') + '>' + window._safeHtml(court) + '</option>';
     }).join('');
-    _courtCardHtml = '<div class="sp-match-operational" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><label class="sp-match-court"><select aria-label="Quadra" onclick="event.stopPropagation()" onchange="window._assignMatchCourt(\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\',this.value)">' + _courtOpts + '</select></label>' + (m.courtCalledAt ? '<span class="sp-match-confirm" style="font-size:.72rem;font-weight:800;color:var(--sp-c-4ade80,#4ade80);">✓ OK</span>' : '<button type="button" class="sp-match-confirm" aria-label="Confirmar chamada para a quadra" onclick="event.stopPropagation();window._confirmMatchCourtCall(this,\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\')" style="padding:4px 9px;border-radius:7px;border:1px solid #22c55e;background:#166534;color:#fff;font-weight:800;cursor:pointer;">OK</button>') + _estimatedTimeHtml + '</div>';
+    _courtCardHtml = '<div class="sp-match-operational" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><label class="sp-match-court"><select aria-label="Quadra" onclick="event.stopPropagation()" onchange="window._assignMatchCourt(\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\',this.value)">' + _courtOpts + '</select></label><button type="button" class="sp-match-confirm" aria-label="Confirmar chamada para a quadra" onclick="event.stopPropagation();window._confirmMatchCourtCall(this,\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\')" style="padding:4px 9px;border-radius:7px;border:1px solid #22c55e;background:#166534;color:#fff;font-weight:800;cursor:pointer;">' + (m.courtCalledAt ? '✓ OK' : 'OK') + '</button>' + _estimatedTimeHtml + '</div>';
   } else if (_isConcentratedEvent && m.court) {
-    _courtCardHtml = '<div class="sp-match-operational" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><div class="sp-match-court sp-match-court--readonly">' + window._safeHtml(String(m.court)) + '</div>' + _estimatedTimeHtml + '</div>';
+    _courtCardHtml = '<div class="sp-match-operational" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><div class="sp-match-court sp-match-court--readonly">' + window._safeHtml(String(m.court)) + '</div>' + (m.courtCalledAt && typeof window._souOrganizador === 'function' && window._souOrganizador(t) ? '<span class="sp-match-confirm sp-match-confirm--locked">✓ OK</span>' : '') + _estimatedTimeHtml + '</div>';
   } else if (_estimatedTimeHtml) {
     _courtCardHtml = '<div class="sp-match-operational" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' + _estimatedTimeHtml + '</div>';
   }

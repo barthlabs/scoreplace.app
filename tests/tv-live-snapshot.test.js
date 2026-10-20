@@ -200,17 +200,22 @@ const clockParent = { title:'', classList: {
   remove: (...names) => names.forEach(name => clockClasses.delete(name)),
   add: name => clockClasses.add(name)
 } };
+let courtLocked = false, okLocked = false;
+const courtControl = { value:'Quadra 4', closest: () => ({ replaceWith: () => { courtLocked = true; } }) };
+const okControl = { replaceWith: () => { okLocked = true; } };
+const courtRow = { querySelector: selector => selector.includes('select') ? (courtLocked ? null : courtControl) : (okLocked ? null : okControl) };
 const clockNode = { textContent:'', getAttribute: name => ({
   'data-start-ms': String(phaseBase), 'data-call-min':'1', 'data-warmup-min':'1', 'data-game-min':'1'
-})[name], closest: () => clockParent };
+})[name], closest: selector => selector === '.sp-match-operational' ? courtRow : clockParent };
 const bracketClockWindow = { ScoreplaceMatchTiming: timingCore };
 vm.runInNewContext(bracketSource.slice(bracketClockStart, bracketClockEnd), {
-  window:bracketClockWindow, document:{ querySelectorAll: () => [clockNode] },
+  window:bracketClockWindow, document:{ querySelectorAll: () => [clockNode], createElement: () => ({}) },
   Date:{ now: () => clockNow }, setInterval: callback => { clockTick = callback; return 1; },
   Number, String
 });
 const clockHtml = bracketClockWindow._spCourtClockHtml(phaseBase, phaseTournament, clockNow);
 assert.match(clockHtml, /sp-match-phase-call.*Chamado 00:00:45/, 'chave nasce com fase e hora idênticas ao NO AR');
+assert(!courtLocked && !okLocked, 'quadra e OK permanecem editáveis durante a chamada');
 for (const [seconds, label, colorClass] of [
   [90, 'Aquecimento 00:00:30', 'sp-match-phase-warmup'],
   [150, 'Tempo de jogo 00:00:30', 'sp-match-phase-game'],
@@ -221,8 +226,11 @@ for (const [seconds, label, colorClass] of [
   assert.equal(clockNode.textContent, label, 'chave atualiza ' + label);
   assert(clockClasses.has(colorClass), 'chave atualiza a cor para ' + colorClass);
 }
+assert(courtLocked && okLocked, 'quadra e OK deixam de ser controles ao iniciar aquecimento');
 const htmlSource = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 assert(htmlSource.indexOf('js/domain/match-timing.js') < htmlSource.indexOf('js/views/bracket.js') &&
   htmlSource.indexOf('js/views/bracket.js') < htmlSource.indexOf('js/views/tv-live.js'),
   'módulo de fases carrega antes da chave e do NO AR');
+assert.match(fs.readFileSync(path.join(root, 'sw.js'), 'utf8'), /'\/js\/domain\/match-timing\.js'/,
+  'relógio compartilhado está no precache para a chave funcionar offline');
 console.log('✓ TV: 6 quadras chamadas, relógio, placar ao vivo, 3 resultados e saldo geral por time');

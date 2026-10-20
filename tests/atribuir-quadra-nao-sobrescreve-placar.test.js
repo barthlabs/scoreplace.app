@@ -17,10 +17,10 @@ ok(src.includes('regression_played_match_court_is_immutable') && src.includes('s
 ok(src.includes("typeof m.scoreP1 === 'number' && m.scoreP1 > 0") && src.includes("typeof m.scoreP2 === 'number' && m.scoreP2 > 0"),
   'cliente também bloqueia seletor quando já existe placar numérico — mesma régua da Function');
 ok(body.includes("confirmCall: true") && body.includes('select.value'), 'OK envia a quadra escolhida e a intenção de chamada na mesma operação');
-ok(cf.includes('if (confirmCall && !court)') && cf.includes('if (confirmCall) m.courtCalledAt = agoraIso;'),
+ok(cf.includes('if (confirmCall && !court)') && cf.includes('if (confirmCall && !m.courtCalledAt) m.courtCalledAt = agoraIso;'),
   'servidor exige quadra e registra o instante da chamada');
 ok(cf.includes('atual === court && (!confirmCall || m.courtCalledAt)'), 'chamada repetida não regrava nem reinicia o relógio');
-ok(cf.includes('else if (atual !== court) delete m.courtCalledAt;'), 'trocar ou remover quadra cancela chamada antiga');
+ok(cf.includes('if (confirmCall && !m.courtCalledAt) m.courtCalledAt = agoraIso;'), 'troca de quadra preserva o início original da chamada');
 const courtBlockStart=cf.indexOf("const atual = String(m.court || '');",cf.indexOf('exports.assignMatchCourt = onCall'));
 const courtBlockEnd=cf.indexOf('const b = _gravaTorneio',courtBlockStart);
 ok(courtBlockStart>=0 && courtBlockEnd>courtBlockStart, 'regra real da chamada localizada na Function');
@@ -28,17 +28,22 @@ if(courtBlockStart>=0 && courtBlockEnd>courtBlockStart){
   const apply=new Function('m','court','confirmCall','agoraIso','_drawFail','tId','matchId','t','drawWindow',
     cf.slice(courtBlockStart,courtBlockEnd)+' return {ok:true,changed:true,courtCalledAt:m.courtCalledAt||null};');
   const m={court:'Quadra 4'};
+  const event={callTime:5};
   const fail=()=>new Error('precondition');
-  apply(m,'Quadra 4',true,'2026-10-19T18:00:00Z',fail,'t','j');
+  apply(m,'Quadra 4',true,'2026-10-19T18:00:00Z',fail,'t','j',event);
   ok(m.courtCalledAt==='2026-10-19T18:00:00Z','OK inicial carimba a chamada');
-  const repeat=apply(m,'Quadra 4',true,'2026-10-19T18:01:00Z',fail,'t','j');
+  const repeat=apply(m,'Quadra 4',true,'2026-10-19T18:01:00Z',fail,'t','j',event);
   ok(repeat.changed===false && m.courtCalledAt==='2026-10-19T18:00:00Z','OK repetido conserva o início');
-  apply(m,'Quadra 5',false,'2026-10-19T18:02:00Z',fail,'t','j');
-  ok(m.court==='Quadra 5' && !m.courtCalledAt,'mudar quadra remove a chamada velha');
-  apply(m,'Quadra 5',true,'2026-10-19T18:03:00Z',fail,'t','j');
-  ok(m.courtCalledAt==='2026-10-19T18:03:00Z','novo OK inicia chamada da quadra nova');
-  apply(m,'',false,'2026-10-19T18:04:00Z',fail,'t','j');
-  ok(!m.court && !m.courtCalledAt,'remover quadra também cancela a chamada');
+  apply(m,'Quadra 5',false,'2026-10-19T18:02:00Z',fail,'t','j',event);
+  ok(m.court==='Quadra 5' && m.courtCalledAt==='2026-10-19T18:00:00Z','mudar quadra durante chamada conserva o relógio');
+  apply(m,'Quadra 5',true,'2026-10-19T18:03:00Z',fail,'t','j',event);
+  ok(m.courtCalledAt==='2026-10-19T18:00:00Z','novo OK não reinicia a chamada');
+  let afterWarmup=false;
+  try { apply(m,'Quadra 4',false,'2026-10-19T18:05:00Z',fail,'t','j',event); } catch (_) { afterWarmup=true; }
+  ok(afterWarmup && m.court==='Quadra 5','ao começar aquecimento, troca de quadra é bloqueada');
+  let removal=false;
+  try { apply(m,'',false,'2026-10-19T18:04:00Z',fail,'t','j',event); } catch (_) { removal=true; }
+  ok(removal && m.courtCalledAt==='2026-10-19T18:00:00Z','chamada não pode ser reiniciada ao remover a quadra');
   const first={id:'j1',court:'Quadra 8',scheduledAt:'2026-10-22T18:00:00Z'};
   const second={id:'j2',court:'Quadra 9',scheduledAt:'2026-10-22T18:00:00Z'};
   const later={id:'j3',court:'Quadra 9',scheduledAt:'2026-10-22T18:35:00Z'};

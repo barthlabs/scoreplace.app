@@ -163,6 +163,7 @@ summary::-webkit-details-marker { display: none; }
   box-sizing: border-box;
   flex: none;
 }
+.sp-match-confirm--locked { color: var(--sp-c-4ade80,#4ade80); font-size: .72rem; font-weight: 800; }
 .sp-match-phase-call { color: #38bdf8; }
 .sp-match-phase-warmup { color: #fbbf24; }
 .sp-match-phase-game { color: #4ade80; }

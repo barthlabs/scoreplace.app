@@ -3737,6 +3737,16 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
       if (jaEmJogo) throw _drawFail('failed-precondition', 'Jogo iniciado ou concluído não pode mudar de quadra.', { tId, matchId });
       const antes = _antesDoMotor(t);
       const atual = String(m.court || '');
+      // A troca só é permitida durante a chamada original. Manter o carimbo
+      // evita que cada nova quadra reinicie os cinco minutos.
+      const callStarted = Date.parse(String(m.courtCalledAt || ''));
+      const callMs = Math.max(0, Number(t.callTime) || 0) * 60000;
+      if (!court && Number.isFinite(callStarted)) {
+        throw _drawFail('failed-precondition', 'Escolha outra quadra para o jogo já chamado.', { tId, matchId });
+      }
+      if (court !== atual && Number.isFinite(callStarted) && Date.parse(agoraIso) >= callStarted + callMs) {
+        throw _drawFail('failed-precondition', 'A chamada terminou; não é mais possível mudar a quadra.', { tId, matchId });
+      }
       if (confirmCall && !court) throw _drawFail('failed-precondition', 'Escolha uma quadra antes de chamar o jogo.', { tId, matchId });
       if (atual === court && (!confirmCall || m.courtCalledAt)) return { ok: true, changed: false, courtCalledAt: m.courtCalledAt || null };
       const reassigned = [];
@@ -3765,8 +3775,7 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
       if (court) m.court = court; else delete m.court;
       // Mudar/remover a quadra desfaz a chamada anterior. Confirmar em outra
       // quadra cria uma chamada nova; repetir na mesma conserva o instante.
-      if (confirmCall) m.courtCalledAt = agoraIso;
-      else if (atual !== court) delete m.courtCalledAt;
+      if (confirmCall && !m.courtCalledAt) m.courtCalledAt = agoraIso;
       const b = _gravaTorneio(tx, ref, t, antes, { agoraIso: agoraIso });
       return { ok: true, changed: true, court, courtCalledAt: m.courtCalledAt || null, reassigned, tournament: b.clean };
     });
