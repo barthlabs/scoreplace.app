@@ -1,6 +1,7 @@
 // 2.5.9 — NO AR mostra jogo, categoria, duplas, placar, quadra e cronômetro
 // no formato dos cards da chave; atualiza ao receber o estado novo. O resultado
 // libera a quadra e entra em Últimos resultados. O timer não tem rótulo extra.
+// O cabeçalho mostra Quadra e Jogo à esquerda, categoria à direita.
 // 2.5.8 — A chamada para quadra funciona também no sandbox do organizador,
 // mantendo o torneio real e o teste isolados. Na TV, nomes dos times e
 // pontuações ocupam melhor a altura disponível na classificação.
