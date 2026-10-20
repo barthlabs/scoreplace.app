@@ -16,6 +16,7 @@ const _matchHistory = require('./match-history-core.js');
 const _rosterState = require('./roster-state-core.js');
 const _tSplit = require('./vendor/tournament-split-core.js');   // fonte única: js/views/ (copy-vendor)
 const _registrationRoster = require('./vendor/registration-roster.js');
+const _matchTiming = require('./vendor/match-timing.js');
 const _competitionAssignments = require('./competition-assignment-core.js');
 // fonte única: functions/match-roster.js (copy-vendor) — monta o subdoc de resultado,
 // incluindo o carregar-adiante do `replay`, que o servidor não sabe recalcular.
@@ -1984,8 +1985,10 @@ exports.resetTournamentToEnrollment = onCall(async request => {
   if (!drawWindow || typeof drawWindow._clearTournamentDraw !== 'function') {
     throw new HttpsError('internal', 'Motor de reset indisponível no servidor.');
   }
-  const ref = db.collection('tournaments').doc(tId), agora = new Date(), agoraIso = agora.toISOString();
+  const sandbox = tId.startsWith('sb_');
+  const ref = db.collection(sandbox ? 'sandboxes' : 'tournaments').doc(tId), agora = new Date(), agoraIso = agora.toISOString();
   return db.runTransaction(async tx => {
+    if (sandbox) await _assertSandboxDrawOwner(tx, await tx.get(ref), uid);
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) {
@@ -1994,8 +1997,8 @@ exports.resetTournamentToEnrollment = onCall(async request => {
     // Não há reset genérico para torneio real. Cada intenção tem uma autorização
     // própria e explícita: Sandbox ou o único torneio liberado para voltar ao
     // estado imediatamente anterior à publicação.
-    const isSandboxRestore = restoreMode === 'sandbox' && t.isSandbox === true;
-    const isPrePublicationRestore = restoreMode === 'prePublication' && t.allowPrePublicationRestore === true;
+    const isSandboxRestore = restoreMode === 'sandbox' && sandbox && t.isSandbox === true;
+    const isPrePublicationRestore = restoreMode === 'prePublication' && sandbox && t.isSandbox === true && t.allowPrePublicationRestore === true;
     if (!isSandboxRestore && !isPrePublicationRestore) {
       throw _drawFail('permission-denied', 'Esta restauração não está habilitada para este torneio.', { tId, uid, restoreMode });
     }
@@ -3711,6 +3714,8 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
   const matchId = String((request.data && request.data.matchId) || '').trim();
   const court = String((request.data && request.data.court) || '').trim().slice(0, 120);
   const confirmCall = request.data && request.data.confirmCall === true;
+  const clockAction = String((request.data && request.data.clockAction) || '');
+  if (clockAction && clockAction !== 'next' && clockAction !== 'restart') throw new HttpsError('invalid-argument', 'Ação do relógio inválida.');
   if (!tId || !matchId) throw new HttpsError('invalid-argument', 'Torneio e jogo são obrigatórios.');
   const sandbox = request.data && request.data.sandbox === true;
   if (sandbox !== tId.startsWith('sb_')) throw new HttpsError('not-found', 'Torneio não encontrado.');
@@ -3727,6 +3732,23 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
       if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização define a quadra.', { tId, matchId, uid });
       const m = drawWindow._findMatch(t, matchId);
       if (!m) return { ok: false, reason: 'match-not-found' };
+      if (clockAction) {
+        // FF/REW controlam apenas o cronômetro operacional, inclusive durante
+        // o jogo. Placar, sets, startedAt e resultado nunca são alterados aqui.
+        if (!m.courtCalledAt || !m.court || m.winner || m.wo || m.resultAt) {
+          throw _drawFail('failed-precondition', 'O jogo precisa estar chamado e sem resultado.', { tId, matchId });
+        }
+        const timing = _matchTiming.config(t);
+        const nowMs = Date.parse(agoraIso);
+        const anchorMs = Date.parse(String(m.courtClockBaseAt || m.courtCalledAt));
+        if (!Number.isFinite(anchorMs)) throw _drawFail('failed-precondition', 'Horário da chamada inválido.', { tId, matchId });
+        const shifted = _matchTiming.adjust(anchorMs, timing, nowMs, clockAction);
+        if (!shifted.changed) return { ok: true, changed: false, phase: shifted.phase, courtClockBaseAt: new Date(anchorMs).toISOString() };
+        const beforeClock = _antesDoMotor(t);
+        m.courtClockBaseAt = new Date(shifted.start).toISOString();
+        const boundary = _gravaTorneio(tx, ref, t, beforeClock, { agoraIso });
+        return { ok: true, changed: true, phase: shifted.phase, courtClockBaseAt: m.courtClockBaseAt, tournament: boundary.clean };
+      }
       const jaEmJogo = (typeof drawWindow._matchHasRealPlay === 'function' && drawWindow._matchHasRealPlay(m)) ||
         m.liveScored === true || m.startedAt || m.resultAt || m.wo === true || m.winner != null ||
         (Array.isArray(m.sets) && m.sets.length > 0) ||
@@ -3739,12 +3761,12 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
       const atual = String(m.court || '');
       // A troca só é permitida durante a chamada original. Manter o carimbo
       // evita que cada nova quadra reinicie os cinco minutos.
-      const callStarted = Date.parse(String(m.courtCalledAt || ''));
-      const callMs = Math.max(0, Number(t.callTime) || 0) * 60000;
-      if (!court && Number.isFinite(callStarted)) {
+      const callStarted = Date.parse(String(m.courtClockBaseAt || m.courtCalledAt || ''));
+      const callState = Number.isFinite(callStarted) ? _matchTiming.phaseAt(callStarted, _matchTiming.config(t), Date.parse(agoraIso)) : null;
+      if (!court && m.courtCalledAt) {
         throw _drawFail('failed-precondition', 'Escolha outra quadra para o jogo já chamado.', { tId, matchId });
       }
-      if (court !== atual && Number.isFinite(callStarted) && Date.parse(agoraIso) >= callStarted + callMs) {
+      if (court !== atual && callState && callState.phase !== 'call') {
         throw _drawFail('failed-precondition', 'A chamada terminou; não é mais possível mudar a quadra.', { tId, matchId });
       }
       if (confirmCall && !court) throw _drawFail('failed-precondition', 'Escolha uma quadra antes de chamar o jogo.', { tId, matchId });

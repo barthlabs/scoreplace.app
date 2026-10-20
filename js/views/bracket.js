@@ -3846,7 +3846,7 @@ window._confirmMatchCourtCall = function(button, tId, matchId) {
       var start = Date.parse(d.courtCalledAt || '');
       var current = typeof window._findTournamentById === 'function' ? window._findTournamentById(tId) : null;
       if (row && Number.isFinite(start)) {
-        var clockHtml = window._spCourtClockHtml(start, current, Date.now());
+        var clockHtml = window._spCourtClockHtml(start, current, Date.now(), tId, matchId, true);
         if (time) time.outerHTML = clockHtml;
         else row.insertAdjacentHTML('beforeend', clockHtml);
       }
@@ -3866,20 +3866,51 @@ window._confirmMatchCourtCall = function(button, tId, matchId) {
     });
 };
 
+window._adjustMatchCourtClock = function(button, tId, matchId, action) {
+  if (button.disabled || typeof window._callCF !== 'function') return;
+  var row = button.closest('.sp-match-operational');
+  var select = row && row.querySelector('select');
+  var court = select ? select.value : row && row.querySelector('.sp-match-court') && row.querySelector('.sp-match-court').textContent;
+  button.disabled = true;
+  return window._callCF('assignMatchCourt', { tournamentId: String(tId), sandbox: String(tId).startsWith('sb_'),
+    matchId: String(matchId), court: String(court || '').trim(), clockAction: action }, 'Entre na sua conta para controlar o relógio.')
+    .then(function(res) {
+      var d = (res && res.data) || {};
+      if (!d.ok || !d.courtClockBaseAt) throw new Error(d.reason || 'Relógio não atualizado.');
+      var start = Date.parse(d.courtClockBaseAt);
+      var current = typeof window._findTournamentById === 'function' ? window._findTournamentById(tId) : null;
+      if (row && Number.isFinite(start)) {
+        var timer = row.querySelector('.sp-match-call-timer');
+        if (timer) timer.setAttribute('data-start-ms', String(start));
+      }
+      if (current && typeof window._collectAllMatches === 'function') {
+        window._collectAllMatches(current).forEach(function(match) {
+          if (String(match.id) === String(matchId)) match.courtClockBaseAt = d.courtClockBaseAt;
+        });
+      }
+      if (typeof window._tvLiveRefresh === 'function') window._tvLiveRefresh();
+      if (typeof window._spRefreshCourtClocks === 'function') window._spRefreshCourtClocks();
+    }).catch(function(err) {
+      if (typeof showNotification === 'function') showNotification('Relógio não alterado', err && err.message || 'Tente novamente.', 'error');
+    }).finally(function() { button.disabled = false; });
+};
+
 window._spFormatElapsed = function(start, now) {
   var seconds = Math.max(0, Math.floor((now - start) / 1000));
   return String(Math.floor(seconds / 3600)).padStart(2, '0') + ':' +
     String(Math.floor(seconds / 60) % 60).padStart(2, '0') + ':' +
     String(seconds % 60).padStart(2, '0');
 };
-window._spCourtClockHtml = function(start, tournament, now) {
+window._spCourtClockHtml = function(start, tournament, now, tId, matchId, controls) {
   var clock = window.ScoreplaceMatchTiming;
   var timing = clock.config(tournament);
   var state = clock.phaseAt(start, timing, now);
+  var buttons = controls ? '<button type="button" class="sp-match-clock-action sp-match-clock-next" aria-label="Próxima etapa do relógio" title="FF · próxima etapa"' + (state.phase === 'overdue' ? ' disabled' : '') + ' onclick="event.stopPropagation();window._adjustMatchCourtClock(this,\'' + String(tId) + '\',\'' + String(matchId) + '\',\'next\')">FF</button>' +
+    '<button type="button" class="sp-match-clock-action" aria-label="Reiniciar etapa do relógio" title="REW · reiniciar tempo" onclick="event.stopPropagation();window._adjustMatchCourtClock(this,\'' + String(tId) + '\',\'' + String(matchId) + '\',\'restart\')">REW</button>' : '';
   return '<span class="sp-match-estimated-time sp-match-phase-' + state.phase + '" title="' + clock.title(state.phase) + '" style="margin-left:auto;white-space:nowrap;text-align:right;font-size:.78rem;font-weight:800;">' +
-    '⏱ <span class="sp-match-call-timer" data-start-ms="' + start + '" data-call-min="' + timing.call + '" data-warmup-min="' + timing.warmup + '" data-game-min="' + timing.game + '">' + clock.text(state, now) + '</span></span>';
+    buttons + '⏱ <span class="sp-match-call-timer" data-start-ms="' + start + '" data-call-min="' + timing.call + '" data-warmup-min="' + timing.warmup + '" data-game-min="' + timing.game + '">' + clock.text(state, now) + '</span></span>';
 };
-if (!window._spCourtCallClock && typeof setInterval === 'function') window._spCourtCallClock = setInterval(function() {
+window._spRefreshCourtClocks = function() {
   var clock = window.ScoreplaceMatchTiming;
   var now = Date.now();
   document.querySelectorAll('.sp-match-call-timer[data-start-ms]').forEach(function(el) {
@@ -3895,6 +3926,8 @@ if (!window._spCourtCallClock && typeof setInterval === 'function') window._spCo
       parent.classList.remove('sp-match-phase-call', 'sp-match-phase-warmup', 'sp-match-phase-game', 'sp-match-phase-overdue');
       parent.classList.add('sp-match-phase-' + state.phase);
       parent.title = clock.title(state.phase);
+      var next = parent.querySelector('.sp-match-clock-next');
+      if (next) next.disabled = state.phase === 'overdue';
     }
     if (state.phase !== 'call') {
       var row = el.closest('.sp-match-operational');
@@ -3916,7 +3949,8 @@ if (!window._spCourtCallClock && typeof setInterval === 'function') window._spCo
       }
     }
   });
-}, 1000);
+};
+if (!window._spCourtCallClock && typeof setInterval === 'function') window._spCourtCallClock = setInterval(window._spRefreshCourtClocks, 1000);
 
 // ─── Formação de duplas na LISTA DE ESPERA durante a R1 (inscrição tardia aberta) ──────
 // v4.5.18 (regra do dono): num torneio de DUPLAS com a janela da inscrição tardia ABERTA
@@ -7631,11 +7665,13 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     return out;
   })();
   var _isConcentratedEvent = !!(window._isConcentratedTournament && window._isConcentratedTournament(t));
-  var _callStartedMs = _matchCardTimestamp(m.courtCalledAt);
+  var _callStartedMs = _matchCardTimestamp(m.courtClockBaseAt || m.courtCalledAt);
   var _callMinutes = window.ScoreplaceMatchTiming
     ? window.ScoreplaceMatchTiming.config(t).call
     : Math.max(0, Number(t && t.callTime) || 0);
-  var _withinCallWindow = !_callStartedMs || Date.now() < _callStartedMs + _callMinutes * 60000;
+  var _withinCallWindow = !_callStartedMs || (window.ScoreplaceMatchTiming
+    ? window.ScoreplaceMatchTiming.phaseAt(_callStartedMs, window.ScoreplaceMatchTiming.config(t), Date.now()).phase === 'call'
+    : Date.now() < _callStartedMs + _callMinutes * 60000);
   var _canChangeCardCourt = !!(_isConcentratedEvent && t && typeof window._souOrganizador === 'function' && window._souOrganizador(t) && !_matchAlreadyInPlay && !isByeMatch && !m.isSitOut && _withinCallWindow);
   var _courtCardHtml = '';
   // Na agenda concentrada a quadra e o horário formam um único dado operacional.
@@ -7643,14 +7679,15 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // organização pode ajustar o chamado dos jogos ao longo do evento.
   var _scheduledMs = _isConcentratedEvent ? _matchCardTimestamp(m.scheduledAt) : null;
   var _playedMs = _isConcentratedEvent ? _matchCardResultTimestamp(m) : null;
-  var _calledMs = _isConcentratedEvent && !_playedMs ? _matchCardTimestamp(m.courtCalledAt) : null;
+  var _calledMs = _isConcentratedEvent && !_playedMs ? _matchCardTimestamp(m.courtClockBaseAt || m.courtCalledAt) : null;
   var _liveStartMs = _isConcentratedEvent && !_playedMs && m.startedAt ? _matchCardTimestamp(m.startedAt) : null;
   // Um único slot operacional de horário: azul enquanto é previsão; verde
   // quando o resultado confirmou o horário real. Não exibir "Jogado em" duas
   // vezes, nem perder a categoria do card concluído.
   var _matchTimeMs = _playedMs || _scheduledMs;
   var _estimatedTimeHtml = (_calledMs || _liveStartMs)
-    ? window._spCourtClockHtml(_calledMs || _liveStartMs, t, Date.now())
+    ? window._spCourtClockHtml(_calledMs || _liveStartMs, t, Date.now(), tId, m.id,
+        typeof window._souOrganizador === 'function' && window._souOrganizador(t))
     : _matchTimeMs
     ? '<span class="sp-match-estimated-time" title="' + (_playedMs ? 'Horário jogado' : 'Horário estimado do jogo') + '" style="margin-left:auto;white-space:nowrap;text-align:right;font-size:.78rem;font-weight:800;color:' + (_playedMs ? 'var(--sp-c-4ade80,#4ade80)' : 'var(--sp-c-7dd3fc,#7dd3fc)') + ';">🕒 ' + (_playedMs ? '' : '≈ ') + window._safeHtml(_matchCardDateTime(_matchTimeMs, t)) + '</span>'
     : '';

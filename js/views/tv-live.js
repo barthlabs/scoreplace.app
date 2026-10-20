@@ -93,7 +93,7 @@
     // ocorreu; não basta lembrar qual jogo recebeu OK por último.
     var latestPhaseId = '', latestTransitionAt = 0;
     allActive.forEach(function (m) {
-      var event = clock.phaseAt(timestamp(m.courtCalledAt || m.startedAt), timing, now);
+      var event = clock.phaseAt(timestamp(m.courtClockBaseAt || m.courtCalledAt || m.startedAt), timing, now);
       if (event.transitionAt > latestTransitionAt) {
         latestTransitionAt = event.transitionAt;
         latestPhaseId = String(m.id || '');
@@ -107,7 +107,7 @@
         a: sideName(t, m, 'p1'), b: sideName(t, m, 'p2'), ta: teamFor(m, 1, teams), tb: teamFor(m, 2, teams),
         scoreA: gameScore(m, 1) === '–' ? '0' : gameScore(m, 1),
         scoreB: gameScore(m, 2) === '–' ? '0' : gameScore(m, 2),
-        timerStart: timestamp(m.courtCalledAt || m.startedAt) };
+        timerStart: timestamp(m.courtClockBaseAt || m.courtCalledAt || m.startedAt) };
     });
     var results = matches.filter(function (m) { return m && (m.winner || m.wo) && !m.isBye && !m.isSitOut; })
       .sort(function (a, b) { return timestamp(b.resultAt || b.completedAt || b.updatedAt) - timestamp(a.resultAt || a.completedAt || a.updatedAt); })
@@ -166,6 +166,26 @@
       '</div><div class="tv-qr"><img class="tv-qr-code" src="' + esc(snapshot.qrImage) + '" alt="QR para abrir o torneio no Scoreplace"><div class="tv-qr-brand"><img src="' + esc(snapshot.scoreplaceLogo) + '" alt=""><span>Abra no<br>Scoreplace</span></div></div>' +
       '</section></aside></main>';
   }
+  // A janela continua viva durante o reload automático da aba principal. O
+  // script nela mantém os relógios e volta a ler o estado assim que o opener
+  // termina de carregar a versão nova.
+  window._tvLiveBodyHtml = bodyHtml;
+  function childScript(tournamentId) {
+    var id = JSON.stringify(String(tournamentId || '')).replace(/</g, '\\u003c');
+    return '<script>(function(){"use strict";var id=' + id + ';function tick(){var now=Date.now();' +
+      'if(now-(window.__tvParentBeat||0)>1800){try{var owner=window.opener;' +
+      'var t=owner&&owner._findTournamentById&&owner._findTournamentById(id);' +
+      'if(t&&owner._tvLiveBuildSnapshot&&owner._tvLiveBodyHtml){var snap=owner._tvLiveBuildSnapshot(t,now);' +
+      'var html=owner._tvLiveBodyHtml(snap);if(html!==window.__tvLastMarkup){document.getElementById("tv-root").innerHTML=html;window.__tvLastMarkup=html;}' +
+      'window.__tvTiming=snap.timing;window.__tvLastSync=now;}}catch(e){}}' +
+      'var clock=window.ScoreplaceMatchTiming,timing=window.__tvTiming;' +
+      'if(clock&&timing)document.querySelectorAll("[data-tv-start]").forEach(function(node){' +
+      'var state=clock.phaseAt(Number(node.getAttribute("data-tv-start")),timing,now);' +
+      'node.className="tv-phase-"+state.phase;node.title=clock.title(state.phase);node.textContent=clock.text(state,now);});' +
+      'var current=document.getElementById("tv-now");if(current)current.textContent=new Date(now).toLocaleTimeString("pt-BR");' +
+      'var warning=document.getElementById("tv-connection");if(warning)warning.hidden=!!window.__tvLastSync&&now-window.__tvLastSync<10000;' +
+      '}setInterval(tick,1000);tick();})();</script>';
+  }
   var styles = '<style>*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#060d1a;color:#ffffff;font-family:Arial,Helvetica,sans-serif}.tv-header{height:9vh;min-height:62px;display:flex;align-items:center;gap:1.2vw;padding:1vh 2vw;border-bottom:2px solid #19314b}.tv-header img{height:100%;max-width:8vw;object-fit:contain}.tv-header h1{font-size:clamp(1.3rem,2.5vw,3rem);margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tv-header time{margin-left:auto;color:#67e8f9;font-size:1.25vw;white-space:nowrap}.tv-board{height:91vh;display:grid;grid-template-columns:1fr 1fr;gap:1vw;padding:1vw}.tv-courts{min-height:0;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(3,minmax(0,1fr));gap:.75vw}.tv-court,.tv-rankings,.tv-results{min-height:0;background:#0d1b2e;border:1px solid #1b3f61;border-radius:1vw;padding:.8vw}.tv-court{display:flex;flex-direction:column;overflow:hidden}.tv-court-top{display:flex;align-items:center;justify-content:space-between;gap:.5vw;color:#7dd3fc;min-height:1.5vw}.tv-court h2{font-size:clamp(.8rem,1.2vw,1.5rem);margin:0}.tv-court h2 small{font-size:.7em}.tv-court-top>span{color:#fbbf24;font-size:.85vw;font-weight:700}.tv-side{display:grid;grid-template-columns:1fr auto;grid-template-rows:auto auto;align-items:center;border-left:.35vw solid var(--team);background:#081321;margin-top:.35vw;padding:.3vw .55vw;min-height:0;flex:1}.tv-team{grid-column:1;font-size:1.2vw;font-weight:900;color:var(--team)}.tv-pair{grid-column:1;font-size:.7vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#cbd5e1}.tv-score{grid-column:2;grid-row:1/span 2;font-size:1.9vw}.tv-versus{text-align:center;color:#94a3b8;font-weight:900;line-height:1}.tv-timer{display:flex;justify-content:space-between;color:#34d399;font-size:.8vw;margin-top:.3vw}.tv-timer strong{font-variant-numeric:tabular-nums;font-size:1vw}.tv-court.empty{align-items:center;justify-content:center;color:#64748b}.tv-court.empty h2{color:#7dd3fc}.tv-sidebar{min-height:0;display:grid;grid-template-rows:1fr 1fr;gap:.75vw}.tv-rankings,.tv-results{overflow:hidden}.tv-sidebar h2{margin:0 0 .5vw;color:#fbbf24;font-size:1.3vw}.tv-ranking-group{overflow:auto;max-height:calc(100% - 2vw)}.tv-ranking-group h3{font-size:.9vw;margin:.4vw 0;color:#7dd3fc}.tv-ranking-row{display:grid;grid-template-columns:2vw 1fr 4vw;gap:.4vw;padding:.24vw;border-bottom:1px solid #1e3349;font-size:.9vw}.tv-ranking-row b{text-align:right;color:#fbbf24}.tv-result{border-bottom:1px solid #1e3349;padding:.4vw 0}.tv-result small{color:#7dd3fc;font-size:.7vw}.tv-result>div{display:grid;grid-template-columns:1fr auto 1fr;gap:.5vw;align-items:center;font-size:.8vw}.tv-result>div strong{text-align:center;font-size:1vw;color:#fff}.tv-result>div span:last-child{text-align:right}#tv-fullscreen-action{position:fixed;z-index:100;right:1vw;bottom:1vw;padding:.65em 1em;border:1px solid #67e8f9;border-radius:.5em;background:#123047;color:#fff;font:700 16px Arial,sans-serif;cursor:pointer;box-shadow:0 2px 12px #0009}#tv-fullscreen-action:focus-visible{outline:3px solid #fbbf24}html:fullscreen #tv-fullscreen-action{display:none}@media(orientation:portrait){.tv-header{height:7vh}.tv-header h1{font-size:3vw}.tv-header time{font-size:2vw}.tv-board{height:93vh;grid-template-columns:1fr;grid-template-rows:55% 45%;gap:1vh;padding:1vh}.tv-courts{gap:1vw}.tv-court{padding:1vw}.tv-court h2,.tv-sidebar h2{font-size:2vw}.tv-court-top>span,.tv-team,.tv-score{font-size:1.6vw}.tv-pair,.tv-timer,.tv-timer strong{font-size:1.2vw}.tv-sidebar{grid-template-rows:60% 40%;gap:1vh}.tv-ranking-row,.tv-result>div{font-size:1.3vw}.tv-ranking-group h3{font-size:1.5vw}.tv-result small{font-size:1vw}}</style>';
   styles = styles.replace('</style>',
     '.tv-sidebar h2{font-size:clamp(1.2rem,1.5vw,2rem)}' +
@@ -220,7 +240,7 @@
     popup = window.open('', 'scoreplace-live-tv-' + String(tournament.id || ''), 'popup,width=1920,height=1080');
     if (!popup) { stop(); if (typeof window.showToast === 'function') window.showToast('Permita abrir uma janela para a TV.'); return; }
     popup.document.open();
-    popup.document.write('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TV · ' + esc(tournament.name) + '</title>' + styles + '</head><body><div id="tv-root"></div><button id="tv-fullscreen-action" type="button" title="Mover para a tela HDMI e ocultar a barra do navegador">⛶ Tela cheia</button></body></html>');
+    popup.document.write('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TV · ' + esc(tournament.name) + '</title>' + styles + '<script src="' + esc(window.location.origin + '/js/domain/match-timing.js?v=' + (window.SCOREPLACE_VERSION || '')) + '"></script><style>#tv-connection{position:fixed;right:1vw;bottom:1vw;z-index:20;padding:.4em .7em;border-radius:.5em;background:#7f1d1d;color:#fff;font-weight:800}#tv-connection[hidden]{display:none}</style></head><body><div id="tv-root"></div><div id="tv-connection" hidden>Reconectando à organização…</div><button id="tv-fullscreen-action" type="button" title="Mover para a tela HDMI e ocultar a barra do navegador">⛶ Tela cheia</button>' + childScript(tournament.id) + '</body></html>');
     popup.document.close();
     function keepTvAwake() {
       if (!popup || popup.closed || popup.document.visibilityState !== 'visible' || wakeSentinel || wakePending) return;
@@ -251,7 +271,10 @@
       var snapshot = window._tvLiveBuildSnapshot(current || tournament, tickNow);
       if (!snapshot) return;
       var markup = bodyHtml(snapshot);
-      if (markup !== lastMarkup) { popup.document.getElementById('tv-root').innerHTML = markup; lastMarkup = markup; }
+      if (markup !== lastMarkup) { popup.document.getElementById('tv-root').innerHTML = markup; lastMarkup = markup; popup.__tvLastMarkup = markup; }
+      popup.__tvTiming = snapshot.timing;
+      popup.__tvLastSync = tickNow;
+      popup.__tvParentBeat = tickNow;
       popup.document.querySelectorAll('[data-tv-start]').forEach(function (node) {
         var start = Number(node.getAttribute('data-tv-start'));
         var event = clock.phaseAt(start, snapshot.timing, tickNow);

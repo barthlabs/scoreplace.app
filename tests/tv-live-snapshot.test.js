@@ -4,6 +4,7 @@ const vm = require('node:vm');
 const path = require('node:path');
 const root = path.join(__dirname, '..');
 const window = { _collectAllMatches: t => t.matches, _tourLogoSrc: t => t.logo,
+  location: { origin: 'https://scoreplace.app' },
   _tournamentUrl: id => `https://scoreplace.app/#tournaments/${id}`,
   _qrCodeUrl: url => `https://qr.example/?data=${encodeURIComponent(url)}` };
 const context = vm.createContext({ window, document: { querySelectorAll: () => [] }, Date, Number, String, Array, Set,
@@ -133,6 +134,7 @@ window.showToast = message => { toast = message; };
 window._tvLiveToggle();
 assert.match(toast, /Permita abrir/, 'popup bloqueado informa o organizador');
 const tvRoot = { innerHTML: '' };
+let popupHtml = '';
 let wakeRequests = 0;
 const tvTimer = { start:Date.now() - 15000, getAttribute() { return String(this.start); }, textContent:'', className:'', title:'' };
 t.callTime = 1;
@@ -141,7 +143,7 @@ t.gameDuration = 1;
 const fakePopup = { closed: false, navigator: { wakeLock: { request: type => {
   assert.equal(type, 'screen'); wakeRequests++; return Promise.resolve({ addEventListener() {}, release: () => Promise.resolve() });
 } } }, document: {
-  open() {}, write() {}, close() {},
+  open() {}, write(html) { popupHtml = html; }, close() {},
   visibilityState: 'visible', addEventListener() {},
   getElementById: id => id === 'tv-root' ? tvRoot : { addEventListener() {} },
   querySelectorAll: selector => selector === '[data-tv-start]' ? [tvTimer] : []
@@ -180,6 +182,26 @@ assert.match(tvRoot.innerHTML, /class="tv-ranking-team"[^>]*>VORTEX<\/strong><b>
 assert.doesNotMatch(tvRoot.innerHTML, /<h3>Times<\/h3>/, 'classificação geral usa somente o cabeçalho da tabela');
 assert.match(tvRoot.innerHTML, /class="tv-qr-code"[^>]*neon-test/);
 assert.match(tvRoot.innerHTML, /scoreplace\.app\/icons\/logo-podium\.svg/);
+const childSource = popupHtml.match(/<script>\(function\(\)\{"use strict";[\s\S]*?<\/script>/);
+assert(childSource, 'NO AR inclui um relógio próprio na janela, independente do intervalo da aba');
+const childRoot = { innerHTML: '' };
+const childWarning = { hidden: true };
+const childOwner = { _findTournamentById: () => t, _tvLiveBuildSnapshot: window._tvLiveBuildSnapshot,
+  _tvLiveBodyHtml: window._tvLiveBodyHtml };
+const childWindow = { opener: childOwner, ScoreplaceMatchTiming: timingCore, __tvParentBeat: 0 };
+let childTick;
+const childDocument = { getElementById: id => id === 'tv-root' ? childRoot : id === 'tv-connection' ? childWarning : null,
+  querySelectorAll: () => [] };
+vm.runInNewContext(childSource[0].slice(8, -9), { window: childWindow, document: childDocument,
+  setInterval: fn => { childTick = fn; return 1; }, Date, Number });
+assert(childTick && childRoot.innerHTML.includes('CLASSIFICAÇÃO'), 'janela restaura conteúdo sem o timer da aba');
+childOwner._findTournamentById = () => ({ ...t, name: 'Após recarregar' });
+childTick();
+assert.match(childRoot.innerHTML, /Após recarregar/, 'janela retoma o torneio quando a aba conclui o reload');
+childWindow.opener = null;
+childWindow.__tvLastSync = Date.now() - 11000;
+childTick();
+assert.equal(childWarning.hidden, false, 'janela avisa perda prolongada da conexão com a aba');
 window._tvLiveToggle();
 assert.equal(window._tvLiveRefresh, null, 'janela fechada solta o refresh em tempo real');
 const liveSource = fs.readFileSync(path.join(root, 'js/views/tv-live.js'), 'utf8');
@@ -196,7 +218,7 @@ const bracketClockEnd = bracketSource.indexOf('// ─── Formação de duplas
 assert(bracketClockStart > 0 && bracketClockEnd > bracketClockStart, 'relógio da chave localizado');
 let clockTick, clockNow = phaseBase + 45000;
 const clockClasses = new Set(['sp-match-estimated-time', 'sp-match-phase-call']);
-const clockParent = { title:'', classList: {
+const clockParent = { title:'', querySelector: () => null, classList: {
   remove: (...names) => names.forEach(name => clockClasses.delete(name)),
   add: name => clockClasses.add(name)
 } };
@@ -215,6 +237,9 @@ vm.runInNewContext(bracketSource.slice(bracketClockStart, bracketClockEnd), {
 });
 const clockHtml = bracketClockWindow._spCourtClockHtml(phaseBase, phaseTournament, clockNow);
 assert.match(clockHtml, /sp-match-phase-call.*Chamado 00:00:45/, 'chave nasce com fase e hora idênticas ao NO AR');
+const organizerClockHtml = bracketClockWindow._spCourtClockHtml(phaseBase, phaseTournament, clockNow, 'sb_tour', 'match-1', true);
+assert.match(organizerClockHtml, />FF<\/button>.*>REW<\/button>.*Chamado 00:00:45/,
+  'FF e REW aparecem à esquerda do relógio apenas no card do organizador');
 assert(!courtLocked && !okLocked, 'quadra e OK permanecem editáveis durante a chamada');
 for (const [seconds, label, colorClass] of [
   [90, 'Aquecimento 00:00:30', 'sp-match-phase-warmup'],

@@ -1,3 +1,8 @@
+// 2.5.15 — Na chave, FF adianta o relógio para a próxima etapa e REW reinicia
+// a etapa atual. A quadra e o OK ficam travados após a chamada. O NO AR mantém
+// seus relógios durante uma atualização da aba e recupera os dados ao reconectar.
+// O progresso aguarda o primeiro jogo agendado antes de marcar o torneio como
+// iniciado; o reset de sorteio fica disponível somente no sandbox.
 // 2.5.14 — NO AR destaca o jogo cuja fase mudou por último: chamada,
 // aquecimento, tempo de jogo ou atraso. A chave usa os mesmos rótulos,
 // cores e cronômetros; placares nas quadras ficam maiores. Durante a chamada,

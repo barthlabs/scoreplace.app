@@ -1,3 +1,10 @@
+## 2.5.15 — 20/out/2026 (controles do relógio e continuidade do NO AR)
+
+- FF avança da chamada para aquecimento, do aquecimento para jogo e do jogo para atraso; REW reinicia a fase atual. Ambos passam pela função autenticada e atualizam chave e NO AR pelo mesmo horário persistido.
+- A janela NO AR mantém o relógio local durante o recarregamento da aba de organização e volta a buscar a classificação e os jogos após a reconexão.
+- O progresso de torneio concentrado sem resultados usa o primeiro jogo programado para a regressiva de início, mesmo se a chave já foi publicada.
+- O botão de voltar ao estado anterior ao sorteio aparece apenas no sandbox e a função de servidor recusa esse reset em torneio real.
+
 ## 2.5.0 — 19/out/2026 (corte comum web e candidatos nativos)
 
 - Ordem explícita do responsável nesta conversa: “vamos publicar novas versoes nativas. alinhando apple/android/we na versao 2.5”. Este é o corte nativo solicitado, não um bump incidental de deploy web.

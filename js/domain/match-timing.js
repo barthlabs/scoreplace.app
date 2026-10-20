@@ -34,7 +34,22 @@
     return { call: 'Tempo de chamada', warmup: 'Aquecimento', game: 'Tempo de jogo', overdue: 'Tempo previsto excedido' }[phase];
   }
   function text(state, now) { return label(state.phase) + ' ' + elapsed(state.phaseStart, now); }
-  var api = { config: config, phaseAt: phaseAt, elapsed: elapsed, label: label, title: title, text: text };
+  function adjust(start, timing, now, action) {
+    var current = phaseAt(start, timing, now).phase;
+    var target = current;
+    if (action === 'next') {
+      target = current === 'call' ? (timing.warmup ? 'warmup' : 'game')
+        : current === 'warmup' ? 'game'
+        : current === 'game' && timing.game ? 'overdue' : current;
+    } else if (action === 'restart') {
+      if (current === 'overdue') target = 'game';
+    } else throw new Error('Ação do relógio inválida.');
+    if (action === 'next' && target === current) return { phase: current, start: start, changed: false };
+    var offsets = { call: 0, warmup: timing.call, game: timing.call + timing.warmup,
+      overdue: timing.call + timing.warmup + timing.game };
+    return { phase: target, start: now - offsets[target] * 60000, changed: true };
+  }
+  var api = { config: config, phaseAt: phaseAt, elapsed: elapsed, label: label, title: title, text: text, adjust: adjust };
   root.ScoreplaceMatchTiming = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

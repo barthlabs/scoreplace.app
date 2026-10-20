@@ -274,7 +274,7 @@ window._resetTournamentToEnrollment = function (tId) {
 // inscritos e duplas de origem manual; remove somente jogos, horários e resultados.
 window._restoreTournamentPrePublication = function (tId) {
   var t = window.AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); });
-  if (!t || t.allowPrePublicationRestore !== true || typeof showAlertDialog !== 'function') return;
+  if (!t || t.isSandbox !== true || t.allowPrePublicationRestore !== true || typeof showAlertDialog !== 'function') return;
   var n = (typeof window._countCompetitors === 'function') ? window._countCompetitors(t).people : (t.participants || []).length;
   showAlertDialog('↩️ Restaurar pré-publicação?',
     'Isto apaga a chave publicada, os <strong>placares</strong>, resultados e horários do sorteio atual. ' +

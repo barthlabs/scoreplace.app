@@ -617,6 +617,7 @@ const SUITES = [
   'tests/liga-countdown-round-end.test.js',
   // o relógio do meio (RODADA e TORNEIO COMPLETO) vira REGRESSIVA quando há fim programado
   'tests/progresso-regressiva-fim-programado.test.js',
+  'tests/neon-progress-before-first-game.test.js',
   'tests/evento-concentrado-regressiva.test.js',
   'tests/barras-de-progresso-mostram-o-percentual.test.js',
   'tests/relogio-cor-do-ritmo-e-centrado.test.js',
@@ -1098,6 +1099,7 @@ const SUITES = [
   'tests/superficies-abas-resize-observer.test.js',
   'tests/bracket-geral-agenda.test.js',
   'tests/tv-live-snapshot.test.js',
+  'tests/controle-relogio-quadra.test.js',
   'tests/neon-agenda-categoria-contract.test.js',
   'tests/dashboard-atalho-aba-e-agenda.test.js',
   'tests/confra-jogo-pendente-na-dashboard.test.js',

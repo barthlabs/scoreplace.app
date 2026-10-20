@@ -1687,16 +1687,30 @@ window._buildProgressInner = function(t) {
   // startedAt/resultAt). Lançar resultado É iniciar → a barra não pode ficar em "aguardando
   // início" quando já há placar na mesa. FIM EFETIVO = último jogo (maior resultAt); vira o
   // fim real quando o torneio encerra. Assim início e fim ficam registrados a partir dos JOGOS.
-  var _allStampsG = [], _endStampsG = [];
+  var _allStampsG = [], _endStampsG = [], _scheduledGamesG = [];
   ((typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (t.matches || [])).forEach(function (m) {
     if (!m || m.isBye || m.isSitOut) return;
     if (m.startedAt) _allStampsG.push(+m.startedAt);
     if (m.resultAt) { _allStampsG.push(+m.resultAt); _endStampsG.push(+m.resultAt); }
+    if (m.scheduledAt) {
+      var _scheduledGameMs = window._tProgParseMs(m.scheduledAt);
+      if (_scheduledGameMs) _scheduledGamesG.push(_scheduledGameMs);
+    }
   });
   var _earliestGameMs = _allStampsG.length ? Math.min.apply(null, _allStampsG) : null;
   var _latestGameMs = _endStampsG.length ? Math.max.apply(null, _endStampsG) : null;
   var actualStart = t.tournamentStarted ? (+t.tournamentStarted) : _earliestGameMs;
   var schedStart = window._tProgParseMs(t.startDate);
+  // No torneio concentrado, publicar a chave ou clicar em "iniciar" pode
+  // preencher tournamentStarted antes do primeiro dia. Para o progresso público,
+  // esse carimbo operacional não substitui o horário agendado se ainda não há
+  // resultado: foi exatamente o estado reportado no Neon antes de 22/10.
+  if (window._isConcentratedTournament && window._isConcentratedTournament(t) &&
+      prog.completed === 0 && _scheduledGamesG.length) {
+    schedStart = Math.min.apply(null, _scheduledGamesG);
+  }
+  if (window._isConcentratedTournament && window._isConcentratedTournament(t) &&
+      schedStart && Date.now() < schedStart && prog.completed === 0 && !_allStampsG.length) actualStart = null;
   var plannedEnd = window._tProgParseMs(t.endDate);
   // ── 1.9.101 · O FIM PROGRAMADO É REAL OU É CHUTE? ────────────────────────────
   // O relógio do meio vira REGRESSIVA ("restante") SÓ quando o fim programado é uma
@@ -2216,10 +2230,15 @@ window._buildProgressInner = function(t) {
     '</div>';
   };
 
-  // v2.7.79: antes de iniciar não há "início real / decorrido" — mostra só um
-  // selo "⏳ Aguardando início" (a janela programada vem na linha de baixo).
+  // Antes do primeiro jogo, a janela programada já permite contar até o
+  // início. O mesmo atributo do relógio central mantém os segundos vivos.
+  var _startCountdown = _notStarted && schedStart > now
+    ? window._tProgClock2L({ deadlineMs: schedStart }) : null;
   var topRow = _notStarted
-    ? '<div style="text-align:center;margin-bottom:8px;font-size:0.82rem;font-weight:700;color:var(--sp-c-93c5fd,#93c5fd);">⏳ Aguardando início</div>'
+    ? '<div style="text-align:center;margin-bottom:8px;color:var(--sp-c-93c5fd,#93c5fd);">' +
+        '<div style="font-size:0.82rem;font-weight:700;">⏳ Aguardando início</div>' +
+        (_startCountdown ? '<strong' + _startCountdown.attr + ' style="display:block;margin-top:3px;font-size:1.05rem;font-variant-numeric:tabular-nums;">' + _startCountdown.html + '</strong><small>para o início</small>' : '') +
+      '</div>'
     : '<div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:flex-start;margin-bottom:7px;gap:8px;">' +
         _realCol(actualStart, 'início real', 'flex-start', _multiDay) +
         '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;">' +
