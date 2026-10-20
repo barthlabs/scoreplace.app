@@ -1,5 +1,7 @@
 'use strict';
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const core = require('../js/domain/court-occupancy.js');
 const base = { id:'one', court:'Quadra 4' };
 assert.equal(core.occupiesCourt(base), false, 'sugestão futura não ocupa');
@@ -16,4 +18,7 @@ const all = [
 assert.equal(core.occupant(all, 'Quadra 4', 'other').id, 'one', 'horários diferentes não liberam quadra ativa');
 assert.equal(core.occupant(all, 'Quadra 4', 'one'), null, 'o próprio jogo pode conservar sua quadra');
 assert.equal(core.occupant(all, 'Quadra 5', 'one'), null, 'sugestão sem chamada não ocupa');
+const serviceWorker = fs.readFileSync(path.join(__dirname, '..', 'sw.js'), 'utf8');
+assert.match(serviceWorker, /'\/js\/domain\/court-occupancy\.js'/,
+  'a regra de ocupação fica disponível no cache offline da chave');
 console.log('✓ ocupação operacional compartilhada');
