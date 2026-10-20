@@ -153,6 +153,16 @@ summary::-webkit-details-marker { display: none; }
   font: inherit;
 }
 .sp-match-court--readonly { justify-content: flex-start; }
+.sp-match-operational .sp-match-court { margin-top: 0; height: 2.35rem; }
+.sp-match-operational .sp-match-court select { height: 100%; box-sizing: border-box; }
+.sp-match-operational .sp-match-confirm {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 2.35rem;
+  box-sizing: border-box;
+  flex: none;
+}
 
 /* ==== TOURNAMENT BRACKET ==== */
 .bracket-container {

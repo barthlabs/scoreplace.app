@@ -28,7 +28,7 @@
 
 /* Coleções que este planejador pode tocar. Qualquer outra é recusada pelo executor.
  * `null` é o documento raiz do torneio. */
-const COLECOES_FIXAS = ['results', 'advanceReceipts', 'outbox'];
+const COLECOES_FIXAS = ['results', 'resultsSandbox', 'advanceReceipts', 'outbox'];
 
 /* Teto conservador, bem abaixo do limite real do Firestore (500 escritas por transação).
  * ⛔ A recusa acontece ANTES de qualquer escrita, e a materialização NUNCA é quebrada em
@@ -123,7 +123,7 @@ function planWrites(tAntes, tDepois, ctx) {
          * sei" não escreve — é ele que sustenta "só quem joga ESTE jogo escreve". */
         if (!Array.isArray(doc.playerUids) || !doc.playerUids.length) delete doc.playerUids;
         ops.push({
-          tipo: 'set', colecao: 'results', chave: String(jogo.id),
+          tipo: 'set', colecao: o.resultCollection === 'resultsSandbox' ? 'resultsSandbox' : 'results', chave: String(jogo.id),
           doc: doc, merge: true, apagarCampos: apagar.length ? apagar : undefined
         });
       });

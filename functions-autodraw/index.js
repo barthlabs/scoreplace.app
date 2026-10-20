@@ -971,7 +971,10 @@ function _gravaTorneio(tx, ref, tDepois, tAntes, ctx) {
     });
     if (_reconciliacaoElenco.removed) console.warn('[gravaTorneio] removeu ' + _reconciliacaoElenco.removed + ' cópia(s) de espera já alocadas.');
   }
-  const plan = _planejaEscrita(tDepois, tAntes, { agoraIso: _agoraIso, extras: (ctx && ctx.extras) || [] });
+  const plan = _planejaEscrita(tDepois, tAntes, {
+    agoraIso: _agoraIso, extras: (ctx && ctx.extras) || [],
+    resultCollection: String(ref.path || '').startsWith('sandboxes/') ? 'resultsSandbox' : 'results'
+  });
   _wp.applyPlan(tx, ref, plan, { FieldValue: FieldValue });
   /* O chamador da W.O. precisa distinguir "motor mudou o objeto" de "o slot entrou
    * no plano que esta transação realmente vai gravar". Expor somente os IDs (não o
@@ -1075,6 +1078,7 @@ function _planejaEscrita(tDepois, tAntes, opts) {
     boundary: _applyWriteBoundary,
     agoraIso: o.agoraIso,
     espelho: _mrEspelho,
+    resultCollection: o.resultCollection || (tDepois && tDepois.isSandbox === true ? 'resultsSandbox' : 'results'),
     tournamentId: o.tournamentId || (tDepois && tDepois.id) || null,
     partesLegadasNoDocumento: partesLegadasNoDocumento,
     extras: o.extras || [],
@@ -2308,8 +2312,8 @@ exports.splitLatePair = onCall(async (request) => {
  * Devolve { ok, outcome, tournament } ou { ok:false, reason } — recusa é resposta
  * legítima ("o outro time já lançou"), não falha de infra.
  */
-async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMessage) {
-  const ref = db.collection('tournaments').doc(tId);
+async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMessage, sandbox) {
+  const ref = db.collection(sandbox ? 'sandboxes' : 'tournaments').doc(tId);
   // Recibo independente do documento do torneio. O id nasce fora do callback porque a
   // transação pode repetir; assim uma repetição não cria dois fatos de auditoria.
   const auditRef = ref.collection('scoreAudit').doc();
@@ -2326,6 +2330,7 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
    * cada tentativa produzir espelho e plano diferentes. */
   const _agoraIsoTx = new Date().toISOString();
   return db.runTransaction(async (tx) => {
+    if (sandbox) await _assertSandboxDrawOwner(tx, await tx.get(ref), ator.uid);
     const t = await _leTorneio(tx, ref, tId);
     if (!t) return { ok: false, reason: 'not-found' };
     const _tAntes = _antesDoMotor(t);
@@ -2339,7 +2344,8 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
       ? (() => { const m = drawWindow._findMatch(t, matchId); return m && m.pendingResult ? JSON.parse(JSON.stringify(m.pendingResult)) : null; })()
       : null;
     // Re-checa sobre o doc FRESCO (acesso pode ter mudado entre o read e a txn).
-    if (!_isTournamentParticipant(t, ator.uid) && !_isTournamentAdmin(t, ator.uid)) {
+    if ((!sandbox && !_isTournamentParticipant(t, ator.uid) && !_isTournamentAdmin(t, ator.uid)) ||
+        (sandbox && !_isTournamentAdmin(t, ator.uid))) {
       return { ok: false, reason: 'permission-denied' };
     }
     _hidrataGrupos(t, 'aplicaPlacarNaTransacao', tId);
@@ -2381,25 +2387,25 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
     // Histórico é projeção derivada da partida aceita pelo motor dentro desta
     // mesma transação. O payload do navegador nunca escolhe jogadores, vencedor
     // ou destinatários. Reabrir/reverter remove a projeção determinística.
-    const _history = res.outcome === 'applied'
+    const _history = !sandbox && res.outcome === 'applied'
       ? _matchHistory.buildTournamentRecord(t, _matchDepois, _agoraIsoTx)
       : null;
-    if (_history) {
+    if (!sandbox && _history) {
       _history.recipients.forEach((historyUid) => {
         tx.set(db.collection('users').doc(historyUid).collection('matchHistory').doc(_history.matchId), _history.record);
       });
-    } else if (res.outcome === 'match-reset' || res.outcome === 'result-reopened' || res.outcome === 'wo-reverted') {
+    } else if (!sandbox && (res.outcome === 'match-reset' || res.outcome === 'result-reopened' || res.outcome === 'wo-reverted')) {
       const _historyId = 't_' + String(tId) + '_' + String(matchId);
       _slotUidsOf(_matchDepois, 'p1').concat(_slotUidsOf(_matchDepois, 'p2')).forEach((historyUid) => {
         tx.delete(db.collection('users').doc(historyUid).collection('matchHistory').doc(_historyId));
       });
     }
-    const _notif = _scoreNotificationEvent(t, _matchDepois, res.outcome, ator, _agoraIsoTx, {
+    const _notif = sandbox ? null : _scoreNotificationEvent(t, _matchDepois, res.outcome, ator, _agoraIsoTx, {
       action: payload && payload.action,
       pendingBefore: _pendingAntes,
       liveNames: ator.liveNames || {}
     });
-    const _transitionNotif = res.outcome === 'disputed'
+    const _transitionNotif = sandbox ? null : res.outcome === 'disputed'
       ? _disputeNotificationEvent(t, _matchDepois, ator, _agoraIsoTx)
       : (res.outcome === 'match-reset' || res.outcome === 'result-reopened' || res.outcome === 'wo-reverted')
         ? _matchReopenedNotificationEvent(t, _matchDepois, res.outcome, ator, _agoraIsoTx) : null;
@@ -3495,6 +3501,8 @@ exports.applyMatchResult = onCall(async (request) => {
 
   const tId = String((request.data && request.data.tournamentId) || '').trim();
   if (!tId) throw new HttpsError('invalid-argument', 'tournamentId é obrigatório.');
+  const sandbox = request.data && request.data.sandbox === true;
+  if (sandbox !== tId.startsWith('sb_')) throw new HttpsError('not-found', 'Torneio não encontrado.');
   const matchId = String((request.data && request.data.matchId) || '').trim();
   if (!matchId) throw new HttpsError('invalid-argument', 'matchId é obrigatório.');
   const payload = (request.data && request.data.payload) || null;
@@ -3507,10 +3515,15 @@ exports.applyMatchResult = onCall(async (request) => {
     throw _drawFail('internal', 'Motor de resultado indisponível no servidor.', { tId, matchId });
   }
 
-  const ref = db.collection('tournaments').doc(tId);
+  const ref = db.collection(sandbox ? 'sandboxes' : 'tournaments').doc(tId);
   const pre = await ref.get();
   if (!pre.exists) throw _drawFail('not-found', 'Torneio não encontrado.', { tId, uid });
-  if (!_isTournamentParticipant(pre.data(), uid) && !_isTournamentAdmin(pre.data(), uid)) {
+  if (sandbox && (pre.data().isSandbox !== true || pre.data().sandboxOwnerUid !== uid ||
+      pre.data().sbState !== 'ready' || pre.data().notificationsMuted !== true)) {
+    throw _drawFail('not-found', 'Torneio não encontrado.', { tId, uid });
+  }
+  if ((!sandbox && !_isTournamentParticipant(pre.data(), uid) && !_isTournamentAdmin(pre.data(), uid)) ||
+      (sandbox && !_isTournamentAdmin(pre.data(), uid))) {
     throw _drawFail('permission-denied', 'Só quem está no torneio pode lançar placar.',
       { tId, matchId, uid, email: email || '(sem email)' });
   }
@@ -3529,7 +3542,7 @@ exports.applyMatchResult = onCall(async (request) => {
     // MESMO miolo que a fila usa — ver _aplicaPlacarNaTransacao.
     out = await _aplicaPlacarNaTransacao(db, tId, matchId, payload, {
       uid, email, name: callerName, liveNames: liveIdentity.nameByUid || {}
-    }, logMessage);
+    }, logMessage, sandbox);
     if (!out.ok && out.reason === 'permission-denied') {
       throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, matchId, uid });
     }
@@ -3726,13 +3739,36 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
       const atual = String(m.court || '');
       if (confirmCall && !court) throw _drawFail('failed-precondition', 'Escolha uma quadra antes de chamar o jogo.', { tId, matchId });
       if (atual === court && (!confirmCall || m.courtCalledAt)) return { ok: true, changed: false, courtCalledAt: m.courtCalledAt || null };
+      const reassigned = [];
+      if (court && court !== atual && m.scheduledAt && typeof drawWindow._collectAllMatches === 'function') {
+        // A troca vale só para o mesmo horário. Jogos de rodadas posteriores
+        // podem usar a mesma quadra; jogos já chamados ou iniciados são intocáveis.
+        const all = drawWindow._collectAllMatches(t);
+        const slot = Date.parse(String(m.scheduledAt));
+        const other = Number.isFinite(slot) ? all.find(item => item && String(item.id) !== matchId &&
+          String(item.court || '') === court && Date.parse(String(item.scheduledAt || '')) === slot) : null;
+        if (other) {
+          const locked = other.courtCalledAt || other.startedAt || other.resultAt || other.winner || other.wo || other.liveScored ||
+            (Array.isArray(other.sets) && other.sets.length > 0);
+          if (locked) throw _drawFail('failed-precondition', 'A quadra já tem um jogo chamado ou iniciado neste horário.', { tId, matchId, court });
+          const occupied = new Set(all.filter(item => item && String(item.id) !== matchId && String(item.id) !== String(other.id) &&
+            Date.parse(String(item.scheduledAt || '')) === slot).map(item => String(item.court || '')));
+          const names = Array.isArray(t.courtNames) ? t.courtNames.map(String) : [];
+          const replacement = atual && !occupied.has(atual) ? atual : names.find(name => name !== court && !occupied.has(name)) || '';
+          all.filter(item => item && String(item.id) === String(other.id)).forEach(item => {
+            if (replacement) item.court = replacement; else delete item.court;
+            delete item.courtCalledAt;
+          });
+          reassigned.push({ matchId: String(other.id), court: replacement });
+        }
+      }
       if (court) m.court = court; else delete m.court;
       // Mudar/remover a quadra desfaz a chamada anterior. Confirmar em outra
       // quadra cria uma chamada nova; repetir na mesma conserva o instante.
       if (confirmCall) m.courtCalledAt = agoraIso;
       else if (atual !== court) delete m.courtCalledAt;
       const b = _gravaTorneio(tx, ref, t, antes, { agoraIso: agoraIso });
-      return { ok: true, changed: true, court, courtCalledAt: m.courtCalledAt || null, tournament: b.clean };
+      return { ok: true, changed: true, court, courtCalledAt: m.courtCalledAt || null, reassigned, tournament: b.clean };
     });
   } catch (e) {
     if (e instanceof HttpsError) throw e;

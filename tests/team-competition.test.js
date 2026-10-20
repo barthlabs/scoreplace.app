@@ -13,6 +13,13 @@ function ok(condition, message) { if (condition) { pass++; console.log('  ✓ ' 
 function row(rows, id) { return rows.find(function (r) { return r.id === id; }); }
 
 const config = { enabled: true, teamCount: 8, formation: 'draw', internalMatches: 'avoid', scoring: { win: 2, draw: 1, loss: -1 } };
+const neonId = 'tour_1790628592058_c342a1e8f5068424887f1702a1633a44';
+const neonBase = { name: 'NEON NIGHTMARE – THE TOURNAMENT', teamCompetition: { enabled:true, aggregation:'per_category', classificationUnit:'pair' } };
+const neonRanking = C.rankingConfigForTournament({ ...neonBase, id:neonId });
+ok(neonRanking.aggregation === 'overall' && neonRanking.classificationUnit === 'team', 'Neon: classificação única geral por time');
+const neonSandboxRanking = C.rankingConfigForTournament({ ...neonBase, id:'sb_' + neonId, isSandbox:true, sandboxOf:neonId });
+ok(neonSandboxRanking.aggregation === 'overall' && neonSandboxRanking.classificationUnit === 'team', 'sandbox do Neon: a mesma classificação geral por time');
+ok(C.rankingConfigForTournament({ ...neonBase, id:'outro' }).classificationUnit === 'pair', 'outro torneio preserva sua configuração própria');
 const pairA1 = { competitionTeamId: 'a' }, pairA2 = { competitionTeamId: 'a' }, pairB = { competitionTeamId: 'b' };
 
 ok(C.allowsMatch(pairA1, pairA2, config) === false, 'toggle desligado: duplas do mesmo time não se enfrentam');
@@ -118,10 +125,23 @@ ok(saldo[0].id === 'a' && saldo[1].id === 'b' && saldo[2].id === 'c',
   'modo saldo ordena por games feitos menos games sofridos');
 
 const partial = C.standings(teams, [
-  { p1: 'A', p2: 'B', p1CompetitionTeamId: 'a', p2CompetitionTeamId: 'b', winner: 'fora-do-jogo', scoreP1: 6, scoreP2: 0 }
+  { p1: 'A', p2: 'B', p1CompetitionTeamId: 'a', p2CompetitionTeamId: 'b', winner: 'fora-do-jogo' }
 ], Object.assign({}, config, { ranking: 'games_diff' }));
 ok(row(partial, 'a').played === 0 && row(partial, 'a').gamesDiff === 0 && row(partial, 'b').gamesDiff === 0,
-  'vencedor incompatível não altera pontos nem saldo enquanto o resultado está parcial');
+  'vencedor incompatível sem placar ou UID não altera a classificação');
+const renamedResults = [
+  { p1: 'Dupla nova A', p2: 'Dupla B', p1CompetitionTeamId: 'a', p2CompetitionTeamId: 'b',
+    winner: 'Dupla antiga A', winnerUids: ['u1', 'u2'], team1Uids: ['u1', 'u2'], team2Uids: ['u3', 'u4'], scoreP1: 6, scoreP2: 3 },
+  { p1: 'Dupla A2', p2: 'Dupla C', p1CompetitionTeamId: 'a', p2CompetitionTeamId: 'c',
+    winner: 'nome antigo sem UID', scoreP1: 6, scoreP2: 4 }
+];
+const afterFirst = C.standings(teams, renamedResults.slice(0, 1), Object.assign({}, config, { ranking: 'games_diff' }));
+const afterSecond = C.standings(teams, renamedResults, Object.assign({}, config, { ranking: 'games_diff' }));
+ok(row(afterFirst, 'a').gamesWon === 6 && row(afterFirst, 'a').wins === 1,
+  'primeiro placar confirmado conta mesmo após mudança de nome da dupla');
+ok(row(afterSecond, 'a').gamesWon === 12 && row(afterSecond, 'a').gamesLost === 7 &&
+  row(afterSecond, 'a').gamesDiff === 5 && row(afterSecond, 'a').wins === 2 && row(afterSecond, 'a').played === 2,
+  'segundo placar soma games, saldo, vitórias e jogos sem apagar o primeiro');
 
 const pairMatches = [
   { p1: 'A-Light', p2: 'B-Light', p1CompetitionTeamId: 'a', p2CompetitionTeamId: 'b', category: 'Light', winner: 'p1', scoreP1: 6, scoreP2: 5 },

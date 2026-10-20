@@ -25,7 +25,7 @@ const courtBlockStart=cf.indexOf("const atual = String(m.court || '');",cf.index
 const courtBlockEnd=cf.indexOf('const b = _gravaTorneio',courtBlockStart);
 ok(courtBlockStart>=0 && courtBlockEnd>courtBlockStart, 'regra real da chamada localizada na Function');
 if(courtBlockStart>=0 && courtBlockEnd>courtBlockStart){
-  const apply=new Function('m','court','confirmCall','agoraIso','_drawFail','tId','matchId',
+  const apply=new Function('m','court','confirmCall','agoraIso','_drawFail','tId','matchId','t','drawWindow',
     cf.slice(courtBlockStart,courtBlockEnd)+' return {ok:true,changed:true,courtCalledAt:m.courtCalledAt||null};');
   const m={court:'Quadra 4'};
   const fail=()=>new Error('precondition');
@@ -39,6 +39,18 @@ if(courtBlockStart>=0 && courtBlockEnd>courtBlockStart){
   ok(m.courtCalledAt==='2026-10-19T18:03:00Z','novo OK inicia chamada da quadra nova');
   apply(m,'',false,'2026-10-19T18:04:00Z',fail,'t','j');
   ok(!m.court && !m.courtCalledAt,'remover quadra também cancela a chamada');
+  const first={id:'j1',court:'Quadra 8',scheduledAt:'2026-10-22T18:00:00Z'};
+  const second={id:'j2',court:'Quadra 9',scheduledAt:'2026-10-22T18:00:00Z'};
+  const later={id:'j3',court:'Quadra 9',scheduledAt:'2026-10-22T18:35:00Z'};
+  const t={courtNames:['Quadra 8','Quadra 9'],games:[first,second,later]};
+  const drawWindow={_collectAllMatches: tournament=>tournament.games};
+  apply(first,'Quadra 9',false,'2026-10-22T17:00:00Z',fail,'t','j1',t,drawWindow);
+  ok(first.court==='Quadra 9' && second.court==='Quadra 8' && later.court==='Quadra 9',
+    'troca quadras de dois jogos futuros no mesmo horário sem mexer em rodada posterior');
+  second.courtCalledAt='2026-10-22T17:01:00Z';
+  let locked=false;
+  try { apply(first,'Quadra 8',false,'2026-10-22T17:02:00Z',fail,'t','j1',t,drawWindow); } catch (_) { locked=true; }
+  ok(locked && first.court==='Quadra 9' && second.court==='Quadra 8', 'jogo chamado bloqueia nova troca');
 }
 ok(src.includes('data-start-ms') && src.includes('_matchCardTimestamp(m.courtCalledAt)') && src.includes('_matchCardTimestamp(m.startedAt)'),
   'card usa chamada para espera e início real para jogo ao vivo');

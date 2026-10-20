@@ -38,6 +38,19 @@ var ScoreplaceTeamCompetition;
         return record(planned || active.find((candidate) => Object.keys(record(record(candidate).schedule)).length > 0) || active[0]);
     }
     ScoreplaceTeamCompetition.configurationForTournament = configurationForTournament;
+    /** A classificação pública do Neon soma todas as categorias pelo time, inclusive no sandbox. */
+    function rankingConfigForTournament(value) {
+        const tournament = record(value);
+        const cfg = normalize(configurationForTournament(tournament));
+        const neonId = 'tour_1790628592058_c342a1e8f5068424887f1702a1633a44';
+        if (text(tournament.name) === 'NEON NIGHTMARE – THE TOURNAMENT' &&
+            (text(tournament.id) === neonId || (tournament.isSandbox === true && text(tournament.sandboxOf) === neonId))) {
+            cfg.aggregation = 'overall';
+            cfg.classificationUnit = 'team';
+        }
+        return cfg;
+    }
+    ScoreplaceTeamCompetition.rankingConfigForTournament = rankingConfigForTournament;
     /** Normaliza a escolha feita ANTES do sorteio; ausência mantém torneios existentes intactos. */
     function normalize(value) {
         const raw = record(value);
@@ -178,6 +191,37 @@ var ScoreplaceTeamCompetition;
             }, { p1: 0, p2: 0 });
         return { p1: number(match.scoreP1, 0), p2: number(match.scoreP2, 0) };
     }
+    // Resultado confirmado pode conservar o rótulo antigo da dupla após uma
+    // alteração de nomes. A identidade do lado vencedor vem primeiro dos UIDs;
+    // o placar final é a recuperação para partidas legadas sem esses UIDs.
+    function winnerSide(match) {
+        const winner = text(match.winner);
+        if (!winner)
+            return null;
+        if (winner === 'draw' || match.draw === true)
+            return 0;
+        if (winner === 'p1' || winner === text(match.p1))
+            return 1;
+        if (winner === 'p2' || winner === text(match.p2))
+            return 2;
+        const rawUids = match.winnerUids || match.winnerUid;
+        const uids = Array.isArray(rawUids) ? rawUids.map(text).filter(Boolean) : [text(rawUids)].filter(Boolean);
+        if (uids.length) {
+            const first = Array.isArray(match.team1Uids) ? match.team1Uids.map(text) : [text(match.p1Uid)];
+            const second = Array.isArray(match.team2Uids) ? match.team2Uids.map(text) : [text(match.p2Uid)];
+            if (uids.every(uid => first.includes(uid)))
+                return 1;
+            if (uids.every(uid => second.includes(uid)))
+                return 2;
+        }
+        const firstScore = typeof match.setsWonP1 === 'number' && (match.setsWonP1 > 0 || number(match.setsWonP2, 0) > 0)
+            ? match.setsWonP1 : match.scoreP1;
+        const secondScore = typeof match.setsWonP2 === 'number' && (number(match.setsWonP1, 0) > 0 || match.setsWonP2 > 0)
+            ? match.setsWonP2 : match.scoreP2;
+        if (typeof firstScore === 'number' && typeof secondScore === 'number' && firstScore !== secondScore)
+            return firstScore > secondScore ? 1 : 2;
+        return null;
+    }
     /**
      * Soma somente jogos reais e decididos. Folga, W.O. sem adversário, pendência e dupla
      * sem time não viram ponto de ninguém. O chamador fornece os times existentes para que
@@ -201,12 +245,12 @@ var ScoreplaceTeamCompetition;
             const a = matchTeamId(match, 'p1'), b = matchTeamId(match, 'p2');
             if (!a || !b || a === b || !rows[a] || !rows[b])
                 return;
-            const winner = text(match.winner);
-            if (!winner)
+            const side = winnerSide(match);
+            if (side === null)
                 return;
-            const draw = winner === 'draw' || match.draw === true;
-            const p1Won = winner === text(match.p1) || winner === 'p1';
-            const p2Won = winner === text(match.p2) || winner === 'p2';
+            const draw = side === 0;
+            const p1Won = side === 1;
+            const p2Won = side === 2;
             // Um rótulo de vencedor que não corresponde aos lados ainda não é resultado
             // publicável: nem pontos nem saldo podem ser inferidos desse estado parcial.
             if (!draw && !p1Won && !p2Won)
@@ -301,12 +345,12 @@ var ScoreplaceTeamCompetition;
             const a = sideId(match, 'p1'), b = sideId(match, 'p2');
             if (!a || !b || a === b)
                 return;
-            const winner = text(match.winner);
-            if (!winner)
+            const side = winnerSide(match);
+            if (side === null)
                 return;
-            const draw = winner === 'draw' || match.draw === true;
-            const p1Won = winner === text(match.p1) || winner === 'p1';
-            const p2Won = winner === text(match.p2) || winner === 'p2';
+            const draw = side === 0;
+            const p1Won = side === 1;
+            const p2Won = side === 2;
             if (!draw && !p1Won && !p2Won)
                 return;
             const games = gamesOf(match);

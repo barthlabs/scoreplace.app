@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.5.9';
+window.SCOREPLACE_VERSION = '2.5.10';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -12167,6 +12167,7 @@ window.AppStore = {
       try {
         var _res = await window._callApplyMatchResult({
           tournamentId: String(tournamentId), matchId: String(matchId),
+          sandbox: String(tournamentId).startsWith('sb_'),
           payload: payload, logMessage: logMessage || ''
         });
         var _d = (_res && _res.data) || {};

@@ -2,11 +2,12 @@
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 // Normalize format: 'Ranking' → 'Liga' (unificado em v0.2.6)
 var _t = window._t || function(k) { return k; };
-// Regulamento editorial do evento real: identificação fechada por ID + nome.
-// Não inferir pelo nome isolado (um sandbox pode copiá-lo) nem alterar dados do torneio.
+// O sandbox deste evento usa a mesma identidade editorial do original.
+// O nome isolado nunca basta: apenas a cópia carimbada com sandboxOf pode herdar o PDF.
 window._isNeonTournament = function(t) {
-    return !!t && t.id === 'tour_1790628592058_c342a1e8f5068424887f1702a1633a44'
-        && t.name === 'NEON NIGHTMARE – THE TOURNAMENT';
+    if (!t || t.name !== 'NEON NIGHTMARE – THE TOURNAMENT') return false;
+    var originalId = 'tour_1790628592058_c342a1e8f5068424887f1702a1633a44';
+    return t.id === originalId || (t.isSandbox === true && t.sandboxOf === originalId);
 };
 /* ⛔ CASA ÚNICA DE "ESTE TORNEIO É UMA LIGA?" (23/set/2026).
  *

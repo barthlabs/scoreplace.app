@@ -1,3 +1,11 @@
+// 2.5.10 — NO AR destaca a última chamada, usa os tempos de chamada, aquecimento
+// e jogo no cronômetro, mantém a tela acordada e lista todos os resultados com
+// rolagem. Classificação acumula games e vitórias mesmo após mudança de nome.
+// Troca de quadra sugere a vaga liberada e mantém jogos futuros sem conflito.
+// Sandbox usa o mesmo motor de placar e classificação da produção, gravando
+// somente em sandboxes, sem notificações nem histórico de participantes.
+// A abertura por link registra o sandbox corretamente; o regulamento da cópia
+// do Neon aponta para o mesmo PDF oficial.
 // 2.5.9 — NO AR mostra jogo, categoria, duplas, placar, quadra e cronômetro
 // no formato dos cards da chave; atualiza ao receber o estado novo. O resultado
 // libera a quadra e entra em Últimos resultados. O timer não tem rótulo extra.

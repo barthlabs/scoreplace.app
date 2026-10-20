@@ -21,7 +21,7 @@ const t = { id: 'neon-test', name: 'NEON NIGHTMARE', logo: 'logo.png', courtName
   competitionTeams: teams, teamCompetition: { enabled: true, aggregation: 'overall', classificationUnit: 'team', ranking: 'games_diff' },
   matches: [
     match(1, 'Quadra 4', 'VORTEX', 'BLAST', { courtCalledAt: '2026-10-22T21:00:00Z' }),
-    match(2, 'Quadra 5', 'ECLIPSE', 'VENOM', { courtCalledAt: '2026-10-22T21:00:00Z', startedAt: '2026-10-22T21:03:00Z', scoreP1: 4, scoreP2: 3 }),
+    match(2, 'Quadra 5', 'ECLIPSE', 'VENOM', { courtCalledAt: '2026-10-22T21:02:00Z', startedAt: '2026-10-22T21:03:00Z', scoreP1: 4, scoreP2: 3 }),
     match(3, 'Quadra 6', 'PANIC', 'PHANTOM', { scheduledAt: '2026-10-22T21:00:00Z' }),
     match(4, 'Quadra 4', 'VORTEX', 'VENOM', { winner: 'p1', scoreP1: 6, scoreP2: 3, resultAt: '2026-10-22T20:00:00Z' }),
     match(5, 'Quadra 5', 'BLAST', 'PANIC', { winner: 'p2', scoreP1: 2, scoreP2: 6, resultAt: '2026-10-22T20:30:00Z' }),
@@ -33,11 +33,13 @@ assert.equal(snapshot.courts.length, 6);
 assert.equal(snapshot.courts[0].number, 1);
 assert.equal(snapshot.courts[0].scoreA, '0', 'a chamada mostra o mesmo placar inicial da chave');
 assert.equal(snapshot.courts[0].timerStart, Date.parse('2026-10-22T21:00:00Z'));
-assert.equal(snapshot.courts[1].timerStart, Date.parse('2026-10-22T21:03:00Z'));
+assert.equal(snapshot.courts[0].latest, false, 'borda dourada fica só na chamada mais recente');
+assert.equal(snapshot.courts[1].timerStart, Date.parse('2026-10-22T21:02:00Z'));
+assert.equal(snapshot.courts[1].latest, true, 'jogo chamado por último é destacado');
 assert.equal(snapshot.courts[1].scoreA, '4');
 assert.equal(snapshot.courts[2].number, undefined, 'jogo só agendado não ocupa TV');
-assert.equal(snapshot.results.length, 3);
-assert.equal(snapshot.results.map(r => r.number).join(','), '5,6,4');
+assert.equal(snapshot.results.length, 4, 'histórico acumula resultados para rolagem');
+assert.equal(snapshot.results.map(r => r.number).join(','), '5,6,4,7', 'resultado novo entra no topo');
 assert.equal(snapshot.results[1].scoreA, '7');
 assert.equal(snapshot.rankings.length, 1, 'classificação geral, sem categoria forçada');
 assert.equal(snapshot.rankings[0].rows.length, 8);
@@ -46,6 +48,7 @@ assert.equal(snapshot.rankings[0].rows[0].gamesDiff, 8);
 assert.equal(snapshot.rankings[0].rows[0].gamesWon, 12);
 assert.equal(snapshot.rankings[0].rows[0].wins, 2);
 assert.equal(snapshot.rankings[0].rows[0].played, 2);
+assert.deepEqual(JSON.parse(JSON.stringify(snapshot.timing)), { call: 0, warmup: 0, game: 0 });
 window._slotUidsPositional = (_match, slot) => slot === 'p1' ? ['uid-1', 'uid-2'] : ['uid-3', 'uid-4'];
 window._resolveSideLive = (_tour, _raw, uids) => uids.map(uid => ({
   'uid-1': 'Maira Cavalcanti', 'uid-2': 'Juliana Penha',
@@ -86,14 +89,19 @@ window.showToast = message => { toast = message; };
 window._tvLiveToggle();
 assert.match(toast, /Permita abrir/, 'popup bloqueado informa o organizador');
 const tvRoot = { innerHTML: '' };
-const fakePopup = { closed: false, document: {
+let wakeRequests = 0;
+const fakePopup = { closed: false, navigator: { wakeLock: { request: type => {
+  assert.equal(type, 'screen'); wakeRequests++; return Promise.resolve({ addEventListener() {}, release: () => Promise.resolve() });
+} } }, document: {
   open() {}, write() {}, close() {},
+  visibilityState: 'visible', addEventListener() {},
   getElementById: id => id === 'tv-root' ? tvRoot : { addEventListener() {} },
   querySelectorAll: () => []
 }, focus() {}, close() { this.closed = true; } };
 window.open = () => fakePopup;
 window._findTournamentById = () => t;
 window._tvLiveToggle();
+assert.equal(wakeRequests, 1, 'NO AR solicita bloqueio de repouso da tela');
 assert.match(tvRoot.innerHTML, /ÚLTIMOS RESULTADOS/);
 assert.doesNotMatch(tvRoot.innerHTML, /CHAMADO|EM JOGO/);
 assert.match(tvRoot.innerHTML, /class="tv-team-tag">VORTEX<\/span><div class="tv-players"><span>VORTEX 1<\/span><span>Parceira<\/span>/,
@@ -103,8 +111,11 @@ assert.match(tvRoot.innerHTML, /<h2>Quadra 4 · JOGO 1<\/h2><span>Fem Light<\/sp
 assert.match(tvRoot.innerHTML, /class="tv-court-footer"><strong data-tv-start=/,
   'timer aparece sozinho abaixo do confronto');
 assert.doesNotMatch(tvRoot.innerHTML, /ÚLTIMOS 3 RESULTADOS/);
-assert.match(tvRoot.innerHTML, /<span>GAMES<\/span><span>V<\/span><span>D<\/span><span>J<\/span>/);
-assert.match(tvRoot.innerHTML, /class="tv-ranking-team"[^>]*>VORTEX<\/strong><b>\+8<\/b><span>12–4<\/span><span>2<\/span><span>0<\/span><span>2<\/span>/);
+assert.match(tvRoot.innerHTML, /tv-court-latest/, 'slot mais recente recebe destaque');
+assert.match(tvRoot.innerHTML, /tv-result-left.*tv-result-score.*tv-result-right/, 'resultados exibem times nas pontas e placares no centro');
+assert.match(tvRoot.innerHTML, /<span>GAMES<\/span><span class="tv-win">V<\/span><span class="tv-loss">D<\/span><span>J<\/span>/);
+assert.match(tvRoot.innerHTML, /class="tv-ranking-team"[^>]*>VORTEX<\/strong><b>\+8<\/b><span>12 - 4<\/span><span class="tv-win">2<\/span><span class="tv-loss">0<\/span><span>2<\/span>/);
+assert.doesNotMatch(tvRoot.innerHTML, /<h3>Times<\/h3>/, 'classificação geral usa somente o cabeçalho da tabela');
 assert.match(tvRoot.innerHTML, /class="tv-qr-code"[^>]*neon-test/);
 assert.match(tvRoot.innerHTML, /scoreplace\.app\/icons\/logo-podium\.svg/);
 window._tvLiveToggle();

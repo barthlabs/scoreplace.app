@@ -62,8 +62,8 @@ assert(/regression_round_heading_never_overlaps_category_tabs/.test(bracket) && 
   'o cabeçalho da rodada não invade a faixa das categorias nem deixa fresta visual');
 assert(/regression_score_submit_never_jumps_bracket/.test(require('fs').readFileSync(path.join(__dirname, '..', 'js/store.js'), 'utf8')),
   'a confirmação do placar preserva a âncora da chave em vez de reiniciar a página');
-assert(/var cfg = core\.normalize\(configuredCfg\)/.test(bracket),
-  'a classificação respeita o critério gravado, sem forçar saldo de games');
+assert(/core\.rankingConfigForTournament\(t\)/.test(bracket),
+  'a classificação lê o critério gravado e o escopo geral por time do Neon pelo domínio compartilhado');
 assert(/regression_team_competition_hides_pair_standings/.test(bracket) && /pairStandingsHtml = _isTeamCompetitionGS \? ''/.test(bracket),
   'agenda entre times não mostra classificação técnica por participantes/duplas');
 assert(/cfg\.aggregation !== 'per_category'/.test(bracket) && /Classificação geral /.test(bracket),

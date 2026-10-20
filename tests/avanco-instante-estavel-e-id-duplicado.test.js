@@ -66,6 +66,13 @@ ok(JSON.stringify(espelhoDe(p1)) === JSON.stringify(espelhoDe(p2)),
    '① ⭐ o documento de `results` é idêntico — inclusive o carimbo do espelho');
 ok(espelhoDe(p1).length > 0, '① (e o espelho realmente foi planejado, senão a asserção acima é vazia)');
 ok(espelhoDe(p1)[0].doc.at === '2026-09-02T10:00:00.000Z', '① o carimbo é o instante RECEBIDO, não um novo');
+const sandboxPlan = WP.planWrites(null, Object.assign(torneio(2), { isSandbox: true }), {
+  split: split, boundary: boundary, agoraIso: '2026-09-02T10:00:00.000Z',
+  espelho: espelho, tournamentId: 'sb_t1', resultCollection: 'resultsSandbox'
+});
+ok(sandboxPlan.ops.some(op => op.colecao === 'resultsSandbox' && op.chave === 'm1') &&
+   !sandboxPlan.ops.some(op => op.colecao === 'results'),
+   '① sandbox espelha placar apenas em resultsSandbox, sem resultado público');
 const oculto = torneio(3);
 oculto.organizerOnly = true;
 const planoOculto = WP.planWrites(null, oculto, {

@@ -1268,6 +1268,7 @@ const SUITES = [
   // antigo do torneio e apagar o resultado que outro aparelho acabou de registrar.
   'tests/atribuir-quadra-nao-sobrescreve-placar.test.js',
   'tests/chamada-quadra-sandbox.test.js',
+  'tests/placar-sandbox-isolado.test.js',
   'tests/publicar-sorteio-nao-sobrescreve-resultado.test.js',
   'tests/avanco-eliminatoria-nao-sobrescreve-placar.test.js',
   // Varredura do doc inteiro: grupo formado e registro de "já avisei" também não somem. v1.8.0.

@@ -2715,6 +2715,12 @@ window.FirestoreDB = {
           }
         } catch (_eSbFrio) { /* negado = não é seu sandbox; segue como não encontrado */ }
       }
+      // O prefixo sb_ já encaminha a primeira leitura à coleção privada. Registre
+      // também esse fato após a leitura confirmada, inclusive na abertura fria.
+      if (doc && doc.exists && this._ehSandbox(id)) {
+        window._sbIdsConhecidos = window._sbIdsConhecidos || {};
+        window._sbIdsConhecidos[String(id)] = true;
+      }
       if (!doc || !doc.exists) {
         // não achou em lugar nenhum: se a primeira leitura tinha erro DE VERDADE, ele
         // aparece agora — engoli-lo faria "sem permissão" e "não existe" virarem a mesma coisa.
