@@ -253,7 +253,7 @@
           !snapshot.timing.game || minutes < gameEnd ? 'game' : 'overdue';
         node.className = 'tv-phase-' + phase;
         node.title = { call: 'Tempo de chamada', warmup: 'Aquecimento', game: 'Tempo de jogo', overdue: 'Tempo previsto excedido' }[phase];
-        var phaseMinutes = { call: 0, warmup: callEnd, game: warmupEnd, overdue: gameEnd }[phase];
+        var phaseMinutes = { call: 0, warmup: callEnd, game: warmupEnd, overdue: warmupEnd }[phase];
         node.textContent = { call: 'Chamado', warmup: 'Aquecimento', game: 'Tempo de jogo', overdue: 'Atrasado' }[phase] +
           ' ' + elapsed(start + phaseMinutes * 60000);
       });

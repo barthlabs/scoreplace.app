@@ -1,6 +1,6 @@
 // 2.5.11 — O cronômetro da quadra no NO AR mostra "Chamado hh:mm:ss" após
 // confirmar a chamada; cada fase reinicia a contagem: Aquecimento, Tempo de
-// jogo e Atrasado quando o prazo termina sem resultado.
+// jogo; Atrasado fica vermelho e continua a mesma contagem do jogo.
 // 2.5.10 — NO AR destaca a última chamada, usa os tempos de chamada, aquecimento
 // e jogo no cronômetro, mantém a tela acordada e lista todos os resultados com
 // rolagem. Classificação acumula games e vitórias mesmo após mudança de nome.

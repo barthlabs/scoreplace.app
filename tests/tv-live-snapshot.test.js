@@ -132,7 +132,7 @@ assert.match(tvTimer.textContent, /^Tempo de jogo 00:00:\d\d$/, 'o tempo de jogo
 assert.equal(tvTimer.className, 'tv-phase-game', 'tempo de jogo usa a fase verde');
 tvTimer.start = Date.now() - 210000;
 window._tvLiveRefresh();
-assert.match(tvTimer.textContent, /^Atrasado 00:00:\d\d$/, 'o atraso conta só o tempo além do jogo previsto');
+assert.match(tvTimer.textContent, /^Atrasado 00:01:\d\d$/, 'o atraso preserva a contagem iniciada no tempo de jogo');
 assert.equal(tvTimer.className, 'tv-phase-overdue', 'atraso usa a fase vermelha');
 assert.match(tvRoot.innerHTML, /ÚLTIMOS RESULTADOS/);
 assert.doesNotMatch(tvRoot.innerHTML, /CHAMADO|EM JOGO/);
