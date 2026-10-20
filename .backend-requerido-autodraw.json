@@ -1,8 +1,9 @@
 {
   "schema": 1,
-  "backendCommit": "003492608b61488dfddda8d58bfcb0965af1eda7",
-  "scopeNote": "Somente assignMatchCourt mudou neste corte; o chamado para quadra passa a usar a coleção isolada do sandbox com validação do dono.",
+  "backendCommit": "07c482df82a4d697fe98a0bb40e28d75bd62c063",
+  "scopeNote": "O placar do sandbox usa o mesmo motor da produção, com coleção e notificações isoladas; a atribuição de quadra também foi atualizada.",
   "functions": [
-    "assignMatchCourt"
+    "assignMatchCourt",
+    "applyMatchResult"
   ]
 }
