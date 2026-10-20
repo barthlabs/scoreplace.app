@@ -69,7 +69,6 @@
       return {
         id: text(m.id), day: localDay(m.scheduledAt), time: localTime(m.scheduledAt), at: timestamp(m.scheduledAt),
         court: text(m.court), number: matchNumber(m), category: text(m.category || m.categoryName),
-        group: text(m.groupName || m.groupLabel || (typeof m.group === 'string' ? m.group : '')),
         round: m.round == null ? '' : String(m.round),
         p1: displaySide(t, m, 'p1'), p2: displaySide(t, m, 'p2'),
         team1: teamName(t, m, 'p1'), team2: teamName(t, m, 'p2'),

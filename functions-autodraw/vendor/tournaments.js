@@ -3952,6 +3952,7 @@ function renderTournaments(container, tournamentId = null) {
                      <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._printTournament('${t.id}')">🖨️ Imprimir</button>
                      <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._exportTournamentCSV('${t.id}')">📊 Exportar CSV</button>
                      <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._tvMode('${t.id}')">📺 Modo TV</button>
+                     ${isOrg && typeof window._downloadTournamentSumula === 'function' ? `<button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation();window._downloadTournamentSumula('${_escAttr(t.id)}')">📋 Súmula horizontal</button><button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation();window._downloadTournamentSumula('${_escAttr(t.id)}', 'portrait')">📋 Súmula vertical</button><button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation();window._downloadTournamentSumula('${_escAttr(t.id)}', 'landscape', true)">📋 Presença</button>` : ''}
                    </div>
                  `;
                 } else if (hasDraw) {
@@ -3967,6 +3968,7 @@ function renderTournaments(container, tournamentId = null) {
                      <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._printTournament('${t.id}')">🖨️ Imprimir</button>
                      <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._exportTournamentCSV('${t.id}')">📊 Exportar CSV</button>
                      <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._tvMode('${t.id}')">📺 Modo TV</button>
+                     ${isOrg && typeof window._downloadTournamentSumula === 'function' ? `<button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation();window._downloadTournamentSumula('${_escAttr(t.id)}')">📋 Súmula horizontal</button><button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation();window._downloadTournamentSumula('${_escAttr(t.id)}', 'portrait')">📋 Súmula vertical</button><button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation();window._downloadTournamentSumula('${_escAttr(t.id)}', 'landscape', true)">📋 Presença</button>` : ''}
                    </div>
                  `;
                 } else {
@@ -4417,7 +4419,6 @@ function renderTournaments(container, tournamentId = null) {
               <div class="org-tools-label" style="${_TOOLS_LABEL_CSS} ${_toolsCss} margin-bottom: 10px;">${_t('org.tools')}</div>
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                 ${hasDraw ? `<button class="btn btn-primary hover-lift" onclick="window._scrollToBracketSection('${t.id}')">🏆 ${_t('btn.viewBracket')}</button>` : ''}
-                ${typeof window._downloadTournamentSumula === 'function' ? `<button class="btn btn-indigo hover-lift" onclick="event.stopPropagation();window._downloadTournamentSumula('${_escAttr(t.id)}')" title="Baixar PDF com súmula por quadra e lista de presença por dia; requer jogos com dia, hora e quadra definidos">📋 Súmula (PDF)</button>` : ''}
                 ${/* create-tournament.js is deferred after this view; the hash fallback is intentional so a direct detail render never loses Editar during that load window. */ !isFinished ? `<button class="btn btn-indigo hover-lift btn-shine" onclick="event.stopPropagation(); if (typeof window._navigateToCreateTournament === 'function') { window._navigateToCreateTournament('${_escAttr(t.id)}'); } else { window.location.hash = '#novo-torneio/${_escAttr(t.id)}'; }">✏️ ${_t('btn.edit')}</button>` : ''}
                 <button class="btn btn-purple hover-lift" onclick="event.stopPropagation(); window.location.hash='#comunicados/${t.id}'">📢 Comunicados</button>
                 ${addParticipantBtns}
