@@ -1,27 +1,8 @@
 {
   "schema": 1,
-  "backendCommit": "f5dad9e5bcdeab7201b384d2fba9fd0eda3e61dc",
-  "scopeNote": "Somente funções afetadas por este corte. getPendingInitialDraw, getPendingDrawReviewState e uploadTournamentImage continuam publicadas do corte anterior e não foram alteradas; republicá-las seria redundante.",
-  "unchangedExportsNotRedeployed": ["getPendingInitialDraw", "getPendingDrawReviewState", "uploadTournamentImage"],
+  "backendCommit": "ab5d2a0d7f1c4d167a9f78dc7614f80038d7e33f",
+  "scopeNote": "Somente assignMatchCourt mudou neste corte; publicação direcionada confirmada e preflight CORS verificado em produção.",
   "functions": [
-    "drawRound",
-    "updateTournamentConfiguration",
-    "resolvePendingDraw",
-    "setPendingInitialSchedule",
-    "autoDraw",
-    "autoDrawReconcile",
-    "tournamentSummary",
-    "sendPushNotification",
-    "saveTournamentReplay",
-    "queueMatchReadyNotifications",
-    "reconcileMatchReadyNotifications",
-    "deliverScoreNotification",
-    "createTournament",
-    "startTournament",
-    "applyTournamentFormat",
-    "advanceTournamentPhase",
-    "setTournamentEnrollmentStatus",
-    "runEnrollmentSlotsDraw",
-    "closeExpiredLeagueSeason"
+    "assignMatchCourt"
   ]
 }
