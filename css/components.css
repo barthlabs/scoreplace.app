@@ -3278,3 +3278,18 @@ dialog.sp-native-update::backdrop { background: var(--bg-overlay, rgba(0,0,0,0.6
 
 /* Vaga de origem clicável: foco por teclado visível nos dois temas. */
 .sp-source-match-link:focus-visible { outline: 2px solid var(--text-main); border-radius: 2px; }
+/* A dashboard mostra só o primeiro jogo enquanto não há largura para
+   outra coluna. Em tela larga, ocupa o espaço com as partidas seguintes. */
+.sp-dashboard-next-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 12px;
+  align-items: start;
+}
+.sp-dashboard-next-extra { display: none; }
+.sp-dashboard-next-plural { display: none; }
+@container (min-width: 620px) {
+  .sp-dashboard-next-extra { display: block; }
+  .sp-dashboard-has-more .sp-dashboard-next-plural { display: inline; }
+  .sp-dashboard-has-more .sp-dashboard-next-singular { display: none; }
+}

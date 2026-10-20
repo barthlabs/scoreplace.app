@@ -2023,7 +2023,7 @@ function _bracketTabsObserveSearchLayout(root, searchWrap) {
   }
 }
 window._bracketPrimaryTabsHtml = function (genderHtml, presentationTabs) {
-  return '<div data-bracket-tabs-primary style="display:flex;align-items:flex-end;gap:5px;flex-wrap:nowrap;width:100%;min-width:0;border-bottom:1px solid rgba(129,140,248,.6);padding:0 4px;">' + '<div data-bracket-main-tabs style="display:flex;align-items:flex-end;gap:5px;flex:0 1 auto;min-width:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;">' + genderHtml + '</div>' + (presentationTabs ? '<div data-bracket-presentation-tabs style="margin-left:auto;flex:0 0 auto;align-self:center;">' + presentationTabs + '</div>' : '') + '<div data-bracket-search-slot="inline" hidden style="margin-left:auto;flex:1 1 260px;max-width:390px;min-width:220px;"></div></div>';
+  return '<div data-bracket-tabs-primary style="display:flex;align-items:flex-end;gap:5px;flex-wrap:nowrap;width:100%;min-width:0;border-bottom:1px solid rgba(129,140,248,.6);padding:0 4px;">' + '<div data-bracket-main-tabs style="display:flex;align-items:flex-end;gap:5px;flex:0 1 auto;min-width:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;">' + genderHtml + '</div>' + (presentationTabs ? '<div data-bracket-presentation-tabs style="margin-left:auto;flex:0 0 auto;align-self:center;">' + presentationTabs + '</div>' : '') + '<div data-bracket-search-slot="inline" hidden style="margin-left:auto;flex:1 1 260px;max-width:780px;min-width:220px;"></div></div>';
 };
 window._bracketCategoryTabsMount = function () {
   var cards = Array.prototype.slice.call(document.querySelectorAll('[data-bracket-tab-category]'));

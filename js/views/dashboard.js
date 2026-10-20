@@ -2898,14 +2898,14 @@ function renderDashboard(container) {
       html += '</div></div>';
     }
 
-    // ── Próximo Jogo (UM só — o mais imediato). v3.1.27 (pedido do dono): a seção
-    // sempre mostra 1 jogo; em Rei/Rainha (3 jogos no grupo), mostra apenas o PRÓXIMO.
-    // Header sem contador. Sub-header: nome do torneio / quebra / Rodada · Fase · Linha
-    // (+ coroa se Rei/Rainha).
+    // A primeira posição continua sendo o jogo mais imediato. Em painéis largos,
+    // os dois seguintes usam as colunas que antes ficavam vazias.
     var allUpcoming = [];
     noResult.forEach(function(i) { allUpcoming.push({ item: i, canLaunch: true }); });
     upcoming.forEach(function(i) { allUpcoming.push({ item: i, canLaunch: false }); });
     var _ngEntry = window._dashboardSelectNextMatch(allUpcoming);
+    var _ngExtras = allUpcoming.filter(function (entry) { return entry !== _ngEntry; })
+      .sort(window._dashboardNextMatchCompare).slice(0, 2);
 
     if (_ngEntry) {
       var _ng = _ngEntry.item;
@@ -2956,11 +2956,11 @@ function renderDashboard(container) {
       // A entrada automática da Dashboard ancora nesta seção. A margem de
       // rolagem pertence ao próprio destino: assim "Seu próximo jogo" nunca
       // fica sob o cabeçalho fixo, independentemente da altura do chrome.
-      _upHtml += '<div id="proximos-jogos-section" style="scroll-margin-top:calc(var(--scroll-anchor, 0px) + 16px);background:rgba(56,189,248,0.05);border:1px solid rgba(56,189,248,0.18);border-radius:14px;padding:14px 16px;margin-bottom:1rem;">';
+      _upHtml += '<div id="proximos-jogos-section" class="' + (_ngExtras.length ? 'sp-dashboard-has-more' : '') + '" style="container-type:inline-size;scroll-margin-top:calc(var(--scroll-anchor, 0px) + 16px);background:rgba(56,189,248,0.05);border:1px solid rgba(56,189,248,0.18);border-radius:14px;padding:14px 16px;margin-bottom:1rem;">';
       // O alvo de entrada é a seção, portanto a própria frase precisa sobreviver
       // ao recuo do cabeçalho fixo. O span não trunca: em largura estreita ele
       // quebra de linha antes de desaparecer sob o chrome.
-      _upHtml += '<h3 style="margin:0 0 12px;min-width:0;font-size:0.85rem;font-weight:700;color:var(--sp-c-38bdf8,#38bdf8);letter-spacing:0.04em;text-transform:uppercase;display:flex;align-items:center;flex-wrap:wrap;gap:8px;line-height:1.25;overflow:visible;"><span aria-hidden="true">⚔️</span><span style="min-width:0;overflow:visible;text-overflow:clip;white-space:normal;">Seu próximo jogo</span></h3>';
+      _upHtml += '<h3 style="margin:0 0 12px;min-width:0;font-size:0.85rem;font-weight:700;color:var(--sp-c-38bdf8,#38bdf8);letter-spacing:0.04em;text-transform:uppercase;display:flex;align-items:center;flex-wrap:wrap;gap:8px;line-height:1.25;overflow:visible;"><span aria-hidden="true">⚔️</span><span style="min-width:0;overflow:visible;text-overflow:clip;white-space:normal;"><span class="sp-dashboard-next-singular">Seu próximo jogo</span>' + (_ngExtras.length ? '<span class="sp-dashboard-next-plural">Seus próximos jogos</span>' : '') + '</span></h3>';
       _upHtml += '<div style="border-left:3px solid #818cf8;padding-left:10px;margin-bottom:10px;">' +
         '<div style="font-weight:800;color:var(--text-bright);font-size:0.92rem;text-transform:uppercase;letter-spacing:0.5px;line-height:1.25;">' + _sf(_ng.tName) + '</div>' +
         (_metaStr ? '<div style="color:var(--sp-c-a5b4fc,#a5b4fc);font-size:0.72rem;margin-top:3px;font-weight:600;">' + _sf(_metaStr) + '</div>' : '') +
@@ -2970,7 +2970,7 @@ function renderDashboard(container) {
        * `min-width:0`, o card esticava para a largura inteira da seção enquanto todos os
        * outros ocupavam uma coluna de `minmax(280px,1fr)`. Card de jogo tem geometria
        * canônica em todo lugar — inclusive a caixa que o segura. */
-      _upHtml += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;align-items:start;">' +
+      _upHtml += '<div class="sp-dashboard-next-grid">' +
         '<div data-mr-card="1" style="min-width:0;">' +
         _miniBracketCard(_ng, _ngEntry.canLaunch, {
           hideFaseHeader: true,
@@ -2979,7 +2979,24 @@ function renderDashboard(container) {
           showScheduleChip: true,
           showMatchGroupChip: true
         }) +
-        '</div></div>';
+        '</div>';
+      _ngExtras.forEach(function (entry) {
+        var item = entry.item, match = item.m || {};
+        var tournament = participacoes.find(function (tt) { return tt.id === item.tId; });
+        var gameLabel = match._gameNum != null ? 'Jogo ' + match._gameNum : 'Jogo';
+        var timeline = tournament && typeof window._matchCardTimelineTextHtml === 'function'
+          ? window._matchCardTimelineTextHtml(tournament, match) : '';
+        _upHtml += '<div data-mr-card="1" class="sp-dashboard-next-extra" style="min-width:0;">' +
+          (item.tName !== _ng.tName ? '<div style="font-size:.72rem;font-weight:800;color:var(--sp-c-a5b4fc,#a5b4fc);margin-bottom:5px;">' + _sf(item.tName) + '</div>' : '') +
+          _miniBracketCard(item, entry.canLaunch, {
+            hideFaseHeader: true,
+            boxLabelOverride: gameLabel,
+            timelineHtml: timeline,
+            showScheduleChip: true,
+            showMatchGroupChip: true
+          }) + '</div>';
+      });
+      _upHtml += '</div>';
       _upHtml += '</div>'; // fecha #proximos-jogos-section
     }
 
