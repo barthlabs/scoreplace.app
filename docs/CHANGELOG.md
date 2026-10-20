@@ -1,3 +1,7 @@
+## 2.5.16 — 20/out/2026 (ordem e ícones do relógio na chave)
+
+- O controle de cada jogo chamado mostra retroceder, etapa com tempo e avançar nessa ordem. Os botões usam ícones circulares espelhados e preservam a ação e os rótulos acessíveis de FF/REW.
+
 ## 2.5.15 — 20/out/2026 (controles do relógio e continuidade do NO AR)
 
 - FF avança da chamada para aquecimento, do aquecimento para jogo e do jogo para atraso; REW reinicia a fase atual. Ambos passam pela função autenticada e atualizam chave e NO AR pelo mesmo horário persistido.

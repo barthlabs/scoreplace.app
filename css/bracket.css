@@ -164,7 +164,9 @@ summary::-webkit-details-marker { display: none; }
   flex: none;
 }
 .sp-match-confirm--locked { color: var(--sp-c-4ade80,#4ade80); font-size: .72rem; font-weight: 800; }
-.sp-match-clock-action { border:1px solid currentColor; border-radius:5px; background:transparent; color:inherit; font-size:.65rem; font-weight:900; padding:2px 4px; margin-right:3px; cursor:pointer; }
+.sp-match-court-clock { display:inline-flex; align-items:center; gap:3px; }
+.sp-match-clock-action { display:inline-flex; align-items:center; justify-content:center; flex:none; box-sizing:border-box; width:27px; height:27px; border:1px solid currentColor; border-radius:50%; background:transparent; color:inherit; padding:4px; cursor:pointer; }
+.sp-match-clock-action svg { display:block; width:100%; height:100%; }
 .sp-match-clock-action:disabled { opacity:.45; cursor:wait; }
 .sp-match-phase-call { color: #38bdf8; }
 .sp-match-phase-warmup { color: #fbbf24; }

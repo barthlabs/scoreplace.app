@@ -237,9 +237,22 @@ vm.runInNewContext(bracketSource.slice(bracketClockStart, bracketClockEnd), {
 });
 const clockHtml = bracketClockWindow._spCourtClockHtml(phaseBase, phaseTournament, clockNow);
 assert.match(clockHtml, /sp-match-phase-call.*Chamado 00:00:45/, 'chave nasce com fase e hora idênticas ao NO AR');
+assert.doesNotMatch(clockHtml, /Reiniciar etapa do relógio|Próxima etapa do relógio/,
+  'sem controles, o relógio não mostra REW nem FF');
 const organizerClockHtml = bracketClockWindow._spCourtClockHtml(phaseBase, phaseTournament, clockNow, 'sb_tour', 'match-1', true);
-assert.match(organizerClockHtml, />FF<\/button>.*>REW<\/button>.*Chamado 00:00:45/,
-  'FF e REW aparecem à esquerda do relógio apenas no card do organizador');
+const rewPosition = organizerClockHtml.indexOf('Reiniciar etapa do relógio');
+const timerPosition = organizerClockHtml.indexOf('Chamado 00:00:45');
+const ffPosition = organizerClockHtml.indexOf('Próxima etapa do relógio');
+assert(rewPosition >= 0 && rewPosition < timerPosition && timerPosition < ffPosition,
+  'no card do organizador: REW, texto do relógio, FF');
+const clockIcons = organizerClockHtml.match(/<svg[^>]*>[\s\S]*?<\/svg>/g) || [];
+assert.equal(clockIcons.length, 2, 'os dois controles usam ícones');
+assert(clockIcons.every(icon => /aria-hidden="true"/.test(icon) && /currentColor/.test(icon) && !/#[0-9a-f]{3,8}/i.test(icon)),
+  'ícones decorativos usam a cor do tema');
+const overdueClockHtml = bracketClockWindow._spCourtClockHtml(phaseBase, phaseTournament,
+  phaseBase + 210000, 'sb_tour', 'match-1', true);
+assert.match(overdueClockHtml, /sp-match-clock-next[^>]* disabled/,
+  'FF permanece indisponível quando o jogo já está atrasado');
 assert(!courtLocked && !okLocked, 'quadra e OK permanecem editáveis durante a chamada');
 for (const [seconds, label, colorClass] of [
   [90, 'Aquecimento 00:00:30', 'sp-match-phase-warmup'],

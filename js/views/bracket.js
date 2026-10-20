@@ -3905,10 +3905,13 @@ window._spCourtClockHtml = function(start, tournament, now, tId, matchId, contro
   var clock = window.ScoreplaceMatchTiming;
   var timing = clock.config(tournament);
   var state = clock.phaseAt(start, timing, now);
-  var buttons = controls ? '<button type="button" class="sp-match-clock-action sp-match-clock-next" aria-label="Próxima etapa do relógio" title="FF · próxima etapa"' + (state.phase === 'overdue' ? ' disabled' : '') + ' onclick="event.stopPropagation();window._adjustMatchCourtClock(this,\'' + String(tId) + '\',\'' + String(matchId) + '\',\'next\')">FF</button>' +
-    '<button type="button" class="sp-match-clock-action" aria-label="Reiniciar etapa do relógio" title="REW · reiniciar tempo" onclick="event.stopPropagation();window._adjustMatchCourtClock(this,\'' + String(tId) + '\',\'' + String(matchId) + '\',\'restart\')">REW</button>' : '';
-  return '<span class="sp-match-estimated-time sp-match-phase-' + state.phase + '" title="' + clock.title(state.phase) + '" style="margin-left:auto;white-space:nowrap;text-align:right;font-size:.78rem;font-weight:800;">' +
-    buttons + '⏱ <span class="sp-match-call-timer" data-start-ms="' + start + '" data-call-min="' + timing.call + '" data-warmup-min="' + timing.warmup + '" data-game-min="' + timing.game + '">' + clock.text(state, now) + '</span></span>';
+  var rewindIcon = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="currentColor"><path d="M11 5 3 12l8 7V5Zm9 0-8 7 8 7V5Z"/></svg>';
+  var forwardIcon = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="currentColor"><path d="m4 5 8 7-8 7V5Zm9 0 8 7-8 7V5Z"/></svg>';
+  var restartBtn = controls ? '<button type="button" class="sp-match-clock-action" aria-label="Reiniciar etapa do relógio" title="REW · reiniciar tempo" onclick="event.stopPropagation();window._adjustMatchCourtClock(this,\'' + String(tId) + '\',\'' + String(matchId) + '\',\'restart\')">' + rewindIcon + '</button>' : '';
+  var nextBtn = controls ? '<button type="button" class="sp-match-clock-action sp-match-clock-next" aria-label="Próxima etapa do relógio" title="FF · próxima etapa"' + (state.phase === 'overdue' ? ' disabled' : '') + ' onclick="event.stopPropagation();window._adjustMatchCourtClock(this,\'' + String(tId) + '\',\'' + String(matchId) + '\',\'next\')">' + forwardIcon + '</button>' : '';
+  var timerHtml = '⏱ <span class="sp-match-call-timer" data-start-ms="' + start + '" data-call-min="' + timing.call + '" data-warmup-min="' + timing.warmup + '" data-game-min="' + timing.game + '">' + clock.text(state, now) + '</span>';
+  return '<span class="sp-match-estimated-time sp-match-court-clock sp-match-phase-' + state.phase + '" title="' + clock.title(state.phase) + '" style="margin-left:auto;white-space:nowrap;text-align:right;font-size:.78rem;font-weight:800;">' +
+    restartBtn + timerHtml + nextBtn + '</span>';
 };
 window._spRefreshCourtClocks = function() {
   var clock = window.ScoreplaceMatchTiming;

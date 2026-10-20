@@ -1,3 +1,5 @@
+// 2.5.16 — Os controles do relógio na chave aparecem como retroceder,
+// etapa/tempo e avançar, nessa ordem, com ícones circulares.
 // 2.5.15 — Após chamar o jogo para uma quadra, FF adianta o relógio para a
 // próxima etapa e REW reinicia a etapa atual; antes da chamada os controles
 // não aparecem. A quadra e o OK ficam travados após o período de chamada. O NO AR mantém
