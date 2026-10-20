@@ -56,6 +56,7 @@ ok(!pending({p1:'',team1Uids:[],p2:'Bia'}),'lista vazia de UIDs não define adve
 const toggleStart=src.indexOf('window._togglePendingMatches = function');
 const toggleEnd=src.indexOf('window._toggleMyMatches = function',toggleStart);
 let focused=0, filtered=0, revealed=[];
+let pendingOperationalFocus=0;
 const body={style:{},parentElement:null};
 const pendingSearch={value:'inga'};
 const pendingClear={style:{display:'block'}};
@@ -69,11 +70,13 @@ toggleSandbox.window=toggleSandbox;
 toggleSandbox.window._filterBarState={chaves:{search:'inga'}};
 toggleSandbox.window._bracketSyncHeaderFilterButtons=()=>{};
 toggleSandbox.window._bracketTabsRevealFilteredMatch=(kind)=>revealed.push(kind);
+toggleSandbox.window._bracketOperationalRootForCard=()=>({});
+toggleSandbox.window._bracketFocusOperationalCard=()=>{ pendingOperationalFocus++; };
 vm.createContext(toggleSandbox);
 const clearStart=src.indexOf('function _bracketClearSearchForHeaderFilter()');
 vm.runInContext(src.slice(clearStart,toggleEnd),toggleSandbox,{filename:'bracket-pending-toggle'});
 toggleSandbox.window._togglePendingMatches(true);
-ok(toggleSandbox.window._showOnlyPendingMatches===true && filtered===1 && focused===1,
+ok(toggleSandbox.window._showOnlyPendingMatches===true && filtered===1 && pendingOperationalFocus===1 && focused===0,
   'ativar pendentes aplica o filtro e leva ao primeiro jogo visível');
 ok(revealed[0]==='pending','ativar pendentes abre a aba do primeiro jogo pendente');
 ok(pendingSearch.value==='' && toggleSandbox.window._filterBarState.chaves.search==='' && pendingClear.style.display==='none',
@@ -86,12 +89,17 @@ const mineStart=src.indexOf('window._toggleMyMatches = function');
 const mineEnd=src.indexOf('// ── PINTAR EM ETAPAS',mineStart);
 vm.runInContext(src.slice(mineStart,mineEnd),toggleSandbox,{filename:'bracket-mine-toggle'});
 toggleSandbox.window._bracketEntryTarget=()=>pendingCard;
+let operationalFocus=0;
+toggleSandbox.window._bracketOperationalRootForCard=()=>({});
+toggleSandbox.window._bracketFocusOperationalCard=()=>{ operationalFocus++; };
 toggleSandbox.window._showOnlyPendingMatches=true;
 toggleSandbox.window._toggleMyMatches(true);
 ok(pendingSearch.value==='' && toggleSandbox.window._filterBarState.chaves.search==='' && pendingClear.style.display==='none',
   'ativar Só meus jogos também limpa a busca anterior por completo');
 ok(toggleSandbox.window._showOnlyMyMatches===true && toggleSandbox.window._showOnlyPendingMatches===false && revealed.at(-1)==='mine',
   'Só meus jogos desliga pendentes e abre a aba do jogo do usuário');
+ok(operationalFocus===1,
+  'Só meus jogos alinha o card abaixo das abas e do cabeçalho fixo da rodada');
 toggleSandbox.window._togglePendingMatches(true);
 ok(toggleSandbox.window._showOnlyPendingMatches===true && toggleSandbox.window._showOnlyMyMatches===false,
   'voltar aos pendentes desliga Só meus jogos');

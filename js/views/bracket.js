@@ -218,7 +218,11 @@ window._togglePendingMatches = function(checked) {
           if (p.hidden || p.style.display === 'none') { hidden = true; break; }
         }
         if (!hidden && cards[i].scrollIntoView) {
-          cards[i].scrollIntoView({ behavior:'smooth', block:'start' });
+          var operationalRoot = typeof window._bracketOperationalRootForCard === 'function'
+            ? window._bracketOperationalRootForCard(cards[i]) : null;
+          if (operationalRoot && typeof window._bracketFocusOperationalCard === 'function')
+            window._bracketFocusOperationalCard(operationalRoot, cards[i], 'auto');
+          else cards[i].scrollIntoView({ behavior:'smooth', block:'start' });
           break;
         }
       }
@@ -278,7 +282,15 @@ window._toggleMyMatches = function(checked) {
     try {
       if (checked) {
         var a = _alvo();
-        if (a && a.scrollIntoView) a.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (a) {
+          var operationalRoot = typeof window._bracketOperationalRootForCard === 'function'
+            ? window._bracketOperationalRootForCard(a) : null;
+          if (operationalRoot && typeof window._bracketFocusOperationalCard === 'function') {
+            window._bracketFocusOperationalCard(operationalRoot, a, 'auto');
+          } else if (a.scrollIntoView) {
+            a.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }
       } else if (_ancora && _ancora.getBoundingClientRect) {
         var _d = _ancora.getBoundingClientRect().top - _topoAntes;
         if (Math.abs(_d) > 1 && typeof window.scrollBy === 'function') window.scrollBy(0, _d);

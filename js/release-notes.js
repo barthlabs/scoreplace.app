@@ -1,3 +1,7 @@
+// 2.5.0 — Corte comum para web, iPhone, Apple Watch, Android e Wear OS.
+// Reúne a grade publicada por dia, chamada para quadra com relógio, TV ao vivo,
+// súmulas, busca por equipe, próximos jogos com rodadas da agenda e o foco
+// integral dos cards ao ativar “Só meus jogos”.
 // 2.4.135 — Rodadas dos próximos jogos seguem os horários da grade
 // publicada em cada dia, iguais às colunas da aba Geral da chave.
 // 2.4.134 — Próximos jogos na dashboard alinham os cards pela rodada de
@@ -903,6 +907,17 @@ window._RELEASE_NOTES_HTML = (function () {
     // quem está com a 2.0.4 no iPhone lê um torneio que o banco não guarda mais desse jeito.
     // Mesma lição da 1.7.35: quando o formato do dado muda, a ida à loja É o conserto.
     // Os itens abaixo são consolidados por tema, como manda a convenção do arquivo.
+    // v2.5 — corte nativo do que já está no ar na web. As lojas passam primeiro
+    // por TestFlight/faixa fechada; o número comum não antecipa aprovação pública.
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(52,211,153,0.08);">' +
+      '<div style="font-weight:800; color:var(--sp-c-a7f3d0,#a7f3d0); font-size:1rem; margin-bottom:8px;">📺 v2.5 — Torneio em quadra, na TV e na súmula <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Outubro, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>📺 Modo TV:</b> saída limpa em janela separada com quadras chamadas, relógios, classificação do torneio e três resultados recentes.</li>' +
+        '<li><b>📋 Súmulas:</b> PDF da grade marcada e da presença para apoiar a organização do torneio.</li>' +
+        '<li><b>🎾 Jogos e quadras:</b> a chave separa dias, aceita busca pelo nome da equipe e mostra a chamada confirmada para quadra com o tempo decorrido.</li>' +
+        '<li><b>🗓️ Próximos jogos:</b> vários cards aparecem lado a lado quando há espaço, com a rodada publicada acima de cada partida.</li>' +
+      '</ul>' +
+    '</div>' +
     // v2.4 — a configuração de torneios por equipes agora é realmente por categoria:
     // quantidade de duplas de cada equipe e jogos por dupla são escolhas independentes.
     '<div style="margin-bottom:1rem;border:2px solid #38bdf8;border-radius:12px;padding:14px 16px;background:rgba(56,189,248,0.08);">' +

@@ -1,3 +1,11 @@
+## 2.5.0 — 19/out/2026 (corte comum web e candidatos nativos)
+
+- Ordem explícita do responsável nesta conversa: “vamos publicar novas versoes nativas. alinhando apple/android/we na versao 2.5”. Este é o corte nativo solicitado, não um bump incidental de deploy web.
+- Alinha o código e o número de versão do site, iPhone/Apple Watch e Android/Wear OS em 2.5.0. O corte incorpora as funções da série 2.4 já publicadas na web, incluindo agenda por dia, confirmação de quadra e cronômetro, modo TV, súmulas e próximos jogos.
+- Ao ativar “Só meus jogos” ou “Jogos pendentes” na grade por rodadas, posiciona o topo do card abaixo das abas e do cabeçalho fixo da rodada, sem cortar o confronto.
+- iOS e Android seguem os fluxos de teste em aparelho antes da distribuição pública. Este registro do corte não afirma aprovação das lojas.
+- Não altera inscrições, sorteio, partidas ou resultados do Neon.
+
 ## 2.4.129 — 19/out/2026 (alinhamento dos cabeçalhos de rodada)
 
 - Converte as coordenadas do portal fixo das rodadas para a escala CSS do documento. Cada título volta a acompanhar a coluna de jogos correspondente ao rolar a chave com zoom.
