@@ -1174,6 +1174,50 @@ function _bracketToggleEmptySourceRounds(root, hide) {
   }
 }
 
+// A agenda publicada e a chave canônica convivem no detalhe do torneio. Nas
+// abas por data, os cards da chave podem estar todos ocultos enquanto a agenda
+// mostra os jogos; nesse caso o wrapper da fase ainda deixava uma faixa "Fase 1"
+// e colunas "Rodada" vazias na tela. A classificação geral é irmã do wrapper
+// e permanece visível. Restaurar o display antes de medir permite voltar à
+// chave canônica caso alguma categoria não tenha agenda completa.
+function _bracketSyncEmptyScheduledPhase(root) {
+  _bracketReleaseEmptyScheduledPhase(root);
+  if (!root || root.getAttribute('data-bracket-team-schedule') !== '1' ||
+      root.getAttribute('data-bracket-date-tabs') !== '1') return;
+  var inline = document.getElementById('inline-bracket-container');
+  if (!inline) return;
+  Array.prototype.forEach.call(inline.children, function (phase) {
+    if (!phase.querySelector || !phase.querySelector('.team-schedule-bracket')) return;
+    // Outros formatos concentrados podem ter uma tabela dentro do mesmo shell.
+    // Preservá-la mesmo quando os jogos dessa data não estão visíveis.
+    if (phase.querySelector('table, .standings-scroll')) return;
+    var cards = phase.querySelectorAll('.sp-match-card');
+    if (!cards.length) return;
+    var visible = Array.prototype.some.call(cards, function (card) {
+      return !card.hidden && card.getClientRects().length > 0;
+    });
+    if (!visible) {
+      phase._spEmptyScheduledPhaseDisplay = {
+        value: phase.style.getPropertyValue('display'),
+        priority: phase.style.getPropertyPriority('display')
+      };
+      phase.style.setProperty('display', 'none', 'important');
+    }
+  });
+}
+
+function _bracketReleaseEmptyScheduledPhase(root) {
+  if (!root) return;
+  var inline = document.getElementById('inline-bracket-container');
+  if (!inline) return;
+  Array.prototype.forEach.call(inline.children, function (phase) {
+    if (!phase._spEmptyScheduledPhaseDisplay) return;
+    phase.style.setProperty('display', phase._spEmptyScheduledPhaseDisplay.value,
+      phase._spEmptyScheduledPhaseDisplay.priority);
+    phase._spEmptyScheduledPhaseDisplay = null;
+  });
+}
+
 // Mantém um card da agenda operacional inteiro abaixo das abas e da régua
 // fixa de rodada. Esta é a única geometria permitida para a entrada da
 // dashboard, as abas Geral/Próximos e a reafirmação pós-montagem: antes, cada
@@ -1617,6 +1661,7 @@ function _bracketTabsApply(tid, gender, category, requestedRound, forceCanonical
       (usesDateTabs && card.getAttribute('data-bracket-tab-day') !== gender) ||
       (usesRoundTabs && card.getAttribute('data-bracket-tab-round') !== round);
   }
+  _bracketSyncEmptyScheduledPhase(root);
   // A camada de cima é a aba principal: Ouro/Prata em linhas independentes;
   // Feminina/Masculina quando as categorias pertencem a um gênero. A ativa vem
   // para a frente; as demais ficam recuadas, sem simularem conteúdo paralelo.
@@ -11015,6 +11060,8 @@ window._bracketApplyFilter = function () {
   // Limite de subida: nunca passar do container da view (senão, numa busca sem resultado,
   // TUDO seria escondido — inclusive a própria barra de busca, e o dono ficaria preso).
   var root = document.getElementById('view-container') || document.body;
+  var _scheduledPhaseRoot = document.querySelector('[data-bracket-tabs-root][data-bracket-team-schedule="1"]');
+  _bracketReleaseEmptyScheduledPhase(_scheduledPhaseRoot);
   var searchEls = [inp, document.getElementById('bracket-search-empty'),
                    document.getElementById('fbwrap-chaves'), document.getElementById('bracket-competitor-index')].filter(Boolean);
   // Container que ABRIGA a barra de busca nunca some (caso inline, em que a chave e a barra
@@ -11206,6 +11253,7 @@ window._bracketApplyFilter = function () {
   // Container sem NENHUM card casando some inteiro (grid, coluna de rodada, box de grupo,
   // <details> de "Demais jogos da rodada"…). Com filtro limpo, todos voltam.
   for (var k = 0; k < conts.length; k++) setDisp(conts[k], contHasHit[k]);
+  _bracketSyncEmptyScheduledPhase(_scheduledPhaseRoot);
   // O contador do <details> é a QUANTIDADE DA SEÇÃO, não a quantidade temporariamente
   // visível pela busca. "Demais jogos da rodada (N)" responde quantos jogos existem
   // ali; trocar por (0) ao buscar Jogador X fazia parecer que não havia mais jogos.

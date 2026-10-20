@@ -229,6 +229,44 @@ function trecho(inicio, fim) {
     const dateTabs = { thursday, friday, fridayCategory, thursdayAgain,
       noDuplicate: document.querySelectorAll('#thu-r8').length === 1 && document.querySelectorAll('#fri-fem-r1').length === 1 };
 
+    // Reproduz a sobra da chave interna do Neon: a sexta usa os jogos da
+    // agenda, enquanto o wrapper da fase ainda contém cards de outra data.
+    // O título da fase e as rodadas vazias devem sumir junto com esse wrapper;
+    // uma categoria sem agenda completa restaura a chave canônica.
+    document.body.innerHTML = '<main id="view-container"><nav data-bracket-tabs-root="1" data-tournament-id="dated-phase" data-bracket-date-tabs="1" data-bracket-team-schedule="1" data-bracket-line-tabs="0" data-bracket-round-tabs="0">' +
+      '<button data-bracket-primary-tab="2026-10-22">22/10</button><button data-bracket-primary-tab="2026-10-23">23/10</button>' +
+      '<button data-bracket-subtab="Masc Light" data-bracket-tab-gender="2026-10-22">Masc Light</button>' +
+      '<button data-bracket-subtab="Masc Light" data-bracket-tab-gender="2026-10-23">Masc Light</button></nav>' +
+      '<section id="published-agenda">' +
+      card('friday-published', 'masc', 'Masc Light', at(23, 18), 'Quadra 4', true).replace('data-bracket-court=', 'data-bracket-tab-day="2026-10-23" data-bracket-court=') +
+      '</section><section id="inline-bracket-container"><section id="team-ranking">Classificação geral dos times</section>' +
+      '<div id="legacy-phase"><div class="team-schedule-bracket"><div class="bracket-round-column"><h4 class="bracket-round-heading">Rodada 1</h4>' +
+      card('thursday-unscheduled', 'masc', 'Masc Light', 0, 'Quadra 5', false).replace('data-bracket-court=', 'data-bracket-tab-day="2026-10-22" data-bracket-court=') +
+      '</div></div></div></section></main>';
+    const phaseRoot = document.querySelector('[data-bracket-tabs-root]');
+    phaseRoot._bracketTabsScope = document.getElementById('view-container');
+    phaseRoot._bracketCardsScope = document.getElementById('view-container');
+    window._bracketSelectCategoryTab('dated-phase', '2026-10-23', 'Masc Light', '');
+    const emptyPhaseHidden = getComputedStyle(document.getElementById('legacy-phase')).display === 'none' &&
+      getComputedStyle(document.getElementById('team-ranking')).display !== 'none' &&
+      !!document.querySelector('[data-bracket-general-view] #friday-published');
+    window._bracketSelectCategoryTab('dated-phase', '2026-10-22', 'Masc Light', '');
+    const canonicalPhaseRestored = getComputedStyle(document.getElementById('legacy-phase')).display !== 'none' &&
+      !document.getElementById('thursday-unscheduled').hidden;
+    const groupTable = document.createElement('table');
+    groupTable.textContent = 'Classificação do grupo';
+    document.getElementById('legacy-phase').appendChild(groupTable);
+    window._bracketSelectCategoryTab('dated-phase', '2026-10-23', 'Masc Light', '');
+    const groupTablePreserved = getComputedStyle(document.getElementById('legacy-phase')).display !== 'none' &&
+      getComputedStyle(groupTable).display !== 'none';
+    groupTable.remove();
+    window._bracketSelectCategoryTab('dated-phase', '2026-10-23', 'Masc Light', '');
+    phaseRoot.setAttribute('data-bracket-date-tabs', '0');
+    window._bracketSelectCategoryTab('dated-phase', '2026-10-23', 'Masc Light', '');
+    const modeRestored = getComputedStyle(document.getElementById('legacy-phase')).display !== 'none';
+    const emptyPhase = { hidden: emptyPhaseHidden, restored: canonicalPhaseRestored,
+      groupTablePreserved, modeRestored };
+
     // Se a rota desmontou o escopo antes da agenda montar, o horário sozinho
     // não pode deixar a categoria em branco: o card canônico continua visível.
     document.body.innerHTML = '<nav id="orphan-root" data-bracket-tabs-root="1" data-tournament-id="orphan-team" data-bracket-team-schedule="1" data-bracket-line-tabs="0" data-bracket-round-tabs="1">' +
@@ -270,7 +308,7 @@ function trecho(inicio, fim) {
       moved: !!focusRoot._bracketGeneralView.querySelector('#focus-pending'),
       track: !!focusRoot._bracketGeneralView.querySelector('.bracket-general-rounds-track')
     };
-    return { generalState, upcomingState, freshUpcomingResults, justScoredResults, restored, generalReentry, cleanup, noSchedule, nested, externalSource, categorySchedule, dateTabs, nextFocus };
+    return { generalState, upcomingState, freshUpcomingResults, justScoredResults, restored, generalReentry, cleanup, noSchedule, nested, externalSource, categorySchedule, dateTabs, emptyPhase, nextFocus };
   });
 
   console.log('\n📋 Geral é a agenda completa do torneio, não uma cópia por gênero');
@@ -320,6 +358,8 @@ function trecho(inicio, fim) {
   ok(result.dateTabs.thursday.join(',') === 'thu-r8' && result.dateTabs.thursdayAgain.join(',') === 'thu-r8', 'quinta termina na sua rodada 8 mesmo depois de alternar dias');
   ok(result.dateTabs.friday.join(',') === 'fri-fem-r1,fri-masc-r1', 'sexta reúne jogos femininos e masculinos sem mostrar quinta');
   ok(result.dateTabs.fridayCategory.join(',') === 'fri-fem-r1' && result.dateTabs.noDuplicate, 'categoria da sexta respeita a data e nenhum card é duplicado');
+  ok(result.emptyPhase.hidden && result.emptyPhase.restored && result.emptyPhase.groupTablePreserved && result.emptyPhase.modeRestored,
+    'a agenda esconde rodadas vazias, preserva tabelas de classificação e restaura a chave ao trocar de modo');
   ok(result.categorySchedule.missingScopeFallback, 'falha de montagem executa o filtro canônico e preserva só a rodada selecionada');
 
   // O portal usa retângulos de viewport, mas nasce dentro do body com zoom.
