@@ -3699,13 +3699,16 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
   const court = String((request.data && request.data.court) || '').trim().slice(0, 120);
   const confirmCall = request.data && request.data.confirmCall === true;
   if (!tId || !matchId) throw new HttpsError('invalid-argument', 'Torneio e jogo são obrigatórios.');
+  const sandbox = request.data && request.data.sandbox === true;
+  if (sandbox !== tId.startsWith('sb_')) throw new HttpsError('not-found', 'Torneio não encontrado.');
   if (!drawWindow || typeof drawWindow._findMatch !== 'function') {
     throw _drawFail('internal', 'Motor de chave indisponível no servidor.', { tId, matchId });
   }
-  const ref = db.collection('tournaments').doc(tId);
+  const ref = db.collection(sandbox ? 'sandboxes' : 'tournaments').doc(tId);
   const agoraIso = new Date().toISOString();
   try {
     return await db.runTransaction(async (tx) => {
+      if (sandbox) await _assertSandboxDrawOwner(tx, await tx.get(ref), uid);
       const t = await _leTorneio(tx, ref, tId);
       if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
       if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização define a quadra.', { tId, matchId, uid });

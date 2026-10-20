@@ -1,3 +1,6 @@
+// 2.5.8 — A chamada para quadra funciona também no sandbox do organizador,
+// mantendo o torneio real e o teste isolados. Na TV, nomes dos times e
+// pontuações ocupam melhor a altura disponível na classificação.
 // 2.5.7 — NO AR exibe a classificação por times com nomes em boxes coloridos,
 // saldo, games, vitórias, derrotas e jogos; fontes maiores e QR para abrir o
 // torneio no Scoreplace. A classificação da chave também usa boxes por time.

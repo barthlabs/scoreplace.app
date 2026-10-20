@@ -1267,6 +1267,7 @@ const SUITES = [
   // Escolher/remover quadra é alteração de um jogo; nunca pode regravar o snapshot
   // antigo do torneio e apagar o resultado que outro aparelho acabou de registrar.
   'tests/atribuir-quadra-nao-sobrescreve-placar.test.js',
+  'tests/chamada-quadra-sandbox.test.js',
   'tests/publicar-sorteio-nao-sobrescreve-resultado.test.js',
   'tests/avanco-eliminatoria-nao-sobrescreve-placar.test.js',
   // Varredura do doc inteiro: grupo formado e registro de "já avisei" também não somem. v1.8.0.

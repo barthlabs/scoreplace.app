@@ -3803,11 +3803,12 @@ window._renderReadyMatchesBanner = function _renderReadyMatchesBanner(t, opts) {
 // já reflete a escolha na hora; persistimos sem re-render pra não perder scroll.
 window._assignMatchCourt = function(tId, matchId, court) {
   court = String(court || '').trim();
+  tId = String(tId);
   if (typeof window._callCF !== 'function') {
     if (typeof showNotification === 'function') showNotification('Quadra não salva', 'Atualize o aplicativo e tente novamente.', 'error');
     return Promise.reject(new Error('Cloud Function indisponível'));
   }
-  return window._callCF('assignMatchCourt', { tournamentId: String(tId), matchId: String(matchId), court: court }, 'Entre na sua conta para definir a quadra.')
+  return window._callCF('assignMatchCourt', { tournamentId: tId, sandbox: tId.startsWith('sb_'), matchId: String(matchId), court: court }, 'Entre na sua conta para definir a quadra.')
     .then(function(res) {
       var d = (res && res.data) || {};
       if (!d.ok) throw new Error(d.reason || 'Não foi possível definir a quadra.');
@@ -3823,6 +3824,7 @@ window._assignMatchCourt = function(tId, matchId, court) {
 // A confirmação grava quadra e instante na mesma transação. O relógio é derivado
 // desse instante, para sobreviver a reload e coincidir em todas as telas.
 window._confirmMatchCourtCall = function(button, tId, matchId) {
+  tId = String(tId);
   var row = button && button.closest('.sp-match-operational');
   var select = row && row.querySelector('select');
   var court = select && String(select.value || '').trim();
@@ -3832,7 +3834,7 @@ window._confirmMatchCourtCall = function(button, tId, matchId) {
   }
   if (typeof window._callCF !== 'function') return;
   button.disabled = true;
-  window._callCF('assignMatchCourt', { tournamentId: String(tId), matchId: String(matchId), court: court, confirmCall: true }, 'Entre na sua conta para chamar o jogo.')
+  window._callCF('assignMatchCourt', { tournamentId: tId, sandbox: tId.startsWith('sb_'), matchId: String(matchId), court: court, confirmCall: true }, 'Entre na sua conta para chamar o jogo.')
     .then(function(res) {
       var d = (res && res.data) || {};
       if (!d.ok) throw new Error(d.reason || 'Não foi possível chamar o jogo.');
