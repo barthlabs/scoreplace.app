@@ -963,14 +963,16 @@ window._RELEASE_NOTES_HTML = (function () {
     // quem está com a 2.0.4 no iPhone lê um torneio que o banco não guarda mais desse jeito.
     // Mesma lição da 1.7.35: quando o formato do dado muda, a ida à loja É o conserto.
     // Os itens abaixo são consolidados por tema, como manda a convenção do arquivo.
-    // v2.5 — corte nativo do que já está no ar na web. As lojas passam primeiro
-    // por TestFlight/faixa fechada; o número comum não antecipa aprovação pública.
+    // v2.5 — corte nativo do que já está no ar na web. A versão 2.5.18
+    // segue diretamente para a análise de produção das duas lojas.
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(52,211,153,0.08);">' +
       '<div style="font-weight:800; color:var(--sp-c-a7f3d0,#a7f3d0); font-size:1rem; margin-bottom:8px;">📺 v2.5 — Torneio em quadra, na TV e na súmula <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Outubro, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>📺 Modo TV:</b> saída limpa em janela separada com quadras chamadas, relógios, classificação do torneio e três resultados recentes.</li>' +
+        '<li><b>🔴 NO AR:</b> a luz vermelha pisca enquanto a janela de TV está aberta e apaga ao fechá-la.</li>' +
         '<li><b>📋 Súmulas:</b> PDF por categoria e data, com até 12 jogos por página, quadra preenchida no evento, placar conforme o formato e assinaturas dos atletas. A organização baixa as versões horizontal e vertical juntas em um ZIP pelo botão Súmulas; a lista de presença é baixada em PDF separado.</li>' +
         '<li><b>🎾 Jogos e quadras:</b> a chave separa dias, aceita busca pelo nome da equipe e mostra a chamada confirmada para quadra com o tempo decorrido.</li>' +
+        '<li><b>⏱️ Operação da chave:</b> relógios de chamada, aquecimento e jogo acompanham a TV. A chave conserva a ordem dos jogos e recupera quadras, classificação e resultados após reconectar; quadras ocupadas não podem receber outra chamada.</li>' +
         '<li><b>🗓️ Próximos jogos:</b> vários cards aparecem lado a lado quando há espaço, com a rodada publicada acima de cada partida.</li>' +
       '</ul>' +
     '</div>' +
