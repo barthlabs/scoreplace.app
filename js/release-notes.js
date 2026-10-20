@@ -1,3 +1,5 @@
+// 2.5.2 — Súmula com times da direita alinhados à direita, atletas maiores e
+// placar centralizado; um botão entrega horizontal e vertical no mesmo ZIP.
 // 2.5.1 — Súmulas de 12 jogos por página, agrupadas por categoria e data,
 // com placar conforme o formato do torneio e assinaturas dos atletas.
 // O acesso fica no bloco de ações do torneio após o sorteio.
@@ -916,7 +918,7 @@ window._RELEASE_NOTES_HTML = (function () {
       '<div style="font-weight:800; color:var(--sp-c-a7f3d0,#a7f3d0); font-size:1rem; margin-bottom:8px;">📺 v2.5 — Torneio em quadra, na TV e na súmula <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Outubro, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>📺 Modo TV:</b> saída limpa em janela separada com quadras chamadas, relógios, classificação do torneio e três resultados recentes.</li>' +
-        '<li><b>📋 Súmulas:</b> PDF por categoria e data, com até 12 jogos por página, quadra preenchida no evento, placar conforme o formato e assinaturas dos atletas. A organização encontra as opções horizontal e vertical junto às ações do torneio; a lista de presença é baixada em PDF separado.</li>' +
+        '<li><b>📋 Súmulas:</b> PDF por categoria e data, com até 12 jogos por página, quadra preenchida no evento, placar conforme o formato e assinaturas dos atletas. A organização baixa as versões horizontal e vertical juntas em um ZIP pelo botão Súmulas; a lista de presença é baixada em PDF separado.</li>' +
         '<li><b>🎾 Jogos e quadras:</b> a chave separa dias, aceita busca pelo nome da equipe e mostra a chamada confirmada para quadra com o tempo decorrido.</li>' +
         '<li><b>🗓️ Próximos jogos:</b> vários cards aparecem lado a lado quando há espaço, com a rodada publicada acima de cada partida.</li>' +
       '</ul>' +

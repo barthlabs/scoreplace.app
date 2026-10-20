@@ -174,20 +174,48 @@
     var tail = label.slice(cut).trim();
     return [label.slice(0, cut).trim(), tail];
   }
-  function writeSide(p, team, names, x, top, width, portrait) {
-    var limit = portrait ? Math.max(12, Math.floor(width / 4.1)) : Math.max(16, Math.floor(width / 4.2));
-    p.write(team || '', x + 3, top + 8, 6.5, false, limit, '0.32 0.40 0.48');
+  // Larguras médias da Helvetica em pontos por mil. Servem tanto para manter
+  // os nomes dentro da coluna quanto para alinhar a dupla da direita ao limite.
+  function labelWidth(value, size, bold) {
+    return Array.from(latin(value)).reduce(function (sum, ch) {
+      if (/[ilI1.,:;!'| ]/.test(ch)) return sum + (ch === ' ' ? 278 : 250);
+      if (/[MW@%]/.test(ch)) return sum + (bold ? 944 : 889);
+      if (/[mw]/.test(ch)) return sum + (bold ? 833 : 778);
+      if (/[A-Z0-9]/.test(ch)) return sum + (bold ? 667 : 611);
+      return sum + (bold ? 556 : 500);
+    }, 0) * size / 1000;
+  }
+  function fitLabel(value, width, size, bold) {
+    var label = text(value);
+    if (labelWidth(label, size, bold) <= width) return label;
+    while (label.length > 1 && labelWidth(label + '...', size, bold) > width) label = label.slice(0, -1).trimEnd();
+    return label + '...';
+  }
+  function sideLines(value, width, size, bold, wrap) {
+    var label = text(value);
+    if (!wrap || labelWidth(label, size, bold) <= width) return [fitLabel(label, width, size, bold)];
+    var words = label.split(/\s+/), head = '';
+    while (words.length && labelWidth(head ? head + ' ' + words[0] : words[0], size, bold) <= width) {
+      head += (head ? ' ' : '') + words.shift();
+    }
+    if (!head) head = words.shift() || '';
+    return [fitLabel(head, width, size, bold), fitLabel(words.join(' '), width, size, bold)];
+  }
+  function sideWrite(p, label, x, y, width, size, bold, right, rgb) {
+    var fitted = fitLabel(label, width - 6, size, bold);
+    var position = right ? x + width - 3 - labelWidth(fitted, size, bold) : x + 3;
+    p.write(fitted, position, y, size, bold, null, rgb);
+  }
+  function writeSide(p, team, names, x, top, width, portrait, right) {
+    var playerSize = portrait ? 7.6 : 8.8;
+    sideWrite(p, team || '', x, top + 8, width, portrait ? 7 : 7.2, false, right, '0.32 0.40 0.48');
     var people = members(names);
     if (!people.length) people = [names];
     people.slice(0, 2).forEach(function (name, i) {
-      if (!portrait) {
-        p.write(name, x + 3, top + 19 + 11*i, 8, true, limit);
-      } else {
-        var chunks = splitLabel(name, limit);
-        var y = top + 19 + 17*i;
-        p.write(chunks[0], x + 3, y, 7, true, limit);
-        if (chunks[1]) p.write(chunks[1], x + 3, y + 7, 6.5, true, limit);
-      }
+      var y = top + (portrait ? 21 + 19*i : 19 + 11*i);
+      var lines = sideLines(name, width - 6, playerSize, true, portrait);
+      sideWrite(p, lines[0], x, y, width, playerSize, true, right);
+      if (lines[1]) sideWrite(p, lines[1], x, y + 8, width, 7.2, true, right);
     });
   }
   // Uma página por categoria e dia, no máximo 12 jogos. A quadra é escrita na chamada.
@@ -221,7 +249,7 @@
     p.write('Nº', left+3, top+13, 7, true);
     p.write('Hora', hourX+3, top+13, 7, true);
     p.write('Quadra', courtX+3, top+13, 7, true);
-    p.write('Placar', scoreX+3, top+13, 7, true);
+    p.write('Placar', scoreX + (scoreWidth - labelWidth('Placar', 7, true))/2, top+13, 7, true);
     p.write('ASSINATURAS DOS ATLETAS', divider+12, top+13, 7, true);
     matches.forEach(function (m, i) {
       var y = bodyTop + i*rowHeight;
@@ -230,15 +258,16 @@
       p.write(String(m.number || '-'), left+3, y+rowHeight/2+3, 8, true);
       p.write(m.time, hourX+3, y+rowHeight/2+3, 7.5);
       p.line(courtX+7, y+rowHeight-10, namesX-10, y+rowHeight-10, 0.55);
-      writeSide(p, m.team1, m.p1, namesX, y, sideWidth, portrait);
-      writeSide(p, m.team2, m.p2, secondX, y, sideWidth, portrait);
+      writeSide(p, m.team1, m.p1, namesX, y, sideWidth, portrait, false);
+      writeSide(p, m.team2, m.p2, secondX, y, sideWidth, portrait, true);
       var cellWidth = scoreWidth / slots;
       for (var s=0;s<slots;s++) {
         var sx = scoreX + s*cellWidth, bw = slots === 1 ? 22 : Math.max(7, Math.floor((cellWidth-12)/2));
+        var boxY = y + (rowHeight - 19)/2;
         if (slots > 1) p.write(String(s+1), sx+cellWidth/2-2, y+9, 6, true);
-        p.box(sx+3, y+rowHeight-27, bw, 19);
-        p.write('x', sx+cellWidth/2-2, y+rowHeight-13, 7, true);
-        p.box(sx+cellWidth-bw-3, y+rowHeight-27, bw, 19);
+        p.box(sx+3, boxY, bw, 19);
+        p.write('x', sx + (cellWidth-labelWidth('x', 7, true))/2, boxY+13, 7, true);
+        p.box(sx+cellWidth-bw-3, boxY, bw, 19);
       }
     });
     var people = uniqueAthletes(matches);
@@ -335,6 +364,45 @@
   function filename(model, orientation, onlyAttendance) {
     return (onlyAttendance ? 'presenca-' : 'sumula-') + model.tournament.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0,45) + (onlyAttendance ? '' : '-' + (orientation === 'portrait' ? 'vertical' : 'horizontal')) + '.pdf';
   }
+  function zipFiles(files) {
+    var encoder = new TextEncoder(), parts = [], directory = [], offset = 0;
+    var table = Array.from({ length:256 }, function (_, n) {
+      var crc = n;
+      for (var i=0;i<8;i++) crc = crc & 1 ? (crc >>> 1) ^ 0xedb88320 : crc >>> 1;
+      return crc >>> 0;
+    });
+    function crc32(bytes) {
+      var crc = 0xffffffff;
+      for (var i=0;i<bytes.length;i++) crc = (crc >>> 8) ^ table[(crc ^ bytes[i]) & 255];
+      return (crc ^ 0xffffffff) >>> 0;
+    }
+    function header(length) { return new DataView(new ArrayBuffer(length)); }
+    function bytesOf(view) { return new Uint8Array(view.buffer); }
+    files.forEach(function (file) {
+      var name = encoder.encode(file.name), data = file.bytes, crc = crc32(data);
+      var local = header(30);
+      local.setUint32(0, 0x04034b50, true); local.setUint16(4, 20, true);
+      local.setUint32(14, crc, true); local.setUint32(18, data.length, true);
+      local.setUint32(22, data.length, true); local.setUint16(26, name.length, true);
+      parts.push(bytesOf(local), name, data);
+      var central = header(46);
+      central.setUint32(0, 0x02014b50, true); central.setUint16(4, 20, true);
+      central.setUint16(6, 20, true); central.setUint32(16, crc, true);
+      central.setUint32(20, data.length, true); central.setUint32(24, data.length, true);
+      central.setUint16(28, name.length, true); central.setUint32(42, offset, true);
+      directory.push(bytesOf(central), name);
+      offset += 30 + name.length + data.length;
+    });
+    var directorySize = directory.reduce(function (n, part) { return n + part.length; }, 0);
+    var end = header(22);
+    end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true);
+    end.setUint16(10, files.length, true); end.setUint32(12, directorySize, true);
+    end.setUint32(16, offset, true);
+    var all = parts.concat(directory, [bytesOf(end)]), result = new Uint8Array(offset + directorySize + 22);
+    var pos = 0;
+    all.forEach(function (part) { result.set(part, pos); pos += part.length; });
+    return result;
+  }
   function download(id, orientation, onlyAttendance) {
     var t = root._findTournamentById && root._findTournamentById(id);
     if (!t) return;
@@ -347,14 +415,19 @@
       if (typeof root.showNotification === 'function') root.showNotification('Súmula indisponível', 'Não há jogos com dia e hora definidos.', 'warning');
       return;
     }
+    var both = orientation === 'both' && !onlyAttendance;
     orientation = orientation === 'portrait' ? 'portrait' : 'landscape';
-    var bytes = encodePdf(onlyAttendance ? makeAttendancePages(model) : makePages(model, { orientation:orientation }));
-    var url = URL.createObjectURL(new Blob([bytes], { type:'application/pdf' }));
+    var bytes = both ? zipFiles(['landscape','portrait'].map(function (direction) {
+      return { name:filename(model, direction, false), bytes:encodePdf(makePages(model, { orientation:direction })) };
+    })) : encodePdf(onlyAttendance ? makeAttendancePages(model) : makePages(model, { orientation:orientation }));
+    var name = both ? filename(model, 'landscape', false).replace(/-horizontal\.pdf$/, '-horizontal-vertical.zip')
+      : filename(model, orientation, onlyAttendance);
+    var url = URL.createObjectURL(new Blob([bytes], { type:both ? 'application/zip' : 'application/pdf' }));
     var anchor = document.createElement('a');
-    anchor.href = url; anchor.download = filename(model, orientation, onlyAttendance); anchor.style.display = 'none';
+    anchor.href = url; anchor.download = name; anchor.style.display = 'none';
     document.body.appendChild(anchor); anchor.click(); anchor.remove();
     setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
   }
-  root.ScoreplaceSumula = { collect:collect, attendance:attendance, makePages:makePages, makeAttendancePages:makeAttendancePages, encodePdf:encodePdf, filename:filename };
+  root.ScoreplaceSumula = { collect:collect, attendance:attendance, makePages:makePages, makeAttendancePages:makeAttendancePages, encodePdf:encodePdf, filename:filename, zipFiles:zipFiles };
   root._downloadTournamentSumula = download;
 })(typeof window !== 'undefined' ? window : globalThis);

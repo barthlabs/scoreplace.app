@@ -8,8 +8,9 @@ require('../js/views/tournament-sumula.js');
 const detailSource = fs.readFileSync('js/views/tournaments.js', 'utf8');
 assert(detailSource.includes("typeof window._downloadTournamentSumula === 'function' ?"),
   'organizador vê o botão Súmula no bloco de ações do torneio');
-assert.strictEqual((detailSource.match(/📋 Súmula horizontal/g) || []).length, 2,
-  'súmula aparece nos estados com sorteio e encerrado, sem duplicação nas ferramentas');
+assert.strictEqual((detailSource.match(/📋 Súmulas<\/button>/g) || []).length, 2,
+  'um botão Súmulas aparece nos estados com sorteio e encerrado');
+assert(!detailSource.includes('📋 Súmula vertical</button>'), 'não mantém botão separado por orientação');
 let warning = null;
 globalThis._findTournamentById = () => ({ id:'sem-grade', name:'Sem grade', matches:[] });
 globalThis._souOrganizador = () => true;
@@ -59,6 +60,13 @@ assert(pages.every(p => p.width === 842), 'súmula horizontal por padrão');
 const portrait = core.makePages(model, { orientation:'portrait' });
 assert.strictEqual(portrait.length, 2);
 assert(portrait.every(p => p.width === 595), 'súmula vertical disponível');
+const bundle = core.zipFiles([
+  { name:core.filename(model, 'landscape'), bytes:core.encodePdf(pages) },
+  { name:core.filename(model, 'portrait'), bytes:core.encodePdf(portrait) },
+]);
+assert.strictEqual(Buffer.from(bundle).readUInt32LE(0), 0x04034b50, 'pacote tem cabeçalho ZIP');
+assert.strictEqual(Buffer.from(bundle).readUInt16LE(bundle.length - 14), 2, 'pacote contém dois arquivos');
+if (process.env.SP_SUMULA_ZIP_SAMPLE) fs.writeFileSync(process.env.SP_SUMULA_ZIP_SAMPLE, bundle);
 assert.strictEqual(core.makePages(model, { attendance:true }).length, 4, 'lista de presença pode ser gerada à parte');
 assert.strictEqual(core.makeAttendancePages(model).length, 2, 'presença tem arquivo próprio, sem duplicar súmulas');
 const pdf = Buffer.from(core.encodePdf(pages));
@@ -81,6 +89,8 @@ const crowded = core.collect(t, Array.from({ length:24 }, (_, i) => ({
 })));
 assert.strictEqual(core.makePages(crowded).length, 2, '24 jogos ocupam duas páginas de 12 jogos');
 assert.strictEqual(core.makePages(crowded, { orientation:'portrait' }).length, 2, 'vertical também usa 12 jogos por página');
+if (process.env.SP_SUMULA_CROWDED_SAMPLE) fs.writeFileSync(process.env.SP_SUMULA_CROWDED_SAMPLE,
+  Buffer.from(core.encodePdf(core.makePages(crowded, { orientation:'portrait' }))));
 const thirtySix = core.collect(t, Array.from({ length:36 }, (_, i) => ({
   id:'n'+i, scheduledGameNumber:i+1, scheduledAt:at(i<24?'2026-10-22':'2026-10-23',
     String(18+Math.floor((i%24)/4)).padStart(2,'0')+':00'),
@@ -99,6 +109,12 @@ const scoreX = Number(scoreCommands.find(s => /\(x\) Tj ET$/.test(s)).match(/ Tm
   scoreCommands.find(s => /\(x\) Tj ET$/.test(s)).match(/ 1 0 0 1 ([\d.]+) [\d.]+ Tm /)[1] : NaN);
 assert(scoreX > scoreBoxes[0].x + scoreBoxes[0].width && scoreX + 4 < scoreBoxes[1].x,
   'o x do placar não invade as caixas em melhor de três');
+const portraitCommands = portrait[0].commands;
+const rightNames = portraitCommands.filter(s => s.includes('/F2 7.6 Tf') &&
+  (s.includes('rica Souza)') || s.includes('bio Ruiz)')));
+assert.strictEqual(rightNames.length, 2, 'nomes da dupla à direita permanecem visíveis');
+const rightPositions = rightNames.map(s => Number(s.match(/ 1 0 0 1 ([\d.]+) [\d.]+ Tm /)[1]));
+assert(rightPositions[0] !== rightPositions[1], 'nomes com comprimentos diferentes alinham pelo limite direito');
 const longNames = core.collect(t, Array.from({ length:12 }, (_, i) => ({
   id:'long-'+i, scheduledAt:at('2026-10-22', '18:00'), category:'Fem Light',
   p1:'Nome Muito Comprido Atleta '+i+' / Parceiro Muito Comprido '+i,
