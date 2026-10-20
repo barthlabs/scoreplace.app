@@ -1,3 +1,5 @@
+// 2.5.18 — A luz do botão NO AR pisca em vermelho enquanto a janela de TV
+// está aberta. Ao fechar a janela, fica escura e para de piscar.
 // 2.5.17 — A chave mantém todos os jogos na ordem numerada e o NO AR recupera
 // quadras, classificação e resultados após reconectar. Quadras ocupadas não podem
 // ser chamadas por outro jogo. Jogos com data, hora e quadra definidos deixam de

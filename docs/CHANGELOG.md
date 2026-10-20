@@ -1,3 +1,8 @@
+## 2.5.18 — 20/out/2026 (indicador NO AR)
+
+- O ponto do botão NO AR agora é vermelho e pisca enquanto a janela da TV está aberta. Ao fechar a janela, o ponto escurece e deixa de piscar. A detecção de fechamento já existente permanece: imediata pelo botão e em até um segundo pelo fechamento da janela no navegador.
+- Apenas apresentação do botão; nenhum dado do torneio é alterado.
+
 ## 2.5.16 — 20/out/2026 (ordem e ícones do relógio na chave)
 
 - O controle de cada jogo chamado mostra retroceder, etapa com tempo e avançar nessa ordem. Os botões usam ícones circulares espelhados e preservam a ação e os rótulos acessíveis de FF/REW.
