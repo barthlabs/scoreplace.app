@@ -1,3 +1,4 @@
+// 2.5.4 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.3 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.2 — Súmula com times da direita alinhados à direita, atletas maiores e
 // placar centralizado; um botão entrega horizontal e vertical no mesmo ZIP.
