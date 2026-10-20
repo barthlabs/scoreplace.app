@@ -1,3 +1,6 @@
+// 2.5.14 — NO AR destaca o jogo cuja fase mudou por último: chamada,
+// aquecimento, tempo de jogo ou atraso. A chave usa os mesmos rótulos,
+// cores e cronômetros; placares nas quadras ficam maiores.
 // 2.5.13 — Seletor de quadra e OK voltam à altura compacta, iguais e
 // centralizados verticalmente no rodapé dos cards de jogo.
 // 2.5.12 — No desktop, Ao Vivo abre o controle em outra janela e mantém a

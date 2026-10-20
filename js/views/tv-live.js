@@ -3,6 +3,7 @@
 (function () {
   'use strict';
   var popup = null, tick = null, lastMarkup = '', wakeSentinel = null, wakePending = false;
+  var clock = window.ScoreplaceMatchTiming;
   function esc(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
@@ -15,11 +16,6 @@
     if (typeof value === 'number') return value;
     var n = Date.parse(value);
     return Number.isFinite(n) ? n : 0;
-  }
-  function elapsed(start) {
-    var sec = Math.max(0, Math.floor((Date.now() - start) / 1000));
-    return [Math.floor(sec / 3600), Math.floor(sec / 60) % 60, sec % 60]
-      .map(function (n) { return String(n).padStart(2, '0'); }).join(':');
   }
   function gameScore(m, side, final) {
     var sets = Array.isArray(m.sets) ? m.sets : [];
@@ -79,23 +75,35 @@
         }, {}) };
     });
   }
-  window._tvLiveBuildSnapshot = function (t) {
+  window._tvLiveBuildSnapshot = function (t, nowMs) {
     if (!t) return null;
     // O listener recebe uma cópia nova. Use a numeração canônica da chave.
     if (typeof window._assignGlobalGameNumbers === 'function') window._assignGlobalGameNumbers(t);
     var matches = typeof window._collectAllMatches === 'function' ? window._collectAllMatches(t) : (t.matches || []);
     var teams = Array.isArray(t.competitionTeams) ? t.competitionTeams : [];
     var courtNames = courtsOf(t);
+    var timing = clock.config(t);
+    var now = nowMs == null ? Date.now() : nowMs;
     var allActive = matches.filter(function (m) {
       return m && !m.winner && !m.wo && !m.isBye && !m.isSitOut && m.court && (m.courtCalledAt || m.startedAt);
     }).sort(function (a, b) { return timestamp(b.courtCalledAt || b.startedAt) - timestamp(a.courtCalledAt || a.startedAt); });
     if (!courtNames.length) courtNames = Array.from(new Set(allActive.map(function (m) { return String(m.court); })));
-    var latestCallId = allActive.length ? String(allActive[0].id || '') : '';
+    // A borda anuncia a próxima oportunidade de chamar pelo microfone. Cada
+    // transição automática compete com uma chamada nova pelo instante em que
+    // ocorreu; não basta lembrar qual jogo recebeu OK por último.
+    var latestPhaseId = '', latestTransitionAt = 0;
+    allActive.forEach(function (m) {
+      var event = clock.phaseAt(timestamp(m.courtCalledAt || m.startedAt), timing, now);
+      if (event.transitionAt > latestTransitionAt) {
+        latestTransitionAt = event.transitionAt;
+        latestPhaseId = String(m.id || '');
+      }
+    });
     var courtCards = courtNames.map(function (name) {
       var m = allActive.find(function (item) { return String(item.court) === name; });
       if (!m) return { name: name };
       return { name: name, number: m._gameNum || m.scheduledGameNumber || m.matchNumber || '', category: String(m.category || m.tierLabel || ''),
-        latest: !!latestCallId && String(m.id || '') === latestCallId,
+        latest: !!latestPhaseId && String(m.id || '') === latestPhaseId,
         a: sideName(t, m, 'p1'), b: sideName(t, m, 'p2'), ta: teamFor(m, 1, teams), tb: teamFor(m, 2, teams),
         scoreA: gameScore(m, 1) === '–' ? '0' : gameScore(m, 1),
         scoreB: gameScore(m, 2) === '–' ? '0' : gameScore(m, 2),
@@ -114,8 +122,7 @@
         'https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=' + encodeURIComponent(qrUrl) + '&bgcolor=ffffff&color=1a1e2e&margin=10',
       scoreplaceLogo: site + '/icons/logo-podium.svg',
       courts: courtCards, rankings: rankingSections(t, matches, teams), results: results,
-      timing: { call: Math.max(0, Number(t.callTime) || 0), warmup: Math.max(0, Number(t.warmupTime) || 0),
-        game: Math.max(0, Number(t.gameDuration) || 0) } };
+      timing: timing };
   };
   function sideHtml(label, team, score) {
     var players = String(label || '').split(' / ').map(function (name) { return name.trim(); }).filter(Boolean);
@@ -164,7 +171,7 @@
     '.tv-sidebar h2{font-size:clamp(1.2rem,1.5vw,2rem)}' +
     '.tv-header time{font-size:clamp(1.5rem,2vw,3rem);font-weight:800;font-variant-numeric:tabular-nums}' +
     '.tv-win{color:#4ade80}.tv-loss{color:#f87171}' +
-    '.tv-court-top{display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:.4vw;border-bottom:1px solid #314151;padding-bottom:.25vw}.tv-court-top h2{color:#38bdf8;font-size:clamp(.85rem,1.1vw,1.5rem);white-space:nowrap}.tv-court-top>span{color:#fbbf24;font-size:clamp(.65rem,.78vw,1rem);font-weight:800;text-align:right}.tv-side{display:grid;grid-template-columns:auto minmax(0,1fr) auto;grid-template-rows:1fr;align-items:stretch;gap:.55vw;border-left:0;border-radius:.45vw;min-width:0;padding:.35vw;background:#222}.tv-team-tag{display:flex;align-items:center;justify-content:center;writing-mode:vertical-rl;transform:rotate(180deg);padding:.25vw .15vw;border:1px solid var(--team);border-radius:999px;background:color-mix(in srgb,var(--team) 28%,#222);color:#fff;font-size:clamp(.65rem,.8vw,1rem);font-weight:900;white-space:nowrap}.tv-players{min-width:0;display:flex;flex-direction:column;justify-content:space-evenly;gap:.15vw}.tv-players span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#fff;font-size:clamp(.8rem,1vw,1.3rem);font-weight:750}.tv-score{grid-column:3;grid-row:1;align-self:center;min-width:2vw;padding:.1em .3em;border:1px solid #555;border-radius:.35em;background:#303030;text-align:center;font-size:clamp(1rem,1.7vw,2.2rem)}' +
+    '.tv-court-top{display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:.4vw;border-bottom:1px solid #314151;padding-bottom:.25vw}.tv-court-top h2{color:#38bdf8;font-size:clamp(.85rem,1.1vw,1.5rem);white-space:nowrap}.tv-court-top>span{color:#fbbf24;font-size:clamp(.65rem,.78vw,1rem);font-weight:800;text-align:right}.tv-side{display:grid;grid-template-columns:auto minmax(0,1fr) auto;grid-template-rows:1fr;align-items:stretch;gap:.55vw;border-left:0;border-radius:.45vw;min-width:0;padding:.35vw;background:#222}.tv-team-tag{display:flex;align-items:center;justify-content:center;writing-mode:vertical-rl;transform:rotate(180deg);padding:.25vw .15vw;border:1px solid var(--team);border-radius:999px;background:color-mix(in srgb,var(--team) 28%,#222);color:#fff;font-size:clamp(.65rem,.8vw,1rem);font-weight:900;white-space:nowrap}.tv-players{min-width:0;display:flex;flex-direction:column;justify-content:space-evenly;gap:.15vw}.tv-players span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#fff;font-size:clamp(.8rem,1vw,1.3rem);font-weight:750}.tv-score{grid-column:3;grid-row:1;align-self:center;min-width:2vw;padding:.1em .3em;border:1px solid #555;border-radius:.35em;background:#303030;text-align:center;font-size:clamp(1.4rem,2.3vw,3rem)}' +
     '.tv-versus{font-size:clamp(.7rem,.8vw,1rem);letter-spacing:.1em}.tv-court-footer{display:flex;justify-content:flex-end;align-items:center;gap:.5vw;margin-top:.35vw;color:#34d399;font-weight:800}.tv-court-footer strong{font-variant-numeric:tabular-nums;font-size:clamp(1rem,1.2vw,1.8rem)}' +
     '.tv-sidebar{grid-template-rows:60% 40%}' +
     '.tv-rankings{display:flex;flex-direction:column}' +
@@ -240,22 +247,18 @@
     function refresh() {
       if (!popup || popup.closed) { stop(); return; }
       var current = typeof window._findTournamentById === 'function' ? window._findTournamentById(tournament.id) : null;
-      var snapshot = window._tvLiveBuildSnapshot(current || tournament);
+      var tickNow = Date.now();
+      var snapshot = window._tvLiveBuildSnapshot(current || tournament, tickNow);
       if (!snapshot) return;
       var markup = bodyHtml(snapshot);
       if (markup !== lastMarkup) { popup.document.getElementById('tv-root').innerHTML = markup; lastMarkup = markup; }
       popup.document.querySelectorAll('[data-tv-start]').forEach(function (node) {
         var start = Number(node.getAttribute('data-tv-start'));
-        var minutes = Math.max(0, (Date.now() - start) / 60000);
-        var callEnd = snapshot.timing.call, warmupEnd = callEnd + snapshot.timing.warmup;
-        var gameEnd = warmupEnd + snapshot.timing.game;
-        var phase = minutes < callEnd ? 'call' : minutes < warmupEnd ? 'warmup' :
-          !snapshot.timing.game || minutes < gameEnd ? 'game' : 'overdue';
+        var event = clock.phaseAt(start, snapshot.timing, tickNow);
+        var phase = event.phase;
         node.className = 'tv-phase-' + phase;
-        node.title = { call: 'Tempo de chamada', warmup: 'Aquecimento', game: 'Tempo de jogo', overdue: 'Tempo previsto excedido' }[phase];
-        var phaseMinutes = { call: 0, warmup: callEnd, game: warmupEnd, overdue: warmupEnd }[phase];
-        node.textContent = { call: 'Chamado', warmup: 'Aquecimento', game: 'Tempo de jogo', overdue: 'Atrasado' }[phase] +
-          ' ' + elapsed(start + phaseMinutes * 60000);
+        node.title = clock.title(phase);
+        node.textContent = clock.text(event, tickNow);
       });
       var now = popup.document.getElementById('tv-now');
       if (now) now.textContent = new Date().toLocaleTimeString('pt-BR');

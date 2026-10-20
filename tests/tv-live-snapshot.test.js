@@ -10,6 +10,7 @@ const context = vm.createContext({ window, document: { querySelectorAll: () => [
   setInterval: () => 1, clearInterval: () => {} });
 vm.runInContext(fs.readFileSync(path.join(root, 'js/domain/team-competition.js'), 'utf8'), context);
 window.ScoreplaceTeamCompetition = context.ScoreplaceTeamCompetition;
+vm.runInContext(fs.readFileSync(path.join(root, 'js/domain/match-timing.js'), 'utf8'), context);
 vm.runInContext(fs.readFileSync(path.join(root, 'js/views/tv-live.js'), 'utf8'), context);
 window._isNeonTournament = tournament => tournament.id === 'tour_1790628592058_c342a1e8f5068424887f1702a1633a44';
 
@@ -29,7 +30,7 @@ const t = { id: 'neon-test', name: 'NEON NIGHTMARE', logo: 'logo.png', courtName
     match(6, 'Quadra 6', 'VOLT', 'BLACKOUT', { winner: 'p1', sets: [{ gamesP1: 7, gamesP2: 5 }], resultAt: '2026-10-22T20:20:00Z' }),
     match(7, 'Quadra 7', 'PHANTOM', 'VORTEX', { winner: 'p2', scoreP1: 1, scoreP2: 6, resultAt: '2026-10-22T19:00:00Z' })
   ] };
-const snapshot = window._tvLiveBuildSnapshot(t);
+const snapshot = window._tvLiveBuildSnapshot(t, Date.parse('2026-10-22T21:02:10Z'));
 const multiPhaseConfig = { enabled:true, aggregation:'per_category', classificationUnit:'pair' };
 const plannedLaterPhase = { enabled:true, aggregation:'overall', classificationUnit:'team',
   schedule:{ enabled:true, modeChosen:true, mode:'structured' } };
@@ -47,9 +48,9 @@ assert.equal(snapshot.courts.length, 6);
 assert.equal(snapshot.courts[0].number, 1);
 assert.equal(snapshot.courts[0].scoreA, '0', 'a chamada mostra o mesmo placar inicial da chave');
 assert.equal(snapshot.courts[0].timerStart, Date.parse('2026-10-22T21:00:00Z'));
-assert.equal(snapshot.courts[0].latest, false, 'borda dourada fica só na chamada mais recente');
+assert.equal(snapshot.courts[0].latest, false, 'borda dourada fica só na transição mais recente');
 assert.equal(snapshot.courts[1].timerStart, Date.parse('2026-10-22T21:02:00Z'));
-assert.equal(snapshot.courts[1].latest, true, 'jogo chamado por último é destacado');
+assert.equal(snapshot.courts[1].latest, true, 'jogo chamado por último é destacado antes de outra transição');
 assert.equal(snapshot.courts[1].scoreA, '4');
 assert.equal(snapshot.courts[2].number, undefined, 'jogo só agendado não ocupa TV');
 assert.equal(snapshot.results.length, 4, 'histórico acumula resultados para rolagem');
@@ -63,6 +64,33 @@ assert.equal(snapshot.rankings[0].rows[0].gamesWon, 12);
 assert.equal(snapshot.rankings[0].rows[0].wins, 2);
 assert.equal(snapshot.rankings[0].rows[0].played, 2);
 assert.deepEqual(JSON.parse(JSON.stringify(snapshot.timing)), { call: 0, warmup: 0, game: 0 });
+const phaseBase = Date.parse('2026-10-22T21:00:00Z');
+const phaseTournament = { ...t, callTime: 1, warmupTime: 1, gameDuration: 1, matches: [
+  match(11, 'Quadra 4', 'VORTEX', 'BLAST', { courtCalledAt: new Date(phaseBase).toISOString() }),
+  match(12, 'Quadra 5', 'ECLIPSE', 'VENOM', { courtCalledAt: new Date(phaseBase + 30000).toISOString() })
+] };
+function highlightedAt(seconds, tournament = phaseTournament) {
+  const cards = window._tvLiveBuildSnapshot(tournament, phaseBase + seconds * 1000).courts;
+  return cards.filter(card => card.latest).map(card => card.number);
+}
+assert.deepEqual(highlightedAt(45), [12], 'nova chamada toma a borda dourada');
+assert.deepEqual(highlightedAt(61), [11], 'início do aquecimento toma a borda da chamada posterior');
+assert.deepEqual(highlightedAt(91), [12], 'aquecimento posterior assume a borda');
+assert.deepEqual(highlightedAt(121), [11], 'início do jogo assume a borda');
+assert.deepEqual(highlightedAt(151), [12], 'outro jogo entrando em tempo de jogo assume a borda');
+assert.deepEqual(highlightedAt(181), [11], 'início do atraso assume a borda');
+assert.deepEqual(highlightedAt(211), [12], 'atraso mais recente assume a borda');
+assert.deepEqual(highlightedAt(211, { ...phaseTournament, matches: [
+  { ...phaseTournament.matches[0], winner: 'p1', resultAt: new Date(phaseBase + 200000).toISOString() },
+  phaseTournament.matches[1]
+] }), [12], 'resultado tira o jogo encerrado da disputa pela borda');
+const timingCore = window.ScoreplaceMatchTiming;
+const timing = timingCore.config(phaseTournament);
+assert.equal(timingCore.text(timingCore.phaseAt(phaseBase, timing, phaseBase + 45000), phaseBase + 45000), 'Chamado 00:00:45');
+assert.equal(timingCore.text(timingCore.phaseAt(phaseBase, timing, phaseBase + 90000), phaseBase + 90000), 'Aquecimento 00:00:30');
+assert.equal(timingCore.text(timingCore.phaseAt(phaseBase, timing, phaseBase + 150000), phaseBase + 150000), 'Tempo de jogo 00:00:30');
+assert.equal(timingCore.text(timingCore.phaseAt(phaseBase, timing, phaseBase + 210000), phaseBase + 210000), 'Atrasado 00:01:30',
+  'a fase atrasada continua a contagem do jogo');
 window._slotUidsPositional = (_match, slot) => slot === 'p1' ? ['uid-1', 'uid-2'] : ['uid-3', 'uid-4'];
 window._resolveSideLive = (_tour, _raw, uids) => uids.map(uid => ({
   'uid-1': 'Maira Cavalcanti', 'uid-2': 'Juliana Penha',
@@ -97,6 +125,8 @@ assert.equal(multiSnapshot.courts[0].scoreB, '3');
 assert.equal(multiSnapshot.results[0].scoreA, '6 / 3 / 10', 'resultado mostra todos os sets');
 assert.equal(multiSnapshot.results[0].scoreB, '4 / 6 / 8');
 let toast = '';
+t.matches[0].courtCalledAt = new Date(Date.now() - 15000).toISOString();
+t.matches[1].courtCalledAt = new Date(Date.now() - 25000).toISOString();
 window._currentBracketTournament = t;
 window.open = () => null;
 window.showToast = message => { toast = message; };
@@ -143,7 +173,7 @@ assert.match(tvRoot.innerHTML, /<h2>Quadra 4 · JOGO 1<\/h2><span>Fem Light<\/sp
 assert.match(tvRoot.innerHTML, /class="tv-court-footer"><strong data-tv-start=/,
   'timer aparece sozinho abaixo do confronto');
 assert.doesNotMatch(tvRoot.innerHTML, /ÚLTIMOS 3 RESULTADOS/);
-assert.match(tvRoot.innerHTML, /tv-court-latest/, 'slot mais recente recebe destaque');
+assert.match(tvRoot.innerHTML, /<article class="tv-court tv-court-latest">/, 'slot da transição mais recente recebe destaque');
 assert.match(tvRoot.innerHTML, /tv-result-left.*tv-result-score.*tv-result-right/, 'resultados exibem times nas pontas e placares no centro');
 assert.match(tvRoot.innerHTML, /<span>GAMES<\/span><span class="tv-win">V<\/span><span class="tv-loss">D<\/span><span>J<\/span>/);
 assert.match(tvRoot.innerHTML, /class="tv-ranking-team"[^>]*>VORTEX<\/strong><b>\+8<\/b><span>12 - 4<\/span><span class="tv-win">2<\/span><span class="tv-loss">0<\/span><span>2<\/span>/);
@@ -160,4 +190,39 @@ assert.doesNotMatch(fs.readFileSync(path.join(root, 'js/views/tournaments.js'), 
   'ficha do torneio não exibe mais o modo antigo');
 assert.doesNotMatch(fs.readFileSync(path.join(root, 'js/views/bracket-ui.js'), 'utf8'), /window\._tvMode =/,
   'implementação antiga removida');
+const bracketSource = fs.readFileSync(path.join(root, 'js/views/bracket.js'), 'utf8');
+const bracketClockStart = bracketSource.indexOf('window._spCourtClockHtml = function');
+const bracketClockEnd = bracketSource.indexOf('// ─── Formação de duplas', bracketClockStart);
+assert(bracketClockStart > 0 && bracketClockEnd > bracketClockStart, 'relógio da chave localizado');
+let clockTick, clockNow = phaseBase + 45000;
+const clockClasses = new Set(['sp-match-estimated-time', 'sp-match-phase-call']);
+const clockParent = { title:'', classList: {
+  remove: (...names) => names.forEach(name => clockClasses.delete(name)),
+  add: name => clockClasses.add(name)
+} };
+const clockNode = { textContent:'', getAttribute: name => ({
+  'data-start-ms': String(phaseBase), 'data-call-min':'1', 'data-warmup-min':'1', 'data-game-min':'1'
+})[name], closest: () => clockParent };
+const bracketClockWindow = { ScoreplaceMatchTiming: timingCore };
+vm.runInNewContext(bracketSource.slice(bracketClockStart, bracketClockEnd), {
+  window:bracketClockWindow, document:{ querySelectorAll: () => [clockNode] },
+  Date:{ now: () => clockNow }, setInterval: callback => { clockTick = callback; return 1; },
+  Number, String
+});
+const clockHtml = bracketClockWindow._spCourtClockHtml(phaseBase, phaseTournament, clockNow);
+assert.match(clockHtml, /sp-match-phase-call.*Chamado 00:00:45/, 'chave nasce com fase e hora idênticas ao NO AR');
+for (const [seconds, label, colorClass] of [
+  [90, 'Aquecimento 00:00:30', 'sp-match-phase-warmup'],
+  [150, 'Tempo de jogo 00:00:30', 'sp-match-phase-game'],
+  [210, 'Atrasado 00:01:30', 'sp-match-phase-overdue']
+]) {
+  clockNow = phaseBase + seconds * 1000;
+  clockTick();
+  assert.equal(clockNode.textContent, label, 'chave atualiza ' + label);
+  assert(clockClasses.has(colorClass), 'chave atualiza a cor para ' + colorClass);
+}
+const htmlSource = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+assert(htmlSource.indexOf('js/domain/match-timing.js') < htmlSource.indexOf('js/views/bracket.js') &&
+  htmlSource.indexOf('js/views/bracket.js') < htmlSource.indexOf('js/views/tv-live.js'),
+  'módulo de fases carrega antes da chave e do NO AR');
 console.log('✓ TV: 6 quadras chamadas, relógio, placar ao vivo, 3 resultados e saldo geral por time');

@@ -163,6 +163,14 @@ summary::-webkit-details-marker { display: none; }
   box-sizing: border-box;
   flex: none;
 }
+.sp-match-phase-call { color: #38bdf8; }
+.sp-match-phase-warmup { color: #fbbf24; }
+.sp-match-phase-game { color: #4ade80; }
+.sp-match-phase-overdue { color: #f87171; }
+[data-theme="light"] .sp-match-phase-call { color: #0369a1; }
+[data-theme="light"] .sp-match-phase-warmup { color: #92400e; }
+[data-theme="light"] .sp-match-phase-game { color: #15803d; }
+[data-theme="light"] .sp-match-phase-overdue { color: #b91c1c; }
 
 /* ==== TOURNAMENT BRACKET ==== */
 .bracket-container {

@@ -3843,15 +3843,15 @@ window._confirmMatchCourtCall = function(button, tId, matchId) {
       button.textContent = '✓ OK';
       var time = row && row.querySelector('.sp-match-estimated-time');
       var start = Date.parse(d.courtCalledAt || '');
-      if (time && Number.isFinite(start)) {
-        time.title = 'Tempo desde a chamada';
-        time.style.color = 'var(--sp-c-4ade80,#4ade80)';
-        time.innerHTML = '⏱ <span class="sp-match-call-timer" data-start-ms="' + start + '">' + window._spFormatElapsed(start, Date.now()) + '</span>';
+      var current = typeof window._findTournamentById === 'function' ? window._findTournamentById(tId) : null;
+      if (row && Number.isFinite(start)) {
+        var clockHtml = window._spCourtClockHtml(start, current, Date.now());
+        if (time) time.outerHTML = clockHtml;
+        else row.insertAdjacentHTML('beforeend', clockHtml);
       }
       // A função já confirmou a gravação. Mostre o jogo na TV deste navegador
       // agora, sem aguardar o eco do listener remoto.
-      if (Number.isFinite(start) && typeof window._findTournamentById === 'function') {
-        var current = window._findTournamentById(tId);
+      if (Number.isFinite(start) && current) {
         var matches = current && typeof window._collectAllMatches === 'function' ? window._collectAllMatches(current) : [];
         matches.forEach(function (match) {
           if (String(match.id) === String(matchId)) { match.court = court; match.courtCalledAt = d.courtCalledAt; }
@@ -3871,10 +3871,30 @@ window._spFormatElapsed = function(start, now) {
     String(Math.floor(seconds / 60) % 60).padStart(2, '0') + ':' +
     String(seconds % 60).padStart(2, '0');
 };
+window._spCourtClockHtml = function(start, tournament, now) {
+  var clock = window.ScoreplaceMatchTiming;
+  var timing = clock.config(tournament);
+  var state = clock.phaseAt(start, timing, now);
+  return '<span class="sp-match-estimated-time sp-match-phase-' + state.phase + '" title="' + clock.title(state.phase) + '" style="margin-left:auto;white-space:nowrap;text-align:right;font-size:.78rem;font-weight:800;">' +
+    '⏱ <span class="sp-match-call-timer" data-start-ms="' + start + '" data-call-min="' + timing.call + '" data-warmup-min="' + timing.warmup + '" data-game-min="' + timing.game + '">' + clock.text(state, now) + '</span></span>';
+};
 if (!window._spCourtCallClock && typeof setInterval === 'function') window._spCourtCallClock = setInterval(function() {
+  var clock = window.ScoreplaceMatchTiming;
+  var now = Date.now();
   document.querySelectorAll('.sp-match-call-timer[data-start-ms]').forEach(function(el) {
     var start = Number(el.getAttribute('data-start-ms'));
-    if (Number.isFinite(start) && start > 0) el.textContent = window._spFormatElapsed(start, Date.now());
+    if (!Number.isFinite(start) || start <= 0) return;
+    var timing = { call: Number(el.getAttribute('data-call-min')) || 0,
+      warmup: Number(el.getAttribute('data-warmup-min')) || 0,
+      game: Number(el.getAttribute('data-game-min')) || 0 };
+    var state = clock.phaseAt(start, timing, now);
+    el.textContent = clock.text(state, now);
+    var parent = el.closest('.sp-match-estimated-time');
+    if (parent) {
+      parent.classList.remove('sp-match-phase-call', 'sp-match-phase-warmup', 'sp-match-phase-game', 'sp-match-phase-overdue');
+      parent.classList.add('sp-match-phase-' + state.phase);
+      parent.title = clock.title(state.phase);
+    }
   });
 }, 1000);
 
@@ -7605,7 +7625,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // vezes, nem perder a categoria do card concluído.
   var _matchTimeMs = _playedMs || _scheduledMs;
   var _estimatedTimeHtml = (_calledMs || _liveStartMs)
-    ? '<span class="sp-match-estimated-time" title="' + (_liveStartMs ? 'Tempo de jogo' : 'Tempo desde a chamada') + '" style="margin-left:auto;white-space:nowrap;text-align:right;font-size:.78rem;font-weight:800;color:var(--sp-c-4ade80,#4ade80);">⏱ <span class="sp-match-call-timer" data-start-ms="' + (_liveStartMs || _calledMs) + '">' + window._spFormatElapsed(_liveStartMs || _calledMs, Date.now()) + '</span></span>'
+    ? window._spCourtClockHtml(_calledMs || _liveStartMs, t, Date.now())
     : _matchTimeMs
     ? '<span class="sp-match-estimated-time" title="' + (_playedMs ? 'Horário jogado' : 'Horário estimado do jogo') + '" style="margin-left:auto;white-space:nowrap;text-align:right;font-size:.78rem;font-weight:800;color:' + (_playedMs ? 'var(--sp-c-4ade80,#4ade80)' : 'var(--sp-c-7dd3fc,#7dd3fc)') + ';">🕒 ' + (_playedMs ? '' : '≈ ') + window._safeHtml(_matchCardDateTime(_matchTimeMs, t)) + '</span>'
     : '';
