@@ -1,3 +1,4 @@
+// 2.5.3 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.2 — Súmula com times da direita alinhados à direita, atletas maiores e
 // placar centralizado; um botão entrega horizontal e vertical no mesmo ZIP.
 // 2.5.1 — Súmulas de 12 jogos por página, agrupadas por categoria e data,
