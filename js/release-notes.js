@@ -1,4 +1,4 @@
-// 2.4.133 — Saída limpa para TV em janela separada: quadras chamadas,
+// 2.4.133 — Botão NO AR abre saída limpa para TV em janela separada: quadras chamadas,
 // relógios, classificação e os três últimos resultados atualizados no torneio.
 // 2.4.132 — Busca mais larga na chave em tela ampla e vários próximos jogos
 // no painel quando a largura disponível permite.
