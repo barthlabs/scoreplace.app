@@ -134,14 +134,20 @@
       "mode": "only"
     },
     "assignMatchCourt": {
-      "backendCommit": "f9fd02f2e4ade14b7ac768d02c2a60ca0754732f",
-      "deployedAt": "2026-10-20T16:54:13.238Z",
+      "backendCommit": "d162e5ab0fd922235a0d6c8c31a3c9e764e5e1a1",
+      "deployedAt": "2026-10-20T17:21:14.521Z",
       "result": "success",
       "mode": "only"
     },
     "applyMatchResult": {
       "backendCommit": "f83d83ad2ba9856e390faed12cc56643c9de586b",
       "deployedAt": "2026-10-20T15:13:59.325Z",
+      "result": "success",
+      "mode": "only"
+    },
+    "resetTournamentToEnrollment": {
+      "backendCommit": "d162e5ab0fd922235a0d6c8c31a3c9e764e5e1a1",
+      "deployedAt": "2026-10-20T17:21:14.521Z",
       "result": "success",
       "mode": "only"
     }
