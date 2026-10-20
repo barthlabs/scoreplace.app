@@ -4,7 +4,12 @@
 process.env.TZ = 'America/Sao_Paulo';
 const assert = require('assert');
 const fs = require('fs');
+const crypto = require('crypto');
 require('../js/views/tournament-sumula.js');
+const sumulaSource = fs.readFileSync('js/views/tournament-sumula.js', 'utf8');
+const officialSvg = fs.readFileSync('icons/logo-podium.svg');
+assert(sumulaSource.includes(crypto.createHash('sha256').update(officialSvg).digest('hex')),
+  'a imagem embutida declara o hash do SVG canônico usado pelo app');
 const detailSource = fs.readFileSync('js/views/tournaments.js', 'utf8');
 assert(detailSource.includes("typeof window._downloadTournamentSumula === 'function' ?"),
   'organizador vê o botão Súmula no bloco de ações do torneio');
@@ -130,10 +135,12 @@ const landscapeWrap = core.makePages(core.collect(t, [{ id:'wrap', category:'Fem
   p2:'Ana Silva / Bia Costa' }]))[0].commands.join('\n');
 assert(landscapeWrap.includes('(Maria Eduarda Corazza Pozzi dos Santos de)') &&
   landscapeWrap.includes('(Almeida)'), 'paisagem mantém o nome longo em duas linhas');
-const logo = core.makePages(model)[0].commands.find(s => s.includes(' rg ') && s.endsWith(' h f'));
-const starXs = Array.from(logo.matchAll(/([\d.]+) [\d.]+ [ml]/g), m => Number(m[1]));
-assert(Math.max(...starXs) - Math.min(...starXs) < 12,
-  'estrela do logo mantém a proporção do SVG oficial');
+assert(core.makePages(model)[0].commands.some(s => s.includes('/OfficialLogo Do')),
+  'a súmula usa a imagem do logo oficial, sem redesenho manual');
+assert(pdf.toString('latin1').includes('/Subtype /Image /Width 320 /Height 240'),
+  'PDF incorpora a rasterização integral do SVG canônico');
+assert(!sumulaSource.includes('function podiumLogo') && !sumulaSource.includes('fillPolygon'),
+  'não mantém estrela ou barras reconstruídas por coordenadas');
 const signatureCommands = core.makePages(longNames)[0].commands.filter(s =>
   / rg BT \/F1 /.test(s) && / 1 0 0 1 (57[1-9]|5[8-9][0-9]|6[0-9][0-9]|7[0-9][0-9]) [\d.]+ Tm /.test(s));
 assert.strictEqual(signatureCommands.length, 48,
