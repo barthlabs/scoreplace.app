@@ -31,8 +31,9 @@ const t = { id: 'neon-test', name: 'NEON NIGHTMARE', logo: 'logo.png', courtName
 const snapshot = window._tvLiveBuildSnapshot(t);
 assert.equal(snapshot.courts.length, 6);
 assert.equal(snapshot.courts[0].number, 1);
-assert.equal(snapshot.courts[0].timerLabel, 'CHAMADO');
-assert.equal(snapshot.courts[1].timerLabel, 'EM JOGO');
+assert.equal(snapshot.courts[0].scoreA, '0', 'a chamada mostra o mesmo placar inicial da chave');
+assert.equal(snapshot.courts[0].timerStart, Date.parse('2026-10-22T21:00:00Z'));
+assert.equal(snapshot.courts[1].timerStart, Date.parse('2026-10-22T21:03:00Z'));
 assert.equal(snapshot.courts[1].scoreA, '4');
 assert.equal(snapshot.courts[2].number, undefined, 'jogo só agendado não ocupa TV');
 assert.equal(snapshot.results.length, 3);
@@ -45,6 +46,26 @@ assert.equal(snapshot.rankings[0].rows[0].gamesDiff, 8);
 assert.equal(snapshot.rankings[0].rows[0].gamesWon, 12);
 assert.equal(snapshot.rankings[0].rows[0].wins, 2);
 assert.equal(snapshot.rankings[0].rows[0].played, 2);
+window._slotUidsPositional = (_match, slot) => slot === 'p1' ? ['uid-1', 'uid-2'] : ['uid-3', 'uid-4'];
+window._resolveSideLive = (_tour, _raw, uids) => uids.map(uid => ({
+  'uid-1': 'Maira Cavalcanti', 'uid-2': 'Juliana Penha',
+  'uid-3': 'Flavia Cocozza', 'uid-4': 'Juliana Carneiro'
+})[uid]).join(' / ');
+const profileSnapshot = window._tvLiveBuildSnapshot({ ...t, matches: [
+  match(10, 'Quadra 4', 'PANIC', 'PHANTOM', { courtCalledAt: '2026-10-22T21:00:00Z',
+    p1: 'Jogador sem perfil (QLAn) / Jogador sem perfil (MjgO)',
+    p2: 'Jogador sem perfil (JrqP) / Jogador sem perfil (hVw1)' })
+] });
+assert.equal(profileSnapshot.courts[0].a, 'Maira Cavalcanti / Juliana Penha', 'TV usa os nomes vivos dos slots');
+assert.equal(profileSnapshot.courts[0].b, 'Flavia Cocozza / Juliana Carneiro');
+const finishedSnapshot = window._tvLiveBuildSnapshot({ ...t, matches: [
+  match(10, 'Quadra 4', 'PANIC', 'PHANTOM', { courtCalledAt: '2026-10-22T21:00:00Z',
+    winner: 'p1', scoreP1: 6, scoreP2: 4, resultAt: '2026-10-22T21:35:00Z' })
+] });
+assert.equal(finishedSnapshot.courts[0].number, undefined, 'resultado final libera o slot da quadra');
+assert.equal(finishedSnapshot.results[0].scoreA, '6', 'resultado final passa aos últimos resultados');
+delete window._slotUidsPositional;
+delete window._resolveSideLive;
 assert.equal(snapshot.qrUrl, 'https://scoreplace.app/#tournaments/neon-test');
 assert.match(snapshot.qrImage, /neon-test/);
 const multi = { ...t, matches: [
@@ -74,12 +95,20 @@ window.open = () => fakePopup;
 window._findTournamentById = () => t;
 window._tvLiveToggle();
 assert.match(tvRoot.innerHTML, /ÚLTIMOS RESULTADOS/);
+assert.doesNotMatch(tvRoot.innerHTML, /CHAMADO|EM JOGO/);
+assert.match(tvRoot.innerHTML, /class="tv-team-tag">VORTEX<\/span><div class="tv-players"><span>VORTEX 1<\/span><span>Parceira<\/span>/,
+  'card da TV mantém etiqueta vertical do time e atletas em linhas, como na chave');
+assert.match(tvRoot.innerHTML, /<h2>Quadra 4 · JOGO 1<\/h2><span>Fem Light<\/span>/,
+  'quadra e jogo aparecem juntos à esquerda, categoria à direita');
+assert.match(tvRoot.innerHTML, /class="tv-court-footer"><strong data-tv-start=/,
+  'timer aparece sozinho abaixo do confronto');
 assert.doesNotMatch(tvRoot.innerHTML, /ÚLTIMOS 3 RESULTADOS/);
 assert.match(tvRoot.innerHTML, /<span>GAMES<\/span><span>V<\/span><span>D<\/span><span>J<\/span>/);
 assert.match(tvRoot.innerHTML, /class="tv-ranking-team"[^>]*>VORTEX<\/strong><b>\+8<\/b><span>12–4<\/span><span>2<\/span><span>0<\/span><span>2<\/span>/);
 assert.match(tvRoot.innerHTML, /class="tv-qr-code"[^>]*neon-test/);
 assert.match(tvRoot.innerHTML, /scoreplace\.app\/icons\/logo-podium\.svg/);
 window._tvLiveToggle();
+assert.equal(window._tvLiveRefresh, null, 'janela fechada solta o refresh em tempo real');
 const liveSource = fs.readFileSync(path.join(root, 'js/views/tv-live.js'), 'utf8');
 assert.match(liveSource, /id=\\?"tv-fullscreen-action/, 'janela NO AR oferece entrada em tela cheia na própria janela');
 assert.match(liveSource, /root\.requestFullscreen\(\)/, 'tela cheia é acionada pela janela que será exibida na TV');

@@ -3669,6 +3669,7 @@ window._sbIngest = function (docs) {
     AS._montaPesadosQueFaltam(paraMontar);
   }
   try { if (typeof window._repintarSeNecessario === 'function') window._repintarSeNecessario(); } catch (e) {}
+  if (typeof window._tvLiveRefresh === 'function') window._tvLiveRefresh();
 };
 
 window._resyncSandboxRoster = function (ft) {
@@ -13010,6 +13011,7 @@ window.AppStore = {
           (_reparseados.length ? _reparseados : tournaments).forEach(function(t){ try { window._hydrateMonarchGroups(t); } catch(e){} });
         }
         store._loading = false;
+        if (typeof window._tvLiveRefresh === 'function') window._tvLiveRefresh();
 
         // v1.9.81: detecta remoções (presente antes, ausente agora) e, se o
         // usuário está vendo um torneio removido, tira ele da tela na hora.

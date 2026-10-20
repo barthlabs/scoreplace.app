@@ -48,6 +48,14 @@
     var hue = team && Number(team.hue);
     return { name: team ? String(team.name || '') : '', color: Number.isFinite(hue) ? 'hsl(' + hue + ' 78% 56%)' : '#94a3b8' };
   }
+  function sideName(t, match, slot) {
+    var raw = String(match[slot] || '');
+    if (typeof window._resolveSideLive !== 'function') return raw;
+    var uids = typeof window._slotUidsPositional === 'function'
+      ? window._slotUidsPositional(match, slot, t)
+      : (match[slot === 'p1' ? 'team1Uids' : 'team2Uids'] || match[slot + 'Uid']);
+    return String(window._resolveSideLive(t, raw, uids) || raw);
+  }
   function rankingSections(t, matches, teams) {
     var core = window.ScoreplaceTeamCompetition;
     var configured = t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition;
@@ -83,14 +91,15 @@
       if (!m) return { name: name };
       var live = !!m.startedAt;
       return { name: name, number: m._gameNum || m.matchNumber || '', category: String(m.category || m.tierLabel || ''),
-        a: String(m.p1 || ''), b: String(m.p2 || ''), ta: teamFor(m, 1, teams), tb: teamFor(m, 2, teams),
-        scoreA: live ? gameScore(m, 1) : '', scoreB: live ? gameScore(m, 2) : '',
-        timerStart: timestamp(live ? m.startedAt : m.courtCalledAt), timerLabel: live ? 'EM JOGO' : 'CHAMADO' };
+        a: sideName(t, m, 'p1'), b: sideName(t, m, 'p2'), ta: teamFor(m, 1, teams), tb: teamFor(m, 2, teams),
+        scoreA: gameScore(m, 1) === '–' ? '0' : gameScore(m, 1),
+        scoreB: gameScore(m, 2) === '–' ? '0' : gameScore(m, 2),
+        timerStart: timestamp(live ? m.startedAt : m.courtCalledAt) };
     });
     var results = matches.filter(function (m) { return m && (m.winner || m.wo) && !m.isBye && !m.isSitOut; })
       .sort(function (a, b) { return timestamp(b.resultAt || b.completedAt || b.updatedAt) - timestamp(a.resultAt || a.completedAt || a.updatedAt); })
       .slice(0, 3).map(function (m) {
-        return { number: m._gameNum || m.matchNumber || '', category: String(m.category || ''), a: String(m.p1 || ''), b: String(m.p2 || ''),
+        return { number: m._gameNum || m.matchNumber || '', category: String(m.category || ''), a: sideName(t, m, 'p1'), b: sideName(t, m, 'p2'),
           ta: teamFor(m, 1, teams), tb: teamFor(m, 2, teams), scoreA: m.wo ? 'W.O.' : gameScore(m, 1, true), scoreB: m.wo ? 'W.O.' : gameScore(m, 2, true) };
       });
     var site = String(window.SCOREPLACE_URL || 'https://scoreplace.app').replace(/\/$/, '');
@@ -102,14 +111,16 @@
       courts: courtCards, rankings: rankingSections(t, matches, teams), results: results };
   };
   function sideHtml(label, team, score) {
-    return '<div class="tv-side" style="--team:' + esc(team.color) + '"><span class="tv-team">' + esc(team.name || 'Time') + '</span>' +
-      '<span class="tv-pair">' + esc(label) + '</span>' + (score !== '' ? '<strong class="tv-score">' + esc(score) + '</strong>' : '') + '</div>';
+    var players = String(label || '').split(' / ').map(function (name) { return name.trim(); }).filter(Boolean);
+    return '<div class="tv-side" style="--team:' + esc(team.color) + '"><span class="tv-team-tag">' + esc(team.name || 'Time') + '</span>' +
+      '<div class="tv-players">' + players.map(function (name) { return '<span>' + esc(name) + '</span>'; }).join('') + '</div>' +
+      (score !== '' ? '<strong class="tv-score">' + esc(score) + '</strong>' : '') + '</div>';
   }
   function cardHtml(card) {
     if (!card.number && !card.a && !card.b) return '<article class="tv-court empty"><h2>' + esc(card.name) + '</h2><p>Aguardando chamada</p></article>';
-    return '<article class="tv-court"><div class="tv-court-top"><h2>' + esc(card.name) + ' <small>JOGO ' + esc(card.number) + '</small></h2><span>' + esc(card.category) + '</span></div>' +
-      sideHtml(card.a, card.ta, card.scoreA) + '<div class="tv-versus">×</div>' + sideHtml(card.b, card.tb, card.scoreB) +
-      '<div class="tv-timer"><span>' + esc(card.timerLabel) + '</span><strong data-tv-start="' + card.timerStart + '">00:00:00</strong></div></article>';
+    return '<article class="tv-court"><div class="tv-court-top"><h2>' + esc(card.name) + ' · JOGO ' + esc(card.number) + '</h2><span>' + esc(card.category) + '</span></div>' +
+      sideHtml(card.a, card.ta, card.scoreA) + '<div class="tv-versus">VS</div>' + sideHtml(card.b, card.tb, card.scoreB) +
+      '<div class="tv-court-footer"><strong data-tv-start="' + card.timerStart + '">00:00:00</strong></div></article>';
   }
   function rankingHtml(section) {
     var byGames = section.ranking === 'games_diff';
@@ -135,6 +146,8 @@
   var styles = '<style>*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#060d1a;color:#ffffff;font-family:Arial,Helvetica,sans-serif}.tv-header{height:9vh;min-height:62px;display:flex;align-items:center;gap:1.2vw;padding:1vh 2vw;border-bottom:2px solid #19314b}.tv-header img{height:100%;max-width:8vw;object-fit:contain}.tv-header h1{font-size:clamp(1.3rem,2.5vw,3rem);margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tv-header time{margin-left:auto;color:#67e8f9;font-size:1.25vw;white-space:nowrap}.tv-board{height:91vh;display:grid;grid-template-columns:1fr 1fr;gap:1vw;padding:1vw}.tv-courts{min-height:0;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(3,minmax(0,1fr));gap:.75vw}.tv-court,.tv-rankings,.tv-results{min-height:0;background:#0d1b2e;border:1px solid #1b3f61;border-radius:1vw;padding:.8vw}.tv-court{display:flex;flex-direction:column;overflow:hidden}.tv-court-top{display:flex;align-items:center;justify-content:space-between;gap:.5vw;color:#7dd3fc;min-height:1.5vw}.tv-court h2{font-size:clamp(.8rem,1.2vw,1.5rem);margin:0}.tv-court h2 small{font-size:.7em}.tv-court-top>span{color:#fbbf24;font-size:.85vw;font-weight:700}.tv-side{display:grid;grid-template-columns:1fr auto;grid-template-rows:auto auto;align-items:center;border-left:.35vw solid var(--team);background:#081321;margin-top:.35vw;padding:.3vw .55vw;min-height:0;flex:1}.tv-team{grid-column:1;font-size:1.2vw;font-weight:900;color:var(--team)}.tv-pair{grid-column:1;font-size:.7vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#cbd5e1}.tv-score{grid-column:2;grid-row:1/span 2;font-size:1.9vw}.tv-versus{text-align:center;color:#94a3b8;font-weight:900;line-height:1}.tv-timer{display:flex;justify-content:space-between;color:#34d399;font-size:.8vw;margin-top:.3vw}.tv-timer strong{font-variant-numeric:tabular-nums;font-size:1vw}.tv-court.empty{align-items:center;justify-content:center;color:#64748b}.tv-court.empty h2{color:#7dd3fc}.tv-sidebar{min-height:0;display:grid;grid-template-rows:1fr 1fr;gap:.75vw}.tv-rankings,.tv-results{overflow:hidden}.tv-sidebar h2{margin:0 0 .5vw;color:#fbbf24;font-size:1.3vw}.tv-ranking-group{overflow:auto;max-height:calc(100% - 2vw)}.tv-ranking-group h3{font-size:.9vw;margin:.4vw 0;color:#7dd3fc}.tv-ranking-row{display:grid;grid-template-columns:2vw 1fr 4vw;gap:.4vw;padding:.24vw;border-bottom:1px solid #1e3349;font-size:.9vw}.tv-ranking-row b{text-align:right;color:#fbbf24}.tv-result{border-bottom:1px solid #1e3349;padding:.4vw 0}.tv-result small{color:#7dd3fc;font-size:.7vw}.tv-result>div{display:grid;grid-template-columns:1fr auto 1fr;gap:.5vw;align-items:center;font-size:.8vw}.tv-result>div strong{text-align:center;font-size:1vw;color:#fff}.tv-result>div span:last-child{text-align:right}#tv-fullscreen-action{position:fixed;z-index:100;right:1vw;bottom:1vw;padding:.65em 1em;border:1px solid #67e8f9;border-radius:.5em;background:#123047;color:#fff;font:700 16px Arial,sans-serif;cursor:pointer;box-shadow:0 2px 12px #0009}#tv-fullscreen-action:focus-visible{outline:3px solid #fbbf24}html:fullscreen #tv-fullscreen-action{display:none}@media(orientation:portrait){.tv-header{height:7vh}.tv-header h1{font-size:3vw}.tv-header time{font-size:2vw}.tv-board{height:93vh;grid-template-columns:1fr;grid-template-rows:55% 45%;gap:1vh;padding:1vh}.tv-courts{gap:1vw}.tv-court{padding:1vw}.tv-court h2,.tv-sidebar h2{font-size:2vw}.tv-court-top>span,.tv-team,.tv-score{font-size:1.6vw}.tv-pair,.tv-timer,.tv-timer strong{font-size:1.2vw}.tv-sidebar{grid-template-rows:60% 40%;gap:1vh}.tv-ranking-row,.tv-result>div{font-size:1.3vw}.tv-ranking-group h3{font-size:1.5vw}.tv-result small{font-size:1vw}}</style>';
   styles = styles.replace('</style>',
     '.tv-sidebar h2{font-size:clamp(1.2rem,1.5vw,2rem)}' +
+    '.tv-court-top{display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:.4vw;border-bottom:1px solid #314151;padding-bottom:.25vw}.tv-court-top h2{color:#38bdf8;font-size:clamp(.85rem,1.1vw,1.5rem);white-space:nowrap}.tv-court-top>span{color:#fbbf24;font-size:clamp(.65rem,.78vw,1rem);font-weight:800;text-align:right}.tv-side{display:grid;grid-template-columns:auto minmax(0,1fr) auto;grid-template-rows:1fr;align-items:stretch;gap:.55vw;border-left:0;border-radius:.45vw;min-width:0;padding:.35vw;background:#222}.tv-team-tag{display:flex;align-items:center;justify-content:center;writing-mode:vertical-rl;transform:rotate(180deg);padding:.25vw .15vw;border:1px solid var(--team);border-radius:999px;background:color-mix(in srgb,var(--team) 28%,#222);color:#fff;font-size:clamp(.65rem,.8vw,1rem);font-weight:900;white-space:nowrap}.tv-players{min-width:0;display:flex;flex-direction:column;justify-content:space-evenly;gap:.15vw}.tv-players span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#fff;font-size:clamp(.8rem,1vw,1.3rem);font-weight:750}.tv-score{grid-column:3;grid-row:1;align-self:center;min-width:2vw;padding:.1em .3em;border:1px solid #555;border-radius:.35em;background:#303030;text-align:center;font-size:clamp(1rem,1.7vw,2.2rem)}' +
+    '.tv-versus{font-size:clamp(.7rem,.8vw,1rem);letter-spacing:.1em}.tv-court-footer{display:flex;justify-content:flex-end;align-items:center;gap:.5vw;margin-top:.35vw;color:#34d399;font-weight:800}.tv-court-footer strong{font-variant-numeric:tabular-nums;font-size:clamp(1rem,1.2vw,1.8rem)}' +
     '.tv-sidebar{grid-template-rows:60% 40%}' +
     '.tv-rankings{display:flex;flex-direction:column}' +
     '.tv-ranking-group{max-height:calc(100% - 2.3vw)}' +
@@ -167,7 +180,7 @@
   }
   function stop() {
     if (tick) clearInterval(tick);
-    tick = null; popup = null; lastMarkup = ''; syncButton();
+    tick = null; popup = null; lastMarkup = ''; window._tvLiveRefresh = null; syncButton();
   }
   window._tvLiveToggle = function () {
     if (popup && !popup.closed) { popup.close(); stop(); return; }
@@ -197,6 +210,7 @@
       if (now) now.textContent = new Date().toLocaleTimeString('pt-BR');
       syncButton();
     }
+    window._tvLiveRefresh = refresh;
     refresh(); tick = setInterval(refresh, 1000);
     popup.focus();
   };

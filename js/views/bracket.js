@@ -3845,7 +3845,7 @@ window._confirmMatchCourtCall = function(button, tId, matchId) {
       if (time && Number.isFinite(start)) {
         time.title = 'Tempo desde a chamada';
         time.style.color = 'var(--sp-c-4ade80,#4ade80)';
-        time.innerHTML = '⏱ Chamado <span class="sp-match-call-timer" data-start-ms="' + start + '">' + window._spFormatElapsed(start, Date.now()) + '</span>';
+        time.innerHTML = '⏱ <span class="sp-match-call-timer" data-start-ms="' + start + '">' + window._spFormatElapsed(start, Date.now()) + '</span>';
       }
     }).catch(function(err) {
       button.disabled = false;
@@ -7575,7 +7575,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // vezes, nem perder a categoria do card concluído.
   var _matchTimeMs = _playedMs || _scheduledMs;
   var _estimatedTimeHtml = (_calledMs || _liveStartMs)
-    ? '<span class="sp-match-estimated-time" title="' + (_liveStartMs ? 'Tempo de jogo' : 'Tempo desde a chamada') + '" style="margin-left:auto;white-space:nowrap;text-align:right;font-size:.78rem;font-weight:800;color:var(--sp-c-4ade80,#4ade80);">' + (_liveStartMs ? '⏱ Em jogo ' : '⏱ Chamado ') + '<span class="sp-match-call-timer" data-start-ms="' + (_liveStartMs || _calledMs) + '">' + window._spFormatElapsed(_liveStartMs || _calledMs, Date.now()) + '</span></span>'
+    ? '<span class="sp-match-estimated-time" title="' + (_liveStartMs ? 'Tempo de jogo' : 'Tempo desde a chamada') + '" style="margin-left:auto;white-space:nowrap;text-align:right;font-size:.78rem;font-weight:800;color:var(--sp-c-4ade80,#4ade80);">⏱ <span class="sp-match-call-timer" data-start-ms="' + (_liveStartMs || _calledMs) + '">' + window._spFormatElapsed(_liveStartMs || _calledMs, Date.now()) + '</span></span>'
     : _matchTimeMs
     ? '<span class="sp-match-estimated-time" title="' + (_playedMs ? 'Horário jogado' : 'Horário estimado do jogo') + '" style="margin-left:auto;white-space:nowrap;text-align:right;font-size:.78rem;font-weight:800;color:' + (_playedMs ? 'var(--sp-c-4ade80,#4ade80)' : 'var(--sp-c-7dd3fc,#7dd3fc)') + ';">🕒 ' + (_playedMs ? '' : '≈ ') + window._safeHtml(_matchCardDateTime(_matchTimeMs, t)) + '</span>'
     : '';
@@ -8079,9 +8079,10 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
         <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start;min-width:0;">
           <div style="display:flex;align-items:center;gap:7px;min-width:0;flex-wrap:wrap;">
             <span style="font-size:0.7rem;font-weight:700;color:var(--sp-c-38bdf8,#38bdf8);text-transform:uppercase;white-space:nowrap;">${window._safeHtml(matchLabel)}</span>
-            ${_timelineSlot}
+            ${_isConcentratedEvent ? '' : _timelineSlot}
             ${readyBadge}
           </div>
+          ${_isConcentratedEvent ? _timelineSlot : ''}
           ${_mostraCabecaSet ? _headlineSlot : ''}
         </div>
         <div id="header-btns-${m.id}" class="btn-row sp-mc-acts">${_headerActions}</div>

@@ -23,6 +23,14 @@ must(iSlot < iHead && /Jogado em/.test(jogado), '"Jogado em" fica no cabeçalho 
 must((jogado.match(/data-match-time-status/g) || []).length === 1, 'a linha do tempo continua sendo UM slot só (atualização ao vivo intacta)');
 const umSet = card(UM, { resultAt: Date.UTC(2026, 8, 18, 14, 48), winner: 'Fernando Cerri / Monique Monteux', scoreP1: 4, scoreP2: 6 });
 must(umSet.indexOf('sp-set-head') === -1 && umSet.indexOf('data-match-time-status') > umSet.indexOf('Jogo 108'), 'set único: sem cabeçalho de sets, prazo ao lado de Jogo N');
+const oldConcentrated = W._isConcentratedTournament;
+W._isConcentratedTournament = () => true;
+const concentrated = card(UM, { category: 'Fem Light', court: 'Quadra 4' });
+W._isConcentratedTournament = oldConcentrated;
+const concHeader = concentrated.slice(concentrated.indexOf('class="sp-mc-head"'), concentrated.indexOf('class="sp-mc-acts"'));
+must(concHeader.indexOf('Jogo 108') < concHeader.indexOf('data-match-time-status') &&
+  (concHeader.match(/data-match-time-status/g) || []).length === 1 &&
+  concHeader.includes('Fem Light'), 'evento concentrado: categoria uma vez abaixo de Jogo N e antes dos botões');
 (async () => {
   const b = await chromium.launch(); const p = await b.newPage({ viewport: { width: 480, height: 600 } });
   await p.setContent('<style>' + CSS + '</style><body style="background:#0b1220;padding:10px"><div style="width:400px">' + jogado + '</div></body>');
