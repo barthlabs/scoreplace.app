@@ -145,12 +145,18 @@
       fillRect:fillRect, fillPolygon:fillPolygon, box:box, write:write };
   }
   function podiumLogo(p, x, y) {
-    p.fillRect(x, y + 22, 12, 23, '0.796 0.835 0.882');
-    p.fillRect(x + 16, y + 7, 12, 38, '0.961 0.620 0.043');
-    p.fillRect(x + 32, y + 29, 12, 16, '0.984 0.573 0.235');
-    p.fillPolygon([[x+22,y],[x+25,y+7],[x+32,y+7],[x+27,y+11],
-      [x+29,y+18],[x+22,y+14],[x+15,y+18],[x+17,y+11],
-      [x+12,y+7],[x+19,y+7]], '0.961 0.620 0.043');
+    // Mesma geometria de icons/logo-podium.svg (viewBox 80x60), reduzida sem
+    // alterar a proporção da estrela em relação à coluna central.
+    var scale = 44 / 80;
+    function px(value) { return x + value * scale; }
+    function py(value) { return y + value * scale; }
+    p.fillRect(px(2), py(30), 22*scale, 30*scale, '0.796 0.835 0.882');
+    p.fillRect(px(29), py(10), 22*scale, 50*scale, '0.961 0.620 0.043');
+    p.fillRect(px(56), py(40), 22*scale, 20*scale, '0.984 0.573 0.235');
+    p.fillPolygon([[40,0],[42,6],[48,6],[43,10],[45,16],[40,12],
+      [35,16],[37,10],[32,6],[38,6]].map(function (point) {
+      return [px(point[0]), py(point[1])];
+    }), '0.961 0.620 0.043');
   }
   function uniqueAthletes(matches) {
     var found = new Map();
@@ -191,15 +197,16 @@
     while (label.length > 1 && labelWidth(label + '...', size, bold) > width) label = label.slice(0, -1).trimEnd();
     return label + '...';
   }
-  function sideLines(value, width, size, bold, wrap) {
+  function sideLines(value, width, size, bold) {
     var label = text(value);
-    if (!wrap || labelWidth(label, size, bold) <= width) return [fitLabel(label, width, size, bold)];
-    var words = label.split(/\s+/), head = '';
-    while (words.length && labelWidth(head ? head + ' ' + words[0] : words[0], size, bold) <= width) {
-      head += (head ? ' ' : '') + words.shift();
+    if (labelWidth(label, size, bold) <= width) return [label];
+    var words = label.split(/\s+/);
+    for (var cut=words.length-1;cut>0;cut--) {
+      var first = words.slice(0, cut).join(' '), second = words.slice(cut).join(' ');
+      if (labelWidth(first, size, bold) <= width && labelWidth(second, size, bold) <= width)
+        return [first, second];
     }
-    if (!head) head = words.shift() || '';
-    return [fitLabel(head, width, size, bold), fitLabel(words.join(' '), width, size, bold)];
+    return null;
   }
   function sideWrite(p, label, x, y, width, size, bold, right, rgb) {
     var fitted = fitLabel(label, width - 6, size, bold);
@@ -207,15 +214,18 @@
     p.write(fitted, position, y, size, bold, null, rgb);
   }
   function writeSide(p, team, names, x, top, width, portrait, right) {
-    var playerSize = portrait ? 7.6 : 8.8;
+    var playerSize = portrait ? 8.5 : 9.3;
     sideWrite(p, team || '', x, top + 8, width, portrait ? 7 : 7.2, false, right, '0.32 0.40 0.48');
     var people = members(names);
     if (!people.length) people = [names];
     people.slice(0, 2).forEach(function (name, i) {
-      var y = top + (portrait ? 21 + 19*i : 19 + 11*i);
-      var lines = sideLines(name, width - 6, playerSize, true, portrait);
-      sideWrite(p, lines[0], x, y, width, playerSize, true, right);
-      if (lines[1]) sideWrite(p, lines[1], x, y + 8, width, 7.2, true, right);
+      var size = playerSize, lines;
+      while (size >= 6.8 && !(lines = sideLines(name, width - 6, size, true))) size -= 0.2;
+      if (!lines) lines = [fitLabel(name, width - 6, 6.8, true)];
+      var y = top + (portrait ? 21 + 19*i : 17 + 12*i);
+      sideWrite(p, lines[0], x, y, width, size, true, right);
+      if (lines[1]) sideWrite(p, lines[1], x, y + (portrait ? 8 : 6.5), width,
+        Math.min(size, portrait ? 7.8 : 8.1), true, right);
     });
   }
   // Uma página por categoria e dia, no máximo 12 jogos. A quadra é escrita na chamada.

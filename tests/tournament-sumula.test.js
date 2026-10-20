@@ -110,7 +110,7 @@ const scoreX = Number(scoreCommands.find(s => /\(x\) Tj ET$/.test(s)).match(/ Tm
 assert(scoreX > scoreBoxes[0].x + scoreBoxes[0].width && scoreX + 4 < scoreBoxes[1].x,
   'o x do placar não invade as caixas em melhor de três');
 const portraitCommands = portrait[0].commands;
-const rightNames = portraitCommands.filter(s => s.includes('/F2 7.6 Tf') &&
+const rightNames = portraitCommands.filter(s => s.includes('/F2 8.5 Tf') &&
   (s.includes('rica Souza)') || s.includes('bio Ruiz)')));
 assert.strictEqual(rightNames.length, 2, 'nomes da dupla à direita permanecem visíveis');
 const rightPositions = rightNames.map(s => Number(s.match(/ 1 0 0 1 ([\d.]+) [\d.]+ Tm /)[1]));
@@ -120,6 +120,14 @@ const longNames = core.collect(t, Array.from({ length:12 }, (_, i) => ({
   p1:'Nome Muito Comprido Atleta '+i+' / Parceiro Muito Comprido '+i,
   p2:'Rival Muito Comprido Atleta '+i+' / Parceira Muito Comprida '+i
 })));
+const wrapped = core.makePages(longNames, { orientation:'portrait' })[0].commands.join('\n');
+assert(wrapped.includes('(Nome Muito Comprido)'), 'nome longo ocupa a primeira linha');
+assert(wrapped.includes('(Atleta 0)'), 'sobrenome continua na segunda linha sem corte');
+assert(!wrapped.includes('(Nome Muito Compr...)'), 'nome longo não termina prematuramente em reticências');
+const logo = core.makePages(model)[0].commands.find(s => s.includes(' rg ') && s.endsWith(' h f'));
+const starXs = Array.from(logo.matchAll(/([\d.]+) [\d.]+ [ml]/g), m => Number(m[1]));
+assert(Math.max(...starXs) - Math.min(...starXs) < 12,
+  'estrela do logo mantém a proporção do SVG oficial');
 const signatureCommands = core.makePages(longNames)[0].commands.filter(s =>
   / rg BT \/F1 /.test(s) && / 1 0 0 1 (57[1-9]|5[8-9][0-9]|6[0-9][0-9]|7[0-9][0-9]) [\d.]+ Tm /.test(s));
 assert.strictEqual(signatureCommands.length, 48,
