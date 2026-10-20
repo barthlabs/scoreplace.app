@@ -124,6 +124,12 @@ const wrapped = core.makePages(longNames, { orientation:'portrait' })[0].command
 assert(wrapped.includes('(Nome Muito Comprido)'), 'nome longo ocupa a primeira linha');
 assert(wrapped.includes('(Atleta 0)'), 'sobrenome continua na segunda linha sem corte');
 assert(!wrapped.includes('(Nome Muito Compr...)'), 'nome longo não termina prematuramente em reticências');
+const landscapeWrap = core.makePages(core.collect(t, [{ id:'wrap', category:'Fem Light',
+  scheduledAt:at('2026-10-22','18:00'),
+  p1:'Maria Eduarda Corazza Pozzi dos Santos de Almeida / Gabriela De Aguiar Scigliano Pereira',
+  p2:'Ana Silva / Bia Costa' }]))[0].commands.join('\n');
+assert(landscapeWrap.includes('(Maria Eduarda Corazza Pozzi dos Santos de)') &&
+  landscapeWrap.includes('(Almeida)'), 'paisagem mantém o nome longo em duas linhas');
 const logo = core.makePages(model)[0].commands.find(s => s.includes(' rg ') && s.endsWith(' h f'));
 const starXs = Array.from(logo.matchAll(/([\d.]+) [\d.]+ [ml]/g), m => Number(m[1]));
 assert(Math.max(...starXs) - Math.min(...starXs) < 12,

@@ -214,18 +214,22 @@
     p.write(fitted, position, y, size, bold, null, rgb);
   }
   function writeSide(p, team, names, x, top, width, portrait, right) {
-    var playerSize = portrait ? 8.5 : 9.3;
-    sideWrite(p, team || '', x, top + 8, width, portrait ? 7 : 7.2, false, right, '0.32 0.40 0.48');
     var people = members(names);
     if (!people.length) people = [names];
+    var playerSize = portrait ? 8.5 : 9.3;
+    var compact = !portrait && people.some(function (name) {
+      return labelWidth(name, playerSize, true) > width - 6;
+    });
+    sideWrite(p, team || '', x, top + (compact ? 7 : 8), width,
+      portrait ? 7 : compact ? 6.4 : 7.2, false, right, '0.32 0.40 0.48');
     people.slice(0, 2).forEach(function (name, i) {
-      var size = playerSize, lines;
+      var size = compact ? 7.8 : playerSize, lines;
       while (size >= 6.8 && !(lines = sideLines(name, width - 6, size, true))) size -= 0.2;
-      if (!lines) lines = [fitLabel(name, width - 6, 6.8, true)];
-      var y = top + (portrait ? 21 + 19*i : 17 + 12*i);
+      if (!lines) { size = 6.8; lines = [fitLabel(name, width - 6, size, true)]; }
+      var y = top + (portrait ? 21 + 19*i : compact ? 15 + 14*i : 17 + 13*i);
       sideWrite(p, lines[0], x, y, width, size, true, right);
-      if (lines[1]) sideWrite(p, lines[1], x, y + (portrait ? 8 : 6.5), width,
-        Math.min(size, portrait ? 7.8 : 8.1), true, right);
+      if (lines[1]) sideWrite(p, lines[1], x, y + (portrait ? 8 : 7), width,
+        Math.min(size, portrait ? 7.8 : 7.3), true, right);
     });
   }
   // Uma página por categoria e dia, no máximo 12 jogos. A quadra é escrita na chamada.
@@ -234,7 +238,7 @@
     var p = portrait ? pdfPage(595, 842) : pdfPage(842, 595);
     var left = portrait ? 18 : 20, right = p.width - left;
     var divider = portrait ? 397 : 559, top = 86, bodyTop = 105;
-    var rowHeight = portrait ? 54 : 36;
+    var rowHeight = portrait ? 54 : 38;
     var slots = model.scoring && model.scoring.slots || 1;
     var gamesPerSet = model.scoring && model.scoring.gamesPerSet || 6;
     var gameLabel = slots === 1 ? '1 set de ' + gamesPerSet + ' games' : 'melhor de ' + slots + ' sets';
