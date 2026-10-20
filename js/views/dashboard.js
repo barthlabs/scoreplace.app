@@ -2972,10 +2972,7 @@ function renderDashboard(container) {
       // ao recuo do cabeçalho fixo. O span não trunca: em largura estreita ele
       // quebra de linha antes de desaparecer sob o chrome.
       _upHtml += '<h3 style="margin:0 0 12px;min-width:0;font-size:0.85rem;font-weight:700;color:var(--sp-c-38bdf8,#38bdf8);letter-spacing:0.04em;text-transform:uppercase;display:flex;align-items:center;flex-wrap:wrap;gap:8px;line-height:1.25;overflow:visible;"><span aria-hidden="true">⚔️</span><span style="min-width:0;overflow:visible;text-overflow:clip;white-space:normal;"><span class="sp-dashboard-next-singular">Seu próximo jogo</span>' + (_ngExtras.length ? '<span class="sp-dashboard-next-plural">Seus próximos jogos</span>' : '') + '</span></h3>';
-      _upHtml += '<div style="border-left:3px solid #818cf8;padding-left:10px;margin-bottom:10px;">' +
-        '<div style="font-weight:800;color:var(--text-bright);font-size:0.92rem;text-transform:uppercase;letter-spacing:0.5px;line-height:1.25;">' + _sf(_ng.tName) + '</div>' +
-        (_metaStr ? '<div style="color:var(--sp-c-a5b4fc,#a5b4fc);font-size:0.72rem;margin-top:3px;font-weight:600;">' + _sf(_metaStr) + '</div>' : '') +
-      '</div>';
+      _upHtml += '<div class="sp-dashboard-next-tournament">' + _sf(_ng.tName) + '</div>';
       /* MESMA LARGURA DAS NOVIDADES E DOS ÚLTIMOS RESULTADOS. Esta era a única das quatro
        * chamadas de `_miniBracketCard` que entrava PELADA: sem o grid e sem o embrulho
        * `min-width:0`, o card esticava para a largura inteira da seção enquanto todos os
@@ -2983,6 +2980,7 @@ function renderDashboard(container) {
        * canônica em todo lugar — inclusive a caixa que o segura. */
       _upHtml += '<div class="sp-dashboard-next-grid">' +
         '<div data-mr-card="1" style="min-width:0;">' +
+        '<div class="sp-dashboard-next-round"><strong>' + _sf(_metaStr || 'Próximo jogo') + '</strong></div>' +
         _miniBracketCard(_ng, _ngEntry.canLaunch, {
           hideFaseHeader: true,
           boxLabelOverride: _boxU,
@@ -2991,14 +2989,25 @@ function renderDashboard(container) {
           showMatchGroupChip: true
         }) +
         '</div>';
+      var shownTournamentNames = new Set([String(_ng.tId)]);
       _ngExtras.forEach(function (entry) {
         var item = entry.item, match = item.m || {};
         var tournament = participacoes.find(function (tt) { return tt.id === item.tId; });
         var gameLabel = match._gameNum != null ? 'Jogo ' + match._gameNum : 'Jogo';
         var timeline = tournament && typeof window._matchCardTimelineTextHtml === 'function'
           ? window._matchCardTimelineTextHtml(tournament, match) : '';
+        var roundInLabel = String(match.label || '').match(/R(?:odada)?\s*(\d+)/i);
+        var roundNumber = roundInLabel ? Number(roundInLabel[1])
+          : (match.round != null && !isNaN(Number(match.round)) ? window._matchRoundDisplayNum(tournament || null, match) : null);
+        var namedRound = tournament && typeof window._canonicalElimLabelForMatch === 'function'
+          ? window._canonicalElimLabelForMatch(tournament, match) : '';
+        var roundHeading = namedRound || (roundNumber != null ? 'Rodada ' + roundNumber : 'Próximo jogo');
+        var otherTournament = !shownTournamentNames.has(String(item.tId));
+        shownTournamentNames.add(String(item.tId));
         _upHtml += '<div data-mr-card="1" class="sp-dashboard-next-extra" style="min-width:0;">' +
-          '<div style="font-size:.72rem;font-weight:800;color:var(--sp-c-a5b4fc,#a5b4fc);margin-bottom:5px;">' + _sf(item.tName) + '</div>' +
+          '<div class="sp-dashboard-next-round">' +
+            (otherTournament ? '<span class="sp-dashboard-next-other-tournament">' + _sf(item.tName) + '</span>' : '') +
+            '<strong>' + _sf(roundHeading) + '</strong></div>' +
           _miniBracketCard(item, entry.canLaunch, {
             hideFaseHeader: true,
             boxLabelOverride: gameLabel,

@@ -1,3 +1,5 @@
+// 2.4.134 — Próximos jogos na dashboard alinham os cards pela rodada de
+// cada partida e mostram o nome de um mesmo torneio apenas uma vez.
 // 2.4.133 — Botão NO AR e Modo TV abrem saída limpa em janela separada, no lugar
 // da visualização antiga na mesma tela: quadras chamadas, relógios,
 // classificação e os três últimos resultados atualizados no torneio.

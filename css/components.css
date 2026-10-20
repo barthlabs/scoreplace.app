@@ -3286,6 +3286,37 @@ dialog.sp-native-update::backdrop { background: var(--bg-overlay, rgba(0,0,0,0.6
   gap: 12px;
   align-items: start;
 }
+.sp-dashboard-next-tournament {
+  border-left: 3px solid #818cf8;
+  padding-left: 10px;
+  margin-bottom: 10px;
+  font-weight: 800;
+  color: var(--text-bright);
+  font-size: .92rem;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  line-height: 1.25;
+}
+.sp-dashboard-next-round {
+  height: 42px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 2px;
+  margin-bottom: 7px;
+  color: var(--sp-c-a5b4fc,#a5b4fc);
+  font-size: .72rem;
+  font-weight: 700;
+}
+.sp-dashboard-next-round > strong,
+.sp-dashboard-next-other-tournament {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sp-dashboard-next-other-tournament { font-size: .66rem; }
 .sp-dashboard-next-extra { display: none; }
 .sp-dashboard-next-plural { display: none; }
 @container (min-width: 620px) {
