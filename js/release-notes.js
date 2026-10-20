@@ -1,4 +1,7 @@
-// 2.5.7 — Atualização consolidada de produção com as correções validadas desde a última publicação.
+// 2.5.7 — NO AR exibe a classificação por times com nomes em boxes coloridos,
+// saldo, games, vitórias, derrotas e jogos; fontes maiores e QR para abrir o
+// torneio no Scoreplace. A classificação da chave também usa boxes por time.
+// O título dos resultados não fixa a quantidade exibida.
 // 2.5.6 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.5 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.4 — Atualização consolidada de produção com as correções validadas desde a última publicação.
