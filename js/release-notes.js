@@ -1,4 +1,5 @@
-// 2.4.131 — Atualização consolidada de produção com as correções validadas desde a última publicação.
+// 2.4.131 — Nas abas por data do Neon, a chave deixa de mostrar uma fase e
+// rodadas vazias abaixo dos jogos. A classificação e os jogos continuam visíveis.
 // 2.4.130 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.4.129 — Cabeçalhos fixos das rodadas alinhados às colunas de jogos,
 // inclusive quando a página usa zoom.
