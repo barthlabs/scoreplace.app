@@ -1,4 +1,7 @@
-// 2.5.17 — Atualização consolidada de produção com as correções validadas desde a última publicação.
+// 2.5.17 — A chave mantém todos os jogos na ordem numerada e o NO AR recupera
+// quadras, classificação e resultados após reconectar. Quadras ocupadas não podem
+// ser chamadas por outro jogo. Jogos com data, hora e quadra definidos deixam de
+// mostrar os balões de WhatsApp; os demais continuam com o contato.
 // 2.5.16 — Os controles do relógio na chave aparecem como retroceder,
 // etapa/tempo e avançar, nessa ordem, com ícones circulares.
 // 2.5.15 — Após chamar o jogo para uma quadra, FF adianta o relógio para a
