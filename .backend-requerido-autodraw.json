@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "backendCommit": "07c482df82a4d697fe98a0bb40e28d75bd62c063",
-  "scopeNote": "O placar do sandbox usa o mesmo motor da produção, com coleção e notificações isoladas; a atribuição de quadra também foi atualizada.",
+  "backendCommit": "f83d83ad2ba9856e390faed12cc56643c9de586b",
+  "scopeNote": "O placar do sandbox usa o mesmo motor da produção, com coleção e notificações isoladas; a atribuição de quadra e a configuração de classificação do Neon foram atualizadas.",
   "functions": [
     "assignMatchCourt",
     "applyMatchResult"
