@@ -39,6 +39,8 @@ assert.match(bracket, /_callCF\('assignMatchCourt', \{ tournamentId: String\(tId
 assert.match(bracket, /clockAction: action/);
 assert.match(bracket, /Próxima etapa do relógio/);
 assert.match(bracket, /Reiniciar etapa do relógio/);
+assert.match(bracket, /!!\(_calledMs && m\.court && typeof window\._souOrganizador === 'function'/,
+  'jogo iniciado sem chamada de quadra mostra relógio, mas não FF/REW que o servidor recusaria');
 assert.match(bracket, /courtClockBaseAt \|\| m\.courtCalledAt/);
 assert.match(fs.readFileSync('js/views/tv-live.js', 'utf8'), /m\.courtClockBaseAt \|\| m\.courtCalledAt/);
 const realReset = server.match(/const isPrePublicationRestore = ([^;]+);/);

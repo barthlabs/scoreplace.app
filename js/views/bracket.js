@@ -7687,7 +7687,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   var _matchTimeMs = _playedMs || _scheduledMs;
   var _estimatedTimeHtml = (_calledMs || _liveStartMs)
     ? window._spCourtClockHtml(_calledMs || _liveStartMs, t, Date.now(), tId, m.id,
-        typeof window._souOrganizador === 'function' && window._souOrganizador(t))
+        !!(_calledMs && m.court && typeof window._souOrganizador === 'function' && window._souOrganizador(t)))
     : _matchTimeMs
     ? '<span class="sp-match-estimated-time" title="' + (_playedMs ? 'Horário jogado' : 'Horário estimado do jogo') + '" style="margin-left:auto;white-space:nowrap;text-align:right;font-size:.78rem;font-weight:800;color:' + (_playedMs ? 'var(--sp-c-4ade80,#4ade80)' : 'var(--sp-c-7dd3fc,#7dd3fc)') + ';">🕒 ' + (_playedMs ? '' : '≈ ') + window._safeHtml(_matchCardDateTime(_matchTimeMs, t)) + '</span>'
     : '';
