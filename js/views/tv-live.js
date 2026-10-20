@@ -139,7 +139,7 @@
     '.tv-ranking-group{max-height:calc(100% - 2.3vw)}' +
     '.tv-ranking-group h3{font-size:clamp(.9rem,1.05vw,1.35rem)}' +
     '.tv-ranking-head,.tv-ranking-row{display:grid;grid-template-columns:2vw minmax(0,1fr) 4vw 5.5vw repeat(3,2vw);gap:.35vw;align-items:center}' +
-    '.tv-ranking-head{padding:.4vw .3vw;border-bottom:1px solid #45617b;color:#9cbed5;font-size:clamp(.7rem,.75vw,1rem);font-weight:800}' +
+    '.tv-ranking-head{padding:.4vw .3vw;border-bottom:1px solid #45617b;color:#cbd5e1;font-size:clamp(.7rem,.75vw,1rem);font-weight:800}' +
     '.tv-ranking-row{min-height:2.6vw;padding:.3vw;border-bottom:1px solid #1e3349;font-size:clamp(.9rem,1.05vw,1.35rem);font-variant-numeric:tabular-nums}' +
     '.tv-ranking-row>span:not(:first-child),.tv-ranking-head>span:not(:nth-child(2)){text-align:center}' +
     '.tv-ranking-row b{text-align:center;color:#fbbf24}' +
