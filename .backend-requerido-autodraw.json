@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "backendCommit": "ab5d2a0d7f1c4d167a9f78dc7614f80038d7e33f",
-  "scopeNote": "Somente assignMatchCourt mudou neste corte; publicação direcionada confirmada e preflight CORS verificado em produção.",
+  "backendCommit": "003492608b61488dfddda8d58bfcb0965af1eda7",
+  "scopeNote": "Somente assignMatchCourt mudou neste corte; o chamado para quadra passa a usar a coleção isolada do sandbox com validação do dono.",
   "functions": [
     "assignMatchCourt"
   ]
