@@ -1,3 +1,5 @@
+// 2.5.13 — Seletor de quadra e OK voltam à altura compacta, iguais e
+// centralizados verticalmente no rodapé dos cards de jogo.
 // 2.5.12 — No desktop, Ao Vivo abre o controle em outra janela e mantém a
 // chave disponível. O controle carrega os atletas do jogo clicado por UID.
 // 2.5.11 — O cronômetro da quadra no NO AR mostra "Chamado hh:mm:ss" após
