@@ -72,6 +72,44 @@ window._dashboardUpcomingCards = function(entries, limit) {
   return [first].concat((entries || []).filter(function (entry) { return entry !== first; })
     .sort(window._dashboardNextMatchCompare).slice(0, Math.max(0, (limit || 1) - 1)));
 };
+// Na agenda concentrada, a rodada exibida é a posição do horário na grade
+// publicada de cada dia. O `m.round` interno do sorteio não representa essa
+// coluna (Neon: J86 às 21:30 é R7, embora o ordinal interno seja outro).
+window._dashboardScheduledRoundLabel = function(t, m) {
+  if (!t || !m || !m.scheduledAt) return '';
+  function millis(value) {
+    if (value && typeof value.toMillis === 'function') return Number(value.toMillis());
+    if (value && typeof value.seconds === 'number') return value.seconds * 1000;
+    var parsed = new Date(value).getTime();
+    return Number.isFinite(parsed) ? parsed : NaN;
+  }
+  var targetAt = millis(m.scheduledAt);
+  if (!Number.isFinite(targetAt)) return '';
+  var zone = typeof window._matchCardTimeZone === 'function'
+    ? window._matchCardTimeZone(t) : 'America/Sao_Paulo';
+  var formatter = new Intl.DateTimeFormat('en-GB', {
+    timeZone: zone, year:'numeric', month:'2-digit', day:'2-digit',
+    hour:'2-digit', minute:'2-digit', hourCycle:'h23'
+  });
+  function slot(at) {
+    var parts = {};
+    formatter.formatToParts(new Date(at)).forEach(function (part) { parts[part.type] = part.value; });
+    return parts.year + '-' + parts.month + '-' + parts.day + '|' + parts.hour + ':' + parts.minute;
+  }
+  var target = slot(targetAt), day = target.split('|')[0];
+  var all = typeof window._collectAllMatches === 'function' ? window._collectAllMatches(t) : (t.matches || []);
+  var hours = new Set();
+  (all || []).forEach(function (match) {
+    if (!match || match.isBye || match.isSitOut || !match.scheduledAt) return;
+    var at = millis(match.scheduledAt);
+    if (!Number.isFinite(at)) return;
+    var key = slot(at);
+    if (key.split('|')[0] === day) hours.add(key.split('|')[1]);
+  });
+  var ordered = Array.from(hours).sort();
+  var index = ordered.indexOf(target.split('|')[1]);
+  return index < 0 ? '' : 'Rodada ' + (index + 1);
+};
 
 // A tela só solicita o fecho. O servidor decide pelo documento fresco, calcula
 // a classificação e registra a notificação; nunca mutar/persistir durante render.
@@ -2929,8 +2967,9 @@ function renderDashboard(container) {
       var _rnum = _rdM ? Number(_rdM[1]) : ((_ngM.round != null && !isNaN(Number(_ngM.round))) ? window._matchRoundDisplayNum(_ngT || t, _ngM) : null); // 1-based, nunca R0
       var _namedRound = (_ngT && typeof window._canonicalElimLabelForMatch === 'function')
         ? window._canonicalElimLabelForMatch(_ngT, _ngM) : '';
-      _meta.push(_namedRound || (_rnum != null ? 'Rodada ' + _rnum : ''));
       var _ngIsTeamSchedule = _isDashboardConcentratedSchedule(_ngT);
+      var _scheduledRound = _ngIsTeamSchedule ? window._dashboardScheduledRoundLabel(_ngT, _ngM) : '';
+      _meta.push(_scheduledRound || _namedRound || (_rnum != null ? 'Rodada ' + _rnum : ''));
       if (!_ngIsTeamSchedule && _ngT && window._isMultiPhase && window._isMultiPhase(_ngT) && _ngM.phaseIndex != null) {
         var _phN = (_ngT.phases && _ngT.phases[_ngM.phaseIndex] && _ngT.phases[_ngM.phaseIndex].name) || ('Fase ' + ((Number(_ngM.phaseIndex) || 0) + 1));
         _meta.push(_phN);
@@ -3001,7 +3040,9 @@ function renderDashboard(container) {
           : (match.round != null && !isNaN(Number(match.round)) ? window._matchRoundDisplayNum(tournament || null, match) : null);
         var namedRound = tournament && typeof window._canonicalElimLabelForMatch === 'function'
           ? window._canonicalElimLabelForMatch(tournament, match) : '';
-        var roundHeading = namedRound || (roundNumber != null ? 'Rodada ' + roundNumber : 'Próximo jogo');
+        var scheduledRound = _isDashboardConcentratedSchedule(tournament)
+          ? window._dashboardScheduledRoundLabel(tournament, match) : '';
+        var roundHeading = scheduledRound || namedRound || (roundNumber != null ? 'Rodada ' + roundNumber : 'Próximo jogo');
         var otherTournament = !shownTournamentNames.has(String(item.tId));
         shownTournamentNames.add(String(item.tId));
         _upHtml += '<div data-mr-card="1" class="sp-dashboard-next-extra" style="min-width:0;">' +

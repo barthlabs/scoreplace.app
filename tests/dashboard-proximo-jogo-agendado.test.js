@@ -17,6 +17,22 @@ const compare = context.window._dashboardNextMatchCompare;
 const within = context.window._dashboardWithinTournamentCompare;
 const selectNext = context.window._dashboardSelectNextMatch;
 const upcomingCards = context.window._dashboardUpcomingCards;
+const scheduledRoundLabel = context.window._dashboardScheduledRoundLabel;
+context.window._collectAllMatches = t => t.matches;
+context.window._matchCardTimeZone = () => 'America/Sao_Paulo';
+const neonSlots = ['18:00','18:35','19:10','19:45','20:20','20:55','21:30','22:05'];
+const neonSchedule = { matches: neonSlots.flatMap((time, round) =>
+  Array.from({ length: 6 }, (_, court) => ({
+    id: `${round}-${court}`, round: round + 1,
+    scheduledAt: `2026-10-23T${time}:00-03:00`
+  }))) };
+assert.equal(scheduledRoundLabel(neonSchedule, { round: 5, scheduledAt:'2026-10-23T21:30:00-03:00' }),
+  'Rodada 7', 'rodada da dashboard segue o horário publicado, mesmo se o ordinal interno diverge');
+assert.equal(scheduledRoundLabel(neonSchedule, { round: 6, scheduledAt:'2026-10-23T22:05:00-03:00' }),
+  'Rodada 8', 'último horário do segundo dia é R8');
+neonSchedule.matches.push({ id:'dia-anterior', scheduledAt:'2026-10-22T18:00:00-03:00' });
+assert.equal(scheduledRoundLabel(neonSchedule, neonSchedule.matches.at(-1)), 'Rodada 1',
+  'a numeração da grade reinicia no outro dia');
 const entry = (m, tId) => ({ item: { m, tId } });
 const friday = entry({ id: 'neon-friday', round: 1, _gameNum: 20,
   p1: 'Dupla A', p2: 'Dupla B', scheduledAt: '2026-10-23T18:00:00-03:00', scheduledKind: 'organizer' }, 'neon');

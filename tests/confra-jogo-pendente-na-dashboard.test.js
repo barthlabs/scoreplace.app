@@ -40,8 +40,8 @@ ok(slotContext.window._directBracketSlotLabel({ matches: [] }, target, 'p2') ===
 ok(dash.includes('window._directBracketSlotLabel(tRef, item.m, side)') &&
   dash.includes("_sf(sourceLabel || 'a definir')") &&
   dash.includes('window._directBracketSlotLinkHtml(tRef, item.m, side)'), 'dashboard consome origem canônica, link e fallback honesto');
-ok(dash.includes("_meta.push(_namedRound || (_rnum != null ? 'Rodada ' + _rnum : ''))"),
-  'meta usa o nome da fase antes do ordinal');
+ok(dash.includes("_meta.push(_scheduledRound || _namedRound || (_rnum != null ? 'Rodada ' + _rnum : ''))"),
+  'fora da agenda concentrada, meta preserva o nome da fase antes do ordinal');
 ok(dash.includes('_hydrateDashboardRoundLabels(_ngT)') &&
   dash.includes('recentConfirmed.concat(othersResults)') &&
   dash.includes('window._ensureTournamentLoaded(t.id') &&
