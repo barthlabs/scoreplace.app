@@ -1,3 +1,4 @@
+// 2.5.17 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.16 — Os controles do relógio na chave aparecem como retroceder,
 // etapa/tempo e avançar, nessa ordem, com ícones circulares.
 // 2.5.15 — Após chamar o jogo para uma quadra, FF adianta o relógio para a
