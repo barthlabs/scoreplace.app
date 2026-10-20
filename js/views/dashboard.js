@@ -2809,7 +2809,7 @@ function renderDashboard(container) {
          * ⛔ Nada de reimplementar a regra aqui: seriam duas verdades pro mesmo par, e é
          * exatamente assim que os dois botões divergiram entre as telas. */
         var liveBtnHtml = (!pendingScores && canLaunch)
-          ? '<button id="live-' + mId + '" class="btn btn-live btn-micro" onclick="event.stopPropagation();window._openLiveScoring(\'' + _esc(tId) + '\',\'' + _esc(mId) + '\')" style="flex-shrink:0;font-size:0.72rem;">📡 Ao Vivo</button>'
+          ? '<button id="live-' + mId + '" class="btn btn-live btn-micro" onclick="event.stopPropagation();window._openLiveScoringForMatch(\'' + _esc(tId) + '\',\'' + _esc(mId) + '\')" style="flex-shrink:0;font-size:0.72rem;">📡 Ao Vivo</button>'
           : '';
         var confirmBtnHtml = (!pendingScores && canLaunch)
           ? '<button id="confirm-' + mId + '" data-confirm-for="' + _esc(mId) + '" class="btn btn-success btn-micro" onclick="event.stopPropagation();window._saveResultInline(\'' + _esc(tId) + '\',\'' + _esc(mId) + '\')" style="flex-shrink:0;font-size:0.72rem;display:none;">✓ Confirmar</button>'

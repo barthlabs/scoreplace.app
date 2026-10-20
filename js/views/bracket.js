@@ -7902,7 +7902,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // digitado à mão É a declaração de que ninguém acompanhou ao vivo. Por isso o botão
   // ganha `id`: sem ele a sincronização não teria como alcançá-lo.
   const liveBtn = (_canScoreLive && !_setsEmCurso)
-    ? `<button id="live-${m.id}" class="btn btn-live btn-micro" onclick="window._openLiveScoring('${_esc(tId)}','${_esc(m.id)}')" style="flex-shrink:0;font-size:0.72rem;" title="${_t('bracket.liveScore')}">${_t('bracket.liveBtn')}</button>`
+    ? `<button id="live-${m.id}" class="btn btn-live btn-micro" onclick="window._openLiveScoringForMatch('${_esc(tId)}','${_esc(m.id)}')" style="flex-shrink:0;font-size:0.72rem;" title="${_t('bracket.liveScore')}">${_t('bracket.liveBtn')}</button>`
     : '';
 
   // v2.4.1: presença PEER — em torneio onde os JOGADORES lançam o placar

@@ -1,3 +1,5 @@
+// 2.5.12 — No desktop, Ao Vivo abre o controle em outra janela e mantém a
+// chave disponível. O controle carrega os atletas do jogo clicado por UID.
 // 2.5.11 — O cronômetro da quadra no NO AR mostra "Chamado hh:mm:ss" após
 // confirmar a chamada; cada fase reinicia a contagem: Aquecimento, Tempo de
 // jogo; Atrasado fica vermelho e continua a mesma contagem do jogo.

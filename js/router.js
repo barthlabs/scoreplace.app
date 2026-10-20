@@ -521,6 +521,12 @@ function initRouter() {
         break;
       case 'tournament':
       case 'tournaments':
+        // Janela independente do placar ao vivo: a própria rota hidrata o jogo,
+        // depois abre o controle com os perfis atuais dos quatro atletas.
+        var _liveParam = hash.match(/[?&]live=([^&]+)/);
+        if (cleanParam && _liveParam && typeof window._openLiveScoringFromRoute === 'function') {
+          try { window._openLiveScoringFromRoute(cleanParam, decodeURIComponent(_liveParam[1])); } catch (_eLive) {}
+        }
         /* ⭐ O OUVINTE DOS JOGOS SEGUE A TELA ABERTA (2.0.112).
          * É aqui que a divisão passa a VALER: com a chave aberta, um ponto de placar
          * entrega o jogo que mudou (~1 KB) em vez do torneio inteiro (214 KB) — e esse eco

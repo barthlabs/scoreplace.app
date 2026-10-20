@@ -4066,6 +4066,95 @@ window._resolveLiveScoring = function(rawSc, sportName) {
   return sc;
 };
 
+// O botão da chave abre um controle independente no desktop. A rota da nova janela
+// lê o próprio jogo do torneio; não transporta nomes ou placar por URL.
+window._openLiveScoringForMatch = function(tId, matchId) {
+  var desktop = typeof window.matchMedia === 'function' &&
+    window.matchMedia('(pointer: fine)').matches && window.screen && window.screen.width >= 900 &&
+    !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  if (desktop) {
+    var url = window.location.origin + window.location.pathname + '#tournaments/' +
+      encodeURIComponent(String(tId)) + '?live=' + encodeURIComponent(String(matchId));
+    var popup = window.open(url, 'scoreplace-live-' + String(tId) + '-' + String(matchId),
+      'popup=yes,width=1180,height=820,resizable=yes,scrollbars=yes');
+    if (popup) {
+      popup.focus();
+      // Se a janela já existia e o usuário fechou só o controle, o mesmo botão
+      // reabre o jogo sem exigir que ele feche e recrie a janela.
+      try {
+        if (popup.location && popup.location.href === url && popup._openLiveScoringFromRoute)
+          popup._openLiveScoringFromRoute(tId, matchId, true);
+      } catch (_ePopup) {}
+      return;
+    }
+    if (window._toast) window._toast('Janela bloqueada pelo navegador; abrindo o placar aqui.', 'warning');
+  }
+  window._openLiveScoringFromRoute(tId, matchId, true);
+};
+
+window._openLiveScoringFromRoute = function(tId, matchId, force) {
+  var key = String(tId) + '/' + String(matchId);
+  if (window._liveScoringOpeningKey === key ||
+      (!force && window._liveScoringOpenedKey === key)) return;
+  window._liveScoringOpeningKey = key;
+  var deadline = Date.now() + 30000;
+  function ready() {
+    var t = window._findTournamentById && window._findTournamentById(tId);
+    var m = t && window._findMatch && window._findMatch(t, matchId);
+    if (!m) {
+      if (Date.now() < deadline) { setTimeout(ready, 200); return; }
+      window._liveScoringOpeningKey = null;
+      if (window._toast) window._toast('Não foi possível carregar este jogo.', 'error');
+      return;
+    }
+    var user = window.AppStore && window.AppStore.currentUser;
+    if (!user && !window._authStateResolved && Date.now() < deadline) {
+      setTimeout(ready, 200);
+      return;
+    }
+    var isOrganizer = !!(window._souOrganizador && window._souOrganizador(t));
+    var isPlayer = !!(user && window._userTeamInMatch && window._userTeamInMatch(t, m, user) > 0 &&
+      window._resultEntryIncludes && window._resultEntryIncludes(t, 'players', m));
+    var isReferee = !!(user && Array.isArray(t.arbitros) && t.arbitros.some(function(a) {
+      return a && a.uid === user.uid && a.status === 'confirmed';
+    }) && window._resultEntryIncludes && window._resultEntryIncludes(t, 'referee', m));
+    if (!isOrganizer && !isPlayer && !isReferee) {
+      window._liveScoringOpeningKey = null;
+      if (window._toast) window._toast('Você não pode operar o placar deste jogo.', 'error');
+      return;
+    }
+    var uids = [];
+    ['p1', 'p2'].forEach(function(side) {
+      var slot = window._slotUidsPositional ? window._slotUidsPositional(m, side, t) :
+        (side === 'p1' ? (m.team1Uids || [m.p1Uid]) : (m.team2Uids || [m.p2Uid]));
+      uids = uids.concat(Array.isArray(slot) ? slot : [slot]);
+    });
+    var preload = window._preloadUserProfiles ? window._preloadUserProfiles(uids.filter(Boolean)) : Promise.resolve();
+    Promise.resolve(preload).catch(function() {}).then(function() {
+      window._liveScoringOpeningKey = null;
+      window._liveScoringOpenedKey = key;
+      window._openLiveScoring(tId, matchId);
+    });
+  }
+  ready();
+};
+
+window._liveScoringSidePlayers = function(t, m, side) {
+  var raw = String(m[side] || '');
+  var parts = raw.split(' / ').map(function(x) { return x.trim(); });
+  var slot = window._slotUidsPositional ? window._slotUidsPositional(m, side, t) : [];
+  if (!Array.isArray(slot) || !slot.length) return parts.filter(Boolean);
+  return slot.map(function(uid, i) {
+    if (!uid) return parts[i] || '';
+    var live = window._nameForUid && window._nameForUid(uid);
+    return live || ((parts[i] && !(window._isOrphanLabel && window._isOrphanLabel(parts[i])))
+      ? parts[i] : 'Jogador ' + (side === 'p1' ? i + 1 : i + 3));
+  });
+};
+window._liveScoringSideNames = function(t, m, side) {
+  return window._liveScoringSidePlayers(t, m, side).join(' / ');
+};
+
 window._openLiveScoring = function(tId, matchId, opts) {
   var isCasual = !!(opts && opts.casual);
   // ⚠️ O TÉCNICO NÃO JOGA — e esta declaração é o que faz a âncora do time azul
@@ -4158,6 +4247,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // v2.8.20: completa campos faltantes do GSM (ex.: countingType) pelo padrão do esporte —
   // mesma canonização do casual; nunca rebaixa GSM já configurado pra numeric.
   if (!isCasual) { sc = window._resolveLiveScoring(sc, t.sport); useSets = sc.type === 'sets'; }
+  // O rótulo canônico da vaga continua em m.p1/m.p2 para gravar o resultado.
+  // Só os nomes mostrados no controle vêm dos perfis vivos dos UIDs do jogo.
   var p1Name = isCasual ? (opts.p1Name || '') : (m.p1 || '');
   var p2Name = isCasual ? (opts.p2Name || '') : (m.p2 || '');
   var casualTitle = isCasual ? (opts.title || (typeof _t === 'function' ? _t('casual.title') : 'Partida Casual')) : '';
@@ -4201,8 +4292,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
     return s.indexOf('/') > 0 ? s.split('/').map(function(x){return x.trim();}).filter(Boolean) : (s.trim() ? [s.trim()] : []);
   }
   var _roster = _timesDoRoster();
-  var p1Players = _roster ? _roster.t1 : _fatiaNome(p1Name);
-  var p2Players = _roster ? _roster.t2 : _fatiaNome(p2Name);
+  var p1Players = _roster ? _roster.t1 : (isCasual ? _fatiaNome(p1Name) : window._liveScoringSidePlayers(t, m, 'p1'));
+  var p2Players = _roster ? _roster.t2 : (isCasual ? _fatiaNome(p2Name) : window._liveScoringSidePlayers(t, m, 'p2'));
   var isDoubles = p1Players.length > 1 || p2Players.length > 1 || !!(opts && opts.isDoubles);
 
   // NOME NO PLACAR = SÓ O PRIMEIRO NOME — regra do dono. O sobrenome só entra

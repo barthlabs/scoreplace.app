@@ -830,6 +830,7 @@ const SUITES = [
   'tests/double-elim.test.js',
   'tests/repechage.test.js',
   'tests/live-scoring-resolve.test.js',
+  'tests/live-scoring-window.test.js',
   'tests/sport-rules-canonical.test.js',
   'tests/advantage-sport-derived.test.js',
   'tests/sport-scoring-rules.test.js',
