@@ -34,12 +34,14 @@ function ok(c, m) { if (c) { console.log('  ✓ ' + m); return; } falhas++; cons
 
 const replay = fs.readFileSync(path.join(ROOT, 'js', 'views', 'match-replay.js'), 'utf8');
 const bui = fs.readFileSync(path.join(ROOT, 'js', 'views', 'bracket-ui.js'), 'utf8');
+const tv = fs.readFileSync(path.join(ROOT, 'js', 'views', 'tv-live.js'), 'utf8');
 
 console.log('\nO REPLAY APARECE — MESMO COM ALGO EM TELA CHEIA');
 
-// a premissa: alguma tela realmente entra em tela cheia (se sair, a regra perde sentido)
-ok(/requestFullscreen|webkitRequestFullscreen/.test(bui),
-   'o app entra em tela cheia em algum ponto (a premissa desta regra)');
+// A saída NO AR agora entra em tela cheia numa janela própria. O placar/replay
+// continua na janela principal e não disputa a subárvore fullscreen da TV.
+ok(/requestFullscreen/.test(tv) && /window\.open\(/.test(tv),
+   'a saída NO AR usa tela cheia em janela separada');
 
 // ── O caminho de hoje: uma tela só ────────────────────────────────────────────
 // `_openLiveScoring` remove o overlay anterior e cria o SEU, que é o que o usuário

@@ -83,19 +83,19 @@ ok(posTorneio > -1 && posTimer > -1 && posTorneio < posTimer,
 // ── 4. NUNCA USAR FOTO DO LOCAL COMO FUNDO DE TORNEIO ─────────────────────────
 // REGRA CANÔNICA: a imagem do card pertence ao torneio. O local não é fallback
 // visual e nem pode iniciar tráfego para Google Places ao renderizar a dashboard,
-// a lista, o detalhe ou o Modo TV.
+// a lista ou o detalhe. A saída NO AR usa apenas o logo do torneio.
 const dashboard = RENDERIZADORES[0][1];
 const lista = RENDERIZADORES[1][1];
 const criacao = ler('js/views/create-tournament.js');
-const tv = ler('js/views/bracket-ui.js');
+const tv = ler('js/views/tv-live.js');
 const progresso = ler('js/views/tournaments-utils.js');
 ok(!/data-vphoto-pid/.test(dashboard) && !/data-vphoto-pid/.test(lista) && !/data-vphoto-pid/.test(tv),
-   'cards, lista e Modo TV não marcam foto do local como fundo');
+   'cards, lista e NO AR não marcam foto do local como fundo');
 ok(!/_hydrateVenuePhotos\(document\)/.test(kick),
    'o observador de cards não busca foto do local');
 ok(!/place\.photos|\.getURI\(/.test(criacao),
    'a seleção de local não importa foto do Google Places');
-ok(/_tourCoverSrc/.test(dashboard) && /_tourCoverSrc/.test(lista) && /_tourCoverSrc/.test(tv),
+ok(/_tourCoverSrc/.test(dashboard) && /_tourCoverSrc/.test(lista) && /_tourLogoSrc/.test(tv),
    'capa própria continua sendo a única imagem de fundo possível');
 ok(/_tournamentCardSolidBackground/.test(store) && /#111827/.test(store),
    'sem capa o card usa fundo sólido neutro (ou cor de marca atenuada)');
