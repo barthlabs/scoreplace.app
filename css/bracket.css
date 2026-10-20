@@ -175,8 +175,8 @@ summary::-webkit-details-marker { display: none; }
 .sp-match-clock-action:disabled { opacity:.45; cursor:wait; }
 .sp-court-occupied { color:#9ca3af; background:#374151; }
 .sp-match-card[data-bracket-complete="1"] { align-self:start; }
-[data-tv-live-button]::before { content:""; display:inline-block; width:.55em; height:.55em; margin-right:.4em; border-radius:50%; background:#fca5a5; vertical-align:middle; }
-[data-tv-live-button][aria-pressed="true"]::before { background:#fff; box-shadow:0 0 0 2px #ef4444,0 0 8px #fff; animation:sp-tv-rec 1s steps(1,end) infinite; }
+[data-tv-live-button]::before { content:""; display:inline-block; width:.55em; height:.55em; margin-right:.4em; border-radius:50%; background:#7f1d1d; vertical-align:middle; }
+[data-tv-live-button][aria-pressed="true"]::before { background:#ef4444; box-shadow:0 0 0 2px #7f1d1d,0 0 10px #ef4444; animation:sp-tv-rec 1s steps(1,end) infinite; }
 @keyframes sp-tv-rec { 50% { opacity:.15; } }
 @media (prefers-reduced-motion: reduce) { [data-tv-live-button][aria-pressed="true"]::before { animation:none; } }
 .sp-match-phase-call { color: #38bdf8; }
