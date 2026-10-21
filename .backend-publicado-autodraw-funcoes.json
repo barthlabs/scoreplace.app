@@ -150,6 +150,18 @@
       "deployedAt": "2026-10-20T17:21:14.521Z",
       "result": "success",
       "mode": "only"
+    },
+    "applyTournamentWO": {
+      "backendCommit": "dfd6f12f9de1643a48e1ffbf0be3e92f8ce48105",
+      "deployedAt": "2026-10-21T19:42:02.144Z",
+      "result": "success",
+      "mode": "only"
+    },
+    "previewTournamentTeamWO": {
+      "backendCommit": "dfd6f12f9de1643a48e1ffbf0be3e92f8ce48105",
+      "deployedAt": "2026-10-21T19:42:02.144Z",
+      "result": "success",
+      "mode": "only"
     }
   }
 }
