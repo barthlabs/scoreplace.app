@@ -1,4 +1,3 @@
-/* Faixa da chave em DOM de navegador, com stubs para modelo, relógio e gravação. */
 'use strict';
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -12,136 +11,147 @@ assert(start > 0 && end > start);
   const browser = await chromium.launch();
   try {
     const page = await browser.newPage();
-    await page.setContent('<main id="view-container"><section id="tourn-grid-container">Torneio</section><nav data-bracket-tabs-root="1" data-tournament-id="sb_test"></nav><section id="rounds"><article class="sp-match-card" id="card-m1"><div class="sp-mc-sc" id="score-p1-m1"><input id="s1-m1"></div><div class="sp-mc-sc" id="score-p2-m1"><input id="s2-m1"></div><button id="confirm-m1" data-confirm-for="m1" style="display:none">Confirmar</button></article><article class="sp-match-card" id="card-m2"><div class="sp-mc-sc" id="score-p1-m2"><input id="s1-m2-0"><input id="s1-m2-1"></div><div class="sp-mc-sc" id="score-p2-m2"><input id="s2-m2-0"><input id="s2-m2-1"></div><button id="confirm-m2" data-confirm-for="m2" style="display:none">Confirmar</button></article><article class="sp-match-card" id="card-m3"></article></section></main>');
+    await page.setContent('<main id="view-container"><section id="tourn-grid-container"></section><nav data-bracket-tabs-root="1" data-tournament-id="sb_test"></nav><section id="rounds"><article id="card-m2" class="sp-match-card"></article></section></main>');
     await page.addScriptTag({ content: source.slice(start, end) });
     const state = await page.evaluate(() => {
       window._matchCardTimestamp = value => value ? Date.parse(value) : 0;
-      window._spCourtClockHtml = (start, t, now, tid, mid, controls) => '<span class="sp-match-court-clock"><span class="sp-match-call-timer" data-start-ms="' + start + '">00:00:00</span>' + (controls ? '<button type="button" class="sp-match-clock-action">REW</button><button type="button" class="sp-match-clock-action">FF</button>' : '') + '</span>';
       window._bracketSyncRoundHeadingOffsets = () => {};
-      window.ScoreplaceCourtOccupancy = {
-        isFinished: m => !!(m.resultAt || m.winner != null || m.wo),
-        occupiesCourt: m => !!(m.court && (m.courtCalledAt || m.startedAt) && !m.resultAt && !m.winner && !m.wo)
-      };
+      window.ScoreplaceCourtOccupancy = { isFinished: m => !!m.resultAt, occupiesCourt: m => !!(m.court && m.courtCalledAt && !m.resultAt) };
       window.ScoreplaceNextMatch = { knownSide: value => !!value && value !== 'TBD' };
-      window._dashboardNextMatchCompare = (a, b) => Date.parse(a.item.m.scheduledAt) - Date.parse(b.item.m.scheduledAt) || a.item.m._gameNum - b.item.m._gameNum;
-      window._collectAllMatches = t => t.phases.flatMap(phase => phase.matches);
+      window._collectAllMatches = t => t.matches;
       window._isConcentratedTournament = () => true;
-      window._safeHtml = text => String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+      window._safeHtml = value => String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
       window.AppStore = { currentUser: { uid: 'org' } };
-      window._isUserAuthority = (t, u) => ['org', 'ref', 'legacy'].includes(u.uid);
-      window._souOrganizador = () => ['org', 'legacy'].includes(window.AppStore.currentUser.uid);
-      window._saveResultInline = (tid, mid) => { window.savedScores = [...document.getElementById('card-' + mid).querySelectorAll('input')].map(input => input.value); };
-      document.getElementById('rounds').addEventListener('input', event => {
-        const card = event.target.closest('.sp-match-card');
-        if (card) card.querySelector('button[data-confirm-for]').style.display = [...card.querySelectorAll('input')].every(input => input.value !== '') ? '' : 'none';
-      });
-      const t = { id: 'sb_test', creatorUid: 'org', adminUids: ['org'], _nJogos: 3, courtNames: ['Quadra 4', 'Quadra 5'], matches: [
-        { id: 'm1', _gameNum: 1, p1: 'A', p2: 'B', category: 'Light', scheduledAt: '2026-10-22T18:00:00Z', court: 'Quadra 5' },
-        { id: 'm2', _gameNum: 2, p1: 'C', p2: 'D', category: 'Light', scheduledAt: '2026-10-22T18:35:00Z', court: 'Quadra 4' },
-        { id: 'm3', _gameNum: 3, p1: 'E', p2: 'F', category: 'Power', scheduledAt: '2026-10-22T19:10:00Z', court: 'Quadra 5' }
+      window._isUserAuthority = (t, u) => ['org', 'ref'].includes(u.uid);
+      window._souOrganizador = () => window.AppStore.currentUser.uid === 'org';
+      window._resultEntryIncludes = () => true;
+      window.renderMatchCard = (m, canEnter, tid, num, compact, pending, opts) => _bracketScopeReplicaHtml(
+        '<article class="sp-match-card" id="card-' + m.id + '"><div class="sp-mc-head">JOGO ' + num +
+        '<button id="live-' + m.id + '" onclick="window._openLiveScoringForMatch()">📡 Ao Vivo</button>' +
+        '<button class="wo-action" onclick="window._woOpenClaim()">Aplicar W.O.</button>' +
+        '<button class="open-action" onclick="window._editResultInline()">Editar</button>' +
+        '<button id="confirm-' + m.id + '" data-confirm-for="' + m.id + '" style="display:none" onclick="window._irrelevant()">✓ Confirmar</button></div>' +
+        '<div class="team"><strong>TIME A</strong><span>' + m.p1 + '</span><label for="s1-' + m.id + '">Placar</label><input id="s1-' + m.id + '" oninput="window._irrelevant()"></div>' +
+        '<div class="versus">VS</div><div class="team"><strong>TIME B</strong><span>' + m.p2 + '</span><input id="s2-' + m.id + '" oninput="window._irrelevant()"></div>' +
+        '<div class="sp-match-operational"><label class="sp-match-court"><select data-persisted-court="' + m.court + '"><option>' + m.court + '</option></select></label>' +
+        '<button class="sp-match-confirm">OK</button>' + (m.courtCalledAt ? '<button class="sp-match-clock-action sp-match-clock-next">FF</button><span class="sp-match-call-timer">00:01</span>' : '') +
+        '</div></article>', opts.idScope);
+      const t = { id: 'sb_test', creatorUid: 'org', _nJogos: 2, courtNames: ['Quadra 4', 'Quadra 5'], matches: [
+        { id: 'm1', _gameNum: 1, p1: 'A / B', p2: 'C / D', scheduledAt: '2026-10-22T18:00:00Z', court: 'Quadra 5' },
+        { id: 'm2', _gameNum: 2, p1: 'E / F', p2: 'G / H', scheduledAt: '2026-10-22T18:35:00Z', court: 'Quadra 4' }
       ] };
-      t.phases = [{ matches: t.matches.slice(0, 2) }, { matches: t.matches.slice(2) }];
+      window._findTournamentById = () => t;
+      window._openLiveScoringForMatch = (tid, mid) => { window.live = [tid, mid]; };
+      window._woOpenClaim = (tid, key) => { window.wo = [tid, key]; };
+      window._bracketOperationsOpen = (tid, mid) => { window.opened = [tid, mid]; };
+      window._saveResultInline = (tid, mid, card) => { window.saved = [tid, mid, ...[...card.querySelectorAll('input[data-operations-source-input]')].map(input => input.value)]; };
+      window._confirmMatchCourtCall = (button, tid, mid) => {
+        window.called = [tid, mid, button.closest('.sp-match-operational').querySelector('select').value];
+        t.matches.find(m => m.id === mid).courtCalledAt = '2026-10-22T18:01:00Z';
+        window._bracketOperationsRefresh(t, root);
+      };
+      window._adjustMatchCourtClock = (button, tid, mid, action) => { window.clock = [tid, mid, action]; };
       const root = document.querySelector('[data-bracket-tabs-root]');
       root._bracketCardsScope = document.getElementById('view-container');
-      const general = document.createElement('section');
-      general.setAttribute('data-bracket-general-view', '1');
-      document.getElementById('tourn-grid-container').insertAdjacentElement('afterend', general);
-      root._bracketGeneralView = general;
-      window._bracketOperationsRefresh(t, root);
+      root._bracketGeneralView = document.createElement('section');
+      document.getElementById('tourn-grid-container').after(root._bracketGeneralView);
       window._bracketOperationsRefresh(t, root);
       const strip = root._bracketOperationsStrip;
-      const initial = {
-        next: strip.querySelector('.sp-operations-next [data-operations-match]').getAttribute('data-operations-match'),
-        courts: [...strip.querySelectorAll('.sp-operations-court-free strong')].map(n => n.textContent),
-        cardBorder: document.getElementById('card-m1').style.border,
-        order: strip.previousElementSibling.id === 'tourn-grid-container' && general.previousElementSibling === strip,
-        oneStrip: document.querySelectorAll('[data-bracket-operations-strip]').length === 1,
-        oneGeneral: document.querySelectorAll('[data-bracket-general-view]').length === 1,
-        noDuplicateIds: document.querySelectorAll('#card-m1').length === 1 && !strip.querySelector('[id], input'),
-        orgLabel: strip.querySelector('.sp-operations-next').textContent.includes('PRÓXIMO A CHAMAR')
-      };
-      t.matches[0].courtCalledAt = '2026-10-22T18:01:00Z';
+      let next = strip.querySelector('.sp-operations-next .sp-match-card');
+      const ids = [...document.querySelectorAll('[id]')].map(node => node.id);
+      const initial = { full: !!next && next.querySelectorAll('.team').length === 2 && !!next.querySelector('.sp-mc-head, .versus, .sp-match-operational'),
+        names: next.textContent.includes('A / B') && next.textContent.includes('C / D'),
+        noCanonical: !document.getElementById('card-m1'), uniqueIds: ids.length === new Set(ids).size,
+        linked: next.querySelector('label[for]').htmlFor === next.querySelector('input').id,
+        noInline: !next.querySelector('[onclick], [oninput]'),
+        courts: [...strip.querySelectorAll('.sp-operations-court-free strong')].map(node => node.textContent) };
+      next.querySelector('select').focus();
       window._bracketOperationsRefresh(t, root);
-      const op1 = strip.querySelector('.sp-operations-court-card[data-operations-match="m1"]');
-      const first = op1.querySelector('[data-operations-source-input="s1-m1"]');
-      first.value = '6'; first.dispatchEvent(new Event('input', { bubbles: true }));
-      const second = op1.querySelector('[data-operations-source-input="s2-m1"]');
-      second.value = '3'; second.dispatchEvent(new Event('input', { bubbles: true }));
-      const confirmVisible = !op1.querySelector('.sp-operations-confirm').hidden;
-      op1.querySelector('.sp-operations-confirm').click();
-      const simpleScore = window.savedScores;
-      const oldCard = document.getElementById('card-m1');
-      const freshCard = oldCard.cloneNode(true);
-      freshCard.querySelectorAll('input').forEach(input => { input.value = ''; });
-      oldCard.replaceWith(freshCard);
+      const selectFocusRestored = document.activeElement === strip.querySelector('.sp-operations-next select');
+      next = strip.querySelector('.sp-operations-next .sp-match-card');
+      next.querySelector('[id*="-live-"]').click();
+      next.querySelector('.wo-action').click();
+      next.querySelector('.open-action').click();
+      next.querySelector('.sp-match-confirm').click();
+      const court = strip.querySelector('.sp-operations-court-slot:nth-child(2) .sp-operations-replica');
+      const fields = [...court.querySelectorAll('input[data-operations-source-input]')];
+      fields[0].value = '6'; fields[0].dispatchEvent(new Event('input', { bubbles: true }));
+      fields[1].value = '3'; fields[1].dispatchEvent(new Event('input', { bubbles: true }));
+      const confirmVisible = court.querySelector('[data-confirm-for]').style.display !== 'none';
+      court.querySelector('[data-confirm-for]').click();
+      court.querySelector('.sp-match-clock-next').click();
       window._bracketOperationsRefresh(t, root);
-      const keptDraft = strip.querySelector('[data-operations-source-input="s1-m1"]').value;
-      const restoredCanonical = document.getElementById('s1-m1').value;
-      const afterCall = {
-        next: strip.querySelector('.sp-operations-next [data-operations-match]').getAttribute('data-operations-match'),
-        occupiedCourt: strip.querySelectorAll('.sp-operations-court-slot')[1].querySelector('[data-operations-match]').getAttribute('data-operations-match'),
-        freeCourt: strip.querySelectorAll('.sp-operations-court-slot')[0].textContent.includes('Livre'),
-        greenCard: document.getElementById('card-m1').style.border.includes('22c55e'),
-        clock: !!op1.querySelector('.sp-match-call-timer'),
-        rewind: op1.querySelectorAll('.sp-match-clock-action').length === 2,
-        confirmVisible, simpleScore, keptDraft, restoredCanonical,
-        uniqueScores: document.querySelectorAll('#s1-m1').length === 1 && !strip.querySelector('[id^="s1-"], [id^="s2-"], [id^="confirm-"]')
-      };
-      t.matches[1].courtCalledAt = '2026-10-22T18:40:00Z';
-      window._bracketOperationsRefresh(t, root);
-      const op2 = strip.querySelector('.sp-operations-court-card[data-operations-match="m2"]');
-      for (const [id, value] of [['s1-m2-0', '6'], ['s2-m2-0', '4'], ['s1-m2-1', '6'], ['s2-m2-1', '2']]) {
-        const input = op2.querySelector('[data-operations-source-input="' + id + '"]');
-        input.value = value; input.dispatchEvent(new Event('input', { bubbles: true }));
-      }
-      op2.querySelector('.sp-operations-confirm').click();
-      const multiScore = window.savedScores;
-      const fixedCourtOrder = [...strip.querySelectorAll('.sp-operations-court-slot [data-operations-match]')].map(n => n.getAttribute('data-operations-match'));
-      t.matches[0].resultAt = '2026-10-22T19:00:00Z';
-      t.matches[0].winner = 'A';
-      window._bracketOperationsRefresh(t, root);
-      const afterResult = {
-        court5Free: strip.querySelectorAll('.sp-operations-court-slot')[1].textContent.includes('Livre'),
-        next: strip.querySelector('.sp-operations-next [data-operations-match]').getAttribute('data-operations-match')
-      };
-      document.getElementById('card-m2').remove();
-      window._bracketOperationsRefresh(t, root);
-      const absentCanonical = {
-        open: !strip.querySelector('.sp-operations-court-card .sp-operations-open').hidden,
-        noInputs: !strip.querySelector('.sp-operations-court-card input'),
-        noConfirm: strip.querySelector('.sp-operations-court-card .sp-operations-confirm').hidden
-      };
-      window.AppStore.currentUser = { uid: 'ref' };
-      window._bracketOperationsRefresh(t, root);
-      const referee = {
-        visible: !!root._bracketOperationsStrip,
-        neutral: strip.querySelector('.sp-operations-next').textContent.includes('PRÓXIMO JOGO'),
-        noCall: !strip.textContent.includes('CHAMAR') && !strip.textContent.includes('Abrir para chamar'),
-        timerWithoutActions: !!strip.querySelector('.sp-match-call-timer') && !strip.querySelector('.sp-match-clock-action')
-      };
-      window.AppStore.currentUser = { uid: 'legacy' };
-      window._bracketOperationsRefresh(t, root);
-      const legacyNoClockActions = !strip.querySelector('.sp-match-clock-action');
+      const afterCall = { called: window.called, saved: window.saved, clock: window.clock, live: window.live, wo: window.wo,
+        opened: window.opened, confirmVisible,
+        draft: strip.querySelector('.sp-operations-court-card [data-operations-source-input="s1-m1"]').value,
+        next: strip.querySelector('.sp-operations-next [data-operations-match]').getAttribute('data-operations-match') };
       window.AppStore.currentUser = { uid: 'other' };
       window._bracketOperationsRefresh(t, root);
-      const outsiderHidden = !document.querySelector('[data-bracket-operations-strip]');
-      return { initial, afterCall, fixedCourtOrder, multiScore, afterResult, absentCanonical, referee, legacyNoClockActions, outsiderHidden };
+      return { initial, afterCall, selectFocusRestored, outsiderHidden: !document.querySelector('[data-bracket-operations-strip]') };
     });
-    assert.equal(state.initial.next, 'm1');
+    assert(state.initial.full && state.initial.names && state.initial.noCanonical && state.initial.uniqueIds && state.initial.linked && state.initial.noInline);
     assert.deepEqual(state.initial.courts, ['Quadra 4', 'Quadra 5']);
-    assert.match(state.initial.cardBorder, /fbbf24/);
-    assert(state.initial.order && state.initial.oneStrip && state.initial.oneGeneral && state.initial.noDuplicateIds && state.initial.orgLabel);
+    assert.deepEqual(state.afterCall.called, ['sb_test', 'm1', 'Quadra 5']);
+    assert.deepEqual(state.afterCall.live, ['sb_test', 'm1']);
+    assert.deepEqual(state.afterCall.wo, ['sb_test', 'm|m1']);
+    assert.deepEqual(state.afterCall.opened, ['sb_test', 'm1']);
+    assert.deepEqual(state.afterCall.saved, ['sb_test', 'm1', '6', '3']);
+    assert.deepEqual(state.afterCall.clock, ['sb_test', 'm1', 'next']);
+    assert(state.afterCall.confirmVisible && state.outsiderHidden && state.selectFocusRestored);
+    assert.equal(state.afterCall.draft, '6');
     assert.equal(state.afterCall.next, 'm2');
-    assert.equal(state.afterCall.occupiedCourt, 'm1');
-    assert(state.afterCall.freeCourt && state.afterCall.greenCard && state.afterCall.clock && state.afterCall.rewind && state.afterCall.confirmVisible && state.afterCall.uniqueScores);
-    assert.deepEqual(state.afterCall.simpleScore, ['6', '3']);
-    assert.equal(state.afterCall.keptDraft, '6');
-    assert.equal(state.afterCall.restoredCanonical, '6');
-    assert.deepEqual(state.multiScore, ['6', '6', '4', '2']);
-    assert.deepEqual(state.fixedCourtOrder, ['m2', 'm1']);
-    assert.deepEqual(state.afterResult, { court5Free: true, next: 'm3' });
-    assert(state.absentCanonical.open && state.absentCanonical.noInputs && state.absentCanonical.noConfirm);
-    assert(state.referee.visible && state.referee.neutral && state.referee.noCall && state.referee.timerWithoutActions && state.legacyNoClockActions && state.outsiderHidden);
-    console.log('✓ faixa operacional: quadras fixas, placar simples e múltiplo, relógio, papéis e IDs únicos');
+    const bestOfThree = await page.evaluate(() => {
+      const op = document.createElement('div');
+      op.innerHTML = '<button data-confirm-for="m3" style="display:none">✓</button>' +
+        [0, 1, 2].map(i => '<input data-operations-source-input="s1-m3-' + i + '"><input data-operations-source-input="s2-m3-' + i + '">').join('');
+      const fields = [...op.querySelectorAll('input')];
+      fields[0].value = '6'; fields[1].value = '2';
+      fields[2].value = '6'; fields[3].value = '4';
+      _bracketOperationsSyncReplicaScore(op, 'm3');
+      const twoSetWin = op.querySelector('button').style.display !== 'none';
+      fields[2].value = '4'; fields[3].value = '6';
+      _bracketOperationsSyncReplicaScore(op, 'm3');
+      const splitNeedsThird = op.querySelector('button').style.display === 'none';
+      fields[4].value = '10'; fields[5].value = '8';
+      _bracketOperationsSyncReplicaScore(op, 'm3');
+      return { twoSetWin, splitNeedsThird, thirdUnlocks: op.querySelector('button').style.display !== 'none' };
+    });
+    assert.deepEqual(bestOfThree, { twoSetWin: true, splitNeedsThird: true, thirdUnlocks: true });
+    // Exercita também o renderizador real: a faixa não pode passar apenas no
+    // stub se uma mudança futura quebrar o caminho opts.idScope.
+    const real = await browser.newPage();
+    try {
+      await real.addScriptTag({ content: source });
+      const names = [...new Set((source.slice(source.indexOf('function renderMatchCard('), source.indexOf('// ─── Highlight winner based on score'))
+        .match(/window\._[A-Za-z0-9_]+/g) || []).map(value => value.slice(7)))];
+      const rendered = await real.evaluate(names => {
+        const match = { id: 'm-real', p1: 'A / B', p2: 'C / D', category: 'Fem Light', court: 'Quadra 4', scheduledAt: '2026-10-22T18:00:00Z' };
+        const tournament = { id: 'sb_real', matches: [match], courtNames: ['Quadra 4'], format: 'Liga', scoring: { type: 'simple' } };
+        for (const name of names) if (typeof window[name] !== 'function') window[name] = () => null;
+        window.AppStore = { currentUser: { uid: 'org' }, tournaments: [tournament] };
+        window._findTournamentById = () => tournament;
+        window._safeHtml = value => String(value);
+        window._spCor = value => value;
+        window._t = value => value;
+        window._scoringUsesSets = () => false;
+        window._bracketIsPendingMatch = () => false;
+        window._isConcentratedTournament = () => true;
+        window._souOrganizador = () => true;
+        window._isUserAuthority = () => true;
+        window._matchSetPlan = () => ({ multi: false, initialTwoSetEntry: false, columns: [] });
+        const standard = document.createElement('template');
+        standard.innerHTML = window.renderMatchCard(match, true, tournament.id, 1, false, null);
+        const replica = document.createElement('template');
+        replica.innerHTML = window.renderMatchCard(match, true, tournament.id, 1, false, null, { idScope: 'operations-m-real' });
+        const a = standard.content.firstElementChild, b = replica.content.firstElementChild;
+        return { sameTeams: a.querySelectorAll('.sp-mc-sc').length === b.querySelectorAll('.sp-mc-sc').length,
+          sameStructure: a.querySelectorAll('*').length === b.querySelectorAll('*').length,
+          operational: !!a.querySelector('.sp-match-operational') === !!b.querySelector('.sp-match-operational'),
+          scoped: b.id === 'operations-m-real-card-m-real',
+          clean: !b.querySelector('[onclick],[oninput],[onchange]') };
+      }, names);
+      assert.deepEqual(rendered, { sameTeams: true, sameStructure: true, operational: true, scoped: true, clean: true });
+    } finally { await real.close(); }
+    console.log('✓ faixa replica o card completo com IDs únicos, chamada, placar e relógio');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

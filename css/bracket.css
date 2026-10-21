@@ -1,7 +1,7 @@
 /* Standings collapsible toggle (inside <details>) */
 .sp-operations-track {
   display: grid;
-  grid-template-columns: minmax(230px, 320px) minmax(0, 1fr);
+  grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
   gap: 10px;
   max-width: 100%;
   min-width: 0;
@@ -31,44 +31,13 @@
   max-width: 100%;
   scrollbar-width: thin;
 }
-.sp-operations-card {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  width: 100%;
-  min-width: 0;
-  min-height: 118px;
-  padding: 9px 10px;
-  border: 1px solid var(--border-color);
-  border-radius: 9px;
-  background: var(--bg-darker);
-  color: var(--text-bright);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.sp-operations-court-slot { display:flex;flex:0 0 245px;flex-direction:column;gap:6px;min-width:0; }
-.sp-operations-court-slot--active { flex-basis: 320px; }
-.sp-operations-court-track .sp-operations-card { flex:1 1 auto; }
-.sp-operations-court-card { box-sizing:border-box; display:flex;flex-direction:column;gap:5px;width:100%;min-width:0;padding:9px;border:2px solid var(--sp-c-22c55e,#22c55e);border-radius:9px;background:var(--bg-darker);color:var(--text-bright); }
-.sp-operations-court-head { display:flex;justify-content:space-between;gap:7px;min-width:0;font-size:.78rem; }
-.sp-operations-court-head strong { color:var(--sp-c-22c55e,#22c55e); }
-.sp-operations-court-head span { color:var(--text-muted);text-align:right; }
-.sp-operations-team { display:flex;align-items:center;gap:6px;min-width:0;min-height:38px;padding:5px 6px;border:1px solid var(--border-color);border-radius:7px;background:var(--bg-card); }
-.sp-operations-team-name { flex:1;min-width:0;overflow-wrap:anywhere;font-size:.78rem;font-weight:700;line-height:1.25; }
-.sp-operations-score { flex:none;max-width:54%;overflow-x:auto; }
-.sp-operations-score .sp-mc-sc { min-width:0; }
-.sp-operations-score input { box-sizing:border-box;max-width:100%;color:var(--text-bright);background:var(--bg-darker);border-color:var(--border-color); }
-.sp-operations-vs { text-align:center;color:var(--text-muted);font-size:.69rem;font-weight:800; }
-.sp-operations-clock { display:flex;align-items:center;gap:4px;min-width:0;overflow-x:auto;padding-top:3px; }
-.sp-operations-clock .sp-match-court { flex:none;font-size:.66rem; }
-.sp-operations-clock .sp-match-court-clock { margin-left:auto!important; }
-[data-theme="light"] .sp-operations-clock .sp-match-phase-game { color:var(--sp-c-22c55e,#166534); }
-.sp-operations-actions { display:flex;justify-content:flex-end;gap:6px; }
-.sp-operations-actions button { padding:5px 8px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-card);color:var(--text-bright);font:inherit;font-size:.74rem;font-weight:800;cursor:pointer; }
-.sp-operations-actions .sp-operations-confirm { border-color:var(--sp-c-22c55e,#22c55e);background:var(--sp-c-166534,#166534);color:#fff; }
-.sp-operations-actions button[hidden] { display:none; }
+.sp-operations-court-slot { display:flex;flex:0 0 340px;flex-direction:column;gap:6px;min-width:0; }
+.sp-operations-court-slot--active { flex-basis: 380px; }
+.sp-operations-replica { display:flex;flex-direction:column;gap:7px;min-width:0;width:100%; }
+.sp-operations-replica > .sp-match-card { width:100%;max-width:none;min-height:0; }
+.sp-operations-next .sp-operations-replica > .sp-match-card { border:3px solid var(--sp-c-fbbf24,#fbbf24)!important; }
+.sp-operations-court-slot--active .sp-operations-replica > .sp-match-card { border:3px solid var(--sp-c-22c55e,#22c55e)!important; }
+.sp-operations-replica .sp-match-call-day-hint { overflow-wrap:anywhere; }
 .sp-operations-court-free {
   display: flex;
   flex: 1 1 auto;
@@ -84,21 +53,13 @@
   font-size: .82rem;
 }
 .sp-operations-court-free span { color: var(--text-muted); }
-.sp-operations-card strong,
-.sp-operations-card .sp-operations-sides { max-width: 100%; overflow-wrap: anywhere; }
-.sp-operations-card strong { font-size: .9rem; }
 .sp-operations-label { color: var(--sp-c-fbbf24, #fbbf24); font-size: .74rem; font-weight: 800; }
 .sp-operations-courts .sp-operations-label { color: var(--sp-c-22c55e, #22c55e); }
-.sp-operations-sides { font-size: .83rem; line-height: 1.3; }
-.sp-operations-sides b { color: var(--text-muted); padding: 0 3px; }
-.sp-operations-card small { margin-top: auto; font-size: .7rem; font-weight: 750; text-decoration: underline; }
-.sp-operations-card:hover { border-color: currentColor; }
-.sp-operations-card:focus-visible { outline: 3px solid var(--sp-c-fbbf24, #fbbf24); outline-offset: 2px; }
 .sp-operations-empty { min-height: 70px; display: flex; align-items: center; color: var(--text-muted); font-size: .82rem; }
 @media (max-width: 690px) {
   .sp-operations-track { grid-template-columns: minmax(0, 1fr); }
-  .sp-operations-court-slot { flex-basis: min(78vw, 245px); }
-  .sp-operations-court-slot--active { flex-basis:min(88vw,320px); }
+  .sp-operations-court-slot { flex-basis: min(88vw, 340px); }
+  .sp-operations-court-slot--active { flex-basis:min(88vw,380px); }
 }
 details[open] > summary .standings-toggle-show { display: none; }
 details[open] > summary .standings-toggle-hide { display: inline !important; }

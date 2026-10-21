@@ -1220,93 +1220,60 @@ function _bracketReconcileOperationalOrder(root) {
   _bracketSyncRoundHeadingOffsets();
 }
 
-function _bracketOperationsCard(m, t, label, canCall) {
-  var safe = window._safeHtml || function (s) { return String(s); };
-  var name = function (slot) {
-    var raw = String(m[slot] || '');
-    var uids = typeof window._slotUidsPositional === 'function' ? window._slotUidsPositional(m, slot, t) : null;
-    return safe(typeof window._resolveSideLive === 'function' ? window._resolveSideLive(t, raw, uids) || raw : raw);
-  };
-  var number = m._gameNum || m.scheduledGameNumber || m.matchNumber || '';
-  var court = m.court ? ' · ' + safe(m.court) : '';
-  var action = canCall ? 'Abrir para chamar' : 'Abrir jogo';
-  return '<button type="button" class="sp-operations-card" data-operations-open="1" data-operations-match="' + safe(String(m.id || '')) +
-    '" aria-label="' + safe(action + ' ' + number) + '"><span class="sp-operations-label">' + safe(label) +
-    '</span><strong>JOGO ' + safe(number) + ' · ' + safe(m.category || m.tierLabel || '') + court +
-    '</strong><span class="sp-operations-sides">' + name('p1') + ' <b>vs</b> ' + name('p2') + '</span><small>' + action + '</small></button>';
-}
-
-function _bracketOperationsCourtCard(m, t, canClock) {
-  var safe = window._safeHtml || function (s) { return String(s); };
-  var name = function (slot) {
-    var raw = String(m[slot] || '');
-    var uids = typeof window._slotUidsPositional === 'function' ? window._slotUidsPositional(m, slot, t) : null;
-    return safe(typeof window._resolveSideLive === 'function' ? window._resolveSideLive(t, raw, uids) || raw : raw);
-  };
-  var id = safe(String(m.id || ''));
-  var number = m._gameNum || m.scheduledGameNumber || m.matchNumber || '';
-  var started = _matchCardTimestamp(m.courtClockBaseAt || m.courtCalledAt || m.startedAt);
-  var clock = started && typeof window._spCourtClockHtml === 'function'
-    ? window._spCourtClockHtml(started, t, Date.now(), t.id, m.id, canClock) : '';
-  return '<article class="sp-operations-court-card" data-operations-match="' + id + '">' +
-    '<div class="sp-operations-court-head"><strong>' + safe(String(m.court || '')) + ' · JOGO ' + safe(number) + '</strong>' +
-    '<span>' + safe(m.category || m.tierLabel || '') + '</span></div>' +
-    '<div class="sp-operations-team"><span class="sp-operations-team-name">' + name('p1') + '</span><div class="sp-operations-score" data-operations-score="p1"></div></div>' +
-    '<div class="sp-operations-vs">VS</div>' +
-    '<div class="sp-operations-team"><span class="sp-operations-team-name">' + name('p2') + '</span><div class="sp-operations-score" data-operations-score="p2"></div></div>' +
-    '<div class="sp-match-operational sp-operations-clock"><div class="sp-match-court sp-match-court--readonly">' + safe(String(m.court || '')) + '</div>' + clock + '</div>' +
-    '<div class="sp-operations-actions"><button type="button" class="sp-operations-confirm" hidden>✓ Confirmar</button>' +
-    '<button type="button" data-operations-open="1" class="sp-operations-open">Abrir jogo</button></div></article>';
-}
-
-function _bracketOperationsCanonical(matchId) {
-  return document.getElementById('card-' + String(matchId));
-}
-
-function _bracketOperationsCanonicalConfirm(card, matchId) {
-  return card && Array.prototype.find.call(card.querySelectorAll('button[data-confirm-for]'), function (button) {
-    return button.id === 'confirm-' + String(matchId);
+// O card da faixa nasce do MESMO renderer da chave. IDs escopados evitam que
+// qualquer ação encontre por acaso o card da rodada em outra aba.
+function _bracketScopeReplicaHtml(html, scope) {
+  var host = document.createElement('template');
+  host.innerHTML = html;
+  var card = host.content.firstElementChild;
+  if (!card) return html;
+  var ids = new Map();
+  Array.prototype.forEach.call(card.querySelectorAll('[id]'), function (node) {
+    var original = node.id;
+    ids.set(original, scope + '-' + original);
+    if (node.tagName === 'INPUT') node.setAttribute('data-operations-source-input', original);
+    node.id = scope + '-' + original;
   });
-}
-
-function _bracketOperationsSyncConfirm(op, matchId) {
-  var button = op && op.querySelector('.sp-operations-confirm');
-  var source = _bracketOperationsCanonicalConfirm(_bracketOperationsCanonical(matchId), matchId);
-  if (!button) return;
-  button.hidden = !source || source.disabled || source.style.display === 'none' ||
-    (typeof getComputedStyle === 'function' && getComputedStyle(source).display === 'none');
-  button.disabled = !source || source.disabled;
-}
-
-function _bracketOperationsRenderScore(op, matchId, draft) {
-  var card = _bracketOperationsCanonical(matchId);
-  var confirm = _bracketOperationsCanonicalConfirm(card, matchId);
-  var open = op.querySelector('.sp-operations-open');
-  ['p1', 'p2'].forEach(function (side) {
-    var target = op.querySelector('[data-operations-score="' + side + '"]');
-    var source = card && Array.prototype.find.call(card.querySelectorAll('.sp-mc-sc'), function (node) {
-      return node.id === 'score-' + side + '-' + matchId;
-    });
-    if (!target) return;
-    target.replaceChildren();
-    if (!source) return;
-    var copy = source.cloneNode(true);
-    Array.prototype.forEach.call(copy.querySelectorAll('[id], [oninput], [onchange], [onclick]'), function (node) {
-      if (node.tagName === 'INPUT' && node.id) {
-        node.setAttribute('data-operations-source-input', node.id);
-        if (draft && Object.prototype.hasOwnProperty.call(draft, node.id)) node.value = draft[node.id];
-        if (!confirm) node.disabled = true;
-      }
-      node.removeAttribute('id');
-      node.removeAttribute('oninput');
-      node.removeAttribute('onchange');
-      node.removeAttribute('onclick');
-    });
-    copy.removeAttribute('id');
-    target.appendChild(copy);
+  if (card.id) { ids.set(card.id, scope + '-' + card.id); card.id = scope + '-' + card.id; }
+  // A réplica não participa da filtragem/movimentação dos cards da chave.
+  Array.prototype.slice.call(card.attributes).forEach(function (attr) {
+    if (/^data-bracket-tab-/.test(attr.name)) card.removeAttribute(attr.name);
   });
-  if (open) open.hidden = !!confirm;
-  _bracketOperationsSyncConfirm(op, matchId);
+  Array.prototype.forEach.call(card.querySelectorAll('*'), function (node) {
+    var clickHandler = node.getAttribute('onclick') || '';
+    if (/window\._openLiveScoringForMatch\(/.test(clickHandler)) node.setAttribute('data-operations-action', 'live');
+    else if (/window\._woOpenClaim\(/.test(clickHandler)) node.setAttribute('data-operations-action', 'wo');
+    else if (/window\._openMatchReplayFromBracket\(/.test(clickHandler)) node.setAttribute('data-operations-action', 'replay');
+    else if (/window\._revertWO\(/.test(clickHandler)) node.setAttribute('data-operations-action', 'revert-wo');
+    ['for', 'aria-labelledby', 'aria-describedby', 'aria-controls', 'aria-owns'].forEach(function (attr) {
+      if (!node.hasAttribute(attr)) return;
+      node.setAttribute(attr, node.getAttribute(attr).split(/\s+/).map(function (value) { return ids.get(value) || value; }).join(' '));
+    });
+    if (node.hasAttribute('href') && node.getAttribute('href').charAt(0) === '#') {
+      var ref = node.getAttribute('href').slice(1);
+      if (ids.has(ref)) node.setAttribute('href', '#' + ids.get(ref));
+    }
+    Array.prototype.slice.call(node.attributes).forEach(function (attr) {
+      if (/^on/i.test(attr.name)) node.removeAttribute(attr.name);
+    });
+    if (clickHandler && !node.hasAttribute('data-operations-action') && !node.matches('[data-confirm-for], .sp-match-confirm, .sp-match-clock-action')) {
+      node.setAttribute('data-operations-open', '1');
+      node.setAttribute('title', (node.getAttribute('title') || '').trim() + ' · Abrir jogo na chave para esta ação');
+    }
+  });
+  card.setAttribute('data-operations-replica', '1');
+  return card.outerHTML;
+}
+
+function _bracketOperationsReplica(m, t, role, label) {
+  var safe = window._safeHtml || function (s) { return String(s); };
+  var canEnter = !!(role.canCall || (typeof window._resultEntryIncludes === 'function' &&
+    (window._resultEntryIncludes(t, 'players') || window._resultEntryIncludes(t, 'referee'))));
+  var html = typeof window.renderMatchCard === 'function'
+    ? window.renderMatchCard(m, canEnter, t.id, m._gameNum || m.scheduledGameNumber || m.matchNumber,
+      false, null, { idScope: 'operations-' + String(m.id || '') }) : '';
+  return '<div class="sp-operations-replica' + (role.active ? ' sp-operations-court-card' : '') + '" data-operations-match="' +
+    safe(String(m.id || '')) + '"><span class="sp-operations-label">' + safe(label) + '</span>' + html + '</div>';
 }
 
 function _bracketOperationsDraftValues(op) {
@@ -1315,6 +1282,56 @@ function _bracketOperationsDraftValues(op) {
     values[input.getAttribute('data-operations-source-input')] = input.value;
   });
   return values;
+}
+
+function _bracketOperationsSyncReplicaScore(op, mid, t, m) {
+  if (!op) return;
+  var inputs = Array.prototype.slice.call(op.querySelectorAll('input[data-operations-source-input]'));
+  var find = function (id) { return inputs.find(function (el) { return el.getAttribute('data-operations-source-input') === id; }); };
+  var a = find('s1-' + mid), b = find('s2-' + mid);
+  var scoreEntered = !!(a && b && a.value !== '' && b.value !== '');
+  // O primeiro lançamento de melhor de três precisa dos dois primeiros sets;
+  // o terceiro só é exigido quando cada lado venceu um. Repete a mesma regra
+  // do card da chave sem consultar IDs globais de uma aba possivelmente oculta.
+  var first = [find('s1-' + mid + '-0'), find('s2-' + mid + '-0')];
+  var second = [find('s1-' + mid + '-1'), find('s2-' + mid + '-1')];
+  if (first[0] && first[1] && second[0] && second[1]) {
+    var full = function (pair) { return pair[0].value.trim() !== '' && pair[1].value.trim() !== ''; };
+    var tied = full(first) && full(second) &&
+      ((Number(first[0].value) > Number(first[1].value)) !== (Number(second[0].value) > Number(second[1].value)));
+    var third = [find('s1-' + mid + '-2'), find('s2-' + mid + '-2')];
+    scoreEntered = full(first) && full(second) && (!tied || (third[0] && third[1] && full(third)));
+    ['1', '2'].forEach(function (side) {
+      var col = op.querySelector('[id$="stbcol-' + side + '-' + mid + '"]');
+      if (col) col.style.display = tied ? '' : 'none';
+    });
+    var label = op.querySelector('[id$="stblbl-' + mid + '"]');
+    if (label) label.style.display = tied ? '' : 'none';
+  }
+  // Os campos de tie-break acompanham o mesmo par de games dentro desta cópia.
+  var tbPairs = [[a, b, find('tb1-' + mid), find('tb2-' + mid)]];
+  [0, 1, 2].forEach(function (i) {
+    tbPairs.push([find('s1-' + mid + '-' + i), find('s2-' + mid + '-' + i),
+      find('tb1-' + mid + '-' + i), find('tb2-' + mid + '-' + i)]);
+  });
+  var scoring = t && typeof window._effectiveScoring === 'function' ? window._effectiveScoring(t, m) : t && t.scoring;
+  var trigger = scoring && scoring.tiebreakEnabled !== false && typeof window._tbLoserGames === 'function'
+    ? window._tbLoserGames(scoring, t.sport) : null;
+  tbPairs.forEach(function (pair) {
+    if (!pair[0] || !pair[1] || !pair[2] || !pair[3]) return;
+    var x = Number(pair[0].value), y = Number(pair[1].value);
+    var show = trigger != null && pair[0].value !== '' && pair[1].value !== '' &&
+      typeof window._isTiebreakSetScore === 'function' && window._isTiebreakSetScore(x, y, trigger);
+    pair[2].style.display = pair[3].style.display = show ? 'inline-block' : 'none';
+    var col = pair[2].closest('.sp-set-col[data-sp-set-index]');
+    if (col) Array.prototype.forEach.call(op.querySelectorAll('.sp-set-col[data-sp-set-index="' + col.getAttribute('data-sp-set-index') + '"]'), function (node) {
+      node.classList.toggle('sp-set-col--tb-open', show);
+    });
+  });
+  var confirm = op.querySelector('button[data-confirm-for]');
+  if (confirm) confirm.style.display = scoreEntered ? '' : 'none';
+  var live = op.querySelector('[id*="-live-' + mid + '"]');
+  if (live) live.style.display = scoreEntered ? 'none' : '';
 }
 
 function _bracketOperationsFingerprint(m) {
@@ -1344,79 +1361,68 @@ window._bracketOperationsRefresh = function (t, root) {
     existing.setAttribute('aria-label', 'Jogos que precisam de atenção');
     root._bracketOperationsStrip = existing;
     existing.addEventListener('click', function (event) {
-      var confirm = event.target && event.target.closest('.sp-operations-confirm');
-      if (confirm) {
-        var op = confirm.closest('.sp-operations-court-card');
-        var mid = op && op.getAttribute('data-operations-match');
-        var tid = String(t.id);
-        var save = window._saveResultInline;
-        var sourceCard = mid && _bracketOperationsCanonical(mid);
-        var sourceButton = _bracketOperationsCanonicalConfirm(sourceCard, mid);
-        if (!sourceCard || !sourceButton || typeof save !== 'function' || sourceButton.disabled || sourceButton.style.display === 'none' ||
-            (typeof getComputedStyle === 'function' && getComputedStyle(sourceButton).display === 'none')) return;
-        var inputs = Array.prototype.slice.call(op.querySelectorAll('input[data-operations-source-input]'));
-        var matched = inputs.length > 0 && inputs.every(function (input) {
-          var source = sourceCard && Array.prototype.find.call(sourceCard.querySelectorAll('input[id]'), function (node) {
-            return node.id === input.getAttribute('data-operations-source-input');
-          });
-          return !!source;
-        });
-        if (!matched) return;
-        inputs.forEach(function (input) {
-          var source = Array.prototype.find.call(sourceCard.querySelectorAll('input[id]'), function (node) {
-            return node.id === input.getAttribute('data-operations-source-input');
-          });
-          if (source) { source.value = input.value; source.dispatchEvent(new Event('input', { bubbles: true })); }
-        });
-        // Um handler externo pode reconstruir a chave durante `input`. Nesse
-        // caso não salvar valores de um card velho nem repetir o clique.
-        if (!sourceCard.isConnected || _bracketOperationsCanonical(mid) !== sourceCard) return;
-        sourceButton = _bracketOperationsCanonicalConfirm(sourceCard, mid);
-        if (sourceButton && !sourceButton.disabled && sourceButton.style.display !== 'none' &&
-            (typeof getComputedStyle !== 'function' || getComputedStyle(sourceButton).display !== 'none')) save(tid, mid);
-        return;
+      var op = event.target && event.target.closest('.sp-operations-replica');
+      if (!op) return;
+      var mid = op.getAttribute('data-operations-match');
+      var target = event.target.closest('button,[data-operations-action],[data-operations-open]');
+      if (!target || target.disabled) return;
+      if (target.hasAttribute('data-confirm-for')) {
+        event.preventDefault();
+        if (typeof window._saveResultInline === 'function') window._saveResultInline(String(t.id), mid, op);
+      } else if (target.classList.contains('sp-match-confirm')) {
+        event.preventDefault();
+        if (typeof window._confirmMatchCourtCall === 'function') window._confirmMatchCourtCall(target, String(t.id), mid);
+      } else if (target.classList.contains('sp-match-clock-action')) {
+        event.preventDefault();
+        if (typeof window._adjustMatchCourtClock === 'function')
+          window._adjustMatchCourtClock(target, String(t.id), mid, target.classList.contains('sp-match-clock-next') ? 'next' : 'restart');
+      } else if (target.getAttribute('data-operations-action') === 'live') {
+        event.preventDefault();
+        if (typeof window._openLiveScoringForMatch === 'function') window._openLiveScoringForMatch(String(t.id), mid);
+      } else if (target.getAttribute('data-operations-action') === 'wo') {
+        event.preventDefault();
+        if (typeof window._woOpenClaim === 'function') window._woOpenClaim(String(t.id), 'm|' + mid);
+      } else if (target.getAttribute('data-operations-action') === 'replay') {
+        event.preventDefault();
+        if (typeof window._openMatchReplayFromBracket === 'function') window._openMatchReplayFromBracket(String(t.id), mid);
+      } else if (target.getAttribute('data-operations-action') === 'revert-wo') {
+        event.preventDefault();
+        if (typeof window._revertWO === 'function') window._revertWO(String(t.id), mid);
+      } else if (target.hasAttribute('data-operations-open')) {
+        event.preventDefault();
+        window._bracketOperationsOpen(String(t.id), mid);
       }
-      var target = event.target && event.target.closest('[data-operations-open]');
-      var match = target && target.closest('[data-operations-match]');
-      if (match) window._bracketOperationsOpen(String(t.id), match.getAttribute('data-operations-match'));
+    });
+    existing.addEventListener('change', function (event) {
+      var select = event.target && event.target.closest('.sp-operations-replica .sp-match-court select');
+      if (select && typeof window._assignMatchCourtFromSelect === 'function') {
+        var op = select.closest('.sp-operations-replica');
+        window._assignMatchCourtFromSelect(select, String(t.id), op.getAttribute('data-operations-match'));
+      }
     });
     existing.addEventListener('input', function (event) {
       var input = event.target && event.target.closest('input[data-operations-source-input]');
       if (!input) return;
-      var op = input.closest('.sp-operations-court-card');
+      var op = input.closest('.sp-operations-replica');
       var mid = op && op.getAttribute('data-operations-match');
-      var card = mid && _bracketOperationsCanonical(mid);
-      var source = card && Array.prototype.find.call(card.querySelectorAll('input[id]'), function (node) {
-        return node.id === input.getAttribute('data-operations-source-input');
-      });
-      if (!source) return;
-      source.value = input.value;
-      source.dispatchEvent(new Event('input', { bubbles: true }));
       var tournament = typeof window._findTournamentById === 'function' ? window._findTournamentById(String(t.id)) : t;
       var current = tournament && (window._collectAllMatches(tournament) || []).find(function (m) { return String(m.id) === mid; });
+      _bracketOperationsSyncReplicaScore(op, mid, tournament, current);
       root._bracketOperationsDrafts = root._bracketOperationsDrafts || {};
       root._bracketOperationsDrafts[mid] = { fingerprint: _bracketOperationsFingerprint(current || {}), values: _bracketOperationsDraftValues(op) };
-      _bracketOperationsRenderScore(op, mid, root._bracketOperationsDrafts[mid].values);
-      var next = Array.prototype.find.call(op.querySelectorAll('input[data-operations-source-input]'), function (node) {
-        return node.getAttribute('data-operations-source-input') === source.id;
-      });
-      if (next) next.focus();
-    });
-    existing.addEventListener('change', function (event) {
-      var input = event.target && event.target.closest('input[data-operations-source-input]');
-      if (!input) return;
-      var op = input.closest('.sp-operations-court-card');
-      var card = op && _bracketOperationsCanonical(op.getAttribute('data-operations-match'));
-      var source = card && Array.prototype.find.call(card.querySelectorAll('input[id]'), function (node) {
-        return node.id === input.getAttribute('data-operations-source-input');
-      });
-      if (source) source.dispatchEvent(new Event('change', { bubbles: true }));
     });
   }
   root._bracketOperationsDrafts = root._bracketOperationsDrafts || {};
-  Array.prototype.forEach.call(existing.querySelectorAll('.sp-operations-court-card'), function (op) {
+  var courtTrack = existing.querySelector('.sp-operations-court-track');
+  var courtScroll = courtTrack ? courtTrack.scrollLeft : 0;
+  var focused = document.activeElement && document.activeElement.closest && document.activeElement.closest('.sp-operations-replica');
+  var focusState = focused && { match: focused.getAttribute('data-operations-match'),
+    key: document.activeElement.getAttribute('data-operations-source-input'),
+    id: document.activeElement.id, tag: document.activeElement.tagName };
+  if (focusState) try { focusState.start = document.activeElement.selectionStart; focusState.end = document.activeElement.selectionEnd; } catch (e) {}
+  Array.prototype.forEach.call(existing.querySelectorAll('.sp-operations-replica'), function (op) {
     var mid = op.getAttribute('data-operations-match');
-    var current = state.active.find(function (m) { return String(m.id) === mid; });
+    var current = state.active.concat(state.next ? [state.next] : []).find(function (m) { return String(m.id) === mid; });
     if (current && op._spFingerprint === _bracketOperationsFingerprint(current)) {
       root._bracketOperationsDrafts[mid] = {
         fingerprint: op._spFingerprint, values: _bracketOperationsDraftValues(op)
@@ -1424,43 +1430,56 @@ window._bracketOperationsRefresh = function (t, root) {
     } else delete root._bracketOperationsDrafts[mid];
   });
   var canCall = typeof window._souOrganizador === 'function' && window._souOrganizador(t);
-  var uid = user && user.uid;
-  var canClock = !!(canCall && uid && (String(t.creatorUid || '') === uid ||
-    (Array.isArray(t.adminUids) && t.adminUids.indexOf(uid) !== -1)));
   var nextLabel = canCall ? 'PRÓXIMO A CHAMAR' : 'PRÓXIMO JOGO';
   existing.innerHTML = '<div class="sp-operations-track"><div class="sp-operations-next">' +
-    (state.next ? _bracketOperationsCard(state.next, t, nextLabel, canCall) : '<div class="sp-operations-empty">Nenhum jogo aguardando chamada</div>') +
+    (state.next ? _bracketOperationsReplica(state.next, t, { canCall: canCall, active: false }, nextLabel) : '<div class="sp-operations-empty">Nenhum jogo aguardando chamada</div>') +
     '</div><div class="sp-operations-courts" aria-label="Jogos em quadra"><span class="sp-operations-section-title">EM QUADRA</span><div class="sp-operations-court-track">' +
     state.courts.map(function (court) {
       var games = state.active.filter(function (m) { return String(m.court) === court; });
       return '<div class="sp-operations-court-slot' + (games.length ? ' sp-operations-court-slot--active' : '') + '">' +
-        (games.length ? games.map(function (m) { return _bracketOperationsCourtCard(m, t, canClock); }).join('') :
+        (games.length ? games.map(function (m) { return _bracketOperationsReplica(m, t, { canCall: canCall, active: true }, court); }).join('') :
           '<div class="sp-operations-court-free"><strong>' + window._safeHtml(court) + '</strong><span>Livre</span></div>') +
         '</div>';
     }).join('') +
     '</div></div></div>';
-  Array.prototype.forEach.call(existing.querySelectorAll('.sp-operations-court-card'), function (op) {
+  courtTrack = existing.querySelector('.sp-operations-court-track');
+  if (courtTrack) courtTrack.scrollLeft = courtScroll;
+  Array.prototype.forEach.call(existing.querySelectorAll('.sp-operations-replica'), function (op) {
     var mid = op.getAttribute('data-operations-match');
-    var current = state.active.find(function (m) { return String(m.id) === mid; });
+    var current = state.active.concat(state.next ? [state.next] : []).find(function (m) { return String(m.id) === mid; });
     var draft = root._bracketOperationsDrafts[mid];
     if (!current || !draft || draft.fingerprint !== _bracketOperationsFingerprint(current)) {
       delete root._bracketOperationsDrafts[mid];
       draft = null;
     }
-    if (draft) {
-      var card = _bracketOperationsCanonical(mid);
-      Object.keys(draft.values).forEach(function (id) {
-        var source = card && Array.prototype.find.call(card.querySelectorAll('input[id]'), function (node) { return node.id === id; });
-        if (source) { source.value = draft.values[id]; source.dispatchEvent(new Event('input', { bubbles: true })); }
-      });
-    }
-    _bracketOperationsRenderScore(op, mid, draft && draft.values);
+    if (draft) Array.prototype.forEach.call(op.querySelectorAll('input[data-operations-source-input]'), function (input) {
+      var key = input.getAttribute('data-operations-source-input');
+      if (Object.prototype.hasOwnProperty.call(draft.values, key)) input.value = draft.values[key];
+    });
+    _bracketOperationsSyncReplicaScore(op, mid, t, current);
     op._spFingerprint = _bracketOperationsFingerprint(current);
   });
+  if (focusState && (focusState.key || focusState.id || focusState.tag === 'SELECT')) {
+    var focusedOp = Array.prototype.find.call(existing.querySelectorAll('.sp-operations-replica'), function (op) {
+      return op.getAttribute('data-operations-match') === focusState.match;
+    });
+    var restored = focusedOp && (focusState.key
+      ? Array.prototype.find.call(focusedOp.querySelectorAll('input[data-operations-source-input]'), function (input) {
+        return input.getAttribute('data-operations-source-input') === focusState.key;
+      })
+      : Array.prototype.find.call(focusedOp.querySelectorAll('select,button'), function (node) {
+        return node.id && node.id === focusState.id && node.tagName === focusState.tag;
+      }) || (focusState.tag === 'SELECT' && focusedOp.querySelector('.sp-match-court select')));
+    if (restored) {
+      restored.focus({ preventScroll: true });
+      try { restored.setSelectionRange(focusState.start, focusState.end); } catch (e) {}
+    }
+  }
   var nextId = state.next && String(state.next.id);
   var activeIds = new Set(state.active.map(function (m) { return String(m.id); }));
   var scope = root._bracketCardsScope || document.getElementById('view-container');
   if (scope) Array.prototype.forEach.call(scope.querySelectorAll('.sp-match-card[id]'), function (card) {
+    if (card.closest('[data-bracket-operations-strip]')) return;
     if (card._spOperationsOldBorder != null) {
       card.style.border = card._spOperationsOldBorder;
       card._spOperationsOldBorder = null;
@@ -1640,6 +1659,7 @@ window._bracketFocusOperationalCard = _bracketFocusOperationalCard;
 window._bracketOperationalSafeTop = _bracketOperationalSafeTop;
 window._bracketOperationalRootForCard = function(card, tId) {
   if (!card || !card.closest) return null;
+  if (card.closest('[data-bracket-operations-strip]')) return null;
   return Array.prototype.find.call(document.querySelectorAll('[data-bracket-tabs-root]'), function(root) {
     return (!tId || root.getAttribute('data-tournament-id') === String(tId)) &&
       !!((root._bracketGeneralView && root._bracketGeneralView.contains(card)) ||
@@ -8783,7 +8803,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // [[regression_legacy_presence_does_not_become_operational_agenda]]
   var _operationalPresence = _isConcentratedEvent && !isDecided && !isByeMatch
     ? (matchReady ? 'complete' : (matchPartial ? 'partial' : 'none')) : '';
-  return `
+  var _matchHtml = `
     <div id="card-${m.id}" class="sp-match-card" data-players="${_searchNames}" data-team-names="${window._safeHtml(_searchTeamNames)}" data-player-uids="${_searchUids}" data-bracket-tab-category="${window._safeHtml(_tabCategory)}" data-bracket-tab-gender="${_tabGender}" data-bracket-tab-source="${_tabSource}" data-bracket-tab-round="${m.round != null ? window._safeHtml(String(m.round)) : ''}" data-bracket-scheduled-at="${_scheduledMs || ''}" data-bracket-result-at="${_playedMs || ''}" data-bracket-complete="${isDecided || m.wo ? '1' : '0'}" data-bracket-pending-match="${_isPendingMatch ? '1' : '0'}" data-bracket-court="${window._safeHtml(String(m.court || ''))}" data-bracket-upcoming="${_isConcentratedEvent && matchReady ? '1' : '0'}" data-bracket-presence="${_operationalPresence}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-scheduled-game-number="${_plannedGameNumber > 0 ? _plannedGameNumber : ''}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:var(--scroll-anchor,120px);background:${window._spCor(_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)', 'background')};border:${_cardBorderStyle};${_courtActive ? '' : _lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};">
       ${_headerHtml}
       ${_pendingBtnsRow}
@@ -8797,6 +8817,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       ${_courtCardHtml}
       ${_cardFooterChips(t, m, { semCabecalhoDeGrupo: _dashConsensus })}
     </div>`;
+  return opts && opts.idScope ? _bracketScopeReplicaHtml(_matchHtml, String(opts.idScope)) : _matchHtml;
 }
 
 // Rodapé do card: as ações de PARTICIPANTE sobre o próprio jogo, lado a lado.

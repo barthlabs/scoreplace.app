@@ -2289,9 +2289,12 @@ window._applyResultToTournament = function (t, matchId, payload) {
   return m;
 };
 
-window._saveInitialBestOfThreeFromCard = function (tId, matchId, t, m, scoring) {
+window._saveInitialBestOfThreeFromCard = function (tId, matchId, t, m, scoring, sourceRoot) {
   var plan = window._matchSetPlan(scoring, m); if (!plan || !plan.initialTwoSetEntry) return false;
-  var read = function (idx) { var a = document.getElementById('s1-' + matchId + '-' + idx), b = document.getElementById('s2-' + matchId + '-' + idx); return { a: a ? parseInt(a.value, 10) : NaN, b: b ? parseInt(b.value, 10) : NaN }; };
+  var field = function (id) { return sourceRoot
+    ? Array.prototype.find.call(sourceRoot.querySelectorAll('input[data-operations-source-input]'), function (el) { return el.getAttribute('data-operations-source-input') === id; })
+    : document.getElementById(id); };
+  var read = function (idx) { var a = field('s1-' + matchId + '-' + idx), b = field('s2-' + matchId + '-' + idx); return { a: a ? parseInt(a.value, 10) : NaN, b: b ? parseInt(b.value, 10) : NaN }; };
   var raw = [read(0), read(1)];
   if (isNaN(raw[0].a) || isNaN(raw[0].b) || isNaN(raw[1].a) || isNaN(raw[1].b)) { _showSetScoreProblem({ detail: 'Preencha os dois sets para registrar o melhor de 3.' }); return true; }
   var sets = [], p1 = 0, p2 = 0;
@@ -2299,7 +2302,7 @@ window._saveInitialBestOfThreeFromCard = function (tId, matchId, t, m, scoring) 
     var problem = window._validateNormalSetScore(scoring, t.sport, raw[i].a, raw[i].b);
     if (!problem.ok) { _showSetScoreProblem(problem); return true; }
     var isTb = scoring.tiebreakEnabled !== false && window._isTiebreakSetScore(raw[i].a, raw[i].b, window._tbLoserGames(scoring, t.sport));
-    var tb1 = parseInt((document.getElementById('tb1-' + matchId + '-' + i) || {}).value, 10), tb2 = parseInt((document.getElementById('tb2-' + matchId + '-' + i) || {}).value, 10);
+    var tb1 = parseInt((field('tb1-' + matchId + '-' + i) || {}).value, 10), tb2 = parseInt((field('tb2-' + matchId + '-' + i) || {}).value, 10);
     if (isTb && (isNaN(tb1) || isNaN(tb2) || (raw[i].a > raw[i].b ? tb1 <= tb2 : tb2 <= tb1))) { _showSetScoreProblem({ detail: 'Informe o tie-break e mantenha o vencedor igual ao do set.' }); return true; }
     sets.push(window._buildManualSet(raw[i].a, raw[i].b, { isTiebreakEntry: isTb, tbP1: tb1, tbP2: tb2 }).sets[0]);
     if (raw[i].a > raw[i].b) p1++; else p2++;
@@ -2319,7 +2322,7 @@ window._saveInitialBestOfThreeFromCard = function (tId, matchId, t, m, scoring) 
   return window._commitSetsResult(tId, matchId, sets, p1, p2, false) || true;
 };
 
-window._saveResultInline = function (tId, matchId) {
+window._saveResultInline = function (tId, matchId, sourceRoot) {
   const t = window._findTournamentById(tId);
   if (!t) return;
   const m = _findMatch(t, matchId);
@@ -2346,10 +2349,13 @@ window._saveResultInline = function (tId, matchId) {
   }
 
   var initialScoring = (typeof window._effectiveScoring === 'function') ? window._effectiveScoring(t, m) : t.scoring;
-  if (document.getElementById('s1-' + matchId + '-0')) return window._saveInitialBestOfThreeFromCard(tId, matchId, t, m, initialScoring);
+  var field = function (id) { return sourceRoot
+    ? Array.prototype.find.call(sourceRoot.querySelectorAll('input[data-operations-source-input]'), function (el) { return el.getAttribute('data-operations-source-input') === id; })
+    : document.getElementById(id); };
+  if (field('s1-' + matchId + '-0')) return window._saveInitialBestOfThreeFromCard(tId, matchId, t, m, initialScoring, sourceRoot);
 
-  const s1El = document.getElementById(`s1-${matchId}`);
-  const s2El = document.getElementById(`s2-${matchId}`);
+  const s1El = field(`s1-${matchId}`);
+  const s2El = field(`s2-${matchId}`);
 
   const s1 = s1El ? parseInt(s1El.value) : NaN;
   const s2 = s2El ? parseInt(s2El.value) : NaN;
@@ -2390,8 +2396,8 @@ window._saveResultInline = function (tId, matchId) {
   var tbP1 = NaN, tbP2 = NaN;
   var isTiebreakEntry = false;
   if (tbEnabled && window._isTiebreakSetScore(s1, s2, tbTrigger)) {
-    var tb1El = document.getElementById('tb1-' + matchId);
-    var tb2El = document.getElementById('tb2-' + matchId);
+    var tb1El = field('tb1-' + matchId);
+    var tb2El = field('tb2-' + matchId);
     tbP1 = tb1El ? parseInt(tb1El.value) : NaN;
     tbP2 = tb2El ? parseInt(tb2El.value) : NaN;
     if (isNaN(tbP1) || isNaN(tbP2)) {
