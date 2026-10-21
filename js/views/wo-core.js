@@ -32,7 +32,8 @@
 // Núcleo PURO das substituições de W.O.: muta só o `t` passado (sem fetch, sem
 // save). Histórico via t.history.push direto (transaction-safe — logAction do
 // AppStore acha por id no store LOCAL, o que não serve pro doc fresco da txn).
-// A fila tem a mesma prioridade para W.O. individual e W.O. de dupla.
+// Com política locked, a dupla respeita waitlistOrder; no W.O. individual com
+// forceWaitlistSub, a ordem usada é a posição de entrada na fila.
 window._woOrderStandby = function(t, entries, forceWaitlistSub, respectLocked) {
   const policy = t.callPolicy || 'present';
   const order = {};
