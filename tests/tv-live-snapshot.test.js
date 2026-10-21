@@ -20,6 +20,9 @@ const context = vm.createContext({ window, document: { querySelectorAll: selecto
 vm.runInContext(fs.readFileSync(path.join(root, 'js/domain/team-competition.js'), 'utf8'), context);
 window.ScoreplaceTeamCompetition = context.ScoreplaceTeamCompetition;
 vm.runInContext(fs.readFileSync(path.join(root, 'js/domain/match-timing.js'), 'utf8'), context);
+vm.runInContext(fs.readFileSync(path.join(root, 'js/domain/next-match.js'), 'utf8'), context);
+const dashSource = fs.readFileSync(path.join(root, 'js/views/dashboard.js'), 'utf8');
+vm.runInContext(dashSource.slice(dashSource.indexOf('window._dashboardNextMatchCompare = function'), dashSource.indexOf('// A tela só solicita o fecho')), context);
 vm.runInContext(fs.readFileSync(path.join(root, 'js/views/tv-live.js'), 'utf8'), context);
 window._isNeonTournament = tournament => tournament.id === 'tour_1790628592058_c342a1e8f5068424887f1702a1633a44';
 
@@ -64,6 +67,23 @@ assert.equal(snapshot.courts[1].timerStart, Date.parse('2026-10-22T21:02:00Z'));
 assert.equal(snapshot.courts[1].latest, true, 'jogo chamado por último é destacado antes de outra transição');
 assert.equal(snapshot.courts[1].scoreA, '4');
 assert.equal(snapshot.courts[2].number, undefined, 'jogo só agendado não ocupa TV');
+assert.equal(snapshot.nextGame.number, 3, 'jogo agendado e ainda não chamado aparece como próximo');
+const queue = { ...t, matches: [
+  match(30, 'Quadra 4', 'VORTEX', 'BLAST', { scheduledAt:'2026-10-22T18:00:00Z', courtCalledAt:'2026-10-22T18:01:00Z' }),
+  match(29, 'Quadra 5', 'ECLIPSE', 'VENOM', { scheduledAt:'2026-10-22T18:00:00Z', winner:'p1' }),
+  match(28, 'Quadra 6', 'PANIC', 'PHANTOM', { scheduledAt:'2026-10-22T18:00:00Z', p2:'TBD' }),
+  match(20, 'Quadra 7', 'VOLT', 'BLACKOUT', { scheduledAt:'2026-10-23T18:00:00Z' }),
+  match(21, 'Quadra 8', 'VORTEX', 'ECLIPSE', { scheduledAt:'2026-10-23T18:00:00Z' })
+] };
+assert.equal(window._tvLiveBuildSnapshot(queue).nextGame.number, 20,
+  'após retomar o segundo dia, exclui jogo chamado, finalizado e adversário indefinido; desempata por número');
+const emptyQueue = { ...queue, matches: queue.matches.slice(0, 3) };
+assert.equal(window._tvLiveBuildSnapshot(emptyQueue).nextGame, null, 'sem jogo elegível após recarregar não inventa confronto');
+assert.match(window._tvLiveBodyHtml(window._tvLiveBuildSnapshot(emptyQueue)), /Próximo jogo ainda não definido/);
+const upcomingHtml = window._tvLiveBodyHtml(snapshot).split('class="tv-upcoming"')[1].split('</section>')[0];
+assert.match(upcomingHtml, /JOGO 3 · Fem Light/);
+assert.match(upcomingHtml, /PANIC 1/);
+assert.doesNotMatch(upcomingHtml, /tv-result-side-score|tv-score/, 'próximo jogo não tem placar');
 assert.equal(snapshot.results.length, 4, 'histórico acumula resultados para rolagem');
 assert.equal(snapshot.results.map(r => r.number).join(','), '5,6,4,7', 'resultado novo entra no topo');
 assert.equal(snapshot.results[1].scoreA, '7');
@@ -122,8 +142,9 @@ assert.equal(finishedSnapshot.courts[0].number, undefined, 'resultado final libe
 assert.equal(finishedSnapshot.results[0].scoreA, '6', 'resultado final passa aos últimos resultados');
 delete window._slotUidsPositional;
 delete window._resolveSideLive;
-assert.equal(snapshot.qrUrl, 'https://scoreplace.app/#tournaments/neon-test');
-assert.match(snapshot.qrImage, /neon-test/);
+assert.equal(snapshot.qrUrl, 'https://scoreplace.app/open.html', 'sandbox não expõe ID na página pública');
+assert.equal(window._tvLiveBuildSnapshot({ ...t, id:'tour_1790628592058_c342a1e8f5068424887f1702a1633a44' }).qrUrl,
+  'https://scoreplace.app/open.html?t=tour_1790628592058_c342a1e8f5068424887f1702a1633a44');
 const multi = { ...t, matches: [
   match(8, 'Quadra 4', 'VORTEX', 'BLAST', { courtCalledAt: '2026-10-22T21:00:00Z', startedAt: '2026-10-22T21:03:00Z',
     sets: [{ gamesP1: 6, gamesP2: 4 }, { gamesP1: 2, gamesP2: 3 }] }),
@@ -189,11 +210,21 @@ assert.match(tvRoot.innerHTML, /class="tv-court-footer"><strong data-tv-start=/,
   'timer aparece sozinho abaixo do confronto');
 assert.doesNotMatch(tvRoot.innerHTML, /ÚLTIMOS 3 RESULTADOS/);
 assert.match(tvRoot.innerHTML, /<article class="tv-court tv-court-active tv-court-latest">/, 'slot da transição mais recente recebe destaque');
+assert.match(popupHtml, /\.tv-result>div\.tv-result-match \.tv-result-left \.tv-result-players span\{text-align:left\}/,
+  'os dois nomes à esquerda, inclusive o último, vencem a regra herdada por especificidade');
+assert.match(popupHtml, /\.tv-result-right \.tv-result-players span\{text-align:right\}/,
+  'os dois nomes à direita continuam alinhados à direita');
+assert.match(popupHtml, /\.tv-result>div span:last-child\{text-align:right\}/,
+  'a regra herdada da etiqueta vertical direita continua presente');
+assert.doesNotMatch(popupHtml, /\.tv-court\.tv-court-active\{border:3px solid #22c55e\}/,
+  'TV não destaca toda quadra ocupada em verde');
+assert.match(popupHtml, /\.tv-court\.tv-court-latest\{border:3px solid #fbbf24/,
+  'TV conserva o destaque dourado da transição mais recente');
 assert.match(tvRoot.innerHTML, /tv-result-left.*tv-result-side-score.*tv-result-versus">VS.*tv-result-right/, 'resultados exibem placares dentro dos boxes e VS entre eles');
 assert.match(tvRoot.innerHTML, /<span>GAMES<\/span><span class="tv-win">V<\/span><span class="tv-loss">D<\/span><span>J<\/span>/);
 assert.match(tvRoot.innerHTML, /class="tv-ranking-team"[^>]*>VORTEX<\/strong><b>\+8<\/b><span>12 - 4<\/span><span class="tv-win">2<\/span><span class="tv-loss">0<\/span><span>2<\/span>/);
 assert.doesNotMatch(tvRoot.innerHTML, /<h3>Times<\/h3>/, 'classificação geral usa somente o cabeçalho da tabela');
-assert.match(tvRoot.innerHTML, /class="tv-qr-code"[^>]*neon-test/);
+assert.match(tvRoot.innerHTML, /class="tv-qr-code"[^>]*open\.html/);
 assert.match(tvRoot.innerHTML, /scoreplace\.app\/icons\/logo-podium\.svg/);
 const childSource = popupHtml.match(/<script>\(function\(\)\{"use strict";[\s\S]*?<\/script>/);
 assert(childSource, 'NO AR inclui um relógio próprio na janela, independente do intervalo da aba');
@@ -354,4 +385,6 @@ assert(htmlSource.indexOf('js/domain/match-timing.js') < htmlSource.indexOf('js/
   'módulo de fases carrega antes da chave e do NO AR');
 assert.match(fs.readFileSync(path.join(root, 'sw.js'), 'utf8'), /'\/js\/domain\/match-timing\.js'/,
   'relógio compartilhado está no precache para a chave funcionar offline');
+if (process.env.SP_TV_CAPTURE) fs.writeFileSync(process.env.SP_TV_CAPTURE,
+  popupHtml.replace('<div id="tv-root"></div>', '<div id="tv-root">' + tvRoot.innerHTML + '</div>'));
 console.log('✓ TV: 6 quadras chamadas, relógio, placar ao vivo, 3 resultados e saldo geral por time');

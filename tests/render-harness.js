@@ -219,6 +219,7 @@ function lowerCadence(t) {
 // As suítes que extraem só _buildMyResultsHtml precisam também dos helpers
 // reais declarados antes dele. Fonte antiga sem esse helper continua suportada.
 function installDashboardNextHelpers(target, source) {
+  new Function('window', fs.readFileSync(path.join(ROOT, 'domain/next-match.js'), 'utf8'))(target);
   var start = source.indexOf('window._dashboardNextMatchCompare = function');
   if (start < 0) return;
   var end = source.indexOf('// A tela só solicita o fecho', start);

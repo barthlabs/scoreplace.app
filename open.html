@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0d1b2e">
+  <title>Abra no Scoreplace</title>
+  <style>
+    :root{color-scheme:dark light;font-family:Arial,Helvetica,sans-serif;background:#071321;color:#f8fafc}
+    *{box-sizing:border-box}
+    body{min-height:100vh;margin:0;display:grid;place-items:center;padding:24px}
+    main{width:min(100%,520px);padding:32px;border:1px solid #46718e;border-radius:20px;background:#10243a;text-align:center;box-shadow:0 18px 48px #0005}
+    .logo{width:64px;height:64px;object-fit:contain}
+    h1{font-size:clamp(1.6rem,5vw,2.2rem);margin:12px 0 6px}
+    p{color:#d6e6f2;line-height:1.45;margin:0 0 24px}
+    .choices{display:flex;flex-direction:column;align-items:center;gap:14px}
+    .store{display:block;line-height:0;border-radius:8px}
+    .store img{display:block;width:auto;height:48px;max-width:100%}
+    .store.play img{height:62.5px}
+    .web{display:flex;align-items:center;justify-content:center;gap:10px;width:min(100%,300px);min-height:52px;padding:10px 20px;border:2px solid #67e8f9;border-radius:10px;background:#10344b;color:#f8fafc;text-decoration:none;font-weight:800;font-size:1rem}
+    a:focus-visible{outline:3px solid #fbbf24;outline-offset:4px}
+    .web:hover{background:#155371}
+    @media(prefers-color-scheme:light){:root{background:#e7f1f8;color:#0b2133}main{background:#fff;border-color:#7c9fb2;box-shadow:0 18px 48px #162d3b26}p{color:#344d60}.web{background:#e5f7fb;color:#082c40;border-color:#117c99}.web:hover{background:#c6ebf4}}
+  </style>
+</head>
+<body>
+  <main>
+    <img class="logo" src="/icons/logo-podium.svg" alt="" width="64" height="64">
+    <h1>Abra no Scoreplace</h1>
+    <p>Escolha como acompanhar o torneio.</p>
+    <nav class="choices" aria-label="Opções para abrir o Scoreplace" id="choices">
+      <a class="web" id="web-link" href="/"><span aria-hidden="true">🌐</span> Versão web</a>
+    </nav>
+  </main>
+  <script src="/js/lojas-config.js?v=2.5.19"></script>
+  <script>
+    (function () {
+      'use strict';
+      var id = new URLSearchParams(location.search).get('t') || '';
+      var valid = /^tour_[0-9]{13}_[a-f0-9]{32}$/.test(id);
+      document.getElementById('web-link').href = valid ? '/#tournaments/' + encodeURIComponent(id) : '/';
+      var choices = document.getElementById('choices');
+      var web = document.getElementById('web-link');
+      ['apple', 'play'].forEach(function (key) {
+        var store = (window.SP_LOJAS || {})[key];
+        if (!store || !store.on || !store.selo || !store.url || !store.badge) return;
+        var link = document.createElement('a');
+        link.className = 'store ' + key;
+        link.href = store.url;
+        link.rel = 'noopener noreferrer';
+        link.setAttribute('aria-label', 'Baixar na ' + store.nome);
+        var badge = document.createElement('img');
+        badge.src = store.badge;
+        badge.alt = 'Baixar na ' + store.nome;
+        link.appendChild(badge);
+        choices.insertBefore(link, web);
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -20,6 +20,7 @@
 const fs = require('fs'), path = require('path');
 const ROOT = path.join(__dirname, '..');
 const store = fs.readFileSync(path.join(ROOT, 'js', 'store.js'), 'utf8');
+const lojas = fs.readFileSync(path.join(ROOT, 'js', 'lojas-config.js'), 'utf8');
 const main = fs.readFileSync(path.join(ROOT, 'js', 'main.js'), 'utf8');
 const share = fs.readFileSync(path.join(ROOT, 'js', 'views', 'tournaments-sharing.js'), 'utf8');
 
@@ -28,8 +29,8 @@ const ok = (c, m) => { if (c) { pass++; console.log('  ✓ ' + m); } else { fail
 console.log('──── selos das lojas do mesmo tamanho ────');
 
 // ── 1. a medida vive no cadastro da loja, uma vez ────────────────────────────────────
-ok(/apple:[^\n]*tinta: 1,/.test(store), 'a arte da Apple se declara de borda a borda (tinta 1)');
-ok(/play:[^\n]*tinta: 0\.768,/.test(store), 'a do Google declara a margem embutida (tinta 0,768)');
+ok(/apple:[^\n]*tinta: 1,/.test(lojas), 'a arte da Apple se declara de borda a borda (tinta 1)');
+ok(/play:[^\n]*tinta: 0\.768,/.test(lojas), 'a do Google declara a margem embutida (tinta 0,768)');
 
 // ── 2. quem desenha compensa — nos DOIS lugares ("e onde mais for") ──────────────────
 ok(/height:' \+ \(Math\.round\(\(h \/ \(l\.tinta \|\| 1\)\)/.test(main),
@@ -57,7 +58,7 @@ const png = fs.readFileSync(path.join(ROOT, 'assets', 'badge-google-play.png'));
 // PNG: largura/altura vivem nos bytes 16..24 do IHDR
 const w = png.readUInt32BE(16), h = png.readUInt32BE(20);
 ok(w === 646 && h === 250, 'o PNG do Google é o oficial 646x250, sem recorte (got ' + w + 'x' + h + ')');
-ok(/as duas lojas proíbem/.test(store) || /proíbem/.test(main),
+ok(/as duas lojas proíbem/.test(lojas) || /proíbem/.test(main),
   'o porquê de não recortar está escrito onde alguém vai mexer');
 
 // ── 5. SÃO OS ARQUIVOS OFICIAIS, EM pt-BR — e o hash prova ──────────────────────────
@@ -72,7 +73,7 @@ ok(sha(fs.readFileSync(path.join(ROOT, 'assets', 'badge-app-store.svg'))) ===
 ok(sha(png) === 'e1ad5e03f636d94b05448c1f156e39b012b9e1d772b730d9e27d066695531a6b',
   'o selo do Google Play é o oficial pt-BR (play.google.com/.../pt-br_badge_web_generic.png)');
 ok(/_Badge_PTBR_/.test(apple), '  → e o SVG da Apple se declara PTBR no próprio título');
-ok(/toolbox\.marketingtools\.apple\.com/.test(store) && /pt-br_badge_web_generic/.test(store),
+ok(/toolbox\.marketingtools\.apple\.com/.test(lojas) && /pt-br_badge_web_generic/.test(lojas),
   '  → as URLs oficiais estão anotadas onde as artes são cadastradas');
 
 console.log(fail === 0

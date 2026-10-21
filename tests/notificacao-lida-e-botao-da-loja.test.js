@@ -111,8 +111,8 @@ console.log('\n== Notificação lida por permanência + botão da loja ==');
 (function () {
   const m = main.match(/window\._storeButtonHtml = function[\s\S]*?\n\};/);
   ok(!!m, '_storeButtonHtml existe (main.js)');
-  const mLojas = store.match(/window\.SP_LOJAS\s*=\s*\{[\s\S]*?\n\};/);
-  ok(!!mLojas, 'window.SP_LOJAS existe (store.js) — a fonte única das fichas');
+  const mLojas = fs.readFileSync(path.join(__dirname, '..', 'js', 'lojas-config.js'), 'utf8').match(/window\.SP_LOJAS\s*=\s*\{[\s\S]*?\n\};/);
+  ok(!!mLojas, 'window.SP_LOJAS existe (lojas-config.js) — a fonte única das fichas');
   if (!m || !mLojas) return;
 
   function chama(ambiente, opts) {

@@ -1101,6 +1101,7 @@ const SUITES = [
   'tests/superficies-abas-resize-observer.test.js',
   'tests/bracket-geral-agenda.test.js',
   'tests/tv-live-snapshot.test.js',
+  'tests/tv-open-page.test.js',
   'tests/court-occupancy.test.js',
   'tests/controle-relogio-quadra.test.js',
   'tests/neon-agenda-categoria-contract.test.js',

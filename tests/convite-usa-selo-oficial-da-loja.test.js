@@ -23,7 +23,7 @@ const sharing = fs.readFileSync(path.join(ROOT, 'js', 'views', 'tournaments-shar
 console.log('\nCONVITE IMPRESSO: SELO OFICIAL DA LOJA');
 
 // ── 1. FONTE ÚNICA carrega o caminho do selo ────────────────────────────────
-const bloco = (store.match(/window\.SP_LOJAS\s*=\s*\{[\s\S]*?\n\};/) || [''])[0];
+const bloco = (fs.readFileSync(path.join(ROOT, 'js', 'lojas-config.js'), 'utf8').match(/window\.SP_LOJAS\s*=\s*\{[\s\S]*?\n\};/) || [''])[0];
 ok(/apple:[^\n]*badge:/.test(bloco), 'SP_LOJAS.apple tem `badge` (caminho do selo)');
 ok(/play:[^\n]*badge:/.test(bloco), 'SP_LOJAS.play tem `badge`');
 // 19/ago/2026: o dono mandou LIGAR as duas, ciente de que a ficha da Play responde 404

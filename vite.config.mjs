@@ -107,6 +107,6 @@ export default defineConfig({
     outDir: 'www',
     emptyOutDir: true,
     manifest: true,
-    rollupOptions: { input: join(ROOT, 'index.html') }
+    rollupOptions: { input: [join(ROOT, 'index.html'), join(ROOT, 'open.html')] }
   }
 });

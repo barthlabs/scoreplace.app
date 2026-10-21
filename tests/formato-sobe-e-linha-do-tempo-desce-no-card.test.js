@@ -1,10 +1,11 @@
 'use strict';
 /* Regra atual: prazo/horário fica ao lado de Jogo N em qualquer formato;
    "Melhor de 3" permanece abaixo dessa linha e antes do cabeçalho de sets. */
-const assert = require('assert/strict'), fs = require('fs'), path = require('path');
+const assert = require('assert/strict'), fs = require('fs'), path = require('path'), vm = require('vm');
 const { chromium } = require('playwright');
 const H = require('./render-harness');
 const W = H.window;
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js/domain/match-timing.js'), 'utf8'), H.sandbox);
 const CSS = fs.readFileSync(path.join(__dirname, '..', 'css/components.css'), 'utf8');
 let ok = 0; const must = (v, m) => { assert.ok(v, m); ok++; console.log('  ✓ ' + m); };
 const M3 = { type: 'sets', setsToWin: 2, gamesPerSet: 6, tiebreakEnabled: true, tiebreakPoints: 7, superTiebreak: true, superTiebreakPoints: 10 };
@@ -31,6 +32,22 @@ const concHeader = concentrated.slice(concentrated.indexOf('class="sp-mc-head"')
 must(concHeader.indexOf('Jogo 108') < concHeader.indexOf('data-match-time-status') &&
   (concHeader.match(/data-match-time-status/g) || []).length === 1 &&
   concHeader.includes('Fem Light'), 'evento concentrado: categoria uma vez abaixo de Jogo N e antes dos botões');
+const oldConcentratedForCourt = W._isConcentratedTournament;
+W._isConcentratedTournament = () => true;
+const calledCard = card(UM, { court: 'Quadra 4', courtCalledAt: '2026-10-22T18:00:00-03:00' });
+const calledMatch = W.AppStore.tournaments[0].matches[0];
+const cardStyle = html => (html.match(/id="card-M1"[^>]*style="([^"]+)"/) || [])[1] || '';
+must(/border:3px solid #22c55e/.test(cardStyle(calledCard)) && !/border-left:/.test(cardStyle(calledCard)),
+  'jogo chamado tem contorno verde nos quatro lados na chave');
+must(!/border:3px solid #22c55e/.test(cardStyle(W.renderMatchCard(calledMatch, false, 'T1', 108, false, null, { readOnly: true }))),
+  'card da dashboard não ganha contorno verde');
+must(!/border:3px solid #22c55e/.test(cardStyle(card(UM, { court: 'Quadra 4', scheduledAt: '2026-10-22T18:00:00-03:00' }))),
+  'quadra escolhida antes do OK ainda não recebe a borda verde');
+must(!/border:3px solid #22c55e/.test(cardStyle(card(UM, { court: 'Quadra 4', startedAt: '2026-10-22T18:00:00-03:00' }))),
+  'a borda verde confirma o OK persistido, não apenas um início legado');
+must(!/border:3px solid #22c55e/.test(cardStyle(card(UM, { court: 'Quadra 4', courtCalledAt: '2026-10-22T18:00:00-03:00', winner: 'p1', scoreP1: 6, scoreP2: 3 }))),
+  'resultado remove o contorno verde e devolve o estilo do card encerrado');
+W._isConcentratedTournament = oldConcentratedForCourt;
 (async () => {
   const b = await chromium.launch(); const p = await b.newPage({ viewport: { width: 480, height: 600 } });
   await p.setContent('<style>' + CSS + '</style><body style="background:#0b1220;padding:10px"><div style="width:400px">' + jogado + '</div></body>');

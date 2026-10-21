@@ -12,6 +12,7 @@ const start = source.indexOf('window._dashboardNextMatchCompare = function');
 const end = source.indexOf('// A tela só solicita o fecho', start);
 assert(start >= 0 && end > start, 'comparador da dashboard localizado');
 const context = { window: {} };
+vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'js/domain/next-match.js'), 'utf8'), context);
 vm.runInNewContext(source.slice(start, end), context);
 const compare = context.window._dashboardNextMatchCompare;
 const within = context.window._dashboardWithinTournamentCompare;

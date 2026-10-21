@@ -23,10 +23,7 @@ window._dashCardClick = function(event, tournamentId) {
 window._dashboardNextMatchCompare = function(a, b) {
   function info(entry) {
     var m = entry.item.m || {};
-    function known(side) {
-      var value = String(side || '').trim();
-      return !!value && !/^(?:TBD|BYE|a definir|(?:vencedor|vencedora|perdedor|perdedora) d[oea] jogo\b|(?:winner|loser) of match\b)/i.test(value);
-    }
+    var known = window.ScoreplaceNextMatch.knownSide;
     var side1 = m.p1 || (Array.isArray(m.team1) ? m.team1.join(' / ') : '');
     var side2 = m.p2 || (Array.isArray(m.team2) ? m.team2.join(' / ') : '');
     var ready = known(side1) && known(side2);

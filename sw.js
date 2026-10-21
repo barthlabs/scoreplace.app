@@ -106,6 +106,7 @@ var CACHE_NAME = 'scoreplace-v2.5.19';
 var STATIC_ASSETS = [
   '/',
   '/index.html',
+  '/open.html',
   '/css/style.css',
   '/css/components.css',
   '/css/layout.css',
@@ -128,6 +129,8 @@ var STATIC_ASSETS = [
   '/js/views/identity-core.js',
   '/js/views/persist-core.js',
   '/js/store.js',
+  '/js/lojas-config.js',
+  '/js/domain/next-match.js',
   '/js/firebase-db.js',
   '/js/notifications.js',
   '/js/ui.js',
