@@ -1,7 +1,8 @@
 // 2.5.19 — O botão NO AR só acende e pisca enquanto a janela de TV do torneio
 // está visível e ativa. Ao ocultar, fechar ou trocar essa janela, ele apaga;
 // após recarregar a chave, recupera o estado da TV que continua aberta. Se o
-// sinal da TV expirar, um novo clique retoma a mesma janela com relógio novo.
+// sinal da TV expirar, um novo clique retoma a mesma janela, encerrando o
+// relógio anterior antes de iniciar o novo.
 // 2.5.18 — A luz do botão NO AR pisca em vermelho enquanto a janela de TV
 // está aberta. Ao fechar a janela, fica escura e para de piscar.
 // 2.5.17 — A chave mantém todos os jogos na ordem numerada e o NO AR recupera

@@ -397,6 +397,7 @@
     window._tvLiveRefresh = refresh;
     refresh();
     if (!popup) return;
+    if (tick) clearInterval(tick);
     tick = setInterval(refresh, 1000);
     try { popup.focus(); } catch (e) { stop(); }
   };

@@ -7,6 +7,7 @@ let nowMs = Date.now();
 class TestDate extends Date { static now() { return nowMs; } }
 const parentHandlers = {};
 const parentIntervals = [];
+const parentActiveIntervals = new Set();
 const liveButton = { attributes: {}, style: {}, setAttribute(name, value) { this.attributes[name] = value; } };
 const window = { _collectAllMatches: t => t.matches, _tourLogoSrc: t => t.logo,
   addEventListener(name, fn) { parentHandlers[name] = fn; },
@@ -14,7 +15,8 @@ const window = { _collectAllMatches: t => t.matches, _tourLogoSrc: t => t.logo,
   _tournamentUrl: id => `https://scoreplace.app/#tournaments/${id}`,
   _qrCodeUrl: url => `https://qr.example/?data=${encodeURIComponent(url)}` };
 const context = vm.createContext({ window, document: { querySelectorAll: selector => selector === '[data-tv-live-button]' ? [liveButton] : [] }, Date:TestDate, Number, String, Array, Set,
-  setInterval: fn => { parentIntervals.push(fn); return parentIntervals.length; }, clearInterval: () => {} });
+  setInterval: fn => { parentIntervals.push(fn); parentActiveIntervals.add(parentIntervals.length); return parentIntervals.length; },
+  clearInterval: id => { parentActiveIntervals.delete(id); } });
 vm.runInContext(fs.readFileSync(path.join(root, 'js/domain/team-competition.js'), 'utf8'), context);
 window.ScoreplaceTeamCompetition = context.ScoreplaceTeamCompetition;
 vm.runInContext(fs.readFileSync(path.join(root, 'js/domain/match-timing.js'), 'utf8'), context);
@@ -249,6 +251,8 @@ const staleRecoveryGeneration = Number(popupHtml.match(/,gen=(\d+),origin=/)[1])
 assert.equal(openCalls, 3, 'clique sem heartbeat reaproveita uma única janela nomeada');
 assert(staleRecoveryGeneration > reopenedGeneration, 'recuperação substitui a geração anterior');
 assert.equal(liveButton.attributes['aria-pressed'], 'false', 'recuperação aguarda o novo heartbeat');
+assert.equal(parentActiveIntervals.size, 2, 'só o monitor global e o refresh novo ficam ativos');
+assert(parentActiveIntervals.has(parentIntervals.length), 'refresh antigo foi cancelado antes do novo');
 childWindow.__tvGeneration = staleRecoveryGeneration;
 childTick();
 assert.equal(childIntervalClears, 1, 'script da geração antiga encerra seu único intervalo');
