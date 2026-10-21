@@ -156,7 +156,8 @@ const fakePopup = { name:'scoreplace-live-tv-neon-test', closed: false, navigato
   getElementById: id => id === 'tv-root' ? tvRoot : { addEventListener() {} },
   querySelectorAll: selector => selector === '[data-tv-start]' ? [tvTimer] : []
 }, focus() {}, close() { this.closed = true; } };
-window.open = () => fakePopup;
+let openCalls = 0;
+window.open = () => { openCalls++; return fakePopup; };
 window._findTournamentById = () => t;
 window._tvLiveToggle();
 assert.equal(liveButton.attributes['aria-pressed'], 'false', 'abrir a janela ainda não liga NO AR sem confirmação da própria página');
@@ -202,11 +203,11 @@ const childOwner = { _findTournamentById: () => t, _tvLiveIsComplete: () => true
 const childHandlers = {};
 const childWindow = { opener: childOwner, ScoreplaceMatchTiming: timingCore, __tvParentBeat: 0,
   addEventListener(name, fn) { childHandlers[name] = fn; } };
-let childTick;
+let childTick, childIntervalClears = 0;
 const childDocument = { visibilityState:'visible', addEventListener() {}, getElementById: id => id === 'tv-root' ? childRoot : id === 'tv-connection' ? childWarning : null,
   querySelectorAll: () => [] };
 vm.runInNewContext(childSource[0].slice(8, -9), { window: childWindow, document: childDocument,
-  setInterval: fn => { childTick = fn; return 1; }, clearInterval: () => {}, Date, Number });
+  setInterval: fn => { childTick = fn; return 1; }, clearInterval: () => { childIntervalClears++; }, Date, Number });
 assert(childTick && childRoot.innerHTML.includes('CLASSIFICAÇÃO'), 'janela restaura conteúdo sem o timer da aba');
 assert.equal(liveButton.attributes['aria-pressed'], 'true', 'heartbeat da página liga o botão');
 assert.equal(window._tvLiveWindow, fakePopup, 'só página confirmada aparece como NO AR');
@@ -243,6 +244,20 @@ nowMs += 11000;
 parentIntervals[0]();
 assert.equal(liveButton.attributes['aria-pressed'], 'false', 'heartbeat vencido desativa o indicador');
 assert.equal(window._tvLiveWindow, null, 're-render da chave também verá estado inativo');
+window._tvLiveToggle();
+const staleRecoveryGeneration = Number(popupHtml.match(/,gen=(\d+),origin=/)[1]);
+assert.equal(openCalls, 3, 'clique sem heartbeat reaproveita uma única janela nomeada');
+assert(staleRecoveryGeneration > reopenedGeneration, 'recuperação substitui a geração anterior');
+assert.equal(liveButton.attributes['aria-pressed'], 'false', 'recuperação aguarda o novo heartbeat');
+childWindow.__tvGeneration = staleRecoveryGeneration;
+childTick();
+assert.equal(childIntervalClears, 1, 'script da geração antiga encerra seu único intervalo');
+parentHandlers.message({ origin:'https://scoreplace.app', source:fakePopup,
+  data:{ type:'scoreplace-tv-heartbeat', id:t.id, gen:reopenedGeneration, visible:true } });
+assert.equal(liveButton.attributes['aria-pressed'], 'false', 'heartbeat antigo não reativa a janela substituída');
+parentHandlers.message({ origin:'https://scoreplace.app', source:fakePopup,
+  data:{ type:'scoreplace-tv-heartbeat', id:t.id, gen:staleRecoveryGeneration, visible:true } });
+assert.equal(liveButton.attributes['aria-pressed'], 'true', 'nova geração reativa a mesma janela');
 const oldDocument = fakePopup.document;
 Object.defineProperty(fakePopup, 'document', { configurable:true, get() { throw new Error('SecurityError'); } });
 parentIntervals[0]();
