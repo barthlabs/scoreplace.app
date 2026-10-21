@@ -149,10 +149,9 @@ window._woReplaceTeamWithStandby = function(t, match, slot, opts) {
     }
   });
   if (!updates.some(u => String(u.matchId) === String(match.id) && u.slot === slot)) return { ok: false, reason: 'match-not-updated' };
-  if (Array.isArray(t.participants)) t.participants = t.participants.map(p => {
-    const id = window._woTeamIdentity(p);
-    return id && id.key === oldTeam.key ? Object.assign({}, replacement) : p;
-  });
+  // O elenco de inscrições é histórico e, em torneios migrados, reconstruído da
+  // subcoleção canônica a cada leitura. A suplente assume os jogos futuros;
+  // a dupla ausente continua inscrita e identificável no elenco.
   const remove = p => { const id = window._woTeamIdentity(p); return !id || id.key !== newTeam.key; };
   if (Array.isArray(t.standbyParticipants)) t.standbyParticipants = t.standbyParticipants.filter(remove);
   if (Array.isArray(t.waitlist)) t.waitlist = t.waitlist.filter(remove);
