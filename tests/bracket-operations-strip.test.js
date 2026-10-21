@@ -152,6 +152,56 @@ assert(start > 0 && end > start);
       }, names);
       assert.deepEqual(rendered, { sameTeams: true, sameStructure: true, operational: true, scoped: true, clean: true });
     } finally { await real.close(); }
+    const scoringPage = await browser.newPage();
+    try {
+      await scoringPage.addScriptTag({ content: fs.readFileSync('js/views/bracket-ui.js', 'utf8') });
+      const saved = await scoringPage.evaluate(async () => {
+        const matches = ['simple', 'best3', 'tiebreak'].map(id => ({ id, p1: 'A', p2: 'B', group: 0 }));
+        const tournament = { id: 'sb_scores', matches, scoring: { type: 'simple' } };
+        const calls = [];
+        window.AppStore = { currentUser: { uid: 'org' },
+          commitResultTx: (tid, mid, payload) => { calls.push({ mid, payload }); return Promise.resolve(true); }, logAction: () => {} };
+        window._findTournamentById = () => tournament;
+        window._findMatch = (t, id) => t.matches.find(match => match.id === id);
+        window._effectiveScoring = t => t.scoring;
+        window._scoringUsesSets = scoring => scoring.type === 'sets';
+        window._matchSetPlan = (scoring, match) => match.id === 'best3'
+          ? { initialTwoSetEntry: true, superTiebreak: true, superTiebreakPoints: 10, tiebreakMargin: 2 } : null;
+        window._validateNormalSetScore = () => ({ ok: true });
+        window._tbLoserGames = () => 6;
+        window._isTiebreakSetScore = (a, b) => Math.min(a, b) === 6 && Math.max(a, b) === 7;
+        window._tbMargem = () => 2;
+        window._tbPoints = (a, b) => ({ pointsP1: a, pointsP2: b });
+        window._resultNeedsApproval = () => false;
+        window._checkGroupRoundComplete = () => {};
+        window._idMapHas = () => true;
+        window._idMapDel = () => {};
+        window._propagateMatchUpdate = () => {};
+        window._rerenderBracket = () => {};
+        window._t = key => key;
+        window.showNotification = () => {};
+        const field = (key, value, scoped) => '<input ' + (scoped ? 'data-operations-source-input' : 'id') + '="' + key + '" value="' + value + '">';
+        const submit = async (id, values) => {
+          const op = document.createElement('div');
+          op.innerHTML = Object.entries(values).map(([key, value]) => field(key, value, true)).join('');
+          // A chave contém números diferentes: o servidor precisa receber a faixa.
+          document.body.innerHTML = Object.keys(values).map(key => field(key, 1, false)).join('');
+          await window._saveResultInline(tournament.id, id, op);
+        };
+        await submit('simple', { 's1-simple': 6, 's2-simple': 3 });
+        tournament.scoring = { type: 'sets', tiebreakEnabled: true };
+        await submit('best3', { 's1-best3-0': 6, 's2-best3-0': 4, 's1-best3-1': 4,
+          's2-best3-1': 6, 's1-best3-2': 10, 's2-best3-2': 8 });
+        await submit('tiebreak', { 's1-tiebreak': 7, 's2-tiebreak': 6, 'tb1-tiebreak': 7, 'tb2-tiebreak': 5 });
+        return calls.map(call => ({ mid: call.mid, payload: call.payload }));
+      });
+      assert.deepEqual(saved.map(call => call.mid), ['simple', 'best3', 'tiebreak']);
+      assert.deepEqual([saved[0].payload.s1, saved[0].payload.s2], [6, 3]);
+      assert.deepEqual(saved[1].payload.sets.map(set => [set.gamesP1, set.gamesP2]), [[6, 4], [4, 6], [10, 8]]);
+      assert.deepEqual([saved[1].payload.setsWonP1, saved[1].payload.setsWonP2], [2, 1]);
+      assert.deepEqual([saved[2].payload.s1, saved[2].payload.s2, saved[2].payload.tbP1, saved[2].payload.tbP2], [7, 6, 7, 5]);
+      assert.equal(saved[2].payload.isTiebreakEntry, true);
+    } finally { await scoringPage.close(); }
     console.log('✓ faixa replica o card completo com IDs únicos, chamada, placar e relógio');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
