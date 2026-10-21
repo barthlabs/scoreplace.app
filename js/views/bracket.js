@@ -384,6 +384,8 @@ function _limparCamadasTransitóriasDaChave(container) {
     try { _bracketGeneralView(root, false); } catch (eG) {}
     var generalView = root._bracketGeneralView;
     if (generalView && generalView.parentNode) generalView.parentNode.removeChild(generalView);
+    var operationsStrip = root._bracketOperationsStrip;
+    if (operationsStrip && operationsStrip.parentNode) operationsStrip.parentNode.removeChild(operationsStrip);
     var portalDoRoot = root._bracketRoundHeadingPortal;
     if (portalDoRoot && portalDoRoot.parentNode) portalDoRoot.parentNode.removeChild(portalDoRoot);
     if (root.parentNode) root.parentNode.removeChild(root);
@@ -1178,6 +1180,333 @@ function _bracketAgendaCompare(a, b) {
   return byCourt || (Number(a.position) || 0) - (Number(b.position) || 0);
 }
 
+// Atalhos de operação da chave. A seleção é calculada sempre do torneio
+// completo; abas, busca e dia visível não podem fazer um jogo sumir daqui.
+window._bracketOperationsSelect = function (t) {
+  var occupancy = window.ScoreplaceCourtOccupancy;
+  var known = window.ScoreplaceNextMatch && window.ScoreplaceNextMatch.knownSide;
+  if (!t || !occupancy || !known || typeof window._collectAllMatches !== 'function') return null;
+  var matches = window._collectAllMatches(t) || [];
+  var expected = Number(t._nJogos);
+  if (t._resumo || t._doCache || t._faltamPesados || (expected > 0 && new Set(matches.map(function (m) { return String(m && m.id || ''); })).size < expected)) return null;
+  var active = matches.filter(function (m) { return occupancy.occupiesCourt(m); });
+  var upcoming = matches.filter(function (m) {
+    if (!m || occupancy.isFinished(m) || m.isBye || m.isSitOut || occupancy.occupiesCourt(m) ||
+        m.courtCalledAt || m.startedAt || !_matchCardTimestamp(m.scheduledAt)) return false;
+    var a = m.p1 || (Array.isArray(m.team1) ? m.team1.join(' / ') : '');
+    var b = m.p2 || (Array.isArray(m.team2) ? m.team2.join(' / ') : '');
+    return known(a) && known(b);
+  }).map(function (m) { return { item: { m: m, tId: t.id } }; });
+  upcoming.sort(window._dashboardNextMatchCompare || function (a, b) {
+    return _bracketAgendaCompare({ at: _matchCardTimestamp(a.item.m.scheduledAt), num: a.item.m._gameNum },
+      { at: _matchCardTimestamp(b.item.m.scheduledAt), num: b.item.m._gameNum });
+  });
+  var courts = Array.isArray(t.courtNames) ? t.courtNames.map(String) :
+    (typeof t.courtNames === 'string' ? t.courtNames.split(',').map(function (name) { return name.trim(); }).filter(Boolean) : []);
+  if (!courts.length) for (var c = 1; c <= Math.max(0, Number(t.courtCount) || 0); c++) courts.push('Quadra ' + c);
+  active.forEach(function (m) { if (courts.indexOf(String(m.court)) === -1) courts.push(String(m.court)); });
+  return { next: upcoming.length ? upcoming[0].item.m : null, active: active, courts: courts };
+};
+
+function _bracketReconcileOperationalOrder(root) {
+  if (!root) return;
+  var card = document.getElementById('tourn-grid-container');
+  var strip = root._bracketOperationsStrip;
+  var general = root._bracketGeneralView;
+  if (!card || !card.parentNode) return;
+  if (strip && strip.previousElementSibling !== card) card.insertAdjacentElement('afterend', strip);
+  var anchor = strip && strip.parentNode === card.parentNode ? strip : card;
+  if (general && general.previousElementSibling !== anchor) anchor.insertAdjacentElement('afterend', general);
+  _bracketSyncRoundHeadingOffsets();
+}
+
+function _bracketOperationsCard(m, t, label, canCall) {
+  var safe = window._safeHtml || function (s) { return String(s); };
+  var name = function (slot) {
+    var raw = String(m[slot] || '');
+    var uids = typeof window._slotUidsPositional === 'function' ? window._slotUidsPositional(m, slot, t) : null;
+    return safe(typeof window._resolveSideLive === 'function' ? window._resolveSideLive(t, raw, uids) || raw : raw);
+  };
+  var number = m._gameNum || m.scheduledGameNumber || m.matchNumber || '';
+  var court = m.court ? ' · ' + safe(m.court) : '';
+  var action = canCall ? 'Abrir para chamar' : 'Abrir jogo';
+  return '<button type="button" class="sp-operations-card" data-operations-open="1" data-operations-match="' + safe(String(m.id || '')) +
+    '" aria-label="' + safe(action + ' ' + number) + '"><span class="sp-operations-label">' + safe(label) +
+    '</span><strong>JOGO ' + safe(number) + ' · ' + safe(m.category || m.tierLabel || '') + court +
+    '</strong><span class="sp-operations-sides">' + name('p1') + ' <b>vs</b> ' + name('p2') + '</span><small>' + action + '</small></button>';
+}
+
+function _bracketOperationsCourtCard(m, t, canClock) {
+  var safe = window._safeHtml || function (s) { return String(s); };
+  var name = function (slot) {
+    var raw = String(m[slot] || '');
+    var uids = typeof window._slotUidsPositional === 'function' ? window._slotUidsPositional(m, slot, t) : null;
+    return safe(typeof window._resolveSideLive === 'function' ? window._resolveSideLive(t, raw, uids) || raw : raw);
+  };
+  var id = safe(String(m.id || ''));
+  var number = m._gameNum || m.scheduledGameNumber || m.matchNumber || '';
+  var started = _matchCardTimestamp(m.courtClockBaseAt || m.courtCalledAt || m.startedAt);
+  var clock = started && typeof window._spCourtClockHtml === 'function'
+    ? window._spCourtClockHtml(started, t, Date.now(), t.id, m.id, canClock) : '';
+  return '<article class="sp-operations-court-card" data-operations-match="' + id + '">' +
+    '<div class="sp-operations-court-head"><strong>' + safe(String(m.court || '')) + ' · JOGO ' + safe(number) + '</strong>' +
+    '<span>' + safe(m.category || m.tierLabel || '') + '</span></div>' +
+    '<div class="sp-operations-team"><span class="sp-operations-team-name">' + name('p1') + '</span><div class="sp-operations-score" data-operations-score="p1"></div></div>' +
+    '<div class="sp-operations-vs">VS</div>' +
+    '<div class="sp-operations-team"><span class="sp-operations-team-name">' + name('p2') + '</span><div class="sp-operations-score" data-operations-score="p2"></div></div>' +
+    '<div class="sp-match-operational sp-operations-clock"><div class="sp-match-court sp-match-court--readonly">' + safe(String(m.court || '')) + '</div>' + clock + '</div>' +
+    '<div class="sp-operations-actions"><button type="button" class="sp-operations-confirm" hidden>✓ Confirmar</button>' +
+    '<button type="button" data-operations-open="1" class="sp-operations-open">Abrir jogo</button></div></article>';
+}
+
+function _bracketOperationsCanonical(matchId) {
+  return document.getElementById('card-' + String(matchId));
+}
+
+function _bracketOperationsCanonicalConfirm(card, matchId) {
+  return card && Array.prototype.find.call(card.querySelectorAll('button[data-confirm-for]'), function (button) {
+    return button.id === 'confirm-' + String(matchId);
+  });
+}
+
+function _bracketOperationsSyncConfirm(op, matchId) {
+  var button = op && op.querySelector('.sp-operations-confirm');
+  var source = _bracketOperationsCanonicalConfirm(_bracketOperationsCanonical(matchId), matchId);
+  if (!button) return;
+  button.hidden = !source || source.disabled || source.style.display === 'none' ||
+    (typeof getComputedStyle === 'function' && getComputedStyle(source).display === 'none');
+  button.disabled = !source || source.disabled;
+}
+
+function _bracketOperationsRenderScore(op, matchId, draft) {
+  var card = _bracketOperationsCanonical(matchId);
+  var confirm = _bracketOperationsCanonicalConfirm(card, matchId);
+  var open = op.querySelector('.sp-operations-open');
+  ['p1', 'p2'].forEach(function (side) {
+    var target = op.querySelector('[data-operations-score="' + side + '"]');
+    var source = card && Array.prototype.find.call(card.querySelectorAll('.sp-mc-sc'), function (node) {
+      return node.id === 'score-' + side + '-' + matchId;
+    });
+    if (!target) return;
+    target.replaceChildren();
+    if (!source) return;
+    var copy = source.cloneNode(true);
+    Array.prototype.forEach.call(copy.querySelectorAll('[id], [oninput], [onchange], [onclick]'), function (node) {
+      if (node.tagName === 'INPUT' && node.id) {
+        node.setAttribute('data-operations-source-input', node.id);
+        if (draft && Object.prototype.hasOwnProperty.call(draft, node.id)) node.value = draft[node.id];
+        if (!confirm) node.disabled = true;
+      }
+      node.removeAttribute('id');
+      node.removeAttribute('oninput');
+      node.removeAttribute('onchange');
+      node.removeAttribute('onclick');
+    });
+    copy.removeAttribute('id');
+    target.appendChild(copy);
+  });
+  if (open) open.hidden = !!confirm;
+  _bracketOperationsSyncConfirm(op, matchId);
+}
+
+function _bracketOperationsDraftValues(op) {
+  var values = {};
+  Array.prototype.forEach.call(op.querySelectorAll('input[data-operations-source-input]'), function (input) {
+    values[input.getAttribute('data-operations-source-input')] = input.value;
+  });
+  return values;
+}
+
+function _bracketOperationsFingerprint(m) {
+  return JSON.stringify([m.scoreP1, m.scoreP2, m.sets, m.winner, m.resultAt, m.pendingResult]);
+}
+
+window._bracketOperationsRefresh = function (t, root) {
+  root = root || Array.prototype.find.call(document.querySelectorAll('[data-bracket-tabs-root]'), function (node) {
+    return t && node.getAttribute('data-tournament-id') === String(t.id);
+  });
+  if (!root || !t || root.getAttribute('data-tournament-id') !== String(t.id)) return;
+  var existing = root._bracketOperationsStrip;
+  var user = window.AppStore && window.AppStore.currentUser;
+  var authorized = typeof window._isUserAuthority === 'function' && window._isUserAuthority(t, user);
+  var concentrated = typeof window._isConcentratedTournament === 'function' && window._isConcentratedTournament(t);
+  if (!authorized || !concentrated || !document.getElementById('tourn-grid-container')) {
+    if (existing && existing.parentNode) existing.remove();
+    root._bracketOperationsStrip = null;
+    _bracketReconcileOperationalOrder(root);
+    return;
+  }
+  var state = window._bracketOperationsSelect(t);
+  if (!state) return; // eco incompleto nunca apaga a faixa anterior
+  if (!existing) {
+    existing = document.createElement('section');
+    existing.setAttribute('data-bracket-operations-strip', '1');
+    existing.setAttribute('aria-label', 'Jogos que precisam de atenção');
+    root._bracketOperationsStrip = existing;
+    existing.addEventListener('click', function (event) {
+      var confirm = event.target && event.target.closest('.sp-operations-confirm');
+      if (confirm) {
+        var op = confirm.closest('.sp-operations-court-card');
+        var mid = op && op.getAttribute('data-operations-match');
+        var tid = String(t.id);
+        var save = window._saveResultInline;
+        var sourceCard = mid && _bracketOperationsCanonical(mid);
+        var sourceButton = _bracketOperationsCanonicalConfirm(sourceCard, mid);
+        if (!sourceCard || !sourceButton || typeof save !== 'function' || sourceButton.disabled || sourceButton.style.display === 'none' ||
+            (typeof getComputedStyle === 'function' && getComputedStyle(sourceButton).display === 'none')) return;
+        var inputs = Array.prototype.slice.call(op.querySelectorAll('input[data-operations-source-input]'));
+        var matched = inputs.length > 0 && inputs.every(function (input) {
+          var source = sourceCard && Array.prototype.find.call(sourceCard.querySelectorAll('input[id]'), function (node) {
+            return node.id === input.getAttribute('data-operations-source-input');
+          });
+          return !!source;
+        });
+        if (!matched) return;
+        inputs.forEach(function (input) {
+          var source = Array.prototype.find.call(sourceCard.querySelectorAll('input[id]'), function (node) {
+            return node.id === input.getAttribute('data-operations-source-input');
+          });
+          if (source) { source.value = input.value; source.dispatchEvent(new Event('input', { bubbles: true })); }
+        });
+        // Um handler externo pode reconstruir a chave durante `input`. Nesse
+        // caso não salvar valores de um card velho nem repetir o clique.
+        if (!sourceCard.isConnected || _bracketOperationsCanonical(mid) !== sourceCard) return;
+        sourceButton = _bracketOperationsCanonicalConfirm(sourceCard, mid);
+        if (sourceButton && !sourceButton.disabled && sourceButton.style.display !== 'none' &&
+            (typeof getComputedStyle !== 'function' || getComputedStyle(sourceButton).display !== 'none')) save(tid, mid);
+        return;
+      }
+      var target = event.target && event.target.closest('[data-operations-open]');
+      var match = target && target.closest('[data-operations-match]');
+      if (match) window._bracketOperationsOpen(String(t.id), match.getAttribute('data-operations-match'));
+    });
+    existing.addEventListener('input', function (event) {
+      var input = event.target && event.target.closest('input[data-operations-source-input]');
+      if (!input) return;
+      var op = input.closest('.sp-operations-court-card');
+      var mid = op && op.getAttribute('data-operations-match');
+      var card = mid && _bracketOperationsCanonical(mid);
+      var source = card && Array.prototype.find.call(card.querySelectorAll('input[id]'), function (node) {
+        return node.id === input.getAttribute('data-operations-source-input');
+      });
+      if (!source) return;
+      source.value = input.value;
+      source.dispatchEvent(new Event('input', { bubbles: true }));
+      var tournament = typeof window._findTournamentById === 'function' ? window._findTournamentById(String(t.id)) : t;
+      var current = tournament && (window._collectAllMatches(tournament) || []).find(function (m) { return String(m.id) === mid; });
+      root._bracketOperationsDrafts = root._bracketOperationsDrafts || {};
+      root._bracketOperationsDrafts[mid] = { fingerprint: _bracketOperationsFingerprint(current || {}), values: _bracketOperationsDraftValues(op) };
+      _bracketOperationsRenderScore(op, mid, root._bracketOperationsDrafts[mid].values);
+      var next = Array.prototype.find.call(op.querySelectorAll('input[data-operations-source-input]'), function (node) {
+        return node.getAttribute('data-operations-source-input') === source.id;
+      });
+      if (next) next.focus();
+    });
+    existing.addEventListener('change', function (event) {
+      var input = event.target && event.target.closest('input[data-operations-source-input]');
+      if (!input) return;
+      var op = input.closest('.sp-operations-court-card');
+      var card = op && _bracketOperationsCanonical(op.getAttribute('data-operations-match'));
+      var source = card && Array.prototype.find.call(card.querySelectorAll('input[id]'), function (node) {
+        return node.id === input.getAttribute('data-operations-source-input');
+      });
+      if (source) source.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  }
+  root._bracketOperationsDrafts = root._bracketOperationsDrafts || {};
+  Array.prototype.forEach.call(existing.querySelectorAll('.sp-operations-court-card'), function (op) {
+    var mid = op.getAttribute('data-operations-match');
+    var current = state.active.find(function (m) { return String(m.id) === mid; });
+    if (current && op._spFingerprint === _bracketOperationsFingerprint(current)) {
+      root._bracketOperationsDrafts[mid] = {
+        fingerprint: op._spFingerprint, values: _bracketOperationsDraftValues(op)
+      };
+    } else delete root._bracketOperationsDrafts[mid];
+  });
+  var canCall = typeof window._souOrganizador === 'function' && window._souOrganizador(t);
+  var uid = user && user.uid;
+  var canClock = !!(canCall && uid && (String(t.creatorUid || '') === uid ||
+    (Array.isArray(t.adminUids) && t.adminUids.indexOf(uid) !== -1)));
+  var nextLabel = canCall ? 'PRÓXIMO A CHAMAR' : 'PRÓXIMO JOGO';
+  existing.innerHTML = '<div class="sp-operations-track"><div class="sp-operations-next">' +
+    (state.next ? _bracketOperationsCard(state.next, t, nextLabel, canCall) : '<div class="sp-operations-empty">Nenhum jogo aguardando chamada</div>') +
+    '</div><div class="sp-operations-courts" aria-label="Jogos em quadra"><span class="sp-operations-section-title">EM QUADRA</span><div class="sp-operations-court-track">' +
+    state.courts.map(function (court) {
+      var games = state.active.filter(function (m) { return String(m.court) === court; });
+      return '<div class="sp-operations-court-slot' + (games.length ? ' sp-operations-court-slot--active' : '') + '">' +
+        (games.length ? games.map(function (m) { return _bracketOperationsCourtCard(m, t, canClock); }).join('') :
+          '<div class="sp-operations-court-free"><strong>' + window._safeHtml(court) + '</strong><span>Livre</span></div>') +
+        '</div>';
+    }).join('') +
+    '</div></div></div>';
+  Array.prototype.forEach.call(existing.querySelectorAll('.sp-operations-court-card'), function (op) {
+    var mid = op.getAttribute('data-operations-match');
+    var current = state.active.find(function (m) { return String(m.id) === mid; });
+    var draft = root._bracketOperationsDrafts[mid];
+    if (!current || !draft || draft.fingerprint !== _bracketOperationsFingerprint(current)) {
+      delete root._bracketOperationsDrafts[mid];
+      draft = null;
+    }
+    if (draft) {
+      var card = _bracketOperationsCanonical(mid);
+      Object.keys(draft.values).forEach(function (id) {
+        var source = card && Array.prototype.find.call(card.querySelectorAll('input[id]'), function (node) { return node.id === id; });
+        if (source) { source.value = draft.values[id]; source.dispatchEvent(new Event('input', { bubbles: true })); }
+      });
+    }
+    _bracketOperationsRenderScore(op, mid, draft && draft.values);
+    op._spFingerprint = _bracketOperationsFingerprint(current);
+  });
+  var nextId = state.next && String(state.next.id);
+  var activeIds = new Set(state.active.map(function (m) { return String(m.id); }));
+  var scope = root._bracketCardsScope || document.getElementById('view-container');
+  if (scope) Array.prototype.forEach.call(scope.querySelectorAll('.sp-match-card[id]'), function (card) {
+    if (card._spOperationsOldBorder != null) {
+      card.style.border = card._spOperationsOldBorder;
+      card._spOperationsOldBorder = null;
+    }
+    if (activeIds.has(card.id.replace(/^card-/, ''))) {
+      card.style.border = '3px solid var(--sp-c-22c55e,#22c55e)';
+    } else if (nextId && card.id === 'card-' + nextId) {
+      card._spOperationsOldBorder = card.style.border;
+      card.style.border = '3px solid var(--sp-c-fbbf24,#fbbf24)';
+    }
+  });
+  _bracketReconcileOperationalOrder(root);
+};
+
+window._bracketOperationsOpen = function (tId, matchId) {
+  var root = Array.prototype.find.call(document.querySelectorAll('[data-bracket-tabs-root]'), function (node) {
+    return node.getAttribute('data-tournament-id') === String(tId);
+  });
+  if (!root) return;
+  var card = document.getElementById('card-' + String(matchId));
+  if (!card) {
+    if (typeof window._rerenderBracket === 'function') {
+      window._rerenderBracket(tId, matchId);
+      setTimeout(function () {
+        var mounted = document.getElementById('card-' + String(matchId));
+        if (mounted) window._bracketOperationsOpen(tId, matchId);
+        else if (typeof showNotification === 'function') showNotification('Jogo fora da chave visível', 'Selecione a fase do jogo para lançar o placar.', 'info');
+      }, 250);
+    } else if (typeof showNotification === 'function') showNotification('Jogo fora da chave visível', 'Selecione a fase do jogo para lançar o placar.', 'info');
+    return;
+  }
+  var gender = root.getAttribute('data-bracket-date-tabs') === '1'
+    ? card.getAttribute('data-bracket-tab-day') : card.getAttribute('data-bracket-tab-gender');
+  var category = card.getAttribute('data-bracket-tab-category');
+  if (gender && category) _bracketTabsApply(tId, gender, category, card.getAttribute('data-bracket-tab-round') || '');
+  _bracketClearSearchForHeaderFilter();
+  var focus = function () {
+    var current = document.getElementById('card-' + String(matchId));
+    if (current && typeof window._bracketFocusOperationalCard === 'function')
+      window._bracketFocusOperationalCard(root, current, 'auto');
+    else if (current && current.scrollIntoView) current.scrollIntoView({ block: 'start' });
+  };
+  focus();
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(focus);
+};
+
 function _bracketAgendaExpected(t, day, category, zone) {
   if (!t || typeof window._collectAllMatches !== 'function') return null;
   var all = window._collectAllMatches(t) || [];
@@ -1362,21 +1691,14 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
     view.style.cssText = 'display:none;margin:12px 0 18px;width:100%;max-width:100%;min-width:0;box-sizing:border-box;overflow-x:clip;isolation:isolate;';
     operationalAnchor.insertAdjacentElement('afterend', view);
     root._bracketGeneralView = view;
-  } else if (operationalAnchor.parentNode && view.previousElementSibling !== operationalAnchor) {
-    // O detalhe é recriado depois de uma atualização de placar. Recoloque a
-    // visão operacional logo abaixo dele sem recriar inputs ou perder a aba.
-    operationalAnchor.insertAdjacentElement('afterend', view);
   }
+  _bracketReconcileOperationalOrder(root);
   // A montagem do detalhe pode terminar depois das abas. Reconciliamos no
   // próximo quadro para que a visão operacional nunca permaneça acima dele.
   // Não depende de timing de render, nem recria os cards já movidos.
   // [[regression_operational_view_waits_for_tournament_details]]
   if (typeof requestAnimationFrame === 'function') requestAnimationFrame(function () {
-    var mountedDetails = document.getElementById('tourn-grid-container');
-    if (mountedDetails && mountedDetails.parentNode && view.parentNode && view.previousElementSibling !== mountedDetails) {
-      mountedDetails.insertAdjacentElement('afterend', view);
-    }
-    _bracketSyncRoundHeadingOffsets();
+    _bracketReconcileOperationalOrder(root);
   });
   var entries = root._bracketGeneralEntries || [];
   if (show && entries.length && root._bracketGeneralDay === gender &&
@@ -2184,6 +2506,7 @@ window._bracketCategoryTabsMount = function () {
   if (id !== 'current') root.setAttribute('data-tournament-id', id);
   root._bracketTabsScope = scope;
   root._bracketCardsScope = detailScope;
+  window._bracketOperationsRefresh(currentTournament, root);
   // Fase classificatória comum pode trocar de rodada. Já a agenda concentrada
   // por times (Neon) precisa deixar R1–R4 visíveis lado a lado: esconder cada
   // coluna atrás de uma terceira aba apaga justamente os jogos futuros.
@@ -3961,6 +4284,7 @@ window._confirmMatchCourtCall = function(button, tId, matchId) {
             card.style.border = '3px solid #22c55e';
           }
         });
+        if (typeof window._bracketOperationsRefresh === 'function') window._bracketOperationsRefresh(current);
       }
       if (row && Number.isFinite(start)) {
         var clockHtml = window._spCourtClockHtml(start, current, Date.now(), tId, matchId, true);
@@ -3993,6 +4317,14 @@ window._adjustMatchCourtClock = function(button, tId, matchId, action) {
       if (row && Number.isFinite(start)) {
         var timer = row.querySelector('.sp-match-call-timer');
         if (timer) timer.setAttribute('data-start-ms', String(start));
+      }
+      if (Number.isFinite(start)) {
+        Array.prototype.forEach.call(document.querySelectorAll('.sp-operations-court-card[data-operations-match], .sp-match-card[id]'), function (node) {
+          if (node.getAttribute('data-operations-match') !== String(matchId) && node.id !== 'card-' + String(matchId)) return;
+          Array.prototype.forEach.call(node.querySelectorAll('.sp-match-call-timer'), function (timer) {
+            timer.setAttribute('data-start-ms', String(start));
+          });
+        });
       }
       if (current && typeof window._collectAllMatches === 'function') {
         window._collectAllMatches(current).forEach(function(match) {

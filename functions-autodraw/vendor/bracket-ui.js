@@ -2123,6 +2123,7 @@ function _finalizeRoundCardInPlace(t, m, tId, matchId) {
   }
   if (!html) return false;
   card.outerHTML = html;
+  if (typeof window._bracketOperationsRefresh === 'function') window._bracketOperationsRefresh(t);
   return true;
 }
 

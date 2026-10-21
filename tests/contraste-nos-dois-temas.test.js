@@ -389,5 +389,24 @@ console.log('\n== Contraste nos DOIS temas ==');
   }
 })();
 
+// Faixa operacional: bordas, entradas de placar e fases do relógio nos dois temas.
+(function () {
+  const css = fs.readFileSync(path.join(ROOT, 'css', 'bracket.css'), 'utf8');
+  ok(/sp-operations-court-card[\s\S]*?border:2px solid var\(--sp-c-22c55e/.test(css), 'slot em quadra usa contorno verde do tema');
+  ok(/sp-operations-next \{ border-color: var\(--sp-c-fbbf24/.test(css), 'próximo a chamar usa contorno dourado do tema');
+  ok(/\.sp-operations-score input \{[^}]*color:var\(--text-bright\);background:var\(--bg-darker\)/.test(css), 'entrada do placar usa tokens de texto e fundo');
+  ok(/\.sp-operations-court-head span \{ color:var\(--text-muted\)/.test(css), 'categoria do slot usa texto secundário do tema');
+  ok(/\.sp-operations-label \{ color:\s*var\(--sp-c-fbbf24/.test(css), 'rótulo próximo usa dourado do tema');
+  for (const [theme, card, fieldBg, text, muted, green, gold, call, warm, game, overdue] of [
+    ['escuro', '#2c2c2e', '#111114', '#f2f2f7', '#98989d', '#22c55e', '#fbbf24', '#38bdf8', '#fbbf24', '#4ade80', '#f87171'],
+    ['claro', '#ffffff', '#f2f2f7', '#1c1c1e', '#5f5f64', '#166534', '#92400e', '#0369a1', '#92400e', '#166534', '#b91c1c']
+  ]) {
+    ok(contraste(hex(card), hex(green)) >= 3 && contraste(hex(card), hex(gold)) >= 3, theme + ': contornos distinguíveis');
+    ok(contraste(hex(fieldBg), hex(text)) >= 4.5, theme + ': números editáveis legíveis');
+    ok([muted, green, gold].every(color => contraste(hex(fieldBg), hex(color)) >= 4.5), theme + ': categoria e rótulos da faixa legíveis');
+    ok([call, warm, game, overdue].every(color => contraste(hex(fieldBg), hex(color)) >= 4.5), theme + ': fases do relógio legíveis');
+  }
+})();
+
 console.log('\n' + pass + ' ok, ' + fail + ' falhas');
 process.exit(fail ? 1 : 0);
