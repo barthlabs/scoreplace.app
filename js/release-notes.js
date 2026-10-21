@@ -2,6 +2,8 @@
 // Google Play e web. Os dois nomes do time à esquerda ficam alinhados à esquerda
 // nos últimos resultados. A borda verde na chave confirma o OK da quadra;
 // a TV conserva o destaque dourado da última transição.
+// Nas chaves, jogos prontos e aguardando presença aparecem apenas nas abas
+// e rodadas, sem painel duplicado acima delas.
 // 2.5.19 — O botão NO AR só acende e pisca enquanto a janela de TV do torneio
 // está visível e ativa. Ao ocultar, fechar ou trocar essa janela, ele apaga;
 // após recarregar a chave, recupera o estado da TV que continua aberta. Se o

@@ -3437,8 +3437,6 @@ function renderBracket(container, tournamentId, isInline) {
 
   // ── "Só meus jogos" toggle is now inside the sticky header (headerHtml) ──
 
-  // Banner "Jogos Prontos" — shown at the top of every bracket view after tournament start
-  const readyBannerHtml = (typeof window._renderReadyMatchesBanner === 'function') ? window._renderReadyMatchesBanner(t) : '';
   // Waitlist panel — shown at the end of every bracket view (Liga/Suíço/Grupos/Monarch/Elim)
   const standbyHtml = _renderStandbyPanel(t, isOrg);
 
@@ -3572,7 +3570,7 @@ function renderBracket(container, tournamentId, isInline) {
   // ── Liga / Suíço (Liga inclui antigo Ranking) ──────────────────────────────
   if (isLiga || isSuico) {
     _pintarEmEtapas(container, headerHtml + _subChoiceBanner + _ligaInviteBanner + _phaseAdvanceBanner + startTournamentBanner,
-      function () { return renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarHtml, { standbyHtml: standbyHtml }); }, _applyMyMatchesFilter);
+      function () { return renderStandings(t, isOrg, canEnterResult, '', progressBarHtml, { standbyHtml: standbyHtml }); }, _applyMyMatchesFilter);
     return;
   }
 
@@ -3591,7 +3589,7 @@ function renderBracket(container, tournamentId, isInline) {
       // a ordem jogaria a espera pra cima dos grupos.
       // Mesmo contrato explicitamente pedido para o Neon: a classificação geral dos times é
       // o resumo acima da chave; os detalhes por categoria ficam recolhidos.
-      _pintarEmEtapas(container, headerHtml + _subChoiceBanner + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + readyBannerHtml,
+      _pintarEmEtapas(container, headerHtml + _subChoiceBanner + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml,
         function () { return _competitionTeamStandingsHtml + renderGroupStage(t, isOrg, canEnterResult) + standbyHtml; }, _applyMyMatchesFilter);
       return;
     }
@@ -3624,9 +3622,9 @@ function renderBracket(container, tournamentId, isInline) {
   var operationalSlot = isOrg ? '<div id="' + _opSlotId + '"></div>' : '';
   try {
     if (isDupla) {
-      container.innerHTML = headerHtml + _subChoiceBanner + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + readyBannerHtml + operationalSlot + renderDoubleElimBracket(t, canEnterResult, standbyHtml);
+      container.innerHTML = headerHtml + _subChoiceBanner + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + operationalSlot + renderDoubleElimBracket(t, canEnterResult, standbyHtml);
     } else {
-      container.innerHTML = headerHtml + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + readyBannerHtml + operationalSlot + renderSingleElimBracket(t, canEnterResult, standbyHtml);
+      container.innerHTML = headerHtml + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + operationalSlot + renderSingleElimBracket(t, canEnterResult, standbyHtml);
     }
   } catch (bracketErr) {
     window._error('[Bracket] Render error:', bracketErr);

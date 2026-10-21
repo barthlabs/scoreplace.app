@@ -1100,6 +1100,7 @@ const SUITES = [
   'tests/bracket-agenda-order.test.js',
   'tests/superficies-abas-resize-observer.test.js',
   'tests/bracket-geral-agenda.test.js',
+  'tests/bracket-sem-painel-presenca.test.js',
   'tests/tv-live-snapshot.test.js',
   'tests/tv-open-page.test.js',
   'tests/court-occupancy.test.js',
