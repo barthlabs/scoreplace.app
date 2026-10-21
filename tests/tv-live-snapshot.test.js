@@ -210,6 +210,15 @@ vm.runInNewContext(childSource[0].slice(8, -9), { window: childWindow, document:
 assert(childTick && childRoot.innerHTML.includes('CLASSIFICAÇÃO'), 'janela restaura conteúdo sem o timer da aba');
 assert.equal(liveButton.attributes['aria-pressed'], 'true', 'heartbeat da página liga o botão');
 assert.equal(window._tvLiveWindow, fakePopup, 'só página confirmada aparece como NO AR');
+fakePopup.document.visibilityState = 'hidden';
+childDocument.visibilityState = 'hidden';
+childTick();
+assert.equal(liveButton.attributes['aria-pressed'], 'false', 'janela oculta desliga o indicador mesmo continuando aberta');
+assert.equal(window._tvLiveWindow, null, 'renderizações da chave também veem a janela oculta como inativa');
+fakePopup.document.visibilityState = 'visible';
+childDocument.visibilityState = 'visible';
+childTick();
+assert.equal(liveButton.attributes['aria-pressed'], 'true', 'janela visível volta a indicar NO AR sem reabrir');
 childOwner._findTournamentById = () => ({ ...t, name: 'Após recarregar' });
 childTick();
 assert.match(childRoot.innerHTML, /Após recarregar/, 'janela retoma o torneio quando a aba conclui o reload');
