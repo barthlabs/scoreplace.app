@@ -3,13 +3,18 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 const root = path.join(__dirname, '..');
+let nowMs = Date.now();
+class TestDate extends Date { static now() { return nowMs; } }
+const parentHandlers = {};
+const parentIntervals = [];
+const liveButton = { attributes: {}, style: {}, setAttribute(name, value) { this.attributes[name] = value; } };
 const window = { _collectAllMatches: t => t.matches, _tourLogoSrc: t => t.logo,
-  addEventListener() {},
+  addEventListener(name, fn) { parentHandlers[name] = fn; },
   location: { origin: 'https://scoreplace.app' },
   _tournamentUrl: id => `https://scoreplace.app/#tournaments/${id}`,
   _qrCodeUrl: url => `https://qr.example/?data=${encodeURIComponent(url)}` };
-const context = vm.createContext({ window, document: { querySelectorAll: () => [] }, Date, Number, String, Array, Set,
-  setInterval: () => 1, clearInterval: () => {} });
+const context = vm.createContext({ window, document: { querySelectorAll: selector => selector === '[data-tv-live-button]' ? [liveButton] : [] }, Date:TestDate, Number, String, Array, Set,
+  setInterval: fn => { parentIntervals.push(fn); return parentIntervals.length; }, clearInterval: () => {} });
 vm.runInContext(fs.readFileSync(path.join(root, 'js/domain/team-competition.js'), 'utf8'), context);
 window.ScoreplaceTeamCompetition = context.ScoreplaceTeamCompetition;
 vm.runInContext(fs.readFileSync(path.join(root, 'js/domain/match-timing.js'), 'utf8'), context);
@@ -143,7 +148,7 @@ const tvTimer = { start:Date.now() - 15000, getAttribute() { return String(this.
 t.callTime = 1;
 t.warmupTime = 1;
 t.gameDuration = 1;
-const fakePopup = { closed: false, navigator: { wakeLock: { request: type => {
+const fakePopup = { name:'scoreplace-live-tv-neon-test', closed: false, navigator: { wakeLock: { request: type => {
   assert.equal(type, 'screen'); wakeRequests++; return Promise.resolve({ addEventListener() {}, release: () => Promise.resolve() });
 } } }, document: {
   open() {}, write(html) { popupHtml = html; }, close() {},
@@ -154,6 +159,8 @@ const fakePopup = { closed: false, navigator: { wakeLock: { request: type => {
 window.open = () => fakePopup;
 window._findTournamentById = () => t;
 window._tvLiveToggle();
+assert.equal(liveButton.attributes['aria-pressed'], 'false', 'abrir a janela ainda não liga NO AR sem confirmação da própria página');
+assert.equal(window._tvLiveWindow, null, 'botão renderizado depois da abertura ainda nasce desligado');
 assert.equal(wakeRequests, 1, 'NO AR solicita bloqueio de repouso da tela');
 assert.match(tvTimer.textContent, /^Chamado 00:00:\d\d$/, 'a chamada aparece como Chamado hh:mm:ss');
 assert.equal(tvTimer.className, 'tv-phase-call', 'chamada usa a fase azul');
@@ -190,14 +197,19 @@ assert(childSource, 'NO AR inclui um relógio próprio na janela, independente d
 const childRoot = { innerHTML: '' };
 const childWarning = { hidden: true };
 const childOwner = { _findTournamentById: () => t, _tvLiveIsComplete: () => true, _tvLiveBuildSnapshot: window._tvLiveBuildSnapshot,
-  _tvLiveBodyHtml: window._tvLiveBodyHtml };
-const childWindow = { opener: childOwner, ScoreplaceMatchTiming: timingCore, __tvParentBeat: 0 };
+  _tvLiveBodyHtml: window._tvLiveBodyHtml,
+  postMessage(data, origin) { parentHandlers.message({ data, origin, source:fakePopup }); } };
+const childHandlers = {};
+const childWindow = { opener: childOwner, ScoreplaceMatchTiming: timingCore, __tvParentBeat: 0,
+  addEventListener(name, fn) { childHandlers[name] = fn; } };
 let childTick;
-const childDocument = { addEventListener() {}, getElementById: id => id === 'tv-root' ? childRoot : id === 'tv-connection' ? childWarning : null,
+const childDocument = { visibilityState:'visible', addEventListener() {}, getElementById: id => id === 'tv-root' ? childRoot : id === 'tv-connection' ? childWarning : null,
   querySelectorAll: () => [] };
 vm.runInNewContext(childSource[0].slice(8, -9), { window: childWindow, document: childDocument,
-  setInterval: fn => { childTick = fn; return 1; }, Date, Number });
+  setInterval: fn => { childTick = fn; return 1; }, clearInterval: () => {}, Date, Number });
 assert(childTick && childRoot.innerHTML.includes('CLASSIFICAÇÃO'), 'janela restaura conteúdo sem o timer da aba');
+assert.equal(liveButton.attributes['aria-pressed'], 'true', 'heartbeat da página liga o botão');
+assert.equal(window._tvLiveWindow, fakePopup, 'só página confirmada aparece como NO AR');
 childOwner._findTournamentById = () => ({ ...t, name: 'Após recarregar' });
 childTick();
 assert.match(childRoot.innerHTML, /Após recarregar/, 'janela retoma o torneio quando a aba conclui o reload');
@@ -207,6 +219,45 @@ childTick();
 assert.equal(childWarning.hidden, false, 'janela avisa perda prolongada da conexão com a aba');
 window._tvLiveToggle();
 assert.equal(window._tvLiveRefresh, null, 'janela fechada solta o refresh em tempo real');
+assert.equal(liveButton.attributes['aria-pressed'], 'false', 'fechar a página apaga o NO AR');
+fakePopup.closed = false;
+window._tvLiveToggle();
+const reopenedGeneration = Number(popupHtml.match(/,gen=(\d+),origin=/)[1]);
+assert(reopenedGeneration > childWindow.__tvGeneration, 'reabrir cria uma geração mais recente');
+assert.equal(liveButton.attributes['aria-pressed'], 'false', 'reabrir espera confirmação da nova página');
+childHandlers.pagehide();
+assert.equal(typeof window._tvLiveRefresh, 'function', 'pagehide da geração antiga não encerra a nova TV');
+parentHandlers.message({ origin:'https://scoreplace.app', source:fakePopup,
+  data:{ type:'scoreplace-tv-heartbeat', id:t.id, gen:reopenedGeneration, visible:true } });
+assert.equal(liveButton.attributes['aria-pressed'], 'true', 'heartbeat da nova geração reativa o botão');
+nowMs += 11000;
+parentIntervals[0]();
+assert.equal(liveButton.attributes['aria-pressed'], 'false', 'heartbeat vencido desativa o indicador');
+assert.equal(window._tvLiveWindow, null, 're-render da chave também verá estado inativo');
+const oldDocument = fakePopup.document;
+Object.defineProperty(fakePopup, 'document', { configurable:true, get() { throw new Error('SecurityError'); } });
+parentIntervals[0]();
+assert.equal(liveButton.attributes['aria-pressed'], 'false', 'navegação cross-origin fica inativa sem lançar');
+window._tvLiveRefresh();
+assert.equal(window._tvLiveRefresh, null, 'refresh cross-origin interrompe o loop sem lançar');
+Object.defineProperty(fakePopup, 'document', { configurable:true, writable:true, value:oldDocument });
+
+const reloadHandlers = {}, reloadIntervals = [];
+const reloadButton = { attributes:{}, style:{}, setAttribute(name,value){this.attributes[name]=value;} };
+const reloadWindow = { location:{origin:'https://scoreplace.app'}, _currentBracketTournament:t,
+  addEventListener(name,fn){reloadHandlers[name]=fn;} };
+vm.runInNewContext(fs.readFileSync(path.join(root, 'js/views/tv-live.js'), 'utf8'), {
+  window:reloadWindow, document:{querySelectorAll:()=>[reloadButton]}, Date:TestDate, Number, String, Array, Set,
+  setInterval:fn=>{reloadIntervals.push(fn);return reloadIntervals.length;}, clearInterval:()=>{} });
+reloadHandlers.message({origin:'https://scoreplace.app',source:{name:'outra-janela',closed:false},
+  data:{type:'scoreplace-tv-heartbeat',id:t.id,gen:reopenedGeneration,visible:true}});
+assert.equal(!!reloadWindow._tvLiveWindow, false, 'após reload ignora heartbeat de janela com nome diferente');
+reloadHandlers.message({origin:'https://scoreplace.app',source:fakePopup,
+  data:{type:'scoreplace-tv-heartbeat',id:t.id,gen:reopenedGeneration,visible:true}});
+assert.equal(reloadButton.attributes['aria-pressed'], 'true', 'após reload recupera a TV nomeada viva');
+fakePopup.closed = true;
+reloadIntervals[0]();
+assert.equal(reloadButton.attributes['aria-pressed'], 'false', 'após reload fechar a TV apaga o botão');
 const liveSource = fs.readFileSync(path.join(root, 'js/views/tv-live.js'), 'utf8');
 assert.match(liveSource, /id=\\?"tv-fullscreen-action/, 'janela NO AR oferece entrada em tela cheia na própria janela');
 assert.match(liveSource, /target\.requestFullscreen\(\)/, 'tela cheia é acionada pela janela que será exibida na TV');

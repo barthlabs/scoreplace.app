@@ -3,6 +3,8 @@
 (function () {
   'use strict';
   var popup = null, tick = null, lastMarkup = '', wakeSentinel = null, wakePending = false;
+  var popupTournamentId = '', popupGeneration = 0, lastHeartbeatAt = 0, lastHeartbeatVisible = false;
+  var highestGenerationById = Object.create(null);
   var lastCompleteTournament = null, loadingTournament = false, lastLoadAttempt = 0;
   var clock = window.ScoreplaceMatchTiming;
   function esc(value) {
@@ -202,9 +204,12 @@
   // script nela mantém os relógios e volta a ler o estado assim que o opener
   // termina de carregar a versão nova.
   window._tvLiveBodyHtml = bodyHtml;
-  function childScript(tournamentId) {
+  function childScript(tournamentId, generation) {
     var id = JSON.stringify(String(tournamentId || '')).replace(/</g, '\\u003c');
-    return '<script>(function(){"use strict";var id=' + id + ';function tick(){var now=Date.now();' +
+    var origin = JSON.stringify(window.location.origin).replace(/</g, '\\u003c');
+    return '<script>(function(){"use strict";var id=' + id + ',gen=' + Number(generation) + ',origin=' + origin + ';window.__tvGeneration=gen;var timer;' +
+      'function signal(type){try{if(window.opener&&!window.opener.closed)window.opener.postMessage({type:type,id:id,gen:gen,visible:document.visibilityState==="visible"},origin);}catch(e){}}' +
+      'function tick(){if(window.__tvGeneration!==gen){clearInterval(timer);return;}var now=Date.now();' +
       'if(now-(window.__tvParentBeat||0)>1800){try{var owner=window.opener;' +
       'var t=owner&&owner._findTournamentById&&owner._findTournamentById(id);' +
       'if(owner&&owner._tvLiveEnsureFresh&&(!t||!owner._tvLiveIsComplete(t)))owner._tvLiveEnsureFresh(id);' +
@@ -216,13 +221,13 @@
       'var state=clock.phaseAt(Number(node.getAttribute("data-tv-start")),timing,now);' +
       'node.className="tv-phase-"+state.phase;node.title=clock.title(state.phase);node.textContent=clock.text(state,now);});' +
       'var current=document.getElementById("tv-now");if(current)current.textContent=new Date(now).toLocaleTimeString("pt-BR");' +
-      'try{if(window.opener&&!window.opener.closed)window.opener.postMessage({type:"scoreplace-tv-heartbeat",id:id},location.origin);}catch(e){}' +
+      'signal("scoreplace-tv-heartbeat");' +
       'var warning=document.getElementById("tv-connection");if(warning)warning.hidden=!!window.__tvLastSync&&now-window.__tvLastSync<10000;' +
       '}document.addEventListener("click",function(event){var btn=event.target&&event.target.closest&&event.target.closest("#tv-fullscreen-action");if(!btn)return;' +
       'var target=document.documentElement;var action=document.fullscreenElement?document.exitFullscreen():target.requestFullscreen();' +
       'Promise.resolve(action).then(function(){btn.textContent=document.fullscreenElement?"⛶ Sair da tela cheia":"⛶ Tela cheia";})' +
       '.catch(function(){btn.textContent="Tela cheia indisponível · tente de novo";});});' +
-      'setInterval(tick,1000);tick();})();</script>';
+      'window.addEventListener("pagehide",function(){signal("scoreplace-tv-gone");});timer=setInterval(tick,1000);tick();})();</script>';
   }
   var styles = '<style>*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#060d1a;color:#ffffff;font-family:Arial,Helvetica,sans-serif}.tv-header{height:9vh;min-height:62px;display:flex;align-items:center;gap:1.2vw;padding:1vh 2vw;border-bottom:2px solid #19314b}.tv-header img{height:100%;max-width:8vw;object-fit:contain}.tv-header h1{font-size:clamp(1.3rem,2.5vw,3rem);margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tv-header time{margin-left:auto;color:#67e8f9;font-size:1.25vw;white-space:nowrap}.tv-board{height:91vh;display:grid;grid-template-columns:1fr 1fr;gap:1vw;padding:1vw}.tv-courts{min-height:0;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(3,minmax(0,1fr));gap:.75vw}.tv-court,.tv-rankings,.tv-results{min-height:0;background:#0d1b2e;border:1px solid #1b3f61;border-radius:1vw;padding:.8vw}.tv-court{display:flex;flex-direction:column;overflow:hidden}.tv-court-top{display:flex;align-items:center;justify-content:space-between;gap:.5vw;color:#7dd3fc;min-height:1.5vw}.tv-court h2{font-size:clamp(.8rem,1.2vw,1.5rem);margin:0}.tv-court h2 small{font-size:.7em}.tv-court-top>span{color:#fbbf24;font-size:.85vw;font-weight:700}.tv-side{display:grid;grid-template-columns:1fr auto;grid-template-rows:auto auto;align-items:center;border-left:.35vw solid var(--team);background:#081321;margin-top:.35vw;padding:.3vw .55vw;min-height:0;flex:1}.tv-team{grid-column:1;font-size:1.2vw;font-weight:900;color:var(--team)}.tv-pair{grid-column:1;font-size:.7vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#cbd5e1}.tv-score{grid-column:2;grid-row:1/span 2;font-size:1.9vw}.tv-versus{text-align:center;color:#94a3b8;font-weight:900;line-height:1}.tv-timer{display:flex;justify-content:space-between;color:#34d399;font-size:.8vw;margin-top:.3vw}.tv-timer strong{font-variant-numeric:tabular-nums;font-size:1vw}.tv-court.empty{align-items:center;justify-content:center;color:#64748b}.tv-court.empty h2{color:#7dd3fc}.tv-sidebar{min-height:0;display:grid;grid-template-rows:1fr 1fr;gap:.75vw}.tv-rankings,.tv-results{overflow:hidden}.tv-sidebar h2{margin:0 0 .5vw;color:#fbbf24;font-size:1.3vw}.tv-ranking-group{overflow:auto;max-height:calc(100% - 2vw)}.tv-ranking-group h3{font-size:.9vw;margin:.4vw 0;color:#7dd3fc}.tv-ranking-row{display:grid;grid-template-columns:2vw 1fr 4vw;gap:.4vw;padding:.24vw;border-bottom:1px solid #1e3349;font-size:.9vw}.tv-ranking-row b{text-align:right;color:#fbbf24}.tv-result{border-bottom:1px solid #1e3349;padding:.4vw 0}.tv-result small{color:#7dd3fc;font-size:.7vw}.tv-result>div{display:grid;grid-template-columns:1fr auto 1fr;gap:.5vw;align-items:center;font-size:.8vw}.tv-result>div strong{text-align:center;font-size:1vw;color:#fff}.tv-result>div span:last-child{text-align:right}#tv-fullscreen-action{position:fixed;z-index:100;right:1vw;bottom:1vw;padding:.65em 1em;border:1px solid #67e8f9;border-radius:.5em;background:#123047;color:#fff;font:700 16px Arial,sans-serif;cursor:pointer;box-shadow:0 2px 12px #0009}#tv-fullscreen-action:focus-visible{outline:3px solid #fbbf24}html:fullscreen #tv-fullscreen-action{display:none}@media(orientation:portrait){.tv-header{height:7vh}.tv-header h1{font-size:3vw}.tv-header time{font-size:2vw}.tv-board{height:93vh;grid-template-columns:1fr;grid-template-rows:55% 45%;gap:1vh;padding:1vh}.tv-courts{gap:1vw}.tv-court{padding:1vw}.tv-court h2,.tv-sidebar h2{font-size:2vw}.tv-court-top>span,.tv-team,.tv-score{font-size:1.6vw}.tv-pair,.tv-timer,.tv-timer strong{font-size:1.2vw}.tv-sidebar{grid-template-rows:60% 40%;gap:1vh}.tv-ranking-row,.tv-result>div{font-size:1.3vw}.tv-ranking-group h3{font-size:1.5vw}.tv-result small{font-size:1vw}}</style>';
   styles = styles.replace('</style>',
@@ -258,8 +263,20 @@
     '#tv-fullscreen-action{position:static;flex:none;white-space:nowrap;box-shadow:none;padding:.45em .7em;font-size:clamp(.8rem,.85vw,1rem)}html:fullscreen #tv-fullscreen-action{display:block}' +
     '@media(orientation:portrait){.tv-header time{font-size:clamp(1.2rem,2.8vw,2.4rem)}.tv-sidebar{grid-template-rows:70% 30%}.tv-ranking-head,.tv-ranking-row{grid-template-columns:3vw minmax(0,1fr) 7vw 10vw repeat(3,4vw);gap:.5vw;font-size:clamp(.75rem,1.4vw,1.2rem)}.tv-ranking-row{min-height:2.9vh}.tv-ranking-team{font-size:clamp(.8rem,1.6vw,1.25rem)}.tv-ranking-row b{font-size:clamp(.8rem,1.6vw,1.25rem)}.tv-qr{width:clamp(90px,17vw,180px)}.tv-qr-brand img{width:3vw}}' +
     '</style>');
+  function isActive() {
+    var current = window._currentBracketTournament;
+    if (!popup || popup.closed || !current || String(current.id) !== popupTournamentId ||
+        !lastHeartbeatVisible || !lastHeartbeatAt || Date.now() - lastHeartbeatAt > 10000) return false;
+    try {
+      return popup.document.visibilityState === 'visible' && !!popup.document.getElementById('tv-root');
+    } catch (e) { return false; }
+  }
   function syncButton() {
-    var on = !!(popup && !popup.closed);
+    var current = window._currentBracketTournament;
+    if (popup && current && popupTournamentId && String(current.id) !== popupTournamentId) {
+      popup = null; popupTournamentId = ''; popupGeneration = 0; lastHeartbeatAt = 0; lastHeartbeatVisible = false;
+    }
+    var on = isActive();
     window._tvLiveWindow = on ? popup : null;
     document.querySelectorAll('[data-tv-live-button]').forEach(function (button) {
       button.setAttribute('aria-pressed', String(on));
@@ -268,29 +285,67 @@
     });
   }
   window.addEventListener('message', function (event) {
-    if (event.origin !== window.location.origin || !event.data || event.data.type !== 'scoreplace-tv-heartbeat') return;
+    if (event.origin !== window.location.origin || !event.data ||
+        (event.data.type !== 'scoreplace-tv-heartbeat' && event.data.type !== 'scoreplace-tv-gone')) return;
     var current = window._currentBracketTournament;
     if (!current || String(current.id) !== String(event.data.id)) return;
-    if (event.source && !event.source.closed) { popup = event.source; syncButton(); }
+    var source = event.source, id = String(event.data.id), gen = Number(event.data.gen);
+    if (!source || (event.data.type === 'scoreplace-tv-heartbeat' && source.closed) ||
+        !Number.isFinite(gen) || gen <= 0) return;
+    if (popup && source !== popup) return;
+    if (!popup) {
+      try { if (source.name !== 'scoreplace-live-tv-' + id) return; } catch (e) { return; }
+    }
+    if (event.data.type === 'scoreplace-tv-gone') {
+      if (popup && source === popup && gen === popupGeneration) stop();
+      return;
+    }
+    var highest = Number(highestGenerationById[id] || 0);
+    if (gen < highest || (popup && popupGeneration && gen !== popupGeneration)) return;
+    highestGenerationById[id] = Math.max(highest, gen);
+    popup = source; popupTournamentId = id; popupGeneration = gen;
+    lastHeartbeatAt = Date.now(); lastHeartbeatVisible = event.data.visible === true;
+    syncButton();
   });
   function stop() {
     if (wakeSentinel && typeof wakeSentinel.release === 'function') wakeSentinel.release().catch(function () {});
     wakeSentinel = null;
     if (tick) clearInterval(tick);
-    tick = null; popup = null; lastMarkup = ''; lastCompleteTournament = null; window._tvLiveRefresh = null; syncButton();
+    tick = null; popup = null; popupTournamentId = ''; popupGeneration = 0;
+    lastHeartbeatAt = 0; lastHeartbeatVisible = false;
+    lastMarkup = ''; lastCompleteTournament = null; window._tvLiveRefresh = null; syncButton();
   }
   window._tvLiveToggle = function () {
-    if (popup && !popup.closed) { popup.close(); stop(); return; }
+    if (isActive()) { popup.close(); stop(); return; }
     var tournament = window._currentBracketTournament;
     if (!tournament) return;
-    popup = window.open('', 'scoreplace-live-tv-' + String(tournament.id || ''), 'popup,width=1920,height=1080');
-    if (!popup) { stop(); if (typeof window.showToast === 'function') window.showToast('Permita abrir uma janela para a TV.'); return; }
-    popup.document.open();
-    popup.document.write('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TV · ' + esc(tournament.name) + '</title>' + styles + '<script src="' + esc(window.location.origin + '/js/domain/match-timing.js?v=' + (window.SCOREPLACE_VERSION || '')) + '"></script><style>#tv-connection{position:fixed;right:1vw;bottom:1vw;z-index:20;padding:.4em .7em;border-radius:.5em;background:#7f1d1d;color:#fff;font-weight:800}#tv-connection[hidden]{display:none}</style></head><body><div id="tv-root"></div><div id="tv-connection">Carregando jogos do servidor…</div>' + childScript(tournament.id) + '</body></html>');
-    popup.document.close();
+    var id = String(tournament.id || ''), nextPopup;
+    try { nextPopup = window.open('about:blank', 'scoreplace-live-tv-' + id, 'popup,width=1920,height=1080'); }
+    catch (e) { nextPopup = null; }
+    if (!nextPopup) {
+      syncButton();
+      if (typeof window.showToast === 'function') window.showToast('Permita abrir uma janela para a TV.');
+      return;
+    }
+    popup = nextPopup; popupTournamentId = id;
+    popupGeneration = Math.max(Date.now(), Number(highestGenerationById[id] || 0) + 1);
+    highestGenerationById[id] = popupGeneration;
+    lastHeartbeatAt = 0; lastHeartbeatVisible = false;
+    syncButton();
+    try {
+      popup.document.open();
+      popup.document.write('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TV · ' + esc(tournament.name) + '</title>' + styles + '<script src="' + esc(window.location.origin + '/js/domain/match-timing.js?v=' + (window.SCOREPLACE_VERSION || '')) + '"></script><style>#tv-connection{position:fixed;right:1vw;bottom:1vw;z-index:20;padding:.4em .7em;border-radius:.5em;background:#7f1d1d;color:#fff;font-weight:800}#tv-connection[hidden]{display:none}</style></head><body><div id="tv-root"></div><div id="tv-connection">Carregando jogos do servidor…</div>' + childScript(tournament.id, popupGeneration) + '</body></html>');
+      popup.document.close();
+    } catch (e) {
+      stop();
+      if (typeof window.showToast === 'function') window.showToast('Não foi possível abrir a janela da TV.');
+      return;
+    }
     function keepTvAwake() {
-      if (!popup || popup.closed || popup.document.visibilityState !== 'visible' || wakeSentinel || wakePending) return;
-      if (!popup.navigator.wakeLock || typeof popup.navigator.wakeLock.request !== 'function') return;
+      try {
+        if (!popup || popup.closed || popup.document.visibilityState !== 'visible' || wakeSentinel || wakePending) return;
+        if (!popup.navigator.wakeLock || typeof popup.navigator.wakeLock.request !== 'function') return;
+      } catch (e) { syncButton(); return; }
       wakePending = true;
       popup.navigator.wakeLock.request('screen').then(function (sentinel) {
         wakeSentinel = sentinel;
@@ -300,41 +355,52 @@
         });
       }).catch(function () { wakeSentinel = null; }).finally(function () { wakePending = false; });
     }
-    popup.document.addEventListener('visibilitychange', keepTvAwake);
-    popup.document.addEventListener('fullscreenchange', keepTvAwake);
+    try {
+      popup.document.addEventListener('visibilitychange', keepTvAwake);
+      popup.document.addEventListener('fullscreenchange', keepTvAwake);
+    } catch (e) { stop(); return; }
     keepTvAwake();
     lastMarkup = '';
     lastCompleteTournament = completeTournament(tournament) ? tournament : null;
     window._tvLiveEnsureFresh(tournament.id);
     function refresh() {
       if (!popup || popup.closed) { stop(); return; }
-      var current = typeof window._findTournamentById === 'function' ? window._findTournamentById(tournament.id) : null;
-      var tickNow = Date.now();
-      if (completeTournament(current)) lastCompleteTournament = current;
-      else window._tvLiveEnsureFresh(tournament.id);
-      var snapshot = window._tvLiveBuildSnapshot(lastCompleteTournament, tickNow);
-      if (!snapshot) return;
-      var markup = bodyHtml(snapshot);
-      if (markup !== lastMarkup) { popup.document.getElementById('tv-root').innerHTML = markup; lastMarkup = markup; popup.__tvLastMarkup = markup; }
-      popup.__tvTiming = snapshot.timing;
-      popup.__tvLastSync = tickNow;
-      popup.__tvParentBeat = tickNow;
-      var warning = popup.document.getElementById('tv-connection');
-      if (warning) warning.hidden = true;
-      popup.document.querySelectorAll('[data-tv-start]').forEach(function (node) {
-        var start = Number(node.getAttribute('data-tv-start'));
-        var event = clock.phaseAt(start, snapshot.timing, tickNow);
-        var phase = event.phase;
-        node.className = 'tv-phase-' + phase;
-        node.title = clock.title(phase);
-        node.textContent = clock.text(event, tickNow);
-      });
-      var now = popup.document.getElementById('tv-now');
-      if (now) now.textContent = new Date().toLocaleTimeString('pt-BR');
-      syncButton();
+      try {
+        var current = typeof window._findTournamentById === 'function' ? window._findTournamentById(tournament.id) : null;
+        var tickNow = Date.now();
+        if (completeTournament(current)) lastCompleteTournament = current;
+        else window._tvLiveEnsureFresh(tournament.id);
+        var snapshot = window._tvLiveBuildSnapshot(lastCompleteTournament, tickNow);
+        if (!snapshot) { syncButton(); return; }
+        var markup = bodyHtml(snapshot);
+        var root = popup.document.getElementById('tv-root');
+        if (!root) { syncButton(); return; }
+        if (markup !== lastMarkup) { root.innerHTML = markup; lastMarkup = markup; popup.__tvLastMarkup = markup; }
+        popup.__tvTiming = snapshot.timing;
+        popup.__tvLastSync = tickNow;
+        popup.__tvParentBeat = tickNow;
+        var warning = popup.document.getElementById('tv-connection');
+        if (warning) warning.hidden = true;
+        popup.document.querySelectorAll('[data-tv-start]').forEach(function (node) {
+          var start = Number(node.getAttribute('data-tv-start'));
+          var event = clock.phaseAt(start, snapshot.timing, tickNow);
+          var phase = event.phase;
+          node.className = 'tv-phase-' + phase;
+          node.title = clock.title(phase);
+          node.textContent = clock.text(event, tickNow);
+        });
+        var now = popup.document.getElementById('tv-now');
+        if (now) now.textContent = new Date().toLocaleTimeString('pt-BR');
+        syncButton();
+      } catch (e) { stop(); }
     }
     window._tvLiveRefresh = refresh;
-    refresh(); tick = setInterval(refresh, 1000);
-    popup.focus();
+    refresh();
+    if (!popup) return;
+    tick = setInterval(refresh, 1000);
+    try { popup.focus(); } catch (e) { stop(); }
   };
+  setInterval(syncButton, 1000);
+  window.addEventListener('focus', syncButton);
+  window.addEventListener('visibilitychange', syncButton);
 })();
