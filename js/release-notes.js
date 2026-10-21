@@ -2,7 +2,8 @@
 // elegível ou encerrar o confronto por W.O.; o sandbox usa a mesma regra sem
 // alterar o torneio real. A TV mantém nomes, símbolos e placares dentro dos
 // boxes. Próximos jogos exibe apenas os cards das rodadas, sem painel duplicado
-// de presença.
+// de presença. Com a fila travada, a dupla suplente segue a ordem definida
+// no sorteio.
 // 2.5.20 — O NO AR mostra o próximo jogo agendado e o QR oferece App Store,
 // Google Play e web. Os dois nomes do time à esquerda ficam alinhados à esquerda
 // nos últimos resultados. A borda verde na chave confirma o OK da quadra;
