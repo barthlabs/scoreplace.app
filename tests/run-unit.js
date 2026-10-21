@@ -1102,6 +1102,7 @@ const SUITES = [
   'tests/bracket-geral-agenda.test.js',
   'tests/bracket-sem-painel-presenca.test.js',
   'tests/tv-live-snapshot.test.js',
+  'tests/tv-live-box-layout.test.js',
   'tests/tv-open-page.test.js',
   'tests/court-occupancy.test.js',
   'tests/controle-relogio-quadra.test.js',
@@ -1116,6 +1117,9 @@ const SUITES = [
   'tests/wo-server-core.test.js',
   'tests/wo-organizer-actions.test.js',
   'tests/wo-claim-server-core.test.js', // consenso de W.O. é puro e roda antes da gravação da CF
+  'tests/wo-team-choice.test.js', // W.O. de dupla mista valida IDs e fecha o jogo sem suplente
+  'tests/wo-team-modal.test.js', // diálogo de W.O. mostra as duas atletas e um botão por dupla
+  'tests/wo-sandbox-route.test.js', // roteamento e autorização de W.O. preservam produção e sandbox
   'tests/wo-declare-cf-only.test.js',
   'tests/wo-individual.test.js',
   'tests/wo-availability-canonical.test.js',

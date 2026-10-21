@@ -59,7 +59,14 @@ const collectAll = (t) => {
   visit(t && t.matches); visit(t && t.phaseRounds);
   return out;
 };
-const fn = new Function('drawWindow', 'return ' + bloco + '\n_preservaRepescagemCarimbada;')({ _collectAllMatches: collectAll });
+const teamIdentity = entry => {
+  if (!entry || !Array.isArray(entry.participants) || entry.participants.length !== 2) return null;
+  const members = entry.participants.map(p => p.uid ? 'uid:' + p.uid : 'manual:' + p.manualParticipantId);
+  return members.some(key => key === 'manual:undefined') ? null : { key: members.sort().join('|') };
+};
+const fn = new Function('drawWindow', 'return ' + bloco + '\n_preservaRepescagemCarimbada;')({
+  _collectAllMatches: collectAll, _woTeamIdentity: teamIdentity
+});
 ok(typeof fn === 'function', '② a trava foi extraída e é executável');
 
 if (typeof fn === 'function') {
@@ -124,6 +131,22 @@ if (typeof fn === 'function') {
   d6.phaseRounds['1'].rounds[0].matches[0].team2Uids = ['vanessa', 'paula'];
   ok(fn(d6, t5).length === 1 && d6.phaseRounds['1'].rounds[0].matches[0].p2 === 'Vanessa / Jogador X',
     '② ⛔ a mesma troca sem recibo da Function continua bloqueada');
+
+  const oldPair = { participants: [{ manualParticipantId: 'm1' }, { manualParticipantId: 'm2' }] };
+  const newPair = { participants: [{ manualParticipantId: 'm3' }, { manualParticipantId: 'm4' }] };
+  const oldManual = { matches: [{ id: 'manual-pair', p1: 'Dupla antiga', p1RepescagemFixada: true,
+    team1Obj: oldPair, team1Uids: [] }] };
+  const newManual = JSON.parse(JSON.stringify(oldManual));
+  newManual.matches[0].p1 = 'Dupla suplente';
+  newManual.matches[0].team1Obj = newPair;
+  const pairPermit = { matchId: 'manual-pair', slot: 'p1',
+    beforeIdentity: 'manual:m1|manual:m2', afterIdentity: 'manual:m3|manual:m4',
+    beforeUids: [], afterUids: [] };
+  ok(fn(newManual, oldManual, [pairPermit]).length === 0 && newManual.matches[0].p1 === 'Dupla suplente',
+    '② ⭐ recibo estrutural permite substituir dupla manual em vaga carimbada');
+  const withoutPermit = JSON.parse(JSON.stringify(newManual));
+  ok(fn(withoutPermit, oldManual).length === 1 && withoutPermit.matches[0].p1 === 'Dupla antiga',
+    '② ⛔ cliente comum não pode trocar a mesma dupla manual carimbada');
 
   /* ⛔ entrada torta não derruba a gravação */
   ok(fn(null, null).length === 0 && fn({}, {}).length === 0,

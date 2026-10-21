@@ -84,7 +84,8 @@ function trecho(inicio, fim) {
       sourceHidden: document.getElementById('source').hidden,
       order: Array.from(agenda.querySelectorAll('[data-bracket-tab-category]')).map((el) => el.id),
       visibleCards: Array.from(agenda.querySelectorAll('[data-bracket-tab-category]')).every((el) => !el.hidden),
-      waiting: Array.from(agenda.querySelectorAll('[data-bracket-upcoming-waiting] [data-bracket-tab-category]')).map((el) => el.id)
+      separatePresenceSection: !!agenda.querySelector('[data-bracket-upcoming-waiting]'),
+      partialRoundHeading: agenda.querySelector('#fem-waiting').closest('.bracket-general-round-column').querySelector('h4').textContent.trim()
     };
 
     // Resultado persistido não pertence à fila operacional numa abertura
@@ -320,8 +321,8 @@ function trecho(inicio, fim) {
   ok(result.generalState.followsDetails, 'Geral fica depois do card de detalhes do torneio, mesmo quando o detalhe é irmão da chave');
   console.log('\n📋 Próximos jogos mostra todos os jogos sem placar');
   ok(result.upcomingState.sourceHidden, 'Próximos jogos também troca a chave canônica por uma única visão operacional');
-  ok(result.upcomingState.order.join(',') === 'fem-waiting,masc-same-day,fem-court-5,fem-round-2,tomorrow', 'a fila inclui todos os jogos sem placar, mantendo presença parcial no topo');
-  ok(result.upcomingState.waiting.join(',') === 'fem-waiting', 'a lista de aguardando presença fica no topo de Próximos jogos');
+  ok(result.upcomingState.order.join(',') === 'masc-same-day,fem-court-5,fem-waiting,fem-round-2,tomorrow', 'a fila inclui jogos parciais na ordem cronológica e de quadra');
+  ok(!result.upcomingState.separatePresenceSection && result.upcomingState.partialRoundHeading === 'Rodada 1 · 22/10 · 18:00', 'presença parcial fica na rodada correta, sem seção separada');
   ok(result.upcomingState.visibleCards, 'o card pronto continua visível depois de mover entre Geral e Próximos jogos');
   ok(result.freshUpcomingResults.indexOf('played-new') === -1 && result.freshUpcomingResults.indexOf('played-mid') === -1 && result.freshUpcomingResults.indexOf('played-old') === -1,
     'Próximos jogos não reintroduz resultados persistidos após uma abertura nova');

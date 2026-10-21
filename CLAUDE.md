@@ -544,6 +544,15 @@ _"quero poder desligar essa revisão automática e reativar quando voltarem os c
   chama o GPT; dentro do Codex chama o Claude; sem pista, os dois e os dois têm que aprovar).
   É assim que o `deploy-hosting.sh` chama no passo 1.8.
 
+**Claude Code no Codex para macOS (21/out/2026):** a sandbox do Codex não enxerga a
+credencial do Claude guardada no Keychain. Nela, `claude auth status` pode retornar
+`loggedIn: false` e `claude -p` responde `Not logged in` mesmo após a página do navegador
+confirmar o login. Antes de pedir autenticação de novo, executar `~/.local/bin/claude auth
+status` **fora da sandbox** (`require_escalated`). Se retornar `loggedIn: true`, executar
+`scripts/revisar-com-claude.sh plano ...` e `scripts/revisar-com-claude.sh diff` também
+fora da sandbox; a sessão já está válida. Não reiniciar OAuth em resposta ao falso
+“Not logged in” da sandbox. O gate de revisão e a exigência de `APROVADO` continuam valendo.
+
 **A faixa é o PISO** — uma regra sobre os arquivos tocados (`revisar.sh faixa [arquivos]` só
 classifica), não opinião de modelo:
 

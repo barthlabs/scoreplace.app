@@ -32,6 +32,133 @@
 // Núcleo PURO das substituições de W.O.: muta só o `t` passado (sem fetch, sem
 // save). Histórico via t.history.push direto (transaction-safe — logAction do
 // AppStore acha por id no store LOCAL, o que não serve pro doc fresco da txn).
+// A fila tem a mesma prioridade para W.O. individual e W.O. de dupla.
+window._woOrderStandby = function(t, entries, forceWaitlistSub, respectLocked) {
+  const policy = t.callPolicy || 'present';
+  const order = {};
+  if (policy === 'locked' && Array.isArray(t.waitlistOrder)) {
+    t.waitlistOrder.forEach((name, index) => { order[name] = index; });
+  }
+  if (forceWaitlistSub && !(respectLocked && policy === 'locked')) return entries.sort((a, b) => a.queueIndex - b.queueIndex);
+  if (policy === 'locked') return entries.sort((a, b) => {
+    const rank = o => order[o.name] !== undefined ? order[o.name]
+      : (o.p && typeof o.p.drawOrder === 'number' ? o.p.drawOrder : 9999);
+    return rank(a) - rank(b);
+  });
+  return entries.sort((a, b) => a.ts - b.ts);
+};
+
+// Identidade de uma DUPLA real: dois membros posicionais, nunca o rótulo visual.
+window._woTeamIdentity = function(entry) {
+  if (!entry || typeof entry !== 'object') return null;
+  const members = Array.isArray(entry.participants) && entry.participants.length === 2
+    ? entry.participants.map(p => ({ uid: String(p && p.uid || ''), manualId: String(p && p.manualParticipantId || '') }))
+    : [1, 2].map(i => ({ uid: String(entry['p' + i + 'Uid'] || ''), manualId: String(entry['p' + i + 'ManualId'] || '') }));
+  if (members.length !== 2 || members.some(p => (!p.uid && !p.manualId) || (p.uid && p.manualId))) return null;
+  const keys = members.map(p => p.uid ? 'uid:' + p.uid : 'manual:' + p.manualId);
+  if (keys[0] === keys[1]) return null;
+  return { members, key: keys.slice().sort().join('|'), uids: members.map(p => p.uid).filter(Boolean) };
+};
+
+// Consulta pura da mesma fila usada na confirmação transacional.
+window._woFindEligibleTeamStandby = function(t, match, slot, opts) {
+  opts = opts || {};
+  if (!t || !match || (slot !== 'p1' && slot !== 'p2')) return null;
+  const objKey = slot === 'p1' ? 'team1Obj' : 'team2Obj';
+  const oldTeam = window._woTeamIdentity(match[objKey]);
+  if (!oldTeam || !match.id) return null;
+  const recordedUids = match[slot === 'p1' ? 'team1Uids' : 'team2Uids'];
+  if (Array.isArray(recordedUids) && recordedUids.some(Boolean) &&
+      recordedUids.filter(Boolean).map(String).sort().join('|') !== oldTeam.uids.slice().sort().join('|')) return null;
+  const all = typeof window._collectAllMatches === 'function' ? window._collectAllMatches(t) : (t.matches || []);
+  const historical = m => !!(m && (m.winner != null || m.startedAt || m.resultAt || m.liveScored === true ||
+    (Array.isArray(m.sets) && m.sets.length) || Number(m.scoreP1) > 0 || Number(m.scoreP2) > 0 ||
+    (typeof window._matchHasRealPlay === 'function' && window._matchHasRealPlay(m))));
+  if (historical(match)) return null;
+  const category = String(match.category || (match[objKey] && match[objKey].category) || '').trim();
+  const standby = (Array.isArray(t.standbyParticipants) ? t.standbyParticipants : [])
+    .concat(Array.isArray(t.waitlist) ? t.waitlist : []);
+  const seen = new Set();
+  const nameOf = (uid, stored) => uid && typeof window._displayNameForUid === 'function'
+    ? window._displayNameForUid(uid, stored || '') : (stored || '');
+  const namesOf = p => [1, 2].map(i => nameOf(p['p' + i + 'Uid'], p['p' + i + 'Name'] ||
+    (Array.isArray(p.participants) && p.participants[i - 1] &&
+      (p.participants[i - 1].displayName || p.participants[i - 1].name)) || ''));
+  const entries = standby.map((p, queueIndex) => {
+    const identity = window._woTeamIdentity(p);
+    if (!identity || seen.has(identity.key)) return null;
+    seen.add(identity.key);
+    const checked = typeof window._idMapGet === 'function' ? window._idMapGet(t, t.checkedIn || {}, p) : false;
+    return { p, identity, queueIndex, name: window._pName(p), ts: typeof checked === 'number' ? checked : (checked ? 1 : 0) };
+  }).filter(Boolean).filter(o => {
+    const c = String(o.p.category || '').trim();
+    if (c !== category || namesOf(o.p).some(name => !name)) return false;
+    if (!opts.forceWaitlistSub && !o.ts) return false;
+    if (o.identity.members.some(member => (member.uid && t.absent && t.absent[member.uid]) ||
+      (member.manualId && t.absent && t.absent[member.manualId]))) return false;
+    const candidateKeys = new Set(o.identity.members.map(member => member.uid ? 'uid:' + member.uid : 'manual:' + member.manualId));
+    return !all.some(m => {
+      if (!m || m.winner != null) return false;
+      return ['team1Obj', 'team2Obj'].some(key => {
+        const side = window._woTeamIdentity(m[key]);
+        if (side) return side.members.some(member => candidateKeys.has(member.uid ? 'uid:' + member.uid : 'manual:' + member.manualId));
+        const uids = m[key === 'team1Obj' ? 'team1Uids' : 'team2Uids'];
+        return Array.isArray(uids) && uids.some(uid => candidateKeys.has('uid:' + uid));
+      });
+    });
+  });
+  window._woOrderStandby(t, entries, !!opts.forceWaitlistSub, true);
+  return entries.length ? { chosen: entries[0], oldTeam, all, historical, names: namesOf(entries[0].p) } : null;
+};
+
+// Promove uma entrada estrutural da fila, sem juntar duas pessoas avulsas.
+// Somente o chamador autorizado no servidor habilita este ramo de _applyWO.
+window._woReplaceTeamWithStandby = function(t, match, slot, opts) {
+  const eligible = window._woFindEligibleTeamStandby(t, match, slot, opts);
+  if (!eligible) return { ok: false, reason: 'no-eligible-pair' };
+  const { chosen, oldTeam, all, historical, names } = eligible;
+  const newTeam = chosen.identity;
+  const label = names.join(' / ');
+  const replacement = Object.assign({}, chosen.p, {
+    p1Uid: newTeam.members[0].uid || null, p1ManualId: newTeam.members[0].manualId || null, p1Name: names[0],
+    p2Uid: newTeam.members[1].uid || null, p2ManualId: newTeam.members[1].manualId || null, p2Name: names[1],
+    displayName: label, name: label,
+    participants: newTeam.members.map((member, i) => ({ uid: member.uid || null,
+      manualParticipantId: member.manualId || null, displayName: names[i], name: names[i] }))
+  });
+  const updates = [];
+  const selectedCategory = String(match.category || '').trim();
+  all.forEach(m => {
+    if (!m || historical(m)) return;
+    if (selectedCategory && m.category && String(m.category).trim() !== selectedCategory) return;
+    for (const side of ['p1', 'p2']) {
+      const key = side === 'p1' ? 'team1Obj' : 'team2Obj';
+      const identity = window._woTeamIdentity(m[key]);
+      if (!identity || identity.key !== oldTeam.key) continue;
+      const oldEntry = m[side];
+      m[side] = label;
+      m[key] = Object.assign({}, replacement);
+      m[side === 'p1' ? 'team1Uids' : 'team2Uids'] = newTeam.uids.slice();
+      m[side + 'Uid'] = newTeam.uids.length === 1 ? newTeam.uids[0] : null;
+      const teamKey = side === 'p1' ? 'team1' : 'team2';
+      if (m[teamKey] != null) m[teamKey] = Array.isArray(m[teamKey]) ? names.slice() : label;
+      if (typeof window._matchPlayerUids === 'function') m.playerUids = window._matchPlayerUids(t, m);
+      updates.push({ matchId: m.id, slot: side, oldEntry, newEntry: label,
+        absentUid: oldTeam.uids[0] || null, subUid: newTeam.uids[0] || null,
+        beforeIdentity: oldTeam.key, afterIdentity: newTeam.key });
+    }
+  });
+  if (!updates.some(u => String(u.matchId) === String(match.id) && u.slot === slot)) return { ok: false, reason: 'match-not-updated' };
+  if (Array.isArray(t.participants)) t.participants = t.participants.map(p => {
+    const id = window._woTeamIdentity(p);
+    return id && id.key === oldTeam.key ? Object.assign({}, replacement) : p;
+  });
+  const remove = p => { const id = window._woTeamIdentity(p); return !id || id.key !== newTeam.key; };
+  if (Array.isArray(t.standbyParticipants)) t.standbyParticipants = t.standbyParticipants.filter(remove);
+  if (Array.isArray(t.waitlist)) t.waitlist = t.waitlist.filter(remove);
+  return { ok: true, outcome: 'subbed', subCount: 1, subDetails: updates, substitute: label };
+};
+
 window._applyWoSubsToTournament = function(t, opts) {
   opts = opts || {};
   if (!t) return { ok: false, reason: 'no-tournament', subCount: 0 };
@@ -69,11 +196,6 @@ window._applyWoSubsToTournament = function(t, opts) {
   // Política de chamada da fila (Sorteio de Vagas): 'present' (padrão/legado) =
   // FIFO por check-in; 'locked' = ordem travada do sorteio (t.waitlistOrder),
   // entrando o próximo PRESENTE nessa ordem (ausente é pulado, não reordena).
-  const _policy = t.callPolicy || 'present';
-  const _ord = {};
-  if (_policy === 'locked' && Array.isArray(t.waitlistOrder)) {
-    t.waitlistOrder.forEach((nm, idx) => { _ord[nm] = idx; });
-  }
   // Build presentList. Tolerant a TIMESTAMP (number) OU TRUE (boolean):
   // _toggleCheckIn seta Date.now() (number truthy), handlers de sub setam true.
   const presentList = standbyPool
@@ -88,18 +210,7 @@ window._applyWoSubsToTournament = function(t, opts) {
     // consomem posição nem entram na ordenação. Quando a organização escolhe
     // preencher a vaga, a ordem restante vale sem check-in.
     .filter(o => (opts.forceWaitlistSub || o.ts > 0) && !window._idMapHas(t, t.absent, o.p) && !_candidateAlreadyPlays(o.p));
-  if (opts.forceWaitlistSub) {
-    presentList.sort((a, b) => a.queueIndex - b.queueIndex);
-  } else if (_policy === 'locked') {
-    const _ordOf = (o) => {
-      if (_ord[o.name] !== undefined) return _ord[o.name];
-      if (o.p && typeof o.p === 'object' && typeof o.p.drawOrder === 'number') return o.p.drawOrder;
-      return 9999;
-    };
-    presentList.sort((a, b) => _ordOf(a) - _ordOf(b));
-  } else {
-    presentList.sort((a, b) => a.ts - b.ts);
-  }
+  window._woOrderStandby(t, presentList, !!opts.forceWaitlistSub);
 
   if (presentList.length === 0) {
     try {
@@ -623,6 +734,19 @@ window._applyWO = function (t, opts) {
   const scope = opts.scope || 'match';
   const noSubBehavior = opts.noSubBehavior || 'escalate';
   const woScope = opts.woScope || t.woScope || 'individual';
+  if (opts.teamSubstitution && woScope !== 'team') return { ok: false, outcome: 'error', reason: 'team-scope-required' };
+  if (opts.teamSubstitution) {
+    const selected = Array.isArray(opts.matches) && opts.matches.length === 1 ? opts.matches[0] : null;
+    const ids = Array.isArray(opts.absentUids) ? opts.absentUids.map(String).filter(Boolean) : [];
+    const side = selected && ['p1', 'p2'].find(s => {
+      const key = s === 'p1' ? 'team1Uids' : 'team2Uids';
+      const uids = Array.isArray(selected[key]) ? selected[key].map(String).filter(Boolean) : [];
+      return uids.length === ids.length && uids.every(u => ids.includes(u));
+    });
+    if (!selected || !side || !window._woFindEligibleTeamStandby(t, selected, side, { forceWaitlistSub: !!opts.forceWaitlistSub })) {
+      return { ok: false, outcome: 'substitute-unavailable', reason: 'substitute-unavailable' };
+    }
+  }
   const _getName = p => window._pName(p);
   // histórico via push direto em t.history (puro/transaction-safe — o motor NÃO
   // salva; quem persiste é o chamador, via AppStore.mutate/commitTournamentTx).
@@ -642,6 +766,17 @@ window._applyWO = function (t, opts) {
   if (!t.absent) t.absent = {};
   if (absentUids.length) absentUids.forEach(u => { if (u) t.absent[u] = Date.now(); });
   else window._idMapSet(t, t.absent, absentName, Date.now());
+  if (woScope === 'team' && absentUids.length && Array.isArray(opts.matches) && opts.matches.length === 1) {
+    const selected = opts.matches[0];
+    const side = ['p1', 'p2'].find(s => {
+      const ids = (selected[s === 'p1' ? 'team1Uids' : 'team2Uids'] || []).filter(Boolean);
+      return ids.length === absentUids.length && ids.every(u => absentUids.includes(u));
+    });
+    const obj = side && selected[side === 'p1' ? 'team1Obj' : 'team2Obj'];
+    if (obj && typeof obj === 'object') {
+      [obj.p1ManualId, obj.p2ManualId].filter(Boolean).forEach(id => { t.absent[id] = Date.now(); });
+    }
+  }
   window._idMapDel(t, t.checkedIn, absentName);
 
   // ── Liga / Rei-Rainha (escopo de grupo) → picker de folga / Jogador X ──
@@ -691,6 +826,14 @@ window._applyWO = function (t, opts) {
   // mostra "Estava no Jogo N com X") — mesmo que caia em aguarda/TBD/sub.
   const _preAll = _allMatches();
   const _preMatch = _preAll.find(m => m && !m.winner && (_absentInSlot(m, 'p1') || _absentInSlot(m, 'p2')));
+  if (opts.teamSubstitution) {
+    const selected = opts.matches[0];
+    const side = _absentInSlot(selected, 'p1') ? 'p1' : 'p2';
+    const sub = window._woReplaceTeamWithStandby(t, selected, side, { forceWaitlistSub: !!opts.forceWaitlistSub });
+    if (!sub.ok) return { ok: false, outcome: 'substitute-unavailable', reason: sub.reason };
+    _log(`Substituição W.O. de dupla: ${absentName} → ${sub.substitute} — jogo ${selected.id}.`);
+    return sub;
+  }
   if (_preMatch && typeof window._woHistSet === 'function') {
     const _slot0 = _absentInSlot(_preMatch, 'p1') ? 'p1' : 'p2';
     const _entry0 = _preMatch[_slot0] || '';

@@ -9,6 +9,32 @@ function claimsOf(t) {
 }
 function claimOf(t, id) { return claimsOf(t).find(c => c && String(c.id) === String(id)) || null; }
 function unique(values) { return [...new Set((values || []).filter(Boolean).map(String))]; }
+function validateTeamWO(match, requestedUids) {
+  if (!match) return { ok: false, reason: 'match-not-found' };
+  const sides = ['p1', 'p2'].map((slot, index) => {
+    const arr = match[index ? 'team2Uids' : 'team1Uids'];
+    const obj = match[index ? 'team2Obj' : 'team1Obj'];
+    const single = match[slot + 'Uid'];
+    const uids = unique(Array.isArray(arr) && arr.some(Boolean) ? arr :
+      single ? [single] : obj ? [obj.p1Uid, obj.p2Uid].concat(Array.isArray(obj.participants) ? obj.participants.map(p => p && p.uid) : []) : []);
+    const roster = match[index ? 'team2' : 'team1'];
+    const twoPositions = (Array.isArray(roster) && roster.length === 2) ||
+      !!(obj && ((Array.isArray(obj.participants) && obj.participants.length === 2) ||
+        ((obj.p1Uid || obj.p1ManualId) && (obj.p2Uid || obj.p2ManualId))));
+    return { slot, uids, label: String(match[slot] || '').trim(), twoPositions };
+  });
+  const [first, second] = sides;
+  if (!first.uids.length || !second.uids.length) return { ok: false, reason: 'side-without-uid' };
+  if (first.uids.some(uid => second.uids.includes(uid))) return { ok: false, reason: 'overlapping-uids' };
+  if (!first.label || !second.label || ['TBD', 'BYE'].includes(first.label) || ['TBD', 'BYE'].includes(second.label))
+    return { ok: false, reason: 'undefined-side' };
+  const wanted = unique(requestedUids);
+  if (!wanted.length || wanted.length !== (requestedUids || []).filter(Boolean).length) return { ok: false, reason: 'invalid-uids' };
+  const team = sides.find(side => side.uids.length === wanted.length && side.uids.every(uid => wanted.includes(uid)));
+  if (!team) return { ok: false, reason: 'stale-or-partial-uids' };
+  if (team.uids.length === 1 && !team.twoPositions) return { ok: false, reason: 'not-a-team' };
+  return { ok: true, team, opponent: sides.find(side => side !== team) };
+}
 function isMember(ctx, uid) { return (ctx.memberUids || []).map(String).includes(String(uid || '')); }
 function confirmers(ctx, claim) {
   const absent = new Set((claim.absentUids || []).map(String));
@@ -123,4 +149,4 @@ function transition(t, input) {
   return { ok: false, reason: 'invalid-action' };
 }
 
-module.exports = { claimsOf, claimOf, transition, outcomeContext, confirmers };
+module.exports = { claimsOf, claimOf, transition, outcomeContext, confirmers, validateTeamWO };

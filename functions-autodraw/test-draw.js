@@ -330,5 +330,17 @@ console.log('   colunas geradas: ' + tc.rounds.length + ' · jogadores sorteados
   assert(before === JSON.stringify(payload.rounds), 'fold é idempotente (2ª passada não altera)');
 })();
 
+// O mesmo conjunto de UIDs identifica a dupla mista antes do motor de W.O.
+{
+  const { validateTeamWO } = require('./wo-claim-core.js');
+  const match = { id:'m-wo', p1:'Ana / Bia', p2:'Clara / Dora',
+    team1Uids:['ana'], team2Uids:['clara','dora'],
+    team1Obj:{ p1Uid:'ana', p2ManualId:'manual-bia' },
+    team2Obj:{ p1Uid:'clara', p2Uid:'dora' } };
+  const chosen = validateTeamWO(match, ['ana']);
+  assert(chosen.ok && chosen.team.label === 'Ana / Bia', 'W.O. de dupla mista usa o rótulo fresco completo');
+  assert(!validateTeamWO(match, ['ana','clara']).ok, 'W.O. parcial/ambíguo entre duplas é recusado');
+}
+
 console.log('\n' + (failures === 0 ? '✅ TODOS OS TESTES PASSARAM' : '❌ ' + failures + ' FALHA(S)'));
 process.exit(failures === 0 ? 0 : 1);

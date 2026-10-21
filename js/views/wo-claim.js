@@ -564,18 +564,31 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (compactManagerChoices) {
       picks = ['p1', 'p2'].map(function(side) {
         var teamName = String(rc.m[side] || '').trim();
-        var opponent = String(rc.m[side === 'p1' ? 'p2' : 'p1'] || '').trim();
         if (!teamName || teamName === 'TBD' || teamName === 'BYE') return '';
-        var names = selectable.filter(function(mb) { return mb.side === side; }).map(function(mb) {
-          var u = (mb.uids || [])[0] || '';
-          var nm = (typeof window._liveRowName === 'function') ? (window._liveRowName({ name: mb.name, uid: u }) || mb.name) : mb.name;
-          return '<button type="button" onclick="window._woDeclareIndividual(\'' + _attr(t.id) + '\',\'' + _attr(ctxKey) + '\',\'' + _attr(mb.name) + '\',\'' + _attr(u) + '\')" class="btn hover-lift" style="flex:1;min-width:0;white-space:normal;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.35);color:var(--text-bright);font-weight:750;border-radius:10px;padding:10px 8px;font-size:0.84rem;">' + _esc(nm) + '</button>';
+        var otherSide = side === 'p1' ? 'p2' : 'p1';
+        var teamUids = (typeof window._slotUids === 'function' ? window._slotUids(rc.m, side) : []).filter(Boolean);
+        var opponentUids = (typeof window._slotUids === 'function' ? window._slotUids(rc.m, otherSide) : []).filter(Boolean);
+        var positional = (typeof window._slotUidsPositional === 'function' ? window._slotUidsPositional(rc.m, side, t) : teamUids).map(function(u) { return u || ''; });
+        var rawNames = teamName.split(' / ').map(function(n) { return n.trim(); }).filter(Boolean);
+        var sideObj = side === 'p1' ? rc.m.team1Obj : rc.m.team2Obj;
+        var structured = side === 'p1' ? rc.m.team1 : rc.m.team2;
+        var display = (Array.isArray(structured) && structured.length ? structured : rawNames).map(function(name, i) {
+          var u = positional[i] || '';
+          var objectName = sideObj && (i === 0 ? sideObj.p1Name : sideObj.p2Name);
+          var fallback = String(objectName || name || '').trim();
+          return { uid: u, name: u && typeof window._displayNameForUid === 'function' ? (window._displayNameForUid(u, fallback) || fallback) : fallback };
+        }).filter(function(member) { return member.name; });
+        if (!display.length) display = [{ uid: teamUids[0] || '', name: teamName }];
+        var names = display.map(function(member) {
+          var common = 'style="display:flex;align-items:center;justify-content:center;min-height:42px;width:100%;min-width:0;white-space:normal;text-align:center;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.35);color:var(--text-bright);font-weight:750;border-radius:10px;padding:9px 8px;font-size:0.84rem;"';
+          return member.uid
+            ? '<button type="button" onclick="window._woDeclareIndividual(\'' + _attr(t.id) + '\',\'' + _attr(ctxKey) + '\',\'' + _attr(member.name) + '\',\'' + _attr(member.uid) + '\')" class="btn hover-lift" ' + common + '>' + _esc(member.name) + '</button>'
+            : '<span ' + common + ' title="Inscrição manual sem conta vinculada">' + _esc(member.name) + '</span>';
         }).join('');
-        var teamUidsCsv = selectable.filter(function(mb) { return mb.side === side; }).map(function(mb) { return (mb.uids || [])[0] || ''; }).filter(Boolean).join(',');
-        var teamAction = opponent && opponent !== 'TBD' && opponent !== 'BYE' && teamUidsCsv
-          ? '<button type="button" onclick="window._woDeclareTeam(\'' + _attr(t.id) + '\',\'' + _attr(ctxKey) + '\',\'' + _attr(teamUidsCsv) + '\')" class="btn hover-lift" style="flex:0 0 auto;background:rgba(127,29,29,.32);border:1px solid rgba(248,113,113,.65);color:#fff;font-weight:850;border-radius:10px;padding:10px;font-size:.78rem;">W.O.<br>dupla</button>' : '';
+        var teamAction = teamUids.length && opponentUids.length && !teamUids.some(function(u) { return opponentUids.indexOf(u) !== -1; }) && display.length === 2
+          ? '<button type="button" onclick="window._woDeclareTeam(\'' + _attr(t.id) + '\',\'' + _attr(ctxKey) + '\',\'' + _attr(teamUids.join(',')) + '\')" class="btn hover-lift" style="align-self:stretch;flex:0 0 76px;background:rgba(127,29,29,.32);border:1px solid rgba(248,113,113,.65);color:#fff;font-weight:850;border-radius:10px;padding:10px;font-size:.78rem;">W.O.<br>dupla</button>' : '';
         return '<div style="display:flex;gap:7px;align-items:stretch;margin-bottom:8px;">' +
-          '<div style="display:flex;gap:6px;flex:1;min-width:0;">' + names + '</div>' + teamAction + '</div>';
+          '<div style="display:grid;grid-template-columns:minmax(0,1fr);gap:6px;flex:1;min-width:0;">' + names + '</div>' + teamAction + '</div>';
       }).join('');
     }
     var teamPicks = '';
@@ -635,13 +648,13 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 
   // Ação administrativa direta: o servidor relê o jogo e executa o mesmo motor
   // transacional. Não há mutação otimista de chave, lista de espera ou placar no cliente.
-  function _orgWoServer(tId, payload, onDone, loadingMsg) {
+  function _orgWoServer(tId, payload, onDone, loadingMsg, onError) {
     if (!window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') {
       if (typeof showNotification === 'function') showNotification('⚠️ Não salvou', 'A conexão com o servidor não está disponível.', 'error');
       return Promise.resolve(null);
     }
     if (typeof window._showLoading === 'function') window._showLoading(loadingMsg || 'Aplicando W.O.…');
-    return window.FirestoreDB._callFn('applyTournamentWO', Object.assign({ tournamentId: String(tId) }, payload)).then(function (data) {
+    return window.FirestoreDB._callFn('applyTournamentWO', Object.assign({ tournamentId: String(tId), sandbox: String(tId).startsWith('sb_') }, payload)).then(function (data) {
       if (typeof window._hideLoading === 'function') window._hideLoading();
       if (typeof onDone === 'function') onDone(data || {});
       if (typeof window._rerenderBracket === 'function') window._rerenderBracket(String(tId));
@@ -650,6 +663,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     }).catch(function (err) {
       if (typeof window._hideLoading === 'function') window._hideLoading();
       if (typeof showNotification === 'function') showNotification('⚠️ Não salvou', (err && err.message) || 'Tente de novo.', 'error');
+      if (typeof onError === 'function') onError(err);
       return null;
     });
   }
@@ -691,27 +705,57 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         label: String(rc.m[slot] || '').trim()
       };
     }).filter(function(team) { return team.uids.length; });
-    var team = teams.filter(function(candidate) { return candidate.uids.length === wanted.length && candidate.uids.every(function(uid, i) { return uid === wanted[i]; }); })[0];
+    var matches = teams.filter(function(candidate) { return candidate.uids.length === wanted.length && candidate.uids.every(function(uid, i) { return uid === wanted[i]; }); });
+    var team = matches.length === 1 ? matches[0] : null;
     var other = teams.filter(function(candidate) { return candidate !== team; })[0];
-    var teamName = team ? (team.uids.map(function(uid) { return _nameOfUid(t, uid, ''); }).filter(Boolean).join(' / ') || team.label) : '';
-    var opponent = other ? (other.uids.map(function(uid) { return _nameOfUid(t, uid, ''); }).filter(Boolean).join(' / ') || other.label) : '';
-    if (!teamName || !opponent || teamName === 'TBD' || teamName === 'BYE' || opponent === 'TBD' || opponent === 'BYE') return;
-    if (!confirmed) {
-      _overlay(_header('Confirmar W.O. do time') + '<div style="padding:1.1rem;">' +
-        '<div style="font-weight:800;font-size:1rem;color:var(--text-bright);">🏳️ Desclassificar ' + _esc(teamName) + '</div>' +
-        '<div style="font-size:0.86rem;line-height:1.45;color:var(--text-muted);margin-top:10px;">A dupla inteira sai deste jogo. Nenhum suplente será chamado. <b style="color:var(--text-bright);">' + _esc(opponent) + '</b> vence por W.O. e avança na chave quando houver próxima rodada.</div>' +
-        '<div style="display:flex;gap:8px;margin-top:16px;">' +
-          '<button type="button" onclick="window._woOpenClaim(\'' + _attr(t.id) + '\',\'' + _attr(ctxKey) + '\')" class="btn" style="flex:1;background:rgba(148,163,184,.12);color:var(--text-bright);border:1px solid rgba(148,163,184,.4);font-weight:800;border-radius:10px;padding:10px;">Cancelar</button>' +
-          '<button type="button" onclick="window._woDeclareTeam(\'' + _attr(t.id) + '\',\'' + _attr(ctxKey) + '\',\'' + _attr(team.uids.join(',')) + '\',true)" class="btn btn-danger" style="flex:1;font-weight:800;border-radius:10px;padding:10px;">Desclassificar time</button>' +
-        '</div></div>');
+    var teamName = team ? team.label : '';
+    var opponent = other ? other.label : '';
+    if (!team || !other || team.uids.some(function(u) { return other.uids.indexOf(u) !== -1; }) || !teamName || !opponent || teamName === 'TBD' || teamName === 'BYE' || opponent === 'TBD' || opponent === 'BYE') {
+      if (typeof showNotification === 'function') showNotification('W.O. indisponível', 'A dupla mudou ou não está identificada com segurança neste jogo. Atualize a chave.', 'error');
       return;
     }
-    _orgWoServer(tId, { matchId: String(rc.matchId || rc.m.id || ''), forceTeamWO: true, teamUids: team.uids }, function (saved) {
+    if (!confirmed) {
+      if (!window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') {
+        if (typeof showNotification === 'function') showNotification('W.O. indisponível', 'Sem conexão com o servidor.', 'error');
+        return;
+      }
+      if (typeof window._showLoading === 'function') window._showLoading('Consultando duplas suplentes…');
+      window.FirestoreDB._callFn('previewTournamentTeamWO', {
+        tournamentId: String(tId), sandbox: String(tId).startsWith('sb_'),
+        matchId: String(rc.matchId || rc.m.id || ''), teamUids: team.uids
+      }).then(function (preview) {
+        if (typeof window._hideLoading === 'function') window._hideLoading();
+        var hasPair = !!(preview && preview.hasEligiblePair);
+        var args = '\'' + _attr(t.id) + '\',\'' + _attr(ctxKey) + '\',\'' + _attr(team.uids.join(',')) + '\',';
+        _overlay(_header('Decidir W.O. da dupla') + '<div style="padding:1.1rem;">' +
+          '<div style="font-weight:800;font-size:1rem;color:var(--text-bright);">' + _esc(teamName) + '</div>' +
+          '<div style="font-size:0.86rem;line-height:1.45;color:var(--text-muted);margin-top:10px;">' +
+            (hasPair ? 'Há uma dupla suplente elegível. Escolha se ela assume a vaga ou se ' : 'Não há dupla suplente elegível. ') +
+            '<b style="color:var(--text-bright);">' + _esc(opponent) + '</b> vence por W.O.</div>' +
+          '<div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;">' +
+            '<button type="button" onclick="window._woOpenClaim(\'' + _attr(t.id) + '\',\'' + _attr(ctxKey) + '\')" class="btn" style="flex:1;min-width:90px;">Cancelar</button>' +
+            (hasPair ? '<button type="button" onclick="window._woDeclareTeam(' + args + '\'substitute\')" class="btn" style="flex:1;min-width:130px;">Chamar dupla suplente</button>' : '') +
+            '<button type="button" onclick="window._woDeclareTeam(' + args + '\'wo\')" class="btn btn-danger" style="flex:1;min-width:130px;">Vitória por W.O.</button>' +
+          '</div></div>');
+      }).catch(function (err) {
+        if (typeof window._hideLoading === 'function') window._hideLoading();
+        if (typeof showNotification === 'function') showNotification('W.O. indisponível', (err && err.message) || 'Atualize a chave.', 'error');
+      });
+      return;
+    }
+    if (confirmed !== 'wo' && confirmed !== 'substitute') return;
+    _orgWoServer(tId, { matchId: String(rc.matchId || rc.m.id || ''), forceTeamWO: true,
+      teamUids: team.uids, teamDecisionV2: true, teamOutcome: confirmed }, function (saved) {
       if (!saved || !saved.ok) return;
       if (typeof window._woCloseOverlay === 'function') window._woCloseOverlay();
-      var winner = (saved.result || {}).winner || opponent;
-      if (typeof showNotification === 'function') showNotification('W.O. do time aplicado', winner + ' vence por W.O.', 'success');
-    }, 'Desclassificando o time…');
+      var result = saved.result || {};
+      var message = result.outcome === 'subbed' ? 'A dupla suplente assumiu a vaga.'
+        : ((result.winner || opponent) + ' vence por W.O.');
+      if (typeof showNotification === 'function') showNotification('Decisão registrada', message, 'success');
+    }, 'Registrando decisão…', function (err) {
+      if (confirmed === 'substitute' && err && String(err.message || '').indexOf('suplente') !== -1)
+        window._woDeclareTeam(tId, ctxKey, teamUidsCsv);
+    });
   };
 
   // ─── ações ─────────────────────────────────────────────────────────────────────

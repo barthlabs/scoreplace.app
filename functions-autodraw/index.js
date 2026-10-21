@@ -1025,6 +1025,14 @@ function _preservaRepescagemCarimbada(tDepois, tAntes, woRepescagemPermits) {
     const antes = _uidsDoSlot(a, sl), depois = _uidsDoSlot(m, sl);
     const pAntes = Array.isArray(p.beforeUids) ? p.beforeUids.map(String).sort() : [];
     const pDepois = Array.isArray(p.afterUids) ? p.afterUids.map(String).sort() : [];
+    if (p.beforeIdentity && p.afterIdentity && typeof drawWindow._woTeamIdentity === 'function') {
+      const objKey = sl === 'p1' ? 'team1Obj' : 'team2Obj';
+      const oldTeam = drawWindow._woTeamIdentity(a[objKey]);
+      const newTeam = drawWindow._woTeamIdentity(m[objKey]);
+      return !!oldTeam && !!newTeam && oldTeam.key !== newTeam.key &&
+        oldTeam.key === p.beforeIdentity && newTeam.key === p.afterIdentity &&
+        _igual(antes, pAntes) && _igual(depois, pDepois);
+    }
     return !!p.absentUid && !!p.subUid && antes.includes(String(p.absentUid)) &&
       !depois.includes(String(p.absentUid)) && depois.includes(String(p.subUid)) &&
       _igual(antes, pAntes) && _igual(depois, pDepois);
@@ -2970,24 +2978,36 @@ exports.applyTournamentWO = onCall(async (request) => {
   const requestedUid = String(data.absentUid || '').trim();
   const matchId = String(data.matchId || '').trim();
   const forceTeamWO = data.forceTeamWO === true;
+  const teamDecisionV2 = data.teamDecisionV2 === true;
+  const teamOutcome = String(data.teamOutcome || '');
   const requestedTeamUids = Array.isArray(data.teamUids) ? data.teamUids.filter(Boolean).map(String) : [];
   if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  const sandbox = data.sandbox === true;
+  if (sandbox !== tId.startsWith('sb_')) throw new HttpsError('not-found', 'Torneio não encontrado.');
   if (!tId || (!forceTeamWO && !absentName && !requestedUid)) {
     throw new HttpsError('invalid-argument', 'Torneio e participante são obrigatórios.');
   }
   if (forceTeamWO && (!matchId || !requestedTeamUids.length)) {
     throw new HttpsError('invalid-argument', 'Jogo e UIDs do time são obrigatórios para desclassificar a dupla.');
   }
+  if (teamDecisionV2 && (!forceTeamWO || !['wo', 'substitute'].includes(teamOutcome))) {
+    throw new HttpsError('invalid-argument', 'Escolha substituir a dupla ou encerrar o jogo por W.O.');
+  }
   if (typeof applyWoFn !== 'function' || !drawWindow) throw _drawFail('internal', 'Motor de W.O. indisponível no servidor.', { tId });
 
-  const ref = db.collection('tournaments').doc(tId);
-  const pre = await ref.get();
+  const ref = db.collection(sandbox ? 'sandboxes' : 'tournaments').doc(tId);
+  const pre = sandbox ? await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    await _assertSandboxDrawOwner(tx, snap, uid);
+    return snap;
+  }) : await ref.get();
   if (!pre.exists) throw _drawFail('not-found', 'Torneio não encontrado.', { tId, uid });
   if (!_isTournamentAdmin(pre.data(), uid)) throw _drawFail('permission-denied', 'Só a organização pode declarar W.O.', { tId, uid });
   await _preloadDrawNames(pre.data());
   const agoraIso = new Date().toISOString();
 
   return db.runTransaction(async (tx) => {
+    if (sandbox) await _assertSandboxDrawOwner(tx, await tx.get(ref), uid);
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, uid });
@@ -3018,19 +3038,15 @@ exports.applyTournamentWO = onCall(async (request) => {
     if (forceTeamWO) {
       // A tela envia o CONJUNTO de UIDs da dupla, nunca "p1"/"p2". O servidor
       // encontra o time no jogo relido dentro da transação e recusa conjunto parcial.
-      const teams = _matchTeamsByUid(selectedMatch);
-      const team = teams.find(candidate => _sameUidSet(candidate.uids, requestedTeamUids));
-      const opponent = teams.find(candidate => candidate !== team);
-      const teamUids = team ? team.uids : [];
+      const selected = _woClaimCore.validateTeamWO(selectedMatch, requestedTeamUids);
+      if (!selected.ok) throw _drawFail('failed-precondition', 'Esta dupla não está mais disponível para W.O.', { tId, matchId, reason: selected.reason });
+      const { team } = selected;
+      const teamUids = team.uids;
       const nameOf = memberUid => (typeof drawWindow._memberNameByUid === 'function'
         ? drawWindow._memberNameByUid(t, memberUid) : '') || '';
-      const teamName = teamUids.map(nameOf).filter(Boolean).join(' / ') || (team && team.legacyLabel) || '';
-      const opponentName = opponent ? (opponent.uids.map(nameOf).filter(Boolean).join(' / ') || opponent.legacyLabel) : '';
-      const isTeam = teamUids.length > 1;
-      if (!teamName || teamName === 'TBD' || teamName === 'BYE' || !opponentName || opponentName === 'TBD' || opponentName === 'BYE' || !isTeam) {
-        throw _drawFail('failed-precondition', 'Só uma dupla ativa por UID contra adversário definido pode ser desclassificada.', { tId, matchId, requestedTeamUids });
-      }
-      // W.O. de time é uma decisão expressa: nunca consome a lista de espera.
+      const teamName = team.uids.length === 1 ? team.label : (teamUids.map(nameOf).filter(Boolean).join(' / ') || team.label);
+      // O cliente novo escolhe expressamente o desfecho. Chamadores antigos
+      // preservam o W.O. sem substituição durante a publicação servidor→cliente.
       result = applyWoFn(t, {
         absentName: teamName,
         absentUids: teamUids,
@@ -3038,8 +3054,10 @@ exports.applyTournamentWO = onCall(async (request) => {
         matches: [selectedMatch],
         noSubBehavior: 'escalate',
         woScope: 'team',
-        _forceNoSub: true,
-        forceWaitlistSub: false
+        _forceNoSub: !teamDecisionV2 || teamOutcome === 'wo',
+        teamSubstitution: teamDecisionV2 && teamOutcome === 'substitute',
+        requireTeamSubstitution: teamDecisionV2 && teamOutcome === 'substitute',
+        forceWaitlistSub: teamDecisionV2 && teamOutcome === 'substitute'
       });
     } else {
       // O texto vindo da tela só localiza o alvo. O UID e o nome vivo são
@@ -3082,6 +3100,10 @@ exports.applyTournamentWO = onCall(async (request) => {
         onlyAbsentUids: targetUids
       });
     }
+    if (teamDecisionV2 && teamOutcome === 'substitute' && (!result || !result.ok)) {
+      throw _drawFail('failed-precondition', 'A dupla suplente não está mais disponível. Reabra a escolha.',
+        { tId, matchId, reason: 'substitute-unavailable' });
+    }
     if (!result || !result.ok) return { ok: false, result: result || { outcome: 'error' } };
     _reconcileSurplusBeforeWrite(t, tId, before);
     /* O recibo vem exclusivamente do motor que acabou de alterar `t` dentro desta
@@ -3108,6 +3130,9 @@ exports.applyTournamentWO = onCall(async (request) => {
      * [[regression_confra_paula_promovida_nao_fica_na_espera]] */
     if (typeof drawWindow._removeFromWaitlistByKey === 'function') {
       (result.subDetails || []).forEach((detail) => {
+        // A dupla já saiu dos dois depósitos pela identidade estrutural no motor.
+        // A remoção por UID abaixo é exclusiva da substituição individual.
+        if (detail && detail.afterIdentity) return;
         const promotedUid = String(detail && detail.subUid || '').trim();
         if (promotedUid) drawWindow._removeFromWaitlistByKey(t, promotedUid);
       });
@@ -3117,9 +3142,18 @@ exports.applyTournamentWO = onCall(async (request) => {
       const slot = d && d.slot;
       const antesDoJogo = porIdAntes[matchIdDoRecibo], depoisDoJogo = depoisPorId[matchIdDoRecibo];
       if (!matchIdDoRecibo || (slot !== 'p1' && slot !== 'p2') || !antesDoJogo || !depoisDoJogo) return null;
+      if (d.afterIdentity) {
+        const key = slot === 'p1' ? 'team1Obj' : 'team2Obj';
+        const beforeTeam = drawWindow._woTeamIdentity(antesDoJogo[key]);
+        const afterTeam = drawWindow._woTeamIdentity(depoisDoJogo[key]);
+        if (!beforeTeam || !afterTeam || beforeTeam.key !== d.beforeIdentity || afterTeam.key !== d.afterIdentity) {
+          throw _drawFail('internal', 'Recibo da dupla não confere com a partida gravada.', { tId, matchId: matchIdDoRecibo });
+        }
+      }
       return {
         matchId: matchIdDoRecibo, slot,
         absentUid: String(d.absentUid || ''), subUid: String(d.subUid || ''),
+        beforeIdentity: d.beforeIdentity || null, afterIdentity: d.afterIdentity || null,
         beforeUids: uidDoSlot(antesDoJogo, slot), afterUids: uidDoSlot(depoisDoJogo, slot)
       };
     }).filter(Boolean);
@@ -3146,6 +3180,43 @@ exports.applyTournamentWO = onCall(async (request) => {
     const matchUpdates = changedIds.map((id) => byId[id]).filter(Boolean)
       .map((m) => JSON.parse(JSON.stringify(m)));
     return { ok: true, result, tournament: boundary.clean, matchUpdates };
+  });
+});
+
+// Prévia estritamente de leitura. A decisão é sempre revalidada em applyTournamentWO.
+exports.previewTournamentTeamWO = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const data = request.data || {};
+  const tId = String(data.tournamentId || '').trim();
+  const matchId = String(data.matchId || '').trim();
+  const sandbox = data.sandbox === true;
+  const requestedTeamUids = Array.isArray(data.teamUids) ? data.teamUids.map(String).filter(Boolean) : [];
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || sandbox !== tId.startsWith('sb_')) throw new HttpsError('not-found', 'Torneio não encontrado.');
+  if (!matchId || !requestedTeamUids.length) throw new HttpsError('invalid-argument', 'Jogo e dupla são obrigatórios.');
+  const ref = db.collection(sandbox ? 'sandboxes' : 'tournaments').doc(tId);
+  const pre = sandbox ? await db.runTransaction(async tx => {
+    const snap = await tx.get(ref);
+    await _assertSandboxDrawOwner(tx, snap, uid);
+    return snap;
+  }) : await ref.get();
+  if (!pre.exists) throw new HttpsError('not-found', 'Torneio não encontrado.');
+  if (!_isTournamentAdmin(pre.data(), uid)) throw new HttpsError('permission-denied', 'Só a organização pode declarar W.O.');
+  await _preloadDrawNames(pre.data());
+  return db.runTransaction(async tx => {
+    if (sandbox) await _assertSandboxDrawOwner(tx, await tx.get(ref), uid);
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw new HttpsError('permission-denied', 'Sem permissão (doc fresco).');
+    _enrichParticipantsFromProfiles(t);
+    const all = typeof drawWindow._collectAllMatches === 'function'
+      ? drawWindow._collectAllMatches(t) : (Array.isArray(t.matches) ? t.matches : []);
+    const match = all.find(m => m && String(m.id) === matchId);
+    const selected = match && _woClaimCore.validateTeamWO(match, requestedTeamUids);
+    if (!selected || !selected.ok) throw new HttpsError('failed-precondition', 'Esta dupla não está mais disponível para W.O.');
+    const hasEligiblePair = !!(typeof drawWindow._woFindEligibleTeamStandby === 'function' &&
+      drawWindow._woFindEligibleTeamStandby(t, match, selected.team.slot, { forceWaitlistSub: true }));
+    return { hasEligiblePair };
   });
 });
 

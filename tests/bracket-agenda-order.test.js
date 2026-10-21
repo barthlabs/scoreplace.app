@@ -50,7 +50,7 @@ assert.strictEqual(context._bracketAgendaExpected(partial, '2026-10-22', '', 'Am
   'subcoleção parcial não passa por foto completa');
 assert(source.includes('entries.sort(_bracketAgendaCompare)') &&
   source.includes('groups[key].sort(_bracketAgendaCompare)') &&
-  source.includes('waitingEntries.sort(_bracketAgendaCompare)'), 'três visões usam o mesmo comparador');
+  !source.includes('waitingEntries.sort(_bracketAgendaCompare)'), 'a fila única e as colunas usam o mesmo comparador');
 assert(source.includes('data-scheduled-game-number="${_plannedGameNumber > 0 ? _plannedGameNumber : \'\'}"'),
   'o DOM diferencia o número canônico do contador legado');
 console.log('✓ agenda por número canônico e contagem de torneio dividido');

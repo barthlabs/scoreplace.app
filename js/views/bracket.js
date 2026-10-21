@@ -1444,8 +1444,8 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
     root._bracketGeneralSlotTimes = scheduledCards.map(function (card) {
       return Number(card.getAttribute('data-bracket-scheduled-at'));
     });
-    // A data de referência não pode depender de haver jogo pronto: se todos
-    // aguardam presença, Próximos jogos ainda precisa mostrar o aviso no topo.
+    // A data de referência inclui todos os jogos pendentes, independentemente
+    // da presença, para manter cada partida na sua rodada agendada.
     // Próximos jogos é a fila operacional: resultado persistido NUNCA volta
     // para ela numa abertura nova. A única exceção é o placar acabado de
     // lançar nesta mesma página, que fica momentaneamente para conferência.
@@ -1454,15 +1454,10 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
     // [[regression_upcoming_keeps_only_current_session_result]]
     var justScoredByTournament = window._bracketJustScoredByTournament || {};
     var justScoredMatchId = String(justScoredByTournament[String(root.getAttribute('data-tournament-id') || '')] || '');
-    var waitingPresence = 0;
     scheduledCards.forEach(function (card, position) {
       if (categoryFilter && card.getAttribute('data-bracket-tab-category') !== categoryFilter) return;
       var at = Number(card.getAttribute('data-bracket-scheduled-at'));
       if (!isFinite(at) || at <= 0 || !card.parentNode) return;
-      // O aviso é de PRESENÇA PARCIAL: presença completa já aparece nos
-      // Próximos jogos; sem ninguém presente ainda não é uma chamada em curso.
-      var isWaitingPresence = onlyReady && card.getAttribute('data-bracket-presence') === 'partial';
-      if (isWaitingPresence) waitingPresence++;
       var isJustScored = onlyReady && justScoredMatchId &&
         (card.id === ('card-' + justScoredMatchId) || card.id === justScoredMatchId) &&
         Number(card.getAttribute('data-bracket-result-at')) > 0;
@@ -1482,7 +1477,7 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
       // wrapper. O container de origem é ocultado separadamente logo abaixo.
       // [[regression_general_agenda_moves_visible_cards]]
       card.hidden = false;
-      entries.push({ card: card, wrapper: wrapper, placeholder: placeholder, at: at, court: card.getAttribute('data-bracket-court') || '', num: Number(card.getAttribute('data-scheduled-game-number')) || 0, position: position, round: Number(card.getAttribute('data-bracket-tab-round')) || 1, waitingPresence: isWaitingPresence, justScored: isJustScored });
+      entries.push({ card: card, wrapper: wrapper, placeholder: placeholder, at: at, court: card.getAttribute('data-bracket-court') || '', num: Number(card.getAttribute('data-scheduled-game-number')) || 0, position: position, round: Number(card.getAttribute('data-bracket-tab-round')) || 1, justScored: isJustScored });
     });
     entries.sort(_bracketAgendaCompare);
     var sources = [];
@@ -1496,17 +1491,12 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
     root._bracketGeneralMode = requestedMode;
     root._bracketGeneralDay = gender;
     root._bracketGeneralCategory = categoryFilter || '';
-    root._bracketUpcomingWaitingPresence = waitingPresence;
   }
   if (!entries.length) {
-    // Geral sem horário não ganha aba. Já Próximos jogos pode legitimamente
-    // estar vazio enquanto a chamada de presença acontece; explique, não deixe
-    // a pessoa diante de uma tela preta.
+    // Geral sem horário não ganha aba. Próximos jogos informa quando não há
+    // partida pendente, sem criar outra lista fora das rodadas.
     if (onlyReady) {
-      var _awaiting = Number(root._bracketUpcomingWaitingPresence) || 0;
-      view.innerHTML = (_awaiting
-        ? '<div data-bracket-upcoming-waiting="1" style="margin:0 0 14px;padding:10px 12px;border:1px solid rgba(245,158,11,.42);border-radius:10px;background:rgba(245,158,11,.09);color:var(--sp-c-fbbf24,#fbbf24);font-size:.9rem;font-weight:800;">🟡 ' + _awaiting + (_awaiting === 1 ? ' jogo aguardando presença' : ' jogos aguardando presença') + '</div>'
-        : '') + '<p style="margin:16px 0;color:var(--text-muted);font-weight:700;">Nenhum jogo pronto para chamar neste dia.</p>';
+      view.innerHTML = '<p style="margin:16px 0;color:var(--text-muted);font-weight:700;">Nenhum próximo jogo neste dia.</p>';
       view.style.display = '';
       return true;
     }
@@ -1526,14 +1516,6 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
   // rodada interna do sorteio e pode misturar 18:00 e 18:35 (ou dois dias).
   // Preservar m.round no banco: só a apresentação da agenda usa scheduledAt.
   // [[regression_general_round_columns]]
-  var agendaEntries = onlyReady ? entries.filter(function (entry) { return !entry.waitingPresence; }) : entries;
-  var waitingEntries = onlyReady ? entries.filter(function (entry) { return entry.waitingPresence; }) : [];
-  if (onlyReady && !agendaEntries.length) {
-    var noneReady = document.createElement('p');
-    noneReady.style.cssText = 'margin:0 0 16px;color:var(--text-muted);font-weight:700;';
-    noneReady.textContent = 'Nenhum jogo pronto para chamar neste dia.';
-    view.appendChild(noneReady);
-  }
   var groups = {};
   var daySlots = {};
   var zone = typeof _matchCardTimeZone === 'function'
@@ -1542,7 +1524,7 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
     timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
   });
-  (root._bracketGeneralSlotTimes || agendaEntries.map(function (entry) { return entry.at; })).forEach(function (at) {
+  (root._bracketGeneralSlotTimes || entries.map(function (entry) { return entry.at; })).forEach(function (at) {
     var parts = {};
     slotFormatter.formatToParts(new Date(at)).forEach(function (part) { parts[part.type] = part.value; });
     var day = parts.year + '-' + parts.month + '-' + parts.day;
@@ -1550,7 +1532,7 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
     if (!daySlots[day]) daySlots[day] = [];
     if (daySlots[day].indexOf(hour) === -1) daySlots[day].push(hour);
   });
-  agendaEntries.forEach(function (entry) {
+  entries.forEach(function (entry) {
     var parts = {};
     slotFormatter.formatToParts(new Date(entry.at)).forEach(function (part) { parts[part.type] = part.value; });
     var day = parts.year + '-' + parts.month + '-' + parts.day;
@@ -1581,20 +1563,6 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
     group.appendChild(grid);
     roundsTrack.appendChild(group);
   });
-  if (waitingEntries.length) {
-    waitingEntries.sort(_bracketAgendaCompare);
-    var waitingSection = document.createElement('section');
-    waitingSection.setAttribute('data-bracket-upcoming-waiting', '1');
-    // A chamada pendente vem ANTES dos jogos prontos: é a informação que o
-    // organizador precisa resolver para o próximo jogo poder entrar na agenda.
-    waitingSection.style.cssText = 'margin:0 0 20px;padding-bottom:14px;border-bottom:1px solid rgba(245,158,11,.28);';
-    waitingSection.innerHTML = '<h4 style="margin:0 0 12px;color:var(--sp-c-fbbf24,#fbbf24);font-size:.9rem;letter-spacing:.2px;">🟡 ' + waitingEntries.length + (waitingEntries.length === 1 ? ' jogo aguardando presença' : ' jogos aguardando presença') + '</h4>';
-    var waitingGrid = document.createElement('div');
-    waitingGrid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;align-items:start;';
-    waitingEntries.forEach(function (entry) { waitingGrid.appendChild(entry.wrapper); });
-    waitingSection.appendChild(waitingGrid);
-    view.appendChild(waitingSection);
-  }
   view.appendChild(roundsTrack);
   view.style.display = '';
   // Os cards operacionais compartilham a mesma grade visual. Depois de mover

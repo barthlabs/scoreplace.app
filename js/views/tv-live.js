@@ -234,13 +234,25 @@
     var id = JSON.stringify(String(tournamentId || '')).replace(/</g, '\\u003c');
     var origin = JSON.stringify(window.location.origin).replace(/</g, '\\u003c');
     return '<script>(function(){"use strict";var id=' + id + ',gen=' + Number(generation) + ',origin=' + origin + ';window.__tvGeneration=gen;var timer;' +
+      'function fit(){if(typeof window.getComputedStyle!=="function")return;' +
+      'document.querySelectorAll(".tv-team-tag,.tv-result-team,.tv-score").forEach(function(el){el.style.fontSize="";' +
+      'var box=el.closest(".tv-side,.tv-result-side");if(!box||!box.clientHeight||!el.clientHeight)return;' +
+      'var size=parseFloat(window.getComputedStyle(el).fontSize)||12,min=el.classList.contains("tv-team-tag")?7:el.classList.contains("tv-score")?12:7;' +
+      'while(el.scrollHeight>el.clientHeight+1&&size>min){size=Math.max(min,size-.5);el.style.fontSize=size+"px";}});' +
+      'document.querySelectorAll(".tv-upcoming .tv-result-players").forEach(function(box){var names=box.querySelectorAll("span");' +
+      'names.forEach(function(el){el.style.fontSize="";});if(!box.clientHeight||!names.length)return;' +
+      'var size=parseFloat(window.getComputedStyle(names[0]).fontSize)||12;' +
+      'while(box.scrollHeight>box.clientHeight+1&&size>10){size=Math.max(10,size-.5);names.forEach(function(el){el.style.fontSize=size+"px";});}});}' +
+      'window.__tvFitLabels=fit;window.addEventListener("resize",fit);window.addEventListener("load",fit);' +
+      'document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible")fit();});' +
+      'if(document.fonts&&document.fonts.ready)document.fonts.ready.then(fit);' +
       'function signal(type){try{if(window.opener&&!window.opener.closed)window.opener.postMessage({type:type,id:id,gen:gen,visible:document.visibilityState==="visible"},origin);}catch(e){}}' +
       'function tick(){if(window.__tvGeneration!==gen){clearInterval(timer);return;}var now=Date.now();' +
       'if(now-(window.__tvParentBeat||0)>1800){try{var owner=window.opener;' +
       'var t=owner&&owner._findTournamentById&&owner._findTournamentById(id);' +
       'if(owner&&owner._tvLiveEnsureFresh&&(!t||!owner._tvLiveIsComplete(t)))owner._tvLiveEnsureFresh(id);' +
       'if(t&&owner._tvLiveIsComplete&&owner._tvLiveIsComplete(t)&&owner._tvLiveBuildSnapshot&&owner._tvLiveBodyHtml){var snap=owner._tvLiveBuildSnapshot(t,now);' +
-      'var html=owner._tvLiveBodyHtml(snap);if(html!==window.__tvLastMarkup){document.getElementById("tv-root").innerHTML=html;window.__tvLastMarkup=html;}' +
+      'var html=owner._tvLiveBodyHtml(snap);if(html!==window.__tvLastMarkup){document.getElementById("tv-root").innerHTML=html;window.__tvLastMarkup=html;fit();}' +
       'window.__tvTiming=snap.timing;window.__tvLastSync=now;}}catch(e){}}' +
       'var clock=window.ScoreplaceMatchTiming,timing=window.__tvTiming;' +
       'if(clock&&timing)document.querySelectorAll("[data-tv-start]").forEach(function(node){' +
@@ -292,6 +304,8 @@
     '.tv-upcoming h2{margin:0;color:#fbbf24;font-size:clamp(.9rem,1.2vw,1.5rem)}.tv-upcoming>small{display:block;margin:.15vw 0;color:#7dd3fc;font-size:clamp(.7rem,.8vw,1rem)}.tv-upcoming>p{color:#cbd5e1;margin:.35vw 0}' +
     '.tv-upcoming .tv-result-match{display:grid;grid-template-columns:minmax(0,1fr) 2.2vw minmax(0,1fr);gap:.3vw;align-items:stretch;height:calc(100% - 2.8vw)}' +
     '.tv-upcoming .tv-result-side{min-height:0}.tv-upcoming .tv-result-left .tv-result-players,.tv-upcoming .tv-result-left .tv-result-players span{text-align:left}.tv-upcoming .tv-result-right .tv-result-players,.tv-upcoming .tv-result-right .tv-result-players span{text-align:right}' +
+    '.tv-side{grid-template-rows:minmax(0,1fr);overflow:hidden}.tv-side>.tv-team-tag{min-height:0;max-height:100%;overflow:hidden}.tv-side>.tv-players{min-height:0;overflow:hidden}.tv-side>.tv-score{min-height:0;max-height:100%;overflow:hidden;line-height:1.1}.tv-versus{flex:none;position:relative;z-index:1}' +
+    '.tv-result-match,.tv-upcoming .tv-result-match{grid-template-rows:minmax(0,1fr);min-height:0}.tv-result-side{min-height:0;overflow:hidden}.tv-result-team{min-height:0;max-height:100%;overflow:hidden;white-space:nowrap}.tv-result-players{min-height:0;overflow:hidden}.tv-upcoming .tv-result-players span{font-size:clamp(.75rem,.95vw,1.3rem)}' +
     '@media(orientation:portrait){.tv-header time{font-size:clamp(1.2rem,2.8vw,2.4rem)}.tv-sidebar{grid-template-rows:70% 30%}.tv-ranking-head,.tv-ranking-row{grid-template-columns:3vw minmax(0,1fr) 7vw 10vw repeat(3,4vw);gap:.5vw;font-size:clamp(.75rem,1.4vw,1.2rem)}.tv-ranking-row{min-height:2.9vh}.tv-ranking-team{font-size:clamp(.8rem,1.6vw,1.25rem)}.tv-ranking-row b{font-size:clamp(.8rem,1.6vw,1.25rem)}.tv-qr{width:clamp(90px,17vw,180px)}.tv-qr-brand img{width:3vw}}' +
     '</style>');
   function isActive() {
@@ -406,7 +420,7 @@
         var markup = bodyHtml(snapshot);
         var root = popup.document.getElementById('tv-root');
         if (!root) { syncButton(); return; }
-        if (markup !== lastMarkup) { root.innerHTML = markup; lastMarkup = markup; popup.__tvLastMarkup = markup; }
+        if (markup !== lastMarkup) { root.innerHTML = markup; lastMarkup = markup; popup.__tvLastMarkup = markup; if (typeof popup.__tvFitLabels === 'function') popup.__tvFitLabels(); }
         popup.__tvTiming = snapshot.timing;
         popup.__tvLastSync = tickNow;
         popup.__tvParentBeat = tickNow;
