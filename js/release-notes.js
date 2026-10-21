@@ -1,3 +1,7 @@
+// 2.5.20 — O NO AR mostra o próximo jogo agendado e o QR oferece App Store,
+// Google Play e web. Os dois nomes do time à esquerda ficam alinhados à esquerda
+// nos últimos resultados. A borda verde na chave confirma o OK da quadra;
+// a TV conserva o destaque dourado da última transição.
 // 2.5.19 — O botão NO AR só acende e pisca enquanto a janela de TV do torneio
 // está visível e ativa. Ao ocultar, fechar ou trocar essa janela, ele apaga;
 // após recarregar a chave, recupera o estado da TV que continua aberta. Se o
