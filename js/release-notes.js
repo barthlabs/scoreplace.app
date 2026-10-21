@@ -1,3 +1,4 @@
+// 2.5.21 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.20 — O NO AR mostra o próximo jogo agendado e o QR oferece App Store,
 // Google Play e web. Os dois nomes do time à esquerda ficam alinhados à esquerda
 // nos últimos resultados. A borda verde na chave confirma o OK da quadra;
