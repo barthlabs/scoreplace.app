@@ -1861,6 +1861,10 @@ function _bracketUpdateRoundHeadingPortal(root, scope) {
     // fallback para um mount ainda sem pai.
     (root.parentNode || scope).appendChild(portal);
     root._bracketRoundHeadingPortal = portal;
+  } else if (root.parentNode && portal.parentNode !== root.parentNode) {
+    // A navegação pode sair de uma seção de grupos ocultada pela agenda Geral.
+    // O espelho das rodadas precisa mudar de pai com ela para continuar visível.
+    root.parentNode.insertBefore(portal, root.nextSibling);
   }
   portal.innerHTML = '';
   var rootRect = root.getBoundingClientRect();
@@ -2051,6 +2055,14 @@ function _bracketTabsObserveSearchLayout(root, searchWrap) {
 window._bracketPrimaryTabsHtml = function (genderHtml, presentationTabs) {
   return '<div data-bracket-tabs-primary style="display:flex;align-items:flex-end;gap:5px;flex-wrap:nowrap;width:100%;min-width:0;border-bottom:1px solid rgba(129,140,248,.6);padding:0 4px;">' + '<div data-bracket-main-tabs style="display:flex;align-items:flex-end;gap:5px;flex:0 1 auto;min-width:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;">' + genderHtml + '</div>' + (presentationTabs ? '<div data-bracket-presentation-tabs style="margin-left:auto;flex:0 0 auto;align-self:center;">' + presentationTabs + '</div>' : '') + '<div data-bracket-search-slot="inline" hidden style="margin-left:auto;flex:1 1 260px;max-width:780px;min-width:220px;"></div></div>';
 };
+// A busca pode estar ausente no detalhe, ou ainda dentro de uma navegação de
+// pintura anterior. A referência de insertBefore deve ser filha direta do host.
+function _bracketTabsHostReference(host, searchWrap) {
+  if (searchWrap && searchWrap.parentNode === host) return searchWrap.nextSibling;
+  var backHeader = host && host.querySelector && host.querySelector(':scope > .sticky-back-header');
+  if (backHeader && backHeader.parentNode === host) return backHeader.nextSibling;
+  return host ? host.firstChild : null;
+}
 window._bracketCategoryTabsMount = function () {
   var cards = Array.prototype.slice.call(document.querySelectorAll('[data-bracket-tab-category]'));
   if (!cards.length) return;
@@ -2097,9 +2109,13 @@ window._bracketCategoryTabsMount = function () {
     if (!parentTabs) break;
     mountedTabs = parentTabs;
   }
-  var tabsHost = mountedTabs ? mountedTabs.parentNode : (searchWrap && searchWrap.parentNode);
-  if (mountedTabs && tabsHost && mountedTabs.contains(searchWrap)) {
-    tabsHost.insertBefore(searchWrap, mountedTabs);
+  // O detalhe é o pai que dura por toda a rolagem. Quando a busca não existe,
+  // ancorar pelo primeiro card prende a faixa num grupo que a Geral esconde.
+  // [[regression_operational_tabs_stay_outside_hidden_group]]
+  var stableHost = detailScope && detailScope.id === 'view-container' && detailScope.contains(first) ? detailScope : null;
+  var tabsHost = stableHost || (mountedTabs ? mountedTabs.parentNode : (searchWrap && searchWrap.parentNode));
+  if (searchWrap && tabsHost && searchWrap.parentNode !== tabsHost) {
+    tabsHost.insertBefore(searchWrap, _bracketTabsHostReference(tabsHost, null));
   }
   var tid = (window._currentBracketTournament && window._currentBracketTournament.id) || scope.getAttribute('data-tournament-id') || 'current';
   var id = String(tid);
@@ -2129,29 +2145,32 @@ window._bracketCategoryTabsMount = function () {
     // impede cards da matriz de aparecerem nessas frestas em fullscreen.
     // [[regression_tabs_full_width_seams_are_opaque]]
     root.style.cssText = 'display:block;box-sizing:border-box;width:100%;max-width:100%;min-width:0;margin:0;padding:4px 12px 6px;border:0;border-radius:0;background:#111114;overflow:visible;position:sticky;top:calc(var(--topbar-h,60px) + var(--hamburger-dd-h,0px) + var(--backheader-h,0px) + var(--stickybar-h,0px) - 1px);z-index:31;isolation:isolate;box-shadow:0 -2px 0 #111114,0 2px 0 #111114,0 8px 12px -12px rgba(0,0,0,.95);';
-    var anchor = _bracketTabsAnchor(first);
-    // Em Ouro/Prata, sobe mais um nível: a faixa deve ficar acima da seção
-    // inteira (título, classificação e rodadas), para poder ocultar a linha
-    // inativa sem levar junto os botões de navegação.
-    if (isOnlyLines) {
-      var lineSection = _bracketLineSection(first);
-      if (lineSection) anchor = lineSection;
+    if (tabsHost) tabsHost.insertBefore(root, _bracketTabsHostReference(tabsHost, searchWrap));
+    else {
+      var anchor = _bracketTabsAnchor(first);
+      // Fora do detalhe, a faixa de Ouro/Prata precede a seção inteira.
+      if (isOnlyLines) {
+        var lineSection = _bracketLineSection(first);
+        if (lineSection) anchor = lineSection;
+      }
+      anchor.parentNode.insertBefore(root, anchor);
     }
-    if (tabsHost) tabsHost.insertBefore(root, searchWrap.nextSibling);
-    else anchor.parentNode.insertBefore(root, anchor);
   } else {
     // O mount pode ser chamado depois de uma atualização de placar que recriou
     // o trilho. Reancora a mesma navegação acima das rodadas, sem deixá-la
     // presa à primeira coluna antiga.
-    var currentAnchor = _bracketTabsAnchor(first);
-    if (isOnlyLines) {
-      var currentLineSection = _bracketLineSection(first);
-      if (currentLineSection) currentAnchor = currentLineSection;
-    }
     if (tabsHost) {
-      if (root.parentNode !== tabsHost || root.previousElementSibling !== searchWrap) tabsHost.insertBefore(root, searchWrap.nextSibling);
-    } else if (currentAnchor && currentAnchor.parentNode && root.nextElementSibling !== currentAnchor) {
-      currentAnchor.parentNode.insertBefore(root, currentAnchor);
+      var reference = _bracketTabsHostReference(tabsHost, searchWrap);
+      if (root.parentNode !== tabsHost || root.nextSibling !== reference) tabsHost.insertBefore(root, reference);
+    } else {
+      var currentAnchor = _bracketTabsAnchor(first);
+      if (isOnlyLines) {
+        var currentLineSection = _bracketLineSection(first);
+        if (currentLineSection) currentAnchor = currentLineSection;
+      }
+      if (currentAnchor && currentAnchor.parentNode && root.nextElementSibling !== currentAnchor) {
+        currentAnchor.parentNode.insertBefore(root, currentAnchor);
+      }
     }
   }
   // `scope` é o contêiner da chave que recebeu esta navegação. Guardamos a

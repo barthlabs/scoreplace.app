@@ -429,6 +429,112 @@ function trecho(inicio, fim) {
   ok(alignment.every((item) => item.count === 3 && item.maxError < 1 && item.topError < 1),
     'cabeçalhos fixos seguem as três colunas e o topo das abas com zoom normal e ampliado');
 
+  // Reproduz o defeito da ficha real: a busca não foi emitida, a raiz e seu
+  // portal nasceram em um grupo que a Geral esconde, mas a agenda é irmã dele.
+  // A montagem precisa tirá-los dali e manter as abas clicáveis após scroll.
+  await page.addScriptTag({ content: trecho('_bracketFindTabsRoot', '_bracketIsEliminationTree') });
+  await page.addScriptTag({ content: src.slice(src.indexOf('function _bracketTabsHostReference'), src.indexOf('// O filtro pode encontrar jogos', src.indexOf('function _bracketTabsHostReference'))) });
+  const stickyMount = await page.evaluate(async () => {
+    document.body.style.zoom = '';
+    document.body.style.margin = '0';
+    document.body.style.setProperty('--topbar-h', '0px');
+    document.body.style.setProperty('--backheader-h', '60px');
+    document.body.innerHTML = '<main id="view-container" style="min-height:2500px;background:#111114">' +
+      '<div class="sticky-back-header" style="position:sticky;top:0;height:60px;background:#111114;z-index:40">Voltar</div>' +
+      '<div id="tourn-grid-container" style="height:220px">Detalhes</div>' +
+      '<section data-bracket-general-view="1" style="height:1600px"><div class="bracket-general-round-column" style="height:1500px;width:300px">' +
+      '<h4 class="bracket-round-heading" style="height:40px;margin:0">Rodada 1</h4></div></section>' +
+      '<div id="inline-bracket-container"><div id="group-section-0" style="display:none">' +
+      '<nav data-bracket-tabs-root="1" data-tournament-id="sticky-fixture" style="position:sticky;top:59px;height:78px;background:#111114;z-index:31"></nav>' +
+      '<div data-bracket-round-heading-portal="1"></div>' +
+      '<article data-bracket-tab-category="Light" data-bracket-tab-gender="fem" data-bracket-scheduled-at="1"></article>' +
+      '<article data-bracket-tab-category="Power" data-bracket-tab-gender="fem" data-bracket-scheduled-at="2"></article>' +
+      '</div></div></main>';
+    const oldRoot = document.querySelector('[data-bracket-tabs-root]');
+    oldRoot._bracketRoundHeadingPortal = document.querySelector('[data-bracket-round-heading-portal]');
+    oldRoot._bracketGeneralView = document.querySelector('[data-bracket-general-view]');
+    window._currentBracketTournament = { id: 'sticky-fixture', matches: [], teamCompetition: { enabled: true, schedule: { enabled: true } } };
+    window._collectAllMatches = () => [];
+    window._bracketTabGender = () => 'fem';
+    window._bracketScheduledDay = () => '2026-10-22';
+    window._bracketTabLabel = (cat) => cat;
+    window._bracketIsEliminationTree = () => false;
+    window._bracketTabsPlaceSearch = (root, search) => { if (search) root.querySelector('[data-bracket-search-slot="inline"]').appendChild(search); };
+    window._bracketTabsObserveSearchLayout = () => {};
+    window._bracketEnsureRoundHeadingResizeListener = () => {};
+    window._bracketTabsRefreshRoundRail = () => {};
+    window._bracketLayoutEliminationTree = () => {};
+    window._bracketSelectCategoryTab = (_id, _gender, category) => { window.__selectedBracketTab = category; };
+    window._bracketTabsApply = (_id, _gender, category) => { window.__selectedBracketTab = category; };
+    window._bracketSyncRoundHeadingOffsets = () => {
+      const root = document.querySelector('[data-bracket-tabs-root]');
+      if (root) _bracketUpdateRoundHeadingPortal(root, root._bracketTabsScope || document.getElementById('inline-bracket-container'));
+    };
+    window._bracketPrimaryTabsHtml = (genderHtml) => '<div data-bracket-tabs-primary>' + genderHtml + '<div data-bracket-search-slot="inline"></div></div>';
+    window._bracketCategoryTabsMount();
+    const root = document.querySelector('[data-bracket-tabs-root]');
+    const portal = root._bracketRoundHeadingPortal;
+    window.scrollTo({ top: 550, behavior: 'instant' });
+    document.documentElement.scrollTop = 550;
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    window._bracketSyncRoundHeadingOffsets();
+    const rect = root.getBoundingClientRect();
+    const portalRect = portal.getBoundingClientRect();
+    const mounted = {
+      rootInDetail: root.parentNode.id === 'view-container',
+      afterHeader: root.previousElementSibling.classList.contains('sticky-back-header'),
+      singleRoot: document.querySelectorAll('[data-bracket-tabs-root]').length === 1,
+      portalTogether: portal.parentNode === root.parentNode,
+      stickyTop: rect.top,
+      portalVisible: getComputedStyle(portal).display !== 'none' && portalRect.width > 0 && !!portal.querySelector('.bracket-round-heading-portal'),
+      portalDisplay: getComputedStyle(portal).display,
+      scrollY: window.scrollY,
+      scrollHeight: document.documentElement.scrollHeight,
+      rootBottom: rect.bottom,
+      headingTop: document.querySelector('[data-bracket-general-view] .bracket-round-heading').getBoundingClientRect().top,
+      columnBottom: document.querySelector('[data-bracket-general-view] .bracket-general-round-column').getBoundingClientRect().bottom,
+      viewLinked: root._bracketGeneralView === document.querySelector('[data-bracket-general-view]')
+    };
+    root.querySelector('[data-bracket-subtab="__upcoming"]').click();
+    mounted.clicked = window.__selectedBracketTab === '__upcoming';
+    const search = document.createElement('div');
+    search.id = 'fbwrap-chaves';
+    root.appendChild(search);
+    window._bracketCategoryTabsMount();
+    mounted.searchRecovered = document.querySelectorAll('#fbwrap-chaves').length === 1 &&
+      document.querySelector('#fbwrap-chaves').closest('[data-bracket-tabs-root]') === root;
+    mounted.singleAfterRemount = document.querySelectorAll('[data-bracket-tabs-root]').length === 1 &&
+      root._bracketRoundHeadingPortal.parentNode === root.parentNode;
+    return mounted;
+  });
+  if (!stickyMount.rootInDetail || !stickyMount.afterHeader || !stickyMount.singleRoot ||
+      !stickyMount.portalTogether || !stickyMount.portalVisible || !stickyMount.clicked ||
+      !stickyMount.searchRecovered || !stickyMount.singleAfterRemount) console.error('  diagnóstico sticky:', stickyMount);
+  ok(stickyMount.rootInDetail && stickyMount.afterHeader && stickyMount.singleRoot &&
+    stickyMount.portalTogether && stickyMount.stickyTop >= 58 && stickyMount.stickyTop <= 61 &&
+    stickyMount.portalVisible && stickyMount.clicked,
+    'abas e títulos das rodadas ficam fixos, visíveis e clicáveis quando o grupo original está oculto');
+  ok(stickyMount.searchRecovered && stickyMount.singleAfterRemount,
+    'a remontagem recupera a busca sem duplicar abas e mantém o portal com sua raiz');
+  const tierMount = await page.evaluate(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    document.body.innerHTML = '<main id="view-container"><div class="sticky-back-header">Voltar</div>' +
+      '<div id="inline-bracket-container"><section id="gold"><article data-bracket-tab-category="Ouro" data-bracket-tab-gender="linhas"></article></section>' +
+      '<section id="silver"><article data-bracket-tab-category="Prata" data-bracket-tab-gender="linhas"></article></section></div></main>';
+    window._currentBracketTournament = { id: 'tiers-fixture', matches: [] };
+    window._bracketCategoryTabsMount();
+    const root = document.querySelector('[data-bracket-tabs-root]');
+    document.getElementById('silver').hidden = true;
+    const stillVisible = root.parentNode.id === 'view-container' && root.getClientRects().length > 0;
+    root.querySelector('[data-bracket-primary-tab="Prata"]').click();
+    const clicked = window.__selectedBracketTab === 'Prata';
+    window._bracketCategoryTabsMount();
+    return { stillVisible, clicked, oneRoot: document.querySelectorAll('[data-bracket-tabs-root]').length === 1 };
+  });
+  if (!tierMount.stillVisible || !tierMount.clicked || !tierMount.oneRoot) console.error('  diagnóstico linhas:', tierMount);
+  ok(tierMount.stillVisible && tierMount.clicked && tierMount.oneRoot,
+    'Ouro/Prata conserva a navegação fora da linha inativa e sem duplicação');
+
   await browser.close();
   console.log('\n' + (fail ? '❌' : '✅') + ' bracket-geral-agenda: ' + pass + ' ok, ' + fail + ' falharam');
   process.exitCode = fail ? 1 : 0;
