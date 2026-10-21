@@ -3904,7 +3904,7 @@ window._confirmMatchCourtCall = function(button, tId, matchId) {
   }
   if (typeof window._callCF !== 'function') return;
   button.disabled = true;
-  window._callCF('assignMatchCourt', { tournamentId: tId, sandbox: tId.startsWith('sb_'), matchId: String(matchId), court: court, confirmCall: true }, 'Entre na sua conta para chamar o jogo.')
+  return window._callCF('assignMatchCourt', { tournamentId: tId, sandbox: tId.startsWith('sb_'), matchId: String(matchId), court: court, confirmCall: true }, 'Entre na sua conta para chamar o jogo.')
     .then(function(res) {
       var d = (res && res.data) || {};
       if (!d.ok) throw new Error(d.reason || 'Não foi possível chamar o jogo.');
@@ -3914,6 +3914,35 @@ window._confirmMatchCourtCall = function(button, tId, matchId) {
       var time = row && row.querySelector('.sp-match-estimated-time');
       var start = Date.parse(d.courtCalledAt || '');
       var current = typeof window._findTournamentById === 'function' ? window._findTournamentById(tId) : null;
+      // O OK foi confirmado no servidor. A TV recebe o estado local abaixo; a
+      // chave também precisa acender agora, sem esperar outro render da rodada.
+      var calledMatch = null;
+      if (Number.isFinite(start) && current && typeof window._collectAllMatches === 'function') {
+        window._collectAllMatches(current).forEach(function (match) {
+          if (String(match.id) === String(matchId)) {
+            match.court = court;
+            match.courtCalledAt = d.courtCalledAt;
+            if (!calledMatch) calledMatch = match;
+          }
+        });
+      }
+      if (calledMatch) {
+        var view = button && button.closest('#view-container');
+        var inBracket = button.closest('#inline-bracket-container, [data-bracket-general-view]');
+        var standalone = /^#bracket\//.test(String(window.location && window.location.hash || ''));
+        var cards = view && (inBracket || standalone)
+          ? view.querySelectorAll(inBracket
+            ? '#inline-bracket-container .sp-match-card[id], [data-bracket-general-view] .sp-match-card[id]'
+            : '.sp-match-card[id]') : [];
+        Array.prototype.forEach.call(cards, function (card) {
+          if (card.id !== 'card-' + String(matchId)) return;
+          card.setAttribute('data-bracket-court', court);
+          if (!calledMatch.winner && !calledMatch.wo && !calledMatch.isBye &&
+              !calledMatch.isSitOut && calledMatch.court && calledMatch.courtCalledAt) {
+            card.style.border = '3px solid #22c55e';
+          }
+        });
+      }
       if (row && Number.isFinite(start)) {
         var clockHtml = window._spCourtClockHtml(start, current, Date.now(), tId, matchId, true);
         if (time) time.outerHTML = clockHtml;
@@ -3921,13 +3950,7 @@ window._confirmMatchCourtCall = function(button, tId, matchId) {
       }
       // A função já confirmou a gravação. Mostre o jogo na TV deste navegador
       // agora, sem aguardar o eco do listener remoto.
-      if (Number.isFinite(start) && current) {
-        var matches = current && typeof window._collectAllMatches === 'function' ? window._collectAllMatches(current) : [];
-        matches.forEach(function (match) {
-          if (String(match.id) === String(matchId)) { match.court = court; match.courtCalledAt = d.courtCalledAt; }
-        });
-        if (typeof window._tvLiveRefresh === 'function') window._tvLiveRefresh();
-      }
+      if (Number.isFinite(start) && current && typeof window._tvLiveRefresh === 'function') window._tvLiveRefresh();
     }).catch(function(err) {
       button.disabled = false;
       if (typeof window._warn === 'function') window._warn('[assignMatchCourt] chamada falhou', err);

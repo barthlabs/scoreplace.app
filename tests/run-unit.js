@@ -1105,6 +1105,7 @@ const SUITES = [
   'tests/tv-live-box-layout.test.js',
   'tests/tv-open-page.test.js',
   'tests/court-occupancy.test.js',
+  'tests/borda-verde-apos-ok.test.js',
   'tests/controle-relogio-quadra.test.js',
   'tests/neon-agenda-categoria-contract.test.js',
   'tests/dashboard-atalho-aba-e-agenda.test.js',
