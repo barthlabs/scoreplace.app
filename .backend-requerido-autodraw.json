@@ -1,9 +1,11 @@
 {
   "schema": 1,
-  "backendCommit": "efb2f4873196f1554b3a786f7d1bd7237cec8ff4",
-  "scopeNote": "As funções de chamada e liberação de quadra foram publicadas para produção e sandbox; o salvamento de placar já usa a função publicada anteriormente.",
+  "backendCommit": "95c07da199dae2ef2f6eb0046fefc3e1f2ff4e4a",
+  "scopeNote": "Chamada, liberação e limpeza do estado das quadras no re-sorteio e na restauração usam o mesmo estado persistido.",
   "functions": [
     "assignMatchCourt",
-    "endMatchOnCourt"
+    "endMatchOnCourt",
+    "drawRound",
+    "resetTournamentToEnrollment"
   ]
 }
