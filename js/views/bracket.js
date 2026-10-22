@@ -1391,6 +1391,10 @@ window._bracketOperationsRefresh = function (t, root) {
   window._bracketEnsureCourtReleaseListener(t.id);
   var state = window._bracketOperationsSelect(t);
   if (!state) return; // eco incompleto nunca apaga a faixa anterior
+  // Recriar o select enquanto o menu nativo está aberto fecha a lista e pode
+  // substituir a escolha por outra quadra antes do clique em OK.
+  if (existing && (existing._spCourtBusy ||
+      existing.contains(document.activeElement) && document.activeElement.matches('.sp-operations-replica .sp-match-court select'))) return;
   if (!existing) {
     existing = document.createElement('section');
     existing.setAttribute('data-bracket-operations-strip', '1');
@@ -1408,6 +1412,15 @@ window._bracketOperationsRefresh = function (t, root) {
       }, 80);
     };
     window.addEventListener('resize', existing._spOperationsOnResize);
+    existing.addEventListener('focusout', function (event) {
+      if (!event.target || !event.target.matches('.sp-operations-replica .sp-match-court select')) return;
+      setTimeout(function () {
+        if (!existing.isConnected || existing._spCourtBusy ||
+            existing.contains(document.activeElement) && document.activeElement.matches('.sp-operations-replica .sp-match-court select')) return;
+        var liveTournament = typeof window._findTournamentById === 'function' && window._findTournamentById(String(t.id));
+        window._bracketOperationsRefresh(liveTournament || t, root);
+      }, 0);
+    });
     existing.addEventListener('click', function (event) {
       var op = event.target && event.target.closest('.sp-operations-replica');
       if (!op) return;
@@ -1419,7 +1432,14 @@ window._bracketOperationsRefresh = function (t, root) {
         if (typeof window._saveResultInline === 'function') window._saveResultInline(String(t.id), mid, op);
       } else if (target.classList.contains('sp-match-confirm')) {
         event.preventDefault();
-        if (typeof window._confirmMatchCourtCall === 'function') window._confirmMatchCourtCall(target, String(t.id), mid);
+        if (typeof window._confirmMatchCourtCall === 'function') {
+          existing._spCourtBusy = (existing._spCourtBusy || 0) + 1;
+          Promise.resolve(window._confirmMatchCourtCall(target, String(t.id), mid)).finally(function () {
+            existing._spCourtBusy--;
+            var liveTournament = typeof window._findTournamentById === 'function' && window._findTournamentById(String(t.id));
+            window._bracketOperationsRefresh(liveTournament || t, root);
+          });
+        }
       } else if (target.classList.contains('sp-match-clock-action')) {
         event.preventDefault();
         if (typeof window._adjustMatchCourtClock === 'function')
@@ -1450,7 +1470,14 @@ window._bracketOperationsRefresh = function (t, root) {
       var select = event.target && event.target.closest('.sp-operations-replica .sp-match-court select');
       if (select && typeof window._assignMatchCourtFromSelect === 'function') {
         var op = select.closest('.sp-operations-replica');
-        window._assignMatchCourtFromSelect(select, String(t.id), op.getAttribute('data-operations-match')).catch(function () {});
+        existing._spCourtBusy = (existing._spCourtBusy || 0) + 1;
+        Promise.resolve(window._assignMatchCourtFromSelect(select, String(t.id), op.getAttribute('data-operations-match')))
+          .catch(function () {}).finally(function () {
+            existing._spCourtBusy--;
+            if (document.activeElement === select) return;
+            var liveTournament = typeof window._findTournamentById === 'function' && window._findTournamentById(String(t.id));
+            window._bracketOperationsRefresh(liveTournament || t, root);
+          });
       }
     });
     existing.addEventListener('input', function (event) {

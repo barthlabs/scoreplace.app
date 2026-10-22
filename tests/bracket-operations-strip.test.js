@@ -16,7 +16,7 @@ assert(start > 0 && end > start);
     await page.addScriptTag({ path: 'js/domain/court-occupancy.js' });
     await page.addScriptTag({ path: 'js/views/bracket-model.js' });
     await page.addScriptTag({ content: source.slice(start, end) });
-    const state = await page.evaluate(() => {
+    const state = await page.evaluate(async () => {
       window._matchCardTimestamp = value => value ? Date.parse(value) : 0;
       window._bracketSyncRoundHeadingOffsets = () => {};
       window.ScoreplaceNextMatch = { knownSide: value => !!value && value !== 'TBD' };
@@ -84,14 +84,18 @@ assert(start > 0 && end > start);
         Math.abs(freeRect.top - nextRect.top) <= 3 &&
         Math.abs(freeRect.bottom - nextRect.bottom) <= 3 &&
         Math.abs(freeRect.height - nextRect.height) <= 3;
-      next.querySelector('select').focus();
+      const openSelect = next.querySelector('select');
+      openSelect.focus();
       window._bracketOperationsRefresh(t, root);
-      const selectFocusRestored = document.activeElement === strip.querySelector('.sp-operations-next select');
+      const selectFocusRestored = document.activeElement === openSelect &&
+        strip.querySelector('.sp-operations-next select') === openSelect;
       next = strip.querySelector('.sp-operations-next .sp-match-card');
       next.querySelector('[id*="-live-"]').click();
       next.querySelector('.wo-action').click();
       next.querySelector('.open-action').click();
+      openSelect.blur();
       next.querySelector('.sp-match-confirm').click();
+      await Promise.resolve();
       const court = strip.querySelector('.sp-operations-court-slot:nth-child(2) .sp-operations-replica');
       const fields = [...court.querySelectorAll('input[data-operations-source-input]')];
       fields[0].value = '6'; fields[0].dispatchEvent(new Event('input', { bubbles: true }));

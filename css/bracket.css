@@ -244,8 +244,18 @@ summary::-webkit-details-marker { display: none; }
   border-radius: 6px;
   background: rgba(16,185,129,.12);
   color: var(--text-bright);
+  color-scheme: dark;
   font: inherit;
 }
+.sp-match-court select option,
+.sp-ready-court-select option {
+  background: #1f2937;
+  color: #f9fafb;
+}
+[data-theme="light"] .sp-match-court select,
+[data-theme="light"] .sp-ready-court-select { color-scheme: light; }
+[data-theme="light"] .sp-match-court select option,
+[data-theme="light"] .sp-ready-court-select option { background: #fff; color: #111827; }
 .sp-match-court--readonly { justify-content: flex-start; }
 .sp-match-operational .sp-match-court { margin-top: 0; }
 .sp-match-operational .sp-match-court select { box-sizing: border-box; }
@@ -277,6 +287,7 @@ summary::-webkit-details-marker { display: none; }
   border-radius: 8px;
   background: rgba(16,185,129,.14);
   color: var(--sp-c-bbf7d0,#bbf7d0);
+  color-scheme: dark;
   font-size: .78rem;
   font-weight: 700;
   cursor: pointer;
