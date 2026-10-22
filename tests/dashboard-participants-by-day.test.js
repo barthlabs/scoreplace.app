@@ -141,5 +141,22 @@ assert.equal(window._tournamentOccupancyForDay(tournament, '2026-10-23', '2026-1
   assert.equal(warnings[0][1], 'unavailable');
   assert.equal(Array.isArray(partial[1].matches), true,
     'torneio sem sorteio é válido com lista vazia de jogos');
+
+  const changingSummary = { id: 'changing-agenda', _resumo: true, updatedAt: 4 };
+  let changingReads = 0;
+  window._findTournamentById = id => id === changingSummary.id ? changingSummary : null;
+  window.FirestoreDB.loadTournamentById = () => {
+    changingReads++;
+    return Promise.resolve({ id: changingSummary.id, matches: [], updatedAt: changingSummary.updatedAt });
+  };
+  await window._loadTournamentForOccupancy(changingSummary, 'venue');
+  await window._loadTournamentForOccupancy(changingSummary, 'venue');
+  assert.equal(changingReads, 1, 'resumo estável reusa a leitura recente');
+  changingSummary.updatedAt = 5;
+  await window._loadTournamentForOccupancy(changingSummary, 'venue');
+  assert.equal(changingReads, 2, 'agenda publicada invalida o resumo pela versão');
+  fixedNow += 61000;
+  await window._loadTournamentForOccupancy(changingSummary, 'venue');
+  assert.equal(changingReads, 3, 'resumo sem atualização observável expira em 60 s');
   console.log('dashboard-participants-by-day: OK');
 })().catch(err => { console.error(err); process.exitCode = 1; });

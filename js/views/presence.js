@@ -600,14 +600,22 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     }
     var prior = _occupancyLoads.get(key);
     if (full(t) && (!prior || version(t) !== prior.updatedAt)) {
-      _occupancyLoads.set(key, { value: t, updatedAt: version(t) });
+      _occupancyLoads.set(key, { value: t, updatedAt: version(t), loadedAt: Date.now() });
       return Promise.resolve(t);
     }
     if (full(live) && (!prior || version(live) !== prior.updatedAt)) {
-      _occupancyLoads.set(key, { value: live, updatedAt: version(live) });
+      _occupancyLoads.set(key, { value: live, updatedAt: version(live), loadedAt: Date.now() });
       return Promise.resolve(live);
     }
-    if (prior) return prior.promise || Promise.resolve(prior.value);
+    if (prior && prior.promise) return prior.promise;
+    if (prior) {
+      // O AppStore pode conservar apenas um resumo enquanto a agenda é publicada
+      // em outra sessão. Uma fotografia completa antiga não é válida para sempre.
+      var observed = version(live || t);
+      if ((!observed || observed === prior.updatedAt) &&
+          Date.now() - (prior.loadedAt || 0) < 60000) return Promise.resolve(prior.value);
+      _occupancyLoads.delete(key);
+    }
     if (!window.FirestoreDB || typeof window.FirestoreDB.loadTournamentById !== 'function') return Promise.reject(new Error('Leitor de torneio indisponível'));
     var entry = { promise: null, updatedAt: '' };
     var promise = window.FirestoreDB.loadTournamentById(t.id).then(function(loaded) {
@@ -617,6 +625,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       if (!full(loaded)) throw new Error('Torneio incompleto');
       entry.value = loaded;
       entry.updatedAt = version(loaded);
+      entry.loadedAt = Date.now();
       entry.promise = null;
       return loaded;
     }).catch(function(err) {
