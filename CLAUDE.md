@@ -535,6 +535,23 @@ modelo e esforço do revisor, e o revisor indica o modelo e esforço de quem exe
 bidirecional? se eu disparar do Claude, GPT revisa; se disparar do GPT, Claude revisa"_ ·
 _"quero poder desligar essa revisão automática e reativar quando voltarem os créditos"_.
 
+**Autorização do envio para revisão (22/out/2026):** quando o dono pede para
+corrigir, implementar ou publicar algo neste projeto, esse pedido já autoriza o
+envio ao revisor cruzado do plano técnico e do diff necessários para **essa
+mesma tarefa**, inclusive revisões do plano e do diff após correções pedidas
+pelo parecer. Não pedir autorização novamente a cada chamada, arquivo,
+iteração ou bump de versão pertencente à tarefa. Preparar o material com o
+menor escopo útil: código, testes, configurações e metadados públicos
+pertinentes. Não incluir credenciais, tokens, dados pessoais de inscritos,
+exportações do banco ou conteúdo privado desnecessário. Se a revisão exigir
+compartilhar algum desses dados, pedir autorização específica antes de enviá-los.
+O veredito `APROVADO` continua obrigatório nas faixas normal e crítica; esta
+autorização de compartilhamento não equivale à aprovação técnica do revisor nem
+autoriza por si só uma alteração de dados de produção ou uma publicação que o
+dono não pediu. Uma recusa do controle automático de aprovação da ferramenta
+deve ser informada ao dono e tratada pelo fluxo da ferramenta; este arquivo não
+a substitui.
+
 **A ferramenta é uma só, `scripts/revisar.sh`, e os atalhos dizem QUEM revisa:**
 - `scripts/revisar-com-gpt.sh` — o GPT (Codex CLI do app ChatGPT, `codex exec`, só leitura)
   revisa o que o **Claude** vai fazer. É o que o Claude usa.
