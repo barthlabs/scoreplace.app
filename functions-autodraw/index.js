@@ -18,6 +18,7 @@ const _tSplit = require('./vendor/tournament-split-core.js');   // fonte única:
 const _registrationRoster = require('./vendor/registration-roster.js');
 const _matchTiming = require('./vendor/match-timing.js');
 const _courtOccupancy = require('./vendor/court-occupancy.js');
+const ScoreplaceRefereeRoster = require('./vendor/referee-roster.js');
 const _competitionAssignments = require('./competition-assignment-core.js');
 // fonte única: functions/match-roster.js (copy-vendor) — monta o subdoc de resultado,
 // incluindo o carregar-adiante do `replay`, que o servidor não sabe recalcular.
@@ -3796,13 +3797,19 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
     throw _drawFail('internal', 'Motor de chave indisponível no servidor.', { tId, matchId });
   }
   const ref = db.collection(sandbox ? 'sandboxes' : 'tournaments').doc(tId);
+  const courtStateRef = ref.collection('courtState').doc('main');
   const agoraIso = new Date().toISOString();
   try {
     return await db.runTransaction(async (tx) => {
       if (sandbox) await _assertSandboxDrawOwner(tx, await tx.get(ref), uid);
       const t = await _leTorneio(tx, ref, tId);
       if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
-      if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização define a quadra.', { tId, matchId, uid });
+      const courtStateSnap = await tx.get(courtStateRef);
+      const courtState = courtStateSnap.exists ? courtStateSnap.data() || {} : {};
+      const released = courtState.released && typeof courtState.released === 'object' ? courtState.released : {};
+      if (released[matchId]) throw _drawFail('failed-precondition', 'Este jogo já saiu da quadra e aguarda placar.', { tId, matchId });
+      const referee = ScoreplaceRefereeRoster.sanitizeAll(t.arbitros).some(e => e.uid === uid && e.status === 'confirmed');
+      if (!_isTournamentAdmin(t, uid) && !referee) throw _drawFail('permission-denied', 'Só a organização ou árbitro confirmado define a quadra.', { tId, matchId, uid });
       const m = drawWindow._findMatch(t, matchId);
       if (!m) return { ok: false, reason: 'match-not-found' };
       if (clockAction) {
@@ -3870,8 +3877,9 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
       }
       const all = drawWindow._collectAllMatches(t);
       if (!Array.isArray(all)) throw _drawFail('internal', 'Não foi possível conferir a ocupação das quadras.', { tId, matchId });
+      const activeCandidates = all.filter(item => item && !released[String(item.id)]);
       if (court && (court !== atual || (confirmCall && !m.courtCalledAt))) {
-        const occupant = _courtOccupancy.occupant(all, court, matchId);
+        const occupant = _courtOccupancy.occupant(activeCandidates, court, matchId);
         if (occupant) {
           const number = occupant._gameNum || occupant.scheduledGameNumber || occupant.matchNumber;
           const label = number ? 'Jogo ' + String(number) : 'outro jogo';
@@ -3884,17 +3892,17 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
         // A troca vale só para o mesmo horário. Jogos de rodadas posteriores
         // podem usar a mesma quadra; jogos já chamados ou iniciados são intocáveis.
         const slot = Date.parse(String(m.scheduledAt));
-        const other = Number.isFinite(slot) ? all.find(item => item && String(item.id) !== matchId &&
+        const other = Number.isFinite(slot) ? activeCandidates.find(item => item && String(item.id) !== matchId &&
           String(item.court || '') === court && !_courtOccupancy.isFinished(item) &&
           Date.parse(String(item.scheduledAt || '')) === slot) : null;
         if (other) {
-          const occupied = new Set(all.filter(item => item && String(item.id) !== matchId && String(item.id) !== String(other.id) &&
+          const occupied = new Set(activeCandidates.filter(item => item && String(item.id) !== matchId && String(item.id) !== String(other.id) &&
             !_courtOccupancy.isFinished(item) && Date.parse(String(item.scheduledAt || '')) === slot).map(item => String(item.court || '')));
           const names = Array.isArray(t.courtNames) ? t.courtNames.map(String) : [];
           const free = name => name && name !== court && !occupied.has(name) &&
-            !_courtOccupancy.occupant(all.filter(item => item && String(item.id) !== matchId), name, other.id);
+            !_courtOccupancy.occupant(activeCandidates.filter(item => item && String(item.id) !== matchId), name, other.id);
           const replacement = free(atual) ? atual : names.find(free) || '';
-          all.filter(item => item && String(item.id) === String(other.id)).forEach(item => {
+          activeCandidates.filter(item => item && String(item.id) === String(other.id)).forEach(item => {
             if (replacement) item.court = replacement; else delete item.court;
             delete item.courtCalledAt;
           });
@@ -3906,6 +3914,7 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
       // quadra cria uma chamada nova; repetir na mesma conserva o instante.
       if (confirmCall && !m.courtCalledAt) m.courtCalledAt = agoraIso;
       const b = _gravaTorneio(tx, ref, t, antes, { agoraIso: agoraIso });
+      tx.set(courtStateRef, { revision: FieldValue.increment(1) }, { merge: true });
       return { ok: true, changed: true, court, courtCalledAt: m.courtCalledAt || null, reassigned, tournament: b.clean };
     });
   } catch (e) {
@@ -3913,6 +3922,42 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
     console.error(`assignMatchCourt EXPLODIU em ${tId}/${matchId} (uid ${uid}):`, e && e.stack || e);
     throw new HttpsError('internal', 'Falha ao definir quadra: ' + String((e && e.message) || e).slice(0, 300));
   }
+});
+
+// Libera a quadra sem fabricar resultado. A revisão do estado é compartilhada
+// com assignMatchCourt, de modo que duas operações concorrentes sejam repetidas.
+exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
+  const uid = request.auth && request.auth.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  const tId = String((request.data && request.data.tournamentId) || '').trim();
+  const matchId = String((request.data && request.data.matchId) || '').trim();
+  const sandbox = request.data && request.data.sandbox === true;
+  if (!tId || !matchId || sandbox !== tId.startsWith('sb_')) throw new HttpsError('invalid-argument', 'Torneio ou jogo inválido.');
+  const ref = db.collection(sandbox ? 'sandboxes' : 'tournaments').doc(tId);
+  const stateRef = ref.collection('courtState').doc('main');
+  const releaseRef = ref.collection('courtReleases').doc(matchId);
+  const agoraIso = new Date().toISOString();
+  return db.runTransaction(async (tx) => {
+    if (sandbox) await _assertSandboxDrawOwner(tx, await tx.get(ref), uid);
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    const stateSnap = await tx.get(stateRef);
+    const state = stateSnap.exists ? stateSnap.data() || {} : {};
+    const released = state.released && typeof state.released === 'object' ? state.released : {};
+    const admin = _isTournamentAdmin(t, uid);
+    const referee = ScoreplaceRefereeRoster.sanitizeAll(t.arbitros).some(e => e.uid === uid && e.status === 'confirmed');
+    if (!admin && !referee) throw new HttpsError('permission-denied', 'Só a organização ou árbitro confirmado pode liberar a quadra.');
+    if (released[matchId]) return { ok: true, changed: false };
+    const m = drawWindow && drawWindow._findMatch && drawWindow._findMatch(t, matchId);
+    if (!m || !m.court || !(m.courtCalledAt || m.startedAt) || _courtOccupancy.isFinished(m)) {
+      throw new HttpsError('failed-precondition', 'O jogo precisa estar em quadra e sem resultado.');
+    }
+    const auditSnap = await tx.get(releaseRef);
+    if (auditSnap.exists) throw new HttpsError('failed-precondition', 'Estado de liberação inconsistente.');
+    tx.set(stateRef, { revision: FieldValue.increment(1), released: { ...released, [matchId]: agoraIso } }, { merge: true });
+    tx.create(releaseRef, { matchId, court: String(m.court), releasedAt: agoraIso, releasedBy: uid });
+    return { ok: true, changed: true, releasedAt: agoraIso };
+  });
 });
 
 

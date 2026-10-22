@@ -27,19 +27,21 @@ try {
         memberUids: mode === 'organizerOnly' ? [org] : base.memberUids });
       await setDoc(doc(db, 'tournaments', id, 'inscritos', 'p1'), { name: 'Atleta' });
       await setDoc(doc(db, 'tournaments', id, 'history', 'h1'), { message: 'Registro' });
+      await setDoc(doc(db, 'tournaments', id, 'courtState', 'main'), { released: { m1: '2026-10-22T18:00:00Z' } });
+      await setDoc(doc(db, 'tournaments', id, 'courtReleases', 'm1'), { matchId: 'm1' });
       await setDoc(doc(db, 'tournaments', id, 'results', 'm1'), { playerUids: mode === 'organizerOnly' ? [] : [member] });
     }
     await setDoc(doc(db, 'tournaments', 'legacy_creator'), { creatorUid: 'uid_legacy_creator', memberUids: [org], isPublic: false, organizerOnly: true });
     await setDoc(doc(db, 'tournaments_summary', 'legacy_creator'), { creatorUid: 'uid_legacy_creator', memberUids: [org], isPublic: false, organizerOnly: true });
   });
-  for (const path of ['tournaments/hidden', 'tournaments_summary/hidden', 'tournaments/hidden/inscritos/p1', 'tournaments/hidden/history/h1', 'tournaments/hidden/results/m1']) {
+  for (const path of ['tournaments/hidden', 'tournaments_summary/hidden', 'tournaments/hidden/inscritos/p1', 'tournaments/hidden/history/h1', 'tournaments/hidden/results/m1', 'tournaments/hidden/courtState/main', 'tournaments/hidden/courtReleases/m1']) {
     await succeeds(org, path);
     await succeeds(cohost, path); // adminUid ativo, mesmo fora de memberUids do torneio
     await fails(member, path);
     await fails(stranger, path);
     await fails(null, path);
   }
-  for (const path of ['tournaments/members', 'tournaments_summary/members', 'tournaments/members/inscritos/p1']) {
+  for (const path of ['tournaments/members', 'tournaments_summary/members', 'tournaments/members/inscritos/p1', 'tournaments/members/courtState/main', 'tournaments/members/courtReleases/m1']) {
     await succeeds(org, path);
     await succeeds(cohost, path);
     await succeeds(member, path);
@@ -48,6 +50,10 @@ try {
   }
   await assertSucceeds(get(null, 'tournaments/public'));
   await assertSucceeds(get(null, 'tournaments_summary/public'));
+  await assertSucceeds(get(null, 'tournaments/public/courtState/main'));
+  await assertSucceeds(get(null, 'tournaments/public/courtReleases/m1'));
+  await assertFails(setDoc(doc(env.authenticatedContext(org).firestore(), 'tournaments', 'public', 'courtState', 'main'), { released: {} }));
+  await assertFails(setDoc(doc(env.authenticatedContext(org).firestore(), 'tournaments', 'public', 'courtReleases', 'm1'), { matchId: 'forged' }));
   const list = (uid, col, field, value) => getDocs(query(
     collection(uid ? env.authenticatedContext(uid).firestore() : env.unauthenticatedContext().firestore(), col),
     where(field, field === 'memberUids' ? 'array-contains' : '==', value)

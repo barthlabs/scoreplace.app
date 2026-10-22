@@ -65,15 +65,18 @@ assert(start > 0 && end > start);
         noCanonical: !document.getElementById('card-m1'), uniqueIds: ids.length === new Set(ids).size,
         linked: next.querySelector('label[for]').htmlFor === next.querySelector('input').id,
         noInline: !next.querySelector('[onclick], [oninput]'),
-        courts: [...strip.querySelectorAll('.sp-operations-court-free strong')].map(node => node.textContent) };
+        courts: [...strip.querySelectorAll('.sp-operations-court-slot:not(.sp-operations-court-slot--active) > .sp-operations-label')].map(node => node.textContent) };
       const trackHeight = strip.querySelector('.sp-operations-court-track').getBoundingClientRect().height;
       const freeRect = strip.querySelector('.sp-operations-court-free').getBoundingClientRect();
       const nextRect = next.getBoundingClientRect();
       const freeHeight = freeRect.height;
-      initial.freeSlotFillsTrack = trackHeight > 100 && freeHeight >= trackHeight - 3;
-      initial.freeSlotMatchesCard = Math.abs(freeRect.top - nextRect.top) <= 3 &&
-        Math.abs(freeRect.bottom - nextRect.bottom) <= 3 &&
-        Math.abs(freeRect.height - nextRect.height) <= 3;
+      initial.geometry = { trackHeight, freeHeight, freeTop: freeRect.top, freeBottom: freeRect.bottom, nextHeight: nextRect.height, nextTop: nextRect.top, nextBottom: nextRect.bottom };
+      const courtLabelHeight = strip.querySelector('.sp-operations-court-slot > .sp-operations-label').getBoundingClientRect().height;
+      initial.freeSlotFillsTrack = trackHeight > 100 && freeHeight >= trackHeight - courtLabelHeight - 12;
+      const fullSlotRect = strip.querySelector('.sp-operations-court-slot').getBoundingClientRect();
+      initial.freeSlotMatchesCard = Math.abs(fullSlotRect.top - nextRect.top) <= 3 &&
+        Math.abs(fullSlotRect.bottom - nextRect.bottom) <= 3 &&
+        Math.abs(fullSlotRect.height - nextRect.height) <= 3;
       next.querySelector('select').focus();
       window._bracketOperationsRefresh(t, root);
       const selectFocusRestored = document.activeElement === strip.querySelector('.sp-operations-next select');
@@ -94,14 +97,23 @@ assert(start > 0 && end > start);
         opened: window.opened, confirmVisible,
         draft: strip.querySelector('.sp-operations-court-card [data-operations-source-input="s1-m1"]').value,
         next: strip.querySelector('.sp-operations-next [data-operations-match]').getAttribute('data-operations-match') };
+      window.AppStore.currentUser = { uid: 'ref' };
+      window._bracketCourtReleaseCache = { sb_test: { released: { m1: '2026-10-22T18:05:00Z' } } };
+      window._bracketOperationsRefresh(t, root);
+      const refereeView = {
+        visible: !!strip.querySelector('.sp-operations-next .sp-match-confirm'),
+        pending: !!strip.querySelector('.sp-operations-pending [data-operations-match="m1"]'),
+        releasedCourt: !!strip.querySelector('.sp-operations-court-slot:nth-child(2) .sp-operations-court-free'),
+        availableCourt: strip.querySelector('.sp-operations-availability').textContent
+      };
       window.AppStore.currentUser = { uid: 'other' };
       window._bracketOperationsRefresh(t, root);
-      return { initial, afterCall, selectFocusRestored, outsiderHidden: !document.querySelector('[data-bracket-operations-strip]') };
+      return { initial, afterCall, refereeView, selectFocusRestored, outsiderHidden: !document.querySelector('[data-bracket-operations-strip]') };
     });
     assert(state.initial.full && state.initial.names && state.initial.noCanonical && state.initial.uniqueIds && state.initial.linked && state.initial.noInline);
     assert.deepEqual(state.initial.courts, ['Quadra 4', 'Quadra 5']);
-    assert(state.initial.freeSlotFillsTrack, 'o slot vazio deve ocupar toda a altura rolável');
-    assert(state.initial.freeSlotMatchesCard, 'o slot vazio deve ter a mesma altura e alinhar no topo e na base do card completo');
+    assert(state.initial.freeSlotFillsTrack, 'o slot vazio deve ocupar toda a altura rolável: ' + JSON.stringify(state.initial));
+    assert(state.initial.freeSlotMatchesCard, 'o slot vazio, incluindo o rótulo acima do box, deve ter a mesma altura do card completo: ' + JSON.stringify(state.initial));
     assert.deepEqual(state.afterCall.called, ['sb_test', 'm1', 'Quadra 5']);
     assert.deepEqual(state.afterCall.live, ['sb_test', 'm1']);
     assert.deepEqual(state.afterCall.wo, ['sb_test', 'm|m1']);
@@ -111,6 +123,8 @@ assert(start > 0 && end > start);
     assert(state.afterCall.confirmVisible && state.outsiderHidden && state.selectFocusRestored);
     assert.equal(state.afterCall.draft, '6');
     assert.equal(state.afterCall.next, 'm2');
+    assert(state.refereeView.visible && state.refereeView.pending && state.refereeView.releasedCourt);
+    assert.match(state.refereeView.availableCourt, /Quadra 4 livre/);
     const bestOfThree = await page.evaluate(() => {
       const op = document.createElement('div');
       op.innerHTML = '<button data-confirm-for="m3" style="display:none">✓</button>' +
@@ -128,6 +142,25 @@ assert(start > 0 && end > start);
       return { twoSetWin, splitNeedsThird, thirdUnlocks: op.querySelector('button').style.display !== 'none' };
     });
     assert.deepEqual(bestOfThree, { twoSetWin: true, splitNeedsThird: true, thirdUnlocks: true });
+    const endStart = source.indexOf('window._endMatchOnCourt = function');
+    const endStop = source.indexOf('function _syncMatchCourtCopies(', endStart);
+    assert(endStart > 0 && endStop > endStart);
+    await page.addScriptTag({ content: source.slice(endStart, endStop) });
+    const endFeedback = await page.evaluate(async () => {
+      const calls = [], notices = [];
+      window.confirm = () => true;
+      window.showNotification = (...args) => notices.push(args);
+      window._callCF = (name, payload) => { calls.push([name, payload]); return Promise.resolve({ data: { ok: true } }); };
+      await window._endMatchOnCourt('tour_test', 'm1');
+      await window._endMatchOnCourt('sb_test', 'm2');
+      window._callCF = () => Promise.reject(new Error('falha de rede'));
+      try { await window._endMatchOnCourt('tour_test', 'm3'); } catch (_) {}
+      return { calls, notices };
+    });
+    assert.equal(endFeedback.calls[0][1].sandbox, false);
+    assert.equal(endFeedback.calls[1][1].sandbox, true);
+    assert(endFeedback.notices.some(args => args[0] === 'Quadra liberada' && args[2] === 'success'));
+    assert(endFeedback.notices.some(args => args[0] === 'Quadra não liberada' && args[2] === 'error'));
     // Exercita também o renderizador real: a faixa não pode passar apenas no
     // stub se uma mudança futura quebrar o caminho opts.idScope.
     const real = await browser.newPage();
@@ -188,8 +221,8 @@ assert(start > 0 && end > start);
         const saved = selectors().map(el => [el.value, el.getAttribute('data-persisted-court')]);
         return { initial, rollback, saved, modelCourt: target.court };
       });
-      assert(courtState.initial.every(x => x.value === '' && x.red && x.occupiedDisabled && x.okDisabled));
-      assert.deepEqual(courtState.rollback, [['', 'Quadra 4'], ['', 'Quadra 4']]);
+      assert(courtState.initial.every(x => x.value === 'Quadra 5' && !x.red && x.occupiedDisabled), JSON.stringify(courtState));
+      assert.deepEqual(courtState.rollback, [['Quadra 5', 'Quadra 4'], ['Quadra 5', 'Quadra 4']]);
       assert.deepEqual(courtState.saved, [['Quadra 5', 'Quadra 5'], ['Quadra 5', 'Quadra 5']]);
       assert.equal(courtState.modelCourt, 'Quadra 5');
     } finally { await real.close(); }

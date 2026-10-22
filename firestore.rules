@@ -425,6 +425,14 @@ service cloud.firestore {
       match /matches/{matchId} {
         allow read, write: if request.auth != null && request.auth.uid == sbDono();
       }
+      match /courtState/{stateId} {
+        allow read: if request.auth != null && request.auth.uid == sbDono();
+        allow write: if false;
+      }
+      match /courtReleases/{matchId} {
+        allow read: if request.auth != null && request.auth.uid == sbDono();
+        allow write: if false;
+      }
       match /resultQueue/{itemId} {
         allow read, write: if request.auth != null && request.auth.uid == sbDono();
       }
@@ -461,6 +469,14 @@ service cloud.firestore {
     }
 
     match /tournaments/{tournamentId} {
+      match /courtState/{stateId} {
+        allow read: if canReadTournamentData(get(/databases/$(database)/documents/tournaments/$(tournamentId)).data);
+        allow write: if false;
+      }
+      match /courtReleases/{matchId} {
+        allow read: if canReadTournamentData(get(/databases/$(database)/documents/tournaments/$(tournamentId)).data);
+        allow write: if false;
+      }
 
       /* ═══ CONTENÇÃO DO AVANÇO DE FASE ═══════════════════════════════════════════
        * O `allow update` do ADMIN abaixo nunca teve `hasOnly`: quem é organizador escreve

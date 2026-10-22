@@ -1,13 +1,16 @@
 /* Standings collapsible toggle (inside <details>) */
 .sp-operations-track {
   display: grid;
-  grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
+  grid-template-columns: minmax(320px, 380px) minmax(320px, 380px) minmax(0, 1fr);
+  align-items: stretch;
   gap: 10px;
   max-width: 100%;
   min-width: 0;
   margin: 12px 0 18px;
+  height: var(--sp-operations-row-height, auto);
 }
 .sp-operations-next,
+.sp-operations-pending,
 .sp-operations-courts {
   min-width: 0;
   border: 3px solid var(--sp-c-22c55e, #22c55e);
@@ -16,12 +19,20 @@
   background: var(--bg-card);
 }
 .sp-operations-next {
+  position: relative;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
   border-color: var(--sp-c-fbbf24, #fbbf24);
 }
+.sp-operations-next .sp-operations-replica { flex:0 0 auto; }
 .sp-operations-courts { display: flex; flex-direction: column; }
+.sp-operations-pending { display:flex; flex-direction:column; border-color:var(--sp-c-38bdf8,#38bdf8); overflow:hidden; }
+.sp-operations-pending-track { display:flex;flex:1 1 auto;flex-direction:column;gap:8px;overflow-y:auto;min-height:0; }
+.sp-operations-availability { position:absolute;top:8px;right:9px;color:var(--sp-c-4ade80,#4ade80);font-size:.69rem;font-weight:800; }
+.sp-operations-availability--busy { color:var(--sp-c-f87171,#f87171); }
+.sp-operations-pending .sp-operations-label { color:var(--sp-c-38bdf8,#38bdf8); }
+.sp-operations-pending .sp-operations-replica > .sp-match-card { border:3px solid var(--sp-c-38bdf8,#38bdf8)!important; }
 .sp-operations-section-title {
   display: block;
   margin: 0 0 7px;
@@ -64,8 +75,10 @@
 .sp-operations-label { color: var(--sp-c-fbbf24, #fbbf24); font-size: .74rem; font-weight: 800; }
 .sp-operations-courts .sp-operations-label { color: var(--sp-c-22c55e, #22c55e); }
 .sp-operations-empty { min-height: 70px; display: flex; align-items: center; color: var(--text-muted); font-size: .82rem; }
+.sp-match-end-court { border:1px solid #38bdf8;border-radius:7px;background:#075985;color:#fff;font:inherit;font-size:.68rem;font-weight:800;padding:4px 7px;cursor:pointer; }
+.sp-match-end-court:disabled { opacity:.5;cursor:wait; }
 @media (max-width: 690px) {
-  .sp-operations-track { grid-template-columns: minmax(0, 1fr); }
+  .sp-operations-track { grid-template-columns: minmax(0, 1fr); height:auto!important; }
   .sp-operations-court-track { min-height: 420px; }
   .sp-operations-court-slot { flex-basis: min(88vw, 340px); }
   .sp-operations-court-slot--active { flex-basis:min(88vw,380px); }

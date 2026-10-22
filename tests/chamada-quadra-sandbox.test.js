@@ -14,15 +14,21 @@ class TestDate extends Date {
   static now() { return Date.parse(nowIso); }
 }
 const HttpsError = class extends Error { constructor(code, message) { super(message); this.code = code; } };
-const paths = [], saved = [];
-let tournament, ownerProfile = null;
+const paths = [], saved = [], courtStates = new Map(), releases = new Map();
+let tournament, ownerProfile = null, isAdmin = true;
 const context = {
   exports: {}, onCall: (_options, callback) => callback, HttpsError,
   db: {
-    collection: collection => ({ doc: id => { const ref = { path: collection + '/' + id }; paths.push(ref.path); return ref; } }),
+    collection: collection => ({ doc: id => { const path = collection + '/' + id; const ref = {
+      path, collection: child => ({ doc: childId => ({ path: path + '/' + child + '/' + childId }) })
+    }; paths.push(ref.path); return ref; } }),
     runTransaction: async fn => fn({ get: async ref => ref.path.startsWith('users/')
       ? { exists: !!ownerProfile, data: () => ownerProfile }
-      : { exists: true, ref } })
+      : ref.path.includes('/courtState/') ? { exists: courtStates.has(ref.path), data: () => courtStates.get(ref.path) }
+      : ref.path.includes('/courtReleases/') ? { exists: releases.has(ref.path), data: () => releases.get(ref.path) }
+      : { exists: true, ref },
+      set: (ref, data) => courtStates.set(ref.path, { ...(courtStates.get(ref.path) || {}), ...data }),
+      create: (ref, data) => releases.set(ref.path, data) })
   },
   drawWindow: {
     _findMatch: (t, id) => t.matches.find(m => m.id === id),
@@ -31,11 +37,13 @@ const context = {
   },
   _assertSandboxDrawOwner: async () => {},
   _leTorneio: async () => tournament,
-  _isTournamentAdmin: () => true,
+  _isTournamentAdmin: () => isAdmin,
   _antesDoMotor: () => ({}),
   _gravaTorneio: (_tx, _ref, t) => { saved.push(JSON.stringify(t.matches)); return { clean: {} }; },
   _drawFail: (code, message) => new HttpsError(code, message),
   _courtOccupancy: require('../js/domain/court-occupancy.js'),
+  ScoreplaceRefereeRoster: { sanitizeAll: value => value || [] },
+  FieldValue: { increment: n => n },
   _matchTiming: require('../js/domain/match-timing.js'),
   _agenda: require('../functions-autodraw/agenda-core.js'),
   Date: TestDate, Intl, Number, String, Array, Set, console
@@ -46,6 +54,7 @@ assert(helperStart >= 0 && helperEnd > helperStart);
 vm.runInNewContext(server.slice(helperStart, helperEnd), context);
 vm.runInNewContext(server.slice(start, end), context);
 const callable = context.exports.assignMatchCourt;
+const endOnCourt = context.exports.endMatchOnCourt;
 const request = (id, matchId, court, confirmCall = false) => ({ auth: { uid: 'owner' }, data: {
   tournamentId: id, sandbox: id.startsWith('sb_'), matchId, court, confirmCall
 } });
@@ -105,6 +114,47 @@ const game = (id, court, scheduledAt = '2026-10-22T21:00:00.000Z') => ({ id, cou
   tournament.matches[0].winner = 'p1';
   await callable(request('tour_test', 'j2', 'Quadra 4', true));
   assert.equal(tournament.matches[1].court, 'Quadra 4', 'resultado libera a quadra');
+
+  tournament.matches = [game('release-prod', 'Quadra 4'), game('follow-prod', 'Quadra 5')];
+  tournament.matches[0].courtCalledAt = nowIso;
+  const beforeRelease = JSON.stringify(tournament.matches);
+  const productionRelease = await endOnCourt({ auth: { uid: 'owner' }, data: {
+    tournamentId: 'tour_test', sandbox: false, matchId: 'release-prod'
+  } });
+  assert.equal(productionRelease.changed, true);
+  assert.equal(JSON.stringify(tournament.matches), beforeRelease, 'Encerrado em produção não altera jogo nem placar');
+  assert.ok(courtStates.get('tournaments/tour_test/courtState/main').released['release-prod']);
+  await callable(request('tour_test', 'follow-prod', 'Quadra 4', true));
+  assert.equal(tournament.matches[1].court, 'Quadra 4', 'produção pode chamar próximo jogo para quadra liberada');
+  assert.equal((await endOnCourt({ auth: { uid: 'owner' }, data: {
+    tournamentId: 'tour_test', sandbox: false, matchId: 'release-prod'
+  } })).changed, false, 'liberação repetida não cria novo estado');
+  isAdmin = false;
+  await assert.rejects(endOnCourt({ auth: { uid: 'stranger' }, data: {
+    tournamentId: 'tour_test', sandbox: false, matchId: 'release-prod'
+  } }), e => e.code === 'permission-denied', 'nem liberação repetida revela o estado a estranhos');
+  tournament.matches.push(game('release-ref', 'Quadra 5'));
+  tournament.matches.at(-1).courtCalledAt = nowIso;
+  tournament.arbitros = [{ uid: 'ref', status: 'confirmed' }];
+  assert.equal((await endOnCourt({ auth: { uid: 'ref' }, data: {
+    tournamentId: 'tour_test', sandbox: false, matchId: 'release-ref'
+  } })).changed, true, 'árbitro confirmado pode liberar a quadra em produção');
+  tournament.matches.push(game('assign-ref', 'Quadra 5'));
+  await callable({ auth: { uid: 'ref' }, data: {
+    tournamentId: 'tour_test', sandbox: false, matchId: 'assign-ref', court: 'Quadra 5', confirmCall: true
+  } });
+  assert.ok(tournament.matches.at(-1).courtCalledAt, 'árbitro confirmado pode chamar para quadra em produção');
+  isAdmin = true;
+
+  tournament.matches = [game('release-sandbox', 'Quadra 4'), game('follow-sandbox', 'Quadra 5')];
+  tournament.matches[0].courtCalledAt = nowIso;
+  const sandboxRelease = await endOnCourt({ auth: { uid: 'owner' }, data: {
+    tournamentId: 'sb_test', sandbox: true, matchId: 'release-sandbox'
+  } });
+  assert.equal(sandboxRelease.changed, true);
+  assert.ok(courtStates.get('sandboxes/sb_test/courtState/main').released['release-sandbox']);
+  await callable(request('sb_test', 'follow-sandbox', 'Quadra 4', true));
+  assert.equal(tournament.matches[1].court, 'Quadra 4', 'sandbox segue o mesmo fluxo de liberação');
 
   tournament.matches = [game('w1', 'Quadra 4'), game('w2', 'Quadra 5')];
   tournament.matches[0].courtCalledAt = nowIso;

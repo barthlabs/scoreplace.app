@@ -69,7 +69,7 @@ ok(posCura > 0 && posPinta > 0 && posCura < posPinta,
    '⛔ a CURA vem ANTES da pintura (pintar primeiro mostraria o pendente que acabou de morrer)');
 
 // 4) o caminho da dashboard segue sendo o do cânone (ação do dedo não passa pelo gate)
-const iRer = src.indexOf('function _rerenderBracket(tId, anchorMatchId) {');
+const iRer = src.indexOf('function _rerenderBracket(tId, anchorMatchId, options) {');
 const corpoRer = _R.ateOFim(src, iRer);
 ok(/_dashPedirRepintura\('acao-no-card'\)/.test(corpoRer),
    'na dashboard a repintura entra como AÇÃO DO DEDO (sem o gate de assinatura de conjunto)');

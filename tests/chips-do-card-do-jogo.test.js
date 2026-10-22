@@ -89,9 +89,12 @@ mConcentrado.p1CompetitionTeamId = 'venom';
 mConcentrado.team1Obj = { competitionTeamId: 'venom', competitionTeamColor: 'hsl(320 80% 45%)' };
 comUsuario(tConcentrado, { uid: 'u1', displayName: 'J1', email: 'j1@x.com' });
 const souOrgOriginal = W._souOrganizador;
+const authorityOriginal = W._isUserAuthority;
 W._souOrganizador = function () { return true; };
+W._isUserAuthority = function () { return true; };
 const cardConcentrado = W.renderMatchCard(mConcentrado, true, tConcentrado.id, 1);
 W._souOrganizador = souOrgOriginal;
+W._isUserAuthority = authorityOriginal;
 ok(/>Fem Light<\/span>/.test(cardConcentrado) && !/Categoria|Jogar até|Propor datas/.test(cardConcentrado),
   'evento concentrado mostra somente a categoria e não convida atletas a negociar prazo/data');
 ok(/sp-match-court/.test(cardConcentrado) && /<option value=""[^>]*>Sem quadra<\/option>/.test(cardConcentrado) && !/📍 Sem quadra/.test(cardConcentrado),

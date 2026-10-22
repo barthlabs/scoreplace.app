@@ -112,6 +112,7 @@ const TABELA = [
   { nome: "drainTournamentWaitlists", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "drawRound", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "enrollParticipant", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
+  { nome: "endMatchOnCourt", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "extractTournamentImportImage", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "fillLigaGuest", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "finishTournament", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },

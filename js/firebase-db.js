@@ -2149,7 +2149,7 @@ window.FirestoreDB = {
    * ninguém mais passa. No sandbox o dono pode escrever, então é ele quem limpa.
    * ⛔ A lista deriva das MESMAS partes que a criação copia; `results` aqui é traduzido pra
    * `resultsSandbox` por `_subNome`, então não precisa (nem pode) ser escrito à mão. */
-  _sandboxSubcollections: ['matches', 'inscritos', 'opponentHistory', 'grupos', 'checkedIn',
+  _sandboxSubcollections: ['matches', 'courtState', 'courtReleases', 'inscritos', 'opponentHistory', 'grupos', 'checkedIn',
     'woLog', 'woClaims', 'history', 'resultQueue', 'categoryNotifications',
     'letzplayScans', 'results'],
 

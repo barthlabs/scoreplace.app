@@ -106,6 +106,8 @@
   }
   window._tvLiveBuildSnapshot = function (t, nowMs) {
     if (!t) return null;
+    if (typeof window._bracketEnsureCourtReleaseListener === 'function') window._bracketEnsureCourtReleaseListener(t.id);
+    var released = typeof window._bracketCourtReleased === 'function' ? window._bracketCourtReleased(t.id) : {};
     // O listener recebe uma cópia nova. Use a numeração canônica da chave.
     if (typeof window._assignGlobalGameNumbers === 'function') window._assignGlobalGameNumbers(t);
     var matches = typeof window._collectAllMatches === 'function' ? window._collectAllMatches(t) : (t.matches || []);
@@ -114,7 +116,7 @@
     var timing = clock.config(t);
     var now = nowMs == null ? Date.now() : nowMs;
     var allActive = matches.filter(function (m) {
-      return m && !m.winner && !m.wo && !m.isBye && !m.isSitOut && m.court && (m.courtCalledAt || m.startedAt);
+      return m && !released[String(m.id)] && !m.winner && !m.wo && !m.isBye && !m.isSitOut && m.court && (m.courtCalledAt || m.startedAt);
     }).sort(function (a, b) { return timestamp(b.courtCalledAt || b.startedAt) - timestamp(a.courtCalledAt || a.startedAt); });
     if (!courtNames.length) courtNames = Array.from(new Set(allActive.map(function (m) { return String(m.court); })));
     // A borda anuncia a próxima oportunidade de chamar pelo microfone. Cada
