@@ -3808,12 +3808,12 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
       if (sandbox) await _assertSandboxDrawOwner(tx, await tx.get(ref), uid);
       const t = await _leTorneio(tx, ref, tId);
       if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+      const referee = ScoreplaceRefereeRoster.sanitizeAll(t.arbitros).some(e => e.uid === uid && e.status === 'confirmed');
+      if (!_isTournamentAdmin(t, uid) && !referee) throw _drawFail('permission-denied', 'Só a organização ou árbitro confirmado define a quadra.', { tId, matchId, uid });
       const courtStateSnap = await tx.get(courtStateRef);
       const courtState = courtStateSnap.exists ? courtStateSnap.data() || {} : {};
       const released = courtState.released && typeof courtState.released === 'object' ? courtState.released : {};
       if (released[matchId]) throw _drawFail('failed-precondition', 'Este jogo já saiu da quadra e aguarda placar.', { tId, matchId });
-      const referee = ScoreplaceRefereeRoster.sanitizeAll(t.arbitros).some(e => e.uid === uid && e.status === 'confirmed');
-      if (!_isTournamentAdmin(t, uid) && !referee) throw _drawFail('permission-denied', 'Só a organização ou árbitro confirmado define a quadra.', { tId, matchId, uid });
       const m = drawWindow._findMatch(t, matchId);
       if (!m) return { ok: false, reason: 'match-not-found' };
       if (clockAction) {

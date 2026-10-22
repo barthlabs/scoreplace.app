@@ -137,6 +137,9 @@ const game = (id, court, scheduledAt = '2026-10-22T21:00:00.000Z') => ({ id, cou
     tournamentId: 'tour_test', sandbox: false, matchId: 'release-prod'
   } })).changed, false, 'liberação repetida não cria novo estado');
   isAdmin = false;
+  await assert.rejects(callable({ auth: { uid: 'stranger' }, data: {
+    tournamentId: 'tour_test', sandbox: false, matchId: 'release-prod', court: 'Quadra 4', confirmCall: true
+  } }), e => e.code === 'permission-denied', 'chamada não revela a liberação a quem não tem permissão');
   await assert.rejects(endOnCourt({ auth: { uid: 'stranger' }, data: {
     tournamentId: 'tour_test', sandbox: false, matchId: 'release-prod'
   } }), e => e.code === 'permission-denied', 'nem liberação repetida revela o estado a estranhos');
