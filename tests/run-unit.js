@@ -54,6 +54,7 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 const SUITES = [
+  'tests/tournament-claim-entry.test.js',
   'tests/team-enroll-consent.test.js',
   'tests/neon-painel-sorteio-safe.test.js',
   'tests/backend-targeted-publication.test.js',
