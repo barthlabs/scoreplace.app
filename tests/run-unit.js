@@ -686,6 +686,7 @@ const SUITES = [
   'tests/fecho-de-rodada-vai-pra-cf.test.js',
   // ⭐ A dashboard é o CÍRCULO da pessoa; o Explorar abre a plataforma.
   'tests/dashboard-mostra-o-meu-circulo.test.js',
+  'tests/dashboard-participants-by-day.test.js',
   // ⛔ A modalidade gravada é o valor CANÔNICO — o emoji é rótulo. O botão padronizava
   // a string errada e a base tinha 6 grafias pra 4 modalidades.
   'tests/modalidade-e-valor-canonico.test.js',

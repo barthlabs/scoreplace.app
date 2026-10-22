@@ -648,70 +648,13 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // Mesma lógica do presence.js: torneio com startDate hoje conta como N
   // "presenças virtuais" (1 por participante, ancoradas no startDate→endDate
   // ou 3h). Organizador fica fora pra não inflar as barras.
-  function _tournamentOccupancy(t, dayKeyStr) {
-    var out = [];
-    if (!t || !t.startDate) return out;
-    // v2.4.72-beta: Liga/Ranking NÃO presume presença no local. Numa Liga o
-    // sorteio acontece e cada dupla combina o dia do seu jogo até o próximo
-    // sorteio — não é um evento de dia único em que todos estão no clube. Logo,
-    // nada de presença virtual ancorada no startDate. Vale só pra torneios de
-    // dia único (eliminatórias, grupos, etc.).
-    if (window._isLigaFormat && window._isLigaFormat(t)) return out;
-    var start = new Date(t.startDate);
-    if (isNaN(start.getTime())) return out;
-    if (window.PresenceDB.dayKey(start) !== dayKeyStr) return out;
-    var endMs = start.getTime() + (3 * 60 * 60 * 1000);
-    // v1.6.83 — DELIBERADO: t.endDate CRU. Aqui o assunto é a ocupação da quadra NAQUELE DIA
-    // (a função já saiu fora em Liga e exige start no mesmo dayKey). Usar o fim do torneio
-    // (última fase) faria uma quadra aparecer ocupada por semanas. Fim do TORNEIO = _tournamentEndDate.
-    if (t.endDate) {
-      var end = new Date(t.endDate);
-      if (!isNaN(end.getTime()) && end.getTime() > start.getTime()) endMs = end.getTime();
-    }
-    var parts = Array.isArray(t.participants) ? t.participants : [];
-    // v3.0.x (Parte 11 uid sweep): uma presença virtual POR PESSOA (slot-aware).
-    // Numa dupla o p2 (uid em p2Uid, displayName só do p1) também é contado e
-    // reconhecido como "eu"/"amigo" — antes só o capitão (p.uid) entrava e o
-    // parceiro sumia do movimento do local. Mantém o "pelo menos 1" anônimo
-    // quando o torneio não tem participantes carregados.
-    var _seenUid = {};
-    function _vpush(uid, dn, photo) {
-      // v1.5.x: dedup por uid DENTRO do torneio — uma pessoa que aparece em 2 entradas
-      // (ex.: numa dupla E numa entrada solo, resíduo de inscrição duplicada) não conta
-      // duas vezes no movimento do local. Anônimo (uid null) pode repetir.
-      if (uid) { if (_seenUid[uid]) return; _seenUid[uid] = true; }
-      // v2.1.68: displayName + photoURL reais pra AMIGOS aparecerem com nome/foto.
-      // v4.5.72: identidade-por-uid — o nome exibido resolve do perfil vivo por uid;
-      // o nome gravado no inscrito só sobra como fallback pra não deixar em branco
-      // (e é a identidade legítima do guest sem conta, que não tem uid).
-      var _live = (uid && typeof window._nameForUid === 'function') ? window._nameForUid(uid) : '';
-      out.push({
-        _virtual: true,
-        uid: uid || null,
-        displayName: _live || dn || '',
-        photoURL: photo || '',
-        startsAt: start.getTime(),
-        endsAt: endMs,
-        type: 'tournament'
-      });
-    }
-    if (parts.length === 0) {
-      _vpush(null, '', '');
-    } else {
-      parts.forEach(function(p) {
-        p = p || {};
-        var hasDupla = !!((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name));
-        if (hasDupla) {
-          _vpush(p.p1Uid || p.uid, p.p1Name || p.displayName || p.name, p.p1Photo || p.photoURL || p.photo);
-          _vpush(p.p2Uid, p.p2Name, p.p2Photo);
-        } else if (Array.isArray(p.participants) && p.participants.length) {
-          p.participants.forEach(function(s) { s = s || {}; _vpush(s.uid, s.displayName || s.name, s.photoURL || s.photo); });
-        } else {
-          _vpush(p.uid, p.displayName || p.name, p.photoURL || p.photo);
-        }
-      });
-    }
-    return out;
+  function _tournamentOccupancy(t, dayKeyStr, eventContext) {
+    if (typeof window._tournamentOccupancyForDay !== 'function') throw new Error('Ocupação do torneio indisponível');
+    var ctx = eventContext || window._tournamentEventDayContext(t, Date.now());
+    // O card preferido pode estar focado em amanhã. Nesse caso o dia selecionado
+    // é o dia do evento exibido, mesmo que o relógio ainda esteja em hoje.
+    if (dayKeyStr && dayKeyStr !== ctx.presenceDayKey) ctx = { eventDayKey: dayKeyStr, eventTz: ctx.eventTz };
+    return window._tournamentOccupancyForDay(t, dayKeyStr, ctx.eventDayKey, ctx.eventTz);
   }
 
   // Renderiza o gráfico dentro do slot `boxId` usando as presenças passadas
@@ -770,6 +713,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   function _renderPreferredChart(boxId, presences, tournaments, dayKeyStr, venueCapacity, opts) {
     var box = document.getElementById(boxId);
     if (!box) return;
+    if (typeof window._tournamentOccupancyForDay !== 'function' ||
+        typeof window._isConcentratedTournament !== 'function') {
+      box.innerHTML = '<div role="alert">Não foi possível carregar os jogos do dia.</div>';
+      return;
+    }
     var win = _currentWindow();
 
     var buckets = {};
@@ -1108,10 +1056,39 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // nominalmente por grupo — os excedentes (ranqueados por menor interação)
   // são dobrados no "+N". Usado no dashboard pra não listar dezenas de nomes.
   // Sem opts/maxChips: mostra TODOS os nomes (detalhe do local).
+  window._venuesRankDayPeople = function(people, score) {
+    var self = people.find(function(x) { return x.klass === 'me'; });
+    var partnerKey = self && self.p && self.p._partnerKey;
+    return people.sort(function(a, b) {
+      if (a.klass === 'me' && b.klass !== 'me') return -1;
+      if (b.klass === 'me' && a.klass !== 'me') return 1;
+      if (partnerKey) {
+        var ap = a.p && a.p._personKey === partnerKey;
+        var bp = b.p && b.p._personKey === partnerKey;
+        if (ap !== bp) return ap ? -1 : 1;
+      }
+      var scoreDifference = score(b.p.uid) - score(a.p.uid);
+      if (scoreDifference) return scoreDifference;
+      if (a.klass === 'friend' && b.klass !== 'friend') return -1;
+      if (b.klass === 'friend' && a.klass !== 'friend') return 1;
+      return String(a.p.displayName || '').localeCompare(String(b.p.displayName || ''), 'pt-BR');
+    });
+  };
+
   function _renderUpcomingBox(boxId, presences, tournaments, dayKeyStr, realPid, opts) {
     var box = document.getElementById(boxId);
     if (!box) return;
+    if (typeof window._tournamentOccupancyForDay !== 'function' ||
+        typeof window._isConcentratedTournament !== 'function') {
+      box.innerHTML = '<div role="alert">Não foi possível carregar os jogos do dia.</div>';
+      return;
+    }
     var maxChips = (opts && opts.maxChips) || 0;
+    var expandKey = boxId + '|' + dayKeyStr;
+    window._venuesUpcomingExpanded = window._venuesUpcomingExpanded || {};
+    var expanded = !!window._venuesUpcomingExpanded[expandKey];
+    if (expanded) maxChips = 0;
+    var anyExtra = false;
     var _scoreCache = {};
     var now = Date.now();
     // v2.8.71: torneio (plano OU ocupação) só aparece em "Próximas horas" a partir de 2
@@ -1153,7 +1130,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     (tournaments || []).forEach(function(t) {
       if (_tournTooFar(t)) return; // v2.8.71: ocupação de torneio a >2 dias não entra
       _tournamentOccupancy(t, dayKeyStr).forEach(function(p) {
-        if (p.startsAt > now) {
+        if (p.endsAt > now) {
           p._tournamentName = t.name || 'torneio';
           p._tournamentId = t.id || t._id || '';
           rows.push(p);
@@ -1171,7 +1148,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var hours = Object.keys(groups).map(Number).sort(function(a, b) { return a - b; });
     var html =
       '<div style="margin-top:10px;background:var(--bg-darker);border:1px solid rgba(99,102,241,0.25);border-radius:12px;padding:10px 12px;">' +
-        '<div style="font-weight:700;color:var(--text-bright);margin-bottom:8px;font-size:0.88rem;">🗓️ Próximas horas</div>';
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px"><span style="font-weight:700;color:var(--text-bright);font-size:0.88rem;">🗓️ Próximas horas</span>__MORE_BUTTON__</div>';
     // chip de uma pessoa (você/amigo) — mesma marcação usada antes.
     function _hhmmU(ts){ try{ var d=new Date(ts); return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); }catch(e){ return ''; } }
     var _personChip = function(p, klass) {
@@ -1207,12 +1184,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // interação desc), aplica o cap de maxChips e devolve os chips HTML + o
     // número de excedentes pra somar ao "+N". scoreFn = _friendInteractionScore.
     var _renderPeople = function(people, otherCount) {
-      people.sort(function(a, b) {
-        if (a.klass === 'me' && b.klass !== 'me') return -1;
-        if (b.klass === 'me' && a.klass !== 'me') return 1;
-        var sa = window._friendInteractionScore ? window._friendInteractionScore(a.p.uid, _scoreCache) : 0;
-        var sb = window._friendInteractionScore ? window._friendInteractionScore(b.p.uid, _scoreCache) : 0;
-        return sb - sa;
+      window._venuesRankDayPeople(people, function(uid) {
+        return window._friendInteractionScore ? window._friendInteractionScore(uid, _scoreCache) : 0;
       });
       var extra = otherCount;
       var shown = people;
@@ -1220,6 +1193,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         shown = people.slice(0, maxChips);
         extra += (people.length - maxChips);
       }
+      if (extra > 0) anyExtra = true;
       return {
         chips: shown.map(function(x) { return _personChip(x.p, x.klass); }).join(''),
         extra: extra,
@@ -1244,9 +1218,13 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         var grp = byTournament[tk];
         if (p.uid) enrolledUids[p.uid] = true;
         var klass = _classifyPresence(p);
-        if (klass === 'me' || klass === 'friend') {
+        if (p.displayName || klass === 'me') {
           var key = p.uid || p.displayName;
-          if (grp.seen[key]) return;
+          if (grp.seen[key]) {
+            var old = grp.people.find(function(x) { return (x.p.uid || x.p.displayName) === key; });
+            if (old && p._partnerKey) old.p._partnerKey = p._partnerKey;
+            return;
+          }
           grp.seen[key] = true;
           grp.people.push({ p: p, klass: klass });
         } else { grp.other += 1; }
@@ -1297,8 +1275,17 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     });
     html += '</div>';
     if (!renderedAny) { box.innerHTML = ''; return; }
+    var moreButton = (opts && opts.maxChips && (anyExtra || expanded))
+      ? '<button type="button" class="sp-upcoming-more" aria-expanded="' + (expanded ? 'true' : 'false') + '" style="border:1px solid var(--sp-c-38bdf8,#38bdf8);border-radius:999px;background:var(--bg-card);color:var(--sp-c-38bdf8,#38bdf8);padding:3px 12px;font:inherit;font-size:.76rem;font-weight:800;cursor:pointer">' + (expanded ? 'ver menos' : 'ver mais') + '</button>' : '';
+    html = html.replace('__MORE_BUTTON__', moreButton);
     box.innerHTML = html;
+    var toggle = box.querySelector('.sp-upcoming-more');
+    if (toggle) toggle.addEventListener('click', function() {
+      window._venuesUpcomingExpanded[expandKey] = !expanded;
+      _renderUpcomingBox(boxId, presences, tournaments, dayKeyStr, realPid, opts);
+    });
   }
+  window._venuesRenderUpcomingBox = _renderUpcomingBox;
 
   // v0.16.28: itera todos os `[data-pref-pid]` cards no DOM e hidrata os 3
   // slots de movimento (chart + "Agora" + "Próximas horas") de cada um.
@@ -1313,7 +1300,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // v2.4.72-beta: no dashboard, "Próximas horas" mostra no máx. 5 amigos
     // nominalmente (top por interação) + "+N". No #place/detalhe mostra todos.
     var _routeKey = String(window.location.hash || '').replace(/^#/, '').split(/[/?]/)[0];
-    var _upcomingOpts = (_routeKey === 'dashboard') ? { maxChips: 5 } : null;
+    var _upcomingOpts = (_routeKey === 'dashboard') ? { maxChips: 3 } : null;
     // v2.1.72: garante o cache de perfis de amigos (uid→nome) pra o match por
     // NOME funcionar em participantes de torneio sem uid (_classifyPresence).
     try { if (typeof window._loadFriendProfilesCached === 'function') await window._loadFriendProfilesCached(); } catch (e) {}
@@ -1383,7 +1370,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         Promise.all([
           window.PresenceDB.loadForVenueDay(realPid, dayKeyStr),
           venuePromise
-        ]).then(function(results) {
+        ]).then(async function(results) {
           var presences = results[0];
           var venue = results[1];
           var capacity = _calcVenueCapacity(venue);
@@ -1401,8 +1388,33 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           var matchTournaments = tournaments.filter(function(t) {
             if (!t) return false;
             var tKey = window.PresenceDB.venueKey(t.venuePlaceId || '', t.venue || '');
-            return tKey && tKey === pKey;
+            if (!tKey || tKey !== pKey) return false;
+            var starts = t.startDate ? new Date(t.startDate).getTime() : 0;
+            var ends = t.endDate ? new Date(t.endDate).getTime() : starts;
+            var now = Date.now();
+            return !!(starts && starts <= now + 2 * 86400000 &&
+              (starts >= now - 2 * 86400000 || !ends || ends >= now - 86400000));
           });
+          var upcomingSlot = document.getElementById('pref-upcoming-' + safePid);
+          var loadKey = realPid + '|' + dayKeyStr + '|' + Date.now();
+          if (upcomingSlot) {
+            upcomingSlot.dataset.occupancyRequest = loadKey;
+            if (matchTournaments.some(function(t) { return t && (t._resumo || t._faltamPesados); })) {
+              upcomingSlot.innerHTML = '<div role="status" style="color:var(--text-muted);padding:10px">Carregando jogos do dia…</div>';
+            }
+          }
+          try {
+            matchTournaments = await Promise.all(matchTournaments.map(function(t) {
+              return window._loadTournamentForOccupancy(t, pKey);
+            }));
+          } catch (loadError) {
+            if (upcomingSlot && upcomingSlot.dataset.occupancyRequest === loadKey) {
+              upcomingSlot.innerHTML = '<div role="alert" style="color:var(--text-muted);padding:10px">Não foi possível carregar os jogos do dia.</div>';
+            }
+            window._warn('[venues movement] tournament load failed', loadError);
+            return;
+          }
+          if (upcomingSlot && upcomingSlot.dataset.occupancyRequest !== loadKey) return;
           // v1.0.9-beta: passa contexto pra render da CTA "Cadastrar quadras"
           // quando capacity=0 (venue sem courts ou loadVenue null).
           // Tenta extrair lat/lon do venue (se loadVenue retornou) ou do

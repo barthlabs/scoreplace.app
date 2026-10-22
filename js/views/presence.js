@@ -501,6 +501,134 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     return out;
   }
 
+  // Um único retrato de ocupação para a dashboard e a tela de presença. Jogos
+  // publicados definem quem efetivamente joga em cada dia de evento; torneios
+  // comuns conservam a antiga regra de startDate.
+  function _eventDayAt(ts, tz) {
+    if (!tz || !ts) return '';
+    var n = ts && typeof ts.toMillis === 'function' ? ts.toMillis() :
+      (ts && typeof ts.seconds === 'number' ? ts.seconds * 1000 : new Date(ts).getTime());
+    if (!isFinite(n)) return '';
+    try {
+      var parts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit'
+      }).formatToParts(new Date(n));
+      var values = {};
+      parts.forEach(function(p) { values[p.type] = p.value; });
+      return values.year + '-' + values.month + '-' + values.day;
+    } catch (e) { return ''; }
+  }
+  window._tournamentEventDayContext = function(t, now) {
+    var instant = now == null ? Date.now() : now;
+    var presenceDayKey = window.PresenceDB.dayKey(new Date(instant));
+    var resolver = window._venueGeo && window._venueGeo.resolverFuso;
+    var zone = typeof resolver === 'function' ? resolver(t, {}) : null;
+    var eventTz = zone && zone.tz || '';
+    return { presenceDayKey: presenceDayKey, eventDayKey: _eventDayAt(instant, eventTz), eventTz: eventTz };
+  };
+  window._tournamentOccupancyForDay = function(t, presenceDayKey, eventDayKey, eventTz) {
+    if (!t || !t.startDate) return [];
+    if (window._isLigaFormat && window._isLigaFormat(t)) return [];
+    if (typeof window._isConcentratedTournament !== 'function') throw new Error('Classificador de torneio indisponível');
+    if (!window._isConcentratedTournament(t) || !eventTz || !eventDayKey) return _tournamentOccupancy(t, presenceDayKey);
+    if (typeof window._collectAllMatches !== 'function') throw new Error('Agenda de jogos indisponível');
+    var matches = window._collectAllMatches(t) || [];
+    var published = matches.filter(function(m) {
+      return m && (m.scheduleSource === 'organizer' || m.scheduleLocked === true ||
+        m.scheduledKind === 'organizer' || m.scheduledKind === 'consensus' ||
+        (m.court && m.scheduledAt && m.scheduleLocked == null && !m.scheduleSource));
+    });
+    if (!published.length) return _tournamentOccupancy(t, presenceDayKey);
+    var daily = published.filter(function(m) {
+      var day = m.scheduledAt ? _eventDayAt(m.scheduledAt, eventTz) : '';
+      if (!day && /^\d{4}-\d{2}-\d{2}$/.test(String(m.requiredDay || ''))) day = m.requiredDay;
+      return day === eventDayKey;
+    });
+    if (!daily.length) return [];
+    var times = daily.map(function(m) {
+      return m.scheduledAt && typeof m.scheduledAt.toMillis === 'function' ? m.scheduledAt.toMillis() :
+        (m.scheduledAt && typeof m.scheduledAt.seconds === 'number' ? m.scheduledAt.seconds * 1000 : new Date(m.scheduledAt).getTime());
+    }).filter(isFinite);
+    var start = times.length ? Math.min.apply(null, times) : new Date(t.startDate).getTime();
+    var end = times.length ? Math.max.apply(null, times) + 3 * 3600000 : start + 3 * 3600000;
+    var out = [], byKey = {};
+    function addPerson(uid, manualId, name, photo, partnerKey) {
+      var key = uid ? 'u:' + uid : (manualId ? 'm:' + manualId : 'n:' + String(name || '').toLocaleLowerCase());
+      if (!uid && !manualId && !name) return;
+      var live = uid && typeof window._nameForUid === 'function' ? window._nameForUid(uid) : '';
+      if (byKey[key]) {
+        if (partnerKey && !byKey[key]._partnerKey) byKey[key]._partnerKey = partnerKey;
+        return;
+      }
+      var p = { _virtual: true, _tournamentId: t.id, _tournamentName: t.name || 'Torneio',
+        uid: uid || null, _manualId: manualId || '', _personKey: key, _partnerKey: partnerKey || '',
+        displayName: live || name || '', photoURL: photo || '', startsAt: start, endsAt: end,
+        visibility: 'public', type: 'tournament' };
+      byKey[key] = p;
+      out.push(p);
+    }
+    daily.sort(function(a,b) {
+      var ta = new Date(a.scheduledAt || 0).getTime() || 0, tb = new Date(b.scheduledAt || 0).getTime() || 0;
+      return ta - tb || (Number(a._gameNum || 0) - Number(b._gameNum || 0));
+    }).forEach(function(m) {
+      ['team1Obj','team2Obj'].forEach(function(field, side) {
+        var obj = m[field] || {};
+        var names = Array.isArray(m[side ? 'team2' : 'team1']) ? m[side ? 'team2' : 'team1'] : [];
+        if (!names.length && obj.displayName) names = String(obj.displayName).split(/\s+\/\s+/);
+        var pairId = String(obj.fixedPairId || obj.id || m.id + ':' + side);
+        var a = { uid: obj.p1Uid || '', manual: obj.p1ManualId || pairId + ':1', name: obj.p1Name || names[0] || '', photo: obj.p1Photo || '' };
+        var b = { uid: obj.p2Uid || '', manual: obj.p2ManualId || pairId + ':2', name: obj.p2Name || names[1] || '', photo: obj.p2Photo || '' };
+        var ka = a.uid ? 'u:' + a.uid : (a.manual ? 'm:' + a.manual : 'n:' + String(a.name).toLocaleLowerCase());
+        var kb = b.uid ? 'u:' + b.uid : (b.manual ? 'm:' + b.manual : 'n:' + String(b.name).toLocaleLowerCase());
+        addPerson(a.uid, a.manual, a.name, a.photo, kb);
+        addPerson(b.uid, b.manual, b.name, b.photo, ka);
+      });
+    });
+    return out;
+  };
+
+  var _occupancyLoads = new Map();
+  window._loadTournamentForOccupancy = function(t, venueKey) {
+    if (!t || !t.id) return Promise.resolve(null);
+    var key = String(t.id) + '|' + String(venueKey || '');
+    var live = window._findTournamentById && window._findTournamentById(t.id);
+    function full(x) { return x && !x._resumo && !x._doCache && !x._faltamPesados && Array.isArray(x.matches); }
+    function version(x) {
+      var at = x && x.updatedAt;
+      return at && typeof at.toMillis === 'function' ? String(at.toMillis()) :
+        (at && typeof at.seconds === 'number' ? String(at.seconds) : String(at || ''));
+    }
+    var prior = _occupancyLoads.get(key);
+    if (full(t) && (!prior || version(t) !== prior.updatedAt)) {
+      _occupancyLoads.set(key, { value: t, updatedAt: version(t) });
+      return Promise.resolve(t);
+    }
+    if (full(live) && (!prior || version(live) !== prior.updatedAt)) {
+      _occupancyLoads.set(key, { value: live, updatedAt: version(live) });
+      return Promise.resolve(live);
+    }
+    if (prior) return prior.promise || Promise.resolve(prior.value);
+    if (!window.FirestoreDB || typeof window.FirestoreDB.loadTournamentById !== 'function') return Promise.reject(new Error('Leitor de torneio indisponível'));
+    var entry = { promise: null, updatedAt: '' };
+    var promise = window.FirestoreDB.loadTournamentById(t.id).then(function(loaded) {
+      if (!full(loaded)) throw new Error('Torneio incompleto');
+      entry.value = loaded;
+      entry.updatedAt = version(loaded);
+      entry.promise = null;
+      return loaded;
+    }).catch(function(err) {
+      if (_occupancyLoads.get(key) === entry) _occupancyLoads.delete(key);
+      throw err;
+    });
+    entry.promise = promise;
+    _occupancyLoads.set(key, entry);
+    return promise;
+  };
+  function _occupancyForPresence(t) {
+    var ctx = window._tournamentEventDayContext(t, Date.now());
+    return window._tournamentOccupancyForDay(t, state.dayKey, ctx.eventDayKey, ctx.eventTz);
+  }
+
   // Janela de horas centrada na hora atual. Permite valores fora de 0–23
   // (ex: 10pm atual → slot 02h de amanhã aparece como 2 sem dados). Para
   // comparar com presenças, normalizamos via (h+24)%24 ao indexar buckets.
@@ -513,6 +641,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   }
 
   function renderChart() {
+    if (state._occupancyLoading) return;
     var box = document.getElementById('presence-chart');
     if (!box) return;
 
@@ -526,7 +655,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var allPresences = state.presences.slice();
     // Add tournament-derived occupancy
     state.tournaments.forEach(function(t) {
-      _tournamentOccupancy(t, state.dayKey).forEach(function(p) { allPresences.push(p); });
+      _occupancyForPresence(t).forEach(function(p) { allPresences.push(p); });
     });
 
     allPresences.forEach(function(p) {
@@ -584,6 +713,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   }
 
   function renderNow() {
+    if (state._occupancyLoading) return;
     var box = document.getElementById('presence-now');
     if (!box) return;
     var now = Date.now();
@@ -592,7 +722,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     });
     // Also fold active tournament occupancies
     state.tournaments.forEach(function(t) {
-      _tournamentOccupancy(t, state.dayKey).forEach(function(p) {
+      _occupancyForPresence(t).forEach(function(p) {
         if (p.startsAt <= now && p.endsAt > now) active.push(p);
       });
     });
@@ -669,6 +799,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   }
 
   function renderUpcoming() {
+    if (state._occupancyLoading) return;
     var box = document.getElementById('presence-upcoming');
     if (!box) return;
     var now = Date.now();
@@ -680,7 +811,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     });
     // Tournament occupancies starting later today
     state.tournaments.forEach(function(t) {
-      _tournamentOccupancy(t, state.dayKey).forEach(function(p) {
+      _occupancyForPresence(t).forEach(function(p) {
         if (p.startsAt > now) rows.push(p);
       });
     });
@@ -921,16 +1052,52 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // Tournaments at same venue + ANY of the selected sports + day.
     var tournaments = (window.AppStore && window.AppStore.tournaments) || [];
     var selSportSet = {}; selSports.forEach(function(s) { selSportSet[s] = true; });
-    state.tournaments = tournaments.filter(function(t) {
+    var candidateTournaments = tournaments.filter(function(t) {
       if (!t) return false;
       var tKey = window.PresenceDB.venueKey(t.venuePlaceId, t.venue);
       if (tKey !== state.venue.placeId) return false;
       if (!selSportSet[window.PresenceDB.normalizeSport(t.sport)]) return false;
       if (!t.startDate) return false;
-      return window.PresenceDB.dayKey(new Date(t.startDate)) === state.dayKey;
+      var starts = new Date(t.startDate).getTime();
+      var ends = t.endDate ? new Date(t.endDate).getTime() : starts;
+      var now = Date.now();
+      if (!isFinite(starts) || starts > now + 2 * 86400000 ||
+          (starts < now - 2 * 86400000 && isFinite(ends) && ends < now - 86400000)) return false;
+      return !!t.hasDraw || window.PresenceDB.dayKey(new Date(t.startDate)) === state.dayKey;
     });
-    renderChart();
-    renderUpcoming();
+    var loadVersion = (state._occupancyLoadVersion || 0) + 1;
+    state._occupancyLoadVersion = loadVersion;
+    state._occupancyLoading = true;
+    state.tournaments = [];
+    var upcomingBox = document.getElementById('presence-upcoming');
+    var chartBox = document.getElementById('presence-chart');
+    var nowBox = document.getElementById('presence-now');
+    if (chartBox) chartBox.innerHTML = '<div role="status">Carregando movimento do dia…</div>';
+    if (nowBox) nowBox.innerHTML = '<div role="status">Carregando jogos do dia…</div>';
+    if (upcomingBox && candidateTournaments.some(function(t) { return t._resumo || t._faltamPesados; })) {
+      upcomingBox.innerHTML = '<div role="status" style="color:var(--text-muted);padding:12px">Carregando jogos do dia…</div>';
+    }
+    Promise.all(candidateTournaments.map(function(t) {
+      return window._loadTournamentForOccupancy(t, state.venue.placeId);
+    })).then(function(fullTournaments) {
+      if (state._occupancyLoadVersion !== loadVersion) return;
+      state._occupancyLoading = false;
+      state.tournaments = fullTournaments.filter(function(t) {
+        var ctx = window._tournamentEventDayContext(t, Date.now());
+        return window._tournamentOccupancyForDay(t, state.dayKey, ctx.eventDayKey, ctx.eventTz).length > 0;
+      });
+      renderChart();
+      renderNow();
+      renderUpcoming();
+    }).catch(function(err) {
+      if (state._occupancyLoadVersion !== loadVersion) return;
+      state._occupancyLoading = false;
+      state.tournaments = [];
+      if (chartBox) chartBox.innerHTML = '<div role="alert">Não foi possível carregar os jogos do dia.</div>';
+      if (nowBox) nowBox.innerHTML = '<div role="alert">Não foi possível carregar os jogos do dia.</div>';
+      if (upcomingBox) upcomingBox.innerHTML = '<div role="alert" style="color:var(--text-muted);padding:12px">Não foi possível carregar os jogos do dia.</div>';
+      window._warn('[presence] tournament occupancy load failed', err);
+    });
 
     // My active presences (for banner + cancel action)
     if (myUid) {
