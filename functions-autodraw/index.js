@@ -1436,6 +1436,9 @@ exports.drawRound = onCall(async (request) => {
      * agenda o próximo slot, em vez de sortear de novo. */
     const _slotManual = _consumirSlotAgendado(t, Date.now(), _fzManual && _fzManual.tz);
     if (_slotManual) console.log(`drawRound: slot ${new Date(_slotManual).toISOString()} consumido pelo manual (${_fzManual.tz})`);
+    // O marcador de quadra liberada pertence à chave anterior, não ao ID textual
+    // de um jogo. Apagá-lo na mesma transação impede que re-sorteio reutilize o ID.
+    if (hadBracket) tx.delete(ref.collection('courtState').doc('main'));
     const b = _gravaTorneio(tx, ref, t, _tAntes, { agoraIso: _agoraIsoTx }); // clobber-free; divide se o marcador mandar
     // Devolve o doc COM nome (b.clean, não b.persist) — o cliente precisa dele pra notificar
     // (_notifyDrawPersonalized lê os nomes) e pra sincronizar o AppStore sem esperar o listener.
@@ -2025,6 +2028,7 @@ exports.resetTournamentToEnrollment = onCall(async request => {
       }
     }
     const boundary = _gravaTorneio(tx, ref, t, before, { agoraIso });
+    tx.delete(ref.collection('courtState').doc('main'));
     /* Recibo consumido pela UI em `tournaments-draw.js`: este é o codebase
      * Functions AUTODRAW, não `functions/index.js`. A fotografia `clean` é
      * pós-plano transacional (matches/rounds/resultados já removidos), portanto
@@ -3935,7 +3939,9 @@ exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
   if (!tId || !matchId || sandbox !== tId.startsWith('sb_')) throw new HttpsError('invalid-argument', 'Torneio ou jogo inválido.');
   const ref = db.collection(sandbox ? 'sandboxes' : 'tournaments').doc(tId);
   const stateRef = ref.collection('courtState').doc('main');
-  const releaseRef = ref.collection('courtReleases').doc(matchId);
+  // Registro novo a cada liberação: um re-sorteio pode reutilizar o matchId,
+  // mas não deve sobrescrever a auditoria da chave anterior.
+  const releaseRef = ref.collection('courtReleases').doc(matchId + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10));
   const agoraIso = new Date().toISOString();
   return db.runTransaction(async (tx) => {
     if (sandbox) await _assertSandboxDrawOwner(tx, await tx.get(ref), uid);
@@ -3952,8 +3958,6 @@ exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
     if (!m || !m.court || !(m.courtCalledAt || m.startedAt) || _courtOccupancy.isFinished(m)) {
       throw new HttpsError('failed-precondition', 'O jogo precisa estar em quadra e sem resultado.');
     }
-    const auditSnap = await tx.get(releaseRef);
-    if (auditSnap.exists) throw new HttpsError('failed-precondition', 'Estado de liberação inconsistente.');
     tx.set(stateRef, { revision: FieldValue.increment(1), released: { ...released, [matchId]: agoraIso } }, { merge: true });
     tx.create(releaseRef, { matchId, court: String(m.court), releasedAt: agoraIso, releasedBy: uid });
     return { ok: true, changed: true, releasedAt: agoraIso };

@@ -17,7 +17,7 @@ const HttpsError = class extends Error { constructor(code, message) { super(mess
 const paths = [], saved = [], courtStates = new Map(), releases = new Map();
 let tournament, ownerProfile = null, isAdmin = true;
 const context = {
-  exports: {}, onCall: (_options, callback) => callback, HttpsError,
+  exports: {}, onCall: (...args) => args.at(-1), HttpsError,
   db: {
     collection: collection => ({ doc: id => { const path = collection + '/' + id; const ref = {
       path, collection: child => ({ doc: childId => ({ path: path + '/' + child + '/' + childId }) })
@@ -28,11 +28,13 @@ const context = {
       : ref.path.includes('/courtReleases/') ? { exists: releases.has(ref.path), data: () => releases.get(ref.path) }
       : { exists: true, ref },
       set: (ref, data) => courtStates.set(ref.path, { ...(courtStates.get(ref.path) || {}), ...data }),
-      create: (ref, data) => releases.set(ref.path, data) })
+      create: (ref, data) => releases.set(ref.path, data),
+      delete: ref => courtStates.delete(ref.path) })
   },
   drawWindow: {
     _findMatch: (t, id) => t.matches.find(m => m.id === id),
     _collectAllMatches: t => t.matches,
+    _clearTournamentDraw: t => { t.matches = []; },
     _matchHasRealPlay: () => false
   },
   _assertSandboxDrawOwner: async () => {},
@@ -53,8 +55,13 @@ const helperEnd = server.indexOf('/* ── L6.R1', helperStart);
 assert(helperStart >= 0 && helperEnd > helperStart);
 vm.runInNewContext(server.slice(helperStart, helperEnd), context);
 vm.runInNewContext(server.slice(start, end), context);
+const resetStart = server.indexOf('exports.resetTournamentToEnrollment = onCall(');
+const resetEnd = server.indexOf('// ─── Rodada extra manual', resetStart);
+assert(resetStart > 0 && resetEnd > resetStart);
+vm.runInNewContext(server.slice(resetStart, resetEnd), context);
 const callable = context.exports.assignMatchCourt;
 const endOnCourt = context.exports.endMatchOnCourt;
+const resetToEnrollment = context.exports.resetTournamentToEnrollment;
 const request = (id, matchId, court, confirmCall = false) => ({ auth: { uid: 'owner' }, data: {
   tournamentId: id, sandbox: id.startsWith('sb_'), matchId, court, confirmCall
 } });
@@ -155,6 +162,27 @@ const game = (id, court, scheduledAt = '2026-10-22T21:00:00.000Z') => ({ id, cou
   assert.ok(courtStates.get('sandboxes/sb_test/courtState/main').released['release-sandbox']);
   await callable(request('sb_test', 'follow-sandbox', 'Quadra 4', true));
   assert.equal(tournament.matches[1].court, 'Quadra 4', 'sandbox segue o mesmo fluxo de liberação');
+
+  // O reset apaga o marcador na mesma transação. Se o sorteio seguinte reutilizar
+  // o ID, ele poderá ser chamado e encerrado sem herdar o placar pendente antigo.
+  tournament.isSandbox = true;
+  await resetToEnrollment({ auth: { uid: 'owner' }, data: { tournamentId: 'sb_test', restoreMode: 'sandbox' } });
+  assert.equal(courtStates.has('sandboxes/sb_test/courtState/main'), false, 'reset limpa liberações da chave antiga');
+  tournament.matches = [game('release-sandbox', 'Quadra 4')];
+  tournament.matches[0].courtCalledAt = nowIso;
+  assert.equal((await endOnCourt({ auth: { uid: 'owner' }, data: {
+    tournamentId: 'sb_test', sandbox: true, matchId: 'release-sandbox'
+  } })).changed, true, 'ID reutilizado pode ser liberado em novo sorteio');
+  assert.equal([...releases.values()].filter(entry => entry.matchId === 'release-sandbox').length, 2,
+    'auditoria guarda as duas liberações em documentos separados');
+  delete tournament.isSandbox;
+
+  const drawStart = server.indexOf('exports.drawRound = onCall(');
+  const drawEnd = server.indexOf('// ───', drawStart + 30);
+  assert(drawStart > 0 && drawEnd > drawStart);
+  const redrawSource = server.slice(drawStart, drawEnd);
+  assert.match(redrawSource, /if \(hadBracket\) tx\.delete\(ref\.collection\('courtState'\)\.doc\('main'\)\)/,
+    're-sorteio limpa o marcador junto com a gravação da nova chave');
 
   tournament.matches = [game('w1', 'Quadra 4'), game('w2', 'Quadra 5')];
   tournament.matches[0].courtCalledAt = nowIso;
