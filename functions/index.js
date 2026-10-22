@@ -103,6 +103,7 @@ const _registrationBatchApply = require("./registration-batch-apply-core");
 const _registrationMutations = require("./registration-mutations-core");
 const _registrationClaim = require("./registration-claim-core");
 const _editCanonicalSlot = require("./edit-canonical-slot-core");
+const _publishedSlotEdit = require("./published-slot-edit-core");
 const _manualClaimLink = require("./manual-claim-link-core");
 const _publishedClaim = require("./published-claim-core");
 const _canonicalRegistrationBoundary = require("./canonical-registration-boundary-core");
@@ -4468,7 +4469,7 @@ function _slotPublishedExtras(tournament) {
   });
 }
 
-/* Edição de uma vaga da dupla antes da publicação da chave. O UID é identidade,
+/* Edição de uma vaga da dupla, inclusive na chave publicada. O UID é identidade,
  * não um nome editável: substituí-lo cria uma vaga manual e preserva a inscrição
  * anterior como histórico retirado. Sandbox e produção usam esta mesma porta. */
 exports.editCanonicalTournamentSlot = onCall(
@@ -4504,7 +4505,12 @@ exports.editCanonicalTournamentSlot = onCall(
         throw new HttpsError('permission-denied', 'somente a organização pode editar vagas');
       }
       const state = await _manualClaimReadState(tx, ref, raw);
-      _manualClaimGuard(state, true);
+      if (state.hasPublishedDraw) {
+        if (state.tournament.pendingDraw || state.privateDraw || state.hasPublishedGroups ||
+            (Array.isArray(state.tournament.groups) && state.tournament.groups.length)) {
+          throw new HttpsError('failed-precondition', 'sorteio em transição ou grupos publicados');
+        }
+      } else _manualClaimGuard(state, true);
       if (_slotPublishedExtras(state.tournament)) throw new HttpsError('failed-precondition', 'chave ou classificação já publicada');
       const logicalId = sandbox ? String(raw.sandboxOf) : tournamentId;
       const checked = await _loadCanonicalRosterForMutation(tx, ref, state.tournament, sandbox ? logicalId : '');
@@ -4561,10 +4567,51 @@ exports.editCanonicalTournamentSlot = onCall(
         try { draft = _editCanonicalSlot.patchDraft(state.privateDraw.draft, edit); }
         catch (error) { throw new HttpsError('failed-precondition', error.message); }
       }
+      let published = null;
+      if (state.hasPublishedDraw) {
+        const sourceValue = uid || manualParticipantId;
+        const embedded = JSON.stringify([state.tournament.rounds, state.tournament.phaseRounds,
+          state.tournament.rodadas, state.tournament.thirdPlaceMatch]);
+        if (embedded.includes(edit.source.fixedPairId) || embedded.includes(sourceValue)) {
+          throw new HttpsError('failed-precondition', 'vaga referenciada em outra parte da chave');
+        }
+        const [matchSnap, resultSnap, opponentSnap, woClaimSnap, woLogSnap] = await Promise.all([
+          tx.get(ref.collection(_tSplitFn.colecaoDaParte('matches'))),
+          tx.get(ref.collection('results')),
+          tx.get(ref.collection(_tSplitFn.colecaoDaParte('opponentHistory'))),
+          tx.get(ref.collection(_tSplitFn.colecaoDaParte('woClaims'))),
+          tx.get(ref.collection(_tSplitFn.colecaoDaParte('woLog'))),
+        ]);
+        if ([opponentSnap, woClaimSnap, woLogSnap].some((snapshot) => snapshot.docs.some((doc) => {
+          const value = JSON.stringify(doc.data());
+          return value.includes(edit.source.fixedPairId) || value.includes(sourceValue) ||
+            (targetUid && value.includes(targetUid));
+        }))) throw new HttpsError('failed-precondition', 'vaga com histórico de adversários ou W.O.');
+        try {
+          published = _publishedSlotEdit.plan(edit, mirrorDocuments,
+            matchSnap.docs.map((doc) => ({ ref: doc.ref, data: doc.data() || {} })),
+            resultSnap.docs.map((doc) => ({ ref: doc.ref, data: doc.data() || {} })));
+        } catch (error) { throw new HttpsError('failed-precondition', error.message); }
+      }
       const next = _writeCanonicalRosterChanges(tx, ref, state.tournament, checked.registrations,
         edit.changes, null, sandbox ? logicalId : '');
       const patchedMirror = match.data.item ? Object.assign({}, match.data, { item: mirror }) : mirror;
-      tx.update(match.ref, _editCanonicalSlot.mirrorWritePatch(patchedMirror, edit, _FV.delete(), oldSlot));
+      if (published) {
+        const p = published.participant;
+        if (p.newId === p.oldRef.id) tx.set(p.oldRef, p.data);
+        else {
+          tx.create(p.oldRef.parent.doc(p.newId), p.data);
+          tx.delete(p.oldRef);
+        }
+        published.matches.forEach((item) => tx.set(item.ref, item.data));
+        published.results.forEach((item) => tx.set(item.ref, item.data));
+        tx.create(ref.collection('slotEditAudits').doc(), {
+          sourceRegistrationId: edit.source.registrationId, targetUid: targetUid || null,
+          categoryId, oldPairId: edit.source.fixedPairId, newPairId: edit.newPairId,
+          matchIds: published.matches.map((item) => item.ref.id), editedByUid: callerUid,
+          editedAt: _FV.serverTimestamp(),
+        });
+      } else tx.update(match.ref, _editCanonicalSlot.mirrorWritePatch(patchedMirror, edit, _FV.delete(), oldSlot));
       if (draft) tx.update(state.privateDrawRef, { draft, updatedAt: _FV.serverTimestamp() });
       return { ok: true, participantsCount: next.participants.length, replacedAccount: !!uid };
     });

@@ -60,6 +60,13 @@ async function driver() {
       team1Uids: sourceUid ? ['old-edit'] : [], team2Uids: [] };
     await db.doc('sandboxes/' + sid + '/privateDraws/initial').set({ kind: 'initial',
       draft: { participants: [side], matches: [match], competitionPairAssignments: [{ fixedPairId: pairId }] } });
+    await db.doc('tournaments/' + tid + '/matches/game-1').set({ _chave: 'game-1', _loc: { tipo: 'matches', mi: 0 },
+      playerUids: sourceUid ? ['old-edit'] : [], jogo: { ...match, p1: side.p1Name + ' / Parceira',
+        p2: 'Outra dupla', scheduledAt: '2026-10-22T18:00:00Z', court: 'Quadra 4',
+        scoreP1: 0, scoreP2: 0, winner: null } });
+    await db.doc('tournaments/' + tid + '/results/game-1').set({ matchId: 'game-1',
+      p1: side.p1Name + ' / Parceira', p2: 'Outra dupla',
+      playerUids: sourceUid ? ['old-edit'] : [], scoreP1: 0, scoreP2: 0, winner: null });
     const result = await call({ tournamentId: sid, sandbox: true, uid: sourceUid ? 'old-edit' : '',
       manualParticipantId: sourceUid ? '' : 'typed-a', categoryId: cat,
       expectedName: sourceUid ? 'Conta antiga' : 'Pessoa antiga',
@@ -77,6 +84,20 @@ async function driver() {
     assert.equal(draft.matches[0].team1Obj.p1Uid || '', mirror.p1Uid || '', kind);
     assert.equal((await db.doc('tournaments/' + tid + '/registrations/' + idA).get()).data().status, 'confirmed', kind);
     assert.equal((await db.doc('tournaments/' + tid + '/inscritos/pair').get()).data().item.p1Name, side.p1Name, kind);
+    const published = await call({ tournamentId: tid, sandbox: false,
+      uid: sourceUid ? 'old-edit' : '', manualParticipantId: sourceUid ? '' : 'typed-a',
+      categoryId: cat, expectedName: sourceUid ? 'Conta antiga' : 'Pessoa antiga',
+      newName: targetUid ? '' : 'Pessoa nova', targetUid: targetUid ? 'new-edit' : '' });
+    assert.equal(published.ok, true, 'chave publicada: ' + kind);
+    const edited = (await db.doc('tournaments/' + tid + '/matches/game-1').get()).data().jogo;
+    const resultDoc = (await db.doc('tournaments/' + tid + '/results/game-1').get()).data();
+    assert.equal(edited.p1, (targetUid ? 'Conta nova' : 'Pessoa nova') + ' / Parceira', kind);
+    assert.equal(edited.court, 'Quadra 4', kind);
+    assert.equal(edited.scoreP1, 0, kind);
+    assert.equal(resultDoc.p1, edited.p1, kind);
+    assert.equal(resultDoc.scoreP1, 0, kind);
+    assert.equal((await db.doc('tournaments/' + tid + '/registrations/' + idA).get()).data().status,
+      sourceUid || targetUid ? 'withdrawn' : 'confirmed', kind);
   }
   console.log('✓ EMULATOR_SLOT_EDIT_OK: quatro transições e produção preservada');
   process.exit(0);
