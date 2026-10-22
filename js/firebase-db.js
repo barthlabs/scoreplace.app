@@ -1929,6 +1929,17 @@ window.FirestoreDB = {
     try { pid = fb.app().options.projectId; } catch (e) {}
     if (!pid) throw Object.assign(new Error(msgs.naoInicializado || 'App não inicializado'), { code: 'functions/internal' });
     var url = 'https://us-central1-' + pid + '.cloudfunctions.net/' + name;
+    // Recuperação emergencial: a infraestrutura Gen2 original responde 500 antes do handler.
+    // Mesmos exports callable, com autenticação e autorização preservadas, em Cloud Run.
+    if (pid === 'scoreplace-app') {
+      var recovery = {
+        assignMatchCourt: 'https://assignmatchcourt-run-recovery-382268772878.us-east1.run.app',
+        applyMatchResult: 'https://applymatchresult-run-recovery-382268772878.us-east1.run.app',
+        setTournamentPresence: 'https://settournamentpresence-run-recovery-382268772878.us-east1.run.app',
+        setTournamentPresenceWithWOSubstitution: 'https://presencwo-run-recovery-382268772878.us-east1.run.app'
+      };
+      if (Object.prototype.hasOwnProperty.call(recovery, name)) url = recovery[name];
+    }
     /* Sem usuário, vai SEM cabeçalho de autorização — e o servidor decide. */
     var cab = { 'Content-Type': 'application/json' };
     if (user) cab['Authorization'] = 'Bearer ' + (await user.getIdToken());

@@ -2461,6 +2461,16 @@ window._callCF = function (fnName, payload, msgs) {
     try { pid = fb.app().options.projectId; } catch (e) {}
     if (!pid) return Promise.reject(Object.assign(new Error(_m.naoInicializado), { code: 'functions/internal' }));
     var url = 'https://us-central1-' + pid + '.cloudfunctions.net/' + fnName;
+    // Fallback para cache híbrido: mantém as quatro rotas operacionais recuperadas.
+    if (pid === 'scoreplace-app') {
+        var recovery = {
+            assignMatchCourt: 'https://assignmatchcourt-run-recovery-382268772878.us-east1.run.app',
+            applyMatchResult: 'https://applymatchresult-run-recovery-382268772878.us-east1.run.app',
+            setTournamentPresence: 'https://settournamentpresence-run-recovery-382268772878.us-east1.run.app',
+            setTournamentPresenceWithWOSubstitution: 'https://presencwo-run-recovery-382268772878.us-east1.run.app'
+        };
+        if (Object.prototype.hasOwnProperty.call(recovery, fnName)) url = recovery[fnName];
+    }
     return user.getIdToken().then(function (tok) {
         return fetch(url, {
             method: 'POST',
