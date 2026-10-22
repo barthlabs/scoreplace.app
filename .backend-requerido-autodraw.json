@@ -1,11 +1,8 @@
 {
   "schema": 1,
-  "backendCommit": "95c07da199dae2ef2f6eb0046fefc3e1f2ff4e4a",
-  "scopeNote": "Chamada, liberação e limpeza do estado das quadras no re-sorteio e na restauração usam o mesmo estado persistido.",
+  "backendCommit": "26b7b69d065b8683887bd79a7c776ad4e6dc9776",
+  "scopeNote": "O último ajuste exige autorização antes de consultar o estado de quadra; as funções de liberação e limpeza foram publicadas no corte anterior.",
   "functions": [
-    "assignMatchCourt",
-    "endMatchOnCourt",
-    "drawRound",
-    "resetTournamentToEnrollment"
+    "assignMatchCourt"
   ]
 }
