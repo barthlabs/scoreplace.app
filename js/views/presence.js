@@ -611,6 +611,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (!window.FirestoreDB || typeof window.FirestoreDB.loadTournamentById !== 'function') return Promise.reject(new Error('Leitor de torneio indisponível'));
     var entry = { promise: null, updatedAt: '' };
     var promise = window.FirestoreDB.loadTournamentById(t.id).then(function(loaded) {
+      // Um torneio ainda sem sorteio pode não ter o campo matches no documento.
+      // Só ele admite essa ausência; uma chave publicada incompleta segue erro.
+      if (loaded && !loaded.hasDraw && !Array.isArray(loaded.matches)) loaded.matches = [];
       if (!full(loaded)) throw new Error('Torneio incompleto');
       entry.value = loaded;
       entry.updatedAt = version(loaded);
@@ -623,6 +626,14 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     entry.promise = promise;
     _occupancyLoads.set(key, entry);
     return promise;
+  };
+  window._loadTournamentsForOccupancy = function(candidates, venueKey) {
+    return Promise.all((candidates || []).map(function(t) {
+      return window._loadTournamentForOccupancy(t, venueKey).catch(function(err) {
+        if (typeof window._warn === 'function') window._warn('[occupancy] tournament load failed', t && t.id, err);
+        return null;
+      });
+    })).then(function(loaded) { return loaded.filter(Boolean); });
   };
   function _occupancyForPresence(t) {
     var ctx = window._tournamentEventDayContext(t, Date.now());
@@ -1077,9 +1088,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (upcomingBox && candidateTournaments.some(function(t) { return t._resumo || t._faltamPesados; })) {
       upcomingBox.innerHTML = '<div role="status" style="color:var(--text-muted);padding:12px">Carregando jogos do dia…</div>';
     }
-    Promise.all(candidateTournaments.map(function(t) {
-      return window._loadTournamentForOccupancy(t, state.venue.placeId);
-    })).then(function(fullTournaments) {
+    window._loadTournamentsForOccupancy(candidateTournaments, state.venue.placeId).then(function(fullTournaments) {
       if (state._occupancyLoadVersion !== loadVersion) return;
       state._occupancyLoading = false;
       state.tournaments = fullTournaments.filter(function(t) {

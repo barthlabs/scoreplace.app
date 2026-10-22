@@ -121,5 +121,25 @@ assert.equal(window._tournamentOccupancyForDay(tournament, '2026-10-23', '2026-1
   window._findTournamentById = () => live;
   assert.equal(await window._loadTournamentForOccupancy(summary, 'venue'), live,
     'atualização viva invalida a fotografia antiga');
+
+  const warnings = [];
+  window._warn = (...args) => warnings.push(args);
+  window._findTournamentById = () => null;
+  window.FirestoreDB.loadTournamentById = id => id === 'unavailable'
+    ? Promise.reject(new Error('leitura falhou'))
+    : Promise.resolve(id === 'without-draw'
+      ? { id, hasDraw: false, startDate: '2026-10-23T21:00:00Z' }
+      : { id, hasDraw: true, matches: [], updatedAt: 3 });
+  const partial = await window._loadTournamentsForOccupancy([
+    { id: 'unavailable', _resumo: true },
+    { id: 'valid', _resumo: true },
+    { id: 'without-draw', _resumo: true }
+  ], 'venue');
+  assert.deepEqual(Array.from(partial, t => t.id), ['valid', 'without-draw'],
+    'uma leitura ruim não esconde os outros torneios do dia');
+  assert.equal(warnings.length, 1);
+  assert.equal(warnings[0][1], 'unavailable');
+  assert.equal(Array.isArray(partial[1].matches), true,
+    'torneio sem sorteio é válido com lista vazia de jogos');
   console.log('dashboard-participants-by-day: OK');
 })().catch(err => { console.error(err); process.exitCode = 1; });

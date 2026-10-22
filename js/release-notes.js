@@ -1,4 +1,8 @@
-// 2.5.29 — Atualização consolidada de produção com as correções validadas desde a última publicação.
+// 2.5.29 — Dashboard mostra apenas atletas com jogo no dia: você, sua dupla e
+// mais um nome próximo, com "ver mais" para expandir a lista. O torneio segue
+// visível nas próximas horas enquanto ainda está em andamento. Na chave, a
+// faixa operacional rola inteira, mantém a próxima chamada visível em telas
+// largas e só exibe placares pendentes quando houver algum.
 // 2.5.28 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.27 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.26 — Atualização consolidada de produção com as correções validadas desde a última publicação.

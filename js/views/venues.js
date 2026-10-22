@@ -1404,9 +1404,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
             }
           }
           try {
-            matchTournaments = await Promise.all(matchTournaments.map(function(t) {
-              return window._loadTournamentForOccupancy(t, pKey);
-            }));
+            matchTournaments = await window._loadTournamentsForOccupancy(matchTournaments, pKey);
           } catch (loadError) {
             if (upcomingSlot && upcomingSlot.dataset.occupancyRequest === loadKey) {
               upcomingSlot.innerHTML = '<div role="alert" style="color:var(--text-muted);padding:10px">Não foi possível carregar os jogos do dia.</div>';
