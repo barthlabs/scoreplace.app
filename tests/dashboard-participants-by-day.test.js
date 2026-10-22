@@ -59,20 +59,20 @@ assert.equal(partner._partnerKey, me._personKey);
 assert.equal(new Set(people23.map(p => p._personKey)).size, 64);
 const rank = people => window._venuesRankDayPeople(people.map(p => ({ p, klass: p.uid === 'me' ? 'me' : 'other' })),
   uid => ({ partner: 1, '23-pair-1': 30, high: 100 }[uid] || 0));
-const selected = rank(people23).slice(0, 3);
-assert.equal(selected.map(x => x.p.uid || x.p._personKey).join(','), 'me,partner,m:23-pair-1:1');
-assert.equal(people23.length - selected.length, 61);
+const selected = rank(people23).slice(0, 5);
+assert.equal(selected.slice(0, 3).map(x => x.p.uid || x.p._personKey).join(','), 'me,partner,m:23-pair-1:1');
+assert.equal(people23.length - selected.length, 59);
 assert.equal(rank(people22)[0].klass, 'other');
 window._venuesRenderUpcomingBox('upcoming', [], [tournament], '2026-10-23', 'venue', { maxChips: 3 });
 assert(box.innerHTML.includes('ver mais'));
-assert(box.innerHTML.includes('+61'));
+assert(box.innerHTML.includes('+59'));
 assert(box.innerHTML.indexOf('Você') < box.innerHTML.indexOf('Jogador 23-0-2'));
 assert(box.innerHTML.indexOf('Jogador 23-0-2') < box.innerHTML.indexOf('Jogador 23-1-1'));
 assert(!box.innerHTML.includes('Jogador 22-0-1'));
 assert.equal(typeof toggleMore, 'function');
 toggleMore();
 assert(box.innerHTML.includes('ver menos'));
-assert(!box.innerHTML.includes('+61'));
+assert(!box.innerHTML.includes('+59'));
 assert(box.innerHTML.includes('Jogador 23-31-2'));
 fixedNow = Date.parse('2026-10-22T12:00:00Z');
 window.AppStore.currentUser.friends = ['friend22'];
@@ -85,7 +85,18 @@ window._venuesUpcomingExpanded = {};
 window._venuesRenderUpcomingBox('upcoming', [], [tournament], '2026-10-23', 'venue', { maxChips: 3 });
 assert(box.innerHTML.includes('Você'), 'o foco em amanhã deve usar a agenda de amanhã mesmo ainda sendo hoje');
 assert(box.innerHTML.indexOf('Você') < box.innerHTML.indexOf('Jogador 23-0-2'));
-assert(box.innerHTML.includes('+61'));
+assert(box.innerHTML.includes('+59'));
+
+const loose = ['me', 'loose-1', 'loose-2', 'loose-3', 'loose-4'].map((uid, i) => ({
+  type: 'planned', uid, displayName: `Avulso ${i}`,
+  startsAt: Date.parse('2026-10-22T21:00:00Z'),
+  endsAt: Date.parse('2026-10-22T23:00:00Z')
+}));
+window.AppStore.currentUser.friends = loose.slice(1).map(p => p.uid);
+window._venuesRenderUpcomingBox('upcoming', loose, [], '2026-10-22', 'venue', { maxChips: 3 });
+assert(box.innerHTML.includes('Você'));
+assert(box.innerHTML.includes('+2'), 'presenças avulsas mantêm três chips no total');
+assert(!box.innerHTML.includes('Avulso 4'));
 
 const duplicate = { ...matches[16], id: 'repeat' };
 tournament.matches.push(duplicate);
@@ -158,5 +169,31 @@ assert.equal(window._tournamentOccupancyForDay(tournament, '2026-10-23', '2026-1
   fixedNow += 61000;
   await window._loadTournamentForOccupancy(changingSummary, 'venue');
   assert.equal(changingReads, 3, 'resumo sem atualização observável expira em 60 s');
+
+  // A URL raiz do site não tem hash. A hidratação precisa aplicar o mesmo
+  // limite da rota explícita da dashboard, mas manter o detalhe completo.
+  fixedNow = Date.parse('2026-10-23T12:00:00Z');
+  window.AppStore.currentUser.friends = [];
+  tournament.venuePlaceId = 'venue';
+  tournament.venue = 'venue';
+  window.AppStore.tournaments = [tournament];
+  window.PresenceDB.venueKey = placeId => placeId;
+  window.PresenceDB.loadForVenueDay = async () => [];
+  const preferredBox = { innerHTML: '', dataset: {}, querySelector: box.querySelector };
+  const card = { getAttribute: key => ({
+    'data-pref-pid': 'venue', 'data-pref-placeid': 'venue', 'data-pref-venuename': 'venue'
+  })[key] || '' };
+  sandbox.document.querySelectorAll = () => [card];
+  sandbox.document.getElementById = id => id === 'pref-upcoming-venue' ? preferredBox : null;
+  for (const [hash, capped] of [['', true], ['#', true], ['#dashboard', true], ['#venues/venue', false]]) {
+    window.location = { hash };
+    preferredBox.innerHTML = '';
+    await window._venuesHydrateAllPreferredMovement();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert(preferredBox.innerHTML.includes('Jogador 23-0-2'), `hidratação da rota ${hash || 'raiz'}`);
+    assert.equal(preferredBox.innerHTML.includes('+59'), capped, `limite da rota ${hash || 'raiz'}`);
+    assert.equal(preferredBox.innerHTML.includes('Jogador 23-31-2'), !capped,
+      `lista completa somente no detalhe ${hash || 'raiz'}`);
+  }
   console.log('dashboard-participants-by-day: OK');
 })().catch(err => { console.error(err); process.exitCode = 1; });

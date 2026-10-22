@@ -1180,18 +1180,17 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var _plusPill = function(n) {
       return '<span style="background:rgba(107,114,128,0.18);border:1px solid rgba(107,114,128,0.3);color:var(--text-bright);font-size:0.72rem;font-weight:600;padding:2px 10px;border-radius:999px;">+' + n + '</span>';
     };
-    // v2.4.72-beta: ordena pessoas ("você" sempre 1º, depois amigos por
-    // interação desc), aplica o cap de maxChips e devolve os chips HTML + o
-    // número de excedentes pra somar ao "+N". scoreFn = _friendInteractionScore.
-    var _renderPeople = function(people, otherCount) {
+    // Ordena pessoas ("você", dupla, depois proximidade), aplica o limite
+    // do grupo e devolve os chips HTML e o número excedente para "+N".
+    var _renderPeople = function(people, otherCount, cap) {
       window._venuesRankDayPeople(people, function(uid) {
         return window._friendInteractionScore ? window._friendInteractionScore(uid, _scoreCache) : 0;
       });
       var extra = otherCount;
       var shown = people;
-      if (maxChips > 0 && people.length > maxChips) {
-        shown = people.slice(0, maxChips);
-        extra += (people.length - maxChips);
+      if (cap > 0 && people.length > cap) {
+        shown = people.slice(0, cap);
+        extra += (people.length - cap);
       }
       if (extra > 0) anyExtra = true;
       return {
@@ -1250,7 +1249,13 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         var titleAttr = grp.id
           ? ' style="display:inline-flex;align-items:center;gap:4px;font-size:0.72rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);margin-bottom:6px;cursor:pointer;" onclick="window.location.hash=\'#tournaments/' + _safe(grp.id) + '\'"'
           : ' style="display:inline-flex;align-items:center;gap:4px;font-size:0.72rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);margin-bottom:6px;"';
-        var grpR = _renderPeople(grp.people, grp.other);
+        var meInGroup = grp.people.find(function(x) { return x.klass === 'me'; });
+        var partnerKey = meInGroup && meInGroup.p && meInGroup.p._partnerKey;
+        var hasPartner = !!(partnerKey && grp.people.some(function(x) {
+          return x !== meInGroup && x.p && x.p._personKey === partnerKey;
+        }));
+        var tournamentCap = maxChips > 0 && !expanded ? 3 + (meInGroup ? 1 : 0) + (hasPartner ? 1 : 0) : 0;
+        var grpR = _renderPeople(grp.people, grp.other, tournamentCap);
         inner += '<div style="background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.3);border-radius:10px;padding:8px 10px;">' +
           '<div' + titleAttr + '>🏆 ' + _safe(grp.name) + '</div>' +
           '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;">' +
@@ -1261,7 +1266,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         '</div>';
       });
       if (hasLoose) {
-        var looseR = _renderPeople(loose.people, loose.other);
+        var looseR = _renderPeople(loose.people, loose.other, maxChips > 0 && !expanded ? 3 : 0);
         inner += '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;">' +
           looseR.chips +
           (looseR.extra > 0 ? _plusPill(looseR.extra) : '') +
@@ -1297,10 +1302,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   async function _hydrateAllPreferredMovement() {
     var cards = document.querySelectorAll('[data-pref-pid]');
     if (!cards || cards.length === 0) return;
-    // v2.4.72-beta: no dashboard, "Próximas horas" mostra no máx. 5 amigos
-    // nominalmente (top por interação) + "+N". No #place/detalhe mostra todos.
+    // No dashboard, cada torneio mostra até três nomes próximos, além do
+    // usuário e da dupla quando jogam no dia; presenças avulsas mantêm três
+    // chips ao todo. No detalhe mostra todos.
     var _routeKey = String(window.location.hash || '').replace(/^#/, '').split(/[/?]/)[0];
-    var _upcomingOpts = (_routeKey === 'dashboard') ? { maxChips: 3 } : null;
+    // O roteador mostra a dashboard também em URLs sem hash e em '#'.
+    var _upcomingOpts = (_routeKey === '' || _routeKey === 'dashboard') ? { maxChips: 3 } : null;
     // v2.1.72: garante o cache de perfis de amigos (uid→nome) pra o match por
     // NOME funcionar em participantes de torneio sem uid (_classifyPresence).
     try { if (typeof window._loadFriendProfilesCached === 'function') await window._loadFriendProfilesCached(); } catch (e) {}
