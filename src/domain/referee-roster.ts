@@ -6,7 +6,7 @@
  * entrada persistida nunca depende de nome, foto ou relógio da aba.
  */
 namespace ScoreplaceRefereeRoster {
-  export type Action = 'invite' | 'self-confirm' | 'remove';
+  export type Action = 'invite' | 'self-confirm' | 'decline' | 'remove';
   export interface PublicProfile { displayName?: unknown; name?: unknown; photoURL?: unknown; }
   export interface RefereeEntry {
     uid: string;
@@ -90,14 +90,18 @@ namespace ScoreplaceRefereeRoster {
     const targetUid = safeUid(input.targetUid);
     const callerUid = safeUid(input.callerUid);
     if (!targetUid || !callerUid) throw new Error('árbitro e autor são obrigatórios');
-    if (!['invite', 'self-confirm', 'remove'].includes(input.action)) throw new Error('ação de arbitragem inválida');
-    if (input.action === 'self-confirm' && targetUid !== callerUid) throw new Error('autoconfirmação só pode confirmar quem pediu');
+    if (!['invite', 'self-confirm', 'decline', 'remove'].includes(input.action)) throw new Error('ação de arbitragem inválida');
+    if ((input.action === 'self-confirm' || input.action === 'decline') && targetUid !== callerUid) throw new Error('convite só pode ser respondido pelo convidado');
     const now = safeDate(input.now);
     if (!now) throw new Error('horário da operação é obrigatório');
 
     const before = sanitizeAll(current);
+    if ((input.action === 'self-confirm' || input.action === 'decline') &&
+        !before.some((entry) => entry.uid === targetUid && entry.status === 'invited')) {
+      throw new Error('convite ativo não encontrado');
+    }
     let next: RefereeEntry[];
-    if (input.action === 'remove') {
+    if (input.action === 'remove' || input.action === 'decline') {
       next = before.filter((entry) => entry.uid !== targetUid);
     } else if (input.action === 'invite') {
       next = before.some((entry) => entry.uid === targetUid)

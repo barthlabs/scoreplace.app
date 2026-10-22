@@ -18,15 +18,21 @@ assert.strictEqual((detailSource.match(/📋 Súmulas<\/button>/g) || []).length
   'um botão Súmulas aparece nos estados com sorteio e encerrado');
 assert(!detailSource.includes('📋 Súmula vertical</button>'), 'não mantém botão separado por orientação');
 let warning = null;
-globalThis._findTournamentById = () => ({ id:'sem-grade', name:'Sem grade', matches:[] });
-globalThis._souOrganizador = () => true;
+globalThis._findTournamentById = () => ({ id:'sem-grade', name:'Sem grade', matches:[], arbitros:[{uid:'ref-1',status:'confirmed'}] });
+globalThis._souOrganizador = () => false;
+globalThis.AppStore = { currentUser:{uid:'ref-1'} };
 globalThis.showNotification = (...args) => { warning = args; };
 globalThis._downloadTournamentSumula('sem-grade');
 assert.deepStrictEqual(warning, ['Súmula indisponível', 'Não há jogos com dia e hora definidos.', 'warning'],
-  'sem grade: informa a condição e não gera um PDF vazio');
+  'árbitro confirmado acessa a súmula; sem grade recebe aviso e nenhum PDF');
+warning = null;
+globalThis.AppStore.currentUser = {uid:'outsider'};
+globalThis._downloadTournamentSumula('sem-grade');
+assert.strictEqual(warning, null, 'conta fora da escala não acessa a súmula');
 delete globalThis._findTournamentById;
 delete globalThis._souOrganizador;
 delete globalThis.showNotification;
+delete globalThis.AppStore;
 const core = globalThis.ScoreplaceSumula;
 const at = (day, hour) => new Date(day + 'T' + hour + ':00-03:00').toISOString();
 const t = { name:'NEON NIGHTMARE', sport:'Beach Tennis', scoring:{ type:'sets', setsToWin:1, gamesPerSet:6 },

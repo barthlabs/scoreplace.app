@@ -12,7 +12,7 @@ const catalog = new Set([...src.matchAll(/^\s*['\"]?([a-z][a-z0-9_-]*)['\"]?\s*:
 const browserTypes = new Set([...core.SOCIAL_TYPES, ...core.TOURNAMENT_TYPES, 'account_update']);
 // Estes três nascem exclusivamente em Functions autenticadas/especializadas;
 // não devem ganhar uma passagem genérica pelo navegador.
-const serverOnly = new Set(['friend_request', 'friend_accepted', 'contact_phone_set']);
+const serverOnly = new Set(['friend_request', 'friend_accepted', 'contact_phone_set', 'referee_invite']);
 const missing = [...catalog].filter((type) => !browserTypes.has(type) && !serverOnly.has(type));
 assert.deepEqual(missing, [], 'todo tipo do catálogo declara sua autoridade de criação');
 assert.equal([...browserTypes].filter((type) => !catalog.has(type)).length, 0,

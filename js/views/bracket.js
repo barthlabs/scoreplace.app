@@ -1438,7 +1438,9 @@ window._bracketOperationsRefresh = function (t, root) {
         if (typeof window._openMatchReplayFromBracket === 'function') window._openMatchReplayFromBracket(String(t.id), mid);
       } else if (target.getAttribute('data-operations-action') === 'revert-wo') {
         event.preventDefault();
-        if (typeof window._revertWO === 'function') window._revertWO(String(t.id), mid);
+        var liveT = typeof window._findTournamentById === 'function' ? window._findTournamentById(String(t.id)) : t;
+        if (typeof window._isUserOrgOrCoHost === 'function' && window._isUserOrgOrCoHost(liveT || t, window.AppStore && window.AppStore.currentUser) &&
+            typeof window._revertWO === 'function') window._revertWO(String(t.id), mid);
       } else if (target.hasAttribute('data-operations-open')) {
         event.preventDefault();
         window._bracketOperationsOpen(String(t.id), mid);
@@ -8450,8 +8452,8 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
 
   // v2.1.85: Reverter W.O. — partidas decididas por W.O. de time (m.wo) ganham
   // um botão pra autoridade desfazer o W.O. (reabre o jogo + libera ausentes).
-  const _isAuthorityCard = (typeof window._isUserAuthority === 'function')
-    ? window._isUserAuthority(t, _cu)
+  const _isAuthorityCard = (typeof window._isUserOrgOrCoHost === 'function')
+    ? window._isUserOrgOrCoHost(t, _cu)
     : (window.AppStore && window._souOrganizador(t));
   // Some depois que o jogo foi jogado de verdade (placar lançado / placar ao
   // vivo iniciado) — nesse ponto o W.O. não é mais reversível.
@@ -8480,10 +8482,10 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       _proposerSideInner = window._userTeamInMatch(t, m, { uid: _pr.proposedBy });
     }
     var _isOpposingMember = _userSideInner > 0 && _userSideInner !== _proposerSideInner;
-    // Authority (org / co-host / confirmed arbiter): edits confirm directly.
-    var _isAuthorityInner = (typeof window._isUserAuthority === 'function')
-      ? window._isUserAuthority(t, _cu)
-      : _isUserOrgInner;
+    // Esta guarda vale apenas para a proposta aberta: pendência e disputa são
+    // resolvidas pelo organizador/co-organizador. O placar decidido sem pendência
+    // continua editável pelo árbitro confirmado via _souAutoridadeCard abaixo.
+    var _isAuthorityInner = _isUserOrgInner;
     // Opposing team approves directly; authority/proposer/opposing can all edit.
     var _canApprove = _isOpposingMember && !_isAuthorityInner;
     var _canEdit = _isAuthorityInner || _isProposerSelf || _isOpposingMember;

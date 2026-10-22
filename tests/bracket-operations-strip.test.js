@@ -70,18 +70,20 @@ assert(start > 0 && end > start);
       const freeRect = strip.querySelector('.sp-operations-court-free').getBoundingClientRect();
       const nextRect = next.getBoundingClientRect();
       const freeHeight = freeRect.height;
+      const courtLabelRect = strip.querySelector('.sp-operations-court-slot > .sp-operations-label').getBoundingClientRect();
+      const availabilityRect = strip.querySelector('.sp-operations-availability').getBoundingClientRect();
       initial.geometry = { trackHeight, freeHeight, freeTop: freeRect.top, freeBottom: freeRect.bottom, nextHeight: nextRect.height, nextTop: nextRect.top, nextBottom: nextRect.bottom,
+        courtLabelTop: courtLabelRect.top, availabilityTop: availabilityRect.top,
         rowHeight: strip.querySelector('.sp-operations-track').style.getPropertyValue('--sp-operations-row-height'),
         replicaHeight: strip.querySelector('.sp-operations-next .sp-operations-replica').getBoundingClientRect().height,
         trackBoxHeight: strip.querySelector('.sp-operations-track').getBoundingClientRect().height,
         nextBoxHeight: strip.querySelector('.sp-operations-next').getBoundingClientRect().height };
-      const courtLabelHeight = strip.querySelector('.sp-operations-court-slot > .sp-operations-label').getBoundingClientRect().height;
-      const courtTrackPadding = parseFloat(getComputedStyle(strip.querySelector('.sp-operations-court-track')).paddingTop) || 0;
-      initial.freeSlotFillsTrack = trackHeight > 100 && freeHeight >= trackHeight - courtTrackPadding - courtLabelHeight - 12;
+      initial.freeSlotFillsTrack = trackHeight > 100 && Math.abs(courtLabelRect.top - availabilityRect.top) <= 3;
       const fullSlotRect = strip.querySelector('.sp-operations-court-slot').getBoundingClientRect();
-      initial.freeSlotMatchesCard = Math.abs(fullSlotRect.top - nextRect.top) <= 3 &&
-        Math.abs(fullSlotRect.bottom - nextRect.bottom) <= 3 &&
-        Math.abs(fullSlotRect.height - nextRect.height) <= 3;
+      initial.freeSlotMatchesCard = fullSlotRect.height >= nextRect.height &&
+        Math.abs(freeRect.top - nextRect.top) <= 3 &&
+        Math.abs(freeRect.bottom - nextRect.bottom) <= 3 &&
+        Math.abs(freeRect.height - nextRect.height) <= 3;
       next.querySelector('select').focus();
       window._bracketOperationsRefresh(t, root);
       const selectFocusRestored = document.activeElement === strip.querySelector('.sp-operations-next select');
@@ -120,8 +122,8 @@ assert(start > 0 && end > start);
     });
     assert(state.initial.full && state.initial.names && state.initial.noCanonical && state.initial.uniqueIds && state.initial.linked && state.initial.noInline);
     assert.deepEqual(state.initial.courts, ['Quadra 4', 'Quadra 5']);
-    assert(state.initial.freeSlotFillsTrack, 'o slot vazio deve ocupar toda a altura rolável: ' + JSON.stringify(state.initial));
-    assert(state.initial.freeSlotMatchesCard, 'o slot vazio, incluindo o rótulo acima do box, deve ter a mesma altura do card completo: ' + JSON.stringify(state.initial));
+    assert(state.initial.freeSlotFillsTrack, 'Quadra X deve alinhar com X quadras livres: ' + JSON.stringify(state.initial));
+    assert(state.initial.freeSlotMatchesCard, 'o box vazio deve ter a mesma altura e alinhamento do card do próximo jogo: ' + JSON.stringify(state.initial));
     assert.deepEqual(state.afterCall.called, ['sb_test', 'm1', 'Quadra 5']);
     assert.deepEqual(state.afterCall.live, ['sb_test', 'm1']);
     assert.deepEqual(state.afterCall.wo, ['sb_test', 'm|m1']);
@@ -155,7 +157,7 @@ assert(start > 0 && end > start);
       window._bracketCourtReleaseCache = { sb_test: { released: { m1: '2026-10-22T18:05:00Z' } } };
       window._bracketOperationsRefresh(t, root);
       const withPending = !!strip.querySelector('.sp-operations-pending [data-operations-match="m1"]');
-      const courtSlot = strip.querySelector('.sp-operations-court-slot');
+      const courtSlot = strip.querySelector('.sp-operations-court-slot .sp-operations-court-free');
       const card = strip.querySelector('.sp-operations-next .sp-match-card');
       const aligned = Math.abs(courtSlot.getBoundingClientRect().top - card.getBoundingClientRect().top) <= 3 &&
         Math.abs(courtSlot.getBoundingClientRect().bottom - card.getBoundingClientRect().bottom) <= 3;

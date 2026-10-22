@@ -430,8 +430,12 @@
   function download(id, orientation, onlyAttendance) {
     var t = root._findTournamentById && root._findTournamentById(id);
     if (!t) return;
-    var authorized = typeof root._souOrganizador === 'function' ? root._souOrganizador(t)
-      : !!(root.AppStore && typeof root.AppStore.isCreator === 'function' && root.AppStore.isCreator(t));
+    var user = root.AppStore && root.AppStore.currentUser;
+    var authorized = (typeof root._souOrganizador === 'function' ? root._souOrganizador(t)
+      : !!(root.AppStore && typeof root.AppStore.isCreator === 'function' && root.AppStore.isCreator(t))) ||
+      !!(user && user.uid && Array.isArray(t.arbitros) && t.arbitros.some(function (a) {
+        return a && a.uid === user.uid && a.status === 'confirmed';
+      }));
     if (!authorized) return;
     var list = typeof root._collectAllMatches === 'function' ? root._collectAllMatches(t) : (t.matches || []);
     var model = collect(t, list);

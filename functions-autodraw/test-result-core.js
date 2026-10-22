@@ -407,6 +407,40 @@ for (const action of ['reset-match', 'reopen-result', 'revert-wo']) {
 
 console.log('\n──── paridade com o cliente ────');
 
+console.log('\n──── árbitro confirmado ────');
+{
+  const T = mkT({ phases: [{ resultEntry: ['organizer', 'referee'] }], arbitros: [{ uid: 'uid_ref', status: 'confirmed', name: 'Árbitro' }] });
+  const r = core.applyResult(T, { matchId: 'm1', payload: PAYLOAD, actor: { uid: 'uid_ref' }, now: 1 });
+  t('árbitro confirmado aplica placar sem pendência', r.ok && r.outcome === 'applied' && !win._findMatch(T, 'm1').pendingResult, JSON.stringify(r));
+  const correction = core.applyResult(T, { matchId: 'm1', payload: { ...PAYLOAD, s1: 6, s2: 4 }, actor: { uid: 'uid_ref' }, now: 2 });
+  t('árbitro corrige resultado decidido sem criar proposta', correction.ok && correction.outcome === 'applied' &&
+    win._findMatch(T, 'm1').scoreP2 === 4 && !win._findMatch(T, 'm1').pendingResult, JSON.stringify(correction));
+}
+{
+  const T = mkT({ phases: [{ resultEntry: 'referee' }], arbitros: [{ uid: 'uid_ref', status: 'invited', name: 'Árbitro' }] });
+  const r = core.applyResult(T, { matchId: 'm1', payload: PAYLOAD, actor: { uid: 'uid_ref' }, now: 1 });
+  t('convidado não lança placar', !r.ok, JSON.stringify(r));
+}
+{
+  const T = mkT({ phases: [{ resultEntry: 'organizer' }], arbitros: [{ uid: 'uid_ref', status: 'confirmed', name: 'Árbitro' }] });
+  const r = core.applyResult(T, { matchId: 'm1', payload: PAYLOAD, actor: { uid: 'uid_ref' }, now: 1 });
+  t('fase sem árbitro bloqueia placar', !r.ok, JSON.stringify(r));
+}
+{
+  const T = mkT({ phases: [{ resultEntry: ['organizer', 'referee'] }], arbitros: [{ uid: 'uid_ref', status: 'confirmed', name: 'Árbitro' }] });
+  win._findMatch(T, 'm1').pendingResult = { proposedBy: UID_A1, scoreP1: 6, scoreP2: 3 };
+  const r = core.applyResult(T, { matchId: 'm1', payload: PAYLOAD, actor: { uid: 'uid_ref' }, now: 1 });
+  t('árbitro não sobrescreve proposta aberta', !r.ok && r.reason === 'pending-result-open', JSON.stringify(r));
+  ['approve-pending', 'counter-pending', 'contest-pending'].forEach(action => {
+    const p = core.applyResult(T, { matchId: 'm1', payload: { action }, actor: { uid: 'uid_ref' }, now: 1 });
+    t('árbitro sem lado não executa ' + action, !p.ok, JSON.stringify(p));
+  });
+  ['reset-match', 'reopen-result', 'revert-wo'].forEach(action => {
+    const p = core.applyResult(T, { matchId: 'm1', payload: { action }, actor: { uid: 'uid_ref' }, now: 1 });
+    t('árbitro não executa ' + action, !p.ok && p.reason === 'organizer-only', JSON.stringify(p));
+  });
+}
+
 // 11) _effectiveResultEntry do servidor == o de js/store.js (evita drift silencioso).
 {
   const fs = require('fs'), path = require('path');

@@ -19,12 +19,13 @@ function extract(name) {
   const j = src.indexOf('\n}\n', i) + 3;
   return src.slice(i, j);
 }
-const ctx = { console };
+const ctx = { console, ScoreplaceRefereeRoster: require('./vendor/referee-roster.js') };
 vm.createContext(ctx);
 vm.runInContext(
   extract('_isTournamentAdmin') + '\n' + extract('_isTournamentParticipant') +
+  "\nconst _isConfirmedTournamentReferee = (t, uid) => ScoreplaceRefereeRoster.sanitizeAll(t && t.arbitros).some(e => e.uid === uid && e.status === 'confirmed');" +
   '\nglobalThis.__canClose = function (t, uid, email) {' +
-  '  return _isTournamentParticipant(t, uid, email) || _isTournamentAdmin(t, uid, email); };',
+  '  return _isTournamentParticipant(t, uid, email) || _isTournamentAdmin(t, uid, email) || _isConfirmedTournamentReferee(t, uid); };',
   ctx);
 const canClose = ctx.__canClose;
 
@@ -40,6 +41,12 @@ ok(canClose({ creatorUid: ORG, memberUids: [ORG, P] }, P, ''),
    'PARTICIPANTE (em memberUids, fora de admin) FECHA — diferença-chave vs drawRound (admin-only)');
 ok(canClose({ creatorUid: ORG, adminUids: [A], memberUids: [ORG, A, P] }, A, ''),
    'co-host (adminUids) fecha');
+ok(canClose({ creatorUid: ORG, arbitros:[{uid:'ref-1',status:'confirmed'}] }, 'ref-1', ''),
+   'árbitro confirmado pode fechar a rodada determinística após lançar o último placar');
+ok(!canClose({ creatorUid: ORG, arbitros:[{uid:'ref-1',status:'invited'}] }, 'ref-1', ''),
+   'convidado ainda não confirmado não fecha rodada');
+ok(src.includes('_isConfirmedTournamentReferee(pre.data(), uid)') && src.includes('_isConfirmedTournamentReferee(t, uid)'),
+   'gates pré e transacional da closeRound revalidam árbitro no estado fresco');
 /* ⛔ O FALLBACK POR `memberEmails` MORREU — e esta asserção mudou de lado por isso.
  * Ela afirmava "fallback memberEmails só quando memberUids VAZIO (doc legado)". Em
  * 26/ago/2026 (362fc0f2, "identidade é uid: e-mail e nome saíram de toda decisão") o

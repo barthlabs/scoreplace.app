@@ -19,6 +19,8 @@ const _registrationRoster = require('./vendor/registration-roster.js');
 const _matchTiming = require('./vendor/match-timing.js');
 const _courtOccupancy = require('./vendor/court-occupancy.js');
 const ScoreplaceRefereeRoster = require('./vendor/referee-roster.js');
+const _isConfirmedTournamentReferee = (t, uid) =>
+  ScoreplaceRefereeRoster.sanitizeAll(t && t.arbitros).some(e => e.uid === uid && e.status === 'confirmed');
 const _competitionAssignments = require('./competition-assignment-core.js');
 // fonte única: functions/match-roster.js (copy-vendor) — monta o subdoc de resultado,
 // incluindo o carregar-adiante do `replay`, que o servidor não sabe recalcular.
@@ -2362,7 +2364,7 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
       ? (() => { const m = drawWindow._findMatch(t, matchId); return m && m.pendingResult ? JSON.parse(JSON.stringify(m.pendingResult)) : null; })()
       : null;
     // Re-checa sobre o doc FRESCO (acesso pode ter mudado entre o read e a txn).
-    if ((!sandbox && !_isTournamentParticipant(t, ator.uid) && !_isTournamentAdmin(t, ator.uid)) ||
+    if ((!sandbox && !_isTournamentParticipant(t, ator.uid) && !_isTournamentAdmin(t, ator.uid) && !_isConfirmedTournamentReferee(t, ator.uid)) ||
         (sandbox && !_isTournamentAdmin(t, ator.uid))) {
       return { ok: false, reason: 'permission-denied' };
     }
@@ -3603,7 +3605,7 @@ exports.applyMatchResult = onCall(async (request) => {
       pre.data().sbState !== 'ready' || pre.data().notificationsMuted !== true)) {
     throw _drawFail('not-found', 'Torneio não encontrado.', { tId, uid });
   }
-  if ((!sandbox && !_isTournamentParticipant(pre.data(), uid) && !_isTournamentAdmin(pre.data(), uid)) ||
+  if ((!sandbox && !_isTournamentParticipant(pre.data(), uid) && !_isTournamentAdmin(pre.data(), uid) && !_isConfirmedTournamentReferee(pre.data(), uid)) ||
       (sandbox && !_isTournamentAdmin(pre.data(), uid))) {
     throw _drawFail('permission-denied', 'Só quem está no torneio pode lançar placar.',
       { tId, matchId, uid, email: email || '(sem email)' });
@@ -3736,8 +3738,13 @@ exports.closeRound = onCall(async (request) => {
   const ref = db.collection('tournaments').doc(tId);
   const pre = await ref.get();
   if (!pre.exists) throw _drawFail('not-found', 'Torneio não encontrado.', { tId, uid });
-  if (!_isTournamentParticipant(pre.data(), uid) && !_isTournamentAdmin(pre.data(), uid)) {
-    throw _drawFail('permission-denied', 'Só um participante ou o organizador fecha a rodada.', { tId, uid, email: email || '(sem email)' });
+  // Pedido do dono (22/out/2026): o árbitro lança o placar e opera a partida
+  // "tudo como o organizador faz", sem as ferramentas administrativas. O fecho
+  // já era permitido aos participantes; consome uma rodada completa e gera a
+  // próxima deterministicamente. Sem ele, o último placar do árbitro travaria
+  // a continuidade da chave mesmo quando todos os resultados estão decididos.
+  if (!_isTournamentParticipant(pre.data(), uid) && !_isTournamentAdmin(pre.data(), uid) && !_isConfirmedTournamentReferee(pre.data(), uid)) {
+    throw _drawFail('permission-denied', 'Só um participante, árbitro confirmado ou organizador fecha a rodada.', { tId, uid, email: email || '(sem email)' });
   }
   await _preloadDrawNames(pre.data()); // nome vivo por uid (o motor gera a próxima rodada e lê nomes)
   const _fzClose = await _fusoDoEvento(pre.data());   // L6.R1: fuso fora da transação
@@ -3753,7 +3760,7 @@ exports.closeRound = onCall(async (request) => {
       if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
       const _tAntes = _antesDoMotor(t);
       // Re-checa authz sobre o doc FRESCO (acesso pode ter mudado entre o read de fora e a txn).
-      if (!_isTournamentParticipant(t, uid) && !_isTournamentAdmin(t, uid)) {
+      if (!_isTournamentParticipant(t, uid) && !_isTournamentAdmin(t, uid) && !_isConfirmedTournamentReferee(t, uid)) {
         throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, uid });
       }
       _hidrataGrupos(t, 'closeRound', tId);

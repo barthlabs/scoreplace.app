@@ -2369,6 +2369,20 @@ if (typeof window.openEditModal !== 'function') {
     };
 }
 
+window._respondRefereeInvite = async function(tournamentId, action) {
+  if (action !== 'self-confirm' && action !== 'decline') return;
+  var user = window.AppStore && window.AppStore.currentUser;
+  if (!user || !user.uid || !window.FirestoreDB || !window.FirestoreDB.manageTournamentReferee) return;
+  try {
+    await window.FirestoreDB.manageTournamentReferee(tournamentId, action, user.uid);
+    if (typeof window.showNotification === 'function') window.showNotification('Arbitragem', action === 'decline' ? 'Convite recusado.' : 'Convite aceito.', 'success');
+    var container = document.getElementById('view-container');
+    if (container) renderTournaments(container, tournamentId);
+  } catch (error) {
+    if (typeof window.showNotification === 'function') window.showNotification('Arbitragem', (error && error.message) || 'Não foi possível responder ao convite.', 'error');
+  }
+};
+
 function renderTournaments(container, tournamentId = null) {
     if (!window.AppStore) return;
     /* ⛔ Detalhe e chave não podem usar outra coleção ou exibir o espelho
@@ -3207,6 +3221,9 @@ function renderTournaments(container, tournamentId = null) {
     const getSportIcon = (sport) => window._sportIcon ? window._sportIcon(sport) : '🏆';
 
     const renderTournamentCard = (t, isOrg) => {
+        const _refereeUid = window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid;
+        const _refereeEntry = _refereeUid && Array.isArray(t.arbitros) && t.arbitros.find(a => a && a.uid === _refereeUid);
+        const isConfirmedReferee = !!(_refereeEntry && _refereeEntry.status === 'confirmed');
         const publicText = t.isPublic ? _t('tournament.public') : _t('tournament.private');
 
         const formatDateBr = (dStr) => {
@@ -3284,6 +3301,7 @@ function renderTournaments(container, tournamentId = null) {
             window._requestExpiredEnrollmentClose(String(t.id), t);
           }
         }
+
 
         // A promoção de espera é feita pela Function sobre o documento fresco.
         // Esta renderização não pode alterar `t`: ela só recebe o recibo canônico.
@@ -3592,6 +3610,21 @@ function renderTournaments(container, tournamentId = null) {
               </div>
             `;
           }
+        }
+
+        if (tournamentId && _refereeEntry && _refereeEntry.status === 'invited') {
+          // `dates` vem do mesmo renderTournamentCard (calculado acima do banner).
+          const safeTid = _escAttr(t.id);
+          const safe = window._safeHtml || (v => String(v || ''));
+          pendingInviteBannerHtml += `<div class="pending-invite-banner referee-invite-banner" style="margin-top:1rem;padding:18px 20px;border:2px solid var(--success-color);border-radius:14px;background:var(--bg-card);color:var(--text-bright);">
+            <strong>Convite para arbitrar ${safe(t.name || 'este torneio')}</strong>
+            <div>Organização: ${safe(t.organizerName || 'Organização do torneio')}</div>
+            <div>Quando: ${safe(dates)} · Local: ${safe(t.venue || 'a confirmar')}</div>
+            <a href="#participants/${safeTid}" onclick="event.stopPropagation()">Ver inscritos</a>
+            <div style="display:flex;gap:8px;margin-top:10px;">
+              <button class="btn btn-success" onclick="event.stopPropagation();window._respondRefereeInvite('${safeTid}','self-confirm')">Aceitar</button>
+              <button class="btn btn-outline" onclick="event.stopPropagation();window._respondRefereeInvite('${safeTid}','decline')">Recusar</button>
+            </div></div>`;
         }
 
         // Ações Específicas da tela Explore
@@ -3951,7 +3984,7 @@ function renderTournaments(container, tournamentId = null) {
                      <button class="btn btn-outline btn-sm hover-lift" onclick="window.location.hash='#participants/${t.id}'">👥 Inscritos</button>
                      <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._printTournament('${t.id}')">🖨️ Imprimir</button>
                      <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._exportTournamentCSV('${t.id}')">📊 Exportar CSV</button>
-                     ${isOrg && typeof window._downloadTournamentSumula === 'function' ? `<button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation();window._downloadTournamentSumula('${_escAttr(t.id)}', 'both')">📋 Súmulas</button><button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation();window._downloadTournamentSumula('${_escAttr(t.id)}', 'landscape', true)">📋 Presença</button>` : ''}
+                     ${(isOrg || isConfirmedReferee) && typeof window._downloadTournamentSumula === 'function' ? `<button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation();window._downloadTournamentSumula('${_escAttr(t.id)}', 'both')">📋 Súmulas</button><button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation();window._downloadTournamentSumula('${_escAttr(t.id)}', 'landscape', true)">📋 Presença</button>` : ''}
                    </div>
                  `;
                 } else if (hasDraw) {
@@ -3966,7 +3999,7 @@ function renderTournaments(container, tournamentId = null) {
                      <button class="btn btn-outline btn-sm hover-lift" onclick="window.location.hash='#participants/${t.id}'">👥 Inscritos</button>
                      <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._printTournament('${t.id}')">🖨️ Imprimir</button>
                      <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._exportTournamentCSV('${t.id}')">📊 Exportar CSV</button>
-                     ${isOrg && typeof window._downloadTournamentSumula === 'function' ? `<button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation();window._downloadTournamentSumula('${_escAttr(t.id)}', 'both')">📋 Súmulas</button><button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation();window._downloadTournamentSumula('${_escAttr(t.id)}', 'landscape', true)">📋 Presença</button>` : ''}
+                     ${(isOrg || isConfirmedReferee) && typeof window._downloadTournamentSumula === 'function' ? `<button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation();window._downloadTournamentSumula('${_escAttr(t.id)}', 'both')">📋 Súmulas</button><button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation();window._downloadTournamentSumula('${_escAttr(t.id)}', 'landscape', true)">📋 Presença</button>` : ''}
                    </div>
                  `;
                 } else {
@@ -4334,12 +4367,8 @@ function renderTournaments(container, tournamentId = null) {
             </div>
 
             ${(tournamentId && isOrg) ? (function() {
-              // v1.6.1-beta: Árbitros button — só aparece quando resultEntry inclui 'referee'
-              var _refEntry = t.resultEntry;
-              var _hasRefereeEntry = Array.isArray(_refEntry)
-                ? (_refEntry.indexOf('referee') !== -1)
-                : (_refEntry === 'referee');
-              var _arbitrosBtn = (_hasRefereeEntry && t.id)
+              // A escala pode ser preparada antes de habilitar lançamento por árbitro.
+              var _arbitrosBtn = t.id
                 ? '<button class="btn hover-lift" style="background:linear-gradient(135deg,rgba(20,184,166,0.18),rgba(6,182,212,0.18));color:var(--sp-c-2dd4bf,#2dd4bf);border:1px solid rgba(20,184,166,0.45);font-size:0.82rem;padding:8px 16px;border-radius:10px;font-weight:600;cursor:pointer;" onclick="event.stopPropagation();window.location.hash=\'#arbitros/' + t.id + '\'">🧑‍⚖️ Árbitros</button>'
                 : '';
               // v1.2.13: "FERRAMENTAS DO ORGANIZADOR" era `rgba(255,255,255,0.35)` HARDCODED —

@@ -23,6 +23,7 @@
 const drawCore = require('./draw-core.js');
 const g = globalThis;
 const win = g.window;
+const ScoreplaceRefereeRoster = require('./vendor/referee-roster.js');
 
 // ── _effectiveResultEntry: PORTADO de js/store.js (~4399) ────────────────────────────
 // store.js NÃO é vendorável (é o app inteiro: DOM, listeners, Firebase do cliente), então
@@ -42,6 +43,10 @@ if (typeof win._effectiveResultEntry !== 'function') {
 function playersMaySubmit(t, m) {
   const re = win._effectiveResultEntry(t, m);
   return re === 'players' || re === 'all' || (Array.isArray(re) && re.indexOf('players') !== -1);
+}
+function refereeMaySubmit(t, m) {
+  const re = win._effectiveResultEntry(t, m);
+  return re === 'referee' || re === 'all' || (Array.isArray(re) && re.includes('referee'));
 }
 
 // ── REABERTURA CANÔNICA ───────────────────────────────────────────────────────────────
@@ -248,6 +253,15 @@ function authorize(t, m, actor) {
   // Organizador/co-org: pode sempre. É a autoridade do torneio.
   if (isAdmin) return { ok: true, reason: '', isAdmin: true, side: side };
 
+  // Árbitro confirmado atua somente se não for jogador do confronto e se a fase
+  // explicitamente admite arbitragem. Propostas abertas continuam protegidas.
+  if (side === 0 && refereeMaySubmit(t, m) &&
+      ScoreplaceRefereeRoster.sanitizeAll(t.arbitros).some(e => e.uid === actor.uid && e.status === 'confirmed')) {
+    if (m.pendingResult && m.pendingResult.disputed) return { ok: false, reason: 'disputed-organizer-only', isAdmin: false, side: 0 };
+    if (m.pendingResult && m.pendingResult.proposedBy) return { ok: false, reason: 'pending-result-open', isAdmin: false, side: 0 };
+    return { ok: true, reason: '', isAdmin: false, side: 0, isReferee: true };
+  }
+
   // Não-admin: a fase precisa permitir participante E ele precisa estar NO JOGO.
   if (!playersMaySubmit(t, m)) return { ok: false, reason: 'organizer-only', isAdmin: false, side: side };
   if (side === 0) return { ok: false, reason: 'not-in-match', isAdmin: false, side: 0 };
@@ -438,7 +452,7 @@ function applyResult(t, opts) {
   const needsApproval = !!(typeof win._resultNeedsApproval === 'function' &&
     win._resultNeedsApproval(t, m, actor));
 
-  if (needsApproval && !o.forceApply) {
+  if (needsApproval && !o.forceApply && !authz.isReferee) {
     m.pendingResult = Object.assign({}, payload.pending || {}, {
       proposedBy: actor.uid || null,
       proposedByName: actor.name || 'Jogador',

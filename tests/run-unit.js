@@ -167,6 +167,7 @@ const SUITES = [
   'tests/contar-gente-nao-e-baixar-gente.test.js',
   'tests/saber-quem-e-nao-abre-a-ficha.test.js',
   'tests/convite-de-arbitro-nao-grava-contato.test.js',
+  'tests/referee-score-card-permissions.test.js',
   'tests/trofeu-e-ranking-nao-abrem-a-ficha.test.js',
   'tests/cep-preferido-tem-uma-forma-so.test.js',
   'tests/parte-que-nao-chegou-nao-vira-lista-vazia.test.js',

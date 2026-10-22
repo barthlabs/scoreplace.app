@@ -731,8 +731,9 @@ function _sideBelongsToUser(t, sideStr, user) {
 }
 window._sideBelongsToUser = _sideBelongsToUser;
 
-// Helper: org, co-host OR confirmed arbiter — these users confirm results directly
-// without requiring approval from the opposing side.
+// Autoridade operacional: organizador, co-organizador ou árbitro confirmado.
+// Árbitro lança e corrige placar sem proposta aberta; somente a organização
+// resolve disputa, aprova proposta pendente, reabre ou reverte W.O.
 function _isUserAuthority(t, user) {
   if (!t || !user) return false;
   if (_isUserOrgOrCoHost(t, user)) return true;
@@ -3130,7 +3131,7 @@ window._organizerResetMatch = function(tId, matchId) {
   if (!m) { showNotification('Jogo não encontrado', '', 'warning'); return; }
   var cu = window.AppStore && window.AppStore.currentUser;
   if (!cu) { showNotification('Login necessário', '', 'warning'); return; }
-  if (!_isUserAuthority(t, cu)) {
+  if (!_isUserOrgOrCoHost(t, cu)) {
     showNotification('Sem permissão', 'Só o organizador pode refazer a partida.', 'warning');
     return;
   }
@@ -3179,7 +3180,7 @@ window._revertWO = function(tId, matchId) {
   }
   var cu = window.AppStore && window.AppStore.currentUser;
   if (!cu) { showNotification('Login necessário', '', 'warning'); return; }
-  if (typeof _isUserAuthority === 'function' && !_isUserAuthority(t, cu)) {
+  if (!_isUserOrgOrCoHost(t, cu)) {
     showNotification('Sem permissão', 'Só o organizador pode reverter um W.O.', 'warning');
     return;
   }
@@ -3225,7 +3226,7 @@ window._editPendingResult = function(tId, matchId) {
   var proposerSide = pr && pr.proposedBy
     ? _userTeamInMatch(t, m, { uid: pr.proposedBy }) : 0;
   var isProposerSelf = !!(pr && cu.uid && pr.proposedBy === cu.uid);
-  var canEdit = _isUserAuthority(t, cu) || isProposerSelf || (userSide > 0 && userSide !== proposerSide);
+  var canEdit = _isUserOrgOrCoHost(t, cu) || isProposerSelf || (userSide > 0 && userSide !== proposerSide);
   if (!canEdit) { showNotification('Sem permissão', 'Você não pode editar este resultado.', 'warning'); return; }
 
   // Valores do pendingResult para pré-preencher
@@ -3354,7 +3355,8 @@ window._editPendingResult = function(tId, matchId) {
       if (typeof _isUserAuthority === 'function' && _isUserAuthority(t, cu)) {
         window._suppressSoftRefresh = false;
         if (s1v === 0 && s2v === 0) {
-          if (typeof window._organizerResetMatch === 'function') window._organizerResetMatch(tId, matchId);
+          if (_isUserOrgOrCoHost(t, cu) && typeof window._organizerResetMatch === 'function') window._organizerResetMatch(tId, matchId);
+          else showNotification('Sem permissão', 'Só o organizador pode refazer a partida.', 'warning');
           return;
         }
         // Grava o placar do organizador como pending e finaliza pelo caminho

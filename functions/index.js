@@ -6553,11 +6553,11 @@ exports.manageTournamentReferee = onCall(
     const data = request.data || {};
     const tournamentId = String(data.tournamentId || "").trim();
     const action = String(data.action || "").trim();
-    if (!tournamentId || !["invite", "self-confirm", "remove"].includes(action)) {
+    if (!tournamentId || !["invite", "self-confirm", "decline", "remove"].includes(action)) {
       throw new HttpsError("invalid-argument", "torneio e ação de arbitragem são obrigatórios");
     }
     const requestedUid = String(data.uid || "").trim();
-    const targetUid = action === "self-confirm" ? callerUid : requestedUid;
+    const targetUid = action === "self-confirm" || action === "decline" ? callerUid : requestedUid;
     if (!targetUid) throw new HttpsError("invalid-argument", "árbitro é obrigatório");
     const db = admin.firestore();
     const ref = db.collection("tournaments").doc(tournamentId);
@@ -6566,11 +6566,15 @@ exports.manageTournamentReferee = onCall(
       const snap = await tx.get(ref);
       if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
       const t = await _splitParts.hidratar(tx, ref, snap.data() || {});
-      if (!_isTournamentOrgCaller(t, callerUid)) {
+      if ((action === "invite" || action === "remove") && !_isTournamentOrgCaller(t, callerUid)) {
         throw new HttpsError("permission-denied", "só a organização gerencia árbitros");
       }
+      if ((action === "self-confirm" || action === "decline") &&
+          !_refereeRoster.sanitizeAll(t.arbitros).some((entry) => entry.uid === callerUid && entry.status === "invited")) {
+        throw new HttpsError("permission-denied", "convite de arbitragem ativo não encontrado");
+      }
       let profile = null;
-      if (action !== "remove") {
+      if (action === "invite" || action === "self-confirm") {
         const profileSnap = await tx.get(db.collection("usersPublic").doc(targetUid));
         if (!profileSnap.exists) throw new HttpsError("not-found", "perfil público do árbitro não existe");
         profile = profileSnap.data() || {};
@@ -6589,6 +6593,14 @@ exports.manageTournamentReferee = onCall(
           arbitros: outcome.arbitros,
           updatedAt: new Date().toISOString()
         });
+        if (action === "invite") {
+          tx.set(db.collection("users").doc(targetUid).collection("notifications").doc("referee-invite-" + tournamentId), {
+            type: "referee_invite", level: "important", tournamentId,
+            tournamentName: String(t.name || "").slice(0, 240),
+            message: "Você recebeu um convite para arbitrar este torneio. Abra a ficha para ver data, local, inscritos e responder.",
+            createdAt: new Date().toISOString(), read: false, fromUid: callerUid
+          }, { merge: true });
+        }
       }
       console.log("[manageTournamentReferee] ok uid=" + callerUid + " tid=" + tournamentId + " action=" + action + " changed=" + outcome.changed);
       return { ok: true, changed: outcome.changed, action };

@@ -46,16 +46,18 @@
   font-weight: 800;
   letter-spacing: .04em;
 }
+.sp-operations-courts .sp-operations-section-title { margin-bottom: 0; }
 .sp-operations-court-track {
   display: flex;
   flex: 1 1 auto;
   gap: 8px;
   width: max-content;
-  padding-top: 21px;
+  padding-top: 0;
   box-sizing: border-box;
   min-height: 0;
 }
 .sp-operations-court-slot { display:flex;flex:0 0 340px;flex-direction:column;gap:6px;min-width:0; }
+.sp-operations-court-slot:not(.sp-operations-court-slot--active) > .sp-operations-label { position:relative;top:7px; }
 .sp-operations-court-slot--active { flex-basis: 380px;justify-content:flex-end; }
 .sp-operations-replica { display:flex;flex-direction:column;gap:7px;min-width:0;width:100%; }
 .sp-operations-replica > .sp-match-card { width:100%;max-width:none;min-height:0; }
@@ -71,6 +73,7 @@
   min-height: 0;
   box-sizing: border-box;
   padding: 10px;
+  margin-top: 8px;
   border: 1px dashed var(--sp-c-22c55e, #22c55e);
   border-radius: 9px;
   color: var(--text-bright);

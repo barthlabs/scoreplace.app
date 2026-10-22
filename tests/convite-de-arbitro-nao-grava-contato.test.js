@@ -23,11 +23,18 @@ const duplicate = roster.apply(invite.arbitros, {
 });
 must(!duplicate.changed && duplicate.arbitros.length === 1, '② convite repetido não duplica árbitro');
 const confirmed = roster.apply(invite.arbitros, {
-  action: 'self-confirm', targetUid: 'org-1', callerUid: 'org-1', now: '2026-09-14T12:02:00.000Z', profile: { displayName: 'Organizador' }
+  action: 'self-confirm', targetUid: 'ref-1', callerUid: 'ref-1', now: '2026-09-14T12:02:00.000Z', profile: { displayName: 'Árbitra Pública' }
 });
-must(confirmed.arbitros.some((entry) => entry.uid === 'org-1' && entry.status === 'confirmed'), '③ autoconfirmação só produz status confirmado para o próprio UID');
+must(confirmed.arbitros.some((entry) => entry.uid === 'ref-1' && entry.status === 'confirmed'), '③ só o convidado confirma o próprio UID');
 assert.throws(() => roster.apply([], { action: 'self-confirm', targetUid: 'outra-pessoa', callerUid: 'org-1', now: '2026-09-14T12:02:00.000Z', profile: {} }));
 ok++; console.log('  ✓ ③ contrato recusa autoconfirmação de outra pessoa');
+assert.throws(() => roster.apply([], { action: 'self-confirm', targetUid: 'ref-1', callerUid: 'ref-1', now: '2026-09-14T12:02:00.000Z', profile: {} }));
+ok++; console.log('  ✓ ③ conta sem convite não se escala');
+const declined = roster.apply(invite.arbitros, { action: 'decline', targetUid: 'ref-1', callerUid: 'ref-1', now: '2026-09-14T12:03:00.000Z', profile: null });
+must(declined.changed && declined.arbitros.length === 0, '③ recusa remove o convite');
+assert.throws(() => roster.apply(declined.arbitros, { action: 'decline', targetUid: 'ref-1', callerUid: 'ref-1', now: '2026-09-14T12:04:00.000Z', profile: null }));
+assert.throws(() => roster.apply(confirmed.arbitros, { action: 'decline', targetUid: 'ref-1', callerUid: 'ref-1', now: '2026-09-14T12:04:00.000Z', profile: null }));
+ok += 2; console.log('  ✓ ③ recusa repetida ou de confirmado não altera a escala');
 const scrubbed = roster.apply([{ uid: 'legado', name: 'Legado', email: 'vazamento@teste.com', phone: '123' }], {
   action: 'remove', targetUid: 'ausente', callerUid: 'org-1', now: '2026-09-14T12:03:00.000Z', profile: null
 });
@@ -50,6 +57,6 @@ must(/async manageTournamentReferee\(tournamentId, action, uid\)/.test(gateway) 
 must(/exports\.manageTournamentReferee = onCall\(/.test(fn) && /db\.runTransaction\(/.test(fn), '⑥ a Function altera a escala em transação');
 must(/_isTournamentOrgCaller\(t, callerUid\)/.test(fn) && /collection\("usersPublic"\)\.doc\(targetUid\)/.test(fn), '⑥ autorização e perfil público são conferidos no servidor');
 must(/_splitParts\.gravar\(tx, ref, before/.test(fn) && /arbitros: outcome\.arbitros/.test(fn), '⑥ a gravação preserva as partes do torneio');
-must(/action === "self-confirm" \? callerUid : requestedUid/.test(fn), '⑥ o servidor ignora UID exibido ao autoconfirmar');
+must(/action === "self-confirm" \|\| action === "decline" \? callerUid : requestedUid/.test(fn), '⑥ o servidor ignora UID exibido no aceite e na recusa');
 
 console.log('\n✅ ' + ok + ' verificações');
