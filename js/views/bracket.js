@@ -11983,8 +11983,10 @@ window._bracketApplyFilter = function (origin) {
      * ⚠️ Marca quem foi aberto pela busca pra saber o que fechar quando ela for limpa. */
     window._fbSyncDetalhe(dets[d], nvis, true);
   }
-  // A troca de aba é consequência de digitação, nunca de um snapshot, placar ou
-  // hidratação assíncrona. Cards provisórios aguardando nome não são acertos.
+  // Pedido explícito do organizador (21/out/2026): ao digitar um filtro,
+  // selecionar a aba onde há resultado. O salto antigo era disparado também
+  // por atualizações automáticas; aqui a origem 'input' limita a troca ao dedo.
+  // Cards provisórios aguardando nome não são acertos.
   if (origin === 'input' && q && !window._bracketAutoTabBusy && _searchTabCandidates.length) {
     var _searchCardVisible = function (card) {
       for (var node = card; node && node !== root; node = node.parentElement) {

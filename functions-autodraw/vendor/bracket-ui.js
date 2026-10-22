@@ -1066,6 +1066,16 @@ function _rerenderBracket(tId, anchorMatchId) {
   if (typeof window.addEventListener === 'function') _scrollIntentEvents.forEach(function (eventName) {
     window.addEventListener(eventName, _markUserScrollIntent, { passive: true });
   });
+  var _scrollIntentActive = true;
+  var _removeScrollIntent = function () {
+    if (!_scrollIntentActive) return;
+    _scrollIntentActive = false;
+    if (typeof window.removeEventListener === 'function') _scrollIntentEvents.forEach(function (eventName) {
+      window.removeEventListener(eventName, _markUserScrollIntent);
+    });
+  };
+  // rAF fica suspenso em abas em segundo plano; o prazo também limpa os ouvintes.
+  var _scrollIntentFallback = setTimeout(_removeScrollIntent, 1000);
   function _restore() {
     if (!_userScrolledDuringRender) window.scrollTo(_sx, _sy);
     _aplicarRolagensDaChave(_hscroll);
@@ -1076,9 +1086,8 @@ function _rerenderBracket(tId, anchorMatchId) {
     _restore();
     requestAnimationFrame(function() {
       _restore();
-      if (typeof window.removeEventListener === 'function') _scrollIntentEvents.forEach(function (eventName) {
-        window.removeEventListener(eventName, _markUserScrollIntent);
-      });
+      _removeScrollIntent();
+      clearTimeout(_scrollIntentFallback);
       if (container) container.style.minHeight = '';
       // ⛔ a trava só sai DEPOIS da última restauração — soltar antes devolveria a janela
       // em que o laço de entrada rola por cima do que acabamos de restaurar.

@@ -1,3 +1,4 @@
+// 2.5.27 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.26 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.25 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.24 — Atualização consolidada de produção com as correções validadas desde a última publicação.
