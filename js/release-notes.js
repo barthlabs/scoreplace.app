@@ -1,3 +1,4 @@
+// 2.5.30 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.29 — Dashboard mostra apenas atletas com jogo no dia: você, sua dupla e
 // mais um nome próximo, com "ver mais" para expandir a lista. O torneio segue
 // visível nas próximas horas enquanto ainda está em andamento. Na chave, a
