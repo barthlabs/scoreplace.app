@@ -77,7 +77,44 @@ async function findReleaseBuild(apiFn, appId, marketingVersion, buildNumber) {
   }
   return selected;
 }
-module.exports = { api, token, findReleaseBuild };
+function storeNotes() {
+  const files = { 'pt-BR': 'whats-new.txt', 'en-US': 'whats-new-en.txt' };
+  return Object.fromEntries(Object.entries(files).map(([locale, file]) => {
+    const value = fs.readFileSync(path.join(__dirname, file), 'utf8').trim();
+    if (!value) throw new Error(`nota de versão vazia para ${locale}`);
+    return [locale, value];
+  }));
+}
+function notesForLocalizations(localizations, notes) {
+  const locales = new Set();
+  const selected = (localizations || []).map((localization) => {
+    const locale = localization.attributes?.locale;
+    if (!notes[locale]) throw new Error(`sem nota de versão para localização ${locale || '(vazia)'}`);
+    if (locales.has(locale)) throw new Error(`localização duplicada: ${locale}`);
+    locales.add(locale);
+    return { id: localization.id, locale, text: notes[locale] };
+  });
+  if (!locales.has('pt-BR')) throw new Error('localização pt-BR ausente na versão da App Store');
+  return selected;
+}
+function selectCancelableSubmission(submissions, versionId) {
+  const active = (submissions || []).filter((submission) =>
+    submission.attributes?.state !== 'COMPLETE');
+  if (active.length !== 1) throw new Error(`esperava uma submissão ativa; encontrei ${active.length}`);
+  const submission = active[0];
+  if (submission.attributes?.state !== 'WAITING_FOR_REVIEW') {
+    throw new Error(`submissão ativa em ${submission.attributes?.state}, não WAITING_FOR_REVIEW`);
+  }
+  if (submission.relationships?.appStoreVersionForReview?.data?.id !== versionId) {
+    throw new Error('submissão ativa não corresponde à versão solicitada');
+  }
+  if (submission.relationships?.items?.meta?.paging?.total !== 1 ||
+      submission.relationships?.items?.data?.length !== 1) {
+    throw new Error('submissão contém outros itens; cancelamento recusado');
+  }
+  return submission;
+}
+module.exports = { api, token, findReleaseBuild, storeNotes, notesForLocalizations, selectCancelableSubmission };
 
 if (require.main === module) {
   (async () => {
@@ -143,6 +180,40 @@ if (require.main === module) {
       if (!process.argv.includes('--apply')) console.log('\n(sem --apply: nada foi escrito)');
       return;
     }
+    if (cmd === 'cancelar') {
+      const versao = process.argv[3];
+      if (!versao) throw new Error('uso: node scripts/asc.js cancelar <versao> [--apply]');
+      const versions = await api(`/apps/${app.id}/appStoreVersions?limit=200`);
+      const matches = (versions.data || []).filter((v) => v.attributes.versionString === versao && v.attributes.platform === 'IOS');
+      if (matches.length !== 1) throw new Error(`esperava versão iOS ${versao} única; encontrei ${matches.length}`);
+      const version = matches[0];
+      if (version.attributes.appStoreState !== 'WAITING_FOR_REVIEW') {
+        throw new Error(`versão ${versao} está em ${version.attributes.appStoreState}, não WAITING_FOR_REVIEW`);
+      }
+      const reviews = await api(`/apps/${app.id}/reviewSubmissions?include=appStoreVersionForReview,items&limit=200`);
+      const submission = selectCancelableSubmission(reviews.data, version.id);
+      console.log(`submissão conferida: ${submission.id}, versão ${versao}, um item, WAITING_FOR_REVIEW`);
+      if (!process.argv.includes('--apply')) { console.log('(dry-run — nada cancelado)'); return; }
+      await api(`/reviewSubmissions/${submission.id}`, { method: 'PATCH', body: { data: {
+        type: 'reviewSubmissions', id: submission.id, attributes: { canceled: true },
+      } } });
+      for (let attempt = 0; attempt < 30; attempt++) {
+        const [review, current] = await Promise.all([
+          api(`/reviewSubmissions/${submission.id}`), api(`/appStoreVersions/${version.id}`),
+        ]);
+        const state = review.data?.attributes?.state;
+        const versionState = current.data?.attributes?.appStoreState;
+        if (state === 'COMPLETE' && versionState === 'DEVELOPER_REJECTED') {
+          console.log(`✓ revisão ${versao} cancelada: ${state}, versão ${versionState}`);
+          return;
+        }
+        if (!['WAITING_FOR_REVIEW', 'CANCELING', 'COMPLETE'].includes(state)) {
+          throw new Error(`estado inesperado após cancelar: submissão ${state}, versão ${versionState}`);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+      }
+      throw new Error('cancelamento enviado, mas a Apple não confirmou COMPLETE/DEVELOPER_REJECTED no prazo');
+    }
 
     if (cmd === 'estado') {
       const vs = await api(`/apps/${app.id}/appStoreVersions?limit=5`);
@@ -203,6 +274,7 @@ if (require.main === module) {
       // A seleção exata ocorre antes de criar ou alterar qualquer versão.
       const selected = await findReleaseBuild(api, app.id, versao, requestedBuild);
       const build = selected.build;
+      const notes = storeNotes(); // lê e valida os dois idiomas antes de criar a versão
       console.log(`\nbuild conferida: ${selected.version} (${build.attributes.version}) ${build.attributes.processingState} (enviada ${(build.attributes.uploadedDate||'').slice(0,16)})`);
 
       // 2. a versão já existe?
@@ -256,6 +328,23 @@ if (require.main === module) {
         throw new Error(`recuso submeter ${versao} sem lançamento automático AFTER_APPROVAL.`);
       }
 
+      // A Apple pode criar a localização automaticamente ao criar a versão.
+      // Ler e validar todas antes de anexar build ou alterar metadados.
+      const locs = await api(`/appStoreVersions/${ver.id}/appStoreVersionLocalizations`);
+      const localizedNotes = notesForLocalizations(locs.data, notes);
+      console.log(`✓ localizações conferidas: ${localizedNotes.map((item) => item.locale).join(', ')}`);
+
+      // Gravar notas por idioma e confirmar a leitura antes de anexar/submeter.
+      for (const item of localizedNotes) {
+        await api(`/appStoreVersionLocalizations/${item.id}`, { method: 'PATCH',
+          body: { data: { type: 'appStoreVersionLocalizations', id: item.id, attributes: { whatsNew: item.text } } } });
+        const confirmed = await api(`/appStoreVersionLocalizations/${item.id}`);
+        if (confirmed.data?.attributes?.whatsNew !== item.text) {
+          throw new Error(`a Apple não confirmou a nota ${item.locale}`);
+        }
+        console.log(`✓ novidades gravadas e conferidas (${item.locale}, ${item.text.length} chars)`);
+      }
+
       // 3. anexa a build
       await api(`/appStoreVersions/${ver.id}/relationships/build`, { method: 'PATCH',
         body: { data: { type: 'builds', id: build.id } } });
@@ -265,16 +354,7 @@ if (require.main === module) {
       }
       console.log(`✓ build ${build.attributes.version} anexada`);
 
-      // 4. texto de novidades (pt-BR)
-      const NOVIDADES = fs.readFileSync(path.join(__dirname, 'whats-new.txt'), 'utf8').trim();
-      const locs = await api(`/appStoreVersions/${ver.id}/appStoreVersionLocalizations`);
-      for (const l of (locs.data || [])) {
-        await api(`/appStoreVersionLocalizations/${l.id}`, { method: 'PATCH',
-          body: { data: { type: 'appStoreVersionLocalizations', id: l.id, attributes: { whatsNew: NOVIDADES } } } });
-        console.log(`✓ novidades gravadas (${l.attributes.locale}, ${NOVIDADES.length} chars)`);
-      }
-
-      // 5. submete pra revisão
+      // 4. submete pra revisão
       const rs = (await api('/reviewSubmissions', { method: 'POST', body: { data: {
         type: 'reviewSubmissions',
         attributes: { platform: 'IOS' },

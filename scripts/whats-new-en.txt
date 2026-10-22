@@ -1,0 +1,1 @@
+Version 2.5.32 brings the matches that need attention into one view for referees: next to call, pending scores, and occupied courts. Live scores appear in the bracket and TV mode. Invited referees can follow the tournament and manage its matches. The dashboard shows a summary of today's players, with access to the full list.
