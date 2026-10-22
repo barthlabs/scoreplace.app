@@ -4561,6 +4561,7 @@ function renderTournaments(container, tournamentId = null) {
     // presença, filtros e W.O. ficam exclusivamente em #participants/:id.
     let detailParticipantsHtml = '';
     var _organizersHtml = '';
+    var _refereesHtml = '';
     // Barra canônica dos inscritos: nasce uma vez, no fluxo logo abaixo do
     // back-header da ficha, e permanece sticky enquanto se percorre o elenco.
     var _inscritosFilterBarHtml = '';
@@ -4885,6 +4886,41 @@ function renderTournaments(container, tournamentId = null) {
           '<div style="' + window._INSCRITO_GRID_SOLO + '">' + _orgCards + '</div>' +
           _contactBtnHtml + '</div>';
       })();
+    }
+
+    // Escala pública do torneio: convites ainda não aceitos só pertencem à
+    // organização. Os nomes e avatares seguem os mesmos helpers por UID dos
+    // demais cards da ficha, para acompanhar alterações posteriores do perfil.
+    if (tournamentId && visible.length === 1) {
+      var _refTournament = visible[0];
+      var _refRoster = typeof ScoreplaceRefereeRoster !== 'undefined'
+        ? ScoreplaceRefereeRoster.sanitizeAll(_refTournament.arbitros) : [];
+      var _refCanSeeInvites = window._souOrganizador(_refTournament);
+      var _visibleReferees = _refRoster.filter(function(entry) {
+        return entry.status === 'confirmed' || _refCanSeeInvites;
+      });
+      if (_visibleReferees.length) {
+        var _refCards = _visibleReferees.map(function(entry) {
+          var _liveName = typeof window._nameForUid === 'function' ? window._nameForUid(entry.uid) : '';
+          var _name = _liveName || entry.name || 'Árbitro';
+          var _pending = entry.status !== 'confirmed';
+          return '<div class="sp-org-card" data-players="' + window._safeHtml(_name + ' árbitro arbitragem') + '" data-my-match="1" ' +
+            'style="box-sizing:border-box;display:flex;align-items:center;gap:8px;padding:8px 12px;' +
+            (_pending ? 'background:rgba(251,191,36,0.08);border:2px dashed rgba(251,191,36,0.6);' : 'background:rgba(20,184,166,0.08);border:1px solid rgba(20,184,166,0.35);') +
+            'border-radius:10px;max-width:100%;min-height:58px;">' +
+            window._personAvatarHtml(entry.uid, _name, 'width:2rem;height:2rem;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid rgba(20,184,166,0.5);') +
+            '<div style="min-width:0;flex:1;">' +
+              '<div style="min-width:0;display:flex;align-items:center;">' +
+                window._personNameHtml(entry.uid, _name, 'font-weight:700;color:var(--text-bright);white-space:nowrap;', 'sp-name-fit', ' data-maxrem="0.82" data-minrem="0.55"') +
+              '</div>' +
+              '<div style="font-size:0.65rem;color:' + (_pending ? 'var(--sp-c-fbbf24,#fbbf24)' : 'var(--text-muted)') + ';">' +
+                (_pending ? 'Convite pendente' : 'Árbitro(a) confirmado(a)') + '</div>' +
+            '</div></div>';
+        }).join('');
+        _refereesHtml = '<section style="margin-top:1.25rem;margin-bottom:0.5rem;">' +
+          '<div style="font-size:0.7rem;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);margin-bottom:8px;">ARBITRAGEM</div>' +
+          '<div style="' + window._INSCRITO_GRID_SOLO + '">' + _refCards + '</div></section>';
+      }
     }
 
     if (tournamentId && visible.length === 1) {
@@ -5341,6 +5377,7 @@ function renderTournaments(container, tournamentId = null) {
 
     ${tournamentId && typeof window._meuCardNoTopo === 'function' ? window._meuCardNoTopo(visible[0]) : ''}
     ${tournamentId ? _organizersHtml : ''}
+    ${tournamentId ? _refereesHtml : ''}
 
     ${tournamentId ? detailParticipantsHtml : ''}
 

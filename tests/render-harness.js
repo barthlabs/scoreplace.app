@@ -82,6 +82,7 @@ loadAbs(path.join(ROOT, 'i18n-pt.js'));
 // enfeite, é dependência. Mesma posição do index.html (primeiro script do app).
 loadAbs(path.join(ROOT, 'paleta-tabela.js'));
 loadAbs(path.join(ROOT, 'views', 'tournaments-draw.js'));
+loadAbs(path.join(ROOT, 'domain', 'referee-roster.js'));
 loadAbs(path.join(ROOT, 'views', 'tournaments.js'));
 // identity-core: cânone de identidade por uid, extraído do store.js (jul/2026) — o store.js
 // não define mais _participantUids/_memberUidByName/_idMap*/_entryHasVip. Antes do store.js,

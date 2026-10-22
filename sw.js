@@ -131,6 +131,7 @@ var STATIC_ASSETS = [
   '/js/store.js',
   '/js/lojas-config.js',
   '/js/domain/next-match.js',
+  '/js/domain/referee-roster.js',
   '/js/firebase-db.js',
   '/js/notifications.js',
   '/js/ui.js',
