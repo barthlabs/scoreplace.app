@@ -70,9 +70,14 @@ assert(start > 0 && end > start);
       const freeRect = strip.querySelector('.sp-operations-court-free').getBoundingClientRect();
       const nextRect = next.getBoundingClientRect();
       const freeHeight = freeRect.height;
-      initial.geometry = { trackHeight, freeHeight, freeTop: freeRect.top, freeBottom: freeRect.bottom, nextHeight: nextRect.height, nextTop: nextRect.top, nextBottom: nextRect.bottom };
+      initial.geometry = { trackHeight, freeHeight, freeTop: freeRect.top, freeBottom: freeRect.bottom, nextHeight: nextRect.height, nextTop: nextRect.top, nextBottom: nextRect.bottom,
+        rowHeight: strip.querySelector('.sp-operations-track').style.getPropertyValue('--sp-operations-row-height'),
+        replicaHeight: strip.querySelector('.sp-operations-next .sp-operations-replica').getBoundingClientRect().height,
+        trackBoxHeight: strip.querySelector('.sp-operations-track').getBoundingClientRect().height,
+        nextBoxHeight: strip.querySelector('.sp-operations-next').getBoundingClientRect().height };
       const courtLabelHeight = strip.querySelector('.sp-operations-court-slot > .sp-operations-label').getBoundingClientRect().height;
-      initial.freeSlotFillsTrack = trackHeight > 100 && freeHeight >= trackHeight - courtLabelHeight - 12;
+      const courtTrackPadding = parseFloat(getComputedStyle(strip.querySelector('.sp-operations-court-track')).paddingTop) || 0;
+      initial.freeSlotFillsTrack = trackHeight > 100 && freeHeight >= trackHeight - courtTrackPadding - courtLabelHeight - 12;
       const fullSlotRect = strip.querySelector('.sp-operations-court-slot').getBoundingClientRect();
       initial.freeSlotMatchesCard = Math.abs(fullSlotRect.top - nextRect.top) <= 3 &&
         Math.abs(fullSlotRect.bottom - nextRect.bottom) <= 3 &&
@@ -93,8 +98,11 @@ assert(start > 0 && end > start);
       court.querySelector('[data-confirm-for]').click();
       court.querySelector('.sp-match-clock-next').click();
       window._bracketOperationsRefresh(t, root);
+      const activeRect = strip.querySelector('.sp-operations-court-slot--active .sp-match-card').getBoundingClientRect();
+      const goldRect = strip.querySelector('.sp-operations-next .sp-match-card').getBoundingClientRect();
       const afterCall = { called: window.called, saved: window.saved, clock: window.clock, live: window.live, wo: window.wo,
         opened: window.opened, confirmVisible,
+        activeBottomAligned: Math.abs(activeRect.bottom - goldRect.bottom) <= 3,
         draft: strip.querySelector('.sp-operations-court-card [data-operations-source-input="s1-m1"]').value,
         next: strip.querySelector('.sp-operations-next [data-operations-match]').getAttribute('data-operations-match') };
       window.AppStore.currentUser = { uid: 'ref' };
@@ -121,10 +129,63 @@ assert(start > 0 && end > start);
     assert.deepEqual(state.afterCall.saved, ['sb_test', 'm1', '6', '3']);
     assert.deepEqual(state.afterCall.clock, ['sb_test', 'm1', 'next']);
     assert(state.afterCall.confirmVisible && state.outsiderHidden && state.selectFocusRestored);
+    assert(state.afterCall.activeBottomAligned, 'cards em quadra e próximo a chamar devem alinhar pela base');
     assert.equal(state.afterCall.draft, '6');
     assert.equal(state.afterCall.next, 'm2');
     assert(state.refereeView.visible && state.refereeView.pending && state.refereeView.releasedCourt);
-    assert.match(state.refereeView.availableCourt, /Quadra 4 livre/);
+    assert.match(state.refereeView.availableCourt, /2 QUADRAS LIVRES/);
+    const scrollLayout = await page.evaluate(() => {
+      const t = window._findTournamentById();
+      const root = document.querySelector('[data-bracket-tabs-root]');
+      window.AppStore.currentUser = { uid: 'org' };
+      t.courtNames = ['Quadra 4', 'Quadra 5', 'Quadra 6', 'Quadra 7', 'Quadra 8'];
+      window._bracketCourtReleaseCache = { sb_test: { released: {} } };
+      window._bracketOperationsRefresh(t, root);
+      const strip = root._bracketOperationsStrip;
+      const track = strip.querySelector('.sp-operations-track');
+      const next = strip.querySelector('.sp-operations-next');
+      const noPending = !strip.querySelector('.sp-operations-pending');
+      const freeCount = strip.querySelector('.sp-operations-availability').textContent;
+      const courtNames = [...strip.querySelectorAll('.sp-operations-court-slot > .sp-operations-label')].map(el => el.textContent);
+      track.scrollLeft = 240;
+      const sticky = getComputedStyle(next).position === 'sticky' && next.getBoundingClientRect().left <= track.getBoundingClientRect().left + 9;
+      const noVerticalClip = track.scrollHeight <= track.clientHeight;
+      window._bracketOperationsRefresh(t, root);
+      const scrollPreserved = root._bracketOperationsStrip.querySelector('.sp-operations-track').scrollLeft === 240;
+      window._bracketCourtReleaseCache = { sb_test: { released: { m1: '2026-10-22T18:05:00Z' } } };
+      window._bracketOperationsRefresh(t, root);
+      const withPending = !!strip.querySelector('.sp-operations-pending [data-operations-match="m1"]');
+      const courtSlot = strip.querySelector('.sp-operations-court-slot');
+      const card = strip.querySelector('.sp-operations-next .sp-match-card');
+      const aligned = Math.abs(courtSlot.getBoundingClientRect().top - card.getBoundingClientRect().top) <= 3 &&
+        Math.abs(courtSlot.getBoundingClientRect().bottom - card.getBoundingClientRect().bottom) <= 3;
+      const liveTrack = strip.querySelector('.sp-operations-track');
+      const width = liveTrack.scrollWidth, viewport = liveTrack.clientWidth;
+      window._bracketCourtReleaseCache = { sb_test: { released: {} } };
+      t.courtNames = ['Quadra 5'];
+      window._bracketOperationsRefresh(t, root);
+      const zero = strip.querySelector('.sp-operations-availability').textContent;
+      t.courtNames = ['Quadra 4', 'Quadra 5'];
+      window._bracketOperationsRefresh(t, root);
+      const one = strip.querySelector('.sp-operations-availability').textContent;
+      return { noPending, freeCount, courtNames, sticky, noVerticalClip, scrollPreserved, withPending, aligned,
+        width, viewport, zero, one };
+    });
+    assert(scrollLayout.noPending && scrollLayout.withPending, 'o painel azul só aparece com placar pendente');
+    assert.equal(scrollLayout.freeCount, '4 QUADRAS LIVRES');
+    assert.equal(scrollLayout.zero, '0 QUADRAS LIVRES');
+    assert.equal(scrollLayout.one, '1 QUADRA LIVRE');
+    assert.deepEqual(scrollLayout.courtNames, ['Quadra 4', 'Quadra 6', 'Quadra 7', 'Quadra 8']);
+    assert(scrollLayout.width > scrollLayout.viewport && scrollLayout.sticky && scrollLayout.scrollPreserved,
+      'a faixa inteira deve rolar e manter o próximo jogo fixo: ' + JSON.stringify(scrollLayout));
+    assert(scrollLayout.noVerticalClip && scrollLayout.aligned, 'a faixa não pode cortar ou desalinhavar os cards: ' + JSON.stringify(scrollLayout));
+    await page.setViewportSize({ width: 600, height: 800 });
+    await page.waitForTimeout(120);
+    const mobileClip = await page.evaluate(() => {
+      const track = document.querySelector('.sp-operations-track');
+      return { height: track.clientHeight, content: track.scrollHeight, mobileHeight: getComputedStyle(track).height };
+    });
+    assert(mobileClip.content <= mobileClip.height, 'mobile não pode cortar cards após resize: ' + JSON.stringify(mobileClip));
     const bestOfThree = await page.evaluate(() => {
       const op = document.createElement('div');
       op.innerHTML = '<button data-confirm-for="m3" style="display:none">✓</button>' +

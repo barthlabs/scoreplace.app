@@ -1299,7 +1299,7 @@ function _bracketScopeReplicaHtml(html, scope) {
   return card.outerHTML;
 }
 
-function _bracketOperationsReplica(m, t, role, label) {
+function _bracketOperationsReplica(m, t, role, label, availability) {
   var safe = window._safeHtml || function (s) { return String(s); };
   var canEnter = !!(role.canCall || (typeof window._resultEntryIncludes === 'function' &&
     (window._resultEntryIncludes(t, 'players') || window._resultEntryIncludes(t, 'referee'))));
@@ -1307,7 +1307,7 @@ function _bracketOperationsReplica(m, t, role, label) {
     ? window.renderMatchCard(m, canEnter, t.id, m._gameNum || m.scheduledGameNumber || m.matchNumber,
       false, null, { idScope: 'operations-' + String(m.id || '') }) : '';
   return '<div class="sp-operations-replica' + (role.active ? ' sp-operations-court-card' : '') + '" data-operations-match="' +
-    safe(String(m.id || '')) + '"><span class="sp-operations-label">' + safe(label) + '</span>' + html + '</div>';
+    safe(String(m.id || '')) + '"><span class="sp-operations-label">' + safe(label) + '</span>' + (availability || '') + html + '</div>';
 }
 
 function _bracketOperationsDraftValues(op) {
@@ -1382,6 +1382,7 @@ window._bracketOperationsRefresh = function (t, root) {
   var authorized = typeof window._isUserAuthority === 'function' && window._isUserAuthority(t, user);
   var concentrated = typeof window._isConcentratedTournament === 'function' && window._isConcentratedTournament(t);
   if (!authorized || !concentrated || !document.getElementById('tourn-grid-container')) {
+    if (existing && existing._spOperationsOnResize) window.removeEventListener('resize', existing._spOperationsOnResize);
     if (existing && existing.parentNode) existing.remove();
     root._bracketOperationsStrip = null;
     _bracketReconcileOperationalOrder(root);
@@ -1395,6 +1396,18 @@ window._bracketOperationsRefresh = function (t, root) {
     existing.setAttribute('data-bracket-operations-strip', '1');
     existing.setAttribute('aria-label', 'Jogos que precisam de atenção');
     root._bracketOperationsStrip = existing;
+    existing._spOperationsOnResize = function () {
+      clearTimeout(existing._spOperationsResizeTimer);
+      existing._spOperationsResizeTimer = setTimeout(function () {
+        if (!existing.isConnected) {
+          window.removeEventListener('resize', existing._spOperationsOnResize);
+          return;
+        }
+        var liveTournament = typeof window._findTournamentById === 'function' && window._findTournamentById(String(t.id));
+        window._bracketOperationsRefresh(liveTournament || t, root);
+      }, 80);
+    };
+    window.addEventListener('resize', existing._spOperationsOnResize);
     existing.addEventListener('click', function (event) {
       var op = event.target && event.target.closest('.sp-operations-replica');
       if (!op) return;
@@ -1451,8 +1464,8 @@ window._bracketOperationsRefresh = function (t, root) {
     });
   }
   root._bracketOperationsDrafts = root._bracketOperationsDrafts || {};
-  var courtTrack = existing.querySelector('.sp-operations-court-track');
-  var courtScroll = courtTrack ? courtTrack.scrollLeft : 0;
+  var previousTrack = existing.querySelector('.sp-operations-track');
+  var trackScroll = previousTrack ? previousTrack.scrollLeft : 0;
   var focused = document.activeElement && document.activeElement.closest && document.activeElement.closest('.sp-operations-replica');
   var focusState = focused && { match: focused.getAttribute('data-operations-match'),
     key: document.activeElement.getAttribute('data-operations-source-input'),
@@ -1468,23 +1481,19 @@ window._bracketOperationsRefresh = function (t, root) {
     } else delete root._bracketOperationsDrafts[mid];
   });
   var canCall = authorized;
-  var nextLabel = canCall ? 'PRÓXIMO A CHAMAR' : 'PRÓXIMO JOGO';
-  var nextCourt = state.next && state.courts.find(function (court) {
-    return String(court) === String(state.next.court || '') &&
-      !state.active.some(function (m) { return String(m.court) === String(court); });
-  });
-  if (!nextCourt && state.next) nextCourt = state.courts.find(function (court) {
+  var nextLabel = canCall ? 'PRÓXIMO JOGO A CHAMAR' : 'PRÓXIMO JOGO';
+  var freeCourts = state.courts.filter(function (court) {
     return !state.active.some(function (m) { return String(m.court) === String(court); });
   });
-  var nextAvailability = state.next
-    ? '<div class="sp-operations-availability' + (nextCourt ? '' : ' sp-operations-availability--busy') + '">' +
-      (nextCourt ? window._safeHtml(nextCourt) + ' livre para chamar' : 'Todas as quadras ocupadas') + '</div>' : '';
+  var freeCount = freeCourts.length;
+  var nextAvailability = '<div class="sp-operations-availability' + (freeCount ? '' : ' sp-operations-availability--busy') + '">' +
+    freeCount + ' ' + (freeCount === 1 ? 'QUADRA LIVRE' : 'QUADRAS LIVRES') + '</div>';
   existing.innerHTML = '<div class="sp-operations-track"><div class="sp-operations-next">' +
-    nextAvailability +
-    (state.next ? _bracketOperationsReplica(state.next, t, { canCall: canCall, active: false }, nextLabel) : '<div class="sp-operations-empty">Nenhum jogo aguardando chamada</div>') +
-    '</div><div class="sp-operations-pending" aria-label="Placares pendentes"><span class="sp-operations-section-title">PLACARES PENDENTES</span><div class="sp-operations-pending-track">' +
-    (state.pending.length ? state.pending.map(function (m) { return _bracketOperationsReplica(m, t, { canCall: canCall, active: false }, String(m.court || 'Placar pendente')); }).join('') : '<div class="sp-operations-empty">Nenhum placar pendente</div>') +
-    '</div></div><div class="sp-operations-courts" aria-label="Jogos em quadra"><span class="sp-operations-section-title">EM QUADRA</span><div class="sp-operations-court-track">' +
+    (state.next ? _bracketOperationsReplica(state.next, t, { canCall: canCall, active: false }, nextLabel, nextAvailability) :
+      '<span class="sp-operations-label">' + nextLabel + '</span>' + nextAvailability + '<div class="sp-operations-empty">Nenhum jogo aguardando chamada</div>') +
+    '</div>' + (state.pending.length ? '<div class="sp-operations-pending" aria-label="Placares pendentes"><span class="sp-operations-section-title">PLACARES PENDENTES</span><div class="sp-operations-pending-track">' +
+    state.pending.map(function (m) { return _bracketOperationsReplica(m, t, { canCall: canCall, active: false }, String(m.court || 'Placar pendente')); }).join('') +
+    '</div></div>' : '') + '<div class="sp-operations-courts" aria-label="Jogos em quadra"><span class="sp-operations-section-title">EM QUADRA</span><div class="sp-operations-court-track">' +
     state.courts.map(function (court) {
       var games = state.active.filter(function (m) { return String(m.court) === court; });
       return '<div class="sp-operations-court-slot' + (games.length ? ' sp-operations-court-slot--active' : '') + '">' +
@@ -1493,14 +1502,18 @@ window._bracketOperationsRefresh = function (t, root) {
         '</div>';
     }).join('') +
     '</div></div></div>';
+  _bracketReconcileOperationalOrder(root);
   var operationsTrack = existing.querySelector('.sp-operations-track');
   if (operationsTrack) {
-    var fullCards = Array.prototype.slice.call(existing.querySelectorAll('.sp-operations-next .sp-match-card, .sp-operations-court-slot--active .sp-match-card'));
-    var tallestCard = fullCards.reduce(function (height, card) { return Math.max(height, card.getBoundingClientRect().height); }, 0);
-    if (tallestCard) operationsTrack.style.setProperty('--sp-operations-row-height', Math.ceil(tallestCard + 20) + 'px');
+    operationsTrack.style.removeProperty('--sp-operations-row-height');
+    var nextReplica = existing.querySelector('.sp-operations-next .sp-operations-replica');
+    var nextHeight = nextReplica ? nextReplica.getBoundingClientRect().height + 30 : 120;
+    var activeHeights = Array.prototype.map.call(existing.querySelectorAll('.sp-operations-court-slot--active .sp-operations-replica'), function (replica) {
+      return replica.getBoundingClientRect().height + 72;
+    });
+    operationsTrack.style.setProperty('--sp-operations-row-height', Math.ceil(Math.max.apply(null, [120, nextHeight].concat(activeHeights))) + 'px');
+    operationsTrack.scrollLeft = trackScroll;
   }
-  courtTrack = existing.querySelector('.sp-operations-court-track');
-  if (courtTrack) courtTrack.scrollLeft = courtScroll;
   Array.prototype.forEach.call(existing.querySelectorAll('.sp-operations-replica'), function (op) {
     var mid = op.getAttribute('data-operations-match');
     var current = state.active.concat(state.pending, state.next ? [state.next] : []).find(function (m) { return String(m.id) === mid; });
@@ -1548,7 +1561,6 @@ window._bracketOperationsRefresh = function (t, root) {
       card.style.border = '3px solid var(--sp-c-fbbf24,#fbbf24)';
     }
   });
-  _bracketReconcileOperationalOrder(root);
 };
 
 window._bracketOperationsOpen = function (tId, matchId) {
