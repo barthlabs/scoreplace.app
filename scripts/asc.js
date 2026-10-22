@@ -48,11 +48,45 @@ async function api(rota, opts) {
   }
   return j;
 }
-module.exports = { api, token };
+async function findReleaseBuild(apiFn, appId, marketingVersion, buildNumber) {
+  let next = `/builds?filter[app]=${encodeURIComponent(appId)}&include=preReleaseVersion&limit=200&sort=-uploadedDate`;
+  const seen = new Set();
+  const candidates = [];
+  while (next) {
+    if (seen.has(next)) throw new Error('paginação repetida na lista de builds da Apple');
+    seen.add(next);
+    const page = await apiFn(next);
+    const versions = new Map((page.included || [])
+      .filter((item) => item.type === 'preReleaseVersions')
+      .map((item) => [item.id, item.attributes.version]));
+    for (const build of (page.data || [])) {
+      const prereleaseId = build.relationships?.preReleaseVersion?.data?.id;
+      const version = versions.get(prereleaseId);
+      if (version === marketingVersion && String(build.attributes.version) === buildNumber) {
+        candidates.push({ build, version });
+      }
+    }
+    next = page.links?.next || null;
+  }
+  if (candidates.length !== 1) {
+    throw new Error(`esperava uma build ${marketingVersion} (${buildNumber}) no App Store Connect; encontrei ${candidates.length}`);
+  }
+  const selected = candidates[0];
+  if (selected.build.attributes.processingState !== 'VALID' || selected.build.attributes.expired) {
+    throw new Error(`build ${marketingVersion} (${buildNumber}) ainda não está válida: ${selected.build.attributes.processingState}, expirada=${!!selected.build.attributes.expired}`);
+  }
+  return selected;
+}
+module.exports = { api, token, findReleaseBuild };
 
 if (require.main === module) {
   (async () => {
     const cmd = process.argv[2] || 'estado';
+    const buildFlag = process.argv.indexOf('--build');
+    const requestedBuild = buildFlag >= 0 ? process.argv[buildFlag + 1] : null;
+    if (cmd === 'submeter' && !/^\d+$/.test(requestedBuild || '')) {
+      throw new Error('uso: node scripts/asc.js submeter <versao> --build <inteiro> [--apply]');
+    }
     // ⛔ ERA `apps.data[0]` — o PRIMEIRO app que a Apple devolvesse. Funcionou
     // enquanto o scoreplace era o único; em 16/set/2026, com o kleaner na
     // conta, `asc.js estado` rodado DENTRO do scoreplace passou a mostrar o
@@ -164,14 +198,12 @@ if (require.main === module) {
     if (cmd === 'submeter') {
       const versao = process.argv[3];
       const APLICAR = process.argv.includes('--apply');
-      if (!versao) { console.error('uso: node scripts/asc.js submeter <versao> [--apply]'); process.exit(2); }
+      if (!versao) { console.error('uso: node scripts/asc.js submeter <versao> --build <inteiro> [--apply]'); process.exit(2); }
 
-      // 1. a BUILD dessa versão tem que existir e estar processada
-      const bs = await api(`/builds?filter[app]=${app.id}&limit=20&sort=-uploadedDate`);
-      const build = (bs.data || []).find((b) => b.attributes.processingState === 'VALID' &&
-        !b.attributes.expired);
-      if (!build) { console.error('✗ nenhuma build VALID disponível.'); process.exit(1); }
-      console.log(`\nbuild escolhida: ${build.attributes.version} (enviada ${(build.attributes.uploadedDate||'').slice(0,16)})`);
+      // A seleção exata ocorre antes de criar ou alterar qualquer versão.
+      const selected = await findReleaseBuild(api, app.id, versao, requestedBuild);
+      const build = selected.build;
+      console.log(`\nbuild conferida: ${selected.version} (${build.attributes.version}) ${build.attributes.processingState} (enviada ${(build.attributes.uploadedDate||'').slice(0,16)})`);
 
       // 2. a versão já existe?
       const vs = await api(`/apps/${app.id}/appStoreVersions?limit=20`);
@@ -227,6 +259,10 @@ if (require.main === module) {
       // 3. anexa a build
       await api(`/appStoreVersions/${ver.id}/relationships/build`, { method: 'PATCH',
         body: { data: { type: 'builds', id: build.id } } });
+      const attached = await api(`/appStoreVersions/${ver.id}?include=build`);
+      if (attached.data?.relationships?.build?.data?.id !== build.id) {
+        throw new Error(`a Apple não confirmou a build ${requestedBuild} na versão ${versao}`);
+      }
       console.log(`✓ build ${build.attributes.version} anexada`);
 
       // 4. texto de novidades (pt-BR)

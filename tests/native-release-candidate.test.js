@@ -20,25 +20,25 @@ const run = () => {
 
 try {
   write('scripts/check-native-release-candidate.js', fs.readFileSync(path.join(root, 'scripts/check-native-release-candidate.js')));
-  write('version.txt', '9.4.7\n');
+  write('version.txt', '2.5.29\n');
   write('capacitor.config.json', JSON.stringify({ webDir: 'www', server: {} }));
-  write('ios/App/App.xcodeproj/project.pbxproj', 'MARKETING_VERSION = 9.4.7;\nCURRENT_PROJECT_VERSION = 88;\n');
-  write('android/app/build.gradle', 'versionCode 89\nversionName "9.4.7"\n');
-  write('android/wear/build.gradle', 'versionCode 90\nversionName "9.4.7"\n');
+  write('ios/App/App.xcodeproj/project.pbxproj', 'MARKETING_VERSION = 2.5.29;\nCURRENT_PROJECT_VERSION = 289;\n');
+  write('android/app/build.gradle', 'versionCode 176\nversionName "2.5.18"\n');
+  write('android/wear/build.gradle', 'versionCode 177\nversionName "2.5.18"\n');
   let result = run();
   assert.equal(result.status, 0, result.output);
-  write('android/wear/build.gradle', 'versionCode 90\nversionName "9.4.6"\n');
+  write('android/wear/build.gradle', 'versionCode 177\nversionName "9.4.17"\n');
   result = run();
   assert.equal(result.status, 1);
-  assert.match(result.output, /versionName 9\.4\.7/);
-  write('android/wear/build.gradle', 'versionCode 89\nversionName "9.4.7"\n');
+  assert.match(result.output, /divergem/);
+  write('android/wear/build.gradle', 'versionCode 176\nversionName "2.5.18"\n');
   result = run();
   assert.equal(result.status, 1);
   assert.match(result.output, /versionCode/);
-  write('android/wear/build.gradle', 'versionCode 90\nversionName "9.4.7"\n');
+  write('android/wear/build.gradle', 'versionCode 177\nversionName "2.5.18"\n');
   write('capacitor.config.json', JSON.stringify({ webDir: 'www', server: { url: 'https://example.test' } }));
   result = run();
   assert.equal(result.status, 1);
   assert.match(result.output, /server\.url/);
-  console.log('✓ candidato nativo: versão comum, builds únicos e bundle local obrigatórios');
+  console.log('✓ candidato nativo: cortes independentes, builds únicos e bundle local obrigatórios');
 } finally { fs.rmSync(lab, { recursive: true, force: true }); }

@@ -183,10 +183,8 @@ if [ -z "$IPA" ] && [ "$_DESTINO_UPLOAD" = "1" ]; then
   echo ""
   echo "✅ Enviado pro App Store Connect — confira o processamento no TestFlight."
   echo ""
-  echo "🚦 GATE OBRIGATÓRIO (Apple): esta build vai pro TESTFLIGHT PRIMEIRO."
-  echo "   NÃO submeta à ANÁLISE ainda. O dono instala pelo TestFlight no iPhone e"
-  echo "   confirma que A ENTRADA NÃO QUEBROU (login/onboarding). Só DEPOIS dessa"
-  echo "   confirmação é que se manda pra revisão no App Store Connect."
+  echo "Próximo passo: confira a build VALID no App Store Connect e siga a decisão"
+  echo "do dono sobre a submissão à revisão de produção. O upload não distribui a testers."
   exit 0
 fi
 if [ -z "$IPA" ]; then
@@ -220,7 +218,5 @@ echo "  xcrun altool --upload-app -f \"$IPA\" --type ios \\"
 echo "    --apiKey <KEY_ID> --apiIssuer <ISSUER_ID>"
 echo "  (ou abrir no app Transporter / Xcode Organizer)."
 echo ""
-echo "🚦 GATE OBRIGATÓRIO (Apple): este IPA vai pro TESTFLIGHT PRIMEIRO."
-echo "   NÃO submeta à ANÁLISE ainda. O dono instala pelo TestFlight no iPhone e"
-echo "   confirma que A ENTRADA NÃO QUEBROU (login/onboarding). Só DEPOIS dessa"
-echo "   confirmação é que se manda pra revisão no App Store Connect."
+echo "Próximo passo: confira a build VALID no App Store Connect e siga a decisão"
+echo "do dono sobre a submissão à revisão de produção. O upload não distribui a testers."
