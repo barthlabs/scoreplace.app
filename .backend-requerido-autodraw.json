@@ -1,10 +1,9 @@
 {
   "schema": 1,
-  "backendCommit": "f83d83ad2ba9856e390faed12cc56643c9de586b",
-  "scopeNote": "O placar do sandbox usa o mesmo motor da produção, com coleção e notificações isoladas; a atribuição de quadra e a configuração de classificação do Neon foram atualizadas.",
+  "backendCommit": "efb2f4873196f1554b3a786f7d1bd7237cec8ff4",
+  "scopeNote": "As funções de chamada e liberação de quadra foram publicadas para produção e sandbox; o salvamento de placar já usa a função publicada anteriormente.",
   "functions": [
     "assignMatchCourt",
-    "applyMatchResult",
     "endMatchOnCourt"
   ]
 }

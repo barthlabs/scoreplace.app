@@ -134,8 +134,8 @@
       "mode": "only"
     },
     "assignMatchCourt": {
-      "backendCommit": "a004f066f946593a06a67e9ddf0291eaf896b9dd",
-      "deployedAt": "2026-10-20T20:48:26.161Z",
+      "backendCommit": "efb2f4873196f1554b3a786f7d1bd7237cec8ff4",
+      "deployedAt": "2026-10-22T04:20:47.548Z",
       "result": "success",
       "mode": "only"
     },
@@ -160,6 +160,12 @@
     "previewTournamentTeamWO": {
       "backendCommit": "c826ef76b1edab5fdb48f6076d081cab992d74cd",
       "deployedAt": "2026-10-21T19:56:33.305Z",
+      "result": "success",
+      "mode": "only"
+    },
+    "endMatchOnCourt": {
+      "backendCommit": "efb2f4873196f1554b3a786f7d1bd7237cec8ff4",
+      "deployedAt": "2026-10-22T04:20:47.548Z",
       "result": "success",
       "mode": "only"
     }
