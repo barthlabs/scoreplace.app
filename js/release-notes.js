@@ -3,6 +3,8 @@
 // visível nas próximas horas enquanto ainda está em andamento. Na chave, a
 // faixa operacional rola inteira, mantém a próxima chamada visível em telas
 // largas e só exibe placares pendentes quando houver algum.
+// A lista do dia preserva torneios válidos se outra leitura falhar e atualiza
+// a ocupação quando o organizador publicar uma agenda após a primeira abertura.
 // 2.5.28 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.27 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.26 — Atualização consolidada de produção com as correções validadas desde a última publicação.
