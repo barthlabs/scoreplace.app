@@ -140,8 +140,8 @@
       "mode": "only"
     },
     "applyMatchResult": {
-      "backendCommit": "f83d83ad2ba9856e390faed12cc56643c9de586b",
-      "deployedAt": "2026-10-20T15:13:59.325Z",
+      "backendCommit": "06256aa182fea45b59532005bc9d201d2a31de20",
+      "deployedAt": "2026-10-22T17:42:56.226Z",
       "result": "success",
       "mode": "only"
     },
@@ -166,6 +166,18 @@
     "endMatchOnCourt": {
       "backendCommit": "95c07da199dae2ef2f6eb0046fefc3e1f2ff4e4a",
       "deployedAt": "2026-10-22T04:31:18.632Z",
+      "result": "success",
+      "mode": "only"
+    },
+    "applyQueuedResult": {
+      "backendCommit": "06256aa182fea45b59532005bc9d201d2a31de20",
+      "deployedAt": "2026-10-22T17:42:56.226Z",
+      "result": "success",
+      "mode": "only"
+    },
+    "closeRound": {
+      "backendCommit": "06256aa182fea45b59532005bc9d201d2a31de20",
+      "deployedAt": "2026-10-22T17:42:56.226Z",
       "result": "success",
       "mode": "only"
     }
