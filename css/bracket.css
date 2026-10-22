@@ -15,7 +15,13 @@
   padding: 8px;
   background: var(--bg-card);
 }
-.sp-operations-next { border-color: var(--sp-c-fbbf24, #fbbf24); }
+.sp-operations-next {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  border-color: var(--sp-c-fbbf24, #fbbf24);
+}
+.sp-operations-courts { display: flex; flex-direction: column; }
 .sp-operations-section-title {
   display: block;
   margin: 0 0 7px;
@@ -26,9 +32,11 @@
 }
 .sp-operations-court-track {
   display: flex;
+  flex: 1 1 auto;
   gap: 8px;
   overflow-x: auto;
   max-width: 100%;
+  min-height: 0;
   scrollbar-width: thin;
 }
 .sp-operations-court-slot { display:flex;flex:0 0 340px;flex-direction:column;gap:6px;min-width:0; }
@@ -44,7 +52,7 @@
   flex-direction: column;
   justify-content: center;
   gap: 5px;
-  min-height: 118px;
+  min-height: 0;
   box-sizing: border-box;
   padding: 10px;
   border: 1px dashed var(--sp-c-22c55e, #22c55e);
@@ -58,6 +66,7 @@
 .sp-operations-empty { min-height: 70px; display: flex; align-items: center; color: var(--text-muted); font-size: .82rem; }
 @media (max-width: 690px) {
   .sp-operations-track { grid-template-columns: minmax(0, 1fr); }
+  .sp-operations-court-track { min-height: 420px; }
   .sp-operations-court-slot { flex-basis: min(88vw, 340px); }
   .sp-operations-court-slot--active { flex-basis:min(88vw,380px); }
 }
@@ -236,6 +245,25 @@ summary::-webkit-details-marker { display: none; }
 .sp-match-clock-action svg { display:block; width:17px; height:17px; flex:none; }
 .sp-match-clock-action:disabled { opacity:.45; cursor:wait; }
 .sp-court-occupied { color:#9ca3af; background:#374151; }
+.sp-ready-court-select {
+  margin-top: 4px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid rgba(16,185,129,.4);
+  border-radius: 8px;
+  background: rgba(16,185,129,.14);
+  color: var(--sp-c-bbf7d0,#bbf7d0);
+  font-size: .78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.sp-match-court select.sp-court-placeholder-busy,
+.sp-ready-court-select.sp-court-placeholder-busy {
+  border-color: var(--sp-c-f87171, #f87171);
+  color: var(--sp-c-fca5a5, #fca5a5);
+  background: rgba(127, 29, 29, .22);
+}
 .sp-match-card[data-bracket-complete="1"] { align-self:start; }
 [data-tv-live-button]::before { content:""; display:inline-block; width:.55em; height:.55em; margin-right:.4em; border-radius:50%; background:#7f1d1d; vertical-align:middle; }
 [data-tv-live-button][aria-pressed="true"]::before { background:#ef4444; box-shadow:0 0 0 2px #7f1d1d,0 0 10px #ef4444; animation:sp-tv-rec 1s steps(1,end) infinite; }

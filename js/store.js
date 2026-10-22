@@ -8664,11 +8664,15 @@ window._fbAction = function (key, field, val, noRerender) {
 // v1.4.14: digitar na busca — mostra/esconde o ✕ de limpar e repassa pro _fbAction.
 // Existe pra que o toggle do ✕ NÃO precise de re-render da barra (noRerender=true
 // preserva o foco e o cursor de quem está digitando).
-window._fbSearchInput = function (key, el) {
+window._fbSearchInput = function (key, el, origin) {
     var opts = window._filterBarCfg[key] || {};
     var x = opts.searchId && document.getElementById(opts.searchId + '-clear');
     if (x) x.style.display = (el && el.value) ? '' : 'none';
     window._fbAction(key, 'search', el ? el.value : '', true);
+    if (origin === 'input' && opts.onSearchInput) {
+        try { (new Function(opts.onSearchInput))(); }
+        catch (e) { try { (window._warn || console.error)('[filterBar] onSearchInput falhou (' + key + '):', e); } catch (e2) {} }
+    }
 };
 // ✕ do campo de busca: limpa, some, devolve o foco (o dono já vai digitar outra coisa)
 // e reaplica o filtro via o MESMO onChange da barra.
@@ -8827,7 +8831,7 @@ window._fbInner = function (key) {
             // v1.8.78: `padding-right` 34→46px pra o texto não correr por baixo do ALVO
             // do ✕ (que agora tem 44px). Sem isso, tocar no fim do próprio texto limparia
             // a busca em vez de posicionar o cursor.
-            + '<input id="' + opts.searchId + '" data-fb-search="1" type="text" oninput="window._fbSearchInput(\'' + key + '\',this)" placeholder="' + esc(opts.placeholder || '🔎 Buscar…') + '" autocomplete="off" value="' + esc(search) + '" style="' + sctrl + 'width:100%;height:44px;min-height:44px;padding:0 46px 0 10px;font-size:0.8rem;">'
+            + '<input id="' + opts.searchId + '" data-fb-search="1" type="text" oninput="window._fbSearchInput(\'' + key + '\',this,\'input\')" placeholder="' + esc(opts.placeholder || '🔎 Buscar…') + '" autocomplete="off" value="' + esc(search) + '" style="' + sctrl + 'width:100%;height:44px;min-height:44px;padding:0 46px 0 10px;font-size:0.8rem;">'
             // v1.8.78: o ALVO DE TOQUE e o DESENHO viraram coisas diferentes. O botão é
             // transparente e tem 44px de largura pela altura inteira do campo; o círculo
             // vermelho de 20px é o <span class="cancel-x-btn"> lá dentro. Antes o círculo
@@ -8924,7 +8928,8 @@ window._bracketBar = function (t, show) {
     var bar = window._inscritosFilterBar({
         stateKey: 'chaves', sticky: true, tournamentId: tid, instanceId: instance,
         searchId: 'bracket-search', sortId: 'bracket-sort', genderId: 'bracket-gender', skillId: 'bracket-skill',
-        skillCategories: (t && t.skillCategories) || [], onChange: 'window._bracketApplyFilter()'
+        skillCategories: (t && t.skillCategories) || [], onChange: 'window._bracketApplyFilter()',
+        onSearchInput: 'window._bracketApplyFilter("input")'
     });
     // O texto digitado sobrevive ao re-render (estado da barra), mas os CARDS voltam sem
     // filtro. Reaplica assim que o DOM novo aterrissa — daqui, e não de cada render site do

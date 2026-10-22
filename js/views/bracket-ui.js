@@ -888,7 +888,6 @@ function _rerenderBracket(tId, anchorMatchId) {
 
   // 1. Find anchor element — prefer the specific match card, fallback to any visible card
   var anchorEl = null;
-  var anchorOffsetY = 0;
   if (anchorMatchId) {
     anchorEl = document.getElementById('card-' + anchorMatchId);
   }
@@ -902,10 +901,6 @@ function _rerenderBracket(tId, anchorMatchId) {
         break;
       }
     }
-  }
-  var anchorId = anchorEl ? anchorEl.id : null;
-  if (anchorEl) {
-    anchorOffsetY = anchorEl.getBoundingClientRect().top;
   }
 
   // v0.16.85: detecta contexto INLINE — quando o user está em #tournaments/<id>
@@ -1062,16 +1057,17 @@ function _rerenderBracket(tId, anchorMatchId) {
     }
   });
 
-  // 6. Restore scroll anchored to the reference element
+  // 6. Preserve the window position across score and court updates. A change
+  // in strip height can shift the browser's scroll between animation frames.
+  // Restore that shift, but leave a fresh user scroll alone.
+  var _userScrolledDuringRender = false;
+  var _scrollIntentEvents = ['wheel', 'touchstart', 'pointerdown', 'keydown'];
+  var _markUserScrollIntent = function () { _userScrolledDuringRender = true; };
+  if (typeof window.addEventListener === 'function') _scrollIntentEvents.forEach(function (eventName) {
+    window.addEventListener(eventName, _markUserScrollIntent, { passive: true });
+  });
   function _restore() {
-    var newAnchor = anchorId ? document.getElementById(anchorId) : null;
-    if (newAnchor) {
-      var newRect = newAnchor.getBoundingClientRect();
-      var delta = newRect.top - anchorOffsetY;
-      window.scrollBy(0, delta);
-    } else {
-      window.scrollTo(_sx, _sy);
-    }
+    if (!_userScrolledDuringRender) window.scrollTo(_sx, _sy);
     _aplicarRolagensDaChave(_hscroll);
   }
 
@@ -1080,6 +1076,9 @@ function _rerenderBracket(tId, anchorMatchId) {
     _restore();
     requestAnimationFrame(function() {
       _restore();
+      if (typeof window.removeEventListener === 'function') _scrollIntentEvents.forEach(function (eventName) {
+        window.removeEventListener(eventName, _markUserScrollIntent);
+      });
       if (container) container.style.minHeight = '';
       // ⛔ a trava só sai DEPOIS da última restauração — soltar antes devolveria a janela
       // em que o laço de entrada rola por cima do que acabamos de restaurar.

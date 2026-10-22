@@ -299,5 +299,84 @@ ok(vis().every(Boolean),'limpar a busca do Jogador X restaura os jogos');
   }
 })();
 
+// Só a digitação escolhe outra aba: snapshots e busca programática preservam
+// a aba ativa. O mesmo caminho usa dia em torneios com abas por data.
+let selectedTabs=[];
+let dateTabs='0';
+const searchTabRoot={getAttribute:(key)=>({
+  'data-tournament-id':'tour_search', 'data-bracket-date-tabs':dateTabs,
+  'data-bracket-round-tabs':'1'
+})[key]};
+const originalQueryAll=sandbox.document.querySelectorAll;
+sandbox.document.querySelectorAll=(selector)=>selector==='[data-bracket-tabs-root]'?[searchTabRoot]:originalQueryAll(selector);
+sandbox.window._currentBracketTournament={id:'tour_search',participants:[]};
+sandbox.window._filterBarState={chaves:{gender:'all',skill:'all'}};
+sandbox.window._bracketTabState={tour_search:{gender:'masc',category:'Masc Power',round:'2'}};
+sandbox._bracketTabsApply=(tid,gender,category,round)=>{
+  selectedTabs.push([tid,gender,category,round]);
+  sandbox.window._bracketTabState[tid]={gender,category,round};
+  cards.forEach(card=>{ card.hidden=card.getAttribute('data-bracket-tab-category')!==category; });
+};
+cards[0].getAttribute=(key)=>({
+  'data-players':'José Silva | Ana','data-match-num':'167',
+  'data-bracket-tab-gender':'fem','data-bracket-tab-day':'22/10',
+  'data-bracket-tab-category':'Fem Light','data-bracket-tab-round':'1'
+})[key];
+cards[1].getAttribute=(key)=>({
+  'data-players':'Bruno | Carla','data-match-num':'168',
+  'data-bracket-tab-gender':'masc','data-bracket-tab-day':'23/10',
+  'data-bracket-tab-category':'Masc Power','data-bracket-tab-round':'2'
+})[key];
+cards[2].getAttribute=(key)=>({ 'data-players':'Outro jogo','data-match-num':'169' })[key];
+ghostCard.getAttribute=(key)=>({ 'data-players':'Outro grupo' })[key];
+cards[0].hidden=true; cards[1].hidden=false;
+input.value='jose'; F();
+ok(selectedTabs.length===0,'refiltro automático não troca aba com busca preenchida');
+F('input');
+ok(JSON.stringify(selectedTabs)==='[["tour_search","fem","Fem Light","1"]]',
+  'digitação abre a categoria e rodada do primeiro jogo correspondente');
+ok(cards[0].hidden===false && empty.style.display==='none','jogo encontrado fica visível sem aviso vazio');
+selectedTabs=[]; cards[0].hidden=true; cards[1].hidden=false;
+sandbox.window._bracketTabState.tour_search={gender:'23/10',category:'Masc Power',round:'2'};
+dateTabs='1'; input.value='jose'; F('input');
+ok(JSON.stringify(selectedTabs)==='[["tour_search","22/10","Fem Light","1"]]',
+  'aba de data usa o dia do jogo, não o gênero');
+selectedTabs=[]; input.value='jose'; F('input');
+ok(selectedTabs.length===0,'resultado já visível não altera a aba');
+input.value='ninguém'; F('input');
+ok(selectedTabs.length===0,'busca sem resultado não troca a aba');
+let hydratedName='';
+sandbox.window._nameForUid=()=>hydratedName;
+sandbox.window._userProfileCache={};
+cards[0]._spUids=null;
+cards[0].getAttribute=(key)=>({
+  'data-players':'','data-player-uids':'uid-pending','data-match-num':'167',
+  'data-bracket-tab-gender':'fem','data-bracket-tab-day':'22/10',
+  'data-bracket-tab-category':'Fem Light','data-bracket-tab-round':'1'
+})[key];
+cards[0].hidden=true; cards[1].hidden=false;
+selectedTabs=[]; input.value='jose'; F('input');
+ok(selectedTabs.length===0,'nome ainda aguardando hidratação não seleciona aba por falso acerto');
+hydratedName='José Silva'; F();
+ok(selectedTabs.length===0,'hidratação posterior não troca aba sem nova digitação');
+const storeSource=fs.readFileSync(path.join(ROOT,'js','store.js'),'utf8');
+const searchInputStart=storeSource.indexOf('window._fbSearchInput = function');
+const searchInputEnd=storeSource.indexOf('// ✕ do campo de busca:',searchInputStart);
+const inputOrigins=[];
+const barSandbox={window:null,document:{getElementById:()=>({style:{}})},console};
+barSandbox.window=barSandbox;
+barSandbox.window._filterBarCfg={chaves:{searchId:'bracket-search',onSearchInput:'window._bracketApplyFilter("input")'}};
+barSandbox.window._fbAction=()=>inputOrigins.push('normal');
+barSandbox.window._bracketApplyFilter=(origin)=>inputOrigins.push(origin);
+vm.createContext(barSandbox);
+vm.runInContext(storeSource.slice(searchInputStart,searchInputEnd),barSandbox,{filename:'filter-search-input'});
+barSandbox.window._fbSearchInput('chaves',{value:'jose'},'input');
+ok(JSON.stringify(inputOrigins)==='["normal","input"]','digitação executa filtro normal e depois seleção de aba');
+inputOrigins.length=0;
+barSandbox.window._fbSearchInput('chaves',{value:'jose'});
+ok(JSON.stringify(inputOrigins)==='["normal"]','atalho programático de sobrenome não seleciona outra aba');
+ok(/_fbSearchInput\(\\'\s*' \+ key \+ '\\',this,\\'input\\'\)/.test(storeSource),
+  'input da barra passa origem explícita');
+
 console.log((fail===0?'✅':'❌')+` bracket-search: ${pass} ok, ${fail} falharam`);
 process.exit(fail===0?0:1);

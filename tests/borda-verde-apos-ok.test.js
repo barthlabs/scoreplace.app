@@ -5,7 +5,7 @@ const vm = require('vm');
 const H = require('./render-harness');
 
 const source = fs.readFileSync('js/views/bracket.js', 'utf8');
-const begin = source.indexOf('window._confirmMatchCourtCall = function');
+const begin = source.indexOf('function _syncMatchCourtCopies(');
 const end = source.indexOf('window._adjustMatchCourtClock = function', begin);
 assert.ok(begin > 0 && end > begin, 'handler real localizado');
 
@@ -32,7 +32,7 @@ async function scenario({ response, matchExtra, route = '#tournaments/sb_tour_1'
       if (s === '#inline-bracket-container, [data-bracket-general-view]') return inBracket ? {} : null;
       return null;
     } };
-  const context = { window: {
+  const context = { document: { querySelectorAll: () => [] }, window: {
     location: { hash: route },
     _callCF: () => response instanceof Error ? Promise.reject(response) : Promise.resolve({ data: response }),
     _findTournamentById: () => tournament,

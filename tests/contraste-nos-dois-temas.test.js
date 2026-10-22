@@ -394,7 +394,7 @@ console.log('\n== Contraste nos DOIS temas ==');
   const css = fs.readFileSync(path.join(ROOT, 'css', 'bracket.css'), 'utf8');
   const components = fs.readFileSync(path.join(ROOT, 'css', 'components.css'), 'utf8');
   ok(/sp-operations-court-slot--active \.sp-operations-replica > \.sp-match-card \{[^}]*border:3px solid var\(--sp-c-22c55e/.test(css), 'card em quadra usa contorno verde do tema');
-  ok(/sp-operations-next \{ border-color: var\(--sp-c-fbbf24/.test(css), 'próximo a chamar usa contorno dourado do tema');
+  ok(/\.sp-operations-next\s*\{[^}]*border-color:\s*var\(--sp-c-fbbf24/.test(css), 'próximo a chamar usa contorno dourado do tema');
   ok(/\.sp-operations-replica > \.sp-match-card \{/.test(css) && /\.sp-set-inp\{[^}]*color:var\(--text-bright\)/.test(components), 'réplica usa o card e o placar canônicos');
   ok(/\.sp-operations-court-free span \{ color: var\(--text-muted\)/.test(css), 'quadra livre usa texto secundário do tema');
   ok(/\.sp-operations-label \{ color:\s*var\(--sp-c-fbbf24/.test(css), 'rótulo próximo usa dourado do tema');

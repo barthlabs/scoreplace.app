@@ -1397,7 +1397,7 @@ window._bracketOperationsRefresh = function (t, root) {
       var select = event.target && event.target.closest('.sp-operations-replica .sp-match-court select');
       if (select && typeof window._assignMatchCourtFromSelect === 'function') {
         var op = select.closest('.sp-operations-replica');
-        window._assignMatchCourtFromSelect(select, String(t.id), op.getAttribute('data-operations-match'));
+        window._assignMatchCourtFromSelect(select, String(t.id), op.getAttribute('data-operations-match')).catch(function () {});
       }
     });
     existing.addEventListener('input', function (event) {
@@ -4180,10 +4180,13 @@ window._renderReadyMatchesBanner = function _renderReadyMatchesBanner(t, opts) {
       const cur = e.match.court || '';
       const all = typeof window._collectAllMatches === 'function' ? window._collectAllMatches(t) : [];
       const occupancy = window.ScoreplaceCourtOccupancy;
-      const opts = '<option value="">📍 Definir quadra…</option>' +
-        _courts.map(function(c){ var busy = occupancy && occupancy.occupant(all, c, e.match.id); return '<option value="' + _sh(c) + '"' + (cur === c ? ' selected' : '') + (busy ? ' disabled class="sp-court-occupied"' : '') + '>' + _sh(c) + (busy ? ' · ocupada' : '') + '</option>'; }).join('');
-      courtHtml = '<select data-persisted-court="' + _sh(cur) + '" onclick="event.stopPropagation()" onchange="window._assignMatchCourtFromSelect(this,\'' + _tIdSafe + '\',\'' + _mid + '\')" ' +
-        'style="margin-top:4px;width:100%;box-sizing:border-box;padding:6px 8px;border-radius:8px;background:rgba(16,185,129,0.14);border:1px solid rgba(16,185,129,0.4);color:var(--sp-c-bbf7d0,#bbf7d0);font-size:0.78rem;font-weight:700;cursor:pointer;">' + opts + '</select>';
+      const curBusy = !!(cur && occupancy && occupancy.occupant(all, cur, e.match.id));
+      const noFree = _courts.every(function(c) { return occupancy && occupancy.occupant(all, c, e.match.id); });
+      const busyPlaceholder = curBusy || noFree;
+      const opts = '<option value=""' + (!cur || curBusy ? ' selected' : '') + (busyPlaceholder || cur || e.match.courtCalledAt ? ' disabled' : '') +
+        (busyPlaceholder ? ' class="sp-court-placeholder-busy"' : '') + '>📍 Definir quadra…</option>' +
+        _courts.map(function(c){ var busy = occupancy && occupancy.occupant(all, c, e.match.id); return '<option value="' + _sh(c) + '"' + (cur === c && !busy ? ' selected' : '') + (busy ? ' disabled class="sp-court-occupied"' : '') + '>' + _sh(c) + (busy ? ' · ocupada' : '') + '</option>'; }).join('');
+      courtHtml = '<select data-match-id="' + _sh(String(e.match.id)) + '" data-persisted-court="' + _sh(cur) + '" class="sp-ready-court-select' + (busyPlaceholder && (!cur || curBusy) ? ' sp-court-placeholder-busy' : '') + '" onclick="event.stopPropagation()" onchange="window._assignMatchCourtFromSelect(this,\'' + _tIdSafe + '\',\'' + _mid + '\').catch(function(){})">' + opts + '</select>';
     } else if (e.match.court) {
       courtHtml = '<div style="margin-top:4px;font-size:0.74rem;font-weight:800;color:var(--sp-c-34d399,#34d399);display:flex;align-items:center;gap:4px;">📍 ' + _sh(e.match.court) + '</div>';
     }
@@ -4242,13 +4245,54 @@ window._assignMatchCourt = function(tId, matchId, court) {
       throw err;
     });
 };
+function _syncMatchCourtCopies(tId, matchId, value, persisted) {
+  var t = typeof window._findTournamentById === 'function' ? window._findTournamentById(String(tId)) : null;
+  var matches = t && typeof window._collectAllMatches === 'function' ? window._collectAllMatches(t) : [];
+  var m = matches.find(function (item) { return String(item.id) === String(matchId); });
+  var occupancy = window.ScoreplaceCourtOccupancy;
+  var copies = Array.prototype.filter.call(document.querySelectorAll('select[data-match-id]'), function (node) {
+    return node.getAttribute('data-match-id') === String(matchId);
+  });
+  copies.forEach(function (node) {
+    var courtOptions = Array.prototype.filter.call(node.options, function (option) { return !!option.value; });
+    courtOptions.forEach(function (option) {
+      var busy = !!(occupancy && occupancy.occupant(matches, option.value, matchId));
+      option.disabled = busy;
+      option.classList.toggle('sp-court-occupied', busy);
+    });
+    var free = courtOptions.some(function (option) { return !option.disabled; });
+    var stored = persisted == null ? node.getAttribute('data-persisted-court') || '' : String(persisted);
+    if (persisted != null) node.setAttribute('data-persisted-court', stored);
+    var storedBusy = !!(stored && occupancy && occupancy.occupant(matches, stored, matchId));
+    var empty = Array.prototype.find.call(node.options, function (option) { return option.value === ''; });
+    if (empty) {
+      var isCard = !!node.closest('.sp-match-operational');
+      empty.disabled = storedBusy || !free || !!(m && m.courtCalledAt) || !!stored;
+      if (isCard) empty.textContent = storedBusy ? stored + ' · ocupada' : (!free ? 'Quadras ocupadas' : 'Sem quadra');
+      empty.classList.toggle('sp-court-placeholder-busy', storedBusy || !free);
+    }
+    node.value = value && Array.prototype.some.call(node.options, function (option) { return option.value === value && !option.disabled; }) ? value : '';
+    var selectedBusy = !!(node.value && occupancy && occupancy.occupant(matches, node.value, matchId));
+    node.classList.toggle('sp-court-placeholder-busy', !node.value && (storedBusy || !free || selectedBusy));
+    var row = node.closest('.sp-match-operational');
+    var button = row && row.querySelector('button.sp-match-confirm');
+    if (button) button.disabled = button.getAttribute('data-call-allowed-today') !== '1' || !node.value || selectedBusy;
+  });
+}
+
 window._assignMatchCourtFromSelect = function(select, tId, matchId) {
   var prior = select.getAttribute('data-persisted-court') || '';
-  return window._assignMatchCourt(tId, matchId, select.value).then(function(result) {
-    select.setAttribute('data-persisted-court', select.value);
+  var requested = select.value;
+  _syncMatchCourtCopies(tId, matchId, requested);
+  return window._assignMatchCourt(tId, matchId, requested).then(function(result) {
+    var t = typeof window._findTournamentById === 'function' ? window._findTournamentById(String(tId)) : null;
+    if (t && typeof window._collectAllMatches === 'function') window._collectAllMatches(t).forEach(function (m) {
+      if (String(m.id) === String(matchId)) m.court = requested;
+    });
+    _syncMatchCourtCopies(tId, matchId, requested, requested);
     return result;
   }).catch(function(error) {
-    select.value = prior;
+    _syncMatchCourtCopies(tId, matchId, prior, prior);
     throw error;
   });
 };
@@ -4306,6 +4350,7 @@ window._confirmMatchCourtCall = function(button, tId, matchId) {
         });
         if (typeof window._bracketOperationsRefresh === 'function') window._bracketOperationsRefresh(current);
       }
+      _syncMatchCourtCopies(tId, matchId, court, court);
       if (row && Number.isFinite(start)) {
         var clockHtml = window._spCourtClockHtml(start, current, Date.now(), tId, matchId, true);
         if (time) time.outerHTML = clockHtml;
@@ -4315,7 +4360,8 @@ window._confirmMatchCourtCall = function(button, tId, matchId) {
       // agora, sem aguardar o eco do listener remoto.
       if (Number.isFinite(start) && current && typeof window._tvLiveRefresh === 'function') window._tvLiveRefresh();
     }).catch(function(err) {
-      button.disabled = false;
+      _syncMatchCourtCopies(tId, matchId, court);
+      if (/failed-precondition/i.test(String(err && (err.code || err.message) || ''))) button.disabled = true;
       if (typeof window._warn === 'function') window._warn('[assignMatchCourt] chamada falhou', err);
       if (typeof showNotification === 'function') showNotification('Chamada não confirmada', err && err.message || 'Tente novamente.', 'error');
     });
@@ -8184,14 +8230,22 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     : '';
   if (_canChangeCardCourt && _cardCourts.length) {
     var _suggestedCourt = (typeof window._suggestFreedCourtForMatch === 'function') ? window._suggestFreedCourtForMatch(t, m) : '';
-    var _displayCourt = _suggestedCourt || String(m.court || '');
     var _allForCourts = typeof window._collectAllMatches === 'function' ? window._collectAllMatches(t) : [];
     var _occupancy = window.ScoreplaceCourtOccupancy;
-    var _courtOpts = (m.courtCalledAt ? '' : '<option value="">Sem quadra</option>') + _cardCourts.map(function (court) {
+    if (_suggestedCourt && _occupancy && _occupancy.occupant(_allForCourts, _suggestedCourt, m.id)) _suggestedCourt = '';
+    var _persistedCourt = String(m.court || '');
+    var _persistedBusy = !!(_persistedCourt && _occupancy && _occupancy.occupant(_allForCourts, _persistedCourt, m.id));
+    var _displayCourt = _persistedBusy ? '' : (_suggestedCourt || _persistedCourt);
+    var _freeCourts = _cardCourts.filter(function (court) { return !_occupancy || !_occupancy.occupant(_allForCourts, court, m.id); });
+    var _busyPlaceholder = _persistedBusy || !_freeCourts.length;
+    var _emptyCourtLabel = _persistedBusy ? _persistedCourt + ' · ocupada' : (!_freeCourts.length ? 'Quadras ocupadas' : 'Sem quadra');
+    var _emptyCourtDisabled = _busyPlaceholder || !!m.courtCalledAt || !!_persistedCourt;
+    var _courtOpts = '<option value=""' + (!_displayCourt ? ' selected' : '') + (_emptyCourtDisabled ? ' disabled' : '') +
+      (_busyPlaceholder ? ' class="sp-court-placeholder-busy"' : '') + '>' + window._safeHtml(_emptyCourtLabel) + '</option>' + _cardCourts.map(function (court) {
       var busy = _occupancy && _occupancy.occupant(_allForCourts, court, m.id);
-      return '<option value="' + window._safeHtml(court) + '"' + (_displayCourt === court ? ' selected' : '') + (busy ? ' disabled class="sp-court-occupied"' : '') + '>' + window._safeHtml(court) + (busy ? ' · ocupada' : '') + '</option>';
+      return '<option value="' + window._safeHtml(court) + '"' + (_displayCourt === court && !busy ? ' selected' : '') + (busy ? ' disabled class="sp-court-occupied"' : '') + '>' + window._safeHtml(court) + (busy ? ' · ocupada' : '') + '</option>';
     }).join('');
-    _courtCardHtml = '<div class="sp-match-operational" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><label class="sp-match-court"><select aria-label="Quadra" data-persisted-court="' + window._safeHtml(String(m.court || '')) + '" onclick="event.stopPropagation()" onchange="window._assignMatchCourtFromSelect(this,\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\')">' + _courtOpts + '</select></label><button type="button" class="sp-match-confirm" aria-label="Confirmar chamada para a quadra"' + (!_callAllowedToday ? ' disabled title="' + window._safeHtml(_callDayMessage) + '"' : '') + ' onclick="event.stopPropagation();window._confirmMatchCourtCall(this,\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\')" style="padding:4px 9px;border-radius:7px;border:1px solid #22c55e;background:#166534;color:#fff;font-weight:800;cursor:pointer;">' + (m.courtCalledAt ? '✓ OK' : 'OK') + '</button>' + (!_callAllowedToday ? '<span class="sp-match-call-day-hint">' + window._safeHtml(_callDayMessage) + '</span>' : '') + _estimatedTimeHtml + '</div>';
+    _courtCardHtml = '<div class="sp-match-operational" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><label class="sp-match-court"><select aria-label="Quadra" data-match-id="' + window._safeHtml(String(m.id)) + '" data-persisted-court="' + window._safeHtml(_persistedCourt) + '" class="' + (_busyPlaceholder && !_displayCourt ? 'sp-court-placeholder-busy' : '') + '" onclick="event.stopPropagation()" onchange="window._assignMatchCourtFromSelect(this,\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\').catch(function(){})">' + _courtOpts + '</select></label><button type="button" class="sp-match-confirm" data-call-allowed-today="' + (_callAllowedToday ? '1' : '0') + '" aria-label="Confirmar chamada para a quadra"' + ((!_callAllowedToday || !_displayCourt || (_occupancy && _occupancy.occupant(_allForCourts, _displayCourt, m.id))) ? ' disabled' : '') + (!_callAllowedToday ? ' title="' + window._safeHtml(_callDayMessage) + '"' : '') + ' onclick="event.stopPropagation();window._confirmMatchCourtCall(this,\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\')" style="padding:4px 9px;border-radius:7px;border:1px solid #22c55e;background:#166534;color:#fff;font-weight:800;cursor:pointer;">' + (m.courtCalledAt ? '✓ OK' : 'OK') + '</button>' + (!_callAllowedToday ? '<span class="sp-match-call-day-hint">' + window._safeHtml(_callDayMessage) + '</span>' : '') + _estimatedTimeHtml + '</div>';
   } else if (_isConcentratedEvent && m.court) {
     _courtCardHtml = '<div class="sp-match-operational" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><div class="sp-match-court sp-match-court--readonly">' + window._safeHtml(String(m.court)) + '</div>' + (m.courtCalledAt && typeof window._souOrganizador === 'function' && window._souOrganizador(t) ? '<span class="sp-match-confirm sp-match-confirm--locked">✓ OK</span>' : '') + _estimatedTimeHtml + '</div>';
   } else if (_estimatedTimeHtml) {
@@ -11537,7 +11591,7 @@ function _uidsDoCard(c) {
   }
   return (c._spUids = out.length ? out : _SEM_UIDS);
 }
-window._bracketApplyFilter = function () {
+window._bracketApplyFilter = function (origin) {
   /* ⭐ ANTES de mexer em qualquer `display`: é esta posição que tem que sobreviver ao filtro.
    * ⛔ E LENDO COM REDE. Esta linha nasceu como `(document.scrollingElement ||
    * document.documentElement).scrollTop` e derrubou duas suítes: no DOM de teste não existe
@@ -11711,6 +11765,7 @@ window._bracketApplyFilter = function () {
   };
   var shown = 0, hitsTotal = 0, hitsVisiveis = 0, markerVisivel = 0;
   var _hitsDiag = [];
+  var _searchTabCandidates = [];
   var conts = [];            // ancestrais candidatos, na ordem em que aparecem
   var contHasHit = [];       // paralelo a conts: algum card casando lá dentro?
   // "Jogador X" é uma vaga, não uma pessoa: encontrá-lo exige o retrato do grupo
@@ -11746,7 +11801,7 @@ window._bracketApplyFilter = function () {
      * custo é zero no caminho que já funciona, e ninguém fica invisível por causa de uma
      * corrida de carregamento. Ver [[project_letzplay_textcontent_engole_estrutura]]: aqui
      * ele é palheiro de busca, não estrutura. */
-    var _casa = !q;
+    var _casa = !q, _awaitingName = false;
     if (!_casa) {
       _casa = window._buscaCasa(c.getAttribute('data-players') || '', q) ||
         window._buscaCasa(c.getAttribute('data-team-names') || '', q);
@@ -11794,7 +11849,7 @@ window._bracketApplyFilter = function () {
         if (_nomesUid) _casa = window._buscaCasa(_nomesUid, q);
         // ⛔ NÃO SE ESCONDE QUEM AINDA NÃO SE CONHECE. Este card — e SÓ ele — segura a
         // decisão até o perfil chegar; o resto da chave já está sendo filtrado de verdade.
-        if (!_casa && _indeciso) _casa = true;
+        if (!_casa && _indeciso) { _casa = true; _awaitingName = true; }
       }
     }
     var _cardCategory = String(c.getAttribute('data-bracket-tab-category') || '');
@@ -11825,6 +11880,10 @@ window._bracketApplyFilter = function () {
         if (!_markerHidden) markerVisivel++;
       }
       continue;
+    }
+    if (q && hit && !_awaitingName && c.getAttribute('data-bracket-tab-category') &&
+        c.getAttribute('data-match-num') && (!c.classList || c.classList.contains('sp-match-card'))) {
+      _searchTabCandidates.push(c);
     }
     // Guarda o display original UMA vez — o card pode ter display próprio (flex/grid).
     setDisp(c, hit);
@@ -11923,6 +11982,50 @@ window._bracketApplyFilter = function () {
      * pra uma lista que não se via. Mesma lição da 2.0.91. [[project_letzplay_scan_stability]]
      * ⚠️ Marca quem foi aberto pela busca pra saber o que fechar quando ela for limpa. */
     window._fbSyncDetalhe(dets[d], nvis, true);
+  }
+  // A troca de aba é consequência de digitação, nunca de um snapshot, placar ou
+  // hidratação assíncrona. Cards provisórios aguardando nome não são acertos.
+  if (origin === 'input' && q && !window._bracketAutoTabBusy && _searchTabCandidates.length) {
+    var _searchCardVisible = function (card) {
+      for (var node = card; node && node !== root; node = node.parentElement) {
+        if (node.hidden || node.style && node.style.display === 'none') return false;
+      }
+      return true;
+    };
+    if (!_searchTabCandidates.some(_searchCardVisible)) {
+      var _tabTournament = _tBusca || window._currentBracketTournament;
+      var _tabTid = _tabTournament && String(_tabTournament.id || '');
+      var _tabRoot = _tabTid && Array.prototype.find.call(document.querySelectorAll('[data-bracket-tabs-root]'), function (node) {
+        return node.getAttribute('data-tournament-id') === _tabTid;
+      });
+      if (_tabRoot) {
+        var _dateTabs = _tabRoot.getAttribute('data-bracket-date-tabs') === '1';
+        var _target = _searchTabCandidates.find(function (card) {
+          return card.getAttribute(_dateTabs ? 'data-bracket-tab-day' : 'data-bracket-tab-gender') !== null &&
+            !!card.getAttribute('data-bracket-tab-category');
+        });
+        if (_target) {
+          var _tabGender = _target.getAttribute(_dateTabs ? 'data-bracket-tab-day' : 'data-bracket-tab-gender') || '';
+          var _tabCategory = _target.getAttribute('data-bracket-tab-category');
+          var _tabRound = _target.getAttribute('data-bracket-tab-round') || '';
+          var _state = window._bracketTabState && window._bracketTabState[_tabTid] || {};
+          if (_state.gender !== _tabGender || _state.category !== _tabCategory ||
+              (_tabRoot.getAttribute('data-bracket-round-tabs') === '1' && _state.round !== _tabRound)) {
+            var _hadFocus = document.activeElement === inp;
+            var _beforeTabY = window.scrollY;
+            window._bracketAutoTabBusy = true;
+            try {
+              _bracketTabsApply(_tabTid, _tabGender, _tabCategory, _tabRound, false);
+              window._bracketApplyFilter('after-tab');
+              if (_hadFocus && inp && inp.isConnected && inp.focus) inp.focus({ preventScroll: true });
+              if (Number.isFinite(_beforeTabY) && typeof window.scrollTo === 'function' &&
+                  Math.abs(window.scrollY - _beforeTabY) > 2) window.scrollTo(window.scrollX, _beforeTabY);
+            } finally { window._bracketAutoTabBusy = false; }
+            return;
+          }
+        }
+      }
+    }
   }
   /* ⛔ 04/set/2026 — O AVISO TEM QUE DIZER QUEM ESVAZIOU A TELA.
    * Relato do dono: _"o toggle só meus jogos, nas chaves não está mostrando nada"_. Medido
@@ -12031,10 +12134,8 @@ window._bracketApplyFilter = function () {
   // Avisar aqui é barato (a função é idempotente e já roda a cada scroll) e fecha o
   // buraco na fonte: é o próprio ato de filtrar que reposiciona o chrome.
   if (typeof window._reflowChrome === 'function') window._reflowChrome();
-  // A busca apenas filtra a aba que a pessoa escolheu. Mudar de categoria aqui
-  // fazia "Geral" saltar para o primeiro resultado e impedia voltar enquanto
-  // o texto permanecia no campo. Em grade por datas, a pessoa alterna o dia e
-  // continua vendo todas as categorias na Geral com a mesma consulta.
+  // Na digitação a aba pode acompanhar o resultado. As demais chamadas mantêm
+  // a escolha do usuário, inclusive quando um placar provoca nova filtragem.
   /* ⛔ E QUEM FILTRA TAMBÉM TEM QUE MANTER O PAI ALTO — era o que faltava aqui.
    * `position:sticky` só segura ENQUANTO o bloco-pai está na viewport. Filtrar de 55 cards
    * para 5 encolhe o `#view-container`, o pai deixa de ter por onde viajar e a barra
@@ -12060,7 +12161,7 @@ window._bracketApplyFilter = function () {
    * Regra: com consulta e acertos, se o PRIMEIRO acerto visível não está na viewport, rola
    * até ele (o card já leva scroll-margin-top = --scroll-anchor, então para sob a barra).
    * Sem consulta, nada muda — `keepY` continua mandando. */
-  if (q && _hitsDiag.length && typeof window.getComputedStyle === 'function') {
+  if (q && _hitsDiag.length && origin !== 'after-tab' && typeof window.getComputedStyle === 'function') {
     try {
       var _primeiro = null;
       for (var _fh = 0; _fh < _hitsDiag.length; _fh++) {

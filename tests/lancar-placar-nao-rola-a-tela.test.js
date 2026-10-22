@@ -25,6 +25,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };
@@ -36,7 +37,7 @@ const ui = fs.readFileSync(path.join(ROOT, 'js', 'views', 'bracket-ui.js'), 'utf
 
 // ── a trava liga no re-render e desliga depois da última restauração ─────────
 const iRr = ui.indexOf('function _rerenderBracket');
-const corpoRr = ui.slice(iRr, ui.indexOf('\n}', ui.indexOf('_restore();', iRr)));
+const corpoRr = ui.slice(iRr, ui.indexOf('window._rerenderBracket = _rerenderBracket;', iRr));
 ok(/window\._travaRolagemDaChave = true;/.test(corpoRr),
    '⛔ o re-render LIGA a trava de rolagem');
 const iLiga = corpoRr.indexOf('_travaRolagemDaChave = true');
@@ -74,6 +75,27 @@ ok(/_lerRolagensDaChave\(\)/.test(corpoRr) && /_aplicarRolagensDaChave/.test(cor
    'a rolagem HORIZONTAL da chave continua preservada');
 ok(/_typedScores/.test(corpoRr), 'o placar digitado em OUTRO jogo continua preservado');
 ok(/_detailsState/.test(corpoRr), 'o estado aberto/fechado das seções continua preservado');
+
+// A faixa operacional pode mudar de altura entre frames: o navegador ajusta o
+// scroll sozinho. Uma rolagem feita pela pessoa nesse intervalo prevalece.
+const frames = [], listeners = {};
+const container = { offsetHeight: 1200, style: {}, querySelectorAll: () => [] };
+const win = { location: { hash: '#bracket/t1' }, scrollX: 0, scrollY: 500,
+  innerHeight: 800, _log() {}, _error() {},
+  scrollTo(x, y) { this.scrollX = x; this.scrollY = y; },
+  addEventListener(name, fn) { listeners[name] = fn; },
+  removeEventListener(name, fn) { if (listeners[name] === fn) delete listeners[name]; } };
+const context = { window: win, document: {
+  getElementById: id => id === 'view-container' ? container : null,
+  querySelectorAll: () => []
+}, clearTimeout() {}, setTimeout() {}, requestAnimationFrame: fn => frames.push(fn),
+_lerRolagensDaChave: () => ({}), _aplicarRolagensDaChave() {}, renderBracket() {} };
+vm.runInNewContext(ui.slice(iRr, ui.indexOf('window._rerenderBracket = _rerenderBracket;', iRr)), context);
+context._rerenderBracket('t1');
+win.scrollY = 462; frames.shift()();
+ok(win.scrollY === 500, 'mudança de altura entre frames não desloca a janela após lançar placar');
+listeners.wheel(); win.scrollY = 430; frames.shift()();
+ok(win.scrollY === 430 && !listeners.wheel, 'rolagem da pessoa prevalece e os ouvintes temporários saem');
 
 console.log(pass + ' ok, ' + fail + ' falhas');
 process.exit(fail ? 1 : 0);

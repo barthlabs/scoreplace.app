@@ -94,8 +94,11 @@ const cardConcentrado = W.renderMatchCard(mConcentrado, true, tConcentrado.id, 1
 W._souOrganizador = souOrgOriginal;
 ok(/>Fem Light<\/span>/.test(cardConcentrado) && !/Categoria|Jogar até|Propor datas/.test(cardConcentrado),
   'evento concentrado mostra somente a categoria e não convida atletas a negociar prazo/data');
-ok(/sp-match-court/.test(cardConcentrado) && /<option value="">Sem quadra<\/option>/.test(cardConcentrado) && !/📍 Sem quadra/.test(cardConcentrado),
+ok(/sp-match-court/.test(cardConcentrado) && /<option value=""[^>]*>Sem quadra<\/option>/.test(cardConcentrado) && !/📍 Sem quadra/.test(cardConcentrado),
   'evento concentrado mantém somente o seletor de quadra, sem pino decorativo');
+const bracketSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'bracket.js'), 'utf8');
+ok(/sp-ready-court-select/.test(bracketSource) && !/style="[^"]*background:rgba\(16,185,129,0\.14\)/.test(bracketSource),
+  'seletor da rota de jogos prontos usa classe CSS para sinalizar quadra ocupada');
 ok(/sp-match-team-tag--vertical/.test(cardConcentrado) && />VENOM<\/span>/.test(cardConcentrado) && !/>Time: VENOM<\/span>/.test(cardConcentrado),
   'o nome do time vira uma tag vertical colorida e não repete “Time:”');
 ok(!/Criar grupo/.test(cardConcentrado),

@@ -12,13 +12,14 @@ assert(start > 0 && end > start);
   try {
     const page = await browser.newPage();
     await page.setContent('<main id="view-container"><section id="tourn-grid-container"></section><nav data-bracket-tabs-root="1" data-tournament-id="sb_test"></nav><section id="rounds"><article id="card-m2" class="sp-match-card"></article></section></main>');
+    await page.addStyleTag({ path: 'css/bracket.css' });
+    await page.addScriptTag({ path: 'js/domain/court-occupancy.js' });
+    await page.addScriptTag({ path: 'js/views/bracket-model.js' });
     await page.addScriptTag({ content: source.slice(start, end) });
     const state = await page.evaluate(() => {
       window._matchCardTimestamp = value => value ? Date.parse(value) : 0;
       window._bracketSyncRoundHeadingOffsets = () => {};
-      window.ScoreplaceCourtOccupancy = { isFinished: m => !!m.resultAt, occupiesCourt: m => !!(m.court && m.courtCalledAt && !m.resultAt) };
       window.ScoreplaceNextMatch = { knownSide: value => !!value && value !== 'TBD' };
-      window._collectAllMatches = t => t.matches;
       window._isConcentratedTournament = () => true;
       window._safeHtml = value => String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
       window.AppStore = { currentUser: { uid: 'org' } };
@@ -65,6 +66,14 @@ assert(start > 0 && end > start);
         linked: next.querySelector('label[for]').htmlFor === next.querySelector('input').id,
         noInline: !next.querySelector('[onclick], [oninput]'),
         courts: [...strip.querySelectorAll('.sp-operations-court-free strong')].map(node => node.textContent) };
+      const trackHeight = strip.querySelector('.sp-operations-court-track').getBoundingClientRect().height;
+      const freeRect = strip.querySelector('.sp-operations-court-free').getBoundingClientRect();
+      const nextRect = next.getBoundingClientRect();
+      const freeHeight = freeRect.height;
+      initial.freeSlotFillsTrack = trackHeight > 100 && freeHeight >= trackHeight - 3;
+      initial.freeSlotMatchesCard = Math.abs(freeRect.top - nextRect.top) <= 3 &&
+        Math.abs(freeRect.bottom - nextRect.bottom) <= 3 &&
+        Math.abs(freeRect.height - nextRect.height) <= 3;
       next.querySelector('select').focus();
       window._bracketOperationsRefresh(t, root);
       const selectFocusRestored = document.activeElement === strip.querySelector('.sp-operations-next select');
@@ -91,6 +100,8 @@ assert(start > 0 && end > start);
     });
     assert(state.initial.full && state.initial.names && state.initial.noCanonical && state.initial.uniqueIds && state.initial.linked && state.initial.noInline);
     assert.deepEqual(state.initial.courts, ['Quadra 4', 'Quadra 5']);
+    assert(state.initial.freeSlotFillsTrack, 'o slot vazio deve ocupar toda a altura rolável');
+    assert(state.initial.freeSlotMatchesCard, 'o slot vazio deve ter a mesma altura e alinhar no topo e na base do card completo');
     assert.deepEqual(state.afterCall.called, ['sb_test', 'm1', 'Quadra 5']);
     assert.deepEqual(state.afterCall.live, ['sb_test', 'm1']);
     assert.deepEqual(state.afterCall.wo, ['sb_test', 'm|m1']);
@@ -121,6 +132,8 @@ assert(start > 0 && end > start);
     // stub se uma mudança futura quebrar o caminho opts.idScope.
     const real = await browser.newPage();
     try {
+      await real.addScriptTag({ path: 'js/domain/court-occupancy.js' });
+      await real.addScriptTag({ path: 'js/views/bracket-model.js' });
       await real.addScriptTag({ content: source });
       const names = [...new Set((source.slice(source.indexOf('function renderMatchCard('), source.indexOf('// ─── Highlight winner based on score'))
         .match(/window\._[A-Za-z0-9_]+/g) || []).map(value => value.slice(7)))];
@@ -151,6 +164,34 @@ assert(start > 0 && end > start);
           clean: !b.querySelector('[onclick],[oninput],[onchange]') };
       }, names);
       assert.deepEqual(rendered, { sameTeams: true, sameStructure: true, operational: true, scoped: true, clean: true });
+      const courtState = await real.evaluate(async () => {
+        const target = { id: 'court-target', p1: 'A / B', p2: 'C / D', category: 'Fem Light',
+          court: 'Quadra 4', scheduledAt: new Date().toISOString() };
+        const occupant = { id: 'court-occupant', court: 'Quadra 4', courtCalledAt: new Date().toISOString() };
+        const t = { id: 'sb_court', matches: [target, occupant], courtNames: ['Quadra 4', 'Quadra 5'],
+          format: 'Liga', scoring: { type: 'simple' } };
+        window._findTournamentById = () => t;
+        const card = html => { const el = document.createElement('div'); el.innerHTML = html; document.body.appendChild(el); return el; };
+        const first = card(window.renderMatchCard(target, true, t.id, 1, false, null));
+        const second = card(window.renderMatchCard(target, true, t.id, 1, false, null, { idScope: 'court-copy' }));
+        const selectors = () => [first, second].map(el => el.querySelector('.sp-match-court select'));
+        const initial = selectors().map(el => ({ value: el.value, red: el.classList.contains('sp-court-placeholder-busy'),
+          occupiedDisabled: el.querySelector('option[value="Quadra 4"]').disabled,
+          okDisabled: el.closest('.sp-match-operational').querySelector('.sp-match-confirm').disabled }));
+        window._callCF = () => Promise.reject(new Error('falha simulada'));
+        selectors()[0].value = 'Quadra 5';
+        try { await window._assignMatchCourtFromSelect(selectors()[0], t.id, target.id); } catch (e) {}
+        const rollback = selectors().map(el => [el.value, el.getAttribute('data-persisted-court')]);
+        window._callCF = () => Promise.resolve({ data: { ok: true, changed: true } });
+        selectors()[0].value = 'Quadra 5';
+        await window._assignMatchCourtFromSelect(selectors()[0], t.id, target.id);
+        const saved = selectors().map(el => [el.value, el.getAttribute('data-persisted-court')]);
+        return { initial, rollback, saved, modelCourt: target.court };
+      });
+      assert(courtState.initial.every(x => x.value === '' && x.red && x.occupiedDisabled && x.okDisabled));
+      assert.deepEqual(courtState.rollback, [['', 'Quadra 4'], ['', 'Quadra 4']]);
+      assert.deepEqual(courtState.saved, [['Quadra 5', 'Quadra 5'], ['Quadra 5', 'Quadra 5']]);
+      assert.equal(courtState.modelCourt, 'Quadra 5');
     } finally { await real.close(); }
     const scoringPage = await browser.newPage();
     try {

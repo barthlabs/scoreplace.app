@@ -184,6 +184,13 @@
 
 }
 
+[data-theme="light"] .sp-match-court select.sp-court-placeholder-busy,
+[data-theme="light"] .sp-ready-court-select.sp-court-placeholder-busy {
+  border-color: var(--er-lz-red, #b91c1c);
+  color: var(--er-lz-red, #b91c1c);
+  background: rgba(185, 28, 28, .08);
+}
+
 :root {
   
   /* Tipografia */
