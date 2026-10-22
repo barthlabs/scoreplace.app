@@ -1,3 +1,4 @@
+// 2.5.32 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.31 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.30 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.29 — Dashboard mostra apenas atletas com jogo no dia: você, sua dupla e
