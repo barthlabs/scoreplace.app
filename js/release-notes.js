@@ -1,4 +1,9 @@
-// 2.5.40 — Atualização consolidada de produção com as correções validadas desde a última publicação.
+// 2.5.40 — Operações de quadra, presença e placar usam contingência automática
+// entre três regiões: a primeira ação escolhe uma região saudável e só troca
+// após falha, conferindo o recibo antes de tentar novamente. A sonda autenticada
+// mede saúde e revisão, sem autorizar ações no torneio; cada gravação valida o
+// papel do usuário. A chave, a TV e as súmulas recebem os ajustes de operação,
+// atualização e impressão preparados para o segundo dia do Neon.
 // 2.5.39 — Torneios públicos em andamento, como o Neon, aparecem para contas
 // novas na dashboard. A descoberta deixa de cortar os torneios após os 50
 // primeiros; resultados já disputados no resumo identificam corretamente
