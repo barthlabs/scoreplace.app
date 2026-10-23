@@ -192,6 +192,78 @@ assert(start > 0 && end > start);
       return { height: track.clientHeight, content: track.scrollHeight, mobileHeight: getComputedStyle(track).height };
     });
     assert(mobileClip.content <= mobileClip.height, 'mobile não pode cortar cards após resize: ' + JSON.stringify(mobileClip));
+    for (const width of [600, 900, 1440]) {
+      await page.setViewportSize({ width, height: 800 });
+      const geometry = await page.evaluate(() => {
+        const t = window._findTournamentById();
+        const root = document.querySelector('[data-bracket-tabs-root]');
+        window._bracketCourtReleaseCache = { sb_test: { released: { m1: '2026-10-22T18:05:00Z' } } };
+        window._bracketOperationsRefresh(t, root);
+        const strip = root._bracketOperationsStrip;
+        const rect = selector => strip.querySelector(selector).getBoundingClientRect();
+        const next = rect('.sp-operations-next .sp-match-card');
+        const pending = rect('.sp-operations-pending .sp-match-card');
+        const free = rect('.sp-operations-court-free');
+        const panels = [...strip.querySelectorAll('.sp-operations-next,.sp-operations-pending,.sp-operations-courts')].map(el => el.getBoundingClientRect());
+        const label = rect('.sp-operations-court-slot > .sp-operations-label');
+        const availability = rect('.sp-operations-availability');
+        return { next: [next.top, next.bottom], pending: [pending.top, pending.bottom],
+          free: [free.top, free.bottom], panels: panels.map(r => [r.top, r.bottom]),
+          labels: [label.top, availability.top], clipped: strip.querySelector('.sp-operations-track').scrollHeight > strip.querySelector('.sp-operations-track').clientHeight };
+      });
+      const aligned = (a, b) => Math.abs(a[0] - b[0]) <= 3 && Math.abs(a[1] - b[1]) <= 3;
+      assert(aligned(geometry.next, geometry.pending) && aligned(geometry.next, geometry.free),
+        'cards e slot livre devem ocupar a mesma região em ' + width + 'px: ' + JSON.stringify(geometry));
+      assert(geometry.panels.every(panel => aligned(panel, geometry.panels[0])) &&
+        Math.abs(geometry.labels[0] - geometry.labels[1]) <= 3 && !geometry.clipped,
+      'as três seções e cabeçalhos devem alinhar sem corte em ' + width + 'px: ' + JSON.stringify(geometry));
+    }
+    const scrollAfterRefresh = await page.evaluate(() => {
+      document.getElementById('view-container').style.paddingTop = '650px';
+      document.getElementById('rounds').style.height = '1600px';
+      window.scrollTo(0, 350);
+      const before = window.scrollY;
+      const root = document.querySelector('[data-bracket-tabs-root]');
+      root._bracketOperationsStrip.querySelector('.sp-operations-track').scrollLeft = 180;
+      const leftBefore = root._bracketOperationsStrip.querySelector('.sp-operations-track').scrollLeft;
+      window._bracketOperationsRefresh(window._findTournamentById(), root);
+      return { before, after: window.scrollY, leftBefore, left: root._bracketOperationsStrip.querySelector('.sp-operations-track').scrollLeft };
+    });
+    assert.equal(scrollAfterRefresh.after, scrollAfterRefresh.before, 'atualização da faixa preserva a posição vertical');
+    assert.equal(scrollAfterRefresh.left, scrollAfterRefresh.leftBefore, 'atualização da faixa preserva a posição horizontal');
+    const toggleStart = source.indexOf('window._toggleMyMatches = function(checked) {');
+    const toggleEnd = source.indexOf('// ── PINTAR EM ETAPAS', toggleStart);
+    assert(toggleStart > 0 && toggleEnd > toggleStart);
+    await page.addScriptTag({ content: source.slice(toggleStart, toggleEnd) });
+    const filterFocus = await page.evaluate(async () => {
+      const t = window._findTournamentById();
+      const root = document.querySelector('[data-bracket-tabs-root]');
+      window.AppStore.currentUser = { uid: 'org' };
+      window._bracketOperationsRefresh(t, root);
+      let jumps = 0;
+      window._bracketClearSearchForHeaderFilter = () => {};
+      window._applyMyMatchesFilter = () => {};
+      window._bracketSyncHeaderFilterButtons = () => {};
+      window._bracketTabsRevealFilteredMatch = () => { jumps++; };
+      window._bracketEntryTarget = () => ({ scrollIntoView: () => { jumps++; } });
+      window._reflowChrome = () => {};
+      window.scrollTo(0, 350);
+      const before = window.scrollY;
+      window._toggleMyMatches(true);
+      window._toggleMyMatches(false);
+      await new Promise(resolve => setTimeout(resolve, 80));
+      const operational = { jumps, before, after: window.scrollY, visible: !!root._bracketOperationsStrip };
+      window.AppStore.currentUser = { uid: 'other' };
+      window._bracketOperationsRefresh(t, root);
+      jumps = 0;
+      window._toggleMyMatches(true);
+      await new Promise(resolve => setTimeout(resolve, 80));
+      return { operational, participantJumps: jumps, participantHasStrip: !!root._bracketOperationsStrip };
+    });
+    assert.deepEqual(filterFocus.operational, { jumps: 0, before: 350, after: 350, visible: true },
+      'alternar Só meus jogos não move nem oculta a faixa operacional: ' + JSON.stringify(filterFocus));
+    assert(filterFocus.participantJumps > 0 && !filterFocus.participantHasStrip,
+      'participante sem faixa conserva o foco anterior: ' + JSON.stringify(filterFocus));
     const bestOfThree = await page.evaluate(() => {
       const op = document.createElement('div');
       op.innerHTML = '<button data-confirm-for="m3" style="display:none">✓</button>' +

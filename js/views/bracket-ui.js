@@ -852,13 +852,20 @@ function _aplicarRolagensDaChave(mapa) {
 }
 
 var _scoreFocusGeneration = 0;
-function _focusNextAfterScore(tId) {
+function _focusNextAfterScore(tId, matchId) {
+  // Um placar novo invalida qualquer foco agendado por um placar anterior.
   var generation = ++_scoreFocusGeneration;
   window._tournamentUpcomingEntryToken = (window._tournamentUpcomingEntryToken || 0) + 1;
   var root = Array.prototype.find.call(document.querySelectorAll('[data-bracket-tabs-root]'), function (node) {
     return node.getAttribute('data-tournament-id') === String(tId);
   });
   if (root) root._bracketFocusToken = (root._bracketFocusToken || 0) + 1;
+  var operationalSource = window._bracketOperationsScoreSource;
+  if (operationalSource && String(operationalSource.tournamentId) === String(tId) &&
+      String(operationalSource.matchId) === String(matchId) && Date.now() - operationalSource.at < 15000) {
+    window._bracketOperationsScoreSource = null;
+    return null; // _rerenderBracket restaura a posição original.
+  }
   var interrupted = false;
   var events = ['wheel', 'touchstart', 'pointerdown', 'keydown'];
   var cancel = function () { interrupted = true; cleanup(); };
@@ -2794,7 +2801,7 @@ window._saveResultInline = function (tId, matchId, sourceRoot) {
   // lançado (página estática). Se a finalização in-place falhar (card fora do
   // DOM, etc.), cai no rerender completo. Rodada completa / eliminatórias /
   // grupos seguem no rerender completo (classificação sobe, próxima rodada).
-  var _focusAfterScore = _focusNextAfterScore(tId);
+  var _focusAfterScore = _focusNextAfterScore(tId, matchId);
   if (_keepUpcomingViewMounted && _finalizeRoundCardInPlace(t, m, tId, matchId)) {
     // Não desmontar root, abas nem portal. A própria visão devolve/move os
     // wrappers no mesmo frame e preserva os dois resultados mais recentes.
@@ -2804,10 +2811,10 @@ window._saveResultInline = function (tId, matchId, sourceRoot) {
       window._bracketSyncRoundHeadingOffsets();
     } catch (e) {}
     setTimeout(function() { window._suppressSoftRefresh = false; }, 3000);
-    requestAnimationFrame(_focusAfterScore);
+    if (_focusAfterScore) requestAnimationFrame(_focusAfterScore);
   } else if (_inPlaceFinalize && _finalizeRoundCardInPlace(t, m, tId, matchId)) {
     setTimeout(function() { window._suppressSoftRefresh = false; }, 3000);
-    requestAnimationFrame(_focusAfterScore);
+    if (_focusAfterScore) requestAnimationFrame(_focusAfterScore);
   } else {
     window._suppressSoftRefresh = false;
     _rerenderBracket(tId, matchId, { focusNext: _focusAfterScore });

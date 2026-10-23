@@ -255,6 +255,9 @@ window._togglePendingMatches = function(checked) {
  * ⛔ `_travaRolagemDaChave` continua mandando: com placar em edição, ninguém rola nada. */
 window._toggleMyMatches = function(checked) {
   if (checked) _bracketClearSearchForHeaderFilter();
+  var _operationsVisible = !!(document.querySelector &&
+    document.querySelector('[data-bracket-operations-strip] .sp-operations-track'));
+  var _operationsY = _operationsVisible ? window.scrollY : null;
   var _ancora = null, _topoAntes = 0;
   var _alvo = function () {
     try { return (typeof window._bracketEntryTarget === 'function') ? window._bracketEntryTarget() : null; }
@@ -271,12 +274,16 @@ window._toggleMyMatches = function(checked) {
   window._showOnlyMyMatches = !!checked;
   window._bracketSyncHeaderFilterButtons();
   _applyMyMatchesFilter();
-  if (checked && typeof window._bracketTabsRevealFilteredMatch === 'function') window._bracketTabsRevealFilteredMatch('mine');
+  if (checked && !_operationsVisible && typeof window._bracketTabsRevealFilteredMatch === 'function') window._bracketTabsRevealFilteredMatch('mine');
   try {
     var _sp = document.getElementById('sp-sticky-spacer');
     if (_sp) _sp.style.height = '0px';
   } catch (e) {}
   if (typeof window._reflowChrome === 'function') { try { window._reflowChrome(); } catch (e) {} }
+  if (_operationsVisible && !window._travaRolagemDaChave) {
+    window.scrollTo(window.scrollX, _operationsY);
+    return;
+  }
   var _ir = function () {
     if (window._travaRolagemDaChave) return;
     try {
@@ -782,11 +789,6 @@ function _alvoDeEntrada() {
     // primeiro jogo do usuário. O laço de entrada aguarda o card nascer.
     return null;
   }
-  // Fase concluída + organizador: sem alvo explícito, o banner "🏆 Avançar"
-  // é de fato a próxima ação útil. Ele só pode ser fallback — nunca pode
-  // sequestrar uma entrada que já escolheu um jogo.
-  var _adv = document.getElementById('phase-advance-banner');
-  if (_adv) return _adv;
   var _p = null;
   try { _p = sessionStorage.getItem('sp_scrollToGroup'); } catch (e) {}
   if (_p) {
@@ -839,6 +841,13 @@ function _alvoDeEntrada() {
       return _g;
     }
   }
+  // A entrada comum de quem opera um torneio começa na faixa de trabalho.
+  // Jogos e grupos pedidos explicitamente acima continuam tendo prioridade.
+  var _faixaOperacional = document.querySelector('[data-bracket-operations-strip]');
+  if (_faixaOperacional && _faixaOperacional.querySelector('.sp-operations-track')) return _faixaOperacional;
+  // Sem faixa operacional, preserva o destino do avanço de fase.
+  var _adv = document.getElementById('phase-advance-banner');
+  if (_adv) return _adv;
   // 2) O SEU GRUPO. Ordem do dono (21/ago/2026): _"quando a pessoa entra nos detalhes do
   //    torneio ela precisa ir direto para o topo do seu grupo. o seu grupo e seu nome deve
   //    estar na tela de cara."_ Vale mesmo SEM jogo pendente — grupo sorteado e ainda sem
@@ -1416,6 +1425,10 @@ window._bracketOperationsRefresh = function (t, root) {
       }, 80);
     };
     window.addEventListener('resize', existing._spOperationsOnResize);
+    existing.addEventListener('pointerdown', function () {
+      // Qualquer ação do operador encerra o foco tardio de entrada/aba.
+      root._bracketFocusToken = (Number(root._bracketFocusToken) || 0) + 1;
+    });
     existing.addEventListener('focusout', function (event) {
       if (!event.target || !event.target.matches('.sp-operations-replica .sp-match-court select')) return;
       setTimeout(function () {
@@ -1433,6 +1446,10 @@ window._bracketOperationsRefresh = function (t, root) {
       if (!target || target.disabled) return;
       if (target.hasAttribute('data-confirm-for')) {
         event.preventDefault();
+        // O placar lançado na faixa não deve iniciar outro foco automático.
+        // A marca é consumida pelo fluxo de resultado; expira para não afetar
+        // uma ação posterior feita no card da chave após validação inválida.
+        window._bracketOperationsScoreSource = { tournamentId: String(t.id), matchId: String(mid), at: Date.now() };
         if (typeof window._saveResultInline === 'function') window._saveResultInline(String(t.id), mid, op);
       } else if (target.classList.contains('sp-match-confirm')) {
         event.preventDefault();
@@ -1503,6 +1520,7 @@ window._bracketOperationsRefresh = function (t, root) {
   root._bracketOperationsDrafts = root._bracketOperationsDrafts || {};
   var previousTrack = existing.querySelector('.sp-operations-track');
   var trackScroll = previousTrack ? previousTrack.scrollLeft : 0;
+  var pageX = window.scrollX, pageY = window.scrollY;
   var focused = document.activeElement && document.activeElement.closest && document.activeElement.closest('.sp-operations-replica');
   var focusState = focused && { match: focused.getAttribute('data-operations-match'),
     key: document.activeElement.getAttribute('data-operations-source-input'),
@@ -1542,14 +1560,15 @@ window._bracketOperationsRefresh = function (t, root) {
   _bracketReconcileOperationalOrder(root);
   var operationsTrack = existing.querySelector('.sp-operations-track');
   if (operationsTrack) {
-    operationsTrack.style.removeProperty('--sp-operations-row-height');
-    var nextReplica = existing.querySelector('.sp-operations-next .sp-operations-replica');
-    var nextHeight = nextReplica ? nextReplica.getBoundingClientRect().height + 30 : 120;
-    var activeHeights = Array.prototype.map.call(existing.querySelectorAll('.sp-operations-court-slot--active .sp-operations-replica'), function (replica) {
-      return replica.getBoundingClientRect().height + 72;
+    // Mede a altura natural de todos os cards antes de aplicar a régua comum.
+    // Tudo ocorre no mesmo turno para não expor uma faixa intermediária à tela.
+    operationsTrack.style.setProperty('--sp-operations-card-height', 'auto');
+    var cardHeights = Array.prototype.map.call(existing.querySelectorAll('.sp-operations-replica > .sp-match-card'), function (card) {
+      return Math.ceil(card.getBoundingClientRect().height);
     });
-    operationsTrack.style.setProperty('--sp-operations-row-height', Math.ceil(Math.max.apply(null, [120, nextHeight].concat(activeHeights))) + 'px');
+    operationsTrack.style.setProperty('--sp-operations-card-height', Math.max.apply(null, [120].concat(cardHeights)) + 'px');
     operationsTrack.scrollLeft = trackScroll;
+    if (window.scrollY !== pageY || window.scrollX !== pageX) window.scrollTo(pageX, pageY);
   }
   Array.prototype.forEach.call(existing.querySelectorAll('.sp-operations-replica'), function (op) {
     var mid = op.getAttribute('data-operations-match');
@@ -2175,7 +2194,7 @@ function _bracketTabsApply(tid, gender, category, requestedRound, forceCanonical
     qb.style.borderColor = onRound ? 'rgba(16,185,129,.72)' : 'rgba(255,255,255,.12)';
   }
   if (isOperationalView) {
-    var operationalShown = _bracketGeneralView(root, true, gender, isUpcoming, true,
+    var operationalShown = _bracketGeneralView(root, true, gender, isUpcoming, !root._bracketOperationsStrip,
       isScheduledCategory ? category : '');
     if (!operationalShown && isScheduledCategory) {
       // Mesmo com todos os horários válidos, um escopo desmontado durante a
@@ -11967,6 +11986,11 @@ window._bracketApplyFilter = function (origin) {
   };
   for (var i = 0; i < cards.length; i++) {
     var c = cards[i];
+    if (c.closest && c.closest('[data-bracket-operations-strip]')) {
+      // Réplicas são comandos persistentes, independentes da aba/busca da chave.
+      if (c.dataset.fbDisp !== undefined) c.style.display = c.dataset.fbDisp;
+      continue;
+    }
     /* ⭐ 2.1.99 — A BUSCA CASA TAMBÉM COM O QUE ESTÁ ESCRITO NA TELA.
      * Relato do dono (02/set/2026): _"essa merda de barra de busca nao esta funcionando
      * porra nenhuma"_ — digitou "Arna" com o Arnaldo visível no card e a chave ficou VAZIA.

@@ -84,6 +84,17 @@ function comDom(mapa, grupoPedido) {
 
 ok(typeof W._bracketEntryTarget === 'function', 'window._bracketEntryTarget existe');
 
+// Organização/arbitragem entra na faixa operacional; o destino explícito
+// continua acima dela e participantes sem faixa mantêm o grupo como alvo.
+(function () {
+  const faixa = mkEl('faixa', ['.sp-operations-track']);
+  const meu = mkEl('meu-grupo');
+  const restore = comDom({ '[data-bracket-operations-strip]': faixa, '[data-my-group="1"]': [meu] });
+  const alvo = W._bracketEntryTarget();
+  restore();
+  ok(alvo === faixa, 'entrada comum da organização foca a faixa operacional');
+})();
+
 // (a) O CASO DO DONO: tenho grupo, NÃO tenho jogo pendente → vai pro meu grupo mesmo assim.
 (function () {
   const meu = mkEl('meu-grupo');

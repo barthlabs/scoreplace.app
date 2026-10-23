@@ -1,3 +1,6 @@
+// 2.5.36 — A faixa do organizador e árbitro alinha próxima chamada, placares pendentes e
+// quadras em qualquer largura; mantém a posição após ações e filtros e recebe
+// o foco ao abrir o torneio.
 // 2.5.35 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.34 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.33 — Atualização consolidada de produção com as correções validadas desde a última publicação.

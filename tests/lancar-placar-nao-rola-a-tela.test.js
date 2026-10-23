@@ -38,6 +38,14 @@ const ui = fs.readFileSync(path.join(ROOT, 'js', 'views', 'bracket-ui.js'), 'utf
 // ── a trava liga no re-render e desliga depois da última restauração ─────────
 const iRr = ui.indexOf('function _rerenderBracket');
 const corpoRr = ui.slice(iRr, ui.indexOf('window._rerenderBracket = _rerenderBracket;', iRr));
+const focusContext = { window: { _bracketOperationsScoreSource: {
+  tournamentId: 't1', matchId: 'm1', at: Date.now()
+} }, document: { querySelectorAll: () => [] }, Date };
+vm.runInNewContext(ui.slice(ui.indexOf('var _scoreFocusGeneration'), iRr), focusContext);
+ok(focusContext._focusNextAfterScore('t1', 'm1') === null &&
+   focusContext.window._bracketOperationsScoreSource === null &&
+   focusContext._scoreFocusGeneration === 1,
+   'placar lançado na faixa invalida foco anterior e não programa novo salto');
 ok(/window\._travaRolagemDaChave = true;/.test(corpoRr),
    '⛔ o re-render LIGA a trava de rolagem');
 const iLiga = corpoRr.indexOf('_travaRolagemDaChave = true');
