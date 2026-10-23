@@ -1,8 +1,8 @@
 {
   "schema": 1,
-  "backendCommit": "26b7b69d065b8683887bd79a7c776ad4e6dc9776",
-  "scopeNote": "O último ajuste exige autorização antes de consultar o estado de quadra; as funções de liberação e limpeza foram publicadas no corte anterior.",
+  "backendCommit": "d25010b5dfd3bd1c7bdaeba28de73335836cadba",
+  "scopeNote": "Adiamento repetido do próximo jogo requer a callable endMatchOnCourt publicada antes da interface.",
   "functions": [
-    "assignMatchCourt"
+    "endMatchOnCourt"
   ]
 }
