@@ -238,8 +238,8 @@
         Math.min(size, portrait ? 7.8 : 7.3), true, right);
     });
   }
-  // Uma página por categoria e dia, no máximo 12 jogos. A quadra é escrita na chamada.
-  function scorePage(model, day, category, matches, part, total, orientation) {
+  // Uma página por quadra e dia, no máximo 12 jogos. A quadra efetiva é anotada no campo.
+  function scorePage(model, day, courtLabel, matches, part, total, orientation) {
     var portrait = orientation === 'portrait';
     var p = portrait ? pdfPage(595, 842) : pdfPage(842, 595);
     var left = portrait ? 18 : 20, right = p.width - left;
@@ -249,10 +249,10 @@
     var gamesPerSet = model.scoring && model.scoring.gamesPerSet || 6;
     var gameLabel = slots === 1 ? '1 set de ' + gamesPerSet + ' games' : 'melhor de ' + slots + ' sets';
     p.fillRect(0, 0, p.width, 69, '0.071 0.133 0.220');
-    p.write(model.tournament + '  |  ' + category, left, 25, portrait ? 11 : 13, true,
+    p.write(model.tournament, left, 25, portrait ? 11 : 13, true,
       portrait ? 56 : 83, '1 1 1');
-    p.write(dayLabel(day) + '  |  ' + gameLabel + '  |  Página ' + part + '/' + total,
-      left, 42, 8, false, 85, '1 1 1');
+    p.write(fitLabel(courtLabel, 120, 8, true) + '  |  ' + dayLabel(day) + '  |  ' + gameLabel +
+      '  |  Página ' + part + '/' + total, left, 42, 8, false, null, '1 1 1');
     p.write('Anote a quadra usada. Após lançar o resultado, cada atleta assina uma vez nesta página.',
       left, 56, portrait ? 6.8 : 8, false, portrait ? 90 : 118, '1 1 1');
     p.logo(right - 60, 4, 60);
@@ -277,6 +277,8 @@
       p.line(left, y+rowHeight, contentRight, y+rowHeight, 0.75);
       p.write(String(m.number || '-'), left+3, y+rowHeight/2+3, 8, true);
       p.write(m.time, hourX+3, y+rowHeight/2+3, 7.5);
+      p.write(fitLabel(m.category || 'Sem categoria', namesX-6-(courtX+3), 6, false),
+        courtX+3, y+11, 6);
       p.line(courtX+7, y+rowHeight-10, namesX-10, y+rowHeight-10, 0.55);
       writeSide(p, m.team1, m.p1, namesX, y, sideWidth, portrait, false);
       writeSide(p, m.team2, m.p2, secondX, y, sideWidth, portrait, true);
@@ -329,19 +331,23 @@
     options = options || {};
     var orientation = options.orientation === 'portrait' ? 'portrait' : 'landscape';
     var pages = [];
-    var categories = Array.from(new Set(model.matches.map(function (m) {
-      return m.category || 'Sem categoria';
-    })));
-    categories.forEach(function (category) {
-      var chunks = [];
+    var courts = Array.from(new Set(model.matches.map(function (m) {
+      return m.court || 'Quadra a definir';
+    }))).sort(function (a, b) {
+      if (a === 'Quadra a definir') return b === a ? 0 : 1;
+      if (b === 'Quadra a definir') return -1;
+      return a.localeCompare(b, 'pt-BR', { numeric:true });
+    });
+    courts.forEach(function (courtLabel) {
       model.days.forEach(function (day) {
         var matches = model.matches.filter(function (m) {
-          return m.day === day && (m.category || 'Sem categoria') === category;
+          return m.day === day && (m.court || 'Quadra a definir') === courtLabel;
         });
-        for (var i=0;i<matches.length;i+=12) chunks.push({ day:day, matches:matches.slice(i,i+12) });
-      });
-      chunks.forEach(function (chunk, index) {
-        pages.push(scorePage(model, chunk.day, category, chunk.matches, index+1, chunks.length, orientation));
+        var total = Math.ceil(matches.length / 12);
+        for (var i=0;i<total;i++) {
+          pages.push(scorePage(model, day, courtLabel, matches.slice(i*12, (i+1)*12),
+            i+1, total, orientation));
+        }
       });
     });
     if (options.attendance) pages.push.apply(pages, makeAttendancePages(model));
