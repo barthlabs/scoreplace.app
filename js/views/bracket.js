@@ -4425,8 +4425,42 @@ function _courtOperationId() {
     var n = Math.floor(Math.random() * 16); return (char === 'x' ? n : (n & 3) | 8).toString(16);
   });
 }
+var _courtConfirmationPending = new Map();
+function _confirmCourtOperation(tId, matchId, action, title, message, run) {
+  var key = [String(tId), String(matchId), action].join('|');
+  if (_courtConfirmationPending.has(key)) return Promise.resolve(null);
+  if (typeof window.showConfirmDialog !== 'function') return Promise.reject(new Error('Confirmação indisponível.'));
+  var operation = new Promise(function (resolve, reject) {
+    var settled = false, observer = null;
+    function disconnect() { if (observer) observer.disconnect(); observer = null; }
+    function cancel() {
+      if (settled) return;
+      settled = true;
+      disconnect();
+      resolve(null);
+    }
+    function confirm() {
+      if (settled) return;
+      settled = true;
+      disconnect();
+      Promise.resolve().then(run).then(resolve, reject);
+    }
+    try {
+      window.showConfirmDialog(title, message, confirm, cancel,
+        { type: 'warning', confirmText: 'Confirmar', cancelText: 'Cancelar' });
+      var dialog = document.getElementById('custom-confirm-dialog');
+      if (dialog && typeof MutationObserver === 'function') {
+        observer = new MutationObserver(function () { if (!dialog.isConnected) cancel(); });
+        observer.observe(document.body, { childList: true });
+      }
+    } catch (error) { disconnect(); settled = true; reject(error); }
+  });
+  _courtConfirmationPending.set(key, operation);
+  return operation.finally(function () { _courtConfirmationPending.delete(key); });
+}
 window._endMatchOnCourt = function (tId, matchId, button) {
-  if (!window.confirm('Liberar esta quadra sem placar? O jogo ficará em Placares pendentes.')) return Promise.resolve(null);
+  return _confirmCourtOperation(tId, matchId, 'release', 'Liberar quadra',
+    'Liberar esta quadra sem placar? O jogo ficará em Placares pendentes.', function () {
   if (!window._callCF) return Promise.reject(new Error('Serviço indisponível.'));
   if (button) button.disabled = true;
   return window._callCF('endMatchOnCourt', {
@@ -4441,13 +4475,14 @@ window._endMatchOnCourt = function (tId, matchId, button) {
     if (typeof showNotification === 'function') showNotification('Quadra não liberada', error && error.message || 'Tente novamente.', 'error');
     throw error;
   }).finally(function () { if (button && button.isConnected) button.disabled = false; });
+  });
 };
 window._cancelCourtAction = function (tId, matchId, action, button) {
   if (action !== 'restore' && action !== 'cancel-call') return Promise.reject(new Error('Ação inválida.'));
   var message = action === 'restore'
     ? 'Restaurar este jogo à quadra original? O relógio continuará contando desde a chamada inicial.'
     : 'Cancelar esta chamada e devolver o jogo à fila?';
-  if (!window.confirm(message)) return Promise.resolve(null);
+  return _confirmCourtOperation(tId, matchId, action, 'Cancelar ação de quadra', message, function () {
   if (!window._callCF) return Promise.reject(new Error('Serviço indisponível.'));
   if (button) button.disabled = true;
   return window._callCF('endMatchOnCourt', {
@@ -4462,6 +4497,7 @@ window._cancelCourtAction = function (tId, matchId, action, button) {
     if (typeof showNotification === 'function') showNotification('Cancelamento recusado', error && error.message || 'Tente novamente.', 'error');
     throw error;
   }).finally(function () { if (button && button.isConnected) button.disabled = false; });
+  });
 };
 function _syncMatchCourtCopies(tId, matchId, value, persisted) {
   var t = typeof window._findTournamentById === 'function' ? window._findTournamentById(String(tId)) : null;

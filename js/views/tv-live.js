@@ -280,6 +280,8 @@
       'copy.querySelectorAll("[id]").forEach(function(child){child.removeAttribute("id");});list.appendChild(copy);});' +
       'var first=list.querySelector("[data-tv-repeat]");resultCycle=first?first.offsetTop-originals[0].offsetTop:0;' +
       'if(resultCycle<=0){list.querySelectorAll("[data-tv-repeat]").forEach(function(node){node.remove();});resultCycle=0;}}' +
+      'function syncFullscreenButton(){var btn=document.getElementById("tv-fullscreen-action");if(btn)btn.textContent=document.fullscreenElement?"⛶ Sair da tela cheia":"⛶ Tela cheia";}' +
+      'document.addEventListener("fullscreenchange",syncFullscreenButton);' +
       'function reflow(){if(window.__tvGeneration!==gen)return;fit();ensureCycle();if(resultCycle){resultPosition=resultPosition%resultCycle;}' +
       'else resultPosition=0;var list=document.querySelector(".tv-results-list");if(list)list.scrollTop=resultPosition;}' +
       'window.__tvFitLabels=fit;window.addEventListener("resize",reflow);window.addEventListener("load",reflow);' +
@@ -287,13 +289,13 @@
       'if(document.fonts&&document.fonts.ready)document.fonts.ready.then(reflow);' +
       'window.__tvReplaceMarkup=function(html){var root=document.getElementById("tv-root"),old=root&&root.querySelector(".tv-results-list");' +
       'var day=old&&old.getAttribute("data-result-day"),top=resultPosition;' +
-      'if(!root)return;if(typeof document.createElement!=="function"){root.innerHTML=html;fit();ensureCycle();' +
+      'if(!root)return;if(typeof document.createElement!=="function"){root.innerHTML=html;syncFullscreenButton();fit();ensureCycle();' +
       'var fallback=root.querySelector(".tv-results-list");resultPosition=fallback&&fallback.getAttribute("data-result-day")===day&&resultCycle?top%resultCycle:0;' +
       'if(fallback)fallback.scrollTop=resultPosition;resultAt=Date.now();return;}' +
       'var draft=document.createElement("div");draft.innerHTML=html;' +
       'var incoming=draft.querySelector(".tv-results-list"),same=!!(old&&incoming&&day===incoming.getAttribute("data-result-day")&&' +
       'Array.from(old.querySelectorAll(".tv-result:not([data-tv-repeat])")).map(function(n){return n.outerHTML;}).join("")===incoming.innerHTML);' +
-      'if(same)incoming.replaceWith(old);root.replaceChildren.apply(root,Array.from(draft.childNodes));fit();' +
+      'if(same)incoming.replaceWith(old);root.replaceChildren.apply(root,Array.from(draft.childNodes));syncFullscreenButton();fit();' +
       'if(!same)ensureCycle();var list=root.querySelector(".tv-results-list");' +
       'if(!same){resultPosition=list&&list.getAttribute("data-result-day")===day&&resultCycle?top%resultCycle:0;' +
       'if(list)list.scrollTop=resultPosition;}resultAt=Date.now();};' +
@@ -319,7 +321,7 @@
       'var warning=document.getElementById("tv-connection");if(warning)warning.hidden=!!window.__tvLastSync&&now-window.__tvLastSync<10000;' +
       '}document.addEventListener("click",function(event){var btn=event.target&&event.target.closest&&event.target.closest("#tv-fullscreen-action");if(!btn)return;' +
       'var target=document.documentElement;var action=document.fullscreenElement?document.exitFullscreen():target.requestFullscreen();' +
-      'Promise.resolve(action).then(function(){btn.textContent=document.fullscreenElement?"⛶ Sair da tela cheia":"⛶ Tela cheia";})' +
+      'Promise.resolve(action).then(syncFullscreenButton)' +
       '.catch(function(){btn.textContent="Tela cheia indisponível · tente de novo";});});' +
       'window.addEventListener("pagehide",function(){signal("scoreplace-tv-gone");});timer=setInterval(tick,1000);tick();})();</script>';
   }

@@ -295,7 +295,7 @@ assert(start > 0 && end > start);
     await page.addScriptTag({ content: source.slice(endStart, endStop) });
     const endFeedback = await page.evaluate(async () => {
       const calls = [], notices = [];
-      window.confirm = () => true;
+      window.showConfirmDialog = (_title, _message, onConfirm) => onConfirm();
       window.showNotification = (...args) => notices.push(args);
       window._callCF = (name, payload) => { calls.push([name, payload]); return Promise.resolve({ data: { ok: true } }); };
       await window._endMatchOnCourt('tour_test', 'm1');
@@ -308,6 +308,31 @@ assert(start > 0 && end > start);
     assert.equal(endFeedback.calls[1][1].sandbox, true);
     assert(endFeedback.notices.some(args => args[0] === 'Quadra liberada' && args[2] === 'success'));
     assert(endFeedback.notices.some(args => args[0] === 'Quadra não liberada' && args[2] === 'error'));
+    const courtDialog = await page.evaluate(async () => {
+      let opens = 0, writes = 0, callbacks;
+      window._callCF = () => { writes++; return Promise.resolve({ data: { ok: true } }); };
+      window.showConfirmDialog = (_title, _message, ok, cancel) => {
+        const old = document.getElementById('custom-confirm-dialog');
+        if (old) old.remove();
+        const dialog = document.createElement('div');
+        dialog.id = 'custom-confirm-dialog'; document.body.appendChild(dialog);
+        callbacks = { ok, cancel, dialog }; opens++;
+      };
+      const first = window._endMatchOnCourt('tour_test', 'cancelled');
+      const duplicate = window._endMatchOnCourt('tour_test', 'cancelled');
+      const duplicated = opens === 1 && await duplicate === null;
+      callbacks.cancel(); callbacks.dialog.remove();
+      const cancelled = await first === null && writes === 0;
+      const replaced = window._endMatchOnCourt('tour_test', 'replaced');
+      window.showConfirmDialog('Outro diálogo', '', () => {}, () => {});
+      const replacementSettled = await Promise.race([replaced.then(x => x === null), new Promise(r => setTimeout(() => r(false), 500))]);
+      const retried = window._endMatchOnCourt('tour_test', 'replaced');
+      const reopens = opens === 4;
+      callbacks.ok(); callbacks.ok();
+      await retried;
+      return { duplicated, cancelled, replacementSettled, reopens, writes };
+    });
+    assert.deepEqual(courtDialog, { duplicated: true, cancelled: true, replacementSettled: true, reopens: true, writes: 1 });
     // Exercita também o renderizador real: a faixa não pode passar apenas no
     // stub se uma mudança futura quebrar o caminho opts.idScope.
     const real = await browser.newPage();

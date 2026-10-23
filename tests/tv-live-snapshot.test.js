@@ -437,7 +437,12 @@ assert.equal(reloadButton.attributes['aria-pressed'], 'false', 'após reload fec
 const liveSource = fs.readFileSync(path.join(root, 'js/views/tv-live.js'), 'utf8');
 assert.match(liveSource, /id=\\?"tv-fullscreen-action/, 'janela NO AR oferece entrada em tela cheia na própria janela');
 assert.match(liveSource, /target\.requestFullscreen\(\)/, 'tela cheia é acionada pela janela que será exibida na TV');
-assert.match(liveSource, /html:fullscreen #tv-fullscreen-action\{display:none\}/, 'controle some da saída limpa');
+assert.match(popupHtml, /document\.addEventListener\("fullscreenchange",syncFullscreenButton\)/,
+  'TV atualiza o botão quando o navegador sai da tela cheia');
+assert.match(popupHtml, /root\.replaceChildren\.apply\(root,Array\.from\(draft\.childNodes\)\);syncFullscreenButton\(\)/,
+  'TV restaura o rótulo correto após atualizar resultados e quadras');
+assert.match(popupHtml, /html:fullscreen #tv-fullscreen-action\{display:block\}/,
+  'saída explícita continua disponível na própria TV');
 assert.doesNotMatch(fs.readFileSync(path.join(root, 'js/views/tournaments.js'), 'utf8'), /window\._tvMode\(/,
   'ficha do torneio não exibe mais o modo antigo');
 assert.doesNotMatch(fs.readFileSync(path.join(root, 'js/views/bracket-ui.js'), 'utf8'), /window\._tvMode =/,
