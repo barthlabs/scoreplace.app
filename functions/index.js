@@ -4099,6 +4099,7 @@ exports.setTournamentPresence = onCall(
     const callerUid = request.auth && request.auth.uid;
     if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
     const data = request.data || {};
+    if (data.probe === true) return _operationProbeReply();
     const tournamentId = String(data.tournamentId || "").trim();
     const sandbox = data.sandbox === true;
     const targetKey = String(data.targetKey || "").trim();
@@ -4130,8 +4131,6 @@ exports.setTournamentPresence = onCall(
     else if (legacyKey && !_partesPerm.idDeDocumentoValido(legacyKey)) {
       throw new HttpsError("invalid-argument", "identidade legada inválida");
     }
-    // Mesmo documento e autorização da operação, sem gravar presença.
-    if (data.probe === true) return _operationProbeReply();
     const receipt = data.operationId == null ? null : (() => {
       try { return _operationReceipt.prepare({ operationId: data.operationId, actorUid: callerUid,
         parentPath: ref.path, kind: "presence", target: targetKey, action,
@@ -4178,29 +4177,36 @@ exports.setTournamentPresence = onCall(
     const fora = Array.from(new Set(_tSplitFn.partesDe(t).concat(Array.isArray(t._semPesados) ? t._semPesados : [])));
     const FieldPath = admin.firestore.FieldPath;
     const FieldValue = admin.firestore.FieldValue;
-    const lote = db.batch();
     const paresDoDoc = [];
     changes.forEach((op) => {
-      if (fora.indexOf(op.parte) !== -1) {
-        const itemRef = ref.collection(_tSplitFn.colecaoDaParte(op.parte)).doc(op.chave);
-        if (op.valor === null) lote.delete(itemRef);
-        else lote.set(itemRef, { _idx: op.chave, _k: op.chave, item: op.valor });
-      } else {
+      if (fora.indexOf(op.parte) === -1) {
         paresDoDoc.push(new FieldPath(op.parte, op.chave), op.valor === null ? FieldValue.delete() : op.valor);
       }
     });
     paresDoDoc.push(new FieldPath("updatedAt"), new Date().toISOString());
-    lote.update.apply(lote, [ref].concat(paresDoDoc));
     const response = { ok: true, action, targetKey, updatedAt: now };
-    if (receiptRef) lote.create(receiptRef, _operationReceipt.document(receipt, response, now));
-    try { await lote.commit(); }
-    catch (e) {
-      if (!receiptRef || !(e && (e.code === 6 || e.code === "already-exists"))) throw e;
-      const previous = await receiptRef.get();
-      if (!previous.exists || !_operationReceipt.matches(previous.data(), receipt)) throw new HttpsError("failed-precondition", "operationId já pertence a outra ação");
-      return _operationReceipt.replay(previous.data());
-    }
-    return response;
+    return db.runTransaction(async (tx) => {
+      const protocol = await tx.get(ref.collection('operationControl').doc('_protocol'));
+      if (protocol.exists && protocol.data().protocolVersion === 2 && !receipt) {
+        throw new HttpsError('failed-precondition', 'Atualize o aplicativo antes de operar este torneio.');
+      }
+      if (receiptRef) {
+        const existing = await tx.get(receiptRef);
+        if (existing.exists) {
+          if (!_operationReceipt.matches(existing.data(), receipt)) throw new HttpsError('failed-precondition', 'operationId já pertence a outra ação');
+          return _operationReceipt.replay(existing.data());
+        }
+      }
+      changes.forEach((op) => {
+        if (fora.indexOf(op.parte) === -1) return;
+        const itemRef = ref.collection(_tSplitFn.colecaoDaParte(op.parte)).doc(op.chave);
+        if (op.valor === null) tx.delete(itemRef);
+        else tx.set(itemRef, { _idx: op.chave, _k: op.chave, item: op.valor });
+      });
+      tx.update.apply(tx, [ref].concat(paresDoDoc));
+      if (receiptRef) tx.create(receiptRef, _operationReceipt.document(receipt, response, now));
+      return response;
+    });
   }
 );
 

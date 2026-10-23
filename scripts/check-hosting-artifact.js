@@ -11,7 +11,7 @@ const { verify } = require('./check-web-entry-contract');
 const ROOT = path.join(__dirname, '..');
 const OUT = path.join(ROOT, 'www');
 const required = ['index.html', 'open.html', 'js/lojas-config.js', 'js/domain/next-match.js',
-  'sw.js', 'manifest.json', 'version.txt', 'ext-version.txt',
+  'sw.js', 'manifest.json', 'version.txt', 'ext-version.txt', 'operation-regions.json',
   'native-update-policy.json', 'favicon.ico', '.vite/manifest.json', '.scoreplace-build.json'];
 const forbidden = ['tests', 'scripts', 'tools', 'functions', 'functions-autodraw',
   'functions-stripe', 'android', 'ios', 'docs', 'infra', 'node_modules'];

@@ -1929,17 +1929,6 @@ window.FirestoreDB = {
     try { pid = fb.app().options.projectId; } catch (e) {}
     if (!pid) throw Object.assign(new Error(msgs.naoInicializado || 'App não inicializado'), { code: 'functions/internal' });
     var url = 'https://us-central1-' + pid + '.cloudfunctions.net/' + name;
-    // Recuperação emergencial: a infraestrutura Gen2 original responde 500 antes do handler.
-    // Mesmos exports callable, com autenticação e autorização preservadas, em Cloud Run.
-    if (pid === 'scoreplace-app') {
-      var recovery = {
-        assignMatchCourt: 'https://assignmatchcourt-run-recovery-382268772878.us-east1.run.app',
-        applyMatchResult: 'https://applymatchresult-run-recovery-382268772878.us-east1.run.app',
-        setTournamentPresence: 'https://settournamentpresence-run-recovery-382268772878.us-east1.run.app',
-        setTournamentPresenceWithWOSubstitution: 'https://presencwo-run-recovery-382268772878.us-east1.run.app'
-      };
-      if (Object.prototype.hasOwnProperty.call(recovery, name)) url = recovery[name];
-    }
     /* Sem usuário, vai SEM cabeçalho de autorização — e o servidor decide. */
     var cab = { 'Content-Type': 'application/json' };
     if (user) cab['Authorization'] = 'Bearer ' + (await user.getIdToken());
@@ -1958,6 +1947,14 @@ window.FirestoreDB = {
         if (_tk && _tk.token) cab['X-Firebase-AppCheck'] = _tk.token;
       }
     } catch (_eAC) { /* sem token: a porta pública decide, as outras não exigem */ }
+    if (pid === 'scoreplace-app' && window.ScoreplaceOperationRouter &&
+        window.ScoreplaceOperationRouter.names.indexOf(name) !== -1) {
+      return window.ScoreplaceOperationRouter.call(name, payload, cab);
+    }
+    if (pid === 'scoreplace-app' && ['assignMatchCourt', 'applyMatchResult', 'setTournamentPresence',
+        'setTournamentPresenceWithWOSubstitution', 'endMatchOnCourt'].indexOf(name) !== -1) {
+      throw Object.assign(new Error('Atualize o aplicativo para usar as operações do torneio.'), { code: 'functions/failed-precondition' });
+    }
     var r = await fetch(url, { method: 'POST', headers: cab, body: JSON.stringify({ data: payload }) });
     var j = await r.json().catch(function () { return {}; });
     if (j && j.error) {
@@ -2642,6 +2639,7 @@ window.FirestoreDB = {
              String(actor.uid).slice(0, 8) + '-' + _hash(corpo);
     var item = {
       matchId: String(matchId),
+      operationId: (window.crypto && typeof window.crypto.randomUUID === 'function') ? window.crypto.randomUUID() : undefined,
       payload: payload,
       logMessage: logMessage || '',
       actorUid: String(actor.uid),

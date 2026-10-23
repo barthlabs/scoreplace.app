@@ -33,8 +33,15 @@ assert.ok(verify(WWW, { log() {}, error(message) { throw new Error(message); } }
   'o shell gerado pelo Vite mantém suas referências resolvíveis e ordenadas');
 assert.ok(!fs.existsSync(path.join(WWW, 'version.txt')),
   'o pacote padrão continua sem version.txt para o auto-update nativo consultar a rede');
-build('--hosting');
-assert.ok(fs.existsSync(path.join(WWW, 'version.txt')) && fs.existsSync(path.join(WWW, 'native-update-policy.json')),
-  'o artefato específico do Hosting inclui seus endpoints públicos de atualização');
-execFileSync(process.execPath, ['scripts/check-hosting-artifact.js'], { cwd: ROOT, stdio: 'pipe' });
+const regionalConfig = path.join(ROOT, 'operation-regions.json');
+const fixtureConfig = !fs.existsSync(regionalConfig);
+if (fixtureConfig) fs.writeFileSync(regionalConfig, JSON.stringify({ schema: 2, fixture: true }));
+try {
+  build('--hosting');
+  assert.ok(fs.existsSync(path.join(WWW, 'version.txt')) && fs.existsSync(path.join(WWW, 'native-update-policy.json')),
+    'o artefato específico do Hosting inclui seus endpoints públicos de atualização');
+  execFileSync(process.execPath, ['scripts/check-hosting-artifact.js'], { cwd: ROOT, stdio: 'pipe' });
+} finally {
+  if (fixtureConfig) fs.rmSync(regionalConfig);
+}
 console.log('✅ ' + parsed.files.length + ' arquivos com hashes estáveis via Vite');

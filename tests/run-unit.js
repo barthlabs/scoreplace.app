@@ -54,6 +54,8 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 const SUITES = [
+  'tests/operation-day.test.js',
+  'tests/operation-router-regions.test.js',
   'tests/operation-receipt-core.test.js',
   'tests/operation-receipt-wo-handler.test.js',
   'tests/operation-probe-readonly.test.js',
@@ -2300,6 +2302,7 @@ const { spawn } = require('child_process');
 /* (1a) MEXEM EM ARQUIVO DO REPO — corrompem de propósito e restauram. Quem ler o mesmo
  *      arquivo ao mesmo tempo falha ao acaso. Cada linha diz o que ela corrompe. */
 const MEXEM_NO_REPO = [
+  'tests/build-www-deterministico.test.js',           // cria/remova o manifesto regional de fixture
   'tests/ext-version-single-source.test.js',            // reescreve js/store.js e extension/content.js
   'tests/trava-de-cache-buster-nao-fica-vazia.test.js', // reescreve index.html
   'tests/gate-amizade-detecta-alias.test.js',           // cria js/views/__sonda-gate-amizade.js

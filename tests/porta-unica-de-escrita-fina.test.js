@@ -179,6 +179,20 @@ function bancoDeMentira(tid, doc, subs) {
       commit: async () => { b.commits++; pend.forEach((f) => f()); },
     };
   };
+  b.runTransaction = async function (fn) {
+    const batch = b.batch();
+    const tx = {
+      get: async (ref) => ref._raiz
+        ? { exists: true, data: () => clone(b.doc) }
+        : { exists: !!((b.subs[ref._sub] || {})[ref._id]),
+          data: () => clone((b.subs[ref._sub] || {})[ref._id]) },
+      update: batch.update, set: batch.set, delete: batch.delete,
+      create: (ref, value) => batch.set(ref, value)
+    };
+    const result = await fn(tx);
+    await batch.commit();
+    return result;
+  };
 
   b.collection = function (nome) {
     if (nome === 'tournaments') {

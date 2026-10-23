@@ -95,6 +95,12 @@ function montarSandbox() {
     const conteudo = '// domínio stub de ' + n + '\nwindow._x = 1;\n';
     fs.writeFileSync(path.join(SB, 'functions', 'vendor', n), conteudo);
   }
+  for (const n of listaNomeada('OPERATION_DAY_FILES')) {
+    const conteudo = '// serviço de data stub de ' + n + '\n';
+    fs.writeFileSync(path.join(SB, 'functions-autodraw', n), conteudo);
+    fs.writeFileSync(path.join(SB, 'functions-autodraw', 'vendor', n), conteudo);
+    fs.writeFileSync(path.join(SB, 'functions', 'vendor', n), conteudo);
+  }
   return nomes;
 }
 function listaNomeada(nome) {

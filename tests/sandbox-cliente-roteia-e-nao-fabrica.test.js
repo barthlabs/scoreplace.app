@@ -218,7 +218,7 @@ const ok = (n, c, x) => { if (c) console.log('  ✓ ' + n); else { console.log('
     ok('⛔ o cliente delega a exclusão à Function, sem apagar apenas o documento pai',
       real.deleteTournament.toString().includes("this._callFn('deleteTournament'") &&
       !real.deleteTournament.toString().includes('_deleteSubcollection'));
-    const faltando = nasRegras.filter((c) => c !== 'operationReceipts' && naLista.indexOf(c) === -1);
+    const faltando = nasRegras.filter((c) => !['operationReceipts', 'operationControl'].includes(c) && naLista.indexOf(c) === -1);
     ok('⭐⭐ nenhuma delas fica de fora do apagar (faltando: ' + faltando.join(', ') + ')',
       faltando.length === 0, JSON.stringify({ nasRegras: nasRegras, naLista: naLista }));
     ok('⭐⭐ e `results` do sandbox é apagado como `resultsSandbox`',

@@ -60,6 +60,7 @@ const context = {
   FieldValue: { increment: n => n, delete: () => deleted },
   FieldPath: class { constructor(...segments) { this.segments = segments; } },
   _operationReceipt: require('../functions-autodraw/operation-receipt-core.js'),
+  _operationProtocolGuard: async () => {},
   _matchTiming: require('../js/domain/match-timing.js'),
   _agenda: require('../functions-autodraw/agenda-core.js'),
   Date: TestDate, Intl, Number, String, Array, Set, console

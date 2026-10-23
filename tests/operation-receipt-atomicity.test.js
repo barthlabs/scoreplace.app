@@ -16,7 +16,6 @@ assert(handlerStart >= 0 && handlerEnd > handlerStart, 'handler de presença rea
 const presenceHandler = backend.slice(handlerStart, handlerEnd);
 const driver = `
 const assert=require('node:assert/strict');
-const vm=require('node:vm');
 const admin=require(${JSON.stringify(path.join(ROOT, 'functions/node_modules/firebase-admin'))});
 const core=require(${JSON.stringify(path.join(ROOT, 'functions/operation-receipt-core'))});
 admin.initializeApp({projectId:${JSON.stringify(PROJECT)}});
@@ -71,15 +70,24 @@ const prepared=(ref,id,kind,payload)=>core.prepare({operationId:id,actorUid:'act
  // O segundo cenário executa o corpo REAL da callable sobre lote Firestore.
  const realRef=db.doc('tournaments/tour_presence_real');
  await realRef.set({checkedIn:{},absent:{},checkedInConfirmed:{}});
+ await realRef.collection('operationControl').doc('_protocol').set({protocolVersion:2});
+ // O controle do dia anterior expira, mas a trava permanente ainda bloqueia v1.
+ await realRef.collection('operationControl').doc('2026-10-22').set({region:'us-east1',revision:1});
  const handlerContext={exports:{},onCall:(_options,fn)=>fn,admin,
   APP_ORIGINS:[],HttpsError:class HttpsError extends Error{constructor(code,message){super(message);this.code=code;}},
   _partesPerm:{idDeDocumentoValido:()=>true},_isTournamentOrgCaller:()=>true,
   _tSplitFn:{partesDe:()=>[],colecaoDaParte:name=>name},_operationReceipt:core};
- vm.runInNewContext(${JSON.stringify(presenceHandler)},handlerContext);
+ // A callback async deve nascer no mesmo realm do Admin SDK: Firestore confere
+ // instanceof Promise antes do commit da transação.
+ new Function('context', 'with (context) { '+${JSON.stringify(presenceHandler)}+' }')(handlerContext);
+ const legacy=()=>handlerContext.exports.setTournamentPresence({auth:{uid:'owner'},data:{
+  tournamentId:'tour_presence_real',targetKey:'player',action:'present'}});
+ await assert.rejects(legacy(),error=>error.code==='failed-precondition');
  const call=()=>handlerContext.exports.setTournamentPresence({auth:{uid:'owner'},data:{
   tournamentId:'tour_presence_real',targetKey:'player',action:'present',operationId:id1}});
- const [r1,r2]=await Promise.all([call(),call()]);
+ const [r1,r2,v1]=await Promise.all([call(),call(),legacy().then(()=>({accepted:true}),e=>({code:e.code}))]);
  assert(r1.ok&&r2.ok&&r1.replayed!==r2.replayed);
+ assert.equal(v1.code,'failed-precondition','v1 concorrente não grava após ativação');
  const realSaved=(await realRef.get()).data();
  const realReceipt=(await realRef.collection('operationReceipts').doc(id1).get()).data();
  assert.equal(realSaved.checkedIn.player,realReceipt.response.updatedAt,

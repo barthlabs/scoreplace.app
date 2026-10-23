@@ -22,10 +22,12 @@ async function req(method, path, uid) {
 (async()=>{
  const out=[];
  for(const parent of ['tournaments/tour_test','sandboxes/sb_test']) {
-  const setup=await req('PATCH',parent+'/operationReceipts/387638c7-0f33-45eb-a217-1314bfe68d73','admin');
-  if(setup!==200)throw Error('semeadura administrativa falhou: '+parent+' '+setup);
-  for(const method of ['GET','PATCH','DELETE']) out.push({parent,method,
-   status:await req(method,parent+'/operationReceipts/387638c7-0f33-45eb-a217-1314bfe68d73','owner')});
+  for(const child of ['operationReceipts/387638c7-0f33-45eb-a217-1314bfe68d73','operationControl/_protocol']) {
+   const setup=await req('PATCH',parent+'/'+child,'admin');
+   if(setup!==200)throw Error('semeadura administrativa falhou: '+parent+'/'+child+' '+setup);
+   for(const method of ['GET','PATCH','DELETE']) out.push({parent,child,method,
+    status:await req(method,parent+'/'+child,'owner')});
+  }
  }
  console.log('__JSON__'+JSON.stringify(out));
 })().catch(e=>{console.error(e);process.exitCode=1});
@@ -43,4 +45,4 @@ const match = /__JSON__(\[[^\n]*\])/.exec(out);
 assert(match, 'driver não devolveu resultado: '+out.slice(-700));
 const results = JSON.parse(match[1]);
 for(const row of results) assert.equal(row.status,403,JSON.stringify(row));
-console.log('✓ recibos de produção e sandbox inacessíveis a clientes');
+console.log('✓ recibos e controle regional inacessíveis a clientes em produção e sandbox');

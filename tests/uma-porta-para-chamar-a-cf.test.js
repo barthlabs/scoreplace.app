@@ -75,7 +75,7 @@ const urlsFdb = (fdb.match(/cloudfunctions\.net\//g) || []).length;
  * `firebase-db.js`; `tournaments-draw.js` tem a CASCA (com fallback de cache híbrido) e a
  * integração tardia. */
 ok(urlsFdb === 1, '① a CASA do transporte está em `firebase-db.js` — achei ' + urlsFdb + ' URL');
-ok(urlsDraw === 2, '① e no sorteio sobraram duas: o fallback híbrido da casca e a integração tardia — achei ' + urlsDraw);
+ok(urlsDraw === 1, '① sorteio mantém somente a integração tardia — achei ' + urlsDraw);
 /* ⚠️ Exceções NOMINAIS, com o contrato de cada uma. Portão que as contasse mentiria sobre o
  * que foi unificado; portão que as ignorasse deixaria nascer a sexta cópia calada.
  *   js/views/auth.js  `checkAccount`      → vai SEM Authorization, antes de existir sessão;
@@ -99,7 +99,7 @@ function varrer(dir) {
 }
 const mapa = varrer(path.join(ROOT, 'js'));
 const inesperados = Object.keys(mapa).filter((f) => {
-  if (f === 'js/views/tournaments-draw.js') return mapa[f] !== 2;
+  if (f === 'js/views/tournaments-draw.js') return mapa[f] !== 1;
   if (f === 'js/firebase-db.js') return mapa[f] !== 1;
   if (EXCECOES[f] !== undefined) return mapa[f] !== EXCECOES[f];
   return true;
@@ -216,16 +216,13 @@ ok(inesperados.length === 0, '① nenhuma casa NOVA de transporte em js/ — ' +
     ok(r && r.ok === true, '⑧ ⭐⭐ `_callFn` responde SEM `tournaments-draw.js` — é a regressão que derrubou os inscritos');
   }
 
-  /* ── ⑨ CACHE HÍBRIDO: casca nova + firebase-db VELHO ⇒ sem recursão ────────────
-   * O Service Worker pode servir os dois de versões diferentes. Sem a checagem da MARCA,
-   * o `_callFn` velho chamaria a casca, que delegaria de volta: laço infinito. */
+  /* ── ⑨ Uma casa antiga falha fechada, sem criar segunda rota operacional. */
   {
     const { w, chamadas } = mundo({});
     w.FirestoreDB._callFnMarca = 'marca-velha';          // finge o firebase-db de 2.3.95
-    const r = await Promise.race([w._callCF('fn', {}), new Promise((res) => setTimeout(() => res('TRAVOU'), 1500))]);
-    ok(r !== 'TRAVOU', '⑨ ⭐⭐ cache híbrido NÃO entra em recursão');
-    ok(r && r.data && r.data.ok === true, '⑨ e a casca fala o protocolo sozinha pelo fallback');
-    ok(chamadas.length === 1, '⑨ uma requisição só');
+    const e = await pegaErro(w._callCF('fn', {}));
+    ok(e && e.code === 'functions/failed-precondition', '⑨ casa antiga exige atualização');
+    ok(chamadas.length === 0, '⑨ nenhuma requisição por transporte alternativo');
   }
 
   console.log('\n' + (fail ? '✗ ' + fail + ' falha(s), ' : '✅ ') + pass + ' verificações');

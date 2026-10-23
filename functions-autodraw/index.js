@@ -5,14 +5,21 @@ const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue, FieldPath } = require('firebase-admin/firestore');
 const { getMessaging } = require('firebase-admin/messaging');
 const { getStorage } = require('firebase-admin/storage');
-const { randomUUID } = require('crypto');
+const { randomUUID, createHash } = require('crypto');
 const _operationReceipt = require('./operation-receipt-core');
+const _operationDay = require('./operation-day');
 const _operationProbeReply = () => ({
   ok: true,
   region: String(process.env.SP_OPERATION_REGION || ''),
   revision: String(process.env.K_REVISION || ''),
   sourceDigest: String(process.env.SP_SOURCE_DIGEST || '')
 });
+async function _operationProtocolGuard(tx, parentRef, operationId) {
+  const snap = await tx.get(parentRef.collection('operationControl').doc('_protocol'));
+  if (snap.exists && snap.data().protocolVersion === 2 && !_operationReceipt.UUID_V4_RE.test(String(operationId || ''))) {
+    throw new HttpsError('failed-precondition', 'Atualize o aplicativo antes de operar este torneio.');
+  }
+}
 // v1.7.35: rebase do sorteio (o servidor não sobrescreve o que aconteceu na quadra
 // enquanto pensava). Módulo PURO e testável — o index não é require-ável em teste.
 const { rebaseRounds } = require('./rebase-core.js');
@@ -2339,7 +2346,7 @@ exports.splitLatePair = onCall(async (request) => {
  * Devolve { ok, outcome, tournament } ou { ok:false, reason } — recusa é resposta
  * legítima ("o outro time já lançou"), não falha de infra.
  */
-async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMessage, sandbox, operationId) {
+async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMessage, sandbox, operationId, enforceClientProtocol = false) {
   const ref = db.collection(sandbox ? 'sandboxes' : 'tournaments').doc(tId);
   const receipt = operationId == null ? null : _operationReceipt.prepare({ operationId,
     actorUid: ator.uid, parentPath: ref.path, kind: 'score', target: matchId,
@@ -2364,6 +2371,7 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
     if (sandbox) await _assertSandboxDrawOwner(tx, await tx.get(ref), ator.uid);
     const t = await _leTorneio(tx, ref, tId);
     if (!t) return { ok: false, reason: 'not-found' };
+    if (enforceClientProtocol) await _operationProtocolGuard(tx, ref, operationId);
     const _tAntes = _antesDoMotor(t);
     _enrichParticipantsFromProfiles(t);
     const _matchAntes = (typeof drawWindow._findMatch === 'function')
@@ -3253,6 +3261,8 @@ exports.previewTournamentTeamWO = onCall(async (request) => {
 // substituições dentro da mesma transação e devolve o estado canônico.
 exports.setTournamentPresenceWithWOSubstitution = onCall(async (request) => {
   const uid = request.auth && request.auth.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (request.data && request.data.probe === true) return _operationProbeReply();
   const data = request.data || {};
   const tId = String(data.tournamentId || '').trim();
   const targetUid = String(data.targetUid || '').trim();
@@ -3276,8 +3286,6 @@ exports.setTournamentPresenceWithWOSubstitution = onCall(async (request) => {
   const pre = await ref.get();
   if (!pre.exists) throw _drawFail('not-found', 'Torneio não encontrado.', { tId, uid });
   if (!_isTournamentAdmin(pre.data(), uid)) throw _drawFail('permission-denied', 'Só a organização controla esta presença.', { tId, uid });
-  // Sonda autenticada: verifica o mesmo documento e papel, sem executar o motor.
-  if (data.probe === true) return _operationProbeReply();
   await _preloadDrawNames(pre.data());
   const agoraIso = new Date().toISOString();
 
@@ -3285,6 +3293,7 @@ exports.setTournamentPresenceWithWOSubstitution = onCall(async (request) => {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, uid });
+    await _operationProtocolGuard(tx, ref, data.operationId);
     if (receiptRef) {
       const existing = await tx.get(receiptRef);
       if (existing.exists) {
@@ -3624,6 +3633,7 @@ exports.applyMatchResult = onCall(async (request) => {
   const uid = request.auth && request.auth.uid;
   const email = request.auth && request.auth.token && request.auth.token.email;
   if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta pra lançar o placar.');
+  if (request.data && request.data.probe === true) return _operationProbeReply();
 
   const tId = String((request.data && request.data.tournamentId) || '').trim();
   if (!tId) throw new HttpsError('invalid-argument', 'tournamentId é obrigatório.');
@@ -3657,8 +3667,6 @@ exports.applyMatchResult = onCall(async (request) => {
     throw _drawFail('permission-denied', 'Só quem está no torneio pode lançar placar.',
       { tId, matchId, uid, email: email || '(sem email)' });
   }
-  // Uma sonda não toca a transação de placar nem calcula resultado.
-  if (request.data && request.data.probe === true) return _operationProbeReply();
   await _preloadDrawNames(pre.data()); // nome vivo por uid (o motor pode gerar/avançar)
   // A comunicação usa nome de exibição, nunca e-mail. Também pré-carregamos quem
   // propôs a pendência: a aprovação remove esse objeto durante a transação.
@@ -3674,7 +3682,7 @@ exports.applyMatchResult = onCall(async (request) => {
     // MESMO miolo que a fila usa — ver _aplicaPlacarNaTransacao.
     out = await _aplicaPlacarNaTransacao(db, tId, matchId, payload, {
       uid, email, name: callerName, liveNames: liveIdentity.nameByUid || {}
-    }, logMessage, sandbox, operationId);
+    }, logMessage, sandbox, operationId, true);
     if (!out.ok && out.reason === 'permission-denied') {
       throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, matchId, uid });
     }
@@ -3747,12 +3755,18 @@ exports.applyQueuedResult = onDocumentCreated(
 
     let out;
     try {
+      // Itens anteriores ao roteador não têm operationId. A chave é derivada do
+      // caminho imutável da fila e permanece a mesma em toda reentrega do gatilho.
+      const queueHash = createHash('sha256').update(`${tId}/${itemId}`).digest('hex');
+      const queueOperationId = _operationReceipt.UUID_V4_RE.test(String(item.operationId || ''))
+        ? item.operationId
+        : `${queueHash.slice(0, 8)}-${queueHash.slice(8, 12)}-4${queueHash.slice(13, 16)}-8${queueHash.slice(17, 20)}-${queueHash.slice(20, 32)}`;
       const pre = await db.collection('tournaments').doc(tId).get();
       if (!pre.exists) { await marca({ status: 'recusado', reason: 'not-found' }); return; }
       await _preloadDrawNames(pre.data());   // nome vivo por uid (o motor pode avançar)
       out = await _aplicaPlacarNaTransacao(db, tId, matchId, item.payload,
         { uid: actorUid, email: item.actorEmail || '' }, item.logMessage || '', false,
-        _operationReceipt.UUID_V4_RE.test(String(item.operationId || '')) ? item.operationId : null);
+        queueOperationId);
     } catch (e) {
       console.error('[filaPlacar] EXPLODIU', tId, itemId, e && e.stack || e);
       await marca({ status: 'erro', reason: String((e && e.message) || e).slice(0, 300) });
@@ -3845,6 +3859,7 @@ exports.closeRound = onCall(async (request) => {
 exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
   const uid = request.auth && request.auth.uid;
   if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (request.data && request.data.probe === true) return _operationProbeReply();
   const tId = String((request.data && request.data.tournamentId) || '').trim();
   const matchId = String((request.data && request.data.matchId) || '').trim();
   const court = String((request.data && request.data.court) || '').trim().slice(0, 120);
@@ -3869,23 +3884,12 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
   } catch (e) { throw new HttpsError('invalid-argument', e.message); }
   const receiptRef = receipt ? ref.collection('operationReceipts').doc(receipt.id) : null;
   const agoraIso = new Date().toISOString();
-  if (request.data && request.data.probe === true) {
-    return db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      if (sandbox) await _assertSandboxDrawOwner(tx, snap, uid);
-      if (!snap.exists) throw new HttpsError('not-found', 'Torneio não encontrado.');
-      const t = snap.data() || {};
-      if (!sandbox && t.isSandbox === true) throw new HttpsError('not-found', 'Torneio não encontrado.');
-      const referee = ScoreplaceRefereeRoster.sanitizeAll(t.arbitros).some(e => e.uid === uid && e.status === 'confirmed');
-      if (!_isTournamentAdmin(t, uid) && !referee) throw _drawFail('permission-denied', 'Só a organização ou árbitro confirmado define a quadra.', { tId, matchId, uid });
-      return _operationProbeReply();
-    }, { readOnly: true });
-  }
   try {
     return await db.runTransaction(async (tx) => {
       if (sandbox) await _assertSandboxDrawOwner(tx, await tx.get(ref), uid);
       const t = await _leTorneio(tx, ref, tId);
       if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+      await _operationProtocolGuard(tx, ref, request.data && request.data.operationId);
       const referee = ScoreplaceRefereeRoster.sanitizeAll(t.arbitros).some(e => e.uid === uid && e.status === 'confirmed');
       if (!_isTournamentAdmin(t, uid) && !referee) throw _drawFail('permission-denied', 'Só a organização ou árbitro confirmado define a quadra.', { tId, matchId, uid });
       if (receiptRef) {
@@ -4027,9 +4031,81 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
 
 // Libera a quadra sem fabricar resultado. A revisão do estado é compartilhada
 // com assignMatchCourt, de modo que duas operações concorrentes sejam repetidas.
+const _OPERATION_REGIONS = new Set(['us-east1', 'us-east4', 'us-south1']);
+exports.tournamentOperationControl = onCall({ invoker: 'public' }, async (request) => {
+  const uid = request.auth && request.auth.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  const data = request.data || {};
+  if (data.probe === true) return _operationProbeReply();
+  const action = String(data.action || 'current');
+  const tId = String(data.tournamentId || '').trim();
+  const sandbox = data.sandbox === true;
+  if (!tId || sandbox !== tId.startsWith('sb_') || !['current', 'select', 'failover', 'receipt'].includes(action)) {
+    throw new HttpsError('invalid-argument', 'Controle regional inválido.');
+  }
+  const ref = db.collection(sandbox ? 'sandboxes' : 'tournaments').doc(tId);
+  if (action === 'receipt') {
+    const id = String(data.operationId || '');
+    if (!_operationReceipt.UUID_V4_RE.test(id)) throw new HttpsError('invalid-argument', 'Identificador inválido.');
+    const [tSnap, rSnap] = await Promise.all([ref.get(), ref.collection('operationReceipts').doc(id).get()]);
+    if (!tSnap.exists) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (sandbox) await _assertSandboxDrawOwner(_TX_LEITURA, tSnap, uid);
+    else if (tSnap.data().isSandbox === true) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(tSnap.data(), uid) && !_isConfirmedTournamentReferee(tSnap.data(), uid) && !_isTournamentParticipant(tSnap.data(), uid)) {
+      throw new HttpsError('permission-denied', 'Sem acesso ao torneio.');
+    }
+    if (!rSnap.exists) return { found: false };
+    const receipt = rSnap.data();
+    if (receipt.actorUid !== uid) throw new HttpsError('permission-denied', 'Recibo de outro usuário.');
+    return { found: true, receipt: { kind: receipt.kind, hash: receipt.hash, response: receipt.response, committedAt: receipt.committedAt } };
+  }
+  const region = String(data.region || '');
+  if ((action === 'select' || action === 'failover') &&
+      (!_OPERATION_REGIONS.has(region) || data.sourceDigest !== process.env.SP_SOURCE_DIGEST)) {
+    throw new HttpsError('failed-precondition', 'Região ou revisão não verificada.');
+  }
+  const now = new Date();
+  return db.runTransaction(async tx => {
+    const tSnap = await tx.get(ref);
+    if (!tSnap.exists) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (sandbox) await _assertSandboxDrawOwner(tx, tSnap, uid);
+    const tournament = tSnap.data() || {};
+    if (!sandbox && tournament.isSandbox === true) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    const operator = _isTournamentAdmin(tournament, uid) || _isConfirmedTournamentReferee(tournament, uid);
+    const participant = _isTournamentParticipant(tournament, uid);
+    if (!operator && !participant) throw new HttpsError('permission-denied', 'Sem acesso ao torneio.');
+    // O próprio inscrito também pode iniciar uma troca após falha da presença.
+    // A CAS da revisão impede que duas contas mudem a escolha em paralelo.
+    let day;
+    try { day = await _operationDay.operationDay(tournament, tx, db, now.toISOString()); }
+    catch (error) { throw new HttpsError('failed-precondition', error.message); }
+    const controlRef = ref.collection('operationControl').doc(day);
+    const protocolRef = ref.collection('operationControl').doc('_protocol');
+    const [controlSnap, protocolSnap] = await Promise.all([tx.get(controlRef), tx.get(protocolRef)]);
+    const current = controlSnap.exists ? controlSnap.data() || {} : null;
+    if (action === 'current') return { selected: !!current, day, region: current && current.region || '', revision: current && current.revision || 0 };
+    if (action === 'select') {
+      if (current) return { selected: true, day, region: current.region, revision: current.revision, adopted: true };
+      if (protocolSnap.exists && protocolSnap.data().protocolVersion !== 2) throw new HttpsError('failed-precondition', 'Protocolo incompatível.');
+      if (!protocolSnap.exists) tx.create(protocolRef, { protocolVersion: 2, activatedAt: now.toISOString(), activatedBy: uid });
+      tx.create(controlRef, { region, revision: 1, day, selectedAt: now.toISOString(), selectedBy: uid,
+        expireAt: new Date(now.getTime() + 30 * 86400000) });
+      return { selected: true, day, region, revision: 1, adopted: false };
+    }
+    if (!current || Number(data.observedRevision) !== Number(current.revision) || region === current.region ||
+        data.reason !== 'infrastructure') {
+      throw new HttpsError('failed-precondition', 'Seleção mudou; consulte novamente.');
+    }
+    tx.update(controlRef, { region, revision: Number(current.revision) + 1, switchedAt: now.toISOString(), switchedBy: uid,
+      previousRegion: current.region, reason: 'infrastructure' });
+    return { selected: true, day, region, revision: Number(current.revision) + 1 };
+  });
+});
+
 exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
   const uid = request.auth && request.auth.uid;
   if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (request.data && request.data.probe === true) return _operationProbeReply();
   const tId = String((request.data && request.data.tournamentId) || '').trim();
   const matchId = String((request.data && request.data.matchId) || '').trim();
   const sandbox = request.data && request.data.sandbox === true;
@@ -4058,6 +4134,7 @@ exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
     if (sandbox) await _assertSandboxDrawOwner(tx, await tx.get(ref), uid);
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    await _operationProtocolGuard(tx, ref, request.data && request.data.operationId);
     const receiptSnap = receiptRef ? await tx.get(receiptRef) : null;
     const stateSnap = await tx.get(stateRef);
     const state = stateSnap.exists ? stateSnap.data() || {} : {};
