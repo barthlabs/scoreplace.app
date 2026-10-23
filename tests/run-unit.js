@@ -1115,6 +1115,7 @@ const SUITES = [
   'tests/superficies-abas-resize-observer.test.js',
   'tests/bracket-geral-agenda.test.js',
   'tests/bracket-operations-strip.test.js',
+  'tests/bracket-avatar-presence.test.js',
   'tests/bracket-sem-painel-presenca.test.js',
   'tests/tv-live-snapshot.test.js',
   'tests/tv-live-box-layout.test.js',

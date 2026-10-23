@@ -683,6 +683,9 @@ window._applyCheckInToggle = function (tId, playerName, uid) {
   }
 
   var hasAbsences = !!(t.absent && Object.keys(t.absent).length);
+  var key = typeof window._idMapKey === 'function' ? window._idMapKey(t, who) : null;
+  var targetKey = key ? (key.uid || key.name) : '';
+  var legacyKey = key && key.uid && key.name && key.name !== key.uid ? key.name : '';
   var save;
   if (hasAbsences && window.FirestoreDB && typeof window.FirestoreDB._callFn === 'function') {
     save = window.FirestoreDB._callFn('setTournamentPresenceWithWOSubstitution', {
@@ -690,9 +693,6 @@ window._applyCheckInToggle = function (tId, playerName, uid) {
       action: wantPresent ? 'present' : 'clear'
     });
   } else {
-    var key = typeof window._idMapKey === 'function' ? window._idMapKey(t, who) : null;
-    var targetKey = key ? (key.uid || key.name) : '';
-    var legacyKey = key && key.uid && key.name && key.name !== key.uid ? key.name : '';
     if (!targetKey || !window.FirestoreDB || typeof window.FirestoreDB.setTournamentPresence !== 'function') {
       if (typeof showNotification === 'function') showNotification('⚠️ Presença não salva', 'A conexão com o servidor não está disponível.', 'warning');
       return;
@@ -700,22 +700,43 @@ window._applyCheckInToggle = function (tId, playerName, uid) {
     save = window.FirestoreDB.setTournamentPresence(tId, targetKey, wantPresent ? 'present' : 'clear', legacyKey);
   }
 
-  window._presenceBusyUntil(uid || playerName, save);
-  Promise.resolve(save).then(function () {
+  var operation = Promise.resolve(save).then(function (response) {
     // Só após o recibo do servidor, espelha a mudança exata e troca o card no
     // lugar. A lista inteira não pode desmontar a cada chamada de presença.
-    _applyPresenceReceipt(tId, targetKey || uid || playerName, wantPresent ? 'present' : 'clear', legacyKey || '');
+    if (hasAbsences) {
+      var canonical = response && (response.tournament || (response.data && response.data.tournament));
+      var current = window._findTournamentById && window._findTournamentById(tId);
+      if (canonical && current) {
+        current.checkedIn = canonical.checkedIn || {};
+        current.checkedInConfirmed = canonical.checkedInConfirmed || {};
+        current.absent = canonical.absent || {};
+      } else if (window.FirestoreDB && typeof window.FirestoreDB._tRef === 'function') {
+        return window.FirestoreDB._tRef(tId).get({ source: 'server' }).then(function (snap) {
+          var fresh = snap && snap.data && snap.data();
+          if (fresh && current) {
+            current.checkedIn = fresh.checkedIn || {};
+            current.checkedInConfirmed = fresh.checkedInConfirmed || {};
+            current.absent = fresh.absent || {};
+          }
+        });
+      } else _applyPresenceReceipt(tId, targetKey || uid || playerName, wantPresent ? 'present' : 'clear', legacyKey || '');
+    } else _applyPresenceReceipt(tId, targetKey || uid || playerName, wantPresent ? 'present' : 'clear', legacyKey || '');
+  }).then(function () {
     if (!_refreshPresenceReceiptInPlace(tId, uid, playerName)) _reRenderParticipantsStable();
     // A integração tardia também só parte depois do commit da presença; a CF
     // correspondente relê o torneio e é idempotente.
     if (wantPresent && typeof window._triggerLateIntegration === 'function') {
       try { window._triggerLateIntegration(window._findTournamentById(tId) || t, { force: true, debounce: true }); } catch (_lateError) {}
     }
+    return true;
   }).catch(function (e) {
     if (window._error) window._error('[presença] falhou', e);
     if (typeof showNotification === 'function') showNotification('⚠️ Presença não salva', (e && e.message) || 'Tente de novo.', 'warning');
     _reRenderParticipantsStable();
+    return false;
   });
+  window._presenceBusyUntil(targetKey || uid || playerName, operation);
+  return operation;
 };
 
 // uid = IDENTIDADE (3º arg, igual _toggleCheckIn). Sem ele, os mapas caíam em _memberUidByName,

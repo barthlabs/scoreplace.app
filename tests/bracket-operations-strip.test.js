@@ -34,7 +34,7 @@ assert(start > 0 && end > start);
         '<button id="confirm-' + m.id + '" data-confirm-for="' + m.id + '" style="display:none" onclick="window._irrelevant()">✓ Confirmar</button></div>' +
         '<div class="team"><strong>TIME A</strong><span>' + m.p1 + '</span><label for="s1-' + m.id + '">Placar</label><input id="s1-' + m.id + '" oninput="window._irrelevant()"></div>' +
         '<div class="versus">VS</div><div class="team"><strong>TIME B</strong><span>' + m.p2 + '</span><input id="s2-' + m.id + '" oninput="window._irrelevant()"></div>' +
-        '<div class="sp-match-operational"><label class="sp-match-court"><select data-persisted-court="' + m.court + '"><option>' + m.court + '</option></select></label>' +
+        '<div class="sp-match-operational"><label class="sp-match-court"><select onclick="event.stopPropagation()" data-persisted-court="' + m.court + '"><option>' + m.court + '</option></select></label>' +
         '<button class="sp-match-confirm">OK</button>' + (m.courtCalledAt ? '<button class="sp-match-clock-action sp-match-clock-next">FF</button><span class="sp-match-call-timer">00:01</span>' : '') +
         '</div></article>', opts.idScope);
       const t = { id: 'sb_test', creatorUid: 'org', _nJogos: 2, courtNames: ['Quadra 4', 'Quadra 5'], matches: [
@@ -85,6 +85,9 @@ assert(start > 0 && end > start);
         Math.abs(freeRect.bottom - nextRect.bottom) <= 3 &&
         Math.abs(freeRect.height - nextRect.height) <= 3;
       const openSelect = next.querySelector('select');
+      const selectorDoesNotOpenBracket = !openSelect.hasAttribute('data-operations-open');
+      openSelect.click();
+      const selectorStayedInStrip = !window.opened;
       openSelect.focus();
       window._bracketOperationsRefresh(t, root);
       const selectFocusRestored = document.activeElement === openSelect &&
@@ -123,7 +126,8 @@ assert(start > 0 && end > start);
       };
       window.AppStore.currentUser = { uid: 'other' };
       window._bracketOperationsRefresh(t, root);
-      return { initial, afterCall, refereeView, selectFocusRestored, outsiderHidden: !document.querySelector('[data-bracket-operations-strip]') };
+      return { initial, afterCall, refereeView, selectFocusRestored, selectorDoesNotOpenBracket,
+        selectorStayedInStrip, outsiderHidden: !document.querySelector('[data-bracket-operations-strip]') };
     });
     assert(state.initial.full && state.initial.names && state.initial.noCanonical && state.initial.uniqueIds && state.initial.linked && state.initial.noInline);
     assert.deepEqual(state.initial.courts, ['Quadra 4', 'Quadra 5']);
@@ -136,7 +140,9 @@ assert(start > 0 && end > start);
     assert.deepEqual(state.afterCall.saved, ['sb_test', 'm1', '6', '3']);
     assert(state.afterCall.scoreSourceCleared, 'marca de origem do placar deve ser limpa quando a gravação retorna');
     assert.deepEqual(state.afterCall.clock, ['sb_test', 'm1', 'next']);
-    assert(state.afterCall.confirmVisible && state.outsiderHidden && state.selectFocusRestored);
+    assert(state.afterCall.confirmVisible && state.outsiderHidden && state.selectFocusRestored &&
+      state.selectorDoesNotOpenBracket && state.selectorStayedInStrip,
+    'selecionar a quadra na faixa não pode abrir o card da chave');
     assert(state.afterCall.activeBottomAligned, 'cards em quadra e próximo a chamar devem alinhar pela base');
     assert.equal(state.afterCall.draft, '6');
     assert.equal(state.afterCall.next, 'm2');

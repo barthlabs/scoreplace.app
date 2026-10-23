@@ -64,7 +64,7 @@
 .sp-operations-replica { display:flex;flex-direction:column;gap:7px;min-width:0;width:100%; }
 .sp-operations-court-slot .sp-operations-replica,
 .sp-operations-pending-track .sp-operations-replica { display:grid;grid-template-rows:var(--sp-operations-line-height) var(--sp-operations-card-height);gap:0; }
-.sp-operations-replica > .sp-match-card { width:100%;max-width:none;min-height:0;height:var(--sp-operations-card-height);box-sizing:border-box; }
+.sp-operations-replica > .sp-match-card { width:100%;max-width:none;min-height:0;height:var(--sp-operations-card-height);box-sizing:border-box;padding-bottom:28px!important; }
 .sp-operations-next .sp-operations-replica > .sp-match-card { border:3px solid var(--sp-c-fbbf24,#fbbf24)!important; }
 .sp-operations-court-slot--active .sp-operations-replica > .sp-match-card { border:3px solid var(--sp-c-22c55e,#22c55e)!important; }
 .sp-operations-replica .sp-match-call-day-hint { overflow-wrap:anywhere; }
@@ -88,8 +88,11 @@
 .sp-operations-empty { min-height: 70px; display: flex; align-items: center; color: var(--text-muted); font-size: .82rem; }
 .sp-match-end-court { border:1px solid #38bdf8;border-radius:7px;background:#075985;color:#fff;font:inherit;font-size:.68rem;font-weight:800;padding:4px 7px;cursor:pointer; }
 .sp-match-end-court:disabled { opacity:.5;cursor:wait; }
-.sp-match-cancel-court { border:1px solid var(--border-color,#64748b);border-radius:7px;background:var(--btn-secondary-bg,#303030);color:var(--btn-secondary-text,#fff);font:inherit;font-size:.68rem;font-weight:800;padding:4px 7px;cursor:pointer; }
+.sp-match-cancel-court { border:1px solid #93c5fd;border-radius:7px;background:#1e40af;color:#fff;font:inherit;font-size:.68rem;font-weight:800;padding:5px 9px;min-height:30px;cursor:pointer; }
 .sp-match-cancel-court:disabled { opacity:.5;cursor:wait; }
+.sp-bracket-presence-button { display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;padding:0;border:0;background:transparent;color:inherit;line-height:0;cursor:pointer;border-radius:50%; }
+.sp-bracket-presence-button:focus-visible { outline:2px solid #38bdf8;outline-offset:2px; }
+.sp-bracket-presence-button:disabled { opacity:.55;cursor:wait; }
 @media (max-width: 690px) {
   .sp-operations-court-slot { flex-basis:min(88vw,380px); }
 }

@@ -1324,7 +1324,7 @@ function _bracketScopeReplicaHtml(html, scope) {
     Array.prototype.slice.call(node.attributes).forEach(function (attr) {
       if (/^on/i.test(attr.name)) node.removeAttribute(attr.name);
     });
-    if (clickHandler && !node.hasAttribute('data-operations-action') && !node.matches('[data-confirm-for], .sp-match-confirm, .sp-match-clock-action')) {
+    if (clickHandler && !node.hasAttribute('data-operations-action') && !node.matches('select, option, input, textarea, [data-confirm-for], .sp-match-confirm, .sp-match-clock-action')) {
       node.setAttribute('data-operations-open', '1');
       node.setAttribute('title', (node.getAttribute('title') || '').trim() + ' · Abrir jogo na chave para esta ação');
     }
@@ -1464,6 +1464,7 @@ window._bracketOperationsRefresh = function (t, root) {
     existing.addEventListener('click', function (event) {
       var op = event.target && event.target.closest('.sp-operations-replica');
       if (!op) return;
+      if (event.target.closest('.sp-match-court select, .sp-match-court option')) return;
       var mid = op.getAttribute('data-operations-match');
       var target = event.target.closest('button,[data-operations-action],[data-operations-open]');
       if (!target || target.disabled) return;
@@ -7437,7 +7438,7 @@ window._competitionTeamTagForMatch = function (t, match, slot, compact, vertical
 };
 
 // ─── Player avatars helper for bracket cards ────────────────────────────────
-function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m, slot, showIndividualCheckIn) {
+function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m, slot, showIndividualCheckIn, canCheckIn) {
   /* ⭐ O 💬 DE CADA PESSOA NOS JOGOS SEM AGENDA DEFINIDA.
    * Ordem do dono (02/set/2026): _"precisa me devolver os balõezinhos em todos os jogos
    * para que as pessoas se encontrem pelo whats"_ e _"para os participantes do grupo (e
@@ -7554,12 +7555,12 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m, slot, showIndividu
     const _presenceWho = _slotUid
       ? { uid: _slotUid, displayName: dispName, name: dispName }
       : dispName;
-    const _isPresent = !!(showIndividualCheckIn && t && window._idMapHas &&
+    const _isPresent = !!(t && window._idMapHas &&
       window._idMapHas(t, t.checkedIn || {}, _presenceWho));
     const _isAbsent = !!(showIndividualCheckIn && !_isPresent && t && window._idMapHas &&
       window._idMapHas(t, t.absent || {}, _presenceWho));
-    const _presenceDot = showIndividualCheckIn
-      ? '<span title="' + (_isPresent ? 'Presente' : (_isAbsent ? 'Ausente' : 'Aguardando presença')) +
+    const _presenceDot = (showIndividualCheckIn || _isPresent)
+      ? '<span data-bracket-presence-dot title="' + (_isPresent ? 'Presente' : (_isAbsent ? 'Ausente' : 'Aguardando presença')) +
         '" aria-label="' + (_isPresent ? 'Presente' : (_isAbsent ? 'Ausente' : 'Aguardando presença')) +
         '" style="width:8px;height:8px;border-radius:50%;background:' +
         (_isPresent ? window._spCor('#10b981', 'background') : (_isAbsent ? window._spCor('#60a5fa', 'background') : window._spCor('#64748b', 'background'))) +
@@ -7626,9 +7627,13 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m, slot, showIndividu
         ? '<div class="sp-match-team">' + _timeHtml + '<div class="sp-match-team-members">' + html + '</div></div>'
         : html;
     }
+    const _avatarHtml = `<img src="${photoSrc}"${_avatarUid} ${onerror} data-player-name="${window._safeHtml(name)}" class="sp-av" style="--sp-av:${size}">`;
+    const _presenceAvatar = canCheckIn && t && t.id && (_slotUid || name)
+      ? `<button type="button" class="sp-bracket-presence-button" data-bracket-presence-action data-presence-tid="${window._safeHtml(String(t.id))}" data-presence-uid="${window._safeHtml(_slotUid)}" data-presence-name="${window._safeHtml(name)}" aria-label="${_isPresent ? 'Remover presença de ' : 'Marcar presença de '}${window._safeHtml(name || 'jogador')}" title="${_isPresent ? 'Remover presença' : 'Marcar presença'}">${_avatarHtml}</button>`
+      : _avatarHtml;
     html += `<div class="sp-mc-side">` +
       _presenceDot +
-      `<img src="${photoSrc}"${_avatarUid} ${onerror} data-player-name="${window._safeHtml(name)}" class="sp-av" style="--sp-av:${size}">` +
+      _presenceAvatar +
       // Cada participante abre sua ficha pelo próprio nome, inclusive no card da chave.
       // O clique delegado para antes da ação do card, portanto não aciona placar/confirmar.
       // ── O NOME É DO PERFIL, E SE ATUALIZA (1.8.29) ────────────────────────
@@ -7678,6 +7683,65 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m, slot, showIndividu
   return _timeHtml
     ? '<div class="sp-match-team">' + _timeHtml + '<div class="sp-match-team-members">' + html + '</div></div>'
     : html;
+}
+
+// A foto na chave é um atalho de presença para a operação do torneio. O clique
+// delegado também atende as réplicas da faixa operacional, cujos handlers inline
+// são removidos ao clonar o card. O servidor continua sendo a autoridade.
+if (!window._bracketPresenceClickInstalled && typeof document.addEventListener === 'function') {
+  window._bracketPresenceClickInstalled = true;
+  window._bracketPresencePending = window._bracketPresencePending || {};
+  document.addEventListener('click', function (event) {
+    var button = event.target && event.target.closest && event.target.closest('[data-bracket-presence-action]');
+    if (!button) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    var tId = button.getAttribute('data-presence-tid') || '';
+    var uid = button.getAttribute('data-presence-uid') || '';
+    var name = button.getAttribute('data-presence-name') || '';
+    var t = window._findTournamentById && window._findTournamentById(tId);
+    if (!t || !window._isUserAuthority || !window._isUserAuthority(t, window.AppStore && window.AppStore.currentUser) ||
+        !window._applyCheckInToggle || (!uid && !name)) return;
+    if ((t.isSandbox === true || tId.indexOf('sb_') === 0) &&
+        !(window._isUserOrgOrCoHost && window._isUserOrgOrCoHost(t, window.AppStore && window.AppStore.currentUser))) return;
+    var key = tId + ':' + (uid || name);
+    if (window._bracketPresencePending[key]) return;
+    window._bracketPresencePending[key] = true;
+    button.disabled = true;
+    Promise.resolve(window._applyCheckInToggle(tId, name, uid)).then(function (saved) {
+      if (saved !== true) return;
+      var fresh = window._findTournamentById && window._findTournamentById(tId);
+      var who = uid ? { uid: uid, displayName: name, name: name } : name;
+      var present = !!(fresh && window._idMapHas && window._idMapHas(fresh, fresh.checkedIn || {}, who));
+      Array.prototype.forEach.call(document.querySelectorAll('[data-bracket-presence-action]'), function (peer) {
+        if (peer.getAttribute('data-presence-tid') !== tId ||
+            peer.getAttribute('data-presence-uid') !== uid ||
+            (!uid && peer.getAttribute('data-presence-name') !== name)) return;
+        var label = (present ? 'Remover presença de ' : 'Marcar presença de ') + (name || 'jogador');
+        peer.setAttribute('aria-label', label);
+        peer.setAttribute('title', present ? 'Remover presença' : 'Marcar presença');
+        var dot = peer.parentNode && peer.parentNode.querySelector('[data-bracket-presence-dot]');
+        if (!dot && peer.parentNode) {
+          dot = document.createElement('span');
+          dot.setAttribute('data-bracket-presence-dot', '');
+          peer.parentNode.insertBefore(dot, peer);
+        }
+        if (dot) {
+          dot.title = present ? 'Presente' : 'Aguardando presença';
+          dot.setAttribute('aria-label', dot.title);
+          dot.style.cssText = 'width:8px;height:8px;border-radius:50%;flex:0 0 8px;display:inline-block;background:' +
+            (present ? '#10b981' : '#64748b');
+        }
+      });
+      var root = Array.prototype.find.call(document.querySelectorAll('[data-bracket-tabs-root]'), function (node) {
+        return node.getAttribute('data-tournament-id') === tId;
+      });
+      if (root && window._bracketOperationsRefresh) window._bracketOperationsRefresh(fresh || t, root);
+    }).finally(function () {
+      delete window._bracketPresencePending[key];
+      if (button.isConnected) button.disabled = false;
+    });
+  }, true);
 }
 
 /* ── LINHA DE TEMPO DO JOGO ─────────────────────────────────────────────────────
@@ -8414,6 +8478,9 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   var _releasedForCard = window._bracketCourtReleased ? window._bracketCourtReleased(tId) : {};
   var _canOperateCourt = !!(typeof window._isUserAuthority === 'function' &&
     window._isUserAuthority(t, window.AppStore && window.AppStore.currentUser));
+  var _canCheckInFromBracket = _canOperateCourt &&
+    (!(t && (t.isSandbox === true || String(tId).indexOf('sb_') === 0)) ||
+      !!(window._isUserOrgOrCoHost && window._isUserOrgOrCoHost(t, window.AppStore && window.AppStore.currentUser)));
   var _canChangeCardCourt = !!(_isConcentratedEvent && t && _canOperateCourt && !_releasedForCard[String(m.id)] && !_matchAlreadyInPlay && !isByeMatch && !m.isSitOut && _withinCallWindow);
   var _courtCardHtml = '';
   // Na agenda concentrada a quadra e o horário formam um único dado operacional.
@@ -8483,7 +8550,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
 
   const p1Row = `
     <div style="${rowStyle(p1IsWinner, 'p1')}">
-      <div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p1AguardaMelhor ? 'TBD' : m.p1, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1', t) : (m.p1Uid || m.team1Uids)), m, 'p1', showIndividualCheckIn)}</div>
+      <div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p1AguardaMelhor ? 'TBD' : m.p1, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1', t) : (m.p1Uid || m.team1Uids)), m, 'p1', showIndividualCheckIn, _canCheckInFromBracket && !_readOnly && _presencaImporta)}</div>
       ${_p1PromotedBadge}${_p1RepBadge}${_p1ByeBadge}
       <div id="score-p1-${m.id}" class="sp-mc-sc">
         ${_multiSet ? _setGridHtml(1) : (showInputs ? p1Score : (p1ScoreVal || ''))}
@@ -8492,7 +8559,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
 
   const p2Row = `
     <div style="${rowStyle(p2IsWinner, 'p2')}">
-      <div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p2AguardaMelhor ? 'TBD' : m.p2, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p2', t) : (m.p2Uid || m.team2Uids)), m, 'p2', showIndividualCheckIn)}</div>
+      <div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p2AguardaMelhor ? 'TBD' : m.p2, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p2', t) : (m.p2Uid || m.team2Uids)), m, 'p2', showIndividualCheckIn, _canCheckInFromBracket && !_readOnly && _presencaImporta)}</div>
       ${_p2PromotedBadge}${_p2RepBadge}${_p2ByeBadge}
       <div id="score-p2-${m.id}" class="sp-mc-sc">
         ${_multiSet ? _setGridHtml(2) : (showInputs ? p2Score : (p2ScoreVal || ''))}

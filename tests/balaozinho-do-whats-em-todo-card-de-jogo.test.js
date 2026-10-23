@@ -68,7 +68,7 @@ ok(/dentroDaCaixa: true/.test(corpoLimpo),
 // passado às duas metades para que a porta única do WhatsApp decida visibilidade.
 // A presença individual é um argumento opcional depois do slot; a fiação do
 // WhatsApp continua exigindo que as duas metades recebam o mesmo `m` e o slot.
-const chamadas = bracket.match(/_teamAvatarHtml\([^;]*?\)\)?, m(?:, ['"]p[12]['"])?(?:,\s*showIndividualCheckIn)?\)/g) || [];
+const chamadas = bracket.match(/_teamAvatarHtml\([^;]*?\)\)?, m(?:, ['"]p[12]['"])?(?:,\s*showIndividualCheckIn)?(?:,\s*_canCheckInFromBracket && !_readOnly && _presencaImporta)?\)/g) || [];
 ok(chamadas.length === 2, '② os dois lados (p1 e p2) passam o jogo — achei ' + chamadas.length);
 
 // ── ③ a REGRA, exercitada na porta única de verdade ─────────────────────────
