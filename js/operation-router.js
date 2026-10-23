@@ -196,6 +196,16 @@
           answer = await post(url(cfg, next.region, name), payload, headers, 20000);
         }
       }
+      if (answer.requiresRefresh) {
+        var db = window.FirestoreDB;
+        var fresh = null;
+        try {
+          if (db && typeof db.loadTournamentById === 'function') fresh = await db.loadTournamentById(tId);
+        } catch (_) { /* O recibo mantém a intenção segura para nova conferência. */ }
+        if (!fresh) throw fail('A ação foi salva, mas ainda não consegui reler o torneio. Repita para conferir.',
+          'unavailable', true);
+        answer.tournament = fresh;
+      }
       delete all[key]; writePending(all);
       return answer;
     } catch (error) {

@@ -19,6 +19,7 @@ let failedRegion = '';
 let committed = false;
 let receipt = false;
 let probeFailure = false;
+let readFailure = false;
 const doc = { body: { appendChild(node) { node.isConnected = true; } }, getElementById() { return null; },
   createElement() { return { style: {}, setAttribute() {}, remove() {} }; } };
 const context = { window: {}, document: doc, localStorage: {
@@ -48,6 +49,7 @@ const context = { window: {}, document: doc, localStorage: {
 context.window = context;
 context.crypto = { randomUUID: (() => { let i = 0; return () => `12345678-1234-4123-8123-${String(++i).padStart(12, '0')}`; })() };
 context.firebase = { auth: () => ({ currentUser: { uid: 'owner' } }) };
+context.FirestoreDB = { loadTournamentById: async () => readFailure ? null : { id: 'tour_test', source: 'server' } };
 vm.createContext(context);
 vm.runInContext(fs.readFileSync(path.join(__dirname, '../js/operation-router.js'), 'utf8'), context);
 const router = context.ScoreplaceOperationRouter;
@@ -69,8 +71,15 @@ const headers = { Authorization: 'Bearer test' };
   assert.equal(committed, true);
   failedRegion = elected; committed = false; receipt = true;
   const before = calls.filter(x => x.name === 'sp-op-court-v2' && !x.payload.probe).length;
-  assert.equal((await router.call('assignMatchCourt', payload, headers)).requiresRefresh, true);
-  assert.equal(calls.filter(x => x.name === 'sp-op-court-v2' && !x.payload.probe).length, before + 1,
+  readFailure = true;
+  await assert.rejects(router.call('assignMatchCourt', payload, headers),
+    error => error.code === 'functions/unavailable');
+  assert.notEqual(store.get('sp-operation-pending-v2'), '{}', 'recibo sem releitura mantém a intenção');
+  readFailure = false;
+  const replay = await router.call('assignMatchCourt', payload, headers);
+  assert.equal(replay.requiresRefresh, true);
+  assert.equal(replay.tournament.source, 'server');
+  assert.equal(calls.filter(x => x.name === 'sp-op-court-v2' && !x.payload.probe).length, before + 2,
     'recibo confirmado impede nova escrita');
   assert.equal(committed, false);
   assert.equal(store.get('sp-operation-pending-v2'), '{}');
