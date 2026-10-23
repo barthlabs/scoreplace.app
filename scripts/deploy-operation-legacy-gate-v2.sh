@@ -3,7 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 mode="${1:---check}"
-[[ "$mode" == '--deploy' || "$mode" == '--check' || "$mode" == '--refresh' ]] || exit 2
+[[ "$mode" == '--deploy' || "$mode" == '--check' || "$mode" == '--refresh' || "$mode" == '--check-live' ]] || exit 2
 project=scoreplace-app
 region=us-east1
 source_manifest=.claude/tmp/operation-regions-manifest-v2.json
@@ -14,10 +14,16 @@ targets=(assignMatchCourt applyMatchResult setTournamentPresence setTournamentPr
 normal=(setTournamentPresence applyMatchResult applyQueuedResult assignMatchCourt setTournamentPresenceWithWOSubstitution endMatchOnCourt)
 
 [[ -z "$(git status --porcelain)" ]] || { echo 'árvore suja' >&2; exit 1; }
-scripts/deploy-operation-regions.sh --check-v2
+if [[ "$mode" == '--check-live' ]]; then
+  scripts/deploy-operation-regions.sh --check-v2-live
+else
+  scripts/deploy-operation-regions.sh --check-v2
+fi
 [[ -f "$source_manifest" ]] || { echo 'manifesto regional ausente' >&2; exit 1; }
 source_commit="$(SP_MANIFEST="$source_manifest" node -e 'const m=require("./"+process.env.SP_MANIFEST);const s=[...new Set(m.map(x=>x.commit))];if(s.length!==1)process.exit(1);process.stdout.write(s[0])')"
-git diff --quiet "$source_commit" HEAD -- functions functions-autodraw || { echo 'codebase mudou após build regional' >&2; exit 1; }
+if [[ "$mode" != '--check-live' ]]; then
+  git diff --quiet "$source_commit" HEAD -- functions functions-autodraw || { echo 'codebase mudou após build regional' >&2; exit 1; }
+fi
 describe_run() { gcloud run services describe "$1" --project "$project" --region "$region" --format=json; }
 describe_fn() { gcloud functions describe "$1" --project "$project" --region us-central1 --gen2 --format=json; }
 validate_before() {

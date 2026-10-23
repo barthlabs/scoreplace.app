@@ -1,3 +1,6 @@
+// 2.5.41 — Contingência automática ampliada para cinco regiões. A malha anterior
+// de três regiões permanece disponível para abas web antigas e como retorno se
+// as cinco portas novas estiverem indisponíveis. Nenhum placar é reprocessado.
 // 2.5.40 — Operações de quadra, presença e placar usam contingência automática
 // entre três regiões: a primeira ação escolhe uma região saudável e só troca
 // após falha, conferindo o recibo antes de tentar novamente. A sonda autenticada

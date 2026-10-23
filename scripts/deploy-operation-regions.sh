@@ -3,12 +3,16 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 mode="${1:---check}"
+if [[ "$mode" == '--deploy-v3' || "$mode" == '--resume-v3' || "$mode" == '--check-v3' || "$mode" == '--check-v2-live' ]]; then
+  exec "$(dirname "$0")/deploy-operation-regions-v3.sh" "$mode"
+fi
 if [[ "$mode" == '--deploy-v2' || "$mode" == '--check-v2' || "$mode" == '--refresh-v2' || "$mode" == '--recover-v2' ]]; then
   exec "$(dirname "$0")/deploy-operation-regions-v2.sh" "$mode"
 fi
-if [[ "$mode" == '--deploy-legacy-gate' || "$mode" == '--check-legacy-gate' ]]; then
+if [[ "$mode" == '--deploy-legacy-gate' || "$mode" == '--check-legacy-gate' || "$mode" == '--check-legacy-gate-live' ]]; then
   gate_mode=--check
   [[ "$mode" == '--deploy-legacy-gate' ]] && gate_mode=--deploy
+  [[ "$mode" == '--check-legacy-gate-live' ]] && gate_mode=--check-live
   exec "$(dirname "$0")/deploy-operation-legacy-gate-v2.sh" "$gate_mode"
 fi
 if [[ "$mode" != '--check' && "$mode" != '--deploy' && "$mode" != '--resume-first' ]]; then

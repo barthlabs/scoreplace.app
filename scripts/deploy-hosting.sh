@@ -567,7 +567,7 @@ verificar_contingencia_regional() {
     echo "✗ configuração regional vazia no commit — abortando."
     return 1
   fi
-  for manifesto in .claude/tmp/operation-regions-manifest-v2.json .claude/tmp/operation-legacy-gate-manifest-v2.json; do
+  for manifesto in .claude/tmp/operation-regions-manifest-v2.json .claude/tmp/operation-regions-manifest-v3.json .claude/tmp/operation-legacy-gate-manifest-v2.json; do
     if [[ ! -s "$manifesto" ]]; then
       echo "✗ manifesto regional ausente: $manifesto — abortando."
       return 1
@@ -577,9 +577,17 @@ verificar_contingencia_regional() {
     echo "✗ configuração regional local diverge do commit — abortando."
     return 1
   fi
-  scripts/deploy-operation-regions.sh --check-v2 || return 1
-  scripts/deploy-operation-regions.sh --check-legacy-gate || return 1
+  local v3blob="$COMMIT:operation-regions-v3.json"
+  if ! git cat-file -e "$v3blob" 2>/dev/null || [[ ! -s operation-regions-v3.json ]] ||
+     ! cmp -s operation-regions-v3.json <(git show "$v3blob"); then
+    echo "✗ configuração v3 ausente ou divergente do commit — abortando."
+    return 1
+  fi
+  scripts/deploy-operation-regions.sh --check-v2-live || return 1
+  scripts/deploy-operation-regions.sh --check-v3 || return 1
+  scripts/deploy-operation-regions.sh --check-legacy-gate-live || return 1
   node scripts/generate-operation-regions-config.js --check || return 1
+  node scripts/generate-operation-regions-v3-config.js --check || return 1
   echo "  ✓ configuração regional no commit: $(git rev-parse "$blob")"
 }
 
@@ -688,6 +696,11 @@ fi
 if [[ ! -s "$DEST/operation-regions.json" ]] ||
    ! cmp -s "$DEST/operation-regions.json" <(git -C "$RAIZ" show "$COMMIT:operation-regions.json"); then
   echo "✗ configuração regional extraída diverge do commit — abortando upload."
+  exit 1
+fi
+if [[ ! -s "$DEST/operation-regions-v3.json" ]] ||
+   ! cmp -s "$DEST/operation-regions-v3.json" <(git -C "$RAIZ" show "$COMMIT:operation-regions-v3.json"); then
+  echo "✗ configuração regional v3 extraída diverge do commit — abortando upload."
   exit 1
 fi
 verificar_contingencia_regional || exit 1

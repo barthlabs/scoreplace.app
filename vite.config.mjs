@@ -17,7 +17,7 @@ logger.warn = (message, options) => {
 };
 /* Scripts clássicos ainda compõem a aplicação. Enquanto cada fronteira não for movida para
  * módulos, Vite preserva exatamente esses arquivos e a ordem declarada no index. */
-const LEGACY_ASSETS = ['sw.js', 'manifest.json', 'robots.txt', 'sitemap.xml', 'css', 'js', 'icons', 'assets'];
+const LEGACY_ASSETS = ['sw.js', 'manifest.json', 'robots.txt', 'sitemap.xml', 'operation-regions.json', 'operation-regions-v3.json', 'css', 'js', 'icons', 'assets'];
 
 /* ⛔⛔⛔ OS COMENTÁRIOS FICAM NO CÓDIGO, MAS NÃO VIAJAM ATÉ O NAVEGADOR.
  *

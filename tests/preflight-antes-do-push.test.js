@@ -119,7 +119,10 @@ function cenario(opcoes) {
   fs.writeFileSync(path.join(repo, 'js', 'marcador-release.txt'), 'marcador=confirmado\n');
   fs.writeFileSync(path.join(repo, 'sw.js'), "var CACHE_NAME = 'scoreplace-v9.9.9';\n");
   fs.writeFileSync(path.join(repo, '.gitignore'), '.claude/\n');
-  if (!o.semJsonRegional) fs.writeFileSync(path.join(repo, 'operation-regions.json'), '{"schema":2,"teste":true}\n');
+  if (!o.semJsonRegional) {
+    fs.writeFileSync(path.join(repo, 'operation-regions.json'), '{"schema":2,"teste":true}\n');
+    fs.writeFileSync(path.join(repo, 'operation-regions-v3.json'), '{"schema":3,"teste":true}\n');
+  }
   fs.mkdirSync(path.join(repo, 'scripts'));
   fs.copyFileSync(path.join(RAIZ, 'scripts', 'deploy-hosting.sh'), path.join(repo, 'scripts', 'deploy-hosting.sh'));
   fs.chmodSync(path.join(repo, 'scripts', 'deploy-hosting.sh'), 0o755);
@@ -154,6 +157,7 @@ function cenario(opcoes) {
     '#!/bin/sh\n' + (o.regiaoDivergente ? 'exit 1\n' : 'exit 0\n'));
   fs.chmodSync(path.join(repo, 'scripts', 'deploy-operation-regions.sh'), 0o755);
   fs.writeFileSync(path.join(repo, 'scripts', 'generate-operation-regions-config.js'), 'process.exit(0);\n');
+  fs.writeFileSync(path.join(repo, 'scripts', 'generate-operation-regions-v3-config.js'), 'process.exit(0);\n');
   fs.writeFileSync(path.join(repo, 'package.json'), JSON.stringify({ name: 'x', version: '1.0.0', scripts: {} }));
   // node_modules que o script exige encontrar (raiz + subprojeto)
   fs.mkdirSync(path.join(repo, 'node_modules', '@playwright', 'test'), { recursive: true });
@@ -170,7 +174,10 @@ function cenario(opcoes) {
   git(['commit', '-q', '-m', 'commit de release']);
   if (!o.semManifestoRegional || !o.semManifestoGate) {
     fs.mkdirSync(path.join(repo, '.claude', 'tmp'), { recursive: true });
-    if (!o.semManifestoRegional) fs.writeFileSync(path.join(repo, '.claude', 'tmp', 'operation-regions-manifest-v2.json'), '[]\n');
+    if (!o.semManifestoRegional) {
+      fs.writeFileSync(path.join(repo, '.claude', 'tmp', 'operation-regions-manifest-v2.json'), '[]\n');
+      fs.writeFileSync(path.join(repo, '.claude', 'tmp', 'operation-regions-manifest-v3.json'), '[]\n');
+    }
     if (!o.semManifestoGate) fs.writeFileSync(path.join(repo, '.claude', 'tmp', 'operation-legacy-gate-manifest-v2.json'), '{}\n');
   }
   const shaRelease = git(['rev-parse', 'HEAD']).trim();

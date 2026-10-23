@@ -97,7 +97,7 @@ self.addEventListener('notificationclick', function(event) {
   );
 });
 
-var CACHE_NAME = 'scoreplace-v2.5.40';
+var CACHE_NAME = 'scoreplace-v2.5.41';
 // NOTE: js/release-notes.js NÃO entra aqui de propósito — é lazy-loaded só
 // quando o usuário abre "Notas de versões" no Help. Adicioná-lo ao precache
 // faria cache.addAll baixar 1MB durante o SW install, anulando o ganho do
@@ -518,7 +518,7 @@ self.addEventListener('fetch', function(event) {
   // `_swcheck` (chamadas diretas/curl também).
   if (url.indexOf('/version.txt') !== -1) return;
   // A eleição regional precisa sempre do manifesto corrente, inclusive sob SW antigo.
-  if (url.indexOf('/operation-regions.json') !== -1) return;
+  if (url.indexOf('/operation-regions') !== -1) return;
 
   // ── SHELL: CACHE PRIMEIRO, REDE ATRÁS ──────────────────────────────────
   // Se a URL EXATA (com `?v=`) já está no cache, responde na hora e revalida em

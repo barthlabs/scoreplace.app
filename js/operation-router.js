@@ -1,6 +1,6 @@
 /* Operações da mesa: eleição regional por torneio/dia e retry pela mesma intenção.
  * A configuração é um artefato estático do deploy, produzido só após verificar
- * as mesmas imagens nas três regiões. Nenhum nome de atleta ou token vai nele. */
+ * as mesmas imagens nas regiões anunciadas. Nenhum nome de atleta ou token vai nele. */
 (function () {
   'use strict';
   var OPERATIONS = {
@@ -60,17 +60,20 @@
       } else node.remove();
     }
   }
-  function loadConfig() {
-    if (!configPromise) configPromise = fetch('/operation-regions.json?v=' +
-      encodeURIComponent(String(window.SCOREPLACE_VERSION || '2')), { cache: 'no-store' }).then(function (r) {
-      if (!r.ok) throw fail('Contingência ainda não publicada. Atualize o aplicativo.', 'unavailable');
-      return r.json();
-    }).then(function (cfg) {
-      if (!cfg || cfg.schema !== 2 || !Array.isArray(cfg.regions) || cfg.regions.length < 2 || !cfg.services) {
+  function fetchConfig(path, schema) {
+      return fetch(path + '?v=' + encodeURIComponent(String(window.SCOREPLACE_VERSION || '3')),
+        { cache: 'no-store' }).then(function (r) {
+        if (!r.ok) throw fail('Contingência ainda não publicada. Atualize o aplicativo.', 'unavailable');
+        return r.json();
+      }).then(function (cfg) {
+      if (!cfg || cfg.schema !== schema || !Array.isArray(cfg.regions) ||
+          cfg.regions.length !== (schema === 3 ? 5 : 3) ||
+          new Set(cfg.regions).size !== cfg.regions.length || !cfg.services) {
         throw fail('Configuração regional inválida.', 'failed-precondition');
       }
       Object.keys(OPERATIONS).concat(['tournamentOperationControl']).forEach(function (name) {
-        var service = name === 'tournamentOperationControl' ? CONTROL : OPERATIONS[name];
+        var service = (name === 'tournamentOperationControl' ? CONTROL : OPERATIONS[name])
+          .replace(/-v2$/, '-v' + schema);
         if (!cfg.services[service] || !cfg.services[service].digest) throw fail('Porta regional ausente.', 'failed-precondition');
         cfg.regions.forEach(function (region) {
           if (!cfg.services[service].urls || !/^https:\/\//.test(cfg.services[service].urls[region])) {
@@ -79,12 +82,20 @@
         });
       });
       return cfg;
-    }).catch(function (error) { configPromise = null; throw error; });
+      });
+  }
+  function loadConfig() {
+    if (!configPromise) configPromise = fetchConfig('/operation-regions-v3.json', 3)
+      .catch(function () { return fetchConfig('/operation-regions.json', 2); })
+      .catch(function (error) { configPromise = null; throw error; });
     return configPromise;
   }
   function url(cfg, region, name) {
-    var service = name === 'tournamentOperationControl' ? CONTROL : OPERATIONS[name];
-    return cfg.services[service].urls[region];
+    var service = (name === 'tournamentOperationControl' ? CONTROL : OPERATIONS[name])
+      .replace(/-v2$/, '-v' + cfg.schema);
+    var endpoint = cfg.services[service] && cfg.services[service].urls && cfg.services[service].urls[region];
+    if (!endpoint) throw fail('Região sem porta operacional.', 'failed-precondition');
+    return endpoint;
   }
   async function post(endpoint, payload, headers, ms) {
     var ctrl = new AbortController();
@@ -110,7 +121,8 @@
     // Cada operação valida o papel do usuário antes de gravar seus dados.
     var started = performance.now();
     await Promise.all(Object.keys(OPERATIONS).concat(['tournamentOperationControl']).map(async function (name) {
-      var service = name === 'tournamentOperationControl' ? CONTROL : OPERATIONS[name];
+      var service = (name === 'tournamentOperationControl' ? CONTROL : OPERATIONS[name])
+        .replace(/-v2$/, '-v' + cfg.schema);
       var answer = await post(url(cfg, region, name), { probe: true }, headers, 7000);
       if (!answer.ok || answer.region !== region || answer.sourceDigest !== cfg.services[service].digest) {
         throw fail('Revisão regional divergente.', 'failed-precondition', true);
@@ -122,7 +134,23 @@
     var results = await Promise.allSettled(cfg.regions.map(function (region) { return probe(cfg, region, headers); }));
     var list = results.filter(function (item) { return item.status === 'fulfilled'; }).map(function (item) { return item.value; });
     list.sort(function (a, b) { return a.latency - b.latency; });
-    if (!list.length) throw fail('Nenhuma região validada. A ação não foi enviada.', 'unavailable', true);
+    if (!list.length && cfg.schema === 3) {
+      // Todas as portas novas falharam. Volta à malha publicada anteriormente,
+      // incluindo o mesmo UUID e recibo da ação que iniciou esta chamada.
+      var previous;
+      try { previous = await fetchConfig('/operation-regions.json', 2); }
+      catch (error) { configPromise = null; throw error; }
+      // Mutação intencional: configPromise resolve este mesmo objeto. A sessão
+      // inteira passa à v2 até recarregar, sem misturar portas v2 e v3.
+      Object.assign(cfg, previous);
+      results = await Promise.allSettled(cfg.regions.map(function (region) { return probe(cfg, region, headers); }));
+      list = results.filter(function (item) { return item.status === 'fulfilled'; }).map(function (item) { return item.value; });
+      list.sort(function (a, b) { return a.latency - b.latency; });
+    }
+    if (!list.length) {
+      configPromise = null;
+      throw fail('Nenhuma região validada. A ação não foi enviada.', 'unavailable', true);
+    }
     return list;
   }
   async function control(cfg, region, payload, headers) {
@@ -147,13 +175,13 @@
         var state = await control(cfg, list[0].region, { action: 'current', tournamentId: tId, sandbox: sandbox }, headers);
         if (!state.selected) {
           state = await control(cfg, list[0].region, { action: 'select', tournamentId: tId, sandbox: sandbox,
-            region: list[0].region, sourceDigest: cfg.services[CONTROL].digest }, headers);
+            region: list[0].region, sourceDigest: cfg.services[CONTROL.replace(/-v2$/, '-v' + cfg.schema)].digest }, headers);
         } else if (!list.some(function (item) { return item.region === state.region; })) {
           var next = list.find(function (item) { return item.region !== state.region; });
           if (!next) throw fail('Região fixada indisponível e sem alternativa.', 'unavailable', true);
           state = await control(cfg, next.region, { action: 'failover', tournamentId: tId, sandbox: sandbox,
             region: next.region, observedRevision: state.revision, reason: 'infrastructure',
-            sourceDigest: cfg.services[CONTROL].digest }, headers);
+            sourceDigest: cfg.services[CONTROL.replace(/-v2$/, '-v' + cfg.schema)].digest }, headers);
         }
         selection.set(tId, state);
         chosen = state.region;
@@ -203,7 +231,7 @@
           if (!alternative) throw error;
           var next = await control(cfg, alternative.region, { action: 'failover', tournamentId: tId,
             sandbox: payload.sandbox === true, region: alternative.region, observedRevision: state.revision,
-            reason: 'infrastructure', sourceDigest: cfg.services[CONTROL].digest }, headers);
+            reason: 'infrastructure', sourceDigest: cfg.services[CONTROL.replace(/-v2$/, '-v' + cfg.schema)].digest }, headers);
           selection.set(tId, next);
           answer = await post(url(cfg, next.region, name), payload, headers, 20000);
         }
