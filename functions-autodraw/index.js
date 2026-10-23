@@ -4061,7 +4061,8 @@ exports.tournamentOperationControl = onCall({ invoker: 'public' }, async (reques
   }
   const region = String(data.region || '');
   if ((action === 'select' || action === 'failover') &&
-      (!_OPERATION_REGIONS.has(region) || data.sourceDigest !== process.env.SP_SOURCE_DIGEST)) {
+      (!_OPERATION_REGIONS.has(region) || region !== process.env.SP_OPERATION_REGION ||
+       data.sourceDigest !== process.env.SP_SOURCE_DIGEST)) {
     throw new HttpsError('failed-precondition', 'Região ou revisão não verificada.');
   }
   const now = new Date();
@@ -4092,7 +4093,8 @@ exports.tournamentOperationControl = onCall({ invoker: 'public' }, async (reques
         expireAt: new Date(now.getTime() + 30 * 86400000) });
       return { selected: true, day, region, revision: 1, adopted: false };
     }
-    if (!current || Number(data.observedRevision) !== Number(current.revision) || region === current.region ||
+    if (!protocolSnap.exists || protocolSnap.data().protocolVersion !== 2 ||
+        !current || Number(data.observedRevision) !== Number(current.revision) || region === current.region ||
         data.reason !== 'infrastructure') {
       throw new HttpsError('failed-precondition', 'Seleção mudou; consulte novamente.');
     }
