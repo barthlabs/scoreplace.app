@@ -42,15 +42,23 @@
   function withoutId(payload) {
     var copy = Object.assign({}, payload); delete copy.operationId; return JSON.stringify(copy);
   }
-  function progress(open) {
+  function progress(open, region) {
     var id = 'sp-region-align-progress';
     var node = document.getElementById(id);
     if (open && !node) {
       node = document.createElement('div'); node.id = id;
       node.setAttribute('role', 'status'); node.setAttribute('aria-live', 'polite');
-      node.style.cssText = 'position:fixed;z-index:2147483640;left:50%;top:24px;transform:translateX(-50%);background:#10243a;color:#fff;border:1px solid #51c5ee;border-radius:12px;padding:12px 18px;box-shadow:0 8px 30px #0009;font-weight:700';
+      node.style.cssText = 'position:fixed;z-index:2147483640;left:50%;top:50%;transform:translate(-50%,-50%);background:#10243a;color:#fff;border:1px solid #51c5ee;border-radius:12px;padding:20px 26px;box-shadow:0 8px 30px #0009;font-weight:700';
       node.textContent = 'Alinhando servidores…'; document.body.appendChild(node);
-    } else if (!open && node) node.remove();
+    } else if (open && node) {
+      clearTimeout(node._removeTimer);
+      node.textContent = 'Alinhando servidores…';
+    } else if (!open && node) {
+      if (region) {
+        node.textContent = 'Servidor alinhado: ' + region;
+        node._removeTimer = setTimeout(function () { if (node.isConnected) node.remove(); }, 900);
+      } else node.remove();
+    }
   }
   function loadConfig() {
     if (!configPromise) configPromise = fetch('/operation-regions.json?v=' +
@@ -131,6 +139,7 @@
     if (aligning.has(tId)) return aligning.get(tId);
     var task = (async function () {
       progress(true);
+      var chosen = '';
       try {
         var list = await healthy(cfg, headers);
         var state = await control(cfg, list[0].region, { action: 'current', tournamentId: tId, sandbox: sandbox }, headers);
@@ -145,8 +154,9 @@
             sourceDigest: cfg.services[CONTROL].digest }, headers);
         }
         selection.set(tId, state);
+        chosen = state.region;
         return state;
-      } finally { progress(false); aligning.delete(tId); }
+      } finally { progress(false, chosen); aligning.delete(tId); }
     })();
     aligning.set(tId, task);
     return task;

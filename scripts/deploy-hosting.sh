@@ -655,6 +655,13 @@ else
 fi
 
 # MARCO: upload
+if [[ -f operation-regions.json ]]; then
+  # O primeiro select pode ativar a trava v2 assim que esta web aparecer.
+  # Exigir as 18 revisões regionais e a trava nas portas antigas antes do upload.
+  scripts/deploy-operation-regions.sh --check-v2 || exit 1
+  scripts/deploy-operation-regions.sh --check-legacy-gate || exit 1
+  node scripts/generate-operation-regions-config.js --check || exit 1
+fi
 _DEPLOY_RC=0
 firebase deploy --only hosting --project scoreplace-app || _DEPLOY_RC=$?
 if [[ "$_DEPLOY_RC" != "0" ]]; then

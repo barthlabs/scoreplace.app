@@ -19,5 +19,13 @@ for (const name of names) {
   services[name] = { digest: rows[0].sourceDigest, urls: Object.fromEntries(rows.map(row => [row.region, row.url])) };
 }
 const output = { schema: 2, regions, services };
-fs.writeFileSync(path.join(root, 'operation-regions.json'), JSON.stringify(output, null, 2) + '\n');
+const target = path.join(root, 'operation-regions.json');
+const expected = JSON.stringify(output, null, 2) + '\n';
+if (process.argv.includes('--check')) {
+  if (!fs.existsSync(target) || fs.readFileSync(target, 'utf8') !== expected) {
+    throw new Error('operation-regions.json não corresponde às revisões verificadas.');
+  }
+} else {
+  fs.writeFileSync(target, expected);
+}
 console.log('✓ operation-regions.json: seis portas em três regiões');
