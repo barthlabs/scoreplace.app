@@ -1297,6 +1297,7 @@ const SUITES = [
   // antigo do torneio e apagar o resultado que outro aparelho acabou de registrar.
   'tests/atribuir-quadra-nao-sobrescreve-placar.test.js',
   'tests/chamada-quadra-sandbox.test.js',
+  'tests/postpone-next-match.test.js',
   'tests/next-match-available.test.js',
   'tests/placar-sandbox-isolado.test.js',
   'tests/publicar-sorteio-nao-sobrescreve-resultado.test.js',

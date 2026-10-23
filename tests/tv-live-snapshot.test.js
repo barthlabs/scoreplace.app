@@ -68,6 +68,13 @@ assert.equal(snapshot.courts[1].latest, true, 'jogo chamado por último é desta
 assert.equal(snapshot.courts[1].scoreA, '4');
 assert.equal(snapshot.courts[2].number, undefined, 'jogo só agendado não ocupa TV');
 assert.equal(snapshot.nextGame.number, 3, 'jogo agendado e ainda não chamado aparece como próximo');
+window._bracketOperationsSelect = () => null;
+assert.equal(window._tvLiveBuildSnapshot(t).nextGame.number, 3,
+  'TV preserva seleção anterior se a faixa operacional ainda não estiver completa');
+window._bracketOperationsSelect = () => ({ next: t.matches[4] });
+assert.equal(window._tvLiveBuildSnapshot(t).nextGame.number, 5,
+  'TV respeita a seleção compartilhada quando o adiamento está disponível');
+delete window._bracketOperationsSelect;
 const queue = { ...t, matches: [
   match(30, 'Quadra 4', 'VORTEX', 'BLAST', { scheduledAt:'2026-10-22T18:00:00Z', courtCalledAt:'2026-10-22T18:01:00Z' }),
   match(29, 'Quadra 5', 'ECLIPSE', 'VENOM', { scheduledAt:'2026-10-22T18:00:00Z', winner:'p1' }),

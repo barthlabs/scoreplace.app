@@ -1216,13 +1216,26 @@ window._bracketCourtReleaseCache = window._bracketCourtReleaseCache || {};
 window._bracketCourtReleased = function (tId) {
   return (window._bracketCourtReleaseCache[String(tId)] || {}).released || {};
 };
+window._bracketCourtPostponed = function (tId) {
+  return (window._bracketCourtReleaseCache[String(tId)] || {}).postponed || [];
+};
+window._bracketPostponedOrder = function (candidates, postponed) {
+  var order = Array.isArray(postponed) ? postponed.map(String) : [];
+  var rank = new Map(order.map(function (id, index) { return [id, index]; }));
+  return (candidates || []).map(function (match, index) { return { match: match, index: index }; })
+    .sort(function (a, b) {
+      var ai = rank.has(String(a.match.id)) ? rank.get(String(a.match.id)) : -1;
+      var bi = rank.has(String(b.match.id)) ? rank.get(String(b.match.id)) : -1;
+      return (ai < 0 ? -1 : 1) - (bi < 0 ? -1 : 1) || (ai >= 0 ? ai - bi : a.index - b.index);
+    }).map(function (entry) { return entry.match; });
+};
 window._bracketEnsureCourtReleaseListener = function (tId) {
   var id = String(tId || '');
   if (!id || !window.FirestoreDB || !window.FirestoreDB.db) return;
   var entry = window._bracketCourtReleaseCache[id];
   if (entry && !entry.error) return;
   if (entry && entry.unsubscribe) entry.unsubscribe();
-  if (!entry) entry = { released: {}, ready: false };
+  if (!entry) entry = { released: {}, postponed: [], revision: 0, ready: false };
   entry.error = null;
   entry.retryTimer = null;
   window._bracketCourtReleaseCache[id] = entry;
@@ -1230,6 +1243,8 @@ window._bracketEnsureCourtReleaseListener = function (tId) {
     .doc(id).collection('courtState').doc('main').onSnapshot(function (snap) {
       var data = snap.exists ? snap.data() || {} : {};
       entry.released = data.released && typeof data.released === 'object' ? data.released : {};
+      entry.postponed = Array.isArray(data.postponed) ? data.postponed : [];
+      entry.revision = Number(data.revision) || 0;
       entry.ready = true;
       entry.error = null;
       var t = typeof window._findTournamentById === 'function' ? window._findTournamentById(id) : null;
@@ -1268,7 +1283,7 @@ window._bracketOperationsSelect = function (t) {
     (typeof t.courtNames === 'string' ? t.courtNames.split(',').map(function (name) { return name.trim(); }).filter(Boolean) : []);
   if (!courts.length) for (var c = 1; c <= Math.max(0, Number(t.courtCount) || 0); c++) courts.push('Quadra ' + c);
   active.forEach(function (m) { if (courts.indexOf(String(m.court)) === -1) courts.push(String(m.court)); });
-  var ordered = upcoming.map(function (entry) { return entry.item.m; });
+  var ordered = window._bracketPostponedOrder(upcoming.map(function (entry) { return entry.item.m; }), window._bracketCourtPostponed(t.id));
   var next = window.ScoreplaceNextMatch && typeof window.ScoreplaceNextMatch.firstAvailable === 'function'
     ? window.ScoreplaceNextMatch.firstAvailable(ordered, matches, released) : null;
   return { next: next, active: active, pending: pending, courts: courts };
@@ -1335,6 +1350,9 @@ function _bracketScopeReplicaHtml(html, scope) {
 
 function _bracketOperationsReplica(m, t, role, label, availability) {
   var safe = window._safeHtml || function (s) { return String(s); };
+  var postpone = role.postponeReady
+    ? '<button type="button" class="sp-operations-postpone" data-postpone-next="' + safe(String(m.id || '')) +
+      '"' + (role.postponeBusy ? ' disabled' : '') + ' title="Postergar este jogo e mostrar o próximo">Pular jogo</button>' : '';
   var canEnter = !!(role.canCall || (typeof window._resultEntryIncludes === 'function' &&
     (window._resultEntryIncludes(t, 'players') || window._resultEntryIncludes(t, 'referee'))));
   var html = typeof window.renderMatchCard === 'function'
@@ -1342,7 +1360,7 @@ function _bracketOperationsReplica(m, t, role, label, availability) {
       false, null, { idScope: 'operations-' + String(m.id || ''),
         preferFirstFreeCourt: !!role.preferFirstFreeCourt, preferredCourt: role.preferredCourt || '' }) : '';
   return '<div class="sp-operations-replica' + (role.active ? ' sp-operations-court-card' : '') + '" data-operations-match="' +
-    safe(String(m.id || '')) + '"><span class="sp-operations-label">' + safe(label) + '</span>' + (availability || '') + html + '</div>';
+    safe(String(m.id || '')) + '"><span class="sp-operations-label">' + safe(label) + postpone + '</span>' + (availability || '') + html + '</div>';
 }
 
 function _bracketOperationsDraftValues(op) {
@@ -1468,6 +1486,40 @@ window._bracketOperationsRefresh = function (t, root) {
       var mid = op.getAttribute('data-operations-match');
       var target = event.target.closest('button,[data-operations-action],[data-operations-open]');
       if (!target || target.disabled) return;
+      if (target.hasAttribute('data-postpone-next')) {
+        event.preventDefault();
+        if (existing._spPostponeBusy || !window._callCF) return;
+        var entry = window._bracketCourtReleaseCache[String(t.id)];
+        if (!entry || !entry.ready) return;
+        existing._spPostponeBusy = true;
+        target.disabled = true;
+        window._callCF('endMatchOnCourt', {
+          tournamentId: String(t.id), matchId: mid, sandbox: String(t.id).startsWith('sb_'),
+          action: 'postpone', expectedRevision: entry.revision, operationId: _courtOperationId()
+        }, 'Entre na sua conta para postergar o jogo.').catch(function (error) {
+          if (typeof showNotification === 'function') showNotification('Não foi possível pular o jogo', error && error.message || 'Atualize a tela.', 'error');
+          var ref = window.FirestoreDB && window.FirestoreDB.db && window.FirestoreDB.db
+            .collection(String(t.id).startsWith('sb_') ? 'sandboxes' : 'tournaments').doc(String(t.id))
+            .collection('courtState').doc('main');
+          if (!ref) return;
+          return ref.get().then(function (snap) {
+            var data = snap.exists ? snap.data() || {} : {};
+            entry.released = data.released && typeof data.released === 'object' ? data.released : {};
+            entry.postponed = Array.isArray(data.postponed) ? data.postponed : [];
+            entry.revision = Number(data.revision) || 0;
+            entry.ready = true;
+          }).catch(function () {
+            entry.ready = false;
+            entry.error = new Error('Falha ao atualizar a fila');
+            window._bracketEnsureCourtReleaseListener(t.id);
+          });
+        }).finally(function () {
+          existing._spPostponeBusy = false;
+          var fresh = typeof window._findTournamentById === 'function' ? window._findTournamentById(String(t.id)) : t;
+          window._bracketOperationsRefresh(fresh || t, root);
+        });
+        return;
+      }
       if (target.hasAttribute('data-confirm-for')) {
         event.preventDefault();
         // O placar lançado na faixa não deve iniciar outro foco automático.
@@ -1578,6 +1630,7 @@ window._bracketOperationsRefresh = function (t, root) {
     freeCount + ' ' + (freeCount === 1 ? 'QUADRA LIVRE' : 'QUADRAS LIVRES') + '</div>';
   existing.innerHTML = '<div class="sp-operations-track"><div class="sp-operations-next">' +
     (state.next ? _bracketOperationsReplica(state.next, t, { canCall: canCall, active: false,
+      postponeReady: canCall, postponeBusy: existing._spPostponeBusy || !(window._bracketCourtReleaseCache[String(t.id)] || {}).ready,
       preferFirstFreeCourt: true, preferredCourt: (root._bracketOperationsManualCourt || {})[String(state.next.id)] || '' }, nextLabel, nextAvailability) :
       '<span class="sp-operations-label">' + nextLabel + '</span>' + nextAvailability + '<div class="sp-operations-empty">Nenhum jogo aguardando chamada</div>') +
     '</div>' + (state.pending.length ? '<div class="sp-operations-pending" aria-label="Placares pendentes"><span class="sp-operations-section-title">PLACARES PENDENTES</span><div class="sp-operations-pending-track">' +

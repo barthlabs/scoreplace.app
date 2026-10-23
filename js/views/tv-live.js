@@ -156,15 +156,19 @@
         scoreB: gameScore(m, 2) === '–' ? '0' : gameScore(m, 2),
         timerStart: timestamp(m.courtClockBaseAt || m.courtCalledAt || m.startedAt) };
     });
-    var knownSide = window.ScoreplaceNextMatch.knownSide;
-    var nextCandidates = matches.filter(function (m) {
-      if (!m || occupancy.isFinished(m) || m.isBye || m.isSitOut || m.courtCalledAt || m.startedAt || !timestamp(m.scheduledAt)) return false;
-      var a = m.p1 || (Array.isArray(m.team1) ? m.team1.join(' / ') : '');
-      var b = m.p2 || (Array.isArray(m.team2) ? m.team2.join(' / ') : '');
-      return knownSide(a) && knownSide(b);
-    }).map(function (m) { return { item: { m: m, tId: t.id } }; });
-    nextCandidates.sort(window._dashboardNextMatchCompare);
-    var nextMatch = window.ScoreplaceNextMatch.firstAvailable(nextCandidates.map(function (entry) { return entry.item.m; }), matches, released);
+    var nextSelection = typeof window._bracketOperationsSelect === 'function' ? window._bracketOperationsSelect(t) : null;
+    var nextMatch = nextSelection ? nextSelection.next : null;
+    if (!nextSelection) {
+      var knownSide = window.ScoreplaceNextMatch.knownSide;
+      var nextCandidates = matches.filter(function (m) {
+        if (!m || occupancy.isFinished(m) || m.isBye || m.isSitOut || m.courtCalledAt || m.startedAt || !timestamp(m.scheduledAt)) return false;
+        var a = m.p1 || (Array.isArray(m.team1) ? m.team1.join(' / ') : '');
+        var b = m.p2 || (Array.isArray(m.team2) ? m.team2.join(' / ') : '');
+        return knownSide(a) && knownSide(b);
+      }).map(function (m) { return { item: { m: m, tId: t.id } }; });
+      nextCandidates.sort(window._dashboardNextMatchCompare);
+      nextMatch = window.ScoreplaceNextMatch.firstAvailable(nextCandidates.map(function (entry) { return entry.item.m; }), matches, released);
+    }
     var nextGame = nextMatch ? {
       number: nextMatch._gameNum || nextMatch.scheduledGameNumber || nextMatch.matchNumber || '',
       category: String(nextMatch.category || nextMatch.tierLabel || ''),

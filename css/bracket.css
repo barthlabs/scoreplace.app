@@ -84,6 +84,9 @@
 }
 .sp-operations-court-free span { color: var(--text-muted); }
 .sp-operations-label { color: var(--sp-c-fbbf24, #fbbf24); font-size: .74rem; font-weight: 800; line-height:var(--sp-operations-line-height); }
+.sp-operations-next .sp-operations-label { display:flex;align-items:center;justify-content:space-between;gap:6px;min-width:0; }
+.sp-operations-postpone { flex:0 0 auto;border:1px solid var(--sp-c-38bdf8,#38bdf8);border-radius:7px;background:#075985;color:#fff;font:inherit;font-size:.66rem;font-weight:800;line-height:14px;padding:1px 7px;cursor:pointer; }
+.sp-operations-postpone:disabled { opacity:.55;cursor:wait; }
 .sp-operations-courts .sp-operations-label { color: var(--sp-c-22c55e, #22c55e); }
 .sp-operations-empty { min-height: 70px; display: flex; align-items: center; color: var(--text-muted); font-size: .82rem; }
 .sp-match-end-court { border:1px solid #38bdf8;border-radius:7px;background:#075985;color:#fff;font:inherit;font-size:.68rem;font-weight:800;padding:4px 7px;cursor:pointer; }

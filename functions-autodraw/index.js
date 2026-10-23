@@ -4121,9 +4121,12 @@ exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
   const sandbox = request.data && request.data.sandbox === true;
   if (!tId || !matchId || sandbox !== tId.startsWith('sb_')) throw new HttpsError('invalid-argument', 'Torneio ou jogo inválido.');
   const action = String((request.data && request.data.action) || 'release');
-  if (!['release', 'restore', 'cancel-call'].includes(action)) throw new HttpsError('invalid-argument', 'Ação inválida.');
+  if (!['release', 'restore', 'cancel-call', 'postpone'].includes(action)) throw new HttpsError('invalid-argument', 'Ação inválida.');
   if (action !== 'release' && !(request.data && request.data.operationId)) {
     throw new HttpsError('invalid-argument', 'Identificador da operação obrigatório.');
+  }
+  if (action === 'postpone' && (!Number.isInteger(request.data.expectedRevision) || request.data.expectedRevision < 0)) {
+    throw new HttpsError('invalid-argument', 'Revisão da fila inválida.');
   }
   if (!drawWindow || typeof drawWindow._findMatch !== 'function' ||
       typeof drawWindow._collectAllMatches !== 'function') {
@@ -4178,6 +4181,28 @@ exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
     }
     if (hasScore) {
       throw new HttpsError('failed-precondition', 'Resultado já lançado. Use Editar placar para corrigi-lo.');
+    }
+    if (action === 'postpone') {
+      if (released[matchId] || m.courtCalledAt || m.startedAt) {
+        throw new HttpsError('failed-precondition', 'Este jogo já saiu da fila; atualize a tela.');
+      }
+      if (Number(state.revision || 0) !== request.data.expectedRevision) {
+        throw new HttpsError('failed-precondition', 'A fila mudou; atualize a tela.');
+      }
+      const eligibleIds = new Set(all.filter(item => item && !released[String(item.id)] &&
+        !item.isBye && !item.isSitOut && !item.courtCalledAt && !item.startedAt && !_courtOccupancy.isFinished(item) &&
+        item.draw !== true && !item.pendingResult && item.liveScored !== true &&
+        !(Array.isArray(item.sets) && item.sets.length) &&
+        !(Number(item.scoreP1) > 0) && !(Number(item.scoreP2) > 0))
+        .map(item => String(item.id)));
+      if (!eligibleIds.has(matchId)) {
+        throw new HttpsError('failed-precondition', 'Este jogo não está aguardando chamada.');
+      }
+      const postponed = (Array.isArray(state.postponed) ? state.postponed : [])
+        .map(String).filter((id, index, list) => id !== matchId && eligibleIds.has(id) && list.indexOf(id) === index);
+      postponed.push(matchId);
+      tx.set(stateRef, { postponed: postponed.slice(-all.length), revision: FieldValue.increment(1) }, { merge: true });
+      return commitReply({ ok: true, changed: true });
     }
     if (action === 'restore') {
       if (!released[matchId]) throw new HttpsError('failed-precondition', 'Este jogo não está em Placares pendentes.');

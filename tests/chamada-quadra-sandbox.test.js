@@ -264,5 +264,23 @@ const game = (id, court, scheduledAt = '2026-10-22T21:00:00.000Z') => ({ id, cou
   await assert.rejects(endOnCourt(op('cancel-call', 'dot.part', 'af885541-8772-4c40-9840-83ad381d81b8')),
     e => e.code === 'failed-precondition' && /Editar placar/.test(e.message),
     'proposta de placar também bloqueia Cancelar');
+  tournament.matches = [game('fila1', 'Quadra 4'), game('fila2', 'Quadra 5'), game('fila3', 'Quadra 6')];
+  const statePath = 'tournaments/tour_test/courtState/main';
+  courtStates.set(statePath, { released: {}, postponed: [], revision: 0 });
+  const postpone = (matchId, expectedRevision, operationId) => endOnCourt({ auth: { uid: 'owner' }, data: {
+    tournamentId: 'tour_test', sandbox: false, matchId, action: 'postpone', expectedRevision, operationId
+  } });
+  const skip1 = '4b3d7597-0e0a-44b2-9d2c-6dc03943bd55';
+  const skip2 = '944ed108-55e8-48e8-bbd0-fd5efc722ab3';
+  assert.equal((await postpone('fila1', 0, skip1)).changed, true);
+  assert.deepEqual(Array.from(courtStates.get(statePath).postponed), ['fila1']);
+  assert.equal((await postpone('fila1', 0, skip1)).replayed, true, 'retry usa recibo antes da revisão');
+  await assert.rejects(postpone('fila2', 0, skip2), e => e.code === 'failed-precondition' && /fila mudou/.test(e.message));
+  assert.equal((await postpone('fila2', 1, skip2)).changed, true);
+  assert.deepEqual(Array.from(courtStates.get(statePath).postponed), ['fila1', 'fila2']);
+  assert.equal(tournament.matches.every(m => !m.courtCalledAt), true, 'pular não chama nem altera partida');
+  tournament.matches[2].courtCalledAt = nowIso;
+  await assert.rejects(postpone('fila3', 1, 'fb51aff9-5549-47ca-96e8-c1f4b5f7c26d'),
+    e => e.code === 'failed-precondition' && /já saiu da fila/.test(e.message));
   console.log('✓ sandbox isolado; dia local, ocupação e troca de quadra validados na callable real');
 })().catch(error => { console.error(error); process.exitCode = 1; });
