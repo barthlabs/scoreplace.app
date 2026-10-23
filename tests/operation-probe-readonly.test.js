@@ -50,6 +50,10 @@ async function check(name, source, begin, end, options) {
   assert.deepEqual(state.calls, [], `${name}: sem login não acessa banco`);
   const result = await handler({ auth: { uid: 'owner' }, data });
   assert.deepEqual(JSON.parse(JSON.stringify(result)), metadata, `${name}: metadados apenas`);
+  // A sonda mede saúde da região. Não concede papel no torneio: a autorização
+  // é verificada pela operação real, depois de escolhido o servidor.
+  const outsider = await handler({ auth: { uid: 'outsider' }, data });
+  assert.deepEqual(JSON.parse(JSON.stringify(outsider)), metadata, `${name}: saúde independe de papel`);
   assert(!state.calls.some(x => x !== 'transaction'), `${name}: sonda escreveu: ${state.calls}`);
 }
 (async () => {

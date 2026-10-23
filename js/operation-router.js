@@ -106,6 +106,8 @@
     } finally { clearTimeout(timer); }
   }
   async function probe(cfg, region, headers) {
+    // A sonda autenticada mede saúde e revisão, não autoriza acesso ao torneio.
+    // Cada operação valida o papel do usuário antes de gravar seus dados.
     var started = performance.now();
     await Promise.all(Object.keys(OPERATIONS).concat(['tournamentOperationControl']).map(async function (name) {
       var service = name === 'tournamentOperationControl' ? CONTROL : OPERATIONS[name];
