@@ -6,6 +6,12 @@ const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { getMessaging } = require('firebase-admin/messaging');
 const { getStorage } = require('firebase-admin/storage');
 const { randomUUID } = require('crypto');
+const _operationProbeReply = () => ({
+  ok: true,
+  region: String(process.env.SP_OPERATION_REGION || ''),
+  revision: String(process.env.K_REVISION || ''),
+  sourceDigest: String(process.env.SP_SOURCE_DIGEST || '')
+});
 // v1.7.35: rebase do sorteio (o servidor não sobrescreve o que aconteceu na quadra
 // enquanto pensava). Módulo PURO e testável — o index não é require-ável em teste.
 const { rebaseRounds } = require('./rebase-core.js');
@@ -3249,6 +3255,8 @@ exports.setTournamentPresenceWithWOSubstitution = onCall(async (request) => {
   const pre = await ref.get();
   if (!pre.exists) throw _drawFail('not-found', 'Torneio não encontrado.', { tId, uid });
   if (!_isTournamentAdmin(pre.data(), uid)) throw _drawFail('permission-denied', 'Só a organização controla esta presença.', { tId, uid });
+  // Sonda autenticada: verifica o mesmo documento e papel, sem executar o motor.
+  if (data.probe === true) return _operationProbeReply();
   await _preloadDrawNames(pre.data());
   const agoraIso = new Date().toISOString();
 
@@ -3610,6 +3618,8 @@ exports.applyMatchResult = onCall(async (request) => {
     throw _drawFail('permission-denied', 'Só quem está no torneio pode lançar placar.',
       { tId, matchId, uid, email: email || '(sem email)' });
   }
+  // Uma sonda não toca a transação de placar nem calcula resultado.
+  if (request.data && request.data.probe === true) return _operationProbeReply();
   await _preloadDrawNames(pre.data()); // nome vivo por uid (o motor pode gerar/avançar)
   // A comunicação usa nome de exibição, nunca e-mail. Também pré-carregamos quem
   // propôs a pendência: a aprovação remove esse objeto durante a transação.
@@ -3810,6 +3820,18 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
   const ref = db.collection(sandbox ? 'sandboxes' : 'tournaments').doc(tId);
   const courtStateRef = ref.collection('courtState').doc('main');
   const agoraIso = new Date().toISOString();
+  if (request.data && request.data.probe === true) {
+    return db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (sandbox) await _assertSandboxDrawOwner(tx, snap, uid);
+      if (!snap.exists) throw new HttpsError('not-found', 'Torneio não encontrado.');
+      const t = snap.data() || {};
+      if (!sandbox && t.isSandbox === true) throw new HttpsError('not-found', 'Torneio não encontrado.');
+      const referee = ScoreplaceRefereeRoster.sanitizeAll(t.arbitros).some(e => e.uid === uid && e.status === 'confirmed');
+      if (!_isTournamentAdmin(t, uid) && !referee) throw _drawFail('permission-denied', 'Só a organização ou árbitro confirmado define a quadra.', { tId, matchId, uid });
+      return _operationProbeReply();
+    }, { readOnly: true });
+  }
   try {
     return await db.runTransaction(async (tx) => {
       if (sandbox) await _assertSandboxDrawOwner(tx, await tx.get(ref), uid);

@@ -30,6 +30,12 @@ const { onDocumentCreated, onDocumentWritten, onDocumentDeleted } = require("fir
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 const crypto = require("crypto");
+const _operationProbeReply = () => ({
+  ok: true,
+  region: String(process.env.SP_OPERATION_REGION || ""),
+  revision: String(process.env.K_REVISION || ""),
+  sourceDigest: String(process.env.SP_SOURCE_DIGEST || "")
+});
 const _mergeRules = require("./merge-rules");
 const _mergeSweep = require("./merge-sweep-core");
 const _profileMerge = require("./profile-merge-core");
@@ -4123,6 +4129,8 @@ exports.setTournamentPresence = onCall(
     else if (legacyKey && !_partesPerm.idDeDocumentoValido(legacyKey)) {
       throw new HttpsError("invalid-argument", "identidade legada inválida");
     }
+    // Mesmo documento e autorização da operação, sem gravar presença.
+    if (data.probe === true) return _operationProbeReply();
     const now = Date.now();
     const changes = action === "present"
       ? [

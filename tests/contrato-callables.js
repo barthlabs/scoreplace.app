@@ -274,4 +274,14 @@ const TABELA = [
 const REGIOES = ['us-central1', 'southamerica-east1'];
 const CLASSIFICACOES = ['presente', 'ausente', 'desconhecido', 'naoSondada'];
 
-module.exports = { PROJECT_ID, montarUrl, TABELA, REGIOES, CLASSIFICACOES, ROOT, CONSTRUTOR_DINAMICO, WRAPPER_ENCAMINHA, URLS_LITERAIS, ENTRYPOINTS, TIPOS_CHAMAVEIS, TRANSPORTE_EXIGE };
+// Cloud Run de contingência: registro separado das Firebase Functions canônicas.
+// Nenhum desses endereços entra em TABELA até a ativação do roteador regional.
+const REGIOES_OPERACIONAIS = ['us-east1', 'us-east4', 'us-south1', 'us-west1', 'southamerica-east1'];
+const SERVICOS_OPERACIONAIS = [
+  { nome: 'sp-op-court-v1', exportName: 'assignMatchCourt', codebase: 'functions-autodraw', probe: true },
+  { nome: 'sp-op-score-v1', exportName: 'applyMatchResult', codebase: 'functions-autodraw', probe: true },
+  { nome: 'sp-op-presence-v1', exportName: 'setTournamentPresence', codebase: 'functions', probe: true },
+  { nome: 'sp-op-presence-wo-v1', exportName: 'setTournamentPresenceWithWOSubstitution', codebase: 'functions-autodraw', probe: true }
+];
+
+module.exports = { PROJECT_ID, montarUrl, TABELA, REGIOES, CLASSIFICACOES, REGIOES_OPERACIONAIS, SERVICOS_OPERACIONAIS, ROOT, CONSTRUTOR_DINAMICO, WRAPPER_ENCAMINHA, URLS_LITERAIS, ENTRYPOINTS, TIPOS_CHAMAVEIS, TRANSPORTE_EXIGE };
