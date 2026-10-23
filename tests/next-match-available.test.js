@@ -28,4 +28,8 @@ assert.equal(next.conflictsWithActive({ id:'x', p1:'Ana / Outra', p2:'Zoe' }, [c
 assert.equal(next.conflictsWithActive({ id:'x', p1:'Manual / Outra', p2:'Zoe' },
   [{ id:'court2', p1:'Manual / Parceira', p2:'Pedro' }]), true,
   'nomes manuais sem ID bloqueiam a dupla correta');
+const serverDraw = require('../functions-autodraw/draw-core.js');
+assert.equal(serverDraw._window, globalThis, 'o shim do servidor compartilha window com globalThis');
+assert.equal(typeof serverDraw._window.ScoreplaceNextMatch.conflictsWithActive, 'function',
+  'a callable de quadra recebe a mesma regra de conflito no servidor real');
 console.log('✓ próximo jogo pula participantes ocupados e respeita identidade');
