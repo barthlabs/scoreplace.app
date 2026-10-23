@@ -53,7 +53,7 @@ if (!fs.existsSync(path.join(WWW, 'index.html'))) {
  * No pacote nativo, `version.txt` deliberadamente NÃO entra: o aplicativo instalado precisa
  * consultar a versão remota, nunca a própria cópia local. */
 if (HOSTING) {
-  ['version.txt', 'ext-version.txt', 'native-update-policy.json', 'favicon.ico'].forEach((file) => {
+  ['version.txt', 'ext-version.txt', 'native-update-policy.json', 'operation-regions.json', 'favicon.ico'].forEach((file) => {
     const source = path.join(ROOT, file);
     if (!fs.existsSync(source)) {
       console.error('[build-www] ERRO: artefato obrigatório do Hosting ausente: ' + file);

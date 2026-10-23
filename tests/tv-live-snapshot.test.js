@@ -260,7 +260,7 @@ const childOwner = { _findTournamentById: () => t, _tvLiveIsComplete: () => true
   postMessage(data, origin) { parentHandlers.message({ data, origin, source:fakePopup }); } };
 const childHandlers = {};
 const childWindow = { opener: childOwner, ScoreplaceMatchTiming: timingCore, __tvParentBeat: 0,
-  addEventListener(name, fn) { childHandlers[name] = fn; } };
+  addEventListener(name, fn) { childHandlers[name] = fn; }, requestAnimationFrame() {} };
 let childTick, childIntervalClears = 0;
 const childDocument = { visibilityState:'visible', addEventListener() {}, getElementById: id => id === 'tv-root' ? childRoot : id === 'tv-connection' ? childWarning : null,
   querySelector: () => null,
@@ -268,6 +268,76 @@ const childDocument = { visibilityState:'visible', addEventListener() {}, getEle
 vm.runInNewContext(childSource[0].slice(8, -9), { window: childWindow, document: childDocument,
   setInterval: fn => { childTick = fn; return 1; }, clearInterval: () => { childIntervalClears++; }, Date, Number });
 assert(childTick && childRoot.innerHTML.includes('CLASSIFICAÇÃO'), 'janela restaura conteúdo sem o timer da aba');
+// Exercita o script real da janela com geometria de scroll controlada. Um
+// avanço de 1 s inteiro seria visível como salto; 100 quadros devem acumular
+// deslocamentos pequenos, inclusive quando scrollTop arredonda no browser.
+let frameNow = 1000;
+const frames = [];
+const scrollListeners = {};
+let reducedMotion = false;
+let smoothList;
+function makeResultNode(list, repeated = false) {
+  const node = { repeated, cloneNode() { return makeResultNode(list, true); },
+    setAttribute(name) { if (name === 'data-tv-repeat') this.repeated = true; },
+    querySelectorAll() { return []; }, removeAttribute() {},
+    remove() { list.nodes.splice(list.nodes.indexOf(this), 1); } };
+  Object.defineProperty(node, 'offsetTop', { get() { return list.nodes.indexOf(node) * 100; } });
+  return node;
+}
+function makeList(day, count, height = 150) {
+  const list = { day, clientHeight:height, scrollTop:0, nodes:[],
+    getAttribute(name) { return name === 'data-result-day' ? this.day : null; },
+    querySelectorAll(selector) { return this.nodes.filter(node => selector === '[data-tv-repeat]' ? node.repeated : !node.repeated); },
+    querySelector(selector) { return selector === '[data-tv-repeat]' ? this.nodes.find(node => node.repeated) : null; },
+    appendChild(node) { this.nodes.push(node); } };
+  Object.defineProperty(list, 'scrollHeight', { get() { return list.nodes.length * 100; } });
+  for (let i = 0; i < count; i++) list.nodes.push(makeResultNode(list));
+  return list;
+}
+const smoothRoot = { querySelector: selector => selector === '.tv-results-list' ? smoothList : null };
+Object.defineProperty(smoothRoot, 'innerHTML', { set(markup) {
+  const day = (markup.match(/data-result-day="([^"]+)/) || [])[1] || '';
+  smoothList = makeList(day, (markup.match(/class="tv-result"/g) || []).length);
+} });
+const smoothDocument = { visibilityState:'visible', fonts:null,
+  addEventListener(name, fn) { scrollListeners[name] = fn; },
+  getElementById(id) { return id === 'tv-root' ? smoothRoot : null; },
+  querySelector(selector) { return selector === '.tv-results-list' ? smoothList : null; },
+  querySelectorAll() { return []; } };
+const smoothWindow = { __tvParentBeat:frameNow, opener:null,
+  addEventListener(name, fn) { scrollListeners[name] = fn; },
+  requestAnimationFrame(fn) { frames.push(fn); },
+  matchMedia() { return { matches:reducedMotion }; } };
+vm.runInNewContext(childSource[0].slice(8, -9), { window:smoothWindow, document:smoothDocument,
+  setInterval() { return 1; }, clearInterval() {}, Date:{ now:() => frameNow }, Number });
+const resultMarkup = (day, count) => '<div class="tv-results-list" data-result-day="' + day + '">' +
+  '<div class="tv-result"></div>'.repeat(count) + '</div>';
+smoothWindow.__tvReplaceMarkup(resultMarkup('2026-10-23', 4));
+assert.equal(smoothList.nodes.length, 8, 'somente resultados que excedem a área recebem cópia visual');
+for (let i = 0; i < 100; i++) { frameNow += 16; frames.shift()(); }
+assert(Math.abs(smoothList.scrollTop - 35.2) < .01, '100 quadros acumulam 35,2 px sem degrau de 22 px');
+smoothWindow.__tvReplaceMarkup(resultMarkup('2026-10-23', 4));
+assert(Math.abs(smoothList.scrollTop - 35.2) < .01, 'refresh no mesmo dia preserva posição fracionária');
+smoothWindow.__tvReplaceMarkup(resultMarkup('2026-10-24', 4));
+assert.equal(smoothList.scrollTop, 0, 'novo dia começa no primeiro resultado');
+for (let i = 0; i < 1137; i++) { frameNow += 16; frames.shift()(); }
+assert(smoothList.scrollTop < 1, 'ao atravessar o ciclo, o excedente é preservado sem voltar bruscamente a zero');
+smoothWindow.__tvReplaceMarkup(resultMarkup('2026-10-24', 1));
+assert.equal(smoothList.nodes.length, 1, 'lista sem overflow não recebe cópia');
+const beforeIdle = smoothList.scrollTop;
+frameNow += 16; frames.shift()();
+assert.equal(smoothList.scrollTop, beforeIdle, 'sem cópia, a lista não se move');
+smoothWindow.__tvReplaceMarkup(resultMarkup('2026-10-24', 4));
+reducedMotion = true;
+frameNow += 16; frames.shift()();
+assert.equal(smoothList.scrollTop, 0, 'preferência de movimento reduzido paralisa a animação');
+reducedMotion = false;
+smoothDocument.visibilityState = 'hidden';
+frameNow += 10000; frames.shift()();
+smoothDocument.visibilityState = 'visible';
+scrollListeners.visibilitychange();
+frameNow += 16; frames.shift()();
+assert(smoothList.scrollTop < 1, 'retorno de aba oculta não avança pelo tempo em segundo plano');
 assert.equal(liveButton.attributes['aria-pressed'], 'true', 'heartbeat da página liga o botão');
 assert.equal(window._tvLiveWindow, fakePopup, 'só página confirmada aparece como NO AR');
 fakePopup.document.visibilityState = 'hidden';

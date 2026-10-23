@@ -3,6 +3,14 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 mode="${1:---check}"
+if [[ "$mode" == '--deploy-v2' || "$mode" == '--check-v2' || "$mode" == '--refresh-v2' ]]; then
+  exec "$(dirname "$0")/deploy-operation-regions-v2.sh" "$mode"
+fi
+if [[ "$mode" == '--deploy-legacy-gate' || "$mode" == '--check-legacy-gate' ]]; then
+  gate_mode=--check
+  [[ "$mode" == '--deploy-legacy-gate' ]] && gate_mode=--deploy
+  exec "$(dirname "$0")/deploy-operation-legacy-gate-v2.sh" "$gate_mode"
+fi
 if [[ "$mode" != '--check' && "$mode" != '--deploy' && "$mode" != '--resume-first' ]]; then
   echo 'uso: scripts/deploy-operation-regions.sh [--check|--deploy|--resume-first]' >&2; exit 2
 fi

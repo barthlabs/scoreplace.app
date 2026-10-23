@@ -370,6 +370,9 @@ service cloud.firestore {
      * consulta que não constranja esse campo é recusada inteira ("rules are not filters").
      * É de propósito — é o que impede varredura da coleção. */
     match /sandboxes/{sandboxId} {
+      match /operationControl/{controlId} {
+        allow read, write: if false;
+      }
       // Recibos de operações são escritos e lidos apenas pelo servidor.
       match /operationReceipts/{operationId} {
         allow read, write: if false;
@@ -473,6 +476,9 @@ service cloud.firestore {
     }
 
     match /tournaments/{tournamentId} {
+      match /operationControl/{controlId} {
+        allow read, write: if false;
+      }
       // O navegador não pode fabricar nem apagar a prova de uma ação aplicada.
       match /operationReceipts/{operationId} {
         allow read, write: if false;

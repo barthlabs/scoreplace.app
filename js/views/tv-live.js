@@ -260,7 +260,7 @@
   function childScript(tournamentId, generation) {
     var id = JSON.stringify(String(tournamentId || '')).replace(/</g, '\\u003c');
     var origin = JSON.stringify(window.location.origin).replace(/</g, '\\u003c');
-    return '<script>(function(){"use strict";var id=' + id + ',gen=' + Number(generation) + ',origin=' + origin + ';window.__tvGeneration=gen;var timer;' +
+    return '<script>(function(){"use strict";var id=' + id + ',gen=' + Number(generation) + ',origin=' + origin + ';window.__tvGeneration=gen;var timer,resultPosition=0,resultCycle=0,resultAt=Date.now();' +
       'function fit(){if(typeof window.getComputedStyle!=="function")return;' +
       'document.querySelectorAll(".tv-team-tag,.tv-result-team,.tv-score").forEach(function(el){el.style.fontSize="";' +
       'var box=el.closest(".tv-side,.tv-result-side");if(!box||!box.clientHeight||!el.clientHeight)return;' +
@@ -270,13 +270,29 @@
       'names.forEach(function(el){el.style.fontSize="";});if(!box.clientHeight||!names.length)return;' +
       'var size=parseFloat(window.getComputedStyle(names[0]).fontSize)||12;' +
       'while(box.scrollHeight>box.clientHeight+1&&size>10){size=Math.max(10,size-.5);names.forEach(function(el){el.style.fontSize=size+"px";});}});}' +
-      'window.__tvFitLabels=fit;window.addEventListener("resize",fit);window.addEventListener("load",fit);' +
-      'document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible")fit();});' +
-      'if(document.fonts&&document.fonts.ready)document.fonts.ready.then(fit);' +
+      'function ensureCycle(){if(window.__tvGeneration!==gen)return;var list=document.querySelector(".tv-results-list");resultCycle=0;if(!list)return;' +
+      'list.querySelectorAll("[data-tv-repeat]").forEach(function(node){node.remove();});' +
+      'var originals=list.querySelectorAll(".tv-result");if(!originals.length||list.scrollHeight-list.clientHeight<=2||' +
+      '(window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches))return;' +
+      'originals.forEach(function(node){var copy=node.cloneNode(true);copy.setAttribute("data-tv-repeat","");copy.setAttribute("aria-hidden","true");' +
+      'copy.querySelectorAll("[id]").forEach(function(child){child.removeAttribute("id");});list.appendChild(copy);});' +
+      'var first=list.querySelector("[data-tv-repeat]");resultCycle=first?first.offsetTop-originals[0].offsetTop:0;' +
+      'if(resultCycle<=0){list.querySelectorAll("[data-tv-repeat]").forEach(function(node){node.remove();});resultCycle=0;}}' +
+      'function reflow(){if(window.__tvGeneration!==gen)return;fit();ensureCycle();if(resultCycle){resultPosition=resultPosition%resultCycle;}' +
+      'else resultPosition=0;var list=document.querySelector(".tv-results-list");if(list)list.scrollTop=resultPosition;}' +
+      'window.__tvFitLabels=fit;window.addEventListener("resize",reflow);window.addEventListener("load",reflow);' +
+      'document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible"){resultAt=Date.now();reflow();}});' +
+      'if(document.fonts&&document.fonts.ready)document.fonts.ready.then(reflow);' +
       'window.__tvReplaceMarkup=function(html){var root=document.getElementById("tv-root"),old=root&&root.querySelector(".tv-results-list");' +
-      'var day=old&&old.getAttribute("data-result-day"),top=old?old.scrollTop:0;' +
-      'if(!root)return;root.innerHTML=html;var list=root.querySelector(".tv-results-list");' +
-      'if(list&&list.getAttribute("data-result-day")===day)list.scrollTop=top;else window.__tvResultScrollAt=Date.now();fit();};' +
+      'var day=old&&old.getAttribute("data-result-day"),top=resultPosition;' +
+      'if(!root)return;root.innerHTML=html;fit();ensureCycle();var list=root.querySelector(".tv-results-list");' +
+      'resultPosition=list&&list.getAttribute("data-result-day")===day&&resultCycle?top%resultCycle:0;' +
+      'if(list)list.scrollTop=resultPosition;resultAt=Date.now();};' +
+      'function advance(){if(window.__tvGeneration!==gen)return;var now=Date.now(),elapsed=Math.min(64,Math.max(0,now-resultAt));resultAt=now;' +
+      'var list=document.querySelector(".tv-results-list");if(list&&resultCycle&&document.visibilityState==="visible"&&' +
+      '!(window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches)){' +
+      'resultPosition+=elapsed*.022;if(resultPosition>=resultCycle)resultPosition-=resultCycle;list.scrollTop=resultPosition;}' +
+      'window.requestAnimationFrame(advance);}window.requestAnimationFrame(advance);' +
       'function signal(type){try{if(window.opener&&!window.opener.closed)window.opener.postMessage({type:type,id:id,gen:gen,visible:document.visibilityState==="visible"},origin);}catch(e){}}' +
       'function tick(){if(window.__tvGeneration!==gen){clearInterval(timer);return;}var now=Date.now();' +
       'if(now-(window.__tvParentBeat||0)>1800){try{var owner=window.opener;' +
@@ -290,9 +306,6 @@
       'var state=clock.phaseAt(Number(node.getAttribute("data-tv-start")),timing,now);' +
       'node.className="tv-phase-"+state.phase;node.title=clock.title(state.phase);node.textContent=clock.text(state,now);});' +
       'var current=document.getElementById("tv-now");if(current)current.textContent=new Date(now).toLocaleTimeString("pt-BR");' +
-      'var results=document.querySelector(".tv-results-list");if(results&&!(window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches)){' +
-      'var overflow=results.scrollHeight-results.clientHeight,previous=window.__tvResultScrollAt||now,delta=Math.min(2000,Math.max(0,now-previous));' +
-      'if(overflow>2){results.scrollTop+=delta*.022;if(results.scrollTop>=overflow-1)results.scrollTop=0;}}window.__tvResultScrollAt=now;' +
       'signal("scoreplace-tv-heartbeat");' +
       'var warning=document.getElementById("tv-connection");if(warning)warning.hidden=!!window.__tvLastSync&&now-window.__tvLastSync<10000;' +
       '}document.addEventListener("click",function(event){var btn=event.target&&event.target.closest&&event.target.closest("#tv-fullscreen-action");if(!btn)return;' +

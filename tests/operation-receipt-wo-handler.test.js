@@ -22,6 +22,7 @@ async function run(engineResult,existing){
  const db={collection:()=>({doc:()=>ref}),runTransaction:async fn=>fn({
   get:async()=>({exists:!!existing,data:()=>existing}),create:(_ref,doc)=>{calls.push('create');saved=doc;},set:()=>calls.push('set')})};
  const ctx={exports:{},onCall:fn=>fn,HttpsError,db,_operationReceipt:core,
+  _operationProtocolGuard:async()=>{},
   _isTournamentAdmin:()=>true,_preloadDrawNames:async()=>{},
   _leTorneio:async()=>JSON.parse(JSON.stringify(t)),_enrichParticipantsFromProfiles:()=>{},
   drawWindow:{_participantUids:p=>[p.uid],_memberNameByUid:()=> 'Player'},

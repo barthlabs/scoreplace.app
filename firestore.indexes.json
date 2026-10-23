@@ -175,6 +175,12 @@
       "indexes": []
     },
     {
+      "collectionGroup": "operationControl",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
       "collectionGroup": "notificationOutbox",
       "fieldPath": "dispatchStatus",
       "indexes": [

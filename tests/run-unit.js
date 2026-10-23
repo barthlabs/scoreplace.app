@@ -54,6 +54,10 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 const SUITES = [
+  'tests/operation-day.test.js',
+  'tests/operation-router-regions.test.js',
+  'tests/operation-control-transaction.test.js',
+  'tests/operation-queue-protocol.test.js',
   'tests/operation-receipt-core.test.js',
   'tests/operation-receipt-wo-handler.test.js',
   'tests/operation-probe-readonly.test.js',
@@ -2300,6 +2304,7 @@ const { spawn } = require('child_process');
 /* (1a) MEXEM EM ARQUIVO DO REPO — corrompem de propósito e restauram. Quem ler o mesmo
  *      arquivo ao mesmo tempo falha ao acaso. Cada linha diz o que ela corrompe. */
 const MEXEM_NO_REPO = [
+  'tests/build-www-deterministico.test.js',           // cria/remova o manifesto regional de fixture
   'tests/ext-version-single-source.test.js',            // reescreve js/store.js e extension/content.js
   'tests/trava-de-cache-buster-nao-fica-vazia.test.js', // reescreve index.html
   'tests/gate-amizade-detecta-alias.test.js',           // cria js/views/__sonda-gate-amizade.js
@@ -2321,6 +2326,7 @@ const MEXEM_NO_REPO = [
  * ⛔ Se estas duas voltarem a falhar com "Port ... is not open", procure emulador órfão
  *      (`lsof -ti :8097`) antes de suspeitar do paralelismo. */
 const PRENDEM_PORTA = [
+  'tests/operation-control-transaction.test.js',
   'tests/l7-creation-replay-emulator.test.js',
   'tests/decisao-do-tardio-na-folga-emulador.test.js',   // sobe o próprio emulador do Firestore
   'tests/tardio-entra-em-torneio-dividido.test.js',      // idem

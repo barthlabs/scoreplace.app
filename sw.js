@@ -517,6 +517,8 @@ self.addEventListener('fetch', function(event) {
   // app nunca mais sairia da versão presa. Vai SEMPRE à rede, mesmo sem
   // `_swcheck` (chamadas diretas/curl também).
   if (url.indexOf('/version.txt') !== -1) return;
+  // A eleição regional precisa sempre do manifesto corrente, inclusive sob SW antigo.
+  if (url.indexOf('/operation-regions.json') !== -1) return;
 
   // ── SHELL: CACHE PRIMEIRO, REDE ATRÁS ──────────────────────────────────
   // Se a URL EXATA (com `?v=`) já está no cache, responde na hora e revalida em

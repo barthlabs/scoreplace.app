@@ -1024,7 +1024,7 @@ window._RELEASE_NOTES_HTML = (function () {
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>📺 Modo TV:</b> saída limpa em janela separada com quadras chamadas, relógios, classificação do torneio e três resultados recentes.</li>' +
         '<li><b>🔴 NO AR:</b> a luz vermelha pisca enquanto a janela de TV está aberta e apaga ao fechá-la.</li>' +
-        '<li><b>📋 Súmulas:</b> PDF por categoria e data, com até 12 jogos por página, quadra preenchida no evento, placar conforme o formato e assinaturas dos atletas. A organização baixa as versões horizontal e vertical juntas em um ZIP pelo botão Súmulas; a lista de presença é baixada em PDF separado.</li>' +
+        '<li><b>📋 Súmulas:</b> PDF por quadra e data, com jogos na ordem prevista, até 12 por página, categoria indicada em cada jogo, quadra efetiva preenchida no evento, placar conforme o formato e assinaturas dos atletas. A organização baixa as versões horizontal e vertical juntas em um ZIP pelo botão Súmulas; a lista de presença é baixada em PDF separado.</li>' +
         '<li><b>🎾 Jogos e quadras:</b> a chave separa dias, aceita busca pelo nome da equipe e mostra a chamada confirmada para quadra com o tempo decorrido.</li>' +
         '<li><b>⏱️ Operação da chave:</b> relógios de chamada, aquecimento e jogo acompanham a TV. A chave conserva a ordem dos jogos e recupera quadras, classificação e resultados após reconectar; quadras ocupadas não podem receber outra chamada.</li>' +
         '<li><b>🗓️ Próximos jogos:</b> vários cards aparecem lado a lado quando há espaço, com a rodada publicada acima de cada partida.</li>' +

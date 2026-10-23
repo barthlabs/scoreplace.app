@@ -2433,12 +2433,8 @@ window._callCloseRound = function (payload) {
  * `msgs` aceita STRING (a forma dos 52 chamadores: é a mensagem de "sem login") ou objeto
  * `{unauth, naoInicializado, falha}`; os defaults abaixo são os desta casca.
  *
- * ⛔⛔ E O FALLBACK ABAIXO EXISTE POR UM MOTIVO SÓ: CACHE HÍBRIDO. O Service Worker pode
- * entregar ESTE arquivo novo junto de um `firebase-db.js` VELHO (o de 2.3.95, cujo `_callFn`
- * chamava `window._callCF`). Sem a checagem da MARCA, teríamos: `_callFn` velho → esta casca
- * → delega de volta → RECURSÃO INFINITA, pior que o defeito original. A marca resolve: sem
- * ela, esta casca fala o protocolo sozinha. ⛔ Não apague o fallback achando que é duplicação
- * — ele só roda em asset híbrido, e é isso que impede o laço. */
+ * A marca impede recursão com um firebase-db.js antigo. Nessa condição a casca
+ * falha fechada e pede atualização; não existe segunda rota para a operação. */
 window._callCF = function (fnName, payload, msgs) {
     msgs = (typeof msgs === 'string') ? { unauth: msgs } : (msgs || {});
     var _m = {
@@ -2453,40 +2449,7 @@ window._callCF = function (fnName, payload, msgs) {
     if (DB && DB._callFnMarca === 'callfn-canonico-v1' && typeof DB._callFn === 'function') {
         return DB._callFn(fnName, payload, _m).then(function (r) { return { data: r }; });
     }
-    /* ── fallback de CACHE HÍBRIDO (ver o bloco acima) ───────────────────────────── */
-    var fb = window.firebase;
-    var user = fb && fb.auth && fb.auth().currentUser;
-    if (!user) return Promise.reject(Object.assign(new Error(_m.unauth), { code: 'functions/unauthenticated' }));
-    var pid = '';
-    try { pid = fb.app().options.projectId; } catch (e) {}
-    if (!pid) return Promise.reject(Object.assign(new Error(_m.naoInicializado), { code: 'functions/internal' }));
-    var url = 'https://us-central1-' + pid + '.cloudfunctions.net/' + fnName;
-    // Fallback para cache híbrido: mantém as quatro rotas operacionais recuperadas.
-    if (pid === 'scoreplace-app') {
-        var recovery = {
-            assignMatchCourt: 'https://assignmatchcourt-run-recovery-382268772878.us-east1.run.app',
-            applyMatchResult: 'https://applymatchresult-run-recovery-382268772878.us-east1.run.app',
-            setTournamentPresence: 'https://settournamentpresence-run-recovery-382268772878.us-east1.run.app',
-            setTournamentPresenceWithWOSubstitution: 'https://presencwo-run-recovery-382268772878.us-east1.run.app'
-        };
-        if (Object.prototype.hasOwnProperty.call(recovery, fnName)) url = recovery[fnName];
-    }
-    return user.getIdToken().then(function (tok) {
-        return fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
-            body: JSON.stringify({ data: payload })
-        });
-    }).then(function (r) {
-        return r.json().catch(function () { return {}; }).then(function (j) {
-            if (j && j.error) {
-                var st = String(j.error.status || '').toLowerCase().replace(/_/g, '-');
-                throw Object.assign(new Error(j.error.message || _m.falha), { code: 'functions/' + (st || 'internal') });
-            }
-            if (!r.ok) throw Object.assign(new Error('HTTP ' + r.status), { code: 'functions/internal' });
-            return { data: (j && j.result) || {} };
-        });
-    });
+    return Promise.reject(Object.assign(new Error('Atualize o aplicativo para usar o torneio.'), { code: 'functions/failed-precondition' }));
 };
 
 // v1.7: lançamento de placar pela CF `applyMatchResult` (authz server-side: resultEntry

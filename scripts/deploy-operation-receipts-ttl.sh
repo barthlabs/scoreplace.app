@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Ativa/confere somente o TTL de operationReceipts.expireAt no Firestore.
+# Ativa/confere os TTLs operacionais explícitos no Firestore.
 # Uso: --dry-run (sem credenciais), --apply (muda a política), --check (somente leitura).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PROJECT=scoreplace-app
 FIELD=expireAt
-GROUP=operationReceipts
+GROUPS=(operationReceipts operationControl)
 MODE="${1:-}"
 [[ "$MODE" == --dry-run || "$MODE" == --apply || "$MODE" == --check ]] && [ "$#" -eq 1 ] || {
   echo 'uso: deploy-operation-receipts-ttl.sh [--dry-run|--apply|--check]' >&2
@@ -14,20 +14,24 @@ MODE="${1:-}"
 }
 
 # O manifesto precisa concordar com este deploy direcionado.
-node - "$ROOT/firestore.indexes.json" "$GROUP" "$FIELD" <<'NODE'
+node - "$ROOT/firestore.indexes.json" "$FIELD" "${GROUPS[@]}" <<'NODE'
 const fs = require('node:fs');
-const [manifest, group, field] = process.argv.slice(2);
+const [manifest, field, ...groups] = process.argv.slice(2);
 const config = JSON.parse(fs.readFileSync(manifest, 'utf8'));
-const entry = (config.fieldOverrides || []).find(x => x.collectionGroup === group && x.fieldPath === field);
-if (!entry || entry.ttl !== true || !Array.isArray(entry.indexes) || entry.indexes.length) {
-  console.error('manifesto não declara TTL direcionado sem índices para ' + group + '.' + field);
-  process.exit(1);
+for (const group of groups) {
+  const entry = (config.fieldOverrides || []).find(x => x.collectionGroup === group && x.fieldPath === field);
+  if (!entry || entry.ttl !== true || !Array.isArray(entry.indexes) || entry.indexes.length) {
+    console.error('manifesto não declara TTL direcionado sem índices para ' + group + '.' + field);
+    process.exit(1);
+  }
 }
 NODE
 
 if [ "$MODE" == --dry-run ]; then
-  echo "gcloud firestore fields ttls update $FIELD --collection-group=$GROUP --enable-ttl --project=$PROJECT"
-  echo "gcloud firestore fields ttls list --collection-group=$GROUP --project=$PROJECT --format=json"
+  for GROUP in "${GROUPS[@]}"; do
+    echo "gcloud firestore fields ttls update $FIELD --collection-group=$GROUP --enable-ttl --project=$PROJECT"
+    echo "gcloud firestore fields ttls list --collection-group=$GROUP --project=$PROJECT --format=json"
+  done
   exit 0
 fi
 
@@ -38,14 +42,14 @@ CLOUDSDK_CONFIG="$(mktemp -d)"
 trap 'rm -rf "$CLOUDSDK_CONFIG"' EXIT
 gcloud auth activate-service-account --key-file="$KEY" --project="$PROJECT" --quiet >/dev/null
 
-if [ "$MODE" == --apply ]; then
-  gcloud firestore fields ttls update "$FIELD" --collection-group="$GROUP" \
-    --enable-ttl --project="$PROJECT" --quiet
-fi
-
-TTL_JSON="$(gcloud firestore fields ttls list --collection-group="$GROUP" \
-  --project="$PROJECT" --format=json)"
-TTL_JSON="$TTL_JSON" node - "$GROUP" "$FIELD" <<'NODE'
+for GROUP in "${GROUPS[@]}"; do
+  if [ "$MODE" == --apply ]; then
+    gcloud firestore fields ttls update "$FIELD" --collection-group="$GROUP" \
+      --enable-ttl --project="$PROJECT" --quiet
+  fi
+  TTL_JSON="$(gcloud firestore fields ttls list --collection-group="$GROUP" \
+    --project="$PROJECT" --format=json)"
+  TTL_JSON="$TTL_JSON" node - "$GROUP" "$FIELD" <<'NODE'
 const [group, field] = process.argv.slice(2);
 const fields = JSON.parse(process.env.TTL_JSON);
 const wanted = fields.find(x => typeof x.name === 'string' &&
@@ -61,3 +65,4 @@ if (state !== 'ACTIVE') {
 }
 console.log('TTL ativo: ' + group + '.' + field);
 NODE
+done

@@ -118,6 +118,8 @@ function cenario(opcoes) {
    * publicada pelo `git archive`, então ele responde "qual commit foi de fato empacotado". */
   fs.writeFileSync(path.join(repo, 'js', 'marcador-release.txt'), 'marcador=confirmado\n');
   fs.writeFileSync(path.join(repo, 'sw.js'), "var CACHE_NAME = 'scoreplace-v9.9.9';\n");
+  fs.writeFileSync(path.join(repo, '.gitignore'), '.claude/\n');
+  if (!o.semJsonRegional) fs.writeFileSync(path.join(repo, 'operation-regions.json'), '{"schema":2,"teste":true}\n');
   fs.mkdirSync(path.join(repo, 'scripts'));
   fs.copyFileSync(path.join(RAIZ, 'scripts', 'deploy-hosting.sh'), path.join(repo, 'scripts', 'deploy-hosting.sh'));
   fs.chmodSync(path.join(repo, 'scripts', 'deploy-hosting.sh'), 0o755);
@@ -148,6 +150,10 @@ function cenario(opcoes) {
   fs.writeFileSync(path.join(repo, 'scripts', 'prepare-hosting-release.js'), 'process.exit(0);\n');
   fs.writeFileSync(path.join(repo, 'scripts', 'check-release-notes.js'), 'process.exit(0);\n');
   fs.writeFileSync(path.join(repo, 'scripts', 'check-deploy-alignment.js'), 'process.exit(0);\n');
+  fs.writeFileSync(path.join(repo, 'scripts', 'deploy-operation-regions.sh'),
+    '#!/bin/sh\n' + (o.regiaoDivergente ? 'exit 1\n' : 'exit 0\n'));
+  fs.chmodSync(path.join(repo, 'scripts', 'deploy-operation-regions.sh'), 0o755);
+  fs.writeFileSync(path.join(repo, 'scripts', 'generate-operation-regions-config.js'), 'process.exit(0);\n');
   fs.writeFileSync(path.join(repo, 'package.json'), JSON.stringify({ name: 'x', version: '1.0.0', scripts: {} }));
   // node_modules que o script exige encontrar (raiz + subprojeto)
   fs.mkdirSync(path.join(repo, 'node_modules', '@playwright', 'test'), { recursive: true });
@@ -162,6 +168,11 @@ function cenario(opcoes) {
   fs.appendFileSync(path.join(repo, 'functions-autodraw', 'placeholder.js'), '// mudança da release\n');
   git(['add', '-A']);
   git(['commit', '-q', '-m', 'commit de release']);
+  if (!o.semManifestoRegional || !o.semManifestoGate) {
+    fs.mkdirSync(path.join(repo, '.claude', 'tmp'), { recursive: true });
+    if (!o.semManifestoRegional) fs.writeFileSync(path.join(repo, '.claude', 'tmp', 'operation-regions-manifest-v2.json'), '[]\n');
+    if (!o.semManifestoGate) fs.writeFileSync(path.join(repo, '.claude', 'tmp', 'operation-legacy-gate-manifest-v2.json'), '{}\n');
+  }
   const shaRelease = git(['rev-parse', 'HEAD']).trim();
   const remotoAntes = execFileSync('git', ['rev-parse', 'main'], { cwd: remoto, encoding: 'utf8' }).trim();
 
@@ -202,7 +213,7 @@ function cenario(opcoes) {
     GIT_REAL + ' -C ' + JSON.stringify(repo) + ' add -A >/dev/null 2>&1\n' +
     GIT_REAL + ' -C ' + JSON.stringify(repo) + ' commit -q -m "head andou" >/dev/null 2>&1\n';
 
-  let wrapper = '#!/bin/sh\n';
+  let wrapper = '#!/bin/sh\ncase "$*" in *" push "*|push*) echo push >> ' + JSON.stringify(path.join(marcas, 'push.txt')) + ' ;; esac\n';
   if (o.corrida === 'antes-do-push') {
     wrapper += 'case "$*" in *" push "*|push*) ' + avancaRemoto + ' ;; esac\n';
     wrapper += 'exec ' + GIT_REAL + ' "$@"\n';
@@ -224,10 +235,8 @@ function cenario(opcoes) {
   } else {
     wrapper += 'exec ' + GIT_REAL + ' "$@"\n';
   }
-  if (o.corrida) {
-    fs.writeFileSync(path.join(bin, 'git'), wrapper);
-    fs.chmodSync(path.join(bin, 'git'), 0o755);
-  }
+  fs.writeFileSync(path.join(bin, 'git'), wrapper);
+  fs.chmodSync(path.join(bin, 'git'), 0o755);
   fs.writeFileSync(path.join(bin, 'npm'),
     '#!/bin/sh\necho "$@" >> ' + JSON.stringify(path.join(marcas, 'npm.txt')) + '\n' +
     'case "$1" in\n' +
@@ -275,11 +284,30 @@ function cenario(opcoes) {
     ? fs.readFileSync(path.join(marcas, 'firebase.txt'), 'utf8') : '';
   const publicado = fs.existsSync(path.join(marcas, 'publicado.txt'))
     ? fs.readFileSync(path.join(marcas, 'publicado.txt'), 'utf8') : '';
+  const pushChamado = fs.existsSync(path.join(marcas, 'push.txt'))
+    ? fs.readFileSync(path.join(marcas, 'push.txt'), 'utf8') : '';
   return {
     status: r.status, saida: (r.stdout || '') + (r.stderr || ''),
-    remotoAntes: remotoAntes2, remotoDepois, shaRelease: shaRelease2, chamouFirebase, publicado,
+    remotoAntes: remotoAntes2, remotoDepois, shaRelease: shaRelease2, chamouFirebase, publicado, pushChamado,
     limpar: () => { try { fs.rmSync(base, { recursive: true, force: true }); } catch (e) {} }
   };
+}
+
+console.log('▸ ①b contingência regional falha antes de push e upload');
+for (const [nome, opcoes] of [
+  ['JSON e manifestos ausentes', { semJsonRegional: true, semManifestoRegional: true, semManifestoGate: true }],
+  ['manifestos presentes, JSON ausente', { semJsonRegional: true }],
+  ['JSON presente, manifesto regional ausente', { semManifestoRegional: true }],
+  ['JSON presente, manifesto da trava ausente', { semManifestoGate: true }],
+  ['serviço regional divergente', { regiaoDivergente: true }]
+]) {
+  const c = cenario({ preflightPassa: true, ...opcoes });
+  try {
+    ok(c.status !== 0, nome + ': script aborta');
+    eq(c.pushChamado, '', nome + ': git push não foi chamado');
+    ok(!/deploy --only hosting/.test(c.chamouFirebase), nome + ': upload não foi chamado');
+    eq(c.remotoDepois, c.remotoAntes, nome + ': remoto inalterado');
+  } finally { c.limpar(); }
 }
 
 console.log('▸ ② preflight REPROVADO: não empurra e não publica');

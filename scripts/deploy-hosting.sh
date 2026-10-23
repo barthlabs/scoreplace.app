@@ -554,6 +554,36 @@ fi
 # ⛔ `--force-with-lease` SOBRE A BASE CONGELADA é a GARANTIA, não as conferências acima.
 # Qualquer avanço do remoto depois da amostra faz o push RECUSAR — e sem push não há upload.
 # MARCO: push-do-main
+verificar_contingencia_regional() {
+  cd "$RAIZ"
+  local blob="$COMMIT:operation-regions.json"
+  local tamanho
+  if ! git cat-file -e "$blob" 2>/dev/null; then
+    echo "✗ configuração regional não está no commit $COMMIT — abortando antes do push."
+    return 1
+  fi
+  tamanho="$(git cat-file -s "$blob")" || return 1
+  if [[ "$tamanho" -le 0 ]]; then
+    echo "✗ configuração regional vazia no commit — abortando."
+    return 1
+  fi
+  for manifesto in .claude/tmp/operation-regions-manifest-v2.json .claude/tmp/operation-legacy-gate-manifest-v2.json; do
+    if [[ ! -s "$manifesto" ]]; then
+      echo "✗ manifesto regional ausente: $manifesto — abortando."
+      return 1
+    fi
+  done
+  if [[ ! -s operation-regions.json ]] || ! cmp -s operation-regions.json <(git show "$blob"); then
+    echo "✗ configuração regional local diverge do commit — abortando."
+    return 1
+  fi
+  scripts/deploy-operation-regions.sh --check-v2 || return 1
+  scripts/deploy-operation-regions.sh --check-legacy-gate || return 1
+  node scripts/generate-operation-regions-config.js --check || return 1
+  echo "  ✓ configuração regional no commit: $(git rev-parse "$blob")"
+}
+
+verificar_contingencia_regional || exit 1
 echo "▸ empurrando o main ANTES do upload (falhar aqui é barato)…"
 if ! git push --force-with-lease="refs/heads/main:$BASE" origin "$COMMIT:refs/heads/main"; then
   echo
@@ -655,6 +685,13 @@ else
 fi
 
 # MARCO: upload
+if [[ ! -s "$DEST/operation-regions.json" ]] ||
+   ! cmp -s "$DEST/operation-regions.json" <(git -C "$RAIZ" show "$COMMIT:operation-regions.json"); then
+  echo "✗ configuração regional extraída diverge do commit — abortando upload."
+  exit 1
+fi
+verificar_contingencia_regional || exit 1
+cd "$DEST"
 _DEPLOY_RC=0
 firebase deploy --only hosting --project scoreplace-app || _DEPLOY_RC=$?
 if [[ "$_DEPLOY_RC" != "0" ]]; then

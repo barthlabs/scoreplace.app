@@ -67,10 +67,10 @@ const secondDay = core.attendance(model, '2026-10-23');
 assert.strictEqual(secondDay.length, 4);
 assert.strictEqual(secondDay[0].opponents, 'Érica Souza / Fábio Ruiz', 'oponentes são do primeiro jogo do torneio, não do dia');
 const pages = core.makePages(model);
-assert.strictEqual(pages.length, 2, 'uma página por dia/categoria, reunindo as quadras');
+assert.strictEqual(pages.length, 3, 'uma página por quadra e dia, reunindo categorias');
 assert(pages.every(p => p.width === 842), 'súmula horizontal por padrão');
 const portrait = core.makePages(model, { orientation:'portrait' });
-assert.strictEqual(portrait.length, 2);
+assert.strictEqual(portrait.length, 3);
 assert(portrait.every(p => p.width === 595), 'súmula vertical disponível');
 const bundle = core.zipFiles([
   { name:core.filename(model, 'landscape'), bytes:core.encodePdf(pages) },
@@ -79,20 +79,49 @@ const bundle = core.zipFiles([
 assert.strictEqual(Buffer.from(bundle).readUInt32LE(0), 0x04034b50, 'pacote tem cabeçalho ZIP');
 assert.strictEqual(Buffer.from(bundle).readUInt16LE(bundle.length - 14), 2, 'pacote contém dois arquivos');
 if (process.env.SP_SUMULA_ZIP_SAMPLE) fs.writeFileSync(process.env.SP_SUMULA_ZIP_SAMPLE, bundle);
-assert.strictEqual(core.makePages(model, { attendance:true }).length, 4, 'lista de presença pode ser gerada à parte');
+assert.strictEqual(core.makePages(model, { attendance:true }).length, 5, 'lista de presença pode ser gerada à parte');
 assert.strictEqual(core.makeAttendancePages(model).length, 2, 'presença tem arquivo próprio, sem duplicar súmulas');
 const pdf = Buffer.from(core.encodePdf(pages));
 assert(pdf.subarray(0, 8).toString('latin1').startsWith('%PDF-1.4'));
-assert.strictEqual((pdf.toString('latin1').match(/\/Type \/Page\b/g) || []).length, 2);
+assert.strictEqual((pdf.toString('latin1').match(/\/Type \/Page\b/g) || []).length, pages.length);
 assert(pdf.toString('latin1').includes('Venom'));
-assert(pdf.toString('latin1').includes('S\\372mula'), 'acentos são codificados em WinAnsi');
+assert(pdf.toString('latin1').includes('P\\341gina'), 'acentos são codificados em WinAnsi');
 assert(!pdf.toString('latin1').includes('DUPLA A'), 'não repete rótulos das duplas no cabeçalho');
 assert(!pdf.toString('latin1').includes('Quadra real'), 'o campo se chama apenas Quadra');
 assert(pdf.toString('latin1').includes('ASSINATURAS DOS ATLETAS'));
 assert(pdf.toString('latin1').includes('1 set de 6 games'));
-assert(!pages[0].commands.join('\n').includes('Quadra 4'), 'a quadra prevista não fica impressa na folha');
-assert.strictEqual(pages[0].commands.filter(s => s.includes('(Ana Silva)')).length, 2,
+const firstCourtPage = pages.find(p => p.commands.join('\n').includes('(Quadra 4)'));
+assert(firstCourtPage, 'a quadra prevista aparece abaixo da data e identifica a folha');
+assert.strictEqual(firstCourtPage.commands.filter(s => s.includes('(Ana Silva)')).length, 2,
   'o nome aparece uma vez no jogo e uma vez para assinatura nesta página');
+const mixed = core.collect(t, [
+  { id:'late-court', scheduledGameNumber:20, scheduledAt:at('2026-10-22','19:00'), court:'Quadra 2', category:'Fem Power', p1:'Atleta Tardia / Parceira Tardia', p2:'Rival Tardia / Parceira Rival' },
+  { id:'other-court', scheduledGameNumber:30, scheduledAt:at('2026-10-22','17:00'), court:'Quadra 10', category:'Masc Light', p1:'Atleta Outra / Parceira Outra', p2:'Rival Outra / Parceira Rival' },
+  { id:'early-court', scheduledGameNumber:10, scheduledAt:at('2026-10-22','18:00'), court:'Quadra 2', category:'Fem Light', p1:'Atleta Inicial / Parceira Inicial', p2:'Rival Inicial / Parceira Rival' },
+  { id:'no-court', scheduledGameNumber:40, scheduledAt:at('2026-10-22','16:00'), category:'', p1:'Atleta Sem Quadra / Parceira Sem Quadra', p2:'Rival Sem Quadra / Parceira Rival' },
+  { id:'no-date', scheduledGameNumber:50, court:'Quadra 2', category:'Fem Light', p1:'Atleta Sem Data / Parceira Sem Data', p2:'Rival Sem Data / Parceira Rival' },
+]);
+assert.strictEqual(mixed.matches.length, 4, 'jogo sem data não entra na ordem prevista');
+for (const orientation of ['landscape','portrait']) {
+  const sheets = core.makePages(mixed, { orientation });
+  assert.strictEqual(sheets.length, 3, 'categorias mistas na mesma quadra compartilham folha');
+  const headings = sheets.map(p => p.commands.join('\n').match(/\((Quadra [^)]*?)\)/)[1]);
+  assert.deepStrictEqual(headings, ['Quadra 2','Quadra 10','Quadra a definir'],
+    'quadras seguem ordem numérica e a quadra indefinida fica ao final');
+  const court2 = sheets[0].commands.join('\n');
+  assert(court2.indexOf('(Atleta Inicial)') < court2.indexOf('(Atleta Tardia)'),
+    'jogos da quadra seguem o horário previsto, mesmo quando a entrada está fora de ordem');
+  assert(court2.includes('Fem Light') && court2.includes('Fem Power'),
+    'categorias diferentes são identificadas na mesma folha');
+  assert(court2.includes('(Categorias: Fem Light, Fem Power)'),
+    'categorias da folha ficam visíveis abaixo da data');
+  const unknownCategory = sheets[2].commands.filter(s => s.includes('/F1 5.5 Tf') && /\((Sem|categoria)\)/.test(s));
+  assert.strictEqual(unknownCategory.length, 2, 'categoria sem nome aparece em duas linhas legíveis');
+  assert(unknownCategory[0].includes('(Sem)') && unknownCategory[1].includes('(categoria)'),
+    'rótulo da categoria não é truncado na coluna estreita');
+  assert(!sheets.some(p => p.commands.join('\n').includes('Atleta Sem Data')),
+    'jogo sem horário válido não é colocado em uma sequência inventada');
+}
 if (process.env.SP_SUMULA_SAMPLE) require('fs').writeFileSync(process.env.SP_SUMULA_SAMPLE, pdf);
 
 const crowded = core.collect(t, Array.from({ length:24 }, (_, i) => ({
@@ -109,7 +138,8 @@ const thirtySix = core.collect(t, Array.from({ length:36 }, (_, i) => ({
   court:'Quadra '+(i%6+4), category:'Fem Light',
   p1:'Ana Silva / Bia Costa', p2:'Clara Lima / Débora Reis'
 })));
-assert.strictEqual(core.makePages(thirtySix).length, 3, '36 jogos Fem Light ocupam três páginas de 12');
+assert.strictEqual(core.makePages(thirtySix).length, 12,
+  '36 jogos distribuídos em seis quadras e dois dias ocupam doze folhas separadas');
 const bestOfThree = core.collect({ ...t, scoring:{ type:'sets', setsToWin:2, gamesPerSet:6 } }, [matches[1]]);
 assert.strictEqual(bestOfThree.scoring.slots, 3);
 assert(core.makePages(bestOfThree)[0].commands.join('\n').includes('melhor de 3 sets'),
@@ -154,4 +184,4 @@ const signatureCommands = core.makePages(longNames)[0].commands.filter(s =>
   / rg BT \/F1 /.test(s) && / 1 0 0 1 (57[1-9]|5[8-9][0-9]|6[0-9][0-9]|7[0-9][0-9]) [\d.]+ Tm /.test(s));
 assert.strictEqual(signatureCommands.length, 48,
   '48 atletas em uma página recebem uma linha cada, sem segunda linha sobreposta');
-console.log('✅ Súmula por categoria: 12 jogos, um set e assinatura única por atleta');
+console.log('✅ Súmula por quadra: 12 jogos por folha, um set e assinatura única por atleta');

@@ -88,6 +88,7 @@ function lerListaNomeada(fonte, nome) {
 const DOMAIN_FILES = lerListaNomeada(fs.readFileSync(COPY_VENDOR, 'utf8'), 'DOMAIN_FILES');
 const DE_FUNCTIONS = lerListaNomeada(fs.readFileSync(COPY_VENDOR, 'utf8'), 'DE_FUNCTIONS');
 const CORE_TO_AUTODRAW = lerListaNomeada(fs.readFileSync(COPY_VENDOR, 'utf8'), 'CORE_TO_AUTODRAW');
+const OPERATION_DAY_FILES = lerListaNomeada(fs.readFileSync(COPY_VENDOR, 'utf8'), 'OPERATION_DAY_FILES');
 const DOMAIN_TO_FUNCTIONS = lerListaNomeada(fs.readFileSync(COPY_VENDOR, 'utf8'), 'DOMAIN_TO_FUNCTIONS');
 
 // Sanidade da própria trava: renomear/reformatar o `const FILES` no copy-vendor.js faria a
@@ -161,7 +162,16 @@ for (const f of DOMAIN_TO_FUNCTIONS) {
 // Se o draw-core.js ainda der require nele, o servidor roda um arquivo que o app já não
 // tem — drift na direção contrária, e igualmente silencioso.
 if (fs.existsSync(VENDOR_DIR)) {
-  const naLista = new Set(FILES.concat(DOMAIN_FILES, DE_FUNCTIONS, CORE_TO_AUTODRAW));
+  const naLista = new Set(FILES.concat(DOMAIN_FILES, DE_FUNCTIONS, CORE_TO_AUTODRAW, OPERATION_DAY_FILES));
+  for (const f of OPERATION_DAY_FILES) {
+    const src = path.join(root, 'functions-autodraw', f);
+    for (const [label, dir] of [['functions-autodraw/vendor', VENDOR_DIR], ['functions/vendor', FUNCTIONS_VENDOR_DIR]]) {
+      const dst = path.join(dir, f);
+      if (!fs.existsSync(src) || !fs.existsSync(dst) || !fs.readFileSync(src).equals(fs.readFileSync(dst))) {
+        divergentes.push({ f: label + '/' + f, motivo: 'diverge de functions-autodraw/' + f });
+      }
+    }
+  }
   // E o que vem de `functions/` também é conferido byte a byte — divergir ali é ter
   // duas cópias do formato do subdoc, que é o defeito que essa lista veio evitar.
   for (const f of DE_FUNCTIONS) {

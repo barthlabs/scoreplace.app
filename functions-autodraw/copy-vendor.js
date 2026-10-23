@@ -156,3 +156,13 @@ for (const f of CORE_TO_AUTODRAW) {
   fs.copyFileSync(src, path.join(OUT_DIR, f));
   console.log(`[copy-vendor] vendor/${f} (core compartilhado de functions/)`);
 }
+
+// A chave do controle regional usa exatamente a mesma regra de fuso nas duas codebases.
+const OPERATION_DAY_FILES = ['agenda-core.js', 'operation-day.js'];
+for (const f of OPERATION_DAY_FILES) {
+  const src = path.join(__dirname, f);
+  for (const out of [OUT_DIR, OUT_FN]) {
+    fs.copyFileSync(src, path.join(out, f));
+    console.log(`[copy-vendor] ${path.relative(path.resolve(__dirname, '..'), out)}/${f}`);
+  }
+}

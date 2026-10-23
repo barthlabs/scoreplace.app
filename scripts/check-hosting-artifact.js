@@ -11,7 +11,7 @@ const { verify } = require('./check-web-entry-contract');
 const ROOT = path.join(__dirname, '..');
 const OUT = path.join(ROOT, 'www');
 const required = ['index.html', 'open.html', 'js/lojas-config.js', 'js/domain/next-match.js',
-  'sw.js', 'manifest.json', 'version.txt', 'ext-version.txt',
+  'sw.js', 'manifest.json', 'version.txt', 'ext-version.txt', 'operation-regions.json',
   'native-update-policy.json', 'favicon.ico', '.vite/manifest.json', '.scoreplace-build.json'];
 const forbidden = ['tests', 'scripts', 'tools', 'functions', 'functions-autodraw',
   'functions-stripe', 'android', 'ios', 'docs', 'infra', 'node_modules'];
@@ -26,6 +26,8 @@ must(fs.readFileSync(path.join(OUT, 'version.txt'), 'utf8') === fs.readFileSync(
   '`version.txt` publicado é a versão gerada nesta mesma fonte');
 must(fs.readFileSync(path.join(OUT, 'ext-version.txt'), 'utf8') === fs.readFileSync(path.join(ROOT, 'ext-version.txt'), 'utf8'),
   '`ext-version.txt` publicado é a versão gerada nesta mesma fonte');
+must(fs.readFileSync(path.join(OUT, 'operation-regions.json'), 'utf8') === fs.readFileSync(path.join(ROOT, 'operation-regions.json'), 'utf8'),
+  '`operation-regions.json` publicado é a configuração regional verificada nesta mesma fonte');
 must(verify(OUT, { log() {}, error(message) { throw new Error(message); } }),
   'o shell do artefato resolve todos os recursos locais e preserva dependências');
 console.log('✅ ' + checks + ' verificações — Hosting serve somente o artefato Vite');
