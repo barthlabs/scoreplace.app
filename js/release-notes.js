@@ -1,3 +1,5 @@
+// 2.5.36 — Operações do torneio escolhem uma região disponível ao iniciar o dia,
+// mantêm a escolha e consultam o recibo antes de repetir uma ação após falha.
 // 2.5.35 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.34 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.33 — Atualização consolidada de produção com as correções validadas desde a última publicação.
