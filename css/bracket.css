@@ -1,4 +1,5 @@
 /* Standings collapsible toggle (inside <details>) */
+[data-bracket-operations-strip] { scroll-margin-top:var(--scroll-anchor,120px);overflow-anchor:none; }
 .sp-operations-track {
   display: flex;
   align-items: stretch;
@@ -6,12 +7,14 @@
   max-width: 100%;
   min-width: 0;
   margin: 12px 0 18px;
-  height: var(--sp-operations-row-height, auto);
   box-sizing: border-box;
   padding: 4px;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-gutter: stable;
+  overflow-anchor: none;
+  --sp-operations-line-height: 18px;
+  --sp-operations-card-height: 120px;
 }
 .sp-operations-next,
 .sp-operations-pending,
@@ -21,66 +24,66 @@
   border-radius: 12px;
   padding: 8px;
   background: var(--bg-card);
+  box-sizing: border-box;
+  overflow-anchor: none;
 }
 .sp-operations-next {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
+  display: grid;
+  grid-template-rows: var(--sp-operations-line-height) var(--sp-operations-line-height) var(--sp-operations-card-height);
   flex: 0 0 min(88vw, 380px);
   border-color: var(--sp-c-fbbf24, #fbbf24);
 }
-.sp-operations-next .sp-operations-replica { flex:0 0 auto; }
-.sp-operations-courts { display: flex; flex:0 0 auto; width:max-content; flex-direction: column; }
-.sp-operations-pending { display:flex;flex:0 0 min(88vw,380px);flex-direction:column;border-color:var(--sp-c-38bdf8,#38bdf8);overflow:hidden; }
-.sp-operations-pending-track { display:flex;flex:1 1 auto;flex-direction:column;gap:8px;overflow-y:auto;min-height:0; }
+.sp-operations-next .sp-operations-replica { display:contents; }
+.sp-operations-courts { display:grid;grid-template-rows:var(--sp-operations-line-height) calc(var(--sp-operations-line-height) + var(--sp-operations-card-height));flex:0 0 auto;width:max-content; }
+.sp-operations-pending { display:grid;grid-template-rows:var(--sp-operations-line-height) calc(var(--sp-operations-line-height) + var(--sp-operations-card-height));flex:0 0 min(88vw,380px);border-color:var(--sp-c-38bdf8,#38bdf8);overflow:hidden; }
+.sp-operations-pending-track { display:flex;flex-direction:column;gap:8px;overflow-y:auto;min-height:0; }
 .sp-operations-availability { color:var(--sp-c-4ade80,#4ade80);font-size:.69rem;font-weight:800;line-height:14px; }
 .sp-operations-availability--busy { color:var(--sp-c-f87171,#f87171); }
 .sp-operations-pending .sp-operations-label { color:var(--sp-c-38bdf8,#38bdf8); }
 .sp-operations-pending .sp-operations-replica > .sp-match-card { border:3px solid var(--sp-c-38bdf8,#38bdf8)!important; }
 .sp-operations-section-title {
   display: block;
-  margin: 0 0 7px;
+  margin: 0;
   color: var(--text-bright);
   font-size: .75rem;
+  line-height: var(--sp-operations-line-height);
   font-weight: 800;
   letter-spacing: .04em;
 }
 .sp-operations-courts .sp-operations-section-title { margin-bottom: 0; }
 .sp-operations-court-track {
   display: flex;
-  flex: 1 1 auto;
   gap: 8px;
   width: max-content;
   padding-top: 0;
   box-sizing: border-box;
   min-height: 0;
 }
-.sp-operations-court-slot { display:flex;flex:0 0 340px;flex-direction:column;gap:6px;min-width:0; }
-.sp-operations-court-slot:not(.sp-operations-court-slot--active) > .sp-operations-label { position:relative;top:7px; }
-.sp-operations-court-slot--active { flex-basis: 380px;justify-content:flex-end; }
+.sp-operations-court-slot { display:grid;grid-template-rows:var(--sp-operations-line-height) var(--sp-operations-card-height);flex:0 0 380px;min-width:0; }
 .sp-operations-replica { display:flex;flex-direction:column;gap:7px;min-width:0;width:100%; }
-.sp-operations-replica > .sp-match-card { width:100%;max-width:none;min-height:0; }
+.sp-operations-court-slot .sp-operations-replica,
+.sp-operations-pending-track .sp-operations-replica { display:grid;grid-template-rows:var(--sp-operations-line-height) var(--sp-operations-card-height);gap:0; }
+.sp-operations-replica > .sp-match-card { width:100%;max-width:none;min-height:0;height:var(--sp-operations-card-height);box-sizing:border-box; }
 .sp-operations-next .sp-operations-replica > .sp-match-card { border:3px solid var(--sp-c-fbbf24,#fbbf24)!important; }
 .sp-operations-court-slot--active .sp-operations-replica > .sp-match-card { border:3px solid var(--sp-c-22c55e,#22c55e)!important; }
 .sp-operations-replica .sp-match-call-day-hint { overflow-wrap:anywhere; }
 .sp-operations-court-free {
   display: flex;
-  flex: 1 1 auto;
   flex-direction: column;
   justify-content: center;
   gap: 5px;
   min-height: 0;
   box-sizing: border-box;
   padding: 10px;
-  margin-top: 8px;
+  height: var(--sp-operations-card-height);
   border: 1px dashed var(--sp-c-22c55e, #22c55e);
   border-radius: 9px;
   color: var(--text-bright);
   font-size: .82rem;
 }
 .sp-operations-court-free span { color: var(--text-muted); }
-.sp-operations-label { color: var(--sp-c-fbbf24, #fbbf24); font-size: .74rem; font-weight: 800; }
+.sp-operations-label { color: var(--sp-c-fbbf24, #fbbf24); font-size: .74rem; font-weight: 800; line-height:var(--sp-operations-line-height); }
 .sp-operations-courts .sp-operations-label { color: var(--sp-c-22c55e, #22c55e); }
 .sp-operations-empty { min-height: 70px; display: flex; align-items: center; color: var(--text-muted); font-size: .82rem; }
 .sp-match-end-court { border:1px solid #38bdf8;border-radius:7px;background:#075985;color:#fff;font:inherit;font-size:.68rem;font-weight:800;padding:4px 7px;cursor:pointer; }
@@ -88,9 +91,7 @@
 .sp-match-cancel-court { border:1px solid var(--border-color,#64748b);border-radius:7px;background:var(--btn-secondary-bg,#303030);color:var(--btn-secondary-text,#fff);font:inherit;font-size:.68rem;font-weight:800;padding:4px 7px;cursor:pointer; }
 .sp-match-cancel-court:disabled { opacity:.5;cursor:wait; }
 @media (max-width: 690px) {
-  .sp-operations-track { height:auto!important;min-height:var(--sp-operations-row-height,120px); }
-  .sp-operations-court-slot { flex-basis: min(88vw, 340px); }
-  .sp-operations-court-slot--active { flex-basis:min(88vw,380px); }
+  .sp-operations-court-slot { flex-basis:min(88vw,380px); }
 }
 @media (min-width: 900px) {
   .sp-operations-next { position:sticky;left:4px;z-index:3;background:var(--bg-card); }
