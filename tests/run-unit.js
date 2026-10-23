@@ -56,6 +56,7 @@ const ROOT = path.join(__dirname, '..');
 const SUITES = [
   'tests/operation-day.test.js',
   'tests/operation-router-regions.test.js',
+  'tests/operation-control-transaction.test.js',
   'tests/operation-receipt-core.test.js',
   'tests/operation-receipt-wo-handler.test.js',
   'tests/operation-probe-readonly.test.js',
@@ -2324,6 +2325,7 @@ const MEXEM_NO_REPO = [
  * ⛔ Se estas duas voltarem a falhar com "Port ... is not open", procure emulador órfão
  *      (`lsof -ti :8097`) antes de suspeitar do paralelismo. */
 const PRENDEM_PORTA = [
+  'tests/operation-control-transaction.test.js',
   'tests/l7-creation-replay-emulator.test.js',
   'tests/decisao-do-tardio-na-folga-emulador.test.js',   // sobe o próprio emulador do Firestore
   'tests/tardio-entra-em-torneio-dividido.test.js',      // idem

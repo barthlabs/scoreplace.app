@@ -4051,7 +4051,8 @@ exports.tournamentOperationControl = onCall({ invoker: 'public' }, async (reques
     if (!tSnap.exists) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (sandbox) await _assertSandboxDrawOwner(_TX_LEITURA, tSnap, uid);
     else if (tSnap.data().isSandbox === true) throw new HttpsError('not-found', 'Torneio não encontrado.');
-    if (!_isTournamentAdmin(tSnap.data(), uid) && !_isConfirmedTournamentReferee(tSnap.data(), uid) && !_isTournamentParticipant(tSnap.data(), uid)) {
+    if (!sandbox && !_isTournamentAdmin(tSnap.data(), uid) &&
+        !_isConfirmedTournamentReferee(tSnap.data(), uid) && !_isTournamentParticipant(tSnap.data(), uid)) {
       throw new HttpsError('permission-denied', 'Sem acesso ao torneio.');
     }
     if (!rSnap.exists) return { found: false };
@@ -4072,7 +4073,7 @@ exports.tournamentOperationControl = onCall({ invoker: 'public' }, async (reques
     if (sandbox) await _assertSandboxDrawOwner(tx, tSnap, uid);
     const tournament = tSnap.data() || {};
     if (!sandbox && tournament.isSandbox === true) throw new HttpsError('not-found', 'Torneio não encontrado.');
-    const operator = _isTournamentAdmin(tournament, uid) || _isConfirmedTournamentReferee(tournament, uid);
+    const operator = sandbox || _isTournamentAdmin(tournament, uid) || _isConfirmedTournamentReferee(tournament, uid);
     const participant = _isTournamentParticipant(tournament, uid);
     if (!operator && !participant) throw new HttpsError('permission-denied', 'Sem acesso ao torneio.');
     // O próprio inscrito também pode iniciar uma troca após falha da presença.
