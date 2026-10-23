@@ -3,7 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 mode="${1:---check-v2}"
-[[ "$mode" == '--deploy-v2' || "$mode" == '--check-v2' || "$mode" == '--refresh-v2' ]] || exit 2
+[[ "$mode" == '--deploy-v2' || "$mode" == '--check-v2' || "$mode" == '--refresh-v2' || "$mode" == '--recover-v2' ]] || exit 2
 project=scoreplace-app
 regions=(us-east1 us-east4 us-south1)
 names=(sp-op-court-v2 sp-op-score-v2 sp-op-presence-v2 sp-op-presence-wo-v2 sp-op-end-court-v2 sp-op-control-v2)
@@ -95,6 +95,42 @@ NODE
   manifest="$next_manifest"
 fi
 
+if [[ "$mode" == '--recover-v2' ]]; then
+  # Uma falha depois dos deploys pode ter deixado todas as revisões novas no ar
+  # e o manifesto antigo intacto. Reconstrua somente por leitura do estado real.
+  check_tree
+  previous_manifest="$manifest"
+  [[ -s "$previous_manifest" ]] || { echo 'manifesto anterior ausente' >&2; exit 1; }
+  previous_commit="$(SP_MANIFEST="$previous_manifest" node -e 'const m=JSON.parse(require("fs").readFileSync(process.env.SP_MANIFEST));const a=[...new Set(m.map(x=>x.commit))];if(m.length!==18||a.length!==1)process.exit(1);process.stdout.write(a[0])')"
+  [[ -n "${SP_RECOVERY_COMMIT:-}" ]] || { echo 'SP_RECOVERY_COMMIT obrigatório para recuperar revisão publicada' >&2; exit 1; }
+  commit="$(git rev-parse "$SP_RECOVERY_COMMIT^{commit}")"
+  git merge-base --is-ancestor "$commit" HEAD || { echo 'commit publicado não pertence ao histórico atual' >&2; exit 1; }
+  git diff --quiet "$commit" HEAD -- functions functions-autodraw || { echo 'backend mudou desde o commit publicado' >&2; exit 1; }
+  [[ "$commit" != "$previous_commit" ]] || { echo 'não há revisão nova a recuperar' >&2; exit 1; }
+  backend_diff="$(git diff --name-only "$previous_commit" HEAD -- functions functions-autodraw)"
+  [[ "$backend_diff" == $'functions-autodraw/index.js\nfunctions-autodraw/vendor/tournaments.js' ]] || {
+    echo "diferença do backend fora do corte aprovado: $backend_diff" >&2; exit 1;
+  }
+  next_manifest="$(mktemp .claude/tmp/operation-regions-manifest-v2.next.XXXXXX)"
+  trap 'rm -f "$next_manifest"' EXIT
+  printf '[]\n' > "$next_manifest"
+  manifest="$next_manifest"
+  for i in "${!names[@]}"; do
+    name="${names[$i]}" target="${targets[$i]}" codebase="${codebases[$i]}"
+    digest="$(node scripts/operation-source-digest.js "$codebase" "$target" "$commit")"
+    for region in "${regions[@]}"; do
+      json="$(describe "$name" "$region")" || { echo "serviço ausente: $name/$region" >&2; exit 1; }
+      SP_JSON="$json" SP_DIGEST="$digest" SP_REGION="$region" node - <<'NODE'
+const s=JSON.parse(process.env.SP_JSON),e=Object.fromEntries((s.spec?.template?.spec?.containers?.[0]?.env||[]).map(x=>[x.name,x.value]));
+if(e.SP_SOURCE_DIGEST!==process.env.SP_DIGEST||e.SP_OPERATION_REGION!==process.env.SP_REGION||
+  !s.spec?.template?.spec?.containers?.[0]?.image?.includes('@sha256:')||!s.status?.latestReadyRevisionName||
+  !s.status?.url||s.spec?.template?.metadata?.annotations?.['run.googleapis.com/base-images'])process.exit(1);
+NODE
+      record "$json" "$name" "$region" "$target" "$codebase" "$commit" "$digest"
+    done
+  done
+fi
+
 if [[ "$mode" == '--deploy-v2' ]]; then
   check_tree
   branch="$(git branch --show-current)"
@@ -134,7 +170,7 @@ fi
 
 check_tree
 [[ -f "$manifest" ]] || { echo 'manifesto v2 ausente' >&2; exit 1; }
-source_commit="$(SP_MANIFEST="$manifest" node -e 'const m=require("./"+process.env.SP_MANIFEST);const a=[...new Set(m.map(x=>x.commit))];if(a.length!==1)process.exit(1);process.stdout.write(a[0])')"
+source_commit="$(SP_MANIFEST="$manifest" node -e 'const m=JSON.parse(require("fs").readFileSync(process.env.SP_MANIFEST));const a=[...new Set(m.map(x=>x.commit))];if(m.length!==18||a.length!==1)process.exit(1);process.stdout.write(a[0])')"
 git diff --quiet "$source_commit" HEAD -- functions functions-autodraw || { echo 'codebase mudou após build' >&2; exit 1; }
 for i in "${!names[@]}"; do
   name="${names[$i]}" target="${targets[$i]}" codebase="${codebases[$i]}"
@@ -157,7 +193,7 @@ NODE
     echo "✓ $name/$region"
   done
 done
-if [[ "$mode" == '--refresh-v2' ]]; then
+if [[ "$mode" == '--refresh-v2' || "$mode" == '--recover-v2' ]]; then
   mv "$next_manifest" "$previous_manifest"
   trap - EXIT
   echo "✓ manifesto substituído após validar 18 revisões: $previous_manifest"
