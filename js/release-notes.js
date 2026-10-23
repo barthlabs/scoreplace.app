@@ -1,3 +1,4 @@
+// 2.5.42 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.41 — Contingência automática ampliada para cinco regiões. A malha anterior
 // de três regiões permanece disponível se as cinco portas novas estiverem
 // indisponíveis. Nenhum placar é reprocessado. Na faixa da chave, o próximo
