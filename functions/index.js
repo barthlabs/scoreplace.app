@@ -30,6 +30,7 @@ const { onDocumentCreated, onDocumentWritten, onDocumentDeleted } = require("fir
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 const crypto = require("crypto");
+const _operationReceipt = require("./operation-receipt-core");
 const _operationProbeReply = () => ({
   ok: true,
   region: String(process.env.SP_OPERATION_REGION || ""),
@@ -4131,6 +4132,20 @@ exports.setTournamentPresence = onCall(
     }
     // Mesmo documento e autorização da operação, sem gravar presença.
     if (data.probe === true) return _operationProbeReply();
+    const receipt = data.operationId == null ? null : (() => {
+      try { return _operationReceipt.prepare({ operationId: data.operationId, actorUid: callerUid,
+        parentPath: ref.path, kind: "presence", target: targetKey, action,
+        payload: { legacyKey, sandbox } }); }
+      catch (e) { throw new HttpsError("invalid-argument", e.message); }
+    })();
+    const receiptRef = receipt ? ref.collection("operationReceipts").doc(receipt.id) : null;
+    if (receiptRef) {
+      const previous = await receiptRef.get();
+      if (previous.exists) {
+        if (!_operationReceipt.matches(previous.data(), receipt)) throw new HttpsError("failed-precondition", "operationId já pertence a outra ação");
+        return _operationReceipt.replay(previous.data());
+      }
+    }
     const now = Date.now();
     const changes = action === "present"
       ? [
@@ -4176,8 +4191,16 @@ exports.setTournamentPresence = onCall(
     });
     paresDoDoc.push(new FieldPath("updatedAt"), new Date().toISOString());
     lote.update.apply(lote, [ref].concat(paresDoDoc));
-    await lote.commit();
-    return { ok: true, action, targetKey, updatedAt: now };
+    const response = { ok: true, action, targetKey, updatedAt: now };
+    if (receiptRef) lote.create(receiptRef, _operationReceipt.document(receipt, response, now));
+    try { await lote.commit(); }
+    catch (e) {
+      if (!receiptRef || !(e && (e.code === 6 || e.code === "already-exists"))) throw e;
+      const previous = await receiptRef.get();
+      if (!previous.exists || !_operationReceipt.matches(previous.data(), receipt)) throw new HttpsError("failed-precondition", "operationId já pertence a outra ação");
+      return _operationReceipt.replay(previous.data());
+    }
+    return response;
   }
 );
 

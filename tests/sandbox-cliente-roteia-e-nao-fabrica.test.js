@@ -202,7 +202,23 @@ const ok = (n, c, x) => { if (c) console.log('  ✓ ' + n); else { console.log('
       .map((s) => s.replace('match /', '').replace(/\/\{$/, ''));
     const naLista = (real._sandboxSubcollections || []).map((c) => real._subNome('sb_2', c));
     ok('as regras declaram ' + nasRegras.length + ' subcoleções de sandbox', nasRegras.length >= 12, JSON.stringify(nasRegras));
-    const faltando = nasRegras.filter((c) => naLista.indexOf(c) === -1);
+    // Recibos são exclusivos do servidor. A exclusão REAL do sandbox usa
+    // deleteTournament, que enumera listCollections() antes de apagar o pai.
+    const exclusaoServidor = fs.readFileSync(path.join(ROOT, 'functions/index.js'), 'utf8');
+    const inicioExclusao = exclusaoServidor.indexOf('exports.deleteTournament = onCall(');
+    const fimExclusao = exclusaoServidor.indexOf('/* ═', inicioExclusao);
+    const corpoExclusao = exclusaoServidor.slice(inicioExclusao, fimExclusao);
+    ok('⭐⭐ o servidor enumera todas as subcoleções do sandbox antes de apagar o pai',
+      inicioExclusao >= 0 && corpoExclusao.includes('await sbRef.listCollections()') &&
+      corpoExclusao.indexOf('await sbRef.listCollections()') < corpoExclusao.indexOf('await sbRef.delete()'));
+    const inicioPurge = exclusaoServidor.indexOf('exports.purgeTournamentCopies = onDocumentDeleted(');
+    const corpoPurge = exclusaoServidor.slice(inicioPurge, exclusaoServidor.indexOf('/* ═', inicioPurge));
+    ok('⭐⭐ produção também enumera subcoleções após excluir o torneio',
+      inicioPurge >= 0 && corpoPurge.includes('.doc(tid).listCollections()'));
+    ok('⛔ o cliente delega a exclusão à Function, sem apagar apenas o documento pai',
+      real.deleteTournament.toString().includes("this._callFn('deleteTournament'") &&
+      !real.deleteTournament.toString().includes('_deleteSubcollection'));
+    const faltando = nasRegras.filter((c) => c !== 'operationReceipts' && naLista.indexOf(c) === -1);
     ok('⭐⭐ nenhuma delas fica de fora do apagar (faltando: ' + faltando.join(', ') + ')',
       faltando.length === 0, JSON.stringify({ nasRegras: nasRegras, naLista: naLista }));
     ok('⭐⭐ e `results` do sandbox é apagado como `resultsSandbox`',

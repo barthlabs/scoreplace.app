@@ -370,6 +370,10 @@ service cloud.firestore {
      * consulta que não constranja esse campo é recusada inteira ("rules are not filters").
      * É de propósito — é o que impede varredura da coleção. */
     match /sandboxes/{sandboxId} {
+      // Recibos de operações são escritos e lidos apenas pelo servidor.
+      match /operationReceipts/{operationId} {
+        allow read, write: if false;
+      }
       function sbDono() {
         return get(/databases/$(database)/documents/sandboxes/$(sandboxId)).data.get('sandboxOwnerUid', '');
       }
@@ -469,6 +473,10 @@ service cloud.firestore {
     }
 
     match /tournaments/{tournamentId} {
+      // O navegador não pode fabricar nem apagar a prova de uma ação aplicada.
+      match /operationReceipts/{operationId} {
+        allow read, write: if false;
+      }
       match /courtState/{stateId} {
         allow read: if canReadTournamentData(get(/databases/$(database)/documents/tournaments/$(tournamentId)).data);
         allow write: if false;

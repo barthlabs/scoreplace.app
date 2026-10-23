@@ -169,6 +169,12 @@
       ]
     },
     {
+      "collectionGroup": "operationReceipts",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
       "collectionGroup": "notificationOutbox",
       "fieldPath": "dispatchStatus",
       "indexes": [

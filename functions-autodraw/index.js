@@ -6,6 +6,7 @@ const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { getMessaging } = require('firebase-admin/messaging');
 const { getStorage } = require('firebase-admin/storage');
 const { randomUUID } = require('crypto');
+const _operationReceipt = require('./operation-receipt-core');
 const _operationProbeReply = () => ({
   ok: true,
   region: String(process.env.SP_OPERATION_REGION || ''),
@@ -2338,8 +2339,12 @@ exports.splitLatePair = onCall(async (request) => {
  * Devolve { ok, outcome, tournament } ou { ok:false, reason } — recusa é resposta
  * legítima ("o outro time já lançou"), não falha de infra.
  */
-async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMessage, sandbox) {
+async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMessage, sandbox, operationId) {
   const ref = db.collection(sandbox ? 'sandboxes' : 'tournaments').doc(tId);
+  const receipt = operationId == null ? null : _operationReceipt.prepare({ operationId,
+    actorUid: ator.uid, parentPath: ref.path, kind: 'score', target: matchId,
+    action: String((payload && payload.action) || ''), payload: { payload, logMessage: String(logMessage || '') } });
+  const receiptRef = receipt ? ref.collection('operationReceipts').doc(receipt.id) : null;
   // Recibo independente do documento do torneio. O id nasce fora do callback porque a
   // transação pode repetir; assim uma repetição não cria dois fatos de auditoria.
   const auditRef = ref.collection('scoreAudit').doc();
@@ -2373,6 +2378,13 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
     if ((!sandbox && !_isTournamentParticipant(t, ator.uid) && !_isTournamentAdmin(t, ator.uid) && !_isConfirmedTournamentReferee(t, ator.uid)) ||
         (sandbox && !_isTournamentAdmin(t, ator.uid))) {
       return { ok: false, reason: 'permission-denied' };
+    }
+    if (receiptRef) {
+      const existing = await tx.get(receiptRef);
+      if (existing.exists) {
+        if (!_operationReceipt.matches(existing.data(), receipt)) throw _drawFail('failed-precondition', 'operationId já pertence a outra ação.', { tId, matchId });
+        return _operationReceipt.replay(existing.data());
+      }
     }
     _hidrataGrupos(t, 'aplicaPlacarNaTransacao', tId);
     if (typeof assertSurplusMatchMayStartFn !== 'function') {
@@ -2450,6 +2462,8 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
       // próprios, com id do recibo para não colidir com o próximo resultado.
       tx.set(ref.collection('notificationOutbox').doc(auditRef.id), _transitionNotif);
     }
+    if (receiptRef) tx.create(receiptRef, _operationReceipt.document(receipt,
+      { ok: true, outcome: res.outcome }, Date.parse(_agoraIsoTx)));
     return { ok: true, outcome: res.outcome, tournament: b.clean };
   });
 }
@@ -3252,6 +3266,13 @@ exports.setTournamentPresenceWithWOSubstitution = onCall(async (request) => {
   }
 
   const ref = db.collection('tournaments').doc(tId);
+  let receipt = null;
+  try {
+    if (data.operationId != null) receipt = _operationReceipt.prepare({ operationId: data.operationId,
+      actorUid: uid, parentPath: ref.path, kind: 'presence-wo', target: targetUid || targetName,
+      action, payload: { targetUid, targetName } });
+  } catch (e) { throw new HttpsError('invalid-argument', e.message); }
+  const receiptRef = receipt ? ref.collection('operationReceipts').doc(receipt.id) : null;
   const pre = await ref.get();
   if (!pre.exists) throw _drawFail('not-found', 'Torneio não encontrado.', { tId, uid });
   if (!_isTournamentAdmin(pre.data(), uid)) throw _drawFail('permission-denied', 'Só a organização controla esta presença.', { tId, uid });
@@ -3264,6 +3285,13 @@ exports.setTournamentPresenceWithWOSubstitution = onCall(async (request) => {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, uid });
+    if (receiptRef) {
+      const existing = await tx.get(receiptRef);
+      if (existing.exists) {
+        if (!_operationReceipt.matches(existing.data(), receipt)) throw _drawFail('failed-precondition', 'operationId já pertence a outra ação.', { tId });
+        return _operationReceipt.replay(existing.data());
+      }
+    }
     _enrichParticipantsFromProfiles(t);
 
     const pools = ['participants', 'standbyParticipants', 'waitlist'];
@@ -3296,6 +3324,13 @@ exports.setTournamentPresenceWithWOSubstitution = onCall(async (request) => {
     if (!result || !result.ok) return { ok: false, result: result || { reason: 'error' } };
     _reconcileSurplusBeforeWrite(t, tId, before);
     const boundary = _gravaTorneio(tx, ref, t, before, { agoraIso });
+    // O motor pode devolver detalhes de suplência com nomes e campos opcionais.
+    // O recibo só guarda o desfecho mínimo; no replay B2 relê o torneio canônico.
+    if (receiptRef) tx.create(receiptRef, _operationReceipt.document(receipt,
+      { ok: true, result: { ok: true, action: String(result.action || action),
+        substitutions: { ok: !!(result.substitutions && result.substitutions.ok),
+          subCount: Number(result.substitutions && result.substitutions.subCount) || 0 } } },
+      Date.parse(agoraIso)));
     return { ok: true, result, tournament: boundary.clean };
   });
 });
@@ -3599,6 +3634,10 @@ exports.applyMatchResult = onCall(async (request) => {
   const payload = (request.data && request.data.payload) || null;
   if (!payload) throw new HttpsError('invalid-argument', 'payload é obrigatório.');
   const logMessage = (request.data && request.data.logMessage) || '';
+  const operationId = request.data && request.data.operationId;
+  if (operationId != null && !_operationReceipt.UUID_V4_RE.test(String(operationId))) {
+    throw new HttpsError('invalid-argument', 'operationId tem que ser um UUID v4');
+  }
 
   // Motor indisponível → NUNCA improvisar a regra aqui. Erro claro; o cliente cai no
   // caminho antigo (que ainda é permitido pelas rules) em vez de ficar sem lançar placar.
@@ -3635,7 +3674,7 @@ exports.applyMatchResult = onCall(async (request) => {
     // MESMO miolo que a fila usa — ver _aplicaPlacarNaTransacao.
     out = await _aplicaPlacarNaTransacao(db, tId, matchId, payload, {
       uid, email, name: callerName, liveNames: liveIdentity.nameByUid || {}
-    }, logMessage, sandbox);
+    }, logMessage, sandbox, operationId);
     if (!out.ok && out.reason === 'permission-denied') {
       throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, matchId, uid });
     }
@@ -3712,7 +3751,8 @@ exports.applyQueuedResult = onDocumentCreated(
       if (!pre.exists) { await marca({ status: 'recusado', reason: 'not-found' }); return; }
       await _preloadDrawNames(pre.data());   // nome vivo por uid (o motor pode avançar)
       out = await _aplicaPlacarNaTransacao(db, tId, matchId, item.payload,
-        { uid: actorUid, email: item.actorEmail || '' }, item.logMessage || '');
+        { uid: actorUid, email: item.actorEmail || '' }, item.logMessage || '', false,
+        _operationReceipt.UUID_V4_RE.test(String(item.operationId || '')) ? item.operationId : null);
     } catch (e) {
       console.error('[filaPlacar] EXPLODIU', tId, itemId, e && e.stack || e);
       await marca({ status: 'erro', reason: String((e && e.message) || e).slice(0, 300) });
@@ -3819,6 +3859,15 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
   }
   const ref = db.collection(sandbox ? 'sandboxes' : 'tournaments').doc(tId);
   const courtStateRef = ref.collection('courtState').doc('main');
+  let receipt = null;
+  try {
+    if (request.data && request.data.operationId != null) receipt = _operationReceipt.prepare({
+      operationId: request.data.operationId, actorUid: uid, parentPath: ref.path,
+      kind: 'court', target: matchId, action: clockAction || (confirmCall ? 'call' : 'assign'),
+      payload: { court, confirmCall, clockAction, sandbox }
+    });
+  } catch (e) { throw new HttpsError('invalid-argument', e.message); }
+  const receiptRef = receipt ? ref.collection('operationReceipts').doc(receipt.id) : null;
   const agoraIso = new Date().toISOString();
   if (request.data && request.data.probe === true) {
     return db.runTransaction(async (tx) => {
@@ -3839,6 +3888,18 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
       if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
       const referee = ScoreplaceRefereeRoster.sanitizeAll(t.arbitros).some(e => e.uid === uid && e.status === 'confirmed');
       if (!_isTournamentAdmin(t, uid) && !referee) throw _drawFail('permission-denied', 'Só a organização ou árbitro confirmado define a quadra.', { tId, matchId, uid });
+      if (receiptRef) {
+        const existing = await tx.get(receiptRef);
+        if (existing.exists) {
+          if (!_operationReceipt.matches(existing.data(), receipt)) throw _drawFail('failed-precondition', 'operationId já pertence a outra ação.', { tId, matchId });
+          return _operationReceipt.replay(existing.data());
+        }
+      }
+      const commitReply = (reply) => {
+        if (receiptRef && reply && reply.ok) tx.create(receiptRef, _operationReceipt.document(receipt,
+          Object.fromEntries(Object.entries(reply).filter(([key]) => key !== 'tournament')), Date.parse(agoraIso)));
+        return reply;
+      };
       const courtStateSnap = await tx.get(courtStateRef);
       const courtState = courtStateSnap.exists ? courtStateSnap.data() || {} : {};
       const released = courtState.released && typeof courtState.released === 'object' ? courtState.released : {};
@@ -3856,11 +3917,11 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
         const anchorMs = Date.parse(String(m.courtClockBaseAt || m.courtCalledAt));
         if (!Number.isFinite(anchorMs)) throw _drawFail('failed-precondition', 'Horário da chamada inválido.', { tId, matchId });
         const shifted = _matchTiming.adjust(anchorMs, timing, nowMs, clockAction);
-        if (!shifted.changed) return { ok: true, changed: false, phase: shifted.phase, courtClockBaseAt: new Date(anchorMs).toISOString() };
+        if (!shifted.changed) return commitReply({ ok: true, changed: false, phase: shifted.phase, courtClockBaseAt: new Date(anchorMs).toISOString() });
         const beforeClock = _antesDoMotor(t);
         m.courtClockBaseAt = new Date(shifted.start).toISOString();
         const boundary = _gravaTorneio(tx, ref, t, beforeClock, { agoraIso });
-        return { ok: true, changed: true, phase: shifted.phase, courtClockBaseAt: m.courtClockBaseAt, tournament: boundary.clean };
+        return commitReply({ ok: true, changed: true, phase: shifted.phase, courtClockBaseAt: m.courtClockBaseAt, tournament: boundary.clean });
       }
       const jaEmJogo = (typeof drawWindow._matchHasRealPlay === 'function' && drawWindow._matchHasRealPlay(m)) ||
         m.liveScored === true || m.startedAt || m.resultAt || m.wo === true || m.winner != null ||
@@ -3919,7 +3980,7 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
           throw _drawFail('failed-precondition', 'Quadra ocupada pelo ' + label + '. Lance o resultado ou aplique W.O. para liberar a quadra.', { tId, matchId, court });
         }
       }
-      if (atual === court && (!confirmCall || m.courtCalledAt)) return { ok: true, changed: false, courtCalledAt: m.courtCalledAt || null };
+      if (atual === court && (!confirmCall || m.courtCalledAt)) return commitReply({ ok: true, changed: false, courtCalledAt: m.courtCalledAt || null });
       const reassigned = [];
       if (court && m.scheduledAt && (court !== atual || (confirmCall && !m.courtCalledAt))) {
         // A troca vale só para o mesmo horário. Jogos de rodadas posteriores
@@ -3948,7 +4009,7 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
       if (confirmCall && !m.courtCalledAt) m.courtCalledAt = agoraIso;
       const b = _gravaTorneio(tx, ref, t, antes, { agoraIso: agoraIso });
       tx.set(courtStateRef, { revision: FieldValue.increment(1) }, { merge: true });
-      return { ok: true, changed: true, court, courtCalledAt: m.courtCalledAt || null, reassigned, tournament: b.clean };
+      return commitReply({ ok: true, changed: true, court, courtCalledAt: m.courtCalledAt || null, reassigned, tournament: b.clean });
     });
   } catch (e) {
     if (e instanceof HttpsError) throw e;

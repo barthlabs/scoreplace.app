@@ -27,14 +27,14 @@ const courtBlockEnd=cf.indexOf('const b = _gravaTorneio',courtBlockStart);
 ok(courtBlockStart>=0 && courtBlockEnd>courtBlockStart, 'regra real da chamada localizada na Function');
 if(courtBlockStart>=0 && courtBlockEnd>courtBlockStart){
   const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
-  const apply=new AsyncFunction('m','court','confirmCall','agoraIso','_drawFail','tId','matchId','t','drawWindow','_matchTiming','sandbox','_courtOccupancy','_agenda','released',
+  const apply=new AsyncFunction('m','court','confirmCall','agoraIso','_drawFail','tId','matchId','t','drawWindow','_matchTiming','sandbox','_courtOccupancy','_agenda','released','commitReply',
     cf.slice(courtBlockStart,courtBlockEnd)+' return {ok:true,changed:true,courtCalledAt:m.courtCalledAt||null};');
   const _matchTiming=require('../js/domain/match-timing.js');
   const occupancy=require('../js/domain/court-occupancy.js');
   const agenda=require('../functions-autodraw/agenda-core.js');
   const testApply=(m,court,confirmCall,agoraIso,fail,tId,matchId,t,drawWindow) =>
     apply(m,court,confirmCall,agoraIso,fail,tId,matchId,t,
-      drawWindow || {_collectAllMatches:()=>[m]},_matchTiming,true,occupancy,agenda,{});
+      drawWindow || {_collectAllMatches:()=>[m]},_matchTiming,true,occupancy,agenda,{},reply=>reply);
   const m={court:'Quadra 4'};
   const event={callTime:5};
   const fail=()=>new Error('precondition');
