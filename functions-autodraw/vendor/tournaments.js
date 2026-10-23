@@ -1619,6 +1619,26 @@ window._focusTournamentMatchWhenReady = function(tId, matchId, options) {
 // de estarem necessariamente consistentes no resumo do torneio. Prioridade:
 // pronto para chamar, depois presença parcial; se ainda não houver nenhum dos
 // dois, mostra o topo útil de Próximos jogos, nunca o hero/classificação.
+function _tournamentOperationalEntryAllowed(t) {
+  return !!(t && typeof window._isUserAuthority === 'function' &&
+    window._isUserAuthority(t, window.AppStore && window.AppStore.currentUser) &&
+    typeof window._isConcentratedTournament === 'function' && window._isConcentratedTournament(t));
+}
+
+function _tournamentOperationalStripForEntry(tId) {
+  var root = Array.prototype.find.call(document.querySelectorAll('[data-bracket-tabs-root]'), function(node) {
+    return node.getAttribute('data-tournament-id') === String(tId);
+  });
+  if (!root) return null;
+  var strip = root._bracketOperationsStrip;
+  if (!strip || !strip.isConnected) {
+    strip = Array.prototype.find.call(document.querySelectorAll('[data-bracket-operations-strip]'), function(node) {
+      return node.getAttribute('data-operations-tournament-id') === String(tId) && node.parentNode === root.parentNode;
+    });
+  }
+  return strip && strip.isConnected && strip.querySelector('.sp-operations-track') ? { root: root, strip: strip } : null;
+}
+
 window._focusTournamentUpcomingWhenReady = function(tId, options) {
   var attempts = 0;
   var maxAttempts = 60;
@@ -1629,6 +1649,7 @@ window._focusTournamentUpcomingWhenReady = function(tId, options) {
   // Este token pertence apenas à ENTRADA pelo atalho: ele reafirma a âncora até
   // a agenda assentar e é cancelado imediatamente por uma interação do usuário.
   var entryToken = String(tId) + ':' + Date.now() + ':' + Math.random();
+  var startedHash = window.location.hash;
   window._tournamentUpcomingEntryToken = entryToken;
   var userInterrupted = false;
   var cancelEntryFocus = function() { userInterrupted = true; };
@@ -1648,7 +1669,31 @@ window._focusTournamentUpcomingWhenReady = function(tId, options) {
     return Number(a.getAttribute('data-match-num')) - Number(b.getAttribute('data-match-num'));
   };
   var focus = function() {
-    if (window._travaRolagemDaChave || userInterrupted || window._tournamentUpcomingEntryToken !== entryToken) return;
+    if (window._travaRolagemDaChave || userInterrupted || window._tournamentUpcomingEntryToken !== entryToken ||
+        window.location.hash !== startedHash) return;
+    var tournament = typeof window._findTournamentById === 'function' ? window._findTournamentById(tId) :
+      window.AppStore && Array.isArray(window.AppStore.tournaments) && window.AppStore.tournaments.find(function(t) { return String(t.id) === String(tId); });
+    if (_tournamentOperationalEntryAllowed(tournament)) {
+      var operational = _tournamentOperationalStripForEntry(tId);
+      if (operational) {
+        var placeStrip = function() {
+          if (window._travaRolagemDaChave || userInterrupted || window._tournamentUpcomingEntryToken !== entryToken ||
+              window.location.hash !== startedHash) return;
+          var live = _tournamentOperationalStripForEntry(tId);
+          if (!live) return;
+          try { if (typeof window._reflowChrome === 'function') window._reflowChrome(); } catch (eChrome) {}
+          // O leitor da chave usa a margem CSS da mesma seção. Repetir aqui
+          // exatamente a âncora evita duas contas diferentes disputarem Y.
+          try { live.strip.scrollIntoView({ behavior: behavior, block: 'start', inline: 'nearest' }); }
+          catch (eScroll) { try { live.strip.scrollIntoView(); } catch (eFallback) {} }
+        };
+        placeStrip();
+        [140, 520, 1000, 1600, 2400, 3400].forEach(function(delay) { setTimeout(placeStrip, delay); });
+        return;
+      }
+      attempts += 1;
+      if (attempts < maxAttempts) { setTimeout(focus, 100); return; }
+    }
     var pageScope = document.getElementById('view-container') || document;
     var seen = {};
     var pending = Array.prototype.slice.call(pageScope.querySelectorAll('[id^="card-"][data-bracket-scheduled-at]')).filter(function(card) {
@@ -1684,7 +1729,8 @@ window._focusTournamentUpcomingWhenReady = function(tId, options) {
     // a âncora na mesma entrada curta, sempre com posição absoluta no viewport
     // da página (não no scroll horizontal da rodada).
     var placeOperationalAnchor = function(reasserting) {
-      if (window._travaRolagemDaChave || userInterrupted || window._tournamentUpcomingEntryToken !== entryToken) return;
+      if (window._travaRolagemDaChave || userInterrupted || window._tournamentUpcomingEntryToken !== entryToken ||
+          window.location.hash !== startedHash) return;
       var liveTarget = targetId && document.getElementById(targetId);
       var destination = liveTarget && getComputedStyle(liveTarget).display !== 'none' ? liveTarget : null;
       var root = (destination && typeof window._bracketOperationalRootForCard === 'function'
@@ -5508,16 +5554,23 @@ function renderTournaments(container, tournamentId = null) {
     if (!_pendingBracketTarget && (_openedFromDashboard ||
         (window._navScrollTid && String(window._navScrollTid) === String(tournamentId)))) {
         var _detailTournamentForTarget = window._findTournamentById ? window._findTournamentById(tournamentId) : null;
+        // Em torneio concentrado, a faixa operacional é o destino da entrada
+        // genérica da autoridade. Não persistir um jogo sintético que venceria
+        // a âncora da faixa montada pela chave.
+        var _operationalGenericEntry = _tournamentOperationalEntryAllowed(_detailTournamentForTarget) &&
+            !!document.getElementById('tourn-grid-container') &&
+            typeof window._bracketOperationsSelect === 'function' &&
+            !!window._bracketOperationsSelect(_detailTournamentForTarget);
         // A rota da dashboard não escolhe o jogo pelo resumo: o detalhe já tem
         // a fonte completa. Portanto, toda entrada genérica resolve primeiro o
         // próximo confronto PENDENTE do usuário autenticado. Só quem não tem
         // partida pendente cai no próximo jogo agendado do torneio.
         // Isso impede que um card global/pronto de outra pessoa ou a
         // classificação substituam a agenda de quem entrou.
-        if (typeof window._nextParticipantTournamentMatchTarget === 'function') {
+        if (!_operationalGenericEntry && typeof window._nextParticipantTournamentMatchTarget === 'function') {
             _pendingBracketTarget = window._nextParticipantTournamentMatchTarget(_detailTournamentForTarget);
         }
-        if (!_pendingBracketTarget && typeof window._nextScheduledTournamentMatchTarget === 'function') {
+        if (!_operationalGenericEntry && !_pendingBracketTarget && typeof window._nextScheduledTournamentMatchTarget === 'function') {
             _pendingBracketTarget = window._nextScheduledTournamentMatchTarget(_detailTournamentForTarget);
         }
         if (_pendingBracketTarget && _pendingBracketTarget.matchId) {

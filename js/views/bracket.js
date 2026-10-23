@@ -1411,6 +1411,7 @@ window._bracketOperationsRefresh = function (t, root) {
   if (!existing) {
     existing = document.createElement('section');
     existing.setAttribute('data-bracket-operations-strip', '1');
+    existing.setAttribute('data-operations-tournament-id', String(t.id));
     existing.setAttribute('aria-label', 'Jogos que precisam de atenção');
     root._bracketOperationsStrip = existing;
     existing._spOperationsOnResize = function () {

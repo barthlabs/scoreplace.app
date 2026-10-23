@@ -1,3 +1,6 @@
+// 2.5.37 — A abertura genérica do torneio leva árbitro e organizador à faixa
+// operacional, sem que um jogo sintetizado ou rolagem tardia mova a tela para
+// outra posição. O acesso direto a uma partida preserva seu destino.
 // 2.5.36 — A faixa do organizador e árbitro alinha próxima chamada, placares pendentes e
 // quadras em qualquer largura; mantém a posição após ações e filtros e recebe
 // o foco ao abrir o torneio, inclusive quando há aviso de avanço de fase.

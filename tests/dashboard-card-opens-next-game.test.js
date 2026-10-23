@@ -77,6 +77,29 @@ function section(from, to) {
     'a entrada não reescreve a rolagem da agenda com o cálculo vertical legado');
   ok(result.scrolled.indexOf('inline-bracket-container') === -1,
     'a classificação inline nunca é usada como fallback quando há agenda');
+  const operationalEntry = await page.evaluate(async () => {
+    document.body.innerHTML = '<main id="view-container"><section id="tourn-grid-container"></section>' +
+      '<nav data-bracket-tabs-root="1" data-tournament-id="neon"></nav>' +
+      '<section data-bracket-operations-strip="1" data-operations-tournament-id="neon">' +
+      '<div class="sp-operations-track">Próximo jogo a chamar</div></section>' +
+      '<article id="card-next" data-bracket-scheduled-at="2000" data-match-num="2" data-bracket-upcoming="1"></article>' +
+      '<section id="inline-bracket-container"></section></main>';
+    window.AppStore = { currentUser: { uid: 'ref' }, tournaments: [{ id: 'neon' }] };
+    window._isUserAuthority = () => true;
+    window._isConcentratedTournament = () => true;
+    const selected = [], scrolled = [];
+    window._bracketSelectCategoryTab = (...args) => selected.push(args);
+    Element.prototype.scrollIntoView = function () { scrolled.push(this.getAttribute('data-bracket-operations-strip') ? 'faixa' : this.id); };
+    window._focusTournamentUpcomingWhenReady('neon', { behavior: 'auto' });
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    return { selected, scrolled };
+  });
+  ok(operationalEntry.selected.length === 0 && operationalEntry.scrolled.length >= 1,
+    'a entrada de árbitro ou organizador foca a faixa operacional sem escolher a aba de um jogo');
+  ok(tournaments.includes('var _operationalGenericEntry = _tournamentOperationalEntryAllowed(_detailTournamentForTarget)') &&
+    tournaments.includes('if (!_operationalGenericEntry && typeof window._nextParticipantTournamentMatchTarget') &&
+    tournaments.includes('if (!_operationalGenericEntry && !_pendingBracketTarget && typeof window._nextScheduledTournamentMatchTarget'),
+    'a rota genérica não persiste um jogo sintético quando a faixa operacional pode ser montada');
   ok(tournaments.includes("var operationalCard = !!(root && destination.hasAttribute('data-bracket-tab-category')") &&
     tournaments.includes("root._bracketGeneralView.contains(destination)") &&
     tournaments.includes("root._bracketTabsScope.contains(destination)") &&
