@@ -26,6 +26,7 @@ function section(from, to) {
   await page.addScriptTag({ content: section('window._nextParticipantTournamentMatchTarget = function', '// Entrada genérica da dashboard:') });
   await page.addScriptTag({ content: section('window._nextScheduledTournamentMatchTarget = function', 'window._scrollToBracketSection = function') });
   await page.addScriptTag({ content: section('window._scrollToBracketSection = function', '// v2.7.85: funções de DUPLA') });
+  await page.addScriptTag({ content: bracket.slice(bracket.indexOf('window._bracketFocusOperationsStrip = function'), bracket.indexOf('/* A LARGURA ÚTIL DA CHAVE', bracket.indexOf('window._bracketFocusOperationsStrip = function'))) });
 
   const result = await page.evaluate(async () => {
     const card = (id, at, court, resultAt, num, upcoming, presence) =>
@@ -88,14 +89,18 @@ function section(from, to) {
     window._isUserAuthority = () => true;
     window._isConcentratedTournament = () => true;
     const selected = [], scrolled = [];
+    const root = document.querySelector('[data-bracket-tabs-root]');
+    const strip = document.querySelector('[data-bracket-operations-strip]');
+    root.getBoundingClientRect = () => ({ bottom: 120 });
+    strip.getBoundingClientRect = () => ({ top: 200 });
     window._bracketSelectCategoryTab = (...args) => selected.push(args);
-    Element.prototype.scrollIntoView = function () { scrolled.push(this.getAttribute('data-bracket-operations-strip') ? 'faixa' : this.id); };
+    window.scrollTo = (request) => scrolled.push(request.top);
     window._focusTournamentUpcomingWhenReady('neon', { behavior: 'auto' });
     await new Promise((resolve) => setTimeout(resolve, 120));
     return { selected, scrolled };
   });
-  ok(operationalEntry.selected.length === 0 && operationalEntry.scrolled.length >= 1,
-    'a entrada de árbitro ou organizador foca a faixa operacional sem escolher a aba de um jogo');
+  ok(operationalEntry.selected.length === 0 && operationalEntry.scrolled[0] === 68,
+    'a entrada foca a faixa 12px abaixo das abas fixas, sem escolher a aba de um jogo');
   ok(tournaments.includes('var _operationalGenericEntry = _tournamentOperationalEntryAllowed(_detailTournamentForTarget)') &&
     tournaments.includes('if (!_operationalGenericEntry && typeof window._nextParticipantTournamentMatchTarget') &&
     tournaments.includes('if (!_operationalGenericEntry && !_pendingBracketTarget && typeof window._nextScheduledTournamentMatchTarget'),

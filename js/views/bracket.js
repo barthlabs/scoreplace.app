@@ -899,6 +899,27 @@ function _alvoDeEntrada() {
 // a ordem de prioridade é regra de produto do dono, não detalhe interno.
 window._bracketEntryTarget = _alvoDeEntrada;
 
+// A margem CSS sozinha não inclui as abas fixas, cuja altura muda com a
+// largura. A entrada na faixa usa a borda inferior real desse cabeçalho.
+window._bracketFocusOperationsStrip = function(tId, behavior) {
+  var root = Array.prototype.find.call(document.querySelectorAll('[data-bracket-tabs-root]'), function(node) {
+    return node.getAttribute('data-tournament-id') === String(tId);
+  });
+  var strip = root && root._bracketOperationsStrip;
+  if (!strip || !strip.isConnected) {
+    strip = Array.prototype.find.call(document.querySelectorAll('[data-bracket-operations-strip]'), function(node) {
+      return root && node.getAttribute('data-operations-tournament-id') === String(tId) && node.parentNode === root.parentNode;
+    });
+  }
+  if (!root || !strip || !strip.isConnected) return false;
+  try { if (typeof window._reflowChrome === 'function') window._reflowChrome(); } catch (eChrome) {}
+  var top = Math.max(0, (window.scrollY || window.pageYOffset || 0) + strip.getBoundingClientRect().top -
+    Math.max(12, root.getBoundingClientRect().bottom + 12));
+  try { window.scrollTo({ top: top, behavior: behavior || 'auto' }); }
+  catch (eScroll) { try { window.scrollTo(0, top); } catch (eFallback) {} }
+  return true;
+};
+
 /* A LARGURA ÚTIL DA CHAVE, MEDIDA — nunca deduzida de `100vw` (ver `_cardMax`).
  * Fonte: o `clientWidth` do rolador horizontal da chave, que já desconta a barra de rolagem
  * e o padding do container. Sem rolador na tela (lista, classificação), vale o
@@ -2953,6 +2974,8 @@ function _applyMyMatchesFilter() {
         if (typeof window._reflowChrome === 'function') window._reflowChrome();
         var _target = _alvoDeEntrada();
         if (!_target) return;
+        if (_target.hasAttribute('data-bracket-operations-strip') &&
+            window._bracketFocusOperationsStrip(_target.getAttribute('data-operations-tournament-id'), behavior)) return;
         var _operationalRoot = window._bracketOperationalRootForCard(_target);
         if (_operationalRoot && typeof window._bracketFocusOperationalCard === 'function') {
           _bracketEntryHorizontalGap(_target, true);
@@ -3029,7 +3052,12 @@ function _applyMyMatchesFilter() {
         var _operationalRoot = window._bracketOperationalRootForCard(_el);
         var _recuo = 0;
         try {
-          if (_operationalRoot) _recuo = Math.round(window._bracketOperationalSafeTop(_operationalRoot, _el));
+          if (_el.hasAttribute('data-bracket-operations-strip')) {
+            var _entryTabs = Array.prototype.find.call(document.querySelectorAll('[data-bracket-tabs-root]'), function(node) {
+              return node.getAttribute('data-tournament-id') === _el.getAttribute('data-operations-tournament-id');
+            });
+            _recuo = _entryTabs ? Math.round(Math.max(12, _entryTabs.getBoundingClientRect().bottom + 12)) : 0;
+          } else if (_operationalRoot) _recuo = Math.round(window._bracketOperationalSafeTop(_operationalRoot, _el));
           else {
             var _cs = getComputedStyle(document.documentElement).getPropertyValue('--scroll-anchor');
             _recuo = Math.round(parseFloat(_cs) || 0);

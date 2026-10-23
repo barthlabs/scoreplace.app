@@ -1681,11 +1681,9 @@ window._focusTournamentUpcomingWhenReady = function(tId, options) {
               window.location.hash !== startedHash) return;
           var live = _tournamentOperationalStripForEntry(tId);
           if (!live) return;
-          try { if (typeof window._reflowChrome === 'function') window._reflowChrome(); } catch (eChrome) {}
-          // O leitor da chave usa a margem CSS da mesma seção. Repetir aqui
-          // exatamente a âncora evita duas contas diferentes disputarem Y.
-          try { live.strip.scrollIntoView({ behavior: behavior, block: 'start', inline: 'nearest' }); }
-          catch (eScroll) { try { live.strip.scrollIntoView(); } catch (eFallback) {} }
+          if (typeof window._bracketFocusOperationsStrip === 'function') {
+            window._bracketFocusOperationsStrip(tId, behavior);
+          }
         };
         placeStrip();
         [140, 520, 1000, 1600, 2400, 3400].forEach(function(delay) { setTimeout(placeStrip, delay); });
