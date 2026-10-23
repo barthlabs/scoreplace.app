@@ -1,0 +1,72 @@
+{
+  "schema": 3,
+  "regions": [
+    "us-east1",
+    "us-east4",
+    "us-south1",
+    "us-central1",
+    "southamerica-east1"
+  ],
+  "services": {
+    "sp-op-court-v3": {
+      "digest": "89bf1dfa7de11c11bfec8bb960d36715e47c9645d760f03ec99c6220c6cb09f8",
+      "urls": {
+        "us-east1": "https://sp-op-court-v3-4f45krjr3a-ue.a.run.app",
+        "us-east4": "https://sp-op-court-v3-4f45krjr3a-uk.a.run.app",
+        "us-south1": "https://sp-op-court-v3-4f45krjr3a-vp.a.run.app",
+        "us-central1": "https://sp-op-court-v3-4f45krjr3a-uc.a.run.app",
+        "southamerica-east1": "https://sp-op-court-v3-4f45krjr3a-rj.a.run.app"
+      }
+    },
+    "sp-op-score-v3": {
+      "digest": "2a8ee551525a119873822cdb16c22f1d86f3061d7c972874b6250c68fcbabc01",
+      "urls": {
+        "us-east1": "https://sp-op-score-v3-4f45krjr3a-ue.a.run.app",
+        "us-east4": "https://sp-op-score-v3-4f45krjr3a-uk.a.run.app",
+        "us-south1": "https://sp-op-score-v3-4f45krjr3a-vp.a.run.app",
+        "us-central1": "https://sp-op-score-v3-4f45krjr3a-uc.a.run.app",
+        "southamerica-east1": "https://sp-op-score-v3-4f45krjr3a-rj.a.run.app"
+      }
+    },
+    "sp-op-presence-v3": {
+      "digest": "26fbf8308121ed66b20d5db328709f75dd8acd6fdd25e0adaa428d6a3873b632",
+      "urls": {
+        "us-east1": "https://sp-op-presence-v3-4f45krjr3a-ue.a.run.app",
+        "us-east4": "https://sp-op-presence-v3-4f45krjr3a-uk.a.run.app",
+        "us-south1": "https://sp-op-presence-v3-4f45krjr3a-vp.a.run.app",
+        "us-central1": "https://sp-op-presence-v3-4f45krjr3a-uc.a.run.app",
+        "southamerica-east1": "https://sp-op-presence-v3-4f45krjr3a-rj.a.run.app"
+      }
+    },
+    "sp-op-presence-wo-v3": {
+      "digest": "26b970303de3ab9af52650601e2e483b943a07a56cf0620429ba7380c6efa360",
+      "urls": {
+        "us-east1": "https://sp-op-presence-wo-v3-4f45krjr3a-ue.a.run.app",
+        "us-east4": "https://sp-op-presence-wo-v3-4f45krjr3a-uk.a.run.app",
+        "us-south1": "https://sp-op-presence-wo-v3-4f45krjr3a-vp.a.run.app",
+        "us-central1": "https://sp-op-presence-wo-v3-4f45krjr3a-uc.a.run.app",
+        "southamerica-east1": "https://sp-op-presence-wo-v3-4f45krjr3a-rj.a.run.app"
+      }
+    },
+    "sp-op-end-court-v3": {
+      "digest": "66f2bfdba485848a9fc7a9c292ae6b94b783735aac6e4849837aa6fdfcfdea53",
+      "urls": {
+        "us-east1": "https://sp-op-end-court-v3-4f45krjr3a-ue.a.run.app",
+        "us-east4": "https://sp-op-end-court-v3-4f45krjr3a-uk.a.run.app",
+        "us-south1": "https://sp-op-end-court-v3-4f45krjr3a-vp.a.run.app",
+        "us-central1": "https://sp-op-end-court-v3-4f45krjr3a-uc.a.run.app",
+        "southamerica-east1": "https://sp-op-end-court-v3-4f45krjr3a-rj.a.run.app"
+      }
+    },
+    "sp-op-control-v3": {
+      "digest": "35ff0cb345a1b03d25fdf73ce6f2bec262698f014c897745e88d28203dbdf17c",
+      "urls": {
+        "us-east1": "https://sp-op-control-v3-4f45krjr3a-ue.a.run.app",
+        "us-east4": "https://sp-op-control-v3-4f45krjr3a-uk.a.run.app",
+        "us-south1": "https://sp-op-control-v3-4f45krjr3a-vp.a.run.app",
+        "us-central1": "https://sp-op-control-v3-4f45krjr3a-uc.a.run.app",
+        "southamerica-east1": "https://sp-op-control-v3-4f45krjr3a-rj.a.run.app"
+      }
+    }
+  }
+}
