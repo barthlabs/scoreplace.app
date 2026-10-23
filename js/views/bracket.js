@@ -1449,8 +1449,15 @@ window._bracketOperationsRefresh = function (t, root) {
         // O placar lançado na faixa não deve iniciar outro foco automático.
         // A marca é consumida pelo fluxo de resultado; expira para não afetar
         // uma ação posterior feita no card da chave após validação inválida.
-        window._bracketOperationsScoreSource = { tournamentId: String(t.id), matchId: String(mid), at: Date.now() };
-        if (typeof window._saveResultInline === 'function') window._saveResultInline(String(t.id), mid, op);
+        var scoreSource = { tournamentId: String(t.id), matchId: String(mid), at: Date.now() };
+        window._bracketOperationsScoreSource = scoreSource;
+        try {
+          if (typeof window._saveResultInline === 'function') window._saveResultInline(String(t.id), mid, op);
+        } finally {
+          // A gravação válida consome a marca ao decidir o foco. Validação
+          // recusada retorna antes disso e não pode afetar o próximo clique.
+          if (window._bracketOperationsScoreSource === scoreSource) window._bracketOperationsScoreSource = null;
+        }
       } else if (target.classList.contains('sp-match-confirm')) {
         event.preventDefault();
         if (typeof window._confirmMatchCourtCall === 'function') {

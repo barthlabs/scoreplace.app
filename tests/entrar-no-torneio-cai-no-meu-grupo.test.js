@@ -95,6 +95,15 @@ ok(typeof W._bracketEntryTarget === 'function', 'window._bracketEntryTarget exis
   ok(alvo === faixa, 'entrada comum da organização foca a faixa operacional');
 })();
 
+(function () {
+  const faixa = mkEl('faixa', ['.sp-operations-track']);
+  const banner = mkEl('banner');
+  const restore = comDom({ '[data-bracket-operations-strip]': faixa, '#phase-advance-banner': banner });
+  const alvo = W._bracketEntryTarget();
+  restore();
+  ok(alvo === faixa, 'faixa operacional presente vence o banner de avanço na entrada');
+})();
+
 // (a) O CASO DO DONO: tenho grupo, NÃO tenho jogo pendente → vai pro meu grupo mesmo assim.
 (function () {
   const meu = mkEl('meu-grupo');

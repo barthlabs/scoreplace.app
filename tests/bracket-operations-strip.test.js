@@ -106,7 +106,8 @@ assert(start > 0 && end > start);
       window._bracketOperationsRefresh(t, root);
       const activeRect = strip.querySelector('.sp-operations-court-slot--active .sp-match-card').getBoundingClientRect();
       const goldRect = strip.querySelector('.sp-operations-next .sp-match-card').getBoundingClientRect();
-      const afterCall = { called: window.called, saved: window.saved, clock: window.clock, live: window.live, wo: window.wo,
+      const afterCall = { called: window.called, saved: window.saved, scoreSourceCleared: window._bracketOperationsScoreSource == null,
+        clock: window.clock, live: window.live, wo: window.wo,
         opened: window.opened, confirmVisible,
         activeBottomAligned: Math.abs(activeRect.bottom - goldRect.bottom) <= 3,
         draft: strip.querySelector('.sp-operations-court-card [data-operations-source-input="s1-m1"]').value,
@@ -133,6 +134,7 @@ assert(start > 0 && end > start);
     assert.deepEqual(state.afterCall.wo, ['sb_test', 'm|m1']);
     assert.deepEqual(state.afterCall.opened, ['sb_test', 'm1']);
     assert.deepEqual(state.afterCall.saved, ['sb_test', 'm1', '6', '3']);
+    assert(state.afterCall.scoreSourceCleared, 'marca de origem do placar deve ser limpa quando a gravação retorna');
     assert.deepEqual(state.afterCall.clock, ['sb_test', 'm1', 'next']);
     assert(state.afterCall.confirmVisible && state.outsiderHidden && state.selectFocusRestored);
     assert(state.afterCall.activeBottomAligned, 'cards em quadra e próximo a chamar devem alinhar pela base');
