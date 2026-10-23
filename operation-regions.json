@@ -1,0 +1,58 @@
+{
+  "schema": 2,
+  "regions": [
+    "us-east1",
+    "us-east4",
+    "us-south1"
+  ],
+  "services": {
+    "sp-op-court-v2": {
+      "digest": "cf00ca80319134737c418587b8b63d6e7e014195c85181b70b99b443fb1cd915",
+      "urls": {
+        "us-east1": "https://sp-op-court-v2-4f45krjr3a-ue.a.run.app",
+        "us-east4": "https://sp-op-court-v2-4f45krjr3a-uk.a.run.app",
+        "us-south1": "https://sp-op-court-v2-4f45krjr3a-vp.a.run.app"
+      }
+    },
+    "sp-op-score-v2": {
+      "digest": "76d90a2f6af0d8e83e7bb16362684d2835696bdfee6acf64c300313b92db25cf",
+      "urls": {
+        "us-east1": "https://sp-op-score-v2-4f45krjr3a-ue.a.run.app",
+        "us-east4": "https://sp-op-score-v2-4f45krjr3a-uk.a.run.app",
+        "us-south1": "https://sp-op-score-v2-4f45krjr3a-vp.a.run.app"
+      }
+    },
+    "sp-op-presence-v2": {
+      "digest": "0184c878527d637a21a13b3abd562cc5043d4ae9ab65112002464bfe932a5dbf",
+      "urls": {
+        "us-east1": "https://sp-op-presence-v2-4f45krjr3a-ue.a.run.app",
+        "us-east4": "https://sp-op-presence-v2-4f45krjr3a-uk.a.run.app",
+        "us-south1": "https://sp-op-presence-v2-4f45krjr3a-vp.a.run.app"
+      }
+    },
+    "sp-op-presence-wo-v2": {
+      "digest": "c3df5f3c4f00298f192c80ae691cb50f3f7d3677f0d566bb7a184f617562ab7f",
+      "urls": {
+        "us-east1": "https://sp-op-presence-wo-v2-4f45krjr3a-ue.a.run.app",
+        "us-east4": "https://sp-op-presence-wo-v2-4f45krjr3a-uk.a.run.app",
+        "us-south1": "https://sp-op-presence-wo-v2-4f45krjr3a-vp.a.run.app"
+      }
+    },
+    "sp-op-end-court-v2": {
+      "digest": "ed8e809109cb4f3aea17e2445f4d2c485a0c360f912eb39e2d7658b2b3034be8",
+      "urls": {
+        "us-east1": "https://sp-op-end-court-v2-4f45krjr3a-ue.a.run.app",
+        "us-east4": "https://sp-op-end-court-v2-4f45krjr3a-uk.a.run.app",
+        "us-south1": "https://sp-op-end-court-v2-4f45krjr3a-vp.a.run.app"
+      }
+    },
+    "sp-op-control-v2": {
+      "digest": "8c0c028af16f9d46d4c29087d73949147e710cbe3cc13c8b23b6f612a388d36a",
+      "urls": {
+        "us-east1": "https://sp-op-control-v2-4f45krjr3a-ue.a.run.app",
+        "us-east4": "https://sp-op-control-v2-4f45krjr3a-uk.a.run.app",
+        "us-south1": "https://sp-op-control-v2-4f45krjr3a-vp.a.run.app"
+      }
+    }
+  }
+}
