@@ -1,5 +1,6 @@
 // 2.5.38 — A faixa operacional abre abaixo das abas fixas, medindo a altura
 // real delas em qualquer largura. A chave e o detalhe usam a mesma coordenada.
+// Snapshot e cache da web acompanham a versão 2.5.38.
 // 2.5.37 — A abertura genérica do torneio leva árbitro e organizador à faixa
 // operacional, sem que um jogo sintetizado ou rolagem tardia mova a tela para
 // outra posição. O acesso direto a uma partida preserva seu destino.
