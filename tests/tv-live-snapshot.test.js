@@ -28,7 +28,7 @@ window._isNeonTournament = tournament => tournament.id === 'tour_1790628592058_c
 
 const teams = ['VORTEX', 'BLAST', 'ECLIPSE', 'VENOM', 'PANIC', 'PHANTOM', 'VOLT', 'BLACKOUT']
   .map((name, i) => ({ id: `t${i}`, name, hue: i * 42 }));
-const match = (id, court, a, b, extra = {}) => ({ id, _gameNum: id, court, category: 'Fem Light',
+const match = (id, court, a, b, extra = {}) => ({ id, _gameNum: id, court, category: 'Fem Light', scheduledAt: '2026-10-22T18:00:00Z',
   p1: `${a} 1 / Parceira`, p2: `${b} 1 / Parceira`, p1CompetitionTeamId: teams.find(t => t.name === a).id,
   p2CompetitionTeamId: teams.find(t => t.name === b).id, ...extra });
 const t = { id: 'neon-test', name: 'NEON NIGHTMARE', logo: 'logo.png', courtNames: [4, 5, 6, 7, 8, 9].map(n => `Quadra ${n}`),
@@ -79,6 +79,14 @@ assert.equal(window._tvLiveBuildSnapshot(queue).nextGame.number, 20,
   'após retomar o segundo dia, exclui jogo chamado, finalizado e adversário indefinido; desempata por número');
 const emptyQueue = { ...queue, matches: queue.matches.slice(0, 3) };
 assert.equal(window._tvLiveBuildSnapshot(emptyQueue).nextGame, null, 'sem jogo elegível após recarregar não inventa confronto');
+vm.runInContext(fs.readFileSync(path.join(root, 'js/domain/court-occupancy.js'), 'utf8'), context);
+const samePlayerQueue = { ...queue, matches: [
+  match(19, 'Quadra 4', 'VORTEX', 'BLAST', { p1:'Atleta ativa / Parceira A', p2:'Adversaria A / Adversaria B', team1Uids:['same-uid','pair-a'], courtCalledAt:'2026-10-23T18:00:00Z' }),
+  match(20, 'Quadra 5', 'VOLT', 'BLACKOUT', { p1:'Atleta ativa / Parceira B', p2:'Adversaria C / Adversaria D', team1Uids:['same-uid','pair-b'], scheduledAt:'2026-10-23T18:10:00Z' }),
+  match(21, 'Quadra 6', 'PANIC', 'PHANTOM', { p1:'Livre A / Livre B', p2:'Livre C / Livre D', scheduledAt:'2026-10-23T18:20:00Z' })
+] };
+assert.equal(window._tvLiveBuildSnapshot(samePlayerQueue).nextGame.number, 21,
+  'TV pula próximo jogo quando uma atleta já disputa outra partida');
 assert.match(window._tvLiveBodyHtml(window._tvLiveBuildSnapshot(emptyQueue)), /Próximo jogo ainda não definido/);
 const upcomingHtml = window._tvLiveBodyHtml(snapshot).split('class="tv-upcoming"')[1].split('</section>')[0];
 assert.match(upcomingHtml, /JOGO 3 · Fem Light/);
@@ -86,6 +94,22 @@ assert.match(upcomingHtml, /PANIC 1/);
 assert.doesNotMatch(upcomingHtml, /tv-result-side-score|tv-score/, 'próximo jogo não tem placar');
 assert.equal(snapshot.results.length, 4, 'histórico acumula resultados para rolagem');
 assert.equal(snapshot.results.map(r => r.number).join(','), '5,6,4,7', 'resultado novo entra no topo');
+assert.equal(snapshot.resultDay, '2026-10-22');
+assert.equal(snapshot.results[0].time, '17:30', 'horário de lançamento usa o fuso do torneio');
+const nextDayResults = { ...t, matches: [
+  match(40, 'Quadra 4', 'PANIC', 'PHANTOM', { resultAt:'2026-10-22T22:00:00Z', winner:'p1' }),
+  match(41, 'Quadra 5', 'VOLT', 'BLACKOUT', { scheduledAt:'2026-10-23T21:00:00Z', resultAt:'2026-10-23T21:40:00Z', winner:'p2' })
+] };
+const daySnapshot = window._tvLiveBuildSnapshot(nextDayResults, Date.parse('2026-10-23T22:00:00Z'));
+assert.equal(daySnapshot.resultDay, '2026-10-23');
+assert.equal(daySnapshot.results.map(r => r.number).join(','), '41', 'TV mostra só placares do dia operacional');
+assert.match(window._tvLiveBodyHtml(daySnapshot), /<h2>ÚLTIMOS RESULTADOS<\/h2><div class="tv-results-list"/, 'cabeçalho fica fora da área rolável');
+assert.match(window._tvLiveBodyHtml(daySnapshot), /18:40 · JOGO 41/, 'hora local precede número do jogo');
+const woWithoutTime = { ...t, matches: [match(42, 'Quadra 4', 'PANIC', 'PHANTOM',
+  { wo: true, winner: 'p1', scheduledAt: '2026-10-23T21:00:00Z' })] };
+const woSnapshot = window._tvLiveBuildSnapshot(woWithoutTime, Date.parse('2026-10-23T22:00:00Z'));
+assert.equal(woSnapshot.results[0].number, 42, 'W.O. sem resultAt não desaparece da TV');
+assert.equal(woSnapshot.results[0].time, 'Horário indisponível', 'TV não inventa horário de lançamento legado');
 assert.equal(snapshot.results[1].scoreA, '7');
 assert.equal(snapshot.rankings.length, 1, 'classificação geral, sem categoria forçada');
 assert.equal(snapshot.rankings[0].rows.length, 8);
@@ -177,6 +201,7 @@ const fakePopup = { name:'scoreplace-live-tv-neon-test', closed: false, navigato
   open() {}, write(html) { popupHtml = html; }, close() {},
   visibilityState: 'visible', addEventListener() {},
   getElementById: id => id === 'tv-root' ? tvRoot : { addEventListener() {} },
+  querySelector: () => null,
   querySelectorAll: selector => selector === '[data-tv-start]' ? [tvTimer] : []
 }, focus() {}, close() { this.closed = true; } };
 let openCalls = 0;
@@ -228,7 +253,7 @@ assert.match(tvRoot.innerHTML, /class="tv-qr-code"[^>]*open\.html/);
 assert.match(tvRoot.innerHTML, /scoreplace\.app\/icons\/logo-podium\.svg/);
 const childSource = popupHtml.match(/<script>\(function\(\)\{"use strict";[\s\S]*?<\/script>/);
 assert(childSource, 'NO AR inclui um relógio próprio na janela, independente do intervalo da aba');
-const childRoot = { innerHTML: '' };
+const childRoot = { innerHTML: '', querySelector: () => null };
 const childWarning = { hidden: true };
 const childOwner = { _findTournamentById: () => t, _tvLiveIsComplete: () => true, _tvLiveBuildSnapshot: window._tvLiveBuildSnapshot,
   _tvLiveBodyHtml: window._tvLiveBodyHtml,
@@ -238,6 +263,7 @@ const childWindow = { opener: childOwner, ScoreplaceMatchTiming: timingCore, __t
   addEventListener(name, fn) { childHandlers[name] = fn; } };
 let childTick, childIntervalClears = 0;
 const childDocument = { visibilityState:'visible', addEventListener() {}, getElementById: id => id === 'tv-root' ? childRoot : id === 'tv-connection' ? childWarning : null,
+  querySelector: () => null,
   querySelectorAll: () => [] };
 vm.runInNewContext(childSource[0].slice(8, -9), { window: childWindow, document: childDocument,
   setInterval: fn => { childTick = fn; return 1; }, clearInterval: () => { childIntervalClears++; }, Date, Number });
@@ -386,5 +412,5 @@ assert(htmlSource.indexOf('js/domain/match-timing.js') < htmlSource.indexOf('js/
 assert.match(fs.readFileSync(path.join(root, 'sw.js'), 'utf8'), /'\/js\/domain\/match-timing\.js'/,
   'relógio compartilhado está no precache para a chave funcionar offline');
 if (process.env.SP_TV_CAPTURE) fs.writeFileSync(process.env.SP_TV_CAPTURE,
-  popupHtml.replace('<div id="tv-root"></div>', '<div id="tv-root">' + tvRoot.innerHTML + '</div>'));
+  popupHtml.replace('<div id="tv-root"></div>', '<div id="tv-root">' + window._tvLiveBodyHtml(snapshot) + '</div>'));
 console.log('✓ TV: 6 quadras chamadas, relógio, placar ao vivo, 3 resultados e saldo geral por time');

@@ -28,6 +28,8 @@ const path = require('path');
 const vm = require('vm');
 const { sandbox } = require('./render-harness');
 
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'domain', 'match-timing.js'), 'utf8'),
+  sandbox, { filename: 'match-timing.js' });
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'schedule-poll.js'), 'utf8'),
   sandbox, { filename: 'schedule-poll.js' });
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'wa-group.js'), 'utf8'),
@@ -106,6 +108,16 @@ ok(/sp-match-team-tag--vertical/.test(cardConcentrado) && />VENOM<\/span>/.test(
   'o nome do time vira uma tag vertical colorida e não repete “Time:”');
 ok(!/Criar grupo/.test(cardConcentrado),
   'evento concentrado não oferece grupo de jogo: atletas não negociam a partida');
+W._isUserAuthority = function () { return true; };
+mConcentrado.court = 'Quadra 4';
+mConcentrado.courtCalledAt = '2026-10-22T18:00:00Z';
+ok(/sp-match-cancel-court/.test(W.renderMatchCard(mConcentrado, true, tConcentrado.id, 1)),
+  'Cancelar aparece para a chamada sem placar');
+ok(!/sp-match-cancel-court/.test(W.renderMatchCard({ ...mConcentrado, pendingResult: { scoreP1: 6, scoreP2: 3 } }, true, tConcentrado.id, 1)),
+  'Cancelar desaparece quando há proposta de placar');
+ok(!/sp-match-cancel-court/.test(W.renderMatchCard({ ...mConcentrado, winner: 'p1', resultAt: '2026-10-22T18:40:00Z' }, true, tConcentrado.id, 1)),
+  'Cancelar desaparece depois do resultado lançado');
+W._isUserAuthority = authorityOriginal;
 ok(W._waGrpCardChip(tConcentrado, mConcentrado, { semCabecalhoDeGrupo: true }) === '',
   'dashboard também não oferece criar grupo em torneio com agenda operacional');
 

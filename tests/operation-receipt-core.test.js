@@ -32,12 +32,17 @@ assert(ttlDeploy.includes('gcloud firestore fields ttls update "$FIELD"') &&
 assert(!ttlDeploy.includes('firebase deploy --only firestore:indexes'),
   'o TTL não deve alterar outros índices em produção');
 assert.deepEqual(core.replay(doc), { ok: true, outcome: 'applied', replayed: true, requiresRefresh: true });
-// Gate B1: ainda não se envia operationId nestas quatro operações. O Gate B2
-// deve trocar estas asserções por testes de releitura canônica após replay.
-for (const file of ['js/store.js', 'js/views/bracket.js', 'js/views/participants.js']) {
+// Gate B1 continua valendo para as operações legadas de inscrição, presença e
+// placar. A reversão da quadra tem recibo próprio e o estado canônico chega pelo
+// ouvinte do torneio e de courtState, inclusive após replay.
+for (const file of ['js/store.js', 'js/views/participants.js']) {
   assert(!fs.readFileSync(path.join(__dirname, '..', file), 'utf8').includes('operationId'),
     file + ' não pode ativar replay antes de implementar requiresRefresh');
 }
+const bracket = fs.readFileSync(path.join(__dirname, '../js/views/bracket.js'), 'utf8');
+assert(bracket.includes(".collection('courtState').doc('main').onSnapshot"));
+assert.equal((bracket.match(/operationId: _courtOperationId\(\)/g) || []).length, 2,
+  'somente liberar/restaurar/cancelar chamada usam o recibo nesta etapa');
 const autodrawConfig = JSON.parse(fs.readFileSync(path.join(__dirname, '../functions-autodraw/firebase.json'), 'utf8'));
 assert(!autodrawConfig.functions.ignore.some(pattern => pattern.includes('operation-receipt-core')),
   'o contrato de recibo precisa acompanhar o deploy do autodraw');

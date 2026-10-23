@@ -85,6 +85,8 @@
 .sp-operations-empty { min-height: 70px; display: flex; align-items: center; color: var(--text-muted); font-size: .82rem; }
 .sp-match-end-court { border:1px solid #38bdf8;border-radius:7px;background:#075985;color:#fff;font:inherit;font-size:.68rem;font-weight:800;padding:4px 7px;cursor:pointer; }
 .sp-match-end-court:disabled { opacity:.5;cursor:wait; }
+.sp-match-cancel-court { border:1px solid var(--border-color,#64748b);border-radius:7px;background:var(--btn-secondary-bg,#303030);color:var(--btn-secondary-text,#fff);font:inherit;font-size:.68rem;font-weight:800;padding:4px 7px;cursor:pointer; }
+.sp-match-cancel-court:disabled { opacity:.5;cursor:wait; }
 @media (max-width: 690px) {
   .sp-operations-track { height:auto!important;min-height:var(--sp-operations-row-height,120px); }
   .sp-operations-court-slot { flex-basis: min(88vw, 340px); }

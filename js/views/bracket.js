@@ -1238,7 +1238,10 @@ window._bracketOperationsSelect = function (t) {
     (typeof t.courtNames === 'string' ? t.courtNames.split(',').map(function (name) { return name.trim(); }).filter(Boolean) : []);
   if (!courts.length) for (var c = 1; c <= Math.max(0, Number(t.courtCount) || 0); c++) courts.push('Quadra ' + c);
   active.forEach(function (m) { if (courts.indexOf(String(m.court)) === -1) courts.push(String(m.court)); });
-  return { next: upcoming.length ? upcoming[0].item.m : null, active: active, pending: pending, courts: courts };
+  var ordered = upcoming.map(function (entry) { return entry.item.m; });
+  var next = window.ScoreplaceNextMatch && typeof window.ScoreplaceNextMatch.firstAvailable === 'function'
+    ? window.ScoreplaceNextMatch.firstAvailable(ordered, matches, released) : null;
+  return { next: next, active: active, pending: pending, courts: courts };
 };
 
 function _bracketReconcileOperationalOrder(root) {
@@ -1276,6 +1279,7 @@ function _bracketScopeReplicaHtml(html, scope) {
     var clickHandler = node.getAttribute('onclick') || '';
     if (/window\._openLiveScoringForMatch\(/.test(clickHandler)) node.setAttribute('data-operations-action', 'live');
     else if (/window\._woOpenClaim\(/.test(clickHandler)) node.setAttribute('data-operations-action', 'wo');
+    else if (/window\._cancelCourtAction\(/.test(clickHandler)) node.setAttribute('data-operations-action', 'cancel-court');
     else if (/window\._endMatchOnCourt\(/.test(clickHandler)) node.setAttribute('data-operations-action', 'ended');
     else if (/window\._openMatchReplayFromBracket\(/.test(clickHandler)) node.setAttribute('data-operations-action', 'replay');
     else if (/window\._revertWO\(/.test(clickHandler)) node.setAttribute('data-operations-action', 'revert-wo');
@@ -1453,6 +1457,10 @@ window._bracketOperationsRefresh = function (t, root) {
       } else if (target.getAttribute('data-operations-action') === 'ended') {
         event.preventDefault();
         if (typeof window._endMatchOnCourt === 'function') window._endMatchOnCourt(String(t.id), mid, target);
+      } else if (target.getAttribute('data-operations-action') === 'cancel-court') {
+        event.preventDefault();
+        if (typeof window._cancelCourtAction === 'function')
+          window._cancelCourtAction(String(t.id), mid, target.getAttribute('data-cancel-court-action'), target);
       } else if (target.getAttribute('data-operations-action') === 'replay') {
         event.preventDefault();
         if (typeof window._openMatchReplayFromBracket === 'function') window._openMatchReplayFromBracket(String(t.id), mid);
@@ -4276,7 +4284,8 @@ window._renderReadyMatchesBanner = function _renderReadyMatchesBanner(t, opts) {
     const _mid = String(e.match.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     if (isReady && _isOrg && _courts.length > 0 && e.match.id) {
       const cur = e.match.court || '';
-      const all = typeof window._collectAllMatches === 'function' ? window._collectAllMatches(t) : [];
+      const released = window._bracketCourtReleased ? window._bracketCourtReleased(t.id) : {};
+      const all = typeof window._collectAllMatches === 'function' ? window._collectAllMatches(t).filter(function (item) { return item && !released[String(item.id)]; }) : [];
       const occupancy = window.ScoreplaceCourtOccupancy;
       const curBusy = !!(cur && occupancy && occupancy.occupant(all, cur, e.match.id));
       const noFree = _courts.every(function(c) { return occupancy && occupancy.occupant(all, c, e.match.id); });
@@ -4343,12 +4352,26 @@ window._assignMatchCourt = function(tId, matchId, court) {
       throw err;
     });
 };
+function _courtOperationId() {
+  var crypto = window.crypto;
+  if (crypto && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  if (crypto && typeof crypto.getRandomValues === 'function') {
+    var bytes = new Uint8Array(16); crypto.getRandomValues(bytes);
+    bytes[6] = (bytes[6] & 15) | 64; bytes[8] = (bytes[8] & 63) | 128;
+    var hex = Array.prototype.map.call(bytes, function (byte) { return (byte + 256).toString(16).slice(1); }).join('');
+    return hex.slice(0, 8) + '-' + hex.slice(8, 12) + '-' + hex.slice(12, 16) + '-' + hex.slice(16, 20) + '-' + hex.slice(20);
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (char) {
+    var n = Math.floor(Math.random() * 16); return (char === 'x' ? n : (n & 3) | 8).toString(16);
+  });
+}
 window._endMatchOnCourt = function (tId, matchId, button) {
-  if (!window.confirm('Liberar esta quadra sem placar? O jogo ficará em Placares pendentes, e esta liberação não pode ser desfeita.')) return Promise.resolve(null);
+  if (!window.confirm('Liberar esta quadra sem placar? O jogo ficará em Placares pendentes.')) return Promise.resolve(null);
   if (!window._callCF) return Promise.reject(new Error('Serviço indisponível.'));
   if (button) button.disabled = true;
   return window._callCF('endMatchOnCourt', {
-    tournamentId: String(tId), matchId: String(matchId), sandbox: String(tId).startsWith('sb_')
+    tournamentId: String(tId), matchId: String(matchId), sandbox: String(tId).startsWith('sb_'),
+    action: 'release', operationId: _courtOperationId()
   }, 'Entre na sua conta para liberar a quadra.').then(function (res) {
     var data = (res && res.data) || {};
     if (!data.ok) throw new Error('Não foi possível liberar a quadra.');
@@ -4356,6 +4379,27 @@ window._endMatchOnCourt = function (tId, matchId, button) {
     return data;
   }).catch(function (error) {
     if (typeof showNotification === 'function') showNotification('Quadra não liberada', error && error.message || 'Tente novamente.', 'error');
+    throw error;
+  }).finally(function () { if (button && button.isConnected) button.disabled = false; });
+};
+window._cancelCourtAction = function (tId, matchId, action, button) {
+  if (action !== 'restore' && action !== 'cancel-call') return Promise.reject(new Error('Ação inválida.'));
+  var message = action === 'restore'
+    ? 'Restaurar este jogo à quadra original? O relógio continuará contando desde a chamada inicial.'
+    : 'Cancelar esta chamada e devolver o jogo à fila?';
+  if (!window.confirm(message)) return Promise.resolve(null);
+  if (!window._callCF) return Promise.reject(new Error('Serviço indisponível.'));
+  if (button) button.disabled = true;
+  return window._callCF('endMatchOnCourt', {
+    tournamentId: String(tId), matchId: String(matchId), sandbox: String(tId).startsWith('sb_'),
+    action: action, operationId: _courtOperationId()
+  }, 'Entre na sua conta para cancelar esta ação.').then(function (res) {
+    var data = (res && res.data) || {};
+    if (!data.ok) throw new Error('Não foi possível cancelar a ação.');
+    if (typeof showNotification === 'function') showNotification('Ação cancelada', action === 'restore' ? 'Jogo restaurado à quadra; o relógio continua.' : 'Chamada desfeita.', 'success');
+    return data;
+  }).catch(function (error) {
+    if (typeof showNotification === 'function') showNotification('Cancelamento recusado', error && error.message || 'Tente novamente.', 'error');
     throw error;
   }).finally(function () { if (button && button.isConnected) button.disabled = false; });
 };
@@ -8797,8 +8841,18 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     ? window._woClaimChip(t, { scope: 'match', matchId: m.id, compact: true })
     : '';
   var _courtReleased = window._bracketCourtReleased ? window._bracketCourtReleased(tId) : {};
+  var _courtFinished = (window.ScoreplaceCourtOccupancy && window.ScoreplaceCourtOccupancy.isFinished(m)) ||
+    m.resultAt || m.winner != null || m.wo === true || m.draw === true || !!m.pendingResult || m.liveScored === true ||
+    (Array.isArray(m.sets) && m.sets.length > 0) || Number(m.scoreP1) > 0 || Number(m.scoreP2) > 0;
+  var _canCancelCourt = !_readOnly && !_setsEdit && !_courtFinished &&
+    typeof window._isUserAuthority === 'function' && window._isUserAuthority(t, window.AppStore && window.AppStore.currentUser);
+  var _cancelCourtAction = _courtReleased[String(m.id)] ? 'restore' : (m.courtCalledAt && !m.startedAt ? 'cancel-call' : '');
+  var _cancelCourtChip = _canCancelCourt && _cancelCourtAction
+    ? '<button type="button" class="sp-match-cancel-court" data-cancel-court-action="' + _cancelCourtAction +
+      '" onclick="event.stopPropagation();window._cancelCourtAction(\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\',\'' +
+      _cancelCourtAction + '\',this)" title="' + (_cancelCourtAction === 'restore' ? 'Restaurar à quadra original; relógio contínuo' : 'Desfazer chamada antes do jogo começar') + '">Cancelar</button>' : '';
   var _canEndCourt = !_readOnly && !_setsEdit && m.court && (m.courtCalledAt || m.startedAt) &&
-    !isDecided && !_courtReleased[String(m.id)] && typeof window._isUserAuthority === 'function' &&
+    !_courtFinished && !_courtReleased[String(m.id)] && typeof window._isUserAuthority === 'function' &&
     window._isUserAuthority(t, window.AppStore && window.AppStore.currentUser);
   var _endHeaderChip = _canEndCourt ? '<button type="button" class="sp-match-end-court" onclick="event.stopPropagation();window._endMatchOnCourt(\'' +
     _esc(tId) + '\',\'' + _esc(m.id) + '\',this)" title="Liberar a quadra e lançar o placar depois">Encerrado</button>' : '';
@@ -8847,7 +8901,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
         ' style="flex-shrink:0;font-size:0.72rem;" title="Editar no torneio">✏️ Editar</button>';
     }
   }
-  var _headerActions = (_readOnly ? _dashEditBtn : `${_endHeaderChip}${_woHeaderChip}${_arrivedBtn}${liveBtn}${headerConfirmBtn}${headerEditBtn}${headerWoRevertBtn}`) + _replayBtn;
+  var _headerActions = (_readOnly ? _dashEditBtn : `${_cancelCourtChip}${_endHeaderChip}${_woHeaderChip}${_arrivedBtn}${liveBtn}${headerConfirmBtn}${headerEditBtn}${headerWoRevertBtn}`) + _replayBtn;
   // O slot existe mesmo quando falta configuração antiga: a agenda pode preencher a
   // data marcada sem reabrir/re-renderizar toda a tela.
 

@@ -34,7 +34,9 @@ if(courtBlockStart>=0 && courtBlockEnd>courtBlockStart){
   const agenda=require('../functions-autodraw/agenda-core.js');
   const testApply=(m,court,confirmCall,agoraIso,fail,tId,matchId,t,drawWindow) =>
     apply(m,court,confirmCall,agoraIso,fail,tId,matchId,t,
-      drawWindow || {_collectAllMatches:()=>[m]},_matchTiming,true,occupancy,agenda,{},reply=>reply);
+      drawWindow ? { ...drawWindow, ScoreplaceNextMatch: { conflictsWithActive: () => false } } :
+        {_collectAllMatches:()=>[m], ScoreplaceNextMatch: { conflictsWithActive: () => false }},
+      _matchTiming,true,occupancy,agenda,{},reply=>reply);
   const m={court:'Quadra 4'};
   const event={callTime:5};
   const fail=()=>new Error('precondition');

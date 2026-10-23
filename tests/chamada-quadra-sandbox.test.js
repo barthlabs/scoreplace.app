@@ -14,28 +14,40 @@ class TestDate extends Date {
   static now() { return Date.parse(nowIso); }
 }
 const HttpsError = class extends Error { constructor(code, message) { super(message); this.code = code; } };
-const paths = [], saved = [], courtStates = new Map(), releases = new Map();
+const paths = [], saved = [], courtStates = new Map(), releases = new Map(), receipts = new Map();
+const deleted = Symbol('delete-field');
+let autoId = 0;
 let tournament, ownerProfile = null, isAdmin = true;
 const context = {
   exports: {}, onCall: (...args) => args.at(-1), HttpsError,
   db: {
     collection: collection => ({ doc: id => { const path = collection + '/' + id; const ref = {
-      path, collection: child => ({ doc: childId => ({ path: path + '/' + child + '/' + childId }) })
+      path, collection: child => ({ doc: childId => ({ path: path + '/' + child + '/' + (childId || 'auto-' + (++autoId)) }) })
     }; paths.push(ref.path); return ref; } }),
-    runTransaction: async fn => fn({ get: async ref => ref.path.startsWith('users/')
+    runTransaction: async fn => { let wrote = false; return fn({ get: async ref => {
+      if (wrote) throw new Error('Firestore transaction read after write');
+      return ref.path.startsWith('users/')
       ? { exists: !!ownerProfile, data: () => ownerProfile }
       : ref.path.includes('/courtState/') ? { exists: courtStates.has(ref.path), data: () => courtStates.get(ref.path) }
       : ref.path.includes('/courtReleases/') ? { exists: releases.has(ref.path), data: () => releases.get(ref.path) }
-      : { exists: true, ref },
-      set: (ref, data) => courtStates.set(ref.path, { ...(courtStates.get(ref.path) || {}), ...data }),
-      create: (ref, data) => releases.set(ref.path, data),
-      delete: ref => courtStates.delete(ref.path) })
+      : ref.path.includes('/operationReceipts/') ? { exists: receipts.has(ref.path), data: () => receipts.get(ref.path) }
+      : { exists: true, ref }; },
+      set: (ref, data) => { wrote = true; courtStates.set(ref.path, { ...(courtStates.get(ref.path) || {}), ...data }); },
+      update: (ref, ...values) => { wrote = true; const data = { ...(courtStates.get(ref.path) || {}) };
+        for (let i = 0; i < values.length; i += 2) { const field = values[i], value = values[i + 1];
+          if (field.segments) { const [parent, key] = field.segments; data[parent] = { ...(data[parent] || {}) };
+            if (value === deleted) delete data[parent][key]; else data[parent][key] = value;
+          } else data[field] = value;
+        } courtStates.set(ref.path, data); },
+      create: (ref, data) => { wrote = true; (ref.path.includes('/operationReceipts/') ? receipts : releases).set(ref.path, data); },
+      delete: ref => { wrote = true; courtStates.delete(ref.path); } }); }
   },
   drawWindow: {
     _findMatch: (t, id) => t.matches.find(m => m.id === id),
     _collectAllMatches: t => t.matches,
     _clearTournamentDraw: t => { t.matches = []; },
-    _matchHasRealPlay: () => false
+    _matchHasRealPlay: () => false,
+    ScoreplaceNextMatch: { conflictsWithActive: () => false }
   },
   _assertSandboxDrawOwner: async () => {},
   _leTorneio: async () => tournament,
@@ -45,7 +57,9 @@ const context = {
   _drawFail: (code, message) => new HttpsError(code, message),
   _courtOccupancy: require('../js/domain/court-occupancy.js'),
   ScoreplaceRefereeRoster: { sanitizeAll: value => value || [] },
-  FieldValue: { increment: n => n },
+  FieldValue: { increment: n => n, delete: () => deleted },
+  FieldPath: class { constructor(...segments) { this.segments = segments; } },
+  _operationReceipt: require('../functions-autodraw/operation-receipt-core.js'),
   _matchTiming: require('../js/domain/match-timing.js'),
   _agenda: require('../functions-autodraw/agenda-core.js'),
   Date: TestDate, Intl, Number, String, Array, Set, console
@@ -198,5 +212,56 @@ const game = (id, court, scheduledAt = '2026-10-22T21:00:00.000Z') => ({ id, cou
   await callable(request('tour_test', 'a', 'Quadra 5'));
   assert.equal(tournament.matches[0].court, 'Quadra 5');
   assert.equal(tournament.matches[1].court, 'Quadra 4', 'troca automática não vê o próprio jogo como ocupante');
+  const op = (action, id, operationId) => ({ auth: { uid: 'owner' }, data: {
+    tournamentId: 'tour_test', sandbox: false, matchId: id, action, operationId
+  } });
+  const releaseId = 'b5334898-7c8a-4915-8c88-a53180496fa1';
+  const restoreId = '7c1969f6-c371-47e0-9352-66f1b5403ed1';
+  const cancelId = '73cf344a-157a-4de4-83a9-ddc292261ef1';
+  tournament.matches = [game('dot.part', 'Quadra 4')];
+  tournament.matches[0].courtCalledAt = nowIso;
+  tournament.matches[0].courtClockBaseAt = nowIso;
+  const originalClock = tournament.matches[0].courtClockBaseAt;
+  assert.equal((await endOnCourt(op('release', 'dot.part', releaseId))).changed, true);
+  assert.equal((await endOnCourt(op('release', 'dot.part', releaseId))).replayed, true,
+    'retry de liberação usa recibo antes do estado released');
+  assert.equal((await endOnCourt(op('restore', 'dot.part', restoreId))).changed, true);
+  assert.equal(courtStates.get('tournaments/tour_test/courtState/main').released['dot.part'], undefined,
+    'FieldPath preserva ponto no ID e apaga somente a marca do jogo');
+  assert.equal(tournament.matches[0].courtClockBaseAt, originalClock,
+    'restauração preserva o relógio contínuo da chamada');
+  assert.equal((await endOnCourt(op('restore', 'dot.part', restoreId))).replayed, true,
+    'retry de restauração não depende do marcador já apagado');
+  assert.equal((await endOnCourt(op('release', 'dot.part', '6cc8c722-961f-43c1-a72b-75c6fe265f96'))).changed, true,
+    'após restaurar, nova liberação cria um evento novo');
+  await assert.rejects(endOnCourt(op('cancel-call', 'dot.part', cancelId)),
+    e => e.code === 'failed-precondition' && /Restaure primeiro/.test(e.message));
+  assert.equal((await endOnCourt(op('restore', 'dot.part', '5f7e6d04-fbb9-4a54-8d93-a1fe4c19e01e'))).changed, true);
+  assert.equal((await endOnCourt(op('cancel-call', 'dot.part', cancelId))).changed, true);
+  assert.equal(tournament.matches[0].courtCalledAt, undefined, 'desfazer chamada não altera quadra agendada');
+  assert.equal(tournament.matches[0].court, 'Quadra 4');
+  assert.equal((await endOnCourt(op('cancel-call', 'dot.part', cancelId))).replayed, true);
+  tournament.matches[0].courtCalledAt = nowIso;
+  tournament.matches[0].scoreP1 = '2';
+  await assert.rejects(endOnCourt(op('cancel-call', 'dot.part', '4cd36370-f078-4dc2-94cf-3b8039203a43')),
+    e => e.code === 'failed-precondition' && /Editar placar/.test(e.message),
+    'qualquer placar parcial impede Cancelar');
+  await assert.rejects(endOnCourt(op('release', 'dot.part', 'b6cc1f22-c962-4c69-920d-e9616a4045a6')),
+    e => e.code === 'failed-precondition' && /sem resultado/.test(e.message),
+    'placar parcial também impede liberar a quadra');
+  tournament.matches[0].resultAt = nowIso;
+  tournament.matches[0].winner = 'p1';
+  await assert.rejects(endOnCourt(op('release', 'dot.part', 'e72286aa-dd6e-4a1c-8d7a-8fe36d47c80b')),
+    e => e.code === 'failed-precondition' && /sem resultado/.test(e.message));
+  await assert.rejects(endOnCourt(op('cancel-call', 'dot.part', '952f667d-4744-4312-977a-2b927546b2ba')),
+    e => e.code === 'failed-precondition' && /Editar placar/.test(e.message),
+    'Cancelar nunca corrige resultado lançado');
+  delete tournament.matches[0].resultAt;
+  delete tournament.matches[0].winner;
+  delete tournament.matches[0].scoreP1;
+  tournament.matches[0].pendingResult = { scoreP1: 6, scoreP2: 3 };
+  await assert.rejects(endOnCourt(op('cancel-call', 'dot.part', 'af885541-8772-4c40-9840-83ad381d81b8')),
+    e => e.code === 'failed-precondition' && /Editar placar/.test(e.message),
+    'proposta de placar também bloqueia Cancelar');
   console.log('✓ sandbox isolado; dia local, ocupação e troca de quadra validados na callable real');
 })().catch(error => { console.error(error); process.exitCode = 1; });

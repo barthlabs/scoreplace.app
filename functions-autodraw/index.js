@@ -2,7 +2,7 @@ const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onDocumentCreated, onDocumentWritten } = require('firebase-functions/v2/firestore');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { initializeApp } = require('firebase-admin/app');
-const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+const { getFirestore, FieldValue, FieldPath } = require('firebase-admin/firestore');
 const { getMessaging } = require('firebase-admin/messaging');
 const { getStorage } = require('firebase-admin/storage');
 const { randomUUID } = require('crypto');
@@ -3972,6 +3972,13 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
       const all = drawWindow._collectAllMatches(t);
       if (!Array.isArray(all)) throw _drawFail('internal', 'Não foi possível conferir a ocupação das quadras.', { tId, matchId });
       const activeCandidates = all.filter(item => item && !released[String(item.id)]);
+      if (confirmCall && !m.courtCalledAt) {
+        const activeMatches = activeCandidates.filter(item => _courtOccupancy.occupiesCourt(item));
+        if (!drawWindow.ScoreplaceNextMatch ||
+            drawWindow.ScoreplaceNextMatch.conflictsWithActive(m, activeMatches)) {
+          throw _drawFail('failed-precondition', 'Uma das duplas já está em quadra. Chame outro jogo e tente novamente depois.', { tId, matchId });
+        }
+      }
       if (court && (court !== atual || (confirmCall && !m.courtCalledAt))) {
         const occupant = _courtOccupancy.occupant(activeCandidates, court, matchId);
         if (occupant) {
@@ -4027,30 +4034,88 @@ exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
   const matchId = String((request.data && request.data.matchId) || '').trim();
   const sandbox = request.data && request.data.sandbox === true;
   if (!tId || !matchId || sandbox !== tId.startsWith('sb_')) throw new HttpsError('invalid-argument', 'Torneio ou jogo inválido.');
+  const action = String((request.data && request.data.action) || 'release');
+  if (!['release', 'restore', 'cancel-call'].includes(action)) throw new HttpsError('invalid-argument', 'Ação inválida.');
+  if (action !== 'release' && !(request.data && request.data.operationId)) {
+    throw new HttpsError('invalid-argument', 'Identificador da operação obrigatório.');
+  }
+  if (!drawWindow || typeof drawWindow._findMatch !== 'function' ||
+      typeof drawWindow._collectAllMatches !== 'function') {
+    throw new HttpsError('internal', 'Motor de chave indisponível no servidor.');
+  }
   const ref = db.collection(sandbox ? 'sandboxes' : 'tournaments').doc(tId);
   const stateRef = ref.collection('courtState').doc('main');
-  // Registro novo a cada liberação: um re-sorteio pode reutilizar o matchId,
-  // mas não deve sobrescrever a auditoria da chave anterior.
-  const releaseRef = ref.collection('courtReleases').doc(matchId + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10));
+  let receipt = null;
+  try {
+    if (request.data && request.data.operationId != null) receipt = _operationReceipt.prepare({
+      operationId: request.data.operationId, actorUid: uid, parentPath: ref.path,
+      kind: 'court-end', target: matchId, action, payload: { sandbox }
+    });
+  } catch (error) { throw new HttpsError('invalid-argument', error.message); }
+  const receiptRef = receipt ? ref.collection('operationReceipts').doc(receipt.id) : null;
   const agoraIso = new Date().toISOString();
   return db.runTransaction(async (tx) => {
     if (sandbox) await _assertSandboxDrawOwner(tx, await tx.get(ref), uid);
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    const receiptSnap = receiptRef ? await tx.get(receiptRef) : null;
     const stateSnap = await tx.get(stateRef);
     const state = stateSnap.exists ? stateSnap.data() || {} : {};
     const released = state.released && typeof state.released === 'object' ? state.released : {};
     const admin = _isTournamentAdmin(t, uid);
     const referee = ScoreplaceRefereeRoster.sanitizeAll(t.arbitros).some(e => e.uid === uid && e.status === 'confirmed');
     if (!admin && !referee) throw new HttpsError('permission-denied', 'Só a organização ou árbitro confirmado pode liberar a quadra.');
-    if (released[matchId]) return { ok: true, changed: false };
-    const m = drawWindow && drawWindow._findMatch && drawWindow._findMatch(t, matchId);
-    if (!m || !m.court || !(m.courtCalledAt || m.startedAt) || _courtOccupancy.isFinished(m)) {
-      throw new HttpsError('failed-precondition', 'O jogo precisa estar em quadra e sem resultado.');
+    if (receiptSnap && receiptSnap.exists) {
+      if (!_operationReceipt.matches(receiptSnap.data(), receipt)) throw new HttpsError('failed-precondition', 'operationId já pertence a outra ação.');
+      return _operationReceipt.replay(receiptSnap.data());
     }
-    tx.set(stateRef, { revision: FieldValue.increment(1), released: { ...released, [matchId]: agoraIso } }, { merge: true });
-    tx.create(releaseRef, { matchId, court: String(m.court), releasedAt: agoraIso, releasedBy: uid });
-    return { ok: true, changed: true, releasedAt: agoraIso };
+    const m = drawWindow._findMatch(t, matchId);
+    const all = drawWindow._collectAllMatches(t);
+    if (!m || !Array.isArray(all)) throw new HttpsError('failed-precondition', 'Jogo não encontrado na chave completa.');
+    const commitReply = (reply) => {
+      if (receiptRef) tx.create(receiptRef, _operationReceipt.document(receipt, reply, Date.parse(agoraIso)));
+      return reply;
+    };
+    const hasScore = _courtOccupancy.isFinished(m) || m.draw === true || !!m.pendingResult ||
+      m.liveScored === true || (Array.isArray(m.sets) && m.sets.length > 0) ||
+      Number(m.scoreP1) > 0 || Number(m.scoreP2) > 0;
+    if (action === 'release') {
+      if (released[matchId]) return commitReply({ ok: true, changed: false });
+      if (!m.court || !(m.courtCalledAt || m.startedAt) || hasScore) {
+        throw new HttpsError('failed-precondition', 'O jogo precisa estar em quadra e sem resultado.');
+      }
+      const auditRef = ref.collection('courtReleases').doc();
+      tx.set(stateRef, { revision: FieldValue.increment(1), released: { ...released, [matchId]: agoraIso } }, { merge: true });
+      tx.create(auditRef, { matchId, court: String(m.court), releasedAt: agoraIso, releasedBy: uid });
+      return commitReply({ ok: true, changed: true, releasedAt: agoraIso });
+    }
+    if (hasScore) {
+      throw new HttpsError('failed-precondition', 'Resultado já lançado. Use Editar placar para corrigi-lo.');
+    }
+    if (action === 'restore') {
+      if (!released[matchId]) throw new HttpsError('failed-precondition', 'Este jogo não está em Placares pendentes.');
+      if (!m.court || !(m.courtCalledAt || m.startedAt)) throw new HttpsError('failed-precondition', 'Chamada original indisponível.');
+      const candidates = all.filter(item => item && !released[String(item.id)]);
+      if (_courtOccupancy.occupant(candidates, m.court, matchId)) {
+        throw new HttpsError('failed-precondition', 'A quadra original está ocupada; libere-a antes de restaurar o jogo.');
+      }
+      const auditRef = ref.collection('courtReleases').doc();
+      tx.update(stateRef, new FieldPath('released', matchId), FieldValue.delete(), 'revision', FieldValue.increment(1));
+      tx.create(auditRef, { kind: 'restore', matchId, court: String(m.court), originalReleasedAt: released[matchId], restoredAt: agoraIso, restoredBy: uid });
+      return commitReply({ ok: true, changed: true, restoredAt: agoraIso });
+    }
+    if (released[matchId]) throw new HttpsError('failed-precondition', 'Restaure primeiro o jogo encerrado.');
+    if (!m.courtCalledAt) throw new HttpsError('failed-precondition', 'Este jogo ainda não foi chamado.');
+    if (m.startedAt || m.liveScored === true || (Array.isArray(m.sets) && m.sets.length) ||
+        Number(m.scoreP1) > 0 || Number(m.scoreP2) > 0) {
+      throw new HttpsError('failed-precondition', 'Jogo já iniciado ou com placar parcial; chamada não cancelada.');
+    }
+    const before = _antesDoMotor(t);
+    delete m.courtCalledAt;
+    delete m.courtClockBaseAt;
+    _gravaTorneio(tx, ref, t, before, { agoraIso });
+    tx.set(stateRef, { revision: FieldValue.increment(1) }, { merge: true });
+    return commitReply({ ok: true, changed: true });
   });
 });
 
