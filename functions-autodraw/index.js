@@ -4094,6 +4094,7 @@ exports.tournamentOperationControl = onCall({ invoker: 'public' }, async (reques
     if (action === 'current') return { selected: !!current, day, region: current && current.region || '', revision: current && current.revision || 0 };
     if (action === 'select') {
       if (current) return { selected: true, day, region: current.region, revision: current.revision, adopted: true };
+      if (!operator) throw new HttpsError('permission-denied', 'Só a organização ou árbitro confirmado pode iniciar o controle regional.');
       if (protocolSnap.exists && protocolSnap.data().protocolVersion !== 2) throw new HttpsError('failed-precondition', 'Protocolo incompatível.');
       if (!protocolSnap.exists) tx.create(protocolRef, { protocolVersion: 2, activatedAt: now.toISOString(), activatedBy: uid });
       tx.create(controlRef, { region, revision: 1, day, selectedAt: now.toISOString(), selectedBy: uid,
