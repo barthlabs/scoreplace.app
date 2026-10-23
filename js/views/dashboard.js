@@ -774,7 +774,7 @@ function renderDashboard(container) {
     // Iniciar Torneio (t.tournamentStarted ou status='in_progress'). Antes,
     // qualquer sorteio realizado já caía em "Em Andamento" — mas o tempo
     // só conta após o user iniciar.
-    const tournamentStarted = !!(t.tournamentStarted || t.status === 'in_progress');
+    const tournamentStarted = !!(t.tournamentStarted || t.status === 'in_progress' || Number(t.matchesDone) > 0);
     if (tournamentStarted) return 'inProgress';
     const currentPhase = (typeof window._phaseForMatch === 'function') ? window._phaseForMatch(t) : null;
     const isLiga = currentPhase

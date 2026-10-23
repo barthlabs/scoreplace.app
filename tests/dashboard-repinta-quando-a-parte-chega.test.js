@@ -235,11 +235,10 @@ const dashNum = (function () {
       const arr = []; for (let k = 0; k < n; k++) arr.push({ id: pref + k, data: () => ({ id: pref + k, name: 'T' + k }) });
       return { size: n, forEach: f => arr.forEach(f) };
     };
+    const consulta = get => ({ where: () => ({ get, limit: () => { throw new Error('corte silencioso'); } }) });
     // ① caminho do RESUMO com documentos
-    obj.db = { collection: (nome) => ({ where: () => ({ limit: () => ({
-      get: async () => (nome === 'tournaments_summary') ? docsFalsos(3, 'r') : docsFalsos(9, 'c')
-    }) }) }) };
-    const r1 = await obj.loadAllPublicTournaments(50);
+    obj.db = { collection: (nome) => consulta(async () => (nome === 'tournaments_summary') ? docsFalsos(3, 'r') : docsFalsos(9, 'c')) };
+    const r1 = await obj.loadAllPublicTournaments({ limit: 50 });
     ok(erros.length === 0, '⭐ o caminho do resumo NÃO lança (era o TypeError de `snap.size`)');
     ok(r1 && r1.tournaments.length === 3,
       '⭐ e devolve os 3 torneios do resumo — antes o `catch` devolvia [] e a vitrine voltava VAZIA');
@@ -247,12 +246,18 @@ const dashNum = (function () {
     ok(ultimo[1] && ultimo[1].lidos === 3 && ultimo[1].via === 'resumo',
       '  → com contagem válida no log (lidos=' + (ultimo[1] && ultimo[1].lidos) + ', via=' + (ultimo[1] && ultimo[1].via) + ')');
 
+    // O torneio público na posição 78 não pode sumir por causa do antigo teto de 50.
+    const todos = docsFalsos(79, 'r');
+    obj.db = { collection: () => consulta(async () => todos) };
+    const r79 = await obj.loadAllPublicTournaments({ limit: 50 });
+    ok(r79.tournaments.length === 79 && r79.tournaments.some(t => t.id === 'r77') &&
+       r79.hasMore === false && r79.nextCursor === null,
+       '79 resumos públicos são devolvidos integralmente, incluindo o da posição 78');
+
     // ② FALLBACK: resumo vazio → caminho completo
     logs.length = 0; erros.length = 0;
-    obj.db = { collection: (nome) => ({ where: () => ({ limit: () => ({
-      get: async () => (nome === 'tournaments_summary') ? docsFalsos(0, 'r') : docsFalsos(9, 'c')
-    }) }) }) };
-    const r2 = await obj.loadAllPublicTournaments(50);
+    obj.db = { collection: (nome) => consulta(async () => (nome === 'tournaments_summary') ? docsFalsos(0, 'r') : docsFalsos(9, 'c')) };
+    const r2 = await obj.loadAllPublicTournaments({ limit: 50 });
     ok(erros.length === 0 && r2.tournaments.length === 9, 'o fallback continua funcionando (9 torneios)');
     const u2 = logs[logs.length - 1] || [];
     ok(u2[1] && u2[1].lidos === 9 && u2[1].via === 'completo',
@@ -260,10 +265,8 @@ const dashNum = (function () {
 
     // ③ resumo INDISPONÍVEL (erro de regra) → fallback, sem derrubar
     logs.length = 0; erros.length = 0;
-    obj.db = { collection: (nome) => ({ where: () => ({ limit: () => ({
-      get: async () => { if (nome === 'tournaments_summary') throw new Error('permission-denied'); return docsFalsos(4, 'c'); }
-    }) }) }) };
-    const r3 = await obj.loadAllPublicTournaments(50);
+    obj.db = { collection: (nome) => consulta(async () => { if (nome === 'tournaments_summary') throw new Error('permission-denied'); return docsFalsos(4, 'c'); }) };
+    const r3 = await obj.loadAllPublicTournaments({ limit: 50 });
     ok(erros.length === 0 && r3.tournaments.length === 4,
       'resumo indisponível cai no completo sem lançar (4 torneios)');
     /* ⚠️ `snap.size` DENTRO do bloco do fallback é legítimo — quem cria `snap` é ele.
@@ -272,6 +275,25 @@ const dashNum = (function () {
     const depoisDoFallback = corpo.slice(corpo.indexOf('tournaments.sort('));
     ok(!/\bsnap\b/.test(depoisDoFallback),
       '⛔ e depois do bloco do fallback ninguém mais toca em `snap` (era o log final)');
+  }
+
+  console.log('\n§7 resumo de torneio já disputado entra em andamento sem promover sorteio sem placar');
+  {
+    const start = SRC_DASH.indexOf('const _classifyDiscoveryTournament = (t) => ');
+    const end = SRC_DASH.indexOf('\n  };', start) + '\n  }'.length;
+    ok(start >= 0 && end > start, 'classificador real localizado no dashboard');
+    const arrow = SRC_DASH.slice(start, end).replace(/^const _classifyDiscoveryTournament = /, '');
+    const classify = vm.runInNewContext('(' + arrow + ')', {
+      window: { _isTorneioParadoSemJogo: () => false, _phaseForMatch: () => null }, Date
+    });
+    ok(classify({ status: 'active', matchesDone: 33, format: 'Fase de Grupos' }) === 'inProgress',
+      'resumo ativo com resultados entra em andamento');
+    ok(classify({ status: 'active', matchesDone: 0, format: 'Eliminatórias Simples' }) !== 'inProgress',
+      'sorteio ativo sem placar não é tratado como iniciado');
+    ok(classify({ status: 'open', tournamentStarted: true }) === 'inProgress',
+      'marca explícita de início continua valendo');
+    ok(classify({ status: 'finished', matchesDone: 33 }) === 'finished',
+      'torneio encerrado continua na categoria encerrada');
   }
 
   console.log('\n' + (fail ? '✗' : '✅') + ' repintura/vitrine: ' + pass + ' ok, ' + fail + ' falharam');

@@ -65,6 +65,15 @@ console.log('▸ o que nunca teve jogo sai da vitrine — e só isso');
   const comJogo = { status: 'active', createdAt: velho, format: 'Eliminatórias Simples',
                     matches: [{ scoreP1: 6, scoreP2: 3 }] };
   eq(window._isTorneioParadoSemJogo(comJogo), false, 'quem já jogou não some da vitrine');
+  eq(window._isTorneioParadoSemJogo({ _resumo: true, status: 'active', createdAt: velho,
+    format: 'Eliminatórias Simples', matchesDone: 33 }), false,
+    'resumo antigo com jogos concluídos permanece visível');
+  eq(window._isTorneioParadoSemJogo({ _resumo: true, status: 'open', createdAt: velho,
+    format: 'Eliminatórias Simples', matchesDone: null }), true,
+    'resumo antigo sem progresso continua oculto');
+  eq(window._isTorneioParadoSemJogo({ _resumo: true, status: 'open', createdAt: velho,
+    format: 'Eliminatórias Simples', matchesDone: 0 }), true,
+    'resumo antigo com zero jogos continua oculto');
   const liga = { status: 'active', createdAt: velho, format: 'Liga' };
   window._isLigaFormat = function (t) { return String(t.format || '').toLowerCase() === 'liga'; };
   eq(window._isTorneioParadoSemJogo(liga), false, 'Liga nunca some (temporada contínua)');

@@ -2351,7 +2351,6 @@ window.FirestoreDB = {
   async loadAllPublicTournaments(opts) {
     if (!this.db) return { tournaments: [], nextCursor: null, hasMore: false };
     opts = opts || {};
-    var limit = Math.max(1, Math.min(100, opts.limit || 50));
     try {
       // v0.16.62: REMOVIDO `.orderBy('createdAt', 'desc')` da query Firestore.
       // Causa-raiz do bug "Nelson não vê torneios públicos" mesmo com Liga
@@ -2367,9 +2366,9 @@ window.FirestoreDB = {
       // backfill `createdAt` em todos os docs e voltar pro orderBy server-side.
       // ⭐ 2.0.90 — A VITRINE LÊ O RESUMO, NÃO O TORNEIO INTEIRO.
       // MEDIDO na base real: o documento do Confra tem 236 KB; o resumo dele, 11 KB.
-      // Na base toda, 421 KB → 62 KB (85% menos). Esta consulta trazia até 51
-      // documentos COMPLETOS — jogos, inscritos e histórico — pra desenhar cartões de
-      // duas linhas. Ver docs/ARQUITETURA-DE-DADOS.md.
+      // Na medição da migração, 421 KB → 62 KB (85% menos). Antes, a vitrine
+      // lia documentos COMPLETOS — jogos, inscritos e histórico — para cartões
+      // de duas linhas. Ver docs/ARQUITETURA-DE-DADOS.md.
       // ⛔ O resumo vem marcado com `_resumo: true`: quem ABRE o torneio troca pelo
       // documento completo (`_ensureTournamentLoaded`), e a tela de detalhe não muda.
       // ⚠️ REDE: se a coleção de resumo vier vazia (regra, backfill em falta, projeto
@@ -2389,8 +2388,7 @@ window.FirestoreDB = {
       var _lidos = 0;
       try {
         var qs = this.db.collection('tournaments_summary')
-          .where('isPublic', '==', true)
-          .limit(limit + 1);
+          .where('isPublic', '==', true);
         var snapS = await qs.get({ source: 'server' });
         _lidos = snapS.size;
         try { if (window._noteFsReads) window._noteFsReads(snapS.size, 'load-all-public-resumo'); } catch (e) {}
@@ -2410,9 +2408,12 @@ window.FirestoreDB = {
       }
 
       if (!_viaResumo) {
+        // Contingência cara: se a consulta de resumos vier vazia ou falhar,
+        // ler todos os documentos públicos completos. Um teto aqui voltaria
+        // a ocultar torneios sem existir paginação funcional na dashboard.
+        // Esta leitura cresce com a base; manter o custo observável em _noteFsReads.
         var q = this.db.collection('tournaments')
-          .where('isPublic', '==', true)
-          .limit(limit + 1);
+          .where('isPublic', '==', true);
         var snap = await q.get({ source: 'server' });
         _lidos = snap.size;
         try { if (window._noteFsReads) window._noteFsReads(snap.size, 'load-all-public'); } catch (e) {}
@@ -2429,14 +2430,12 @@ window.FirestoreDB = {
         var bT = b.createdAt ? new Date(b.createdAt).getTime() : 0;
         return bT - aT;
       });
-      var hasMore = tournaments.length > limit;
-      if (hasMore) tournaments = tournaments.slice(0, limit);
       window._log('[loadAllPublicTournaments v0.16.62]',
-        { via: _viaResumo ? 'resumo' : 'completo', lidos: _lidos, returned: tournaments.length, hasMore: hasMore });
+        { via: _viaResumo ? 'resumo' : 'completo', lidos: _lidos, returned: tournaments.length, hasMore: false });
       return {
         tournaments: tournaments,
         nextCursor: null, // paginação por cursor desabilitada temporariamente
-        hasMore: hasMore
+        hasMore: false
       };
     } catch (e) {
       window._error('Erro ao carregar todos os torneios públicos:', e);

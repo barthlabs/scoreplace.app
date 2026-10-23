@@ -3326,6 +3326,9 @@ window._SEM_JOGO_SUMICO_DIAS = 30;
 window._isTorneioParadoSemJogo = function (t) {
   if (!t || t.status === 'finished') return false;
   if (window._isLigaFormat && window._isLigaFormat(t)) return false;   // temporada contínua
+  // Resumos públicos não carregam os jogos. A contagem positiva é prova de que
+  // houve placar, mesmo quando _collectAllMatches() encontra um array vazio.
+  if (Number(t.matchesDone) > 0) return false;
   var jogou = (typeof window._tournamentHasAnyScore === 'function') ? window._tournamentHasAnyScore(t) : null;
   if (jogou === null) return false;
   if (jogou) return false;
@@ -13412,7 +13415,6 @@ window.AppStore = {
       : '';
     try {
       var res = await loader.call(window.FirestoreDB, {
-        limit: opts.limit || 50,
         cursor: cursor,
         requireRemote: true
       });

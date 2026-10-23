@@ -1,3 +1,9 @@
+// 2.5.39 — Torneios públicos em andamento, como o Neon, aparecem para contas
+// novas na dashboard. A descoberta deixa de cortar os torneios após os 50
+// primeiros; resultados já disputados no resumo identificam corretamente
+// o andamento sem classificar um simples sorteio como início. A leitura
+// alternativa de documentos completos, usada se o resumo falhar, lê todos os
+// públicos e pode consumir mais banda até existir paginação real.
 // 2.5.38 — A faixa operacional abre abaixo das abas fixas, medindo a altura
 // real delas em qualquer largura. A chave e o detalhe usam a mesma coordenada.
 // Snapshot e cache da web acompanham a versão 2.5.38.
