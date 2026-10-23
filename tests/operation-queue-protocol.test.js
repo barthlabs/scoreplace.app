@@ -1,6 +1,10 @@
 'use strict';
 // Executa a porta real da fila até a transação: um item legado não pode usar
 // o UUID sintético do recibo para atravessar o protocolo operacional v2.
+// Decisão para este corte: não existem clientes antigos em uso (instrução do
+// organizador); a fila real do Neon foi lida antes da publicação e tinha zero
+// itens, inclusive zero pendentes. Uma intenção inválida futura permanece no
+// documento com status/reason para auditoria, sem aplicar placar silenciosamente.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
