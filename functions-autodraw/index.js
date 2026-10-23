@@ -4037,7 +4037,7 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
 
 // Libera a quadra sem fabricar resultado. A revisão do estado é compartilhada
 // com assignMatchCourt, de modo que duas operações concorrentes sejam repetidas.
-const _OPERATION_REGIONS = new Set(['us-east1', 'us-east4', 'us-south1', 'us-west1', 'southamerica-east1']);
+const _OPERATION_REGIONS = new Set(['us-east1', 'us-east4', 'us-south1', 'us-central1', 'southamerica-east1']);
 exports.tournamentOperationControl = onCall({ invoker: 'public' }, async (request) => {
   const uid = request.auth && request.auth.uid;
   if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');

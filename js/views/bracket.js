@@ -1339,7 +1339,8 @@ function _bracketOperationsReplica(m, t, role, label, availability) {
     (window._resultEntryIncludes(t, 'players') || window._resultEntryIncludes(t, 'referee'))));
   var html = typeof window.renderMatchCard === 'function'
     ? window.renderMatchCard(m, canEnter, t.id, m._gameNum || m.scheduledGameNumber || m.matchNumber,
-      false, null, { idScope: 'operations-' + String(m.id || '') }) : '';
+      false, null, { idScope: 'operations-' + String(m.id || ''),
+        preferFirstFreeCourt: !!role.preferFirstFreeCourt, preferredCourt: role.preferredCourt || '' }) : '';
   return '<div class="sp-operations-replica' + (role.active ? ' sp-operations-court-card' : '') + '" data-operations-match="' +
     safe(String(m.id || '')) + '"><span class="sp-operations-label">' + safe(label) + '</span>' + (availability || '') + html + '</div>';
 }
@@ -1524,9 +1525,11 @@ window._bracketOperationsRefresh = function (t, root) {
       var select = event.target && event.target.closest('.sp-operations-replica .sp-match-court select');
       if (select && typeof window._assignMatchCourtFromSelect === 'function') {
         var op = select.closest('.sp-operations-replica');
+        root._bracketOperationsManualCourt = root._bracketOperationsManualCourt || {};
+        root._bracketOperationsManualCourt[op.getAttribute('data-operations-match')] = select.value;
         existing._spCourtBusy = (existing._spCourtBusy || 0) + 1;
         Promise.resolve(window._assignMatchCourtFromSelect(select, String(t.id), op.getAttribute('data-operations-match')))
-          .catch(function () {}).finally(function () {
+          .catch(function () { delete root._bracketOperationsManualCourt[op.getAttribute('data-operations-match')]; }).finally(function () {
             existing._spCourtBusy--;
             if (document.activeElement === select) return;
             var liveTournament = typeof window._findTournamentById === 'function' && window._findTournamentById(String(t.id));
@@ -1573,7 +1576,8 @@ window._bracketOperationsRefresh = function (t, root) {
   var nextAvailability = '<div class="sp-operations-availability' + (freeCount ? '' : ' sp-operations-availability--busy') + '">' +
     freeCount + ' ' + (freeCount === 1 ? 'QUADRA LIVRE' : 'QUADRAS LIVRES') + '</div>';
   existing.innerHTML = '<div class="sp-operations-track"><div class="sp-operations-next">' +
-    (state.next ? _bracketOperationsReplica(state.next, t, { canCall: canCall, active: false }, nextLabel, nextAvailability) :
+    (state.next ? _bracketOperationsReplica(state.next, t, { canCall: canCall, active: false,
+      preferFirstFreeCourt: true, preferredCourt: (root._bracketOperationsManualCourt || {})[String(state.next.id)] || '' }, nextLabel, nextAvailability) :
       '<span class="sp-operations-label">' + nextLabel + '</span>' + nextAvailability + '<div class="sp-operations-empty">Nenhum jogo aguardando chamada</div>') +
     '</div>' + (state.pending.length ? '<div class="sp-operations-pending" aria-label="Placares pendentes"><span class="sp-operations-section-title">PLACARES PENDENTES</span><div class="sp-operations-pending-track">' +
     state.pending.map(function (m) { return _bracketOperationsReplica(m, t, { canCall: canCall, active: false }, String(m.court || 'Placar pendente')); }).join('') +
@@ -8458,7 +8462,9 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     var _freeCourts = _cardCourts.filter(function (court) { return !_occupancy || !_occupancy.occupant(_allForCourts, court, m.id); });
     // A agenda pode apontar uma quadra já ocupada enquanto outra está livre.
     // A sugestão é apenas visual; a callable ainda valida a ocupação no clique.
-    var _displayCourt = (_suggestedCourt && _freeCourts.includes(_suggestedCourt) ? _suggestedCourt : '') ||
+    var _preferredCourt = opts && opts.preferredCourt && _freeCourts.includes(opts.preferredCourt) ? opts.preferredCourt : '';
+    var _displayCourt = _preferredCourt || (opts && opts.preferFirstFreeCourt && !m.courtCalledAt ? _freeCourts[0] : '') ||
+      (_suggestedCourt && _freeCourts.includes(_suggestedCourt) ? _suggestedCourt : '') ||
       (!_persistedBusy && _freeCourts.includes(_persistedCourt) ? _persistedCourt : '') || _freeCourts[0] || '';
     var _busyPlaceholder = !_freeCourts.length;
     var _emptyCourtLabel = _busyPlaceholder ? 'Todas as quadras ocupadas' : 'Sem quadra';

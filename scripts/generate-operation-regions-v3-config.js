@@ -6,7 +6,7 @@ const path = require('node:path');
 const root = path.join(__dirname, '..');
 const manifestPath = process.env.SP_V3_MANIFEST || path.join(root, '.claude/tmp/operation-regions-manifest-v3.json');
 const manifest = JSON.parse(fs.readFileSync(manifestPath));
-const regions = ['us-east1', 'us-east4', 'us-south1', 'us-west1', 'southamerica-east1'];
+const regions = ['us-east1', 'us-east4', 'us-south1', 'us-central1', 'southamerica-east1'];
 const names = ['sp-op-court-v3', 'sp-op-score-v3', 'sp-op-presence-v3',
   'sp-op-presence-wo-v3', 'sp-op-end-court-v3', 'sp-op-control-v3'];
 if (manifest.length !== regions.length * names.length) throw new Error('Manifesto v3 incompleto ou duplicado');

@@ -285,9 +285,16 @@
       'if(document.fonts&&document.fonts.ready)document.fonts.ready.then(reflow);' +
       'window.__tvReplaceMarkup=function(html){var root=document.getElementById("tv-root"),old=root&&root.querySelector(".tv-results-list");' +
       'var day=old&&old.getAttribute("data-result-day"),top=resultPosition;' +
-      'if(!root)return;root.innerHTML=html;fit();ensureCycle();var list=root.querySelector(".tv-results-list");' +
-      'resultPosition=list&&list.getAttribute("data-result-day")===day&&resultCycle?top%resultCycle:0;' +
-      'if(list)list.scrollTop=resultPosition;resultAt=Date.now();};' +
+      'if(!root)return;if(typeof document.createElement!=="function"){root.innerHTML=html;fit();ensureCycle();' +
+      'var fallback=root.querySelector(".tv-results-list");resultPosition=fallback&&fallback.getAttribute("data-result-day")===day&&resultCycle?top%resultCycle:0;' +
+      'if(fallback)fallback.scrollTop=resultPosition;resultAt=Date.now();return;}' +
+      'var draft=document.createElement("div");draft.innerHTML=html;' +
+      'var incoming=draft.querySelector(".tv-results-list"),same=!!(old&&incoming&&day===incoming.getAttribute("data-result-day")&&' +
+      'Array.from(old.querySelectorAll(".tv-result:not([data-tv-repeat])")).map(function(n){return n.outerHTML;}).join("")===incoming.innerHTML);' +
+      'if(same)incoming.replaceWith(old);root.replaceChildren.apply(root,Array.from(draft.childNodes));fit();' +
+      'if(!same)ensureCycle();var list=root.querySelector(".tv-results-list");' +
+      'if(!same){resultPosition=list&&list.getAttribute("data-result-day")===day&&resultCycle?top%resultCycle:0;' +
+      'if(list)list.scrollTop=resultPosition;}resultAt=Date.now();};' +
       'function advance(){if(window.__tvGeneration!==gen)return;var now=Date.now(),elapsed=Math.min(64,Math.max(0,now-resultAt));resultAt=now;' +
       'var list=document.querySelector(".tv-results-list");if(list&&resultCycle&&document.visibilityState==="visible"&&' +
       '!(window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches)){' +

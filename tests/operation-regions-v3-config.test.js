@@ -7,7 +7,7 @@ const { spawnSync } = require('node:child_process');
 const root = path.join(__dirname, '..');
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-region-v3-'));
 const file = path.join(temp, 'manifest.json');
-const regions = ['us-east1', 'us-east4', 'us-south1', 'us-west1', 'southamerica-east1'];
+const regions = ['us-east1', 'us-east4', 'us-south1', 'us-central1', 'southamerica-east1'];
 const names = ['court', 'score', 'presence', 'presence-wo', 'end-court', 'control'];
 const rows = names.flatMap(name => regions.map(region => ({ name: `sp-op-${name}-v3`, region,
   url: `https://${region}.example/${name}`, sourceDigest: 'a'.repeat(64),

@@ -3,7 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 mode="${1:---check}"
-if [[ "$mode" == '--deploy-v3' || "$mode" == '--resume-v3' || "$mode" == '--check-v3' || "$mode" == '--check-v2-live' ]]; then
+if [[ "$mode" == '--deploy-v3' || "$mode" == '--resume-v3' || "$mode" == '--retarget-v3' || "$mode" == '--check-v3' || "$mode" == '--check-v2-live' ]]; then
   exec "$(dirname "$0")/deploy-operation-regions-v3.sh" "$mode"
 fi
 if [[ "$mode" == '--deploy-v2' || "$mode" == '--check-v2' || "$mode" == '--refresh-v2' || "$mode" == '--recover-v2' ]]; then

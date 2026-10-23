@@ -11,7 +11,7 @@ const oldSource = fs.existsSync(path.join(root, '.git'))
   : null; // A cópia git archive do predeploy não contém histórico.
 const services = ['court', 'score', 'presence', 'presence-wo', 'end-court', 'control'];
 const three = ['us-east1', 'us-east4', 'us-south1'];
-const five = [...three, 'us-west1', 'southamerica-east1'];
+const five = [...three, 'us-central1', 'southamerica-east1'];
 const digest = 'a'.repeat(64);
 const config = (schema) => ({ schema, regions: schema === 3 ? five : three,
   services: Object.fromEntries(services.map(s => [`sp-op-${s}-v${schema}`, {
@@ -84,14 +84,14 @@ function harness(source, { v3 = true, currentRegion = '', failFirstWrite = false
   await assert.rejects(retryProbes.router.call('assignMatchCourt', p, h));
   await retryProbes.router.call('assignMatchCourt', p, h);
   assert.equal(retryProbes.getV3ConfigLoads(), 2, 'falha de todas as sondas limpa o cache');
-  const fallback = harness(currentSource, { v3: false, currentRegion: 'us-west1', failFirstWrite: true });
+  const fallback = harness(currentSource, { v3: false, currentRegion: 'us-central1', failFirstWrite: true });
   await fallback.router.call('assignMatchCourt', p, h);
   assert(three.includes(fallback.getSelected()));
   assert(fallback.calls.some(x => x.payload.action === 'failover' && x.payload.observedRevision === 7));
   const writes = fallback.calls.filter(x => x.name === 'sp-op-court-v2' && !x.payload.probe);
   assert.equal(writes.length, 2);
   assert.equal(writes[0].payload.operationId, writes[1].payload.operationId);
-  assert(!fallback.calls.some(x => x.region === 'us-west1' && x.name.endsWith('-v2')));
+  assert(!fallback.calls.some(x => x.region === 'us-central1' && x.name.endsWith('-v2')));
   if (oldSource) {
     const legacy = harness(oldSource, { currentRegion: 'us-west1' });
     await legacy.router.call('assignMatchCourt', p, h);
