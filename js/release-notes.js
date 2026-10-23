@@ -1,3 +1,4 @@
+// 2.5.40 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.39 — Torneios públicos em andamento, como o Neon, aparecem para contas
 // novas na dashboard. A descoberta deixa de cortar os torneios após os 50
 // primeiros; resultados já disputados no resumo identificam corretamente
