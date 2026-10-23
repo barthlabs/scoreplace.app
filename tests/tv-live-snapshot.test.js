@@ -103,6 +103,27 @@ const nextDayResults = { ...t, matches: [
 const daySnapshot = window._tvLiveBuildSnapshot(nextDayResults, Date.parse('2026-10-23T22:00:00Z'));
 assert.equal(daySnapshot.resultDay, '2026-10-23');
 assert.equal(daySnapshot.results.map(r => r.number).join(','), '41', 'TV mostra só placares do dia operacional');
+const beforeFirstScore = { ...nextDayResults, matches: nextDayResults.matches.map(m => m.id === 41
+  ? { ...m, winner: null, resultAt: null } : m) };
+const waitingSnapshot = window._tvLiveBuildSnapshot(beforeFirstScore, Date.parse('2026-10-23T21:05:00Z'));
+assert.equal(waitingSnapshot.resultDay, '2026-10-22', 'resultados de ontem permanecem até o primeiro placar de hoje');
+assert.equal(waitingSnapshot.results.map(r => r.number).join(','), '40');
+const lateOldScore = { ...nextDayResults, matches: [...nextDayResults.matches,
+  match(43, 'Quadra 6', 'ECLIPSE', 'VENOM', { requiredDay:'2026-10-22',
+    resultAt:'2026-10-23T22:05:00Z', winner:'p1' })] };
+assert.equal(window._tvLiveBuildSnapshot(lateOldScore, Date.parse('2026-10-23T22:10:00Z')).results.map(r => r.number).join(','),
+  '41', 'placar tardio de ontem não devolve resultados antigos à TV');
+const futureScore = { ...nextDayResults, matches: [...nextDayResults.matches,
+  match(44, 'Quadra 7', 'BLAST', 'VOLT', { requiredDay:'2026-10-24', resultAt:'2026-10-23T21:50:00Z', winner:'p1' })] };
+assert.equal(window._tvLiveBuildSnapshot(futureScore, Date.parse('2026-10-23T22:00:00Z')).resultDay,
+  '2026-10-23', 'jogo concluído com data operacional futura não troca a TV');
+const noDay = { ...nextDayResults, matches: [...nextDayResults.matches,
+  match(45, 'Quadra 8', 'VORTEX', 'PHANTOM', { scheduledAt:null, resultAt:'2026-10-23T22:02:00Z', winner:'p1' })] };
+assert.equal(window._tvLiveBuildSnapshot(noDay, Date.parse('2026-10-23T22:05:00Z')).resultDay,
+  '2026-10-23', 'jogo sem dia nem agendamento não define a data da TV');
+const noResults = { ...t, matches:t.matches.map(m => ({ ...m, winner:null, resultAt:null, wo:false })) };
+assert.equal(window._tvLiveBuildSnapshot(noResults, Date.parse('2026-10-23T22:05:00Z')).results.length,
+  0, 'sem placares a lista permanece vazia');
 assert.match(window._tvLiveBodyHtml(daySnapshot), /<h2>ÚLTIMOS RESULTADOS<\/h2><div class="tv-results-list"/, 'cabeçalho fica fora da área rolável');
 assert.match(window._tvLiveBodyHtml(daySnapshot), /18:40 · JOGO 41/, 'hora local precede número do jogo');
 const woWithoutTime = { ...t, matches: [match(42, 'Quadra 4', 'PANIC', 'PHANTOM',

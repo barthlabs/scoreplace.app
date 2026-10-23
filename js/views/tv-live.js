@@ -172,10 +172,12 @@
       ta: teamFor(nextMatch, 1, teams), tb: teamFor(nextMatch, 2, teams)
     } : null;
     var zone = eventZone(t);
-    var gameDays = matches.filter(function (m) { return m && timestamp(m.scheduledAt) && timestamp(m.scheduledAt) <= now; })
-      .map(function (m) { return { day: matchDay(m, zone), start: timestamp(m.scheduledAt) }; })
-      .sort(function (a, b) { return b.start - a.start; });
-    var resultDay = gameDays.length ? gameDays[0].day : localDay(now, zone);
+    var today = localDay(now, zone);
+    var resultDays = matches.filter(function (m) { return m && occupancy.isFinished(m) && !m.isBye && !m.isSitOut; })
+      .map(function (m) { return matchDay(m, zone); })
+      .filter(function (day) { return day && day <= today; })
+      .sort().reverse();
+    var resultDay = resultDays[0] || today;
     var results = matches.filter(function (m) { return m && occupancy.isFinished(m) && !m.isBye && !m.isSitOut &&
       matchDay(m, zone) === resultDay; })
       .sort(function (a, b) { return timestamp(b.resultAt || b.completedAt || b.scheduledAt) - timestamp(a.resultAt || a.completedAt || a.scheduledAt); })
