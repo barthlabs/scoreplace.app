@@ -322,7 +322,7 @@ window._computeMonarchStandings = function(group, t, category) {
     };
   }
   var _cfgTb = (t && Array.isArray(t.tiebreakers) && t.tiebreakers.length) ? t.tiebreakers : null;
-  if (!_cfgTb || typeof window._standingsCompareConfig !== 'function') {
+  if ((!_cfgTb && (!t || t.rankingPrimary !== 'games_diff')) || typeof window._standingsCompareConfig !== 'function') {
     if (_ordCong) {
       return _linhas.slice().sort(function (a, b) {
         var d = _ordCong(a) - _ordCong(b);
@@ -334,6 +334,7 @@ window._computeMonarchStandings = function(group, t, category) {
   }
   var _opts = {
     tiebreakers: _cfgTb, adv: _adv,
+    primaryField: t && t.rankingPrimary === 'games_diff' ? 'games_diff' : (_adv ? 'advancedPoints' : 'points'),
     // confronto direto sai dos JOGOS DESTE GRUPO, por uid (nome só pra quem não tem conta)
     h2h: (typeof window._standingsBuildH2H === 'function')
       ? window._standingsBuildH2H(matches, function (m, lado) {
@@ -1252,7 +1253,7 @@ function _computeStandings(t, category) {
     var _optsStd = {
       tiebreakers: tiebreakers,
       // com pontuação avançada ligada, é ela que lidera — senão os pontos simples
-      primaryField: _advPrimary ? 'advancedPoints' : 'points',
+      primaryField: t.rankingPrimary === 'games_diff' ? 'games_diff' : (_advPrimary ? 'advancedPoints' : 'points'),
       h2h: h2h, birth: birthByName,
       // `sorteio` = ORDEM DA CHAVE (quem aparece no jogo mais cedo vem antes) — regra do dono
       ordem: (typeof window._standingsOrdemChave === 'function')

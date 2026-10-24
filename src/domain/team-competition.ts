@@ -10,6 +10,7 @@ namespace ScoreplaceTeamCompetition {
   export type Formation = 'manual' | 'draw';
   export type InternalMatches = 'allow' | 'avoid';
   export type Ranking = 'points' | 'games_diff';
+  export type Tiebreaker = 'vitorias' | 'games_vencidos' | 'saldo_games' | 'pontos' | 'sorteio';
   export type Aggregation = 'overall' | 'per_category';
   export type ClassificationUnit = 'team' | 'pair';
   export type ScheduleMode = 'free' | 'structured';
@@ -21,6 +22,8 @@ namespace ScoreplaceTeamCompetition {
     formation: Formation;
     internalMatches: InternalMatches;
     ranking: Ranking;
+    tiebreakers?: Tiebreaker[];
+    tieDrawOrder?: string[];
     aggregation: Aggregation;
     classificationUnit: ClassificationUnit;
     /**
@@ -115,6 +118,14 @@ namespace ScoreplaceTeamCompetition {
   export function normalize(value: unknown): Config {
     const raw = record(value);
     const scoring = record(raw.scoring);
+    const allowedTiebreakers: Tiebreaker[] = ['vitorias', 'games_vencidos', 'saldo_games', 'pontos', 'sorteio'];
+    const tiebreakers = Array.isArray(raw.tiebreakers) && raw.tiebreakers.length
+      ? (raw.tiebreakers as unknown[]).filter((item, index, list): item is Tiebreaker =>
+          typeof item === 'string' && allowedTiebreakers.includes(item as Tiebreaker) && list.indexOf(item) === index)
+      : undefined;
+    const tieDrawOrder = Array.isArray(raw.tieDrawOrder) && raw.tieDrawOrder.length <= 128 && raw.tieDrawOrder.every((item) =>
+      typeof item === 'string' && !!item.trim()) && new Set(raw.tieDrawOrder).size === raw.tieDrawOrder.length
+      ? raw.tieDrawOrder as string[] : undefined;
     const hasExplicitNames = Array.isArray(raw.teamNames);
     const suppliedNames: unknown[] = hasExplicitNames ? raw.teamNames as unknown[] : [];
     // ⛔ Times NÃO nascem pré-criados. A competição por times pode ser ligada antes de
@@ -171,6 +182,8 @@ namespace ScoreplaceTeamCompetition {
       // Pontos preserva os torneios existentes. Saldo de games é uma escolha explícita
       // do organizador para eventos em que o placar — e não a vitória isolada — define o time.
       ranking: raw.ranking === 'games_diff' ? 'games_diff' : 'points',
+      ...(tiebreakers && tiebreakers.length ? { tiebreakers } : {}),
+      ...(tieDrawOrder ? { tieDrawOrder } : {}),
       // Geral soma categorias (por exemplo, feminino + masculino) no mesmo time.
       // Por categoria mantém tabelas independentes sem alterar os confrontos.
       aggregation: raw.aggregation === 'per_category' ? 'per_category' : 'overall',
@@ -276,6 +289,34 @@ namespace ScoreplaceTeamCompetition {
     return null;
   }
 
+  function compareRows(a: TeamRow, b: TeamRow, cfg: Config, drawOrder: string[]): number {
+    const primary = cfg.ranking === 'games_diff' ? b.gamesDiff - a.gamesDiff : b.points - a.points;
+    if (primary) return primary;
+    if (cfg.tiebreakers) {
+      for (const criterion of cfg.tiebreakers) {
+        let result = 0;
+        if (criterion === 'vitorias') result = b.wins - a.wins;
+        else if (criterion === 'games_vencidos') result = b.gamesWon - a.gamesWon;
+        else if (criterion === 'saldo_games') result = b.gamesDiff - a.gamesDiff;
+        else if (criterion === 'pontos') result = b.points - a.points;
+        else if (criterion === 'sorteio' && drawOrder.length) result = drawOrder.indexOf(a.id) - drawOrder.indexOf(b.id);
+        if (result) return result;
+      }
+    } else {
+      // Contrato legado idêntico: nenhuma reclassificação silenciosa de torneios antigos.
+      const legacy = cfg.ranking === 'games_diff'
+        ? (b.gamesWon - a.gamesWon) || (b.wins - a.wins)
+        : (b.wins - a.wins);
+      if (legacy) return legacy;
+    }
+    return a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
+  }
+
+  function validDrawOrder(cfg: Config, ids: string[]): string[] {
+    const order = cfg.tieDrawOrder || [];
+    return order.length === ids.length && ids.every((id) => order.includes(id)) ? order : [];
+  }
+
   /**
    * Soma somente jogos reais e decididos. Folga, W.O. sem adversário, pendência e dupla
    * sem time não viram ponto de ninguém. O chamador fornece os times existentes para que
@@ -319,9 +360,9 @@ namespace ScoreplaceTeamCompetition {
       win.wins++; win.points += cfg.scoring.win;
       loss.losses++; loss.points += cfg.scoring.loss;
     });
-    return Object.keys(rows).map((id) => rows[id]).sort((a, b) => cfg.ranking === 'games_diff'
-      ? (b.gamesDiff - a.gamesDiff) || (b.gamesWon - a.gamesWon) || (b.wins - a.wins) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id)
-      : (b.points - a.points) || (b.wins - a.wins) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+    const result = Object.keys(rows).map((id) => rows[id]);
+    const drawOrder = validDrawOrder(cfg, result.map((row) => row.id));
+    return result.sort((a, b) => compareRows(a, b, cfg, drawOrder));
   }
 
   /** Classificação das duplas da competição por times, sem alterar a classificação global das outras modalidades. */
@@ -394,9 +435,9 @@ namespace ScoreplaceTeamCompetition {
         loss.losses++; loss.points += cfg.scoring.loss;
       }
     });
-    return Object.keys(rows).map((id) => rows[id]).sort((a, b) => cfg.ranking === 'games_diff'
-      ? (b.gamesDiff - a.gamesDiff) || (b.gamesWon - a.gamesWon) || (b.wins - a.wins) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id)
-      : (b.points - a.points) || (b.wins - a.wins) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+    const result = Object.keys(rows).map((id) => rows[id]);
+    const drawOrder = validDrawOrder(cfg, result.map((row) => row.id));
+    return result.sort((a, b) => compareRows(a, b, cfg, drawOrder));
   }
 }
 

@@ -19,6 +19,28 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 
   function _tid() { var h = (location.hash || '').replace(/^#/, '').split('/'); return h[1] || ''; }
   function _norm() { if (S) S.cfg = window.FORMAT2.normalize(S.cfg, S.sport); }
+  function _teamTiebreakersBlock(tc) {
+    var labels = { vitorias: 'Número de vitórias', games_vencidos: 'Games vencidos', saldo_games: 'Saldo de games', pontos: 'Pontos', sorteio: 'Sorteio da organização' };
+    var list = Array.isArray(tc.tiebreakers) ? tc.tiebreakers : null;
+    var out = '<div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(129,140,248,.22);">' +
+      '<div style="font-size:.78rem;font-weight:600;color:var(--text-main);">Desempates por time, nesta ordem</div>' +
+      '<div style="font-size:.72rem;color:var(--text-muted);margin:4px 0 8px;">Só são aplicados após empate no critério principal acima.</div>';
+    if (!list) return out + '<button type="button" class="btn btn-secondary btn-sm" onclick="window._f2TeamTiebreakStart()">Configurar desempates</button>' +
+      '<div style="font-size:.72rem;color:var(--text-muted);margin-top:5px;">Sem configuração: permanece a ordem dos torneios anteriores.</div></div>';
+    out += list.map(function (key, index) {
+      return '<div style="display:flex;align-items:center;gap:7px;margin:5px 0;color:var(--text-main);">' +
+        '<span style="min-width:1.3rem;">' + (index + 1) + 'º</span><span style="flex:1;">' + (labels[key] || key) + '</span>' +
+        '<button type="button" class="btn btn-secondary btn-sm" title="Subir" aria-label="Subir ' + (labels[key] || key) + '" onclick="window._f2TeamTiebreakMove(' + index + ',-1)">↑</button>' +
+        '<button type="button" class="btn btn-secondary btn-sm" title="Descer" aria-label="Descer ' + (labels[key] || key) + '" onclick="window._f2TeamTiebreakMove(' + index + ',1)">↓</button>' +
+        '<button type="button" class="cancel-x-btn" style="--cx-size:22px;" title="Remover" aria-label="Remover ' + (labels[key] || key) + '" onclick="window._f2TeamTiebreakRemove(' + index + ')">×</button></div>';
+    }).join('');
+    var available = Object.keys(labels).filter(function (key) { return list.indexOf(key) < 0; });
+    if (available.length) out += '<label style="display:block;margin-top:8px;font-size:.72rem;color:var(--text-muted);">Adicionar critério ' +
+      '<select aria-label="Adicionar critério de desempate por time" onchange="window._f2TeamTiebreakAdd(this.value)" style="margin-left:5px;background:var(--bg-secondary,#20242b);color:var(--text-main);border:1px solid rgba(255,255,255,.25);border-radius:6px;padding:5px;">' +
+      '<option value="">Selecione</option>' + available.map(function (key) { return '<option value="' + key + '">' + labels[key] + '</option>'; }).join('') + '</select></label>';
+    if (list.indexOf('sorteio') >= 0) out += '<div style="font-size:.72rem;color:var(--text-muted);margin-top:8px;">O sorteio só desempata quando a organização registra a ordem dos times. Sem ordem registrada, a posição continua empatada pelos critérios esportivos.</div>';
+    return out + '</div>';
+  }
   function _syncTeamSize() {
     if (!S) return;
     var cfg = S.cfg;
@@ -885,6 +907,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
               '<label style="font-size:.78rem;color:var(--text-muted);">Vitória ' + _num(tc.scoring.win, -99, 99, 'window._f2TeamScore(\'win\',this.value,this)') + '</label>' +
               '<label style="font-size:.78rem;color:var(--text-muted);">Empate ' + _num(tc.scoring.draw, -99, 99, 'window._f2TeamScore(\'draw\',this.value,this)') + '</label>' +
               '<label style="font-size:.78rem;color:var(--text-muted);">Derrota ' + _num(tc.scoring.loss, -99, 99, 'window._f2TeamScore(\'loss\',this.value,this)') + '</label></div>') +
+          _teamTiebreakersBlock(tc) +
           '<div style="margin-top:12px;font-size:.72rem;color:var(--text-muted);margin-bottom:6px;">Escopo da tabela</div>' +
           _pill(tc.aggregation !== 'per_category', 'window._f2TeamAggregation(\'overall\')', '🌐 Geral') +
           _pill(tc.aggregation === 'per_category', 'window._f2TeamAggregation(\'per_category\')', '🏷️ Por categoria') +
@@ -1496,6 +1519,26 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   window._f2TeamRanking = function (ranking) {
     if (!S || !S.cfg.teamCompetition) return;
     S.cfg.teamCompetition.ranking = ranking === 'games_diff' ? 'games_diff' : 'points'; _norm(); _rerender();
+  };
+  window._f2TeamTiebreakStart = function () {
+    if (!S || !S.cfg.teamCompetition) return;
+    S.cfg.teamCompetition.tiebreakers = ['vitorias', 'games_vencidos', 'sorteio']; _norm(); _rerender();
+  };
+  window._f2TeamTiebreakAdd = function (key) {
+    if (!S || !S.cfg.teamCompetition || !key) return;
+    var list = S.cfg.teamCompetition.tiebreakers;
+    if (!Array.isArray(list) || list.indexOf(key) >= 0) return;
+    list.push(key); _norm(); _rerender();
+  };
+  window._f2TeamTiebreakRemove = function (index) {
+    if (!S || !S.cfg.teamCompetition || !Array.isArray(S.cfg.teamCompetition.tiebreakers)) return;
+    S.cfg.teamCompetition.tiebreakers.splice(index, 1); _norm(); _rerender();
+  };
+  window._f2TeamTiebreakMove = function (index, step) {
+    if (!S || !S.cfg.teamCompetition || !Array.isArray(S.cfg.teamCompetition.tiebreakers)) return;
+    var list = S.cfg.teamCompetition.tiebreakers, target = index + step;
+    if (target < 0 || target >= list.length) return;
+    var item = list[index]; list[index] = list[target]; list[target] = item; _norm(); _rerender();
   };
   window._f2TeamAggregation = function (aggregation) {
     if (!S || !S.cfg.teamCompetition) return;

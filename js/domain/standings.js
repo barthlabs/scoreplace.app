@@ -226,10 +226,15 @@ var ScoreplaceStandings;
     ScoreplaceStandings.standingsCompare = standingsCompare;
     function standingsCompareConfig(a, b, options = {}) {
         const list = options.tiebreakers;
+        const primary = options.primaryField || 'points';
+        if (primary === 'games_diff') {
+            const gamesResult = ScoreplaceStandings.CRITERIOS.saldo_games(a, b);
+            if (gamesResult)
+                return gamesResult;
+        }
         if (!Array.isArray(list) || !list.length)
             return standingsCompare(a, b, Boolean(options.adv));
-        const primary = options.primaryField || 'points';
-        if (a[primary] != null && b[primary] != null && n(b[primary]) !== n(a[primary]))
+        if (primary !== 'games_diff' && a[primary] != null && b[primary] != null && n(b[primary]) !== n(a[primary]))
             return n(b[primary]) - n(a[primary]);
         for (const criterionName of list) {
             const criterion = ScoreplaceStandings.CRITERIOS[criterionName];

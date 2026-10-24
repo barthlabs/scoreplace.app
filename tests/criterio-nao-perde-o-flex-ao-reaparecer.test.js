@@ -30,7 +30,7 @@ console.log('──── criterio-nao-perde-o-flex-ao-reaparecer ────')
 
 // ── 1. as linhas da lista DEPENDEM do display inline ──────────────────────────
 const lis = SRC.match(/<li draggable="true" data-tb="[^"]+"[^>]*>/g) || [];
-ok(lis.length === 9, 'as 9 linhas de critério estão no template · achado: ' + lis.length);
+ok(lis.length === 11, 'as 11 linhas de critério estão no template · achado: ' + lis.length);
 const semFlex = lis.filter((t) => !/display:flex/.test(t));
 ok(semFlex.length === 0, 'toda linha declara display:flex no style inline (é ele que some) · sem flex: ' + semFlex.length);
 

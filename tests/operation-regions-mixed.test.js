@@ -18,23 +18,24 @@ const skipReason = gitRepo.status !== 0 ? 'sem histórico Git (cópia git archiv
   : !current ? 'sem commit de functions-autodraw no histórico Git'
     : !manifestsPresent ? 'manifestos regionais ignorados pelo git archive' : false;
 const digest = skipReason ? '' : execFileSync('node',
-  ['scripts/operation-source-digest.js', 'functions-autodraw', 'endMatchOnCourt', current],
+  ['scripts/operation-source-digest.js', 'functions-autodraw', 'endMatchOnCourt', current, '--from-git'],
   { cwd: root }).toString().trim();
 const scoreDigest = skipReason ? '' : execFileSync('node',
   ['scripts/operation-source-digest.js', 'functions-autodraw', 'applyMatchResult', current, '--from-git'],
   { cwd: root }).toString().trim();
 
 for (const version of ['v2', 'v3']) {
-  const run = (rows, allowLegacyCourt = false) => {
+  const run = (rows, allowLegacyCourt = false, extraEnv = {}) => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-region-test-'));
     const file = path.join(dir, 'manifest.json');
     fs.writeFileSync(file, JSON.stringify(rows));
     try { return spawnSync('node', [script, version, ...(allowLegacyCourt ? ['--allow-legacy-court'] : [])],
-      { cwd: root, env: { ...process.env, SP_REGION_MANIFEST: file }, encoding: 'utf8' }); }
+      { cwd: root, env: { ...process.env, ...extraEnv, SP_REGION_MANIFEST: file }, encoding: 'utf8' }); }
     finally { fs.rmSync(dir, { recursive: true, force: true }); }
   };
   test(`${version}: corte antigo e atualização só da quadra`, { skip: skipReason }, () => {
     const original = JSON.parse(fs.readFileSync(path.join(root, `.claude/tmp/operation-regions-manifest-${version}.json`)));
+    assert.equal(run(original).status, 0, 'revisões regionais registradas continuam válidas após novos commits');
     const legacy = structuredClone(original);
     const legacyCommit = legacy.find(row => row.name === `sp-op-court-${version}`).commit;
     const legacyDigest = execFileSync('node', ['scripts/operation-source-digest.js', 'functions-autodraw',
@@ -72,6 +73,24 @@ for (const version of ['v2', 'v3']) {
     const wrongService = structuredClone(mixed);
     wrongService.find(row => row.name === `sp-op-score-${version}`).commit = current;
     assert.notEqual(run(wrongService).status, 0);
+    const objects = path.resolve(root, execFileSync('git', ['rev-parse', '--git-path', 'objects'], { cwd: root }).toString().trim());
+    const objectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-region-objects-'));
+    const objectEnv = { GIT_OBJECT_DIRECTORY: objectDir, GIT_ALTERNATE_OBJECT_DIRECTORIES: objects };
+    try {
+      const tree = execFileSync('git', ['rev-parse', 'HEAD^{tree}'], { cwd: root }).toString().trim();
+      for (const parents of [[], ['-p', 'HEAD']]) {
+        const unrelated = execFileSync('git', ['commit-tree', tree, ...parents], {
+          cwd: root, env: { ...process.env, ...objectEnv,
+            GIT_AUTHOR_NAME: 'Regional test', GIT_AUTHOR_EMAIL: 'test@example.invalid',
+            GIT_COMMITTER_NAME: 'Regional test', GIT_COMMITTER_EMAIL: 'test@example.invalid' },
+          input: 'regional ancestry test\n'
+        }).toString().trim();
+        const invalid = structuredClone(mixed);
+        for (const row of invalid.filter(row => row.name === `sp-op-score-${version}`)) row.commit = unrelated;
+        assert.notEqual(run(invalid, false, objectEnv).status, 0,
+          parents.length ? 'commit futuro é recusado' : 'commit não ancestral é recusado');
+      }
+    } finally { fs.rmSync(objectDir, { recursive: true, force: true }); }
     const wrongLegacyDigest = structuredClone(mixed);
     for (const row of wrongLegacyDigest.filter(row => row.name === `sp-op-score-${version}`)) row.sourceDigest = '0'.repeat(64);
     assert.notEqual(run(wrongLegacyDigest).status, 0, 'digest de outra porta continua verificado contra o commit antigo');

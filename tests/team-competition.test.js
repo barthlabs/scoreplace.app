@@ -21,8 +21,13 @@ ok(['src/domain/team-competition.ts', 'js/domain/team-competition.js',
 const neonBase = { name: 'NEON NIGHTMARE – THE TOURNAMENT', teamCompetition: { enabled:true, aggregation:'per_category', classificationUnit:'pair' } };
 const neonRanking = C.rankingConfigForTournament({ ...neonBase, id:neonId });
 ok(neonRanking.aggregation === 'overall' && neonRanking.classificationUnit === 'team', 'Neon: classificação única geral por time');
+ok(!neonRanking.tiebreakers,
+  'Neon concluído mantém os desempates legados sem injeção por ID');
 const neonSandboxRanking = C.rankingConfigForTournament({ ...neonBase, id:'sb_' + neonId, isSandbox:true, sandboxOf:neonId });
 ok(neonSandboxRanking.aggregation === 'overall' && neonSandboxRanking.classificationUnit === 'team', 'sandbox do Neon: a mesma classificação geral por time');
+ok(!neonSandboxRanking.tiebreakers, 'sandbox do Neon preserva os mesmos desempates legados');
+ok(C.rankingConfigForTournament({ ...neonBase, id: neonId, teamCompetition: { ...neonBase.teamCompetition, tiebreakers: ['games_vencidos'] } }).tiebreakers.join(',') === 'games_vencidos',
+  'lista explicitamente salva prevalece sobre a ordem padrão do Neon');
 ok(C.rankingConfigForTournament({ ...neonBase, id:'outro' }).classificationUnit === 'pair', 'outro torneio preserva sua configuração própria');
 const pairA1 = { competitionTeamId: 'a' }, pairA2 = { competitionTeamId: 'a' }, pairB = { competitionTeamId: 'b' };
 
@@ -127,6 +132,56 @@ ok(row(saldo, 'a').gamesDiff === 5 && row(saldo, 'b').gamesWon === 13 && row(sal
   'saldo acumula games do placar simples e de todos os sets');
 ok(saldo[0].id === 'a' && saldo[1].id === 'b' && saldo[2].id === 'c',
   'modo saldo ordena por games feitos menos games sofridos');
+
+const rankTeams = [{id:'a',name:'Azul'}, {id:'b',name:'Branco'}, {id:'c',name:'Cinza'}, {id:'d',name:'Dourado'}];
+const tieGames = [
+  {p1:'A',p2:'C',p1CompetitionTeamId:'a',p2CompetitionTeamId:'c',winner:'p1',scoreP1:6,scoreP2:0},
+  {p1:'A',p2:'D',p1CompetitionTeamId:'a',p2CompetitionTeamId:'d',winner:'p2',scoreP1:0,scoreP2:6},
+  {p1:'B',p2:'C',p1CompetitionTeamId:'b',p2CompetitionTeamId:'c',winner:'draw',draw:true,scoreP1:5,scoreP2:5},
+  {p1:'B',p2:'D',p1CompetitionTeamId:'b',p2CompetitionTeamId:'d',winner:'draw',draw:true,scoreP1:5,scoreP2:5},
+];
+const ordered = C.standings(rankTeams, tieGames, {enabled:true,ranking:'games_diff',tiebreakers:['vitorias','games_vencidos','sorteio']});
+ok(row(ordered,'a').gamesDiff === row(ordered,'b').gamesDiff && row(ordered,'a').gamesWon < row(ordered,'b').gamesWon && ordered.findIndex(r=>r.id==='a') < ordered.findIndex(r=>r.id==='b'),
+  'saldo igual: vitória precede games vencidos, mesmo quando o outro fez mais games');
+const legacyOrdered = C.standings(rankTeams, tieGames, {enabled:true,ranking:'games_diff'});
+ok(legacyOrdered.findIndex(r=>r.id==='b') < legacyOrdered.findIndex(r=>r.id==='a'),
+  'sem lista, a regra legada games vencidos antes de vitórias permanece');
+const headFixture = [{id:'z',name:'Azul'},{id:'a',name:'Branco'},{id:'c',name:'Azul'}];
+['games_diff','points'].forEach((ranking) => {
+  const legacyCfg = {enabled:true,ranking};
+  ok(C.standings(headFixture,[],legacyCfg).map(r=>r.id).join(',') === 'c,z,a' &&
+    C.pairStandings(headFixture.map(r=>({...r,category:'Light'})),[],legacyCfg).map(r=>r.id).join(',') === 'c,z,a',
+    'fixture observado no HEAD: time e dupla legados resolvem nome e depois ID (' + ranking + ')');
+});
+ok(C.standings([{id:'z',name:'Azul'},{id:'a',name:'Branco'}], [], {enabled:true,ranking:'games_diff'}).map(r=>r.id).join(',') === 'z,a' &&
+  C.standings([{id:'z',name:'Azul'},{id:'a',name:'Branco'}], [], {enabled:true,ranking:'points'}).map(r=>r.id).join(',') === 'z,a',
+  'times legados totalmente empatados preservam nome e depois ID');
+ok((function (rows) { return rows.findIndex(r=>r.id==='a') < rows.findIndex(r=>r.id==='b'); })(C.standings(rankTeams, tieGames, {enabled:true,ranking:'points',scoring:{win:2,draw:0,loss:0},tiebreakers:['games_vencidos']})),
+  'pontos continuam sendo o critério principal mesmo com desempates configurados');
+const gamesWonTie = C.standings(rankTeams, [
+  {p1:'A',p2:'C',p1CompetitionTeamId:'a',p2CompetitionTeamId:'c',winner:'draw',draw:true,scoreP1:4,scoreP2:4},
+  {p1:'B',p2:'D',p1CompetitionTeamId:'b',p2CompetitionTeamId:'d',winner:'draw',draw:true,scoreP1:5,scoreP2:5},
+], {enabled:true,ranking:'games_diff',tiebreakers:['vitorias','games_vencidos']});
+ok(gamesWonTie.findIndex(r=>r.id==='b') < gamesWonTie.findIndex(r=>r.id==='a'), 'vitórias iguais: games vencidos decide');
+const unresolved = C.standings([{id:'z',name:'Azul'},{id:'a',name:'Branco'}], [],
+  {enabled:true,ranking:'games_diff',tiebreakers:['sorteio'],tieDrawOrder:['a']});
+ok(unresolved.map(r=>r.id).join(',') === 'z,a', 'sorteio incompleto não é aplicado; fallback visual preserva nome e ID');
+const drawn = C.standings([{id:'z',name:'Azul'},{id:'a',name:'Branco'}], [],
+  {enabled:true,ranking:'games_diff',tiebreakers:['sorteio'],tieDrawOrder:['a','z']});
+ok(drawn.map(r=>r.id).join(',') === 'a,z', 'sorteio completo por IDs estáveis desempata');
+ok(C.normalize({enabled:true,tiebreakers:['vitorias','inválido','vitorias','games_vencidos'],tieDrawOrder:['a','a']}).tiebreakers.join(',') === 'vitorias,games_vencidos' &&
+  !C.normalize({enabled:true,tieDrawOrder:['a','a']}).tieDrawOrder, 'normalização remove critérios inválidos/repetidos e ordem de sorteio duplicada');
+ok(!C.normalize({enabled:true,tiebreakers:[]}).tiebreakers &&
+  C.standings(rankTeams,tieGames,{enabled:true,ranking:'games_diff',tiebreakers:[]}).map(r=>r.id).join(',') === legacyOrdered.map(r=>r.id).join(','),
+  'lista vazia mantém o comparador legado');
+ok(!C.normalize({enabled:true,tieDrawOrder:Array.from({length:129},(_,i)=>String(i))}).tieDrawOrder &&
+  C.standings([{id:'z',name:'Azul'},{id:'a',name:'Branco'}],[],{enabled:true,tiebreakers:['sorteio'],tieDrawOrder:['a','outro']}).map(r=>r.id).join(',') === 'z,a',
+  'sorteio longo ou com ID desconhecido é neutro');
+ok(C.pairStandings([{id:'z',name:'Azul',category:'Light'}, {id:'a',name:'Branco',category:'Light'}], [], {enabled:true,ranking:'games_diff'}).map(r=>r.id).join(',') === 'z,a' &&
+  C.pairStandings([{id:'z',name:'Azul',category:'Light'}, {id:'a',name:'Branco',category:'Light'}], [], {enabled:true,ranking:'points'}).map(r=>r.id).join(',') === 'z,a',
+  'duplas legadas totalmente empatadas preservam nome e depois ID');
+ok(teamUi.includes('_teamTiebreakersBlock(tc)') && teamUi.includes('_f2TeamTiebreakMove') && teamUi.includes('_f2TeamTiebreakAdd'),
+  'editor permite selecionar e reordenar os critérios por time');
 
 const partial = C.standings(teams, [
   { p1: 'A', p2: 'B', p1CompetitionTeamId: 'a', p2CompetitionTeamId: 'b', winner: 'fora-do-jogo' }

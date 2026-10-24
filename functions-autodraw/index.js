@@ -4828,7 +4828,7 @@ const _CAMPOS_CONFIG_TORNEIO = new Set([
    * com a escolha nova é RECUSADO pelo servidor. O valor é fechado no cliente e reconferido pelo
    * motor, que cai em `repescagem` diante de qualquer coisa que não reconheça. */
   'politicaDaChave',
-  'phase1Name','tiebreakers','tiebreakersExcluded','advancedScoring','genderCategories',
+  'phase1Name','rankingPrimary','tiebreakers','tiebreakersExcluded','advancedScoring','genderCategories',
   'skillCategories','ageCategories','customCategories','combinedCategories','rigor','rigorRequire',
   'fmt2','phases'
 ]);

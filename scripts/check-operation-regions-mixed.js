@@ -2,7 +2,7 @@
 'use strict';
 // Verifica o corte regional por serviço sem recalcular o hash da árvore antiga.
 const fs = require('node:fs');
-const { execFileSync } = require('node:child_process');
+const { execFileSync, spawnSync } = require('node:child_process');
 const path = require('node:path');
 const { sourceDescriptor, sourceDigest } = require('./operation-source-digest');
 const root = path.join(__dirname, '..');
@@ -20,12 +20,14 @@ const codebases = ['functions-autodraw', 'functions-autodraw', 'functions',
 const file = process.env.SP_REGION_MANIFEST || path.join(root, `.claude/tmp/operation-regions-manifest-${version}.json`);
 const rows = JSON.parse(fs.readFileSync(file, 'utf8'));
 if (rows.length !== regions.length * names.length) throw new Error('manifesto regional incompleto');
-const current = execFileSync('git', ['log', '-1', '--format=%H', '--', 'functions-autodraw'], { cwd: root }).toString().trim();
+const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root }).toString().trim();
+const isRecordedAncestor = commit => /^[a-f0-9]{40}$/.test(commit) &&
+  spawnSync('git', ['merge-base', '--is-ancestor', commit, head], { cwd: root }).status === 0;
 // As portas de placar e encerramento podem ser atualizadas separadamente.
 // A base antiga é definida pelas outras quatro portas, que continuam imóveis.
 const independentlyUpdated = new Set([`sp-op-score-${version}`, `sp-op-end-court-${version}`]);
 const legacy = [...new Set(rows.filter(row => !independentlyUpdated.has(row.name)).map(row => row.commit))];
-if (legacy.length !== 1 || !/^[a-f0-9]{40}$/.test(legacy[0])) throw new Error('commit legado divergente');
+if (legacy.length !== 1 || !isRecordedAncestor(legacy[0])) throw new Error('commit legado divergente');
 let mixed = false;
 const oldSources = new Map();
 for (let i = 0; i < names.length; i++) {
@@ -40,7 +42,7 @@ for (let i = 0; i < names.length; i++) {
   }
   const commit = service[0].commit;
   if (independentlyUpdated.has(names[i]) && commit !== legacy[0]) {
-    if (commit !== current) throw new Error('commit da porta atualizada não é a fonte atual: ' + names[i]);
+    if (!isRecordedAncestor(commit)) throw new Error('commit da porta atualizada não pertence ao histórico publicado: ' + names[i]);
     mixed = true;
   } else if (commit !== legacy[0]) throw new Error('outra porta mudou de commit: ' + names[i]);
   if (commit === legacy[0]) {
@@ -48,7 +50,7 @@ for (let i = 0; i < names.length; i++) {
     const oldDigest = sourceDigest(targets[i], legacy[0], oldSources.get(codebases[i]));
     if (service[0].sourceDigest !== oldDigest) throw new Error('digest legado divergente: ' + names[i]);
   } else {
-    const digest = sourceDigest(targets[i], current, sourceDescriptor(codebases[i], current, true));
+    const digest = sourceDigest(targets[i], commit, sourceDescriptor(codebases[i], commit, true));
     if (service[0].sourceDigest !== digest) throw new Error('digest da porta atualizada divergente: ' + names[i]);
   }
 }

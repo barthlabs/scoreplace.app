@@ -2058,7 +2058,8 @@
         return rot ? [rot] : [];
       });
     }
-    var _opts = { tiebreakers: tb, h2h: _h2hUid, birth: _birth, ordem: _ordemChave };
+    var _opts = { tiebreakers: tb, h2h: _h2hUid, birth: _birth, ordem: _ordemChave,
+      primaryField: opts.rankingPrimary === 'games_diff' ? 'games_diff' : 'points' };
     function cmp(a, b) { return _cmpCfg(a, b, _opts); }
     return Object.keys(smap).map(function (k) { return smap[k]; }).sort(cmp);
   }
@@ -2367,7 +2368,7 @@
         if (m.team1Obj && m.team1Obj.displayName) lobjs[m.team1Obj.displayName] = m.team1Obj;
         if (m.team2Obj && m.team2Obj.displayName) lobjs[m.team2Obj.displayName] = m.team2Obj;
       });
-      var lst = _groupTeamStandings({ matches: leagueMs, players: Object.keys(lobjs) });
+      var lst = _groupTeamStandings({ matches: leagueMs, players: Object.keys(lobjs) }, { tiebreakers: t.tiebreakers, rankingPrimary: t.rankingPrimary });
       return [{ name: lname, standings: lst.map(function (s) { return lobjs[s.name] || { name: s.name, displayName: s.name }; }) }];
     }
 
@@ -2383,7 +2384,7 @@
       });
       return Object.keys(byG).sort(function (a, b) { return byG[a].groupIdx - byG[b].groupIdx; }).map(function (k) {
         var g = byG[k];
-        var st = _groupTeamStandings({ matches: g.matches, players: Object.keys(g.objs) });
+        var st = _groupTeamStandings({ matches: g.matches, players: Object.keys(g.objs) }, { tiebreakers: t.tiebreakers, rankingPrimary: t.rankingPrimary });
         var ordered = st.map(function (s) { return g.objs[s.name] || { name: s.name, displayName: s.name }; });
         return { name: g.name, standings: ordered };
       });
@@ -2636,7 +2637,7 @@
     // v2.6.95 (Chunk 5): passa os tiebreakers configurados + datas de nascimento
     // (antiguidade/juventude) pro _groupTeamStandings, pra classificação na transição
     // respeitar a ordem que o organizador definiu.
-    var _tbOpts = { tiebreakers: t.tiebreakers, birthByName: (typeof window._tbBirthByName === 'function') ? window._tbBirthByName(t) : {} };
+    var _tbOpts = { tiebreakers: t.tiebreakers, rankingPrimary: t.rankingPrimary, birthByName: (typeof window._tbBirthByName === 'function') ? window._tbBirthByName(t) : {} };
     var cs = function (g) { return standingsDaFaseAnterior(g, t, _tbOpts, _isMonarchPrev); };
     // ⛔ SEM PAINEL DE AJUSTE DE CHAVEAMENTO — mas COM o de PROMOVER LINHA (v1.5.25).
     //

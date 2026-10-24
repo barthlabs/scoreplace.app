@@ -229,9 +229,13 @@ namespace ScoreplaceStandings {
 
   export function standingsCompareConfig(a: StandingLine, b: StandingLine, options: CompareOptions = {}): number {
     const list = options.tiebreakers;
-    if (!Array.isArray(list) || !list.length) return standingsCompare(a, b, Boolean(options.adv));
     const primary = options.primaryField || 'points';
-    if (a[primary] != null && b[primary] != null && n(b[primary]) !== n(a[primary])) return n(b[primary]) - n(a[primary]);
+    if (primary === 'games_diff') {
+      const gamesResult = CRITERIOS.saldo_games(a, b);
+      if (gamesResult) return gamesResult;
+    }
+    if (!Array.isArray(list) || !list.length) return standingsCompare(a, b, Boolean(options.adv));
+    if (primary !== 'games_diff' && a[primary] != null && b[primary] != null && n(b[primary]) !== n(a[primary])) return n(b[primary]) - n(a[primary]);
     for (const criterionName of list) {
       const criterion = CRITERIOS[criterionName];
       if (!criterion) continue;
