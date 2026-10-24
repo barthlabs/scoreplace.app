@@ -130,6 +130,14 @@ if rg -q '^\.backend-publicado-autodraw-funcoes\.json$' "$ALL" 2>/dev/null; then
   } >> "$CROSS_EVIDENCE"
 fi
 
+# Evidência opcional de uma suíte completa já concluída neste mesmo corte.
+# O parecer por lote ocorre antes do preflight do Hosting; sem este recibo, um
+# lote contendo apenas testes é reprovado por ainda não ver o resultado que o
+# próprio publicador só produziria depois da revisão.
+if [[ -n "${SP_REVIEW_TEST_EVIDENCE:-}" && -f "$SP_REVIEW_TEST_EVIDENCE" ]]; then
+  cat "$SP_REVIEW_TEST_EVIDENCE" >> "$CROSS_EVIDENCE"
+fi
+
 batch=1; bytes=0; current="$TMP/batch-$batch"
 touch "$current"
 while IFS= read -r file; do
