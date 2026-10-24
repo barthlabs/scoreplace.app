@@ -57,6 +57,8 @@ const SUITES = [
   'tests/operation-day.test.js',
   'tests/operation-router-regions.test.js',
   'tests/operation-router-v3.test.js',
+  'tests/operation-router-central-actions.test.js',
+  'tests/check-served-operation-revision.test.js',
   'tests/operation-regions-v3-config.test.js',
   'tests/operation-control-transaction.test.js',
   'tests/operation-queue-protocol.test.js',

@@ -41,6 +41,14 @@ if(!r||r.target!==process.env.SP_TARGET||r.codebase!==process.env.SP_CODEBASE||r
 NODE
   probe_no_auth "$(printf '%s' "$json" | field status.url)"
 }
+verify_served_row() {
+  local name="$1" region="$2" json="$3" file="$4" revision_name revision_json
+  revision_name="$(SP_SERVICE_JSON="$json" node -e 'const {servedRevisionName}=require("./scripts/check-served-operation-revision");process.stdout.write(servedRevisionName(JSON.parse(process.env.SP_SERVICE_JSON)))')" || return 1
+  revision_json="$(gcloud run revisions describe "$revision_name" --project "$project" --region "$region" --format=json)" || return 1
+  SP_SERVICE_JSON="$json" SP_REVISION_JSON="$revision_json" SP_FILE="$file" SP_NAME="$name" SP_REGION="$region" \
+    node scripts/check-served-operation-revision.js || return 1
+  probe_no_auth "$(printf '%s' "$json" | field status.url)"
+}
 record() {
   local name="$1" region="$2" target="$3" codebase="$4" commit="$5" digest="$6" json="$7"
   SP_NAME="$name" SP_REGION="$region" SP_TARGET="$target" SP_CODEBASE="$codebase" SP_COMMIT="$commit" SP_DIGEST="$digest" SP_JSON="$json" SP_FILE="$candidate" node - <<'NODE'
@@ -55,7 +63,7 @@ NODE
 }
 if [[ "$mode" == --check-v2-live ]]; then
   [[ -s "$oldmanifest" ]] || { echo 'manifesto v2 ausente' >&2; exit 1; }
-  node scripts/check-operation-regions-mixed.js v2
+  node scripts/check-operation-regions-mixed.js v2 --allow-legacy-court
   oldcommit="$(node -e 'const m=require("./.claude/tmp/operation-regions-manifest-v2.json");process.stdout.write(m.find(x=>x.name!=="sp-op-end-court-v2").commit)')"
   git show "$oldcommit:functions-autodraw/index.js" | rg "new Set\(\['us-east1', 'us-east4', 'us-south1'\]\)" >/dev/null || { echo 'v2 não possui Set histórico esperado' >&2; exit 1; }
   for i in "${!names[@]}"; do
@@ -63,7 +71,7 @@ if [[ "$mode" == --check-v2-live ]]; then
     for region in "${regions[@]:0:3}"; do
       json="$(describe "$name" "$region")" || exit 1
       row_commit="$(SP_FILE="$oldmanifest" SP_NAME="$name" node -e 'const m=require("./"+process.env.SP_FILE);process.stdout.write(m.find(x=>x.name===process.env.SP_NAME).commit)')"
-      verify_row "$name" "$region" "$target" "$codebase" "$row_commit" "$json" "$oldmanifest"
+      verify_served_row "$name" "$region" "$json" "$oldmanifest"
       this_image="$(printf '%s' "$json" | field spec.template.spec.containers.0.image)"
       [[ -z "$image" || "$image" == "$this_image" ]] || exit 1
       image="$this_image"
@@ -180,13 +188,21 @@ fi
 [[ -s "$manifest" ]] || { echo 'manifesto v3 ausente' >&2; exit 1; }
 # As portas antigas preservam o digest já registrado; somente end-court usa
 # a árvore atual. O verificador confirma essa exceção e o serviço vivo abaixo.
-node scripts/check-operation-regions-mixed.js v3
+if [[ "$mode" == --check-v3 ]]; then
+  node scripts/check-operation-regions-mixed.js v3 --allow-legacy-court
+else
+  node scripts/check-operation-regions-mixed.js v3
+fi
 for i in "${!names[@]}"; do
   name="${names[$i]}"; target="${targets[$i]}"; codebase="${codebases[$i]}"; image=''
   row_commit="$(SP_FILE="$manifest" SP_NAME="$name" node -e 'const m=require("./"+process.env.SP_FILE);process.stdout.write(m.find(x=>x.name===process.env.SP_NAME).commit)')"
   for region in "${regions[@]}"; do
     json="$(describe "$name" "$region")" || exit 1
-    verify_row "$name" "$region" "$target" "$codebase" "$row_commit" "$json" "$manifest"
+    if [[ "$mode" == --check-v3 ]]; then
+      verify_served_row "$name" "$region" "$json" "$manifest"
+    else
+      verify_row "$name" "$region" "$target" "$codebase" "$row_commit" "$json" "$manifest"
+    fi
     this_image="$(printf '%s' "$json" | field spec.template.spec.containers.0.image)"
     [[ -z "$image" || "$image" == "$this_image" ]] || exit 1
     image="$this_image"

@@ -11,6 +11,7 @@
     endMatchOnCourt: 'sp-op-end-court-v2'
   };
   var CONTROL = 'sp-op-control-v2';
+  var CENTRAL_END_COURT = 'https://endmatchoncourt-4f45krjr3a-uc.a.run.app';
   var STORAGE = 'sp-operation-pending-v2';
   var MAX_AGE = 7 * 86400000;
   var configPromise = null;
@@ -202,21 +203,62 @@
     }
     throw fail('Não foi possível conferir o recibo. A ação continua pendente.', 'unavailable', true);
   }
+  async function refreshAnswer(tId, answer) {
+    if (!answer.requiresRefresh) return answer;
+    var db = window.FirestoreDB;
+    var fresh = null;
+    try {
+      if (db && typeof db.loadTournamentById === 'function') fresh = await db.loadTournamentById(tId);
+    } catch (_) { /* O recibo mantém a intenção segura para nova conferência. */ }
+    if (!fresh) throw fail('A ação foi salva, mas ainda não consegui reler o torneio. Repita para conferir.',
+      'unavailable', true);
+    answer.tournament = fresh;
+    return answer;
+  }
   async function call(name, input, headers) {
     if (!OPERATIONS[name]) throw fail('Operação desconhecida.', 'invalid-argument');
     var payload = Object.assign({}, input || {});
     var tId = String(payload.tournamentId || '');
     if (!tId) throw fail('Torneio não informado.', 'invalid-argument');
-    var cfg = await loadConfig();
     var key = intentKey(name, payload);
     var all = readPending(); var old = all[key];
     var uid = window.firebase.auth().currentUser && window.firebase.auth().currentUser.uid;
     if (old && old.actorUid !== uid) throw fail('Há uma ação pendente de outra conta neste navegador.', 'failed-precondition');
     if (old && Date.now() - old.createdAt > MAX_AGE) throw fail('Esta ação pendente passou de sete dias; confira o torneio antes de repetir.', 'failed-precondition');
-    if (old && withoutId(old.payload) !== withoutId(payload)) throw fail('Há uma ação anterior sem confirmação para este jogo. Confira antes de mudar.', 'failed-precondition');
+    if (old && withoutId(old.payload) !== withoutId(payload)) throw fail('A ação ' +
+      String(old.payload.action || old.name || 'anterior') + ' ainda não foi confirmada para este jogo. Repita essa ação para conferir antes de mudar.',
+      'failed-precondition');
     payload.operationId = old ? old.payload.operationId : (payload.operationId || uuid());
     if (!old) { all[key] = { name: name, payload: payload, actorUid: uid, createdAt: Date.now() }; writePending(all); }
+    if (name === 'endMatchOnCourt' && (payload.action === 'cancel-call' || payload.action === 'postpone')) {
+      try {
+        var centralAnswer;
+        try { centralAnswer = await post(CENTRAL_END_COURT, payload, headers, 20000); }
+        catch (error) {
+          if (!error.infrastructure) throw error;
+          // Um timeout pode ter ocorrido depois do commit. Nunca envie a ação a
+          // uma porta regional antiga nem troque seu UUID antes de conferir.
+          try {
+            var receiptCfg = await loadConfig();
+            var candidates = await healthy(receiptCfg, headers);
+            var receiptAnswer = await findReceipt(receiptCfg, candidates.map(function (item) { return item.region; }), payload, headers);
+            if (!receiptAnswer) throw error;
+            centralAnswer = Object.assign({}, receiptAnswer, { replayed: true, requiresRefresh: true });
+          } catch (_) {
+            throw fail('Sem confirmação da ação. Repita a mesma ação para conferir; o identificador foi preservado.',
+              'unavailable', true);
+          }
+        }
+        centralAnswer = await refreshAnswer(tId, centralAnswer);
+        delete all[key]; writePending(all);
+        return centralAnswer;
+      } catch (error) {
+        if (!error.infrastructure) { delete all[key]; writePending(all); }
+        throw error;
+      }
+    }
     try {
+      var cfg = await loadConfig();
       var state = await align(cfg, tId, payload.sandbox === true, headers);
       var answer;
       try { answer = await post(url(cfg, state.region, name), payload, headers, 20000); }
@@ -236,16 +278,7 @@
           answer = await post(url(cfg, next.region, name), payload, headers, 20000);
         }
       }
-      if (answer.requiresRefresh) {
-        var db = window.FirestoreDB;
-        var fresh = null;
-        try {
-          if (db && typeof db.loadTournamentById === 'function') fresh = await db.loadTournamentById(tId);
-        } catch (_) { /* O recibo mantém a intenção segura para nova conferência. */ }
-        if (!fresh) throw fail('A ação foi salva, mas ainda não consegui reler o torneio. Repita para conferir.',
-          'unavailable', true);
-        answer.tournament = fresh;
-      }
+      answer = await refreshAnswer(tId, answer);
       delete all[key]; writePending(all);
       return answer;
     } catch (error) {
