@@ -21,8 +21,16 @@ for (const version of ['v2', 'v3']) {
     finally { fs.rmSync(dir, { recursive: true, force: true }); }
   };
   test(`${version}: corte antigo e atualização só da quadra`, () => {
-    assert.equal(run(original, true).status, 0);
-    assert.notEqual(run(original).status, 0, 'Hosting barra quadra antiga');
+    const legacy = structuredClone(original);
+    const legacyCommit = legacy.find(row => row.name !== `sp-op-end-court-${version}`).commit;
+    const legacyDigest = execFileSync('node', ['scripts/operation-source-digest.js', 'functions-autodraw',
+      'endMatchOnCourt', legacyCommit, '--from-git'], { cwd: root }).toString().trim();
+    for (const row of legacy.filter(row => row.name === `sp-op-end-court-${version}`)) {
+      row.commit = legacyCommit;
+      row.sourceDigest = legacyDigest;
+    }
+    assert.equal(run(legacy, true).status, 0);
+    assert.notEqual(run(legacy).status, 0, 'Hosting barra quadra antiga');
     const mixed = structuredClone(original);
     for (const row of mixed.filter(row => row.name === `sp-op-end-court-${version}`)) {
       row.commit = current;
@@ -32,6 +40,9 @@ for (const version of ['v2', 'v3']) {
     const wrongService = structuredClone(mixed);
     wrongService.find(row => row.name === `sp-op-score-${version}`).commit = current;
     assert.notEqual(run(wrongService).status, 0);
+    const wrongLegacyDigest = structuredClone(mixed);
+    for (const row of wrongLegacyDigest.filter(row => row.name === `sp-op-score-${version}`)) row.sourceDigest = '0'.repeat(64);
+    assert.notEqual(run(wrongLegacyDigest).status, 0, 'digest de outra porta continua verificado contra o commit antigo');
     const wrongDigest = structuredClone(mixed);
     for (const row of wrongDigest.filter(row => row.name === `sp-op-end-court-${version}`)) row.sourceDigest = '0'.repeat(64);
     assert.notEqual(run(wrongDigest).status, 0);

@@ -4,6 +4,7 @@
 const fs = require('node:fs');
 const { execFileSync } = require('node:child_process');
 const path = require('node:path');
+const { sourceDescriptor, sourceDigest } = require('./operation-source-digest');
 const root = path.join(__dirname, '..');
 const version = process.argv[2];
 if (!['v2', 'v3'].includes(version)) throw new Error('uso: check-operation-regions-mixed.js v2|v3');
@@ -23,6 +24,7 @@ const current = execFileSync('git', ['log', '-1', '--format=%H', '--', 'function
 const legacy = [...new Set(rows.filter(row => row.name !== `sp-op-end-court-${version}`).map(row => row.commit))];
 if (legacy.length !== 1 || !/^[a-f0-9]{40}$/.test(legacy[0])) throw new Error('commit legado divergente');
 let mixed = false;
+const oldSources = new Map();
 for (let i = 0; i < names.length; i++) {
   const selected = regions.map(region => rows.filter(row => row.name === names[i] && row.region === region));
   if (selected.some(matches => matches.length !== 1)) throw new Error('porta ausente ou duplicada: ' + names[i]);
@@ -38,6 +40,11 @@ for (let i = 0; i < names.length; i++) {
     if (commit !== current) throw new Error('commit da quadra não é a fonte atual');
     mixed = true;
   } else if (commit !== legacy[0]) throw new Error('outra porta mudou de commit: ' + names[i]);
+  if (i !== 4) {
+    if (!oldSources.has(codebases[i])) oldSources.set(codebases[i], sourceDescriptor(codebases[i], legacy[0], true));
+    const oldDigest = sourceDigest(targets[i], legacy[0], oldSources.get(codebases[i]));
+    if (service[0].sourceDigest !== oldDigest) throw new Error('digest legado divergente: ' + names[i]);
+  }
 }
 if (mixed) {
   const digest = execFileSync('node', [path.join(root, 'scripts/operation-source-digest.js'),
