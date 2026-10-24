@@ -8,8 +8,8 @@
       "mode": "only"
     },
     "updateTournamentConfiguration": {
-      "backendCommit": "410b09c535f4f4665d5abaa4507019de97fb35ba",
-      "deployedAt": "2026-10-24T18:53:10.407Z",
+      "backendCommit": "841923d9b195aca28c2658bf21d7d618d1bc9441",
+      "deployedAt": "2026-10-24T19:26:10.043Z",
       "result": "success",
       "mode": "only"
     },
@@ -184,6 +184,12 @@
     "setTournamentPresenceWithWOSubstitution": {
       "backendCommit": "0510380cf595fd63ab6a79346a571c489513ca56",
       "deployedAt": "2026-10-23T16:00:23.085Z",
+      "result": "success",
+      "mode": "only"
+    },
+    "setTeamTieDrawOrder": {
+      "backendCommit": "841923d9b195aca28c2658bf21d7d618d1bc9441",
+      "deployedAt": "2026-10-24T19:26:10.043Z",
       "result": "success",
       "mode": "only"
     }
