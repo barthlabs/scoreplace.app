@@ -1,6 +1,8 @@
 // 2.5.48 — Torneios futuros podem classificar atletas e duplas por pontos ou saldo
 // de games e escolher a ordem de vitórias, games vencidos e outros desempates.
-// Competições por times têm seus próprios desempates configuráveis. O Neon já
+// Competições por times têm seus próprios desempates configuráveis. Se houver
+// sorteio como último critério, a organização registra a ordem sorteada no app;
+// a ordem só vale quando inclui todos os times e a classificação está aberta. O Neon já
 // concluído mantém a ordem legada exibida (saldo, games vencidos, vitórias),
 // diferente da ordem prevista no regulamento; não houve reapuração nesta versão.
 // 2.5.47 — A fase classificatória não cria disputa de 3º lugar após um placar.
