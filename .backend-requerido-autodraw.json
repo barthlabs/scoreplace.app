@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "backendCommit": "d25010b5dfd3bd1c7bdaeba28de73335836cadba",
-  "scopeNote": "Adiamento repetido do próximo jogo requer a callable endMatchOnCourt publicada antes da interface.",
+  "backendCommit": "c696fb32476b2482bc5c5c8a8a3d98e20338cfab",
+  "scopeNote": "Adiamento e cancelamento de chamada sem placar exigem endMatchOnCourt atualizada antes da interface.",
   "functions": [
     "endMatchOnCourt"
   ]
