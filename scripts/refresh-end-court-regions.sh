@@ -66,7 +66,7 @@ if(i<0||e.SP_SOURCE_DIGEST!==process.env.SP_DIGEST||e.SP_OPERATION_REGION!==proc
   !s.status?.url||s.status.url!==old.url||!s.status?.latestReadyRevisionName||s.spec?.template?.metadata?.annotations?.['run.googleapis.com/base-images'])process.exit(1);
 m[i]={name:process.env.SP_NAME,region:process.env.SP_REGION,target:'endMatchOnCourt',codebase:'functions-autodraw',
   commit:process.env.SP_COMMIT,sourceDigest:process.env.SP_DIGEST,
-  image:s.spec.template.spec.containers[0].image,url:s.status.url,revision:s.status.latestReadyRevisionName};
+  image:s.spec.template.spec.containers[0].image,url:s.status.url,revision:s.status.latestReadyRevisionName,env:e};
 fs.writeFileSync(process.env.SP_FILE,JSON.stringify(m,null,2)+'\n');
 NODE
 }
@@ -87,8 +87,9 @@ for version in v3 v2; do
     json="$(describe "$name" "$region")"
     current_digest="$(printf '%s' "$json" | node -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>{const x=JSON.parse(s);process.stdout.write((x.spec?.template?.spec?.containers?.[0]?.env||[]).find(e=>e.name==="SP_SOURCE_DIGEST")?.value||"")})')"
     if [[ "$current_digest" == "$digest" ]]; then
-      [[ -e "$candidate" ]] || { echo 'porta nova sem candidato: pare e reconcilie' >&2; exit 1; }
-      check_service "$json" "$candidate" "$name" "$region"
+      receipt="$candidate"
+      [[ -e "$receipt" ]] || receipt="$manifest"
+      check_service "$json" "$receipt" "$name" "$region"
       echo "✓ já atualizado $name/$region"
     else
       check_service "$json" "$manifest" "$name" "$region"
