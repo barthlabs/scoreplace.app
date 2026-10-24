@@ -1398,9 +1398,24 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       var side = uid ? (String(pair.p1Uid || '') === String(uid) ? 'p1' : 'p2')
         : (String(pair.p1ManualId || '') === String(manualId) ? 'p1' : 'p2');
       var name = String(pair[side + 'Name'] || pair[side + 'DisplayName'] || '').trim();
-      if (!name && uid && typeof window._displayNameForUid === 'function') name = window._displayNameForUid(uid, '');
-      if (!name) throw new Error('nome da inscrição indisponível; atualize o torneio');
-      _erShowReplacementDialog(t, { uid: uid || '', manualId: manualId || '', categoryId: pair.categoryId, name: name });
+      if (!uid) {
+        if (!name) throw new Error('nome da inscrição indisponível; atualize o torneio');
+        _erShowReplacementDialog(t, { uid: '', manualId: manualId, categoryId: pair.categoryId, name: name });
+        return;
+      }
+      if (!name && typeof window._nameForUid === 'function') name = window._nameForUid(uid) || '';
+      if (name) {
+        _erShowReplacementDialog(t, { uid: uid, manualId: '', categoryId: pair.categoryId, name: name });
+        return;
+      }
+      var db = window.FirestoreDB.db;
+      if (!db) throw new Error('perfil da conta indisponível; atualize o torneio');
+      return db.collection(window._COLECAO_PERFIL_PUBLICO || 'usersPublic').doc(uid).get().then(function (profileSnap) {
+        var profile = profileSnap.exists ? profileSnap.data() || {} : {};
+        var liveName = String(profile.displayName || '').trim();
+        if (!liveName || profile.mergedInto) throw new Error('perfil da conta indisponível; atualize o torneio');
+        _erShowReplacementDialog(t, { uid: uid, manualId: '', categoryId: pair.categoryId, name: liveName });
+      });
     }).catch(function (error) {
       if (typeof showNotification === 'function') showNotification('Não foi possível abrir a troca', String((error && error.message) || error), 'error');
     });

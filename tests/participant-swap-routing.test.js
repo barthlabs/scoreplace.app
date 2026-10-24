@@ -14,16 +14,25 @@ const opened = [], errors = [];
 const tournament = { id: 'tour-test', canonicalRegistrationMigration: { fingerprint: 'valid' } };
 const pairs = [
   { fixedPairId: 'pair-light', categoryId: 'light', p1ManualId: 'manual-a',
-    p1Name: 'Atleta manual', p2Uid: 'uid-partner', p2Name: 'Parceira' },
+    p1Name: 'Atleta manual', p2Uid: 'uid-partner' },
   { fixedPairId: 'pair-power', categoryId: 'power', p1ManualId: 'manual-a',
-    p1Name: 'Atleta manual', p2Uid: 'uid-partner', p2Name: 'Parceira' },
+    p1Name: 'Atleta manual', p2Uid: 'uid-partner' },
 ];
 const sandbox = {
   window: {
     _findTournamentById: () => tournament,
     _souOrganizador: () => true,
     _canonicalCategoryIdForDisplay: (_t, category) => category === 'Fem Light' ? 'light' : category,
-    FirestoreDB: { loadCanonicalTournamentRoster: async () => ({ data: { participants: pairs } }) },
+    FirestoreDB: {
+      loadCanonicalTournamentRoster: async () => ({ data: { participants: pairs } }),
+      db: { collection: (collection) => {
+        assert.equal(collection, 'usersPublic');
+        return { doc: (uid) => {
+          assert.equal(uid, 'uid-partner');
+          return { get: async () => ({ exists: true, data: () => ({ displayName: 'Parceira da conta' }) }) };
+        } };
+      } },
+    },
   },
   _erShowReplacementDialog: (_t, row) => opened.push(row),
   showNotification: (_title, message) => errors.push(message),
@@ -40,6 +49,7 @@ vm.runInContext(source.slice(start, end), sandbox);
   assert.equal(opened[0].manualId, 'manual-a');
   assert.equal(opened[1].categoryId, 'power');
   assert.equal(opened[1].uid, 'uid-partner');
+  assert.equal(opened[1].name, 'Parceira da conta', 'UID sem nome no roster busca perfil atual');
   assert.deepEqual(errors, []);
   console.log('✓ troca pelo nome usa identidade e categoria canônicas nas três entradas');
 })().catch((error) => { console.error(error); process.exitCode = 1; });
