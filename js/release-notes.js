@@ -1,3 +1,4 @@
+// 2.5.50 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.49 — O painel de progresso mostra a etapa ou rodada atual e, logo abaixo,
 // a barra do torneio inteiro. Em torneios de vários dias, a primeira etapa
 // permanece visível até o primeiro registro da seguinte; após o encerramento,
