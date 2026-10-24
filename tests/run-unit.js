@@ -633,6 +633,7 @@ const SUITES = [
   // o relógio do meio (RODADA e TORNEIO COMPLETO) vira REGRESSIVA quando há fim programado
   'tests/progresso-regressiva-fim-programado.test.js',
   'tests/neon-progress-before-first-game.test.js',
+  'tests/neon-progress-two-days.test.js',
   'tests/evento-concentrado-regressiva.test.js',
   'tests/barras-de-progresso-mostram-o-percentual.test.js',
   'tests/relogio-cor-do-ritmo-e-centrado.test.js',

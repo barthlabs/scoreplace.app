@@ -230,6 +230,7 @@ require('./vendor/persist-core.js');            // _cleanUndefined + _computeAdm
                                                 // — o boundary de escrita (o que a drawRound grava
                                                 // tem de sair pela MESMA regra do cliente)
 require('./vendor/sport-rules.js');             // SPORT_RULES — dep de format2 (allowsSingles/teamSize)
+require('./vendor/match-day.js');               // dia operacional compartilhado com TV
 require('./vendor/tournaments-utils.js');       // _isLigaFormat, _calcNextDrawDate
 require('./vendor/tournaments.js');             // _countCompetitors/_waitlistPeopleCount — as
                                                 // contagens que o CARTÃO mostra. O resumo TEM que

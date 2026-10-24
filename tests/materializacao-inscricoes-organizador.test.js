@@ -25,16 +25,16 @@ ok('a prévia e a aplicação continuam atrás da confirmação explícita',
   /fingerprint:\s*fingerprint/.test(body) && body.includes("_callCF('applyCanonicalRegistrationMigration'"));
 ok('a ferramenta não escreve Firestore pelo navegador',
   !/\.collection\([^\n]+\)\.(?:set|update|add|delete)\(/.test(body));
-ok('botão expõe somente a prévia explícita para torneio ainda não convertido',
-  tournaments.includes("window._materializeCanonicalRegistrations('${t.id}')") &&
-  tournaments.includes('!(t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint)') &&
-  tournaments.includes('🧬 Converter inscrições'));
-ok('lote curto usa prévia do servidor, confirmação explícita e não escreve Firestore pelo navegador',
+ok('organizador não recebe botão de conversão legado nem em lote',
+  !tournaments.includes('_canonicalBatchBtn') &&
+  !tournaments.includes('🧬 Converter inscrições') &&
+  !/onclick=[^\n]*_materializeCanonicalRegistrations/.test(tournaments));
+ok('rotina administrativa preserva prévia do servidor e confirmação explícita, sem botão público',
   body.includes('window._materializeCanonicalRegistrationsBatch = function') &&
   body.includes("_callCF('previewCanonicalRegistrationMigrationBatch'") &&
   body.includes("_callCF('applyCanonicalRegistrationMigrationBatch'") &&
   body.includes('showConfirmDialog') &&
-  tournaments.includes('🧬 Converter '));
+  !tournaments.includes('🧬 Converter '));
 ok('nota pública explica o alcance de comunicados para convidados manuais',
   releaseNotes.includes('📣 Comunicados alcançam contas registradas') &&
   releaseNotes.includes('Convidados incluídos manualmente, sem conta vinculada'));

@@ -21,6 +21,7 @@ vm.runInContext(fs.readFileSync(path.join(root, 'js/domain/team-competition.js')
 window.ScoreplaceTeamCompetition = context.ScoreplaceTeamCompetition;
 vm.runInContext(fs.readFileSync(path.join(root, 'js/domain/match-timing.js'), 'utf8'), context);
 vm.runInContext(fs.readFileSync(path.join(root, 'js/domain/next-match.js'), 'utf8'), context);
+vm.runInContext(fs.readFileSync(path.join(root, 'js/domain/match-day.js'), 'utf8'), context);
 const dashSource = fs.readFileSync(path.join(root, 'js/views/dashboard.js'), 'utf8');
 vm.runInContext(dashSource.slice(dashSource.indexOf('window._dashboardNextMatchCompare = function'), dashSource.indexOf('// A tela só solicita o fecho')), context);
 vm.runInContext(fs.readFileSync(path.join(root, 'js/views/tv-live.js'), 'utf8'), context);
@@ -429,6 +430,7 @@ const reloadHandlers = {}, reloadIntervals = [];
 const reloadButton = { attributes:{}, style:{}, setAttribute(name,value){this.attributes[name]=value;} };
 const reloadWindow = { location:{origin:'https://scoreplace.app'}, _currentBracketTournament:t,
   addEventListener(name,fn){reloadHandlers[name]=fn;} };
+reloadWindow.ScoreplaceMatchDay = window.ScoreplaceMatchDay;
 vm.runInNewContext(fs.readFileSync(path.join(root, 'js/views/tv-live.js'), 'utf8'), {
   window:reloadWindow, document:{querySelectorAll:()=>[reloadButton]}, Date:TestDate, Number, String, Array, Set,
   setInterval:fn=>{reloadIntervals.push(fn);return reloadIntervals.length;}, clearInterval:()=>{} });

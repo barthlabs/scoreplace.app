@@ -140,6 +140,7 @@ var STATIC_ASSETS = [
   '/js/deep-link.js',
   '/js/pwa-migrate-banner.js',
   '/js/views/dashboard.js',
+  '/js/domain/match-day.js',
   '/js/views/tournaments-utils.js',
   '/js/views/weather.js',
   '/js/views/tournaments-sharing.js',

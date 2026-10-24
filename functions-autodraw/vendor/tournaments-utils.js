@@ -842,6 +842,18 @@ window._getTournamentProgress = function(t) {
         if (p1.indexOf('BYE') === 0) return false;
         return p1 && p2;
     });
+    var onlyClassification = Array.isArray(t.phases) && t.phases.length > 0 &&
+        t.phases.every(function(phase) { return phase && phase.kind === 'classification'; });
+    if (onlyClassification) {
+        realMatches = realMatches.filter(function(m) {
+            var third = m === t.thirdPlaceMatch || m.isThirdPlace === true ||
+                (t.thirdPlaceMatch && m.id && m.id === t.thirdPlaceMatch.id);
+            if (!third) return true;
+            // Mesmo critério de `completed` abaixo: carimbo isolado não é placar.
+            return !!(m.winner || m.result ||
+                (m.score1 !== undefined && m.score2 !== undefined && m.score1 !== null && m.score2 !== null));
+        });
+    }
     var completed = realMatches.filter(function(m) {
         return m.winner || m.result || (m.score1 !== undefined && m.score2 !== undefined && (m.score1 !== null && m.score2 !== null));
     });
@@ -1665,8 +1677,60 @@ window._progBarPct = function(pct, color, h, radius, trackBg, outColor) {
     '<div style="width:' + p + '%;height:100%;background:' + window._spCor(color, 'background') + ';transition:width 0.5s ease,background 0.5s ease;"></div>' + lbl +
   '</div>';
 };
+window._tProgByDay = function(t) {
+  var days = t && t.scheduleWindow && t.scheduleWindow.days;
+  if (!Array.isArray(days) || days.length < 2 || !window.ScoreplaceMatchDay) return null;
+  var all = typeof window._collectAllMatches === 'function' ? window._collectAllMatches(t) : (t.matches || []);
+  var prog = window._getTournamentProgress(t);
+  var zone = window.ScoreplaceMatchDay.eventZone(t);
+  var grouped = days.map(function(d) { return { day: String(d.day || ''), startTime: d.startTime || '', endTime: d.endTime || '', matches: [] }; });
+  var byDay = Object.create(null);
+  grouped.forEach(function(d) { byDay[d.day] = d; });
+  var onlyClassification = Array.isArray(t.phases) && t.phases.length > 0 &&
+    t.phases.every(function(phase) { return phase && phase.kind === 'classification'; });
+  var real = all.filter(function(m) {
+    if (!m || m.isBye || m.isSitOut || !(m.p1 || m.player1) || !(m.p2 || m.player2)) return false;
+    var third = m === t.thirdPlaceMatch || m.isThirdPlace === true ||
+      (t.thirdPlaceMatch && m.id && m.id === t.thirdPlaceMatch.id);
+    return !(onlyClassification && third && !(m.winner || m.result ||
+      (m.score1 !== undefined && m.score2 !== undefined && m.score1 !== null && m.score2 !== null)));
+  });
+  real.forEach(function(m) {
+    var day = window.ScoreplaceMatchDay.matchDay(m, zone);
+    if (byDay[day]) byDay[day].matches.push(m);
+  });
+  // Se a agenda estiver incompleta, o painel antigo é mais honesto que etapas parciais.
+  if (grouped.reduce(function(n, d) { return n + d.matches.length; }, 0) !== prog.total) return null;
+  return { days: grouped.map(function(d) {
+    var done = d.matches.filter(function(m) { return m.winner || m.result ||
+      (m.score1 !== undefined && m.score2 !== undefined && m.score1 !== null && m.score2 !== null); });
+    var first = d.matches.map(function(m) { return window.ScoreplaceMatchDay.timestamp(m.startedAt || m.resultAt); }).filter(Boolean);
+    var last = done.map(function(m) { return window.ScoreplaceMatchDay.timestamp(m.resultAt); }).filter(Boolean);
+    return { day: d.day, startTime: d.startTime, endTime: d.endTime, total: d.matches.length,
+      completed: done.length, firstAt: first.length ? Math.min.apply(null, first) : null,
+      lastAt: last.length ? Math.max.apply(null, last) : null };
+  }), total: prog.total, completed: prog.completed, zone: zone };
+};
+window._tProgByDayHtml = function(stage) {
+  var time = function(ms) { return new Date(ms).toLocaleTimeString('pt-BR', { timeZone: stage.zone, hour: '2-digit', minute: '2-digit' }); };
+  var cards = stage.days.map(function(d, i) {
+    var pct = d.total ? Math.round(d.completed / d.total * 100) : 0;
+    var date = d.day.slice(8, 10) + '/' + d.day.slice(5, 7);
+    return '<div class="tourn-progress-stage">' +
+      '<div class="tourn-progress-stage-head"><strong>Etapa ' + (i + 1) + ' · ' + date + '</strong><strong>' + d.completed + '/' + d.total + ' jogos · ' + pct + '%</strong></div>' +
+      '<div class="tourn-progress-stage-track"><span style="width:' + pct + '%"></span></div>' +
+      '<div class="tourn-progress-stage-meta"><span>Programado ' + d.startTime + '–' + d.endTime + '</span>' +
+      '<span>' + (d.firstAt ? 'Primeiro registro ' + time(d.firstAt) : 'Aguardando primeiro jogo') + '</span>' +
+      (d.completed === d.total && d.lastAt ? '<span>Último placar ' + time(d.lastAt) + '</span>' : '') + '</div></div>';
+  }).join('');
+  var pct = stage.total ? Math.round(stage.completed / stage.total * 100) : 0;
+  return '<div class="tourn-progress-stages"><div class="tourn-progress-stage-head"><strong>PROGRESSO DO TORNEIO</strong><strong>' +
+    stage.completed + '/' + stage.total + ' partidas · ' + pct + '%</strong></div>' + cards + '</div>';
+};
 window._buildProgressInner = function(t) {
   var prog = window._getTournamentProgress(t);
+  var dayStages = window._tProgByDay(t);
+  if (dayStages) return window._tProgByDayHtml(dayStages);
   // v4.4.48: Multi-fase (ex.: Fase de Grupos → Eliminatória): a barra VERDE do topo reflete
   // a FASE ATUAL (só o estágio corrente). Numa classificatória de 72 jogos, quando os 72
   // saem → 100% e o botão "avançar de fase" aparece — é o que o dono quer VER no topo. O

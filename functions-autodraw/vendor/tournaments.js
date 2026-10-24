@@ -4413,7 +4413,7 @@ function renderTournaments(container, tournamentId = null) {
             ${(tournamentId && isOrg) ? (function() {
               // A escala pode ser preparada antes de habilitar lançamento por árbitro.
               var _arbitrosBtn = t.id
-                ? '<button class="btn hover-lift" style="background:linear-gradient(135deg,rgba(20,184,166,0.18),rgba(6,182,212,0.18));color:var(--sp-c-2dd4bf,#2dd4bf);border:1px solid rgba(20,184,166,0.45);font-size:0.82rem;padding:8px 16px;border-radius:10px;font-weight:600;cursor:pointer;" onclick="event.stopPropagation();window.location.hash=\'#arbitros/' + t.id + '\'">🧑‍⚖️ Árbitros</button>'
+                ? '<button class="btn hover-lift sp-referee-action" onclick="event.stopPropagation();window.location.hash=\'#arbitros/' + t.id + '\'">🧑‍⚖️ Árbitros</button>'
                 : '';
               // v1.2.13: "FERRAMENTAS DO ORGANIZADOR" era `rgba(255,255,255,0.35)` HARDCODED —
               // branco a 35% não dá leitura em NENHUM dos casos reportados: sobre a foto do
@@ -4449,20 +4449,6 @@ function renderTournaments(container, tournamentId = null) {
                 ? 'color:#f1f5f9 !important; text-shadow:0 1px 3px rgba(0,0,0,0.95), 0 0 2px rgba(0,0,0,0.95);'
                 : 'color:var(--text-muted);';
               var _toolsBorder = venuePhotoBg ? 'rgba(255,255,255,0.28)' : 'var(--border-color, rgba(255,255,255,0.12))';
-              // A conversão é sempre explícita. Quando o organizador tem mais
-              // de um torneio ainda legado no store já autorizado, oferecemos
-              // um recorte curto (máx. 10), cuja prévia e cada escrita voltam
-              // a ser conferidas no servidor por UID e fingerprint.
-              var _canonicalBatchIds = (window.AppStore && Array.isArray(window.AppStore.tournaments)
-                ? window.AppStore.tournaments : []).filter(function (candidate) {
-                  return candidate && candidate.id && window._souOrganizador(candidate) &&
-                    !(candidate.canonicalRegistrationMigration && candidate.canonicalRegistrationMigration.fingerprint);
-                }).map(function (candidate) { return String(candidate.id); }).slice(0, 10);
-              var _canonicalBatchArg = encodeURIComponent(JSON.stringify(_canonicalBatchIds));
-              var _canonicalBatchBtn = _canonicalBatchIds.length > 1 && window._canonicalRegistrationMutationsReady === true
-                ? '<button class="btn btn-indigo hover-lift" onclick="event.stopPropagation(); window._materializeCanonicalRegistrationsBatch(' +
-                  'JSON.parse(decodeURIComponent(\'' + _canonicalBatchArg + '\'))' +
-                  ')" title="Confere e converte, em lote curto, somente torneios que você organiza">🧬 Converter ' + _canonicalBatchIds.length + ' torneios</button>' : '';
               // ── ENCERRADO POR INATIVIDADE: a ÚNICA ferramenta é Reabrir ──────────────
               // Ordem do dono (02/ago/2026): _"depois de encerrado, a única ferramenta ativa
               // seria o reabrir torneio"_. Não é decoração: enquanto o torneio está parado,
@@ -4498,8 +4484,6 @@ function renderTournaments(container, tournamentId = null) {
                 ${isOrg ? `<button class="btn btn-tool-amber hover-lift" onclick="event.stopPropagation(); window._saveAsTemplate('${t.id}')">💾 ${window._t ? window._t('btn.saveTemplate') : 'Salvar como Template'}</button>` : ''}
                 ${categoriasBtn}
                 ${enrollmentReportBtn}
-                ${isOrg && !(t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint) && window._canonicalRegistrationMutationsReady === true ? `<button class="btn btn-indigo hover-lift" onclick="event.stopPropagation(); window._materializeCanonicalRegistrations('${t.id}')" title="Confere o elenco atual e só converte se a prévia assinada não tiver conflitos">🧬 Converter inscrições</button>` : ''}
-                ${_canonicalBatchBtn}
                 ${isOrg ? `<button class="btn hover-lift" style="background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;border:none;" onclick="event.stopPropagation(); window._opOpenManage('${t.id}')">📊 Enquete</button>` : ''}
                 ${/* ⛔ 1.8.31 — o chip do grupo do torneio SAIU daqui. Ordem do dono: "existe esse
                       botao la em cima ao lado do inscrever-se/desinscrever-se. nao é o mesmo? tem

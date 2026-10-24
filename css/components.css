@@ -3324,3 +3324,23 @@ dialog.sp-native-update::backdrop { background: var(--bg-overlay, rgba(0,0,0,0.6
   .sp-dashboard-has-more .sp-dashboard-next-plural { display: inline; }
   .sp-dashboard-has-more .sp-dashboard-next-singular { display: none; }
 }
+
+/* Árbitros: superfícies sólidas evitam texto pálido sobre foto ou tema claro. */
+.sp-referee-action { background: #0f766e !important; color: #fff !important; border: 1px solid #115e59 !important; font-size: .82rem; padding: 8px 16px; border-radius: 10px; font-weight: 700; cursor: pointer; }
+.sp-referee-action.btn-sm { font-size: .7rem; padding: 5px 10px; border-radius: 8px; }
+.sp-referee-action-invite { background: #4338ca !important; border-color: #3730a3 !important; }
+.sp-referee-sport { display: inline-block; font-size: .6rem; padding: 1px 6px; border-radius: 4px; background: #0f766e; color: #fff; border: 1px solid #115e59; }
+.sp-referee-section { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 14px; padding: 14px 16px; margin-bottom: 20px; color: var(--text-bright); }
+.sp-referee-section-confirmed { border-left: 4px solid #0f766e; }
+.sp-referee-section-invited { border-left: 4px solid #b45309; }
+.sp-referee-section-available { border-left: 4px solid #4338ca; }
+.sp-referee-section-title { font-size: .75rem; font-weight: 800; text-transform: uppercase; letter-spacing: .5px; color: var(--text-bright); margin-bottom: 10px; }
+.sp-referee-section-title span { opacity: .8; }
+
+/* Progresso de torneio distribuído em dias, com total e fechamento por etapa. */
+.tourn-progress-stages { display: grid; gap: 12px; color: var(--text-bright); }
+.tourn-progress-stage { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; }
+.tourn-progress-stage-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; flex-wrap: wrap; font-size: .85rem; }
+.tourn-progress-stage-track { height: 10px; border-radius: 999px; background: rgba(127,127,127,.22); overflow: hidden; margin: 8px 0; }
+.tourn-progress-stage-track span { display: block; height: 100%; background: #059669; border-radius: inherit; }
+.tourn-progress-stage-meta { display: flex; gap: 6px 16px; flex-wrap: wrap; font-size: .72rem; color: var(--text-muted); }

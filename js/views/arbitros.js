@@ -57,8 +57,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var sportBadges = '';
     if (Array.isArray(person.refereeSports) && person.refereeSports.length > 0) {
       sportBadges = person.refereeSports.map(function(s) {
-        return '<span style="font-size:0.6rem;padding:1px 6px;border-radius:4px;background:rgba(20,184,166,0.12);'
-          + 'color:var(--sp-c-2dd4bf,#2dd4bf);border:1px solid rgba(20,184,166,0.25);">' + safe(s) + '</span>';
+        return '<span class="sp-referee-sport">' + safe(s) + '</span>';
       }).join('');
     }
 
@@ -86,15 +85,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       var isSelf = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid === uid);
       if (isSelf) {
         // Organizador se auto-confirma diretamente — sem fluxo de convite
-        actionBtn = '<button class="btn btn-sm" style="font-size:0.7rem;padding:5px 10px;'
-          + 'background:linear-gradient(135deg,rgba(20,184,166,0.18),rgba(13,148,136,0.18));'
-          + 'color:var(--sp-c-2dd4bf,#2dd4bf);border:1px solid rgba(20,184,166,0.4);border-radius:8px;" '
+        actionBtn = '<button class="btn btn-sm sp-referee-action" '
           + 'onclick="event.stopPropagation();window._arbitrosSelfConfirm(\'' + safeUid + '\',\'' + safeTid + '\')" '
           + 'title="Confirmar como árbitro deste torneio">✓ Arbitrarei</button>';
       } else {
-        actionBtn = '<button class="btn btn-sm" style="font-size:0.7rem;padding:5px 10px;'
-          + 'background:linear-gradient(135deg,rgba(99,102,241,0.18),rgba(79,70,229,0.18));'
-          + 'color:var(--sp-c-a5b4fc,#a5b4fc);border:1px solid rgba(99,102,241,0.4);border-radius:8px;" '
+        actionBtn = '<button class="btn btn-sm sp-referee-action sp-referee-action-invite" '
           + 'onclick="event.stopPropagation();window._arbitrosInvite(\'' + safeUid + '\',\'' + safeTid + '\')" '
           + 'title="Convidar para arbitrar">+ Convidar</button>';
       }
@@ -115,15 +110,15 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   }
 
   // ─── Section renderer ───────────────────────────────────────────────────────
-  function _arbSection(title, icon, color, borderColor, bgColor, cards) {
+  function _arbSection(title, icon, tone, cards) {
     if (cards.length === 0) {
-      return '<div style="background:' + window._spCor(bgColor, 'background') + ';border:1px solid ' + window._spCor(borderColor, 'borda') + ';border-radius:14px;padding:14px 16px;margin-bottom:20px;">'
-        + '<div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:' + window._spCor(color, 'color') + ';margin-bottom:4px;">' + icon + ' ' + window._safeHtml(title) + '</div>'
+      return '<div class="sp-referee-section sp-referee-section-' + tone + '">'
+        + '<div class="sp-referee-section-title">' + icon + ' ' + window._safeHtml(title) + '</div>'
         + '<div style="font-size:0.8rem;color:var(--text-muted);padding:8px 0;">Nenhum árbitro aqui ainda.</div>'
       + '</div>';
     }
-    return '<div style="background:' + window._spCor(bgColor, 'background') + ';border:1px solid ' + window._spCor(borderColor, 'borda') + ';border-radius:14px;padding:14px 16px;margin-bottom:20px;">'
-      + '<div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:' + window._spCor(color, 'color') + ';margin-bottom:10px;">' + icon + ' ' + window._safeHtml(title) + ' <span style="opacity:0.65;">(' + cards.length + ')</span></div>'
+    return '<div class="sp-referee-section sp-referee-section-' + tone + '">'
+      + '<div class="sp-referee-section-title">' + icon + ' ' + window._safeHtml(title) + ' <span>(' + cards.length + ')</span></div>'
       + cards.join('')
     + '</div>';
   }
@@ -220,9 +215,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           var availableCards = available.map(function(a)     { return _arbCard(a, tId, 'available'); });
 
           var html =
-            _arbSection('Confirmados', '✅', '#2dd4bf', 'rgba(20,184,166,0.35)', 'rgba(20,184,166,0.06)', confirmedCards) +
-            _arbSection('Convidados',  '⏳', '#fbbf24', 'rgba(251,191,36,0.35)',  'rgba(251,191,36,0.05)',  invitedCards)  +
-            _arbSection('Disponíveis' + (sport ? ' em ' + sport : ''), '🔍', '#a5b4fc', 'rgba(99,102,241,0.35)', 'rgba(99,102,241,0.05)', availableCards);
+            _arbSection('Confirmados', '✅', 'confirmed', confirmedCards) +
+            _arbSection('Convidados',  '⏳', 'invited', invitedCards)  +
+            _arbSection('Disponíveis' + (sport ? ' em ' + sport : ''), '🔍', 'available', availableCards);
 
           var el = document.getElementById('arbitros-content');
           if (el) el.innerHTML = html;
