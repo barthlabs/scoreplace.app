@@ -1,4 +1,9 @@
-// 2.5.50 — Atualização consolidada de produção com as correções validadas desde a última publicação.
+// 2.5.50 — A organização abre a troca de participante tocando no nome em
+// Análise, Inscritos ou Chaves. A tela existente permite escolher uma pessoa
+// digitada ou uma conta encontrada pelo nome, em qualquer combinação de origem
+// e destino. A vaga é identificada pela inscrição canônica e pela categoria;
+// jogos já concluídos mantêm a formação histórica. Se o perfil da conta ainda
+// não estiver em memória, o nome atual é lido antes da confirmação.
 // 2.5.49 — O painel de progresso mostra a etapa ou rodada atual e, logo abaixo,
 // a barra do torneio inteiro. Em torneios de vários dias, a primeira etapa
 // permanece visível até o primeiro registro da seguinte; após o encerramento,
