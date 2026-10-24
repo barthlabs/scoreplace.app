@@ -15,6 +15,7 @@ assert(body.includes("teamDecisionV2 && teamOutcome === 'substitute'"), 'chamada
 assert(body.includes("_forceNoSub: !teamDecisionV2 || teamOutcome === 'wo'"), 'escolha de W.O. e cliente antigo não consomem suplente');
 assert(body.includes('requireTeamSubstitution: teamDecisionV2'), 'substituição exige dupla elegível na transação');
 assert(body.includes('individualDecisionV2 = data.individualDecisionV2 === true'), 'a decisão individual é explícita');
+assert(body.includes('individualDecisionV2 && (forceTeamWO || !matchId || !requestedUid)'), 'o servidor recusa W.O. individual sem UID antes de qualquer escrita');
 assert(body.includes("result.outcome !== 'subbed'"), 'sem substituição concluída o W.O. individual não grava pendência nem W.O. da dupla');
 assert(body.includes('matches: [selectedMatch]'), 'a callable limita a ação ao jogo escolhido');
 assert(body.includes('requestedTeamUids'), 'o time é solicitado pelo conjunto de UIDs');
@@ -31,6 +32,8 @@ assert(!view.includes('teamSide:'), 'a tela não envia p1/p2 para a callable');
 assert(view.includes('W.O. do time inteiro'), 'modal identifica claramente a seção de dupla');
 assert(view.includes('Chamar dupla suplente') && view.includes('Vitória por W.O.'), 'confirmação oferece as duas escolhas ao organizador');
 assert(view.includes('individualDecisionV2: true'), 'a tela exige suplente no W.O. individual');
+assert(view.includes("isManager && rc.scope === 'match' && !_u"), 'a tela não oferece W.O. individual indisponível para inscrição digitada');
+assert(view.includes('Inscrição digitada: use Trocar participante'), 'a pessoa digitada recebe uma ação alternativa clara');
 assert(view.includes('Se não houver suplente, nada será gravado'), 'a confirmação individual explica a decisão');
 
 const create = fs.readFileSync('js/views/create-tournament.js', 'utf8');

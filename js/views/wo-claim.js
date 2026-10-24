@@ -544,6 +544,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       var _nm = (typeof window._liveRowName === 'function')
         ? (window._liveRowName({ name: mb.name, uid: _u }) || mb.name)
         : mb.name;
+      if (isManager && rc.scope === 'match' && !_u) {
+        return '<div style="display:block;width:100%;text-align:left;margin-bottom:8px;background:rgba(148,163,184,.08);border:1px solid rgba(148,163,184,.3);color:var(--text-bright);border-radius:11px;padding:11px 13px;font-size:0.92rem;">' + _esc(_nm) + '<span style="display:block;font-size:0.7rem;color:var(--text-muted);margin-top:2px;">Inscrição digitada: use Trocar participante no nome da chave ou dos inscritos.</span></div>';
+      }
       if (isManager && rc.scope === 'match') {
         return '<button type="button" onclick="window._woDeclareIndividual(\'' + _attr(t.id) + '\',\'' + _attr(ctxKey) + '\',\'' + _attr(mb.name) + '\',\'' + _attr(_u) + '\')" class="btn hover-lift" style="display:block;width:100%;text-align:left;margin-bottom:8px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.3);color:var(--text-bright);font-weight:700;border-radius:11px;padding:11px 13px;font-size:0.92rem;">🚫 W.O. individual · ' + _esc(_nm) + '<span style="display:block;font-size:0.7rem;font-weight:600;color:var(--text-muted);margin-top:2px;">exige suplente elegível; sem suplente, escolha separadamente o W.O. da dupla</span></button>';
       }
@@ -604,7 +607,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       });
     }
     var intro = isManager && rc.scope === 'match'
-      ? 'Toque no nome para W.O. individual e chamar o primeiro suplente. À direita, <b style="color:var(--text-bright);">W.O. dupla</b> encerra o confronto daquele time sem suplente.'
+      ? 'Para uma pessoa com conta, toque no nome para W.O. individual e chamar o primeiro suplente. Inscrição digitada pode ser trocada diretamente na chave. À direita, <b style="color:var(--text-bright);">W.O. dupla</b> encerra o confronto daquele time sem suplente.'
       : 'Quem não pôde vir? <b style="color:var(--text-bright);">Se for você, só a sua confirmação basta</b> — ninguém mais precisa aprovar. Apontando outra pessoa, o outro lado confirma antes.';
     _overlay(_header(isManager && rc.scope === 'match' ? 'Aplicar W.O.' : 'Faltou alguém?') +
       '<div style="padding:1.1rem;">' +

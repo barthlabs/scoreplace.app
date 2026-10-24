@@ -3,7 +3,9 @@
 // digitada ou uma conta encontrada pelo nome, em qualquer combinação de origem
 // e destino. A vaga é identificada pela inscrição canônica e pela categoria;
 // jogos já concluídos mantêm a formação histórica. Se o perfil da conta ainda
-// não estiver em memória, o nome atual é lido antes da confirmação.
+// não estiver em memória, o nome atual é lido antes da confirmação. O atalho
+// de W.O. individual exige UID; para uma inscrição digitada, a tela indica a
+// troca direta no nome em vez de oferecer uma ação que o servidor recusaria.
 // 2.5.49 — O painel de progresso mostra a etapa ou rodada atual e, logo abaixo,
 // a barra do torneio inteiro. Em torneios de vários dias, a primeira etapa
 // permanece visível até o primeiro registro da seguinte; após o encerramento,
