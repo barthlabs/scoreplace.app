@@ -82,7 +82,7 @@ async function driver() {
       checkedInConfirmed: { [sourceUid ? 'old-edit' : 'typed-a']: true },
       absent: { [sourceUid ? 'old-edit' : 'typed-a']: false },
       opponentHistory: { [pairId]: ['past-opponent'] },
-      woLog: [{ matchId: 'historical', note: 'registro anterior' }],
+      woLog: [{ matchId: 'historical', absentName: side.p1Name, note: 'registro anterior' }],
     });
     const historicalBefore = (await db.doc('tournaments/' + tid + '/matches/game-0').get()).data();
     const historicalResultBefore = (await db.doc('tournaments/' + tid + '/results/game-0').get()).data();
@@ -144,7 +144,8 @@ async function driver() {
     assert.notEqual(activeReplacement.manualParticipantId || activeReplacement.participantUid,
       sourceUid ? 'old-edit' : 'typed-a', kind);
     assert.deepEqual(tournamentAfter.opponentHistory, { [pairId]: ['past-opponent'] }, kind);
-    assert.deepEqual(tournamentAfter.woLog, [{ matchId: 'historical', note: 'registro anterior' }], kind);
+    assert.deepEqual(tournamentAfter.woLog, [{ matchId: 'historical', absentName: side.p1Name,
+      note: 'registro anterior' }], kind);
     assert.equal((await db.doc('tournaments/' + tid + '/registrations/' + idA).get()).data().status,
       'withdrawn', kind);
   }

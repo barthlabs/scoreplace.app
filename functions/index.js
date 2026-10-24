@@ -4528,7 +4528,7 @@ exports.editCanonicalTournamentSlot = onCall(
     if (!callerUid) throw new HttpsError('unauthenticated', 'login necessário');
     const data = request.data || {};
     if (data.operation !== 'replace') {
-      throw new HttpsError('invalid-argument', 'escolha explicitamente trocar a pessoa; correção de grafia usa a renomeação');
+      throw new HttpsError('invalid-argument', 'escolha explicitamente trocar a pessoa; para corrigir o nome de uma inscrição manual, use o lápis na tela Inscritos');
     }
     const tournamentId = String(data.tournamentId || '').trim();
     const sandbox = data.sandbox === true;
