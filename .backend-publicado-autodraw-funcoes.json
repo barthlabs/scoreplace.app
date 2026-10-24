@@ -62,8 +62,8 @@
       "mode": "only"
     },
     "tournamentSummary": {
-      "backendCommit": "f5dad9e5bcdeab7201b384d2fba9fd0eda3e61dc",
-      "deployedAt": "2026-10-19T17:29:07.759Z",
+      "backendCommit": "89925c7eb4a00c1951bdc7dea1f0a296248392a4",
+      "deployedAt": "2026-10-24T16:14:45.315Z",
       "result": "success",
       "mode": "only"
     },

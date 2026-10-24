@@ -4081,6 +4081,20 @@ window._maybeFinishElimination = _maybeFinishElimination;
 // Garante que o thirdPlaceMatch existe com TBD e preenche progressivamente
 // com os perdedores das semifinais conforme os resultados são lançados
 function _maybeGenerate3rdPlace(t) {
+  // Classificatória não tem disputa de 3º lugar. `_advanceWinner` chama este
+  // helper após cada resultado, inclusive em fases classificatórias; sem esta
+  // guarda ele recriava um campo separado mesmo com os jogos canônicos corretos.
+  // Preserve um placar legado para investigação, mas limpe o placeholder vazio.
+  if (_bracketPhaseFormat(t) === 'classification') {
+    var oldThird = t && t.thirdPlaceMatch;
+    if (oldThird && !(oldThird.winner || oldThird.result ||
+        (oldThird.score1 != null && oldThird.score2 != null) ||
+        (oldThird.scoreP1 != null && oldThird.scoreP2 != null) ||
+        (Array.isArray(oldThird.sets) && oldThird.sets.length))) {
+      delete t.thirdPlaceMatch;
+    }
+    return;
+  }
   // 3rd place match is always generated for elimination formats — EXCEPT
   // Dupla Eliminatória.
   // v1.0.92-beta: DE não tem match dedicado de 3º lugar — 3º vem do Lower

@@ -154,7 +154,8 @@ function cenario(opcoes) {
   fs.writeFileSync(path.join(repo, 'scripts', 'check-release-notes.js'), 'process.exit(0);\n');
   fs.writeFileSync(path.join(repo, 'scripts', 'check-deploy-alignment.js'), 'process.exit(0);\n');
   fs.writeFileSync(path.join(repo, 'scripts', 'deploy-operation-regions.sh'),
-    '#!/bin/sh\n' + (o.regiaoDivergente ? 'exit 1\n' : 'exit 0\n'));
+    '#!/bin/sh\n' + (o.regiaoDivergente ? 'exit 1\n' :
+      o.fingerprintInicialFalha ? ': > .claude/tmp/operation-regions-manifest-v2.json\nexit 0\n' : 'exit 0\n'));
   fs.chmodSync(path.join(repo, 'scripts', 'deploy-operation-regions.sh'), 0o755);
   fs.writeFileSync(path.join(repo, 'scripts', 'generate-operation-regions-config.js'), 'process.exit(0);\n');
   fs.writeFileSync(path.join(repo, 'scripts', 'generate-operation-regions-v3-config.js'), 'process.exit(0);\n');
@@ -193,6 +194,10 @@ function cenario(opcoes) {
   fs.writeFileSync(path.join(bin, 'firebase'),
     '#!/bin/sh\n' +
     'echo "$@" >> ' + JSON.stringify(path.join(marcas, 'firebase.txt')) + '\n' +
+    (o.alteraRegionalAposGate
+      ? 'case "$*" in *"functions:list"*) printf alterado >> ' +
+        JSON.stringify(path.join(repo, o.alteraRegionalAposGate)) + ' ;; esac\n'
+      : '') +
     'case "$*" in *"deploy --only hosting"*)\n' +
     '  cat js/marcador-release.txt >> ' + JSON.stringify(path.join(marcas, 'publicado.txt')) + ' 2>/dev/null\n' +
     ';; esac\n' +
@@ -316,6 +321,31 @@ for (const [nome, opcoes] of [
     eq(c.remotoDepois, c.remotoAntes, nome + ': remoto inalterado');
   } finally { c.limpar(); }
 }
+
+console.log('▸ ①c fingerprint regional local fecha mudanças entre gate e upload');
+{
+  const c = cenario({ preflightPassa: true, fingerprintInicialFalha: true });
+  try {
+    ok(c.status !== 0, 'fingerprint inicial inválido aborta');
+    eq(c.pushChamado, '', 'fingerprint inicial inválido não empurra');
+    ok(!/deploy --only hosting/.test(c.chamouFirebase), 'fingerprint inicial inválido não publica');
+  } finally { c.limpar(); }
+}
+for (const file of [
+  '.claude/tmp/operation-regions-manifest-v2.json',
+  '.claude/tmp/operation-regions-manifest-v3.json',
+  '.claude/tmp/operation-legacy-gate-manifest-v2.json',
+  'operation-regions.json',
+  'operation-regions-v3.json'
+]) {
+  const c = cenario({ preflightPassa: true, alteraRegionalAposGate: file });
+  try {
+    ok(c.status !== 0, file + ': alteração após gate aborta');
+    ok(!/deploy --only hosting/.test(c.chamouFirebase), file + ': alteração não publica');
+  } finally { c.limpar(); }
+}
+ok((sh.match(/verificar_contingencia_regional \|\| exit 1/g) || []).length === 1,
+  'a malha remota é conferida uma única vez por tentativa');
 
 console.log('▸ ② preflight REPROVADO: não empurra e não publica');
 {

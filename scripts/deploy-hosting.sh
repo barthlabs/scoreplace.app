@@ -595,6 +595,37 @@ verificar_contingencia_regional() {
 }
 
 verificar_contingencia_regional || exit 1
+# A malha remota já foi conferida nesta tentativa. Guardar apenas a integridade
+# dos cinco insumos locais evita repetir 48 descrições de serviço após o push.
+# Este digest vive só neste processo; uma retomada faz nova conferência remota.
+fingerprint_regional() {
+  cd "$RAIZ"
+  node - <<'NODE'
+const fs = require('node:fs');
+const crypto = require('node:crypto');
+const files = [
+  '.claude/tmp/operation-regions-manifest-v2.json',
+  '.claude/tmp/operation-regions-manifest-v3.json',
+  '.claude/tmp/operation-legacy-gate-manifest-v2.json',
+  'operation-regions.json',
+  'operation-regions-v3.json'
+];
+try {
+  const hash = crypto.createHash('sha256');
+  for (const file of files) {
+    const data = fs.readFileSync(file);
+    if (!data.length) throw new Error(file + ' está vazio');
+    hash.update(file).update('\0').update(data).update('\0');
+  }
+  process.stdout.write(hash.digest('hex'));
+} catch (error) {
+  console.error('✗ fingerprint regional indisponível: ' + error.message);
+  process.exitCode = 1;
+}
+NODE
+}
+REGIONAL_FINGERPRINT="$(fingerprint_regional)" || exit 1
+[[ -n "$REGIONAL_FINGERPRINT" ]] || { echo "✗ fingerprint regional vazio — abortando."; exit 1; }
 echo "▸ empurrando o main ANTES do upload (falhar aqui é barato)…"
 if ! git push --force-with-lease="refs/heads/main:$BASE" origin "$COMMIT:refs/heads/main"; then
   echo
@@ -706,7 +737,12 @@ if [[ ! -s "$DEST/operation-regions-v3.json" ]] ||
   echo "✗ configuração regional v3 extraída diverge do commit — abortando upload."
   exit 1
 fi
-verificar_contingencia_regional || exit 1
+REGIONAL_FINGERPRINT_AGORA="$(fingerprint_regional)" || exit 1
+if [[ "$REGIONAL_FINGERPRINT_AGORA" != "$REGIONAL_FINGERPRINT" ]]; then
+  echo "✗ manifesto ou configuração regional mudou após o gate remoto — abortando upload."
+  exit 1
+fi
+echo "  ✓ insumos regionais preservados desde o gate remoto"
 cd "$DEST"
 _DEPLOY_RC=0
 firebase deploy --only hosting --project scoreplace-app || _DEPLOY_RC=$?

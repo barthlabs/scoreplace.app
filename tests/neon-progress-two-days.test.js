@@ -20,6 +20,28 @@ assert.deepEqual(W._tProgByDay(first).days.map(d => [d.completed, d.total]), [[4
 assert.equal(W._getTournamentProgress(first).completed, 48);
 
 const phantom = t.thirdPlaceMatch;
+const mixedPhases = {
+  phases: [{ kind: 'classification' }, { kind: 'elimination', elimination: { bracketType: 'single' } }],
+  currentPhaseIndex: 0,
+  matches: [
+    { id: 'semi-a', round: 1, p1: 'A', p2: 'B', winner: 'A' },
+    { id: 'semi-b', round: 1, p1: 'C', p2: 'D', winner: 'C' },
+    { id: 'final', round: 2, p1: 'A', p2: 'C', winner: null }
+  ],
+  thirdPlaceMatch: { id: 'phantom', p1: 'B', p2: 'D', winner: null }
+};
+W._maybeGenerate3rdPlace(mixedPhases);
+assert.equal(mixedPhases.thirdPlaceMatch, undefined,
+  'a fase classificatória remove o placeholder de terceiro lugar na origem');
+mixedPhases.currentPhaseIndex = 1;
+W._maybeGenerate3rdPlace(mixedPhases);
+assert.ok(mixedPhases.thirdPlaceMatch,
+  'a fase eliminatória seguinte continua podendo gerar terceiro lugar');
+const scoredThird = { ...mixedPhases, currentPhaseIndex: 0,
+  thirdPlaceMatch: { id: 'historical', score1: 6, score2: 4, winner: 'B' } };
+W._maybeGenerate3rdPlace(scoredThird);
+assert.equal(scoredThird.thirdPlaceMatch.id, 'historical',
+  'um resultado histórico nunca é apagado pela limpeza de classificatória');
 assert.equal(W._getTournamentProgress({ ...t, thirdPlaceMatch: { ...phantom, winner: 'A' } }).total, 97,
   'terceiro lugar realmente jogado continua no total');
 assert.equal(W._getTournamentProgress({ ...t, phases: [{ kind: 'elimination' }] }).total, 97,
