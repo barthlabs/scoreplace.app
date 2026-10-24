@@ -72,7 +72,8 @@ if [[ "$mode" == --check-v2-live ]]; then
       json="$(describe "$name" "$region")" || exit 1
       row_commit="$(SP_FILE="$oldmanifest" SP_NAME="$name" node -e 'const m=require("./"+process.env.SP_FILE);process.stdout.write(m.find(x=>x.name===process.env.SP_NAME).commit)')"
       verify_served_row "$name" "$region" "$json" "$oldmanifest"
-      this_image="$(printf '%s' "$json" | field spec.template.spec.containers.0.image)"
+      this_image="$(SP_FILE="$oldmanifest" SP_NAME="$name" SP_REGION="$region" node -e 'const m=require("./"+process.env.SP_FILE);process.stdout.write(m.find(x=>x.name===process.env.SP_NAME&&x.region===process.env.SP_REGION)?.image||"")')"
+      [[ -n "$this_image" ]] || exit 1
       [[ -z "$image" || "$image" == "$this_image" ]] || exit 1
       image="$this_image"
       echo "✓ v2 $name/$region"
@@ -203,7 +204,12 @@ for i in "${!names[@]}"; do
     else
       verify_row "$name" "$region" "$target" "$codebase" "$row_commit" "$json" "$manifest"
     fi
-    this_image="$(printf '%s' "$json" | field spec.template.spec.containers.0.image)"
+    if [[ "$mode" == --check-v3 ]]; then
+      this_image="$(SP_FILE="$manifest" SP_NAME="$name" SP_REGION="$region" node -e 'const m=require("./"+process.env.SP_FILE);process.stdout.write(m.find(x=>x.name===process.env.SP_NAME&&x.region===process.env.SP_REGION)?.image||"")')"
+    else
+      this_image="$(printf '%s' "$json" | field spec.template.spec.containers.0.image)"
+    fi
+    [[ -n "$this_image" ]] || exit 1
     [[ -z "$image" || "$image" == "$this_image" ]] || exit 1
     image="$this_image"
     SP_FILE="$manifest" SP_NAME="$name" SP_REGION="$region" node - <<'NODE'
