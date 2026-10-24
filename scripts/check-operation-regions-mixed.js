@@ -21,7 +21,10 @@ const file = process.env.SP_REGION_MANIFEST || path.join(root, `.claude/tmp/oper
 const rows = JSON.parse(fs.readFileSync(file, 'utf8'));
 if (rows.length !== regions.length * names.length) throw new Error('manifesto regional incompleto');
 const current = execFileSync('git', ['log', '-1', '--format=%H', '--', 'functions-autodraw'], { cwd: root }).toString().trim();
-const legacy = [...new Set(rows.filter(row => row.name !== `sp-op-end-court-${version}`).map(row => row.commit))];
+// As portas de placar e encerramento podem ser atualizadas separadamente.
+// A base antiga é definida pelas outras quatro portas, que continuam imóveis.
+const independentlyUpdated = new Set([`sp-op-score-${version}`, `sp-op-end-court-${version}`]);
+const legacy = [...new Set(rows.filter(row => !independentlyUpdated.has(row.name)).map(row => row.commit))];
 if (legacy.length !== 1 || !/^[a-f0-9]{40}$/.test(legacy[0])) throw new Error('commit legado divergente');
 let mixed = false;
 const oldSources = new Map();
@@ -36,23 +39,19 @@ for (let i = 0; i < names.length; i++) {
     if (new Set(service.map(row => row[field])).size !== 1) throw new Error(field + ' divergente: ' + names[i]);
   }
   const commit = service[0].commit;
-  if (i === 4 && commit !== legacy[0]) {
-    if (commit !== current) throw new Error('commit da quadra não é a fonte atual');
+  if (independentlyUpdated.has(names[i]) && commit !== legacy[0]) {
+    if (commit !== current) throw new Error('commit da porta atualizada não é a fonte atual: ' + names[i]);
     mixed = true;
   } else if (commit !== legacy[0]) throw new Error('outra porta mudou de commit: ' + names[i]);
-  if (i !== 4) {
+  if (commit === legacy[0]) {
     if (!oldSources.has(codebases[i])) oldSources.set(codebases[i], sourceDescriptor(codebases[i], legacy[0], true));
     const oldDigest = sourceDigest(targets[i], legacy[0], oldSources.get(codebases[i]));
     if (service[0].sourceDigest !== oldDigest) throw new Error('digest legado divergente: ' + names[i]);
+  } else {
+    const digest = sourceDigest(targets[i], current, sourceDescriptor(codebases[i], current, true));
+    if (service[0].sourceDigest !== digest) throw new Error('digest da porta atualizada divergente: ' + names[i]);
   }
 }
-if (mixed) {
-  const digest = execFileSync('node', [path.join(root, 'scripts/operation-source-digest.js'),
-    'functions-autodraw', 'endMatchOnCourt', current], { cwd: root }).toString().trim();
-  if (rows.find(row => row.name === `sp-op-end-court-${version}`).sourceDigest !== digest) {
-    throw new Error('digest da quadra divergente da fonte atual');
-  }
-}
-if (!mixed && !allowLegacyCourt) throw new Error('porta end-court ainda usa o commit antigo');
+if (!mixed && !allowLegacyCourt) throw new Error('nenhuma porta direcionada usa o commit atual');
 process.stdout.write(JSON.stringify({ version, legacyCommit: legacy[0], courtCommit: rows.find(row => row.name === `sp-op-end-court-${version}`).commit,
   mixed, rows: rows.length }) + '\n');

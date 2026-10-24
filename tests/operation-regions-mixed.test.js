@@ -20,6 +20,9 @@ const skipReason = gitRepo.status !== 0 ? 'sem histórico Git (cópia git archiv
 const digest = skipReason ? '' : execFileSync('node',
   ['scripts/operation-source-digest.js', 'functions-autodraw', 'endMatchOnCourt', current],
   { cwd: root }).toString().trim();
+const scoreDigest = skipReason ? '' : execFileSync('node',
+  ['scripts/operation-source-digest.js', 'functions-autodraw', 'applyMatchResult', current, '--from-git'],
+  { cwd: root }).toString().trim();
 
 for (const version of ['v2', 'v3']) {
   const run = (rows, allowLegacyCourt = false) => {
@@ -33,21 +36,39 @@ for (const version of ['v2', 'v3']) {
   test(`${version}: corte antigo e atualização só da quadra`, { skip: skipReason }, () => {
     const original = JSON.parse(fs.readFileSync(path.join(root, `.claude/tmp/operation-regions-manifest-${version}.json`)));
     const legacy = structuredClone(original);
-    const legacyCommit = legacy.find(row => row.name !== `sp-op-end-court-${version}`).commit;
+    const legacyCommit = legacy.find(row => row.name === `sp-op-court-${version}`).commit;
     const legacyDigest = execFileSync('node', ['scripts/operation-source-digest.js', 'functions-autodraw',
       'endMatchOnCourt', legacyCommit, '--from-git'], { cwd: root }).toString().trim();
     for (const row of legacy.filter(row => row.name === `sp-op-end-court-${version}`)) {
       row.commit = legacyCommit;
       row.sourceDigest = legacyDigest;
     }
+    const legacyScoreDigest = execFileSync('node', ['scripts/operation-source-digest.js', 'functions-autodraw',
+      'applyMatchResult', legacyCommit, '--from-git'], { cwd: root }).toString().trim();
+    for (const row of legacy.filter(row => row.name === `sp-op-score-${version}`)) {
+      row.commit = legacyCommit;
+      row.sourceDigest = legacyScoreDigest;
+    }
     assert.equal(run(legacy, true).status, 0);
     assert.notEqual(run(legacy).status, 0, 'Hosting barra quadra antiga');
-    const mixed = structuredClone(original);
+    const mixed = structuredClone(legacy);
     for (const row of mixed.filter(row => row.name === `sp-op-end-court-${version}`)) {
       row.commit = current;
       row.sourceDigest = digest;
     }
     assert.equal(run(mixed).status, 0);
+    const scoreOnly = structuredClone(legacy);
+    for (const row of scoreOnly.filter(row => row.name === `sp-op-score-${version}`)) {
+      row.commit = current;
+      row.sourceDigest = scoreDigest;
+    }
+    assert.equal(run(scoreOnly).status, 0, 'placar pode ser atualizado sozinho');
+    const both = structuredClone(mixed);
+    for (const row of both.filter(row => row.name === `sp-op-score-${version}`)) {
+      row.commit = current;
+      row.sourceDigest = scoreDigest;
+    }
+    assert.equal(run(both).status, 0, 'placar e encerramento podem ter a mesma revisão nova');
     const wrongService = structuredClone(mixed);
     wrongService.find(row => row.name === `sp-op-score-${version}`).commit = current;
     assert.notEqual(run(wrongService).status, 0);
