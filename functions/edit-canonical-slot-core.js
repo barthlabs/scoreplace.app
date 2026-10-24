@@ -2,7 +2,7 @@
 
 const crypto = require('crypto');
 const { registrationId } = require('./registration-core');
-const { canonicalPairId, indexRegistrations } = require('./registration-mutations-core');
+const { indexRegistrations } = require('./registration-mutations-core');
 const { normalizeName } = require('./manual-name-unique-core');
 
 const text = (value) => typeof value === 'string' ? value.trim() : '';
@@ -41,7 +41,10 @@ function plan(tournamentId, registrations, identity, categoryId, expectedName, n
     if (existing && (existing.participantKind !== 'account' || existing.participantUid !== target)) throw new Error('identidade de destino divergente');
     if (existing && existing.status !== 'withdrawn') throw new Error('conta já inscrita nesta categoria');
     if (existing && !['', 'left', 'organizer_replaced'].includes(text(existing.withdrawnReason))) throw new Error('inscrição histórica não pode ser reativada');
-    const newPairId = canonicalPairId(tournamentId, categoryId, [id, partner.registrationId]);
+    // A vaga competitiva conserva o ID para classificações por equipe/dupla.
+    // Classificações individuais congeladas ainda são recusadas pela callable.
+    // A identidade de quem jogou cada partida vive no instantâneo do jogo.
+    const newPairId = current.fixedPairId;
     const updates = [Object.assign({}, current, { status: 'withdrawn', fixedPairId: null, withdrawnReason: 'organizer_replaced' }),
       Object.assign({}, partner, { fixedPairId: newPairId })];
     const creates = [];
@@ -54,14 +57,26 @@ function plan(tournamentId, registrations, identity, categoryId, expectedName, n
   }
   if (current.participantKind === 'manual') {
     if (normalizeName(current.manualDisplayName) === normalizeName(name)) throw new Error('nome sem alteração');
-    return { source: current, partner, newName: name, newIdentity: { manualParticipantId: current.manualParticipantId },
-      newPairId: current.fixedPairId, changes: { updates: [Object.assign({}, current, { manualDisplayName: name })], creates: [] } };
+    const generatedManualId = text(manualId) || 'org-' + crypto.randomUUID();
+    if (all.some((item) => item.manualParticipantId === generatedManualId)) throw new Error('identidade manual já existe');
+    const key = 'manual:' + generatedManualId;
+    const newId = registrationId(key, categoryId);
+    const replacement = Object.assign({}, current, {
+      registrationId: newId, participantKey: key, manualParticipantId: generatedManualId,
+      manualDisplayName: name, fixedPairId: current.fixedPairId,
+      replacedManualParticipantId: current.manualParticipantId,
+    });
+    delete replacement.withdrawnReason;
+    return { source: current, partner, newName: name, newIdentity: { manualParticipantId: generatedManualId },
+      newPairId: current.fixedPairId,
+      changes: { updates: [Object.assign({}, current, { status: 'withdrawn', fixedPairId: null,
+        withdrawnReason: 'organizer_replaced' })], creates: [replacement] } };
   }
   const generated = text(manualId) || 'org-' + crypto.randomUUID();
   if (all.some((item) => item.manualParticipantId === generated)) throw new Error('identidade manual já existe');
   const key = 'manual:' + generated;
   const newId = registrationId(key, categoryId);
-  const newPairId = canonicalPairId(tournamentId, categoryId, [newId, partner.registrationId]);
+  const newPairId = current.fixedPairId;
   const replacement = Object.assign({}, current, { registrationId: newId, participantKey: key,
     participantKind: 'manual', participantUid: null, manualParticipantId: generated, manualDisplayName: name,
     fixedPairId: newPairId, replacedParticipantUid: current.participantUid });
@@ -128,7 +143,8 @@ function patchPair(entry, edit, options) {
     if (!entry.fixedPairId) return false;
     throw new Error('parceiro divergente');
   }
-  if (edit.source.participantKind !== 'manual' || edit.newIdentity.uid) {
+  if (edit.source.participantKind !== 'manual' || edit.newIdentity.uid ||
+      edit.newIdentity.manualParticipantId !== edit.source.manualParticipantId) {
     delete entry[slot + 'Uid'];
     delete entry[slot + 'ManualId'];
     if (edit.newIdentity.uid) entry[slot + 'Uid'] = edit.newIdentity.uid;
@@ -152,7 +168,8 @@ function mirrorWritePatch(document, edit, deleteFieldValue, oldSlot) {
   const slot = oldSlot || (matches('p1') !== matches('p2') ? (matches('p1') ? 'p1' : 'p2') : '');
   if (!slot) throw new Error('vaga substituta ausente do espelho');
   const patch = { [prefix + slot + 'Name']: edit.newName };
-  if (edit.source.participantKind !== 'manual' || edit.newIdentity.uid) {
+  if (edit.source.participantKind !== 'manual' || edit.newIdentity.uid ||
+      edit.newIdentity.manualParticipantId !== edit.source.manualParticipantId) {
     patch[prefix + slot + 'Uid'] = edit.newIdentity.uid || deleteFieldValue;
     patch[prefix + slot + 'ManualId'] = edit.newIdentity.manualParticipantId || deleteFieldValue;
     if (mirror.fixedPairId) patch[prefix + 'fixedPairId'] = edit.newPairId;

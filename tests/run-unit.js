@@ -65,6 +65,7 @@ const SUITES = [
   'tests/operation-receipt-core.test.js',
   'tests/operation-receipt-wo-handler.test.js',
   'tests/operation-probe-readonly.test.js',
+  'tests/live-operation-readiness.test.js',
   'tests/arbitragem-na-ficha.test.js',
   'tests/tournament-claim-entry.test.js',
   'tests/team-enroll-consent.test.js',

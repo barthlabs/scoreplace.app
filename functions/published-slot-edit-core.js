@@ -4,7 +4,6 @@
 // A agenda, a posição na chave e os campos de resultado permanecem intactos.
 const split = require('./vendor/tournament-split-core');
 const slot = require('./edit-canonical-slot-core');
-const { hasOutcome } = require('./published-claim-core');
 
 const replaceDisplay = (value, oldName, newName, required) => {
   if (typeof value !== 'string' || !oldName) {
@@ -22,14 +21,24 @@ const replaceDisplay = (value, oldName, newName, required) => {
   return next;
 };
 
-const started = (game, result) => {
-  if (hasOutcome(game) || hasOutcome(result)) return true;
-  if (game && game.liveScored === true) return true;
-  return [game, result].some((item) => item && [
-    'calledAt', 'warmupAt', 'startedAt', 'endedAt', 'finishedAt',
-    'courtCalledAt', 'courtStartedAt', 'courtEndedAt', 'pendingResult',
-  ].some((key) => item[key] != null && item[key] !== false && item[key] !== ''));
-};
+const positive = (value) => Number.isFinite(Number(value)) && Number(value) > 0;
+const nonempty = (value) => value !== null && value !== undefined && value !== false && value !== '';
+const scored = (item) => !!(item && (
+  item.liveScored === true || nonempty(item.setsProgressAt) ||
+  (Array.isArray(item.sets) && item.sets.length > 0) ||
+  ['scoreP1', 'scoreP2', 'setsWonP1', 'setsWonP2', 'totalGamesP1', 'totalGamesP2']
+    .some(key => positive(item[key])) ||
+  ['pendingResult', 'winner', 'winnerId', 'resultAt', 'wo'].some(key => nonempty(item[key])) ||
+  item.draw === true
+));
+const finished = (item) => !!(item && (
+  ['endedAt', 'finishedAt', 'completedAt', 'courtEndedAt', 'resultAt', 'winner', 'winnerId']
+    .some(key => nonempty(item[key])) || item.draw === true || item.wo === true
+));
+const started = (game, result) => scored(game) || scored(result) || finished(game) || finished(result);
+const onCourt = (game) => !!(game && [
+  'calledAt', 'warmupAt', 'startedAt', 'courtCalledAt', 'courtStartedAt',
+].some(key => nonempty(game[key])) && !finished(game));
 
 function plan(edit, participantDocs, matchDocs, resultDocs) {
   if (!edit || !edit.source || !edit.partner || !edit.newIdentity) throw new Error('edição incompleta');
@@ -55,6 +64,9 @@ function plan(edit, participantDocs, matchDocs, resultDocs) {
   const byResult = new Map(resultDocs.map((item) => [item.ref.id, item]));
   const matches = [];
   const results = [];
+  const historicalMatchIds = [];
+  const liveMatchIds = [];
+  const referenced = new Set();
   for (const doc of matchDocs) {
     const data = doc.data;
     const game = data.jogo || data;
@@ -62,6 +74,19 @@ function plan(edit, participantDocs, matchDocs, resultDocs) {
     for (const n of [1, 2]) {
       const original = game['team' + n + 'Obj'];
       if (!original || original.fixedPairId !== edit.source.fixedPairId) continue;
+      const sourceId = edit.source.participantKind === 'account'
+        ? { uid: edit.source.participantUid } : { manualParticipantId: edit.source.manualParticipantId };
+      if (!slot.hasIdentity(original, sourceId)) continue;
+      if (referenced.has(doc.ref.id)) throw new Error('vaga em dois lados do mesmo jogo');
+      referenced.add(doc.ref.id);
+      const resultDoc = byResult.get(doc.ref.id);
+      if (started(game, resultDoc && resultDoc.data)) {
+        if (!finished(game) && !finished(resultDoc && resultDoc.data)) {
+          throw new Error('jogo em andamento com placar parcial; corrija ou encerre antes da troca');
+        }
+        historicalMatchIds.push(doc.ref.id);
+        continue;
+      }
       const side = { ...original };
       if (!slot.patchPair(side, edit)) continue;
       const sourceSlot = slot.sourceSlot(original, edit);
@@ -71,9 +96,8 @@ function plan(edit, participantDocs, matchDocs, resultDocs) {
           side[field] = replaceDisplay(original[field], oldName, edit.newName);
         }
       }
-      const resultDoc = byResult.get(doc.ref.id);
-      if (started(game, resultDoc && resultDoc.data)) throw new Error('jogo já chamado, iniciado ou com placar');
       if (next) throw new Error('vaga em dois lados do mesmo jogo');
+      if (onCourt(game)) liveMatchIds.push(doc.ref.id);
       const uids = [side.p1Uid, side.p2Uid].filter(Boolean);
       next = { ...game, ['team' + n + 'Obj']: side,
         ['team' + n + 'Uids']: uids,
@@ -94,17 +118,17 @@ function plan(edit, participantDocs, matchDocs, resultDocs) {
         p2Uid: next.p2Uid || null, playerUids } });
     }
   }
-  if (!matches.length) throw new Error('jogos da vaga não encontrados');
-  if (matches.length > 100 || 2 * matches.length + 8 > 450) throw new Error('edição grande demais');
+  if (!matches.length) throw new Error('não há jogo atual ou futuro para esta substituição');
+  if (matches.length > 100 || 2 * matches.length + 16 > 450) throw new Error('substituição excede limite da transação');
   const sourceId = edit.source.participantKind === 'account'
     ? { uid: edit.source.participantUid } : { manualParticipantId: edit.source.manualParticipantId };
-  const touched = new Set(matches.map((item) => item.ref.id));
-  if (matchDocs.some((doc) => !touched.has(doc.ref.id) &&
+  if (matchDocs.some((doc) => !referenced.has(doc.ref.id) &&
       ['team1Obj', 'team2Obj'].some((key) => {
         const side = (doc.data.jogo || doc.data)[key];
         return side && side.fixedPairId === edit.source.fixedPairId && slot.hasIdentity(side, sourceId);
       }))) throw new Error('referência da vaga sem atualização');
-  return { participant: { oldRef: mirror.ref, newId, data: participantData }, matches, results };
+  return { participant: { oldRef: mirror.ref, newId, data: participantData }, matches, results,
+    historicalMatchIds, liveMatchIds };
 }
 
-module.exports = { plan, started };
+module.exports = { plan, started, scored, finished };

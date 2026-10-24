@@ -28,9 +28,11 @@ const draft = { createdAt: stamp, participants: [side], matches: [1, 2, 3].map((
   team2Obj: { p1Uid: 'x', fixedPairId: 'other' },
 })), competitionPairAssignments: [{ fixedPairId: pairId }] };
 
-const rename = core.plan(tid, [a, b], { manualParticipantId: 'a' }, categoryId, 'Nome anterior', 'Nome corrigido');
-assert.equal(rename.changes.creates.length, 0);
-assert.equal(rename.changes.updates[0].manualDisplayName, 'Nome corrigido');
+const rename = core.plan(tid, [a, b], { manualParticipantId: 'a' }, categoryId, 'Nome anterior', 'Nome corrigido', 'new-manual');
+assert.equal(rename.changes.creates.length, 1);
+assert.equal(rename.changes.creates[0].manualDisplayName, 'Nome corrigido');
+assert.equal(rename.changes.creates[0].replacedManualParticipantId, 'a');
+assert.equal(rename.changes.updates[0].status, 'withdrawn');
 assert.equal(rename.newPairId, pairId);
 const renamedDraft = core.patchDraft(draft, rename);
 assert.equal(renamedDraft.participants[0].p1Name, 'Nome corrigido');
@@ -52,7 +54,7 @@ assert.equal(replace.changes.creates.length, 1);
 assert.equal(replace.changes.updates[0].status, 'withdrawn');
 assert.equal(replace.changes.updates[0].withdrawnReason, 'organizer_replaced');
 assert.equal(replace.changes.creates[0].replacedParticipantUid, 'b');
-assert.notEqual(replace.newPairId, pairId);
+assert.equal(replace.newPairId, pairId, 'a vaga competitiva conserva classificação e histórico');
 const committed = boundary.applyChanges({ id: tid, creatorUid: 'organizer', canonicalRegistrationMigration: {
   fingerprint: 'test', registrationCount: 2,
 } }, [a, b], replace.changes.updates, replace.changes.creates);
@@ -85,9 +87,10 @@ assert.equal(found.ref, 'right');
 const renamedLegacy = Object.assign({}, core.legacyItem(found.data));
 assert.equal(core.patchPair(renamedLegacy, rename, { legacyMirror: true }), true);
 assert.equal(renamedLegacy.p1Name, 'Nome corrigido');
+assert.equal(renamedLegacy.p1ManualId, 'new-manual');
 assert.equal(renamedLegacy.fixedPairId, undefined);
 assert.deepEqual(core.mirrorWritePatch({ ...legacy, item: renamedLegacy }, rename, deleted),
-  { 'item.p1Name': 'Nome corrigido' });
+  { 'item.p1Name': 'Nome corrigido', 'item.p1Uid': deleted, 'item.p1ManualId': 'new-manual' });
 const replacedLegacy = Object.assign({}, legacy.item);
 assert.equal(core.patchPair(replacedLegacy, replace, { legacyMirror: true }), true);
 const nestedPatch = core.mirrorWritePatch({ ...legacy, item: replacedLegacy }, replace, deleted);
@@ -110,7 +113,8 @@ assert.throws(() => core.findLegacyMirror([{ data: { ...legacy, item: { ...legac
 assert.equal(core.findLegacyMirror([{ data: { ...legacy.item } }], rename).data.fixedPair, true);
 const topLevel = { ...legacy.item };
 assert.equal(core.patchPair(topLevel, rename, { legacyMirror: true }), true);
-assert.deepEqual(core.mirrorWritePatch(topLevel, rename, deleted), { p1Name: 'Nome corrigido' });
+assert.deepEqual(core.mirrorWritePatch(topLevel, rename, deleted),
+  { p1Name: 'Nome corrigido', p1Uid: deleted, p1ManualId: 'new-manual' });
 // O ID físico do sandbox não participa do casamento; a dupla conserva o ID lógico do torneio original.
 assert.equal(core.findLegacyMirror([{ ref: 'sandboxes/sb-test/inscritos/pair', data: legacy }],
   core.plan(tid, [a, b], { manualParticipantId: 'a' }, categoryId, 'Nome anterior', 'Outro nome')).ref,
@@ -158,7 +162,7 @@ assert.match(callable, /if \(!callerUid\) throw new HttpsError\('unauthenticated
 assert.match(callable, /_sandboxAutorizado\(db, snap, callerUid/);
 assert.match(callable, /_isTournamentOrgCaller\(raw, callerUid\)/);
 assert.match(callable, /_manualClaimGuard\(state, true\)/);
-assert.match(callable, /_slotPublishedExtras\(state\.tournament\)/);
+assert.match(callable, /classificação contém identidade individual/);
 assert.match(callable, /pendingCanonicalParticipantClaims/);
 assert.match(callable, /_writeCanonicalRosterChanges\(tx/);
 assert.match(callable, /_editCanonicalSlot\.findLegacyMirror\(mirrorDocuments, edit\)/);

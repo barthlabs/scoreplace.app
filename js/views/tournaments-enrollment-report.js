@@ -1312,7 +1312,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (!row || row._duplaIdx == null || !(row.uid || row.manualId) || !row.categoryId) return;
     if (typeof showInputDialog !== 'function' || typeof window._callCF !== 'function') return;
     showInputDialog('Trocar participante',
-      'Digite o nome de quem vai ocupar a vaga de ' + _esc(row.name) + '. Depois escolha a conta existente, se houver, ou uma vaga digitada.',
+      'Digite o nome de outra pessoa que ocupará a vaga de ' + _esc(row.name) + '. Esta ação é uma substituição, não uma correção de grafia. Depois escolha a conta existente, se houver, ou uma vaga digitada.',
       function (value) {
         var newName = String(value || '').trim();
         if (newName.length < 2 || newName.length > 120) {
@@ -1320,7 +1320,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           return;
         }
         function submit(targetUid) {
-          window._callCF('editCanonicalTournamentSlot', { tournamentId: String(_liveState.t.id),
+          window._callCF('editCanonicalTournamentSlot', { operation: 'replace', tournamentId: String(_liveState.t.id),
             sandbox: _liveState.t.isSandbox === true, uid: row.uid || '', manualParticipantId: row.manualId || '',
             categoryId: (typeof window._canonicalCategoryIdForDisplay === 'function'
               ? (window._canonicalCategoryIdForDisplay(_liveState.t, row.categoryId) || row.categoryId)
@@ -1338,10 +1338,15 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         }
         if (typeof showConfirmDialog !== 'function') return;
         var db = window.FirestoreDB && window.FirestoreDB.db;
-        if (!db) {
-          if (typeof showNotification === 'function') showNotification('Busca de contas indisponível', 'Recarregue a Análise antes de trocar esta vaga.', 'error');
-          return;
+        function offerChoices(accounts) {
+          _erReplacementChoice = '';
+          var choices = '<label style="display:block;margin:8px 0;"><input type="radio" name="er-replacement" checked onchange="window._erChooseReplacement(\'\')"> Nome digitado: <b>' + _esc(newName) + '</b></label>' +
+            accounts.map(function (account) { return '<label style="display:block;margin:8px 0;"><input type="radio" name="er-replacement" onchange="window._erChooseReplacement(\'' + _escAttr(account.uid) + '\')"> Conta: <b>' + _esc(account.name) + '</b></label>'; }).join('');
+          showConfirmDialog('Confirmar troca da vaga', '<div style="text-align:left;">' + _esc(row.name) + ' sairá desta vaga. Jogos concluídos ficam com a formação original; os jogos sem placar, inclusive os já chamados, passam a mostrar quem entrou. A presença de quem saiu permanece no histórico; a pessoa nova precisa registrar a própria presença. Se houver classificação congelada com o nome dessa pessoa ou dupla, a troca será recusada sem alterar os jogos. Escolha a identidade de destino:' + choices + '</div>',
+            function () { submit(_erReplacementChoice); }, function () {},
+            { type: 'warning', confirmText: 'Trocar participante', cancelText: 'Cancelar' });
         }
+        if (!db) { offerChoices([]); return; }
         // user-vivo:isento — esta é uma LISTA de contas candidatas; lápides são
         // removidas abaixo e o servidor revalida mergedInto antes de vincular.
         var query = db.collection(window._COLECAO_PERFIL_PUBLICO || 'usersPublic')
@@ -1353,14 +1358,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
             var profile = doc.data() || {};
             if (!profile.mergedInto && profile.displayName) accounts.push({ uid: doc.id, name: profile.displayName });
           });
-          _erReplacementChoice = '';
-          var choices = '<label style="display:block;margin:8px 0;"><input type="radio" name="er-replacement" checked onchange="window._erChooseReplacement(\'\')"> Nome digitado: <b>' + _esc(newName) + '</b></label>' +
-            accounts.map(function (account) { return '<label style="display:block;margin:8px 0;"><input type="radio" name="er-replacement" onchange="window._erChooseReplacement(\'' + _escAttr(account.uid) + '\')"> Conta: <b>' + _esc(account.name) + '</b></label>'; }).join('');
-          showConfirmDialog('Confirmar troca da vaga', '<div style="text-align:left;">' + _esc(row.name) + ' sairá desta vaga. Escolha a identidade de destino:' + choices + '</div>',
-            function () { submit(_erReplacementChoice); }, function () {},
-            { type: 'warning', confirmText: 'Trocar participante', cancelText: 'Cancelar' });
+          offerChoices(accounts);
         }).catch(function (error) {
-          if (typeof showNotification === 'function') showNotification('Busca de contas indisponível', String(error && error.message || error), 'error');
+          if (typeof showNotification === 'function') showNotification('Busca de contas indisponível', 'A troca por nome digitado continua disponível.', 'warning');
+          offerChoices([]);
         });
       }, { placeholder: 'Nome completo', okText: 'Continuar' });
   };

@@ -3016,6 +3016,7 @@ exports.applyTournamentWO = onCall(async (request) => {
   const forceTeamWO = data.forceTeamWO === true;
   const teamDecisionV2 = data.teamDecisionV2 === true;
   const teamOutcome = String(data.teamOutcome || '');
+  const individualDecisionV2 = data.individualDecisionV2 === true;
   const requestedTeamUids = Array.isArray(data.teamUids) ? data.teamUids.filter(Boolean).map(String) : [];
   if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
   const sandbox = data.sandbox === true;
@@ -3028,6 +3029,9 @@ exports.applyTournamentWO = onCall(async (request) => {
   }
   if (teamDecisionV2 && (!forceTeamWO || !['wo', 'substitute'].includes(teamOutcome))) {
     throw new HttpsError('invalid-argument', 'Escolha substituir a dupla ou encerrar o jogo por W.O.');
+  }
+  if (individualDecisionV2 && (forceTeamWO || !matchId || !requestedUid)) {
+    throw new HttpsError('invalid-argument', 'Escolha uma pessoa e um jogo para o W.O. individual com suplente.');
   }
   if (typeof applyWoFn !== 'function' || !drawWindow) throw _drawFail('internal', 'Motor de W.O. indisponível no servidor.', { tId });
 
@@ -3135,6 +3139,10 @@ exports.applyTournamentWO = onCall(async (request) => {
         forceWaitlistSub: true,
         onlyAbsentUids: targetUids
       });
+      if (individualDecisionV2 && (!result || !result.ok || result.outcome !== 'subbed')) {
+        throw _drawFail('failed-precondition', 'Não há suplente elegível para este W.O. individual. Escolha o W.O. da dupla ou faça uma troca direta.',
+          { tId, matchId, reason: 'individual-substitute-unavailable' });
+      }
     }
     if (teamDecisionV2 && teamOutcome === 'substitute' && (!result || !result.ok)) {
       throw _drawFail('failed-precondition', 'A dupla suplente não está mais disponível. Reabra a escolha.',

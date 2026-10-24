@@ -4499,6 +4499,18 @@ function _slotHasIdentity(value, identity) {
   return _editCanonicalSlot.hasIdentity(value, identity);
 }
 
+function _slotHasDisplayedName(value, expectedName) {
+  const wanted = _manualNameUnique.normalizeName(expectedName);
+  if (!wanted || value == null) return false;
+  if (typeof value === 'string') {
+    return value.split(/\s*\/\s*/).some((part) => _manualNameUnique.normalizeName(part) === wanted);
+  }
+  if (Array.isArray(value)) return value.some((entry) => _slotHasDisplayedName(entry, expectedName));
+  if (typeof value !== 'object') return false;
+  return Object.entries(value).some(([key, entry]) =>
+    _slotHasDisplayedName(key, expectedName) || _slotHasDisplayedName(entry, expectedName));
+}
+
 function _slotPublishedExtras(tournament) {
   return ['classification', 'standings'].some((key) => {
     const value = tournament && tournament[key];
@@ -4515,6 +4527,9 @@ exports.editCanonicalTournamentSlot = onCall(
     const callerUid = request.auth && request.auth.uid;
     if (!callerUid) throw new HttpsError('unauthenticated', 'login necessário');
     const data = request.data || {};
+    if (data.operation !== 'replace') {
+      throw new HttpsError('invalid-argument', 'escolha explicitamente trocar a pessoa; correção de grafia usa a renomeação');
+    }
     const tournamentId = String(data.tournamentId || '').trim();
     const sandbox = data.sandbox === true;
     const uid = String(data.uid || '').trim();
@@ -4548,7 +4563,9 @@ exports.editCanonicalTournamentSlot = onCall(
           throw new HttpsError('failed-precondition', 'sorteio em transição ou grupos publicados');
         }
       } else _manualClaimGuard(state, true);
-      if (_slotPublishedExtras(state.tournament)) throw new HttpsError('failed-precondition', 'chave ou classificação já publicada');
+      if (raw.status === 'finished') {
+        throw new HttpsError('failed-precondition', 'torneio encerrado; não há jogo futuro para substituir');
+      }
       const logicalId = sandbox ? String(raw.sandboxOf) : tournamentId;
       const checked = await _loadCanonicalRosterForMutation(tx, ref, state.tournament, sandbox ? logicalId : '');
       const identity = uid ? { uid } : { manualParticipantId };
@@ -4564,10 +4581,19 @@ exports.editCanonicalTournamentSlot = onCall(
       let edit;
       try { edit = _editCanonicalSlot.plan(logicalId, checked.registrations, identity, categoryId, expectedName, destinationName, null, targetUid); }
       catch (error) { throw new HttpsError('failed-precondition', error.message); }
+      if (['classification', 'classificationEntries', 'standings'].some((key) =>
+        _slotHasIdentity(state.tournament[key], identity) ||
+        _slotHasDisplayedName(state.tournament[key], expectedName))) {
+        throw new HttpsError('failed-precondition', 'classificação contém identidade individual; revisão necessária');
+      }
       const auxiliary = ['waitlist', 'standbyParticipants', 'sorteioRealizado', 'placeholderReservations',
-        'monarchWaitlist', 'woHistory', 'woSubstituteFor', 'checkedIn', 'absent', 'vips'];
+        'monarchWaitlist', 'woHistory', 'woSubstituteFor', 'vips'];
       if (auxiliary.some((key) => _slotHasIdentity(state.tournament[key], identity))) {
         throw new HttpsError('failed-precondition', 'vaga referenciada em outra etapa do torneio');
+      }
+      if ([expectedName, uid, manualParticipantId].some((value) =>
+        value && _slotHasDisplayedName(state.tournament.woHistory, value))) {
+        throw new HttpsError('failed-precondition', 'histórico de W.O. referencia a vaga; use o fluxo de W.O.');
       }
       const claims = Array.isArray(raw.pendingCanonicalParticipantClaims) ? raw.pendingCanonicalParticipantClaims : [];
       if (claims.some((item) => _slotHasIdentity(item, identity))) {
@@ -4610,20 +4636,18 @@ exports.editCanonicalTournamentSlot = onCall(
         const embedded = JSON.stringify([state.tournament.rounds, state.tournament.phaseRounds,
           state.tournament.rodadas, state.tournament.thirdPlaceMatch]);
         if (embedded.includes(edit.source.fixedPairId) || embedded.includes(sourceValue)) {
-          throw new HttpsError('failed-precondition', 'vaga referenciada em outra parte da chave');
+          throw new HttpsError('failed-precondition', 'vaga em rodada embutida fora da coleção de jogos');
         }
-        const [matchSnap, resultSnap, opponentSnap, woClaimSnap, woLogSnap] = await Promise.all([
+        const [matchSnap, resultSnap, woClaimSnap] = await Promise.all([
           tx.get(ref.collection(_tSplitFn.colecaoDaParte('matches'))),
           tx.get(ref.collection('results')),
-          tx.get(ref.collection(_tSplitFn.colecaoDaParte('opponentHistory'))),
           tx.get(ref.collection(_tSplitFn.colecaoDaParte('woClaims'))),
-          tx.get(ref.collection(_tSplitFn.colecaoDaParte('woLog'))),
         ]);
-        if ([opponentSnap, woClaimSnap, woLogSnap].some((snapshot) => snapshot.docs.some((doc) => {
+        if ([woClaimSnap].some((snapshot) => snapshot.docs.some((doc) => {
           const value = JSON.stringify(doc.data());
-          return value.includes(edit.source.fixedPairId) || value.includes(sourceValue) ||
+          return value.includes(sourceValue) ||
             (targetUid && value.includes(targetUid));
-        }))) throw new HttpsError('failed-precondition', 'vaga com histórico de adversários ou W.O.');
+        }))) throw new HttpsError('failed-precondition', 'vaga com W.O. pendente');
         try {
           published = _publishedSlotEdit.plan(edit, mirrorDocuments,
             matchSnap.docs.map((doc) => ({ ref: doc.ref, data: doc.data() || {} })),
@@ -4632,6 +4656,9 @@ exports.editCanonicalTournamentSlot = onCall(
       }
       const next = _writeCanonicalRosterChanges(tx, ref, state.tournament, checked.registrations,
         edit.changes, null, sandbox ? logicalId : '');
+      // Presença e ausência são fatos históricos da pessoa. A identidade nova
+      // não herda essas chaves; nem a presença antiga nem o registro de W.O.
+      // são apagados durante a troca da vaga competitiva.
       const patchedMirror = match.data.item ? Object.assign({}, match.data, { item: mirror }) : mirror;
       if (published) {
         const p = published.participant;
@@ -4646,11 +4673,15 @@ exports.editCanonicalTournamentSlot = onCall(
           sourceRegistrationId: edit.source.registrationId, targetUid: targetUid || null,
           categoryId, oldPairId: edit.source.fixedPairId, newPairId: edit.newPairId,
           matchIds: published.matches.map((item) => item.ref.id), editedByUid: callerUid,
+          historicalMatchIds: published.historicalMatchIds,
+          liveMatchIds: published.liveMatchIds,
+          presencePreserved: true,
           editedAt: _FV.serverTimestamp(),
         });
       } else tx.update(match.ref, _editCanonicalSlot.mirrorWritePatch(patchedMirror, edit, _FV.delete(), oldSlot));
       if (draft) tx.update(state.privateDrawRef, { draft, updatedAt: _FV.serverTimestamp() });
-      return { ok: true, participantsCount: next.participants.length, replacedAccount: !!uid };
+      return { ok: true, participantsCount: next.participants.length, replacedAccount: !!uid,
+        liveMatchIds: published ? published.liveMatchIds : [] };
     });
   }
 );

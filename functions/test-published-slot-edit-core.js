@@ -47,12 +47,28 @@ assert.equal(output.results[0].data.p1, 'Marilia / Parceira');
 assert.equal(output.results[0].data.scoreP1, 0);
 assert.equal(output.results[0].data.updatedAt, 123);
 assert.equal(game.team1Obj.p1ManualId, 'manual-old', 'plano não modifica leitura');
+const live = { ...game, courtCalledAt: 100, startedAt: 123, court: 'Quadra 4' };
+const liveOutput = published.plan(edit, participants,
+  [{ ...matches[0], data: { ...matches[0].data, jogo: live } }], results);
+assert.equal(liveOutput.matches[0].data.jogo.startedAt, 123);
+assert.equal(liveOutput.matches[0].data.jogo.courtCalledAt, 100);
+assert.deepEqual(liveOutput.liveMatchIds, ['game-1']);
 assert.throws(() => published.plan(edit, participants,
-  [{ ...matches[0], data: { ...matches[0].data, jogo: { ...game, startedAt: 123 } } }], results), /iniciado/);
-assert.throws(() => published.plan(edit, participants, matches,
-  [{ ...results[0], data: { ...results[0].data, scoreP1: 6 } }]), /placar/);
+  [{ ...matches[0], data: { ...matches[0].data, jogo: live } }],
+  [{ ...results[0], data: { ...results[0].data, scoreP1: 6 } }]), /placar parcial/);
 assert.throws(() => published.plan(edit, participants,
-  [{ ...matches[0], data: { ...matches[0].data, jogo: { ...game, liveScored: true } } }], results), /iniciado/);
+  [{ ...matches[0], data: { ...matches[0].data, jogo: { ...game, liveScored: true } } }], results), /placar parcial/);
+const historical = { ...game, scoreP1: 6, scoreP2: 2, winner: 'p1', resultAt: 150 };
+const future = { ...game, id: 'game-2' };
+const historyOutput = published.plan(edit, participants,
+  [{ ...matches[0], data: { ...matches[0].data, jogo: historical } },
+    { ref: ref('game-2'), data: { jogo: future } }],
+  [{ ...results[0], data: { ...results[0].data, scoreP1: 6, scoreP2: 2, winner: 'p1', resultAt: 150 } }]);
+assert.deepEqual(historyOutput.historicalMatchIds, ['game-1']);
+assert.deepEqual(historyOutput.matches.map(item => item.ref.id), ['game-2']);
+assert.equal(historical.team1Obj.p1ManualId, 'manual-old', 'histórico não é reescrito');
+assert.equal(historyOutput.matches[0].data.jogo.team1Obj.fixedPairId, oldPairId,
+  'a vaga da dupla conserva o mesmo saldo');
 assert.throws(() => published.plan(edit, participants,
   [{ ...matches[0], data: { ...matches[0].data, jogo: { ...game, p1: 'Mariana / Parceira' } } }], results), /ambíguo/);
 assert.throws(() => published.plan(edit, participants,

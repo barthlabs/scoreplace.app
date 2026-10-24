@@ -545,7 +545,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         ? (window._liveRowName({ name: mb.name, uid: _u }) || mb.name)
         : mb.name;
       if (isManager && rc.scope === 'match') {
-        return '<button type="button" onclick="window._woDeclareIndividual(\'' + _attr(t.id) + '\',\'' + _attr(ctxKey) + '\',\'' + _attr(mb.name) + '\',\'' + _attr(_u) + '\')" class="btn hover-lift" style="display:block;width:100%;text-align:left;margin-bottom:8px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.3);color:var(--text-bright);font-weight:700;border-radius:11px;padding:11px 13px;font-size:0.92rem;">🚫 W.O. individual · ' + _esc(_nm) + '<span style="display:block;font-size:0.7rem;font-weight:600;color:var(--text-muted);margin-top:2px;">entra suplente elegível; sem suplente, o adversário vence</span></button>';
+        return '<button type="button" onclick="window._woDeclareIndividual(\'' + _attr(t.id) + '\',\'' + _attr(ctxKey) + '\',\'' + _attr(mb.name) + '\',\'' + _attr(_u) + '\')" class="btn hover-lift" style="display:block;width:100%;text-align:left;margin-bottom:8px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.3);color:var(--text-bright);font-weight:700;border-radius:11px;padding:11px 13px;font-size:0.92rem;">🚫 W.O. individual · ' + _esc(_nm) + '<span style="display:block;font-size:0.7rem;font-weight:600;color:var(--text-muted);margin-top:2px;">exige suplente elegível; sem suplente, escolha separadamente o W.O. da dupla</span></button>';
       }
       var _euMesmo = !!(uid && _u && String(_u) === String(uid));
       var _sel = _euMesmo
@@ -676,18 +676,18 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (!confirmed) {
       _overlay(_header('Confirmar W.O. individual') + '<div style="padding:1.1rem;">' +
         '<div style="font-weight:800;font-size:1rem;color:var(--text-bright);">🚫 Aplicar W.O. em ' + _esc(liveName) + '</div>' +
-        '<div style="font-size:0.86rem;line-height:1.45;color:var(--text-muted);margin-top:10px;">A pessoa sai deste jogo. A primeira pessoa elegível da lista de espera assume a vaga; se não houver, o adversário vence por W.O.</div>' +
+        '<div style="font-size:0.86rem;line-height:1.45;color:var(--text-muted);margin-top:10px;">A pessoa sai deste jogo e a primeira pessoa elegível da lista de espera assume a vaga. Se não houver suplente, nada será gravado. Para dar a vitória ao adversário, escolha W.O. da dupla.</div>' +
         '<div style="display:flex;gap:8px;margin-top:16px;">' +
           '<button type="button" onclick="window._woOpenClaim(\'' + _attr(t.id) + '\',\'' + _attr(ctxKey) + '\')" class="btn" style="flex:1;background:rgba(148,163,184,.12);color:var(--text-bright);border:1px solid rgba(148,163,184,.4);font-weight:800;border-radius:10px;padding:10px;">Cancelar</button>' +
-          '<button type="button" onclick="window._woDeclareIndividual(\'' + _attr(t.id) + '\',\'' + _attr(ctxKey) + '\',\'' + _attr(absentName) + '\',\'' + _attr(absentUid) + '\',true)" class="btn btn-danger" style="flex:1;font-weight:800;border-radius:10px;padding:10px;">Confirmar W.O.</button>' +
+          '<button type="button" onclick="window._woDeclareIndividual(\'' + _attr(t.id) + '\',\'' + _attr(ctxKey) + '\',\'' + _attr(absentName) + '\',\'' + _attr(absentUid) + '\',true)" class="btn btn-danger" style="flex:1;font-weight:800;border-radius:10px;padding:10px;">W.O. individual + suplente</button>' +
         '</div></div>');
       return;
     }
-    _orgWoServer(tId, { absentName: String(liveName || ''), absentUid: String(absentUid || ''), matchId: String(rc.matchId || rc.m.id || '') }, function (saved) {
+    _orgWoServer(tId, { absentName: String(liveName || ''), absentUid: String(absentUid || ''), matchId: String(rc.matchId || rc.m.id || ''), individualDecisionV2: true }, function (saved) {
       if (!saved || !saved.ok) return;
       if (typeof window._woCloseOverlay === 'function') window._woCloseOverlay();
       var r = saved.result || {};
-      var msg = r.outcome === 'subbed' ? 'A vaga foi ocupada pela lista de espera.' : ((r.winner || 'O adversário') + ' vence por W.O.');
+      var msg = r.outcome === 'subbed' ? 'A vaga foi ocupada pela lista de espera.' : 'Escolha o suplente para completar a vaga.';
       if (typeof showNotification === 'function') showNotification('W.O. individual aplicado', msg, 'success');
     }, 'Aplicando W.O. individual…');
   };
