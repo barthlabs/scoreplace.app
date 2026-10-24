@@ -598,6 +598,9 @@ verificar_contingencia_regional || exit 1
 # A malha remota já foi conferida nesta tentativa. Guardar apenas a integridade
 # dos cinco insumos locais evita repetir 48 descrições de serviço após o push.
 # Este digest vive só neste processo; uma retomada faz nova conferência remota.
+# Limite deliberado: uma mudança EXTERNA em algum serviço após o gate remoto e
+# antes do upload não é detectada nesta tentativa; a próxima detectará. O
+# fingerprint abaixo protege somente os cinco arquivos locais.
 fingerprint_regional() {
   cd "$RAIZ"
   node - <<'NODE'

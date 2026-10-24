@@ -346,6 +346,10 @@ for (const file of [
 }
 ok((sh.match(/verificar_contingencia_regional \|\| exit 1/g) || []).length === 1,
   'a malha remota é conferida uma única vez por tentativa');
+// O ensaio não simula mudança externa de serviço depois do gate: por escolha
+// operacional, esse intervalo não é coberto pela segunda checagem local.
+ok(/mudança EXTERNA em algum serviço após o gate remoto[\s\S]*não é detectada nesta tentativa/.test(sh),
+  'o limite da conferência única da malha está explícito no roteiro');
 
 console.log('▸ ② preflight REPROVADO: não empurra e não publica');
 {
