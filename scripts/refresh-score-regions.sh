@@ -15,12 +15,25 @@ rg -q "_bracketPhaseFormat\(t\) === 'classification'" js/views/bracket-logic.js 
 for version in v2 v3; do
   node scripts/check-operation-regions-mixed.js "$version" --allow-legacy-court
 done
+resume_started="$(SP_COMMIT="$source_commit" node - <<'NODE'
+const fs = require('fs');
+const started = ['v2', 'v3'].some(version => {
+  const rows = JSON.parse(fs.readFileSync(`.claude/tmp/operation-regions-manifest-${version}.json`));
+  return rows.some(row => row.name === `sp-op-score-${version}` && row.commit === process.env.SP_COMMIT);
+});
+process.stdout.write(started ? '1' : '0');
+NODE
+)"
 if [[ "$mode" == --preflight ]]; then
-  node scripts/generate-operation-regions-config.js --check
-  node scripts/generate-operation-regions-v3-config.js --check
+  if [[ "$resume_started" == 0 ]]; then
+    node scripts/generate-operation-regions-config.js --check
+    node scripts/generate-operation-regions-v3-config.js --check
+  else
+    echo '✓ retomada parcial: a configuração pública será regenerada após completar as oito portas'
+  fi
 fi
 if [[ "$mode" == --deploy && ! -e .claude/tmp/operation-regions-manifest-v2.score-candidate.json &&
-      ! -e .claude/tmp/operation-regions-manifest-v3.score-candidate.json ]]; then
+      ! -e .claude/tmp/operation-regions-manifest-v3.score-candidate.json && "$resume_started" == 0 ]]; then
   # Confronta as oito portas antes da primeira mudança. Numa retomada, cada
   # porta já atualizada é verificada contra o candidato salvo no loop abaixo.
   bash "$0" --preflight
