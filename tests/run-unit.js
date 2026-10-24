@@ -842,6 +842,7 @@ const SUITES = [
   'tests/h2h-matrix-uid.test.js',
   'tests/standings-tiebreakers.test.js',
   'tests/team-competition.test.js',
+  'tests/team-tie-draw-order.test.js',
   'tests/seed-pairing.test.js',
   'tests/grandfinal-lines.test.js',
   'tests/category-transition.test.js',

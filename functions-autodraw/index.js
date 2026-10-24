@@ -5169,6 +5169,36 @@ exports.startTournament = onCall(async (request) => {
   });
 });
 
+exports.setTeamTieDrawOrder = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const data = request.data || {};
+  const tId = String(data.tournamentId || '').trim();
+  const sandbox = tId.startsWith('sb_');
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || (data.sandbox !== undefined && data.sandbox !== sandbox)) {
+    throw new HttpsError('invalid-argument', 'Torneio inválido.');
+  }
+  const order = data.orderedTeamIds;
+  if (!Array.isArray(order) || order.length > 128) {
+    throw new HttpsError('invalid-argument', 'Ordem do sorteio inválida.');
+  }
+  const ref = db.collection(sandbox ? 'sandboxes' : 'tournaments').doc(tId);
+  const { validateTeamTieDrawOrder } = require('./team-tie-draw-order-core');
+  return db.runTransaction(async tx => {
+    if (sandbox) await _assertSandboxDrawOwner(tx, await tx.get(ref), uid);
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização registra o sorteio.', { tId, uid });
+    const problem = validateTeamTieDrawOrder(t, order);
+    if (problem) throw new HttpsError(problem.code, problem.message);
+    if (JSON.stringify(t.teamCompetition.tieDrawOrder || []) === JSON.stringify(order)) {
+      return { ok: true, changed: false };
+    }
+    tx.update(ref, { 'teamCompetition.tieDrawOrder': order.slice() });
+    return { ok: true, changed: true };
+  });
+});
+
 exports.resetTournamentCheckIn = onCall(async (request) => {
   const uid = request.auth && request.auth.uid;
   const tId = String((request.data && request.data.tournamentId) || '').trim();

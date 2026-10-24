@@ -34,7 +34,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         '<button type="button" class="btn btn-secondary btn-sm" title="Descer" aria-label="Descer ' + (labels[key] || key) + '" onclick="window._f2TeamTiebreakMove(' + index + ',1)">↓</button>' +
         '<button type="button" class="cancel-x-btn" style="--cx-size:22px;" title="Remover" aria-label="Remover ' + (labels[key] || key) + '" onclick="window._f2TeamTiebreakRemove(' + index + ')">×</button></div>';
     }).join('');
-    var available = Object.keys(labels).filter(function (key) { return list.indexOf(key) < 0; });
+    var available = Object.keys(labels).filter(function (key) {
+      return list.indexOf(key) < 0 && (key !== 'sorteio' || tc.classificationUnit !== 'pair');
+    });
     if (available.length) out += '<label style="display:block;margin-top:8px;font-size:.72rem;color:var(--text-muted);">Adicionar critério ' +
       '<select aria-label="Adicionar critério de desempate por time" onchange="window._f2TeamTiebreakAdd(this.value)" style="margin-left:5px;background:var(--bg-secondary,#20242b);color:var(--text-main);border:1px solid rgba(255,255,255,.25);border-radius:6px;padding:5px;">' +
       '<option value="">Selecione</option>' + available.map(function (key) { return '<option value="' + key + '">' + labels[key] + '</option>'; }).join('') + '</select></label>';
@@ -1522,12 +1524,15 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   };
   window._f2TeamTiebreakStart = function () {
     if (!S || !S.cfg.teamCompetition) return;
-    S.cfg.teamCompetition.tiebreakers = ['vitorias', 'games_vencidos', 'sorteio']; _norm(); _rerender();
+    S.cfg.teamCompetition.tiebreakers = S.cfg.teamCompetition.classificationUnit === 'pair'
+      ? ['vitorias', 'games_vencidos'] : ['vitorias', 'games_vencidos', 'sorteio'];
+    _norm(); _rerender();
   };
   window._f2TeamTiebreakAdd = function (key) {
     if (!S || !S.cfg.teamCompetition || !key) return;
     var list = S.cfg.teamCompetition.tiebreakers;
-    if (!Array.isArray(list) || list.indexOf(key) >= 0) return;
+    if (!Array.isArray(list) || list.indexOf(key) >= 0 ||
+        (key === 'sorteio' && S.cfg.teamCompetition.classificationUnit === 'pair')) return;
     list.push(key); _norm(); _rerender();
   };
   window._f2TeamTiebreakRemove = function (index) {
@@ -1546,7 +1551,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   };
   window._f2TeamClassificationUnit = function (unit) {
     if (!S || !S.cfg.teamCompetition) return;
-    S.cfg.teamCompetition.classificationUnit = unit === 'pair' ? 'pair' : 'team'; _norm(); _rerender();
+    S.cfg.teamCompetition.classificationUnit = unit === 'pair' ? 'pair' : 'team';
+    if (S.cfg.teamCompetition.classificationUnit === 'pair' && Array.isArray(S.cfg.teamCompetition.tiebreakers)) {
+      S.cfg.teamCompetition.tiebreakers = S.cfg.teamCompetition.tiebreakers.filter(function (key) { return key !== 'sorteio'; });
+    }
+    _norm(); _rerender();
   };
   window._f2TeamScheduleByCategory = function (enabled) {
     if (!S || !S.cfg.teamCompetition) return;

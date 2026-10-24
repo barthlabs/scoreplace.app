@@ -230,6 +230,7 @@ const TABELA = [
   { nome: "setParticipantLetzplay", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "setPhaseLateEnrollment", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "setPhasePromotion", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
+  { nome: "setTeamTieDrawOrder", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "setTournamentBranding", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "setTournamentCategoryConfig", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "setTournamentEnrollmentStatus", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },

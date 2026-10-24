@@ -3,6 +3,65 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 // Dynamically update stat-boxes after participant/waitlist changes
 var _t = window._t || function(k) { return k; };
 
+window._teamTieDrawVisible = function (t) {
+  if (!t || t.status === 'finished' || t.finishedAt || Number(t.currentPhaseIndex || 0) > 0 ||
+      (t.classifFinalDaLinha && Object.keys(t.classifFinalDaLinha).length)) return false;
+  var cfg = t.teamCompetition || {};
+  if (cfg.enabled !== true || cfg.classificationUnit === 'pair' ||
+      !Array.isArray(cfg.tiebreakers) || cfg.tiebreakers.indexOf('sorteio') < 0 ||
+      !Array.isArray(t.competitionTeams) || t.competitionTeams.length < 2) return false;
+  var rounds = (t.rounds || []).concat(t.phaseRounds || []);
+  (t.phases || []).forEach(function (phase) { rounds = rounds.concat((phase && phase.rounds) || []); });
+  return !rounds.some(function (round) {
+    return ((round && round.groups) || []).concat((round && round.monarchGroups) || [])
+      .some(function (group) { return group && (Array.isArray(group.classifCongelada) || group.classifCongeladaAt); });
+  });
+};
+
+window._openTeamTieDrawOrder = function (tId) {
+  var t = window._findTournamentById && window._findTournamentById(tId);
+  if (!window._teamTieDrawVisible(t) || typeof window.showConfirmDialog !== 'function') return;
+  var teams = t.competitionTeams.slice();
+  var canonicalIds = teams.map(function (team) { return String(team.id || '').trim(); });
+  if (canonicalIds.some(function (id) { return !id; }) || new Set(canonicalIds).size !== canonicalIds.length) return;
+  var saved = t.teamCompetition.tieDrawOrder;
+  var ordered = Array.isArray(saved) && saved.length === canonicalIds.length &&
+    saved.every(function (id) { return canonicalIds.indexOf(id) >= 0; }) && new Set(saved).size === saved.length
+    ? saved.slice() : canonicalIds.slice();
+  var safe = window._safeHtml || function (value) { return String(value).replace(/[&<>"']/g, function (c) {
+    return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+  }); };
+  function drawList() {
+    return ordered.map(function (id, index) {
+      var team = teams.find(function (item) { return item.id === id; }) || {};
+      return '<li style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border-color);">' +
+        '<strong style="width:2em;">' + (index + 1) + 'º</strong><span style="flex:1;color:var(--text-main);">' + safe(team.name || id) + '</span>' +
+        '<button type="button" class="btn btn-secondary btn-sm" aria-label="Subir ' + safe(team.name || id) + '" onclick="window._moveTeamTieDrawOrder(' + index + ',-1)">↑</button>' +
+        '<button type="button" class="btn btn-secondary btn-sm" aria-label="Descer ' + safe(team.name || id) + '" onclick="window._moveTeamTieDrawOrder(' + index + ',1)">↓</button></li>';
+    }).join('');
+  }
+  window._moveTeamTieDrawOrder = function (index, step) {
+    var next = index + step;
+    if (next < 0 || next >= ordered.length) return;
+    var temp = ordered[index]; ordered[index] = ordered[next]; ordered[next] = temp;
+    var list = document.getElementById('team-tie-draw-order-list');
+    if (list) list.innerHTML = drawList();
+  };
+  var body = '<p style="margin:0 0 8px;color:var(--text-main);">Registre abaixo a ordem do sorteio realizado pela organização. O app não realiza o sorteio.</p>' +
+    '<ol id="team-tie-draw-order-list" style="list-style:none;padding:0;margin:0;">' + drawList() + '</ol>';
+  window.showConfirmDialog('🎲 Sorteio de desempate dos times', body, function () {
+    window.FirestoreDB._callFn('setTeamTieDrawOrder', { tournamentId: String(tId), sandbox: String(tId).startsWith('sb_'), orderedTeamIds: ordered.slice() })
+      .then(function (res) {
+        if (!(res && (res.ok || (res.data && res.data.ok)))) throw new Error('draw-order-save-failed');
+        if (typeof window.showNotification === 'function') window.showNotification('Ordem registrada', 'A ordem do sorteio de desempate foi salva.', 'success');
+        if (typeof window._softRefreshView === 'function') window._softRefreshView();
+      }).catch(function (err) {
+        if (window._warn) window._warn('[setTeamTieDrawOrder]', err);
+        if (typeof window.showNotification === 'function') window.showNotification('Não foi possível salvar', 'Atualize a página e confira os times e a fase.', 'error');
+      });
+  }, null, { confirmText:'Registrar ordem', cancelText:'Cancelar', type:'info', maxWidth:'520px' });
+};
+
 // ─── SEÇÃO CANÔNICA DE DUPLAS (single source of truth) ───────────────────────
 // v4.5.74: a MESMA seção "Sem dupla" (topo) + "Duplas formadas" (embaixo) usada na
 // PÁGINA DE DETALHE do torneio (renderTournaments) E na CHAMADA (#participants).
@@ -4496,6 +4555,7 @@ function renderTournaments(container, tournamentId = null) {
                       ele seja o organizador), feita a partir do próprio JOGO no chaveamento
                       (_schCardChip / _schGroupChip no bracket). Ver pedido do dono. */ ''}
                 ${_arbitrosBtn}
+                ${window._teamTieDrawVisible(t) ? `<button class="btn btn-tool-amber hover-lift" onclick="event.stopPropagation();window._openTeamTieDrawOrder('${_escAttr(t.id)}')">🎲 Registrar sorteio de desempate</button>` : ''}
                 ${toggleRegBtn}
                 ${/* v1.3.65/66: "INSCRIÇÕES DURANTE A FASE" (Fechadas/Suplentes Apenas/Novos
                       Confrontos) REMOVIDO das Ferramentas do Organizador — não foi pedido e não
