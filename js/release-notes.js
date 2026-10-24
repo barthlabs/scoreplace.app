@@ -1,4 +1,9 @@
-// 2.5.46 — Atualização consolidada de produção com as correções validadas desde a última publicação.
+// 2.5.46 — O progresso de torneios com vários dias mostra total e etapas separadas.
+// No Neon, são 96 jogos, 48 por dia; o início exibido é o primeiro registro
+// persistido, pois a chamada inicial não foi gravada. Os horários da agenda
+// são escapados antes de entrar no painel. O botão Árbitros ganhou contraste
+// nos dois temas. Por decisão do organizador, os controles de conversão de
+// inscrições legadas saíram da interface; nenhuma migração é disparada aqui.
 // 2.5.45 — Organizador e árbitro podem pular o próximo jogo para chamar outro
 // elegível. É possível cancelar a chamada de um jogo sem placar próprio, mesmo
 // depois de iniciado, e devolver à quadra um jogo encerrado sem placar. Placar
