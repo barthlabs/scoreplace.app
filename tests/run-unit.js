@@ -284,6 +284,7 @@ const SUITES = [
   'tests/l9-censo-formatos-legados.test.js',
   'tests/l7-rename-participant-core.test.js',
   'tests/edit-canonical-slot-core.test.js',
+  'tests/participant-swap-routing.test.js',
   'tests/edit-canonical-slot-emulator.test.js',
   'tests/l7-liga-availability-cf.test.js',
   'tests/l7-liga-availability-package-boundary.test.js',

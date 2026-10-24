@@ -47,7 +47,7 @@ assert.strictEqual(classify(withId('cat-m', 'pair-unknown'), finalPlan), false,
   'sem dia persistido na distribuição final não recebe 3 por origem');
 assert(source.includes('originCategoryId: p.originCategoryId || \'\''), 'origem passa pela expansão da dupla');
 assert(source.includes('originCategoryId: (p && p.originCategoryId) || \'\''), 'origem passa para as linhas da matriz');
-const card = source.slice(source.indexOf('  function _erPairCard('), source.indexOf('  window._erEditPairMember', source.indexOf('  function _erPairCard(')));
+const card = source.slice(source.indexOf('  function _erPairCard('), source.indexOf('  window._erOpenParticipantFicha', source.indexOf('  function _erPairCard(')));
 const fakeWindow = {};
 vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'js/paleta-tabela.js'), 'utf8'), { window: fakeWindow });
 const lzColors = { white: '#f3f4f6', violet: '#a78bfa', green: '#2dd4a0', blue: '#38bdf8', yellow: '#f0b445', red: '#f26a6a' };
@@ -70,7 +70,7 @@ const renderEditable = new Function('window', '_LZ_COL', '_erIsTransferredFemale
 );
 const editable = renderEditable(pair('cat-m', 'Fem Light').map((member, index) => Object.assign(member,
   { order: index + 1, name: 'Pessoa ' + (index + 1), assigned: ['Fem Light'] })));
-assert.strictEqual((editable.match(/window\._erOpenParticipantFicha\(/g) || []).length, 2, 'cada nome abre a própria ficha');
+assert.strictEqual((editable.match(/window\._erOpenParticipantFicha\(/g) || []).length, 2, 'cada nome aciona a entrada própria da análise');
 assert(!editable.includes('onclick="event.stopPropagation();window._erEditPairMember('), 'edição não aparece no card');
 assert(!editable.includes('✏️'), 'nenhum lápis na dupla');
 const statusMembers = pair('cat-m', 'Fem Light').map((member, index) => Object.assign(member,

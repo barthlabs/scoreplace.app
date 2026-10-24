@@ -1770,13 +1770,21 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
       var _mEditBtn = (isOrg && !_mUid && _mManualId)
         ? '<button type="button" title="Editar ' + _nmH + '" aria-label="Editar ' + _nmH + '" style="border:0;background:transparent;color:var(--text-muted);font-size:0.86rem;line-height:1;padding:3px;cursor:pointer;flex-shrink:0;" onclick="event.stopPropagation();window._editParticipantName(\'' + t.id + '\',\'' + _nmSafe + '\',\'' + _mManualId + '\',this)">✏️</button>'
         : '';
+      var _mSwap = isOrg && t.status !== 'finished' && (t.canonicalRegistrationMigration || {}).fingerprint &&
+        _mPart && _mPart.fixedPairId && (_mUid || _mManualId);
+      var _mNameAction = _mSwap
+        ? '<span role="button" tabindex="0" data-tournament-swap="1" data-swap-tid="' + window._safeHtml(String(t.id)) +
+          '" data-swap-uid="' + window._safeHtml(String(_mUid)) + '" data-swap-manual-id="' +
+          window._safeHtml(String(_mManualId)) + '" data-swap-category="' +
+          window._safeHtml(String(_mPart.categoryId || p.categoryId || '')) + '" title="Trocar participante">' + _mNameHtml + '</span>'
+        : _mNameHtml;
       // ⭐ ponto único: o nome já hidratava (_mUidAttr), o ÍCONE não — e era ele que
       // nascia mudo quando o perfil ainda não tinha chegado.
       /* ⛔ `data-edit-name-scope` é do DIV, nunca do span do nome: o helper do nome só leva
        * atributos extras ao span externo, e o alvo editável é o marcador INTERNO. A chave
        * casa por igualdade de string — jamais entra dentro de um seletor CSS. */
       return '<div data-edit-name-scope data-edit-key="' + window._safeHtml(String(t.id) + '|' + String(_mUid || _mManualId || _nm)) + '" style="display:flex;align-items:center;gap:6px;margin-bottom:2px;overflow:hidden;">' +
-        window._personAvatarHtml(_mUid, _nm, 'width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;') + _mNameHtml + _mContact + _mEditBtn + '</div>';
+        window._personAvatarHtml(_mUid, _nm, 'width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;') + _mNameAction + _mContact + _mEditBtn + '</div>';
     }).join('') + (_orgStar ? '<div style="margin-top:2px;">' + _orgStar + '</div>' : '');
   } else {
     var _pSafe = pName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -2862,6 +2870,12 @@ function renderParticipants(container, tournamentId) {
       const _niNomeHtml = (typeof window._personNameHtml === 'function')
         ? window._personNameHtml(_niUid, _niShown, _niEstilo, '', ' data-edit-name-target="1"')
         : `<span${_niUidAttr} data-edit-name-target="1" style="${_niEstilo}">${_niDisp}</span>`;
+      const _niPair = _nameToParticipant[ind.name];
+      const _niSwap = isOrg && t.status !== 'finished' && (t.canonicalRegistrationMigration || {}).fingerprint &&
+        (_niPair && _niPair.fixedPairId || ind.fixedPairId) && (_niUid || _niManualId);
+      const _niNameAction = _niSwap
+        ? `<span role="button" tabindex="0" data-tournament-swap="1" data-swap-tid="${window._safeHtml(String(tId))}" data-swap-uid="${window._safeHtml(String(_niUid))}" data-swap-manual-id="${window._safeHtml(String(_niManualId))}" data-swap-category="${window._safeHtml(String(_niPair && _niPair.categoryId || ind.categoryId || ''))}" title="Trocar participante">${_niNomeHtml}</span>`
+        : _niNomeHtml;
       const _niContato = (typeof window._contactPersonIconHtml === 'function')
         ? window._contactPersonIconHtml(t, _niUid, ind.name, { sameGroup: true }) : '';
       /* ⛔⛔ O ORGANIZADOR TEM DE CONSEGUIR CONFERIR O QUE ELE MUDOU (24/set/2026).
@@ -2880,7 +2894,7 @@ function renderParticipants(container, tournamentId) {
       const _niEditBtn = (isOrg && !_niUid && _niManualId)
         ? `<button type="button" title="Editar ${_safeName}" aria-label="Editar ${_safeName}" style="border:0;background:transparent;color:var(--text-muted);font-size:0.82rem;line-height:1;padding:3px;cursor:pointer;flex-shrink:0;" onclick="event.stopPropagation();window._editParticipantName('${tId}','${safeName}','${_niManualId}',this)">\u270f\ufe0f</button>`
         : '';
-      const _nameRow = `<div data-edit-name-scope data-edit-key="${window._safeHtml(String(tId) + '|' + String(_niUid || _niManualId || ind.name || ''))}" style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;min-width:0;">${_niNomeHtml}${_niContato}${_niEditBtn}${_orgStarC}${isStandby ? presenceDot : ''}</div>${_niRotuloTorneio}`;
+      const _nameRow = `<div data-edit-name-scope data-edit-key="${window._safeHtml(String(tId) + '|' + String(_niUid || _niManualId || ind.name || ''))}" style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;min-width:0;">${_niNameAction}${_niContato}${_niEditBtn}${_orgStarC}${isStandby ? presenceDot : ''}</div>${_niRotuloTorneio}`;
       const _jogoTop = matchLabel ? `<span style="font-weight:${_jogoWeight};color:${window._spCor(_jogoColor, 'color')};opacity:${_jogoOpacity};font-size:0.72rem;white-space:nowrap;">${matchLabel}</span>` : '';
       // Faixa do jogo FULL-WIDTH abaixo do header (libera largura pros nomes dos times).
       let _matchStrip = '';

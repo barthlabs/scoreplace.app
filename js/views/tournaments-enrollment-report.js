@@ -1302,14 +1302,17 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   }
   window._erOpenParticipantFicha = function (order) {
     var row = (_liveState && _liveState.rows || []).find(function (item) { return item.order === Number(order); });
+    if (row && _liveState && _liveState.isOrg && _liveState.t.status !== 'finished' && row._duplaIdx != null &&
+        (_liveState.t.canonicalRegistrationMigration || {}).fingerprint) {
+      window._erEditPairMember(order);
+      return;
+    }
     if (row && typeof window._lzAthleteDialog === 'function') window._lzAthleteDialog(row.uid || '', row.order);
   };
   var _erReplacementChoice = '';
   window._erChooseReplacement = function (uid) { _erReplacementChoice = String(uid || ''); };
-  window._erEditPairMember = function (order) {
-    if (!_liveState || !_liveState.isOrg || !(_liveState.t.canonicalRegistrationMigration || {}).fingerprint) return;
-    var row = (_liveState.rows || []).find(function (item) { return item.order === Number(order); });
-    if (!row || row._duplaIdx == null || !(row.uid || row.manualId) || !row.categoryId) return;
+  function _erShowReplacementDialog(t, row, after) {
+    if (!t || !row || !(row.uid || row.manualId) || !row.categoryId) return;
     if (typeof showInputDialog !== 'function' || typeof window._callCF !== 'function') return;
     showInputDialog('Trocar participante',
       'Digite o nome de outra pessoa que ocupará a vaga de ' + _esc(row.name) + '. Esta ação é uma substituição, não uma correção de grafia. Depois escolha a conta existente, se houver, ou uma vaga digitada.',
@@ -1320,17 +1323,16 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           return;
         }
         function submit(targetUid) {
-          window._callCF('editCanonicalTournamentSlot', { operation: 'replace', tournamentId: String(_liveState.t.id),
-            sandbox: _liveState.t.isSandbox === true, uid: row.uid || '', manualParticipantId: row.manualId || '',
+          window._callCF('editCanonicalTournamentSlot', { operation: 'replace', tournamentId: String(t.id),
+            sandbox: t.isSandbox === true, uid: row.uid || '', manualParticipantId: row.manualId || '',
             categoryId: (typeof window._canonicalCategoryIdForDisplay === 'function'
-              ? (window._canonicalCategoryIdForDisplay(_liveState.t, row.categoryId) || row.categoryId)
+              ? (window._canonicalCategoryIdForDisplay(t, row.categoryId) || row.categoryId)
               : row.categoryId), expectedName: row.name, newName: targetUid ? '' : newName, targetUid: targetUid || '' },
           'Entre na sua conta para editar a vaga.').then(function () {
-            var tId = String(_liveState.t.id);
+            var tId = String(t.id);
             delete _erCanonicalLoaded[tId];
             delete _erCanonicalRosterById[tId];
-            var container = document.getElementById('view-container');
-            if (container) window.renderEnrollmentReportPage(container, tId);
+            if (typeof after === 'function') after(tId);
             if (typeof showNotification === 'function') showNotification('Vaga atualizada', 'A dupla foi atualizada no torneio.', 'success');
           }).catch(function (error) {
             if (typeof showNotification === 'function') showNotification('Não foi possível editar', String((error && error.message) || error), 'error');
@@ -1364,6 +1366,44 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           offerChoices([]);
         });
       }, { placeholder: 'Nome completo', okText: 'Continuar' });
+  }
+  window._erEditPairMember = function (order) {
+    if (!_liveState || !_liveState.isOrg || _liveState.t.status === 'finished' ||
+        !(_liveState.t.canonicalRegistrationMigration || {}).fingerprint) return;
+    var row = (_liveState.rows || []).find(function (item) { return item.order === Number(order); });
+    if (!row || row._duplaIdx == null) return;
+    _erShowReplacementDialog(_liveState.t, row, function (tId) {
+      var container = document.getElementById('view-container');
+      if (container) window.renderEnrollmentReportPage(container, tId);
+    });
+  };
+  window._openTournamentParticipantReplacement = function (tId, uid, manualId, categoryId) {
+    var t = typeof window._findTournamentById === 'function' ? window._findTournamentById(String(tId)) : null;
+    if (!t || !window._souOrganizador(t) || t.status === 'finished' ||
+        !(t.canonicalRegistrationMigration || {}).fingerprint ||
+        !window.FirestoreDB || typeof window.FirestoreDB.loadCanonicalTournamentRoster !== 'function') return;
+    if (!!uid === !!manualId) return;
+    window.FirestoreDB.loadCanonicalTournamentRoster(String(tId)).then(function (result) {
+      var data = result && result.data ? result.data : result;
+      var canonicalCategory = categoryId && typeof window._canonicalCategoryIdForDisplay === 'function'
+        ? (window._canonicalCategoryIdForDisplay(t, categoryId) || categoryId) : categoryId;
+      var pairs = (data && Array.isArray(data.participants) ? data.participants : []).filter(function (pair) {
+        if (!pair || !pair.fixedPairId || !pair.categoryId ||
+            (canonicalCategory && String(pair.categoryId) !== String(canonicalCategory))) return false;
+        return uid ? String(pair.p1Uid || '') === String(uid) || String(pair.p2Uid || '') === String(uid)
+          : String(pair.p1ManualId || '') === String(manualId) || String(pair.p2ManualId || '') === String(manualId);
+      });
+      if (pairs.length !== 1) throw new Error('vaga ativa ausente ou ambígua; atualize o torneio');
+      var pair = pairs[0];
+      var side = uid ? (String(pair.p1Uid || '') === String(uid) ? 'p1' : 'p2')
+        : (String(pair.p1ManualId || '') === String(manualId) ? 'p1' : 'p2');
+      var name = String(pair[side + 'Name'] || pair[side + 'DisplayName'] || '').trim();
+      if (!name && uid && typeof window._displayNameForUid === 'function') name = window._displayNameForUid(uid, '');
+      if (!name) throw new Error('nome da inscrição indisponível; atualize o torneio');
+      _erShowReplacementDialog(t, { uid: uid || '', manualId: manualId || '', categoryId: pair.categoryId, name: name });
+    }).catch(function (error) {
+      if (typeof showNotification === 'function') showNotification('Não foi possível abrir a troca', String((error && error.message) || error), 'error');
+    });
   };
   function _erFormedPairsPanel(rows, t) {
     // Duplas sem categoria ficam no bloco de duplas; depois do drop elas saem

@@ -60,7 +60,8 @@ function _blocoDaLinha(src, marcador) {
 }
 const _nameRowAdmin = _blocoDaLinha(participants, 'const _nameRow = ');
 ok(_nameRowAdmin.length > 0, 'a linha do nome da lista administrativa foi localizada pelo próprio identificador');
-ok(/\$\{_niNomeHtml\}/.test(_nameRowAdmin), 'a lista administrativa emite o nome pelo helper canônico da ficha');
+ok(/\$\{_niNameAction\}/.test(_nameRowAdmin) && /_niNameAction[\s\S]{0,700}_niNomeHtml/.test(participants),
+  'a lista administrativa mantém o nome canônico e permite a troca direta ao organizador');
 ok(/\$\{_niContato\}/.test(_nameRowAdmin), 'a lista administrativa mostra o balão de contato ao lado do nome');
 ok(/\$\{_niEditBtn\}/.test(_nameRowAdmin), 'a edição da lista administrativa é um botão próprio, não o nome');
 /* ⛔ E o botão só existe para quem foi digitado À MÃO (25/set/2026). Pergunta do dono: "onde

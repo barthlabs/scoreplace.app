@@ -7641,12 +7641,22 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m, slot, showIndividu
   // nome longo usa as duas linhas já reservadas na mesma caixa, com fonte menor. Forçar
   // a quebra do parceiro fazia "Leila Arida" ocupar duas linhas sem necessidade.
   let html = members.length > 1 ? '<div class="sp-mc-col">' : '';
-  members.forEach(function(_mb) {
+  members.forEach(function(_mb, memberIndex) {
     // `_mb` = { uid, nome }. `nome` pode vir VAZIO quando há uid e o perfil ainda não
     // chegou — o span leva `data-uid-name` e é preenchido pela hidratação (nunca por
     // nome gravado). O resto da função continua trabalhando com `name` como antes.
-    const _slotUid = _mb && _mb.uid ? String(_mb.uid) : '';
+    const _sideObj = m && m[slot === 'p2' ? 'team2Obj' : 'team1Obj'];
+    const _slotManualId = _sideObj && _sideObj.fixedPairId
+      ? String(_sideObj[memberIndex === 0 ? 'p1ManualId' : 'p2ManualId'] || '') : '';
+    const _slotUid = _slotManualId ? '' : (_mb && _mb.uid ? String(_mb.uid) : '');
     const name = (_mb && _mb.nome) ? String(_mb.nome) : '';
+    const _canSwap = !!(t && t.id && m && _sideObj && _sideObj.fixedPairId &&
+      (t.canonicalRegistrationMigration || {}).fingerprint && t.status !== 'finished' &&
+      typeof window._souOrganizador === 'function' && window._souOrganizador(t) &&
+      !m.winner && m.status !== 'finished' && (_slotUid || _slotManualId));
+    const _swapAttrs = _canSwap
+      ? ` role="button" tabindex="0" data-tournament-swap="1" data-swap-tid="${window._safeHtml(String(t.id))}" data-swap-uid="${window._safeHtml(_slotUid)}" data-swap-manual-id="${window._safeHtml(_slotManualId)}" data-swap-category="${window._safeHtml(String(_sideObj.categoryId || m.categoryId || m.category || ''))}" title="Trocar participante"`
+      : '';
     // v2.4.65: durante W.O. pendente, o slot do ausente exibe o substituto
     // convidado em amarelo + tag "aguardando resposta" (avatar do convidado).
     const _isPendingSlot = !!(pendingSub && pendingSub.absent && name === pendingSub.absent && pendingSub.invitee);
@@ -7755,7 +7765,7 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m, slot, showIndividu
       /* A faixa interna delimita somente o nome dentro do conteúdo que o auto-fit mede.
        * O 💬 continua irmão dela dentro de .sp-name-fit: assim o toque no nome abre a
        * ficha, o toque no 💬 abre contato, e os dois seguem cabendo na mesma caixa. */
-      `<div class="sp-mc-box"${_boxNomeAttrs} style="${_boxNome}"><span class="sp-name-fit sp-mc-nm" data-maxrem="${_nomeMaxRem}" data-minrem="${_nomeMinRem}" data-two-line-maxrem="${_geo.twoLineMaxRem}"><span class="sp-person-name-content">${
+      `<div class="sp-mc-box"${_boxNomeAttrs} style="${_boxNome}"><span class="sp-name-fit sp-mc-nm" data-maxrem="${_nomeMaxRem}" data-minrem="${_nomeMinRem}" data-two-line-maxrem="${_geo.twoLineMaxRem}"><span class="sp-person-name-content"${_swapAttrs}>${
         _slotUid
           ? window._personNameHtml(_slotUid, name) +
             ((name && typeof window._isOrgName === 'function' && window._currentBracketTournament &&

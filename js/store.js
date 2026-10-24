@@ -6370,6 +6370,23 @@ window._openPlayerProfileFromNameElement = function (el, ev) {
 
 if (typeof document !== 'undefined' && document.addEventListener && !window._playerProfileLinkDelegationInstalled) {
     window._playerProfileLinkDelegationInstalled = true;
+    var _swapNameTarget = function (node) {
+        while (node && node !== document) {
+            if (node.getAttribute && node.getAttribute('data-tournament-swap') === '1') return node;
+            node = node.parentNode;
+        }
+        return null;
+    };
+    var _openSwapFromName = function (node, ev) {
+        var el = _swapNameTarget(node);
+        if (!el || typeof window._openTournamentParticipantReplacement !== 'function') return false;
+        if (ev && typeof ev.preventDefault === 'function') ev.preventDefault();
+        if (ev && typeof ev.stopImmediatePropagation === 'function') ev.stopImmediatePropagation();
+        window._openTournamentParticipantReplacement(el.getAttribute('data-swap-tid') || '',
+            el.getAttribute('data-swap-uid') || '', el.getAttribute('data-swap-manual-id') || '',
+            el.getAttribute('data-swap-category') || '');
+        return true;
+    };
     var _profileNameTarget = function (node) {
         while (node && node !== document) {
             if (node.getAttribute && (node.getAttribute('data-player-profile-uid') || node.getAttribute('data-uid-name'))) return node;
@@ -6378,11 +6395,13 @@ if (typeof document !== 'undefined' && document.addEventListener && !window._pla
         return null;
     };
     document.addEventListener('click', function (ev) {
+        if (_openSwapFromName(ev.target, ev)) return;
         var el = _profileNameTarget(ev.target);
         if (el) window._openPlayerProfileFromNameElement(el, ev);
     }, true);
     document.addEventListener('keydown', function (ev) {
         if (ev.key !== 'Enter' && ev.key !== ' ') return;
+        if (_openSwapFromName(ev.target, ev)) return;
         var el = _profileNameTarget(ev.target);
         if (el && window._openPlayerProfileFromNameElement(el, ev) && typeof ev.stopPropagation === 'function') ev.stopPropagation();
     }, true);
