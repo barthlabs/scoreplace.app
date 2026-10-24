@@ -7,11 +7,21 @@ const path = require('node:path');
 const { execFileSync, spawnSync } = require('node:child_process');
 const root = path.join(__dirname, '..');
 const script = path.join(root, 'scripts/check-operation-regions-mixed.js');
-const current = execFileSync('git', ['log', '-1', '--format=%H', '--', 'functions-autodraw'], { cwd: root }).toString().trim();
-const digest = execFileSync('node', ['scripts/operation-source-digest.js', 'functions-autodraw', 'endMatchOnCourt', current], { cwd: root }).toString().trim();
+const gitRepo = spawnSync('git', ['rev-parse', '--is-inside-work-tree'], { cwd: root, encoding: 'utf8' });
+const gitLog = gitRepo.status === 0
+  ? spawnSync('git', ['log', '-1', '--format=%H', '--', 'functions-autodraw'], { cwd: root, encoding: 'utf8' })
+  : null;
+const current = gitLog?.status === 0 ? gitLog.stdout.trim() : '';
+const manifestsPresent = ['v2', 'v3'].every(version =>
+  fs.existsSync(path.join(root, `.claude/tmp/operation-regions-manifest-${version}.json`)));
+const skipReason = gitRepo.status !== 0 ? 'sem histórico Git (cópia git archive)'
+  : !current ? 'sem commit de functions-autodraw no histórico Git'
+    : !manifestsPresent ? 'manifestos regionais ignorados pelo git archive' : false;
+const digest = skipReason ? '' : execFileSync('node',
+  ['scripts/operation-source-digest.js', 'functions-autodraw', 'endMatchOnCourt', current],
+  { cwd: root }).toString().trim();
 
 for (const version of ['v2', 'v3']) {
-  const original = JSON.parse(fs.readFileSync(path.join(root, `.claude/tmp/operation-regions-manifest-${version}.json`)));
   const run = (rows, allowLegacyCourt = false) => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-region-test-'));
     const file = path.join(dir, 'manifest.json');
@@ -20,7 +30,8 @@ for (const version of ['v2', 'v3']) {
       { cwd: root, env: { ...process.env, SP_REGION_MANIFEST: file }, encoding: 'utf8' }); }
     finally { fs.rmSync(dir, { recursive: true, force: true }); }
   };
-  test(`${version}: corte antigo e atualização só da quadra`, () => {
+  test(`${version}: corte antigo e atualização só da quadra`, { skip: skipReason }, () => {
+    const original = JSON.parse(fs.readFileSync(path.join(root, `.claude/tmp/operation-regions-manifest-${version}.json`)));
     const legacy = structuredClone(original);
     const legacyCommit = legacy.find(row => row.name !== `sp-op-end-court-${version}`).commit;
     const legacyDigest = execFileSync('node', ['scripts/operation-source-digest.js', 'functions-autodraw',
