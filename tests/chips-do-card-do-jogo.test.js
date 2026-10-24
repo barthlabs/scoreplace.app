@@ -113,6 +113,8 @@ mConcentrado.court = 'Quadra 4';
 mConcentrado.courtCalledAt = '2026-10-22T18:00:00Z';
 ok(/sp-match-cancel-court/.test(W.renderMatchCard(mConcentrado, true, tConcentrado.id, 1)),
   'Cancelar aparece para a chamada sem placar');
+ok(/sp-match-cancel-court/.test(W.renderMatchCard({ ...mConcentrado, startedAt: '2026-10-22T18:05:00Z' }, true, tConcentrado.id, 1)),
+  'Cancelar permanece disponível se este jogo começou mas segue sem placar');
 ok(!/sp-match-cancel-court/.test(W.renderMatchCard({ ...mConcentrado, pendingResult: { scoreP1: 6, scoreP2: 3 } }, true, tConcentrado.id, 1)),
   'Cancelar desaparece quando há proposta de placar');
 ok(!/sp-match-cancel-court/.test(W.renderMatchCard({ ...mConcentrado, winner: 'p1', resultAt: '2026-10-22T18:40:00Z' }, true, tConcentrado.id, 1)),

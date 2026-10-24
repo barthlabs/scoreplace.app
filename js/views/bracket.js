@@ -9076,11 +9076,11 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     (Array.isArray(m.sets) && m.sets.length > 0) || Number(m.scoreP1) > 0 || Number(m.scoreP2) > 0;
   var _canCancelCourt = !_readOnly && !_setsEdit && !_courtFinished &&
     typeof window._isUserAuthority === 'function' && window._isUserAuthority(t, window.AppStore && window.AppStore.currentUser);
-  var _cancelCourtAction = _courtReleased[String(m.id)] ? 'restore' : (m.courtCalledAt && !m.startedAt ? 'cancel-call' : '');
+  var _cancelCourtAction = _courtReleased[String(m.id)] ? 'restore' : (m.courtCalledAt ? 'cancel-call' : '');
   var _cancelCourtChip = _canCancelCourt && _cancelCourtAction
     ? '<button type="button" class="sp-match-cancel-court" data-cancel-court-action="' + _cancelCourtAction +
       '" onclick="event.stopPropagation();window._cancelCourtAction(\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\',\'' +
-      _cancelCourtAction + '\',this)" title="' + (_cancelCourtAction === 'restore' ? 'Restaurar à quadra original; relógio contínuo' : 'Desfazer chamada antes do jogo começar') + '">Cancelar</button>' : '';
+      _cancelCourtAction + '\',this)" title="' + (_cancelCourtAction === 'restore' ? 'Restaurar à quadra original; relógio contínuo' : 'Desfazer a chamada; o jogo volta à fila sem cronômetro') + '">Cancelar</button>' : '';
   var _canEndCourt = !_readOnly && !_setsEdit && m.court && (m.courtCalledAt || m.startedAt) &&
     !_courtFinished && !_courtReleased[String(m.id)] && typeof window._isUserAuthority === 'function' &&
     window._isUserAuthority(t, window.AppStore && window.AppStore.currentUser);

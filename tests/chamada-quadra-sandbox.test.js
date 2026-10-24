@@ -238,9 +238,25 @@ const game = (id, court, scheduledAt = '2026-10-22T21:00:00.000Z') => ({ id, cou
   await assert.rejects(endOnCourt(op('cancel-call', 'dot.part', cancelId)),
     e => e.code === 'failed-precondition' && /Restaure primeiro/.test(e.message));
   assert.equal((await endOnCourt(op('restore', 'dot.part', '5f7e6d04-fbb9-4a54-8d93-a1fe4c19e01e'))).changed, true);
+  tournament.matches[0].startedAt = nowIso;
+  tournament.matches.push({ ...game('outro-resultado', 'Quadra 5'), winner: 'p1', resultAt: nowIso });
   assert.equal((await endOnCourt(op('cancel-call', 'dot.part', cancelId))).changed, true);
   assert.equal(tournament.matches[0].courtCalledAt, undefined, 'desfazer chamada não altera quadra agendada');
+  assert.equal(tournament.matches[0].startedAt, undefined, 'jogo iniciado sem placar volta à fila');
+  assert.equal(tournament.matches[0].courtClockBaseAt, undefined, 'relógio antigo é removido');
   assert.equal(tournament.matches[0].court, 'Quadra 4');
+  assert.ok(Array.from(releases.values()).some(item => item.kind === 'cancel-call' &&
+    item.matchId === 'dot.part' && item.previousStartedAt === nowIso &&
+    item.previousCourtCalledAt === nowIso && item.previousCourtClockBaseAt === nowIso),
+  'cancelamento preserva horários anteriores no registro de auditoria');
+  await assert.rejects(callable({ auth: { uid: 'owner' }, data: {
+    tournamentId: 'tour_test', sandbox: false, matchId: 'dot.part', court: 'Quadra 4', clockAction: 'next'
+  } }), e => e.code === 'failed-precondition' && /chamado/.test(e.message),
+  'controle do relógio não alcança jogo devolvido à fila');
+  await callable(request('tour_test', 'dot.part', 'Quadra 5'));
+  assert.equal(tournament.matches[0].court, 'Quadra 5',
+    'após cancelar chamada sem placar, a organização pode escolher outra quadra');
+  tournament.matches[0].court = 'Quadra 4';
   assert.equal((await endOnCourt(op('cancel-call', 'dot.part', cancelId))).replayed, true);
   tournament.matches[0].courtCalledAt = nowIso;
   tournament.matches[0].scoreP1 = '2';
@@ -259,6 +275,11 @@ const game = (id, court, scheduledAt = '2026-10-22T21:00:00.000Z') => ({ id, cou
     'Cancelar nunca corrige resultado lançado');
   delete tournament.matches[0].resultAt;
   delete tournament.matches[0].winner;
+  tournament.matches[0].wo = true;
+  await assert.rejects(endOnCourt(op('cancel-call', 'dot.part', '15e66e13-c522-4e84-9ca6-a90d46e143aa')),
+    e => e.code === 'failed-precondition' && /Editar placar/.test(e.message),
+    'W.O. do próprio jogo impede Cancelar mesmo sem placar numérico');
+  delete tournament.matches[0].wo;
   delete tournament.matches[0].scoreP1;
   tournament.matches[0].pendingResult = { scoreP1: 6, scoreP2: 3 };
   await assert.rejects(endOnCourt(op('cancel-call', 'dot.part', 'af885541-8772-4c40-9840-83ad381d81b8')),

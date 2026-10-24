@@ -4218,12 +4218,17 @@ exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
     }
     if (released[matchId]) throw new HttpsError('failed-precondition', 'Restaure primeiro o jogo encerrado.');
     if (!m.courtCalledAt) throw new HttpsError('failed-precondition', 'Este jogo ainda não foi chamado.');
-    if (m.startedAt || m.liveScored === true || (Array.isArray(m.sets) && m.sets.length) ||
-        Number(m.scoreP1) > 0 || Number(m.scoreP2) > 0) {
-      throw new HttpsError('failed-precondition', 'Jogo já iniciado ou com placar parcial; chamada não cancelada.');
-    }
     const before = _antesDoMotor(t);
+    const auditRef = ref.collection('courtReleases').doc();
+    tx.create(auditRef, {
+      kind: 'cancel-call', matchId, court: String(m.court || ''),
+      previousCourtCalledAt: m.courtCalledAt || null,
+      previousStartedAt: m.startedAt || null,
+      previousCourtClockBaseAt: m.courtClockBaseAt || null,
+      cancelledAt: agoraIso, cancelledBy: uid,
+    });
     delete m.courtCalledAt;
+    delete m.startedAt;
     delete m.courtClockBaseAt;
     _gravaTorneio(tx, ref, t, before, { agoraIso });
     tx.set(stateRef, { revision: FieldValue.increment(1) }, { merge: true });
