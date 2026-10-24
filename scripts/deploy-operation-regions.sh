@@ -3,6 +3,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 mode="${1:---check}"
+if [[ "$mode" == '--refresh-end-court' ]]; then
+  exec "$(dirname "$0")/refresh-end-court-regions.sh" --deploy
+fi
 if [[ "$mode" == '--deploy-v3' || "$mode" == '--resume-v3' || "$mode" == '--retarget-v3' || "$mode" == '--check-v3' || "$mode" == '--check-v2-live' ]]; then
   exec "$(dirname "$0")/deploy-operation-regions-v3.sh" "$mode"
 fi

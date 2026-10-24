@@ -1229,6 +1229,21 @@ window._bracketPostponedOrder = function (candidates, postponed) {
       return (ai < 0 ? -1 : 1) - (bi < 0 ? -1 : 1) || (ai >= 0 ? ai - bi : a.index - b.index);
     }).map(function (entry) { return entry.match; });
 };
+window._bracketReloadCourtState = function (tId, entry) {
+  entry.ready = false;
+  var db = window.FirestoreDB && window.FirestoreDB.db;
+  if (!db) return Promise.reject(new Error('Leitura da fila indisponível'));
+  var id = String(tId);
+  return db.collection(id.startsWith('sb_') ? 'sandboxes' : 'tournaments').doc(id)
+    .collection('courtState').doc('main').get({ source: 'server' }).then(function (snap) {
+      var data = snap.exists ? snap.data() || {} : {};
+      entry.released = data.released && typeof data.released === 'object' ? data.released : {};
+      entry.postponed = Array.isArray(data.postponed) ? data.postponed : [];
+      entry.revision = Number(data.revision) || 0;
+      entry.ready = true;
+      entry.error = null;
+    });
+};
 window._bracketEnsureCourtReleaseListener = function (tId) {
   var id = String(tId || '');
   if (!id || !window.FirestoreDB || !window.FirestoreDB.db) return;
@@ -1496,19 +1511,17 @@ window._bracketOperationsRefresh = function (t, root) {
         window._callCF('endMatchOnCourt', {
           tournamentId: String(t.id), matchId: mid, sandbox: String(t.id).startsWith('sb_'),
           action: 'postpone', expectedRevision: entry.revision, operationId: _courtOperationId()
-        }, 'Entre na sua conta para postergar o jogo.').catch(function (error) {
+        }, 'Entre na sua conta para postergar o jogo.').then(function () {
+          // O recibo confirma a gravação, mas não inclui a nova revisão.
+          // Bloqueie o próximo clique até reler a fila no servidor.
+          return window._bracketReloadCourtState(t.id, entry).catch(function () {
+            entry.ready = false;
+            entry.error = new Error('Falha ao atualizar a fila');
+            window._bracketEnsureCourtReleaseListener(t.id);
+          });
+        }, function (error) {
           if (typeof showNotification === 'function') showNotification('Não foi possível pular o jogo', error && error.message || 'Atualize a tela.', 'error');
-          var ref = window.FirestoreDB && window.FirestoreDB.db && window.FirestoreDB.db
-            .collection(String(t.id).startsWith('sb_') ? 'sandboxes' : 'tournaments').doc(String(t.id))
-            .collection('courtState').doc('main');
-          if (!ref) return;
-          return ref.get().then(function (snap) {
-            var data = snap.exists ? snap.data() || {} : {};
-            entry.released = data.released && typeof data.released === 'object' ? data.released : {};
-            entry.postponed = Array.isArray(data.postponed) ? data.postponed : [];
-            entry.revision = Number(data.revision) || 0;
-            entry.ready = true;
-          }).catch(function () {
+          return window._bracketReloadCourtState(t.id, entry).catch(function () {
             entry.ready = false;
             entry.error = new Error('Falha ao atualizar a fila');
             window._bracketEnsureCourtReleaseListener(t.id);

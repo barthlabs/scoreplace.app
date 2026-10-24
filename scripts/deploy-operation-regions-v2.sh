@@ -170,19 +170,21 @@ fi
 
 check_tree
 [[ -f "$manifest" ]] || { echo 'manifesto v2 ausente' >&2; exit 1; }
-source_commit="$(SP_MANIFEST="$manifest" node -e 'const m=JSON.parse(require("fs").readFileSync(process.env.SP_MANIFEST));const a=[...new Set(m.map(x=>x.commit))];if(m.length!==18||a.length!==1)process.exit(1);process.stdout.write(a[0])')"
-git diff --quiet "$source_commit" HEAD -- functions functions-autodraw || { echo 'codebase mudou após build' >&2; exit 1; }
+# Corte misto: as outras cinco portas mantêm a imagem/digest do manifesto
+# previamente verificado. Recalcular seu hash com a árvore atual daria um
+# digest falso, pois operation-source-digest lê os arquivos do checkout atual.
+# Somente end-court é recalculada pelo verificador com o commit do handler.
+node scripts/check-operation-regions-mixed.js v2
 for i in "${!names[@]}"; do
   name="${names[$i]}" target="${targets[$i]}" codebase="${codebases[$i]}"
-  digest="$(node scripts/operation-source-digest.js "$codebase" "$target" "$source_commit")"
   source_image=''
   for region in "${regions[@]}"; do
     json="$(describe "$name" "$region")" || { echo "serviço ausente: $name/$region" >&2; exit 1; }
-    SP_MANIFEST="$manifest" SP_JSON="$json" SP_NAME="$name" SP_REGION="$region" SP_DIGEST="$digest" node - <<'NODE'
+    SP_MANIFEST="$manifest" SP_JSON="$json" SP_NAME="$name" SP_REGION="$region" node - <<'NODE'
 const fs=require('fs');const rows=JSON.parse(fs.readFileSync(process.env.SP_MANIFEST));
 const r=rows.find(x=>x.name===process.env.SP_NAME&&x.region===process.env.SP_REGION);
 const s=JSON.parse(process.env.SP_JSON),env=Object.fromEntries((s.spec?.template?.spec?.containers?.[0]?.env||[]).map(x=>[x.name,x.value]));
-if(!r||r.sourceDigest!==process.env.SP_DIGEST||env.SP_SOURCE_DIGEST!==r.sourceDigest||env.SP_OPERATION_REGION!==r.region||
+if(!r||env.SP_SOURCE_DIGEST!==r.sourceDigest||env.SP_OPERATION_REGION!==r.region||
   s.status?.latestReadyRevisionName!==r.revision||s.status?.url!==r.url||s.spec?.template?.spec?.containers?.[0]?.image!==r.image||
   s.spec?.template?.metadata?.annotations?.['run.googleapis.com/base-images'])process.exit(1);
 NODE

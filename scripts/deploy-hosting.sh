@@ -583,6 +583,9 @@ verificar_contingencia_regional() {
     echo "✗ configuração v3 ausente ou divergente do commit — abortando."
     return 1
   fi
+  # A interface de Pular jogo só pode subir após as oito portas end-court
+  # (três v2 e cinco v3) baterem com os manifestos e digests locais. Esses
+  # checks leem cada revisão viva e abortam antes do push e do upload.
   scripts/deploy-operation-regions.sh --check-v2-live || return 1
   scripts/deploy-operation-regions.sh --check-v3 || return 1
   scripts/deploy-operation-regions.sh --check-legacy-gate-live || return 1

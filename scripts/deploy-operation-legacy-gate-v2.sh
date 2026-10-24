@@ -20,7 +20,7 @@ else
   scripts/deploy-operation-regions.sh --check-v2
 fi
 [[ -f "$source_manifest" ]] || { echo 'manifesto regional ausente' >&2; exit 1; }
-source_commit="$(SP_MANIFEST="$source_manifest" node -e 'const m=require("./"+process.env.SP_MANIFEST);const s=[...new Set(m.map(x=>x.commit))];if(s.length!==1)process.exit(1);process.stdout.write(s[0])')"
+source_commit="$(SP_MANIFEST="$source_manifest" node -e 'const m=require("./"+process.env.SP_MANIFEST);const s=[...new Set(m.filter(x=>x.name!=="sp-op-end-court-v2").map(x=>x.commit))];if(s.length!==1)process.exit(1);process.stdout.write(s[0])')"
 if [[ "$mode" != '--check-live' ]]; then
   git diff --quiet "$source_commit" HEAD -- functions functions-autodraw || { echo 'codebase mudou após build regional' >&2; exit 1; }
 fi
