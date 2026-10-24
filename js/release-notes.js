@@ -1,3 +1,4 @@
+// 2.5.46 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.45 — Organizador e árbitro podem pular o próximo jogo para chamar outro
 // elegível. É possível cancelar a chamada de um jogo sem placar próprio, mesmo
 // depois de iniciado, e devolver à quadra um jogo encerrado sem placar. Placar
