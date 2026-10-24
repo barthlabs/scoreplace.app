@@ -1,3 +1,7 @@
+// 2.5.49 — O painel de progresso mostra a etapa ou rodada atual e, logo abaixo,
+// a barra do torneio inteiro. Em torneios de vários dias, a primeira etapa
+// permanece visível até o primeiro registro da seguinte; após o encerramento,
+// fica a última etapa. O total inclui fases futuras já planejadas.
 // 2.5.48 — Torneios futuros podem classificar atletas e duplas por pontos ou saldo
 // de games e escolher a ordem de vitórias, games vencidos e outros desempates.
 // Competições por times têm seus próprios desempates configuráveis. Se houver

@@ -10,7 +10,11 @@ assert.deepEqual({ ...W._getTournamentProgress(t) }, { total: 96, completed: 96,
 const stages = W._tProgByDay(t);
 assert.deepEqual(stages.days.map(d => [d.day, d.completed, d.total]),
   [['2026-10-22', 48, 48], ['2026-10-23', 48, 48]]);
-assert.match(W._buildProgressInner(t), /96\/96 partidas · 100%/);
+assert.equal(stages.activeIndex, 1, 'a última etapa com jogo iniciado é a atual');
+assert.match(W._buildProgressInner(t), /Etapa 2 · 23\/10/);
+assert.doesNotMatch(W._buildProgressInner(t), /Etapa 1 · 22\/10/);
+assert.match(W._buildProgressInner(t), /TORNEIO COMPLETO/);
+assert.match(W._buildProgressInner(t), /96\/96 jogos · 100%/);
 assert.doesNotMatch(W._buildProgressInner(t), /19\/10|97 partidas/);
 const unsafeWindow = { ...t, scheduleWindow: { days: t.scheduleWindow.days.map((d, i) =>
   i === 0 ? { ...d, startTime: '<img src=x onerror=alert(1)>' } : d) } };
@@ -18,6 +22,39 @@ assert.doesNotMatch(W._buildProgressInner(unsafeWindow), /<img/, 'horários da a
 const first = { ...t, matches: t.matches.map(m => m.requiredDay === '2026-10-23' ? { ...m, winner: null, score1: null, score2: null, resultAt: null, startedAt: null } : m) };
 assert.deepEqual(W._tProgByDay(first).days.map(d => [d.completed, d.total]), [[48, 48], [0, 48]]);
 assert.equal(W._getTournamentProgress(first).completed, 48);
+assert.equal(W._tProgByDay(first).activeIndex, 0);
+assert.match(W._buildProgressInner(first), /Etapa 1 · 22\/10/);
+assert.doesNotMatch(W._buildProgressInner(first), /Etapa 2 · 23\/10/);
+assert.match(W._buildProgressInner(first), /48\/96 jogos · 50%/);
+const secondStarted = { ...first, matches: first.matches.map(m => m.requiredDay === '2026-10-23' && m.id === first.matches.find(x => x.requiredDay === '2026-10-23').id
+  ? { ...m, startedAt: '2026-10-23T21:00:00Z' } : m) };
+assert.equal(W._tProgByDay(secondStarted).activeIndex, 1, 'a primeira chamada registrada troca a etapa antes do placar');
+assert.match(W._buildProgressInner(secondStarted), /Etapa 2 · 23\/10/);
+assert.doesNotMatch(W._buildProgressInner(secondStarted), /Etapa 1 · 22\/10/);
+const noFirstStamp = { ...first, matches: first.matches.map(m => m.requiredDay === '2026-10-22'
+  ? { ...m, startedAt: null, resultAt: null } : m) };
+assert.equal(W._tProgByDay(noFirstStamp).activeIndex, 0, 'sem registro, não inventa início de etapa');
+const thirdDayHtml = W._tProgByDayHtml({ days: [
+  { day: '2026-10-22', total: 2, completed: 2, startTime: '18:00', endTime: '20:00', firstAt: 1, lastAt: 2 },
+  { day: '2026-10-23', total: 2, completed: 2, startTime: '18:00', endTime: '20:00', firstAt: 3, lastAt: 4 },
+  { day: '2026-10-24', total: 2, completed: 1, startTime: '18:00', endTime: '20:00', firstAt: 5, lastAt: null }
+], activeIndex: 2, total: 6, completed: 5, zone: 'America/Sao_Paulo' });
+assert.match(thirdDayHtml, /Etapa 3 · 24\/10/);
+assert.doesNotMatch(thirdDayHtml, /Etapa [12] ·/);
+assert.match(thirdDayHtml, /5\/6 jogos · 83%/);
+const originalPlan = W._tournamentGamesPlan;
+W._tournamentGamesPlan = () => ({ totalPlanned: 120, totalDone: 48 });
+try {
+  const futurePhase = W._tProgByDay(first);
+  assert.equal(futurePhase.total, 120, 'a barra total inclui fase futura ainda não materializada');
+  assert.match(W._tProgByDayHtml(futurePhase), /48\/120 jogos · 40%/);
+} finally { W._tournamentGamesPlan = originalPlan; }
+const oneStage = { status: 'in_progress', matches: [
+  { id: 'one', p1: 'A', p2: 'B', winner: 'A', score1: 6, score2: 2,
+    startedAt: 1730149200000, resultAt: 1730151000000 }
+] };
+assert.match(W._buildProgressInner(oneStage), /Torneio completo/,
+  'o torneio de uma só etapa também apresenta o total abaixo da etapa atual');
 
 const phantom = t.thirdPlaceMatch;
 const mixedPhases = {

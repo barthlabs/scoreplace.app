@@ -3343,4 +3343,6 @@ dialog.sp-native-update::backdrop { background: var(--bg-overlay, rgba(0,0,0,0.6
 .tourn-progress-stage-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; flex-wrap: wrap; font-size: .85rem; }
 .tourn-progress-stage-track { height: 10px; border-radius: 999px; background: rgba(127,127,127,.22); overflow: hidden; margin: 8px 0; }
 .tourn-progress-stage-track span { display: block; height: 100%; background: #059669; border-radius: inherit; }
+.tourn-progress-total { border-color: var(--sp-b-a78bfa,rgba(167,139,250,.45)); }
+.tourn-progress-total .tourn-progress-stage-track span { background: linear-gradient(90deg,#8b5cf6,#a78bfa); }
 .tourn-progress-stage-meta { display: flex; gap: 6px 16px; flex-wrap: wrap; font-size: .72rem; color: var(--text-muted); }

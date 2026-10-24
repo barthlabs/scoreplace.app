@@ -1701,7 +1701,7 @@ window._tProgByDay = function(t) {
   });
   // Se a agenda estiver incompleta, o painel antigo é mais honesto que etapas parciais.
   if (grouped.reduce(function(n, d) { return n + d.matches.length; }, 0) !== prog.total) return null;
-  return { days: grouped.map(function(d) {
+  var daySummaries = grouped.map(function(d) {
     var done = d.matches.filter(function(m) { return m.winner || m.result ||
       (m.score1 !== undefined && m.score2 !== undefined && m.score1 !== null && m.score2 !== null); });
     var first = d.matches.map(function(m) { return window.ScoreplaceMatchDay.timestamp(m.startedAt || m.resultAt); }).filter(Boolean);
@@ -1709,14 +1709,21 @@ window._tProgByDay = function(t) {
     return { day: d.day, startTime: d.startTime, endTime: d.endTime, total: d.matches.length,
       completed: done.length, firstAt: first.length ? Math.min.apply(null, first) : null,
       lastAt: last.length ? Math.max.apply(null, last) : null };
-  }), total: prog.total, completed: prog.completed, zone: zone };
+  });
+  var activeIndex = 0;
+  daySummaries.forEach(function(d, i) { if (d.firstAt) activeIndex = i; });
+  var plan = typeof window._tournamentGamesPlan === 'function' ? window._tournamentGamesPlan(t) : null;
+  return { days: daySummaries, activeIndex: activeIndex,
+    total: plan && plan.totalPlanned > 0 ? plan.totalPlanned : prog.total,
+    completed: plan && plan.totalDone != null ? plan.totalDone : prog.completed, zone: zone };
 };
 window._tProgByDayHtml = function(stage) {
   var time = function(ms) { return new Date(ms).toLocaleTimeString('pt-BR', { timeZone: stage.zone, hour: '2-digit', minute: '2-digit' }); };
   var esc = function(value) { return String(value == null ? '' : value).replace(/[&<>"']/g, function(c) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
   }); };
-  var cards = stage.days.map(function(d, i) {
+  var i = Math.max(0, Math.min(stage.days.length - 1, stage.activeIndex || 0));
+  var cards = stage.days.slice(i, i + 1).map(function(d) {
     var pct = d.total ? Math.round(d.completed / d.total * 100) : 0;
     var date = esc(d.day.slice(8, 10) + '/' + d.day.slice(5, 7));
     var planned = esc(d.startTime) + '–' + esc(d.endTime);
@@ -1728,8 +1735,12 @@ window._tProgByDayHtml = function(stage) {
       (d.completed === d.total && d.lastAt ? '<span>Último placar ' + time(d.lastAt) + '</span>' : '') + '</div></div>';
   }).join('');
   var pct = stage.total ? Math.round(stage.completed / stage.total * 100) : 0;
-  return '<div class="tourn-progress-stages"><div class="tourn-progress-stage-head"><strong>PROGRESSO DO TORNEIO</strong><strong>' +
-    stage.completed + '/' + stage.total + ' partidas · ' + pct + '%</strong></div>' + cards + '</div>';
+  return '<div class="tourn-progress-stages">' + cards +
+    '<div class="tourn-progress-stage tourn-progress-total">' +
+      '<div class="tourn-progress-stage-head"><strong>🏆 TORNEIO COMPLETO</strong><strong>' +
+        stage.completed + '/' + stage.total + ' jogos · ' + pct + '%</strong></div>' +
+      '<div class="tourn-progress-stage-track"><span style="width:' + pct + '%"></span></div>' +
+    '</div></div>';
 };
 window._buildProgressInner = function(t) {
   var prog = window._getTournamentProgress(t);
@@ -2019,14 +2030,17 @@ window._buildProgressInner = function(t) {
   var _ligaBarHtml = '';
   var _lp = window._ligaTournamentProgress(t);
   var _gp = (window._tournamentGamesPlan ? window._tournamentGamesPlan(t) : null);
-  // v2.7.12: a barra "Torneio completo" aparece na Liga multi-rodada E no
-  // construtor de fases (soma TODAS as fases via _tournamentGamesPlan).
+  // A barra "Torneio completo" acompanha todos os torneios, sempre abaixo da
+  // etapa atual. Nas múltiplas fases usa o plano inteiro, inclusive fases futuras.
   var _useGp = _mp && _gp && _gp.totalPlanned > 0;
-  if ((_lp && _lp.roundsPlanned > 1) || _useGp) {
-    var _barDone = _useGp ? _gp.totalDone : _lp.completedAll;
-    var _barTotal = _useGp ? _gp.totalPlanned : _lp.totalPlanned;
-    var _barPct = _useGp ? _gp.pct : _lp.pct;
-    var _barSuffix = _useGp ? (' · fase ' + (((_gp.currentPhaseIndex) || 0) + 1) + ' de ' + _gp.phasesCount) : (' · rodada ' + _lp.currentRoundNum + ' de ' + _lp.roundsPlanned);
+  var _multiRound = !!(_lp && _lp.roundsPlanned > 1);
+  var _wholeProg = window._getTournamentProgress(t);
+  if (_useGp || _multiRound || _wholeProg.total > 0) {
+    var _barDone = _useGp ? _gp.totalDone : (_multiRound ? _lp.completedAll : _wholeProg.completed);
+    var _barTotal = _useGp ? _gp.totalPlanned : (_multiRound ? _lp.totalPlanned : _wholeProg.total);
+    var _barPct = _barTotal > 0 ? Math.round(_barDone / _barTotal * 100) : 0;
+    var _barSuffix = _useGp ? (' · fase ' + (((_gp.currentPhaseIndex) || 0) + 1) + ' de ' + _gp.phasesCount)
+      : (_multiRound ? (' · rodada ' + _lp.currentRoundNum + ' de ' + _lp.roundsPlanned) : '');
     // v2.4.78: duração REAL do torneio inteiro — do 1º placar lançado (primeiro
     // m.startedAt de todas as rodadas) ao último (maior m.resultAt). Espelha o
     // painel da rodada (INÍCIO REAL / DUROU / FINAL REAL), mas cobrindo a Liga
@@ -2041,7 +2055,7 @@ window._buildProgressInner = function(t) {
       if (r && r.completedAt) _endsFallback.push(+r.completedAt);
     });
     // v2.7.12: fases de chave (1+) vivem em t.matches → cobrem o fim REAL do torneio.
-    if (_mp) (t.matches || []).forEach(function(m){
+    (t.matches || []).forEach(function(m){
       if (!m || m.isSitOut) return;
       if (m.startedAt) _allStarts.push(+m.startedAt);
       if (m.resultAt) _allEnds.push(+m.resultAt);

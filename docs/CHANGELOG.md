@@ -1,3 +1,9 @@
+## 2.5.49 — 24/out/2026 (progresso da etapa atual e do torneio)
+
+- Exibe somente o dia/etapa em andamento no topo do painel; a troca ocorre quando o primeiro jogo da etapa seguinte recebe um registro de início ou resultado. Após o último dia, mantém a etapa final visível.
+- Mostra logo abaixo uma barra separada para o total de jogos do torneio, incluindo fases futuras planejadas. Torneios de uma etapa também recebem o total.
+- Nenhum jogo, placar ou inscrição é alterado.
+
 ## 2.5.18 — 20/out/2026 (indicador NO AR)
 
 - O ponto do botão NO AR agora é vermelho e pisca enquanto a janela da TV está aberta. Ao fechar a janela, o ponto escurece e deixa de piscar. A detecção de fechamento já existente permanece: imediata pelo botão e em até um segundo pelo fechamento da janela no navegador.
