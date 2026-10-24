@@ -1,3 +1,7 @@
+// 2.5.47 — A fase classificatória não cria disputa de 3º lugar após um placar.
+// Um placeholder antigo sem resultado é removido na origem; placares históricos
+// são preservados. O deploy confere a malha regional uma vez por tentativa e
+// verifica a integridade dos cinco arquivos locais antes do upload.
 // 2.5.46 — O progresso de torneios com vários dias mostra total e etapas separadas.
 // No Neon, são 96 jogos, 48 por dia; o início exibido é o primeiro registro
 // persistido, pois a chamada inicial não foi gravada. Os horários da agenda
