@@ -20,7 +20,7 @@ else
   scripts/deploy-operation-regions.sh --check-v2
 fi
 [[ -f "$source_manifest" ]] || { echo 'manifesto regional ausente' >&2; exit 1; }
-source_commit="$(SP_MANIFEST="$source_manifest" node -e 'const m=require("./"+process.env.SP_MANIFEST);const s=[...new Set(m.filter(x=>x.name!=="sp-op-end-court-v2").map(x=>x.commit))];if(s.length!==1)process.exit(1);process.stdout.write(s[0])')"
+source_commit="$(SP_MANIFEST="$source_manifest" node -e 'const m=require("./"+process.env.SP_MANIFEST);const s=[...new Set(m.filter(x=>x.name!=="sp-op-end-court-v2"&&x.name!=="sp-op-score-v2").map(x=>x.commit))];if(s.length!==1)process.exit(1);process.stdout.write(s[0])')"
 if [[ "$mode" != '--check-live' ]]; then
   git diff --quiet "$source_commit" HEAD -- functions functions-autodraw || { echo 'codebase mudou após build regional' >&2; exit 1; }
 fi
@@ -183,7 +183,11 @@ const fs=require('fs'),s=JSON.parse(process.env.SP_JSON),src=JSON.parse(fs.readF
 const expected=src.find(x=>x.name===process.env.SP_REGIONAL&&x.region==='us-east1');
 const saved=gate.recovery.find(x=>x.name===process.env.SP_NAME);
 const image=s.spec?.template?.spec?.containers?.[0]?.image;
-if(!expected||!saved||image!==expected.image||image!==saved.image||s.status?.url!==saved.url||s.spec?.template?.metadata?.annotations?.['run.googleapis.com/base-images'])process.exit(1);
+// A recuperação preserva sua imagem já verificada mesmo quando o placar
+// regional é atualizado sozinho; as demais portas continuam espelhadas.
+if(!expected||!saved||image!==saved.image||
+  (process.env.SP_REGIONAL!=='sp-op-score-v2'&&image!==expected.image)||
+  s.status?.url!==saved.url||s.spec?.template?.metadata?.annotations?.['run.googleapis.com/base-images'])process.exit(1);
 if(s.status?.latestReadyRevisionName!==saved.revision){console.error('revisão da recuperação divergente');process.exit(1);}
 NODE
   url="$(SP_JSON="$json" node -e 'process.stdout.write(JSON.parse(process.env.SP_JSON).status.url)')"
