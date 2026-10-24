@@ -1,4 +1,10 @@
-// 2.5.45 — Atualização consolidada de produção com as correções validadas desde a última publicação.
+// 2.5.45 — Organizador e árbitro podem pular o próximo jogo para chamar outro
+// elegível. É possível cancelar a chamada de um jogo sem placar próprio, mesmo
+// depois de iniciado, e devolver à quadra um jogo encerrado sem placar. Placar
+// parcial, ao vivo ou lançado no próprio jogo impede o cancelamento; resultados
+// de outros jogos não impedem. Essas duas ações usam a função central já
+// publicada, enquanto as demais operações mantêm a contingência regional.
+// O portão de publicação confere a revisão regional que recebe o tráfego.
 // 2.5.44 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.43 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.42 — Atualização consolidada de produção com as correções validadas desde a última publicação.
