@@ -12,6 +12,9 @@ assert.deepEqual(stages.days.map(d => [d.day, d.completed, d.total]),
   [['2026-10-22', 48, 48], ['2026-10-23', 48, 48]]);
 assert.match(W._buildProgressInner(t), /96\/96 partidas · 100%/);
 assert.doesNotMatch(W._buildProgressInner(t), /19\/10|97 partidas/);
+const unsafeWindow = { ...t, scheduleWindow: { days: t.scheduleWindow.days.map((d, i) =>
+  i === 0 ? { ...d, startTime: '<img src=x onerror=alert(1)>' } : d) } };
+assert.doesNotMatch(W._buildProgressInner(unsafeWindow), /<img/, 'horários da agenda devem ser escapados');
 const first = { ...t, matches: t.matches.map(m => m.requiredDay === '2026-10-23' ? { ...m, winner: null, score1: null, score2: null, resultAt: null, startedAt: null } : m) };
 assert.deepEqual(W._tProgByDay(first).days.map(d => [d.completed, d.total]), [[48, 48], [0, 48]]);
 assert.equal(W._getTournamentProgress(first).completed, 48);

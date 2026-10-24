@@ -1713,13 +1713,17 @@ window._tProgByDay = function(t) {
 };
 window._tProgByDayHtml = function(stage) {
   var time = function(ms) { return new Date(ms).toLocaleTimeString('pt-BR', { timeZone: stage.zone, hour: '2-digit', minute: '2-digit' }); };
+  var esc = function(value) { return String(value == null ? '' : value).replace(/[&<>"']/g, function(c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  }); };
   var cards = stage.days.map(function(d, i) {
     var pct = d.total ? Math.round(d.completed / d.total * 100) : 0;
-    var date = d.day.slice(8, 10) + '/' + d.day.slice(5, 7);
+    var date = esc(d.day.slice(8, 10) + '/' + d.day.slice(5, 7));
+    var planned = esc(d.startTime) + '–' + esc(d.endTime);
     return '<div class="tourn-progress-stage">' +
       '<div class="tourn-progress-stage-head"><strong>Etapa ' + (i + 1) + ' · ' + date + '</strong><strong>' + d.completed + '/' + d.total + ' jogos · ' + pct + '%</strong></div>' +
       '<div class="tourn-progress-stage-track"><span style="width:' + pct + '%"></span></div>' +
-      '<div class="tourn-progress-stage-meta"><span>Programado ' + d.startTime + '–' + d.endTime + '</span>' +
+      '<div class="tourn-progress-stage-meta"><span>Programado ' + planned + '</span>' +
       '<span>' + (d.firstAt ? 'Primeiro registro ' + time(d.firstAt) : 'Aguardando primeiro jogo') + '</span>' +
       (d.completed === d.total && d.lastAt ? '<span>Último placar ' + time(d.lastAt) + '</span>' : '') + '</div></div>';
   }).join('');
