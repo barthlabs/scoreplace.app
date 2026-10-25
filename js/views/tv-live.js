@@ -106,7 +106,7 @@
     });
   }
   window._tvLiveBuildSnapshot = function (t, nowMs) {
-    if (!t) return null;
+    if (!t || !t.id) return null;
     if (typeof window._bracketEnsureCourtReleaseListener === 'function') window._bracketEnsureCourtReleaseListener(t.id);
     var released = typeof window._bracketCourtReleased === 'function' ? window._bracketCourtReleased(t.id) : {};
     // O listener recebe uma cópia nova. Use a numeração canônica da chave.
@@ -376,6 +376,23 @@
     '@media(orientation:portrait){.tv-header time{font-size:clamp(1.2rem,2.8vw,2.4rem)}.tv-sidebar{grid-template-rows:70% 30%}.tv-ranking-head,.tv-ranking-row{grid-template-columns:3vw minmax(0,1fr) 7vw 10vw repeat(3,4vw);gap:.5vw;font-size:clamp(.75rem,1.4vw,1.2rem)}.tv-ranking-row{min-height:2.9vh}.tv-ranking-team{font-size:clamp(.8rem,1.6vw,1.25rem)}.tv-ranking-row b{font-size:clamp(.8rem,1.6vw,1.25rem)}.tv-qr{width:clamp(90px,17vw,180px)}.tv-qr-brand img{width:3vw}}' +
     '#tv-root{width:100%;height:100%}.tv-custom-board{position:relative;width:100%;height:100%;overflow:hidden}.tv-custom-box{position:absolute;min-width:0;min-height:0;overflow:hidden}.tv-custom-box>.tv-header,.tv-custom-box>.tv-courts,.tv-custom-box>.tv-upcoming,.tv-custom-box>.tv-rankings,.tv-custom-box>.tv-results,.tv-custom-box>.tv-qr{width:100%;height:100%;min-height:0;overflow:hidden}.tv-custom-box>.tv-header{padding:.35vw .8vw}.tv-custom-box>.tv-courts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(3,minmax(0,1fr))}.tv-custom-results .tv-results{display:flex}.tv-custom-results .tv-results-main{width:100%}.tv-custom-qr .tv-qr{justify-content:center}.tv-custom-qr .tv-qr-code{max-height:75%;width:auto;max-width:95%}' +
     '</style>');
+  // O editor usa exatamente o HTML e o CSS da janela No ar. O iframe não
+  // executa childScript: relógios e hora recebem o valor deste instante.
+  window._tvLivePreviewDocument = function (snapshot) {
+    if (!snapshot || !snapshot.tvLayout) return '';
+    var now = Date.now();
+    var markup = bodyHtml(snapshot)
+      .replace(/<button id="tv-fullscreen-action"[^>]*>[^<]*<\/button>/g, '')
+      .replace('<time id="tv-now"></time>', '<time id="tv-now">' + esc(new Date(now).toLocaleTimeString('pt-BR')) + '</time>')
+      .replace(/<strong data-tv-start="([^"]*)">00:00:00<\/strong>/g, function (whole, raw) {
+        var start = Number(raw);
+        if (!Number.isFinite(start) || !start || !clock) return whole;
+        var phase = clock.phaseAt(start, snapshot.timing, now);
+        return '<strong data-tv-start="' + esc(raw) + '" class="tv-phase-' + esc(phase.phase) + '" title="' + esc(clock.title(phase.phase)) + '">' + esc(clock.text(phase, now)) + '</strong>';
+      });
+    return '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><base href="' + esc(window.location.href) + '">' + styles +
+      '<style>#tv-fullscreen-action{display:none!important}</style></head><body><div id="tv-root">' + markup + '</div></body></html>';
+  };
   function isActive() {
     var current = window._currentBracketTournament;
     if (!popup || popup.closed || !current || String(current.id) !== popupTournamentId ||
