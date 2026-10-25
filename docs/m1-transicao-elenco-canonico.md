@@ -1,5 +1,28 @@
 # M1 — transição do elenco canônico
 
+## Censo por autoridade em 25/10/2026
+
+O censo somente-leitura passou a usar o marcador
+`canonicalRegistrationMigration.fingerprint` para escolher a fonte de
+autoridade **antes** de ler o elenco legado. Para torneios já migrados, compara
+o número de documentos ao recibo, confere os IDs físicos e usa a mesma
+validação estrutural de inscrição e dupla das Functions. Para torneios ainda
+legados, mantém a prévia de migração e a comparação com `registrations`.
+
+Resultado observado no Firestore de produção, sem escrita ou dados pessoais:
+
+| Autoridade | Torneios | Documentos/inscrições | Exceções |
+| --- | ---: | ---: | ---: |
+| Canônica | 4 | 472 documentos examinados | 0 bloqueados |
+| Legada | 80 | 134 inscrições projetáveis; 45 duplas preserváveis | 0 conflitos, 0 entradas sem suporte, 0 divergências |
+
+O relatório anterior indicava 92 divergências e 129 documentos “fora da
+projeção” ao comparar o elenco canônico atual de um torneio já migrado com seu
+espelho histórico. Essa comparação não mede integridade após a migração e foi
+retirada somente da rota canônica. O censo novo **não** valida jogos, resultados,
+agenda ou placares e não autoriza migração em lote. Cada torneio legado ainda
+exige prévia, confirmação e transação com fingerprint fresco.
+
 ## Evidência de partida
 
 Em 09/10/2026, o censo de produção somente-leitura

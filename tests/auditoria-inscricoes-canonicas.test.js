@@ -15,12 +15,17 @@ ok(source.includes("legacy-category-definition-core.js") && source.includes('leg
   'censo usa a mesma normalização de categorias da Function e do planejador');
 ok(/canonicalRegistrationsForTournament[\s\S]*?\/registrations/.test(source) &&
    /materialization\.decideMaterialization\(id, report, existing\)/.test(source),
-  'censo compara a projeção com os documentos canônicos realmente existentes');
-ok(/inscrições canônicas ainda a materializar/.test(source) &&
-   /inscrições canônicas divergentes/.test(source) &&
-   /documentos canônicos fora da projeção/.test(source) &&
-   /torneios bloqueados para materialização/.test(source),
-  'censo expõe pendência, divergência e bloqueio separadamente');
+  'censo lê os documentos físicos e compara a projeção na rota legada');
+ok(source.indexOf("audit.routeFor(tournament) === 'canonical'") < source.indexOf('const [entries, existing] = await Promise.all') &&
+   /canonicalBoundary\.verifiedRoster/.test(source) &&
+   /audit\.canonicalDocuments\(existing\)/.test(source),
+  'censo roteia a autoridade antes de ler o legado e valida o canônico pelo núcleo de produção');
+ok(/canônico — torneios íntegros/.test(source) &&
+   /canônico — torneios bloqueados/.test(source) &&
+   /legado — inscrições divergentes/.test(source) &&
+   /legado — documentos fora da projeção/.test(source) &&
+   /legado — torneios bloqueados para materialização/.test(source),
+  'censo expõe integridade canônica e pendências legadas com rótulos separados');
 ok(!/method:\s*['\"]PATCH['\"]/.test(source) &&
    !/\.set\(/.test(source) && !/\.update\(/.test(source) && !/\.delete\(/.test(source),
   'censo permanece estritamente somente leitura');

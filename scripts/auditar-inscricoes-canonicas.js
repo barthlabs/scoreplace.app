@@ -13,6 +13,8 @@ const split = require(path.join(__dirname, '..', 'js', 'views', 'tournament-spli
 const registration = require(path.join(__dirname, '..', 'functions', 'registration-core.js'));
 const materialization = require(path.join(__dirname, '..', 'functions', 'registration-migration-core.js'));
 const legacyCategoryDefinitions = require(path.join(__dirname, '..', 'functions', 'legacy-category-definition-core.js'));
+const canonicalBoundary = require(path.join(__dirname, '..', 'functions', 'canonical-registration-boundary-core.js'));
+const audit = require('./auditar-inscricoes-canonicas-core');
 const { accessTokenForServiceAccount } = require('./firebase-service-account-token');
 
 if (process.argv.length > 2) {
@@ -88,9 +90,12 @@ async function main() {
   const token = await accessTokenForServiceAccount();
   const tournaments = await listCollection(BASE + '/tournaments', token);
   const totals = {
-    tournaments: tournaments.length, entries: 0, registrations: 0, formedPairs: 0,
-    conflicts: 0, unsupported: 0, canonicalExisting: 0, canonicalMissing: 0,
-    canonicalAlready: 0, canonicalHistorical: 0, canonicalRepairable: 0, canonicalDivergent: 0, canonicalUnexpected: 0, canonicalBlocked: 0
+    tournaments: tournaments.length, canonicalTournaments: 0, legacyTournaments: 0,
+    canonicalVerified: 0, canonicalBlocked: 0, canonicalDocuments: 0,
+    entries: 0, registrations: 0, formedPairs: 0, conflicts: 0, unsupported: 0,
+    legacyExisting: 0, legacyMissing: 0, legacyAlready: 0,
+    legacyHistorical: 0, legacyRepairable: 0, legacyDivergent: 0,
+    legacyUnexpected: 0, legacyBlocked: 0
   };
   const unsupportedByReason = {};
   const unsupportedSchemas = {};
@@ -102,36 +107,56 @@ async function main() {
     const reports = await Promise.all(tournaments.slice(offset, offset + 8).map(async (document) => {
       const id = document.name.split('/').pop();
       const tournament = documentToObject(document);
-      const [entries, existing] = await Promise.all([
-        entriesForTournament(document, token),
-        canonicalRegistrationsForTournament(document, token)
-      ]);
+      // A rota vem ANTES de qualquer leitura ou projeção do espelho legado.
+      // Depois do recibo, `registrations` é a única autoridade do elenco.
+      if (audit.routeFor(tournament) === 'canonical') {
+        const existing = await canonicalRegistrationsForTournament(document, token);
+        try {
+          const items = audit.canonicalDocuments(existing);
+          canonicalBoundary.verifiedRoster(Object.assign({}, tournament, { id }), items);
+          return { id, kind: 'canonical', existingCount: items.length, validationError: null };
+        } catch (error) {
+          return { id, kind: 'canonical', existingCount: Object.keys(existing).length,
+            validationError: error && error.message ? error.message : String(error) };
+        }
+      }
+      const [entries, existing] = await Promise.all([entriesForTournament(document, token), canonicalRegistrationsForTournament(document, token)]);
       let categories;
       try { categories = legacyCategoryDefinitions.resolve(tournament, entries); }
-      catch (error) { return { id: id, entries: entries, report: { registrations: [], formedPairs: [], conflicts: [], unsupported: [] }, existing: existing, decision: null, materializationError: error && error.message ? error.message : String(error) }; }
+      catch (error) { return { id: id, kind: 'legacy', entries: entries, report: { registrations: [], formedPairs: [], conflicts: [], unsupported: [] }, existing: existing, decision: null, materializationError: error && error.message ? error.message : String(error) }; }
       const report = registration.projectLegacyRoster(id, entries, categories.categoryIdForLegacyLabel, categories.defaultCategoryId);
       let decision = null;
       let materializationError = null;
       try { decision = materialization.decideMaterialization(id, report, existing); }
       catch (error) { materializationError = error && error.message ? error.message : String(error); }
-      return { id: id, entries: entries, report: report, existing: existing, decision: decision, materializationError: materializationError };
+      return { id: id, kind: 'legacy', entries: entries, report: report, existing: existing, decision: decision, materializationError: materializationError };
     }));
-    reports.forEach(({ id, entries, report, existing, decision, materializationError }) => {
+    reports.forEach(({ id, kind, entries, report, existing, decision, materializationError, existingCount, validationError }) => {
+      if (kind === 'canonical') {
+        totals.canonicalTournaments++;
+        totals.canonicalDocuments += existingCount;
+        if (validationError) {
+          totals.canonicalBlocked++;
+          flagged.push({ id, kind, blocked: validationError });
+        } else totals.canonicalVerified++;
+        return;
+      }
+      totals.legacyTournaments++;
       totals.entries += entries.length;
       totals.registrations += report.registrations.length;
       totals.formedPairs += report.formedPairs.length;
       totals.conflicts += report.conflicts.length;
       totals.unsupported += report.unsupported.length;
-      totals.canonicalExisting += Object.keys(existing).length;
+      totals.legacyExisting += Object.keys(existing).length;
       if (decision) {
-        totals.canonicalMissing += decision.creates.length;
-        totals.canonicalAlready += decision.already.length;
-        totals.canonicalHistorical += decision.historicalExisting.length;
-        totals.canonicalRepairable += decision.reconciliationCandidates.length;
-        totals.canonicalDivergent += decision.conflicts.length;
-        totals.canonicalUnexpected += decision.unexpectedExisting.length;
+        totals.legacyMissing += decision.creates.length;
+        totals.legacyAlready += decision.already.length;
+        totals.legacyHistorical += decision.historicalExisting.length;
+        totals.legacyRepairable += decision.reconciliationCandidates.length;
+        totals.legacyDivergent += decision.conflicts.length;
+        totals.legacyUnexpected += decision.unexpectedExisting.length;
       } else {
-        totals.canonicalBlocked++;
+        totals.legacyBlocked++;
       }
       report.unsupported.forEach((item) => {
         unsupportedByReason[item.reason] = (unsupportedByReason[item.reason] || 0) + 1;
@@ -142,27 +167,32 @@ async function main() {
         unsupportedSchemas[key] = (unsupportedSchemas[key] || 0) + 1;
       });
       if (report.conflicts.length || report.unsupported.length || (decision && (decision.conflicts.length || decision.unexpectedExisting.length)) || materializationError) {
-        flagged.push({ id: id, entries: entries.length, conflicts: report.conflicts.length, unsupported: report.unsupported.length,
-          canonicalDivergent: decision ? decision.conflicts.length : 0, canonicalUnexpected: decision ? decision.unexpectedExisting.length : 0, canonicalRepairable: decision ? decision.reconciliationCandidates.length : 0, blocked: materializationError || '' });
+        flagged.push({ id: id, kind: 'legacy', entries: entries.length, conflicts: report.conflicts.length, unsupported: report.unsupported.length,
+          legacyDivergent: decision ? decision.conflicts.length : 0, legacyUnexpected: decision ? decision.unexpectedExisting.length : 0, legacyRepairable: decision ? decision.reconciliationCandidates.length : 0, blocked: materializationError || '' });
       }
     });
   }
 
   console.log('Censo de inscrições canônicas (somente leitura)');
   console.log('  torneios: ' + totals.tournaments);
-  console.log('  entradas: ' + totals.entries);
-  console.log('  inscrições projetáveis: ' + totals.registrations);
-  console.log('  duplas formadas preserváveis: ' + totals.formedPairs);
-  console.log('  conflitos: ' + totals.conflicts);
-  console.log('  entradas sem suporte: ' + totals.unsupported);
-  console.log('  inscrições canônicas já materializadas: ' + totals.canonicalAlready);
-  console.log('  histórico canônico aposentado: ' + totals.canonicalHistorical);
-  console.log('  cópias sem categoria reparáveis: ' + totals.canonicalRepairable);
-  console.log('  documentos canônicos existentes: ' + totals.canonicalExisting);
-  console.log('  inscrições canônicas ainda a materializar: ' + totals.canonicalMissing);
-  console.log('  inscrições canônicas divergentes: ' + totals.canonicalDivergent);
-  console.log('  documentos canônicos fora da projeção: ' + totals.canonicalUnexpected);
-  console.log('  torneios bloqueados para materialização: ' + totals.canonicalBlocked);
+  console.log('  canônico — torneios com recibo: ' + totals.canonicalTournaments);
+  console.log('  canônico — torneios íntegros: ' + totals.canonicalVerified);
+  console.log('  canônico — torneios bloqueados: ' + totals.canonicalBlocked);
+  console.log('  canônico — documentos validados ou examinados: ' + totals.canonicalDocuments);
+  console.log('  legado — torneios por migrar: ' + totals.legacyTournaments);
+  console.log('  legado — entradas: ' + totals.entries);
+  console.log('  legado — inscrições projetáveis: ' + totals.registrations);
+  console.log('  legado — duplas formadas preserváveis: ' + totals.formedPairs);
+  console.log('  legado — conflitos: ' + totals.conflicts);
+  console.log('  legado — entradas sem suporte: ' + totals.unsupported);
+  console.log('  legado — registros já compatíveis: ' + totals.legacyAlready);
+  console.log('  legado — histórico canônico aposentado: ' + totals.legacyHistorical);
+  console.log('  legado — cópias sem categoria reparáveis: ' + totals.legacyRepairable);
+  console.log('  legado — documentos existentes: ' + totals.legacyExisting);
+  console.log('  legado — inscrições ainda a materializar: ' + totals.legacyMissing);
+  console.log('  legado — inscrições divergentes: ' + totals.legacyDivergent);
+  console.log('  legado — documentos fora da projeção: ' + totals.legacyUnexpected);
+  console.log('  legado — torneios bloqueados para materialização: ' + totals.legacyBlocked);
   Object.keys(unsupportedByReason).sort().forEach((reason) => {
     console.log('  sem-suporte[' + reason + ']: ' + unsupportedByReason[reason]);
   });
@@ -170,10 +200,14 @@ async function main() {
     console.log('  estrutura[' + schema + ']: ' + unsupportedSchemas[schema]);
   });
   flagged.forEach((item) => {
-        console.log('  exceção ' + item.id + ': entradas=' + item.entries + ', conflitos=' + item.conflicts + ', sem-suporte=' + item.unsupported +
-          ', canônico-divergente=' + item.canonicalDivergent + ', canônico-fora-da-projeção=' + item.canonicalUnexpected + ', canônico-reparável=' + item.canonicalRepairable + (item.blocked ? ', bloqueado=' + item.blocked : ''));
+    if (item.kind === 'canonical') {
+      console.log('  exceção canônica ' + item.id + ': bloqueado=' + item.blocked);
+    } else {
+      console.log('  exceção legada ' + item.id + ': entradas=' + item.entries + ', conflitos=' + item.conflicts + ', sem-suporte=' + item.unsupported +
+        ', divergentes=' + item.legacyDivergent + ', fora-da-projeção=' + item.legacyUnexpected + ', reparáveis=' + item.legacyRepairable + (item.blocked ? ', bloqueado=' + item.blocked : ''));
+    }
   });
-  process.exit((totals.conflicts || totals.unsupported || totals.canonicalDivergent || totals.canonicalUnexpected || totals.canonicalBlocked) ? 2 : 0);
+  process.exit((totals.canonicalBlocked || totals.conflicts || totals.unsupported || totals.legacyDivergent || totals.legacyUnexpected || totals.legacyBlocked) ? 2 : 0);
 }
 
 console.log('Iniciando censo de inscrições canônicas (somente leitura)…');
