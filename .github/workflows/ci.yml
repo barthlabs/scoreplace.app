@@ -38,7 +38,8 @@ concurrency:
 
 jobs:
   testes:
-    runs-on: ubuntu-latest
+    # ubuntu-latest passou a usar 26.04; Playwright 1.59.1 não instala Chromium nessa imagem.
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v5
