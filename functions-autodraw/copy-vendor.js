@@ -122,6 +122,12 @@ for (const f of DOMAIN_TO_FUNCTIONS) {
   fs.copyFileSync(path.join(DOMAIN_DIR, f), path.join(OUT_FN, f));
   console.log(`[copy-vendor] functions/vendor/${f} (domínio TypeScript gerado)`);
 }
+// A configuração visual da TV usa um esquema único no browser e nas duas portas.
+const TV_LAYOUT_SOURCE = path.resolve(__dirname, '..', 'js', 'tv-layout-core.js');
+for (const dest of [path.join(__dirname, 'tv-layout-core.js'), path.join(OUT_FN, 'tv-layout-core.js')]) {
+  fs.copyFileSync(TV_LAYOUT_SOURCE, dest);
+  console.log(`[copy-vendor] ${path.relative(path.resolve(__dirname, '..'), dest)} (layout da TV)`);
+}
 
 /* ── E O CONSTRUTOR DO SUBDOC DE RESULTADO VIAJA NA MÃO CONTRÁRIA (2.1.30) ────
  * `functions/match-roster.js` é quem sabe montar `tournaments/{id}/results/{matchId}`,

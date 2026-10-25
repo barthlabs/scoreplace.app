@@ -1142,6 +1142,8 @@ function _applyWriteBoundary(data) {
   ['organizerEmail', 'creatorEmail', 'adminEmails', 'organizerName'].forEach((campo) => { delete data[campo]; });
   data.adminUids = w._computeAdminUids(data);
   data.memberUids = w._mergeMemberUids(data, data.memberUids, w._computeMemberUids(data));
+  data.refereeUids = data.isSandbox === true ? [] : ScoreplaceRefereeRoster.sanitizeAll(data.arbitros)
+    .filter(entry => entry.status === 'confirmed').map(entry => entry.uid).sort();
   /* ── L6.R1 · O `nextDrawAt` CANÔNICO SAI DAQUI, e nunca do passado ────────────────────
    * Esta é a fronteira por onde TODA escrita do autodraw passa — sorteio manual, fecho de
    * rodada, placar e o cron. Por isso a regra do agendamento mora aqui e não em cada porta:
@@ -4836,7 +4838,7 @@ const _CAMPOS_CONFIG_TORNEIO = new Set([
    * com a escolha nova é RECUSADO pelo servidor. O valor é fechado no cliente e reconferido pelo
    * motor, que cai em `repescagem` diante de qualquer coisa que não reconheça. */
   'politicaDaChave',
-  'phase1Name','rankingPrimary','tiebreakers','tiebreakersExcluded','advancedScoring','genderCategories',
+  'phase1Name','rankingPrimary','tiebreakers','tiebreakersExcluded','advancedScoring','tvLayout','genderCategories',
   'skillCategories','ageCategories','customCategories','combinedCategories','rigor','rigorRequire',
   'fmt2','phases'
 ]);
@@ -4932,6 +4934,7 @@ exports.createTournament = onCall(require('./tournament-create').makeCreateTourn
   cloneConfig: _clonaConfigDeclarativa,
   validateCapacity: config => require('./category-capacity-core').validateCapacityConfig(config, HttpsError),
   validatePolicy: require('./elimination-policy-config-core').validateAndCanonicalizeExplicitPolicy,
+  validateTvLayout: require('./tv-layout-core').normalize,
   compile: (cfg, ctx) => drawWindow.FORMAT2.compileToPhases(cfg, ctx),
   boundary: _applyWriteBoundary, readTournament: _leTorneio
 }));
@@ -5011,7 +5014,10 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     if (!_CAMPOS_CONFIG_TORNEIO.has(key)) {
       throw new HttpsError('permission-denied', 'Este campo não pode ser alterado pela ficha do torneio.');
     }
-    patch[key] = _clonaConfigDeclarativa(raw[key], 0, [key]);
+    if (key === 'tvLayout') {
+      try { patch[key] = require('./tv-layout-core').normalize(raw[key]); }
+      catch (error) { throw new HttpsError('invalid-argument', error.message); }
+    } else patch[key] = _clonaConfigDeclarativa(raw[key], 0, [key]);
   });
   // Este handler é definido aqui (não por factory); a criação injeta a mesma função
   // na factory para permitir exercitar o handler real com um banco falso nos testes.

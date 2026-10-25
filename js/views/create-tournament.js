@@ -362,6 +362,8 @@ function setupCreateTournamentModal() {
                 </div>
               </div>
 
+              <details id="tv-personalization" style="margin:0 0 1rem;border:1px solid #818cf8;border-radius:12px;padding:0.75rem;background:rgba(99,102,241,.07);">
+                <summary style="cursor:pointer;color:var(--text-main);font-weight:800;font-size:1rem;">🎨 Personalização</summary>
               <!-- Logo do Torneio -->
               <div id="logo-section" style="background: rgba(99,102,241,0.06); border: 1px solid rgba(99,102,241,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
                 <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: var(--sp-c-a5b4fc,#a5b4fc); font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.logoSection')}</p>
@@ -453,6 +455,8 @@ function setupCreateTournamentModal() {
                 <input type="file" id="cover-file-input" accept="image/jpeg,image/png,image/webp" style="display:none;" onchange="window._handleCoverUpload(event)">
                 <input type="hidden" id="tourn-cover-data" value="">
               </div>
+              <div id="tv-layout-editor"></div>
+              </details>
 
               <!-- Acesso explícito: geral, somente inscritos ou somente organização. -->
               <div class="form-group mb-2" style="background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.18);border-radius:12px;padding:1rem;">
@@ -5240,6 +5244,7 @@ function setupCreateTournamentModal() {
     if (typeof window._syncCallPolicy === 'function') window._syncCallPolicy();
     if (typeof window._syncEnrollLimitMode === 'function') window._syncEnrollLimitMode();
     window._setVisibility(t.organizerOnly === true ? 'organizers' : t.membersOnly === true ? 'members' : t.isPublic !== false ? 'public' : 'members');
+    if (typeof window._tvEditorSetLayout === 'function') window._tvEditorSetLayout(t.tvLayout || null);
     // W.O. não é mais configuração: sempre inicia em individual; a organização escolhe
     // individual ou dupla inteira diretamente no card, com confirmação explícita.
     var _woEl = document.getElementById('wo-scope'); if (_woEl) _woEl.value = 'individual';
@@ -6155,6 +6160,7 @@ window._saveTournamentClickHandler = async function() {
           isPublic: isPublicVal,
           membersOnly: visibilityVal === 'members',
           organizerOnly: visibilityVal === 'organizers',
+          tvLayout: (typeof window._tvEditorReadLayout === 'function') ? window._tvEditorReadLayout() : null,
           format,
           sport: sportClean,
           startDate: startDateVal,
@@ -7808,6 +7814,7 @@ window._prefillFromTemplate = function(tpl) {
     // gravar apenas o hidden regressa o texto/posição visual para “Público”.
     if (typeof window._setVisibility === 'function') window._setVisibility(tpl.organizerOnly ? 'organizers' : tpl.membersOnly ? 'members' : tpl.isPublic ? 'public' : 'members');
   }
+  if (typeof window._tvEditorSetLayout === 'function') window._tvEditorSetLayout(tpl.tvLayout || null);
   // Tipo de jogo, lotação, lançamento de resultado, W.O. já tratado, encerrar ao lotar
   _setV('tourn-game-types', tpl.gameTypes);
   // Lançamento de Resultados — v2.6.62: hidden + render canônica.
@@ -8345,6 +8352,7 @@ window._saveCurrentFormAsTemplate = function(saveButton) {
       isPublic: get('tourn-public') === 'true',
       membersOnly: get('tourn-visibility') === 'members',
       organizerOnly: get('tourn-visibility') === 'organizers',
+      tvLayout: (typeof window._tvEditorReadLayout === 'function') ? window._tvEditorReadLayout() : null,
       scoring: scoring,
       genderCategories: genderCats,
       skillCategories: skillCats,

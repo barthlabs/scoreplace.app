@@ -45,7 +45,7 @@ function withoutRuntimeState(value) {
   }, {});
 }
 // Dependências injetadas: este é o handler real, também executado pelos testes.
-function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig, validateCapacity, validatePolicy, compile, boundary, readTournament, now = Date.now }) {
+function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig, validateCapacity, validatePolicy, validateTvLayout, compile, boundary, readTournament, now = Date.now }) {
   const fail = (code, message) => { throw new HttpsError(code, message); };
   return async function createTournament(request) {
     const uid = request.auth && request.auth.uid;
@@ -65,7 +65,8 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
     const config = {};
     Object.keys(raw).forEach(key => {
       if (!fields.has(key) || key === 'phases' || key === 'ligaRRSchedule') fail('invalid-argument', 'Campo de criação não permitido: ' + key);
-      config[key] = cloneConfig(raw[key], 0, [key]);
+      try { config[key] = key === 'tvLayout' && validateTvLayout ? validateTvLayout(raw[key]) : cloneConfig(raw[key], 0, [key]); }
+      catch (error) { fail('invalid-argument', error.message); }
     });
     checkNested(config, fail);
     if ('membersOnly' in config || 'organizerOnly' in config) {

@@ -22,6 +22,7 @@ window.ScoreplaceTeamCompetition = context.ScoreplaceTeamCompetition;
 vm.runInContext(fs.readFileSync(path.join(root, 'js/domain/match-timing.js'), 'utf8'), context);
 vm.runInContext(fs.readFileSync(path.join(root, 'js/domain/next-match.js'), 'utf8'), context);
 vm.runInContext(fs.readFileSync(path.join(root, 'js/domain/match-day.js'), 'utf8'), context);
+vm.runInContext(fs.readFileSync(path.join(root, 'js/tv-layout-core.js'), 'utf8'), context);
 const dashSource = fs.readFileSync(path.join(root, 'js/views/dashboard.js'), 'utf8');
 vm.runInContext(dashSource.slice(dashSource.indexOf('window._dashboardNextMatchCompare = function'), dashSource.indexOf('// A tela só solicita o fecho')), context);
 vm.runInContext(fs.readFileSync(path.join(root, 'js/views/tv-live.js'), 'utf8'), context);
@@ -96,6 +97,15 @@ const samePlayerQueue = { ...queue, matches: [
 assert.equal(window._tvLiveBuildSnapshot(samePlayerQueue).nextGame.number, 21,
   'TV pula próximo jogo quando uma atleta já disputa outra partida');
 assert.match(window._tvLiveBodyHtml(window._tvLiveBuildSnapshot(emptyQueue)), /Próximo jogo ainda não definido/);
+const customLayout = window.ScoreplaceTvLayout.defaults();
+customLayout.sections.qr.visible = false;
+customLayout.card.score = false;
+const customSnapshot = window._tvLiveBuildSnapshot({ ...t, tvLayout: customLayout });
+const customHtml = window._tvLiveBodyHtml(customSnapshot);
+assert.match(customHtml, /tv-custom-board/);
+assert.doesNotMatch(customHtml, /tv-custom-qr/);
+assert.doesNotMatch(customHtml, /class="tv-score"/);
+assert.match(customHtml, /tv-custom-rankings/);
 const upcomingHtml = window._tvLiveBodyHtml(snapshot).split('class="tv-upcoming"')[1].split('</section>')[0];
 assert.match(upcomingHtml, /JOGO 3 · Fem Light/);
 assert.match(upcomingHtml, /PANIC 1/);
@@ -518,4 +528,10 @@ assert.match(fs.readFileSync(path.join(root, 'sw.js'), 'utf8'), /'\/js\/domain\/
   'relógio compartilhado está no precache para a chave funcionar offline');
 if (process.env.SP_TV_CAPTURE) fs.writeFileSync(process.env.SP_TV_CAPTURE,
   popupHtml.replace('<div id="tv-root"></div>', '<div id="tv-root">' + window._tvLiveBodyHtml(snapshot) + '</div>'));
+if (process.env.SP_TV_CAPTURE_CUSTOM) {
+  const customTournament = { ...t, tvLayout: window.ScoreplaceTvLayout.defaults() };
+  const customSnapshot = window._tvLiveBuildSnapshot(customTournament, Date.parse('2026-10-22T21:02:10Z'));
+  fs.writeFileSync(process.env.SP_TV_CAPTURE_CUSTOM,
+    popupHtml.replace('<div id="tv-root"></div>', '<div id="tv-root">' + window._tvLiveBodyHtml(customSnapshot) + '</div>'));
+}
 console.log('✓ TV: 6 quadras chamadas, relógio, placar ao vivo, 3 resultados e saldo geral por time');

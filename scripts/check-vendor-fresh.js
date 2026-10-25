@@ -91,6 +91,23 @@ const CORE_TO_AUTODRAW = lerListaNomeada(fs.readFileSync(COPY_VENDOR, 'utf8'), '
 const OPERATION_DAY_FILES = lerListaNomeada(fs.readFileSync(COPY_VENDOR, 'utf8'), 'OPERATION_DAY_FILES');
 const DOMAIN_TO_FUNCTIONS = lerListaNomeada(fs.readFileSync(COPY_VENDOR, 'utf8'), 'DOMAIN_TO_FUNCTIONS');
 
+// O editor da TV compartilha o mesmo validador entre navegador e os dois codebases.
+// Estes destinos ficam fora de vendor/, mas também precisam ser cópias idênticas.
+const tvLayoutSource = path.join(root, 'js', 'tv-layout-core.js');
+const tvLayoutDestinations = [
+  path.join(root, 'functions-autodraw', 'tv-layout-core.js'),
+  path.join(FUNCTIONS_VENDOR_DIR, 'tv-layout-core.js')
+];
+if (fs.existsSync(tvLayoutSource) || tvLayoutDestinations.some((file) => fs.existsSync(file))) {
+  if (!fs.existsSync(tvLayoutSource)) fail.push('js/tv-layout-core.js: fonte ausente para as duas portas.');
+  for (const file of tvLayoutDestinations) {
+    if (!fs.existsSync(file) || !fs.existsSync(tvLayoutSource) ||
+        !fs.readFileSync(file).equals(fs.readFileSync(tvLayoutSource))) {
+      fail.push(path.relative(root, file) + ': validador da TV diverge de js/tv-layout-core.js.');
+    }
+  }
+}
+
 // Sanidade da própria trava: renomear/reformatar o `const FILES` no copy-vendor.js faria a
 // leitura voltar vazia e a trava passar a conferir NADA — verde sobre zero arquivo. Uma
 // trava que não sabe o que confere é decoração.

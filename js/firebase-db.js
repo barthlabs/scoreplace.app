@@ -2247,18 +2247,24 @@ window.FirestoreDB = {
       var snapS = await this.db.collection('tournaments_summary')
         .where('memberUids', 'array-contains', uid)
         .get({ source: 'server' });
+      var refereeSnapS = await this.db.collection('tournaments_summary')
+        .where('refereeUids', 'array-contains', uid)
+        .get({ source: 'server' });
       try { if (window._noteFsReads) window._noteFsReads(snapS.size, 'meus-torneios-resumo'); } catch (e) {}
-      snapS.forEach(function (doc) {
+      var seenSummaryIds = Object.create(null);
+      [snapS, refereeSnapS].forEach(function (querySnap) { querySnap.forEach(function (doc) {
+        if (seenSummaryIds[doc.id]) return;
+        seenSummaryIds[doc.id] = true;
         var d = doc.data();
         if (!d) return;
-        if (d.organizerOnly === true && d.creatorUid !== uid && !(Array.isArray(d.memberUids) && d.memberUids.indexOf(uid) !== -1)) return;
+        if (d.organizerOnly === true && d.creatorUid !== uid && !(Array.isArray(d.memberUids) && d.memberUids.indexOf(uid) !== -1) && !(Array.isArray(d.refereeUids) && d.refereeUids.indexOf(uid) !== -1)) return;
         d._docId = doc.id;
         if (!d.id) d.id = doc.id;
         // sentinela: se alguém pedir jogo/inscrito a este documento leve, o app avisa
         // com o rastro de quem pediu (ver `_marcaResumo` em store.js)
         if (typeof window._marcaResumo === 'function') window._marcaResumo(d);
         _viaResumo.push(typeof window._projectTournamentPhasesForRead === 'function' ? window._projectTournamentPhasesForRead(d) : d);
-      });
+      }); });
     } catch (eR) {
       window._warn('[meus torneios] resumo indisponível, caindo no caminho antigo:', eR && eR.message);
     }
@@ -2268,12 +2274,18 @@ window.FirestoreDB = {
       var snap = await this.db.collection('tournaments')
         .where('memberUids', 'array-contains', uid)
         .get({ source: 'server' });
+      var refereeSnap = await this.db.collection('tournaments')
+        .where('refereeUids', 'array-contains', uid)
+        .get({ source: 'server' });
       try { if (window._noteFsReads) window._noteFsReads(snap.size, 'meus-torneios-completo'); } catch (e) {}
       var tournaments = [];
-      snap.forEach(function(doc) {
+      var seenTournamentIds = Object.create(null);
+      [snap, refereeSnap].forEach(function(querySnap) { querySnap.forEach(function(doc) {
+        if (seenTournamentIds[doc.id]) return;
+        seenTournamentIds[doc.id] = true;
         var d = doc.data();
         if (d) tournaments.push(typeof window._projectTournamentPhasesForRead === 'function' ? window._projectTournamentPhasesForRead(d) : d);
-      });
+      }); });
       return tournaments;
     } catch (e) {
       window._error('Erro ao carregar torneios do usuário:', e);
@@ -3547,6 +3559,24 @@ window.FirestoreDB = {
     } catch (e) {
       window._error('Erro ao excluir template:', e);
     }
+  },
+
+  async getTvTemplates(uid) {
+    if (!this.db || !uid) return [];
+    var snap = await this.db.collection('users').doc(uid).collection('tvTemplates').get();
+    var result = [];
+    snap.forEach(function (doc) { result.push(Object.assign({ _id: doc.id }, doc.data())); });
+    return result.sort(function (a, b) { return String(b.createdAt || '').localeCompare(String(a.createdAt || '')); });
+  },
+
+  async saveTvTemplate(uid, name, tvLayout) {
+    if (!uid) throw new Error('Login obrigatório');
+    return this._callFn('saveOwnTvTemplate', { name: name, tvLayout: tvLayout });
+  },
+
+  async deleteTvTemplate(uid, templateId) {
+    if (!uid) throw new Error('Login obrigatório');
+    return this._callFn('deleteOwnTvTemplate', { templateId: templateId });
   },
 
   // ---- Casual Matches ----

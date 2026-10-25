@@ -164,8 +164,8 @@ const torneio = {
   const bloco = rules.slice(corpo, fim);
   const subs = Array.from(bloco.matchAll(/match \/([A-Za-z0-9_]+)\/\{/g)).map((m) => m[1]);
 
-  // As que existem hoje e NÃO guardam cópia de torneio. `templates` são configurações
-  // salvas (não apontam pra um tid); `trophies`/`milestones` são EMBLEMAS, chaveados por
+  // As que existem hoje e NÃO guardam cópia de torneio. `templates` e `tvTemplates`
+  // são configurações reutilizáveis (não apontam pra um tid); `trophies`/`milestones` são EMBLEMAS, chaveados por
   // id de conquista — não há doc por torneio pra apagar.
   // v1.9.97: `phoneVerifyAttempts` é o rastro das tentativas de verificar o CELULAR
   // (camada 2 da campanha, nascida do caso Leila). É dado de CONTA, não de torneio —
@@ -175,7 +175,7 @@ const torneio = {
   /* ⭐ `letzplay` entrou em 13/set/2026 e a decisão é a mesma destas: NÃO tem doc por
    * torneio, então o purge de torneio não a toca. Some com a CONTA, pelo
    * `listCollections()` da exclusão de conta — que enumera, não lê lista. */
-  const semTorneio = ['templates', 'trophies', 'milestones', 'phoneVerifyAttempts', 'letzplay'];
+  const semTorneio = ['templates', 'tvTemplates', 'trophies', 'milestones', 'phoneVerifyAttempts', 'letzplay'];
   const conhecidas = USER_SUBCOLLECTIONS_BY_TOURNAMENT.concat(semTorneio);
   const novas = subs.filter((s) => !conhecidas.includes(s));
 

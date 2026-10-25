@@ -14395,11 +14395,18 @@ window.AppStore = {
       // Sandbox: invisível pra QUALQUER um que não seja o dev — mesmo tendo os
       // participantes reais espelhados no memberUids. Só o dev enxerga o SB.
       if (t.isSandbox && !_devSees) return false;
+      if (t.organizerOnly === true) {
+        var uid = cu && cu.uid;
+        return !!(uid && (t.creatorUid === uid ||
+          (Array.isArray(t.adminUids) && t.adminUids.indexOf(uid) !== -1) ||
+          (Array.isArray(t.refereeUids) && t.refereeUids.indexOf(uid) !== -1)));
+      }
       if (t.isPublic) return true;
       if (invitedIds.indexOf(String(t.id)) !== -1) return true;
       if (!cu || !cu.uid) return false;
       // v1.8.99: uid é a única fonte de identificação
       if (t.creatorUid === cu.uid) return true;
+      if (!t.isSandbox && Array.isArray(t.refereeUids) && t.refereeUids.indexOf(cu.uid) !== -1) return true;
       if (Array.isArray(t.memberUids) && t.memberUids.indexOf(cu.uid) !== -1) return true;
       // v1.2.2: sem fallback por e-mail — membro é quem está em memberUids, ponto.
       // (o fallback existia pra torneio migrado antes da v1.8.99; não há mais nenhum)

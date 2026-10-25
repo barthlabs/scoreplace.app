@@ -139,7 +139,7 @@ const bi = idx.indexOf('function _applyWriteBoundary(');
 ok(bi !== -1, '_applyWriteBoundary existe no index.js');
 if (bi !== -1) {
   const bj = idx.indexOf('\n}\n', bi) + 3;
-  const bctx = { drawWindow: w, HttpsError: class extends Error {}, console };
+  const bctx = { drawWindow: w, ScoreplaceRefereeRoster: require('./vendor/referee-roster.js'), HttpsError: class extends Error {}, console };
   vm.createContext(bctx);
   vm.runInContext(idx.slice(bi, bj) + '\nglobalThis.__b = _applyWriteBoundary;', bctx);
   const boundary = bctx.__b;

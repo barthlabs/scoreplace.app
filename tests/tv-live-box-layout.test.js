@@ -7,9 +7,10 @@ const { chromium } = require('@playwright/test');
 
 (async () => {
   const capture = path.join(os.tmpdir(), `scoreplace-tv-${process.pid}.html`);
+  const customCapture = path.join(os.tmpdir(), `scoreplace-tv-custom-${process.pid}.html`);
   try {
     execFileSync(process.execPath, [path.join(__dirname, 'tv-live-snapshot.test.js')], {
-      env: { ...process.env, SP_TV_CAPTURE: capture }, stdio: 'pipe'
+      env: { ...process.env, SP_TV_CAPTURE: capture, SP_TV_CAPTURE_CUSTOM: customCapture }, stdio: 'pipe'
     });
     const html = fs.readFileSync(capture, 'utf8').replace(/<script src="[^"]*match-timing[^>]*><\/script>/, '');
     const browser = await chromium.launch();
@@ -50,7 +51,16 @@ const { chromium } = require('@playwright/test');
         assert(measurement.upcomingFont >= 10, 'nomes do próximo jogo seguem legíveis');
         await page.close();
       }
+      const customPage = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+      await customPage.setContent(fs.readFileSync(customCapture, 'utf8').replace(/<script src="[^"]*match-timing[^>]*><\/script>/, ''));
+      const customBounds = await customPage.evaluate(() => ({
+        board: document.querySelector('.tv-custom-board').getBoundingClientRect().toJSON(),
+        courts: document.querySelector('.tv-custom-courts').getBoundingClientRect().toJSON()
+      }));
+      assert.equal(customBounds.board.height, 900, 'layout personalizado ocupa toda a altura');
+      assert(customBounds.courts.height > 500, 'quadras personalizadas têm área visível');
+      await customPage.close();
     } finally { await browser.close(); }
     console.log('✓ TV: etiquetas, placares e próximo jogo contidos nos boxes');
-  } finally { try { fs.unlinkSync(capture); } catch (_) {} }
+  } finally { try { fs.unlinkSync(capture); } catch (_) {} try { fs.unlinkSync(customCapture); } catch (_) {} }
 })().catch(error => { console.error(error); process.exitCode = 1; });

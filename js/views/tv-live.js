@@ -186,24 +186,27 @@
     var site = String(window.SCOREPLACE_URL || 'https://scoreplace.app').replace(/\/$/, '');
     var publicId = /^tour_[0-9]{13}_[a-f0-9]{32}$/.test(String(t.id || '')) ? String(t.id) : '';
     var qrUrl = site + '/open.html' + (publicId ? '?t=' + encodeURIComponent(publicId) : '');
-    return { name: String(t.name || ''), logo: typeof window._tourLogoSrc === 'function' ? window._tourLogoSrc(t) : '',
+    var tvLayout = null;
+    try { if (t.tvLayout && window.ScoreplaceTvLayout) tvLayout = window.ScoreplaceTvLayout.normalize(t.tvLayout); } catch (e) { tvLayout = null; }
+    return { name: String(t.name || ''), logo: typeof window._tourLogoSrc === 'function' ? window._tourLogoSrc(t) : '', tvLayout: tvLayout,
       qrUrl: qrUrl, qrImage: typeof window._qrCodeUrl === 'function' ? window._qrCodeUrl(qrUrl, 320, false) :
         'https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=' + encodeURIComponent(qrUrl) + '&bgcolor=ffffff&color=1a1e2e&margin=10',
       scoreplaceLogo: site + '/icons/logo-podium.svg',
       courts: courtCards, nextGame: nextGame, rankings: rankingSections(t, matches, teams), results: results, resultDay: resultDay,
       timing: timing };
   };
-  function sideHtml(label, team, score) {
+  function sideHtml(label, team, score, options) {
     var players = String(label || '').split(' / ').map(function (name) { return name.trim(); }).filter(Boolean);
-    return '<div class="tv-side" style="--team:' + esc(team.color) + '"><span class="tv-team-tag">' + esc(team.name || 'Time') + '</span>' +
-      '<div class="tv-players">' + players.map(function (name) { return '<span>' + esc(name) + '</span>'; }).join('') + '</div>' +
-      (score !== '' ? '<strong class="tv-score">' + esc(score) + '</strong>' : '') + '</div>';
+    return '<div class="tv-side" style="--team:' + esc(team.color) + '">' + (options.teams ? '<span class="tv-team-tag">' + esc(team.name || 'Time') + '</span>' : '') +
+      (options.players ? '<div class="tv-players">' + players.map(function (name) { return '<span>' + esc(name) + '</span>'; }).join('') + '</div>' : '') +
+      (options.score && score !== '' ? '<strong class="tv-score">' + esc(score) + '</strong>' : '') + '</div>';
   }
-  function cardHtml(card) {
-    if (!card.number && !card.a && !card.b) return '<article class="tv-court empty"><h2>' + esc(card.name) + '</h2><p>Aguardando chamada</p></article>';
-    return '<article class="tv-court tv-court-active' + (card.latest ? ' tv-court-latest' : '') + '"><div class="tv-court-top"><h2>' + esc(card.name) + ' · JOGO ' + esc(card.number) + '</h2><span>' + esc(card.category) + '</span></div>' +
-      sideHtml(card.a, card.ta, card.scoreA) + '<div class="tv-versus">VS</div>' + sideHtml(card.b, card.tb, card.scoreB) +
-      '<div class="tv-court-footer"><strong data-tv-start="' + card.timerStart + '">00:00:00</strong></div></article>';
+  function cardHtml(card, options) {
+    options = options || { court: true, number: true, category: true, teams: true, players: true, score: true, timer: true };
+    if (!card.number && !card.a && !card.b) return '<article class="tv-court empty">' + (options.court ? '<h2>' + esc(card.name) + '</h2>' : '') + '<p>Aguardando chamada</p></article>';
+    return '<article class="tv-court tv-court-active' + (card.latest ? ' tv-court-latest' : '') + '"><div class="tv-court-top"><h2>' + (options.court ? esc(card.name) : '') + (options.number ? ' · JOGO ' + esc(card.number) : '') + '</h2>' + (options.category ? '<span>' + esc(card.category) + '</span>' : '') + '</div>' +
+      sideHtml(card.a, card.ta, card.scoreA, options) + '<div class="tv-versus">VS</div>' + sideHtml(card.b, card.tb, card.scoreB, options) +
+      (options.timer ? '<div class="tv-court-footer"><strong data-tv-start="' + card.timerStart + '">00:00:00</strong></div>' : '') + '</article>';
   }
   function rankingHtml(section, showTitle) {
     var byGames = section.ranking === 'games_diff';
@@ -236,6 +239,7 @@
       '<div class="tv-result-side tv-result-right" style="--team:' + esc(game.tb.color) + '"><div class="tv-result-players">' + players(game.b) + '</div><span class="tv-result-team">' + esc(game.tb.name || 'Time') + '</span></div></div></section>';
   }
   function bodyHtml(snapshot) {
+    if (snapshot.tvLayout) return customBodyHtml(snapshot);
     return '<header class="tv-header">' + (snapshot.logo ? '<img src="' + esc(snapshot.logo) + '" alt="">' : '') + '<h1>' + esc(snapshot.name) + '</h1><time id="tv-now"></time><button id="tv-fullscreen-action" type="button" title="Mover para a tela HDMI e ocultar a barra do navegador">⛶ Tela cheia</button></header>' +
       '<main class="tv-board"><div class="tv-left"><section class="tv-courts">' + snapshot.courts.map(cardHtml).join('') + '</section>' + nextGameHtml(snapshot.nextGame) + '</div>' +
       '<aside class="tv-sidebar"><section class="tv-rankings"><h2>CLASSIFICAÇÃO</h2>' +
@@ -244,6 +248,21 @@
       snapshot.results.map(resultHtml).join('') +
       '</div></div><div class="tv-qr"><img class="tv-qr-code" src="' + esc(snapshot.qrImage) + '" alt="QR para escolher App Store, Google Play ou versão web"><div class="tv-qr-brand"><img src="' + esc(snapshot.scoreplaceLogo) + '" alt=""><span>Abra no<br>Scoreplace</span></div></div>' +
       '</section></aside></main>';
+  }
+  function customBodyHtml(snapshot) {
+    var layout = snapshot.tvLayout;
+    function box(id, inner) {
+      var b = layout.sections[id];
+      return b.visible ? '<div class="tv-custom-box tv-custom-' + id + '" style="left:' + b.x + '%;top:' + b.y + '%;width:' + b.w + '%;height:' + b.h + '%">' + inner + '</div>' : '';
+    }
+    var ranking = '<section class="tv-rankings"><h2>CLASSIFICAÇÃO</h2>' + (snapshot.rankings.length ? snapshot.rankings.map(function (s) { return rankingHtml(s, snapshot.rankings.length > 1); }).join('') : '<p>Classificação ainda não configurada</p>') + '</section>';
+    var results = '<section class="tv-results"><div class="tv-results-main"><h2>ÚLTIMOS RESULTADOS</h2><div class="tv-results-list" data-result-day="' + esc(snapshot.resultDay) + '">' + snapshot.results.map(resultHtml).join('') + '</div></div></section>';
+    var qr = '<div class="tv-qr"><img class="tv-qr-code" src="' + esc(snapshot.qrImage) + '" alt="QR para abrir o Scoreplace"><div class="tv-qr-brand"><img src="' + esc(snapshot.scoreplaceLogo) + '" alt=""><span>Abra no<br>Scoreplace</span></div></div>';
+    return '<main class="tv-custom-board" style="background:' + esc(layout.background) + '">' +
+      box('header', '<header class="tv-header">' + (snapshot.logo ? '<img src="' + esc(snapshot.logo) + '" alt="">' : '') + '<h1>' + esc(snapshot.name) + '</h1><time id="tv-now"></time></header>') +
+      box('courts', '<section class="tv-courts">' + snapshot.courts.map(function (card) { return cardHtml(card, layout.card); }).join('') + '</section>') +
+      box('upcoming', nextGameHtml(snapshot.nextGame)) + box('rankings', ranking) + box('results', results) + box('qr', qr) +
+      '<button id="tv-fullscreen-action" type="button" title="Mover para a tela HDMI e ocultar a barra do navegador">⛶ Tela cheia</button></main>';
   }
   // A janela continua viva durante o reload automático da aba principal. O
   // script nela mantém os relógios e volta a ler o estado assim que o opener
@@ -355,6 +374,7 @@
     '.tv-side{grid-template-rows:minmax(0,1fr);overflow:hidden}.tv-side>.tv-team-tag{min-height:0;max-height:100%;overflow:hidden}.tv-side>.tv-players{min-height:0;overflow:hidden}.tv-side>.tv-score{min-height:0;max-height:100%;overflow:hidden;line-height:1.1}.tv-versus{flex:none;position:relative;z-index:1}' +
     '.tv-result-match,.tv-upcoming .tv-result-match{grid-template-rows:minmax(0,1fr);min-height:0}.tv-result-side{min-height:0;overflow:hidden}.tv-result-team{min-height:0;max-height:100%;overflow:hidden;white-space:nowrap}.tv-result-players{min-height:0;overflow:hidden}.tv-upcoming .tv-result-players span{font-size:clamp(.75rem,.95vw,1.3rem)}' +
     '@media(orientation:portrait){.tv-header time{font-size:clamp(1.2rem,2.8vw,2.4rem)}.tv-sidebar{grid-template-rows:70% 30%}.tv-ranking-head,.tv-ranking-row{grid-template-columns:3vw minmax(0,1fr) 7vw 10vw repeat(3,4vw);gap:.5vw;font-size:clamp(.75rem,1.4vw,1.2rem)}.tv-ranking-row{min-height:2.9vh}.tv-ranking-team{font-size:clamp(.8rem,1.6vw,1.25rem)}.tv-ranking-row b{font-size:clamp(.8rem,1.6vw,1.25rem)}.tv-qr{width:clamp(90px,17vw,180px)}.tv-qr-brand img{width:3vw}}' +
+    '#tv-root{width:100%;height:100%}.tv-custom-board{position:relative;width:100%;height:100%;overflow:hidden}.tv-custom-box{position:absolute;min-width:0;min-height:0;overflow:hidden}.tv-custom-box>.tv-header,.tv-custom-box>.tv-courts,.tv-custom-box>.tv-upcoming,.tv-custom-box>.tv-rankings,.tv-custom-box>.tv-results,.tv-custom-box>.tv-qr{width:100%;height:100%;min-height:0;overflow:hidden}.tv-custom-box>.tv-header{padding:.35vw .8vw}.tv-custom-box>.tv-courts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(3,minmax(0,1fr))}.tv-custom-results .tv-results{display:flex}.tv-custom-results .tv-results-main{width:100%}.tv-custom-qr .tv-qr{justify-content:center}.tv-custom-qr .tv-qr-code{max-height:75%;width:auto;max-width:95%}' +
     '</style>');
   function isActive() {
     var current = window._currentBracketTournament;

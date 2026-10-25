@@ -3878,7 +3878,9 @@ exports.saveOwnTournamentTemplate = onCall(
     const uid = request.auth && request.auth.uid;
     if (!uid) throw new HttpsError("unauthenticated", "Login obrigatório");
     let template;
-    try { template = _ownLibrary.normalizeTemplate(request.data && request.data.template); }
+    try { template = _ownLibrary.normalizeTemplate(request.data && request.data.template);
+      if (template.tvLayout != null) template.tvLayout = require('./vendor/tv-layout-core').normalize(template.tvLayout);
+    }
     catch (error) { throw new HttpsError("invalid-argument", error.message); }
     const db = admin.firestore();
     const profile = await db.collection("users").doc(uid).get();
@@ -3901,6 +3903,44 @@ exports.deleteOwnTournamentTemplate = onCall(
     catch (error) { throw new HttpsError("invalid-argument", error.message); }
     await admin.firestore().collection("users").doc(uid).collection("templates").doc(templateId).delete();
     return { ok: true, templateId };
+  }
+);
+
+exports.saveOwnTvTemplate = onCall(
+  { region: 'us-central1', memory: '256MiB', timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError('unauthenticated', 'Login obrigatório');
+    const name = String((request.data && request.data.name) || '').trim();
+    if (!name || name.length > 80) throw new HttpsError('invalid-argument', 'Nome do modelo inválido');
+    let layout;
+    try { layout = require('./vendor/tv-layout-core').normalize(request.data && request.data.tvLayout); }
+    catch (error) { throw new HttpsError('invalid-argument', error.message); }
+    if (!layout) throw new HttpsError('invalid-argument', 'Layout obrigatório');
+    const db = admin.firestore();
+    const profile = await db.collection('users').doc(uid).get();
+    if (!profile.exists) throw new HttpsError('failed-precondition', 'Perfil inexistente');
+    const templates = db.collection('users').doc(uid).collection('tvTemplates');
+    if ((await templates.limit(30).get()).size >= 30) {
+      throw new HttpsError('resource-exhausted', 'Limite de 30 modelos de TV por conta');
+    }
+    const ref = await templates.add({
+      name, tvLayout: layout, ownerUid: uid, createdAt: new Date().toISOString()
+    });
+    return { ok: true, templateId: ref.id };
+  }
+);
+
+exports.deleteOwnTvTemplate = onCall(
+  { region: 'us-central1', memory: '256MiB', timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError('unauthenticated', 'Login obrigatório');
+    let id;
+    try { id = _ownLibrary.normalizeDocumentId(request.data && request.data.templateId, 'templateId'); }
+    catch (error) { throw new HttpsError('invalid-argument', error.message); }
+    await admin.firestore().collection('users').doc(uid).collection('tvTemplates').doc(id).delete();
+    return { ok: true, templateId: id };
   }
 );
 
@@ -6706,6 +6746,7 @@ exports.manageTournamentReferee = onCall(
         const before = JSON.parse(JSON.stringify(t));
         _splitParts.gravar(tx, ref, before, {
           arbitros: outcome.arbitros,
+          refereeUids: _refereeRoster.sanitizeAll(outcome.arbitros).filter(entry => entry.status === 'confirmed').map(entry => entry.uid).sort(),
           updatedAt: new Date().toISOString()
         });
         if (action === "invite") {

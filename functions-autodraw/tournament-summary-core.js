@@ -175,6 +175,7 @@ function buildSummary(t, id, H) {
     // ── quem manda / quem está dentro (é o que responde "meus torneios") ───
     creatorUid: String(t.creatorUid || ''),
     adminUids: _arr(t.adminUids).map(String).filter(Boolean),
+    refereeUids: _arr(t.refereeUids).map(String).filter(Boolean),
     coHostUids: _arr(t.coHosts).map(function (c) {
       return String((c && (c.uid || c)) || '');
     }).filter(Boolean),
@@ -223,7 +224,7 @@ function buildSummary(t, id, H) {
 var CAMPOS_QUE_IMPORTAM = [
   'name', 'sport', 'format', 'status', 'isPublic', 'organizerOnly', 'membersOnly', 'isSandbox', 'venueName', 'venue',
   'venuePlaceId', 'startDate', 'endDate', 'createdAt', 'updatedAt', 'finishedAt',
-  'autoClosed', 'tournamentStarted', 'creatorUid', 'coHosts', 'adminUids', 'memberUids',
+  'autoClosed', 'tournamentStarted', 'creatorUid', 'coHosts', 'adminUids', 'memberUids', 'refereeUids',
   'enrollmentMode', 'lateEnrollment', 'registrationLimit', 'ligaSeasonMonths',
   'combinedCategories', 'categories', 'participants', 'placeholderReservations',
   'waitlist', 'standbyParticipants', 'matches', 'rounds', 'groups', 'phases',

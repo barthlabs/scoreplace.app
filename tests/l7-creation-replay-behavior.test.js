@@ -9,7 +9,7 @@ class HttpsError extends Error { constructor(code,message){super(message);this.c
 const configSource = server.slice(server.indexOf('const _CAMPOS_CONFIG_TORNEIO'), server.indexOf('function _fasesDeConfiguracaoAtualizaveis'));
 const config = new Function('HttpsError', configSource + '\nreturn {fields:_CAMPOS_CONFIG_TORNEIO,cloneConfig:_clonaConfigDeclarativa};')(HttpsError);
 const boundarySource = server.slice(server.indexOf('function _applyWriteBoundary('),server.indexOf('\n// Re-sorteio:',server.indexOf('function _applyWriteBoundary(')));
-const boundary = new Function('drawWindow','_agenda','HttpsError',boundarySource+'\nreturn _applyWriteBoundary;')(win,require('../functions-autodraw/agenda-core'),HttpsError);
+const boundary = new Function('drawWindow','_agenda','HttpsError','ScoreplaceRefereeRoster',boundarySource+'\nreturn _applyWriteBoundary;')(win,require('../functions-autodraw/agenda-core'),HttpsError,require('../functions-autodraw/vendor/referee-roster.js'));
 const copy = x => JSON.parse(JSON.stringify(x));
 function fakeDB() {
   const docs = new Map(); let queue = Promise.resolve(), writes=0;

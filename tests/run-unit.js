@@ -1124,6 +1124,8 @@ const SUITES = [
   'tests/bracket-avatar-presence.test.js',
   'tests/bracket-sem-painel-presenca.test.js',
   'tests/tv-live-snapshot.test.js',
+  'tests/tv-layout.test.js',
+  'tests/tv-layout-editor.test.js',
   'tests/tv-live-box-layout.test.js',
   'tests/tv-open-page.test.js',
   'tests/court-occupancy.test.js',

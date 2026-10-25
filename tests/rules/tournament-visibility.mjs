@@ -8,6 +8,7 @@ const env = await initializeTestEnvironment({
   firestore: { rules: readFileSync('firestore.rules', 'utf8'), host, port: Number(port) }
 });
 const org = 'uid_org', cohost = 'uid_cohost', member = 'uid_member', stranger = 'uid_stranger';
+const referee = 'uid_referee', invited = 'uid_invited', removed = 'uid_removed';
 const get = (uid, path) => getDoc(doc(uid ? env.authenticatedContext(uid).firestore() : env.unauthenticatedContext().firestore(), path));
 const succeeds = async (uid, path) => {
   try { await assertSucceeds(get(uid, path)); }
@@ -21,7 +22,7 @@ try {
   await env.withSecurityRulesDisabled(async ctx => {
     const db = ctx.firestore();
     for (const [id, mode] of [['hidden', 'organizerOnly'], ['members', 'membersOnly'], ['public', 'isPublic']]) {
-      const base = { id, name: id, creatorUid: org, adminUids: [org, cohost], memberUids: mode === 'organizerOnly' ? [org, cohost] : [org, member], isPublic: mode === 'isPublic', organizerOnly: mode === 'organizerOnly', membersOnly: mode === 'membersOnly' };
+      const base = { id, name: id, creatorUid: org, adminUids: [org, cohost], memberUids: mode === 'organizerOnly' ? [org, cohost] : [org, member], refereeUids: mode === 'isPublic' ? [] : [referee, removed], isPublic: mode === 'isPublic', organizerOnly: mode === 'organizerOnly', membersOnly: mode === 'membersOnly' };
       await setDoc(doc(db, 'tournaments', id), base);
       await setDoc(doc(db, 'tournaments_summary', id), { ...base,
         memberUids: mode === 'organizerOnly' ? [org] : base.memberUids });
@@ -34,9 +35,22 @@ try {
     await setDoc(doc(db, 'tournaments', 'legacy_creator'), { creatorUid: 'uid_legacy_creator', memberUids: [org], isPublic: false, organizerOnly: true });
     await setDoc(doc(db, 'tournaments_summary', 'legacy_creator'), { creatorUid: 'uid_legacy_creator', memberUids: [org], isPublic: false, organizerOnly: true });
   });
+  await succeeds(removed, 'tournaments/hidden');
+  await succeeds(removed, 'tournaments_summary/hidden');
+  await env.withSecurityRulesDisabled(async ctx => {
+    const db = ctx.firestore();
+    for (const id of ['hidden', 'members']) {
+      for (const col of ['tournaments', 'tournaments_summary']) {
+        await setDoc(doc(db, col, id), { refereeUids: [referee] }, { merge: true });
+      }
+    }
+  });
   for (const path of ['tournaments/hidden', 'tournaments_summary/hidden', 'tournaments/hidden/inscritos/p1', 'tournaments/hidden/history/h1', 'tournaments/hidden/results/m1', 'tournaments/hidden/courtState/main', 'tournaments/hidden/courtReleases/m1']) {
     await succeeds(org, path);
     await succeeds(cohost, path); // adminUid ativo, mesmo fora de memberUids do torneio
+    await succeeds(referee, path);
+    await fails(invited, path);
+    await fails(removed, path);
     await fails(member, path);
     await fails(stranger, path);
     await fails(null, path);
@@ -45,6 +59,7 @@ try {
     await succeeds(org, path);
     await succeeds(cohost, path);
     await succeeds(member, path);
+    await succeeds(referee, path);
     await fails(stranger, path);
     await fails(null, path);
   }
@@ -54,9 +69,10 @@ try {
   await assertSucceeds(get(null, 'tournaments/public/courtReleases/m1'));
   await assertFails(setDoc(doc(env.authenticatedContext(org).firestore(), 'tournaments', 'public', 'courtState', 'main'), { released: {} }));
   await assertFails(setDoc(doc(env.authenticatedContext(org).firestore(), 'tournaments', 'public', 'courtReleases', 'm1'), { matchId: 'forged' }));
+  await assertFails(setDoc(doc(env.authenticatedContext(referee).firestore(), 'tournaments', 'hidden', 'courtState', 'main'), { released: {} }));
   const list = (uid, col, field, value) => getDocs(query(
     collection(uid ? env.authenticatedContext(uid).firestore() : env.unauthenticatedContext().firestore(), col),
-    where(field, field === 'memberUids' ? 'array-contains' : '==', value)
+    where(field, field === 'memberUids' || field === 'refereeUids' ? 'array-contains' : '==', value)
   ));
   for (const col of ['tournaments', 'tournaments_summary']) {
     const checkList = async (label, promise) => {
@@ -67,6 +83,11 @@ try {
     if (memberList.docs.some(d => d.id === 'hidden')) throw new Error(col + ': modo oculto vazou na lista do inscrito');
     const orgList = await checkList('organizador', list(org, col, 'memberUids', org));
     if (!orgList.docs.some(d => d.id === 'hidden')) throw new Error(col + ': organizador não recebeu o torneio oculto');
+    const refereeList = await checkList('árbitro confirmado', list(referee, col, 'refereeUids', referee));
+    if (!refereeList.docs.some(d => d.id === 'hidden') || !refereeList.docs.some(d => d.id === 'members')) throw new Error(col + ': escala de arbitragem incorreta');
+    const invitedList = await checkList('árbitro convidado', list(invited, col, 'refereeUids', invited));
+    const removedList = await checkList('árbitro removido', list(removed, col, 'refereeUids', removed));
+    if (!invitedList.empty || !removedList.empty) throw new Error(col + ': convite ou remoção concedeu leitura');
     const publicList = await checkList('público', list(null, col, 'isPublic', true));
     if (!publicList.docs.some(d => d.id === 'public')) throw new Error(col + ': torneio geral ausente');
     // Mesmo formato das consultas de loadAllTournaments/loadOpenTournaments.

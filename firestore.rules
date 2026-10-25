@@ -37,11 +37,16 @@ service cloud.firestore {
       );
     }
 
+    function isConfirmedTournamentReferee(data) {
+      return data.get('isSandbox', false) != true && request.auth != null
+        && request.auth.uid in data.get('refereeUids', []);
+    }
+
     function canReadTournamentData(data) {
       return data.get('organizerOnly', false) == true
-        ? isTournamentAdmin(data)
+        ? (isTournamentAdmin(data) || isConfirmedTournamentReferee(data))
         : (data.get('membersOnly', false) == true
-          ? (isTournamentAdmin(data) || isTournamentParticipant(data))
+          ? (isTournamentAdmin(data) || isTournamentParticipant(data) || isConfirmedTournamentReferee(data))
         : ((data.get('isSandbox', false) == true)
           ? (request.auth != null && request.auth.uid in data.get('memberUids', []))
           : (data.get('isPublic', false) == true || request.auth != null)));
@@ -281,6 +286,7 @@ service cloud.firestore {
       // de acesso: uma query por isPublic=false incluiria torneios ocultos.
       allow list: if resource.data.get('isPublic', false) == true
         || (request.auth != null && request.auth.uid in resource.data.get('memberUids', []))
+        || isConfirmedTournamentReferee(resource.data)
         || (request.auth != null && request.auth.uid == resource.data.get('creatorUid', ''));
       allow write: if false;   // só a Cloud Function (admin SDK ignora regras)
     }
@@ -717,6 +723,7 @@ service cloud.firestore {
       allow get: if canReadTournamentData(resource.data);
       allow list: if resource.data.get('isPublic', false) == true
         || (request.auth != null && request.auth.uid in resource.data.get('memberUids', []))
+        || isConfirmedTournamentReferee(resource.data)
         || (request.auth != null && request.auth.uid == resource.data.get('creatorUid', ''));
 
       // ⛔ CREATE: FECHADO. Torneio NASCE NO SERVIDOR — a porta é a Function
@@ -797,6 +804,7 @@ service cloud.firestore {
         && elencoIntacto()
         && rosterLegadoProtegidoAposMigracao()
         && categoriasTipadasIntactas()
+        && igual('refereeUids')
         && (igual('organizerOnly') || isTournamentAdmin(resource.data))
         && (igual('membersOnly') || isTournamentAdmin(resource.data))
         && !(request.resource.data.get('organizerOnly', false) == true
@@ -1524,6 +1532,11 @@ service cloud.firestore {
       match /templates/{templateId} {
         allow read: if request.auth != null && request.auth.uid == userId;
         // A Function fixa dono e metadados; o navegador só lê sua biblioteca.
+        allow write: if false;
+      }
+
+      match /tvTemplates/{templateId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
         allow write: if false;
       }
 
