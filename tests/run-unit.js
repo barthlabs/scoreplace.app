@@ -984,6 +984,7 @@ const SUITES = [
   'tests/elim-reirainha-opening.test.js',
   'tests/chave-label-default.test.js',
   'tests/letzplay-verdict-color.test.js',
+  'tests/letzplay-global-scan-suspenso.test.js',
   'tests/classificacao-nome-por-linha.test.js',
   'tests/tiebreak-nao-entra-no-placar.test.js',
   'tests/motor-velho-nao-e-leitura-completa.test.js',

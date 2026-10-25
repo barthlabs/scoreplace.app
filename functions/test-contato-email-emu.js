@@ -1,8 +1,8 @@
 /* ⛔⛔ O E-MAIL DO ORGANIZADOR SÓ SAI PARA QUEM ESTÁ INSCRITO (LGPD, 25/set/2026).
  *
  * Esta é a prova REAL da porta: chama a callable no emulador, com conta de verdade e ID token
- * conferido, contra documento de verdade — inclusive TORNEIO DIVIDIDO, onde o elenco mora em
- * subcoleção e um teste de função pura não alcança.
+ * conferido, contra documento de verdade — com e sem marcador legado de divisão. O elenco
+ * sempre mora em subcoleção e um teste de função pura não alcança essa hidratação.
  *
  * Nasceu porque a suíte pura não bastava: ela prova a régua, não a porta. Se a hidratação do
  * elenco dividido sair de `getTournamentParticipantContact`, a função pura continua verde e o
@@ -60,12 +60,15 @@ async function contato(token, tournamentId, uid) {
   const tFora = await criarConta(FORA, "estranho@teste.local",    { displayName: "Estranho" });
   const tCo   = await criarConta(CO,   "coorg@teste.local",       { displayName: "Co-organizador", phone: "11988880000" });
 
-  // ── torneio COMUM: elenco no documento ──────────────────────────────────────
+  // ── torneio sem marcador legado: o elenco também mora na subcoleção ──────────
   const T1 = "ct-comum";
   await db.collection("tournaments").doc(T1).set({
     id: T1, name: "Comum", creatorUid: ORG, access: "public",
     coHosts: [{ uid: CO, status: "active" }],
-    participants: [{ uid: INSC, displayName: "Inscrito" }],
+    participants: [],
+  });
+  await db.collection("tournaments").doc(T1).collection("inscritos").doc("p0").set({
+    _idx: 0, item: { uid: INSC, displayName: "Inscrito" },
   });
 
   console.log("\n── torneio comum ──");
@@ -88,9 +91,8 @@ async function contato(token, tournamentId, uid) {
   ok(d.ok && !d.contact.organizerEmail,
     "⛔ nem o organizador recebe e-mail de PARTICIPANTE por esta porta");
 
-  // ── torneio DIVIDIDO: elenco na subcoleção `inscritos` ──────────────────────
-  // É o caso que a função pura não alcança: sem hidratar, a régua roda com elenco VAZIO
-  // e o inscrito é tratado como estranho.
+  // ── torneio com marcador legado: elenco na mesma subcoleção `inscritos` ──────
+  // Nos dois formatos de documento, sem hidratar a régua roda com elenco VAZIO.
   const T2 = "ct-dividido";
   await db.collection("tournaments").doc(T2).set({
     id: T2, name: "Dividido", creatorUid: ORG, access: "public",

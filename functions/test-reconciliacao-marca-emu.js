@@ -176,6 +176,9 @@ const catDe = async (uid) => ((await db.collection("users").doc(uid).get()).data
   const vitima = "marca-vitima", atacante = "marca-atacante";
   const tokenVitima = await criarConta(vitima, "vitima@teste.local");
   const tokenAtacante = await criarConta(atacante, "atacante@teste.local");
+  await db.collection("tournaments").doc("marca-torneio-atacante").set({
+    name: "Torneio do atacante", creatorUid: atacante, adminUids: [], memberUids: [atacante],
+  });
   await db.collection("users").doc(vitima).set({
     displayName: "Vítima", uid: vitima,
     skillBySport: { "Beach Tennis": "D" }, gender: "feminino",
@@ -199,11 +202,14 @@ const catDe = async (uid) => ((await db.collection("users").doc(uid).get()).data
 
   const FS = "http://" + (process.env.FIRESTORE_EMULATOR_HOST || "127.0.0.1:8080")
     + "/v1/projects/" + PROJECT + "/databases/(default)/documents/letzplayScans/" + vitima;
-  const plantio = await fetch(FS + "?updateMask.fieldPaths=scan&updateMask.fieldPaths=handle", {
+  const plantio = await fetch(FS, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", Authorization: "Bearer " + tokenAtacante },
     body: JSON.stringify({ fields: {
       handle: { stringValue: "atleta-forjado" },
+      scannedBy: { stringValue: atacante },
+      scannedAt: { stringValue: new Date().toISOString() },
+      tournamentId: { stringValue: "marca-torneio-atacante" },
       scan: { mapValue: { fields: {
         gender: { stringValue: "masculino" },
         skill: { stringValue: "A" },
@@ -211,8 +217,9 @@ const catDe = async (uid) => ((await db.collection("users").doc(uid).get()).data
       } } },
     } }),
   });
-  /* ⛔ EXIGE 200: se o plantio falhar, o cenário não provou abuso nenhum e NÃO pode passar por isso. */
-  ok(plantio.status === 200, "a conta B CONSEGUE plantar o scan no nome de A (é o buraco que resta: "
+  /* O payload cruza o gate antigo de assinatura + torneio próprio; só o
+   * fechamento da escrita global deve recusá-lo. */
+  ok(plantio.status === 403, "a conta B NÃO planta scan global no nome de A ("
     + plantio.status + ")");
 
   /* A porta que aplicava o scan não existe mais: a chamada tem de falhar com NOT FOUND — e não

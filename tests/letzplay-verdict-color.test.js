@@ -1,24 +1,7 @@
-/* Cor do nome na Análise de Inscritos (verificação letzplay) — node tests/letzplay-verdict-color.test.js
- *
- * REPRODUZ O BUG REAL de 14/jul/2026 (dados copiados de produção, letzplayScans/{uid}):
- * A Flavia Campion autorizou, o scan leu o perfil dela com sucesso (Fem D+/C-, apurado D),
- * e mesmo assim o nome ficou ROXO ("autorizou, aguardando verificação"). A Kelly Barth,
- * com scan equivalente, ficou VERDE. A única diferença: a Kelly tinha logado no app depois
- * do scan, e o auto-preenchimento gravou skillBySport={'Beach Tennis':'C'} — a Flavia tinha
- * skillBySport={} e nunca logou.
- * ⚠️ 23/set/2026: aquele auto-preenchimento NÃO EXISTE MAIS (ele aplicava um scan que qualquer
- * conta planta). O veredito passou a sair do scan, e é por isso que os casos abaixo continuam
- * valendo sem ninguém logar.
- *
- * Causa: _lzVerdict(declRank=null) devolvia 'white' ("sem info pra comparar") → não marcava
- * _lzVerified → o nome caía no roxo. Ou seja, a LEITURA DO ORGANIZADOR dependia do INSCRITO
- * logar — que é exatamente o que não pode acontecer.
- *
- * Regra do dono: "se puxou o nível dela no letzplay, deveria ficar verde (coerente); veio do
- * próprio letzplay e não tem como não ser coerente com o letzplay."
- *
- * Este teste FALHA no código antigo (Flavia = violeta) e PASSA no novo (Flavia = verde).
- * Ver feedback_tests_must_reproduce_real_failure, project_letzplay_authorization_color_and_rigor.
+/* Cor do nome na Análise de Inscritos — node tests/letzplay-verdict-color.test.js
+ * O acervo global letzplayScans foi escrito por clientes: mesmo scans completos e recentes
+ * não podem produzir cor, nível ou veredito de terceiros. Os fixtures históricos abaixo
+ * garantem essa contenção; o autoimport do próprio titular mantém seu caminho separado.
  */
 const { window, load } = require('./headless.js');
 // O modelo canônico do histórico (dateNum/dateParts) vive em js/letzplay-model.js, fora de
@@ -107,9 +90,9 @@ function run(row, profileMap, scanMap) { apply([row], profileMap, scanMap); retu
     { flavia: profAuthorized },
     { flavia: { scan: scanCompleto } }
   );
-  ok(r._lzColor === COL.green, 'nível apurado + captura completa, sem nível declarado → VERDE, veio: ' + r._lzColor);
-  ok(r._lzVerified === true, 'conta como VERIFICADA (o perfil foi lido POR INTEIRO)');
-  ok(r._lzSkill === 'D', 'exibe o nível apurado D (borda fraca de "Fem D+ / C-"), veio: ' + r._lzSkill);
+  ok(r._lzColor === COL.violet, 'scan global completo sem origem verificável → VIOLETA, veio: ' + r._lzColor);
+  ok(r._lzVerified === false, 'scan global não conta como verificação');
+  ok(r._lzSkill === null, 'scan global não atribui nível apurado, veio: ' + r._lzSkill);
 }
 
 // ── 1b. A COR SAI DO MESMO MOTOR DA FICHA (caso Bruna Arilla, 17/ago/2026) ──────
@@ -210,7 +193,7 @@ function run(row, profileMap, scanMap) { apply([row], profileMap, scanMap); retu
   const comLogin = run({ uid: 'k2', effectiveSkills: ['C'] }, { k2: profAuthorized }, { k2: { scan: scanKelly } });
   ok(semLogin._lzColor === comLogin._lzColor,
     'Mesmo scan deve dar a MESMA cor com e sem login do inscrito (' + semLogin._lzColor + ' vs ' + comLogin._lzColor + ')');
-  ok(comLogin._lzColor === COL.green, 'Kelly com nível declarado C e banda C+/B- → coerente (verde)');
+  ok(comLogin._lzColor === COL.violet, 'scan global não produz veredito mesmo com nível declarado');
 }
 
 // ── 3. Roxo continua sendo APENAS "autorizou e ainda não foi lido" ──
@@ -232,7 +215,7 @@ function run(row, profileMap, scanMap) { apply([row], profileMap, scanMap); retu
   // Declarou D, mas é CAMPEÃO na Fem C → deve subir (vermelho). Nada a ver com o fix.
   const scanGato = Object.assign({}, scanFlavia, { champions: ['Fem C'], profileSkill: 'D' });
   const r = run({ uid: 'g', effectiveSkills: ['D'] }, { g: profAuthorized }, { g: { scan: scanGato } });
-  ok(r._lzColor === COL.red, 'Campeão em categoria mais forte que a declarada → VERMELHO (deve subir), veio: ' + r._lzColor);
+  ok(r._lzColor === COL.violet, 'título em scan global sem prova não produz veredito, veio: ' + r._lzColor);
 }
 
 // ── 6. Sem nível declarado E sem nível apurado → branco (não há o que afirmar) ──
@@ -266,13 +249,13 @@ function run(row, profileMap, scanMap) { apply([row], profileMap, scanMap); retu
     totals: { rankings: 3, tournaments: 2, matches: 66 }
   });
   const r = run({ uid: 'f3', effectiveSkills: [] }, { f3: profAuthorized }, { f3: { scan: completo } });
-  ok(r._lzColor === COL.green, 'capturou os 2 torneios declarados → VERDE (veio: ' + r._lzColor + ')');
+  ok(r._lzColor === COL.violet, 'captura global completa ainda não comprova origem (veio: ' + r._lzColor + ')');
 }
 {
   // EVIDÊNCIA POSITIVA vale mesmo incompleta: achar título é prova; não achar não é.
   const gato = Object.assign({}, scanFlavia, { champions: ['Fem C'] });   // segue 0/2 torneios
   const r = run({ uid: 'g2', effectiveSkills: ['D'] }, { g2: profAuthorized }, { g2: { scan: gato } });
-  ok(r._lzColor === COL.red, 'campeão achado → VERMELHO mesmo com captura incompleta (veio: ' + r._lzColor + ')');
+  ok(r._lzColor === COL.violet, 'título em scan global incompleto não produz veredito (veio: ' + r._lzColor + ')');
 }
 {
   // sem totais declarados (dado antigo) → não dá pra afirmar completude → roxo
@@ -342,9 +325,9 @@ function run(row, profileMap, scanMap) { apply([row], profileMap, scanMap); retu
     importedAt: AGORA, extVersion: MOTOR, rating: { band: 'C+/B-' }, rankings: [], tournaments: [] };
   const scanResumido = Object.assign({}, scanKelly, { tournaments: [], totals: { rankings: 8, tournaments: 8, matches: 152 } });
   const r = run({ uid: 'k9', effectiveSkills: [] }, { k9: profAuthorized }, { k9: { scan: scanResumido, fullImport: fullDoOrg } });
-  ok(r._lzColor === COL.green, 'histórico completo no fullImport do SCAN → VERDE (veio: ' + r._lzColor + ')');
-  ok(r._lzSrc === '🎾', 'fonte = histórico (🎾), não o resumo (🔎)');
-  ok(r._lzSkill === 'C', 'nível vem do officialCategory do histórico');
+  ok(r._lzColor === COL.violet, 'fullImport global sem origem verificável → VIOLETA (veio: ' + r._lzColor + ')');
+  ok(r._lzSrc === null, 'fullImport global não é fonte de veredito');
+  ok(r._lzSkill === null, 'fullImport global não atribui categoria');
 }
 {
   // sem fullImport (o organizador cancelou antes dela) → segue no resumo → roxo
@@ -358,7 +341,7 @@ function run(row, profileMap, scanMap) { apply([row], profileMap, scanMap); retu
   const r = run({ uid: 'm9', effectiveSkills: [] },
     { m9: Object.assign({ letzplayImport: pequeno }, profAuthorized) },
     { m9: { scan: scanKelly, fullImport: grande } });
-  ok(r._lzSkill === 'B', 'entre autoimport (10 jogos) e scan do org (152), vence o de MAIS jogos');
+  ok(r._lzSkill === 'C', 'import próprio prevalece sobre scan global não verificável, mesmo com menos jogos');
 }
 
 
@@ -800,7 +783,7 @@ console.log('\n── janela de 3 meses ──');
   const imp = { importedAt: new Date().toISOString(), extVersion: MOTOR, officialCategory: { skill: 'D', categoryRaw: 'Fem D' },
     rankings: [], tournaments: [], games: [{ lzId: '1' }], declaredGames: 1, lzCursor: { v: 4, complete: true } };
   const r = run({ uid: 'db1', effectiveSkills: [] }, { db1: profAuthorized }, { db1: { fullImport: imp } });
-  ok(r._lzColor === COL.green, 'scan vindo do BANCO (letzplayScans) já pinta verde sem clique nenhum');
+  ok(r._lzColor === COL.violet, 'scan global legado lido do banco não vira veredito');
 }
 
 // ── 21. "100% e roxo": a data mostrada tem que ser a do histórico EM USO ─────

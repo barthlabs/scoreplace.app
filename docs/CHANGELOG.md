@@ -1,3 +1,10 @@
+## 2.5.55 — 25/out/2026 (contenção do scan global do Letzplay)
+
+- A escrita de `letzplayScans/{uid}` por clientes foi fechada nas Firestore Rules, inclusive para contas organizadoras e clientes antigos. A coleção legada permanece preservada e legível.
+- A busca de terceiros está suspensa também no sandbox. A Análise deixa de transformar scans globais sem procedência verificável em cores, níveis ou vereditos; o autoimport do próprio titular permanece separado.
+- O contador de partidas da dashboard passa a mostrar apenas jogos do Scoreplace até haver coleta externa validada pelo servidor.
+- Nenhum dado, inscrição, confronto ou resultado de torneio foi migrado ou alterado.
+
 ## 2.5.49 — 24/out/2026 (progresso da etapa atual e do torneio)
 
 - Exibe somente o dia/etapa em andamento no topo do painel; a troca ocorre quando o primeiro jogo da etapa seguinte recebe um registro de início ou resultado. Após o último dia, mantém a etapa final visível.

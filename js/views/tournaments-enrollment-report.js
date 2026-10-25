@@ -2544,6 +2544,15 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     }
   }
 
+  // A coleta de terceiros roda numa extensão autenticada no navegador. Até que
+  // exista verificação independente no servidor, seu resultado não pode ser
+  // persistido por UID global nem apresentado como apuração confirmada.
+  var _LZ_SCAN_SUSPENSO = 'A busca de terceiros no Letzplay está temporariamente suspensa por segurança. Seus dados e os scans anteriores foram preservados.';
+  var _LZ_SCAN_TERCEIROS_ATIVO = false;
+  function _lzAvisarScanSuspenso() {
+    if (typeof showNotification === 'function') showNotification('Busca temporariamente suspensa', _LZ_SCAN_SUSPENSO, 'warning');
+  }
+
   // ── CONFERE A EXTENSÃO AO ABRIR A FICHA ───────────────────────────────────────
   // Pergunta a versão e responde em ~800ms: sem extensão, ou com uma abaixo do mínimo, o
   // aviso aparece no topo da ficha e o botão de puxar fica cinza. Ninguém mais descobre
@@ -2975,38 +2984,16 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
        * ⚠️ Preço declarado: quem nunca declarou o @ fica BRANCO, mesmo com scan gravado. Era assim
        * antes de a porta (aposentada) escrever o @ no perfil; voltar a isso é o lado seguro. */
       r._lzAuthorized = !!(prof && typeof prof.letzplayHandle === 'string' && prof.letzplayHandle.trim());
-      // O HISTÓRICO PODE ESTAR EM DOIS LUGARES, e eu só olhava um:
-      //   • users/{uid}.letzplayImport      → a pessoa fez o autoimport dela;
-      //   • letzplayScans/{uid}.fullImport  → o ORGANIZADOR puxou por ela (busca completa).
-      // Caso real (14/jul 17:57): a Kelly tinha 152 jogos COMPLETOS no fullImport do scan e
-      // aparecia ROXA — porque ela nunca fez autoimport, então eu caía no scan resumido
-      // (torneios 2/8), julgava incompleto e não absolvia. O dado estava lá; a tela mentia.
-      // Não dá pra depender do letzplayImport do perfil: ele é do PRÓPRIO dono e pode nem existir
-      // (que roda depois) ou pelo login da própria pessoa — de novo fazendo a leitura do
-      // organizador depender do inscrito. Vence o que tem MAIS jogos (mesma regra da CF).
-      /* ⛔ FRONTEIRA DE CONFIANÇA DO LETZPLAY — o que ESTA tela pode e o que ela NÃO pode afirmar.
-       *
-       * ⚠️ ANTERIOR A ESTA LEVA E NÃO FECHADO AQUI: não existe vínculo verificável entre o @ que a
-       * pessoa declarou e o CONTEÚDO do scan. Qualquer conta escreve `letzplayScans/{uid}` de
-       * terceiro, e o import "próprio" também é gravável pelo dono (a ponte aceita `postMessage` e
-       * as Rules deixam o dono escrever o campo). Ou seja: o veredito nasce de dado COLETADO NO
-       * NAVEGADOR, e nenhum arranjo de precedência aqui muda isso.
-       * ⛔ Fechar de verdade exige o SERVIDOR falar com o letzplay — coleta server-side. Não é o
-       * caso, e não finjo que é. [[project_scan_do_letzplay_nao_escreve_perfil]]
-       * ⭐ O que esta leva MELHOROU, medido: antes o scan plantado ia ao PERFIL global da vítima
-       * (gênero, categoria, marca e histórico) por uma porta com Admin SDK — aquilo acabou. Hoje o
-       * estrago possível é a LEITURA desta tela.
-       *
-       * ⛔ SEM @ DECLARADO, CONTEÚDO DE SCAN NÃO PRODUZ VEREDITO (23/set/2026). Marcar
-       * `_lzAuthorized = false` não bastava: os ramos abaixo pintavam cor e `_lzVerified` a partir
-       * do scan mesmo assim — e o scan é gravável por QUALQUER conta no nome de qualquer pessoa.
-       * Um terceiro forjava o veredito que orienta a atribuição de categoria do organizador.
-       * ⚠️ O import do PRÓPRIO dono (`letzplayImport` no perfil) continua valendo: ele não é
-       * plantável — só a própria pessoa escreve o próprio perfil. */
-      var _fi = (r._lzAuthorized && r.uid && scanMap[r.uid] && scanMap[r.uid].fullImport) || null;
+      // A coleção global legada foi escrita por clientes e sua origem não é verificável.
+      // Não usar seus scans para cor, nível ou veredito. O autoimport do titular permanece,
+      // mas também é uma declaração do cliente, não uma coleta independente do servidor.
+      // O acervo global legado não tem procedência verificável. Mesmo quando o
+      // torneio declarado coincide com este, um organizador podia ter inventado
+      // o conteúdo. Só o import do próprio titular segue para o veredito.
+      var _fi = null;
       var _own = prof && prof.letzplayImport;
       var li = _lzMelhorImport(_fi, _own);
-      var sc = (r._lzAuthorized && r.uid && scanMap[r.uid] && scanMap[r.uid].scan) ? scanMap[r.uid].scan : null;
+      var sc = null;
       if (li) {
         var oc = li.officialCategory, band = li.rating && li.rating.band;
         // ── A EVIDÊNCIA MORA NO FOOTPRINT, NÃO EM `tournaments` ────────────────────
@@ -4524,6 +4511,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     try { window.postMessage({ __sp_lp: 'lz-keep-tab', on: !!on }, window.location.origin); } catch (e) {}
   }
   window._lzAthleteImport = function (uid) {
+    if (!_LZ_SCAN_TERCEIROS_ATIVO) { _lzAvisarScanSuspenso(); return; }
     /* ⛔ GUARDA ANTES DE SEGURAR A ABA. Segurar a aba por uma ação que a Rule vai recusar
      * deixaria o organizador preso numa leitura que nunca grava. Defesa para chamada
      * direta: a tela já não oferece o botão na própria linha. */
@@ -5315,6 +5303,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   }
   window._lzScanRunning = false;
   window._lzOrgScan = function (mode) {
+    if (!_LZ_SCAN_TERCEIROS_ATIVO) { _lzAvisarScanSuspenso(); return; }
     mode = (mode === 'full') ? 'full' : 'essential';
     if (window._lzScanRunning) return;   // já rodando → a barra está na tela
     var ctx = window._lzScanCtx;
@@ -5803,6 +5792,7 @@ window._lzNaoEhEuMesmo = function (uid) {
   };
 
   function _lzPersistScans(tId, scans, gamesDelta) {
+    if (!_LZ_SCAN_TERCEIROS_ATIVO) return Promise.reject(new Error(_LZ_SCAN_SUSPENSO));
     var ok = (scans || []).filter(function (s) {
       return s.uid && s.scan && window._lzNaoEhEuMesmo(s.uid);
     });
@@ -5875,6 +5865,12 @@ window._lzNaoEhEuMesmo = function (uid) {
     })).then(function () { return ok.length; });
   }
   function _saveScansAndReload(tId, scans, onFail) {
+    if (!_LZ_SCAN_TERCEIROS_ATIVO) {
+      if (typeof window._hideLoading === 'function') window._hideLoading();
+      if (typeof onFail === 'function') onFail(_LZ_SCAN_SUSPENSO);
+      else _lzAvisarScanSuspenso();
+      return;
+    }
     // Mesma fronteira única: particiona ANTES de persistir, arquivar, chamar a CF e pintar.
     /* ⚠️ 23/set/2026: o resultado da busca fica no SCAN e na tela. Ele não vai mais para o perfil
      * de ninguém — a porta que fazia isso foi aposentada. */

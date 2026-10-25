@@ -52,9 +52,12 @@ console.log('── a rota residual não monta o próprio uid como alvo ──')
 console.log('── a guarda vem ANTES de segurar a aba ──');
 {
   const i = fonte.indexOf('window._lzAthleteImport = function (uid)');
-  const corpo = fonte.slice(i, i + 900);
+  const corpo = fonte.slice(i, fonte.indexOf('var ctx = window._lzScanCtx', i));
+  const iSuspenso = corpo.indexOf('_lzAvisarScanSuspenso');
   const iGuarda = corpo.indexOf('_lzNaoEhEuMesmo');
   const iAba = corpo.indexOf('_lzSegurarAba(true)');
+  ok(iSuspenso > 0 && iSuspenso < iAba,
+    'a suspensão vem antes de abrir a aba da extensão');
   ok(iGuarda > 0 && iAba > 0 && iGuarda < iAba,
     '⭐ a guarda vem ANTES de `_lzSegurarAba` — senão a aba ficaria presa numa ação recusada');
   ok(/categoria vem do seu perfil/i.test(corpo),

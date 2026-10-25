@@ -1180,112 +1180,16 @@ service cloud.firestore {
       }
     }
 
-    // ─── Scan público letzplay POR PESSOA (uid), global e reutilizável ─────────
-    // letzplayScans/{uid} — o organizador busca o PERFIL PÚBLICO letzplay do inscrito
-    // (categoria/nível/totais) via extensão e grava aqui, keyed por uid. Puxou uma vez,
-    // vale pra TODOS os torneios (não precisa re-puxar). Dado é público no letzplay.
-    // Leitura: qualquer authed. Escrita: qualquer authed (organizador) — dado público.
+    // ─── Acervo legado de scans Letzplay por UID ───────────────────────────────
+    // Preservado para leitura/auditoria, sem escrita do cliente. Os scans antigos
+    // nasceram no navegador sem verificação independente: assinatura e torneio
+    // declarados pelo cliente não comprovam a origem do conteúdo. Um organizador
+    // podia usar um torneio próprio para adulterar o scan global de outro UID.
+    // Novos dados só poderão voltar a esta coleção após coleta verificável no
+    // servidor; não basta mover o mesmo payload do cliente para uma Callable.
     match /letzplayScans/{scanUid} {
       allow read: if request.auth != null;
-      // scannedByName + tournamentId/Name identificam quem/qual torneio puxou; fullImport
-      // é o histórico COMPLETO (só no scan "completo").
-      // ⚠️ 23/set/2026: ele NÃO vira mais o `letzplayImport` do dono — o auto-preenchimento e a
-      // porta que aplicava scan em perfil alheio foram REMOVIDOS. O scan é evidência lida pela
-      // Análise; o perfil só muda pelo que a pessoa declara.
-      //
-      // `lzCursorParcial` e `totaisLetzplay` entraram na 1.6.64, quando o PARCIAL deixou de
-      // gravar histórico e passou a gravar só PROGRESSO (onde parou) e ESTRUTURA (quantos
-      // torneios/rankings/jogos existem). Eu subi o código e esqueci a whitelist: toda
-      // escrita virou permission-denied e a leitura "avançava" na tela sem gravar nada.
-      // Campo novo no cliente sem campo novo aqui = escrita rejeitada, sempre.
-      /* ⛔ NINGUÉM ESCREVE O PRÓPRIO SCAN (22/set/2026).
-       *
-       * O QUE ESTAVA EXPOSTO, e era caminho de passos todos rotineiros: qualquer autenticado
-       * gravava `letzplayScans/{qualquer uid}`, INCLUSIVE o próprio. Bastava forjar o
-       * próprio scan com `profileSkill: 'A'`, inscrever-se num torneio e esperar o
-       * organizador apertar o botão que aplica as categorias — `applyLetzplayScans` confere
-       * quem CHAMA e nunca quem ESCREVEU. A categoria inventada entrava no perfil marcada
-       * como apurada pelo letzplay.
-       *
-       * Este scan é ATESTADO DE TERCEIRO: o organizador varre o perfil público de quem está
-       * inscrito. Ninguém atesta a si mesmo. Quem quer o próprio histórico usa o caminho do
-       * atleta, que grava no PERFIL (js/views/letzplay-bridge.js), não aqui.
-       *
-       * ⚠️ O QUE ISTO **NÃO** FECHA, e está escrito para ninguém ler como resolvido:
-       *   • scan JÁ PLANTADO antes desta regra continua na coleção e continua sendo
-       *     aplicado — `scannedBy` e `scannedAt` são do cliente, então não há como separar
-       *     legítimo de forjado sem procedência carimbada pelo servidor;
-       *   • qualquer conta B ainda grava scan forjado para o uid A;
-       *   • `applyLetzplayScans` ainda aplica para alguém que NEM ESTÁ no torneio de quem
-       *     chama — ela não valida o elenco.
-       * O conserto disso é a porta de gravação com procedência, no plano da leva 2a. */
-      /* ⭐⭐ 23/set/2026 — ASSINADO E DO ORGANIZADOR DO TORNEIO QUE O SCAN NOMEIA.
-       * Decisão do dono: a cor da Análise FICA (ela orienta, não prova — já está na nota da
-       * 2.3.92). Então o conserto vai na ORIGEM, não na leitura:
-       *   • ASSINATURA — `scannedBy == request.auth.uid`. Era texto livre do cliente, então
-       *     o forjador podia plantar ASSINANDO COM O UID DE UM TERCEIRO. Agora quem grava
-       *     assina com o próprio uid, e o ato fica rastreável.
-       *   • VÍNCULO — o `tournamentId` que o próprio documento declara tem de existir, e
-       *     quem grava tem de ser ADMIN dele. Scan é atestado de terceiro DENTRO de um
-       *     torneio; fora de um torneio não tem por que existir. Antes bastava estar
-       *     autenticado: qualquer conta gravava o scan de qualquer pessoa, sem vínculo.
-       * ⚠️ SANDBOX: a gravação do relatório é na coleção GLOBAL (sem roteamento), então num
-       * sandbox o `tournamentId` é o id do SANDBOX — e lá quem manda é `sandboxOwnerUid`
-       * (creatorUid/adminUids são cópia do original e não valem). Sem este ramo eu quebraria
-       * exatamente a tela onde o dono testa.
-       * ⚠️ CLIENTE ANTIGO É CORTADO, declarado: houve versão que mandava só handle/scan/
-       * scannedAt/scannedBy. MEDIDO: a árvore da 2.3.27 (a de produção no Play) já manda
-       * assinatura E vínculo nos dois caminhos de escrita, e os bundles nativos de hoje
-       * também — o corte só alcança quem está ANTES da versão que está na loja, e o efeito é
-       * a varredura falhar, nada mais.
-       * ⛔ O QUE ISTO NÃO FECHA: quem é organizador de um torneio PRÓPRIO ainda planta scan
-       * de qualquer uid nomeando esse torneio. A trava com dentes é exigir que o `scanUid`
-       * esteja no ELENCO — e ela espera a medida do banco real (a lista de membros está
-       * completa em todo torneio?), porque recusar por suposição já custou caro aqui. */
-      function scanAlvoT() {
-        return get(/databases/$(database)/documents/tournaments/$(request.resource.data.tournamentId)).data;
-      }
-      function scanAlvoSb() {
-        return get(/databases/$(database)/documents/sandboxes/$(request.resource.data.tournamentId)).data;
-      }
-      /* ⛔⛔ O ELENCO NÃO ENTROU — E O MOTIVO É MEDIDO, não recuo por cansaço.
-       * Eu havia acrescentado "o alvo tem de estar no `memberUids` do torneio nomeado" e
-       * disse que aquilo COLAPSAVA o ataque. Estava errado, em duas frentes, e a revisão do
-       * diff mostrou as duas:
-       *   1. NÃO CONFINA NADA. O scan é GLOBAL por uid. O organizador inscreve a vítima no
-       *      torneio dele (inscrever terceiro é fluxo suportado, e a porta de inscrição
-       *      recompõe `memberUids` sozinha), grava o scan — e aquele documento passa a ser
-       *      lido na Análise de TODOS os outros torneios. A trava só obrigava um passo a
-       *      mais, não fechava o caminho.
-       *   2. QUEBRAVA O SANDBOX. A cópia nasce com o elenco do original, mas quem se
-       *      inscreve DEPOIS da cópia não entra na lista da cópia pelo mesmo caminho — e a
-       *      varredura dentro do sandbox passaria a ser recusada. Romper a ferramenta de
-       *      teste do dono para ganhar um passo a mais do atacante é troca ruim.
-       * ⇒ Ficam a ASSINATURA e o VÍNCULO, que são ganho sem preço. O fecho de verdade segue
-       * sendo COLETA NO SERVIDOR. [[project_scan_do_letzplay_nao_escreve_perfil]] */
-      function scanDoOrganizador() {
-        return (exists(/databases/$(database)/documents/tournaments/$(request.resource.data.tournamentId))
-                && isTournamentAdmin(scanAlvoT()))
-            || (exists(/databases/$(database)/documents/sandboxes/$(request.resource.data.tournamentId))
-                && scanAlvoSb().get('sandboxOwnerUid', '') == request.auth.uid);
-      }
-      allow create, update: if request.auth != null
-        && request.auth.uid != scanUid
-        && request.resource.data.keys().hasOnly(['handle', 'scan', 'scannedAt', 'scannedBy', 'scannedByName', 'tournamentId', 'tournamentName', 'fullImport', 'lzCursorParcial', 'totaisLetzplay'])
-        && request.resource.data.scannedBy == request.auth.uid
-        && request.resource.data.tournamentId is string
-        && scanDoOrganizador();
-      /* ✅ PUBLICADA em 22/set/2026, ANTES do Hosting — a ordem importa: `deploy-hosting.sh`
-       * sobe SOMENTE o Hosting, então sem `firebase deploy --only firestore:rules` a
-       * proteção não existiria em produção e a tela falaria de trava que não está no ar.
-       * Ruleset no ar: f4efce77-8eb5-4546-a4cb-3fda307995c3 — conferido pela API de
-       * releases, não pelo repositório: `request.auth.uid != scanUid` presente e
-       * `allow delete: if false` ativo. */
-      /* ⛔ E NINGUÉM APAGA. Estava `request.auth != null`: qualquer autenticado destruía o
-       * scan de qualquer pessoa. Travar a escrita e deixar o apagar aberto seria proteger o
-       * conteúdo e permitir DESTRUIR a evidência — pior, porque não sobra o que comparar.
-       * Não existe apagar legítimo pelo cliente; remoção administrativa usa o Admin SDK,
-       * que não passa por aqui. (Escopo: só esta coleção GLOBAL.) */
+      allow create, update: if false;
       allow delete: if false;
     }
 

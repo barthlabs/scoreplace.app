@@ -4293,37 +4293,9 @@ function renderDashboard(container) {
         } catch (_e) {}
         var agg = _aggregateWL(_base, _myUid, _myDn);
 
-        // ── v1.8.92: havendo letzplay, o total é letzplay + scoreplace ──────────
-        // Relato do dono: "aqui o partidas esta divergente. vamos usar o
-        // letzplay+scoreplace quando houver historico letzplay."
-        // O pill contava só o scoreplace (27 partidas · 78%) enquanto a ficha do
-        // atleta, na MESMA sessão, mostrava 40V–50D · 44% rotulado "letzplay +
-        // scoreplace" — duas respostas para a mesma pergunta, na mesma tela.
-        // A soma é a mesma do card (letzplay-profile.js): totais do letzplay mais o
-        // V/D do scoreplace. Sem leitura do letzplay nada muda — segue só o
-        // scoreplace, que é o comportamento anterior; por isso a falha é silenciosa.
-        // ⚠️ O CAMINHO DO CAMPO FOI MEDIDO no doc real, não deduzido: em
-        // `letzplayScans/{uid}` os totais vivem em `scan.totals` ({wins, losses,
-        // matches}). Não existe `profile.totals` no documento — eu tinha escrito esse
-        // caminho de cabeça e ele simplesmente não casaria com nada, somando zero em
-        // silêncio (o pior tipo de erro: nada quebra, o número só continua errado).
-        try {
-          var _db = window.FirestoreDB && (window.FirestoreDB.db ||
-            (window.FirestoreDB.ensureDb && window.FirestoreDB.ensureDb()));
-          if (_db) {
-            var _snap = await _db.collection('letzplayScans').doc(_myUid).get();
-            if (_snap && _snap.exists) {
-              var _d = _snap.data() || {};
-              var _tot = (_d.scan && _d.scan.totals) || (_d.stats) ||
-                         (_d.profile && _d.profile.totals) || null;
-              if (_tot) {
-                var _lw = parseInt(_tot.wins, 10) || 0;
-                var _ll = parseInt(_tot.losses, 10) || 0;
-                if (_lw + _ll > 0) { agg.w += _lw; agg.l += _ll; }
-              }
-            }
-          }
-        } catch (_lzErr) { /* sem letzplay → segue só com o scoreplace */ }
+        // Scans globais antigos podiam ser escritos por terceiros e não são
+        // fonte segura para alterar o contador pessoal. Até haver um import
+        // verificável sem dupla contagem, este pill usa só os jogos Scoreplace.
 
         var fmt = _formatMatchesPill(agg.w, agg.l);
         if (!fmt) return;

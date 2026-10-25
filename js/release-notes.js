@@ -1,3 +1,7 @@
+// 2.5.55 — Por segurança, a busca de perfis de terceiros no Letzplay fica suspensa.
+// Leituras globais antigas não definem mais cores ou níveis na Análise, e o contador
+// de partidas da tela inicial considera apenas jogos do Scoreplace. Nenhum histórico
+// anterior é apagado e nenhum torneio, inscrição, confronto ou resultado é alterado.
 // 2.5.54 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.53 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.52 — Atualização consolidada de produção com as correções validadas desde a última publicação.

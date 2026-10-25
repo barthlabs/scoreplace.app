@@ -1,6 +1,7 @@
 // E2E do endpoint backfillMatchResultDocs no emulador (Functions + Firestore).
-// Roda via (com functions/.secret.local definindo BACKFILL_SECRET):
-//   firebase emulators:exec --only functions,firestore --project demo-scoreplace \
+// Roda via npm run test:emu:fn ou com BACKFILL_SECRET=emu-backfill-test
+// no processo do emulador. Esse valor fictício deve coincidir com SECRET abaixo:
+//   BACKFILL_SECRET=emu-backfill-test firebase emulators:exec --only functions,firestore,auth --project demo-scoreplace \
 //     "node functions/test-backfill-emu.js"
 // Prova: (1) dryRun conta sem escrever; (2) backfill cria subdocs dos legados com
 // playerUids + campos de resultado; (3) NÃO recria subdoc existente; (4) pula

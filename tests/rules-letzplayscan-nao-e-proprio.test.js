@@ -1,26 +1,7 @@
-/* NINGUÉM ESCREVE O PRÓPRIO SCAN DO LETZPLAY — provado nas RULES REAIS, no emulador.
- *
- * O QUE ESTAVA EXPOSTO (medido em 22/set/2026), e todos os passos eram rotineiros:
- *   1. qualquer autenticado gravava `letzplayScans/{qualquer uid}`, INCLUSIVE o próprio;
- *   2. bastava forjar o próprio scan com `profileSkill: 'A'`;
- *   3. inscrever-se num torneio;
- *   4. esperar o organizador apertar o botão que aplica as categorias —
- *      `applyLetzplayScans` confere quem CHAMA e nunca quem ESCREVEU;
- *   5. a categoria inventada entrava no perfil marcada como apurada pelo letzplay.
- *
- * O scan é ATESTADO DE TERCEIRO: o organizador varre o perfil público de quem está
- * inscrito. Ninguém atesta a si mesmo. Quem quer o próprio histórico usa o caminho do
- * atleta, que grava no PERFIL, não aqui.
- *
- * ⚠️ ESTE TESTE NÃO PROVA QUE O ASSUNTO FECHOU. Scan já plantado antes da regra continua
- * na coleção e continua sendo aplicado; qualquer conta B ainda grava para o uid A; e
- * `applyLetzplayScans` ainda aplica para quem nem está no torneio de quem chama. Ver o
- * plano da leva 2a.
- *
- * As duas direções são exigidas: o abuso FALHA nas rules novas e PASSA nas antigas. Um
- * teste que passa nos dois não prova correção nenhuma.
- *
- * Rodado por: npm run test:rules
+/* Fronteira da coleção global letzplayScans/{uid}, nas Rules reais do emulador.
+ * Nenhum cliente autenticado pode criar, atualizar ou apagar um scan global, inclusive
+ * em nome próprio ou com torneio sob seu controle. Leituras legadas seguem possíveis,
+ * e a coleção privada do sandbox preserva sua regra distinta. Rodado por test:rules.
  */
 const { rodarNoEmulador } = require('./emulador');
 const fs = require('fs');
@@ -116,6 +97,7 @@ const arr = (...xs) => ({ arrayValue: { values: xs } });
     Object.assign({}, PAYLOAD.fields, { scannedBy: S(COHOST) }) });
   out.sandboxGrava = await req('PATCH', 'letzplayScans/uid_v4', ORG, { fields:
     Object.assign({}, PAYLOAD.fields, { tournamentId: S('s1'), tournamentName: S('SB') }) });
+  out.sandboxColecao = await req('PATCH', 'sandboxes/s1/letzplayScans/uid_v4', ORG, PAYLOAD);
 
   /* ── ELENCO: o alvo tem de estar no torneio que o scan nomeia ────────────────────
    * B e organizador do PROPRIO torneio t2 e assina com o proprio uid: assinatura e
@@ -143,6 +125,7 @@ const arr = (...xs) => ({ arrayValue: { values: xs } });
   await req('PATCH', 'letzplayScans/uid_legado', 'owner', { fields: {
     handle: S('@velho'), scannedAt: S('2026-01-01T00:00:00.000Z'), scannedBy: S(ORG),
   } });
+  out.leLegado = await req('GET', 'letzplayScans/uid_legado', ORG);
   out.legadoSemVinculo = await req('PATCH', 'letzplayScans/uid_legado?updateMask.fieldPaths=handle',
     ORG, { fields: { handle: S('@novo') } });
   out.legadoComVinculo = await req('PATCH', 'letzplayScans/uid_legado', ORG, PAYLOAD);
@@ -179,16 +162,16 @@ function runAgainst(rulesFile, label) {
 let pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
 
-console.log('\n── rules ATUAIS: o próprio scan é recusado, o de terceiro passa ──');
+console.log('\n── rules ATUAIS: acervo global legível, escrita cliente fechada ──');
 const novo = runAgainst(path.join(ROOT, 'firestore.rules'), 'atuais');
 ok(novo.criaProprio !== 200,
   '⭐ CRIAR o PRÓPRIO scan é recusado (got ' + novo.criaProprio + ')');
 ok(novo.atualizaProprio !== 200,
   '⭐ ATUALIZAR o PRÓPRIO scan é recusado (got ' + novo.atualizaProprio + ')');
-ok(novo.criaDeOutro === 200,
-  '⭐ criar o scan de OUTRO uid continua permitido, com o payload REAL (got ' + novo.criaDeOutro + ')');
-ok(novo.atualizaDeOutro === 200,
-  'e atualizar o de outro também (got ' + novo.atualizaDeOutro + ')');
+ok(novo.criaDeOutro === 403,
+  '⭐ criar scan global de OUTRO uid é recusado (got ' + novo.criaDeOutro + ')');
+ok(novo.atualizaDeOutro === 403,
+  '⭐ atualizar scan global de outro também é recusado (got ' + novo.atualizaDeOutro + ')');
 ok(novo.apagaDeOutro !== 200,
   '⭐ APAGAR scan de terceiro é recusado (got ' + novo.apagaDeOutro + ')');
 ok(novo.apagaProprio !== 200,
@@ -201,28 +184,32 @@ ok(novo.torneioInexistente !== 200,
   '⭐ VÍNCULO: `tournamentId` que não existe é recusado (got ' + novo.torneioInexistente + ')');
 ok(novo.foraAtualiza !== 200,
   '⭐ e o irmão: ATUALIZAR sem ser organizador também é recusado (got ' + novo.foraAtualiza + ')');
-ok(novo.cohostGrava === 200,
-  '⭐ CO-ORGANIZADOR grava — mesmo poder do organizador, ou eu quebraria o co-org (got ' + novo.cohostGrava + ')');
-ok(novo.sandboxGrava === 200,
-  '⭐ SANDBOX: o dono grava nomeando o sandbox — é onde o dono testa (got ' + novo.sandboxGrava + ')');
+ok(novo.cohostGrava === 403,
+  '⭐ co-organizador não grava no acervo global (got ' + novo.cohostGrava + ')');
+ok(novo.sandboxGrava === 403,
+  '⭐ sandbox também não grava no acervo global (got ' + novo.sandboxGrava + ')');
+ok(novo.sandboxColecao === 200,
+  '⭐ coleção interna do sandbox mantém a permissão do dono (got ' + novo.sandboxColecao + ')');
+ok(novo.leLegado === 200,
+  '⭐ scan legado continua legível (got ' + novo.leLegado + ')');
 ok(novo.legadoSemVinculo !== 200,
   '⭐ LEGADO: atualizar scan antigo sem trazer o vínculo é recusado (got ' + novo.legadoSemVinculo + ')');
-ok(novo.legadoComVinculo === 200,
-  '⭐ LEGADO: com o payload completo, passa (got ' + novo.legadoComVinculo + ')');
+ok(novo.legadoComVinculo === 403,
+  '⭐ legado não pode ser atualizado pelo cliente (got ' + novo.legadoComVinculo + ')');
 /* ⛔ MEDIDO E NÃO FECHADO — a trava de ELENCO foi tentada e RETIRADA, e o teste guarda o
  * fato em vez de esconder: organizador do PRÓPRIO torneio AINDA escreve o scan de quem não
  * está nele. Retirada por duas medidas: (1) não confina nada, porque o scan é global por uid
  * e basta inscrever a vítima — a porta de inscrição recompõe o elenco sozinha — para o
  * documento valer na Análise de todos os outros torneios; (2) quebrava a varredura dentro do
  * Sandbox para quem se inscreve depois da cópia. Fecho de verdade = coleta no servidor. */
-ok(novo.donoDeOutroTorneio === 200,
-  '⚠️ ABERTO: organizador de torneio próprio ainda escreve scan de quem não está nele (got ' + novo.donoDeOutroTorneio + ')');
-ok(novo.sandboxForaDoElenco === 200,
-  '⚠️ ABERTO: e pelo sandbox também (got ' + novo.sandboxForaDoElenco + ')');
-ok(novo.donoDeOutroTorneioFull === 200,
-  '⚠️ ABERTO: inclusive com `fullImport`, que é o que pesa no veredito (got ' + novo.donoDeOutroTorneioFull + ')');
-ok(novo.orgDoTorneioCerto === 200,
-  '⭐ CONTROLE do elenco: o mesmo uid passa pelo organizador do torneio onde ele ESTÁ (got ' + novo.orgDoTorneioCerto + ')');
+ok(novo.donoDeOutroTorneio === 403,
+  '⭐ organizador de torneio próprio não planta scan global de outro UID (got ' + novo.donoDeOutroTorneio + ')');
+ok(novo.sandboxForaDoElenco === 403,
+  '⭐ o sandbox não oferece desvio para o acervo global (got ' + novo.sandboxForaDoElenco + ')');
+ok(novo.donoDeOutroTorneioFull === 403,
+  '⭐ payload completo também é recusado (got ' + novo.donoDeOutroTorneioFull + ')');
+ok(novo.orgDoTorneioCerto === 403,
+  '⭐ nem o organizador do torneio de origem altera o acervo global (got ' + novo.orgDoTorneioCerto + ')');
 
 console.log('── rules ANTIGAS: o abuso PASSAVA (senão o teste não prova o conserto) ──');
 const antigas = `rules_version = '2';
