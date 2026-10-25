@@ -1,8 +1,10 @@
 {
   "schema": 1,
-  "backendCommit": "c696fb32476b2482bc5c5c8a8a3d98e20338cfab",
-  "scopeNote": "Adiamento e cancelamento de chamada sem placar exigem endMatchOnCourt atualizada antes da interface.",
+  "backendCommit": "2d5fea1ed9dd37dcb0915f1ec18cc84f02a44404",
+  "scopeNote": "Personalização da TV e visibilidade de árbitros exigem criação, configuração e resumo atualizados antes da interface.",
   "functions": [
-    "endMatchOnCourt"
+    "createTournament",
+    "updateTournamentConfiguration",
+    "tournamentSummary"
   ]
 }
