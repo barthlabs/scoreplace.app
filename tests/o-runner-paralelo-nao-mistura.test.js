@@ -144,6 +144,18 @@ ok(/SP_TEST_JOBS/.test(src), '④ existe a saída SP_TEST_JOBS=1 pra voltar ao s
 const semComentarios = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 ok(!/spawn\([^)]*stdio/.test(semComentarios) && !/stdio: *'inherit'/.test(semComentarios),
    '④ a saída é BUFFERIZADA por suíte — `inherit` em paralelo entrelaça 8 suítes e some com o erro');
+ok(/spawn\(process\.execPath,[^;]*env:\s*ambienteFilho/.test(semComentarios) &&
+   /const ambienteFilho\s*=\s*Object\.assign\(\{\},\s*process\.env\)/.test(semComentarios) &&
+   /delete ambienteFilho\[name\]/.test(semComentarios) &&
+   /gitLocalFallback\.concat\(gitLocalVars\)/.test(semComentarios),
+   '④ suítes recebem uma cópia do ambiente sem variáveis locais do git do hook');
+const blocoFallback = semComentarios.slice(semComentarios.indexOf('const gitLocalFallback = ['),
+  semComentarios.indexOf('];', semComentarios.indexOf('const gitLocalFallback = [')));
+ok(['GIT_DIR', 'GIT_WORK_TREE', 'GIT_QUARANTINE_PATH', 'GIT_OBJECT_DIRECTORY',
+    'GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR']
+  .every((name) => blocoFallback.includes("'" + name + "'")) &&
+  /git', \['rev-parse', '--local-env-vars'\]/.test(semComentarios),
+  '④ fallback completo mesmo sem git rev-parse --local-env-vars');
 
 // ── ⑤ o contrato de saída que outros scripts leem não mudou ─────────────────
 ok(/TODAS as ' \+ SUITES\.length \+ ' suítes unitárias passaram/.test(src),

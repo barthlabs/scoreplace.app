@@ -2312,7 +2312,7 @@ const SUITES = [
  * depender de vizinhança). SP_TEST_JOBS=<n> fixa o paralelismo.
  */
 const os = require('os');
-const { spawn } = require('child_process');
+const { spawn, execFileSync } = require('child_process');
 
 /* (1a) MEXEM EM ARQUIVO DO REPO — corrompem de propósito e restauram. Quem ler o mesmo
  *      arquivo ao mesmo tempo falha ao acaso. Cada linha diz o que ela corrompe. */
@@ -2380,10 +2380,26 @@ const SUITE_TIMEOUT_MS = Math.max(60000, parseInt(process.env.SP_SUITE_TIMEOUT_M
 const failed = [];
 const t0 = Date.now();
 
+// Um hook de git exporta variáveis locais do próprio checkout. Suítes que criam
+// repositórios descartáveis devem descobrir o .git delas, não o do hook pai.
+// A limpeza é só para os filhos; o runner e as demais variáveis ficam intactos.
+const ambienteFilho = Object.assign({}, process.env);
+const gitLocalFallback = [
+  'GIT_DIR', 'GIT_WORK_TREE', 'GIT_QUARANTINE_PATH', 'GIT_OBJECT_DIRECTORY',
+  'GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR'
+];
+let gitLocalVars = [];
+try {
+  gitLocalVars = execFileSync('git', ['rev-parse', '--local-env-vars'], {
+    cwd: ROOT, encoding: 'utf8', timeout: 5000
+  }).split(/\s+/).filter(Boolean);
+} catch (e) { /* fallback explícito cobre git indisponível/antigo */ }
+new Set(gitLocalFallback.concat(gitLocalVars)).forEach((name) => { delete ambienteFilho[name]; });
+
 function roda(rel) {
   return new Promise((resolve) => {
     // `detached` cria grupo próprio: timeout mata também emulator/browser que a suíte deixou.
-    const p = spawn(process.execPath, [path.join(ROOT, rel)], { cwd: ROOT, detached: true });
+    const p = spawn(process.execPath, [path.join(ROOT, rel)], { cwd: ROOT, detached: true, env: ambienteFilho });
     let saida = '';
     let terminou = false;
     const encerrar = function(code, motivo) {

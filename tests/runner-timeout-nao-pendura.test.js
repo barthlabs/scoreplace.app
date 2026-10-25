@@ -25,9 +25,11 @@ ok(ini !== -1 && fim > ini, 'encontrou a função roda real');
   filho.stdout = new EventEmitter();
   filho.stderr = new EventEmitter();
   filho.kill = function () { kill.push('filho'); };
+  const ambienteFilho = { SP_TEST_JOBS: '2' };
+  let ambienteRecebido;
   const sb = {
-    ROOT: '/repo', path, failed: [], SUITE_TIMEOUT_MS: 12,
-    spawn: function () { return filho; },
+    ROOT: '/repo', path, failed: [], SUITE_TIMEOUT_MS: 12, ambienteFilho,
+    spawn: function (_exe, _args, options) { ambienteRecebido = options.env; return filho; },
     setTimeout, clearTimeout,
     console: { log() {} },
     process: {
@@ -39,6 +41,8 @@ ok(ini !== -1 && fim > ini, 'encontrou a função roda real');
   vm.createContext(sb);
   vm.runInContext(SRC.slice(ini, fim) + '\nthis.roda = roda;', sb, { filename: 'run-unit-real.js' });
   await sb.roda('filho-sem-close.test.js');
+  ok(ambienteRecebido === ambienteFilho,
+    'a função real passa ao filho o ambiente isolado antes do timeout');
   ok(sb.failed.length === 1 && sb.failed[0] === 'filho-sem-close.test.js',
     'filho sem close reprova a suíte, não deixa a promessa pendurada');
   ok(kill.includes('-424242:SIGTERM'), 'timeout encerra o GRUPO do filho, não só o pai');
