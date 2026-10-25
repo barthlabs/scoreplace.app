@@ -1,7 +1,8 @@
 /* Fronteira da coleção global letzplayScans/{uid}, nas Rules reais do emulador.
  * Nenhum cliente autenticado pode criar, atualizar ou apagar um scan global, inclusive
  * em nome próprio ou com torneio sob seu controle. Leituras legadas seguem possíveis,
- * e a coleção privada do sandbox preserva sua regra distinta. Rodado por test:rules.
+ * e as cópias legadas de torneio/sandbox também ficam somente para leitura.
+ * Rodado por test:rules.
  */
 const { rodarNoEmulador } = require('./emulador');
 const fs = require('fs');
@@ -97,7 +98,18 @@ const arr = (...xs) => ({ arrayValue: { values: xs } });
     Object.assign({}, PAYLOAD.fields, { scannedBy: S(COHOST) }) });
   out.sandboxGrava = await req('PATCH', 'letzplayScans/uid_v4', ORG, { fields:
     Object.assign({}, PAYLOAD.fields, { tournamentId: S('s1'), tournamentName: S('SB') }) });
-  out.sandboxColecao = await req('PATCH', 'sandboxes/s1/letzplayScans/uid_v4', ORG, PAYLOAD);
+  await req('PATCH', 'sandboxes/s1/letzplayScans/uid_v4', 'owner', PAYLOAD);
+  await req('PATCH', 'tournaments/t1/letzplayScans/uid_v4', 'owner', PAYLOAD);
+  out.sandboxColecaoLe = await req('GET', 'sandboxes/s1/letzplayScans/uid_v4', ORG);
+  out.torneioColecaoLe = await req('GET', 'tournaments/t1/letzplayScans/uid_v4', ORG);
+  out.sandboxColecaoCria = await req('PATCH', 'sandboxes/s1/letzplayScans/uid_novo', ORG, PAYLOAD);
+  out.sandboxColecaoAtualiza = await req('PATCH', 'sandboxes/s1/letzplayScans/uid_v4?updateMask.fieldPaths=handle', ORG,
+    { fields: { handle: S('@forjado') } });
+  out.sandboxColecaoApaga = await req('DELETE', 'sandboxes/s1/letzplayScans/uid_v4', ORG);
+  out.torneioColecaoCria = await req('PATCH', 'tournaments/t1/letzplayScans/uid_novo', ORG, PAYLOAD);
+  out.torneioColecaoAtualiza = await req('PATCH', 'tournaments/t1/letzplayScans/uid_v4?updateMask.fieldPaths=handle', ORG,
+    { fields: { handle: S('@forjado') } });
+  out.torneioColecaoApaga = await req('DELETE', 'tournaments/t1/letzplayScans/uid_v4', ORG);
 
   /* ── ELENCO: o alvo tem de estar no torneio que o scan nomeia ────────────────────
    * B e organizador do PROPRIO torneio t2 e assina com o proprio uid: assinatura e
@@ -188,8 +200,12 @@ ok(novo.cohostGrava === 403,
   '⭐ co-organizador não grava no acervo global (got ' + novo.cohostGrava + ')');
 ok(novo.sandboxGrava === 403,
   '⭐ sandbox também não grava no acervo global (got ' + novo.sandboxGrava + ')');
-ok(novo.sandboxColecao === 200,
-  '⭐ coleção interna do sandbox mantém a permissão do dono (got ' + novo.sandboxColecao + ')');
+ok(novo.sandboxColecaoLe === 200 && novo.torneioColecaoLe === 200,
+  '⭐ acervos legados do sandbox e torneio seguem legíveis para o dono');
+ok(novo.sandboxColecaoCria === 403 && novo.sandboxColecaoAtualiza === 403 && novo.sandboxColecaoApaga === 403,
+  '⭐ sandbox recusa criar, atualizar e apagar scans de terceiros pelo cliente');
+ok(novo.torneioColecaoCria === 403 && novo.torneioColecaoAtualiza === 403 && novo.torneioColecaoApaga === 403,
+  '⭐ torneio recusa criar, atualizar e apagar scans de terceiros pelo cliente');
 ok(novo.leLegado === 200,
   '⭐ scan legado continua legível (got ' + novo.leLegado + ')');
 ok(novo.legadoSemVinculo !== 200,

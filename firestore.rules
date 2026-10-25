@@ -474,7 +474,10 @@ service cloud.firestore {
         allow read, write: if request.auth != null && request.auth.uid == sbDono();
       }
       match /letzplayScans/{scanUid} {
-        allow read, write: if request.auth != null && request.auth.uid == sbDono();
+        // Acervo legado da cópia privada: leitura do dono preservada, mas
+        // nenhum cliente pode produzir nova "prova" de terceiros no sandbox.
+        allow read: if request.auth != null && request.auth.uid == sbDono();
+        allow write: if false;
       }
       match /resultsSandbox/{matchId} {
         allow read, write: if request.auth != null && request.auth.uid == sbDono();
@@ -1066,20 +1069,16 @@ service cloud.firestore {
         allow write: if false;
       }
 
-      // ─── Busca ativa letzplay do organizador (anti-gato) ───────────────────
-      // tournaments/{id}/letzplayScans/{uid} — o organizador varre o PERFIL
-      // PÚBLICO letzplay dos inscritos que autorizaram (categoria/nível) via a
-      // extensão. Só o admin (org/co-host) escreve; qualquer authed que pode ler
-      // o torneio lê (co-organizadores veem o mesmo).
+      // ─── Acervo legado de scans Letzplay do torneio ───────────────────────
+      // A varredura de terceiros está suspensa também neste escopo: mesmo o
+      // organizador não pode fabricar evidência de categoria/nível no cliente.
+      // Preservar a leitura histórica de quem pode ver o torneio.
       match /letzplayScans/{scanUid} {
         function parentTs() {
           return get(/databases/$(database)/documents/tournaments/$(tournamentId)).data;
         }
         allow read: if canReadTournamentData(parentTs());
-        allow create, update: if request.auth != null
-          && (isTournamentAdmin(parentTs()) || isTournamentAdminByUid(parentTs()));
-        allow delete: if request.auth != null
-          && (isTournamentAdmin(parentTs()) || isTournamentAdminByUid(parentTs()));
+        allow write: if false;
       }
 
       /* ─── RECIBO DO AVANÇO E CAIXA DE SAÍDA: NASCEM FECHADOS ────────────────
