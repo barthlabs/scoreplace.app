@@ -1,3 +1,4 @@
+// 2.5.53 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.52 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.51 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.50 — A organização abre a troca de participante tocando no nome em
