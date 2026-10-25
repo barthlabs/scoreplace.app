@@ -6412,30 +6412,17 @@ window._lzNaoEhEuMesmo = function (uid) {
       if (typeof window._showLoading === 'function') window._showLoading('Carregando análise dos inscritos…');
     }
 
-    // v1.3.24-beta: _fetchProfiles tenta rescue por email/displayName sem uid.
-    // v1.15.35: os scans letzplay são GLOBAIS por uid (letzplayScans/{uid}) — precisamos
-    // dos perfis primeiro pra saber quem autorizou-sem-import, e só então buscar os scans.
+    // O veredito e a ficha usam somente o import do próprio titular no perfil.
+    // Scans globais legados não têm procedência verificável e permanecem guardados,
+    // mas não são carregados na Análise.
     _fetchProfiles(t, parts).then(function (fetchResult) {
       if (window.location.hash !== '#analise/' + tId) { _doneLoading(); return; }
       var byUid = fetchResult.byUid || {};
-      // Candidatos = TODO inscrito com @ no perfil (2.0.50: letzplay é público, o
-      // consentimento por toggle morreu — criar a conta já autoriza, termos de uso).
-      // v1.1.18: inclui quem já tem import próprio — sem isso a página não sabia QUANDO
-      // cada um foi verificado (regra dos 6 dias). O veredito não muda: em
-      // _erApplyLzToRows o import próprio continua tendo precedência sobre o scan.
-      /* ⛔ CANDIDATOS = TODO INSCRITO COM UID, e não só quem tem @ no perfil. Era este filtro que
-       * fazia a Análise nem BUSCAR o scan de quem tinha o perfil vazio — e, aposentada a porta que
-       * gravava o @ no perfil, ele apagaria a cor de todo mundo ao recarregar. A busca já é em
-       * lote: custa um documento por inscrito, do tamanho do elenco. */
-      var candUids = parts.filter(function (p) { return !!p.uid; }).map(function (p) { return p.uid; });
-      _fetchGlobalScans(candUids).then(function (scanMap) {
-        if (window.location.hash !== '#analise/' + tId) { _doneLoading(); return; }
-        var rows = _buildRows(t, parts, fetchResult);
-        window._log('[EnrollmentReport] profiles:', Object.keys(byUid).length, 'scans:', Object.keys(scanMap).length);
-        _renderPage(container, t, rows, byUid, parts, fetchResult.resolvedFor || {}, scanMap);
-        _doneLoading();
-        _lzReabrirFichaSeVoltou();
-      });
+      var rows = _buildRows(t, parts, fetchResult);
+      window._log('[EnrollmentReport] profiles:', Object.keys(byUid).length, 'legacy scans: skipped');
+      _renderPage(container, t, rows, byUid, parts, fetchResult.resolvedFor || {}, {});
+      _doneLoading();
+      _lzReabrirFichaSeVoltou();
     }).catch(function (err) {
       window._error('[EnrollmentReport] erro:', err);
       _doneLoading();
@@ -6451,22 +6438,6 @@ window._lzNaoEhEuMesmo = function (uid) {
         '<button class="btn" type="button" onclick="window.location.reload()">Tentar novamente</button></div>';
     });
   };
-
-  // Scans letzplay GLOBAIS por uid (letzplayScans/{uid}) — reutilizáveis entre torneios.
-  // Busca só os uids relevantes (autorizaram-sem-import) → poucos reads.
-  function _fetchGlobalScans(uids) {
-    try {
-      var db = firebase.firestore();
-      var uniq = {}; (uids || []).forEach(function (u) { if (u) uniq[u] = 1; });
-      var list = Object.keys(uniq);
-      if (!list.length) return Promise.resolve({});
-      return Promise.all(list.map(function (u) {
-        return db.collection('letzplayScans').doc(u).get()
-          .then(function (d) { return d.exists ? { uid: u, data: d.data() } : null; })
-          .catch(function () { return null; });
-      })).then(function (arr) { var m = {}; arr.forEach(function (x) { if (x) m[x.uid] = x.data; }); return m; });
-    } catch (e) { return Promise.resolve({}); }
-  }
 
   // Compat: preserva _openEnrollmentReport pra todos os call-sites antigos —
   // navega pra hash #analise/<tId> que dispara renderEnrollmentReportPage.

@@ -755,8 +755,7 @@ console.log('\n── janela de 3 meses ──');
 }
 
 // ── 20. A COR SAI DO BANCO, ANTES DE QUALQUER CLIQUE ─────────────────────────
-// "o sistema deve consultar o banco de dados para ver isso mesmo antes de qualquer clique
-// do organizador." A página busca perfis + letzplayScans por uid e SÓ ENTÃO renderiza.
+// A página consulta os perfis antes de renderizar, sem buscar scans globais legados.
 {
   const fs = require('fs'), pth = require('path');
   const src = fs.readFileSync(pth.join(__dirname, '..', 'js', 'views', 'tournaments-enrollment-report.js'), 'utf8');
@@ -772,12 +771,13 @@ console.log('\n── janela de 3 meses ──');
   const fimCarga = mCarga ? src.indexOf('_lzReabrirFichaSeVoltou', mCarga.index) : -1;
   ok(fimCarga > 0, 'achei o fim do carregamento (_lzReabrirFichaSeVoltou)');
   const carga = mCarga ? src.slice(mCarga.index, fimCarga) : '';
-  ok(/_fetchGlobalScans\(candUids\)/.test(carga), 'a página busca os letzplayScans do banco no carregamento');
-  const iScans = carga.indexOf('_fetchGlobalScans');
+  ok(!/_fetchGlobalScans|collection\(['"]letzplayScans['"]\)/.test(carga), 'a página não busca scans globais no carregamento');
   const iRender = carga.indexOf('_renderPage');
-  ok(iScans >= 0 && iRender > iScans, 'e busca ANTES de renderizar');
+  ok(iRender >= 0 && /_renderPage\(container, t, rows, byUid, parts, fetchResult\.resolvedFor \|\| \{\}, \{\}\)/.test(carga), 'a página renderiza com scanMap vazio');
+  ok(!/function _fetchGlobalScans\(/.test(src), 'a função de leitura global foi removida');
+  ok(/var _LZ_SCAN_TERCEIROS_ATIVO = false/.test(src), 'varredura de terceiros permanece suspensa');
   const render = src.slice(src.indexOf('function _renderCategoriesSection'), src.indexOf('function _renderCategoriesSection') + 400);
-  ok(/_erApplyLzToRows\(rows, profileMap, scanMap\)/.test(render), 'as cores são aplicadas com o que veio do banco');
+  ok(/_erApplyLzToRows\(rows, profileMap, scanMap\)/.test(render), 'as cores são aplicadas aos perfis carregados');
 
   // e o veredito só depende do dado — nenhuma cor precisa de clique
   const imp = { importedAt: new Date().toISOString(), extVersion: MOTOR, officialCategory: { skill: 'D', categoryRaw: 'Fem D' },
