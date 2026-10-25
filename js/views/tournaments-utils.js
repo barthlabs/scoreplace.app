@@ -1704,10 +1704,18 @@ window._tProgByDay = function(t) {
   var daySummaries = grouped.map(function(d) {
     var done = d.matches.filter(function(m) { return m.winner || m.result ||
       (m.score1 !== undefined && m.score2 !== undefined && m.score1 !== null && m.score2 !== null); });
+    var calls = d.matches.map(function(m) {
+      var start = window.ScoreplaceMatchDay.timestamp(m.startedAt);
+      var result = window.ScoreplaceMatchDay.timestamp(m.resultAt);
+      // Alguns placares históricos repetiram o mesmo carimbo no início e no fim.
+      // Isso registra uma partida, mas não comprova uma chamada anterior.
+      return start && start !== result ? start : 0;
+    }).filter(Boolean);
     var first = d.matches.map(function(m) { return window.ScoreplaceMatchDay.timestamp(m.startedAt || m.resultAt); }).filter(Boolean);
     var last = done.map(function(m) { return window.ScoreplaceMatchDay.timestamp(m.resultAt); }).filter(Boolean);
     return { day: d.day, startTime: d.startTime, endTime: d.endTime, total: d.matches.length,
       completed: done.length, firstAt: first.length ? Math.min.apply(null, first) : null,
+      firstCallAt: calls.length ? Math.min.apply(null, calls) : null,
       lastAt: last.length ? Math.max.apply(null, last) : null };
   });
   var activeIndex = 0;
@@ -1717,35 +1725,9 @@ window._tProgByDay = function(t) {
     total: plan && plan.totalPlanned > 0 ? plan.totalPlanned : prog.total,
     completed: plan && plan.totalDone != null ? plan.totalDone : prog.completed, zone: zone };
 };
-window._tProgByDayHtml = function(stage) {
-  var time = function(ms) { return new Date(ms).toLocaleTimeString('pt-BR', { timeZone: stage.zone, hour: '2-digit', minute: '2-digit' }); };
-  var esc = function(value) { return String(value == null ? '' : value).replace(/[&<>"']/g, function(c) {
-    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-  }); };
-  var i = Math.max(0, Math.min(stage.days.length - 1, stage.activeIndex || 0));
-  var cards = stage.days.slice(i, i + 1).map(function(d) {
-    var pct = d.total ? Math.round(d.completed / d.total * 100) : 0;
-    var date = esc(d.day.slice(8, 10) + '/' + d.day.slice(5, 7));
-    var planned = esc(d.startTime) + '–' + esc(d.endTime);
-    return '<div class="tourn-progress-stage">' +
-      '<div class="tourn-progress-stage-head"><strong>Etapa ' + (i + 1) + ' · ' + date + '</strong><strong>' + d.completed + '/' + d.total + ' jogos · ' + pct + '%</strong></div>' +
-      '<div class="tourn-progress-stage-track"><span style="width:' + pct + '%"></span></div>' +
-      '<div class="tourn-progress-stage-meta"><span>Programado ' + planned + '</span>' +
-      '<span>' + (d.firstAt ? 'Primeiro registro ' + time(d.firstAt) : 'Aguardando primeiro jogo') + '</span>' +
-      (d.completed === d.total && d.lastAt ? '<span>Último placar ' + time(d.lastAt) + '</span>' : '') + '</div></div>';
-  }).join('');
-  var pct = stage.total ? Math.round(stage.completed / stage.total * 100) : 0;
-  return '<div class="tourn-progress-stages">' + cards +
-    '<div class="tourn-progress-stage tourn-progress-total">' +
-      '<div class="tourn-progress-stage-head"><strong>🏆 TORNEIO COMPLETO</strong><strong>' +
-        stage.completed + '/' + stage.total + ' jogos · ' + pct + '%</strong></div>' +
-      '<div class="tourn-progress-stage-track"><span style="width:' + pct + '%"></span></div>' +
-    '</div></div>';
-};
 window._buildProgressInner = function(t) {
   var prog = window._getTournamentProgress(t);
   var dayStages = window._tProgByDay(t);
-  if (dayStages) return window._tProgByDayHtml(dayStages);
   // v4.4.48: Multi-fase (ex.: Fase de Grupos → Eliminatória): a barra VERDE do topo reflete
   // a FASE ATUAL (só o estágio corrente). Numa classificatória de 72 jogos, quando os 72
   // saem → 100% e o botão "avançar de fase" aparece — é o que o dono quer VER no topo. O
@@ -1769,8 +1751,8 @@ window._buildProgressInner = function(t) {
   var _allStampsG = [], _endStampsG = [], _scheduledGamesG = [];
   ((typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (t.matches || [])).forEach(function (m) {
     if (!m || m.isBye || m.isSitOut) return;
-    if (m.startedAt) _allStampsG.push(+m.startedAt);
-    if (m.resultAt) { _allStampsG.push(+m.resultAt); _endStampsG.push(+m.resultAt); }
+    if (m.startedAt) _allStampsG.push(dayStages ? window.ScoreplaceMatchDay.timestamp(m.startedAt) : +m.startedAt);
+    if (m.resultAt) { _allStampsG.push(dayStages ? window.ScoreplaceMatchDay.timestamp(m.resultAt) : +m.resultAt); _endStampsG.push(dayStages ? window.ScoreplaceMatchDay.timestamp(m.resultAt) : +m.resultAt); }
     if (m.scheduledAt) {
       var _scheduledGameMs = window._tProgParseMs(m.scheduledAt);
       if (_scheduledGameMs) _scheduledGamesG.push(_scheduledGameMs);
@@ -1807,8 +1789,12 @@ window._buildProgressInner = function(t) {
   if (!schedStart) schedStart = actualStart;
   var progFrac = prog.total > 0 ? (prog.completed / prog.total) : 0;
 
-  var _time = function(ms) { var d = new Date(ms); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
-  var _date = function(ms) { var d = new Date(ms); return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0'); };
+  var _time = function(ms) { var d = new Date(ms); return dayStages
+    ? new Intl.DateTimeFormat('pt-BR', { timeZone: dayStages.zone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(d)
+    : String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+  var _date = function(ms) { var d = new Date(ms); return dayStages
+    ? new Intl.DateTimeFormat('pt-BR', { timeZone: dayStages.zone, day: '2-digit', month: '2-digit' }).format(d)
+    : String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0'); };
 
   // ── v2.3.18: Liga → barra ESCOPADA NA RODADA ATUAL ──────────────────────
   // 🟢 verde = % da rodada concluída; 🔵 azul = tempo regulamentar (do sorteio
@@ -1824,6 +1810,7 @@ window._buildProgressInner = function(t) {
   var _phaseRoundActive = false;
   var _roundComplete = false, _roundCompletedMs = null, _roundNum = 0;
   var _labelSchedStart = 'início programado', _labelSchedEnd = 'final programado', _labelHead = 'Progresso do Torneio';
+  var _labelActualStart = 'início real';
   if (_isLiga) {
     var _ri = t.rounds.length - 1;
     var _curR = t.rounds[_ri] || {};
@@ -2025,6 +2012,32 @@ window._buildProgressInner = function(t) {
     }
   }
 
+  // Dias operacionais usam o mesmo painel de rodada/fase, com escopo na etapa
+  // configurada. A agenda só assume esse escopo quando cobre todos os jogos.
+  if (dayStages) {
+    var _dayIdx = dayStages.activeIndex;
+    var _day = dayStages.days[_dayIdx];
+    var _dayStart = window.ScoreplaceMatchDay.dayTimeMs(_day.day, _day.startTime, dayStages.zone);
+    var _dayEnd = window.ScoreplaceMatchDay.dayTimeMs(_day.day, _day.endTime, dayStages.zone);
+    if (Number.isFinite(_dayStart) && Number.isFinite(_dayEnd) && _dayEnd > _dayStart) {
+      _phaseRoundActive = true;
+      prog = { total: _day.total, completed: _day.completed,
+        pct: _day.total ? Math.round(100 * _day.completed / _day.total) : 0 };
+      progFrac = _day.total ? _day.completed / _day.total : 0;
+      actualStart = _day.firstAt;
+      _labelActualStart = _day.firstCallAt && _day.firstCallAt <= _day.firstAt ? 'início real' : 'primeiro registro';
+      schedStart = _dayStart;
+      plannedEnd = _dayEnd;
+      _schedEndReal = true;
+      _roundComplete = _day.total > 0 && _day.completed === _day.total;
+      _roundCompletedMs = _roundComplete ? _day.lastAt : null;
+      _labelHead = 'Etapa ' + (_dayIdx + 1) + ' · ' + _day.day.slice(8, 10) + '/' + _day.day.slice(5, 7);
+      _labelSchedStart = 'início programado';
+      _labelSchedEnd = 'final programado';
+      if (dayStages.total > 0 && dayStages.completed === dayStages.total && _day.lastAt) isFinished = true;
+    } else dayStages = null;
+  }
+
   // v2.3.8/2.3.18: barra do TORNEIO inteiro (Liga multi-rodada) com data/hora
   // do 1º ponto e do limite do último ponto.
   var _ligaBarHtml = '';
@@ -2036,11 +2049,11 @@ window._buildProgressInner = function(t) {
   var _multiRound = !!(_lp && _lp.roundsPlanned > 1);
   var _wholeProg = window._getTournamentProgress(t);
   if (_useGp || _multiRound || _wholeProg.total > 0) {
-    var _barDone = _useGp ? _gp.totalDone : (_multiRound ? _lp.completedAll : _wholeProg.completed);
-    var _barTotal = _useGp ? _gp.totalPlanned : (_multiRound ? _lp.totalPlanned : _wholeProg.total);
+    var _barDone = dayStages ? dayStages.completed : (_useGp ? _gp.totalDone : (_multiRound ? _lp.completedAll : _wholeProg.completed));
+    var _barTotal = dayStages ? dayStages.total : (_useGp ? _gp.totalPlanned : (_multiRound ? _lp.totalPlanned : _wholeProg.total));
     var _barPct = _barTotal > 0 ? Math.round(_barDone / _barTotal * 100) : 0;
-    var _barSuffix = _useGp ? (' · fase ' + (((_gp.currentPhaseIndex) || 0) + 1) + ' de ' + _gp.phasesCount)
-      : (_multiRound ? (' · rodada ' + _lp.currentRoundNum + ' de ' + _lp.roundsPlanned) : '');
+    var _barSuffix = dayStages ? '' : (_useGp ? (' · fase ' + (((_gp.currentPhaseIndex) || 0) + 1) + ' de ' + _gp.phasesCount)
+      : (_multiRound ? (' · rodada ' + _lp.currentRoundNum + ' de ' + _lp.roundsPlanned) : ''));
     // v2.4.78: duração REAL do torneio inteiro — do 1º placar lançado (primeiro
     // m.startedAt de todas as rodadas) ao último (maior m.resultAt). Espelha o
     // painel da rodada (INÍCIO REAL / DUROU / FINAL REAL), mas cobrindo a Liga
@@ -2049,23 +2062,31 @@ window._buildProgressInner = function(t) {
     (t.rounds || []).forEach(function(r){
       (r.matches || []).forEach(function(m){
         if (!m || m.isSitOut) return;
-        if (m.startedAt) _allStarts.push(+m.startedAt);
-        if (m.resultAt) _allEnds.push(+m.resultAt);
+        if (m.startedAt && (!dayStages || window.ScoreplaceMatchDay.timestamp(m.startedAt) !== window.ScoreplaceMatchDay.timestamp(m.resultAt)))
+          _allStarts.push(dayStages ? window.ScoreplaceMatchDay.timestamp(m.startedAt) : +m.startedAt);
+        if (m.resultAt) _allEnds.push(dayStages ? window.ScoreplaceMatchDay.timestamp(m.resultAt) : +m.resultAt);
       });
       if (r && r.completedAt) _endsFallback.push(+r.completedAt);
     });
     // v2.7.12: fases de chave (1+) vivem em t.matches → cobrem o fim REAL do torneio.
     (t.matches || []).forEach(function(m){
       if (!m || m.isSitOut) return;
-      if (m.startedAt) _allStarts.push(+m.startedAt);
-      if (m.resultAt) _allEnds.push(+m.resultAt);
+      if (m.startedAt && (!dayStages || window.ScoreplaceMatchDay.timestamp(m.startedAt) !== window.ScoreplaceMatchDay.timestamp(m.resultAt)))
+        _allStarts.push(dayStages ? window.ScoreplaceMatchDay.timestamp(m.startedAt) : +m.startedAt);
+      if (m.resultAt) _allEnds.push(dayStages ? window.ScoreplaceMatchDay.timestamp(m.resultAt) : +m.resultAt);
     });
-    var _firstPointMs = _allStarts.length ? Math.min.apply(null, _allStarts) : (t.tournamentStarted ? (+t.tournamentStarted) : null);
+    var _firstPointMs = dayStages && _allEnds.length
+      ? Math.min.apply(null, _allStarts.concat(_allEnds))
+      : (_allStarts.length ? Math.min.apply(null, _allStarts) : (t.tournamentStarted ? (+t.tournamentStarted) : null));
     var _lastPointMs = _allEnds.length ? Math.max.apply(null, _allEnds) : (_endsFallback.length ? Math.max.apply(null, _endsFallback) : null);
     // v2.7.14: fim do torneio inteiro = fim da ÚLTIMA fase (janela programada),
     // não t.endDate (que no multi-fase é a fase ATUAL, ex.: 19/06). O fim real é
     // o da última fase (ex.: Confra 12/11). Janela também dá o início do todo.
-    var _win = (_mp && window._tournamentScheduledWindow) ? window._tournamentScheduledWindow(t) : null;
+    var _win = dayStages
+      ? { startMs: window.ScoreplaceMatchDay.dayTimeMs(dayStages.days[0].day, dayStages.days[0].startTime, dayStages.zone),
+          endMs: window.ScoreplaceMatchDay.dayTimeMs(dayStages.days[dayStages.days.length - 1].day,
+            dayStages.days[dayStages.days.length - 1].endTime, dayStages.zone) }
+      : ((_mp && window._tournamentScheduledWindow) ? window._tournamentScheduledWindow(t) : null);
     var _deadlineMs = (_win && _win.endMs) ? _win.endMs : window._tProgParseMs(t.endDate);
     var _tournDone = _barPct >= 100;
 
@@ -2132,7 +2153,8 @@ window._buildProgressInner = function(t) {
       // (a 3ª coluna fica vazia enquanto o torneio corre).
       var _rightCol = _tournDone ? _tCol(_lastPointMs, 'final real', 'flex-end') : '<div></div>';
       _durRow = '<div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:flex-start;margin-top:9px;gap:8px;">' +
-        _tCol(_firstPointMs, 'início real', 'flex-start') +
+        _tCol(_firstPointMs, (dayStages && (!_allStarts.length || _firstPointMs < Math.min.apply(null, _allStarts))
+          ? 'primeiro registro' : 'início real'), 'flex-start') +
         // O `title` diz de ONDE o número parte: a coluna à esquerda mostra o início REAL
         // (primeira bola jogada), mas a contagem ancora no PROGRAMADO — sem isso o leitor
         // não teria como saber por que os dois não fecham.
@@ -2284,11 +2306,11 @@ window._buildProgressInner = function(t) {
   // mostra DATA (dia) na linha REAL quando: (a) início e fim reais caem em dias diferentes, OU
   // (b) o dia REAL dos jogos difere do dia PROGRAMADO (ex.: jogado hoje, programado p/ 25/07) —
   // aí o horário sozinho engana. Pedido do dono.
-  var _multiDay = !_notStarted && (
+  var _multiDay = !!dayStages || (!_notStarted && (
     _date(actualStart) !== _date(estEndMs) ||
     (schedStart && _date(actualStart) !== _date(schedStart)) ||
     (schedStart && _date(estEndMs) !== _date(schedStart))
-  );
+  ));
 
   var _timeS = 'font-size:1rem;font-weight:800;color:var(--text-bright);line-height:1.1;';
   var _lblS = 'font-size:0.6rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;font-weight:700;line-height:1.25;';
@@ -2322,7 +2344,7 @@ window._buildProgressInner = function(t) {
         (_startCountdown ? '<strong' + _startCountdown.attr + ' style="display:block;margin-top:3px;font-size:1.05rem;font-variant-numeric:tabular-nums;">' + _startCountdown.html + '</strong><small>para o início</small>' : '') +
       '</div>'
     : '<div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:flex-start;margin-bottom:7px;gap:8px;">' +
-        _realCol(actualStart, 'início real', 'flex-start', _multiDay) +
+        _realCol(actualStart, _labelActualStart, 'flex-start', _multiDay) +
         '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;">' +
           // v1.7.83/84: 2 linhas — este é o SEGUNDO renderizador do relógio (o do
           // painel da rodada); o outro é o do TORNEIO COMPLETO. Consertar só um

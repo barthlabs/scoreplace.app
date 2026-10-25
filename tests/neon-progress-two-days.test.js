@@ -11,10 +11,18 @@ const stages = W._tProgByDay(t);
 assert.deepEqual(stages.days.map(d => [d.day, d.completed, d.total]),
   [['2026-10-22', 48, 48], ['2026-10-23', 48, 48]]);
 assert.equal(stages.activeIndex, 1, 'a última etapa com jogo iniciado é a atual');
+assert.ok(stages.days[1].firstCallAt > stages.days[1].firstAt,
+  'chamadas posteriores não convertem o primeiro placar em início real');
 assert.match(W._buildProgressInner(t), /Etapa 2 · 23\/10/);
 assert.doesNotMatch(W._buildProgressInner(t), /Etapa 1 · 22\/10/);
-assert.match(W._buildProgressInner(t), /TORNEIO COMPLETO/);
-assert.match(W._buildProgressInner(t), /96\/96 jogos · 100%/);
+assert.match(W._buildProgressInner(t), /Torneio completo/);
+assert.match(W._buildProgressInner(t), /96\/96 jogos \(100%\)/);
+assert.match(W._buildProgressInner(t), /22:40/);
+assert.match(W._buildProgressInner(t), /primeiro<br>registro/);
+assert.match(W._buildProgressInner(t), /final<br>real/);
+assert.match(W._buildProgressInner(t), /data-dobra="progresso-torneio-completo"/);
+assert.equal((W._buildProgressInner(t).match(/height:1[68]px/g) || []).length >= 3, true,
+  'etapa mostra barra realizada e barra programada, além da barra total');
 assert.doesNotMatch(W._buildProgressInner(t), /19\/10|97 partidas/);
 const unsafeWindow = { ...t, scheduleWindow: { days: t.scheduleWindow.days.map((d, i) =>
   i === 0 ? { ...d, startTime: '<img src=x onerror=alert(1)>' } : d) } };
@@ -25,7 +33,8 @@ assert.equal(W._getTournamentProgress(first).completed, 48);
 assert.equal(W._tProgByDay(first).activeIndex, 0);
 assert.match(W._buildProgressInner(first), /Etapa 1 · 22\/10/);
 assert.doesNotMatch(W._buildProgressInner(first), /Etapa 2 · 23\/10/);
-assert.match(W._buildProgressInner(first), /48\/96 jogos · 50%/);
+assert.match(W._buildProgressInner(first), /22:40/);
+assert.match(W._buildProgressInner(first), /48\/96 jogos \(50%\)/);
 const secondStarted = { ...first, matches: first.matches.map(m => m.requiredDay === '2026-10-23' && m.id === first.matches.find(x => x.requiredDay === '2026-10-23').id
   ? { ...m, startedAt: '2026-10-23T21:00:00Z' } : m) };
 assert.equal(W._tProgByDay(secondStarted).activeIndex, 1, 'a primeira chamada registrada troca a etapa antes do placar');
@@ -34,20 +43,20 @@ assert.doesNotMatch(W._buildProgressInner(secondStarted), /Etapa 1 · 22\/10/);
 const noFirstStamp = { ...first, matches: first.matches.map(m => m.requiredDay === '2026-10-22'
   ? { ...m, startedAt: null, resultAt: null } : m) };
 assert.equal(W._tProgByDay(noFirstStamp).activeIndex, 0, 'sem registro, não inventa início de etapa');
-const thirdDayHtml = W._tProgByDayHtml({ days: [
-  { day: '2026-10-22', total: 2, completed: 2, startTime: '18:00', endTime: '20:00', firstAt: 1, lastAt: 2 },
-  { day: '2026-10-23', total: 2, completed: 2, startTime: '18:00', endTime: '20:00', firstAt: 3, lastAt: 4 },
-  { day: '2026-10-24', total: 2, completed: 1, startTime: '18:00', endTime: '20:00', firstAt: 5, lastAt: null }
-], activeIndex: 2, total: 6, completed: 5, zone: 'America/Sao_Paulo' });
-assert.match(thirdDayHtml, /Etapa 3 · 24\/10/);
-assert.doesNotMatch(thirdDayHtml, /Etapa [12] ·/);
-assert.match(thirdDayHtml, /5\/6 jogos · 83%/);
+const thirdDay = { ...t, scheduleWindow: { days: [...t.scheduleWindow.days,
+  { day: '2026-10-24', startTime: '17:10', endTime: '21:25' }] },
+  matches: [...t.matches, { id: 'third', requiredDay: '2026-10-24', p1: 'A', p2: 'B',
+    startedAt: '2026-10-24T20:10:00Z' }] };
+assert.match(W._buildProgressInner(thirdDay), /Etapa 3 · 24\/10/);
+assert.doesNotMatch(W._buildProgressInner(thirdDay), /Etapa [12] ·/);
+assert.match(W._buildProgressInner(thirdDay), /17:10/);
+assert.match(W._buildProgressInner(thirdDay), /21:25/);
 const originalPlan = W._tournamentGamesPlan;
 W._tournamentGamesPlan = () => ({ totalPlanned: 120, totalDone: 48 });
 try {
   const futurePhase = W._tProgByDay(first);
   assert.equal(futurePhase.total, 120, 'a barra total inclui fase futura ainda não materializada');
-  assert.match(W._tProgByDayHtml(futurePhase), /48\/120 jogos · 40%/);
+  assert.match(W._buildProgressInner(first), /48\/120 jogos \(40%\)/);
 } finally { W._tournamentGamesPlan = originalPlan; }
 const oneStage = { status: 'in_progress', matches: [
   { id: 'one', p1: 'A', p2: 'B', winner: 'A', score1: 6, score2: 2,
@@ -94,6 +103,8 @@ assert.equal(day.matchDay({ scheduledAt: '2026-10-23T02:59:00Z' }, zone), '2026-
 assert.equal(day.matchDay({ scheduledAt: '2026-10-23T03:01:00Z' }, zone), '2026-10-23');
 assert.equal(day.matchDay({ requiredDay: '2026-10-22', scheduledAt: '2026-10-23T03:01:00Z' }, zone), '2026-10-22');
 assert.equal(day.eventZone({}), zone, 'o shim usa BRT quando _matchCardTimeZone está ausente');
+assert.equal(day.dayTimeMs('2026-10-23', '18:00', zone), Date.parse('2026-10-23T21:00:00Z'));
+assert.ok(Number.isNaN(day.dayTimeMs('2026-10-23', '<img>', zone)));
 
 require('../functions-autodraw/draw-core.js');
 const summary = require('../functions-autodraw/tournament-summary-core.js');

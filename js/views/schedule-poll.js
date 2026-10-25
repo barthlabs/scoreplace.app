@@ -162,6 +162,9 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
   // Date.parse sem offset usaria o fuso do aparelho, que é precisamente o que não
   // pode decidir o horário de um torneio remoto.
   function _schMsNoFuso(ymd, hm, t) {
+    if (window.ScoreplaceMatchDay && typeof window.ScoreplaceMatchDay.dayTimeMs === 'function') {
+      return window.ScoreplaceMatchDay.dayTimeMs(ymd, hm, _schFuso(t));
+    }
     var a = String(ymd || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
     var b = String(hm || '').match(/^(\d{2}):(\d{2})$/);
     if (!a || !b) return NaN;
