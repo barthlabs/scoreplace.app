@@ -1,3 +1,8 @@
+// 2.5.56 — A Análise deixa de consultar scans globais antigos do Letzplay,
+// cuja origem não pode ser comprovada. Histórico, progresso, totais e data
+// vindos apenas desses scans deixam de aparecer na ficha; o import feito
+// pela própria pessoa continua disponível. Os documentos antigos são
+// preservados, sem alteração em torneios, inscrições, jogos ou resultados.
 // 2.5.55 — Por segurança, a busca de perfis de terceiros no Letzplay fica suspensa.
 // Leituras globais antigas não definem mais cores ou níveis na Análise, e o contador
 // de partidas da tela inicial considera apenas jogos do Scoreplace. Nenhum histórico
