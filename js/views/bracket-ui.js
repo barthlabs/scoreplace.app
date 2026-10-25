@@ -852,9 +852,10 @@ function _aplicarRolagensDaChave(mapa) {
 }
 
 var _scoreFocusGeneration = 0;
-function _focusNextAfterScore(tId, matchId) {
-  // Um placar novo invalida qualquer foco agendado por um placar anterior.
-  var generation = ++_scoreFocusGeneration;
+function _invalidarFocoAgendado(tId, matchId) {
+  // Salvar placar cancela focos de entrada ainda pendentes, sem navegar para
+  // outro jogo. A posição atual pertence ao operador até ele rolar manualmente.
+  ++_scoreFocusGeneration;
   window._tournamentUpcomingEntryToken = (window._tournamentUpcomingEntryToken || 0) + 1;
   var root = Array.prototype.find.call(document.querySelectorAll('[data-bracket-tabs-root]'), function (node) {
     return node.getAttribute('data-tournament-id') === String(tId);
@@ -864,40 +865,10 @@ function _focusNextAfterScore(tId, matchId) {
   if (operationalSource && String(operationalSource.tournamentId) === String(tId) &&
       String(operationalSource.matchId) === String(matchId) && Date.now() - operationalSource.at < 15000) {
     window._bracketOperationsScoreSource = null;
-    return null; // _rerenderBracket restaura a posição original.
+    return;
   }
-  var interrupted = false;
-  var events = ['wheel', 'touchstart', 'pointerdown', 'keydown'];
-  var cancel = function () { interrupted = true; cleanup(); };
-  var listening = false, timer, registrationTimer;
-  function cleanup() {
-    if (listening) events.forEach(function (name) { window.removeEventListener(name, cancel); });
-    listening = false;
-    clearTimeout(timer);
-    clearTimeout(registrationTimer);
-  }
-  registrationTimer = setTimeout(function () {
-    if (generation !== _scoreFocusGeneration) return;
-    events.forEach(function (name) { window.addEventListener(name, cancel, { passive: true }); });
-    listening = true;
-    timer = setTimeout(cancel, 5000);
-  }, 0);
-  return function () {
-    if (generation !== _scoreFocusGeneration || interrupted || window._travaRolagemDaChave) return;
-    var currentRoot = Array.prototype.find.call(document.querySelectorAll('[data-bracket-tabs-root]'), function (node) {
-      return node.getAttribute('data-tournament-id') === String(tId);
-    });
-    var t = typeof window._findTournamentById === 'function' ? window._findTournamentById(tId) : null;
-    var state = t && typeof window._bracketOperationsSelect === 'function' ? window._bracketOperationsSelect(t) : null;
-    var next = state && state.next;
-    var card = next && currentRoot && Array.prototype.find.call(currentRoot.querySelectorAll('.sp-operations-next [data-operations-match]'), function (node) {
-      return node.getAttribute('data-operations-match') === String(next.id);
-    });
-    cleanup();
-    if (card && typeof window._bracketFocusOperationalCard === 'function') window._bracketFocusOperationalCard(currentRoot, card, 'auto');
-  };
 }
-function _rerenderBracket(tId, anchorMatchId, options) {
+function _rerenderBracket(tId, anchorMatchId) {
   // Se o usuário está no dashboard, re-renderizar o dashboard — não o bracket.
   // Evita substituir a view atual por um bracket quando o resultado foi lançado
   // a partir da dashboard ou de qualquer view que não seja o bracket.
@@ -932,7 +903,6 @@ function _rerenderBracket(tId, anchorMatchId, options) {
   // cai dentro dessa janela, e os dois brigam — a tela pula a cada confirmação.
   // A trava sai só depois que a última passada de restauração terminou (ver `_restore`).
   window._travaRolagemDaChave = true;
-  var _focusAfterResult = options && options.focusNext;
 
   // 1. Find anchor element — prefer the specific match card, fallback to any visible card
   var anchorEl = null;
@@ -1125,7 +1095,7 @@ function _rerenderBracket(tId, anchorMatchId, options) {
   // rAF fica suspenso em abas em segundo plano; o prazo também limpa os ouvintes.
   var _scrollIntentFallback = setTimeout(_removeScrollIntent, 1000);
   function _restore() {
-    if (!_focusAfterResult && !_userScrolledDuringRender) window.scrollTo(_sx, _sy);
+    if (!_userScrolledDuringRender) window.scrollTo(_sx, _sy);
     _aplicarRolagensDaChave(_hscroll);
   }
 
@@ -1143,7 +1113,6 @@ function _rerenderBracket(tId, anchorMatchId, options) {
       // recalculada); é curto o bastante pra não atrapalhar uma navegação de verdade.
       setTimeout(function() {
         window._travaRolagemDaChave = false;
-        if (_focusAfterResult) _focusAfterResult();
       }, 400);
       setTimeout(function() { window._suppressSoftRefresh = false; }, 3000);
     });
@@ -2386,6 +2355,7 @@ window._saveResultInline = function (tId, matchId, sourceRoot) {
   if (!t) return;
   const m = _findMatch(t, matchId);
   if (!m) return;
+  _invalidarFocoAgendado(tId, matchId);
 
   // ⚠️ JOGO JÁ ENCERRADO NÃO ACEITA PROPOSTA NOVA DE PARTICIPANTE. O card esconde os
   // inputs quando `isDecided` (showInputs exige !isDecided), mas isso é gate de RENDER:
@@ -2801,7 +2771,6 @@ window._saveResultInline = function (tId, matchId, sourceRoot) {
   // lançado (página estática). Se a finalização in-place falhar (card fora do
   // DOM, etc.), cai no rerender completo. Rodada completa / eliminatórias /
   // grupos seguem no rerender completo (classificação sobe, próxima rodada).
-  var _focusAfterScore = _focusNextAfterScore(tId, matchId);
   if (_keepUpcomingViewMounted && _finalizeRoundCardInPlace(t, m, tId, matchId)) {
     // Não desmontar root, abas nem portal. A própria visão devolve/move os
     // wrappers no mesmo frame e preserva os dois resultados mais recentes.
@@ -2811,13 +2780,11 @@ window._saveResultInline = function (tId, matchId, sourceRoot) {
       window._bracketSyncRoundHeadingOffsets();
     } catch (e) {}
     setTimeout(function() { window._suppressSoftRefresh = false; }, 3000);
-    if (_focusAfterScore) requestAnimationFrame(_focusAfterScore);
   } else if (_inPlaceFinalize && _finalizeRoundCardInPlace(t, m, tId, matchId)) {
     setTimeout(function() { window._suppressSoftRefresh = false; }, 3000);
-    if (_focusAfterScore) requestAnimationFrame(_focusAfterScore);
   } else {
     window._suppressSoftRefresh = false;
-    _rerenderBracket(tId, matchId, { focusNext: _focusAfterScore });
+    _rerenderBracket(tId, matchId);
   }
 };
 

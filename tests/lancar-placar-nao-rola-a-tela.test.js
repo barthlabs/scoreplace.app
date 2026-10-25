@@ -38,14 +38,42 @@ const ui = fs.readFileSync(path.join(ROOT, 'js', 'views', 'bracket-ui.js'), 'utf
 // ── a trava liga no re-render e desliga depois da última restauração ─────────
 const iRr = ui.indexOf('function _rerenderBracket');
 const corpoRr = ui.slice(iRr, ui.indexOf('window._rerenderBracket = _rerenderBracket;', iRr));
-const focusContext = { window: { _bracketOperationsScoreSource: {
+const focusRoot = { _bracketFocusToken: 2, getAttribute: () => 't1' };
+const focusContext = { window: { _tournamentUpcomingEntryToken: 3, _bracketOperationsScoreSource: {
   tournamentId: 't1', matchId: 'm1', at: Date.now()
-} }, document: { querySelectorAll: () => [] }, Date };
+} }, document: { querySelectorAll: () => [focusRoot] }, Date };
 vm.runInNewContext(ui.slice(ui.indexOf('var _scoreFocusGeneration'), iRr), focusContext);
-ok(focusContext._focusNextAfterScore('t1', 'm1') === null &&
+ok(focusContext._invalidarFocoAgendado('t1', 'm1') === undefined &&
    focusContext.window._bracketOperationsScoreSource === null &&
-   focusContext._scoreFocusGeneration === 1,
-   'placar lançado na faixa invalida foco anterior e não programa novo salto');
+   focusContext._scoreFocusGeneration === 1 &&
+   focusContext.window._tournamentUpcomingEntryToken === 4 &&
+   focusRoot._bracketFocusToken === 3,
+   'placar invalida todos os focos pendentes sem programar novo salto');
+const endSave = ui.indexOf('\n};\n\n// v0.17.1', ui.indexOf('window._saveResultInline ='));
+const saveStart = ui.indexOf('window._saveResultInline =');
+const saveBody = ui.slice(saveStart, endSave);
+ok(saveBody.indexOf('_invalidarFocoAgendado(tId, matchId)') < saveBody.indexOf('if (_curUser && _resultNeedsApproval'),
+   'foco pendente é invalidado também antes do caminho de proposta que retorna cedo');
+const saveTail = ui.slice(ui.indexOf('  if (_keepUpcomingViewMounted && _finalizeRoundCardInPlace', saveStart), endSave);
+for (const mode of ['upcoming', 'in-place', 'full']) {
+  const focusFrames = [], reRenders = [];
+  const saveContext = {
+    tId: 't1', matchId: 'm1', t: {}, m: {},
+    _keepUpcomingViewMounted: mode === 'upcoming',
+    _inPlaceFinalize: mode === 'in-place',
+    _operationalUpcomingRoot: {},
+    _finalizeRoundCardInPlace: () => true,
+    _rerenderBracket: (...args) => reRenders.push(args),
+    requestAnimationFrame: fn => focusFrames.push(fn),
+    setTimeout: () => 1,
+    window: { _suppressSoftRefresh: false, _bracketTabState: { t1: {} },
+      _bracketGeneralView() {}, _bracketSyncRoundHeadingOffsets() {} }
+  };
+  vm.runInNewContext(saveTail, saveContext);
+  ok(focusFrames.length === 0, mode + ': salvar não agenda um frame para mudar de jogo');
+  ok(mode === 'full' ? reRenders.length === 1 && reRenders[0].length === 2 : reRenders.length === 0,
+     mode + ': atualização preserva o caminho previsto sem passar focusNext');
+}
 ok(/window\._travaRolagemDaChave = true;/.test(corpoRr),
    '⛔ o re-render LIGA a trava de rolagem');
 const iLiga = corpoRr.indexOf('_travaRolagemDaChave = true');
