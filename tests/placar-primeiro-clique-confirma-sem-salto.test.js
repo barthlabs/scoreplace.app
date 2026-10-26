@@ -39,7 +39,7 @@ const context = {
     _saveToCache() {}, _warn() {}, _captureException() {},
     _suppressSoftRefresh: false
   },
-  Promise, Date, String, Object, console, setTimeout() { return 1; }, clearTimeout() {},
+  Promise, Date, String, Object, console, setTimeout(fn) { fn(); return 1; }, clearTimeout() {},
   showNotification() {}
 };
 vm.createContext(context);
