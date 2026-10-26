@@ -198,6 +198,28 @@ async function respostaCanonicaFicaNoCard(browser) {
   await page.close();
 }
 
+async function falhaNaoDeixaPlacarOtimista(browser) {
+  console.log('\n①c Falha do servidor desfaz o resultado local');
+  const t = montaTorneio();
+  t.scoring = UM_SET;
+  const alvo = (t.matches || []).filter(m => m.round === 2)[3].id;
+  const page = await abreChave(browser, t, { uid:'u-org', displayName:'Org', org:true });
+  const r = await page.evaluate(async (id) => {
+    const tour = window.AppStore.tournaments[0];
+    const before = JSON.stringify(tour);
+    window.AppStore.commitResultTx = () => Promise.resolve(false);
+    document.getElementById('s1-' + id).value = '6';
+    document.getElementById('s2-' + id).value = '4';
+    await window._saveResultInline(tour.id, id);
+    const game = tour.matches.find(m => m.id === id);
+    return { same: JSON.stringify(tour) === before, winner: game.winner || null,
+      successNotice: window.__avisos.some(x => x[1] === window._t('result.saved')) };
+  }, alvo);
+  ok(r.same && !r.winner, 'a recusa restaura jogo, avanço e presença exatamente como antes do clique');
+  ok(!r.successNotice, 'a recusa não anuncia resultado gravado');
+  await page.close();
+}
+
 /* ── ② SIMULAR JOGA O FORMATO DA FASE ───────────────────────────────────────────────── */
 function simularJogaOFormato() {
   console.log('\n② Simular fase (dev) joga melhor de 3 / de 5, não um set solto');
@@ -491,6 +513,7 @@ async function numeroDoPlacar(browser) {
   try {
     await naoPula(browser);
     await respostaCanonicaFicaNoCard(browser);
+    await falhaNaoDeixaPlacarOtimista(browser);
     simularJogaOFormato();
     await aprovacao(browser);
     await difDoisPontos(browser);

@@ -12317,7 +12317,9 @@ window.AppStore = {
     // proíbe, e é o que impede os jogos de saírem do documento (enquanto o cliente escreve
     // o torneio, ele precisa de permissão de escrita nele).
     var r = _viaCF;
-    if (_confirmButton && _confirmButton.isConnected) {
+    // Se a Function gravou mas a releitura/repintura ainda não trocou o card,
+    // manter Confirmar travado: outro clique não deve sobrescrever o placar.
+    if (!_viaCF && _confirmButton && _confirmButton.isConnected) {
       _confirmButton.disabled = false;
       _confirmButton.textContent = _confirmLabel;
     }

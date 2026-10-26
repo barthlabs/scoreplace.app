@@ -2625,6 +2625,15 @@ window._saveResultInline = function (tId, matchId, sourceRoot) {
     return;
   }
 
+  // A UI ainda calcula um pré-estado para avanço/presença enquanto a CF trabalha.
+  // Ele nunca pode sobreviver a uma recusa ou perda de confirmação. A cópia é
+  // somente local; não escreve documento nem serve como fonte do resultado.
+  var _beforeDirectResult = null;
+  try { _beforeDirectResult = JSON.parse(JSON.stringify(t)); }
+  catch (_snapshotError) {
+    showNotification('Não consegui preparar o placar', 'Recarregue o torneio antes de tentar novamente.', 'error');
+    return;
+  }
   if (useSets) {
     // Store as a single set for GSM compatibility — FONTE ÚNICA _buildManualSet
     var _ms = window._buildManualSet(s1, s2, { isFixedSet: isFixedSet, isTiebreakEntry: isTiebreakEntry, tbP1: tbP1, tbP2: tbP2 });
@@ -2807,23 +2816,26 @@ window._saveResultInline = function (tId, matchId, sourceRoot) {
   // project_concurrency_safe_saves.
   var _resultSavePromise = null;
   if (!_deferSaveToTransition) {
+    // Um eco de outro campo não pode pintar o pré-estado otimista como se o
+    // resultado já estivesse confirmado enquanto a callable ainda alinha.
+    if (document.getElementById('card-' + matchId)) window._suppressSoftRefresh = true;
     _resultSavePromise = window.AppStore.commitResultTx(tId, matchId, {
       s1: s1, s2: s2, useSets: useSets, isFixedSet: isFixedSet,
       isTiebreakEntry: isTiebreakEntry, tbP1: tbP1, tbP2: tbP2
     }, _resultLogMsg);
   }
 
-  // Persist a per-user matchHistory record so the player's Estatísticas
-  // Detalhadas survive tournament deletion. Inline scoring has no pointLog,
-  // so we derive minimal stats (games/points/sets) from s1/s2 directly.
-  try { _persistInlineTournamentMatchRecord(t, m, s1, s2, tbP1, tbP2, isTiebreakEntry, useSets); } catch(e) {}
-
-  // Trophy hook — resultado de partida de torneio
-  try {
-    if (typeof window._trophyOnTournamentMatchResult === 'function') {
-      window._trophyOnTournamentMatchResult({ matchId: matchId, winner: m.winner, draw: m.draw, tournamentId: tId });
-    }
-  } catch(_te) {}
+  var _afterConfirmedInlineResult = function () {
+    // Estatísticas e troféus só podem partir de resultado confirmado.
+    var confirmedT = window._findTournamentById(tId) || t;
+    var confirmedM = _findMatch(confirmedT, matchId) || m;
+    try { _persistInlineTournamentMatchRecord(confirmedT, confirmedM, s1, s2, tbP1, tbP2, isTiebreakEntry, useSets); } catch(e) {}
+    try {
+      if (typeof window._trophyOnTournamentMatchResult === 'function') {
+        window._trophyOnTournamentMatchResult({ matchId: matchId, winner: confirmedM.winner, draw: confirmedM.draw, tournamentId: tId });
+      }
+    } catch(_te) {}
+  };
 
   // A CF entrega o aviso a partir da outbox do resultado confirmado. O cliente
   // não tem segunda porta de entrega nem reconstroi placar para e-mail/push.
@@ -2833,12 +2845,20 @@ window._saveResultInline = function (tId, matchId, sourceRoot) {
   // commitResultTx faz a substituição pontual a partir do resultado canônico.
   if (_resultSavePromise) return Promise.resolve(_resultSavePromise).then(function (saved) {
     if (saved === true) {
+      _afterConfirmedInlineResult();
       if (window._sound) window._sound('set');
       if (t.status === 'finished' && window._sound) window._sound('campeao');
       showNotification(_t('result.saved'), _resultSavedDetail, 'success');
+    } else if (_beforeDirectResult && window._findTournamentById(tId) === t) {
+      // Só reverta a MESMA referência: um snapshot canônico que entrou durante
+      // a espera vence esta cópia anterior ao clique.
+      Object.keys(t).forEach(function (key) { delete t[key]; });
+      Object.keys(_beforeDirectResult).forEach(function (key) { t[key] = _beforeDirectResult[key]; });
+      window._suppressSoftRefresh = false;
     }
     return saved;
   });
+  _afterConfirmedInlineResult();
   if (window._sound) window._sound('set');
   if (t.status === 'finished' && window._sound) window._sound('campeao');
   showNotification(_t('result.saved'), _resultSavedDetail, 'success');

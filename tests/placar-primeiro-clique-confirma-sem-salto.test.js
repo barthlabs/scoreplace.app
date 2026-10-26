@@ -62,5 +62,16 @@ store._saveToCache = () => {};
   assert.equal(match.winner, 'A');
   assert.equal(refreshes, 1, 'o card é trocado no próprio lugar pelo estado confirmado');
   assert.equal(redraws, 0, 'a grade inteira não é remontada');
+  // A CF pode confirmar antes de o card voltar ao DOM. O Confirmar antigo
+  // nunca pode ficar clicável nessa janela, mesmo com {ok:true}.
+  button.isConnected = true;
+  button.disabled = false;
+  button.textContent = 'Confirmar';
+  context.window._refreshConfirmedMatchCard = () => false;
+  const lateCard = store.commitResultTx('T1', 'M1', { s1: 6, s2: 4 }, 'Resultado');
+  resolveServer({ data: { ok: true } });
+  assert.equal(await lateCard, true);
+  assert.equal(button.disabled, true, 'resultado confirmado sem card redesenhado não reativa Confirmar');
+  assert.equal(button.textContent, '⏳ Gravando…');
   console.log('✓ primeiro clique confirma, relê resultado e troca o card sem desmontar a grade');
 })().catch(error => { console.error(error); process.exitCode = 1; });
