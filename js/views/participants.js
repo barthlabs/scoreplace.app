@@ -1320,7 +1320,8 @@ window._partApplyFilter = function () {
   var _keepY = _docEl.scrollTop;
   var inp = document.getElementById('part-search');
   if (inp) window._partSearch = inp.value;
-  var q = (window._partSearch || '').trim().toLowerCase();
+  var q = (window._partSearch || '').trim().toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   var sort = (document.getElementById('part-sort') || {}).value || 'name-asc';
   var gf = (document.getElementById('part-gender') || {}).value || 'all';
   var sk = (document.getElementById('part-skill') || {}).value || 'all';
@@ -1342,7 +1343,7 @@ window._partApplyFilter = function () {
     // tolerando também valor multi (g/s separados por vírgula) por segurança.
     var isMulti = c.getAttribute('data-part-multi') === '1';
     var _inact = c.getAttribute('data-part-inactive') === '1';
-    var okSearch = !q || nm.indexOf(q) !== -1;
+    var okSearch = !q || nm.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().indexOf(q) !== -1;
     /* ⛔ QUEM NÃO TEM O DADO NÃO É ESCONDIDO PELO FILTRO DELE (2.1.34).
      * Relato do dono (28/ago/2026): criou um torneio, inscreveu 8 placeholders, e a tela
      * de inscritos veio VAZIA — com os contadores dizendo "Todos (8)". Os cards estavam

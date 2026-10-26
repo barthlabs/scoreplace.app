@@ -3188,10 +3188,12 @@ window.FirestoreDB = {
   async searchUsers(queryText, opts) {
     try {
       var scoped = await this.listInvitableUsers();
-      var qScoped = String(queryText || '').trim().toLowerCase();
+      var foldName = function (value) { return String(value || '').toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, ''); };
+      var qScoped = foldName(String(queryText || '').trim());
       if (!qScoped) return [];
       return scoped.filter(function (u) {
-        return String(u.displayName || '').toLowerCase().indexOf(qScoped) !== -1;
+        return foldName(u.displayName).indexOf(qScoped) !== -1;
       }).slice(0, Math.max(1, Math.min(50, (opts && opts.limit) || 20)));
     } catch (e) { window._warn('searchUsers err', e && e.message); return []; }
   },

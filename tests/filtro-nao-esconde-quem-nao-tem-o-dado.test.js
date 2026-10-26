@@ -39,7 +39,7 @@ function ok(c, m) { if (c) { console.log('  ✓ ' + m); return; } falhas++; cons
 const src = fs.readFileSync(path.join(ROOT, 'js', 'views', 'participants.js'), 'utf8');
 
 // ── a regra REAL, extraída e executável ──────────────────────────────────────────
-const i = src.indexOf('var okSearch = !q || nm.indexOf(q) !== -1;');
+const i = src.indexOf('var okSearch = !q ||');
 const j = src.indexOf('var okActive =', i);
 ok(i > 0 && j > i, 'achei a regra de filtro no participants.js');
 // O filtro de categoria foi adicionado depois desta prova. Esta suíte mede gênero,
