@@ -2152,6 +2152,21 @@
     if (!t) return out;
     var cur = (idx == null) ? (t.currentPhaseIndex || 0) : idx;
     if (cur === 0) {
+      var monarchRounds = (t.rounds || []).filter(function (r) {
+        return r && Array.isArray(r.monarchGroups) && r.monarchGroups.length;
+      });
+      if (monarchRounds.length) {
+        monarchRounds.forEach(function (r, ri) {
+          r.monarchGroups.forEach(function (g, gi) {
+            var ms = (g.rounds && g.rounds[0]) ? g.rounds[0].matches : (g.matches || []);
+            (ms || []).forEach(function (m) {
+              if (m) out.push({ match: m, roundIdx: ri, round: r.round, groupIdx: gi,
+                groupName: g.name || ('Grupo ' + (gi + 1)) });
+            });
+          });
+        });
+        return out;
+      }
       prevPhaseGroups(t).forEach(function (g, gi) {
         var ms = (g.rounds && g.rounds[0]) ? g.rounds[0].matches : (g.matches || []);
         (ms || []).forEach(function (m) {
@@ -2225,8 +2240,13 @@
       // desde que os outros estivessem completos.
       var _u0 = phaseGames(t, 0);
       var _gruposComJogo = {};
-      _u0.forEach(function (u) { if (u.groupIdx != null) _gruposComJogo[u.groupIdx] = 1; });
-      if (Object.keys(_gruposComJogo).length < groups.length) return false;
+      _u0.forEach(function (u) {
+        if (u.groupIdx != null) _gruposComJogo[(u.roundIdx == null ? '0' : u.roundIdx) + ':' + u.groupIdx] = 1;
+      });
+      var _gruposEsperados = isMonarch
+        ? t.rounds.reduce(function (n, r) { return n + ((r && r.monarchGroups) || []).length; }, 0)
+        : groups.length;
+      if (Object.keys(_gruposComJogo).length < _gruposEsperados) return false;
       return _u0.every(function (u) { return _jogoResolvido(u.match, true); });
     }
     // v3.1.16 (inc 8): fase atual = Liga incremental (Pontos Corridos rodada a rodada) →

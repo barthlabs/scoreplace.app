@@ -120,6 +120,29 @@ tVazio.rounds[0].monarchGroups = [
 ];
 ok(P.phaseComplete(tVazio) === false, 'grupo sem nenhum jogo impede a fase de completar');
 
+console.log('──── 4b. rodadas anteriores não desaparecem da guarda ────');
+const tMulti = storage1(true);
+tMulti.phases[0].rounds = 2;
+tMulti.rounds[0].monarchGroups[0].matches = [jogo('anterior-pendente', false)];
+tMulti.rounds.push({ round: 2, matches: [jogo('atual-decidido', true)],
+  monarchGroups: [{ name: 'G1', matches: [jogo('atual-decidido', true)] }] });
+ok(P.phaseGames(tMulti, 0).length === 2,
+  'leitor único inclui jogos de todas as rodadas Rei/Rainha');
+ok(P.pendingMatches(tMulti).some(function (u) { return u.match.id === 'anterior-pendente'; }),
+  'pendência da rodada anterior continua visível para resolução');
+ok(P.phaseComplete(tMulti) === false,
+  'fase não avança com resultado pendente em rodada anterior');
+tMulti.rounds[0].monarchGroups[0].matches[0].winner = 'A';
+ok(P.phaseComplete(tMulti) === true,
+  'fase avança somente depois de decidir a rodada anterior');
+const tMultiVazio = storage1(true);
+tMultiVazio.phases[0].rounds = 2;
+tMultiVazio.rounds.push({ round: 2, monarchGroups: [
+  { name: 'G1', matches: [jogo('atual', true)] }, { name: 'G2', matches: [] }
+] });
+ok(P.phaseComplete(tMultiVazio) === false,
+  'grupo vazio de rodada posterior também impede o avanço');
+
 console.log('──── 5. varredura: a leitura não voltou a ser copiada ────');
 const fs = require('fs'), path = require('path');
 const src = fs.readFileSync(path.join(__dirname, '../js/views/phases-engine.js'), 'utf8');
