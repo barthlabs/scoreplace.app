@@ -136,5 +136,15 @@ const headers = { Authorization: 'Bearer test' };
   const secondRegion = await findReceipt({}, ['us-east1', 'us-east4'], { tournamentId: 'tour_score', operationId: 'op' }, headers);
   assert.equal(secondRegion.region, 'us-east4', 'recibo é achado na segunda região após ausência na primeira');
   assert.deepEqual(checkedRegions, ['us-east1', 'us-east4']);
+  const uncertainReceipt = new Function('control', 'fail', routerSource.slice(receiptStart, receiptEnd) + '\nreturn findReceipt;')(
+    async (_cfg, region) => {
+      if (region === 'us-east4') throw Object.assign(new Error('indisponível'), { infrastructure: true });
+      return { found: false };
+    }, (message, code) => Object.assign(new Error(message), { code })
+  );
+  await assert.rejects(uncertainReceipt({}, ['us-east1', 'us-east4'],
+    { tournamentId: 'tour_score', operationId: 'op' }, headers),
+    error => error.code === 'unavailable',
+    'ausência em uma região não permite repetir escrita se outra região ficou inalcançável');
   console.log('✓ eleição, aderência, troca por falha, mesmo operationId e recibo sem escrita duplicada');
 })().catch(error => { console.error(error); process.exitCode = 1; });

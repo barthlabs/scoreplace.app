@@ -195,6 +195,7 @@
   }
   async function findReceipt(cfg, regions, payload, headers) {
     var checked = false;
+    var unreachable = false;
     for (var i = 0; i < regions.length; i++) {
       try {
         var answer = await control(cfg, regions[i], { action: 'receipt', tournamentId: payload.tournamentId,
@@ -202,11 +203,14 @@
         checked = true;
         if (answer.found) return (answer.receipt && answer.receipt.response) || { ok: true, replayed: true, requiresRefresh: true };
         // O recibo pode estar em outra região após failover. Só a ausência em
-        // todas as regiões consultáveis permite considerar a operação não gravada.
+        // todas as regiões permite considerar a operação não gravada.
         continue;
-      } catch (error) { if (!error.infrastructure) throw error; }
+      } catch (error) {
+        if (!error.infrastructure) throw error;
+        unreachable = true;
+      }
     }
-    if (checked) return null;
+    if (checked && !unreachable) return null;
     throw fail('Não foi possível conferir o recibo. A ação continua pendente.', 'unavailable', true);
   }
   async function refreshAnswer(tId, answer) {
