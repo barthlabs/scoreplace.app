@@ -1,4 +1,8 @@
-// 2.5.59 — Atualização consolidada de produção com as correções validadas desde a última publicação.
+// 2.5.59 — O primeiro toque em Confirmar aguarda o alinhamento regional e envia
+// o placar uma só vez; a chave preserva a posição da tela após a gravação.
+// Uma região inacessível não permite interpretar um recibo não encontrado em
+// outra como ausência definitiva da operação. A criação e aplicação de formato
+// rejeitam intenções explícitas inválidas; torneios existentes não são migrados.
 // 2.5.58 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.57 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.56 — A Análise deixa de consultar scans globais antigos do Letzplay,
