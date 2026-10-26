@@ -104,8 +104,8 @@
       "mode": "only"
     },
     "advanceTournamentPhase": {
-      "backendCommit": "9d4d1a05d3a96b3f28c92ec0295e79dcb8f764aa",
-      "deployedAt": "2026-10-26T20:57:00.903Z",
+      "backendCommit": "9321d5420b0c458828b1f99a900c2bacaba3533d",
+      "deployedAt": "2026-10-26T21:07:39.314Z",
       "result": "success",
       "mode": "only"
     },
