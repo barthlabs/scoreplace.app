@@ -207,6 +207,7 @@ const SUITES = [
   'tests/planejamento-fases-legadas.test.js',
   'tests/auditar-inscricoes-canonicas-core.test.js',
   'tests/migrar-fases-legadas-lote.test.js',
+  'tests/aprovacao-fases-core.test.js',
   'functions/test-registration-lifecycle-core.js',
   'functions/test-registration-merge-core.js',
   'functions/test-push-token-core.js',

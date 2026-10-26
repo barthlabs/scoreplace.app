@@ -17,11 +17,11 @@
  * ser uma operação explícita, nunca consequência automática deste backup.
  */
 
-const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const admin = require(path.join(ROOT, 'functions', 'node_modules', 'firebase-admin'));
+const { stable, digest, buildOperationalBackup } = require('./backup-torneio-operacional-core');
 const PROJECT = 'scoreplace-app';
 // O snapshot contém dados de participantes. Por padrão ele fica local, fora do
 // repositório e sem transferência para serviços externos.
@@ -45,50 +45,6 @@ function arg(name) {
   return hit ? hit.slice(prefix.length) : '';
 }
 function fail(message) { throw new Error('BACKUP ABORTADO: ' + message); }
-function stable(value) {
-  if (Array.isArray(value)) return value.map(stable);
-  if (!value || typeof value !== 'object') return value;
-  // O Admin SDK serializa Timestamps como {_seconds,_nanoseconds}; preservar isso
-  // explicitamente torna o retrato independente de versões do SDK.
-  if (typeof value.toDate === 'function' && value.seconds != null && value.nanoseconds != null) {
-    return { __firestoreType: 'timestamp', seconds: Number(value.seconds), nanoseconds: Number(value.nanoseconds) };
-  }
-  if (typeof value.latitude === 'number' && typeof value.longitude === 'number') {
-    return { __firestoreType: 'geopoint', latitude: value.latitude, longitude: value.longitude };
-  }
-  if (Buffer.isBuffer(value)) return { __firestoreType: 'bytes', base64: value.toString('base64') };
-  const out = {};
-  Object.keys(value).sort().forEach((key) => { out[key] = stable(value[key]); });
-  return out;
-}
-function digest(text) { return crypto.createHash('sha256').update(text).digest('hex'); }
-
-function countEntities(subcollections) {
-  const records = subcollections.inscritos || [];
-  const identities = new Set();
-  let pairs = 0;
-  for (const record of records) {
-    const item = record.data && record.data.item || record.data || {};
-    const first = ['p1Uid', 'p1ManualId', 'p1Id', 'p1Seq'].map((key) => item[key]).find(Boolean);
-    const second = ['p2Uid', 'p2ManualId', 'p2Id', 'p2Seq'].map((key) => item[key]).find(Boolean);
-    if (first && second) {
-      pairs += 1;
-      identities.add('p1:' + String(first));
-      identities.add('p2:' + String(second));
-      continue;
-    }
-    const individual = ['uid', 'manualId', 'id'].map((key) => item[key]).find(Boolean) || record.id;
-    identities.add('individual:' + String(individual));
-  }
-  return {
-    enrollmentRecords: records.length,
-    participants: identities.size,
-    pairs,
-    // Times são criados pelo sorteio e não podem ser deduzidos de inscrições.
-    teams: null
-  };
-}
-
 (async () => {
   const tournamentId = arg('tournament');
   const output = arg('output') || DEFAULT_OUTPUT;
@@ -109,27 +65,7 @@ function countEntities(subcollections) {
       .sort((a, b) => a.id.localeCompare(b.id));
   }
   const createdAt = new Date().toISOString();
-  const payload = {
-    schema: 'scoreplace/tournament-operational-backup/1',
-    project: PROJECT,
-    tournamentId,
-    createdAt,
-    tournament: { id: tournament.id, data: stable(tournament.data()) },
-    subcollections
-  };
-  const body = JSON.stringify(payload, null, 2) + '\n';
-  const sha256 = digest(body);
-  const entities = countEntities(subcollections);
-  const manifest = {
-    schema: payload.schema,
-    project: PROJECT,
-    tournamentId,
-    createdAt,
-    sha256,
-    tournamentFields: Object.keys(payload.tournament.data).length,
-    entities,
-    subcollections: Object.fromEntries(Object.entries(subcollections).map(([name, docs]) => [name, docs.length]))
-  };
+  const { payload, body, sha256, entities, manifest } = buildOperationalBackup(tournament, subcollections, createdAt, PROJECT);
   const stamp = createdAt.replace(/[:.]/g, '-');
   const safeId = tournamentId.replace(/[^A-Za-z0-9_-]/g, '_');
   const filename = 'torneio-' + safeId + '-' + stamp + '.json';

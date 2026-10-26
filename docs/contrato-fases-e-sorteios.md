@@ -59,3 +59,16 @@ canônico sem recriar rodadas, placares, duplas, jogos ou agenda. Qualquer
 migração física exige censo, backup, comparação antes/depois e confirmação
 explícita; a projeção por leitura continua sendo a garantia para dados que ainda
 não foram materializados.
+
+O migrador em lote imprime uma prévia sem argumentos. Para aplicar, exige o
+fingerprint global dessa prévia e um arquivo JSON com aprovações individuais,
+cada uma contendo `tournamentId`, `fingerprint` da entrada pendente e
+`backupManifestPath` do backup operacional recém-gerado para aquele torneio.
+Somente os IDs aprovados são processados. O executor verifica o SHA-256 do
+arquivo de backup e a versão exata (`updateTime`, inclusive nanossegundos) do
+documento pai antes de qualquer escrita; backup anterior a uma edição não
+serve. Qualquer exceção no censo ou aprovação inválida aborta o lote inteiro.
+Depois dessa checagem, cada torneio continua protegido por CAS e verificação
+individual. O backup fotografa o documento pai e lê as subcoleções em sequência;
+não é um snapshot atômico entre elas. A projeção de fases escreve apenas no
+documento pai, sem tocar nas subcoleções nem nos fatos de jogo.
