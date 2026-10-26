@@ -38,8 +38,8 @@
       "mode": "only"
     },
     "createTournament": {
-      "backendCommit": "59418bc0bc6af752df676a0c97b2751ebf254651",
-      "deployedAt": "2026-10-26T17:38:19.748Z",
+      "backendCommit": "acd2ae8bd904ac118d8dddb7424f0d9b2d97aa8f",
+      "deployedAt": "2026-10-26T23:23:09.497Z",
       "result": "success",
       "mode": "only"
     },
@@ -98,8 +98,8 @@
       "mode": "only"
     },
     "applyTournamentFormat": {
-      "backendCommit": "59418bc0bc6af752df676a0c97b2751ebf254651",
-      "deployedAt": "2026-10-26T17:38:19.748Z",
+      "backendCommit": "acd2ae8bd904ac118d8dddb7424f0d9b2d97aa8f",
+      "deployedAt": "2026-10-26T23:23:09.497Z",
       "result": "success",
       "mode": "only"
     },

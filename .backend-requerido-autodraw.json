@@ -1,10 +1,9 @@
 {
   "schema": 1,
-  "backendCommit": "2d5fea1ed9dd37dcb0915f1ec18cc84f02a44404",
-  "scopeNote": "Personalização da TV e visibilidade de árbitros exigem criação, configuração e resumo atualizados antes da interface.",
+  "backendCommit": "acd2ae8bd904ac118d8dddb7424f0d9b2d97aa8f",
+  "scopeNote": "Validação numérica de nova intenção de formato aplicada à criação e à edição, sem alterar torneios existentes.",
   "functions": [
     "createTournament",
-    "updateTournamentConfiguration",
-    "tournamentSummary"
+    "applyTournamentFormat"
   ]
 }
