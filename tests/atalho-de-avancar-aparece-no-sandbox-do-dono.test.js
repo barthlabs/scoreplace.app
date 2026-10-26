@@ -242,6 +242,9 @@ ok('a fase se diz completa pelos matchIds e jogos canônicos, sem cópia no grup
   W._phasesPhaseComplete(tSem) === true);
 ok('⭐⭐ o atalho nasce mesmo sem referências hidratadas no grupo',
   atalhos(detalhe(tSem)).length === 1);
+W._hydrateMonarchGroups(tSem);
+ok('a hidratação normal continua religando os grupos após a montagem',
+  (((tSem.rounds || [])[0] || {}).monarchGroups || []).every((g) => (g.matches || []).length === 3));
 
 console.log(falhas === 0
   ? '\n✅ atalho-de-avancar-aparece-no-sandbox-do-dono: OK'

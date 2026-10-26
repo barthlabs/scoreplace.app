@@ -2164,11 +2164,15 @@
         // ID sem jogo é uma pendência de integridade, nunca uma fase concluída.
         return g.matchIds.map(function (id) { return byId[String(id)] || { id: id }; });
       }
-      var monarchRounds = (t.rounds || []).filter(function (r) {
-        return r && Array.isArray(r.monarchGroups) && r.monarchGroups.length;
+      var monarchRounds = [];
+      (t.rounds || []).forEach(function (r, ri) {
+        if (r && Array.isArray(r.monarchGroups) && r.monarchGroups.length) {
+          monarchRounds.push({ round: r, index: ri });
+        }
       });
       if (monarchRounds.length) {
-        monarchRounds.forEach(function (r, ri) {
+        monarchRounds.forEach(function (slot) {
+          var r = slot.round, ri = slot.index;
           r.monarchGroups.forEach(function (g, gi) {
             var ms = matchesDoGrupo(r, g);
             (ms || []).forEach(function (m) {

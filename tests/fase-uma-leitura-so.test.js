@@ -167,6 +167,13 @@ ok(P.phaseGames(tGrupoAninhado, 0).length === 3 && P.phaseComplete(tGrupoAninhad
   'matchIds resolve jogos aninhados no grupo quando o plano da rodada está vazio');
 ok(P.pendingMatches(tDobrado).every(function (u) { return u.match && u.match.p1 == null; }),
   'referência ausente não expõe jogadores inventados ao consumidor do painel');
+const tMisto = storage1(false);
+tMisto.rounds[0].monarchGroups[0] = { name: 'G1', matchIds: ['a', 'b', 'c'] };
+tMisto.rounds.unshift({ round: 0, matches: [jogo('preliminar', true)] });
+ok(P.phaseGames(tMisto, 0).every(function (u) { return u.roundIdx === 1; }),
+  'índice da rodada Rei/Rainha aponta para t.rounds mesmo após rodada sem grupos');
+ok(P.pendingMatches(tMisto)[0].roundIdx === 1,
+  'painel recebe índice original da rodada do jogo pendente');
 
 console.log('──── 5. varredura: a leitura não voltou a ser copiada ────');
 const fs = require('fs'), path = require('path');
