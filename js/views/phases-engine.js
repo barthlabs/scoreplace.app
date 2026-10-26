@@ -2152,13 +2152,25 @@
     if (!t) return out;
     var cur = (idx == null) ? (t.currentPhaseIndex || 0) : idx;
     if (cur === 0) {
+      // No banco, o jogo Rei/Rainha mora em round.matches; o grupo guarda matchIds.
+      // A Function consulta esta guarda antes de hidratar o torneio, portanto a
+      // leitura precisa funcionar tanto com referências hidratadas quanto dobradas.
+      function matchesDoGrupo(r, g) {
+        var ms = (g.rounds && g.rounds[0]) ? g.rounds[0].matches : (g.matches || []);
+        if (!Array.isArray(g.matchIds) || !g.matchIds.length) return ms || [];
+        var byId = {};
+        (r.matches || []).forEach(function (m) { if (m && m.id != null) byId[String(m.id)] = m; });
+        (ms || []).forEach(function (m) { if (m && m.id != null && !byId[String(m.id)]) byId[String(m.id)] = m; });
+        // ID sem jogo é uma pendência de integridade, nunca uma fase concluída.
+        return g.matchIds.map(function (id) { return byId[String(id)] || { id: id }; });
+      }
       var monarchRounds = (t.rounds || []).filter(function (r) {
         return r && Array.isArray(r.monarchGroups) && r.monarchGroups.length;
       });
       if (monarchRounds.length) {
         monarchRounds.forEach(function (r, ri) {
           r.monarchGroups.forEach(function (g, gi) {
-            var ms = (g.rounds && g.rounds[0]) ? g.rounds[0].matches : (g.matches || []);
+            var ms = matchesDoGrupo(r, g);
             (ms || []).forEach(function (m) {
               if (m) out.push({ match: m, roundIdx: ri, round: r.round, groupIdx: gi,
                 groupName: g.name || ('Grupo ' + (gi + 1)) });

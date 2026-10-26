@@ -49,7 +49,7 @@ const FASES = [{ name: 'Classificatória' }, { name: 'Eliminatória' }];
 // ── os três storages, cada um em duas versões: completo e com 1 jogo pendente ──
 function storage1(completo) {           // Confra: t.rounds[].monarchGroups
   return {
-    id: 't1', phases: FASES, currentPhaseIndex: 0, rounds: [{
+    id: 't1', phases: FASES.map(function (phase) { return Object.assign({}, phase); }), currentPhaseIndex: 0, rounds: [{
       number: 1,
       matches: [jogo('a', true), jogo('b', true), jogo('c', completo)],
       monarchGroups: [{ name: 'G1', players: ['A', 'B', 'C', 'D'], matches: [] }]
@@ -142,6 +142,31 @@ tMultiVazio.rounds.push({ round: 2, monarchGroups: [
 ] });
 ok(P.phaseComplete(tMultiVazio) === false,
   'grupo vazio de rodada posterior também impede o avanço');
+
+console.log('──── 4c. grupos dobrados no banco ainda guardam o avanço ────');
+const tDobrado = storage1(false);
+tDobrado.rounds[0].monarchGroups[0] = { name: 'G1', matchIds: ['a', 'b', 'c'] };
+ok(P.phaseGames(tDobrado, 0).length === 3,
+  'leitor resolve matchIds na fonte única round.matches sem hidratação prévia');
+ok(P.pendingMatches(tDobrado).length === 1,
+  'jogo pendente do grupo dobrado continua visível');
+ok(P.phaseComplete(tDobrado) === false,
+  'grupo dobrado com jogo pendente não libera avanço');
+tDobrado.rounds[0].matches[2].winner = 'A / B';
+ok(P.phaseComplete(tDobrado) === true,
+  'grupo dobrado completo libera avanço');
+tDobrado.rounds[0].monarchGroups[0].matchIds.push('jogo-ausente');
+ok(P.phaseComplete(tDobrado) === false,
+  'referência de jogo ausente não libera avanço');
+const tGrupoAninhado = storage1(true);
+tGrupoAninhado.rounds[0].matches = [];
+tGrupoAninhado.rounds[0].monarchGroups[0] = {
+  name: 'G1', matchIds: ['a', 'b', 'c'], rounds: [{ matches: [jogo('a', true), jogo('b', true), jogo('c', true)] }]
+};
+ok(P.phaseGames(tGrupoAninhado, 0).length === 3 && P.phaseComplete(tGrupoAninhado) === true,
+  'matchIds resolve jogos aninhados no grupo quando o plano da rodada está vazio');
+ok(P.pendingMatches(tDobrado).every(function (u) { return u.match && u.match.p1 == null; }),
+  'referência ausente não expõe jogadores inventados ao consumidor do painel');
 
 console.log('──── 5. varredura: a leitura não voltou a ser copiada ────');
 const fs = require('fs'), path = require('path');

@@ -225,10 +225,10 @@ ok('⭐ e o HTML do sandbox tem UM só rótulo de avanço',
   (hSb.match(/Avançar de [Ff]ase/g) || []).length === 1,
   (hSb.match(/Avançar de [Ff]ase/g) || []).join(' | '));
 
-console.log('\n── ⑧ CONTROLE VERMELHO: sem religar os grupos na montagem, o atalho some ──');
-/* ⚠️ Não é leitura de fonte: é o MESMO caminho, com a porta canônica neutralizada. Se um
- * dia alguém tirar a hidratação de `_montaPesadosQueFaltam`, ② e ③ caem — e este item
- * prova que são ELES que a cobram, e não outra coisa qualquer. */
+console.log('\n── ⑧ leitura canônica também resolve matchIds antes da hidratação ──');
+/* A leitura da fase passou a resolver matchIds em round.matches. Neutralizar a
+ * hidratação aqui não pode mais ocultar jogos já montados nem o atalho; as seções
+ * ② e ③ continuam verificando que a montagem normal religa as referências. */
 const hidrataReal = W._hydrateMonarchGroups;
 W._hydrateMonarchGroups = function (t) { return t; };            // desliga a porta
 zerarStore(DONO);
@@ -238,10 +238,10 @@ W._hydrateMonarchGroups = hidrataReal;                            // religa ante
 ok('montou os jogos do mesmo jeito', (((tSem.rounds || [])[0] || {}).matches || []).length === 12);
 ok('⛔ mas os grupos ficaram SEM os jogos (só matchIds)',
   (((tSem.rounds || [])[0] || {}).monarchGroups || []).every((g) => !(g.matches || []).length));
-ok('⛔ e por isso a fase se diz incompleta — mesmo com todo jogo decidido',
-  W._phasesPhaseComplete(tSem) === false);
-ok('⭐⭐ CONTROLE: o atalho NÃO nasce (é exatamente o defeito reportado)',
-  atalhos(detalhe(tSem)).length === 0);
+ok('a fase se diz completa pelos matchIds e jogos canônicos, sem cópia no grupo',
+  W._phasesPhaseComplete(tSem) === true);
+ok('⭐⭐ o atalho nasce mesmo sem referências hidratadas no grupo',
+  atalhos(detalhe(tSem)).length === 1);
 
 console.log(falhas === 0
   ? '\n✅ atalho-de-avancar-aparece-no-sandbox-do-dono: OK'
