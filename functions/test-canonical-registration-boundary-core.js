@@ -38,6 +38,12 @@ ok('modo só organizadores mantém inscrições, mas limita o índice lido pela 
 bad('recusa criação que repete documento materializado', () => boundary.applyCreates(tournament, [account('u1')], [account('u1')]));
 bad('recusa contagem divergente', () => boundary.verifiedRoster(tournament, []));
 bad('recusa documento com identidade divergente', () => boundary.verifiedRoster(tournament, [Object.assign({}, account('u1'), { participantKey: 'uid:u2' })]));
+bad('recusa documento sem categoria estrutural', () => boundary.verifiedRoster(tournament, [Object.assign({}, account('u1'), { categoryId: '' })]));
+const laterRegistration = account('u2');
+const laterTournament = { id: 't1', canonicalRegistrationMigration: { fingerprint: 'fp-1', registrationCount: 2 } };
+ok('aceita roster atualizado sem exigir fingerprint de importação nas novas inscrições',
+  !Object.prototype.hasOwnProperty.call(laterRegistration, 'migrationFingerprint') &&
+  boundary.verifiedRoster(laterTournament, [account('u1'), laterRegistration]).registrations.length === 2);
 const changed = boundary.applyUpdates(tournament, [account('u1')], [Object.assign({}, account('u1'), { status: 'withdrawn' })]);
 ok('projeção pós-mutação mantém o recibo e remove inscrito retirado do roster', changed.registrations[0].status === 'withdrawn' && changed.participants.length === 0);
 const restored = boundary.applyChanges(tournament, changed.registrations, [Object.assign({}, changed.registrations[0], { status: 'confirmed', withdrawnReason: null })], []);

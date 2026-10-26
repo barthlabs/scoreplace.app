@@ -5704,6 +5704,9 @@ async function _applyCanonicalRegistrationMigrationForOrganizer(db, callerUid, t
           (plannedCounts && physicalCount !== plannedCounts.registrations + plannedCounts.historicalExisting)) {
         throw new HttpsError("failed-precondition", "a contagem canônica mudou; gere uma nova prévia");
       }
+      // O leitor já traduz erros de validação. Falhas transitórias de tx.get
+      // precisam subir intactas para o Firestore repetir a transação.
+      await _loadCanonicalRosterForMutation(tx, ref, rawTournament);
       return { outcome: "already_migrated", created: 0, already: physicalCount,
         registrations: plannedCounts ? plannedCounts.registrations : physicalCount,
         formedPairs: receipt.fixedPairCount || 0, fingerprint: receipt.fingerprint };

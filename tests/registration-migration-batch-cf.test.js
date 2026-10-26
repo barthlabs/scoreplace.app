@@ -27,6 +27,18 @@ assert.ok(applyHelper.indexOf('route === "already_migrated"') < applyHelper.inde
   applyHelper.indexOf('route === "already_migrated"') < applyHelper.indexOf('tx.set(ref,') &&
   applyHelper.includes('receipt.registrationCount') && applyHelper.includes('plannedCounts.registrations + plannedCounts.historicalExisting'),
   'retomada canônica preserva o recibo sem escrita e valida a contagem do manifesto');
+const alreadyMigrated = block('if (route === "already_migrated")', 'const tournament = await _splitParts.hidratar', applyHelper);
+assert.ok(alreadyMigrated.indexOf('plannedCounts.registrations + plannedCounts.historicalExisting') <
+  alreadyMigrated.indexOf('await _loadCanonicalRosterForMutation(tx, ref, rawTournament)') &&
+  alreadyMigrated.indexOf('await _loadCanonicalRosterForMutation(tx, ref, rawTournament)') <
+  alreadyMigrated.indexOf('return { outcome: "already_migrated"') &&
+  !alreadyMigrated.includes('catch') &&
+  !alreadyMigrated.includes('_splitParts.') && !alreadyMigrated.includes('tx.create(') && !alreadyMigrated.includes('tx.set(ref,'),
+  'retomada deve validar o elenco físico antes de confirmar, sem capturar falha transitória nem reler legado');
+const canonicalLoader = block('async function _loadCanonicalRosterForMutation', 'function _writeCanonicalRosterUpdates');
+assert.ok(canonicalLoader.includes('limit(migration.expectedCount + 1)') &&
+  canonicalLoader.includes('doc.id') && canonicalLoader.includes('_canonicalRegistrationBoundary.verifiedRoster'),
+  'a leitura canônica deve detectar excesso e conferir id físico e estrutura');
 assert.ok(batchPreview.includes('_previewCanonicalRegistrationMigrationForOrganizer') && batchPreview.includes('_registrationBatchPlan.planFromMigrationPreviews') && batchPreview.includes('_registrationBatchApply.batchRequestFromPlan'),
   'a prévia em lote deve usar a mesma leitura autorizada e montar recibo verificável');
 assert.ok(batchPreview.includes('const legacyReports = reports.filter') &&
