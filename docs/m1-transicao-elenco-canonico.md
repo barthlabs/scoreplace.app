@@ -1,5 +1,70 @@
 # M1 — transição do elenco canônico
 
+## Resultado da migração em 26/10/2026
+
+Após backup, prévia, transação e pós-check individuais, foram convertidos os
+17 torneios com inscrições legadas (134 registros canônicos criados) e os 63
+torneios com elenco vazio (zero registros criados). Há 80 recibos locais com
+`status: migrated`, `protectedDataVerified: true` e nenhum pendente em
+`/Users/rtb/Documents/Codex/backups-operacionais/2026-10-26-inscricoes/recibos`.
+Cada pós-check comparou os campos protegidos e as subcoleções preexistentes
+com seu backup operacional. Nenhum jogo, resultado ou inscrição histórica foi
+apagado pela migração.
+
+O censo de produção após a operação encontrou **84/84 torneios canônicos
+íntegros, zero legados e zero bloqueados**, com 606 documentos canônicos
+validados ou examinados. O Confra (`tour_1780009816637`) e o Neon já eram
+canônicos antes da operação e não integraram os manifestos de migração. O
+Confra foi relido após o lote: 151 `registrations`, 213 `matches`, 213
+`results` e 150 `inscritos` históricos, as mesmas contagens do censo anterior.
+
+Este corte migrou dados no Firestore; não publicou código de Hosting ou
+Functions. O migrador e os testes permanecem no checkout local até a
+integração normal do código.
+
+## Rechecagem somente-leitura em 26/10/2026
+
+O `main` remoto continua em `a88e12258`. O censo de produção examinou 84
+torneios: os 4 com recibo canônico passaram pela validação estrutural (472
+documentos), sem bloqueio. Restam 80 torneios legados; a prévia projetou 134
+inscrições e 45 duplas, com zero conflitos, entradas sem suporte, documentos
+divergentes ou bloqueios. Desses 80, **17 têm inscrições** e 63 estão vazios.
+Os 17 pertencem a 15 organizações distintas e se distribuem em 6 ativos,
+8 abertos, 1 fechado e 2 finalizados. Estes números vieram do planejador e
+dos metadados do Firestore, sem escrita; não são aprovação para conversão.
+
+O mecanismo de prévia/aplicação está disponível para a organização de cada
+torneio e relê o elenco numa transação antes de gravar. O censo acima valida
+inscrições, não confere jogos, resultados ou placares. Após este censo, o
+proprietário autorizou expressamente uma **exceção administrativa para estes
+17 torneios**, substituindo as confirmações das organizações, com backup e
+prévia individual. Isso não autoriza apagar dados competitivos nem tocar no
+Neon ou no Confra, já canônicos. Os 63 torneios vazios exigem plano separado.
+
+O teste operacional `node tests/migrar-inscricoes-admin-emulator.test.js` roda
+manualmente no checkout com dependências de `functions/` instaladas, antes de
+qualquer `--apply`. Ele não integra o `hosting.predeploy`: a cópia feita por
+`git archive` contém dependências da raiz, mas não `functions/node_modules`.
+O teste isolado passou em 26/10/2026, inclusive com um `Timestamp` no
+documento do torneio; o desligamento de `firebase-tools` exibiu um aviso de
+permissão da checagem de atualização após certificar saída 0 do teste.
+
+### Recibo administrativo pendente
+
+O executor reserva `recibos/<id>.json` como `pending` **antes** da transação.
+Se ele permanecer assim, não repetir `--apply` nem apagar/sobrescrever o
+arquivo: primeiro ler o torneio e o recibo canônico em produção, somente
+leitura. Se o marcador ainda não existir, conferir o backup e o estado atual,
+registrar a tentativa abortada preservando o recibo original e só então gerar
+novo backup e nova prévia. Se o marcador existir, comparar fingerprint e
+contagens com o recibo pendente, executar o pós-check de campos protegidos e
+subcoleções contra o backup, e finalizar o recibo apenas se tudo coincidir.
+Qualquer divergência exige investigação individual; nunca rollback automático.
+Uma subcoleção nova criada entre a última conferência e o commit não é
+protegida por CAS de lista (Firestore não oferece essa leitura transacional),
+portanto a checagem pré-commit **não é atômica com o commit**. A migração não
+sobrescreve a nova subcoleção, e o pós-check a detecta para inspeção.
+
 ## Censo por autoridade em 25/10/2026
 
 O censo somente-leitura passou a usar o marcador

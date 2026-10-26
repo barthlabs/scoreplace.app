@@ -48,6 +48,28 @@ canônico. Se uma futura ativação precisar ser desfeita, a release seguinte de
 uma callable administrativa idempotente, auditada e limitada ao torneio afetado; não há
 atalho de console autorizado.
 
+**Exceção administrativa delimitada — 26/10/2026:** o proprietário do produto
+autorizou expressamente, nesta conversa, substituir a confirmação individual
+das organizações para os 17 torneios legados com inscrições identificados no
+plano `.claude/tmp/plano-migracao-administrativa-inscricoes.md`. Não é regra
+geral nem autoriza migração em massa cega: cada alvo exige backup próprio,
+prévia com fingerprint, nova leitura transacional, teste, verificação posterior
+e recibo que atribua a decisão ao proprietário, nunca à organização. Confra e
+Neon já são canônicos e ficam fora do escopo; jogos, resultados, placares,
+confrontos e espelhos legados não são apagados. Qualquer alvo fora dos 17 ou
+estado divergente exige novo plano e autorização específica.
+
+**Extensão específica para elencos vazios — 26/10/2026:** depois da migração
+dos 17, o proprietário determinou nesta conversa: “nao deve ficar nada
+legado” e “migre os torneios que estejam legados preservando os dados e
+traduzindo para o modelo novo”. O censo seguinte mostrou exatamente 63
+torneios ainda legados, todos com zero inscrições e zero registros canônicos.
+Esta autorização cobre somente os IDs congelados em
+`scripts/migrar-inscricoes-vazias-manifest.json`, sob o novo plano
+`.claude/tmp/plano-migracao-elencos-vazios.md`, e exige backup, prévia,
+transação, pós-check e recibo próprios. Não autoriza alterar Confra, Neon,
+jogos, placares, resultados ou qualquer elenco que deixou de estar vazio.
+
 ### Reset histórico (transição alpha → beta) — 2026-04-29
 Na transição do alpha pra beta foi feito o reset final das coleções:
 - ❌ Apagadas: `tournaments`, `venues`, `presences`, `casualMatches`, `mail`

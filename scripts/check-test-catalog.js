@@ -30,6 +30,8 @@ const ler = (p) => fs.readFileSync(path.join(RAIZ, p), 'utf8');
  * as `rules-*` disputam as portas 8098/8099 e TODAS usam o projeto `demo-scoreplace`, ou
  * seja, os dados se misturariam. Rodadas em série, como aqui, não colidem. */
 const EMULADOR_MANUAL = {
+  'tests/migrar-inscricoes-admin-emulator.test.js':
+    'node tests/migrar-inscricoes-admin-emulator.test.js',
   'functions/test-backfill-emu.js':
     'firebase emulators:exec --only functions,firestore --project demo-scoreplace "node functions/test-backfill-emu.js"',
   'functions/test-syncroster-emu.js':
