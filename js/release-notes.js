@@ -1,7 +1,8 @@
 // 2.5.61 — O primeiro clique em Confirmar aguarda o alinhamento regional e a gravação
 // do placar até a resposta canônica. Após confirmar, só o card do jogo é atualizado
 // para Editar, preservando as rolagens da grade. O aviso de sucesso não aparece
-// antes da confirmação do servidor; recusa restaura o estado local anterior.
+// antes da confirmação do servidor; recusa restaura o estado local anterior e
+// libera a atualização mesmo se o torneio tiver sido recarregado nesse intervalo.
 // Se o recibo chegar antes da releitura, a tela libera a sincronização sem
 // oferecer um segundo Confirmar para o mesmo placar.
 // Nenhum jogo ou resultado existente é regravado.
