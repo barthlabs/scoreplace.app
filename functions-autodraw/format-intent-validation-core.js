@@ -18,6 +18,13 @@ const ENUMS = [
   ['eliminatoria.newMatchups', ['inherit', true, false]],
   ['eliminatoria.linhas', [1, 2, 4]]
 ];
+const INTEGERS = [
+  ['grupos', 1],
+  ['classificados', 1],
+  ['rodadas.n', 1],
+  ['classificationPairing.clusterSize', 2],
+  ['classificationSchedule.gamesPerUnit', 1]
+];
 
 function explicitValue(object, path) {
   const parts = path.split('.');
@@ -41,6 +48,28 @@ function validateNewFormatIntent(fmt2, HttpsError) {
     // para a parceria fixa da disputa dupla assumida pelo compilador.
     if (!field.present || (path === 'parceria' && field.value === null && (fmt2.disputa === 'individual' || !Object.prototype.hasOwnProperty.call(fmt2, 'disputa')))) continue;
     if (!allowed.includes(field.value)) {
+      throw new HttpsError('invalid-argument', 'Valor de formato inválido em fmt2.' + path + '.');
+    }
+  }
+  // O compilador tolerante lê documentos históricos, mas uma intenção nova
+  // não pode transformar "3abc" ou 3.5 em três jogos sem avisar o organizador.
+  // Não há teto aqui: a edição integral pode reenviar valores antigos acima do
+  // alcance atual dos sliders, mesmo quando esse campo não foi alterado.
+  const schedule = explicitValue(fmt2, 'classificationSchedule');
+  if (schedule.present && schedule.value !== null &&
+      (!schedule.value || typeof schedule.value !== 'object' || Array.isArray(schedule.value))) {
+    throw new HttpsError('invalid-argument', 'Valor de formato inválido em fmt2.classificationSchedule.');
+  }
+  if (schedule.present && schedule.value !== null &&
+      !explicitValue(fmt2, 'classificationSchedule.gamesPerUnit').present) {
+    throw new HttpsError('invalid-argument', 'Valor de formato inválido em fmt2.classificationSchedule.gamesPerUnit.');
+  }
+  for (const [path, minimum] of INTEGERS) {
+    const field = explicitValue(fmt2, path);
+    if (!field.present) continue;
+    const value = field.value;
+    const parsed = typeof value === 'string' && /^[0-9]+$/.test(value) ? Number(value) : value;
+    if (!Number.isSafeInteger(parsed) || parsed < minimum) {
       throw new HttpsError('invalid-argument', 'Valor de formato inválido em fmt2.' + path + '.');
     }
   }

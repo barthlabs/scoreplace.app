@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { validateNewFormatIntent } = require('../functions-autodraw/format-intent-validation-core');
+const { makeCreateTournament } = require('../functions-autodraw/tournament-create');
 class HttpsError extends Error { constructor(code, message) { super(message); this.code = code; } }
 
 const valid = {
@@ -16,6 +17,9 @@ assert.doesNotThrow(() => validateNewFormatIntent(valid, HttpsError));
 assert.doesNotThrow(() => validateNewFormatIntent({ disputa: 'individual', parceria: null }, HttpsError));
 assert.doesNotThrow(() => validateNewFormatIntent({ parceria: null }, HttpsError));
 assert.doesNotThrow(() => validateNewFormatIntent({ eliminatoria: { ativa: false } }, HttpsError));
+assert.doesNotThrow(() => validateNewFormatIntent({ classificationSchedule: null, rodadas: { modo: 'todos' } }, HttpsError));
+assert.doesNotThrow(() => validateNewFormatIntent({ grupos: 20, classificationPairing: { clusterSize: 100 } }, HttpsError), 'não impõe teto novo em edição histórica');
+assert.doesNotThrow(() => validateNewFormatIntent({ grupos: '20', classificationSchedule: { gamesPerUnit: '3' } }, HttpsError));
 
 for (const [patch, field] of [
   [{ disputa: 'equipe' }, 'disputa'],
@@ -30,6 +34,24 @@ for (const [patch, field] of [
     error.code === 'invalid-argument' && error.message.includes('fmt2.' + field), field);
 }
 assert.throws(() => validateNewFormatIntent([], HttpsError), { code: 'invalid-argument' });
+
+for (const [patch, field] of [
+  [{ grupos: '3abc' }, 'grupos'], [{ grupos: 3.5 }, 'grupos'],
+  [{ grupos: '' }, 'grupos'], [{ grupos: ' 3' }, 'grupos'],
+  [{ grupos: '1e2' }, 'grupos'], [{ grupos: 0 }, 'grupos'],
+  [{ classificados: -1 }, 'classificados'], [{ classificados: null }, 'classificados'],
+  [{ rodadas: { n: '' } }, 'rodadas.n'], [{ rodadas: { n: 1.5 } }, 'rodadas.n'],
+  [{ classificationPairing: { clusterSize: 1 } }, 'classificationPairing.clusterSize'],
+  [{ classificationPairing: { clusterSize: Infinity } }, 'classificationPairing.clusterSize'],
+  [{ classificationSchedule: {} }, 'classificationSchedule.gamesPerUnit'],
+  [{ classificationSchedule: { gamesPerUnit: null } }, 'classificationSchedule.gamesPerUnit'],
+  [{ classificationSchedule: { gamesPerUnit: '3abc' } }, 'classificationSchedule.gamesPerUnit'],
+  [{ classificationSchedule: { gamesPerUnit: 3.5 } }, 'classificationSchedule.gamesPerUnit'],
+  [{ classificationSchedule: [] }, 'classificationSchedule']
+]) {
+  assert.throws(() => validateNewFormatIntent(patch, HttpsError), error =>
+    error.code === 'invalid-argument' && error.message.includes('fmt2.' + field), field);
+}
 
 const server = fs.readFileSync(path.join(__dirname, '..', 'functions-autodraw', 'index.js'), 'utf8');
 const compiler = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'format2.js'), 'utf8');
@@ -46,6 +68,9 @@ const FORMAT2 = require('../functions-autodraw/draw-core')._window.FORMAT2;
 const historical = FORMAT2.normalize({ disputa: 'dupla', parceria: 'antiga', rodadas: { modo: 'legacy' },
   eliminatoria: { linhas: 3, lateEnrollment: 'legacy' } }, 'Beach Tennis');
 assert.doesNotThrow(() => validateNewFormatIntent(historical, HttpsError), 'dialeto histórico normalizado pela UI continua editável');
+const wideHistorical = FORMAT2.normalize({ grupos: 20, classificationPairing: { clusterSize: 100 } }, 'Beach Tennis');
+assert.equal(wideHistorical.grupos, 20);
+assert.doesNotThrow(() => validateNewFormatIntent(wideHistorical, HttpsError), 'normalizado histórico com mais de 16 grupos segue editável');
 assert.match(server, /validateIntent: require\('\.\/format-intent-validation-core'\)\.validateNewFormatIntent/);
 assert.match(server, /const fmt2Clone = _clonaConfigDeclarativa\(fmt2, 0, \['fmt2'\]\);\s*require\('\.\/format-intent-validation-core'\)\.validateNewFormatIntent\(fmt2Clone, HttpsError\)/);
 
@@ -76,14 +101,42 @@ const edit = new Function('onCall', 'HttpsError', 'db', 'drawWindow', '_leTornei
 );
 
 (async () => {
+  let createCompiled = 0, createTransactions = 0;
+  const create = makeCreateTournament({
+    db: { collection: () => ({ doc: id => ({ id }) }), runTransaction: async () => { createTransactions++; } },
+    HttpsError, FieldValue: { serverTimestamp: () => 'now' },
+    fields: new Set(['name', 'sport', 'format', 'fmt2']),
+    cloneConfig: value => structuredClone(value),
+    validateIntent: validateNewFormatIntent,
+    compile: () => { createCompiled++; return { topLevel: {}, phases: [], cfg: {} }; },
+    boundary: value => ({ persist: value, clean: value }),
+    readTournament: async () => null,
+    now: () => Date.now()
+  });
+  await assert.rejects(create({ auth: { uid: 'owner' }, data: {
+    tournamentId: 'tour_' + Date.now() + '_' + 'a'.repeat(32),
+    config: { name: 'Teste', sport: 'Beach Tennis', format: 'Liga',
+      fmt2: { classificationSchedule: { gamesPerUnit: '3abc' } } }
+  } }), error => error.code === 'invalid-argument' && error.message.includes('fmt2.classificationSchedule.gamesPerUnit'));
+  assert.equal(createCompiled, 0, 'criação rejeita antes de compilar');
+  assert.equal(createTransactions, 0, 'criação rejeita antes da transação');
   await assert.rejects(edit({ auth: { uid: 'owner' }, data: {
     tournamentId: 'tour_test', fmt2: { disputa: 'dupla', classificationSchedule: { mode: 'structred' } }
   } }), error => error.code === 'invalid-argument' && error.message.includes('fmt2.classificationSchedule.mode'));
   assert.equal(compiled, 0, 'rejeita antes do compilador');
   assert.equal(writes, 0, 'rejeita antes de qualquer escrita');
+  await assert.rejects(edit({ auth: { uid: 'owner' }, data: {
+    tournamentId: 'tour_test', fmt2: { classificationSchedule: { gamesPerUnit: 3.5 } }
+  } }), error => error.code === 'invalid-argument' && error.message.includes('fmt2.classificationSchedule.gamesPerUnit'));
+  assert.equal(compiled, 0, 'edição rejeita número alterado antes do compilador');
+  assert.equal(writes, 0, 'edição rejeita número alterado antes de escrever');
   const legacyEdit = await edit({ auth: { uid: 'owner' }, data: { tournamentId: 'tour_test', fmt2: historical } });
   assert.equal(legacyEdit.ok, true, 'edição de dialeto histórico normalizado pela UI segue aceita');
   assert.equal(compiled, 1);
   assert.equal(writes, 1);
+  const wideEdit = await edit({ auth: { uid: 'owner' }, data: { tournamentId: 'tour_test', fmt2: wideHistorical } });
+  assert.equal(wideEdit.ok, true, 'edição histórica com mais de 16 grupos não é bloqueada');
+  assert.equal(compiled, 2);
+  assert.equal(writes, 2);
   console.log('✓ intenção nova rejeita enum inválido nas duas portas de escrita');
 })().catch(error => { console.error(error); process.exitCode = 1; });
