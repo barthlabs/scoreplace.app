@@ -2849,11 +2849,13 @@ window._saveResultInline = function (tId, matchId, sourceRoot) {
       if (window._sound) window._sound('set');
       if (t.status === 'finished' && window._sound) window._sound('campeao');
       showNotification(_t('result.saved'), _resultSavedDetail, 'success');
-    } else if (_beforeDirectResult && window._findTournamentById(tId) === t) {
-      // Só reverta a MESMA referência: um snapshot canônico que entrou durante
-      // a espera vence esta cópia anterior ao clique.
-      Object.keys(t).forEach(function (key) { delete t[key]; });
-      Object.keys(_beforeDirectResult).forEach(function (key) { t[key] = _beforeDirectResult[key]; });
+    } else {
+      if (_beforeDirectResult && window._findTournamentById(tId) === t) {
+        // Só reverta a MESMA referência: um snapshot canônico que entrou
+        // durante a espera vence esta cópia anterior ao clique.
+        Object.keys(t).forEach(function (key) { delete t[key]; });
+        Object.keys(_beforeDirectResult).forEach(function (key) { t[key] = _beforeDirectResult[key]; });
+      }
       window._suppressSoftRefresh = false;
     }
     return saved;

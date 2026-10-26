@@ -217,6 +217,20 @@ async function falhaNaoDeixaPlacarOtimista(browser) {
   }, alvo);
   ok(r.same && !r.winner, 'a recusa restaura jogo, avanço e presença exatamente como antes do clique');
   ok(!r.successNotice, 'a recusa não anuncia resultado gravado');
+  const replacement = await page.evaluate(async (id) => {
+    const old = window.AppStore.tournaments[0];
+    const current = JSON.stringify(old);
+    window.AppStore.commitResultTx = () => {
+      window.AppStore.tournaments[0] = JSON.parse(current); // eco canônico durante a espera
+      return Promise.resolve(false);
+    };
+    await window._saveResultInline(old.id, id);
+    return { same: JSON.stringify(window.AppStore.tournaments[0]) === current,
+      replaced: window.AppStore.tournaments[0] !== old,
+      suppress: window._suppressSoftRefresh };
+  }, alvo);
+  ok(replacement.replaced && replacement.same && replacement.suppress === false,
+    'a recusa com nova referência preserva o snapshot do servidor e libera o refresh');
   await page.close();
 }
 
