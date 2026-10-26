@@ -1,3 +1,4 @@
+// 2.5.59 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.58 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.57 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.56 — A Análise deixa de consultar scans globais antigos do Letzplay,
