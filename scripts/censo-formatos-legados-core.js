@@ -18,6 +18,7 @@ const CAMPOS_LIGA_ATUAL = [
   'ligaSeasonMonths', 'ligaOpenEnrollment'
 ];
 function temAlgumCampo(o, campos) { return campos.some((nome) => temCampo(o, nome)); }
+function temValorNaoNulo(o, campos) { return campos.some((nome) => o && o[nome] != null); }
 function texto(v) { return String(v == null ? '' : v).trim(); }
 function faseCanonica(fase) {
   if (!fase || typeof fase !== 'object') return false;
@@ -49,7 +50,8 @@ function classificarTorneio(t) {
     // é ausência de dados: tratá-la assim produzia um falso alerta em todo
     // torneio inclusivo/de categoria única.
     categoriaUnicaSemConfiguracao: !combinado && !eixos,
-    rankingLegado: temAlgumCampo(t, CAMPOS_RANKING_LEGADO),
+    rankingLegado: temValorNaoNulo(t, CAMPOS_RANKING_LEGADO),
+    rankingNuloResidual: temAlgumCampo(t, CAMPOS_RANKING_LEGADO) && !temValorNaoNulo(t, CAMPOS_RANKING_LEGADO),
     ligaAtual: temAlgumCampo(t, CAMPOS_LIGA_ATUAL),
     marcadorDeCompatibilidadeNativa: temCampo(t, '_semPesados'),
     semProjecaoDeFases: fases.length === 0,
@@ -62,7 +64,7 @@ function resumir(torneios) {
   const total = (torneios || []).length;
   const soma = {
     total, partesCanonicas: total, categoriasCanonicas: 0,
-    categoriasPorEixos: 0, categoriaUnicaSemConfiguracao: 0, rankingLegado: 0,
+    categoriasPorEixos: 0, categoriaUnicaSemConfiguracao: 0, rankingLegado: 0, rankingNuloResidual: 0,
     ligaAtual: 0, semMarcadorDeCompatibilidadeNativa: 0,
     semProjecaoDeFases: 0, fasesNaoCanonicas: 0, rotuloDeFormatoLegado: 0
   };
@@ -71,6 +73,7 @@ function resumir(torneios) {
     ['categoriasCanonicas', 'categoriasPorEixos', 'categoriaUnicaSemConfiguracao', 'rankingLegado', 'ligaAtual',
       'semProjecaoDeFases', 'fasesNaoCanonicas', 'rotuloDeFormatoLegado']
       .forEach((k) => { if (c[k]) soma[k]++; });
+    if (c.rankingNuloResidual) soma.rankingNuloResidual++;
     if (!c.marcadorDeCompatibilidadeNativa) soma.semMarcadorDeCompatibilidadeNativa++;
   });
   return soma;

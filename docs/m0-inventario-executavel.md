@@ -121,3 +121,19 @@ categoria inferida nem ser regravados em massa. A migração de inscrições com
 por um torneio inativo aprovado, a partir de prévia com fingerprint, e só então
 avança por coortes. Os três registros `ranking*` continuam exigindo adaptador
 de leitura até uma conversão explícita e auditável.
+
+## Rechecagem dos campos de ranking — 26/10/2026
+
+O censo anterior confundia a presença de uma chave `ranking*` com um valor
+legado efetivo. A leitura individual dos três documentos mostrou os cinco
+campos `ranking*` nulos e as configurações correspondentes já preenchidas em
+`liga*`; um desses documentos é o Confra. O predicado foi ajustado para contar
+`0` e `false` como valores reais, mas não `null` ou campo ausente.
+
+Nova execução somente-leitura de `node scripts/censo-formatos-legados.js --json`:
+84 torneios, `rankingLegado: 0`, `rankingNuloResidual: 3`,
+`semProjecaoDeFases: 0` e `fasesNaoCanonicas: 0`. Portanto não há valores
+operacionais de ranking a traduzir nesses três torneios. Os campos nulos
+residuais e os rótulos internos antigos não foram removidos: clientes nativos
+antigos ainda exigem análise de compatibilidade antes de retirar fallbacks.
+Nenhum documento de produção foi escrito nesta rechecagem.
