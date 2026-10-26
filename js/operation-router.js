@@ -17,6 +17,7 @@
   var configPromise = null;
   var selection = new Map();
   var aligning = new Map();
+  var inFlight = new Map();
 
   function fail(message, code, infrastructure) {
     return Object.assign(new Error(message), { code: 'functions/' + code, infrastructure: !!infrastructure });
@@ -193,29 +194,39 @@
     return task;
   }
   async function findReceipt(cfg, regions, payload, headers) {
+    var checked = false;
     for (var i = 0; i < regions.length; i++) {
       try {
         var answer = await control(cfg, regions[i], { action: 'receipt', tournamentId: payload.tournamentId,
           sandbox: payload.sandbox === true, operationId: payload.operationId }, headers);
-        if (answer.found) return answer.receipt.response || { ok: true, replayed: true, requiresRefresh: true };
-        return null;
+        checked = true;
+        if (answer.found) return (answer.receipt && answer.receipt.response) || { ok: true, replayed: true, requiresRefresh: true };
+        // O recibo pode estar em outra região após failover. Só a ausência em
+        // todas as regiões consultáveis permite considerar a operação não gravada.
+        continue;
       } catch (error) { if (!error.infrastructure) throw error; }
     }
+    if (checked) return null;
     throw fail('Não foi possível conferir o recibo. A ação continua pendente.', 'unavailable', true);
   }
   async function refreshAnswer(tId, answer) {
     if (!answer.requiresRefresh) return answer;
     var db = window.FirestoreDB;
     var fresh = null;
-    try {
-      if (db && typeof db.loadTournamentById === 'function') fresh = await db.loadTournamentById(tId);
-    } catch (_) { /* O recibo mantém a intenção segura para nova conferência. */ }
-    if (!fresh) throw fail('A ação foi salva, mas ainda não consegui reler o torneio. Repita para conferir.',
+    // A operação já tem recibo. Uma leitura imediatamente após o failover pode
+    // falhar transitoriamente; o clique original deve continuar até reler o dado.
+    for (var attempt = 0; attempt < 5 && !fresh; attempt++) {
+      try {
+        if (db && typeof db.loadTournamentById === 'function') fresh = await db.loadTournamentById(tId);
+      } catch (_) { /* O recibo mantém a intenção segura para nova conferência. */ }
+      if (!fresh && attempt < 4) await new Promise(function (resolve) { setTimeout(resolve, 300 * (attempt + 1)); });
+    }
+    if (!fresh) throw fail('A ação foi salva, mas ainda não consegui reler o torneio. Confira a conexão antes de repetir.',
       'unavailable', true);
     answer.tournament = fresh;
     return answer;
   }
-  async function call(name, input, headers) {
+  async function callOnce(name, input, headers) {
     if (!OPERATIONS[name]) throw fail('Operação desconhecida.', 'invalid-argument');
     var payload = Object.assign({}, input || {});
     var tId = String(payload.tournamentId || '');
@@ -285,6 +296,23 @@
       if (!error.infrastructure) { delete all[key]; writePending(all); }
       throw error;
     }
+  }
+  function call(name, input, headers) {
+    var payload = input || {};
+    var key = intentKey(name, payload);
+    // Um segundo toque durante o alinhamento não cria outra gravação nem troca
+    // o operationId: ambos aguardam a mesma intenção iniciada no primeiro.
+    var pending = inFlight.get(key);
+    if (pending) {
+      if (pending.signature !== withoutId(payload)) return Promise.reject(fail(
+        'A primeira ação ainda está sendo confirmada. Aguarde antes de alterar este jogo.', 'failed-precondition'));
+      return pending.task;
+    }
+    var task = callOnce(name, input, headers);
+    inFlight.set(key, { signature: withoutId(payload), task: task });
+    function clearInFlight() { if (inFlight.get(key) && inFlight.get(key).task === task) inFlight.delete(key); }
+    task.then(clearInFlight, clearInFlight);
+    return task;
   }
   window.ScoreplaceOperationRouter = { call: call, names: Object.keys(OPERATIONS) };
 })();

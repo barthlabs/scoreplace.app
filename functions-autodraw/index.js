@@ -4934,6 +4934,7 @@ exports.createTournament = onCall(require('./tournament-create').makeCreateTourn
   cloneConfig: _clonaConfigDeclarativa,
   validateCapacity: config => require('./category-capacity-core').validateCapacityConfig(config, HttpsError),
   validatePolicy: require('./elimination-policy-config-core').validateAndCanonicalizeExplicitPolicy,
+  validateIntent: require('./format-intent-validation-core').validateNewFormatIntent,
   validateTvLayout: require('./tv-layout-core').normalize,
   compile: (cfg, ctx) => drawWindow.FORMAT2.compileToPhases(cfg, ctx),
   boundary: _applyWriteBoundary, readTournament: _leTorneio
@@ -5260,6 +5261,7 @@ exports.applyTournamentFormat = onCall(async (request) => {
     // A terceira porta de gravação recebe fmt2 cru; clonar e validar ANTES de
     // compilar impede a normalização tolerante de esconder uma escolha inválida.
     const fmt2Clone = _clonaConfigDeclarativa(fmt2, 0, ['fmt2']);
+    require('./format-intent-validation-core').validateNewFormatIntent(fmt2Clone, HttpsError);
     require('./elimination-policy-config-core').validateAndCanonicalizeExplicitPolicy(fmt2Clone, HttpsError);
     let out;
     try {

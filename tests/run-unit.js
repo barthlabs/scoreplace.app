@@ -78,6 +78,7 @@ const SUITES = [
   'tests/manual-name-unique-core.test.js',
   'tests/native-update-policy.test.js',
   'tests/native-release-candidate.test.js',
+  'tests/format-intent-validation.test.js',
   'tests/asc-build-selection.test.js',
   'tests/bracket-policy.test.js',
   'tests/l7-surplus-decision-persistence.test.js',

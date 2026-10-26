@@ -31,7 +31,7 @@ const clock=Date.now(), id='tour_'+clock+'_'+'a'.repeat(32);
 const payload={tournamentId:id,config:{name:'Copa',sport:'Tênis',format:'Eliminatórias Simples',isPublic:true}};
 const auth={uid:'owner',token:{email:'org@example.com',email_verified:true}};
 const read=async(tx,ref,id)=>{const snap=await tx.get(ref);return snap.exists?{...snap.data(),id}:null;};
-function creator(db,time=clock){return makeCreateTournament({db,HttpsError,FieldValue:{serverTimestamp:()=> 'server-time'},...config,validatePolicy:require('../functions-autodraw/elimination-policy-config-core').validateAndCanonicalizeExplicitPolicy,compile:(c,x)=>win.FORMAT2.compileToPhases(c,x),boundary,readTournament:read,now:()=>time});}
+function creator(db,time=clock){return makeCreateTournament({db,HttpsError,FieldValue:{serverTimestamp:()=> 'server-time'},...config,validatePolicy:require('../functions-autodraw/elimination-policy-config-core').validateAndCanonicalizeExplicitPolicy,validateIntent:require('../functions-autodraw/format-intent-validation-core').validateNewFormatIntent,compile:(c,x)=>win.FORMAT2.compileToPhases(c,x),boundary,readTournament:read,now:()=>time});}
 (async()=>{
  await test('política explícita inválida falha antes de criar recibo ou torneio',async()=>{
   const db=fakeDB(),fn=creator(db);
@@ -39,6 +39,14 @@ function creator(db,time=clock){return makeCreateTournament({db,HttpsError,Field
    await assert.rejects(fn({auth,data:{...payload,config:{...payload.config,...configPatch}}}),{code:'invalid-argument'});
   }
   await assert.rejects(fn({auth,data:{...payload,config:{...payload.config,politicaDaChave:'bye',fmt2:{eliminatoria:{ativa:true,politicaDaChave:'repescagem'}}}}}),{code:'invalid-argument'});
+  assert.equal(db.writes,0);
+  assert.equal(db.docs.size,0);
+ });
+ await test('intenção com enum inválido não cria recibo nem torneio',async()=>{
+  const db=fakeDB(),fn=creator(db);
+  await assert.rejects(fn({auth,data:{...payload,config:{...payload.config,fmt2:{
+    disputa:'dupla',classificationSchedule:{gamesPerUnit:3,mode:'structred'}
+  }}}}),{code:'invalid-argument'});
   assert.equal(db.writes,0);
   assert.equal(db.docs.size,0);
  });

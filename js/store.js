@@ -12140,8 +12140,10 @@ window.AppStore = {
     // [[regression_score_submit_never_jumps_bracket]]
     var _keepBracketViewport = false;
     try {
-      _keepBracketViewport = (window.location.hash || '').indexOf('#tournaments/' + String(tournamentId)) === 0 &&
-        !!document.getElementById('card-' + String(matchId));
+      var _scoreRoute = window.location.hash || '';
+      _keepBracketViewport = _scoreRoute.indexOf('#bracket/' + String(tournamentId)) === 0 ||
+        (_scoreRoute.indexOf('#tournaments/' + String(tournamentId)) === 0 &&
+        !!document.getElementById('card-' + String(matchId)));
     } catch (_eViewport) {}
     if (typeof window._callApplyMatchResult === 'function') {
       try {
@@ -12218,14 +12220,18 @@ window.AppStore = {
                *
                * ⭐ A regra: quem GRAVA repinta; o eco vira redundância, não a única ponte.
                * [[project_mutacao_otimista_morre_no_carregamento_em_voo]]
-               * ⛔ A repintura é FORÇADA de propósito: solto o `_suppressSoftRefresh` (ele
-               * existe pra calar eco ALHEIO, não a confirmação da MINHA gravação) e zero a
-               * assinatura carimbada — senão o gate compara o estado novo com ele mesmo,
-               * porque a cópia logo acima já adiantou o local, e conclui "nada mudou". */
+               * ⛔ A repintura é FORÇADA de propósito: na chave visível uso o renderer
+               * que preserva a posição e mantenho `_suppressSoftRefresh` para calar o eco;
+               * fora dela, libero o refresh e zero a assinatura carimbada. Sem isso, o gate
+               * compara o estado novo com ele mesmo e conclui "nada mudou". */
               try {
-                if ((window.location.hash || '').indexOf('#tournaments/' + String(tournamentId)) === 0) {
+                var _currentScoreRoute = window.location.hash || '';
+                if (_currentScoreRoute.indexOf('#tournaments/' + String(tournamentId)) === 0 ||
+                    _currentScoreRoute.indexOf('#bracket/' + String(tournamentId)) === 0) {
                   if (_keepBracketViewport && typeof window._rerenderBracket === 'function') {
                     window._suppressSoftRefresh = true;
+                    clearTimeout(window._scoreResultSuppressTimer);
+                    window._scoreResultSuppressTimer = setTimeout(function () { window._suppressSoftRefresh = false; }, 3000);
                     window._rerenderBracket(tournamentId, matchId);
                   } else {
                     window._suppressSoftRefresh = false;
