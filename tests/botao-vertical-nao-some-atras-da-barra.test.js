@@ -57,10 +57,12 @@ function varrerTopFixo() {
   }
   // O único controle vertical agora mora no CSS e usa a base REAL do portal de
   // títulos; --scroll-anchor continua como fallback antes da medição inicial.
-  const rule = (css.match(/\.bracket-previous-round-button\s*\{([^}]*)\}/) || [])[1] || '';
+  const rule = (css.match(/\.bracket-previous-round-button,\s*\.bracket-previous-phase-button\s*\{([^}]*)\}/) || [])[1] || '';
   ok(/position:\s*sticky/.test(rule) && /top:\s*var\(--bracket-round-reveal-top,\s*var\(--scroll-anchor/.test(rule),
     'controle lateral usa a base do portal e recua para --scroll-anchor');
-  ok(comVar === 0, 'o antigo botão vertical de fase foi removido');
+  const phaseRule = (css.match(/\.bracket-previous-round-button,\s*\.bracket-previous-phase-button\s*\{([^}]*)\}/) || [])[1] || '';
+  ok(/position:\s*sticky/.test(phaseRule) && /top:\s*var\(--bracket-round-reveal-top,\s*var\(--scroll-anchor/.test(phaseRule),
+    'fase anterior compartilha o posicionamento do botão vertical de rodadas');
   ok(cravados.length === 0, 'nenhum com top cravado' + (cravados.length ? ' — ' + cravados.join(', ') : ''));
 }
 
@@ -106,6 +108,35 @@ async function medir() {
   return out;
 }
 
+function contrasteRgb(a, b) {
+  function luminancia(rgb) {
+    const nums = (rgb.match(/[\d.]+/g) || []).slice(0, 3).map(Number).map(v => {
+      v /= 255;
+      return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    });
+    return nums[0] * 0.2126 + nums[1] * 0.7152 + nums[2] * 0.0722;
+  }
+  const x = luminancia(a), y = luminancia(b);
+  return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+}
+
+async function medirContraste() {
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage();
+    await page.setContent('<style>' + CSS + '</style><button class="bracket-previous-phase-button">Mostrar fase anterior</button>');
+    const cores = {};
+    for (const tema of ['dark', 'light']) {
+      await page.evaluate(value => { document.documentElement.setAttribute('data-theme', value); }, tema);
+      cores[tema] = await page.locator('button').evaluate(el => {
+        const css = getComputedStyle(el);
+        return { text: css.color, background: css.backgroundColor };
+      });
+    }
+    return cores;
+  } finally { await browser.close(); }
+}
+
 (async function () {
   varrerTopFixo();
   console.log('\n② Chromium com o cromo real (topbar+back-header+barra = ' + (ANCORA - RESPIRO) + 'px)');
@@ -115,6 +146,12 @@ async function medir() {
   ok(m.cravado.escondido > 10,
     'o top cravado de antes FALHA na mesma régua: ' + m.cravado.escondido + 'px de ' +
     m.cravado.altura + 'px por baixo da barra');
+
+  const cores = await medirContraste();
+  for (const tema of ['dark', 'light']) {
+    ok(contrasteRgb(cores[tema].text, cores[tema].background) >= 4.5,
+      'texto do botão de fase tem contraste AA no tema ' + tema);
+  }
 
   console.log('\n' + (falhas ? '✗ ' + falhas + '/' + testes + ' falharam' : '✓ ' + testes + '/' + testes + ' passaram'));
   process.exit(falhas ? 1 : 0);

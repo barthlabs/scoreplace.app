@@ -20,7 +20,7 @@ const zoom = ui.slice(ui.indexOf('window._applyBracketZoom = function'), ui.inde
       '<div class="bracket-round-column"><div id="card-final" class="sp-match-card"></div></div></div></div></div>' +
       '<input id="bracket-zoom-slider" type="range" min="1" max="800"><span id="bracket-zoom-label"></span></div>');
     await page.addScriptTag({ content: tree + '\n' + zoom });
-    await page.evaluate(() => {
+    const startsCondensed = await page.evaluate(() => {
       window._bracketZoom = 1;
       window._currentBracketTournament = { phases: [{ kind: 'elimination' }], matches: [
         { id: 'a', nextMatchId: 'semi1', nextSlot: 'p1' },
@@ -32,7 +32,11 @@ const zoom = ui.slice(ui.indexOf('window._applyBracketZoom = function'), ui.inde
         { id: 'unrelated', nextMatchId: 'final' }
       ] };
       _bracketLayoutEliminationTree(document.querySelector('[data-bracket-tabs-root]'));
+      const condensed = !document.querySelector('svg[data-bracket-tree-lines]');
+      window._setBracketPresentation('chaves');
+      return condensed;
     });
+    assert.ok(startsCondensed, 'a eliminatória inicia condensada até o usuário escolher Expandido');
     await page.waitForSelector('svg[data-bracket-tree-lines] path:nth-child(6)');
     const result = await page.evaluate(() => {
       const paths = [...document.querySelectorAll('svg[data-bracket-tree-lines] path')];

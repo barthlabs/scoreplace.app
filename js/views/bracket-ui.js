@@ -901,8 +901,8 @@ function _rerenderBracket(tId, anchorMatchId) {
   // mecanismo mexendo no mesmo scroll: o laço `_reafirmar` da entrada na chave (bracket.js),
   // que corrige a posição do alvo DE ENTRADA por até ~3s. Quem entra e já começa a lançar
   // cai dentro dessa janela, e os dois brigam — a tela pula a cada confirmação.
-  // A trava sai só depois que a última passada de restauração terminou (ver `_restore`).
-  window._travaRolagemDaChave = true;
+  // A trava é ativada só depois que o timer de segurança é instalado abaixo;
+  // assim uma exceção na preparação não pode deixá-la presa.
 
   // 1. Find anchor element — prefer the specific match card, fallback to any visible card
   var anchorEl = null;
@@ -983,6 +983,31 @@ function _rerenderBracket(tId, anchorMatchId) {
   clearTimeout(window._pendingSoftRefresh);
 
   var container = inlineContainer || document.getElementById('view-container');
+  // O navegador tenta ancorar a rolagem por conta própria enquanto o DOM da
+  // chave é substituído. Isso compete com a posição exata que salvamos acima.
+  var _scrollRoot = document.documentElement;
+  var _restoreGeneration = (window._bracketRestoreGeneration || 0) + 1;
+  window._bracketRestoreGeneration = _restoreGeneration;
+  if (!window._bracketScrollAnchorState) {
+    window._bracketScrollAnchorState = {
+      value: _scrollRoot && _scrollRoot.style ? _scrollRoot.style.overflowAnchor : ''
+    };
+  }
+  // Se uma exceção interromper o fluxo antes dos rAFs, ainda assim desfazemos
+  // o bloqueio temporário de ancoragem e a altura mínima da view.
+  function _releaseScrollLock(unlock) {
+    if (window._bracketRestoreGeneration !== _restoreGeneration) return;
+    if (container) container.style.minHeight = '';
+    if (_scrollRoot && _scrollRoot.style) {
+      _scrollRoot.style.overflowAnchor = window._bracketScrollAnchorState
+        ? window._bracketScrollAnchorState.value : '';
+    }
+    window._bracketScrollAnchorState = null;
+    if (unlock !== false) window._travaRolagemDaChave = false;
+  }
+  var _scrollSafetyTimer = setTimeout(_releaseScrollLock, 1500);
+  if (_scrollRoot && _scrollRoot.style) _scrollRoot.style.overflowAnchor = 'none';
+  window._travaRolagemDaChave = true;
 
   // v2.3.85: preserva o estado aberto/fechado dos <details> (ex.: "Demais jogos
   // da rodada", "Rodadas Anteriores") por índice — assim recalcular a
@@ -1095,7 +1120,11 @@ function _rerenderBracket(tId, anchorMatchId) {
   // rAF fica suspenso em abas em segundo plano; o prazo também limpa os ouvintes.
   var _scrollIntentFallback = setTimeout(_removeScrollIntent, 1000);
   function _restore() {
-    if (!_userScrolledDuringRender) window.scrollTo(_sx, _sy);
+    // Um novo placar ou uma navegação substitui esta transação de restauração.
+    // Nunca trazer a tela de volta para um torneio/posição já abandonado.
+    if (_userScrolledDuringRender || window._bracketRestoreGeneration !== _restoreGeneration ||
+        window.location.hash !== _hash || (container && container.isConnected === false)) return;
+    window.scrollTo(_sx, _sy);
     _aplicarRolagensDaChave(_hscroll);
   }
 
@@ -1104,16 +1133,19 @@ function _rerenderBracket(tId, anchorMatchId) {
     _restore();
     requestAnimationFrame(function() {
       _restore();
-      _removeScrollIntent();
-      clearTimeout(_scrollIntentFallback);
-      if (container) container.style.minHeight = '';
-      // ⛔ a trava só sai DEPOIS da última restauração — soltar antes devolveria a janela
-      // em que o laço de entrada rola por cima do que acabamos de restaurar.
-      // O respiro de 400ms cobre o layout que ainda assenta (avatares, classificação
-      // recalculada); é curto o bastante pra não atrapalhar uma navegação de verdade.
+      // Fontes, imagens e a classificação ainda podem mudar de altura depois
+      // de dois frames. Mantenha o piso da tela antiga até a última correção;
+      // uma rolagem manual cancela as correções, nunca é desfeita pelo código.
+      [120, 350, 800].forEach(function (delay) { setTimeout(_restore, delay); });
       setTimeout(function() {
+        _removeScrollIntent();
+        clearTimeout(_scrollIntentFallback);
+        if (window._bracketRestoreGeneration !== _restoreGeneration) return;
+        clearTimeout(_scrollSafetyTimer);
+        _releaseScrollLock(false);
+        _restore();
         window._travaRolagemDaChave = false;
-      }, 400);
+      }, 1000);
       setTimeout(function() { window._suppressSoftRefresh = false; }, 3000);
     });
   });

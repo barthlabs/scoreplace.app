@@ -151,7 +151,8 @@ summary::-webkit-details-marker { display: none; }
 .bracket-round-reveal-scope .bracket-round-column[data-bracket-round-collapsed="1"] {
   display: none !important;
 }
-.bracket-previous-round-button {
+.bracket-previous-round-button,
+.bracket-previous-phase-button {
   position: sticky;
   top: var(--bracket-round-reveal-top, var(--scroll-anchor, 120px));
   z-index: 9;
@@ -171,7 +172,14 @@ summary::-webkit-details-marker { display: none; }
   font-weight: 750;
   cursor: pointer;
 }
-.bracket-previous-round-button:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+.bracket-previous-round-button:focus-visible,
+.bracket-previous-phase-button:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+.bracket-phase-reveal-scope {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
 .bracket-round-reveal-scope:not(:has(.bracket-round-column[data-bracket-round-collapsed="1"])) > .bracket-previous-round-button {
   display: none;
 }

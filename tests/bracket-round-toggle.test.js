@@ -10,7 +10,7 @@ const findTabs = source.slice(source.indexOf('function _bracketFindTabsRoot'), s
 const portal = source.slice(source.indexOf('function _bracketUpdateRoundHeadingPortal'), source.indexOf('function _bracketEnsureRoundHeadingResizeListener'));
 const primaryTabs = source.slice(source.indexOf('window._bracketPrimaryTabsHtml = function'), source.indexOf('window._bracketCategoryTabsMount = function'));
 assert.match(source, /--bracket-round-reveal-top/, 'controle lateral usa base inferior da faixa fixa');
-assert.doesNotMatch(source, /var _prevBtn = '[^\n]*writing-mode:vertical-rl/, 'fase anterior não cria segundo botão vertical');
+assert.match(source, /class="bracket-previous-phase-button"/, 'fase anterior usa controle lateral vertical como as rodadas');
 
 (async () => {
   const browser = await chromium.launch();

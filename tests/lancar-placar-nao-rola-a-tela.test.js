@@ -76,12 +76,10 @@ for (const mode of ['upcoming', 'in-place', 'full']) {
 }
 ok(/window\._travaRolagemDaChave = true;/.test(corpoRr),
    '⛔ o re-render LIGA a trava de rolagem');
-const iLiga = corpoRr.indexOf('_travaRolagemDaChave = true');
-const iDesliga = corpoRr.indexOf('_travaRolagemDaChave = false');
-ok(iLiga > 0 && iDesliga > iLiga,
-   'e a DESLIGA só depois — soltar antes devolveria a janela em que o laço rola por cima');
-ok(corpoRr.lastIndexOf('_restore();') < iDesliga,
-   'o desligamento vem DEPOIS da última passada de restauração');
+ok(/_scrollSafetyTimer = setTimeout\(_releaseScrollLock, 1500\);[\s\S]*?_travaRolagemDaChave = true/.test(corpoRr),
+   'o timer de segurança é instalado antes de ativar a trava');
+ok(/_releaseScrollLock\(false\);\s*_restore\(\);\s*window\._travaRolagemDaChave = false/.test(corpoRr),
+   'o desligamento normal vem DEPOIS da última passada de restauração');
 
 // ── a causa raiz: o ontoggle dos <details> ──────────────────────────────────
 ok(/ontoggle="window\._demaisJogosAoAbrir\(this\)"/.test(bracket),
@@ -124,18 +122,31 @@ const win = { location: { hash: '#bracket/t1' }, scrollX: 0, scrollY: 500,
 const context = { window: win, document: {
   getElementById: id => id === 'view-container' ? container : null,
   querySelectorAll: () => []
-}, clearTimeout() {}, setTimeout(fn) { timers.push(fn); return timers.length; }, requestAnimationFrame: fn => frames.push(fn),
+}, clearTimeout() {}, setTimeout(fn, delay) { timers.push({ fn, delay }); return timers.length; }, requestAnimationFrame: fn => frames.push(fn),
 _lerRolagensDaChave: () => ({}), _aplicarRolagensDaChave() {}, renderBracket() {} };
 vm.runInNewContext(ui.slice(iRr, ui.indexOf('window._rerenderBracket = _rerenderBracket;', iRr)), context);
 context._rerenderBracket('t1');
 win.scrollY = 462; frames.shift()();
 ok(win.scrollY === 500, 'mudança de altura entre frames não desloca a janela após lançar placar');
 listeners.wheel(); win.scrollY = 430; frames.shift()();
-ok(win.scrollY === 430 && !listeners.wheel, 'rolagem da pessoa prevalece e os ouvintes temporários saem');
+ok(win.scrollY === 430, 'rolagem da pessoa prevalece durante a pintura');
+timers.filter(t => t.delay === 1000).at(-1).fn();
+ok(!listeners.wheel, 'os ouvintes temporários saem após a estabilização tardia');
 const fallbackIndex = timers.length;
 context._rerenderBracket('t1');
-timers[fallbackIndex]();
+timers.slice(fallbackIndex).find(t => t.delay === 1000).fn();
 ok(!listeners.wheel, 'aba em segundo plano limpa ouvintes mesmo sem executar requestAnimationFrame');
+frames.shift()(); frames.shift()();
+const lateStart = timers.length;
+win.scrollY = 500;
+context._rerenderBracket('t1');
+frames.shift()(); frames.shift()();
+win.scrollY = 410;
+timers.slice(lateStart).find(t => t.delay === 800).fn();
+ok(win.scrollY === 500, 'reflow tardio da classificação não desloca a tela após lançar placar');
+listeners.touchstart(); win.scrollY = 380;
+timers.slice(lateStart).filter(t => t.delay === 1000).at(-1).fn();
+ok(win.scrollY === 380, 'toque manual interrompe a correção tardia');
 
 console.log(pass + ' ok, ' + fail + ' falhas');
 process.exit(fail ? 1 : 0);

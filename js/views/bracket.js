@@ -1025,7 +1025,7 @@ function _bracketLayoutEliminationTree(root) {
   var zoomScope = root.closest ? root.closest('#view-container, #inline-bracket-container') : document;
   if (typeof window._bindBracketZoomGestures === 'function') window._bindBracketZoomGestures(zoomScope);
   if (window._bracketTreeLayoutFrame) cancelAnimationFrame(window._bracketTreeLayoutFrame);
-  if (window._bracketPresentation === 'jogos') {
+  if (window._bracketPresentation !== 'chaves') {
     if (zoomScope) {
       zoomScope.querySelectorAll('svg[data-bracket-tree-lines]').forEach(function (svg) { svg.remove(); });
       zoomScope.querySelectorAll('[data-bracket-tree-margin]').forEach(function (card) {
@@ -1137,7 +1137,8 @@ window._setBracketPresentation = function (mode, button) {
   _bracketLayoutEliminationTree(scope.querySelector('[data-bracket-tabs-root]') || scope);
 };
 function _bracketPresentationControlHtml() {
-  var jogos = window._bracketPresentation === 'jogos';
+  // Sem escolha explícita nesta sessão, a leitura compacta é o padrão.
+  var jogos = window._bracketPresentation !== 'chaves';
   return '<div class="bracket-presentation-switch" role="group" aria-label="Apresentação da eliminatória">' +
     '<button type="button" data-bracket-presentation="jogos" aria-pressed="' + jogos + '" class="' + (jogos ? 'active' : '') + '" title="Jogos sem linhas" onclick="window._setBracketPresentation(\'jogos\',this)">Condensado</button>' +
     '<button type="button" data-bracket-presentation="chaves" aria-pressed="' + !jogos + '" class="' + (jogos ? '' : 'active') + '" title="Chave com linhas de avanço" onclick="window._setBracketPresentation(\'chaves\',this)">Expandido</button>' +
@@ -4037,17 +4038,14 @@ function renderBracket(container, tournamentId, isInline) {
           '</div>';
       }
 
-      // v4.3.10 (pedido do dono): revelador de fase anterior no PADRÃO CANÔNICO — botão
-      // VERTICAL STICKY à esquerda (igual "👁 Mostrar ocultas" das chaves), sempre visível
-      // no scroll. ADITIVO: a fase atual fica SEMPRE à direita; clicar revela as fases
-      // anteriores (encerradas, read-only) ACIMA da atual, sem esconder nada. Estado por
-      // torneio em window._phasePrevOpen[tId]; re-render via _rerenderBracket.
+      // A fase anterior usa o mesmo controle lateral das rodadas. Ela é histórica,
+      // mas seus grupos, partidas e resultados precisam continuar consultáveis.
       var _currentContent = window._renderPhaseBracket(t, canEnterResult, standbyHtml, null);
       if (!window._phasePrevOpen) window._phasePrevOpen = {};
       var _prevOpen = !!window._phasePrevOpen[t.id];
       // Todas as rodadas permanecem visíveis. A fase anterior não depende mais de
       // um estado oculto da chave atual.
-      var _prevBtn = '<button class="btn btn-micro btn-outline" onclick="window._togglePhasePrev(\'' + _tIdEsc2 + '\')" title="Ver resultados e chaves das fases anteriores (encerradas) sem sair da fase atual" style="padding:7px 10px;line-height:1.15;white-space:nowrap;">' + (_prevOpen ? '✕ Ocultar fase anterior' : '👁 Ver fase anterior') + '</button>';
+      var _prevBtn = '<button type="button" class="bracket-previous-phase-button" aria-expanded="' + (_prevOpen ? 'true' : 'false') + '" onclick="window._togglePhasePrev(\'' + _tIdEsc2 + '\')" title="' + (_prevOpen ? 'Ocultar' : 'Mostrar') + ' fase anterior">' + (_prevOpen ? 'Ocultar fase anterior' : 'Mostrar fase anterior') + '</button>';
       var _prevSections = '';
       if (_prevOpen) {
         for (var _ppi = _curPh - 1; _ppi >= 0; _ppi--) {
@@ -4058,7 +4056,7 @@ function renderBracket(container, tournamentId, isInline) {
           // Fallback: se o render da fase 0 vier vazio ou não-carregou, tenta o render de
           // chave por índice (caso os jogos daquela fase morem em t.matches, não em t.rounds).
           if (!_ppContent || !String(_ppContent).trim() || /Não foi possível carregar/.test(_ppContent)) {
-            var _alt = window._renderPhaseBracket(t, canEnterResult, '', _ppi);
+            var _alt = window._renderPhaseBracket(t, _ppi === 0 ? false : canEnterResult, '', _ppi);
             if (_alt && String(_alt).trim()) _ppContent = _alt;
           }
           if (!_ppContent || !String(_ppContent).trim()) _ppContent = '<div style="padding:1rem;color:var(--text-muted);">Sem dados pra exibir desta fase (formato não suportado no modo leitura).</div>';
@@ -4070,16 +4068,15 @@ function renderBracket(container, tournamentId, isInline) {
           '</div>';
         }
       }
-      // ADITIVO + HORIZONTAL: fase(s) anterior(es) à ESQUERDA, fase atual à DIREITA, num
-      // único scroll horizontal (mais antigo → mais novo). A fase anterior usa um
-      // botão horizontal: o ÚNICO controle lateral da chave é o de revelar rodada.
+      // Fases históricas à esquerda e atual à direita. O botão permanece fixo à
+      // esquerda, fora do scroller horizontal, como o revelador de rodadas.
       var _revealBody = _prevOpen
         ? '<div style="flex:1;min-width:0;overflow-x:auto;padding-bottom:8px;"><div style="display:flex;align-items:flex-start;min-width:max-content;">' +
             _prevSections +
             '<div style="flex-shrink:0;padding-left:22px;border-left:2px dashed rgba(129,140,248,0.5);">' + _currentContent + '</div>' +
           '</div></div>'
         : '<div style="flex:1;min-width:0;">' + _currentContent + '</div>';
-      var _bodyWrap = '<div><div style="display:flex;justify-content:flex-end;margin:0 0 6px;">' + _prevBtn + '</div>' + _revealBody + '</div>';
+      var _bodyWrap = '<div class="bracket-phase-reveal-scope">' + _prevBtn + _revealBody + '</div>';
 
       container.innerHTML = headerHtml + _subChoiceBanner + startTournamentBanner + progressBarHtml + _nextBanner + _bodyWrap;
       _applyMyMatchesFilter();
@@ -7164,13 +7161,27 @@ window._togglePhasePrev = function (tId) {
   window._phasePrevOpen[tId] = !window._phasePrevOpen[tId];
   if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tId);
 };
-// Renderiza a FASE 0 (classificatória — Pontos Corridos / Grupos / Rei-Rainha) só
-// leitura. Os renderers são orientados à fase ATUAL (via currentPhaseIndex), então
+// Renderiza a FASE 0 histórica (Pontos Corridos / Grupos / Rei-Rainha) somente
+// para consulta. Os renderers são orientados à fase ATUAL (via currentPhaseIndex), então
 // montamos um FAUX com currentPhaseIndex=0 pra eles surfarem a Fase 0. Usado pela
 // navegação de fases (botão "Fase anterior"). v3.1.28.
 window._renderPhase0ReadOnly = function (t) {
   if (!t) return '';
   var f0 = Object.assign({}, t, { currentPhaseIndex: 0 });
+  // Use a MESMA porta que desenhava a fase 1 antes do avanço. Para jogos
+  // canônicos em t.matches ela é _renderPhaseBracket; para rodadas antigas
+  // de Pontos Corridos/Rei-Rainha ela é renderStandings. O antigo atalho
+  // direto para _renderMonarchStage podia receber subgrupos vazios e deixar
+  // o painel histórico inteiramente em branco.
+  var tagged = (t.matches || []).some(function (m) {
+    return m && (m.phaseIndex || 0) === 0 && !m.isSitOut && !m.isBye &&
+      (m.bracket === 'monarch' || m.bracket === 'group' || m.isMonarch);
+  });
+  if (tagged && typeof window._renderPhaseBracket === 'function') {
+    var _currentPhaseHasMyGame = window._chaveTenhoJogoNaFase;
+    try { return window._renderPhaseBracket(t, false, '', 0); }
+    finally { window._chaveTenhoJogoNaFase = _currentPhaseHasMyGame; }
+  }
   // v4.3.10: os renderers de grupo/Rei-Rainha (_renderMonarchStage/_getUnifiedRounds) leem
   // f0.groups, mas os grupos da fase 0 moram em t.rounds[].monarchGroups (Rei/Rainha) ou em
   // matches taggeados — NÃO em t.groups (que fica vazio depois de avançar). Por isso a fase
@@ -7183,10 +7194,8 @@ window._renderPhase0ReadOnly = function (t) {
     }
   } catch (e) {}
   var _isLiga0 = !!(window._isLigaFormat && window._isLigaFormat(f0));
-  var _isMonarchDaPraia = window._isMonarchFormat(f0);
   var _hasGroups0 = Array.isArray(f0.groups) && f0.groups.length > 0;
   try {
-    if (_isMonarchDaPraia && typeof window._renderMonarchStage === 'function') return window._renderMonarchStage(f0, false, false, { suppressAutoAdvance: true });
     if (_isLiga0 && typeof window.renderStandings === 'function') return window.renderStandings(f0, false, false, '', '', { suppressAutoAdvance: true });
     if (_hasGroups0 && typeof window.renderGroupStage === 'function') return window.renderGroupStage(f0, false, false, { suppressAutoAdvance: true });
     if (typeof window.renderStandings === 'function') return window.renderStandings(f0, false, false, '', '', { suppressAutoAdvance: true });

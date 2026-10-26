@@ -90,16 +90,15 @@ ok(W._sorteioDaFaseEhReiRainha({ phases: [], ligaRoundFormat: 'rei_rainha' }) ==
 ok(W._sorteioDaFaseEhReiRainha({ phases: 'nao-e-lista', drawMode: 'rei_rainha' }) === true,
   '④ ⚠️ mas o que NÃO é lista conta como ausência — aí o topo é tudo que existe');
 
-// ── ⑤ consumidores deliberados do motor de rodadas ────────────────────────────
-/* A porta protege o despacho/espera/auto-cura e a barreira de duplas formadas
- * no sorteio. Esta última precisa saber que uma eliminatória posterior não é mais
+// ── ⑤ consumidores deliberados do motor de rodadas e do W.O. ────────────────
+/* A porta protege a barreira de duplas formadas no sorteio e a prévia de W.O.
+ * da partida. Ambos precisam saber que uma eliminatória posterior não é mais
  * Rei/Rainha, mesmo se o torneio nasceu como tal. Qualquer outro consumidor fora
- * desta lista cai no teste: migrar todo o restante sem medir foi o que já obrigou
- * reversão. */
+ * desta lista cai no teste: migrar todo o restante sem medir já obrigou reversão. */
 const chamadas = varrer(path.join(ROOT, 'js'), /_sorteioDaFaseEhReiRainha\s*\(/g)
   .filter(function (f) { return f !== 'js/views/tournaments-utils.js'; });
-ok(chamadas.length === 1 && chamadas[0] === 'js/views/tournaments-draw.js',
-  '⑤ a única consumidora externa é a barreira de duplas do sorteio — achei ' + chamadas.length + ': ' + chamadas.join(', '));
+ok(chamadas.length === 2 && chamadas.includes('js/views/tournaments-draw.js') && chamadas.includes('js/views/wo-claim.js'),
+  '⑤ sorteio e W.O. consultam a fase, sem novos consumidores acidentais — achei ' + chamadas.length + ': ' + chamadas.join(', '));
 
 // ── ⑥ a porta antiga continua intocada ───────────────────────────────────────
 const utils = fs.readFileSync(path.join(ROOT, 'js/views/tournaments-utils.js'), 'utf8');

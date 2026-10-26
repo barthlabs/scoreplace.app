@@ -558,6 +558,7 @@ const SUITES = [
   'tests/congelada-viaja-ate-o-render.test.js',
   'tests/congelada-manda-no-avanco.test.js',
   'tests/classificacao-anterior-fica-compacta.test.js',
+  'tests/fase-anterior-grupos-e-resultados.test.js',
   'tests/cabecalho-e-busca-fixos-no-celular.test.js',
   'tests/hidratacao-nao-congela-no-primeiro-quadro.test.js',
   'tests/resultados-espelhados-hidratam-telas.test.js',
@@ -1145,6 +1146,7 @@ const SUITES = [
   'tests/wo-server-core.test.js',
   'tests/wo-organizer-actions.test.js',
   'tests/wo-claim-server-core.test.js', // consenso de W.O. é puro e roda antes da gravação da CF
+  'tests/wo-claim-fase-canonica.test.js', // o W.O. de jogo consulta a fase do confronto, não o rótulo do torneio
   'tests/wo-team-choice.test.js', // W.O. de dupla mista valida IDs e fecha o jogo sem suplente
   'tests/wo-team-modal.test.js', // diálogo de W.O. mostra as duas atletas e um botão por dupla
   'tests/wo-sandbox-route.test.js', // roteamento e autorização de W.O. preservam produção e sandbox

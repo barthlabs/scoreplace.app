@@ -62,11 +62,29 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     return !!(cu && typeof window._canManagePresence === 'function' && window._canManagePresence(t, cu));
   }
   function _isLiga(t, m) {
-    var phase = (typeof window._phaseForMatch === 'function') ? window._phaseForMatch(t, m) : null;
-    if (phase) return phase.kind === 'classification' && (!phase.classification || phase.classification.structure !== 'groups');
+    if (Array.isArray(t && t.phases)) {
+      var phase = (typeof window._phaseForMatch === 'function') ? window._phaseForMatch(t, m) : null;
+      if (!phase) return false;
+      if (!phase.kind) return !!(window._isLigaFormat && window._isLigaFormat(t));
+      if (m && m.phaseIndex != null) {
+        return phase.kind === 'classification' &&
+          (!phase.classification || phase.classification.structure !== 'groups') &&
+          !(window._faseCorrenteEhClassificatoriaPorRodadas && window._faseCorrenteEhClassificatoriaPorRodadas(t, Number(m.phaseIndex)));
+      }
+      return !!(window._faseCorrenteUsaEntradasRotativas && window._faseCorrenteUsaEntradasRotativas(t));
+    }
     return !!(window._isLigaFormat ? window._isLigaFormat(t) : (t && (t.format === 'Liga' || t.format === 'Ranking')));
   }
-  function _isMonarchFmt(t) { return !!(window._isMonarchFormat && window._isMonarchFormat(t)); }
+  function _isMonarchFmt(t, m) {
+    if (Array.isArray(t && t.phases)) {
+      var index = m && m.phaseIndex != null ? Number(m.phaseIndex) : Number(t.currentPhaseIndex || 0);
+      if (!Number.isInteger(index) || index < 0 || index >= t.phases.length) return false;
+      var phase = t.phases[index];
+      if (phase && !phase.kind) return !!(window._isMonarchFormat && window._isMonarchFormat(t));
+      return !!(window._sorteioDaFaseEhReiRainha && window._sorteioDaFaseEhReiRainha(t, index));
+    }
+    return !!(window._isMonarchFormat && window._isMonarchFormat(t));
+  }
 
   // ─── gating: multi-dia + jogadores lançam resultado ────────────────────────────
   function _ymd(dstr) {
@@ -325,10 +343,16 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   function _outcomeCtx(t, c) {
     try {
       if (!t || !c || c.scope !== 'match') return null;
-      if (_isLiga(t) || _isMonarchFmt(t)) return null;
-      if ((t.woScope || 'individual') !== 'individual') return null;
       var m = _findMatchById(t, c.matchId);
       if (!m || m.winner || m.isBye || m.isSitOut) return null;
+      // Um índice de fase inválido nunca autoriza inferir pelo topo histórico.
+      // Em híbridos o jogo pode pertencer a outra fase que não a corrente.
+      if (Array.isArray(t.phases)) {
+        var matchPhase = window._phaseForMatch && window._phaseForMatch(t, m);
+        if (!matchPhase || (matchPhase.kind && matchPhase.kind !== 'elimination')) return null;
+      }
+      if (_isLiga(t, m) || _isMonarchFmt(t, m)) return null;
+      if ((t.woScope || 'individual') !== 'individual') return null;
       var absent = (c.absentUids || []).filter(Boolean);
       if (!absent.length) return null;              // sem uid do ausente → fallback nome, não negocia
       var side = null;
@@ -647,8 +671,6 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       return null;
     });
   }
-  function _isLigaGroup(t, c) { return c && c.scope === 'group' && (_isLiga(t) || _isMonarchFmt(t)); }
-
   // Ação administrativa direta: o servidor relê o jogo e executa o mesmo motor
   // transacional. Não há mutação otimista de chave, lista de espera ou placar no cliente.
   function _orgWoServer(tId, payload, onDone, loadingMsg, onError) {
