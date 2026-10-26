@@ -56,6 +56,7 @@ const ROOT = path.join(__dirname, '..');
 const SUITES = [
   'tests/operation-day.test.js',
   'tests/operation-router-regions.test.js',
+  'tests/placar-primeiro-clique-confirma-sem-salto.test.js',
   'tests/operation-router-v3.test.js',
   'tests/operation-router-central-actions.test.js',
   'tests/check-served-operation-revision.test.js',

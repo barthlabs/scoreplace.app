@@ -12134,6 +12134,15 @@ window.AppStore = {
     // houver rede. Assim não existe uma segunda porta que possa divergir do recibo e do
     // placar canônicos da CF.
     var _viaCF = false;
+    // O clique continua ocupado até a Function confirmar E o card mostrar o
+    // resultado. O alinhamento regional sozinho não conclui a operação.
+    var _confirmButton = typeof document !== 'undefined' && document.getElementById
+      ? document.getElementById('confirm-' + String(matchId)) : null;
+    var _confirmLabel = _confirmButton ? _confirmButton.textContent : '';
+    if (_confirmButton) {
+      _confirmButton.disabled = true;
+      _confirmButton.textContent = '⏳ Gravando…';
+    }
     // Capture antes do await. A confirmação pode chegar depois da restauração
     // inicial do card, mas ainda precisa redesenhar pela mesma âncora — nunca
     // pelo refresh geral que reposiciona a página no topo.
@@ -12157,9 +12166,19 @@ window.AppStore = {
           _viaCF = true;
           // Sincroniza o local com o que o servidor gravou (mesmo padrão do drawRound):
           // o listener também traria, mas esperar por ele deixaria a tela atrás do save.
+          if (!_d.tournament && window.FirestoreDB && typeof window.FirestoreDB.loadTournamentById === 'function') {
+            // Um recibo de operação repetida pode trazer apenas {ok:true}.
+            // A primeira intenção já foi gravada; releia, sem pedir outro clique.
+            for (var _readAttempt = 0; _readAttempt < 4 && !_d.tournament; _readAttempt++) {
+              try { _d.tournament = await window.FirestoreDB.loadTournamentById(String(tournamentId)); }
+              catch (_readError) {}
+              if (!_d.tournament && _readAttempt < 3) await new Promise(function (resolve) { setTimeout(resolve, 250 * (_readAttempt + 1)); });
+            }
+          }
           if (_d.tournament) {
             var _lt = this.tournaments.find(function (x) { return String(x.id) === String(tournamentId); });
             if (_lt) {
+              var _statusBeforeResult = _lt.status;
               Object.keys(_d.tournament).forEach(function (k) { _lt[k] = _d.tournament[k]; });
               /* A callable confirma a transação, mas a fronteira leve do torneio não
                * carrega o resultado de cada jogo. O card não pode voltar a desenhar o set
@@ -12171,8 +12190,12 @@ window.AppStore = {
               var _midConfirmado = String(matchId);
               if (window.FirestoreDB && typeof window.FirestoreDB.loadMatchResult === 'function') {
                 try {
-                  var _resultadoConfirmado = await window.FirestoreDB.loadMatchResult(
-                    String(tournamentId), _midConfirmado);
+                  var _resultadoConfirmado = null;
+                  for (var _resultAttempt = 0; _resultAttempt < 4 && !_resultadoConfirmado; _resultAttempt++) {
+                    try { _resultadoConfirmado = await window.FirestoreDB.loadMatchResult(
+                      String(tournamentId), _midConfirmado); } catch (_readResultError) {}
+                    if (!_resultadoConfirmado && _resultAttempt < 3) await new Promise(function (resolve) { setTimeout(resolve, 250 * (_resultAttempt + 1)); });
+                  }
                   if (_resultadoConfirmado) {
                     var _jogoConfirmado = (typeof window._findMatch === 'function')
                       ? window._findMatch(_lt, _midConfirmado)
@@ -12228,7 +12251,13 @@ window.AppStore = {
                 var _currentScoreRoute = window.location.hash || '';
                 if (_currentScoreRoute.indexOf('#tournaments/' + String(tournamentId)) === 0 ||
                     _currentScoreRoute.indexOf('#bracket/' + String(tournamentId)) === 0) {
-                  if (_keepBracketViewport && typeof window._rerenderBracket === 'function') {
+                  if (_keepBracketViewport && _statusBeforeResult !== 'finished' && _lt.status !== 'finished' &&
+                      typeof window._refreshConfirmedMatchCard === 'function' &&
+                      window._refreshConfirmedMatchCard(_lt, tournamentId, matchId)) {
+                    window._suppressSoftRefresh = true;
+                    clearTimeout(window._scoreResultSuppressTimer);
+                    window._scoreResultSuppressTimer = setTimeout(function () { window._suppressSoftRefresh = false; }, 3000);
+                  } else if (_keepBracketViewport && typeof window._rerenderBracket === 'function') {
                     window._suppressSoftRefresh = true;
                     clearTimeout(window._scoreResultSuppressTimer);
                     window._scoreResultSuppressTimer = setTimeout(function () { window._suppressSoftRefresh = false; }, 3000);
@@ -12288,6 +12317,10 @@ window.AppStore = {
     // proíbe, e é o que impede os jogos de saírem do documento (enquanto o cliente escreve
     // o torneio, ele precisa de permissão de escrita nele).
     var r = _viaCF;
+    if (_confirmButton && _confirmButton.isConnected) {
+      _confirmButton.disabled = false;
+      _confirmButton.textContent = _confirmLabel;
+    }
     if (!r) {
       try {
         var _reason = window._lastSaveError && window._lastSaveError.reason;

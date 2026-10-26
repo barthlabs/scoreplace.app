@@ -18,6 +18,7 @@
   var selection = new Map();
   var aligning = new Map();
   var inFlight = new Map();
+  var progressCount = 0;
 
   function fail(message, code, infrastructure) {
     return Object.assign(new Error(message), { code: 'functions/' + code, infrastructure: !!infrastructure });
@@ -47,17 +48,20 @@
   function progress(open, region) {
     var id = 'sp-region-align-progress';
     var node = document.getElementById(id);
+    if (open) progressCount++;
+    else progressCount = Math.max(0, progressCount - 1);
+    if (!open && progressCount) return;
     if (open && !node) {
       node = document.createElement('div'); node.id = id;
       node.setAttribute('role', 'status'); node.setAttribute('aria-live', 'polite');
       node.style.cssText = 'position:fixed;z-index:2147483640;left:50%;top:50%;transform:translate(-50%,-50%);background:#10243a;color:#fff;border:1px solid #51c5ee;border-radius:12px;padding:20px 26px;box-shadow:0 8px 30px #0009;font-weight:700';
-      node.textContent = 'Alinhando servidores…'; document.body.appendChild(node);
+      node.textContent = 'Alinhando servidores e gravando…'; document.body.appendChild(node);
     } else if (open && node) {
       clearTimeout(node._removeTimer);
-      node.textContent = 'Alinhando servidores…';
+      node.textContent = 'Alinhando servidores e gravando…';
     } else if (!open && node) {
       if (region) {
-        node.textContent = 'Servidor alinhado: ' + region;
+        node.textContent = 'Operação confirmada em ' + region;
         node._removeTimer = setTimeout(function () { if (node.isConnected) node.remove(); }, 900);
       } else node.remove();
     }
@@ -170,9 +174,6 @@
     }
     if (aligning.has(tId)) return aligning.get(tId);
     var task = (async function () {
-      progress(true);
-      var chosen = '';
-      try {
         var list = await healthy(cfg, headers);
         var state = await control(cfg, list[0].region, { action: 'current', tournamentId: tId, sandbox: sandbox }, headers);
         if (!state.selected) {
@@ -186,10 +187,8 @@
             sourceDigest: cfg.services[CONTROL.replace(/-v2$/, '-v' + cfg.schema)].digest }, headers);
         }
         selection.set(tId, state);
-        chosen = state.region;
         return state;
-      } finally { progress(false, chosen); aligning.delete(tId); }
-    })();
+      })().finally(function () { aligning.delete(tId); });
     aligning.set(tId, task);
     return task;
   }
@@ -272,9 +271,13 @@
         throw error;
       }
     }
+    progress(true);
+    var progressRegion = '';
+    var progressCompleted = false;
     try {
       var cfg = await loadConfig();
       var state = await align(cfg, tId, payload.sandbox === true, headers);
+      progressRegion = state.region;
       var answer;
       try { answer = await post(url(cfg, state.region, name), payload, headers, 20000); }
       catch (error) {
@@ -295,10 +298,13 @@
       }
       answer = await refreshAnswer(tId, answer);
       delete all[key]; writePending(all);
+      progressCompleted = answer && answer.ok !== false;
       return answer;
     } catch (error) {
       if (!error.infrastructure) { delete all[key]; writePending(all); }
       throw error;
+    } finally {
+      progress(false, progressCompleted ? progressRegion : '');
     }
   }
   function call(name, input, headers) {

@@ -2187,6 +2187,35 @@ function _finalizeRoundCardInPlace(t, m, tId, matchId) {
   return true;
 }
 
+// A resposta canônica de um placar não deve remontar a grade inteira: jogos
+// concluídos podem mudar de seção/ordem e o card sob os olhos do operador salta.
+// Substituir só o card mantém a posição e troca Confirmar por Editar no mesmo lugar.
+window._refreshConfirmedMatchCard = function (t, tId, matchId) {
+  var card = document.getElementById('card-' + matchId);
+  if (!card || !t) return false;
+  var m = _findMatch(t, matchId);
+  if (!m) return false;
+  var sx = window.scrollX || 0, sy = window.scrollY || 0;
+  var hscroll = _lerRolagensDaChave();
+  var root = document.documentElement;
+  var oldAnchor = root && root.style ? root.style.overflowAnchor : '';
+  var oldScrollLock = window._travaRolagemDaChave;
+  if (root && root.style) root.style.overflowAnchor = 'none';
+  window._travaRolagemDaChave = true;
+  var changed = false;
+  try {
+    changed = _finalizeRoundCardInPlace(t, m, tId, matchId);
+    if (changed) {
+      window.scrollTo(sx, sy);
+      _aplicarRolagensDaChave(hscroll);
+    }
+  } finally {
+    if (root && root.style) root.style.overflowAnchor = oldAnchor;
+    window._travaRolagemDaChave = oldScrollLock;
+  }
+  return changed;
+};
+
 // ── BLINDAGEM DE CONCORRÊNCIA (project_concurrency_safe_saves) ────────────────
 // Mutação PURA de "lançar resultado" num torneio dado. Espelha EXATAMENTE o bloco
 // de mutação de _saveResultInline (scores/sets/winner/draw/resultAt + advance OU
@@ -2633,7 +2662,7 @@ window._saveResultInline = function (tId, matchId, sourceRoot) {
 
   // Som: resultado lançado/confirmado fora do placar ao vivo → fanfarra "Set".
   // (o caminho de proposta que precisa de aprovação já retornou acima.)
-  if (window._sound) window._sound('set');
+  var _resultSavedDetail = '';
 
   // v2.3.46: quando true, o save NÃO re-renderiza o bracket inteiro — só
   // atualiza o card lançado in-place. Mantém a página estática (sem pulo de
@@ -2654,11 +2683,10 @@ window._saveResultInline = function (tId, matchId, sourceRoot) {
     // Som: se este resultado encerrou a eliminatória → campeão coroado (segue o
     // "Set" que já tocou acima). Salvar num torneio já encerrado não ocorre, então
     // status 'finished' aqui = acabou de encerrar.
-    if (t.status === 'finished' && window._sound) window._sound('campeao');
-    showNotification(_t('result.saved'), `${m.winner} avança!`, 'success');
+    _resultSavedDetail = `${m.winner} avança!`;
   } else if (isRoundMatch) {
     // Liga/Suíço/Ranking — atualizar standings
-    showNotification(_t('result.saved'), m.draw ? _t('bui.draw') : _t('bui.matchWon', {winner: m.winner}), 'success');
+    _resultSavedDetail = m.draw ? _t('bui.draw') : _t('bui.matchWon', {winner: m.winner});
 
     // Auto-close round + auto-advance to next round when all matches complete
     // (avoids requiring organizer to manually click "Encerrar Rodada")
@@ -2705,7 +2733,7 @@ window._saveResultInline = function (tId, matchId, sourceRoot) {
   } else {
     // Check if current group round is complete, activate next
     _checkGroupRoundComplete(t, m.group);
-    showNotification(_t('result.saved'), m.draw ? _t('bui.draw') : _t('bui.matchWon', {winner: m.winner}), 'success');
+    _resultSavedDetail = m.draw ? _t('bui.draw') : _t('bui.matchWon', {winner: m.winner});
   }
 
   // Auto check-in: marcar presença de todos os participantes deste jogo (e limpar ausência se existia)
@@ -2777,8 +2805,9 @@ window._saveResultInline = function (tId, matchId, sourceRoot) {
   // lançamentos concorrem). A `t` local já foi mutada acima (UI otimista); commitResultTx
   // re-aplica a MESMA mutação sobre o estado fresco + persiste a entrada de histórico.
   // project_concurrency_safe_saves.
+  var _resultSavePromise = null;
   if (!_deferSaveToTransition) {
-    window.AppStore.commitResultTx(tId, matchId, {
+    _resultSavePromise = window.AppStore.commitResultTx(tId, matchId, {
       s1: s1, s2: s2, useSets: useSets, isFixedSet: isFixedSet,
       isTiebreakEntry: isTiebreakEntry, tbP1: tbP1, tbP2: tbP2
     }, _resultLogMsg);
@@ -2798,6 +2827,21 @@ window._saveResultInline = function (tId, matchId, sourceRoot) {
 
   // A CF entrega o aviso a partir da outbox do resultado confirmado. O cliente
   // não tem segunda porta de entrega nem reconstroi placar para e-mail/push.
+
+  // O card só muda quando a Function confirma. Repintá-lo agora (estado local
+  // otimista) cria um salto e permite que o usuário veja Editar antes do commit;
+  // commitResultTx faz a substituição pontual a partir do resultado canônico.
+  if (_resultSavePromise) return Promise.resolve(_resultSavePromise).then(function (saved) {
+    if (saved === true) {
+      if (window._sound) window._sound('set');
+      if (t.status === 'finished' && window._sound) window._sound('campeao');
+      showNotification(_t('result.saved'), _resultSavedDetail, 'success');
+    }
+    return saved;
+  });
+  if (window._sound) window._sound('set');
+  if (t.status === 'finished' && window._sound) window._sound('campeao');
+  showNotification(_t('result.saved'), _resultSavedDetail, 'success');
 
   // v2.3.46: rodada incompleta em formato por rodada → atualiza só o card
   // lançado (página estática). Se a finalização in-place falhar (card fora do

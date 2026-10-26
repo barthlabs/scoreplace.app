@@ -167,6 +167,37 @@ async function naoPula(browser) {
   await page.close();
 }
 
+async function respostaCanonicaFicaNoCard(browser) {
+  console.log('\n①b Resposta do servidor atualiza só o card');
+  const t = montaTorneio();
+  const alvo = (t.matches || []).filter(m => m.round === 2)[3].id;
+  const page = await abreChave(browser, t, { uid:'u-org', displayName:'Org', org:true });
+  const r = await page.evaluate((id) => {
+    const card = document.getElementById('card-' + id);
+    const wrapper = card.closest('.bracket-scroll-container, .bracket-sticky-scroll-wrapper');
+    window.scrollTo(0, card.getBoundingClientRect().top + window.scrollY - 250);
+    wrapper.scrollLeft = Math.round((wrapper.scrollWidth - wrapper.clientWidth) * 0.6);
+    const before = { y: window.scrollY, x: wrapper.scrollLeft,
+      top: card.getBoundingClientRect().top, left: card.getBoundingClientRect().left };
+    const tour = window.AppStore.tournaments[0];
+    const game = tour.matches.find(m => m.id === id);
+    game.sets = [{ gamesP1: 6, gamesP2: 4 }, { gamesP1: 6, gamesP2: 3 }];
+    game.setsWonP1 = 2; game.setsWonP2 = 0; game.winner = game.p1;
+    game.scoreP1 = 2; game.scoreP2 = 0; game.resultAt = Date.now();
+    const changed = window._refreshConfirmedMatchCard(tour, tour.id, id);
+    const fresh = document.getElementById('card-' + id);
+    return { changed, before, after: { y: window.scrollY, x: wrapper.scrollLeft,
+      top: fresh.getBoundingClientRect().top, left: fresh.getBoundingClientRect().left },
+      hasEdit: /Editar/.test(fresh.textContent), hasConfirm: !!fresh.querySelector('#confirm-' + id) };
+  }, alvo);
+  ok(r.changed && r.hasEdit && !r.hasConfirm, 'o resultado confirmado mostra Editar no mesmo card');
+  ok(Math.abs(r.after.top - r.before.top) <= 2 && Math.abs(r.after.left - r.before.left) <= 2,
+    'o card permanece na posição visual após a resposta do servidor');
+  ok(r.after.x === r.before.x && r.after.y === r.before.y,
+    'as rolagens vertical e horizontal não mudam');
+  await page.close();
+}
+
 /* ── ② SIMULAR JOGA O FORMATO DA FASE ───────────────────────────────────────────────── */
 function simularJogaOFormato() {
   console.log('\n② Simular fase (dev) joga melhor de 3 / de 5, não um set solto');
@@ -459,6 +490,7 @@ async function numeroDoPlacar(browser) {
   const browser = await chromium.launch();
   try {
     await naoPula(browser);
+    await respostaCanonicaFicaNoCard(browser);
     simularJogaOFormato();
     await aprovacao(browser);
     await difDoisPontos(browser);
