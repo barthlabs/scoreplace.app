@@ -57,10 +57,21 @@ const refs = [];
 git(['for-each-ref', '--format=%(refname:short)', 'refs/heads', 'refs/remotes'])
   .split('\n').filter(Boolean).forEach((r) => refs.push(r));
 
+// Um marcador de teste pode carregar version.txt sem conter um site publicável.
+// A trava deve comparar linhas que poderiam substituir o Hosting, não um commit
+// parcial que removeu index.html/firebase.json. O remoto publicável continua
+// sujeito à verificação de ancestralidade independente no deploy-hosting.sh.
+function deployable(ref) {
+  const paths = new Set(git(['ls-tree', '--name-only', ref, '--', 'index.html', 'firebase.json'])
+    .split('\n').filter(Boolean));
+  return paths.has('index.html') && paths.has('firebase.json');
+}
+
 const achados = [];
 const vistos = {};
 for (const ref of refs) {
   if (/\bHEAD$/.test(ref)) continue;                       // symbolic-ref, não é linha própria
+  if (!deployable(ref)) continue;
   const v = git(['show', ref + ':version.txt']).trim();
   if (!v || !/^\d+\.\d+/.test(v)) continue;
   if (cmp(v, minha) > 0) {

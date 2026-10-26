@@ -33,6 +33,28 @@ try {
   run(['add', '.']); run(['commit', '-m', 'docs only']);
   const docsOnly = spawnSync(process.execPath, [gate], { env: { ...process.env, SP_RELEASE_ROOT: lab }, encoding: 'utf8' });
   if (docsOnly.status !== 0 || !/shell preservada/.test(docsOnly.stdout)) throw new Error('gate exigiu versão nova para documentação: ' + docsOnly.stderr);
+  // A trava anti-regressão não pode confundir uma linha de teste sem artefato
+  // publicável com uma versão pronta para substituir o Hosting.
+  fs.mkdirSync(path.join(lab, 'scripts'));
+  const versionAhead = path.join(lab, 'scripts/check-version-ahead.js');
+  fs.copyFileSync(path.join(root, 'scripts/check-version-ahead.js'), versionAhead);
+  const originalBranch = execFileSync('git', ['symbolic-ref', '--short', 'HEAD'], { cwd: lab, encoding: 'utf8' }).trim();
+  fs.writeFileSync(path.join(lab, 'index.html'), '<!doctype html><title>Scoreplace</title>\n');
+  fs.writeFileSync(path.join(lab, 'firebase.json'), '{"hosting":{"public":"."}}\n');
+  run(['add', '.']); run(['commit', '-m', 'deployable baseline']);
+  run(['checkout', '-b', 'test-marker']);
+  run(['rm', 'index.html', 'firebase.json']);
+  fs.writeFileSync(path.join(lab, 'version.txt'), '9.9.9\n');
+  run(['add', '.']); run(['commit', '-m', 'test marker only']);
+  run(['checkout', originalBranch]);
+  const marker = spawnSync(process.execPath, [versionAhead], { cwd: lab, encoding: 'utf8' });
+  if (marker.status !== 0) throw new Error('marcador sem app bloqueou release: ' + marker.stderr);
+  run(['checkout', '-b', 'future-release']);
+  fs.writeFileSync(path.join(lab, 'version.txt'), '2.2.37\n');
+  run(['add', '.']); run(['commit', '-m', 'future deployable release']);
+  run(['checkout', originalBranch]);
+  const future = spawnSync(process.execPath, [versionAhead], { cwd: lab, encoding: 'utf8' });
+  if (future.status === 0 || !/future-release/.test(future.stderr)) throw new Error('linha publicável mais nova deixou de bloquear release');
   const deploy = fs.readFileSync(path.join(root, 'scripts/deploy-hosting.sh'), 'utf8');
   const reviewer = fs.readFileSync(path.join(root, 'scripts/revisar.sh'), 'utf8');
   if (!/check-release-version-fresh\.js/.test(deploy)) throw new Error('deploy não chama a trava de versão fresca');
