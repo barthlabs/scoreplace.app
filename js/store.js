@@ -12164,6 +12164,7 @@ window.AppStore = {
         var _d = (_res && _res.data) || {};
         if (_d.ok) {
           _viaCF = true;
+          var _canonicalApplied = false;
           // Sincroniza o local com o que o servidor gravou (mesmo padrão do drawRound):
           // o listener também traria, mas esperar por ele deixaria a tela atrás do save.
           if (!_d.tournament && window.FirestoreDB && typeof window.FirestoreDB.loadTournamentById === 'function') {
@@ -12178,6 +12179,7 @@ window.AppStore = {
           if (_d.tournament) {
             var _lt = this.tournaments.find(function (x) { return String(x.id) === String(tournamentId); });
             if (_lt) {
+              _canonicalApplied = true;
               var _statusBeforeResult = _lt.status;
               Object.keys(_d.tournament).forEach(function (k) { _lt[k] = _d.tournament[k]; });
               /* A callable confirma a transação, mas a fronteira leve do torneio não
@@ -12270,6 +12272,17 @@ window.AppStore = {
                 }
               } catch (_eR) { /* best-effort: repintura nunca derruba o placar já gravado */ }
             }
+          }
+          if (!_canonicalApplied) {
+            // A escrita já foi confirmada, mas a releitura ficou indisponível.
+            // Libere o listener/refresh para trazer o canônico quando a rede
+            // voltar; nunca transforme este Confirmar em uma segunda escrita.
+            window._suppressSoftRefresh = false;
+            window._tdetailSig = null;
+            if (_confirmButton && _confirmButton.isConnected) {
+              _confirmButton.textContent = '✅ Gravado · sincronizando…';
+            }
+            if (typeof window._softRefreshView === 'function') window._softRefreshView();
           }
         } else {
           // Recusa do servidor: registra pra diagnóstico e devolve falha ao chamador.
