@@ -23,6 +23,12 @@ retirada somente da rota canônica. O censo novo **não** valida jogos, resultad
 agenda ou placares e não autoriza migração em lote. Cada torneio legado ainda
 exige prévia, confirmação e transação com fingerprint fresco.
 
+O planejador somente-leitura de materialização também passou a excluir torneios
+com recibo canônico **antes** de ler o espelho legado. Na execução observada em
+25/10/2026, ignorou os 4 canônicos e produziu um manifesto assinado para os 80
+legados: 134 inscrições e 45 duplas, sem incluir o Neon. O manifesto não executa
+nenhuma conversão e não dispensa a confirmação individual do organizador.
+
 ## Evidência de partida
 
 Em 09/10/2026, o censo de produção somente-leitura

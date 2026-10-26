@@ -13,6 +13,7 @@ const registration = require(path.join(__dirname, '..', 'functions', 'registrati
 const materialization = require(path.join(__dirname, '..', 'functions', 'registration-migration-core.js'));
 const batch = require(path.join(__dirname, '..', 'functions', 'registration-batch-plan-core.js'));
 const legacyCategoryDefinitions = require(path.join(__dirname, '..', 'functions', 'legacy-category-definition-core.js'));
+const audit = require('./auditar-inscricoes-canonicas-core');
 const { accessTokenForServiceAccount } = require('./firebase-service-account-token');
 
 if (process.argv.length > 2) {
@@ -99,13 +100,19 @@ async function inspectTournament(document, token) {
 async function main() {
   const token = await accessTokenForServiceAccount();
   const tournaments = await listCollection(BASE + '/tournaments', token);
+  // O recibo decide a autoridade antes de buscar o espelho participants.
+  // Depois dele, um torneio não é candidato a materialização de legado.
+  const legacy = tournaments.filter((document) => audit.routeFor(documentToObject(document)) === 'legacy');
+  if (!legacy.length) throw new Error('nenhum torneio legado pendente de materialização');
   const inspected = [];
-  for (let offset = 0; offset < tournaments.length; offset += 8) {
-    inspected.push(...await Promise.all(tournaments.slice(offset, offset + 8).map((document) => inspectTournament(document, token))));
+  for (let offset = 0; offset < legacy.length; offset += 8) {
+    inspected.push(...await Promise.all(legacy.slice(offset, offset + 8).map((document) => inspectTournament(document, token))));
   }
   // O planejador aborta inteiro se uma única fotografia deixar de ser segura.
   // Assim não existe manifesto parcial que pareça pronto para aplicação.
   const plan = batch.planBatch(inspected, new Date().toISOString());
+  console.error('Torneios canônicos ignorados: ' + (tournaments.length - legacy.length));
+  console.error('Torneios legados planejados: ' + inspected.length);
   process.stdout.write(JSON.stringify(plan, null, 2) + '\n');
 }
 
