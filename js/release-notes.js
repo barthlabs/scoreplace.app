@@ -1,3 +1,4 @@
+// 2.5.60 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.59 — O primeiro toque em Confirmar aguarda o alinhamento regional e envia
 // o placar uma só vez; a chave preserva a posição da tela após a gravação.
 // Uma região inacessível não permite interpretar um recibo não encontrado em
