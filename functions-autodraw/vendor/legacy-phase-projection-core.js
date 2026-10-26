@@ -12,6 +12,20 @@ function hash(value) {
   return crypto.createHash('sha256').update(stable(value)).digest('hex');
 }
 
+// A projeção pode herdar propriedades opcionais `undefined` do construtor
+// legado. Firestore não armazena esse valor: em objetos a chave é ausente; em
+// arrays a posição permanece e vira null. Planejar já nessa forma faz o recibo
+// e a verificação pós-CAS descreverem exatamente o documento persistível.
+function persistible(value) {
+  if (Array.isArray(value)) return Array.from(value, (item) => item === undefined ? null : persistible(item));
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value)
+      .filter(([, item]) => item !== undefined)
+      .map(([key, item]) => [key, persistible(item)]));
+  }
+  return value;
+}
+
 // Tudo fora de `phases` é protegido: a migração não tem autoridade para
 // modificar elenco, chave, agenda, resultados nem metadados do torneio.
 function protectedFingerprint(tournament) {
@@ -36,7 +50,7 @@ function planLegacyPhaseProjection(tournament, project, options) {
     throw new Error('projector de fases indisponível');
   }
   const out = project(tournament) || {};
-  const phases = Array.isArray(out.phases) ? out.phases : [];
+  const phases = Array.isArray(out.phases) ? persistible(out.phases) : [];
   if (!phases.length) throw new Error('projeção de fases vazia');
   const opts = options || {};
   const tournamentId = String(opts.tournamentId || tournament.id || '').trim();

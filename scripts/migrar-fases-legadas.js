@@ -12,6 +12,7 @@
 
 const path = require('path');
 const { accessTokenForServiceAccountSync } = require('./firebase-service-account-token');
+const phaseStore = require('./phase-projection-firestore-core');
 const ROOT = path.join(__dirname, '..');
 const { _window } = require(path.join(ROOT, 'functions-autodraw', 'draw-core.js'));
 const { runOne } = require(path.join(ROOT, 'scripts', 'migrar-fases-legadas-core.js'));
@@ -44,73 +45,7 @@ if (APPLY && !FINGERPRINT) {
   process.exit(1);
 }
 
-const BASE = 'https://firestore.googleapis.com/v1/projects/scoreplace-app/databases/(default)/documents';
 const token = () => accessTokenForServiceAccountSync();
-
-function fromFirestore(value) {
-  if (value == null) return null;
-  if ('stringValue' in value) return value.stringValue;
-  if ('integerValue' in value) return Number(value.integerValue);
-  if ('doubleValue' in value) return value.doubleValue;
-  if ('booleanValue' in value) return value.booleanValue;
-  if ('nullValue' in value) return null;
-  if ('timestampValue' in value) return value.timestampValue;
-  if ('arrayValue' in value) return (value.arrayValue.values || []).map(fromFirestore);
-  if ('mapValue' in value) {
-    const result = {};
-    Object.entries(value.mapValue.fields || {}).forEach(([key, child]) => { result[key] = fromFirestore(child); });
-    return result;
-  }
-  return null;
-}
-
-function toFirestore(value) {
-  if (value === null || value === undefined) return { nullValue: null };
-  if (typeof value === 'boolean') return { booleanValue: value };
-  if (typeof value === 'number') return Number.isInteger(value) ? { integerValue: String(value) } : { doubleValue: value };
-  if (typeof value === 'string') return { stringValue: value };
-  if (Array.isArray(value)) return { arrayValue: { values: value.map(toFirestore) } };
-  if (typeof value === 'object') {
-    const fields = {};
-    Object.entries(value).forEach(([key, child]) => { fields[key] = toFirestore(child); });
-    return { mapValue: { fields } };
-  }
-  return { nullValue: null };
-}
-
-function documentToObject(document) {
-  const result = {};
-  Object.entries((document && document.fields) || {}).forEach(([key, value]) => { result[key] = fromFirestore(value); });
-  return result;
-}
-
-async function readTournament(accessToken, id) {
-  const response = await fetch(`${BASE}/tournaments/${encodeURIComponent(id)}`, {
-    headers: { Authorization: `Bearer ${accessToken}` }
-  });
-  if (!response.ok) throw new Error(`falhou ao ler ${id}: ${response.status} ${await response.text()}`);
-  const document = await response.json();
-  return { tournament: documentToObject(document), updateTime: document.updateTime || '' };
-}
-
-async function writePhaseProjection(accessToken, id, projection, updateTime) {
-  if (!updateTime) throw new Error('documento sem updateTime; CAS indisponível');
-  if (!projection || !Array.isArray(projection.phases)) throw new Error('projeção de fases inválida');
-  const query = new URLSearchParams();
-  query.append('updateMask.fieldPaths', 'phases');
-  if (Number.isInteger(projection.currentPhaseIndex)) query.append('updateMask.fieldPaths', 'currentPhaseIndex');
-  query.append('currentDocument.updateTime', updateTime);
-  const fields = { phases: toFirestore(projection.phases) };
-  if (Number.isInteger(projection.currentPhaseIndex)) {
-    fields.currentPhaseIndex = toFirestore(projection.currentPhaseIndex);
-  }
-  const response = await fetch(`${BASE}/tournaments/${encodeURIComponent(id)}?${query.toString()}`, {
-    method: 'PATCH',
-    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fields })
-  });
-  if (!response.ok) throw new Error(`CAS recusou a escrita de ${id}: ${response.status} ${(await response.text()).slice(0, 240)}`);
-}
 
 // Marcadores de transição que um documento antigo pode carregar mesmo depois de
 // `phases[]` já descrever completamente o torneio. Eles são SOMENTE medidos
@@ -134,11 +69,11 @@ async function main() {
     apply: APPLY,
     fingerprint: FINGERPRINT,
     project,
-    load: (id) => readTournament(accessToken, id),
-    write: (id, projection, updateTime) => writePhaseProjection(accessToken, id, projection, updateTime),
+    load: (id) => phaseStore.readTournament(accessToken, id),
+    write: (id, projection, updateTime) => phaseStore.writePhaseProjection(accessToken, id, projection, updateTime),
   });
   const plan = result.plan;
-  const markers = legacySwissMarkers((await readTournament(accessToken, ONLY_ID)).tournament);
+  const markers = legacySwissMarkers((await phaseStore.readTournament(accessToken, ONLY_ID)).tournament);
   console.log(`✓ ${ONLY_ID}: ${result.outcome} · ${plan.reason}`);
   console.log(`  recibo: ${plan.fingerprint}`);
   console.log(`  campos protegidos: ${plan.protectedFingerprint}`);

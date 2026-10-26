@@ -19,8 +19,8 @@ function toFirestore(value) {
   if (typeof value === 'boolean') return { booleanValue: value };
   if (typeof value === 'number') return Number.isInteger(value) ? { integerValue: String(value) } : { doubleValue: value };
   if (typeof value === 'string') return { stringValue: value };
-  if (Array.isArray(value)) return { arrayValue: { values: value.map(toFirestore) } };
-  if (typeof value === 'object') return { mapValue: { fields: Object.fromEntries(Object.entries(value).map(([key, child]) => [key, toFirestore(child)])) } };
+  if (Array.isArray(value)) return { arrayValue: { values: Array.from(value, toFirestore) } };
+  if (typeof value === 'object') return { mapValue: { fields: Object.fromEntries(Object.entries(value).filter(([, child]) => child !== undefined).map(([key, child]) => [key, toFirestore(child)])) } };
   return { nullValue: null };
 }
 function documentToObject(document) { return Object.fromEntries(Object.entries((document && document.fields) || {}).map(([key, value]) => [key, fromFirestore(value)])); }
@@ -51,4 +51,4 @@ async function writePhaseProjection(accessToken, id, projection, updateTime) {
   const response = await fetch(BASE + '/tournaments/' + encodeURIComponent(id) + '?' + query.toString(), { method: 'PATCH', headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' }, body: JSON.stringify({ fields }) });
   if (!response.ok) throw new Error('CAS recusou a escrita de ' + id + ': ' + response.status + ' ' + (await response.text()).slice(0, 240));
 }
-module.exports = { documentToObject, listTournaments, readTournament, writePhaseProjection };
+module.exports = { fromFirestore, toFirestore, documentToObject, listTournaments, readTournament, writePhaseProjection };
