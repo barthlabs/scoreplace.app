@@ -12,6 +12,14 @@ const { UNCATEGORIZED_CATEGORY_ID } = require('./registration-core');
 
 function text(value) { return typeof value === 'string' ? value.trim() : ''; }
 
+function migrationRoute(tournament, expectedFingerprint) {
+  const receipt = tournament && tournament.canonicalRegistrationMigration || {};
+  const fingerprint = receipt.fingerprint;
+  if (!fingerprint) return 'legacy';
+  if (expectedFingerprint === undefined) return 'already_canonical';
+  return fingerprint === expectedFingerprint ? 'already_migrated' : 'canonical_divergent';
+}
+
 function participantFields(participantKey) {
   const key = text(participantKey);
   if (key.indexOf('uid:') === 0 && key.slice(4)) {
@@ -205,4 +213,4 @@ function decideMaterialization(tournamentId, report, existingById) {
   };
 }
 
-module.exports = { participantFields, desiredDocuments, decideMaterialization };
+module.exports = { migrationRoute, participantFields, desiredDocuments, decideMaterialization };

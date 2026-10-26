@@ -1651,6 +1651,10 @@ window._materializeCanonicalRegistrations = function (tId) {
     falha: 'Não foi possível gerar a prévia das inscrições.'
   }).then(function (response) {
     var preview = (response && response.data) || {};
+    if (preview.status === 'already_canonical') {
+      showNotification('Inscrições já convertidas', 'Este torneio já usa inscrições canônicas; nenhuma conversão foi aplicada.', 'info');
+      return;
+    }
     var summary = preview.summary || {};
     var registrations = Number(summary.registrations || 0);
     var pairs = Number(summary.formedPairs || 0);
@@ -1725,13 +1729,16 @@ window._materializeCanonicalRegistrationsBatch = function (rawIds) {
   }).then(function (response) {
     var preview = (response && response.data) || {};
     var reports = Array.isArray(preview.reports) ? preview.reports : [];
+    var ignored = Array.isArray(preview.ignored) ? preview.ignored.length : 0;
     if (preview.ready !== true || !preview.plan || !preview.batch || !preview.request) {
       var exceptions = reports.filter(function (item) {
         var summary = item && item.summary || {};
         return Number(summary.conflicts || 0) || Number(summary.unsupported || 0) || Number(summary.divergent || 0);
       }).length;
       showNotification('Conversão em lote não aplicada',
-        exceptions ? exceptions + ' torneio(s) têm conflitos ou dados sem suporte; nenhum foi alterado.' : 'A prévia não está pronta para conversão.', 'warning');
+        exceptions ? exceptions + ' torneio(s) têm conflitos ou dados sem suporte; nenhum foi alterado.' :
+          ignored && preview.reason === 'already_canonical' ? 'Todos os torneios escolhidos já usam inscrições canônicas.' :
+          'A prévia não está pronta para conversão.', 'warning');
       return;
     }
     var totals = preview.plan.totals || {};
@@ -1741,6 +1748,7 @@ window._materializeCanonicalRegistrationsBatch = function (rawIds) {
       '<p style="margin:0 0 10px;">A conversão cria somente registros canônicos. Chaves, placares, duplas e a projeção legada permanecem intactos.</p>' +
       '<ul style="margin:0 0 10px;padding-left:20px;">' +
         '<li><b>' + Number(totals.tournaments || 0) + '</b> torneios</li>' +
+        (ignored ? '<li><b>' + ignored + '</b> já canônico(s), fora desta conversão</li>' : '') +
         '<li><b>' + Number(totals.creates || 0) + '</b> inscrições a criar</li>' +
         '<li><b>' + Number(totals.already || 0) + '</b> inscrições já canônicas</li>' +
         '<li><b>' + Number(totals.formedPairs || 0) + '</b> duplas formadas preservadas</li>' +

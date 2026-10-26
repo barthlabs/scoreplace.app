@@ -24,8 +24,12 @@ const helper = block(index, 'async function _previewCanonicalRegistrationMigrati
 ok('Function de prévia existe', fn.length > 300 && helper.length > 900);
 ok('identidade vem exclusivamente do token', /request\.auth && request\.auth\.uid/.test(fn));
 ok('exige tournamentId', /tournamentId é obrigatório/.test(fn));
-ok('lê o torneio e a parte participants em transação', /db\.runTransaction/.test(helper) && /_splitParts\.hidratar\(tx, ref, snap\.data\(\) \|\| \{\}, \["participants"\]\)/.test(helper));
-ok('autoriza organização contra dado fresco', /_isTournamentOrgCaller\(tournament, callerUid\)/.test(helper));
+ok('lê o torneio e a parte participants em transação somente na rota legada',
+  /db\.runTransaction/.test(helper) && /_splitParts\.hidratar\(tx, ref, rawTournament, \["participants"\]\)/.test(helper) &&
+  helper.indexOf('migrationRoute(rawTournament)') < helper.indexOf('_splitParts.hidratar'));
+ok('autoriza organização no pai fresco antes de hidratar o legado',
+  /_isTournamentOrgCaller\(rawTournament, callerUid\)/.test(helper) &&
+  helper.indexOf('_isTournamentOrgCaller(rawTournament, callerUid)') < helper.indexOf('_splitParts.hidratar'));
 ok('usa o núcleo puro sobre os registros físicos do elenco dividido',
   /_splitParts\.lerRegistrosDaParte\(tx, ref, "participants"\)/.test(helper) &&
   // A projeção recebe também a ponte explícita rótulo legado → categoryId. Sem

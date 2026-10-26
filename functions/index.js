@@ -5566,10 +5566,16 @@ async function _previewCanonicalRegistrationMigrationForOrganizer(db, callerUid,
   return db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
-    const tournament = await _splitParts.hidratar(tx, ref, snap.data() || {}, ["participants"]);
-    if (!_isTournamentOrgCaller(tournament, callerUid)) {
+    const rawTournament = snap.data() || {};
+    if (!_isTournamentOrgCaller(rawTournament, callerUid)) {
       throw new HttpsError("permission-denied", "só a organização consulta a prévia de migração");
     }
+    if (_registrationMigration.migrationRoute(rawTournament) === "already_canonical") {
+      const receipt = rawTournament.canonicalRegistrationMigration;
+      return { status: "already_canonical", tournamentId,
+        fingerprint: receipt.fingerprint, registrationCount: receipt.registrationCount };
+    }
+    const tournament = await _splitParts.hidratar(tx, ref, rawTournament, ["participants"]);
     // A prévia usa os IDs físicos da coleção dividida. É proibido derivar a
     // identidade de convidado da posição do array ou do nome exibido.
     const records = await _splitParts.lerRegistrosDaParte(tx, ref, "participants");
@@ -5649,16 +5655,21 @@ exports.previewCanonicalRegistrationMigrationBatch = onCall(
     const reports = await Promise.all(ids.map((id) =>
       _previewCanonicalRegistrationMigrationForOrganizer(admin.firestore(), callerUid, id)
     ));
-    const unsafe = reports.filter((item) => item.summary.conflicts || item.summary.unsupported || item.summary.divergent || item.summary.unexpectedExisting);
+    const legacyReports = reports.filter((item) => item.status !== "already_canonical");
+    const ignored = reports.filter((item) => item.status === "already_canonical").map((item) => item.tournamentId);
+    if (!legacyReports.length) {
+      return { generatedAt: new Date().toISOString(), reports: [], ignored, ready: false, reason: "already_canonical" };
+    }
+    const unsafe = legacyReports.filter((item) => item.summary.conflicts || item.summary.unsupported || item.summary.divergent || item.summary.unexpectedExisting);
     if (unsafe.length) {
-      return { generatedAt: new Date().toISOString(), reports, ready: false, reason: "exceptions" };
+      return { generatedAt: new Date().toISOString(), reports: legacyReports, ignored, ready: false, reason: "exceptions" };
     }
     let plan, planned;
     try {
-      plan = _registrationBatchPlan.planFromMigrationPreviews(reports, new Date().toISOString());
-      planned = _registrationBatchApply.batchRequestFromPlan(plan, { batchSize: ids.length });
+      plan = _registrationBatchPlan.planFromMigrationPreviews(legacyReports, new Date().toISOString());
+      planned = _registrationBatchApply.batchRequestFromPlan(plan, { batchSize: legacyReports.length });
     } catch (error) { throw new HttpsError("failed-precondition", error.message); }
-    return { generatedAt: new Date().toISOString(), reports, ready: true, plan, batch: planned.batch, request: planned.request };
+    return { generatedAt: new Date().toISOString(), reports: legacyReports, ignored, ready: true, plan, batch: planned.batch, request: planned.request };
   }
 );
 
@@ -5667,7 +5678,7 @@ exports.previewCanonicalRegistrationMigrationBatch = onCall(
 // conferência humana e o clique; conflito nunca é sobrescrito. A migração não
 // toca participants, placares, chaves nem pares legados — estes continuam sendo
 // a projeção de jogo enquanto o leitor canônico é introduzido gradualmente.
-async function _applyCanonicalRegistrationMigrationForOrganizer(db, callerUid, tournamentId, expectedFingerprint) {
+async function _applyCanonicalRegistrationMigrationForOrganizer(db, callerUid, tournamentId, expectedFingerprint, plannedCounts) {
   if (!_CANONICAL_REGISTRATION_MUTATIONS_READY) {
     throw new HttpsError(
       "failed-precondition",
@@ -5678,10 +5689,26 @@ async function _applyCanonicalRegistrationMigrationForOrganizer(db, callerUid, t
   return db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
-    const tournament = await _splitParts.hidratar(tx, ref, snap.data() || {}, ["participants"]);
-    if (!_isTournamentOrgCaller(tournament, callerUid)) {
+    const rawTournament = snap.data() || {};
+    if (!_isTournamentOrgCaller(rawTournament, callerUid)) {
       throw new HttpsError("permission-denied", "só a organização migra inscrições");
     }
+    const route = _registrationMigration.migrationRoute(rawTournament, expectedFingerprint);
+    if (route === "canonical_divergent") {
+      throw new HttpsError("failed-precondition", "o torneio já usa inscrições canônicas com outro recibo");
+    }
+    if (route === "already_migrated") {
+      const receipt = rawTournament.canonicalRegistrationMigration;
+      const physicalCount = receipt.registrationCount;
+      if (!Number.isInteger(physicalCount) || physicalCount < 0 ||
+          (plannedCounts && physicalCount !== plannedCounts.registrations + plannedCounts.historicalExisting)) {
+        throw new HttpsError("failed-precondition", "a contagem canônica mudou; gere uma nova prévia");
+      }
+      return { outcome: "already_migrated", created: 0, already: physicalCount,
+        registrations: plannedCounts ? plannedCounts.registrations : physicalCount,
+        formedPairs: receipt.fixedPairCount || 0, fingerprint: receipt.fingerprint };
+    }
+    const tournament = await _splitParts.hidratar(tx, ref, rawTournament, ["participants"]);
     const records = await _splitParts.lerRegistrosDaParte(tx, ref, "participants");
     let categories;
     try { categories = _legacyCategoryDefinitions.resolve(tournament, records); }
@@ -5701,6 +5728,10 @@ async function _applyCanonicalRegistrationMigrationForOrganizer(db, callerUid, t
     catch (error) { throw new HttpsError("failed-precondition", error.message); }
     if (decision.conflicts.length || decision.unexpectedExisting.length) {
       throw new HttpsError("failed-precondition", "há inscrições canônicas divergentes; a migração não sobrescreve dados");
+    }
+    if (plannedCounts && decision.desired.length + decision.historicalExisting.length !==
+        plannedCounts.registrations + plannedCounts.historicalExisting) {
+      throw new HttpsError("failed-precondition", "a contagem do elenco mudou; gere uma nova prévia");
     }
     decision.creates.forEach((document) => {
       tx.create(ref.collection("registrations").doc(document.registrationId), Object.assign({}, document, {
@@ -5861,7 +5892,9 @@ exports.applyCanonicalRegistrationMigrationBatch = onCall(
     const results = [];
     for (const item of items) {
       try {
-        const result = await _applyCanonicalRegistrationMigrationForOrganizer(db, callerUid, item.tournamentId, item.fingerprint);
+        const result = await _applyCanonicalRegistrationMigrationForOrganizer(db, callerUid, item.tournamentId, item.fingerprint, {
+          registrations: item.registrations, historicalExisting: item.historicalExisting,
+        });
         results.push(Object.assign({ tournamentId: item.tournamentId }, result));
       } catch (error) {
         // Não reinterpreta o erro nem tenta um caminho legado. O recibo mantém

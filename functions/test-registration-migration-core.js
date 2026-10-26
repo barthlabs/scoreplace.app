@@ -6,6 +6,13 @@ let pass = 0, fail = 0;
 function ok(name, value) { if (value) pass++; else { fail++; console.error('✗ ' + name); } }
 function bad(name, fn) { try { fn(); ok(name, false); } catch (_) { ok(name, true); } }
 
+ok('rota de materialização reconhece legado', M.migrationRoute({}) === 'legacy');
+ok('prévia canônica não afirma idempotência sem fingerprint esperado',
+  M.migrationRoute({ canonicalRegistrationMigration: { fingerprint: 'fp' } }) === 'already_canonical');
+ok('aplicação canônica compara o recibo, não o espelho legado',
+  M.migrationRoute({ canonicalRegistrationMigration: { fingerprint: 'fp' }, participants: [] }, 'fp') === 'already_migrated' &&
+  M.migrationRoute({ canonicalRegistrationMigration: { fingerprint: 'fp' } }, 'outro') === 'canonical_divergent');
+
 const report = R.projectLegacyRoster('t1', [
   { sourceKey: 'dupla-1', entry: { p1Uid: 'u1', p2Name: 'Convidada', category: 'cat-a' } },
   { sourceKey: 'solo-1', entry: { uid: 'u3', category: 'cat-b' } },
@@ -101,7 +108,12 @@ const body = start === -1 ? '' : server.slice(start, server.indexOf('\n// Config
 const helperStart = server.indexOf('async function _applyCanonicalRegistrationMigrationForOrganizer');
 const helper = helperStart === -1 ? '' : server.slice(helperStart, start);
 ok('callable de migração existe', start !== -1);
-ok('callable exige fingerprint e organização por UID', body.includes('expectedFingerprint') && helper.includes('_isTournamentOrgCaller(tournament, callerUid)'));
+ok('callable exige fingerprint e organização por UID no documento pai', body.includes('expectedFingerprint') && helper.includes('_isTournamentOrgCaller(rawTournament, callerUid)'));
+ok('retomada canônica sai antes da leitura legada e de qualquer escrita',
+  helper.indexOf('route === "already_migrated"') < helper.indexOf('lerRegistrosDaParte') &&
+  helper.indexOf('route === "already_migrated"') < helper.indexOf('tx.create(') &&
+  helper.indexOf('route === "already_migrated"') < helper.indexOf('tx.set(ref,') &&
+  helper.includes('receipt.registrationCount') && helper.includes('route === "canonical_divergent"'));
 ok('migração só é liberada depois das mutações canônicas e conserva a trava do servidor',
   server.includes('const _CANONICAL_REGISTRATION_MUTATIONS_READY = true;') &&
   helper.includes('if (!_CANONICAL_REGISTRATION_MUTATIONS_READY)') && helper.includes('operações canônicas de elenco não foram concluídas'));
@@ -116,7 +128,7 @@ ok('reconciliação preserva histórico, exige fingerprint e recusa qualquer sob
   reconciliation.includes('_hasCanonicalTournamentDraw(tournament)'));
 ok('lote usa o mesmo helper transacional e limita dez torneios',
   server.includes('exports.applyCanonicalRegistrationMigrationBatch = onCall') &&
-  body.includes('_applyCanonicalRegistrationMigrationForOrganizer(db, callerUid, item.tournamentId, item.fingerprint)') &&
+  body.includes('_applyCanonicalRegistrationMigrationForOrganizer(db, callerUid, item.tournamentId, item.fingerprint, {') &&
   body.includes('_registrationBatchPlan.verifyPlan(data.plan)') &&
   body.includes('_registrationBatchApply.batchRequestFromPlan'));
 
