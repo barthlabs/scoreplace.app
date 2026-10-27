@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "backendCommit": "7dd97815d7e0e5a4633d331cde37cca61c688fdb",
-  "scopeNote": "drawRound usa o planejador estrito para recusar agendas inviáveis antes de gravar o sorteio; o deploy não executa sorteio nem altera torneios existentes.",
+  "backendCommit": "93f6e10d98a888ef6cfbb1d98717bf756075d20d",
+  "scopeNote": "Neste corte só drawRound mudou de comportamento: recusa agendas estritas inviáveis antes da gravação. setTournamentEnrollmentStatus, resetTournamentToEnrollment, updateTournamentConfiguration e createTournament já têm recibos de publicação no commit 56ac51fd e suas implementações não foram alteradas neste corte. O deploy não executa sorteio nem altera torneios existentes.",
   "functions": [
     "drawRound"
   ]
