@@ -206,6 +206,37 @@ ok(vis()[0]===false && vis()[1]===false,'…e os demais seguem filtrados pela bu
 input.value=''; F();
 ok(vis().every(Boolean),'limpar tudo devolve todos os cards');
 
+// O nome aparece em vários jogos: a busca salta para o último ainda sem placar,
+// enquadrando o card inteiro abaixo da barra fixa. Atualização automática não salta.
+const searchAttrs=[
+  {'data-players':'Ana','data-match-num':'1','data-bracket-complete':'1','data-bracket-pending-match':'0'},
+  {'data-players':'Ana','data-match-num':'2','data-bracket-complete':'0','data-bracket-pending-match':'1'},
+  {'data-players':'Ana','data-match-num':'3','data-bracket-complete':'0','data-bracket-pending-match':'1'}
+];
+const originalAttributes=cards.map(c=>c.getAttribute);
+cards.forEach((c,i)=>{
+  c.getAttribute=(key)=>searchAttrs[i][key];
+  c.offsetParent={}; c.offsetHeight=120;
+  c.getBoundingClientRect=()=>({top:i===2?700:300,bottom:i===2?840:420});
+});
+sandbox.document.documentElement={clientHeight:800};
+sandbox.window.getComputedStyle=()=>({getPropertyValue:()=> '120px'});
+sandbox.window.innerHeight=800;
+sandbox.window.scrollY=0;
+const searchScrolls=[];
+sandbox.window.scrollTo=(opts)=>searchScrolls.push(opts);
+input.value='ana'; F('input');
+ok(searchScrolls.length===1 && searchScrolls[0].top===572,
+  'busca prioriza o último jogo sem placar e enquadra o card inteiro na viewport');
+searchScrolls.length=0; F();
+ok(searchScrolls.length===0,'refiltro automático não desloca a tela após lançar placar');
+searchAttrs[2]['data-bracket-complete']='1'; searchAttrs[2]['data-bracket-pending-match']='0';
+ok(sandbox.window._bracketSearchTarget(cards,false,null)===cards[1],
+  'jogo anterior sem placar passa a ser o alvo quando o último recebe resultado');
+cards.forEach((c,i)=>{c.getAttribute=originalAttributes[i];});
+delete sandbox.window.getComputedStyle;
+input.value=''; F();
+
 // A barra completa filtra metadados dos jogos, mas não reordena nem troca a aba.
 cards[0].getAttribute=(k)=>({'data-players':'José Silva | Ana','data-match-num':'167','data-bracket-tab-gender':'fem','data-bracket-tab-category':'Fem Light'})[k];
 cards[1].getAttribute=(k)=>({'data-players':'Bruno / Carla | Bruno | Carla','data-match-num':'168','data-bracket-tab-gender':'masc','data-bracket-tab-category':'Masc Power'})[k];

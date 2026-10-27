@@ -848,6 +848,90 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
     return out;
   };
 
+  // Num sorteio de três jogos por dupla, "rodada" do documento pode ser a
+  // posição visual na grade (R1..R7). A cadência esportiva deve ser derivada
+  // dos confrontos: cada estágio contém exatamente um jogo de cada dupla.
+  function _schPackTeamDayStrict(t, matches, day, dayIndex, courts, slotMs) {
+    var count = Math.floor((day.fimMs - day.iniMs) / slotMs);
+    if (!count || count > 30 || matches.length > count * courts) return null;
+    var order = (t.categorySchedule && t.categorySchedule.slots || [])
+      .filter(function (slot) { return slot.day === day.ymd; })
+      .sort(function (a, b) { return Number(a.order || 0) - Number(b.order || 0); })
+      .map(function (slot) { return String(slot.category || ''); });
+    var categories = Array.from(new Set(order.concat(matches.map(_schCategoriaDoJogo))));
+    var staged = {}, totalStages = 0;
+    for (var ci = 0; ci < categories.length; ci++) {
+      var category = categories[ci];
+      var games = matches.filter(function (game) { return _schCategoriaDoJogo(game) === category; })
+        .slice().sort(function (a, b) { return String(a.id).localeCompare(String(b.id)); });
+      if (!games.length) continue;
+      var incidence = Object.create(null), edges = [];
+      for (var gi = 0; gi < games.length; gi++) {
+        var game = games[gi], left = String(game.team1Obj && game.team1Obj.fixedPairId || ''),
+          right = String(game.team2Obj && game.team2Obj.fixedPairId || '');
+        if (!left || !right || left === right) return null;
+        edges.push([left, right]);
+        (incidence[left] || (incidence[left] = [])).push(gi);
+        (incidence[right] || (incidence[right] = [])).push(gi);
+      }
+      var degrees = Object.keys(incidence).map(function (key) { return incidence[key].length; });
+      var stages = day.categoryFlow === 'rounds' ? degrees[0] : Math.max(degrees[0], Math.ceil(games.length / courts));
+      if (!stages || stages > 8 || degrees.some(function (degree) { return degree !== degrees[0]; }) ||
+          games.length * 2 !== degrees.length * degrees[0]) return null;
+      var colors = games.map(function () { return -1; }), usedColors = Object.create(null), colorCounts = Array(stages).fill(0), steps = 0;
+      Object.keys(incidence).forEach(function (key) { usedColors[key] = 0; });
+      function color(remaining) {
+        if (!remaining) return true;
+        if (++steps > 200000) return false;
+        var chosen = -1, options = null;
+        for (var ei = 0; ei < edges.length; ei++) {
+          if (colors[ei] >= 0) continue;
+          var pair = edges[ei], mask = usedColors[pair[0]] | usedColors[pair[1]], available = [];
+          for (var stage = 0; stage < stages; stage++) if (!(mask & (1 << stage)) &&
+              (day.categoryFlow === 'rounds' || colorCounts[stage] < courts)) available.push(stage);
+          if (!available.length) return false;
+          if (!options || available.length < options.length) { chosen = ei; options = available; if (available.length === 1) break; }
+        }
+        var ends = edges[chosen];
+        for (var oi = 0; oi < options.length; oi++) {
+          var value = options[oi], bit = 1 << value;
+          colors[chosen] = value; usedColors[ends[0]] |= bit; usedColors[ends[1]] |= bit; colorCounts[value]++;
+          if (color(remaining - 1)) return true;
+          usedColors[ends[0]] &= ~bit; usedColors[ends[1]] &= ~bit; colorCounts[value]--; colors[chosen] = -1;
+        }
+        return false;
+      }
+      if (!color(games.length)) return null;
+      staged[category] = Array.from({ length:stages }, function () { return []; });
+      games.forEach(function (game, index) { staged[category][colors[index]].push(game); });
+      totalStages = Math.max(totalStages, stages);
+    }
+    var ordered = [];
+    if (day.categoryFlow === 'rounds') {
+      for (var round = 0; round < totalStages; round++) {
+        var pending = categories.map(function (category) { return (staged[category] && staged[category][round] || []).slice(); });
+        while (pending.some(function (list) { return list.length; })) {
+          for (var c = 0; c < pending.length; c++) if (pending[c].length) ordered.push(pending[c].shift());
+        }
+        // Fecha o estágio antes de iniciar o próximo, mesmo que sobrem quadras.
+        while (ordered.length % courts) ordered.push(null);
+      }
+    } else {
+      categories.forEach(function (category) {
+        (staged[category] || []).forEach(function (stageGames) {
+          ordered = ordered.concat(stageGames);
+          while (ordered.length % courts) ordered.push(null);
+        });
+      });
+    }
+    var waves = Math.ceil(ordered.length / courts);
+    if (waves > count) return null;
+    return ordered.filter(Boolean).map(function (game) {
+      var position = ordered.indexOf(game), wave = Math.floor(position / courts), at = day.iniMs + wave * slotMs;
+      return { matchId:String(game.id), ms:at, iso:new Date(at).toISOString(), dia:dayIndex, onda:wave, extrapolaJanela:false };
+    });
+  }
+
   // Empacota partidas independentes de TODAS as categorias no mesmo horário.
   // A agenda estruturada por equipes ocupa a capacidade global de quadras;
   // reservar ondas inteiras para uma categoria fabricava quadras vazias.
@@ -1094,6 +1178,12 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
       var packedTeamDay = teamSchedule && teamSchedule.enabled === true &&
         (teamSchedule.mode === 'structured' || teamSchedule.mode === 'free') &&
         t.categorySchedule && t.categorySchedule.confirmed === true && jogos.some(function (m) { return !!m.requiredDay; });
+      var strictTeamDay = packedTeamDay && Number(teamSchedule.gamesPerTeam) === 3 &&
+        Array.isArray(teamSchedule.pairDayAssignments) && teamSchedule.pairDayAssignments.length > 0 &&
+        // Replanejar a partir de um torneio já em andamento não pode exigir
+        // que o subgrafo de partidas restantes continue 3-regular.
+        (all || []).filter(function (m) { return m && !m.isBye && !m.isSitOut; }).length === jogos.length;
+      var strictFailed = false;
       if (packedTeamDay) {
         var byDay = jan.dias.map(function () { return []; }), assigned = true;
         chaves.forEach(function (key) {
@@ -1103,10 +1193,12 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
         });
         var durationMinutes = window._minutosDaPartida(t, window._faseDoTorneio(t, (jogos[0] && jogos[0].phaseIndex) || 0)) || 30;
         var sameDuration = jogos.every(function (m) { return (window._minutosDaPartida(t, window._faseDoTorneio(t, m.phaseIndex || 0)) || 30) === durationMinutes; });
+        if (strictTeamDay && (!assigned || !sameDuration)) strictFailed = true;
         if (assigned && sameDuration) {
           var packed = [], full = true;
           byDay.forEach(function (matches, index) {
-            var result = _schPackStructuredDay(t, matches, jan.dias[index], index, quadras, durationMinutes * _MIN);
+            var result = strictTeamDay ? _schPackTeamDayStrict(t, matches, jan.dias[index], index, quadras, durationMinutes * _MIN) :
+              _schPackStructuredDay(t, matches, jan.dias[index], index, quadras, durationMinutes * _MIN);
             if (!result) full = false; else packed = packed.concat(result);
           });
           if (full && packed.length === jogos.length) return {
@@ -1114,10 +1206,12 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
             fimMs:packed.reduce(function (max, slot) { return Math.max(max, slot.ms + durationMinutes * _MIN); }, jan.dias[0].iniMs),
             extraPorDia:jan.dias.map(function () { return 0; }), extraMs:0, executionOrder:ordemLegada, slotMin:durationMinutes
           };
+          if (strictTeamDay) strictFailed = true;
         }
-        // Se não couber, o caminho legado abaixo mantém cada requiredDay no
-        // mesmo dia e marca o excedente (cabe:false). A prévia e a publicação
-        // bloqueiam esse estado; nunca inventamos um terceiro dia.
+        // Se o plano estrito não couber, o caminho histórico abaixo ainda
+        // permite visualizar partidas e excedentes no mesmo dia. Porém a
+        // prévia continua cabe:false mesmo quando esse desenho frouxo couber:
+        // quadras ocupadas não autorizam quebrar a cadência escolhida.
       }
 
       var slots = [], cursores = jan.dias.map(function (dia) { return dia.iniMs; }), onda = 0, estourou = false, fimMs = cursores[0], extraPorDia = jan.dias.map(function () { return 0; });
@@ -1310,7 +1404,7 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
         // UI. `slots` é sempre a lista canônica de {matchId, ms} consumida pela
         // agenda operacional — manter esse contrato entre cliente e vendor.
         slots: slots, quadras: quadras, dias: jan.dias.length,
-        cabe: !estourou, fimMs: fimMs, extraPorDia:extraPorDia,
+        cabe: !estourou && !strictFailed, fimMs: fimMs, extraPorDia:extraPorDia,
         extraMs: extraPorDia.reduce(function (sum, value) { return sum + value; }, 0),
         executionOrder:ordemLegada,
         // slotMin da 1ª fase — só informativo (cada fase tem o seu, ver o loop acima)

@@ -295,6 +295,7 @@ summary::-webkit-details-marker { display: none; }
 .sp-match-clock-action svg { display:block; width:17px; height:17px; flex:none; }
 .sp-match-clock-action:disabled { opacity:.45; cursor:wait; }
 .sp-court-occupied { color:#9ca3af; background:#374151; }
+.sp-match-player-busy { color:#fca5a5; font-size:.78rem; font-weight:800; }
 .sp-ready-court-select {
   margin-top: 4px;
   width: 100%;

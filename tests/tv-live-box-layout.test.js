@@ -49,6 +49,34 @@ const { chromium } = require('@playwright/test');
         assert(measurement.scores, `placares ficam nos boxes em ${viewport.width}px`);
         assert(measurement.players, `atletas do próximo jogo ficam nos boxes em ${viewport.width}px`);
         assert(measurement.upcomingFont >= 10, 'nomes do próximo jogo seguem legíveis');
+        if (viewport.width === 2048) {
+          const pinned = await page.evaluate(() => {
+            const root = document.getElementById('tv-root');
+            const list = root.querySelector('.tv-results-list');
+            const first = list.querySelector('.tv-result');
+            for (let i = 0; i < 12; i++) {
+              const copy = first.cloneNode(true);
+              copy.classList.remove('tv-result-latest', 'tv-result-pinned');
+              copy.removeAttribute('data-result-id');
+              list.appendChild(copy);
+            }
+            first.setAttribute('data-result-id', 'fresh-visual-test');
+            first.setAttribute('data-result-at', String(Date.now()));
+            window.dispatchEvent(new Event('resize'));
+            window.__tvReplaceMarkup(root.innerHTML);
+            const active = root.querySelector('.tv-results-list');
+            active.scrollTop = 150;
+            const card = active.querySelector('.tv-result-latest');
+            return { pinned:card.classList.contains('tv-result-pinned'),
+              border:getComputedStyle(card).borderTopColor,
+              position:getComputedStyle(card).position,
+              top:card.getBoundingClientRect().top,
+              listTop:active.getBoundingClientRect().top };
+          });
+          assert(pinned.pinned && pinned.position === 'sticky', 'último placar fica fixo durante a rolagem');
+          assert.equal(pinned.border, 'rgb(251, 191, 36)', 'borda dourada usa a cor esperada');
+          assert(Math.abs(pinned.top - pinned.listTop) < 2, 'card fixo permanece no topo da seção');
+        }
         await page.close();
       }
       const customPage = await browser.newPage({ viewport: { width: 1440, height: 900 } });

@@ -76,6 +76,10 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
       }
     }
     if (validatePolicy) validatePolicy(config, HttpsError);
+    if (config.registrationSettings !== undefined) {
+      try { config.registrationSettings = require('./registration-settings-core').validate(config.registrationSettings, config.combinedCategories); }
+      catch (error) { fail('invalid-argument', error.message); }
+    }
     if (config.fmt2 && validateIntent) validateIntent(config.fmt2, HttpsError, undefined, undefined);
     if (validateCapacity) validateCapacity(config);
     const hasFmt2 = !!(config.fmt2 && typeof config.fmt2 === 'object' && !Array.isArray(config.fmt2));
@@ -109,7 +113,12 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
 /* O organizador é exclusivamente o `creatorUid`. Nome, foto e contato vivem no
        * perfil e a tela os hidrata pelo UID; congelar displayName aqui faria o
        * torneio envelhecer quando a pessoa atualizasse o próprio perfil. */
-      Object.assign(t, { id, name: config.name.trim(), status: 'open', storageCanonico: true,
+      const registration = config.registrationSettings;
+      const pricing = registration && registration.pricing;
+      const requiresCheckout = pricing && (pricing.mode === 'single'
+        ? pricing.cents > 0
+        : Object.keys(pricing.centsByCategory || {}).some(category => pricing.centsByCategory[category] > 0));
+      Object.assign(t, { id, name: config.name.trim(), status: registration && (registration.source === 'external' || requiresCheckout) ? 'closed' : 'open', storageCanonico: true,
         creatorUid: uid, organizerUid: uid, organizerId: uid,
         coHosts: [],
         participants: [], standbyParticipants: [], matches: [], rounds: [], groups: [],

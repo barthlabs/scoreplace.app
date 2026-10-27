@@ -30,6 +30,12 @@ const ler = (p) => fs.readFileSync(path.join(RAIZ, p), 'utf8');
  * as `rules-*` disputam as portas 8098/8099 e TODAS usam o projeto `demo-scoreplace`, ou
  * seja, os dados se misturariam. Rodadas em série, como aqui, não colidem. */
 const EMULADOR_MANUAL = {
+  'tests/neon-emulator-copy.test.js':
+    'NEON_BACKUP_PATH=/caminho/absoluto/para/backup.json node tests/neon-emulator-copy.test.js',
+  'tests/neon-sandbox-capacity.test.js':
+    'NEON_BACKUP_PATH=/caminho/absoluto/para/backup.json node tests/neon-sandbox-capacity.test.js',
+  'tests/neon-sandbox-schedule-replay.test.js':
+    'NEON_BACKUP_PATH=/caminho/absoluto/para/backup.json node tests/neon-sandbox-schedule-replay.test.js',
   'tests/migrar-inscricoes-admin-emulator.test.js':
     'node tests/migrar-inscricoes-admin-emulator.test.js',
   'functions/test-backfill-emu.js':

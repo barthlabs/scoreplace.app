@@ -4401,32 +4401,35 @@ window._renderReadyMatchesBanner = function _renderReadyMatchesBanner(t, opts) {
     const bg = isReady ? 'rgba(16,185,129,0.12)' : 'rgba(245,158,11,0.08)';
     const border = isReady ? 'rgba(16,185,129,0.3)' : 'rgba(245,158,11,0.2)';
     const labelColor = isReady ? '#4ade80' : '#fbbf24';
+    const released = window._bracketCourtReleased ? window._bracketCourtReleased(t.id) : {};
+    const all = typeof window._collectAllMatches === 'function' ? window._collectAllMatches(t).filter(function (item) { return item && !released[String(item.id)]; }) : [];
+    const occupancy = window.ScoreplaceCourtOccupancy;
+    const playerBusy = !!(isReady && occupancy && window.ScoreplaceNextMatch && window.ScoreplaceNextMatch.conflictsWithActive(
+      e.match, all.filter(function (item) { return occupancy.occupiesCourt(item); })));
     // Seletor de quadra — só em jogo PRONTO (todos presentes). Organizador vê
     // dropdown editável; demais veem a quadra como etiqueta (quando já definida).
     let courtHtml = '';
     const _mid = String(e.match.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     if (isReady && _isOrg && _courts.length > 0 && e.match.id) {
       const cur = e.match.court || '';
-      const released = window._bracketCourtReleased ? window._bracketCourtReleased(t.id) : {};
-      const all = typeof window._collectAllMatches === 'function' ? window._collectAllMatches(t).filter(function (item) { return item && !released[String(item.id)]; }) : [];
-      const occupancy = window.ScoreplaceCourtOccupancy;
       const curBusy = !!(cur && occupancy && occupancy.occupant(all, cur, e.match.id));
       const noFree = _courts.every(function(c) { return occupancy && occupancy.occupant(all, c, e.match.id); });
       const busyPlaceholder = curBusy || noFree;
       const opts = '<option value=""' + (!cur || curBusy ? ' selected' : '') + (busyPlaceholder || cur || e.match.courtCalledAt ? ' disabled' : '') +
         (busyPlaceholder ? ' class="sp-court-placeholder-busy"' : '') + '>📍 Definir quadra…</option>' +
         _courts.map(function(c){ var busy = occupancy && occupancy.occupant(all, c, e.match.id); return '<option value="' + _sh(c) + '"' + (cur === c && !busy ? ' selected' : '') + (busy ? ' disabled class="sp-court-occupied"' : '') + '>' + _sh(c) + (busy ? ' · ocupada' : '') + '</option>'; }).join('');
-      courtHtml = '<select data-match-id="' + _sh(String(e.match.id)) + '" data-persisted-court="' + _sh(cur) + '" class="sp-ready-court-select' + (busyPlaceholder && (!cur || curBusy) ? ' sp-court-placeholder-busy' : '') + '" onclick="event.stopPropagation()" onchange="window._assignMatchCourtFromSelect(this,\'' + _tIdSafe + '\',\'' + _mid + '\').catch(function(){})">' + opts + '</select>';
+      courtHtml = '<select data-match-id="' + _sh(String(e.match.id)) + '" data-persisted-court="' + _sh(cur) + '" class="sp-ready-court-select' + (busyPlaceholder && (!cur || curBusy) ? ' sp-court-placeholder-busy' : '') + '"' + (playerBusy ? ' disabled title="Atleta já está em outra quadra"' : '') + ' onclick="event.stopPropagation()" onchange="window._assignMatchCourtFromSelect(this,\'' + _tIdSafe + '\',\'' + _mid + '\').catch(function(){})">' + opts + '</select>';
     } else if (e.match.court) {
       courtHtml = '<div style="margin-top:4px;font-size:0.74rem;font-weight:800;color:var(--sp-c-34d399,#34d399);display:flex;align-items:center;gap:4px;">📍 ' + _sh(e.match.court) + '</div>';
     }
     return `
-    <div style="padding:10px 14px;background:${window._spCor(bg, 'background')};border:1px solid ${border};border-radius:10px;display:flex;flex-direction:column;gap:4px;">
+    <div style="padding:10px 14px;background:${window._spCor(bg, 'background')};border:${playerBusy ? '3px solid #ef4444' : '1px solid ' + border};border-radius:10px;display:flex;flex-direction:column;gap:4px;">
       <div style="font-size:0.8rem;font-weight:800;color:${window._spCor(labelColor, 'color')};letter-spacing:0.5px;">${e.friendlyNum != null ? _t('bracket.matchNum', {n: e.friendlyNum}) : ''}</div>
       ${renderSideRow(e.match.p1)}
       <div style="font-size:0.6rem;font-weight:800;color:rgba(255,255,255,0.2);letter-spacing:2px;padding:0 2px;">VS</div>
       ${renderSideRow(e.match.p2)}
       ${courtHtml}
+      ${playerBusy ? '<span class="sp-match-player-busy">Atleta em quadra</span>' : ''}
     </div>`;
   };
 
@@ -4568,10 +4571,13 @@ function _syncMatchCourtCopies(tId, matchId, value, persisted) {
   var matches = t && typeof window._collectAllMatches === 'function' ? window._collectAllMatches(t).filter(function (item) { return item && !released[String(item.id)]; }) : [];
   var m = matches.find(function (item) { return String(item.id) === String(matchId); });
   var occupancy = window.ScoreplaceCourtOccupancy;
+  var active = occupancy && window.ScoreplaceNextMatch ? matches.filter(function (item) { return occupancy.occupiesCourt(item); }) : [];
+  var playerBusy = !!(m && window.ScoreplaceNextMatch && window.ScoreplaceNextMatch.conflictsWithActive(m, active));
   var copies = Array.prototype.filter.call(document.querySelectorAll('select[data-match-id]'), function (node) {
     return node.getAttribute('data-match-id') === String(matchId);
   });
   copies.forEach(function (node) {
+    node.disabled = playerBusy;
     var courtOptions = Array.prototype.filter.call(node.options, function (option) { return !!option.value; });
     courtOptions.forEach(function (option) {
       var busy = !!(occupancy && occupancy.occupant(matches, option.value, matchId));
@@ -4597,11 +4603,19 @@ function _syncMatchCourtCopies(tId, matchId, value, persisted) {
     node.classList.toggle('sp-court-placeholder-busy', !node.value && (storedBusy || !free || selectedBusy));
     var row = node.closest('.sp-match-operational');
     var button = row && row.querySelector('button.sp-match-confirm');
-    if (button) button.disabled = button.getAttribute('data-call-allowed-today') !== '1' || !node.value || selectedBusy;
+    if (button) button.disabled = playerBusy || button.getAttribute('data-call-allowed-today') !== '1' || !node.value || selectedBusy;
   });
 }
 
 window._assignMatchCourtFromSelect = function(select, tId, matchId) {
+  var current = typeof window._findTournamentById === 'function' ? window._findTournamentById(String(tId)) : null;
+  var all = current && typeof window._collectAllMatches === 'function' ? window._collectAllMatches(current) : [];
+  var candidate = all.find(function (item) { return item && String(item.id) === String(matchId); });
+  var occupancy = window.ScoreplaceCourtOccupancy;
+  if (candidate && occupancy && window.ScoreplaceNextMatch && window.ScoreplaceNextMatch.conflictsWithActive(candidate,
+      all.filter(function (item) { return occupancy.occupiesCourt(item); }))) {
+    return Promise.reject(new Error('Uma das duplas já está em quadra.'));
+  }
   var prior = select.getAttribute('data-persisted-court') || '';
   var requested = select.value;
   _syncMatchCourtCopies(tId, matchId, requested);
@@ -4622,6 +4636,15 @@ window._assignMatchCourtFromSelect = function(select, tId, matchId) {
 // desse instante, para sobreviver a reload e coincidir em todas as telas.
 window._confirmMatchCourtCall = function(button, tId, matchId) {
   tId = String(tId);
+  var currentTournament = typeof window._findTournamentById === 'function' ? window._findTournamentById(tId) : null;
+  var allMatches = currentTournament && typeof window._collectAllMatches === 'function' ? window._collectAllMatches(currentTournament) : [];
+  var candidate = allMatches.find(function (item) { return item && String(item.id) === String(matchId); });
+  var occupancy = window.ScoreplaceCourtOccupancy;
+  if (candidate && occupancy && window.ScoreplaceNextMatch && window.ScoreplaceNextMatch.conflictsWithActive(candidate,
+      allMatches.filter(function (item) { return occupancy.occupiesCourt(item); }))) {
+    if (typeof showNotification === 'function') showNotification('Atleta em quadra', 'Uma das duplas já está em outra quadra. Chame outro jogo.', 'error');
+    return;
+  }
   var row = button && button.closest('.sp-match-operational');
   var select = row && row.querySelector('select');
   var court = select && String(select.value || '').trim();
@@ -8603,6 +8626,14 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     (!(t && (t.isSandbox === true || String(tId).indexOf('sb_') === 0)) ||
       !!(window._isUserOrgOrCoHost && window._isUserOrgOrCoHost(t, window.AppStore && window.AppStore.currentUser)));
   var _canChangeCardCourt = !!(_isConcentratedEvent && t && _canOperateCourt && !_releasedForCard[String(m.id)] && !_matchAlreadyInPlay && !isByeMatch && !m.isSitOut && _withinCallWindow);
+  var _playerInAnotherCourt = false;
+  if (_isConcentratedEvent && t && !m.winner && window.ScoreplaceCourtOccupancy && window.ScoreplaceNextMatch &&
+      typeof window._collectAllMatches === 'function') {
+    var _activeForCard = window._collectAllMatches(t).filter(function (item) {
+      return item && !_releasedForCard[String(item.id)] && window.ScoreplaceCourtOccupancy.occupiesCourt(item);
+    });
+    _playerInAnotherCourt = window.ScoreplaceNextMatch.conflictsWithActive(m, _activeForCard);
+  }
   var _courtCardHtml = '';
   // Na agenda concentrada a quadra e o horário formam um único dado operacional.
   // `scheduledKind: estimate` vem do planejador; o ≈ deixa explícito que a
@@ -8663,6 +8694,11 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       return '<option value="' + window._safeHtml(court) + '"' + (_displayCourt === court && !busy ? ' selected' : '') + (busy ? ' disabled class="sp-court-occupied"' : '') + '>' + window._safeHtml(court) + (busy ? ' · ocupada' : ' · livre') + '</option>';
     }).join('');
     _courtCardHtml = '<div class="sp-match-operational" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><label class="sp-match-court"><select aria-label="Quadra" data-match-id="' + window._safeHtml(String(m.id)) + '" data-persisted-court="' + window._safeHtml(_persistedCourt) + '" class="' + (_busyPlaceholder && !_displayCourt ? 'sp-court-placeholder-busy' : '') + '" onclick="event.stopPropagation()" onchange="window._assignMatchCourtFromSelect(this,\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\').catch(function(){})">' + _courtOpts + '</select></label><button type="button" class="sp-match-confirm" data-call-allowed-today="' + (_callAllowedToday ? '1' : '0') + '" aria-label="Confirmar chamada para a quadra"' + ((!_callAllowedToday || !_displayCourt || (_occupancy && _occupancy.occupant(_allForCourts, _displayCourt, m.id))) ? ' disabled' : '') + (!_callAllowedToday ? ' title="' + window._safeHtml(_callDayMessage) + '"' : '') + ' onclick="event.stopPropagation();window._confirmMatchCourtCall(this,\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\')" style="padding:4px 9px;border-radius:7px;border:1px solid #22c55e;background:#166534;color:#fff;font-weight:800;cursor:pointer;">' + (m.courtCalledAt ? '✓ OK' : 'OK') + '</button>' + (!_callAllowedToday ? '<span class="sp-match-call-day-hint">' + window._safeHtml(_callDayMessage) + '</span>' : '') + _estimatedTimeHtml + '</div>';
+    if (_playerInAnotherCourt) {
+      _courtCardHtml = _courtCardHtml.replace('aria-label="Quadra"', 'aria-label="Quadra" disabled title="Atleta já está em outra quadra"')
+        .replace('aria-label="Confirmar chamada para a quadra"', 'aria-label="Confirmar chamada para a quadra" disabled')
+        .replace(/<\/div>$/, '<span class="sp-match-player-busy">Atleta em quadra</span></div>');
+    }
   } else if (_isConcentratedEvent && m.court) {
     _courtCardHtml = '<div class="sp-match-operational" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><div class="sp-match-court sp-match-court--readonly">' + window._safeHtml(String(m.court)) + '</div>' + (m.courtCalledAt && _canOperateCourt ? '<span class="sp-match-confirm sp-match-confirm--locked">✓ OK</span>' : '') + _estimatedTimeHtml + '</div>';
   } else if (_estimatedTimeHtml) {
@@ -9273,7 +9309,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // este contorno porque são renderizados em modo somente leitura.
   var _courtActive = !_readOnly && !m.winner && !m.wo && !m.isBye && !m.isSitOut &&
     !!m.court && !!m.courtCalledAt && !_releasedForCard[String(m.id)];
-  var _cardBorderStyle = _courtActive ? '3px solid #22c55e' :
+  var _cardBorderStyle = _playerInAnotherCourt ? '3px solid #ef4444' : _courtActive ? '3px solid #22c55e' :
     (_isMyMatch ? '2px' : '1px') + ' solid ' +
     (hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' :
       hasPending ? 'rgba(251,191,36,0.5)' : cardBorder);
@@ -12024,6 +12060,28 @@ function _uidsDoCard(c) {
   }
   return (c._spUids = out.length ? out : _SEM_UIDS);
 }
+// A busca deve levar ao jogo atual, não ao primeiro resultado histórico.
+// A ordem do DOM acompanha a ordem da chave; entre jogos ainda sem resultado,
+// o último card é o alvo. Marcadores de classificação não são jogos.
+window._bracketSearchTarget = function (cards, visibleOnly, root) {
+  var lastMatch = null, lastPending = null;
+  for (var i = 0; i < cards.length; i++) {
+    var card = cards[i];
+    if (!card || !card.getAttribute || card.getAttribute('data-fb-marker') === '1' ||
+        !card.getAttribute('data-match-num')) continue;
+    if (visibleOnly) {
+      var visible = true;
+      for (var node = card; node && node !== root; node = node.parentElement) {
+        if (node.hidden || node.style && node.style.display === 'none') { visible = false; break; }
+      }
+      if (!visible || card.offsetParent === null || card.offsetHeight <= 0) continue;
+    }
+    lastMatch = card;
+    if (card.getAttribute('data-bracket-pending-match') === '1' &&
+        card.getAttribute('data-bracket-complete') !== '1') lastPending = card;
+  }
+  return lastPending || lastMatch;
+};
 window._bracketApplyFilter = function (origin) {
   /* ⭐ ANTES de mexer em qualquer `display`: é esta posição que tem que sobreviver ao filtro.
    * ⛔ E LENDO COM REDE. Esta linha nasceu como `(document.scrollingElement ||
@@ -12432,7 +12490,8 @@ window._bracketApplyFilter = function (origin) {
       }
       return true;
     };
-    if (!_searchTabCandidates.some(_searchCardVisible)) {
+    var _preferredSearchCard = window._bracketSearchTarget(_searchTabCandidates, false, root);
+    if (_preferredSearchCard && !_searchCardVisible(_preferredSearchCard)) {
       var _tabTournament = _tBusca || window._currentBracketTournament;
       var _tabTid = _tabTournament && String(_tabTournament.id || '');
       var _tabRoot = _tabTid && Array.prototype.find.call(document.querySelectorAll('[data-bracket-tabs-root]'), function (node) {
@@ -12440,10 +12499,10 @@ window._bracketApplyFilter = function (origin) {
       });
       if (_tabRoot) {
         var _dateTabs = _tabRoot.getAttribute('data-bracket-date-tabs') === '1';
-        var _target = _searchTabCandidates.find(function (card) {
+        var _target = window._bracketSearchTarget(_searchTabCandidates.filter(function (card) {
           return card.getAttribute(_dateTabs ? 'data-bracket-tab-day' : 'data-bracket-tab-gender') !== null &&
             !!card.getAttribute('data-bracket-tab-category');
-        });
+        }), false, root);
         if (_target) {
           var _tabGender = _target.getAttribute(_dateTabs ? 'data-bracket-tab-day' : 'data-bracket-tab-gender') || '';
           var _tabCategory = _target.getAttribute('data-bracket-tab-category');
@@ -12598,17 +12657,15 @@ window._bracketApplyFilter = function (origin) {
    * espalhados fora da viewport, e `keepY` (acima) devolve a rolagem exatamente onde estava:
    * numa área que acabou de ficar vazia. Quatro versões "consertaram" a busca e ele
    * continuava sem ver nada — porque o defeito era de ROLAGEM, não de casamento.
-   * Regra: com consulta e acertos, se o PRIMEIRO acerto visível não está na viewport, rola
-   * até ele (o card já leva scroll-margin-top = --scroll-anchor, então para sob a barra).
+   * Regra: com consulta e acertos, focar o ÚLTIMO jogo sem placar. Se todos já foram
+   * decididos, usar o último resultado. O topo deve ficar abaixo da barra fixa e,
+   * quando o card couber na viewport, a base também deve permanecer visível.
    * Sem consulta, nada muda — `keepY` continua mandando. */
-  if (q && _hitsDiag.length && origin !== 'after-tab' && typeof window.getComputedStyle === 'function') {
+  if (q && _hitsDiag.length && (origin === 'input' || origin === 'after-tab') && typeof window.getComputedStyle === 'function') {
     try {
-      var _primeiro = null;
-      for (var _fh = 0; _fh < _hitsDiag.length; _fh++) {
-        if (_hitsDiag[_fh].offsetParent !== null && _hitsDiag[_fh].offsetHeight > 0) { _primeiro = _hitsDiag[_fh]; break; }
-      }
-      if (_primeiro && typeof _primeiro.getBoundingClientRect === 'function') {
-        var _rc = _primeiro.getBoundingClientRect();
+      var _alvoBusca = window._bracketSearchTarget(_hitsDiag, true, root);
+      if (_alvoBusca && typeof _alvoBusca.getBoundingClientRect === 'function') {
+        var _rc = _alvoBusca.getBoundingClientRect();
         var _ancora = parseFloat(window.getComputedStyle(document.documentElement).getPropertyValue('--scroll-anchor')) || 120;
         /* No iOS, `innerHeight` pode continuar sendo a altura do layout inteiro enquanto
          * o teclado ocupa a metade de baixo. Assim o card é encontrado e filtrado, mas
@@ -12621,7 +12678,11 @@ window._bracketApplyFilter = function (origin) {
           _vpTopo = Number(_vv.offsetTop) || 0;
           _alturaVp = _vpTopo + Number(_vv.height);
         }
-        if (_rc.top < (_vpTopo + _ancora) || _rc.bottom > _alturaVp) _primeiro.scrollIntoView({ block: 'start', behavior: 'auto' });
+        var _topoSeguro = _vpTopo + _ancora + 8;
+        if (_rc.top < _topoSeguro || _rc.bottom > _alturaVp - 8) {
+          var _destinoY = Math.max(0, (window.scrollY || 0) + _rc.top - _topoSeguro);
+          window.scrollTo({ top: _destinoY, behavior: 'auto' });
+        }
       }
     } catch (_es) {}
   }

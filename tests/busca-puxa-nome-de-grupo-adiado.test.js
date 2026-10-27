@@ -202,7 +202,7 @@ const ok = (c, m) => { if (c) { pass++; console.log('  ✓ ' + m); } else { fail
     window.scrollTo(0, 0);
     var el = document.getElementById('card-jLonge'), inp = document.getElementById('bracket-search');
     var antes = el.getBoundingClientRect().top;
-    inp.value = 'mon'; window._bracketApplyFilter();
+    inp.value = 'mon'; window._bracketApplyFilter('input');
     await new Promise(function (r) { setTimeout(r, 50); });
     var r2 = el.getBoundingClientRect();
     return { antesForaDaTela: antes > window.innerHeight, visivel: el.style.display !== 'none', depoisNaTela: r2.top >= 0 && r2.top < window.innerHeight };

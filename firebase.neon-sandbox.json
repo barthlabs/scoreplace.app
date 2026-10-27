@@ -1,0 +1,15 @@
+{
+  "//": "Somente testes locais com demo-scoreplace; nunca usar para deploy.",
+  "firestore": { "rules": "firestore.rules" },
+  "functions": [
+    { "source": "functions", "codebase": "default" },
+    { "source": "functions-autodraw", "codebase": "autodraw" }
+  ],
+  "emulators": {
+    "firestore": { "port": 8093 },
+    "auth": { "port": 9092 },
+    "functions": { "port": 5011 },
+    "ui": { "enabled": false },
+    "singleProjectMode": true
+  }
+}

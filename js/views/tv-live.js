@@ -180,9 +180,15 @@
         var resultTime = ended
           ? new Intl.DateTimeFormat('pt-BR', { timeZone: zone, hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(ended))
           : 'Horário indisponível';
-        return { number: m._gameNum || m.scheduledGameNumber || m.matchNumber || '', time: resultTime, category: String(m.category || ''), a: sideName(t, m, 'p1'), b: sideName(t, m, 'p2'),
+        var hasScore = !m.wo && ended > 0 && ((m.scoreP1 != null && m.scoreP2 != null) ||
+          (Array.isArray(m.sets) && m.sets.some(function (set) { return set && set.gamesP1 != null && set.gamesP2 != null; })));
+        return { id: String(m.id || ''), resultAt: ended, hasScore: hasScore, number: m._gameNum || m.scheduledGameNumber || m.matchNumber || '', time: resultTime, category: String(m.category || ''), a: sideName(t, m, 'p1'), b: sideName(t, m, 'p2'),
           ta: teamFor(m, 1, teams), tb: teamFor(m, 2, teams), scoreA: m.wo ? 'W.O.' : gameScore(m, 1, true), scoreB: m.wo ? 'W.O.' : gameScore(m, 2, true), duration: duration };
       });
+    // Uma decisão por W.O. pode entrar no histórico depois do placar mais
+    // recente; o destaque é sempre do último jogo com placar efetivamente salvo.
+    var latestScoreIndex = results.findIndex(function (result) { return result.hasScore; });
+    if (latestScoreIndex > 0) results.unshift(results.splice(latestScoreIndex, 1)[0]);
     var site = String(window.SCOREPLACE_URL || 'https://scoreplace.app').replace(/\/$/, '');
     var publicId = /^tour_[0-9]{13}_[a-f0-9]{32}$/.test(String(t.id || '')) ? String(t.id) : '';
     var qrUrl = site + '/open.html' + (publicId ? '?t=' + encodeURIComponent(publicId) : '');
@@ -216,14 +222,14 @@
       return '<div class="tv-ranking-row"><span>' + (index + 1) + '</span><strong class="tv-ranking-team" style="--team:' + esc(color) + '">' + esc(row.name) + '</strong><b>' + esc(value) + '</b><span>' + esc(row.gamesWon) + ' - ' + esc(row.gamesLost) + '</span><span class="tv-win">' + esc(row.wins) + '</span><span class="tv-loss">' + esc(row.losses) + '</span><span>' + esc(row.played) + '</span></div>';
     }).join('') + '</div>';
   }
-  function resultHtml(result) {
+  function resultHtml(result, index) {
     function players(label) {
       return String(label || '').split(' / ').map(function (name) { return '<span>' + esc(name.trim()) + '</span>'; }).join('');
     }
     var a = Number(result.scoreA), b = Number(result.scoreB);
     var scoreAClass = Number.isFinite(a) && Number.isFinite(b) && a !== b ? (a > b ? ' tv-result-win' : ' tv-result-loss') : '';
     var scoreBClass = Number.isFinite(a) && Number.isFinite(b) && a !== b ? (b > a ? ' tv-result-win' : ' tv-result-loss') : '';
-    return '<div class="tv-result"><small>' + esc(result.time) + ' · JOGO ' + esc(result.number) + ' · ' + esc(result.category) + (result.duration ? ' · ' + esc(result.duration) : '') + '</small>' +
+    return '<div class="tv-result' + (index === 0 && result.hasScore ? ' tv-result-latest' : '') + '" data-result-id="' + esc(result.id || '') + '" data-result-at="' + esc(result.resultAt || 0) + '"><small>' + esc(result.time) + ' · JOGO ' + esc(result.number) + ' · ' + esc(result.category) + (result.duration ? ' · ' + esc(result.duration) : '') + '</small>' +
       '<div class="tv-result-match"><div class="tv-result-side tv-result-left" style="--team:' + esc(result.ta.color) + '"><span class="tv-result-team">' + esc(result.ta.name || 'Time') + '</span><div class="tv-result-players">' + players(result.a) + '</div><strong class="tv-result-side-score' + scoreAClass + '">' + esc(result.scoreA) + '</strong></div>' +
       '<div class="tv-result-versus">VS</div>' +
       '<div class="tv-result-side tv-result-right" style="--team:' + esc(result.tb.color) + '"><strong class="tv-result-side-score' + scoreBClass + '">' + esc(result.scoreB) + '</strong><div class="tv-result-players">' + players(result.b) + '</div><span class="tv-result-team">' + esc(result.tb.name || 'Time') + '</span></div></div></div>';
@@ -271,7 +277,7 @@
   function childScript(tournamentId, generation) {
     var id = JSON.stringify(String(tournamentId || '')).replace(/</g, '\\u003c');
     var origin = JSON.stringify(window.location.origin).replace(/</g, '\\u003c');
-    return '<script>(function(){"use strict";var id=' + id + ',gen=' + Number(generation) + ',origin=' + origin + ';window.__tvGeneration=gen;var timer,resultPosition=0,resultCycle=0,resultAt=Date.now();' +
+    return '<script>(function(){"use strict";var id=' + id + ',gen=' + Number(generation) + ',origin=' + origin + ';window.__tvGeneration=gen;var timer,resultPosition=0,resultCycle=0,resultAt=Date.now(),highlightedResultId="",pinVisibleMs=0,pinArmed=false;' +
       'function fit(){if(typeof window.getComputedStyle!=="function")return;' +
       'document.querySelectorAll(".tv-team-tag,.tv-result-team,.tv-score").forEach(function(el){el.style.fontSize="";' +
       'var box=el.closest(".tv-side,.tv-result-side");if(!box||!box.clientHeight||!el.clientHeight)return;' +
@@ -285,14 +291,20 @@
       'list.querySelectorAll("[data-tv-repeat]").forEach(function(node){node.remove();});' +
       'var originals=list.querySelectorAll(".tv-result");if(!originals.length||list.scrollHeight-list.clientHeight<=2||' +
       '(window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches))return;' +
-      'originals.forEach(function(node){var copy=node.cloneNode(true);copy.setAttribute("data-tv-repeat","");copy.setAttribute("aria-hidden","true");' +
+      'originals.forEach(function(node){var copy=node.cloneNode(true);if(copy.classList)copy.classList.remove("tv-result-pinned");copy.setAttribute("data-tv-repeat","");copy.setAttribute("aria-hidden","true");' +
       'copy.querySelectorAll("[id]").forEach(function(child){child.removeAttribute("id");});list.appendChild(copy);});' +
       'var first=list.querySelector("[data-tv-repeat]");resultCycle=first?first.offsetTop-originals[0].offsetTop:0;' +
       'if(resultCycle<=0){list.querySelectorAll("[data-tv-repeat]").forEach(function(node){node.remove();});resultCycle=0;}}' +
+      'function syncResultPin(){var list=document.querySelector(".tv-results-list"),first=list&&list.querySelector(".tv-result:not([data-tv-repeat])");' +
+      'var current=first&&first.classList&&first.classList.contains("tv-result-latest")&&first.getAttribute("data-result-id")||"";' +
+      'var savedAt=first&&Number(first.getAttribute("data-result-at"))||0,key=current?current+"@"+savedAt:"";' +
+      'if(key!==highlightedResultId){highlightedResultId=key;pinVisibleMs=0;' +
+      'pinArmed=!!(current&&resultCycle&&savedAt&&Date.now()-savedAt>=0&&Date.now()-savedAt<30000);' +
+      'if(pinArmed){resultPosition=0;list.scrollTop=0;}}if(first)first.classList.toggle("tv-result-pinned",pinArmed);}' +
       'function syncFullscreenButton(){var btn=document.getElementById("tv-fullscreen-action");if(btn)btn.textContent=document.fullscreenElement?"⛶ Sair da tela cheia":"⛶ Tela cheia";}' +
       'document.addEventListener("fullscreenchange",syncFullscreenButton);' +
       'function reflow(){if(window.__tvGeneration!==gen)return;fit();ensureCycle();if(resultCycle){resultPosition=resultPosition%resultCycle;}' +
-      'else resultPosition=0;var list=document.querySelector(".tv-results-list");if(list)list.scrollTop=resultPosition;}' +
+      'else resultPosition=0;var list=document.querySelector(".tv-results-list");if(list)list.scrollTop=resultPosition;syncResultPin();}' +
       'window.__tvFitLabels=fit;window.addEventListener("resize",reflow);window.addEventListener("load",reflow);' +
       'document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible"){resultAt=Date.now();reflow();}});' +
       'if(document.fonts&&document.fonts.ready)document.fonts.ready.then(reflow);' +
@@ -300,18 +312,20 @@
       'var day=old&&old.getAttribute("data-result-day"),top=resultPosition;' +
       'if(!root)return;if(typeof document.createElement!=="function"){root.innerHTML=html;syncFullscreenButton();fit();ensureCycle();' +
       'var fallback=root.querySelector(".tv-results-list");resultPosition=fallback&&fallback.getAttribute("data-result-day")===day&&resultCycle?top%resultCycle:0;' +
-      'if(fallback)fallback.scrollTop=resultPosition;resultAt=Date.now();return;}' +
+      'if(fallback)fallback.scrollTop=resultPosition;syncResultPin();resultAt=Date.now();return;}' +
       'var draft=document.createElement("div");draft.innerHTML=html;' +
       'var incoming=draft.querySelector(".tv-results-list"),same=!!(old&&incoming&&day===incoming.getAttribute("data-result-day")&&' +
-      'Array.from(old.querySelectorAll(".tv-result:not([data-tv-repeat])")).map(function(n){return n.outerHTML;}).join("")===incoming.innerHTML);' +
+      'Array.from(old.querySelectorAll(".tv-result:not([data-tv-repeat])")).map(function(n){return n.outerHTML.replace(/\\s+tv-result-pinned\\b/g,"");}).join("")===incoming.innerHTML);' +
       'if(same)incoming.replaceWith(old);root.replaceChildren.apply(root,Array.from(draft.childNodes));syncFullscreenButton();fit();' +
       'if(!same)ensureCycle();var list=root.querySelector(".tv-results-list");' +
       'if(!same){resultPosition=list&&list.getAttribute("data-result-day")===day&&resultCycle?top%resultCycle:0;' +
-      'if(list)list.scrollTop=resultPosition;}resultAt=Date.now();};' +
+      'if(list)list.scrollTop=resultPosition;}syncResultPin();resultAt=Date.now();};' +
       'function advance(){if(window.__tvGeneration!==gen)return;var now=Date.now(),elapsed=Math.min(64,Math.max(0,now-resultAt));resultAt=now;' +
       'var list=document.querySelector(".tv-results-list");if(list&&resultCycle&&document.visibilityState==="visible"&&' +
       '!(window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches)){' +
-      'resultPosition+=elapsed*.022;if(resultPosition>=resultCycle)resultPosition-=resultCycle;list.scrollTop=resultPosition;}' +
+      'if(pinArmed)pinVisibleMs+=elapsed;resultPosition+=elapsed*.022;var wrapped=resultPosition>=resultCycle;' +
+      'if(wrapped)resultPosition%=resultCycle;list.scrollTop=resultPosition;' +
+      'if(pinArmed&&pinVisibleMs>=30000&&wrapped){pinArmed=false;syncResultPin();}}' +
       'window.requestAnimationFrame(advance);}window.requestAnimationFrame(advance);' +
       'function signal(type){try{if(window.opener&&!window.opener.closed)window.opener.postMessage({type:type,id:id,gen:gen,visible:document.visibilityState==="visible"},origin);}catch(e){}}' +
       'function tick(){if(window.__tvGeneration!==gen){clearInterval(timer);return;}var now=Date.now();' +
@@ -355,6 +369,7 @@
     '.tv-result-match{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:.35vw;align-items:stretch}.tv-result-side{display:flex;align-items:center;gap:.35vw;min-width:0;border-radius:.4vw;background:#222;padding:.25vw;border:1px solid color-mix(in srgb,var(--team) 45%,#444)}.tv-result-left{border-left:.25vw solid var(--team)}.tv-result-right{border-right:.25vw solid var(--team);justify-content:flex-end}.tv-result-team{flex:none;padding:.2vw;border:1px solid var(--team);border-radius:999px;background:color-mix(in srgb,var(--team) 26%,#222);writing-mode:vertical-rl;transform:rotate(180deg);font-size:clamp(.55rem,.65vw,.9rem);font-weight:900}.tv-result-right .tv-result-team{transform:none}.tv-result-players{display:flex;flex-direction:column;justify-content:space-around;min-width:0;gap:.15vw}.tv-result-players span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:clamp(.7rem,.85vw,1.2rem);font-weight:750}.tv-result-score{display:flex;align-items:center;gap:.22vw;font-size:clamp(.8rem,1vw,1.4rem);font-weight:900}.tv-result-score strong{font-size:clamp(1rem,1.5vw,2rem);font-variant-numeric:tabular-nums}.tv-result-win{color:#4ade80}.tv-result-loss{color:#f87171}' +
     '.tv-results{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1vw}' +
     '.tv-results-main{display:flex;flex-direction:column;min-width:0;min-height:0}.tv-results-main>h2{flex:none}.tv-results-list{min-width:0;min-height:0;flex:1;overflow-y:auto;overscroll-behavior:contain;padding-right:.35vw}' +
+    '.tv-result.tv-result-latest{border:2px solid #fbbf24;border-radius:.55vw;background:#16253a;box-shadow:0 0 14px #fbbf2440;padding:.3vw .4vw;margin-bottom:.25vw}.tv-result.tv-result-pinned{position:sticky;top:0;z-index:2;box-shadow:0 3px 18px #000b,0 0 16px #fbbf2466}' +
     '.tv-court.tv-court-latest{border:3px solid #fbbf24;box-shadow:0 0 18px #fbbf2466}' +
     '.tv-court-footer strong.tv-phase-call{color:#38bdf8}.tv-court-footer strong.tv-phase-warmup{color:#fbbf24}.tv-court-footer strong.tv-phase-game{color:#4ade80}.tv-court-footer strong.tv-phase-overdue{color:#f87171}' +
     '.tv-result-left .tv-result-players span{text-align:left}.tv-result>div.tv-result-match .tv-result-left .tv-result-players span{text-align:left}.tv-result-right .tv-result-players span{text-align:right}' +

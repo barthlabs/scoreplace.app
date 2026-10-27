@@ -237,7 +237,7 @@ const CASES = [
     id:'neon-64', name:'Neon 64', status:'open', format:'Fase de Grupos', teamSize:2, enrollmentMode:'teams',
     startDate:'2026-10-22T18:00:00-03:00', endDate:'2026-10-23T22:40:00-03:00',
     courtCount:6, gameDuration:25, callTime:5, warmupTime:5,
-    scheduleWindow:{ days:[{ day:'2026-10-22', startTime:'18:00', endTime:'22:40', categoryFlow:'rounds' }, { day:'2026-10-23', startTime:'18:00', endTime:'22:40', categoryFlow:'rounds' }] },
+    scheduleWindow:{ days:[{ day:'2026-10-22', startTime:'17:25', endTime:'22:40', categoryFlow:'rounds' }, { day:'2026-10-23', startTime:'17:25', endTime:'22:40', categoryFlow:'rounds' }] },
     combinedCategories:realCategories, participants:realPairs.map(function (entry) { return JSON.parse(JSON.stringify(entry)); }),
     categoryDefinitions:realCategories.map(function (label, index) { return { id:'category-' + index, label:label }; }),
     teamCompetition:realConfig, phases:[{ teamCompetition:realConfig }],
@@ -291,7 +291,8 @@ const CASES = [
   ok('Neon 64: mapa de dupla excluída não fabrica inscrição',
     competitionAssignments.overlay(projectedAgain.slice(1), savedAssignments).length === 63);
   const estimated = core._window._schGradeEstimada(neon64);
-  // 96 jogos devem preencher exatamente 6 quadras x 8 ondas em cada dia.
+  // A janela da cópia tem nove horários: três estágios de 16 jogos, sem
+  // antecipar o segundo jogo de uma dupla enquanto outra aguarda o primeiro.
   const plannedDaysValid = estimated && estimated.slots.every(function (slot) {
     const match = realMatches.find(function (m) { return String(m.id) === slot.matchId; });
     return !match.requiredDay || match.requiredDay === ['2026-10-22','2026-10-23'][slot.dia];
@@ -302,8 +303,8 @@ const CASES = [
     estimated.slots.filter(function (slot) { return slot.dia === day; }).forEach(function (slot) { counts[slot.ms] = (counts[slot.ms] || 0) + 1; });
     return Object.values(counts);
   });
-  ok('Neon 64: 96 jogos em 48 por dia, oito ondas completas de seis quadras', estimated && estimated.cabe === true && estimated.slots.length === 96 &&
-    plannedDaysValid && applied === 96 && waves.every(function (day) { return day.length === 8 && day.every(function (count) { return count === 6; }); }) &&
+  ok('Neon 64: 96 jogos em 48 por dia e três estágios de 16', estimated && estimated.cabe === true && estimated.slots.length === 96 &&
+    plannedDaysValid && applied === 96 && waves.every(function (day) { return day.length === 9 && day.join(',') === '6,6,4,6,6,4,6,6,4'; }) &&
     estimated.slots.every(function (slot) {
       const match = realMatches.find(function (m) { return String(m.id) === slot.matchId; });
       return !match.requiredDay || new Date(slot.iso).toLocaleDateString('en-CA', { timeZone:'America/Sao_Paulo' }) === match.requiredDay;
@@ -321,15 +322,63 @@ const CASES = [
     });
     return Object.values(counts);
   });
-  ok('Neon 64 livre: três jogos por dupla e seis quadras ocupadas nas oito ondas de cada dia',
+  ok('Neon 64 livre: três jogos por dupla em nove horários por dia',
     freeDraw.ok && neonFree64.matches.length === 96 && freeGrade && freeGrade.cabe === true &&
     freeGrade.slots.length === 96 && freeWaves.every(function (day) {
-      return day.length === 8 && day.every(function (count) { return count === 6; });
+      return day.length === 9 && day.join(',') === '6,6,4,6,6,4,6,6,4';
     }) && neonFree64.participants.every(function (entry) {
       return neonFree64.matches.filter(function (match) {
         return match.team1Obj.fixedPairId === entry.fixedPairId || match.team2Obj.fixedPairId === entry.fixedPairId;
       }).length === 3;
     }), JSON.stringify({ drawn:freeDraw.ok, reason:freeDraw.reason, matches:neonFree64.matches && neonFree64.matches.length, waves:freeWaves }));
+  // strict-team-insufficient-aborts-transaction / strict-free-mode-insufficient-aborts-transaction:
+  // o motor ainda forma os confrontos, mas o plano de oito horários não cabe.
+  // drawRound deve detectar isso dentro da transação antes de gravar a chave.
+  ['structured', 'free'].forEach(function (mode) {
+    const short = realTournament();
+    short.id = 'neon-short-' + mode;
+    short.teamCompetition = Object.assign({}, realConfig, {
+      schedule:Object.assign({}, realConfig.schedule, { mode:mode })
+    });
+    short.phases = [{ teamCompetition:short.teamCompetition }];
+    short.scheduleWindow = { days:short.scheduleWindow.days.map(function (day) {
+      return Object.assign({}, day, { endTime:'22:05' });
+    }) };
+    const result = core.drawInitial(short, { idStamp:'neon-short-' + mode });
+    const plan = result.ok && core._window._schGradeEstimada(short);
+    const appliedCount = core._window._schAplicarGrade(short, []);
+    ok('strict-' + mode + '-insufficient: 96 confrontos, mas janela 8/8 recusa a grade',
+      result.ok === true && short.matches.length === 96 && plan && plan.cabe === false &&
+      appliedCount === 0 && short.matches.every(function (match) { return !match.scheduledAt; }));
+  });
+  // individual-schedule-unchanged: o gate novo é exclusivo de times com dias
+  // fixos; este caso mantém o sorteio individual e sua grade estimada.
+  const individual = mkT('individual-schedule-unchanged', {
+    format:'Fase de Grupos', gruposCount:2, gruposClassified:2, teamSize:1,
+    startDate:'2026-10-22T18:00:00-03:00', endDate:'2026-10-22T22:40:00-03:00',
+    courtCount:2, gameDuration:25, callTime:5, warmupTime:5,
+    scheduleWindow:{ days:[{ day:'2026-10-22', startTime:'17:25', endTime:'22:40' }] }
+  }, 8);
+  const individualDraw = core.drawInitial(individual, { idStamp:'individual-schedule-unchanged' });
+  const individualPlan = individualDraw.ok && core._window._schGradeEstimada(individual);
+  const individualApplied = core._window._schAplicarGrade(individual, []);
+  ok('individual-schedule-unchanged: sorteio e estimativa seguem disponíveis',
+    individualDraw.ok === true && individualPlan && individualPlan.cabe === true &&
+    individualApplied === individualPlan.slots.length && individualApplied > 0);
+  const drawRoundSource = fs.readFileSync(path.join(__dirname, 'index.js'), 'utf8');
+  const drawRoundBody = drawRoundSource.slice(drawRoundSource.indexOf('exports.drawRound ='), drawRoundSource.indexOf('exports.closeRound ='));
+  ok('strict-team-insufficient-aborts-transaction: gate está antes da gravação da grade',
+    drawRoundBody.indexOf('const strictTeamDays =') > drawRoundBody.indexOf('const res = drawInitial(') &&
+    drawRoundBody.indexOf('if (strictTeamDays)') < drawRoundBody.indexOf('drawWindow._schAplicarGrade(t)') &&
+    drawRoundBody.indexOf("throw _drawFail('failed-precondition',") < drawRoundBody.indexOf('drawWindow._schAplicarGrade(t)'));
+  const sandboxCopy = JSON.parse(JSON.stringify(neonFree64));
+  sandboxCopy.id = 'sb_neon-64-free-copy';
+  sandboxCopy.isSandbox = true;
+  sandboxCopy.notificationsMuted = true;
+  const copiedGrade = core._window._schGradeEstimada(sandboxCopy);
+  ok('Neon 64 livre: cópia sandbox e torneio futuro têm slots idênticos',
+    freeGrade && copiedGrade && copiedGrade.cabe === freeGrade.cabe &&
+    JSON.stringify(copiedGrade.slots) === JSON.stringify(freeGrade.slots));
   const neonSandbox64 = realTournament();
   neonSandbox64.id = 'sb_neon-64-free';
   neonSandbox64.isSandbox = true;
@@ -347,7 +396,7 @@ const CASES = [
   });
   ok('Neon 64 livre: sandbox e produção usam o mesmo motor e satisfazem a mesma grade',
     sandboxDraw.ok && sandboxGrade && sandboxGrade.cabe === true && neonSandbox64.matches.length === neonFree64.matches.length &&
-    sandboxWaves.every(function (day) { return day.length === 8 && day.every(function (count) { return count === 6; }); }) &&
+    sandboxWaves.every(function (day) { return day.length === 9 && day.join(',') === '6,6,4,6,6,4,6,6,4'; }) &&
     neonSandbox64.participants.every(function (entry) {
       return neonSandbox64.matches.filter(function (match) {
         return match.team1Obj.fixedPairId === entry.fixedPairId || match.team2Obj.fixedPairId === entry.fixedPairId;
@@ -380,9 +429,8 @@ const CASES = [
       (roundTimes[id] || (roundTimes[id] = [])).push({ round:Number(match.round || 0), ms:slotById.get(String(match.id)) });
     });
   });
-  ok('Neon 64: rodadas de cada dupla seguem ordem cronológica', Object.keys(roundTimes).every(function (id) {
-    const times = roundTimes[id].sort(function (a, b) { return a.round - b.round; });
-    return times.every(function (item, index) { return index === 0 || item.ms > times[index - 1].ms; });
+  ok('Neon 64: cada dupla tem três horários distintos', Object.keys(roundTimes).every(function (id) {
+    return new Set(roundTimes[id].map(function (item) { return item.ms; })).size === 3;
   }));
   const restByPair = {}, teamsByWave = {};
   estimated.slots.forEach(function (slot) {
@@ -402,9 +450,8 @@ const CASES = [
     return sum + waves[waves.length - 1] - waves[0];
   }, 0) / Object.keys(restByPair).length;
   const diversity = Object.values(teamsByWave).map(function (teams) { return teams.size; });
-  ok('Neon 64: grade prioriza descanso e variedade de times sem perder ocupação',
-    backToBack <= 50 && diversity.length === 16 && diversity.every(function (count) { return count >= 4; }) &&
-      diversity.reduce(function (sum, count) { return sum + count; }, 0) >= 76 && averageSpan >= 3,
+  ok('Neon 64: grade prioriza descanso sem perder a cadência de três estágios',
+    backToBack <= 20 && diversity.length === 18 && averageSpan >= 4,
     JSON.stringify({ backToBack, averageSpan, diversity }));
   // No fluxo por categorias, a primeira semente pode falhar. A grade abaixo
   // depende de uma semente posterior e deve continuar igual à grade histórica.

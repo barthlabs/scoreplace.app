@@ -34,6 +34,10 @@ vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'sched
   sandbox, { filename: 'schedule-poll.js' });
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'wa-group.js'), 'utf8'),
   sandbox, { filename: 'wa-group.js' });
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'domain', 'court-occupancy.js'), 'utf8'),
+  sandbox, { filename: 'court-occupancy.js' });
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'domain', 'next-match.js'), 'utf8'),
+  sandbox, { filename: 'next-match.js' });
 const W = sandbox;
 
 let pass = 0, fail = 0;
@@ -101,6 +105,23 @@ ok(/>Fem Light<\/span>/.test(cardConcentrado) && !/Categoria|Jogar até|Propor d
   'evento concentrado mostra somente a categoria e não convida atletas a negociar prazo/data');
 ok(/sp-match-court/.test(cardConcentrado) && /<option value=""[^>]*>Sem quadra<\/option>/.test(cardConcentrado) && !/📍 Sem quadra/.test(cardConcentrado),
   'evento concentrado mantém somente o seletor de quadra, sem pino decorativo');
+const concurrent = tConcentrado.rounds[0].matches[1];
+concurrent.team1Uids = ['u1'];
+concurrent.court = 'Quadra 5';
+concurrent.courtCalledAt = '2026-10-22T18:00:00Z';
+const collectOriginal = W._collectAllMatches;
+W._collectAllMatches = function () { return tConcentrado.rounds[0].matches; };
+W._isUserAuthority = function () { return true; };
+const busyCard = W.renderMatchCard(mConcentrado, true, tConcentrado.id, 1);
+ok(/border:3px solid #ef4444/.test(busyCard) && /Atleta em quadra/.test(busyCard),
+  'jogo com atleta ativo em outra quadra recebe borda vermelha e explicação');
+ok(/aria-label="Quadra" disabled/.test(busyCard) && /aria-label="Confirmar chamada para a quadra" disabled/.test(busyCard),
+  'atribuição e chamada de quadra ficam desativadas enquanto atleta joga');
+delete concurrent.courtCalledAt;
+delete concurrent.court;
+concurrent.team1Uids = ['u3'];
+W._collectAllMatches = collectOriginal;
+W._isUserAuthority = authorityOriginal;
 const bracketSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'bracket.js'), 'utf8');
 ok(/sp-ready-court-select/.test(bracketSource) && !/style="[^"]*background:rgba\(16,185,129,0\.14\)/.test(bracketSource),
   'seletor da rota de jogos prontos usa classe CSS para sinalizar quadra ocupada');

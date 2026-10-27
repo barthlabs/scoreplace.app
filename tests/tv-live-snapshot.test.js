@@ -114,6 +114,8 @@ assert.equal(snapshot.results.length, 4, 'histórico acumula resultados para rol
 assert.equal(snapshot.results.map(r => r.number).join(','), '5,6,4,7', 'resultado novo entra no topo');
 assert.equal(snapshot.resultDay, '2026-10-22');
 assert.equal(snapshot.results[0].time, '17:30', 'horário de lançamento usa o fuso do torneio');
+assert.equal(snapshot.results[0].id, '5', 'o resultado mais recente conserva a identidade para destaque na TV');
+assert.match(window._tvLiveBodyHtml(snapshot), /class="tv-result tv-result-latest" data-result-id="5"/, 'último placar recebe borda dourada');
 const nextDayResults = { ...t, matches: [
   match(40, 'Quadra 4', 'PANIC', 'PHANTOM', { resultAt:'2026-10-22T22:00:00Z', winner:'p1' }),
   match(41, 'Quadra 5', 'VOLT', 'BLACKOUT', { scheduledAt:'2026-10-23T21:00:00Z', resultAt:'2026-10-23T21:40:00Z', winner:'p2' })
@@ -149,6 +151,13 @@ const woWithoutTime = { ...t, matches: [match(42, 'Quadra 4', 'PANIC', 'PHANTOM'
 const woSnapshot = window._tvLiveBuildSnapshot(woWithoutTime, Date.parse('2026-10-23T22:00:00Z'));
 assert.equal(woSnapshot.results[0].number, 42, 'W.O. sem resultAt não desaparece da TV');
 assert.equal(woSnapshot.results[0].time, 'Horário indisponível', 'TV não inventa horário de lançamento legado');
+assert.doesNotMatch(window._tvLiveBodyHtml(woSnapshot), /tv-result-latest/, 'W.O. não recebe borda de placar lançado');
+const scoredBeforeWo = { ...t, matches: [
+  match(46, 'Quadra 4', 'PANIC', 'PHANTOM', { scheduledAt:'2026-10-23T19:00:00Z', scoreP1:6, scoreP2:3, resultAt:'2026-10-23T20:00:00Z', winner:'p1' }),
+  match(47, 'Quadra 5', 'BLAST', 'VOLT', { wo:true, winner:'p1', scheduledAt:'2026-10-23T21:00:00Z' })
+] };
+assert.equal(window._tvLiveBuildSnapshot(scoredBeforeWo, Date.parse('2026-10-23T22:00:00Z')).results[0].number,
+  46, 'último placar, não um W.O. posterior, ocupa o topo destacado');
 assert.equal(snapshot.results[1].scoreA, '7');
 assert.equal(snapshot.rankings.length, 1, 'classificação geral, sem categoria forçada');
 assert.equal(snapshot.rankings[0].rows.length, 8);
@@ -315,28 +324,36 @@ const frames = [];
 const scrollListeners = {};
 let reducedMotion = false;
 let smoothList;
-function makeResultNode(list, repeated = false) {
-  const node = { repeated, cloneNode() { return makeResultNode(list, true); },
+function makeResultNode(list, repeated = false, id = '', at = 0) {
+  const classes = new Set();
+  if (id) classes.add('tv-result-latest');
+  const node = { repeated, cloneNode() { return makeResultNode(list, true, id, at); },
     setAttribute(name) { if (name === 'data-tv-repeat') this.repeated = true; },
+    getAttribute(name) { return name === 'data-result-id' ? id : name === 'data-result-at' ? String(at) : null; },
+    classList: { toggle(name, on) { if (on) classes.add(name); else classes.delete(name); },
+      remove(name) { classes.delete(name); }, contains(name) { return classes.has(name); } },
     querySelectorAll() { return []; }, removeAttribute() {},
     remove() { list.nodes.splice(list.nodes.indexOf(this), 1); } };
   Object.defineProperty(node, 'offsetTop', { get() { return list.nodes.indexOf(node) * 100; } });
   return node;
 }
-function makeList(day, count, height = 150) {
+function makeList(day, count, height = 150, latestId = '', latestAt = 0) {
   const list = { day, clientHeight:height, scrollTop:0, nodes:[],
     getAttribute(name) { return name === 'data-result-day' ? this.day : null; },
     querySelectorAll(selector) { return this.nodes.filter(node => selector === '[data-tv-repeat]' ? node.repeated : !node.repeated); },
-    querySelector(selector) { return selector === '[data-tv-repeat]' ? this.nodes.find(node => node.repeated) : null; },
+    querySelector(selector) { return selector === '[data-tv-repeat]' ? this.nodes.find(node => node.repeated)
+      : selector === '.tv-result:not([data-tv-repeat])' ? this.nodes.find(node => !node.repeated) : null; },
     appendChild(node) { this.nodes.push(node); } };
   Object.defineProperty(list, 'scrollHeight', { get() { return list.nodes.length * 100; } });
-  for (let i = 0; i < count; i++) list.nodes.push(makeResultNode(list));
+  for (let i = 0; i < count; i++) list.nodes.push(makeResultNode(list, false, i === 0 ? latestId : '', i === 0 ? latestAt : 0));
   return list;
 }
 const smoothRoot = { querySelector: selector => selector === '.tv-results-list' ? smoothList : null };
 Object.defineProperty(smoothRoot, 'innerHTML', { set(markup) {
   const day = (markup.match(/data-result-day="([^"]+)/) || [])[1] || '';
-  smoothList = makeList(day, (markup.match(/class="tv-result"/g) || []).length);
+  const latest = markup.match(/class="tv-result tv-result-latest" data-result-id="([^"]*)" data-result-at="([^"]*)"/);
+  smoothList = makeList(day, (markup.match(/class="tv-result(?: tv-result-latest)?"/g) || []).length,
+    150, latest ? latest[1] : '', latest ? Number(latest[2]) : 0);
 } });
 const smoothDocument = { visibilityState:'visible', fonts:null,
   addEventListener(name, fn) { scrollListeners[name] = fn; },
@@ -349,8 +366,9 @@ const smoothWindow = { __tvParentBeat:frameNow, opener:null,
   matchMedia() { return { matches:reducedMotion }; } };
 vm.runInNewContext(childSource[0].slice(8, -9), { window:smoothWindow, document:smoothDocument,
   setInterval() { return 1; }, clearInterval() {}, Date:{ now:() => frameNow }, Number });
-const resultMarkup = (day, count) => '<div class="tv-results-list" data-result-day="' + day + '">' +
-  '<div class="tv-result"></div>'.repeat(count) + '</div>';
+const resultMarkup = (day, count, latestId = '', latestAt = 0) => '<div class="tv-results-list" data-result-day="' + day + '">' +
+  (latestId ? '<div class="tv-result tv-result-latest" data-result-id="' + latestId + '" data-result-at="' + latestAt + '"></div>' : '<div class="tv-result"></div>') +
+  '<div class="tv-result"></div>'.repeat(count - 1) + '</div>';
 smoothWindow.__tvReplaceMarkup(resultMarkup('2026-10-23', 4));
 assert.equal(smoothList.nodes.length, 8, 'somente resultados que excedem a área recebem cópia visual');
 for (let i = 0; i < 100; i++) { frameNow += 16; frames.shift()(); }
@@ -377,6 +395,12 @@ smoothDocument.visibilityState = 'visible';
 scrollListeners.visibilitychange();
 frameNow += 16; frames.shift()();
 assert(smoothList.scrollTop < 1, 'retorno de aba oculta não avança pelo tempo em segundo plano');
+smoothWindow.__tvReplaceMarkup(resultMarkup('2026-10-24', 4, 'fresh-score', frameNow));
+assert(smoothList.nodes[0].classList.contains('tv-result-pinned'), 'placar novo fica fixo no topo da seção');
+for (let i = 0; i < 1900; i++) { frameNow += 16; frames.shift()(); }
+assert(smoothList.nodes[0].classList.contains('tv-result-pinned'), 'não solta o resultado antes do retorno ao topo após 30 segundos');
+for (let i = 0; i < 450; i++) { frameNow += 16; frames.shift()(); }
+assert(!smoothList.nodes[0].classList.contains('tv-result-pinned'), 'após 30 segundos e retorno ao topo, jogo rola normalmente');
 assert.equal(liveButton.attributes['aria-pressed'], 'true', 'heartbeat da página liga o botão');
 assert.equal(window._tvLiveWindow, fakePopup, 'só página confirmada aparece como NO AR');
 fakePopup.document.visibilityState = 'hidden';

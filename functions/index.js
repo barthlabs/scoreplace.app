@@ -3049,6 +3049,18 @@ exports.enrollParticipant = onCall(
       else if ((snap.data() || {}).isSandbox === true) throw new HttpsError("not-found", "torneio não existe");
       const _dados = await _splitParts.hidratar(tx, docRef, snap.data());
       const rawTournament = snap.data() || {};
+      const registration = rawTournament.registrationSettings;
+      if (registration && !(organizerManualRequested && _isTournamentOrgCaller(rawTournament, callerUid))) {
+        if (registration.source === 'external') {
+          throw new HttpsError('failed-precondition', 'As inscrições deste torneio são externas.');
+        }
+        const pricing = registration.pricing;
+        const paid = pricing && (pricing.mode === 'single' ? Number(pricing.cents) > 0
+          : pricing.mode === 'category' && Object.keys(pricing.centsByCategory || {}).some(category => Number(pricing.centsByCategory[category]) > 0));
+        if (paid) {
+          throw new HttpsError('failed-precondition', 'A inscrição paga requer pagamento confirmado pelo Scoreplace.');
+        }
+      }
       const logicalId = sandbox ? String(rawTournament.sandboxOf) : tournamentId;
       // Nomes digitados e placeholders são rótulos humanos e não podem se repetir
       // no mesmo torneio. A identidade continua sendo UID/manualParticipantId, mas

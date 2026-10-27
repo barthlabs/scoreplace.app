@@ -15,7 +15,7 @@ const participants = categories.flatMap((category, categoryIndex) => Array.from(
 }));
 const tournament = {
   id:neonId, name:'Neon Nightmare', startDate:'2026-10-22T18:00', endDate:'2026-10-23T22:40',
-  categories, participants, courtCount:6,
+  categories, participants, courtCount:6, courtNames:['Quadra 4','Quadra 5','Quadra 6','Quadra 7','Quadra 8','Quadra 9'],
   categoryDefinitions:categories.map((label, index) => ({ id:'category-' + index, label })),
   teamCompetition:{ enabled:true, teamCount:8,
     teamNames:['Blackout', 'Blast', 'Eclipse', 'Panic', 'Phantom', 'Venom', 'Volt', 'Vortex'],
@@ -24,11 +24,39 @@ const tournament = {
 };
 W._findTournamentById = () => tournament;
 let overlay;
+let dayEditor;
+let confirmNode;
+const courts = Array.from({ length:6 }, (_, index) => ({ getAttribute(){ return 'Quadra ' + (index + 4); } }));
+const dayCards = [
+  ['Fem Power', 'Fem Extreme', 'Fem Light'],
+  ['Masc Power', 'Masc Extreme', 'Masc Light', 'Fem Light']
+].map((names, index) => ({
+  style:{}, getAttribute(name){ return name === 'data-day' ? ['2026-10-22','2026-10-23'][index] : null; },
+  querySelectorAll(selector){ return selector === '[data-team-category-card]' ? names.map(category => ({
+    getAttribute(){ return category; }
+  })) : []; }
+}));
 sandbox.document.createElement = () => {
+  dayEditor = { innerHTML:'', querySelectorAll(){ return []; } };
+  confirmNode = {};
+  const pairSection = { style:{} };
   overlay = {
     style:{}, innerHTML:'', remove(){},
-    querySelector(selector){ return selector === '#team-draw-cancel-top' ? {} : null; },
-    querySelectorAll(){ return []; }
+    querySelector(selector){
+      if (selector === '[data-team-pair-day-editor]') return dayEditor;
+      if (selector === '[data-team-pair-day-section]') return pairSection;
+      if (selector === '#team-draw-confirm') return confirmNode;
+      if (selector === '#team-draw-cancel-top') return {};
+      if (selector.includes('[data-team-day-start]')) return { value:'18:00' };
+      if (selector.includes('[data-team-day-end]')) return { value:'22:40' };
+      const day = /data-team-day-lane\]\[data-day="([^"]+)"/.exec(selector);
+      return day ? dayCards[['2026-10-22','2026-10-23'].indexOf(day[1])] : null;
+    },
+    querySelectorAll(selector){
+      if (selector === '[data-team-day-lane]') return dayCards;
+      if (selector === '[data-team-court-card]') return courts;
+      return [];
+    }
   };
   return overlay;
 };
@@ -44,6 +72,11 @@ if (backAt < 0 || drawAt <= backAt || drawAt >= contentAt ||
   throw new Error('Voltar e Sortear devem aparecer uma única vez, nessa ordem, no cabeçalho fixo');
 }
 if (!/data-team-pair-day-editor/.test(overlay.innerHTML)) throw new Error('Editor de dias das duplas ausente');
+if (!/16 duplas/.test(dayEditor.innerHTML) || !/8 duplas/.test(dayEditor.innerHTML) ||
+    !/Sortear dias livremente/.test(dayEditor.innerHTML) ||
+    /Dias das duplas — conferir e ajustar|Misto ou indefinido/.test(overlay.innerHTML + dayEditor.innerHTML)) {
+  throw new Error('Fem Light deve distribuir automaticamente 16/8 em duas caixas, sem o editor antigo');
+}
 if (/O sorteio está bloqueado/.test(overlay.innerHTML)) throw new Error('Elenco Neon válido foi bloqueado');
 const lightCards = overlay.innerHTML.match(/data-team-category-card="Fem Light"/g) || [];
 if (lightCards.length < 3) throw new Error('Fem Light deve aparecer na fonte e nos dois dias');
@@ -80,4 +113,36 @@ delete participants[0].category;
 W._showTeamCompetitionDrawReview(tournament.id, { _canonicalRosterLoaded:true });
 if (/O sorteio está bloqueado/.test(overlay.innerHTML)) throw new Error('Categoria canônica sem rótulo legado não deve bloquear o painel');
 participants[0].category = category;
-console.log('✓ Painel Neon: dias configuráveis, Fem Light nos dois dias, X correto e sem UID visível');
+let saves = 0, ready = 0, savedPayload;
+W.FirestoreDB = {
+  _ehSandbox(){ return true; },
+  _callFn(name, payload){
+    if (name !== 'updateTournamentConfiguration') throw new Error('Chamada inesperada: ' + name);
+    saves++; savedPayload = payload;
+    return Promise.resolve({ ok:true });
+  }
+};
+tournament.id = 'sb_' + neonId + '_1793070000000';
+tournament.teamCompetition.schedule.originDayPolicy = '';
+W._showTeamCompetitionDrawReview(tournament.id, { _canonicalRosterLoaded:true, onReady(){ ready++; } });
+if (typeof confirmNode.onclick !== 'function') throw new Error('Sortear não habilitou para elenco completo');
+confirmNode.onclick();
+setImmediate(async () => { try {
+  const assignments = savedPayload && savedPayload.patch.teamCompetition.schedule.pairDayAssignments || [];
+  const light = assignments.filter(item => participants.some(entry => entry.fixedPairId === item.fixedPairId && entry.category === 'Fem Light'));
+  const first = light.filter(item => item.day === '2026-10-22').length;
+  const second = light.filter(item => item.day === '2026-10-23').length;
+  if (saves !== 1 || ready !== 1 || savedPayload.sandbox !== true || assignments.length !== 64 || first !== 16 || second !== 8) {
+    throw new Error('Um clique deve salvar no sandbox 64 dias nominais (Fem Light 16/8) e só então prosseguir');
+  }
+  // Se o salvamento falha, o clique não pode iniciar o sorteio com uma agenda
+  // que existe apenas na memória do navegador.
+  W.FirestoreDB._callFn = () => Promise.reject(new Error('falha de gravação simulada'));
+  W._showTeamCompetitionDrawReview(tournament.id, { _canonicalRosterLoaded:true, onReady(){ ready++; } });
+  confirmNode.onclick();
+  await new Promise(resolve => setImmediate(resolve));
+  if (ready !== 1 || confirmNode.disabled || confirmNode.textContent !== '🎲 Sortear times e confrontos') {
+    throw new Error('Falha ao salvar deve reabilitar o botão sem disparar o sorteio');
+  }
+  console.log('✓ Painel Neon: 16/8 por um clique, dias configuráveis, X correto e sem UID visível');
+} catch (error) { console.error(error); process.exitCode = 1; } });

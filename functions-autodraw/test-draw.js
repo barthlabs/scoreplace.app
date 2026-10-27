@@ -10,6 +10,22 @@ function assert(cond, msg) {
   else console.log('  ✓ ' + msg);
 }
 
+// non-league-auto-draw-skips: mesmo com próximo slot vencido e janela curta,
+// o cron da Liga não pode executar o planejador estrito dos torneios de times.
+{
+  const teamTournament = {
+    format: 'Fase de Grupos', status: 'active', nextDrawAt: Date.parse('2026-10-27T21:00:00Z'),
+    participants: [], rounds: [],
+    teamCompetition: { enabled:true, schedule:{ enabled:true, mode:'free', gamesPerTeam:3,
+      pairDayAssignments:[{ fixedPairId:'p1', day:'2026-10-28' }] } },
+    categorySchedule: { confirmed:true }, scheduleWindow: { days:[{ day:'2026-10-28', startTime:'18:00', endTime:'18:35' }] }
+  };
+  const before = JSON.stringify(teamTournament);
+  const result = generateLigaRound(teamTournament, new Date(teamTournament.nextDrawAt));
+  assert(result.ok === false && result.reason === 'not-liga', 'non-league-auto-draw-skips: torneio de times não entra no sorteio da Liga');
+  assert(JSON.stringify(teamTournament) === before, 'non-league-auto-draw-skips: nenhum dado do torneio é alterado');
+}
+
 // Mock de torneio com a config real do Ranking Confra 2026.
 function mkConfra(n) {
   const parts = [];
