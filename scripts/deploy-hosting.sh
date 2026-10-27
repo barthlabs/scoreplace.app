@@ -782,14 +782,17 @@ echo "✓ NO AR: $VERSAO  ·  main alinhado em ${COMMIT:0:8}"
 
 # O checkout principal acompanha; o remoto já foi confirmado no passo 3.5.
 if git merge-base --is-ancestor "$COMMIT" refs/remotes/origin/main 2>/dev/null || [[ "$REMOTO" == "$COMMIT" ]]; then
-  PRINCIPAL="$(git worktree list --porcelain | awk '/^worktree /{print $2; exit}')"
+  # A primeira entrada pode ser o repositório bare: só uma entrada com branch main
+  # é um checkout que podemos inspecionar e avançar.
+  PRINCIPAL="$(git worktree list --porcelain | awk '$1=="worktree" {path=substr($0, 10)} $1=="branch" && $2=="refs/heads/main" {print path; exit}')"
   if [[ -n "$PRINCIPAL" && "$PRINCIPAL" != "$RAIZ" ]]; then
     BRANCH_PRINCIPAL="$(git -C "$PRINCIPAL" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
-    SUJO_PRINCIPAL="$(git -C "$PRINCIPAL" status --porcelain --untracked-files=no)"
-    if [[ "$BRANCH_PRINCIPAL" == main && -z "$SUJO_PRINCIPAL" ]]; then
-      git -C "$PRINCIPAL" merge --ff-only origin/main >/dev/null 2>&1 && echo "  ✓ checkout principal alinhado" || echo "⚠️  checkout principal não pôde avançar automaticamente."
-    elif [[ "$BRANCH_PRINCIPAL" != main ]]; then
+    if [[ "$BRANCH_PRINCIPAL" != main ]]; then
       echo "⚠️  checkout principal está em '$BRANCH_PRINCIPAL'; não mexi fora de main."
+    elif ! SUJO_PRINCIPAL="$(git -C "$PRINCIPAL" status --porcelain --untracked-files=no 2>/dev/null)"; then
+      echo "⚠️  não pude inspecionar o checkout principal; não o alterei."
+    elif [[ -z "$SUJO_PRINCIPAL" ]]; then
+      git -C "$PRINCIPAL" merge --ff-only origin/main >/dev/null 2>&1 && echo "  ✓ checkout principal alinhado" || echo "⚠️  checkout principal não pôde avançar automaticamente."
     else
       echo "⚠️  checkout principal tem alterações; não mexi."
     fi

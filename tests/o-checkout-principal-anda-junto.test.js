@@ -22,6 +22,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const { execFileSync } = require('child_process');
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };
@@ -31,6 +32,17 @@ const sh = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'deploy-hosting
 
 ok(/git worktree list --porcelain/.test(sh),
    '⛔ o deploy descobre o checkout PRINCIPAL (não assume que está rodando nele)');
+const seletor = sh.match(/PRINCIPAL="\$\(git worktree list --porcelain \| awk '([^']+)'\)"/);
+ok(!!seletor, 'o checkout principal é selecionado pelo branch main, não pela primeira entrada');
+if (seletor) {
+  const escolher = (entries) => execFileSync('awk', [seletor[1]], { input: entries, encoding: 'utf8' }).trim();
+  const bare = 'worktree /repo/bare\nbare\n\n';
+  const outro = 'worktree /repo/feature\nbranch refs/heads/feature\n\n';
+  const main = 'worktree /repo/main\nbranch refs/heads/main\n\n';
+  ok(escolher(bare + outro + main) === '/repo/main',
+     '⛔ bare primeiro e branch extra não desviam a inspeção do main');
+  ok(escolher(bare + outro) === '', 'sem checkout main não há tentativa de fast-forward');
+}
 ok(/merge --ff-only origin\/main/.test(sh),
    'e o alinha por fast-forward');
 
@@ -48,6 +60,12 @@ ok(/!= main/.test(bloco) && /não mexi fora de main/.test(bloco),
    '⛔ principal noutro branch → avisa e NÃO mexe');
 ok(/status --porcelain --untracked-files=no/.test(bloco),
    '⛔ principal com alterações não commitadas → avisa e NÃO mexe (trabalho de outra sessão não se descarta)');
+ok(/elif ! SUJO_PRINCIPAL=.*status --porcelain --untracked-files=no/.test(bloco) &&
+   /não pude inspecionar o checkout principal; não o alterei/.test(bloco),
+   '⛔ status indisponível não aborta o pós-deploy nem é confundido com checkout limpo');
+ok(/elif \[\[ -z "\$SUJO_PRINCIPAL" \]\]/.test(bloco) &&
+   /checkout principal tem alterações; não mexi/.test(bloco),
+   'checkout main sujo não recebe fast-forward');
 ok(/untracked-files=no/.test(bloco),
    'e arquivo NÃO RASTREADO não conta como sujeira — ele sobrevive ao fast-forward e ' +
    'bloquear por causa dele deixaria o alinhamento sem acontecer justamente onde há rascunho');
