@@ -3018,6 +3018,7 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
         var item = split[si], available = item.available;
         if (available.length !== 2 || item.entries.length % cfg.teamCount !== 0) return { error:'A divisão desta categoria precisa de dois dias e de uma quantidade inteira de duplas por time.' };
         var units = item.entries.length / cfg.teamCount, first = available[0], second = available[1];
+        if (units < 2) return { error:'Esta categoria precisa de ao menos duas duplas por time para ter jogos nos dois dias. Coloque-a em um único dia.' };
         var fixedFirst = item.entries.filter(function (entry) { return fixedPairChoices.get(String(entry.fixedPairId)) === first; });
         var fixedSecond = item.entries.filter(function (entry) { return fixedPairChoices.get(String(entry.fixedPairId)) === second; });
         var bestUnits = -1, bestPenalty = Infinity;
@@ -3027,7 +3028,9 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
           var penalty = Math.abs((tally.get(first) + firstTarget) - (tally.get(second) + secondTarget));
           if (penalty < bestPenalty) { bestPenalty = penalty; bestUnits = firstUnits; }
         }
-        if (bestUnits < 0) return { error:'As duplas fixadas não cabem nos dois dias com a mesma quota por time. Solte algumas escolhas.' };
+        if (bestUnits < 0) return { error:fixedFirst.length || fixedSecond.length
+          ? 'As duplas fixadas não cabem nos dois dias com a mesma quota por time. Solte algumas escolhas.'
+          : 'Esta categoria não pode ser dividida igualmente entre os dois dias. Coloque-a em um único dia.' };
         var remaining = item.entries.filter(function (entry) { return available.indexOf(fixedPairChoices.get(String(entry.fixedPairId))) < 0; })
           .sort(function (a, b) { return previewRank.get(String(a.fixedPairId)) - previewRank.get(String(b.fixedPairId)); });
         fixedFirst.forEach(function (entry) { dayByPair.set(String(entry.fixedPairId), first); });

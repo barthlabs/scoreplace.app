@@ -86,6 +86,15 @@ if (!/class="cancel-x-btn" data-team-remove-category[^>]*aria-label="Remover Fem
 }
 const visibleHtml = overlay.innerHTML.replace(/\sdata-[^=]+="[^"]*"/g, '');
 if (/uid-(?:first|second)-/.test(visibleHtml)) throw new Error('UID cru vazou no conteúdo visível');
+const fullRoster = tournament.participants;
+tournament.participants = participants.filter(entry => entry.category !== 'Fem Light')
+  .concat(participants.filter(entry => entry.category === 'Fem Light').slice(0, 8));
+W._showTeamCompetitionDrawReview(tournament.id, { _canonicalRosterLoaded:true });
+if (!/ao menos duas duplas por time/.test(dayEditor.innerHTML) ||
+    /As duplas fixadas não cabem/.test(dayEditor.innerHTML)) {
+  throw new Error('Categoria de uma dupla por time em dois dias precisa de aviso específico, sem acusar fixações inexistentes');
+}
+tournament.participants = fullRoster;
 const savedAssignments = tournament.teamCompetition.schedule.pairDayAssignments;
 tournament.teamCompetition.schedule.pairDayAssignments = savedAssignments.slice(1);
 W._showTeamCompetitionDrawReview(tournament.id, { _canonicalRosterLoaded:true });
