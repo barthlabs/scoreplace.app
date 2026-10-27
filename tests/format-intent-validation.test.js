@@ -2,7 +2,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { validateNewFormatIntent } = require('../functions-autodraw/format-intent-validation-core');
+const { validateNewFormatIntent, validateHistoricalSinglesIdentity, validateCompletedMixedIdentity } = require('../functions-autodraw/format-intent-validation-core');
 const { makeCreateTournament } = require('../functions-autodraw/tournament-create');
 class HttpsError extends Error { constructor(code, message) { super(message); this.code = code; } }
 
@@ -20,6 +20,32 @@ assert.doesNotThrow(() => validateNewFormatIntent({ eliminatoria: { ativa: false
 assert.doesNotThrow(() => validateNewFormatIntent({ classificationSchedule: null, rodadas: { modo: 'todos' } }, HttpsError));
 assert.doesNotThrow(() => validateNewFormatIntent({ grupos: 20, classificationPairing: { clusterSize: 100 } }, HttpsError), 'não impõe teto novo em edição histórica');
 assert.doesNotThrow(() => validateNewFormatIntent({ grupos: '20', classificationSchedule: { gamesPerUnit: '3' } }, HttpsError));
+
+const historicalSingles = { disputa: 'individual', historicalSinglesOverride: true };
+const storedSingles = { teamSize: 1, fmt2: historicalSingles };
+assert.doesNotThrow(() => validateNewFormatIntent(historicalSingles, HttpsError, storedSingles, 1));
+assert.doesNotThrow(() => validateHistoricalSinglesIdentity(storedSingles, 1, HttpsError));
+for (const requested of ['1', '01', ' 1', 2, '2']) {
+  assert.throws(() => validateNewFormatIntent(historicalSingles, HttpsError, storedSingles, requested),
+    { code: 'failed-precondition' });
+  assert.throws(() => validateHistoricalSinglesIdentity(storedSingles, requested, HttpsError),
+    { code: 'failed-precondition' });
+}
+assert.doesNotThrow(() => validateHistoricalSinglesIdentity({ teamSize: '1', fmt2: historicalSingles }, '1', HttpsError));
+assert.throws(() => validateHistoricalSinglesIdentity({ teamSize: '1', fmt2: historicalSingles }, 1, HttpsError),
+  { code: 'failed-precondition' });
+assert.throws(() => validateNewFormatIntent(historicalSingles, HttpsError, undefined, undefined),
+  { code: 'failed-precondition', message: 'Atualize o app para editar este torneio.' });
+assert.throws(() => validateNewFormatIntent({ disputa: 'individual' }, HttpsError, storedSingles, 1),
+  { code: 'failed-precondition', message: 'Atualize o app para editar este torneio.' });
+for (const value of [null, false, 'true', 1]) {
+  assert.throws(() => validateNewFormatIntent({ disputa: 'individual', historicalSinglesOverride: value }, HttpsError),
+    { code: 'invalid-argument' });
+}
+assert.throws(() => validateNewFormatIntent({ disputa: 'dupla', historicalSinglesOverride: true }, HttpsError, storedSingles, 1),
+  { code: 'invalid-argument' });
+assert.throws(() => validateNewFormatIntent(historicalSingles, HttpsError, { fmt2: historicalSingles }, 1),
+  { code: 'failed-precondition' });
 
 for (const [patch, field] of [
   [{ disputa: 'equipe' }, 'disputa'],
@@ -78,6 +104,49 @@ assert.match(editor, /\[1, 2, 4\]\.map\(function \(n\).*_f2Linhas/s);
 assert.match(compiler, /mode: value\.mode === 'structured' \? 'structured' : 'free'/);
 assert.match(editor, /current\.mode = mode === 'structured' \? 'structured' : 'free'/);
 const FORMAT2 = require('../functions-autodraw/draw-core')._window.FORMAT2;
+const mixedCfg = FORMAT2.defaultConfig('Futevôlei');
+mixedCfg.disputa = 'dupla';
+mixedCfg.parceria = 'fixa';
+mixedCfg.classifAtiva = true;
+mixedCfg.grupos = 2;
+mixedCfg.classificados = 4;
+mixedCfg.eliminatoria.ativa = false;
+mixedCfg.completedMixedGroupOnly = true;
+const mixedCompiled = FORMAT2.compileToPhases(mixedCfg, { sport: 'Futevôlei' });
+const storedMixed = { id: 'tour_test', creatorUid: 'owner', sport: 'Futevôlei',
+  status: 'finished', matches: [], ...mixedCompiled.topLevel,
+  phases: mixedCompiled.phases, fmt2: mixedCompiled.cfg };
+assert.doesNotThrow(() => validateNewFormatIntent(storedMixed.fmt2, HttpsError, storedMixed, 2));
+assert.doesNotThrow(() => validateCompletedMixedIdentity(storedMixed, 2, HttpsError));
+for (const requested of [1, '2']) {
+  assert.throws(() => validateCompletedMixedIdentity(storedMixed, requested, HttpsError),
+    { code: 'failed-precondition' });
+}
+for (const [scope, key, value] of [
+  ['top', 'teamSize', 1], ['top', 'status', 'active'],
+  ['top', 'gruposCount', 3], ['top', 'gruposClassified', 2],
+  ['top', 'politicaDaChave', 'bye'],
+  ['phase', 'gruposCount', 4], ['phase', 'fixedPairs', false]
+]) {
+  const wrong = structuredClone(storedMixed);
+  (scope === 'top' ? wrong : wrong.phases[0])[key] = value;
+  assert.throws(() => validateCompletedMixedIdentity(wrong, wrong.teamSize, HttpsError),
+    { code: 'failed-precondition' }, scope + '.' + key);
+}
+const mixedWithNextPhase = structuredClone(storedMixed);
+mixedWithNextPhase.phases.push({ kind: 'elimination' });
+assert.throws(() => validateCompletedMixedIdentity(mixedWithNextPhase, 2, HttpsError),
+  { code: 'failed-precondition' });
+assert.throws(() => validateNewFormatIntent(storedMixed.fmt2, HttpsError),
+  { code: 'failed-precondition' }, 'criação não pode forjar marcador');
+assert.throws(() => validateNewFormatIntent({ disputa: 'dupla' }, HttpsError, storedMixed, 2),
+  { code: 'failed-precondition' }, 'cliente antigo não remove marcador');
+assert.throws(() => validateNewFormatIntent({ disputa: 'individual', completedMixedGroupOnly: true },
+  HttpsError, storedMixed, 2), { code: 'invalid-argument' });
+for (const value of [false, null, 'true']) {
+  assert.throws(() => validateNewFormatIntent({ disputa: 'dupla', completedMixedGroupOnly: value },
+    HttpsError), { code: 'invalid-argument' });
+}
 const historical = FORMAT2.normalize({ disputa: 'dupla', parceria: 'antiga', rodadas: { modo: 'legacy' },
   eliminatoria: { linhas: 3, lateEnrollment: 'legacy' } }, 'Beach Tennis');
 assert.doesNotThrow(() => validateNewFormatIntent(historical, HttpsError), 'dialeto histórico normalizado pela UI continua editável');
@@ -85,7 +154,7 @@ const wideHistorical = FORMAT2.normalize({ grupos: 20, classificationPairing: { 
 assert.equal(wideHistorical.grupos, 20);
 assert.doesNotThrow(() => validateNewFormatIntent(wideHistorical, HttpsError), 'normalizado histórico com mais de 16 grupos segue editável');
 assert.match(server, /validateIntent: require\('\.\/format-intent-validation-core'\)\.validateNewFormatIntent/);
-assert.match(server, /const fmt2Clone = _clonaConfigDeclarativa\(fmt2, 0, \['fmt2'\]\);\s*require\('\.\/format-intent-validation-core'\)\.validateNewFormatIntent\(fmt2Clone, HttpsError\)/);
+assert.match(server, /const fmt2Clone = _clonaConfigDeclarativa\(fmt2, 0, \['fmt2'\]\);\s*require\('\.\/format-intent-validation-core'\)\.validateNewFormatIntent\(fmt2Clone, HttpsError, t, t\.teamSize\)/);
 
 // Executa o handler exportado, extraído literalmente do módulo de produção.
 // A transação fake contabiliza qualquer escrita, inclusive se uma futura mudança
@@ -96,14 +165,19 @@ assert(start >= 0 && end > start, 'handler real de edição encontrado');
 const handlerSource = server.slice(start, end);
 let compiled = 0;
 let writes = 0;
-const tournament = { id: 'tour_test', creatorUid: 'owner', sport: 'Tênis', matches: [], phases: [] };
+let tournament = { id: 'tour_test', creatorUid: 'owner', sport: 'Tênis', matches: [], phases: [] };
 const db = {
   collection: () => ({ doc: id => ({ id }) }),
   runTransaction: async callback => callback({
     set: () => { writes++; }, update: () => { writes++; }, create: () => { writes++; }, delete: () => { writes++; }
   })
 };
-const drawWindow = { FORMAT2: { compileToPhases: () => { compiled++; return { topLevel: {}, phases: [], cfg: {} }; }, summary: () => '' } };
+const drawWindow = { FORMAT2: { compileToPhases: (fmt2, context) => {
+  compiled++;
+  return fmt2.historicalSinglesOverride === true || fmt2.completedMixedGroupOnly === true
+    ? FORMAT2.compileToPhases(fmt2, context)
+    : { topLevel: {}, phases: [], cfg: {} };
+}, summary: () => '' } };
 const edit = new Function('onCall', 'HttpsError', 'db', 'drawWindow', '_leTorneio', '_isTournamentAdmin',
   'hasDrawnBracket', '_clonaConfigDeclarativa', '_drawFail', '_antesDoMotor', '_gravaTorneio', 'require',
   'const exports = {};\n' + handlerSource + '\nreturn exports.applyTournamentFormat;')(
@@ -133,7 +207,7 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
   '_isTournamentAdmin', '_drawFail', 'hasDrawnBracket', '_configAtiva', '_antesDoMotor',
   '_gravaTorneio', '_fasesDeConfiguracaoAtualizaveis', 'drawWindow', 'require',
   'const exports = {};\n' + configSource + '\nreturn exports.updateTournamentConfiguration;')(
-  fn => fn, HttpsError, configDb, new Set(['fmt2', 'name']), new Set(['fmt2']), cloneConfig,
+  fn => fn, HttpsError, configDb, new Set(['fmt2', 'name', 'teamSize']), new Set(['fmt2', 'teamSize']), cloneConfig,
   async () => {}, async () => configTournament, () => true,
   (code, message) => new HttpsError(code, message), t => Array.isArray(t.matches) && t.matches.length > 0,
   require('../functions-autodraw/config-ativa-core'), () => ({}),
@@ -146,7 +220,7 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
   const create = makeCreateTournament({
     db: { collection: () => ({ doc: id => ({ id }) }), runTransaction: async () => { createTransactions++; } },
     HttpsError, FieldValue: { serverTimestamp: () => 'now' },
-    fields: new Set(['name', 'sport', 'format', 'fmt2']),
+    fields: new Set(['name', 'sport', 'format', 'teamSize', 'fmt2']),
     cloneConfig,
     validateIntent: validateNewFormatIntent,
     compile: () => { createCompiled++; return { topLevel: {}, phases: [], cfg: {} }; },
@@ -161,6 +235,19 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
   } }), error => error.code === 'invalid-argument' && error.message.includes('fmt2.classificationSchedule.gamesPerUnit'));
   assert.equal(createCompiled, 0, 'criação rejeita antes de compilar');
   assert.equal(createTransactions, 0, 'criação rejeita antes da transação');
+  await assert.rejects(create({ auth: { uid: 'owner' }, data: {
+    tournamentId: 'tour_' + Date.now() + '_' + 'b'.repeat(32),
+    config: { name: 'Individual histórico forjado', sport: 'Futevôlei', format: 'Eliminatórias Simples',
+      teamSize: 1, fmt2: historicalSingles }
+  } }), { code: 'failed-precondition' });
+  assert.equal(createCompiled, 0, 'flag histórica não é criada pelo cliente');
+  assert.equal(createTransactions, 0, 'criação com flag não abre transação');
+  await assert.rejects(create({ auth: { uid: 'owner' }, data: {
+    tournamentId: 'tour_' + Date.now() + '_' + 'c'.repeat(32),
+    config: { name: 'Misto forjado', sport: 'Futevôlei', format: 'Fase de Grupos',
+      teamSize: 2, fmt2: storedMixed.fmt2 }
+  } }), { code: 'failed-precondition' });
+  assert.equal(createTransactions, 0, 'misto forjado não abre transação');
   await assert.rejects(edit({ auth: { uid: 'owner' }, data: {
     tournamentId: 'tour_test', fmt2: { disputa: 'dupla', classificationSchedule: { mode: 'structred' } }
   } }), error => error.code === 'invalid-argument' && error.message.includes('fmt2.classificationSchedule.mode'));
@@ -192,6 +279,23 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
   assert.equal(wideEdit.ok, true, 'edição histórica com mais de 16 grupos não é bloqueada');
   assert.equal(compiled, 2);
   assert.equal(writes, 2);
+  tournament = { id: 'tour_test', creatorUid: 'owner', sport: 'Futevôlei', teamSize: 1,
+    matches: [], phases: [], fmt2: historicalSingles };
+  const beforeApply = writes;
+  await assert.rejects(edit({ auth: { uid: 'owner' }, data: {
+    tournamentId: 'tour_test', fmt2: { disputa: 'individual' }
+  } }), { code: 'failed-precondition', message: 'Atualize o app para editar este torneio.' });
+  assert.equal(writes, beforeApply, 'apply não remove flag por cliente antigo');
+  const clonedHistorical = cloneConfig(historicalSingles, 0, ['fmt2']);
+  assert.equal(clonedHistorical.historicalSinglesOverride, true, 'clone real preserva flag');
+  const appliedHistorical = await edit({ auth: { uid: 'owner' }, data: {
+    tournamentId: 'tour_test', fmt2: clonedHistorical
+  } });
+  assert.equal(appliedHistorical.ok, true, 'apply recompila histórico individual');
+  assert.equal(tournament.teamSize, 1);
+  assert.equal(typeof tournament.teamSize, 'number');
+  assert.equal(tournament.fmt2.historicalSinglesOverride, true);
+  assert.equal(writes, beforeApply + 1);
   for (const [fmt2, field] of [
     [{ disputa: 'equipe' }, 'disputa'],
     [{ grupos: '3abc' }, 'grupos'],
@@ -241,6 +345,59 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
     tournamentId: 'tour_test', patch: { fmt2: null }
   } }), error => error.code === 'invalid-argument');
   assert.equal(configWrites, beforeNull, 'substituir formato existente por null não escreve');
+  const storedHistoricFormat = { ...historicalSingles, parceria: null,
+    classificationSchedule: { mode: 'antigo' } };
+  configTournament = { id: 'tour_test', creatorUid: 'owner', sport: 'Futevôlei',
+    name: 'Antes', teamSize: 1, fmt2: storedHistoricFormat };
+  const echoed = await configHandler({ auth: { uid: 'owner' }, data: {
+    tournamentId: 'tour_test', patch: { name: 'Depois', fmt2: structuredClone(storedHistoricFormat) }
+  } });
+  assert.equal(echoed.ok, true, 'fmt2 idêntico com enum antigo não revalida o envelope');
+  assert.equal(configTournament.fmt2, storedHistoricFormat, 'fmt2 salvo permanece intacto');
+  const withoutEnvelope = await configHandler({ auth: { uid: 'owner' }, data: {
+    tournamentId: 'tour_test', patch: { name: 'Mais um nome' }
+  } });
+  assert.equal(withoutEnvelope.ok, true, 'editar nome sem fmt2 mantém identidade histórica');
+  for (const patch of [{ teamSize: 2 }, { teamSize: '1' },
+    { teamSize: 2, fmt2: structuredClone(storedHistoricFormat) }]) {
+    const before = configWrites;
+    await assert.rejects(configHandler({ auth: { uid: 'owner' }, data: {
+      tournamentId: 'tour_test', patch
+    } }), { code: 'failed-precondition' });
+    assert.equal(configWrites, before, 'mudança de modalidade não escreve');
+  }
+  const beforeOldClient = configWrites;
+  await assert.rejects(configHandler({ auth: { uid: 'owner' }, data: {
+    tournamentId: 'tour_test', patch: { fmt2: { disputa: 'individual' } }
+  } }), { code: 'failed-precondition', message: 'Atualize o app para editar este torneio.' });
+  assert.equal(configWrites, beforeOldClient, 'cliente sem flag não apaga a identidade histórica');
+
+  configTournament = structuredClone(storedMixed);
+  const sameMixed = await configHandler({ auth: { uid: 'owner' }, data: {
+    tournamentId: 'tour_test', patch: { name: 'Nome corrigido', fmt2: structuredClone(storedMixed.fmt2) }
+  } });
+  assert.equal(sameMixed.ok, true, 'eco do envelope misto preserva edição não estrutural');
+  const beforeMixedChange = configWrites;
+  for (const patch of [{ teamSize: 1 }, { teamSize: '2' },
+    { fmt2: { disputa: 'dupla' } }, { teamSize: 1, fmt2: structuredClone(storedMixed.fmt2) }]) {
+    await assert.rejects(configHandler({ auth: { uid: 'owner' }, data: {
+      tournamentId: 'tour_test', patch
+    } }), { code: 'failed-precondition' });
+    assert.equal(configWrites, beforeMixedChange, 'mudança estrutural mista não escreve');
+  }
+  tournament = structuredClone(storedMixed);
+  const beforeMixedApply = writes;
+  await assert.rejects(edit({ auth: { uid: 'owner' }, data: {
+    tournamentId: 'tour_test', fmt2: { disputa: 'dupla' }
+  } }), { code: 'failed-precondition' });
+  assert.equal(writes, beforeMixedApply, 'apply não remove marcador');
+  const appliedMixed = await edit({ auth: { uid: 'owner' }, data: {
+    tournamentId: 'tour_test', fmt2: structuredClone(storedMixed.fmt2)
+  } });
+  assert.equal(appliedMixed.ok, true, 'apply recompila shape terminal no harness sem sorteio');
+  assert.equal(tournament.fmt2.completedMixedGroupOnly, true);
+  assert.equal(tournament.phases.length, 1);
+
   const historicDrawn = { disputa: 'dupla', parceria: 'antiga',
     eliminatoria: { roundBounds: ['2026-11-01T23:00'] } };
   configTournament = { id: 'tour_test', creatorUid: 'owner', sport: 'Beach Tennis',
@@ -254,5 +411,21 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
   assert.equal(deadlineResult.ok, true, 'prazo em formato histórico com chave passa');
   assert.equal(configWrites, beforeDrawn + 1);
   assert.deepEqual(configTournament.matches, [{ id: 'jogo-existente' }], 'jogos não mudam');
+  const drawnHistoricFormat = { ...historicalSingles,
+    eliminatoria: { roundBounds: ['2026-11-01T23:00'] } };
+  configTournament = { id: 'tour_test', creatorUid: 'owner', sport: 'Futevôlei', teamSize: 1,
+    matches: [{ id: 'jogo-existente' }], fmt2: drawnHistoricFormat };
+  const newDeadline = structuredClone(drawnHistoricFormat);
+  newDeadline.eliminatoria.roundBounds = ['2026-11-03T23:00'];
+  const drawnSaved = await configHandler({ auth: { uid: 'owner' }, data: {
+    tournamentId: 'tour_test', patch: { fmt2: newDeadline }
+  } });
+  assert.equal(drawnSaved.ok, true, 'prazo de individual histórico sorteado é editável');
+  assert.equal(configTournament.fmt2.historicalSinglesOverride, true, 'mescla preserva flag');
+  const beforeTypeChange = configWrites;
+  await assert.rejects(configHandler({ auth: { uid: 'owner' }, data: {
+    tournamentId: 'tour_test', patch: { teamSize: '1' }
+  } }), { code: 'failed-precondition' });
+  assert.equal(configWrites, beforeTypeChange, 'ramo sorteado recusa mudança de tipo');
   console.log('✓ intenção nova rejeita valor e contêiner inválidos nas duas portas de escrita');
 })().catch(error => { console.error(error); process.exitCode = 1; });

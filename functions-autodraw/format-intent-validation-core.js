@@ -38,9 +38,73 @@ function explicitValue(object, path) {
   return { present: true, value: current };
 }
 
-function validateNewFormatIntent(fmt2, HttpsError) {
+function validateHistoricalSinglesIdentity(stored, requestedTeamSize, HttpsError) {
+  if (!stored || !stored.fmt2 || stored.fmt2.historicalSinglesOverride !== true) return;
+  if ((stored.teamSize !== 1 && stored.teamSize !== '1') ||
+      requestedTeamSize !== stored.teamSize) {
+    throw new HttpsError('failed-precondition', 'O formato individual histórico não pode mudar de modalidade.');
+  }
+}
+
+function validateCompletedMixedIdentity(stored, requestedTeamSize, HttpsError) {
+  if (!stored || !stored.fmt2 || stored.fmt2.completedMixedGroupOnly !== true) return;
+  const phase = Array.isArray(stored.phases) && stored.phases.length === 1 ? stored.phases[0] : null;
+  if (stored.status !== 'finished' || stored.sport !== 'Futevôlei' ||
+      stored.teamSize !== 2 || requestedTeamSize !== stored.teamSize ||
+      stored.enrollmentMode !== 'misto' ||
+      stored.format !== 'Fase de Grupos + Eliminatórias' ||
+      stored.gruposCount !== 2 || stored.gruposClassified !== 4 ||
+      stored.drawMode !== 'sorteio' || stored.manualPairing !== 'open' ||
+      stored.politicaDaChave != null ||
+      stored.mixedPairingSeparated !== false ||
+      !Array.isArray(stored.matches) || stored.matches.length !== 0 ||
+      !phase || phase.kind !== 'classification' ||
+      phase.formatCode !== 'classification_groups' ||
+      phase.format !== 'Fase de Grupos + Eliminatórias' ||
+      phase.fixedPairs !== true || phase.gruposCount !== 2 ||
+      phase.gruposClassified !== 4 || phase.drawMode !== 'sorteio' ||
+      !phase.classification || phase.classification.structure !== 'groups') {
+    throw new HttpsError('failed-precondition', 'O formato misto histórico não pode mudar de modalidade.');
+  }
+}
+
+function validateNewFormatIntent(fmt2, HttpsError, stored, requestedTeamSize) {
   if (!fmt2 || typeof fmt2 !== 'object' || Array.isArray(fmt2)) {
     throw new HttpsError('invalid-argument', 'Configuração de formato inválida.');
+  }
+  const historicalField = explicitValue(fmt2, 'historicalSinglesOverride');
+  const storedHistorical = !!(stored && stored.fmt2 && stored.fmt2.historicalSinglesOverride === true);
+  if (storedHistorical && (!historicalField.present || historicalField.value !== true)) {
+    throw new HttpsError('failed-precondition', 'Atualize o app para editar este torneio.');
+  }
+  if (historicalField.present) {
+    if (historicalField.value !== true) {
+      throw new HttpsError('invalid-argument', 'Valor de formato inválido em fmt2.historicalSinglesOverride.');
+    }
+    if (!storedHistorical) {
+      throw new HttpsError('failed-precondition', 'Atualize o app para editar este torneio.');
+    }
+    if (fmt2.disputa !== 'individual') {
+      throw new HttpsError('invalid-argument', 'Formato individual histórico exige disputa individual.');
+    }
+    validateHistoricalSinglesIdentity(stored, requestedTeamSize, HttpsError);
+  }
+  const mixedField = explicitValue(fmt2, 'completedMixedGroupOnly');
+  const storedMixed = !!(stored && stored.fmt2 && stored.fmt2.completedMixedGroupOnly === true);
+  if (storedMixed && (!mixedField.present || mixedField.value !== true)) {
+    throw new HttpsError('failed-precondition', 'Atualize o app para editar este torneio.');
+  }
+  if (mixedField.present) {
+    if (mixedField.value !== true) {
+      throw new HttpsError('invalid-argument', 'Valor de formato inválido em fmt2.completedMixedGroupOnly.');
+    }
+    if (!storedMixed) {
+      throw new HttpsError('failed-precondition', 'Atualize o app para editar este torneio.');
+    }
+    if (fmt2.disputa !== 'dupla') {
+      throw new HttpsError('invalid-argument', 'Formato misto histórico exige disputa em dupla.');
+    }
+    validateCompletedMixedIdentity(stored, requestedTeamSize, HttpsError);
   }
   // Um contêiner explicitamente enviado não pode sumir durante a validação
   // dos filhos e reaparecer como default no compilador tolerante de legado.
@@ -84,4 +148,4 @@ function validateNewFormatIntent(fmt2, HttpsError) {
   }
 }
 
-module.exports = { validateNewFormatIntent };
+module.exports = { validateNewFormatIntent, validateHistoricalSinglesIdentity, validateCompletedMixedIdentity };

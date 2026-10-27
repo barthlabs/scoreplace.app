@@ -5052,13 +5052,25 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     _policyConfig.canonicalizePolicyAliases(patch, t);
     require('./category-capacity-core').validateCapacityConfig(patch, HttpsError, t);
     const hasDraw = hasDrawnBracket(t);
-    // A ficha também edita fmt2 antes do sorteio. Um envelope idêntico ao
-    // documento fresco é ruído da ficha, não uma intenção nova: descartá-lo
-    // preserva a edição de nome/prazo em torneio histórico não sorteado.
-    // Só uma mudança real recebe o gate da criação/configurador de formato.
-    if (!hasDraw && Object.prototype.hasOwnProperty.call(patch, 'fmt2')) {
-      if (_configAtiva.igual(t.fmt2, patch.fmt2)) delete patch.fmt2;
-      else require('./format-intent-validation-core').validateNewFormatIntent(patch.fmt2, HttpsError);
+    // A ficha reenvia fmt2 mesmo quando só muda nome/prazo. Um envelope igual
+    // não é intenção nova, mas a identidade de um individual histórico precisa
+    // continuar protegida mesmo quando o patch não traz fmt2.
+    const fmt2Present = Object.prototype.hasOwnProperty.call(patch, 'fmt2');
+    const requestedTeamSize = Object.prototype.hasOwnProperty.call(patch, 'teamSize') ? patch.teamSize : t.teamSize;
+    if (!hasDraw) {
+      const formatGate = require('./format-intent-validation-core');
+      if (fmt2Present) {
+        if (_configAtiva.igual(t.fmt2, patch.fmt2)) {
+          formatGate.validateHistoricalSinglesIdentity(t, requestedTeamSize, HttpsError);
+          formatGate.validateCompletedMixedIdentity(t, requestedTeamSize, HttpsError);
+          delete patch.fmt2;
+        } else {
+          formatGate.validateNewFormatIntent(patch.fmt2, HttpsError, t, requestedTeamSize);
+        }
+      } else {
+        formatGate.validateHistoricalSinglesIdentity(t, requestedTeamSize, HttpsError);
+        formatGate.validateCompletedMixedIdentity(t, requestedTeamSize, HttpsError);
+      }
     }
     const requestedOpeningAt = Date.parse(String(patch.registrationOpenAt || ''));
     // Mesmo que o horário já esteja gravado, uma edição precisa recuperar o estado
@@ -5269,7 +5281,7 @@ exports.applyTournamentFormat = onCall(async (request) => {
     // A terceira porta de gravação recebe fmt2 cru; clonar e validar ANTES de
     // compilar impede a normalização tolerante de esconder uma escolha inválida.
     const fmt2Clone = _clonaConfigDeclarativa(fmt2, 0, ['fmt2']);
-    require('./format-intent-validation-core').validateNewFormatIntent(fmt2Clone, HttpsError);
+    require('./format-intent-validation-core').validateNewFormatIntent(fmt2Clone, HttpsError, t, t.teamSize);
     require('./elimination-policy-config-core').validateAndCanonicalizeExplicitPolicy(fmt2Clone, HttpsError);
     let out;
     try {
@@ -5281,6 +5293,14 @@ exports.applyTournamentFormat = onCall(async (request) => {
       });
     } catch (e) {
       throw new HttpsError('invalid-argument', 'Não foi possível compilar o formato: ' + String((e && e.message) || e).slice(0, 180));
+    }
+    if (fmt2Clone.historicalSinglesOverride === true && out.topLevel.teamSize !== 1) {
+      throw new HttpsError('failed-precondition', 'O formato individual histórico não pode mudar de modalidade.');
+    }
+    if (fmt2Clone.completedMixedGroupOnly === true &&
+        (out.topLevel.teamSize !== 2 || out.topLevel.enrollmentMode !== 'misto' ||
+          out.phases.length !== 1 || out.phases[0].formatCode !== 'classification_groups')) {
+      throw new HttpsError('failed-precondition', 'O formato misto histórico não pode mudar de modalidade.');
     }
     const antes = _antesDoMotor(t);
     Object.assign(t, out.topLevel);

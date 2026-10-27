@@ -275,6 +275,25 @@
     return (code === 'elim_dupla' || /dupla eliminat/.test(label)) ? 'double' : 'single';
   }
 
+  // Estado terminal medido em produção: a eliminatória estava prevista no
+  // rótulo, mas nunca foi materializada. A configuração canônica mantém a
+  // única fase de grupos sem inventar uma segunda fase ou perder os 4 cortes.
+  function completedMixedGroupOnly(t) {
+    var p = t && Array.isArray(t.phases) && t.phases.length === 1 ? t.phases[0] : null;
+    return !!(t && t.status === 'finished' && t.sport === 'Futevôlei' &&
+      t.teamSize === 2 && t.enrollmentMode === 'misto' &&
+      t.format === 'Fase de Grupos + Eliminatórias' &&
+      t.gruposCount === 2 && t.gruposClassified === 4 &&
+      t.drawMode === 'sorteio' && t.manualPairing === 'open' &&
+      t.politicaDaChave == null &&
+      t.mixedPairingSeparated === false &&
+      Array.isArray(t.matches) && t.matches.length === 0 &&
+      p && p.kind === 'classification' && p.formatCode === 'classification_groups' &&
+      p.format === 'Fase de Grupos + Eliminatórias' && p.fixedPairs === true &&
+      p.gruposCount === 2 && p.gruposClassified === 4 && p.drawMode === 'sorteio' &&
+      p.classification && p.classification.structure === 'groups');
+  }
+
   function projectLegacyPhases(tournament) {
     tournament = tournament || {};
     var stored = Array.isArray(tournament.phases) ? tournament.phases : [];
@@ -450,7 +469,7 @@
   // ponte de ENTRADA: documentos sem `fmt2` não voltam ao formulário com o
   // default do aplicativo, nem ressuscitam o antigo "modo suíço". A saída do
   // próximo salvar continua sendo `fmt2` + `phases` canônicos.
-  function configFromTournament(tournament, sport) {
+  function configFromTournament(tournament, sport, options) {
     tournament = tournament || {};
     var projected = projectLegacyPhases(tournament).phases || [];
     var first = projected[0] || {};
@@ -465,7 +484,15 @@
       cfg.teamCompetition = JSON.parse(JSON.stringify(savedTeamCompetition));
     }
 
-    cfg.disputa = Number(tournament.teamSize) === 1 ? 'individual' : 'dupla';
+    var historicalSingles = (tournament.teamSize === 1 || tournament.teamSize === '1') &&
+      ((options && options.historicalSinglesOverride === true) ||
+        (tournament.fmt2 && tournament.fmt2.historicalSinglesOverride === true));
+    cfg.disputa = (tournament.teamSize === 1 || tournament.teamSize === '1') ? 'individual' : 'dupla';
+    if (historicalSingles) cfg.historicalSinglesOverride = true;
+    var historicalMixed = completedMixedGroupOnly(tournament) &&
+      ((options && options.completedMixedGroupOnly === true) ||
+        (tournament.fmt2 && tournament.fmt2.completedMixedGroupOnly === true));
+    if (historicalMixed) cfg.completedMixedGroupOnly = true;
     if (first.kind === 'elimination') {
       cfg.classifAtiva = false;
       cfg.eliminatoria.ativa = true;
@@ -501,6 +528,7 @@
       if (Array.isArray(mapping) && mapping[0] && parseInt(mapping[0].rankTo, 10) > 0) inferredTarget = parseInt(mapping[0].rankTo, 10);
     }
     if (inferredTarget > 0) cfg.classificados = inferredTarget;
+    if (historicalMixed) cfg.classificados = 4;
     // A fase can carry the effective team controls even when the historical
     // fmt2 snapshot is absent or stale. The editor must show the saved motor
     // configuration, never the default for a new tournament.
@@ -547,7 +575,8 @@
     var out = JSON.parse(JSON.stringify(cfg));
 
     if (out.disputa !== 'individual' && out.disputa !== 'dupla') out.disputa = 'dupla';
-    if (out.disputa === 'individual' && sport && !allowsSingles(sport)) out.disputa = 'dupla';
+    if (out.disputa === 'individual' && sport && !allowsSingles(sport) &&
+        out.historicalSinglesOverride !== true) out.disputa = 'dupla';
     var isDupla = out.disputa === 'dupla';
 
     out.grupos = Math.max(1, parseInt(out.grupos, 10) || 1);
@@ -1012,6 +1041,20 @@
         teamCompetition: (cfg.teamCompetition && cfg.teamCompetition.enabled) ? cfg.teamCompetition : null,
         pairingStrategy: 'top', grandFinal: true
       });
+      if (cfg.completedMixedGroupOnly === true) {
+        // Nenhuma eliminatória foi materializada. Não introduzir no espelho
+        // uma política de chave que o sorteio histórico nunca recebeu.
+        delete top.politicaDaChave;
+        top.format = 'Fase de Grupos + Eliminatórias';
+        top.enrollmentMode = 'misto';
+        top.gruposCount = 2;
+        top.gruposClassified = 4;
+        top.manualPairing = 'open';
+        top.mixedPairingSeparated = false;
+        p0.format = 'Fase de Grupos + Eliminatórias';
+        p0.gruposCount = 2;
+        p0.gruposClassified = 4;
+      }
     }
 
     var phases = [p0];
@@ -1134,6 +1177,127 @@
     return { topLevel: top, phases: phases, cfg: cfg };
   }
 
+  // Prévia conservadora de conversão, sem escrita. Só considera uma intenção
+  // representável quando o compilador atual reproduz os campos estruturais
+  // declarados; jogos e placares jamais participam desta saída.
+  function translateLegacyTournament(tournament) {
+    var t = tournament && typeof tournament === 'object' ? tournament : {};
+    function blocked(reason) { return { ok: false, fmt2: null, derived: null, reason: reason }; }
+    var sport = t.sport;
+    if (typeof sport !== 'string' || !sport.trim()) return blocked('missing-sport');
+    var rawSize = t.teamSize;
+    if (rawSize !== 1 && rawSize !== 2 && rawSize !== '1' && rawSize !== '2') return blocked('invalid-teamSize');
+    var teamSize = rawSize === 1 || rawSize === '1' ? 1 : 2;
+    // Estas recusas precisam anteceder configFromTournament: normalize corrige
+    // silenciosamente individual→dupla em esportes cujo preset exige dupla.
+    var historicalSingles = teamSize === 1 && !allowsSingles(sport);
+    var rule = (window.SPORT_RULES || {})[sport];
+    if (teamSize === 2 && rule && rule.teamSize === 1) return blocked('doubles-not-supported-for-sport');
+    var historicalMixed = completedMixedGroupOnly(t);
+    if (t.enrollmentMode === 'misto' && !historicalMixed) return blocked('mixed-enrollment-not-representable');
+
+    var required = ['format', 'teamSize', 'enrollmentMode', 'phases'];
+    for (var i = 0; i < required.length; i++) {
+      if (!Object.prototype.hasOwnProperty.call(t, required[i]) || t[required[i]] == null) {
+        return blocked('unverified-' + required[i]);
+      }
+    }
+    if (!Array.isArray(t.phases) || !t.phases.length) return blocked('unverified-phases');
+
+    try {
+    var cfg = configFromTournament(t, sport, {
+      historicalSinglesOverride: historicalSingles,
+      completedMixedGroupOnly: historicalMixed
+    });
+    var derived = compileToPhases(cfg, {
+      sport: sport,
+      resultEntry: t.resultEntry,
+      lateEnrollment: t.lateEnrollment,
+      newMatchups: t.newMatchups
+    });
+    function declared(object, key) {
+      return !!object && Object.prototype.hasOwnProperty.call(object, key) && object[key] != null;
+    }
+    var hasCount = declared(t, 'gruposCount');
+    var hasClassified = declared(t, 'gruposClassified');
+    if (hasCount !== hasClassified) return blocked('unverified-gruposClassified');
+    var compiledHasGroups = declared(derived.topLevel, 'gruposCount') ||
+      declared(derived.topLevel, 'gruposClassified') ||
+      declared(derived.phases[0], 'gruposCount') || declared(derived.phases[0], 'gruposClassified');
+    var directElimination = t.format === 'Eliminatórias Simples' && t.phases.length === 1 &&
+      t.phases[0] && t.phases[0].kind === 'elimination' && derived.phases.length === 1;
+    var directSingleElim = !hasCount && !hasClassified && (teamSize === 2 || historicalSingles) &&
+      directElimination && !compiledHasGroups;
+    if (!hasCount) {
+      if (!directElimination || compiledHasGroups) return blocked('unverified-gruposClassified');
+    }
+    if (directSingleElim) {
+      function allowed(object, key, expected) {
+        return !declared(object, key) || object[key] === expected;
+      }
+      if (!allowed(t, 'gruposCount', null) || !allowed(t, 'gruposClassified', null) ||
+          !allowed(t, 'drawMode', 'sorteio') || !allowed(t, 'politicaDaChave', 'repescagem')) {
+        return blocked('mismatch-top.directElimination');
+      }
+      var legacyPhase = t.phases[0];
+      if (!allowed(legacyPhase, 'gruposCount', 4) || !allowed(legacyPhase, 'gruposClassified', 2) ||
+          !allowed(legacyPhase, 'drawMode', 'sorteio') ||
+          !allowed(legacyPhase, 'politicaDaChave', 'repescagem')) {
+        return blocked('mismatch-phases.0.directElimination');
+      }
+      if (derived.topLevel.drawMode !== 'sorteio' || derived.phases[0].drawMode !== 'sorteio' ||
+          derived.topLevel.politicaDaChave !== 'repescagem' ||
+          derived.phases[0].politicaDaChave !== 'repescagem') {
+        return blocked('mismatch-compiled.directElimination');
+      }
+    }
+    var topFields = ['format', 'teamSize', 'drawMode', 'enrollmentMode', 'gruposClassified', 'gruposCount', 'teamCompetition'];
+    if (historicalMixed) topFields.push('manualPairing', 'mixedPairingSeparated');
+    var phaseFields = ['kind', 'formatCode', 'format', 'teamSize', 'drawMode', 'gruposClassified', 'gruposCount',
+      'fixedPairs', 'classification', 'elimination', 'source', 'teamCompetition'];
+    function same(left, right) {
+      if (left === right) return true;
+      if (!left || !right || typeof left !== 'object' || typeof right !== 'object') return false;
+      if (Array.isArray(left) !== Array.isArray(right)) return false;
+      var leftKeys = Object.keys(left).sort();
+      var rightKeys = Object.keys(right).sort();
+      if (leftKeys.length !== rightKeys.length) return false;
+      for (var j = 0; j < leftKeys.length; j++) {
+        if (leftKeys[j] !== rightKeys[j] || !same(left[leftKeys[j]], right[rightKeys[j]])) return false;
+      }
+      return true;
+    }
+    function compareFields(source, compiled, fields, prefix) {
+      for (var j = 0; j < fields.length; j++) {
+        var key = fields[j];
+        if (directSingleElim && (key === 'gruposCount' || key === 'gruposClassified' || key === 'drawMode')) {
+          var effective = key === 'gruposCount' ? 4 : key === 'gruposClassified' ? 2 : 'sorteio';
+          var left = source[key] == null ? effective : source[key];
+          var right = compiled[key] == null ? effective : compiled[key];
+          if (!same(left, right)) return prefix + key;
+          continue;
+        }
+        if (!Object.prototype.hasOwnProperty.call(source, key)) continue;
+        var actual = key === 'teamSize' && (source[key] === '1' || source[key] === '2')
+          ? Number(source[key]) : source[key];
+        if (!same(actual, compiled[key])) return prefix + key;
+      }
+      return null;
+    }
+    var mismatch = compareFields(t, derived.topLevel, topFields, 'top.');
+    if (mismatch) return blocked('mismatch-' + mismatch);
+    if (t.phases.length !== derived.phases.length) return blocked('mismatch-phases.length');
+    for (var p = 0; p < t.phases.length; p++) {
+      if (!t.phases[p] || typeof t.phases[p] !== 'object') return blocked('invalid-phase-' + p);
+      mismatch = compareFields(t.phases[p], derived.phases[p], phaseFields, 'phases.' + p + '.');
+      if (mismatch) return blocked('mismatch-' + mismatch);
+    }
+    return { ok: true, fmt2: derived.cfg, derived: { topLevel: derived.topLevel, phases: derived.phases }, reason: null };
+    } catch (error) {
+      return blocked('compile-error');
+    }
+  }
+
   window.FORMAT2 = {
     allowsSingles: allowsSingles,
     teamSizeFor: teamSizeFor,
@@ -1143,6 +1307,7 @@
     summary: summary,
     projectLegacyPhases: projectLegacyPhases,
     compileToPhases: compileToPhases,
+    translateLegacyTournament: translateLegacyTournament,
     assessGroupSchedule: assessGroupSchedule,
     resolveTurnos: resolveTurnos
   };

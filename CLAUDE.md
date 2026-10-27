@@ -70,6 +70,19 @@ Esta autorização cobre somente os IDs congelados em
 transação, pós-check e recibo próprios. Não autoriza alterar Confra, Neon,
 jogos, placares, resultados ou qualquer elenco que deixou de estar vazio.
 
+**Extensão específica para configuração de formato — 27/10/2026:** o proprietário
+determinou nesta conversa: “tudo deveria passar pelo motor novo. traduza as
+coisas para que funcione no motor novo como se nunca tivesse havido outro
+modelo”. O censo somente-leitura encontrou **73 torneios sem `fmt2`** (61 no
+manifesto de elencos vazios e 12 fora dele), todos traduzíveis após a revisão
+do compilador. A autorização atual cobre somente materializar `fmt2` e seus
+espelhos estruturais nesses 73 documentos, com IDs congelados no manifesto
+privado da migração administrativa, backup individual integral, verificação
+do documento fresco e CAS. Não amplia a autorização da migração de elencos;
+não altera partidas, placares, inscrições, confrontos ou resultados. Confra e
+Neon já possuem `fmt2` e ficam fora. Outros torneios surgidos depois do censo
+exigem nova prévia e autorização específica.
+
 ### Reset histórico (transição alpha → beta) — 2026-04-29
 Na transição do alpha pra beta foi feito o reset final das coleções:
 - ❌ Apagadas: `tournaments`, `venues`, `presences`, `casualMatches`, `mail`
