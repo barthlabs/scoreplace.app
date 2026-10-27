@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "backendCommit": "acd2ae8bd904ac118d8dddb7424f0d9b2d97aa8f",
-  "scopeNote": "Validação numérica de nova intenção de formato aplicada à criação e à edição, sem alterar torneios existentes.",
+  "backendCommit": "6a9b71d32e30bb906696b1ba78cc4d0ce2d1898c",
+  "scopeNote": "Validação estrutural da nova intenção de formato na criação e edição; nenhuma alteração em torneios existentes.",
   "functions": [
     "createTournament",
     "applyTournamentFormat"
