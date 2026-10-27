@@ -1,6 +1,7 @@
 'use strict';
 const { createHash } = require('crypto');
 const Split = require('./vendor/tournament-split-core.js');
+const LegacyCategories = require('./vendor/legacy-category-definition-core.js');
 const WINDOW_MS = 24 * 60 * 60 * 1000;
 const INTERNAL = new Set(['__proto__', 'prototype', 'constructor', 'matches', 'rounds', 'participants',
   'standbyParticipants', 'waitlist', 'memberUids', 'adminUids', 'coHosts', 'creatorUid', 'organizerUid',
@@ -110,6 +111,14 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
         const lastBounds = config.fmt2.eliminatoria && config.fmt2.eliminatoria.roundBounds;
         if (Array.isArray(lastBounds) && t.phases.length > 1) t.phases[t.phases.length - 1].roundBounds = lastBounds;
       }
+      // Torneio sem categorias nasce realmente vazio. A projeção histórica só
+      // é usada quando há rótulos declarados; sem eles ela inventaria "Geral".
+      let categoryDefinitions;
+      try {
+        const labels = LegacyCategories.legacyLabels(t, []);
+        categoryDefinitions = labels.length ? LegacyCategories.projectedDefinitions(t, []).definitions : [];
+      } catch (error) { fail('invalid-argument', error.message); }
+      t.categoryDefinitions = categoryDefinitions;
 /* O organizador é exclusivamente o `creatorUid`. Nome, foto e contato vivem no
        * perfil e a tela os hidrata pelo UID; congelar displayName aqui faria o
        * torneio envelhecer quando a pessoa atualizasse o próprio perfil. */
@@ -121,6 +130,13 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
       Object.assign(t, { id, name: config.name.trim(), status: registration && (registration.source === 'external' || requiresCheckout) ? 'closed' : 'open', storageCanonico: true,
         creatorUid: uid, organizerUid: uid, organizerId: uid,
         coHosts: [],
+        // O elenco também nasce canônico e vazio. Sem este recibo, a primeira
+        // inscrição cai no escritor legado de participants mesmo em torneio novo.
+        canonicalRegistrationMigration: {
+          fingerprint: 'native:' + id, registrationCount: 0,
+          source: 'native', appliedBy: uid
+        },
+        memberUids: [uid],
         participants: [], standbyParticipants: [], matches: [], rounds: [], groups: [],
         currentPhaseIndex: 0, createdAt: iso, updatedAt: iso,
         history: [{ date: iso, message: 'Torneio Criado' }] });

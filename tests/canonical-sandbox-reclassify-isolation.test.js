@@ -137,6 +137,30 @@ const request = (sandboxFlag) => ({
   assert.strictEqual(state.sandboxes.sb_t1.doc.canonicalRegistrationMigration.registrationCount, 2);
   console.log('✓ sandbox muda categoria e recibo sem tocar no original');
 
+  // O documento pai pode ter arrays vazios enquanto a chave está nas partes.
+  // A guarda deve consultar cada subcoleção antes de qualquer escrita.
+  for (const part of ['matches', 'grupos', 'woClaims']) {
+    state.sandboxes.sb_t1[part] = { drawn: { id: 'drawn' } };
+    const beforeBlocked = clone(state.sandboxes.sb_t1);
+    await assert.rejects(call({ ...request(true), fromCategoryId: 'cat-b', toCategoryId: 'cat-a' }),
+      /após o sorteio/, 'reclassificação bloqueada por ' + part + ' separado');
+    assert.deepStrictEqual(clone(state.sandboxes.sb_t1), beforeBlocked, part + ' não causou escrita');
+    delete state.sandboxes.sb_t1[part];
+  }
+  const setDefinitions = (definitionsArg) => CF.setTournamentCategoryDefinitions.run({
+    data: { tournamentId: 't1', definitions: definitionsArg, rigor: 'casual' },
+    auth: { uid: 'org', token: { uid: 'org' } }, rawRequest: { headers: {} }, acceptsStreaming: false,
+  });
+  for (const part of ['matches', 'grupos', 'woClaims']) {
+    state.tournaments.t1[part] = { drawn: { id: 'drawn' } };
+    const beforeBlocked = clone(state.tournaments.t1);
+    await assert.rejects(setDefinitions(definitions), /antes do primeiro sorteio/,
+      'edição tipada bloqueada por ' + part + ' separado');
+    assert.deepStrictEqual(clone(state.tournaments.t1), beforeBlocked, part + ' não causou escrita');
+    delete state.tournaments.t1[part];
+  }
+  console.log('✓ três partes divididas travam categorias e reclassificação sem tocar no original');
+
   await assert.rejects(call(request(false)), /torneio não existe/);
   await assert.rejects(call({ ...request(true), tournamentId: 't1' }), /torneio não existe/);
   await assert.rejects(call({ ...request(true), fromCategoryId: 'cat-b', toCategoryId: 'cat-a' }, 'intruso'), /torneio não existe/);
@@ -174,4 +198,18 @@ const request = (sandboxFlag) => ({
   assert.strictEqual(Object.keys(state.sandboxes.sb_t2.inscritos).length, 0, 'ramo legado grava a subcoleção de inscritos do sandbox na transação');
   assert.deepStrictEqual(clone(state.tournaments.t2), legacyBefore, 'ramo legado não replica escrita no original');
   console.log('✓ desinscrição legada atualiza a subcoleção de inscritos do sandbox sem tocar em produção');
+
+  state.tournaments.t1.doc.creatorUid = 'org';
+  const beforeUsedRemoval = clone(state.tournaments.t1);
+  await assert.rejects(setDefinitions([definitions[1]]), /Reclassifique as inscrições/);
+  assert.deepStrictEqual(clone(state.tournaments.t1), beforeUsedRemoval,
+    'remover categoria usada não escreve em torneio real nem no clone');
+  const renamed = definitions.map((def, index) => ({ ...def, label: index === 0 ? 'Categoria A renomeada' : def.label }));
+  const configured = await setDefinitions(renamed);
+  assert.strictEqual(configured.ok, true);
+  assert.deepStrictEqual(state.tournaments.t1.doc.categoryDefinitions.map((def) => def.id), ['cat-a', 'cat-b']);
+  assert.deepStrictEqual(state.tournaments.t1.doc.combinedCategories, ['Categoria A renomeada', 'cat-b']);
+  assert.strictEqual(state.tournaments.t1.doc.enrollmentRigor, 'casual');
+  assert(state.tournaments.t1.doc.updatedAt, 'edição tipada atualiza o relógio');
+  console.log('✓ renomeação mantém IDs; remoção de categoria usada recusa sem escrita');
 })().catch((error) => { console.error(error); process.exitCode = 1; });

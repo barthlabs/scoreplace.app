@@ -68,6 +68,14 @@ const Split = require(path.join(ROOT, 'js/views/tournament-split-core.js'));
   });
   const doc = (await db.doc('tournaments/' + id).get()).data();
   assert(doc, 'o torneio foi criado');
+  assert.deepEqual(doc.canonicalRegistrationMigration, {
+    fingerprint: 'native:' + id, registrationCount: 0,
+    source: 'native', appliedBy: uid
+  }, 'o torneio nasce com recibo canônico vazio, antes de qualquer inscrição');
+  assert.deepEqual(doc.memberUids, [uid], 'o organizador permanece visível sem ser inscrito');
+  assert.deepEqual(doc.categoryDefinitions, [], 'torneio sem categorias não inventa categoria Geral');
+  const emptyRegistrations = await db.collection('tournaments/' + id + '/registrations').get();
+  assert.equal(emptyRegistrations.size, 0, 'recibo vazio não fabrica inscrições');
 
   /* ── ① NASCE COM O MARCADOR E COM O CONTADOR ──────────────────────────────
    * ⛔ O contador não é enfeite: sem ele, "zero" vira "não sei", o leitor cai na heurística e pode
@@ -125,6 +133,10 @@ const Split = require(path.join(ROOT, 'js/views/tournament-split-core.js'));
   assert(retry && retry.tournament, '④ reabrir a criação devolve o torneio, sem recusa por parte faltando');
   const doc2 = (await db.doc('tournaments/' + id).get()).data();
   assert.deepEqual(doc2._nPartes, doc._nPartes, '④ ⛔ e o contador não foi corrompido no caminho');
+  assert.deepEqual(doc2.canonicalRegistrationMigration, doc.canonicalRegistrationMigration,
+    '④ replay de criação mantém o mesmo recibo canônico');
+  assert.deepEqual(doc2.categoryDefinitions, doc.categoryDefinitions,
+    '④ replay preserva a lista tipada vazia');
   console.log('✓ ④ a porta real relê e devolve, sem acusar parte faltando');
 
   console.log('\n✅ o torneio nasce dividido, na mesma forma do separador, e é usável');

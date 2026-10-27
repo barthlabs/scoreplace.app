@@ -193,11 +193,21 @@ const configStart = server.indexOf('exports.updateTournamentConfiguration = onCa
 const configEnd = server.indexOf('\n// ─── Ciclo presencial:', configStart);
 assert(configStart >= 0 && configEnd > configStart, 'handler real da ficha encontrado');
 const configSource = server.slice(configStart, configEnd);
+const categoryGuardStart = server.indexOf('async function _assertCategoryConfigBeforeDraw(tx, ref, t) {');
+const categoryGuardEnd = server.indexOf('\n// Uma lista de rótulos', categoryGuardStart);
+assert(categoryGuardStart >= 0 && categoryGuardEnd > categoryGuardStart, 'guarda real de categorias encontrada');
+const categoryGuard = new Function('hasDrawnBracket', 'HttpsError', '_tSplit',
+  server.slice(categoryGuardStart, categoryGuardEnd) + '\nreturn _assertCategoryConfigBeforeDraw;')(
+  () => false, HttpsError, require('../js/views/tournament-split-core.js'));
 let configWrites = 0;
+let categoryProjections = 0;
+let configSplitPart = '';
 let configTournament = { id: 'tour_test', creatorUid: 'owner', sport: 'Beach Tennis', fmt2: {} };
 const configDb = {
-  collection: () => ({ doc: id => ({ id }) }),
+  collection: () => ({ doc: id => ({ id, collection: part => ({ part, limit() { return this; } }) }) }),
   runTransaction: async callback => callback({
+    get: async ref => ({ empty: ref.part !== configSplitPart,
+      docs: ref.part === configSplitPart ? [{ id: 'drawn' }] : [] }),
     set: () => { configWrites++; }, update: () => { configWrites++; },
     create: () => { configWrites++; }, delete: () => { configWrites++; }
   })
@@ -206,13 +216,18 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
   '_CONFIG_ESTRUTURAL', '_clonaConfigDeclarativa', '_assertSandboxDrawOwner', '_leTorneio',
   '_isTournamentAdmin', '_drawFail', 'hasDrawnBracket', '_configAtiva', '_antesDoMotor',
   '_gravaTorneio', '_fasesDeConfiguracaoAtualizaveis', 'drawWindow', 'require',
+  '_assertCategoryConfigBeforeDraw', '_categoryDefinitionsForLabels',
   'const exports = {};\n' + configSource + '\nreturn exports.updateTournamentConfiguration;')(
-  fn => fn, HttpsError, configDb, new Set(['fmt2', 'name', 'teamSize']), new Set(['fmt2', 'teamSize']), cloneConfig,
+  fn => fn, HttpsError, configDb, new Set(['fmt2', 'name', 'teamSize', 'genderCategories', 'combinedCategories', 'gameTypes']), new Set(['fmt2', 'teamSize', 'gameTypes']), cloneConfig,
   async () => {}, async () => configTournament, () => true,
   (code, message) => new HttpsError(code, message), t => Array.isArray(t.matches) && t.matches.length > 0,
   require('../functions-autodraw/config-ativa-core'), () => ({}),
   (_tx, _ref, t) => { configWrites++; return { clean: t }; }, () => [], {},
-  require('node:module').createRequire(path.join(__dirname, '..', 'functions-autodraw', 'index.js'))
+  require('node:module').createRequire(path.join(__dirname, '..', 'functions-autodraw', 'index.js')),
+  categoryGuard, async (_tx, _ref, _t, labels) => {
+    categoryProjections++;
+    return labels.map((label) => ({ id: 'cat-' + label, label }));
+  }
 );
 
 (async () => {
@@ -427,5 +442,38 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
     tournamentId: 'tour_test', patch: { teamSize: '1' }
   } }), { code: 'failed-precondition' });
   assert.equal(configWrites, beforeTypeChange, 'ramo sorteado recusa mudança de tipo');
+  configTournament = { id: 'tour_test', creatorUid: 'owner', sport: 'Beach Tennis',
+    canonicalRegistrationMigration: { fingerprint: 'native:tour_test', registrationCount: 0 },
+    genderCategories: [], combinedCategories: [], categoryDefinitions: [],
+    matches: [], groups: [], _nPartes: { matches: 1 }, fmt2: {} };
+  const beforeSplit = configWrites;
+  await assert.rejects(configHandler({ auth: { uid: 'owner' }, data: {
+    tournamentId: 'tour_test', patch: { genderCategories: ['Feminino'] }
+  } }), error => error.code === 'failed-precondition' && /antes do primeiro sorteio/.test(error.message),
+  'ficha recusa categoria se os jogos estão só na parte dividida');
+  assert.equal(configWrites, beforeSplit, 'recusa sem escrita na ficha');
+  assert.equal(categoryProjections, 0, 'categoria sorteada não chega à projeção');
+  for (const part of ['matches', 'grupos', 'woClaims']) {
+    configSplitPart = require('../js/views/tournament-split-core.js').colecaoDaParte(part);
+    configTournament = { id: 'tour_test', creatorUid: 'owner', sport: 'Beach Tennis',
+      canonicalRegistrationMigration: { fingerprint: 'native:tour_test', registrationCount: 0 },
+      genderCategories: [], combinedCategories: [], categoryDefinitions: [],
+      matches: [], groups: [], _nPartes: {}, fmt2: {} };
+    await assert.rejects(configHandler({ auth: { uid: 'owner' }, data: {
+      tournamentId: 'tour_test', patch: { genderCategories: ['Feminino'] }
+    } }), error => error.code === 'failed-precondition' && /antes do primeiro sorteio/.test(error.message),
+    'ficha recusa categoria com contador zero e documento na subcoleção ' + part);
+    assert.equal(configWrites, beforeSplit, part + ' dividido não causa escrita');
+  }
+  configSplitPart = '';
+  configTournament = { id: 'tour_test', creatorUid: 'owner', sport: 'Beach Tennis',
+    canonicalRegistrationMigration: { fingerprint: 'native:tour_test', registrationCount: 0 },
+    genderCategories: ['Feminino'], combinedCategories: ['Feminino'], categoryDefinitions: [],
+    matches: [], groups: [], fmt2: {}, gameTypes: 'simples' };
+  const changedGameType = await configHandler({ auth: { uid: 'owner' }, data: {
+    tournamentId: 'tour_test', patch: { gameTypes: 'duplas', combinedCategories: ['Feminino Duplas'] }
+  } });
+  assert.equal(changedGameType.ok, true, 'mudança de tipo pré-sorteio pode recompor categorias');
+  assert.equal(categoryProjections, 1, 'mudança de tipo projetou a nova categoria tipada');
   console.log('✓ intenção nova rejeita valor e contêiner inválidos nas duas portas de escrita');
 })().catch(error => { console.error(error); process.exitCode = 1; });

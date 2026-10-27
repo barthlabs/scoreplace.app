@@ -155,7 +155,12 @@ for (const f of DE_FUNCTIONS) {
  * quanto pelo autoDraw. O artefato do autoDraw é implantado isoladamente:
  * exigir `../functions/...` dele funciona no checkout, mas quebra o container
  * publicado porque esse diretório não existe dentro do source bundle. */
-const CORE_TO_AUTODRAW = ['legacy-phase-projection-core.js'];
+const CORE_TO_AUTODRAW = [
+  'legacy-phase-projection-core.js',
+  'legacy-category-definition-core.js',
+  'category-eligibility-core.js',
+  'registration-category-bridge-core.js'
+];
 for (const f of CORE_TO_AUTODRAW) {
   const src = path.resolve(__dirname, '..', 'functions', f);
   if (!fs.existsSync(src)) { console.error(`[copy-vendor] FONTE AUSENTE: ${src}`); process.exit(1); }

@@ -3082,6 +3082,9 @@ exports.enrollParticipant = onCall(
         }
       }
       if (rawTournament.canonicalRegistrationMigration && rawTournament.canonicalRegistrationMigration.fingerprint) {
+        if (!Array.isArray(rawTournament.categoryDefinitions) || !rawTournament.categoryDefinitions.length) {
+          throw new HttpsError('failed-precondition', 'Configure ao menos uma categoria antes de abrir inscrições.');
+        }
         if (extraUpdates) {
           throw new HttpsError("failed-precondition", "origem de dupla não faz parte da inscrição canônica");
         }
@@ -5126,6 +5129,9 @@ exports.reclassifyCanonicalRegistration = onCall(
       if (!(tournament.canonicalRegistrationMigration && tournament.canonicalRegistrationMigration.fingerprint)) {
         throw new HttpsError("failed-precondition", "torneio ainda não usa inscrições canônicas");
       }
+      if (!_categoryDefinitionsCanChange(tournament) || await _temPartesDeJogo(tx, ref, tournament)) {
+        throw new HttpsError('failed-precondition', 'A categoria da inscrição não pode mudar após o sorteio.');
+      }
       let definitions;
       try { definitions = _categoryEligibility.normalizeCategoryDefinitions(tournament.categoryDefinitions); }
       catch (error) { throw new HttpsError("failed-precondition", error.message); }
@@ -5929,10 +5935,9 @@ exports.applyCanonicalRegistrationMigrationBatch = onCall(
   }
 );
 
-// Configuração tipada das categorias novas. O formulário legado continua com seus
-// rótulos compostos até a migração de inscrições; esta porta não os reinterpreta
-// nem faz dual-write. Depois de materializada a primeira fase, trocar a definição
-// mudaria a elegibilidade do que já foi sorteado, então a decisão fica congelada.
+// Configuração tipada das categorias. O rótulo combinado continua sendo um
+// espelho para as telas existentes, sem substituir IDs de inscrições. Depois
+// do primeiro sorteio, trocar a definição mudaria a elegibilidade da chave.
 function _categoryDefinitionsCanChange(tournament) {
   if (!tournament) return false;
   if (Number(tournament._phaseMaterialized || 0) > 0 || Number(tournament.currentPhaseIndex || 0) > 0) return false;
@@ -5941,6 +5946,21 @@ function _categoryDefinitionsCanChange(tournament) {
     tournament.matches, tournament.rounds, tournament.groups,
     tournament.phaseRounds
   ].some((value) => Array.isArray(value) ? value.length > 0 : (value && typeof value === 'object' && Object.keys(value).length > 0));
+}
+
+// Os torneios divididos mantêm arrays vazios no documento pai. Conferir só
+// esses arrays permitiria reclassificar depois de a chave existir em subcoleção.
+// Todas as leituras deste helper antecedem qualquer escrita na transação.
+async function _temPartesDeJogo(tx, ref, tournament) {
+  const counts = tournament && tournament._nPartes || {};
+  if (Number(tournament && tournament._nJogos || 0) > 0 ||
+      Number(tournament && tournament._nGrupos || 0) > 0 ||
+      ['matches', 'grupos', 'woClaims'].some((part) => Number(counts[part] || 0) > 0)) return true;
+  for (const part of ['matches', 'grupos', 'woClaims']) {
+    const snap = await tx.get(ref.collection(_tSplitFn.colecaoDaParte(part)).limit(1));
+    if (snap.empty === false || (Array.isArray(snap.docs) && snap.docs.length > 0)) return true;
+  }
+  return false;
 }
 
 exports.setTournamentCategoryDefinitions = onCall(
@@ -5969,8 +5989,22 @@ exports.setTournamentCategoryDefinitions = onCall(
       if (!_categoryDefinitionsCanChange(tournament)) {
         throw new HttpsError("failed-precondition", "categorias só podem mudar antes do primeiro sorteio");
       }
+      if (await _temPartesDeJogo(tx, ref, tournament)) {
+        throw new HttpsError('failed-precondition', 'categorias só podem mudar antes do primeiro sorteio');
+      }
+      const migration = tournament.canonicalRegistrationMigration || {};
+      if (migration.fingerprint) {
+        const checked = await _loadCanonicalRosterForMutation(tx, ref, tournament, '');
+        const nextIds = new Set(definitions.map((def) => def.id));
+        const removed = new Set((Array.isArray(tournament.categoryDefinitions) ? tournament.categoryDefinitions : [])
+          .map((def) => def && def.id).filter((id) => id && !nextIds.has(id)));
+        if (checked.registrations.some((item) => item && item.status !== 'withdrawn' && removed.has(item.categoryId))) {
+          throw new HttpsError('failed-precondition', 'Reclassifique as inscrições antes de remover a categoria.');
+        }
+      }
       tx.update(ref, {
         categoryDefinitions: definitions,
+        combinedCategories: definitions.map((def) => def.label),
         enrollmentRigor: rigor,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });

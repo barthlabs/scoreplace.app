@@ -475,6 +475,64 @@ function _assertLegacyRosterMutationAllowed(t, operation) {
   }
 }
 
+async function _assertCategoryConfigBeforeDraw(tx, ref, t) {
+  if (typeof hasDrawnBracket !== 'function') {
+    throw new HttpsError('failed-precondition', 'Motor do sorteio indisponível para alterar categorias.');
+  }
+  const phaseRounds = t && t.phaseRounds;
+  const hasPhaseRounds = Array.isArray(phaseRounds) ? phaseRounds.length > 0
+    : !!(phaseRounds && typeof phaseRounds === 'object' && Object.keys(phaseRounds).length);
+  const parts = t && t._nPartes || {};
+  const hasSplitDraw = Number(t && t._nJogos || 0) > 0 || Number(t && t._nGrupos || 0) > 0 ||
+    ['matches', 'grupos', 'woClaims'].some((part) => Number(parts[part] || 0) > 0) ||
+    ['matches', 'grupos', 'woClaims'].some((part) => Array.isArray(t && t[part]) && t[part].length > 0);
+  if (hasSplitDraw || hasDrawnBracket(t) || Number(t && t._phaseMaterialized || 0) > 0 ||
+      Number(t && t.currentPhaseIndex || 0) > 0 || !!(t && t.phaseStartedAt) || hasPhaseRounds ||
+      (Array.isArray(t && t.woClaims) && t.woClaims.length > 0)) {
+    throw new HttpsError('failed-precondition', 'Categorias só podem mudar antes do primeiro sorteio.');
+  }
+  // `matches` é hidratado por _leTorneio, mas `grupos` e `woClaims` podem existir
+  // fora das partes canônicas. Contadores de documentos antigos também podem
+  // faltar: a leitura física em transação é a última trava, antes de escrever.
+  for (const part of ['matches', 'grupos', 'woClaims']) {
+    const snap = await tx.get(ref.collection(_tSplit.colecaoDaParte(part)).limit(1));
+    if (snap.empty === false || (Array.isArray(snap.docs) && snap.docs.length > 0)) {
+      throw new HttpsError('failed-precondition', 'Categorias só podem mudar antes do primeiro sorteio.');
+    }
+  }
+}
+
+// Uma lista de rótulos não carrega a identidade de uma renomeação. Reusar o ID
+// pelo rótulo estável e recusar remoção usada evita deixar inscrições órfãs.
+async function _categoryDefinitionsForLabels(tx, ref, t, combinedCategories) {
+  const legacy = require('./vendor/legacy-category-definition-core.js');
+  const eligibility = require('./vendor/category-eligibility-core.js');
+  let labels, projected;
+  try {
+    labels = legacy.legacyLabels({ combinedCategories }, []);
+    projected = labels.length ? legacy.projectedDefinitions({ combinedCategories: labels }, []).definitions : [];
+  } catch (error) { throw new HttpsError('invalid-argument', error.message); }
+  const previous = Array.isArray(t.categoryDefinitions) ? t.categoryDefinitions : [];
+  const normalize = (label) => String(label || '').trim().normalize('NFKC').toLocaleLowerCase('pt-BR');
+  const byLabel = new Map(previous.map((def) => [normalize(def && def.label), def]));
+  const definitions = projected.map((def) => {
+    const existing = byLabel.get(normalize(def.label));
+    return existing ? Object.assign({}, existing, { label: def.label }) : def;
+  });
+  try { eligibility.normalizeCategoryDefinitions(definitions); }
+  catch (error) { throw new HttpsError('failed-precondition', error.message); }
+  const nextIds = new Set(definitions.map((def) => def.id));
+  const removed = new Set(previous.map((def) => def && def.id).filter((id) => id && !nextIds.has(id)));
+  if (removed.size) {
+    const snap = await tx.get(ref.collection('registrations'));
+    if (snap.docs.some((doc) => {
+      const registration = doc.data() || {};
+      return registration.status !== 'withdrawn' && removed.has(registration.categoryId);
+    })) throw new HttpsError('failed-precondition', 'Reclassifique as inscrições antes de remover a categoria.');
+  }
+  return definitions;
+}
+
 /* Depois da migração, `participants`/esperas que o motor recebe são somente uma
  * projeção de trabalho dos documentos `registrations`. O sorteio ainda pode
  * agrupá-la em duplas, limpar presença e consultar nomes para montar partidas,
@@ -4771,9 +4829,24 @@ exports.setTournamentCategoryConfig = onCall({ invoker: 'public' }, async (reque
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização configura categorias.', { tId, uid });
-    if (JSON.stringify(t.genderCategories || []) === JSON.stringify(genderCategories) && JSON.stringify(t.skillCategories || []) === JSON.stringify(skillCategories)) return { ok:true, changed:false };
-    _assertLegacyRosterMutationAllowed(t, 'configuração legada de categorias');
+    const sameAxes = JSON.stringify(t.genderCategories || []) === JSON.stringify(genderCategories) &&
+      JSON.stringify(t.skillCategories || []) === JSON.stringify(skillCategories);
+    const canonical = !!(t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint);
+    if (sameAxes && !canonical) return { ok:true, changed:false };
+    // Uma edição pela porta tipada pode ter mudado o rótulo sem tocar os eixos.
+    // A chamada antiga com os mesmos eixos não pode desfazer isso em silêncio.
+    if (sameAxes && JSON.stringify(t.combinedCategories || []) !== JSON.stringify(combinedCategories)) {
+      throw new HttpsError('failed-precondition', 'Categorias foram editadas em outra tela. Recarregue antes de alterá-las.');
+    }
+    if (sameAxes && Array.isArray(t.categoryDefinitions) &&
+        JSON.stringify(t.categoryDefinitions.map((def) => def && def.label)) === JSON.stringify(combinedCategories)) {
+      return { ok:true, changed:false };
+    }
+    await _assertCategoryConfigBeforeDraw(tx, ref, t);
+    if (!canonical) _assertLegacyRosterMutationAllowed(t, 'configuração legada de categorias');
+    const definitions = canonical ? await _categoryDefinitionsForLabels(tx, ref, t, combinedCategories) : null;
     const antes = _antesDoMotor(t); t.genderCategories = genderCategories; t.skillCategories = skillCategories; t.combinedCategories = combinedCategories;
+    if (canonical) t.categoryDefinitions = definitions;
     const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
     return { ok:true, changed:true, tournament:b.clean };
   });
@@ -4891,7 +4964,7 @@ const _CAMPOS_CONFIG_TORNEIO = new Set([
 const _CONFIG_ESTRUTURAL = new Set([
   'format','sport','teamSize','gameTypes','drawMode','fmt2','phases','swissRounds','registrationSettings',
   'gruposCount','gruposClassified','gruposEqualOnly','gruposSeedVip','gruposSeedCategory',
-  'teamCompetition','categorySchedule','turnos',
+  'teamCompetition','categorySchedule','turnos','categoryDefinitions',
   'ligaRoundFormat','ligaDrawMode','ligaTurnos','ligaRRSchedule','monarchAdvanceToElim',
   /* ⛔⛔⛔ COMO A CHAVE RESOLVE O RESTO É ESTRUTURAL: ela decide quem espera a estreia, quem volta
    * depois de perder e onde cai a folga. Trocá-la com a chave já sorteada redesenha confrontos que as
@@ -5091,6 +5164,22 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
         patch.registrationSettings,
         patch.combinedCategories !== undefined ? patch.combinedCategories : t.combinedCategories
       ); } catch (error) { throw new HttpsError('invalid-argument', error.message); }
+    }
+    const categoryKeys = ['genderCategories', 'skillCategories', 'ageCategories', 'customCategories', 'combinedCategories'];
+    const categoryChanged = categoryKeys.some((key) => Object.prototype.hasOwnProperty.call(patch, key) &&
+      JSON.stringify(patch[key]) !== JSON.stringify(t[key]));
+    if (categoryChanged && t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint) {
+      const axesChanged = categoryKeys.slice(0, 4).some((key) => Object.prototype.hasOwnProperty.call(patch, key) &&
+        JSON.stringify(patch[key]) !== JSON.stringify(t[key]));
+      // O seletor de tipo de jogo recompõe os rótulos combinados mesmo quando
+      // gênero/habilidade não mudam. Isso é uma edição legítima da ficha.
+      if (!axesChanged && !Object.prototype.hasOwnProperty.call(patch, 'gameTypes') &&
+          Object.prototype.hasOwnProperty.call(patch, 'combinedCategories')) {
+        throw new HttpsError('failed-precondition', 'Categorias foram editadas em outra tela. Recarregue antes de alterá-las.');
+      }
+      await _assertCategoryConfigBeforeDraw(tx, ref, t);
+      const finalLabels = Object.prototype.hasOwnProperty.call(patch, 'combinedCategories') ? patch.combinedCategories : t.combinedCategories;
+      patch.categoryDefinitions = await _categoryDefinitionsForLabels(tx, ref, t, finalLabels || []);
     }
     const hasDraw = hasDrawnBracket(t);
     // A ficha reenvia fmt2 mesmo quando só muda nome/prazo. Um envelope igual
