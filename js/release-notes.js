@@ -1,3 +1,4 @@
+// 2.5.65 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.64 — Torneios com inscrições externas não podem ser abertos para inscrição
 // pelo Scoreplace. O controle de origem e preço inicia gratuito; inscrições pagas
 // ficam bloqueadas até a cobrança e o repasse estarem implementados. A alteração
