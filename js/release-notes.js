@@ -1,3 +1,4 @@
+// 2.5.63 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.62 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.61 — O primeiro clique em Confirmar aguarda o alinhamento regional e a gravação
 // do placar até a resposta canônica. Após confirmar, só o card do jogo é atualizado
