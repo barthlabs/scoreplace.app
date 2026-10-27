@@ -180,5 +180,16 @@ setImmediate(async () => { try {
   if (commonAssignments.length !== 0 || commonPayload.patch.teamCompetition.schedule.originDayPolicy !== '') {
     throw new Error('Confirmar torneio comum sem opt-in não pode regravar dias das duplas nem mudar a política');
   }
+  tournament.participants = participants.filter(entry => entry.category !== 'Fem Light')
+    .concat(participants.filter(entry => entry.category === 'Fem Light').slice(0, 4));
+  tournament.teamCompetition.schedule.pairsPerTeamByCategory['Fem Light'] = 1;
+  commonPayload = null;
+  W._showTeamCompetitionDrawReview(tournament.id, { _canonicalRosterLoaded:true, onReady(){} });
+  if (typeof confirmNode.onclick !== 'function') throw new Error('Agenda legada válida deve permitir confirmação');
+  confirmNode.onclick();
+  await new Promise(resolve => setImmediate(resolve));
+  if (!commonPayload || (commonPayload.patch.teamCompetition.schedule.pairDayAssignments || []).length !== 0) {
+    throw new Error('Categoria de uma dupla por time em dois dias não pode bloquear nem criar dias nominais sem opt-in');
+  }
   console.log('✓ Painel Neon: 16/8 por um clique, dias configuráveis, X correto e sem UID visível');
 } catch (error) { console.error(error); process.exitCode = 1; } });

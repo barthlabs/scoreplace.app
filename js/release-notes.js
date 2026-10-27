@@ -8,6 +8,8 @@
 // o sorteio antes de gravá-lo. A prévia livre é estável até a organização pedir
 // novo sorteio dos dias. A busca da chave prioriza o jogo atual sem placar, destaca
 // atletas em quadra e a TV mantém o último resultado em destaque por 30 segundos.
+// Torneios comuns sem essa política mantêm a agenda por rodadas e não recebem
+// dias por dupla apenas por reabrir e confirmar o painel.
 // Nenhum jogo, placar ou sorteio existente é regravado por esta publicação.
 // 2.5.64 — Torneios com inscrições externas não podem ser abertos para inscrição
 // pelo Scoreplace. O controle de origem e preço inicia gratuito; inscrições pagas

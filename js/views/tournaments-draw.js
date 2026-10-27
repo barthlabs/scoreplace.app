@@ -3183,11 +3183,11 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
         var validCourtOrder = selectedCourtOrder.length === courtNames.length && new Set(selectedCourtOrder).size === courtNames.length;
         var scheduledCategories = {}; slots.forEach(function (slot) { scheduledCategories[slot.category] = true; });
         var validSlots = slots.length >= categories.length && categories.every(function (category) { return scheduledCategories[category]; }) && slots.every(function (slot) { return days.indexOf(slot.day) >= 0; });
-        var plannedPairDays = computePairDayPlan(slots);
-        if (plannedPairDays.error) { if (window.showNotification) window.showNotification('Dias inviáveis', plannedPairDays.error, 'error'); return; }
-        var selectedPairDays = entries.map(function (entry) {
+        var plannedPairDays = pairDaysEnabled ? computePairDayPlan(slots) : null;
+        if (plannedPairDays && plannedPairDays.error) { if (window.showNotification) window.showNotification('Dias inviáveis', plannedPairDays.error, 'error'); return; }
+        var selectedPairDays = pairDaysEnabled ? entries.map(function (entry) {
           return { fixedPairId:String(entry.fixedPairId || ''), day:plannedPairDays.dayByPair.get(String(entry.fixedPairId || '')) || '' };
-        });
+        }) : [];
         var selectedDayById = new Map(selectedPairDays.map(function (item) { return [item.fixedPairId, item.day]; }));
         var validPairDays = categories.every(function (category) {
           var available = slots.filter(function (slot) { return slot.category === category; }).map(function (slot) { return slot.day; });
