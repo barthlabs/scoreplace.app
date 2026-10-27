@@ -1,8 +1,10 @@
 {
   "schema": 1,
-  "backendCommit": "79f98951144e58629648238debbdefb3e64d98d4",
-  "scopeNote": "Neste corte só drawRound mudou de comportamento: recusa agendas estritas inviáveis antes da gravação. O ajuste posterior no vendor/tournaments-draw.js preserva políticas históricas do Neon e não muda outras callables. setTournamentEnrollmentStatus, resetTournamentToEnrollment, updateTournamentConfiguration e createTournament já têm recibos de publicação no commit 56ac51fd. O deploy não executa sorteio nem altera torneios existentes.",
+  "backendCommit": "242c71837bd608dc9dae1634e64beddee7ab0660",
+  "scopeNote": "Neste corte, createTournament pode nascer sem categorias com elenco canônico vazio; setTournamentCategoryConfig e updateTournamentConfiguration sincronizam categorias antes do sorteio e bloqueiam partes de jogo existentes. Estas três callables do autodraw foram publicadas de forma direcionada. drawRound pertence ao corte anterior e conserva seu recibo histórico; este manifesto descreve somente o último commit que mudou o autodraw. O comando de deploy não invoca sorteio nem migração.",
   "functions": [
-    "drawRound"
+    "createTournament",
+    "setTournamentCategoryConfig",
+    "updateTournamentConfiguration"
   ]
 }
