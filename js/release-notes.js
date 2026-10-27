@@ -1,4 +1,11 @@
-// 2.5.65 — Atualização consolidada de produção com as correções validadas desde a última publicação.
+// 2.5.65 — O painel de sorteio distribui automaticamente as duplas de categorias
+// que jogam em dois dias, preservando os dias nominais já salvos mesmo sob a
+// política anterior. Concentradas conclui uma categoria antes da seguinte;
+// Alternadas respeita a ordem dos jogos de cada dupla dentro da categoria.
+// Se a janela não comportar todos os confrontos, o servidor recusa o sorteio
+// antes de gravá-lo. A busca da chave prioriza o jogo atual sem placar, destaca
+// atletas em quadra e a TV mantém o último resultado em destaque por 30 segundos.
+// Nenhum jogo, placar ou sorteio existente é regravado por esta publicação.
 // 2.5.64 — Torneios com inscrições externas não podem ser abertos para inscrição
 // pelo Scoreplace. O controle de origem e preço inicia gratuito; inscrições pagas
 // ficam bloqueadas até a cobrança e o repasse estarem implementados. A alteração
