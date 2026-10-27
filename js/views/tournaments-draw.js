@@ -3221,7 +3221,9 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
           nextCompetition.schedule.pairsPerTeamByCategory = categories.reduce(function (out, category) { out[category] = required(category); return out; }, {});
           nextCompetition.schedule.pairDayAssignments = selectedPairDays;
           nextCompetition.schedule.rosterSnapshot = rosterSnapshot;
-          nextCompetition.schedule.originDayPolicy = 'organizer-pair-days';
+          nextCompetition.schedule.originDayPolicy =
+            savedOriginPolicy === 'female-light-organization-final' || savedOriginPolicy === 'female-light-five-plus-three'
+              ? savedOriginPolicy : 'organizer-pair-days';
         }
         db._callFn('updateTournamentConfiguration', { tournamentId:String(tId), sandbox:typeof db._ehSandbox === 'function' && db._ehSandbox(tId), patch:{ categorySchedule:{ version:1, confirmed:true, slots:slots }, scheduleWindow:{ version:1, days:scheduleWindowDays }, courtOrder:selectedCourtOrder, teamCompetition:nextCompetition } }).then(function () {
           t.categorySchedule = { version:1, confirmed:true, slots:slots };

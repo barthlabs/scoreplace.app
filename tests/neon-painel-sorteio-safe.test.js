@@ -145,16 +145,25 @@ setImmediate(async () => { try {
   const second = light.filter(item => item.day === '2026-10-23').length;
   const savedDays = new Map(savedAssignments.map(item => [item.fixedPairId, item.day]));
   const preservedDays = light.every(item => savedDays.get(item.fixedPairId) === item.day);
-  if (saves !== 1 || ready !== 1 || savedPayload.sandbox !== true || assignments.length !== 64 || first !== 16 || second !== 8 || !preservedDays) {
+  if (saves !== 1 || ready !== 1 || savedPayload.sandbox !== true || assignments.length !== 64 || first !== 16 || second !== 8 || !preservedDays ||
+      savedPayload.patch.teamCompetition.schedule.originDayPolicy !== 'female-light-organization-final') {
     throw new Error('Um clique deve preservar os dias nominais salvos sob a política antiga (Fem Light 16/8) e só então prosseguir');
   }
+  tournament.teamCompetition.schedule.originDayPolicy = 'female-light-five-plus-three';
+  W._showTeamCompetitionDrawReview(tournament.id, { _canonicalRosterLoaded:true, onReady(){ ready++; } });
+  confirmNode.onclick();
+  await new Promise(resolve => setImmediate(resolve));
+  if (savedPayload.patch.teamCompetition.schedule.originDayPolicy !== 'female-light-five-plus-three') {
+    throw new Error('A segunda política histórica do Neon também deve ser preservada');
+  }
+  tournament.teamCompetition.schedule.originDayPolicy = 'female-light-organization-final';
   // Se o salvamento falha, o clique não pode iniciar o sorteio com uma agenda
   // que existe apenas na memória do navegador.
   W.FirestoreDB._callFn = () => Promise.reject(new Error('falha de gravação simulada'));
   W._showTeamCompetitionDrawReview(tournament.id, { _canonicalRosterLoaded:true, onReady(){ ready++; } });
   confirmNode.onclick();
   await new Promise(resolve => setImmediate(resolve));
-  if (ready !== 1 || confirmNode.disabled || confirmNode.textContent !== '🎲 Sortear times e confrontos') {
+  if (ready !== 2 || confirmNode.disabled || confirmNode.textContent !== '🎲 Sortear times e confrontos') {
     throw new Error('Falha ao salvar deve reabilitar o botão sem disparar o sorteio');
   }
   tournament.id = 'sb_common_team_tournament';
