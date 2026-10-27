@@ -89,12 +89,14 @@ if (/uid-(?:first|second)-/.test(visibleHtml)) throw new Error('UID cru vazou no
 const fullRoster = tournament.participants;
 tournament.participants = participants.filter(entry => entry.category !== 'Fem Light')
   .concat(participants.filter(entry => entry.category === 'Fem Light').slice(0, 8));
+tournament.teamCompetition.schedule.originDayPolicy = 'organizer-pair-days';
 W._showTeamCompetitionDrawReview(tournament.id, { _canonicalRosterLoaded:true });
 if (!/ao menos duas duplas por time/.test(dayEditor.innerHTML) ||
     /As duplas fixadas não cabem/.test(dayEditor.innerHTML)) {
   throw new Error('Categoria de uma dupla por time em dois dias precisa de aviso específico, sem acusar fixações inexistentes');
 }
 tournament.participants = fullRoster;
+tournament.teamCompetition.schedule.originDayPolicy = 'female-light-organization-final';
 const savedAssignments = tournament.teamCompetition.schedule.pairDayAssignments;
 tournament.teamCompetition.schedule.pairDayAssignments = savedAssignments.slice(1);
 W._showTeamCompetitionDrawReview(tournament.id, { _canonicalRosterLoaded:true });
@@ -169,18 +171,14 @@ setImmediate(async () => { try {
     return Promise.resolve({ ok:true });
   };
   W._showTeamCompetitionDrawReview(tournament.id, { _canonicalRosterLoaded:true, onReady(){} });
-  if (typeof confirmNode.onclick !== 'function' || !/data-team-pair-category="Fem Light"/.test(dayEditor.innerHTML)) {
-    throw new Error('Torneio comum sem opt-in deve oferecer a divisão da categoria em dois dias');
+  if (typeof confirmNode.onclick !== 'function' || dayEditor.innerHTML !== '') {
+    throw new Error('Torneio comum sem opt-in não deve ativar a divisão de duplas ao reabrir');
   }
-  const firstPreview = dayEditor.innerHTML;
-  W._showTeamCompetitionDrawReview(tournament.id, { _canonicalRosterLoaded:true, onReady(){} });
-  if (dayEditor.innerHTML !== firstPreview) throw new Error('A distribuição livre deve permanecer estável ao reabrir a revisão');
   confirmNode.onclick();
   await new Promise(resolve => setImmediate(resolve));
   const commonAssignments = commonPayload && commonPayload.patch.teamCompetition.schedule.pairDayAssignments || [];
-  if (commonAssignments.length !== participants.length ||
-      commonPayload.patch.teamCompetition.schedule.originDayPolicy !== 'organizer-pair-days') {
-    throw new Error('Confirmar categoria dividida deve salvar dias por dupla também em torneio comum, conforme os dias escolhidos');
+  if (commonAssignments.length !== 0 || commonPayload.patch.teamCompetition.schedule.originDayPolicy !== '') {
+    throw new Error('Confirmar torneio comum sem opt-in não pode regravar dias das duplas nem mudar a política');
   }
   console.log('✓ Painel Neon: 16/8 por um clique, dias configuráveis, X correto e sem UID visível');
 } catch (error) { console.error(error); process.exitCode = 1; } });

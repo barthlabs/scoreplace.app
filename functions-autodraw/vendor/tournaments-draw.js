@@ -2980,11 +2980,11 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
     var getDrawMode = wireToggle('mode', selectedDrawMode, function (value) {
       return value === 'structured' ? 'Em cada rodada, os mesmos dois times se enfrentam em todas as categorias.' : 'Cada categoria sorteia adversários próprios, sem repetir oponente nas rodadas.';
     });
-    // A organização define os dias arrastando categorias. Desde 27/out, qualquer
-    // categoria colocada em dois dias distribui as duplas automaticamente entre
-    // eles; a seção abaixo só pede escolhas para essa categoria dividida.
-    // Categorias em um dia único já têm o dia determinado pela faixa escolhida.
-    var pairDaysEnabled = false;
+    // O plano de duplas por dia é automático no formato de times do Neon ou
+    // quando a organização já optou explicitamente por ele. Outros torneios
+    // conservam a agenda por rodadas ao reabrir o painel: não se convertem
+    // implicitamente apenas porque uma categoria aparece em dois dias.
+    var pairDaysEnabled = neonQuota || savedOriginPolicy === 'organizer-pair-days';
     // Só as escolhas explícitas ficam fixas. Duplas sem escolha são repartidas
     // automaticamente; a prévia permanece estável durante esta abertura.
     var fixedPairChoices = new Map();
@@ -3064,7 +3064,7 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
       var splitCategories = categories.filter(function (category) {
         return new Set(slots.filter(function (slot) { return slot.category === category; }).map(function (slot) { return slot.day; })).size > 1;
       });
-      pairDaysEnabled = splitCategories.length > 0;
+      pairDaysEnabled = (neonQuota || savedOriginPolicy === 'organizer-pair-days') && splitCategories.length > 0;
       var section = overlay.querySelector('[data-team-pair-day-section]');
       if (section) section.style.display = pairDaysEnabled ? '' : 'none';
       if (!pairDaysEnabled) { holder.innerHTML = ''; return; }
