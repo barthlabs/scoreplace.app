@@ -1,7 +1,8 @@
 // 2.5.65 — O painel de sorteio distribui automaticamente as duplas de categorias
 // que jogam em dois dias no modelo de times do Neon, preservando os dias
-// nominais já salvos mesmo sob a
-// política anterior. Concentradas conclui uma categoria antes da seguinte;
+// nominais já salvos. Ao confirmar, preserva explicitamente as políticas
+// históricas female-light-organization-final e female-light-five-plus-three
+// em vez de substituí-las pela política nova. Concentradas conclui uma categoria antes da seguinte;
 // Alternadas respeita a ordem dos jogos de cada dupla dentro da categoria.
 // Para qualquer torneio de times com três jogos por time e agenda nominal
 // confirmada, se a janela não comportar todos os confrontos, o servidor recusa
