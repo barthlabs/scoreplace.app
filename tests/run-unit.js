@@ -54,6 +54,8 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 const SUITES = [
+  'tests/registration-settings.test.js',
+  'tests/sandbox-enrollment-route.test.js',
   'tests/operation-day.test.js',
   'tests/operation-router-regions.test.js',
   'tests/placar-primeiro-clique-confirma-sem-salto.test.js',

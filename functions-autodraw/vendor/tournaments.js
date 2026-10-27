@@ -3825,7 +3825,12 @@ function renderTournaments(container, tournamentId = null) {
         // para reabrir não pode sumir nem depender de achar outra tela.
         const _regIsClosed = t.status === 'closed';
         const _regLabel = _regIsClosed ? 'Abrir inscrições' : 'Fechar inscrições';
-        let toggleRegBtn = ((!hasDraw || (lateEnrollManaged && !_r2Started)) && !isLigaOpenEnroll && isOrg) ? `<button class="btn ${_regIsClosed ? 'btn-success' : 'btn-danger'} hover-lift" title="${_regIsClosed ? 'Reabrir inscrições' : 'Encerrar inscrições'}" onclick="event.stopPropagation(); window._regBtnBusy&&window._regBtnBusy(this,'${t.id}','${_regIsClosed ? 'Reabrindo…' : 'Encerrando…'}'); window.toggleRegistrationStatus('${t.id}')">${_regLabel}</button>` : '';
+        const _registration = t.registrationSettings;
+        const _regPricing = _registration && _registration.pricing;
+        const _regPaid = _regPricing && (_regPricing.mode === 'single'
+          ? Number(_regPricing.cents) > 0
+          : Object.keys(_regPricing.centsByCategory || {}).some(k => Number(_regPricing.centsByCategory[k]) > 0));
+        let toggleRegBtn = ((!hasDraw || (lateEnrollManaged && !_r2Started)) && !isLigaOpenEnroll && isOrg && !(_registration && (_registration.source === 'external' || _regPaid))) ? `<button class="btn ${_regIsClosed ? 'btn-success' : 'btn-danger'} hover-lift" title="${_regIsClosed ? 'Reabrir inscrições' : 'Encerrar inscrições'}" onclick="event.stopPropagation(); window._regBtnBusy&&window._regBtnBusy(this,'${t.id}','${_regIsClosed ? 'Reabrindo…' : 'Encerrando…'}'); window.toggleRegistrationStatus('${t.id}')">${_regLabel}</button>` : '';
         // v4.1.18: Reabrir/Encerrar EM ANDAMENTO deste torneio → botão cinza "Reabrindo…"/
         // "Encerrando…" (mesma UX do Sortear) mesmo se o detalhe re-renderizar antes de
         // concluir. Limpo em _regBtnDone (dialog/painel/refresh/backstop).

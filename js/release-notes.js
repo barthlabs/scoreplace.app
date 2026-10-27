@@ -1,3 +1,9 @@
+// 2.5.64 — Torneios com inscrições externas não podem ser abertos para inscrição
+// pelo Scoreplace. O controle de origem e preço inicia gratuito; inscrições pagas
+// ficam bloqueadas até a cobrança e o repasse estarem implementados. A alteração
+// de inscrições no sandbox encontra a cópia correta e não modifica o torneio real.
+// Repetir o sorteio da cópia deixa suas inscrições fechadas; em produção, o reset
+// conserva a reabertura que já existia.
 // 2.5.63 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.62 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.61 — O primeiro clique em Confirmar aguarda o alinhamento regional e a gravação

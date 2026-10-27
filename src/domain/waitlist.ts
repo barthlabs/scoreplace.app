@@ -408,6 +408,14 @@ namespace ScoreplaceWaitlist {
 
   export function enrollmentOpenState(tournament: Tournament | null | undefined, nowMs?: number): { open: boolean; ligaOpen: boolean; sorteio: boolean; deadlinePassed: boolean; notOpenYet: boolean; opensAt: number | null } {
     if (!tournament) return { open: false, ligaOpen: false, sorteio: false, deadlinePassed: false, notOpenYet: false, opensAt: null };
+    const registration = record(tournament.registrationSettings) || {};
+    const pricing = record(registration.pricing) || {};
+    const categoryPrices = record(pricing.centsByCategory) || {};
+    const paid = pricing.mode === 'single'
+      ? Number(pricing.cents) > 0
+      : pricing.mode === 'category' && Object.keys(categoryPrices).some(key => Number(categoryPrices[key]) > 0);
+    if (registration.source === 'external' || paid)
+      return { open: false, ligaOpen: false, sorteio: false, deadlinePassed: false, notOpenYet: false, opensAt: null };
     /* A inscrição após o sorteio é política da FASE corrente. Um torneio
      * multifase pode ter começado como Liga, mas estar na eliminatória agora:
      * o rótulo de topo não pode reabrir aquela fase. Documentos sem fases

@@ -471,6 +471,22 @@ function setupCreateTournamentModal() {
                 <p id="vis-desc" style="margin:8px 0 0;font-size:0.8rem;color:var(--text-muted);">${_t('create.publicDesc')}</p>
               </div>
 
+              <div class="form-group mb-2" style="background:rgba(52,211,153,0.06);border:1px solid rgba(52,211,153,0.2);border-radius:12px;padding:1rem;">
+                <p style="margin:0 0 0.75rem;font-size:0.8rem;color:#6ee7b7;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Inscrições</p>
+                <div role="group" aria-label="Origem das inscrições" style="display:flex;gap:6px;flex-wrap:wrap;">
+                  <button type="button" class="btn" data-registration-source="scoreplace" onclick="window._setRegistrationSource('scoreplace',true)">Pelo Scoreplace</button>
+                  <button type="button" class="btn" data-registration-source="external" onclick="window._setRegistrationSource('external',true)">Externa</button>
+                </div>
+                <input type="hidden" id="tourn-registration-source" value="scoreplace">
+                <p id="registration-source-desc" style="margin:8px 0;font-size:0.8rem;color:var(--text-muted);"></p>
+                <div id="registration-pricing-controls">
+                  <label for="tourn-registration-price-mode">Valor definido pelo organizador</label>
+                  <select id="tourn-registration-price-mode" onchange="window._registrationSettingsTouched=true;window._renderRegistrationPrices()"><option value="single">Valor único</option><option value="category">Por categoria</option></select>
+                  <div id="registration-prices" oninput="window._registrationSettingsTouched=true"></div>
+                  <p style="font-size:0.78rem;color:var(--text-muted);">Gratuita por padrão. Se houver valor, o participante pagará também a taxa de serviço. O checkout de inscrições ainda não está ativo; até sua implantação, inscrições pagas ficam fechadas no app.</p>
+                </div>
+              </div>
+
               <!-- ═══════════ BOX FASE 1 ═══════════
                    Agrupa: Formato · Modo de Sorteio · campos condicionais ·
                    Formato das Partidas (GSM) · Categorias · Classificação.
@@ -2845,6 +2861,86 @@ function setupCreateTournamentModal() {
       btn.style.border = selected ? '2px solid #60a5fa' : '1px solid rgba(255,255,255,0.2)';
       btn.style.background = selected ? 'rgba(59,130,246,0.3)' : 'rgba(255,255,255,0.05)';
     });
+  };
+
+  window._setRegistrationSource = function(source, touched) {
+    var chosen = source === 'external' ? 'external' : 'scoreplace';
+    var hidden = document.getElementById('tourn-registration-source');
+    if (hidden) hidden.value = chosen;
+    if (touched) window._registrationSettingsTouched = true;
+    var controls = document.getElementById('registration-pricing-controls');
+    if (controls) controls.style.display = chosen === 'external' ? 'none' : '';
+    var desc = document.getElementById('registration-source-desc');
+    if (desc) desc.textContent = chosen === 'external'
+      ? 'Inscritos vêm de fora. Ninguém pode se inscrever por conta própria no Scoreplace.'
+      : 'Inscrições pelo app. Valor zero significa inscrição gratuita.';
+    document.querySelectorAll('[data-registration-source]').forEach(function(btn) {
+      var active = btn.getAttribute('data-registration-source') === chosen;
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+      btn.style.border = active ? '2px solid #34d399' : '1px solid rgba(255,255,255,0.2)';
+      btn.style.background = active ? 'rgba(16,185,129,0.28)' : 'rgba(255,255,255,0.05)';
+    });
+    if (chosen === 'scoreplace') window._renderRegistrationPrices();
+  };
+
+  window._renderRegistrationPrices = function(preset) {
+    var root = document.getElementById('registration-prices');
+    var modeEl = document.getElementById('tourn-registration-price-mode');
+    if (!root || !modeEl) return;
+    var prior = {};
+    root.querySelectorAll('[data-registration-category]').forEach(function(input) {
+      prior[input.getAttribute('data-registration-category')] = input.value;
+    });
+    var priorSingle = root.querySelector('#tourn-registration-price');
+    if (priorSingle) prior.__single = priorSingle.value;
+    root.replaceChildren();
+    var makeInput = function(labelText, value, category) {
+      var label = document.createElement('label');
+      label.style.cssText = 'display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;';
+      var name = document.createElement('span'); name.textContent = labelText;
+      var input = document.createElement('input');
+      input.type = 'text'; input.inputMode = 'decimal'; input.placeholder = '0,00';
+      input.value = value == null ? '0,00' : String(value);
+      if (category == null) input.id = 'tourn-registration-price';
+      else input.setAttribute('data-registration-category', category);
+      label.append(name, input); root.appendChild(label);
+    };
+    if (modeEl.value !== 'category') {
+      makeInput('R$', preset && preset.cents != null ? (preset.cents / 100).toFixed(2).replace('.', ',') : prior.__single, null);
+      return;
+    }
+    var cats = (window._getCreateFormCategoryData && window._getCreateFormCategoryData().combinedCategories) || [];
+    if (!cats.length) { root.textContent = 'Defina as categorias antes dos valores.'; return; }
+    cats.forEach(function(category) {
+      var cents = preset && preset.centsByCategory && preset.centsByCategory[category];
+      makeInput(category + ' · R$', cents != null ? (cents / 100).toFixed(2).replace('.', ',') : prior[category], category);
+    });
+    var refresh = document.createElement('button'); refresh.type = 'button'; refresh.className = 'btn';
+    refresh.textContent = 'Atualizar categorias'; refresh.style.marginTop = '8px';
+    refresh.onclick = function() { window._renderRegistrationPrices(); }; root.appendChild(refresh);
+  };
+
+  window._readRegistrationSettings = function() {
+    var source = (document.getElementById('tourn-registration-source') || {}).value;
+    if (source === 'external') return { source:'external', pricing:null };
+    var parseCents = function(value) {
+      var raw = String(value == null ? '' : value).trim().replace(',', '.');
+      if (!/^\d+(?:\.\d{1,2})?$/.test(raw)) throw new Error('Informe valores em reais com até duas casas decimais.');
+      var cents = Math.round(Number(raw) * 100);
+      if (!Number.isSafeInteger(cents) || cents > 100000000) throw new Error('Valor de inscrição inválido.');
+      return cents;
+    };
+    var mode = (document.getElementById('tourn-registration-price-mode') || {}).value;
+    if (mode !== 'category') return { source:'scoreplace', pricing:{ mode:'single', cents:parseCents((document.getElementById('tourn-registration-price') || {}).value) } };
+    var cats = (window._getCreateFormCategoryData && window._getCreateFormCategoryData().combinedCategories) || [];
+    if (!cats.length) throw new Error('Defina categorias antes de configurar valores por categoria.');
+    var map = {};
+    cats.forEach(function(category) {
+      var input = Array.from(document.querySelectorAll('[data-registration-category]')).find(function(el) { return el.getAttribute('data-registration-category') === category; });
+      if (!input) throw new Error('Atualize os valores para as categorias atuais.');
+      map[category] = parseCents(input.value);
+    });
+    return { source:'scoreplace', pricing:{ mode:'category', centsByCategory:map } };
   };
 
   window._onSportChange = function () {
@@ -5244,6 +5340,12 @@ function setupCreateTournamentModal() {
     if (typeof window._syncCallPolicy === 'function') window._syncCallPolicy();
     if (typeof window._syncEnrollLimitMode === 'function') window._syncEnrollLimitMode();
     window._setVisibility(t.organizerOnly === true ? 'organizers' : t.membersOnly === true ? 'members' : t.isPublic !== false ? 'public' : 'members');
+    window._registrationSettingsTouched = false;
+    var _regSettingsEdit = t.registrationSettings;
+    window._setRegistrationSource(_regSettingsEdit && _regSettingsEdit.source === 'external' ? 'external' : 'scoreplace', false);
+    var _regModeEdit = document.getElementById('tourn-registration-price-mode');
+    if (_regModeEdit) _regModeEdit.value = _regSettingsEdit && _regSettingsEdit.pricing && _regSettingsEdit.pricing.mode === 'category' ? 'category' : 'single';
+    window._renderRegistrationPrices(_regSettingsEdit && _regSettingsEdit.pricing);
     if (typeof window._tvEditorSetLayout === 'function') window._tvEditorSetLayout(t.tvLayout || null);
     // W.O. não é mais configuração: sempre inicia em individual; a organização escolhe
     // individual ou dupla inteira diretamente no card, com confirmação explícita.
@@ -5594,6 +5696,7 @@ function setupCreateTournamentModal() {
     // Legado com total exato ganha a leitura por categoria; se não for exato,
     // preserva-se o total antigo e pede-se uma decisão explícita do organizador.
     if (typeof window._syncCategoryCapacity === 'function') window._syncCategoryCapacity({ deriveFromTotal: true });
+    window._renderRegistrationPrices(_regSettingsEdit && _regSettingsEdit.pricing);
 
     window._onFormatoChange();
     window._onLigaInactivityChange();
@@ -6496,6 +6599,16 @@ window._saveTournamentClickHandler = async function() {
         tourData.ageCategories = catData.ageCategories || []; // v1.2.0
         tourData.customCategories = catData.customCategories || []; // v2.1.80
         tourData.combinedCategories = catData.combinedCategories || [];
+        // Ausente em torneio antigo não é sinônimo de "gratuito pelo app". Só
+        // muda a origem quando o organizador escolher explicitamente; eventos
+        // concluídos (como o Neon) não são regravados por esta novidade.
+        if (!editId || window._registrationSettingsTouched || (window._editingTournament && window._editingTournament.registrationSettings)) {
+          try { tourData.registrationSettings = window._readRegistrationSettings(); }
+          catch (error) {
+            showAlertDialog('Valor da inscrição', error.message, null, { type:'warning' });
+            return;
+          }
+        }
 
         // A ESCOLHA DA TELA VENCE, e vale pra QUALQUER formato — não só Liga. É ela que o
         // motor lê no sorteio, inclusive o automático (a CF autoDraw roda o mesmo motor).
@@ -6637,6 +6750,9 @@ window._saveTournamentClickHandler = async function() {
   };
   const btnSave = document.getElementById('btn-save-tournament');
   if (btnSave) btnSave.addEventListener('click', window._saveTournamentClickHandler);
+  window._registrationSettingsTouched = false;
+  window._setRegistrationSource('scoreplace', false);
+  window._renderRegistrationPrices();
   window._renderEstimatedGameHours();
 }
 

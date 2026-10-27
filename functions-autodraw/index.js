@@ -929,6 +929,12 @@ function _gravaTorneio(tx, ref, tDepois, tAntes, ctx) {
   if (!_agoraIso) {
     throw new Error('[write-plan] _gravaTorneio exige ctx.agoraIso — instante estável calculado FORA da transação');
   }
+  // Todas as rotas de preparação/enquete/reabertura passam por esta escrita.
+  // Uma configuração externa ou paga nunca pode persistir status aberto, inclusive
+  // quando uma rota antiga tenta restaurar o status anterior.
+  if (tDepois && tDepois.status === 'open' && require('./registration-settings-core').requiresClosedEnrollment(tDepois.registrationSettings)) {
+    tDepois.status = 'closed';
+  }
   /* Todo torneio passa por esta fronteira antes de voltar ao banco. `fmt2` é a intenção
    * do configurador, não um certificado de que `phases[]` chegou inteiro à versão nova:
    * houve documentos híbridos com fmt2 salvo e fases ainda em dialeto Liga/Suíço. Pular a
@@ -2036,7 +2042,9 @@ exports.resetTournamentToEnrollment = onCall(async request => {
     }
     const before = _antesDoMotor(t), wasAuto = t.drawManual !== true && t.drawFirstDate;
     drawWindow._clearTournamentDraw(t);
-    t.status = 'open';
+    // Na cópia de teste, repetir o sorteio não autoriza inscrições novas.
+    // Torneios reais conservam o comportamento anterior de reabertura.
+    t.status = isSandboxRestore ? 'closed' : 'open';
     // Preserva a configuração automática e impede que um horário já vencido redesenhe agora.
     if (isSandboxRestore && wasAuto) {
       const at = new Date(String(t.drawFirstDate) + 'T' + String(t.drawFirstTime || '19:00')).getTime();
@@ -4817,7 +4825,7 @@ exports.setTournamentFlyerPrefs = onCall(async (request) => {
 // ciclo de vida fica fora desta lista e só possui comandos próprios no servidor.
 const _CAMPOS_CONFIG_TORNEIO = new Set([
   'name','isPublic','membersOnly','organizerOnly','format','sport','startDate','endDate','roundBounds','roundBoundsEditorEnabled','registrationOpenAt','registrationLimit',
-  'enrollmentMode','mixedPairingSeparated','manualPairing','teamSize','gameTypes',
+  'enrollmentMode','registrationSettings','mixedPairingSeparated','manualPairing','teamSize','gameTypes',
   // A capacidade por categoria é declarativa; o total que a tela calcula continua
   // em maxParticipants para os fluxos legados de inscrição. Os dois precisam passar
   // pela mesma porta de edição, senão a ficha salva recusaria 16 × 6 = 96.
@@ -4854,7 +4862,7 @@ const _CAMPOS_CONFIG_TORNEIO = new Set([
  * de rodadas da fase e, se não bater, DESCARTA o arranjo e volta pra divisão igual.
  * Os demais campos desta lista continuam onde estavam — esses sim redesenham a chave. */
 const _CONFIG_ESTRUTURAL = new Set([
-  'format','sport','teamSize','gameTypes','drawMode','fmt2','phases','swissRounds',
+  'format','sport','teamSize','gameTypes','drawMode','fmt2','phases','swissRounds','registrationSettings',
   'gruposCount','gruposClassified','gruposEqualOnly','gruposSeedVip','gruposSeedCategory',
   'teamCompetition','categorySchedule','turnos',
   'ligaRoundFormat','ligaDrawMode','ligaTurnos','ligaRRSchedule','monarchAdvanceToElim',
@@ -5051,6 +5059,12 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     const _policyBeforeShape = _policyConfig.policyShape(t);
     _policyConfig.canonicalizePolicyAliases(patch, t);
     require('./category-capacity-core').validateCapacityConfig(patch, HttpsError, t);
+    if (patch.registrationSettings !== undefined) {
+      try { patch.registrationSettings = require('./registration-settings-core').validate(
+        patch.registrationSettings,
+        patch.combinedCategories !== undefined ? patch.combinedCategories : t.combinedCategories
+      ); } catch (error) { throw new HttpsError('invalid-argument', error.message); }
+    }
     const hasDraw = hasDrawnBracket(t);
     // A ficha reenvia fmt2 mesmo quando só muda nome/prazo. Um envelope igual
     // não é intenção nova, mas a identidade de um individual histórico precisa
@@ -5075,7 +5089,9 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     const requestedOpeningAt = Date.parse(String(patch.registrationOpenAt || ''));
     // Mesmo que o horário já esteja gravado, uma edição precisa recuperar o estado
     // "aberto quando chegar a hora" se uma versão antiga o deixou status=closed.
-    const scheduledOpeningRestoresState = !hasDraw && t.status === 'closed' && Number.isFinite(requestedOpeningAt) && requestedOpeningAt > Date.now();
+    const scheduledOpeningRestoresState = !hasDraw && t.status === 'closed'
+      && !require('./registration-settings-core').requiresClosedEnrollment(patch.registrationSettings || t.registrationSettings)
+      && Number.isFinite(requestedOpeningAt) && requestedOpeningAt > Date.now();
     /* A URL vazia é o comando explícito de remover marca. Ela também precisa limpar
      * `coverPhotoData`/`logoData` legado; por isso continua sendo mudança mesmo se uma
      * fotografia antiga já tiver deixado a URL vazia no documento. */
@@ -5153,7 +5169,7 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
      * até lá. Não é bypass: só vale antes da chave e só a organização grava o campo.
      * Fechar manualmente depois limpa o agendamento e volta a prevalecer. */
     const openingAt = Date.parse(String(t.registrationOpenAt || ''));
-    if (!hasDraw && t.status === 'closed' && Number.isFinite(openingAt) && openingAt > Date.now()) t.status = 'open';
+    if (!hasDraw && t.status === 'closed' && !require('./registration-settings-core').requiresClosedEnrollment(t.registrationSettings) && Number.isFinite(openingAt) && openingAt > Date.now()) t.status = 'open';
     t.updatedAt = agoraIso;
     if (!Array.isArray(t.history)) t.history = [];
     t.history.push({ date: agoraIso, message: 'Regras atualizadas pela organização.' });
@@ -5850,17 +5866,28 @@ function _enqueueEnrollmentNotice(tx, ref, t, type, title, message, nowIso) {
 exports.setTournamentEnrollmentStatus = onCall(async request => {
   const uid = request.auth && request.auth.uid;
   const d = request.data || {}, tId = String(d.tournamentId || '').trim();
+  const sandbox = d.sandbox === true;
   const action = String(d.action || '').trim();
   const forDraw = d.forDraw === true;
   const nowIso = new Date().toISOString();
   if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
   if (!tId || !['open', 'close', 'late-open', 'late-close'].includes(action)) throw new HttpsError('invalid-argument', 'Ação de inscrição inválida.');
-  const ref = db.collection('tournaments').doc(tId);
+  if (tId.startsWith('sb_') !== sandbox) throw new HttpsError('not-found', 'Torneio não encontrado.');
+  const ref = db.collection(sandbox ? 'sandboxes' : 'tournaments').doc(tId);
   return db.runTransaction(async tx => {
+    if (sandbox) await _assertSandboxDrawOwner(tx, await tx.get(ref), uid);
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização altera as inscrições.', { tId, uid });
     if (t.status === 'finished') throw new HttpsError('failed-precondition', 'O torneio já foi encerrado.');
+    if ((action === 'open' || action === 'late-open') && t.registrationSettings) {
+      const settings = t.registrationSettings;
+      const price = settings.pricing;
+      const paid = price && (price.mode === 'single' ? Number(price.cents) > 0
+        : Object.keys(price.centsByCategory || {}).some(category => Number(price.centsByCategory[category]) > 0));
+      if (settings.source === 'external') throw new HttpsError('failed-precondition', 'Inscrições externas não podem ser abertas no Scoreplace.');
+      if (paid) throw new HttpsError('failed-precondition', 'Ative primeiro o checkout das inscrições pagas.');
+    }
     const hasDraw = _hasTournamentDraw(t);
     const late = (drawWindow && typeof drawWindow._effectiveLateEnrollment === 'function')
       ? ['standby', 'expand'].includes(drawWindow._effectiveLateEnrollment(t))

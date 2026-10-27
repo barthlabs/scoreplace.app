@@ -11,6 +11,7 @@ await p.evaluate((src)=>{
  for(const [id,v] of Object.entries({'edit-tournament-id':'e','tourn-name':'Nome editado','select-formato':'elim_simples','tourn-sport':'Tênis'})){const e=document.getElementById(id);if(e)e.value=v;}
  window._t=(k)=>k;window._autoDrawAgendadoNoForm=()=>false;window._sportBaseName=x=>x;window._gsmReadHidden=()=>({type:'simple'});
  window._allowSelfDeactEl=()=>null;window._f2GetConfig=()=>({classifAtiva:false,eliminatoria:{ativa:true}});
+ window._readRegistrationSettings=()=>({source:'scoreplace',pricing:{mode:'single',cents:0,centsByCategory:{}}});
  window._spinButton=(btn,label)=>{btn.disabled=true;btn.innerHTML='<span class="btn-spinner"></span>'+label;};
  window._spinButtonDone=(btn)=>{btn.disabled=false;btn.innerHTML='Salvar';};
  window._canCreateTournament=()=>true;window._getCreateFormCategoryData=()=>({});window._readEstimatedGameHours=()=>null;window.closeModal=()=>{};

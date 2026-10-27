@@ -759,7 +759,7 @@ window._reopenEnrollmentForTarget = function(tId, target, autoClose) {
 
 window._setTournamentEnrollmentStatus = function(tId, action, opts) {
     if (typeof window._callCF !== 'function') return Promise.reject(new Error('Function indisponível'));
-    return window._callCF('setTournamentEnrollmentStatus', { tournamentId:String(tId), action:String(action), forDraw:!!(opts && opts.forDraw) }, 'Entre na sua conta para alterar as inscrições.').then(function(res) {
+    return window._callCF('setTournamentEnrollmentStatus', { tournamentId:String(tId), sandbox:String(tId).startsWith('sb_'), action:String(action), forDraw:!!(opts && opts.forDraw) }, 'Entre na sua conta para alterar as inscrições.').then(function(res) {
         var data = (res && res.data) || {};
         if (data.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(tId, data.tournament);
         return data;

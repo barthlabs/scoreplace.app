@@ -122,6 +122,20 @@ function asParticipantsArray(data) {
 // nenhum organizador esteja olhando a ficha. `status === 'closed'` continua sendo
 // a decisão MANUAL e sempre vence um horário programado.
 function enrollmentOpen(data, nowMs) {
+  // A origem externa nunca abre autoinscrição, mesmo para clientes nativos antigos.
+  // Preço positivo exige confirmação de pagamento por uma porta específica; esta
+  // callable não recebe nem valida pagamentos.
+  var registration = data && data.registrationSettings;
+  if (registration && registration.source === 'external') {
+    return { open: false, deadlinePassed: false, notOpenYet: false, opensAt: null };
+  }
+  if (registration && registration.source === 'scoreplace' && registration.pricing) {
+    var pricing = registration.pricing;
+    var paid = pricing.mode === 'single'
+      ? Number(pricing.cents) > 0
+      : pricing.mode === 'category' && Object.keys(pricing.centsByCategory || {}).some(function (key) { return Number(pricing.centsByCategory[key]) > 0; });
+    if (paid) return { open: false, deadlinePassed: false, notOpenYet: false, opensAt: null };
+  }
   // Inscrição pós-sorteio pertence à fase atual. O rótulo legado "Liga" no
   // topo não pode reabrir uma eliminatória de um torneio multifase. Sem fases
   // canônicas, mantém-se a compatibilidade de leitura de Liga/Ranking.
