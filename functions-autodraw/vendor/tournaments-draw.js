@@ -2980,10 +2980,11 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
     var getDrawMode = wireToggle('mode', selectedDrawMode, function (value) {
       return value === 'structured' ? 'Em cada rodada, os mesmos dois times se enfrentam em todas as categorias.' : 'Cada categoria sorteia adversários próprios, sem repetir oponente nas rodadas.';
     });
-    // O plano nominal do Neon é migrado para a configuração editável a pedido
-    // da organização (19/out). Outros torneios preservam a agenda por rodadas
-    // até o organizador ativar explicitamente os dias por dupla.
-    var pairDaysEnabled = neonQuota || savedOriginPolicy === 'organizer-pair-days';
+    // A organização define os dias arrastando categorias. Desde 27/out, qualquer
+    // categoria colocada em dois dias distribui as duplas automaticamente entre
+    // eles; a seção abaixo só pede escolhas para essa categoria dividida.
+    // Categorias em um dia único já têm o dia determinado pela faixa escolhida.
+    var pairDaysEnabled = false;
     // Só as escolhas explícitas ficam fixas. Duplas sem escolha são repartidas
     // automaticamente; a prévia permanece estável durante esta abertura.
     var fixedPairChoices = new Map();

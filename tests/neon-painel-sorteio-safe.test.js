@@ -155,5 +155,29 @@ setImmediate(async () => { try {
   if (ready !== 1 || confirmNode.disabled || confirmNode.textContent !== '🎲 Sortear times e confrontos') {
     throw new Error('Falha ao salvar deve reabilitar o botão sem disparar o sorteio');
   }
+  tournament.id = 'sb_common_team_tournament';
+  tournament.name = 'Torneio comum';
+  tournament.teamCompetition.teamCount = 4;
+  tournament.teamCompetition.teamNames = ['Time A', 'Time B', 'Time C', 'Time D'];
+  tournament.teamCompetition.schedule.originDayPolicy = '';
+  tournament.teamCompetition.schedule.pairDayAssignments = [];
+  tournament.teamCompetition.schedule.pairsPerTeamByCategory = Object.fromEntries(categories.map(label => [label, label === 'Fem Light' ? 6 : 2]));
+  let commonPayload;
+  W.FirestoreDB._callFn = (name, payload) => {
+    if (name !== 'updateTournamentConfiguration') throw new Error('Chamada inesperada: ' + name);
+    commonPayload = payload;
+    return Promise.resolve({ ok:true });
+  };
+  W._showTeamCompetitionDrawReview(tournament.id, { _canonicalRosterLoaded:true, onReady(){} });
+  if (typeof confirmNode.onclick !== 'function' || !/data-team-pair-category="Fem Light"/.test(dayEditor.innerHTML)) {
+    throw new Error('Torneio comum sem opt-in deve oferecer a divisão da categoria em dois dias');
+  }
+  confirmNode.onclick();
+  await new Promise(resolve => setImmediate(resolve));
+  const commonAssignments = commonPayload && commonPayload.patch.teamCompetition.schedule.pairDayAssignments || [];
+  if (commonAssignments.length !== participants.length ||
+      commonPayload.patch.teamCompetition.schedule.originDayPolicy !== 'organizer-pair-days') {
+    throw new Error('Confirmar categoria dividida deve salvar dias por dupla também em torneio comum, conforme os dias escolhidos');
+  }
   console.log('✓ Painel Neon: 16/8 por um clique, dias configuráveis, X correto e sem UID visível');
 } catch (error) { console.error(error); process.exitCode = 1; } });

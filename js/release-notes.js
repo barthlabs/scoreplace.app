@@ -1,5 +1,6 @@
 // 2.5.65 — O painel de sorteio distribui automaticamente as duplas de categorias
-// que jogam em dois dias, preservando os dias nominais já salvos mesmo sob a
+// que jogam em dois dias, inclusive torneios comuns sem configuração prévia,
+// preservando os dias nominais já salvos mesmo sob a
 // política anterior. Concentradas conclui uma categoria antes da seguinte;
 // Alternadas respeita a ordem dos jogos de cada dupla dentro da categoria.
 // Se a janela não comportar todos os confrontos, o servidor recusa o sorteio
