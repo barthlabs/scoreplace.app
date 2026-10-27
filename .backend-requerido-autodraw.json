@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "backendCommit": "8529d4153efb94b2be91811d9321adc27b567e60",
-  "scopeNote": "Neste corte só drawRound mudou de comportamento: recusa agendas estritas inviáveis antes da gravação. setTournamentEnrollmentStatus, resetTournamentToEnrollment, updateTournamentConfiguration e createTournament já têm recibos de publicação no commit 56ac51fd e suas implementações não foram alteradas neste corte. O deploy não executa sorteio nem altera torneios existentes.",
+  "backendCommit": "79f98951144e58629648238debbdefb3e64d98d4",
+  "scopeNote": "Neste corte só drawRound mudou de comportamento: recusa agendas estritas inviáveis antes da gravação. O ajuste posterior no vendor/tournaments-draw.js preserva políticas históricas do Neon e não muda outras callables. setTournamentEnrollmentStatus, resetTournamentToEnrollment, updateTournamentConfiguration e createTournament já têm recibos de publicação no commit 56ac51fd. O deploy não executa sorteio nem altera torneios existentes.",
   "functions": [
     "drawRound"
   ]

@@ -4,12 +4,12 @@ Este corte publica a interface e a validação de capacidade do sorteio para tor
 
 ## Backend direcionado
 
-`scripts/deploy-functions.sh autodraw --only drawRound` terminou com `functions[drawRound(us-central1)] Successful update operation` e `Deploy complete!`. O recibo gerado pelo próprio script registra `drawRound` no commit `8529d4153efb94b2be91811d9321adc27b567e60`; não foi editado à mão.
+`scripts/deploy-functions.sh autodraw --only drawRound` terminou com `functions[drawRound(us-central1)] Successful update operation` e `Deploy complete!`. Após a correção que preserva a política histórica do Neon, o deploy direcionado foi repetido com sucesso. O recibo gerado pelo próprio script registra `drawRound` no commit `79f98951144e58629648238debbdefb3e64d98d4`; não foi editado à mão.
 
 Checagens locais após o deploy:
 
 ```text
-$ git show 8529d4153efb94b2be91811d9321adc27b567e60:functions-autodraw/index.js | rg -c strictTeamDays
+$ git show 79f98951144e58629648238debbdefb3e64d98d4:functions-autodraw/index.js | rg -c strictTeamDays
 2
 $ node scripts/check-backend-publicado.js
 ✓ rules publicado (ec2d58d5)
@@ -25,4 +25,4 @@ O gate `strictTeamDays` está dentro de `db.runTransaction`, antes de `_schAplic
 
 `node functions-autodraw/copy-vendor.js` seguido de `git status --short` não mudou arquivos rastreados. O único arquivo não rastreado no checkout é `scripts/finish-tournament-preserving-data.js`, preservado fora do corte. `node scripts/check-vendor-fresh.js` confirmou os 26 arquivos idênticos.
 
-`test-draw.js` passou no predeploy de `drawRound`; `test-drawinitial.js` terminou com `102 ok, 0 falharam`. Os testes do painel de dias e de contraste passaram após os últimos ajustes. A janela `17:25` existe apenas no fixture do Neon: a janela original iniciando às `18:00` não comporta os 96 jogos sob a cadência estrita; nenhum horário ou resultado do torneio real foi alterado.
+`test-draw.js` passou no predeploy de `drawRound`; `test-drawinitial.js` terminou com `102 ok, 0 falharam`. Os testes do painel de dias e de contraste passaram após os últimos ajustes. O teste do painel agora confirma que `female-light-organization-final` e `female-light-five-plus-three` não viram `organizer-pair-days` ao salvar. A janela `17:25` existe apenas no fixture do Neon: a janela original iniciando às `18:00` não comporta os 96 jogos sob a cadência estrita; nenhum horário ou resultado do torneio real foi alterado.
