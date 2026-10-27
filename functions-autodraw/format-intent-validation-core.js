@@ -42,6 +42,15 @@ function validateNewFormatIntent(fmt2, HttpsError) {
   if (!fmt2 || typeof fmt2 !== 'object' || Array.isArray(fmt2)) {
     throw new HttpsError('invalid-argument', 'Configuração de formato inválida.');
   }
+  // Um contêiner explicitamente enviado não pode sumir durante a validação
+  // dos filhos e reaparecer como default no compilador tolerante de legado.
+  for (const path of ['rodadas', 'classificationPairing', 'eliminatoria']) {
+    const field = explicitValue(fmt2, path);
+    if (field.present && (!field.value || typeof field.value !== 'object' ||
+        Array.isArray(field.value) || Object.getPrototypeOf(field.value) !== Object.prototype)) {
+      throw new HttpsError('invalid-argument', 'Valor de formato inválido em fmt2.' + path + '.');
+    }
+  }
   for (const [path, allowed] of ENUMS) {
     const field = explicitValue(fmt2, path);
     // Null é normalizado para disputa individual ou, sem disputa explícita,

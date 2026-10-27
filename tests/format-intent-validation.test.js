@@ -34,6 +34,12 @@ for (const [patch, field] of [
     error.code === 'invalid-argument' && error.message.includes('fmt2.' + field), field);
 }
 assert.throws(() => validateNewFormatIntent([], HttpsError), { code: 'invalid-argument' });
+const invalidContainers = ['rodadas', 'classificationPairing', 'eliminatoria'].flatMap(field =>
+  [null, 'texto', [], 7].map(value => ({ field, fmt2: { [field]: value } })));
+for (const { field, fmt2 } of invalidContainers) {
+  assert.throws(() => validateNewFormatIntent(fmt2, HttpsError), error =>
+    error.code === 'invalid-argument' && error.message.includes('fmt2.' + field), field);
+}
 
 for (const [patch, field] of [
   [{ grupos: '3abc' }, 'grupos'], [{ grupos: 3.5 }, 'grupos'],
@@ -54,6 +60,13 @@ for (const [patch, field] of [
 }
 
 const server = fs.readFileSync(path.join(__dirname, '..', 'functions-autodraw', 'index.js'), 'utf8');
+const cloneStart = server.indexOf('function _clonaConfigDeclarativa(');
+const cloneEnd = server.indexOf('function _fasesDeConfiguracaoAtualizaveis(', cloneStart);
+assert(cloneStart >= 0 && cloneEnd > cloneStart, 'clone real de configuração encontrado');
+const cloneConfig = new Function('HttpsError', server.slice(cloneStart, cloneEnd) +
+  '\nreturn _clonaConfigDeclarativa;')(HttpsError);
+assert.equal(cloneConfig(null, 0, ['fmt2', 'rodadas']), null);
+assert(Array.isArray(cloneConfig([], 0, ['fmt2', 'rodadas'])), 'clone real preserva arrays');
 const compiler = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'format2.js'), 'utf8');
 const editor = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'format2-ui.js'), 'utf8');
 assert.match(compiler, /out\.rodadas\.modo !== 'todos' && out\.rodadas\.modo !== 'fixo'/);
@@ -95,7 +108,7 @@ const edit = new Function('onCall', 'HttpsError', 'db', 'drawWindow', '_leTornei
   'hasDrawnBracket', '_clonaConfigDeclarativa', '_drawFail', '_antesDoMotor', '_gravaTorneio', 'require',
   'const exports = {};\n' + handlerSource + '\nreturn exports.applyTournamentFormat;')(
   fn => fn, HttpsError, db, drawWindow, async () => tournament, () => true, () => false,
-  value => structuredClone(value), (code, message) => new HttpsError(code, message),
+  cloneConfig, (code, message) => new HttpsError(code, message),
   () => ({}), () => { writes++; return { clean: tournament }; },
   require('node:module').createRequire(path.join(__dirname, '..', 'functions-autodraw', 'index.js'))
 );
@@ -106,7 +119,7 @@ const edit = new Function('onCall', 'HttpsError', 'db', 'drawWindow', '_leTornei
     db: { collection: () => ({ doc: id => ({ id }) }), runTransaction: async () => { createTransactions++; } },
     HttpsError, FieldValue: { serverTimestamp: () => 'now' },
     fields: new Set(['name', 'sport', 'format', 'fmt2']),
-    cloneConfig: value => structuredClone(value),
+    cloneConfig,
     validateIntent: validateNewFormatIntent,
     compile: () => { createCompiled++; return { topLevel: {}, phases: [], cfg: {} }; },
     boundary: value => ({ persist: value, clean: value }),
@@ -130,6 +143,19 @@ const edit = new Function('onCall', 'HttpsError', 'db', 'drawWindow', '_leTornei
   } }), error => error.code === 'invalid-argument' && error.message.includes('fmt2.classificationSchedule.gamesPerUnit'));
   assert.equal(compiled, 0, 'edição rejeita número alterado antes do compilador');
   assert.equal(writes, 0, 'edição rejeita número alterado antes de escrever');
+  for (const { field, fmt2 } of invalidContainers) {
+    await assert.rejects(create({ auth: { uid: 'owner' }, data: {
+      tournamentId: 'tour_' + Date.now() + '_' + 'a'.repeat(32),
+      config: { name: 'Teste', sport: 'Beach Tennis', format: 'Liga', fmt2 }
+    } }), error => error.code === 'invalid-argument' && error.message.includes('fmt2.' + field));
+    assert.equal(createCompiled, 0, field + ': criação não compila');
+    assert.equal(createTransactions, 0, field + ': criação não abre transação');
+    await assert.rejects(edit({ auth: { uid: 'owner' }, data: {
+      tournamentId: 'tour_test', fmt2
+    } }), error => error.code === 'invalid-argument' && error.message.includes('fmt2.' + field));
+    assert.equal(compiled, 0, field + ': edição não compila');
+    assert.equal(writes, 0, field + ': edição não escreve');
+  }
   const legacyEdit = await edit({ auth: { uid: 'owner' }, data: { tournamentId: 'tour_test', fmt2: historical } });
   assert.equal(legacyEdit.ok, true, 'edição de dialeto histórico normalizado pela UI segue aceita');
   assert.equal(compiled, 1);
@@ -138,5 +164,5 @@ const edit = new Function('onCall', 'HttpsError', 'db', 'drawWindow', '_leTornei
   assert.equal(wideEdit.ok, true, 'edição histórica com mais de 16 grupos não é bloqueada');
   assert.equal(compiled, 2);
   assert.equal(writes, 2);
-  console.log('✓ intenção nova rejeita enum inválido nas duas portas de escrita');
+  console.log('✓ intenção nova rejeita valor e contêiner inválidos nas duas portas de escrita');
 })().catch(error => { console.error(error); process.exitCode = 1; });
