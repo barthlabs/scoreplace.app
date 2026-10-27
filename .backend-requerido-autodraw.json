@@ -1,11 +1,8 @@
 {
   "schema": 1,
-  "backendCommit": "56ac51fdb214651f001d09813da52c0fe63e80e9",
-  "scopeNote": "Origem e preço de inscrições com bloqueio seguro, reset de sandbox e roteamento isolado; nenhum dado de torneio é alterado pelo deploy.",
+  "backendCommit": "7dd97815d7e0e5a4633d331cde37cca61c688fdb",
+  "scopeNote": "drawRound usa o planejador estrito para recusar agendas inviáveis antes de gravar o sorteio; o deploy não executa sorteio nem altera torneios existentes.",
   "functions": [
-    "setTournamentEnrollmentStatus",
-    "resetTournamentToEnrollment",
-    "updateTournamentConfiguration",
-    "createTournament"
+    "drawRound"
   ]
 }
