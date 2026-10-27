@@ -12,6 +12,7 @@ await p.evaluate((src)=>{
  window._t=(k)=>k;window._autoDrawAgendadoNoForm=()=>false;window._sportBaseName=x=>x;window._gsmReadHidden=()=>({type:'simple'});
  window._readRegistrationSettings=()=>({source:'scoreplace',pricing:{mode:'single',cents:0}});
  window._allowSelfDeactEl=()=>null;window._f2GetConfig=()=>({classifAtiva:false,eliminatoria:{ativa:true}});
+ window._readRegistrationSettings=()=>({source:'scoreplace',pricing:{mode:'single',cents:0,centsByCategory:{}}});
  window._spinButton=(btn,label)=>{btn.disabled=true;btn.innerHTML='<span class="btn-spinner"></span>'+label;};
  window._spinButtonDone=(btn)=>{btn.disabled=false;btn.innerHTML='Salvar';};
  window._canCreateTournament=()=>true;window._getCreateFormCategoryData=()=>({});window._readEstimatedGameHours=()=>null;window.closeModal=()=>{};

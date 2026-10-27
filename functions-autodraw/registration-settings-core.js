@@ -25,4 +25,13 @@ function validate(value, categories) {
   return { source:'scoreplace', pricing:{ mode:'category', centsByCategory:Object.fromEntries(unique.map(label => [label, map[label]])) } };
 }
 
-module.exports = { validate };
+function requiresClosedEnrollment(value) {
+  if (!value || typeof value !== 'object') return false;
+  if (value.source === 'external') return true;
+  const pricing = value.pricing;
+  if (!pricing || value.source !== 'scoreplace') return false;
+  if (pricing.mode === 'single') return Number(pricing.cents) > 0;
+  return pricing.mode === 'category' && Object.values(pricing.centsByCategory || {}).some(cents => Number(cents) > 0);
+}
+
+module.exports = { validate, requiresClosedEnrollment };
