@@ -2991,11 +2991,15 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
     savedPairDays.forEach(function (day, id) {
       if (days.indexOf(day) >= 0) fixedPairChoices.set(id, day);
     });
-    var previewOrder = entries.map(function (entry) { return String(entry.fixedPairId || ''); });
-    for (var shuffleIndex = previewOrder.length - 1; shuffleIndex > 0; shuffleIndex--) {
-      var randomIndex = Math.floor(Math.random() * (shuffleIndex + 1));
-      var tempId = previewOrder[shuffleIndex]; previewOrder[shuffleIndex] = previewOrder[randomIndex]; previewOrder[randomIndex] = tempId;
+    // A prévia livre precisa ser estável entre aberturas. Só o botão explícito
+    // "Sortear dias livremente" embaralha de novo antes da confirmação.
+    function stablePairRank(id) {
+      var value = String(tId) + '|' + id, hash = 2166136261;
+      for (var ci = 0; ci < value.length; ci++) hash = Math.imul(hash ^ value.charCodeAt(ci), 16777619);
+      return hash >>> 0;
     }
+    var previewOrder = entries.map(function (entry) { return String(entry.fixedPairId || ''); })
+      .sort(function (a, b) { return stablePairRank(a) - stablePairRank(b) || a.localeCompare(b); });
     var previewRank = new Map(previewOrder.map(function (id, index) { return [id, index]; }));
     function laneDays(category) {
       return days.filter(function (day) {

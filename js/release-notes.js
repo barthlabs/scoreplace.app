@@ -3,8 +3,10 @@
 // preservando os dias nominais já salvos mesmo sob a
 // política anterior. Concentradas conclui uma categoria antes da seguinte;
 // Alternadas respeita a ordem dos jogos de cada dupla dentro da categoria.
-// Se a janela não comportar todos os confrontos, o servidor recusa o sorteio
-// antes de gravá-lo. A busca da chave prioriza o jogo atual sem placar, destaca
+// Para qualquer torneio de times com três jogos por time e agenda nominal
+// confirmada, se a janela não comportar todos os confrontos, o servidor recusa
+// o sorteio antes de gravá-lo. A prévia livre é estável até a organização pedir
+// novo sorteio dos dias. A busca da chave prioriza o jogo atual sem placar, destaca
 // atletas em quadra e a TV mantém o último resultado em destaque por 30 segundos.
 // Nenhum jogo, placar ou sorteio existente é regravado por esta publicação.
 // 2.5.64 — Torneios com inscrições externas não podem ser abertos para inscrição

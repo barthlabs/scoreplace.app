@@ -172,6 +172,9 @@ setImmediate(async () => { try {
   if (typeof confirmNode.onclick !== 'function' || !/data-team-pair-category="Fem Light"/.test(dayEditor.innerHTML)) {
     throw new Error('Torneio comum sem opt-in deve oferecer a divisão da categoria em dois dias');
   }
+  const firstPreview = dayEditor.innerHTML;
+  W._showTeamCompetitionDrawReview(tournament.id, { _canonicalRosterLoaded:true, onReady(){} });
+  if (dayEditor.innerHTML !== firstPreview) throw new Error('A distribuição livre deve permanecer estável ao reabrir a revisão');
   confirmNode.onclick();
   await new Promise(resolve => setImmediate(resolve));
   const commonAssignments = commonPayload && commonPayload.patch.teamCompetition.schedule.pairDayAssignments || [];

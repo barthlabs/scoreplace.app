@@ -237,6 +237,8 @@ const CASES = [
     id:'neon-64', name:'Neon 64', status:'open', format:'Fase de Grupos', teamSize:2, enrollmentMode:'teams',
     startDate:'2026-10-22T18:00:00-03:00', endDate:'2026-10-23T22:40:00-03:00',
     courtCount:6, gameDuration:25, callTime:5, warmupTime:5,
+    // Apenas este fixture amplia a janela: 18:00 não comporta a cadência estrita
+    // de 96 jogos. Os horários e resultados do Neon real não são modificados.
     scheduleWindow:{ days:[{ day:'2026-10-22', startTime:'17:25', endTime:'22:40', categoryFlow:'rounds' }, { day:'2026-10-23', startTime:'17:25', endTime:'22:40', categoryFlow:'rounds' }] },
     combinedCategories:realCategories, participants:realPairs.map(function (entry) { return JSON.parse(JSON.stringify(entry)); }),
     categoryDefinitions:realCategories.map(function (label, index) { return { id:'category-' + index, label:label }; }),
