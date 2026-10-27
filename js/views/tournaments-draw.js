@@ -2987,7 +2987,7 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
     // Só as escolhas explícitas ficam fixas. Duplas sem escolha são repartidas
     // automaticamente; a prévia permanece estável durante esta abertura.
     var fixedPairChoices = new Map();
-    if (savedOriginPolicy === 'organizer-pair-days') savedPairDays.forEach(function (day, id) {
+    savedPairDays.forEach(function (day, id) {
       if (days.indexOf(day) >= 0) fixedPairChoices.set(id, day);
     });
     var previewOrder = entries.map(function (entry) { return String(entry.fixedPairId || ''); });

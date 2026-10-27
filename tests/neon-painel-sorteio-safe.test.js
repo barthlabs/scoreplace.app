@@ -132,7 +132,7 @@ W.FirestoreDB = {
   }
 };
 tournament.id = 'sb_' + neonId + '_1793070000000';
-tournament.teamCompetition.schedule.originDayPolicy = '';
+tournament.teamCompetition.schedule.originDayPolicy = 'female-light-organization-final';
 W._showTeamCompetitionDrawReview(tournament.id, { _canonicalRosterLoaded:true, onReady(){ ready++; } });
 if (typeof confirmNode.onclick !== 'function') throw new Error('Sortear não habilitou para elenco completo');
 confirmNode.onclick();
@@ -141,8 +141,10 @@ setImmediate(async () => { try {
   const light = assignments.filter(item => participants.some(entry => entry.fixedPairId === item.fixedPairId && entry.category === 'Fem Light'));
   const first = light.filter(item => item.day === '2026-10-22').length;
   const second = light.filter(item => item.day === '2026-10-23').length;
-  if (saves !== 1 || ready !== 1 || savedPayload.sandbox !== true || assignments.length !== 64 || first !== 16 || second !== 8) {
-    throw new Error('Um clique deve salvar no sandbox 64 dias nominais (Fem Light 16/8) e só então prosseguir');
+  const savedDays = new Map(savedAssignments.map(item => [item.fixedPairId, item.day]));
+  const preservedDays = light.every(item => savedDays.get(item.fixedPairId) === item.day);
+  if (saves !== 1 || ready !== 1 || savedPayload.sandbox !== true || assignments.length !== 64 || first !== 16 || second !== 8 || !preservedDays) {
+    throw new Error('Um clique deve preservar os dias nominais salvos sob a política antiga (Fem Light 16/8) e só então prosseguir');
   }
   // Se o salvamento falha, o clique não pode iniciar o sorteio com uma agenda
   // que existe apenas na memória do navegador.
