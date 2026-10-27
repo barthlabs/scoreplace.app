@@ -113,6 +113,34 @@ const edit = new Function('onCall', 'HttpsError', 'db', 'drawWindow', '_leTornei
   require('node:module').createRequire(path.join(__dirname, '..', 'functions-autodraw', 'index.js'))
 );
 
+// A terceira entrada de fmt2 é a ficha geral. Extrair o handler literalmente
+// evita testar apenas o validador puro e deixar a porta transacional descoberta.
+const configStart = server.indexOf('exports.updateTournamentConfiguration = onCall(async (request) => {');
+const configEnd = server.indexOf('\n// ─── Ciclo presencial:', configStart);
+assert(configStart >= 0 && configEnd > configStart, 'handler real da ficha encontrado');
+const configSource = server.slice(configStart, configEnd);
+let configWrites = 0;
+let configTournament = { id: 'tour_test', creatorUid: 'owner', sport: 'Beach Tennis', fmt2: {} };
+const configDb = {
+  collection: () => ({ doc: id => ({ id }) }),
+  runTransaction: async callback => callback({
+    set: () => { configWrites++; }, update: () => { configWrites++; },
+    create: () => { configWrites++; }, delete: () => { configWrites++; }
+  })
+};
+const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG_TORNEIO',
+  '_CONFIG_ESTRUTURAL', '_clonaConfigDeclarativa', '_assertSandboxDrawOwner', '_leTorneio',
+  '_isTournamentAdmin', '_drawFail', 'hasDrawnBracket', '_configAtiva', '_antesDoMotor',
+  '_gravaTorneio', '_fasesDeConfiguracaoAtualizaveis', 'drawWindow', 'require',
+  'const exports = {};\n' + configSource + '\nreturn exports.updateTournamentConfiguration;')(
+  fn => fn, HttpsError, configDb, new Set(['fmt2', 'name']), new Set(['fmt2']), cloneConfig,
+  async () => {}, async () => configTournament, () => true,
+  (code, message) => new HttpsError(code, message), t => Array.isArray(t.matches) && t.matches.length > 0,
+  require('../functions-autodraw/config-ativa-core'), () => ({}),
+  (_tx, _ref, t) => { configWrites++; return { clean: t }; }, () => [], {},
+  require('node:module').createRequire(path.join(__dirname, '..', 'functions-autodraw', 'index.js'))
+);
+
 (async () => {
   let createCompiled = 0, createTransactions = 0;
   const create = makeCreateTournament({
@@ -164,5 +192,67 @@ const edit = new Function('onCall', 'HttpsError', 'db', 'drawWindow', '_leTornei
   assert.equal(wideEdit.ok, true, 'edição histórica com mais de 16 grupos não é bloqueada');
   assert.equal(compiled, 2);
   assert.equal(writes, 2);
+  for (const [fmt2, field] of [
+    [{ disputa: 'equipe' }, 'disputa'],
+    [{ grupos: '3abc' }, 'grupos'],
+    [{ rodadas: [] }, 'rodadas']
+  ]) {
+    configTournament = { id: 'tour_test', creatorUid: 'owner', sport: 'Beach Tennis', fmt2: {} };
+    await assert.rejects(configHandler({ auth: { uid: 'owner' }, data: {
+      tournamentId: 'tour_test', patch: { fmt2 }
+    } }), error => error.code === 'invalid-argument' && error.message.includes('fmt2.' + field));
+    assert.equal(configWrites, 0, field + ': ficha não escreve');
+  }
+  for (const schedule of [undefined, { gamesPerUnit: 3, mode: 'free' }]) {
+    configTournament = { id: 'tour_test', creatorUid: 'owner', sport: 'Beach Tennis', fmt2: {} };
+    const normalized = FORMAT2.normalize({ disputa: 'dupla', parceria: 'fixa',
+      ...(schedule ? { classificationSchedule: schedule } : {}) }, 'Beach Tennis');
+    assert.equal(schedule ? normalized.classificationSchedule.gamesPerUnit : normalized.classificationSchedule,
+      schedule ? 3 : undefined, 'payload da ficha normalizado pelo compilador real');
+    const result = await configHandler({ auth: { uid: 'owner' }, data: {
+      tournamentId: 'tour_test', patch: { fmt2: normalized }
+    } });
+    assert.equal(result.ok, true, 'ficha aceita payload normalizado real');
+    assert.equal(result.changed, true);
+  }
+  // Cliente antigo pode reenviar o fmt2 histórico intacto ao editar outro
+  // campo. Não transformar leitura/eco em uma nova intenção de formato.
+  const oldUnsorted = { disputa: 'dupla', parceria: 'antiga',
+    classificationSchedule: { mode: 'free' } };
+  configTournament = { id: 'tour_test', creatorUid: 'owner', sport: 'Beach Tennis',
+    name: 'Antes', fmt2: oldUnsorted };
+  const oldReordered = { classificationSchedule: { mode: 'free' }, parceria: 'antiga', disputa: 'dupla' };
+  const oldResult = await configHandler({ auth: { uid: 'owner' }, data: {
+    tournamentId: 'tour_test', patch: { name: 'Depois', fmt2: oldReordered }
+  } });
+  assert.equal(oldResult.ok, true, 'nome pode ser editado com formato histórico intacto');
+  assert.equal(configTournament.fmt2, oldUnsorted, 'fmt2 histórico não é regravado');
+  configTournament = { id: 'tour_test', creatorUid: 'owner', sport: 'Beach Tennis',
+    name: 'Antes', fmt2: null };
+  const nullEcho = await configHandler({ auth: { uid: 'owner' }, data: {
+    tournamentId: 'tour_test', patch: { name: 'Depois', fmt2: null }
+  } });
+  assert.equal(nullEcho.ok, true, 'eco de null histórico não bloqueia nome');
+  assert.equal(configTournament.fmt2, null, 'null histórico não é regravado');
+  configTournament = { id: 'tour_test', creatorUid: 'owner', sport: 'Beach Tennis',
+    name: 'Antes', fmt2: valid };
+  const beforeNull = configWrites;
+  await assert.rejects(configHandler({ auth: { uid: 'owner' }, data: {
+    tournamentId: 'tour_test', patch: { fmt2: null }
+  } }), error => error.code === 'invalid-argument');
+  assert.equal(configWrites, beforeNull, 'substituir formato existente por null não escreve');
+  const historicDrawn = { disputa: 'dupla', parceria: 'antiga',
+    eliminatoria: { roundBounds: ['2026-11-01T23:00'] } };
+  configTournament = { id: 'tour_test', creatorUid: 'owner', sport: 'Beach Tennis',
+    matches: [{ id: 'jogo-existente' }], fmt2: historicDrawn };
+  const deadlineOnly = JSON.parse(JSON.stringify(historicDrawn));
+  deadlineOnly.eliminatoria.roundBounds = ['2026-11-02T23:00'];
+  const beforeDrawn = configWrites;
+  const deadlineResult = await configHandler({ auth: { uid: 'owner' }, data: {
+    tournamentId: 'tour_test', patch: { fmt2: deadlineOnly }
+  } });
+  assert.equal(deadlineResult.ok, true, 'prazo em formato histórico com chave passa');
+  assert.equal(configWrites, beforeDrawn + 1);
+  assert.deepEqual(configTournament.matches, [{ id: 'jogo-existente' }], 'jogos não mudam');
   console.log('✓ intenção nova rejeita valor e contêiner inválidos nas duas portas de escrita');
 })().catch(error => { console.error(error); process.exitCode = 1; });

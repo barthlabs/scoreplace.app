@@ -5052,6 +5052,14 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     _policyConfig.canonicalizePolicyAliases(patch, t);
     require('./category-capacity-core').validateCapacityConfig(patch, HttpsError, t);
     const hasDraw = hasDrawnBracket(t);
+    // A ficha também edita fmt2 antes do sorteio. Um envelope idêntico ao
+    // documento fresco é ruído da ficha, não uma intenção nova: descartá-lo
+    // preserva a edição de nome/prazo em torneio histórico não sorteado.
+    // Só uma mudança real recebe o gate da criação/configurador de formato.
+    if (!hasDraw && Object.prototype.hasOwnProperty.call(patch, 'fmt2')) {
+      if (_configAtiva.igual(t.fmt2, patch.fmt2)) delete patch.fmt2;
+      else require('./format-intent-validation-core').validateNewFormatIntent(patch.fmt2, HttpsError);
+    }
     const requestedOpeningAt = Date.parse(String(patch.registrationOpenAt || ''));
     // Mesmo que o horário já esteja gravado, uma edição precisa recuperar o estado
     // "aberto quando chegar a hora" se uma versão antiga o deixou status=closed.
