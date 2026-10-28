@@ -62,7 +62,7 @@ test('falha parcial offline restaura tráfego das portas já alteradas', { skip:
     fs.chmodSync(file, 0o755);
   };
   fake('git', `const c=require('node:child_process');const a=process.argv.slice(2);if(a[0]==='status'&&a[1]==='--porcelain')process.exit(0);const r=c.spawnSync('/usr/bin/git',a,{stdio:'inherit'});process.exit(r.status??1);`);
-  fake('curl', `process.stdout.write('401');`);
+  fake('curl', `const fs=require('node:fs'),file=process.env.SP_FAKE_CURL_ONCE;if(file&&!fs.existsSync(file)){fs.writeFileSync(file,'first');process.stdout.write('000');}else process.stdout.write('401');`);
   fake('gcloud', `
 const fs=require('node:fs'),path=require('node:path'),a=process.argv.slice(2);
 const file=process.env.SP_FAKE_STATE,state=JSON.parse(fs.readFileSync(file));
@@ -85,13 +85,14 @@ if(a[1]==='services'&&a[2]==='describe'){
   const statePath = path.join(dir, 'fake-state.json');
   fs.writeFileSync(statePath, JSON.stringify({ deploys: 0, trafficUpdates: 0, entries: {} }));
   const env = { ...process.env, PATH: `${dir}:${process.env.PATH}`, SP_FAKE_ROOT: root,
-    SP_FAKE_STATE: statePath, SP_FAKE_FAIL_AT: '3', SP_REGIONAL_SYNC_STATE: path.join(dir, 'sync.json') };
+    SP_FAKE_STATE: statePath, SP_FAKE_FAIL_AT: '3', SP_FAKE_CURL_ONCE: path.join(dir, 'curl-once'), SP_REGIONAL_SYNC_STATE: path.join(dir, 'sync.json') };
   try {
     const result = cp.spawnSync('node', ['scripts/sync-operation-regions-current.js', '--deploy'], { cwd: root, env, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
     assert.notEqual(result.status, 0, 'a terceira mutação simulada deve abortar');
     const fakeState = JSON.parse(fs.readFileSync(statePath, 'utf8'));
     assert.equal(fakeState.deploys, 3);
     assert.equal(fakeState.trafficUpdates, 2, 'revisões criadas com 0% recebem corte explícito para 100%');
+    assert.ok(fs.existsSync(env.SP_FAKE_CURL_ONCE), 'sonda 000 transitória foi repetida');
     assert.equal(Object.values(fakeState.entries).filter(entry => entry.latest.endsWith('-new')).length, 2);
     for (const [id, entry] of Object.entries(fakeState.entries)) {
       const [name, region] = id.split('/');

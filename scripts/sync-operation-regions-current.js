@@ -60,8 +60,16 @@ function activeRow(name, region, rows) {
   return { row, service: s, revision: r };
 }
 function probe(url) {
-  const result = cp.spawnSync('curl', ['-sS', '--max-time', '20', '-H', 'content-type: application/json', '-d', '{"data":{"probe":true}}', '-o', '/dev/null', '-w', '%{http_code}', url], { cwd: root, encoding: 'utf8' });
-  if (result.status !== 0 || !['401', '403'].includes(result.stdout.trim())) throw new Error(`sonda sem Auth divergente: ${url} ${result.stdout.trim()}`);
+  let result;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    result = cp.spawnSync('curl', ['-sS', '--max-time', '20', '-H', 'content-type: application/json', '-d', '{"data":{"probe":true}}', '-o', '/dev/null', '-w', '%{http_code}', url], { cwd: root, encoding: 'utf8' });
+    if (result.status === 0 && ['401', '403'].includes(result.stdout.trim())) return;
+    // Cloud Run pode dar 000 por instantes após mudar o tráfego. Não aceitar
+    // 5xx/200 nem repetir respostas HTTP válidas fora do contrato de Auth.
+    if (result.status === 0 && result.stdout.trim() !== '000') break;
+    if (attempt < 2) cp.spawnSync('sleep', ['2']);
+  }
+  throw new Error(`sonda sem Auth divergente: ${url} ${result?.stdout?.trim() || 'sem resposta'}`);
 }
 function validateManifest(version, rows) {
   const expected = policy.flatMap(p => regions[version].map(region => `sp-op-${p.short}-${version}/${region}`));
