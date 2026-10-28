@@ -34,7 +34,7 @@ const resultsBefore = resultSnapshot();
 const html = W._renderPhase0ReadOnly(t, false);
 assert.match(html, /data-group-box/, 'fase histórica mostra grupos');
 assert.match(html, /card-/, 'fase histórica mostra jogos e resultados');
-assert.match(html, /Classificação do grupo/, 'fase histórica mostra classificação');
+assert.match(html, /<th[^>]*>Pts<\/th>/, 'fase histórica mostra pontos na tabela de cada grupo');
 assert.equal(JSON.stringify({ rounds: t.rounds, matches: t.matches, groups: t.groups }), before,
   'consultar fase histórica não reescreve resultados ou confrontos');
 assert.equal(t.currentPhaseIndex, 1, 'fase atual não muda');
@@ -46,7 +46,7 @@ W._phasePrevOpen[t.id] = true;
 W.renderBracket(container, t.id, false);
 assert.match(container.innerHTML, /class="bracket-previous-phase-button" aria-expanded="true"/, 'fase aberta preserva estado após re-render');
 assert.match(container.innerHTML, /data-group-box/, 'fase anterior aberta mostra grupos na tela real');
-assert.match(container.innerHTML, /Classificação do grupo/, 'fase anterior aberta mostra resultados e classificação na tela real');
+assert.match(container.innerHTML, /<th[^>]*>Pts<\/th>/, 'fase anterior aberta mostra pontos e classificação na tela real');
 assert.match(container.innerHTML, /card-elim-1/, 'fase atual permanece visível ao lado da histórica');
 assert.equal(resultSnapshot(), resultsBefore,
   'alternar e re-renderizar as fases não modifica confrontos ou resultados');

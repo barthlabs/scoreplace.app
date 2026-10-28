@@ -7180,10 +7180,120 @@ window._renderPhaseBracket = _renderPhaseBracket;
 // "Mostrar ocultas") liga/desliga a exibição read-only das fases encerradas ACIMA da
 // atual — nunca troca a visão nem esconde a fase atual. Estado por torneio + re-render.
 if (!window._phasePrevOpen) window._phasePrevOpen = {};
+var _historicalMonarchGroups = {};
 window._togglePhasePrev = function (tId) {
   window._phasePrevOpen[tId] = !window._phasePrevOpen[tId];
+  if (!window._phasePrevOpen[tId]) delete _historicalMonarchGroups[tId];
   if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tId);
 };
+window._retryHistoricalMonarchGroups = function (tId) {
+  delete _historicalMonarchGroups[tId];
+  if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tId);
+};
+function _historicalMonarchMessage(t, failed) {
+  var tr = window._t || function (key) { return key; };
+  var message = tr(failed ? 'bracket.historicalGroupsError' : 'bracket.historicalGroupsLoading');
+  var button = '';
+  if (failed) {
+    var id = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    button = '<button type="button" class="btn btn-secondary" onclick="window._retryHistoricalMonarchGroups(\'' + id + '\')">' +
+      window._safeHtml(tr('bracket.historicalGroupsRetry')) + '</button>';
+  }
+  return '<div style="padding:1rem;color:var(--text-muted);">' + window._safeHtml(message) + button + '</div>';
+}
+function _historicalMonarchGames(t) {
+  var byId = {}, ids = [];
+  function add(m) {
+    if (!m || m.id == null || m.id === '') return;
+    var id = String(m.id);
+    if (byId[id]) return;
+    byId[id] = m;
+    ids.push(id);
+  }
+  (t.rounds || []).forEach(function (rd) { (rd && rd.matches || []).forEach(function (m) {
+    if (m && Number(m.phaseIndex || 0) === 0) add(m);
+  }); });
+  (t.matches || []).forEach(function (m) { if (m && Number(m.phaseIndex || 0) === 0) add(m); });
+  ids.sort();
+  return { byId: byId, ids: ids };
+}
+function _historicalMonarchRender(t, docs) {
+  var rounds = (t.rounds || []).map(function (rd) {
+    return Object.assign({}, rd, { matches: (rd && rd.matches || []).map(function (m) { return Object.assign({}, m); }), monarchGroups: [] });
+  });
+  if (!rounds.length) return null;
+  var copied = Object.assign({}, t, { currentPhaseIndex: 0, rounds: rounds, groups: [],
+    matches: (t.matches || []).map(function (m) { return Object.assign({}, m); }) });
+  var phaseGames = _historicalMonarchGames(t);
+  var flat = {}, first = rounds[0];
+  (first.matches || []).forEach(function (m) { if (m && m.id != null) flat[String(m.id)] = m; });
+  phaseGames.ids.forEach(function (id) {
+    if (!flat[id]) { var m = Object.assign({}, phaseGames.byId[id]); first.matches.push(m); flat[id] = m; }
+  });
+  var slots = {};
+  for (var i = 0; i < docs.length; i++) {
+    var doc = docs[i] || {}, loc = doc._loc || {}, group = doc.grupo;
+    var ri = Number(loc.ri), gi = Number(loc.gi);
+    if (!group || !Number.isInteger(ri) || !Number.isInteger(gi) || ri < 0 || gi < 0 || !rounds[ri]) return null;
+    var groupIds = Array.isArray(group.matchIds) ? group.matchIds :
+      (Array.isArray(group.matches) ? group.matches.map(function (m) { return m && m.id; }) : []);
+    if (!groupIds.length) return null;
+    var seen = {};
+    for (var j = 0; j < groupIds.length; j++) {
+      var mid = String(groupIds[j]);
+      if (seen[mid] || !phaseGames.byId[mid]) return null;
+      seen[mid] = true;
+    }
+    var key = ri + ':' + gi;
+    if (slots[key]) return null;
+    slots[key] = true;
+    var clone = Object.assign({}, group);
+    if (Array.isArray(group.matchIds)) clone.matchIds = group.matchIds.slice();
+    if (Array.isArray(group.matches)) clone.matches = group.matches.map(function (m) { return Object.assign({}, m); });
+    rounds[ri].monarchGroups[gi] = clone;
+  }
+  if (typeof window._hydrateMonarchGroups === 'function') window._hydrateMonarchGroups(copied);
+  return _renderMonarchStage(copied, false, false, { suppressAutoAdvance: true, showHistoricalFullStandings: true });
+}
+function _historicalMonarchRead(t) {
+  var id = String(t.id || ''), count = Number((t._nPartes && t._nPartes.grupos) || t._nGrupos || 0);
+  var games = _historicalMonarchGames(t);
+  var phaseKey = JSON.stringify((t.phases || [])[0] || {}) + '|' + count + '|' + games.ids.join('|');
+  var state = _historicalMonarchGroups[id];
+  if (state && state.key !== phaseKey) { delete _historicalMonarchGroups[id]; state = null; }
+  if (t._faltamPesados && Array.isArray(t._faltaOQue) && t._faltaOQue.indexOf('matches') !== -1) {
+    return _historicalMonarchMessage(t, !!(window.AppStore && window.AppStore._partesEmErro && window.AppStore._partesEmErro[id]));
+  }
+  if (state && state.status === 'pending') return _historicalMonarchMessage(t, false);
+  if (state && state.status === 'error') return _historicalMonarchMessage(t, true);
+  if (state && state.status === 'ready') {
+    var rendered = _historicalMonarchRender(t, state.docs);
+    if (rendered) return rendered;
+    state.status = 'error';
+    return _historicalMonarchMessage(t, true);
+  }
+  state = { key: phaseKey, status: 'pending', docs: null };
+  _historicalMonarchGroups[id] = state;
+  var collection = window._tSplit && window._tSplit.colecaoDaParte('grupos');
+  var db = window.FirestoreDB;
+  if (!collection || !db || typeof db._tSub !== 'function') {
+    state.status = 'error';
+    return _historicalMonarchMessage(t, true);
+  }
+  db._tSub(id, collection).get({ source: 'server' }).then(function (snap) {
+    if (_historicalMonarchGroups[id] !== state) return;
+    var docs = [];
+    snap.forEach(function (d) { docs.push(d.data()); });
+    state.docs = docs;
+    state.status = docs.length === count ? 'ready' : 'error';
+    if (typeof window._rerenderBracket === 'function') window._rerenderBracket(id);
+  }).catch(function () {
+    if (_historicalMonarchGroups[id] !== state) return;
+    state.status = 'error';
+    if (typeof window._rerenderBracket === 'function') window._rerenderBracket(id);
+  });
+  return _historicalMonarchMessage(t, false);
+}
 // Renderiza a FASE 0 histórica (Pontos Corridos / Grupos / Rei-Rainha) somente
 // para consulta. Os renderers são orientados à fase ATUAL (via currentPhaseIndex), então
 // montamos um FAUX com currentPhaseIndex=0 pra eles surfarem a Fase 0. Usado pela
@@ -7191,6 +7301,23 @@ window._togglePhasePrev = function (tId) {
 window._renderPhase0ReadOnly = function (t) {
   if (!t) return '';
   var f0 = Object.assign({}, t, { currentPhaseIndex: 0 });
+  var phase0 = Array.isArray(t.phases) ? t.phases[0] : null;
+  var monarch = !!(phase0 && window._phasesEngine && window._phasesEngine.phaseIsMonarch &&
+    window._phasesEngine.phaseIsMonarch(phase0));
+  if (monarch) {
+    var inline = (t.rounds || []).reduce(function (n, rd) { return n + ((rd && rd.monarchGroups && rd.monarchGroups.length) || 0); }, 0);
+    var promised = Number((t._nPartes && t._nPartes.grupos) || t._nGrupos || 0);
+    if (promised > inline) return _historicalMonarchRead(t);
+    if (inline) {
+      var docs = [];
+      (t.rounds || []).forEach(function (rd, ri) { (rd && rd.monarchGroups || []).forEach(function (g, gi) {
+        docs.push({ _loc: { ri: ri, gi: gi }, grupo: g });
+      }); });
+      var rendered = _historicalMonarchRender(t, docs);
+      return rendered || _historicalMonarchMessage(t, true);
+    }
+    return _historicalMonarchMessage(t, true);
+  }
   // Use a MESMA porta que desenhava a fase 1 antes do avanço. Para jogos
   // canônicos em t.matches ela é _renderPhaseBracket; para rodadas antigas
   // de Pontos Corridos/Rei-Rainha ela é renderStandings. O antigo atalho
@@ -9546,7 +9673,8 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
         if (_ehMon(t.phases[_pi])) { _idxFaseMon = _pi; break; }
       }
     }
-    var _compacta = ((t._phaseMaterialized || 0) > _idxFaseMon) || ((t.currentPhaseIndex || 0) > _idxFaseMon);
+    var _compacta = !(opts && opts.showHistoricalFullStandings) &&
+      (((t._phaseMaterialized || 0) > _idxFaseMon) || ((t.currentPhaseIndex || 0) > _idxFaseMon));
     var standingsRows = standings.map(function(s, i) {
       var diff = s.pointsFor - s.pointsAgainst;
       var setDiff = s.setsWon - s.setsLost;

@@ -567,6 +567,7 @@ const SUITES = [
   'tests/congelada-manda-no-avanco.test.js',
   'tests/classificacao-anterior-fica-compacta.test.js',
   'tests/fase-anterior-grupos-e-resultados.test.js',
+  'tests/fase-historica-grupos-externos.test.js',
   'tests/cabecalho-e-busca-fixos-no-celular.test.js',
   'tests/hidratacao-nao-congela-no-primeiro-quadro.test.js',
   'tests/resultados-espelhados-hidratam-telas.test.js',
