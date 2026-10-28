@@ -28,7 +28,7 @@ function scenario(options) {
 const cold = scenario();
 assert.strictEqual(cold.calls.length, 1);
 assert.strictEqual(cold.calls[0].fresh, true);
-assert(cold.container.innerHTML.includes('Carregando inscritos'));
+assert(cold.container.innerHTML.includes('Carregando…'));
 cold.calls[0].cb({ id: 'neon' });
 assert.strictEqual(cold.calls[1], 'render', 'sucesso frio só pinta após carregar');
 const failed = scenario();
