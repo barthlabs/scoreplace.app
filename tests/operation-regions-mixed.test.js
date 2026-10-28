@@ -40,7 +40,8 @@ for (const version of ['v2', 'v3']) {
   };
   test(`${version}: corte antigo e atualização só da quadra`, { skip: skipReason }, () => {
     const original = baselineRows(version);
-    assert.equal(run(original).status, 0, 'revisões regionais registradas continuam válidas após novos commits');
+    assert.equal(run(original, true).status, 0,
+      'manifesto histórico íntegro é válido somente na verificação que permite legado');
     const legacy = structuredClone(original);
     const legacyCommit = legacy.find(row => row.name === `sp-op-court-${version}`).commit;
     const legacyDigest = execFileSync('node', ['scripts/operation-source-digest.js', 'functions-autodraw',

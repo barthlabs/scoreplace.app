@@ -10,6 +10,8 @@ const version = process.argv[2];
 if (!['v2', 'v3'].includes(version)) throw new Error('uso: check-operation-regions-mixed.js v2|v3');
 const allowLegacyCourt = process.argv.includes('--allow-legacy-court');
 const requireCurrent = process.argv.includes('--require-current');
+// SHA fixado para este corte; no próximo release regional, atualizar junto com
+// sync-operation-regions-current.js e os manifestos, antes de abrir o Hosting.
 const releaseCommit = '40be907dfc593db2eb4de1d6ed9783493b301787';
 const regions = version === 'v2'
   ? ['us-east1', 'us-east4', 'us-south1']

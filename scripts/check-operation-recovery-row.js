@@ -4,6 +4,9 @@ const fs = require('node:fs');
 const { servedRevisionName } = require('./check-served-operation-revision');
 
 function checkRecovery(service, source, gate, name, regionalName) {
+  // A recovery é uma porta alternativa da MESMA operação. Mesmo para placar,
+  // imagem antiga não é aceita após a porta regional ter mudado: o gate só abre
+  // quando a imagem regional nova também está servida pela recovery.
   const expected = source.filter(row => row.name === regionalName && row.region === 'us-east1');
   const saved = gate.recovery?.filter(row => row.name === name);
   if (expected.length !== 1 || saved?.length !== 1) throw new Error('recovery ausente ou duplicada');
