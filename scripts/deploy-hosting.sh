@@ -583,9 +583,10 @@ verificar_contingencia_regional() {
     echo "✗ configuração v3 ausente ou divergente do commit — abortando."
     return 1
   fi
-  # As portas regionais existentes permanecem nos digests dos manifestos e
-  # são verificadas ao vivo. Pular e Cancelar usam a callable central já
-  # publicada; não atualizar end-court v2/v3 neste corte.
+  # O corte 2.5.69 só pode ir ao ar com as seis portas de ambas as malhas
+  # no mesmo commit de backend, além das revisões servidas verificadas abaixo.
+  node scripts/check-operation-regions-mixed.js v2 --require-current || return 1
+  node scripts/check-operation-regions-mixed.js v3 --require-current || return 1
   scripts/deploy-operation-regions.sh --check-v2-live || return 1
   scripts/deploy-operation-regions.sh --check-v3 || return 1
   scripts/deploy-operation-regions.sh --check-legacy-gate-live || return 1

@@ -9,6 +9,8 @@ const root = path.join(__dirname, '..');
 const version = process.argv[2];
 if (!['v2', 'v3'].includes(version)) throw new Error('uso: check-operation-regions-mixed.js v2|v3');
 const allowLegacyCourt = process.argv.includes('--allow-legacy-court');
+const requireCurrent = process.argv.includes('--require-current');
+const releaseCommit = '40be907dfc593db2eb4de1d6ed9783493b301787';
 const regions = version === 'v2'
   ? ['us-east1', 'us-east4', 'us-south1']
   : ['us-east1', 'us-east4', 'us-south1', 'us-central1', 'southamerica-east1'];
@@ -23,12 +25,13 @@ if (rows.length !== regions.length * names.length) throw new Error('manifesto re
 const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root }).toString().trim();
 const isRecordedAncestor = commit => /^[a-f0-9]{40}$/.test(commit) &&
   spawnSync('git', ['merge-base', '--is-ancestor', commit, head], { cwd: root }).status === 0;
-// As portas de placar e encerramento podem ser atualizadas separadamente.
-// A base antiga é definida pelas outras quatro portas, que continuam imóveis.
-const independentlyUpdated = new Set([`sp-op-score-${version}`, `sp-op-end-court-${version}`]);
-const legacy = [...new Set(rows.filter(row => !independentlyUpdated.has(row.name)).map(row => row.commit))];
-if (legacy.length !== 1 || !isRecordedAncestor(legacy[0])) throw new Error('commit legado divergente');
-let mixed = false;
+const expectedKeys = new Set(names.flatMap(name => regions.map(region => `${name}/${region}`)));
+if (rows.some(row => !expectedKeys.has(`${row.name}/${row.region}`)) ||
+    new Set(rows.map(row => `${row.name}/${row.region}`)).size !== expectedKeys.size) {
+  throw new Error('porta regional inesperada ou duplicada');
+}
+const baseline = rows.find(row => row.name === `sp-op-court-${version}`)?.commit;
+if (!isRecordedAncestor(baseline)) throw new Error('commit de origem inválido');
 const oldSources = new Map();
 for (let i = 0; i < names.length; i++) {
   const selected = regions.map(region => rows.filter(row => row.name === names[i] && row.region === region));
@@ -41,19 +44,19 @@ for (let i = 0; i < names.length; i++) {
     if (new Set(service.map(row => row[field])).size !== 1) throw new Error(field + ' divergente: ' + names[i]);
   }
   const commit = service[0].commit;
-  if (independentlyUpdated.has(names[i]) && commit !== legacy[0]) {
-    if (!isRecordedAncestor(commit)) throw new Error('commit da porta atualizada não pertence ao histórico publicado: ' + names[i]);
-    mixed = true;
-  } else if (commit !== legacy[0]) throw new Error('outra porta mudou de commit: ' + names[i]);
-  if (commit === legacy[0]) {
-    if (!oldSources.has(codebases[i])) oldSources.set(codebases[i], sourceDescriptor(codebases[i], legacy[0], true));
-    const oldDigest = sourceDigest(targets[i], legacy[0], oldSources.get(codebases[i]));
-    if (service[0].sourceDigest !== oldDigest) throw new Error('digest legado divergente: ' + names[i]);
-  } else {
-    const digest = sourceDigest(targets[i], commit, sourceDescriptor(codebases[i], commit, true));
-    if (service[0].sourceDigest !== digest) throw new Error('digest da porta atualizada divergente: ' + names[i]);
-  }
+  if (!isRecordedAncestor(commit)) throw new Error('commit da porta não pertence ao histórico publicado: ' + names[i]);
+  const cacheKey = `${codebases[i]}:${commit}`;
+  if (!oldSources.has(cacheKey)) oldSources.set(cacheKey, sourceDescriptor(codebases[i], commit, true));
+  const expectedDigest = sourceDigest(targets[i], commit, oldSources.get(cacheKey));
+  if (service[0].sourceDigest !== expectedDigest) throw new Error('digest da porta divergente: ' + names[i]);
 }
-if (!mixed && !allowLegacyCourt) throw new Error('nenhuma porta direcionada usa o commit atual');
-process.stdout.write(JSON.stringify({ version, legacyCommit: legacy[0], courtCommit: rows.find(row => row.name === `sp-op-end-court-${version}`).commit,
+const mixed = new Set(rows.map(row => row.commit)).size > 1;
+const uniformCurrent = rows.every(row => row.commit === releaseCommit);
+const directed = [`sp-op-score-${version}`, `sp-op-end-court-${version}`].some(name =>
+  rows.find(row => row.name === name)?.commit !== baseline);
+if (requireCurrent && !uniformCurrent) throw new Error('malha regional não usa o commit integral do corte');
+if (!allowLegacyCourt && !requireCurrent && !uniformCurrent && !directed) {
+  throw new Error('nenhuma porta direcionada usa o código atual');
+}
+process.stdout.write(JSON.stringify({ version, legacyCommit: baseline, courtCommit: rows.find(row => row.name === `sp-op-end-court-${version}`).commit,
   mixed, rows: rows.length }) + '\n');

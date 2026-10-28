@@ -178,18 +178,7 @@ const m=JSON.parse(require('fs').readFileSync(process.env.SP_GATE_MANIFEST));if(
 NODE
 for i in "${!recovery[@]}"; do
   json="$(describe_run "${recovery[$i]}")"
-  SP_JSON="$json" SP_NAME="${recovery[$i]}" SP_REGIONAL="${regional[$i]}" SP_SOURCE_MANIFEST="$source_manifest" SP_GATE_MANIFEST="$gate_manifest" node - <<'NODE'
-const fs=require('fs'),s=JSON.parse(process.env.SP_JSON),src=JSON.parse(fs.readFileSync(process.env.SP_SOURCE_MANIFEST)),gate=JSON.parse(fs.readFileSync(process.env.SP_GATE_MANIFEST));
-const expected=src.find(x=>x.name===process.env.SP_REGIONAL&&x.region==='us-east1');
-const saved=gate.recovery.find(x=>x.name===process.env.SP_NAME);
-const image=s.spec?.template?.spec?.containers?.[0]?.image;
-// A recuperação preserva sua imagem já verificada mesmo quando o placar
-// regional é atualizado sozinho; as demais portas continuam espelhadas.
-if(!expected||!saved||image!==saved.image||
-  (process.env.SP_REGIONAL!=='sp-op-score-v2'&&image!==expected.image)||
-  s.status?.url!==saved.url||s.spec?.template?.metadata?.annotations?.['run.googleapis.com/base-images'])process.exit(1);
-if(s.status?.latestReadyRevisionName!==saved.revision){console.error('revisão da recuperação divergente');process.exit(1);}
-NODE
+  SP_JSON="$json" SP_NAME="${recovery[$i]}" SP_REGIONAL="${regional[$i]}" SP_SOURCE_MANIFEST="$source_manifest" SP_GATE_MANIFEST="$gate_manifest" node scripts/check-operation-recovery-row.js
   url="$(SP_JSON="$json" node -e 'process.stdout.write(JSON.parse(process.env.SP_JSON).status.url)')"
   probe_no_auth "$url"
   echo "✓ trava recovery ${recovery[$i]}"

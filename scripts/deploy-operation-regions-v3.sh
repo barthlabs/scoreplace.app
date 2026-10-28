@@ -64,8 +64,11 @@ NODE
 if [[ "$mode" == --check-v2-live ]]; then
   [[ -s "$oldmanifest" ]] || { echo 'manifesto v2 ausente' >&2; exit 1; }
   node scripts/check-operation-regions-mixed.js v2 --allow-legacy-court
-  oldcommit="$(node -e 'const m=require("./.claude/tmp/operation-regions-manifest-v2.json");process.stdout.write(m.find(x=>x.name!=="sp-op-end-court-v2").commit)')"
-  git show "$oldcommit:functions-autodraw/index.js" | rg "new Set\(\['us-east1', 'us-east4', 'us-south1'\]\)" >/dev/null || { echo 'v2 não possui Set histórico esperado' >&2; exit 1; }
+  courtcommit="$(node -e 'const m=require("./.claude/tmp/operation-regions-manifest-v2.json");process.stdout.write(m.find(x=>x.name==="sp-op-court-v2").commit)')"
+  court_source="$(git show "$courtcommit:functions-autodraw/index.js")"
+  for required_region in us-east1 us-east4 us-south1; do
+    [[ "$court_source" == *"'$required_region'"* ]] || { echo "v2 não aceita $required_region" >&2; exit 1; }
+  done
   for i in "${!names[@]}"; do
     name="${names[$i]/-v3/-v2}"; target="${targets[$i]}"; codebase="${codebases[$i]}"; image=''
     for region in "${regions[@]:0:3}"; do

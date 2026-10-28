@@ -1322,6 +1322,11 @@ const SUITES = [
   'tests/chamada-quadra-sandbox.test.js',
   'tests/postpone-next-match.test.js',
   'tests/operation-regions-mixed.test.js',
+  'tests/operation-regional-sync.test.js',
+  'tests/operation-recovery-gate.test.js',
+  'tests/operation-gate-sync.test.js',
+  'tests/operation-gate-check-live.test.js',
+  'tests/verify-function-source.test.js',
   'tests/next-match-available.test.js',
   'tests/placar-sandbox-isolado.test.js',
   'tests/publicar-sorteio-nao-sobrescreve-resultado.test.js',
@@ -2332,6 +2337,8 @@ const { spawn, execFileSync } = require('child_process');
 /* (1a) MEXEM EM ARQUIVO DO REPO — corrompem de propósito e restauram. Quem ler o mesmo
  *      arquivo ao mesmo tempo falha ao acaso. Cada linha diz o que ela corrompe. */
 const MEXEM_NO_REPO = [
+  'tests/operation-regional-sync.test.js',            // cria binários e estado falsos em tmp; runner detecta writeFileSync
+  'tests/operation-gate-check-live.test.js',           // cria binários e candidato falsos em tmp
   'tests/build-www-deterministico.test.js',           // cria/remova o manifesto regional de fixture
   'tests/ext-version-single-source.test.js',            // reescreve js/store.js e extension/content.js
   'tests/trava-de-cache-buster-nao-fica-vazia.test.js', // reescreve index.html

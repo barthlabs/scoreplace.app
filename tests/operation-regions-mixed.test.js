@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { execFileSync, spawnSync } = require('node:child_process');
+const { sourceDescriptor, sourceDigest } = require('../scripts/operation-source-digest');
 const root = path.join(__dirname, '..');
 const script = path.join(root, 'scripts/check-operation-regions-mixed.js');
 const gitRepo = spawnSync('git', ['rev-parse', '--is-inside-work-tree'], { cwd: root, encoding: 'utf8' });
@@ -25,11 +26,11 @@ const scoreDigest = skipReason ? '' : execFileSync('node',
   { cwd: root }).toString().trim();
 
 for (const version of ['v2', 'v3']) {
-  const run = (rows, allowLegacyCourt = false, extraEnv = {}) => {
+  const run = (rows, allowLegacyCourt = false, extraEnv = {}, requireCurrent = false) => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-region-test-'));
     const file = path.join(dir, 'manifest.json');
     fs.writeFileSync(file, JSON.stringify(rows));
-    try { return spawnSync('node', [script, version, ...(allowLegacyCourt ? ['--allow-legacy-court'] : [])],
+    try { return spawnSync('node', [script, version, ...(allowLegacyCourt ? ['--allow-legacy-court'] : []), ...(requireCurrent ? ['--require-current'] : [])],
       { cwd: root, env: { ...process.env, ...extraEnv, SP_REGION_MANIFEST: file }, encoding: 'utf8' }); }
     finally { fs.rmSync(dir, { recursive: true, force: true }); }
   };
@@ -52,6 +53,7 @@ for (const version of ['v2', 'v3']) {
     }
     assert.equal(run(legacy, true).status, 0);
     assert.notEqual(run(legacy).status, 0, 'Hosting barra quadra antiga');
+    assert.notEqual(run(legacy, false, {}, true).status, 0, 'release barra qualquer fonte antiga');
     const mixed = structuredClone(legacy);
     for (const row of mixed.filter(row => row.name === `sp-op-end-court-${version}`)) {
       row.commit = current;
@@ -100,5 +102,22 @@ for (const version of ['v2', 'v3']) {
     const differentImage = structuredClone(mixed);
     differentImage.find(row => row.name === `sp-op-end-court-${version}`).image = 'image@sha256:' + 'f'.repeat(64);
     assert.notEqual(run(differentImage).status, 0);
+  });
+  test(`${version}: seis portas alinhadas no código atual`, { skip: skipReason }, () => {
+    const original = JSON.parse(fs.readFileSync(path.join(root, `.claude/tmp/operation-regions-manifest-${version}.json`)));
+    const commit = execFileSync('git', ['rev-parse', '40be907df'], { cwd: root }).toString().trim();
+    const descriptors = new Map();
+    const aligned = original.map(row => {
+      if (!descriptors.has(row.codebase)) descriptors.set(row.codebase, sourceDescriptor(row.codebase, commit, true));
+      return { ...row, commit, sourceDigest: sourceDigest(row.target, commit, descriptors.get(row.codebase)) };
+    });
+    assert.equal(run(aligned).status, 0);
+    assert.equal(run(aligned, false, {}, true).status, 0, 'release exige as seis portas no commit atual');
+    const unexpected = structuredClone(aligned);
+    unexpected[0].region = 'europe-west1';
+    assert.notEqual(run(unexpected).status, 0);
+    const wrongDigest = structuredClone(aligned);
+    wrongDigest[0].sourceDigest = '0'.repeat(64);
+    assert.notEqual(run(wrongDigest).status, 0);
   });
 }

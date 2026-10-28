@@ -1,10 +1,9 @@
 {
   "schema": 1,
-  "backendCommit": "242c71837bd608dc9dae1634e64beddee7ab0660",
-  "scopeNote": "Neste corte, createTournament pode nascer sem categorias com elenco canônico vazio; setTournamentCategoryConfig e updateTournamentConfiguration sincronizam categorias antes do sorteio e bloqueiam partes de jogo existentes. Estas três callables do autodraw foram publicadas de forma direcionada. drawRound pertence ao corte anterior e conserva seu recibo histórico; este manifesto descreve somente o último commit que mudou o autodraw. O comando de deploy não invoca sorteio nem migração.",
+  "backendCommit": "3fb50a11a81a70ada749cabef44ef29d2b2a09b8",
+  "scopeNote": "Neste corte, drawRound usa a projeção canônica no sorteio inicial e advanceTournamentPhase valida e projeta as configurações antes de materializar a fase seguinte. A publicação dessas duas callables não invoca sorteio nem migração; as demais portas operacionais são verificadas separadamente pela trava regional.",
   "functions": [
-    "createTournament",
-    "setTournamentCategoryConfig",
-    "updateTournamentConfiguration"
+    "drawRound",
+    "advanceTournamentPhase"
   ]
 }
