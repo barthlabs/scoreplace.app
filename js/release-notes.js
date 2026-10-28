@@ -1,8 +1,10 @@
 // 2.5.72 — A organização pode definir data e preparar o grupo de WhatsApp de
-// jogos futuros ainda sem adversários, como finais e disputas de 3º lugar.
-// Jogadores só recebem essas ações quando entram no confronto. Os cards de
-// jogos usam menos espaço vertical, placares um pouco maiores e o tie-break
-// editável acompanha o tamanho e a posição do valor confirmado.
+// qualquer jogo futuro ainda sem adversários, incluindo finais e 3º lugar.
+// Jogadores só recebem essas ações quando entram no confronto. O servidor
+// recusa novos agendamentos e grupos de jogos iniciados ou com resultado pendente.
+// Os cards usam menos espaço vertical, placares um pouco maiores e o tie-break
+// editável acompanha o valor confirmado; em tela estreita, melhor de 3 mantém
+// o limite de fonte que preserva a largura disponível para os nomes.
 // Nenhum jogo, placar, sorteio ou classificação existente é regravado.
 // 2.5.71 — A abertura e a retentativa de torneios com elenco canônico voltam a
 // consultar o servidor quando falta a confirmação da leitura; a tela mostra só
