@@ -1,3 +1,4 @@
+// 2.5.70 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.69 — Fases históricas parcialmente convertidas passam a exibir grupos,
 // jogos, pontos e classificação pela configuração do torneio. O avanço recusa
 // configuração inválida sem criar chave parcial. Nenhum torneio, sorteio, jogo,
