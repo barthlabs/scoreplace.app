@@ -2,6 +2,9 @@
 // jogos, pontos e classificação pela configuração do torneio. O avanço recusa
 // configuração inválida sem criar chave parcial. Nenhum torneio, sorteio, jogo,
 // placar ou classificação já gravado é reescrito por esta publicação.
+// A verificação cobre a escolha de promoção preservada na fase histórica original.
+// O portão de publicação também preserva os manifestos regionais ao reverter uma
+// tentativa incompleta, sem mudar a configuração ou os dados de torneios.
 // 2.5.68 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.67 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.66 — Atualização consolidada de produção com as correções validadas desde a última publicação.
