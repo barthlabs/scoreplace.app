@@ -3186,8 +3186,14 @@ function _applyMyMatchesFilter() {
  * ⛔ NÃO TOCA NA IDENTIDADE DO GRUPO. `sg.name` e `data-group-label` seguem inteiros: são a
  * chave que casa o grupo entre a chave e a dashboard, e que a rolagem usa pra achar o box.
  * Aqui é só o texto desenhado. Sem "Grupo" no nome, devolve como veio. */
-window._grpRotuloCurto = function (nome) {
+window._grpRotuloCurto = function (nome, soLetraDoGrupo) {
   var n = String(nome == null ? '' : nome).trim();
+  // Rei/Rainha: a rodada está na seção, não na identidade visual do grupo.
+  // O nome completo continua intacto para busca, rolagem e persistência.
+  if (soLetraDoGrupo) {
+    var letra = n.match(/(?:^|\s)Grupo\s+([A-Z](?:\d+)?)$/i);
+    if (letra) return letra[1].toUpperCase();
+  }
   var m = n.match(/^(.+?)\s+Grupo\s+(\S+)$/i);
   return m ? (m[1] + ' (' + m[2] + ')') : n;
 };
@@ -9761,13 +9767,13 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     var _mineBadgeMon = _isMineMon
       ? '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(34,211,238,0.15);color:var(--sp-c-22d3ee,#22d3ee);font-weight:700;">SEU GRUPO</span>'
       : '';
-    html += '<div data-group-box="1"' + (_isMineMon ? ' data-my-group="1"' : '') + ' data-group-label="' + window._safeHtml(window._grpKey(sg.name)) + '" style="scroll-margin-top:var(--scroll-anchor,120px);background:var(--bg-card);border:1px solid var(--border-color);border-left:4px solid ' + window._spCor((groupDone ? '#4ade80' : (_isMineMon ? '#22d3ee' : '#fbbf24')), 'borda') + ';border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">' +
+    html += '<div data-group-box="1" data-monarch-group="1"' + (_isMineMon ? ' data-my-group="1"' : '') + ' data-group-label="' + window._safeHtml(window._grpKey(sg.name)) + '" style="scroll-margin-top:var(--scroll-anchor,120px);background:var(--bg-card);border:1px solid var(--border-color);border-left:4px solid ' + window._spCor((groupDone ? '#4ade80' : (_isMineMon ? '#22d3ee' : '#fbbf24')), 'borda') + ';border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">' +
       /* DUAS LINHAS, NÃO TRÊS: título curto em cima, selos embaixo, botões à direita.
        * Antes era tudo numa linha só, com `flex:1` no <h3>: os dois botões grandes
        * comiam a largura, o título quebrava em três linhas e ERA ELE que esticava a
        * altura dos botões. Agora o título e os selos vivem numa coluna própria
        * (`align-items:flex-start` no pai, pra os botões não esticarem junto), o nome
-       * vai curto (`R1 (C)`) e sem quebra, e o selo desce pra segunda linha inteiro —
+       * vai curto (`C`) e sem quebra, e o selo desce pra segunda linha inteiro —
        * fonte menor, `white-space:nowrap`, nunca truncado. */
       /* ⛔ ESPAÇO MORTO ENTRE OS BOTÕES E A CLASSIFICAÇÃO. Relato do dono (03/set/2026):
        * _"não precisa desse espaço vazio entre os botões e a classificação. pode ser bem
@@ -9776,7 +9782,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
        * classificação no cabeçalho sem colar. */
       '<div class="btn-row" style="display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:0.45rem;">' +
         '<div style="display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0;flex:1;">' +
-          '<h3 style="margin:0;font-size:1.1rem;line-height:1.15;white-space:nowrap;color:' + window._spCor((_isMineMon ? '#22d3ee' : 'var(--text-bright)'), 'color') + ';">' + window._safeHtml(window._grpRotuloCurto(sg.name)) + '</h3>' +
+          '<h3 style="margin:0;font-size:1.1rem;line-height:1.15;white-space:nowrap;color:' + window._spCor((_isMineMon ? '#22d3ee' : 'var(--text-bright)'), 'color') + ';">' + window._safeHtml(window._grpRotuloCurto(sg.name, true)) + '</h3>' +
           ((_mineBadgeMon || statusBadge) ? '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;white-space:nowrap;">' + _mineBadgeMon + (statusBadge || '') + '</div>' : '') +
         '</div>' +
         _schGrpBtn2 + _waGrpBtn2 + _grpArrived + _woCtrlM +
@@ -12390,7 +12396,8 @@ window._bracketApplyFilter = function (origin) {
   // "Jogador X" é uma vaga, não uma pessoa: encontrá-lo exige o retrato do grupo
   // inteiro. Para atletas reais, preserva o filtro cirúrgico (só os jogos daquela
   // pessoa), com a classificação estrutural já mantida pelos marcadores.
-  var showGhostGroupContext = !onlyMine && !onlyPending && /(^|\s)jogador(?:\s+x)?(?=\s|$)/.test(q);
+  var showWholeMonarchGroupContext = !onlyMine && !onlyPending && !!q;
+  var showGhostGroupContext = showWholeMonarchGroupContext && /(^|\s)jogador(?:\s+x)?(?=\s|$)/.test(q);
   var hitGroups = [];        // somente os grupos achados pela busca de Jogador X
   var markHit = function (el) {
     for (var p = el; p && p !== root && p !== document.body; p = p.parentElement) {
@@ -12523,10 +12530,11 @@ window._bracketApplyFilter = function (origin) {
     // de W.O.) não pode deixar só um card solto: a classificação e os jogos
     // rotativos daquele grupo explicam a vaga. Guarda o box mais próximo para
     // restaurar os irmãos abaixo, depois que todos os hits forem conhecidos.
-    if (hit && showGhostGroupContext) {
+    if (hit && showWholeMonarchGroupContext) {
       for (var gp = c.parentElement; gp && gp !== root && gp !== document.body; gp = gp.parentElement) {
         if (gp.getAttribute && gp.getAttribute('data-group-box') === '1') {
-          if (hitGroups.indexOf(gp) === -1) hitGroups.push(gp);
+          if ((showGhostGroupContext || gp.getAttribute('data-monarch-group') === '1') &&
+              hitGroups.indexOf(gp) === -1) hitGroups.push(gp);
           break;
         }
       }
@@ -12538,10 +12546,11 @@ window._bracketApplyFilter = function (origin) {
       else if (hit) contHasHit[ix] = true;
     }
   }
-  // Jogador X encontrado = retrato completo: não esconder os outros dois jogos
-  // por não conterem literalmente o rótulo da vaga. `data-fb-marker` continua
-  // declarativo e não recebe display próprio. Uma busca por atleta real não
-  // expande os irmãos; no modo "Só meus jogos", também não há expansão.
+  // Rei/Rainha é uma unidade de classificação: se a busca acha alguém do grupo,
+  // mostra os jogos e placares do grupo inteiro, mesmo os confrontos sem o nome
+  // digitado. A mesma regra já valia para a vaga "Jogador X"; em grupos genéricos
+  // o filtro por atleta continua restrito ao jogo encontrado. `data-fb-marker`
+  // permanece declarativo; "Só meus jogos" e "Jogos pendentes" não expandem.
   /* UM pedido, em LOTE, para todos os indecisos desta passada — e a MESMA consulta se
    * reaplica quando os perfis chegam, RELENDO o input (o `q` daqui já pode estar velho).
    * ⛔ Marcar ANTES de pedir: reentrada durante o voo não repete o pedido. */
@@ -12565,6 +12574,7 @@ window._bracketApplyFilter = function (origin) {
     for (var hs = 0; hs < siblings.length; hs++) {
       if (siblings[hs].getAttribute && siblings[hs].getAttribute('data-fb-marker') === '1') continue;
       setDisp(siblings[hs], true);
+      markHit(siblings[hs].parentElement);
     }
   }
   // Container sem NENHUM card casando some inteiro (grid, coluna de rodada, box de grupo,

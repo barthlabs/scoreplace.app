@@ -57,8 +57,18 @@ async function main() {
     assert.equal(rerenders, 1, 'resposta aciona re-render');
     const html = W._renderPhase0ReadOnly(t);
     assert.match(html, /data-group-box/, 'exibe grupos reais');
+    assert.match(html, /data-monarch-group="1"/, 'grupo Rei\/Rainha identificado para a busca');
+    assert.equal(W._grpRotuloCurto('R1 Grupo A2', true), 'A2', 'após Z o grupo usa letra e número');
+    assert.equal(W._grpRotuloCurto('R1 Grupo A'), 'R1 (A)', 'outro chamador mantém o rótulo antigo');
+    assert.match(html, /<h3[^>]*>A<\/h3>/, 'grupo Rei\/Rainha mostra só a letra, sem R1');
     assert.match(html, /<th[^>]*>Pts<\/th>/, 'exibe pontos na tabela do grupo');
-    assert.match(html, /card-/, 'exibe jogos');
+    for (const doc of docs) {
+      for (const id of doc.grupo.matchIds) {
+        assert.ok(html.includes('id="card-' + id + '"'), 'jogo ' + id + ' aparece com duplas e placar');
+      }
+    }
+    assert.match(html, /data-players="[^"]*J1 \/ J2[^"]*J3 \/ J4/, 'os dois lados da dupla seguem no confronto');
+    assert.match(html, />6<\/[^>]+>/, 'placar gravado é mostrado no card histórico');
     const firstRanked = docs[0].grupo.classifCongelada[0].name;
     const firstTable = html.match(/<tbody>([\s\S]*?)<\/tbody>/);
     assert.ok(firstTable && firstTable[1].includes(firstRanked), 'tabela usa o retrato de classificação guardado');

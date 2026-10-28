@@ -62,8 +62,15 @@ const cardOutro = mkEl({ 'data-players': 'Bruno | Carla' }, gridF);
 const boxG = mkEl({ 'data-group-box': '1' }, root);           // outro grupo, sem a Lucia
 const gridG = mkEl({}, boxG);
 const cardG = mkEl({ 'data-players': 'Dinho | Elza' }, gridG);
+// Rei/Rainha: o resultado da busca é o grupo inteiro, inclusive o confronto
+// em que o nome consultado não aparece literalmente no card.
+const boxMonarch = mkEl({ 'data-group-box': '1', 'data-monarch-group': '1' }, root);
+const gridMonarch = mkEl({}, boxMonarch);
+const mon1 = mkEl({ 'data-players': 'Rodrigo | Ana', 'data-match-num': '1' }, gridMonarch);
+const mon2 = mkEl({ 'data-players': 'Rodrigo | Bia', 'data-match-num': '2' }, gridMonarch);
+const mon3 = mkEl({ 'data-players': 'Ana | Bia', 'data-match-num': '3' }, gridMonarch);
 
-const cards = [trWo, cardLucia, cardOutro, cardG];
+const cards = [trWo, cardLucia, cardOutro, cardG, mon1, mon2, mon3];
 const empty = { style: {} }, input = { value: '' };
 const sandbox = { window: null, console, document: {
   getElementById: (id) => id === 'bracket-search' ? input
@@ -81,6 +88,12 @@ ok(vis(cardLucia) && !vis(cardOutro), '  → só o jogo dela');
 ok(vis(classif), '  → E A CLASSIFICAÇÃO DO GRUPO APARECE  ← era o bug');
 ok(vis(trWo), '  → com a linha do W.O. no lugar (tabela sem buraco na numeração)');
 ok(!vis(boxG), '  → o grupo sem ela continua sumindo');
+ok(!vis(boxMonarch), '  → grupo Rei/Rainha sem ela também some');
+
+input.value = 'rodrigo'; F();
+ok(vis(boxMonarch), 'busca por atleta real acha o grupo Rei/Rainha');
+ok(vis(mon1) && vis(mon2) && vis(mon3), '  → seus três confrontos e placares permanecem visíveis');
+ok(!vis(boxF) && !vis(boxG), '  → grupos sem o atleta ficam ocultos');
 
 input.value = 'nina'; F();
 ok(vis(boxF) && vis(classif), 'busca "nina" (quem tomou W.O.): ainda acha o grupo dela');
@@ -88,11 +101,11 @@ ok(!vis(cardLucia) && !vis(cardOutro), '  → sem jogos casando, os cards somem'
 ok(empty.style.display === 'none', '  → e NÃO diz "nenhum resultado" (achou o grupo)');
 
 input.value = 'zzz'; F();
-ok(!vis(boxF) && !vis(boxG), 'busca sem ninguém: os dois boxes somem');
+ok(!vis(boxF) && !vis(boxG) && !vis(boxMonarch), 'busca sem ninguém: todos os boxes somem');
 ok(empty.style.display === 'block', '  → e o "nenhum resultado" aparece');
 
 input.value = ''; F();
-ok(vis(boxF) && vis(boxG) && vis(classif) && vis(cardLucia) && vis(cardOutro) && vis(cardG),
+ok(vis(boxF) && vis(boxG) && vis(boxMonarch) && vis(classif) && vis(cardLucia) && vis(cardOutro) && vis(cardG) && vis(mon1) && vis(mon2) && vis(mon3),
   'busca limpa: tudo volta');
 
 console.log(fail === 0
