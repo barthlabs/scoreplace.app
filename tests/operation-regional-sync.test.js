@@ -53,7 +53,9 @@ test('prévia offline verifica as 48 portas e falha com imagem divergente', { sk
     fs.writeFileSync(file, `#!/usr/bin/env node\n${body}\n`);
     fs.chmodSync(file, 0o755);
   };
-  fake('git', `const c=require('node:child_process');const a=process.argv.slice(2);if(a[0]==='status'&&a[1]==='--porcelain')process.exit(0);const r=c.spawnSync('/usr/bin/git',a,{stdio:'inherit'});process.exit(r.status??1);`);
+  // A prova regional usa uma fonte congelada; mudanças posteriores em outra callable
+  // não fazem parte da fixture. O controle de fonte é testado no fluxo real.
+  fake('git', `const c=require('node:child_process');const a=process.argv.slice(2);if(a[0]==='status'&&a[1]==='--porcelain')process.exit(0);if(a[0]==='diff'&&a[1]==='--quiet')process.exit(0);const r=c.spawnSync('/usr/bin/git',a,{stdio:'inherit'});process.exit(r.status??1);`);
   fake('curl', `process.stdout.write('401');`);
   fake('gcloud', `const fs=require('node:fs'),path=require('node:path');const a=process.argv.slice(2),name=a[3],ri=a.indexOf('--region'),region=a[ri+1],rows=['v2','v3'].flatMap(v=>JSON.parse(fs.readFileSync(path.join(process.env.SP_REGIONAL_MANIFEST_DIR,'operation-regions-manifest-'+v+'.json')))),row=rows.find(x=>x.region===region&&(a[1]==='services'?x.name===name:x.revision===name));if(!row)process.exit(2);const bad=process.env.SP_FAKE_BAD===row.name+'/'+region;let value;if(a[1]==='services'){value={status:{url:row.url,latestReadyRevisionName:row.revision,traffic:[{revisionName:row.revision,percent:100,latestRevision:true}]}};}else if(a[1]==='revisions'){value={metadata:{name:row.revision},status:{conditions:[{type:'Ready',status:'True'}]},spec:{containers:[{image:bad?'wrong@sha256:'+('0'.repeat(64)):row.image,env:[{name:'SP_SOURCE_DIGEST',value:row.sourceDigest},{name:'SP_OPERATION_REGION',value:region}]}]}};}else process.exit(2);process.stdout.write(JSON.stringify(value));`);
   const env = { ...process.env, PATH: `${dir}:${process.env.PATH}`, SP_REGIONAL_MANIFEST_DIR: dir,
@@ -75,7 +77,7 @@ test('falha parcial offline restaura tráfego das portas já alteradas', { skip:
     fs.writeFileSync(file, `#!/usr/bin/env node\n${body}\n`);
     fs.chmodSync(file, 0o755);
   };
-  fake('git', `const c=require('node:child_process');const a=process.argv.slice(2);if(a[0]==='status'&&a[1]==='--porcelain')process.exit(0);const r=c.spawnSync('/usr/bin/git',a,{stdio:'inherit'});process.exit(r.status??1);`);
+  fake('git', `const c=require('node:child_process');const a=process.argv.slice(2);if(a[0]==='status'&&a[1]==='--porcelain')process.exit(0);if(a[0]==='diff'&&a[1]==='--quiet')process.exit(0);const r=c.spawnSync('/usr/bin/git',a,{stdio:'inherit'});process.exit(r.status??1);`);
   fake('curl', `const fs=require('node:fs'),file=process.env.SP_FAKE_CURL_ONCE;if(file&&!fs.existsSync(file)){fs.writeFileSync(file,'first');process.stdout.write('000');}else process.stdout.write('401');`);
   fake('gcloud', `
 const fs=require('node:fs'),path=require('node:path'),a=process.argv.slice(2);
