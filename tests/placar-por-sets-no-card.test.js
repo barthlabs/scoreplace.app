@@ -135,10 +135,11 @@ function regua() {
     'morte súbita (margem 1) NÃO escreve margem nenhuma — seria ruído sobre o esperado');
 
   // Antes de haver placar, o cartão mostra o Set 1 com escala de jogo de um set.
-  // Ao gravar o primeiro, passa à escala completa do melhor de 3.
+  // Ao gravar o primeiro, a escala completa do melhor de 3 não pode ampliar
+  // o cartão nem fazer o placar saltar de tamanho.
   const antes = plano(MELHOR3, []).columns[0].w;
   const depois = plano(MELHOR3, [S(6, 4)]).columns[0].w;
-  ok(antes > depois, 'cartão vazio usa a escala compacta de 1 set e só reduz após Set 1 (' + antes + 'px → ' + depois + 'px)');
+  ok(antes >= depois, 'cartão vazio nunca é menor que a escala após Set 1 (' + antes + 'px → ' + depois + 'px)');
 }
 
 /* ── ② A DECISÃO + ③ O QUE O PARCIAL GRAVA ────────────────────────────────────────── */
@@ -423,8 +424,8 @@ async function stbDoisDigitosETieBreakLateral() {
     const cols = [...card.querySelectorAll('[data-sp-set-index="1"]')].map((e) => { const r = e.getBoundingClientRect(); return { x:r.x, w:r.width, open:e.classList.contains('sp-set-col--tb-open') }; });
     return { input:{ x:q.x, y:q.y, right:q.right }, tb:{ x:tq.x, y:tq.y, right:tq.right, shown:getComputedStyle(tb).display !== 'none' }, cols:cols };
   });
-  ok(after.tb.shown && Math.abs(after.tb.y - after.input.y) <= 1 && after.tb.x >= after.input.right + 2,
-    'TB abre à direita do placar do set, na mesma linha (placar=' + after.input.x.toFixed(1) + '–' + after.input.right.toFixed(1) + '; TB=' + after.tb.x.toFixed(1) + '–' + after.tb.right.toFixed(1) + '; y=' + after.input.y.toFixed(1) + '/' + after.tb.y.toFixed(1) + ')');
+  ok(after.tb.shown && after.tb.y <= after.input.y && after.input.y - after.tb.y <= 4 && after.tb.x >= after.input.right + 2,
+    'TB abre à direita e levemente acima do placar, como o subponto confirmado (placar=' + after.input.x.toFixed(1) + '–' + after.input.right.toFixed(1) + '; TB=' + after.tb.x.toFixed(1) + '–' + after.tb.right.toFixed(1) + '; y=' + after.input.y.toFixed(1) + '/' + after.tb.y.toFixed(1) + ')');
   ok(after.cols.length === 3 && after.cols.every((c) => c.open) && after.cols.every((c) => Math.abs(c.w - after.cols[0].w) <= 0.5),
     'rótulo e as duas linhas abrem a mesma coluna de TB, sem desalinhamento');
   const ui = read('js/views/bracket-ui.js');
@@ -582,8 +583,8 @@ async function duasSecoesMesmoTamanho() {
     'grade ' + m.grade + 'px vs últimos ' + m.ultimos + 'px (antes: 19,2 vs 23,2)');
   ok(m.grade === m.numSimples,
     '⑥ ⭐ e é o tamanho do NÚMERO SIMPLES (`.sp-mc-num` = ' + m.numSimples + 'px), não um terceiro valor');
-  ok(Math.abs(m.grade - 1.45 * m.raiz) < 0.6,
-    '⑥ que é 1,45rem sobre a raiz de ' + m.raiz + 'px (obtido ' + m.grade + 'px)');
+  ok(Math.abs(m.grade - 1.55 * m.raiz) < 0.6,
+    '⑥ que é 1,55rem sobre a raiz de ' + m.raiz + 'px (obtido ' + m.grade + 'px)');
 }
 
 /* ── ⑦ A FOLGA DOS SETS ACOMPANHA O TAMANHO DO CARD ──────────────────────────────── */

@@ -297,18 +297,16 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
   }
   window._schJogoLiberado = _schJogoLiberado;
 
-  // ⛔ AÇÕES ANTECIPADAS (16/out/2026): propor datas e criar o grupo NÃO dependem
-  // do adversário já definido. Um lado real basta para abrir as duas ações; TBD
-  // recebe as propostas depois. Isto NÃO é o gate do consenso/placar: estes só
-  // podem fechar com os dois lados conhecidos. BYE, folga e jogo terminado nunca
-  // ganham ação nova. Os dois chips usam esta mesma porta, sem cópias na dashboard.
+  // A organização pode preparar data e grupo até com ambos os lados pendentes
+  // (final/3º lugar). Jogadores só podem fazê-lo após entrar no confronto.
+  // Consenso e placar continuam exigindo os dois lados definidos.
   function _schPodePrepararJogo(t, m) {
     if (!m || m.isBye || m.isSitOut || m.winner || m.wo || m.completedAt || m.resultAt ||
         (m.pendingResult && m.pendingResult.proposedAt)) return false;
     // BYE pode chegar como rótulo do slot mesmo sem isBye no registro legado.
     if (m.p1 === 'BYE' || m.p2 === 'BYE') return false;
     function conhecido(v) { return !!(v && v !== 'TBD' && v !== 'BYE'); }
-    return conhecido(m.p1) || conhecido(m.p2);
+    return conhecido(m.p1) || conhecido(m.p2) || _schEhAdmin(t, _cu());
   }
   window._schPodePrepararJogo = _schPodePrepararJogo;
   function _schKnownSides(m) {

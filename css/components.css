@@ -2663,7 +2663,7 @@ html, body,
 /* Espaçamento canônico entre os integrantes de uma dupla em TODO card de jogo.
    O valor vem da geometria aprovada em “Seus últimos resultados”; dashboard, próximo
    jogo, novidades e chave usam esta mesma classe, nunca um gap local. */
-:root{--sp-match-team-member-gap:2px;}
+:root{--sp-match-team-member-gap:1px;}
 /* Uma dupla é uma lista compacta, nunca uma coluna distribuída pela altura do
    card. `justify-content:flex-start` e `align-content:flex-start` previnem que
    altura herdada ou um layout externo transforme os 2px em um vão visível. */
@@ -2749,7 +2749,7 @@ html, body,
    fonte, vãos e tags reduzem juntos antes de a caixa do nome virar uma coluna. */
 @container (max-width:390px){
   .sp-set-grid[data-sp-best-of="3"],.sp-set-grid[data-sp-best-of="5"]{gap:5px;}
-  .sp-set-grid{--sp-num-fs-set:1.12rem!important;}
+  .sp-set-grid[data-sp-best-of="5"]{--sp-num-fs-set:1.18rem!important;}
   .sp-mc-sc{margin-left:4px;}
   .sp-mc-badge{font-size:0.5rem;padding:1px 3px;margin:0 2px 0 1px;letter-spacing:0.15px;}
 }
@@ -2781,7 +2781,7 @@ html, body,
    já tem `margin-left:8px` separando do nome. Somei 2px de padding aqui e o slot de 6 nomes
    com grade de melhor de 3 no desktop passou a precisar de TRÊS linhas — a folga real ali
    era menor que 2px. Margem que estoura o vizinho não é elegante. */
-:root{--sp-num-fs:1.45rem;--sp-num-fs-set:0.78rem;}
+:root{--sp-num-fs:1.55rem;--sp-num-fs-set:0.78rem;}
 .sp-mc-num{font-weight:800;font-size:var(--sp-num-fs);min-width:1.9rem;text-align:center;line-height:1.15;}
 .sp-set-num{display:block;font-weight:800;font-size:var(--sp-num-fs-set);line-height:1.15;}
 /* O box "zerado até receber o placar": existe, ocupa a coluna, e não afirma resultado. */
@@ -2809,7 +2809,7 @@ html, body,
 .sp-set-score-entry .sp-set-inp{flex:1 1 auto;min-width:0;}
 .sp-set-score-entry .sp-set-tb{flex:0 0 var(--sp-set-tb-field-w);width:var(--sp-set-tb-field-w);margin:0;}
 .sp-set-col--tb-open{width:calc(var(--w,34px) + var(--sp-set-tb-field-w) + var(--sp-set-tb-gap));flex-basis:calc(var(--w,34px) + var(--sp-set-tb-field-w) + var(--sp-set-tb-gap));}
-.sp-set-tb{width:100%;box-sizing:border-box;text-align:center;font-variant-numeric:tabular-nums;font-size:0.60rem;font-weight:700;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.3);color:var(--text-bright);border-radius:5px;padding:2px 1px;}
+.sp-set-tb{width:100%;box-sizing:border-box;text-align:center;font-variant-numeric:tabular-nums;font-size:0.9rem;font-weight:700;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.3);color:var(--text-bright);border-radius:5px;padding:2px 1px;position:relative;top:-2px;}
 /* Set confirmado é CLICÁVEL pra corrigir (só enquanto o jogo não fechou) — o cursor é
    o único aviso, porque um ✕ por coluna encheria a linha de ruído. */
 .sp-tb-points{font-size:0.58em;font-weight:700;margin-left:1px;margin-right:0.22em;vertical-align:super;line-height:0;}

@@ -63,6 +63,8 @@ const R3_PRONTO = jogo('gold-R3-P1', 3, 'gold', 'u-mar', 'u-arn', 'u-a', 'u-b',
 const R3_ESPERA = Object.assign(jogo('gold-R3-P2', 3, 'gold', 'u-mar', 'u-arn', null, null,
                                      ['Mariana / Arnaldo', 'TBD']), { team2Uids: [] });
 const R2 = jogo('gold-R2-P1', 2, 'gold', 'u-c', 'u-d', 'u-e', 'u-f', ['C / D', 'E / F']);
+const FINAL = Object.assign(jogo('gold-final', 4, 'gold', null, null, null, null,
+                                ['TBD', 'TBD']), { team1Uids: [], team2Uids: [] });
 
 const T = {
   id: 'T-FASE2', format: 'Liga', status: 'active', currentPhaseIndex: 1, currentStage: 'phase1',
@@ -73,7 +75,7 @@ const T = {
       team1: ['P1', 'P2'], team2: ['P3', 'P4'], team1Uids: ['u-1', 'u-2'], team2Uids: ['u-3', 'u-4'],
       winner: 'dupla A' }
   ] }],
-  matches: [R1, R2, R3_PRONTO, R3_ESPERA]
+  matches: [R1, R2, R3_PRONTO, R3_ESPERA, FINAL]
 };
 W.AppStore.tournaments = [T];
 W._collectAllMatches = (t) => t.matches;
@@ -114,6 +116,8 @@ ok((W._schCardChip(T, R3_PRONTO) || '').indexOf('Propor') !== -1,
 ok((W._waGrpCardChip(T, R3_ESPERA) || '').indexOf('Criar grupo') !== -1 &&
    (W._schCardChip(T, R3_ESPERA) || '').indexOf('Propor datas') !== -1,
    '④ um lado conhecido já pode criar grupo e propor datas antes de sair o vencedor');
+ok((W._waGrpCardChip(T, FINAL) || '') === '' && (W._schCardChip(T, FINAL) || '') === '',
+   '④ jogo futuro sem lados não oferece ações a participante de outro confronto');
 
 // ── ⑤ nada disso abriu porta pra quem não é do jogo ───────────────────────────
 como(ESTRANHO);
@@ -123,6 +127,12 @@ como(ORG);
 ok((W._waGrpCardChip(T, R1) || '') !== '', '⑤ o organizador segue vendo');
 ok((W._waGrpCardChip(T, R3_ESPERA) || '').indexOf('Criar grupo') !== -1,
    '⑤ o organizador também prepara o grupo enquanto aguarda o rival');
+ok((W._waGrpCardChip(T, FINAL) || '').indexOf('Criar grupo') !== -1 &&
+   (W._schCardChip(T, FINAL) || '').indexOf('Propor datas') !== -1,
+   '⑤ organização prepara data e WhatsApp da final antes de conhecer os finalistas');
+const finalCard = W.renderMatchCard(FINAL, true, T.id, FINAL.round);
+ok(/_schOpenMatch/.test(finalCard) && /_waGrpOpen/.test(finalCard),
+   '⑤ o card renderizado da final mostra ambos os botões antes de conhecer os finalistas');
 ok(W._schPodePrepararJogo(T, { p1: 'TBD', p2: 'BYE' }) === false &&
    W._schPodePrepararJogo(T, { p1: 'A', p2: 'TBD', winner: 'A' }) === false,
    '⑤ BYE ou jogo concluído não ganha ação antecipada');

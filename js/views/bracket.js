@@ -8425,7 +8425,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   const p2IsWinner = isDecided && _ladoVencedor === 2;
 
   const rowStyle = (isWinner, side) => {
-    const base = 'padding:8px 10px;border-radius:8px;display:flex;justify-content:space-between;align-items:center;';
+    const base = 'padding:4px 10px;border-radius:8px;display:flex;justify-content:space-between;align-items:center;';
     // ── ⭐ A REGRA DE COR, DITADA PELO DONO (1.9.112) ─────────────────────────
     //   sem resultado ....... TUDO CINZA (tarja e numero)
     //   com resultado ....... vencedor: tarja VERDE + numero VERDE
@@ -8518,7 +8518,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // inputs de TB ao registrar 6-5/5-6 (default trigger = gamesPerSet - 1).
   const _tbEnabled = !!(_msc && _msc.tiebreakEnabled !== false &&
       (_msc.gamesPerSet || useSets));
-  const _tbInputStyle = 'width:40px;text-align:center;font-size:0.75rem;font-weight:700;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.3);color:var(--text-bright);border-radius:5px;padding:3px 4px;';
+  const _tbInputStyle = 'width:40px;text-align:center;font-size:0.9rem;font-weight:700;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.3);color:var(--text-bright);border-radius:5px;padding:2px 4px;vertical-align:super;';
   const p1TbInput = showInputs && _tbEnabled
     ? `<input type="number" id="tb1-${m.id}" min="0" placeholder="tb" title="Tie-break"
         style="${_tbInputStyle}display:none;margin-left:4px;"

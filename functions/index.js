@@ -6643,11 +6643,11 @@ exports.setMatchWhatsAppGroup = onCall(
        * entre "salvou" e "salvou duas vezes com `at` diferente". */
       const atual = (alvo.jogo && alvo.jogo.waGroup) || null;
       const knownSides = _matchKnownSides(alvo.jogo);
-      // Preparar o jogo pede só um lado real. Não criar grupo em BYE/folga,
-      // jogo sem ninguém ou partida encerrada; link já existente continua gerenciável.
+      // A organização pode criar o grupo da final/3º lugar antes de seus lados
+      // serem definidos. Um jogador não pode criar grupo de jogo alheio/vazio.
       if (!apagar && !atual && (alvo.jogo.isBye || alvo.jogo.isSitOut ||
           alvo.jogo.p1 === "BYE" || alvo.jogo.p2 === "BYE" ||
-          (!knownSides.p1 && !knownSides.p2) || _scheduleHasRealPlay(alvo.jogo))) {
+          (!knownSides.p1 && !knownSides.p2 && !souOrg) || _scheduleHasRealPlay(alvo.jogo))) {
         throw new HttpsError("failed-precondition", "jogo não aceita grupo novo");
       }
       const staleLink = !!(atual && !_matchKnownSidesValid(atual.knownSides, knownSides, alvo.jogo));

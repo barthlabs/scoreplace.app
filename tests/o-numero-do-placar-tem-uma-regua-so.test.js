@@ -106,9 +106,9 @@ ok(W._setColEscala(1).fs === W._setColEscala(2).fs, '③ 1 e 2 colunas usam o me
  * `tests/placar-por-sets-no-card.test.js` — comparar por leitura de código não pega, porque
  * os dois caminhos estão certos cada um por si. [[feedback_unify_dual_entry_points]] */
 ok(W._setColEscala(3).fs <= W._setColEscala(2).fs, '③ mais colunas nunca aumenta a fonte');
-ok(W._setColEscala(2).fs === 1.45 && W._setColEscala(3).fs === 1.45,
-  '③ ⭐ 1-3 colunas chegam ao TETO (1,45rem = `--sp-num-fs`), o tamanho do número simples');
-ok(W._setColEscala(5).fs < 1.45,
+ok(W._setColEscala(2).fs === 1.55 && W._setColEscala(3).fs === 1.55,
+  '③ ⭐ 1-3 colunas chegam ao TETO (1,55rem = `--sp-num-fs`), o tamanho do número simples');
+ok(W._setColEscala(5).fs < 1.55,
   '③ ⛔ e 4-5 colunas NÃO chegam: lá são cinco colunas dividindo espaço com o nome, não duas');
 ok(W._setColEscala(5).fs < W._setColEscala(3).fs, '③ e melhor de 5 é o mais apertado');
 ok(W._setColEscala(9).fs === W._setColEscala(5).fs, '③ acima de 5 não encolhe mais (não há degrau)');

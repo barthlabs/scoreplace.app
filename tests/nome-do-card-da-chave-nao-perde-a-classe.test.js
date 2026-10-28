@@ -134,7 +134,7 @@ function slot(nomes, opts) {
 }
 
 // a linha do jogo, com os estilos inline REAIS de `rowStyle` + o card e o grid reais
-const ROW = 'padding:8px 10px;border-radius:8px;display:flex;justify-content:space-between;' +
+const ROW = 'padding:4px 10px;border-radius:8px;display:flex;justify-content:space-between;' +
   'align-items:center;background:var(--placar-linha-bg);border-left:3px solid var(--placar-tarja-neutra);';
 
 function card(id, nomes, opts) {

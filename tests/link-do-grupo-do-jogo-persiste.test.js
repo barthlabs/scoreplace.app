@@ -506,6 +506,22 @@ const jogoDoDoc = (b, id) => (b.doc.rounds[0].matches || []).find((m) => m && m.
       ok('  → e nada foi gravado', !regDe(BANCO, 'g0-1').jogo.waGroup);
     }
     BANCO = bancoDividido();
+    const futura = regDe(BANCO, 'g0-1').jogo;
+    futura.p1 = 'TBD'; futura.p2 = 'TBD';
+    futura.team1Uids = []; futura.team2Uids = [];
+    const semLados = await chamar('uOrg', { tournamentId: 'T1', matchId: 'g0-1',
+      link: LINK('4'), operationId: UUID(4) });
+    ok('organização prepara grupo de final ainda sem participantes', semLados.ok &&
+      regDe(BANCO, 'g0-1').jogo.waGroup.link === LINK('4'));
+    BANCO = bancoDividido();
+    const futuraJogador = regDe(BANCO, 'g0-1').jogo;
+    futuraJogador.p1 = 'TBD'; futuraJogador.p2 = 'TBD';
+    futuraJogador.team1Uids = []; futuraJogador.team2Uids = [];
+    const negado = await erroDe(chamar('uA', { tournamentId: 'T1', matchId: 'g0-1',
+      link: LINK('4'), operationId: UUID(4) }));
+    ok('jogador não cria grupo antes de estar no confronto', negado && negado.code === 'permission-denied' &&
+      !futuraJogador.waGroup);
+    BANCO = bancoDividido();
     const eSemLogin = await erroDe(CF.setMatchWhatsAppGroup.run({ data: { tournamentId: 'T1', matchId: 'g0-1', link: LINK('1'), operationId: UUID(1) }, auth: null, rawRequest: { headers: {} } }));
     ok('⛔ sem login, nem chega a ler o torneio', !!eSemLogin && eSemLogin.code === 'unauthenticated');
   }
