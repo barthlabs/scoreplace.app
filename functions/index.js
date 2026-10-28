@@ -6643,8 +6643,8 @@ exports.setMatchWhatsAppGroup = onCall(
        * entre "salvou" e "salvou duas vezes com `at` diferente". */
       const atual = (alvo.jogo && alvo.jogo.waGroup) || null;
       const knownSides = _matchKnownSides(alvo.jogo);
-      // A organização pode criar o grupo da final/3º lugar antes de seus lados
-      // serem definidos. Um jogador não pode criar grupo de jogo alheio/vazio.
+      // A organização pode preparar o grupo de qualquer jogo futuro antes de
+      // seus lados serem definidos. Um jogador não pode abrir grupo alheio/vazio.
       if (!apagar && !atual && (alvo.jogo.isBye || alvo.jogo.isSitOut ||
           alvo.jogo.p1 === "BYE" || alvo.jogo.p2 === "BYE" ||
           (!knownSides.p1 && !knownSides.p2 && !souOrg) || _scheduleHasRealPlayAgenda(alvo.jogo))) {
@@ -7217,8 +7217,8 @@ exports.setMatchSchedule = onCall(
         }
         if (it.temSchedule) {
           const currentSides = freshSides;
-          // A organização pode preparar final/3º lugar antes de conhecer os
-          // lados; participante não pode propor data para um jogo vazio.
+          // A organização pode preparar qualquer jogo futuro antes de conhecer
+          // os lados; participante não pode propor data para um jogo vazio.
           // Nenhum dos dois pode abrir proposta depois de iniciado o jogo.
           if (alvo.jogo.isBye || alvo.jogo.isSitOut ||
               alvo.jogo.p1 === "BYE" || alvo.jogo.p2 === "BYE" ||

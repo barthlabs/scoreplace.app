@@ -1,6 +1,6 @@
 ## 2.5.72 — 28/out/2026 (datas de jogos futuros e cards canônicos)
 
-- A organização pode preparar datas e grupos de WhatsApp de final e 3º lugar antes de conhecer os dois lados. Participantes não recebem essa permissão. Jogos iniciados, concluídos ou com resultado pendente não aceitam proposta nova de data nem criação de grupo novo de WhatsApp, inclusive por chamada direta às Functions. O servidor valida o estado fresco do jogo antes de gravar.
+- A organização pode preparar datas e grupos de WhatsApp de qualquer jogo futuro ainda sem lados definidos, inclusive final e 3º lugar. Participantes não recebem essa permissão. Jogos iniciados, concluídos ou com resultado pendente não aceitam proposta nova de data nem criação de grupo novo de WhatsApp, inclusive por chamada direta às Functions. O servidor valida o estado fresco do jogo antes de gravar.
 - Os cards de jogo usam metade da margem vertical entre borda e atletas e menos espaço entre os nomes. A mesma escala de placar, ligeiramente maior, vale para números lançados e campos de edição em todos os torneios.
 - O campo de pontos do tie-break aberto acompanha o tamanho e o posicionamento do subponto já lançado. O teste de geometria permite até 4 px acima da linha do set porque esse é o alinhamento visual solicitado; a comparação de larguras passou de `>` para `>=` porque o card vazio não pode crescer depois do primeiro set, mas pode conservar a mesma largura.
 - Nenhum jogo, placar, sorteio, inscrição ou classificação existente foi alterado por este corte.

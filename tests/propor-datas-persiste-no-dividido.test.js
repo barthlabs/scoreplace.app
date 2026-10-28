@@ -285,7 +285,7 @@ const PROPOSTA = { options: [{ id: 'so_1', kind: 'date', dateISO: '2026-09-10', 
     time: '10:00', byUid: 'uOrg' }], votes: {}, dayVotes: {} };
   const orgFinal = await chamar('uOrg', { tournamentId: 'T1', matchId: 'g0-1',
     operationId: UUID(9), schedule: finalSchedule });
-  ok('organizador prepara a data da final com os dois lados TBD', orgFinal.ok &&
+  ok('organizador prepara data de qualquer jogo futuro com os dois lados TBD', orgFinal.ok &&
     jogoNoBanco(BANCO, 'g0-1').schedule.options.length === 1);
   const unauthorizedFinal = await erroDe(chamar('uA', { tournamentId: 'T1', matchId: 'g0-1',
     operationId: UUID(8), schedule: finalSchedule }));
