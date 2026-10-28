@@ -217,7 +217,7 @@ ok(serverAgendaPlayed({ completedAt:'2026-10-22T18:00:00Z' }), 'CF bloqueia real
 ok(!serverAgendaPlayed({ scheduledAt:'2026-10-22T18:00:00Z' }), 'CF permite realocação de mera estimativa');
 ok(/function _scheduleHasRealPlayAgenda\(m\)/.test(srcMainFunctions) &&
   /operational && _scheduleHasRealPlayAgenda\(alvo\.jogo\)/.test(srcMainFunctions) &&
-  /_scheduleHasRealPlay\(alvo\.jogo\)/.test(srcMainFunctions),
+  /_scheduleHasRealPlayAgenda\(alvo\.jogo\)/.test(srcMainFunctions),
   'CF mantém a regra de proposta e acrescenta guarda restrita à realocação operacional');
 ok(/var _schGrpBtn = \(typeof window\._schGroupChip === 'function'\)/.test(srcBracket),
   'bracket: o gate isMyGroup saiu do call site do grupo (senão a data some nos outros grupos)');
