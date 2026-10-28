@@ -13,8 +13,16 @@ function allowsLigaAvailability(t) {
     const index = Number(t.currentPhaseIndex || 0);
     if (!(index >= 0 && index < t.phases.length)) return false;
     const phase = t.phases[index];
-    return !!(phase && phase.kind === 'classification' &&
-      (!phase.classification || phase.classification.structure !== 'groups'));
+    if (!phase || phase.kind !== 'classification' ||
+        (phase.classification && phase.classification.structure === 'groups')) return false;
+    // Mesma política da fase no navegador: entradas fixas/rodadas não usam
+    // a disponibilidade de Liga rotativa, mesmo quando o rótulo antigo diz Liga.
+    const pairing = phase.classification && phase.classification.pairing;
+    if (pairing == null) return t.classifyFormat !== 'swiss' && t.currentStage !== 'swiss';
+    if (pairing === 'swiss') return false;
+    if (typeof pairing === 'object' &&
+        (pairing.strategy === 'ranking_clusters' || pairing.entryMode === 'fixed')) return false;
+    return true;
   }
   return t.format === 'Liga' || t.format === 'Ranking';
 }
