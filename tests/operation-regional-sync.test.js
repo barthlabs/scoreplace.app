@@ -71,7 +71,9 @@ const arg=(n)=>a[a.indexOf(n)+1],region=arg('--region'),name=a[1]==='deploy'?a[2
 if(!row)process.exit(2);
 const id=row.name+'/'+region,e=state.entries[id]||{served:row.revision,latest:row.revision,image:row.image,digest:row.sourceDigest};
 if(a[1]==='services'&&a[2]==='describe'){
-  const ready=e.readyDelay>0?e.served:e.latest;if(e.readyDelay>0){e.readyDelay--;state.entries[id]=e;fs.writeFileSync(file,JSON.stringify(state));}
+  // Cloud Run mantém latestReady na revisão servida enquanto a nova fica
+  // marcada Ready/Retired com 0% de tráfego; ela só reaparece após o corte.
+  const ready=e.served;
   process.stdout.write(JSON.stringify({spec:{template:{spec:{containers:[{image:e.image}]}}},status:{url:row.url,latestCreatedRevisionName:e.latest,latestReadyRevisionName:ready,traffic:[{revisionName:e.served,percent:100,latestRevision:e.served===ready}]}}));
 }else if(a[1]==='revisions'&&a[2]==='describe'){
   const fresh=name===row.name+'-new';
@@ -80,7 +82,7 @@ if(a[1]==='services'&&a[2]==='describe'){
   e.served=arg('--to-revisions').split('=')[0];if(e.served===row.name+'-new')state.trafficUpdates++;state.entries[id]=e;fs.writeFileSync(file,JSON.stringify(state));
 }else if(a[1]==='deploy'){
   state.deploys++;if(state.deploys===Number(process.env.SP_FAKE_FAIL_AT)){fs.writeFileSync(file,JSON.stringify(state));process.exit(17);}
-  const env=arg('--update-env-vars').split(',');e.digest=env[0].split('=')[1];e.image=a.includes('--image')?arg('--image'):'fake/image@sha256:'+('e'.repeat(64));e.latest=row.name+'-new';e.readyDelay=1;/* serviço mantém 100% na revisão antiga e prontidão atrasa */state.entries[id]=e;fs.writeFileSync(file,JSON.stringify(state));
+  const env=arg('--update-env-vars').split(',');e.digest=env[0].split('=')[1];e.image=a.includes('--image')?arg('--image'):'fake/image@sha256:'+('e'.repeat(64));e.latest=row.name+'-new';/* serviço mantém 100% na revisão antiga e a nova fica Ready/Retired */state.entries[id]=e;fs.writeFileSync(file,JSON.stringify(state));
 }else process.exit(2);
 `);
   const statePath = path.join(dir, 'fake-state.json');
@@ -91,7 +93,7 @@ if(a[1]==='services'&&a[2]==='describe'){
     const result = cp.spawnSync('node', ['scripts/sync-operation-regions-current.js', '--deploy'], { cwd: root, env, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
     assert.notEqual(result.status, 0, 'a terceira mutação simulada deve abortar');
     const fakeState = JSON.parse(fs.readFileSync(statePath, 'utf8'));
-    assert.equal(fakeState.deploys, 3);
+    assert.equal(fakeState.deploys, 3, result.stdout + result.stderr);
     assert.equal(fakeState.trafficUpdates, 2, 'revisões criadas com 0% recebem corte explícito para 100%');
     assert.ok(fs.existsSync(env.SP_FAKE_CURL_ONCE), 'sonda 000 transitória foi repetida');
     assert.equal(Object.values(fakeState.entries).filter(entry => entry.latest.endsWith('-new')).length, 2);

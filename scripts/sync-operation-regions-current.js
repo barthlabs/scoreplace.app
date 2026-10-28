@@ -75,8 +75,13 @@ function waitForNewReadyRevision(name, region, previousRevision, digest) {
   for (let attempt = 0; attempt < 60; attempt++) {
     const s = service(name, region);
     const created = s.status?.latestCreatedRevisionName;
-    if (created && created !== previousRevision && s.status?.latestReadyRevisionName === created) {
+    if (created && created !== previousRevision) {
       const r = revision(created, region);
+      const ready = (r.status?.conditions || []).find(item => item.type === 'Ready');
+      if (ready?.status !== 'True') {
+        if (attempt < 59) cp.spawnSync('sleep', ['3']);
+        continue;
+      }
       const env = Object.fromEntries((r.spec?.containers?.[0]?.env || []).map(item => [item.name, item.value]));
       if (env.SP_SOURCE_DIGEST !== digest || env.SP_OPERATION_REGION !== region || !r.spec?.containers?.[0]?.image?.includes('@sha256:')) {
         throw new Error(`revisão criada com fonte divergente: ${name}/${region}`);
@@ -259,7 +264,7 @@ try {
       // Serviços com tráfego fixado na revisão anterior recebem a nova revisão
       // com 0%. O corte precisa ser explícito antes da prova de revisão servida.
       const deployed = waitForNewReadyRevision(name, region, state.previous[`${name}/${region}`].revision, digest);
-      const nextRevision = deployed.status?.latestReadyRevisionName;
+      const nextRevision = deployed.status?.latestCreatedRevisionName;
       if (!nextRevision || nextRevision === state.previous[`${name}/${region}`].revision) throw new Error(`nova revisão ausente: ${name}/${region}`);
       if (servedRevisionName(deployed) !== nextRevision) {
         run('gcloud', ['run', 'services', 'update-traffic', name, '--project', project, '--region', region, '--to-revisions', `${nextRevision}=100`, '--quiet'], { stdio: 'inherit' });
