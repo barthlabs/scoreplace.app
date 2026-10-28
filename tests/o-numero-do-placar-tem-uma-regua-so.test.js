@@ -34,6 +34,9 @@ const ROOT = path.join(__dirname, '..');
 const css = fs.readFileSync(path.join(ROOT, 'css', 'components.css'), 'utf8');
 const style = fs.readFileSync(path.join(ROOT, 'css', 'style.css'), 'utf8');
 const model = fs.readFileSync(path.join(ROOT, 'js', 'views', 'bracket-model.js'), 'utf8');
+const narrow = css.match(/@container \(max-width:390px\)\{[\s\S]*?\n\}/);
+ok(!!narrow && /\.sp-set-grid\[data-sp-best-of="3"\]\{--sp-num-fs-set:1\.12rem!important;\}/.test(narrow[0]),
+   'em card estreito, melhor de 3 mantém o teto que protege o espaço dos nomes');
 
 /* ── ① UMA RÉGUA: ninguém cravado ─────────────────────────────────────────── */
 const regra = (sel) => {

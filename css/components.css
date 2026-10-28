@@ -2749,6 +2749,7 @@ html, body,
    fonte, vãos e tags reduzem juntos antes de a caixa do nome virar uma coluna. */
 @container (max-width:390px){
   .sp-set-grid[data-sp-best-of="3"],.sp-set-grid[data-sp-best-of="5"]{gap:5px;}
+  .sp-set-grid[data-sp-best-of="3"]{--sp-num-fs-set:1.12rem!important;}
   .sp-set-grid[data-sp-best-of="5"]{--sp-num-fs-set:1.18rem!important;}
   .sp-mc-sc{margin-left:4px;}
   .sp-mc-badge{font-size:0.5rem;padding:1px 3px;margin:0 2px 0 1px;letter-spacing:0.15px;}
