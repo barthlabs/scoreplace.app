@@ -75,7 +75,7 @@ function loadState() {
   if (fs.existsSync(stateFile)) return readJson(stateFile);
   const originals = Object.fromEntries(['v2', 'v3'].map(v => [v, readJson(manifestPath(v))]));
   for (const v of ['v2', 'v3']) validateManifest(v, originals[v]);
-  const state = { schema: 1, sourceCommit: run('git', ['rev-parse', sourceCommit]), originals, candidates: structuredClone(originals), previous: {}, updated: [], inFlight: [] };
+  const state = { schema: 1, sourceCommit: run('git', ['rev-parse', sourceCommit]), originals, candidates: structuredClone(originals), previous: {}, updated: [], inFlight: [], promoted: false };
   writeJson(stateFile, state);
   return state;
 }
@@ -158,6 +158,15 @@ function rollback(state) {
     } catch (error) { errors.push(`${id}: rechecagem final: ${error.message}`); }
   }
   if (errors.length) throw new Error(`rollback incompleto:\n${errors.join('\n')}`);
+  // A promoção local é reversível mesmo se o processo cair entre dois arquivos.
+  if (state.promoted || ['v2', 'v3'].some(v => JSON.stringify(readJson(manifestPath(v))) !== JSON.stringify(state.originals[v]))) {
+    const originalConfigs = Object.fromEntries(['v2', 'v3'].map(v => [v, updatedConfig(v, state.originals[v])]));
+    for (const v of ['v2', 'v3']) writeJson(manifestPath(v), state.originals[v]);
+    writeJson(path.join(root, 'operation-regions.json'), originalConfigs.v2);
+    writeJson(path.join(root, 'operation-regions-v3.json'), originalConfigs.v3);
+    state.promoted = false;
+    writeJson(stateFile, state);
+  }
 }
 
 function main() {
@@ -241,6 +250,8 @@ try {
   for (const v of ['v2', 'v3']) writeJson(manifestPath(v), state.candidates[v]);
   writeJson(path.join(root, 'operation-regions.json'), configs.v2);
   writeJson(path.join(root, 'operation-regions-v3.json'), configs.v3);
+  state.promoted = true;
+  writeJson(stateFile, state);
   process.stdout.write('✓ 48 portas sincronizadas; falta sincronizar normais/recovery e validar gate\n');
 } catch (error) {
   process.stderr.write(`sincronização interrompida: ${error.message}\n`);

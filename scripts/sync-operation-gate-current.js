@@ -56,7 +56,7 @@ function loadState() {
   if (normals.some(([name]) => !original.normal?.some(row => row.name === name)) ||
       recovery.some(([name]) => !original.recovery?.some(row => row.name === name)) ||
       original.normal.length !== 6 || original.recovery.length !== 4) throw new Error('gate original incompleto');
-  const state = { schema: 1, sourceCommit, original, candidate: { startedAt: original.startedAt, sourceCommit, normal: [], recovery: [] }, previous: {}, inFlight: [], updated: [] };
+  const state = { schema: 1, sourceCommit, original, candidate: { startedAt: original.startedAt, sourceCommit, normal: [], recovery: [] }, previous: {}, inFlight: [], updated: [], promoted: false };
   write(stateFile, state);
   return state;
 }
@@ -104,6 +104,11 @@ function rollback(state) {
     } catch (error) { errors.push(`${id}: rechecagem final: ${error.message}`); }
   }
   if (errors.length) throw new Error(`rollback incompleto:\n${errors.join('\n')}`);
+  if (state.promoted || JSON.stringify(read(gateFile)) !== JSON.stringify(state.original)) {
+    write(gateFile, state.original);
+    state.promoted = false;
+    write(stateFile, state);
+  }
 }
 function recordNormal(state, name, codebase) {
   const proof = verify(name, codebase, sourceCommit, state.original.startedAt);
@@ -212,6 +217,8 @@ function main() {
     write(candidate, state.candidate);
     run('bash', ['scripts/deploy-operation-legacy-gate-v2.sh', '--check-live'], { env: { ...process.env, SP_GATE_MANIFEST: candidate } });
     write(gateFile, state.candidate);
+    state.promoted = true;
+    write(stateFile, state);
     process.stdout.write('✓ seis callables e quatro recovery alinhadas; gate promovido\n');
   } catch (error) {
     process.stderr.write(`gate interrompido: ${error.message}\n`);

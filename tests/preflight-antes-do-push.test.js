@@ -159,6 +159,9 @@ function cenario(opcoes) {
   fs.chmodSync(path.join(repo, 'scripts', 'deploy-operation-regions.sh'), 0o755);
   fs.writeFileSync(path.join(repo, 'scripts', 'generate-operation-regions-config.js'), 'process.exit(0);\n');
   fs.writeFileSync(path.join(repo, 'scripts', 'generate-operation-regions-v3-config.js'), 'process.exit(0);\n');
+  // O gate de uniformidade regional é coberto na suíte própria; este cenário
+  // mantém o foco na ordem preflight → push → Hosting.
+  fs.writeFileSync(path.join(repo, 'scripts', 'check-operation-regions-mixed.js'), 'process.exit(0);\n');
   fs.writeFileSync(path.join(repo, 'package.json'), JSON.stringify({ name: 'x', version: '1.0.0', scripts: {} }));
   // node_modules que o script exige encontrar (raiz + subprojeto)
   fs.mkdirSync(path.join(repo, 'node_modules', '@playwright', 'test'), { recursive: true });
