@@ -3,8 +3,8 @@
 // Jogadores só recebem essas ações quando entram no confronto. O servidor
 // recusa novos agendamentos e grupos de jogos iniciados ou com resultado pendente.
 // Os cards usam menos espaço vertical, placares um pouco maiores e o tie-break
-// editável acompanha o valor confirmado; em tela estreita, melhor de 3 mantém
-// o limite de fonte que preserva a largura disponível para os nomes.
+// editável acompanha o valor confirmado; em tela estreita, 1 set e melhor de 3
+// mantêm o limite de fonte que preserva a largura disponível para os nomes.
 // Nenhum jogo, placar, sorteio ou classificação existente é regravado.
 // 2.5.71 — A abertura e a retentativa de torneios com elenco canônico voltam a
 // consultar o servidor quando falta a confirmação da leitura; a tela mostra só
