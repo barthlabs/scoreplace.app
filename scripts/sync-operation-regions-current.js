@@ -71,6 +71,22 @@ function probe(url) {
   }
   throw new Error(`sonda sem Auth divergente: ${url} ${result?.stdout?.trim() || 'sem resposta'}`);
 }
+function waitForNewReadyRevision(name, region, previousRevision, digest) {
+  for (let attempt = 0; attempt < 60; attempt++) {
+    const s = service(name, region);
+    const created = s.status?.latestCreatedRevisionName;
+    if (created && created !== previousRevision && s.status?.latestReadyRevisionName === created) {
+      const r = revision(created, region);
+      const env = Object.fromEntries((r.spec?.containers?.[0]?.env || []).map(item => [item.name, item.value]));
+      if (env.SP_SOURCE_DIGEST !== digest || env.SP_OPERATION_REGION !== region || !r.spec?.containers?.[0]?.image?.includes('@sha256:')) {
+        throw new Error(`revisão criada com fonte divergente: ${name}/${region}`);
+      }
+      return s;
+    }
+    if (attempt < 59) cp.spawnSync('sleep', ['3']);
+  }
+  throw new Error(`nova revisão não ficou pronta: ${name}/${region}`);
+}
 function validateManifest(version, rows) {
   const expected = policy.flatMap(p => regions[version].map(region => `sp-op-${p.short}-${version}/${region}`));
   if (rows.length !== expected.length || new Set(rows.map(key)).size !== expected.length || rows.some(r => !expected.includes(key(r)))) throw new Error(`manifesto ${version} incompleto ou inesperado`);
@@ -242,7 +258,7 @@ try {
       run('gcloud', args, { stdio: 'inherit' });
       // Serviços com tráfego fixado na revisão anterior recebem a nova revisão
       // com 0%. O corte precisa ser explícito antes da prova de revisão servida.
-      const deployed = service(name, region);
+      const deployed = waitForNewReadyRevision(name, region, state.previous[`${name}/${region}`].revision, digest);
       const nextRevision = deployed.status?.latestReadyRevisionName;
       if (!nextRevision || nextRevision === state.previous[`${name}/${region}`].revision) throw new Error(`nova revisão ausente: ${name}/${region}`);
       if (servedRevisionName(deployed) !== nextRevision) {

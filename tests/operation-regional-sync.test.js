@@ -71,7 +71,8 @@ const arg=(n)=>a[a.indexOf(n)+1],region=arg('--region'),name=a[1]==='deploy'?a[2
 if(!row)process.exit(2);
 const id=row.name+'/'+region,e=state.entries[id]||{served:row.revision,latest:row.revision,image:row.image,digest:row.sourceDigest};
 if(a[1]==='services'&&a[2]==='describe'){
-  process.stdout.write(JSON.stringify({spec:{template:{spec:{containers:[{image:e.image}]}}},status:{url:row.url,latestReadyRevisionName:e.latest,traffic:[{revisionName:e.served,percent:100,latestRevision:e.served===e.latest}]}}));
+  const ready=e.readyDelay>0?e.served:e.latest;if(e.readyDelay>0){e.readyDelay--;state.entries[id]=e;fs.writeFileSync(file,JSON.stringify(state));}
+  process.stdout.write(JSON.stringify({spec:{template:{spec:{containers:[{image:e.image}]}}},status:{url:row.url,latestCreatedRevisionName:e.latest,latestReadyRevisionName:ready,traffic:[{revisionName:e.served,percent:100,latestRevision:e.served===ready}]}}));
 }else if(a[1]==='revisions'&&a[2]==='describe'){
   const fresh=name===row.name+'-new';
   process.stdout.write(JSON.stringify({metadata:{name},status:{conditions:[{type:'Ready',status:'True'}]},spec:{containers:[{image:fresh?e.image:row.image,env:[{name:'SP_SOURCE_DIGEST',value:fresh?e.digest:row.sourceDigest},{name:'SP_OPERATION_REGION',value:region}]}]}}));
@@ -79,7 +80,7 @@ if(a[1]==='services'&&a[2]==='describe'){
   e.served=arg('--to-revisions').split('=')[0];if(e.served===row.name+'-new')state.trafficUpdates++;state.entries[id]=e;fs.writeFileSync(file,JSON.stringify(state));
 }else if(a[1]==='deploy'){
   state.deploys++;if(state.deploys===Number(process.env.SP_FAKE_FAIL_AT)){fs.writeFileSync(file,JSON.stringify(state));process.exit(17);}
-  const env=arg('--update-env-vars').split(',');e.digest=env[0].split('=')[1];e.image=a.includes('--image')?arg('--image'):'fake/image@sha256:'+('e'.repeat(64));e.latest=row.name+'-new';/* serviço mantém 100% na revisão antiga */state.entries[id]=e;fs.writeFileSync(file,JSON.stringify(state));
+  const env=arg('--update-env-vars').split(',');e.digest=env[0].split('=')[1];e.image=a.includes('--image')?arg('--image'):'fake/image@sha256:'+('e'.repeat(64));e.latest=row.name+'-new';e.readyDelay=1;/* serviço mantém 100% na revisão antiga e prontidão atrasa */state.entries[id]=e;fs.writeFileSync(file,JSON.stringify(state));
 }else process.exit(2);
 `);
   const statePath = path.join(dir, 'fake-state.json');
