@@ -7836,6 +7836,51 @@ window._onSportChange = function() {
   if (typeof window._gsmUpdateAdvantageUI === 'function') window._gsmUpdateAdvantageUI();
 };
 
+// A template carries format rules, never the dates or draw state of its source event.
+// Keep this projection independent of the DOM so old templates are sanitized on read.
+window._f2TemplateCopy = function(fmt2Bruto) {
+  if (!fmt2Bruto || typeof fmt2Bruto !== 'object' || Array.isArray(fmt2Bruto)) return null;
+  var raw;
+  try { raw = JSON.parse(JSON.stringify(fmt2Bruto)); } catch (e) { return null; }
+  var pick = function(source, keys) {
+    var out = {};
+    if (!source || typeof source !== 'object' || Array.isArray(source)) return out;
+    keys.forEach(function(key) {
+      if (Object.prototype.hasOwnProperty.call(source, key)) out[key] = source[key];
+    });
+    return out;
+  };
+  var out = pick(raw, ['disputa', 'grupos', 'parceria', 'formacaoDupla', 'manualPairingOpen',
+    'classifAtiva', 'classificados', 'classifScope', '_scoreBy', 'historicalSinglesOverride']);
+  if (raw.rodadas) {
+    out.rodadas = pick(raw.rodadas, ['modo', 'turnos', 'n', 'drawFirstTime', 'drawIntervalDays',
+      'drawManual', 'allowSelfDeactivation', '_intervalAuto']);
+    out.rodadas.drawFirstDate = '';
+  }
+  if (raw.classificationPairing) out.classificationPairing = pick(raw.classificationPairing,
+    ['strategy', 'clusterSize', 'rematchPolicy']);
+  if (raw.classificationSchedule) out.classificationSchedule = pick(raw.classificationSchedule,
+    ['gamesPerUnit', 'mode']);
+  if (raw.eliminatoria) {
+    out.eliminatoria = pick(raw.eliminatoria, ['ativa', 'dupla', 'linhas', 'nomes', 'origem',
+      'formacao', 'qualifyAll', 'terceiro', 'grandFinal', 'lateEnrollment', 'newMatchups',
+      'scoring', 'roundBoundsEditorEnabled', 'politicaDaChave', 'openReiRainha', 'reiRainhaCut']);
+    out.eliminatoria.endDate = '';
+    out.eliminatoria.endTime = '';
+    out.eliminatoria.roundBounds = [];
+  }
+  if (raw.teamCompetition) {
+    out.teamCompetition = pick(raw.teamCompetition, ['enabled', 'teamCount', 'teamNames', 'formation',
+      'internalMatches', 'ranking', 'tiebreakers', 'aggregation', 'classificationUnit', 'scoring']);
+    if (raw.teamCompetition.schedule) {
+      out.teamCompetition.schedule = pick(raw.teamCompetition.schedule,
+        ['enabled', 'teamsPerGroup', 'gamesPerPair', 'gamesPerTeam', 'pairsPerTeamByCategory',
+          'gamesPerPairByCategory', 'mode', 'modeConfirmed', 'modeChosen', 'originDayPolicy']);
+    }
+  }
+  return out;
+};
+
 // ─── Pre-fill form from a saved template ──────────────────────────────────
 window._prefillFromTemplate = function(tpl) {
   if (!tpl) return;
@@ -8030,7 +8075,7 @@ window._prefillFromTemplate = function(tpl) {
   // salva em tpl.fmt2. É a fonte única de t.phases. Setamos como config pendente e remontamos
   // o format2 pra ele iniciar a partir dela (torneio NOVO a partir de template = sem editId).
   if (tpl.fmt2) {
-    window._f2PendingTemplateCfg = tpl.fmt2;
+    window._f2PendingTemplateCfg = window._f2TemplateCopy(tpl.fmt2);
     var _fm = document.getElementById('f2-config-mount'); if (_fm) { try { _fm.remove(); } catch (e) {} }
   }
   if (tpl.phase1Name != null) {
@@ -8422,6 +8467,12 @@ window._saveCurrentFormAsTemplate = function(saveButton) {
   var sportRaw = get('select-sport') || '';
   var sportClean = sportRaw.replace(/^[^\w\u00C0-\u024F]+/u, '').trim();
   var formatValue = get('select-formato');
+  var fmt2 = null;
+  try { fmt2 = window._f2TemplateCopy((typeof window._f2GetConfig === 'function') ? window._f2GetConfig() : null); } catch (e) {}
+  if (!fmt2) {
+    if (typeof showNotification === 'function') showNotification('Formato indisponível', 'Recarregue a ficha antes de salvar o template.', 'error');
+    return;
+  }
   var drawModeValue = get('draw-mode');
   var formatMap = { liga:'Liga', elim_simples:'Eliminatórias Simples', elim_dupla:'Dupla Eliminatória', grupos_mata:'Fase de Grupos + Eliminatórias' };
   var format;
@@ -8528,7 +8579,7 @@ window._saveCurrentFormAsTemplate = function(saveButton) {
       // v4.4.x (Camada 2): CONFIG DE FORMATO COMPLETA = a config do configurador único
       // (format2). É a MESMA fonte que o save lê pra montar t.phases → guardar a config crua
       // round-trips 100%. Fase 1 (nome) + toggles top-level completam.
-      fmt2: (function () { try { return (typeof window._f2GetConfig === 'function') ? window._f2GetConfig() : null; } catch (e) { return null; } })(),
+      fmt2: fmt2,
       phase1Name: (function () { var el = document.getElementById('phase1-name'); return el ? el.value.trim() : ''; })(),
       allowSelfDeactivation: (function () { var el = window._allowSelfDeactEl(); return el ? !!el.checked : true; })(),
       gruposCount: parseInt(get('grupos-count')) || 4,

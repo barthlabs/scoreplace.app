@@ -1570,16 +1570,32 @@ window._saveAsTemplate = function(tId) {
   if (typeof showInputDialog === 'function') {
     showInputDialog(_t('template.namePrompt'), t.name, function(templateName) {
       if (!templateName || !templateName.trim()) return;
+      var templateFmt2 = (typeof window._f2TemplateCopy === 'function') ? window._f2TemplateCopy(t.fmt2) : null;
       var template = {
         name: templateName.trim(),
         sport: t.sport || '',
         format: t.format || '',
+        fmt2: templateFmt2,
+        phase1Name: t.phase1Name || '',
+        drawMode: t.drawMode || 'sorteio',
+        ligaRoundFormat: t.ligaRoundFormat || '',
+        allowSelfDeactivation: t.allowSelfDeactivation,
         scoring: t.scoring || null,
         genderCategories: t.genderCategories || [],
         skillCategories: t.skillCategories || [],
+        ageCategories: t.ageCategories || [],
+        customCategories: t.customCategories || [],
         combinedCategories: t.combinedCategories || [],
         enrollmentMode: t.enrollmentMode || 'open',
         maxParticipants: t.maxParticipants || '',
+        maxParticipantsPerCategory: t.maxParticipantsPerCategory || '',
+        maxParticipantsByCategory: t.maxParticipantsByCategory || {},
+        gruposCount: templateFmt2 ? templateFmt2.grupos : t.gruposCount,
+        gruposClassified: templateFmt2 ? templateFmt2.classificados : t.gruposClassified,
+        gruposEqualOnly: t.gruposEqualOnly,
+        gruposSeedVip: t.gruposSeedVip,
+        gruposSeedCategory: t.gruposSeedCategory,
+        reiRainhaGroupsBy: t.reiRainhaGroupsBy || '',
         courtCount: t.courtCount || '',
         gameDuration: t.gameDuration || '',
         venue: t.venue || '',
@@ -1588,6 +1604,7 @@ window._saveAsTemplate = function(tId) {
         venueAddress: t.venueAddress || '',
         teamSize: t.teamSize || 1
       };
+      if (!template.fmt2) delete template.fmt2;
       window._saveTemplate(template).then(function(result) {
         if (result === 'ok') {
           showNotification(_t('template.saved'), '', 'success');
