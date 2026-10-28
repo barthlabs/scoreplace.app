@@ -39,10 +39,15 @@ test('árvore do ZIP exige conjunto exato e bytes idênticos', () => {
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('política de embalagem inclui testes em functions mas não em autodraw', () => {
+const { spawnSync } = require('node:child_process');
+const gitRoot = path.join(__dirname, '..');
+const hasGit = spawnSync('git', ['rev-parse', '--is-inside-work-tree'],
+  { cwd: gitRoot, encoding: 'utf8' }).status === 0;
+test('política de embalagem inclui testes em functions mas não em autodraw',
+  { skip: hasGit ? false : 'cópia git archive sem histórico Git; política validada na árvore de origem' }, () => {
   // O SHA curto de release é resolvido pelo teste sem depender do conteúdo do checkout.
   const { execFileSync } = require('node:child_process');
-  const full = execFileSync('git', ['rev-parse', '40be907df'], { cwd: path.join(__dirname, '..'), encoding: 'utf8' }).trim();
+  const full = execFileSync('git', ['rev-parse', '40be907df'], { cwd: gitRoot, encoding: 'utf8' }).trim();
   assert.equal(full.length, 40);
   assert(expectedNames(full, 'functions').some(x => x.startsWith('test-')));
   assert(!expectedNames(full, 'functions-autodraw').some(x => x.startsWith('test-')));
