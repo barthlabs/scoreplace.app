@@ -27,11 +27,14 @@ function eq(a, b, msg) { ok(JSON.stringify(a) === JSON.stringify(b), msg + ' (es
   Object.freeze(source.phases[0]); Object.freeze(source.phases[1]); Object.freeze(source.phases); Object.freeze(source.matches[0]); Object.freeze(source.matches); Object.freeze(source);
   var projected = eng.projectPhaseCfg(source.phases[0], source, 0);
   ok(projected.kind === 'classification' && projected.classification.structure === 'round_robin', 'fase histórica é projetada pelo FORMAT2');
-  var promotionPhase = { formatCode: 'elim_simples', _promoteAsked: true };
+  var promotionPhase = { formatCode: 'elim_simples' };
   var promotionContext = { phases: [{ formatCode: 'liga' }, promotionPhase] };
+  // Mesmo caminho do painel em tournaments-draw-prep.js: ele grava a escolha
+  // no objeto original t.phases[nextIdx] antes de chamar o avanço novamente.
+  promotionPhase._promoteAsked = true;
   var promotedProjection = eng.projectPhaseCfg(promotionPhase, promotionContext, 1);
   ok(promotedProjection._promoteAsked === true && promotionPhase._promoteAsked === true,
-    'decisão de promoção em memória sobrevive à projeção da fase histórica');
+    'flag gravada na fase original pelo painel sobrevive à projeção histórica');
   ok(JSON.stringify(source) === before && JSON.stringify(projected).indexOf('__scoreplacePhaseProjectionMarker') < 0,
     'projeção não muta documentos congelados nem vaza marcador');
   var marker = '__scoreplacePhaseProjectionMarker';
