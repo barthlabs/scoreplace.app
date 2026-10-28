@@ -303,6 +303,7 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
   function _schPodePrepararJogo(t, m) {
     if (!m || m.isBye || m.isSitOut || m.winner || m.wo || m.completedAt || m.resultAt ||
         (m.pendingResult && m.pendingResult.proposedAt)) return false;
+    if (typeof window._schPartidaImovel === 'function' && window._schPartidaImovel(m)) return false;
     // BYE pode chegar como rótulo do slot mesmo sem isBye no registro legado.
     if (m.p1 === 'BYE' || m.p2 === 'BYE') return false;
     function conhecido(v) { return !!(v && v !== 'TBD' && v !== 'BYE'); }

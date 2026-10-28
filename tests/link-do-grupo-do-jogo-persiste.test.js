@@ -522,6 +522,14 @@ const jogoDoDoc = (b, id) => (b.doc.rounds[0].matches || []).find((m) => m && m.
     ok('jogador não cria grupo antes de estar no confronto', negado && negado.code === 'permission-denied' &&
       !futuraJogador.waGroup);
     BANCO = bancoDividido();
+    regDe(BANCO, 'g0-1').jogo.pendingResult = { proposedAt: '2026-09-12T10:30:00.000Z' };
+    const beforePending = clone(regDe(BANCO, 'g0-1').jogo);
+    const pendingDenied = await erroDe(chamar('uOrg', { tournamentId: 'T1', matchId: 'g0-1',
+      link: LINK('4'), operationId: UUID(4) }));
+    ok('resultado pendente não aceita grupo novo', pendingDenied &&
+      pendingDenied.code === 'failed-precondition' &&
+      JSON.stringify(regDe(BANCO, 'g0-1').jogo) === JSON.stringify(beforePending));
+    BANCO = bancoDividido();
     const eSemLogin = await erroDe(CF.setMatchWhatsAppGroup.run({ data: { tournamentId: 'T1', matchId: 'g0-1', link: LINK('1'), operationId: UUID(1) }, auth: null, rawRequest: { headers: {} } }));
     ok('⛔ sem login, nem chega a ler o torneio', !!eSemLogin && eSemLogin.code === 'unauthenticated');
   }

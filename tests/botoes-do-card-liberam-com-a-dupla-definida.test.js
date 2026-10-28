@@ -136,6 +136,9 @@ ok(/_schOpenMatch/.test(finalCard) && /_waGrpOpen/.test(finalCard),
 ok(W._schPodePrepararJogo(T, { p1: 'TBD', p2: 'BYE' }) === false &&
    W._schPodePrepararJogo(T, { p1: 'A', p2: 'TBD', winner: 'A' }) === false,
    '⑤ BYE ou jogo concluído não ganha ação antecipada');
+ok(W._schPodePrepararJogo(T, { p1: 'TBD', p2: 'TBD', startedAt: '2026-10-28T10:00:00Z' }) === false &&
+   W._schPodePrepararJogo(T, { p1: 'TBD', p2: 'TBD', liveScored: true }) === false,
+   '⑤ organização não prepara data de jogo iniciado, mesmo sem lados definidos');
 
 console.log(fail ? ('  ' + fail + ' FALHA(S), ' + pass + ' ok') : ('  ✓ ' + pass + ' asserções'));
 process.exit(fail ? 1 : 0);

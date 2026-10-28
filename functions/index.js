@@ -6647,7 +6647,7 @@ exports.setMatchWhatsAppGroup = onCall(
       // serem definidos. Um jogador não pode criar grupo de jogo alheio/vazio.
       if (!apagar && !atual && (alvo.jogo.isBye || alvo.jogo.isSitOut ||
           alvo.jogo.p1 === "BYE" || alvo.jogo.p2 === "BYE" ||
-          (!knownSides.p1 && !knownSides.p2 && !souOrg) || _scheduleHasRealPlay(alvo.jogo))) {
+          (!knownSides.p1 && !knownSides.p2 && !souOrg) || _scheduleHasRealPlayAgenda(alvo.jogo))) {
         throw new HttpsError("failed-precondition", "jogo não aceita grupo novo");
       }
       const staleLink = !!(atual && !_matchKnownSidesValid(atual.knownSides, knownSides, alvo.jogo));
@@ -7217,11 +7217,13 @@ exports.setMatchSchedule = onCall(
         }
         if (it.temSchedule) {
           const currentSides = freshSides;
-          // Proposta antecipada pode ter um lado TBD, mas não pode nascer num
-          // jogo vazio, BYE/folga ou já disputado. Consenso segue mais estrito.
+          // A organização pode preparar final/3º lugar antes de conhecer os
+          // lados; participante não pode propor data para um jogo vazio.
+          // Nenhum dos dois pode abrir proposta depois de iniciado o jogo.
           if (alvo.jogo.isBye || alvo.jogo.isSitOut ||
               alvo.jogo.p1 === "BYE" || alvo.jogo.p2 === "BYE" ||
-              (!currentSides.p1 && !currentSides.p2) || _scheduleHasRealPlay(alvo.jogo)) {
+              (!currentSides.p1 && !currentSides.p2 && !souOrg) ||
+              _scheduleHasRealPlayAgenda(alvo.jogo)) {
             throw new HttpsError("failed-precondition", "jogo não aceita propostas novas");
           }
           const oldSides = alvo.jogo.schedule && alvo.jogo.schedule.knownSides;

@@ -278,6 +278,37 @@ const PROPOSTA = { options: [{ id: 'so_1', kind: 'date', dateISO: '2026-09-10', 
   ok('organizador ainda pode apontar data diretamente com rival TBD', orgDirect.ok &&
     jogoNoBanco(BANCO, 'g0-1').scheduledKind === 'organizer');
   BANCO = bancoDividido();
+  const futureFinal = jogoNoBanco(BANCO, 'g0-1');
+  futureFinal.p1 = 'TBD'; futureFinal.p2 = 'TBD';
+  futureFinal.team1Uids = []; futureFinal.team2Uids = [];
+  const finalSchedule = { options: [{ id: 'final_1', kind: 'date', dateISO: '2026-09-12',
+    time: '10:00', byUid: 'uOrg' }], votes: {}, dayVotes: {} };
+  const orgFinal = await chamar('uOrg', { tournamentId: 'T1', matchId: 'g0-1',
+    operationId: UUID(9), schedule: finalSchedule });
+  ok('organizador prepara a data da final com os dois lados TBD', orgFinal.ok &&
+    jogoNoBanco(BANCO, 'g0-1').schedule.options.length === 1);
+  const unauthorizedFinal = await erroDe(chamar('uA', { tournamentId: 'T1', matchId: 'g0-1',
+    operationId: UUID(8), schedule: finalSchedule }));
+  ok('participante não propõe data em jogo sem lados', unauthorizedFinal &&
+    ['failed-precondition', 'permission-denied'].includes(unauthorizedFinal.code));
+  jogoNoBanco(BANCO, 'g0-1').startedAt = '2026-09-12T10:00:00.000Z';
+  const beforeStarted = clone(jogoNoBanco(BANCO, 'g0-1'));
+  const startedFinal = await erroDe(chamar('uOrg', { tournamentId: 'T1', matchId: 'g0-1',
+    operationId: UUID(8), schedule: finalSchedule }));
+  ok('jogo iniciado não aceita proposta de data, mesmo com ambos os lados TBD',
+    startedFinal && startedFinal.code === 'failed-precondition');
+  ok('proposta recusada não regrava o jogo iniciado',
+    JSON.stringify(jogoNoBanco(BANCO, 'g0-1')) === JSON.stringify(beforeStarted));
+  delete jogoNoBanco(BANCO, 'g0-1').startedAt;
+  jogoNoBanco(BANCO, 'g0-1').pendingResult = { proposedAt: '2026-09-12T10:30:00.000Z' };
+  const beforePending = clone(jogoNoBanco(BANCO, 'g0-1'));
+  const pendingFinal = await erroDe(chamar('uOrg', { tournamentId: 'T1', matchId: 'g0-1',
+    operationId: UUID(8), schedule: finalSchedule }));
+  ok('resultado pendente também impede proposta nova',
+    pendingFinal && pendingFinal.code === 'failed-precondition');
+  ok('proposta recusada preserva o resultado pendente',
+    JSON.stringify(jogoNoBanco(BANCO, 'g0-1')) === JSON.stringify(beforePending));
+  BANCO = bancoDividido();
   const guestMatch = jogoNoBanco(BANCO, 'g0-1');
   guestMatch.p1 = 'Guest A'; guestMatch.team1Uids = []; guestMatch.p1Uid = null;
   await chamar('uOrg', { tournamentId: 'T1', matchId: 'g0-1', operationId: UUID(9),
