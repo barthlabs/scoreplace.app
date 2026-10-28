@@ -55,6 +55,8 @@ const EMULADOR_MANUAL = {
    * função pura não alcança isso. */
   'functions/test-contato-email-emu.js':
     'firebase emulators:exec --only functions,firestore,auth --project demo-scoreplace "node functions/test-contato-email-emu.js"',
+  'functions/test-public-canonical-roster-emu.js':
+    'firebase emulators:exec --only functions,firestore,auth --project demo-scoreplace "node functions/test-public-canonical-roster-emu.js"',
   'functions-autodraw/test-reconciliacao-marca-emu.js':
     'cd functions-autodraw && firebase emulators:exec --only functions,firestore,auth --config firebase.emulator.json --project demo-scoreplace "node test-reconciliacao-marca-emu.js"',
   'functions-autodraw/test-canonical-sandbox-emu.js':

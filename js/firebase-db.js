@@ -2004,7 +2004,7 @@ window.FirestoreDB = {
     var result = await this._callFn('getCanonicalTournamentRoster', {
       tournamentId: String(tournamentId || ''),
       sandbox: typeof this._ehSandbox === 'function' && this._ehSandbox(tournamentId)
-    });
+    }, { semLogin: true });
     // A registration is the typed canonical record. Placeholder reservations
     // stay beside it until the organizer assigns gender/category; callers that
     // render the complete roster merge them explicitly. Merging here would make

@@ -6139,13 +6139,13 @@ exports.requestCanonicalRegistration = onCall(
 
 /* A coleção canônica permanece privada no Firestore. Esta é a única ponte de
  * leitura para a tela: devolve uma projeção estrutural, nunca os documentos
- * crus, e somente para a organização ou alguém que já pertença ao elenco.
+ * crus. Espectadores de torneios gerais recebem apenas identidades já
+ * demonstradas pelos jogos públicos, nunca inscrições ainda sem jogo.
  * `participants` portanto não volta a ser um espelho persistido só para UI. */
 exports.getCanonicalTournamentRoster = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
   async (request) => {
     const callerUid = request.auth && request.auth.uid;
-    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
     const tournamentId = String((request.data && request.data.tournamentId) || "").trim();
     if (!tournamentId) throw new HttpsError("invalid-argument", "tournamentId é obrigatório");
     const db = admin.firestore();
@@ -6153,9 +6153,13 @@ exports.getCanonicalTournamentRoster = onCall(
     // fallback. No sandbox, memberUids/adminUids são cópia fiel e não autorizam.
     const sandbox = request.data && request.data.sandbox === true;
     const ref = db.collection(sandbox ? "sandboxes" : "tournaments").doc(tournamentId);
-    return await db.runTransaction(async (tx) => {
+    if (sandbox && !callerUid) throw new HttpsError("not-found", "torneio não existe");
+    const roster = await db.runTransaction(async (tx) => {
       const tournamentSnap = await tx.get(ref);
       const tournament = tournamentSnap.exists ? tournamentSnap.data() || {} : {};
+      const publicGeneral = !sandbox && tournamentSnap.exists && tournament.isPublic === true &&
+        tournament.isSandbox !== true && tournament.organizerOnly !== true && tournament.membersOnly !== true;
+      if (!callerUid && !publicGeneral) throw new HttpsError("not-found", "torneio não existe");
       if (sandbox) {
         await _sandboxAutorizado(db, tournamentSnap, callerUid, (sourceRef) => tx.get(sourceRef));
       } else if (!tournamentSnap.exists) {
@@ -6182,11 +6186,13 @@ exports.getCanonicalTournamentRoster = onCall(
       try { categoryDefinitions = _categoryEligibility.normalizeCategoryDefinitions(tournament.categoryDefinitions); }
       catch (error) { throw new HttpsError("failed-precondition", error.message); }
       const participants = checked.participants;
-      const belongsToRoster = participants.some((entry) => [entry.uid, entry.p1Uid, entry.p2Uid]
+      const belongsToRoster = !!callerUid && participants.some((entry) => [entry.uid, entry.p1Uid, entry.p2Uid]
         .filter(Boolean).map(String).indexOf(String(callerUid)) !== -1);
-      if (!sandbox && !_isTournamentOrgCaller(tournament, callerUid) && !belongsToRoster) {
+      const isOrg = !!callerUid && _isTournamentOrgCaller(tournament, callerUid);
+      if (!sandbox && !isOrg && !belongsToRoster && !publicGeneral) {
         throw new HttpsError("permission-denied", "elenco indisponível neste torneio");
       }
+      const publicSpectator = !sandbox && !isOrg && !belongsToRoster && publicGeneral;
       // A interface recebe o mapa somente para apresentação. A identidade que
       // acompanha cada entrada é `categoryId` e as portas de mutação nunca
       // aceitam um label em seu lugar.
@@ -6212,11 +6218,83 @@ exports.getCanonicalTournamentRoster = onCall(
       return {
         tournamentId,
         registrationCount: checked.registrations.length,
-        participants,
-        placeholderReservations,
-        categoryDefinitions: categoryDefinitions.map((definition) => ({ id: definition.id, label: definition.label }))
+        participants: publicSpectator ? [] : participants,
+        placeholderReservations: publicSpectator ? [] : placeholderReservations,
+        categoryDefinitions: categoryDefinitions.map((definition) => ({ id: definition.id, label: definition.label })),
+        // Estes campos ficam somente na memória da callable; nunca são enviados
+        // ao cliente. A projeção pública é concluída fora da transação para que
+        // a leitura de jogos seja paginada, inclusive em torneios grandes.
+        _publicSpectator: publicSpectator,
+        _verifiedParticipants: publicSpectator ? participants : null
       };
     });
+    if (!roster._publicSpectator) {
+      delete roster._publicSpectator;
+      delete roster._verifiedParticipants;
+      return roster;
+    }
+    // A consulta não usa nomes nem o ID de uma dupla isoladamente como prova:
+    // só UIDs que já constam do jogo público podem aparecer na projeção.
+    const publicUids = new Set();
+    const publicPairs = new Map();
+    const addUid = (value) => { if (typeof value === "string" && value.trim()) publicUids.add(value.trim()); };
+    let cursor = null;
+    while (true) {
+      let query = ref.collection("matches").orderBy("__name__")
+        .select("jogo", "playerUids", "team1Obj", "team2Obj", "team1Uids", "team2Uids", "p1Uid", "p2Uid")
+        .limit(200);
+      if (cursor) query = query.startAfter(cursor);
+      const page = await query.get();
+      page.forEach((doc) => {
+        const raw = doc.data() || {};
+        const game = raw.jogo || raw;
+        [game.team1Obj, game.team2Obj].forEach((side) => {
+          if (!side || typeof side !== "object") return;
+          if (typeof side.fixedPairId === "string" && side.fixedPairId.trim()) {
+            const id = side.fixedPairId.trim();
+            const sides = publicPairs.get(id) || [];
+            sides.push(side);
+            publicPairs.set(id, sides);
+          }
+          addUid(side.uid); addUid(side.p1Uid); addUid(side.p2Uid);
+        });
+        [raw.playerUids, game.team1Uids, game.team2Uids].forEach((values) => {
+          if (Array.isArray(values)) values.forEach(addUid);
+        });
+        addUid(game.p1Uid); addUid(game.p2Uid);
+      });
+      if (page.size < 200) break;
+      cursor = page.docs[page.docs.length - 1];
+    }
+    roster.participants = roster._verifiedParticipants.map((entry) => {
+      if (!entry) return null;
+      if (entry.fixedPairId) {
+        if (!entry.p1Uid && !entry.p2Uid) return null;
+        const side = (publicPairs.get(String(entry.fixedPairId)) || []).find((candidate) =>
+          (!entry.p1Uid || String(candidate.p1Uid || "") === String(entry.p1Uid)) &&
+          (!entry.p2Uid || String(candidate.p2Uid || "") === String(entry.p2Uid)));
+        if (!side) return null;
+        return {
+          categoryId: entry.categoryId, category: entry.category,
+          categories: entry.categories, fixedPair: true, fixedPairId: entry.fixedPairId,
+          ...(entry.p1Uid ? { p1Uid: entry.p1Uid } : {}),
+          ...(entry.p2Uid ? { p2Uid: entry.p2Uid } : {})
+        };
+      }
+      if (!entry.uid || !publicUids.has(String(entry.uid))) return null;
+      return { categoryId: entry.categoryId, category: entry.category,
+        categories: entry.categories, uid: entry.uid };
+    }).filter(Boolean);
+    // A visibilidade pode ter mudado enquanto as páginas de jogos eram lidas.
+    // Conferir novamente evita devolver um roster público de torneio fechado.
+    const latest = await ref.get();
+    const current = latest.exists ? latest.data() || {} : {};
+    if (current.isPublic !== true || current.organizerOnly === true || current.membersOnly === true || current.isSandbox === true) {
+      throw new HttpsError("not-found", "torneio não existe");
+    }
+    delete roster._publicSpectator;
+    delete roster._verifiedParticipants;
+    return roster;
   }
 );
 

@@ -54,6 +54,7 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 const SUITES = [
+  'tests/public-canonical-roster-client.test.js',
   'tests/registration-settings.test.js',
   'tests/sandbox-enrollment-route.test.js',
   'tests/neon-sandbox-guard.test.js',
