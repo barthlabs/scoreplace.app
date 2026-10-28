@@ -3,11 +3,132 @@
  * Eliminatória puxando 1º-2º de cada grupo → Ouro e 3º-4º → Prata, duplas fixas,
  * convergindo em grande final + 3º/4º.
  */
+global.window = global;
+require('./format2.js');
 var eng = require('./phases-engine.js');
 
 var pass = 0, fail = 0;
 function ok(cond, msg) { if (cond) { pass++; } else { fail++; console.error('  ✗ FALHOU:', msg); } }
 function eq(a, b, msg) { ok(JSON.stringify(a) === JSON.stringify(b), msg + ' (esperado ' + JSON.stringify(b) + ', veio ' + JSON.stringify(a) + ')'); }
+
+// Projeção é só leitura: preserva documentos antigos e rejeita ambiguidades.
+(function () {
+  var invalid = [null, {}, { kind: 'unexpected' }, { kind: 'classification' },
+    { kind: 'elimination', elimination: { bracketType: 'triple' } }];
+  invalid.forEach(function (cfg, i) {
+    var noThrow = true, values;
+    try { values = [eng.phaseIsGroups(cfg), eng.phaseIsLiga(cfg), eng.phaseIsMonarch(cfg)]; }
+    catch (e) { noThrow = false; }
+    ok(noThrow && values && values.every(function (value) { return value === false; }), 'predicados neutros para fase inválida ' + i);
+  });
+  var source = { phases: [{ name: 'Fase antiga', formatCode: 'liga', rounds: 3 },
+    { name: 'Final', formatCode: 'elim_simples' }], matches: [{ id: 'preservar', winner: 'A' }] };
+  var before = JSON.stringify(source);
+  Object.freeze(source.phases[0]); Object.freeze(source.phases[1]); Object.freeze(source.phases); Object.freeze(source.matches[0]); Object.freeze(source.matches); Object.freeze(source);
+  var projected = eng.projectPhaseCfg(source.phases[0], source, 0);
+  ok(projected.kind === 'classification' && projected.classification.structure === 'round_robin', 'fase histórica é projetada pelo FORMAT2');
+  ok(JSON.stringify(source) === before && JSON.stringify(projected).indexOf('__scoreplacePhaseProjectionMarker') < 0,
+    'projeção não muta documentos congelados nem vaza marcador');
+  var marker = '__scoreplacePhaseProjectionMarker';
+  var collision = Object.assign({}, source.phases[0], { [marker]: true });
+  var collisionRejected = false;
+  try { eng.projectPhaseCfg(collision, { phases: [collision] }, 0); } catch (e) { collisionRejected = true; }
+  ok(collisionRejected, 'marcador preexistente é recusado');
+  var originalProjector = window.FORMAT2.projectLegacyPhases;
+  try {
+    window.FORMAT2.projectLegacyPhases = function () { return { phases: [] }; };
+    var zeroRejected = false;
+    try { eng.projectPhaseCfg(source.phases[0], source, 0); } catch (e) { zeroRejected = true; }
+    ok(zeroRejected, 'projeção sem fase identificável é recusada');
+    window.FORMAT2.projectLegacyPhases = function () { return { phases: [{ [marker]: true }, { [marker]: true }] }; };
+    var twoRejected = false;
+    try { eng.projectPhaseCfg(source.phases[0], source, 0); } catch (e) { twoRejected = true; }
+    ok(twoRejected, 'projeção com duas fases ambíguas é recusada');
+  } finally { window.FORMAT2.projectLegacyPhases = originalProjector; }
+  ok(!eng.phaseComplete({ phases: [{ kind: 'invalid' }, { kind: 'elimination', elimination: { bracketType: 'single' } }], groups: [{ matches: [{ winner: 'A' }] }] }),
+    'leitura de fase inválida não conclui torneio');
+  var historicalAtOne = { phases: [{ formatCode: 'grupos_mata' }, { formatCode: 'elim_dupla' }] };
+  var omittedIndexRejected = false;
+  try { eng.generatePhase([], historicalAtOne.phases[1], { t: historicalAtOne }); }
+  catch (e) { omittedIndexRejected = /Índice obrigatório/.test(String(e.message)); }
+  ok(omittedIndexRejected, 'fase histórica com contexto exige índice explícito antes do sorteio');
+  ok(JSON.stringify(historicalAtOne) === '{"phases":[{"formatCode":"grupos_mata"},{"formatCode":"elim_dupla"}]}',
+    'erro de índice não altera fases guardadas');
+  var partial = { kind: 'classification', name: 'Rei/Rainha', drawMode: 'rei_rainha', formatCode: 'liga' };
+  var partialT = { phases: [partial], matches: [{ id: 'j1', winner: 'A' }] };
+  var partialBefore = JSON.stringify(partialT);
+  Object.freeze(partial); Object.freeze(partialT.phases); Object.freeze(partialT.matches[0]); Object.freeze(partialT.matches); Object.freeze(partialT);
+  var partialCfg = eng.projectPhaseCfg(partial, partialT, 0);
+  ok(partialCfg.kind === 'classification' && partialCfg.classification.structure === 'round_robin' && partialCfg.drawMode === 'rei_rainha',
+    'fase Rei/Rainha parcialmente tipada projeta domínio sem trocar modalidade');
+  ok(JSON.stringify(partialT) === partialBefore && JSON.stringify(partialCfg).indexOf(marker) < 0,
+    'projeção parcial não altera documento nem vaza marcador');
+  var advancingPartial = { phases: [partial, { kind: 'elimination', elimination: { bracketType: 'single' } }],
+    groups: [{ name: 'Grupo A', matches: [{ id: 'p0', p1: 'A', p2: 'B', winner: 'A' }] }], currentPhaseIndex: 0 };
+  ok(eng.phaseComplete(advancingPartial) === true &&
+    eng.projectPhaseCfg(advancingPartial.phases[0], advancingPartial, 0).kind === 'classification' &&
+    eng.projectPhaseCfg(advancingPartial.phases[1], advancingPartial, 1).kind === 'elimination',
+    'fase atual parcial válida continua elegível ao avanço após projeção das duas fases');
+  var partialIndexRejected = false;
+  try { eng.generatePhase([], partial, { t: partialT }); } catch (e) { partialIndexRejected = /Índice obrigatório/.test(String(e.message)); }
+  ok(partialIndexRejected, 'geração parcial exige índice quando já há fases');
+  var synthesized = eng.generatePhase([], partial, { ordered: true });
+  ok(!!synthesized && JSON.stringify(partialT) === partialBefore,
+    'fase parcial sem torneio usa envelope sintético somente em memória');
+  var absentElim = { kind: 'elimination', formatCode: 'elim_dupla' };
+  var elimCfg = eng.projectPhaseCfg(absentElim, { phases: [absentElim] }, 0);
+  ok(elimCfg.kind === 'elimination' && elimCfg.elimination.bracketType === 'double', 'eliminação parcial é projetada');
+  [{ kind: 'classification', classification: { structure: 'foo' }, format: 'Grupos' },
+    { kind: 'elimination', elimination: { bracketType: 'foo' }, formatCode: 'elim_dupla' },
+    { kind: 'unknown', format: 'Liga' }].forEach(function (bad, i) {
+    var rejected = false;
+    try { eng.projectPhaseCfg(bad, { phases: [bad] }, 0); } catch (e) { rejected = true; }
+    ok(rejected, 'domínio explicitamente inválido não usa heurística ' + i);
+  });
+  var swissElim = { kind: 'elimination', formatCode: 'elim_simples' };
+  var swissT = { currentStage: 'elimination', swissRoundsData: [{ matches: [] }], phases: [swissElim] };
+  var swissBefore = JSON.stringify(swissT);
+  var swissCfg = eng.projectPhaseCfg(swissElim, swissT, 0);
+  ok(swissCfg.kind === 'elimination' && swissCfg.elimination.bracketType === 'single',
+    'inserção suíça não muda identidade da fase eliminatória original');
+  ok(JSON.stringify(swissT) === swissBefore && JSON.stringify(swissCfg).indexOf(marker) < 0,
+    'inserção suíça não altera torneio nem vaza marcador');
+  var otherMarked = { formatCode: 'elim_simples', [marker]: true };
+  var twoMarkers = { phases: [{ formatCode: 'grupos_mata' }, otherMarked] };
+  var otherRejected = false;
+  try { eng.projectPhaseCfg(twoMarkers.phases[0], twoMarkers, 0); } catch (e) { otherRejected = true; }
+  ok(otherRejected, 'marcador preexistente em outra fase torna identidade ambígua');
+  var nested = { phases: [{ formatCode: 'grupos_mata' }, { formatCode: 'elim_simples', elimination: { labels: ['Ouro'] } }] };
+  var nestedBefore = JSON.stringify(nested);
+  Object.freeze(nested.phases[1].elimination.labels); Object.freeze(nested.phases[1].elimination);
+  Object.freeze(nested.phases[1]); Object.freeze(nested.phases); Object.freeze(nested);
+  eng.projectPhaseCfg(nested.phases[0], nested, 0);
+  ok(JSON.stringify(nested) === nestedBefore, 'fase não selecionada congelada inclusive nos aninhados não é mutada');
+  [['Grupos', 'liga', 'groups'], ['Liga', 'grupos_mata', 'groups']].forEach(function (entry) {
+    var c = { kind: 'classification', format: entry[0], formatCode: entry[1] };
+    ok(eng.projectPhaseCfg(c, { phases: [c] }, 0).classification.structure === entry[2],
+      'fase histórica parcial preserva precedência do tradutor existente: ' + entry[0]);
+  });
+  var priorStore = window.AppStore, priorDb = window.FirestoreDB;
+  window.AppStore = { sync: function () { throw new Error('escrita indevida'); } };
+  window.FirestoreDB = { saveTournament: function () { throw new Error('escrita indevida'); } };
+  try {
+    [{ phases: [{ kind: 'classification', classification: { structure: 'foo' } }, { kind: 'elimination', elimination: { bracketType: 'single' } }] },
+      { phases: [{ kind: 'classification', classification: { structure: 'groups' } }, { kind: 'elimination', elimination: { bracketType: 'foo' } }] }]
+      .forEach(function (t, i) {
+        var snapshot = JSON.stringify(t);
+        var result = eng.materializeNextPhase(t, function () { return []; });
+        ok(result.ok === false && result.error === 'invalid-phase-config' && JSON.stringify(t) === snapshot,
+          'materializador retorna erro sem mutar para fase inválida ' + i);
+      });
+    var validPartial = { phases: [{ kind: 'classification', formatCode: 'grupos_mata' },
+      { kind: 'elimination', elimination: { bracketType: 'single' } }] };
+    var validBefore = JSON.stringify(validPartial);
+    var validResult = eng.materializeNextPhase(validPartial, function () { return []; });
+    ok(validResult.error === 'no-groups' && JSON.stringify(validPartial) === validBefore,
+      'fase atual parcial válida passa pela projeção, sem escrita quando faltam grupos');
+  } finally { window.AppStore = priorStore; window.FirestoreDB = priorDb; }
+})();
 
 // 4 grupos (A,B,C,D) de 4 jogadores, standings já ordenado por colocação.
 function grp(letter) {
@@ -473,9 +594,9 @@ ok(mres3.ok === false && mres3.error === 'already-materialized', 'guard _phaseMa
 
 // ── v3.1: FASE DE GRUPOS como fase posterior ───────────────────────────────
 (function () {
-  ok(eng.phaseIsGroups({ formatCode: 'grupos_mata' }), 'phaseIsGroups: grupos_mata');
-  ok(eng.phaseIsGroups({ format: 'Fase de Grupos' }), 'phaseIsGroups: label com "grupo"');
-  ok(!eng.phaseIsGroups({ formatCode: 'elim_dupla' }), 'phaseIsGroups: elim_dupla não é grupo');
+  ok(eng.phaseIsGroups({ kind: 'classification', classification: { structure: 'groups' }, formatCode: 'grupos_mata' }), 'phaseIsGroups: grupos_mata');
+  ok(eng.phaseIsGroups({ kind: 'classification', classification: { structure: 'groups' }, format: 'Fase de Grupos' }), 'phaseIsGroups: label com "grupo"');
+  ok(!eng.phaseIsGroups({ kind: 'elimination', elimination: { bracketType: 'double' }, formatCode: 'elim_dupla' }), 'phaseIsGroups: elim_dupla não é grupo');
 
   // 8 classificados (1 grupo anterior, todos avançam) → 2 grupos de 4 round-robin.
   var prevG = [{ name: 'Classif', standings: [] }];
@@ -670,10 +791,10 @@ ok(mres3.ok === false && mres3.error === 'already-materialized', 'guard _phaseMa
 
 // ── v3.1: REI/RAINHA como fase posterior ───────────────────────────────────
 (function () {
-  ok(eng.phaseIsMonarch({ reiRainha: true }), 'phaseIsMonarch: reiRainha=true');
-  ok(eng.phaseIsMonarch({ format: 'Liga', drawMode: 'rei_rainha' }), 'phaseIsMonarch: drawMode rei_rainha');
+  ok(eng.phaseIsMonarch({ kind: 'classification', classification: { structure: 'round_robin' }, reiRainha: true }), 'phaseIsMonarch: reiRainha=true');
+  ok(eng.phaseIsMonarch({ kind: 'classification', classification: { structure: 'round_robin' }, format: 'Liga', drawMode: 'rei_rainha' }), 'phaseIsMonarch: drawMode rei_rainha');
   ok(!eng.phaseIsMonarch({ format: 'liga' }), 'phaseIsMonarch: liga sem reiRainha não é monarch');
-  ok(!eng.phaseIsGroups({ reiRainha: true, formatCode: 'grupos_mata' }), 'phaseIsGroups: reiRainha tem precedência (não é grupos)');
+  ok(!eng.phaseIsGroups({ kind: 'classification', classification: { structure: 'round_robin' }, reiRainha: true, formatCode: 'grupos_mata' }), 'phaseIsGroups: reiRainha tem precedência (não é grupos)');
 
   // Campanha kill-monarch-format: monarch NÃO tem gerador de rodada única — é rota
   // league INCREMENTAL (pool → rodadas via _generateNextRound/_phaseGenNextLeagueRound).
@@ -714,10 +835,10 @@ ok(mres3.ok === false && mres3.error === 'already-materialized', 'guard _phaseMa
 
 // ── v3.1: LIGA (Pontos Corridos) como fase posterior ───────────────────────
 (function () {
-  ok(eng.phaseIsLiga({ formatCode: 'liga' }), 'phaseIsLiga: formatCode liga');
-  ok(eng.phaseIsLiga({ format: 'Pontos Corridos' }), 'phaseIsLiga: label Pontos Corridos');
-  ok(!eng.phaseIsLiga({ formatCode: 'liga', reiRainha: true }), 'phaseIsLiga: liga+reiRainha é monarch, não liga');
-  ok(!eng.phaseIsLiga({ formatCode: 'elim_dupla' }), 'phaseIsLiga: elim não é liga');
+  ok(eng.phaseIsLiga({ kind: 'classification', classification: { structure: 'round_robin' }, formatCode: 'liga' }), 'phaseIsLiga: formatCode liga');
+  ok(eng.phaseIsLiga({ kind: 'classification', classification: { structure: 'round_robin' }, format: 'Pontos Corridos' }), 'phaseIsLiga: label Pontos Corridos');
+  ok(!eng.phaseIsLiga({ kind: 'classification', classification: { structure: 'round_robin' }, formatCode: 'liga', reiRainha: true }), 'phaseIsLiga: liga+reiRainha é monarch, não liga');
+  ok(!eng.phaseIsLiga({ kind: 'elimination', elimination: { bracketType: 'double' }, formatCode: 'elim_dupla' }), 'phaseIsLiga: elim não é liga');
 
   // 5 classificados → round-robin C(5,2)=10 (1 turno).
   var prevG = [{ name: 'C', standings: [] }];

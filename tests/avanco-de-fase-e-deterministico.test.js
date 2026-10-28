@@ -44,7 +44,7 @@ function motor() {
   const DOMAINS = path.join(__dirname, '..', 'js', 'domain');
   vm.runInContext(fs.readFileSync(path.join(DOMAINS, 'standings.js'), 'utf8'), g, { filename: 'standings.js' });
   ['identity-core.js', 'persist-core.js', 'waitlist-core.js', 'standings-core.js',
-   'sport-rules.js', 'tournament-split-core.js', 'bracket-model.js', 'chaves.js',
+   'sport-rules.js', 'tournament-split-core.js', 'format2.js', 'bracket-model.js', 'chaves.js',
    'chaves-adapter.js', 'tournaments-draw-prep.js', 'tournaments-draw.js',
    'bracket-logic.js', 'phases-engine.js'].forEach((f) => {
     const p = path.join(RAIZ, f);

@@ -17,6 +17,12 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
+// O construtor de fase 0 é definido antes dos seus módulos no HTML, mas só roda
+// após a carga deferida. No servidor os requires precisam vir na ordem inversa.
+const shell = fs.readFileSync(path.resolve(__dirname, '..', 'index.html'), 'utf8');
+const shim = fs.readFileSync(path.join(__dirname, 'draw-core.js'), 'utf8');
+const deployScript = fs.readFileSync(path.resolve(__dirname, '..', 'scripts', 'deploy-hosting.sh'), 'utf8');
+
 let pass = 0, fail = 0;
 function ok(name, cond, got) {
   if (cond) { pass++; console.log('  ✓ ' + name + (got !== undefined ? ' (got ' + got + ')' : '')); }
@@ -26,6 +32,16 @@ function eq(name, a, b) {
   const sa = JSON.stringify(a), sb = JSON.stringify(b);
   ok(name, sa === sb, sa === sb ? undefined : '\n      esperado: ' + sb + '\n      obtido:   ' + sa);
 }
+ok('browser: scripts diferidos carregam FORMAT2 antes do motor de fases',
+  shell.indexOf('js/views/format2.js?') >= 0 && shell.indexOf('js/views/format2.js?') < shell.indexOf('js/views/phases-engine.js?') &&
+  /js\/views\/format2\.js\?[^"']+" defer/.test(shell) && /js\/views\/phases-engine\.js\?[^"']+" defer/.test(shell));
+ok('servidor: FORMAT2 carregado antes do motor e do construtor',
+  shim.indexOf("require('./vendor/format2.js')") >= 0 &&
+  shim.indexOf("require('./vendor/format2.js')") < shim.indexOf("require('./vendor/phases-engine.js')") &&
+  shim.indexOf("require('./vendor/phases-engine.js')") < shim.indexOf("require('./vendor/tournaments-draw.js')"));
+ok('publicação: troca cache-busters depois de preparar nova versão e antes do push',
+  deployScript.indexOf('prepare-hosting-release.js') < deployScript.indexOf('check-cache-busters.js" --fix') &&
+  deployScript.indexOf('check-cache-busters.js" --fix') < deployScript.indexOf('if ! git push --force-with-lease'));
 
 // ── Carrega um format2.js num contexto ISOLADO (não polui o global do processo) ──
 // format2.js é um IIFE que lê window.SPORT_RULES e escreve window.FORMAT2.
@@ -102,6 +118,14 @@ const core = require('./draw-core.js');
 // fase explícita prevalece; sem ela, o intent é normalizado antes da leitura.
 (function () {
   const build = core._window._buildPhase0Cfg;
+  const phaseEngine = core._window._phasesEngine;
+  let missingEngineRejected = false;
+  try {
+    core._window._phasesEngine = null;
+    build({ format: 'Liga', phases: [{ kind: 'classification', classification: { structure: 'round_robin' } }] });
+  } catch (e) { missingEngineRejected = /Motor de fases indisponível/.test(String(e.message)); }
+  finally { core._window._phasesEngine = phaseEngine; }
+  ok('motor indisponível bloqueia sorteio antes de gerar jogos', missingEngineRejected);
   const raw = { disputa: 'dupla', parceria: 'fixa', grupos: 1, classifAtiva: true,
     rodadas: { modo: 'todos', turnos: 'ida_volta' }, eliminatoria: { ativa: false },
     teamCompetition: { enabled: true, teamCount: 8, schedule: { enabled: true, teamsPerGroup: 8,

@@ -2292,26 +2292,41 @@ window._generateExtraRound = function (tId) {
 // é MODO (drawMode/reiRainha), não formato.
 window._buildPhase0Cfg = function (t) {
     var phase0 = ((t && t.phases) || [])[0] || null;
+    var projectedNoPhase = null;
+    if (phase0) {
+        if (!window._phasesEngine || typeof window._phasesEngine.projectPhaseCfg !== 'function') {
+            throw new Error('Motor de fases indisponível; sorteio não iniciado.');
+        }
+        phase0 = window._phasesEngine.projectPhaseCfg(phase0, t, 0);
+    } else {
+        if (!window.FORMAT2 || typeof window.FORMAT2.projectLegacyPhases !== 'function') {
+            throw new Error('Tradutor de fases indisponível; sorteio não iniciado.');
+        }
+        var synthesized = window.FORMAT2.projectLegacyPhases(t);
+        projectedNoPhase = synthesized && synthesized.phases && synthesized.phases[0];
+        if (!projectedNoPhase || !window._phasesEngine || typeof window._phasesEngine.classifyPhaseFormat !== 'function') {
+            throw new Error('Configuração de fase indisponível; sorteio não iniciado.');
+        }
+        window._phasesEngine.classifyPhaseFormat(projectedNoPhase);
+        phase0 = projectedNoPhase;
+    }
     var fmt = (phase0 && phase0.format) || t.format || 'Eliminatórias Simples';
     var code;
-    // O contrato de domínio da fase é a fonte primária. Os textos de topo abaixo
-    // existem exclusivamente para documentos ainda não projetados; usar o texto antes
-    // da fase fazia uma fase eliminatória posterior herdar "Liga" do torneio inteiro.
+    // A projeção acima é obrigatória mesmo sem phases[]. Os rótulos antigos não
+    // podem reclassificar uma fase depois que o domínio foi resolvido.
     if (phase0 && phase0.kind === 'classification') {
         code = (phase0.classification && phase0.classification.structure === 'groups') ? 'grupos_mata' : 'liga';
     } else if (phase0 && phase0.kind === 'elimination') {
         code = (phase0.elimination && phase0.elimination.bracketType === 'double') ? 'elim_dupla' : 'elim_simples';
-    } else if (window._isLigaFormat && window._isLigaFormat(t)) code = 'liga';
-    else if (fmt === 'Suíço Clássico' || t.classifyFormat === 'swiss') code = 'liga';
-    else if (/Grupo/.test(fmt)) code = 'grupos_mata';
-    else if (/Dupla/.test(fmt)) code = 'elim_dupla';
-    else if (/Rei|Rainha|monarch/i.test(fmt)) code = 'grupos_mata';
-    else code = 'elim_simples';
+    } else throw new Error('Domínio da fase inicial inválido; sorteio não iniciado.');
     var phaseDrawMode = phase0 && phase0.drawMode;
     var rei = (phase0 && phase0.reiRainha === true) || phaseDrawMode === 'rei_rainha'
         || (t.drawMode === 'rei_rainha') || (t.ligaRoundFormat === 'rei_rainha') || /Rei|Rainha/i.test(fmt);
     var cfg = {
         format: fmt, formatCode: code,
+        kind: phase0.kind,
+        classification: phase0.kind === 'classification' ? Object.assign({}, phase0.classification) : undefined,
+        elimination: phase0.kind === 'elimination' ? Object.assign({}, phase0.elimination) : undefined,
         /* ⛔⛔ A POLÍTICA DA CHAVE ENTRA AQUI, E ESTE É O CAMINHO MAIS IMPORTANTE DE TODOS: a fase 0 é
          * o SORTEIO INICIAL. Achado na 3ª revisão do plano do bloco 7 — eu já havia consertado o
          * adapter, as chaves por linha e o recálculo do tardio, e a fase 0 tinha ficado. Sem esta

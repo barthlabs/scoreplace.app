@@ -19,7 +19,7 @@ function pool(n) { var a = []; for (var i = 1; i <= n; i++) a.push({ displayName
 var ELIM_CFG = { name: 'Eliminatória', format: 'Eliminatórias Simples', formatCode: 'elim_simples', bracketResolution: 'bye', source: { type: 'previous', mapping: [{ dest: 'main', rankFrom: 1, rankTo: 1 }] } };
 
 function buildPhase0(t, cfg0) {
-  var built = E.generatePhase(pool(8), cfg0, { t: t, idPrefix: 'p0' });
+  var built = E.generatePhase(pool(8), cfg0, { t: t, phaseIndex: 0, idPrefix: 'p0' });
   E.storePhase(t, 0, built);
   return built;
 }
@@ -52,7 +52,7 @@ function decideAll(t) {
   var t = { id: 'm', phases: [cfg0, ELIM_CFG], currentPhaseIndex: 0, participants: pool(8) };
   // Campanha kill-monarch-format: monarch NÃO passa por storePhase — generatePhase
   // aplica direto em t (rota league incremental, t.rounds[].monarchGroups nativo).
-  var built = E.generatePhase(pool(8), cfg0, { t: t, idPrefix: 'p0' });
+  var built = E.generatePhase(pool(8), cfg0, { t: t, phaseIndex: 0, idPrefix: 'p0' });
   ok(built && built.appliedToT === true, 'Rei/Rainha fase 0 → rota league (appliedToT, t.rounds nativo)');
   ok(t.ligaRoundFormat === 'rei_rainha', 'reroteio marca ligaRoundFormat=rei_rainha');
   ok(!(t.matches || []).length && Array.isArray(t.rounds) && t.rounds.length === 1 && (t.rounds[0].monarchGroups || []).length === 2, 't.rounds[0].monarchGroups com 2 grupos (nada no modelo antigo t.matches)');

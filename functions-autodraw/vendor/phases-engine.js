@@ -1402,24 +1402,103 @@
     // kill-monarch-format (jul/2026) — nenhuma detecção lê o format string.
     return cfg.reiRainha === true || cfg.drawMode === 'rei_rainha';
   }
+  function _copyPhaseValue(value) {
+    if (Array.isArray(value)) return value.map(_copyPhaseValue);
+    if (value && Object.prototype.toString.call(value) === '[object Object]') {
+      var copy = {};
+      Object.keys(value).forEach(function (key) { copy[key] = _copyPhaseValue(value[key]); });
+      return copy;
+    }
+    return value;
+  }
+  function _validatedPhaseCfg(cfg) {
+    if (!cfg || typeof cfg !== 'object') throw new Error('Configuração de fase ausente.');
+    if (cfg.kind === 'classification') {
+      if (!cfg.classification || (cfg.classification.structure !== 'groups' && cfg.classification.structure !== 'round_robin')) {
+        throw new Error('Estrutura de fase classificatória inválida.');
+      }
+    } else if (cfg.kind === 'elimination') {
+      if (!cfg.elimination || (cfg.elimination.bracketType !== 'single' && cfg.elimination.bracketType !== 'double')) {
+        throw new Error('Tipo de chave eliminatória inválido.');
+      }
+    } else throw new Error('Domínio da fase ausente ou inválido.');
+    return cfg;
+  }
+  var _nodePhaseProjector = null;
+  function _realPhaseProjector() {
+    if (typeof window !== 'undefined' && window.FORMAT2) return window.FORMAT2.projectLegacyPhases;
+    // Testes Node isolados não têm o shell do navegador. Carregar o MESMO FORMAT2
+    // em VM, sem criar um tradutor alternativo nem mexer no global.window dos testes.
+    if (typeof require === 'function' && typeof module !== 'undefined' && module.exports) {
+      if (!_nodePhaseProjector) {
+        var fs = require('fs'), path = require('path'), vm = require('vm');
+        var sandbox = { window: {} };
+        vm.runInNewContext(fs.readFileSync(path.join(__dirname, 'format2.js'), 'utf8'), sandbox);
+        _nodePhaseProjector = sandbox.window.FORMAT2 && sandbox.window.FORMAT2.projectLegacyPhases;
+      }
+      return _nodePhaseProjector;
+    }
+    return null;
+  }
+  function projectPhaseCfg(cfg, context, index) {
+    var marker = '__scoreplacePhaseProjectionMarker';
+    if (cfg && Object.prototype.hasOwnProperty.call(cfg, marker)) throw new Error('Marcador de fase reservado.');
+    if (!cfg || typeof cfg !== 'object') throw new Error('Configuração de fase inválida.');
+    if (cfg.kind != null) {
+      if (cfg.kind !== 'classification' && cfg.kind !== 'elimination') throw new Error('Domínio da fase ausente ou inválido.');
+      var domain = cfg.kind === 'classification'
+        ? cfg.classification && cfg.classification.structure
+        : cfg.elimination && cfg.elimination.bracketType;
+      if (domain != null) return _validatedPhaseCfg(_copyPhaseValue(cfg));
+    }
+    var projector = _realPhaseProjector();
+    if (typeof projector !== 'function') throw new Error('Tradutor de fases indisponível.');
+    if (!context || !Number.isInteger(index) || index < 0) throw new Error('Contexto de fase obrigatório.');
+    // O tradutor lê campos do topo e copia cada fase: não duplicar elenco/jogos
+    // inteiros só para projetar uma configuração histórica em memória.
+    var envelope = Object.assign({}, context, {
+      phases: Array.isArray(context.phases) ? context.phases.map(function (phase) { return Object.assign({}, phase); }) : null
+    });
+    if (!Array.isArray(envelope.phases) || index >= envelope.phases.length) throw new Error('Índice de fase inválido.');
+    envelope.phases[index] = Object.assign(_copyPhaseValue(cfg), { [marker]: true });
+    var plan = projector(envelope);
+    var matches = (plan && Array.isArray(plan.phases) ? plan.phases : []).filter(function (phase) { return phase && phase[marker] === true; });
+    if (matches.length !== 1) throw new Error('Não foi possível identificar a fase traduzida.');
+    var projected = _copyPhaseValue(matches[0]);
+    delete projected[marker];
+    if (cfg.kind != null && projected.kind !== cfg.kind) throw new Error('Domínio da fase traduzida diverge do original.');
+    return _validatedPhaseCfg(projected);
+  }
   function classifyPhaseFormat(cfg) {
-    if (!cfg) return 'elim';
-    // Fases novas declaram o tipo de domínio. `formatCode` abaixo é somente a
-    // leitura de torneios já materializados antes deste contrato.
+    _validatedPhaseCfg(cfg);
     if (cfg.kind === 'elimination') return 'elim';
     if (cfg.kind === 'classification') {
       if (cfg.classification && cfg.classification.structure === 'groups') return 'groups';
       return 'league';
     }
-    var f = String(cfg.format || cfg.formatCode || '').toLowerCase();
-    if (cfg.formatCode === 'grupos_mata' || /grupo/.test(f)) return 'groups';
-    if (cfg.formatCode === 'liga' || /\bliga\b|pontos corridos|ranking|su[ií]ç?o|swiss/.test(f)) return 'league';
-    return 'elim';
+    throw new Error('Domínio da fase inválido.');
+  }
+  function _readPhaseCfg(cfg, context, index) {
+    try { return projectPhaseCfg(cfg, context, index); }
+    catch (e) {
+      // Erro de dado não vira fase concluída; registrar uma vez permite diagnosticar
+      // a configuração sem registrar nomes, placares ou o documento do torneio.
+      var key = String(index) + ':' + String(e && e.message);
+      if (!_phaseReadWarnings[key]) {
+        _phaseReadWarnings[key] = true;
+        if (typeof console !== 'undefined' && console.warn) console.warn('[phases] fase ilegível no índice ' + index + ': ' + (e && e.message));
+      }
+      return null;
+    }
+  }
+  var _phaseReadWarnings = {};
+  function _readPhaseFormat(cfg) {
+    try { return classifyPhaseFormat(cfg); } catch (e) { return null; }
   }
   function _phaseIsGroups(cfg) {
-    return !!cfg && !isMonarchDraw(cfg) && classifyPhaseFormat(cfg) === 'groups';
+    return !isMonarchDraw(cfg) && _readPhaseFormat(cfg) === 'groups';
   }
-  function _phaseIsMonarch(cfg) { return isMonarchDraw(cfg); }
+  function _phaseIsMonarch(cfg) { return !!cfg && cfg.kind === 'classification' && _readPhaseFormat(cfg) !== null && isMonarchDraw(cfg); }
 
   // REI/RAINHA como fase (qualquer índice): NÃO tem gerador próprio — é MODO de
   // sorteio do formato Pontos Corridos. Fase 0: generatePhase → ramo league →
@@ -1656,8 +1735,8 @@
     /* ⛔ Aqui havia `var _third = cfg.thirdPlace !== false`, DECLARADA E NUNCA USADA — resto da flag
      * que morreu na 2.1.41. Apagada em 26/set/2026 com o resto: variável morta que lê campo morto é
      * o convite para alguém "religar" a opcionalidade achando que ela fazia algo. */
-    var dupla = !!(cfg && ((cfg.elimination && cfg.elimination.bracketType === 'double') ||
-      (cfg.kind !== 'elimination' && (cfg.formatCode === 'elim_dupla' || /dupla/i.test(String(cfg.format || ''))))));
+    _validatedPhaseCfg(cfg);
+    var dupla = cfg.elimination.bracketType === 'double';
     if (pool.length === 1) {
       // 1 inscrito → campeão por BYE (preserva o legado da Fase 0).
       // v4.5.71: identidade por uid no slot real (p1 = campeão).
@@ -1673,6 +1752,19 @@
 
   function generatePhase(pool, cfg, ctx) {
     ctx = ctx || {};
+    var complete = cfg && ((cfg.kind === 'classification' && cfg.classification && cfg.classification.structure != null) ||
+      (cfg.kind === 'elimination' && cfg.elimination && cfg.elimination.bracketType != null));
+    if (!complete && (!cfg || cfg.kind == null || cfg.kind === 'classification' || cfg.kind === 'elimination')) {
+      var source = ctx.t || {};
+      var phaseIndex = ctx.phaseIndex == null ? 0 : ctx.phaseIndex;
+      if (!Array.isArray(source.phases) || !source.phases.length) {
+        source = Object.assign({}, source, { phases: [cfg] });
+        phaseIndex = 0;
+      } else if (!Number.isInteger(ctx.phaseIndex) || ctx.phaseIndex < 0) {
+        throw new Error('Índice obrigatório para sorteio de fase histórica.');
+      }
+      cfg = projectPhaseCfg(cfg, source, phaseIndex);
+    } else cfg = projectPhaseCfg(cfg, null, 0);
     var idPrefix = ctx.idPrefix || 'gp';
     pool = (pool || []).slice();
     var enroll = !!(cfg && cfg.source && cfg.source.type === 'enrollment');
@@ -1825,7 +1917,7 @@
 
   // Uma config de fase é Liga / Pontos Corridos (round-robin, tabela única)?
   function _phaseIsLiga(cfg) {
-    return !!cfg && !isMonarchDraw(cfg) && classifyPhaseFormat(cfg) === 'league';
+    return !isMonarchDraw(cfg) && _readPhaseFormat(cfg) === 'league';
   }
 
   // ── selectQualifiers — a TRANSIÇÃO canônica (quem classifica + como entra) ───
@@ -2099,8 +2191,9 @@
   // da classificação. Sem isso, prevPhaseGroups devolvia [] → phaseComplete=false (a
   // eliminatória nunca gerava) + total de jogos não somava a eliminatória (100% precoce).
   function _leagueGroupFromRounds(t) {
-    var cfg0 = (t.phases && t.phases[0]) || {};
-    if (isMonarchDraw(cfg0) || classifyPhaseFormat(cfg0) !== 'league') return [];
+    if (!t || !Array.isArray(t.phases) || !t.phases[0]) return [];
+    var cfg0 = _readPhaseCfg(t.phases[0], t, 0);
+    if (!cfg0 || isMonarchDraw(cfg0) || _readPhaseFormat(cfg0) !== 'league') return [];
     var allM = [], players = [], seen = {};
     (t.rounds || []).forEach(function (r) {
       (r && r.matches || []).forEach(function (m) {
@@ -2215,6 +2308,8 @@
   function phaseComplete(t) {
     if (!isMultiPhase(t)) return false;
     var cur = t.currentPhaseIndex || 0;
+    var currentCfg = _readPhaseCfg(t.phases[cur], t, cur);
+    if (!currentCfg) return false;
     if (cur === 0) {
       // Fase classificatória completa quando todos os jogos dos grupos estão
       // decididos. Cobre DOIS estilos:
@@ -2240,9 +2335,8 @@
       // Classificatória Liga/Suíço (fase 0): só COMPLETA quando TODAS as rodadas
       // configuradas foram geradas E decididas — senão a eliminatória geraria cedo,
       // no meio do Suíço (mesmo espírito do check monarca acima e da Liga incremental).
-      var cfg0 = t.phases[0] || {};
-      if (_roundsBased && !isMonarch && classifyPhaseFormat(cfg0) === 'league') {
-        var needL = (typeof window !== 'undefined' && typeof window._phasePlannedRounds === 'function') ? window._phasePlannedRounds(t, 0) : (parseInt(cfg0.rounds) || parseInt(cfg0.swissRounds) || 1);
+      if (_roundsBased && !isMonarch && _readPhaseFormat(currentCfg) === 'league') {
+        var needL = (typeof window !== 'undefined' && typeof window._phasePlannedRounds === 'function') ? window._phasePlannedRounds(t, 0) : (parseInt(currentCfg.rounds) || parseInt(currentCfg.swissRounds) || 1);
         var playedL = t.rounds.filter(function (r) {
           // Só rodada com confronto real satisfaz a quantidade planejada: BYE/folga
           // explicam a estrutura, mas não são uma rodada jogada da classificatória.
@@ -2469,6 +2563,13 @@
     var nextIdx = cur + 1;
     if (nextIdx >= t.phases.length) return { ok: false, error: 'no-next-phase' };
     if ((t._phaseMaterialized || 0) >= nextIdx) return { ok: false, error: 'already-materialized' };
+    var cfg, prevCfg;
+    try {
+      cfg = projectPhaseCfg(t.phases[nextIdx], t, nextIdx);
+      prevCfg = projectPhaseCfg(t.phases[cur], t, cur);
+    } catch (e) {
+      return { ok: false, error: 'invalid-phase-config' };
+    }
     // Origem das colocações: Fase 0 = grupos (Rei/Rainha ou round-robin); Fase 1+ =
     // resultado da CHAVE anterior (Chunk 4 — encadeamento além de 0→1). No 2º caso
     // as standings já vêm ranqueadas, então cs é identidade.
@@ -2476,7 +2577,6 @@
     if (cur === 0) { groups = prevPhaseGroups(t); cs = computeStandings; }
     else { groups = bracketPhaseGroups(t, cur); cs = function (g) { return g.standings || []; }; }
     if (!groups.length) return { ok: false, error: 'no-groups' };
-    var cfg = t.phases[nextIdx];
     // v3.1.15: roteamento por FORMATO (classifyPhaseFormat → league/groups/elim). O
     // modo de sorteio (Rei/Rainha) e a cadência (rodada a rodada / todos contra todos)
     // são EIXOS ORTOGONAIS dentro do formato Pontos Corridos — NÃO um 4º formato.
@@ -2491,7 +2591,7 @@
     // ⭐ AQUI é a camada que conhece a fase ANTERIOR de verdade: `t.phases[cur]`, com o
     // `reiRainha`/`drawMode` e o `rounds` que o compilador gravou. Vai numa CÓPIA do cfg —
     // a configuração guardada do torneio não é tocada.
-    var _prevRRUnica = ehReiRainhaRodadaUnica(t.phases[cur]);
+    var _prevRRUnica = ehReiRainhaRodadaUnica(prevCfg);
     var built;
     if (_mon || _fmt === 'league') {
       var _cfgL = _mon ? Object.assign({}, cfg, { fixedPairs: false, ligaCadence: 'incremental' }) : cfg;
@@ -2696,13 +2796,22 @@
     // atrás de um teste de pow2, que era a pergunta errada. Uma vez decidido
     // (`_promoteAsked`), a fase avança direto. Ver [[project_promote_line_before_pow2]].
     var _cur = t.currentPhaseIndex || 0;
-    var _nextCfg = t.phases[_cur + 1] || {};
+    if (!Array.isArray(t.phases) || _cur + 1 >= t.phases.length) return;
+    var _nextCfg, _currentCfg;
+    try {
+      _currentCfg = projectPhaseCfg(t.phases[_cur], t, _cur);
+      _nextCfg = projectPhaseCfg(t.phases[_cur + 1], t, _cur + 1);
+    } catch (phaseError) {
+      if (window.showNotification) window.showNotification('Não foi possível avançar',
+        'Configuração de fase inválida. Nenhuma nova chave foi criada.', 'error');
+      return;
+    }
     // Fase de Grupos / Rei-Rainha / Liga não têm chave → paridade de linha não se aplica.
     if (!_phaseIsGroups(_nextCfg) && !_phaseIsMonarch(_nextCfg) && !_phaseIsLiga(_nextCfg)) {
       var _curG = (_cur === 0) ? prevPhaseGroups(t) : bracketPhaseGroups(t, _cur);
       var _mp = mappingDaTransicao(_nextCfg);
       var _byDest = selectQualifiers(_curG, _nextCfg, { computeStandings: (_cur === 0 ? cs : function (g) { return g.standings || []; }),
-        prevRRRodadaUnica: ehReiRainhaRodadaUnica(t.phases[_cur]), tiebreakers: t.tiebreakers,
+        prevRRRodadaUnica: ehReiRainhaRodadaUnica(_currentCfg), tiebreakers: t.tiebreakers,
         birthByName: (typeof window._tbBirthByName === 'function') ? window._tbBirthByName(t) : {} });
       var _lines = _mp.map(function (m) { return { label: (m.label || '').trim() || m.dest, dest: m.dest, size: (_byDest[m.dest] || []).length }; }).filter(function (l) { return l.size > 0; });
       if (_lines.length >= 2 && !_nextCfg._promoteAsked && typeof window._showPhasePromotePanel === 'function' &&
@@ -3087,6 +3196,7 @@
     genLeagueFromPool: genLeagueFromPool,
     poolFromPrev: _poolFromPrev,
     classifyPhaseFormat: classifyPhaseFormat,
+    projectPhaseCfg: projectPhaseCfg,
     isMonarchDraw: isMonarchDraw,
     selectQualifiers: selectQualifiers,
     phaseIsGroups: _phaseIsGroups,

@@ -26,6 +26,7 @@ function promotionFixture(promoteHelps) {
   const gateStart = source.indexOf('    var _cur = t.currentPhaseIndex || 0;', source.indexOf('  function advanceMultiPhase(tId)'));
   const gate = source.slice(gateStart, end);
   const ctx = { window,
+    projectPhaseCfg: cfg => cfg,
     _phaseIsGroups: () => false, _phaseIsMonarch: () => false, _phaseIsLiga: () => false,
     prevPhaseGroups: () => [{}], bracketPhaseGroups: () => [],
     mappingDaTransicao: () => [{ dest: 'gold' }, { dest: 'silver' }],

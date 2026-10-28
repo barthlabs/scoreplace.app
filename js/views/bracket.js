@@ -7304,6 +7304,14 @@ function _historicalMonarchRead(t) {
   });
   return _historicalMonarchMessage(t, false);
 }
+// Histórico não interpreta formato por rótulo. Usa a mesma projeção em memória
+// do motor e, se a fase estiver inválida, não inventa modalidade.
+function _phaseCfgForHistoricalRead(t, index) {
+  if (!t || !Array.isArray(t.phases) || !t.phases[index] || !window._phasesEngine ||
+      typeof window._phasesEngine.projectPhaseCfg !== 'function') return null;
+  try { return window._phasesEngine.projectPhaseCfg(t.phases[index], t, index); }
+  catch (e) { return null; }
+}
 // Renderiza a FASE 0 histórica (Pontos Corridos / Grupos / Rei-Rainha) somente
 // para consulta. Os renderers são orientados à fase ATUAL (via currentPhaseIndex), então
 // montamos um FAUX com currentPhaseIndex=0 pra eles surfarem a Fase 0. Usado pela
@@ -7311,7 +7319,7 @@ function _historicalMonarchRead(t) {
 window._renderPhase0ReadOnly = function (t) {
   if (!t) return '';
   var f0 = Object.assign({}, t, { currentPhaseIndex: 0 });
-  var phase0 = Array.isArray(t.phases) ? t.phases[0] : null;
+  var phase0 = _phaseCfgForHistoricalRead(t, 0);
   var monarch = !!(phase0 && window._phasesEngine && window._phasesEngine.phaseIsMonarch &&
     window._phasesEngine.phaseIsMonarch(phase0));
   if (monarch) {
@@ -9680,7 +9688,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
         ? window._phasesEngine.phaseIsMonarch
         : function (c) { return !!c && (c.reiRainha === true || c.drawMode === 'rei_rainha'); };
       for (var _pi = 0; _pi < t.phases.length; _pi++) {
-        if (_ehMon(t.phases[_pi])) { _idxFaseMon = _pi; break; }
+        if (_ehMon(_phaseCfgForHistoricalRead(t, _pi))) { _idxFaseMon = _pi; break; }
       }
     }
     var _compacta = !(opts && opts.showHistoricalFullStandings) &&
