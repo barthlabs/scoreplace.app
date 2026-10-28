@@ -290,6 +290,13 @@ window._sorteioDaFaseEhReiRainha = function (t, idx) {
     return !!(window._isMonarchFormat && window._isMonarchFormat(t));
 };
 
+// A classificação Rei/Rainha recebe pessoas, não duplas pré-formadas.
+window._initialMonarchIndividualEnrollment = function (t) {
+    return !!t && t.enrollmentMode === 'individual' &&
+        Number(t.currentPhaseIndex || 0) === 0 &&
+        !!window._sorteioDaFaseEhReiRainha(t, 0);
+};
+
 // v4.4.96: enrollmentMode CANÔNICO — 'time' (legado) e 'teams' (format2, ver
 // format2.js:215/244) são SINÔNIMOS de "equipe/dupla"; 'misto' também permite
 // duplas. Helper único pra matar o drift 'time' vs 'teams' que fazia torneios de

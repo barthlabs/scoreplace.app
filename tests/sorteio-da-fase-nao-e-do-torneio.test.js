@@ -94,7 +94,9 @@ ok(W._sorteioDaFaseEhReiRainha({ phases: 'nao-e-lista', drawMode: 'rei_rainha' }
 /* A porta protege a barreira de duplas formadas no sorteio e a prévia de W.O.
  * da partida. Ambos precisam saber que uma eliminatória posterior não é mais
  * Rei/Rainha, mesmo se o torneio nasceu como tal. Qualquer outro consumidor fora
- * desta lista cai no teste: migrar todo o restante sem medir já obrigou reversão. */
+ * desta lista cai no teste: migrar todo o restante sem medir já obrigou reversão.
+ * A Análise usa um leitor de comportamento intermediário definido neste mesmo
+ * arquivo de utilidades, sem consultar a porta diretamente. */
 const chamadas = varrer(path.join(ROOT, 'js'), /_sorteioDaFaseEhReiRainha\s*\(/g)
   .filter(function (f) { return f !== 'js/views/tournaments-utils.js'; });
 ok(chamadas.length === 2 && chamadas.includes('js/views/tournaments-draw.js') && chamadas.includes('js/views/wo-claim.js'),

@@ -3209,14 +3209,25 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // como se não existissem. Reconstitui apenas essa projeção visual pela
     // ordem de inscrição (97/98, 99/100, ...); a identidade manual permanece
     // nos próprios rows e é usada na gravação.
-    var _placeholderSingles = enrolledRows.filter(function (r) {
-      return r && r._duplaIdx == null && /^(?:jogador|player|inscrito|placeholder)\s*0*\d+$/i.test(String(r.name || '').trim());
-    }).sort(function (a, b) { return Number(a.order) - Number(b.order); });
-    for (var _pi = 0; _pi + 1 < _placeholderSingles.length; _pi += 2) {
-      var _pa = _placeholderSingles[_pi], _pb = _placeholderSingles[_pi + 1];
-      var _pk = 'placeholder-pair:' + String(_pa.manualId || _pa.order) + ':' + String(_pb.manualId || _pb.order);
-      _pa._duplaIdx = _pk; _pa._duplaSide = 'p1';
-      _pb._duplaIdx = _pk; _pb._duplaSide = 'p2';
+    if (window._initialMonarchIndividualEnrollment && window._initialMonarchIndividualEnrollment(t)) {
+      // O mesmo array pode ser reutilizado ao mudar de fase. Remova só pares
+      // fictícios da apresentação; preserve os pares confirmados pelo servidor.
+      (rows || []).forEach(function (r) {
+        if (r && String(r._duplaIdx || '').indexOf('placeholder-pair:') === 0) {
+          delete r._duplaIdx;
+          delete r._duplaSide;
+        }
+      });
+    } else {
+      var _placeholderSingles = enrolledRows.filter(function (r) {
+        return r && r._duplaIdx == null && /^(?:jogador|player|inscrito|placeholder)\s*0*\d+$/i.test(String(r.name || '').trim());
+      }).sort(function (a, b) { return Number(a.order) - Number(b.order); });
+      for (var _pi = 0; _pi + 1 < _placeholderSingles.length; _pi += 2) {
+        var _pa = _placeholderSingles[_pi], _pb = _placeholderSingles[_pi + 1];
+        var _pk = 'placeholder-pair:' + String(_pa.manualId || _pa.order) + ':' + String(_pb.manualId || _pb.order);
+        _pa._duplaIdx = _pk; _pa._duplaSide = 'p1';
+        _pb._duplaIdx = _pk; _pb._duplaSide = 'p2';
+      }
     }
     var byPair = {};
     (rows || []).forEach(function (r) {
@@ -3746,6 +3757,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   };
   window._erFormPair = function (source, target) {
     if (!_liveState || !_liveState.isOrg || !source || !target) return;
+    if (window._initialMonarchIndividualEnrollment && window._initialMonarchIndividualEnrollment(_liveState.t)) {
+      if (typeof showNotification === 'function') showNotification('Duplas só após a classificação', 'Nesta fase Rei/Rainha, organize as pessoas individualmente por categoria. As duplas serão formadas pelos classificados.', 'warning');
+      return;
+    }
     // Categoria staged ainda não existe no servidor. Formar agora faria a CF
     // rejeitar a dupla por categoria ausente e voltaria a parecer que o drop
     // "não fez nada". O aviso direciona para o único passo necessário.
