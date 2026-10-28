@@ -182,8 +182,8 @@
       "mode": "only"
     },
     "setTournamentPresenceWithWOSubstitution": {
-      "backendCommit": "0510380cf595fd63ab6a79346a571c489513ca56",
-      "deployedAt": "2026-10-23T16:00:23.085Z",
+      "backendCommit": "3fb50a11a81a70ada749cabef44ef29d2b2a09b8",
+      "deployedAt": "2026-10-28T11:15:37.055Z",
       "result": "success",
       "mode": "only"
     },
