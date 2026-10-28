@@ -1,3 +1,4 @@
+// 2.5.68 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.67 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.66 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.65 — O painel de sorteio distribui automaticamente as duplas de categorias
