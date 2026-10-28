@@ -36,6 +36,7 @@ const context = {
     },
     _rerenderBracket() { redraws++; },
     _softRefreshView() { redraws++; },
+    _tournamentDetailSig(t) { return t.status + ':' + t.matches[0].winner; },
     _saveToCache() {}, _warn() {}, _captureException() {},
     _suppressSoftRefresh: false
   },
@@ -62,6 +63,8 @@ store._saveToCache = () => {};
   assert.equal(match.winner, 'A');
   assert.equal(refreshes, 1, 'o card é trocado no próprio lugar pelo estado confirmado');
   assert.equal(redraws, 0, 'a grade inteira não é remontada');
+  assert.equal(context.window._tdetailSig, 'active:A',
+    'o eco do próprio placar não remonta a página depois que a supressão expira');
   // A CF pode confirmar antes de o card voltar ao DOM. O Confirmar antigo
   // nunca pode ficar clicável nessa janela, mesmo com {ok:true}.
   button.isConnected = true;

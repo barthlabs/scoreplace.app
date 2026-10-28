@@ -2000,10 +2000,12 @@ function renderParticipants(container, tournamentId) {
    * fingerprint e contagem; todas as telas usam a mesma fonte. */
   if (t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint &&
       (!window._elencoCanonicoAtual || !window._elencoCanonicoAtual(t))) {
-    var _retryRoster = typeof window._botaoTentarPartes === 'function' ? window._botaoTentarPartes(t.id) : '';
-    container.innerHTML = '<div class="card" style="padding:1.5rem;text-align:center;">' +
-      '<h3>Inscritos em atualização</h3><p>A lista canônica ainda não foi confirmada. Nenhum inscrito foi removido.</p>' +
-      _retryRoster + '</div>';
+    var _rosterFailed = typeof window._estadoDasPartes === 'function' &&
+      window._estadoDasPartes(t) === 'erro';
+    var _retryRoster = _rosterFailed && typeof window._botaoTentarPartes === 'function'
+      ? window._botaoTentarPartes(t.id) : '';
+    container.innerHTML = '<div class="card" role="status" style="padding:1.5rem;text-align:center;">' +
+      (_rosterFailed ? 'Não foi possível carregar. ' + _retryRoster : 'Carregando…') + '</div>';
     return;
   }
 

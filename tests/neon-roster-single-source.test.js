@@ -27,7 +27,9 @@ const fake = { canonicalRegistrationMigration: migration,
 assert.strictEqual(ctx._marcaPartesQueFaltam(fake, true), true,
   'documento migrado sem receipt rejeita espelho, mesmo quando contador coincide');
 assert(Array.from(fake._faltaOQue).includes('participants'));
-const summary = { canonicalRegistrationMigration: migration, _semPesados: [], participants: [] };
+assert.strictEqual(ctx._marcaPartesQueFaltam(fake), true,
+  'a tentativa manual também detecta recibo ausente e busca o elenco em vez de parar');
+const summary = { _resumo: true, canonicalRegistrationMigration: migration, _semPesados: [], participants: [] };
 assert.strictEqual(ctx._marcaPartesQueFaltam(summary, false), false,
   'resumo não fica em carregamento eterno');
 const canonical = { canonicalRegistrationMigration: migration,
@@ -68,5 +70,9 @@ ctx._error = () => {};
     'fingerprint novo cancela listener antigo');
   assert(participants.includes('!window._elencoCanonicoAtual(t)'), 'inscritos bloqueia render sem receipt');
   assert(tournaments.includes('!window._elencoCanonicoAtual(_tRoster)'), 'detalhe bloqueia render sem receipt');
+  assert(!tournaments.includes('O elenco canônico ainda não foi confirmado.'),
+    'a espera não expõe diagnóstico técnico no detalhe');
+  assert(!participants.includes('A lista canônica ainda não foi confirmada.'),
+    'a espera não expõe diagnóstico técnico em Inscritos');
   console.log('✅ neon-roster-single-source: abertura, espelho, receipt, falha e telas');
 })().catch((e) => { console.error(e); process.exitCode = 1; });

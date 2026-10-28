@@ -830,6 +830,12 @@ window._marcaPartesQueFaltam = function (t, documentoDeTorneio) {
   (Array.isArray(t._semPesados) ? t._semPesados : []).forEach(function (nome) {
     if (_foraDaqui.indexOf(nome) === -1) _foraDaqui.push(nome);
   });
+  // O recibo canônico é a prova do elenco, mesmo quando o espelho antigo já
+  // atingiu `_nPartes`. Sem este alvo a retentativa do botão conclui "completo"
+  // sem fazer leitura alguma e a tela técnica fica presa para sempre.
+  if (t._resumo !== true && t.canonicalRegistrationMigration &&
+      t.canonicalRegistrationMigration.fingerprint &&
+      _foraDaqui.indexOf('participants') === -1) _foraDaqui.push('participants');
   if (!_foraDaqui.length) { delete t._faltamPesados; delete t._faltaOQue; return false; }
   var _tam = function (x) {
     if (Array.isArray(x)) return x.length;
@@ -871,7 +877,7 @@ window._marcaPartesQueFaltam = function (t, documentoDeTorneio) {
      * espelhos de compatibilidade, nunca prova de elenco. Isto vale para cache,
      * abertura fria, detalhe, inscritos e chave: todos recebem a MESMA projeção
      * comprovada pela callable, ou aguardam/mostram erro recuperável. */
-    if (nome === 'participants' && documentoDeTorneio &&
+    if (nome === 'participants' &&
         t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint) {
       if (!window._elencoCanonicoAtual(t)) { falta = true; oQue.push(nome); }
       return;
@@ -4610,6 +4616,13 @@ window._softRefreshView = function() {
         var _pool = ((window.AppStore && window.AppStore.tournaments) || []).concat((window.AppStore && window.AppStore.publicDiscovery) || []);
         var _tdetail = _pool.find(function(x){ return x && String(x.id) === String(_tid); });
         if (_tdetail) {
+          // Um eco parcial do documento não substitui a tela completa por um
+          // segundo "Carregando". A montagem das partes avisa quando terminar;
+          // até lá o detalhe já visível continua intacto, inclusive seu scroll.
+          if ((_tdetail._faltamPesados === true ||
+              (_tdetail.canonicalRegistrationMigration && _tdetail.canonicalRegistrationMigration.fingerprint &&
+               typeof window._elencoCanonicoAtual === 'function' && !window._elencoCanonicoAtual(_tdetail))) &&
+              !(typeof window._estadoDasPartes === 'function' && window._estadoDasPartes(_tdetail) === 'erro')) return;
           var _tsig = window._tournamentDetailSig(_tdetail);
           if (_tsig === window._tdetailSig) return; // nada relevante mudou → sem re-render (sem pulinho)
           window._tdetailSig = _tsig;
@@ -12256,6 +12269,12 @@ window.AppStore = {
                   if (_keepBracketViewport && _statusBeforeResult !== 'finished' && _lt.status !== 'finished' &&
                       typeof window._refreshConfirmedMatchCard === 'function' &&
                       window._refreshConfirmedMatchCard(_lt, tournamentId, matchId)) {
+                    // O eco da própria gravação não pode remontar o detalhe três
+                    // segundos depois e deslocar o card que acabamos de atualizar.
+                    // A assinatura usa o mesmo estado canônico já mostrado no DOM.
+                    if (typeof window._tournamentDetailSig === 'function') {
+                      window._tdetailSig = window._tournamentDetailSig(_lt);
+                    }
                     window._suppressSoftRefresh = true;
                     clearTimeout(window._scoreResultSuppressTimer);
                     window._scoreResultSuppressTimer = setTimeout(function () { window._suppressSoftRefresh = false; }, 3000);

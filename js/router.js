@@ -736,7 +736,7 @@ function initRouter() {
               window._participantsLoadPending.epoch === _routeEpoch) break;
           var _participantsRequest = { id: String(cleanParam), epoch: _routeEpoch };
           window._participantsLoadPending = _participantsRequest;
-          viewContainer.innerHTML = '<div class="card" style="padding:1.5rem;text-align:center;">Carregando inscritos atualizados…</div>';
+          viewContainer.innerHTML = '<div class="card" role="status" style="padding:1.5rem;text-align:center;">Carregando…</div>';
           window._ensureTournamentLoaded(cleanParam, function (loaded) {
             if (window._participantsLoadPending === _participantsRequest) window._participantsLoadPending = null;
             if (!_routeIsCurrent()) return;

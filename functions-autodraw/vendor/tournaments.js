@@ -2494,10 +2494,12 @@ function renderTournaments(container, tournamentId = null) {
       var _tRoster = window._findTournamentById && window._findTournamentById(tournamentId);
       if (_tRoster && _tRoster.canonicalRegistrationMigration && _tRoster.canonicalRegistrationMigration.fingerprint &&
           (!window._elencoCanonicoAtual || !window._elencoCanonicoAtual(_tRoster))) {
-        var _retryCanonical = typeof window._botaoTentarPartes === 'function' ? window._botaoTentarPartes(_tRoster.id) : '';
-        container.innerHTML = '<div class="card" style="padding:1.5rem;text-align:center;">' +
-          '<h3>Torneio em atualização</h3><p>O elenco canônico ainda não foi confirmado. Os dados do torneio foram preservados.</p>' +
-          _retryCanonical + '</div>';
+        var _canonicalFailed = typeof window._estadoDasPartes === 'function' &&
+          window._estadoDasPartes(_tRoster) === 'erro';
+        var _retryCanonical = _canonicalFailed && typeof window._botaoTentarPartes === 'function'
+          ? window._botaoTentarPartes(_tRoster.id) : '';
+        container.innerHTML = '<div class="card" role="status" style="padding:1.5rem;text-align:center;">' +
+          (_canonicalFailed ? 'Não foi possível carregar. ' + _retryCanonical : 'Carregando…') + '</div>';
         return;
       }
     }

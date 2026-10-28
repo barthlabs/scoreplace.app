@@ -1,3 +1,8 @@
+// 2.5.71 — A abertura e a retentativa de torneios com elenco canônico voltam a
+// consultar o servidor quando falta a confirmação da leitura; a tela mostra só
+// “Carregando…” durante a espera. Um placar confirmado atualiza o card no lugar
+// sem que o eco da gravação remonte a página e desloque a posição da tela.
+// Nenhum torneio, jogo, sorteio ou placar já gravado é modificado por esta versão.
 // 2.5.70 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.69 — Fases históricas parcialmente convertidas passam a exibir grupos,
 // jogos, pontos e classificação pela configuração do torneio. O avanço recusa
