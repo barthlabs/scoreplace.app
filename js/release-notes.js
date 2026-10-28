@@ -1,3 +1,4 @@
+// 2.5.73 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.72 — A organização pode definir data e preparar o grupo de WhatsApp de
 // qualquer jogo futuro ainda sem adversários, incluindo finais e 3º lugar.
 // Jogadores só recebem essas ações quando entram no confronto. O servidor
