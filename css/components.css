@@ -340,19 +340,30 @@ input[type="time"].sp-team-draw-time::-webkit-datetime-edit-minute-field {
 #modal-support-pix .back-hdr-ham,
 #qr-modal-overlay .back-hdr-ham { display: inline-flex !important; }
 
-/* Back header inside overlays/card-modals: flows statically in flex column (NOT position:fixed).
+/* Back header inside overlays/card-modals: remains in flex flow, but must be positioned.
+   Its absolute ::before mask is then anchored to this header, never the whole overlay.
    JS (_reflowChrome) pushes the sibling content down by dropdown height when hamburger opens. */
 #modal-quick-create .sticky-back-header,
 #casual-match-overlay .sticky-back-header,
 #modal-support-pix .sticky-back-header,
 #qr-modal-overlay .sticky-back-header,
 #venues-detail-overlay .sticky-back-header {
-  position: static !important;
+  position: relative !important;
   top: auto !important;
   left: auto !important;
   right: auto !important;
   max-width: 100% !important;
   margin: 0 !important;
+}
+/* The generic back-header mask overhangs by 4px to seal bracket seams. These
+   overlay headers have no seam: keep their mask inside the header's own box. */
+#modal-quick-create .sticky-back-header::before,
+#casual-match-overlay .sticky-back-header::before,
+#modal-support-pix .sticky-back-header::before,
+#qr-modal-overlay .sticky-back-header::before,
+#venues-detail-overlay .sticky-back-header::before {
+  top: 0;
+  bottom: 0;
 }
 /* App NATIVO (Capacitor): estas overlays são position:fixed;top:0 em tela cheia,
    então o cabeçalho fica no topo absoluto — SOB a status bar / ilha dinâmica. No
