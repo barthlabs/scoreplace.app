@@ -76,14 +76,14 @@ if(a[1]==='services'&&a[2]==='describe'){
   const fresh=name===row.name+'-new';
   process.stdout.write(JSON.stringify({metadata:{name},status:{conditions:[{type:'Ready',status:'True'}]},spec:{containers:[{image:fresh?e.image:row.image,env:[{name:'SP_SOURCE_DIGEST',value:fresh?e.digest:row.sourceDigest},{name:'SP_OPERATION_REGION',value:region}]}]}}));
 }else if(a[1]==='services'&&a[2]==='update-traffic'){
-  e.served=arg('--to-revisions').split('=')[0];state.entries[id]=e;fs.writeFileSync(file,JSON.stringify(state));
+  e.served=arg('--to-revisions').split('=')[0];if(e.served===row.name+'-new')state.trafficUpdates++;state.entries[id]=e;fs.writeFileSync(file,JSON.stringify(state));
 }else if(a[1]==='deploy'){
   state.deploys++;if(state.deploys===Number(process.env.SP_FAKE_FAIL_AT)){fs.writeFileSync(file,JSON.stringify(state));process.exit(17);}
-  const env=arg('--update-env-vars').split(',');e.digest=env[0].split('=')[1];e.image=a.includes('--image')?arg('--image'):'fake/image@sha256:'+('e'.repeat(64));e.latest=row.name+'-new';e.served=e.latest;state.entries[id]=e;fs.writeFileSync(file,JSON.stringify(state));
+  const env=arg('--update-env-vars').split(',');e.digest=env[0].split('=')[1];e.image=a.includes('--image')?arg('--image'):'fake/image@sha256:'+('e'.repeat(64));e.latest=row.name+'-new';/* serviço mantém 100% na revisão antiga */state.entries[id]=e;fs.writeFileSync(file,JSON.stringify(state));
 }else process.exit(2);
 `);
   const statePath = path.join(dir, 'fake-state.json');
-  fs.writeFileSync(statePath, JSON.stringify({ deploys: 0, entries: {} }));
+  fs.writeFileSync(statePath, JSON.stringify({ deploys: 0, trafficUpdates: 0, entries: {} }));
   const env = { ...process.env, PATH: `${dir}:${process.env.PATH}`, SP_FAKE_ROOT: root,
     SP_FAKE_STATE: statePath, SP_FAKE_FAIL_AT: '3', SP_REGIONAL_SYNC_STATE: path.join(dir, 'sync.json') };
   try {
@@ -91,6 +91,7 @@ if(a[1]==='services'&&a[2]==='describe'){
     assert.notEqual(result.status, 0, 'a terceira mutação simulada deve abortar');
     const fakeState = JSON.parse(fs.readFileSync(statePath, 'utf8'));
     assert.equal(fakeState.deploys, 3);
+    assert.equal(fakeState.trafficUpdates, 2, 'revisões criadas com 0% recebem corte explícito para 100%');
     assert.equal(Object.values(fakeState.entries).filter(entry => entry.latest.endsWith('-new')).length, 2);
     for (const [id, entry] of Object.entries(fakeState.entries)) {
       const [name, region] = id.split('/');

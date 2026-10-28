@@ -232,6 +232,14 @@ try {
       } else args.push('--image', image);
       args.push('--update-env-vars', `SP_SOURCE_DIGEST=${digest},SP_OPERATION_REGION=${region}`, '--allow-unauthenticated', '--quiet');
       run('gcloud', args, { stdio: 'inherit' });
+      // Serviços com tráfego fixado na revisão anterior recebem a nova revisão
+      // com 0%. O corte precisa ser explícito antes da prova de revisão servida.
+      const deployed = service(name, region);
+      const nextRevision = deployed.status?.latestReadyRevisionName;
+      if (!nextRevision || nextRevision === state.previous[`${name}/${region}`].revision) throw new Error(`nova revisão ausente: ${name}/${region}`);
+      if (servedRevisionName(deployed) !== nextRevision) {
+        run('gcloud', ['run', 'services', 'update-traffic', name, '--project', project, '--region', region, '--to-revisions', `${nextRevision}=100`, '--quiet'], { stdio: 'inherit' });
+      }
       const row = recordCurrent(state, v, name, region, p, sha, digest, old.url, image);
       state.inFlight = state.inFlight.filter(x => x !== `${name}/${region}`);
       writeJson(stateFile, state);
