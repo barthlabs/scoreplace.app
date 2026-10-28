@@ -58,9 +58,10 @@ async function main() {
     const html = W._renderPhase0ReadOnly(t);
     assert.match(html, /data-group-box/, 'exibe grupos reais');
     assert.match(html, /data-monarch-group="1"/, 'grupo Rei\/Rainha identificado para a busca');
-    assert.equal(W._grpRotuloCurto('R1 Grupo A2', true), 'A2', 'após Z o grupo usa letra e número');
+    assert.equal(W._grpRotuloCurto('R1 Grupo A2', true), 'Grupo A2', 'após Z o grupo usa letra e número');
     assert.equal(W._grpRotuloCurto('R1 Grupo A'), 'R1 (A)', 'outro chamador mantém o rótulo antigo');
-    assert.match(html, /<h3[^>]*>A<\/h3>/, 'grupo Rei\/Rainha mostra só a letra, sem R1');
+    assert.match(html, /<h3[^>]*>Grupo A<\/h3>/, 'grupo Rei\/Rainha mostra Grupo A, sem R1');
+    assert.doesNotMatch(html, /<span[^>]*>Concluído<\/span>/, 'fase histórica não rotula cada grupo como concluído');
     assert.match(html, /<th[^>]*>Pts<\/th>/, 'exibe pontos na tabela do grupo');
     for (const doc of docs) {
       for (const id of doc.grupo.matchIds) {

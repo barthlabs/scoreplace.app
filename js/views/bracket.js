@@ -1199,7 +1199,9 @@ function _bracketOperationalCards(root, fallbackScope) {
   var cardScope = root && root._bracketCardsScope;
   if (!cardScope || !cardScope.querySelectorAll) cardScope = fallbackScope || document.getElementById('view-container') || document;
   return Array.prototype.slice.call(cardScope.querySelectorAll('[data-bracket-tab-category]')).filter(function (card) {
-    return !(root && root._bracketGeneralView && root._bracketGeneralView.contains(card));
+    // As abas da fase atual não governam jogos de fases anteriores.
+    return !(card.closest && card.closest('[data-bracket-historical-phase]')) &&
+      !(root && root._bracketGeneralView && root._bracketGeneralView.contains(card));
   });
 }
 
@@ -2632,7 +2634,9 @@ function _bracketTabsHostReference(host, searchWrap) {
   return host ? host.firstChild : null;
 }
 window._bracketCategoryTabsMount = function () {
-  var cards = Array.prototype.slice.call(document.querySelectorAll('[data-bracket-tab-category]'));
+  var cards = Array.prototype.filter.call(document.querySelectorAll('[data-bracket-tab-category]'), function (card) {
+    return !(card.closest && card.closest('[data-bracket-historical-phase]'));
+  });
   if (!cards.length) return;
   // Ouro/Prata (ou linhas) só ganham abas quando são trilhas independentes. Se
   // chegam a uma grande final, continuam na mesma chave — escondê-las em abas
@@ -3192,7 +3196,7 @@ window._grpRotuloCurto = function (nome, soLetraDoGrupo) {
   // O nome completo continua intacto para busca, rolagem e persistência.
   if (soLetraDoGrupo) {
     var letra = n.match(/(?:^|\s)Grupo\s+([A-Z](?:\d+)?)$/i);
-    if (letra) return letra[1].toUpperCase();
+    if (letra) return 'Grupo ' + letra[1].toUpperCase();
   }
   var m = n.match(/^(.+?)\s+Grupo\s+(\S+)$/i);
   return m ? (m[1] + ' (' + m[2] + ')') : n;
@@ -4068,7 +4072,7 @@ function renderBracket(container, tournamentId, isInline) {
           if (!_ppContent || !String(_ppContent).trim()) _ppContent = '<div style="padding:1rem;color:var(--text-muted);">Sem dados pra exibir desta fase (formato não suportado no modo leitura).</div>';
           // v4.3.11: cada fase anterior é uma COLUNA à ESQUERDA (flex-shrink:0), largura
           // contida — o timeline lê da esquerda (mais antigo) pra direita (fase atual).
-          _prevSections += '<div style="flex-shrink:0;width:min(88vw,560px);margin:0 22px 0 0;border:1px solid rgba(129,140,248,0.45);border-radius:12px;background:rgba(99,102,241,0.08);overflow:hidden;align-self:stretch;">' +
+          _prevSections += '<div data-bracket-historical-phase="' + _ppi + '" style="flex-shrink:0;width:min(88vw,560px);margin:0 22px 0 0;border:1px solid rgba(129,140,248,0.45);border-radius:12px;background:rgba(99,102,241,0.08);overflow:hidden;align-self:stretch;">' +
             '<div style="padding:10px 14px;font-weight:800;color:var(--sp-c-c7d2fe,#c7d2fe);border-bottom:1px solid rgba(129,140,248,0.25);">👁 ' + _ppName + ' — fase encerrada</div>' +
             '<div style="padding:8px 12px 14px;">' + _ppContent + '</div>' +
           '</div>';
@@ -9748,7 +9752,8 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
 
     // "Em andamento" REMOVIDO (pedido do dono — é óbvio, só rouba espaço). Só o
     // "Concluído" (verde) permanece, pois aí sim informa algo útil.
-    var statusBadge = groupDone ? '<span style="font-size:0.65rem;padding:2px 8px;border-radius:6px;background:rgba(16,185,129,0.15);color:var(--sp-c-4ade80,#4ade80);font-weight:700;">' + _t('bracket.complete') + '</span>' : '';
+    var statusBadge = groupDone && !(opts && opts.showHistoricalFullStandings)
+      ? '<span style="font-size:0.65rem;padding:2px 8px;border-radius:6px;background:rgba(16,185,129,0.15);color:var(--sp-c-4ade80,#4ade80);font-weight:700;">' + _t('bracket.complete') + '</span>' : '';
 
     var _schGrpBtn2 = (typeof window._schGroupChip === 'function') ? window._schGroupChip(t, matches) : '';
     // Rei/Rainha: o grupo do WhatsApp é ÚNICO por GRUPO (3 jogos, mesmas 4 pessoas),
@@ -9767,7 +9772,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     var _mineBadgeMon = _isMineMon
       ? '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(34,211,238,0.15);color:var(--sp-c-22d3ee,#22d3ee);font-weight:700;">SEU GRUPO</span>'
       : '';
-    html += '<div data-group-box="1" data-monarch-group="1"' + (_isMineMon ? ' data-my-group="1"' : '') + ' data-group-label="' + window._safeHtml(window._grpKey(sg.name)) + '" style="scroll-margin-top:var(--scroll-anchor,120px);background:var(--bg-card);border:1px solid var(--border-color);border-left:4px solid ' + window._spCor((groupDone ? '#4ade80' : (_isMineMon ? '#22d3ee' : '#fbbf24')), 'borda') + ';border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">' +
+    html += '<div data-group-box="1" data-monarch-group="1"' + (_isMineMon ? ' data-my-group="1"' : '') + ' data-group-label="' + window._safeHtml(window._grpKey(sg.name)) + '" style="scroll-margin-top:var(--scroll-anchor,120px);background:var(--bg-card);border:1px solid var(--border-color);border-left:4px solid ' + window._spCor((opts && opts.showHistoricalFullStandings ? '#818cf8' : groupDone ? '#4ade80' : (_isMineMon ? '#22d3ee' : '#fbbf24')), 'borda') + ';border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">' +
       /* DUAS LINHAS, NÃO TRÊS: título curto em cima, selos embaixo, botões à direita.
        * Antes era tudo numa linha só, com `flex:1` no <h3>: os dois botões grandes
        * comiam a largura, o título quebrava em três linhas e ERA ELE que esticava a
