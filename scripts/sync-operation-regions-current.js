@@ -9,7 +9,7 @@ const { servedRevisionName, checkServed } = require('./check-served-operation-re
 
 const root = path.join(__dirname, '..');
 const project = 'scoreplace-app';
-const sourceCommit = '40be907df';
+const sourceCommit = '40be907dfc593db2eb4de1d6ed9783493b301787';
 const policy = [
   { short: 'court', target: 'assignMatchCourt', codebase: 'functions-autodraw' },
   { short: 'score', target: 'applyMatchResult', codebase: 'functions-autodraw' },
