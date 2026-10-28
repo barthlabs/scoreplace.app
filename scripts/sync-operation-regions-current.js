@@ -30,7 +30,7 @@ function run(file, args, options = {}) {
   return typeof output === 'string' ? output.trim() : '';
 }
 function gcloud(args) { return JSON.parse(run('gcloud', [...args, '--project', project, '--format=json'])); }
-function manifestPath(version) { return path.join(root, `.claude/tmp/operation-regions-manifest-${version}.json`); }
+function manifestPath(version) { return path.join(process.env.SP_REGIONAL_MANIFEST_DIR || path.join(root, '.claude/tmp'), `operation-regions-manifest-${version}.json`); }
 function key(row) { return `${row.name}/${row.region}`; }
 function service(name, region) { return gcloud(['run', 'services', 'describe', name, '--region', region]); }
 function revision(name, region) { return gcloud(['run', 'revisions', 'describe', name, '--region', region]); }

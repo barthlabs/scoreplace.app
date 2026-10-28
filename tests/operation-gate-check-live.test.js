@@ -52,7 +52,9 @@ process.stdout.write(JSON.stringify(value));
       cwd: root, env, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024,
     });
     assert.equal(good.status, 0, good.stderr);
-    saved.image = original.recovery.find(row => row.name === saved.name).image;
+    // O manifesto promovido já pode conter a imagem nova. A variante ruim deve
+    // ser inequivocamente diferente, sem depender do estado anterior da máquina.
+    saved.image = 'old-image@sha256:' + '0'.repeat(64);
     fs.writeFileSync(candidatePath, JSON.stringify(candidate));
     const bad = cp.spawnSync('bash', ['scripts/deploy-operation-legacy-gate-v2.sh', '--check-live'], {
       cwd: root, env, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024,

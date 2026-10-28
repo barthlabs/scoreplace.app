@@ -15,6 +15,10 @@ const gitLog = gitRepo.status === 0
 const current = gitLog?.status === 0 ? gitLog.stdout.trim() : '';
 const manifestsPresent = ['v2', 'v3'].every(version =>
   fs.existsSync(path.join(root, `.claude/tmp/operation-regions-manifest-${version}.json`)));
+const historyPath = path.join(root, '.claude/tmp/operation-regions-current-sync.json');
+const history = fs.existsSync(historyPath) ? JSON.parse(fs.readFileSync(historyPath, 'utf8')) : null;
+const baselineRows = version => history?.originals?.[version] || JSON.parse(fs.readFileSync(
+  path.join(root, `.claude/tmp/operation-regions-manifest-${version}.json`)));
 const skipReason = gitRepo.status !== 0 ? 'sem histórico Git (cópia git archive)'
   : !current ? 'sem commit de functions-autodraw no histórico Git'
     : !manifestsPresent ? 'manifestos regionais ignorados pelo git archive' : false;
@@ -35,7 +39,7 @@ for (const version of ['v2', 'v3']) {
     finally { fs.rmSync(dir, { recursive: true, force: true }); }
   };
   test(`${version}: corte antigo e atualização só da quadra`, { skip: skipReason }, () => {
-    const original = JSON.parse(fs.readFileSync(path.join(root, `.claude/tmp/operation-regions-manifest-${version}.json`)));
+    const original = baselineRows(version);
     assert.equal(run(original).status, 0, 'revisões regionais registradas continuam válidas após novos commits');
     const legacy = structuredClone(original);
     const legacyCommit = legacy.find(row => row.name === `sp-op-court-${version}`).commit;
