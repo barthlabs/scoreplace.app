@@ -6339,7 +6339,12 @@ window._lzNaoEhEuMesmo = function (uid) {
         };
         t.participants = data.participants;
         t.placeholderReservations = Array.isArray(data.placeholderReservations) ? data.placeholderReservations : [];
-        if (Array.isArray(data.categoryDefinitions)) t.categoryDefinitions = data.categoryDefinitions;
+        // O documento atual pode ter sido editado depois da leitura do elenco.
+        // A resposta do roster só supre definições ausentes; não reverte a
+        // configuração vigente (inclusive um array vazio deliberado).
+        if (!Array.isArray(t.categoryDefinitions) && Array.isArray(data.categoryDefinitions)) {
+          t.categoryDefinitions = data.categoryDefinitions;
+        }
         _erCanonicalLoaded[String(tId)] = true;
         if (window.location.hash === '#analise/' + tId) window.renderEnrollmentReportPage(container, tId, true);
       }).catch(function (err) {
@@ -6351,7 +6356,9 @@ window._lzNaoEhEuMesmo = function (uid) {
       var canonicalRoster = _erCanonicalRosterById[String(tId)];
       t.participants = canonicalRoster.participants;
       t.placeholderReservations = Array.isArray(canonicalRoster.placeholderReservations) ? canonicalRoster.placeholderReservations : [];
-      if (Array.isArray(canonicalRoster.categoryDefinitions)) t.categoryDefinitions = canonicalRoster.categoryDefinitions;
+      if (!Array.isArray(t.categoryDefinitions) && Array.isArray(canonicalRoster.categoryDefinitions)) {
+        t.categoryDefinitions = canonicalRoster.categoryDefinitions;
+      }
     }
     // v2.8.56: expande duplas em pessoas individuais (conta cada inscrito uma vez).
     var rosterParts = _erDedupeRosterParts(Array.isArray(t.participants) ? t.participants : []);

@@ -56,6 +56,7 @@ const ROOT = path.join(__dirname, '..');
 const SUITES = [
   'tests/modal-overlay-header-mask.test.js',
   'tests/public-canonical-roster-client.test.js',
+  'tests/enrollment-report-current-categories.test.js',
   'tests/registration-settings.test.js',
   'tests/sandbox-enrollment-route.test.js',
   'tests/neon-sandbox-guard.test.js',
