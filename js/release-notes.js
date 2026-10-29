@@ -1,3 +1,4 @@
+// 2.5.79 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.78 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.77 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.76 — Atualização consolidada de produção com as correções validadas desde a última publicação.
