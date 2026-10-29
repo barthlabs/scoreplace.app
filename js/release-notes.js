@@ -1,4 +1,8 @@
-// 2.5.79 — Atualização consolidada de produção com as correções validadas desde a última publicação.
+// 2.5.79 — A Análise atribui em bloco reservas individuais a categorias antes
+// do sorteio, criando inscrições canônicas sem formar duplas. Repetir o envio
+// não duplica inscrições; se um salvamento parcial falhar, a tela orienta a
+// retomar o restante. A organização vê a quantidade de jogadores arrastados.
+// Esta publicação de código não altera inscrições, jogos ou placares existentes.
 // 2.5.78 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.77 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.76 — Atualização consolidada de produção com as correções validadas desde a última publicação.
