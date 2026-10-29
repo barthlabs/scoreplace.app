@@ -6232,7 +6232,7 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
       && typeof window.renderGroupStage === 'function') {
     groupHistoryHtml = '<details style="margin-top:1.5rem;">'
       + '<summary style="cursor:pointer;font-weight:700;font-size:0.85rem;color:var(--text-bright);padding:10px 14px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;user-select:none;">📜 Fase de Grupos — rodadas anteriores</summary>'
-      + '<div style="margin-top:10px;">' + window.renderGroupStage(t, false, false, { suppressAutoAdvance: true }) + '</div>'
+      + '<div style="margin-top:10px;">' + window.renderGroupStage(t, false, false, { historicalPhase: true, suppressAutoAdvance: true }) + '</div>'
       + '</details>';
   }
 
@@ -7142,7 +7142,7 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
     var _gFaux = {
       id: t.id, matches: _gMs, groups: _gGroups,
       gruposClassified: phaseCfg.gruposClassified || t.gruposClassified || 2,
-      scoring: t.scoring, tiebreakers: t.tiebreakers,
+      scoring: t.scoring, tiebreakers: t.tiebreakers, rankingPrimary: t.rankingPrimary,
       creatorUid: t.creatorUid, coHosts: t.coHosts,
       teamCompetition: t.teamCompetition,
       scheduleWindow: t.scheduleWindow,
@@ -7365,7 +7365,7 @@ window._renderPhase0ReadOnly = function (t) {
   var _hasGroups0 = Array.isArray(f0.groups) && f0.groups.length > 0;
   try {
     if (_isLiga0 && typeof window.renderStandings === 'function') return window.renderStandings(f0, false, false, '', '', { suppressAutoAdvance: true });
-    if (_hasGroups0 && typeof window.renderGroupStage === 'function') return window.renderGroupStage(f0, false, false, { suppressAutoAdvance: true });
+    if (_hasGroups0 && typeof window.renderGroupStage === 'function') return window.renderGroupStage(f0, false, false, { historicalPhase: true, suppressAutoAdvance: true });
     if (typeof window.renderStandings === 'function') return window.renderStandings(f0, false, false, '', '', { suppressAutoAdvance: true });
   } catch (e) { if (window._warn) window._warn('[phase0 readonly]', e); }
   return '<div style="padding:1rem;color:var(--text-muted);">Não foi possível carregar a fase anterior.</div>';
@@ -9971,7 +9971,38 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
         }
       });
     });
-    const sorted = Object.values(scoreMap).sort((a, b) => b.points - a.points || b.wins - a.wins || b.pointsDiff - a.pointsDiff);
+    // A fase ativa usa a mesma porta que decide quem avança. Uma fase já
+    // materializada mantém a leitura histórica até existir retrato congelado.
+    let sorted = Object.values(scoreMap).sort((a, b) => b.points - a.points || b.wins - a.wins || b.pointsDiff - a.pointsDiff);
+    const _gEngine = window._phasesEngine;
+    if (!(opts && opts.historicalPhase) && !(t.advancedScoring && t.advancedScoring.enabled)) {
+      if (_gEngine && typeof _gEngine.standingsDaFaseAnterior === 'function' &&
+          typeof window._standingsCompareConfig === 'function') {
+        const _gMatchesRaw = (sg.matches && sg.matches.length)
+          ? sg.matches
+          : gRounds.reduce(function(acc, r) { return acc.concat((r && r.matches) || []); }, []);
+        // O adaptador pode conter o mesmo jogo em matches e nas rodadas.
+        // Identidade do jogo é o id; sem id, a referência do objeto.
+        const _gSeenMatches = new Set();
+        const _gMatches = _gMatchesRaw.filter(function(m) {
+          if (!m) return false;
+          const key = m.id != null ? 'id:' + m.id : m;
+          if (_gSeenMatches.has(key)) return false;
+          _gSeenMatches.add(key);
+          return true;
+        });
+        const _gTbOpts = {
+          tiebreakers: t.tiebreakers,
+          rankingPrimary: t.rankingPrimary,
+          birthByName: typeof window._tbBirthByName === 'function' ? window._tbBirthByName(t) : {}
+        };
+        // O motor concatena group.matches e group.rounds. Passar só matches
+        // impede contar o mesmo jogo duas vezes.
+        sorted = _gEngine.standingsDaFaseAnterior({ players: gParticipants, matches: _gMatches }, t, _gTbOpts, false);
+      } else if (typeof console !== 'undefined' && console.warn) {
+        console.warn('[groups] motor/comparador indisponível — classificação visual anterior preservada');
+      }
+    }
     const classified = t.gruposClassified || 2;
 
     const medal = i => i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}º`;
