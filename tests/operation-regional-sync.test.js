@@ -6,15 +6,23 @@ const path = require('node:path');
 const os = require('node:os');
 const cp = require('node:child_process');
 const { policy, regions, validateManifest, lookup, updatedConfig } = require('../scripts/sync-operation-regions-current');
+const { legacyFixtureAvailability, legacyFixtureRows } = require('./operation-regions-legacy-fixture');
 
 const root = path.join(__dirname, '..');
+const legacyAvailability = legacyFixtureAvailability();
+const historyPath = path.join(root, '.claude/tmp/operation-regions-current-sync.json');
+const hasOriginalHistory = fs.existsSync(historyPath)
+  && Boolean(JSON.parse(fs.readFileSync(historyPath, 'utf8')).originals);
 function isolatedManifests(dir, legacy = false) {
-  const savedPath = path.join(root, '.claude/tmp/operation-regions-current-sync.json');
+  const savedPath = historyPath;
   const saved = legacy && fs.existsSync(savedPath) ? JSON.parse(fs.readFileSync(savedPath, 'utf8')) : null;
   const rows = {};
   for (const version of ['v2', 'v3']) {
-    rows[version] = saved?.originals?.[version] || JSON.parse(fs.readFileSync(
+    const current = JSON.parse(fs.readFileSync(
       path.join(root, `.claude/tmp/operation-regions-manifest-${version}.json`), 'utf8'));
+    rows[version] = saved?.originals?.[version] || (legacy
+      ? legacyFixtureRows(current, legacyAvailability.parent)
+      : current);
     fs.writeFileSync(path.join(dir, `operation-regions-manifest-${version}.json`), JSON.stringify(rows[version]));
   }
   return rows;
@@ -69,7 +77,7 @@ test('prévia offline verifica as 48 portas e falha com imagem divergente', { sk
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('falha parcial offline restaura tráfego das portas já alteradas', { skip: !['v2', 'v3'].every(v => fs.existsSync(path.join(root, `.claude/tmp/operation-regions-manifest-${v}.json`))) }, () => {
+test('falha parcial offline restaura tráfego das portas já alteradas', { skip: !['v2', 'v3'].every(v => fs.existsSync(path.join(root, `.claude/tmp/operation-regions-manifest-${v}.json`))) || (!hasOriginalHistory && legacyAvailability.skipReason) }, () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-regional-rollback-'));
   const baseline = isolatedManifests(dir, true);
   const fake = (name, body) => {

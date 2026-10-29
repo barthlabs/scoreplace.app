@@ -6,6 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { execFileSync, spawnSync } = require('node:child_process');
 const { sourceDescriptor, sourceDigest } = require('../scripts/operation-source-digest');
+const { legacyFixtureAvailability, legacyFixtureRows } = require('./operation-regions-legacy-fixture');
 const root = path.join(__dirname, '..');
 const script = path.join(root, 'scripts/check-operation-regions-mixed.js');
 const gitRepo = spawnSync('git', ['rev-parse', '--is-inside-work-tree'], { cwd: root, encoding: 'utf8' });
@@ -17,11 +18,13 @@ const manifestsPresent = ['v2', 'v3'].every(version =>
   fs.existsSync(path.join(root, `.claude/tmp/operation-regions-manifest-${version}.json`)));
 const historyPath = path.join(root, '.claude/tmp/operation-regions-current-sync.json');
 const history = fs.existsSync(historyPath) ? JSON.parse(fs.readFileSync(historyPath, 'utf8')) : null;
-const baselineRows = version => history?.originals?.[version] || JSON.parse(fs.readFileSync(
-  path.join(root, `.claude/tmp/operation-regions-manifest-${version}.json`)));
+const legacyAvailability = legacyFixtureAvailability();
+const baselineRows = version => history?.originals?.[version] || legacyFixtureRows(JSON.parse(fs.readFileSync(
+  path.join(root, `.claude/tmp/operation-regions-manifest-${version}.json`))), legacyAvailability.parent);
 const skipReason = gitRepo.status !== 0 ? 'sem histórico Git (cópia git archive)'
   : !current ? 'sem commit de functions-autodraw no histórico Git'
     : !manifestsPresent ? 'manifestos regionais ignorados pelo git archive' : false;
+const historicalSkipReason = skipReason || (!history?.originals && legacyAvailability.skipReason);
 const digest = skipReason ? '' : execFileSync('node',
   ['scripts/operation-source-digest.js', 'functions-autodraw', 'endMatchOnCourt', current, '--from-git'],
   { cwd: root }).toString().trim();
@@ -38,7 +41,7 @@ for (const version of ['v2', 'v3']) {
       { cwd: root, env: { ...process.env, ...extraEnv, SP_REGION_MANIFEST: file }, encoding: 'utf8' }); }
     finally { fs.rmSync(dir, { recursive: true, force: true }); }
   };
-  test(`${version}: corte antigo e atualização só da quadra`, { skip: skipReason }, () => {
+  test(`${version}: corte antigo e atualização só da quadra`, { skip: historicalSkipReason }, () => {
     const original = baselineRows(version);
     assert.equal(run(original, true).status, 0,
       'manifesto histórico íntegro é válido somente na verificação que permite legado');
