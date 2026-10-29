@@ -72,6 +72,7 @@ const TABELA = [
   { nome: "applyTournamentFormat", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "applyTournamentImportBlock", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "applyTournamentWO", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
+  { nome: "assignCanonicalPlaceholderCategoryBatch", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "assignMatchCourt", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "autoAssignTournamentCategories", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "backfillAllUserTrophies", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },

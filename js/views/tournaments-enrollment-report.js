@@ -1149,15 +1149,29 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     })) {
       return Promise.reject(new Error('Escolha uma categoria para gravar a alteração de gênero neste torneio.'));
     }
-    var seen = Object.create(null), moves = [];
+    var seen = Object.create(null), moves = [], reservationsByCategory = Object.create(null);
     edits.forEach(function (edit) {
       if (!Object.prototype.hasOwnProperty.call(edit, 'category')) return;
       var row = rows.filter(function (candidate) {
         return candidate && ((edit.uid && candidate.uid === edit.uid) || (edit.manualParticipantId && candidate.manualId === edit.manualParticipantId));
       })[0];
-      if (!row || !row.categoryId || (!row.uid && !row.manualId)) {
+      if (!row || (!row.uid && !row.manualId)) {
         throw new Error('inscrição canônica sem identidade estável ou categoryId');
       }
+      var toCategoryId = typeof window._canonicalCategoryIdForDisplay === 'function'
+        ? window._canonicalCategoryIdForDisplay(t, edit.category) : '';
+      if (!toCategoryId) throw new Error('categoria escolhida não existe na configuração atual');
+      if (row.genericPlaceholderReservation === true) {
+        if (!row.manualId || row.uid || row._duplaIdx != null) {
+          throw new Error('reserva individual sem identidade estável');
+        }
+        if (!reservationsByCategory[toCategoryId]) reservationsByCategory[toCategoryId] = [];
+        if (reservationsByCategory[toCategoryId].indexOf(row.manualId) === -1) {
+          reservationsByCategory[toCategoryId].push(row.manualId);
+        }
+        return;
+      }
+      if (!row.categoryId) throw new Error('inscrição canônica sem categoryId');
       var pairKey = row._duplaIdx != null ? 'pair:' + String(row._duplaIdx) : (row.uid ? 'uid:' + row.uid : 'manual:' + row.manualId);
       if (seen[pairKey]) return;
       seen[pairKey] = true;
@@ -1175,16 +1189,39 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         targetCategory: edit.category
       });
     });
-    if (!moves.length) return Promise.resolve({ changed: 0 });
-    if (typeof window._reclassifyCanonicalCategory !== 'function') {
+    var reservationGroups = Object.keys(reservationsByCategory);
+    if (!moves.length && !reservationGroups.length) return Promise.resolve({ changed: 0 });
+    if (moves.length && typeof window._reclassifyCanonicalCategory !== 'function') {
       return Promise.reject(new Error('A rota canônica de categorias não está disponível. Atualize o aplicativo e tente novamente.'));
     }
+    if (reservationGroups.length && !(window.FirestoreDB && typeof window.FirestoreDB._callFn === 'function')) {
+      return Promise.reject(new Error('A rota canônica de reservas não está disponível. Atualize o aplicativo.'));
+    }
+    if (reservationGroups.some(function (key) { return reservationsByCategory[key].length > 32; })) {
+      return Promise.reject(new Error('Selecione no máximo 32 reservas por categoria em cada salvamento.'));
+    }
+    var result = reservationGroups.reduce(function (chain, categoryId) {
+      return chain.then(function (result) {
+        return window.FirestoreDB._callFn('assignCanonicalPlaceholderCategoryBatch', {
+          tournamentId: String(t.id), sandbox: t.isSandbox === true,
+          toCategoryId: categoryId, manualParticipantIds: reservationsByCategory[categoryId]
+        }).then(function (response) {
+          var data = response && response.data ? response.data : response;
+          if (data && data.needsReclassification) {
+            throw new Error('Uma dupla já formada precisa ser reclassificada. Reabra a Análise antes de salvar o restante.');
+          }
+          return { changed: result.changed + Number(data && data.changed || 0) };
+        });
+      });
+    }, Promise.resolve({ changed: 0 })).catch(function (error) {
+      throw new Error('Não foi possível concluir a atribuição. Parte do bloco pode já ter sido salva; tente Salvar novamente para retomar o restante. ' + String((error && error.message) || error));
+    });
     return moves.reduce(function (chain, move) {
       return chain.then(function (result) {
         return window._reclassifyCanonicalCategory(t, String(t.id), move.participant, move.targetCategory, move.participant.category)
           .then(function () { return { changed: result.changed + 1 }; });
       });
-    }, Promise.resolve({ changed: 0 }));
+    }, result);
   }
 
   function _erPendingCount() {
@@ -3722,6 +3759,15 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     window._erRenderMatrix();
   };
   window._erMxClearSelection = function () { _erClearSelection(false); };
+  function _erShowBlockDragImage(ev, count, unit) {
+    if (!ev || !ev.dataTransfer || typeof ev.dataTransfer.setDragImage !== 'function' || count < 2) return;
+    var indicator = document.createElement('div');
+    indicator.textContent = 'Arrastando bloco de ' + count + ' ' + unit + (count === 1 ? '' : 's');
+    indicator.style.cssText = 'position:fixed;left:-10000px;top:0;z-index:99999;padding:12px 18px;border:2px solid #38bdf8;border-radius:10px;background:#12304a;color:white;font-weight:700;';
+    document.body.appendChild(indicator);
+    ev.dataTransfer.setDragImage(indicator, 22, 22);
+    setTimeout(function () { if (indicator.parentNode) indicator.parentNode.removeChild(indicator); }, 0);
+  }
   window._erMxDragStart = function (ev, order) {
     _erLastMatrixDragAt = Date.now();
     // Arrastar um card já selecionado leva todos; arrastar outro começa uma seleção
@@ -3734,6 +3780,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     window._erMxDrag = order;
     try {
       ev.dataTransfer.effectAllowed = 'move';
+      _erShowBlockDragImage(ev, _erDraggedOrders.length, 'jogador');
       ev.dataTransfer.setData('text/plain', String(order));
       ev.dataTransfer.setData('application/x-scoreplace-orders', _erDraggedOrders.join(','));
       // A mesma origem também pode cair SOBRE outro card solo para formar uma
@@ -3857,6 +3904,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     window._erMxDrag = order;
     try {
       ev.dataTransfer.effectAllowed = 'move';
+      _erShowBlockDragImage(ev, Math.max(1, Math.ceil(_erDraggedOrders.length / 2)), 'dupla');
       ev.dataTransfer.setData('text/plain', 'pair:' + String(row._duplaIdx));
       ev.dataTransfer.setData('application/x-scoreplace-orders', _erDraggedOrders.join(','));
       // Um card só usa o caminho atômico da dupla; ao arrastar uma seleção com
@@ -3907,6 +3955,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       if (sk && sk !== '__none__') { var vc = _mxFindValidCat(_liveState.t, genderKey, sk); if (vc) window._erStageCategory(order, vc); }
       else if (sk === '__none__') { window._erStageCategory(order, ''); }
     });
+    if (orders.length > 1 && sk && sk !== '__none__' && typeof showNotification === 'function') {
+      var label = _mxFindValidCat(_liveState.t, genderKey, sk) || sk;
+      showNotification('Bloco atribuído', orders.length + ' jogadores → ' + label + '. Clique em Salvar para confirmar.', 'info');
+    }
     window._erRenderMatrix();
     window._erUpdateSaveBar();
   };

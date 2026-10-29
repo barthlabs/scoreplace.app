@@ -54,6 +54,9 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 const SUITES = [
+  'functions/test-placeholder-category-batch-core.js',
+  'tests/placeholder-category-batch-emulator.test.js',
+  'tests/placeholder-category-batch-client.test.js',
   'tests/modal-overlay-header-mask.test.js',
   'tests/public-canonical-roster-client.test.js',
   'tests/enrollment-report-current-categories.test.js',

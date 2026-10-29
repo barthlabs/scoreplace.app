@@ -104,6 +104,7 @@ const _categoryEligibility = require("./category-eligibility-core");
 const _registrationCategoryBridge = require("./registration-category-bridge-core");
 const _legacyCategoryDefinitions = require("./legacy-category-definition-core");
 const _registrationCore = require("./registration-core");
+const _placeholderCategoryBatch = require("./placeholder-category-batch-core");
 const _registrationMigration = require("./registration-migration-core");
 const _registrationBatchPlan = require("./registration-batch-plan-core");
 const _registrationBatchApply = require("./registration-batch-apply-core");
@@ -4814,7 +4815,7 @@ function _writeCanonicalRosterUpdates(tx, tournamentRef, tournament, registratio
  * de `registrationCount`, a próxima leitura trataria o novo documento como
  * corrupção; sem `memberUids`, a pessoa acabaria inscrita mas invisível no
  * listener do app. */
-function _writeCanonicalRosterCreates(tx, tournamentRef, tournament, registrations, creates, logicalId) {
+function _writeCanonicalRosterCreates(tx, tournamentRef, tournament, registrations, creates, logicalId, reservationsAfter) {
   const canonicalTournament = _canonicalMutationTournament(tournamentRef, tournament, logicalId);
   let next;
   try { next = _canonicalRegistrationBoundary.applyCreates(canonicalTournament, registrations, creates); }
@@ -4825,11 +4826,13 @@ function _writeCanonicalRosterCreates(tx, tournamentRef, tournament, registratio
       updatedAt: _FV.serverTimestamp(),
     }));
   });
-  tx.update(tournamentRef, {
+  const tournamentPatch = {
     canonicalRegistrationMigration: next.tournament.canonicalRegistrationMigration,
     memberUids: _canonicalRegistrationBoundary.memberUids(next.tournament, next.registrations),
     updatedAt: _FV.serverTimestamp(),
-  });
+  };
+  if (Array.isArray(reservationsAfter)) tournamentPatch.placeholderReservations = reservationsAfter;
+  tx.update(tournamentRef, tournamentPatch);
   return next;
 }
 
@@ -5159,7 +5162,16 @@ exports.reclassifyCanonicalRegistration = onCall(
           toCategoryId
         );
       } catch (error) { throw new HttpsError("failed-precondition", error.message); }
-      const next = _writeCanonicalRosterChanges(tx, ref, tournament, checked.registrations, changes, null, logicalId);
+      const movingManualIds = new Set((changes.updates || []).map((update) => {
+        const origin = checked.registrations.find((item) => item.registrationId === update.registrationId);
+        return origin && origin.participantKind === 'manual' ? String(origin.manualParticipantId || '') : '';
+      }).filter(Boolean));
+      const reservations = Array.isArray(tournament.placeholderReservations) ? tournament.placeholderReservations : [];
+      const filtered = movingManualIds.size
+        ? reservations.filter((item) => !movingManualIds.has(String(item && item.manualParticipantId || '')))
+        : reservations;
+      const patch = filtered.length < reservations.length ? { placeholderReservations: filtered } : null;
+      const next = _writeCanonicalRosterChanges(tx, ref, tournament, checked.registrations, changes, patch, logicalId);
       return {
         ok: true,
         outcome: changes.outcome,
@@ -5168,6 +5180,66 @@ exports.reclassifyCanonicalRegistration = onCall(
         fromCategoryId: changes.fromCategoryId,
         toCategoryId: changes.toCategoryId,
       };
+    });
+  }
+);
+
+/* Reservas de vagas individuais só passam a ser inscrições ao receber categoria
+ * na Análise. A própria transação remove as reservas consumidas e avança o
+ * recibo canônico; nenhuma dupla é formada nesta porta. */
+exports.assignCanonicalPlaceholderCategoryBatch = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError('unauthenticated', 'login necessário');
+    const data = request.data || {};
+    const tournamentId = String(data.tournamentId || '').trim();
+    const toCategoryId = String(data.toCategoryId || '').trim();
+    const manualIds = data.manualParticipantIds;
+    const sandbox = data.sandbox === true;
+    if (!tournamentId || sandbox !== tournamentId.startsWith('sb_') ||
+        !Array.isArray(manualIds) || !manualIds.length || manualIds.length > 32) {
+      throw new HttpsError('invalid-argument', 'lote de reservas inválido');
+    }
+    const db = admin.firestore();
+    const ref = db.collection(sandbox ? 'sandboxes' : 'tournaments').doc(tournamentId);
+    return db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new HttpsError('not-found', 'torneio não existe');
+      const tournament = snap.data() || {};
+      if (sandbox) await _sandboxAutorizado(db, snap, callerUid, (sourceRef) => tx.get(sourceRef));
+      else if (tournament.isSandbox === true) throw new HttpsError('not-found', 'torneio não existe');
+      else if (!_isTournamentOrgCaller(tournament, callerUid)) {
+        throw new HttpsError('permission-denied', 'só a organização altera categoria de inscrição');
+      }
+      const logicalId = sandbox ? String(tournament.sandboxOf) : tournamentId;
+      if (!_categoryDefinitionsCanChange(tournament) || await _temPartesDeJogo(tx, ref, tournament)) {
+        throw new HttpsError('failed-precondition', 'A categoria da inscrição não pode mudar após o sorteio.');
+      }
+      let definitions;
+      try {
+        definitions = _categoryEligibility.normalizeCategoryDefinitions(tournament.categoryDefinitions);
+        _registrationCategoryBridge.categoryIdsFromTypedIds(definitions, [toCategoryId]);
+      } catch (error) { throw new HttpsError('invalid-argument', error.message); }
+      const checked = await _loadCanonicalRosterForMutation(tx, ref, tournament, logicalId);
+      let planned;
+      try {
+        planned = _placeholderCategoryBatch.plan(
+          logicalId, tournament.canonicalRegistrationMigration.fingerprint,
+          tournament.placeholderReservations, checked.registrations, manualIds, toCategoryId
+        );
+      } catch (error) { throw new HttpsError(error.code || 'failed-precondition', error.message); }
+      if (planned.needsReclassification) {
+        if (planned.removed) tx.update(ref, { placeholderReservations: planned.reservationsAfter, updatedAt: _FV.serverTimestamp() });
+        return { ok: true, changed: 0, needsReclassification: true };
+      }
+      if (planned.creates.length) {
+        _writeCanonicalRosterCreates(tx, ref, tournament, checked.registrations,
+          planned.creates, logicalId, planned.reservationsAfter);
+      } else if (planned.removed) {
+        tx.update(ref, { placeholderReservations: planned.reservationsAfter, updatedAt: _FV.serverTimestamp() });
+      }
+      return { ok: true, changed: planned.creates.length, registrationIds: planned.creates.map((item) => item.registrationId) };
     });
   }
 );
