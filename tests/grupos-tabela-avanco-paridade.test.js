@@ -78,6 +78,10 @@ try {
     { name: 'Grupo A', players: ['A', 'B', 'C', 'D'] }
   ] }] }; };
   parity(fixture(regular, { rankingPrimary: 'games_diff' }), 'adaptador sem rounds usa grupos legados');
+  W._getUnifiedRounds = function() { return { columns: [{ phase: 'groups', subgroups: [
+    { name: 'Grupo A', players: ['A', 'B', 'C', 'D'], matches: [regular[0]] }
+  ] }] }; };
+  parity(fixture(regular, { rankingPrimary: 'games_diff' }), 'adaptador parcial inclui rodadas legadas');
 } finally {
   W._getUnifiedRounds = oldAdapter;
 }

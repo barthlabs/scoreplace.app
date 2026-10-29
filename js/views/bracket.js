@@ -9978,9 +9978,8 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
     if (!(opts && opts.historicalPhase) && !(t.advancedScoring && t.advancedScoring.enabled)) {
       if (_gEngine && typeof _gEngine.standingsDaFaseAnterior === 'function' &&
           typeof window._standingsCompareConfig === 'function') {
-        const _gMatchesRaw = (sg.matches && sg.matches.length)
-          ? sg.matches
-          : gRounds.reduce(function(acc, r) { return acc.concat((r && r.matches) || []); }, []);
+        const _gMatchesRaw = (sg.matches || []).concat(
+          gRounds.reduce(function(acc, r) { return acc.concat((r && r.matches) || []); }, []));
         // O adaptador pode conter o mesmo jogo em matches e nas rodadas.
         // Identidade do jogo é o id; sem id, a referência do objeto.
         const _gSeenMatches = new Set();
