@@ -1,4 +1,9 @@
-// 2.5.80 — Atualização consolidada de produção com as correções validadas desde a última publicação.
+// 2.5.80 — A classificação dos grupos comuns ativos passa a seguir os mesmos
+// desempates e critério principal que determinam o avanço de fase. Jogos de
+// folga/ausência não somam vitória nem pontos, mesmo com vencedor registrado.
+// A leitura histórica não é reordenada. Jogos presentes apenas nas rodadas
+// continuam entrando na tabela quando a lista direta do grupo é parcial.
+// Esta versão não regrava jogos, placares nem classificações armazenadas.
 // 2.5.79 — A Análise atribui em bloco reservas individuais a categorias antes
 // do sorteio, criando inscrições canônicas sem formar duplas. Repetir o envio
 // não duplica inscrições; se um salvamento parcial falhar, a tela orienta a
