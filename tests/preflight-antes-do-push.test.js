@@ -153,6 +153,9 @@ function cenario(opcoes) {
   fs.writeFileSync(path.join(repo, 'scripts', 'prepare-hosting-release.js'), 'process.exit(0);\n');
   fs.writeFileSync(path.join(repo, 'scripts', 'check-release-notes.js'), 'process.exit(0);\n');
   fs.writeFileSync(path.join(repo, 'scripts', 'check-deploy-alignment.js'), 'process.exit(0);\n');
+  // O recibo das Functions é coberto pelo gate próprio; este laboratório usa
+  // backend fictício para isolar a ordem preflight → push → upload.
+  fs.writeFileSync(path.join(repo, 'scripts', 'check-invite-functions-published.js'), 'process.exit(0);\n');
   fs.writeFileSync(path.join(repo, 'scripts', 'deploy-operation-regions.sh'),
     '#!/bin/sh\n' + (o.regiaoDivergente ? 'exit 1\n' :
       o.fingerprintInicialFalha ? ': > .claude/tmp/operation-regions-manifest-v2.json\nexit 0\n' : 'exit 0\n'));
