@@ -1213,15 +1213,16 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           return { changed: result.changed + Number(data && data.changed || 0) };
         });
       });
-    }, Promise.resolve({ changed: 0 })).catch(function (error) {
-      throw new Error('Não foi possível concluir a atribuição. Parte do bloco pode já ter sido salva; tente Salvar novamente para retomar o restante. ' + String((error && error.message) || error));
-    });
+    }, Promise.resolve({ changed: 0 }));
     return moves.reduce(function (chain, move) {
       return chain.then(function (result) {
         return window._reclassifyCanonicalCategory(t, String(t.id), move.participant, move.targetCategory, move.participant.category)
           .then(function () { return { changed: result.changed + 1 }; });
       });
-    }, result);
+    }, result).catch(function (error) {
+      if (!reservationGroups.length) throw error;
+      throw new Error('Não foi possível concluir a atribuição. Parte do bloco pode já ter sido salva; tente Salvar novamente para retomar o restante. ' + String((error && error.message) || error));
+    });
   }
 
   function _erPendingCount() {
