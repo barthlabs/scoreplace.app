@@ -144,6 +144,13 @@ function renderNotifications(container) {
         return ch && ch.status === 'pending' && ch.uid && ch.uid === myUid;
       }));
     }
+    function _refereePendingForMe(tId) {
+      var t = _findTourn(tId);
+      if (!t) return null;
+      return !!(Array.isArray(t.arbitros) && t.arbitros.some(function(a) {
+        return a && a.uid === cu.uid && a.status === 'invited';
+      }));
+    }
     // Convite que EU enviei e ainda está pendente (botão Cancelar do organizador).
     function _sentInviteStillPending(tId, invType) {
       var t = _findTourn(tId);
@@ -210,10 +217,22 @@ function renderNotifications(container) {
       var safeNotifId = (n._id || '').replace(/'/g, "\\'").replace(/\\/g, "\\\\");
       var safeTournamentId = (n.tournamentId || '').replace(/'/g, "\\'").replace(/\\/g, "\\\\");
       var _isInvite = (n.type === 'host_transfer_invite' || n.type === 'cohost_invite');
+      var _isRefInvite = n.type === 'referee_invite';
       var _isSent = (n.type === 'host_transfer_sent' || n.type === 'cohost_invite_sent');
-      var _pend = _isInvite ? _invitePendingForMe(n.tournamentId, n.type === 'host_transfer_invite' ? 'transfer' : 'cohost') : null;
+      var _hasInviteStatus = n.type === 'cohost_invite' && typeof n.inviteStatus === 'string';
+      var _pend = _isInvite && !_hasInviteStatus ? _invitePendingForMe(n.tournamentId, n.type === 'host_transfer_invite' ? 'transfer' : 'cohost') : null;
+      var _inviteActionPending = _hasInviteStatus ? n.inviteStatus === 'pending' : (_pend === true || (_pend === null && isUnread));
+      var _hasRefInviteStatus = _isRefInvite && typeof n.inviteStatus === 'string';
+      var _refPend = _isRefInvite && !_hasRefInviteStatus ? _refereePendingForMe(n.tournamentId) : null;
+      var _refActionPending = _hasRefInviteStatus ? n.inviteStatus === 'pending' : (_refPend === true || (_refPend === null && isUnread));
       var _sentPend = _isSent ? _sentInviteStillPending(n.tournamentId, n.inviteType || 'cohost') : null;
-      if (_isInvite && (_pend === true || (_pend === null && isUnread))) {
+      if (_isRefInvite && _refActionPending) {
+        var safeMyUid = String(cu.uid || '').replace(/'/g, "\\'").replace(/\\/g, "\\\\");
+        actionHtml = '<div style="display:flex;gap:6px;margin-top:8px;">' +
+          '<button class="btn btn-sm" style="background:transparent;color:var(--danger-color);border:1px solid var(--danger-color);padding:4px 14px;" onclick="event.stopPropagation();window._arbitrosDecline(\'' + safeMyUid + '\',\'' + safeTournamentId + '\')">' + _t('notif.reject') + '</button>' +
+          '<button class="btn btn-sm" style="background:var(--success-color);color:#fff;border:none;padding:4px 14px;" onclick="event.stopPropagation();window._arbitrosSelfConfirm(\'' + safeMyUid + '\',\'' + safeTournamentId + '\')">' + _t('notif.accept') + '</button>' +
+        '</div>';
+      } else if (_isInvite && _inviteActionPending) {
         var _invType = n.type === 'host_transfer_invite' ? 'transfer' : 'cohost';
         // Sem _markNotifRead no clique: quem marca lida é o aceite/recusa APLICADO
         // (_markInviteNotifsRead). Se a gravação falhar, o convite continua respondível.
@@ -382,7 +401,8 @@ function renderNotifications(container) {
       var _pedeDecisao;
       if (_AUTOREAD_TYPES_OK(n.type)) _pedeDecisao = false;
       else if (n.type === 'match-pending-approval') _pedeDecisao = (_pendRes !== false);
-      else if (_isInvite) _pedeDecisao = (_pend !== false);
+      else if (_isInvite) _pedeDecisao = _hasInviteStatus ? _inviteActionPending : (_pend !== false);
+      else if (_isRefInvite) _pedeDecisao = _hasRefInviteStatus ? _refActionPending : (_refPend !== false);
       else if (_isSent) _pedeDecisao = (_sentPend !== false);
       else _pedeDecisao = true;
       var _autoRead = isUnread && !_pedeDecisao;
@@ -484,7 +504,7 @@ function _timeAgo(dateStr) {
 // marca lida é a ação aplicada (aceitar/recusar/confirmar). Fonte única — o render
 // e o observador consultam a MESMA lista; se divergissem, um convite poderia sumir
 // da lista de não lidas sem ninguém ter respondido.
-window._NOTIF_ACTION_TYPES = ['host_transfer_invite', 'cohost_invite', 'host_transfer_sent',
+window._NOTIF_ACTION_TYPES = ['host_transfer_invite', 'cohost_invite', 'referee_invite', 'host_transfer_sent',
   'cohost_invite_sent', 'friend_request', 'casual_link_request', 'match-pending-approval'];
 function _AUTOREAD_TYPES_OK(tipo) {
   return window._NOTIF_ACTION_TYPES.indexOf(tipo) === -1;

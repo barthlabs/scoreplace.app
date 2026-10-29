@@ -184,6 +184,13 @@ do_main() {
   targets="$(selected_targets "$all" 'functions:')" || return $?
   deploy_dir "$ROOT" "$targets" \
     "principal (functions/)" "$ROOT/functions"
+  # O Hosting novo delega o aviso e o aceite ao servidor. Só carimbe após
+  # confirmar as três callables nesta execução; --dry-run nunca cria recibo.
+  if [ "$DRY" != 1 ] && [[ ",$targets," == *",functions:mutateHostOrganization,"* ]] &&
+     [[ ",$targets," == *",functions:respondHostInvite,"* ]] &&
+     [[ ",$targets," == *",functions:manageTournamentReferee,"* ]]; then
+    SP_DEPLOY_CONFIRMED=1 node "$ROOT/scripts/check-invite-functions-published.js" --stamp
+  fi
 }
 do_autodraw() {
   local all targets

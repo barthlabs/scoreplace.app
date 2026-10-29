@@ -120,6 +120,35 @@ function baseDoc() {
   eq('tipo inválido', C.computeRespondHostInvite(baseDoc(), CO, 'xpto', 'accept').outcome, 'notFound');
 })();
 
+// Amigos não inscritos podem receber coorganização, sem virar admin antes do aceite.
+(() => {
+  const d = { name: 'Torneio de teste', creatorUid: ORG, participants: [{ uid: ORG }], coHosts: [] };
+  const denied = C.computeMutateHostOrganization(d, ORG, { action: 'invite', inviteType: 'cohost', targetUid: CO });
+  eq('não inscrito sem amizade aceita é recusado', denied.outcome, 'invalidTarget');
+  const invited = C.computeMutateHostOrganization(d, ORG, { action: 'invite', inviteType: 'cohost', targetUid: CO, friendAccepted: true });
+  eq('amigo não inscrito recebe convite pendente', invited.updateData.coHosts[0].status, 'pending');
+  ok('convite pendente não dá admin', !invited.updateData.adminUids.includes(CO));
+  const active = C.computeRespondHostInvite(Object.assign({}, d, invited.updateData), CO, 'cohost', 'accept');
+  ok('aceite dá acesso a coorganizador', active.updateData.adminUids.includes(CO) && active.updateData.memberUids.includes(CO));
+  eq('transferência continua exigindo inscrição', C.computeMutateHostOrganization(d, ORG, {
+    action: 'invite', inviteType: 'transfer', targetUid: CO, friendAccepted: true
+  }).outcome, 'invalidTarget');
+  eq('não aceita auto-convite', C.computeMutateHostOrganization(d, ORG, {
+    action: 'invite', inviteType: 'cohost', targetUid: ORG, friendAccepted: true
+  }).outcome, 'invalidTarget');
+  eq('convite repetido é idempotente', C.computeMutateHostOrganization(Object.assign({}, d, invited.updateData), ORG, {
+    action: 'invite', inviteType: 'cohost', targetUid: CO, friendAccepted: true
+  }).outcome, 'notFound');
+  const canceled = C.computeMutateHostOrganization(Object.assign({}, d, invited.updateData), ORG, {
+    action: 'cancel', inviteType: 'cohost', targetUid: CO
+  });
+  eq('cancelamento retira convite pendente', canceled.updateData.coHosts.length, 0);
+  eq('reconvite após cancelar é aplicado', C.computeMutateHostOrganization(Object.assign({}, d, canceled.updateData), ORG, {
+    action: 'invite', inviteType: 'cohost', targetUid: CO, friendAccepted: true
+  }).outcome, 'applied');
+  eq('ID de aviso único e estável', C.cohostInviteNotifId('tour/1', 'uid/2'), 'cohost_invite_tour%2F1_uid%2F2');
+})();
+
 // Reserva manual não dá acesso; reivindicação autenticada ativa o UID sem aceite extra.
 (() => {
   const d = { creatorUid: ORG, coHosts: [], coHostReservations: [

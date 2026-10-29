@@ -233,6 +233,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 
   // ─── Intenções de arbitragem: a Function é a única escritora do torneio ───
   function _refreshArbitros(tId) {
+    // Esta rotina também é chamada pelo convite na ficha do torneio. Não
+    // substitua a ficha inteira pela página de arbitragem após o envio.
+    if (String(window.location.hash || '').indexOf('#arbitros/') !== 0) return;
     if (typeof window.renderArbitrosPage !== 'function') return;
     var view = document.getElementById('view-container');
     if (view) window.renderArbitrosPage(view, tId);
@@ -247,27 +250,46 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       }
       return;
     }
-    db.manageTournamentReferee(tId, action, uid)
-      .then(function() {
-        if (typeof window.showNotification === 'function') window.showNotification(title, message, 'success');
-        _refreshArbitros(tId);
+    return db.manageTournamentReferee(tId, action, uid)
+      .then(function(result) {
+        if (result && result.notFound) {
+          if (typeof window.showNotification === 'function') window.showNotification('Convite indisponível', 'Este convite não está mais disponível.', 'error');
+        } else if (result && result.changed === false) {
+          if (typeof window.showNotification === 'function') window.showNotification('Sem alteração', 'Este convite já foi respondido.', 'info');
+        } else if (typeof window.showNotification === 'function') {
+          window.showNotification(title, message, 'success');
+        }
+        if (String(window.location.hash || '').indexOf('#notifications') === 0 && typeof window.renderNotifications === 'function') {
+          var view = document.getElementById('view-container');
+          if (view) window.renderNotifications(view);
+        } else {
+          _refreshArbitros(tId);
+        }
+        return result;
       })
       .catch(function(err) {
         if (typeof window.showNotification === 'function') {
           window.showNotification('Erro', String(err.message || err), 'error');
         }
+        return { error: true };
       });
   }
 
   window._arbitrosInvite = function(uid, tId) {
-    _callArbitro('invite', uid, tId, 'Convite enviado', 'O convite de arbitragem foi enviado com sucesso.');
+    return _callArbitro('invite', uid, tId, 'Convite enviado', 'O convite de arbitragem foi enviado com sucesso.');
   };
 
   window._arbitrosSelfConfirm = function(uid, tId) {
     var current = window.AppStore && window.AppStore.currentUser;
     if (!current || !current.uid) return;
     // O UID exibido não é autoridade: a Function usa o UID autenticado para confirmar a si.
-    _callArbitro('self-confirm', current.uid, tId, 'Árbitro confirmado', 'Você está confirmado como árbitro deste torneio.');
+    return _callArbitro('self-confirm', current.uid, tId, 'Árbitro confirmado', 'Você está confirmado como árbitro deste torneio.');
+  };
+
+  window._arbitrosDecline = function(uid, tId) {
+    var current = window.AppStore && window.AppStore.currentUser;
+    if (!current || !current.uid) return;
+    return _callArbitro('decline', current.uid, tId, 'Convite recusado', 'Você recusou o convite de arbitragem.');
   };
 
   window._arbitrosRemove = function(uid, tId) {

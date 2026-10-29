@@ -59,10 +59,15 @@ console.log('\n== Notificação lida por permanência + botão da loja ==');
   const _AUTOREAD_TYPES_OK = t => win._NOTIF_ACTION_TYPES.indexOf(t) === -1;
 
   function decide(o) {
-    const n = { type: o.type };
+    const n = { type: o.type, inviteStatus: o.inviteStatus };
     const isUnread = o.isUnread !== false;
-    const _pendRes = o._pendRes, _pend = o._pend, _sentPend = o._sentPend;
+    const _pendRes = o._pendRes, _pend = o._pend, _sentPend = o._sentPend, _refPend = o._refPend;
     const _isInvite = (n.type === 'host_transfer_invite' || n.type === 'cohost_invite');
+    const _isRefInvite = n.type === 'referee_invite';
+    const _hasInviteStatus = n.type === 'cohost_invite' && typeof n.inviteStatus === 'string';
+    const _inviteActionPending = _hasInviteStatus ? n.inviteStatus === 'pending' : (_pend === true || (_pend === null && isUnread));
+    const _hasRefInviteStatus = _isRefInvite && typeof n.inviteStatus === 'string';
+    const _refActionPending = _hasRefInviteStatus ? n.inviteStatus === 'pending' : (_refPend === true || (_refPend === null && isUnread));
     const _isSent = (n.type === 'host_transfer_sent' || n.type === 'cohost_invite_sent');
     return eval('(function(){' + cod + '\nreturn _autoRead;})()');
   }
@@ -82,6 +87,9 @@ console.log('\n== Notificação lida por permanência + botão da loja ==');
   ok(decide({ type: 'cohost_invite', _pend: false }) === true, 'convite JÁ RESPONDIDO marca (não há o que aceitar)');
   ok(decide({ type: 'cohost_invite', _pend: null }) === false, 'convite de estado desconhecido não marca');
   ok(decide({ type: 'host_transfer_invite', _pend: true }) === false, 'transferência pendente não marca');
+  ok(decide({ type: 'referee_invite', inviteStatus: 'pending' }) === false, 'convite de arbitragem pendente não marca');
+  ok(decide({ type: 'referee_invite', inviteStatus: 'answered' }) === true, 'convite de arbitragem respondido marca');
+  ok(decide({ type: 'referee_invite', inviteStatus: 'canceled' }) === true, 'convite de arbitragem cancelado marca');
   ok(decide({ type: 'cohost_invite_sent', _sentPend: true }) === false, 'convite que EU enviei e segue pendente não marca (o Cancelar ainda vale)');
   ok(decide({ type: 'cohost_invite_sent', _sentPend: false }) === true, 'convite que eu enviei e já foi respondido marca');
 

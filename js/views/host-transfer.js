@@ -132,21 +132,13 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var t = (window.AppStore.tournaments || []).find(function(x) { return String(x.id) === String(tId); });
     var user = window.AppStore.currentUser;
     if (!t || !user || !target || !target.uid) return;
-    _mutateHostOrganization(tId, 'invite', 'cohost', target.uid).then(function (out) {
+    return _mutateHostOrganization(tId, 'invite', 'cohost', target.uid).then(function (out) {
       if (!out.changed) {
         if (typeof showNotification === 'function') showNotification(_tH('org.alreadyInvited'), (target.displayName || _pName(target)) + ' ' + _tH('org.alreadyInvitedMsg'), 'warning');
-        return;
+        return { alreadyInvited: true };
       }
       var name = out.targetName || target.displayName || '';
-      var _chBase = 'https://scoreplace.app/#cohost/';
-      _notifyUser(out.targetUid || target.uid, {
-        type: 'cohost_invite', tournamentId: String(t.id), tournamentName: out.tournamentName || t.name,
-        fromName: user.displayName, fromUid: user.uid, inviterName: user.displayName || _tH('org.theOrganizer'),
-        acceptUrl: _chBase + 'accept/' + encodeURIComponent(String(t.id)) + '/cohost',
-        rejectUrl: _chBase + 'reject/' + encodeURIComponent(String(t.id)) + '/cohost',
-        message: (user.displayName || _tH('org.theOrganizer')) + ' ' + _tH('org.invitedCohost') + ' "' + (out.tournamentName || t.name) + '".',
-        level: 'fundamental'
-      });
+      // O convite e o aviso ao destinatário são gravados juntos na Function.
       _notifyUser(user.uid, {
         type: 'cohost_invite_sent', tournamentId: String(t.id), tournamentName: out.tournamentName || t.name,
         targetName: name, message: _tH('org.cohostInviteSent') + ' ' + name + '.', level: 'all', inviteType: 'cohost'
@@ -155,16 +147,136 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       return Promise.resolve(window.FirestoreDB.sendCoHostInviteEmail(String(t.id), String(out.targetUid || target.uid)))
         .catch(function (e) { window._warn('[co-org] e-mail falhou:', e && e.message); return { enviado: false }; });
     }).then(function (veredito) {
+      if (veredito && veredito.alreadyInvited) return veredito;
       var quem = target.displayName || target.email || '';
       if (veredito && veredito.enviado) {
         if (typeof showNotification === 'function') showNotification(_tH('org.inviteSent'), _tH('org.awaitingResponse') + ' ' + quem, 'info');
       } else if (typeof showNotification === 'function') {
         showNotification('Convite registrado', quem + ' já pode ver o convite no app — mas o e-mail de aviso não pôde ser enviado agora.', 'warning');
       }
+      return { changed: true };
     }).catch(function (e) {
       window._warn('[co-org] convite não gravado', e);
       if (typeof showNotification === 'function') showNotification('Não foi possível convidar', 'O convite não foi salvo. Verifique a conexão e tente de novo.', 'error');
+      return { error: true };
     });
+  };
+
+  // Busca apenas amigos confirmados do perfil atual. Nomes são apresentação;
+  // toda seleção e todo convite usam o UID, nunca o texto digitado.
+  window._openTournamentFriendInvitePicker = function(tId, role) {
+    var t = (window.AppStore.tournaments || []).find(function(x) { return String(x.id) === String(tId); });
+    var user = window.AppStore.currentUser;
+    if (!t || !user || !window._souOrganizador(t) || (role !== 'cohost' && role !== 'referee')) return;
+    var old = document.getElementById('tournament-friend-invite-overlay');
+    if (old) old.remove();
+    var overlay = document.createElement('div');
+    overlay.id = 'tournament-friend-invite-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.82);display:flex;align-items:center;justify-content:center;padding:1rem;';
+    var panel = document.createElement('div');
+    panel.style.cssText = 'width:min(100%,430px);max-height:80%;display:flex;flex-direction:column;background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;padding:16px;gap:10px;';
+    var title = document.createElement('div');
+    title.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--text-bright);font-weight:700;';
+    title.textContent = role === 'cohost' ? 'Convidar organizador' : 'Convidar árbitro';
+    var close = document.createElement('button');
+    close.type = 'button'; close.className = 'btn btn-sm'; close.textContent = 'Fechar';
+    close.addEventListener('click', function() { overlay.remove(); });
+    title.appendChild(close);
+    var input = document.createElement('input');
+    input.type = 'search'; input.placeholder = 'Buscar amigo pelo nome';
+    input.setAttribute('aria-label', 'Buscar amigo pelo nome');
+    input.style.cssText = 'width:100%;padding:10px;border-radius:8px;background:var(--bg-input,#111827);color:var(--text-bright);border:1px solid var(--border-color);';
+    var list = document.createElement('div');
+    list.style.cssText = 'overflow-y:auto;min-height:80px;display:flex;flex-direction:column;gap:6px;';
+    var confirmRow = document.createElement('div');
+    confirmRow.style.cssText = 'display:none;align-items:center;justify-content:space-between;gap:8px;';
+    var selectedName = document.createElement('span');
+    selectedName.style.cssText = 'min-width:0;overflow:hidden;text-overflow:ellipsis;color:var(--text-bright);';
+    var send = document.createElement('button');
+    send.type = 'button'; send.className = 'btn btn-sm'; send.textContent = 'Enviar convite';
+    confirmRow.appendChild(selectedName); confirmRow.appendChild(send);
+    panel.appendChild(title); panel.appendChild(input); panel.appendChild(list); panel.appendChild(confirmRow);
+    overlay.appendChild(panel); document.body.appendChild(overlay);
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+    var normalize = function(s) { return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(); };
+    var friendUids = (Array.isArray(user.friends) ? user.friends : []).filter(function(uid) {
+      return typeof uid === 'string' && uid && uid !== user.uid && uid.indexOf('@') === -1;
+    });
+    var uniqueUids = Array.from(new Set(friendUids));
+    var busy = false;
+    var friends = [];
+    var selected = null;
+    send.addEventListener('click', function() {
+      if (busy || !selected) return;
+      busy = true; send.disabled = true;
+      var invitation = role === 'cohost'
+        ? window._initiateCoHostInvite(tId, { uid: selected.uid, displayName: selected.name })
+        : (typeof window._arbitrosInvite === 'function' ? window._arbitrosInvite(selected.uid, tId) : null);
+      Promise.resolve(invitation).then(function(result) {
+        if (result && result.error) { busy = false; send.disabled = false; return; }
+        if (result && result.changed) {
+          // A Function já confirmou a gravação. Atualize somente a ficha local;
+          // o snapshot autoritativo reconciliará o restante sem recarregar a página.
+          if (role === 'cohost') {
+            t.coHosts = Array.isArray(t.coHosts) ? t.coHosts : [];
+            if (!t.coHosts.some(function(ch) { return ch && ch.uid === selected.uid; }))
+              t.coHosts.push({ uid: selected.uid, status: 'pending', name: selected.name });
+          } else {
+            t.arbitros = Array.isArray(t.arbitros) ? t.arbitros : [];
+            if (!t.arbitros.some(function(a) { return a && a.uid === selected.uid; }))
+              t.arbitros.push({ uid: selected.uid, status: 'invited', name: selected.name, photoURL: selected.photo });
+          }
+          var view = document.getElementById('view-container');
+          var scroll = window.scrollY || 0;
+          overlay.remove();
+          if (view && String(window.location.hash || '').indexOf('#tournaments/' + tId) === 0 && typeof renderTournaments === 'function') {
+            renderTournaments(view, tId);
+            window.scrollTo(0, scroll);
+          }
+          return;
+        }
+        overlay.remove();
+      }).catch(function() { busy = false; send.disabled = false; });
+    });
+    var render = function() {
+      list.replaceChildren();
+      var q = normalize(input.value);
+      var matches = friends.filter(function(f) { return !q || normalize(f.name).includes(q); });
+      if (!matches.length) { list.textContent = friends.length ? 'Nenhum amigo com esse nome.' : 'Nenhum amigo disponível.'; return; }
+      matches.forEach(function(friend) {
+        var row = document.createElement('button');
+        row.type = 'button'; row.className = 'btn btn-sm';
+        row.style.cssText = 'display:flex;align-items:center;text-align:left;gap:10px;width:100%;padding:9px;';
+        var img = document.createElement(friend.photo ? 'img' : 'span');
+        if (friend.photo) { img.src = friend.photo; img.alt = ''; img.style.cssText = 'width:32px;height:32px;border-radius:50%;object-fit:cover;'; }
+        else { img.textContent = friend.name.slice(0, 1).toUpperCase(); img.style.cssText = 'width:32px;height:32px;border-radius:50%;background:#334155;display:grid;place-items:center;'; }
+        var label = document.createElement('span'); label.textContent = friend.name;
+        row.appendChild(img); row.appendChild(label);
+        row.addEventListener('click', function() {
+          if (busy) return;
+          selected = friend;
+          selectedName.textContent = friend.name;
+          confirmRow.style.display = 'flex';
+        });
+        list.appendChild(row);
+      });
+    };
+    list.textContent = 'Carregando amigos…';
+    input.addEventListener('input', render);
+    Promise.resolve(typeof window._preloadUserProfiles === 'function' ? window._preloadUserProfiles(uniqueUids) : null).then(function() {
+      if (!overlay.isConnected) return;
+      var cache = window._userProfileCache || {};
+      var fallback = window._friendProfilesCache || {};
+      friends = uniqueUids.map(function(uid) {
+        var p = cache[uid] || fallback[uid] || {};
+        return { uid: uid, name: String(p.displayName || p.name || '').trim(), photo: p.photoURL || '' };
+      }).filter(function(f) {
+        if (!f.name) return false;
+        if (role === 'cohost') return !(t.coHosts || []).some(function(ch) { return ch && ch.uid === f.uid && (ch.status === 'pending' || ch.status === 'active'); });
+        return !(t.arbitros || []).some(function(a) { return a && a.uid === f.uid && (a.status === 'invited' || a.status === 'confirmed'); });
+      });
+      render(); input.focus();
+    }).catch(function() { if (overlay.isConnected) list.textContent = 'Não foi possível carregar seus amigos. Tente novamente.'; });
   };
 
   // ─── Accept host invite ───────────────────────────────────────────────────

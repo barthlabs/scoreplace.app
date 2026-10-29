@@ -149,8 +149,8 @@ function palco(opts) {
     await varios(6);
     ok(p.eventos.indexOf('mutate:gravou') < p.eventos.indexOf('function:chamada'),
       '⭐ a Function só é chamada DEPOIS de `mutate` resolver');
-    ok(p.eventos.indexOf('notif:alvo1') !== -1 && p.eventos.indexOf('notif:org1') !== -1,
-      '  → e as duas notificações in-app saem depois da gravação');
+    ok(p.eventos.indexOf('notif:alvo1') === -1 && p.eventos.indexOf('notif:org1') !== -1,
+      '  → o destinatário recebe aviso transacional da Function, sem duplicata do cliente');
     ok(p.eventos.some((e) => e.indexOf('toast:info:') === 0),
       '  → e o toast de sucesso também');
   }
@@ -188,7 +188,8 @@ function palco(opts) {
     p.resolveMutate();
     await varios(10);
     ok(p.T.coHosts.length === 1, rotulo + ': ⭐ o convite persistido CONTINUA (não se apaga por e-mail)');
-    ok(p.eventos.indexOf('notif:alvo1') !== -1, rotulo + ':   → e a notificação in-app também');
+    ok(p.eventos.indexOf('notif:alvo1') === -1 && p.eventos.indexOf('notif:org1') !== -1,
+      rotulo + ':   → o aviso do destinatário permanece no servidor e não há duplicata do cliente');
     ok(!p.eventos.some((e) => e.indexOf('toast:info:') === 0),
       rotulo + ': ⛔ e a tela NÃO afirma que o convite foi enviado');
     ok(p.eventos.some((e) => e.indexOf('toast:warning:') === 0),

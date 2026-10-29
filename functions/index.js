@@ -6880,14 +6880,27 @@ exports.manageTournamentReferee = onCall(
     console.log("[manageTournamentReferee] pedido uid=" + callerUid + " tid=" + tournamentId + " action=" + action + " target=" + targetUid);
     return db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
-      if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+      const answerAction = action === "self-confirm" || action === "decline";
+      const noticeRef = db.collection("users").doc(targetUid).collection("notifications")
+        .doc("referee-invite-" + tournamentId);
+      const noticeSnap = (answerAction || action === "remove") ? await tx.get(noticeRef) : null;
+      const noticePending = !!(noticeSnap && noticeSnap.exists &&
+        (noticeSnap.data() || {}).inviteStatus === "pending");
+      if (!snap.exists) {
+        if (!answerAction) throw new HttpsError("not-found", "torneio não existe");
+        if (noticePending) tx.update(noticeRef, { inviteStatus: "canceled" });
+        return { ok: true, changed: false, notFound: true };
+      }
       const t = await _splitParts.hidratar(tx, ref, snap.data() || {});
       if ((action === "invite" || action === "remove") && !_isTournamentOrgCaller(t, callerUid)) {
         throw new HttpsError("permission-denied", "só a organização gerencia árbitros");
       }
-      if ((action === "self-confirm" || action === "decline") &&
-          !_refereeRoster.sanitizeAll(t.arbitros).some((entry) => entry.uid === callerUid && entry.status === "invited")) {
-        throw new HttpsError("permission-denied", "convite de arbitragem ativo não encontrado");
+      const wasInvited = _refereeRoster.sanitizeAll(t.arbitros)
+        .some((entry) => entry.uid === targetUid && entry.status === "invited");
+      if (answerAction && !wasInvited) {
+        if (noticePending) tx.update(noticeRef, { inviteStatus: "canceled" });
+        return { ok: true, changed: false,
+          notFound: !noticeSnap || !noticeSnap.exists || (noticeSnap.data() || {}).inviteStatus !== "answered" };
       }
       let profile = null;
       if (action === "invite" || action === "self-confirm") {
@@ -6910,13 +6923,17 @@ exports.manageTournamentReferee = onCall(
           refereeUids: _refereeRoster.sanitizeAll(outcome.arbitros).filter(entry => entry.status === 'confirmed').map(entry => entry.uid).sort(),
           updatedAt: new Date().toISOString()
         });
-        if (action === "invite") {
-          tx.set(db.collection("users").doc(targetUid).collection("notifications").doc("referee-invite-" + tournamentId), {
-            type: "referee_invite", level: "important", tournamentId,
+        if (action === "invite" && !t.isSandbox) {
+          tx.set(noticeRef, {
+            type: "referee_invite", inviteStatus: "pending", level: "important", tournamentId,
             tournamentName: String(t.name || "").slice(0, 240),
-            message: "Você recebeu um convite para arbitrar este torneio. Abra a ficha para ver data, local, inscritos e responder.",
+            message: "Você recebeu um convite para arbitrar este torneio. Aceite ou recuse por aqui.",
             createdAt: new Date().toISOString(), read: false, fromUid: callerUid
           }, { merge: true });
+        } else if (noticePending && answerAction) {
+          tx.update(noticeRef, { inviteStatus: "answered" });
+        } else if (noticePending && action === "remove" && wasInvited) {
+          tx.update(noticeRef, { inviteStatus: "canceled" });
         }
       }
       console.log("[manageTournamentReferee] ok uid=" + callerUid + " tid=" + tournamentId + " action=" + action + " changed=" + outcome.changed);
@@ -7590,12 +7607,26 @@ exports.respondHostInvite = onCall(
     const docRef = db.collection("tournaments").doc(tournamentId);
     const out = await db.runTransaction(async (tx) => {
       const snap = await tx.get(docRef);
-      if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+      const inviteRef = inviteType === "cohost"
+        ? db.collection("users").doc(callerUid).collection("notifications")
+          .doc(_coHostCore.cohostInviteNotifId(tournamentId, callerUid)) : null;
+      const inviteSnap = inviteRef ? await tx.get(inviteRef) : null;
+      if (!snap.exists) {
+        if (inviteSnap && inviteSnap.exists && (inviteSnap.data() || {}).inviteStatus === "pending") {
+          tx.update(inviteRef, { inviteStatus: "canceled" });
+        }
+        return { outcome: "notFound" };
+      }
       // Torneio DIVIDIDO: o elenco mora na subcoleção. Hidrata ANTES de decidir —
       // sem isto as regras rodam contra `participants: []`. Ver functions/split-parts.js.
       const t = await _splitParts.hidratar(tx, docRef, snap.data());
       const r = _coHostCore.computeRespondHostInvite(t, callerUid, inviteType, action);
-      if (r.outcome !== "applied" || !r.updateData) return r;
+      if (r.outcome !== "applied" || !r.updateData) {
+        if (inviteSnap && inviteSnap.exists && (inviteSnap.data() || {}).inviteStatus === "pending") {
+          tx.update(inviteRef, { inviteStatus: "canceled" });
+        }
+        return r;
+      }
 
       const upd = Object.assign({}, r.updateData);
       // Transferência aceita: quem assume vira o organizador também nos campos de exibição.
@@ -7607,6 +7638,9 @@ exports.respondHostInvite = onCall(
       }
       upd.updatedAt = new Date().toISOString();
       _splitParts.gravar(tx, docRef, t, upd);
+      if (inviteSnap && inviteSnap.exists && (inviteSnap.data() || {}).inviteStatus === "pending") {
+        tx.update(inviteRef, { inviteStatus: "answered" });
+      }
       return r;
     });
 
@@ -7643,12 +7677,49 @@ exports.mutateHostOrganization = onCall(
       if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
       const t = await _splitParts.hidratar(tx, ref, snap.data() || {});
       if (!_isTournamentOrgCaller(t, callerUid)) throw new HttpsError("permission-denied", "só a organização altera convites");
+      let friendAccepted = false;
+      let inviterName = "";
+      let targetActive = true;
+      let inviteRef = null;
+      let inviteSnap = null;
+      if (inviteType === "cohost" && action === "invite" && targetUid !== callerUid) {
+        const friendRef = db.collection("friendships").doc(_amizadeAuth.pairId(callerUid, targetUid));
+        const [friendSnap, targetSnap, callerSnap] = await Promise.all([
+          tx.get(friendRef), tx.get(db.collection("users").doc(targetUid)), tx.get(db.collection("users").doc(callerUid))
+        ]);
+        const target = targetSnap.exists ? (targetSnap.data() || {}) : null;
+        targetActive = !!target && target.deleted !== true && !target.deletedAt && !target.mergedInto;
+        friendAccepted = targetActive && friendSnap.exists && (friendSnap.data() || {}).status === "accepted";
+        inviterName = callerSnap.exists ? String((callerSnap.data() || {}).displayName || "") : "";
+      }
+      if (inviteType === "cohost" && (action === "cancel" || action === "invite")) {
+        inviteRef = db.collection("users").doc(targetUid).collection("notifications")
+          .doc(_coHostCore.cohostInviteNotifId(tournamentId, targetUid));
+        if (action === "cancel") inviteSnap = await tx.get(inviteRef);
+      }
       const before = JSON.parse(JSON.stringify(t));
-      const result = _coHostCore.computeMutateHostOrganization(t, callerUid, { action, inviteType, targetUid });
+      const result = _coHostCore.computeMutateHostOrganization(t, callerUid, { action, inviteType, targetUid, friendAccepted });
       if (result.outcome === "forbidden") throw new HttpsError("permission-denied", "só o criador remove co-organizador");
+      if (inviteType === "cohost" && action === "invite" && !targetActive) throw new HttpsError("failed-precondition", "conta destinatária indisponível");
       if (result.outcome === "invalidTarget") throw new HttpsError("failed-precondition", "participante inválido para organização");
       if (result.outcome !== "applied" || !result.updateData) return { ok: true, changed: false, tournamentName: t.name || "" };
       _splitParts.gravar(tx, ref, before, Object.assign({}, result.updateData, { updatedAt: new Date().toISOString() }));
+      if (inviteRef && action === "invite" && !t.isSandbox) {
+        const now = new Date().toISOString();
+        const baseUrl = "https://scoreplace.app/#cohost/";
+        tx.set(inviteRef, {
+          type: "cohost_invite", inviteStatus: "pending", tournamentId,
+          tournamentName: String(t.name || "").slice(0, 240),
+          fromUid: callerUid, fromName: inviterName, inviterName,
+          message: (inviterName || "A organização") + " convidou você para organizar o torneio \"" + String(t.name || "").slice(0, 240) + "\".",
+          level: "fundamental", read: false, createdAt: now,
+          acceptUrl: baseUrl + "accept/" + encodeURIComponent(tournamentId) + "/cohost",
+          rejectUrl: baseUrl + "reject/" + encodeURIComponent(tournamentId) + "/cohost"
+        }, { merge: true });
+      } else if (inviteRef && action === "cancel" && inviteSnap && inviteSnap.exists &&
+          (inviteSnap.data() || {}).inviteStatus === "pending") {
+        tx.update(inviteRef, { inviteStatus: "canceled" });
+      }
       return { ok: true, changed: true, action: result.action, inviteType: result.inviteType,
         targetUid: result.targetUid, targetName: result.targetName, tournamentName: result.tournamentName };
     });

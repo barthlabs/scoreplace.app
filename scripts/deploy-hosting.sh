@@ -677,6 +677,10 @@ cd "$DEST"
 # ⚠️ O que ESTE script garante sozinho é a trava abaixo: nenhuma porta aposentada fica no ar.
 
 # MARCO: backend-carimbado
+# Os convites desta versão dependem de três Functions específicas. O recibo é
+# escrito somente depois do deploy direcionado confirmado; sem ele, esta leva
+# para antes de publicar a web (mesmo que alguém execute Hosting isoladamente).
+node scripts/check-invite-functions-published.js || exit 1
 # ⛔ A web não sobe sem o backend dela. Ver o cabeçalho de `check-backend-publicado.js`: é carimbo,
 # não publicação — publicar daqui derrubaria o ensaio que garante push-antes-de-upload.
 # ⚠️ A trava mora em arquivo próprio, e o ENSAIO do preflight copia só parte de `scripts/` — sem

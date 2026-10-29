@@ -204,9 +204,9 @@ function computeRespondHostInvite(data, callerUid, inviteType, action) {
 }
 
 
-// O alvo de convite precisa já constar no torneio. Isso mantém a superfície do comando
-// estreita: o picker escolhe uma inscrição existente, e a Function nunca promove um UID
-// arbitrário só porque ele foi enviado pelo navegador.
+// Transferência exige integrante do torneio. Para coorganização, a Function também
+// pode autorizar um amigo confirmado: ela mesma produz friendAccepted após ler a
+// amizade canônica. Este helper só verifica pertencimento; não dá autoridade ao cliente.
 function tournamentHasMember(data, uid) {
   if (!data || !uid) return false;
   const wanted = String(uid);
@@ -260,7 +260,9 @@ function computeMutateHostOrganization(data, callerUid, input) {
 
   const coHosts = coHostsArray(data).map(coHostUidRecord);
   if (action === 'invite') {
-    if (!targetUid || targetUid === callerUid || !tournamentHasMember(data, targetUid)) {
+    if (!targetUid || targetUid === callerUid ||
+        (inviteType === 'transfer' && !tournamentHasMember(data, targetUid)) ||
+        (inviteType === 'cohost' && !tournamentHasMember(data, targetUid) && input.friendAccepted !== true)) {
       return { outcome: 'invalidTarget', updateData: null, tournamentName: data.name || '' };
     }
     if (inviteType === 'transfer') {
@@ -303,8 +305,13 @@ function computeMutateHostOrganization(data, callerUid, input) {
     withDerived(next, { coHosts: coHosts }));
 }
 
+function cohostInviteNotifId(tournamentId, uid) {
+  if (!tournamentId || !uid) throw new Error('torneio e uid obrigatórios');
+  return 'cohost_invite_' + encodeURIComponent(String(tournamentId)) + '_' + encodeURIComponent(String(uid));
+}
+
 module.exports = {
   computeAdminUids, computeAdminEmails, pendingCoHostIndex, computeRespondHostInvite,
   tournamentHasMember, participantDisplayName, computeMutateHostOrganization,
-  claimReservedOrganizer
+  claimReservedOrganizer, cohostInviteNotifId
 };

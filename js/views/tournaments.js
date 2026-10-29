@@ -4979,6 +4979,7 @@ function renderTournaments(container, tournamentId = null) {
            * mesma medida. A constante já existe; o certo é chamá-la.
            * [[feedback_reuse_what_already_works]] [[feedback_unify_dual_entry_points]] */
           '<div style="' + window._INSCRITO_GRID_SOLO + '">' + _orgCards + '</div>' +
+          (_viewerIsOrg ? '<button type="button" class="btn btn-sm" style="margin-top:8px;" onclick="window._openTournamentFriendInvitePicker(\'' + String(_t.id).replace(/'/g, "\\'") + '\',\'cohost\')">+ Convidar organizador</button>' : '') +
           _contactBtnHtml + '</div>';
       })();
     }
@@ -4994,7 +4995,7 @@ function renderTournaments(container, tournamentId = null) {
       var _visibleReferees = _refRoster.filter(function(entry) {
         return entry.status === 'confirmed' || _refCanSeeInvites;
       });
-      if (_visibleReferees.length) {
+      if (_visibleReferees.length || _refCanSeeInvites) {
         var _refCards = _visibleReferees.map(function(entry) {
           var _liveName = typeof window._nameForUid === 'function' ? window._nameForUid(entry.uid) : '';
           var _name = _liveName || entry.name || 'Árbitro';
@@ -5014,7 +5015,8 @@ function renderTournaments(container, tournamentId = null) {
         }).join('');
         _refereesHtml = '<section style="margin-top:1.25rem;margin-bottom:0.5rem;">' +
           '<div style="font-size:0.7rem;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);margin-bottom:8px;">ARBITRAGEM</div>' +
-          '<div style="' + window._INSCRITO_GRID_SOLO + '">' + _refCards + '</div></section>';
+          '<div style="' + window._INSCRITO_GRID_SOLO + '">' + _refCards + '</div>' +
+          (_refCanSeeInvites ? '<button type="button" class="btn btn-sm" style="margin-top:8px;" onclick="window._openTournamentFriendInvitePicker(\'' + String(_refTournament.id).replace(/'/g, "\\'") + '\',\'referee\')">+ Convidar árbitro</button>' : '') + '</section>';
       }
     }
 
