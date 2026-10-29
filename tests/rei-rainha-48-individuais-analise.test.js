@@ -38,4 +38,20 @@ const guardStart = src.indexOf('  window._erFormPair = function (source, target)
 const guardEnd = src.indexOf('    // Categoria staged', guardStart);
 ok(guardStart >= 0 && guardEnd > guardStart && src.slice(guardStart, guardEnd).includes('window._initialMonarchIndividualEnrollment(_liveState.t)') && src.slice(guardStart, guardEnd).includes('return;'),
   'ação de formar dupla fica bloqueada antes da chamada ao servidor nesta fase');
+const oldFind = W._findTournamentById;
+const oldNotify = W.showNotification;
+const oldConfirm = W.showConfirmDialog;
+const oldDb = W.FirestoreDB;
+let notifications = 0, confirms = 0, calls = 0;
+W._findTournamentById = () => initial;
+W.showNotification = () => { notifications++; };
+W.showConfirmDialog = () => { confirms++; };
+W.FirestoreDB = { formPair: () => { calls++; return Promise.resolve({}); } };
+W._formTeamConfirm('test', 'Jogador 1', 'uid1', 'Jogador 2', 'uid2', { changeRule: true });
+ok(notifications === 1 && confirms === 0 && calls === 0,
+  'overlay de sorteio explica o bloqueio antes do diálogo changeRule ou da chamada ao servidor');
+W._findTournamentById = oldFind;
+W.showNotification = oldNotify;
+W.showConfirmDialog = oldConfirm;
+W.FirestoreDB = oldDb;
 process.exitCode = failures ? 1 : 0;

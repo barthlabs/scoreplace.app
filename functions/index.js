@@ -4487,6 +4487,7 @@ exports.leaveStandby = onCall(
 // [[project_draw_client_to_cf_migration]] / [[project_sandbox_tournament]].
 // Deploy:  firebase deploy --only functions:formPair,functions:splitPair
 const _pairCore = require("./pair-core");
+const _monarchPairPolicy = require("./monarch-pair-policy");
 const _participantRename = require("./participant-rename-core");
 const _ligaAvailability = require("./liga-availability-core");
 // Codebases Firebase são pacotes isolados. Em desenvolvimento aproveita o motor
@@ -7374,6 +7375,9 @@ exports.formPair = onCall(
       if (sandbox) await _sandboxAutorizado(db, snap, callerUid, (sourceRef) => tx.get(sourceRef));
       else if (rawTournament.isSandbox === true) throw new HttpsError("not-found", "torneio não existe");
       const logicalId = sandbox ? String(rawTournament.sandboxOf) : tournamentId;
+      if (_monarchPairPolicy.initialMonarchIndividualEnrollment(rawTournament)) {
+        throw new HttpsError("failed-precondition", "Na fase inicial Rei/Rainha, as inscrições são individuais; as duplas só podem ser formadas depois da classificação.");
+      }
       if (rawTournament.canonicalRegistrationMigration && rawTournament.canonicalRegistrationMigration.fingerprint) {
         if (opts.changeRule) throw new HttpsError("failed-precondition", "alteração de regra não faz parte da dupla canônica");
         if ((!opts.uid1 && !opts.manualId1) || (!opts.uid2 && !opts.manualId2)) {

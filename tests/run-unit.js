@@ -1130,6 +1130,7 @@ const SUITES = [
   'tests/duplas-teams-enrollmode.test.js',
   'tests/analise-duplas-arrastaveis.test.js',
   'tests/rei-rainha-48-individuais-analise.test.js',
+  'functions/test-monarch-pair-policy.js',
   'tests/analise-cabecalho-soma-categorias.test.js',
   'tests/chaves-abas-categoria.test.js',
   'tests/chaves-abas-estaveis.test.js',

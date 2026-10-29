@@ -34,6 +34,7 @@ const EXCECOES = {
   'js/views/format2.js': 'o compilador ESCREVE o campo — é a origem, não um leitor',
   'js/views/format2-ui.js': 'a tela de configuração ESCREVE o campo',
   'functions-autodraw/draw-core.js': 'lê a config da FASE (resposta certa); migra na leva dos leitores',
+  'functions/monarch-pair-policy.js': 'porta única do servidor para impedir dupla prematura; paridade com a porta do cliente testada',
 };
 const CAMPOS = ['drawMode', 'ligaRoundFormat'];
 

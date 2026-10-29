@@ -1,5 +1,7 @@
 // ─── English translations ───────────────────────────────────────────────────
 window._translations['en'] = {
+  'draw.monarchPairBlockedTitle': 'Pairs after standings',
+  'draw.monarchPairBlockedBody': 'In the initial King/Queen phase, entries are individual. Pairs are formed after the standings are final.',
   'bracket.competitorIndex': 'Competitors in the bracket',
   'bracket.filterNoMatches': 'No matches found with these filters.',
   'bracket.filterOtherTab': 'Matching games are in another bracket tab.',

@@ -1,5 +1,7 @@
 // ─── Portuguese (pt-BR) translations ────────────────────────────────────────
 window._translations['pt'] = {
+  'draw.monarchPairBlockedTitle': 'Duplas após a classificação',
+  'draw.monarchPairBlockedBody': 'Na fase inicial Rei/Rainha, as inscrições são individuais. As duplas serão formadas depois da classificação.',
   'bracket.competitorIndex': 'Competidores na chave',
   'bracket.filterNoMatches': 'Nenhum jogo encontrado com esses filtros.',
   'bracket.filterOtherTab': 'Há jogos com esses filtros em outra aba da chave.',

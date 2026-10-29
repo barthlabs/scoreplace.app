@@ -4497,6 +4497,10 @@ window._showDropChoiceOverlay = function(opts) {
 window._formTeamConfirm = function(tId, name1, uid1, name2, uid2, opts) {
     var t = window._findTournamentById(tId);
     if (!t) return;
+    if (window._initialMonarchIndividualEnrollment && window._initialMonarchIndividualEnrollment(t)) {
+        if (typeof showNotification === 'function') showNotification(window._t('draw.monarchPairBlockedTitle'), window._t('draw.monarchPairBlockedBody'), 'warning');
+        return;
+    }
     var newName = name1 + ' / ' + name2;
     var _changeRule = !!(opts && opts.changeRule);
     // v2.7.81: lógica de formar a dupla extraída — o overlay chama isto DIRETO
