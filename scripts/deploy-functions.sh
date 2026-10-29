@@ -186,7 +186,9 @@ do_main() {
     "principal (functions/)" "$ROOT/functions"
   # O Hosting novo delega o aviso e o aceite ao servidor. Só carimbe após
   # confirmar as três callables nesta execução; --dry-run nunca cria recibo.
-  if [ "$DRY" != 1 ] && [[ ",$targets," == *",functions:mutateHostOrganization,"* ]] &&
+  if [ "$DRY" != 1 ] &&
+     ! { [ "${SP_SKIP_INVITE_RECEIPT:-0}" = 1 ] && [ -n "${FIREBASE_FALSO_SAIDA:-}" ]; } &&
+     [[ ",$targets," == *",functions:mutateHostOrganization,"* ]] &&
      [[ ",$targets," == *",functions:respondHostInvite,"* ]] &&
      [[ ",$targets," == *",functions:manageTournamentReferee,"* ]]; then
     SP_DEPLOY_CONFIRMED=1 node "$ROOT/scripts/check-invite-functions-published.js" --stamp

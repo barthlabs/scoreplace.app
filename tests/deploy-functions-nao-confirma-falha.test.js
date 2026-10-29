@@ -29,6 +29,8 @@ function executar(saida, codigo) {
     PATH: falso + path.delimiter + process.env.PATH,
     FIREBASE_FALSO_SAIDA: saida,
     FIREBASE_FALSO_EXIT: String(codigo),
+    // O ensaio usa CLI falso: jamais gravar um recibo que afirmaria deploy real.
+    SP_SKIP_INVITE_RECEIPT: '1',
     GOOGLE_APPLICATION_CREDENTIALS: chave,
     NODE_OPTIONS: '-r ' + hook,
   });
