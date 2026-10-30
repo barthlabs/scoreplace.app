@@ -40,7 +40,28 @@ function amountForCategory(settings, definitions, categoryId, contract) {
   return total;
 }
 
-function directMethods(settings) {
+function hasDraw(t) {
+  if (!t || typeof t !== 'object') return false;
+  return t.status === 'in_progress' || t.tournamentStarted === true || t.hasDraw === true || t.drawSelectionDone === true
+    || !!t.pendingDraw || ['matches', 'rounds', 'groups', 'grupos', 'phaseRounds', 'phaseGroups']
+      .some(key => (Array.isArray(t[key]) && t[key].length > 0)
+        || Number(t._nPartes && t._nPartes[key]) > 0);
+}
+
+function paymentContext(tournament) {
+  if (!tournament || typeof tournament !== 'object' || tournament.status === 'finished' || hasDraw(tournament)) {
+    return 'late';
+  }
+  return 'pre_draw';
+}
+
+function assertPaymentContext(context) {
+  if (context !== 'pre_draw' && context !== 'late') throw new Error('Contexto de pagamento inválido.');
+}
+
+function directMethods(settings, context) {
+  assertPaymentContext(context);
+  if (context === 'late') return null;
   const methods = settings && settings.paymentMethods || {};
   const pixKey = String(methods.organizerPixKey || '').trim();
   const pixName = String(methods.organizerPixName || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
@@ -197,6 +218,17 @@ function planReclassificationPayment(changes, originals, settings, definitions, 
   return next;
 }
 
+function createsNewOpenCharge(changes, originals) {
+  const before = new Map((originals || []).map(item => [item.registrationId, item]));
+  return (changes.updates || []).concat(changes.creates || []).some(item => {
+    if (item.status === 'withdrawn' || item.paymentState !== 'awaiting_payment'
+      || !cents(item.paymentDueCents) || item.paymentDueCents === 0) return false;
+    const source = before.get(item.reclassifiedFromRegistrationId);
+    return !source || source.paymentState !== 'awaiting_payment'
+      || source.paymentDueCents !== item.paymentDueCents;
+  });
+}
+
 function reclassificationNotices(changes, originals, definitions, tournament) {
   if (!tournament || tournament.isSandbox || tournament.notificationsMuted || tournament.organizerOnly) return [];
   const before = new Map((originals || []).map(item => [item.registrationId, item]));
@@ -239,7 +271,9 @@ function reclassificationNotices(changes, originals, definitions, tournament) {
   return notices;
 }
 
-function submittedProof(registration, proofPath, method) {
+function submittedProof(registration, proofPath, method, context) {
+  assertPaymentContext(context);
+  if (context === 'late') throw new Error('Comprovante do organizador indisponível após o sorteio.');
   const state = registration && registration.paymentState;
   if (!['awaiting_payment', 'rejected', 'proof_submitted'].includes(state)
     || registration.status !== 'pending' || !registration.participantUid) {
@@ -294,7 +328,8 @@ function canPair(registration) {
   return registration.paymentState === 'paid' && registration.status === 'confirmed';
 }
 
-module.exports = { STATES, FINANCIAL_FIELDS, priceForCategory, amountForCategory, directMethods, paidEnrollmentRequired, awaitingPayment,
+module.exports = { STATES, FINANCIAL_FIELDS, priceForCategory, amountForCategory, hasDraw, paymentContext,
+  directMethods, paidEnrollmentRequired, awaitingPayment,
   prepareWithdrawal,
-  assertReactivationSafe, planReclassificationPayment, reclassificationNotices,
+  assertReactivationSafe, planReclassificationPayment, createsNewOpenCharge, reclassificationNotices,
   submittedProof, confirmDirectPayment, rejectDirectPayment, canPair };

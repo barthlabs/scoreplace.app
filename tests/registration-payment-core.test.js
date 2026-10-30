@@ -22,12 +22,19 @@ assert.throws(() => Payment.amountForCategory({ ...settings, passServiceFeeToPar
 assert.strictEqual(Payment.priceForCategory(settings, definitions, 'cat-b'), 0);
 assert.strictEqual(Payment.priceForCategory({ source:'scoreplace', pricing:{ mode:'single', cents:1200 } }, [], category), 1200);
 assert.throws(() => Payment.priceForCategory(settings, definitions, 'cat-c'), /Categoria sem valor/);
-assert.throws(() => Payment.directMethods({ paymentMethods:{} }), /Configure/);
-assert.deepStrictEqual(Payment.directMethods(settings), { organizerPixKey:'pix@example.com',
+assert.throws(() => Payment.directMethods({ paymentMethods:{} }, 'pre_draw'), /Configure/);
+assert.deepStrictEqual(Payment.directMethods(settings, 'pre_draw'), { organizerPixKey:'pix@example.com',
   organizerPixName:'Fulano de Tal', organizerPixCity:'Brasilia', organizerPaymentUrl:'' });
-assert.throws(() => Payment.directMethods({ paymentMethods:{ organizerPixKey:'pix@example.com' } }), /Nome e cidade/);
-assert.throws(() => Payment.directMethods({ paymentMethods:{ organizerPaymentUrl:'javascript:alert(1)' } }), /HTTPS/);
-assert.throws(() => Payment.directMethods({ paymentMethods:{ organizerPaymentUrl:'https://user:pass@example.com/' } }), /credenciais/);
+assert.throws(() => Payment.directMethods({ paymentMethods:{ organizerPixKey:'pix@example.com' } }, 'pre_draw'), /Nome e cidade/);
+assert.throws(() => Payment.directMethods({ paymentMethods:{ organizerPaymentUrl:'javascript:alert(1)' } }, 'pre_draw'), /HTTPS/);
+assert.throws(() => Payment.directMethods({ paymentMethods:{ organizerPaymentUrl:'https://user:pass@example.com/' } }, 'pre_draw'), /credenciais/);
+assert.throws(() => Payment.directMethods(settings), /Contexto/);
+assert.strictEqual(Payment.directMethods(settings, 'late'), null);
+assert.strictEqual(Payment.directMethods(null, 'late'), null);
+assert.strictEqual(Payment.paymentContext(null), 'late');
+assert.strictEqual(Payment.paymentContext({ status:'finished' }), 'late');
+assert.strictEqual(Payment.paymentContext({ _nPartes:{ phaseRounds:1 } }), 'late');
+assert.strictEqual(Payment.paymentContext({ status:'draft' }), 'pre_draw');
 assert.strictEqual(Payment.paidEnrollmentRequired(settings, false, false), true);
 assert.throws(() => Payment.paidEnrollmentRequired(settings, true, true), /Inclusão manual em torneio pago/);
 assert.throws(() => Payment.paidEnrollmentRequired(settings, true, false), /Inclusão manual em torneio pago/);
@@ -45,6 +52,13 @@ function registration(uid) {
 }
 const first = Payment.awaitingPayment(registration('u1'), 18700);
 const second = Payment.awaitingPayment(registration('u2'), 18700);
+const sameOpenCharge = { ...first, registrationId:'destination', reclassifiedFromRegistrationId:first.registrationId };
+assert.strictEqual(Payment.createsNewOpenCharge({ updates:[], creates:[sameOpenCharge] }, [first]), false,
+  'transferir cobrança aberta do mesmo valor não cria nova cobrança');
+assert.strictEqual(Payment.createsNewOpenCharge({ updates:[], creates:[{ ...sameOpenCharge, paymentDueCents:18800 }] }, [first]), true,
+  'aumento de valor exige nova cobrança');
+assert.strictEqual(Payment.createsNewOpenCharge({ updates:[], creates:[{ ...sameOpenCharge, reclassifiedFromRegistrationId:null }] }, [first]), true,
+  'cobrança sem origem auditável é nova');
 assert.strictEqual(first.status, 'pending');
 assert.strictEqual(first.paymentState, 'awaiting_payment');
 assert.strictEqual(first.paymentDueCents, 18700);
@@ -53,9 +67,11 @@ assert.throws(() => Mutations.pair(id, [first, second], [first.registrationId, s
 assert.throws(() => Payment.awaitingPayment({ ...registration('u1'), status:'waitlisted' }, 18700), /Lista de espera/);
 assert.throws(() => Payment.awaitingPayment(registration('u1'), 0), /inválida/);
 const proofPath = `tournamentPaymentProofs/${id}/u1/0123456789abcdef`;
-assert.throws(() => Payment.submittedProof(first, `tournamentPaymentProofs/${id}/u2/0123456789abcdef`, 'organizer_pix'), /pasta privada/);
-assert.throws(() => Payment.submittedProof(first, proofPath), /Selecione o meio/);
-const proof = Payment.submittedProof(first, proofPath, 'organizer_pix');
+assert.throws(() => Payment.submittedProof(first, `tournamentPaymentProofs/${id}/u2/0123456789abcdef`, 'organizer_pix', 'pre_draw'), /pasta privada/);
+assert.throws(() => Payment.submittedProof(first, proofPath, undefined, 'pre_draw'), /Selecione o meio/);
+assert.throws(() => Payment.submittedProof(first, proofPath, 'organizer_pix'), /Contexto/);
+assert.throws(() => Payment.submittedProof(first, proofPath, 'organizer_pix', 'late'), /após o sorteio/);
+const proof = Payment.submittedProof(first, proofPath, 'organizer_pix', 'pre_draw');
 assert.strictEqual(proof.paymentState, 'proof_submitted');
 assert.strictEqual(proof.paymentMethod, 'organizer_pix');
 assert.strictEqual(proof.status, 'pending');
@@ -111,7 +127,7 @@ const foreignCurrency = { ...paid, paymentCurrency:'USD' };
 assert.throws(() => Payment.planReclassificationPayment(Mutations.reclassify(id, [foreignCurrency],
   { uid:'u1' }, category, 'cat-b'), [foreignCurrency], equalSettings, pricedDefinitions), /Moeda/);
 const secondPaid = Payment.confirmDirectPayment(Payment.submittedProof(second,
-  `tournamentPaymentProofs/${id}/u2/0123456789abcdef`, 'organizer_pix'), 'organizer', 'Pix identificado');
+  `tournamentPaymentProofs/${id}/u2/0123456789abcdef`, 'organizer_pix', 'pre_draw'), 'organizer', 'Pix identificado');
 const pairedPaid = Mutations.pair(id, [paid, secondPaid], [paid.registrationId, secondPaid.registrationId]);
 const pairedPaymentMove = Payment.planReclassificationPayment(Mutations.reclassify(id, pairedPaid.updates,
   { uid:'u1' }, category, 'cat-b'), pairedPaid.updates, equalSettings, pricedDefinitions);
@@ -241,8 +257,8 @@ assert.strictEqual(Payment.reclassificationNotices(rejectedFree, [rejected], pri
 assert.strictEqual(rejected.status, 'pending');
 assert.strictEqual(rejected.paymentState, 'rejected');
 assert.strictEqual(Payment.canPair(rejected), false);
-assert.throws(() => Payment.submittedProof(rejected, proofPath, 'organizer_pix'), /novo comprovante/);
-assert.strictEqual(Payment.submittedProof(rejected, `tournamentPaymentProofs/${id}/u1/abcdef0123456789`, 'organizer_pix').paymentState, 'proof_submitted');
+assert.throws(() => Payment.submittedProof(rejected, proofPath, 'organizer_pix', 'pre_draw'), /novo comprovante/);
+assert.strictEqual(Payment.submittedProof(rejected, `tournamentPaymentProofs/${id}/u1/abcdef0123456789`, 'organizer_pix', 'pre_draw').paymentState, 'proof_submitted');
 const reviewedButUnqualified = Payment.confirmDirectPayment({ ...proof, validationState:'pending_review' }, 'organizer', 'Pix identificado');
 assert.strictEqual(reviewedButUnqualified.status, 'pending');
 assert.strictEqual(Payment.canPair(reviewedButUnqualified), false);

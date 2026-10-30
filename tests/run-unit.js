@@ -63,6 +63,7 @@ const SUITES = [
   'tests/registration-settings.test.js',
   'tests/registration-payment-core.test.js',
   'tests/registration-payment-service.test.js',
+  'tests/registration-payment-index-context.test.js',
   'tests/rules-tournament-billing.test.js',
   'tests/storage-payment-proof.test.js',
   'tests/pix-brcode.test.js',

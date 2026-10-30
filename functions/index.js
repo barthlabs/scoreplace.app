@@ -3066,8 +3066,10 @@ exports.enrollParticipant = onCall(
             || rawTournament.billingContract?.schema !== 1) {
             throw new HttpsError('failed-precondition', 'A inscrição paga ainda não está habilitada neste torneio.');
           }
-          try { _registrationPayment.directMethods(registration); }
-          catch (error) { throw new HttpsError('failed-precondition', error.message); }
+          if (_registrationPayment.paymentContext(_dados) === 'pre_draw') {
+            try { _registrationPayment.directMethods(registration, 'pre_draw'); }
+            catch (error) { throw new HttpsError('failed-precondition', error.message); }
+          }
           const billingConfig = (await tx.get(db.collection('billingAdminConfig').doc('active'))).data() || {};
           if (!_billingTerms.termsAccepted(rawTournament, _billingTerms.termsCatalog(billingConfig, rawTournament))) {
             throw new HttpsError('failed-precondition', 'As condições financeiras mudaram. Aguarde a organização aceitá-las novamente.');
@@ -3164,6 +3166,12 @@ exports.enrollParticipant = onCall(
             }
           } catch (error) { throw new HttpsError('failed-precondition', error.message); }
         }
+        // A lista de espera após o sorteio não cria cobrança e pode continuar.
+        // Uma vaga que exigiria pagamento ao organizador, porém, espera o fluxo
+        // financeiro tardio do Scoreplace antes de qualquer escrita no elenco.
+        if (paymentDue.length && _registrationPayment.paymentContext(_dados) === 'late') {
+          throw new HttpsError('failed-precondition', 'Pagamento ao organizador indisponível após o sorteio.');
+        }
         let next = checked;
         if (decision.enrollment && decision.enrollment.updates.length) {
           next = _writeCanonicalRosterChanges(tx, docRef, rawTournament, checked.registrations, decision.enrollment, null, logicalId);
@@ -3189,7 +3197,8 @@ exports.enrollParticipant = onCall(
           participants: next.participants,
           standbyParticipants: decision.outcome === "waitlisted" ? next.participants : null,
           paymentDue,
-          paymentMethods:paymentDue.length ? _registrationPayment.directMethods(registration) : null,
+          paymentMethods:paymentDue.length
+            ? _registrationPayment.directMethods(registration, _registrationPayment.paymentContext(_dados)) : null,
         });
       }
       if (paidDirectEnrollment) throw new HttpsError('failed-precondition', 'Este torneio precisa usar inscrições canônicas para receber pagamentos.');
@@ -5281,7 +5290,13 @@ exports.reclassifyCanonicalRegistration = onCall(
         if (tournament.billingContract?.schema !== 1 || !tournament.billingTermsAcceptance?.hash) {
           throw new HttpsError('failed-precondition', 'Inscrição paga ainda não está habilitada neste torneio.');
         }
-        try { _registrationPayment.directMethods(tournament.registrationSettings); }
+        try {
+          const context = _registrationPayment.paymentContext(tournament);
+          if (context === 'late' && _registrationPayment.createsNewOpenCharge(changes, checked.registrations)) {
+            throw new Error('Nova cobrança indisponível após o sorteio.');
+          }
+          if (context === 'pre_draw') _registrationPayment.directMethods(tournament.registrationSettings, context);
+        }
         catch (error) { throw new HttpsError('failed-precondition', error.message); }
         const billingConfig = (await tx.get(db.collection('billingAdminConfig').doc('active'))).data() || {};
         if (!_billingTerms.termsAccepted(tournament, _billingTerms.termsCatalog(billingConfig, tournament))) {

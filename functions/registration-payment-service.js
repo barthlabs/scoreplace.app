@@ -65,12 +65,6 @@ function makeService({ db, storage, HttpsError, FieldValue }) {
       createdAt:now, createdAtMs:Date.parse(now), dispatchStatus:'pending'
     });
   }
-  function hasDraw(t) {
-    return t.status === 'in_progress' || t.tournamentStarted === true || t.hasDraw === true || t.drawSelectionDone === true
-      || !!t.pendingDraw || ['matches', 'rounds', 'groups', 'grupos', 'phaseRounds', 'phaseGroups']
-        .some(key => (Array.isArray(t[key]) && t[key].length > 0)
-          || Number(t._nPartes && t._nPartes[key]) > 0);
-  }
   function paymentPatch(next, now) {
     return { status:next.status, paymentState:next.paymentState,
       proofPath:next.proofPath, paymentMethod:next.paymentMethod || null,
@@ -100,17 +94,18 @@ function makeService({ db, storage, HttpsError, FieldValue }) {
     const ref = refs(tournamentId, registrationId);
     return db.runTransaction(async tx => {
       const state = await checked(tx, ref.tournament, ref.registration, tournamentId);
-      if (state.tournament.status === 'finished' || hasDraw(state.tournament)) {
+      const context = payment.paymentContext(state.tournament);
+      if (context === 'late') {
         fail('failed-precondition', 'O envio de comprovante exige torneio antes do sorteio.');
       }
       if (state.registration.participantUid !== uid || state.registration.participantKind !== 'account') {
         fail('permission-denied', 'Apenas a pessoa inscrita envia seu comprovante.');
       }
       let methods;
-      try { methods = payment.directMethods(state.tournament.registrationSettings); }
+      try { methods = payment.directMethods(state.tournament.registrationSettings, context); }
       catch (error) { fail('failed-precondition', error.message); }
-      if (method === 'organizer_pix' ? !methods.organizerPixKey
-        : method === 'organizer_link' ? !methods.organizerPaymentUrl : true) {
+      if (!methods || (method === 'organizer_pix' ? !methods.organizerPixKey
+        : method === 'organizer_link' ? !methods.organizerPaymentUrl : true)) {
         fail('failed-precondition', 'Meio de pagamento não configurado neste torneio.');
       }
       if (state.registration.paymentState === 'proof_submitted' && state.registration.proofPath === path
@@ -126,7 +121,7 @@ function makeService({ db, storage, HttpsError, FieldValue }) {
         fail('failed-precondition', 'Este comprovante já pertence a outra inscrição.');
       }
       let next;
-      try { next = payment.submittedProof(state.registration, path, method); }
+      try { next = payment.submittedProof(state.registration, path, method, context); }
       catch (error) { fail('failed-precondition', error.message); }
       const now = new Date().toISOString();
       tx.update(ref.registration, paymentPatch(next, now));
@@ -150,7 +145,7 @@ function makeService({ db, storage, HttpsError, FieldValue }) {
     return db.runTransaction(async tx => {
       const state = await checked(tx, ref.tournament, ref.registration, tournamentId);
       if (!organizer(state.tournament, uid)) fail('permission-denied', 'Só a organização confere pagamentos.');
-      if (state.tournament.status === 'finished' || hasDraw(state.tournament)) {
+      if (payment.paymentContext(state.tournament) === 'late') {
         fail('failed-precondition', 'A conferência manual exige torneio antes do sorteio.');
       }
       const before = state.registration;
@@ -191,7 +186,7 @@ function makeService({ db, storage, HttpsError, FieldValue }) {
     if (!tournamentSnap.exists || tournamentSnap.data().isSandbox === true) fail('not-found', 'Torneio não encontrado.');
     const tournament = tournamentSnap.data() || {};
     let methods;
-    try { methods = payment.directMethods(tournament.registrationSettings); }
+    try { methods = payment.directMethods(tournament.registrationSettings, payment.paymentContext(tournament)); }
     catch (_) { return { payments:[], paymentMethods:null }; }
     const own = await tournamentRef.collection('registrations').where('participantUid', '==', uid).get();
     const labels = new Map((tournament.categoryDefinitions || []).map(item => [item.id, item.label]));

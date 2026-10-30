@@ -97,6 +97,21 @@ const request = (actor, extra) => ({ auth:{ uid:actor }, data:{ tournamentId:tid
   const outsiderPayment = await service.myPayments(request('outsider'));
   assert.strictEqual(outsiderPayment.payments.length, 0);
   assert.strictEqual(outsiderPayment.paymentMethods, null);
+  for (const tournamentState of [{ status:'in_progress' }, { status:'finished' },
+    { drawSelectionDone:true }, { _nPartes:{ phaseRounds:1 } }]) {
+    const original = docs.get(tournamentPath);
+    docs.set(tournamentPath, { ...original, ...tournamentState });
+    const latePayment = await service.myPayments(request(uid));
+    assert.strictEqual(latePayment.payments.length, 1, 'cobrança antiga permanece legível');
+    assert.strictEqual(latePayment.paymentMethods, null, 'meios do organizador não aparecem após sorteio');
+    await assert.rejects(service.submitProof(request(uid, { proofPath:path, paymentMethod:'organizer_pix' })),
+      error => error.code === 'failed-precondition');
+    docs.set(tournamentPath, { ...original, ...tournamentState, registrationSettings:null });
+    const withoutSettings = await service.myPayments(request(uid));
+    assert.strictEqual(withoutSettings.payments.length, 1, 'histórico permanece mesmo sem configuração');
+    assert.strictEqual(withoutSettings.paymentMethods, null);
+    docs.set(tournamentPath, original);
+  }
   await assert.rejects(service.submitProof(request('outsider', { proofPath:`tournamentPaymentProofs/${tid}/outsider/0123456789abcdef`, paymentMethod:'organizer_pix' })), error => error.code === 'permission-denied');
   metadataType = 'image/svg+xml';
   await assert.rejects(service.submitProof(request(uid, { proofPath:path, paymentMethod:'organizer_pix' })), error => error.code === 'failed-precondition');

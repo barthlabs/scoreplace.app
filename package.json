@@ -50,6 +50,7 @@
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",
     "@capacitor/cli": "^8.4.1",
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@playwright/test": "^1.49.0",
     "acorn": "8.17.0",
     "esbuild": "^0.28.2",
