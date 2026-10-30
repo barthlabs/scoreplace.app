@@ -1080,10 +1080,7 @@ window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
     // mas o que entra no array é uma CÓPIA (Object.assign), então a recusa não removia NADA
     // da tela e a pessoa seguia se vendo "inscrita" até o próximo snapshot.
     var _pushedEnroll = Object.assign({}, participantObj, { _pendingEnroll: true });
-    var _pricing = t.registrationSettings && t.registrationSettings.pricing;
-    var _paidEnrollment = !!(_pricing && (_pricing.mode === 'single' ? Number(_pricing.cents) > 0
-      : Object.keys(_pricing.centsByCategory || {}).some(function(key) { return Number(_pricing.centsByCategory[key]) > 0; }))
-      || t.registrationSettings && t.registrationSettings.passServiceFeeToParticipant === true);
+    var _paidEnrollment = window._tournamentRequiresPayment(t);
     if (!_paidEnrollment) t.participants.push(_pushedEnroll);
 
     // Show success and navigate immediately (no wait for network)
@@ -1382,9 +1379,30 @@ window.deenrollCurrentUser = function (tId) {
     }
 };
 
+// A mesma definição de inscrição paga usada pelo servidor: qualquer categoria
+// com preço positivo ou taxa de serviço repassada exige pagamento auditado.
+window._tournamentRequiresPayment = function (t) {
+    var settings = t && t.registrationSettings;
+    if (!settings || settings.source !== 'scoreplace') return false;
+    var pricing = settings.pricing;
+    return !!(pricing && (pricing.mode === 'single' ? Number(pricing.cents) > 0
+        : pricing.mode === 'category' && Object.keys(pricing.centsByCategory || {}).some(function (key) {
+            return Number(pricing.centsByCategory[key]) > 0;
+        })) || settings.passServiceFeeToParticipant === true);
+};
+
+window._paidManualEnrollmentBlocked = function (t) {
+    if (!window._tournamentRequiresPayment(t)) return false;
+    if (typeof showAlertDialog === 'function') showAlertDialog('Inscrição com pagamento',
+        'Convide a pessoa para se inscrever e concluir o pagamento pelo app. A organização não pode confirmar uma inscrição paga manualmente.',
+        null, { type: 'warning' });
+    return true;
+};
+
 window.addParticipantFunction = function (tId) {
     const t = window._findTournamentById(tId);
     if (!t) return;
+    if (window._paidManualEnrollmentBlocked(t)) return;
     // v1.8.40: regra canônica (waitlist-core._enrollmentOpenState — a mesma do servidor).
     var _closedOrDrawn = !window._enrollmentOpenState(t).open;
     // A UI só expressa a intenção; a callable confirma que a sessão é de
@@ -1407,6 +1425,7 @@ window.addParticipantFunction = function (tId) {
 window._doAddParticipant = function (tId, pName, selectedUid, selectedPhoto, onDone, _resolved, categoryIds) {
     var t = window._findTournamentById(tId);
     if (!t) return;
+    if (window._paidManualEnrollmentBlocked(t)) return;
     // v1.8.40: regra canônica (waitlist-core._enrollmentOpenState — a mesma do servidor).
     var _closedOrDrawn = !window._enrollmentOpenState(t).open;
     // A autorização real é conferida novamente pela callable, dentro da transação.

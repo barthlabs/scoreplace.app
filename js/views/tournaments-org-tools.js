@@ -167,6 +167,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // ════════════════ 2) + PARTICIPANTE (nome + placeholders) ════════════════
   window.renderAddParticipantPage = function (container, tId) {
     var t = _guard(tId); if (!t) return;
+    var paidEnrollment = !!(window._tournamentRequiresPayment && window._tournamentRequiresPayment(t));
     var safeId = String(tId).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     var controlKey = _participantControlKey(tId);
     // CANÔNICO: conta PESSOAS (dupla=2), nunca entradas. _countCompetitors (tournaments.js).
@@ -205,8 +206,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 
     var countLine = '<div id="addpart-count-' + controlKey + '" style="text-align:center;font-size:0.78rem;color:var(--text-muted);margin-bottom:1rem;">' + (nParts == null ? '—' : nParts) + ' inscritos' + (overCapacity ? ' · ⚠ ' + overCapacity + ' acima das vagas' : '') + '</div>';
 
+    var paidNotice = '<div role="status" style="padding:1rem;border:1px solid var(--border-color);border-radius:12px;margin-bottom:1rem;">Inscrição com pagamento: convide a pessoa para se inscrever e concluir o pagamento pelo app. Inclusão manual não confirma pagamento.</div>';
     container.innerHTML = _header(tId, '👤 + Participante') +
-      '<div style="max-width:560px;margin:0 auto;padding:1rem;">' + countLine + nameBox + phBox + importBox + '</div>';
+      '<div style="max-width:560px;margin:0 auto;padding:1rem;">' + countLine + (paidEnrollment ? paidNotice : nameBox) + phBox + importBox + '</div>';
     if (typeof window._reflowChrome === 'function') window._reflowChrome();
   };
 
@@ -215,6 +217,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // reutiliza os mesmos ids e os mesmos cores da página legada, mas não altera location.hash.
   window._openParticipantTools = function (tId) {
     var t = _guard(tId); if (!t) return;
+    var paidEnrollment = !!(window._tournamentRequiresPayment && window._tournamentRequiresPayment(t));
     var old = document.getElementById('organizer-participant-tools');
     if (old) old.remove();
     var safeId = String(tId).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -230,9 +233,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       '<div style="width:min(520px,100%);max-height:calc(100% - 32px);overflow:auto;background:var(--bg-card,#182033);color:var(--text-main,#fff);border:1px solid var(--border-color,#475569);border-radius:16px;box-shadow:0 18px 55px rgba(0,0,0,.55);padding:14px;box-sizing:border-box;">' +
         '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;"><h2 style="margin:0;font-size:1.05rem;">👤 Inscritos e vagas</h2><button type="button" class="cancel-x-btn" aria-label="Fechar" onclick="window._closeParticipantTools()" style="border:0;background:transparent;color:var(--text-main,#fff);font-size:1.6rem;line-height:1;cursor:pointer;">×</button></div>' +
         '<div id="addpart-count-' + controlKey + '" style="font-size:.77rem;color:var(--text-muted);margin-bottom:9px;">' + (count == null ? '—' : count) + ' inscritos' + (overCapacity ? ' · ⚠ ' + overCapacity + ' acima das vagas' : '') + '</div>' +
-        '<section style="padding:11px;border:1px solid var(--border-color);border-radius:12px;margin-bottom:9px;"><strong>Adicionar participante</strong>' +
+        (paidEnrollment ? '<div role="status" style="padding:11px;border:1px solid var(--border-color);border-radius:12px;margin-bottom:9px;">Inscrição com pagamento: convide a pessoa para se inscrever e concluir o pagamento pelo app. Inclusão manual não confirma pagamento.</div>' : '<section style="padding:11px;border:1px solid var(--border-color);border-radius:12px;margin-bottom:9px;"><strong>Adicionar participante</strong>' +
           '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:7px;"><input id="addpart-name-' + controlKey + '" type="text" placeholder="Ex.: Maria Silva" style="flex:1;min-width:170px;padding:10px;border-radius:9px;border:1px solid var(--border-color);background:var(--bg-darker);color:var(--text-color);" onkeydown="if(event.key===\'Enter\'){event.preventDefault();window._pageAddParticipant(\'' + safeId + '\');}"><button id="addpart-name-btn-' + controlKey + '" type="button" class="btn btn-cyan" onclick="window._pageAddParticipant(\'' + safeId + '\')">Adicionar</button></div>' +
-        '</section>' +
+        '</section>') +
         '<section style="padding:11px;border:1px solid var(--border-color);border-radius:12px;"><strong>Adicionar placeholders</strong>' +
           '<div style="display:flex;gap:8px;flex-wrap:wrap;"><input id="addpart-ph-' + controlKey + '" type="number" min="1" max="200" value="8" style="width:105px;padding:10px;border-radius:9px;border:1px solid var(--border-color);background:var(--bg-darker);color:var(--text-color);" onkeydown="if(event.key===\'Enter\'){event.preventDefault();window._pageAddPlaceholders(\'' + safeId + '\');}"><button id="addpart-ph-btn-' + controlKey + '" type="button" class="btn btn-cyan" onclick="window._pageAddPlaceholders(\'' + safeId + '\')">Adicionar vagas</button></div>' +
         '</section>' +
@@ -285,11 +288,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   }
 
   window._pageAddParticipant = function (tId) {
+    var tournament = _guard(tId); if (!tournament) return;
+    if (window._paidManualEnrollmentBlocked && window._paidManualEnrollmentBlocked(tournament)) return;
     var controlKey = _participantControlKey(tId);
     var inp = document.getElementById('addpart-name-' + controlKey);
     var name = inp ? inp.value.trim() : '';
     if (!name) { if (typeof showNotification === 'function') showNotification('Nome vazio', 'Digite o nome do participante.', 'warning'); return; }
-    var tournament = _guard(tId); if (!tournament) return;
     var btnId = 'addpart-name-btn-' + controlKey;
     _addBtnLoading(btnId, true);
     var _done = false, _finish = function () { if (_done) return; _done = true; _addBtnLoading(btnId, false); };

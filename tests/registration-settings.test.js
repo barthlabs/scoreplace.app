@@ -3,6 +3,7 @@ const assert = require('assert');
 const { validate, requiresClosedEnrollment, paidDirectReady } = require('../functions-autodraw/registration-settings-core');
 const enroll = require('../functions/enroll-core');
 const fs = require('fs');
+const vm = require('vm');
 
 assert.deepStrictEqual(validate({ source:'scoreplace', pricing:{ mode:'single', cents:0 } }, []),
   { source:'scoreplace', pricing:{ mode:'single', cents:0 } });
@@ -82,6 +83,29 @@ assert(detail.includes('💳 Pagamento da inscrição') && detail.includes('t.me
 assert(detail.includes('_registration.passServiceFeeToParticipant === true'),
   'organizador vê a fila de comprovantes quando só a taxa de serviço torna a inscrição paga');
 const enrollmentClient = fs.readFileSync('js/views/tournaments-enrollment.js', 'utf8');
-assert(enrollmentClient.includes('t.registrationSettings.passServiceFeeToParticipant === true'),
-  'cliente não anuncia inscrição gratuita antes da resposta do servidor quando a taxa é repassada');
+const helperStart = enrollmentClient.indexOf('window._tournamentRequiresPayment = function (t) {');
+assert(helperStart >= 0, 'classificação de inscrição paga existe no cliente');
+const helperEnd = enrollmentClient.indexOf('\n};', helperStart);
+const paidWindow = {};
+vm.runInNewContext(enrollmentClient.slice(helperStart, helperEnd + 3), { window:paidWindow });
+const paidCases = [
+  [{ source:'scoreplace', pricing:{ mode:'single', cents:100 } }, true],
+  [{ source:'scoreplace', pricing:{ mode:'category', centsByCategory:{ A:0, B:100 } } }, true],
+  [{ source:'scoreplace', pricing:{ mode:'single', cents:0 }, passServiceFeeToParticipant:true }, true],
+  [{ source:'scoreplace', pricing:{ mode:'single', cents:0 } }, false],
+  [{ source:'external', pricing:{ mode:'single', cents:100 } }, false]
+];
+for (const [settings, expected] of paidCases) {
+  assert.strictEqual(paidWindow._tournamentRequiresPayment({ registrationSettings:settings }), expected);
+  if (settings.source === 'scoreplace') {
+    assert.strictEqual(require('../functions/registration-payment-core').paidEnrollmentRequired(settings, false, false), expected,
+      'servidor e cliente concordam sobre inscrição paga');
+  }
+}
+assert(enrollmentClient.includes('if (window._paidManualEnrollmentBlocked(t)) return;'),
+  'overlay e core recusam inclusão manual paga antes da chamada');
+const orgTools = fs.readFileSync('js/views/tournaments-org-tools.js', 'utf8');
+assert(orgTools.includes('paidEnrollment ? paidNotice : nameBox')
+  && orgTools.includes('window._paidManualEnrollmentBlocked(tournament)'),
+  'painel e página de organização não oferecem inclusão manual paga');
 console.log('Inscrição gratuita padrão; origem externa fechada e pagamento direto pendente após aceite.');
