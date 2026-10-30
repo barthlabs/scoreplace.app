@@ -1,3 +1,4 @@
+// 2.5.81 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.80 — A classificação dos grupos comuns ativos passa a seguir os mesmos
 // desempates e critério principal que determinam o avanço de fase. Jogos de
 // folga/ausência não somam vitória nem pontos, mesmo com vencedor registrado.
