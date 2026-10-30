@@ -6,6 +6,8 @@
 // ainda não estão disponíveis; nenhum torneio antigo recebe cobrança retroativa.
 // A inclusão manual em torneio pago orienta a pessoa a se inscrever pelo app;
 // reservas de placeholders não quitam nem confirmam inscrições.
+// Uma inscrição paga já pendente abre o painel de pagamento mesmo sem meio
+// configurado; nesse caso o app informa a pendência sem oferecer um envio inválido.
 // 2.5.80 — A classificação dos grupos comuns ativos passa a seguir os mesmos
 // desempates e critério principal que determinam o avanço de fase. Jogos de
 // folga/ausência não somam vitória nem pontos, mesmo com vencedor registrado.

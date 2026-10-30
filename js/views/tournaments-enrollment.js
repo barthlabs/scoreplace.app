@@ -469,7 +469,7 @@ window._applyEnrollResult = function (t, tId, res, ctx) {
   var name = ctx.name || '';
   var toast = function (title, msg, kind) { if (typeof showNotification !== 'undefined') showNotification(title, msg, kind); };
   if (ctx.self && (Array.isArray(res.paymentDue) && res.paymentDue.length
-    || res.alreadyEnrolled && t.registrationSettings && t.registrationSettings.paymentMethods)) {
+    || res.alreadyEnrolled && window._tournamentRequiresPayment(t))) {
     if (typeof window._openTournamentRegistrationPayment === 'function') {
       window._openTournamentRegistrationPayment(tId);
     }
@@ -1040,7 +1040,7 @@ window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
       ? window._isUserEnrolledInTournament(user, t)
       : false);
     if (alreadyIn) {
-        if (t.registrationSettings && t.registrationSettings.paymentMethods
+        if (window._tournamentRequiresPayment(t)
           && typeof window._openTournamentRegistrationPayment === 'function') {
             window._openTournamentRegistrationPayment(tId);
             return;

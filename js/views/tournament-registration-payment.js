@@ -101,6 +101,11 @@
           var options = [];
           if (methods.organizerPixKey) options.push(['organizer_pix', 'Pix da organização']);
           if (methods.organizerPaymentUrl) options.push(['organizer_link', 'Link da organização']);
+          if (!options.length) {
+            card.append(node('p', 'Ainda não há um meio de pagamento disponível para esta inscrição. Não faça transferências fora do aplicativo; a organização precisa configurar a cobrança.'));
+            body.append(card);
+            return;
+          }
           if (options.length > 1) { var placeholder = node('option', 'Selecione o meio usado'); placeholder.value = ''; methodSelect.append(placeholder); }
           options.forEach(function (option) { var item = node('option', option[1]); item.value = option[0]; methodSelect.append(item); });
           var label = node('label', 'Enviar comprovante (imagem ou PDF, até 10 MB)');

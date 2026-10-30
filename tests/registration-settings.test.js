@@ -104,8 +104,36 @@ for (const [settings, expected] of paidCases) {
 }
 assert(enrollmentClient.includes('if (window._paidManualEnrollmentBlocked(t)) return;'),
   'overlay e core recusam inclusão manual paga antes da chamada');
+assert(enrollmentClient.includes('if (window._tournamentRequiresPayment(t)\n'),
+  'já inscrito com pagamento abre o painel sem depender da presença de paymentMethods');
+const readerStart = enrollmentClient.indexOf('window._applyEnrollResult = function (t, tId, res, ctx) {');
+const readerEnd = enrollmentClient.indexOf('\n};', readerStart);
+assert(readerStart >= 0 && readerEnd > readerStart, 'leitor canônico do retorno localizado');
+const paymentViews = [];
+const notices = [];
+const resultWindow = {
+  _tournamentRequiresPayment:paidWindow._tournamentRequiresPayment,
+  _openTournamentRegistrationPayment:tId => paymentViews.push(tId)
+};
+const resultContext = { window:resultWindow, showNotification:(...args) => notices.push(args), _t:key => key };
+vm.runInNewContext(enrollmentClient.slice(readerStart, readerEnd + 3), resultContext);
+const paidTournament = { registrationSettings:{ source:'scoreplace', pricing:{ mode:'single', cents:100 } }, participants:[{ uid:'other' }] };
+assert.strictEqual(resultWindow._applyEnrollResult(paidTournament, 'tour_test', { alreadyEnrolled:true },
+  { self:true, optimistic:{ uid:'new' }, refresh:false }), 'already');
+assert.deepStrictEqual(paymentViews, ['tour_test'], 'já inscrito pago abre painel mesmo sem paymentMethods');
+assert.strictEqual(paidTournament.participants.length, 1, 'rollback por filter não remove outro participante');
+const pendingTournament = { ...paidTournament, participants:[{ uid:'other' }] };
+assert.strictEqual(resultWindow._applyEnrollResult(pendingTournament, 'tour_test',
+  { paymentDue:[{ amountCents:100 }], participants:[{ uid:'other' }] },
+  { self:true, successToast:true, refresh:false }), 'enrolled');
+assert(notices.some(([title]) => title === 'Inscrição pendente'),
+  'inscrição paga não recebe mensagem de vaga confirmada');
 const orgTools = fs.readFileSync('js/views/tournaments-org-tools.js', 'utf8');
 assert(orgTools.includes('paidEnrollment ? paidNotice : nameBox')
   && orgTools.includes('window._paidManualEnrollmentBlocked(tournament)'),
   'painel e página de organização não oferecem inclusão manual paga');
+assert(fs.readFileSync('js/views/tournament-registration-payment.js', 'utf8').includes('if (!options.length)'),
+  'painel não oferece envio de comprovante sem meio de pagamento');
+assert(fs.readFileSync('js/firebase-db.js', 'utf8').includes('async sendFriendRequest(fromUid, toUid, fromData)'),
+  'reconfirmação de amizade tem método de cliente');
 console.log('Inscrição gratuita padrão; origem externa fechada e pagamento direto pendente após aceite.');
