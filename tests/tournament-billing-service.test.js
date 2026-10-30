@@ -71,7 +71,7 @@ let recoveryIntent = null;
 let recoveryCharge = null;
 let stripeRecoveryUnavailable = false;
 let clockMs = Date.parse('2026-10-29T12:00:00Z');
-const service = makeService({ db, HttpsError, FieldValue, now:() => clockMs, stripe:() => ({
+const service = makeService({ db, HttpsError, FieldValue, now:() => clockMs, cardOperational:true, stripe:() => ({
   checkout:{ sessions:{ create:async (_params, options) => {
     assert.strictEqual(_params.payment_intent_data.metadata.kind, 'tournament-fee');
     checkoutCalls++; assert.ok(options.idempotencyKey.startsWith('tournament-fee-'));
@@ -104,6 +104,14 @@ const service = makeService({ db, HttpsError, FieldValue, now:() => clockMs, str
   charges:{ retrieve:async () => recoveryCharge || { payment_intent:'pi_test1' } }
 }) });
 (async () => {
+  const productionLocked = makeService({ db, HttpsError, FieldValue,
+    now:() => clockMs, stripe:() => { throw new Error('Stripe não deve ser chamado'); } });
+  assert.strictEqual((await productionLocked.status({ auth:{ uid:'owner' },
+    data:{ tournamentId:tId } })).cardAvailable, false,
+  'o cartão permanece indisponível sem webhook implantado, mesmo com tabela financeira configurada');
+  await assert.rejects(productionLocked.checkout({ auth:{ uid:'owner' },
+    data:{ tournamentId:tId } }), error => error.code === 'failed-precondition'
+      && /ainda não está habilitado/.test(error.message));
   const estimateInput = { currency:'BRL', passFinancialFee:false, passServiceFee:true,
     rows:[{ label:'Retinal', registrationCents:18700, participantCount:16 }] };
   await assert.rejects(service.estimate({ data:estimateInput }), error => error.code === 'unauthenticated');

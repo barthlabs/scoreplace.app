@@ -50,7 +50,7 @@ function sameCardSession(session, tournamentId, quote) {
     && metadata.fingerprint === quote.fingerprint && metadata.attemptId === quote.cardAttemptId);
 }
 
-function makeService({ db, HttpsError, FieldValue, stripe, now = Date.now }) {
+function makeService({ db, HttpsError, FieldValue, stripe, now = Date.now, cardOperational = false }) {
   const tournamentRef = id => {
     if (typeof id !== 'string' || !/^tour_[0-9]{13}_[a-f0-9]{32}$/.test(id)) {
       fail(HttpsError, 'invalid-argument', 'Torneio inválido.');
@@ -154,8 +154,8 @@ function makeService({ db, HttpsError, FieldValue, stripe, now = Date.now }) {
         pixKey:cfg.scoreplacePixKey || null,
         pixReceiverName:typeof cfg.scoreplacePixName === 'string' ? cfg.scoreplacePixName : null,
         pixReceiverCity:typeof cfg.scoreplacePixCity === 'string' ? cfg.scoreplacePixCity : null,
-        cardAvailable:cardCatalogReady(cfg, now()),
-        cardTotalCents:t.billingQuote && cardCatalogReady(cfg, now())
+        cardAvailable:cardOperational && cardCatalogReady(cfg, now()),
+        cardTotalCents:t.billingQuote && cardOperational && cardCatalogReady(cfg, now())
           ? grossUp(t.billingQuote.totalCents, cfg.cardFeeBps, cfg.cardFixedCents) : null,
         unreviewedProofCount:live ? live.unreviewedProofCount : null,
         unsettledPaymentCount:live ? live.unsettledPaymentCount : null,
@@ -345,6 +345,7 @@ function makeService({ db, HttpsError, FieldValue, stripe, now = Date.now }) {
     return { financeAdmin:!!(cfg.developerUid && uid === cfg.developerUid) };
   }
   async function checkout(request) {
+    if (!cardOperational) fail(HttpsError, 'failed-precondition', 'Pagamento por cartão ainda não está habilitado.');
     const uid = request.auth && request.auth.uid;
     if (!uid) fail(HttpsError, 'unauthenticated', 'Entre na sua conta.');
     const ref = tournamentRef(request.data && request.data.tournamentId);

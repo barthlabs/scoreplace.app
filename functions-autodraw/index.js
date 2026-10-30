@@ -34,7 +34,6 @@ const _registrationRoster = require('./vendor/registration-roster.js');
 const _tournamentBilling = require('./vendor/tournament-billing-core.js');
 const _billingSnapshots = new WeakMap();
 const _tournamentFeeStripeKey = defineSecret('STRIPE_SECRET_KEY');
-const _tournamentFeeWebhookSecret = defineSecret('TOURNAMENT_FEE_WEBHOOK_SECRET');
 const _matchTiming = require('./vendor/match-timing.js');
 const _courtOccupancy = require('./vendor/court-occupancy.js');
 const ScoreplaceRefereeRoster = require('./vendor/referee-roster.js');
@@ -2883,26 +2882,9 @@ exports.startTournamentFeeCheckout = onCall({ secrets:[_tournamentFeeStripeKey] 
 exports.cancelTournamentFeeCardAttempt = onCall({ secrets:[_tournamentFeeStripeKey] }, _tournamentFeeService.cancelCardAttempt);
 exports.confirmTournamentFeePix = onCall(_tournamentFeeService.confirmPix);
 exports.reconcileReversedTournamentFee = onCall({ secrets:[_tournamentFeeStripeKey] }, _tournamentFeeService.reconcileReversedTournamentFee);
-exports.tournamentFeeStripeWebhook = onRequest({ secrets:[_tournamentFeeStripeKey, _tournamentFeeWebhookSecret] }, async (req, res) => {
-  if (req.method !== 'POST' || !Buffer.isBuffer(req.rawBody)) {
-    res.status(400).send('Corpo bruto obrigatório.'); return;
-  }
-  let event;
-  try {
-    const stripe = new (require('stripe'))(_tournamentFeeStripeKey.value());
-    event = stripe.webhooks.constructEvent(req.rawBody, req.headers['stripe-signature'], _tournamentFeeWebhookSecret.value());
-  } catch (error) {
-    console.error('[tournament-fee] assinatura inválida:', error.message);
-    res.status(400).send('Assinatura inválida.'); return;
-  }
-  try {
-    const outcome = await _tournamentFeeService.webhookEvent(event);
-    res.status(200).json(outcome);
-  } catch (error) {
-    console.error('[tournament-fee] webhook não aplicado:', error);
-    res.status(500).send('Não aplicado.');
-  }
-});
+// O webhook Stripe da taxa do torneio só será exportado quando o segredo
+// específico estiver provisionado e o cartão homologado. Sem a porta de
+// conciliação automática, cardCatalogReady mantém o cartão indisponível.
 
 // Backfill de confrontos que já estavam definidos quando esta regra entrou no ar, e
 // lembrete único para partidas pendentes a até sete dias do prazo da sua rodada. A mesma
