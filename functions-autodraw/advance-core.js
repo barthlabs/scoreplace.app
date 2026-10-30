@@ -72,7 +72,7 @@ const CHAVE_DE_ENTIDADE = ['id', 'uid', '_chave'];
 const ARRAYS_POSICIONAIS = [
   'sets', 'mapping', 'phases', 'players', 'playersUids', 'playersSlotIds',
   'team1', 'team2', 'team1Uids', 'team2Uids', 'team1SlotIds', 'team2SlotIds',
-  'classifCongelada', 'standings', 'tiebreakers', 'rounds', 'repFill'
+  'classifCongelada', 'phaseGroupRankingRows', 'standings', 'tiebreakers', 'rounds', 'repFill'
 ];
 
 const TETO_PROFUNDIDADE = 40;

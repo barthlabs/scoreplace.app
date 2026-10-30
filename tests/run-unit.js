@@ -1617,6 +1617,8 @@ const SUITES = [
   'tests/cancel-x-canon.test.js',
   'tests/groups-render.test.js',
   'tests/grupos-tabela-avanco-paridade.test.js',
+  'tests/group-standings-integrity.test.js',
+  'tests/phase-group-standings-snapshot.test.js',
   'tests/dashboard-card-opens-next-game.test.js',
   'tests/liga-render.test.js',
   'tests/liga-countdown.test.js',

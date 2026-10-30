@@ -409,8 +409,11 @@
     };
   }
 
-  function standingsDaFaseAnterior(g, t, tbOpts, isMonarch) {
-    if (!isMonarch) return _groupTeamStandings(g, tbOpts);
+  function standingsDaFaseAnterior(g, t, tbOpts, isMonarch, phaseIdx) {
+    if (!isMonarch) return _groupTeamStandings(g, Object.assign({}, tbOpts || {}, {
+      tournament: t,
+      advancedScoring: effectiveAdvancedScoring(t, phaseIdx != null ? phaseIdx : (t && t.currentPhaseIndex || 0))
+    }));
     if (typeof window._computeMonarchStandings !== 'function') return (g && g.standings) || [];
     var ms = ((g && g.matches) || []).concat(
       ((g && g.rounds) || []).reduce(function (a, r) { return a.concat((r && r.matches) || []); }, []));
@@ -423,6 +426,14 @@
     // v4.1.70: pareamento POR PERFORMANCE usa os MESMOS pontos da tela — passa `t` pra
     // aplicar advancedScoring quando ligado (ordem = classificação exibida).
     return window._computeMonarchStandings(entrada, t, (g && g.category) || null);
+  }
+
+  // A fase configurada prevalece sobre o topo, inclusive quando desliga PA.
+  // Torneios sem fases mantêm a configuração única do torneio.
+  function effectiveAdvancedScoring(t, phaseIndex) {
+    if (!t || !Array.isArray(t.phases) || !t.phases.length) return (t && t.advancedScoring) || null;
+    var ph = t.phases[phaseIndex || 0] || t.phases[0] || {};
+    return (ph.advancedScoring && typeof ph.advancedScoring === 'object') ? ph.advancedScoring : null;
   }
 
   function buildEntrantsByDest(prevGroups, mapping, fixedPairs, computeStandings, pairingStrategy, opts) {
@@ -2012,6 +2023,16 @@
     if (!group) return [];
     var matches = (group.matches || []).slice();
     (group.rounds || []).forEach(function (r) { if (Array.isArray(r.matches)) matches = matches.concat(r.matches); });
+    // O mesmo jogo pode estar no grupo e na rodada. Contá-lo duas vezes muda a
+    // classificação usada no avanço, mesmo quando a tela mostra um único placar.
+    var seenMatchIds = {};
+    matches = matches.filter(function (m) {
+      if (!m || m.id == null) return !!m;
+      var key = String(m.id);
+      if (seenMatchIds[key]) return false;
+      seenMatchIds[key] = true;
+      return true;
+    });
     var participants = group.players || group.participants || [];
     var smap = {}, h2h = {}, usesSets = false;
     function ensure(nm) { if (nm && !smap[nm]) smap[nm] = { name: nm, uid: null, points: 0, wins: 0, losses: 0, draws: 0, pointsDiff: 0, played: 0, setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, tiebreaksWon: 0, buchholz: 0, sonnebornBerger: 0 }; }
@@ -2042,10 +2063,16 @@
       if (nm && smap[nm] && !smap[nm].uid && p && typeof p === 'object' && p.uid) smap[nm].uid = p.uid;
       preserveTeam(nm, p);
     });
-    // uid também dos SLOTS dos jogos (grupo legado sem uid no elenco ainda tem no jogo)
+    // uid também dos SLOTS dos jogos (grupo sem uid no elenco ainda tem no jogo)
     (function () {
-      var slot = (typeof window !== 'undefined' && typeof window._slotUids === 'function') ? window._slotUids : null;
-      if (!slot) return;
+      var slot = (typeof window !== 'undefined' && typeof window._slotUids === 'function') ? window._slotUids : function (m, side) {
+        var arr = side === 'p1' ? m.team1Uids : m.team2Uids;
+        if (Array.isArray(arr) && arr.length) return arr.filter(Boolean);
+        var single = side === 'p1' ? m.p1Uid : m.p2Uid;
+        if (single) return [single];
+        var obj = side === 'p1' ? m.team1Obj : m.team2Obj;
+        return obj ? [obj.p1Uid, obj.p2Uid, obj.p3Uid, obj.p4Uid].filter(Boolean) : [];
+      };
       matches.forEach(function (m) {
         if (!m) return;
         [['p1', m.p1], ['p2', m.p2]].forEach(function (par) {
@@ -2089,6 +2116,19 @@
         smap[m.p2].tbPointsWon = (smap[m.p2].tbPointsWon || 0) + _tbpP.p2; smap[m.p2].tbPointsLost = (smap[m.p2].tbPointsLost || 0) + _tbpP.p1;
       }
     });
+    var advanced = opts.advancedScoring;
+    if (advanced && advanced.enabled) {
+      var calculate = opts.calcAdvancedPoints ||
+        ((typeof window !== 'undefined' && typeof window._calcAdvancedPoints === 'function') ? window._calcAdvancedPoints : null);
+      if (!calculate) throw new Error('[classificação] cálculo de Pontuação Avançada indisponível');
+      var scopedTournament = Object.assign({}, opts.tournament || {}, { advancedScoring: advanced });
+      Object.keys(smap).forEach(function (nm) {
+        var line = smap[nm];
+        line.basicPoints = line.points;
+        line.advancedPoints = calculate(scopedTournament, line.name, group.category || null, matches, line.uid).total;
+        line.points = line.advancedPoints;
+      });
+    }
     // Buchholz (soma dos pontos dos adversários) + Sonneborn-Berger (ponderado por resultado), group-local.
     Object.keys(smap).forEach(function (nm) {
       var s = smap[nm];
@@ -2220,6 +2260,87 @@
     if (tagged.length) return tagged;
     // Classificatória Liga/Suíço (fase 0) → 1 grupo único a partir de t.rounds.
     return _leagueGroupFromRounds(t);
+  }
+
+  // A mesma lista que alimenta a fase seguinte vira um retrato somente-leitura.
+  // O cálculo ocorre uma vez, antes da materialização; a callback do avanço
+  // devolve estas mesmas linhas, sem recalcular a ordem entre as duas operações.
+  function capturePhaseGroupStandings(t, computeStandings, savedAt, sourceGroups, phaseIdx) {
+    var groups = sourceGroups === undefined ? prevPhaseGroups(t) : sourceGroups;
+    var capturedPhase = phaseIdx != null ? phaseIdx : (t.currentPhaseIndex || 0);
+    var byName = Object.create(null);
+    if (!groups.length) throw new Error('[classificação] nenhum grupo para consolidar');
+    var fields = ['name', 'uid', 'p1Uid', 'p2Uid', 'p3Uid', 'p4Uid', 'points', 'basicPoints',
+      'advancedPoints', 'wins', 'losses', 'draws', 'played', 'pointsDiff', 'setsWon',
+      'setsLost', 'gamesWon', 'gamesLost', 'tiebreaksWon', 'tbPointsWon', 'tbPointsLost',
+      'buchholz', 'sonnebornBerger'];
+    function identity(row) {
+      if (row && row.uid) return 'uid:' + String(row.uid);
+      var ids = row && [row.p1Uid, row.p2Uid, row.p3Uid, row.p4Uid].filter(Boolean).map(String).sort();
+      if (ids && ids.length) return 'team:' + ids.join('+');
+      return row && row.name ? 'name:' + String(row.name) : '';
+    }
+    function publishedOrder(rows, frozen) {
+      if (!Array.isArray(frozen) || !frozen.length) return rows;
+      var byId = Object.create(null);
+      rows.forEach(function (row) { byId[identity(row)] = row; });
+      var ordered = frozen.map(function (item) {
+        var ref = typeof item === 'string' ? { name: item } : item;
+        var row = byId[identity(ref)] || rows.find(function (candidate) {
+          return candidate.name && candidate.name === ref.name;
+        });
+        if (!row) throw new Error('[classificação] ordem publicada não corresponde ao grupo');
+        delete byId[identity(row)];
+        return row;
+      });
+      if (ordered.length !== rows.length || Object.keys(byId).length) {
+        throw new Error('[classificação] ordem publicada incompleta');
+      }
+      return ordered;
+    }
+    var snapshot = {
+      schema: 1,
+      phaseIndex: capturedPhase,
+      phaseName: (t.phases && t.phases[capturedPhase] && t.phases[capturedPhase].name) || '',
+      savedAt: savedAt || '',
+      groups: groups.map(function (group, index) {
+        var name = String(group && group.name || ('Grupo ' + (index + 1)));
+        if (byName[name]) throw new Error('[classificação] nomes de grupo repetidos');
+        var calculated = computeStandings(group);
+        if (!Array.isArray(calculated) || !calculated.length) {
+          throw new Error('[classificação] grupo sem classificação para consolidar');
+        }
+        var seenIdentities = Object.create(null), seenNames = Object.create(null);
+        calculated.forEach(function (row) {
+          var key = identity(row);
+          var displayName = String(row && row.name || '').trim().toLocaleLowerCase();
+          if (!key || !displayName || seenIdentities[key] || seenNames[displayName]) {
+            throw new Error('[classificação] identidade ausente ou repetida no grupo');
+          }
+          seenIdentities[key] = true;
+          seenNames[displayName] = true;
+        });
+        var rows = publishedOrder(calculated, group.classifCongelada);
+        byName[name] = rows;
+        return {
+          groupIdx: group.groupIdx != null ? group.groupIdx : index,
+          groupName: name,
+          phaseGroupRankingRows: rows.map(function (row, rank) {
+            var saved = { rank: rank + 1 };
+            fields.forEach(function (field) {
+              if (row[field] !== undefined && row[field] !== null) saved[field] = row[field];
+            });
+            return saved;
+          })
+        };
+      })
+    };
+    if (JSON.stringify(snapshot).length > 500000) throw new Error('[classificação] retrato excede o limite seguro');
+    return { snapshot: snapshot, standingsForGroup: function (group) {
+      var rows = byName[String(group && group.name || '')];
+      if (!rows) throw new Error('[classificação] grupo não encontrado no retrato');
+      return rows;
+    } };
   }
 
   // ── ONDE ESTÃO OS JOGOS DESTA FASE — LEITOR ÚNICO ────────────────────────────
@@ -2498,7 +2619,8 @@
         if (m.team1Obj && m.team1Obj.displayName) lobjs[m.team1Obj.displayName] = m.team1Obj;
         if (m.team2Obj && m.team2Obj.displayName) lobjs[m.team2Obj.displayName] = m.team2Obj;
       });
-      var lst = _groupTeamStandings({ matches: leagueMs, players: Object.keys(lobjs) }, { tiebreakers: t.tiebreakers, rankingPrimary: t.rankingPrimary });
+      var lst = standingsDaFaseAnterior({ matches: leagueMs, players: Object.keys(lobjs) }, t,
+        { tiebreakers: t.tiebreakers, rankingPrimary: t.rankingPrimary }, false, phaseIdx);
       return [{ name: lname, standings: lst.map(function (s) { return lobjs[s.name] || { name: s.name, displayName: s.name }; }) }];
     }
 
@@ -2514,9 +2636,10 @@
       });
       return Object.keys(byG).sort(function (a, b) { return byG[a].groupIdx - byG[b].groupIdx; }).map(function (k) {
         var g = byG[k];
-        var st = _groupTeamStandings({ matches: g.matches, players: Object.keys(g.objs) }, { tiebreakers: t.tiebreakers, rankingPrimary: t.rankingPrimary });
+        var st = standingsDaFaseAnterior({ matches: g.matches, players: Object.keys(g.objs) }, t,
+          { tiebreakers: t.tiebreakers, rankingPrimary: t.rankingPrimary }, false, phaseIdx);
         var ordered = st.map(function (s) { return g.objs[s.name] || { name: s.name, displayName: s.name }; });
-        return { name: g.name, standings: ordered };
+        return { name: g.name, groupIdx: g.groupIdx, matches: g.matches, standings: ordered, rankingRows: st };
       });
     }
 
@@ -2556,8 +2679,9 @@
    * (sha256(operationId|tournamentId|toPhaseIndex), em advance-core.js).
    * ⛔ TODO parâmetro é OPCIONAL: sem `det`, o comportamento é EXATAMENTE o de antes —
    * o cliente e os fluxos antigos não mudam. */
-  function materializeNextPhase(t, computeStandings, idPrefix, det) {
+  function materializeNextPhase(t, computeStandings, idPrefix, det, opts) {
     det = det || {};
+    opts = opts || {};
     if (!isMultiPhase(t)) return { ok: false, error: 'not-multiphase' };
     var cur = t.currentPhaseIndex || 0;
     var nextIdx = cur + 1;
@@ -2575,7 +2699,10 @@
     // as standings já vêm ranqueadas, então cs é identidade.
     var groups, cs;
     if (cur === 0) { groups = prevPhaseGroups(t); cs = computeStandings; }
-    else { groups = bracketPhaseGroups(t, cur); cs = function (g) { return g.standings || []; }; }
+    else {
+      groups = opts.usarClassificacaoCongelada ? opts.sourceGroups : bracketPhaseGroups(t, cur);
+      cs = opts.usarClassificacaoCongelada ? opts.standingsForGroup : function (g) { return g.standings || []; };
+    }
     if (!groups.length) return { ok: false, error: 'no-groups' };
     // v3.1.15: roteamento por FORMATO (classifyPhaseFormat → league/groups/elim). O
     // modo de sorteio (Rei/Rainha) e a cadência (rodada a rodada / todos contra todos)
@@ -3208,6 +3335,7 @@
     phaseIsLiga: _phaseIsLiga,
     linkTierToFinal: linkTierToFinal,
     prevPhaseGroups: prevPhaseGroups,
+    capturePhaseGroupStandings: capturePhaseGroupStandings,
     bracketPhaseGroups: bracketPhaseGroups,
     phaseComplete: phaseComplete,
     pendingMatches: pendingMatches,
@@ -3215,6 +3343,7 @@
     globalStandings: _globalStandings,   // ordem que decide quem sobe de fase
     materializeNextPhase: materializeNextPhase,
     groupTeamStandings: _groupTeamStandings,
+    effectiveAdvancedScoring: effectiveAdvancedScoring,
     resolveRepFills: resolveRepFills
   };
 

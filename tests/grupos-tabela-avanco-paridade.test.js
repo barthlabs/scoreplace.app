@@ -102,7 +102,26 @@ try {
 }
 assert.match(warning, /motor\/comparador indisponível/, 'fallback emite diagnóstico');
 assert.strictEqual(table(fixture(regular, { rankingPrimary: 'games_diff', advancedScoring: { enabled: true } }))[0].name,
-  'A', 'pontuação avançada mantém leitura anterior neste corte');
+  'B', 'pontuação avançada usa a mesma ordem do avanço');
+const advanced = { enabled: true, categories: { match_won: { enabled: true, value: 10 } } };
+const withPhaseAdvanced = fixture(regular, { phases: [{ advancedScoring: advanced }],
+  advancedScoring: { enabled: false }, rankingPrimary: 'points' });
+parity(withPhaseAdvanced, 'pontuação avançada efetiva da fase');
+assert.strictEqual(engine(withPhaseAdvanced)[0].points, 20,
+  'PA da fase substitui os pontos comuns na ordem de avanço');
+const phaseDisablesAdvanced = fixture(regular, { phases: [{ advancedScoring: { enabled: false } }],
+  advancedScoring: advanced });
+parity(phaseDisablesAdvanced, 'fase desliga PA mesmo com topo ligado');
+assert.ok(engine(phaseDisablesAdvanced).every((row) => !Object.hasOwn(row, 'advancedPoints')),
+  'PA desligada na fase não vaza do topo');
+const phaseWithoutAdvanced = fixture(regular, { phases: [{}], advancedScoring: advanced });
+assert.ok(engine(phaseWithoutAdvanced).every((row) => !Object.hasOwn(row, 'advancedPoints')),
+  'fase sem configuração de PA não herda o topo');
+for (const t of [withPhaseAdvanced, phaseDisablesAdvanced, phaseWithoutAdvanced,
+  fixture(regular, { advancedScoring: advanced })]) {
+  assert.deepStrictEqual(E.effectiveAdvancedScoring(t, 0), W._effectiveAdvScoring(t, 0),
+    'projeção da Function e leitor web escolhem a mesma configuração');
+}
 assert.strictEqual(table(fixture(regular, { rankingPrimary: 'games_diff' }), { historicalPhase: true })[0].name,
   'A', 'fase histórica não troca a classificação publicada');
 

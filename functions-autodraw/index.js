@@ -5564,17 +5564,59 @@ exports.advanceTournamentPhase = onCall(async (request) => {
     });
     _enrichParticipantsFromProfiles(t);
     _hidrataGrupos(t, 'advanceTournamentPhase', tId);
-    const hasMonarch = (t.rounds || []).some(r => r && Array.isArray(r.monarchGroups) && r.monarchGroups.length) ||
-      (((current === 0 ? (t.groups || []) : (((t.phaseGroups || [])[current]) || []))).some(g => {
-        const ms = (g.matches || []).concat((g.rounds || []).reduce((a, r) => a.concat((r && r.matches) || []), []));
-        return ms.some(m => m && m.isMonarch);
-      }));
+    const phaseEngine = drawWindow && drawWindow._phasesEngine;
+    const sourceGroups = current === 0
+      ? (phaseEngine && typeof phaseEngine.prevPhaseGroups === 'function' ? phaseEngine.prevPhaseGroups(t) : [])
+      : (phaseEngine && typeof phaseEngine.bracketPhaseGroups === 'function' ? phaseEngine.bracketPhaseGroups(t, current) : []);
+    if (!sourceGroups.length) return { ok: false, reason: 'no-groups' };
+    const currentCfg = phaseEngine && typeof phaseEngine.projectPhaseCfg === 'function'
+      ? phaseEngine.projectPhaseCfg(t.phases[current], t, current) : null;
+    const isGroupsCfg = !!(currentCfg && phaseEngine && typeof phaseEngine.phaseIsGroups === 'function' && phaseEngine.phaseIsGroups(currentCfg));
+    const hasMonarch = current === 0
+      ? (t.rounds || []).some(r => r && Array.isArray(r.monarchGroups) && r.monarchGroups.length) ||
+        sourceGroups.some(g => {
+          const ms = (g.matches || []).concat((g.rounds || []).reduce((a, r) => a.concat((r && r.matches) || []), []));
+          return ms.some(m => m && m.isMonarch);
+        })
+      : !!(phaseEngine && typeof phaseEngine.isMonarchDraw === 'function' && phaseEngine.isMonarchDraw(currentCfg)) ||
+        (t.matches || []).some(m => m && Number(m.phaseIndex || 0) === current && (m.bracket === 'monarch' || m.isMonarch)) ||
+        (((t.phaseRounds || [])[current] || {}).rounds || []).some(r => (r && r.matches || []).some(m => m && (m.bracket === 'monarch' || m.isMonarch)));
     const tbOpts = { tiebreakers: t.tiebreakers, rankingPrimary: t.rankingPrimary,
       birthByName: typeof drawWindow._tbBirthByName === 'function' ? drawWindow._tbBirthByName(t) : {} };
-    const standings = g => phaseStandingsFn(g, t, tbOpts, hasMonarch);
+    const calculateStandings = g => phaseStandingsFn(g, t, tbOpts, hasMonarch);
+    // A fase comum recebe um retrato apenas quando a mesma classificação que
+    // criará a próxima chave pôde ser consolidada no documento fresco.
+    let groupCapture = null;
+    if (isGroupsCfg && !hasMonarch && phaseEngine && typeof phaseEngine.capturePhaseGroupStandings === 'function') {
+      try {
+        groupCapture = phaseEngine.capturePhaseGroupStandings(t,
+          current > 0 ? g => g.rankingRows || [] : calculateStandings,
+          agoraIso, sourceGroups, current);
+      } catch (err) {
+        console.error('[advanceTournamentPhase] classificação não consolidada', err && err.message);
+        throw new HttpsError('failed-precondition', 'Não foi possível consolidar a classificação desta fase.');
+      }
+    }
+    if (current > 0 && isGroupsCfg && !hasMonarch && !groupCapture) return { ok: false, reason: 'no-groups' };
+    const frozenEntrants = g => {
+      const rows = groupCapture.standingsForGroup(g);
+      if (current === 0) return rows;
+      const byName = new Map((g.standings || []).map(team => [team.displayName || team.name, team]));
+      return rows.map(row => {
+        const team = byName.get(row.name);
+        if (!team) throw new HttpsError('failed-precondition', 'Classificação e equipes da fase não correspondem.');
+        return team;
+      });
+    };
+    const standings = groupCapture ? frozenEntrants : calculateStandings;
     const next = current + 1;
-    const res = materializePhaseFn(t, standings, 'ph-' + tId + '-' + next);
+    const res = materializePhaseFn(t, standings, 'ph-' + tId + '-' + next, undefined,
+      current > 0 && groupCapture ? { usarClassificacaoCongelada: true, sourceGroups, standingsForGroup: frozenEntrants } : undefined);
     if (!res || !res.ok) return { ok: false, reason: (res && res.error) || 'phase-not-materialized' };
+    if (groupCapture) {
+      t.phaseGroupStandings = Object.assign({}, t.phaseGroupStandings || {});
+      t.phaseGroupStandings[String(current)] = groupCapture.snapshot;
+    }
     if (res.incrementalLeague && typeof drawWindow._phaseGenNextLeagueRound === 'function') drawWindow._phaseGenNextLeagueRound(t, res.phaseIndex);
     if (res.built && res.built.needsDoubleElim && typeof drawWindow._buildDoubleElimBracket === 'function') drawWindow._buildDoubleElimBracket(t, { phaseIndex: t.currentPhaseIndex });
     if (res.built && res.built.needsRepechageDoubleElim && typeof drawWindow._buildRepechageDoubleElim === 'function') {

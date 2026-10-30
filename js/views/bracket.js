@@ -7141,8 +7141,11 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
      */
     var _gFaux = {
       id: t.id, matches: _gMs, groups: _gGroups,
+      currentPhaseIndex: curPhase, phaseGroupStandings: t.phaseGroupStandings,
       gruposClassified: phaseCfg.gruposClassified || t.gruposClassified || 2,
       scoring: t.scoring, tiebreakers: t.tiebreakers, rankingPrimary: t.rankingPrimary,
+      advancedScoring: (typeof window._effectiveAdvScoring === 'function')
+        ? window._effectiveAdvScoring(t, curPhase) : t.advancedScoring,
       creatorUid: t.creatorUid, coHosts: t.coHosts,
       teamCompetition: t.teamCompetition,
       scheduleWindow: t.scheduleWindow,
@@ -9947,11 +9950,13 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
     // back to participants for shapes that omit .players).
     const gParticipants = (sg.players && sg.players.length) ? sg.players : (groups[gi] ? (groups[gi].participants || groups[gi].players || []) : []);
     const gRounds = sg.rounds || (groups[gi] ? (groups[gi].rounds || []) : []);
+    const _phaseIdx = t.currentPhaseIndex || 0;
+    const _phaseSnapshot = t.phaseGroupStandings && t.phaseGroupStandings[String(_phaseIdx)];
     const scoreMap = {};
-    gParticipants.forEach(name => {
+    if (!_phaseSnapshot) gParticipants.forEach(name => {
       scoreMap[name] = { name, points: 0, wins: 0, losses: 0, draws: 0, pointsDiff: 0, played: 0 };
     });
-    gRounds.forEach(r => {
+    if (!_phaseSnapshot) gRounds.forEach(r => {
       (r.matches || []).forEach(m => {
         if (!m.winner) return;
         const s1 = parseInt(m.scoreP1) || 0;
@@ -9971,11 +9976,21 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
         }
       });
     });
-    // A fase ativa usa a mesma porta que decide quem avança. Uma fase já
-    // materializada mantém a leitura histórica até existir retrato congelado.
+    // A fase ativa usa a mesma porta que decide quem avança. Depois do avanço,
+    // a ordem gravada é a fonte; resultados posteriores não recalculam o grupo.
     let sorted = Object.values(scoreMap).sort((a, b) => b.points - a.points || b.wins - a.wins || b.pointsDiff - a.pointsDiff);
     const _gEngine = window._phasesEngine;
-    if (!(opts && opts.historicalPhase) && !(t.advancedScoring && t.advancedScoring.enabled)) {
+    if (_phaseSnapshot && Array.isArray(_phaseSnapshot.groups)) {
+      const _savedGroup = _phaseSnapshot.groups.find(function(saved) {
+        // O índice exibido pode mudar ("meu grupo" primeiro, filtros, grupo esparso).
+        // O nome é único no retrato publicado e identifica o grupo sem depender da posição.
+        return saved && saved.groupName === sg.name;
+      });
+      if (!_savedGroup || !Array.isArray(_savedGroup.phaseGroupRankingRows)) {
+        return '<div role="alert" style="padding:12px;border:1px solid var(--border-color);border-radius:10px;color:var(--text-bright);">Classificação consolidada indisponível para este grupo. Nenhuma ordem foi recalculada.</div>';
+      }
+      sorted = _savedGroup.phaseGroupRankingRows;
+    } else if (!(opts && opts.historicalPhase)) {
       if (_gEngine && typeof _gEngine.standingsDaFaseAnterior === 'function' &&
           typeof window._standingsCompareConfig === 'function') {
         const _gMatchesRaw = (sg.matches || []).concat(
