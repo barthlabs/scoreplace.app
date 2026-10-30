@@ -5569,7 +5569,8 @@ exports.advanceTournamentPhase = onCall(async (request) => {
         const ms = (g.matches || []).concat((g.rounds || []).reduce((a, r) => a.concat((r && r.matches) || []), []));
         return ms.some(m => m && m.isMonarch);
       }));
-    const tbOpts = { tiebreakers: t.tiebreakers, birthByName: typeof drawWindow._tbBirthByName === 'function' ? drawWindow._tbBirthByName(t) : {} };
+    const tbOpts = { tiebreakers: t.tiebreakers, rankingPrimary: t.rankingPrimary,
+      birthByName: typeof drawWindow._tbBirthByName === 'function' ? drawWindow._tbBirthByName(t) : {} };
     const standings = g => phaseStandingsFn(g, t, tbOpts, hasMonarch);
     const next = current + 1;
     const res = materializePhaseFn(t, standings, 'ph-' + tId + '-' + next);

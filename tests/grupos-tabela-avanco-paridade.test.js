@@ -53,6 +53,8 @@ const regular = [
   { id: 'm3', p1: 'B', p2: 'C', winner: 'B', scoreP1: 6, scoreP2: 0 },
   { id: 'm4', p1: 'D', p2: 'B' }
 ];
+assert.strictEqual(engine(fixture(regular, { rankingPrimary: 'games_diff' }))[0].name, 'B',
+  'saldo principal põe B à frente de A apesar de A ter mais vitórias');
 parity(fixture(regular, { rankingPrimary: 'games_diff' }), 'saldo principal e jogo pendente');
 parity(fixture(regular, { tiebreakers: ['saldo_pontos', 'vitorias', 'sorteio'] }), 'desempate configurado');
 parity(fixture([], { tiebreakers: ['sorteio'] }), 'empate total e ordem da chave');
@@ -107,5 +109,11 @@ assert.strictEqual(table(fixture(regular, { rankingPrimary: 'games_diff' }), { h
 const bracketSrc = fs.readFileSync(path.join(__dirname, '../js/views/bracket.js'), 'utf8');
 assert.match(bracketSrc, /var _gFaux = \{[\s\S]{0,240}tiebreakers: t\.tiebreakers, rankingPrimary: t\.rankingPrimary/,
   'fase posterior preserva o critério principal do torneio');
+
+const serverSrc = fs.readFileSync(path.join(__dirname, '../functions-autodraw/index.js'), 'utf8');
+const advanceSrc = serverSrc.slice(serverSrc.indexOf('exports.advanceTournamentPhase = onCall('),
+  serverSrc.indexOf('async function _notifyAdvancedPhase(', serverSrc.indexOf('exports.advanceTournamentPhase = onCall(')));
+assert.match(advanceSrc, /const tbOpts = \{[^}]*rankingPrimary:\s*t\.rankingPrimary/,
+  'a Function que forma a fase seguinte repassa o mesmo critério principal da tabela');
 
 console.log('✓ tabela de grupos igual à porta real do avanço');
