@@ -19,6 +19,10 @@ const writes = [];
 const reads = [];
 const context = {
   exports:{},
+  require:name => {
+    if (name === './registration-settings-core') return require('../functions-autodraw/registration-settings-core');
+    throw new Error('Módulo inesperado: ' + name);
+  },
   onCall: fn => fn,
   HttpsError: class extends Error { constructor(code, message) { super(message); this.code = code; } },
   db: {
@@ -53,6 +57,14 @@ const call = context.exports.setTournamentEnrollmentStatus;
   const prod = await call({ auth:{uid:'owner'}, data:{tournamentId:'event', sandbox:false, action:'close'} });
   assert.strictEqual(prod.changed, true);
   assert.deepStrictEqual(writes, ['sandboxes/sb_event', 'tournaments/event']);
+  docs.set('tournaments/event', { id:'event', status:'closed', registrationSettings:{
+    source:'scoreplace', pricing:{ mode:'single', cents:0 }, passServiceFeeToParticipant:true
+  } });
+  await assert.rejects(call({ auth:{uid:'owner'}, data:{tournamentId:'event', action:'open'} }),
+    /Configure o recebimento direto/,
+    'taxa de serviço repassada exige gate financeiro mesmo com preço base zero');
+  assert.strictEqual(docs.get('tournaments/event').status, 'closed');
+  assert.deepStrictEqual(writes, ['sandboxes/sb_event', 'tournaments/event'], 'recusa não grava torneio');
   const resetStart = server.indexOf('exports.resetTournamentToEnrollment = onCall(');
   const resetEnd = server.indexOf('\nexports.generateExtraTournamentRound = onCall(', resetStart);
   const reset = server.slice(resetStart, resetEnd);

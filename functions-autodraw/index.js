@@ -6069,10 +6069,9 @@ exports.setTournamentEnrollmentStatus = onCall(async request => {
     if (t.status === 'finished') throw new HttpsError('failed-precondition', 'O torneio já foi encerrado.');
     if ((action === 'open' || action === 'late-open') && t.registrationSettings) {
       const settings = t.registrationSettings;
-      const price = settings.pricing;
-      const paid = price && (price.mode === 'single' ? Number(price.cents) > 0
-        : Object.keys(price.centsByCategory || {}).some(category => Number(price.centsByCategory[category]) > 0));
       if (settings.source === 'external') throw new HttpsError('failed-precondition', 'Inscrições externas não podem ser abertas no Scoreplace.');
+      if (settings.source !== 'scoreplace') throw new HttpsError('failed-precondition', 'Origem das inscrições inválida.');
+      const paid = require('./registration-settings-core').requiresClosedEnrollment(settings);
       if (paid) {
         if (sandbox || action === 'late-open' || !require('./registration-settings-core').paidDirectReady(t)) {
           throw new HttpsError('failed-precondition', 'Configure o recebimento direto e aceite as condições financeiras antes de abrir inscrições pagas.');
