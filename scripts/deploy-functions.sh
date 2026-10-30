@@ -210,8 +210,10 @@ do_autodraw() {
 }
 do_stripe() {
   # Codebase NOMEADO ("stripe") → o filtro EXIGE o prefixo do codebase.
-  deploy_dir "$ROOT/functions-stripe" \
-    "$(targets_esm "$ROOT/functions-stripe/index.js" 'functions:stripe:')" "stripe (functions-stripe/)"
+  local all targets
+  all="$(targets_esm "$ROOT/functions-stripe/index.js" 'functions:stripe:')"
+  targets="$(selected_targets "$all" 'functions:stripe:')" || return $?
+  deploy_dir "$ROOT/functions-stripe" "$targets" "stripe (functions-stripe/)"
 }
 
 case "$ALVO" in

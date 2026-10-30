@@ -31,6 +31,7 @@ import { defineSecret } from "firebase-functions/params";
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import Stripe from "stripe";
+import { isProCheckoutSession } from "./pro-checkout-core.js";
 
 initializeApp();
 const db = getFirestore();
@@ -103,6 +104,10 @@ export const stripeWebhook = onRequest(
 
       switch (event.type) {
         case "checkout.session.completed": {
+          if (!isProCheckoutSession(obj)) {
+            console.log("Non-Pro checkout session ignored");
+            break;
+          }
           const userId = obj.client_reference_id || (obj.metadata && obj.metadata.userId);
           if (!userId) { console.error("No userId in checkout session"); break; }
           const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);

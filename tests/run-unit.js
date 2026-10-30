@@ -64,6 +64,8 @@ const SUITES = [
   'tests/registration-payment-core.test.js',
   'tests/registration-payment-service.test.js',
   'tests/registration-payment-index-context.test.js',
+  'tests/pro-checkout-core.test.js',
+  'tests/deploy-functions-stripe-only.test.js',
   'tests/rules-tournament-billing.test.js',
   'tests/storage-payment-proof.test.js',
   'tests/pix-brcode.test.js',
@@ -2385,6 +2387,7 @@ const MEXEM_NO_REPO = [
  *      (`lsof -ti :8097`) antes de suspeitar do paralelismo. */
 const PRENDEM_PORTA = [
   'tests/storage-payment-proof.test.js',         // Firestore + Storage nas portas 8130/9198
+  'tests/rules-tournament-billing.test.js',       // Firestore 8125; o hub compartilhado falhou sob carga paralela na CI
   'tests/operation-control-transaction.test.js',
   'tests/l7-creation-replay-emulator.test.js',
   'tests/decisao-do-tardio-na-folga-emulador.test.js',   // sobe o próprio emulador do Firestore
