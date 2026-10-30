@@ -31,7 +31,7 @@ import { defineSecret } from "firebase-functions/params";
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import Stripe from "stripe";
-import { isProCheckoutSession } from "./pro-checkout-core.js";
+import { isProCheckoutSession, proSubscriptionEventId, matchesProSubscriptionEvent } from "./pro-checkout-core.js";
 
 initializeApp();
 const db = getFirestore();
@@ -42,6 +42,18 @@ const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
 // Stripe inicializado lazy dentro de cada função (precisa do secret resolvido).
 function getStripe() {
   return new Stripe(stripeSecretKey.value(), { apiVersion: "2023-10-16" });
+}
+
+async function findProUserForEvent(type, object) {
+  const subscriptionId = proSubscriptionEventId(type, object);
+  if (!subscriptionId) return null;
+  const snap = await db.collection("users").where("stripeSubscriptionId", "==", subscriptionId).limit(2).get();
+  if (snap.size > 1) {
+    console.warn("Duplicate Pro subscription reference; event ignored");
+    return null;
+  }
+  const userDoc = snap.docs[0];
+  return userDoc && matchesProSubscriptionEvent(type, object, userDoc.data()) ? userDoc : null;
 }
 
 // ============================================================================
@@ -124,11 +136,8 @@ export const stripeWebhook = onRequest(
         }
 
         case "invoice.paid": {
-          const custId = obj.customer;
-          if (!custId) break;
-          const snap = await db.collection("users").where("stripeCustomerId", "==", custId).limit(1).get();
-          if (snap.empty) break;
-          const userDoc = snap.docs[0];
+          const userDoc = await findProUserForEvent(event.type, obj);
+          if (!userDoc) break;
           const data = userDoc.data();
           const currentExp = data.planExpiresAt ? new Date(data.planExpiresAt) : new Date();
           const newExp = new Date(Math.max(currentExp.getTime(), Date.now()) + 30 * 24 * 60 * 60 * 1000);
@@ -143,30 +152,26 @@ export const stripeWebhook = onRequest(
         }
 
         case "customer.subscription.deleted": {
-          const custId2 = obj.customer;
-          if (!custId2) break;
-          const snap2 = await db.collection("users").where("stripeCustomerId", "==", custId2).limit(1).get();
-          if (snap2.empty) break;
-          await snap2.docs[0].ref.update({
+          const userDoc = await findProUserForEvent(event.type, obj);
+          if (!userDoc) break;
+          await userDoc.ref.update({
             plan: "free",
             subscriptionStatus: "canceled",
             updatedAt: new Date().toISOString(),
           });
-          console.log("Pro deactivated for " + snap2.docs[0].id);
+          console.log("Pro deactivated for " + userDoc.id);
           break;
         }
 
         case "invoice.payment_failed": {
-          const custId3 = obj.customer;
-          if (!custId3) break;
-          const snap3 = await db.collection("users").where("stripeCustomerId", "==", custId3).limit(1).get();
-          if (snap3.empty) break;
-          await snap3.docs[0].ref.update({
+          const userDoc = await findProUserForEvent(event.type, obj);
+          if (!userDoc) break;
+          await userDoc.ref.update({
             plan: "past_due",
             subscriptionStatus: "payment_failed",
             updatedAt: new Date().toISOString(),
           });
-          console.log("Plan past_due for " + snap3.docs[0].id);
+          console.log("Plan past_due for " + userDoc.id);
           break;
         }
 
