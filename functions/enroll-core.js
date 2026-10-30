@@ -126,11 +126,15 @@ function enrollmentOpen(data, nowMs) {
   // Preço positivo exige confirmação de pagamento por uma porta específica; esta
   // callable não recebe nem valida pagamentos.
   var registration = data && data.registrationSettings;
+  if (registration != null && (typeof registration !== 'object' || Array.isArray(registration)
+    || registration.source !== 'scoreplace' && registration.source !== 'external')) {
+    return { open: false, deadlinePassed: false, notOpenYet: false, opensAt: null };
+  }
   if (registration && registration.source === 'external') {
     return { open: false, deadlinePassed: false, notOpenYet: false, opensAt: null };
   }
-  if (registration && registration.source === 'scoreplace' && registration.pricing) {
-    var pricing = registration.pricing;
+  if (registration && registration.source === 'scoreplace') {
+    var pricing = registration.pricing || {};
     var paid = pricing.mode === 'single'
       ? Number(pricing.cents) > 0
       : pricing.mode === 'category' && Object.keys(pricing.centsByCategory || {}).some(function (key) { return Number(pricing.centsByCategory[key]) > 0; });

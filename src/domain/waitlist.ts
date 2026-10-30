@@ -408,17 +408,21 @@ namespace ScoreplaceWaitlist {
 
   export function enrollmentOpenState(tournament: Tournament | null | undefined, nowMs?: number): { open: boolean; ligaOpen: boolean; sorteio: boolean; deadlinePassed: boolean; notOpenYet: boolean; opensAt: number | null; lateOverrideAllowed: boolean } {
     if (!tournament) return { open: false, ligaOpen: false, sorteio: false, deadlinePassed: false, notOpenYet: false, opensAt: null, lateOverrideAllowed: false };
-    const registration = record(tournament.registrationSettings) || {};
+    const configuredRegistration = record(tournament.registrationSettings);
+    const registration = configuredRegistration || {};
+    if (tournament.registrationSettings != null && (!configuredRegistration
+      || registration.source !== 'scoreplace' && registration.source !== 'external'))
+      return { open: false, ligaOpen: false, sorteio: false, deadlinePassed: false, notOpenYet: false, opensAt: null, lateOverrideAllowed: false };
     const pricing = record(registration.pricing) || {};
     const categoryPrices = record(pricing.centsByCategory) || {};
     const paid = pricing.mode === 'single'
       ? Number(pricing.cents) > 0
       : pricing.mode === 'category' && Object.keys(categoryPrices).some(key => Number(categoryPrices[key]) > 0);
-    const lateOverrideAllowed = registration.source !== 'external'
-      && !(registration.source === 'scoreplace' && (paid || registration.passServiceFeeToParticipant === true));
+    const paymentRequired = paid || registration.passServiceFeeToParticipant === true;
+    const lateOverrideAllowed = registration.source !== 'external' && !paymentRequired;
     if (registration.source === 'external')
       return { open: false, ligaOpen: false, sorteio: false, deadlinePassed: false, notOpenYet: false, opensAt: null, lateOverrideAllowed };
-    if (!lateOverrideAllowed) {
+    if (paymentRequired) {
       const methods = record(registration.paymentMethods) || {};
       const direct = Boolean(text(methods.organizerPixKey) || text(methods.organizerPaymentUrl));
       const contract = record(tournament.billingContract);

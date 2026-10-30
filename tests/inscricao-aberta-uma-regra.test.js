@@ -80,6 +80,13 @@ console.log('  ✓ paridade cliente×servidor em ' + casos + ' combinações');
 const paymentCases = [
   { label:'externa', settings:{ source:'external' }, expected:false },
   { label:'gratuita', settings:{ source:'scoreplace', pricing:{ mode:'single', cents:0 } }, expected:true },
+  { label:'origem ausente com valor', settings:{ pricing:{ mode:'single', cents:1000 } }, expected:false },
+  { label:'origem inválida sem valor', settings:{ source:'unexpected', pricing:{ mode:'single', cents:0 } }, expected:false },
+  { label:'configuração inválida', settings:[], expected:false },
+  { label:'configuração numérica inválida', settings:0, expected:false },
+  { label:'configuração booleana inválida', settings:false, expected:false },
+  { label:'configuração textual inválida', settings:'', expected:false },
+  { label:'taxa repassada sem preço', settings:{ source:'scoreplace', passServiceFeeToParticipant:true }, expected:false },
   { label:'paga sem meio', settings:{ source:'scoreplace', pricing:{ mode:'single', cents:1000 } }, expected:false },
   { label:'paga sem aceite', settings:{ source:'scoreplace', pricing:{ mode:'single', cents:1000 }, paymentMethods:{ organizerPixKey:'pix@example.com' } }, expected:false },
   { label:'paga com Pix próprio', settings:{ source:'scoreplace', pricing:{ mode:'single', cents:1000 }, paymentMethods:{ organizerPixKey:'pix@example.com' } }, accepted:true, expected:true },
@@ -97,7 +104,7 @@ for (const testCase of paymentCases) {
       servidor(tournament, AGORA).open].map(Boolean);
     ok(results.every(result => result === expected),
       testCase.label + (drawn ? ' após sorteio' : ' antes do sorteio') + ': UI, domínio e servidor concordam');
-    const allowLate = testCase.settings.source !== 'external'
+    const allowLate = testCase.settings.source === 'scoreplace'
       && !testCase.settings.passServiceFeeToParticipant
       && testCase.settings.pricing?.mode === 'single' && testCase.settings.pricing.cents === 0;
     ok(cliente(tournament, AGORA).lateOverrideAllowed === allowLate

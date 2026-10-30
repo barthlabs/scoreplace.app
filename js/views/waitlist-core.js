@@ -309,12 +309,16 @@ window._enrollmentOpenState = function (t, nowMs) {
   var domain = _wlDomain();
   if (domain && typeof domain.enrollmentOpenState === 'function') return domain.enrollmentOpenState(t, nowMs);
   var registration = t.registrationSettings;
+  if (registration != null && (typeof registration !== 'object' || Array.isArray(registration)
+    || registration.source !== 'scoreplace' && registration.source !== 'external')) {
+    return { open: false, ligaOpen: false, sorteio: false, deadlinePassed: false, notOpenYet: false, opensAt: null, lateOverrideAllowed: false };
+  }
   if (registration && registration.source === 'external') {
     return { open: false, ligaOpen: false, sorteio: false, deadlinePassed: false, notOpenYet: false, opensAt: null, lateOverrideAllowed: false };
   }
   var lateOverrideAllowed = true;
-  if (registration && registration.source === 'scoreplace' && registration.pricing) {
-    var pricing = registration.pricing;
+  if (registration && registration.source === 'scoreplace') {
+    var pricing = registration.pricing || {};
     var paid = pricing.mode === 'single'
       ? Number(pricing.cents) > 0
       : pricing.mode === 'category' && Object.keys(pricing.centsByCategory || {}).some(function (key) { return Number(pricing.centsByCategory[key]) > 0; });
