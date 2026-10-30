@@ -6070,7 +6070,6 @@ exports.setTournamentEnrollmentStatus = onCall(async request => {
     if ((action === 'open' || action === 'late-open') && t.registrationSettings) {
       const settings = t.registrationSettings;
       if (settings.source === 'external') throw new HttpsError('failed-precondition', 'Inscrições externas não podem ser abertas no Scoreplace.');
-      if (settings.source !== 'scoreplace') throw new HttpsError('failed-precondition', 'Origem das inscrições inválida.');
       const paid = require('./registration-settings-core').requiresClosedEnrollment(settings);
       if (paid) {
         if (sandbox || action === 'late-open' || !require('./registration-settings-core').paidDirectReady(t)) {
