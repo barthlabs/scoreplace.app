@@ -65,6 +65,16 @@ const call = context.exports.setTournamentEnrollmentStatus;
     'taxa de serviço repassada exige gate financeiro mesmo com preço base zero');
   assert.strictEqual(docs.get('tournaments/event').status, 'closed');
   assert.deepStrictEqual(writes, ['sandboxes/sb_event', 'tournaments/event'], 'recusa não grava torneio');
+  docs.set('tournaments/event', { id:'event', status:'closed', registrationSettings:{
+    pricing:{ mode:'single', cents:100 }
+  } });
+  await assert.rejects(call({ auth:{uid:'owner'}, data:{tournamentId:'event', action:'open'} }),
+    /Configure o recebimento direto/, 'configuração incompleta com preço não contorna o gate');
+  docs.set('tournaments/event', { id:'event', status:'closed', registrationSettings:{
+    pricing:{ mode:'single', cents:0 }
+  } });
+  const freeIncomplete = await call({ auth:{uid:'owner'}, data:{tournamentId:'event', action:'open'} });
+  assert.strictEqual(freeIncomplete.changed, true, 'preço zero conserva abertura existente');
   const resetStart = server.indexOf('exports.resetTournamentToEnrollment = onCall(');
   const resetEnd = server.indexOf('\nexports.generateExtraTournamentRound = onCall(', resetStart);
   const reset = server.slice(resetStart, resetEnd);

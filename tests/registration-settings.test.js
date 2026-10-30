@@ -1,6 +1,6 @@
 'use strict';
 const assert = require('assert');
-const { validate, requiresClosedEnrollment, paidDirectReady } = require('../functions-autodraw/registration-settings-core');
+const { validate, isPaidRegistration, requiresClosedEnrollment, paidDirectReady } = require('../functions-autodraw/registration-settings-core');
 const enroll = require('../functions/enroll-core');
 const fs = require('fs');
 const vm = require('vm');
@@ -37,6 +37,10 @@ assert.strictEqual(requiresClosedEnrollment({ source:'scoreplace', pricing:{ mod
 assert.strictEqual(requiresClosedEnrollment({ source:'scoreplace', pricing:{ mode:'single', cents:0 } }), false);
 assert.strictEqual(requiresClosedEnrollment({ source:'scoreplace', pricing:{ mode:'single', cents:0 },
   passServiceFeeToParticipant:true }), true);
+assert.strictEqual(isPaidRegistration({ pricing:{ mode:'single', cents:100 } }), true,
+  'preço pago não perde o gate se a origem estiver incompleta');
+assert.strictEqual(isPaidRegistration({ pricing:{ mode:'single', cents:0 } }), false);
+assert.strictEqual(isPaidRegistration({ pricing:{ mode:'single', cents:0 }, passServiceFeeToParticipant:true }), true);
 
 assert.strictEqual(enroll.enrollmentOpen({ status:'open', registrationSettings:{ source:'scoreplace', pricing:{ mode:'single', cents:0 } } }).open, true);
 assert.strictEqual(enroll.enrollmentOpen({ status:'open', registrationSettings:{ source:'external', pricing:null } }).open, false);

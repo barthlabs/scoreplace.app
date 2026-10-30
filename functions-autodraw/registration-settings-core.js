@@ -63,14 +63,19 @@ function validate(value, categories) {
       organizerPixCity:pixCity, organizerPaymentUrl:paymentUrl } };
 }
 
+function isPaidRegistration(value) {
+  if (!value || typeof value !== 'object') return false;
+  const pricing = value.pricing;
+  if (value.passServiceFeeToParticipant === true) return true;
+  if (!pricing || typeof pricing !== 'object') return false;
+  if (pricing.mode === 'single') return Number(pricing.cents) > 0;
+  return pricing.mode === 'category' && Object.values(pricing.centsByCategory || {}).some(cents => Number(cents) > 0);
+}
+
 function requiresClosedEnrollment(value) {
   if (!value || typeof value !== 'object') return false;
   if (value.source === 'external') return true;
-  const pricing = value.pricing;
-  if (!pricing || value.source !== 'scoreplace') return false;
-  if (value.passServiceFeeToParticipant === true) return true;
-  if (pricing.mode === 'single') return Number(pricing.cents) > 0;
-  return pricing.mode === 'category' && Object.values(pricing.centsByCategory || {}).some(cents => Number(cents) > 0);
+  return value.source === 'scoreplace' && isPaidRegistration(value);
 }
 
 // Apenas o recebimento direto com aceite financeiro permite abrir inscrições
@@ -90,4 +95,4 @@ function paidDirectReady(tournament) {
     && (pixReady || String(methods.organizerPaymentUrl || '').trim()));
 }
 
-module.exports = { validate, requiresClosedEnrollment, paidDirectReady };
+module.exports = { validate, isPaidRegistration, requiresClosedEnrollment, paidDirectReady };
