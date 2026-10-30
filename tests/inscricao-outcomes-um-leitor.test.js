@@ -1,7 +1,7 @@
 /* O RESULTADO DA INSCRIÇÃO TEM UM LEITOR SÓ — e nenhum desfecho fica mudo.
  *
  * MEDIDO em 13/ago/2026: a CF enrollParticipant devolve 7 desfechos e cada um dos
- * 4 call sites lia um SUBCONJUNTO — o resto caía em silêncio ou no toast de
+ * call sites liam um SUBCONJUNTO — o resto caía em silêncio ou no toast de
  * SUCESSO. Os três piores (reais):
  *   (a) organizador inscrevia numa Liga com fase sorteada → `waitlisted` sem ramo
  *       → a pessoa SUMIA da tela sem mensagem;
@@ -38,6 +38,7 @@ function corpoDe(src, marca) {
   throw new Error('não fechei ' + marca);
 }
 const corpo = corpoDe(fonte, 'window._applyEnrollResult = function');
+const predicadoPago = corpoDe(fonte, 'window._tournamentRequiresPayment = function');
 
 function monta() {
   const sb = {};
@@ -53,6 +54,7 @@ function monta() {
   sb._notifyTournamentParticipants = (t, n) => sb.notifs.push(n);
   sb.document = { getElementById: () => null };
   vm.createContext(sb);
+  vm.runInContext(predicadoPago, sb, { filename: 'pagamento.js' });
   vm.runInContext(corpo, sb, { filename: 'leitor.js' });
   return sb;
 }
@@ -124,12 +126,17 @@ function monta() {
   ok(sb.notifs.some(n => n.type === 'enrollments_closed'), '(e) autoClose notifica os inscritos');
 }
 
-// ── FIAÇÃO: os 4 call sites usam o leitor; nenhum re-interpreta o shape na mão ─
+// ── FIAÇÃO: as três portas diretas usam o leitor; a inscrição em dupla delega
+// à autoinscrição após pedir consentimento individual de cada atleta. ─────────
 const semComent = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 const code = semComent(fonte);
-ok((code.match(/_applyEnrollResult\(t, tId, res/g) || []).length +
-   (code.match(/_applyEnrollResult\(t, tId, result/g) || []).length >= 4,
-  'os 4 call sites (self, time, +participante, fila) passam pelo leitor único');
+const chamadasLeitor = (code.match(/_applyEnrollResult\(t, tId, (?:res|result)/g) || []).length;
+const chamadasServidor = (code.match(/window\.FirestoreDB\.enrollParticipant\(tId,/g) || []).length;
+ok(chamadasLeitor === 3 && chamadasServidor === 3,
+  'as três portas diretas (autoinscrição, organizador e fila) passam pelo leitor único');
+const inscreverDupla = corpoDe(code, 'window.submitTeamEnroll = function');
+ok(/window\.enrollCurrentUser\(tId\)/.test(inscreverDupla) && !/enrollParticipant\(/.test(inscreverDupla),
+  'inscrição em dupla delega à autoinscrição, sem quarta porta direta');
 // o padrão antigo (ramos soltos de result.waitlisted fora do leitor) não pode voltar
 const foraDoLeitor = code.replace(corpoDe(code, 'window._applyEnrollResult = function'), '');
 ok(!/result\.waitlisted/.test(foraDoLeitor) && !/result\.enrollmentClosed/.test(foraDoLeitor),
