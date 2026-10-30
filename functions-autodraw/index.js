@@ -1,6 +1,7 @@
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onDocumentCreated, onDocumentWritten } = require('firebase-functions/v2/firestore');
-const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
+const { defineSecret } = require('firebase-functions/params');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue, FieldPath } = require('firebase-admin/firestore');
 const { getMessaging } = require('firebase-admin/messaging');
@@ -30,6 +31,10 @@ const _matchHistory = require('./match-history-core.js');
 const _rosterState = require('./roster-state-core.js');
 const _tSplit = require('./vendor/tournament-split-core.js');   // fonte única: js/views/ (copy-vendor)
 const _registrationRoster = require('./vendor/registration-roster.js');
+const _tournamentBilling = require('./vendor/tournament-billing-core.js');
+const _billingSnapshots = new WeakMap();
+const _tournamentFeeStripeKey = defineSecret('STRIPE_SECRET_KEY');
+const _tournamentFeeWebhookSecret = defineSecret('TOURNAMENT_FEE_WEBHOOK_SECRET');
 const _matchTiming = require('./vendor/match-timing.js');
 const _courtOccupancy = require('./vendor/court-occupancy.js');
 const ScoreplaceRefereeRoster = require('./vendor/referee-roster.js');
@@ -794,12 +799,25 @@ async function _leTorneio(tx, ref, tId) {
    * uma migração incompleta. A transação aborta antes de criar qualquer chave.
    */
   const migration = montado.canonicalRegistrationMigration || {};
+  if (tx !== _TX_LEITURA && montado.billingContract?.schema === 1
+      && !montado.isSandbox && !migration.fingerprint) {
+    throw new Error('[tournament-billing] contrato ativo sem elenco canônico confirmado');
+  }
   if (migration.fingerprint) {
     const registrationSnap = await tx.get(ref.collection('registrations'));
     const registrations = registrationSnap.docs.map((doc) => doc.data() || {});
     const expected = Number(migration.registrationCount || 0);
     if (expected !== registrations.length) {
       throw new Error('[canonical-registration] contagem divergente: esperado ' + expected + ', recebido ' + registrations.length);
+    }
+    if (tx !== _TX_LEITURA && montado.billingContract && montado.billingContract.schema === 1 && !montado.isSandbox) {
+      const snapshot = _tournamentBilling.rosterSnapshot(registrations, montado.placeholderReservations);
+      const fingerprint = createHash('sha256').update(snapshot.canonicalJson).digest('hex');
+      const byPath = _billingSnapshots.get(tx) || new Map();
+      byPath.set(ref.path, { fingerprint, participantCount: snapshot.participantCount,
+        unreviewedProofCount:snapshot.unreviewedProofCount,
+        unsettledPaymentCount:snapshot.unsettledPaymentCount });
+      _billingSnapshots.set(tx, byPath);
     }
     try { montado.participants = _registrationRoster.rosterFromRegistrations(registrations); }
     catch (error) { throw new Error('[canonical-registration] elenco inválido: ' + error.message); }
@@ -964,6 +982,14 @@ function _aplicaRascunhoDoSorteioInicial(t, draft) {
  * ⛔ E `participants`/`history` só saem do documento se estiverem NO MARCADOR — `dividir`
  * extrai os três por natureza, e gravar a config crua dele zeraria o elenco. */
 function _gravaTorneio(tx, ref, tDepois, tAntes, ctx) {
+  if (tDepois?.billingContract?.schema === 1 && !tDepois.isSandbox && !tAntes) {
+    throw new Error('[tournament-billing] gravação sem estado anterior do torneio');
+  }
+  if (tAntes && tAntes.billingContract && tAntes.billingContract.schema === 1 && !tAntes.isSandbox) {
+    const snapshot = _billingSnapshots.get(tx)?.get(ref.path);
+    _tournamentBilling.assertCanDraw(tAntes, tDepois, snapshot && snapshot.fingerprint,
+      snapshot && snapshot.unreviewedProofCount, snapshot && snapshot.unsettledPaymentCount);
+  }
   /* ⭐ 2.2 — ESTA PORTA PASSOU A DELEGAR AO PLANEJADOR ÚNICO (`write-plan.js`).
    * Ordem do revisor externo: a checagem de limite e o executor têm de consumir EXATAMENTE
    * o mesmo plano; um preflight que estime por fora pode divergir da escrita real, e aí o
@@ -990,7 +1016,8 @@ function _gravaTorneio(tx, ref, tDepois, tAntes, ctx) {
   // Todas as rotas de preparação/enquete/reabertura passam por esta escrita.
   // Uma configuração externa ou paga nunca pode persistir status aberto, inclusive
   // quando uma rota antiga tenta restaurar o status anterior.
-  if (tDepois && tDepois.status === 'open' && require('./registration-settings-core').requiresClosedEnrollment(tDepois.registrationSettings)) {
+  if (tDepois && tDepois.status === 'open' && require('./registration-settings-core').requiresClosedEnrollment(tDepois.registrationSettings)
+    && !require('./registration-settings-core').paidDirectReady(tDepois)) {
     tDepois.status = 'closed';
   }
   /* Todo torneio passa por esta fronteira antes de voltar ao banco. `fmt2` é a intenção
@@ -2837,6 +2864,45 @@ exports.queueMatchReadyNotifications = onDocumentWritten(
     }
   }
 );
+
+// Cobrança de ORGANIZAÇÃO por torneio. Nenhum endpoint de assinatura Pro é
+// reutilizado; os recibos e o webhook têm contrato próprio.
+const _tournamentFeeService = require('./tournament-billing-service').makeService({
+  db, HttpsError, FieldValue,
+  stripe: () => new (require('stripe'))(_tournamentFeeStripeKey.value())
+});
+exports.getTournamentFeeStatus = onCall(_tournamentFeeService.status);
+exports.simulateTournamentRegistrationFees = onCall(_tournamentFeeService.estimate);
+exports.acceptTournamentFeeTerms = onCall(_tournamentFeeService.acceptTerms);
+exports.prepareTournamentFee = onCall(_tournamentFeeService.prepare);
+exports.reportTournamentFeePix = onCall(_tournamentFeeService.reportPix);
+exports.rejectTournamentFeePixReport = onCall(_tournamentFeeService.rejectPixReport);
+exports.listTournamentFeePixReports = onCall(_tournamentFeeService.listPixReports);
+exports.getTournamentFinanceAdminStatus = onCall(_tournamentFeeService.financeAdminStatus);
+exports.startTournamentFeeCheckout = onCall({ secrets:[_tournamentFeeStripeKey] }, _tournamentFeeService.checkout);
+exports.cancelTournamentFeeCardAttempt = onCall({ secrets:[_tournamentFeeStripeKey] }, _tournamentFeeService.cancelCardAttempt);
+exports.confirmTournamentFeePix = onCall(_tournamentFeeService.confirmPix);
+exports.reconcileReversedTournamentFee = onCall({ secrets:[_tournamentFeeStripeKey] }, _tournamentFeeService.reconcileReversedTournamentFee);
+exports.tournamentFeeStripeWebhook = onRequest({ secrets:[_tournamentFeeStripeKey, _tournamentFeeWebhookSecret] }, async (req, res) => {
+  if (req.method !== 'POST' || !Buffer.isBuffer(req.rawBody)) {
+    res.status(400).send('Corpo bruto obrigatório.'); return;
+  }
+  let event;
+  try {
+    const stripe = new (require('stripe'))(_tournamentFeeStripeKey.value());
+    event = stripe.webhooks.constructEvent(req.rawBody, req.headers['stripe-signature'], _tournamentFeeWebhookSecret.value());
+  } catch (error) {
+    console.error('[tournament-fee] assinatura inválida:', error.message);
+    res.status(400).send('Assinatura inválida.'); return;
+  }
+  try {
+    const outcome = await _tournamentFeeService.webhookEvent(event);
+    res.status(200).json(outcome);
+  } catch (error) {
+    console.error('[tournament-fee] webhook não aplicado:', error);
+    res.status(500).send('Não aplicado.');
+  }
+});
 
 // Backfill de confrontos que já estavam definidos quando esta regra entrou no ar, e
 // lembrete único para partidas pendentes a até sete dias do prazo da sua rodada. A mesma
@@ -4719,6 +4785,9 @@ exports.undoInferredTournamentCategoryMerge = onCall(async (request) => {
 exports.setDrawBalanceChoice = onCall(async (request) => {
   const uid = request.auth && request.auth.uid;
   const data = request.data || {};
+  if (data.genderRatioDisabled !== undefined && typeof data.genderRatioDisabled !== 'boolean') {
+    throw new HttpsError('invalid-argument', 'A opção de proporção deve ser verdadeira ou falsa.');
+  }
   const tId = String(data.tournamentId || '').trim();
   const mode = String(data.mode || '').trim();
   const ratio = String(data.ratio || '').trim();
@@ -4760,9 +4829,10 @@ exports.setDrawBalanceChoice = onCall(async (request) => {
     // impede que a formação de duplas e o espalhamento por grupo leiam decisões opostas.
     t._drawBalanceMode = mode;
     t.equilibrado = mode === 'equilibrado';
+    if (data.genderRatioDisabled !== undefined) t.genderRatioDisabled = data.genderRatioDisabled;
     const hasRatio = drawWindow && drawWindow._GENDER_RATIOS && drawWindow._GENDER_RATIOS[ratio];
     const ratioApplies = !drawWindow || typeof drawWindow._ratioAppliesTo !== 'function' || drawWindow._ratioAppliesTo(t);
-    if (mode === 'equilibrado' && hasRatio && ratioApplies) {
+    if (mode === 'equilibrado' && hasRatio && ratioApplies && t.genderRatioDisabled !== true) {
       const phaseIndex = Number.isInteger(t.currentPhaseIndex) ? t.currentPhaseIndex : 0;
       if (Array.isArray(t.phases) && t.phases[phaseIndex]) t.phases[phaseIndex].genderRatio = ratio;
       else t.genderRatio = ratio;
@@ -4935,7 +5005,7 @@ const _CAMPOS_CONFIG_TORNEIO = new Set([
   'venuePhotoUrl','coverUrl','coverMode','coverColor','coverGradientColor','coverGradientEnabled','coverGradientAngle','logoUrl','logoLocked','logoShape','logoRadius','logoAspect','courtCount',
   'courtNames','courtOrder','callTime','warmupTime','gameDuration','scoring','swissRounds',
   'drawFirstDate','drawFirstTime','drawIntervalDays','drawManual','temporada','equilibrado',
-  'clusterSize','balanceBy','genderRatio','wlGroupBalance','ligaNewPlayerScore',
+  'clusterSize','balanceBy','genderRatio','genderRatioDisabled','wlGroupBalance','ligaNewPlayerScore',
   'ligaInactivity','ligaInactivityX','allowSelfDeactivation','ligaOpenEnrollment',
   'ligaRoundFormat','ligaDrawMode','ligaTurnos','ligaRRSchedule',
   'ligaSeasonMonths','elimRankingType','gruposCount','gruposClassified','gruposEqualOnly','turnos',
@@ -4962,7 +5032,7 @@ const _CAMPOS_CONFIG_TORNEIO = new Set([
  * de rodadas da fase e, se não bater, DESCARTA o arranjo e volta pra divisão igual.
  * Os demais campos desta lista continuam onde estavam — esses sim redesenham a chave. */
 const _CONFIG_ESTRUTURAL = new Set([
-  'format','sport','teamSize','gameTypes','drawMode','fmt2','phases','swissRounds','registrationSettings',
+  'format','sport','teamSize','gameTypes','drawMode','fmt2','phases','swissRounds','registrationSettings','genderRatioDisabled',
   'gruposCount','gruposClassified','gruposEqualOnly','gruposSeedVip','gruposSeedCategory',
   'teamCompetition','categorySchedule','turnos','categoryDefinitions',
   'ligaRoundFormat','ligaDrawMode','ligaTurnos','ligaRRSchedule','monarchAdvanceToElim',
@@ -5165,6 +5235,18 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
         patch.combinedCategories !== undefined ? patch.combinedCategories : t.combinedCategories
       ); } catch (error) { throw new HttpsError('invalid-argument', error.message); }
     }
+    const billingSettingsChanged = patch.registrationSettings !== undefined
+      && !_configAtiva.igual(t.registrationSettings, patch.registrationSettings);
+    if (billingSettingsChanged && t.billingContract?.schema === 1 && !t.isSandbox) {
+      // Uma inscrição já cobrada conserva preço e instruções do pagamento.
+      // Alterá-los aqui deixaria o débito antigo apontando para meios novos.
+      const charged = await tx.get(ref.collection('registrations')
+        .where('paymentDueCents', '>', 0).limit(1));
+      if (!charged.empty) {
+        throw new HttpsError('failed-precondition',
+          'Já existe inscrição com cobrança. Valor, repasse da taxa e meios de pagamento não podem mudar neste torneio.');
+      }
+    }
     const categoryKeys = ['genderCategories', 'skillCategories', 'ageCategories', 'customCategories', 'combinedCategories'];
     const categoryChanged = categoryKeys.some((key) => Object.prototype.hasOwnProperty.call(patch, key) &&
       JSON.stringify(patch[key]) !== JSON.stringify(t[key]));
@@ -5267,6 +5349,12 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
         t[key] = patch[key];
       }
     });
+    // Preço e meios de recebimento são condições materiais. Um aceite anterior
+    // não autoriza cobrar sob outra configuração, mesmo que os termos gerais
+    // do catálogo financeiro ainda tenham a mesma versão.
+    if (billingSettingsChanged && t.billingContract && t.billingContract.schema === 1 && !t.isSandbox) {
+      t.billingTermsAcceptance = null;
+    }
     if (_policyBeforeShape !== _policyConfig.policyShape(t)) {
       // Apenas uma alteração da política ou de seu formato exige revalidar o
       // conjunto efetivo. Nome/prazo de fase e outros patches não são vetados
@@ -5584,6 +5672,7 @@ exports.resolvePendingDraw = onCall(async (request) => {
     const t=await _leTorneio(tx,ref,tId); if(!t) throw new HttpsError('not-found','Torneio não encontrado.');
     if(!_isTournamentAdmin(t,uid)) throw _drawFail('permission-denied','Só a organização altera o sorteio em revisão.',{tId,uid});
     let pd=t.pendingDraw; if(!pd) return {ok:true,changed:false};
+    _tournamentBilling.assertCanPublishPendingDraw(action, t);
     const refPrivado = pd.kind === 'initial' ? _refRascunhoInicialPrivado(ref) : null;
     if (refPrivado && pd.private === true) {
       const secreto = await tx.get(refPrivado);
@@ -6002,7 +6091,16 @@ exports.setTournamentEnrollmentStatus = onCall(async request => {
       const paid = price && (price.mode === 'single' ? Number(price.cents) > 0
         : Object.keys(price.centsByCategory || {}).some(category => Number(price.centsByCategory[category]) > 0));
       if (settings.source === 'external') throw new HttpsError('failed-precondition', 'Inscrições externas não podem ser abertas no Scoreplace.');
-      if (paid) throw new HttpsError('failed-precondition', 'Ative primeiro o checkout das inscrições pagas.');
+      if (paid) {
+        if (sandbox || action === 'late-open' || !require('./registration-settings-core').paidDirectReady(t)) {
+          throw new HttpsError('failed-precondition', 'Configure o recebimento direto e aceite as condições financeiras antes de abrir inscrições pagas.');
+        }
+        const billingCfg = (await tx.get(db.collection('billingAdminConfig').doc('active'))).data() || {};
+        const billing = require('./tournament-billing-service');
+        if (!billing.termsAccepted(t, billing.termsCatalog(billingCfg, t))) {
+          throw new HttpsError('failed-precondition', 'Aceite as condições financeiras atuais antes de abrir inscrições pagas.');
+        }
+      }
     }
     const hasDraw = _hasTournamentDraw(t);
     const late = (drawWindow && typeof drawWindow._effectiveLateEnrollment === 'function')

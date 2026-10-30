@@ -189,6 +189,9 @@ window._clearTournamentDraw = function (t) {
   // sub-chaves antigas (rodadas da fase 2) sobreviveriam. _collectAllMatches trata
   // null como vazio. storePhase re-inicializa com {} quando precisar.
   t.phaseRounds = null;
+  // O reset autorizado em sandbox também descarta o retrato da classificação
+  // anterior; um novo sorteio não pode herdar a ordem de uma fase já apagada.
+  t.phaseGroupStandings = null;
   t.phaseLeagueState = null;
   t._canonicalDraw = false;
   // v1.4.17: limpa TAMBÉM o registro por id (o contexto vive fora do objeto pra sobreviver
@@ -560,7 +563,7 @@ function _formDoublesTeams(origParticipants, teamSize, teamOrigins, balanceMode,
         individuals = individuals.concat(people);
       }
     });
-  } else if (balanceMode === 'equilibrado' && teamSize === 2) {
+  } else if (balanceMode === 'equilibrado' && teamSize === 2 && !(pairingConfig && pairingConfig.genderRatioDisabled === true)) {
     // v2.1.20: sorteio EQUILIBRADO — distribui não-homens (mulheres + outros)
     // pra MINIMIZAR duplas 100% masculinas. Cada não-homem "cobre" um homem.
     // Homens que sobram formam duplas masculinas (inevitável se faltarem
@@ -1839,6 +1842,7 @@ window._showDrawBalanceOverlay = function (opts) {
   window._gdCtx = { rows: rows, mode: (opts.mode === 'equilibrado' ? 'equilibrado' : 'livre'),
     ratio: (opts.ratio || window._GENDER_RATIO_DEFAULT || '50/50'),
     locked: (opts.locked !== false),
+    enabled: (opts.enabled !== false),
     // v1.7.19: com categorias por gênero (Fem/Masc/Misto separados) NÃO há proporção — o
     // sorteio já roda por categoria e o pool é homogêneo. A caixa nem aparece.
     ratioApplies: (opts.ratioApplies !== false),
@@ -1863,7 +1867,8 @@ window._showDrawBalanceOverlay = function (opts) {
   // de trava próprio — duas telas contando histórias diferentes da mesma regra.
   var _ratioCtrl = (typeof window._ratioSliderHtml === 'function')
     ? window._ratioSliderHtml({ idp: 'gd', ratio: window._gdCtx.ratio, locked: !!window._gdCtx.locked,
-                                onRatio: 'window._gdSetRatio', onLock: 'window._gdSetLock' })
+                                enabled: !!window._gdCtx.enabled, onRatio: 'window._gdSetRatio',
+                                onLock: 'window._gdSetLock', onEnabled: 'window._gdSetRatioEnabled' })
     : '';
 
   ov.innerHTML =
@@ -1927,7 +1932,9 @@ window._applyDrawBalanceChoice = function (t, mode, assigned, opts) {
     });
     t._drawBalanceMode = mode;
     t.equilibrado = (mode === 'equilibrado');
-    if (mode === 'equilibrado' && opts.ratio && window._GENDER_RATIOS && window._GENDER_RATIOS[opts.ratio] &&
+    if (opts.enabled === false) t.genderRatioDisabled = true;
+    else if (Object.prototype.hasOwnProperty.call(t, 'genderRatioDisabled')) t.genderRatioDisabled = false;
+    if (mode === 'equilibrado' && opts.enabled !== false && opts.ratio && window._GENDER_RATIOS && window._GENDER_RATIOS[opts.ratio] &&
         (typeof window._ratioAppliesTo !== 'function' || window._ratioAppliesTo(t))) {
       var _pi = t.currentPhaseIndex || 0;
       if (Array.isArray(t.phases) && t.phases[_pi]) t.phases[_pi].genderRatio = opts.ratio;
@@ -1947,7 +1954,8 @@ window._applyDrawBalanceChoice = function (t, mode, assigned, opts) {
     mode: mode,
     assignments: assigned.map(function (r) { return { uid: r.uid || '', name: r.name || '', gender: r.gender || '' }; }),
     ratio: opts.ratio || '',
-    locked: opts.locked !== false
+    locked: opts.locked !== false,
+    genderRatioDisabled: opts.enabled === false
   }).then(function (result) {
     if (typeof window._softRefreshView === 'function') window._softRefreshView();
     return result;
@@ -2002,8 +2010,9 @@ window._maybeShowGenderDrawDialog = function(tId, onProceed) {
       // abre no que ESTÁ configurado — a tela mostra a verdade, não um default próprio
       mode: (t.equilibrado === false) ? 'livre' : 'equilibrado',
       // abre já com a proporção/trava do torneio (a tela mostra a verdade, não um default)
-      ratio: (typeof window._ratioConfigured === 'function' && window._ratioConfigured(t)) ||
+      ratio: (typeof window._ratioStored === 'function' && window._ratioStored(t)) ||
              (window._GENDER_RATIO_DEFAULT || '25/75'),
+      enabled: t.genderRatioDisabled !== true,
       locked: (typeof window._ratioIsLocked === 'function') ? window._ratioIsLocked(t) : true,
       // ⭐ 2.1: mesma regra da tela de configuração — some com categoria de gênero E some
       // quando a disputa toda é de um gênero só (aí não há proporção a fazer).
@@ -2012,7 +2021,8 @@ window._maybeShowGenderDrawDialog = function(tId, onProceed) {
         : ((typeof window._ratioAppliesTo === 'function') ? window._ratioAppliesTo(t) : true),
       onConfirm: function (mode, assigned, ratioOpts) {
         window._applyDrawBalanceChoice(t, mode, assigned,
-          { ratio: (ratioOpts && ratioOpts.ratio), locked: (ratioOpts && ratioOpts.locked) })
+          { ratio: (ratioOpts && ratioOpts.ratio), locked: (ratioOpts && ratioOpts.locked),
+            enabled: (ratioOpts && ratioOpts.enabled) })
           .then(function () { if (typeof onProceed === 'function') onProceed(); })
           .catch(function () {});
       }
@@ -2047,7 +2057,7 @@ window._gdPaintRatio = function(){
   var hint = document.getElementById('gd-ratio-hint');
   if (!hint) return;
   var lbl = (typeof window._ratioLabel === 'function') ? window._ratioLabel(ctx.ratio) : ctx.ratio;
-  hint.textContent = ctx.locked
+  hint.textContent = !ctx.enabled ? 'Sem proporção de gênero neste torneio.' : ctx.locked
     ? ('Quem não couber em ' + lbl + ' vai para a lista de espera.')
     : ('Quem está sem gênero declarado entra por último.');
 };
@@ -2059,6 +2069,11 @@ window._gdSetRatio = function(r){
 window._gdSetLock = function(travada){
   if (!window._gdCtx) return;
   window._gdCtx.locked = !!travada;
+  window._gdPaintRatio();
+};
+window._gdSetRatioEnabled = function(enabled){
+  if (!window._gdCtx) return;
+  window._gdCtx.enabled = !!enabled;
   window._gdPaintRatio();
 };
 window._gdCancel = function(){
@@ -2073,7 +2088,8 @@ window._gdConfirm = function(){
   window._gdCtx = null;
   if (window._dtrace) window._dtrace('genderConfirm', { mode: ctx.mode });
   // 3º argumento novo (aditivo): a proporção escolhida e se ela está travada.
-  if (typeof ctx.onConfirm === 'function') ctx.onConfirm(ctx.mode, assigned, { ratio: ctx.ratio, locked: ctx.locked });
+  if (typeof ctx.onConfirm === 'function') ctx.onConfirm(ctx.mode, assigned,
+    { ratio: ctx.ratio, locked: ctx.locked, enabled: ctx.enabled });
 };
 
 /* Uma linha do log, um lugar só. A busca preguiçosa do log completo (abaixo) reusa
@@ -2464,7 +2480,7 @@ window._callCF = function (fnName, payload, msgs) {
     if (DB && DB._callFnMarca === 'callfn-canonico-v1' && typeof DB._callFn === 'function') {
         return DB._callFn(fnName, payload, _m).then(function (r) { return { data: r }; });
     }
-    return Promise.reject(Object.assign(new Error('Atualize o aplicativo para usar o torneio.'), { code: 'functions/failed-precondition' }));
+    return Promise.reject(Object.assign(new Error('Atualize o aplicativo para usar o torneio.'), { code: 'functions/failed-precondition', atualizacao: true }));
 };
 
 // v1.7: lançamento de placar pela CF `applyMatchResult` (authz server-side: resultEntry

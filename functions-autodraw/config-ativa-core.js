@@ -61,6 +61,7 @@ function _politicaCanonica(v) {
   return (v === undefined || v === null || v === '') ? 'repescagem' : v;
 }
 function igualEstrutural(campo, atual, enviado) {
+  if (campo === 'genderRatioDisabled') return igual(atual == null ? false : atual, enviado == null ? false : enviado);
   return campo === 'politicaDaChave'
     ? _politicaCanonica(atual) === _politicaCanonica(enviado)
     : igual(atual, enviado);

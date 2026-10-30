@@ -127,6 +127,7 @@ ok(/collection\(['"]tournaments['"]\)/.test(delBlock) === false,
   'auth.js NÃO escreve mais em torneios (a CF faz, com Admin SDK, ignorando rules)');
 
 const cfSrc = fs.readFileSync(path.join(__dirname, '..', 'functions', 'index.js'), 'utf8');
+const deleteTournamentCoreSrc = fs.readFileSync(path.join(__dirname, '..', 'functions', 'delete-account-tournament-core.js'), 'utf8');
 ok(/exports\.deleteAccount = onCall\(/.test(cfSrc), 'a CF deleteAccount existe');
 ok(cfSrc.includes('_uidSweep.findUidPaths'), 'a CF usa o cânone de varredura de uid');
 
@@ -137,7 +138,8 @@ ok(/_callFn\('deenrollParticipant'/.test(deBlock) && !/collection\(['"]tournamen
   'cliente pede desinscrição à Function, sem fallback de escrita direta');
 ok(/exports\.deenrollParticipant = onCall\(/.test(cfSrc) && /computeDeenroll/.test(cfSrc),
   'Function de desinscrição usa o núcleo canônico por uid');
-ok(/_purgeUidEverywhere/.test(cfSrc) && /next\.memberUids\s*=\s*\(next\.memberUids \|\| \[\]\)\.filter/.test(cfSrc),
+ok(/purgeUidEverywhere: _purgeUidEverywhere/.test(cfSrc) &&
+  /next\.memberUids\s*=\s*\(next\.memberUids \|\| \[\]\)\.filter/.test(deleteTournamentCoreSrc),
   'deleteAccount limpa referências por uid e recompõe memberUids no servidor');
 
 console.log(fail === 0

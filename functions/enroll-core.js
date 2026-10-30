@@ -134,7 +134,16 @@ function enrollmentOpen(data, nowMs) {
     var paid = pricing.mode === 'single'
       ? Number(pricing.cents) > 0
       : pricing.mode === 'category' && Object.keys(pricing.centsByCategory || {}).some(function (key) { return Number(pricing.centsByCategory[key]) > 0; });
-    if (paid) return { open: false, deadlinePassed: false, notOpenYet: false, opensAt: null };
+    if (paid || registration.passServiceFeeToParticipant === true) {
+      var methods = registration.paymentMethods || {};
+      var direct = !!(String(methods.organizerPixKey || '').trim() || String(methods.organizerPaymentUrl || '').trim());
+      var accepted = !!(data.billingContract && data.billingContract.schema === 1
+        && data.canonicalRegistrationMigration && data.canonicalRegistrationMigration.fingerprint
+        && data.billingTermsAcceptance && data.billingTermsAcceptance.hash);
+      if (!direct || !accepted || phaseDrawDone(data)) {
+        return { open: false, deadlinePassed: false, notOpenYet: false, opensAt: null };
+      }
+    }
   }
   // Inscrição pós-sorteio pertence à fase atual. O rótulo legado "Liga" no
   // topo não pode reabrir uma eliminatória de um torneio multifase. Sem fases

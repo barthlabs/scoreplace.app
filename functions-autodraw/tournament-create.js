@@ -2,10 +2,12 @@
 const { createHash } = require('crypto');
 const Split = require('./vendor/tournament-split-core.js');
 const LegacyCategories = require('./vendor/legacy-category-definition-core.js');
+const { DEFAULT_SERVICE_FEE_CENTS } = require('./tournament-fee-simulator.js');
 const WINDOW_MS = 24 * 60 * 60 * 1000;
 const INTERNAL = new Set(['__proto__', 'prototype', 'constructor', 'matches', 'rounds', 'participants',
   'standbyParticipants', 'waitlist', 'memberUids', 'adminUids', 'coHosts', 'creatorUid', 'organizerUid',
   'isSandbox', '_semPesados', 'pendingDraw', 'results', 'history', 'winner', 'playerUids']);
+['billingContract', 'billingQuote', 'billingSettlement', 'billingTermsAcceptance'].forEach(key => INTERNAL.add(key));
 // `history` é reservado no documento do torneio, mas `rigorRequire.history` é uma
 // escolha booleana declarativa do formulário: exigir ou não histórico do atleta ao se
 // inscrever. A exceção é pelo CAMINHO completo, nunca pelo nome solto; assim não abre
@@ -126,7 +128,8 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
       const pricing = registration && registration.pricing;
       const requiresCheckout = pricing && (pricing.mode === 'single'
         ? pricing.cents > 0
-        : Object.keys(pricing.centsByCategory || {}).some(category => pricing.centsByCategory[category] > 0));
+        : Object.keys(pricing.centsByCategory || {}).some(category => pricing.centsByCategory[category] > 0))
+        || registration && registration.passServiceFeeToParticipant === true;
       Object.assign(t, { id, name: config.name.trim(), status: registration && (registration.source === 'external' || requiresCheckout) ? 'closed' : 'open', storageCanonico: true,
         creatorUid: uid, organizerUid: uid, organizerId: uid,
         coHosts: [],
@@ -140,6 +143,10 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
         participants: [], standbyParticipants: [], matches: [], rounds: [], groups: [],
         currentPhaseIndex: 0, createdAt: iso, updatedAt: iso,
         history: [{ date: iso, message: 'Torneio Criado' }] });
+      // Só novos torneios recebem o contrato. Torneios legados, CULT, Confra e
+      // Neon não são migrados nem cobrados retroativamente.
+      t.billingContract = { schema: 1, currency: 'BRL', feeCentsPerPerson: DEFAULT_SERVICE_FEE_CENTS,
+        createdAt: iso, quoteId: '' };
       const result = boundary(t);
       /* ⛔⛔⛔ O TORNEIO NASCE DIVIDIDO. Ordem do dono, 27/set/2026: _"nao é pra dividir em voo. é
        * pra nascer dividido"_.

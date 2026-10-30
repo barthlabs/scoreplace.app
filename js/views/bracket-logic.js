@@ -6142,7 +6142,7 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
   //   DESTRAVADA→ este espalhamento: busca a proporção e flexibiliza pra incluir mais gente.
   // É literalmente o que o texto do toggle já prometia ao organizador.
   var _travadaAqui = (typeof window._ratioIsLocked === 'function') ? window._ratioIsLocked(t) : true;
-  if (t.equilibrado !== false && numGroups > 1 && !_travadaAqui) {
+  if (t.equilibrado !== false && numGroups > 1 && !_travadaAqui && t.genderRatioDisabled !== true) {
     playingPlayers = _spreadMinorityGender(t, playingPlayers, numGroups);
   }
   var groups = [];

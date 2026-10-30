@@ -21,7 +21,7 @@ const OUT_DIR = path.resolve(__dirname, 'vendor');
 // A cópia de bracket-ui também é carregada pelo shim do autoDraw. Mesmo que o motor
 // não abra o placar ao vivo, o domínio precisa acompanhá-la para que nenhum caminho do
 // arquivo vendorizado encontre um helper indefinido.
-const DOMAIN_FILES = ['participant-identity.js', 'waitlist.js', 'standings.js', 'team-competition.js', 'match-timing.js', 'match-day.js', 'court-occupancy.js', 'next-match.js', 'realtime-freshness.js', 'referee-roster.js', 'round-bounds.js', 'registration-roster.js'];
+const DOMAIN_FILES = ['participant-identity.js', 'waitlist.js', 'standings.js', 'team-competition.js', 'match-timing.js', 'match-day.js', 'court-occupancy.js', 'next-match.js', 'realtime-freshness.js', 'referee-roster.js', 'round-bounds.js', 'registration-roster.js', 'tournament-billing-core.js'];
 
 const FILES = [
   // ⭐ FASE 2 — o tradutor documento ⇄ subcoleções. Mora aqui (js/views/) porque agora
@@ -112,7 +112,7 @@ const OUT_FN = path.resolve(__dirname, '..', 'functions', 'vendor');
 // `amizade-core.js` foi removida quando a autoridade de amizade foi consolidada no
 // servidor; mantê-la nesta lista fazia todo deploy do autoDraw abortar por fonte ausente.
 const SO_FUNCTIONS = ['tournament-split-core.js'];
-const DOMAIN_TO_FUNCTIONS = ['participant-identity.js', 'waitlist.js', 'referee-roster.js', 'registration-roster.js'];
+const DOMAIN_TO_FUNCTIONS = ['participant-identity.js', 'waitlist.js', 'referee-roster.js', 'registration-roster.js', 'tournament-billing-core.js'];
 if (!fs.existsSync(OUT_FN)) fs.mkdirSync(OUT_FN, { recursive: true });
 for (const f of SO_FUNCTIONS) {
   fs.copyFileSync(path.join(SRC_DIR, f), path.join(OUT_FN, f));
@@ -159,7 +159,8 @@ const CORE_TO_AUTODRAW = [
   'legacy-phase-projection-core.js',
   'legacy-category-definition-core.js',
   'category-eligibility-core.js',
-  'registration-category-bridge-core.js'
+  'registration-category-bridge-core.js',
+  'billing-terms-core.js'
 ];
 for (const f of CORE_TO_AUTODRAW) {
   const src = path.resolve(__dirname, '..', 'functions', f);

@@ -5,6 +5,18 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   'use strict';
   var _tH = window._t || function(k) { return k; };
 
+  function _inviteErrorMessage(e) {
+    if (e && e.atualizacao === true) return 'Atualize o aplicativo e tente novamente.';
+    var code = String((e && e.code) || '');
+    if (code === 'functions/failed-precondition') return 'O convite não está disponível. Confira a amizade, a conta e o estado do torneio.';
+    if (code === 'functions/permission-denied') return 'Sua conta não tem permissão para enviar este convite.';
+    if (code === 'functions/unauthenticated') return 'Entre novamente na sua conta para enviar o convite.';
+    if (code === 'functions/not-found') return 'O convite não está disponível. Atualize a página e tente novamente.';
+    if (code === 'functions/unavailable' || (e && (e.message === 'sem conexão com o servidor' || e.message === 'Failed to fetch')))
+      return 'Não foi possível alcançar o serviço de convites. Confira a conexão e tente novamente.';
+    return 'O convite não foi salvo. Tente novamente em instantes.';
+  }
+
   // Crown SVG reusable
   var CROWN_SVG = '<svg width="22" height="22" viewBox="0 0 24 24" fill="rgba(251,191,36,0.9)"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>';
   window._CROWN_SVG = CROWN_SVG;
@@ -39,10 +51,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 
     overlay.innerHTML = '<div style="background:var(--bg-card);width:94%;max-width:380px;border-radius:16px;border:1px solid rgba(251,191,36,0.3);box-shadow:0 20px 60px rgba(0,0,0,0.6);overflow:hidden;">' +
       // Sticky header with buttons
-      '<div style="padding:0.75rem 1rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border-color);background:linear-gradient(135deg,#78350f,#b45309);">' +
+      '<div class="sp-host-invite-header" style="padding:0.75rem 1rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border-color);">' +
         '<button type="button" onclick="document.getElementById(\'host-transfer-overlay\').remove()" class="btn btn-sm" style="background:var(--sp-g-255-255-255-015,rgba(255,255,255,0.15));color:var(--sp-c-fef3c7,#fef3c7);border:1px solid var(--sp-b-255-255-255-025,rgba(255,255,255,0.25));">' + _tH('org.cancel') + '</button>' +
         '<span style="font-weight:700;color:var(--sp-c-fef3c7,#fef3c7);font-size:0.9rem;">' + CROWN_SVG + ' ' + _tH('org.organization') + '</span>' +
-        '<button type="button" id="btn-confirm-host-transfer" class="btn btn-sm" style="background:#fbbf24;color:#78350f;font-weight:700;border:none;">' + _tH('org.confirm') + '</button>' +
+        '<button type="button" id="btn-confirm-host-transfer" class="btn btn-sm sp-host-invite-confirm" style="font-weight:700;">' + _tH('org.confirm') + '</button>' +
       '</div>' +
       // Body
       '<div style="padding:1rem 1.25rem;">' +
@@ -53,11 +65,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         '</div>' +
         // Options
         '<div style="display:flex;flex-direction:column;gap:8px;" id="host-transfer-options">' +
-          '<label style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:rgba(251,191,36,0.08);border:2px solid rgba(251,191,36,0.3);border-radius:12px;cursor:pointer;" id="opt-cohost">' +
+          '<label class="sp-host-invite-option is-selected" style="display:flex;align-items:flex-start;gap:10px;padding:12px;border-radius:12px;cursor:pointer;" id="opt-cohost">' +
             '<input type="radio" name="host-type" value="cohost" checked style="margin-top:2px;accent-color:#fbbf24;">' +
             '<div><div style="font-weight:700;color:var(--text-bright);font-size:0.88rem;">' + _tH('org.share') + '</div><div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px;">' + _tH('org.shareDesc') + '</div></div>' +
           '</label>' +
-          '<label style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03));border:2px solid var(--border-color);border-radius:12px;cursor:pointer;" id="opt-transfer">' +
+          '<label class="sp-host-invite-option" style="display:flex;align-items:flex-start;gap:10px;padding:12px;border-radius:12px;cursor:pointer;" id="opt-transfer">' +
             '<input type="radio" name="host-type" value="transfer" style="margin-top:2px;accent-color:#fbbf24;">' +
             '<div><div style="font-weight:700;color:var(--text-bright);font-size:0.88rem;">' + _tH('org.transfer') + '</div><div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px;">' + _tH('org.transferDesc') + '</div></div>' +
           '</label>' +
@@ -71,25 +83,28 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var radios = overlay.querySelectorAll('input[name="host-type"]');
     radios.forEach(function(r) {
       r.addEventListener('change', function() {
-        document.getElementById('opt-cohost').style.borderColor = 'var(--border-color)';
-        document.getElementById('opt-cohost').style.background = 'rgba(255,255,255,0.03)';
-        document.getElementById('opt-transfer').style.borderColor = 'var(--border-color)';
-        document.getElementById('opt-transfer').style.background = 'rgba(255,255,255,0.03)';
+        document.getElementById('opt-cohost').classList.remove('is-selected');
+        document.getElementById('opt-transfer').classList.remove('is-selected');
         var sel = document.getElementById('opt-' + r.value);
-        if (sel) { sel.style.borderColor = 'rgba(251,191,36,0.3)'; sel.style.background = 'rgba(251,191,36,0.08)'; }
+        if (sel) sel.classList.add('is-selected');
       });
     });
 
     // Confirm handler
-    document.getElementById('btn-confirm-host-transfer').addEventListener('click', function() {
+    var confirm = document.getElementById('btn-confirm-host-transfer');
+    var busy = false;
+    confirm.addEventListener('click', function() {
+      if (busy) return;
       var checked = overlay.querySelector('input[name="host-type"]:checked');
       var type = checked ? checked.value : 'cohost';
-      overlay.remove();
-      if (type === 'transfer') {
-        window._initiateHostTransfer(tId, { uid: pUid, displayName: pName });
-      } else {
-        window._initiateCoHostInvite(tId, { uid: pUid, displayName: pName });
-      }
+      busy = true; confirm.disabled = true;
+      var action = type === 'transfer'
+        ? window._initiateHostTransfer(tId, { uid: pUid, displayName: pName })
+        : window._initiateCoHostInvite(tId, { uid: pUid, displayName: pName });
+      Promise.resolve(action).then(function(result) {
+        if (result && (result.ok || result.changed || result.alreadyInvited)) overlay.remove();
+        else { busy = false; confirm.disabled = false; }
+      }).catch(function() { busy = false; confirm.disabled = false; });
     });
   };
 
@@ -106,8 +121,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   window._initiateHostTransfer = function(tId, target) {
     var t = (window.AppStore.tournaments || []).find(function(x) { return String(x.id) === String(tId); });
     var user = window.AppStore.currentUser;
-    if (!t || !user || !target || !target.uid) return;
-    _mutateHostOrganization(tId, 'invite', 'transfer', target.uid).then(function (out) {
+    if (!t || !user || !target || !target.uid) return Promise.resolve({ error: true });
+    return _mutateHostOrganization(tId, 'invite', 'transfer', target.uid).then(function (out) {
       if (!out.changed) throw new Error('convite já não está disponível');
       var name = out.targetName || target.displayName || '';
       _notifyUser(out.targetUid || target.uid, {
@@ -121,9 +136,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         targetName: name, message: _tH('org.transferInviteSent') + ' ' + name + '.', level: 'all', inviteType: 'transfer'
       });
       if (typeof showNotification === 'function') showNotification(_tH('org.inviteSent'), _tH('org.awaitingResponse') + ' ' + name, 'info');
+      return { ok: true };
     }).catch(function (e) {
       window._warn('[co-org] transferência não gravada', e);
-      if (typeof showNotification === 'function') showNotification('Não foi possível convidar', 'O convite não foi salvo. Verifique a conexão e tente de novo.', 'error');
+      if (typeof showNotification === 'function') showNotification('Não foi possível convidar', _inviteErrorMessage(e), 'error');
+      return { error: true };
     });
   };
 
@@ -131,7 +148,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   window._initiateCoHostInvite = function(tId, target) {
     var t = (window.AppStore.tournaments || []).find(function(x) { return String(x.id) === String(tId); });
     var user = window.AppStore.currentUser;
-    if (!t || !user || !target || !target.uid) return;
+    if (!t || !user || !target || !target.uid) return Promise.resolve({ error: true });
     return _mutateHostOrganization(tId, 'invite', 'cohost', target.uid).then(function (out) {
       if (!out.changed) {
         if (typeof showNotification === 'function') showNotification(_tH('org.alreadyInvited'), (target.displayName || _pName(target)) + ' ' + _tH('org.alreadyInvitedMsg'), 'warning');
@@ -157,13 +174,14 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       return { changed: true };
     }).catch(function (e) {
       window._warn('[co-org] convite não gravado', e);
-      if (typeof showNotification === 'function') showNotification('Não foi possível convidar', 'O convite não foi salvo. Verifique a conexão e tente de novo.', 'error');
+      if (typeof showNotification === 'function') showNotification('Não foi possível convidar',
+        typeof _inviteErrorMessage === 'function' ? _inviteErrorMessage(e) : 'O convite não foi salvo. Tente novamente.', 'error');
       return { error: true };
     });
   };
 
-  // Busca apenas amigos confirmados do perfil atual. Nomes são apresentação;
-  // toda seleção e todo convite usam o UID, nunca o texto digitado.
+  // A projeção do servidor decide quem pode receber convite. Perfil e nome são
+  // apenas apresentação; users.friends não é prova de amizade aceita.
   window._openTournamentFriendInvitePicker = function(tId, role) {
     var t = (window.AppStore.tournaments || []).find(function(x) { return String(x.id) === String(tId); });
     var user = window.AppStore.currentUser;
@@ -199,21 +217,89 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     overlay.appendChild(panel); document.body.appendChild(overlay);
     overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
     var normalize = function(s) { return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(); };
-    var friendUids = (Array.isArray(user.friends) ? user.friends : []).filter(function(uid) {
-      return typeof uid === 'string' && uid && uid !== user.uid && uid.indexOf('@') === -1;
-    });
-    var uniqueUids = Array.from(new Set(friendUids));
     var busy = false;
     var friends = [];
     var selected = null;
+    var accepted = new Set();
+    var pendingReconfirmation = null;
+    var loaded = false;
+    function loadAcceptedFriendUids() {
+      var db = window.FirestoreDB && window.FirestoreDB.db;
+      if (!db) return Promise.reject(new Error('sem banco de amizades'));
+      return db.collection('friendAccess').doc(user.uid).collection('accepted')
+        .get({ source: 'server' }).then(function(snapshot) {
+          var uids = [];
+          snapshot.forEach(function(doc) {
+            if (doc.id && doc.id !== user.uid) uids.push(doc.id);
+          });
+          return Array.from(new Set(uids));
+        });
+    }
+    function availableForRole(uid) {
+      if (role === 'cohost') return !(t.coHosts || []).some(function(ch) {
+        return ch && ch.uid === uid && (ch.status === 'pending' || ch.status === 'active');
+      });
+      return !(t.arbitros || []).some(function(a) {
+        return a && a.uid === uid && (a.status === 'invited' || a.status === 'confirmed');
+      });
+    }
+    function loadFriends() {
+      loaded = false;
+      selected = null;
+      confirmRow.style.display = 'none';
+      list.textContent = 'Carregando amigos…';
+      var legacyCall = window.FirestoreDB && window.FirestoreDB.listLegacyFriendships;
+      var legacyOptional = Promise.resolve().then(function() {
+        return typeof legacyCall === 'function' ? legacyCall.call(window.FirestoreDB) : [];
+      })
+        .catch(function() { return []; });
+      return Promise.all([loadAcceptedFriendUids(), legacyOptional]).then(function(results) {
+        var uids = results[0];
+        var legacy = results[1];
+        if (!Array.isArray(legacy)) throw new Error('lista de amizades inválida');
+        var preload = typeof window._preloadUserProfiles === 'function'
+          ? Promise.resolve(window._preloadUserProfiles(uids)).catch(function() {})
+          : Promise.resolve();
+        return preload.then(function() {
+          if (!overlay.isConnected) return;
+          accepted = new Set(uids);
+          var cache = window._userProfileCache || {};
+          var fallback = window._friendProfilesCache || {};
+          friends = uids.filter(availableForRole).map(function(uid) {
+            var p = cache[uid] || fallback[uid] || {};
+            return { uid: uid, name: String(p.displayName || p.name || '').trim(),
+              photo: p.photoURL || '', state: 'accepted' };
+          }).filter(function(friend) { return !!friend.name; });
+          legacy.forEach(function(r) {
+            var uid = r && String(r.uid || '');
+            if (!uid || accepted.has(uid) || uid === user.uid || !availableForRole(uid)) return;
+            friends.push({ uid: uid, name: String(r.displayName || 'Amigo sem nome público').trim(),
+              photo: r.photoURL || '', state: 'legacy' });
+          });
+          if (pendingReconfirmation && !accepted.has(pendingReconfirmation.uid)) {
+            friends = friends.filter(function(f) { return f.uid !== pendingReconfirmation.uid; });
+            friends.push({ uid: pendingReconfirmation.uid, name: pendingReconfirmation.name,
+              photo: pendingReconfirmation.photo, state: 'pending' });
+          }
+          loaded = true;
+          render();
+          input.focus();
+        });
+      });
+    }
     send.addEventListener('click', function() {
-      if (busy || !selected) return;
+      if (busy || !loaded || !selected || !accepted.has(selected.uid)) return;
       busy = true; send.disabled = true;
       var invitation = role === 'cohost'
         ? window._initiateCoHostInvite(tId, { uid: selected.uid, displayName: selected.name })
         : (typeof window._arbitrosInvite === 'function' ? window._arbitrosInvite(selected.uid, tId) : null);
       Promise.resolve(invitation).then(function(result) {
-        if (result && result.error) { busy = false; send.disabled = false; return; }
+        if (result == null || result.error) {
+          busy = false; send.disabled = false;
+          if (invitation === null && typeof showNotification === 'function')
+            showNotification('Não foi possível convidar', 'A arbitragem está indisponível agora.', 'error');
+          return;
+        }
         if (result && result.changed) {
           // A Function já confirmou a gravação. Atualize somente a ficha local;
           // o snapshot autoritativo reconciliará o restante sem recarregar a página.
@@ -244,39 +330,62 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       var matches = friends.filter(function(f) { return !q || normalize(f.name).includes(q); });
       if (!matches.length) { list.textContent = friends.length ? 'Nenhum amigo com esse nome.' : 'Nenhum amigo disponível.'; return; }
       matches.forEach(function(friend) {
-        var row = document.createElement('button');
-        row.type = 'button'; row.className = 'btn btn-sm';
+        var row = document.createElement(friend.state === 'accepted' ? 'button' : 'div');
+        if (friend.state === 'accepted') { row.type = 'button'; row.className = 'btn btn-sm'; }
         row.style.cssText = 'display:flex;align-items:center;text-align:left;gap:10px;width:100%;padding:9px;';
         var img = document.createElement(friend.photo ? 'img' : 'span');
         if (friend.photo) { img.src = friend.photo; img.alt = ''; img.style.cssText = 'width:32px;height:32px;border-radius:50%;object-fit:cover;'; }
         else { img.textContent = friend.name.slice(0, 1).toUpperCase(); img.style.cssText = 'width:32px;height:32px;border-radius:50%;background:#334155;display:grid;place-items:center;'; }
         var label = document.createElement('span'); label.textContent = friend.name;
         row.appendChild(img); row.appendChild(label);
-        row.addEventListener('click', function() {
-          if (busy) return;
-          selected = friend;
-          selectedName.textContent = friend.name;
-          confirmRow.style.display = 'flex';
-        });
+        if (friend.state === 'accepted') {
+          row.addEventListener('click', function() {
+            if (busy || !loaded || !accepted.has(friend.uid)) return;
+            selected = friend;
+            selectedName.textContent = friend.name;
+            confirmRow.style.display = 'flex';
+          });
+        } else if (friend.state === 'legacy') {
+          var reconfirm = document.createElement('button');
+          reconfirm.type = 'button'; reconfirm.className = 'btn btn-sm';
+          reconfirm.textContent = 'Solicitar reconfirmação';
+          reconfirm.style.marginLeft = 'auto';
+          reconfirm.addEventListener('click', function() {
+            if (busy || !loaded) return;
+            busy = true; reconfirm.disabled = true; send.disabled = true;
+            Promise.resolve(window.FirestoreDB.sendFriendRequest(user.uid, friend.uid)).then(function() {
+              pendingReconfirmation = { uid: friend.uid, name: friend.name, photo: friend.photo };
+              return loadFriends().then(function() {
+                if (overlay.isConnected && typeof showNotification === 'function')
+                  showNotification('Amizade', accepted.has(friend.uid) ? 'Amizade confirmada. Agora você pode convidar.' : 'Pedido de reconfirmação enviado.', 'info');
+              }).catch(function() {
+                if (overlay.isConnected) list.textContent = 'Pedido enviado. Não foi possível atualizar a lista agora.';
+                loaded = false;
+              });
+            }).catch(function() {
+              pendingReconfirmation = null;
+              return loadFriends().then(function() {
+                if (overlay.isConnected && typeof showNotification === 'function')
+                  showNotification('Amizade', 'Não foi possível reconfirmar agora. Tente novamente.', 'error');
+              }).catch(function() {
+                if (overlay.isConnected) list.textContent = 'Não foi possível atualizar seus amigos. Feche e tente novamente.';
+              });
+            }).finally(function() { busy = false; send.disabled = false; });
+          });
+          row.appendChild(reconfirm);
+        } else {
+          var status = document.createElement('span');
+          status.textContent = 'Pedido de reconfirmação enviado';
+          status.style.marginLeft = 'auto';
+          row.appendChild(status);
+        }
         list.appendChild(row);
       });
     };
-    list.textContent = 'Carregando amigos…';
     input.addEventListener('input', render);
-    Promise.resolve(typeof window._preloadUserProfiles === 'function' ? window._preloadUserProfiles(uniqueUids) : null).then(function() {
-      if (!overlay.isConnected) return;
-      var cache = window._userProfileCache || {};
-      var fallback = window._friendProfilesCache || {};
-      friends = uniqueUids.map(function(uid) {
-        var p = cache[uid] || fallback[uid] || {};
-        return { uid: uid, name: String(p.displayName || p.name || '').trim(), photo: p.photoURL || '' };
-      }).filter(function(f) {
-        if (!f.name) return false;
-        if (role === 'cohost') return !(t.coHosts || []).some(function(ch) { return ch && ch.uid === f.uid && (ch.status === 'pending' || ch.status === 'active'); });
-        return !(t.arbitros || []).some(function(a) { return a && a.uid === f.uid && (a.status === 'invited' || a.status === 'confirmed'); });
-      });
-      render(); input.focus();
-    }).catch(function() { if (overlay.isConnected) list.textContent = 'Não foi possível carregar seus amigos. Tente novamente.'; });
+    loadFriends().catch(function() {
+      if (overlay.isConnected) list.textContent = 'Não foi possível carregar seus amigos. Tente novamente.';
+    });
   };
 
   // ─── Accept host invite ───────────────────────────────────────────────────

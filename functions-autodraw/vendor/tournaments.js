@@ -3393,7 +3393,7 @@ function renderTournaments(container, tournamentId = null) {
         // FECHA no 1º resultado (ou 1º ponto no placar ao vivo) da R2. window._lateEnrollWindowOpen
         // já é essa regra canônica (round>=2 com resultado, por fase). Depois de fechar, isAberto
         // vira false → +Participante inativo + estado "encerradas (em andamento)".
-        const lateEnrollOpen = lateEnrollManaged && (typeof window._lateEnrollWindowOpen === 'function'
+        const lateEnrollOpen = _openSt.lateOverrideAllowed && lateEnrollManaged && (typeof window._lateEnrollWindowOpen === 'function'
           ? window._lateEnrollWindowOpen(t)
           : t.status !== 'closed');
         const isAberto = _openSt.open || lateEnrollOpen;
@@ -3456,6 +3456,15 @@ function renderTournaments(container, tournamentId = null) {
               ? window._isUserEnrolledInTournament(window.AppStore.currentUser, t) : false);
         const _inscricaoIndefinida = (isParticipating === null);
         const _partesEmErro = (typeof window._partesFalharam === 'function') && window._partesFalharam(t);
+        // A inscrição paga continua acessível mesmo após o fechamento das
+        // inscrições. O índice memberUids inclui reservas pendentes; não
+        // exigir que o elenco pesado já tenha chegado para abrir a consulta
+        // privada de pagamentos da própria conta no servidor.
+        const _myPaymentAccess = !!(tournamentId && !t.isSandbox && window.AppStore.currentUser
+          && t.registrationSettings && t.registrationSettings.source === 'scoreplace'
+          && t.registrationSettings.paymentMethods
+          && (isParticipating === true || Array.isArray(t.memberUids)
+            && t.memberUids.includes(String(window.AppStore.currentUser.uid || ''))));
 
         // v2.1.3: usuário está na LISTA DE ESPERA (standby/waitlist)? Inscrição
         // tardia (pós-sorteio, Fechadas OFF) coloca o novo inscrito aqui — e o
@@ -3829,10 +3838,10 @@ function renderTournaments(container, tournamentId = null) {
         const _regLabel = _regIsClosed ? 'Abrir inscrições' : 'Fechar inscrições';
         const _registration = t.registrationSettings;
         const _regPricing = _registration && _registration.pricing;
-        const _regPaid = _regPricing && (_regPricing.mode === 'single'
+        const _regPaid = _registration && (_registration.passServiceFeeToParticipant === true || _regPricing && (_regPricing.mode === 'single'
           ? Number(_regPricing.cents) > 0
-          : Object.keys(_regPricing.centsByCategory || {}).some(k => Number(_regPricing.centsByCategory[k]) > 0));
-        let toggleRegBtn = ((!hasDraw || (lateEnrollManaged && !_r2Started)) && !isLigaOpenEnroll && isOrg && !(_registration && (_registration.source === 'external' || _regPaid))) ? `<button class="btn ${_regIsClosed ? 'btn-success' : 'btn-danger'} hover-lift" title="${_regIsClosed ? 'Reabrir inscrições' : 'Encerrar inscrições'}" onclick="event.stopPropagation(); window._regBtnBusy&&window._regBtnBusy(this,'${t.id}','${_regIsClosed ? 'Reabrindo…' : 'Encerrando…'}'); window.toggleRegistrationStatus('${t.id}')">${_regLabel}</button>` : '';
+          : Object.keys(_regPricing.centsByCategory || {}).some(k => Number(_regPricing.centsByCategory[k]) > 0)));
+        let toggleRegBtn = ((!hasDraw || (lateEnrollManaged && !_r2Started)) && !isLigaOpenEnroll && isOrg && !(_registration && _registration.source === 'external')) ? `<button class="btn ${_regIsClosed ? 'btn-success' : 'btn-danger'} hover-lift" title="${_regIsClosed ? 'Reabrir inscrições' : 'Encerrar inscrições'}" onclick="event.stopPropagation(); window._regBtnBusy&&window._regBtnBusy(this,'${t.id}','${_regIsClosed ? 'Reabrindo…' : 'Encerrando…'}'); window.toggleRegistrationStatus('${t.id}')">${_regLabel}</button>` : '';
         // v4.1.18: Reabrir/Encerrar EM ANDAMENTO deste torneio → botão cinza "Reabrindo…"/
         // "Encerrando…" (mesma UX do Sortear) mesmo se o detalhe re-renderizar antes de
         // concluir. Limpo em _regBtnDone (dialog/painel/refresh/backstop).
@@ -4217,6 +4226,7 @@ function renderTournaments(container, tournamentId = null) {
                ${enrollBtnHtml}
                ${tournamentId ? `<div style="font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.6;">Inscrição: ${enrollmentText}</div>` : ''}
             </div>` : (tournamentId ? `<div style="display: flex; justify-content: flex-end; margin-top: 6px; font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.6;">Inscrição: ${enrollmentText}</div>` : '')}
+            ${_myPaymentAccess ? `<div style="display:flex;justify-content:flex-end;margin-top:6px;"><button class="btn btn-sm btn-indigo hover-lift" type="button" onclick="event.stopPropagation();window._openTournamentRegistrationPayment('${_escAttr(t.id)}')">💳 Pagamento da inscrição</button></div>` : ''}
 
             ${pendingInviteBannerHtml}
 
@@ -4564,6 +4574,8 @@ function renderTournaments(container, tournamentId = null) {
                 ${_arbitrosBtn}
                 ${window._teamTieDrawVisible(t) ? `<button class="btn btn-tool-amber hover-lift" onclick="event.stopPropagation();window._openTeamTieDrawOrder('${_escAttr(t.id)}')">🎲 Registrar sorteio de desempate</button>` : ''}
                 ${toggleRegBtn}
+                ${t.billingContract && !t.isSandbox ? `<button class="btn btn-indigo hover-lift" onclick="event.stopPropagation();window._openTournamentFeeModal('${_escAttr(t.id)}')">💳 Taxa do torneio</button>` : ''}
+                ${_regPaid && _registration && _registration.paymentMethods && !t.isSandbox ? `<button class="btn btn-indigo hover-lift" onclick="event.stopPropagation();window._openTournamentPaymentReview('${_escAttr(t.id)}')">🧾 Conferir pagamentos</button>` : ''}
                 ${/* v1.3.65/66: "INSCRIÇÕES DURANTE A FASE" (Fechadas/Suplentes Apenas/Novos
                       Confrontos) REMOVIDO das Ferramentas do Organizador — não foi pedido e não
                       serve ali (a escolha de novos confrontos já é feita no sorteio, e a config vem
@@ -4979,7 +4991,7 @@ function renderTournaments(container, tournamentId = null) {
            * mesma medida. A constante já existe; o certo é chamá-la.
            * [[feedback_reuse_what_already_works]] [[feedback_unify_dual_entry_points]] */
           '<div style="' + window._INSCRITO_GRID_SOLO + '">' + _orgCards + '</div>' +
-          (_viewerIsOrg ? '<button type="button" class="btn btn-sm" style="margin-top:8px;" onclick="window._openTournamentFriendInvitePicker(\'' + String(_t.id).replace(/'/g, "\\'") + '\',\'cohost\')">+ Convidar organizador</button>' : '') +
+          (_viewerIsOrg ? '<button type="button" class="btn btn-sm sp-friend-invite-open" style="margin-top:8px;" onclick="window._openTournamentFriendInvitePicker(\'' + String(_t.id).replace(/'/g, "\\'") + '\',\'cohost\')">+ Convidar organizador</button>' : '') +
           _contactBtnHtml + '</div>';
       })();
     }
@@ -5016,7 +5028,7 @@ function renderTournaments(container, tournamentId = null) {
         _refereesHtml = '<section style="margin-top:1.25rem;margin-bottom:0.5rem;">' +
           '<div style="font-size:0.7rem;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);margin-bottom:8px;">ARBITRAGEM</div>' +
           '<div style="' + window._INSCRITO_GRID_SOLO + '">' + _refCards + '</div>' +
-          (_refCanSeeInvites ? '<button type="button" class="btn btn-sm" style="margin-top:8px;" onclick="window._openTournamentFriendInvitePicker(\'' + String(_refTournament.id).replace(/'/g, "\\'") + '\',\'referee\')">+ Convidar árbitro</button>' : '') + '</section>';
+          (_refCanSeeInvites ? '<button type="button" class="btn btn-sm sp-friend-invite-open" style="margin-top:8px;" onclick="window._openTournamentFriendInvitePicker(\'' + String(_refTournament.id).replace(/'/g, "\\'") + '\',\'referee\')">+ Convidar árbitro</button>' : '') + '</section>';
       }
     }
 

@@ -480,10 +480,37 @@ function setupCreateTournamentModal() {
                 <input type="hidden" id="tourn-registration-source" value="scoreplace">
                 <p id="registration-source-desc" style="margin:8px 0;font-size:0.8rem;color:var(--text-muted);"></p>
                 <div id="registration-pricing-controls">
-                  <label for="tourn-registration-price-mode">Valor definido pelo organizador</label>
-                  <select id="tourn-registration-price-mode" onchange="window._registrationSettingsTouched=true;window._renderRegistrationPrices()"><option value="single">Valor único</option><option value="category">Por categoria</option></select>
+                  <span class="registration-field-title">Valor definido pelo organizador</span>
+                  <div class="registration-price-mode" role="group" aria-label="Forma de definir o valor">
+                    <label><input type="radio" name="tourn-registration-price-choice" value="single" checked onchange="window._registrationSettingsTouched=true;document.getElementById('tourn-registration-price-mode').value='single';window._renderRegistrationPrices()"> Valor único</label>
+                    <label><input type="radio" name="tourn-registration-price-choice" value="category" onchange="window._registrationSettingsTouched=true;document.getElementById('tourn-registration-price-mode').value='category';window._renderRegistrationPrices()"> Por categoria</label>
+                  </div>
+                  <input type="hidden" id="tourn-registration-price-mode" value="single">
                   <div id="registration-prices" oninput="window._registrationSettingsTouched=true"></div>
-                  <p style="font-size:0.78rem;color:var(--text-muted);">Gratuita por padrão. Se houver valor, o participante pagará também a taxa de serviço. O checkout de inscrições ainda não está ativo; até sua implantação, inscrições pagas ficam fechadas no app.</p>
+                  <div class="registration-payment-methods">
+                    <span class="registration-field-title">Como o organizador recebe</span>
+                    <label><input type="checkbox" id="tourn-pay-organizer-pix" onchange="window._registrationSettingsTouched=true;window._toggleRegistrationPaymentFields()"> Pix na chave do organizador</label>
+                    <input type="text" id="tourn-organizer-pix-key" class="registration-payment-field" placeholder="Chave Pix do organizador" autocomplete="off" maxlength="77" oninput="window._registrationSettingsTouched=true" hidden>
+                    <input type="text" id="tourn-organizer-pix-name" class="registration-payment-field" placeholder="Nome do titular da chave Pix" autocomplete="off" maxlength="25" oninput="window._registrationSettingsTouched=true" hidden>
+                    <input type="text" id="tourn-organizer-pix-city" class="registration-payment-field" placeholder="Cidade do titular da chave Pix" autocomplete="off" maxlength="15" oninput="window._registrationSettingsTouched=true" hidden>
+                    <label><input type="checkbox" id="tourn-pay-organizer-link" onchange="window._registrationSettingsTouched=true;window._toggleRegistrationPaymentFields()"> Link de pagamento do organizador</label>
+                    <input type="url" id="tourn-organizer-payment-url" class="registration-payment-field" placeholder="https://..." autocomplete="off" maxlength="2048" oninput="window._registrationSettingsTouched=true" hidden>
+                    <p>Estes meios enviam o pagamento diretamente ao organizador. A inscrição fica pendente até a organização conferir o comprovante e o recebimento.</p>
+                  </div>
+                  <section class="registration-fee-simulator" aria-label="Simulação de taxas das inscrições">
+                    <h3>Simulação das inscrições</h3>
+                    <p>Estime com o número de inscritos por valor. Esta simulação considera Pix direto na chave do organizador; não inclui taxas de links próprios. O repasse da taxa de serviço, quando salvo, é acrescentado à cobrança real.</p>
+                    <div id="registration-simulation-counts"></div>
+                    <label><input type="checkbox" id="registration-simulation-pass-financial" disabled> Repassar taxa financeira ao inscrito <small>(Pix direto: R$ 0,00)</small></label>
+                    <label><input type="checkbox" id="registration-simulation-pass-service" onchange="window._registrationSettingsTouched=true"> Acrescentar a taxa de serviço Scoreplace ao valor pago pelo inscrito</label>
+                    <button type="button" class="btn" onclick="window._simulateRegistrationFees()">Simular valores</button>
+                    <div id="registration-simulation-result" role="status" aria-live="polite"></div>
+                  </section>
+                  <p style="font-size:0.78rem;color:var(--text-muted);">Inscrição gratuita por padrão, exceto se a taxa de serviço for acrescentada ao inscrito. Para abrir inscrições pagas, configure Pix ou link próprio e aceite as condições financeiras na ficha do torneio. A organização acerta a taxa do Scoreplace após fechar inscrições e antes do sorteio.</p>
+                </div>
+                <div class="registration-financial-terms-entry">
+                  <p>A taxa do Scoreplace incide sobre as pessoas confirmadas também quando as inscrições vêm de fora. O valor, os prazos e o aceite são os do contrato deste torneio.</p>
+                  <button type="button" class="btn" onclick="window._openTournamentFeeTermsFromEditor()">Ver condições e aceitar</button>
                 </div>
               </div>
 
@@ -611,6 +638,7 @@ function setupCreateTournamentModal() {
                    refere o sorteio". Só vale no sorteio EQUILIBRADO; no livre não há regra. -->
               <div id="gender-ratio-box">
                 <input type="hidden" id="gender-ratio" value="">
+                <input type="checkbox" id="gender-ratio-enabled" checked style="display:none;">
                 <!-- ⭐ 2.1: a trava continua como campo OCULTO porque o save lê por id; quem
                      desenha o toggle é o controle único (gender-ratio-core), e ele espelha
                      aqui. Antes havia 4 pílulas e um toggle DESENHADOS AQUI, e outra cópia
@@ -2883,6 +2911,39 @@ function setupCreateTournamentModal() {
     if (chosen === 'scoreplace') window._renderRegistrationPrices();
   };
 
+  window._openTournamentFeeTermsFromEditor = function() {
+    var tournamentId = (document.getElementById('edit-tournament-id') || {}).value || '';
+    if (!tournamentId) {
+      if (window.showNotification) showNotification('Salve o torneio primeiro',
+        'O contrato e os prazos financeiros ficam disponíveis após criar o torneio.', 'info');
+      return;
+    }
+    if (window._registrationSettingsTouched === true) {
+      if (window.showNotification) showNotification('Salve as alterações primeiro',
+        'As condições devem refletir os valores e meios de pagamento já gravados.', 'info');
+      return;
+    }
+    if (typeof window._openTournamentFeeModal !== 'function') {
+      if (window.showNotification) showNotification('Atualize o aplicativo',
+        'Não foi possível abrir as condições financeiras.', 'error');
+      return;
+    }
+    window._openTournamentFeeModal(tournamentId);
+  };
+
+  window._toggleRegistrationPaymentFields = function() {
+    var pix = document.getElementById('tourn-pay-organizer-pix');
+    var link = document.getElementById('tourn-pay-organizer-link');
+    var pixKey = document.getElementById('tourn-organizer-pix-key');
+    var pixName = document.getElementById('tourn-organizer-pix-name');
+    var pixCity = document.getElementById('tourn-organizer-pix-city');
+    var paymentUrl = document.getElementById('tourn-organizer-payment-url');
+    if (pixKey) pixKey.hidden = !(pix && pix.checked);
+    if (pixName) pixName.hidden = !(pix && pix.checked);
+    if (pixCity) pixCity.hidden = !(pix && pix.checked);
+    if (paymentUrl) paymentUrl.hidden = !(link && link.checked);
+  };
+
   window._renderRegistrationPrices = function(preset) {
     var root = document.getElementById('registration-prices');
     var modeEl = document.getElementById('tourn-registration-price-mode');
@@ -2896,21 +2957,23 @@ function setupCreateTournamentModal() {
     root.replaceChildren();
     var makeInput = function(labelText, value, category) {
       var label = document.createElement('label');
-      label.style.cssText = 'display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;';
+      label.className = 'registration-price-row';
       var name = document.createElement('span'); name.textContent = labelText;
       var input = document.createElement('input');
       input.type = 'text'; input.inputMode = 'decimal'; input.placeholder = '0,00';
+      input.className = 'registration-price-input';
       input.value = value == null ? '0,00' : String(value);
       if (category == null) input.id = 'tourn-registration-price';
       else input.setAttribute('data-registration-category', category);
       label.append(name, input); root.appendChild(label);
     };
     if (modeEl.value !== 'category') {
-      makeInput('R$', preset && preset.cents != null ? (preset.cents / 100).toFixed(2).replace('.', ',') : prior.__single, null);
+      makeInput('R$ · inscrição', preset && preset.cents != null ? (preset.cents / 100).toFixed(2).replace('.', ',') : prior.__single, null);
+      window._renderRegistrationSimulationCounts();
       return;
     }
     var cats = (window._getCreateFormCategoryData && window._getCreateFormCategoryData().combinedCategories) || [];
-    if (!cats.length) { root.textContent = 'Defina as categorias antes dos valores.'; return; }
+    if (!cats.length) { root.textContent = 'Defina as categorias antes dos valores.'; window._renderRegistrationSimulationCounts(); return; }
     cats.forEach(function(category) {
       var cents = preset && preset.centsByCategory && preset.centsByCategory[category];
       makeInput(category + ' · R$', cents != null ? (cents / 100).toFixed(2).replace('.', ',') : prior[category], category);
@@ -2918,6 +2981,75 @@ function setupCreateTournamentModal() {
     var refresh = document.createElement('button'); refresh.type = 'button'; refresh.className = 'btn';
     refresh.textContent = 'Atualizar categorias'; refresh.style.marginTop = '8px';
     refresh.onclick = function() { window._renderRegistrationPrices(); }; root.appendChild(refresh);
+    window._renderRegistrationSimulationCounts();
+  };
+
+  window._registrationSimulationCounts = window._registrationSimulationCounts || {};
+  window._renderRegistrationSimulationCounts = function() {
+    var root = document.getElementById('registration-simulation-counts');
+    var prices = document.getElementById('registration-prices');
+    if (!root || !prices) return;
+    root.replaceChildren();
+    prices.querySelectorAll('.registration-price-input').forEach(function(price) {
+      var category = price.getAttribute('data-registration-category') || '__single';
+      var label = document.createElement('label');
+      label.className = 'registration-simulation-count-row';
+      var title = document.createElement('span');
+      title.textContent = category === '__single' ? 'Número estimado de inscritos' : category + ' · inscritos';
+      var input = document.createElement('input');
+      input.type = 'number'; input.inputMode = 'numeric'; input.min = '0'; input.max = '100000'; input.step = '1';
+      input.value = String(window._registrationSimulationCounts[category] || 0);
+      input.setAttribute('data-simulation-category', category);
+      input.addEventListener('input', function() { window._registrationSimulationCounts[category] = input.value; });
+      label.append(title, input); root.appendChild(label);
+    });
+    var result = document.getElementById('registration-simulation-result');
+    if (result) result.replaceChildren();
+  };
+
+  window._simulateRegistrationFees = async function() {
+    var result = document.getElementById('registration-simulation-result');
+    if (!result) return;
+    result.textContent = 'Calculando';
+    try {
+      if (typeof window._callCF !== 'function') throw new Error('Atualize o aplicativo.');
+      var rows = [];
+      var parseCents = function(value) {
+        var raw = String(value || '').trim().replace(',', '.');
+        if (!/^\d+(?:\.\d{1,2})?$/.test(raw)) throw new Error('Informe o valor com até duas casas decimais.');
+        var cents = Math.round(Number(raw) * 100);
+        if (!Number.isSafeInteger(cents) || cents > 100000000) throw new Error('Valor da inscrição inválido.');
+        return cents;
+      };
+      document.querySelectorAll('#registration-prices .registration-price-input').forEach(function(price) {
+        var category = price.getAttribute('data-registration-category') || '__single';
+        var count = document.querySelector('#registration-simulation-counts [data-simulation-category="' + CSS.escape(category) + '"]');
+        if (!count || !/^\d+$/.test(count.value) || Number(count.value) > 100000) throw new Error('Informe a quantidade de inscritos.');
+        rows.push({ label:category === '__single' ? 'Valor único' : category,
+          registrationCents:parseCents(price.value), participantCount:Number(count.value) });
+      });
+      if (!rows.length) throw new Error('Defina ao menos um valor de inscrição.');
+      var payload = { currency:'BRL', rows:rows, passFinancialFee:false,
+        passServiceFee:document.getElementById('registration-simulation-pass-service').checked };
+      var tournamentId = (document.getElementById('edit-tournament-id') || {}).value;
+      if (tournamentId) payload.tournamentId = tournamentId;
+      var response = await window._callCF('simulateTournamentRegistrationFees', payload, 'Entre na sua conta para simular a cobrança.');
+      var data = response.data || {};
+      var format = function(cents) { return new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' }).format(cents / 100); };
+      var list = document.createElement('div'); list.className = 'registration-simulation-results';
+      var line = function(label, value) { var item = document.createElement('p'); item.textContent = label + ': ' + value; list.appendChild(item); };
+      line('Taxa Scoreplace por inscrito', format(data.serviceFeeCents));
+      data.rows.forEach(function(row) {
+        line(row.label + ' · ' + row.participantCount + ' inscrito(s)',
+          format(row.totalCents) + ' cobrado por pessoa · ' + format(row.organizerCents) + ' líquido por pessoa');
+      });
+      line('Total cobrado dos inscritos', format(data.totals.chargedCents));
+      line('Total de taxas Scoreplace', format(data.totals.serviceFeeCents));
+      line('Total líquido estimado ao organizador', format(data.totals.organizerCents));
+      var note = document.createElement('p');
+      note.textContent = 'Estimativa, não cobrança. Pix direto: a taxa do Scoreplace é acertada após o fechamento das inscrições e antes do sorteio.';
+      list.append(note); result.replaceChildren(list);
+    } catch (error) { result.textContent = error.message || 'Não foi possível simular.'; }
   };
 
   window._readRegistrationSettings = function() {
@@ -2931,7 +3063,33 @@ function setupCreateTournamentModal() {
       return cents;
     };
     var mode = (document.getElementById('tourn-registration-price-mode') || {}).value;
-    if (mode !== 'category') return { source:'scoreplace', pricing:{ mode:'single', cents:parseCents((document.getElementById('tourn-registration-price') || {}).value) } };
+    var methods = {};
+    var pixChecked = (document.getElementById('tourn-pay-organizer-pix') || {}).checked === true;
+    var linkChecked = (document.getElementById('tourn-pay-organizer-link') || {}).checked === true;
+    methods.organizerPixKey = pixChecked ? String((document.getElementById('tourn-organizer-pix-key') || {}).value || '').trim() : '';
+    methods.organizerPixName = pixChecked ? String((document.getElementById('tourn-organizer-pix-name') || {}).value || '').trim() : '';
+    methods.organizerPixCity = pixChecked ? String((document.getElementById('tourn-organizer-pix-city') || {}).value || '').trim() : '';
+    methods.organizerPaymentUrl = linkChecked ? String((document.getElementById('tourn-organizer-payment-url') || {}).value || '').trim() : '';
+    if (pixChecked && !methods.organizerPixKey) throw new Error('Informe a chave Pix do organizador.');
+    if (pixChecked && (!methods.organizerPixName || !methods.organizerPixCity)) throw new Error('Informe nome e cidade do titular da chave Pix.');
+    if (linkChecked) {
+      var parsedPaymentUrl;
+      try { parsedPaymentUrl = new URL(methods.organizerPaymentUrl); } catch (_) { throw new Error('Informe um link de pagamento HTTPS válido.'); }
+      if (parsedPaymentUrl.protocol !== 'https:' || parsedPaymentUrl.username || parsedPaymentUrl.password) {
+        throw new Error('Informe um link de pagamento HTTPS sem credenciais.');
+      }
+    }
+    var withMethods = function(settings) {
+      var original = window._registrationSettingsOriginal;
+      if ((document.getElementById('registration-simulation-pass-service') || {}).checked === true) {
+        settings.passServiceFeeToParticipant = true;
+      }
+      if (methods.organizerPixKey || methods.organizerPaymentUrl || original && original.paymentMethods) {
+        settings.paymentMethods = methods;
+      }
+      return settings;
+    };
+    if (mode !== 'category') return withMethods({ source:'scoreplace', pricing:{ mode:'single', cents:parseCents((document.getElementById('tourn-registration-price') || {}).value) } });
     var cats = (window._getCreateFormCategoryData && window._getCreateFormCategoryData().combinedCategories) || [];
     if (!cats.length) throw new Error('Defina categorias antes de configurar valores por categoria.');
     var map = {};
@@ -2940,7 +3098,7 @@ function setupCreateTournamentModal() {
       if (!input) throw new Error('Atualize os valores para as categorias atuais.');
       map[category] = parseCents(input.value);
     });
-    return { source:'scoreplace', pricing:{ mode:'category', centsByCategory:map } };
+    return withMethods({ source:'scoreplace', pricing:{ mode:'category', centsByCategory:map } });
   };
 
   window._onSportChange = function () {
@@ -5342,9 +5500,28 @@ function setupCreateTournamentModal() {
     window._setVisibility(t.organizerOnly === true ? 'organizers' : t.membersOnly === true ? 'members' : t.isPublic !== false ? 'public' : 'members');
     window._registrationSettingsTouched = false;
     var _regSettingsEdit = t.registrationSettings;
+    window._registrationSettingsOriginal = _regSettingsEdit || null;
     window._setRegistrationSource(_regSettingsEdit && _regSettingsEdit.source === 'external' ? 'external' : 'scoreplace', false);
     var _regModeEdit = document.getElementById('tourn-registration-price-mode');
     if (_regModeEdit) _regModeEdit.value = _regSettingsEdit && _regSettingsEdit.pricing && _regSettingsEdit.pricing.mode === 'category' ? 'category' : 'single';
+    var _regChoiceEdit = document.querySelector('input[name="tourn-registration-price-choice"][value="' + (_regModeEdit ? _regModeEdit.value : 'single') + '"]');
+    if (_regChoiceEdit) _regChoiceEdit.checked = true;
+    var _regMethodsEdit = _regSettingsEdit && _regSettingsEdit.paymentMethods || {};
+    var _pixCheckEdit = document.getElementById('tourn-pay-organizer-pix');
+    var _linkCheckEdit = document.getElementById('tourn-pay-organizer-link');
+    var _pixKeyEdit = document.getElementById('tourn-organizer-pix-key');
+    var _pixNameEdit = document.getElementById('tourn-organizer-pix-name');
+    var _pixCityEdit = document.getElementById('tourn-organizer-pix-city');
+    var _linkUrlEdit = document.getElementById('tourn-organizer-payment-url');
+    if (_pixCheckEdit) _pixCheckEdit.checked = !!_regMethodsEdit.organizerPixKey;
+    if (_linkCheckEdit) _linkCheckEdit.checked = !!_regMethodsEdit.organizerPaymentUrl;
+    if (_pixKeyEdit) _pixKeyEdit.value = _regMethodsEdit.organizerPixKey || '';
+    if (_pixNameEdit) _pixNameEdit.value = _regMethodsEdit.organizerPixName || '';
+    if (_pixCityEdit) _pixCityEdit.value = _regMethodsEdit.organizerPixCity || '';
+    if (_linkUrlEdit) _linkUrlEdit.value = _regMethodsEdit.organizerPaymentUrl || '';
+    var _passServiceEdit = document.getElementById('registration-simulation-pass-service');
+    if (_passServiceEdit) _passServiceEdit.checked = !!(_regSettingsEdit && _regSettingsEdit.passServiceFeeToParticipant);
+    window._toggleRegistrationPaymentFields();
     window._renderRegistrationPrices(_regSettingsEdit && _regSettingsEdit.pricing);
     if (typeof window._tvEditorSetLayout === 'function') window._tvEditorSetLayout(t.tvLayout || null);
     // W.O. não é mais configuração: sempre inicia em individual; a organização escolhe
@@ -5545,8 +5722,10 @@ function setupCreateTournamentModal() {
     (function () {
       var _rEl = document.getElementById('gender-ratio');
       if (!_rEl) return;
-      var _cur = (typeof window._ratioConfigured === 'function') ? window._ratioConfigured(t, 0) : '';
+      var _cur = (typeof window._ratioStored === 'function') ? window._ratioStored(t, 0) : '';
       _rEl.value = _cur || '';
+      var _en = document.getElementById('gender-ratio-enabled');
+      if (_en) _en.checked = t.genderRatioDisabled !== true;
       var _lk = document.getElementById('gender-ratio-lock');
       if (_lk) _lk.checked = (typeof window._ratioIsLocked === 'function') ? window._ratioIsLocked(t) : true;
       // Editando: dá pra saber os gêneros de quem já entrou — é o que faz a seção sumir num
@@ -5960,8 +6139,9 @@ function setupCreateTournamentModal() {
     var _abrir = function (rows) {
       window._showDrawBalanceOverlay({
         rows: rows, mode: _modo,
-        ratio: (t && typeof window._ratioConfigured === 'function' && window._ratioConfigured(t)) ||
+        ratio: (t && typeof window._ratioStored === 'function' && window._ratioStored(t)) ||
                (window._GENDER_RATIO_DEFAULT || '25/75'),
+        enabled: !t || t.genderRatioDisabled !== true,
         locked: (t && typeof window._ratioIsLocked === 'function') ? window._ratioIsLocked(t) : true,
         subtitle: 'O sorteio vai acontecer sozinho na data marcada — a escolha é agora. Dá pra mudar depois, editando o torneio.',
         emptyText: t ? 'Todos os inscritos já têm gênero definido. ✓'
@@ -5969,7 +6149,8 @@ function setupCreateTournamentModal() {
         onConfirm: function (mode, assigned, ratioOpts) {
           // persist:false — quem grava é o próprio salvar, logo em seguida
           if (t) window._applyDrawBalanceChoice(t, mode, assigned,
-            { persist: false, ratio: (ratioOpts && ratioOpts.ratio), locked: (ratioOpts && ratioOpts.locked) });
+            { persist: false, ratio: (ratioOpts && ratioOpts.ratio), locked: (ratioOpts && ratioOpts.locked),
+              enabled: (ratioOpts && ratioOpts.enabled) });
           _seguir(mode === 'equilibrado');
         }
         // Cancelar = fecha e não salva; o formulário fica como estava.
@@ -6002,6 +6183,10 @@ window._ctSetRatioLock = function (travada) {
   var c = document.getElementById('gender-ratio-lock');
   if (c) c.checked = !!travada;
 };
+window._ctSetRatioEnabled = function (enabled) {
+  var c = document.getElementById('gender-ratio-enabled');
+  if (c) c.checked = !!enabled;
+};
 // Guarda os gêneros de quem JÁ está inscrito (só existe no editar). `null` = criação, ainda
 // não dá pra saber — e não saber não faz a seção sumir.
 window._ctRatioGeneros = null;
@@ -6031,9 +6216,12 @@ window._ctPaintRatio = function () {
   var cur = h ? String(h.value || '') : '';
   if (!cur) { cur = window._GENDER_RATIO_DEFAULT; if (h) h.value = cur; }
   var lk = document.getElementById('gender-ratio-lock');
+  var enabledEl = document.getElementById('gender-ratio-enabled');
   mount.innerHTML = window._ratioSliderHtml({
     idp: 'grct', ratio: cur, locked: !lk || lk.checked !== false,
-    onRatio: 'window._ctSetRatio', onLock: 'window._ctSetRatioLock'
+    enabled: !enabledEl || enabledEl.checked !== false,
+    onRatio: 'window._ctSetRatio', onLock: 'window._ctSetRatioLock',
+    onEnabled: 'window._ctSetRatioEnabled'
   });
 };
 window._saveTournamentClickHandler = async function() {
@@ -6358,6 +6546,15 @@ window._saveTournamentClickHandler = async function() {
           creatorUid: window.AppStore.currentUser ? window.AppStore.currentUser.uid : '',
           coHosts: []
         };
+
+        // Opt-out global do gênero: não materializa `false` em torneios legados que
+        // não tinham o campo. Isso evita transformar um save de calendário em mudança
+        // estrutural depois que a chave já existe.
+        var _ratioEnabledForm = document.getElementById('gender-ratio-enabled');
+        var _ratioOriginal = window._editingTournament;
+        if (_ratioEnabledForm && !_ratioEnabledForm.checked) tourData.genderRatioDisabled = true;
+        else if (_ratioOriginal && Object.prototype.hasOwnProperty.call(_ratioOriginal, 'genderRatioDisabled'))
+          tourData.genderRatioDisabled = false;
 
         // Não existe mais um modo suíço persistível. Os controles visuais antigos
         // podem continuar montados enquanto há edições históricas, mas a escolha
@@ -6751,6 +6948,7 @@ window._saveTournamentClickHandler = async function() {
   const btnSave = document.getElementById('btn-save-tournament');
   if (btnSave) btnSave.addEventListener('click', window._saveTournamentClickHandler);
   window._registrationSettingsTouched = false;
+  window._registrationSettingsOriginal = null;
   window._setRegistrationSource('scoreplace', false);
   window._renderRegistrationPrices();
   window._renderEstimatedGameHours();
@@ -8189,6 +8387,7 @@ window._navigateToCreateTournament = function (editId) {
 
 window.renderCreateTournamentPage = function (container, editId) {
   if (!container) return;
+  if (!editId) window._registrationSettingsOriginal = null;
   // A rota pode ser aberta diretamente por refresh/deep-link. Mesmo que exista
   // um objeto local aparentemente completo, o Editor deve começar do servidor.
   // O marco é consumido somente nesta navegação; um novo clique em Editar limpa

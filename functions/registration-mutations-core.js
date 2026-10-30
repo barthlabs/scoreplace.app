@@ -11,6 +11,7 @@
 
 const crypto = require('crypto');
 const { participantKey, registrationId } = require('./registration-core');
+const payment = require('./registration-payment-core');
 
 function text(value) { return typeof value === 'string' ? value.trim() : ''; }
 
@@ -49,10 +50,6 @@ function indexRegistrations(tournamentId, registrations) {
     byId.set(item.registrationId, item);
   });
   return byId;
-}
-
-function statusCanPair(status) {
-  return status === 'confirmed' || status === 'pending';
 }
 
 /* Cria inscrições inéditas ou reativa uma retirada ordinária. A elegibilidade, a janela e
@@ -118,7 +115,7 @@ function pair(tournamentId, registrations, registrationIds) {
   const entries = ids.map((id) => byId.get(id));
   if (entries.some((item) => !item)) throw new Error('inscrição não encontrada');
   if (entries[0].categoryId !== entries[1].categoryId) throw new Error('dupla exige a mesma categoria');
-  if (entries.some((item) => !statusCanPair(item.status))) throw new Error('inscrição sem status elegível para dupla');
+  if (entries.some((item) => !payment.canPair(item))) throw new Error('inscrição sem status elegível para dupla');
   if (entries.some((item) => item.fixedPairId)) throw new Error('inscrição já pertence a uma dupla');
   const fixedPairId = canonicalPairId(tournamentId, entries[0].categoryId, ids);
   const updates = entries.map((item) => Object.assign({}, item, { fixedPairId }));

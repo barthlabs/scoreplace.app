@@ -193,9 +193,17 @@
     var i = ORDEM.indexOf(r); if (i < 0) i = 1;
     var cfg = RATIOS[r];
     var travada = (o.locked !== false);
+    var enabled = o.enabled !== false;
     return '<div id="' + idp + '-box" style="background:rgba(34,197,94,0.05);border:1px solid rgba(34,197,94,0.20);border-radius:12px;padding:1rem;margin-bottom:1rem;">' +
       '<p style="margin:0 0 0.35rem;font-size:0.8rem;color:var(--ratio-verde,#22c55e);font-weight:600;text-transform:uppercase;letter-spacing:1px;"><span style="margin-right:5px;">⚖️</span>Proporção do sorteio</p>' +
       '<p style="margin:0 0 0.9rem;font-size:0.74rem;color:var(--text-muted,#94a3b8);line-height:1.4;">Homens / mulheres em cada 4 pessoas sorteadas (grupo Rei/Rainha ou jogo). Vale no sorteio equilibrado.</p>' +
+      '<div class="toggle-row" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(34,197,94,0.25);background:rgba(34,197,94,0.07);">' +
+        '<div class="toggle-row-label"><span style="font-weight:700;color:var(--text-color,#f1f5f9);font-size:0.88rem;">Aplicar proporção de gênero</span></div>' +
+        '<label class="toggle-switch"><input type="checkbox" id="' + idp + '-enabled"' + (enabled ? ' checked' : '') +
+          ' onchange="window._ratioSliderEnabled(\'' + idp + '\', this.checked); ' + (o.onEnabled || 'window._ratioSliderNoop') + '(this.checked)">' +
+          '<span class="toggle-slider"></span></label>' +
+      '</div>' +
+      '<div id="' + idp + '-controls" style="display:' + (enabled ? 'block' : 'none') + ';margin-top:12px;">' +
       // A LEITURA em cima do slider: o PERCENTUAL grande e em verde (é como o valor está
       // gravado e como o slider fala), a composição H/M embaixo, menor. Pedido do dono
       // (22/ago/2026) — antes era o contrário. `-face` = linha grande, `-pct` = linha menor.
@@ -218,7 +226,7 @@
         '<label class="toggle-switch"><input type="checkbox" id="' + idp + '-lock"' + (travada ? ' checked' : '') +
           ' onchange="window._ratioSliderLock(\'' + idp + '\', this.checked); ' + (o.onLock || 'window._ratioSliderNoop') + '(this.checked)">' +
           '<span class="toggle-slider"></span></label>' +
-      '</div>' +
+      '</div></div>' +
     '</div>';
   };
   // O texto da trava também é um só — era outra coisa que divergia entre as duas telas.
@@ -239,11 +247,16 @@
     var d = document.getElementById(idp + '-lockdesc');
     if (d) d.textContent = window._ratioLockDesc(!!travada);
   };
+  window._ratioSliderEnabled = function (idp, enabled) {
+    var controls = document.getElementById(idp + '-controls');
+    if (controls) controls.style.display = enabled ? 'block' : 'none';
+  };
 
   window._ratioForPhase = function (t, phaseIdx, category) {
     if (!t) return '';
     if (window._drawModeIsLivre && window._drawModeIsLivre(t)) return '';
     if (!window._ratioAppliesTo(t, category)) return '';   // separado por gênero → sem proporção
+    if (t.genderRatioDisabled === true) return '';
     var r = window._ratioConfigured(t, phaseIdx);
     return r || window._GENDER_RATIO_DEFAULT;
   };
@@ -258,13 +271,16 @@
   //     regra dura por default deixaria QUALQUER torneio cujos inscritos não preencheram
   //     gênero sortear ZERO grupos — o organizador clica Sortear e não sai nada.
   // Escolhida a proporção na fase, ela vale nos DOIS (é o "trava tudo" pedido pelo dono).
-  window._ratioConfigured = function (t, phaseIdx, category) {
+  window._ratioStored = function (t, phaseIdx) {
     if (!t) return '';
-    if (!window._ratioAppliesTo(t, category)) return '';
     var i = (phaseIdx == null) ? (t.currentPhaseIndex || 0) : phaseIdx;
     var ph = (Array.isArray(t.phases) && t.phases[i]) ? t.phases[i] : null;
     var r = String((ph && ph.genderRatio) || t.genderRatio || '');
     return RATIOS[r] ? r : '';
+  };
+  window._ratioConfigured = function (t, phaseIdx, category) {
+    if (!t || t.genderRatioDisabled === true || !window._ratioAppliesTo(t, category)) return '';
+    return window._ratioStored(t, phaseIdx);
   };
 
   // Sorteio livre? (o campo é o mesmo que o motor de duplas já lê)

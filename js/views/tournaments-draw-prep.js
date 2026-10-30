@@ -3486,6 +3486,8 @@ window.toggleRegistrationStatus = function (tId) {
                 'Torneio não encontrado.',
                 'Só a organização altera as inscrições.',
                 'O torneio já foi encerrado.',
+                'Configure o recebimento direto e aceite as condições financeiras antes de abrir inscrições pagas.',
+                'Aceite as condições financeiras atuais antes de abrir inscrições pagas.',
                 'A inscrição tardia não está disponível neste torneio.',
                 'Depois da chave, use a inscrição tardia.'
             ];

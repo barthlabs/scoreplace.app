@@ -406,16 +406,29 @@ namespace ScoreplaceWaitlist {
     return true;
   }
 
-  export function enrollmentOpenState(tournament: Tournament | null | undefined, nowMs?: number): { open: boolean; ligaOpen: boolean; sorteio: boolean; deadlinePassed: boolean; notOpenYet: boolean; opensAt: number | null } {
-    if (!tournament) return { open: false, ligaOpen: false, sorteio: false, deadlinePassed: false, notOpenYet: false, opensAt: null };
+  export function enrollmentOpenState(tournament: Tournament | null | undefined, nowMs?: number): { open: boolean; ligaOpen: boolean; sorteio: boolean; deadlinePassed: boolean; notOpenYet: boolean; opensAt: number | null; lateOverrideAllowed: boolean } {
+    if (!tournament) return { open: false, ligaOpen: false, sorteio: false, deadlinePassed: false, notOpenYet: false, opensAt: null, lateOverrideAllowed: false };
     const registration = record(tournament.registrationSettings) || {};
     const pricing = record(registration.pricing) || {};
     const categoryPrices = record(pricing.centsByCategory) || {};
     const paid = pricing.mode === 'single'
       ? Number(pricing.cents) > 0
       : pricing.mode === 'category' && Object.keys(categoryPrices).some(key => Number(categoryPrices[key]) > 0);
-    if (registration.source === 'external' || paid)
-      return { open: false, ligaOpen: false, sorteio: false, deadlinePassed: false, notOpenYet: false, opensAt: null };
+    const lateOverrideAllowed = registration.source !== 'external'
+      && !(registration.source === 'scoreplace' && (paid || registration.passServiceFeeToParticipant === true));
+    if (registration.source === 'external')
+      return { open: false, ligaOpen: false, sorteio: false, deadlinePassed: false, notOpenYet: false, opensAt: null, lateOverrideAllowed };
+    if (!lateOverrideAllowed) {
+      const methods = record(registration.paymentMethods) || {};
+      const direct = Boolean(text(methods.organizerPixKey) || text(methods.organizerPaymentUrl));
+      const contract = record(tournament.billingContract);
+      const migration = record(tournament.canonicalRegistrationMigration);
+      const acceptance = record(tournament.billingTermsAcceptance);
+      const accepted = Boolean(contract && contract.schema === 1 && migration && migration.fingerprint
+        && acceptance && acceptance.hash);
+      if (!direct || !accepted || phaseDrawDone(tournament))
+        return { open: false, ligaOpen: false, sorteio: false, deadlinePassed: false, notOpenYet: false, opensAt: null, lateOverrideAllowed };
+    }
     /* A inscrição após o sorteio é política da FASE corrente. Um torneio
      * multifase pode ter começado como Liga, mas estar na eliminatória agora:
      * o rótulo de topo não pode reabrir aquela fase. Documentos sem fases
@@ -443,7 +456,7 @@ namespace ScoreplaceWaitlist {
      * Abertura/fechamento agendados são avaliados pelo relógio, não por timer da
      * página; status fechado manualmente continua fechado mesmo depois do horário. */
     const ligaOpen = allowsLateEnrollment && tournament.ligaOpenEnrollment !== false && tournament.status !== 'closed' && tournament.status !== 'finished' && !notOpenYet && !deadlinePassed;
-    return { open: (tournament.status !== 'closed' && tournament.status !== 'finished' && !sorteio && !notOpenYet && !deadlinePassed) || !!ligaOpen, ligaOpen, sorteio, deadlinePassed, notOpenYet, opensAt: Number.isFinite(opensAt) ? opensAt : null };
+    return { open: (tournament.status !== 'closed' && tournament.status !== 'finished' && !sorteio && !notOpenYet && !deadlinePassed) || !!ligaOpen, ligaOpen, sorteio, deadlinePassed, notOpenYet, opensAt: Number.isFinite(opensAt) ? opensAt : null, lateOverrideAllowed };
   }
 
   /** Quem ocupa confronto ou grupo da fase atual; folga nunca conta como jogo. */

@@ -185,6 +185,18 @@ console.log('\n──── leitura da configuração: fase manda, topo é fallb
     win._ratioForPhase({ _drawBalanceMode: 'equilibrado', genderRatio: '25/75' }, 0) === '25/75');
   t('livre continua sem proporção nenhuma',
     win._ratioForPhase({ _drawBalanceMode: 'livre' }, 0) === '');
+  const desligado = { ...base, genderRatioDisabled: true };
+  t('desligar no topo vence a proporção das duas fases',
+    win._ratioForPhase(desligado, 0) === '' && win._ratioForPhase(desligado, 1) === '');
+  t('e o sorteio inicial não relê a proporção guardada',
+    win._ratioConfigured(desligado, 0) === '' && win._ratioConfigured(desligado, 1) === '');
+  t('o valor escolhido continua guardado para reativar',
+    win._ratioStored(desligado, 0) === '50/50' && win._ratioStored(desligado, 1) === '25/75');
+  t('false explícito preserva a regra anterior',
+    win._ratioForPhase({ ...base, genderRatioDisabled: false }, 0) === '50/50');
+  const ctrlOff = win._ratioSliderHtml({ idp: 'test-ratio', ratio: '25/75', enabled: false });
+  t('controle desligado esconde slider e trava, sem apagar o valor',
+    ctrlOff.includes('id="test-ratio-controls" style="display:none') && ctrlOff.includes('id="test-ratio-slider"') && ctrlOff.includes('value="0"'));
 }
 
 console.log('\n──── o toggle: TRAVADO é o default; destravar é escolha explícita ────');
@@ -405,7 +417,7 @@ console.log('\n──── a proporção está nas duas telas, com o mesmo togg
      /id="gd-mode-livre"/.test(draw) && /id="gd-mode-equilibrado"/.test(draw) &&
      /Sorteio puro, sem olhar gênero/.test(draw));
   t('a escolha da tela é persistida na FASE', /t\.phases\[_pi\]\.genderRatio = opts\.ratio/.test(draw));
-  t('e no LIVRE não grava proporção', /mode === 'equilibrado' && opts\.ratio/.test(draw));
+  t('e no LIVRE não grava proporção', /mode === 'equilibrado' && opts\.enabled !== false && opts\.ratio/.test(draw));
 
   t('criar/editar tem a caixa da proporção', /id="gender-ratio-box"/.test(form));
   // ⭐ 2.1: "Sem regra" MORREU. O dono fechou que o default do app é 50/50 e que o slider tem
@@ -426,7 +438,11 @@ console.log('\n──── a proporção está nas duas telas, com o mesmo togg
      && /_EXT_IDS = \[[^\]]*'phase-dates-box'[^\]]*\]/.test(f2));
   t('o salvar grava a proporção', /tourData\.genderRatio =/.test(form));
   t('e "Sem regra" APAGA a regra (grava null, não omite)', /: null;/.test(form.split('tourData.genderRatio =')[1].split('\n')[0] + ';'));
-  t('editar repopula com o que está gravado', /_ratioConfigured\(t, 0\)/.test(form));
+  t('editar repopula com o valor bruto, mesmo com opt-out', /_ratioStored\(t, 0\)/.test(form));
+  t('a formação de duplas equilibrada respeita opt-out',
+    /balanceMode === 'equilibrado' && teamSize === 2 && !\(pairingConfig && pairingConfig\.genderRatioDisabled === true\)/.test(draw));
+  t('o espalhamento de grupos respeita opt-out',
+    /numGroups > 1 && !_travadaAqui && t\.genderRatioDisabled !== true/.test(R('bracket-logic.js')));
 
   t('a caixa da lista de espera mostra a proporção vigente', /_wlRatioTxt/.test(brk));
   t('e o rótulo do toggle virou "Travar proporção"', /Travar proporção/.test(brk));
@@ -435,6 +451,25 @@ console.log('\n──── a proporção está nas duas telas, com o mesmo togg
   t('e o aviso do toggle diz QUAL é a proporção', /_ratioLabel/.test(bui));
 }
 
+
+console.log('\n──── duplas: modo equilibrado sem proporção não separa por gênero ────');
+{
+  const vm = require('vm');
+  const p = ['H1', 'H2', 'M1', 'M2'].map((name, i) => ({
+    uid: 'ratio-' + i, displayName: name, gender: name[0] === 'H' ? 'masculino' : 'feminino'
+  }));
+  vm.runInContext('globalThis.__ratioOldRandom = Math.random; Math.random = () => 0.999', H.sandbox);
+  try {
+    const ativo = win._formDoublesTeams(p, 2, {}, 'equilibrado', { genderRatioDisabled: false });
+    const desligado = win._formDoublesTeams(p, 2, {}, 'equilibrado', { genderRatioDisabled: true });
+    t('ativo distribui um homem e uma mulher em cada dupla',
+      ativo.participants.every(team => team.participants[0].gender !== team.participants[1].gender));
+    t('desligado respeita a ordem embaralhada sem balancear gênero',
+      desligado.participants.map(team => team.displayName).join('|') === 'H1 / H2|M1 / M2');
+  } finally {
+    vm.runInContext('Math.random = globalThis.__ratioOldRandom; delete globalThis.__ratioOldRandom', H.sandbox);
+  }
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ⭐ 2.1 — O CONTROLE RODANDO DE VERDADE (não só o arquivo lido)

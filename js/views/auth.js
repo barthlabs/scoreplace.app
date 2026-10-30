@@ -5124,6 +5124,11 @@ async function simulateLoginSuccess(user) {
       : '';
 
     container.innerHTML = hdr;
+    var financeSlot = document.createElement('div');
+    container.appendChild(financeSlot);
+    if (typeof window._renderTournamentFinanceAdminEntry === 'function') {
+      window._renderTournamentFinanceAdminEntry(financeSlot);
+    }
     // Mover o .modal pra dentro do container (preserva listeners + state).
     container.appendChild(modalInner);
     // v1.3.29-beta: limpar inline `overflow-y: auto` que setupProfileModal

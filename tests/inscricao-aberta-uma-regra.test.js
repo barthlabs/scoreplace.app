@@ -30,6 +30,7 @@ vm.createContext(sb);
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'waitlist-core.js'), 'utf8'), sb, { filename: 'waitlist-core.js' });
 const cliente = sb._enrollmentOpenState;
 ok(typeof cliente === 'function', 'window._enrollmentOpenState existe no waitlist-core');
+const dominio = require(path.join(__dirname, '..', 'js', 'domain', 'waitlist.js')).enrollmentOpenState;
 
 // ── lado do SERVIDOR (require direto — módulo puro) ────────────────────────────
 const servidor = require(path.join(__dirname, '..', 'functions', 'enroll-core.js')).enrollmentOpen;
@@ -72,6 +73,38 @@ formatos.forEach(function (fmt) {
 });
 pass++; // a matriz inteira conta como uma asserção de paridade
 console.log('  ✓ paridade cliente×servidor em ' + casos + ' combinações');
+
+// Regra financeira: o pagamento direto habilitado não deve desaparecer da UI.
+// O mesmo conjunto roda no fallback da tela, no domínio efetivamente publicado e
+// na Function. Inscrição gratuita com taxa repassada também é paga.
+const paymentCases = [
+  { label:'externa', settings:{ source:'external' }, expected:false },
+  { label:'gratuita', settings:{ source:'scoreplace', pricing:{ mode:'single', cents:0 } }, expected:true },
+  { label:'paga sem meio', settings:{ source:'scoreplace', pricing:{ mode:'single', cents:1000 } }, expected:false },
+  { label:'paga sem aceite', settings:{ source:'scoreplace', pricing:{ mode:'single', cents:1000 }, paymentMethods:{ organizerPixKey:'pix@example.com' } }, expected:false },
+  { label:'paga com Pix próprio', settings:{ source:'scoreplace', pricing:{ mode:'single', cents:1000 }, paymentMethods:{ organizerPixKey:'pix@example.com' } }, accepted:true, expected:true },
+  { label:'paga com link próprio', settings:{ source:'scoreplace', pricing:{ mode:'category', centsByCategory:{ A:1000 } }, paymentMethods:{ organizerPaymentUrl:'https://example.com/pagar' } }, accepted:true, expected:true },
+  { label:'valor zero com taxa repassada sem meio', settings:{ source:'scoreplace', pricing:{ mode:'single', cents:0 }, passServiceFeeToParticipant:true }, expected:false },
+  { label:'valor zero com taxa repassada e Pix', settings:{ source:'scoreplace', pricing:{ mode:'single', cents:0 }, passServiceFeeToParticipant:true, paymentMethods:{ organizerPixKey:'pix@example.com' } }, accepted:true, expected:true },
+];
+for (const testCase of paymentCases) {
+  for (const drawn of [false, true]) {
+    const tournament = { status:'open', registrationSettings:testCase.settings,
+      ...(testCase.accepted ? { billingContract:{ schema:1 }, canonicalRegistrationMigration:{ fingerprint:'abc' }, billingTermsAcceptance:{ hash:'def' } } : {}),
+      ...(drawn ? { rounds:[{}] } : {}) };
+    const expected = !drawn && testCase.expected;
+    const results = [cliente(tournament, AGORA).open, dominio(tournament, AGORA).open,
+      servidor(tournament, AGORA).open].map(Boolean);
+    ok(results.every(result => result === expected),
+      testCase.label + (drawn ? ' após sorteio' : ' antes do sorteio') + ': UI, domínio e servidor concordam');
+    const allowLate = testCase.settings.source !== 'external'
+      && !testCase.settings.passServiceFeeToParticipant
+      && testCase.settings.pricing?.mode === 'single' && testCase.settings.pricing.cents === 0;
+    ok(cliente(tournament, AGORA).lateOverrideAllowed === allowLate
+      && dominio(tournament, AGORA).lateOverrideAllowed === allowLate,
+    testCase.label + ': inscrição tardia não contorna origem ou pagamento');
+  }
+}
 
 // ── os CASOS DO INCIDENTE, nomeados ────────────────────────────────────────────
 ok(cliente({ format: 'Liga', status: 'closed', registrationLimit: ONTEM }, AGORA).open === false,
@@ -118,6 +151,10 @@ ok(/ligaOpenEnrollment !== false && sorteioRealizado/.test(enr) === false,
   'REGRESSÃO: nenhuma cópia local de ligaAberta-com-sorteio pode voltar no enrollment');
 ok(/_enrollmentOpenState\(t\)/.test(tour), 'tournaments.js (render do detalhe) usa a fonte única');
 ok((dash.match(/_enrollmentOpenState/g) || []).length >= 3, 'dashboard usa a fonte única nos gates');
+ok(/_openSt\.lateOverrideAllowed && lateEnrollManaged/.test(tour)
+  && (dash.match(/lateOverrideAllowed/g) || []).length >= 3
+  && /_enrollmentOpenState\(t\)\.lateOverrideAllowed/.test(enr),
+  'detalhe, dashboard e inscrição tardia respeitam o veto canônico para pagamentos e origem externa');
 
 // auto-close do render: numa Liga aberta o isAberto canônico é true → o bloco não dispara.
 ok(/isAberto = _openSt\.open \|\| lateEnrollOpen/.test(tour),

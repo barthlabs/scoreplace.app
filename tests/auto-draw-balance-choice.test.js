@@ -11,6 +11,7 @@
 const fs = require('fs'), path = require('path');
 const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'create-tournament.js'), 'utf8');
 const draw = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments-draw.js'), 'utf8');
+const server = fs.readFileSync(path.join(__dirname, '..', 'functions-autodraw', 'index.js'), 'utf8');
 let pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
 
@@ -70,6 +71,14 @@ ok(/t\._drawBalanceMode = mode;/.test(apply), 'grava o modo que manda na formaç
 ok(/t\.equilibrado = \(mode === 'equilibrado'\);/.test(apply), 'e o que manda no espalhamento dentro dos grupos');
 ok(/_callFn\('setDrawBalanceChoice'/.test(apply), 'o torneio existente só despacha a intenção para a Function');
 ok(!/commitTournamentTx|AppStore\.mutate/.test(apply), 'não reintroduz escrita do navegador para reaplicar a decisão');
+ok(/genderRatioDisabled: opts\.enabled === false/.test(apply), 'opt-out chega à callable como booleano');
+const choice = server.slice(server.indexOf('exports.setDrawBalanceChoice ='), server.indexOf('// ─── Edição da ficha:', server.indexOf('exports.setDrawBalanceChoice =')));
+ok(/data\.genderRatioDisabled !== undefined && typeof data\.genderRatioDisabled !== 'boolean'/.test(choice), 'servidor recusa string false e outros não-booleanos');
+ok(choice.indexOf('if (data.genderRatioDisabled !== undefined) t.genderRatioDisabled = data.genderRatioDisabled;') > 0 &&
+   choice.indexOf('if (data.genderRatioDisabled !== undefined) t.genderRatioDisabled = data.genderRatioDisabled;') < choice.indexOf("if (mode === 'equilibrado' && hasRatio"),
+   'servidor grava opt-out mesmo quando ratio vem vazio');
+ok(/mode === 'equilibrado' && hasRatio && ratioApplies && t\.genderRatioDisabled !== true/.test(choice),
+   'opt-out não apaga ratio salvo nem altera a trava');
 
 console.log((fail ? '✗' : '✓') + ' auto-draw-balance-choice: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);

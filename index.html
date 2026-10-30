@@ -68,7 +68,7 @@
   <link rel="stylesheet" href="css/paleta.css?v=2.0.118">
   
   <link rel="stylesheet" href="css/style.css?v=2.5.27">
-  <link rel="stylesheet" href="css/components.css?v=2.5.74">
+  <link rel="stylesheet" href="css/components.css?v=2.5.80">
   <link rel="stylesheet" href="css/layout.css?v=2.0.118">
   <link rel="stylesheet" href="css/bracket.css?v=2.5.65">
   <link rel="stylesheet" href="css/responsive.css?v=2.4.83">
@@ -635,10 +635,10 @@
        servidor carrega o MESMO arquivo antes de gravar — ver persist-core.js -->
   <script src="js/views/persist-core.js?v=2.4.118" defer></script>
   <!-- Contrato tipado da lista de espera; adaptador clássico e motor usam a mesma regra. -->
-  <script src="js/domain/waitlist.js?v=2.5.64" defer></script>
+  <script src="js/domain/waitlist.js?v=2.5.80" defer></script>
   <!-- Cânone da LISTA DE ESPERA (3 storages). Extraído do store.js: a Cloud Function
        integrateLateEntries carrega o MESMO arquivo — ver waitlist-core.js -->
-  <script src="js/views/waitlist-core.js?v=2.4.18" defer></script>
+  <script src="js/views/waitlist-core.js?v=2.5.80" defer></script>
   <!-- Contrato tipado da classificação: critérios, confronto direto, ordem da chave e tie-break. -->
   <script src="js/domain/standings.js?v=2.5.48" defer></script>
   <!-- Contrato da tabela por times: duplas jogam por categoria; o time agrega pontos. -->
@@ -649,7 +649,7 @@
   <script src="js/views/standings-core.js?v=2.3.23" defer></script>
   <!-- proporção de gênero do sorteio equilibrado (50/50 · 25/75 · 75/25) — PURO e
        vendorável: o mesmo módulo decide o sorteio inicial e a formação por lista de espera -->
-  <script src="js/views/gender-ratio-core.js?v=2.0.118" defer></script>
+  <script src="js/views/gender-ratio-core.js?v=2.5.80" defer></script>
   <!-- ⭐ TABELA DE COR, lado dinâmico: traduz `cor -> var(--token, cor)` quando a cor
        chega por variável (`'color:' + cor`). Tem que vir ANTES de quem desenha. -->
   <script src="js/paleta-tabela.js?v=2.0.118"></script>
@@ -679,7 +679,7 @@
   <script src="js/views/delete-account.js?v=2.0.118" defer></script>
   <script src="js/views/terms-acceptance.js?v=2.3.88" defer></script>
   <script src="js/domain/next-match.js?v=2.5.35" defer></script>
-  <script src="js/views/dashboard.js?v=2.5.55" defer></script>
+  <script src="js/views/dashboard.js?v=2.5.80" defer></script>
   <script src="js/views/presence.js?v=2.5.30" defer></script>
   <script src="js/views/venues.js?v=2.5.30" defer></script>
   <script src="js/domain/match-day.js?v=2.5.51" defer></script>
@@ -689,11 +689,14 @@
   <script src="js/views/tournament-sumula.js?v=2.5.40" defer></script>
   <script src="js/views/tournaments-analytics.js?v=2.3.311" defer></script>
   <script src="js/views/tournaments-organizer.js?v=2.5.73" defer></script>
-  <script src="js/views/host-transfer.js?v=2.5.78" defer></script>
+  <script src="js/views/host-transfer.js?v=2.5.80" defer></script>
   <script src="js/views/tournaments-categories.js?v=2.4.77" defer></script>
   <script src="js/domain/referee-roster.js?v=2.5.31" defer></script>
-  <script src="js/views/tournaments.js?v=2.5.78" defer></script>
-  <script src="js/views/tournaments-enrollment.js?v=2.4.119" defer></script>
+  <script src="js/views/tournament-billing.js?v=2.5.80" defer></script>
+  <script src="js/domain/pix-brcode.js?v=2.5.80" defer></script>
+  <script src="js/views/tournament-registration-payment.js?v=2.5.80" defer></script>
+  <script src="js/views/tournaments.js?v=2.5.80" defer></script>
+  <script src="js/views/tournaments-enrollment.js?v=2.5.80" defer></script>
   <script src="js/views/tournaments-org-tools.js?v=2.4.58" defer></script>
   <script src="js/views/tournaments-import-parser.js?v=2.4.57" defer></script>
   <script src="js/views/tournaments-import-allocation.js?v=2.4.57" defer></script>
@@ -704,8 +707,8 @@
   <script src="js/views/schedule-poll.js?v=2.5.72" defer></script>
   <script src="js/views/schedule-organizer.js?v=2.4.119" defer></script>
   <script src="js/views/wa-group.js?v=2.4.130" defer></script>
-  <script src="js/views/tournaments-draw-prep.js?v=2.5.64" defer></script>
-  <script src="js/views/tournaments-draw.js?v=2.5.76" defer></script>
+  <script src="js/views/tournaments-draw-prep.js?v=2.5.80" defer></script>
+  <script src="js/views/tournaments-draw.js?v=2.5.80" defer></script>
   <!-- Núcleos PUROS da aplicação das decisões do pré-sorteio (resto/pow2/ímpar/sem-dupla/
        chamada). Os painéis chamam DAQUI e a Cloud Function drawRound carrega o MESMO
        arquivo (vendorado) — um dono só pra cada conta. Ver docs/sorteio-ciclo-decisoes.md -->
@@ -713,11 +716,11 @@
   <!-- L6.R2.1: tipo canônico do local do evento (number|null) + espelho do resolvedor de fuso, só pro aviso da tela. ANTES de create-tournament.js, que o usa. -->
   <script src="js/views/venue-geo-core.js?v=2.1.81" defer></script>
   <script src="js/tv-layout-core.js?v=2.5.52" defer></script>
-  <script src="js/views/create-tournament.js?v=2.5.73" defer></script>
+  <script src="js/views/create-tournament.js?v=2.5.80" defer></script>
   <!-- v4.4.x — reescrita do motor de formato: configurador único (substitui empilhamento de fases) -->
   <script src="js/views/format2.js?v=2.5.63" defer></script>
   <script src="js/views/format2-ui.js?v=2.5.49" defer></script>
-  <script src="js/views/bracket-logic.js?v=2.5.48" defer></script>
+  <script src="js/views/bracket-logic.js?v=2.5.80" defer></script>
   <script src="js/views/bracket-model.js?v=2.5.72" defer></script>
   <script src="js/domain/match-timing.js?v=2.5.17" defer></script>
   <script src="js/domain/court-occupancy.js?v=2.5.17" defer></script>
@@ -753,7 +756,7 @@
   <!-- Entrar sem senha: a chave é DESCOBRÍVEL, então a pessoa não digita nome nem e-mail.
        Medido: 4 dos 9 pares de conta duplicada são Apple+Google, gente que não achou a própria conta. -->
   <script src="js/views/passkey.js?v=2.3.111" defer></script>
-  <script src="js/views/auth.js?v=2.4.118" defer></script>
+  <script src="js/views/auth.js?v=2.5.80" defer></script>
   <script src="js/views/letzplay-profile.js?v=2.0.118" defer></script>
   <!-- COLOCAÇÃO FINAL (window._lzPlacement). Nasceu na 1.8.6, provado por 37 asserções
        contra a chave real do T&F 449729 — e ficou dois dias SEM ESTA LINHA: o arquivo

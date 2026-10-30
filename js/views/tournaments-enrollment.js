@@ -295,6 +295,7 @@ function _checkEnrollmentEligibility(t, user) {
 
 // Helper: check if late enrollment to standby is allowed
 function _allowsLateEnrollment(t) {
+  if (!window._enrollmentOpenState(t).lateOverrideAllowed) return false;
   // v1.3.134 (regra do dono): "inscrições durante a fase" é UMA regra só — o toggle standby/expand
   // abre a inscrição tardia e a JANELA fica aberta na R1, fechando no 1º PLACAR LANÇADO da R2.
   // Fonte ÚNICA: _lateEnrollWindowOpen (toggle + status + janela R1→R2). Antes esta função olhava
@@ -467,6 +468,12 @@ window._applyEnrollResult = function (t, tId, res, ctx) {
   res = res || {}; ctx = ctx || {};
   var name = ctx.name || '';
   var toast = function (title, msg, kind) { if (typeof showNotification !== 'undefined') showNotification(title, msg, kind); };
+  if (ctx.self && (Array.isArray(res.paymentDue) && res.paymentDue.length
+    || res.alreadyEnrolled && t.registrationSettings && t.registrationSettings.paymentMethods)) {
+    if (typeof window._openTournamentRegistrationPayment === 'function') {
+      window._openTournamentRegistrationPayment(tId);
+    }
+  }
 
   var verdict;
   if (res.capacityFull) verdict = 'capacityFull';
@@ -512,8 +519,12 @@ window._applyEnrollResult = function (t, tId, res, ctx) {
         name + ' entrou na LISTA DE ESPERA — a fase atual já está sorteada; entra no próximo confronto.', 'success');
     }
   } else if (verdict === 'enrolled' && ctx.successToast) {
-    // ⚠️ `enroll.enrolledMsg` interpola o nome do TORNEIO, não o da pessoa.
-    toast(_t('enroll.enrolledTitle'), _t('enroll.enrolledMsg', { name: t.name || '' }), 'success');
+    if (Array.isArray(res.paymentDue) && res.paymentDue.length) {
+      toast('Inscrição pendente', 'Pague e envie o comprovante. A vaga só será confirmada após a conferência.', 'info');
+    } else {
+      // ⚠️ `enroll.enrolledMsg` interpola o nome do TORNEIO, não o da pessoa.
+      toast(_t('enroll.enrolledTitle'), _t('enroll.enrolledMsg', { name: t.name || '' }), 'success');
+    }
   }
   // verdict 'dupSuspect' NÃO ganha toast: o diálogo abaixo é a mensagem (com o "PARECE",
   // a conta mascarada e o "não sou eu") — o toast "já inscrito" aqui seria a mentira
@@ -1029,6 +1040,11 @@ window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
       ? window._isUserEnrolledInTournament(user, t)
       : false);
     if (alreadyIn) {
+        if (t.registrationSettings && t.registrationSettings.paymentMethods
+          && typeof window._openTournamentRegistrationPayment === 'function') {
+            window._openTournamentRegistrationPayment(tId);
+            return;
+        }
         if (typeof showNotification !== 'undefined') showNotification(_t('enroll.alreadyEnrolled'), _t('enroll.alreadyEnrolledMsg'), 'info');
         window._scrollToParticipant(tId, user.displayName);
         return;
@@ -1064,23 +1080,27 @@ window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
     // mas o que entra no array é uma CÓPIA (Object.assign), então a recusa não removia NADA
     // da tela e a pessoa seguia se vendo "inscrita" até o próximo snapshot.
     var _pushedEnroll = Object.assign({}, participantObj, { _pendingEnroll: true });
-    t.participants.push(_pushedEnroll);
+    var _pricing = t.registrationSettings && t.registrationSettings.pricing;
+    var _paidEnrollment = !!(_pricing && (_pricing.mode === 'single' ? Number(_pricing.cents) > 0
+      : Object.keys(_pricing.centsByCategory || {}).some(function(key) { return Number(_pricing.centsByCategory[key]) > 0; }))
+      || t.registrationSettings && t.registrationSettings.passServiceFeeToParticipant === true);
+    if (!_paidEnrollment) t.participants.push(_pushedEnroll);
 
     // Show success and navigate immediately (no wait for network)
-    if (window._sound) window._sound('sino');
-    if (typeof showNotification !== 'undefined') showNotification(_t('enroll.enrolledTitle'), _t('enroll.enrolledMsg', { name: window._safeHtml(t.name) }), 'success');
+    if (!_paidEnrollment && window._sound) window._sound('sino');
+    if (!_paidEnrollment && typeof showNotification !== 'undefined') showNotification(_t('enroll.enrolledTitle'), _t('enroll.enrolledMsg', { name: window._safeHtml(t.name) }), 'success');
     // Trophy hook — enrollment milestone
-    setTimeout(function() {
+    if (!_paidEnrollment) setTimeout(function() {
       try { if (typeof window._trophyOnTournamentEnrolled === 'function') window._trophyOnTournamentEnrolled(t); } catch(_te) {}
     }, 500);
-    window._scrollToParticipant(tId, user.displayName);
+    if (!_paidEnrollment) window._scrollToParticipant(tId, user.displayName);
     // v2.1.66: cria automaticamente um "Planejar ida" cobrindo a duração do
     // torneio quando ele tem data+hora e local. Dedup do PresenceDB evita duplicar.
-    try { if (typeof window._maybeCreateTournamentPresencePlan === 'function') window._maybeCreateTournamentPresencePlan(t, user); } catch (_pp) {}
+    if (!_paidEnrollment) try { if (typeof window._maybeCreateTournamentPresencePlan === 'function') window._maybeCreateTournamentPresencePlan(t, user); } catch (_pp) {}
     // v2.8.86: se há enquete ativa, notifica o novo inscrito pra responder (fundamental).
-    try { if (typeof window._opNotifyNewEnrollee === 'function') window._opNotifyNewEnrollee(t, user && user.uid); } catch (_op) {}
+    if (!_paidEnrollment) try { if (typeof window._opNotifyNewEnrollee === 'function') window._opNotifyNewEnrollee(t, user && user.uid); } catch (_op) {}
     // Post-enroll callback (ex: abrir picker de parceiro em torneios de duplas)
-    if (typeof _onSuccess === 'function') { setTimeout(_onSuccess, 400); }
+    if (!_paidEnrollment && typeof _onSuccess === 'function') { setTimeout(_onSuccess, 400); }
 
     // --- Background: Firestore transaction for consistency ---
     if (window.FirestoreDB && window.FirestoreDB.enrollParticipant) {
@@ -1091,10 +1111,11 @@ window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
                 name: _dispName || '',
                 self: true,
                 optimistic: _pushedEnroll,
-                successToast: false,
+                successToast: _paidEnrollment,
                 excludeEmail: user.email
             });
             if (_verdict !== 'enrolled') return;
+            if (Array.isArray(result.paymentDue) && result.paymentDue.length) return;
 
             // Notify organizer (fire-and-forget)
             /* ⛔ QUEM DECIDE É O UID (24/set/2026). A guarda era
@@ -1347,7 +1368,9 @@ window.deenrollCurrentUser = function (tId) {
                         // Rollback: restore original participants and re-render
                         window._warn('Deenroll transaction error:', err);
                         t.participants = _savedParticipants;
-                        if (typeof showNotification !== 'undefined') showNotification(_t('enroll.error'), _t('enroll.cancelError'), 'error');
+                        var _financialBlocked = err && (err.code === 'functions/failed-precondition' || err.code === 'failed-precondition');
+                        if (typeof showNotification !== 'undefined') showNotification(_t('enroll.error'),
+                            _financialBlocked && err.message ? err.message : _t('enroll.cancelError'), 'error');
                         var c2 = document.getElementById('view-container');
                         if (c2) renderTournaments(c2, window.location.hash.split('/')[1]);
                     });

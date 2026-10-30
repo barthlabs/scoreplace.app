@@ -484,7 +484,24 @@ service cloud.firestore {
       }
     }
 
+    match /billingAdminConfig/{configId} {
+      allow read, write: if false;
+    }
+    match /billingVouchers/{voucherId} {
+      allow read, write: if false;
+    }
+    match /billingPaymentEvents/{eventId} {
+      allow read, write: if false;
+    }
+
     match /tournaments/{tournamentId} {
+      match /billingReceipts/{receiptId} {
+        allow read: if request.auth != null && (
+          request.auth.uid == get(/databases/$(database)/documents/tournaments/$(tournamentId)).data.get('creatorUid', '')
+          || request.auth.uid in get(/databases/$(database)/documents/tournaments/$(tournamentId)).data.get('adminUids', [])
+        );
+        allow write: if false;
+      }
       match /operationControl/{controlId} {
         allow read, write: if false;
       }
@@ -634,6 +651,7 @@ service cloud.firestore {
           && igualZeroBase('_phaseMaterialized')
           && igual('phaseStartedAt')
           && igual('phaseRounds')
+          && igual('phaseGroupStandings')
           && igual('_semPesados')
           && (!dividido() || (igual('_nJogos') && igual('_nPartes') && igual('_nGrupos')))
           && (!divideParte('matches') || listaVazia('matches'));
@@ -647,6 +665,22 @@ service cloud.firestore {
                  == resource.data.get('categoryDefinitions', null)
           && request.resource.data.get('enrollmentRigor', null)
                  == resource.data.get('enrollmentRigor', null);
+      }
+
+      // Para torneios nascidos com cobrança, só o servidor materializa a chave:
+      // ele confere a quitação e o fingerprint do elenco na mesma transação.
+      // Permitir a escrita direta após marcar "paid" deixaria passar uma chave
+      // com elenco já alterado. Torneios anteriores mantêm o caminho legado.
+      function cobrancaClienteNaoGeraChave() {
+        let contract = d0().get('billingContract', {});
+        return !(contract is map && contract.get('schema', 0) == 1)
+          || (igual('registrationSettings')
+            && igual('matches') && igual('rounds') && igual('groups')
+            && igual('phaseRounds') && igual('phaseGroups')
+            && igual('pendingDraw') && igual('drawSelectionDone')
+            && igual('tournamentStarted')
+            && (igual('status') || (d1().get('status', '') != 'active'
+              && d1().get('status', '') != 'in_progress')));
       }
 
       /* ⭐ A ÚNICA SAÍDA LEGÍTIMA: O RESET PARA INSCRIÇÕES.
@@ -685,6 +719,7 @@ service cloud.firestore {
           && d1().get('_phaseMaterialized', 0) == 0
           && nuloOuAusente('currentStage')
           && nuloOuAusente('phaseRounds')
+          && nuloOuAusente('phaseGroupStandings')
           && nuloOuAusente('phaseLeagueState')
           && nuloOuAusente('phaseStartedAt')
           && nuloOuAusente('standings')
@@ -742,7 +777,7 @@ service cloud.firestore {
       // atribuído a terceiro. Todo torneio em produção já tem creatorUid (varredura de
       // 29/jul: 0 sem dono por uid), e o cliente sempre o grava.
       //
-      // ⛔ E TORNEIO NASCE NA FASE 1, SEM ESTADO DE AVANÇO E SEM MARCADOR DE DIVISÃO.
+      // ⛔ O estado inicial de fase e os marcadores de divisão pertencem ao servidor.
       // Sem isto a trava do `update` teria uma porta ao lado: o `igual(...)` compara com o
       // que JÁ ESTÁ no documento, então quem criasse o doc já com `currentPhaseIndex: 3` e
       // `phaseStartedAt` preenchido teria o estado de avanço fabricado e CONGELADO —
@@ -805,6 +840,12 @@ service cloud.firestore {
         )
         && (faseIntacta() || ehResetOk())
         && elencoIntacto()
+        && igual('billingContract')
+        && igual('billingQuote')
+        && igual('billingSettlement')
+        && igual('billingPixReport')
+        && igual('billingTermsAcceptance')
+        && cobrancaClienteNaoGeraChave()
         && rosterLegadoProtegidoAposMigracao()
         && categoriasTipadasIntactas()
         && igual('refereeUids')
@@ -1048,6 +1089,22 @@ service cloud.firestore {
       // não cria, altera nem remove essas decisões diretamente.
       match /registrations/{registrationId} {
         allow read, write: if false;
+      }
+
+      // Instruções individuais de pagamento não são um acervo compartilhado:
+      // cada inscrito lê apenas seu documento; só a organização pode listar.
+      match /paymentSecrets/{secretId} {
+        function paymentParent() {
+          return get(/databases/$(database)/documents/tournaments/$(tournamentId)).data;
+        }
+        function paymentAdmin() {
+          return isTournamentAdmin(paymentParent()) || isTournamentAdminByUid(paymentParent());
+        }
+        allow get: if request.auth != null && (
+          paymentAdmin() || resource.data.get('participantUid', '') == request.auth.uid
+        );
+        allow list: if request.auth != null && paymentAdmin();
+        allow write: if false;
       }
 
       // ─── HISTÓRICO ESPELHADO: LEITURA, PRA AGUENTAR A PODA ────────────────

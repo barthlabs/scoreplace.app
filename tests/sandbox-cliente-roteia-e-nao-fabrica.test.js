@@ -197,7 +197,11 @@ const ok = (n, c, x) => { if (c) console.log('  ✓ ' + n); else { console.log('
     const iSb = regras.indexOf('match /sandboxes/{sandboxId} {');
     // ⚠️ começa DEPOIS do `match` do próprio parent, senão "sandboxes" entra como se fosse
     // subcoleção dele mesmo e o teste cobra do apagar uma coleção que não existe.
-    const bloco = regras.slice(regras.indexOf('\n', iSb), regras.indexOf('match /tournaments/{tournamentId} {'));
+    const aposParent = regras.slice(regras.indexOf('\n', iSb));
+    // A próxima regra no mesmo nível encerra o bloco de sandbox. Regras globais
+    // de cobrança podem existir antes de tournaments e não são subcoleções dele.
+    const proximoTopLevel = aposParent.search(/\n    match \/[A-Za-z]+\//);
+    const bloco = proximoTopLevel < 0 ? aposParent : aposParent.slice(0, proximoTopLevel);
     const nasRegras = (bloco.match(/match \/([A-Za-z]+)\/\{/g) || [])
       .map((s) => s.replace('match /', '').replace(/\/\{$/, ''));
     const naLista = (real._sandboxSubcollections || []).map((c) => real._subNome('sb_2', c));

@@ -11,6 +11,11 @@ const assert = require('assert/strict'), fs = require('fs'), path = require('pat
 const core = require('../functions-autodraw/config-ativa-core.js');
 let ok = 0; const must = (v, m) => { assert.ok(v, m); ok++; console.log('  ✓ ' + m); };
 
+must(core.igualEstrutural('genderRatioDisabled', undefined, false), 'opt-out ausente equivale a false em torneio já sorteado');
+must(core.igualEstrutural('genderRatioDisabled', false, undefined), 'false equivale a ausente no sentido inverso');
+must(!core.igualEstrutural('genderRatioDisabled', true, undefined), 'true não equivale a ausente');
+must(core.igualEstrutural('politicaDaChave', undefined, 'repescagem'), 'a equivalência legada de política permanece');
+
 const canonico = {
   classificatoria: { grupos: 4, rodadas: 1 },
   eliminatoria: { endDate: '2026-11-12', endTime: '23:00', roundBounds: ['2026-09-20T23:00', '2026-10-09T23:54'] }

@@ -283,7 +283,7 @@ window._dashEnroll = function(tId) {
     var _lateOpen = (typeof window._lateEnrollWindowOpen === 'function')
       ? window._lateEnrollWindowOpen(t)
       : (t.status !== 'closed' && (_leDash === 'standby' || _leDash === 'expand'));
-    if (t.status !== 'finished' && _lateOpen) { window.enrollCurrentUser(tId); return; }
+    if (t.status !== 'finished' && window._enrollmentOpenState(t).lateOverrideAllowed && _lateOpen) { window.enrollCurrentUser(tId); return; }
     if (typeof showAlertDialog === 'function') showAlertDialog(window._t('auth.enrollClosed'), window._t('auth.enrollClosedMsg'), null, { type: 'warning' });
     return;
   }
@@ -548,7 +548,7 @@ function renderDashboard(container) {
     // v2.1.4: late enrollment (Fechadas OFF) — inscrições seguem abertas após o
     // sorteio (e após iniciar) até o organizador encerrar. Mesma regra do detalhe.
     const _leD = window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment;
-    const lateEnrollOpen = _stF.sorteio && t.status !== 'finished' && t.status !== 'closed' && (_leD === 'standby' || _leD === 'expand');
+    const lateEnrollOpen = _stF.lateOverrideAllowed && _stF.sorteio && t.status !== 'finished' && t.status !== 'closed' && (_leD === 'standby' || _leD === 'expand');
     return _stF.open || lateEnrollOpen;
   }).length;
 
@@ -867,7 +867,7 @@ function renderDashboard(container) {
     // v2.1.4: late enrollment (Fechadas OFF) mantém inscrições abertas após o
     // sorteio e após iniciar, até o organizador encerrar. Mesma regra do detalhe.
     const _leD = window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment;
-    const lateEnrollOpen = sorteioRealizado && !isFinished && t.status !== 'closed' && (_leD === 'standby' || _leD === 'expand');
+    const lateEnrollOpen = _openStD.lateOverrideAllowed && sorteioRealizado && !isFinished && t.status !== 'closed' && (_leD === 'standby' || _leD === 'expand');
     const isAberto = _openStD.open || lateEnrollOpen;
     // v1.3.35-beta: "Em Andamento" só com t.tournamentStarted setado pelo
     // botão Iniciar Torneio. Sorteio realizado mantém "Inscrições Encerradas".

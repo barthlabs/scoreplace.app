@@ -88,6 +88,26 @@ ok(runDashEnroll(makeT(function (t) {
   t.phases = [{ name: 'Eliminatória', lateEnrollment: 'closed' }];
 })).blocked !== null, 'fase corrente com closed sobrepõe top-level expand → bloqueia');
 
+// A janela tardia gratuita não contorna origem externa nem pagamento. Mesmo
+// com o toggle Abertas, esses torneios não têm inscrição após o sorteio.
+ok(runDashEnroll(makeT(function (t) {
+  t.registrationSettings = { source:'external' };
+})).blocked !== null, 'origem externa não reabre pela janela tardia');
+ok(runDashEnroll(makeT(function (t) {
+  t.registrationSettings = { source:'scoreplace', pricing:{ mode:'single', cents:1000 },
+    paymentMethods:{ organizerPixKey:'pix@example.com' } };
+  t.billingContract = { schema:1 };
+  t.canonicalRegistrationMigration = { fingerprint:'abc' };
+  t.billingTermsAcceptance = { hash:'def' };
+})).blocked !== null, 'inscrição paga não reabre pela janela tardia');
+ok(runDashEnroll(makeT(function (t) {
+  t.registrationSettings = { source:'scoreplace', pricing:{ mode:'single', cents:0 },
+    passServiceFeeToParticipant:true, paymentMethods:{ organizerPixKey:'pix@example.com' } };
+  t.billingContract = { schema:1 };
+  t.canonicalRegistrationMigration = { fingerprint:'abc' };
+  t.billingTermsAcceptance = { hash:'def' };
+})).blocked !== null, 'tarifa repassada não reabre pela janela tardia');
+
 console.log('\n' + (fail === 0 ? '✅ dash-enroll-late-window: OK' : '❌ ' + fail + ' FALHA(S)') + '  (' + pass + ' asserts ok)');
 if (fails.length) { fails.forEach((f) => console.error('  ✗ ' + f)); }
 process.exit(fail > 0 ? 1 : 0);

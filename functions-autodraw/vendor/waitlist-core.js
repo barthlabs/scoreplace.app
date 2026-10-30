@@ -305,9 +305,31 @@ window._phaseDrawDone = function (t) {
 // teste). Todo gate de UI e todo caminho de escrita passam por AQUI; a próxima régua
 // paralela é a próxima pessoa bloqueada. [[feedback_unify_dual_entry_points]]
 window._enrollmentOpenState = function (t, nowMs) {
-  if (!t) return { open: false, ligaOpen: false, sorteio: false, deadlinePassed: false, notOpenYet: false, opensAt: null };
+  if (!t) return { open: false, ligaOpen: false, sorteio: false, deadlinePassed: false, notOpenYet: false, opensAt: null, lateOverrideAllowed: false };
   var domain = _wlDomain();
   if (domain && typeof domain.enrollmentOpenState === 'function') return domain.enrollmentOpenState(t, nowMs);
+  var registration = t.registrationSettings;
+  if (registration && registration.source === 'external') {
+    return { open: false, ligaOpen: false, sorteio: false, deadlinePassed: false, notOpenYet: false, opensAt: null, lateOverrideAllowed: false };
+  }
+  var lateOverrideAllowed = true;
+  if (registration && registration.source === 'scoreplace' && registration.pricing) {
+    var pricing = registration.pricing;
+    var paid = pricing.mode === 'single'
+      ? Number(pricing.cents) > 0
+      : pricing.mode === 'category' && Object.keys(pricing.centsByCategory || {}).some(function (key) { return Number(pricing.centsByCategory[key]) > 0; });
+    if (paid || registration.passServiceFeeToParticipant === true) {
+      lateOverrideAllowed = false;
+      var methods = registration.paymentMethods || {};
+      var direct = !!(String(methods.organizerPixKey || '').trim() || String(methods.organizerPaymentUrl || '').trim());
+      var accepted = !!(t.billingContract && t.billingContract.schema === 1
+        && t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint
+        && t.billingTermsAcceptance && t.billingTermsAcceptance.hash);
+      if (!direct || !accepted || window._phaseDrawDone(t)) {
+        return { open: false, ligaOpen: false, sorteio: false, deadlinePassed: false, notOpenYet: false, opensAt: null, lateOverrideAllowed };
+      }
+    }
+  }
   var now = (typeof nowMs === 'number') ? nowMs : Date.now();
   // A inscrição pós-sorteio é da fase atual. Um documento multifase pode
   // conservar "Liga" no topo depois de entrar na eliminatória; esse rótulo
@@ -329,7 +351,7 @@ window._enrollmentOpenState = function (t, nowMs) {
   var deadlinePassed = !!(t.registrationLimit && Number.isFinite(deadline) && deadline < now);
   var ligaOpen = allowsLateEnrollment && t.ligaOpenEnrollment !== false && t.status !== 'closed' && t.status !== 'finished' && !notOpenYet && !deadlinePassed;
   var open = (t.status !== 'closed' && t.status !== 'finished' && !sorteio && !notOpenYet && !deadlinePassed) || !!ligaOpen;
-  return { open: open, ligaOpen: ligaOpen, sorteio: sorteio, deadlinePassed: deadlinePassed, notOpenYet: notOpenYet, opensAt: Number.isFinite(opensAt) ? opensAt : null };
+  return { open: open, ligaOpen: ligaOpen, sorteio: sorteio, deadlinePassed: deadlinePassed, notOpenYet: notOpenYet, opensAt: Number.isFinite(opensAt) ? opensAt : null, lateOverrideAllowed: lateOverrideAllowed };
 };
 
 // Está JOGANDO a fase corrente? (aparece num grupo Rei/Rainha, num grupo de fase ou

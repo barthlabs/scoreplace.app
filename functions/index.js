@@ -116,6 +116,9 @@ const _manualClaimLink = require("./manual-claim-link-core");
 const _publishedClaim = require("./published-claim-core");
 const _canonicalRegistrationBoundary = require("./canonical-registration-boundary-core");
 const _canonicalEnrollment = require("./canonical-enrollment-core");
+const _registrationPaymentService = require("./registration-payment-service");
+const _registrationPayment = require("./registration-payment-core");
+const _billingTerms = require("./billing-terms-core");
 const _tournamentImport = require("./tournament-import-core");
 const _manualNameUnique = require("./manual-name-unique-core");
 const _registrationLifecycle = require("./registration-lifecycle-core");
@@ -3051,15 +3054,25 @@ exports.enrollParticipant = onCall(
       const _dados = await _splitParts.hidratar(tx, docRef, snap.data());
       const rawTournament = snap.data() || {};
       const registration = rawTournament.registrationSettings;
-      if (registration && !(organizerManualRequested && _isTournamentOrgCaller(rawTournament, callerUid))) {
-        if (registration.source === 'external') {
-          throw new HttpsError('failed-precondition', 'As inscrições deste torneio são externas.');
-        }
-        const pricing = registration.pricing;
-        const paid = pricing && (pricing.mode === 'single' ? Number(pricing.cents) > 0
-          : pricing.mode === 'category' && Object.keys(pricing.centsByCategory || {}).some(category => Number(pricing.centsByCategory[category]) > 0));
+      let paidDirectEnrollment = false;
+      if (registration) {
+        let paid = false;
+        try {
+          paid = _registrationPayment.paidEnrollmentRequired(registration, organizerManualRequested,
+            _isTournamentOrgCaller(rawTournament, callerUid));
+        } catch (error) { throw new HttpsError('failed-precondition', error.message); }
         if (paid) {
-          throw new HttpsError('failed-precondition', 'A inscrição paga requer pagamento confirmado pelo Scoreplace.');
+          if (sandbox || !rawTournament.canonicalRegistrationMigration?.fingerprint || !rawTournament.billingTermsAcceptance?.hash
+            || rawTournament.billingContract?.schema !== 1) {
+            throw new HttpsError('failed-precondition', 'A inscrição paga ainda não está habilitada neste torneio.');
+          }
+          try { _registrationPayment.directMethods(registration); }
+          catch (error) { throw new HttpsError('failed-precondition', error.message); }
+          const billingConfig = (await tx.get(db.collection('billingAdminConfig').doc('active'))).data() || {};
+          if (!_billingTerms.termsAccepted(rawTournament, _billingTerms.termsCatalog(billingConfig, rawTournament))) {
+            throw new HttpsError('failed-precondition', 'As condições financeiras mudaram. Aguarde a organização aceitá-las novamente.');
+          }
+          paidDirectEnrollment = true;
         }
       }
       const logicalId = sandbox ? String(rawTournament.sandboxOf) : tournamentId;
@@ -3124,18 +3137,62 @@ exports.enrollParticipant = onCall(
         if (decision.outcome === "rejected" || decision.outcome === "conflict") {
           return Object.assign({ canonical: true, participants: checked.participants }, decision);
         }
+        // `enroll` só produz updates ao reativar uma inscrição retirada. O
+        // status anterior de pagamento vem junto no documento canônico; nunca
+        // o substitua por uma nova cobrança (nem o apague se o preço virou 0)
+        // sem conciliar o pagamento ou comprovante original.
+        try { (decision.enrollment?.updates || []).forEach(_registrationPayment.assertReactivationSafe); }
+        catch (error) { throw new HttpsError('failed-precondition', error.message); }
+        let paymentDue = [];
+        if (paidDirectEnrollment && decision.enrollment) {
+          try {
+            for (const kind of ['creates', 'updates']) {
+              decision.enrollment[kind] = decision.enrollment[kind].map(item => {
+                if (item.status === 'waitlisted') return item;
+                const amount = _registrationPayment.amountForCategory(registration, rawTournament.categoryDefinitions,
+                  item.categoryId, rawTournament.billingContract);
+                if (!amount) {
+                  if (!item.paymentState) return item;
+                  return { ...item, paymentState:null, paymentDueCents:null, paymentCurrency:null,
+                    proofPath:null, paymentMethod:null, paymentReviewedBy:null, paymentReviewEvidence:null };
+                }
+                const pending = _registrationPayment.awaitingPayment(item, amount);
+                paymentDue.push({ registrationId:pending.registrationId, categoryId:pending.categoryId,
+                  amountCents:amount, currency:'BRL' });
+                return pending;
+              });
+            }
+          } catch (error) { throw new HttpsError('failed-precondition', error.message); }
+        }
         let next = checked;
         if (decision.enrollment && decision.enrollment.updates.length) {
           next = _writeCanonicalRosterChanges(tx, docRef, rawTournament, checked.registrations, decision.enrollment, null, logicalId);
         } else if (decision.enrollment && decision.enrollment.creates.length) {
           next = _writeCanonicalRosterCreates(tx, docRef, rawTournament, checked.registrations, decision.enrollment.creates, logicalId);
         }
+        if (paymentDue.length && !rawTournament.organizerOnly) {
+          const at = new Date(nowMs).toISOString();
+          for (const due of paymentDue) {
+            tx.create(docRef.collection('notificationOutbox').doc('registration-payment-' + due.registrationId + '-' + nowMs), {
+              schema:1, kind:'tournament-notification', type:'registration_payment_pending',
+              title:'Inscrição aguardando pagamento',
+              message:'Sua inscrição em ' + String(rawTournament.name || 'torneio') + ' foi recebida. Pague pelo meio escolhido e envie o comprovante. A vaga só será confirmada após a conferência.',
+              tournamentId, tournamentName:String(rawTournament.name || ''), level:'important',
+              recipients:[participantUid], ctaLabel:'Ver pagamento',
+              ctaUrl:'https://scoreplace.app/#tournaments/' + tournamentId,
+              createdAt:at, createdAtMs:nowMs, dispatchStatus:'pending'
+            });
+          }
+        }
         return Object.assign({}, decision, {
           canonical: true,
           participants: next.participants,
           standbyParticipants: decision.outcome === "waitlisted" ? next.participants : null,
+          paymentDue,
+          paymentMethods:paymentDue.length ? _registrationPayment.directMethods(registration) : null,
         });
       }
+      if (paidDirectEnrollment) throw new HttpsError('failed-precondition', 'Este torneio precisa usar inscrições canônicas para receber pagamentos.');
       _assertLegacyRosterStillAuthoritative(_dados);
       const isOrganizer = _isTournamentOrgCaller(_dados, callerUid);
       if (participantUid && participantUid !== callerUid) throw new HttpsError("permission-denied", "inscrição de conta exige a própria sessão");
@@ -3209,7 +3266,9 @@ exports.enrollParticipant = onCall(
       alreadyEnrolled: false,
       participants: out.participants,
       autoCloseTriggered: !!out.autoClose,
-      reachedCapacityDraw: !!out.reachedDraw
+      reachedCapacityDraw: !!out.reachedDraw,
+      paymentDue: out.paymentDue || [],
+      paymentMethods: out.paymentMethods || null
     });
   }
 );
@@ -4399,7 +4458,19 @@ exports.deenrollParticipant = onCall(
         const checked = await _loadCanonicalRosterForMutation(tx, docRef, rawTournament, logicalId);
         const decision = _registrationMutations.withdraw(logicalId, checked.registrations,
           userUid ? { uid: userUid } : { manualParticipantId: manualParticipantId });
-        const next = _writeCanonicalRosterUpdates(tx, docRef, rawTournament, checked.registrations, decision.updates, logicalId);
+        const previousById = new Map(checked.registrations.map(item => [item.registrationId, item]));
+        const withdrawalIds = new Set();
+        let prepared;
+        try {
+          prepared = decision.updates.map(item => {
+            const prior = previousById.get(item.registrationId);
+            if (item.status !== 'withdrawn' || !prior || prior.status === 'withdrawn') return item;
+            withdrawalIds.add(item.registrationId);
+            return _registrationPayment.prepareWithdrawal(item);
+          });
+        } catch (error) { throw new HttpsError('failed-precondition', error.message); }
+        const next = _writeCanonicalRosterUpdates(tx, docRef, rawTournament, checked.registrations,
+          prepared, logicalId, withdrawalIds);
         return { outcome: decision.outcome === "changed" ? "removed" : "notFound", participants: next.participants, canonical: true };
       }
       if (manualParticipantId) {
@@ -4789,17 +4860,23 @@ async function _loadCanonicalRosterForMutation(tx, tournamentRef, tournament, lo
   catch (error) { throw new HttpsError("failed-precondition", error.message); }
 }
 
-function _writeCanonicalRosterUpdates(tx, tournamentRef, tournament, registrations, updates, logicalId) {
+function _writeCanonicalRosterUpdates(tx, tournamentRef, tournament, registrations, updates, logicalId, financialIds) {
   const canonicalTournament = _canonicalMutationTournament(tournamentRef, tournament, logicalId);
   let next;
   try { next = _canonicalRegistrationBoundary.applyUpdates(canonicalTournament, registrations, updates); }
   catch (error) { throw new HttpsError("failed-precondition", error.message); }
   (updates || []).forEach((item) => {
-    tx.update(tournamentRef.collection("registrations").doc(item.registrationId), {
+    const patch = {
       status: item.status,
       fixedPairId: item.fixedPairId || null,
       updatedAt: _FV.serverTimestamp(),
-    });
+    };
+    if (financialIds instanceof Set && financialIds.has(item.registrationId)) {
+      for (const key of _registrationPayment.FINANCIAL_FIELDS) {
+        if (Object.prototype.hasOwnProperty.call(item, key)) patch[key] = item[key];
+      }
+    }
+    tx.update(tournamentRef.collection("registrations").doc(item.registrationId), patch);
   });
   // O índice de entrega é derivado exclusivamente da fotografia já validada.
   // Nunca preservamos memberUids antigo, pois ele pode manter uma conta retirada
@@ -4862,6 +4939,11 @@ function _writeCanonicalRosterChanges(tx, tournamentRef, tournament, registratio
     if (Object.prototype.hasOwnProperty.call(item, "validationState")) {
       patch.validationState = item.validationState;
     }
+    for (const key of ['paymentState', 'paymentDueCents', 'paymentCurrency', 'proofPath', 'paymentMethod',
+      'paymentReviewedBy', 'paymentReviewEvidence', 'reclassifiedFromRegistrationId',
+      'paymentTransferredToRegistrationId']) {
+      if (Object.prototype.hasOwnProperty.call(item, key)) patch[key] = item[key];
+    }
     if (item.participantKind === "manual" && Object.prototype.hasOwnProperty.call(item, "manualDisplayName")) {
       patch.manualDisplayName = item.manualDisplayName;
     }
@@ -4881,6 +4963,30 @@ function _writeCanonicalRosterChanges(tx, tournamentRef, tournament, registratio
   }, extraTournamentPatch || {}, reservedOrganizerPatch || {}));
   return next;
 }
+
+// Comprovantes de recebimento DIRETO pela organização. Estas portas não abrem
+// inscrições pagas; apenas executam transições verificáveis quando uma inscrição
+// pendente existir. A ativação depende do fluxo completo e do aceite financeiro.
+exports.submitTournamentPaymentProof = onCall(
+  { region:"us-central1", memory:"256MiB", timeoutSeconds:60, cors:APP_ORIGINS },
+  request => _registrationPaymentService.makeService({ db:admin.firestore(), storage:admin.storage(),
+    HttpsError, FieldValue:admin.firestore.FieldValue }).submitProof(request)
+);
+exports.getMyTournamentRegistrationPayments = onCall(
+  { region:"us-central1", memory:"256MiB", timeoutSeconds:60, cors:APP_ORIGINS },
+  request => _registrationPaymentService.makeService({ db:admin.firestore(), storage:admin.storage(),
+    HttpsError, FieldValue:admin.firestore.FieldValue }).myPayments(request)
+);
+exports.listTournamentPaymentProofs = onCall(
+  { region:"us-central1", memory:"256MiB", timeoutSeconds:60, cors:APP_ORIGINS },
+  request => _registrationPaymentService.makeService({ db:admin.firestore(), storage:admin.storage(),
+    HttpsError, FieldValue:admin.firestore.FieldValue }).pendingProofs(request)
+);
+exports.reviewTournamentPaymentProof = onCall(
+  { region:"us-central1", memory:"256MiB", timeoutSeconds:60, cors:APP_ORIGINS },
+  request => _registrationPaymentService.makeService({ db:admin.firestore(), storage:admin.storage(),
+    HttpsError, FieldValue:admin.firestore.FieldValue }).reviewProof(request)
+);
 
 /* Importação externa só ocupa duplas-placeholder canônicas. Prévia e bloco
  * são portas separadas: fotos/planilhas jamais escrevem por si. */
@@ -5102,6 +5208,7 @@ exports.applyTournamentImportBlock = onCall(
 exports.reclassifyCanonicalRegistration = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
   async (request) => {
+    const noticeToken = crypto.randomUUID();
     const callerUid = request.auth && request.auth.uid;
     if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
     const data = request.data || {};
@@ -5162,6 +5269,25 @@ exports.reclassifyCanonicalRegistration = onCall(
           toCategoryId
         );
       } catch (error) { throw new HttpsError("failed-precondition", error.message); }
+      try { changes = _registrationPayment.planReclassificationPayment(changes, checked.registrations,
+        tournament.registrationSettings, definitions, tournament.billingContract); }
+      catch (error) { throw new HttpsError('failed-precondition', error.message); }
+      const paymentNotices = !sandbox
+        ? _registrationPayment.reclassificationNotices(changes, checked.registrations, definitions, tournament)
+        : [];
+      const paidDestination = (changes.updates || []).concat(changes.creates || [])
+        .some(item => item.status !== 'withdrawn' && Number(item.paymentDueCents) > 0);
+      if (paidDestination && !sandbox) {
+        if (tournament.billingContract?.schema !== 1 || !tournament.billingTermsAcceptance?.hash) {
+          throw new HttpsError('failed-precondition', 'Inscrição paga ainda não está habilitada neste torneio.');
+        }
+        try { _registrationPayment.directMethods(tournament.registrationSettings); }
+        catch (error) { throw new HttpsError('failed-precondition', error.message); }
+        const billingConfig = (await tx.get(db.collection('billingAdminConfig').doc('active'))).data() || {};
+        if (!_billingTerms.termsAccepted(tournament, _billingTerms.termsCatalog(billingConfig, tournament))) {
+          throw new HttpsError('failed-precondition', 'As condições financeiras mudaram. Aguarde a organização aceitá-las novamente.');
+        }
+      }
       const movingManualIds = new Set((changes.updates || []).map((update) => {
         const origin = checked.registrations.find((item) => item.registrationId === update.registrationId);
         return origin && origin.participantKind === 'manual' ? String(origin.manualParticipantId || '') : '';
@@ -5172,6 +5298,55 @@ exports.reclassifyCanonicalRegistration = onCall(
         : reservations;
       const patch = filtered.length < reservations.length ? { placeholderReservations: filtered } : null;
       const next = _writeCanonicalRosterChanges(tx, ref, tournament, checked.registrations, changes, patch, logicalId);
+      const auditAt = new Date().toISOString();
+      const auditFields = (item) => {
+        if (!item) return null;
+        return {
+          status:item.status || null, validationState:item.validationState || null,
+          withdrawnReason:item.withdrawnReason || null,
+          paymentState:item.paymentState || null,
+          paymentDueCents:Number.isSafeInteger(item.paymentDueCents) ? item.paymentDueCents : null,
+          paymentCurrency:item.paymentCurrency || null, paymentMethod:item.paymentMethod || null,
+          reclassifiedFromRegistrationId:item.reclassifiedFromRegistrationId || null,
+          paymentTransferredToRegistrationId:item.paymentTransferredToRegistrationId || null
+        };
+      };
+      const previousById = new Map(checked.registrations.map(item => [item.registrationId, item]));
+      const allDestinations = (changes.creates || []).concat(changes.updates || []);
+      (changes.updates || []).filter(item => item.status === 'withdrawn'
+        && item.categoryId === changes.fromCategoryId).forEach((sourceAfter, index) => {
+        const sourceBefore = previousById.get(sourceAfter.registrationId);
+        const destinationAfter = allDestinations.find(item => item.participantKey === sourceAfter.participantKey
+          && item.categoryId === changes.toCategoryId && item.status !== 'withdrawn');
+        if (!sourceBefore || !destinationAfter) return;
+        tx.create(ref.collection('registrationCategoryAudit').doc(noticeToken + '-' + index), {
+          schema:1, kind:'category-reclassification', at:auditAt, byUid:callerUid,
+          tournamentId, sandbox,
+          participantUid:sourceBefore.participantUid || null,
+          manualParticipantId:sourceBefore.manualParticipantId || null,
+          sourceRegistrationId:sourceBefore.registrationId,
+          destinationRegistrationId:destinationAfter.registrationId,
+          fromCategoryId:changes.fromCategoryId, toCategoryId:changes.toCategoryId,
+          sourceBefore:auditFields(sourceBefore), sourceAfter:auditFields(sourceAfter),
+          destinationBefore:auditFields(previousById.get(destinationAfter.registrationId)),
+          destinationAfter:auditFields(destinationAfter)
+        });
+      });
+      if (!sandbox && paymentNotices.length) {
+        const nowMs = Date.now();
+        const now = new Date(nowMs).toISOString();
+        paymentNotices.forEach((notice, index) => {
+          const { sourceRegistrationId, destinationRegistrationId, ...payload } = notice;
+          const eventId = 'registration-reclassified-payment-' + noticeToken + '-' + index;
+          tx.create(ref.collection('notificationOutbox').doc(eventId), {
+            schema:1, kind:'tournament-notification', ...payload,
+            tournamentId, tournamentName:String(tournament.name || ''),
+            ctaLabel:'Ver pagamento', ctaUrl:'https://scoreplace.app/#tournaments/' + tournamentId,
+            sourceRegistrationId, destinationRegistrationId,
+            createdAt:now, createdAtMs:nowMs, dispatchStatus:'pending'
+          });
+        });
+      }
       return {
         ok: true,
         outcome: changes.outcome,
@@ -7506,8 +7681,8 @@ exports.formPair = onCall(
           const fixedPairId = _registrationMutations.canonicalPairId(logicalId, uncategorized, [id1, id2]);
           const manualName = (item, fallback) => String(item && (item.manualDisplayName || item.displayName || item.name) || fallback).trim();
           const creates = [
-            { registrationId: id1, tournamentId: logicalId, categoryId: uncategorized, participantKey: key1, status: "confirmed", validationState: "approved", migrationFingerprint: rawTournament.canonicalRegistrationMigration.fingerprint, fixedPairId, participantKind: "manual", participantUid: null, manualParticipantId: String(opts.manualId1), manualDisplayName: manualName(r1, opts.name1) },
-            { registrationId: id2, tournamentId: logicalId, categoryId: uncategorized, participantKey: key2, status: "confirmed", validationState: "approved", migrationFingerprint: rawTournament.canonicalRegistrationMigration.fingerprint, fixedPairId, participantKind: "manual", participantUid: null, manualParticipantId: String(opts.manualId2), manualDisplayName: manualName(r2, opts.name2) },
+            { registrationId: id1, tournamentId: logicalId, categoryId: uncategorized, participantKey: key1, status: "confirmed", validationState: "approved", migrationFingerprint: rawTournament.canonicalRegistrationMigration.fingerprint, fixedPairId, participantKind: "manual", participantUid: null, manualParticipantId: String(opts.manualId1), manualDisplayName: manualName(r1, opts.name1), isPlaceholder: true },
+            { registrationId: id2, tournamentId: logicalId, categoryId: uncategorized, participantKey: key2, status: "confirmed", validationState: "approved", migrationFingerprint: rawTournament.canonicalRegistrationMigration.fingerprint, fixedPairId, participantKind: "manual", participantUid: null, manualParticipantId: String(opts.manualId2), manualDisplayName: manualName(r2, opts.name2), isPlaceholder: true },
           ];
           const next = _writeCanonicalRosterCreates(tx, docRef, rawTournament, checked.registrations, creates, logicalId);
           return { outcome: "paired", participants: next.participants, canonical: true };
@@ -10113,32 +10288,31 @@ exports.deleteAccount = onCall(
     }
 
     // 2) Torneios em que ela PARTICIPA — o cânone acha o uid onde ele estiver.
+    // Decisão deliberada: falha de transação interrompe esta exclusão antes da
+    // lápide e do Auth. Continuar apagaria a conta com referências financeiras
+    // ou de participação órfãs; a pessoa permanece autenticada para tentar de
+    // novo quando o torneio estiver acessível.
     const snap = await db.collection("tournaments").get();
+    const cleanParticipantTournament = require("./delete-account-tournament-core").cleanParticipantTournament;
+    const cleanupNowIso = new Date().toISOString();
     for (const doc of snap.docs) {
       if (organizados.has(doc.id)) continue;
-      const t = doc.data();
-      if (!_uidSweep.findUidPaths(t, uid).length) continue;
-
-      const jogou = _tournamentHasPlayedMatches(t, uid);
-      let next = t;
-
-      if (jogou) {
-        // MANTÉM o resultado: a entrada vira { uid, deleted } e os NOMES saem dos slots.
-        next = _anonymizeEntries(next, uid);
-        next = _stripNamesInMatches(next, uid);
-        out.tournamentsAnonymized++;
-      } else {
-        // Não jogou: sai inteira. Slot de dupla leva a entrada junto (dupla não joga só).
-        const parts = (t.participants || []).filter((p) => !p || typeof p !== "object" ||
-          !_uidSweep.findUidPaths(p, uid).length);
-        next = Object.assign({}, t, { participants: parts });
-        out.tournamentsLeft++;
-      }
-      // Sobrou uid em mapa/array (check-in, voto, waitlist…)? O cânone limpa o resto.
-      next = _purgeUidEverywhere(next, uid, jogou);
-      next.memberUids = (next.memberUids || []).filter((u) => u !== uid);
-      next.updatedAt = new Date().toISOString();
-      await doc.ref.set(next).catch((e) => console.error("[deleteAccount] torneio " + doc.id, e.message));
+      // O censo acima só lista candidatos. O avanço de fase pode gravar uma
+      // classificação entre ele e esta iteração: ler e regravar a foto antiga
+      // apagaria o retrato. Recalcular a limpeza sobre o documento FRESCO na
+      // mesma transação torna essa corrida um retry do Firestore, não perda.
+      const outcome = await cleanParticipantTournament(db, doc.ref, uid, {
+        findUidPaths: _uidSweep.findUidPaths,
+        hasPlayedMatches: _tournamentHasPlayedMatches,
+        anonymizeEntries: _anonymizeEntries,
+        stripNamesInMatches: _stripNamesInMatches,
+        purgeUidEverywhere: _purgeUidEverywhere,
+        nowIso: cleanupNowIso,
+      });
+      // Só contar o fato que efetivamente foi confirmado; erro rejeita a
+      // chamada e impede a lápide e a exclusão no Auth.
+      if (outcome === "anonymized") out.tournamentsAnonymized++;
+      if (outcome === "left") out.tournamentsLeft++;
     }
 
     // 3a) Inscrições canônicas: fato histórico anonimizado, nunca documento apagado.

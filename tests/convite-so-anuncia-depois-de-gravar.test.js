@@ -106,7 +106,7 @@ function palco(opts) {
   win._softRefreshView = () => { eventos.push('repintou'); };
   win._pName = (p) => (p && p.displayName) || '';
   win._t = (k) => k;
-  win.showNotification = (titulo, msg, tipo) => { eventos.push('toast:' + tipo + ':' + titulo); };
+  win.showNotification = (titulo, msg, tipo) => { eventos.push('toast:' + tipo + ':' + titulo + ':' + msg); };
 
   const ctx = {
     window: win, console: { log(){}, warn(){}, error(){} }, Promise, Array, Object, String, Date,
@@ -123,9 +123,11 @@ function palco(opts) {
   ctx.window.__ev = eventos;
 
   const helper = recortaFn(SRC_HT, 'function _mutateHostOrganization');
+  const errorHelper = recortaFn(SRC_HT, 'function _inviteErrorMessage');
   const corpo = recortaFn(SRC_HT, 'window._initiateCoHostInvite = function');
-  if (!helper || !corpo) return null;
-  vm.runInContext(helper + ';' + corpo + ';', ctx);
+  const transfer = recortaFn(SRC_HT, 'window._initiateHostTransfer = function');
+  if (!helper || !errorHelper || !corpo || !transfer) return null;
+  vm.runInContext(errorHelper + ';' + helper + ';' + corpo + ';' + transfer + ';', ctx);
   return { win, T, eventos, resolveMutate: _resolveMutate, rejeitaMutate: _rejeitaMutate, ctx };
 }
 
@@ -234,6 +236,31 @@ function palco(opts) {
     ok(!/collection\(\s*['"]mail['"]\s*\)/.test(semComentarios(SRC_DB + SRC_HT + SRC_DRAW)),
       '⛔ e nenhum dos três arquivos escreve em /mail');
     ok(!/acceptUrl:[\s\S]{0,60}scoreplace\.app\/#pair/.test(SRC_DRAW) || true, 'deep-link do e-mail segue no servidor');
+  }
+
+  console.log('\n§7 ERRO DO SERVIDOR — texto específico, sem falso sucesso');
+  for (const [code, marker, expected] of [
+    ['functions/failed-precondition', false, 'Confira a amizade'],
+    ['functions/failed-precondition', true, 'Atualize o aplicativo'],
+    ['functions/permission-denied', false, 'não tem permissão'],
+    [null, false, 'alcançar o serviço de convites']
+  ]) {
+    const p = palco();
+    p.win._callCF = () => Promise.reject(Object.assign(new Error(code ? 'detalhe interno' : 'Failed to fetch'), { code, atualizacao: marker }));
+    const out = await p.win._initiateCoHostInvite('tour_1', { uid: 'alvo1', displayName: 'Kelly' });
+    ok(out.error === true, code + ': retorno de falha');
+    const msg = p.eventos.find(x => x.includes('toast:error:')) || '';
+    ok(msg.includes(expected) && !msg.includes('detalhe interno') && !p.eventos.some(x => x.includes('toast:info:')),
+      code + ': mensagem segura e específica, sem falso sucesso');
+  }
+  {
+    const p = palco();
+    p.win._callCF = () => Promise.reject(Object.assign(new Error('segredo interno'), { code: 'functions/permission-denied' }));
+    const out = await p.win._initiateHostTransfer('tour_1', { uid: 'alvo1', displayName: 'Kelly' });
+    ok(out.error === true && p.eventos.some(x => x.includes('toast:error:')), 'transferência também devolve e avisa erro');
+    p.win.AppStore.currentUser = null;
+    const early = await p.win._initiateHostTransfer('tour_1', { uid: 'alvo1' });
+    ok(early.error === true, 'transferência sem usuário não finge sucesso');
   }
 
   console.log('\n' + (fail ? '✗' : '✅') + ' convite/ordem de gravação: ' + pass + ' ok, ' + fail + ' falharam');

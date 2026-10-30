@@ -61,6 +61,15 @@ const SUITES = [
   'tests/public-canonical-roster-client.test.js',
   'tests/enrollment-report-current-categories.test.js',
   'tests/registration-settings.test.js',
+  'tests/registration-payment-core.test.js',
+  'tests/registration-payment-service.test.js',
+  'tests/rules-tournament-billing.test.js',
+  'tests/storage-payment-proof.test.js',
+  'tests/pix-brcode.test.js',
+  'tests/tournament-fee-simulator.test.js',
+  'tests/tournament-billing-core.test.js',
+  'tests/tournament-billing-transaction-guard.test.js',
+  'tests/tournament-billing-service.test.js',
   'tests/sandbox-enrollment-route.test.js',
   'tests/neon-sandbox-guard.test.js',
   'tests/operation-day.test.js',
@@ -1613,6 +1622,7 @@ const SUITES = [
   'tests/match-roster-uid.test.js',
   'tests/fairness-uid-identity.test.js',
   'tests/delete-account-dupla-orphan.test.js',
+  'tests/delete-account-tournament-transaction.test.js',
   'tests/merge-federated-wins.test.js',
   // A decisão do AUTO-MERGE consulta o AUTH (incidente 02/ago/2026: perfil de junho sem
   // createdAt no doc PERDIA pra perfil de julho com createdAt — o Auth sempre soube a idade).
@@ -2373,6 +2383,7 @@ const MEXEM_NO_REPO = [
  * ⛔ Se estas duas voltarem a falhar com "Port ... is not open", procure emulador órfão
  *      (`lsof -ti :8097`) antes de suspeitar do paralelismo. */
 const PRENDEM_PORTA = [
+  'tests/storage-payment-proof.test.js',         // Firestore + Storage nas portas 8130/9198
   'tests/operation-control-transaction.test.js',
   'tests/l7-creation-replay-emulator.test.js',
   'tests/decisao-do-tardio-na-folga-emulador.test.js',   // sobe o próprio emulador do Firestore

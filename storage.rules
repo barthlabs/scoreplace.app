@@ -14,6 +14,25 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
 
+    // Comprovante financeiro privado e imutável. Nunca usar o prefixo público
+    // tournaments/{id}/{arquivo} para estes arquivos.
+    match /tournamentPaymentProofs/{tournamentId}/{uid}/{proofId} {
+      function paymentTournament() {
+        return firestore.get(/databases/(default)/documents/tournaments/$(tournamentId)).data;
+      }
+      function isPaymentAdmin() {
+        return request.auth.uid == paymentTournament().get('creatorUid', '')
+          || request.auth.uid in paymentTournament().get('adminUids', []);
+      }
+      allow read: if request.auth != null && (request.auth.uid == uid || isPaymentAdmin());
+      allow create: if resource == null && request.auth != null && request.auth.uid == uid
+        && request.auth.uid in paymentTournament().get('memberUids', [])
+        && request.resource.size > 0 && request.resource.size <= 10 * 1024 * 1024
+        && (request.resource.contentType.matches('image/(jpeg|png|webp|gif|heic|heif)')
+          || request.resource.contentType == 'application/pdf');
+      allow update, delete: if false;
+    }
+
     // Caminho: tournaments/{tournamentId}/{logo|cover}
     match /tournaments/{tournamentId}/{arquivo} {
 
