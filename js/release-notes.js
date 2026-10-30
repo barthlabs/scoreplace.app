@@ -1,3 +1,4 @@
+// 2.5.82 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.81 — Inscrições pagas por Pix ou link do organizador ficam pendentes até
 // a conferência do comprovante. A organização pode consultar a taxa do torneio,
 // aceitar as condições e enviar o comprovante do Pix devido ao Scoreplace antes
