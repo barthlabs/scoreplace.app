@@ -110,8 +110,8 @@
       "mode": "only"
     },
     "setTournamentEnrollmentStatus": {
-      "backendCommit": "dc2a7e46391211ec281716d51aa4b86ee5a1e56a",
-      "deployedAt": "2026-10-30T13:46:11.243Z",
+      "backendCommit": "a92f0892ea8b23f9a56f6e360c448b0b2211ac77",
+      "deployedAt": "2026-10-30T14:18:42.441Z",
       "result": "success",
       "mode": "only"
     },

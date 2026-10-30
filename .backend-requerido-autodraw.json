@@ -1,34 +1,8 @@
 {
   "schema": 1,
-  "backendCommit": "dc2a7e46391211ec281716d51aa4b86ee5a1e56a",
-  "scopeNote": "Cobrança e inscrição: portas financeiras, criação/configuração, abertura, geradores de chaves e caminhos automáticos afetados pela guarda transacional. O cartão fica desabilitado até configuração financeira verificada e webhook homologado.",
+  "backendCommit": "a92f0892ea8b23f9a56f6e360c448b0b2211ac77",
+  "scopeNote": "Neste corte de backend, somente setTournamentEnrollmentStatus mudou e foi republicada. As outras portas da cobrança e do sorteio constam do recibo anterior e não foram redeployadas sem alteração. Cartão e inscrição tardia paga seguem desabilitados.",
   "functions": [
-    "drawRound",
-    "generateExtraTournamentRound",
-    "integrateLateEntries",
-    "closeRound",
-    "startTournament",
-    "applyTournamentFormat",
-    "advanceTournamentPhase",
-    "resolvePendingDraw",
-    "runEnrollmentSlotsDraw",
-    "autoDraw",
-    "autoDrawReconcile",
-    "closePhaseLeagueRound",
-    "setTournamentEnrollmentStatus",
-    "updateTournamentConfiguration",
-    "createTournament",
-    "setDrawBalanceChoice",
-    "setTournamentCategoryConfig",
-    "closeExpiredEnrollment",
-    "getTournamentFeeStatus",
-    "simulateTournamentRegistrationFees",
-    "acceptTournamentFeeTerms",
-    "prepareTournamentFee",
-    "reportTournamentFeePix",
-    "rejectTournamentFeePixReport",
-    "listTournamentFeePixReports",
-    "getTournamentFinanceAdminStatus",
-    "confirmTournamentFeePix"
+    "setTournamentEnrollmentStatus"
   ]
 }
