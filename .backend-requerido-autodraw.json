@@ -1,9 +1,34 @@
 {
   "schema": 1,
-  "backendCommit": "3fb50a11a81a70ada749cabef44ef29d2b2a09b8",
-  "scopeNote": "Neste corte, drawRound usa a projeção canônica no sorteio inicial e advanceTournamentPhase valida e projeta as configurações antes de materializar a fase seguinte. A publicação dessas duas callables não invoca sorteio nem migração; as demais portas operacionais são verificadas separadamente pela trava regional.",
+  "backendCommit": "454cea23b3dbaab775d58758bae975d2bfcfd543",
+  "scopeNote": "Cobrança e inscrição: portas financeiras, criação/configuração, abertura, geradores de chaves e caminhos automáticos afetados pela guarda transacional. O cartão fica desabilitado até configuração financeira verificada e webhook homologado.",
   "functions": [
     "drawRound",
-    "advanceTournamentPhase"
+    "generateExtraTournamentRound",
+    "integrateLateEntries",
+    "closeRound",
+    "startTournament",
+    "applyTournamentFormat",
+    "advanceTournamentPhase",
+    "resolvePendingDraw",
+    "runEnrollmentSlotsDraw",
+    "autoDraw",
+    "autoDrawReconcile",
+    "closePhaseLeagueRound",
+    "setTournamentEnrollmentStatus",
+    "updateTournamentConfiguration",
+    "createTournament",
+    "setDrawBalanceChoice",
+    "setTournamentCategoryConfig",
+    "closeExpiredEnrollment",
+    "getTournamentFeeStatus",
+    "simulateTournamentRegistrationFees",
+    "acceptTournamentFeeTerms",
+    "prepareTournamentFee",
+    "reportTournamentFeePix",
+    "rejectTournamentFeePixReport",
+    "listTournamentFeePixReports",
+    "getTournamentFinanceAdminStatus",
+    "confirmTournamentFeePix"
   ]
 }
