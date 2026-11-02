@@ -112,6 +112,13 @@ const clone=value=>JSON.parse(JSON.stringify(value));
   await sandboxRef.set({...before.parent,id:sandboxId,isSandbox:true,sbState:'ready',
     notificationsMuted:true,sandboxOf:id,sandboxOwnerUid:'org',pairRequests:[]});
   for(const item of before.regs)await sandboxRef.collection('registrations').doc(item.registrationId).set(item);
+  const privateBefore=clone((await sandboxRef.get()).data());
+  await rejected(call('formPair',{tournamentId:sandboxId,sandbox:true,
+    uid1:'alice',uid2:'bob',categoryId:'a'},'alice'),'not-found');
+  await rejected(call('splitPair',{tournamentId:sandboxId,sandbox:true,
+    uid1:'alice',uid2:'bob',categoryId:'a'},'alice'),'not-found');
+  assert.deepEqual(clone((await sandboxRef.get()).data()),privateBefore,
+    'não dono não altera sandbox canônico por formPair ou splitPair');
   const sandboxPair=await call('formPair',{tournamentId:sandboxId,sandbox:true,
     uid1:'alice',uid2:'bob',categoryId:'a'},'org');
   assert.equal(sandboxPair.outcome,'paired','dono do sandbox autorizado no original forma sem convite stale');
@@ -128,6 +135,17 @@ const clone=value=>JSON.parse(JSON.stringify(value));
     memberUids:['org','legacy-a','legacy-b'],
     pairRequests:[{id:'legacy-a__legacy-b',inviterUid:'legacy-a',inviteeUid:'legacy-b'}]});
   for(const item of divided.participants)await legacyRef.collection('inscritos').doc(item._k).set(item);
+  const legacySandboxId='sb_'+legacyId+'_e12';
+  const legacySandboxRef=db.doc('sandboxes/'+legacySandboxId);
+  await legacySandboxRef.set({...clone((await legacyRef.get()).data()),id:legacySandboxId,
+    isSandbox:true,sbState:'ready',notificationsMuted:true,sandboxOf:legacyId,sandboxOwnerUid:'org'});
+  const legacyPrivateBefore=clone((await legacySandboxRef.get()).data());
+  await rejected(call('formPair',{tournamentId:legacySandboxId,sandbox:true,
+    uid1:'legacy-a',uid2:'legacy-b'},'legacy-b'),'not-found');
+  await rejected(call('splitPair',{tournamentId:legacySandboxId,sandbox:true,
+    uid1:'legacy-a',uid2:'legacy-b'},'legacy-b'),'not-found');
+  assert.deepEqual(clone((await legacySandboxRef.get()).data()),legacyPrivateBefore,
+    'não dono não altera sandbox legado por formPair ou splitPair');
   const legacy=await call('formPair',{tournamentId:legacyId,uid1:'legacy-a',uid2:'legacy-b',
     pairRequestId:'legacy-a__legacy-b'},'legacy-b');
   assert.equal(legacy.outcome,'paired','torneio dividido forma com convite e elenco hidratado');
