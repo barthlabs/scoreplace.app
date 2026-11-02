@@ -5,6 +5,11 @@
 // A saída de inscrição recusa prosseguir quando a pessoa já está no sorteio e
 // não há vaga de W.O. identificada. Alterações de categoria aguardam o salvamento
 // em curso para evitar que uma ação rejeitada apareça como concluída.
+// Uma lista atualizada sem recibo explícito não afirma inscrição concluída;
+// o aceite de dupla só anuncia sucesso depois da confirmação do servidor.
+// O corte confere o conteúdo das Functions já publicadas antes de reutilizar
+// seus recibos, e a migração administrativa E08 verifica o leitor web no ar
+// antes de permitir qualquer aplicação em produção.
 // 2.5.83 — O placar de set comum impede um segundo dígito quando a regra fecha
 // em até nove games. Tie-break e super tie-break continuam aceitando dois dígitos.
 // Se um placar inválido chegar à confirmação, o aviso mostra o set e os números lidos.
