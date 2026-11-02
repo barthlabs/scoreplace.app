@@ -245,6 +245,10 @@ const canon=v=>{ if(v===null||typeof v!=='object') return JSON.stringify(v===und
     await fdb.doc('sandboxes/forjado').set({sandboxOwnerUid:DEV,sandboxOf:'orig_div',isSandbox:true,sbState:'ready'});
     return {ok:true};
   });
+  await m('DEV tenta recriar resultsSandbox', async()=>{
+    await sbRef.collection('resultsSandbox').doc('ghost').set({scoreP1:6,scoreP2:4});
+    return {ok:true};
+  });
   // e o REAL não escreve nada
   if(app.auth().currentUser) await app.auth().signOut();
   await app.auth().signInWithEmailAndPassword('real@x.com','senha123');
@@ -525,6 +529,8 @@ ok('⭐⭐ avanço: o DONO grava a próxima fase no documento do sandbox',
 });
 ok('⭐⭐ ⛔ e o DONO NÃO fabrica sandbox à mão — criar é só da Function',
   R['DEV tenta FABRICAR sandbox à mão'].ok === false, J(R['DEV tenta FABRICAR sandbox à mão']));
+ok('⛔ nem o dono recria resultsSandbox depois da E05',
+  R['DEV tenta recriar resultsSandbox'].ok === false, J(R['DEV tenta recriar resultsSandbox']));
 ['REAL escreve no parent do sandbox', 'REAL escreve em matches do sandbox', 'REAL escreve em resultsSandbox'].forEach((k) => {
   ok('⛔ ' + k + ' → NEGADO', R[k].ok === false, J(R[k]));
 });

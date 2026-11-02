@@ -718,6 +718,7 @@ const SUITES = [
   'tests/progresso-regressiva-fim-programado.test.js',
   'tests/neon-progress-before-first-game.test.js',
   'tests/neon-progress-two-days.test.js',
+  'tests/e05-third-place-only-elimination.test.js',
   'tests/evento-concentrado-regressiva.test.js',
   'tests/barras-de-progresso-mostram-o-percentual.test.js',
   'tests/relogio-cor-do-ritmo-e-centrado.test.js',

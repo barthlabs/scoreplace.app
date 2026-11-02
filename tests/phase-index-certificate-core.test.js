@@ -61,8 +61,9 @@ const historical = rootOf(planFor(existing, existing,
   { phaseReadProof: true, partesLegadasNoDocumento: { matches: true } }));
 assert.equal(historical._phaseReadCertificate, undefined,
   'primeira gravação de jogos históricos ainda não certifica');
-const sandbox = rootOf(planFor(existing, existing,
-  { phaseReadProof: true, resultCollection: 'resultsSandbox' }));
+const sandboxExisting = { ...existing, isSandbox: true };
+const sandbox = rootOf(planFor(sandboxExisting, sandboxExisting,
+  { phaseReadProof: true }));
 assert.equal(sandbox._phaseReadCertificate, undefined, 'sandbox não certifica');
 const afterRemoval = { ...existing, phaseRounds: {} };
 const removalPlan = planFor(existing, afterRemoval, { phaseReadProof: true });

@@ -94,7 +94,7 @@ ok(written.some(([p]) => p === 'tournaments/t1/matches/m1') &&
    '① applyPlan envia somente o jogo físico');
 const sandboxPlan = WP.planWrites(null, Object.assign(torneio(2), { isSandbox: true }), {
   split: split, boundary: boundary, agoraIso: '2026-09-02T10:00:00.000Z',
-  tournamentId: 'sb_t1', resultCollection: 'resultsSandbox'
+  tournamentId: 'sb_t1'
 });
 ok(sandboxPlan.ops.some(op => op.colecao === 'matches' && op.chave === 'm1') &&
    !sandboxPlan.ops.some(op => op.colecao === 'resultsSandbox' || op.colecao === 'results'),

@@ -30,6 +30,8 @@ const ler = (p) => fs.readFileSync(path.join(RAIZ, p), 'utf8');
  * as `rules-*` disputam as portas 8098/8099 e TODAS usam o projeto `demo-scoreplace`, ou
  * seja, os dados se misturariam. Rodadas em série, como aqui, não colidem. */
 const EMULADOR_MANUAL = {
+  'tests/e05-results-obsoletos-emulator.test.js':
+    'node tests/e05-results-obsoletos-emulator.test.js',
   'tests/e05-sandbox-replay-emulator.test.js':
     'node tests/e05-sandbox-replay-emulator.test.js',
   'tests/e05-wo-patch-replay-emulator.test.js':

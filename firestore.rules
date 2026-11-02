@@ -480,7 +480,9 @@ service cloud.firestore {
         allow write: if false;
       }
       match /resultsSandbox/{matchId} {
-        allow read, write: if request.auth != null && request.auth.uid == sbDono();
+        // E05: o placar vive somente em matches/{id}.jogo; nem o dono recria o índice.
+        allow read: if request.auth != null && request.auth.uid == sbDono();
+        allow write: if false;
       }
     }
 

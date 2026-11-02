@@ -1980,7 +1980,7 @@ function _isEliminationBracket(t) {
   if (canonical) return canonical === 'single' || canonical === 'double';
   var legacy = (t && t.format) || '';
   return legacy === 'Eliminatórias Simples' || legacy === 'Eliminatória Simples' ||
-    legacy === 'Dupla Eliminatória' || legacy === 'Fase de Grupos';
+    legacy === 'Dupla Eliminatória';
 }
 
 function _advanceWinner(t, completedMatch) {
@@ -4086,7 +4086,7 @@ function _maybeGenerate3rdPlace(t) {
   // helper após cada resultado, inclusive em fases classificatórias; sem esta
   // guarda ele recriava um campo separado mesmo com os jogos canônicos corretos.
   // Preserve um placar legado para investigação, mas limpe o placeholder vazio.
-  if (_bracketPhaseFormat(t) === 'classification') {
+  if (!_isEliminationBracket(t)) {
     var oldThird = t && t.thirdPlaceMatch;
     if (oldThird && !(oldThird.winner || oldThird.result ||
         (oldThird.score1 != null && oldThird.score2 != null) ||

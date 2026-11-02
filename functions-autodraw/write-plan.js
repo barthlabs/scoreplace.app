@@ -29,8 +29,7 @@ const phaseCertificate = require('./vendor/phase-index-certificate-core');
 
 /* Coleções que este planejador pode tocar. Qualquer outra é recusada pelo executor.
  * `null` é o documento raiz do torneio. */
-const COLECOES_FIXAS = ['results', 'resultsSandbox', 'resultVisibilityFence',
-  'advanceReceipts', 'outbox', 'notificationOutbox'];
+const COLECOES_FIXAS = ['advanceReceipts', 'outbox', 'notificationOutbox'];
 
 /* Teto conservador, bem abaixo do limite real do Firestore (500 escritas por transação).
  * ⛔ A recusa acontece ANTES de qualquer escrita, e a materialização NUNCA é quebrada em
@@ -52,6 +51,9 @@ function _clone(x) { return JSON.parse(JSON.stringify(x)); }
  */
 function planWrites(tAntes, tDepois, ctx) {
   const o = ctx || {};
+  if (o.visibilityResults || o.resultCollection) {
+    throw new Error('[write-plan] results não é fonte de jogo; transição obsoleta');
+  }
   if (!o.boundary) throw new Error('[write-plan] ctx.boundary é obrigatório');
   if (!o.agoraIso) throw new Error('[write-plan] ctx.agoraIso é obrigatório — instante estável entra por argumento');
 
@@ -102,40 +104,6 @@ function planWrites(tAntes, tDepois, ctx) {
 
   });
 
-  // Transição de privacidade: independe de jogosQueMudaram e do filtro de
-  // roster vazio acima. O chamador leu TODOS os resultados na mesma transação.
-  if (o.visibilityResults) {
-    const transition = o.visibilityResults;
-    if (!['hide', 'release'].includes(transition.mode) || !Array.isArray(transition.entries) ||
-        o.resultCollection === 'resultsSandbox') throw new Error('[write-plan] transição de resultados inválida');
-    if (ops.some((op) => op.colecao === split.colecaoDaParte('matches'))) {
-      throw new Error('[write-plan] transição de visibilidade com mudança de jogo — recuso estado parcial');
-    }
-    const seen = new Set();
-    for (const entry of transition.entries) {
-      const id = entry && String(entry.id || '');
-      if (!id || id.includes('/') || seen.has(id)) throw new Error('[write-plan] resultado sem identidade única');
-      seen.add(id);
-      if (transition.mode === 'hide') {
-        ops.push({ tipo: 'set', colecao: 'results', chave: id, doc: {},
-          merge: true, apagarCampos: ['playerUids'] });
-      } else {
-        if (!Array.isArray(entry.playerUids) || entry.playerUids.some((uid) =>
-          typeof uid !== 'string' || !uid.trim())) throw new Error('[write-plan] roster de liberação sem prova');
-        ops.push({ tipo: 'set', colecao: 'results', chave: id,
-          doc: { playerUids: [...new Set(entry.playerUids)] }, merge: true });
-      }
-    }
-  }
-
-  // A raiz e todos os resultados da transição são confirmados com a mesma
-  // revisão que os escritores normais disputam. Mesmo zero resultados exige
-  // incremento: sem ele, uma inserção após a consulta escaparia da transição.
-  if (o.visibilityResults || ops.some((op) => op.colecao === 'results')) {
-    ops.push({ tipo: 'set', colecao: 'resultVisibilityFence', chave: 'state',
-      doc: {}, merge: true, incrementFields: ['revision'] });
-  }
-
   /* devolve ao documento tudo que NÃO está no marcador */
   (split.PESADOS || ['participants', 'history']).forEach((k) => {
     if (fora.indexOf(k) === -1 && b.persist[k] !== undefined) pDepois.config[k] = b.persist[k];
@@ -152,7 +120,7 @@ function planWrites(tAntes, tDepois, ctx) {
 
   if (o.phaseReadProof === true &&
       ops.length + 1 + (o.extras || []).length <= TETO_OPERACOES &&
-      o.resultCollection !== 'resultsSandbox' &&
+      !tDepois.isSandbox &&
       !(o.partesLegadasNoDocumento && o.partesLegadasNoDocumento.matches)) {
     const certificate = phaseCertificate.build(pDepois.matches, split);
     if (certificate && pDepois.config._nPartes.matches === certificate.count) {

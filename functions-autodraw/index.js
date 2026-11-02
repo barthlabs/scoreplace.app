@@ -41,13 +41,6 @@ const ScoreplaceRefereeRoster = require('./vendor/referee-roster.js');
 const _isConfirmedTournamentReferee = (t, uid) =>
   ScoreplaceRefereeRoster.sanitizeAll(t && t.arbitros).some(e => e.uid === uid && e.status === 'confirmed');
 const _competitionAssignments = require('./competition-assignment-core.js');
-// fonte única: functions/match-roster.js (copy-vendor) — monta o subdoc de resultado,
-// incluindo o carregar-adiante do `replay`, que o servidor não sabe recalcular.
-let _mrEspelho = null;
-try { _mrEspelho = require('./vendor/match-roster.js'); }
-catch (e) { console.error('[espelho-result] vendor/match-roster.js indisponível:', e && e.message); }
-const _visibilityRoster = require('./vendor/result-visibility-roster-core.js');
-const _visibilityFence = require('./vendor/result-visibility-fence-core.js');
 /* ⚰️ O reconciliador da marca SAIU daqui em 23/set/2026: esta codebase não grava mais
  * `skillBySport` em perfil de terceiro (a categoria do organizador vive no torneio), então não há
  * marca de procedência a reconciliar. Ele continua vivo em `functions/`, onde as portas de perfil
@@ -967,12 +960,6 @@ async function _leTorneio(tx, ref, tId, readCounter = null, projectLateCandidate
   const snap = await tx.get(ref);
   if (readCounter) readCounter.documents = 1;
   if (!snap.exists) return null;
-  // Qualquer mutador pode acabar emitindo results pelo plano central após a
-  // projeção canônica. O fence integra o read-set antes de qualquer escrita.
-  if (tx !== _TX_LEITURA && !String(ref.path).startsWith('sandboxes/')) {
-    const fenceSnap = await _visibilityFence.read(tx, ref);
-    if (readCounter && fenceSnap.exists) readCounter.documents++;
-  }
   const t = snap.data(); t.id = tId;
   // ⭐ UM CAMINHO SÓ (ver montarDoBanco no split-core). O que é daqui: ler coleção DENTRO
   // da transação — e transação exige todas as leituras antes de qualquer escrita, que é
@@ -1233,8 +1220,7 @@ function _gravaTorneio(tx, ref, tDepois, tAntes, ctx) {
    * o mesmo plano; um preflight que estime por fora pode divergir da escrita real, e aí o
    * teto mede um plano enquanto o banco recebe outro.
    * A lógica de dividir, de `jogosQueMudaram` e dos contadores mora no planejador.
-   * E05: a escrita normal agora produz apenas jogos físicos; a transição E01 ainda
-   * pode alterar `results` históricos pelo mesmo plano e fence.
+   * E05: a escrita normal produz apenas jogos físicos.
    * ⛔ E NÃO HÁ FALLBACK AQUI: quem não passa `ctx.agoraIso` recebe erro. Um fallback neste
    * ponto reintroduziria exatamente o defeito, só que calado. Cada chamador calcula o
    * instante UMA vez, imediatamente antes de `db.runTransaction`. */
@@ -1318,16 +1304,8 @@ function _gravaTorneio(tx, ref, tDepois, tAntes, ctx) {
   }
   const plan = _planejaEscrita(tDepois, tAntes, {
     agoraIso: _agoraIso, extras: (ctx && ctx.extras) || [],
-    visibilityResults: ctx && ctx.visibilityResults,
-    resultCollection: String(ref.path || '').startsWith('sandboxes/') ? 'resultsSandbox' : 'results',
     phaseReadProof: tx !== _TX_LEITURA && !!_phaseReadProofs.get(tx)?.get(ref.path)
   });
-  if (ctx && ctx.visibilityResults) {
-    const tooMany = _wp.checaTeto(plan);
-    if (tooMany) throw new HttpsError('failed-precondition', tooMany);
-    const bytes = Buffer.byteLength(JSON.stringify(plan.ops), 'utf8');
-    if (bytes > 5 * 1024 * 1024) throw new HttpsError('failed-precondition', 'Transição de visibilidade grande demais.');
-  }
   _wp.applyPlan(tx, ref, plan, { FieldValue: FieldValue });
   /* O chamador da W.O. precisa distinguir "motor mudou o objeto" de "o slot entrou
    * no plano que esta transação realmente vai gravar". Expor somente os IDs (não o
@@ -1438,12 +1416,10 @@ function _planejaEscrita(tDepois, tAntes, opts) {
     split: _tSplit,
     boundary: _applyWriteBoundary,
     agoraIso: o.agoraIso,
-    resultCollection: o.resultCollection || (tDepois && tDepois.isSandbox === true ? 'resultsSandbox' : 'results'),
     tournamentId: o.tournamentId || (tDepois && tDepois.id) || null,
     partesLegadasNoDocumento: partesLegadasNoDocumento,
     phaseReadProof: o.phaseReadProof === true,
     extras: o.extras || [],
-    visibilityResults: o.visibilityResults || null
   });
 }
 
@@ -5588,40 +5564,6 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     t.updatedAt = agoraIso;
     if (!Array.isArray(t.history)) t.history = [];
     t.history.push({ date: agoraIso, message: 'Regras atualizadas pela organização.' });
-    let visibilityResults = null;
-    if (!sandbox && wasOrganizerOnly !== (t.organizerOnly === true)) {
-      // A consulta sozinha não trava inserções: todos os escritores de results
-      // também leem a raiz na própria transação e recuam se ela estiver oculta.
-      const resultSnap = await tx.get(ref.collection('results').limit(751));
-      // O teto protege a varredura de results. Jogos/inscrições necessários à
-      // montagem canônica não são espelhos a limpar e não podem consumir esse teto.
-      if (resultSnap.docs.length >= 751) {
-        throw new HttpsError('failed-precondition', 'Há mais de 750 resultados históricos. A visibilidade não foi alterada; contate o suporte para conciliação administrativa.');
-      }
-      const hide = t.organizerOnly === true;
-      const games = hide ? null : new Map();
-      if (!hide) {
-        if (!_mrEspelho || typeof _mrEspelho.collectMatches !== 'function') {
-          throw new HttpsError('failed-precondition', 'Elenco dos jogos indisponível para liberação.');
-        }
-        for (const game of _mrEspelho.collectMatches(t)) {
-          if (!game || game.id == null || game.id === '') continue;
-          const id = String(game.id);
-          if (games.has(id) && games.get(id) !== game) {
-            throw new HttpsError('failed-precondition', 'Identidade de jogo duplicada na liberação.');
-          }
-          games.set(id, game);
-        }
-      }
-      visibilityResults = { mode: hide ? 'hide' : 'release', entries: resultSnap.docs.map((doc) => {
-        if (hide) return { id: doc.id };
-        const game = games.get(doc.id);
-        if (!game) throw new HttpsError('failed-precondition', 'Há resultado histórico sem jogo comprovado. Nenhum resultado foi liberado; contate o suporte para conciliação administrativa.');
-        const playerUids = _visibilityRoster.releasePlayerUids(t, game);
-        if (playerUids === null) throw new HttpsError('failed-precondition', 'Elenco inconclusivo impede a liberação.');
-        return { id: doc.id, playerUids };
-      }) };
-    }
     const extras = [];
     if (wasOrganizerOnly && t.organizerOnly !== true && !t.isSandbox) {
       const admins = new Set([t.creatorUid].concat(Array.isArray(t.adminUids) ? t.adminUids : []).map(String));
@@ -5640,7 +5582,7 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
         createdAt: agoraIso, createdAtMs: Date.parse(agoraIso), dispatchStatus: 'pending'
       } });
     }
-    const b = _gravaTorneio(tx, ref, t, antes, { agoraIso, visibilityResults, extras });
+    const b = _gravaTorneio(tx, ref, t, antes, { agoraIso, extras });
     return { ok:true, changed:true, tournament:b.clean };
   });
 });

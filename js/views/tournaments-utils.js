@@ -208,7 +208,7 @@ window._phaseEliminationKind = function(t, phaseIndex) {
     }
     var legacy = t.format || '';
     if (legacy === 'Dupla Eliminatória') return 'double';
-    if (legacy === 'Eliminatórias Simples' || legacy === 'Eliminatória Simples' || legacy === 'Fase de Grupos') return 'single';
+    if (legacy === 'Eliminatórias Simples' || legacy === 'Eliminatória Simples') return 'single';
     return null;
 };
 
