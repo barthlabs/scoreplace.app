@@ -114,7 +114,9 @@ const clone=value=>JSON.parse(JSON.stringify(value));
       tx.update(current.ref,{'canonicalRegistrationMigration.registrationCount':1});
     });
     const deletion=n%2===0?remove(current.id,'B'):configure(current.id,[definitions[0]]);
-    await Promise.allSettled([enroll,deletion]);
+    const settled=await Promise.allSettled([enroll,deletion]);
+    assert(settled.some(result=>result.status==='fulfilled'),
+      'a corrida deve concluir pelo menos uma das operações concorrentes');
     const live=(await current.ref.collection('registrations').get()).docs.some(doc=>doc.data().status!=='withdrawn');
     const labels=(await current.ref.get()).data().categoryDefinitions.map(def=>def.id);
     assert(!live||labels.includes('b'),'corrida não deixa inscrição ativa sem categoria');
