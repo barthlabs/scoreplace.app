@@ -133,14 +133,15 @@ function navigate(matchId) {
     'tournaments/fixture': { exists: true, data: () => ({ name: 'Torneio teste' }) }
   };
   let failRead = null;
+  let failCode = 'permission-denied';
   database.ensureDb = () => true;
   database.db = { collection(name) { return { doc(id) { const base = name + '/' + id; return {
     get(opts) { reads.push([base, opts.source]);
-      return failRead === base ? Promise.reject(Object.assign(new Error('negado'), { code: 'permission-denied' }))
+      return failRead === base ? Promise.reject(Object.assign(new Error('negado'), { code: failCode }))
         : Promise.resolve(docs[base] || { exists: false }); },
     collection(sub) { return { doc(mid) { const key = base + '/' + sub + '/' + mid; return {
       get(opts) { reads.push([key, opts.source]);
-        return failRead === key ? Promise.reject(Object.assign(new Error('negado'), { code: 'permission-denied' }))
+        return failRead === key ? Promise.reject(Object.assign(new Error('negado'), { code: failCode }))
           : Promise.resolve(docs[key] || { exists: false }); }
     }; } }; }
   }; } }; } };
@@ -173,6 +174,8 @@ function navigate(matchId) {
   await assert.rejects(database.loadCanonicalMatch('fixture', 'game-1'), { code: 'permission-denied' });
   failRead = 'tournaments/fixture/matches/game-1';
   await assert.rejects(database.loadCanonicalMatch('fixture', 'game-1'), { code: 'permission-denied' });
+  failCode = 'unavailable';
+  await assert.rejects(database.loadCanonicalMatch('fixture', 'game-1'), { code: 'unavailable' });
   failRead = null;
   await assert.rejects(database.loadCanonicalMatch('fixture', ''), /Identidade de jogo inválida/);
   database.ensureDb = () => false;

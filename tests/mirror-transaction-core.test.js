@@ -122,6 +122,11 @@ function harness(tournament) {
     p1: 'Ana / Bia', p2: 'Cris / Dani', team1Obj: { p1Uid: 'ana', p2ManualId: 'bia' },
     team2Obj: { p1ManualId: 'cris', p2ManualId: 'dani' },
   }), ['ana'], 'vaga manual no outro lado não apaga o UID estrutural comprovado');
+  assert.deepEqual(core.provenPlayerUids({ participants: [
+    { uid: 'homonimo-1', displayName: 'Um' }, { uid: 'homonimo-2', displayName: 'Um' }
+  ] }, {
+    p1: 'Um / Dois', p2: 'TBD', team1Obj: { p1Uid: 'uid-explicito', p2ManualId: 'manual-dois' }
+  }), ['uid-explicito'], 'dupla parcial com homônimos usa só o UID estrutural, nunca o nome');
   assert.deepEqual(core.provenPlayerUids(duplicateName, roster.collectMatches(duplicateName)[0]), [],
     'homônimos sem identidade estrutural não recebem autorização por nome');
   assert.deepEqual(core.provenPlayerUids({ participants: [] }, {
