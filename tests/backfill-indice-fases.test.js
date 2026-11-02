@@ -2,6 +2,7 @@
 
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const split = require('../functions/vendor/tournament-split-core.js');
 const roster = require('../functions/match-roster.js');
@@ -144,7 +145,8 @@ async function fakeServer(options = {}) {
   assert(!requests[0].url.searchParams.has('updateMask.fieldPaths'));
   assert.equal(requests[0].options.body, undefined);
   assert(!JSON.stringify(core.aggregatePlans([plan])).includes('private-token'));
-  const tempHome = fs.mkdtempSync('/private/tmp/scoreplace-phase-test-');
+  const temporaryRoot = fs.realpathSync(os.tmpdir());
+  const tempHome = fs.mkdtempSync(path.join(temporaryRoot, 'scoreplace-phase-test-'));
   try {
     const success = await fakeServer({ backupDir: tempHome });
     const expected = (await script.preview(success.fetchImpl, 'private-token')).digest;
@@ -183,7 +185,7 @@ async function fakeServer(options = {}) {
     assert.equal(stale.patchAttempts, 0);
     assert.throws(() => script.backupRoot(path.join(process.cwd(), 'test-home')), /proibido/);
     const link = path.join(tempHome, 'link');
-    fs.symlinkSync('/private/tmp', link);
+    fs.symlinkSync(temporaryRoot, link);
     assert.throws(() => script.assertNoSymlinks(path.join(link, 'backup')), /symlink/);
   } finally {
     fs.rmSync(tempHome, { recursive: true, force: true });

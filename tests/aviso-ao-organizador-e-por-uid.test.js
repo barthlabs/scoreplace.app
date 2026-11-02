@@ -107,6 +107,8 @@ const guardas = (src.match(/if \(_verdict(Team)? !== 'enrolled'\) return;/g) || 
 ok(guardas === 1, '⑥ ⭐ a inscrição própria para ANTES do aviso quando não é `enrolled` — achei ' + guardas);
 
 /* ── ⑦ cancelamento que NÃO aconteceu não avisa ─────────────────────────────────── */
+ok(/if \(!result \|\| typeof result\.notFound !== 'boolean' \|\| !Array\.isArray\(result\.participants\)\)/.test(src),
+  '⑦ resposta ausente ou incompleta é recusada antes de acessar notFound');
 ok(/if \(result\.notFound\) \{/.test(src),
   '⑦ ⭐⭐ `notFound` da Function interrompe antes do aviso — a guarda que faltava');
 const iCanc = src.indexOf('if (result.notFound) {');
