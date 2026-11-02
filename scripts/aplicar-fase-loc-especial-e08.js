@@ -19,6 +19,8 @@ const SOURCE = path.join(DIR, 'e05-inline-manifest-private.json');
 const MANIFEST = path.join(DIR, 'e08-phase14-manifest-private.json');
 const RECEIPT = path.join(DIR, 'e08-phase14-receipt-private.json');
 const BACKUP_DIR = '/Users/rtb/Documents/Codex/backups-operacionais';
+// Manifesto E05: Corpus (3º lugar), Misto (2 grupos × 3 rodadas × 2 jogos),
+// Duplas Mistas (3º lugar). Recusar qualquer cardinalidade diferente.
 const EXPECTED = Object.freeze([1, 12, 1]);
 
 function fail(message) { throw new Error('[E08 fase14] ' + message); }
@@ -170,14 +172,20 @@ async function applyVerified(db, plan, targets, backups, hooks = {}) {
   // nelas alteraria updateTime e violaria o escopo de dois campos nos 14 jogos.
   await db.runTransaction(async tx => {
     const fresh = [];
-    for (const target of targets) {
+    for (let i = 0; i < targets.length; i++) {
+      const target = targets[i];
       const ref = db.collection('tournaments').doc(target.id);
+      // listCollections não participa da transação; conferir a lista antes das
+      // leituras transacionais e novamente na pós-auditoria. Documentos lidos
+      // via tx.get e o lastUpdateTime abaixo protegem o conjunto conhecido.
+      const names = (await ref.listCollections()).map(col => col.id).sort();
+      if (!same(names, before[i].physicalCollectionNames)) fail('subcoleção nova ou removida');
       const root = await tx.get(ref);
       const collections = {};
-      for (const name of before[fresh.length].physicalCollectionNames) {
+      for (const name of names) {
         collections[name] = (await tx.get(ref.collection(name))).docs;
       }
-      const snapshot = { root, collections, physicalCollectionNames: before[fresh.length].physicalCollectionNames };
+      const snapshot = { root, collections, physicalCollectionNames: names };
       validate(snapshot, target);
       fresh.push(snapshot);
     }
@@ -254,6 +262,8 @@ async function main(args = process.argv.slice(2), hooks = {}) {
   if (!hooks.skipRelease) await requirePublishedRelease();
   const authorized = hooks.authorized || approval(plan);
   const receiptFile = hooks.receiptFile || RECEIPT;
+  // PREPARED pode sobreviver a uma queda após o commit. Não repetir: auditar
+  // manualmente os 14 alvos contra o backup e resolver o recibo primeiro.
   if (fs.existsSync(receiptFile)) fail('recibo anterior exige auditoria antes de retry');
   const targets = hooks.targets || sourceTargets();
   const backups = backupsFromPlan(plan, hooks.backupDir || BACKUP_DIR);
