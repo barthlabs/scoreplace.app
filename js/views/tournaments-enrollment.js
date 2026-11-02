@@ -1263,9 +1263,16 @@ window.deenrollCurrentUser = function (tId) {
                     && window._isPlacedInDraw(t, user.uid);
                 var _vaga = (_colocada && typeof window._acharVagaNoSorteio === 'function')
                     ? window._acharVagaNoSorteio(t, user.uid) : null;
-                if (_vaga && typeof window._ligaApplyWo === 'function') {
-                    window._ligaApplyWo(t.id, _vaga.roundIndex, _vaga.groupName, _vaga.nome);
-                    return;   // o fluxo de W.O. commita, notifica e re-renderiza sozinho
+                if (_colocada) {
+                    if (_vaga && typeof window._ligaApplyWo === 'function') {
+                        window._ligaApplyWo(t.id, _vaga.roundIndex, _vaga.groupName, _vaga.nome);
+                        return;   // o fluxo de W.O. commita, notifica e re-renderiza sozinho
+                    }
+                    if (typeof showNotification !== 'undefined') showNotification(
+                        'Saída não confirmada',
+                        'Não foi possível localizar sua vaga na chave para aplicar W.O. Atualize o torneio e tente novamente.',
+                        'error');
+                    return; // nunca retirar do elenco quem ainda ocupa um confronto
                 }
                 if (window.FirestoreDB && typeof window.FirestoreDB.deenrollParticipant === 'function') {
                     window.FirestoreDB.deenrollParticipant(tId, user.uid).then(function(result) {

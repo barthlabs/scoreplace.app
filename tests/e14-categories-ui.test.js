@@ -55,5 +55,25 @@ window._erRenderMatrix=()=>{};
     'configuração envia a versão tipada para CAS no servidor');
   assert.deepEqual(Array.from(tournament.combinedCategories),['Fem','Masc'],
     'toggle canônico não recria rótulo retirado de eixo antigo');
+  await Promise.resolve(); await Promise.resolve();
+  let rejectPending;
+  window._callCF=(_name,payload)=>{payloads.push(payload);return new Promise((_resolve,reject)=>{rejectPending=reject;});};
+  window._erToggleGender('e14',null);
+  const pendingGender=Array.from(tournament.genderCategories);
+  window._erToggleSkill('e14','Power',null);
+  assert.deepEqual(Array.from(tournament.genderCategories),pendingGender,
+    'segundo toggle não altera gênero durante gravação pendente');
+  assert.deepEqual(Array.from(tournament.skillCategories),[],
+    'segundo toggle não altera habilidade durante gravação pendente');
+  assert.equal(payloads.length,2,'segundo toggle não envia outra gravação');
+  rejectPending(new Error('servidor recusou')); await Promise.resolve(); await Promise.resolve();
+  assert.deepEqual(Array.from(tournament.genderCategories),['Fem','Masc'],
+    'recusa restaura snapshot anterior à primeira mutação');
+  window._callCF=(_name,payload)=>{payloads.push(payload);return Promise.resolve({ok:true});};
+  window._erToggleSkill('e14','Power',null);
+  assert.equal(payloads.length,3,'recusa libera novo toggle');
+  await Promise.resolve(); await Promise.resolve();
+  window._erToggleGenderMisto('e14',null);
+  assert.equal(payloads.length,4,'sucesso também libera o próximo toggle');
   console.log('✓ E14 UI: categoria removida não reaparece e toggle recusado/offline reverte');
 })().catch(error=>{console.error(error);process.exitCode=1;});

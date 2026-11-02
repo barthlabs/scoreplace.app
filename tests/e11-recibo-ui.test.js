@@ -121,6 +121,23 @@ function fixture(participants = [{ uid:'self' }]) {
   }
   {
     const {s,t,effects} = fixture();
+    let deenrollCalls = 0, woCalls = 0;
+    s._isPlacedInDraw = () => true;
+    s._acharVagaNoSorteio = () => null;
+    s._ligaApplyWo = () => { woCalls++; };
+    s.FirestoreDB = { deenrollParticipant:() => { deenrollCalls++; return Promise.resolve({notFound:false,participants:[]}); } };
+    s.deenrollCurrentUser(t.id); await flush();
+    assert.equal(deenrollCalls,0,'pessoa colocada sem vaga localizada não sai do elenco pela porta comum');
+    assert.equal(woCalls,0);
+    assert.equal(t.participants.length,1);
+    assert.equal(effects.toasts.at(-1).kind,'error');
+    s._acharVagaNoSorteio = () => ({roundIndex:1,groupName:'A',nome:'Pessoa Teste'});
+    s.deenrollCurrentUser(t.id); await flush();
+    assert.equal(woCalls,1,'vaga localizada segue pela porta W.O.');
+    assert.equal(deenrollCalls,0,'W.O. não chama desinscrição comum');
+  }
+  {
+    const {s,t,effects} = fixture();
     s.FirestoreDB = { deenrollParticipant:() => Promise.reject(Object.assign(new Error('sem permissão'), { code:'permission-denied' })) };
     s.deenrollCurrentUser(t.id); await flush();
     assert.equal(t.participants.length, 1); assert.equal(effects.cancellations, 0);

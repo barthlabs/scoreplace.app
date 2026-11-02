@@ -3591,6 +3591,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     btn.textContent = reverting ? '⏳ Revertendo…' : '⏳ Criando…';
   }
   var _erCategorySaveSeq = 0;
+  var _erCategorySaveInFlight = false;
   function _erCategorySnapshot(t) {
     return { genderCategories: (t.genderCategories || []).slice(),
       skillCategories: (t.skillCategories || []).slice(),
@@ -3626,6 +3627,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   }
   function _erCommitCats(t, previous) {
     var saveSeq = ++_erCategorySaveSeq;
+    _erCategorySaveInFlight = true;
     t.combinedCategories = _erComputeCombined(t.genderCategories, t.skillCategories);
     // O onSnapshot troca os OBJETOS de AppStore.tournaments — _liveState.t pode estar
     // apontando pro objeto VELHO. O toggle muta o novo (via _erFindT) mas o re-render
@@ -3636,6 +3638,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // (era o "carregando" que pulava a tela). Re-render só a matriz, in-place.
     window._suppressSoftRefresh = true;
     var done = function () {
+      _erCategorySaveInFlight = false;
       window._erRenderMatrix();
       setTimeout(function () { window._suppressSoftRefresh = false; }, 1200);
     };
@@ -3657,7 +3660,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     } catch (e) { rejected(e); }
   }
   window._erToggleGender = function (tId, btn) {
-    if (!_liveState || !_liveState.isOrg) return;
+    if (!_liveState || !_liveState.isOrg || _erCategorySaveInFlight) return;
     var t = _erFindT(tId); if (!t) return;
     var previous = _erCategorySnapshot(t);
     if (!_erToggleAxes(t)) return;
@@ -3671,7 +3674,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     _erCommitCats(t, previous);
   };
   window._erToggleGenderMisto = function (tId, btn) {
-    if (!_liveState || !_liveState.isOrg) return;
+    if (!_liveState || !_liveState.isOrg || _erCategorySaveInFlight) return;
     var t = _erFindT(tId); if (!t) return;
     var previous = _erCategorySnapshot(t);
     if (!_erToggleAxes(t)) return;
@@ -3683,7 +3686,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     _erCommitCats(t, previous);
   };
   window._erToggleSkill = function (tId, sk, btn) {
-    if (!_liveState || !_liveState.isOrg) return;
+    if (!_liveState || !_liveState.isOrg || _erCategorySaveInFlight) return;
     var t = _erFindT(tId); if (!t) return;
     var previous = _erCategorySnapshot(t);
     if (!_erToggleAxes(t)) return;
