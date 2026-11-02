@@ -73,6 +73,21 @@ function ultimoDoEscopo(nome, caminhos) {
   return nome === 'autodraw' ? ultimoAutodrawImplantavel() : ultimoDe(caminhos);
 }
 
+// Dois commits podem tocar o vendor e restaurar exatamente os bytes já implantados.
+// Nesse caso, o recibo nominal continua válido: exigir outro deploy por SHA de
+// histórico publicaria Functions sem mudança. A igualdade deve abranger TODO o
+// codebase, não apenas os arquivos escolhidos pelo manifesto.
+function mesmoAutodrawPublicado(backendCommit) {
+  if (!/^[a-f0-9]{40}$/i.test(backendCommit || '')) return false;
+  try {
+    execFileSync('git', ['merge-base', '--is-ancestor', backendCommit, 'HEAD'],
+      { cwd: RAIZ, stdio: 'ignore' });
+    execFileSync('git', ['diff', '--quiet', backendCommit, 'HEAD', '--', 'functions-autodraw'],
+      { cwd: RAIZ, stdio: 'ignore' });
+    return true;
+  } catch (_) { return false; }
+}
+
 if (iCarimbar !== -1) {
   const e = ESCOPOS[escopoPedido];
   const sha = ultimoDoEscopo(escopoPedido, e.caminhos);
@@ -135,10 +150,14 @@ Object.keys(ESCOPOS).forEach((nome) => {
   try { git(['merge-base', '--is-ancestor', ultimo, carimbado]); jaContem = true; } catch (e2) { jaContem = false; }
   if (jaContem) { console.log('✓ ' + nome + ' publicado (carimbo ' + carimbado.slice(0, 8) + ' já contém)'); return; }
   if (nome === 'autodraw') {
-    const result = checkTargetedPublication(readJson(manifestPath), readJson(receiptPath), ultimo, exportsAutodraw());
+    const manifest = readJson(manifestPath);
+    const sameTree = manifest && mesmoAutodrawPublicado(manifest.backendCommit);
+    const result = checkTargetedPublication(manifest, readJson(receiptPath),
+      sameTree ? manifest.backendCommit : ultimo, exportsAutodraw());
     if (result.ok) {
       console.log('✓ autodraw direcionado — VERIFICADAS: ' + result.verified.join(', '));
       console.log('  NÃO verificadas neste corte: ' + result.unverified + ' funções do codebase');
+      if (sameTree) console.log('  codebase idêntico ao commit publicado (' + manifest.backendCommit.slice(0, 8) + ')');
       return;
     }
     console.error('  recibo direcionado recusado: ' + result.reason);
