@@ -61,16 +61,16 @@
       ]
     },
     {
-      "collectionGroup": "mirrorReconcilePending",
+      "collectionGroup": "matches",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
         {
-          "fieldPath": "permanent",
-          "order": "ASCENDING"
+          "fieldPath": "players",
+          "arrayConfig": "CONTAINS"
         },
         {
-          "fieldPath": "leaseUntilMs",
-          "order": "ASCENDING"
+          "fieldPath": "dateMs",
+          "order": "DESCENDING"
         }
       ]
     },
