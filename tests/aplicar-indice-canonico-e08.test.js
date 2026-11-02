@@ -97,7 +97,7 @@ try {
   // Se cair após o wx e antes de completar o JSON, a limpeza exige auditoria manual.
   fs.unlinkSync(legacy);
   fs.unlinkSync(otherFile);
-  fs.writeFileSync(newFile, '{');
+  fs.writeFileSync(path.join(records, path.basename(newFile)), '{');
   assert.throws(() => cli.assertPriorReceipts(id, otherDigest, records), /ilegível/);
 
   console.log('E08: manifesto, digest, recibo E20 e autorização específica conferidos');
