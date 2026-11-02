@@ -12650,11 +12650,8 @@ async function _sweepDeletionLeftovers(db, uid, kind) {
   await conta("casualMatches.playerUids", db.collection("casualMatches").where("playerUids", "array-contains", uid));
   // user-vivo:isento — busca reversa por uid (contagem de vínculos de terceiros).
   await conta("users.friends[] de terceiros", db.collection("users").where("friends", "array-contains", uid));
-  // Durante a migração E05, auditar as duas coleções detecta tanto o jogo físico
-  // canônico quanto um espelho antigo que sobreviveu à limpeza. Não usar o espelho
-  // para reconstruir placar ou identidade.
+  // Após a migração E05, results foi esvaziado; só matches guarda jogos de torneio.
   await conta("matches.playerUids", db.collectionGroup("matches").where("playerUids", "array-contains", uid));
-  await conta("results.playerUids", db.collectionGroup("results").where("playerUids", "array-contains", uid));
   await olha("letzplayScans/" + uid, async () => {
     const d = await db.collection("letzplayScans").doc(uid).get();
     if (d.exists) sobras.push("letzplayScans/" + uid);

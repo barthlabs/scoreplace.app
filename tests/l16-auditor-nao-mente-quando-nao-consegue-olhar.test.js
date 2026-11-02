@@ -47,8 +47,8 @@ must(/const conta = \(label, q\) => olha\(label,/.test(varre),
   '① o contador de coleções também entra pela porta única');
 must(/conta\("matches\.playerUids", db\.collectionGroup\("matches"\)\.where\("playerUids", "array-contains", uid\)\)/.test(varre),
   '① jogos físicos com UID remanescente entram no relatório de sobras');
-must(/conta\("results\.playerUids", db\.collectionGroup\("results"\)\.where\("playerUids", "array-contains", uid\)\)/.test(varre),
-  '① espelhos antigos ainda entram no relatório durante a migração E05');
+must(!/collectionGroup\("results"\)|conta\("results\./.test(varre),
+  '① coleção retirada não participa do relatório de sobras');
 
 // ── ② o contador de notificações ────────────────────────────────────────────
 const iniD = F.indexOf('// 6) Notificações + perfil → TOMBSTONE');
