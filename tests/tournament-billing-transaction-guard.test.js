@@ -15,13 +15,15 @@ const pendingGuard = pendingRoute.indexOf('_tournamentBilling.assertCanPublishPe
 const pendingWrite = pendingRoute.indexOf('_gravaTorneio(tx,ref,t,antes,{agoraIso})', pendingGuard);
 assert(txStart >= 0 && pendingRead > txStart && pendingGuard > pendingRead && pendingWrite > pendingGuard,
   'a porta checa a quitação na transação, após leitura e antes de qualquer gravação');
-const start = source.indexOf('async function _leTorneio(tx, ref, tId) {');
+const start = source.indexOf('async function _leTorneio(tx, ref, tId, readCounter = null, projectLateCandidates = false) {');
 const end = source.indexOf('// ⛔ Sandbox é um documento privado', start);
 assert(start > 0 && end > start, 'leitor canônico encontrado');
 const reader = { get() { throw new Error('use a leitura simulada'); } };
 const snapshots = new WeakMap();
+const phaseReadProofs = new WeakMap();
 const context = {
-  _TX_LEITURA:reader, _billingSnapshots:snapshots, createHash,
+  _TX_LEITURA:reader, _billingSnapshots:snapshots, _phaseReadProofs:phaseReadProofs, createHash,
+  _visibilityFence:{ read:async () => ({ exists:false }) },
   _tSplit:{ montarDoBanco:async t => ({ ...t }), partesDe:() => [] },
   _tournamentBilling:require('../js/domain/tournament-billing-core.js'),
   _registrationRoster:{ rosterFromRegistrations:items => items.map(item => ({ ...item })) },

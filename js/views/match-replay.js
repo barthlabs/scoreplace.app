@@ -96,20 +96,18 @@
     var t = (window.AppStore && typeof window._findTournamentById === 'function')
       ? window._findTournamentById(tid)
       : (window.AppStore && window.AppStore.tournaments || []).filter(function (x) { return String(x.id) === String(tid); })[0];
-    var res = t && t._results && t._results[matchId];
-    if (!res || !res.replay) {
-      if (window.showNotification) window.showNotification('Sem replay', 'Este jogo não tem o registro ponto a ponto.', 'info');
-      return;
-    }
-    var todos = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : [];
+    var todos = (t && typeof window._collectAllMatches === 'function')
+      ? (window._collectAllMatches(t) || []) : [];
     var m = null;
     for (var i = 0; i < todos.length; i++) {
       if (todos[i] && String(todos[i].id) === String(matchId)) { m = todos[i]; break; }
     }
-    // Nomes: o subdoc denormaliza p1/p2 (DISPLAY_FIELDS), e o match do torneio é o
-    // fallback — assim a tela funciona mesmo se um dos dois estiver defasado.
-    var n1 = (res.p1 || (m && m.p1) || 'Time 1');
-    var n2 = (res.p2 || (m && m.p2) || 'Time 2');
+    if (!m || !m.replay) {
+      if (window.showNotification) window.showNotification('Sem replay', 'Este jogo não tem o registro ponto a ponto.', 'info');
+      return;
+    }
+    var n1 = m.p1 || 'Time 1';
+    var n2 = m.p2 || 'Time 2';
     var jogadores = [];
     String(n1).split(' / ').forEach(function (n) { jogadores.push({ name: n, team: 1 }); });
     String(n2).split(' / ').forEach(function (n) { jogadores.push({ name: n, team: 2 }); });
@@ -117,10 +115,10 @@
       matchId: matchId,
       matchType: 'tournament',
       sport: (t && t.sport) || '',
-      tournamentName: (t && t.name) || res.tournamentName || null,
+      tournamentName: (t && t.name) || null,
       players: jogadores,
-      sets: res.sets || [],
-      replay: res.replay
+      sets: m.sets || [],
+      replay: m.replay
     });
   };
 

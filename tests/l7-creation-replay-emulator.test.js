@@ -44,11 +44,14 @@ const {getFirestore}=require('module').createRequire(path.join(ROOT,'functions-a
  assert.equal(responses.filter(r=>r.changed).length,1);
  const doc=db.doc('tournaments/'+id),created=(await doc.get()).data();
  assert.equal(created.creatorUid,uid);assert(created._nascidoEm.toMillis()>0);assert.deepEqual(created.matches,[]);
- await doc.update({matches:[{id:'m',p1:'A',p2:'B',p1Uid:'player',p2Uid:'opponent',scoreP1:6,scoreP2:4,winner:'A'}]});
+ const jogo={id:'m',p1:'A',p2:'B',p1Uid:'player',p2Uid:'opponent',scoreP1:6,scoreP2:4,winner:'A'};
+ await doc.update({_nJogos:1,'_nPartes.matches':1});
+ await doc.collection('matches').doc('m').set({_chave:'m',_loc:{tipo:'matches',mi:0},jogo,playerUids:['player','opponent']});
  const replay={v:2,totalPoints:1,points:[{w:1,a:0,b:0}]};
  await functions.saveTournamentReplay.run({auth:{uid:'player'},data:{tournamentId:id,matchId:'m',replay}});
- const result=(await doc.collection('results').doc('m').get()).data();
- assert.deepEqual(result.replay,replay);assert.equal(result.scoreP1,6);assert(result.playerUids.includes('player'));
+ const result=(await doc.collection('matches').doc('m').get()).data();
+ assert.deepEqual(result.jogo.replay,replay);assert.equal(result.jogo.scoreP1,6);assert(result.playerUids.includes('player'));
+ assert.equal((await doc.collection('results').doc('m').get()).exists,false);
  await assert.rejects(functions.saveTournamentReplay.run({auth:{uid:'stranger'},data:{tournamentId:id,matchId:'m',replay}}),{code:'permission-denied'});
  const retry=await functions.createTournament.run(request);assert.equal(retry.tournament.matches[0].scoreP1,6);
  await doc.delete();await assert.rejects(functions.createTournament.run(request),{code:'not-found'});assert(!(await doc.get()).exists);

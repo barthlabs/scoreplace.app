@@ -143,7 +143,8 @@ for (const dest of [path.join(__dirname, 'tv-layout-core.js'), path.join(OUT_FN,
  * `skillBySportSource` tem de ser apagada pela MESMA regra que as portas do outro
  * codebase usam. Duas cópias da regra divergiriam em silêncio — o gate de vendor compara
  * byte a byte justamente para isso. */
-const DE_FUNCTIONS = ['match-roster.js'];
+const DE_FUNCTIONS = ['match-roster.js', 'phase-index-certificate-core.js',
+  'result-visibility-roster-core.js', 'result-visibility-fence-core.js'];
 for (const f of DE_FUNCTIONS) {
   const src = path.resolve(__dirname, '..', 'functions', f);
   if (!fs.existsSync(src)) { console.error(`[copy-vendor] FONTE AUSENTE: ${src}`); process.exit(1); }

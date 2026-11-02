@@ -142,7 +142,7 @@ const NOVA = { uid: 'uid_mariana', name: 'Mariana', displayName: 'Mariana', self
 
   // (b) servidor decide que ainda cabe no ELENCO (fase não estava sorteada no doc fresco)
   const t2 = { id: 'tour_x', name: 'Confra', participants: [], standbyParticipants: [] };
-  const sb2 = monta({ alreadyEnrolled: false, waitlisted: false,
+  const sb2 = monta({ outcome:'enrolled', alreadyEnrolled: false, waitlisted: false,
                       participants: [{ uid: 'uid_org' }, { uid: 'uid_mariana' }] }, { t: t2 });
   await new Promise(r => sb2.__f(t2, 'tour_x', NOVA, r));
   ok(t2.participants.length === 2 && t2.standbyParticipants.length === 0,

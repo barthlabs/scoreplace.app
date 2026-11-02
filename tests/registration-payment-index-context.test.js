@@ -8,6 +8,8 @@ const enroll = source.slice(source.indexOf('exports.enrollParticipant = onCall('
   source.indexOf('exports.deenrollParticipant = onCall('));
 const reclassify = source.slice(source.indexOf('exports.reclassifyCanonicalRegistration = onCall('),
   source.indexOf('exports.', source.indexOf('exports.reclassifyCanonicalRegistration = onCall(') + 1));
+const batch = source.slice(source.indexOf('async function _applyCanonicalAssignmentBatch('),
+  source.indexOf('exports.assignCanonicalPlaceholderCategoryBatch = onCall('));
 
 assert(enroll.includes('paymentContext(_dados)'), 'inscrição calcula o contexto do torneio hidratado');
 assert(enroll.includes("_registrationPayment.directMethods(registration, 'pre_draw')"),
@@ -23,6 +25,10 @@ assert(reclassify.includes("context === 'late' && _registrationPayment.createsNe
   'reclassificação compara destinos com cobranças anteriores e recusa somente cobrança nova');
 assert(reclassify.includes("context === 'pre_draw') _registrationPayment.directMethods"),
   'meios da organização são validados apenas antes do sorteio');
+assert(batch.includes("context === 'late' && _registrationPayment.createsNewOpenCharge(changes, virtualRegistrations)"),
+  'lote compara cobrança nova com a fotografia progressiva antes de gravar');
+assert(batch.includes("context === 'pre_draw') _registrationPayment.directMethods"),
+  'lote valida os meios diretos somente antes do sorteio');
 const allCalls = source.match(/_registrationPayment\.directMethods\([^;]+/g) || [];
-assert.strictEqual(allCalls.length, 3, 'todas as três portas do index estão cobertas');
+assert.strictEqual(allCalls.length, 4, 'as quatro portas do index estão cobertas');
 console.log('Portas de inscrição e reclassificação: contexto pós-sorteio explícito OK.');

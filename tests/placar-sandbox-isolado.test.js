@@ -48,7 +48,6 @@ const context = {
     return { clean: {} };
   },
   _scoreAuditPayload: () => ({}),
-  _matchHistory: { buildTournamentRecord: () => ({ matchId: 'j1', recipients: ['player'], record: {} }) },
   _scoreNotificationEvent: () => ({ type: 'score-final' }),
   SCORE_NOTIFICATION_CONSOLIDATION_MS: 0,
   PENDING_SCORE_APPROVAL_MS: 0,
@@ -81,6 +80,7 @@ vm.runInNewContext(source.slice(start, end), context);
   assert.deepEqual(calls, ['motor', 'grava']);
   assert.ok(writes.includes('tournaments/tour_test/results/j1'));
   assert.ok(writes.some((path) => path.includes('/notificationOutbox/')));
-  assert.ok(writes.some((path) => path.startsWith('users/player/matchHistory/')));
-  console.log('✓ mesmo motor de placar; sandbox só grava sob sandboxes e não notifica');
+  assert.ok(!writes.some((path) => path.includes('/matchHistory/')),
+    'placar de torneio não duplica resultado no histórico pessoal');
+  console.log('✓ mesmo motor de placar; sandbox isolado e histórico de torneio sem cópia');
 })().catch((error) => { console.error(error); process.exitCode = 1; });

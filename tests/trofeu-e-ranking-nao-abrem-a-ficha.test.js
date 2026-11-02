@@ -68,10 +68,10 @@ must(new RegExp('collection\\(' + ESPELHO.replace(/\./g, '\\.') + " \\|\\| 'user
 const AN = codigo('js/views/tournaments-analytics.js');
 must(/var _colPub = window\._COLECAO_PERFIL_PUBLICO \|\| 'usersPublic';/.test(AN),
   '④ a ficha pública resolve pelo espelho');
-must(/collection\(_colPub\)\.doc\(uid\)/.test(AN) && /collection\(_colPub\)\.where\('displayName'/.test(AN),
-  '④ ⭐ os dois caminhos (por uid e por nome) leem o espelho');
-must((AN.match(/\{ publico: true \}/g) || []).length === 2,
-  '④ ⭐ e os dois atravessam a lápide sem baixar ficha');
+must(/collection\(_colPub\)\.doc\(uid\)/.test(AN) && !/collection\(_colPub\)\.where\('displayName'/.test(AN),
+  '④ ⭐ a ficha identificada lê por UID; nome manual não busca a primeira homônima');
+must((AN.match(/\{ publico: true \}/g) || []).length === 1,
+  '④ ⭐ a leitura por UID atravessa a lápide sem baixar ficha');
 
 // ── ⑤ ponte do letzplay ────────────────────────────────────────────────────
 const ST = codigo('js/store.js');

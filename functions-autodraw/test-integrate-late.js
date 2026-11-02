@@ -113,9 +113,11 @@ const R1 = (t) => (t.matches || []).filter((m) => m && m.round === 1);
   ok('só toca Rei/Rainha rotativo da fase atual (o formato que a fila serve)',
      corpo.includes('drawWindow._faseCorrenteUsaEntradasRotativas(t0)') &&
      corpo.includes('drawWindow._motorDaFaseUsaReiRainha(t0)'));
-  ok('nem carrega perfil sem 4 na fila (custo zero no caso comum)', corpo.includes('_fila < 4'));
+  ok('legado evita custo sem 4; canônico consulta registrations',
+     corpo.includes('!canonical && _fila < 4') && corpo.includes('t0.canonicalRegistrationMigration?.fingerprint'));
   ok('resolve nome e gênero por uid ANTES do motor', corpo.includes('_preloadDrawNames(') && corpo.includes('_enrichParticipantsFromProfiles('));
-  ok('monta torneio dividido dentro da transação', corpo.includes('await _leTorneio(tx, doc.ref, doc.id)'));
+  ok('monta torneio dividido dentro da transação e projeta a espera canônica',
+     corpo.includes('await _leTorneio(tx, doc.ref, doc.id, null, canonical)'));
   ok('guarda o estado anterior para gravar só deltas', corpo.includes('const _tAntes = _antesDoMotor(t)'));
   ok('persiste pelo writer canônico (inclusive subcoleções)', corpo.includes('_gravaTorneio(tx, doc.ref, t, _tAntes, { agoraIso: _agoraIsoTx })'));
   ok('não pula torneio dividido por ler documento cru', !corpo.includes('PULADO: torneio dividido'));

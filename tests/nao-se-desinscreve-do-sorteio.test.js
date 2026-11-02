@@ -97,10 +97,8 @@ ok('não inventa colocação onde não há',
   !core.isPlacedInDraw({ rounds: [{ monarchGroups: [{ playersUids: ['x'] }] }] }, JU));
 
 // ── PARIDADE cliente × servidor ──────────────────────────────────────────────────────
-// O caminho otimista da desinscrição precisa decidir IGUAL à CF. Se divergirem, o cliente
-// remove, o onSnapshot traz de volta, e a pessoa pisca saindo e voltando na tela — o próprio
-// comentário do caminho otimista já avisa disso. Aqui as DUAS implementações rodam sobre a
-// MESMA matriz e têm de concordar em todos os casos.
+// O cliente usa a mesma detecção para rotear quem foi colocada ao W.O.; fora desse
+// caminho, espera o recibo da CF e adota a projeção que ela calculou.
 global.window = global.window || global;
 require(path.join(__dirname, '..', 'js', 'views', 'waitlist-core.js'));
 
@@ -123,13 +121,14 @@ const divergiu = MATRIZ.filter(([, doc, uid]) => {
 ok('cliente e CF concordam em TODOS os casos da matriz (' + MATRIZ.length + ')',
   divergiu.length === 0, 'divergiram: ' + divergiu.join(', '));
 
-// E o caminho otimista tem de CONSULTAR o espelho — senão a paridade existe no papel e não
-// na tela (foi assim que o cliente e a CF se separaram da primeira vez).
+// O roteamento ao W.O. ainda precisa consultar o espelho da colocação.
 const cliente = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments-enrollment.js'), 'utf8');
-ok('o caminho otimista da desinscrição consulta _isPlacedInDraw',
-  /_isPlacedInDraw\(t, user\.uid\)/.test(cliente));
-ok('  → e DESATIVA em vez de remover quando ela está colocada',
-  /_colocada[\s\S]{0,400}ligaActive: false/.test(cliente));
+const selfBlock = cliente.slice(cliente.indexOf('window.deenrollCurrentUser = function'),
+  cliente.indexOf('window._tournamentRequiresPayment = function'));
+ok('a desinscrição consulta _isPlacedInDraw para rotear ao W.O.',
+  /_isPlacedInDraw\(t, user\.uid\)/.test(selfBlock));
+ok('  → fora do W.O. adota a projeção da CF, sem desativação otimista',
+  /t\.participants = result\.participants/.test(selfBlock) && !/_savedParticipants/.test(selfBlock));
 
 // ── E A VAGA NÃO FICA ABERTA: o suplente entra pela PROPORÇÃO ────────────────────────
 // Ordem do dono (22/ago/2026): _"a próxima pessoa da lista de espera que mantenha a

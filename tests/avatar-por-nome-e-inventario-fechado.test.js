@@ -51,7 +51,7 @@ const INVENTARIO = {
   'js/store.js': { n: 2, nota: 'o construtor canônico (_avatarUrl) e o ponto único que o consome' },
 
   // ── CONVERTIDOS: gente com uid, emitindo [data-uid-avatar] e hidratando ──────
-  'js/views/bracket.js': { n: 3, nota: 'CONVERTIDO 1.9.113 — a chave hidrata ícone junto com o nome' },
+  'js/views/bracket.js': { n: 2, nota: 'a chave conserva UID no avatar e hidrata foto pelo perfil público' },
   'js/views/host-transfer.js': { n: 0, nota: 'CONVERTIDO — seletor de organizador' },
   'js/views/schedule-poll.js': { n: 0, nota: 'CONVERTIDO — enquete de horário' },
   'js/views/opinion-poll.js': { n: 0, nota: 'CONVERTIDO — enquete de opinião' },
@@ -63,9 +63,9 @@ const INVENTARIO = {
   //   · convite pendente → `r.inviterUid`/`r.inviteeUid`, já lidos pra montar _pendUids;
   //   · linhas de jogador do painel → `m2.team1Uids`/`team2Uids`, por ÍNDICE.
   // Sobrou em cada arquivo só o que não é render de pessoa-com-uid (abaixo).
-  'js/views/tournaments.js': { n: 2, nota: 'pódio 🥇🥈🥉 (string de resultado, sem uid) + passe de reparo' },
-  'js/views/dashboard.js': { n: 1, nota: 'passe de REPARO por nome já conhecido (não é render)' },
-  'js/views/participants.js': { n: 1, nota: 'passe de REPARO por nome já conhecido (não é render)' },
+  'js/views/tournaments.js': { n: 1, nota: 'pódio 🥇🥈🥉: iniciais do rótulo quando não há foto por UID' },
+  'js/views/dashboard.js': { n: 0, nota: 'passe de reparo agora usa UID' },
+  'js/views/participants.js': { n: 0, nota: 'passe de reparo agora usa UID' },
 
   // ── NÃO é pessoa com perfil por resolver — MEDIDO, não presumido ─────────────
   'js/views/auth.js': { n: 4, nota: 'perfil do PRÓPRIO usuário logado — o nome nunca está por resolver' },

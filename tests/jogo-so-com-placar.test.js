@@ -35,7 +35,16 @@ const _storeSrc = fs.readFileSync(path.join(__dirname, '..', 'js', 'store.js'), 
 const _m = _storeSrc.match(/window\._isSandboxRef = function[\s\S]*?\n};/);
 if (!_m) { console.error('✗ não achei window._isSandboxRef em js/store.js'); process.exit(1); }
 vm.runInContext(_m[0], sandbox, { filename: 'store._isSandboxRef.js' });
+const _logicSrc = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'bracket-logic.js'), 'utf8');
+const _slotFn = _logicSrc.match(/function _slotUids\(m, side\) \{[\s\S]*?\n\}/);
+if (!_slotFn) { console.error('✗ não achei _slotUids em bracket-logic.js'); process.exit(1); }
+vm.runInContext('window._slotUids = ' + _slotFn[0] + ';', sandbox, { filename: 'bracket-logic._slotUids.js' });
+const _posFn = _logicSrc.match(/function _slotUidsPositional\(m, side, t\) \{[\s\S]*?\n\}/);
+if (!_posFn) { console.error('✗ não achei _slotUidsPositional em bracket-logic.js'); process.exit(1); }
+vm.runInContext('window._slotUidsPositional = ' + _posFn[0] + ';', sandbox,
+  { filename: 'bracket-logic._slotUidsPositional.js' });
 
+load('bracket-model.js');
 load('tournaments-enrollment-report.js');
 const item = window._lzItemDeResult;
 
@@ -80,9 +89,17 @@ const PROD = [
     scoreP1: 6, scoreP2: 4, winner: 'Daniela / Monica Rossi', playerUids: [UID] },
 ];
 
-console.log('\n▸ A ficha da Lucia: 10 docs no banco, 2 jogos');
-const itens = PROD.map(function (r) { return item(r, UID, EU); }).filter(Boolean);
-eq(itens.length, 2, 'dos 10 docs de produção, só 2 são jogo (o código antigo mostrava 10)');
+console.log('\n▸ A ficha da Lucia: resultados legados sem UID de lado não atribuem V/D');
+eq(PROD.map(function (r) { return item(r, UID, EU); }).filter(Boolean).length, 0,
+  'os 10 espelhos antigos não provam o lado pelo nome');
+const fisicos = PROD.map(function (r, i) {
+  return i < 2 ? Object.assign({}, r, {
+    team1Uids: i === 0 ? ['parceiro-0', UID] : [UID, 'parceiro-1'],
+    team2Uids: ['adversaria-' + i, 'adversario-' + i]
+  }) : r;
+});
+const itens = fisicos.map(function (r) { return item(r, UID, EU); }).filter(Boolean);
+eq(itens.length, 2, 'os dois jogos físicos com UID dos lados entram; os sandboxes ficam fora');
 eq(itens[0].partner, 'FERNANDO CARLOS CERRI', 'jogo 1: parceiro resolvido (era sempre null)');
 eq(itens[0].opponent, 'Gabriela Ferreira / Luiz Felipe Abreu', 'jogo 1: adversário (era "—")');
 eq(itens[0].result, 'D', 'jogo 1: derrota (5×6)');
@@ -100,7 +117,8 @@ eq(item({ matchId: 'm2', tournamentId: 'tour_normal', p1: 'Lucia Helena Silva Ce
   scoreP1: 6, scoreP2: null, playerUids: [UID] }, UID, EU), null,
   'placar de um lado só não é placar');
 ok(item({ matchId: 'm3', tournamentId: 'tour_normal', p1: 'Lucia Helena Silva Cerri / X', p2: 'A / B',
-  scoreP1: 0, scoreP2: 6, winner: 'A / B', playerUids: [UID] }, UID, EU) != null,
+  scoreP1: 0, scoreP2: 6, winner: 'A / B', playerUids: [UID],
+  team1Uids: [UID, 'x'], team2Uids: ['a', 'b'] }, UID, EU) != null,
   'zero É placar (0×6 é jogo jogado, não é ausência de dado)');
 
 console.log('▸ LEI 2 — sempre parceiro e adversário');
@@ -115,7 +133,8 @@ window._findTournamentById = function (id) {
 };
 window._collectAllMatches = function (t) { return (t && t.matches) || []; };
 const rec = item({ matchId: 'm5', tournamentId: 'tour_estrut', scoreP1: 6, scoreP2: 1,
-  winner: 'Lucia Helena Silva Cerri / Nelson', playerUids: [UID] }, UID, EU);
+  winner: 'Lucia Helena Silva Cerri / Nelson', playerUids: [UID],
+  team1Uids: [UID, 'nelson'], team2Uids: ['kelly', 'rodrigo'] }, UID, EU);
 ok(rec != null, 'doc sem p1/p2 é RECUPERADO da estrutura do torneio (o dado é nosso)');
 eq(rec && rec.partner, 'Nelson', 'parceiro recuperado da estrutura');
 eq(rec && rec.opponent, 'Kelly / Rodrigo', 'adversário recuperado da estrutura');
@@ -124,7 +143,8 @@ eq(rec && rec.competition, 'Confra', 'nome do torneio recuperado da estrutura');
 console.log('▸ LEI 2b — o LADO sai do dado, não do chute (ela nunca é adversária dela mesma)');
 const p2side = item({ matchId: 'm6', tournamentId: 'tour_normal', tournamentName: 'Hellen Open',
   p1: 'Daniela / Monica Rossi', p2: 'Paulinha / Lucia Helena Silva Cerri',
-  scoreP1: 6, scoreP2: 4, winner: 'Daniela / Monica Rossi', playerUids: [UID] }, UID, EU);
+  scoreP1: 6, scoreP2: 4, winner: 'Daniela / Monica Rossi', playerUids: [UID],
+  team1Uids: ['daniela', 'monica'], team2Uids: ['paulinha', UID] }, UID, EU);
 eq(p2side.opponent, 'Daniela / Monica Rossi', 'ela está em p2 → adversário é p1 (o antigo devolvia ela mesma)');
 eq(p2side.partner, 'Paulinha', 'parceira do lado dela');
 eq(p2side.scoreA + 'x' + p2side.scoreB, '4x6', 'placar orientado pelo lado dela');
@@ -132,12 +152,35 @@ eq(p2side.result, 'D', 'derrota');
 // e a vitória que o código antigo pintava de derrota (winner batia com um p1 indefinido)
 const vit = item({ matchId: 'm7', tournamentId: 'tour_normal', p1: 'A / B',
   p2: 'Lucia Helena Silva Cerri / C', scoreP1: 1, scoreP2: 6,
-  winner: 'Lucia Helena Silva Cerri / C', playerUids: [UID] }, UID, EU);
+  winner: 'Lucia Helena Silva Cerri / C', playerUids: [UID],
+  team1Uids: ['a', 'b'], team2Uids: [UID, 'c'] }, UID, EU);
 eq(vit.result, 'V', '6×1 dela é VITÓRIA (o antigo pintava de derrota)');
 // sem saber de que lado jogou, o card mentiria → não existe
 eq(item({ matchId: 'm8', tournamentId: 'tour_normal', p1: 'A / B', p2: 'C / D',
   scoreP1: 6, scoreP2: 1, winner: 'A / B', playerUids: [UID] }, UID, EU), null,
   'nome não bate em nenhum dos lados → fora (melhor nada que um card mentindo)');
+eq(item({ matchId: 'm9', tournamentId: 'tour_normal', p1: EU + ' / X', p2: EU + ' / Y',
+  scoreP1: 6, scoreP2: 1, winner: EU + ' / X', playerUids: [UID],
+  team1Uids: ['outro', 'x'], team2Uids: [UID, 'y'] }, UID, EU).scoreA, '1',
+  'homônimos nos dois lados: UID determina o lado, mesmo com nome idêntico');
+eq(item({ matchId: 'm10', tournamentId: 'tour_normal', p1: EU + ' / X', p2: 'Y / Z',
+  scoreP1: 6, scoreP2: 1, winner: EU + ' / X', playerUids: [UID],
+  team1Uids: [UID, 'x'], team2Uids: [UID, 'z'] }, UID, EU), null,
+  'UID duplicado nos dois lados não gera resultado pessoal');
+eq(item({ matchId: 'm11', tournamentId: 'tour_normal', p1: 'A / B', p2: EU + ' / C',
+  scoreP1: 1, scoreP2: 6, winner: 'A / B', winnerUids: [UID, 'c'], playerUids: [UID],
+  team1Uids: ['a', 'b'], team2Uids: [UID, 'c'] }, UID, EU).result, 'V',
+  'UID do vencedor prevalece sobre rótulo antigo do vencedor');
+eq(item({ matchId: 'm12', tournamentId: 'tour_normal', p1: 'A / B',
+  p2: 'Ana Maria / Ana Silva', scoreP1: 1, scoreP2: 6,
+  winner: 'Ana Maria / Ana Silva', playerUids: [UID],
+  team1Uids: ['a', 'b'], team2Uids: ['ana-maria', UID] }, UID, 'Ana').partner, 'Ana Maria',
+  'parceira homônima vem da posição do UID, não da comparação de nomes');
+eq(item({ matchId: 'm13', tournamentId: 'tour_normal', p1: 'A / B',
+  p2: 'Ana Maria / Ana Silva', scoreP1: 1, scoreP2: 6,
+  winner: 'Ana Maria / Ana Silva', playerUids: [UID],
+  team1Uids: ['a', 'b'], p2Uid: UID }, UID, 'Ana').partner, null,
+  'sem posição comprovada, parceiro fica vazio em vez de atribuição inventada');
 
 console.log('▸ LEI 3 — SB nunca, por qualquer um dos 3 sinais');
 eq(item({ matchId: 'x', tournamentId: 'tour_1_sb', p1: EU + ' / X', p2: 'A / B',

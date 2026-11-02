@@ -628,6 +628,35 @@ async function espacoDosSetsResponsivo() {
     '⑦ cabeçalho e os dois lados mantêm o mesmo vão entre colunas');
 }
 
+async function entradaE30() {
+  console.log('\n⑧ Games comuns não recebem segundo dígito');
+  const html = cardHtml(Object.assign({}, MELHOR3, { tiebreakAt: 'g-1' }), [], { id: 'M-E30' });
+  const browser = await chromium.launch();
+  const page = await browser.newPage();
+  await page.setContent('<body>' + html + '</body>');
+  await page.addScriptTag({ content: 'window._limitNormalSetGameInput = ' + W._limitNormalSetGameInput.toString() +
+    '; window._highlightWinner = function(){}; window._warnGrossSetScore = function(){};' });
+  const games = page.locator('#s1-M-E30-1');
+  await games.fill('6');
+  await games.press('5');
+  ok(await games.inputValue() === '6', '6 seguido de 5 no 2º set permanece 6 no navegador');
+  ok(await games.getAttribute('max') === '6', 'campo de games anuncia máximo 6');
+  await games.evaluate((el) => {
+    el.defaultValue = '6';
+    delete el.dataset.spValidGame;
+    el.value = '65';
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  ok(await games.inputValue() === '6', 'game pré-preenchido restaura 6 sem depender de foco');
+  const tb = page.locator('#tb1-M-E30-0');
+  const stb = page.locator('#s1-M-E30-2');
+  await tb.evaluate((el) => { el.value = '12'; el.dispatchEvent(new Event('input', { bubbles: true })); });
+  await stb.evaluate((el) => { el.value = '10'; el.dispatchEvent(new Event('input', { bubbles: true })); });
+  ok(await tb.inputValue() === '12' && await stb.inputValue() === '10',
+    'tie-break e super tie-break continuam aceitando dois dígitos');
+  await browser.close();
+}
+
 (async function () {
   regua();
   decisao();
@@ -636,6 +665,7 @@ async function espacoDosSetsResponsivo() {
   await correcoesDoSandbox();
   await duasSecoesMesmoTamanho();
   await espacoDosSetsResponsivo();
+  await entradaE30();
   console.log('\n' + (falhas ? '✗ ' + falhas + '/' + testes + ' falharam' : '✓ ' + testes + '/' + testes + ' passaram'));
   process.exit(falhas ? 1 : 0);
 })();

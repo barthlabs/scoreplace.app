@@ -2710,7 +2710,15 @@ window._triggerLateIntegration = function (t, opts) {
                 'chave-legada-sem-coordenada': ['⏳ Chave antiga — entrada na espera',
                     'Esta chave foi sorteada por uma versão anterior e não pode ser recalculada sem mudar os confrontos. A inscrição segue na espera.'],
                 'chave-legada-sem-seeds': ['⏳ Chave antiga — entrada na espera',
-                    'Esta chave não guarda a semeadura do sorteio, então não dá pra incluir sem mudar os confrontos. A inscrição segue na espera.']
+                    'Esta chave não guarda a semeadura do sorteio, então não dá pra incluir sem mudar os confrontos. A inscrição segue na espera.'],
+                'pagamento-tardio-indisponivel': ['⏳ Inscrição na espera',
+                    'Esta vaga exigiria cobrança após o sorteio. A inscrição continua na espera até existir um fluxo de pagamento tardio.'],
+                'categoria-tardia-ambigua': ['⏳ Categoria precisa de revisão',
+                    'A mesma pessoa aguarda em mais de uma categoria. A inscrição continua na espera para evitar colocação na chave errada.'],
+                'dupla-tardia-incompleta': ['⏳ Dupla na espera',
+                    'Um integrante da dupla não pode entrar agora. Ambos continuam na espera até a situação ser resolvida.'],
+                'sem-vaga-ou-janela': ['⏳ Inscrição na espera',
+                    'A entrada não coube na chave ou na janela atual e continua na lista de espera. Confira presença, janela e novos confrontos.']
             };
             var _vistos = {};
             _rec.forEach(function (r) {
@@ -4856,7 +4864,7 @@ window._participantSelfPair = function(tId, name1, uid1, name2, uid2) {
         window.FirestoreDB._callFn('requestTournamentPair', { tournamentId: String(tId), inviteeUid: String(uid2) }).then(function(result) {
             if (result && result.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(tId, result.tournament);
             if (result && result.action === 'confirm' && typeof window._formDuplaByUids === 'function') {
-                window._formDuplaByUids(tId, result.inviterName || name1, result.inviterUid, result.inviteeName || name2, result.inviteeUid);
+                window._formDuplaByUids(tId, result.inviterName || name1, result.inviterUid, result.inviteeName || name2, result.inviteeUid, result.requestId || '');
                 return;
             }
             var email = (window.FirestoreDB && typeof window.FirestoreDB.sendPairInviteEmail === 'function') ? window.FirestoreDB.sendPairInviteEmail(String(tId), uid2) : Promise.resolve({ enviado:false });

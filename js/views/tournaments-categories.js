@@ -483,12 +483,13 @@ window._getTournamentCategories = function(t) {
     if (!t) return [];
     // Inscrições canônicas carregam IDs opacos; a tela sempre exibe o rótulo
     // configurado, nunca o ID (inclusive para torneios legados traduzidos).
-    if (t.canonicalRegistrationMigration && Array.isArray(t.categoryDefinitions) && t.categoryDefinitions.length) {
-        var typedLabels = t.categoryDefinitions
+    if (t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint) {
+        // Ausente ou vazio não autoriza reconstruir categorias removidas por
+        // `combinedCategories` ou pelos eixos antigos.
+        return (Array.isArray(t.categoryDefinitions) ? t.categoryDefinitions : [])
             .filter(function(def) { return def && def.enabled !== false && def.label; })
             .map(function(def) { return String(def.label).trim(); })
             .filter(Boolean);
-        if (typedLabels.length) return typedLabels;
     }
     if (Array.isArray(t.combinedCategories) && t.combinedCategories.length > 0) return t.combinedCategories;
     // Backward compat: compute from gender/skill arrays if they exist
@@ -646,7 +647,7 @@ function _ensureMistoGenderProfiles(t, uidsNeeded) {
 
 // Build HTML showing category participant counts
 window._buildCategoryCountHtml = function(t) {
-    var cats = t.combinedCategories;
+    var cats = window._getTournamentCategories(t);
     if (!cats || cats.length === 0) return '';
     var sorted = window._sortCategoriesBySkillOrder(cats, t.skillCategories);
     var parts = t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : [];
@@ -1268,7 +1269,7 @@ window.renderCategoryManagerPage = function(container, tId) {
         // Always re-read fresh data from AppStore (fixes stale closure after sync)
         var t = window._findTournamentById(tId);
         if (!t) return;
-        var categories = window._sortCategoriesBySkillOrder((t.combinedCategories || []).slice(), t.skillCategories);
+        var categories = window._sortCategoriesBySkillOrder(window._getTournamentCategories(t).slice(), t.skillCategories);
         var parts = t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : [];
 
         // Count participants per category & find uncategorized
@@ -1348,7 +1349,7 @@ window.renderCategoryManagerPage = function(container, tId) {
                 var catDisplay = window._displayCategoryName(cat);
                 var isMerged = !!mergedCatSet[cat];
                 // Unmerge icon — top-right corner, only for merged categories
-                var unmergeIcon = isMerged
+                var unmergeIcon = isMerged && !_isCanonicalCategoryRoster(t)
                     ? '<div class="cat-unmerge-btn" data-unmerge-cat="' + catEsc + '" title="Desmesclar" style="position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:50%;background:rgba(239,68,68,0.15);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 0.2s;z-index:2;" onmouseenter="this.style.background=\'rgba(239,68,68,0.35)\'" onmouseleave="this.style.background=\'rgba(239,68,68,0.15)\'">' +
                       '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2.5" stroke-linecap="round"><path d="M16 3h5v5M8 3H3v5M16 21h5v-5M8 21H3v-5"/></svg>' +
                       '</div>'
@@ -1370,7 +1371,7 @@ window.renderCategoryManagerPage = function(container, tId) {
                     ? '<div style="font-size:0.72rem;color:var(--text-muted);font-style:italic;padding:2px 0;">nenhum inscrito</div>'
                     : '';
                 var prRight = (isMerged || count === 0) ? '44px' : '8px';
-                return '<div class="cat-mgr-card" draggable="true" data-cat="' + catEsc + '" ' +
+                return '<div class="cat-mgr-card" draggable="' + (!_isCanonicalCategoryRoster(t)) + '" data-cat="' + catEsc + '" ' +
                     'style="position:relative;display:inline-flex;flex-direction:column;align-items:flex-start;padding:10px 14px;border-radius:12px;background:rgba(99,102,241,0.08);border:2px solid rgba(99,102,241,0.2);cursor:default;transition:border-color 0.2s;min-width:120px;">' +
                     unmergeIcon + deleteBtn +
                     '<div style="font-weight:700;font-size:0.8rem;color:var(--sp-c-818cf8,#818cf8);white-space:nowrap;margin-bottom:6px;padding-right:' + prRight + ';">' + catDisplay + '</div>' +
@@ -1577,7 +1578,7 @@ window._refreshCatMgr = function(tId) {
 window._buildInlineCatMgrHTML = function(tId) {
     var t = window._findTournamentById(tId);
     if (!t) return '';
-    var categories = window._sortCategoriesBySkillOrder((t.combinedCategories || []).slice(), t.skillCategories);
+    var categories = window._sortCategoriesBySkillOrder(window._getTournamentCategories(t).slice(), t.skillCategories);
     // v2.8.55: torneio de CATEGORIA ÚNICA (ou sem categorias) não mostra a seção de
     // gerenciar categorias — não há "entre categorias" pra arrastar nem "sem categoria"
     // a distinguir (todo mundo pertence à única categoria, e o sorteio já encaixa).
@@ -1629,7 +1630,7 @@ window._buildInlineCatMgrHTML = function(tId) {
                 var catEsc = cat.replace(/\\/g, '\\\\').replace(/"/g, '&quot;').replace(/'/g, "\\'");
                 var catDisplay = window._displayCategoryName(cat);
                 var isMerged = !!mergedCatSet[cat];
-                var unmergeIcon = isMerged
+                var unmergeIcon = isMerged && !_isCanonicalCategoryRoster(t)
                     ? '<div class="cat-unmerge-btn" data-unmerge-cat="' + catEsc + '" title="Desmesclar" style="position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:50%;background:rgba(239,68,68,0.15);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 0.2s;z-index:2;" onmouseenter="this.style.background=\'rgba(239,68,68,0.35)\'" onmouseleave="this.style.background=\'rgba(239,68,68,0.15)\'"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2.5" stroke-linecap="round"><path d="M16 3h5v5M8 3H3v5M16 21h5v-5M8 21H3v-5"/></svg></div>'
                     : '';
                 var delRight = isMerged ? '27px' : '3px';
@@ -1643,7 +1644,7 @@ window._buildInlineCatMgrHTML = function(tId) {
                 }).join('');
                 var emptyLabel = count === 0 ? '<div style="font-size:0.72rem;color:var(--text-muted);font-style:italic;padding:2px 0;">nenhum inscrito</div>' : '';
                 var prRight = (isMerged || count === 0) ? '44px' : '8px';
-                return '<div class="cat-mgr-card" draggable="true" data-cat="' + catEsc + '" style="position:relative;display:inline-flex;flex-direction:column;align-items:flex-start;padding:10px 14px;border-radius:12px;background:rgba(99,102,241,0.08);border:2px solid rgba(99,102,241,0.2);cursor:default;transition:border-color 0.2s;min-width:120px;">' +
+                return '<div class="cat-mgr-card" draggable="' + (!_isCanonicalCategoryRoster(t)) + '" data-cat="' + catEsc + '" style="position:relative;display:inline-flex;flex-direction:column;align-items:flex-start;padding:10px 14px;border-radius:12px;background:rgba(99,102,241,0.08);border:2px solid rgba(99,102,241,0.2);cursor:default;transition:border-color 0.2s;min-width:120px;">' +
                     unmergeIcon + deleteBtn +
                     '<div style="font-weight:700;font-size:0.8rem;color:var(--sp-c-818cf8,#818cf8);white-space:nowrap;margin-bottom:6px;padding-right:' + prRight + ';">' + catDisplay + '</div>' +
                     '<div style="display:flex;flex-wrap:wrap;gap:4px;">' + chipsHtml + '</div>' +
@@ -1741,11 +1742,14 @@ var _catMgrDropScrollY = null;
 // Attach drag-and-drop events for category manager (desktop + mobile touch)
 function _attachCatManagerDragDrop(tId) {
     var _dragData = null; // Shared drag state for both desktop and touch
+    var _catTournament = window._findTournamentById(tId);
+    var _canonicalCategories = _isCanonicalCategoryRoster(_catTournament);
 
     // Category card drag (for merging)
     var catCards = document.querySelectorAll('.cat-mgr-card');
     catCards.forEach(function(card) {
         card.addEventListener('dragstart', function(e) {
+            if (_canonicalCategories) { e.preventDefault(); return; }
             card._wasDragged = true;
             _dragData = { type: 'cat', cat: card.getAttribute('data-cat') };
             e.dataTransfer.setData('text/plain', 'cat');
@@ -1772,7 +1776,7 @@ function _attachCatManagerDragDrop(tId) {
             card.style.border = '2px solid rgba(99,102,241,0.2)';
             var targetCat = card.getAttribute('data-cat');
 
-            if (_dragData && _dragData.type === 'cat' && _dragData.cat !== targetCat) {
+            if (!_canonicalCategories && _dragData && _dragData.type === 'cat' && _dragData.cat !== targetCat) {
                 _confirmMergeCategories(tId, _dragData.cat, targetCat);
             } else if (_dragData && _dragData.type === 'participant') {
                 if (_dragData.sourceCat) {
@@ -1878,6 +1882,7 @@ function _attachCatManagerDragDrop(tId) {
 
     // Inicia o arraste de fato (chamado só após o long-press concluir).
     function _beginTouchDrag(target) {
+        if (_canonicalCategories && target.classList.contains('cat-mgr-card')) return;
         _lpArmed = true;
         _touchDragEl = target;
         if (target.classList.contains('cat-mgr-participant-in-cat')) {
@@ -1981,7 +1986,7 @@ function _attachCatManagerDragDrop(tId) {
 
         if (targetEl && _dragData) {
             var targetCat = targetEl.getAttribute('data-cat');
-            if (_dragData.type === 'cat' && _dragData.cat !== targetCat) {
+            if (!_canonicalCategories && _dragData.type === 'cat' && _dragData.cat !== targetCat) {
                 _confirmMergeCategories(tId, _dragData.cat, targetCat);
             } else if (_dragData.type === 'participant') {
                 if (_dragData.sourceCat) {
@@ -3153,6 +3158,7 @@ var _categoryNormalizationRequested = {};
 window._requestTournamentCategoryNormalization = function(tId) {
     tId = String(tId || '').trim();
     if (!tId || _categoryNormalizationRequested[tId]) return;
+    if (_isCanonicalCategoryRoster(window._findTournamentById(tId))) return;
     if (!window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') return;
     _categoryNormalizationRequested[tId] = true;
     window.FirestoreDB._callFn('normalizeTournamentCategories', { tournamentId: tId }).then(function(result) {

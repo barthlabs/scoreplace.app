@@ -476,11 +476,10 @@ const achou = (c, p) => D.detectarMesmaPessoa(c, p).suspeito;
 
   const enr = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments-enrollment.js'), 'utf8');
   // v1.8.40: a pergunta saiu dos call sites e virou parte do LEITOR ÚNICO do resultado
-  // (_applyEnrollResult) — que a dispara em QUALQUER desfecho com dupSuspect, inclusive
-  // no `alreadyEnrolled` da recusa (onde antes o return precoce a matava e a pessoa via
-  // "já inscrito" sem o "não sou eu"). A varredura acompanha o invariante, não a linha.
-  ok('a inscrição pergunta quando o servidor acusa duplicata (no leitor único do resultado)',
-    /res\.dupSuspect && typeof window\._askDuplicatePerson === 'function'/.test(enr));
+  // (_applyEnrollResult). Pergunta após inscrição confirmada, espera confirmada ou
+  // alreadyEnrolled com suspeita; recusa de elegibilidade não afirma inscrição.
+  ok('a inscrição pergunta sobre duplicata somente após recibo compatível',
+    /res\.dupSuspect && \(ok \|\| verdict === 'dupSuspect'\) && typeof window\._askDuplicatePerson === 'function'/.test(enr));
   ok('o "não sou eu" chama a CF de dispensa', /dismissDuplicateSuspicion'\)\(\{ tournamentId/.test(enr));
   ok('portas legadas por nome foram removidas; só a prova por segunda conta permanece',
     !/exports\.requestNameMergeProof\s*=/.test(idx) &&

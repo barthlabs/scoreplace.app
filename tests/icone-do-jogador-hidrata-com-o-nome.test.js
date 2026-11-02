@@ -52,8 +52,10 @@ ok(/avEls\.forEach\(function \(e\) \{ var u = e\.getAttribute\('data-uid-avatar'
    'os uids dos ícones entram no mesmo preload dos nomes — uma ida só');
 ok(/if \(!nm\) return;/.test(hid),
    'sem nome resolvido, o ícone continua vazio — nunca um ícone errado');
-ok(/window\._userProfileCache && window\._userProfileCache\[u\]/.test(hid),
-   'a FOTO REAL sai do cache de perfis (senão quem tem foto cairia nas iniciais)');
+ok(/window\._profilePhotoForUid\(u\)/.test(hid),
+   'a FOTO REAL sai do cache de perfis pelo UID');
+ok(/e\.setAttribute\('data-uid-photo', u\)/.test(hid),
+   'o UID permanece para atualizações posteriores da foto');
 ok(/e\.removeAttribute\('data-uid-avatar'\)/.test(hid),
    'resolvido, o marcador sai — a próxima passada não refaz trabalho');
 

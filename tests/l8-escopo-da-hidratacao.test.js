@@ -24,12 +24,10 @@ function novaStore(respostas) {
     _collectAllMatches: (t) => t.matches
   };
   const store = vm.runInNewContext('({' + property('js/store.js', 'hydrateMatchResults') + ',' +
-    // a hidratação pergunta ao detector de escrita em massa (2.2.79): ele vem JUNTO, senão
-    // o recorte testa uma função que chama algo que não existe — e o teste mente.
-    property('js/store.js', '_carimboDeLote') + '})', { window });
+    property('js/store.js', '_applyPhysicalResultOnMatch') + '})', { window });
   store.currentUser = { uid: 'u1' };
   store._saveToCache = () => {};
-  store._overlayResultOnMatch = (m, r) => Object.assign(m, r);
+  store._matchResultFields = ['scoreP1'];
   return { store, lidos, window };
 }
 

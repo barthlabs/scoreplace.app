@@ -20,7 +20,10 @@ ok(corrigido.acao === 'set' && corrigido.doc.winner === 'A' && corrigido.doc.sco
 ok(corrigido.doc.replay && corrigido.doc.replay.points.length === 1, 'replay do espelho anterior é preservado');
 
 const removido = planoDoEspelho({ participants: t.participants, rounds: [{ matches: [] }] }, 'm1', novo.doc, 'T1', 'x');
-ok(removido.acao === 'delete', 'sem jogo canônico, o espelho é removido');
+ok(removido.acao === 'skip', 'sem evento físico de jogo, espelho órfão é preservado');
+const removidoPorEvento = planoDoEspelho({ participants: t.participants, rounds: [{ matches: [] }] },
+  'm1', novo.doc, 'T1', 'x', { allowDelete: true });
+ok(removidoPorEvento.acao === 'delete', 'evento físico de jogo removido autoriza exclusão do espelho');
 
 console.log((fail ? '❌' : '✅') + ' match-result-mirror-core: ' + pass + ' ok, ' + fail + ' falhas');
 process.exit(fail ? 1 : 0);

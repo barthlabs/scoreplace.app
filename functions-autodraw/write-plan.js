@@ -25,10 +25,12 @@
  * plano ser COMPARÁVEL e hasheável em teste (mesmas entradas ⇒ mesma sequência).
  */
 'use strict';
+const phaseCertificate = require('./vendor/phase-index-certificate-core');
 
 /* Coleções que este planejador pode tocar. Qualquer outra é recusada pelo executor.
  * `null` é o documento raiz do torneio. */
-const COLECOES_FIXAS = ['results', 'resultsSandbox', 'advanceReceipts', 'outbox'];
+const COLECOES_FIXAS = ['results', 'resultsSandbox', 'resultVisibilityFence',
+  'advanceReceipts', 'outbox', 'notificationOutbox'];
 
 /* Teto conservador, bem abaixo do limite real do Firestore (500 escritas por transação).
  * ⛔ A recusa acontece ANTES de qualquer escrita, e a materialização NUNCA é quebrada em
@@ -44,7 +46,6 @@ function _clone(x) { return JSON.parse(JSON.stringify(x)); }
  *              split,        // o módulo tournament-split-core (injetado, não importado)
  *              boundary,     // função que aplica a fronteira de escrita; devolve {persist}
  *              agoraIso,     // instante ESTÁVEL da operação (argumento, nunca Date.now())
- *              espelho,      // { buildMirrorDoc } ou null — o espelho de `results`
  *              extras: [ { colecao, chave, doc, merge? } ]  // recibo, outbox
  *            }
  * devolve  — { ops, totais, marcador }
@@ -68,6 +69,9 @@ function planWrites(tAntes, tDepois, ctx) {
   const fora = split.partesDe(tDepois);
 
   const pDepois = split.dividir(_clone(b.persist), fora);
+  // A fronteira recebe uma fotografia que pode carregar marca antiga. O set
+  // completo da raiz deve sempre substituí-la por prova nova ou removê-la.
+  delete pDepois.config[phaseCertificate.FIELD];
   /* Sem torneio anterior, TODA parte é "vazia antes" — derivado de PESADOS + matches, e
    * não de três nomes escritos à mão, senão a quarta parte pareceria nova a cada gravação. */
   const vazio = { matches: [] };
@@ -96,39 +100,41 @@ function planWrites(tAntes, tDepois, ctx) {
     d.mudaram.forEach((m) => ops.push({ tipo: 'set', colecao: colecao, chave: chaveDe(m), doc: m }));
     d.sumiram.forEach((m) => ops.push({ tipo: 'delete', colecao: colecao, chave: chaveDe(m) }));
 
-    /* ESPELHO DE `results` — a CF é quem escreve desde a 2.1.30. Continua aqui, com o
-     * MESMO cuidado de antes, só que agora como OPERAÇÃO DO PLANO (e por isso contada no
-     * teto e visível no teste) e com o instante vindo por argumento. */
-    // O resultado indexado por playerUids é legível até pelo nativo antigo.
-    // Enquanto oculto, o jogo existe só na parte canônica, não no espelho.
-    if (nome === 'matches' && tDepois.organizerOnly !== true && o.espelho && typeof o.espelho.buildMirrorDoc === 'function' && d.mudaram.length) {
-      d.mudaram.forEach((reg) => {
-        const jogo = reg && reg.jogo;
-        if (!jogo || jogo.id == null || jogo.id === '') return;
-        let doc;
-        try {
-          doc = o.espelho.buildMirrorDoc(tDepois, jogo, o.tournamentId || null, o.agoraIso, null);
-        } catch (e) {
-          /* Best-effort declarado: o resultado JÁ está em `matches`, que é a fonte de
-           * verdade. Falhar o espelho não pode derrubar a gravação. */
-          if (o.onAviso) o.onAviso('[espelho-result] ' + String(jogo.id) + ': ' + (e && e.message));
-          return;
-        }
-        const apagar = [];
-        /* CONFIRMADO NÃO FICA PENDENTE: `merge:true` preservaria uma proposta já
-         * respondida, e ela seguiria pedindo confirmação num jogo fechado. */
-        const decidido = (jogo.winner != null && jogo.winner !== '') || jogo.draw === true || jogo.wo != null;
-        if (decidido) apagar.push('pendingResult');
-        /* ROSTER VAZIO NÃO SOBRESCREVE ROSTER BOM: `playerUids: []` é "não sei", e "não
-         * sei" não escreve — é ele que sustenta "só quem joga ESTE jogo escreve". */
-        if (!Array.isArray(doc.playerUids) || !doc.playerUids.length) delete doc.playerUids;
-        ops.push({
-          tipo: 'set', colecao: o.resultCollection === 'resultsSandbox' ? 'resultsSandbox' : 'results', chave: String(jogo.id),
-          doc: doc, merge: true, apagarCampos: apagar.length ? apagar : undefined
-        });
-      });
-    }
   });
+
+  // Transição de privacidade: independe de jogosQueMudaram e do filtro de
+  // roster vazio acima. O chamador leu TODOS os resultados na mesma transação.
+  if (o.visibilityResults) {
+    const transition = o.visibilityResults;
+    if (!['hide', 'release'].includes(transition.mode) || !Array.isArray(transition.entries) ||
+        o.resultCollection === 'resultsSandbox') throw new Error('[write-plan] transição de resultados inválida');
+    if (ops.some((op) => op.colecao === split.colecaoDaParte('matches'))) {
+      throw new Error('[write-plan] transição de visibilidade com mudança de jogo — recuso estado parcial');
+    }
+    const seen = new Set();
+    for (const entry of transition.entries) {
+      const id = entry && String(entry.id || '');
+      if (!id || id.includes('/') || seen.has(id)) throw new Error('[write-plan] resultado sem identidade única');
+      seen.add(id);
+      if (transition.mode === 'hide') {
+        ops.push({ tipo: 'set', colecao: 'results', chave: id, doc: {},
+          merge: true, apagarCampos: ['playerUids'] });
+      } else {
+        if (!Array.isArray(entry.playerUids) || entry.playerUids.some((uid) =>
+          typeof uid !== 'string' || !uid.trim())) throw new Error('[write-plan] roster de liberação sem prova');
+        ops.push({ tipo: 'set', colecao: 'results', chave: id,
+          doc: { playerUids: [...new Set(entry.playerUids)] }, merge: true });
+      }
+    }
+  }
+
+  // A raiz e todos os resultados da transição são confirmados com a mesma
+  // revisão que os escritores normais disputam. Mesmo zero resultados exige
+  // incremento: sem ele, uma inserção após a consulta escaparia da transição.
+  if (o.visibilityResults || ops.some((op) => op.colecao === 'results')) {
+    ops.push({ tipo: 'set', colecao: 'resultVisibilityFence', chave: 'state',
+      doc: {}, merge: true, incrementFields: ['revision'] });
+  }
 
   /* devolve ao documento tudo que NÃO está no marcador */
   (split.PESADOS || ['participants', 'history']).forEach((k) => {
@@ -143,6 +149,16 @@ function planWrites(tAntes, tDepois, ctx) {
   pDepois.config._nPartes = fora.reduce((acc, nome) => {
     acc[nome] = (pDepois[nome] || []).length; return acc;
   }, {});
+
+  if (o.phaseReadProof === true &&
+      ops.length + 1 + (o.extras || []).length <= TETO_OPERACOES &&
+      o.resultCollection !== 'resultsSandbox' &&
+      !(o.partesLegadasNoDocumento && o.partesLegadasNoDocumento.matches)) {
+    const certificate = phaseCertificate.build(pDepois.matches, split);
+    if (certificate && pDepois.config._nPartes.matches === certificate.count) {
+      pDepois.config[phaseCertificate.FIELD] = certificate;
+    }
+  }
 
   ops.push({ tipo: 'set', colecao: null, chave: null, doc: pDepois.config });
   return _fecha(ops, o, fora, b);
@@ -190,6 +206,8 @@ function checaTeto(plan, teto) {
  */
 function applyPlan(tx, ref, plan, deps) {
   if (!plan || !Array.isArray(plan.ops)) throw new Error('[write-plan] plano inválido');
+  const tetoErro = checaTeto(plan);
+  if (tetoErro) throw new Error('[write-plan] ' + tetoErro);
   const FieldValue = deps && deps.FieldValue;
   const permitidas = plan.colecoesPermitidas || COLECOES_FIXAS;
 
@@ -212,6 +230,13 @@ function applyPlan(tx, ref, plan, deps) {
       if (!FieldValue) throw new Error('[write-plan] apagarCampos exige deps.FieldValue');
       doc = Object.assign({}, doc);
       op.apagarCampos.forEach((c) => { doc[c] = FieldValue.delete(); });
+    }
+    if (op.incrementFields && op.incrementFields.length) {
+      if (!FieldValue || typeof FieldValue.increment !== 'function') {
+        throw new Error('[write-plan] incrementFields exige deps.FieldValue.increment');
+      }
+      doc = Object.assign({}, doc);
+      op.incrementFields.forEach((field) => { doc[field] = FieldValue.increment(1); });
     }
     if (op.merge) tx.set(alvo, doc, { merge: true });
     else tx.set(alvo, doc);

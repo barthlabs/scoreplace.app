@@ -3,10 +3,10 @@ const fs=require('fs'),path=require('path'),vm=require('vm'),assert=require('ass
 const root=path.resolve(__dirname,'..');
 const source=fs.readFileSync(path.join(root,'js/store.js'),'utf8');
 const start=source.indexOf('  hydrateMatchResults(tournamentId, opts) {');
-const end=source.indexOf('\n  // Grava o resultado',start);
-/* o detector de escrita em massa (`_carimboDeLote`, 2.2.79) vem JUNTO: a hidratação pergunta
- * a ele antes de sobrepor. Sem o par, o recorte testaria uma função que chama algo inexistente. */
-const cIni=source.indexOf('  _carimboDeLote: function (map) {');
+const end=source.indexOf('\n  // E05: o replay',start);
+assert(start>=0&&end>start,'recorte de hidratação permanece válido');
+/* A hidratação usa a aplicação autoritativa do jogo físico. */
+const cIni=source.indexOf('  _applyPhysicalResultOnMatch: function (m, result) {');
 const cFim=source.indexOf('\n  },',cIni)+4;
 const storeCode='({'+source.slice(start,end).replace(/[\s,]*$/,'')+',\n'+source.slice(cIni,cFim).replace(/[\s,]*$/,'')+'})';
 const dash=fs.readFileSync(path.join(root,'js/views/dashboard.js'),'utf8');
@@ -18,7 +18,7 @@ function deferred(){let resolve,reject;const promise=new Promise((a,b)=>{resolve
 (async()=>{
  const query=deferred();let reads=0,saves=0;
  const ctx={window:{FirestoreDB:{loadMatchResults(){reads++;return query.promise;}},_collectAllMatches:t=>t.matches}};
- const store=vm.runInNewContext(storeCode,ctx);store.currentUser={uid:'a'};store.tournaments=[{id:'t',matches:[{id:'m'}]}];store._saveToCache=()=>saves++;store._overlayResultOnMatch=(m,r)=>Object.assign(m,r);
+ const store=vm.runInNewContext(storeCode,ctx);store.currentUser={uid:'a'};store.tournaments=[{id:'t',matches:[{id:'m'}]}];store._saveToCache=()=>saves++;store._matchResultFields=['scoreP1'];
  const old=store.tournaments[0];const p=store.hydrateMatchResults('t');assert.equal(p,store.hydrateMatchResults('t'));assert.equal(reads,1);
  const fresh={id:'t',matches:[{id:'m',roster:'fresh'}]};store.tournaments=[fresh];query.resolve({m:{scoreP1:6}});assert.equal(await p,true);assert.equal(fresh.matches[0].scoreP1,6);assert.equal(fresh.matches[0].roster,'fresh');assert.equal(old.matches[0].scoreP1,undefined);assert.equal(saves,1);
  for(const change of ['account','delete']){

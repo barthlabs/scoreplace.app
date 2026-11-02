@@ -139,16 +139,7 @@ eq(m6.woAbsent, 'Fulano', 'com quem faltou');
  * empurrar. Este bloco guarda as três regras dessa escrita.
  */
 const bui = fs.readFileSync(path.join(ROOT, 'js', 'views', 'bracket-ui.js'), 'utf8');
-/* ⚠️ 2.2 — O GRAVADOR MUDOU DE ENDEREÇO, NÃO DE COMPORTAMENTO. O que era um bloco dentro
- * de `_gravaTorneio` virou um planejador puro em `functions-autodraw/write-plan.js`
- * (`planWrites`) mais um executor (`applyPlan`), por ordem do revisor: a checagem de teto e
- * a escrita real precisam consumir o MESMO plano, senão o teto mede uma coisa e o banco
- * recebe outra. Estas asserções continuam valendo palavra por palavra — só que o CAMINHO DE
- * ESCRITA da CF agora são dois arquivos. Varrer só o index.js daria vermelho por endereço
- * errado, que é o pior tipo de falso negativo: some a cobertura e parece regressão. */
-const _cfIdx = fs.readFileSync(path.join(ROOT, 'functions-autodraw', 'index.js'), 'utf8');
-const _cfPlan = fs.readFileSync(path.join(ROOT, 'functions-autodraw', 'write-plan.js'), 'utf8');
-const ad = _cfIdx + '\n/* ── write-plan.js (mesmo caminho de escrita) ── */\n' + _cfPlan;
+/* E05: o planejador central deve manter placar e proposta no jogo físico. */
 
 console.log('\n6. O espelho do CLIENTE não existe mais');
 ok(!/_dualWriteMatchResult\s*\(/.test(src.replace(/\/\*[\s\S]*?\*\//g, '')),
@@ -156,28 +147,26 @@ ok(!/_dualWriteMatchResult\s*\(/.test(src.replace(/\/\*[\s\S]*?\*\//g, '')),
 ok(!/function _dualWriteResult/.test(bui) && !/_dualWriteResult\(tId/.test(bui),
    'bracket-ui.js não tem mais o wrapper nem as 7 chamadas dele');
 
-console.log('\n7. A CF escreve o subdoc — e com as travas certas');
-const marcoEspelho = ad.indexOf("if (nome === 'matches' && tDepois.organizerOnly !== true && o.espelho");
-ok(marcoEspelho >= 0, 'o espelho só é escrito quando o torneio não está restrito à organização');
-const bloco = ad.slice(marcoEspelho, marcoEspelho + 2400);
-ok(/buildMirrorDoc\(/.test(bloco),
-   'usa buildMirrorDoc — a MESMA fonte de functions/, não uma segunda cópia do formato');
-/* 2.2: o planejador é PURO — ele DECLARA `apagarCampos:['pendingResult']` e só o executor
- * (applyPlan, que conhece o SDK) traduz para FieldValue.delete(). Confiro os DOIS lados:
- * declarar sem traduzir não apaga nada, e traduzir sem declarar nunca é acionado. */
-ok(/apagar\.push\('pendingResult'\)/.test(bloco) &&
-   /doc\[c\] = FieldValue\.delete\(\)/.test(ad),
-   '⛔ jogo DECIDIDO apaga o pendingResult — confirmado não fica pedindo confirmação');
-ok(/decidido = \(jogo\.winner != null/.test(bloco) && /jogo\.draw === true \|\| jogo\.wo != null/.test(bloco),
-   'e "decidido" inclui empate e W.O., não só winner');
-ok(/delete doc\.playerUids/.test(bloco),
-   '⛔ roster VAZIO não sobrescreve roster bom — é ele que sustenta a regra de escrita');
-/* 2.2: o merge também virou DECLARAÇÃO no plano (`merge: true` na op) e tradução no
- * executor (`tx.set(alvo, doc, { merge: true })`). Os dois lados, pelo mesmo motivo de cima. */
-ok(/merge: true/.test(bloco) && /tx\.set\(alvo, doc, \{ merge: true \}\)/.test(ad),
-   'grava com merge — é o que preserva o `replay`, que o servidor não sabe recalcular');
+console.log('\n7. A CF planeja somente o jogo físico');
+const WP = require(path.join(ROOT, 'functions-autodraw', 'write-plan.js'));
+const split = require(path.join(ROOT, 'js', 'views', 'tournament-split-core.js'));
+const plano = (jogo) => WP.planWrites(null, { id: 't', matches: [jogo] }, {
+  split, boundary: (t) => ({ persist: t }), agoraIso: '2026-08-28T00:00:00Z'
+});
+const confirmado = plano(matchConfirmado());
+const escrito = confirmado.ops.find((op) => op.colecao === 'matches' && op.chave === 'm-v1');
+ok(escrito && escrito.doc.jogo.scoreP1 === 5 && escrito.doc.jogo.scoreP2 === 6 &&
+   escrito.doc.jogo.winner === matchConfirmado().winner && escrito.doc.jogo.pendingResult === null,
+   'placar confirmado e proposta respondida ficam no jogo canônico');
+ok(!confirmado.ops.some((op) => op.colecao === 'results' || op.colecao === 'resultsSandbox'),
+   'o plano normal não cria espelho');
+const proposta = { id: 'p1', p1: 'A', p2: 'B', pendingResult: { scoreP1: 6, scoreP2: 4 } };
+const propostaEscrita = plano(proposta).ops.find((op) => op.colecao === 'matches');
+ok(propostaEscrita && propostaEscrita.doc.jogo.pendingResult.scoreP1 === 6 &&
+   propostaEscrita.doc.jogo.winner === undefined,
+   'proposta pendente vive no mesmo jogo físico sem vencedor inventado');
 
-console.log('\n8. O construtor do subdoc é de verdade e monta o formato de produção');
+console.log('\n8. O construtor histórico permanece para as transições ainda pendentes');
 const mr = require(path.join(ROOT, 'functions-autodraw', 'vendor', 'match-roster.js'));
 const doc = mr.buildMirrorDoc({ name: 'Confra' },
   { id: 'm1', winner: 'A / B', scoreP1: 6, scoreP2: 3, sets: [{ gamesP1: 6, gamesP2: 3 }],

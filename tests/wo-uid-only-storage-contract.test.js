@@ -75,7 +75,10 @@ ok(!('displayName' in orgSanitized.coHosts[0]) && !('email' in orgSanitized.coHo
 
 const firebaseDb = fs.readFileSync('js/firebase-db.js', 'utf8');
 const saveBody = firebaseDb.slice(firebaseDb.indexOf('async saveTournament('), firebaseDb.indexOf('async getTournament(', firebaseDb.indexOf('async saveTournament(')));
-const mutateBody = firebaseDb.slice(firebaseDb.indexOf('async mutateTournament('), firebaseDb.indexOf('async mutateMatchResult(', firebaseDb.indexOf('async mutateTournament(')));
+const mutateStart = firebaseDb.indexOf('async mutateTournament(');
+const mutateEnd = firebaseDb.indexOf('  _resultFromPhysicalMatch(', mutateStart);
+ok(mutateStart >= 0 && mutateEnd > mutateStart, 'recorte de mutateTournament permanece válido');
+const mutateBody = firebaseDb.slice(mutateStart, mutateEnd);
 ok(saveBody.includes('cleanData = window._stripStoredWoAccountLabels(cleanData)'), 'saveTournament fecha a porta de regravação de rótulos W.O.');
 ok(mutateBody.includes('_persist = window._stripStoredWoAccountLabels(_persist)'), 'mutateTournament fecha a porta transacional de rótulos W.O.');
 ok(saveBody.includes('cleanData = window._stripStoredOrganizationAccountLabels(cleanData)') && mutateBody.includes('_persist = window._stripStoredOrganizationAccountLabels(_persist)'),

@@ -30,9 +30,9 @@ Plataforma web de gestao de torneios esportivos e board games. App SPA (Single P
 **O projeto está em fase BETA desde 2026-04-29.** Regras a partir daqui:
 
 - **Dados são REAIS.** Torneios, partidas casuais, presenças, locais, perfis — tudo que o usuário cria PERSISTE. Não apagar nada sem comunicação prévia.
-- **Schemas estáveis.** Mudanças de schema agora exigem código de migração ou backward-compat. Não pode quebrar dados existentes silenciosamente.
+- **Esquema canônico único.** Mudanças de estrutura exigem migração administrativa dos documentos antigos para o mesmo formato dos novos, com censo, prévia dos alvos, backup, controle de concorrência e verificação posterior. Compatibilidade de leitura pode proteger a transição, mas não substitui a migração nem vira caminho permanente. Não quebrar nem reinterpretar dados existentes silenciosamente.
 - **Reset de coleções proibido** sem aviso explícito aos usuários afetados. Em alpha era livre — em beta é compromisso.
-- **Defensive code OK** quando lidar com docs antigos: branches `if (legacy_shape)`, fallbacks pra campos opcionais, normalização de payload no read são aceitáveis e recomendados.
+- **Defesa não é modo legado.** Enquanto uma migração não estiver comprovadamente completa, a leitura pode recusar ou usar caminho integral seguro para um documento incompleto; não deve tratar dados antigos como segundo contrato de produto. Depois de censo e testes de cobertura, remover branches de compatibilidade que ficaram sem alvos. Preservar fallbacks para falha/corrupção independentemente da idade do documento.
 - **Comunicação obrigatória** antes de qualquer mudança que afete dados do usuário.
 
 ### Migração do elenco canônico

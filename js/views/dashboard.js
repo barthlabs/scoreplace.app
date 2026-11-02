@@ -2597,23 +2597,8 @@ function renderDashboard(container) {
       var _gJogoNum = (item.m && item.m.isMonarch && item.m._gameNum != null) ? item.m._gameNum : null;
       var _monarchBoxLabel = (_gJogoNum != null) ? ('Jogo ' + _gJogoNum) : null;
 
-      // Foto real do jogador: tenta _playerPhotoCache, depois perfil do usuário
       function _initials(name) {
         return (name || '?').split(/\s+/).slice(0,2).map(function(w){return w[0]||'';}).join('').toUpperCase();
-      }
-      function _photoForPlayer(name) {
-        // Próprio usuário: foto do próprio perfil em sessão
-        if (_isMe(name) && cu && cu.photoURL && cu.photoURL.indexOf('dicebear.com') === -1) return cu.photoURL;
-        // Cache global de fotos por nome (populado por _preloadPlayerPhotos —
-        // SEMPRE a foto real do perfil do usuário, por uid). Chave é lowercase.
-        if (window._playerPhotoCache) {
-          var _c = window._playerPhotoCache[(name || '').toLowerCase()];
-          if (_c && _c.indexOf('dicebear.com') === -1) return _c;
-        }
-        // Sem foto de perfil em cache → null (cai em iniciais; será trocado
-        // pelo swap pós-preload). NÃO usar p.photoURL armazenado (pode estar
-        // defasado — a regra é sempre a foto do perfil real).
-        return null;
       }
       // ⭐ 2.0.35 · A GEOMETRIA DO NOME É A MESMA DA CHAVE. Ordem do dono: _"implemente em
       // todos os cards de forma canônica — não só no Novidades, ou nos Últimos Resultados,
@@ -4212,7 +4197,7 @@ function renderDashboard(container) {
   var _socialMatchesDisplay = (window._dashMatchesCache && window._dashMatchesCache.display) || '0';
   var _socialMatchesSubtitle = (window._dashMatchesCache && window._dashMatchesCache.subtitle) || '';
   var _socialMatchesTitle = (window._dashMatchesCache && window._dashMatchesCache.title) || 'Suas partidas casuais e em torneios — clique pra ver detalhes';
-  var _socialMatchesClick = "if(typeof window._showPlayerStats==='function' && window.AppStore.currentUser){window._showPlayerStats(window.AppStore.currentUser.displayName||'')}";
+  var _socialMatchesClick = "if(typeof window._showPlayerStats==='function' && window.AppStore.currentUser){window._showPlayerStats(window.AppStore.currentUser.displayName||'',null,window.AppStore.currentUser.uid)}";
 
   // Helper compartilhado: agrega W/L de uma lista de records.
   // v1.8.95: DELEGA pra conta canônica (`window._totaisVD`, store.js). Havia duas
@@ -4221,7 +4206,7 @@ function renderDashboard(container) {
   // pergunta é o defeito; a assinatura fica pra não mexer nos chamadores.
   function _aggregateWL(records, myUid, myDn) {
     if (typeof window._totaisVD === 'function') {
-      var r = window._totaisVD(records, myUid, myDn);
+      var r = window._totaisVD(records, myUid, '');
       return { w: r.wins, l: r.losses };
     }
     return { w: 0, l: 0 };
@@ -4267,10 +4252,11 @@ function renderDashboard(container) {
 
   // Refresh async do Firestore matchHistory. Cobre partidas em outros
   // devices que não estão no cache local v2. Substitui via data attrs.
-  if (_myUid && window.FirestoreDB && typeof window.FirestoreDB.loadUserMatchHistory === 'function') {
+  if (_myUid && window.FirestoreDB && typeof window.FirestoreDB.loadScoreplaceMatchHistory === 'function') {
     (async function() {
       try {
-        var records = await window.FirestoreDB.loadUserMatchHistory(_myUid, { limit: 500 });
+        var records = await window.FirestoreDB.loadScoreplaceMatchHistory(_myUid);
+        if (records === null) return;
         // ── v1.8.96: MESMA ENTRADA que a ficha do atleta ───────────────────────
         // Relato do dono: "ainda divergente 54/54 contra 52/53". Unificar o CÁLCULO
         // (1.8.95) não bastou: os dois lados calculavam igual sobre entradas
@@ -4383,7 +4369,7 @@ function renderDashboard(container) {
             <h2 class="sp-name-fit" data-maxrem="2.3" data-minrem="1.1" style="margin:0; font-size:2.3rem; font-weight:700; color:var(--hero-text); line-height:1.1; white-space:nowrap; max-width:100%;">${_t('dashboard.welcomeName', {name: (window._firstNameOnly ? window._firstNameOnly(userName) : userName)})}${_proBadge}</h2>
           </div>
         </div>
-        ${window.AppStore.currentUser ? '<div style="display:flex;flex-direction:column;gap:5px;align-items:stretch;"><button onclick="window.location.hash=\'#trofeus\'" style="background:var(--hero-glass-bg);border:1px solid var(--hero-glass-border);border-radius:12px;padding:6px 12px;cursor:pointer;display:flex;align-items:center;gap:5px;color:var(--hero-text);font-size:0.78rem;font-weight:600;white-space:nowrap;transition:background 0.2s;" onmouseover="this.style.background=\'var(--hero-glass-bg-hover)\'" onmouseout="this.style.background=\'var(--hero-glass-bg)\'"><span style="font-size:1rem;">🏆</span> Conquistas</button><button onclick="if(typeof window._showPlayerStats===\'function\')window._showPlayerStats(\'' + window._safeHtml((window.AppStore.currentUser.displayName || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")) + '\')" style="background:var(--hero-glass-bg);border:1px solid var(--hero-glass-border);border-radius:12px;padding:6px 12px;cursor:pointer;display:flex;align-items:center;gap:5px;color:var(--hero-text);font-size:0.78rem;font-weight:600;white-space:nowrap;transition:background 0.2s;" onmouseover="this.style.background=\'var(--hero-glass-bg-hover)\'" onmouseout="this.style.background=\'var(--hero-glass-bg)\'"><span style="font-size:1rem;">📊</span> ' + _t('dashboard.statistics') + '</button></div>' : ''}
+        ${window.AppStore.currentUser ? '<div style="display:flex;flex-direction:column;gap:5px;align-items:stretch;"><button onclick="window.location.hash=\'#trofeus\'" style="background:var(--hero-glass-bg);border:1px solid var(--hero-glass-border);border-radius:12px;padding:6px 12px;cursor:pointer;display:flex;align-items:center;gap:5px;color:var(--hero-text);font-size:0.78rem;font-weight:600;white-space:nowrap;transition:background 0.2s;" onmouseover="this.style.background=\'var(--hero-glass-bg-hover)\'" onmouseout="this.style.background=\'var(--hero-glass-bg)\'"><span style="font-size:1rem;">🏆</span> Conquistas</button><button onclick="if(typeof window._showPlayerStats===\'function\')window._showPlayerStats(window.AppStore.currentUser.displayName||\'\',null,window.AppStore.currentUser.uid)" style="background:var(--hero-glass-bg);border:1px solid var(--hero-glass-border);border-radius:12px;padding:6px 12px;cursor:pointer;display:flex;align-items:center;gap:5px;color:var(--hero-text);font-size:0.78rem;font-weight:600;white-space:nowrap;transition:background 0.2s;" onmouseover="this.style.background=\'var(--hero-glass-bg-hover)\'" onmouseout="this.style.background=\'var(--hero-glass-bg)\'"><span style="font-size:1rem;">📊</span> ' + _t('dashboard.statistics') + '</button></div>' : ''}
       </div>
       <!-- A versão saiu daqui (03/set/2026): agora mora sob o wordmark do cabeçalho, que
            aparece em TODAS as telas — e não só nesta. Ver #header-version no index.html. -->
@@ -4766,16 +4752,7 @@ function renderDashboard(container) {
     Promise.all(_phTournaments.map(function(t) {
       try { return _preloadPlayerPhotos(t); } catch(e) { return Promise.resolve(); }
     })).then(function() {
-      var imgs = container.querySelectorAll('img[data-player-name]');
-      imgs.forEach(function(img) {
-        var nm = img.getAttribute('data-player-name');
-        var real = window._playerPhotoCache && window._playerPhotoCache[(nm || '').toLowerCase()];
-        if (real && real.indexOf('dicebear.com') === -1 && img.src.indexOf('dicebear.com') !== -1) {
-          var fb = 'https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(nm) + '&backgroundColor=6366f1&textColor=ffffff&fontSize=42&size=28';
-          img.onerror = function() { this.onerror = null; this.src = fb; };
-          img.src = real;
-        }
-      });
+      if (typeof window._refreshPersonPhotos === 'function') window._refreshPersonPhotos(container);
     }).catch(function() {}).then(function () { return _dashNamesReady; }).then(_dashHydrateNames);
   }
 

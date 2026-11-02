@@ -95,7 +95,7 @@ function temChave(t) {
 }
 
 // t         — doc do torneio
-// placares  — { comPlacar, primeiro, ultimo } (ms ou null), computado dos docs de `results`
+// placares  — { comPlacar, primeiro, ultimo } (ms ou null), computado dos jogos físicos
 // agoraMs   — instante da varredura
 // → { acao, dueAt, motivo }
 //   acao: 'nada' | 'avisar' | 'encerrar' | 'foraDaVitrine'

@@ -168,4 +168,10 @@ assert.match(callable, /_writeCanonicalRosterChanges\(tx/);
 assert.match(callable, /_editCanonicalSlot\.findLegacyMirror\(mirrorDocuments, edit\)/);
 assert.match(callable, /tx\.update\(match\.ref, _editCanonicalSlot\.mirrorWritePatch\(patchedMirror, edit, _FV\.delete\(\), oldSlot\)\)/);
 assert.match(callable, /tx\.update\(state\.privateDrawRef, \{ draft/);
+assert.doesNotMatch(callable, /tx\.get\(ref\.collection\('results'\)\)|published\.results|resultSnap/,
+  'edição de vaga publicada não consulta nem escreve espelho de resultado');
+const claimCallable = source.slice(source.indexOf('exports.acceptTournamentClaimLink ='),
+  source.indexOf('exports.', source.indexOf('exports.acceptTournamentClaimLink =') + 8));
+assert.doesNotMatch(claimCallable, /tx\.get\(ref\.collection\('results'\)\)|resultSnap/,
+  'vínculo de vaga publicada não consulta espelho de resultado');
 console.log('✓ edição canônica da vaga: nome manual, troca de UID, três jogos e isolamento do rascunho');

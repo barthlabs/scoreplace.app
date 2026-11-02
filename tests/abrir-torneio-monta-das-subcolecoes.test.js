@@ -124,7 +124,7 @@ ok(S.iguais(S.remontar(soJogos), t),
    * devolver a rodada sem os grupos apaga o retrato congelado que as pessoas já viram. */
   const historico = {
     id: 'confra-historica',
-    rounds: [{ round: 1, format: 'liga', matches: [], monarchGroups: [{
+    rounds: [{ round: 1, format: 'liga', matches: [{ id: 'j-historico', p1: 'Ana', p2: 'Bia' }], monarchGroups: [{
       name: 'Grupo A', players: ['Ana', 'Bia'], playersUids: ['uAna', 'uBia'],
       classifCongelada: [{ uid: 'uAna', name: 'Ana' }, { uid: 'uBia', name: 'Bia' }]
     }]}],
@@ -143,6 +143,117 @@ ok(S.iguais(S.remontar(soJogos), t),
     'mas a montagem lê a subcoleção histórica de grupos quando o documento a declara');
   ok(JSON.stringify(montadoHistorico.rounds[0].monarchGroups) === JSON.stringify(historico.rounds[0].monarchGroups),
     'e devolve grupo, UIDs e classificação congelada sem reinterpretação');
+  const grupoQueNaoRemonta = JSON.parse(JSON.stringify(partesHistoricas.grupos[0]));
+  delete grupoQueNaoRemonta._loc;
+  let rejeitouGrupoInvalido = false;
+  try {
+    await S.montarDoBanco(partesHistoricas.config, async (colecao, nome) =>
+      nome === 'grupos' ? [grupoQueNaoRemonta] : partesHistoricas[nome] || []);
+  } catch (err) {
+    rejeitouGrupoInvalido = /remontar devolveu vazio/.test(String(err.message));
+  }
+  ok(rejeitouGrupoInvalido,
+    'grupo físico inválido faz a abertura recusar chave parcial');
+  async function recusaContagem(root, grupos) {
+    try {
+      await S.montarDoBanco(root, async (colecao, nome) =>
+        nome === 'grupos' ? grupos : partesHistoricas[nome] || []);
+      return false;
+    } catch (err) {
+      return /contadores físicos de grupos|contagem física de grupos/.test(String(err.message));
+    }
+  }
+  const raizComGrupos = Object.assign({}, partesHistoricas.config,
+    { _semPesados: ['grupos'] });
+  ok(await recusaContagem(Object.assign({}, raizComGrupos, { _nGrupos: 2 }),
+    partesHistoricas.grupos), 'alias detecta último grupo físico ausente');
+  ok(await recusaContagem(Object.assign({}, raizComGrupos,
+    { _nPartes: { grupos: 2 } }), partesHistoricas.grupos),
+  'contador principal detecta último grupo físico ausente');
+  ok(await recusaContagem(Object.assign({}, raizComGrupos,
+    { _nPartes: { grupos: 1 }, _nGrupos: 2 }), partesHistoricas.grupos),
+  'contadores principal e alias divergentes recusam a abertura');
+  ok(await recusaContagem(Object.assign({}, raizComGrupos, { _nGrupos: 0 }),
+    partesHistoricas.grupos), 'grupo físico além da contagem zero também é recusado');
+  ok(await recusaContagem(Object.assign({}, raizComGrupos, { _nGrupos: '1' }),
+    partesHistoricas.grupos), 'contador de tipo inválido é recusado');
+  const semGrupoFisico = Object.assign({}, partesHistoricas.config,
+    { _semPesados: ['grupos'], _nGrupos: 0 });
+  ok(!!(await S.montarDoBanco(semGrupoFisico, async (colecao, nome) =>
+    nome === 'grupos' ? [] : partesHistoricas[nome] || [])),
+  'contagem zero com coleção vazia abre sem inventar grupo');
+
+  const CF = require(path.join(ROOT, 'functions', 'split-parts.js'));
+  const registros = {
+    matches: partesHistoricas.matches, grupos: partesHistoricas.grupos,
+    inscritos: partesHistoricas.participants, opponentHistory: partesHistoricas.opponentHistory
+  };
+  for (const marcador of [
+    { _semPesados: ['grupos'] },
+    { _nPartes: { grupos: partesHistoricas.grupos.length } },
+    { _nGrupos: partesHistoricas.grupos.length },
+    { _semPesados: ['grupos'], _nPartes: { grupos: partesHistoricas.grupos.length },
+      _nGrupos: partesHistoricas.grupos.length }
+  ]) {
+    const root = Object.assign({}, partesHistoricas.config, marcador);
+    if (!Object.hasOwn(marcador, '_semPesados')) delete root._semPesados;
+    if (!Object.hasOwn(marcador, '_nPartes')) delete root._nPartes;
+    if (!Object.hasOwn(marcador, '_nGrupos')) delete root._nGrupos;
+    const webReads = [], fnReads = [];
+    const web = await S.montarDoBanco(root, async (colecao, nome) => {
+      webReads.push(nome);
+      return registros[colecao] || [];
+    });
+    const ref = { collection: (colecao) => ({ get: async () => {
+      fnReads.push(colecao);
+      return { docs: (registros[colecao] || []).map((entry) => ({ data: () => entry })) };
+    } }) };
+    const fn = await CF.hidratar(null, ref, JSON.parse(JSON.stringify(root)));
+    ok(webReads.filter((x) => x === 'grupos').length === 1 &&
+      fnReads.filter((x) => x === 'grupos').length === 1,
+    'cada leitor busca grupos físicos uma vez com cada marcador isolado ou combinado');
+    ok(S.iguais(web.rounds, fn.rounds) && S.iguais(web.rounds, historico.rounds),
+      'web e Function preservam jogos, UIDs e classificação congelada pelo mesmo registro físico');
+  }
+  for (const invalido of ['1', 1.5, 0, -1, Infinity]) {
+    const root = Object.assign({}, partesHistoricas.config,
+      { _nPartes: { grupos: invalido } });
+    delete root._semPesados;
+    const webReads = [], fnReads = [];
+    if (invalido === 0) {
+      await S.montarDoBanco(root, async (colecao, nome) => {
+        webReads.push(nome); return registros[colecao] || [];
+      });
+    } else {
+      ok(await recusaContagem(root, partesHistoricas.grupos),
+        'contador principal inválido recusa a abertura web');
+    }
+    await CF.hidratar(null, { collection: (colecao) => ({ get: async () => {
+      fnReads.push(colecao);
+      return { docs: (registros[colecao] || []).map((entry) => ({ data: () => entry })) };
+    } }) }, JSON.parse(JSON.stringify(root)));
+    ok(!webReads.includes('grupos') && !fnReads.includes('grupos'),
+      'contador inválido/zero não acrescenta leitura de grupos em nenhum leitor');
+  }
+  for (const invalido of ['35', 1.5, 0, -1, Infinity]) {
+    const root = Object.assign({}, partesHistoricas.config, { _nGrupos: invalido });
+    delete root._semPesados;
+    const webReads = [], fnReads = [];
+    if (invalido === 0) {
+      await S.montarDoBanco(root, async (colecao, nome) => {
+        webReads.push(nome); return registros[colecao] || [];
+      });
+    } else {
+      ok(await recusaContagem(root, partesHistoricas.grupos),
+        'alias inválido recusa a abertura web');
+    }
+    await CF.hidratar(null, { collection: (colecao) => ({ get: async () => {
+      fnReads.push(colecao);
+      return { docs: (registros[colecao] || []).map((entry) => ({ data: () => entry })) };
+    } }) }, JSON.parse(JSON.stringify(root)));
+    ok(!webReads.includes('grupos') && !fnReads.includes('grupos'),
+      'alias inválido/zero não acrescenta leitura de grupos em nenhum leitor');
+  }
   console.log((fail ? '✗' : '✓') + ' abrir-torneio-monta-das-subcolecoes: ' + pass + ' ok, ' + fail + ' falhas');
   process.exit(fail ? 1 : 0);
 })().catch(function (err) { console.error(err); process.exit(1); });

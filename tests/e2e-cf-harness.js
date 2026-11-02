@@ -49,13 +49,15 @@ W.FirestoreDB.formPair = function (tId, opts) {
   var doc = findDoc(tId); if (!doc) return thenable(null, new Error('not-found'));
   var r = pc.computeFormPair(doc, { uid1: opts.uid1 || '', name1: opts.name1 || '', uid2: opts.uid2 || '', name2: opts.name2 || '', changeRule: !!opts.changeRule });
   if (r.updateData) applyUpdate(doc, r.updateData);
-  return thenable({ data: { notFound: r.outcome === 'notFound', newName: r.newName } });
+  return thenable({ data: { outcome: r.outcome === 'formed' ? 'paired' : r.outcome,
+    notFound: r.outcome === 'notFound', participants: r.participants, pairRequests: r.updateData && r.updateData.pairRequests,
+    newName: r.newName } });
 };
 W.FirestoreDB.splitPair = function (tId, opts) {
   var doc = findDoc(tId); if (!doc) return thenable(null, new Error('not-found'));
   var r = pc.computeSplitPair(doc, { id1: opts.id1, id2: opts.id2 });
   if (r.updateData) applyUpdate(doc, r.updateData);
-  return thenable({ data: { notFound: r.outcome === 'notFound' } });
+  return thenable({ data: { outcome: r.outcome, notFound: r.outcome === 'notFound', participants: r.participants } });
 };
 // CF-only da dupla na espera: a CF lê uma CÓPIA do doc, muta+integra, e DEVOLVE o doc (o cliente
 // reflete via _applyCFTournament). NÃO muta o original — fiel à transação da CF. Retorno = shape

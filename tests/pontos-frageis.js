@@ -49,7 +49,7 @@ module.exports = [
     incidente: 'o formulário de dupla inscrevia o parceiro sem aceite e passou a falhar na Cloud Function', data: '2026-10-19' },
   { id: '7', arquivo: E, ancora: ORG_UID, ocorrencia: 2, marca: 'QUEM DECIDE É O UID',
     incidente: AVISO + ' (CANCELAMENTO)', data: '2026-09-24' },
-  { id: '8', arquivo: E, ancora: 'if (!result || result.notFound) return;',
+  { id: '8', arquivo: E, ancora: 'if (result.notFound) {',
     marca: 'O AVISO EXIGE QUE A SAÍDA TENHA ACONTECIDO',
     incidente: 'avisava cancelamento que nao aconteceu', data: '2026-09-24' },
   { id: '9', arquivo: R, ancora: 'allow create: if false;', contexto: 'match /tournaments/{tournamentId}',
@@ -85,14 +85,6 @@ module.exports = [
       + 'Medido no jogo 153 da Confra: p1 dizia "Sandra Bighetto / Flavia Barchetta" e os uids eram '
       + 'de Rodrigo e Betsy, a dupla ELIMINADA. O card desenha pela identidade, entao a tela '
       + 'mostrava os eliminados jogando. Corrigi o rotulo tres vezes e o dono continuou vendo o erro',
-    data: '2026-09-27' },
-
-  { id: '16', arquivo: 'js/store.js', ancora: 'if (_podeReaplicarPlacar) {',
-    marca: 'O PLACAR VOLTA POR CIMA',
-    incidente: 'o jogo tem DUAS copias: o placar e gravado na colecao de resultados e o documento '
-      + 'do jogo so depois. O ouvinte remontava os jogos e escrevia por cima do objeto vivo, jogando '
-      + 'fora a camada de resultado recem-aplicada — o 0-0 que o dono relatou por semanas. O refresh '
-      + 'curava porque a carga completa reaplica, e foi isso que me fez procurar na repintura',
     data: '2026-09-27' },
 
   { id: '17', arquivo: 'js/views/bracket-logic.js',
@@ -132,12 +124,6 @@ module.exports = [
     marca: 'TODO TORNEIO JÁ TEM ELENCO E JOGOS FORA DO DOCUMENTO',
     incidente: 'o gatilho de W.O. usava a ausência do marcador legado para pular a reconciliação, '
       + 'deixando o substituto, a desativação e o slot do jogo divergirem das subcoleções',
-    data: '2026-09-27' },
-
-  { id: '23', arquivo: 'functions/index.js', ancora: 'const fora = _tSplitFn.partesDe(config);',
-    marca: 'JOGO DIVIDIDO NÃO DEPENDE DO MARCADOR LEGADO',
-    incidente: 'o gatilho de matches retornava quando a fotografia não trazia `_semPesados`, '
-      + 'mantendo o documento de resultado atrasado apesar de o jogo canônico ter mudado',
     data: '2026-09-27' },
 
   { id: '24', arquivo: 'functions/index.js', ancora: 'const fora = _tSplitFn.partesDe(t);',

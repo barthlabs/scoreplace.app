@@ -40,12 +40,15 @@ const sandbox = (overrides = {}) => ({ exists: true, data: () => ({
   await assert.rejects(context.authorize(db, sandbox(), 'organizador', read), { code: 'not-found', message: 'torneio não existe' }, 'organizador removido perde acesso sem revelar sandbox');
   assert.ok(source.indexOf('const origRef = db.collection("tournaments").doc(origId)', source.indexOf('exports.createSandbox')) <
     source.indexOf('const jaTem = await db.collection("sandboxes")', source.indexOf('exports.createSandbox')), 'original autorizado antes do retorno idempotente');
-  // A função getCanonicalTournamentRoster tem export legado nos DOIS pacotes.
-  // O deploy de um não pode restaurar a brecha do outro por divergência.
-  const duplicate = autodraw.slice(autodraw.indexOf('exports.getCanonicalTournamentRoster'), autodraw.indexOf('exports.getCanonicalTournamentRoster') + 2100);
-  for (const required of ['sb.notificationsMuted !== true', 'sb.sandboxOwnerUid !== uid', "db.collection('tournaments').doc(String(sb.sandboxOf))", '_isTournamentAdmin(original, uid)', "c.status === 'active'", "c.status === 'accepted'"]) {
-    assert.ok(duplicate.includes(required), 'autodraw conserva a guarda: ' + required);
+  // A callable tem um único dono; publicar autodraw não pode substituir a
+  // fronteira de registrations nem reabrir o sandbox para UIDs copiados.
+  assert.equal((source.match(/^exports\.getCanonicalTournamentRoster\s*=/gm) || []).length, 1);
+  assert.equal((autodraw.match(/^exports\.getCanonicalTournamentRoster\s*=/gm) || []).length, 0);
+  const rosterCall = source.slice(source.indexOf('exports.getCanonicalTournamentRoster'), source.indexOf('exports.getTournamentEnrollmentProfiles'));
+  for (const required of ['_sandboxAutorizado(', 'verifiedRoster(', 'standbyParticipants']) {
+    assert.ok(rosterCall.includes(required), 'callable canônica conserva a guarda: ' + required);
   }
+  assert.match(source.slice(start, end), /sandboxOwnerUid/);
   // O Firestore guarda o ID na chave do documento, não necessariamente no corpo.
   // A Análise deve projetá-lo antes de entrar na fronteira canônica tanto no
   // original quanto na cópia que preserva os registrationIds do original.

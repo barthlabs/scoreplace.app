@@ -433,11 +433,13 @@ console.log('\n== Notificação lida por permanência + botão da loja ==');
   }
 
   // os DOIS consumidores usam a mesma conta — é isso que impede a divergência
-  ok(/window\._totaisVD\(records, myUid, myDn\)/.test(dash),
+  // E18: o 3º argumento vazio impede o fallback por nome dentro de _totaisVD;
+  // os dois consumidores continuam delegando ao mesmo contador por UID.
+  ok(/window\._totaisVD\(records, myUid, ''\)/.test(dash),
     'o pill da tela inicial DELEGA pra conta canônica');
   ok(!/var team = null;[\s\S]{0,400}?r\.winnerTeam === team/.test(dash),
     'o pill não tem mais a própria implementação de V/D');
-  ok(/window\._totaisVD\(merged, resolvedUid, playerName\)/.test(ana),
+  ok(/window\._totaisVD\(merged, resolvedUid, ''\)/.test(ana),
     'a ficha do atleta recalcula com a MESMA conta quando o histórico completo chega');
   ok(/getElementById\('letzplay-card-stats-slot'\)/.test(ana),
     'ela redesenha no slot que EXISTE (o id foi conferido no arquivo, não inventado)');

@@ -27,8 +27,10 @@ ok(NUCLEO.indexOf('$HOME/.local/bin/claude') !== -1,
   'o adaptador encontra o Claude Code instalado fora do PATH do Codex');
 ok(NUCLEO.indexOf('/Applications/Claude.app/Contents/MacOS/claude') !== -1,
   'o adaptador tem fallback para o executável empacotado do Claude');
-ok(/--permission-mode dontAsk/.test(NUCLEO) && /--tools Read Glob Grep/.test(NUCLEO),
-  'a revisão Claude é não interativa e limitada a ferramentas de leitura');
+ok(/--permission-mode dontAsk/.test(NUCLEO) &&
+   /review_tools="Read Glob Grep"/.test(NUCLEO) &&
+   /review_tools=""/.test(NUCLEO) && /--tools "\$review_tools"/.test(NUCLEO),
+  'a revisão Claude é não interativa e a lista explícita desliga leitura de dependências');
 
 const SEM_REVISOR = { CODEX_BIN: '/nonexistent/codex', CLAUDE_BIN: '/nonexistent/claude',
   SP_GPT_CHAVE: '/nonexistent/chave-gpt', SP_CLAUDE_CHAVE: '/nonexistent/chave-claude' };
@@ -87,6 +89,7 @@ for (const f of ['revisar.sh', 'revisar-com-gpt.sh', 'revisar-com-claude.sh']) {
   fs.copyFileSync(path.join(ROOT, 'scripts', f), path.join(lab, 'scripts', f));
 }
 fs.writeFileSync(path.join(lab, 'js', 'store.js'), "window.SCOREPLACE_VERSION = '1.0.0';\nvar x = 1;\n");
+fs.writeFileSync(path.join(lab, 'js', 'deleted.js'), 'const tracked = true;\n');
 fs.writeFileSync(path.join(lab, 'a.css'), 'a{}\n');
 git(['add', '-A']); git(['commit', '-q', '-m', 'base']);
 git(['update-ref', 'refs/remotes/origin/main', 'HEAD']);
@@ -148,6 +151,12 @@ ok(r.code === 4, 'ligado de novo, sem Codex volta a falhar com exit 4 — code '
 const fakeClaude = path.join(lab, 'claude-falso.sh');
 const modelos = path.join(lab, 'modelos.txt');
 fs.writeFileSync(fakeClaude, `#!/usr/bin/env bash
+if [[ -n "${'$'}{FAKE_PROMPT:-}" ]]; then
+  node -e 'require("fs").writeFileSync(process.env.FAKE_PROMPT, require("fs").readFileSync(0))'
+fi
+if [[ -n "${'$'}{FAKE_ARGV:-}" ]]; then
+  printf '%s\\n' "${'$'}@" > "${'$'}FAKE_ARGV"
+fi
 for ((i=1; i<=$#; i++)); do
   if [[ "${'$'}{!i}" == "--model" ]]; then j=$((i+1)); echo "${'$'}{!j}" >> "${'$'}FAKE_MODELOS"; fi
 done
@@ -155,6 +164,79 @@ result=$'VEREDITO: RESSALVAS\\nEXECUTOR: modelo=gpt-5.6-terra esforco=medium —
 node -e 'process.stdout.write(JSON.stringify({result:process.argv[1],usage:{input_tokens:1,output_tokens:1},total_cost_usd:0}))' "${'$'}result"
 `);
 fs.chmodSync(fakeClaude, 0o755);
+const approvedList = path.join(lab, 'approved-files.txt');
+const capturedPrompt = path.join(lab, 'captured-prompt.txt');
+const capturedArgv = path.join(lab, 'captured-argv.txt');
+fs.writeFileSync(approvedList, 'js/store.js\n');
+fs.writeFileSync(path.join(lab, 'private-extra.js'), 'UNAUTHORIZED_FILE_SENTINEL\n');
+fs.writeFileSync(path.join(lab, 'js', 'store.js'), "window.SCOREPLACE_VERSION = '1.0.1';\nvar x = 3;\n");
+r = runLab(labCLAUDE, ['diff'], { CLAUDE_BIN: fakeClaude,
+  FAKE_MODELOS: modelos, FAKE_PROMPT: capturedPrompt, FAKE_ARGV: capturedArgv,
+  SP_REVIEW_FILE_LIST: approvedList, SP_REVIEW_PART: 'scope-check' });
+ok(fs.existsSync(capturedPrompt), 'lista explícita chega ao revisor falso');
+if (fs.existsSync(capturedPrompt)) {
+  const scopedPrompt = fs.readFileSync(capturedPrompt, 'utf8');
+  ok(scopedPrompt.includes('var x = 3') && !scopedPrompt.includes('UNAUTHORIZED_FILE_SENTINEL'),
+    'o prompt inclui só o diff autorizado, não outro arquivo novo do worktree');
+  ok(!scopedPrompt.includes('--- arquivo NOVO não rastreado: js/store.js'),
+    'arquivo rastreado da lista não é reapresentado como novo');
+  ok(scopedPrompt.includes('Read/Grep/Glob estão desativados') &&
+     !scopedPrompt.includes('use Read/Grep') &&
+     !scopedPrompt.includes('compare fonte e destino na árvore atual'),
+  'lote explícito Claude não manda usar ferramentas desligadas');
+}
+ok(fs.readFileSync(capturedArgv, 'utf8').includes('--tools\n\n'),
+  'lote explícito Claude passa --tools vazio no argv');
+const fakeGPT = path.join(lab, 'codex-falso.sh');
+fs.writeFileSync(fakeGPT, `#!/usr/bin/env bash
+printf '%s\\n' "${'$'}@" > "${'$'}FAKE_ARGV"
+cat > "${'$'}FAKE_PROMPT"
+for ((i=1; i<=$#; i++)); do
+  if [[ "${'$'}{!i}" == "-o" ]]; then j=$((i+1)); out="${'$'}{!j}"; fi
+done
+printf 'VEREDITO: APROVADO\\nEXECUTOR: modelo=sonnet esforco=medium — laboratório\\nESCALAR: NAO\\n' > "${'$'}out"
+`);
+fs.chmodSync(fakeGPT, 0o755);
+r = runLab(labGPT, ['diff'], { CODEX_BIN: fakeGPT, FAKE_PROMPT: capturedPrompt,
+  FAKE_ARGV: capturedArgv, SP_REVIEW_FILE_LIST: approvedList, SP_GPT_FAIXA: 'critica' });
+const scopedGPT = fs.readFileSync(capturedPrompt, 'utf8');
+ok(scopedGPT.includes('use dependências apenas para contextualizar os arquivos do lote') &&
+   !scopedGPT.includes('Read/Grep/Glob estão desativados') &&
+   !scopedGPT.includes('UNAUTHORIZED_FILE_SENTINEL'),
+  'lote explícito GPT descreve leitura read-only sem enviar arquivo externo');
+ok(fs.readFileSync(capturedArgv, 'utf8').includes('--sandbox\nread-only\n'),
+  'lote explícito GPT mantém sandbox somente-leitura');
+r = runLab(labCLAUDE, ['diff'], { CLAUDE_BIN: fakeClaude,
+  FAKE_MODELOS: modelos, FAKE_PROMPT: capturedPrompt, FAKE_ARGV: capturedArgv,
+  SP_REVIEW_FILE_LIST: '', SP_GPT_FAIXA: 'critica' });
+const fullPrompt = fs.readFileSync(capturedPrompt, 'utf8');
+ok(fullPrompt.includes('use Read/Grep na árvore atual') &&
+   fullPrompt.includes('compare fonte e destino na árvore atual'),
+  'sem lista, o prompt mantém conferência de dependências e vendor');
+ok(fs.readFileSync(capturedArgv, 'utf8').includes('--tools\nRead Glob Grep\n'),
+  'sem lista, Claude recebe ferramentas de leitura no argv');
+const missingList = path.join(lab, 'missing-files.txt');
+fs.writeFileSync(missingList, 'js/inexistente.js\n');
+r = runLab(labCLAUDE, ['diff'], { CLAUDE_BIN: fakeClaude,
+  FAKE_MODELOS: modelos, SP_REVIEW_FILE_LIST: missingList });
+ok(r.code !== 0 && r.out.includes('arquivo da lista inexistente: js/inexistente.js'),
+  'lista explícita com arquivo inexistente falha antes da revisão');
+const deletedList = path.join(lab, 'deleted-files.txt');
+fs.writeFileSync(deletedList, 'js/deleted.js\n');
+fs.rmSync(path.join(lab, 'js', 'deleted.js'));
+r = runLab(labCLAUDE, ['diff'], { CLAUDE_BIN: fakeClaude,
+  FAKE_MODELOS: modelos, FAKE_PROMPT: capturedPrompt,
+  SP_REVIEW_FILE_LIST: deletedList, SP_GPT_FAIXA: 'critica' });
+const deletionPrompt = fs.readFileSync(capturedPrompt, 'utf8');
+ok(r.code === 2 && deletionPrompt.includes('deleted file mode') &&
+   deletionPrompt.includes('arquivo REMOVIDO rastreado (diff acima): js/deleted.js'),
+  'arquivo rastreado removido permanece no diff do lote (code=' + r.code +
+  ', diff=' + deletionPrompt.includes('deleted file mode') +
+  ', marker=' + deletionPrompt.includes('arquivo REMOVIDO rastreado (diff acima): js/deleted.js') +
+  ', out=' + r.out.slice(0, 220).replace(/\n/g, ' ') + ')');
+git(['checkout', '-q', '--', 'js/deleted.js']);
+git(['checkout', '-q', '--', 'js/store.js']);
+fs.writeFileSync(modelos, '');
 const planoAdapt = path.join(lab, 'plano-adaptativo.md');
 fs.writeFileSync(planoAdapt, '# plano\n\nTocar `js/store.js`.\n');
 r = runLab(labCLAUDE, ['plano', planoAdapt], { CLAUDE_BIN: fakeClaude, FAKE_MODELOS: modelos });
@@ -195,7 +277,9 @@ ok(NUCLEO.includes('MODELO=haiku') &&
    NUCLEO.includes('Sonnet só entra se for pedido explicitamente') &&
    NUCLEO.includes('[[ "$MODELO" != haiku ]]'),
   'Haiku é o padrão econômico; Sonnet só entra por pedido explícito');
-const reciboAntesDaSuite = NUCLEO.indexOf('base=%s\\n') < NUCLEO.indexOf('SP_REVIEW_VALIDATE:-0');
+const indiceRecibo = NUCLEO.indexOf('base=%s\\n');
+const indiceSuite = NUCLEO.indexOf('SP_REVIEW_VALIDATE:-0');
+const reciboAntesDaSuite = indiceRecibo >= 0 && indiceSuite >= 0 && indiceRecibo < indiceSuite;
 ok(reciboAntesDaSuite &&
    NUCLEO.includes('mesmo corte e conteúdo') &&
    NUCLEO.includes('"$(cat "$RECIBO_BASE")" == "$BASE_DIFF"') &&

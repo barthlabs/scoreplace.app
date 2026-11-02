@@ -118,12 +118,37 @@ function monta() {
   const t = { name: 'Confra', participants: [], maxParticipants: 8 };
   const dup = { motivo: 'celular' };
   const v = sb._applyEnrollResult(t, 'tid', {
-    participants: [{ uid: 'eu' }], dupSuspect: dup, autoCloseTriggered: true
+    outcome: 'enrolled', participants: [{ uid: 'eu' }], dupSuspect: dup, autoCloseTriggered: true
   }, { name: 'Eu', self: true, refresh: false, excludeEmail: 'eu@x.com' });
   ok(v === 'enrolled', '(e) veredito enrolled');
   ok(sb.perguntas.length === 1, '(e) dupSuspect com inscrição feita (fail-open) também pergunta');
   ok(t.status === 'closed', '(e) autoClose fecha o torneio local');
   ok(sb.notifs.some(n => n.type === 'enrollments_closed'), '(e) autoClose notifica os inscritos');
+}
+
+// Recusa canônica e resposta sem resultado não podem ser traduzidas como sucesso.
+for (const outcome of ['rejected', 'conflict', 'unconfirmed', 'futureOutcome']) {
+  const sb = monta();
+  const t = { name:'Teste', participants:[{ uid:'velho' }] };
+  const verdict = sb._applyEnrollResult(t, 'tid', { outcome, participants:[{ uid:'fresco' }] },
+    { self:true, successToast:true, refresh:false });
+  ok(verdict !== 'enrolled' && sb.toasts.length === 1 && sb.toasts[0].k === 'error',
+    outcome + ' não gera sucesso');
+  ok(t.participants.length === 1 && t.participants[0].uid === 'fresco',
+    outcome + ' adota projeção do recibo sem criar inscrição');
+}
+{
+  const sb = monta();
+  const t = {name:'Teste',participants:[]};
+  sb._applyEnrollResult(t,'tid',{outcome:'rejected',participants:[],dupSuspect:{motivo:'nome'}},
+    {self:true,refresh:false});
+  ok(sb.perguntas.length===0,'recusa de elegibilidade não abre diálogo que pressupõe inscrição feita');
+}
+{
+  const sb = monta();
+  const t = { name:'Teste', participants:[] };
+  ok(sb._applyEnrollResult(t, 'tid', undefined, { self:true, successToast:true, refresh:false }) === 'unconfirmed'
+    && sb.toasts[0].k === 'error', 'resposta ausente falha fechada');
 }
 
 // ── FIAÇÃO: as três portas diretas usam o leitor; a inscrição em dupla delega

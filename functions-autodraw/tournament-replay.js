@@ -1,4 +1,5 @@
 'use strict';
+const { canonicalJson } = require('./vendor/match-roster');
 const KEYS = new Set(['v','truncated','totalPoints','useSets','isFixedSet','countingType','scoring','so','serveSkipped','points']);
 function validateReplay(raw, HttpsError) {
   const fail = () => { throw new HttpsError('invalid-argument', 'Replay inválido ou grande demais.'); };
@@ -31,33 +32,43 @@ function validateReplay(raw, HttpsError) {
   if (Buffer.byteLength(text) > 192 * 1024) fail();
   return JSON.parse(text);
 }
-function makeSaveTournamentReplay({ db, HttpsError, readTournament, findMatch, isAdmin, playerUids, buildMirror, now = Date.now }) {
+function makeSaveTournamentReplay({ db, HttpsError, readTournament, findMatch, isAdmin, playerUids }) {
   return async request => {
     const uid = request.auth && request.auth.uid;
     if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
     const data = request.data || {};
     const validId = x => typeof x === 'string' && x.length > 0 && x.length <= 180 && !x.includes('/');
     if (!validId(data.tournamentId) || !validId(data.matchId)) throw new HttpsError('invalid-argument', 'Jogo inválido.');
-    const replay = validateReplay(data.replay, HttpsError), iso = new Date(now()).toISOString();
+    const replay = validateReplay(data.replay, HttpsError);
     const sandbox = data.sandbox === true;
     const ref = db.collection(sandbox ? 'sandboxes' : 'tournaments').doc(data.tournamentId);
     return db.runTransaction(async tx => {
       const t = await readTournament(tx, ref, data.tournamentId);
       if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+      // readTournament já incluiu o fence no read-set das transações reais.
       if (sandbox && t.sandboxOwnerUid !== uid) throw new HttpsError('permission-denied', 'Sandbox de outra pessoa.');
       const m = findMatch(t, data.matchId);
       if (!m) throw new HttpsError('not-found', 'Jogo não encontrado.');
       if (!sandbox && !isAdmin(t, uid) && !playerUids(m).includes(uid)) throw new HttpsError('permission-denied', 'Só quem joga ou organiza pode salvar o replay.');
-      const resultRef = ref.collection(sandbox ? 'resultsSandbox' : 'results').doc(data.matchId);
-      const snap = await tx.get(resultRef);
-      const result = snap.exists ? snap.data() : buildMirror(t, m, data.tournamentId, iso);
-      if (!result) throw new HttpsError('failed-precondition', 'Projeção do jogo indisponível.');
-      // No modo somente organizadores, o índice global de histórico não pode
-      // expor o confronto ao app nativo antigo.
-      if (!sandbox && t.organizerOnly === true && !snap.exists) result.playerUids = [];
-      if (JSON.stringify(result.replay) === JSON.stringify(replay)) return { ok: true, changed: false, replay };
-      // Só o replay muda; placar, roster e proposta concorrentes permanecem intactos.
-      if (snap.exists) tx.update(resultRef, { replay }); else tx.create(resultRef, Object.assign({}, result, { replay }));
+      const matchRef = ref.collection('matches').doc(data.matchId);
+      const snap = await tx.get(matchRef);
+      const physical = snap.exists ? snap.data() : null;
+      const loc = physical && physical._loc;
+      if (!physical || physical._chave !== data.matchId ||
+          !physical.jogo || physical.jogo.id !== data.matchId ||
+          !loc || !['rounds', 'matches', 'phaseRounds', 'groupRounds', 'thirdPlace'].includes(loc.tipo) ||
+          canonicalJson(physical.jogo) !== canonicalJson(m)) {
+        throw new HttpsError('failed-precondition', 'Jogo físico incompleto ou divergente.');
+      }
+      if (canonicalJson(physical.jogo.replay) === canonicalJson(replay)) {
+        return { ok: true, changed: false, replay };
+      }
+      const next = { ...physical, jogo: { ...physical.jogo, replay } };
+      if (Buffer.byteLength(JSON.stringify(next), 'utf8') > 700 * 1024) {
+        throw new HttpsError('failed-precondition', 'O jogo físico ficou grande demais para salvar o replay.');
+      }
+      // Campo aninhado: nunca substituir `jogo` inteiro nem criar espelho.
+      tx.update(matchRef, { 'jogo.replay': replay });
       return { ok: true, changed: true, replay };
     });
   };

@@ -169,6 +169,16 @@ arquivos_do_diff() {
 arquivos_do_escopo() {
   if [[ -n "${SP_REVIEW_FILE_LIST:-}" ]]; then
     [[ -f "$SP_REVIEW_FILE_LIST" ]] || { echo "✗ SP_REVIEW_FILE_LIST não encontrado: $SP_REVIEW_FILE_LIST" >&2; return 1; }
+    local f
+    while IFS= read -r f; do
+      [[ -n "$f" ]] || continue
+      # Exclusão rastreada ainda tem diff; caminho inexistente e não rastreado
+      # seria omitido silenciosamente do lote.
+      if [[ ! -f "$f" ]] && ! git ls-files --error-unmatch -- "$f" >/dev/null 2>&1; then
+        echo "✗ arquivo da lista inexistente: $f" >&2
+        return 1
+      fi
+    done < "$SP_REVIEW_FILE_LIST"
     cat "$SP_REVIEW_FILE_LIST"
   else
     arquivos_do_diff
@@ -348,7 +358,11 @@ if [[ "$MODO" == diff ]]; then
   FINGERPRINT=$( {
     printf 'base=%s\n' "$BASE_DIFF"
     diff_do_escopo
-    while IFS= read -r f; do [[ -f "$f" ]] && shasum -a 256 "$f"; done < "$LISTA"
+    while IFS= read -r f; do
+      [[ -n "$f" ]] || continue
+      if [[ -f "$f" ]]; then shasum -a 256 "$f"
+      else printf 'removido:%s\n' "$f"; fi
+    done < "$LISTA"
   } | shasum -a 256 | awk '{print $1}')
   if [[ -s "$OUT" && -s "$RECIBO" && -s "$RECIBO_BASE" && "$(cat "$RECIBO")" == "$FINGERPRINT" && "$(cat "$RECIBO_BASE")" == "$BASE_DIFF" ]] && grep -qE '(^|\*\*)VEREDITO: *APROVADO' "$OUT"; then
     echo "  ✓ parecer APROVADO reaproveitado: mesmo corte e conteúdo ($FINGERPRINT)."
@@ -405,15 +419,25 @@ if [[ "$MODO" == diff && -s "$OUT" && -s "$RECIBO_BASE" && "$(cat "$RECIBO_BASE"
 elif [[ "$MODO" != diff && -s "$OUT" ]]; then
   ANTERIOR="$(cat "$OUT")"
 fi
+if [[ -n "${SP_REVIEW_FILE_LIST:-}" ]]; then
+  CONTEXTO_REVISAO='O prompt contém somente os arquivos e evidências do lote explícito. Uma dependência fora dele é limite de contexto, não prova de ausência.'
+  if [[ "$REVISOR" == claude ]]; then
+    CONTEXTO_REVISAO+=' Read/Grep/Glob estão desativados neste lote; analise apenas o material recebido.'
+    INSTRUCAO_DEPENDENCIAS='Quando um diff parcial não mostrar uma definição ou cópia vendor, descreva o contexto faltante em vez de afirmar ausência ou divergência na árvore. Cite somente arquivo:linha presente no material recebido.'
+  else
+    CONTEXTO_REVISAO+=' Você pode ler a árvore pelo ambiente read-only do GPT; use dependências apenas para contextualizar os arquivos do lote e registre achados somente sobre ele.'
+    INSTRUCAO_DEPENDENCIAS='Quando o diff referenciar uma dependência fora do lote, confira somente o contexto necessário na árvore antes de afirmar ausência ou divergência. Um lote é partição de transporte, não prova de que outro arquivo ou cópia vendor inexiste.'
+  fi
+else
+  CONTEXTO_REVISAO='Você tem leitura da árvore inteira: CONFIRA CONTRA O CÓDIGO REAL, não contra o que o texto afirma. As regras da casa estão em CLAUDE.md (AGENTS.md é a mesma coisa). Se já foi carregado no contexto, não releia o mesmo arquivo. Inspecione primeiro o diff e apenas as dependências necessárias; não percorra changelogs históricos ou documentação inteira sem ligação com um achado.'
+  INSTRUCAO_DEPENDENCIAS='Quando o diff referencia variável, função ou script parcialmente fora do corte, use Read/Grep na árvore atual antes de declarar algo indefinido, ausente ou sem contexto. Um diff é deliberadamente parcial e não prova que uma definição antiga inexiste. Quando o cabeçalho disser LOTE, ele é apenas uma partição de transporte do mesmo corte: não infira ausência de arquivo, função, teste ou cópia vendor porque não apareceu naquele lote. Antes de alegar que um arquivo ou símbolo não existe, confirme com Read/Grep na árvore e cite o resultado concreto. Para cópias vendor, compare fonte e destino na árvore atual ou descreva uma divergência comprovada; arquivos relacionados podem estar deliberadamente em lotes diferentes.'
+fi
 {
   cat <<EOF
 Você é o REVISOR de segunda opinião deste repositório (scoreplace.app — SPA em vanilla JS +
 Firebase). Outro agente ($QUEM_EXECUTA) vai implementar; seu trabalho é achar o que ele NÃO viu,
-e NADA é implementado sem o seu APROVADO. Você tem leitura da árvore inteira: CONFIRA CONTRA O
-CÓDIGO REAL, não contra o que o texto afirma. Nunca edite nada. As regras da casa estão em
-CLAUDE.md (AGENTS.md é a mesma coisa). Se já foi carregado no contexto, não releia o mesmo
-arquivo. Inspecione primeiro o diff e apenas as dependências necessárias; não percorra
-changelogs históricos ou documentação inteira sem ligação com um achado. Responda em português do Brasil.
+e NADA é implementado sem o seu APROVADO. Nunca edite nada. $CONTEXTO_REVISAO
+Responda em português do Brasil.
 A revisão Claude usa motores econômicos e não escala automaticamente. ESCALAR: SIM é um
 pedido fundamentado para o executor avaliar, nunca autorização para uma chamada mais cara.
 
@@ -437,16 +461,9 @@ de build/teste). Não bloqueie por memória externa, arquivo fora do repositóri
 de processo, relato manual de teste, ou tarefa documental não solicitada pelo responsável.
 O deploy executa a suíte completa depois da revisão; peça um teste adicional apenas quando
 ele provar um defeito específico deste diff, indicando arquivo e cenário.
-Quando o diff referencia variável, função ou script parcialmente fora do corte, use Read/Grep
-na árvore atual antes de declarar algo indefinido, ausente ou sem contexto. A árvore atual é
-autoridade: um diff é deliberadamente parcial e não prova que uma definição antiga inexiste.
-Quando o cabeçalho disser LOTE, ele é apenas uma partição de transporte do mesmo corte: não
-infira ausência de arquivo, função, teste ou cópia vendor porque não apareceu naquele lote.
-Antes de alegar que um arquivo ou símbolo não existe, confirme com Read/Grep na árvore e cite
-o resultado concreto. Você não tem Bash: nunca afirme que testes falharam, passaram ou foram
-executados, salvo quando isso constar expressamente na EVIDÊNCIA DE VALIDAÇÃO do pipeline.
-Para cópias vendor, compare fonte e destino na árvore atual ou descreva uma divergência
-comprovada; arquivos relacionados podem estar deliberadamente em lotes diferentes.
+$INSTRUCAO_DEPENDENCIAS
+Você não tem Bash: nunca afirme que testes falharam, passaram ou foram executados, salvo
+quando isso constar expressamente na EVIDÊNCIA DE VALIDAÇÃO do pipeline.
 
 Depois, só o que for concreto, sempre com arquivo:linha:
 1. O QUE QUEBRA — regressão, caso não coberto, concorrência, dado que some.
@@ -490,9 +507,25 @@ EOF
     fi
     echo "--- commits à frente da base do corte:"; git log --oneline "$BASE_DIFF"..HEAD 2>/dev/null || true
     echo "--- diff:"; diff_do_escopo
-    git ls-files --others --exclude-standard -z 2>/dev/null | while IFS= read -r -d '' f; do
-      echo "--- arquivo NOVO não rastreado: $f"; sed -n '1,400p' "$f"
-    done
+    # A lista explícita também restringe os arquivos novos. Sem esse filtro,
+    # SP_REVIEW_FILE_LIST limitava o diff rastreado mas enviava todos os arquivos
+    # não rastreados do worktree, inclusive os que o usuário não autorizou.
+    while IFS= read -r f; do
+      [[ -n "$f" ]] || continue
+      if [[ ! -f "$f" ]]; then
+        if git ls-files --error-unmatch -- "$f" >/dev/null 2>&1; then
+          echo "--- arquivo REMOVIDO rastreado (diff acima): $f"
+          continue
+        fi
+        echo "✗ arquivo da lista inexistente: $f" >&2
+        exit 1
+      fi
+      if ! git ls-files --error-unmatch -- "$f" >/dev/null 2>&1; then
+        echo "--- arquivo NOVO não rastreado: $f"
+        if [[ -n "${SP_REVIEW_FILE_LIST:-}" ]]; then cat "$f"
+        else sed -n '1,400p' "$f"; fi
+      fi
+    done < "$LISTA"
   fi
   cat <<'EOF'
 
@@ -545,10 +578,14 @@ executar_revisor() {
   else
     CLAUDE_ORCAMENTO="${SP_CLAUDE_MAX_BUDGET_USD_CRITICA:-0.60}"
   fi
+  # Com uma lista explícita autorizada, o revisor recebe só o material no
+  # prompt: não pode abrir dependências adicionais por Read/Glob/Grep.
+  local review_tools="Read Glob Grep"
+  [[ -n "${SP_REVIEW_FILE_LIST:-}" ]] && review_tools=""
   env -u CLAUDECODE "$CLAUDE" -p --model "$MODELO" ${CLAUDE_EXTRA[@]+"${CLAUDE_EXTRA[@]}"} \
     --max-budget-usd "$CLAUDE_ORCAMENTO" --no-session-persistence --disable-slash-commands \
     --strict-mcp-config --mcp-config '{"mcpServers":{}}' \
-    --permission-mode dontAsk --tools Read Glob Grep --output-format json \
+    --permission-mode dontAsk --tools "$review_tools" --output-format json \
     < "$PROMPT" > "$log_exec" 2> "$err_exec"
   RC=$?
   node -e '

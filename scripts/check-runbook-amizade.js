@@ -31,12 +31,14 @@ const sh = path.join(ROOT, 'scripts', 'deploy-functions.sh');
 ok(fs.existsSync(sh), 'scripts/deploy-functions.sh existe');
 const recusaAmplo = spawnSync('bash', [sh, 'main', '--dry-run'], { cwd: ROOT, encoding: 'utf8' });
 ok(recusaAmplo.status !== 0, '`deploy-functions.sh main --dry-run` recusa deploy amplo implícito');
-const dry = spawnSync('bash', [sh, 'main', '--all', '--dry-run'], { cwd: ROOT, encoding: 'utf8' });
+const friendExports = ['sendFriendRequest', 'acceptFriendRequest', 'rejectFriendRequest',
+ 'cancelFriendRequest', 'removeFriend', 'listLegacyFriendships', 'mergePhoneAccount',
+ 'deleteAccount', 'autoMergeOnProfileUpdate', 'scheduledAutoMergeCleanup'];
+const dryAll = spawnSync('bash', [sh, 'main', '--all', '--dry-run'], { cwd: ROOT, encoding: 'utf8' });
+const dry = dryAll;
 ok(dry.status === 0, '`deploy-functions.sh main --all --dry-run` sai 0 (deu ' + dry.status + ')');
 const saida = (dry.stdout || '') + (dry.stderr || '');
-['sendFriendRequest', 'acceptFriendRequest', 'rejectFriendRequest', 'cancelFriendRequest',
- 'removeFriend', 'listLegacyFriendships', 'mergePhoneAccount', 'deleteAccount',
- 'autoMergeOnProfileUpdate', 'scheduledAutoMergeCleanup'].forEach((fn) => {
+friendExports.forEach((fn) => {
   ok(saida.indexOf('functions:' + fn) !== -1, '  o deploy alveja `' + fn + '`');
 });
 const seletivo = spawnSync('bash', [sh, 'main', '--only', 'sendFriendRequest', '--dry-run'], { cwd: ROOT, encoding: 'utf8' });

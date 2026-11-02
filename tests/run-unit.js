@@ -57,6 +57,17 @@ const SUITES = [
   'functions/test-placeholder-category-batch-core.js',
   'tests/placeholder-category-batch-emulator.test.js',
   'tests/placeholder-category-batch-client.test.js',
+  'tests/e13-analise-ui.test.js',
+  'tests/e13-atribuicao-emulator.test.js',
+  'tests/e13-atribuicao-legado-emulator.test.js',
+  'tests/e14-categories-ui.test.js',
+  'tests/e14-category-emulator.test.js',
+  'tests/e15-late-emulator.test.js',
+  'tests/e15-late-ui.test.js',
+  'tests/e15-late-rules.test.js',
+  'tests/e16-contrato-transversal-emulator.test.js',
+  'tests/e17-perfil-uid-ui.test.js',
+  'tests/e18-identity-ui.test.js',
   'tests/modal-overlay-header-mask.test.js',
   'tests/public-canonical-roster-client.test.js',
   'tests/enrollment-report-current-categories.test.js',
@@ -66,7 +77,17 @@ const SUITES = [
   'tests/registration-payment-index-context.test.js',
   'tests/pro-checkout-core.test.js',
   'tests/deploy-functions-stripe-only.test.js',
+  'tests/mirror-deploy-guard.test.js',
   'tests/rules-tournament-billing.test.js',
+  'tests/rules-result-visibility-parent-probe.test.js', // emulador 8133; ensaio isolado da 3.2.8
+  'tests/result-history-visibility-parity.test.js', // emulador 8134; política JS × Rules aninhadas
+  'tests/result-visibility-write-plan.test.js', // E01: plano atômico, teto e prova de roster
+  'tests/result-history-page-core.test.js', // paginação, filtragem e cursor opaco da 3.2.8
+  'tests/result-history-page-emulator.test.js', // consulta Admin real por caminho, emulador demo
+  'tests/result-history-client-page.test.js', // cliente junta páginas e propaga falha
+  'tests/e05-canonical-history-record.test.js', // torneios do jogo físico, casuais separados
+  'tests/e05-merge-sweeps-physical-only.test.js', // fusão de conta não regrava results
+  'tests/e05-historico-aplicador.test.js', // backup e CAS do lote de histórico
   'tests/storage-payment-proof.test.js',
   'tests/pix-brcode.test.js',
   'tests/tournament-fee-simulator.test.js',
@@ -559,6 +580,37 @@ const SUITES = [
   // com os spans de nome VAZIOS, e ninguém pedia os perfis — o nome não existia pra achar.
   'tests/busca-puxa-nome-de-grupo-adiado.test.js',
   'tests/detail-route-never-renders-participants.test.js',
+  'tests/match-route-cold-depth.test.js',
+  'tests/match-phase-index.test.js',
+  'tests/phase-index-certificate-core.test.js',
+  'tests/phase-certificate-client-write.test.js',
+  'tests/phase-games-read-core.test.js',
+  'tests/phase-games-read-client.test.js',
+  'tests/phase-preview-route.test.js',
+  'tests/auditar-indice-fases.test.js',
+  'tests/auditar-reconciliacao-espelhos.test.js',
+  'tests/planejar-reconciliacao-espelhos.test.js',
+  'tests/planejar-fonte-unica-e05.test.js',
+  'tests/migrar-uid-jogos-e05.test.js',
+  'tests/traduzir-resultado-pareado-e05.test.js',
+  'tests/e29-ordem-confra.test.js',
+  'tests/planejar-jogos-inline-e05.test.js',
+  'tests/planejar-sandbox-e05.test.js',
+  'tests/planejar-indice-canonico-e08.test.js',
+  'tests/aplicar-indice-canonico-e08.test.js',
+  'tests/aplicar-pares-e05.test.js',
+  'tests/check-e05-mirror-functions.test.js',
+  'tests/retirar-writers-e20.test.js',
+  'tests/rules-e20-old-web-compat.test.js',
+  'tests/e05-jogos-embutidos-tradutor.test.js',
+  'tests/e05-jogos-embutidos-split-parts.test.js',
+  'tests/e05-aplicador-jogos-inline.test.js',
+  'tests/e05-web-canonical-result-reader.test.js',
+  'tests/e05-confirmacao-fisica-web.test.js',
+  'tests/mirror-transaction-core.test.js',
+  'tests/mirror-reconcile-queue-hidden.test.js',
+  'tests/result-history-callable-errors.test.js',
+  'tests/backfill-indice-fases.test.js',
   'tests/callback-tardio-nao-troca-detalhe-por-inscritos.test.js',
   'tests/remover-inscrito-declara-a-intencao.test.js',
   'tests/torneio-dividido-chega-inteiro-na-tela.test.js',
@@ -1773,7 +1825,7 @@ const SUITES = [
   'functions-autodraw/test-result-core.js',
   // S1: registro de histórico nasce apenas de jogo canônico, com destinatários UID-only.
   'functions-autodraw/test-match-history-core.js',
-  'tests/l8-ficha-results-fallback.test.js', // L8: fallback local só em falha da consulta global
+  'tests/l8-ficha-results-fallback.test.js', // L8: ficha usa porta autorizada e não esconde falha
   'tests/l8-limpeza-orfaos-falha-fechada.test.js', // L8: limpeza só após prova canônica e pós-condição
   'tests/l9-aliases-mortos-removidos.test.js', // L9: aliases sem chamadores não retornam
   'tests/close-round-promise-handled.test.js', // aprovação aguarda closeRound; demais chamadores consomem erro
@@ -1888,6 +1940,12 @@ const SUITES = [
   'tests/canonical-category-secondary-routes.test.js',
   'tests/canonical-manual-category-selection.test.js',
   'tests/canonical-organizer-removal.test.js',
+  'tests/e11-recibo-ui.test.js',
+  'tests/e11-recibo-functions-emulator.test.js',
+  'tests/e12-dupla-ui.test.js',
+  'tests/e12-duplas-emulator.test.js',
+  'tests/e12-pedido-dupla-emulator.test.js',
+  'tests/e12-pair-rules.test.js',
   'tests/canonical-legacy-admin-barrier.test.js',
   // VIP é uma decisão de identidade (UID ou vaga manual), nunca uma decisão por nome.
   // Mantê-lo no runner evita que a rota callable volte a aceitar homônimos em silêncio.
@@ -1929,6 +1987,7 @@ const SUITES = [
   // Se o servidor contar em UTC ou disparar em dia errado, sai fora. (Entrega = emulador.)
   'functions/test-reminder-core.js',
   'functions/test-abandon-core.js',
+  'functions/test-abandon-run.js',
   // Convite de co-organização/transferência → CF. TRAVA a regressão real (Sentry
   // SCOREPLACE-WEB-6R): o aceite MUDA adminUids, o que estourava a regra antiga e dava
   // permission-denied em TODO convidado com conta. Também trava a identidade SÓ-UID e a
@@ -2388,8 +2447,23 @@ const MEXEM_NO_REPO = [
  * ⛔ Se estas duas voltarem a falhar com "Port ... is not open", procure emulador órfão
  *      (`lsof -ti :8097`) antes de suspeitar do paralelismo. */
 const PRENDEM_PORTA = [
+  'tests/rules-e20-old-web-compat.test.js', // Firestore 8199; web 2.5.83 contra as Rules novas
+  'tests/migrar-uid-jogos-e05.test.js', // Firestore Emulator e transação CAS E05
+  'tests/e29-ordem-confra.test.js', // inicia Firestore Emulator para CAS do lote E29
   'tests/storage-payment-proof.test.js',         // Firestore + Storage nas portas 8130/9198
   'tests/rules-tournament-billing.test.js',       // Firestore 8125; o hub compartilhado falhou sob carga paralela na CI
+  'tests/rules-result-visibility-parent-probe.test.js', // Firestore 8133; Rules temporárias da 3.2.8
+  'tests/result-history-visibility-parity.test.js', // Firestore 8134; paridade de autorização da 3.2.8
+  'tests/result-history-page-emulator.test.js', // Firestore em porta dinâmica; consulta Admin da 3.2.8
+  'tests/e12-duplas-emulator.test.js',      // Firestore em porta dinâmica; partilha hub/logging do Firebase CLI
+  'tests/e12-pedido-dupla-emulator.test.js', // mesma contenção do hub/logging
+  'tests/e12-pair-rules.test.js',            // Rules em emulador próprio; serializar com as duas acima
+  'tests/e13-atribuicao-emulator.test.js',   // E13: transação canônica e hub do Firebase CLI
+  'tests/e13-atribuicao-legado-emulator.test.js', // E13: writer legado e hub do Firebase CLI
+  'tests/e14-category-emulator.test.js', // E14: configuração e exclusão canônica no Firestore
+  'tests/e15-late-emulator.test.js', // E15: promoção e escrita física no emulador
+  'tests/e15-late-rules.test.js', // E15: cliente antigo não escreve lista de espera
+  'tests/e16-contrato-transversal-emulator.test.js', // E16: concorrência entre comandos canônicos
   'tests/operation-control-transaction.test.js',
   'tests/l7-creation-replay-emulator.test.js',
   'tests/decisao-do-tardio-na-folga-emulador.test.js',   // sobe o próprio emulador do Firestore

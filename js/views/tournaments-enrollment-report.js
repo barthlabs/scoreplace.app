@@ -693,11 +693,14 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // não configurou. Lógica: se t tem combinedCategories + ageCategories,
     // usa. Senão, deriva do que aparece nos perfis (gender × skill,
     // gender × age).
-    var combined = (t.combinedCategories || []).slice();
+    var combined = (typeof window._getTournamentCategories === 'function'
+      ? window._getTournamentCategories(t) : (t.combinedCategories || [])).slice();
     var ageCats = (t.ageCategories || []).slice();
     var genders = (t.genderCategories || []).slice();
     var genderLabels = { fem: 'Fem', masc: 'Masc', misto_aleatorio: 'Misto', misto_obrigatorio: 'Misto' };
-    var hasOrgConfig = combined.length > 0 || ageCats.length > 0 || genders.length > 0;
+    var canonicalDefinitions = !!(t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint);
+    if (canonicalDefinitions) { ageCats = []; genders = []; }
+    var hasOrgConfig = canonicalDefinitions || combined.length > 0 || ageCats.length > 0 || genders.length > 0;
 
     // Quando NÃO há configuração, derivar das presenças reais
     var derivedSource = false;
@@ -968,6 +971,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   var _erCanonicalRosterById = Object.create(null);
   // v2.4.34: mudanças staged (gênero/categoria) por order, aplicadas só no "Salvar".
   var _pendingEdits = {};
+  var _erAssignmentOperation = null;
+  var _erSaveInFlight = false;
   // Seleção da matriz existe só como estado visual/local: atribuições continuam em
   // `_pendingEdits` e dupla continua na Cloud Function. `order` é seguro aqui apenas
   // como chave efêmera da tela; a escrita que sai dela usa exclusivamente UID.
@@ -1106,14 +1111,14 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   }
 
   window._erStageGender = function (order, val) {
-    if (!_liveState || !_liveState.isOrg) return;
+    if (!_liveState || !_liveState.isOrg || _erSaveInFlight) return;
     if (!_pendingEdits[order]) _pendingEdits[order] = {};
     _pendingEdits[order].gender = val;
     _erMarkCardModified(order);
     window._erUpdateSaveBar();
   };
   window._erStageCategory = function (order, val) {
-    if (!_liveState || !_liveState.isOrg) return;
+    if (!_liveState || !_liveState.isOrg || _erSaveInFlight) return;
     // A categoria pertence à DUPLA, não a um lado dela. A análise continua
     // mostrando as pessoas nas colunas de gênero, mas qualquer atribuição de
     // categoria para uma delas precisa marcar os dois membros antes do Save.
@@ -1136,8 +1141,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // O relatório nasceu antes do roster tipado e por isso acumulava alterações para
   // `applyEnrollmentAssignments`. Em torneio migrado essa porta é proibida: cada
   // alteração precisa conservar a origem `categoryId` e a identidade estável.
-  // Mantemos as chamadas em série para que uma falha não gere corridas entre
-  // transações; pares recebem uma única mudança, pois a Function move a dupla toda.
+  // O bloco inteiro atravessa uma transação; pares recebem uma única mudança,
+  // pois a Function move a dupla toda. O mesmo operationId sobrevive ao retry.
   function _erSaveCanonicalCategoryEdits(t, rows, edits) {
     // Soltar uma dupla numa coluna de categoria marca também o gênero para a
     // prévia visual. No roster canônico, porém, o ID tipado da categoria já
@@ -1149,11 +1154,14 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     })) {
       return Promise.reject(new Error('Escolha uma categoria para gravar a alteração de gênero neste torneio.'));
     }
-    var seen = Object.create(null), moves = [], reservationsByCategory = Object.create(null);
+    var seen = Object.create(null), moves = [], reservations = [];
     edits.forEach(function (edit) {
       if (!Object.prototype.hasOwnProperty.call(edit, 'category')) return;
       var row = rows.filter(function (candidate) {
-        return candidate && ((edit.uid && candidate.uid === edit.uid) || (edit.manualParticipantId && candidate.manualId === edit.manualParticipantId));
+        return candidate && (edit.sourceRowOrder != null
+          ? candidate.order === edit.sourceRowOrder
+          : ((edit.uid && candidate.uid === edit.uid) ||
+             (edit.manualParticipantId && candidate.manualId === edit.manualParticipantId)));
       })[0];
       if (!row || (!row.uid && !row.manualId)) {
         throw new Error('inscrição canônica sem identidade estável ou categoryId');
@@ -1165,63 +1173,43 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         if (!row.manualId || row.uid || row._duplaIdx != null) {
           throw new Error('reserva individual sem identidade estável');
         }
-        if (!reservationsByCategory[toCategoryId]) reservationsByCategory[toCategoryId] = [];
-        if (reservationsByCategory[toCategoryId].indexOf(row.manualId) === -1) {
-          reservationsByCategory[toCategoryId].push(row.manualId);
-        }
+        if (!reservations.some(function (item) { return item.manualParticipantId === row.manualId; }))
+          reservations.push({ manualParticipantId: row.manualId, toCategoryId: toCategoryId });
         return;
       }
       if (!row.categoryId) throw new Error('inscrição canônica sem categoryId');
-      var pairKey = row._duplaIdx != null ? 'pair:' + String(row._duplaIdx) : (row.uid ? 'uid:' + row.uid : 'manual:' + row.manualId);
+      var pairKey = (row._duplaIdx != null ? 'pair:' + String(row._duplaIdx)
+        : (row.uid ? 'uid:' + row.uid : 'manual:' + row.manualId)) + '|cat:' + String(row.categoryId);
       if (seen[pairKey]) return;
       seen[pairKey] = true;
       moves.push({
-        participant: {
-          uid: row.uid || '',
-          manualParticipantId: row.manualId || '',
-          // A linha pode trazer o rótulo de apresentação como categoryId após
-          // a projeção do roster. Normalize para o ID tipado antes da mutação.
-          categoryId: (typeof window._canonicalCategoryIdForDisplay === 'function'
-            ? (window._canonicalCategoryIdForDisplay(t, row.categoryId) || row.categoryId)
-            : row.categoryId),
-          category: (row.assigned && row.assigned[0]) || ''
-        },
-        targetCategory: edit.category
+        userUid: row.uid || '', manualParticipantId: row.manualId || '',
+        // O rótulo projetado nunca é usado como ID no servidor.
+        fromCategoryId: (typeof window._canonicalCategoryIdForDisplay === 'function'
+          ? (window._canonicalCategoryIdForDisplay(t, row.categoryId) || row.categoryId)
+          : row.categoryId),
+        toCategoryId: toCategoryId
       });
     });
-    var reservationGroups = Object.keys(reservationsByCategory);
-    if (!moves.length && !reservationGroups.length) return Promise.resolve({ changed: 0 });
-    if (moves.length && typeof window._reclassifyCanonicalCategory !== 'function') {
-      return Promise.reject(new Error('A rota canônica de categorias não está disponível. Atualize o aplicativo e tente novamente.'));
+    var count = moves.length + reservations.length;
+    if (!count) return Promise.resolve({ ok:true, outcome:'unchanged', changed:0, resolvedEntries:0 });
+    if (count > 160) return Promise.reject(new Error('Selecione no máximo 160 atribuições por salvamento.'));
+    if (!(window.FirestoreDB && typeof window.FirestoreDB._callFn === 'function'))
+      return Promise.reject(new Error('A rota canônica de atribuições não está disponível. Atualize o aplicativo.'));
+    var shape = JSON.stringify({ tournamentId:String(t.id), sandbox:t.isSandbox === true,
+      edits:moves, reservations:reservations });
+    if (!_erAssignmentOperation || _erAssignmentOperation.shape !== shape) {
+      _erAssignmentOperation = { shape:shape,
+        id:'er13_' + Date.now().toString(36) + '_' + (window.crypto && typeof window.crypto.randomUUID === 'function'
+          ? window.crypto.randomUUID().replace(/-/g, '') : Math.random().toString(36).slice(2, 14)) };
     }
-    if (reservationGroups.length && !(window.FirestoreDB && typeof window.FirestoreDB._callFn === 'function')) {
-      return Promise.reject(new Error('A rota canônica de reservas não está disponível. Atualize o aplicativo.'));
-    }
-    if (reservationGroups.some(function (key) { return reservationsByCategory[key].length > 32; })) {
-      return Promise.reject(new Error('Selecione no máximo 32 reservas por categoria em cada salvamento.'));
-    }
-    var result = reservationGroups.reduce(function (chain, categoryId) {
-      return chain.then(function (result) {
-        return window.FirestoreDB._callFn('assignCanonicalPlaceholderCategoryBatch', {
-          tournamentId: String(t.id), sandbox: t.isSandbox === true,
-          toCategoryId: categoryId, manualParticipantIds: reservationsByCategory[categoryId]
-        }).then(function (response) {
-          var data = response && response.data ? response.data : response;
-          if (data && data.needsReclassification) {
-            throw new Error('Uma dupla já formada precisa ser reclassificada. Reabra a Análise antes de salvar o restante.');
-          }
-          return { changed: result.changed + Number(data && data.changed || 0) };
-        });
-      });
-    }, Promise.resolve({ changed: 0 }));
-    return moves.reduce(function (chain, move) {
-      return chain.then(function (result) {
-        return window._reclassifyCanonicalCategory(t, String(t.id), move.participant, move.targetCategory, move.participant.category)
-          .then(function () { return { changed: result.changed + 1 }; });
-      });
-    }, result).catch(function (error) {
-      if (!reservationGroups.length) throw error;
-      throw new Error('Não foi possível concluir a atribuição. Parte do bloco pode já ter sido salva; tente Salvar novamente para retomar o restante. ' + String((error && error.message) || error));
+    var payload = JSON.parse(shape); payload.operationId = _erAssignmentOperation.id;
+    return window.FirestoreDB._callFn('assignCanonicalPlaceholderCategoryBatch', payload).then(function (response) {
+      var data = response && response.data ? response.data : response;
+      if (!data || data.ok !== true || (data.outcome !== 'assigned' && data.outcome !== 'unchanged') ||
+          data.operationId !== payload.operationId || data.resolvedEntries !== count)
+        throw new Error('O servidor não confirmou o bloco inteiro. Atualize a Análise antes de tentar novamente.');
+      return data;
     });
   }
 
@@ -1583,7 +1571,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   };
   // Cancelar: descarta as edições pendentes (drag de gênero/categoria) e re-renderiza.
   window._erCancelEdits = function () {
+    if (_erSaveInFlight) return;
     _pendingEdits = {};
+    _erAssignmentOperation = null;
     if (typeof window._erRenderMatrix === 'function') window._erRenderMatrix();
     if (typeof window._erRenderInscritos === 'function') window._erRenderInscritos();
     // Regression guard: Cancel must also restore the category shown for a formed
@@ -1602,24 +1592,27 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 
   // Aplica TODAS as mudanças staged de uma vez.
   window._erSaveEdits = function (tId, sport) {
-    if (!_liveState || !_liveState.isOrg) return;
-    var rows = _liveState.rows || [], edits = [];
+    if (!_liveState || !_liveState.isOrg || _erSaveInFlight) return;
+    var rows = _liveState.rows || [], edits = [], missingRow = false;
     Object.keys(_pendingEdits).forEach(function (orderKey) {
       var pe = _pendingEdits[orderKey]; if (!pe || Object.keys(pe).length === 0) return;
       var row = rows.filter(function (r) { return r.order === parseInt(orderKey, 10); })[0];
       // UID é a identidade do alvo. Participante importado/manual usa o
       // manualParticipantId estável; nome é só o último fallback legado e não pode
       // decidir qual dupla será atualizada.
-      if (!row) return;
-      var e = { uid: row.uid || '', manualParticipantId: row.manualId || '', legacyName: (row.uid || row.manualId) ? '' : (row.name || ''), waitlist: !!row._wl, pairMember: row._duplaSide || '' };
+      if (!row) { missingRow = true; return; }
+      var e = { uid: row.uid || '', manualParticipantId: row.manualId || '', legacyName: (row.uid || row.manualId) ? '' : (row.name || ''), waitlist: !!row._wl, pairMember: row._duplaSide || '', sourceRowOrder: row.order };
       if ('gender' in pe) e.gender = pe.gender;
       if ('category' in pe) e.category = pe.category;
       edits.push(e);
     });
+    if (missingRow) { if (typeof showNotification === 'function') showNotification('Seleção desatualizada', 'Uma seleção mudou na Análise. Atualize a tela antes de salvar.', 'error'); return; }
     var nEdits = edits.length; if (!nEdits) return;
+    if (nEdits > 160) { if (typeof showNotification === 'function') showNotification('Bloco grande demais', 'Selecione no máximo 160 atribuições por salvamento.', 'error'); return; }
     var isCanonicalRoster = typeof window._isCanonicalCategoryRoster === 'function' && window._isCanonicalCategoryRoster(_liveState.t);
     var btns = ['er-save-btn','er-mx-save-btn'].map(function(id){return document.getElementById(id);}).filter(Boolean);
     btns.forEach(function(b){ if(window._spinButton) window._spinButton(b,'Salvando…'); else { b.disabled=true; b.textContent='Salvando…'; } });
+    _erSaveInFlight = true;
     window._suppressSoftRefresh = true;
     // ⛔ NÃO usar firebase.functions().httpsCallable aqui. Este era o último caminho
     // da Análise fora do transporte canônico e enviava a chamada sem Authorization
@@ -1630,28 +1623,37 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       ? Promise.resolve().then(function () { return _erSaveCanonicalCategoryEdits(_liveState.t, rows, edits); })
       : (typeof window._callCF === 'function')
       ? window._callCF('applyEnrollmentAssignments', {
-          tournamentId:String(tId), sport:String(sport||''), edits:edits
+          tournamentId:String(tId), sport:String(sport||''), edits:edits.map(function (edit) { var copy=Object.assign({},edit); delete copy.sourceRowOrder; return copy; })
         }, { unauth:'Entre na sua conta para salvar as atribuições.', falha:'Não foi possível salvar as atribuições.' })
       : Promise.reject(Object.assign(new Error('Atualize o aplicativo para salvar as atribuições com segurança.'), { code:'functions/internal' }));
-    saveCall.then(function(res){
-      var r=(res&&res.data)||{}; _pendingEdits={};
-      // A Function devolve o documento canônico da transação. Aplicá-lo já evita
+    return saveCall.then(function(res){
+      var r=(res&&res.data)?res.data:res;
+      if (!r || r.ok !== true || (r.outcome !== 'assigned' && r.outcome !== 'unchanged') ||
+          !Number.isSafeInteger(r.resolvedEntries) || r.resolvedEntries < 1 ||
+          (!isCanonicalRoster && r.resolvedEntries !== nEdits))
+        throw new Error('O servidor não confirmou o bloco inteiro. Atualize a Análise antes de tentar novamente.');
+      _pendingEdits={}; _erAssignmentOperation=null; _erSaveInFlight=false;
+      // O writer legado pode devolver a fotografia confirmada. Aplicá-la já evita
       // que a dupla volte para “sem categoria” até o snapshot/reload chegar.
       if (r.tournament && _liveState && _liveState.t) {
-        _liveState.t = r.tournament;
-        _liveState.rows = _erReconcilePairRows(_buildRows(r.tournament, _expandDuplas(r.tournament.participants || [], r.tournament), {
-          byUid: _liveState.profileMap || {}, resolvedFor: _liveState.resolvedFor || {}
-        }));
-        var stored = _erFindT(r.tournament.id);
-        if (stored && stored !== r.tournament) Object.assign(stored, r.tournament);
-        if (typeof window._erRenderMatrix === 'function') window._erRenderMatrix();
+        try {
+          _liveState.t = r.tournament;
+          _liveState.rows = _erReconcilePairRows(_buildRows(r.tournament, _expandDuplas(r.tournament.participants || [], r.tournament), {
+            byUid: _liveState.profileMap || {}, resolvedFor: _liveState.resolvedFor || {}
+          }));
+          var stored = _erFindT(r.tournament.id);
+          if (stored && stored !== r.tournament) Object.assign(stored, r.tournament);
+          if (typeof window._erRenderMatrix === 'function') window._erRenderMatrix();
+        } catch (paintError) { if (window._warn) window._warn('[Analysis] refresh after committed assignment:', paintError); }
       }
-      if (typeof showNotification==='function') showNotification('✅ Alterações salvas', (r.changed||nEdits)+' inscrito(s) atualizado(s).','success');
+      try { if (typeof showNotification==='function') showNotification('✅ Alterações salvas', (Number.isSafeInteger(r.changed)?r.changed:nEdits)+' inscrito(s) atualizado(s).','success'); }
+      catch (noticeError) { if (window._warn) window._warn('[Analysis] notice after committed assignment:', noticeError); }
       btns.forEach(function(b){if(window._spinButtonDone)window._spinButtonDone(b);});
       // Só a confirmação do servidor pode recarregar a tela: em erro de rede as
       // alterações staged permanecem disponíveis para o organizador tentar de novo.
       setTimeout(function(){window._suppressSoftRefresh=false; try{window.location.reload();}catch(e){}},900);
     }).catch(function(err){
+      _erSaveInFlight=false;
       window._suppressSoftRefresh=false;
       btns.forEach(function(b){if(window._spinButtonDone)window._spinButtonDone(b);});
       if(typeof showNotification==='function') showNotification('Não foi possível salvar',String((err&&err.message)||err),'error');
@@ -2181,8 +2183,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // tudo (placar, sets, vencedor, quando). Então a lista do scoreplace vinha vazia pra
   // todo mundo — inclusive pra quem tem jogo comigo semana passada.
   //
-  // A busca é UMA query, por uid, sem carregar torneio: collectionGroup('results') com
-  // array-contains em playerUids. É o mesmo caminho que o dashboard já usa.
+  // A descoberta agora passa pela porta paginada do servidor: ela consulta o
+  // índice por uid e confere cada raiz antes de devolver qualquer resultado.
   // ── AS TRÊS LEIS DE UM JOGO (regra do dono, 01/ago/2026) ──────────────────────
   // Ele olhou a ficha da Lucia Helena e apontou três coisas na MESMA tela:
   //   1. _"apenas os jogos com placar foram efetivamente jogados. os que não tiverem
@@ -2201,27 +2203,13 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // E o LADO estava sendo chutado: `p1Uids`/`p2Uids` NUNCA existiram no doc (o subdoc
   // guarda só o resultado; a estrutura mora no torneio), então caía sempre em `meu = 0` —
   // por isso ela aparecia como adversária DELA MESMA e uma vitória de 6×1 era pintada de
-  // derrota. Agora o lado sai do uid do slot (identidade canônica) e só depois do nome.
-  function _lzNorm(s) {
-    return String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
-  }
+  // derrota. O lado pessoal só pode sair do UID do jogo físico, nunca do nome exibido.
   function _lzMembros(lado) {
     return String(lado || '').split('/').map(function (n) { return n.trim(); }).filter(Boolean);
   }
-  // O nome está NESTE lado? Igualdade primeiro; depois "o nome gravado contém o nome do
-  // perfil" (o slot às vezes guarda o nome completo e o perfil o curto, e vice-versa).
-  function _lzLadoTem(lado, nome) {
-    var alvo = _lzNorm(nome);
-    if (!alvo || !lado) return false;
-    return _lzMembros(lado).some(function (n) {
-      var x = _lzNorm(n);
-      if (!x) return false;
-      if (x === alvo || x.indexOf(alvo) >= 0) return true;
-      return alvo.indexOf(x) >= 0 && x.split(/\s+/).length >= 2;   // curto demais vira falso-positivo
-    });
-  }
-  // O jogo na ESTRUTURA (doc do torneio), quando ele está carregado — é de lá que vêm os
-  // nomes dos dois lados e os uids do slot quando o subdoc de placar não os trouxe.
+  // O jogo na ESTRUTURA (doc do torneio), quando ele está carregado, pode
+  // fornecer rótulos ausentes no registro físico paginado. A identidade usada
+  // para atribuir resultado pessoal vem somente do jogo físico recebido.
   function _lzMatchDaEstrutura(r) {
     if (!r || !r.tournamentId || r.matchId == null) return null;
     var t = (typeof window._findTournamentById === 'function') ? window._findTournamentById(r.tournamentId) : null;
@@ -2254,39 +2242,36 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var lado2 = r.p2 || (mE && mE.p2) || '';
     if (!lado1 || !lado2) return null;   // sem os dois lados não é jogo, é registro pela metade
 
-    // LADO: uid do slot (identidade canônica) → nome → desiste.
+    // O índice playerUids encontra candidatos, mas não identifica o LADO. Exigir
+    // os UIDs estruturais dos dois lados impede atribuir V/D por nome homônimo.
     var meu = -1;
-    if (mE && typeof window._slotUids === 'function') {
-      var u1 = window._slotUids(mE, 'p1') || [], u2 = window._slotUids(mE, 'p2') || [];
-      if (u1.indexOf(uid) >= 0) meu = 0;
-      else if (u2.indexOf(uid) >= 0) meu = 1;
-    }
-    if (meu < 0) {
-      var nome = meNome || _lzNomeDoUid(uid);
-      if (_lzLadoTem(lado1, nome)) meu = 0;
-      else if (_lzLadoTem(lado2, nome)) meu = 1;
+    if (typeof window._slotUids === 'function') {
+      var u1 = window._slotUids(r, 'p1') || [], u2 = window._slotUids(r, 'p2') || [];
+      if (u1.length && u2.length && !u1.some(function (id) { return u2.indexOf(id) >= 0; })) {
+        if (u1.indexOf(uid) >= 0) meu = 0;
+        else if (u2.indexOf(uid) >= 0) meu = 1;
+      }
     }
     if (meu < 0) return null;            // sem saber de que lado jogou, o card mente
 
     var meuLado = meu === 0 ? lado1 : lado2, outroLado = meu === 0 ? lado2 : lado1;
     var meuSc = meu === 0 ? s1 : s2, outroSc = meu === 0 ? s2 : s1;
 
-    // PARCEIRO = o resto do MEU lado (vazio em simples, e tudo bem). ADVERSÁRIO = o outro
-    // lado inteiro. Nunca mais "—" nem ela mesma do outro lado.
-    var euNome = meNome || _lzNomeDoUid(uid);
-    var parceiros = _lzMembros(meuLado).filter(function (n) { return !_lzLadoTem(n, euNome); });
-    // se o filtro comeu tudo (nome não bate com nenhum membro), mostra o lado sem mim
-    if (!parceiros.length && _lzMembros(meuLado).length > 1) {
-      parceiros = _lzMembros(meuLado).slice(1);
-    }
+    // Parceiro: a posição do UID no lado precisa corresponder à posição do nome.
+    // Se não houver essa prova, omitir o parceiro evita mostrar a própria pessoa
+    // como parceira quando duas pessoas têm nomes iguais ou abreviados.
+    var membros = _lzMembros(meuLado);
+    var posicionais = (typeof window._slotUidsPositional === 'function')
+      ? window._slotUidsPositional(r, meu === 0 ? 'p1' : 'p2') : [];
+    var meuIndice = posicionais.indexOf(uid);
+    var parceiros = posicionais.length === membros.length && meuIndice >= 0 &&
+      posicionais.lastIndexOf(uid) === meuIndice
+      ? membros.filter(function (_, i) { return i !== meuIndice; }) : [];
 
-    var venceu = null;
-    if (r.draw !== true) {
-      var w = _lzNorm(r.winner);
-      if (w && w === _lzNorm(meuLado)) venceu = true;
-      else if (w && w === _lzNorm(outroLado)) venceu = false;
-      else if (meuSc !== outroSc) venceu = meuSc > outroSc;   // o placar decide quando o nome não bate
-    }
+    var ladoVencedor = (typeof window._matchWinnerSide === 'function')
+      ? window._matchWinnerSide(r) : null;
+    var venceu = ladoVencedor === 1 || ladoVencedor === 2
+      ? ladoVencedor === meu + 1 : null;
 
     var tt = est && est.t;
     return {
@@ -2305,54 +2290,16 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       _k: (r.tournamentId || '') + '/' + (r.matchId || '')
     };
   }
-  // DOIS CAMINHOS, PORQUE UM SÓ JÁ FALHOU DUAS VEZES.
-  //   (a) por TORNEIO — `tournaments/{id}/results` de cada torneio já carregado. Não usa
-  //       índice nenhum e cobre exatamente o caso da tela: gente que jogou COMIGO. Foi o
-  //       que salvou quando o collection group estava indisponível.
-  //   (b) por COLLECTION GROUP — pega o resto (torneios que não estão carregados aqui).
-  //       Precisa de regra `match /{path=**}/results/{matchId}` (regra aninhada NÃO vale
-  //       pra collection group) E de índice COLLECTION_GROUP_CONTAINS em playerUids.
-  //       Faltavam os dois: a consulta voltava permission-denied e, depois, failed-
-  //       precondition — e a ficha dizia "Jogos 0" pra quem tinha jogo gravado aqui.
-  // O que falhar não derruba o outro; o que vier dos dois é unido por torneio/partida.
+  // A ficha lê a porta paginada do servidor. Ela confere a visibilidade de cada
+  // torneio; falha não pode virar "nenhum jogo" nem consulta local parcial.
   function _lzJogosDoScoreplace(uid, meNome) {
-    var db = window.FirestoreDB && window.FirestoreDB.db;
-    if (!db || !uid) return Promise.resolve([]);
-    var ts = (window.AppStore && window.AppStore.tournaments) || [];
-    function itens(qs, tid) {
-      var o = [];
-      qs.forEach(function (d) {
-        var raw = d.data() || {};
-        if (tid && !raw.tournamentId) raw.tournamentId = tid;
-        var it = _lzItemDeResult(raw, uid, meNome);
-        if (it) o.push(it);
-      });
-      return o;
+    if (!uid) return Promise.resolve([]);
+    if (!window.FirestoreDB || typeof window.FirestoreDB.loadMyMatchResults !== 'function') {
+      return Promise.reject(new Error('Leitor de histórico indisponível'));
     }
-    function unir(rs) {
-      var vistos = {}, out = [];
-      rs.forEach(function (lista) { (lista || []).forEach(function (it) {
-        if (!it) return; var k = it._k || (it.competition + '|' + it.opponent + '|' + it.ts);
-        if (vistos[k]) return; vistos[k] = 1; out.push(it);
-      }); });
-      return out;
-    }
-    function locais() { return Promise.all(ts.slice(0, 40)
-      // SB nem é consultado (o dev tem o doc na lista) — a consulta economizada é de graça
-      // e o cinto de verdade continua sendo o `_isSandboxRef` de dentro do item.
-      .filter(function (t) { return !(window._isSandboxRef && window._isSandboxRef(t.id, t.name)); })
-      .map(function (t) {
-        return db.collection('tournaments').doc(t.id).collection('results')
-          .where('playerUids', 'array-contains', uid).limit(120).get()
-          .then(function (qs) { return itens(qs, t.id); })
-          .catch(function () { return []; });
-      })); }
-    return db.collectionGroup('results').where('playerUids', 'array-contains', uid).limit(400).get()
-      .then(function (qs) { return itens(qs, null); })
-      .catch(function (e) {
-        window._warn && window._warn('[letzplay] collection group de placares indisponível:', (e && e.code) || e);
-        return locais().then(unir);
-      });
+    return window.FirestoreDB.loadMyMatchResults(uid).then(function (rows) {
+      return rows.map(function (raw) { return _lzItemDeResult(raw, uid, meNome); }).filter(Boolean);
+    });
   }
 
   // Exportado pra que o teste exercite as TRÊS LEIS no código REAL (tests/jogo-so-com-
@@ -2563,7 +2510,20 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         return b.style.color === 'rgb(255, 255, 255)' || b.getAttribute('data-lz-ativo') === '1';
       })[0];
       window._lzAba((ativo && ativo.getAttribute('data-lz-aba')) || 'tour');
-    }).catch(function () {});
+    }).catch(function (error) {
+      var privado = error && error.code === 'private';
+      if (!privado) window._warn && window._warn('[ficha] histórico Scoreplace indisponível:', (error && error.code) || error);
+      var A = window._lzAbas || (window._lzAbas = {});
+      var aviso = '<div role="' + (privado ? 'status' : 'alert') + '" style="padding:8px;color:var(--sp-c-fbbf24,#fbbf24);">' +
+        (privado ? 'Jogos do Scoreplace privados.' : 'Jogos do Scoreplace indisponíveis. Abra a ficha novamente para tentar carregar.') + '</div>';
+      A.jogo = (A.jogo || '') + aviso;
+      A.tour = (A.tour || '') + aviso;
+      A.rank = (A.rank || '') + aviso;
+      var abas = document.getElementById('lz-abas');
+      if (!abas) return;
+      var ativo = [].slice.call(abas.querySelectorAll('[data-lz-ativo="1"]'))[0];
+      window._lzAba((ativo && ativo.getAttribute('data-lz-aba')) || 'tour');
+    });
   }
 
   // ── A LEITURA SÓ AVANÇOU SE A ESCRITA FOI CONFIRMADA ──────────────────────────
@@ -3166,6 +3126,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   function _erAnalysisSkills(t) {
     var explicit = _erConfiguredSkills(t);
     if (explicit.length) return explicit;
+    if (t && t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint) return [];
 
     // Categoria somente por gênero (Fem/Masc) é uma configuração válida: não
     // inventar A/B/C/D/FUN; a única caixa resume os inscritos daquele gênero.
@@ -3181,9 +3142,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // portanto os toggles precisam nascer LIGADOS e uma edição não pode regravar só Fem/Masc.
   // [[regression_analysis_preserves_combined_category_axes]]
   function _erConfiguredSkills(t) {
+    var canonical = !!(t && t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint);
     var seen = {}, explicit = [];
-    (Array.isArray(t && t.skillCategories) ? t.skillCategories : [])
-      .concat(Array.isArray(t && t.customCategories) ? t.customCategories : [])
+    (canonical ? [] : (Array.isArray(t && t.skillCategories) ? t.skillCategories : []))
+      .concat(canonical ? [] : (Array.isArray(t && t.customCategories) ? t.customCategories : []))
       .forEach(function (skill) {
         skill = String(skill || '').trim();
         if (skill && !seen[skill]) { seen[skill] = true; explicit.push(skill); }
@@ -3299,7 +3261,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // Fem/Masc criada; mistoOn = categoria Misto criada (box indicador acima do grid —
     // Misto é UMA categoria com todo mundo, não duas separadas Fem/Masc; as pessoas
     // continuam nas colunas do gênero delas). createdSkills = habilidades formalizadas.
-    var gcatsAll = t.genderCategories || [];
+    var gcatsAll = (t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint)
+      ? (typeof window._getTournamentCategories === 'function' ? window._getTournamentCategories(t) : []).map(function (label) {
+          return /^(Fem|Masc|Misto(?:\s+(?:Aleat\.|Obrig\.))?)(?:\s|$)/.exec(label)?.[1] || '';
+        }).filter(Boolean)
+      : (t.genderCategories || []);
     var mistoOn = gcatsAll.some(_erIsMistoTok);
     var genderOn = gcatsAll.some(_erIsFMTok);
     // Não olhar só o campo novo: um torneio já configurado antes desse campo existir
@@ -3624,7 +3590,42 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     btn.className = 'btn btn-outline btn-sm';
     btn.textContent = reverting ? '⏳ Revertendo…' : '⏳ Criando…';
   }
-  function _erCommitCats(t) {
+  var _erCategorySaveSeq = 0;
+  function _erCategorySnapshot(t) {
+    return { genderCategories: (t.genderCategories || []).slice(),
+      skillCategories: (t.skillCategories || []).slice(),
+      combinedCategories: (t.combinedCategories || []).slice() };
+  }
+  function _erAxesForToggle(t) {
+    if (!(t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint)) {
+      return { genders:(t.genderCategories || []).slice(), skills:_erConfiguredSkills(t).slice() };
+    }
+    if (!Array.isArray(t.categoryDefinitions)) return null;
+    var labels = window._getTournamentCategories(t), genders = [], skills = [];
+    labels.forEach(function (label) {
+      var match = /^(Fem|Masc|Misto(?: Aleat\.| Obrig\.)?)(?: (.+))?$/.exec(label);
+      var gender = match ? match[1] : '';
+      var skill = match ? (match[2] || '') : label;
+      if (gender && genders.indexOf(gender) === -1) genders.push(gender);
+      if (skill && skills.indexOf(skill) === -1) skills.push(skill);
+    });
+    var expected = _erComputeCombined(genders, skills);
+    if (expected.length !== labels.length || expected.some(function (label) { return labels.indexOf(label) === -1; })) return null;
+    return { genders:genders, skills:skills };
+  }
+  function _erToggleAxes(t) {
+    var axes = _erAxesForToggle(t);
+    if (!axes) {
+      if (typeof showNotification === 'function') showNotification('Categorias não alteradas',
+        'Esta configuração não é uma matriz de gênero e habilidade. Edite as categorias na ficha do torneio.', 'error');
+      return false;
+    }
+    t.genderCategories = axes.genders;
+    t.skillCategories = axes.skills;
+    return true;
+  }
+  function _erCommitCats(t, previous) {
+    var saveSeq = ++_erCategorySaveSeq;
     t.combinedCategories = _erComputeCombined(t.genderCategories, t.skillCategories);
     // O onSnapshot troca os OBJETOS de AppStore.tournaments — _liveState.t pode estar
     // apontando pro objeto VELHO. O toggle muta o novo (via _erFindT) mas o re-render
@@ -3638,14 +3639,28 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       window._erRenderMatrix();
       setTimeout(function () { window._suppressSoftRefresh = false; }, 1200);
     };
+    var rejected = function (error) {
+      if (saveSeq === _erCategorySaveSeq && _erFindT(t.id) === t) {
+        t.genderCategories = previous.genderCategories;
+        t.skillCategories = previous.skillCategories;
+        t.combinedCategories = previous.combinedCategories;
+      }
+      if (typeof showNotification === 'function') showNotification('Categorias não alteradas',
+        (error && error.message) || 'Não foi possível confirmar a configuração no servidor.', 'error');
+      done();
+    };
     try {
-      if (typeof window._callCF !== 'function') { done(); return; }
-      window._callCF('setTournamentCategoryConfig', { tournamentId: String(t.id), genderCategories: t.genderCategories || [], skillCategories: t.skillCategories || [] }, 'Entre na sua conta para configurar categorias.').then(done, done);
-    } catch (e) { done(); }
+      if (typeof window._callCF !== 'function') { rejected(new Error('Sem conexão com o servidor.')); return; }
+      return window._callCF('setTournamentCategoryConfig', { tournamentId: String(t.id), genderCategories: t.genderCategories || [], skillCategories: t.skillCategories || [],
+        expectedCategoryDefinitions: t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint ? t.categoryDefinitions : undefined },
+      'Entre na sua conta para configurar categorias.').then(done, rejected);
+    } catch (e) { rejected(e); }
   }
   window._erToggleGender = function (tId, btn) {
     if (!_liveState || !_liveState.isOrg) return;
     var t = _erFindT(tId); if (!t) return;
+    var previous = _erCategorySnapshot(t);
+    if (!_erToggleAxes(t)) return;
     // Alterna SÓ a divisão Fem/Masc — a categoria Misto (coluna do meio) tem toggle
     // próprio e sobrevive intacta a este botão.
     var gc = (t.genderCategories || []).slice();
@@ -3653,21 +3668,25 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var reverting = gc.length > others.length;
     _erSetBtnBusy(btn, reverting);
     t.genderCategories = reverting ? others : others.concat(['Fem', 'Masc']);
-    _erCommitCats(t);
+    _erCommitCats(t, previous);
   };
   window._erToggleGenderMisto = function (tId, btn) {
     if (!_liveState || !_liveState.isOrg) return;
     var t = _erFindT(tId); if (!t) return;
+    var previous = _erCategorySnapshot(t);
+    if (!_erToggleAxes(t)) return;
     var gc = (t.genderCategories || []).slice();
     var others = gc.filter(function (v) { return !_erIsMistoTok(v); });
     var reverting = gc.length > others.length;
     _erSetBtnBusy(btn, reverting);
     t.genderCategories = reverting ? others : others.concat(['Misto']);
-    _erCommitCats(t);
+    _erCommitCats(t, previous);
   };
   window._erToggleSkill = function (tId, sk, btn) {
     if (!_liveState || !_liveState.isOrg) return;
     var t = _erFindT(tId); if (!t) return;
+    var previous = _erCategorySnapshot(t);
+    if (!_erToggleAxes(t)) return;
     // Começa da configuração efetiva, inclusive legado por combinedCategories. Sem
     // isso Light/Power/Extreme apareciam ligados, mas o primeiro clique apagava todas
     // elas ao persistir apenas a habilidade clicada.
@@ -3677,7 +3696,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (i >= 0) sc.splice(i, 1); else sc.push(sk);
     sc.sort(function (a, b) { return _DEFAULT_SKILLS.indexOf(a) - _DEFAULT_SKILLS.indexOf(b); });
     t.skillCategories = sc;
-    _erCommitCats(t);
+    _erCommitCats(t, previous);
   };
   function _erSelectRange(from, to) {
     var rows = ((_liveState && _liveState.rows) || []).slice().sort(function (a, b) { return a.order - b.order; });

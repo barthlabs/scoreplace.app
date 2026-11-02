@@ -17,7 +17,7 @@ function fakeDB() {
   const db={docs,collection:n=>({doc:id=>ref(n+'/'+id)}),get writes(){return writes;},runTransaction(fn){
     const task=queue.then(async()=>{
       let pending=[];
-      const tx={get:async r=>({exists:docs.has(r.path),data:()=>copy(docs.get(r.path))}),create:(r,x)=>{assert(!docs.has(r.path),'create-only');pending.push([r.path,copy(x)]);},update:(r,x)=>{assert(docs.has(r.path));pending.push([r.path,{...docs.get(r.path),...copy(x)}]);}};
+      const tx={get:async r=>({exists:docs.has(r.path),data:()=>copy(docs.get(r.path))}),create:(r,x)=>{assert(!docs.has(r.path),'create-only');pending.push([r.path,copy(x)]);},update:(r,x)=>{assert(docs.has(r.path));const next=copy(docs.get(r.path));for(const [key,value] of Object.entries(x)){const parts=key.split('.');let at=next;while(parts.length>1){const part=parts.shift();at=at[part]||(at[part]={});}at[parts[0]]=copy(value);}pending.push([r.path,next]);},set:(r,x)=>{if(r.path.endsWith('/resultVisibilityFence/state'))pending.push([r.path,{revision:(docs.get(r.path)?.revision||0)+1}]);else pending.push([r.path,copy(x)]);}};
       // Exercita retry do callback sem efetivar a tentativa abortada.
       await fn(tx); pending=[];
       const result=await fn(tx);
@@ -30,7 +30,7 @@ async function test(label,fn){await fn();console.log('✓ '+label);count++;}
 const clock=Date.now(), id='tour_'+clock+'_'+'a'.repeat(32);
 const payload={tournamentId:id,config:{name:'Copa',sport:'Tênis',format:'Eliminatórias Simples',isPublic:true}};
 const auth={uid:'owner',token:{email:'org@example.com',email_verified:true}};
-const read=async(tx,ref,id)=>{const snap=await tx.get(ref);return snap.exists?{...snap.data(),id}:null;};
+const read=async(tx,ref,id)=>{const snap=await tx.get(ref);if(!snap.exists)return null;await tx.get(ref.collection('resultVisibilityFence').doc('state'));return {...snap.data(),id};};
 function creator(db,time=clock){return makeCreateTournament({db,HttpsError,FieldValue:{serverTimestamp:()=> 'server-time'},...config,validatePolicy:require('../functions-autodraw/elimination-policy-config-core').validateAndCanonicalizeExplicitPolicy,validateIntent:require('../functions-autodraw/format-intent-validation-core').validateNewFormatIntent,compile:(c,x)=>win.FORMAT2.compileToPhases(c,x),boundary,readTournament:read,now:()=>time});}
 (async()=>{
  await test('política explícita inválida falha antes de criar recibo ou torneio',async()=>{
@@ -149,28 +149,84 @@ function creator(db,time=clock){return makeCreateTournament({db,HttpsError,Field
   assert(out.ok);assert.equal(out.tournament.rigorRequire.history,true);
  });
  const replay={v:2,totalPoints:1,points:[{w:1,a:0,b:0}],scoring:{setsToWin:1},truncated:false};
- function replayHandler(db){return makeSaveTournamentReplay({db,HttpsError,readTournament:read,findMatch:(t,id)=>t.matches.find(m=>m.id===id),isAdmin:(t,uid)=>t.creatorUid===uid,playerUids:m=>[m.p1Uid,m.p2Uid].filter(Boolean),buildMirror:mirror.buildMirrorDoc,now:()=>clock});}
+ await test('jogo físico com replay remonta idêntico ao original',async()=>{
+  const split=require('../js/views/tournament-split-core.js');
+  const jogo={id:'m',p1:'A',p2:'B',scoreP1:6,replay};
+  const parts=split.dividir({matches:[jogo],rounds:[]},['matches']);
+  const mounted=split.remontar(parts);
+  assert.equal(mirror.canonicalJson(mounted.matches[0]),mirror.canonicalJson(parts.matches[0].jogo));
+  assert.equal(mirror.canonicalJson(mounted.matches[0]),mirror.canonicalJson(jogo));
+ });
+ function replayHandler(db){return makeSaveTournamentReplay({db,HttpsError,readTournament:async(tx,ref,id)=>{const t=await read(tx,ref,id);if(!t)return null;const m=await tx.get(ref.collection('matches').doc('m'));if(m.exists)t.matches=[m.data().jogo];return t;},findMatch:(t,id)=>t.matches.find(m=>m.id===id),isAdmin:(t,uid)=>t.creatorUid===uid,playerUids:m=>[m.p1Uid,m.p2Uid].filter(Boolean)});}
  await test('replay usa UID canônico e não altera placar/proposta/roster concorrentes',async()=>{
   const db=fakeDB(),fn=replayHandler(db);
   const t={creatorUid:'owner',matches:[{id:'m',p1Uid:'player',p2Uid:'opponent',p1:'A',p2:'B',winner:'A',scoreP1:6,scoreP2:3}]};
-  db.docs.set('tournaments/t',t);const before={playerUids:['player','opponent'],winner:'A',scoreP1:6,pendingResult:{scoreP1:7}};db.docs.set('tournaments/t/results/m',before);
+  db.docs.set('tournaments/t',t);const before={_chave:'m',_loc:{tipo:'matches',mi:0},playerUids:['player','opponent'],jogo:{...t.matches[0],pendingResult:{scoreP1:7}}};db.docs.set('tournaments/t/matches/m',before);
   const data={tournamentId:'t',matchId:'m',replay};
   await assert.rejects(fn({auth:{uid:'stranger'},data}),{code:'permission-denied'});
-  assert.equal(db.writes,0);await fn({auth:{uid:'player'},data});await fn({auth:{uid:'player'},data});assert.equal(db.writes,1);
-  assert.deepEqual(db.docs.get('tournaments/t/results/m'),{...before,replay});assert.deepEqual(db.docs.get('tournaments/t'),t);
+  assert.equal(db.writes,0);
+  const first=await fn({auth:{uid:'player'},data});
+  assert.equal(first.changed,true,'jogo físico sem replay recebe a primeira gravação');
+  const reordered={points:[{b:0,a:0,w:1}],scoring:{setsToWin:1},truncated:false,totalPoints:1,v:2};
+  const retry=await fn({auth:{uid:'player'},data:{...data,replay:reordered}});
+  assert.equal(retry.changed,false,'ordem de chaves não cria novo replay');
+  assert.equal(db.writes,1,'retry equivalente não escreve');
+  assert(!db.docs.has('tournaments/t/resultVisibilityFence/state'));
+  assert.deepEqual(db.docs.get('tournaments/t/matches/m'),{...before,jogo:{...before.jogo,replay}});assert.deepEqual(db.docs.get('tournaments/t'),t);
+  const changedReplay={...replay,points:[{w:2,a:0,b:0}]};
+  const changed=await fn({auth:{uid:'player'},data:{...data,replay:changedReplay}});
+  assert.equal(changed.changed,true,'ponto diferente ainda é gravado');
+  assert(!db.docs.has('tournaments/t/resultVisibilityFence/state'));
+  assert.equal(db.writes,2);
   await assert.rejects(fn({auth,data:{...data,replay:{...replay,points:Array(601).fill({w:1})}}}),{code:'invalid-argument'});
   await assert.rejects(fn({auth,data:{...data,replay:{...replay,points:[{w:1,a:{text:'inválido'}}]}}}),{code:'invalid-argument'});
   db.docs.set('sandboxes/s',{...t,sandboxOwnerUid:'dev'});
   await assert.rejects(fn({auth:{uid:'player'},data:{...data,tournamentId:'s',sandbox:true}}),{code:'permission-denied'});
-  await fn({auth:{uid:'dev'},data:{...data,tournamentId:'s',sandbox:true}});assert(db.docs.has('sandboxes/s/resultsSandbox/m'));assert(!db.docs.has('sandboxes/s/results/m'));
+  db.docs.set('sandboxes/s/matches/m',before);
+  await fn({auth:{uid:'dev'},data:{...data,tournamentId:'s',sandbox:true}});assert(db.docs.get('sandboxes/s/matches/m').jogo.replay);assert(!db.docs.has('sandboxes/s/resultsSandbox/m'));
  });
- await test('replay de torneio restrito não indexa atletas no histórico global',async()=>{
+ await test('replay de torneio restrito não cria índice global de resultados',async()=>{
   const db=fakeDB(),fn=replayHandler(db);
-  db.docs.set('tournaments/oculto',{creatorUid:'owner',organizerOnly:true,matches:[{id:'m',p1Uid:'player',p2Uid:'opponent',p1:'A',p2:'B'}]});
+  const jogo={id:'m',p1Uid:'player',p2Uid:'opponent',p1:'A',p2:'B'};
+  db.docs.set('tournaments/oculto',{creatorUid:'owner',organizerOnly:true,matches:[jogo]});
+  db.docs.set('tournaments/oculto/matches/m',{_chave:'m',_loc:{tipo:'matches',mi:0},jogo});
   await fn({auth:{uid:'owner'},data:{tournamentId:'oculto',matchId:'m',replay}});
-  assert.deepEqual(db.docs.get('tournaments/oculto/results/m').playerUids,[]);
+  assert.deepEqual(db.docs.get('tournaments/oculto/matches/m').jogo.replay,replay);
+  assert(!db.docs.has('tournaments/oculto/results/m'));
+ });
+ await test('replay sem jogo físico ou acima do teto recusa sem escrita',async()=>{
+  const db=fakeDB(),fn=replayHandler(db);
+  const jogo={id:'m',p1Uid:'player',p2Uid:'other'};
+  db.docs.set('tournaments/sem',{creatorUid:'owner',matches:[jogo]});
+  await assert.rejects(fn({auth:{uid:'owner'},data:{tournamentId:'sem',matchId:'m',replay}}),
+    {code:'failed-precondition'});
+  const grande={...jogo,filler:'x'.repeat(600*1024)};
+  db.docs.set('tournaments/grande',{creatorUid:'owner',matches:[grande]});
+  db.docs.set('tournaments/grande/matches/m',{_chave:'m',_loc:{tipo:'matches',mi:0},jogo:grande});
+  const pontos=Array.from({length:600},()=>({w:1,t:'x'.repeat(250)}));
+  const replayGrande={v:2,totalPoints:600,points:pontos};
+  await assert.rejects(fn({auth:{uid:'owner'},data:{tournamentId:'grande',matchId:'m',replay:replayGrande}}),
+    {code:'failed-precondition'});
+  assert.equal(db.writes,0);
+  assert(!db.docs.has('tournaments/sem/results/m'));
  });
  const source=fs.readFileSync('js/store.js','utf8');
+ await test('cliente guarda replay confirmado no jogo canônico em memória',async()=>{
+  const start=source.indexOf('  async saveMatchReplay(');
+  const end=source.indexOf('\n  // Start real-time listener',start);
+  assert(start>0&&end>start);
+  const torneio={id:'t',matches:[{id:'m',p1:'A',p2:'B'}]};
+  const context={window:{_torneios:[torneio],_saves:0,
+    _collectAllMatches:t=>t.matches,
+    FirestoreDB:{_callFn:async()=>({ok:true,replay})}}};
+  vm.createContext(context);
+  vm.runInContext('window.Store={tournaments:window._torneios,_saveToCache:function(){window._saves++},'+
+    source.slice(start,end)+'};',context);
+  assert.equal(await context.window.Store.saveMatchReplay('t','m',replay),true);
+  assert.equal(torneio.matches[0].replay,replay);
+  assert.equal(torneio._results,undefined);
+  assert.equal(context.window._saves,1);
+ });
  function browser(){
   let saves=0, calls=[], uploads=0;const context={window:{},console,Uint8Array};const w=context.window;
   w.crypto=crypto.webcrypto;w._error=()=>{};w._warn=()=>{};

@@ -4,7 +4,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
  * HISTÓRICO DE JOGOS unificado e cronológico (mais recente no topo).
  * Une duas fontes numa lista só, com badge de origem e filtros:
  *   • 🎾 LetzPlay  — jogos importados (cu.letzplayImport.games, schema v2)
- *   • 🏆 Scoreplace — jogos do próprio app (matchHistory + casuais locais + torneios)
+ *   • 🏆 Scoreplace — torneios dos jogos físicos e casuais persistidos/locais
  *
  * Objetivo: uma vez importado o histórico do letzplay, ele VIVE aqui — o usuário
  * tudo num lugar só e não perde nada. Filtra por fonte, local,
@@ -289,17 +289,20 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var meuUid = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) || null;
     var ehOutraPessoa = (uid !== meuUid);
     var records = [];
-    // matchHistory persistente (torneios + casuais gravados no Firestore)
-    if (window.FirestoreDB && typeof window.FirestoreDB.loadUserMatchHistory === 'function') {
+    // Casuais persistidos e torneios derivados dos jogos físicos, numa leitura completa.
+    if (window.FirestoreDB && typeof window.FirestoreDB.loadScoreplaceMatchHistory === 'function') {
       // v1.7.51: `null` = estatísticas fechadas por quem é dono delas (`statsVisibility`).
       // Aqui a lista só deixa de crescer — o letzplay e os jogos públicos seguem entrando,
       // e quem AVISA que está fechado é a ficha (tournaments-analytics). O `|| []` de antes
       // apagava a distinção logo na origem.
-      try {
-        var _mh = await window.FirestoreDB.loadUserMatchHistory(uid);
-        records = (_mh === null) ? [] : (_mh || []);
-      } catch (e) { records = []; }
-    }
+      var _mh = await window.FirestoreDB.loadScoreplaceMatchHistory(uid);
+      if (_mh === null) {
+        var privado = new Error('Histórico privado');
+        privado.code = 'private';
+        throw privado;
+      }
+      records = _mh;
+    } else throw new Error('Leitor de histórico indisponível');
     // casuais locais (podem não ter subido ao Firestore) — dedup por matchId.
     // Só pro DONO da máquina: o localStorage é dele, não da pessoa que está sendo olhada.
     if (ehOutraPessoa) { /* pula os casuais locais */ } else
@@ -571,8 +574,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     try { lp = await _fromLetzplayCanonical(cu); }
     catch (e) { window._log && window._log('[histórico] canônico falhou, usando o formato antigo:', (e && e.message) || e); }
     if (!lp) lp = _fromLetzplay(cu);
-    var sp = [];
-    try { sp = await _fromScoreplace(cu); } catch (e) { sp = []; }
+    var sp = [], spError = false, spPrivate = false;
+    try { sp = await _fromScoreplace(cu); }
+    catch (e) {
+      if (e && e.code === 'private') spPrivate = true;
+      else { spError = true; if (window._warn) window._warn('[histórico] Scoreplace indisponível', e); }
+    }
 
     _all = lp.concat(sp).sort(function (a, b) { return b.ts - a.ts; });
     _filters = { source: 'all', sport: '', venue: '', comp: '' };
@@ -612,6 +619,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 
     container.innerHTML = hdr +
       '<div style="max-width:1080px;margin:0 auto;padding:0 14px 40px;">' +
+        (spPrivate ? '<div role="status" style="padding:12px;color:var(--text-muted,#cbd5e1);">Histórico Scoreplace privado.</div>' : '') +
+        (spError ? '<div role="alert" style="padding:12px;color:var(--text-muted,#cbd5e1);">Histórico Scoreplace indisponível. Tente novamente mais tarde.</div>' : '') +
         filterBar + lpHint +
         '<div id="hist-resumo"></div>' +
         '<div id="hist-list" style="margin-top:10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;align-items:start;"></div>' +

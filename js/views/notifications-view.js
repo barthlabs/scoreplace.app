@@ -292,7 +292,7 @@ function renderNotifications(container) {
         var safePairReq = String(n.pairRequestId).replace(/'/g, "\\'").replace(/\\/g, "\\\\");
         actionHtml = '<div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap:wrap;">' +
           '<button class="btn btn-sm" style="background: var(--danger-color); color:#fff; border:none; padding:6px 16px; font-size:0.78rem; font-weight:700;" onclick="event.stopPropagation(); if(window._cancelPairRequest)window._cancelPairRequest(\'' + safeTournamentId + '\',\'' + safePairReq + '\'); _markNotifRead(\'' + safeNotifId + '\'); window.location.hash=\'#tournaments/' + safeTournamentId + '\';">❌ Recusar</button>' +
-          '<button class="btn btn-sm" style="background:#10b981; color:#fff; border:none; padding:6px 16px; font-size:0.78rem; font-weight:700;" onclick="event.stopPropagation(); if(window._acceptPairRequest)window._acceptPairRequest(\'' + safeTournamentId + '\',\'' + safePairReq + '\'); _markNotifRead(\'' + safeNotifId + '\'); window.location.hash=\'#tournaments/' + safeTournamentId + '\';">✅ Aceitar</button>' +
+          '<button class="btn btn-sm" style="background:#10b981; color:#fff; border:none; padding:6px 16px; font-size:0.78rem; font-weight:700;" onclick="event.stopPropagation(); if(window._acceptPairRequest)Promise.resolve(window._acceptPairRequest(\'' + safeTournamentId + '\',\'' + safePairReq + '\')).then(function(ok){if(ok===true){_markNotifRead(\'' + safeNotifId + '\');window.location.hash=\'#tournaments/' + safeTournamentId + '\';}});">✅ Aceitar</button>' +
         '</div>';
       } else if (n.type === 'wa_group' && n.waGroupLink) {
         // v1.3.17: convite pro grupo de WhatsApp — o botão abre o link direto

@@ -39,7 +39,8 @@ const homonimas = {
   matches: [
     Object.assign(dupla('s1', 'Ana / Bia', 'Carla / Dani', 'Ana / Bia'), { round: 0, team1Uids: ['uA', 'uB'], team2Uids: ['uE', 'uF'] }),
     Object.assign(dupla('s2', 'Ana / Bia', 'Erika / Fabi', 'Ana / Bia'), { round: 0, team1Uids: ['uC', 'uD'], team2Uids: ['uG', 'uH'] }),
-    Object.assign(dupla('f', 'Ana / Bia', 'Ana / Bia', 'Ana / Bia'), { round: 1, team1Uids: ['uA', 'uB'], team2Uids: ['uC', 'uD'] })
+    // E18: rótulos iguais não provam o lado vencedor; a fixture o carimba por UID.
+    Object.assign(dupla('f', 'Ana / Bia', 'Ana / Bia', 'Ana / Bia'), { round: 1, team1Uids: ['uA', 'uB'], team2Uids: ['uC', 'uD'], winnerUids: ['uA', 'uB'] })
   ]
 };
 W._updateProgressiveClassification(homonimas);

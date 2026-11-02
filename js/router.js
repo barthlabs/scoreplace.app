@@ -519,6 +519,30 @@ function initRouter() {
           } finally { _finalizarTrocaPrincipal(); }
         }
         break;
+      case 'phase-preview':
+        if (!cleanParam || !/^[^/]+$/.test(cleanParam) ||
+            !window.FirestoreDB || typeof window.FirestoreDB.loadTournamentPhaseGames !== 'function' ||
+            typeof window.renderTournamentPhasePreview !== 'function') {
+          window.location.hash = '#dashboard';
+          break;
+        }
+        var _previewUid = window.AppStore && window.AppStore.currentUser &&
+          window.AppStore.currentUser.uid;
+        var _previewCurrent = function () {
+          return _routeIsCurrent() && !!(window.AppStore && window.AppStore.currentUser) &&
+            window.AppStore.currentUser.uid === _previewUid;
+        };
+        viewContainer.innerHTML = '<div style="padding:2rem;">Carregando prévia da fase…</div>';
+        window.FirestoreDB.loadTournamentPhaseGames(cleanParam, 'current',
+          { skipFullFallback: true }).then(function (result) {
+          if (!_previewCurrent()) return;
+          if (result && result.mode === 'partial' &&
+              window.renderTournamentPhasePreview(viewContainer, cleanParam, result, _previewCurrent)) return;
+          window.location.hash = '#tournaments/' + encodeURIComponent(cleanParam);
+        }).catch(function () {
+          if (_previewCurrent()) window.location.hash = '#tournaments/' + encodeURIComponent(cleanParam);
+        });
+        break;
       case 'tournament':
       case 'tournaments':
         // Janela independente do placar ao vivo: a própria rota hidrata o jogo,

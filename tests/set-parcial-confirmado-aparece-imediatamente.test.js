@@ -6,7 +6,7 @@
  * até atualizar a página. A resposta da CF carrega só o torneio limpo, sem `matches`.
  * Este teste reproduz exatamente essa fronteira: a tela começa no Set 1, a Function
  * confirma o Set 2 e o estado usado pelo render passa a conter os dois sets na mesma
- * promessa, depois de ler o documento canônico `results/{matchId}` do servidor — sem
+ * promessa, depois de ler o jogo físico `matches/{matchId}.jogo` do servidor — sem
  * recarga ou novo lançamento.
  */
 'use strict';
@@ -25,7 +25,8 @@ const source = fs.readFileSync(path.join(ROOT, 'js/store.js'), 'utf8');
 const start = source.indexOf('  async commitResultTx(tournamentId, matchId, payload, logMessage) {');
 ok(start >= 0, 'commitResultTx existe');
 const method = R.ateOFim(source, start);
-ok(method.indexOf('loadMatchResult') >= 0, 'a confirmação usa a leitura canônica do resultado');
+const apply = R.ateOFim(source, source.indexOf('  _applyPhysicalResultOnMatch: function'));
+ok(method.indexOf('loadPhysicalMatchResult') >= 0, 'a confirmação usa o jogo físico');
 
 const tournament = {
   id: 'T1', name: 'Confra',
@@ -41,7 +42,7 @@ const sandbox = {
   window: {
     _callApplyMatchResult: async () => ({ data: { ok: true, tournament: { id: 'T1', updatedAt: 'server' } } }),
     FirestoreDB: {
-      loadMatchResult: async () => ({
+      loadPhysicalMatchResult: async () => ({
         sets: [{ gamesP1: 4, gamesP2: 6 }, { gamesP1: 2, gamesP2: 6 }],
         setsWonP1: 0, setsWonP2: 2, startedAt: 123
       })
@@ -59,10 +60,11 @@ const sandbox = {
   showNotification() {}
 };
 vm.createContext(sandbox);
-vm.runInContext('var API = {' + method + '}; this.API = API;', sandbox);
+vm.runInContext('var API = {' + method + ',' + apply + '}; this.API = API;', sandbox);
 const api = sandbox.API;
 api.tournaments = [tournament];
 api._saveToCache = function () {};
+api._matchResultFields = ['sets', 'setsWonP1', 'setsWonP2', 'startedAt'];
 
 (async () => {
   const saved = await api.commitResultTx('T1', 'M1', {
@@ -74,8 +76,8 @@ api._saveToCache = function () {};
   const m = tournament.matches[0];
   ok(m.sets.length === 2 && m.sets[1].gamesP1 === 2 && m.sets[1].gamesP2 === 6,
     'o card em memória recebe o Set 2 antes de qualquer reload');
-  ok(tournament._results.M1.sets.length === 2,
-    'o espelho local acompanha o card e não o reduz no próximo render');
+  ok(!tournament._results.M1,
+    'o cache antigo do espelho é removido para não reverter o Set 2');
   ok(renders === 1, 'a confirmação repinta a tela imediatamente');
   cardVisible = true;
   sandbox.window.location.hash = '#bracket/T1';

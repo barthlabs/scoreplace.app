@@ -190,13 +190,22 @@ function buildSeedDoc(t, m) {
 // resultado, com chaves ordenadas). Usada pra decidir se o mirror MUDOU sem
 // re-escrever à toa. Compara-se subdocSignature(buildSeedDoc(t,m)) (desejado) com
 // subdocSignature(subdocAtual) (o que já está gravado).
+function canonicalJson(value) {
+  return JSON.stringify(value, (_key, item) => {
+    if (!item || Array.isArray(item) || typeof item !== "object") return item;
+    const prototype = Object.getPrototypeOf(item);
+    if (prototype !== Object.prototype && prototype !== null) return item;
+    const ordered = {};
+    Object.keys(item).sort().forEach((key) => { ordered[key] = item[key]; });
+    return ordered;
+  });
+}
+
 function subdocSignature(data) {
   data = data || {};
   const res = {};
   RESULT_FIELDS.concat(DISPLAY_FIELDS).forEach((k) => { if (data[k] !== undefined) res[k] = data[k]; });
-  const ordered = {};
-  Object.keys(res).sort().forEach((k) => { ordered[k] = res[k]; });
-  return rosterKey(data.playerUids) + "::" + JSON.stringify(ordered);
+  return rosterKey(data.playerUids) + "::" + canonicalJson(res);
 }
 
 // Doc de espelho COMPLETO pra CF gravar (set SEM merge = clobber fiel, remove campos
@@ -218,5 +227,5 @@ function buildMirrorDoc(t, m, tid, nowIso, anterior) {
 
 module.exports = {
   collectMatches, participantUids, slotUids, uniqueParticipantByName, matchRoster, rosterKey, computeRosterChanges,
-  RESULT_FIELDS, buildSeedDoc, subdocSignature, buildMirrorDoc,
+  RESULT_FIELDS, buildSeedDoc, canonicalJson, subdocSignature, buildMirrorDoc,
 };

@@ -73,9 +73,11 @@ const selfView = fs.readFileSync('js/views/tournaments-enrollment.js', 'utf8');
 const selfStart = selfView.indexOf('window.deenrollCurrentUser = function');
 const selfEnd = selfView.indexOf('window.addParticipantFunction = function', selfStart);
 const selfBlock = selfView.slice(selfStart, selfEnd);
-ok(/t\.participants = _savedParticipants/.test(selfBlock) &&
+ok(!/_savedParticipants/.test(selfBlock) &&
+  /typeof result\.notFound !== 'boolean'/.test(selfBlock) &&
+  /Array\.isArray\(result\.participants\)/.test(selfBlock) &&
   /err\.code === 'functions\/failed-precondition'/.test(selfBlock) &&
   /err\.code === 'failed-precondition'/.test(selfBlock) &&
   /_financialBlocked && err\.message \? err\.message : _t\('enroll\.cancelError'\)/.test(selfBlock),
-  'autodesinscrição reverte a tela e só mostra erro financeiro específico para pré-condição');
+  'autodesinscrição espera recibo e só mostra erro financeiro específico para pré-condição');
 process.exitCode = failed ? 1 : 0;

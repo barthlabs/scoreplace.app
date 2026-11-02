@@ -323,7 +323,8 @@ function rejectDirectPayment(registration, reviewerUid, evidence) {
 }
 
 function canPair(registration) {
-  if (!registration || !['confirmed', 'pending'].includes(registration.status)) return false;
+  if (!registration || !['confirmed', 'pending', 'waitlisted'].includes(registration.status)) return false;
+  if (registration.status === 'waitlisted') return !registration.paymentState;
   if (!registration.paymentState) return true;
   return registration.paymentState === 'paid' && registration.status === 'confirmed';
 }

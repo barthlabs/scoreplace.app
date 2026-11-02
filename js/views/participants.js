@@ -560,10 +560,7 @@ window._updateCardPresenceInPlace = function (tId, uid, playerName) {
     var fresh = tmp.firstElementChild; if (!fresh) return false;
     card.replaceWith(fresh);                                   // só ESTE card; os demais intactos
     if (typeof window._hydrateUidNames === 'function') { try { window._hydrateUidNames(fresh); } catch (_e) {} }
-    try {
-      var imgs = fresh.querySelectorAll('img[data-player-name]');
-      imgs.forEach(function (img) { var n = (img.getAttribute('data-player-name') || '').toLowerCase(); var real = window._playerPhotoCache && window._playerPhotoCache[n]; if (real && real.indexOf('dicebear.com') === -1) img.src = real; });
-    } catch (_e) {}
+    if (typeof window._refreshPersonPhotos === 'function') window._refreshPersonPhotos(fresh);
     return true;
   } catch (_e) { return false; }
 };
@@ -598,10 +595,7 @@ window._updatePanelCardInPlace = function (tId, uid, playerName) {
     var tmp = document.createElement('div'); tmp.innerHTML = String(html).trim();
     var fresh = tmp.firstElementChild; if (!fresh) return false;
     card.replaceWith(fresh);                                              // só ESTE card; os demais intactos → sem pulinho
-    try {
-      var imgs = fresh.querySelectorAll('img[data-player-name]');
-      imgs.forEach(function (img) { var n = (img.getAttribute('data-player-name') || '').toLowerCase(); var real = window._playerPhotoCache && window._playerPhotoCache[n]; if (real && real.indexOf('dicebear.com') === -1) img.src = real; });
-    } catch (_e) {}
+    if (typeof window._refreshPersonPhotos === 'function') window._refreshPersonPhotos(fresh);
     if (typeof window._hydrateUidNames === 'function') { try { window._hydrateUidNames(fresh); } catch (_e) {} }
     return true;
   } catch (_e) { return false; }
@@ -2029,16 +2023,7 @@ function renderParticipants(container, tournamentId) {
   // Pre-load player photos from Firestore (async update after render)
   if (typeof _preloadPlayerPhotos === 'function') {
     window._aplicarFotosInscritos = function() {
-      var pImgs = container.querySelectorAll('img[data-player-name]');
-      pImgs.forEach(function(img) {
-        var nm = img.getAttribute('data-player-name');
-        var real = window._playerPhotoCache && window._playerPhotoCache[(nm || '').toLowerCase()];
-        if (real && real.indexOf('dicebear.com') === -1 && img.src.indexOf('dicebear.com') !== -1) {
-          var fb = 'https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(nm) + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
-          img.onerror = function() { this.onerror = null; this.src = fb; };
-          img.src = real;
-        }
-      });
+      if (typeof window._refreshPersonPhotos === 'function') window._refreshPersonPhotos(container);
     };
     _preloadPlayerPhotos(t).then(window._aplicarFotosInscritos).catch(function() {}).then(_hydrateNamesP);
   } else { setTimeout(_hydrateNamesP, 0); }

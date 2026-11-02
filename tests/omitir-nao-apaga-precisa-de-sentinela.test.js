@@ -24,7 +24,7 @@ const CAMPOS = ['organizerEmail', 'creatorEmail', 'adminEmails'];
 
 // ── 1. cliente: a porta única, e ela usa sentinela ───────────────────────────
 const db = fs.readFileSync(path.join(root, 'js/firebase-db.js'), 'utf8');
-const ini = db.indexOf('_apagarEmailDoDocPublico(alvo) {');
+const ini = db.indexOf('_apagarEmailDoDocPublico(alvo, options) {');
 assert.ok(ini > 0, 'existe a porta única da remoção no cliente');
 const porta = semComentarios(db.slice(ini, db.indexOf('\n  },', ini)));
 
@@ -34,6 +34,10 @@ assert.match(porta, /typeof _fv\.delete === 'function'/,
 CAMPOS.forEach((c) => assert.match(porta, new RegExp("'" + c + "'"), 'a porta cobre ' + c));
 assert.match(porta, /else delete alvo\[campo\]/,
   'e sem `firebase` carregado cai no delete — o harness não quebra por causa da sentinela');
+assert.match(porta, /options && options\.integral === true/,
+  'o set integral tem uma opção explícita separada da escrita com merge');
+assert.match(porta, /delete alvo\[campo\]/,
+  'no set integral o campo é removido do objeto antes da substituição');
 
 // os dois caminhos de gravação do cliente chamam a porta
 const dbSemCom = semComentarios(db);
@@ -41,6 +45,8 @@ assert.equal((dbSemCom.match(/_apagarEmailDoDocPublico\(/g) || []).length, 3,
   'a porta é definida UMA vez e chamada pelos DOIS caminhos de gravação (save + transação)');
 assert.match(dbSemCom, /set\(cleanData, \{ merge: true \}\)/,
   '⛔ e a gravação segue com merge — é justamente por isso que a sentinela é obrigatória');
+assert.match(dbSemCom, /_apagarEmailDoDocPublico\(data, \{ integral: true \}\)/,
+  'a transação com set integral não recebe sentinela inválida');
 
 /* ── 2. servidor: a fronteira do autodraw OMITE, e omitir é o CERTO lá ────────
  * ⛔⛔ AS DUAS PORTAS TÊM REGRAS OPOSTAS, E A RAZÃO É A FORMA DA ESCRITA.

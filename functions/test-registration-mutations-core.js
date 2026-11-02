@@ -52,6 +52,15 @@ ok('desfaz dupla por identidade e categoria explícitas', splitByIdentity.outcom
 bad('recusa desfazer dupla por identidade sem categoria explícita', () => M.splitParticipants('t1', pairedByIdentity.updates, { uid: 'u1' }, { uid: 'u2' }, ''));
 bad('recusa desfazer registros que não são dupla', () => M.split('t1', [a, b], [a.registrationId, b.registrationId]));
 const waitlisted = registration('u4', 'cat-a', 'waitlisted');
+const waitlistedPartner = registration('u5', 'cat-a', 'waitlisted');
+const latePair = M.pair('t1', [waitlisted, waitlistedPartner], [waitlisted.registrationId, waitlistedPartner.registrationId]);
+ok('duas inscrições na espera formam uma dupla sem promoção', latePair.updates.length === 2 && latePair.updates.every(item => item.status === 'waitlisted' && item.fixedPairId === latePair.fixedPairId));
+bad('não mistura espera e inscrição confirmada', () => M.pair('t1', [a, waitlisted], [a.registrationId, waitlisted.registrationId]));
+bad('não mistura espera e pagamento pendente', () => M.pair('t1', [waitlisted, Object.assign({}, waitlistedPartner, { paymentState:'awaiting_payment' })], [waitlisted.registrationId, waitlistedPartner.registrationId]));
+const lateLeave = M.leaveWaitlist('t1', latePair.updates, { uid:'u4' });
+ok('sair da espera desfaz a dupla sem retirar o parceiro', lateLeave.updates.length === 2 && lateLeave.updates.some(item => item.participantUid === 'u4' && item.status === 'withdrawn' && !item.fixedPairId) && lateLeave.updates.some(item => item.participantUid === 'u5' && item.status === 'waitlisted' && !item.fixedPairId));
+const lateSplit = M.split('t1', latePair.updates, [waitlisted.registrationId, waitlistedPartner.registrationId]);
+ok('desfazer na espera preserva as duas inscrições', lateSplit.updates.length === 2 && lateSplit.updates.every(item => item.status === 'waitlisted' && !item.fixedPairId));
 const leave = M.leaveWaitlist('t1', [a, waitlisted], { uid: 'u4' });
 ok('saída da espera não altera inscrição confirmada', leave.updates.length === 1 && leave.updates[0].status === 'withdrawn' && leave.updates[0].registrationId === waitlisted.registrationId);
 const withdrawn = M.withdraw('t1', [paired.updates[0], paired.updates[1], aSecondCategory, c], { uid: 'u1' });

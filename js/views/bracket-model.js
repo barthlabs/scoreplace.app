@@ -1767,7 +1767,7 @@ window._assignGlobalGameNumbers = function (t) {
   // MESMAS ids. Zero cópia, zero colisão, zero fallback.
   // A travessia abaixo só COLETA a ordem cronológica; o número é atribuído no FIM
   // (_emitir), depois de aplicar a única inversão que existe: a FINAL é o último
-  // jogo do torneio e o 3º/4º lugar fica um número abaixo dela — mesmo a final
+  // jogo de cada linha e o 3º/4º lugar fica um número abaixo dela — mesmo a final
   // aparecendo ACIMA do 3º na tela. Coletar antes de numerar é o que permite essa
   // garantia sem um segundo contador.
   var ordem = [];        // 1ª ocorrência de cada jogo, em ordem cronológica
@@ -1804,9 +1804,9 @@ window._assignGlobalGameNumbers = function (t) {
       }).map(function (item) { return item.m; });
   }
   function _emitir() {
-    // 3º/4º vem imediatamente antes da final DA MESMA CATEGORIA. Antes todos os
-    // terceiros eram retirados juntos e recolocados antes da última final do
-    // torneio: com A/B/C/D, a categoria baixa deixava de ser uma sequência fechada.
+    // 3º/4º vem imediatamente antes da final da MESMA LINHA e fase. Ouro e Prata
+    // compartilham categoria; inserir todos os terceiros antes da última final
+    // da categoria invertia a final e o terceiro da Ouro na Confra.
     var porSerie = {}, ordemSeries = [];
     ordem.forEach(function (m) {
       var k = (m && m.id != null && seriePorId[String(m.id)]) || '__sem_categoria__';
@@ -1818,14 +1818,37 @@ window._assignGlobalGameNumbers = function (t) {
       var bloco = porSerie[serie];
       var terceiros = bloco.filter(_ehTerceiro);
       var semTerceiro = bloco.filter(function (m) { return !_ehTerceiro(m); });
-      if (terceiros.length) {
+      terceiros.forEach(function (terceiro) {
+        var fase = Number(terceiro.phaseIndex) || 0;
+        // O terceiro canônico de uma linha carrega o próprio bracket (gold/silver).
+        // grand3 pertence à grande final. Um `thirdplace` legado não identifica
+        // a linha; quando houver tierLabel, ele é a evidência estrutural restante.
+        var linha = terceiro.bracket === 'grand3' ? 'grand' :
+          (terceiro.bracket && terceiro.bracket !== 'thirdplace' ? terceiro.bracket : null);
+        var tier = !linha && terceiro.tierLabel ? String(terceiro.tierLabel) : null;
         var iFinal = -1;
         for (var z = semTerceiro.length - 1; z >= 0; z--) {
-          if (!_ehExtra(semTerceiro[z])) { iFinal = z; break; }
+          var candidato = semTerceiro[z];
+          if (_ehExtra(candidato) || (Number(candidato.phaseIndex) || 0) !== fase) continue;
+          if (linha && (candidato.bracket || 'main') !== linha) continue;
+          if (tier && String(candidato.tierLabel || '') !== tier) continue;
+          iFinal = z;
+          break;
+        }
+        if (iFinal < 0) {
+          // Se a final da linha ainda não existe, mantém o destino histórico
+          // na fase, em vez de empurrar o terceiro para depois da outra final.
+          for (var k = semTerceiro.length - 1; k >= 0; k--) {
+            if (!_ehExtra(semTerceiro[k]) &&
+                (Number(semTerceiro[k].phaseIndex) || 0) === fase) { iFinal = k; break; }
+          }
+          if (iFinal < 0) for (var l = semTerceiro.length - 1; l >= 0; l--) {
+            if (!_ehExtra(semTerceiro[l])) { iFinal = l; break; }
+          }
         }
         if (iFinal < 0) iFinal = semTerceiro.length;
-        Array.prototype.splice.apply(semTerceiro, [iFinal, 0].concat(terceiros));
-      }
+        semTerceiro.splice(iFinal, 0, terceiro);
+      });
       ordem = ordem.concat(semTerceiro);
     });
     ordem.forEach(function (m, i) {
@@ -2178,18 +2201,39 @@ window._assignGlobalGameNumbers = function (t) {
     if (!m) return null;
     if (m.draw || m.winner === 'draw') return 0;
     if (!m.winner) return null;
-    // 1. O caminho normal: a string bate com o slot.
-    if (m.winner === m.p1) return 1;
-    if (m.winner === m.p2) return 2;
-    // 2. Por UID — a identidade estrutural do slot. Cobre o nome trocado depois do resultado.
+    // 1. UID antes de texto: dois lados homônimos não podem escolher o primeiro.
     var wu = m.winnerUids || m.winnerUid;
     if (wu) {
-      var lista = Array.isArray(wu) ? wu : [wu];
-      var t1 = m.team1Uids || (m.p1Uid ? [m.p1Uid] : []);
-      var t2 = m.team2Uids || (m.p2Uid ? [m.p2Uid] : []);
-      var bate = function (t) { return lista.length && lista.every(function (u) { return t.indexOf(u) !== -1; }); };
-      if (bate(t1)) return 1;
-      if (bate(t2)) return 2;
+      var lista = (Array.isArray(wu) ? wu : [wu]).filter(Boolean);
+      var t1 = (m.team1Uids || (m.p1Uid ? [m.p1Uid] : [])).filter(Boolean);
+      var t2 = (m.team2Uids || (m.p2Uid ? [m.p2Uid] : [])).filter(Boolean);
+      var ladoCompleto = function (n, ids) {
+        var team = m['team' + n];
+        var obj = m['team' + n + 'Obj'];
+        var raw = m['team' + n + 'Uids'];
+        var expected = Array.isArray(team) && team.length ? team.length
+          : obj && Array.isArray(obj.participants) && obj.participants.length ? obj.participants.length
+          : obj && (obj.p1Uid || obj.p2Uid || obj.p1Name || obj.p2Name) ? 2 : 0;
+        return ids.length > 0 && (!expected || ids.length === expected) &&
+          !(Array.isArray(raw) && raw.some(function (u) { return !u; }));
+      };
+      var bate = function (t, n) { return lista.length > 0 && ladoCompleto(n, t) &&
+        lista.every(function (u) { return t.indexOf(u) !== -1; }); };
+      var one = bate(t1, 1), two = bate(t2, 2);
+      if (one && two) return null;
+      if (one) return 1;
+      if (two) return 2;
+      // UID do vencedor sem slot estrutural completo: leitura legada por texto
+      // ainda decide quando os rótulos distinguem os lados.
+      if ((!ladoCompleto(1, t1) || !ladoCompleto(2, t2)) && m.p1 !== m.p2) {
+        if (m.winner === m.p1) return 1;
+        if (m.winner === m.p2) return 2;
+      }
+    }
+    // 2. Texto só quando distingue exatamente um lado e não há UID vencedor.
+    if (!wu && m.p1 !== m.p2) {
+      if (m.winner === m.p1) return 1;
+      if (m.winner === m.p2) return 2;
     }
     // 3. Pelo PLACAR, que está no mesmo documento e é inequívoco. Sets primeiro (é o placar
     //    que decide a partida quando o formato usa sets), games/pontos depois.

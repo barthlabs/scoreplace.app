@@ -34,7 +34,7 @@ console.log('──── instante estável no retry · id duplicado recusado �
 
 /* ═══ DEFEITO 1 ═══════════════════════════════════════════════════════════════════════ */
 
-/* Torneio dividido mínimo, com espelho ligado — é o espelho que carimbava o instante. */
+/* Torneio dividido mínimo: o plano normal só grava o jogo físico. */
 function torneio(nJogos) {
   const matches = [];
   for (let i = 1; i <= nJogos; i++) {
@@ -44,13 +44,9 @@ function torneio(nJogos) {
 }
 const split = require(path.join(__dirname, '..', 'functions', 'vendor', 'tournament-split-core.js'));
 const boundary = (d) => ({ persist: JSON.parse(JSON.stringify(d)) });
-const espelho = {
-  buildMirrorDoc: (t, jogo, tid, agoraIso) => ({ id: jogo.id, at: agoraIso, playerUids: ['u1'] })
-};
-
 function planeja(agoraIso) {
   return WP.planWrites(null, torneio(3), {
-    split: split, boundary: boundary, agoraIso: agoraIso, espelho: espelho, tournamentId: 't1'
+    split: split, boundary: boundary, agoraIso: agoraIso, tournamentId: 't1'
   });
 }
 
@@ -61,35 +57,64 @@ ok(JSON.stringify(p1.ops) === JSON.stringify(p2.ops),
    '① ⭐ mesmo instante ⇒ plano IDÊNTICO byte a byte');
 ok(JSON.stringify(p1.totais) === JSON.stringify(p2.totais), '① e os mesmos totais');
 
-const espelhoDe = (p) => p.ops.filter((o) => o.colecao === 'results');
-ok(JSON.stringify(espelhoDe(p1)) === JSON.stringify(espelhoDe(p2)),
-   '① ⭐ o documento de `results` é idêntico — inclusive o carimbo do espelho');
-ok(espelhoDe(p1).length > 0, '① (e o espelho realmente foi planejado, senão a asserção acima é vazia)');
-ok(espelhoDe(p1)[0].doc.at === '2026-09-02T10:00:00.000Z', '① o carimbo é o instante RECEBIDO, não um novo');
+const jogosDe = (p) => p.ops.filter((o) => o.colecao === 'matches');
+ok(JSON.stringify(jogosDe(p1)) === JSON.stringify(jogosDe(p2)) && jogosDe(p1).length === 3,
+   '① ⭐ os três jogos físicos são idênticos no retry');
+ok(!p1.ops.some((o) => o.colecao === 'results' || o.colecao === 'resultsSandbox'),
+   '① nenhuma edição normal cria segunda fonte de placar');
+const scored = torneio(1);
+Object.assign(scored.matches[0], { scoreP1: 6, scoreP2: 4, winner: 'A',
+  wo: true, woAbsentSide: 'p2' });
+const scorePlan = WP.planWrites(null, scored, {
+  split, boundary, tournamentId: 't1', agoraIso: '2026-09-02T10:00:00.000Z'
+});
+const physicalScore = scorePlan.ops.find(o => o.colecao === 'matches' && o.chave === 'm1');
+ok(!!physicalScore && physicalScore.doc.jogo.scoreP1 === 6 &&
+   physicalScore.doc.jogo.winner === 'A' && physicalScore.doc.jogo.wo === true &&
+   physicalScore.doc.jogo.pendingResult === undefined &&
+   !scorePlan.ops.some(o => o.colecao === 'results'),
+   '① jogo físico decidido guarda placar e W.O. sem espelho');
+const pending = torneio(1);
+delete pending.matches[0].winner;
+pending.matches[0].pendingResult = { scoreP1: 6, scoreP2: 4 };
+const pendingPlan = WP.planWrites(null, pending, {
+  split, boundary, tournamentId: 't1', agoraIso: '2026-09-02T10:00:00.000Z'
+});
+ok(pendingPlan.ops.some(o => o.colecao === 'matches' && o.chave === 'm1' &&
+  o.doc.jogo.pendingResult.scoreP1 === 6 && !o.doc.jogo.winner),
+  '① proposta pendente vive no jogo físico sem vencedor confirmado');
+const written = [];
+const baseRef = { path: 'tournaments/t1', collection(col) { return {
+  doc(id) { return { path: 'tournaments/t1/' + col + '/' + id }; }
+}; } };
+const tx = { set(ref, doc) { written.push([ref.path, doc]); }, delete(ref) { written.push([ref.path, null]); } };
+WP.applyPlan(tx, baseRef, scorePlan, { FieldValue: { increment: () => 1, delete: () => null } });
+ok(written.some(([p]) => p === 'tournaments/t1/matches/m1') &&
+   !written.some(([p]) => p.includes('/results/')),
+   '① applyPlan envia somente o jogo físico');
 const sandboxPlan = WP.planWrites(null, Object.assign(torneio(2), { isSandbox: true }), {
   split: split, boundary: boundary, agoraIso: '2026-09-02T10:00:00.000Z',
-  espelho: espelho, tournamentId: 'sb_t1', resultCollection: 'resultsSandbox'
+  tournamentId: 'sb_t1', resultCollection: 'resultsSandbox'
 });
-ok(sandboxPlan.ops.some(op => op.colecao === 'resultsSandbox' && op.chave === 'm1') &&
-   !sandboxPlan.ops.some(op => op.colecao === 'results'),
-   '① sandbox espelha placar apenas em resultsSandbox, sem resultado público');
+ok(sandboxPlan.ops.some(op => op.colecao === 'matches' && op.chave === 'm1') &&
+   !sandboxPlan.ops.some(op => op.colecao === 'resultsSandbox' || op.colecao === 'results'),
+   '① sandbox também grava só o jogo físico');
 const oculto = torneio(3);
 oculto.organizerOnly = true;
 const planoOculto = WP.planWrites(null, oculto, {
-  split: split, boundary: boundary, agoraIso: '2026-09-02T10:00:00.000Z', espelho: espelho, tournamentId: 't1'
+  split: split, boundary: boundary, agoraIso: '2026-09-02T10:00:00.000Z', tournamentId: 't1'
 });
-ok(espelhoDe(planoOculto).length === 0 && planoOculto.ops.some(o => o.colecao === 'matches'),
-   '① torneio oculto guarda jogos canônicos sem indexar resultados para o app antigo');
+ok(!planoOculto.ops.some(o => o.colecao === 'results') && planoOculto.ops.some(o => o.colecao === 'matches'),
+   '① torneio oculto guarda jogos canônicos sem resultado global');
 
-/* ② instante diferente ⇒ plano diferente. É o que provaria a divergência entre tentativas
- *    se o `new Date()` tivesse ficado dentro do callback. */
+/* ② sem carimbo de espelho, o plano físico não varia com o instante externo. */
 const p3 = planeja('2026-09-02T10:00:01.000Z');
-ok(JSON.stringify(espelhoDe(p1)) !== JSON.stringify(espelhoDe(p3)),
-   '② ⭐ instante diferente muda o espelho — é exatamente o que o retry produzia antes');
+ok(JSON.stringify(p1.ops) === JSON.stringify(p3.ops),
+   '② ⭐ jogo físico não depende de carimbo do espelho aposentado');
 
 /* ③ extras (recibo/outbox) entram no plano e são estáveis */
 const comExtras = (agora) => WP.planWrites(null, torneio(2), {
-  split: split, boundary: boundary, agoraIso: agora, espelho: espelho, tournamentId: 't1',
+  split: split, boundary: boundary, agoraIso: agora, tournamentId: 't1',
   extras: [
     { colecao: 'advanceReceipts', chave: 'op1', doc: { criadoEm: agora } },
     { colecao: 'outbox', chave: 'adv-t1-1-op1', doc: { criadoEm: agora } }
@@ -103,7 +128,7 @@ ok(e1.ops.some((o) => o.colecao === 'advanceReceipts') && e1.ops.some((o) => o.c
 
 /* ④ sem instante, falha fechada — nunca um fallback silencioso */
 let lancou = false;
-try { WP.planWrites(null, torneio(1), { split: split, boundary: boundary, espelho: espelho }); }
+try { WP.planWrites(null, torneio(1), { split: split, boundary: boundary }); }
 catch (e) { lancou = /agoraIso/.test(String(e && e.message)); }
 ok(lancou, '④ ⭐ planWrites sem agoraIso LANÇA — sem fallback dentro do caminho transacional');
 
@@ -113,7 +138,7 @@ ok(lancou, '④ ⭐ planWrites sem agoraIso LANÇA — sem fallback dentro do ca
 const semMarcador = torneio(1);
 delete semMarcador._semPesados;
 const planoSemMarcador = WP.planWrites(null, semMarcador, {
-  split: split, boundary: boundary, agoraIso: '2026-09-02T10:00:00.000Z', espelho: espelho, tournamentId: 't1'
+  split: split, boundary: boundary, agoraIso: '2026-09-02T10:00:00.000Z', tournamentId: 't1'
 });
 const configSemMarcador = planoSemMarcador.ops.find((op) => op.colecao === null);
 ok(planoSemMarcador.ops.some((op) => op.colecao === 'matches' && op.chave === 'm1'),

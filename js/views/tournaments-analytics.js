@@ -2,6 +2,50 @@
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 // ── Analytics & Details Functions ──
 
+// A ficha e a modal de estatísticas atribuem resultados só a slots completos.
+// Rótulos e mapas nome→UID servem ao display, nunca à atribuição.
+function _statsMatchSide(m, side, t) {
+  if (!m || typeof window._slotUids !== 'function') return { uids: [], complete: false };
+  var uids = (window._slotUids(m, side) || []).filter(Boolean);
+  var first = side === 'p1';
+  var team = m[first ? 'team1' : 'team2'];
+  var raw = m[first ? 'team1Uids' : 'team2Uids'];
+  var obj = m[first ? 'team1Obj' : 'team2Obj'];
+  var label = String(m[side] || '');
+  var expected = 0;
+  if (Array.isArray(team) && team.length) expected = team.length;
+  else if (obj && Array.isArray(obj.participants) && obj.participants.length) expected = obj.participants.length;
+  else if (obj && (obj.p1Uid || obj.p2Uid || obj.p1Name || obj.p2Name)) expected = 2;
+  else if (label.indexOf(' / ') !== -1) expected = label.split(' / ').length;
+  else if (Array.isArray(raw) && raw.length > 1) expected = raw.length;
+  else if (m[first ? 'p1Uid' : 'p2Uid'] && (!t || !(Number(t.teamSize) > 1))) expected = 1;
+  else if (Array.isArray(raw) && raw.length === 1 && t && Number(t.teamSize) === 1) expected = 1;
+  var complete = expected > 0 && uids.length === expected && new Set(uids).size === expected &&
+    !(Array.isArray(raw) && raw.some(function(u) { return !u; }));
+  return { uids: uids, complete: complete };
+}
+function _statsWinnerSide(m, left, right) {
+  if (!m || m.draw || m.winner === 'draw') return 0;
+  if (!left.complete || !right.complete) return null;
+  var raw = m.winnerUids || m.winnerUid;
+  if (raw) {
+    var winners = (Array.isArray(raw) ? raw : [raw]).filter(Boolean);
+    var inSide = function(side) { return winners.length > 0 &&
+      winners.every(function(uid) { return side.uids.indexOf(uid) !== -1; }); };
+    var one = inSide(left), two = inSide(right);
+    if (one !== two) return one ? 1 : 2;
+  }
+  // WO sem vencedor estrutural e placar empatado/incompleto não decidem nada.
+  var a = m.setsWonP1, b = m.setsWonP2;
+  if (typeof a !== 'number' || typeof b !== 'number' || (a === 0 && b === 0)) {
+    a = m.scoreP1; b = m.scoreP2;
+  }
+  if (typeof a !== 'number' || typeof b !== 'number') { a = m.score1; b = m.score2; }
+  if (typeof a !== 'number' || typeof b !== 'number') return null;
+  if (a === b) return !m.winner && a > 0 ? 0 : null;
+  return a > b ? 1 : 2;
+}
+
 // ── Perfil de jogador ─────────────────────────────────────────────────────────
 // _openPlayerProfile(name, {uid, tournamentId})
 // - Próprio usuário → #profile (editável, propaga tudo)
@@ -12,9 +56,7 @@ window._openPlayerProfile = function(playerName, opts) {
   var cu = window.AppStore && window.AppStore.currentUser;
   if (!playerName && !uid) return;
 
-  var isSelf = (uid && cu && uid === cu.uid) ||
-               (!uid && cu && cu.displayName &&
-                cu.displayName.toLowerCase().trim() === String(playerName || '').toLowerCase().trim());
+  var isSelf = !!(uid && cu && uid === cu.uid);
   if (isSelf) { window.location.hash = '#profile'; return; }
 
   var db = window.FirestoreDB && window.FirestoreDB.db;
@@ -58,7 +100,7 @@ window._openPlayerProfile = function(playerName, opts) {
   // ── buscar dados e montar ──
   var _build = function(profile, playerUid) {
     var name   = (profile && profile.displayName) || playerName || '?';
-    var photo  = (profile && profile.photoURL) || (window._playerPhotoCache && window._playerPhotoCache[String(playerName||'').toLowerCase()]) || '';
+    var photo  = (profile && profile.photoURL) || '';
     var city   = (profile && profile.city) || '';
     var sports = (profile && Array.isArray(profile.preferredSports)) ? profile.preferredSports : [];
     var skillBySport = (profile && profile.skillBySport) || {};
@@ -81,20 +123,16 @@ window._openPlayerProfile = function(playerName, opts) {
     // ── histórico compartilhado ── (exclui sandbox: stats do SB não vazam)
     var tournaments = window._statsEligibleTournaments ? window._statsEligibleTournaments() : (window.AppStore && window.AppStore.tournaments || []);
     var shared = { asPartner:[], asOpponent:[] };
-    var cuName  = cu && cu.displayName || '';
-    var _nameIn = function(str, n) { return str && n && (str.toLowerCase() === n.toLowerCase() || str.toLowerCase().indexOf(' / ') !== -1 && str.toLowerCase().split(' / ').some(function(p){return p.trim()===n.toLowerCase().trim();})); };
-    tournaments.forEach(function(t) {
+    if (cu && cu.uid && playerUid) tournaments.forEach(function(t) {
       var allParts = Array.isArray(t.participants) ? t.participants : [];
       var cuEntry = null, plEntry = null;
       allParts.forEach(function(p) {
-        var n = window._pName ? window._pName(p) : (typeof p === 'string' ? p : (p.displayName||p.name||'')); // v3.0.x: canônico "A / B" pra dupla
-        var _po = (typeof p === 'object' && p) ? p : null;
-        if (_nameIn(n, cuName) || (cu&&cu.uid&&_po&&(_po.uid===cu.uid||_po.p1Uid===cu.uid||_po.p2Uid===cu.uid))) cuEntry = n;
-        if (_nameIn(n, name) || (playerUid&&_po&&(_po.uid===playerUid||_po.p1Uid===playerUid||_po.p2Uid===playerUid))) plEntry = n;
+        var ids = typeof window._participantUids === 'function' ? window._participantUids(p) : [];
+        if (ids.indexOf(cu.uid) !== -1) cuEntry = p;
+        if (ids.indexOf(playerUid) !== -1) plEntry = p;
       });
       if (!cuEntry || !plEntry) return;
-      // Verificar se são no mesmo time (parceiros) ou times diferentes (adversários)
-      var isPartner = cuEntry === plEntry || (cuEntry.indexOf('/') !== -1 && _nameIn(cuEntry, name));
+      var isPartner = cuEntry === plEntry;
       if (isPartner) { shared.asPartner.push(t); } else { shared.asOpponent.push(t); }
     });
 
@@ -104,16 +142,15 @@ window._openPlayerProfile = function(playerName, opts) {
       tList.forEach(function(t) {
         var allM = typeof window._collectAllMatches==='function' ? window._collectAllMatches(t) : [];
         allM.forEach(function(m) {
-          var p1h = _nameIn(m.p1||'', mode==='partner' ? name : cuName);
-          var p2h = _nameIn(m.p2||'', mode==='partner' ? name : cuName);
-          if (!p1h && !p2h) return;
-          if (!m.winner) return;
-          var cuWon = _nameIn(m.winner, cuName) || _nameIn(m.winner, name);
-          if (mode==='partner') {
-            if (_nameIn(m.winner, name)) w++; else l++;
-          } else {
-            if (_nameIn(m.winner, cuName)) w++; else if (m.winner==='draw') d++; else l++;
-          }
+          var left = _statsMatchSide(m, 'p1', t), right = _statsMatchSide(m, 'p2', t);
+          if (!left.complete || !right.complete) return;
+          var cuSide = left.uids.indexOf(cu.uid) !== -1 ? 1 : right.uids.indexOf(cu.uid) !== -1 ? 2 : null;
+          var plSide = left.uids.indexOf(playerUid) !== -1 ? 1 : right.uids.indexOf(playerUid) !== -1 ? 2 : null;
+          if (!cuSide || !plSide || (mode === 'partner') !== (cuSide === plSide)) return;
+          var winnerSide = _statsWinnerSide(m, left, right);
+          if (winnerSide === 0) d++;
+          else if (winnerSide === cuSide) w++;
+          else if (winnerSide) l++;
         });
       });
       return {w:w,d:d,l:l};
@@ -167,11 +204,14 @@ window._openPlayerProfile = function(playerName, opts) {
         '<button id="ppo-stats-btn" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);color:var(--sp-c-a5b4fc,#a5b4fc);border-radius:10px;padding:8px 20px;font-size:0.82rem;cursor:pointer;">📊 Ver estatísticas detalhadas</button>' +
       '</div>';
 
-    // Foto: popular no cache ANTES de abrir stats para aparecer corretamente
-    var _realPhoto = photo && photo.indexOf('dicebear.com') === -1 ? photo : '';
-    if (_realPhoto && name) {
-      if (!window._playerPhotoCache) window._playerPhotoCache = {};
-      window._playerPhotoCache[name.toLowerCase()] = _realPhoto;
+    // A ficha pública já foi lida pelo UID; a tela de estatísticas recebe
+    // a mesma identidade sem associar a foto a outro perfil homônimo.
+    var _profileUid = playerUid || uid;
+    if (_profileUid && profile) {
+      window._userProfileCache = window._userProfileCache || {};
+      window._userProfileCache[_profileUid] = Object.assign({}, window._userProfileCache[_profileUid] || {}, {
+        displayName: name, photoURL: photo
+      });
     }
     var statsBtn = document.getElementById('ppo-stats-btn');
     if (statsBtn) {
@@ -185,7 +225,7 @@ window._openPlayerProfile = function(playerName, opts) {
           if (ppo) ppo.style.display = '';
           return;
         }
-        window._showPlayerStats(_nameSafe, opts.tournamentId);
+        window._showPlayerStats(_nameSafe, opts.tournamentId, _profileUid);
 
         // MutationObserver: quando player-stats-overlay for removido do DOM,
         // restaura o overlay do perfil automaticamente (cobre Voltar e ×)
@@ -335,10 +375,9 @@ window._openPlayerProfile = function(playerName, opts) {
       .then(function(v) { _build(v ? v.data : null, v ? v.uid : uid); })
       .catch(function() { _build(null, uid); });
   } else {
-    db.collection(_colPub).where('displayName', '==', playerName).limit(1).get()
-      .then(function(snap) { return window._userVivo(snap, { publico: true }); })   // lápide guarda o mesmo nome
-      .then(function(v) { _build(v ? v.data : null, v ? v.uid : ''); })
-      .catch(function() { _build(null, ''); });
+    // Nome manual não identifica uma conta; a busca por displayName podia abrir
+    // a primeira pessoa homônima e mostrar sua foto/histórico como se fosse a inscrita.
+    _build(null, '');
   }
 };
 
@@ -454,11 +493,11 @@ function _compareShell(badge, bodyHtml) {
 // when viewing own profile and user has organized 2+ tournaments. Uses the
 // modal's _boxStat/_sectionShell helpers so it harmonizes visually with the
 // rest of the stats overlay.
-function _buildOrganizerAnalyticsForModal(playerName) {
+function _buildOrganizerAnalyticsForModal(playerName, playerUid) {
     var t = window._t || function(k) { return k; };
     var cu = window.AppStore && window.AppStore.currentUser;
     if (!cu || !cu.displayName) return '';
-    var viewingSelf = String(cu.displayName).toLowerCase().trim() === String(playerName).toLowerCase().trim();
+    var viewingSelf = !!(playerUid && cu.uid === playerUid);
     if (!viewingSelf) return '';
 
     var tours = window._statsEligibleTournaments ? window._statsEligibleTournaments() : ((window.AppStore && Array.isArray(window.AppStore.tournaments)) ? window.AppStore.tournaments : []);
@@ -571,7 +610,7 @@ function _buildOrganizerAnalyticsForModal(playerName) {
 
 // Show Player Stats Modal — consolidated stats across all tournaments + persistent
 // matchHistory (casual + tournament) so records survive deletion of the source.
-window._showPlayerStats = function(playerName, currentTournamentId) {
+window._showPlayerStats = function(playerName, currentTournamentId, playerUid) {
     if (!playerName) return;
     var safeN = window._safeHtml(playerName);
     // Stats globais do jogador: exclui sandbox (resultados do SB não vazam).
@@ -587,12 +626,6 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
         podiums: 0,      // top 3 finishes
         sports: {},
         formats: {}
-    };
-
-    // Helper: check if a player name matches (case-insensitive, partial)
-    var _nameMatch = function(a, b) {
-        if (!a || !b) return false;
-        return a.toLowerCase().trim() === b.toLowerCase().trim();
     };
 
     // Helper: extract all matches from a tournament (delegates to canonical collector)
@@ -611,15 +644,28 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
         return all;
     };
 
-    // uid do jogador visto — detecção por uid (memberUids/participante) além do nome,
-    // senão duplas/times cujo _pName não bate exatamente somem da lista.
-    var _viewedUid = (typeof window._resolvePlayerUid === 'function') ? window._resolvePlayerUid(playerName) : null;
+    var _viewedUid = playerUid || null;
+
+    var _countStructuralMatches = function(t) {
+        _getAllMatches(t).forEach(function(m) {
+            var left = _statsMatchSide(m, 'p1', t), right = _statsMatchSide(m, 'p2', t);
+            if (!left.complete || !right.complete || !_viewedUid) return;
+            var isP1 = left.uids.indexOf(_viewedUid) !== -1;
+            var isP2 = right.uids.indexOf(_viewedUid) !== -1;
+            if (isP1 === isP2) return;
+            var winnerSide = _statsWinnerSide(m, left, right);
+            if (winnerSide === null) return;
+            stats.totalMatches++;
+            if (winnerSide === 0) stats.totalDraws++;
+            else if ((isP1 && winnerSide === 1) || (isP2 && winnerSide === 2)) stats.totalWins++;
+            else stats.totalLosses++;
+        });
+    };
 
     tournaments.forEach(function(t) {
-        // Check if player is a participant (nome OU uid)
+        // Participação pela identidade da inscrição; nome é só apresentação.
         var pList = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
         var isParticipant = pList.some(function(p) {
-            if (_nameMatch(window._pName(p), playerName)) return true;
             if (_viewedUid && typeof window._participantUids === 'function') {
                 return (window._participantUids(p) || []).indexOf(_viewedUid) >= 0;
             }
@@ -647,8 +693,13 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
         // Check standings for position (Liga/Suíço)
         if (typeof window._computeStandings === 'function' && _hasClassification) {
             var computed = window._computeStandings(t);
+            var foundStructuralRow = false;
             for (var si = 0; si < computed.length; si++) {
-                if (_nameMatch(computed[si].name, playerName)) {
+                var row = computed[si] || {};
+                var rowKey = String(row.key || '');
+                var rowUids = /^uid:[^+]+(?:\+[^+]+)*$/.test(rowKey) ? rowKey.slice(4).split('+') : [];
+                if (_viewedUid && (row.uid === _viewedUid || rowUids.indexOf(_viewedUid) !== -1)) {
+                    foundStructuralRow = true;
                     stats.totalWins += computed[si].wins || 0;
                     stats.totalLosses += computed[si].losses || 0;
                     stats.totalDraws += computed[si].draws || 0;
@@ -662,26 +713,11 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
                     break;
                 }
             }
+            // A linha derivada de uma dupla pode ter só chave por nome; seus
+            // jogos ainda têm UIDs próprios. Não reinterpretar a classificação.
+            if (!foundStructuralRow) _countStructuralMatches(t);
         } else {
-            // Elimination format — count from matches
-            var matches = _getAllMatches(t);
-            matches.forEach(function(m) {
-                var p1 = m.p1 || m.player1 || '';
-                var p2 = m.p2 || m.player2 || '';
-                var winner = m.winner || '';
-                var isP1 = _nameMatch(p1, playerName);
-                var isP2 = _nameMatch(p2, playerName);
-                if (!isP1 && !isP2) return;
-                if (!winner && m.score1 === undefined) return; // unplayed
-                stats.totalMatches++;
-                if (_nameMatch(winner, playerName)) {
-                    stats.totalWins++;
-                } else if (winner && !_nameMatch(winner, playerName)) {
-                    stats.totalLosses++;
-                } else if (m.score1 !== undefined && m.score1 === m.score2) {
-                    stats.totalDraws++;
-                }
-            });
+            _countStructuralMatches(t);
             // Check if champion (final match winner). Prefer adapter to find
             // the true final across canonical + legacy shapes; fall back to
             // the last entry of t.matches for single-elim legacy data.
@@ -705,11 +741,16 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
                 if (!finalMatch && Array.isArray(t.matches) && t.matches.length > 0) {
                     finalMatch = t.matches[t.matches.length - 1];
                 }
-                if (finalMatch && _nameMatch(finalMatch.winner, playerName)) {
-                    stats.titles++;
-                    stats.podiums++;
-                } else if (finalMatch && ((_nameMatch(finalMatch.p1, playerName) || _nameMatch(finalMatch.p2, playerName)))) {
-                    stats.podiums++; // runner-up
+                if (finalMatch && _viewedUid) {
+                    var finalLeft = _statsMatchSide(finalMatch, 'p1', t);
+                    var finalRight = _statsMatchSide(finalMatch, 'p2', t);
+                    var finalWinner = _statsWinnerSide(finalMatch, finalLeft, finalRight);
+                    if (finalWinner && finalLeft.complete && finalRight.complete) {
+                        var mySide = finalLeft.uids.indexOf(_viewedUid) !== -1 ? 1
+                          : finalRight.uids.indexOf(_viewedUid) !== -1 ? 2 : null;
+                        if (mySide === finalWinner) { stats.titles++; stats.podiums++; }
+                        else if (mySide) stats.podiums++;
+                    }
                 }
             }
         }
@@ -723,22 +764,12 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
     // can show real stats before the async Firestore fetch completes.
     function _collectLocalRecordsForPlayer(pName, pUid) {
         var cu = window.AppStore && window.AppStore.currentUser;
-        var isCurUser = cu && cu.displayName && String(cu.displayName).toLowerCase().trim() === String(pName).toLowerCase().trim();
+        var isCurUser = !!(cu && cu.uid && pUid === cu.uid);
         if (!isCurUser) return [];
         try {
             var v2 = JSON.parse(localStorage.getItem('scoreplace_casual_history_v2') || '[]');
             if (!Array.isArray(v2) || !v2.length) return [];
-            var myUid = pUid || (cu && cu.uid) || null;
-            var myDn = (cu.displayName || '').toLowerCase().trim();
-            return v2.map(function(r) {
-                var rc = Object.assign({}, r);
-                rc.players = (r.players || []).map(function(p) {
-                    var cp = Object.assign({}, p);
-                    if (!cp.uid && cp.name && String(cp.name).toLowerCase().trim() === myDn) cp.uid = myUid;
-                    return cp;
-                });
-                return rc;
-            });
+            return v2;
         } catch(e) { return []; }
     }
 
@@ -770,8 +801,12 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
     }).join('');
 
     // Resolve photo + uid (for persistent match history lookup)
-    var resolvedPhoto = window._resolvePlayerPhoto(playerName);
-    var resolvedUid = window._resolvePlayerUid(playerName);
+    var resolvedUid = _viewedUid;
+    var resolvedPhoto = resolvedUid && window._profilePhotoForUid
+      ? window._profilePhotoForUid(resolvedUid)
+      : null;
+    var _photoCu = window.AppStore && window.AppStore.currentUser;
+    if (!resolvedPhoto && _photoCu && resolvedUid === _photoCu.uid) resolvedPhoto = _photoCu.photoURL || null;
     var _initialChar = (playerName.charAt(0) || '?').toUpperCase();
     var avatarHtml = resolvedPhoto
       ? '<img src="' + window._safeHtml(resolvedPhoto) + '" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid var(--primary-color,#3b82f6);margin-bottom:0.5rem;display:inline-block;" onerror="this.outerHTML=\'<div style=\\\'width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#fbbf24,#f59e0b);display:inline-flex;align-items:center;justify-content:center;font-size:1.8rem;font-weight:700;color:#1a1e2e;margin-bottom:0.5rem;\\\'>' + _initialChar + '</div>\'">'
@@ -789,7 +824,7 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
 
     // Organizer analytics — only when viewing own stats and user has organized
     // 2+ tournaments. Harmonized with modal's _boxStat/_sectionShell helpers.
-    var _organizerSectionHtml = _buildOrganizerAnalyticsForModal(playerName);
+    var _organizerSectionHtml = _buildOrganizerAnalyticsForModal(playerName, resolvedUid);
 
     // v1.8: card "Seu nível (letzplay)" — mudou do perfil pra cá. Aparece nas
     // Estatísticas quando o jogador visto é o PRÓPRIO usuário e ele tem histórico
@@ -797,7 +832,7 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
     // popular ao vivo se a modal estiver aberta. Import de OUTROS jogadores é
     // fase à parte (precisa do doc deles) — por ora só a própria conta.
     var _lpCu = window.AppStore && window.AppStore.currentUser;
-    var _lpIsCurUser = _lpCu && _lpCu.displayName && String(_lpCu.displayName).toLowerCase().trim() === String(playerName).toLowerCase().trim();
+    var _lpIsCurUser = !!(_lpCu && _lpCu.uid && resolvedUid === _lpCu.uid);
     // Nível GERAL: mistura scoreplace (torneios oficiais + V/D) do jogador VISTO.
     var _spExtra = {
       tournaments: (stats.tournamentNames || []).map(function(tn) { return { name: tn.name, sport: tn.sport, year: null, date: tn.date || null, isRanking: !!tn.isRanking }; }),
@@ -878,29 +913,13 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
         // timeStats, durationMs, players[].uid) so we can run the same detailed
         // aggregation used by the Firestore matchHistory path.
         var cu = window.AppStore && window.AppStore.currentUser;
-        var isCurrentUser = cu && cu.displayName && String(cu.displayName).toLowerCase().trim() === String(playerName).toLowerCase().trim();
+        var isCurrentUser = !!(cu && cu.uid && resolvedUid === cu.uid);
         if (isCurrentUser && typeof window._renderPersistentMatchStats === 'function') {
             try {
                 var v2 = JSON.parse(localStorage.getItem('scoreplace_casual_history_v2') || '[]');
                 if (Array.isArray(v2) && v2.length > 0) {
-                    // Seed records with current user's uid/name so _renderPersistentMatchStats
-                    // can find "my slot" even when the saved player entry had no uid.
                     var myUid = cu.uid || null;
-                    var myDn = (cu.displayName || '').toLowerCase().trim();
-                    var seeded = v2.map(function(r) {
-                        var rc = Object.assign({}, r);
-                        rc.players = (r.players || []).map(function(p) {
-                            var cp = Object.assign({}, p);
-                            if (!cp.uid && cp.name && String(cp.name).toLowerCase().trim() === myDn) {
-                                cp.uid = myUid;
-                            }
-                            return cp;
-                        });
-                        return rc;
-                    });
-                    // _renderPersistentMatchStats filters by uid — only renders matches
-                    // where current user is found. That's exactly what we want.
-                    return window._renderPersistentMatchStats(seeded, myUid);
+                    return window._renderPersistentMatchStats(v2, myUid);
                 }
             } catch(e) {}
         }
@@ -910,13 +929,13 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
         try {
             if (isCurrentUser) {
                 var casualHist = JSON.parse(localStorage.getItem('scoreplace_casual_history') || '[]');
-                cStats.matches = casualHist.length;
-                var dn = (cu.displayName || '').toLowerCase();
                 for (var ci = 0; ci < casualHist.length; ci++) {
                     var ch = casualHist[ci];
+                    if (!ch || ch.playerUid !== resolvedUid) continue;
+                    cStats.matches++;
                     if (ch.winner === 'Empate') cStats.draws++;
-                    else if (ch.winner && String(ch.winner).toLowerCase() === dn) cStats.wins++;
-                    else if (ch.winner) cStats.losses++;
+                    else if (ch.winnerUid === resolvedUid) cStats.wins++;
+                    else if (ch.winnerUid) cStats.losses++;
                 }
             }
         } catch(e) {}
@@ -1015,14 +1034,14 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
             }).catch(function() {});
         }
     }
-    if (resolvedUid && window.FirestoreDB && typeof window.FirestoreDB.loadUserMatchHistory === 'function') {
+    if (resolvedUid && window.FirestoreDB && typeof window.FirestoreDB.loadScoreplaceMatchHistory === 'function') {
         var slot = modal.querySelector('#player-stats-persistent');
         // Merge Firestore records with localStorage v2 casual cache so the hero-box
         // always shows the full detailed metric set for casual matches — even if
         // the Firestore write failed (permission, offline, no uid at save time).
         function _mergeLocalCasualV2(firestoreRecs) {
             var curUser = window.AppStore && window.AppStore.currentUser;
-            var viewingSelf = curUser && curUser.displayName && String(curUser.displayName).toLowerCase().trim() === String(playerName).toLowerCase().trim();
+            var viewingSelf = !!(curUser && curUser.uid && resolvedUid === curUser.uid);
             if (!viewingSelf) return firestoreRecs || [];
             var merged = (firestoreRecs || []).slice();
             try {
@@ -1030,8 +1049,6 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
                 if (Array.isArray(v2) && v2.length > 0) {
                     var seen = {};
                     for (var i = 0; i < merged.length; i++) { if (merged[i] && merged[i].matchId) seen[merged[i].matchId] = 1; }
-                    var myUid = curUser.uid || null;
-                    var myDn = (curUser.displayName || '').toLowerCase().trim();
                     for (var j = 0; j < v2.length; j++) {
                         var r = v2[j];
                         if (!r || (r.matchId && seen[r.matchId])) continue;
@@ -1044,22 +1061,13 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
                         // ⚠️ Filtrar aqui é obrigatório porque este é o ÚNICO ponto em que
                         // registro local entra na conta sem passar pelo loader.
                         if (typeof window._isPartidaEmRajada === 'function' && window._isPartidaEmRajada(r)) continue;
-                        // Ensure my uid is present so _renderPersistentMatchStats can locate me.
-                        var seeded = Object.assign({}, r);
-                        seeded.players = (r.players || []).map(function(p) {
-                            var cp = Object.assign({}, p);
-                            if (!cp.uid && cp.name && String(cp.name).toLowerCase().trim() === myDn) {
-                                cp.uid = myUid;
-                            }
-                            return cp;
-                        });
-                        merged.push(seeded);
+                        merged.push(r);
                     }
                 }
             } catch(e) {}
             return merged;
         }
-        window.FirestoreDB.loadUserMatchHistory(resolvedUid).then(function(records) {
+        window.FirestoreDB.loadScoreplaceMatchHistory(resolvedUid).then(function(records) {
             if (!slot) return;
             // v1.7.51 — `null` = a pessoa fechou as estatísticas (`statsVisibility`).
             // NÃO cair no render de sempre: ele desenha a grade inteira ZERADA de
@@ -1088,20 +1096,18 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
             // a MESMA conta (`window._totaisVD`), e o card é redesenhado com ela.
             try {
               if (_lpIsCurUser && _lpCu && _lpCu.letzplayImport && typeof window._totaisVD === 'function') {
-                var _vd = window._totaisVD(merged, resolvedUid, playerName);
+                var _vd = window._totaisVD(merged, resolvedUid, '');
                 if (_vd.wins + _vd.losses > 0) {
                   _spExtra.wins = _vd.wins; _spExtra.losses = _vd.losses;
                   // v1.8.97: e os resultados COM DATA, pro card calcular a SEQUÊNCIA
                   // considerando scoreplace + letzplay. Sem isto o tile mostrava a
                   // sequência só do letzplay, que costuma ser bem mais antiga.
-                  var _dn = String(playerName || '').toLowerCase().trim();
                   _spExtra.resultados = (merged || []).map(function (r) {
                     if (!r) return null;
                     var team = null;
                     (r.players || []).forEach(function (p) {
                       if (!p) return;
                       if (resolvedUid && p.uid === resolvedUid) team = p.team;
-                      else if (team == null && _dn && p.name && String(p.name).toLowerCase().trim() === _dn) team = p.team;
                     });
                     if (team == null || !r.winnerTeam || r.winnerTeam === 0) return null;
                     var ts = r.finishedAt ? new Date(r.finishedAt).getTime() : 0;
@@ -1141,11 +1147,7 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
         }).catch(function(e) {
             window._warn('[player-stats] loadUserMatchHistory failed', e);
             if (slot) {
-                slot.innerHTML = window._renderPersistentMatchStats(_collectLocalRecordsForPlayer(playerName, resolvedUid), resolvedUid) +
-                    (stats.tournamentsPlayed > 0 ? '<details style="margin-top:10px;"><summary style="cursor:pointer;font-size:0.78rem;font-weight:600;color:var(--text-bright,#fff);padding:6px 0;">📋 Torneios Disputados (' + stats.tournamentsPlayed + ')</summary><div style="margin-top:6px;">' + tourListHtml + '</div></details>' : '');
-                if (typeof window._initStatsAnimation === 'function') {
-                    window._initStatsAnimation(slot);
-                }
+                slot.innerHTML = '<div role="alert" style="padding:18px 14px;color:var(--text-muted);">Estatísticas indisponíveis. Tente novamente mais tarde.</div>';
             }
         });
     }
@@ -1662,12 +1664,9 @@ function _formTrendHtml(casualRecs, tournRecs, lpGames, uid, lpImp) {
       '</div>';
 }
 
-// Renders the persistent matchHistory block for a given uid's records.
-// Splits casual vs tournament, aggregates serve/receive/killer/breaks/streaks,
-// and produces head-to-head + partnership tables. Records are written per-player
-// to users/{uid}/matchHistory so they survive tournament/casual deletion.
-// Histórico novo guarda somente uid+time. A apresentação resolve o nome vivo do
-// espelho público; nome gravado existe só em registros anteriores ao corte.
+// Renderiza casuais persistidos e torneios projetados dos jogos físicos. Agrega
+// métricas e confrontos a partir do mesmo contrato de apresentação.
+// A apresentação resolve o nome vivo do espelho público por UID.
 function _historyPlayerName(player) {
     if (player && player.uid && typeof window._nameForUid === 'function') {
         var live = window._nameForUid(player.uid);

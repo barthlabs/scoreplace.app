@@ -21,11 +21,10 @@ function hasManualIdentity(value, manualId) {
     hasManualIdentity(part, manualId));
 }
 
-function plan(manualId, oldPairId, newPairId, uid, participantDocs, matchDocs, resultDocs) {
+function plan(manualId, oldPairId, newPairId, uid, participantDocs, matchDocs) {
   if (!manualId || !oldPairId || !newPairId || !uid) throw new Error('identidade incompleta');
   const participants = [];
   const matches = [];
-  const resultsById = new Map((resultDocs || []).map((doc) => [doc.id, doc]));
   const participantHits = [];
   for (const doc of participantDocs || []) {
     const data = doc.data || {};
@@ -74,11 +73,9 @@ function plan(manualId, oldPairId, newPairId, uid, participantDocs, matchDocs, r
     if (!updated) continue;
     const id = String(game.id || doc.id);
     if (!id || id !== doc.id) throw new Error('ID de jogo inconsistente');
-    const result = resultsById.get(id);
-    if (result && hasOutcome(result.data)) throw new Error('resultado de jogo existente; chame a organização');
     const playerUids = Array.from(new Set([].concat(updated.team1Uids || [], updated.team2Uids || [])));
-    matches.push({ id, data: data.jogo ? Object.assign({}, data, { jogo: updated, playerUids }) : updated,
-      result: result ? { id, playerUids } : null });
+    matches.push({ id, data: data.jogo ? Object.assign({}, data, { jogo: updated, playerUids }) :
+      Object.assign({}, updated, { playerUids }) });
   }
   if (!matches.length) throw new Error('jogos da vaga não encontrados');
   if (matches.length > 100) throw new Error('vínculo grande demais; chame a organização');

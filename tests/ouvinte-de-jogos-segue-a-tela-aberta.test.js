@@ -38,7 +38,8 @@ const fakeDb = { collection: () => ({ doc: () => ({ collection: () => ({
  * roteamento em si é provado em sandbox-cliente-roteia-e-nao-fabrica). */
 const _tSub = () => fakeDb.collection().doc().collection();
 const ctx = {
-  window: { FirestoreDB: { db: fakeDb, _tSub: _tSub }, _tSplit: {
+  window: { FirestoreDB: { db: fakeDb, _tSub: _tSub,
+      _resultFromPhysicalMatch: () => null }, _tSplit: {
       remontar: (p) => Object.assign({}, p.config, { _montado: p.matches.length }),
       partesDe: (t) => (Array.isArray(t && t._semPesados) && t._semPesados.length
         ? t._semPesados : ['matches']) },
@@ -84,6 +85,20 @@ ok(vivo._montado === 1, '⭐ o delta é remontado e escrito NO LUGAR (mesma refe
 ok(!vivo._faltamPesados, '   e a marca de incompleto sai');
 ok(opcoesDoOuvinte && opcoesDoOuvinte.includeMetadataChanges === true,
   'o ouvinte recebe a confirmação remota mesmo quando ela só muda metadata');
+
+let avisoTorneio = null;
+API._notifyInvalidPhysicalMatch = function (id) { avisoTorneio = id; };
+ctx.window.FirestoreDB._resultFromPhysicalMatch = function (doc) {
+  if (doc._chave === 'bad') throw new Error('Jogo canônico inválido');
+  return null;
+};
+const antesInvalido = vivo._montado;
+assinou({ forEach: function (f) {
+  f({ id: 'good', data: function () { return { _chave: 'good' }; } });
+  f({ id: 'bad', data: function () { return { _chave: 'bad' }; } });
+}, docChanges: function () { return [{}, {}]; }, metadata: { fromCache: false } });
+ok(vivo._montado === antesInvalido, 'jogo físico inválido não publica snapshot parcial');
+ok(avisoTorneio === 't1', 'aviso identifica o torneio-pai da parte inválida');
 
 // nada mudou → não repinta
 let antes = vivo._montado;

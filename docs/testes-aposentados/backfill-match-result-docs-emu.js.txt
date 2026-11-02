@@ -110,7 +110,7 @@ async function call(qs) { const r = await fetch(BASE + qs); return { status: r.s
 
   console.log("──── backfill real ────");
   const run = await call(`?secret=${SECRET}`);
-  ok(run.body.ok, "backfill respondeu ok");
+  ok(run.body.ok && !(run.body.errors || []).length, "backfill respondeu sem erros: " + JSON.stringify(run.body.errors || []));
   // legado: 3 subdocs criados (semi1, semi2, final)
   const lg = await db.collection("tournaments").doc("bf-legacy").collection("results").get();
   const lgById = {}; lg.forEach((d) => (lgById[d.id] = d.data()));
@@ -154,6 +154,24 @@ async function call(qs) { const r = await fetch(BASE + qs); return { status: r.s
   ok(g1After.winner === "B" && g1After.scoreP1 === 2, "⛔ force preservou o resultado (winner B, 2)");
   const forceRun2 = await call(`?secret=${SECRET}&force=1`);
   ok(forceRun2.body.refreshed === 0, `force idempotente: 2ª vez refresca 0 (refreshed=${forceRun2.body.refreshed})`);
+
+  // Force relê o resultado dentro da transação e preserva replay que não vem
+  // do jogo. Um snapshot antigo anterior ao force perderia este campo.
+  const g1Ref = db.collection('tournaments').doc('bf-hassub').collection('results').doc('g1');
+  await g1Ref.set({ p1: 'Nome antigo', replay: { marker: 'preservar' } }, { merge: true });
+  const replayForce = await call(`?secret=${SECRET}&force=1&tid=bf-hassub`);
+  ok(replayForce.body.refreshed >= 1, 'force refresca espelho desatualizado: ' + JSON.stringify(replayForce.body.errors || []));
+  const afterReplayForce = (await g1Ref.get()).data();
+  ok(afterReplayForce.p1 === 'A' && afterReplayForce.replay?.marker === 'preservar',
+    'force preserva replay fresco ao corrigir contexto');
+
+  await db.collection('tournaments').doc('bf-hassub').update({ organizerOnly: true, isPublic: false });
+  const hiddenBefore = JSON.stringify((await g1Ref.get()).data());
+  const hiddenForce = await call(`?secret=${SECRET}&force=1&tid=bf-hassub`);
+  ok(hiddenForce.body.refreshed === 0 && hiddenForce.body.created === 0,
+    'backfill não cria nem reindexa torneio oculto');
+  ok(JSON.stringify((await g1Ref.get()).data()) === hiddenBefore,
+    'backfill oculto preserva resultado sem qualquer escrita');
 
   console.log("════════════════════════════════════════");
   console.log((fail === 0 ? "✅" : "❌") + " backfill E2E: " + (fail === 0 ? "todos ok" : fail + " falharam"));

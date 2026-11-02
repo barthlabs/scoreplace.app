@@ -11,12 +11,15 @@ const router = fs.readFileSync(path.join(__dirname, '..', 'js', 'router.js'), 'u
 const analytics = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments-analytics.js'), 'utf8');
 let fail = 0;
 function ok(condition, message) { if (!condition) { fail++; console.error('  ✗ ' + message); } }
-const start = src.indexOf('// Participantes já inscritos individualmente');
-const end = src.indexOf('// Para duplas', start);
+// E18 extraiu o filtro para um helper chamado pelo mesmo render; verificar o
+// ponto de decisão real, não a antiga posição textual dentro do cartão.
+const start = src.indexOf('window._soloPartnerCandidates = function');
+const end = src.indexOf('window._teamTieDrawVisible', start);
 const block = src.slice(start, end);
 ok(start >= 0, 'bloco de inscritos individuais existe');
 ok(/if \(p == null\) return false;/.test(block), 'slot nulo é descartado antes de ler o perfil');
 ok(/p\.displayName \|\| p\.name/.test(block), 'nome continua sendo resolvido para entradas válidas');
+ok(/window\._soloPartnerCandidates\(t\.participants,/.test(src), 'render usa o helper verificado');
 const profileLoader = store.slice(store.indexOf('window._loadParticipantProfilesByName'), store.indexOf('// Patch dos slots', store.indexOf('window._loadParticipantProfilesByName')));
 ok(/forEach\(function\(p\) \{\s*\/\/[\s\S]*?if \(p == null\) return;/.test(profileLoader), 'hidratação de perfis descarta slot nulo antes de ler displayName');
 const exploreMatcher = explore.slice(explore.indexOf('function _participantMatchesUser'), explore.indexOf('// ---- User card HTML builder ----'));
@@ -66,5 +69,5 @@ ok(/if \(p == null\) return;/.test(buildActivityLog), 'histórico descarta o slo
   }
 }
 
-console.log((fail ? '❌' : '✅') + ' participante-nulo-nao-derruba-detalhe: ' + (fail ? fail + ' falharam' : '11 ok'));
+console.log((fail ? '❌' : '✅') + ' participante-nulo-nao-derruba-detalhe: ' + (fail ? fail + ' falharam' : '12 ok'));
 process.exit(fail ? 1 : 0);

@@ -110,10 +110,12 @@ const ok = (n, c, x) => { if (c) console.log('  ✓ ' + n); else { console.log('
   if (temHelpers) {
     const S = require(path.join(ROOT, 'js/views/tournament-split-core.js'));
     W._tSplit = S;
-    const escritas = [], apagadas = [];
+    const escritas = [], atualizadas = [], apagadas = [];
+    W.firebase.firestore = { FieldValue: { delete: () => ({ __delete: true }) } };
     let commits = 0;
     real.db.batch = () => ({
       set: (r, v) => escritas.push({ path: r.path, v: v }),
+      update: (r, v) => atualizadas.push({ path: r.path, v: v }),
       delete: (r) => apagadas.push(r.path),
       commit: () => { commits++; return Promise.resolve(); },
     });
@@ -126,11 +128,12 @@ const ok = (n, c, x) => { if (c) console.log('  ✓ ' + n); else { console.log('
     const depois = { matches: [jogo('m1', 0, 0, 'a'), jogo('m3', 1, 0, null)] };  // m1 mudou, m3 nasceu, m2 sumiu
     const n = await real._sbGravaPartes('sb_2', antes, depois, ['matches']);
     ok('⭐⭐ escreveu no caminho do SANDBOX, nunca em tournaments',
-      escritas.length > 0 && escritas.every((e) => e.path.indexOf('sandboxes/sb_2/matches/') === 0),
-      JSON.stringify(escritas.map((e) => e.path)));
-    ok('⭐⭐ escreveu SÓ o que mudou (m1 e m3), não a coleção inteira',
-      escritas.length === 2 && escritas.some((e) => e.v.jogo.id === 'm1') && escritas.some((e) => e.v.jogo.id === 'm3'),
-      JSON.stringify(escritas.map((e) => e.v.jogo.id)));
+      escritas.concat(atualizadas).length > 0 && escritas.concat(atualizadas).every((e) => e.path.indexOf('sandboxes/sb_2/matches/') === 0),
+      JSON.stringify(escritas.concat(atualizadas).map((e) => e.path)));
+    ok('⭐⭐ jogo existente só atualiza o campo alterado; novo jogo é criado',
+      escritas.length === 1 && escritas[0].v.jogo.id === 'm3' && atualizadas.length === 1 &&
+      JSON.stringify(atualizadas[0].v) === JSON.stringify({ 'jogo.winner': 'a' }),
+      JSON.stringify({ escritas, atualizadas }));
     ok('⭐⭐ e APAGOU quem sumiu (m2) — parte que fica pra trás é jogo fantasma na tela',
       apagadas.length === 1 && apagadas[0].indexOf('sandboxes/sb_2/matches/') === 0, JSON.stringify(apagadas));
     ok('   um lote só, e o número devolvido bate (' + n + ')', commits === 1 && n === 3);
@@ -214,6 +217,7 @@ const ok = (n, c, x) => { if (c) console.log('  ✓ ' + n); else { console.log('
     const corpoExclusao = exclusaoServidor.slice(inicioExclusao, fimExclusao);
     ok('⭐⭐ o servidor enumera todas as subcoleções do sandbox antes de apagar o pai',
       inicioExclusao >= 0 && corpoExclusao.includes('await sbRef.listCollections()') &&
+      corpoExclusao.includes('await sbRef.delete()') &&
       corpoExclusao.indexOf('await sbRef.listCollections()') < corpoExclusao.indexOf('await sbRef.delete()'));
     const inicioPurge = exclusaoServidor.indexOf('exports.purgeTournamentCopies = onDocumentDeleted(');
     const corpoPurge = exclusaoServidor.slice(inicioPurge, exclusaoServidor.indexOf('/* ═', inicioPurge));

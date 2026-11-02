@@ -10,8 +10,8 @@
  * Rules de verdade, no Emulator. O defeito que ele mata (14 inscritos, 0 jogos) nasceu
  * justamente de um caminho que "passava" em modelo e falhava no banco.
  *
- * A ÚNICA exceção de forma, autorizada: results → resultsSandbox (o curinga de collection
- * group não pode ser escopado por coleção-pai; ver firestore.rules).
+ * E05: placar vive apenas em matches/{id}.jogo. A cópia nova não cria resultsSandbox;
+ * a exclusão ainda limpa esse índice quando um sandbox antigo o possui.
  */
 'use strict';
 const { execFileSync } = require('child_process');
@@ -158,8 +158,7 @@ const canon=v=>{ if(v===null||typeof v!=='object') return JSON.stringify(v===und
   const rOrig=await db.collection('tournaments/orig_div/results').get();
   const rSb=await db.collection('sandboxes/'+sbDivId+'/resultsSandbox').get();
   const rSbNome=await db.collection('sandboxes/'+sbDivId+'/results').get();
-  R['results -> resultsSandbox']={ok:true,orig:rOrig.size,resultsSandbox:rSb.size,resultsNoSb:rSbNome.size,
-    iguais:rOrig.size===rSb.size && rOrig.docs.every(d=>{const o=rSb.docs.find(x=>x.id===d.id); return o && canon(o.data())===canon(d.data());})};
+  R['novo sandbox sem espelho']={ok:true,orig:rOrig.size,resultsSandbox:rSb.size,resultsNoSb:rSbNome.size};
 
   // ── isolamento pelas RULES, com o SDK ──
   for(const [quem,email] of [['DEV','rstbarth@gmail.com'],['REAL','real@x.com']]){
@@ -216,14 +215,15 @@ const canon=v=>{ if(v===null||typeof v!=='object') return JSON.stringify(v===und
     const g=(((cfg.rounds||[])[0]||{}).monarchGroups||[])[0]||{};
     return {ok:true,grupo:g.name,congelada:canon(g.classifCongelada),congeladaAt:g.classifCongeladaAt};
   });
-  // placar — escreve o jogo e o resultado, como a quadra faz
+  // placar — escreve somente o jogo físico, como a porta canônica faz
   await m('fluxo: placar no jogo', async()=>{
     await sbRef.collection('matches').doc('m2').set({_chave:'m2',jogo:{id:'m2',winner:'z',scoreP1:6,scoreP2:0}},{merge:true});
     return {ok:true,jogo:((await sbRef.collection('matches').doc('m2').get()).data()||{}).jogo};
   });
-  await m('fluxo: resultado em resultsSandbox', async()=>{
-    await sbRef.collection('resultsSandbox').doc('m2').set({playerUids:[DEV,REAL],winner:'z',scoreP1:6,scoreP2:0,updatedAt:11});
-    return {ok:true,doc:(await sbRef.collection('resultsSandbox').doc('m2').get()).data()};
+  await m('fluxo: sem espelho após placar', async()=>{
+    const espelho=await sbRef.collection('resultsSandbox').get();
+    const jogo=(await sbRef.collection('matches').doc('m2').get()).data().jogo;
+    return {ok:true,espelhos:espelho.size,winner:jogo.winner,scoreP1:jogo.scoreP1,scoreP2:jogo.scoreP2};
   });
   // avanço — a mesma escrita do documento que o "commitTournamentTx" faz
   await m('fluxo: avanço de fase', async()=>{
@@ -324,9 +324,14 @@ const canon=v=>{ if(v===null||typeof v!=='object') return JSON.stringify(v===und
       congelada:(((((t.rounds||[])[0]||{}).monarchGroups||[])[0]||{}).classifCongelada||[]).length,
       registrou: !!(win._sbIdsConhecidos && win._sbIdsConhecidos[sbDivId])};
   });
-  await m('FRIO: e o resultado vem de resultsSandbox', async()=>{
-    const r=await FDB.loadMatchResult(sbDivId,'m1');
-    return {ok:true,winner:(r||{}).winner, caminho:FDB._tSub(sbDivId,'results').path};
+  await m('FRIO: não existe espelho de resultado', async()=>{
+    const snap=await FDB._tSub(sbDivId,'results').get({source:'server'});
+    return {ok:true,espelhos:snap.size,caminho:FDB._tSub(sbDivId,'results').path};
+  });
+  await m('FRIO: jogo físico vem de matches do sandbox', async()=>{
+    const r=await FDB.loadCanonicalMatch(sbDivId,'m1');
+    return {ok:true,winner:(r||{}).winner, caminho:FDB._tSub(sbDivId,'matches').path,
+      tournamentName:(r||{}).tournamentName};
   });
   await m('FRIO: o TORNEIO REAL segue abrindo por tournaments', async()=>{
     const t=await FDB.loadTournamentById('orig_div');
@@ -351,6 +356,10 @@ const canon=v=>{ if(v===null||typeof v!=='object') return JSON.stringify(v===und
   if(app.auth().currentUser) await app.auth().signOut();
   await app.auth().signInWithEmailAndPassword('rstbarth@gmail.com','senha123');
   const antesDoDelete=await retratoDoOriginal();
+  // Legado de sandbox antigo: a exclusão ainda deve limpar o índice aposentado.
+  await db.doc('sandboxes/'+sbDivId+'/resultsSandbox/old').set({matchId:'old'});
+  R['DELETE: índice legado presente antes']={ok:true,
+    n:(await db.collection('sandboxes/'+sbDivId+'/resultsSandbox').get()).size};
   await m('DELETE: o dono apaga o próprio sandbox', async()=>{
     await FDB.deleteTournament(sbDivId);
     const parent=(await db.doc('sandboxes/'+sbDivId).get()).exists;
@@ -443,9 +452,9 @@ console.log('\n── ⑤ subcoleções: mesmas contagens e mesmo conteúdo ─�
   const s = R['sub ' + c];
   ok('⭐ ' + c + ': ' + s.orig + ' → ' + s.sb + ', conteúdo idêntico', s.orig === s.sb && s.iguais === true, J(s));
 });
-const rr = R['results -> resultsSandbox'];
-ok('⭐⭐ results → resultsSandbox: ids/campos/contagens idênticos (' + rr.orig + ' → ' + rr.resultsSandbox + ')',
-  rr.orig === rr.resultsSandbox && rr.iguais === true, J(rr));
+const rr = R['novo sandbox sem espelho'];
+ok('⭐⭐ novo sandbox não duplica o resultado legado (' + rr.orig + ' na origem)',
+  rr.orig === 1 && rr.resultsSandbox === 0, J(rr));
 ok('⛔ e NÃO existe `results` dentro do sandbox (o curinga não teria como alcançar)', rr.resultsNoSb === 0, J(rr));
 
 console.log('\n── ⑥ isolamento pelas RULES (SDK do app) ──');
@@ -454,7 +463,7 @@ ok('⭐⭐ DEV lê o parent do sandbox', R['DEV lê parent do sandbox'].ok === t
   ok('  DEV lê sub ' + c, R['DEV lê sub ' + c].ok === true, J(R['DEV lê sub ' + c]));
   ok('  ⛔ REAL NÃO lê sub ' + c, R['REAL lê sub ' + c].ok === false, J(R['REAL lê sub ' + c]));
 });
-ok('⭐⭐ DEV lê resultsSandbox', R['DEV lê resultsSandbox'].ok === true);
+ok('⭐⭐ DEV lê resultsSandbox vazio', R['DEV lê resultsSandbox'].ok === true && R['DEV lê resultsSandbox'].n === 0);
 ok('⭐⭐ ⛔ REAL NÃO lê resultsSandbox', R['REAL lê resultsSandbox'].ok === false, J(R['REAL lê resultsSandbox']));
 ok('⭐⭐ ⛔ REAL NÃO lê o parent do sandbox', R['REAL lê parent do sandbox'].ok === false, J(R['REAL lê parent do sandbox']));
 
@@ -502,9 +511,11 @@ ok('⭐ chaves: a classificação CONGELADA veio junto, com o carimbo',
 ok('⭐⭐ placar: o DONO escreve o jogo dentro do sandbox',
   R['fluxo: placar no jogo'].ok === true && (R['fluxo: placar no jogo'].jogo || {}).scoreP1 === 6,
   J(R['fluxo: placar no jogo']));
-ok('⭐⭐ resultado: e escreve em `resultsSandbox` (nunca em `results`)',
-  R['fluxo: resultado em resultsSandbox'].ok === true &&
-  (R['fluxo: resultado em resultsSandbox'].doc || {}).winner === 'z', J(R['fluxo: resultado em resultsSandbox']));
+ok('⭐⭐ resultado: só o jogo físico mudou, sem espelho',
+  R['fluxo: sem espelho após placar'].ok === true &&
+  R['fluxo: sem espelho após placar'].winner === 'z' &&
+  R['fluxo: sem espelho após placar'].scoreP1 === 6 &&
+  R['fluxo: sem espelho após placar'].espelhos === 0, J(R['fluxo: sem espelho após placar']));
 ok('⭐⭐ avanço: o DONO grava a próxima fase no documento do sandbox',
   R['fluxo: avanço de fase'].ok === true && R['fluxo: avanço de fase'].fase === 1 &&
   R['fluxo: avanço de fase'].rodadas === 2, J(R['fluxo: avanço de fase']));
@@ -568,9 +579,13 @@ ok('⭐⭐ INSCRITOS chegaram na abertura fria (7)', fr.inscritos === 7, J(fr.in
 ok('⭐⭐ CHAVE chegou: 5 jogos remontados na posição', fr.jogos === 5, J(fr.jogos));
 ok('⭐⭐ PLACAR veio junto (6 no jogo m1)', fr.placar === 6, J(fr.placar));
 ok('⭐ e a classificação CONGELADA também (4 linhas)', fr.congelada === 4, J(fr.congelada));
-const fr2 = R['FRIO: e o resultado vem de resultsSandbox'];
-ok('⭐⭐ o resultado é lido em `resultsSandbox`, já roteado',
-  fr2.ok === true && fr2.winner === 'a' && /\/resultsSandbox$/.test(fr2.caminho || ''), J(fr2));
+const fr2 = R['FRIO: não existe espelho de resultado'];
+ok('⭐⭐ novo sandbox mantém índice vazio após abertura fria',
+  fr2.ok === true && fr2.espelhos === 0 && /\/resultsSandbox$/.test(fr2.caminho || ''), J(fr2));
+const frPhysical = R['FRIO: jogo físico vem de matches do sandbox'];
+ok('⭐⭐ rota canônica lê matches do sandbox sem resultsSandbox',
+  frPhysical.ok === true && frPhysical.winner === 'a' &&
+  /^sandboxes\/sb_[^/]+\/matches$/.test(frPhysical.caminho || ''), J(frPhysical));
 const fr3 = R['FRIO: o TORNEIO REAL segue abrindo por tournaments'];
 ok('⛔ CONTROLE: torneio REAL abre por `tournaments` como sempre',
   fr3.achou === true && fr3.caminho === 'tournaments/orig_div', J(fr3));
@@ -578,6 +593,8 @@ ok('⭐⭐ ⛔ e o MESMO link não abre nada pro REAL',
   R['FRIO: REAL abre o mesmo link'].achou === false, J(R['FRIO: REAL abre o mesmo link']));
 
 console.log('\n── ⑬ exclusão: apagar o sandbox apaga o sandbox inteiro ──');
+ok('⭐⭐ índice legado de sandbox antigo existe antes da exclusão',
+  R['DELETE: índice legado presente antes'].n === 1);
 const dl = R['DELETE: o dono apaga o próprio sandbox'];
 ok('⭐⭐ o documento do sandbox sumiu', dl.ok === true && dl.parent === false, J(dl.parent));
 ok('⭐⭐ e TODAS as 12 subcoleções ficaram vazias — inclusive `resultsSandbox`',

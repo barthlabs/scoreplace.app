@@ -11,9 +11,13 @@ function pair(a, b, n1, n2, extra) {
     p2ManualId: 'm' + n2, p1Seq: n1, p2Seq: n2, category: 'Fem Light' }, extra);
 }
 function tournament(parts, extra) {
-  return Object.assign({ id: 'foto', teamSize: 2, enrollmentMode: 'teams',
+  const t = Object.assign({ id: 'foto', teamSize: 2, enrollmentMode: 'teams',
     canonicalRegistrationMigration: { fingerprint: 'foto' }, participants: parts,
     combinedCategories: ['Fem Light'], maxParticipants: 128 }, extra);
+  // O recibo canônico exige definições tipadas; a lista de rótulos da fixture
+  // acompanha a categoria configurada em cada cenário.
+  t.categoryDefinitions = t.combinedCategories.map((label, i) => ({ id: 'cat-' + i, label }));
+  return t;
 }
 const andrea = pair('Andrea Ruschmann', 'Juliana Marques', 1, 2);
 const adriana = pair('Adriana Rosa', 'Adriana de Marco Pilli', 4, 3);

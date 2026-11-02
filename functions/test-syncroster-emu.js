@@ -1,124 +1,67 @@
-// E2E do trigger syncMatchRosters (ESPELHO server-autoritativo) no emulador
-// (Functions + Firestore). Roda via:
-//   firebase emulators:exec --only functions,firestore --project demo-scoreplace \
-//     "node functions/test-syncroster-emu.js"
-// Prova, via UPDATE do doc do torneio (qualquer path): (1) avanço → re-semeia roster
-// do downstream; (2) W.O. (winner+wo sem placar) → espelha no subdoc; (3) reverter/
-// zerar → REMOVE o resultado do subdoc (clobber); (4) NÃO backfilla jogo sem subdoc.
-const admin = require("firebase-admin");
-admin.initializeApp({ projectId: "demo-scoreplace" });
+'use strict';
+// E05: o gatilho da raiz mantém o roster e o W.O. físico sem projetar results.
+// Roda no projeto demo pelos emuladores de Functions, Firestore e Auth.
+const assert = require('node:assert/strict');
+const admin = require('firebase-admin');
+admin.initializeApp({ projectId: 'demo-scoreplace' });
 const db = admin.firestore();
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-let fail = 0;
-function ok(c, msg) { if (c) console.log("  ✓ " + msg); else { fail++; console.error("  ✗ " + msg); } }
-
-async function pollSub(tid, matchId, predicate, label, tries) {
-  for (let i = 0; i < (tries || 20); i++) {
-    const snap = await db.collection("tournaments").doc(tid).collection("results").doc(matchId).get();
-    const data = snap.exists ? snap.data() : null;
-    if (predicate(data)) return data;
-    await sleep(500);
+async function until(read, predicate, label) {
+  for (let i = 0; i < 40; i++) {
+    const value = await read();
+    if (predicate(value)) return value;
+    await sleep(250);
   }
-  const snap = await db.collection("tournaments").doc(tid).collection("results").doc(matchId).get();
-  return snap.exists ? snap.data() : null;
+  throw new Error('gatilho não concluiu: ' + label);
 }
 
-(async function main() {
-  const tid = "sr-emu-1";
-  const parts = [
-    { uid: "uA", displayName: "A" }, { uid: "uB", displayName: "B" },
-    { uid: "uC", displayName: "C" }, { uid: "uD", displayName: "D" },
-  ];
-  await db.collection("tournaments").doc(tid).set({
-    name: "SR Emu", participants: parts,
-    matches: [
-      { id: "semi1", p1: "A", p2: "B", nextMatchId: "final" },
-      { id: "semi2", p1: "C", p2: "D", nextMatchId: "final" },
-      { id: "final", p1: "TBD", p2: "TBD" },
-    ],
-  });
-  // semeia subdocs (como sorteio/backfill) — semi1 e final
-  await db.collection("tournaments").doc(tid).collection("results").doc("semi1").set({ matchId: "semi1", playerUids: ["uA", "uB"] });
-  await db.collection("tournaments").doc(tid).collection("results").doc("final").set({ matchId: "final", playerUids: [] });
-  await sleep(2500);
-
-  console.log("──── avanço (roster) ────");
-  await db.collection("tournaments").doc(tid).update({
-    matches: [
-      { id: "semi1", p1: "A", p2: "B", nextMatchId: "final", winner: "A", scoreP1: 6, scoreP2: 3 },
-      { id: "semi2", p1: "C", p2: "D", nextMatchId: "final" },
-      { id: "final", p1: "A", p2: "TBD" },
-    ],
-  });
-  const fin = await pollSub(tid, "final", (d) => d && (d.playerUids || []).join("|") === "uA");
-  ok(fin && (fin.playerUids || []).join("|") === "uA", "avanço: roster do 'final' → [uA]");
-  const s1 = await pollSub(tid, "semi1", (d) => d && d.winner === "A");
-  ok(s1 && s1.winner === "A" && s1.scoreP1 === 6, "resultado do 'semi1' espelhado no subdoc (winner A, 6)");
-
-  console.log("──── W.O. (winner+wo, sem placar) ────");
-  await db.collection("tournaments").doc(tid).update({
-    matches: [
-      { id: "semi1", p1: "A", p2: "B", nextMatchId: "final", winner: "A", scoreP1: 6, scoreP2: 3 },
-      { id: "semi2", p1: "C", p2: "D", nextMatchId: "final", winner: "C", wo: true, woAbsentSide: "p2" },
-      { id: "final", p1: "A", p2: "C" },
-    ],
-  });
-  // semeia subdoc do semi2 agora (como se já existisse) pra CF poder espelhar
-  await db.collection("tournaments").doc(tid).collection("results").doc("semi2").set({ matchId: "semi2", playerUids: ["uC", "uD"] });
-  await sleep(500);
-  // re-dispara um write (a CF do update acima pode ter rodado antes do subdoc existir)
-  await db.collection("tournaments").doc(tid).update({ _touch: Date.now() });
-  const s2 = await pollSub(tid, "semi2", (d) => d && d.wo === true);
-  ok(s2 && s2.winner === "C" && s2.wo === true && s2.woAbsentSide === "p2", "W.O. espelhado no subdoc (winner C, wo, woAbsentSide)");
-  ok(s2 && s2.scoreP1 === undefined, "W.O. sem placar → subdoc sem scoreP1");
-
-  console.log("──── reverter/zerar (clobber remove resultado) ────");
-  await db.collection("tournaments").doc(tid).update({
-    matches: [
-      { id: "semi1", p1: "A", p2: "B", nextMatchId: "final", winner: "A", scoreP1: 6, scoreP2: 3 },
-      { id: "semi2", p1: "C", p2: "D", nextMatchId: "final" }, // W.O. revertido → sem winner/wo
-      { id: "final", p1: "A", p2: "TBD" },
-    ],
-  });
-  const s2r = await pollSub(tid, "semi2", (d) => d && d.winner === undefined);
-  ok(s2r && s2r.winner === undefined && s2r.wo === undefined, "reverter: subdoc do 'semi2' PERDE winner/wo (clobber)");
-  ok(s2r && (s2r.playerUids || []).slice().sort().join("|") === "uC|uD", "reverter: roster do 'semi2' preservado [uC,uD]");
-  const finR = await pollSub(tid, "final", (d) => d && (d.playerUids || []).join("|") === "uA");
-  ok(finR && (finR.playerUids || []).join("|") === "uA", "reverter: 'final' volta a roster [uA] (C saiu)");
-
-  /* ⛔ ESTA ASSERÇÃO AFIRMAVA LITERALMENTE A REGRA QUE FOI REMOVIDA. Ela exigia que um
-   * jogo NOVO, sem subdoc semeado, NÃO ganhasse espelho — o `if (!snap.exists) continue`
-   * que existia em `syncMatchRosters`.
-   * Em 6c2570cb ("1.7.99 — o espelho do roster passa a se manter sozinho, no servidor") a
-   * linha caiu, com a medição de produção escrita no código (functions/index.js:8074-8083):
-   * o Confra tinha 4 docs pra dezenas de jogos e dois torneios de eliminatória tinham ZERO,
-   * porque o seed vivia no CLIENTE e o sorteio AUTOMÁTICO roda no SERVIDOR. "Quem dependesse
-   * do subdoc existir tinha cobertura aleatória."
-   * ⭐ Agora se afirma a CURA: o jogo novo ganha espelho sozinho, com o roster canônico. */
-  console.log("──── cura automática: jogo NOVO ganha espelho sozinho (6c2570cb) ────");
-  await db.collection("tournaments").doc(tid).update({
-    matches: admin.firestore.FieldValue.arrayUnion({
-      id: "extra", p1: "A", p2: "B", winner: "A", team1Uids: ["uA"], team2Uids: ["uB"],
-    }),
-  });
-  const ex = await pollSub(tid, "extra", (d) => !!d);
-  ok(!!ex, "⭐ jogo novo SEM subdoc semeado ganha espelho pelo gatilho");
-  ok(ex && (ex.playerUids || []).slice().sort().join("|") === "uA|uB",
-    `⭐ e o espelho nasce com o roster canônico por uid (got ${(ex && ex.playerUids || []).join("|")})`);
-  ok(ex && ex.winner === "A", "⭐ carregando o resultado que o jogo já tinha");
-
-  /* ⚠️ E O LIMITE CONTINUA: o gatilho só toca jogo cuja ASSINATURA mudou
-   * (functions/index.js:8087). Reescrever o MESMO jogo não reescreve o espelho — senão
-   * toda escrita no torneio varreria a chave inteira. */
-  const antesIdem = JSON.stringify(ex);
-  await db.collection("tournaments").doc(tid).update({ updatedAt: new Date().toISOString() });
-  await sleep(2500);
-  const depoisIdem = await db.collection("tournaments").doc(tid).collection("results").doc("extra").get();
-  ok(depoisIdem.exists && JSON.stringify(depoisIdem.data()) === antesIdem,
-    "⛔ escrita sem mudança de assinatura NÃO reescreve o espelho (idempotente)");
-
-  console.log("════════════════════════════════════════");
-  console.log((fail === 0 ? "✅" : "❌") + " syncMatchRosters E2E: " + (fail === 0 ? "todos ok" : fail + " falharam"));
-  process.exit(fail ? 1 : 0);
-})().catch((e) => { console.error("EXCEÇÃO:", e); process.exit(1); });
+(async () => {
+  const ref = db.doc('tournaments/sync-root-e05');
+  const physical = ref.collection('matches').doc('future');
+  const historical = ref.collection('matches').doc('historical');
+  const result = ref.collection('results').doc('future');
+  const side = { id: 'future', label: 'R1 Grupo A • Jogo 1', roundIndex: 0,
+    p1: 'Ana / Bia', p2: 'Caio / Dani', team1: ['Ana', 'Bia'], team2: ['Caio', 'Dani'],
+    team1Uids: ['a', 'b'], team2Uids: ['c', 'd'], scoreP1: null, scoreP2: null };
+  await ref.set({ name: 'Teste E05', participants: [{ uid: 'a', displayName: 'Ana' },
+    { uid: 'b', displayName: 'Bia' }], woLog: [],
+    _nPartes: { participants: 2, matches: 2 }, _nJogos: 2 });
+  await until(async () => (await ref.collection('participants').doc('a').get()).data(),
+    (value) => value && value.status === 'enrolled', 'espelho de elenco');
+  await ref.collection('inscritos').doc('ua').set({ _k: 'ua', _idx: 0,
+    item: { uid: 'a', ligaActive: true, enrollSeq: 1 } });
+  await ref.collection('inscritos').doc('ub').set({ _k: 'ub', _idx: 1,
+    item: { uid: 'b', ligaActive: true, enrollSeq: 2 } });
+  await physical.set({ _chave: 'future', _loc: { tipo: 'rounds', ri: 0, mi: 0 },
+    jogo: side, playerUids: ['a', 'b', 'c', 'd'] });
+  await historical.set({ _chave: 'historical', _loc: { tipo: 'rounds', ri: 0, mi: 1 },
+    jogo: { ...side, id: 'historical', label: 'R1 Grupo A • Jogo 2', scoreP1: 6, scoreP2: 3,
+      winner: 'p1' }, playerUids: ['a', 'b', 'c', 'd'] });
+  const historicalBefore = (await historical.get()).data();
+  await result.set({ matchId: 'future', p1: 'Ana / Bia', scoreP1: 0,
+    playerUids: ['a', 'b', 'c', 'd'] });
+  const resultBefore = (await result.get()).data();
+  await ref.update({ name: 'Teste E05 renomeado', woLog: [{ id: 'wo-e05', status: 'active',
+    roundIndex: 0, groupName: 'R1 Grupo A', absentName: 'Bia', absentUid: 'b',
+    subName: 'Reserva', subUid: 'r' }] });
+  const updated = await until(async () => (await physical.get()).data(),
+    (value) => value && value.jogo.p1 === 'Ana / Reserva', 'W.O. no jogo físico');
+  assert.deepEqual(updated.jogo.team1Uids, ['a', 'r']);
+  assert.deepEqual(updated.playerUids, ['a', 'r', 'c', 'd']);
+  assert.equal(updated.jogo.scoreP1, null);
+  const substitute = await until(async () => (await ref.collection('inscritos').doc('ur').get()).data(),
+    (value) => value && value.item && value.item.uid === 'r', 'substituto em inscritos');
+  assert.equal(substitute.item.ligaActive, true);
+  const absent = await until(async () => (await ref.collection('inscritos').doc('ub').get()).data(),
+    (value) => value && value.item && value.item.ligaActive === false, 'ausente desativada');
+  assert.equal(absent.item.uid, 'b');
+  assert.deepEqual((await historical.get()).data(), historicalBefore,
+    'jogo concluído e placar não mudam');
+  assert.deepEqual((await result.get()).data(), resultBefore,
+    'gatilho da raiz não regrava espelho histórico');
+  assert.equal((await ref.collection('results').get()).size, 1,
+    'gatilho não cria espelho para jogo físico');
+  console.log('✓ E05 syncMatchRosters: roster e W.O. físicos; results intactos');
+  process.exit(0);
+})().catch((error) => { console.error(error.stack || error); process.exit(1); });

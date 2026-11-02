@@ -61,6 +61,20 @@
       ]
     },
     {
+      "collectionGroup": "mirrorReconcilePending",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "permanent",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "leaseUntilMs",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "matches",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
@@ -94,6 +108,20 @@
     }
   ],
   "fieldOverrides": [
+    {
+      "collectionGroup": "matches",
+      "fieldPath": "playerUids",
+      "indexes": [
+        {
+          "arrayConfig": "CONTAINS",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "queryScope": "COLLECTION_GROUP"
+        }
+      ]
+    },
     {
       "collectionGroup": "results",
       "fieldPath": "playerUids",

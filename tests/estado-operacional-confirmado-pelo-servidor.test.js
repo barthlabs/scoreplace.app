@@ -52,8 +52,7 @@ function method(name) {
 }
 [
   'loadMatchResults(tournamentId, opts)',
-  'loadMatchResult(tournamentId, matchId)',
-  'loadMyMatchResults(uid, opts)',
+  'loadPhysicalMatchResult(tournamentId, matchId)',
   'loadAllTournaments(opts)',
   'loadMyTournaments(uid, opts)',
   'loadAllPublicTournaments(opts)',
@@ -61,6 +60,9 @@ function method(name) {
   'loadUserProfile(uid)',
 ].forEach((name) => must(/get\(\{ source: 'server' \}\)/.test(method(name)),
   name + ' não aceita cache como resposta atual'));
+must(/_callFn\('getTournamentResultHistoryPage'/.test(method('loadMyMatchResults(uid, opts)')) &&
+  !/collectionGroup\(/.test(method('loadMyMatchResults(uid, opts)')),
+  'histórico entre torneios vem da porta do servidor, sem consulta global no cliente');
 
 const store = fs.readFileSync(path.join(ROOT, 'js/store.js'), 'utf8');
 must(/loadMyTournaments\(_uid, \{ requireRemote: true \}\)/.test(store),

@@ -56,8 +56,10 @@ ok(typeof window._spScoreplaceItems === 'function', 'match-history expõe os jog
 {
   const fonte = require('fs').readFileSync(
     require('path').join(__dirname, '..', 'js', 'views', 'match-history.js'), 'utf8');
-  const bloco = fonte.slice(fonte.indexOf('async function _fromScoreplace'),
-    fonte.indexOf('async function _fromScoreplace') + 1200);
+  const start = fonte.indexOf('async function _fromScoreplace');
+  const end = fonte.indexOf('  function _sourceBadge', start);
+  ok(start >= 0 && end > start, 'o corpo inteiro do leitor Scoreplace foi localizado');
+  const bloco = fonte.slice(start, end);
   ok(/ehOutraPessoa/.test(bloco), 'sabe distinguir "sou eu" de "é outra pessoa"');
   ok(/if \(ehOutraPessoa\)/.test(bloco), 'e pula os casuais do localStorage quando é outra pessoa');
 }

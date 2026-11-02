@@ -67,6 +67,62 @@ ok(TB(NaN, 6, 6) === false, 'NaN → false');
 ok(TB('', '', 6) === false, 'vazio → false');
 ok(TB(7, 6, undefined) === true, 'gamesPerSet ausente → default 6 → 7-6 true');
 
+// Regressão E30: no jogo real, o 1º set era 6×5 (TB 7×5) e o 2º campo
+// continha 65×1 em vez de 6×1. O jogo válido deve entrar; a digitação
+// inválida deve identificar o set e os números lidos, sem gravar nada.
+const scoring = { type: 'sets', setsToWin: 2, gamesPerSet: 6,
+  tiebreakEnabled: true, tiebreakAt: 'g-1', superTiebreak: true };
+ok(W._validateNormalSetScore(scoring, 'Beach Tennis', 6, 5).ok === true,
+  'Beach Tennis configurado em 5×5 aceita 6×5');
+ok(W._validateNormalSetScore(scoring, 'Beach Tennis', 6, 1).ok === true,
+  '2º set 6×1 é válido');
+ok(W._validateNormalSetScore(scoring, 'Beach Tennis', 65, 1).ok === false,
+  '65×1 é rejeitado');
+ok(W._normalSetGameInputCap(scoring, 'Beach Tennis') === 6,
+  'set de 6 games com tie-break em 5×5 limita o campo a 6');
+ok(W._normalSetGameInputCap({ type: 'sets', gamesPerSet: 11, tiebreakEnabled: false, countingType: 'numeric' }, 'Pickleball') === null,
+  'pontuação numérica até 11 continua aceitando dois dígitos');
+ok(W._normalSetGameInputCap({ type: 'sets', gamesPerSet: 6, tiebreakEnabled: false }, 'Tênis') === null,
+  'set configurado para prorrogação sem tie-break continua aceitando 10×8');
+const gameInput = { value: '6', dataset: {} };
+W._limitNormalSetGameInput(gameInput, 6);
+gameInput.value = '65';
+W._limitNormalSetGameInput(gameInput, 6);
+ok(gameInput.value === '6', 'segundo dígito é recusado imediatamente no campo de games');
+
+const mid = 'jogo-e30';
+const fields = {};
+for (const [key, value] of Object.entries({
+  ['s1-' + mid + '-0']: '6', ['s2-' + mid + '-0']: '5',
+  ['tb1-' + mid + '-0']: '7', ['tb2-' + mid + '-0']: '5',
+  ['s1-' + mid + '-1']: '6', ['s2-' + mid + '-1']: '1'
+})) fields[key] = { value, getAttribute() { return null; }, setAttribute() {} };
+W.document.getElementById = (id) => fields[id] || null;
+W._matchSetPlan = () => ({ initialTwoSetEntry: true });
+W._buildManualSet = (a, b, tb) => ({ sets: [{ gamesP1: a, gamesP2: b,
+  ...(tb && tb.isTiebreakEntry ? { tiebreak: { pointsP1: tb.tbP1, pointsP2: tb.tbP2 } } : {}) }] });
+let committed = null, alert = '';
+W._commitSetsResult = (tid, id, sets, p1, p2) => { committed = { sets, p1, p2 }; return true; };
+W.showAlertDialog = (title, detail) => { alert = detail; };
+const tour = { id: 'torneio-e30', sport: 'Beach Tennis', scoring, matches: [{ id: mid }] };
+W._saveInitialBestOfThreeFromCard(tour.id, mid, tour, tour.matches[0], scoring);
+ok(committed && committed.p1 === 2 && committed.p2 === 0 && committed.sets.length === 2 &&
+  committed.sets[0].tiebreak.pointsP1 === 7 && committed.sets[0].tiebreak.pointsP2 === 5 &&
+  committed.sets[1].gamesP1 === 6 && committed.sets[1].gamesP2 === 1,
+  '6×5 (TB 7×5), 6×1 salva dois sets e vencedor 2×0');
+fields['s1-' + mid + '-1'].value = '65';
+committed = null; alert = '';
+W._saveInitialBestOfThreeFromCard(tour.id, mid, tour, tour.matches[0], scoring);
+ok(committed === null && alert.includes('2º set') && alert.includes('65×1'),
+  '65×1 no 2º set não grava e avisa coluna e placar exatos');
+W.AppStore.tournaments = [tour];
+W._collectAllMatches = (t) => t.matches;
+W._effectiveScoring = (t) => t.scoring;
+alert = '';
+W._warnGrossSetScore(mid, 1);
+ok(alert.includes('2º set') && alert.includes('65×1'),
+  'aviso ao sair do campo também identifica 2º set e 65×1');
+
 console.log('  ' + pass + ' asserts OK, ' + fail + ' falhas');
 if (fail > 0) { console.error('❌ tiebreak-set-score FALHOU'); process.exit(1); }
 console.log('✅ tiebreak-set-score: OK');

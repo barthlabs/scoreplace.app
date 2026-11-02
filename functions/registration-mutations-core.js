@@ -115,6 +115,7 @@ function pair(tournamentId, registrations, registrationIds) {
   const entries = ids.map((id) => byId.get(id));
   if (entries.some((item) => !item)) throw new Error('inscrição não encontrada');
   if (entries[0].categoryId !== entries[1].categoryId) throw new Error('dupla exige a mesma categoria');
+  if (entries[0].status !== entries[1].status) throw new Error('dupla exige inscrições no mesmo status');
   if (entries.some((item) => !payment.canPair(item))) throw new Error('inscrição sem status elegível para dupla');
   if (entries.some((item) => item.fixedPairId)) throw new Error('inscrição já pertence a uma dupla');
   const fixedPairId = canonicalPairId(tournamentId, entries[0].categoryId, ids);
@@ -189,7 +190,18 @@ function withdraw(tournamentId, registrations, participant) {
 }
 
 function leaveWaitlist(tournamentId, registrations, participant) {
-  return transitionStatus(tournamentId, registrations, participant, ['waitlisted'], 'withdrawn');
+  const byId = indexRegistrations(tournamentId, registrations);
+  const key = participantKey(participant || {});
+  const mine = Array.from(byId.values()).filter(item => item.participantKey === key && item.status === 'waitlisted');
+  if (!mine.length) return { outcome: 'notFound', updates: [] };
+  const pairIds = new Set(mine.map(item => text(item.fixedPairId)).filter(Boolean));
+  const mineIds = new Set(mine.map(item => item.registrationId));
+  const updates = Array.from(byId.values()).filter(item => mineIds.has(item.registrationId) ||
+    (item.fixedPairId && pairIds.has(item.fixedPairId))).map(item => Object.assign({}, item, {
+    status: mineIds.has(item.registrationId) ? 'withdrawn' : item.status,
+    fixedPairId: null,
+  }));
+  return { outcome: 'changed', updates };
 }
 
 /* Trocar categoria não pode reescrever a projeção `participants`: categoryId faz

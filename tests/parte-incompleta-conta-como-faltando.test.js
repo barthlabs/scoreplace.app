@@ -136,7 +136,7 @@ console.log('\n⑤ a ORIGEM do pedaço solto: mutateTournament não devolve part
 {
   const db = fs.readFileSync(path.join(RAIZ, 'js', 'firebase-db.js'), 'utf8');
   const i = db.indexOf('async mutateTournament(');
-  const j = db.indexOf('\n  // ── PLACAR POR JOGO EM DOC PRÓPRIO', i);
+  const j = db.indexOf('\n  // E05: o placar vem do mesmo documento físico', i);
   const corpo = db.slice(i, j === -1 ? i + 12000 : j);
   ok(/_tSplit\.dividir\(/.test(corpo),
     '⭐ mutateTournament DIVIDE antes de gravar (era daqui que vinha o jogo solto no doc)');

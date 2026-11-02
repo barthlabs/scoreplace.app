@@ -182,6 +182,13 @@ do_main() {
   local all targets
   all="$(targets_cjs "$ROOT/functions/index.js" 'functions:')"
   targets="$(selected_targets "$all" 'functions:')" || return $?
+  # E05 aposentou a projeção de results. A flag do reconciliador antigo fica
+  # false de propósito e não pode bloquear o gatilho de roster/W.O. que sobrou.
+  # Antes de alvejá-lo, provar no código ativo que não há escritor de espelho.
+  if [[ ",$targets," == *",functions:syncMatchRosters,"* ]]; then
+    node "$ROOT/tests/espelho-results-segue-jogo-dividido.test.js" >/dev/null ||
+      die "E05: gatilho de roster não passou na guarda de fonte física única"
+  fi
   deploy_dir "$ROOT" "$targets" \
     "principal (functions/)" "$ROOT/functions"
   # O Hosting novo delega o aviso e o aceite ao servidor. Só carimbe após

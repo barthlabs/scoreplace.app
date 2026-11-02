@@ -1652,8 +1652,13 @@ function _loadAndRenderFriendStats(friendUid, hr) {
     );
   };
 
-  window.FirestoreDB.loadUserMatchHistory(myUid, { limit: 200 })
+  window.FirestoreDB.loadScoreplaceMatchHistory(myUid)
     .then(function(history) {
+      if (history === null) {
+        var privateStats = document.getElementById('friend-stats-section');
+        if (privateStats) privateStats.innerHTML = '<div style="font-size:0.75rem;color:var(--text-muted);text-align:center;font-style:italic;">Histórico privado</div>';
+        return;
+      }
       var shared = history.filter(function(r) {
         return Array.isArray(r.playerUids) && r.playerUids.indexOf(friendUid) !== -1;
       });

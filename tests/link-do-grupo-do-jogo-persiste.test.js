@@ -322,8 +322,8 @@ const jogoDoDoc = (b, id) => (b.doc.rounds[0].matches || []).find((m) => m && m.
     const txFalso = { get: async () => ({ docs: regs.map((r) => ({ id: S.chaveDoRegistro(r), data: () => r })) }) };
     const refFalso = { collection: () => ({}) };
     const viaHidratar = await SP.hidratar(txFalso, refFalso, clone(cfg));
-    ok('⛔ `hidratar` devolve o torneio com ZERO jogos (rounds[0].matches vazio)',
-      (viaHidratar.rounds[0].matches || []).length === 0,
+    ok('⭐ `hidratar` remonta os 6 jogos em rounds[0].matches',
+      (viaHidratar.rounds[0].matches || []).length === 6,
       'MEDIDO: ' + JSON.stringify(viaHidratar.rounds[0].matches));
     const viaMontar = await S.montarDoBanco(clone(cfg), async () => regs);
     ok('⭐ `montarDoBanco` devolve os 6 jogos no lugar certo — é ele que a porta usa',
@@ -435,7 +435,8 @@ const jogoDoDoc = (b, id) => (b.doc.rounds[0].matches || []).find((m) => m && m.
     // ⚠️ A ARMADILHA, tornada visível: o torneio MONTADO tem os grupos de volta dentro de
     // `rounds`. Gravar `rounds` a partir DELE devolveria os 2 grupos pro documento — este
     // teste só distingue as duas implementações porque a diferença é medível aqui.
-    const montado = await S.montarDoBanco(clone(BANCO.doc), async () => p2.grupos);
+    const montado = await S.montarDoBanco(clone(BANCO.doc), async (_colecao, nome) =>
+      nome === 'grupos' ? p2.grupos : []);
     ok('  ⚠️ e o torneio MONTADO tem os 2 grupos dentro de `rounds` (é o que não pode voltar)',
       (montado.rounds[0].monarchGroups || []).length === 2);
     await chamar('uA', { tournamentId: 'T1', matchId: 'g0-1', link: LINK('1'), operationId: UUID(1) });

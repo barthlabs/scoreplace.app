@@ -30,6 +30,22 @@ const ler = (p) => fs.readFileSync(path.join(RAIZ, p), 'utf8');
  * as `rules-*` disputam as portas 8098/8099 e TODAS usam o projeto `demo-scoreplace`, ou
  * seja, os dados se misturariam. Rodadas em série, como aqui, não colidem. */
 const EMULADOR_MANUAL = {
+  'tests/e05-sandbox-replay-emulator.test.js':
+    'node tests/e05-sandbox-replay-emulator.test.js',
+  'tests/e05-wo-patch-replay-emulator.test.js':
+    'node tests/e05-wo-patch-replay-emulator.test.js',
+  'tests/e07-atribuir-fase-emulator.test.js':
+    'node scripts/rodar-emulador.js --only firestore --config firebase.emulator.json --project demo-scoreplace "node tests/e07-atribuir-fase-emulator.test.js"',
+  'tests/e05-aplicador-jogos-inline-emulator.test.js':
+    'node scripts/rodar-emulador.js --only firestore --config firebase.emulator.json --project demo-scoreplace "node tests/e05-aplicador-jogos-inline-emulator.test.js"',
+  'tests/aplicar-indice-canonico-e08-emulator.test.js':
+    'node scripts/rodar-emulador.js --only firestore --config firebase.emulator.json --project demo-scoreplace "node tests/aplicar-indice-canonico-e08-emulator.test.js"',
+  'tests/aplicar-pares-e05-emulator.test.js':
+    'node scripts/rodar-emulador.js --only firestore --config firebase.emulator.json --project demo-scoreplace "node tests/aplicar-pares-e05-emulator.test.js"',
+  'tests/e05-historico-aplicador-emulator.test.js':
+    'node scripts/rodar-emulador.js --only firestore --config firebase.emulator.json --project demo-scoreplace "node tests/e05-historico-aplicador-emulator.test.js"',
+  'tests/phase-rest-transaction-emulator.test.js':
+    'node tests/phase-rest-transaction-emulator.test.js',
   'tests/neon-emulator-copy.test.js':
     'NEON_BACKUP_PATH=/caminho/absoluto/para/backup.json node tests/neon-emulator-copy.test.js',
   'tests/neon-sandbox-capacity.test.js':
@@ -38,8 +54,8 @@ const EMULADOR_MANUAL = {
     'NEON_BACKUP_PATH=/caminho/absoluto/para/backup.json node tests/neon-sandbox-schedule-replay.test.js',
   'tests/migrar-inscricoes-admin-emulator.test.js':
     'node tests/migrar-inscricoes-admin-emulator.test.js',
-  'functions/test-backfill-emu.js':
-    'firebase emulators:exec --only functions,firestore --project demo-scoreplace "node functions/test-backfill-emu.js"',
+  /* O teste do endpoint backfillMatchResultDocs, já removido, está preservado em
+   * docs/testes-aposentados/backfill-match-result-docs-emu.js.txt. */
   'functions/test-syncroster-emu.js':
     'firebase emulators:exec --only functions,firestore --project demo-scoreplace "node functions/test-syncroster-emu.js"',
   /* ⭐ A marca da categoria, nos DOIS codebases. O do principal sobe também o `auth` (as
@@ -63,6 +79,8 @@ const EMULADOR_MANUAL = {
     'cd functions-autodraw && firebase emulators:exec --only functions,firestore,auth --config firebase.emulator.json --project demo-scoreplace "node test-reconciliacao-marca-emu.js"',
   'functions-autodraw/test-canonical-sandbox-emu.js':
     'npm run test:emu:autodraw',
+  'functions-autodraw/test-result-visibility-emu.js':
+    'cd functions-autodraw && firebase emulators:exec --only functions,firestore,auth --config firebase.emulator.json --project demo-scoreplace "node test-result-visibility-emu.js"',
   'functions/test-pair-replicate.js':
     'firebase emulators:exec --only firestore --config firebase.emulator.json --project demo-scoreplace "FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 node functions/test-pair-replicate.js"',
   'functions/test-sandbox-replicate.js':

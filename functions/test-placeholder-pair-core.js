@@ -1,25 +1,29 @@
 'use strict';
 
-const assert = require('assert');
+const assert = require('node:assert/strict');
 const R = require('./registration-core');
 const B = require('./canonical-registration-boundary-core');
-const M = require('./registration-mutations-core');
 
 const tid = 't-placeholder';
-const categoryId = R.UNCATEGORIZED_CATEGORY_ID;
-assert.strictEqual(categoryId, '__uncategorized__');
-const a = { participantKey: 'manual:placeholder-a', manualParticipantId: 'placeholder-a' };
-const b = { participantKey: 'manual:placeholder-b', manualParticipantId: 'placeholder-b' };
-const idA = R.registrationId(a.participantKey, categoryId);
-const idB = R.registrationId(b.participantKey, categoryId);
-const pairId = M.canonicalPairId(tid, categoryId, [idA, idB]);
-const tournament = { id: tid, canonicalRegistrationMigration: { fingerprint: 'fp', registrationCount: 0 } };
-const creates = [
-  { registrationId: idA, tournamentId: tid, categoryId, participantKey: a.participantKey, participantKind: 'manual', participantUid: null, manualParticipantId: a.manualParticipantId, manualDisplayName: 'Jogador 01', status: 'confirmed', validationState: 'approved', fixedPairId: pairId },
-  { registrationId: idB, tournamentId: tid, categoryId, participantKey: b.participantKey, participantKind: 'manual', participantUid: null, manualParticipantId: b.manualParticipantId, manualDisplayName: 'Jogador 02', status: 'confirmed', validationState: 'approved', fixedPairId: pairId },
+const reservations = [
+  { manualParticipantId: 'placeholder-a', displayName: 'Jogador 01', isPlaceholder: true },
+  { manualParticipantId: 'placeholder-b', displayName: 'Jogador 02', isPlaceholder: true },
 ];
-const out = B.applyCreates(tournament, [], creates);
-assert.strictEqual(out.tournament.canonicalRegistrationMigration.registrationCount, 2);
-assert.strictEqual(out.registrations.length, 2);
-assert.deepStrictEqual(out.registrations.map((x) => x.fixedPairId), [pairId, pairId]);
-console.log('✓ placeholders sem categoria formam uma dupla canônica com a sentinela estrutural');
+const tournament = { id: tid, placeholderReservations: reservations,
+  canonicalRegistrationMigration: { fingerprint: 'fp', registrationCount: 0 } };
+const empty = B.verifiedRoster(tournament, []);
+assert.deepEqual(empty.participants, [], 'reservas sem categoria não são elenco inscrito');
+assert.equal(empty.migration.expectedCount, 0, 'reservas não avançam o recibo');
+assert.deepEqual(tournament.placeholderReservations, reservations, 'reservas continuam separadas');
+
+const real = { registrationId: R.registrationId('manual:real-a', 'a'), tournamentId: tid,
+  categoryId: 'a', participantKey: 'manual:real-a', participantKind: 'manual',
+  manualParticipantId: 'real-a', manualDisplayName: 'Inscrito manual',
+  status: 'confirmed', validationState: 'approved', fixedPairId: null };
+const added = B.applyCreates(tournament, [], [real]);
+assert.equal(added.registrations.length, 1, 'inscrição manual real recebe documento próprio');
+assert.equal(added.tournament.canonicalRegistrationMigration.registrationCount, 1);
+assert.equal(added.participants.length, 1);
+assert.deepEqual(added.tournament.placeholderReservations, reservations,
+  'inscrição real não altera reservas existentes');
+console.log('✓ reserva permanece fora de registrations e da projeção; inclusão real avança recibo');

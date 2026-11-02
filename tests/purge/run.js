@@ -88,6 +88,8 @@ const mh = (uid, rid) => db.collection('users').doc(uid).collection('matchHistor
   // a enumeração cobre o que ainda nem existe.
   await db.collection('tournaments').doc(TID).collection('coisaNovaQueNinguemDeclarou').doc('x')
     .set({ ok: true });
+  const fenceRef = db.collection('tournaments').doc(TID).collection('resultVisibilityFence').doc('state');
+  await fenceRef.set({ revision: 1 });
   await db.collection('tournaments').doc(OUTRO).collection('participants').doc('u-ana')
     .set({ uid: 'u-ana', status: 'enrolled' });
 
@@ -147,6 +149,16 @@ const mh = (uid, rid) => db.collection('users').doc(uid).collection('matchHistor
   ok((await sub('communications')).size === 0, 'comunicados do organizador SUMIRAM');
   ok((await sub('coisaNovaQueNinguemDeclarou')).size === 0,
      'subcoleção que NENHUMA lista declara sumiu — a enumeração cobre o que nem existe ainda');
+  ok(!(await existe(fenceRef)), 'fence da privacidade sumiu após exclusão da raiz');
+  const lateWriter = await db.runTransaction(async tx => {
+    const root = await tx.get(db.collection('tournaments').doc(TID));
+    if (!root.exists) return 'missing-root';
+    await tx.get(fenceRef);
+    tx.set(fenceRef, { revision: admin.firestore.FieldValue.increment(1) }, { merge: true });
+    return 'written';
+  });
+  ok(lateWriter === 'missing-root' && !(await existe(fenceRef)),
+    'escritor atrasado não recria fence órfão depois da exclusão');
 
   const n = (u, id) => db.collection('users').doc(u).collection('notifications').doc(id);
   ok(!(await existe(n('u-ana', 'n-alvo'))),  'notificação do torneio SUMIU');

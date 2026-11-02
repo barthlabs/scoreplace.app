@@ -67,12 +67,14 @@ ok(/for \(var p = pIni \+ 1; _incremental && p <= maxPage && !C\.complete; p\+\+
 {
   const app = require('fs').readFileSync(
     require('path').join(__dirname, '..', 'js', 'views', 'tournaments-enrollment-report.js'), 'utf8');
-  // `meNome` entrou na assinatura em 01/ago/2026: é por ele que se sabe de que LADO a
-  // pessoa jogou (o doc de placar nunca teve p1Uids/p2Uids).
+  // `meNome` continua na assinatura para apresentação. O lado pessoal vem dos
+  // UIDs estruturais do jogo físico; nome não identifica homônimos.
   ok(/function _lzJogosDoScoreplace\(uid, meNome\)/.test(app), 'existe a fonte alternativa: os documentos de placar');
   const fn = app.slice(app.indexOf('function _lzJogosDoScoreplace'), app.indexOf('function _lzJuntarScoreplace'));
-  ok(/collectionGroup\('results'\)/.test(app), 'lê os documentos de placar, onde o placar realmente mora');
-  ok(/where\('playerUids', 'array-contains', uid\)/.test(app), 'e identifica a pessoa por uid, não por nome');
+  ok(/FirestoreDB\.loadMyMatchResults\(uid\)/.test(fn),
+    'lê os placares pela porta paginada que valida cada torneio');
+  ok(/_lzItemDeResult\(raw, uid, meNome\)/.test(fn),
+    'identifica o lado pelo uid ao converter cada placar, não apenas pelo nome');
   ok(/source: 'scoreplace'/.test(fn), 'os itens saem com a fonte marcada (a tag do card)');
   const juntar = app.slice(app.indexOf('function _lzJuntarScoreplace'), app.indexOf('function _lzJuntarScoreplace') + 900);
   ok(/proprio &&/.test(juntar), 'pro próprio usuário segue usando o matchHistory (mais completo, inclui casuais)');
@@ -110,38 +112,36 @@ ok(/for \(var p = pIni \+ 1; _incremental && p <= maxPage && !C\.complete; p\+\+
     'e o rótulo só é desenhado quando há valor');
 }
 
-// ── OS PLACARES TÊM DOIS CAMINHOS ──────────────────────────────────────────────────────
-// 01/ago/2026: a ficha mostrava "Torneios 0 · Rankings 0 · Jogos 0" pra gente que jogou
-// torneio de teste com o dono. Duas causas empilhadas, as duas medidas no banco real:
-//   1) regra ANINHADA não vale pra collection group → permission-denied sempre;
-//   2) collection group com array-contains exige índice COLLECTION_GROUP_CONTAINS.
-// Um caminho só, que depende de duas coisas que faltavam, é caminho nenhum.
+// ── HISTÓRICO: UMA PORTA PAGINADA, SEM FALLBACK LOCAL ───────────────────────────────
+// O leitor antigo fazia collection group e uma leitura por torneio. A substituição deve
+// manter o resultado completo sem depender de uma regra global de leitura nem devolver
+// uma lista parcial silenciosa quando a porta do servidor falhar.
 {
   const app = require('fs').readFileSync(
     require('path').join(__dirname, '..', 'js', 'views', 'tournaments-enrollment-report.js'), 'utf8');
   const fn = app.slice(app.indexOf('function _lzItemDeResult'), app.indexOf('// ── PARTIDAS CASUAIS'));
-  ok(/collection\('tournaments'\)\.doc\(t\.id\)\.collection\('results'\)/.test(fn),
-     'caminho A: por torneio já carregado — sem índice, cobre quem jogou comigo');
-  ok(/collectionGroup\('results'\)/.test(fn), 'caminho B: collection group pro resto');
-  ok((fn.match(/\.catch\(/g) || []).length >= 2, 'um caminho que falha não derruba o outro');
-  ok(/if \(vistos\[k\]\) return;/.test(fn), 'e o que vier dos dois é unido sem duplicar');
+  ok(/FirestoreDB\.loadMyMatchResults\(uid\)/.test(fn),
+     'a ficha usa a porta paginada do servidor');
+  ok(!/collectionGroup\('results'\)/.test(fn) && !/\.collection\('results'\)\.get\(/.test(fn),
+     'a ficha não contorna a validação da raiz com leitura direta');
+  ok(/Promise\.reject\(new Error\('Leitor de histórico indisponível'\)\)/.test(fn),
+     'sem leitor a ficha falha explicitamente, não inventa lista vazia');
+  ok(!/\.catch\(/.test(fn), 'falha do servidor não vira sucesso parcial');
   // ⚠️ REGRA REVOGADA PELO DONO em 01/ago/2026. Aqui se exigia `if (meu < 0) meu = 0;` —
   // "melhor um card sem V/D do que sumir com o jogo". Na prática esse chute fazia a Lucia
   // Helena aparecer como ADVERSÁRIA DELA MESMA e pintava um 6×1 dela de derrota (medido
   // nos 10 docs reais dela; ver tests/jogo-so-com-placar.test.js). Card que mente é pior
-  // que card que não existe: _"isso não pode ocorrer"_. Agora o lado sai do uid do slot,
-  // depois do nome, e sem isso o jogo não é mostrado.
+  // que card que não existe: _"isso não pode ocorrer"_. Agora o lado sai apenas do UID
+  // estrutural do jogo físico; sem isso o resultado pessoal não é mostrado.
   ok(/if \(meu < 0\) return null;/.test(fn),
      'sem saber de que lado a pessoa jogou, o jogo NÃO é mostrado (o chute mentia)');
 
-  const rules = require('fs').readFileSync(require('path').join(__dirname, '..', 'firestore.rules'), 'utf8');
-  ok(/match \/\{path=\*\*\}\/results\/\{matchId\}/.test(rules),
-     'as regras têm o match de collection group (o aninhado não serve)');
-  const idx = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, '..', 'firestore.indexes.json'), 'utf8'));
-  const fo = (idx.fieldOverrides || []).find(f => f.collectionGroup === 'results' && f.fieldPath === 'playerUids');
-  ok(!!fo, 'e existe o override de índice pro campo playerUids');
-  ok(!!fo && fo.indexes.some(i => i.queryScope === 'COLLECTION_GROUP' && i.arrayConfig === 'CONTAINS'),
-     'com escopo COLLECTION_GROUP e arrayConfig CONTAINS');
+  const db = require('fs').readFileSync(require('path').join(__dirname, '..', 'js', 'firebase-db.js'), 'utf8');
+  const leitor = db.slice(db.indexOf('async loadMyMatchResults('), db.indexOf('// Atomic enrollment', db.indexOf('async loadMyMatchResults(')));
+  ok(/getTournamentResultHistoryPage/.test(leitor), 'a porta paginada é a única fonte de resultados');
+  ok(/if \(!reply \|\| !Array\.isArray\(reply\.items\)\)/.test(leitor),
+     'resposta inválida não passa como página vazia');
+  ok(/seen\[reply\.cursor\]/.test(leitor), 'cursor repetido reprova em vez de entrar em laço');
 }
 
 console.log((fail ? '✗' : '✓') + ' lz-incremental-history: ' + pass + ' passaram, ' + fail + ' falharam');

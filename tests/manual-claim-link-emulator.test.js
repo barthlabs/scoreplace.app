@@ -115,18 +115,16 @@ async function driver() {
   assert.equal(publishedAfter.team1Obj.p1ManualId, undefined);
   assert.equal(publishedAfter.court, '7');
   assert.equal(publishedAfter.scheduledAt, '2026-10-22T18:00:00Z');
+  const physicalAfter = (await db.doc('tournaments/' + tid + '/matches/published').get()).data();
+  assert(physicalAfter.playerUids.includes('anna-claim'));
   const claimedPreview = await call('previewTournamentClaimLink', { tournamentId: tid, token: originalLink.token, sandbox: false });
   assert.equal(claimedPreview.alreadyRegistered, true);
   await assert.rejects(call('acceptTournamentClaimLink', {
     tournamentId: tid, token: originalLink.token, sandbox: false, manualParticipantId: 'a',
   }));
-  let resultAfter;
-  for (let attempt = 0; attempt < 30; attempt++) {
-    resultAfter = (await db.doc('tournaments/' + tid + '/results/published').get()).data();
-    if (resultAfter && resultAfter.playerUids.includes('anna-claim')) break;
-    await new Promise((resolve) => setTimeout(resolve, 200));
-  }
-  assert(resultAfter.playerUids.includes('anna-claim'));
+  const resultAfter = (await db.doc('tournaments/' + tid + '/results/published').get()).data();
+  assert.deepEqual(resultAfter, { matchId: 'published', playerUids: [], winner: null },
+    'o espelho histórico não é regravado pelo vínculo canônico');
   assert.equal((await db.collectionGroup('notifications').get()).size, notificationCountBefore);
   assert.equal((await db.collection('mail').get()).size, mailCountBefore);
   const participantSnapshot = await db.collection('tournaments/' + tid + '/inscritos').get();

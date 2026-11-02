@@ -2,7 +2,7 @@
 // Extraída da CF pra ser testável (o código que roda em prod é ESTE), igual reminder-run.
 //
 // O que faz, por torneio não encerrado:
-//   • lê os placares (subcoleção `results`) e monta { comPlacar, primeiro, ultimo };
+//   • lê os placares dos jogos físicos e monta { comPlacar, primeiro, ultimo };
 //   • pergunta ao núcleo o que fazer;
 //   • 'avisar'   → notifica o ORGANIZADOR (e co-hosts) 48h antes, uma única vez;
 //   • 'encerrar' → grava status finished + `autoClosed`, e avisa que dá pra reabrir;
@@ -13,6 +13,7 @@
 // CLASSIFICAÇÃO NÃO FOI FECHADA (sem pódio, sem troféu, sem título) — regra do dono:
 // _"encerrar não deve fechar a classificação"_.
 const _core = require("./abandon-core");
+const { collectMatches } = require("./match-roster");
 
 function _uidsDoDono(t) {
   var out = [];
@@ -26,21 +27,37 @@ function _uidsDoDono(t) {
   return out;
 }
 
-async function _placaresDe(db, tId) {
+async function _placaresDe(db, tId, t) {
   var out = { comPlacar: 0, primeiro: null, ultimo: null };
+  // Uma raiz ainda com jogos inline não prova que a coleção física está completa.
+  if (collectMatches(t).length) return null;
   var snap;
-  try { snap = await db.collection("tournaments").doc(tId).collection("results").get(); }
-  catch (e) { console.warn("[abandono] results de", tId, e && e.message); return out; }
+  try { snap = await db.collection("tournaments").doc(tId).collection("matches").get(); }
+  catch (e) { console.warn("[abandono] matches de", tId, e && e.message); return null; }
+  var n = snap.size;
+  var nJogos = t._nJogos;
+  var nPartes = t._nPartes && t._nPartes.matches;
+  if (nJogos == null && nPartes == null ? n !== 0 :
+      (nJogos != null && (!Number.isSafeInteger(nJogos) || nJogos !== n)) ||
+      (nPartes != null && (!Number.isSafeInteger(nPartes) || nPartes !== n))) return null;
+  var indeterminado = false;
   snap.forEach(function (d) {
-    var r = d.data() || {};
+    var reg = d.data();
+    if (!reg || reg._chave !== d.id || !reg._loc || typeof reg._loc !== 'object' ||
+        !reg._loc.tipo || !reg.jogo || typeof reg.jogo !== 'object' ||
+        reg.jogo.id == null || String(reg.jogo.id) === '') {
+      indeterminado = true;
+      return;
+    }
+    var r = reg.jogo;
     if (r.scoreP1 == null || r.scoreP2 == null) return;   // sem placar não é jogo jogado
+    var ms = _core.msDe(r.resultAt);
+    if (!ms) { indeterminado = true; return; }
     out.comPlacar++;
-    var ms = _core.msDe(r.resultAt) || _core.msDe(r.updatedAt);
-    if (!ms) return;
     if (!out.primeiro || ms < out.primeiro) out.primeiro = ms;
     if (!out.ultimo || ms > out.ultimo) out.ultimo = ms;
   });
-  return out;
+  return indeterminado ? null : out;
 }
 
 async function _notificar(db, uids, tId, t, tipo, msg, nowMs) {
@@ -73,14 +90,16 @@ async function runAbandonSweep(db, nowMs) {
   try { snap = await db.collection("tournaments").get(); }
   catch (e) { console.error("[abandono] query falhou:", e && e.message); return { erro: e && e.message }; }
 
-  var avisados = 0, encerrados = 0, foraDaVitrine = 0, notifs = 0;
+  var avisados = 0, encerrados = 0, foraDaVitrine = 0, notifs = 0, indeterminados = 0;
   for (var i = 0; i < snap.docs.length; i++) {
     var doc = snap.docs[i];
     var t = doc.data() || {};
     if (t.status === "finished") continue;
     if (t.isSandbox === true) continue;
+    if (_core.ehLiga(t)) continue;
 
-    var placares = await _placaresDe(db, doc.id);
+    var placares = await _placaresDe(db, doc.id, t);
+    if (!placares) { indeterminados++; console.warn('[abandono] fonte física indeterminada:', doc.id); continue; }
     var r = _core.computeAbandon(t, placares, nowMs);
 
     if (r.acao === "foraDaVitrine") { foraDaVitrine++; continue; }   // leitura, não escrita
@@ -117,9 +136,10 @@ async function runAbandonSweep(db, nowMs) {
     }
   }
   console.log("[abandono] varridos=" + snap.size + " avisados=" + avisados +
-              " encerrados=" + encerrados + " foraDaVitrine=" + foraDaVitrine + " notifs=" + notifs);
+              " encerrados=" + encerrados + " foraDaVitrine=" + foraDaVitrine +
+              " indeterminados=" + indeterminados + " notifs=" + notifs);
   return { varridos: snap.size, avisados: avisados, encerrados: encerrados,
-           foraDaVitrine: foraDaVitrine, notifs: notifs };
+           foraDaVitrine: foraDaVitrine, indeterminados: indeterminados, notifs: notifs };
 }
 
-module.exports = { runAbandonSweep, _uidsDoDono: _uidsDoDono };
+module.exports = { runAbandonSweep, _uidsDoDono: _uidsDoDono, _placaresDe: _placaresDe };

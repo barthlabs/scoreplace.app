@@ -1366,8 +1366,15 @@ window._preloadUserProfiles = function (uids) {
   }
   toLoad.forEach(function (uid) {
     var pr = db.collection(COL).doc(uid).get().then(function (s) {
-      var d = (s && s.exists) ? (s.data() || {}) : {};
-      window._userProfileCache[uid] = {
+      if (s && s.exists && s.data() && s.data().mergedInto && typeof window._userVivo === 'function') {
+        return Promise.resolve(window._userVivo(s, { publico: true })).then(function (v) {
+          return v || { uid: uid, data: s.data() || {} };
+        });
+      }
+      return { uid: uid, data: (s && s.exists) ? (s.data() || {}) : {} };
+    }).then(function (resolved) {
+      var d = (resolved && resolved.data) || {};
+      var profile = {
         displayName: d.displayName || d.name || '',
         phone: '',
         photoURL: d.photoURL || '',
@@ -1379,6 +1386,8 @@ window._preloadUserProfiles = function (uids) {
         birthDate: d.birthDate || '',
         defaultCategory: d.defaultCategory || ''
       };
+      window._userProfileCache[uid] = profile;
+      if (resolved && resolved.uid && resolved.uid !== uid) window._userProfileCache[resolved.uid] = profile;
     }).catch(function (e) {
       window._preloadFalhas = (window._preloadFalhas || 0) + 1;
       if (window._preloadFalhas <= 2 && typeof window._captureMessage === 'function') {
@@ -1433,6 +1442,47 @@ window._genderForUid = function (uid) { var p = uid && window._userProfileCache[
 window._birthForUid = function (uid) { var p = uid && window._userProfileCache[uid]; return (p && p.birthDate) || ''; };
 window._skillMapForUid = function (uid) { var p = uid && window._userProfileCache[uid]; return (p && p.skillBySport) || null; };
 window._defaultCatForUid = function (uid) { var p = uid && window._userProfileCache[uid]; return (p && p.defaultCategory) || ''; };
+// Foto de pessoa identificada vem somente do perfil público carregado pelo UID.
+// _preloadUserProfiles já projeta o perfil vivo sobre UIDs antigos com mergedInto.
+window._profilePhotoForUid = function (uid) {
+  var p = uid && window._userProfileCache && window._userProfileCache[uid];
+  var url = p && p.photoURL;
+  return url && String(url).indexOf('dicebear.com') === -1 ? url : '';
+};
+window._refreshPersonPhotos = function (root) {
+  if (!root || !root.querySelectorAll) return;
+  root.querySelectorAll('img[data-uid-photo]').forEach(function (img) {
+    var uid = img.getAttribute('data-uid-photo');
+    if (!uid) return;
+    var nm = (typeof window._nameForUid === 'function' && window._nameForUid(uid)) || img.getAttribute('data-player-name') || '';
+    if (!nm) { img.removeAttribute('src'); return; }
+    var photo = window._profilePhotoForUid(uid);
+    var src = window._profileAvatarUrl(nm, photo, 48);
+    if (img.getAttribute('src') !== src) img.src = src;
+    img.setAttribute('data-player-name', nm);
+  });
+};
+window._cacheSavedOwnProfile = function (uid, name, photoURL) {
+  if (!uid) return;
+  window._savedProfileCacheGen = window._savedProfileCacheGen || {};
+  var gen = (window._savedProfileCacheGen[uid] || 0) + 1;
+  window._savedProfileCacheGen[uid] = gen;
+  var apply = function () {
+    if (window._savedProfileCacheGen[uid] !== gen) return;
+    window._userProfileCache = window._userProfileCache || {};
+    window._userProfileCache[uid] = Object.assign({}, window._userProfileCache[uid] || {}, {
+      displayName: name || '', photoURL: photoURL || ''
+    });
+    window._profileNameByUid = window._profileNameByUid || {};
+    if (name) window._profileNameByUid[uid] = name;
+    else delete window._profileNameByUid[uid];
+    if (typeof window._bumpProfileEpoch === 'function') window._bumpProfileEpoch();
+  };
+  // Leitura antiga em voo não pode repor a foto anterior depois do save.
+  var pending = window._userProfilePending && window._userProfilePending[uid];
+  apply();
+  if (pending && typeof pending.then === 'function') pending.then(apply, apply);
+};
 // v1.3.39: resolvedores PERFIL-FIRST por participante — o app lê gênero/idade/skill/
 // categoria-padrão pelo UID (perfil), FALLBACK pro campo gravado só enquanto a migração
 // "gravar só uid" não termina. Swap 1:1 nos leitores: p.gender→_pGender(p), etc. Meta:
@@ -1551,13 +1601,13 @@ window._hydrateUidNames = function (root) {
       if (!nm) return;                       // sem nome ainda: fica sem icone, nao com um errado
       // a FOTO REAL vem do mesmo cache que o `_preloadUserProfiles` acabou de
       // encher — sem isto quem tem foto no perfil cairia nas iniciais.
-      var perfil = window._userProfileCache && window._userProfileCache[u];
-      var foto = perfil && perfil.photoURL;
+      var foto = window._profilePhotoForUid(u);
       e.src = (typeof window._profileAvatarUrl === 'function')
         ? window._profileAvatarUrl(nm, foto, 48)
         : ('https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(nm) +
            '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf');
       e.setAttribute('data-player-name', nm);
+      e.setAttribute('data-uid-photo', u); // identidade estável para swaps posteriores
       e.removeAttribute('data-uid-avatar');  // resolvido: nao volta na proxima passada
     });
     // A BUSCA também congela: `data-players` é o que o filtro varre, e ele foi escrito
@@ -6269,18 +6319,10 @@ window._avatarUrl = function(name, size) {
 window._personAvatarHtml = function (uid, name, css, extraAttrs) {
     var nm = String(name || '');
     var semNomeAinda = !nm && !!uid;
-    var foto = null;
-    try {
-        var perfil = uid && window._userProfileCache && window._userProfileCache[uid];
-        if (perfil && perfil.photoURL) foto = perfil.photoURL;
-        if (!foto && nm && window._playerPhotoCache) {
-            var c = window._playerPhotoCache[nm.toLowerCase()];
-            if (c && String(c).indexOf('dicebear.com') === -1) foto = c;
-        }
-    } catch (e) { foto = null; }
+    var foto = uid && window._profilePhotoForUid ? window._profilePhotoForUid(uid) : '';
     // sem nome AINDA → src vazio (sem círculo mudo); a hidratação preenche pelo uid
     var src = semNomeAinda ? '' : window._profileAvatarUrl(nm, foto, 48);
-    var marcador = uid ? (' data-uid-avatar="' + window._safeHtml(String(uid)) + '"') : '';
+    var marcador = uid ? (' data-uid-avatar="' + window._safeHtml(String(uid)) + '" data-uid-photo="' + window._safeHtml(String(uid)) + '"') : '';
     return '<img src="' + window._safeHtml(src) + '"' + marcador +
         ' data-player-name="' + window._safeHtml(nm) + '"' +
         (extraAttrs || '') + ' style="' + (css || '') + '" />';
@@ -12177,6 +12219,10 @@ window.AppStore = {
         var _d = (_res && _res.data) || {};
         if (_d.ok) {
           _viaCF = true;
+          // Uma hidratação iniciada antes deste commit não pode repor o placar velho.
+          this._resultReadEpochs = this._resultReadEpochs || {};
+          this._resultReadEpochs[String(tournamentId)] =
+            (this._resultReadEpochs[String(tournamentId)] || 0) + 1;
           var _canonicalApplied = false;
           // Sincroniza o local com o que o servidor gravou (mesmo padrão do drawRound):
           // o listener também traria, mas esperar por ele deixaria a tela atrás do save.
@@ -12195,36 +12241,65 @@ window.AppStore = {
               _canonicalApplied = true;
               var _statusBeforeResult = _lt.status;
               Object.keys(_d.tournament).forEach(function (k) { _lt[k] = _d.tournament[k]; });
-              /* A callable confirma a transação, mas a fronteira leve do torneio não
-               * carrega o resultado de cada jogo. O card não pode voltar a desenhar o set
-               * anterior enquanto espera o ouvinte: depois de uma confirmação o usuário pode
-               * lançar de novo achando que falhou. A saída é ler O DOCUMENTO CANÔNICO que a
-               * própria CF acabou de gravar (`results/{matchId}`), sempre com source:server.
-               * Não reaplicamos payload, não calculamos vencedor e não avançamos chave no
-               * cliente: só espelhamos campos que o servidor já confirmou. */
+              /* A callable confirma a transação. O card relê o jogo físico que ela
+               * gravou, sem derivar placar do payload nem consultar `results`. */
               var _midConfirmado = String(matchId);
-              if (window.FirestoreDB && typeof window.FirestoreDB.loadMatchResult === 'function') {
+              var _visualConfirmado = false;
+              if (window.FirestoreDB && typeof window.FirestoreDB.loadPhysicalMatchResult === 'function') {
                 try {
                   var _resultadoConfirmado = null;
                   for (var _resultAttempt = 0; _resultAttempt < 4 && !_resultadoConfirmado; _resultAttempt++) {
-                    try { _resultadoConfirmado = await window.FirestoreDB.loadMatchResult(
-                      String(tournamentId), _midConfirmado); } catch (_readResultError) {}
+                    // Só ausência transitória permite retry. Jogo inválido interrompe.
+                    _resultadoConfirmado = await window.FirestoreDB.loadPhysicalMatchResult(
+                      String(tournamentId), _midConfirmado);
                     if (!_resultadoConfirmado && _resultAttempt < 3) await new Promise(function (resolve) { setTimeout(resolve, 250 * (_resultAttempt + 1)); });
+                  }
+                  if (!_resultadoConfirmado && _d.tournament) {
+                    // Os jogos inline da raiz ainda aguardam a migração administrativa.
+                    var _inlineConfirmados = [];
+                    (Array.isArray(_d.tournament.groups) ? _d.tournament.groups : []).forEach(function (g) {
+                      (Array.isArray(g && g.rounds) ? g.rounds : []).forEach(function (round) {
+                        (Array.isArray(round && round.matches) ? round.matches : []).forEach(function (game) {
+                          if (game && String(game.id) === _midConfirmado) _inlineConfirmados.push(game);
+                        });
+                      });
+                    });
+                    var _third = _d.tournament.thirdPlaceMatch;
+                    if (_third && String(_third.id) === _midConfirmado) _inlineConfirmados.push(_third);
+                    if (_inlineConfirmados.length === 1) _resultadoConfirmado = _inlineConfirmados[0];
+                    else if (_inlineConfirmados.length > 1 && window._warn) {
+                      window._warn('[applyMatchResult] ID inline duplicado; aguardando sincronização');
+                    }
                   }
                   if (_resultadoConfirmado) {
                     var _jogoConfirmado = (typeof window._findMatch === 'function')
                       ? window._findMatch(_lt, _midConfirmado)
                       : (_lt.matches || []).find(function (m) { return String(m.id) === _midConfirmado; });
-                    if (_jogoConfirmado) Object.keys(_resultadoConfirmado).forEach(function (k) {
-                      _jogoConfirmado[k] = _resultadoConfirmado[k];
-                    });
-                    _lt._results = _lt._results || {};
-                    _lt._results[_midConfirmado] = Object.assign(
-                      {}, _lt._results[_midConfirmado] || {}, _resultadoConfirmado);
+                    if (_jogoConfirmado && typeof this._applyPhysicalResultOnMatch === 'function') {
+                      this._applyPhysicalResultOnMatch(_jogoConfirmado, _resultadoConfirmado);
+                      _visualConfirmado = true;
+                    }
                   }
                 } catch (_eResultadoConfirmado) {
-                  if (window._warn) window._warn('[applyMatchResult] não consegui reler o resultado confirmado');
+                  if (window._warn) window._warn('[applyMatchResult] jogo físico indisponível ou inválido; aguardando sincronização');
                 }
+              }
+              // O cache anterior nunca pode reaplicar o set velho sobre o jogo novo.
+              if (_lt._results) delete _lt._results[_midConfirmado];
+              if (!_visualConfirmado) {
+                window._suppressSoftRefresh = false;
+                window._tdetailSig = null;
+                if (_confirmButton && _confirmButton.isConnected) {
+                  _confirmButton.textContent = window._t
+                    ? window._t('store.scoreRecordedUnverifiedButton')
+                    : 'Gravado no servidor · exibição não confirmada';
+                }
+                if (typeof showNotification === 'function') showNotification(
+                  window._t ? window._t('store.scoreRecordedUnverifiedTitle') : 'Placar gravado no servidor',
+                  window._t ? window._t('store.scoreRecordedUnverifiedMessage') :
+                    'Não foi possível confirmar a exibição deste placar. Atualize a página antes de conferir o jogo.',
+                  'warning');
+                if (typeof window._softRefreshView === 'function') window._softRefreshView();
               }
               /* ⛔ TORNEIO DIVIDIDO: o documento que a CF devolve NÃO traz os jogos — eles moram
                * na subcoleção, e o placar fino do card vem do ESPELHO, que a dashboard hidrata
@@ -12263,6 +12338,7 @@ window.AppStore = {
                * fora dela, libero o refresh e zero a assinatura carimbada. Sem isso, o gate
                * compara o estado novo com ele mesmo e conclui "nada mudou". */
               try {
+                if (!_visualConfirmado) return true;
                 var _currentScoreRoute = window.location.hash || '';
                 if (_currentScoreRoute.indexOf('#tournaments/' + String(tournamentId)) === 0 ||
                     _currentScoreRoute.indexOf('#bracket/' + String(tournamentId)) === 0) {
@@ -12392,24 +12468,6 @@ window.AppStore = {
     return this.commitResultTx(tournamentId, matchId, { action: 'approve-pending' }, logMessage || 'Resultado aprovado');
   },
 
-  // Re-escreve SÓ o playerUids (roster) de um jogo a partir da ESTRUTURA atual,
-  // FORÇANDO overwrite (o dual-write só semeia quando vazio; aqui o slot TBD virou
-  // um jogador de verdade no avanço, então precisa sobrescrever). Preserva os demais
-  // campos do subdoc (set-sem-merge reescreve o `res` fresco, mexendo só em playerUids).
-  // Admin-only na regra (best-effort silencioso; participant-driven fica pra CF).
-  async reseedMatchRoster(tournamentId, matchId) {
-    var t = this.tournaments.find(function (x) { return String(x.id) === String(tournamentId); });
-    if (!t) return;
-    var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : [];
-    var m = null;
-    for (var i = 0; i < all.length; i++) { if (all[i] && String(all[i].id) === String(matchId)) { m = all[i]; break; } }
-    if (!m) return;
-    var puids = this._matchPlayerUids(t, m);
-    await this.commitMatchResult(tournamentId, String(matchId), function (res) {
-      res.playerUids = puids; // roster do jogo (admin-only na regra)
-    }, { silent: true });
-  },
-
   // Persiste o SORTEIO INICIAL (a transição enrollment→bracket, generateDrawFunction).
   // Caso ESPECIAL da campanha: a chave é gerada UMA vez local com SHUFFLE aleatório —
   // re-gerar sobre o fresco daria OUTRA chave. Então NÃO re-executamos o sorteio no
@@ -12427,15 +12485,7 @@ window.AppStore = {
     });
   },
 
-  // ── PLACAR POR JOGO EM DOC PRÓPRIO (project_match_result_docs, linha 4.1) ──────
-  // Camada store sobre FirestoreDB.mutateMatchResult. Cada jogo grava seu resultado
-  // no doc tournaments/{tId}/results/{matchId} → escrever placares de jogos DIFERENTES
-  // nunca disputa (isolamento). A trava contra corrida DENTRO do jogo é a transação.
-  // INERTE até o incremento 3 (nenhum path de resultado grava subdoc ainda) → pros
-  // torneios atuais t._results fica vazio e o overlay é no-op (zero mudança).
-
-  // Campos de RESULTADO que vivem no subdoc (o resto do match = ESTRUTURA, fica no
-  // doc do torneio). Sobrepõe esses campos do subdoc no objeto match da estrutura.
+  // Campos de resultado derivados do jogo físico e aplicados às telas existentes.
   _matchResultFields: ['scoreP1', 'scoreP2', 'winner', 'draw', 'sets', 'setsWonP1', 'setsWonP2', 'totalGamesP1', 'totalGamesP2', 'fixedSet', 'resultAt', 'updatedAt', 'startedAt', 'pendingResult', 'wo', 'woAbsent', 'woAbsentSide'],
   /* ⛔ PROPOSTA PENDENTE NÃO APAGA RESULTADO CONFIRMADO.
    *
@@ -12585,8 +12635,29 @@ window.AppStore = {
     }
   },
 
-  // Hidrata t._results da subcoleção `results` e sobrepõe nos objetos match da
-  // estrutura. Chamar ao entrar no bracket/detalhe (wiring vem no inc 2b/3).
+  // O jogo físico é autoritativo: campo retirado nele também sai do objeto em memória.
+  _applyPhysicalResultOnMatch: function (m, result) {
+    if (!m || !result) return;
+    this._matchResultFields.concat(['winnerUid', 'winnerUids', 'confirmedAt']).forEach(function (k) {
+      if (Object.prototype.hasOwnProperty.call(result, k)) m[k] = result[k];
+      else delete m[k];
+    });
+  },
+
+  _notifyInvalidPhysicalMatch: function (tournamentId) {
+    var id = String(tournamentId || '');
+    if (!id) return;
+    this._invalidPhysicalMatchWarnings = this._invalidPhysicalMatchWarnings || new Set();
+    if (this._invalidPhysicalMatchWarnings.has(id)) return;
+    this._invalidPhysicalMatchWarnings.add(id);
+    if (typeof showNotification === 'function') showNotification(
+      window._t ? window._t('store.matchDataInvalidTitle') : 'Jogo inconsistente',
+      window._t ? window._t('store.matchDataInvalidMessage') :
+        'O placar pode estar desatualizado. Recarregue a página; se persistir, contate o suporte.',
+      'warning');
+  },
+
+  // Hidrata o resultado a partir do jogo físico e sobrepõe nos objetos da chave.
   /* L8.P5 — A MARCA GUARDA O ESCOPO, NÃO UM "SIM".
    *
    * MEDIDO em 11/set/2026: a dashboard puxava 244 documentos de `results` por abertura e
@@ -12605,7 +12676,8 @@ window.AppStore = {
     var limite = (opts && Number(opts.limit) > 0) ? Number(opts.limit) : 0;
     var escopo = limite ? 'parcial' : 'completa';
     var actorUid = this.currentUser && this.currentUser.uid;
-    var requestKey = JSON.stringify([actorUid || null, id, escopo]);
+    var readEpoch = (this._resultReadEpochs && this._resultReadEpochs[id]) || 0;
+    var requestKey = JSON.stringify([actorUid || null, id, escopo, readEpoch]);
     this._hydrateResultPromises = this._hydrateResultPromises || {};
     if (this._hydrateResultPromises[requestKey]) return this._hydrateResultPromises[requestKey];
     var self = this;
@@ -12614,33 +12686,35 @@ window.AppStore = {
     if (!t || !window.FirestoreDB || typeof window.FirestoreDB.loadMatchResults !== 'function') return false;
     try {
       var map = await window.FirestoreDB.loadMatchResults(tournamentId, limite ? { limit: limite } : undefined);
+      if (((this._resultReadEpochs || {})[id] || 0) !== readEpoch) return false;
       if ((this.currentUser && this.currentUser.uid) !== actorUid) return false;
       // O snapshot pode substituir o objeto enquanto a consulta está em voo.
       t = this.tournaments.find(function (x) { return String(x.id) === id; });
       if (!t) return false;
-      // 'completa' sempre ganha; 'parcial' só marca quando não havia leitura completa.
-      if (escopo === 'completa' || t._resultsHydrated !== 'completa') t._resultsHydrated = escopo;
       // A janela recente ACRESCENTA ao que já se sabia — substituir apagaria jogo antigo que
       // uma leitura completa anterior já tinha trazido. A leitura completa, essa, é a verdade
       // inteira e substitui.
       t._results = (escopo === 'completa') ? (map || {}) : Object.assign({}, t._results || {}, map || {});
       var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : [];
       var store = self;
-      var _lote = self._carimboDeLote(t._results);
-      all.forEach(function (m) { if (m && m.id != null && t._results[m.id]) self._overlayResultOnMatch(m, t._results[m.id], _lote); });
+      all.forEach(function (m) { if (m && m.id != null && t._results[m.id]) self._applyPhysicalResultOnMatch(m, t._results[m.id]); });
+      // Só confirmar o escopo depois de aplicar todos os jogos sem erro.
+      if (escopo === 'completa' || t._resultsHydrated !== 'completa') t._resultsHydrated = escopo;
       store._saveToCache();
       return true;
-    } catch (e) { if (window._error) window._error('hydrateMatchResults ' + tournamentId, e); return false; }
+    } catch (e) {
+      if (window._error) window._error('hydrateMatchResults ' + tournamentId, e);
+      if (/Jogo canônico inválido/.test(String(e && e.message)) && this._notifyInvalidPhysicalMatch)
+        this._notifyInvalidPhysicalMatch(tournamentId);
+      return false;
+    }
     }).call(this);
     this._hydrateResultPromises[requestKey] = task;
     task.then(function () { delete self._hydrateResultPromises[requestKey]; }, function () { delete self._hydrateResultPromises[requestKey]; });
     return task;
   },
 
-  /* Resultados da dashboard vivem numa subcoleção. O ouvinte do documento do
-   * torneio não recebe essas mudanças, portanto aprovar um placar em outro aparelho
-   * só aparecia depois de atualizar a página. A dashboard acompanha somente a mesma
-   * janela pequena que ela hidrata (até cinco torneios, quarenta resultados cada). */
+  /* E05: a dashboard acompanha o mesmo jogo físico que guarda o placar. */
   ouvirResultadosDaDashboard(tournamentIds) {
     var ids = (Array.isArray(tournamentIds) ? tournamentIds : []).map(String)
       .filter(Boolean).filter(function (id, i, all) { return all.indexOf(id) === i; }).sort();
@@ -12652,7 +12726,7 @@ window.AppStore = {
     ids.forEach(function (id) {
       try {
         var recebeuServidor = false;
-        var consulta = window.FirestoreDB._tSub(id, 'results').orderBy('updatedAt', 'desc').limit(40);
+        var consulta = window.FirestoreDB._tSub(id, 'matches');
         var un = consulta.onSnapshot({ includeMetadataChanges:true }, function (snap) {
           if (typeof window._isRemoteFirestoreSnapshot === 'function' && !window._isRemoteFirestoreSnapshot(snap)) return;
           var mudou = snap.docChanges();
@@ -12660,26 +12734,53 @@ window.AppStore = {
           recebeuServidor = true;
           var vivo = (self.tournaments || []).find(function (t) { return t && String(t.id) === id; });
           if (!vivo) return;
+          var projetados = [];
+          mudou.forEach(function (change) {
+            try {
+              projetados.push({ change: change, result: change.type === 'removed' ? null :
+                window.FirestoreDB._resultFromPhysicalMatch(change.doc.data(), String(change.doc.id)) });
+            } catch (e) {
+              if (window._error) window._error('[dashboard] jogo físico inválido', e);
+              if (self._notifyInvalidPhysicalMatch) self._notifyInvalidPhysicalMatch(id);
+            }
+          });
           vivo._results = vivo._results || {};
           var todos = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(vivo) : [];
-          var lote = self._carimboDeLote(vivo._results);
-          mudou.forEach(function (change) {
-            var mid = String(change.doc.id);
-            if (change.type === 'removed') {
+          var camposVistos = self._matchResultFields.concat([
+            'p1', 'p2', 'team1Uids', 'team2Uids', 'p1Uid', 'p2Uid', 'playerUids',
+            'roundLabel', 'winnerUid', 'winnerUids', 'confirmedAt'
+          ]);
+          var assinatura = function (result) {
+            if (!result) return '';
+            return JSON.stringify(camposVistos.map(function (k) {
+              return [Object.prototype.hasOwnProperty.call(result, k), result[k]];
+            }));
+          };
+          var alterouResultado = false;
+          projetados.forEach(function (entry) {
+            var change = entry.change, mid = String(change.doc.id);
+            if (entry.result === null) {
+              if (!vivo._results[mid]) return;
               delete vivo._results[mid];
               todos.forEach(function (m) {
                 if (!m || String(m.id) !== mid) return;
-                ['scoreP1','scoreP2','sets','setsWonP1','setsWonP2','winner','draw','pendingResult','confirmedAt'].forEach(function (k) { delete m[k]; });
+                self._matchResultFields.concat(['winnerUid', 'winnerUids', 'confirmedAt']).forEach(function (k) { delete m[k]; });
               });
+              alterouResultado = true;
               return;
             }
-            var result = change.doc.data() || {};
+            var result = entry.result;
+            if (assinatura(vivo._results[mid]) === assinatura(result)) return;
             vivo._results[mid] = result;
+            alterouResultado = true;
             todos.forEach(function (m) {
-              if (m && String(m.id) === mid) self._overlayResultOnMatch(m, result, lote);
+              if (m && String(m.id) === mid) self._applyPhysicalResultOnMatch(m, result);
             });
           });
-          try { if (window._noteFsReads) window._noteFsReads(mudou.length, 'rt-dashboard-results'); } catch (_eReads) {}
+          try { if (window._noteFsReads) window._noteFsReads(mudou.length, 'rt-dashboard-matches'); } catch (_eReads) {}
+          if (!alterouResultado) return;
+          self._resultReadEpochs = self._resultReadEpochs || {};
+          self._resultReadEpochs[id] = (self._resultReadEpochs[id] || 0) + 1;
           self._saveToCache();
           if (typeof window._dashPedirRepintura === 'function') window._dashPedirRepintura('resultados-remotos');
         }, function (err) { if (window._warn) window._warn('[dashboard] listener de resultados falhou', err); });
@@ -12695,25 +12796,9 @@ window.AppStore = {
     this._dashboardResultsSub = null;
   },
 
-  // Grava o resultado de UM jogo no doc próprio (transação, sem lost-update) +
-  // aplicação otimista local (t._results[matchId] + overlay no match). `mutatorFn`
-  // é re-executado sobre o subdoc fresco na transação (idempotente/retry-safe).
-  // `opts.silent` = NÃO mostra toast de erro ao usuário (para os writes best-effort
-  // do dual-write/seed: o doc do torneio é autoritativo, uma falha aqui é inofensiva
-  // — ex.: torneio legado sem roster semeado → participante toma permission-denied
-  // no subdoc; não pode virar toast "Erro ao salvar" já que o save real deu certo).
-  // v1.8.79 (REPLAY PÚBLICO): grava o ponto a ponto no doc DO JOGO
-  // (`tournaments/{tid}/results/{matchId}`), que é o único lugar que QUALQUER pessoa
-  // pode ler — as regras liberam leitura pra todo autenticado, e pro público quando o
-  // torneio é público. O `matchHistory` NÃO serve aqui: ele é do jogador e obedece ao
-  // `statsVisibility`, então o replay sumiria pra quem só está assistindo.
-  //
-  // ⚠️ CORRIDA CONHECIDA, e é por isso que existe retentativa: `allow create` no subdoc
-  // é SÓ de admin. Quando quem termina a partida é PARTICIPANTE e o doc ainda não
-  // existe, a 1ª tentativa falha — e é a CF `syncMatchRosters` que cria o doc ao ver a
-  // escrita do resultado no torneio. As tentativas seguintes dão tempo pra ela rodar.
-  // Organizador acerta de primeira (ele pode criar). Best-effort SEMPRE: o replay é um
-  // extra, e falhar aqui não pode atrapalhar o placar, que já foi gravado.
+  // E05: o replay do torneio mora no documento físico canônico do jogo.
+  // A callable valida permissão e atualiza somente `jogo.replay`; sem jogo físico,
+  // ela falha fechado. Best-effort: a falha do replay não desfaz o placar salvo.
   async saveMatchReplay(tournamentId, matchId, replay) {
     if (!tournamentId || matchId == null || matchId === '' || !replay) return false;
     if (!window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') return false;
@@ -12725,8 +12810,10 @@ window.AppStore = {
       if (!result || result.ok !== true || !result.replay) return false;
       var t = this.tournaments.find(function (x) { return String(x.id) === String(tournamentId); });
       if (t) {
-        t._results = t._results || {};
-        t._results[matchId] = Object.assign({}, t._results[matchId], { replay: result.replay });
+        var jogos = (typeof window._collectAllMatches === 'function')
+          ? (window._collectAllMatches(t) || []) : (t.matches || []);
+        var jogo = jogos.find(function (x) { return x && String(x.id) === String(matchId); });
+        if (jogo) jogo.replay = result.replay;
         this._saveToCache();
       }
       return true;
@@ -12734,67 +12821,6 @@ window.AppStore = {
       if (window._warn) window._warn('[replay] falha ao confirmar replay', e);
       return false;
     }
-  },
-
-  async commitMatchResult(tournamentId, matchId, mutatorFn, opts) {
-    var t = this.tournaments.find(function (x) { return String(x.id) === String(tournamentId); });
-    if (t) {
-      if (!t._results) t._results = {};
-      if (!t._results[matchId]) t._results[matchId] = { matchId: String(matchId) };
-      try { mutatorFn(t._results[matchId]); } catch (e) { if (window._error) window._error('commitMatchResult local', e); }
-      var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : [];
-      for (var i = 0; i < all.length; i++) { if (all[i] && String(all[i].id) === String(matchId)) { this._overlayResultOnMatch(all[i], t._results[matchId]); break; } }
-    }
-    if (!window.FirestoreDB || typeof window.FirestoreDB.mutateMatchResult !== 'function') return false;
-    try {
-      await window.FirestoreDB.mutateMatchResult(tournamentId, matchId, mutatorFn);
-      this._saveToCache();
-      return true;
-    } catch (e) {
-      if (window._error) window._error('commitMatchResult FALHOU ' + tournamentId + '/' + matchId, e);
-      if (!(opts && opts.silent) && typeof showNotification === 'function') { try { showNotification(window._t('store.saveError'), (e && (e.code || e.message)) || '', 'error'); } catch (e2) {} }
-      return false;
-    }
-  },
-
-  // Resolve os UIDS dos dois lados de um jogo (p1/p2, incluindo dupla "A / B") →
-  // usado como `playerUids` do doc de resultado (a regra do Firestore libera a
-  // escrita do participante DAQUELE jogo por este roster). Caminho de confiança:
-  // quem escreve o roster é o SORTEIO/AVANÇO (admin), nunca o participante.
-  /* ⭐ 2.0.98 — A DERIVAÇÃO MUDOU DE CASA: `window._matchPlayerUids` agora mora em
-   * js/views/bracket-logic.js, junto de `_slotUids`, porque o SERVIDOR também precisa
-   * dela (o gatilho grava `playerUids` em cada jogo espelhado, e é esse campo que
-   * permite a regra "só quem joga ESTE jogo escreve"). bracket-logic é vendorizado;
-   * store.js não é.
-   * ⛔ NÃO reimplementei do outro lado. Hoje mesmo três bugs vieram de lógica duplicada
-   * que divergiu (tabela de borda, casamento por grafia, nome de token). Uma casa só. */
-  _matchPlayerUids: function (t, m) {
-    return (typeof window._matchPlayerUids === 'function') ? window._matchPlayerUids(t, m) : [];
-  },
-
-  // Semeia os docs de resultado (subcoleção results) a partir da ESTRUTURA atual:
-  // pra cada jogo, grava { playerUids, + campos de resultado que já existirem no
-  // match }. Roda como ADMIN (organizador) — é o caminho de confiança que seta o
-  // roster. Chamada após o sorteio e no avanço (o próximo jogo ganha os uids novos).
-  // Best-effort por jogo (uma falha não derruba os outros).
-  async seedMatchResultDocs(tournamentId) {
-    var t = this.tournaments.find(function (x) { return String(x.id) === String(tournamentId); });
-    if (!t) return { ok: false, reason: 'no-tournament' };
-    var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : [];
-    var self = this, count = 0, failed = 0;
-    for (var i = 0; i < all.length; i++) {
-      var m = all[i];
-      if (!m || m.id == null || m.id === '') continue;
-      var puids = this._matchPlayerUids(t, m);
-      var applied = await this.commitMatchResult(tournamentId, String(m.id), (function (mm, pu) {
-        return function (res) {
-          self._matchResultFields.forEach(function (k) { if (Object.prototype.hasOwnProperty.call(mm, k)) res[k] = mm[k]; });
-          res.playerUids = pu; // roster do jogo (admin-only na regra)
-        };
-      })(m, puids), { silent: true });
-      if (applied) count++; else failed++;
-    }
-    return { ok: failed === 0, count: count, failed: failed };
   },
 
   // Start real-time listener — auto-updates tournaments on any Firestore change
@@ -14164,6 +14190,21 @@ window.AppStore = {
               recebeuServidor = true;
               var regs = [];
               snap.forEach(function (d) { var v = d.data(); if (v) regs.push(v); });
+              var resultadosFisicos = null;
+              if (nome === 'matches') {
+                resultadosFisicos = {};
+                try {
+                  snap.forEach(function (d) {
+                    resultadosFisicos[d.id] = window.FirestoreDB._resultFromPhysicalMatch(d.data(), String(d.id));
+                  });
+                } catch (eFisico) {
+                  if (window._error) window._error('[fase2] jogo físico inválido no ouvinte', eFisico);
+                  if (self._notifyInvalidPhysicalMatch) self._notifyInvalidPhysicalMatch(id);
+                  return;
+                }
+                self._resultReadEpochs = self._resultReadEpochs || {};
+                self._resultReadEpochs[id] = (self._resultReadEpochs[id] || 0) + 1;
+              }
               if (!regs.length) {
                 /* ⛔ O SNAPSHOT É A VERDADE: parte vazia é parte VAZIA, não "sem notícia".
                  * `remontar` protege quem não recebeu registro nenhum (nunca apaga) —
@@ -14171,6 +14212,7 @@ window.AppStore = {
                  * presença tem que esvaziar a presença na tela, senão a marca fica pra
                  * sempre. A forma (mapa ou lista) vem do que já está vivo. */
                 vivo[nome] = Array.isArray(vivo[nome]) ? [] : {};
+                if (nome === 'matches') vivo._results = {};
               } else {
                 /* ⚠️ ESTE remontar é DIFERENTE do `montarDoBanco`: ali a gente LÊ o banco;
                  * aqui o banco ENTREGA um delta. Só a parte ouvida vem do snapshot; as
@@ -14182,36 +14224,20 @@ window.AppStore = {
                 // escreve NO LUGAR — telas guardam o objeto; trocar a referência as deixaria
                 // com o de antes. Mesmo motivo da busca e do `_ensureTournamentLoaded`.
                 Object.keys(montado).forEach(function (kk) { vivo[kk] = montado[kk]; });
-                                var _podeReaplicarPlacar = (nome === 'matches') && !!vivo._results &&
-                  typeof self._overlayResultOnMatch === 'function';
-                /* ⛔⛔⛔ O PLACAR VOLTA POR CIMA — ERA ISTO QUE FAZIA O 0-0.
-                 *
-                 * RELATO DO DONO, repetido por semanas: _"lanço o resultado, confirmo, volta 0-0;
-                 * só dando refresh aparece"_. A causa está exatamente aqui, e não na repintura,
-                 * que é onde eu procurei antes.
-                 *
-                 * O JOGO TEM DUAS CÓPIAS: o placar é gravado primeiro na coleção de RESULTADOS
-                 * (`results`), e o documento do JOGO (`matches`) recebe a atualização depois. Este
-                 * ouvinte remonta os jogos a partir de `matches` e escreve por cima do objeto vivo
-                 * — jogando fora a camada de resultado que a tela acabou de aplicar. O que sobra é
-                 * o jogo sem placar: 0-0. O refresh curava porque a carga completa reaplica
-                 * `_results` no fim.
-                 *
-                 * ⇒ reaplicar é obrigatório DEPOIS de repor os jogos, e pela MESMA função que o
-                 * ouvinte de resultados usa — duas implementações divergiriam e o defeito voltaria
-                 * por metade. [[project_jogo_vive_em_matches_e_results]] */
-                if (_podeReaplicarPlacar) {
+                // O mesmo snapshot de jogos que remonta a chave define o placar atual.
+                // Nunca reaplicar um espelho em cache sobre o jogo físico recém-chegado.
+                if (nome === 'matches') {
                   try {
+                    vivo._results = resultadosFisicos;
                     var _todosAgora = (typeof window._collectAllMatches === 'function')
                       ? (window._collectAllMatches(vivo) || []) : (vivo.matches || []);
-                    var _lote = (typeof self._carimboDeLote === 'function') ? self._carimboDeLote(vivo._results) : null;
                     _todosAgora.forEach(function (mm) {
                       if (!mm || mm.id == null) return;
                       var res = vivo._results[String(mm.id)];
-                      if (res) self._overlayResultOnMatch(mm, res, _lote);
+                      if (res) self._applyPhysicalResultOnMatch(mm, res);
                     });
                   } catch (_eOv) {
-                    if (window._error) window._error('[fase2] não consegui reaplicar os resultados após repor os jogos', _eOv);
+                    if (window._error) window._error('[fase2] não consegui aplicar os placares físicos após repor os jogos', _eOv);
                   }
                 }
               }
@@ -15733,7 +15759,15 @@ window._linePodiumHtml = function (t, lineMatches, title, color) {
   if (p2 === 'TBD' || p2 === 'BYE') p2 = null;
   var tp = (lineMatches || []).filter(function (m) { return (m.isThirdPlace || (m.bracket || '') === 'thirdplace') && m.winner; })[0];
   var p3 = tp ? tp.winner : null;
-  return window._buildPodiumHtml(p1, p2, p3, null, null, null, { title: title, titleColor: color });
+  var _winSide = window._matchWinnerSide(fin);
+  var _side = _winSide === 1 ? 'p1' : (_winSide === 2 ? 'p2' : '');
+  var _uids = function (m, side) { return m && side && typeof window._slotUidsPositional === 'function' ? window._slotUidsPositional(m, side) : []; };
+  var _thirdWinSide = tp && window._matchWinnerSide(tp);
+  var _thirdSide = _thirdWinSide === 1 ? 'p1' : (_thirdWinSide === 2 ? 'p2' : '');
+  return window._buildPodiumHtml(p1, p2, p3, null, null, null, {
+    title: title, titleColor: color,
+    uids: [_uids(fin, _side), _uids(fin, _side ? (_side === 'p1' ? 'p2' : 'p1') : ''), _uids(tp, _thirdSide)]
+  });
 };
 
 // FUNÇÃO CANÔNICA: pódio(s) + classificação(ões). Usada na página do torneio (encerrado).
@@ -15771,7 +15805,13 @@ window._renderPodiumsAndClassif = function (t) {
       var _d3 = (Array.isArray(_deMap)
         ? _deMap.filter(function (entry) { return entry && entry.pos === 3; }).map(function (entry) { return entry.name; })[0]
         : Object.keys(_deMap).filter(function (n) { return _deMap[n] === 3; })[0]) || null; // 3º = perdedor da Final Inferior
-      _dePod = window._buildPodiumHtml(_d1, _d2, _d3);
+      var _deWinSide = window._matchWinnerSide(_deGF);
+      var _deSide = _deWinSide === 1 ? 'p1' : (_deWinSide === 2 ? 'p2' : '');
+      var _deUids = function (side) { return side && typeof window._slotUidsPositional === 'function' ? window._slotUidsPositional(_deGF, side) : []; };
+      var _deThird = Array.isArray(_deMap) ? _deMap.filter(function (entry) { return entry && entry.pos === 3; })[0] : null;
+      _dePod = window._buildPodiumHtml(_d1, _d2, _d3, null, null, null, { uids: [
+        _deUids(_deSide), _deUids(_deSide ? (_deSide === 'p1' ? 'p2' : 'p1') : ''), _deThird && _deThird.uid ? [_deThird.uid] : []
+      ] });
     }
     var _deCls = (Array.isArray(_deMap) ? _deMap.length : Object.keys(_deMap).length)
       ? window._renderClassifBlock(t, _deMap, { label: '📊 Classificação geral', color: '#fbbf24', open: false }) : '';
@@ -15866,7 +15906,17 @@ window._renderPodiumsAndClassif = function (t) {
   if (finalMatch && typeof window._buildPodiumHtml === 'function') {
     var w1 = finalMatch.winner, w2 = (window._matchWinnerSide(finalMatch) === 1) ? finalMatch.p2 : finalMatch.p1;
     if (w2 === 'TBD' || w2 === 'BYE') w2 = null;
-    podium = window._buildPodiumHtml(w1, w2, thirdPlace);
+    var _finalWinSide = window._matchWinnerSide(finalMatch);
+    var _finalSide = _finalWinSide === 1 ? 'p1' : (_finalWinSide === 2 ? 'p2' : '');
+    var _podiumUids = function (m, side) { return m && side && typeof window._slotUidsPositional === 'function' ? window._slotUidsPositional(m, side) : []; };
+    var _thirdMatch = t && t.thirdPlaceMatch && t.thirdPlaceMatch.winner === thirdPlace ? t.thirdPlaceMatch : null;
+    var _thirdWinSide = _thirdMatch && window._matchWinnerSide(_thirdMatch);
+    var _thirdSide = _thirdWinSide === 1 ? 'p1' : (_thirdWinSide === 2 ? 'p2' : '');
+    podium = window._buildPodiumHtml(w1, w2, thirdPlace, null, null, null, { uids: [
+      _podiumUids(finalMatch, _finalSide),
+      _podiumUids(finalMatch, _finalSide ? (_finalSide === 'p1' ? 'p2' : 'p1') : ''),
+      _podiumUids(_thirdMatch, _thirdSide)
+    ] });
   }
   // Liga/Suíço (sem chave) → pódio + classificação por standings.
   if (!podium && !isMulti && Array.isArray(t.rounds) && t.rounds.length && typeof window._buildPodiumHtml === 'function') {
@@ -15874,7 +15924,9 @@ window._renderPodiumsAndClassif = function (t) {
     if (Array.isArray(st) && st.length) {
       var nm = function (s) { return s ? (s.name || s.player || '') : ''; };
       var pts = function (s) { return (s && s.points != null) ? (s.points + ' pts') : ''; };
-      podium = window._buildPodiumHtml(nm(st[0]), nm(st[1]), nm(st[2]), 'Campeão', pts(st[1]) || '2º Lugar', pts(st[2]) || '3º Lugar');
+      podium = window._buildPodiumHtml(nm(st[0]), nm(st[1]), nm(st[2]), 'Campeão', pts(st[1]) || '2º Lugar', pts(st[2]) || '3º Lugar', {
+        uids: st.slice(0, 3).map(function (s) { return s && s.uid ? [s.uid] : []; })
+      });
       var smap = {}; st.forEach(function (s, i) { var n = nm(s); if (n) smap[n] = i + 1; });
       classifMap = smap;
     }

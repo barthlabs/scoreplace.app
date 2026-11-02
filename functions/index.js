@@ -28,6 +28,7 @@ const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const { onDocumentCreated, onDocumentWritten, onDocumentDeleted } = require("firebase-functions/v2/firestore");
 const { defineSecret } = require("firebase-functions/params");
+const { FieldValue: _ResultFenceFieldValue } = require('firebase-admin/firestore');
 const admin = require("firebase-admin");
 const crypto = require("crypto");
 const _operationReceipt = require("./operation-receipt-core");
@@ -67,6 +68,8 @@ const _casualMatchHistory = require("./casual-match-history-core");
 const _identityState = require("./identity-state-core");
 const _letzplayWrite = require("./letzplay-write-core");
 const _notificationAuthority = require("./notification-authority-core");
+const _resultHistoryPage = require("./result-history-page-core");
+const RESULT_HISTORY_CURSOR_KEY = defineSecret("RESULT_HISTORY_CURSOR_KEY");
 
 // v1.8.38 — RARIDADE DO TOKEN, em UM lugar só (os dois caminhos de detecção usam este).
 // O subconjunto de 1 token só vira sinal quando o token existe SÓ nas duas contas
@@ -115,6 +118,7 @@ const _publishedSlotEdit = require("./published-slot-edit-core");
 const _manualClaimLink = require("./manual-claim-link-core");
 const _publishedClaim = require("./published-claim-core");
 const _canonicalRegistrationBoundary = require("./canonical-registration-boundary-core");
+const _registrationRosterProjection = require("./vendor/registration-roster.js");
 const _canonicalEnrollment = require("./canonical-enrollment-core");
 const _registrationPaymentService = require("./registration-payment-service");
 const _registrationPayment = require("./registration-payment-core");
@@ -185,7 +189,7 @@ async function _sandboxAutorizado(db, snap, callerUid, read) {
 }
 const _partesPerm = require("./partes-permissao.js");   // allowlist: quem pode mexer em que
 const _tSplitFn = require("./vendor/tournament-split-core.js"); // colecaoDaParte
-const _splitResultMirror = require("./match-result-mirror-core.js");
+const _resultVisibilityFence = require("./result-visibility-fence-core.js");
 const _woReconcile = require("./wo-split-reconcile-core.js"); // W.O. chega nas subcoleções
 const _secEmail = require("./secondary-email-core.js");       // e-mail secundário: decisões puras
 const _secReserva = require("./secondary-email-reserva.js"); // e-mail secundário: reserva ATÔMICA
@@ -335,7 +339,7 @@ function _replaceNameInMatches(matches, oldUid, newName, newUid) {
  *     o doc nos dois lados por um instante, nunca o faz sumir). Se o destino JÁ existe, o
  *     do sobrevivente prevalece e o do drop é só removido — mesma regra de colisão do
  *     uid-sweep (estado atual > estado da conta absorvida).
- *   • CONTEÚDO — `results/*.playerUids` e afins, pelo mesmo remapUid do documento.
+ *   • CONTEÚDO — partes canônicas, sobretudo `matches.playerUids` e seus slots.
  *
  * Best-effort: falhar aqui não desfaz a fusão, que já gravou o essencial.
  */
@@ -345,6 +349,9 @@ async function _sweepTournamentSubcollections(db, tourRef, dropUid, keepUid, reg
   let cols = [];
   try { cols = await tourRef.listCollections(); } catch (e) { return 0; }
   for (const col of cols) {
+    // E05: a fusão não pode recriar ou alterar o índice histórico de placares.
+    // A identidade do confronto é corrigida no documento físico `matches`.
+    if (col.id === 'results' || col.id === 'resultsSandbox') continue;
     try {
       // (a) doc cujo ID é o uid morto
       const velho = await col.doc(dropUid).get();
@@ -459,8 +466,8 @@ async function _repairTournaments(db, dropUid, dropEmail, dropName, keepUid, kee
     }
     // ── SUBCOLEÇÕES do torneio (v1.7.40) ────────────────────────────────────
     // A varredura acima cobre o DOCUMENTO. As subcoleções ficavam de fora, e nelas o uid
-    // aparece de DUAS formas: como ID DO DOC (o espelho do roster é `participants/{uid}`,
-    // o dual-write da 1.7.29) e DENTRO do conteúdo (`results/*.playerUids`).
+    // aparece de DUAS formas: como ID DO DOC (`participants/{uid}`) e dentro do
+    // conteúdo (`matches.playerUids` e slots UID). Results é ignorado pela E05.
     // MEDIDO em 05/ago/2026, depois de fundir: o espelho do Eduardo continuou sob o uid
     // MORTO — o doc respondia 200 no uid apagado e 404 no sobrevivente. O espelho existe
     // justamente pra ser a rede contra perda de inscrito; apontando pra uid morto, ele não
@@ -3136,6 +3143,9 @@ exports.enrollParticipant = onCall(
             organizerManual: organizerManualRequested && isOrganizer,
           });
         } catch (error) { throw new HttpsError("failed-precondition", error.message); }
+        if (!['notOpenYet', 'closed', 'rejected', 'conflict', 'capacityFull', 'alreadyRegistered', 'enrolled', 'waitlisted'].includes(decision.outcome)) {
+          throw new HttpsError('failed-precondition', 'Resultado de inscrição não reconhecido; nenhuma inscrição foi gravada.');
+        }
         if (decision.outcome === "rejected" || decision.outcome === "conflict") {
           return Object.assign({ canonical: true, participants: checked.participants }, decision);
         }
@@ -3211,6 +3221,9 @@ exports.enrollParticipant = onCall(
       const r = _enrollCore.computeEnroll(_dados, sanitizedParticipantObj, extraUpdates, nowMs, {
         organizerManual: organizerManualRequested && isOrganizer
       });
+      if (!['notOpenYet', 'closed', 'already', 'alreadyWaitlisted', 'capacityFull', 'waitlisted', 'enrolled'].includes(r.outcome)) {
+        throw new HttpsError('failed-precondition', 'Resultado de inscrição não reconhecido; nenhuma inscrição foi gravada.');
+      }
       if (r.updateData) _splitParts.gravar(tx, docRef, _dados, r.updateData);
       return r;
     });
@@ -3258,6 +3271,10 @@ exports.enrollParticipant = onCall(
     }
 
     if (out.outcome === "capacityFull") return withDuplicateSignal({ capacityFull: true, participants: out.participants });
+    if (out.outcome === "rejected" || out.outcome === "conflict") {
+      return { outcome: out.outcome, alreadyEnrolled: false,
+        participants: out.participants, reasons: out.reasons || [] };
+    }
     if (out.outcome === "already" || out.outcome === "alreadyRegistered") return withDuplicateSignal({ alreadyEnrolled: true, participants: out.participants });
     if (out.outcome === "closed" || out.outcome === "notOpenYet") return withDuplicateSignal({ alreadyEnrolled: false, enrollmentClosed: true, enrollmentNotOpenYet: out.outcome === "notOpenYet", participants: out.participants });
     // v1.6.86: fase já sorteada → a pessoa entrou na LISTA DE ESPERA (não no roster).
@@ -3271,7 +3288,11 @@ exports.enrollParticipant = onCall(
         participants: out.participants, standbyParticipants: out.standbyParticipants || null
       });
     }
+    if (out.outcome !== "enrolled") {
+      return { outcome: 'unconfirmed', participants: out.participants };
+    }
     return withDuplicateSignal({
+      outcome: 'enrolled',
       alreadyEnrolled: false,
       participants: out.participants,
       autoCloseTriggered: !!out.autoClose,
@@ -4553,12 +4574,13 @@ exports.leaveStandby = onCall(
       });
     }
 
-    return {
-      removed: out.outcome === "removed",
-      standbyParticipants: out.standbyParticipants || [],
-      waitlist: out.waitlist || [],
-      participants: out.participants || []
-    };
+    const receipt = { removed: out.outcome === "removed", participants: out.participants || [] };
+    if (out.canonical) receipt.canonical = true;
+    else {
+      receipt.standbyParticipants = out.standbyParticipants || [];
+      receipt.waitlist = out.waitlist || [];
+    }
+    return receipt;
   }
 );
 
@@ -4775,9 +4797,8 @@ exports.editCanonicalTournamentSlot = onCall(
         if (embedded.includes(edit.source.fixedPairId) || embedded.includes(sourceValue)) {
           throw new HttpsError('failed-precondition', 'vaga em rodada embutida fora da coleção de jogos');
         }
-        const [matchSnap, resultSnap, woClaimSnap] = await Promise.all([
+        const [matchSnap, woClaimSnap] = await Promise.all([
           tx.get(ref.collection(_tSplitFn.colecaoDaParte('matches'))),
-          tx.get(ref.collection('results')),
           tx.get(ref.collection(_tSplitFn.colecaoDaParte('woClaims'))),
         ]);
         if ([woClaimSnap].some((snapshot) => snapshot.docs.some((doc) => {
@@ -4787,8 +4808,7 @@ exports.editCanonicalTournamentSlot = onCall(
         }))) throw new HttpsError('failed-precondition', 'vaga com W.O. pendente');
         try {
           published = _publishedSlotEdit.plan(edit, mirrorDocuments,
-            matchSnap.docs.map((doc) => ({ ref: doc.ref, data: doc.data() || {} })),
-            resultSnap.docs.map((doc) => ({ ref: doc.ref, data: doc.data() || {} })));
+            matchSnap.docs.map((doc) => ({ ref: doc.ref, data: doc.data() || {} })));
         } catch (error) { throw new HttpsError('failed-precondition', error.message); }
       }
       const next = _writeCanonicalRosterChanges(tx, ref, state.tournament, checked.registrations,
@@ -4805,7 +4825,7 @@ exports.editCanonicalTournamentSlot = onCall(
           tx.delete(p.oldRef);
         }
         published.matches.forEach((item) => tx.set(item.ref, item.data));
-        published.results.forEach((item) => tx.set(item.ref, item.data));
+        if (published.matches.length) tx.update(ref, { _phaseReadCertificate: _FV.delete() });
         tx.create(ref.collection('slotEditAudits').doc(), {
           sourceRegistrationId: edit.source.registrationId, targetUid: targetUid || null,
           categoryId, oldPairId: edit.source.fixedPairId, newPairId: edit.newPairId,
@@ -4869,7 +4889,10 @@ async function _loadCanonicalRosterForMutation(tx, tournamentRef, tournament, lo
   catch (error) { throw new HttpsError("failed-precondition", error.message); }
 }
 
-function _writeCanonicalRosterUpdates(tx, tournamentRef, tournament, registrations, updates, logicalId, financialIds) {
+function _writeCanonicalRosterUpdates(tx, tournamentRef, tournament, registrations, updates, logicalId, financialIds, extraTournamentPatch) {
+  if (extraTournamentPatch && Object.keys(extraTournamentPatch).some((key) => key !== 'pairRequests')) {
+    throw new HttpsError('invalid-argument', 'patch adicional de elenco inválido');
+  }
   const canonicalTournament = _canonicalMutationTournament(tournamentRef, tournament, logicalId);
   let next;
   try { next = _canonicalRegistrationBoundary.applyUpdates(canonicalTournament, registrations, updates); }
@@ -4891,6 +4914,7 @@ function _writeCanonicalRosterUpdates(tx, tournamentRef, tournament, registratio
   // Nunca preservamos memberUids antigo, pois ele pode manter uma conta retirada
   // ou esconder alguém recém-aceito/na espera.
   tx.update(tournamentRef, {
+    ...(extraTournamentPatch || {}),
     memberUids: _canonicalRegistrationBoundary.memberUids(next.tournament || canonicalTournament, next.registrations),
     updatedAt: _FV.serverTimestamp(),
   });
@@ -5377,12 +5401,273 @@ exports.reclassifyCanonicalRegistration = onCall(
 /* Reservas de vagas individuais só passam a ser inscrições ao receber categoria
  * na Análise. A própria transação remove as reservas consumidas e avança o
  * recibo canônico; nenhuma dupla é formada nesta porta. */
+function _canonicalAssignmentBatchInput(data) {
+  const edits = Array.isArray(data.edits) ? data.edits : null;
+  const reservations = Array.isArray(data.reservations) ? data.reservations : null;
+  if (!edits || !reservations || !edits.length && !reservations.length ||
+      edits.length + reservations.length > 160) {
+    throw new HttpsError('invalid-argument', 'Selecione de 1 a 160 atribuições por salvamento.');
+  }
+  const operationId = String(data.operationId || '').trim();
+  if (!/^[A-Za-z0-9_-]{8,100}$/.test(operationId)) {
+    throw new HttpsError('invalid-argument', 'Identificador do salvamento inválido.');
+  }
+  const cleanEdits = edits.map((item) => ({
+    userUid: String(item && item.userUid || '').trim(),
+    manualParticipantId: String(item && item.manualParticipantId || '').trim(),
+    fromCategoryId: String(item && item.fromCategoryId || '').trim(),
+    toCategoryId: String(item && item.toCategoryId || '').trim(),
+  }));
+  const cleanReservations = reservations.map((item) => ({
+    manualParticipantId: String(item && item.manualParticipantId || '').trim(),
+    toCategoryId: String(item && item.toCategoryId || '').trim(),
+  }));
+  const seen = new Set(), editPeople = new Set();
+  for (const item of cleanEdits) {
+    if (!!item.userUid === !!item.manualParticipantId || !item.fromCategoryId || !item.toCategoryId) {
+      throw new HttpsError('invalid-argument', 'Identidade e categorias tipadas são obrigatórias.');
+    }
+    const key = item.userUid ? 'uid:' + item.userUid : 'manual:' + item.manualParticipantId;
+    const entryKey = key + '\u0000' + item.fromCategoryId;
+    if (seen.has(entryKey)) throw new HttpsError('invalid-argument', 'Atribuição duplicada para a mesma inscrição.');
+    seen.add(entryKey); editPeople.add(key);
+  }
+  for (const item of cleanReservations) {
+    if (!item.manualParticipantId || !item.toCategoryId) throw new HttpsError('invalid-argument', 'Reserva sem identidade ou categoria.');
+    const key = 'manual:' + item.manualParticipantId;
+    if (editPeople.has(key) || seen.has(key + '\u0000reservation')) {
+      throw new HttpsError('invalid-argument', 'Reserva e edição da mesma pessoa no mesmo bloco.');
+    }
+    seen.add(key + '\u0000reservation');
+  }
+  return { edits: cleanEdits, reservations: cleanReservations, operationId };
+}
+
+function _canonicalAssignmentAuditFields(item) {
+  if (!item) return null;
+  return {
+    status: item.status || null, validationState: item.validationState || null,
+    withdrawnReason: item.withdrawnReason || null, paymentState: item.paymentState || null,
+    paymentDueCents: Number.isSafeInteger(item.paymentDueCents) ? item.paymentDueCents : null,
+    paymentCurrency: item.paymentCurrency || null, paymentMethod: item.paymentMethod || null,
+    reclassifiedFromRegistrationId: item.reclassifiedFromRegistrationId || null,
+    paymentTransferredToRegistrationId: item.paymentTransferredToRegistrationId || null,
+  };
+}
+
+async function _applyCanonicalAssignmentBatch(request, input) {
+  const callerUid = request.auth && request.auth.uid;
+  if (!callerUid) throw new HttpsError('unauthenticated', 'login necessário');
+  const data = request.data || {};
+  const tournamentId = String(data.tournamentId || '').trim();
+  const sandbox = data.sandbox === true;
+  if (!tournamentId || sandbox !== tournamentId.startsWith('sb_')) {
+    throw new HttpsError('invalid-argument', 'Torneio inválido para atribuição.');
+  }
+  const db = admin.firestore();
+  const ref = db.collection(sandbox ? 'sandboxes' : 'tournaments').doc(tournamentId);
+  const receiptRef = ref.collection('assignmentReceipts').doc(input.operationId);
+  const requestHash = crypto.createHash('sha256').update(JSON.stringify({
+    tournamentId, sandbox, edits: input.edits, reservations: input.reservations,
+  })).digest('hex');
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new HttpsError('not-found', 'torneio não existe');
+    const tournament = snap.data() || {};
+    if (sandbox) await _sandboxAutorizado(db, snap, callerUid, (sourceRef) => tx.get(sourceRef));
+    else if (tournament.isSandbox === true) throw new HttpsError('not-found', 'torneio não existe');
+    else if (!_isTournamentOrgCaller(tournament, callerUid)) {
+      throw new HttpsError('permission-denied', 'só a organização altera inscrições');
+    }
+    const prior = await tx.get(receiptRef);
+    if (prior.exists) {
+      const stored = prior.data() || {};
+      if (stored.requestHash !== requestHash || stored.callerUid !== callerUid) {
+        throw new HttpsError('failed-precondition', 'operationId já pertence a outro salvamento.');
+      }
+      return Object.assign({}, stored.reply, { replayed: true });
+    }
+    const logicalId = sandbox ? String(tournament.sandboxOf || '') : tournamentId;
+    if (!_categoryDefinitionsCanChange(tournament) || await _temPartesDeJogo(tx, ref, tournament)) {
+      throw new HttpsError('failed-precondition', 'A categoria da inscrição não pode mudar após o sorteio.');
+    }
+    let definitions;
+    try {
+      definitions = _categoryEligibility.normalizeCategoryDefinitions(tournament.categoryDefinitions);
+      const requested = input.edits.flatMap((item) => item.fromCategoryId === _registrationCore.UNCATEGORIZED_CATEGORY_ID
+        ? [item.toCategoryId] : [item.fromCategoryId, item.toCategoryId])
+        .concat(input.reservations.map((item) => item.toCategoryId));
+      _registrationCategoryBridge.categoryIdsFromTypedIds(definitions, requested);
+    } catch (error) { throw new HttpsError('invalid-argument', error.message); }
+    const checked = await _loadCanonicalRosterForMutation(tx, ref, tournament, logicalId);
+    let virtualTournament = _canonicalMutationTournament(ref, tournament, logicalId);
+    let virtualRegistrations = checked.registrations;
+    let virtualReservations = Array.isArray(tournament.placeholderReservations) ? tournament.placeholderReservations : [];
+    const updatesById = new Map(), createsById = new Map();
+    const audits = [], paymentNotices = [], pendingPaymentChecks = [];
+    let changed = 0;
+    const groups = new Map();
+    for (const item of input.reservations) {
+      if (!groups.has(item.toCategoryId)) groups.set(item.toCategoryId, []);
+      groups.get(item.toCategoryId).push(item.manualParticipantId);
+    }
+    for (const [toCategoryId, ids] of groups) {
+      for (let start = 0; start < ids.length; start += 32) {
+        let planned;
+        try {
+          planned = _placeholderCategoryBatch.plan(logicalId,
+            tournament.canonicalRegistrationMigration.fingerprint, virtualReservations,
+            virtualRegistrations, ids.slice(start, start + 32), toCategoryId);
+        } catch (error) { throw new HttpsError(error.code || 'failed-precondition', error.message); }
+        if (planned.needsReclassification) {
+          throw new HttpsError('failed-precondition', 'Uma dupla já formada precisa de reclassificação antes do bloco.');
+        }
+        virtualReservations = planned.reservationsAfter;
+        if (planned.creates.length) {
+          let next;
+          try { next = _canonicalRegistrationBoundary.applyCreates(virtualTournament, virtualRegistrations, planned.creates); }
+          catch (error) { throw new HttpsError('failed-precondition', error.message); }
+          virtualTournament = next.tournament;
+          virtualRegistrations = next.registrations;
+          planned.creates.forEach((item) => createsById.set(item.registrationId, item));
+          changed += planned.creates.length;
+        }
+      }
+    }
+    const touchedSourceIds = new Set();
+    for (const item of input.edits) {
+      const key = item.userUid ? 'uid:' + item.userUid : 'manual:' + item.manualParticipantId;
+      const requestedSourceId = _registrationCore.registrationId(key, item.fromCategoryId);
+      if (touchedSourceIds.has(requestedSourceId)) {
+        throw new HttpsError('invalid-argument', 'Pessoa ou dupla repetida no bloco.');
+      }
+      const active = virtualRegistrations.filter((registration) => registration &&
+        registration.participantKey === key && registration.status !== 'withdrawn');
+      const from = active.filter((registration) => registration.categoryId === item.fromCategoryId);
+      const atDestination = active.filter((registration) => registration.categoryId === item.toCategoryId);
+      const source = from.length === 1 ? from[0] : atDestination.length === 1 ? atDestination[0] : null;
+      if (!source) throw new HttpsError('failed-precondition', 'Inscrição mudou; atualize a Análise antes de salvar.');
+      const cohort = source.fixedPairId
+        ? virtualRegistrations.filter((registration) => registration && registration.fixedPairId === source.fixedPairId)
+        : [source];
+      if (cohort.length !== (source.fixedPairId ? 2 : 1) ||
+          cohort.some((registration) => touchedSourceIds.has(_registrationCore.registrationId(registration.participantKey, item.fromCategoryId)))) {
+        throw new HttpsError('invalid-argument', 'Pessoa ou dupla repetida no bloco.');
+      }
+      cohort.forEach((registration) => touchedSourceIds.add(_registrationCore.registrationId(registration.participantKey, item.fromCategoryId)));
+      if (source.categoryId === item.toCategoryId) {
+        if (source.categoryId !== item.fromCategoryId &&
+            (source.reclassifiedFromRegistrationId !== _registrationCore.registrationId(key, item.fromCategoryId) ||
+             !virtualRegistrations.some((priorSource) => priorSource.registrationId === source.reclassifiedFromRegistrationId && priorSource.status === 'withdrawn'))) {
+          throw new HttpsError('failed-precondition', 'Categoria de origem mudou; atualize a Análise.');
+        }
+        continue;
+      }
+      if (source.categoryId !== item.fromCategoryId) {
+        throw new HttpsError('failed-precondition', 'Categoria de origem mudou; atualize a Análise.');
+      }
+      let changes;
+      try {
+        changes = _registrationMutations.reclassify(logicalId, virtualRegistrations,
+          item.userUid ? { uid: item.userUid } : { manualParticipantId: item.manualParticipantId },
+          item.fromCategoryId, item.toCategoryId);
+        changes = _registrationPayment.planReclassificationPayment(changes, virtualRegistrations,
+          tournament.registrationSettings, definitions, tournament.billingContract);
+      } catch (error) { throw new HttpsError('failed-precondition', error.message); }
+      const notices = sandbox ? [] : _registrationPayment.reclassificationNotices(changes, virtualRegistrations, definitions, tournament);
+      paymentNotices.push(...notices);
+      const paidDestination = changes.updates.concat(changes.creates)
+        .some((entry) => entry.status !== 'withdrawn' && Number(entry.paymentDueCents) > 0);
+      if (paidDestination && !sandbox) {
+        if (tournament.billingContract?.schema !== 1 || !tournament.billingTermsAcceptance?.hash) {
+          throw new HttpsError('failed-precondition', 'Inscrição paga ainda não está habilitada neste torneio.');
+        }
+        try {
+          const context = _registrationPayment.paymentContext(tournament);
+          if (context === 'late' && _registrationPayment.createsNewOpenCharge(changes, virtualRegistrations)) {
+            throw new Error('Nova cobrança indisponível após o sorteio.');
+          }
+          if (context === 'pre_draw') _registrationPayment.directMethods(tournament.registrationSettings, context);
+        } catch (error) { throw new HttpsError('failed-precondition', error.message); }
+        pendingPaymentChecks.push(true);
+      }
+      const beforeById = new Map(virtualRegistrations.map((entry) => [entry.registrationId, entry]));
+      const destinations = changes.creates.concat(changes.updates);
+      for (const sourceAfter of changes.updates.filter((entry) => entry.status === 'withdrawn' && entry.categoryId === item.fromCategoryId)) {
+        const sourceBefore = beforeById.get(sourceAfter.registrationId);
+        const destinationAfter = destinations.find((entry) => entry.participantKey === sourceAfter.participantKey &&
+          entry.categoryId === item.toCategoryId && entry.status !== 'withdrawn');
+        if (!sourceBefore || !destinationAfter) throw new HttpsError('failed-precondition', 'Transição de categoria incompleta.');
+        audits.push({ sourceBefore, sourceAfter, destinationBefore: beforeById.get(destinationAfter.registrationId), destinationAfter,
+          fromCategoryId: item.fromCategoryId, toCategoryId: item.toCategoryId });
+      }
+      let next;
+      try { next = _canonicalRegistrationBoundary.applyChanges(virtualTournament, virtualRegistrations, changes.updates, changes.creates); }
+      catch (error) { throw new HttpsError('failed-precondition', error.message); }
+      virtualTournament = next.tournament;
+      virtualRegistrations = next.registrations;
+      changes.updates.forEach((entry) => updatesById.set(entry.registrationId, entry));
+      changes.creates.forEach((entry) => createsById.set(entry.registrationId, entry));
+      changed++;
+    }
+    if (pendingPaymentChecks.length) {
+      const billingConfig = (await tx.get(db.collection('billingAdminConfig').doc('active'))).data() || {};
+      if (!_billingTerms.termsAccepted(tournament, _billingTerms.termsCatalog(billingConfig, tournament))) {
+        throw new HttpsError('failed-precondition', 'As condições financeiras mudaram. Aguarde a organização aceitá-las novamente.');
+      }
+    }
+    const updates = Array.from(updatesById.values());
+    const creates = Array.from(createsById.values());
+    const reservationsChanged = JSON.stringify(virtualReservations) !== JSON.stringify(tournament.placeholderReservations || []);
+    const writeCount = (updates.length || creates.length || reservationsChanged ? 1 : 0)
+      + updates.length + creates.length + audits.length + paymentNotices.length + 1;
+    if (writeCount > 450) throw new HttpsError('failed-precondition', 'Bloco grande demais para uma transação; reduza a seleção.');
+    let next = checked;
+    if (updates.length || creates.length || reservationsChanged) {
+      next = _writeCanonicalRosterChanges(tx, ref, tournament, checked.registrations,
+        { updates, creates }, reservationsChanged ? { placeholderReservations: virtualReservations } : null,
+        sandbox ? logicalId : '');
+    }
+    const auditAt = new Date().toISOString();
+    audits.forEach((audit, index) => tx.create(ref.collection('registrationCategoryAudit').doc(input.operationId + '-' + index), {
+      schema: 1, kind: 'category-reclassification', at: auditAt, byUid: callerUid, tournamentId, sandbox,
+      participantUid: audit.sourceBefore.participantUid || null,
+      manualParticipantId: audit.sourceBefore.manualParticipantId || null,
+      sourceRegistrationId: audit.sourceBefore.registrationId,
+      destinationRegistrationId: audit.destinationAfter.registrationId,
+      fromCategoryId: audit.fromCategoryId, toCategoryId: audit.toCategoryId,
+      sourceBefore: _canonicalAssignmentAuditFields(audit.sourceBefore),
+      sourceAfter: _canonicalAssignmentAuditFields(audit.sourceAfter),
+      destinationBefore: _canonicalAssignmentAuditFields(audit.destinationBefore),
+      destinationAfter: _canonicalAssignmentAuditFields(audit.destinationAfter),
+    }));
+    if (!sandbox) paymentNotices.forEach((notice, index) => {
+      const { sourceRegistrationId, destinationRegistrationId, ...payload } = notice;
+      tx.create(ref.collection('notificationOutbox').doc('registration-reclassified-payment-' + input.operationId + '-' + index), {
+        schema: 1, kind: 'tournament-notification', ...payload,
+        tournamentId, tournamentName: String(tournament.name || ''),
+        ctaLabel: 'Ver pagamento', ctaUrl: 'https://scoreplace.app/#tournaments/' + tournamentId,
+        sourceRegistrationId, destinationRegistrationId,
+        createdAt: auditAt, createdAtMs: Date.parse(auditAt), dispatchStatus: 'pending',
+      });
+    });
+    const reply = { ok: true, outcome: changed || reservationsChanged ? 'assigned' : 'unchanged',
+      changed, resolvedEntries: input.edits.length + input.reservations.length,
+      operationId: input.operationId };
+    tx.create(receiptRef, { requestHash, callerUid, reply, createdAt: auditAt });
+    return reply;
+  });
+}
+
 exports.assignCanonicalPlaceholderCategoryBatch = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
   async (request) => {
     const callerUid = request.auth && request.auth.uid;
     if (!callerUid) throw new HttpsError('unauthenticated', 'login necessário');
     const data = request.data || {};
+    if (Array.isArray(data.edits) || Array.isArray(data.reservations)) {
+      return _applyCanonicalAssignmentBatch(request, _canonicalAssignmentBatchInput(data));
+    }
     const tournamentId = String(data.tournamentId || '').trim();
     const toCategoryId = String(data.toCategoryId || '').trim();
     const manualIds = data.manualParticipantIds;
@@ -5796,10 +6081,9 @@ exports.acceptTournamentClaimLink = onCall(
           throw new HttpsError('failed-precondition', 'vaga com classificação ou reserva; chame a organização');
         }
         publishedAuditRef = ref.collection('manualClaimAudits').doc(manualParticipantId);
-        const [participantSnap, matchSnap, resultSnap, auditSnap] = await Promise.all([
+        const [participantSnap, matchSnap, auditSnap] = await Promise.all([
           tx.get(ref.collection(_tSplitFn.colecaoDaParte('participants'))),
           tx.get(ref.collection(_tSplitFn.colecaoDaParte('matches'))),
-          tx.get(ref.collection('results')),
           tx.get(publishedAuditRef),
         ]);
         if (auditSnap.exists) throw new HttpsError('failed-precondition', 'vaga já vinculada antes; chame a organização');
@@ -5807,8 +6091,7 @@ exports.acceptTournamentClaimLink = onCall(
           publishedPlan = _publishedClaim.plan(manualParticipantId, pair.entry.fixedPairId,
             target.fixedPairId, callerUid,
             participantSnap.docs.map((doc) => ({ id: doc.id, data: doc.data() })),
-            matchSnap.docs.map((doc) => ({ id: doc.id, data: doc.data() })),
-            resultSnap.docs.map((doc) => ({ id: doc.id, data: doc.data() })));
+            matchSnap.docs.map((doc) => ({ id: doc.id, data: doc.data() })));
         } catch (error) { throw new HttpsError('failed-precondition', error.message); }
       }
       if (state.privateDraw) {
@@ -5824,6 +6107,7 @@ exports.acceptTournamentClaimLink = onCall(
         publishedPlan.matches.forEach((match) => {
           tx.set(ref.collection(_tSplitFn.colecaoDaParte('matches')).doc(match.id), match.data);
         });
+        if (publishedPlan.matches.length) tx.update(ref, { _phaseReadCertificate: _FV.delete() });
         tx.create(publishedAuditRef, {
           manualParticipantId, claimedByUid: callerUid, oldPairId: pair.entry.fixedPairId,
           newPairId: target.fixedPairId, oldParticipantDocId: item.id,
@@ -6256,6 +6540,15 @@ exports.setTournamentCategoryDefinitions = onCall(
         throw new HttpsError('failed-precondition', 'categorias só podem mudar antes do primeiro sorteio');
       }
       const migration = tournament.canonicalRegistrationMigration || {};
+      const nextLabels = new Set(definitions.map((def) => def.label));
+      const obsoleteLabels = (Array.isArray(tournament.categoryDefinitions) ? tournament.categoryDefinitions : [])
+        .map((def) => def && def.label).filter((label) => label && !nextLabels.has(label));
+      const categoryPrices = tournament.registrationSettings?.pricing;
+      if (obsoleteLabels.some((label) =>
+        (categoryPrices?.mode === 'category' && Object.prototype.hasOwnProperty.call(categoryPrices.centsByCategory || {}, label))
+        || Object.prototype.hasOwnProperty.call(tournament.maxParticipantsByCategory || {}, label))) {
+        throw new HttpsError('failed-precondition', 'Remova primeiro o preço ou o limite de vagas da categoria renomeada ou excluída.');
+      }
       if (migration.fingerprint) {
         const checked = await _loadCanonicalRosterForMutation(tx, ref, tournament, '');
         const nextIds = new Set(definitions.map((def) => def.id));
@@ -6400,6 +6693,34 @@ exports.requestCanonicalRegistration = onCall(
   }
 );
 
+/* A descoberta entre torneios usa os jogos físicos canônicos; cada candidato
+ * só sai depois de conferir a raiz do torneio no servidor. */
+exports.getTournamentResultHistoryPage = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30,
+    cors: APP_ORIGINS, enforceAppCheck: true, maxInstances: 10,
+    secrets: [RESULT_HISTORY_CURSOR_KEY] },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "entre na sua conta");
+    const data = request.data || {};
+    const targetUid = data.targetUid == null ? callerUid : data.targetUid;
+    try {
+      return await _resultHistoryPage.readResultHistoryPage({
+        db: admin.firestore(), fieldPath: admin.firestore.FieldPath,
+        callerUid, targetUid, cursor: data.cursor,
+        cursorKey: Buffer.from(RESULT_HISTORY_CURSOR_KEY.value() || '', 'base64')
+      });
+    } catch (error) {
+      // Chave de cursor ausente/inválida é falha interna de configuração,
+      // não erro de argumento do atleta. O núcleo falha antes de qualquer leitura.
+      if (/^(cursor|uid) inválid[oa]/.test(String(error && error.message))) {
+        throw new HttpsError("invalid-argument", "pedido de histórico inválido");
+      }
+      throw error;
+    }
+  }
+);
+
 /* A coleção canônica permanece privada no Firestore. Esta é a única ponte de
  * leitura para a tela: devolve uma projeção estrutural, nunca os documentos
  * crus. Espectadores de torneios gerais recebem apenas identidades já
@@ -6456,6 +6777,13 @@ exports.getCanonicalTournamentRoster = onCall(
         throw new HttpsError("permission-denied", "elenco indisponível neste torneio");
       }
       const publicSpectator = !sandbox && !isOrg && !belongsToRoster && publicGeneral;
+      // Só a organização vê a espera completa. A coleção canônica é a fonte;
+      // participantes e visitantes não recebem o elenco de quem ainda não joga.
+      const standbyParticipants = isOrg
+        ? _registrationRosterProjection.rosterFromRegistrations(checked.registrations
+            .filter(item => item.status === 'waitlisted')
+            .map(item => ({ ...item, status:'confirmed' })))
+        : [];
       // A interface recebe o mapa somente para apresentação. A identidade que
       // acompanha cada entrada é `categoryId` e as portas de mutação nunca
       // aceitam um label em seu lugar.
@@ -6482,6 +6810,7 @@ exports.getCanonicalTournamentRoster = onCall(
         tournamentId,
         registrationCount: checked.registrations.length,
         participants: publicSpectator ? [] : participants,
+        standbyParticipants,
         placeholderReservations: publicSpectator ? [] : placeholderReservations,
         categoryDefinitions: categoryDefinitions.map((definition) => ({ id: definition.id, label: definition.label })),
         // Estes campos ficam somente na memória da callable; nunca são enviados
@@ -7628,6 +7957,27 @@ exports.setMatchSchedule = onCall(
     });
   }
 );
+function _pairInvitationForCaller(tournament, callerUid, opts, isOrganizer) {
+  if (isOrganizer) return null;
+  if (tournament.manualPairing !== 'open' || !opts.uid1 || !opts.uid2 || opts.manualId1 || opts.manualId2) {
+    throw new HttpsError('failed-precondition', 'formação por participante exige convite entre duas contas inscritas');
+  }
+  const pair = new Set([String(opts.uid1), String(opts.uid2)]);
+  if (pair.size !== 2 || !pair.has(callerUid)) {
+    throw new HttpsError('permission-denied', 'só a pessoa convidada pode aceitar a dupla');
+  }
+  const matches = (Array.isArray(tournament.pairRequests) ? tournament.pairRequests : []).filter((item) =>
+    item && String(item.inviteeUid || '') === callerUid &&
+    pair.has(String(item.inviterUid || '')) &&
+    String(item.inviterUid || '') !== callerUid &&
+    String(item.id || '') &&
+    (!opts.pairRequestId || String(item.id) === opts.pairRequestId));
+  if (matches.length !== 1) {
+    throw new HttpsError('failed-precondition', 'convite de dupla ausente, alterado ou ambíguo');
+  }
+  return matches[0];
+}
+
 exports.formPair = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
   async (request) => {
@@ -7637,7 +7987,7 @@ exports.formPair = onCall(
     const tournamentId = String((request.data && request.data.tournamentId) || "");
     const d = request.data || {};
     const sandbox = d.sandbox === true;
-    const opts = { uid1: d.uid1 || "", manualId1: d.manualId1 || "", name1: d.name1 || "", uid2: d.uid2 || "", manualId2: d.manualId2 || "", name2: d.name2 || "", categoryId: d.categoryId || "", changeRule: !!d.changeRule };
+    const opts = { uid1: d.uid1 || "", manualId1: d.manualId1 || "", name1: d.name1 || "", uid2: d.uid2 || "", manualId2: d.manualId2 || "", name2: d.name2 || "", categoryId: d.categoryId || "", pairRequestId: String(d.pairRequestId || ''), changeRule: !!d.changeRule };
     // Nome serve para exibir a dupla, nunca para selecionar quem será alterado.
     // Esta fronteira protege inclusive clientes antigos que ainda tenham JS em cache.
     if (!tournamentId || (!opts.uid1 && !opts.manualId1) || (!opts.uid2 && !opts.manualId2)) {
@@ -7662,45 +8012,18 @@ exports.formPair = onCall(
         if ((!opts.uid1 && !opts.manualId1) || (!opts.uid2 && !opts.manualId2)) {
           throw new HttpsError("invalid-argument", "dupla canônica exige UID ou ID manual; nome não é identidade");
         }
-        const isOrg = _isTournamentOrgCaller(rawTournament, callerUid);
-        const involvesCaller = opts.uid1 === callerUid || opts.uid2 === callerUid;
-        if (!isOrg && !involvesCaller) {
-          throw new HttpsError("permission-denied", "só o organizador ou um dos dois da dupla podem formá-la");
-        }
+        const isOrg = sandbox || _isTournamentOrgCaller(rawTournament, callerUid);
+        _pairInvitationForCaller(rawTournament, callerUid, opts, isOrg);
         const checked = await _loadCanonicalRosterForMutation(tx, docRef, rawTournament, logicalId);
-        // Placeholders são reservas organizacionais, não inscrições canônicas.
-        // Em torneio de duplas o organizador pode formar duas reservas sem
-        // categoria; materializamos ambas como inscrições canônicas na
-        // categoria sentinela e vinculamos a dupla na mesma transação.
-        const _uncategorizedId = _registrationCore.UNCATEGORIZED_CATEGORY_ID;
-        // `__uncategorized__` é a forma tipada da mesma reserva sem categoria
-        // que clientes antigos enviavam como string vazia.
-        if ((!opts.categoryId || opts.categoryId === _uncategorizedId) && opts.manualId1 && opts.manualId2) {
-          const reservations = Array.isArray(rawTournament.placeholderReservations)
-            ? rawTournament.placeholderReservations : [];
-          const r1 = reservations.find((item) => String(item && item.manualParticipantId || '') === String(opts.manualId1));
-          const r2 = reservations.find((item) => String(item && item.manualParticipantId || '') === String(opts.manualId2));
-          const teamSize = Number(rawTournament.teamSize || 1);
-          if (teamSize < 2 || !r1 || !r2 || r1.isPlaceholder !== true || r2.isPlaceholder !== true) {
-            throw new HttpsError("invalid-argument", "reservas sem categoria só podem formar dupla em torneio de duplas");
-          }
-          const uncategorized = _uncategorizedId;
-          const key1 = _registrationCore.participantKey({ manualParticipantId: opts.manualId1 });
-          const key2 = _registrationCore.participantKey({ manualParticipantId: opts.manualId2 });
-          const id1 = _registrationCore.registrationId(key1, uncategorized);
-          const id2 = _registrationCore.registrationId(key2, uncategorized);
-          const existing = new Set(checked.registrations.map((item) => String(item.registrationId)));
-          if (existing.has(id1) || existing.has(id2)) {
-            throw new HttpsError("already-exists", "uma das reservas já foi materializada");
-          }
-          const fixedPairId = _registrationMutations.canonicalPairId(logicalId, uncategorized, [id1, id2]);
-          const manualName = (item, fallback) => String(item && (item.manualDisplayName || item.displayName || item.name) || fallback).trim();
-          const creates = [
-            { registrationId: id1, tournamentId: logicalId, categoryId: uncategorized, participantKey: key1, status: "confirmed", validationState: "approved", migrationFingerprint: rawTournament.canonicalRegistrationMigration.fingerprint, fixedPairId, participantKind: "manual", participantUid: null, manualParticipantId: String(opts.manualId1), manualDisplayName: manualName(r1, opts.name1), isPlaceholder: true },
-            { registrationId: id2, tournamentId: logicalId, categoryId: uncategorized, participantKey: key2, status: "confirmed", validationState: "approved", migrationFingerprint: rawTournament.canonicalRegistrationMigration.fingerprint, fixedPairId, participantKind: "manual", participantUid: null, manualParticipantId: String(opts.manualId2), manualDisplayName: manualName(r2, opts.name2), isPlaceholder: true },
-          ];
-          const next = _writeCanonicalRosterCreates(tx, docRef, rawTournament, checked.registrations, creates, logicalId);
-          return { outcome: "paired", participants: next.participants, canonical: true };
+        const reservations = Array.isArray(rawTournament.placeholderReservations) ? rawTournament.placeholderReservations : [];
+        if ([opts.manualId1, opts.manualId2].filter(Boolean).some((id) => reservations.some((item) =>
+          item && item.isPlaceholder === true && String(item.manualParticipantId || '') === String(id)))) {
+          throw new HttpsError('failed-precondition', 'reserva precisa virar inscrição real antes de formar dupla');
+        }
+        if ([opts.uid1 ? 'uid:' + opts.uid1 : 'manual:' + opts.manualId1,
+             opts.uid2 ? 'uid:' + opts.uid2 : 'manual:' + opts.manualId2].some((key) =>
+          checked.registrations.some((item) => item && item.participantKey === key && item.isPlaceholder === true && item.status !== 'withdrawn'))) {
+          throw new HttpsError('failed-precondition', 'placeholder não é inscrição real para formar dupla');
         }
         if (!opts.categoryId) throw new HttpsError("invalid-argument", "categoryId é obrigatório para formar dupla canônica");
         let decision;
@@ -7712,8 +8035,11 @@ exports.formPair = onCall(
             opts.categoryId
           );
         } catch (error) { throw new HttpsError("failed-precondition", error.message); }
-        const next = _writeCanonicalRosterUpdates(tx, docRef, rawTournament, checked.registrations, decision.updates, logicalId);
-        return { outcome: "paired", participants: next.participants, canonical: true };
+        const pairRequests = Array.isArray(rawTournament.pairRequests)
+          ? _pairCore.dropRequestsInvolving(rawTournament.pairRequests, [opts.uid1, opts.uid2].filter(Boolean)) : null;
+        const next = _writeCanonicalRosterUpdates(tx, docRef, rawTournament, checked.registrations,
+          decision.updates, logicalId, undefined, pairRequests ? { pairRequests } : undefined);
+        return { outcome: "paired", participants: next.participants, pairRequests, canonical: true };
       }
       // Torneio DIVIDIDO: o elenco mora na subcoleção. Hidrata ANTES de decidir —
       // sem isto as regras rodam contra `participants: []`. Ver functions/split-parts.js.
@@ -7721,11 +8047,8 @@ exports.formPair = onCall(
       _assertLegacyRosterStillAuthoritative(t);
       // Permissão: o organizador/co-host forma qualquer dupla; senão, o próprio (aceite de
       // convite) só pode formar dupla que INCLUA o seu uid.
-      const isOrg = _isTournamentOrgCaller(t, callerUid);
-      const involvesCaller = (opts.uid1 && opts.uid1 === callerUid) || (opts.uid2 && opts.uid2 === callerUid);
-      if (!isOrg && !involvesCaller) {
-        throw new HttpsError("permission-denied", "só o organizador ou um dos dois da dupla podem formá-la");
-      }
+      const isOrg = sandbox || _isTournamentOrgCaller(t, callerUid);
+      _pairInvitationForCaller(t, callerUid, opts, isOrg);
       const r = _pairCore.computeFormPair(t, opts);
       if (r.updateData) _splitParts.gravar(tx, docRef, t, r.updateData);
       return r;
@@ -7745,7 +8068,9 @@ exports.formPair = onCall(
     if (out.outcome === 'categoryRequired' || out.outcome === 'categoryMismatch' || out.outcome === 'mixedPairRequiresOneOfEachGender') {
       return { notFound: false, invalidPairing: out.outcome, participants: out.participants };
     }
-    return { notFound: false, participants: out.participants, newName: out.newName };
+    return { outcome: 'paired', notFound: false, participants: out.participants,
+      pairRequests: out.canonical ? out.pairRequests : out.updateData && out.updateData.pairRequests,
+      newName: out.newName };
   }
 );
 
@@ -7790,7 +8115,7 @@ exports.splitPair = onCall(
             opts.categoryId
           );
         } catch (error) { throw new HttpsError("failed-precondition", error.message); }
-        const isOrg = _isTournamentOrgCaller(rawTournament, callerUid);
+        const isOrg = sandbox || _isTournamentOrgCaller(rawTournament, callerUid);
         const isMember = opts.uid1 === callerUid || opts.uid2 === callerUid;
         if (!isOrg && !isMember) {
           throw new HttpsError("permission-denied", "só o organizador ou um membro da dupla podem desfazê-la");
@@ -7804,7 +8129,7 @@ exports.splitPair = onCall(
       _assertLegacyRosterStillAuthoritative(t);
       const r = _pairCore.computeSplitPair(t, opts);
       // Permissão: organizador/co-host desfaz qualquer dupla; senão, um MEMBRO da dupla.
-      const isOrg = _isTournamentOrgCaller(t, callerUid);
+      const isOrg = sandbox || _isTournamentOrgCaller(t, callerUid);
       const isMember = r.outcome === "split" && (r.p1Uid === callerUid || r.p2Uid === callerUid);
       if (!isOrg && !isMember) {
         throw new HttpsError("permission-denied", "só o organizador ou um membro da dupla podem desfazê-la");
@@ -7821,7 +8146,7 @@ exports.splitPair = onCall(
     }
 
     if (out.outcome === "notFound") return { notFound: true, participants: out.participants };
-    return { notFound: false, participants: out.participants };
+    return { outcome: 'split', notFound: false, participants: out.participants };
   }
 );
 
@@ -12325,6 +12650,10 @@ async function _sweepDeletionLeftovers(db, uid, kind) {
   await conta("casualMatches.playerUids", db.collection("casualMatches").where("playerUids", "array-contains", uid));
   // user-vivo:isento — busca reversa por uid (contagem de vínculos de terceiros).
   await conta("users.friends[] de terceiros", db.collection("users").where("friends", "array-contains", uid));
+  // Durante a migração E05, auditar as duas coleções detecta tanto o jogo físico
+  // canônico quanto um espelho antigo que sobreviveu à limpeza. Não usar o espelho
+  // para reconstruir placar ou identidade.
+  await conta("matches.playerUids", db.collectionGroup("matches").where("playerUids", "array-contains", uid));
   await conta("results.playerUids", db.collectionGroup("results").where("playerUids", "array-contains", uid));
   await olha("letzplayScans/" + uid, async () => {
     const d = await db.collection("letzplayScans").doc(uid).get();
@@ -12960,85 +13289,7 @@ exports.syncDiscoveryFeed = onDocumentWritten(
   }
 );
 
-// ─── syncMatchRosters (project_match_result_docs, inc 3b + espelho de resultado) ─
-// ESPELHO SERVER-AUTORITATIVO do subdoc de resultado por-jogo
-// (tournaments/{tId}/results/{matchId}) a partir do doc do torneio, com privilégio
-// de ADMIN. onWrite do doc do torneio → pra cada jogo cujo ESTADO ESPELHÁVEL mudou
-// (roster playerUids + campos de resultado: winner/score/sets/pending/wo/...),
-// reescreve o subdoc como CÓPIA FIEL do match (set SEM merge = remove campos que
-// sumiram, ex.: refazer/reverter/editar). Isso torna o subdoc uma fonte confiável
-// pra LEITURA independente de QUAL path mexeu no resultado no doc do torneio —
-// cobre de uma vez: mata-mata participant-driven (o cliente não pode escrever
-// playerUids pela regra), W.O., reverter W.O., editar resultado, placar ao vivo, e
-// os paths que já fazem dual-write no cliente (aqui vira idempotente). SÓ toca
-// subdoc que JÁ existe (semeado pelo sorteio/backfill) — não faz backfill de legado
-// (isso é a migração). NÃO re-dispara a si mesma (escreve em results/, não no doc do
-// torneio). Idempotente por assinatura (não reescreve se o espelho já bate).
-// Deploy: firebase deploy --only functions:syncMatchRosters
-const { collectMatches, subdocSignature, buildSeedDoc, buildMirrorDoc } = require("./match-roster");
-
-// Lê um torneio pela fonte que o próprio marcador declara. Esta função existe para os
-// dois caminhos server-side de `results`: o gatilho incremental e o backfill. Deixar
-// cada um listar partes por conta própria recriaria a falha que esta leva corrige.
-async function _montarTorneioCanonico(tournamentRef, config) {
-  return _tSplitFn.montarDoBanco(config, async (colecao) => {
-    const snap = await tournamentRef.collection(colecao).get();
-    return snap.docs.map((d) => d.data());
-  });
-}
-
-// ─── syncSplitMatchResult — Fase 2: fonte `matches` → projeção `results` ──────
-// `syncMatchRosters` observa o documento do torneio e serve os torneios inteiros.
-// Depois da Fase 2, o placar pode mudar em `tournaments/{tid}/matches/{matchId}`
-// sem que o doc pai contenha qualquer jogo. Este é o gatilho complementar, não uma
-// segunda fonte: ele remonta o torneio atual pelo mesmo `montarDoBanco` do app/CF e
-// espelha exclusivamente o jogo que mudou. O cliente continua sem dual-write.
-exports.syncSplitMatchResult = onDocumentWritten(
-  { document: "tournaments/{tid}/matches/{matchId}", region: "us-central1", memory: "256MiB", timeoutSeconds: 60 },
-  async (event) => {
-    const tid = event.params.tid;
-    const matchId = event.params.matchId;
-    const db = admin.firestore();
-    const tournamentRef = db.collection("tournaments").doc(tid);
-    const configSnap = await tournamentRef.get();
-    if (!configSnap.exists) return;
-    const config = configSnap.data() || {};
-    // O histórico nativo consulta o índice global por playerUids. Enquanto o
-    // torneio estiver restrito à organização, não criar esse índice.
-    if (config.organizerOnly === true) return;
-    /* ⛔ JOGO DIVIDIDO NÃO DEPENDE DO MARCADOR LEGADO.
-     * Todo torneio guarda `matches` fora do documento; `_semPesados` só continua gravado
-     * para o nativo antigo. Se este gatilho retornar porque uma fotografia chegou sem o
-     * campo, uma alteração de placar na subcoleção não chega a `results` e a tela volta a
-     * ler resultado velho. A mesma fonte `partesDe` já protege todos os montadores.
-     * [[project_torneio_nasce_dividido]] */
-    const fora = _tSplitFn.partesDe(config);
-    if (fora.indexOf('matches') === -1) return;
-
-    let t;
-    try {
-      t = await _montarTorneioCanonico(tournamentRef, config);
-    } catch (e) {
-      // Fail-closed: um torneio incompleto jamais pode produzir `results` inventado.
-      console.error(`[syncSplitMatchResult] ${tid}/${matchId}: não montou fonte canônica:`, e && e.message);
-      return;
-    }
-
-    const resultRef = tournamentRef.collection("results").doc(String(matchId));
-    const anteriorSnap = await resultRef.get();
-    const plano = _splitResultMirror.planoDoEspelho(
-      t, matchId, anteriorSnap.exists ? anteriorSnap.data() : null, tid, new Date().toISOString()
-    );
-    if (plano.acao === 'skip') return;
-    if (plano.acao === 'delete') {
-      if (anteriorSnap.exists) await resultRef.delete();
-      return;
-    }
-    await resultRef.set(plano.doc); // sem merge: campos removidos da fonte também somem
-    console.log(`[syncSplitMatchResult] ${tid}/${matchId}: espelho atualizado`);
-  }
-);
-
+// Vigia da raiz: conserva roster de participantes e concilia W.O. nos jogos físicos.
 exports.syncMatchRosters = onDocumentWritten(
   { document: "tournaments/{tid}", region: "us-central1", memory: "256MiB", timeoutSeconds: 60 },
   async (event) => {
@@ -13079,9 +13330,7 @@ exports.syncMatchRosters = onDocumentWritten(
     // MOVIMENTOS (W.O., promoção da fila, saída) e a inscrição que cai no fallback do
     // cliente quando a CF falha.
     //
-    // Roda ANTES do early-return de baixo (que só olha mudança de JOGO): mudança de
-    // roster frequentemente não mexe em jogo nenhum, e sair antes cegaria a rede
-    // justamente nos eventos que ela existe pra registrar.
+    // Roda em toda mudança da raiz: alteração de roster pode não mudar jogo algum.
     // Best-effort e isolado: falhar aqui não pode derrubar o gatilho nem o save que já
     // aconteceu — o array no doc do torneio segue sendo a fonte da verdade.
     try {
@@ -13137,20 +13386,29 @@ exports.syncMatchRosters = onDocumentWritten(
           plano.novosInscritos.forEach((n) => lote.set(_colIns.doc(n._id), { _k: n._k, _idx: n._idx, item: n.item }, { merge: true }));
           plano.desativar.forEach((d) => lote.set(_colIns.doc(d._id), { _k: d._k, _idx: d._idx, item: d.item }, { merge: true }));
           plano.patchesDeJogo.forEach((p) => {
-            const corpo = { _loc: p._loc, _chave: p._chave, jogo: p.jogo };
-            if (p.playerUids) corpo.playerUids = p.playerUids;
-            lote.set(_colJog.doc(p._id), corpo, { merge: true });
+            // O plano veio de leitura anterior ao lote: atualizar o mapa `jogo`
+            // inteiro apagaria replay/placar escritos nesse intervalo. Somente
+            // campos do slot mudam; documento removido faz o batch falhar fechado.
+            lote.update(_colJog.doc(p._id), p.camposAlterados);
           });
           /* ⛔ O MARCADOR TEM QUE ACOMPANHAR. `_nPartes.participants` é o que faz o app
            * decidir se busca o elenco; deixá-lo para trás depois de acrescentar gente
            * recria a divergência que este gatilho existe pra fechar. */
+          const _rootPatch = {};
+          if (plano.patchesDeJogo.length) {
+            // O lote pode criar um jogo com merge; a marca de leitura por fase
+            // precisa cair atomicamente mesmo sem novos inscritos.
+            _rootPatch._phaseReadCertificate = _FV.delete();
+          }
           if (plano.novosInscritos.length) {
             const _nP = Object.assign({}, after._nPartes || {}, { participants: _ins.length + plano.novosInscritos.length });
             const _mem = after.organizerOnly === true
               ? Array.from(new Set([after.creatorUid].concat(after.adminUids || []).filter(Boolean)))
               : Array.from(new Set((after.memberUids || []).concat(plano.novosInscritos.map((n) => n.item.uid))));
-            lote.update(_ref2, { _nPartes: _nP, memberUids: _mem });
+            _rootPatch._nPartes = _nP;
+            _rootPatch.memberUids = _mem;
           }
+          if (Object.keys(_rootPatch).length) lote.update(_ref2, _rootPatch);
           await lote.commit();
           console.log("[wo-reconcilia] " + tid + " · " + plano.eventos + " evento(s) · +" +
             plano.novosInscritos.length + " inscrito(s) · " + plano.desativar.length + " desativado(s) · " +
@@ -13162,176 +13420,7 @@ exports.syncMatchRosters = onDocumentWritten(
       console.error("[wo-reconcilia] " + tid + " falhou:", _woErr && _woErr.message);
     }
 
-    // O histórico global consulta results por playerUids, inclusive no nativo
-    // antigo. Na transição para somente organizadores, removemos o índice dos
-    // espelhos existentes; nenhum placar ou confronto canônico é apagado. A
-    // checagem roda em TODA escrita oculta para reconciliar atualizações parciais.
-    if (after.organizerOnly === true) {
-      const hiddenResults = await admin.firestore().collection("tournaments").doc(tid).collection("results").get();
-      let batch = admin.firestore().batch();
-      let count = 0;
-      for (const result of hiddenResults.docs) {
-        if (!Array.isArray(result.data().playerUids) || !result.data().playerUids.length) continue;
-        batch.update(result.ref, { playerUids: [] });
-        count++;
-        if (count % 400 === 0) { await batch.commit(); batch = admin.firestore().batch(); }
-      }
-      if (count % 400) await batch.commit();
-      return;
-    }
 
-    // Ao liberar um torneio dividido, o pai não contém os jogos. Reidratar a
-    // parte canônica força a reconstrução do índice de histórico, sem depender
-    // de um novo sorteio nem alterar placares.
-    let afterForResults = after;
-    if (before && before.organizerOnly === true && after.organizerOnly !== true && !collectMatches(after).length) {
-      afterForResults = await _montarTorneioCanonico(admin.firestore().collection("tournaments").doc(tid), after);
-    }
-    // Assinatura (roster+resultado) de cada jogo ANTES → só processa os que mudaram.
-    const beforeSig = {};
-    collectMatches(before && before.organizerOnly !== true ? before : {}).forEach((m) => {
-      if (m && m.id != null && m.id !== "") beforeSig[String(m.id)] = subdocSignature(buildSeedDoc(before, m));
-    });
-    const candidates = [];
-    const seenId = {};
-    collectMatches(afterForResults).forEach((m) => {
-      if (!m || m.id == null || m.id === "") return;
-      const id = String(m.id);
-      if (seenId[id]) return;
-      seenId[id] = true;
-      const sig = subdocSignature(buildSeedDoc(afterForResults, m));
-      if (beforeSig[id] !== sig) candidates.push({ id, m, sig });
-    });
-    if (!candidates.length) return; // nada mudou no espelho → barato, sai
-
-    const nowIso = new Date().toISOString();
-    const db = admin.firestore();
-    const resultsCol = db.collection("tournaments").doc(tid).collection("results");
-    let synced = 0;
-    for (const { id, m, sig } of candidates) {
-      try {
-        const ref = resultsCol.doc(id);
-        const snap = await ref.get();
-        // v1.8.79: ANTES aqui havia `if (!snap.exists) continue` — "não semeado, é a
-        // migração que cuida". MEDIDO em produção (16/ago) e isso não se sustentava:
-        // Confra tinha 4 docs pra dezenas de jogos, e dois torneios de eliminatórias
-        // tinham ZERO. A causa é que o seed vive no CLIENTE (`seedMatchResultDocs`, em
-        // `_commitInitialDraw`) e o SORTEIO AUTOMÁTICO roda no SERVIDOR — que nunca o
-        // chama. Ou seja: quem dependesse do subdoc existir tinha cobertura aleatória.
-        // Agora o doc é CRIADO aqui quando falta. Este gatilho é o lugar certo: ele vê
-        // TODA escrita no torneio, de QUALQUER cliente (inclusive o nativo antigo) e de
-        // qualquer caminho de sorteio, e roda como ADMIN — que é justamente quem a regra
-        // deixa criar (`allow create: só admin`). Nenhuma regra precisou mudar.
-        // Só entram jogos cuja assinatura MUDOU, então isto não varre o torneio inteiro
-        // a cada escrita: cria sob demanda, no jogo que mexeu.
-        const existia = snap.exists;
-        if (existia && subdocSignature(snap.data()) === sig) continue; // espelho já bate → idempotente
-        // `anterior` carrega adiante o que o espelho não sabe recalcular (replay).
-        await ref.set(buildMirrorDoc(afterForResults, m, tid, nowIso, existia ? snap.data() : null));
-        synced++;
-      } catch (e) {
-        console.error(`[syncMatchRosters] ${tid}/${id}:`, e);
-      }
-    }
-    if (synced) console.log(`[syncMatchRosters] ${tid}: ${synced} espelho(s) de resultado sincronizado(s)`);
-  }
-);
-
-// ─── backfillMatchResultDocs (project_match_result_docs, MIGRAÇÃO) ─────────────
-// Semeia os docs de resultado por-jogo (tournaments/{tId}/results/{matchId}) dos
-// torneios LEGADOS — os criados ANTES do wiring de seed-no-sorteio, que têm o placar
-// só no doc do torneio. Pra cada jogo SEM subdoc, cria { matchId, playerUids, +
-// campos de resultado atuais do match }. NÃO toca subdoc que já existe (idempotente
-// — a syncMatchRosters + o dual-write mantêm os existentes frescos). Roda com ADMIN
-// (bypassa a regra, pode semear playerUids). One-shot, seguro pra re-rodar.
-//   ?tid=<id>   → só um torneio (teste)
-//   ?dryRun=1   → conta o que criaria, NÃO escreve
-//   ?limit=<n>  → processa no máx n torneios (segurança)
-// Guarda: ?secret=<BACKFILL_SECRET> (secret setado via functions:secrets:set — NUNCA
-// hardcoded; os endpoints admin antigos vazaram segredo em repo público → 410).
-// Deploy: firebase deploy --only functions:backfillMatchResultDocs --project <proj>
-const BACKFILL_SECRET = defineSecret("BACKFILL_SECRET");
-exports.backfillMatchResultDocs = onRequest(
-  { region: "us-central1", timeoutSeconds: 540, memory: "512MiB", secrets: [BACKFILL_SECRET] },
-  async (req, res) => {
-    if (req.query.secret !== BACKFILL_SECRET.value()) {
-      res.status(403).json({ error: "forbidden" });
-      return;
-    }
-    const db = admin.firestore();
-    const dryRun = req.query.dryRun === "1" || req.query.dryRun === "true";
-    // force=1: além de criar os que faltam, REFRESCA (reescreve) os subdocs que já
-    // existem cujo espelho está desatualizado (ex.: ganhar os campos de exibição
-    // p1/p2/tournamentName/roundLabel novos). Usa a MESMA assinatura da CF pra só
-    // reescrever o que mudou (idempotente). Sem force = só cria os faltantes.
-    const force = req.query.force === "1" || req.query.force === "true";
-    const oneTid = req.query.tid ? String(req.query.tid) : null;
-    const limit = req.query.limit ? parseInt(String(req.query.limit), 10) : 0;
-
-    let docs;
-    if (oneTid) {
-      const s = await db.collection("tournaments").doc(oneTid).get();
-      docs = s.exists ? [s] : [];
-    } else {
-      const snap = await db.collection("tournaments").get();
-      docs = snap.docs;
-      if (limit > 0) docs = docs.slice(0, limit);
-    }
-
-    let tournaments = 0, withBracket = 0, created = 0, refreshed = 0, skipped = 0;
-    const errors = [];
-    for (const tdoc of docs) {
-      tournaments++;
-      const bruto = tdoc.data() || {};
-      // Backfill também não pode tornar um sorteio oculto visível no histórico.
-      if (bruto.organizerOnly === true) { skipped++; continue; }
-      let t;
-      try {
-        // `backfill` também é reparo dos torneios já divididos: o documento pai é
-        // magro por desenho; usar `collectMatches(bruto)` os ignorava em silêncio.
-        t = await _montarTorneioCanonico(tdoc.ref, bruto);
-      } catch (e) {
-        errors.push({ tid: tdoc.id, err: 'não montou fonte canônica: ' + String(e && e.message) });
-        continue;
-      }
-      const matches = collectMatches(t).filter((m) => m && m.id != null && m.id !== "");
-      if (!matches.length) continue; // sem chave (fase de inscrição) → nada a semear
-      withBracket++;
-      const resultsCol = db.collection("tournaments").doc(tdoc.id).collection("results");
-      // lê os subdocs já existentes de uma vez (evita N gets)
-      const existingSnap = await resultsCol.get();
-      const existingData = {};
-      existingSnap.docs.forEach((d) => { existingData[d.id] = d.data() || {}; });
-      const seen = new Set();
-      for (const m of matches) {
-        const id = String(m.id);
-        if (seen.has(id)) continue; // um match id só uma vez
-        seen.add(id);
-        const exists = Object.prototype.hasOwnProperty.call(existingData, id);
-        if (exists && !force) { skipped++; continue; } // já semeado → não clobbera
-        try {
-          if (exists) {
-            // force: só reescreve se o espelho mudou (idempotente por assinatura)
-            if (subdocSignature(existingData[id]) === subdocSignature(buildSeedDoc(t, m))) { skipped++; continue; }
-            if (dryRun) { refreshed++; continue; }
-            // `replay` não é derivável de matches; carregar o anterior evita que o
-            // reparo correto do placar apague o ponto-a-ponto da partida.
-            await resultsCol.doc(id).set(buildMirrorDoc(t, m, tdoc.id, null, existingData[id]));
-            refreshed++;
-          } else {
-            if (dryRun) { created++; continue; }
-            const seed = buildSeedDoc(t, m);
-            seed.updatedAt = new Date().toISOString();
-            await resultsCol.doc(id).set(seed); // create (não existe) — set sem merge
-            created++;
-          }
-        } catch (e) {
-          errors.push({ tid: tdoc.id, matchId: id, err: String(e && e.message) });
-        }
-      }
-    }
-    console.log(`[backfillMatchResultDocs] dryRun=${dryRun} force=${force} tournaments=${tournaments} withBracket=${withBracket} created=${created} refreshed=${refreshed} skipped=${skipped} errors=${errors.length}`);
-    res.json({ ok: true, dryRun, force, tournaments, withBracket, created, refreshed, skipped, errors: errors.slice(0, 20) });
   }
 );
 
@@ -14551,13 +14640,9 @@ exports.removeFriend = onCall(_AMIZADE_OPTS, async (request) => {
  *     então clonar dali JÁ NASCE incompleto.
  *   ⇒ aqui roda o Admin SDK: lê o original inteiro, PROVA, e escreve as partes.
  *
- * ⭐ A ÚNICA exceção de forma persistida, autorizada pelo dono:
- *      tournaments/{id}/results/{matchId} → sandboxes/{id}/resultsSandbox/{matchId}
- *   Motivo: a regra de COLLECTION GROUP `/{path=**}/results/{matchId}` não pode ser
- *   escopada por coleção-pai (limitação da plataforma, não escolha). Como a cópia é FIEL,
- *   ela preserva `playerUids` reais — mantendo o nome, o participante real passaria por
- *   aquela regra e leria os resultados do sandbox. Muda SÓ o nome do caminho: ids, campos,
- *   placares e contagens vão byte a byte.
+ * E05: `results` é o índice legado, não a fonte do placar. Um sandbox novo copia
+ * `matches/{id}.jogo` e as outras partes canônicas; não cria `resultsSandbox`.
+ * Sandboxes antigos ainda podem ter esse índice e são limpos na exclusão.
  *
  * ⚠️ `creating` → `ready`: o documento nasce com `sbState:'creating'` e só vira `'ready'`
  * DEPOIS da prova canônica. O cliente só lista/abre o que está `ready`, então falha no meio
@@ -14648,10 +14733,12 @@ exports.createSandbox = onCall(
     // ── ③ LÊ O ORIGINAL CANÔNICO E COMPLETO ─────────────────────────────────
     // O original foi lido e autorizado acima, antes mesmo da busca idempotente.
 
-    // TODAS as subcoleções que o original de fato tem — enumeradas, não adivinhadas.
+    // Todas as partes do original, exceto os índices legados de resultado.
+    // O placar já está em matches/{id}.jogo; copiá-lo de novo criaria segunda fonte.
     const subRefs = await origRef.listCollections();
     const partes = {};
     for (const c of subRefs) {
+      if (c.id === "results" || c.id === "resultsSandbox") continue;
       const snap = await c.get();
       partes[c.id] = snap.docs.map((d) => ({ id: d.id, data: d.data() }));
     }
@@ -14703,10 +14790,9 @@ exports.createSandbox = onCall(
 
     let escritos = 0;
     for (const col of Object.keys(partes)) {
-      const destino = (col === "results") ? "resultsSandbox" : col;   // a única exceção
       let lote = db.batch(); let n = 0;
       for (const d of partes[col]) {
-        lote.set(sbRef.collection(destino).doc(d.id), d.data);        // id e campos byte a byte
+        lote.set(sbRef.collection(col).doc(d.id), d.data);             // id e campos byte a byte
         n++; escritos++;
         if (n >= 400) { await lote.commit(); lote = db.batch(); n = 0; }
       }
@@ -14722,15 +14808,14 @@ exports.createSandbox = onCall(
       if (_sbCanon(cfg[k]) !== _sbCanon(relido[k])) difs.push("campo:" + k);
     }
     for (const col of Object.keys(partes)) {
-      const destino = (col === "results") ? "resultsSandbox" : col;
-      const snap = await sbRef.collection(destino).get();
+      const snap = await sbRef.collection(col).get();
       if (snap.size !== partes[col].length) {
-        difs.push(destino + ": " + snap.size + " de " + partes[col].length);
+        difs.push(col + ": " + snap.size + " de " + partes[col].length);
         continue;
       }
       const porId = {}; snap.docs.forEach((d) => { porId[d.id] = d.data(); });
       for (const d of partes[col]) {
-        if (_sbCanon(porId[d.id]) !== _sbCanon(d.data)) { difs.push(destino + "/" + d.id); break; }
+        if (_sbCanon(porId[d.id]) !== _sbCanon(d.data)) { difs.push(col + "/" + d.id); break; }
       }
     }
     if (difs.length) {

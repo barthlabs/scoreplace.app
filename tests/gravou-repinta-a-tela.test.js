@@ -48,7 +48,8 @@ ok(/#tournaments\/' \+ String\(tournamentId\)/.test(bloco),
 
 console.log('\n③ A repintura nunca derruba o placar já gravado');
 ok(/catch \(_eR\)/.test(bloco), 'o bloco é best-effort — falhar ao repintar não desfaz a gravação');
-ok(bloco.indexOf('_saveToCache') < bloco.indexOf('_softRefreshView'),
+ok(bloco.indexOf('this._saveToCache()') >= 0 &&
+   bloco.indexOf('this._saveToCache()') < bloco.lastIndexOf('window._softRefreshView()'),
    'e ela vem DEPOIS de persistir o cache, não antes');
 
 console.log('\n④ Torneio DIVIDIDO: o que a CF devolve não traz os jogos');

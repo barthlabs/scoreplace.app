@@ -465,7 +465,7 @@ window._syncTournamentPresencePlan = function(t, user) {
 // Retorna o veredito: 'enrolled' | 'waitlisted' | 'alreadyWaitlisted' | 'already' |
 // 'dupSuspect' | 'capacityFull' | 'closed'.
 window._applyEnrollResult = function (t, tId, res, ctx) {
-  res = res || {}; ctx = ctx || {};
+  res = res && typeof res === 'object' ? res : {}; ctx = ctx || {};
   var name = ctx.name || '';
   var toast = function (title, msg, kind) { if (typeof showNotification !== 'undefined') showNotification(title, msg, kind); };
   if (ctx.self && (Array.isArray(res.paymentDue) && res.paymentDue.length
@@ -476,14 +476,17 @@ window._applyEnrollResult = function (t, tId, res, ctx) {
   }
 
   var verdict;
-  if (res.capacityFull) verdict = 'capacityFull';
+  if (res.outcome != null && ['enrolled', 'rejected', 'conflict'].indexOf(res.outcome) === -1) verdict = 'unconfirmed';
+  else if (res.outcome === 'rejected' || res.outcome === 'conflict') verdict = res.outcome;
+  else if (res.capacityFull) verdict = 'capacityFull';
   else if (res.duplicateName) verdict = 'duplicateName';
   else if (res.enrollmentClosed) verdict = 'closed';
   else if (res.alreadyEnrolled && res.dupSuspect) verdict = 'dupSuspect';
   else if (res.alreadyEnrolled) verdict = 'already';
   else if (res.alreadyWaitlisted) verdict = 'alreadyWaitlisted';
   else if (res.waitlisted) verdict = 'waitlisted';
-  else verdict = 'enrolled';
+  else if (res.outcome === 'enrolled') verdict = 'enrolled';
+  else verdict = 'unconfirmed';
   var ok = (verdict === 'enrolled' || verdict === 'waitlisted');
 
   // A verdade é a do servidor: a cópia local adota as listas que ele devolveu.
@@ -494,7 +497,13 @@ window._applyEnrollResult = function (t, tId, res, ctx) {
     t.participants = t.participants.filter(function (p) { return p !== ctx.optimistic; });
   }
 
-  if (verdict === 'capacityFull') {
+  if (verdict === 'rejected' || verdict === 'conflict') {
+    toast('Inscrição recusada', verdict === 'conflict'
+      ? 'As categorias escolhidas entram em conflito. Revise a escolha e tente novamente.'
+      : 'A inscrição não foi aceita para esta categoria. Revise os requisitos do torneio.', 'error');
+  } else if (verdict === 'unconfirmed') {
+    toast('Inscrição não confirmada', 'Não foi possível confirmar o resultado. Atualize o torneio e confira sua inscrição antes de tentar novamente.', 'error');
+  } else if (verdict === 'capacityFull') {
     toast('Vagas esgotadas', ctx.self
       ? 'As vagas acabaram antes de você concluir — você não foi inscrito.'
       : ('As vagas acabaram — ' + name + ' não entrou.'), 'error');
@@ -530,7 +539,7 @@ window._applyEnrollResult = function (t, tId, res, ctx) {
   // a conta mascarada e o "não sou eu") — o toast "já inscrito" aqui seria a mentira
   // que escondia a saída.
 
-  if (res.dupSuspect && typeof window._askDuplicatePerson === 'function') {
+  if (res.dupSuspect && (ok || verdict === 'dupSuspect') && typeof window._askDuplicatePerson === 'function') {
     window._askDuplicatePerson(tId, res.dupSuspect);
   }
 
@@ -595,27 +604,31 @@ function _enrollToStandby(t, tId, participantObj, callback) {
   // ⚠️ SEM PUSH OTIMISTA: quem decide o destino é o servidor, olhando o doc fresco. Empurrar
   // na lista antes da resposta é o que produzia o "apareceu em azul e sumiu" — e, pior, num
   // caso de sucesso parcial deixaria a tela afirmando algo que o banco não tem.
+  if (!window.FirestoreDB || typeof window.FirestoreDB.enrollParticipant !== 'function') {
+    if (typeof showNotification !== 'undefined') showNotification('Erro', 'Não foi possível confirmar a inscrição. Tente novamente.', 'error');
+    if (callback) callback('error');
+    return;
+  }
   window.FirestoreDB.enrollParticipant(tId, participantObj).then(function(res) {
     res = res || {};
-    // Compatibilidade de resposta: versões antigas da Function não devolviam a lista.
-    // Isto atualiza somente a UI; jamais persiste uma inscrição pelo navegador.
-    if (res.waitlisted && !res.alreadyWaitlisted && !Array.isArray(res.standbyParticipants) && t.standbyParticipants.indexOf(participantObj) === -1) {
-      t.standbyParticipants.push(participantObj);
-    }
     // self = a própria pessoa se inscrevendo (o organizador inscrevendo terceiro recebe
     // a mensagem na 3ª pessoa). Decidido por uid, nunca por flag de UI.
     var _cuStb = window.AppStore && window.AppStore.currentUser;
-    window._applyEnrollResult(t, tId, res, {
+    var verdict = window._applyEnrollResult(t, tId, res, {
       name: newName,
       self: !!(_cuStb && participantObj && participantObj.uid && participantObj.uid === _cuStb.uid),
       successToast: true,   // 'enrolled' aqui = o servidor concluiu que ainda cabe no elenco
       refresh: false        // quem repinta é o callback do caller
     });
-    if (callback) callback();
+    // Compatibilidade de resposta: versões antigas da Function não devolviam a
+    // fila. A projeção local só é completada após um recibo waitlisted válido.
+    if (verdict === 'waitlisted' && !res.alreadyWaitlisted && !Array.isArray(res.standbyParticipants)
+      && t.standbyParticipants.indexOf(participantObj) === -1) t.standbyParticipants.push(participantObj);
+    if (callback) callback(verdict);
   }).catch(function(e) {
     if (typeof showNotification !== 'undefined') showNotification('Não foi possível entrar na lista de espera', (e && e.message) ? e.message : 'Tente novamente em instantes.', 'error');
     if (typeof window._captureException === 'function') window._captureException(e, { area: '_enrollToStandby', tournamentId: tId });
-    if (callback) callback();
+    if (callback) callback('error');
   });
 }
 
@@ -1036,19 +1049,8 @@ window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
         if (typeof window.AppStore._montaPesadosQueFaltam === 'function') window.AppStore._montaPesadosQueFaltam([String(tId)]);
         return;
     }
-    var alreadyIn = (_souInsc === true) || (typeof window._isUserEnrolledInTournament === 'function'
-      ? window._isUserEnrolledInTournament(user, t)
-      : false);
-    if (alreadyIn) {
-        if (window._tournamentRequiresPayment(t)
-          && typeof window._openTournamentRegistrationPayment === 'function') {
-            window._openTournamentRegistrationPayment(tId);
-            return;
-        }
-        if (typeof showNotification !== 'undefined') showNotification(_t('enroll.alreadyEnrolled'), _t('enroll.alreadyEnrolledMsg'), 'info');
-        window._scrollToParticipant(tId, user.displayName);
-        return;
-    }
+    // O elenco em memória pode estar atrasado depois de outra sessão ou retirada.
+    // Só o recibo fresco da callable decide se já existe inscrição.
 
     // v1.6.86 — PONTO ÚNICO DE DESTINO: fase já SORTEADA → LISTA DE ESPERA, nunca o roster.
     // Fica DEPOIS do participantObj estar pronto de propósito: assim quem chega tarde entra
@@ -1057,62 +1059,34 @@ window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
     // classificar na mão). Todos os caminhos de auto-inscrição passam por aqui — inscrição
     // direta, com categoria, e duplas de teamSize 2 —, então a porta é uma só.
     if (window._phaseDrawDone(t)) {
-        _enrollToStandby(t, tId, participantObj, function() {
+        _enrollToStandby(t, tId, participantObj, function(verdict) {
             const _vcW = document.getElementById('view-container');
             if (_vcW && typeof renderTournaments === 'function') renderTournaments(_vcW, tId);
-            if (typeof _onSuccess === 'function') { setTimeout(_onSuccess, 400); }
+            if ((verdict === 'waitlisted' || verdict === 'enrolled') && typeof _onSuccess === 'function') { setTimeout(_onSuccess, 400); }
         });
         return;
     }
 
-    // Add to local state immediately
-    // ⚠️ v1.8.1 — O PUSH É DA TELA, NÃO DO BANCO. Marca transiente `_pendingEnroll`:
-    // este objeto existe pra a interface responder na hora, mas NÃO é inscrição
-    // confirmada — quem confirma é a CF, que devolve o
-    // array autoritativo logo abaixo. Sem a marca, quando a resposta NUNCA chega (4G
-    // caindo na quadra, aba fechada, timeout) o push ficava e qualquer save posterior
-    // o gravava: a pessoa virava "inscrita" sem nunca ter passado pela LISTA DE ESPERA,
-    // que é onde a regra da 1.6.86 manda quem chega depois do sorteio. Foi assim que
-    // M.Delia, Marcos e Debora ficaram invisíveis na rodada do Confra (10/ago).
-    // O `saveTournament` remove entradas marcadas antes de persistir.
-    if (!Array.isArray(t.participants)) t.participants = t.participants ? Object.values(t.participants) : [];
-    // v1.8.40: guarda a REFERÊNCIA do push — o rollback antigo filtrava por participantObj,
-    // mas o que entra no array é uma CÓPIA (Object.assign), então a recusa não removia NADA
-    // da tela e a pessoa seguia se vendo "inscrita" até o próximo snapshot.
-    var _pushedEnroll = Object.assign({}, participantObj, { _pendingEnroll: true });
-    var _paidEnrollment = window._tournamentRequiresPayment(t);
-    if (!_paidEnrollment) t.participants.push(_pushedEnroll);
-
-    // Show success and navigate immediately (no wait for network)
-    if (!_paidEnrollment && window._sound) window._sound('sino');
-    if (!_paidEnrollment && typeof showNotification !== 'undefined') showNotification(_t('enroll.enrolledTitle'), _t('enroll.enrolledMsg', { name: window._safeHtml(t.name) }), 'success');
-    // Trophy hook — enrollment milestone
-    if (!_paidEnrollment) setTimeout(function() {
-      try { if (typeof window._trophyOnTournamentEnrolled === 'function') window._trophyOnTournamentEnrolled(t); } catch(_te) {}
-    }, 500);
-    if (!_paidEnrollment) window._scrollToParticipant(tId, user.displayName);
-    // v2.1.66: cria automaticamente um "Planejar ida" cobrindo a duração do
-    // torneio quando ele tem data+hora e local. Dedup do PresenceDB evita duplicar.
-    if (!_paidEnrollment) try { if (typeof window._maybeCreateTournamentPresencePlan === 'function') window._maybeCreateTournamentPresencePlan(t, user); } catch (_pp) {}
-    // v2.8.86: se há enquete ativa, notifica o novo inscrito pra responder (fundamental).
-    if (!_paidEnrollment) try { if (typeof window._opNotifyNewEnrollee === 'function') window._opNotifyNewEnrollee(t, user && user.uid); } catch (_op) {}
-    // Post-enroll callback (ex: abrir picker de parceiro em torneios de duplas)
-    if (!_paidEnrollment && typeof _onSuccess === 'function') { setTimeout(_onSuccess, 400); }
-
-    // --- Background: Firestore transaction for consistency ---
+    // O recibo transacional decide quando a tela pode afirmar que houve inscrição.
     if (window.FirestoreDB && window.FirestoreDB.enrollParticipant) {
         window.FirestoreDB.enrollParticipant(tId, participantObj).then(function(result) {
-            // v1.8.40: UM leitor pro resultado (toasts, sync, rollback do push, diálogo de
-            // duplicata, auto-close). O toast de sucesso já saiu otimista → successToast:false.
             var _verdict = window._applyEnrollResult(t, tId, result, {
                 name: _dispName || '',
                 self: true,
-                optimistic: _pushedEnroll,
-                successToast: _paidEnrollment,
+                successToast: true,
                 excludeEmail: user.email
             });
             if (_verdict !== 'enrolled') return;
             if (Array.isArray(result.paymentDue) && result.paymentDue.length) return;
+
+            if (window._sound) window._sound('sino');
+            setTimeout(function() {
+              try { if (typeof window._trophyOnTournamentEnrolled === 'function') window._trophyOnTournamentEnrolled(t); } catch(_te) {}
+            }, 500);
+            window._scrollToParticipant(tId, user.displayName);
+            try { if (typeof window._maybeCreateTournamentPresencePlan === 'function') window._maybeCreateTournamentPresencePlan(t, user); } catch (_pp) {}
+            try { if (typeof window._opNotifyNewEnrollee === 'function') window._opNotifyNewEnrollee(t, user && user.uid); } catch (_op) {}
+            if (typeof _onSuccess === 'function') { setTimeout(_onSuccess, 400); }
 
             // Notify organizer (fire-and-forget)
             /* ⛔ QUEM DECIDE É O UID (24/set/2026). A guarda era
@@ -1157,16 +1131,12 @@ window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
                 }
             } catch(e) { window._warn('Auto-friend error:', e); }
         }).catch(function(err) {
-            // Rollback: remove from local state and re-render
             window._warn('Enroll transaction error:', err);
-            // v1.8.40: o que entrou no array foi a CÓPIA _pushedEnroll — filtrar pelo
-            // participantObj original (v3.0.76) nunca removia nada.
-            t.participants = t.participants.filter(function(p) { return p !== _pushedEnroll; });
             if (typeof showNotification !== 'undefined') showNotification(_t('enroll.error'), _t('enroll.errorMsg'), 'error');
             var container = document.getElementById('view-container');
             if (container && typeof renderTournaments === 'function') renderTournaments(container, tId);
         });
-    }
+    } else if (typeof showNotification !== 'undefined') showNotification(_t('enroll.error'), _t('enroll.errorMsg'), 'error');
 };
 
 // SEM CONSENTIMENTO NÃO HÁ DUPLA: o formulário antigo criava a vaga do parceiro
@@ -1230,21 +1200,34 @@ window._leaveStandby = function (tId) {
         _t('enroll.leaveWaitlist') || 'Sair da lista de espera',
         'Deseja sair da lista de espera deste torneio?',
         function() {
-            // Otimista na tela; a gravação vai por transação de CAMPOS (v1.8.40) — o
-            // saveTournament de doc inteiro que morava aqui era a classe do bug da Mariana.
-            if (Array.isArray(t.standbyParticipants)) t.standbyParticipants = t.standbyParticipants.filter(function(p) { return !_matchUser(p); });
-            if (Array.isArray(t.waitlist)) t.waitlist = t.waitlist.filter(function(p) { return !_matchUser(p); });
             if (window.FirestoreDB && typeof window.FirestoreDB.leaveStandby === 'function') {
                 window.FirestoreDB.leaveStandby(tId, user).then(function(res) {
-                    if (res && res.removed) {
+                    if (!res || typeof res.removed !== 'boolean' || !Array.isArray(res.participants)) {
+                        if (typeof showNotification !== 'undefined') showNotification('Erro', 'Não foi possível confirmar a saída da lista de espera.', 'error');
+                        return;
+                    }
+                    if (res.canonical === true) {
+                        t.participants = res.participants;
+                        if (res.removed) {
+                            if (Array.isArray(t.standbyParticipants)) t.standbyParticipants = t.standbyParticipants.filter(function(p) { return !_matchUser(p); });
+                            if (Array.isArray(t.waitlist)) t.waitlist = t.waitlist.filter(function(p) { return !_matchUser(p); });
+                        }
+                    } else {
                         if (Array.isArray(res.standbyParticipants)) t.standbyParticipants = res.standbyParticipants;
                         if (Array.isArray(res.waitlist)) t.waitlist = res.waitlist;
                     }
-                }).catch(function(err) { window._warn('[leaveStandby] tx error:', err); });
+                    if (res.removed) {
+                        if (typeof showNotification !== 'undefined') showNotification('Saiu da lista de espera', 'Você não está mais na lista de espera.', 'info');
+                    } else if (typeof showNotification !== 'undefined') showNotification('Inscrição não encontrada', 'Você já não estava na lista de espera. Atualize o torneio.', 'info');
+                    var c = document.getElementById('view-container');
+                    if (c && typeof renderTournaments === 'function') renderTournaments(c, String(tId));
+                }).catch(function(err) {
+                    window._warn('[leaveStandby] tx error:', err);
+                    if (typeof showNotification !== 'undefined') showNotification('Erro', (err && err.message) || 'Não foi possível sair da lista de espera.', 'error');
+                });
+            } else if (typeof showNotification !== 'undefined') {
+                showNotification('Erro', 'Não foi possível sair da lista de espera.', 'error');
             }
-            if (typeof showNotification !== 'undefined') showNotification('Saiu da lista de espera', 'Você não está mais na lista de espera.', 'info');
-            var c = document.getElementById('view-container');
-            if (c && typeof renderTournaments === 'function') renderTournaments(c, String(tId));
         },
         null,
         { type: 'warning', confirmText: 'Sair', cancelText: 'Cancelar' }
@@ -1261,12 +1244,8 @@ window.deenrollCurrentUser = function (tId) {
             _t('enroll.cancelEnroll'),
             _t('enroll.cancelEnrollMsg'),
             () => {
-                // --- Optimistic UI: remove locally FIRST, then sync to Firestore ---
-                var _savedParticipants = Array.isArray(t.participants) ? t.participants.slice() : Object.values(t.participants || {}).slice();
-                // v1.5.x — MESMO critério da CF/transação deenrollParticipant (têm que casar,
-                // senão o otimista some e o onSnapshot traz de volta). DUPLA: quem sai a DESFAZ
-                // e o parceiro fica SOLO ("sem dupla"). Iterar limpa duplicatas e não deixa slot
-                // com o uid de quem saiu — senão re-inscrever vira no-op.
+                // O W.O. conserva sua porta própria; fora dela, a saída só altera
+                // a projeção local depois do recibo transacional.
                 // ⛔ JÁ COLOCADA NO SORTEIO → sair É W.O., e o W.O. chama o suplente.
                 //
                 // Ordem do dono (22/ago/2026): _"a próxima pessoa da lista de espera que
@@ -1288,49 +1267,23 @@ window.deenrollCurrentUser = function (tId) {
                     window._ligaApplyWo(t.id, _vaga.roundIndex, _vaga.groupName, _vaga.nome);
                     return;   // o fluxo de W.O. commita, notifica e re-renderiza sozinho
                 }
-                if (_colocada) {
-                    t.participants = _savedParticipants.map(function (p) {
-                        if (!p || typeof p !== 'object') return p;
-                        if (window._participantUids(p).indexOf(user.uid) === -1) return p;
-                        if (p.ligaActive === false) return p;
-                        return Object.assign({}, p, { ligaActive: false, selfDeactivatedAt: new Date().toISOString() });
-                    });
-                } else
-                t.participants = _savedParticipants.reduce(function(acc, p) {
-                    if (!p || typeof p !== 'object') { acc.push(p); return acc; } // string guest
-                    var isPair = !!((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name));
-                    if (isPair && (p.p1Uid === user.uid || p.p2Uid === user.uid)) {
-                        var keep = (typeof window._pairPartnerSolo === 'function')
-                            ? window._pairPartnerSolo(p, p.p1Uid === user.uid ? 2 : 1) : null;
-                        if (keep) acc.push(keep); // parceiro sobrevive solo
-                        return acc;
-                    }
-                    if (window._participantUids(p).indexOf(user.uid) !== -1) return acc; // solo/time → sai
-                    acc.push(p);
-                    return acc;
-                }, []);
-
-                // Show success and re-render immediately (no wait for network)
-                if (typeof showNotification !== 'undefined') showNotification(_t('enroll.cancelledTitle'), _t('enroll.cancelledMsg', { name: window._safeHtml(t.name) }), 'info');
-                // v2.1.67: cancela também o "Planejar ida" criado na inscrição.
-                try { if (typeof window._cancelTournamentPresencePlan === 'function') window._cancelTournamentPresencePlan(t, user); } catch (_cp) {}
-                const container = document.getElementById('view-container');
-                if (container) renderTournaments(container, window.location.hash.split('/')[1]);
-
-                // --- Background: Firestore transaction for consistency ---
                 if (window.FirestoreDB && typeof window.FirestoreDB.deenrollParticipant === 'function') {
                     window.FirestoreDB.deenrollParticipant(tId, user.uid).then(function(result) {
-                        if (result && !result.notFound) {
-                            t.participants = result.participants;
+                        if (!result || typeof result.notFound !== 'boolean' || !Array.isArray(result.participants)) {
+                            if (typeof showNotification !== 'undefined') showNotification(_t('enroll.error'), _t('enroll.cancelError'), 'error');
+                            return;
                         }
-                        /* ⛔ E O AVISO EXIGE QUE A SAÍDA TENHA ACONTECIDO (24/set/2026).
-                         * O `if` acima só decidia ATUALIZAR o elenco; o aviso saía mesmo com
-                         * `notFound` (a Function devolve isso quando não achou a pessoa —
-                         * functions/index.js). Passava despercebido porque a guarda por e-mail
-                         * barrava vários casos por acidente; com a guarda por uid o aviso
-                         * alcança mais gente, e um cancelamento que NÃO ocorreu passaria a
-                         * avisar o organizador. Mesma condição que decide o elenco. */
-                        if (!result || result.notFound) return;
+                        t.participants = result.participants;
+                        var container = document.getElementById('view-container');
+                        if (container && typeof renderTournaments === 'function') renderTournaments(container, window.location.hash.split('/')[1]);
+                        // O AVISO EXIGE QUE A SAÍDA TENHA ACONTECIDO: notFound
+                        // atualiza a projeção, mas não confirma retirada nem notifica.
+                        if (result.notFound) {
+                            if (typeof showNotification !== 'undefined') showNotification('Inscrição não encontrada', 'Você já não constava no elenco. Atualize o torneio.', 'info');
+                            return;
+                        }
+                        if (typeof showNotification !== 'undefined') showNotification(_t('enroll.cancelledTitle'), _t('enroll.cancelledMsg', { name: window._safeHtml(t.name) }), 'info');
+                        try { if (typeof window._cancelTournamentPresencePlan === 'function') window._cancelTournamentPresencePlan(t, user); } catch (_cp) {}
                         // Notify organizer (fire-and-forget)
                         /* ⛔ QUEM DECIDE É O UID (24/set/2026). A guarda era
                          * `t.organizerEmail && t.organizerEmail !== user.email`, e o e-mail nunca foi usado
@@ -1362,14 +1315,10 @@ window.deenrollCurrentUser = function (tId) {
                             }).catch(function(e) { window._warn('Notify organizer unenroll error:', e); });
                         }
                     }).catch(function(err) {
-                        // Rollback: restore original participants and re-render
                         window._warn('Deenroll transaction error:', err);
-                        t.participants = _savedParticipants;
                         var _financialBlocked = err && (err.code === 'functions/failed-precondition' || err.code === 'failed-precondition');
                         if (typeof showNotification !== 'undefined') showNotification(_t('enroll.error'),
                             _financialBlocked && err.message ? err.message : _t('enroll.cancelError'), 'error');
-                        var c2 = document.getElementById('view-container');
-                        if (c2) renderTournaments(c2, window.location.hash.split('/')[1]);
                     });
                 } else { if (window.showNotification) window.showNotification(_t('enroll.error'), _t('enroll.cancelError'), 'error'); }
             },

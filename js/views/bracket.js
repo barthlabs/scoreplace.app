@@ -3833,18 +3833,7 @@ function renderBracket(container, tournamentId, isInline) {
         }).catch(function () { if (_nomesResolve) _nomesResolve(); });
       } catch (e) {}
     }
-    // After photos loaded, update all bracket avatar images with real photos
-    var bracketImgs = container.querySelectorAll('img[data-player-name]');
-    bracketImgs.forEach(function(img) {
-      var name = img.getAttribute('data-player-name');
-      var realPhoto = window._playerPhotoCache[(name || '').toLowerCase()];
-      if (realPhoto && realPhoto.indexOf('dicebear.com') === -1 && img.src.indexOf('dicebear.com') !== -1) {
-        var seed = encodeURIComponent(name);
-        var fallback = 'https://api.dicebear.com/9.x/initials/svg?seed=' + seed + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
-        img.onerror = function() { this.onerror = null; this.src = fallback; };
-        img.src = realPhoto;
-      }
-    });
+    if (typeof window._refreshPersonPhotos === 'function') window._refreshPersonPhotos(container);
   }).catch(function() {});
 
   // v1.6.98: pré-carrega os perfis dos 💬 da classificação. TEM que ser antes do
@@ -5011,18 +5000,18 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
     if (tsb) return 1;                // só b presente → b sobe
     return 0;                         // nenhum presente → mantém a ordem original
   });
-  var _canPair = isOrg || (t && t.manualPairing === 'open');
+  var _canPair = isOrg || (t && t.manualPairing === 'open' && !(t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint));
   var ci = window._presencaViva(t);
   var _nameFs = (window._INSCRITO_NAME_FONT_PX || 17);
 
-  var _photoOf = function (nm) {
+  var _photoOf = function (nm, uid) {
     var _fb = 'https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(nm) + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
-    var c = window._playerPhotoCache && window._playerPhotoCache[nm.toLowerCase()];
+    var c = uid && window._profilePhotoForUid ? window._profilePhotoForUid(uid) : '';
     return { url: (c && c.indexOf('dicebear.com') === -1) ? c : _fb, fb: _fb };
   };
   // Bloco de UMA pessoa: avatar + nome (17px) e, ABAIXO, o toggle de presença (pedido do dono).
   var _memberBlock = function (nm, pObj) {
-    var ph = _photoOf(nm);
+    var ph = _photoOf(nm, pObj && pObj.uid);
     var mc = window._idMapHas ? window._idMapHas(t, ci, pObj || { displayName: nm, name: nm }) : false;
     var safeName = _sa(nm);
     /* ⭐ O NOME DESTE CARD PRECISA DO GANCHO DE HIDRATAÇÃO. Pergunta do dono (03/set/2026):
@@ -5036,7 +5025,7 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
      * círculo ficaria sem a inicial mesmo depois de o nome chegar. */
     var _uidCard = String((pObj && pObj.uid) || '');
     return '<div style="display:flex;flex-direction:column;gap:5px;min-width:0;flex:1 1 42%;">'
-      + '<div style="display:flex;align-items:center;gap:7px;min-width:0;"><img src="' + _safeHtml(ph.url) + '" onerror="this.onerror=null;this.src=\'' + ph.fb + '\'" data-player-name="' + _safeHtml(nm) + '"' + (_uidCard ? ' data-uid-avatar="' + _safeHtml(_uidCard) + '"' : '') + ' style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span' + (_uidCard ? ' data-uid-name="' + _safeHtml(_uidCard) + '"' : '') + ' style="font-weight:700;font-size:' + _nameFs + 'px;color:var(--text-bright);line-height:1.18;word-break:break-word;min-width:0;">' + _safeHtml(nm) + '</span></div>'
+      + '<div style="display:flex;align-items:center;gap:7px;min-width:0;"><img src="' + _safeHtml(ph.url) + '" onerror="this.onerror=null;this.src=\'' + ph.fb + '\'" data-player-name="' + _safeHtml(nm) + '"' + (_uidCard ? ' data-uid-avatar="' + _safeHtml(_uidCard) + '" data-uid-photo="' + _safeHtml(_uidCard) + '"' : '') + ' style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span' + (_uidCard ? ' data-uid-name="' + _safeHtml(_uidCard) + '"' : '') + ' style="font-weight:700;font-size:' + _nameFs + 'px;color:var(--text-bright);line-height:1.18;word-break:break-word;min-width:0;">' + _safeHtml(nm) + '</span></div>'
       + '<div style="display:flex;align-items:center;gap:6px;"><label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation();window._toggleCheckIn(\'' + tIdSafe + '\',\'' + safeName + '\',\'' + String((pObj && pObj.uid) || '').replace(/'/g, "\\'") + '\');"><span class="toggle-slider"></span></label><span style="font-size:0.62rem;font-weight:700;color:' + window._spCor((mc ? '#4ade80' : '#64748b'), 'color') + ';">' + (mc ? 'Presente' : 'Ausente') + '</span></div>'
       + '</div>';
   };
@@ -5160,9 +5149,68 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
 // src/tgt = identidade (uid||nome) dos 2 avulsos. A CF formLatePair (functions-autodraw) tira os 2
 // da espera, forma a dupla _lateJoin, marca presença E integra na chave — ATÔMICO — e devolve o
 // doc. O cliente só dispara e REFLETE (via _applyCFTournament). Zero mutação/save local.
+window._lateCanonicalPairEntry = function (tId, key) {
+  var t = window.AppStore && Array.isArray(window.AppStore.tournaments)
+    ? window.AppStore.tournaments.find(function (item) { return String(item.id) === String(tId); }) : null;
+  if (!t) return null;
+  var wait = (typeof window._getWaitlist === 'function') ? window._getWaitlist(t) : (t.standbyParticipants || []);
+  var found = wait.find(function (item) { return item && typeof item === 'object' &&
+    (String(item.uid || '') === String(key) || String(item.manualParticipantId || '') === String(key)); });
+  return found ? { tournament:t, entry:found } : null;
+};
+window._lateCanonicalPairIdentity = function (entry, prefix) {
+  if (!entry) return null;
+  var uid = String(entry[prefix ? prefix + 'Uid' : 'uid'] || '');
+  var manual = String(entry[prefix ? prefix + 'ManualId' : 'manualParticipantId'] || '');
+  return uid ? { uid:uid } : (manual ? { manualId:manual } : null);
+};
+window._lateCanonicalPairRefresh = function (tId) {
+  var t = window.AppStore && Array.isArray(window.AppStore.tournaments)
+    ? window.AppStore.tournaments.find(function (item) { return String(item.id) === String(tId); }) : null;
+  if (!t || !window.FirestoreDB || typeof window.FirestoreDB._montaDeSubcolecoes !== 'function') return Promise.reject(new Error('torneio não está carregado'));
+  return window.FirestoreDB._montaDeSubcolecoes(tId, t, []).then(function (fresh) {
+    if (typeof window._applyCFTournament === 'function') window._applyCFTournament(tId, fresh);
+    return fresh;
+  });
+};
 window._formLateJoinDupla = function (tId, src, tgt, opts) {
   var _cards = (opts && opts.cards) || null;
   if (!src || !tgt || src === tgt) { if (typeof window._ljClearForming === 'function') window._ljClearForming(_cards); return; }
+  var _source = window._lateCanonicalPairEntry(tId, src);
+  if (_source && _source.tournament.canonicalRegistrationMigration && _source.tournament.canonicalRegistrationMigration.fingerprint) {
+    var _target = window._lateCanonicalPairEntry(tId, tgt);
+    var _a = window._lateCanonicalPairIdentity(_source.entry), _b = _target && window._lateCanonicalPairIdentity(_target.entry);
+    var _cat = String(_source.entry.categoryId || '');
+    if (!_a || !_b || !_cat || _cat !== String(_target.entry.categoryId || '')) {
+      if (typeof window._ljClearForming === 'function') window._ljClearForming(_cards);
+      if (typeof showNotification !== 'undefined') showNotification('Dupla não formada', 'Escolha duas inscrições identificadas da mesma categoria.', 'warning');
+      return;
+    }
+    var _formed = false, _entered = false;
+    window.FirestoreDB.formPair(tId, { uid1:_a.uid, manualId1:_a.manualId, uid2:_b.uid, manualId2:_b.manualId, categoryId:_cat })
+      .then(function (res) {
+        var d = (res && res.data) || res;
+        if (!d || d.outcome !== 'paired') throw new Error('formação não confirmada pelo servidor');
+        _formed = true;
+        return window._callIntegrateLate({ tournamentId:tId });
+      }).then(function (res) {
+        var d = (res && res.data) || res;
+        _entered = !!(d && Number(d.promoted || 0) >= 2);
+        if (d && d.changed && d.tournament && typeof window._applyCFTournament === 'function') {
+          window._applyCFTournament(tId, d.tournament);
+        } else return window._lateCanonicalPairRefresh(tId);
+        return null;
+      }).then(function () {
+        if (typeof window._ljClearForming === 'function') window._ljClearForming(_cards);
+        if (typeof showNotification !== 'undefined') showNotification(_entered ? '🤝 Dupla na chave' : '⏳ Dupla na espera',
+          _entered ? 'Os dois integrantes entraram no confronto.' : 'A dupla foi formada, mas ainda não havia vaga para os dois.', _entered ? 'success' : 'info');
+      }).catch(function (e) {
+        if (typeof window._ljClearForming === 'function') window._ljClearForming(_cards);
+        if (_formed) window._lateCanonicalPairRefresh(tId).catch(function () {});
+        if (typeof showNotification !== 'undefined') showNotification(_formed ? 'Dupla formada; integração pendente' : 'Não foi possível formar a dupla', (e && (e.message || e.code)) || '', 'warning');
+      });
+    return;
+  }
   if (!(window.FirestoreDB && typeof window.FirestoreDB.formLatePair === 'function')) {
     if (typeof window._ljClearForming === 'function') window._ljClearForming(_cards);
     if (typeof showNotification !== 'undefined') showNotification('Sem conexão', 'Não foi possível formar a dupla agora — tente de novo.', 'warning');
@@ -5366,6 +5414,34 @@ window._splitLateDupla = function (tId, id1, id2, btnEl) {
   var _btn = (btnEl && btnEl.nodeType === 1) ? btnEl : null;
   var _done = function () { if (_btn && window._spinButtonDone) window._spinButtonDone(_btn); };
   if (_btn && typeof window._spinButton === 'function') window._spinButton(_btn, '');
+  var _t = window.AppStore && Array.isArray(window.AppStore.tournaments)
+    ? window.AppStore.tournaments.find(function (item) { return String(item.id) === String(tId); }) : null;
+  if (_t && _t.canonicalRegistrationMigration && _t.canonicalRegistrationMigration.fingerprint) {
+    var _wait = (typeof window._getWaitlist === 'function') ? window._getWaitlist(_t) : (_t.standbyParticipants || []);
+    var _pair = _wait.find(function (entry) { return entry && typeof entry === 'object' && entry.fixedPairId &&
+      (String(entry.p1Uid || entry.p1ManualId || '') === String(id1) || String(entry.p2Uid || entry.p2ManualId || '') === String(id1)) &&
+      (String(entry.p1Uid || entry.p1ManualId || '') === String(id2) || String(entry.p2Uid || entry.p2ManualId || '') === String(id2)); });
+    var _a = _pair && window._lateCanonicalPairIdentity(_pair, 'p1');
+    var _b = _pair && window._lateCanonicalPairIdentity(_pair, 'p2');
+    if (!_a || !_b || !_pair.categoryId) {
+      _done();
+      if (typeof showNotification !== 'undefined') showNotification('Não foi possível desfazer a dupla', 'Recarregue a lista de espera antes de tentar novamente.', 'warning');
+      return;
+    }
+    window.FirestoreDB.splitPair(tId, { uid1:_a.uid, manualId1:_a.manualId, uid2:_b.uid, manualId2:_b.manualId, categoryId:_pair.categoryId })
+      .then(function (res) {
+        var d = (res && res.data) || res;
+        if (!d || d.outcome !== 'split') throw new Error('desfazimento não confirmado pelo servidor');
+        return window._lateCanonicalPairRefresh(tId);
+      }).then(function () {
+        _done();
+        if (typeof showNotification !== 'undefined') showNotification('↩️ Dupla desfeita', 'As duas inscrições continuam na espera.', 'info');
+      }).catch(function (e) {
+        _done();
+        if (typeof showNotification !== 'undefined') showNotification('Não foi possível desfazer a dupla', (e && (e.message || e.code)) || '', 'warning');
+      });
+    return;
+  }
   if (!(window.FirestoreDB && typeof window.FirestoreDB.splitLatePair === 'function')) {
     _done();
     if (typeof showNotification !== 'undefined') showNotification('Sem conexão', 'Não foi possível desfazer agora — tente de novo.', 'warning');
@@ -7459,75 +7535,16 @@ function _getCheckInStatus(tId, teamName) {
 async function _preloadPlayerPhotos(tournament) {
   if (!window.FirestoreDB || !window.FirestoreDB.db || !tournament) return;
   const participants = Array.isArray(tournament.participants) ? tournament.participants : [];
-  const names = new Set();
-
-  participants.forEach(function(p) {
-    if (typeof p === 'string') {
-      p.split(' / ').forEach(function(n) { n = n.trim(); if (n && n !== 'TBD' && n !== 'BYE') names.add(n); });
-    } else if (p && typeof p === 'object') {
-      var name = p.displayName || p.name || '';
-      // Para times de dupla ("Kelly / Rodrigo Barth"), adicionar cada membro
-      // individualmente — é assim que os perfis estão no Firestore.
-      if (name) {
-        name.split(' / ').map(function(n) { return n.trim(); }).filter(Boolean).forEach(function(n) { names.add(n); });
-      }
-    }
-  });
-
-  // Also add organizer name so their photo is cached for org cards
-  if (tournament.organizerName) names.add(tournament.organizerName);
-  if (Array.isArray(tournament.coHosts)) {
-    tournament.coHosts.forEach(function(ch) {
-      if (ch && ch.status === 'active' && ch.displayName) names.add(ch.displayName);
-    });
-  }
-
-  /* ⛔ ESTE CARREGADOR É A GÊMEA DE `_preloadUserProfiles` E FICOU PARA TRÁS UMA LEVA.
-   * Ele roda no mesmo momento e sobre as mesmas pessoas — todo mundo que abre a chave —, só
-   * que para foto e nome. Lia `users`, que é `allow read: if request.auth != null` e guarda
-   * 94 campos, para usar DOIS: `displayName` e `photoURL`. Passa a ler o espelho público.
-   * MEDIDO em 13/set/2026, comparando as duas coleções: a consulta por nome dá resultado
-   * IDÊNTICO nos 263 nomes distintos, e as 144 fotos estão todas no espelho.
-   * Inscrição legada sem UID não busca ficha privada por e-mail: pode faltar foto,
-   * mas abrir uma chave nunca justifica expor uma conta inteira. */
-  var COL = window._COLECAO_PERFIL_PUBLICO || 'usersPublic';
-
-  // Query Firestore for each unique name to get their photoURL
-  var promises = [];
-  names.forEach(function(name) {
-    if (window._playerPhotoCache[name.toLowerCase()]) return; // already cached
-    promises.push(
-      window.FirestoreDB.db.collection(COL)
-        .where('displayName', '==', name)
-        .limit(1)
-        .get()
-        .then(function(snap) { return window._userVivo(snap, { publico: true }); })   // lápide guarda o mesmo nome
-        .then(function(v) {
-          if (v) {
-            var data = v.data;
-            if (data.photoURL && data.photoURL.indexOf('dicebear.com') === -1) {
-              window._playerPhotoCache[name.toLowerCase()] = data.photoURL;
-            }
-          }
-        })
-        .catch(function() {})
-    );
-  });
-
-  // v1.8.58: buscar foto por UID (fonte mais confiável — imune a nomes trocados).
-  // Cacheia sob o displayName real do Firestore E sob cada membro do time.
-  // v2.6.105: AO MESMO TEMPO, refresca o NOME do inscrito a partir do perfil atual
-  // (por uid). O torneio congela o nome no momento da inscrição; quando a pessoa
-  // renomeia o perfil depois, o torneio fica com nome velho → 2 pessoas distintas
-  // apareciam com o MESMO nome velho (falsa duplicata) e colapsavam no ranking.
-  // Aqui usamos o mesmo doc.get() que já buscamos pra foto — zero leitura extra.
-  // v4.0.83: NÃO grava nome no torneio. Popula o cache GLOBAL uid→nome-do-perfil (ao vivo);
-  // todo display resolve dele via _displayNameForUid/_entryDisplayName. Identidade = uid; nome
-  // puxado do perfil sempre. SEM self-heal, SEM saveTournament. Ver [[project_uid_audit_sweep]].
+  // O preload único lê usersPublic por UID, inclusive redirecionamentos mergedInto.
+  // Nome e foto são projeções de tela; nenhuma delas é gravada no torneio.
   window._profileNameByUid = window._profileNameByUid || {};
   var _cacheChanged = false;
   function _cacheName(u, nm) {
-    if (!u || !nm) return;
+    if (!u) return;
+    if (!nm) {
+      if (window._profileNameByUid[u]) { delete window._profileNameByUid[u]; _cacheChanged = true; }
+      return;
+    }
     if (typeof window._isUnfriendlyName === 'function' && window._isUnfriendlyName(nm)) return; // telefone/genérico não vira nome
     if (window._profileNameByUid[u] !== nm) { window._profileNameByUid[u] = nm; _cacheChanged = true; }
   }
@@ -7542,53 +7559,17 @@ async function _preloadPlayerPhotos(tournament) {
     [p.uid, p.p1Uid, p.p2Uid].forEach(function(u) { if (u) _uidsToLoad[u] = 1; });
     if (Array.isArray(p.participants)) p.participants.forEach(function(s) { if (s && s.uid) _uidsToLoad[s.uid] = 1; });
   }); });
-  // ── LOTE, NÃO UMA LEITURA POR PESSOA (1.9.43) ────────────────────────────────
-  // MEDIDO na chave do Confra: 143 uids = 143 `doc.get()`, e era isso que travava a mão
-  // DEPOIS que a tela já tinha desenhado (860ms no desktop; muito pior no celular).
-  // `documentId() in [...]` traz 10 perfis por consulta → ~15 idas em vez de 143.
-  // ⚠️ O que NÃO muda: cada doc segue passando pelo `_userVivo` (o uid do inscrito pode
-  // ser LÁPIDE e o nome tem que vir da conta viva) e o cache é preenchido igual.
+  if (tournament.creatorUid) _uidsToLoad[tournament.creatorUid] = 1;
+  if (Array.isArray(tournament.coHosts)) tournament.coHosts.forEach(function(ch) {
+    if (ch && ch.status === 'active' && ch.uid) _uidsToLoad[ch.uid] = 1;
+  });
   var _todosUids = Object.keys(_uidsToLoad);
-  var _fpId = (typeof firebase !== 'undefined' && firebase.firestore && firebase.firestore.FieldPath)
-    ? firebase.firestore.FieldPath.documentId() : null;
-  var _guardaDoc = function (uid, v) {
-    if (!v) return;
-    var data = v.data || {};
-    var nm = (data.displayName || '').trim();
-    _cacheName(uid, nm);                          // o uid que o torneio guarda (pode ser a lápide)
-    if (v.uid !== uid) _cacheName(v.uid, nm);     // e o uid vivo, pra quem já migrou
-    if (data.photoURL && data.photoURL.indexOf('dicebear.com') === -1 && nm) {
-      window._playerPhotoCache[nm.toLowerCase()] = data.photoURL;
-    }
-  };
-  if (_fpId && _todosUids.length > 1) {
-    for (var _b = 0; _b < _todosUids.length; _b += 10) {
-      (function (lote) {
-        promises.push(
-          window.FirestoreDB.db.collection(COL).where(_fpId, 'in', lote).get()
-            .then(function (snap) {
-              var pend = [];
-              snap.forEach(function (doc) {
-                pend.push(Promise.resolve(window._userVivo(doc, { publico: true })).then(function (v) { _guardaDoc(doc.id, v); }));
-              });
-              return Promise.all(pend);
-            })
-            .catch(function () {})
-        );
-      })(_todosUids.slice(_b, _b + 10));
-    }
-  } else {
-    _todosUids.forEach(function(uid) {
-      promises.push(
-        window.FirestoreDB.db.collection(COL).doc(uid).get()
-          .then(function(doc) { return window._userVivo(doc, { publico: true }); })
-          .then(function(v) { _guardaDoc(uid, v); })
-          .catch(function() {})
-      );
-    });
-  }
-
-  await Promise.all(promises);
+  if (typeof window._preloadUserProfiles === 'function') await window._preloadUserProfiles(_todosUids);
+  _todosUids.forEach(function(uid) {
+    var p = window._userProfileCache && window._userProfileCache[uid];
+    if (!p) return; // falha transitória: não apagar nome já carregado
+    _cacheName(uid, p && (p.displayName || p.name));
+  });
 
   // HIDRATA (EM MEMÓRIA, SEM SALVAR) o nome do perfil pelo uid em TODOS os pools → toda tela que
   // lê p1Name/p2Name/displayName DIRETO mostra o nome AO VIVO de uma vez (não depende de cada
@@ -7860,7 +7841,7 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m, slot, showIndividu
       : '';
     const seed = encodeURIComponent(dispName);
     // Check photo cache for real user photo
-    const rawCached = window._playerPhotoCache[dispName.toLowerCase()] || '';
+    const rawCached = _slotUid && window._profilePhotoForUid ? window._profilePhotoForUid(_slotUid) : '';
     const cachedPhoto = (rawCached && rawCached.indexOf('dicebear.com') === -1) ? rawCached : '';
     // ── ⭐ ICONE SEM NOME VIRA CIRCULO VAZIO, IGUAL PRA TODO MUNDO (1.9.113) ──
     // Pergunta do dono, olhando a chave: _"o que aconteceu com as fotos/icones dos
@@ -7882,7 +7863,9 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m, slot, showIndividu
     const photoSrc = cachedPhoto || initialsUrl;
     const onerror = cachedPhoto && initialsUrl ? `onerror="this.onerror=null;this.src='${initialsUrl}'"` : '';
     // o uid viaja no proprio <img> — a hidratacao acha por ele
-    const _avatarUid = _semNomeAinda ? ` data-uid-avatar="${window._safeHtml(_slotUid)}"` : '';
+    const _avatarUid = _slotUid
+      ? ` data-uid-photo="${window._safeHtml(_slotUid)}"${_semNomeAinda ? ` data-uid-avatar="${window._safeHtml(_slotUid)}"` : ''}`
+      : '';
     // ⚠️ 2.0.34 · REVERTIDO PELO DONO. A 2.0.33 tinha subido a foto (× 1.85 da base) e a
     // fonte do nome (× 2, depois × 1.5) pra ocupar a caixa de duas linhas que a 2.0.30 criou.
     // Vendo no ar, a ordem foi: _"reverte tudo que está uma merda"_ — a caixa maior, a fonte
@@ -8330,12 +8313,14 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     var _soBg = _isInactiveSO ? 'rgba(239,68,68,0.06)' : 'rgba(245,158,11,0.08)';
     var _soBorder = _isInactiveSO ? 'rgba(239,68,68,0.2)' : 'rgba(245,158,11,0.2)';
     var _soIcon = _isInactiveSO ? '🔴' : '😴';
+    var _soUids = window._slotUids ? window._slotUids(m, 'p1') : [];
+    var _soUidJs = _soUids.length === 1 ? String(_soUids[0]).replace(/\\/g, '\\\\').replace(/'/g, "\\'") : '';
     return `
       <div style="background:${window._spCor(_soBg, 'background')};border:1px solid ${_soBorder};border-radius:12px;padding:10px 14px;margin-bottom:8px;position:relative;">
         <div style="display:flex;align-items:center;gap:8px;">
           <span style="font-size:1.1rem;">${_soIcon}</span>
           <div style="flex:1;min-width:0;">
-            <div style="font-size:0.82rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;" onclick="if(window._showPlayerStats)window._showPlayerStats('${window._safeHtml(String(m.p1).replace(/\\/g, '\\\\').replace(/'/g, "\\'"))}','${String(tId).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')">${window._safeHtml(t ? window._resolveSideLive(t, m.p1, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1', t) : (m.p1Uid || m.team1Uids))) : m.p1)}</div>
+            <div style="font-size:0.82rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;" onclick="if(window._showPlayerStats)window._showPlayerStats('${window._safeHtml(String(m.p1).replace(/\\/g, '\\\\').replace(/'/g, "\\'"))}','${String(tId).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}','${_soUidJs}')">${window._safeHtml(t ? window._resolveSideLive(t, m.p1, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1', t) : (m.p1Uid || m.team1Uids))) : m.p1)}</div>
             <div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px;">${_soDetail}</div>
           </div>
         </div>
@@ -8521,6 +8506,12 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // inputs de TB ao registrar 6-5/5-6 (default trigger = gamesPerSet - 1).
   const _tbEnabled = !!(_msc && _msc.tiebreakEnabled !== false &&
       (_msc.gamesPerSet || useSets));
+  const _gameInputCap = useSets && typeof window._normalSetGameInputCap === 'function'
+    ? window._normalSetGameInputCap(_msc, t.sport) : null;
+  const _gameInputAttrs = (kind) => kind === 'set' && _gameInputCap != null
+    ? ' max="' + _gameInputCap + '" onfocus="this.dataset.spValidGame=this.value"' : '';
+  const _gameInputGuard = (kind) => kind === 'set' && _gameInputCap != null
+    ? 'window._limitNormalSetGameInput(this,' + _gameInputCap + ');' : '';
   const _tbInputStyle = 'width:40px;text-align:center;font-size:0.9rem;font-weight:700;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.3);color:var(--text-bright);border-radius:5px;padding:2px 4px;vertical-align:super;';
   const p1TbInput = showInputs && _tbEnabled
     ? `<input type="number" id="tb1-${m.id}" min="0" placeholder="tb" title="Tie-break"
@@ -8560,8 +8551,8 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       ? '<input type="number" id="tb' + side + '-' + m.id + '" min="0" placeholder="tb" title="Tie-break"' +
         ' class="sp-set-tb" style="display:none;" oninput="window._highlightWinner(\'' + _esc(m.id) + '\')">'
       : '';
-    return '<span class="sp-set-score-entry"><input type="number" id="s' + side + '-' + m.id + '" min="0" placeholder="0" class="sp-set-inp sp-set-inp--live"' +
-      ' oninput="window._highlightWinner(\'' + _esc(m.id) + '\')" onchange="window._warnGrossSetScore(\'' + _esc(m.id) + '\')">' + tb + '</span>';
+    return '<span class="sp-set-score-entry"><input type="number" id="s' + side + '-' + m.id + '" min="0" placeholder="0" class="sp-set-inp sp-set-inp--live"' + _gameInputAttrs(c.kind) +
+      ' oninput="' + _gameInputGuard(c.kind) + 'window._highlightWinner(\'' + _esc(m.id) + '\')" onchange="window._warnGrossSetScore(\'' + _esc(m.id) + '\')">' + tb + '</span>';
   };
   // Correção de resultado é o MESMO placar do card, no MESMO lugar. Nenhum diálogo
   // paralelo: os números viram campos já preenchidos e o restante do card não se move.
@@ -8579,7 +8570,9 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     const sync = ' oninput="window._syncEditedSetInputs(\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\',' + idx + ')"';
     const input = '<input type="number" min="0" inputmode="numeric" value="' +
       (value != null ? window._safeHtml(value) : '') + '" id="sp-edit-set-' + _esc(m.id) + '-' + idx + '-' + side +
-      '" class="sp-set-inp" style="width:100%;min-width:0;box-sizing:border-box;color:' + scoreColor + ';"' + sync + ' onclick="event.stopPropagation()">';
+      '" class="sp-set-inp" style="width:100%;min-width:0;box-sizing:border-box;color:' + scoreColor + ';"' + _gameInputAttrs(c.kind) +
+      (c.kind === 'set' && _gameInputCap != null ? ' oninput="' + _gameInputGuard(c.kind) + 'window._syncEditedSetInputs(\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\',' + idx + ')"' : sync) +
+      ' onclick="event.stopPropagation()">';
     // O TB só surge se o placar do set exige tie-break. STB já usa os campos principais.
     if (isStb || c.kind !== 'set') return input;
     const tbNeeded = Number.isFinite(Number(original.gamesP1)) && Number.isFinite(Number(original.gamesP2)) &&
@@ -8608,7 +8601,8 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   const _initialEntryCell = (c, side) => {
     const hidden = c.state === 'stb-entry';
     const wrap = hidden ? ' id="stbcol-' + side + '-' + m.id + '" style="display:none;--w:' + c.w + 'px;"' : ' style="--w:' + c.w + 'px;"';
-    const input = '<input type="number" id="s' + side + '-' + m.id + '-' + c.i + '" min="0" placeholder="0" class="sp-set-inp sp-set-inp--live" oninput="window._highlightWinner(\'' + _esc(m.id) + '\')" onchange="window._warnGrossSetScore(\'' + _esc(m.id) + '\',' + c.i + ')">';
+    const input = '<input type="number" id="s' + side + '-' + m.id + '-' + c.i + '" min="0" placeholder="0" class="sp-set-inp sp-set-inp--live"' + _gameInputAttrs(c.kind) +
+      ' oninput="' + _gameInputGuard(c.kind) + 'window._highlightWinner(\'' + _esc(m.id) + '\')" onchange="window._warnGrossSetScore(\'' + _esc(m.id) + '\',' + c.i + ')">';
     const tb = c.kind === 'set' && _tbEnabled ? '<input type="number" id="tb' + side + '-' + m.id + '-' + c.i + '" min="0" placeholder="tb" title="Tie-break" class="sp-set-tb" style="display:none;" oninput="window._highlightWinner(\'' + _esc(m.id) + '\')">' : '';
     return '<div class="sp-set-col" data-sp-set-index="' + c.i + '"' + wrap + '><span class="sp-set-score-entry">' + input + tb + '</span></div>';
   };
@@ -8663,9 +8657,9 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   const _setGridHtml = (side) => '<div class="sp-set-grid"' + _setCountAttr + _setFormatAttr + ' style="' + _numFsVar + '">' + _setCellsHtml(side) + '</div>';
 
   const p1Score = showInputs
-    ? `<input type="number" id="s1-${m.id}" min="0" placeholder="0"
+    ? `<input type="number" id="s1-${m.id}" min="0" placeholder="0"${_gameInputAttrs('set')}
         class="sp-mc-inp"
-        oninput="window._highlightWinner('${_esc(m.id)}')" onchange="window._warnGrossSetScore('${_esc(m.id)}')">${p1TbInput}`
+        oninput="${_gameInputGuard('set')}window._highlightWinner('${_esc(m.id)}')" onchange="window._warnGrossSetScore('${_esc(m.id)}')">${p1TbInput}`
     : null;
   // v0.17.1: quando pending, lê scoreP1/scoreP2 (ou sets) do _pr em vez do m.
   // v2.1.89: para partidas W.O., deriva o lado ausente de woAbsentSide (ou do
@@ -8706,9 +8700,9 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     : null;
 
   const p2Score = showInputs
-    ? `<input type="number" id="s2-${m.id}" min="0" placeholder="0"
+    ? `<input type="number" id="s2-${m.id}" min="0" placeholder="0"${_gameInputAttrs('set')}
         class="sp-mc-inp"
-        oninput="window._highlightWinner('${_esc(m.id)}')" onchange="window._warnGrossSetScore('${_esc(m.id)}')">${p2TbInput}`
+        oninput="${_gameInputGuard('set')}window._highlightWinner('${_esc(m.id)}')" onchange="window._warnGrossSetScore('${_esc(m.id)}')">${p2TbInput}`
     : null;
   const _p2Display = hasPending
     ? formatSetScores(_prFmt, 2)   // mesmo formatador do lado 1 — ver o comentário acima
@@ -9289,16 +9283,15 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     window._isUserAuthority(t, window.AppStore && window.AppStore.currentUser);
   var _endHeaderChip = _canEndCourt ? '<button type="button" class="sp-match-end-court" onclick="event.stopPropagation();window._endMatchOnCourt(\'' +
     _esc(tId) + '\',\'' + _esc(m.id) + '\',this)" title="Liberar a quadra e lançar o placar depois">Encerrado</button>' : '';
-  // v1.8.79: REPLAY — só existe se o jogo tem ponto a ponto gravado no doc do jogo
-  // (`t._results[m.id].replay`), o que acontece quando ele foi disputado no PLACAR AO
+  // E05: REPLAY — vem do próprio jogo físico remontado quando ele tem ponto a ponto
+  // gravado, o que acontece quando foi disputado no PLACAR AO
   // VIVO. Fica FORA de `_headerActions` de propósito: aquele cluster é de AÇÃO e some
   // inteiro em somente leitura, e o replay é justamente o contrário — ele existe pra
   // quem só está ASSISTINDO. Ordem do dono: "deve aparecer para todos os usuários e
   // não só para quem participou do jogo".
   var _replayBtn = '';
   try {
-    var _rr = t && t._results && t._results[m.id];
-    if (isDecided && _rr && _rr.replay && _rr.replay.points && _rr.replay.points.length) {
+    if (isDecided && m.replay && m.replay.points && m.replay.points.length) {
       _replayBtn = '<button class="btn btn-sm" onclick="event.stopPropagation();window._openMatchReplayFromBracket(\'' +
         String(t.id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'' +
         String(m.id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')" ' +
@@ -10346,7 +10339,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
       return '<tr style="border-bottom:1px solid var(--border-color);' + (_bg ? 'background:' + window._spCor(_bg, 'background') + ';' : '') + '">';
     })()}
       <td style="padding:11px 14px;font-weight:800;color:${window._spCor(posColor(i), 'color')};">${medal(i)}</td>
-      <td style="padding:11px 14px;font-weight:600;color:var(--text-bright);display:flex;align-items:center;gap:6px;"><span style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;display:inline-flex;align-items:center;gap:2px;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile==='function')window._openPlayerProfile('${_safeName}',{uid:'${String(s.uid||'').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}',tournamentId:'${_safeTid}'});else window._showPlayerHistory('${_safeTid}','${_safeName}')" title="${(typeof window._plainRowName === 'function' ? window._plainRowName : function (s) { return (s && s.name) || ''; })(s) ? 'Ver ficha de ' + window._safeHtml((typeof window._plainRowName === 'function' ? window._plainRowName : function (s) { return (s && s.name) || ''; })(s)) : 'Ver ficha'}">${(typeof window._rowNameHtml === 'function' ? window._rowNameHtml : function (s, h) { return h; })(s, typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(window._liveRowName(s), t) : (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(window._liveRowName(s), t) : window._safeHtml(s.name)))}</span><span style="cursor:pointer;font-size:0.7rem;opacity:0.5;transition:opacity 0.2s;" onclick="event.stopPropagation();if(typeof window._showPlayerStats==='function')window._showPlayerStats('${_safeName}')" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'" title="Estatísticas globais">📊</span>${typeof window._contactPersonIconHtml === 'function' ? window._contactPersonIconHtml(t, s.uid, s.name, { sameGroup: false }) : ''}</td>
+      <td style="padding:11px 14px;font-weight:600;color:var(--text-bright);display:flex;align-items:center;gap:6px;"><span style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;display:inline-flex;align-items:center;gap:2px;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile==='function')window._openPlayerProfile('${_safeName}',{uid:'${String(s.uid||'').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}',tournamentId:'${_safeTid}'});else window._showPlayerHistory('${_safeTid}','${_safeName}')" title="${(typeof window._plainRowName === 'function' ? window._plainRowName : function (s) { return (s && s.name) || ''; })(s) ? 'Ver ficha de ' + window._safeHtml((typeof window._plainRowName === 'function' ? window._plainRowName : function (s) { return (s && s.name) || ''; })(s)) : 'Ver ficha'}">${(typeof window._rowNameHtml === 'function' ? window._rowNameHtml : function (s, h) { return h; })(s, typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(window._liveRowName(s), t) : (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(window._liveRowName(s), t) : window._safeHtml(s.name)))}</span><span style="cursor:pointer;font-size:0.7rem;opacity:0.5;transition:opacity 0.2s;" onclick="event.stopPropagation();if(typeof window._showPlayerStats==='function')window._showPlayerStats('${_safeName}',null,'${String(s.uid||'').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'" title="Estatísticas globais">📊</span>${typeof window._contactPersonIconHtml === 'function' ? window._contactPersonIconHtml(t, s.uid, s.name, { sameGroup: false }) : ''}</td>
       ${_scoreCell}
       ${_pctCell}
       <td style="padding:11px 14px;text-align:center;color:var(--sp-c-4ade80,#4ade80);cursor:pointer;" onclick="window._showPlayerHistory('${_safeTid}','${_safeName}','wins')" title="Clique para ver as vitórias">${s.wins}</td>

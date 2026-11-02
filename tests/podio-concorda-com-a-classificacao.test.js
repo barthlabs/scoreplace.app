@@ -60,7 +60,7 @@ ok(/_terceiros\.length === 1/.test(bloco),
   '⛔ e SÓ quando ela aponta UM: empate no 3º, escolher um seria inventar desempate que ninguém jogou');
 
 // a derivação tem que vir ANTES de desenhar, senão não adianta
-const iDesenho = src.indexOf('podium = window._buildPodiumHtml(w1, w2, thirdPlace);');
+const iDesenho = src.indexOf('podium = window._buildPodiumHtml(w1, w2, thirdPlace,');
 ok(iDesenho > i, '⭐ e vem ANTES de o pódio ser desenhado');
 
 // e a lista canônica usada é a MESMA que alimenta a tabela. Ela carrega UID(s),

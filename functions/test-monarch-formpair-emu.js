@@ -6,6 +6,7 @@ if (!process.env.FIRESTORE_EMULATOR_HOST || !process.env.FIREBASE_AUTH_EMULATOR_
 const assert = require('assert');
 const admin = require('firebase-admin');
 const CF = require('./index');
+const registration = require('./registration-core');
 const db = admin.firestore();
 const owner = 'owner-monarch-test';
 const tourId = 'tour_1793220000000_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
@@ -19,9 +20,9 @@ const base = { creatorUid: owner, organizerUid: owner, enrollmentMode: 'individu
   placeholderReservations: individuals, participants: [], teamSize: 2 };
 async function invoke(id, opts) {
   try {
-    await CF.formPair.run({ data: { tournamentId: id, sandbox: id.startsWith('sb_'), ...opts },
+    const value = await CF.formPair.run({ data: { tournamentId: id, sandbox: id.startsWith('sb_'), ...opts },
       auth: { uid: owner, token: { uid: owner } }, rawRequest: { headers: {} }, acceptsStreaming: false });
-    return { ok: true };
+    return { ok: true, value };
   } catch (e) { return { ok: false, code: e.code, message: e.message }; }
 }
 (async () => {
@@ -44,12 +45,34 @@ async function invoke(id, opts) {
       assert.match(result.message, /fase inicial Rei\/Rainha/);
       assert.strictEqual(result.code, 'failed-precondition');
       assert.deepStrictEqual((await ref.get()).data(), before, 'documento intacto');
+      assert.strictEqual((await ref.collection('registrations').get()).size, 0, 'fase 0 não cria inscrição');
     }
   }
-  await source.update({ currentPhaseIndex: 1 });
-  const later = await invoke(tourId, payloads[0]);
-  assert.ok(later.ok || !/fase inicial Rei\/Rainha/.test(later.message), 'fase 1 não bloqueada pela guarda');
+  const fp = 'fp-monarch-test';
+  const members = ['uid-a', 'uid-b'];
+  const registrations = members.map(uid => ({
+    registrationId: registration.registrationId('uid:' + uid, 'a'),
+    tournamentId: tourId, categoryId: 'a', participantKey: 'uid:' + uid,
+    participantKind: 'account', participantUid: uid, status: 'confirmed',
+    validationState: 'approved', migrationFingerprint: fp, fixedPairId: null
+  }));
+  for (const item of registrations) await source.collection('registrations').doc(item.registrationId).set(item);
+  const frozenClassification = { phaseIndex: 0, order: members.slice(), score: [21, 18] };
+  await source.update({ currentPhaseIndex: 1, classification: frozenClassification,
+    canonicalRegistrationMigration: { fingerprint: fp, registrationCount: 2 },
+    categoryDefinitions: [{ id: 'a', label: 'A' }], memberUids: [owner, ...members] });
+  const later = await invoke(tourId, { uid1: members[0], uid2: members[1], categoryId: 'a' });
+  assert.strictEqual(later.ok, true, later.message || 'fase 1 forma dupla real');
+  assert.strictEqual(later.value.outcome, 'paired');
+  assert.deepStrictEqual((await source.get()).data().classification, frozenClassification,
+    'classificação consolidada não muda após formar dupla');
+  assert.strictEqual((await source.get()).data().placeholderReservations.length, 48,
+    'reservas seguem separadas das inscrições reais');
+  const after = (await source.collection('registrations').get()).docs.map(doc => doc.data());
+  assert.strictEqual(after.length, 2);
+  assert(after[0].fixedPairId && after[0].fixedPairId === after[1].fixedPairId);
+  for (const item of registrations) await source.collection('registrations').doc(item.registrationId).delete();
   await source.delete();
   await sb.delete();
-  console.log('✓ formPair real bloqueou fase 0 e preservou 48 reservas; fase 1 liberada');
+  console.log('✓ formPair bloqueou fase 0 sem inscrições; fase 1 formou dupla real sem alterar classificação nem 48 reservas');
 })().catch((e) => { console.error(e); process.exitCode = 1; });

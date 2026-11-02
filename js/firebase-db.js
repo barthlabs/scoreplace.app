@@ -54,6 +54,72 @@ window._perfilDeLista = function (raw) {
   return out;
 };
 
+// Projeção de apresentação, sem persistência. O jogo físico é a fonte do
+// placar; a ficha, o histórico e os contadores recebem o mesmo contrato.
+window._spTournamentHistoryRecord = function (game) {
+  if (!game || !game.tournamentId || !game.matchId || game.isBye || game.isSitOut || game.wo) return null;
+  var hasScore = game.scoreP1 != null && game.scoreP1 !== '' && game.scoreP2 != null && game.scoreP2 !== '';
+  if (!hasScore && (!Array.isArray(game.sets) || !game.sets.length)) return null;
+  var a = hasScore ? Number(game.scoreP1) : null, b = hasScore ? Number(game.scoreP2) : null;
+  if (hasScore && (!isFinite(a) || !isFinite(b))) throw new Error('Placar inválido no jogo físico');
+  if (typeof window._slotUids !== 'function') throw new Error('Leitor de identidade do jogo indisponível');
+  var one = window._slotUids(game, 'p1').filter(Boolean).map(String);
+  var two = window._slotUids(game, 'p2').filter(Boolean).map(String);
+  if (!one.length || !two.length || one.some(function (uid) { return two.indexOf(uid) >= 0; })) {
+    // Sem atribuição comprovada dos dois lados não há V/D pessoal honesto.
+    // O confronto e o placar continuam no jogo físico do torneio.
+    return null;
+  }
+  var players = one.map(function (uid) { return { uid: uid, team: 1 }; })
+    .concat(two.map(function (uid) { return { uid: uid, team: 2 }; }));
+  if (typeof window._matchWinnerSide !== 'function') throw new Error('Leitor do vencedor indisponível');
+  var winner = window._matchWinnerSide(game);
+  var sets = Array.isArray(game.sets) ? game.sets.map(function (set) {
+    var rawX = set && (set.gamesP1 != null ? set.gamesP1 : set.p1);
+    var rawY = set && (set.gamesP2 != null ? set.gamesP2 : set.p2);
+    var x = Number(rawX), y = Number(rawY);
+    if (rawX == null || rawY == null || rawX === '' || rawY === '' || !isFinite(x) || !isFinite(y)) {
+      throw new Error('Set inválido no jogo físico');
+    }
+    return { gamesP1: x, gamesP2: y, tiebreak: set && set.tiebreak || null };
+  }) : [];
+  if (!hasScore && !sets.length) return null;
+  var summary = sets.length ? sets.map(function (set) {
+    var text = set.gamesP1 + '-' + set.gamesP2;
+    var tb = set.tiebreak;
+    if (tb && typeof tb === 'object') {
+      var p1 = Number(tb.p1 != null ? tb.p1 : tb.pointsP1);
+      var p2 = Number(tb.p2 != null ? tb.p2 : tb.pointsP2);
+      if (isFinite(p1) && isFinite(p2)) text += '(' + Math.min(p1, p2) + ')';
+    }
+    return text;
+  }).join(' ') : a + '-' + b;
+  var when = game.resultAt || game.updatedAt || game.startedAt || '';
+  var millis = when && typeof when.toMillis === 'function' ? when.toMillis()
+    : when && typeof when.seconds === 'number' ? when.seconds * 1000
+      : when && typeof when._seconds === 'number' ? when._seconds * 1000
+      : (typeof when === 'number' ? when : Date.parse(when));
+  var finishedAt = isFinite(millis) && millis > 0 ? new Date(millis).toISOString() : '';
+  var stat = function (side) {
+    var games = sets.length ? sets.reduce(function (sum, set) {
+      return sum + (side === 1 ? set.gamesP1 : set.gamesP2);
+    }, 0) : (side === 1 ? a : b);
+    var won = sets.reduce(function (sum, set) {
+      var sideWon = side === 1 ? set.gamesP1 > set.gamesP2 : set.gamesP2 > set.gamesP1;
+      return sum + (sideWon ? 1 : 0);
+    }, 0);
+    return { games: games, sets: won, points: 0 };
+  };
+  return { schema: 2, matchId: 't_' + game.tournamentId + '_' + game.matchId,
+    matchType: 'tournament', tournamentId: String(game.tournamentId),
+    tournamentName: game.tournamentName || '', tournamentFormat: game.format || '',
+    sport: game.sport || '', venue: game.venue || '', roundLabel: game.roundLabel || '',
+    isDoubles: one.length > 1 || two.length > 1, finishedAt: finishedAt,
+    players: players, playerUids: one.concat(two), winnerTeam: winner,
+    scoreSummary: summary, sets: sets,
+    stats: { team1: stat(1), team2: stat(2) }, playerStats: {} };
+};
+
 window.FirestoreDB = {
   db: null,
   lastInitError: null,
@@ -262,8 +328,14 @@ window.FirestoreDB = {
    *
    * ⚠️ Sem `firebase` carregado (harness, teste de nó) cai no `delete`: não apaga no banco, mas
    * também não reescreve, e nenhum teste quebra por causa da sentinela. */
-  _apagarEmailDoDocPublico(alvo) {
+  _apagarEmailDoDocPublico(alvo, options) {
     if (!alvo) return alvo;
+    // `transaction.set` substitui o documento inteiro: a ausência remove o campo.
+    // A sentinela abaixo é exclusiva das gravações com `merge:true`.
+    if (options && options.integral === true) {
+      ['organizerEmail', 'creatorEmail', 'adminEmails'].forEach(function (campo) { delete alvo[campo]; });
+      return alvo;
+    }
     /* ⛔ A GUARDA VAI ATÉ O FIM DA CORRENTE. Eu havia conferido `firebase` e `firebase.firestore`
      * e parado ali: num dos harnesses o `firestore` existe e o `FieldValue` NÃO, e a gravação
      * morria com "reading 'delete'" — derrubando a recusa que uma OUTRA rede devia ter dado, e
@@ -337,12 +409,9 @@ window.FirestoreDB = {
     return this.db.collection(this._ehSandbox(idOuT) ? 'sandboxes' : 'tournaments').doc(id);
   },
 
-  /* O nome da SUBCOLEÇÃO. A única exceção de forma autorizada pelo dono: `results` vira
-   * `resultsSandbox` dentro do sandbox — porque a regra de collection group
-   * `/{path=**}/results/{matchId}` NÃO pode ser escopada por coleção-pai, e a cópia fiel
-   * preserva `playerUids` reais: mantendo o nome, o participante real leria os resultados
-   * do sandbox por aquela mesma regra. Muda só o NOME do caminho; ids, campos, placares e
-   * contagens vão byte a byte (provado em tests/sandbox-cf-emulador.test.js). */
+  /* Rota de limpeza de sandboxes antigos: o índice legado chama-se
+   * `resultsSandbox` para não entrar no collection group global de `results`.
+   * E05: novos sandboxes não criam esse índice; o placar vive em `matches`. */
   _subNome(idOuT, sub) {
     return (String(sub) === 'results' && this._ehSandbox(idOuT)) ? 'resultsSandbox' : String(sub);
   },
@@ -1389,6 +1458,10 @@ window.FirestoreDB = {
         throw _eD;
       }
     }
+    // O cache local pode trazer um atestado antigo. Esta escrita usa merge:
+    // omitir a chave preserva o valor autoritativo no servidor sem tentar forjá-lo.
+    cleanData = Object.assign({}, cleanData);
+    delete cleanData._phaseReadCertificate;
     await this._tRef(docId).set(cleanData, { merge: true });
     /* SANDBOX DIVIDIDO: e as partes logo atrás — lendo o que está lá pra escrever só o
      * DELTA (diff canônico), nunca a coleção inteira de novo. Num torneio real esta linha
@@ -1497,6 +1570,33 @@ window.FirestoreDB = {
   async _sbGravaPartes(id, antes, depois, fora) {
     var S = (typeof window !== 'undefined') ? window._tSplit : null;
     if (!S || !Array.isArray(fora) || !fora.length) return 0;
+    var _igual = function (a, b) { return JSON.stringify(a) === JSON.stringify(b); };
+    var _obj = function (v) { return v && typeof v === 'object' && !Array.isArray(v); };
+    var _campoSeguro = function (campo) {
+      return /^[A-Za-z_][A-Za-z0-9_]*$/.test(campo) &&
+        campo !== '__proto__' && campo !== 'prototype' && campo !== 'constructor';
+    };
+    var _patchJogo = function (anterior, atual) {
+      if (!_obj(anterior) || !_obj(atual) || !_obj(anterior.jogo) || !_obj(atual.jogo))
+        throw new Error('[sandbox] registro de jogo inválido para atualização parcial');
+      if (!_igual(anterior.jogo.replay, atual.jogo.replay))
+        throw new Error('[sandbox] replay só pode ser alterado pela callable');
+      var apagar = firebase.firestore.FieldValue.delete();
+      var patch = {};
+      var campos = Object.keys(anterior).concat(Object.keys(atual));
+      campos.filter(function (v, i) { return campos.indexOf(v) === i && v !== 'jogo'; }).forEach(function (campo) {
+        if (!_campoSeguro(campo)) throw new Error('[sandbox] campo físico inválido: ' + campo);
+        if (!_igual(anterior[campo], atual[campo]))
+          patch[campo] = Object.prototype.hasOwnProperty.call(atual, campo) ? atual[campo] : apagar;
+      });
+      var camposJogo = Object.keys(anterior.jogo).concat(Object.keys(atual.jogo));
+      camposJogo.filter(function (v, i) { return camposJogo.indexOf(v) === i && v !== 'replay'; }).forEach(function (campo) {
+        if (!_campoSeguro(campo)) throw new Error('[sandbox] campo de jogo inválido: ' + campo);
+        if (!_igual(anterior.jogo[campo], atual.jogo[campo]))
+          patch['jogo.' + campo] = Object.prototype.hasOwnProperty.call(atual.jogo, campo) ? atual.jogo[campo] : apagar;
+      });
+      return patch;
+    };
     /* ⚠️ EM LOTES DE 400: o teto do batch do Firestore é 500, e um avanço de fase num
      * torneio do tamanho do Confra passa disso com folga (115 jogos + 152 inscritos). Lote
      * estourado não grava NADA — e "não gravou nada" aqui é a chave da próxima fase sumindo. */
@@ -1504,13 +1604,27 @@ window.FirestoreDB = {
     for (var i = 0; i < fora.length; i++) {
       var nome = fora[i];
       var col = this._tSub(id, S.colecaoDaParte(nome));
-      var d = S.jogosQueMudaram((antes && antes[nome]) || [], (depois && depois[nome]) || []);
-      d.mudaram.forEach(function (x) { var k = S.chaveDoRegistro(x); if (k) pend.push({ ref: col.doc(k), v: x }); });
+      var anteriores = (antes && antes[nome]) || [];
+      var d = S.jogosQueMudaram(anteriores, (depois && depois[nome]) || []);
+      var porChave = {};
+      if (nome === 'matches') anteriores.forEach(function (x) { var k = S.chaveDoRegistro(x); if (k) porChave[k] = x; });
+      d.mudaram.forEach(function (x) {
+        var k = S.chaveDoRegistro(x);
+        if (!k) return;
+        if (nome === 'matches' && porChave[k]) {
+          var patch = _patchJogo(porChave[k], x);
+          if (Object.keys(patch).length) pend.push({ ref: col.doc(k), patch: patch });
+        } else pend.push({ ref: col.doc(k), v: x });
+      });
       d.sumiram.forEach(function (x) { var k = S.chaveDoRegistro(x); if (k) pend.push({ ref: col.doc(k), v: null }); });
     }
     for (var j = 0; j < pend.length; j += 400) {
       var lote = this.db.batch();
-      pend.slice(j, j + 400).forEach(function (w) { if (w.v === null) lote.delete(w.ref); else lote.set(w.ref, w.v); });
+      pend.slice(j, j + 400).forEach(function (w) {
+        if (w.v === null) lote.delete(w.ref);
+        else if (w.patch) lote.update(w.ref, w.patch);
+        else lote.set(w.ref, w.v);
+      });
       await lote.commit();
     }
     return pend.length;
@@ -1555,6 +1669,9 @@ window.FirestoreDB = {
       var doc = await transaction.get(ref);
       if (!doc.exists) throw new Error('Tournament not found: ' + tournamentId);
       var data = doc.data();
+      // Capturar antes do mutator: um objeto da UI não é prova do certificado.
+      var _phaseCertificateFromServer = Object.prototype.hasOwnProperty.call(data, '_phaseReadCertificate')
+        ? JSON.parse(JSON.stringify(data._phaseReadCertificate)) : undefined;
       /* SANDBOX DIVIDIDO: as partes voltam pro documento FRESCO pela porta canônica
        * (`remontar`), que é quem sabe ONDE cada registro mora — `_loc` diz a posição, e o
        * Firestore entrega por id, que aqui é hash. ⛔ Sobrepor `rounds` inteiro pela cópia
@@ -1647,7 +1764,7 @@ window.FirestoreDB = {
       // path que não popula participants) não pode sumir e derrubar o listener
       // `array-contains` de quem depende dele. Ver saveTournament (v1.8.96/1.9.84).
       // SANDBOX: _mergeMemberUids SUBSTITUI (não une) — ver saveTournament/persist-core.
-      self._apagarEmailDoDocPublico(data);   // ⛔ LGPD (25/set/2026): sentinela, ver saveTournament
+      self._apagarEmailDoDocPublico(data, { integral: true }); // set integral: remover antes de limpar/dividir
       data.adminUids    = self._computeAdminUids(data);
       data.memberUids   = window._mergeMemberUids(data, data.memberUids, self._computeMemberUids(data));
       try {
@@ -1734,6 +1851,10 @@ window.FirestoreDB = {
           throw _eDM;
         }
       }
+      // O set completo deve preservar exatamente a marca lida nesta transação.
+      // O cliente não pode alterar jogos físicos de produção nem decidir a marca.
+      if (_phaseCertificateFromServer === undefined) delete _persist._phaseReadCertificate;
+      else _persist._phaseReadCertificate = _phaseCertificateFromServer;
       transaction.set(ref, _persist); // set (sem merge) DENTRO da txn = clobber-free
       // Devolve o estado autoritativo HIDRATADO (group.matches como refs) pro caller
       // sincronizar o AppStore sem depender de um render pra reconstruir os grupos.
@@ -1758,105 +1879,131 @@ window.FirestoreDB = {
     return _txOut;
   },
 
-  // ── PLACAR POR JOGO EM DOC PRÓPRIO (project_match_result_docs, linha 4.1) ──────
-  // Cada JOGO tem seu resultado/consenso num doc próprio:
-  //   tournaments/{tId}/results/{matchId}
-  // Por quê: escrever o placar do jogo A e o do jogo B são docs DIFERENTES →
-  // NUNCA disputam entre si (isolamento, escala — o modelo das presenças/places).
-  // A trava contra corrida DENTRO de um mesmo jogo (dois participantes/org lançando
-  // ao mesmo tempo) é mantida pela TRANSAÇÃO neste doc: runTransaction lê fresco,
-  // aplica, grava; conflito → aborta+re-executa → nenhum write se perde. Dividir +
-  // manter a segurança, exatamente como o dono pediu.
-  //
-  // O doc guarda SÓ o estado MUTÁVEL do resultado (scoreP1/P2, winner, draw, sets,
-  // setsWonP1/P2, totalGamesP1/P2, fixedSet, resultAt, startedAt, pendingResult,
-  // wo, woAbsentSide, ...). A ESTRUTURA da chave (p1/p2, nextMatchId, fase) fica no
-  // doc do torneio — a hidratação de leitura mescla o resultado no match p/ render.
-  //
-  // mutatorFn(result): muta `result` in place. Retorne `false` pra ABORTAR sem gravar.
-  // Retorna { aborted, data } — data = estado autoritativo pós-commit.
-  async mutateMatchResult(tournamentId, matchId, mutatorFn) {
-    if (!this.ensureDb()) throw new Error('Firestore not initialized');
-    if (matchId == null || matchId === '') throw new Error('mutateMatchResult: matchId vazio');
-    var ref = this._tSub(tournamentId, 'results').doc(String(matchId));
-    var self = this;
-    return this.db.runTransaction(async function (transaction) {
-      var doc = await transaction.get(ref);
-      var data = doc.exists ? doc.data() : { matchId: String(matchId), tournamentId: String(tournamentId) };
-      var out = mutatorFn(data);
-      if (out === false) return { aborted: true, data: data };
-      // ⚠️ v1.7.91 — AQUI MORAVA UM BLOCO COLADO POR ENGANO, e ele quebrava esta função
-      // INTEIRA. A 1.7.28 (`c1c041e5`) levou o guard de elenco pra DENTRO da transação e
-      // uma cópia dele caiu também aqui, num escopo onde `options`, `_setDe`, `_antesArr`
-      // e `_uidsTx` NÃO EXISTEM (`mutateMatchResult(tournamentId, matchId, mutatorFn)` não
-      // tem `options`). Resultado MEDIDO chamando a função real: `ReferenceError: options
-      // is not defined` na PRIMEIRA linha do bloco, antes de qualquer `try` — ou seja a
-      // transação estourava e NADA era gravado, em 100% das chamadas.
-      //
-      // O bloco também não fazia sentido nenhum aqui: este doc é o RESULTADO de UM jogo
-      // (placar/consenso, ver o comentário do topo) — não tem `participants`,
-      // `standbyParticipants` nem `waitlist` pra restaurar. Elenco é assunto do doc do
-      // torneio, e lá o guard continua onde deve, em `mutateTournament`.
-      //
-      // Não estourou em produção porque `commitMatchResult` (store.js) ainda não tem
-      // chamador — o doc por jogo está atrás do "incremento 3" de
-      // [[project_match_result_docs]]. Ficaria armado pro dia em que fosse ligado.
-      data.matchId = String(matchId);
-      data.updatedAt = new Date().toISOString();
-      var clean = self._cleanUndefined(data);
-      transaction.set(ref, clean); // set (sem merge) DENTRO da txn = clobber-free
-      return { aborted: false, data: clean };
-    });
+  // E05: o placar vem do mesmo documento físico que guarda o confronto.
+  // A forma do mapa é mantida enquanto as telas migram da hidratação antiga.
+  _resultFromPhysicalMatch(physical, id) {
+    var game = physical && physical.jogo;
+    var embeddedId = game && game.id;
+    var hasEmbeddedId = embeddedId != null && String(embeddedId) !== '';
+    if (!physical || physical._chave !== id || !physical._loc || typeof physical._loc !== 'object' ||
+        !game || typeof game !== 'object' || Array.isArray(game) ||
+        (hasEmbeddedId && !((typeof embeddedId === 'string' ||
+          (typeof embeddedId === 'number' && Number.isFinite(embeddedId))) && String(embeddedId) === id))) {
+      throw new Error('Jogo canônico inválido: ' + id);
+    }
+    var result = Object.assign({}, game);
+    result.id = id;
+    result.matchId = id;
+    if (Array.isArray(physical.playerUids)) result.playerUids = physical.playerUids.slice();
+    result.roundLabel = game.roundLabel || game.label || game.roundName || '';
+    return result;
   },
 
-  // Lê TODOS os docs de resultado de um torneio (subcoleção results). Retorna um
-  // mapa { [matchId]: resultData } pra hidratação de leitura (merge nos matches).
   async loadMatchResults(tournamentId, opts) {
     if (!this.ensureDb()) throw Object.assign(new Error('Firestore indisponível para ler resultados.'), { code: 'unavailable' });
-    // L8.P5: `opts.limit` pede a JANELA RECENTE (dashboard), não a coleção inteira (chave).
-    // ⛔ `orderBy` EXCLUI documento que não tem o campo — medido em 11/set/2026: 240 de 240
-    // docs de `results` têm `updatedAt` (Confra 214/214), e o gate do censo existe pra que
-    // isso não mude calado. Sem `opts` o caminho é o de sempre: coleção inteira, sem ordenação.
     var limite = (opts && Number(opts.limit) > 0) ? Number(opts.limit) : 0;
-    var consulta = this._tSub(tournamentId, 'results');
-    if (limite) consulta = consulta.orderBy('updatedAt', 'desc').limit(limite);
-    var snap = await consulta.get({ source: 'server' });
+    var snap = await this._tSub(tournamentId, 'matches').get({ source: 'server' });
+    var entries = [];
+    var self = this;
+    snap.forEach(function (d) {
+      entries.push([d.id, self._resultFromPhysicalMatch(d.data(), d.id)]);
+    });
+    if (limite) {
+      var instante = function (value) {
+        if (value && typeof value.toMillis === 'function') return value.toMillis();
+        if (value && typeof value.seconds === 'number') return value.seconds * 1000;
+        if (typeof value === 'number') return value;
+        return Date.parse(value || '') || 0;
+      };
+      entries.sort(function (a, b) {
+        var x = a[1], y = b[1];
+        return instante(y.updatedAt || y.resultAt || y.startedAt) -
+          instante(x.updatedAt || x.resultAt || x.startedAt);
+      });
+      entries = entries.slice(0, limite);
+    }
     var out = {};
-    snap.forEach(function (d) { out[d.id] = d.data(); });
+    entries.forEach(function (entry) { out[entry[0]] = entry[1]; });
     return out;
   },
 
-  // ── FASE B: leitura ISOLADA do subdoc de resultado (project_match_result_docs) ──
-  // Lê UM doc de resultado (tournaments/{tId}/results/{matchId}) sem carregar o
-  // torneio inteiro. Retorna o dado do jogo ou null.
-  async loadMatchResult(tournamentId, matchId) {
-    if (!this.ensureDb()) return null;
-    if (matchId == null || matchId === '') return null;
-    var d = await this._tSub(tournamentId, 'results').doc(String(matchId)).get({ source: 'server' });
-    return d.exists ? d.data() : null;
+  // Confirmação fina do placar: um único jogo físico, sem consultar `results`.
+  async loadPhysicalMatchResult(tournamentId, matchId) {
+    if (!this.ensureDb()) throw Object.assign(new Error('Firestore indisponível para ler o jogo.'), { code: 'unavailable' });
+    var tid = String(tournamentId || '').trim();
+    var id = String(matchId || '').trim();
+    if (!tid || !id || tid.includes('/') || id.includes('/')) throw new Error('Identidade de jogo inválida.');
+    var snap = await this._tSub(tid, 'matches').doc(id).get({ source: 'server' });
+    return snap.exists ? this._resultFromPhysicalMatch(snap.data(), id) : null;
   },
 
-  // Lê TODOS os jogos de um usuário ACROSS todos os torneios numa ÚNICA query
-  // collectionGroup (`results` where playerUids array-contains uid), sem carregar
-  // NENHUM doc de torneio — o benefício de isolamento da leitura da linha 4.1.
-  // Cada item traz `tournamentId` (campo do subdoc) + `matchId` + resultado.
-  // Requer o índice collectionGroup `results` (playerUids CONTAINS, updatedAt DESC).
-  async loadMyMatchResults(uid, opts) {
-    if (!this.ensureDb() || !uid) return [];
-    var q = this.db.collectionGroup('results').where('playerUids', 'array-contains', uid);
-    try { q = q.orderBy('updatedAt', 'desc'); } catch (e) {}
-    if (opts && opts.limit) q = q.limit(opts.limit);
-    var snap = await q.get({ source: 'server' });
-    var out = [];
-    snap.forEach(function (d) {
-      var data = d.data() || {};
-      // tournamentId costuma vir no subdoc (mirror/seed); fallback = doc pai.
-      if (!data.tournamentId && d.ref && d.ref.parent && d.ref.parent.parent) {
-        data.tournamentId = d.ref.parent.parent.id;
-      }
-      out.push(data);
+  // Ficha isolada a partir do jogo canônico. O recorte contém apenas o que o card
+  // usa; a autorização do documento físico e da raiz é feita pelas Rules.
+  async loadCanonicalMatch(tournamentId, matchId) {
+    if (!this.ensureDb()) throw Object.assign(new Error('Firestore indisponível para ler o jogo.'), { code: 'unavailable' });
+    var tid = String(tournamentId || '').trim();
+    var id = String(matchId || '').trim();
+    if (!tid || !id || tid.includes('/') || id.includes('/')) throw new Error('Identidade de jogo inválida.');
+    var matchSnap = await this._tSub(tid, 'matches').doc(id).get({ source: 'server' });
+    if (!matchSnap.exists) return null;
+    var physical = matchSnap.data();
+    this._resultFromPhysicalMatch(physical, id);
+    var game = physical && physical.jogo;
+    var rootSnap = await this._tRef(tid).get({ source: 'server' });
+    if (!rootSnap.exists) throw new Error('Torneio do jogo indisponível.');
+    var root = rootSnap.data() || {};
+    var fields = ['p1', 'p2', 'scoreP1', 'scoreP2', 'sets', 'winner', 'winnerUid',
+      'winnerUids', 'draw', 'wo', 'woAbsentSide', 'pendingResult', 'team1Uids', 'team2Uids'];
+    var out = { id: id, matchId: id, tournamentId: tid,
+      tournamentName: root.name || '', roundLabel: game.label || game.roundName || '' };
+    fields.forEach(function (field) {
+      if (Object.prototype.hasOwnProperty.call(game, field)) out[field] = game[field];
     });
     return out;
+  },
+
+  // Histórico entre torneios passa pela porta que confere a visibilidade de
+  // CADA raiz. O navegador não consulta collectionGroup('results') diretamente.
+  // Busca todas as páginas antes de ordenar: documentos antigos podem não ter
+  // updatedAt, então ordená-los na query excluiria resultados legítimos.
+  async loadMyMatchResults(uid, opts) {
+    if (!uid) return [];
+    var out = [], cursor = null, seen = {};
+    for (var page = 0; page < 100; page++) {
+      var reply = await this._callFn('getTournamentResultHistoryPage', {
+        targetUid: String(uid), cursor: cursor
+      });
+      if (!reply || !Array.isArray(reply.items)) {
+        throw Object.assign(new Error('Resposta de histórico inválida'), { code: 'functions/data-loss' });
+      }
+      out.push.apply(out, reply.items);
+      if (!reply.cursor) {
+        function ts(value) {
+          if (value && typeof value.toMillis === 'function') return value.toMillis();
+          if (value && typeof value.seconds === 'number') return value.seconds * 1000;
+          if (value && typeof value._seconds === 'number') return value._seconds * 1000;
+          if (typeof value === 'number') return value;
+          return Date.parse(value || '') || 0;
+        }
+        out.sort(function (a, b) { return ts(b.updatedAt || b.resultAt) - ts(a.updatedAt || a.resultAt); });
+        return opts && opts.limit ? out.slice(0, Math.max(0, Number(opts.limit) || 0)) : out;
+      }
+      if (seen[reply.cursor]) {
+        throw Object.assign(new Error('Cursor de histórico repetido'), { code: 'functions/data-loss' });
+      }
+      seen[reply.cursor] = true;
+      cursor = reply.cursor;
+    }
+    throw Object.assign(new Error('Histórico grande demais para esta leitura; tente novamente mais tarde.'),
+      { code: 'functions/resource-exhausted' });
+  },
+
+  async loadScoreplaceMatchHistory(uid) {
+    if (!uid) return [];
+    var parts = await Promise.all([this.loadMyMatchResults(uid), this.loadUserMatchHistory(uid)]);
+    if (parts[1] === null) return null;
+    var tournament = parts[0].map(window._spTournamentHistoryRecord).filter(Boolean);
+    return tournament.concat(parts[1]);
   },
 
   // Atomic enrollment — uses Firestore transaction to prevent race conditions
@@ -2103,6 +2250,7 @@ window.FirestoreDB = {
       uid1: (opts && opts.uid1) || '', manualId1: (opts && opts.manualId1) || '', name1: (opts && opts.name1) || '',
       uid2: (opts && opts.uid2) || '', manualId2: (opts && opts.manualId2) || '', name2: (opts && opts.name2) || '',
       categoryId: (opts && opts.categoryId) || '',
+      pairRequestId: (opts && opts.pairRequestId) || '',
       changeRule: !!(opts && opts.changeRule)
     });
   },
@@ -2155,8 +2303,8 @@ window.FirestoreDB = {
    * do sandbox (jogos, inscritos, grupos, histórico, placares) ficariam vivas e sem dono —
    * exatamente os 151 `results` órfãos medidos em 01/ago/2026, agora numa coleção onde
    * ninguém mais passa. No sandbox o dono pode escrever, então é ele quem limpa.
-   * ⛔ A lista deriva das MESMAS partes que a criação copia; `results` aqui é traduzido pra
-   * `resultsSandbox` por `_subNome`, então não precisa (nem pode) ser escrito à mão. */
+   * A lista cobre as partes criadas hoje E o índice legado dos sandboxes antigos.
+   * `results` aqui é traduzido para `resultsSandbox` por `_subNome`. */
   _sandboxSubcollections: ['matches', 'courtState', 'courtReleases', 'inscritos', 'opponentHistory', 'grupos', 'checkedIn',
     'woLog', 'woClaims', 'history', 'resultQueue', 'categoryNotifications',
     'letzplayScans', 'results'],
@@ -2544,7 +2692,7 @@ window.FirestoreDB = {
         (Array.isArray(_canonical.categoryDefinitions) ? _canonical.categoryDefinitions : []).forEach(function (definition) {
           if (definition && definition.id && definition.label) _categoryLabels[String(definition.id)] = String(definition.label);
         });
-        t.participants = _canonical.participants.map(function (entry) {
+        var _projectCanonicalEntry = function (entry) {
           if (!entry || typeof entry !== 'object') throw new Error('participante canônico inválido');
           var projected = Object.assign({}, entry);
           var categoryId = String(projected.categoryId || projected.category || '').trim();
@@ -2559,7 +2707,14 @@ window.FirestoreDB = {
           projected.category = categoryLabel;
           projected.categories = [categoryLabel];
           return projected;
-        });
+        };
+        t.participants = _canonical.participants.map(_projectCanonicalEntry);
+        t.standbyParticipants = (Array.isArray(_canonical.standbyParticipants)
+          ? _canonical.standbyParticipants : []).map(_projectCanonicalEntry);
+        // O espelho legado nunca complementa uma leitura canônica, nem para
+        // usuários sem permissão de ver quem ainda aguarda vaga.
+        t.waitlist = [];
+        t.monarchWaitlist = {};
         // O contador `_nPartes.participants` pertence ao espelho legado. No Neon ele
         // ainda anuncia 192 embora a projeção canônica atual contenha 128 pessoas.
         // O recibo da callable, conferido acima com o documento do servidor, é a
@@ -2700,6 +2855,147 @@ window.FirestoreDB = {
     }
   },
 
+  /* Porta isolada para a 3.2.6. Nenhum consumidor a usa antes da integração 3.2.7.
+   * A prova de cobertura e a lista filtrada usam o MESMO snapshot read-only. */
+  async loadTournamentPhaseGames(id, phaseIndex, options) {
+    var self = this;
+    var fallbackPromise = null;
+    async function fallback() {
+      if (options && options.skipFullFallback === true) {
+        return { mode: 'fullFallback', readOnly: true, tournament: null };
+      }
+      if (!fallbackPromise) fallbackPromise = Promise.resolve().then(function () {
+        return self.loadTournamentById(id);
+      }).then(function (tournament) {
+        return { mode: 'fullFallback', readOnly: true, tournament: tournament };
+      });
+      return fallbackPromise;
+    }
+    var core = window._phaseGamesRead;
+    if (!this.db || !id || !core ||
+        (phaseIndex !== 'current' && (!Number.isSafeInteger(phaseIndex) ||
+          phaseIndex < 0 || phaseIndex >= 30)) ||
+        !/^[^/]+$/.test(String(id)) || this._ehSandbox(id)) return fallback();
+    var fb = window.firebase;
+    var project = '';
+    try { project = fb.app().options.projectId; } catch (e) {}
+    if (!project || !/^[a-zA-Z0-9-]+$/.test(project) || typeof fetch !== 'function') return fallback();
+    var headers = { 'Content-Type': 'application/json' };
+    try {
+      var user = fb.auth && fb.auth().currentUser;
+      if (user) headers.Authorization = 'Bearer ' + (await user.getIdToken());
+      if (fb.appCheck && typeof fb.appCheck === 'function') {
+        var appToken = await fb.appCheck().getToken(false);
+        if (appToken && appToken.token) headers['X-Firebase-AppCheck'] = appToken.token;
+      }
+    } catch (e) { return fallback(); }
+    var base = 'https://firestore.googleapis.com/v1/projects/' + project + '/databases/(default)/documents';
+    var parent = base + '/tournaments/' + encodeURIComponent(String(id));
+    var tx = null;
+    var now = (typeof this._phaseGamesNow === 'function') ? this._phaseGamesNow.bind(this) : Date.now;
+    var deadline = now() + 15000;
+    async function request(url, body, timeout, cleanup) {
+      var remaining = cleanup ? Infinity : deadline - now();
+      if (remaining <= 0) throw new Error('phase REST deadline');
+      var ctrl = new AbortController();
+      var timer = setTimeout(function () { ctrl.abort(); }, Math.min(timeout || 10000, remaining));
+      try {
+        var response = await fetch(url, { method: 'POST', headers: headers,
+          body: JSON.stringify(body), signal: ctrl.signal });
+        if (!response.ok) throw new Error('phase REST ' + response.status);
+        return await response.json();
+      } finally { clearTimeout(timer); }
+    }
+    function filter(op, n) {
+      return { fieldFilter: { field: { fieldPath: '_phaseIndex' }, op: op,
+        value: { integerValue: String(n) } } };
+    }
+    function aggregation(where) {
+      var q = { from: [{ collectionId: 'matches' }] };
+      if (where) q.where = where;
+      return { transaction: tx, structuredAggregationQuery: {
+        structuredQuery: q, aggregations: [{ alias: 'n', count: {} }]
+      } };
+    }
+    function numberOf(rows) {
+      var value = rows && rows[0] && rows[0].result && rows[0].result.aggregateFields &&
+        rows[0].result.aggregateFields.n;
+      return value && value.integerValue !== undefined ? core.count(value.integerValue) : null;
+    }
+    function field(value) {
+      if (!value || typeof value !== 'object') throw new Error('phase REST field');
+      if ('nullValue' in value) return null;
+      if ('stringValue' in value) return value.stringValue;
+      if ('integerValue' in value) {
+        var integer = Number(value.integerValue);
+        if (!Number.isSafeInteger(integer)) throw new Error('phase REST integer');
+        return integer;
+      }
+      if ('doubleValue' in value) return Number(value.doubleValue);
+      if ('booleanValue' in value) return value.booleanValue;
+      if ('timestampValue' in value) return new Date(value.timestampValue);
+      if ('referenceValue' in value) return value.referenceValue;
+      if ('bytesValue' in value) return value.bytesValue;
+      if ('geoPointValue' in value) return value.geoPointValue;
+      if ('arrayValue' in value) return (value.arrayValue.values || []).map(field);
+      if ('mapValue' in value) {
+        var out = {};
+        Object.keys(value.mapValue.fields || {}).forEach(function (key) {
+          if (key === '__proto__' || key === 'constructor') throw new Error('phase REST unsafe key');
+          out[key] = field(value.mapValue.fields[key]);
+        });
+        return out;
+      }
+      throw new Error('phase REST unknown value');
+    }
+    try {
+      var started = await request(base + ':beginTransaction', { options: { readOnly: {} } });
+      tx = started && started.transaction;
+      if (!tx) throw new Error('phase REST without transaction');
+      var rootName = 'projects/' + project + '/databases/(default)/documents/tournaments/' + String(id);
+      var rootRows = await request(base + ':batchGet', { documents: [rootName], transaction: tx });
+      if (!Array.isArray(rootRows) || rootRows.length !== 1 || !rootRows[0].found ||
+          rootRows[0].found.name !== rootName) return await fallback();
+      var root = field({ mapValue: { fields: rootRows[0].found.fields || {} } });
+      var resolvedPhaseIndex = phaseIndex === 'current' ? root.currentPhaseIndex : phaseIndex;
+      if (!Array.isArray(root.phases) || !Number.isSafeInteger(resolvedPhaseIndex) ||
+          resolvedPhaseIndex < 0 || resolvedPhaseIndex >= 30 ||
+          resolvedPhaseIndex >= root.phases.length) return await fallback();
+      var total = numberOf(await request(parent + ':runAggregationQuery', aggregation(null)));
+      /* IN cobre somente fases inteiras 0..29. Um valor fora desse conjunto
+       * derruba a leitura seletiva do torneio inteiro para o fallback. */
+      var indexed = numberOf(await request(parent + ':runAggregationQuery',
+        aggregation({ fieldFilter: { field: { fieldPath: '_phaseIndex' }, op: 'IN',
+          value: { arrayValue: { values: Array.from({ length: 30 }, function (_, n) {
+            return { integerValue: String(n) };
+          }) } } } })));
+      var phaseCount = numberOf(await request(parent + ':runAggregationQuery',
+        aggregation(filter('EQUAL', resolvedPhaseIndex))));
+      if (total === null || indexed === null || phaseCount === null ||
+          phaseCount === 0 || total !== indexed) return await fallback();
+      var rows = await request(parent + ':runQuery', { transaction: tx, structuredQuery: {
+        from: [{ collectionId: 'matches' }], where: filter('EQUAL', resolvedPhaseIndex)
+      } });
+      if (!Array.isArray(rows) || rows.some(function (row) { return !row.document &&
+        !(row && row.readTime && !row.error); })) return await fallback();
+      var envelopes = rows.filter(function (row) { return !!row.document; }).map(function (row) {
+        return field({ mapValue: { fields: row.document.fields || {} } });
+      });
+      if (!await core.valid({ root: root, phaseIndex: resolvedPhaseIndex, total: total, indexed: indexed,
+        phaseCount: phaseCount, envelopes: envelopes }, window._tSplit)) return await fallback();
+      return Object.freeze({ mode: 'partial', readOnly: true, phaseIndex: resolvedPhaseIndex,
+        root: { name: root.name, currentPhaseIndex: root.currentPhaseIndex, phases: root.phases },
+        games: envelopes });
+    } catch (e) {
+      return fallback();
+    } finally {
+      if (tx) {
+        /* Cleanup não pode atrasar a abertura nem transformar sucesso em erro. */
+        request(base + ':rollback', { transaction: tx }, 1500, true).catch(function () {});
+      }
+    }
+  },
+
   async loadTournamentById(id) {
     if (!this.db || !id) return null;
     try {
@@ -2721,7 +3017,7 @@ window.FirestoreDB = {
        * `tournaments`, o documento não está lá e a tela dizia "não encontrado".
        * ⇒ Aqui o fato é CRIADO: não achou em `tournaments`, pergunta a `sandboxes`; achando,
        * REGISTRA o id, e a partir daí as partes (`_montaDeSubcolecoes`) e toda leitura e
-       * escrita seguintes já roteiam sozinhas — inclusive `results`→`resultsSandbox`.
+       * escrita seguintes já roteiam sozinhas. A limpeza do índice legado também.
        * ⛔ E isto não abre nada pra ninguém: as Rules de `sandboxes` entregam só ao
        * `sandboxOwnerUid`. Pra qualquer outra pessoa a leitura é NEGADA e o desfecho é o
        * mesmo "não encontrado" — o `catch` existe pra isso, não pra esconder erro. */
@@ -3900,10 +4196,11 @@ window.FirestoreDB = {
     if (!this.db || !uid) return [];
     options = options || {};
     try {
-      var q = this.db.collection('users').doc(uid).collection('matchHistory');
-      if (options.matchType) q = q.where('matchType', '==', options.matchType);
-      q = q.orderBy('finishedAt', 'desc');
-      if (options.limit) q = q.limit(options.limit);
+      // Apenas partidas casuais permanecem nesta coleção. A consulta por tipo
+      // evita baixar cópias antigas de torneio enquanto o lote E05 as retira.
+      if (options.matchType && options.matchType !== 'casual') return [];
+      var q = this.db.collection('users').doc(uid).collection('matchHistory')
+        .where('matchType', '==', 'casual');
       var snap = await q.get();
       var out = [];
       // v1.8.93: PARTIDA EM RAJADA NÃO ENTRA. Filtrar aqui, na origem, é o que faz a
@@ -3935,7 +4232,8 @@ window.FirestoreDB = {
           try { await window._preloadUserProfiles(profileUids); } catch (e) {}
         }
       }
-      return out;
+      out.sort(function (a, b) { return String(b.finishedAt || '').localeCompare(String(a.finishedAt || '')); });
+      return options.limit ? out.slice(0, options.limit) : out;
     } catch (e) {
       // v1.7.51 — RECUSA NÃO É LISTA VAZIA. `users/{uid}/matchHistory` agora é lido
       // conforme o `statsVisibility` da própria pessoa, então "não posso ver" virou um
@@ -3948,7 +4246,7 @@ window.FirestoreDB = {
         return null;
       }
       window._error('Erro ao carregar histórico de partidas:', e);
-      return [];
+      throw e;
     }
   }
 };

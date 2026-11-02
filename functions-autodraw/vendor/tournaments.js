@@ -3,6 +3,23 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 // Dynamically update stat-boxes after participant/waitlist changes
 var _t = window._t || function(k) { return k; };
 
+window._soloPartnerCandidates = function(participants, currentUid) {
+  return (Array.isArray(participants) ? participants : [])
+    .filter(function(p) {
+      if (p == null) return false;
+      if (currentUid && typeof p === 'object' && p.uid && p.uid === currentUid) return false;
+      return !window._entryTeamMembers(p);
+    })
+    .map(function(p) {
+      return typeof p === 'string'
+        ? { name: p, uid: '', photo: '' }
+        : { name: p.uid && window._displayNameForUid
+            ? window._displayNameForUid(p.uid, p.displayName || p.name || '')
+            : (p.displayName || p.name || ''), uid: p.uid || '', photo: '' };
+    })
+    .filter(function(p) { return p.name; });
+};
+
 window._teamTieDrawVisible = function (t) {
   if (!t || t.status === 'finished' || t.finishedAt || Number(t.currentPhaseIndex || 0) > 0 ||
       (t.classifFinalDaLinha && Object.keys(t.classifFinalDaLinha).length)) return false;
@@ -437,9 +454,8 @@ window._buildDoublesInscritosSection = function (t, ctx) {
   var _enrollOrderMapD = window._buildEnrollOrderMap(t);
   // Só elenco migrado COMPLETO com categorias declaradas usa blocos. Não
   // alterar o array persistido: _pairedParticipants é cópia feita por filter.
-  var _declaredCategoryNames = Array.isArray(t.combinedCategories) && t.combinedCategories.length
-    ? t.combinedCategories : (Array.isArray(t.categoryDefinitions)
-      ? t.categoryDefinitions.filter(function (d) { return d && d.enabled !== false; }).map(function (d) { return d.label; }) : []);
+  var _declaredCategoryNames = typeof window._getTournamentCategories === 'function'
+    ? window._getTournamentCategories(t) : (Array.isArray(t.combinedCategories) ? t.combinedCategories : []);
   var _categoryBlockRank = new Map();
   if (_canonicalDenseSeq && t.registrationDisplayOrder !== 'enrollSeq' && _declaredCategoryNames.length > 1) {
     _declaredCategoryNames.forEach(function (label, index) {
@@ -709,10 +725,7 @@ window._updateDuplaCardInPlace = function (tId, uid, playerName) {
       var fresh = tmp.firstElementChild; if (!fresh) return false;
       card.replaceWith(fresh);
       painted++;
-      try {
-        var imgs = fresh.querySelectorAll('img[data-player-name]');
-        imgs.forEach(function (img) { var n = (img.getAttribute('data-player-name') || '').toLowerCase(); var real = window._playerPhotoCache && window._playerPhotoCache[n]; if (real && real.indexOf('dicebear.com') === -1) img.src = real; });
-      } catch (_e) {}
+      if (typeof window._refreshPersonPhotos === 'function') window._refreshPersonPhotos(fresh);
       if (typeof window._hydrateUidNames === 'function') { try { window._hydrateUidNames(fresh); } catch (_e) {} }
     }
     return painted > 0;
@@ -974,7 +987,12 @@ window.removeParticipantFunction = function (tId, participantName, memberUid) {
                     if (_manualId) _removePayload.manualParticipantId = _manualId;
                     else _removePayload.userUid = String(memberUid);
                     window.FirestoreDB._callFn('deenrollParticipant', _removePayload).then(function(result) {
-                        if (result && Array.isArray(result.participants)) _tPre.participants = result.participants;
+                        if (!result || typeof result.notFound !== 'boolean' || !Array.isArray(result.participants)) {
+                            if (typeof showNotification === 'function') showNotification('Erro', 'Não foi possível confirmar a remoção. Atualize a lista.', 'error');
+                            return;
+                        }
+                        _tPre.participants = result.participants;
+                        if (result.notFound && typeof showNotification === 'function') showNotification('Inscrição não encontrada', 'Este participante já não constava no elenco.', 'info');
                         const container = document.getElementById('view-container');
                         if (container) {
                             if ((window.location.hash || '').indexOf('#participants') === 0 && typeof window.renderParticipants === 'function') window.renderParticipants(container, tId);
@@ -984,14 +1002,18 @@ window.removeParticipantFunction = function (tId, participantName, memberUid) {
                     return;
                 }
                 window.FirestoreDB._callFn('removeTournamentParticipant', { tournamentId: String(tId), participantName: String(participantName || ''), memberUid: String(memberUid || '') }).then(function(result) {
-                    if (result && result.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(tId, result.tournament);
+                    if (!result || !result.tournament || typeof window._applyCFTournament !== 'function') {
+                        if (typeof showNotification === 'function') showNotification('Erro', 'Não foi possível confirmar a remoção. Atualize a lista.', 'error');
+                        return;
+                    }
+                    window._applyCFTournament(tId, result.tournament);
                     const container = document.getElementById('view-container');
                     if (container) {
                         if ((window.location.hash || '').indexOf('#participants') === 0 && typeof window.renderParticipants === 'function') window.renderParticipants(container, tId);
                         else if (typeof renderTournaments === 'function') renderTournaments(container, tId);
                     }
                 }).catch(function(err) { if (typeof showNotification === 'function') showNotification('Erro', (err && err.message) || 'Não foi possível remover o participante.', 'error'); });
-            }
+            } else if (typeof showNotification === 'function') showNotification('Erro', 'Não foi possível remover o participante.', 'error');
         },
         null,
         { type: 'danger', confirmText: _t('btn.remove'), cancelText: _t('btn.cancel') }
@@ -1306,21 +1328,32 @@ window._buildPodiumHtml = function(p1, p2, p3, sub1, sub2, sub3, opts) {
   var _sh = window._safeHtml || function(s){ return String(s == null ? '' : s); };
   if (!p1) return '';
   opts = opts || {};
+  var podiumUids = Array.isArray(opts.uids) ? opts.uids : [];
   var title = opts.title || '🏆 Torneio Encerrado';
   sub1 = sub1 || 'Campeão';
   sub2 = sub2 || '2º Lugar';
   sub3 = sub3 || '3º Lugar';
+  function _livePodiumName(stored, place) {
+    var names = String(stored == null ? '' : stored).split(' / ').map(function(s) { return s.trim(); });
+    var ids = podiumUids[place];
+    if (!Array.isArray(ids) || ids.length !== names.length || typeof window._displayNameForUid !== 'function') return stored;
+    return names.map(function(n, i) { return ids[i] ? window._displayNameForUid(ids[i], n) : n; }).join(' / ');
+  }
+  p1 = _livePodiumName(p1, 0);
+  p2 = _livePodiumName(p2, 1);
+  p3 = _livePodiumName(p3, 2);
   // v3.0.0: barra de fotos numa linha própria, centralizada (alinhada com a
   // medalha). Nomes da dupla divididos em duas metades — cada integrante quebra
   // linha na sua metade; nome grande (ex.: Rodrigo) reduz a fonte pra caber.
-  function _av(name, size) {
+  function _av(name, size, place) {
     var ms = String(name == null ? '' : name).split(' / ').map(function(s){ return s.trim(); }).filter(Boolean);
     if (!ms.length) return '';
-    var imgs = ms.map(function(n) {
-      var lc = n.toLowerCase();
-      var cached = (window._playerPhotoCache && window._playerPhotoCache[lc] && window._playerPhotoCache[lc].indexOf('dicebear') === -1) ? window._playerPhotoCache[lc] : '';
+    var ids = Array.isArray(podiumUids[place]) && podiumUids[place].length === ms.length ? podiumUids[place] : [];
+    var imgs = ms.map(function(n, i) {
+      var uid = ids[i] || '';
+      var cached = uid && window._profilePhotoForUid ? window._profilePhotoForUid(uid) : '';
       var src = cached || (typeof window._profileAvatarUrl === 'function' ? window._profileAvatarUrl(n, '', size) : ('https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(n) + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf'));
-      return '<img src="' + _sh(src) + '" title="' + _sh(n) + '" style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;object-fit:cover;border:2px solid var(--sp-b-255-255-255-025,rgba(255,255,255,0.25));margin-left:-5px;box-sizing:border-box;flex-shrink:0;">';
+      return '<img src="' + _sh(src) + '" title="' + _sh(n) + '"' + (uid ? ' data-uid-photo="' + _sh(uid) + '"' : '') + ' style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;object-fit:cover;border:2px solid var(--sp-b-255-255-255-025,rgba(255,255,255,0.25));margin-left:-5px;box-sizing:border-box;flex-shrink:0;">';
     }).join('');
     return '<div style="display:flex;align-items:center;justify-content:center;padding-left:5px;margin-top:4px;">' + imgs + '</div>';
   }
@@ -1352,20 +1385,20 @@ window._buildPodiumHtml = function(p1, p2, p3, sub1, sub2, sub3, opts) {
       _half(right, color, fw, maxFs, minFs, boxH) +
     '</div>';
   }
-  function _block(name, color, fw, avSize, maxFs, minFs, boxH) {
-    return _av(name, avSize) + _names(name, color, fw, maxFs, minFs, boxH);
+  function _block(name, color, fw, avSize, maxFs, minFs, boxH, place) {
+    return _av(name, avSize, place) + _names(name, color, fw, maxFs, minFs, boxH);
   }
   var second = p2 ? (
     '<div style="flex:1;text-align:center;min-width:0;margin-top:-4px;">' +
       '<div style="font-size:2rem;line-height:1;">🥈</div>' +
-      _block(p2, '#cbd5e1', '700', 24, 17, 9, 52) +
+      _block(p2, '#cbd5e1', '700', 24, 17, 9, 52, 1) +
       '<div style="font-size:0.72rem;color:rgba(255,255,255,0.6);margin-top:3px;">' + _sh(sub2) + '</div>' +
     '</div>'
   ) : '';
   var third = p3 ? (
     '<div style="flex:1;text-align:center;min-width:0;margin-top:18px;">' +
       '<div style="font-size:1.7rem;line-height:1;">🥉</div>' +
-      _block(p3, '#cd7f32', '700', 24, 16, 9, 50) +
+      _block(p3, '#cd7f32', '700', 24, 16, 9, 50, 2) +
       '<div style="font-size:0.72rem;color:rgba(255,255,255,0.6);margin-top:3px;">' + _sh(sub3) + '</div>' +
     '</div>'
   ) : '';
@@ -1376,7 +1409,7 @@ window._buildPodiumHtml = function(p1, p2, p3, sub1, sub2, sub3, opts) {
     '<div style="font-size:1.35rem;font-weight:700;margin-bottom:1.1rem;color:' + window._spCor((opts.titleColor || '#fff'), 'color') + ';">' + _sh(title) + '</div>' +
     '<div style="text-align:center;margin-bottom:1.1rem;">' +
       '<div style="font-size:3rem;line-height:1;">🥇</div>' +
-      _block(p1, '#fbbf24', '800', 32, 23, 11, 64) +
+      _block(p1, '#fbbf24', '800', 32, 23, 11, 64, 0) +
       '<div style="font-size:0.8rem;color:var(--sp-c-fbbf24,#fbbf24);font-weight:600;margin-top:3px;">' + _sh(sub1) + '</div>' +
     '</div>' +
     bottomRow +
@@ -1900,7 +1933,7 @@ window._scrollToBracketSection = function(tId, matchId) {
 
 // v2.7.85: funções de DUPLA em escopo de módulo (disponíveis no load — dashboard + drag).
 // Forma a dupla de fato (caminho canônico, reusado por organizador e por aceite de convite).
-window._formDuplaByUids = function(tId, name1, uid1, name2, uid2) {
+window._formDuplaByUids = function(tId, name1, uid1, name2, uid2, pairRequestId) {
     var t = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
     if (!t) return;
     // CF-ONLY (regra do dono "tudo na CF, cliente só dispara"): a Function é quem
@@ -1927,7 +1960,7 @@ window._formDuplaByUids = function(tId, name1, uid1, name2, uid2) {
         if (typeof showNotification !== 'undefined') showNotification('Dupla sem identidade ou categoria válida', 'Atualize o elenco: a formação canônica exige os dois IDs de participante e uma categoria tipada em comum.', 'warning');
         return;
     }
-    window.FirestoreDB.formPair(tId, { uid1: _u1, manualId1: _manual1, name1: name1, uid2: _u2, manualId2: _manual2, name2: name2, categoryId: _canonicalRoster ? _category1 : '' })
+    return window.FirestoreDB.formPair(tId, { uid1: _u1, manualId1: _manual1, name1: name1, uid2: _u2, manualId2: _manual2, name2: name2, categoryId: _canonicalRoster ? _category1 : '', pairRequestId: pairRequestId || '' })
         .then(function (res) {
             // MESMA regra do desfazer: só comemora se a CF gravou de verdade (notFound = não achou).
             var _r = (res && res.data) ? res.data : res;
@@ -1935,11 +1968,11 @@ window._formDuplaByUids = function(tId, name1, uid1, name2, uid2) {
             // caminho que duplicava a pessoa no roster e sumia com o parceiro dela).
             if (_r && _r.alreadyPaired) {
                 if (typeof showNotification !== 'undefined') showNotification('Já está em dupla', (_r.who ? (_r.who + ' já') : 'Essa pessoa já') + ' faz parte de outra dupla. Desfaça a dupla atual antes de formar uma nova.', 'warning');
-                return;
+                return false;
             }
             if (_r && _r.notFound) {
                 if (typeof showNotification !== 'undefined') showNotification('Não foi possível formar a dupla', 'O servidor não encontrou os dois inscritos. Recarregue e tente de novo.', 'warning');
-                return;
+                return false;
             }
             if (_r && _r.invalidPairing) {
                 var _pairRuleMsg = {
@@ -1948,7 +1981,11 @@ window._formDuplaByUids = function(tId, name1, uid1, name2, uid2) {
                     mixedPairRequiresOneOfEachGender: 'Na categoria mista, a dupla precisa ter uma mulher e um homem.'
                 };
                 if (typeof showNotification !== 'undefined') showNotification('Dupla incompatível', _pairRuleMsg[_r.invalidPairing] || 'Os participantes não atendem à regra de formação deste torneio.', 'warning');
-                return;
+                return false;
+            }
+            if (!_r || _r.outcome !== 'paired' || !Array.isArray(_r.participants)) {
+                if (typeof showNotification !== 'undefined') showNotification('Não foi possível confirmar a dupla', 'O servidor não confirmou a formação. Atualize a tela e tente novamente.', 'warning');
+                return false;
             }
             // Não reconstruir a dupla no cliente e nem inferir por nomes. O único
             // estado válido é `participants` retornado pela transação UID-only da CF.
@@ -1962,16 +1999,22 @@ window._formDuplaByUids = function(tId, name1, uid1, name2, uid2) {
                 // vencer o gate, sem depender de refresh manual.
                 window._pdetailSig = null;
             }
+            if (Array.isArray(_r.pairRequests)) t.pairRequests = _r.pairRequests;
             // chave já sorteada → integra na CF (integrateLateEntries detecta o órfão e re-sorteia)
             if (_hasBracket && typeof window._triggerLateIntegration === 'function') { try { window._triggerLateIntegration(t, { force: true }); } catch (e) {} }
             if (typeof showNotification !== 'undefined') showNotification('👫 Dupla formada!', newName, 'success');
             if (_u2 && _u2 !== _u1 && typeof window._sendUserNotification === 'function') {
-                var cu = window.AppStore.currentUser;
-                window._sendUserNotification(_u2, { type: 'enrollment_new', title: '🤝 Dupla formada!', message: (cu && cu.displayName ? cu.displayName : 'O organizador') + ' formou dupla com você em ' + window._safeHtml(t.name || '') + ': ' + window._safeHtml(newName), tournamentId: String(t.id), tournamentName: t.name || '', level: 'fundamental' });
+                try {
+                    var cu = window.AppStore.currentUser;
+                    window._sendUserNotification(_u2, { type: 'enrollment_new', title: '🤝 Dupla formada!', message: (cu && cu.displayName ? cu.displayName : 'O organizador') + ' formou dupla com você em ' + window._safeHtml(t.name || '') + ': ' + window._safeHtml(newName), tournamentId: String(t.id), tournamentName: t.name || '', level: 'fundamental' });
+                } catch (notifyError) { if (window._warn) window._warn('[formPair] aviso pós-commit falhou', notifyError); }
             }
-            if (typeof window._softRefreshView === 'function') window._softRefreshView();
+            if (typeof window._softRefreshView === 'function') {
+                try { window._softRefreshView(); } catch (refreshError) { if (window._warn) window._warn('[formPair] refresh pós-commit falhou', refreshError); }
+            }
+            return true;
         })
-        .catch(function (e) { if (typeof showNotification !== 'undefined') showNotification('Não foi possível formar a dupla', (e && e.message) || '', 'warning'); });
+        .catch(function (e) { if (typeof showNotification !== 'undefined') showNotification('Não foi possível formar a dupla', (e && e.message) || '', 'warning'); return false; });
 };
 // Desfazer dupla → 2 inscritos solo. ESCOPO DE MÓDULO (v1.3.x): estava dentro de
 // renderTournaments — mesmo bug que moveu _formDuplaByUids pro load (o botão "Desfazer" no
@@ -2071,7 +2114,7 @@ window._splitDupla = function(tId, id1, id2, btnEl) {
         // dava o pior sintoma possível: toast "Dupla desfeita" e a dupla intacta, pra sempre.
         var _r = (res && res.data) ? res.data : res;
         _busyDone();
-        if (_r && _r.notFound) {
+        if (!_r || _r.outcome !== 'split' || _r.notFound) {
             if (typeof showNotification !== 'undefined') showNotification('Não foi possível desfazer a dupla', 'O servidor não encontrou esta dupla no torneio. Recarregue e tente de novo.', 'warning');
             return;
         }
@@ -2113,25 +2156,31 @@ window._pairErrorMsg = function(code) {
 // Aceitar um convite de dupla pendente (alvo) → forma via caminho canônico + comunicados.
 window._acceptPairRequest = function(tId, reqId) {
     var t = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
-    if (!t || !window._teamFormation) return;
+    if (!t || !window._teamFormation) return Promise.resolve(false);
     var myUid = (window.AppStore.currentUser || {}).uid;
-    var res = window._teamFormation.acceptPair(t, reqId, myUid);
+    if (!myUid) return Promise.resolve(false);
+    var check = Object.assign({}, t, { pairRequests: Array.isArray(t.pairRequests) ? t.pairRequests.slice() : [] });
+    var res = window._teamFormation.acceptPair(check, reqId, myUid);
     if (!res.ok) {
         if (typeof showNotification !== 'undefined') showNotification('Não foi possível', window._pairErrorMsg(res.error), 'warning');
         if (typeof window._softRefreshView === 'function') window._softRefreshView();
-        return;
+        return Promise.resolve(false);
     }
-    window._formDuplaByUids(tId, res.inviterName, res.inviterUid, res.inviteeName, res.inviteeUid);
-    // v2.7.84: comunicados de ACEITE — pro convidante (fundamental) + formação da dupla
-    // pra todos os inscritos (caráter geral).
-    var _t2 = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
-    var _newTeam = (res.inviterName || '') + ' / ' + (res.inviteeName || '');
-    if (res.inviterUid && typeof window._sendUserNotification === 'function') {
-        window._sendUserNotification(res.inviterUid, { type: 'enrollment_new', title: '✅ Dupla aceita!', message: window._safeHtml(res.inviteeName || '') + ' aceitou formar dupla com você em ' + window._safeHtml((_t2 && _t2.name) || '') + ': ' + window._safeHtml(_newTeam), tournamentId: String(tId), tournamentName: (_t2 && _t2.name) || '', level: 'fundamental' });
-    }
-    if (_t2 && typeof window._notifyTournamentParticipants === 'function') {
-        window._notifyTournamentParticipants(_t2, { type: 'enrollment_new', title: '👫 Nova dupla formada', message: 'A dupla ' + window._safeHtml(_newTeam) + ' foi formada em ' + window._safeHtml(_t2.name || '') + '.', tournamentId: String(tId), tournamentName: _t2.name || '', level: 'all' });
-    }
+    var pending = window._formDuplaByUids(tId, res.inviterName, res.inviterUid, res.inviteeName, res.inviteeUid, String(reqId));
+    return Promise.resolve(pending).then(function (formed) {
+        if (formed !== true) return false;
+        var _t2 = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
+        var _newTeam = (res.inviterName || '') + ' / ' + (res.inviteeName || '');
+        if (res.inviterUid && typeof window._sendUserNotification === 'function') {
+            try { window._sendUserNotification(res.inviterUid, { type: 'enrollment_new', title: '✅ Dupla aceita!', message: window._safeHtml(res.inviteeName || '') + ' aceitou formar dupla com você em ' + window._safeHtml((_t2 && _t2.name) || '') + ': ' + window._safeHtml(_newTeam), tournamentId: String(tId), tournamentName: (_t2 && _t2.name) || '', level: 'fundamental' }); }
+            catch (notifyError) { if (window._warn) window._warn('[acceptPair] aviso pós-commit falhou', notifyError); }
+        }
+        if (_t2 && typeof window._notifyTournamentParticipants === 'function') {
+            try { window._notifyTournamentParticipants(_t2, { type: 'enrollment_new', title: '👫 Nova dupla formada', message: 'A dupla ' + window._safeHtml(_newTeam) + ' foi formada em ' + window._safeHtml(_t2.name || '') + '.', tournamentId: String(tId), tournamentName: _t2.name || '', level: 'all' }); }
+            catch (notifyError) { if (window._warn) window._warn('[acceptPair] aviso geral pós-commit falhou', notifyError); }
+        }
+        return true;
+    });
 };
 // Cancelar/recusar um convite de dupla pendente (iniciante ou alvo).
 window._cancelPairRequest = function(tId, reqId) {
@@ -3365,7 +3414,8 @@ function renderTournaments(container, tournamentId = null) {
             + `</span>`
           : `<span style="display:inline-flex;align-items:center;gap:8px;"><span style="font-size:1.1rem;">🗓️</span><span style="font-variant-numeric:tabular-nums;">${dates}</span></span>`;
         const regLimit = formatDateBr(t.registrationLimit);
-        const cats = (t.combinedCategories && t.combinedCategories.length) ? window._sortCategoriesBySkillOrder(t.combinedCategories, t.skillCategories).join(', ') : ((t.categories && t.categories.length) ? t.categories.join(', ') : _t('tourn.singleCat'));
+        const _configuredCats = typeof window._getTournamentCategories === 'function' ? window._getTournamentCategories(t) : (t.combinedCategories || []);
+        const cats = _configuredCats.length ? window._sortCategoriesBySkillOrder(_configuredCats, t.skillCategories).join(', ') : _t('tourn.singleCat');
 
         if (typeof window._requestExpiredLeagueSeasonClose === 'function') window._requestExpiredLeagueSeasonClose(t);
 
@@ -3537,22 +3587,8 @@ function renderTournaments(container, tournamentId = null) {
         const isDoublesTournament = parseInt(t.teamSize || 2) === 2;
 
         // Participantes já inscritos individualmente (sem "/" = sem dupla ainda)
-        const _enrolledSolo = (Array.isArray(t.participants) ? t.participants : [])
-          .filter(function(p) {
-            // Snapshot parcial pode carregar uma posição nula antes da subcoleção terminar.
-            // Ela não é inscrição e nunca pode derrubar a tela inteira por `displayName`.
-            if (p == null) return false;
-            var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
-            var cu = window.AppStore && window.AppStore.currentUser;
-            if (cu && (n === cu.displayName || (typeof p === 'object' && p.uid === cu.uid))) return false;
-            return !window._entryTeamMembers(p); // só solos — entrada de time excluída por ESTRUTURA (uid/slots), não por '/'
-          })
-          .map(function(p) {
-            return typeof p === 'string'
-              ? { name: p, uid: '', photo: '' }
-              : { name: p.displayName || p.name || '', uid: p.uid || '', photo: p.photoURL || '' };
-          })
-          .filter(function(p) { return p.name; });
+        const _enrolledSolo = window._soloPartnerCandidates(t.participants,
+          window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid);
 
         // Para duplas (teamSize===2): modal suprimido — fluxo é direto (inscrição + _showPartnerPicker)
         const teamEnrollModalHtml = isDoublesTournament ? '' : `
@@ -4227,6 +4263,10 @@ function renderTournaments(container, tournamentId = null) {
                ${tournamentId ? `<div style="font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.6;">Inscrição: ${enrollmentText}</div>` : ''}
             </div>` : (tournamentId ? `<div style="display: flex; justify-content: flex-end; margin-top: 6px; font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.6;">Inscrição: ${enrollmentText}</div>` : '')}
             ${_myPaymentAccess ? `<div style="display:flex;justify-content:flex-end;margin-top:6px;"><button class="btn btn-sm btn-indigo hover-lift" type="button" onclick="event.stopPropagation();window._openTournamentRegistrationPayment('${_escAttr(t.id)}')">💳 Pagamento da inscrição</button></div>` : ''}
+            ${!tournamentId && t.isPublic === true && !t.organizerOnly && !t.membersOnly && !t.isSandbox &&
+              /^[A-Za-z0-9_-]+$/.test(String(t.id))
+              ? `<div style="display:flex;justify-content:flex-end;margin-top:6px;"><button class="btn btn-outline btn-sm" type="button" onclick="event.stopPropagation();window.location.hash='#phase-preview/${_escAttr(t.id)}'">Prévia da fase</button></div>`
+              : ''}
 
             ${pendingInviteBannerHtml}
 
@@ -5035,7 +5075,7 @@ function renderTournaments(container, tournamentId = null) {
     if (tournamentId && visible.length === 1) {
         const t = visible[0];
         const isOrg = window._souOrganizador(t);
-        const _hasTournCats = (t.combinedCategories && t.combinedCategories.length > 0) || (t.genderCategories && t.genderCategories.length > 0) || (t.skillCategories && t.skillCategories.length > 0) || (t.ageCategories && t.ageCategories.length > 0);
+        const _hasTournCats = (typeof window._getTournamentCategories === 'function' ? window._getTournamentCategories(t).length > 0 : !!(t.combinedCategories && t.combinedCategories.length));
         // Snapshot de transição pode conter lacunas. A lista canônica que alimenta cards,
         // ordenação e perfis nunca carrega uma entrada nula para o restante da tela.
         const parts = (typeof window._getCompetitors === 'function' ? window._getCompetitors(t) : (t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : [])).filter(function (p) { return p != null; });
@@ -5083,17 +5123,7 @@ function renderTournaments(container, tournamentId = null) {
         // Pre-load player photos for avatar display (async, updates DOM after load)
         if (typeof _preloadPlayerPhotos === 'function') {
             _preloadPlayerPhotos(t).then(function() {
-                // Update all participant avatar images with real photos from cache
-                var pImgs = container.querySelectorAll('img[data-player-name]');
-                pImgs.forEach(function(img) {
-                    var nm = img.getAttribute('data-player-name');
-                    var real = window._playerPhotoCache && window._playerPhotoCache[(nm || '').toLowerCase()];
-                    if (real && real.indexOf('dicebear.com') === -1 && img.src.indexOf('dicebear.com') !== -1) {
-                        var fb = 'https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(nm) + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
-                        img.onerror = function() { this.onerror = null; this.src = fb; };
-                        img.src = real;
-                    }
-                });
+                if (typeof window._refreshPersonPhotos === 'function') window._refreshPersonPhotos(container);
             }).catch(function() {}).then(_hydrateNamesNow);
         } else {
             // sem preload de fotos → ainda hidrata, mas defer pra rodar pós-innerHTML
@@ -5846,15 +5876,17 @@ window._partnerPickerRender = function(tId, q, enrolled, friends, searchResults)
   if (!dropdown) return;
 
   function _item(p, badge, color) {
-    var avatar = p.photo
-      ? '<img src="' + window._safeHtml(p.photo) + '" style="width:2rem;height:2rem;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.style.display=\'none\'">'
-      : '<div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,' + color + ');display:flex;align-items:center;justify-content:center;font-size:0.75rem;color:#fff;font-weight:700;flex-shrink:0;">' + window._safeHtml((p.name[0]||'?').toUpperCase()) + '</div>';
-    return '<div onclick="event.stopPropagation();window._partnerPickerSelect(\'' + tId + '\',\'' + _escAttr(p.name) + '\',\'' + _escAttr(p.uid||'') + '\')" ' +
+    var liveName = p.uid && window._displayNameForUid ? window._displayNameForUid(p.uid, p.name) : p.name;
+    var livePhoto = p.uid && window._profilePhotoForUid ? window._profilePhotoForUid(p.uid) : '';
+    var avatar = livePhoto
+      ? '<img src="' + window._safeHtml(livePhoto) + '" style="width:2rem;height:2rem;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.style.display=\'none\'">'
+      : '<div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,' + color + ');display:flex;align-items:center;justify-content:center;font-size:0.75rem;color:#fff;font-weight:700;flex-shrink:0;">' + window._safeHtml((liveName[0]||'?').toUpperCase()) + '</div>';
+    return '<div onclick="event.stopPropagation();window._partnerPickerSelect(\'' + tId + '\',\'' + _escAttr(liveName) + '\',\'' + _escAttr(p.uid||'') + '\')" ' +
       'style="display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;transition:background 0.1s;" ' +
       'onmouseover="this.style.background=\'rgba(99,102,241,0.12)\'" onmouseout="this.style.background=\'none\'">' +
       avatar +
       '<div style="flex:1;min-width:0;">' +
-        '<div style="font-size:0.88rem;font-weight:600;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + window._safeHtml(p.name) + '</div>' +
+        '<div style="font-size:0.88rem;font-weight:600;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + window._safeHtml(liveName) + '</div>' +
         '<div style="font-size:0.68rem;color:var(--text-muted);">' + badge + '</div>' +
       '</div></div>';
   }

@@ -49,8 +49,8 @@ ok(skill.includes('categoryId: String(skillIntent.participant.categoryId') &&
 
 const save = between(reportUi, 'function _erSaveCanonicalCategoryEdits', 'function _erPendingCount');
 ok(save.includes('row.categoryId') && save.includes('manualParticipantId: row.manualId') &&
-   save.includes('window._reclassifyCanonicalCategory'),
-  'Análise converte lote em mudanças tipadas, sem escolher alvo por nome');
+   save.includes("_callFn('assignCanonicalPlaceholderCategoryBatch'") && save.includes('fromCategoryId'),
+  'Análise converte bloco inteiro em mudanças tipadas, sem escolher alvo por nome');
 ok(save.includes("'pair:'") && save.includes('seen[pairKey]'),
   'Análise envia uma única mudança para dupla fixa, pois a Function move ambas juntas');
 ok(save.includes("!Object.prototype.hasOwnProperty.call(edit, 'category')") &&
@@ -67,13 +67,15 @@ ok(reportSave.includes('isCanonicalRoster') && reportSave.includes('_erSaveCanon
 (async function () {
   const calls = [];
   const context = {
-    Promise,
+    Promise, Date, Math, JSON, _erAssignmentOperation:null,
     window: {
       _canonicalCategoryIdForDisplay: (_t, value) => value,
-      _reclassifyCanonicalCategory: (_t, _id, participant, target) => {
-        calls.push({ participant, target });
-        return Promise.resolve();
-      }
+      FirestoreDB: { _callFn: (name, payload) => {
+        calls.push({ name, payload });
+        return Promise.resolve({ data:{ ok:true, outcome:'assigned', changed:payload.edits.length,
+          resolvedEntries:payload.edits.length + payload.reservations.length,
+          operationId:payload.operationId } });
+      } }
     }
   };
   const fn = vm.runInNewContext(save + '\n_erSaveCanonicalCategoryEdits', context);
@@ -85,8 +87,9 @@ ok(reportSave.includes('isCanonicalRoster') && reportSave.includes('_erSaveCanon
   ];
   const edits = rows.map((row) => ({ manualParticipantId: row.manualId, gender: 'masc', category: 'Masc Light' }));
   const result = await fn({ id: 'neon' }, rows, edits);
-  ok(result.changed === 2 && calls.length === 2 && calls.every((call) => call.target === 'Masc Light'),
-    'lote com gênero derivado grava uma vez por dupla, sem rejeitar antes da Function');
+  ok(result.changed === 2 && calls.length === 1 && calls[0].payload.edits.length === 2 &&
+     calls[0].payload.edits.every((edit) => edit.toCategoryId === 'Masc Light'),
+    'lote com gênero derivado envia uma só transação, uma edição por dupla');
   let genderOnlyRejected = false;
   try { await fn({ id: 'neon' }, rows, [{ manualParticipantId: 'm113', gender: 'masc' }]); }
   catch (error) { genderOnlyRejected = /Escolha uma categoria/.test(error.message); }

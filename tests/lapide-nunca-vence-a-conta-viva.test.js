@@ -195,12 +195,10 @@ function querySnap(base, uids) {
       escapou.push(path.relative(path.join(__dirname, '..'), f) + ':' + (i + 1) + '  ' + L[i].trim().slice(0, 80));
     }
   }
-  /* ⛔ ESTE É UM PISO DE SANIDADE, não uma meta: ele só garante que a varredura ACHOU algo —
-   * uma varredura que encontra zero passaria vazia em `escapou.length === 0` e não protegeria
-   * nada. Era 20; na etapa 7 (17/set/2026) caiu para 10 porque metade das buscas por
-   * identidade SAIU do navegador para o servidor. Baixar o piso acompanha a realidade; quem
-   * tem dentes aqui é a asserção seguinte, que exige ZERO escapadas. */
-  ok(vistos >= 6, 'a varredura achou as buscas por identidade remanescentes (got ' + vistos + ')');
+  /* ⛔ Piso de sanidade: E17 retirou as consultas por displayName na chave e na ficha
+   * pública para não associar homônimos. Restam quatro buscas amplas de identidade em js/;
+   * a asserção seguinte continua exigindo que nenhuma escape da porta _userVivo. */
+  ok(vistos >= 4, 'a varredura achou as buscas por identidade remanescentes (got ' + vistos + ')');
   if (escapou.length) {
     console.error('  ↓ buscas amplas em users/ que NÃO passam por _userVivo:');
     escapou.forEach((e) => console.error('     ' + e));

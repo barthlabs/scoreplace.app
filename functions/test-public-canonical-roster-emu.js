@@ -166,5 +166,36 @@ async function call(tournamentId, idToken, sandbox) {
   assert.equal(ownSandbox.body.result.registrationCount, 7, 'dono vê somente cópia canônica validada');
   assert.notEqual((await call(sbRef.id, spectator, true)).status, 200, 'sandbox nega espectador');
   assert.notEqual((await call(sbRef.id, null, true)).status, 200, 'sandbox nega anônimo');
+
+  // O mesmo ID nas duas coleções não permite fallback. A reserva existe só na
+  // cópia e distingue qual documento a callable realmente leu.
+  const sameIdSandbox = db.collection('sandboxes').doc(id);
+  await sameIdSandbox.set(Object.assign({}, root, {
+    isSandbox: true, sandboxOf: id, sandboxOwnerUid: 'pub-org',
+    sbState: 'ready', notificationsMuted: true,
+    placeholderReservations: [{ isPlaceholder: true, manualParticipantId: 'copy-only', name: 'Reserva da cópia' }]
+  }));
+  const sameIdBatch = db.batch();
+  canonicalDocs.forEach((doc) => sameIdBatch.set(sameIdSandbox.collection('registrations').doc(doc.id), doc.data()));
+  await sameIdBatch.commit();
+  const sameIdCopy = await call(id, org, true);
+  assert.equal(sameIdCopy.status, 200, JSON.stringify(sameIdCopy.body));
+  assert.equal(sameIdCopy.body.result.placeholderReservations[0].manualParticipantId, 'copy-only');
+  const sameIdOriginal = await call(id, org);
+  assert.equal(sameIdOriginal.status, 200, JSON.stringify(sameIdOriginal.body));
+  assert.deepEqual(sameIdOriginal.body.result.placeholderReservations, [], 'sem flag lê apenas o original');
+  const deniedCopy = await call(id, member, true);
+  const absentCopy = await call('sandbox-inexistente', org, true);
+  assert.equal(deniedCopy.body.error.status, absentCopy.body.error.status,
+    'UID de membro copiado não revela a existência do sandbox');
+  assert.notEqual((await call(id, null, true)).status, 200, 'anônimo não lê sandbox');
+  for (const state of ['creating', 'failed']) {
+    await sameIdSandbox.update({ sbState: state });
+    assert.notEqual((await call(id, org, true)).status, 200, state + ' é negado');
+  }
+  await sameIdSandbox.update({ sbState: 'ready', isSandbox: false });
+  assert.notEqual((await call(id, org, true)).status, 200, 'documento sem carimbo é negado');
+  await sameIdSandbox.update({ isSandbox: true, canonicalRegistrationMigration: { fingerprint: 'fixture', registrationCount: 8 } });
+  assert.notEqual((await call(id, org, true)).status, 200, 'recibo divergente falha fechado');
   console.log('✅ projeção pública do elenco canônico verificada');
 })().then(() => process.exit(0), error => { console.error(error); process.exit(1); });

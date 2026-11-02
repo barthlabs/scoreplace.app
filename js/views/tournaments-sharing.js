@@ -260,10 +260,8 @@ window.renderInvitePage = function(container) {
 };
 
 // ─── FASE B: página leve de UM jogo (project_match_result_docs) ──────────────
-// Deep-link #match/:tId/:matchId → renderiza o jogo lendo SÓ o subdoc
-// (tournaments/{tId}/results/{matchId}), SEM carregar o torneio inteiro. É o
-// consumidor real do isolamento de leitura da linha 4.1: o subdoc já carrega o
-// contexto de exibição denormalizado (p1/p2/tournamentName/roundLabel + placar).
+// Deep-link #match/:tId/:matchId → lê o jogo físico e a raiz para seu nome,
+// sem hidratar o torneio inteiro ou consultar o antigo espelho results.
 window._matchUrl = function(tId, matchId) {
   return (window.SCOREPLACE_URL || 'https://scoreplace.app') + '/#match/' + encodeURIComponent(tId) + '/' + encodeURIComponent(matchId);
 };
@@ -347,7 +345,7 @@ window._buildFaseBMatchCardHtml = function(result, tId) {
     '</div>';
 };
 
-// Page-route: carrega o subdoc (leitura ISOLADA) e renderiza. Estados: carregando,
+// Page-route: carrega o jogo físico (leitura isolada) e renderiza. Estados: carregando,
 // não-encontrado, ok. Segue o padrão centralizado (_renderBackHeader + container).
 window.renderMatchPage = function(container, tId, matchId) {
   var backHref = tId ? ('#tournaments/' + tId) : '#dashboard';
@@ -362,12 +360,12 @@ window.renderMatchPage = function(container, tId, matchId) {
   container.innerHTML = hdr + '<div id="fase-b-match-body">' + loading + '</div>';
   if (typeof window._reflowChrome === 'function') window._reflowChrome();
 
-  if (!tId || !matchId || !window.FirestoreDB || typeof window.FirestoreDB.loadMatchResult !== 'function') {
+  if (!tId || !matchId || !window.FirestoreDB || typeof window.FirestoreDB.loadCanonicalMatch !== 'function') {
     var body0 = document.getElementById('fase-b-match-body');
     if (body0) body0.innerHTML = '<div style="text-align:center;padding:2.5rem 1rem;color:var(--text-muted,#94a3b8);">Jogo não encontrado.</div>';
     return;
   }
-  window.FirestoreDB.loadMatchResult(tId, matchId).then(function(result) {
+  window.FirestoreDB.loadCanonicalMatch(tId, matchId).then(function(result) {
     var body = document.getElementById('fase-b-match-body');
     if (!body) return; // navegou pra fora enquanto carregava
     if (!result) {
@@ -379,7 +377,9 @@ window.renderMatchPage = function(container, tId, matchId) {
     body.innerHTML = window._buildFaseBMatchCardHtml(result, tId);
   }).catch(function(e) {
     var body = document.getElementById('fase-b-match-body');
-    if (body) body.innerHTML = '<div style="text-align:center;padding:2.5rem 1rem;color:var(--sp-c-ef4444,#ef4444);">Erro ao carregar o jogo.</div>';
+    if (body) body.innerHTML = '<div style="text-align:center;padding:2.5rem 1rem;color:var(--sp-c-ef4444,#ef4444);">' +
+      ((e && (e.code === 'permission-denied' || e.code === 'firestore/permission-denied'))
+        ? 'Sem acesso a este jogo.' : 'Erro ao carregar o jogo.') + '</div>';
     if (window._error) window._error('renderMatchPage', e);
   });
 };

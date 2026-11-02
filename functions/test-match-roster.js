@@ -1,7 +1,7 @@
 // Teste PURO da lógica de roster da CF syncMatchRosters (project_match_result_docs
 // inc 3b). Sem Firebase — só a matemática de computeRosterChanges. Rodar:
 //   node functions/test-match-roster.js
-const { collectMatches, matchRoster, slotUids, computeRosterChanges, rosterKey, buildSeedDoc, subdocSignature, buildMirrorDoc } = require("./match-roster");
+const { collectMatches, matchRoster, slotUids, computeRosterChanges, rosterKey, buildSeedDoc, canonicalJson, subdocSignature, buildMirrorDoc } = require("./match-roster");
 
 let pass = 0, fail = 0;
 function ok(c, msg) { if (c) { pass++; console.log("  ✓ " + msg); } else { fail++; console.error("  ✗ " + msg); } }
@@ -86,6 +86,18 @@ ok(!("winner" in seed2) && seed2.playerUids.length === 2, "jogo sem resultado �
 
 // ── subdocSignature + buildMirrorDoc: espelho de resultado (all-paths) ──
 console.log("──── subdocSignature / buildMirrorDoc ────");
+const pendingA = { team: { b: 2, a: 1 }, sets: [{ z: 9, a: 1 }] };
+const pendingB = { sets: [{ a: 1, z: 9 }], team: { a: 1, b: 2 } };
+ok(canonicalJson(pendingA) === canonicalJson(pendingB), "chaves aninhadas em ordem diferente têm o mesmo JSON canônico");
+ok(subdocSignature({ pendingResult: pendingA }) === subdocSignature({ pendingResult: pendingB }),
+  "assinatura do espelho ignora só a ordem das chaves aninhadas");
+ok(canonicalJson({ values: [1, 2] }) !== canonicalJson({ values: [2, 1] }), "ordem de arrays permanece relevante");
+ok(canonicalJson({ value: '1' }) !== canonicalJson({ value: 1 }), "tipos diferentes permanecem diferentes");
+ok(canonicalJson({ value: undefined }) === canonicalJson({}), "undefined segue a semântica de JSON.stringify");
+ok(canonicalJson({ value: null }) !== canonicalJson({ value: undefined }), "null não equivale a campo ausente");
+const timestampLike = { toJSON() { return { nanoseconds: 7, seconds: 3 }; } };
+ok(canonicalJson({ nested: { timestamp: timestampLike } }) === canonicalJson({ nested: { timestamp: { seconds: 3, nanoseconds: 7 } } }),
+  "toJSON aninhado é aplicado antes da ordenação de chaves");
 const tW = { participants: parts, matches: [{ id: "m1", p1: "A", p2: "B", winner: "A", scoreP1: 6, scoreP2: 3 }] };
 const sigAB_win = subdocSignature(buildSeedDoc(tW, tW.matches[0]));
 // mesmo estado no subdoc → assinatura igual (idempotente, CF não reescreve).

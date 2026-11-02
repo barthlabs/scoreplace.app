@@ -1495,8 +1495,30 @@ window._tbLoserGames = function (scoring, sport) {
   return gp;
 };
 
-// Validação única de um set normal. Evita que dois placares digitados no mesmo
-// campo (por exemplo 66–42) sejam gravados como um resultado impossível.
+// Campos de games com tie-break configurado fecham antes de dois dígitos quando
+// o alvo do torneio cabe em um dígito. Outros esportes podem contar pontos até
+// 11/18 e sets sem tie-break podem ser prorrogados; eles não recebem esse limite.
+window._normalSetGameInputCap = function (scoring, sport) {
+  if (!scoring || scoring.tiebreakEnabled === false || scoring.countingType === 'numeric') return null;
+  var gp = parseInt(scoring.gamesPerSet, 10) || 6;
+  var cap = Math.max(gp, window._tbLoserGames(scoring, sport) + 1);
+  return cap <= 9 ? cap : null;
+};
+window._limitNormalSetGameInput = function (input, cap) {
+  if (!input || !Number.isInteger(cap) || cap < 1 || cap > 9) return;
+  var value = String(input.value || '');
+  if (value === '' || (/^[0-9]$/.test(value) && Number(value) <= cap)) {
+    input.dataset.spValidGame = value;
+    return;
+  }
+  var previous = input.dataset.spValidGame;
+  if (previous == null) previous = String(input.defaultValue || '');
+  input.value = previous != null && (previous === '' || (/^[0-9]$/.test(previous) && Number(previous) <= cap))
+    ? previous : '';
+};
+
+// Validação única de um set normal. Impede que valores impossíveis sejam gravados
+// e informa exatamente os números lidos, sem adivinhar como foram digitados.
 window._validateNormalSetScore = function (scoring, sport, a, b) {
   a = Number(a); b = Number(b);
   if (!Number.isInteger(a) || !Number.isInteger(b) || a < 0 || b < 0) return { ok: false, detail: 'Preencha os dois placares do set com números válidos.' };
@@ -1510,8 +1532,8 @@ window._validateNormalSetScore = function (scoring, sport, a, b) {
   var extended = !hasTb && high >= gp && high - low >= 2;
   if (regular || byTb || extended) return { ok: true };
   return { ok: false, detail: (high >= 20 || low >= 20)
-    ? 'Parece que dois placares foram colocados no mesmo set. Lance cada set na sua própria coluna, por exemplo 6–3 e 6–4.'
-    : 'Confira o placar do set. Com esta regra, use um resultado válido como 6–4 ou 7–6.' };
+    ? 'Placar ' + a + '×' + b + ' inválido: confira o número de games digitado neste set.'
+    : 'Placar ' + a + '×' + b + ' inválido. Confira a regra deste set: ' + gp + ' games' + (hasTb ? ', tie-break em ' + trigger + '×' + trigger : ', sem tie-break') + '.' };
 };
 function _showSetScoreProblem(problem) {
   showAlertDialog('Placar de set inválido', (problem && problem.detail) || 'Confira o placar informado.', null, { type: 'warning' });
@@ -1529,7 +1551,10 @@ window._warnGrossSetScore = function (matchId, idx) {
   });
   var sc = tour && ((typeof window._effectiveScoring === 'function') ? window._effectiveScoring(tour, match) : tour.scoring);
   var problem = window._validateNormalSetScore(sc, tour && tour.sport, a, b);
-  if (!problem.ok && aEl.getAttribute('data-score-warning') !== (a + '-' + b)) { aEl.setAttribute('data-score-warning', a + '-' + b); _showSetScoreProblem(problem); }
+  if (!problem.ok && aEl.getAttribute('data-score-warning') !== (a + '-' + b)) {
+    aEl.setAttribute('data-score-warning', a + '-' + b);
+    _showSetScoreProblem({ detail: (Number.isInteger(idx) ? (idx + 1) + 'º set: ' : '') + problem.detail });
+  }
 };
 
 // FONTE ÚNICA do SET gravado no lançamento manual (sempre 1 set): games + o tie-break quando
@@ -2122,6 +2147,10 @@ window._saveEditedSetsInline = function (tId, matchId, sc, rows, overlay, onAcce
     if (isNaN(a) || isNaN(b) || a < 0 || b < 0 || a === b) { showNotification('Placar inválido', 'Cada set precisa de dois placares diferentes.', 'warning'); return; }
     var ta = String(r.tbA.value || '').trim(), tb = String(r.tbB.value || '').trim();
     var isStb = r.isStb;
+    if (!isStb) {
+      var normalProblem = window._validateNormalSetScore(sc, t.sport, a, b);
+      if (!normalProblem.ok) { _showSetScoreProblem({ detail: (i + 1) + 'º set: ' + normalProblem.detail }); return; }
+    }
     var tbTrigger = window._tbLoserGames(sc, t.sport);
     var isTb = !isStb && window._isTiebreakSetScore(a, b, tbTrigger);
     if (isTb && (!ta || !tb)) { showNotification('Tie-break incompleto', 'Informe os pontos do tie-break deste set.', 'warning'); return; }
@@ -2389,7 +2418,7 @@ window._saveInitialBestOfThreeFromCard = function (tId, matchId, t, m, scoring, 
   var sets = [], p1 = 0, p2 = 0;
   for (var i = 0; i < 2; i++) {
     var problem = window._validateNormalSetScore(scoring, t.sport, raw[i].a, raw[i].b);
-    if (!problem.ok) { _showSetScoreProblem(problem); return true; }
+    if (!problem.ok) { _showSetScoreProblem({ detail: (i + 1) + 'º set: ' + problem.detail }); return true; }
     var isTb = scoring.tiebreakEnabled !== false && window._isTiebreakSetScore(raw[i].a, raw[i].b, window._tbLoserGames(scoring, t.sport));
     var tb1 = parseInt((field('tb1-' + matchId + '-' + i) || {}).value, 10), tb2 = parseInt((field('tb2-' + matchId + '-' + i) || {}).value, 10);
     if (isTb && (isNaN(tb1) || isNaN(tb2) || (raw[i].a > raw[i].b ? tb1 <= tb2 : tb2 <= tb1))) { _showSetScoreProblem({ detail: 'Informe o tie-break e mantenha o vencedor igual ao do set.' }); return true; }
@@ -3327,6 +3356,9 @@ window._editPendingResult = function(tId, matchId) {
   var _pesc = (typeof window._effectiveScoring === 'function') ? window._effectiveScoring(t, m) : t.scoring;
   var _peUseSets = window._scoringUsesSets(_pesc);
   var _peTbEnabled = _peUseSets && _pesc && _pesc.tiebreakEnabled !== false;
+  var _peGameCap = _peUseSets ? window._normalSetGameInputCap(_pesc, t.sport) : null;
+  var _peGameAttrs = _peGameCap == null ? '' : ' max="' + _peGameCap + '" onfocus="this.dataset.spValidGame=this.value"';
+  var _peGameGuard = _peGameCap == null ? '' : 'window._limitNormalSetGameInput(this,' + _peGameCap + ');';
   // pré-preenche com o TB que a proposta já trazia (pr.tbP1/tbP2) ou com o do set gravado
   var _peSetTb = (m.sets && m.sets[0] && m.sets[0].tiebreak) || null;
   var _peTb1 = (pr && pr.tbP1 != null) ? pr.tbP1 : (_peSetTb && _peSetTb.pointsP1 != null ? _peSetTb.pointsP1 : null);
@@ -3346,10 +3378,10 @@ window._editPendingResult = function(tId, matchId) {
 
   // Suprime re-renders enquanto o usuário edita (evita dashboard destruir os inputs)
   window._suppressSoftRefresh = true;
-  sp1.innerHTML = '<input id="s1-' + matchId + '" type="number" min="0" value="' + s1 + '" onclick="event.stopPropagation()"' +
-    ' oninput="window._highlightWinner(\'' + _peEsc(matchId) + '\')" style="' + inputStyle + '">' + _peTbInput(1, _peTb1);
-  sp2.innerHTML = '<input id="s2-' + matchId + '" type="number" min="0" value="' + s2 + '" onclick="event.stopPropagation()"' +
-    ' oninput="window._highlightWinner(\'' + _peEsc(matchId) + '\')" style="' + inputStyle + '">' + _peTbInput(2, _peTb2);
+  sp1.innerHTML = '<input id="s1-' + matchId + '" type="number" min="0" value="' + s1 + '"' + _peGameAttrs + ' onclick="event.stopPropagation()"' +
+    ' oninput="' + _peGameGuard + 'window._highlightWinner(\'' + _peEsc(matchId) + '\')" style="' + inputStyle + '">' + _peTbInput(1, _peTb1);
+  sp2.innerHTML = '<input id="s2-' + matchId + '" type="number" min="0" value="' + s2 + '"' + _peGameAttrs + ' onclick="event.stopPropagation()"' +
+    ' oninput="' + _peGameGuard + 'window._highlightWinner(\'' + _peEsc(matchId) + '\')" style="' + inputStyle + '">' + _peTbInput(2, _peTb2);
 
   // Revela JÁ se o placar que veio na proposta é do gatilho (o caso do relato: abre em 5-6
   // sem o organizador precisar redigitar). Depois disso quem revela é o oninput.
@@ -3551,6 +3583,9 @@ window._editResultInline = function(tId, matchId) {
   var _esc2 = (typeof window._effectiveScoring === 'function') ? window._effectiveScoring(t, m) : t.scoring;
   var _useSets = window._scoringUsesSets(_esc2);
   var _tbEnabled = _useSets && _esc2.tiebreakEnabled !== false;
+  var _editGameCap = _useSets ? window._normalSetGameInputCap(_esc2, t.sport) : null;
+  var _editGameAttrs = _editGameCap == null ? '' : ' max="' + _editGameCap + '" onfocus="this.dataset.spValidGame=this.value"';
+  var _editGameGuard = _editGameCap == null ? '' : 'window._limitNormalSetGameInput(this,' + _editGameCap + ');';
   var _existingTb = (m.sets && m.sets[0] && m.sets[0].tiebreak) || null;
   var _tbInputStyle = 'width:40px;text-align:center;font-size:0.75rem;font-weight:700;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.4);color:var(--text-bright);border-radius:5px;padding:3px 4px;';
 
@@ -3562,9 +3597,9 @@ window._editResultInline = function(tId, matchId) {
         (_existingTb && _existingTb.pointsP1 != null ? ' value="' + _existingTb.pointsP1 + '"' : '') +
         ' style="' + _tbInputStyle + 'display:none;margin-left:4px;" oninput="window._highlightWinner(\'' + _esc(matchId) + '\')">'
       : '';
-    p1ScoreDiv.innerHTML = '<input type="number" id="s1-' + matchId + '" min="0" placeholder="0"' +
+    p1ScoreDiv.innerHTML = '<input type="number" id="s1-' + matchId + '" min="0" placeholder="0"' + _editGameAttrs +
       (m.scoreP1 != null ? ' value="' + m.scoreP1 + '"' : '') +
-      ' style="' + inputStyle + '" oninput="window._highlightWinner(\'' + _esc(matchId) + '\')">' + tb1Html;
+      ' style="' + inputStyle + '" oninput="' + _editGameGuard + 'window._highlightWinner(\'' + _esc(matchId) + '\')">' + tb1Html;
   }
   var p2ScoreDiv = document.getElementById('score-p2-' + matchId);
   if (p2ScoreDiv) {
@@ -3573,9 +3608,9 @@ window._editResultInline = function(tId, matchId) {
         (_existingTb && _existingTb.pointsP2 != null ? ' value="' + _existingTb.pointsP2 + '"' : '') +
         ' style="' + _tbInputStyle + 'display:none;margin-left:4px;" oninput="window._highlightWinner(\'' + _esc(matchId) + '\')">'
       : '';
-    p2ScoreDiv.innerHTML = '<input type="number" id="s2-' + matchId + '" min="0" placeholder="0"' +
+    p2ScoreDiv.innerHTML = '<input type="number" id="s2-' + matchId + '" min="0" placeholder="0"' + _editGameAttrs +
       (m.scoreP2 != null ? ' value="' + m.scoreP2 + '"' : '') +
-      ' style="' + inputStyle + '" oninput="window._highlightWinner(\'' + _esc(matchId) + '\')">' + tb2Html;
+      ' style="' + inputStyle + '" oninput="' + _editGameGuard + 'window._highlightWinner(\'' + _esc(matchId) + '\')">' + tb2Html;
   }
 
   // A linha de rótulos das colunas (Set 1 · Set 2 · Super Tie-Break) some junto: a edição

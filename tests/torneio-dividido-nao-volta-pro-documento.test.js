@@ -46,7 +46,7 @@ ok(/'participants', 'history'/.test(antesDoSet),
 
 // ── ② as CFs ────────────────────────────────────────────────────────────────
 ok(/function _gravaTorneio\(tx, ref, tDepois, tAntes, ctx\)/.test(cf), 'as CFs têm um gravador único');
-ok(/function _leTorneio\(tx, ref, tId\)/.test(cf), 'e um leitor único que MONTA das subcoleções');
+ok(/function _leTorneio\(tx, ref, tId, readCounter = null, projectLateCandidates = false\)/.test(cf), 'e um leitor único que MONTA das subcoleções');
 const iG = cf.indexOf('function _gravaTorneio(');
 // ⛔ ANCORA NO FIM DA FUNÇÃO, não numa janela de N caracteres: já me pegou cinco vezes.
 // Um comentário a mais empurra o código pra fora da janela e o teste 'falha' sem regressão.

@@ -108,8 +108,8 @@ for (const [settings, expected] of paidCases) {
 }
 assert(enrollmentClient.includes('if (window._paidManualEnrollmentBlocked(t)) return;'),
   'overlay e core recusam inclusão manual paga antes da chamada');
-assert(enrollmentClient.includes('if (window._tournamentRequiresPayment(t)\n'),
-  'já inscrito com pagamento abre o painel sem depender da presença de paymentMethods');
+assert(enrollmentClient.includes('res.alreadyEnrolled && window._tournamentRequiresPayment(t)'),
+  'recibo já inscrito com pagamento abre o painel sem depender de paymentMethods');
 const readerStart = enrollmentClient.indexOf('window._applyEnrollResult = function (t, tId, res, ctx) {');
 const readerEnd = enrollmentClient.indexOf('\n};', readerStart);
 assert(readerStart >= 0 && readerEnd > readerStart, 'leitor canônico do retorno localizado');
@@ -128,7 +128,7 @@ assert.deepStrictEqual(paymentViews, ['tour_test'], 'já inscrito pago abre pain
 assert.strictEqual(paidTournament.participants.length, 1, 'rollback por filter não remove outro participante');
 const pendingTournament = { ...paidTournament, participants:[{ uid:'other' }] };
 assert.strictEqual(resultWindow._applyEnrollResult(pendingTournament, 'tour_test',
-  { paymentDue:[{ amountCents:100 }], participants:[{ uid:'other' }] },
+  { outcome:'enrolled', paymentDue:[{ amountCents:100 }], participants:[{ uid:'other' }] },
   { self:true, successToast:true, refresh:false }), 'enrolled');
 assert(notices.some(([title]) => title === 'Inscrição pendente'),
   'inscrição paga não recebe mensagem de vaga confirmada');

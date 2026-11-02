@@ -7027,7 +7027,7 @@ function setupProfileModal() {
               '<div id="profile-lz-import-slot" style="margin-top:10px;">' +
                 (typeof window._renderProfileLzImportSlot === 'function' ? window._renderProfileLzImportSlot() : '') +
               '</div>' +
-              '<div onclick="(window._showPlayerStats&&window.AppStore&&window.AppStore.currentUser)&&window._showPlayerStats(window.AppStore.currentUser.displayName)" style="margin-top:8px;font-size:0.72rem;color:var(--text-muted,#94a3b8);line-height:1.4;cursor:pointer;">' +
+              '<div onclick="(window._showPlayerStats&&window.AppStore&&window.AppStore.currentUser)&&window._showPlayerStats(window.AppStore.currentUser.displayName,null,window.AppStore.currentUser.uid)" style="margin-top:8px;font-size:0.72rem;color:var(--text-muted,#94a3b8);line-height:1.4;cursor:pointer;">' +
                 '💡 Você também importa pelas suas <b style="color:var(--text-bright,#fff);">📊 Estatísticas</b> na tela inicial.' +
               '</div>' +
             '</div>' +
@@ -9733,6 +9733,12 @@ window._askDuplicateAccount = function () {
       // vazar para Firebase Auth ou caminhos legados de apresentação.
       if (saveError) return;
       if (payload.availabilityBySport) window._profileAvailabilityDirty = false;
+      // A leitura pública pode estar em voo com a versão anterior do perfil.
+      // A porta central repõe nome/foto pelo UID após qualquer leitura antiga.
+      var _savedUid = window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid;
+      if (_savedUid && typeof window._cacheSavedOwnProfile === 'function') {
+        window._cacheSavedOwnProfile(_savedUid, window.AppStore.currentUser.displayName || '', window.AppStore.currentUser.photoURL || '');
+      }
 
       // ── 8. HINTS — só toggle quando state REALMENTE mudou ──────────────
       // Antes: enable/disable era chamado incondicionalmente a cada save,

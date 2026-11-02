@@ -1,6 +1,6 @@
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
 import { readFileSync } from 'fs';
-import { collection, collectionGroup, doc, getDoc, getDocs, query, setDoc, where } from 'firebase/firestore';
+import { collection, collectionGroup, deleteDoc, doc, getDoc, getDocs, query, setDoc, where } from 'firebase/firestore';
 
 const [host, port] = String(process.env.FIRESTORE_EMULATOR_HOST || '127.0.0.1:8080').split(':');
 const env = await initializeTestEnvironment({
@@ -31,10 +31,36 @@ try {
       await setDoc(doc(db, 'tournaments', id, 'courtState', 'main'), { released: { m1: '2026-10-22T18:00:00Z' } });
       await setDoc(doc(db, 'tournaments', id, 'courtReleases', 'm1'), { matchId: 'm1' });
       await setDoc(doc(db, 'tournaments', id, 'results', 'm1'), { playerUids: mode === 'organizerOnly' ? [] : [member] });
+      await setDoc(doc(db, 'tournaments', id, 'matches', 'm1'), { _chave: 'm1', _loc: {}, jogo: { id: 'm1', scoreP1: 6 } });
+      await setDoc(doc(db, 'tournaments', id, 'resultVisibilityFence', 'state'), { revision: 1 });
     }
     await setDoc(doc(db, 'tournaments', 'legacy_creator'), { creatorUid: 'uid_legacy_creator', memberUids: [org], isPublic: false, organizerOnly: true });
     await setDoc(doc(db, 'tournaments_summary', 'legacy_creator'), { creatorUid: 'uid_legacy_creator', memberUids: [org], isPublic: false, organizerOnly: true });
+    await setDoc(doc(db, 'tournaments', 'private'), { creatorUid: org, isPublic: false, organizerOnly: false, membersOnly: false });
+    for (const col of ['results', 'matches']) await setDoc(doc(db, 'tournaments', 'private', col, 'm1'), { id: 'm1' });
   });
+  // O cliente antigo pode tentar alterar a visibilidade diretamente. A Rule
+  // precisa negar o commit inteiro, inclusive quando ele mistura outra edição.
+  const orgDb = env.authenticatedContext(org).firestore();
+  for (const patch of [
+    { organizerOnly: true, isPublic: false },
+    { organizerOnly: true, isPublic: false, name: 'Nome junto' }
+  ]) {
+    const error = await assertFails(setDoc(doc(orgDb, 'tournaments', 'public'), patch, { merge: true }));
+    if (error.code !== 'permission-denied') throw new Error('alteração direta deve falhar nas Rules');
+  }
+  const releaseError = await assertFails(setDoc(doc(orgDb, 'tournaments', 'hidden'),
+    { organizerOnly: false, isPublic: true }, { merge: true }));
+  if (releaseError.code !== 'permission-denied') throw new Error('liberação direta deve falhar nas Rules');
+  await assertSucceeds(setDoc(doc(orgDb, 'tournaments', 'public'), { name: 'Nome permitido' }, { merge: true }));
+  for (const actor of [null, org, member]) {
+    const actorDb = actor ? env.authenticatedContext(actor).firestore() : env.unauthenticatedContext().firestore();
+    const fence = doc(actorDb, 'tournaments', 'public', 'resultVisibilityFence', 'state');
+    await assertFails(getDoc(fence));
+    await assertFails(getDocs(collection(actorDb, 'tournaments', 'public', 'resultVisibilityFence')));
+    await assertFails(setDoc(fence, { revision: 2 }, { merge: true }));
+    await assertFails(deleteDoc(fence));
+  }
   await succeeds(removed, 'tournaments/hidden');
   await succeeds(removed, 'tournaments_summary/hidden');
   await env.withSecurityRulesDisabled(async ctx => {
@@ -54,6 +80,18 @@ try {
     await fails(member, path);
     await fails(stranger, path);
     await fails(null, path);
+  }
+  // As duas coleções têm a mesma autorização para uma leitura por ID.
+  for (const col of ['matches', 'results']) {
+    const hidden = 'tournaments/hidden/' + col + '/m1';
+    for (const uid of [org, cohost, referee]) await succeeds(uid, hidden);
+    for (const uid of [null, member, stranger]) await fails(uid, hidden);
+    await succeeds(null, 'tournaments/public/' + col + '/m1');
+    await fails(null, 'tournaments/private/' + col + '/m1');
+    await succeeds(stranger, 'tournaments/private/' + col + '/m1');
+    await succeeds(member, 'tournaments/members/' + col + '/m1');
+    await fails(stranger, 'tournaments/members/' + col + '/m1');
+    await fails(null, 'tournaments/members/' + col + '/m1');
   }
   for (const path of ['tournaments/members', 'tournaments_summary/members', 'tournaments/members/inscritos/p1', 'tournaments/members/courtState/main', 'tournaments/members/courtReleases/m1']) {
     await succeeds(org, path);

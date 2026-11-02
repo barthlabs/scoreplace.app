@@ -34,7 +34,10 @@ function executar(saida, codigo) {
     GOOGLE_APPLICATION_CREDENTIALS: chave,
     NODE_OPTIONS: '-r ' + hook,
   });
-  return spawnSync('bash', ['scripts/deploy-functions.sh', 'main', '--all'], { cwd: raiz, env, encoding: 'utf8' });
+  // Testa a confirmação do CLI com alvo focal não protegido. `--all` incluiria
+  // o espelho ainda sem fallback e seria barrado antes do Firebase falso.
+  return spawnSync('bash', ['scripts/deploy-functions.sh', 'main', '--only', 'getTournamentResultHistoryPage'],
+    { cwd: raiz, env, encoding: 'utf8' });
 }
 
 let r = executar('Error: permission denied', 1);

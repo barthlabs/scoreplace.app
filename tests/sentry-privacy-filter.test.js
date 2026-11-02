@@ -72,5 +72,10 @@ for (const route of routes) {
   const routed = config.beforeSend({ message: 'falha' });
   must(routed.tags.route === route, 'rota do router preservada na telemetria: ' + route);
 }
+context.location.hash = '#phase-preview/segredo-do-torneio';
+const previewEvent = config.beforeSend({ message: 'erro no segredo-do-torneio' });
+must(previewEvent.tags.route === 'phase-preview' &&
+  !JSON.stringify(previewEvent).includes('segredo-do-torneio'),
+  'prévia mantém só o nome da rota na telemetria');
 
 console.log('✅ sentry-privacy-filter: ' + ok + ' asserções, 0 falha(s)');

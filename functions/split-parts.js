@@ -38,6 +38,28 @@ function partesDivididas(data) {
   return S.partesDe(data);
 }
 
+function temGruposFisicos(data) {
+  return !!(data && ((Array.isArray(data._semPesados) && data._semPesados.includes('grupos')) ||
+    (data._nPartes && Number.isSafeInteger(data._nPartes.grupos) && data._nPartes.grupos > 0) ||
+    (Number.isSafeInteger(data._nGrupos) && data._nGrupos > 0)));
+}
+
+function contagemGruposFisicos(data) {
+  const principal = data && data._nPartes && data._nPartes.grupos;
+  const alias = data && data._nGrupos;
+  if (principal != null && alias != null && principal !== alias) {
+    throw new Error('[split-parts] contadores físicos de grupos divergentes');
+  }
+  return principal != null ? principal : alias;
+}
+
+function partesIdenticas(antes, depois) {
+  const delta = S.jogosQueMudaram(antes || [], depois || []);
+  const reverso = S.jogosQueMudaram(depois || [], antes || []);
+  return !delta.mudaram.length && !delta.sumiram.length &&
+    !reverso.mudaram.length && !reverso.sumiram.length;
+}
+
 /**
  * Devolve `data` com as partes divididas PREENCHIDAS a partir das subcoleções.
  * Muta e devolve o próprio objeto — quem chama já trabalha com uma cópia do snapshot.
@@ -56,15 +78,57 @@ function partesDivididas(data) {
  */
 async function hidratar(tx, ref, data, apenas) {
   let fora = partesDivididas(data);
-  if (Array.isArray(apenas)) fora = fora.filter((n) => apenas.indexOf(n) !== -1);
+  const gruposFisicos = temGruposFisicos(data);
+  if (gruposFisicos && !fora.includes('grupos')) fora.push('grupos');
+  if (Array.isArray(apenas)) {
+    const pedidos = new Set(apenas);
+    if (gruposFisicos && pedidos.has('grupos')) pedidos.add('matches');
+    fora = fora.filter((n) => pedidos.has(n));
+  }
   if (!fora.length) return data;
   for (const nome of fora) {
     const col = ref.collection(S.colecaoDaParte(nome));
     const snap = await (tx ? tx.get(col) : col.get());
     const regs = snap.docs.map((d) => d.data());
-    const montado = S.remontar({ config: { [nome]: [] }, [nome]: regs });
-    if (!montado) throw new Error('[split-parts] remontar falhou em "' + nome + '"');
-    data[nome] = montado[nome] || [];
+    if (nome === 'matches') {
+      const montado = S.remontar({ config: data, matches: regs });
+      if (!montado) throw new Error('[split-parts] remontar falhou em "matches"');
+      for (const campo of ['matches', 'rounds', 'phaseRounds', 'groups', 'thirdPlaceMatch']) {
+        if (Object.prototype.hasOwnProperty.call(montado, campo)) data[campo] = montado[campo];
+      }
+    } else if (nome === 'grupos') {
+      const montado = S.remontar({ config: data, grupos: regs });
+      if (!montado) throw new Error('[split-parts] remontar falhou em "grupos"');
+      const vistos = new Set();
+      for (const reg of regs) {
+        const loc = reg && reg._loc;
+        if (!loc || loc.tipo !== 'grupos' || !Number.isSafeInteger(loc.ri) || loc.ri < 0 ||
+            !Number.isSafeInteger(loc.gi) || loc.gi < 0) {
+          throw new Error('[split-parts] localização física de grupo inválida');
+        }
+        const chave = loc.ri + ':' + loc.gi;
+        if (vistos.has(chave)) throw new Error('[split-parts] localização física de grupo repetida');
+        vistos.add(chave);
+      }
+      const count = contagemGruposFisicos(data);
+      if (count != null && (!Number.isSafeInteger(count) || count < 0 || count !== regs.length)) {
+        throw new Error('[split-parts] contagem física de grupos divergente');
+      }
+      const reextraidos = S.dividir(montado, ['grupos']).grupos || [];
+      if (reextraidos.length !== regs.length || !partesIdenticas(regs, reextraidos)) {
+        throw new Error('[split-parts] remontar perdeu ou alterou grupo físico');
+      }
+      const jogosAntes = S.dividir(data, ['matches']).matches || [];
+      const jogosDepois = S.dividir(montado, ['matches']).matches || [];
+      if (!partesIdenticas(jogosAntes, jogosDepois)) {
+        throw new Error('[split-parts] remontar grupos alterou jogos');
+      }
+      data.rounds = montado.rounds;
+    } else {
+      const montado = S.remontar({ config: { [nome]: [] }, [nome]: regs });
+      if (!montado) throw new Error('[split-parts] remontar falhou em "' + nome + '"');
+      data[nome] = montado[nome] || [];
+    }
   }
   return data;
 }
@@ -96,6 +160,70 @@ function gravar(tx, ref, antes, updateData) {
   const fora = partesDivididas(antes);
   const doc = Object.assign({}, updateData || {});
   if (!fora.length) { if (Object.keys(doc).length) tx.update(ref, doc); return; }
+
+  // Depois da tradução administrativa, um callable pode reenviar a estrutura
+  // hidratada. Só metadados mudam aqui: jogos e grupos físicos ficam na sua
+  // subcoleção. O tradutor único limpa todas as posições aninhadas da raiz.
+  if (antes._inlineGamesExternalized === true) {
+    if (Object.prototype.hasOwnProperty.call(doc, 'matches')) {
+      throw new Error('[split-parts] jogos migrados exigem escrita física específica');
+    }
+    const structural = ['rounds', 'phaseRounds', 'groups', 'thirdPlaceMatch']
+      .filter((field) => Object.prototype.hasOwnProperty.call(doc, field));
+    if (structural.length) {
+      const original = S.dividir(JSON.parse(JSON.stringify(antes)), ['matches', 'grupos']);
+      const counts = antes._nPartes || {};
+      if (!Number.isSafeInteger(counts.matches) || counts.matches < 0 ||
+          counts.matches !== original.matches.length) {
+        throw new Error('[split-parts] jogos migrados não foram hidratados por completo');
+      }
+      const oldGroups = original.grupos || [];
+      const count = contagemGruposFisicos(antes);
+      if ((oldGroups.length || count != null) &&
+          (!Number.isSafeInteger(count) || count < 0 || count !== oldGroups.length)) {
+        throw new Error('[split-parts] grupos migrados não foram hidratados por completo');
+      }
+      const proposed = S.dividir(JSON.parse(JSON.stringify(Object.assign({}, antes, doc))),
+        ['matches', 'grupos']);
+      for (const name of ['matches', 'grupos']) {
+        const delta = S.jogosQueMudaram(original[name] || [], proposed[name] || []);
+        if (delta.mudaram.length || delta.sumiram.length) {
+          throw new Error('[split-parts] ' + name + ' migrados exigem escrita física específica');
+        }
+      }
+      for (const field of structural) {
+        if (Object.prototype.hasOwnProperty.call(proposed.config, field)) {
+          doc[field] = proposed.config[field];
+        } else {
+          delete doc[field];
+        }
+      }
+    }
+  } else if (temGruposFisicos(antes) && Object.prototype.hasOwnProperty.call(doc, 'rounds')) {
+    const original = S.dividir(JSON.parse(JSON.stringify(antes)), ['grupos']);
+    const count = contagemGruposFisicos(antes);
+    if (!Number.isSafeInteger(count) || count < 0 || count !== original.grupos.length) {
+      throw new Error('[split-parts] grupos físicos não foram hidratados por completo');
+    }
+    if (!Array.isArray(doc.rounds)) throw new Error('[split-parts] rodadas inválidas');
+    const proposedRounds = doc.rounds.map((round, ri) => {
+      if (!round || typeof round !== 'object') return round;
+      // Um round vindo do config já dividido carrega `monarchGroups: []`.
+      // Aqui vazio/ausente significa manter a subcoleção; removê-la exige escritor físico.
+      const groups = round.monarchGroups;
+      if (Object.prototype.hasOwnProperty.call(round, 'monarchGroups') &&
+          (!Array.isArray(groups) || groups.length)) return round;
+      const previous = Array.isArray(antes.rounds) && antes.rounds[ri];
+      return previous && Object.prototype.hasOwnProperty.call(previous, 'monarchGroups')
+        ? Object.assign({}, round, { monarchGroups: previous.monarchGroups }) : round;
+    });
+    const proposed = S.dividir(JSON.parse(JSON.stringify(Object.assign({}, antes, doc,
+      { rounds: proposedRounds }))), ['grupos']);
+    if (!partesIdenticas(original.grupos, proposed.grupos)) {
+      throw new Error('[split-parts] grupos físicos exigem escrita específica');
+    }
+    doc.rounds = proposed.config.rounds;
+  }
 
   let mexeu = Object.keys(doc).length > 0;   // campo que fica no doc já é motivo de bump
   // ⛔ `_nPartes` mede REGISTROS FÍSICOS da subcoleção, não pessoas. Formar uma

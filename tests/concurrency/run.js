@@ -43,6 +43,55 @@ function demoTournament(id) {
 
 function findMatch(t, mid) { return (t.matches || []).find(function (m) { return m.id === mid; }); }
 
+// 3.2.8: merge precisa de sentinela; set integral não pode contê-la. A prova lê
+// o documento cru depois da gravação, não apenas o objeto retornado ao cliente.
+async function test_alvo_emailPublico_mergeEIntegral() {
+  const idT = 'email-modes-' + Date.now();
+  const base = demoTournament(idT);
+  base.creatorEmail = 'creator@x.test';
+  base.adminEmails = ['admin@x.test'];
+  await H.seedTournament(base);
+  const client = H.makeClient();
+  const campos = ['organizerEmail', 'creatorEmail', 'adminEmails'];
+  const antes = await H.readTournament(idT);
+  ok(campos.every((k) => Object.prototype.hasOwnProperty.call(antes, k)), 'email: fixture legada contém os três campos antes do set integral');
+  await client.FirestoreDB.mutateTournament(idT, function (fresh) { fresh.description = 'após transação'; });
+  const depois = await H.readTournament(idT);
+  ok(campos.every((k) => !Object.prototype.hasOwnProperty.call(depois, k)), 'email: set integral remove os três campos legados do documento');
+  ok(depois.description === 'após transação' && depois.creatorUid === base.creatorUid, 'email: set integral preserva os demais campos e a mutação');
+
+  const idMerge = 'email-merge-' + Date.now();
+  const antigo = Object.assign({}, base, { id: idMerge });
+  await H.seedTournament(antigo);
+  await client.FirestoreDB.saveTournament(antigo);
+  const depoisMerge = await H.readTournament(idMerge);
+  ok(campos.every((k) => !Object.prototype.hasOwnProperty.call(depoisMerge, k)), 'email: saveTournament com merge remove os três campos por sentinela');
+  ok(depoisMerge.creatorUid === base.creatorUid, 'email: merge preserva a autorização por UID');
+}
+
+async function test_alvo_emailPublico_sandboxDividido() {
+  const S = require('../../js/views/tournament-split-core.js');
+  const idT = 'sb_email-' + Date.now();
+  const original = Object.assign({}, demoTournament(idT), {
+    isSandbox: true, sandboxOwnerUid: 'org1', organizerEmail: 'organizer@x.test',
+    creatorEmail: 'creator@x.test', adminEmails: ['admin@x.test'],
+  });
+  const split = S.dividir(original, S.partesDe(original));
+  const ref = H.rawDb.collection('sandboxes').doc(idT);
+  await ref.set(split.config);
+  for (const nome of S.partesDe(original)) {
+    for (const d of split[nome] || []) await ref.collection(S.colecaoDaParte(nome)).doc(S.chaveDoRegistro(d)).set(d);
+  }
+  const antes = (await ref.get()).data();
+  ok(['organizerEmail', 'creatorEmail', 'adminEmails'].every((k) => Object.prototype.hasOwnProperty.call(antes, k)), 'email: sandbox dividido começa com os três campos legados');
+  const client = H.makeClient();
+  client.win._tSplit = S;
+  await client.FirestoreDB.mutateTournament(idT, function (fresh) { fresh.description = 'sandbox mutado'; });
+  const config = (await ref.get()).data();
+  ok(['organizerEmail', 'creatorEmail', 'adminEmails'].every((k) => !Object.prototype.hasOwnProperty.call(config, k)), 'email: config dividido não reintroduz os três campos');
+  ok(config.description === 'sandbox mutado' && config.creatorUid === original.creatorUid && config.sandboxOwnerUid === original.sandboxOwnerUid, 'email: sandbox preserva demais campos e dono');
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // DIAGNÓSTICO — o padrão saveTournament(merge doc inteiro) PERDE um write numa
 // corrida de dois lançamentos. `matches` é UM campo-array: o merge substitui o
@@ -300,73 +349,65 @@ async function test_alvo_wo_atomic_race() {
   ok(fin.p1 === 'B' && fin.p2 === 'D', 'W.O. RACE: advance preencheu a final (p1=' + fin.p1 + ', p2=' + fin.p2 + ')');
 }
 
-// ALVO 8 — PLACAR POR JOGO EM DOC PRÓPRIO (linha 4.1, project_match_result_docs):
-// cada resultado vive em tournaments/{tId}/results/{matchId}. (a) 2 resultados em
-// jogos DIFERENTES concorrentes → docs distintos → ZERO contenção, ambos persistem.
-// (b) 2 escritas concorrentes no MESMO jogo → transação serializa, nenhuma perdida.
-// Prova que dá pra DIVIDIR (isolamento entre jogos) E MANTER a segurança (txn por jogo).
-async function test_alvo_matchResult_perGameDocs() {
+// E05 — o leitor web novo consulta jogos físicos, inclusive uma coleção maior que
+// a janela da dashboard. Este alvo usa o SDK real apontado ao emulador.
+async function test_alvo_e05_leitorFisico() {
   const V = require('./emu-harness-views');
-  if (typeof V.FirestoreDB.mutateMatchResult !== 'function') { pending++; console.log('  ⏳ mutateMatchResult não carregou'); return; }
-  const idT = 'mr-' + Date.now();
+  const rawDb = require('./emu-harness').rawDb;
+  const idT = 'e05-reader-' + Date.now();
   await V.seedTournament(demoTournament(idT));
-  // (a) jogos DIFERENTES, concorrentes → sem contenção
-  await Promise.all([
-    V.FirestoreDB.mutateMatchResult(idT, 'sf1', function (r) { r.winner = 'A'; r.scoreP1 = 6; r.scoreP2 = 3; }),
-    V.FirestoreDB.mutateMatchResult(idT, 'sf2', function (r) { r.winner = 'D'; r.scoreP1 = 4; r.scoreP2 = 6; }),
-  ]);
-  const results = await V.FirestoreDB.loadMatchResults(idT);
-  eq(results.sf1 && results.sf1.winner, 'A', 'PER-GAME: resultado de sf1 persistiu (doc próprio)');
-  eq(results.sf2 && results.sf2.winner, 'D', 'PER-GAME: resultado de sf2 persistiu (doc próprio, sem contenção)');
-  // (b) MESMO jogo, 2 escritas concorrentes (campos diferentes) → nenhuma perdida
-  await Promise.all([
-    V.FirestoreDB.mutateMatchResult(idT, 'sf1', function (r) { r.confirmedByA = true; }),
-    V.FirestoreDB.mutateMatchResult(idT, 'sf1', function (r) { r.confirmedByB = true; }),
-  ]);
-  const r2 = await V.FirestoreDB.loadMatchResults(idT);
-  ok(r2.sf1 && r2.sf1.confirmedByA === true && r2.sf1.confirmedByB === true, 'PER-GAME: 2 escritas concorrentes no MESMO jogo → nenhuma perdida (txn serializa)');
-  eq(r2.sf1 && r2.sf1.winner, 'A', 'PER-GAME: campo anterior (winner=A) preservado sob a corrida');
-  // (c) ESPELHO COMPLETO / REFAZER (inc 3a full-mirror): seed roster + resultado,
-  // depois um mutador que APAGA os campos de resultado (= _organizerResetMatch) →
-  // o doc perde winner/score MAS mantém playerUids (roster intacto). Prova que o
-  // dual-write remove placar velho no reset (sem stale) e não apaga o roster.
-  await V.FirestoreDB.mutateMatchResult(idT, 'reset1', function (r) {
-    r.playerUids = ['ua', 'ub']; r.winner = 'A'; r.scoreP1 = 6; r.scoreP2 = 2;
-  });
-  await V.FirestoreDB.mutateMatchResult(idT, 'reset1', function (r) {
-    delete r.winner; delete r.scoreP1; delete r.scoreP2; // refazer zera o resultado
-  });
-  const r3 = await V.FirestoreDB.loadMatchResults(idT);
-  ok(r3.reset1 && r3.reset1.winner === undefined && r3.reset1.scoreP1 === undefined, 'PER-GAME: refazer (delete) REMOVE placar velho do subdoc — sem stale');
-  ok(r3.reset1 && Array.isArray(r3.reset1.playerUids) && r3.reset1.playerUids.length === 2, 'PER-GAME: roster (playerUids) sobrevive ao refazer');
-  // (d) RE-SEED NO AVANÇO (inc 3a): o jogo downstream nasce com roster VAZIO no
-  // sorteio (slots TBD); quando um vencedor avança, o reseed FORÇA o playerUids novo
-  // preservando os demais campos. Prova: seed vazio → force playerUids → doc ganha o
-  // roster sem tocar em nada mais (o reseed só mexe em playerUids).
-  await V.FirestoreDB.mutateMatchResult(idT, 'final1', function (r) { r.playerUids = []; r.startedAt = 999; });
-  await V.FirestoreDB.mutateMatchResult(idT, 'final1', function (r) { r.playerUids = ['uw']; }); // avanço do vencedor
-  const r4 = await V.FirestoreDB.loadMatchResults(idT);
-  ok(r4.final1 && Array.isArray(r4.final1.playerUids) && r4.final1.playerUids.length === 1 && r4.final1.playerUids[0] === 'uw', 'PER-GAME: reseed no avanço FORÇA playerUids do próximo jogo (TBD→vencedor)');
-  eq(r4.final1 && r4.final1.startedAt, 999, 'PER-GAME: reseed do roster PRESERVA os demais campos do subdoc');
+  const batch = rawDb.batch();
+  for (let i = 0; i < 213; i++) {
+    const id = 'm' + String(i).padStart(3, '0');
+    batch.set(rawDb.collection('tournaments').doc(idT).collection('matches').doc(id), {
+      _chave: id, _loc: { part: 'matches' },
+      jogo: { id, p1: 'A', p2: 'B', scoreP1: i, scoreP2: 1,
+        updatedAt: new Date(Date.UTC(2026, 9, 1, 0, i)).toISOString() },
+      playerUids: ['ua', 'ub']
+    });
+  }
+  await batch.commit();
+  const partial = await V.FirestoreDB.loadMatchResults(idT, { limit: 40 });
+  eq(Object.keys(partial).length, 40, 'E05: janela 40 selecionada depois da leitura física');
+  ok(partial.m212 && !partial.m000, 'E05: jogo mais recente presente sem depender da ordem de documento');
+  const full = await V.FirestoreDB.loadMatchResults(idT);
+  eq(Object.keys(full).length, 213, 'E05: leitura completa preserva 213 jogos');
+  eq(full.m212.scoreP1, 212, 'E05: placar vem de matches/jogo');
+  const one = await V.FirestoreDB.loadPhysicalMatchResult(idT, 'm212');
+  eq(one && one.scoreP1, 212, 'E05: confirmação fina lê o mesmo jogo físico');
+  eq(await V.FirestoreDB.loadPhysicalMatchResult(idT, 'missing'), null,
+    'E05: documento físico ausente é distinguível de inválido');
+  await rawDb.collection('tournaments').doc(idT).collection('matches').doc('broken')
+    .set({ _chave: 'outro', _loc: {}, jogo: { id: 'broken', scoreP1: 99 } });
+  let rejected = false;
+  try { await V.FirestoreDB.loadMatchResults(idT); } catch (e) { rejected = /Jogo canônico inválido/.test(String(e)); }
+  ok(rejected, 'E05: documento físico inválido falha a leitura inteira');
+  let singleRejected = false;
+  try { await V.FirestoreDB.loadPhysicalMatchResult(idT, 'broken'); }
+  catch (e) { singleRejected = /Jogo canônico inválido/.test(String(e)); }
+  ok(singleRejected, 'E05: confirmação fina rejeita documento inválido');
 }
 
-// ALVO 9 — FASE B: leitura ISOLADA (linha 4.1). loadMatchResult (um jogo, sem o
-// torneio) + loadMyMatchResults (collectionGroup: TODOS os jogos de um uid ACROSS
-// torneios numa query, SEM carregar nenhum torneio). Prova o benefício de leitura.
+// ALVO 9 — o cliente da porta paginada de histórico entre torneios.
+// O transporte é simulado: este alvo valida junção, filtro e ordenação dos lotes.
 async function test_alvo_faseB_isolatedReads() {
   const V = require('./emu-harness-views');
   if (typeof V.FirestoreDB.loadMyMatchResults !== 'function') { pending++; console.log('  ⏳ loadMyMatchResults não carregou'); return; }
+  ok(typeof V.FirestoreDB.mutateMatchResult === 'undefined' &&
+     typeof V.FirestoreDB.loadMatchResult === 'undefined',
+     'E05: portas web diretas de results foram removidas');
   const tA = 'fb-a-' + Date.now(), tB = 'fb-b-' + Date.now();
-  // 2 torneios, subdocs com playerUids. uX joga em A/m1 e B/m1; uZ só em A/m2.
-  await V.FirestoreDB.mutateMatchResult(tA, 'm1', function (r) { r.tournamentId = tA; r.playerUids = ['uX', 'uY']; r.winner = 'X'; r.updatedAt = '2026-01-03'; });
-  await V.FirestoreDB.mutateMatchResult(tA, 'm2', function (r) { r.tournamentId = tA; r.playerUids = ['uZ', 'uW']; r.updatedAt = '2026-01-01'; });
-  await V.FirestoreDB.mutateMatchResult(tB, 'm1', function (r) { r.tournamentId = tB; r.playerUids = ['uX', 'uK']; r.updatedAt = '2026-01-02'; });
-  // (a) leitura de UM jogo isolado
-  const one = await V.FirestoreDB.loadMatchResult(tA, 'm1');
-  ok(one && one.winner === 'X' && one.tournamentId === tA, 'FASE B: loadMatchResult lê um jogo isolado (sem torneio)');
-  const none = await V.FirestoreDB.loadMatchResult(tA, 'inexistente');
-  ok(none === null, 'FASE B: loadMatchResult de jogo inexistente → null');
-  // (b) collectionGroup: todos os jogos de uX ACROSS torneios, ordenado por updatedAt desc
+  // (b) páginas da callable: o cliente junta todos os lotes e ordena por data.
+  const originalCallFn = V.FirestoreDB._callFn;
+  V.FirestoreDB._callFn = async function (name, payload) {
+    ok(name === 'getTournamentResultHistoryPage', 'histórico usa a callable, não collectionGroup no cliente');
+    const rows = payload.targetUid === 'uX' ? [
+      { tournamentId: tA, matchId: 'm1', playerUids: ['uX'], updatedAt: '2026-01-03' },
+      { tournamentId: tB, matchId: 'm1', playerUids: ['uX'], updatedAt: '2026-01-02' }
+    ] : [{ tournamentId: tA, matchId: 'm2', playerUids: ['uZ'], updatedAt: '2026-01-01' }];
+    return payload.cursor ? { items: rows.slice(1), cursor: null }
+      : { items: rows.slice(0, 1), cursor: rows.length > 1 ? 'next' : null };
+  };
   const mine = await V.FirestoreDB.loadMyMatchResults('uX');
   ok(mine.length === 2, 'FASE B: loadMyMatchResults(uX) → 2 jogos (A/m1 + B/m1) across torneios (got ' + mine.length + ')');
   const tids = mine.map(function (x) { return x.tournamentId; }).sort();
@@ -374,6 +415,7 @@ async function test_alvo_faseB_isolatedReads() {
   ok(mine[0].updatedAt >= mine[1].updatedAt, 'FASE B: ordenado por updatedAt desc (mais recente primeiro)');
   const zed = await V.FirestoreDB.loadMyMatchResults('uZ');
   ok(zed.length === 1 && zed[0].tournamentId === tA, 'FASE B: uZ só tem 1 jogo (A/m2) — filtro por uid correto');
+  V.FirestoreDB._callFn = originalCallFn;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -804,6 +846,8 @@ async function test_diag_convitePar_addDuplicaOMesmoConvite() {
 (async function main() {
   // window global usado pelos mutators do teste de views (emu-harness-views seta global.window=global)
   const suites = [
+    ['alvo email público — merge e set integral', test_alvo_emailPublico_mergeEIntegral],
+    ['alvo email público — sandbox dividido', test_alvo_emailPublico_sandboxDividido],
     ['diagnóstico lost-update (saveTournament merge)', test_diagnostico_lostUpdate_saveTournament],
     ['alvo mutateTournament sem lost-update', test_alvo_mutateTournament_noLostUpdate],
     ['alvo mutateTournament estresse 8 clientes', test_alvo_mutateTournament_stress8],
@@ -813,8 +857,8 @@ async function test_diag_convitePar_addDuplicaOMesmoConvite() {
     ['alvo SORTEIO INICIAL delta preserva edição concorrente', test_alvo_initialDraw_deltaPreservesConcurrentEdit],
     ['alvo SORTEIO INICIAL guarda de idempotência (duplo sorteio)', test_alvo_initialDraw_idempotencyGuard],
     ['alvo SAVE W.O. atômico sob corrida (_applyWO REAL)', test_alvo_wo_atomic_race],
-    ['alvo PLACAR POR JOGO em doc próprio (isolamento + txn)', test_alvo_matchResult_perGameDocs],
-    ['alvo FASE B leitura isolada (loadMatchResult + collectionGroup)', test_alvo_faseB_isolatedReads],
+    ['alvo E05 leitor físico de 213 jogos', test_alvo_e05_leitorFisico],
+    ['alvo FASE B porta paginada sem results direto', test_alvo_faseB_isolatedReads],
     ['alvo ABA ESQUECIDA não apaga o trabalho dos outros', test_alvo_abaEsquecida_naoApagaOsOutros],
     ['alvo ABA ESQUECIDA — contra-exemplo do caminho antigo', test_alvo_abaEsquecida_caminhoAntigoDestroi],
     ['diag L1.1.1 sequencia ANTIGA duplica o e-mail', test_diag_secEmail_sequenciaAntigaDuplica],

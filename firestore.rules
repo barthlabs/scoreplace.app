@@ -836,20 +836,23 @@ service cloud.firestore {
           isTournamentAdmin(resource.data)
           // v1.8.62: admin por uid (organizador phone-only sem email)
           || isTournamentAdminByUid(resource.data)
-          || (isTournamentParticipant(resource.data) && isParticipantBracketDiff())
+          || (isTournamentParticipant(resource.data) && isParticipantBracketDiff()
+              && (resource.data.get('canonicalRegistrationMigration', {}).get('fingerprint', '') == ''
+                  || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['pairRequests'])))
         )
         && (faseIntacta() || ehResetOk())
         && elencoIntacto()
-        && igual('billingContract')
-        && igual('billingQuote')
-        && igual('billingSettlement')
-        && igual('billingPixReport')
-        && igual('billingTermsAcceptance')
+        // Campos do servidor reunidos numa única diferença. Além de impedir
+        // falsificação, evita exceder o teto de expressões no reset completo.
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'billingContract', 'billingQuote', 'billingSettlement', 'billingPixReport',
+          'billingTermsAcceptance', '_phaseReadCertificate'
+        ])
         && cobrancaClienteNaoGeraChave()
         && rosterLegadoProtegidoAposMigracao()
         && categoriasTipadasIntactas()
         && igual('refereeUids')
-        && (igual('organizerOnly') || isTournamentAdmin(resource.data))
+        && igual('organizerOnly')
         && (igual('membersOnly') || isTournamentAdmin(resource.data))
         && !(request.resource.data.get('organizerOnly', false) == true
           && request.resource.data.get('membersOnly', false) == true)
@@ -879,39 +882,16 @@ service cloud.firestore {
         allow read, write: if false;
       }
 
-      // ─── Resultado por JOGO em doc próprio (linha 4.1, project_match_result_docs) ───
-      // Cada jogo tem seu placar/consenso em tournaments/{id}/results/{matchId}.
-      //
-      // ⛔ LEITURA PELO CLIENTE; `create`/`update`/`delete` RESERVADOS A PROCESSO
-      // PRIVILEGIADO (Cloud Function com Admin SDK, ou manutenção por IAM/REST).
-      // Fechado em 23/set/2026, e o motivo é o campo `playerUids`: ele é o HISTÓRICO
-      // GLOBAL de terceiro. A consulta de "Meus Resultados" é
-      // `collectionGroup('results').where('playerUids','array-contains', uid)` — quem
-      // escreve esse campo escreve o passado de outra pessoa. Com a regra antiga o
-      // organizador criava um jogo com o uid de QUALQUER UM e um placar inventado, e
-      // aquilo aparecia na vida dela; nem precisava estar inscrita. É o irmão do que o
-      // bloco 3 tirou do documento do torneio — e trava de elenco no doc não vale nada
-      // com a porta do subdoc aberta ao lado.
-      //
-      // QUEM ESCREVE, e nenhum deles passa por aqui:
-      //   • automáticos, criação/atualização: o gatilho `syncMatchRosters` (deriva
-      //     `playerUids` da ESTRUTURA do torneio), o gatilho `syncSplitMatchResult`
-      //     (espelha o placar), o plano de escrita do torneio dividido
-      //     (functions-autodraw/write-plan.js) e o backfill HTTP protegido por segredo;
-      //   • rota server-side pedida pelo usuário: a callable de replay;
-      //   • apagamento: `syncSplitMatchResult` remove espelhos e `purgeTournamentCopies`
-      //     remove as subcoleções inteiras.
-      //
-      // ⚠️ MEDIDO ANTES DE FECHAR: o cliente NÃO usava esta porta. A única escrita dele
-      // era `mutateMatchResult` (js/firebase-db.js), chamada só por `commitMatchResult`,
-      // cujos dois chamadores (`reseedMatchRoster`, `seedMatchResultDocs`) não têm
-      // chamador nenhum — nem no main nem na árvore da versão que está no Play. O doc
-      // por jogo está atrás do "incremento 3"; quando ele for ligado, nasce pela porta
-      // do servidor em vez de herdar uma porta já aberta.
-      // ⚠️ O SANDBOX não passa por aqui: `_tSub` roteia `results`→`resultsSandbox`, que
-      // tem bloco próprio mais acima.
-      // Leitura = quem pode ler o torneio (e a query de collection group é autorizada
-      // pelo curinga `match /{path=**}/results/{matchId}`, lá embaixo — outra regra).
+      // ─── Resultados históricos durante a migração E05 ───
+      // A fonte canônica é `matches/{id}.jogo`. `results/{matchId}` ainda existe em
+      // torneios antigos até a tradução administrativa e a auditoria E05/E06.
+      // Escrita direta do cliente permanece negada: `playerUids` neste índice pode
+      // atribuir um placar ao histórico de outra pessoa. A transição E01 de
+      // ocultar/liberar usa o servidor e o fence até a retirada desses documentos.
+      // `purgeTournamentCopies` enumera subcoleções ao excluir um torneio, inclusive
+      // `results`. O sandbox histórico usa o caminho separado `resultsSandbox`.
+      // A leitura do grupo histórico continua sujeita às regras abaixo enquanto
+      // existirem clientes e documentos antigos; a retirada requer corte coordenado.
       match /results/{matchId} {
         function parentT() {
           return get(/databases/$(database)/documents/tournaments/$(tournamentId)).data;
@@ -970,6 +950,12 @@ service cloud.firestore {
         // sendo gravado: ele deixou de ser insumo DESTA regra e virou insumo da CF.
         allow read: if canReadTournamentData(parentTm());
         allow write: if false;
+      }
+
+      // Revisão transacional dos escritores de results. Nenhum cliente lê ou
+      // altera este contador; o Admin SDK é a única porta.
+      match /resultVisibilityFence/{fenceId} {
+        allow read, write: if false;
       }
 
       // ─── FILA DO PLACAR: a intenção espera o sinal, a CF é que aplica ─────

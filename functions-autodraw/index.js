@@ -27,9 +27,10 @@ const { rebaseRounds } = require('./rebase-core.js');
 const _tourSummary = require('./tournament-summary-core.js');
 const _wp = require('./write-plan.js');
 const _woClaimCore = require('./wo-claim-core.js');
-const _matchHistory = require('./match-history-core.js');
 const _rosterState = require('./roster-state-core.js');
 const _tSplit = require('./vendor/tournament-split-core.js');   // fonte única: js/views/ (copy-vendor)
+const _phaseCert = require('./vendor/phase-index-certificate-core.js');
+const _phaseReadProofs = new WeakMap();
 const _registrationRoster = require('./vendor/registration-roster.js');
 const _tournamentBilling = require('./vendor/tournament-billing-core.js');
 const _billingSnapshots = new WeakMap();
@@ -45,6 +46,8 @@ const _competitionAssignments = require('./competition-assignment-core.js');
 let _mrEspelho = null;
 try { _mrEspelho = require('./vendor/match-roster.js'); }
 catch (e) { console.error('[espelho-result] vendor/match-roster.js indisponível:', e && e.message); }
+const _visibilityRoster = require('./vendor/result-visibility-roster-core.js');
+const _visibilityFence = require('./vendor/result-visibility-fence-core.js');
 /* ⚰️ O reconciliador da marca SAIU daqui em 23/set/2026: esta codebase não grava mais
  * `skillBySport` em perfil de terceiro (a categoria do organizador vive no torneio), então não há
  * marca de procedência a reconciliar. Ele continua vivo em `functions/`, onde as portas de perfil
@@ -224,12 +227,12 @@ function _matchMemberByUid(m, uid) {
 // Busca em lote os nomes VIVOS (users/{uid}.displayName) de um conjunto de uids.
 // Retorna { profByUid, nameByUid }. Reaproveitado pra checar notifyPlatform sem
 // re-ler o mesmo doc. Nome ausente → não entra no mapa (o caller cai no fallback).
-async function _loadLiveNames(uidSet) {
+async function _loadLiveNames(uidSet, tx = null) {
   const list = Array.from(uidSet);
   const profByUid = {};
   for (let i = 0; i < list.length; i += 100) {
     const refs = list.slice(i, i + 100).map(u => db.collection('users').doc(u));
-    const docs = await db.getAll(...refs);
+    const docs = tx ? await Promise.all(refs.map(ref => tx.get(ref))) : await db.getAll(...refs);
     docs.forEach(d => { if (d.exists) profByUid[d.id] = d.data() || {}; });
   }
   const nameByUid = {};
@@ -335,9 +338,10 @@ function _drawEmailOpts(t, tId, message) {
 // Storage é só-uid → sem isto o motor (pool por nome) descarta entrada só-uid → 0 rodadas.
 // Best-effort: falha silenciosa cai no nome gravado (legado). Também rehidrata as entradas
 // (o generateLigaRound já rehidrata no topo; para o caminho de fase, chamamos explícito).
-async function _preloadDrawNames(t) {
+async function _preloadDrawNames(t, tx = null) {
+  const empty = { nameByUid: {}, profByUid: {} };
   try {
-    if (!drawWindow) return;
+    if (!drawWindow) return empty;
     const uids = new Set();
     // v1.5.10: a ESPERA entra aqui também. Quem entra tarde vem de standby/waitlist, e o
     // inscrito grava SÓ uid (o nome vem do perfil vivo) — sem carregar esses uids, o motor
@@ -352,11 +356,30 @@ async function _preloadDrawNames(t) {
     if (t.monarchWaitlist && typeof t.monarchWaitlist === 'object') {
       Object.keys(t.monarchWaitlist).forEach(k => _walk(t.monarchWaitlist[k]));
     }
-    if (!uids.size) return;
-    const { profByUid, nameByUid } = await _loadLiveNames(uids);
-    drawWindow._profileNameByUid = nameByUid || {};
-    drawWindow._profByUid = profByUid || {}; // v1.3.52: perfil COMPLETO por uid p/ enriquecer
-  } catch (e) { /* best-effort; motor cai no nome gravado legado */ }
+    if (!uids.size) {
+      if (!tx) {
+        drawWindow._profileNameByUid = {};
+        drawWindow._profByUid = {};
+      }
+      return empty;
+    }
+    const { profByUid, nameByUid } = await _loadLiveNames(uids, tx);
+    const names = { nameByUid: nameByUid || {}, profByUid: profByUid || {} };
+    // A transação usa o contexto por invocação; nunca exporta seus perfis ao global.
+    if (!tx) {
+      drawWindow._profileNameByUid = names.nameByUid;
+      drawWindow._profByUid = names.profByUid;
+    }
+    return names;
+  } catch (e) {
+    if (tx) throw e; // leitura do read-set falhou: a transação inteira deve abortar
+    if (drawWindow) {
+      drawWindow._profileNameByUid = {};
+      drawWindow._profByUid = {};
+    }
+    console.warn('[draw-names] preload opcional falhou:', e && e.code || 'erro');
+    return empty;
+  }
 }
 
 // v1.3.52: resolve o perfil POR UID e ESCREVE nos participantes em memória (gênero/skill/idade/
@@ -551,7 +574,15 @@ async function _categoryDefinitionsForLabels(tx, ref, t, combinedCategories) {
 function _preserveCanonicalRosterProjection(tDepois, tAntes) {
   const migration = tDepois && tDepois.canonicalRegistrationMigration;
   if (!migration || !migration.fingerprint || !tAntes) return false;
-  ['participants', 'standbyParticipants', 'waitlist'].forEach((key) => {
+  const lateSource = tDepois._canonicalLateSource;
+  const keys = lateSource ? ['participants', 'standbyParticipants', 'waitlist', 'monarchWaitlist']
+    : ['participants', 'standbyParticipants', 'waitlist'];
+  keys.forEach((key) => {
+    const original = lateSource && lateSource[key];
+    if (key !== 'participants' && original) {
+      tDepois[key] = JSON.parse(JSON.stringify(original));
+      return;
+    }
     if (Object.prototype.hasOwnProperty.call(tAntes, key)) {
       tDepois[key] = JSON.parse(JSON.stringify(tAntes[key]));
     } else {
@@ -568,6 +599,176 @@ function _preserveCanonicalRosterProjection(tDepois, tAntes) {
   return true;
 }
 
+// A espera canônica é projetada apenas para esta leitura transacional. A mesma
+// função de roster valida identidade, categoria e par tanto para confirmados
+// quanto para quem aguarda vaga; a troca de status abaixo nunca é persistida.
+function _canonicalLateCandidates(registrations, tournament) {
+  const waiting = registrations.filter(item => item && item.status === 'waitlisted');
+  const fingerprint = String(tournament.canonicalRegistrationMigration?.fingerprint || '');
+  if (waiting.some(item => !item.registrationId || !item.participantKey
+    || String(item.migrationFingerprint || '') !== fingerprint)) {
+    throw new HttpsError('failed-precondition', 'Lista de espera canônica incompleta; nenhuma chave foi alterada.');
+  }
+  const labels = new Map((tournament.categoryDefinitions || []).filter(def => def && def.id && def.label)
+    .map(def => [String(def.id), String(def.label)]));
+  const pricing = tournament.registrationSettings?.source === 'scoreplace'
+    ? tournament.registrationSettings.pricing : null;
+  const blocked = [];
+  const byPerson = new Map();
+  registrations.filter(item => item && item.status !== 'withdrawn').forEach(item => {
+    const key = String(item.participantKey || '');
+    byPerson.set(key, (byPerson.get(key) || 0) + 1);
+  });
+  let eligible = waiting.filter(item => {
+    if (!item.participantKey || byPerson.get(String(item.participantKey)) !== 1) {
+      blocked.push({ registrationId:item.registrationId, motivo:'categoria-tardia-ambigua' });
+      return false;
+    }
+    const price = pricing?.mode === 'single' ? Number(pricing.cents)
+      : pricing?.mode === 'category' ? Number(pricing.centsByCategory?.[labels.get(String(item.categoryId))])
+        : pricing ? NaN : 0;
+    if (tournament.registrationSettings?.passServiceFeeToParticipant === true
+      || item.paymentState != null
+      || (pricing && (!Number.isSafeInteger(price) || price < 0 || price > 0))) {
+      blocked.push({ registrationId:item.registrationId, motivo:'pagamento-tardio-indisponivel' });
+      return false;
+    }
+    return true;
+  });
+  const pairMembers = new Map();
+  waiting.forEach(item => {
+    if (!item.fixedPairId) return;
+    const id = String(item.fixedPairId);
+    const members = pairMembers.get(id) || [];
+    members.push(item);
+    pairMembers.set(id, members);
+  });
+  const eligibleIds = new Set(eligible.map(item => item.registrationId));
+  const excludedPairs = new Set();
+  for (const [id, members] of pairMembers) {
+    if (members.length !== 2 || members.some(item => !eligibleIds.has(item.registrationId))) {
+      excludedPairs.add(id);
+      members.filter(item => eligibleIds.has(item.registrationId)).forEach(item =>
+        blocked.push({ registrationId:item.registrationId, motivo:'dupla-tardia-incompleta' }));
+    }
+  }
+  eligible = eligible.filter(item => !item.fixedPairId || !excludedPairs.has(String(item.fixedPairId)));
+  const entries = _registrationRoster.rosterFromRegistrations(eligible.map(item => ({ ...item, status:'confirmed' })))
+    .map(entry => {
+      const label = labels.get(String(entry.categoryId || ''));
+      return { ...entry, category:label || entry.category,
+        categories:[label || entry.category], _lateJoin:true };
+    });
+  return { entries, eligible, blocked };
+}
+
+function _latePlacementKeys(t) {
+  const keys = new Set();
+  const uid = value => { if (value) keys.add('uid:' + String(value)); };
+  const manual = value => { if (value) keys.add('manual:' + String(value)); };
+  const entry = value => {
+    if (!value || typeof value !== 'object') return;
+    uid(value.uid); manual(value.manualParticipantId);
+    uid(value.p1Uid); uid(value.p2Uid);
+    manual(value.p1ManualId); manual(value.p2ManualId);
+  };
+  const matches = drawWindow && typeof drawWindow._collectAllMatches === 'function'
+    ? drawWindow._collectAllMatches(t) || [] : t.matches || [];
+  matches.forEach(match => {
+    if (!match) return;
+    [match.p1Uid, match.p2Uid].forEach(uid);
+    [match.team1Uids, match.team2Uids].forEach(arr => (arr || []).forEach(uid));
+    entry(match.team1Obj); entry(match.team2Obj);
+  });
+  const group = g => {
+    if (!g) return;
+    (g.playersUids || []).forEach(uid);
+    // playersSlotIds são posições administrativas, não manualParticipantId.
+    (g.participants || []).forEach(entry);
+  };
+  (t.groups || []).forEach(group);
+  (t.rounds || []).forEach(round => (round?.monarchGroups || []).forEach(group));
+  return keys;
+}
+
+function _promoteCanonicalLateEntries(tx, ref, tBefore, tAfter, nowIso) {
+  const source = tAfter._canonicalLateSource;
+  if (!source) return [];
+  const before = _latePlacementKeys(tBefore), after = _latePlacementKeys(tAfter);
+  const placedKeys = new Set(source.eligible.map(item => String(item.participantKey || ''))
+    .filter(key => key && !before.has(key) && after.has(key)));
+  const pairs = new Map();
+  source.eligible.forEach(item => {
+    if (!item.fixedPairId) return;
+    const id = String(item.fixedPairId);
+    const members = pairs.get(id) || [];
+    members.push(String(item.participantKey || ''));
+    pairs.set(id, members);
+  });
+  const together = keys => {
+    const entryKeys = entry => {
+      if (!entry || typeof entry !== 'object') return [];
+      return [entry.uid && 'uid:' + entry.uid, entry.manualParticipantId && 'manual:' + entry.manualParticipantId,
+        entry.p1Uid && 'uid:' + entry.p1Uid, entry.p2Uid && 'uid:' + entry.p2Uid,
+        entry.p1ManualId && 'manual:' + entry.p1ManualId, entry.p2ManualId && 'manual:' + entry.p2ManualId].filter(Boolean);
+    };
+    const matches = drawWindow && typeof drawWindow._collectAllMatches === 'function'
+      ? drawWindow._collectAllMatches(tAfter) || [] : tAfter.matches || [];
+    const teams = [];
+    matches.forEach(match => {
+      if (!match) return;
+      [1,2].forEach(side => {
+        const uids = match['team' + side + 'Uids'] || [];
+        teams.push(uids.map(uid => 'uid:' + uid).concat(entryKeys(match['team' + side + 'Obj'])));
+      });
+    });
+    (tAfter.groups || []).forEach(group => (group.participants || []).forEach(entry => teams.push(entryKeys(entry))));
+    return teams.some(team => keys.every(key => team.includes(key)));
+  };
+  for (const [pairId, keys] of pairs) {
+    const count = keys.filter(key => placedKeys.has(key)).length;
+    if (keys.length !== 2 || (count !== 0 && (count !== 2 || !together(keys)))) {
+      throw new HttpsError('failed-precondition', 'Dupla tardia sem vaga conjunta comprovada: ' + pairId);
+    }
+  }
+  const promoted = [];
+  for (const registration of source.eligible) {
+    const key = String(registration.participantKey || '');
+    if (!placedKeys.has(key)) continue;
+    const id = String(registration.registrationId || '');
+    const snap = source.registrations.find(doc => doc.id === id);
+    if (!snap || !snap.exists || snap.data().status !== 'waitlisted'
+      || String(snap.data().migrationFingerprint || '') !== source.fingerprint) {
+      throw new HttpsError('aborted', 'Inscrição tardia mudou; tente integrar novamente.');
+    }
+    tx.update(ref.collection('registrations').doc(id), { status:'confirmed', updatedAt:nowIso });
+    promoted.push(id);
+  }
+  return promoted;
+}
+
+function _canonicalLateResponseRoster(t, promotedIds) {
+  const source = t._canonicalLateSource;
+  if (!source) return null;
+  const promoted = new Set(promotedIds);
+  const registrations = source.registrations.map(doc => {
+    const item = doc.data() || {};
+    return promoted.has(doc.id) ? { ...item, status:'confirmed' } : item;
+  });
+  const labels = new Map((t.categoryDefinitions || []).filter(def => def && def.id && def.label)
+    .map(def => [String(def.id), String(def.label)]));
+  const decorate = entries => entries.map(entry => {
+    const label = labels.get(String(entry.categoryId || ''));
+    return label ? { ...entry, category:label, categories:[label] } : entry;
+  });
+  const participants = _appendPlaceholderReservations(_competitionAssignments.overlay(
+    decorate(_registrationRoster.rosterFromRegistrations(registrations)),
+    t.competitionPairAssignments), t);
+  const standbyParticipants = decorate(_registrationRoster.rosterFromRegistrations(registrations
+    .filter(item => item.status === 'waitlisted').map(item => ({ ...item, status:'confirmed' }))));
+  return { participants, standbyParticipants, waitlist:[], monarchWaitlist:{} };
+}
+
 /* Placeholder não é inscrição. Em torneio com `registrations` canônicas ele
  * mora no documento do torneio, fora da coleção de inscrições, e volta a ser
  * apresentado junto do elenco apenas para análise/organização. Isso permite
@@ -575,8 +776,8 @@ function _preserveCanonicalRosterProjection(tDepois, tAntes) {
  * incompleta que o motor poderia sortear como válida. */
 function _placeholderReservations(t) {
   // Mantém a mesma projeção usada por addTournamentPlaceholders e pelo novo
-  // leitor getCanonicalTournamentRoster; esta função vive neste módulo, não em
-  // functions/index.js, portanto está no escopo da callable em produção.
+  // A organização usa esta projeção nos comandos do pacote autodraw; a leitura
+  // canônica para o cliente vive exclusivamente em functions/index.js.
   const seen = new Set();
   return (Array.isArray(t && t.placeholderReservations) ? t.placeholderReservations : [])
     .filter((entry) => entry && entry.isPlaceholder === true)
@@ -759,9 +960,20 @@ function _antesDoMotor(t) {
   return JSON.parse(JSON.stringify(t));
 }
 
-async function _leTorneio(tx, ref, tId) {
+async function _leTorneio(tx, ref, tId, readCounter = null, projectLateCandidates = false) {
+  // O SDK pode reutilizar o objeto da transação num retry. Uma leitura nova
+  // nunca herda prova da tentativa anterior.
+  const oldProofs = _phaseReadProofs.get(tx);
+  if (oldProofs) oldProofs.delete(ref.path);
   const snap = await tx.get(ref);
+  if (readCounter) readCounter.documents = 1;
   if (!snap.exists) return null;
+  // Qualquer mutador pode acabar emitindo results pelo plano central após a
+  // projeção canônica. O fence integra o read-set antes de qualquer escrita.
+  if (tx !== _TX_LEITURA && !String(ref.path).startsWith('sandboxes/')) {
+    const fenceSnap = await _visibilityFence.read(tx, ref);
+    if (readCounter && fenceSnap.exists) readCounter.documents++;
+  }
   const t = snap.data(); t.id = tId;
   // ⭐ UM CAMINHO SÓ (ver montarDoBanco no split-core). O que é daqui: ler coleção DENTRO
   // da transação — e transação exige todas as leituras antes de qualquer escrita, que é
@@ -769,6 +981,7 @@ async function _leTorneio(tx, ref, tId) {
   const lidas = {};
   const montado = await _tSplit.montarDoBanco(t, async (colecao, parte) => {
     const s = await tx.get(ref.collection(colecao));
+    if (readCounter) readCounter.documents += s.docs.length;
     const docs = s.docs.map((d) => d.data());
     lidas[parte || colecao] = docs;
     return docs;
@@ -791,6 +1004,11 @@ async function _leTorneio(tx, ref, tId) {
     if (noPai.length && !(lidas[parte] || []).length) legadoNoPai[parte] = true;
   });
   if (Object.keys(legadoNoPai).length) montado._partesLegadasNoDocumento = legadoNoPai;
+  const phaseReadComplete = tx !== _TX_LEITURA && !legadoNoPai.matches && !montado.isSandbox &&
+      Array.isArray(lidas.matches) &&
+      Number.isSafeInteger(t._nPartes && t._nPartes.matches) &&
+      t._nPartes.matches === lidas.matches.length &&
+      !!_phaseCert.build(lidas.matches, _tSplit);
   /*
    * Depois da migração de inscrições, o sorteio lê a fonte canônica. Não há
    * fallback para o elenco legado: se o marcador diz que o corte foi aplicado
@@ -804,6 +1022,7 @@ async function _leTorneio(tx, ref, tId) {
   }
   if (migration.fingerprint) {
     const registrationSnap = await tx.get(ref.collection('registrations'));
+    if (readCounter) readCounter.documents += registrationSnap.docs.length;
     const registrations = registrationSnap.docs.map((doc) => doc.data() || {});
     const expected = Number(migration.registrationCount || 0);
     if (expected !== registrations.length) {
@@ -828,8 +1047,29 @@ async function _leTorneio(tx, ref, tId) {
     });
     montado.participants = _competitionAssignments.overlay(montado.participants, montado.competitionPairAssignments);
     montado.participants = _appendPlaceholderReservations(montado.participants, montado);
+    if (tx !== _TX_LEITURA && projectLateCandidates) {
+      const late = _canonicalLateCandidates(registrations, montado);
+      // A lista antiga não participa da decisão canônica. O original fica fora
+      // do objeto serializável e é restaurado antes do planejador de escrita.
+      Object.defineProperty(montado, '_canonicalLateSource', { value:{
+        waitlist:Array.isArray(montado.waitlist) ? montado.waitlist : [],
+        standbyParticipants:Array.isArray(montado.standbyParticipants) ? montado.standbyParticipants : [],
+        monarchWaitlist:montado.monarchWaitlist && typeof montado.monarchWaitlist === 'object'
+          ? montado.monarchWaitlist : {},
+        registrations:registrationSnap.docs, eligible:late.eligible, blocked:late.blocked,
+        fingerprint:String(migration.fingerprint)
+      }, enumerable:false, configurable:true });
+      montado.waitlist = late.entries;
+      montado.standbyParticipants = [];
+      montado.monarchWaitlist = {};
+    }
   }
   montado.id = tId;
+  if (phaseReadComplete) {
+    const byPath = _phaseReadProofs.get(tx) || new Map();
+    byPath.set(ref.path, { matchCount: lidas.matches.length });
+    _phaseReadProofs.set(tx, byPath);
+  }
   return montado;
 }
 
@@ -993,19 +1233,15 @@ function _gravaTorneio(tx, ref, tDepois, tAntes, ctx) {
    * Ordem do revisor externo: a checagem de limite e o executor têm de consumir EXATAMENTE
    * o mesmo plano; um preflight que estime por fora pode divergir da escrita real, e aí o
    * teto mede um plano enquanto o banco recebe outro.
-   * ⛔ O COMPORTAMENTO NÃO MUDA para quem já chamava aqui (`drawRound`, `closeRound`,
-   * `applyMatchResult`, `autoDraw`): a lógica de dividir, de `jogosQueMudaram`, do espelho
-   * de `results` e dos contadores foi MOVIDA, não reescrita. A suíte desses quatro é a
-   * linha de base do refator e roda antes e depois.
-   * ⚠️ ÚNICA diferença observável: o instante do espelho deixou de ser `new Date()` dentro
-   * da transação e passa a vir por argumento — o retry do Firestore re-executa o callback,
-   * e com `new Date()` cada tentativa produzia um espelho diferente.
+   * A lógica de dividir, de `jogosQueMudaram` e dos contadores mora no planejador.
+   * E05: a escrita normal agora produz apenas jogos físicos; a transição E01 ainda
+   * pode alterar `results` históricos pelo mesmo plano e fence.
    * ⛔ E NÃO HÁ FALLBACK AQUI: quem não passa `ctx.agoraIso` recebe erro. Um fallback neste
    * ponto reintroduziria exatamente o defeito, só que calado. Cada chamador calcula o
    * instante UMA vez, imediatamente antes de `db.runTransaction`. */
   /* ⛔ FALHA FECHADA, SEM FALLBACK AQUI DENTRO. Esta função roda dentro do callback de
    * `db.runTransaction`, que o Firestore RE-EXECUTA quando aborta. Qualquer `new Date()`
-   * neste ponto faria a 2ª tentativa gerar um espelho de `results` e um plano diferentes
+   * neste ponto faria a 2ª tentativa gerar um plano diferente
    * da 1ª — o retry deixaria de ser idempotente. O instante é da OPERAÇÃO, calculado uma
    * vez antes de abrir a transação, e chega por argumento. */
   const _agoraIso = ctx && ctx.agoraIso;
@@ -1083,8 +1319,16 @@ function _gravaTorneio(tx, ref, tDepois, tAntes, ctx) {
   }
   const plan = _planejaEscrita(tDepois, tAntes, {
     agoraIso: _agoraIso, extras: (ctx && ctx.extras) || [],
-    resultCollection: String(ref.path || '').startsWith('sandboxes/') ? 'resultsSandbox' : 'results'
+    visibilityResults: ctx && ctx.visibilityResults,
+    resultCollection: String(ref.path || '').startsWith('sandboxes/') ? 'resultsSandbox' : 'results',
+    phaseReadProof: tx !== _TX_LEITURA && !!_phaseReadProofs.get(tx)?.get(ref.path)
   });
+  if (ctx && ctx.visibilityResults) {
+    const tooMany = _wp.checaTeto(plan);
+    if (tooMany) throw new HttpsError('failed-precondition', tooMany);
+    const bytes = Buffer.byteLength(JSON.stringify(plan.ops), 'utf8');
+    if (bytes > 5 * 1024 * 1024) throw new HttpsError('failed-precondition', 'Transição de visibilidade grande demais.');
+  }
   _wp.applyPlan(tx, ref, plan, { FieldValue: FieldValue });
   /* O chamador da W.O. precisa distinguir "motor mudou o objeto" de "o slot entrou
    * no plano que esta transação realmente vai gravar". Expor somente os IDs (não o
@@ -1195,12 +1439,12 @@ function _planejaEscrita(tDepois, tAntes, opts) {
     split: _tSplit,
     boundary: _applyWriteBoundary,
     agoraIso: o.agoraIso,
-    espelho: _mrEspelho,
     resultCollection: o.resultCollection || (tDepois && tDepois.isSandbox === true ? 'resultsSandbox' : 'results'),
     tournamentId: o.tournamentId || (tDepois && tDepois.id) || null,
     partesLegadasNoDocumento: partesLegadasNoDocumento,
+    phaseReadProof: o.phaseReadProof === true,
     extras: o.extras || [],
-    onAviso: (m) => console.error(m)
+    visibilityResults: o.visibilityResults || null
   });
 }
 
@@ -1601,14 +1845,19 @@ exports.requestTournamentPair = onCall(async request => {
   const uid=request.auth&&request.auth.uid, data=request.data||{}, tId=String(data.tournamentId||'').trim(), inviteeUid=String(data.inviteeUid||'').trim();
   if(!uid) throw new HttpsError('unauthenticated','Entre na sua conta.');
   if(!tId||!inviteeUid||inviteeUid===uid) throw new HttpsError('invalid-argument','Convite inválido.');
-  if(!drawWindow||!drawWindow._teamFormation||typeof drawWindow._teamFormation.requestPair!=='function') throw new HttpsError('internal','Núcleo de duplas indisponível no servidor.');
+  if(!drawWindow||!drawWindow._teamFormation||typeof drawWindow._teamFormation.requestPair!=='function'||typeof drawWindow._initialMonarchIndividualEnrollment!=='function') throw new HttpsError('internal','Núcleo de duplas indisponível no servidor.');
   const ref=db.collection('tournaments').doc(tId),nowIso=new Date().toISOString();
   return db.runTransaction(async tx=>{
     const t=await _leTorneio(tx,ref,tId);if(!t)throw new HttpsError('not-found','Torneio não encontrado.');
+    if(drawWindow._initialMonarchIndividualEnrollment(t)) throw new HttpsError('failed-precondition','Na fase inicial Rei/Rainha, as inscrições são individuais; as duplas só podem ser formadas depois da classificação.');
     const parts=Array.isArray(t.participants)?t.participants:Object.values(t.participants||{});
     const find=(id)=>parts.find(p=>p&&typeof p==='object'&&((typeof drawWindow._participantUids==='function'?drawWindow._participantUids(p):[p.uid]).map(String).includes(String(id))));
     const inviter=find(uid),invitee=find(inviteeUid);if(!inviter||!invitee)throw new HttpsError('failed-precondition','Inscrito não encontrado.');
+    if(t.canonicalRegistrationMigration&&t.canonicalRegistrationMigration.fingerprint&&
+       (inviter.isPlaceholder===true||invitee.isPlaceholder===true||!inviter.uid||!invitee.uid))
+      throw new HttpsError('failed-precondition','Convite exige duas inscrições individuais reais.');
     const nameOf=p=>String(p.displayName||p.name||'Participante');
+    const reciprocal=(Array.isArray(t.pairRequests)?t.pairRequests:[]).find(r=>r&&r.inviterUid===inviteeUid&&r.inviteeUid===uid);
     const before=_antesDoMotor(t),out=drawWindow._teamFormation.requestPair(t,uid,inviteeUid,nameOf(inviter),nameOf(invitee),{now:Date.parse(nowIso)});
     if(!out||!out.ok) throw new HttpsError('failed-precondition',String((out&&out.error)||'convite-inválido'));
     if(out.action==='pending'){
@@ -1616,7 +1865,8 @@ exports.requestTournamentPair = onCall(async request => {
       tx.set(ref.collection('notificationOutbox').doc('pair-invite-'+_outboxDocIdPart(r.id)),{schema:1,kind:'tournament-notification',type:'pair_invite',title:'🤝 Convite de dupla',message:String(r.inviterName||'Participante')+' quer formar dupla com você em '+String(t.name||'torneio')+'.',tournamentId:tId,tournamentName:t.name||'',pairRequestId:r.id,pairInviterName:r.inviterName,pairInviteeName:r.inviteeName,level:'fundamental',recipients:[inviteeUid],ctaLabel:'Ver convite',ctaUrl:'https://scoreplace.app/#pair/accept/'+encodeURIComponent(tId)+'/'+encodeURIComponent(r.id),createdAt:nowIso,createdAtMs:Date.parse(nowIso),dispatchStatus:'pending'},{merge:true});
       return {ok:true,action:'pending',requestId:r.id,inviterName:r.inviterName,inviteeName:r.inviteeName,tournament:b.clean};
     }
-    return {ok:true,action:'confirm',inviterUid:out.inviterUid,inviteeUid:out.inviteeUid,inviterName:out.inviterName||nameOf(inviter),inviteeName:out.inviteeName||nameOf(invitee)};
+    if(!reciprocal||!reciprocal.id)throw new HttpsError('failed-precondition','Convite recíproco não encontrado.');
+    return {ok:true,action:'confirm',requestId:reciprocal.id,inviterUid:out.inviterUid,inviteeUid:out.inviteeUid,inviterName:out.inviterName||nameOf(inviter),inviteeName:out.inviteeName||nameOf(invitee)};
   });
 });
 
@@ -1689,70 +1939,6 @@ exports.addTournamentPlaceholders = onCall(async request => {
     const projectedPeople = _projectedPeopleCount(clean.participants);
     clean.competitorsCount = projectedPeople;
     return { ok: true, added: out.added, destination: out.destination, tournament: clean };
-  });
-});
-
-// Leitura única do elenco canônico para o editor e para a análise. Inscrições
-// confirmadas são devolvidas já projetadas pelo registro canônico; reservas de
-// placeholder permanecem separadas porque ainda não possuem gênero/categoria.
-// A tela que precisa do roster visual completo faz a junção por
-// `manualParticipantId`, sem transformar reserva em inscrição tipada.
-exports.getCanonicalTournamentRoster = onCall(async request => {
-  const uid = request.auth && request.auth.uid;
-  const data = request.data || {};
-  const tId = String(data.tournamentId || '').trim();
-  const sandbox = data.sandbox === true;
-  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
-  if (!tId) throw new HttpsError('invalid-argument', 'Torneio obrigatório.');
-  // ⛔ Não inferir tipo pelo prefixo do ID nem tentar a outra coleção em caso de
-  // falha: um ID pode existir em ambas. A flag só escolhe o caminho, NÃO autoriza.
-  const ref = db.collection(sandbox ? 'sandboxes' : 'tournaments').doc(tId);
-  return db.runTransaction(async tx => {
-    if (sandbox) {
-      // O sandbox copia memberUids/adminUids do original byte a byte. Por isso
-      // _isTournamentAdmin/_isTournamentParticipant NÃO concedem acesso aqui.
-      // Confira o pai antes de _leTorneio para que inexistente e não dono tenham
-      // o mesmo erro, sem revelar nem o recibo de um sandbox alheio.
-      const sbSnap = await tx.get(ref);
-      const sb = sbSnap.exists ? sbSnap.data() || {} : {};
-      if (sb.isSandbox !== true || sb.sbState !== 'ready' ||
-          sb.notificationsMuted !== true || String(sb.sandboxOf || '') === '' ||
-          sb.sandboxOwnerUid !== uid) {
-        throw new HttpsError('not-found', 'Torneio não encontrado.');
-      }
-      // A cópia preserva UIDs reais. Também em sandboxes antigos, o dono só
-      // conserva acesso enquanto organizar o torneio original. Sem fallback.
-      const originalSnap = await tx.get(db.collection('tournaments').doc(String(sb.sandboxOf)));
-      const original = originalSnap.exists ? originalSnap.data() || {} : {};
-      const cohost = Array.isArray(original.coHosts) && original.coHosts.some(c =>
-        c && c.uid === uid && (c.status === 'active' || c.status === 'accepted'));
-      if (!originalSnap.exists || (!_isTournamentAdmin(original, uid) && !cohost)) {
-        throw new HttpsError('not-found', 'Torneio não encontrado.');
-      }
-    }
-    const t = await _leTorneio(tx, ref, tId);
-    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
-    if (!sandbox && !_isTournamentAdmin(t, uid) && !_isTournamentParticipant(t, uid)) {
-      throw new HttpsError('permission-denied', 'Sem acesso ao elenco deste torneio.');
-    }
-    const migration = t.canonicalRegistrationMigration || {};
-    if (!migration.fingerprint) {
-      return {
-        participants: Array.isArray(t.participants) ? t.participants.filter(p => !(p && p.isPlaceholder === true)) : [],
-        placeholderReservations: _placeholderReservations(t),
-        categoryDefinitions: Array.isArray(t.categoryDefinitions) ? t.categoryDefinitions : [],
-        registrationCount: Array.isArray(t.participants) ? t.participants.filter(p => !(p && p.isPlaceholder === true)).length : 0
-      };
-    }
-    const participants = Array.isArray(t.participants)
-      ? t.participants.filter(p => !(p && p.isPlaceholder === true))
-      : [];
-    return {
-      participants,
-      placeholderReservations: _placeholderReservations(t),
-      categoryDefinitions: Array.isArray(t.categoryDefinitions) ? t.categoryDefinitions : [],
-      registrationCount: Number(migration.registrationCount || participants.length)
-    };
   });
 });
 
@@ -2285,7 +2471,8 @@ exports.integrateLateEntries = onCall(async (request) => {
   if (!_isTournamentAdmin(pre.data(), uid)) {
     throw _drawFail('permission-denied', 'Só o organizador ou um co-organizador integra tardios.', { tId, uid });
   }
-  await _preloadDrawNames(pre.data()); // nome vivo por uid antes de formar duplas/rótulos
+  // A espera canônica só aparece depois de _leTorneio. O preload fica dentro
+  // do read-set transacional para incluir seus perfis e não usar a lista antiga.
 
   let out;
   try {
@@ -2294,8 +2481,10 @@ exports.integrateLateEntries = onCall(async (request) => {
      * cada tentativa produzir espelho e plano diferentes. */
     const _agoraIsoTx = new Date().toISOString();
     out = await db.runTransaction(async (tx) => {
-      const t = await _leTorneio(tx, ref, tId);
+      const t = await _leTorneio(tx, ref, tId, null, true);
       if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+      const names = await _preloadDrawNames(t, tx);
+      return drawWindow._spRodaComNomes(names.nameByUid, names.profByUid, () => {
       const _tAntes = _antesDoMotor(t);
       if (!_isTournamentAdmin(t, uid)) {
         throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, uid });
@@ -2323,18 +2512,36 @@ exports.integrateLateEntries = onCall(async (request) => {
       if (!res || !res.ok) {
         throw _drawFail('failed-precondition', (res && res.reason) || 'integrate-failed', { tId, format: t.format });
       }
+      const recusas = (res.recusas || []).concat(t._canonicalLateSource?.blocked || []);
       // `recusas` viaja MESMO com changed=false — é justamente o caso "chave cheia": o
       // tardio está presente, NÃO entrou, e o organizador precisa saber por quê e o que
       // fazer. Devolver só `changed:false` aqui era silêncio, e silêncio foi o pecado da 1.5.x.
-      if (!res.changed) return { ok: true, changed: false, recusas: res.recusas || [] };
+      if (!res.changed) {
+        if (!res.recusas?.length && t._canonicalLateSource?.eligible.length) {
+          recusas.push({ motivo:'sem-vaga-ou-janela' });
+        }
+        return { ok: true, changed: false, recusas };
+      }
       const b = _gravaTorneio(tx, ref, t, _tAntes, { agoraIso: _agoraIsoTx }); // clobber-free; divide se o marcador mandar
+      const promoted = _promoteCanonicalLateEntries(tx, ref, _tAntes, t, _agoraIsoTx);
+      if (t._canonicalLateSource?.eligible.length && (res.placed > 0 || res.monarch > 0)
+        && promoted.length === 0) {
+        throw new HttpsError('failed-precondition', 'Entrada tardia sem prova de vaga; nenhuma alteração foi gravada.');
+      }
+      if (!res.recusas?.length && t._canonicalLateSource?.eligible.length > promoted.length) {
+        recusas.push({ motivo:'sem-vaga-ou-janela' });
+      }
+      if (b.clean && t._canonicalLateSource) {
+        Object.assign(b.clean, _canonicalLateResponseRoster(t, promoted));
+      }
       // Devolve TODOS os contadores (v1.4.43): faltava `placed`/`repfill`/etc. — o "jogo 5" novo
       // (via _growAdefinir/_placeLateEntriesSurgically volta em `placed`) não aparecia no trace nem
       // disparava o toast, dando a impressão de "não criou" mesmo tendo criado. Todo caminho que muda
       // a chave TEM de aparecer no retorno. Ver [[project_late_dupla_fills_awaiting_slot]].
       return { ok: true, changed: true, extra: res.extra, duplas: res.duplas, duplasTier: res.duplasTier,
                dissolved: res.dissolved, monarch: res.monarch, repfill: res.repfill, placed: res.placed,
-               wlClean: res.wlClean, recusas: res.recusas || [], tournament: b.clean };
+               wlClean: res.wlClean, promoted:promoted.length, recusas, tournament: b.clean };
+      });
     });
   } catch (e) {
     if (e instanceof HttpsError) throw e;
@@ -2376,8 +2583,9 @@ exports.formLatePair = onCall(async (request) => {
     out = await db.runTransaction(async (tx) => {
       const t = await _leTorneio(tx, ref, tId);
       if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
-      const _tAntes = _antesDoMotor(t);
       if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, uid });
+      if (t.canonicalRegistrationMigration?.fingerprint) throw new HttpsError('failed-precondition', 'Atualize o aplicativo para formar duplas na espera canônica.');
+      const _tAntes = _antesDoMotor(t);
       _hidrataGrupos(t, 'formLatePair', tId);
       const res = formLatePairFn(t, { key1: key1, key2: key2, nowTs: Date.now() });
       if (!res || !res.ok) throw _drawFail('failed-precondition', (res && res.reason) || 'form-failed', { tId });
@@ -2419,8 +2627,9 @@ exports.splitLatePair = onCall(async (request) => {
     out = await db.runTransaction(async (tx) => {
       const t = await _leTorneio(tx, ref, tId);
       if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
-      const _tAntes = _antesDoMotor(t);
       if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, uid });
+      if (t.canonicalRegistrationMigration?.fingerprint) throw new HttpsError('failed-precondition', 'Atualize o aplicativo para desfazer duplas na espera canônica.');
+      const _tAntes = _antesDoMotor(t);
       _hidrataGrupos(t, 'splitLatePair', tId);
       const res = splitLatePairFn(t, { id1: id1, id2: id2 });
       if (!res || !res.ok) throw _drawFail('failed-precondition', (res && res.reason) || 'split-failed', { tId });
@@ -2552,22 +2761,8 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
     });
     const _matchDepois = (typeof drawWindow._findMatch === 'function')
       ? drawWindow._findMatch(t, matchId) : null;
-    // Histórico é projeção derivada da partida aceita pelo motor dentro desta
-    // mesma transação. O payload do navegador nunca escolhe jogadores, vencedor
-    // ou destinatários. Reabrir/reverter remove a projeção determinística.
-    const _history = !sandbox && res.outcome === 'applied'
-      ? _matchHistory.buildTournamentRecord(t, _matchDepois, _agoraIsoTx)
-      : null;
-    if (!sandbox && _history) {
-      _history.recipients.forEach((historyUid) => {
-        tx.set(db.collection('users').doc(historyUid).collection('matchHistory').doc(_history.matchId), _history.record);
-      });
-    } else if (!sandbox && (res.outcome === 'match-reset' || res.outcome === 'result-reopened' || res.outcome === 'wo-reverted')) {
-      const _historyId = 't_' + String(tId) + '_' + String(matchId);
-      _slotUidsOf(_matchDepois, 'p1').concat(_slotUidsOf(_matchDepois, 'p2')).forEach((historyUid) => {
-        tx.delete(db.collection('users').doc(historyUid).collection('matchHistory').doc(_historyId));
-      });
-    }
+    // Histórico de torneio é lido do jogo físico. A transação não cria uma
+    // segunda cópia de placar em users/{uid}/matchHistory.
     const _notif = sandbox ? null : _scoreNotificationEvent(t, _matchDepois, res.outcome, ator, _agoraIsoTx, {
       action: payload && payload.action,
       pendingBefore: _pendingAntes,
@@ -4420,14 +4615,17 @@ function _findEnrollmentAssignmentTarget(arr, e) {
  * [[regression_analysis_assignment_callable_has_public_preflight]] */
 exports.applyEnrollmentAssignments = onCall({ invoker: 'public' }, async (request) => {
   const uid=request.auth&&request.auth.uid, data=request.data||{}, tId=String(data.tournamentId||'').trim();
-  const sport=String(data.sport||'').trim().slice(0,80), raw=Array.isArray(data.edits)?data.edits.slice(0,100):null;
+  const sport=String(data.sport||'').trim().slice(0,80), raw=Array.isArray(data.edits)?data.edits:null;
   if(!uid) throw new HttpsError('unauthenticated','Entre na sua conta.');
-  if(!tId||!raw||!raw.length) throw new HttpsError('invalid-argument','Atribuições inválidas.');
+  if(!tId||!raw||!raw.length||raw.length>160) throw new HttpsError('invalid-argument','Selecione de 1 a 160 atribuições por salvamento.');
   /* `name` é aceito só como ponte de clientes ainda em cache: entra no mesmo
    * caminho `legacyName`, que exige alvo único. Clientes atuais nunca o enviam;
    * portanto não há retorno à mutação por nome nem janela de rollout quebrada. */
   const clean=raw.map(x=>({uid:String(x&&x.uid||'').trim(),manualParticipantId:String(x&&x.manualParticipantId||'').trim().slice(0,180),legacyName:String(x&&(x.legacyName||x.name)||'').trim().slice(0,120),waitlist:!!(x&&x.waitlist),pairMember:(x&&['p1','p2'].includes(x.pairMember))?x.pairMember:'',gender:(x&&['feminino','masculino','outro',''].includes(x.gender))?x.gender:undefined,category:x&&Object.prototype.hasOwnProperty.call(x,'category')?String(x.category||'').trim().slice(0,80):undefined,uncategorizedByOrganizer:!!(x&&x.uncategorizedByOrganizer),markWasUncategorized:!!(x&&x.markWasUncategorized),notifyCategory:!!(x&&x.notifyCategory)}));
   if(clean.some(x=>((x.uid&&x.manualParticipantId)||(!x.uid&&!x.manualParticipantId&&!x.legacyName))||(x.gender===undefined&&x.category===undefined))) throw new HttpsError('invalid-argument','Alvo ou alteração inválida.');
+  const seenEdits=new Set();
+  for(const e of clean){const key=(e.uid?'u:'+e.uid:e.manualParticipantId?'m:'+e.manualParticipantId:'n:'+e.legacyName)+'|'+(e.waitlist?'w':'p')+'|'+e.pairMember;
+    if(seenEdits.has(key)) throw new HttpsError('invalid-argument','Pessoa repetida no bloco.'); seenEdits.add(key);}
   const ref=db.collection('tournaments').doc(tId),agoraIso=new Date().toISOString();
   // Migração preguiçosa de registros antigos: novas vagas já nascem com ID manual,
   // mas fotos legadas só tinham nome. O nonce é criado fora da transação para que um
@@ -4440,7 +4638,7 @@ exports.applyEnrollmentAssignments = onCall({ invoker: 'public' }, async (reques
     if(!_isTournamentAdmin(t,uid)) throw _drawFail('permission-denied','Só a organização altera inscrições.',{tId,uid});
     _assertLegacyRosterMutationAllowed(t, 'atribuição legada de categoria');
     const before=_antesDoMotor(t), valid=new Set(Array.isArray(t.combinedCategories)?t.combinedCategories:[]); let changed=0;
-    const missing=[];
+    const missing=[], categoryByTarget=new Map();
     const ensureManualIdentity=(target,e)=>{
       const next=()=>legacyIdPrefix+'-'+(++legacyIdSequence);
       if(e.pairMember){
@@ -4449,6 +4647,7 @@ exports.applyEnrollmentAssignments = onCall({ invoker: 'public' }, async (reques
       if(Array.isArray(target.participants)) target.participants.forEach(slot=>{if(slot&&typeof slot==='object'&&!slot.uid&&!slot.manualParticipantId&&(slot.name||slot.displayName))slot.manualParticipantId=next();});
     };
     for(const e of clean){const pools=e.waitlist?[t.waitlist,t.standbyParticipants,t.monarchWaitlist]:[t.participants]; let target=null, ambiguous=false; for(const pool of pools){const found=_findEnrollmentAssignmentTarget(pool,e);if(found.ambiguous){ambiguous=true;break;} if(found.target){if(target&&target!==found.target){ambiguous=true;break;}target=found.target;}} if(!target||ambiguous){missing.push(ambiguous?'alvo ambíguo':(e.legacyName||e.manualParticipantId||e.uid));continue;}
+      if(e.category!==undefined){const prior=categoryByTarget.get(target);if(prior!==undefined&&prior!==e.category) throw new HttpsError('invalid-argument','Dupla recebeu categorias diferentes no mesmo bloco.');categoryByTarget.set(target,e.category);}
       ensureManualIdentity(target,e);
       /* ⛔ O PAR {valor, marca} ANDA JUNTO, inclusive por MEMBRO de dupla — antes o membro recebia só
        * o valor, e o sanitizador (que agora exige a marca) o apagaria no próximo save: a decisão
@@ -4476,7 +4675,8 @@ exports.applyEnrollmentAssignments = onCall({ invoker: 'public' }, async (reques
      * voltava para "sem categoria" no refresh. A transação inteira falha para que o
      * organizador conserve as alterações pendentes e receba uma instrução honesta. */
     if(missing.length) throw new HttpsError('failed-precondition','Um ou mais inscritos não foram encontrados. Atualize a análise e tente novamente.');
-    if(!changed)return {ok:true,changed:0}; const b=_gravaTorneio(tx,ref,t,before,{agoraIso}); return {ok:true,changed,tournament:b.clean};
+    if(!changed)return {ok:true,changed:0,outcome:'unchanged',resolvedEntries:clean.length};
+    const b=_gravaTorneio(tx,ref,t,before,{agoraIso}); return {ok:true,changed,tournament:b.clean,outcome:'assigned',resolvedEntries:clean.length};
   });
 });
 
@@ -4734,6 +4934,30 @@ exports.deleteEmptyTournamentCategory = onCall(async (request) => {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização exclui categorias.', { tId, uid });
+    if (t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint) {
+      await _assertCategoryConfigBeforeDraw(tx, ref, t);
+      if (!Array.isArray(t.categoryDefinitions)) throw new HttpsError('failed-precondition', 'Definições canônicas de categoria ausentes.');
+      const matches = t.categoryDefinitions.filter(def => def && def.label === category);
+      if (matches.length !== 1) return { ok:true, changed:false, outcome:'missing' };
+      const definition = matches[0];
+      const registrations = await tx.get(ref.collection('registrations'));
+      if (registrations.docs.some(doc => {
+        const item = doc.data() || {};
+        return item.status !== 'withdrawn' && item.categoryId === definition.id;
+      }) || (t.placeholderReservations || []).some(item => item && typeof item === 'object' && (
+        typeof item.categoryId !== 'string' || !item.categoryId.trim() || item.categoryId === definition.id))) {
+        return { ok:true, changed:false, outcome:'occupied' };
+      }
+      const prices = t.registrationSettings && t.registrationSettings.pricing;
+      if ((prices && prices.mode === 'category' && Object.prototype.hasOwnProperty.call(prices.centsByCategory || {}, category))
+        || Object.prototype.hasOwnProperty.call(t.maxParticipantsByCategory || {}, category)) {
+        throw new HttpsError('failed-precondition', 'Remova primeiro o preço ou o limite de vagas desta categoria.');
+      }
+      const next = t.categoryDefinitions.filter(def => def && def.id !== definition.id);
+      tx.update(ref, { categoryDefinitions:next, combinedCategories:next.map(def => def.label),
+        updatedAt:FieldValue.serverTimestamp() });
+      return { ok:true, changed:true, outcome:'deleted' };
+    }
     _assertLegacyRosterMutationAllowed(t, 'exclusão legada de categoria');
     const before = _antesDoMotor(t), outcome = drawWindow._categoryMutationsCore.deleteEmpty(t, category);
     if (outcome !== true) return { ok: true, changed: false, outcome };
@@ -4895,6 +5119,13 @@ exports.setTournamentCategoryConfig = onCall({ invoker: 'public' }, async (reque
       return { ok:true, changed:false };
     }
     await _assertCategoryConfigBeforeDraw(tx, ref, t);
+    if (canonical && !Array.isArray(data.expectedCategoryDefinitions)) {
+      throw new HttpsError('failed-precondition', 'Atualize o aplicativo antes de editar as categorias deste torneio.');
+    }
+    if (canonical && (!Array.isArray(t.categoryDefinitions)
+        || JSON.stringify(data.expectedCategoryDefinitions) !== JSON.stringify(t.categoryDefinitions))) {
+      throw new HttpsError('failed-precondition', 'Categorias foram editadas em outra tela. Recarregue antes de alterá-las.');
+    }
     if (!canonical) _assertLegacyRosterMutationAllowed(t, 'configuração legada de categorias');
     const definitions = canonical ? await _categoryDefinitionsForLabels(tx, ref, t, combinedCategories) : null;
     const antes = _antesDoMotor(t); t.genderCategories = genderCategories; t.skillCategories = skillCategories; t.combinedCategories = combinedCategories;
@@ -5086,8 +5317,7 @@ function _fasesDeConfiguracaoAtualizaveis(atual, proposta) {
 exports.saveTournamentReplay = onCall(require('./tournament-replay').makeSaveTournamentReplay({
   db, HttpsError, readTournament: _leTorneio,
   findMatch: (t, id) => drawWindow._findMatch(t, id), isAdmin: _isTournamentAdmin,
-  playerUids: m => _slotUidsOf(m, 'p1').concat(_slotUidsOf(m, 'p2')),
-  buildMirror: (t, m, id, iso) => _mrEspelho.buildMirrorDoc(t, m, id, iso)
+  playerUids: m => _slotUidsOf(m, 'p1').concat(_slotUidsOf(m, 'p2'))
 }));
 exports.createTournament = onCall(require('./tournament-create').makeCreateTournament({
   db, HttpsError, FieldValue, fields: _CAMPOS_CONFIG_TORNEIO,
@@ -5359,7 +5589,41 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     t.updatedAt = agoraIso;
     if (!Array.isArray(t.history)) t.history = [];
     t.history.push({ date: agoraIso, message: 'Regras atualizadas pela organização.' });
-    const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
+    let visibilityResults = null;
+    if (!sandbox && wasOrganizerOnly !== (t.organizerOnly === true)) {
+      // A consulta sozinha não trava inserções: todos os escritores de results
+      // também leem a raiz na própria transação e recuam se ela estiver oculta.
+      const resultSnap = await tx.get(ref.collection('results').limit(751));
+      // O teto protege a varredura de results. Jogos/inscrições necessários à
+      // montagem canônica não são espelhos a limpar e não podem consumir esse teto.
+      if (resultSnap.docs.length >= 751) {
+        throw new HttpsError('failed-precondition', 'Há mais de 750 resultados históricos. A visibilidade não foi alterada; contate o suporte para conciliação administrativa.');
+      }
+      const hide = t.organizerOnly === true;
+      const games = hide ? null : new Map();
+      if (!hide) {
+        if (!_mrEspelho || typeof _mrEspelho.collectMatches !== 'function') {
+          throw new HttpsError('failed-precondition', 'Elenco dos jogos indisponível para liberação.');
+        }
+        for (const game of _mrEspelho.collectMatches(t)) {
+          if (!game || game.id == null || game.id === '') continue;
+          const id = String(game.id);
+          if (games.has(id) && games.get(id) !== game) {
+            throw new HttpsError('failed-precondition', 'Identidade de jogo duplicada na liberação.');
+          }
+          games.set(id, game);
+        }
+      }
+      visibilityResults = { mode: hide ? 'hide' : 'release', entries: resultSnap.docs.map((doc) => {
+        if (hide) return { id: doc.id };
+        const game = games.get(doc.id);
+        if (!game) throw new HttpsError('failed-precondition', 'Há resultado histórico sem jogo comprovado. Nenhum resultado foi liberado; contate o suporte para conciliação administrativa.');
+        const playerUids = _visibilityRoster.releasePlayerUids(t, game);
+        if (playerUids === null) throw new HttpsError('failed-precondition', 'Elenco inconclusivo impede a liberação.');
+        return { id: doc.id, playerUids };
+      }) };
+    }
+    const extras = [];
     if (wasOrganizerOnly && t.organizerOnly !== true && !t.isSandbox) {
       const admins = new Set([t.creatorUid].concat(Array.isArray(t.adminUids) ? t.adminUids : []).map(String));
       // No modo restrito memberUids contém só admins. O elenco carregado de
@@ -5369,14 +5633,15 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
         .map(String);
       const recipients = Array.from(new Set(participantUids))
         .filter(memberUid => memberUid && !admins.has(memberUid));
-      if (recipients.length) tx.set(ref.collection('notificationOutbox').doc('visibility-release-' + Date.parse(agoraIso)), {
+      if (recipients.length) extras.push({ colecao: 'notificationOutbox', chave: 'visibility-release-' + Date.parse(agoraIso), doc: {
         schema: 1, kind: 'tournament-notification', type: 'tournament_visible',
         title: '🏆 Torneio liberado', message: 'O torneio ' + String(t.name || '') + ' já está disponível para você.',
         tournamentId: tId, tournamentName: t.name || '', level: 'important', recipients,
         ctaLabel: 'Ver torneio', ctaUrl: 'https://scoreplace.app/#tournaments/' + encodeURIComponent(tId),
         createdAt: agoraIso, createdAtMs: Date.parse(agoraIso), dispatchStatus: 'pending'
-      });
+      } });
     }
+    const b = _gravaTorneio(tx, ref, t, antes, { agoraIso, visibilityResults, extras });
     return { ok:true, changed:true, tournament:b.clean };
   });
 });
@@ -5966,11 +6231,13 @@ exports.resolvePendingLateBye = onCall(async (request) => {
    * faz cada tentativa produzir um documento diferente. */
   const agoraIso = new Date().toISOString();
   return db.runTransaction(async (tx) => {
-    const t = await _leTorneio(tx, ref, tId);
+    const t = await _leTorneio(tx, ref, tId, null, true);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) {
       throw _drawFail('permission-denied', 'Só a organização decide sobre a chave.', { tId, uid });
     }
+    const names = t._canonicalLateSource ? await _preloadDrawNames(t, tx) : null;
+    const decide = () => {
     const antes = _antesDoMotor(t);
     /* ⛔⛔ TODA A REGRA MORA NO MOTOR (`decidirTardioNaFolga`), não aqui. Enquanto ela morava dentro
      * desta callable, a única forma de conferi-la era LER o texto do arquivo — e teste que lê texto
@@ -5985,7 +6252,14 @@ exports.resolvePendingLateBye = onCall(async (request) => {
     if (!out.ok) throw _drawFail(out.codigo, out.mensagem, { tId, linha });
     if (!out.mudou) return { ok: true, changed: false, motivo: out.motivo || null };
     const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
+    const promoted = _promoteCanonicalLateEntries(tx, ref, antes, t, agoraIso);
+    if (t._canonicalLateSource && acao === 'confirmar' && out.aplicados > 0 && !promoted.length) {
+      throw new HttpsError('failed-precondition', 'Decisão tardia sem inscrição canônica colocada; nenhuma alteração foi gravada.');
+    }
+    if (b.clean && t._canonicalLateSource) Object.assign(b.clean, _canonicalLateResponseRoster(t, promoted));
     return { ok: true, changed: true, acao: out.acao, aplicados: out.aplicados || 0, tournament: b.clean };
+    };
+    return names ? drawWindow._spRodaComNomes(names.nameByUid, names.profByUid, decide) : decide();
   });
 });
 
@@ -7270,10 +7544,9 @@ exports.closePhaseLeagueRound = onCall(async (request) => {
 // continua querendo o e-mail —, então o e-mail fica FORA do gate de notifyPlatform.
 // Nível `fundamental`: é o mesmo peso de um sorteio, chega até a quem só quer o essencial.
 // A mensagem é PERSONALIZADA: cada um lê "você" e os nomes dos outros três.
-async function _avisarGrupoFormado(tId, tName, novos) {
+async function _avisarGrupoFormado(tId, tName, novos, profiles) {
   if (!Array.isArray(novos) || !novos.length) return 0;
-  const prof = (drawWindow && typeof drawWindow._spMapaDePerfis === 'function')
-    ? drawWindow._spMapaDePerfis() : ((drawWindow && drawWindow._profByUid) || {});
+  const prof = profiles || {};
   const nomeDe = (uid, fallback) => {
     const d = prof[uid];
     return (d && (d.displayName || d.name)) || fallback || '';
@@ -7337,11 +7610,24 @@ async function _formarGruposDaEspera(doc) {
   if (t0.status === 'finished' || t0.status === 'closed') return 0;
   const _fila = (Array.isArray(t0.standbyParticipants) ? t0.standbyParticipants.length : 0) +
                 (Array.isArray(t0.waitlist) ? t0.waitlist.length : 0);
-  if (_fila < 4) return 0;   // sem 4 na fila não há grupo possível — nem carrega perfil
+  const canonical = !!t0.canonicalRegistrationMigration?.fingerprint;
+  if (!canonical && _fila < 4) return 0;   // em canônico, a espera mora nos registrations
+  if (canonical) {
+    // O agendador varre todos os torneios a cada 30 minutos. Uma consulta curta
+    // evita remontar todos os jogos/grupos de torneios sem quatro pessoas à
+    // espera; a transação abaixo relê a fonte inteira antes de decidir.
+    try {
+      const waiting = await doc.ref.collection('registrations').where('status', '==', 'waitlisted').limit(4).get();
+      if (waiting.size < 4) return 0;
+    } catch (error) {
+      console.error(`[espera→grupo] ${doc.id}: consulta canônica falhou:`, error && error.message);
+      return 0;
+    }
+  }
 
   // nome VIVO e gênero por uid ANTES do motor: a entrada da espera é strippada (só uid),
   // e sem isto o gênero não resolve e a proporção travada recusa todo mundo.
-  await _preloadDrawNames(t0);
+  const preloaded = !canonical ? await _preloadDrawNames(t0) : null;
   try {
     /* ⛔ INSTANTE ESTÁVEL DA OPERAÇÃO — calculado UMA VEZ, FORA do callback.
      * O Firestore RE-EXECUTA o callback no retry; um `new Date()` lá dentro faria
@@ -7352,8 +7638,10 @@ async function _formarGruposDaEspera(doc) {
       // grupos e jogos vivem nas subcoleções: montar aqui é obrigatório antes de deixar o
       // motor alterar a fila, senão a gravação posterior não tem como comparar/escrever
       // as partes canônicas. É o mesmo caminho de drawRound/integrateLateEntries.
-      const t = await _leTorneio(tx, doc.ref, doc.id);
+      const t = await _leTorneio(tx, doc.ref, doc.id, null, canonical);
       if (!t) return { changed: false };
+      const names = canonical ? await _preloadDrawNames(t, tx) : null;
+      const integrate = () => {
       const _tAntes = _antesDoMotor(t);
       _hidrataGrupos(t, 'formarGruposDaEspera', doc.id);
       _enrichParticipantsFromProfiles(t);
@@ -7372,11 +7660,18 @@ async function _formarGruposDaEspera(doc) {
       // cada subcoleção. Nunca usar `tx.set` direto: ele recolocaria os pesados no doc ou
       // descartaria mudanças de grupos/jogos ao formar a espera.
       _gravaTorneio(tx, doc.ref, t, _tAntes, { agoraIso: _agoraIsoTx });
-      return { changed: true, monarch: r.monarch || 0, wlClean: r.wlClean || 0, novos: novos, nome: t.name || '' };
+      const promoted = _promoteCanonicalLateEntries(tx, doc.ref, _tAntes, t, _agoraIsoTx);
+      if (canonical && r.monarch > 0 && t._canonicalLateSource?.eligible.length && !promoted.length) {
+        throw new HttpsError('failed-precondition', 'Grupo tardio sem inscrição canônica comprovada.');
+      }
+      return { changed: true, monarch: r.monarch || 0, wlClean: r.wlClean || 0,
+        novos: novos, nome: t.name || '', noticeProfiles: (names || preloaded || {}).profByUid || {} };
+      };
+      return names ? drawWindow._spRodaComNomes(names.nameByUid, names.profByUid, integrate) : integrate();
     });
     if (res.changed) {
       console.log(`[espera→grupo] ${doc.id}: ${res.monarch} grupo(s) formado(s) da lista de espera`);
-      await _avisarGrupoFormado(doc.id, res.nome, res.novos || []);
+      await _avisarGrupoFormado(doc.id, res.nome, res.novos || [], res.noticeProfiles);
       return res.monarch || 0;
     }
   } catch (e) {

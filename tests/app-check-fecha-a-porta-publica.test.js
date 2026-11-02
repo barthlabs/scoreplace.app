@@ -12,7 +12,7 @@
  *   ② o cliente ATIVANDO com a chave de site e MANDANDO o token em cada chamada — este transporte é
  *      montado à mão, não é o SDK de Functions, então o cabeçalho não vai sozinho. Foi exatamente o
  *      que a revisão apontou: o cliente mandava só `Content-Type` e, havendo sessão, `Authorization`;
- *   ③ o servidor EXIGINDO (`enforceAppCheck`) nas duas portas públicas.
+ *   ③ o servidor EXIGINDO (`enforceAppCheck`) nas duas portas públicas de passkey.
  * ⚠️ Ligar ③ sem ② recusaria TODAS as chamadas, inclusive as legítimas. A ordem importa e por isso as
  * três são conferidas juntas, num arquivo só.
  */
@@ -79,7 +79,10 @@ const bloco = (id) => { const i = fn.indexOf('exports.' + id + ' = onCall'); con
     '③ ⚠️ ' + id + ' NÃO exige — é porta de quem já entrou, e a sessão já prova quem é');
 });
 const quantas = (fn.match(/enforceAppCheck:\s*true/g) || []).length;
-ok(quantas === 2, '③ exatamente DUAS portas exigem App Check hoje (achei ' + quantas + ')');
+const historico = bloco('getTournamentResultHistoryPage');
+ok(/enforceAppCheck:\s*true/.test(historico) && /request\.auth && request\.auth\.uid/.test(historico),
+  '③ a porta de histórico exige App Check E sessão, pois cruza torneios');
+ok(quantas === 3, '③ exatamente TRÊS portas exigem App Check hoje (achei ' + quantas + ')');
 
 console.log('\n' + (fail ? '✗ ' + fail + ' falha(s), ' : '✅ ') + pass + ' verificações');
 process.exit(fail ? 1 : 0);

@@ -1,5 +1,5 @@
-/* Regressão real da callable publicada: sandbox e torneio com o MESMO ID.
- * Rodar pelo emulador de Functions deste codebase, não pelo da raiz. */
+/* Regressão dos comandos de sandbox do pacote autodraw. A leitura canônica
+ * pertence ao pacote principal e é testada no emulador da raiz. */
 'use strict';
 const assert = require('node:assert/strict');
 const admin = require('firebase-admin');
@@ -7,7 +7,7 @@ const fetch = require('node-fetch');
 admin.initializeApp({ projectId: 'demo-scoreplace' });
 const db = admin.firestore();
 const base = 'http://127.0.0.1:' + (process.env.FUNCTIONS_EMULATOR_PORT || '5001') +
-  '/demo-scoreplace/us-central1/getCanonicalTournamentRoster';
+  '/demo-scoreplace/us-central1/';
 const authUrl = 'http://' + (process.env.FIREBASE_AUTH_EMULATOR_HOST || '127.0.0.1:9099') +
   '/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=fake-api-key';
 
@@ -20,14 +20,8 @@ async function token(uid) {
   assert.ok(body.idToken, 'Auth emulator deve emitir token');
   return body.idToken;
 }
-async function call(id, sandbox, idToken) {
-  const response = await fetch(base, { method: 'POST',
-    headers: Object.assign({ 'Content-Type': 'application/json' }, idToken ? { Authorization: 'Bearer ' + idToken } : {}),
-    body: JSON.stringify({ data: { tournamentId: id, ...(sandbox === undefined ? {} : { sandbox }) } }) });
-  return { status: response.status, body: await response.json() };
-}
 async function callFn(name, data, idToken) {
-  const url = base.replace('/getCanonicalTournamentRoster', '/' + name);
+  const url = base + name;
   const response = await fetch(url, { method:'POST',
     headers: { 'Content-Type':'application/json', Authorization:'Bearer ' + idToken },
     body: JSON.stringify({ data }) });
@@ -55,20 +49,6 @@ const categories = [{ id: 'light', label: 'Light' }];
     canonicalRegistrationMigration: receipt, categoryDefinitions: categories, participants: [] });
   await real.collection('registrations').doc('real').set(registration('real', 'Pessoa real'));
   await sb.collection('registrations').doc('copy').set(registration('copy', 'Pessoa da cópia'));
-
-  const own = await call(id, true, owner);
-  assert.equal(own.status, 200, JSON.stringify(own.body));
-  assert.equal(own.body.result.registrationCount, 1);
-  assert.equal(own.body.result.participants[0].name, 'Pessoa da cópia');
-  const normal = await call(id, undefined, member); // cliente antigo, sem flag
-  assert.equal(normal.status, 200, JSON.stringify(normal.body));
-  assert.equal(normal.body.result.participants[0].name, 'Pessoa real');
-  assert.notEqual((await call(id, true, member)).status, 200, 'memberUids copiado não autoriza sandbox');
-  assert.notEqual((await call(id, false, stranger)).status, 200, 'estranho não lê torneio normal');
-  const absent = await call('sandbox-inexistente', true, owner);
-  const denied = await call(id, true, member);
-  assert.equal(absent.body.error.status, denied.body.error.status, 'inexistente e não dono são indistinguíveis');
-  assert.notEqual((await call(id, true, null)).status, 200, 'sem autenticação é negado');
 
   // Mutação real do sandbox no emulador: o doc original é comparado byte a
   // byte. Isto pega a antiga rota que buscava `tournaments/{sb_id}`.
@@ -107,15 +87,5 @@ const categories = [{ id: 'light', label: 'Light' }];
     'upload autorizado gravou o objeto no emulador de Storage');
   assert.equal(JSON.stringify((await real.get()).data()), realBefore, 'upload autorizado não altera original');
 
-  for (const state of ['creating', 'failed']) {
-    await sb.update({ sbState: state });
-    assert.notEqual((await call(id, true, owner)).status, 200, state + ' é negado');
-  }
-  await sb.update({ sbState: 'ready', isSandbox: false });
-  assert.notEqual((await call(id, true, owner)).status, 200, 'documento sem carimbo é negado');
-  await sb.update({ isSandbox: admin.firestore.FieldValue.delete() });
-  assert.notEqual((await call(id, true, owner)).status, 200, 'carimbo ausente é negado');
-  await sb.update({ isSandbox: true, canonicalRegistrationMigration: { fingerprint: 'snapshot-fixture', registrationCount: 2 } });
-  assert.notEqual((await call(id, true, owner)).status, 200, 'recibo divergente falha fechado');
-  console.log('✓ callable canônica isola sandbox, recibo, dono e torneio normal');
+  console.log('✓ comandos autodraw mantêm o sandbox isolado do torneio original');
 })().then(() => process.exit(0), (error) => { console.error(error); process.exit(1); });

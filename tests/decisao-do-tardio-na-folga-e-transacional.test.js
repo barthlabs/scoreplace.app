@@ -44,7 +44,7 @@ ok(iTx > 0, '① ela roda em transação');
 const dentro = iTx > 0 ? bloco.slice(iTx) : '';
 /* a CASCA: o que só a callable pode fazer */
 [
-  ['_leTorneio(tx, ref, tId)', '① ⛔⛔ RELÊ o torneio pelo caminho canônico — decidir sobre o retrato da aba é decidir sobre o que já mudou'],
+  ['_leTorneio(tx, ref, tId, null, true)', '① ⛔⛔ RELÊ o torneio pelo caminho canônico e projeta a espera transacional'],
   ['_isTournamentAdmin(t, uid)', '① ⛔⛔ exige ORGANIZAÇÃO: nem o inscrito nem terceiro redesenham a chave de ninguém'],
   ['_gravaTorneio(tx, ref, t, antes', '① e grava pela porta canônica']
 ].forEach(function (par) {

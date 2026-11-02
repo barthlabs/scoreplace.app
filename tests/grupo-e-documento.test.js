@@ -79,6 +79,33 @@ const semNome = S.dividir({ rounds: [{ monarchGroups: [{ players: ['A'], players
 ok('⭐ grupo sem nome se identifica pelos UIDS de quem joga nele',
   semNome.grupos[0]._chave && !/^gi/.test(semNome.grupos[0]._chave));
 
+// Um grupo físico ilegível não pode desaparecer da classificação sem acusar falha.
+const clonar = (x) => JSON.parse(JSON.stringify(x));
+const grupoInvalido = (nome, alterar) => {
+  const partes = clonar(p);
+  alterar(partes);
+  ok('⛔ grupo físico ' + nome + ' recusa remontagem parcial', S.remontar(partes) === null);
+};
+ok('⭐ parte grupos ausente continua legítima',
+  S.remontar({ config: clonar(p.config), matches: clonar(p.matches) }) !== null);
+grupoInvalido('não array', (partes) => { partes.grupos = { item: partes.grupos[0] }; });
+grupoInvalido('sem _loc', (partes) => { delete partes.grupos[0]._loc; });
+grupoInvalido('com tipo errado', (partes) => { partes.grupos[0]._loc.tipo = 'matches'; });
+grupoInvalido('com índice fracionário', (partes) => { partes.grupos[0]._loc.gi = 0.5; });
+grupoInvalido('com índice negativo', (partes) => { partes.grupos[0]._loc.ri = -1; });
+grupoInvalido('com rodada ausente', (partes) => { partes.grupos[0]._loc.ri = 99; });
+grupoInvalido('com grupo nulo', (partes) => { partes.grupos[0].grupo = null; });
+grupoInvalido('com grupo em array', (partes) => { partes.grupos[0].grupo = []; });
+grupoInvalido('com posição repetida', (partes) => {
+  partes.grupos[1]._loc = clonar(partes.grupos[0]._loc);
+});
+grupoInvalido('com lacuna entre posições', (partes) => {
+  partes.grupos[1]._loc.gi = 2;
+});
+grupoInvalido('com slot ocupado na raiz', (partes) => {
+  partes.config.rounds[0].monarchGroups[0] = { name: 'inline' };
+});
+
 // ── ③ pedir só o que o marcador diz ──────────────────────────────────────────
 /* ⛔ ERA AQUI QUE EU IA REPETIR O ERRO: `dividir` extraía TUDO, e o Confra está dividido só
  * em matches/participants/opponentHistory. A próxima gravação teria mandado

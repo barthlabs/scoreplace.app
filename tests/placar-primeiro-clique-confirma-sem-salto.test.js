@@ -9,6 +9,7 @@ const source = fs.readFileSync(path.join(__dirname, '../js/store.js'), 'utf8');
 const start = source.indexOf('  async commitResultTx(tournamentId, matchId, payload, logMessage) {');
 assert(start >= 0);
 const method = R.ateOFim(source, start);
+const apply = R.ateOFim(source, source.indexOf('  _applyPhysicalResultOnMatch: function'));
 const match = { id: 'M1', p1: 'A', p2: 'B' };
 const tournament = { id: 'T1', status: 'active', matches: [match] };
 const button = { textContent: 'Confirmar', disabled: false, isConnected: true };
@@ -24,7 +25,7 @@ const context = {
     _callApplyMatchResult() { calls++; return new Promise(resolve => { resolveServer = resolve; }); },
     FirestoreDB: {
       async loadTournamentById() { return { id: 'T1', status: 'active' }; },
-      async loadMatchResult() { resultReads++; return { winner: 'A', scoreP1: 6, scoreP2: 4 }; }
+      async loadPhysicalMatchResult() { resultReads++; return { winner: 'A', scoreP1: 6, scoreP2: 4 }; }
     },
     _findMatch(t, id) { return t.matches.find(m => m.id === id); },
     _refreshConfirmedMatchCard(t, tid, mid) {
@@ -44,10 +45,11 @@ const context = {
   showNotification() {}
 };
 vm.createContext(context);
-vm.runInContext('this.API = {' + method + '};', context);
+vm.runInContext('this.API = {' + method + ',' + apply + '};', context);
 const store = context.API;
 store.tournaments = [tournament];
 store._saveToCache = () => {};
+store._matchResultFields = ['winner', 'scoreP1', 'scoreP2'];
 
 (async () => {
   const click = store.commitResultTx('T1', 'M1', { s1: 6, s2: 4 }, 'Resultado');

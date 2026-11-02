@@ -21,6 +21,7 @@
  * ([[feedback_congelador_cego_procurava_o_jogo_no_escopo_errado]]).
  */
 const path = require('path');
+const fs = require('fs');
 const C = require(path.join(__dirname, '..', 'functions', 'wo-split-reconcile-core.js'));
 
 let pass = 0, fail = 0;
@@ -66,6 +67,18 @@ ok(j1.team1Uids[1] === null, '   e o uid vira null (vaga não é pessoa)');
 ok(p.desativar.length === 1 && p.desativar[0].item.ligaActive === false, 'a ausente é desativada — senão volta a ser sorteada');
 ok(p.desativar[0].item.woDeactivatedAt === woNathalya.at, '   com o carimbo do W.O.');
 ok(p.novosInscritos.length === 0, '⛔ "Jogador X" NÃO entra no elenco — é vaga, não pessoa');
+const comReplay = jogosH2.map((m) => ({ ...m, playerUids: ['atual'],
+  jogo: { ...m.jogo, replay: { points: [{ w: 1 }] }, pendingResult: { proposed: true } } }));
+const patchDeReplay = C.planejar(antes, depois, inscritosH2, comReplay).patchesDeJogo[0];
+ok(Object.keys(patchDeReplay.camposAlterados).every((campo) =>
+  ['jogo.p1', 'jogo.p2', 'jogo.team1', 'jogo.team2',
+    'jogo.team1Uids', 'jogo.team2Uids', 'playerUids'].includes(campo)) &&
+  Object.keys(patchDeReplay.camposAlterados).some((campo) => campo.startsWith('jogo.')),
+  '⛔ patch de W.O. contém só os campos alterados do slot e índice UID já presente');
+ok(!Object.hasOwn(patchDeReplay.camposAlterados, 'jogo') &&
+  !Object.hasOwn(patchDeReplay.camposAlterados, 'jogo.replay') &&
+  !Object.hasOwn(patchDeReplay.camposAlterados, 'jogo.pendingResult'),
+  '⛔ o replay e a proposta não entram na escrita do W.O.');
 
 console.log('\n② substituto que é PESSOA entra no elenco\n');
 const woErika = { id: 'wo-C-1', status: 'active', roundIndex: 0, groupName: 'R1 Grupo C',
@@ -103,6 +116,20 @@ const p4 = C.planejar(comVelho, comVelhoENovo, inscritosH2.concat([{ _id: 'utqlM
 ok(!p4.desativar.some((d) => d.item.uid === 'tqlM'),
   '⭐ o W.O. ANTIGO não é reprocessado — no Confra, um daqueles ausentes tinha sido REATIVADO à mão pelo dono');
 ok(p4.desativar.some((d) => d.item.uid === 'ufIkpAo880X3LRWSxaOgXZS0Aph2'), '   e o novo é, normalmente');
+
+console.log('\n⑤ guarda estática do batch de W.O.\n');
+const functionSource = fs.readFileSync(path.join(__dirname, '..', 'functions', 'index.js'), 'utf8');
+const batchStart = functionSource.indexOf('plano.patchesDeJogo.forEach((p) => {');
+const batchEnd = functionSource.indexOf('await lote.commit();', batchStart);
+const batchSource = batchStart >= 0 && batchEnd > batchStart ? functionSource.slice(batchStart, batchEnd) : '';
+ok(/const _rootPatch = \{\};[\s\S]*if \(plano\.patchesDeJogo\.length\) \{[\s\S]*_rootPatch\._phaseReadCertificate = _FV\.delete\(\)/.test(batchSource),
+  'patch de jogo invalida certificado com a sentinela disponível no módulo, mesmo sem novo inscrito');
+ok((batchSource.match(/lote\.update\(_ref2,/g) || []).length === 1 &&
+   /if \(Object\.keys\(_rootPatch\)\.length\) lote\.update\(_ref2, _rootPatch\)/.test(batchSource),
+  'o batch tem no máximo um update da raiz, fora do condicional de novos inscritos');
+ok(/lote\.update\(_colJog\.doc\(p\._id\), p\.camposAlterados\)/.test(batchSource) &&
+  !/lote\.set\(_colJog\.doc\(p\._id\)/.test(batchSource),
+  '⛔ o batch atualiza caminhos do slot, sem recriar jogo removido nem sobrescrever o mapa');
 
 console.log('\n' + (fail ? '✗ ' + fail + ' falha(s) de ' + (pass + fail) : '✅ ' + pass + '/' + pass + ' ok') + '\n');
 process.exit(fail ? 1 : 0);

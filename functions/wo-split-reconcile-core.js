@@ -148,13 +148,27 @@ function planejar(antes, depois, inscritos, jogos) {
       const novo = trocarNoJogo(g, w.absentName, w.subName, w.subUid);
       if (!novo) return;
       if (temPlacar(g)) { recusados.push({ id: m._id, label: g.label, motivo: 'placar lançado' }); return; }
-      const patch = { _id: m._id, _loc: m._loc, _chave: m._chave, jogo: novo, label: g.label };
+      const camposDoSlot = ['p1', 'p2', 'team1', 'team2', 'team1Uids', 'team2Uids'];
+      const permitidos = new Set(camposDoSlot);
+      for (const campo of new Set(Object.keys(g).concat(Object.keys(novo)))) {
+        if (!permitidos.has(campo) && JSON.stringify(g[campo]) !== JSON.stringify(novo[campo])) {
+          throw new Error('W.O. tentou alterar campo fora do slot: ' + campo);
+        }
+      }
+      const camposAlterados = {};
+      camposDoSlot.forEach((campo) => {
+        if (JSON.stringify(g[campo]) !== JSON.stringify(novo[campo])) {
+          camposAlterados['jogo.' + campo] = novo[campo];
+        }
+      });
+      const patch = { _id: m._id, _loc: m._loc, _chave: m._chave,
+        jogo: novo, camposAlterados, label: g.label };
       /* `playerUids` é índice denormalizado e nem todo jogo tem — escrever onde não existia
        * é inventar campo. */
       if (Array.isArray(m.playerUids)) {
         const uids = [];
         (novo.team1Uids || []).concat(novo.team2Uids || []).forEach((u) => { if (u) uids.push(u); });
-        patch.playerUids = uids;
+        patch.camposAlterados.playerUids = uids;
       }
       patchesDeJogo.push(patch);
     });

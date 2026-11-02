@@ -192,5 +192,36 @@ ok(typeof W._monarchGlobalJogoNum === 'undefined',
     '[AGENDA] scheduledGameNumber prevalece sobre a ordem incidental do array');
 })();
 
+// Ouro e Prata dividem a categoria: cada terceiro antecede a final da SUA linha.
+// A inserção fora de ordem reproduz o defeito observado na Confra sem dados reais.
+(function () {
+  const match = (id, bracket, third) => ({ id, category: 'mesma categoria', phaseIndex: 1,
+    bracket, round: 6, p1: 'A', p2: 'B', isThirdPlace: third });
+  const t = { matches: [
+    match('gold-third', 'gold', true), match('silver-third', 'silver', true),
+    match('gold-final', 'gold', false), match('silver-final', 'silver', false)
+  ] };
+  W._assignGlobalGameNumbers(t);
+  const n = Object.fromEntries(t.matches.map(m => [m.id, m._gameNum]));
+  ok(n['gold-third'] === 1 && n['gold-final'] === 2 &&
+    n['silver-third'] === 3 && n['silver-final'] === 4,
+  '[CONFRA] terceiro e final consecutivos por linha, com final por último: ' + JSON.stringify(n));
+  ok(new Set(Object.values(n)).size === 4,
+    '[CONFRA] quatro jogos reais mantêm números únicos');
+})();
+
+// Terceiro de linha cuja final ainda não nasceu conserva a posição histórica.
+(function () {
+  const t = { matches: [
+    { id: 'gold-third-pending', category: 'same', phaseIndex: 1, bracket: 'gold',
+      round: 6, isThirdPlace: true, p1: 'A', p2: 'B' },
+    { id: 'silver-final', category: 'same', phaseIndex: 1, bracket: 'silver',
+      round: 6, p1: 'C', p2: 'D' }
+  ] };
+  W._assignGlobalGameNumbers(t);
+  ok(t.matches[0]._gameNum === 1 && t.matches[1]._gameNum === 2,
+    '[SEM FINAL DA LINHA] terceiro não vai depois da final de outra linha');
+})();
+
 console.log('\n' + (fail === 0 ? '✅' : '❌') + ' game-numbering: ' + pass + ' ok, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);

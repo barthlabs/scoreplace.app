@@ -96,6 +96,32 @@
   function _arr(x) { return Array.isArray(x) ? x : []; }
   function _clone(x) { return x === undefined ? undefined : JSON.parse(JSON.stringify(x)); }
 
+  /* Índice de leitura, não fonte de verdade. O lugar estrutural fixa a fase dos
+   * rounds e phaseRounds; um tag explícito conflitante deixa o registro sem índice.
+   * matches[] não tem lugar de fase: exige tag numérica explícita. */
+  function _faseIndexavel(m, loc) {
+    if (!m || typeof m !== 'object' || !loc) return null;
+    var tag = m.phaseIndex;
+    var ausente = !Object.prototype.hasOwnProperty.call(m, 'phaseIndex') || tag === undefined;
+    if (loc.tipo === 'matches') {
+      return Number.isSafeInteger(tag) && tag >= 0 ? tag : null;
+    }
+    var estrutural = null;
+    if (loc.tipo === 'rounds') estrutural = 0;
+    else if (loc.tipo === 'phaseRounds' && /^(0|[1-9]\d*)$/.test(loc.fase)) {
+      var n = Number(loc.fase);
+      if (Number.isSafeInteger(n)) estrutural = n;
+    }
+    if (estrutural === null) return null;
+    return ausente || tag === estrutural ? estrutural : null;
+  }
+
+  function _indexarFase(reg, m, loc) {
+    var fase = _faseIndexavel(m, loc);
+    if (fase !== null) reg._phaseIndex = fase;
+    return reg;
+  }
+
   /* ── CHAVE DURÁVEL DO EVENTO DE HISTÓRICO ──────────────────────────────────────
    * O histórico é um LOG: só cresce, e cada linha é imutável depois de escrita.
    * Mesmo assim ele era espelhado por POSIÇÃO (`'h' + _idx`), e posição é justamente
@@ -194,6 +220,8 @@
     if (m && m.id != null && String(m.id) !== '') return String(m.id);
     if (loc.tipo === 'rounds') return 'r' + loc.ri + '-' + loc.mi;
     if (loc.tipo === 'phaseRounds') return 'p' + loc.fase + '-' + loc.ri + '-' + loc.mi;
+    if (loc.tipo === 'groupRounds') return 'g' + loc.gi + '-' + loc.ri + '-' + loc.mi;
+    if (loc.tipo === 'thirdPlace') return 'third-place';
     return 'm' + loc.mi;
   }
 
@@ -346,22 +374,31 @@
    * `monarchGroups: []` pro documento e apagado os 35 grupos — sem erro e sem log.
    * ⭐ Com `apenas`, o que não foi pedido NUNCA sai do config: não há o que devolver, logo
    * não há o que esquecer. Quem chama sem lista (o espelho) segue querendo tudo. */
-  function dividir(t, apenas) {
+  function dividir(t, apenas, opcoes) {
     if (!t || typeof t !== 'object') return null;
     var _lista = Array.isArray(apenas) ? apenas : null;
     var _quer = function (nome) { return !_lista || _lista.indexOf(nome) !== -1; };
     var config = _clone(t);
     var matches = [], grupos = [];
+    var extrairInline = !!(t._inlineGamesExternalized === true ||
+      (opcoes && opcoes.migracaoAdministrativa === true));
+    var chavesJogos = Object.create(null);
+    function adicionarJogo(m, loc) {
+      var chave = chaveDoJogo(m, loc);
+      if (extrairInline && chavesJogos[chave]) throw new Error('[split] ID de jogo repetido');
+      chavesJogos[chave] = true;
+      var reg = _indexarFase({ _chave: chave, _loc: loc, jogo: _clone(m) }, m, loc);
+      var uids = _uidsDoJogo(t, m);
+      if (uids) reg.playerUids = uids;
+      matches.push(reg);
+    }
 
     if (_quer('matches')) // ── 1. jogos de t.rounds[].matches ────────────────────────────────────────
     _arr(config.rounds).forEach(function (r, ri) {
       if (!r || typeof r !== 'object') return;
       _arr(r.matches).forEach(function (m, mi) {
         var loc = { tipo: 'rounds', ri: ri, mi: mi };
-        var _pu = _uidsDoJogo(t, m);
-        var _reg = { _chave: chaveDoJogo(m, loc), _loc: loc, jogo: _clone(m) };
-        if (_pu) _reg.playerUids = _pu;
-        matches.push(_reg);
+        adicionarJogo(m, loc);
       });
       // ⛔ o array fica VAZIO, não some: a rodada tem outros campos (format, status,
       // round, monarchGroups) e a AUSÊNCIA de `matches` não é o mesmo que vazio.
@@ -385,10 +422,7 @@
     // ── 2. jogos de t.matches[] ───────────────────────────────────────────────
     if (_quer('matches')) _arr(config.matches).forEach(function (m, mi) {
       var loc = { tipo: 'matches', mi: mi };
-      var _pu2 = _uidsDoJogo(t, m);
-      var _reg2 = { _chave: chaveDoJogo(m, loc), _loc: loc, jogo: _clone(m) };
-      if (_pu2) _reg2.playerUids = _pu2;
-      matches.push(_reg2);
+      adicionarJogo(m, loc);
     });
     if (_quer('matches') && Array.isArray(config.matches)) config.matches = [];
 
@@ -401,14 +435,27 @@
           if (!r || typeof r !== 'object') return;
           _arr(r.matches).forEach(function (m, mi) {
             var loc = { tipo: 'phaseRounds', fase: String(fase), ri: ri, mi: mi };
-            var _pu = _uidsDoJogo(t, m);
-        var _reg = { _chave: chaveDoJogo(m, loc), _loc: loc, jogo: _clone(m) };
-        if (_pu) _reg.playerUids = _pu;
-        matches.push(_reg);
+            adicionarJogo(m, loc);
           });
           if (Array.isArray(r.matches)) r.matches = [];
         });
       });
+    }
+
+    // Só o lote administrativo ou uma raiz já migrada retira esses jogos do pai.
+    if (_quer('matches') && extrairInline) _arr(config.groups).forEach(function (g, gi) {
+      if (!g || !Array.isArray(g.rounds)) return;
+      g.rounds.forEach(function (r, ri) {
+        if (!r || !Array.isArray(r.matches)) return;
+        r.matches.forEach(function (m, mi) {
+          adicionarJogo(m, { tipo: 'groupRounds', gi: gi, ri: ri, mi: mi });
+        });
+        r.matches = [];
+      });
+    });
+    if (_quer('matches') && extrairInline && config.thirdPlaceMatch) {
+      adicionarJogo(config.thirdPlaceMatch, { tipo: 'thirdPlace' });
+      delete config.thirdPlaceMatch;
     }
 
     // ── 4. inscritos e histórico ──────────────────────────────────────────────
@@ -444,17 +491,45 @@
     // ⛔ ORDEM IMPORTA: o índice `mi` é a posição no array original. Ordenar por ele
     // devolve a ordem exata; sem isso, dois jogos trocados já quebram a igualdade —
     // e, pior, mudariam a ordem visível na tela.
-    var porTipo = { rounds: [], matches: [], phaseRounds: [] };
-    _arr(partes.matches).forEach(function (m) {
-      var tipo = (m && m._loc && m._loc.tipo) || 'matches';
-      (porTipo[tipo] || porTipo.matches).push(m);
+    var porTipo = { rounds: [], matches: [], phaseRounds: [], groupRounds: [], thirdPlace: [] };
+    var vistos = Object.create(null), naRaiz = Object.create(null), invalido = false;
+    function marcarJogoDaRaiz(jogo) {
+      if (jogo && jogo.id != null && String(jogo.id) !== '') naRaiz[String(jogo.id)] = true;
+    }
+    _arr(t.matches).forEach(marcarJogoDaRaiz);
+    _arr(t.rounds).forEach(function (r) { _arr(r && r.matches).forEach(marcarJogoDaRaiz); });
+    if (t.phaseRounds && typeof t.phaseRounds === 'object') Object.keys(t.phaseRounds).forEach(function (fase) {
+      _arr(t.phaseRounds[fase] && t.phaseRounds[fase].rounds).forEach(function (r) {
+        _arr(r && r.matches).forEach(marcarJogoDaRaiz);
+      });
     });
+    _arr(t.groups).forEach(function (g) {
+      _arr(g && g.matches).forEach(marcarJogoDaRaiz);
+      _arr(g && g.rounds).forEach(function (r) { _arr(r && r.matches).forEach(marcarJogoDaRaiz); });
+    });
+    marcarJogoDaRaiz(t.thirdPlaceMatch);
+    _arr(partes.matches).forEach(function (m) {
+      if (!m || !m._loc || !Object.prototype.hasOwnProperty.call(porTipo, m._loc.tipo) ||
+          !m.jogo || typeof m.jogo !== 'object') { invalido = true; return; }
+      var chave = String(m._chave || m.jogo.id || '');
+      if (!chave || (t._inlineGamesExternalized === true &&
+          (vistos[chave] || naRaiz[chave]))) {
+        invalido = true; return;
+      }
+      vistos[chave] = true;
+      porTipo[m._loc.tipo].push(m);
+    });
+    if (invalido) return null;
 
     porTipo.rounds
       .slice().sort(function (a, b) { return (a._loc.ri - b._loc.ri) || (a._loc.mi - b._loc.mi); })
       .forEach(function (m) {
         var r = _arr(t.rounds)[m._loc.ri];
-        if (!r) return;
+        if (!r) { if (t._inlineGamesExternalized === true) invalido = true; return; }
+        if (!Number.isSafeInteger(m._loc.mi) || m._loc.mi < 0 ||
+            (t._inlineGamesExternalized === true && Array.isArray(r.matches) && r.matches[m._loc.mi] != null)) {
+          invalido = true; return;
+        }
         if (!Array.isArray(r.matches)) r.matches = [];
         r.matches[m._loc.mi] = _clone(m.jogo);
       });
@@ -462,6 +537,10 @@
     porTipo.matches
       .slice().sort(function (a, b) { return a._loc.mi - b._loc.mi; })
       .forEach(function (m) {
+        if (!Number.isSafeInteger(m._loc.mi) || m._loc.mi < 0 ||
+            (t._inlineGamesExternalized === true && Array.isArray(t.matches) && t.matches[m._loc.mi] != null)) {
+          invalido = true; return;
+        }
         if (!Array.isArray(t.matches)) t.matches = [];
         t.matches[m._loc.mi] = _clone(m.jogo);
       });
@@ -474,24 +553,70 @@
       .forEach(function (m) {
         var ph = t.phaseRounds && t.phaseRounds[m._loc.fase];
         var r = ph && _arr(ph.rounds)[m._loc.ri];
-        if (!r) return;
+        if (!r) { if (t._inlineGamesExternalized === true) invalido = true; return; }
+        if (!Number.isSafeInteger(m._loc.mi) || m._loc.mi < 0 ||
+            (t._inlineGamesExternalized === true && Array.isArray(r.matches) && r.matches[m._loc.mi] != null)) {
+          invalido = true; return;
+        }
         if (!Array.isArray(r.matches)) r.matches = [];
         r.matches[m._loc.mi] = _clone(m.jogo);
       });
+
+    porTipo.groupRounds
+      .slice().sort(function (a, b) {
+        return (a._loc.ri - b._loc.ri) || (a._loc.gi - b._loc.gi) || (a._loc.mi - b._loc.mi);
+      })
+      .forEach(function (m) {
+        var g = _arr(t.groups)[m._loc.gi];
+        var r = g && _arr(g.rounds)[m._loc.ri];
+        if (!r || !Number.isSafeInteger(m._loc.mi) || m._loc.mi < 0 ||
+            (Array.isArray(r.matches) && r.matches[m._loc.mi] != null)) { invalido = true; return; }
+        if (!Array.isArray(r.matches)) r.matches = [];
+        r.matches[m._loc.mi] = _clone(m.jogo);
+      });
+
+    porTipo.thirdPlace.forEach(function (m) {
+      if (t.thirdPlaceMatch || porTipo.thirdPlace.length !== 1) { invalido = true; return; }
+      t.thirdPlaceMatch = _clone(m.jogo);
+    });
+    if (invalido) return null;
 
     /* ── GRUPOS DE VOLTA ────────────────────────────────────────────────────────
      * ⛔ Pela POSIÇÃO gravada em `_loc`, nunca pela ordem em que os documentos chegaram: o
      * Firestore entrega por id, e id aqui é hash. Sem `_loc.gi` o Grupo Q apareceria onde
      * estava o Grupo A. Chave diz QUEM, `_loc` diz ONDE. */
+    if (partes.grupos !== undefined && !Array.isArray(partes.grupos)) return null;
+    var rodadasComGrupos = [];
     _arr(partes.grupos)
-      .filter(function (x) { return x && x._loc && x._loc.tipo === 'grupos'; })
+      .filter(function (x) {
+        var loc = x && x._loc;
+        if (!loc || loc.tipo !== 'grupos' ||
+            !Number.isSafeInteger(loc.ri) || loc.ri < 0 ||
+            !Number.isSafeInteger(loc.gi) || loc.gi < 0 ||
+            !x.grupo || typeof x.grupo !== 'object' || Array.isArray(x.grupo)) {
+          invalido = true;
+          return false;
+        }
+        return true;
+      })
       .slice().sort(function (x, y) { return (x._loc.ri - y._loc.ri) || (x._loc.gi - y._loc.gi); })
       .forEach(function (x) {
         var r = _arr(t.rounds)[x._loc.ri];
-        if (!r) return;
+        if (!r || (r.monarchGroups != null && !Array.isArray(r.monarchGroups)) ||
+            (Array.isArray(r.monarchGroups) && r.monarchGroups[x._loc.gi] != null)) {
+          invalido = true;
+          return;
+        }
         if (!Array.isArray(r.monarchGroups)) r.monarchGroups = [];
+        if (rodadasComGrupos.indexOf(r) === -1) rodadasComGrupos.push(r);
         r.monarchGroups[x._loc.gi] = _clone(x.grupo);
       });
+    rodadasComGrupos.forEach(function (r) {
+      for (var gi = 0; gi < r.monarchGroups.length; gi++) {
+        if (r.monarchGroups[gi] == null) { invalido = true; break; }
+      }
+    });
+    if (invalido) return null;
 
     PESADOS.forEach(function (campo) {
       var lista = _arr(partes[campo]);
@@ -568,6 +693,12 @@
   }
 
   function jogosQueMudaram(antes, depois) {
+    function semIndiceDeLeitura(reg) {
+      if (!reg || !Object.prototype.hasOwnProperty.call(reg, '_phaseIndex')) return reg;
+      var copia = Object.assign({}, reg);
+      delete copia._phaseIndex;
+      return copia;
+    }
     var idx = {};
     _arr(antes).forEach(function (m) { var k = chaveDoRegistro(m); if (k) idx[k] = m; });
     var mudaram = [], sumiram = [];
@@ -577,7 +708,7 @@
       if (!k) return;
       vistos[k] = 1;
       var b = idx[k];
-      if (!b || !iguais(b, m)) mudaram.push(m);
+      if (!b || !iguais(semIndiceDeLeitura(b), semIndiceDeLeitura(m))) mudaram.push(m);
     });
     Object.keys(idx).forEach(function (k) { if (!vistos[k]) sumiram.push(idx[k]); });
     return { mudaram: mudaram, sumiram: sumiram };
@@ -605,6 +736,13 @@
    */
   function montarDoBanco(config, lerColecao) {
     if (!config) throw new Error('[split] montarDoBanco: sem config');
+    var gruposPrincipal = config._nPartes && config._nPartes.grupos;
+    var gruposAlias = config._nGrupos;
+    if ((gruposPrincipal != null && (!Number.isSafeInteger(gruposPrincipal) || gruposPrincipal < 0)) ||
+        (gruposAlias != null && (!Number.isSafeInteger(gruposAlias) || gruposAlias < 0)) ||
+        (gruposPrincipal != null && gruposAlias != null && gruposPrincipal !== gruposAlias)) {
+      throw new Error('[split] contadores físicos de grupos inválidos ou divergentes');
+    }
     /* ⛔ O marcador `_semPesados` só existe para compatibilidade dos apps nativos antigos.
      * Este é o caminho que recebe um DOCUMENTO de torneio e o recompõe; logo, precisa sempre
      * perguntar ao contrato canônico `partesDe`. Se uma foto antiga do documento perder o
@@ -620,7 +758,8 @@
      * estrutura já externa — nunca decide se matches/elenco/opponentHistory ficam
      * dentro ou fora. [[project_torneio_nasce_dividido]] */
     var _legadoFora = Array.isArray(config._semPesados) ? config._semPesados : [];
-    if (_legadoFora.indexOf('grupos') !== -1 && fora.indexOf('grupos') === -1) fora.push('grupos');
+    if ((_legadoFora.indexOf('grupos') !== -1 || gruposPrincipal > 0 || gruposAlias > 0) &&
+        fora.indexOf('grupos') === -1) fora.push('grupos');
     var partes = { config: config };
     var i = 0;
     function proxima() {
@@ -631,6 +770,12 @@
       }
       var nome = fora[i++];
       return Promise.resolve(lerColecao(colecaoDaParte(nome), nome)).then(function (docs) {
+        if (nome === 'grupos') {
+          var esperado = gruposPrincipal != null ? gruposPrincipal : gruposAlias;
+          if (!Array.isArray(docs) || (esperado != null && docs.length !== esperado)) {
+            throw new Error('[split] contagem física de grupos divergente');
+          }
+        }
         partes[nome] = docs || [];
         return proxima();
       });
@@ -642,7 +787,7 @@
               chaveDoEvento: chaveDoEvento, chaveDoInscrito: chaveDoInscrito,
               chaveDoApontamento: chaveDoApontamento,
               colecaoDaParte: colecaoDaParte, chaveDoGrupo: chaveDoGrupo, montarDoBanco: montarDoBanco,
-              jogosQueMudaram: jogosQueMudaram,
+              jogosQueMudaram: jogosQueMudaram, faseIndexavel: _faseIndexavel,
               PESADOS: PESADOS, PARTES: PARTES, PARTES_CANONICAS: PARTES_CANONICAS,
               partesDe: partesDe, canonico: canonico, iguais: iguais };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

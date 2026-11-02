@@ -28,19 +28,20 @@ const scored = (item) => !!(item && (
   (Array.isArray(item.sets) && item.sets.length > 0) ||
   ['scoreP1', 'scoreP2', 'setsWonP1', 'setsWonP2', 'totalGamesP1', 'totalGamesP2']
     .some(key => positive(item[key])) ||
-  ['pendingResult', 'winner', 'winnerId', 'resultAt', 'wo'].some(key => nonempty(item[key])) ||
+  ['pendingResult', 'winner', 'winnerId', 'resultAt', 'wo', 'woAbsent', 'woAbsentSide', 'score']
+    .some(key => nonempty(item[key])) ||
   item.draw === true
 ));
 const finished = (item) => !!(item && (
   ['endedAt', 'finishedAt', 'completedAt', 'courtEndedAt', 'resultAt', 'winner', 'winnerId']
     .some(key => nonempty(item[key])) || item.draw === true || item.wo === true
 ));
-const started = (game, result) => scored(game) || scored(result) || finished(game) || finished(result);
+const started = (game) => scored(game) || finished(game);
 const onCourt = (game) => !!(game && [
   'calledAt', 'warmupAt', 'startedAt', 'courtCalledAt', 'courtStartedAt',
 ].some(key => nonempty(game[key])) && !finished(game));
 
-function plan(edit, participantDocs, matchDocs, resultDocs) {
+function plan(edit, participantDocs, matchDocs) {
   if (!edit || !edit.source || !edit.partner || !edit.newIdentity) throw new Error('edição incompleta');
   const mirror = slot.findLegacyMirror(participantDocs, edit);
   const oldItem = slot.legacyItem(mirror.data);
@@ -61,9 +62,7 @@ function plan(edit, participantDocs, matchDocs, resultDocs) {
   const participantData = mirror.data.item
     ? { ...mirror.data, _k: newId, item: nextItem }
     : nextItem;
-  const byResult = new Map(resultDocs.map((item) => [item.ref.id, item]));
   const matches = [];
-  const results = [];
   const historicalMatchIds = [];
   const liveMatchIds = [];
   const referenced = new Set();
@@ -79,9 +78,8 @@ function plan(edit, participantDocs, matchDocs, resultDocs) {
       if (!slot.hasIdentity(original, sourceId)) continue;
       if (referenced.has(doc.ref.id)) throw new Error('vaga em dois lados do mesmo jogo');
       referenced.add(doc.ref.id);
-      const resultDoc = byResult.get(doc.ref.id);
-      if (started(game, resultDoc && resultDoc.data)) {
-        if (!finished(game) && !finished(resultDoc && resultDoc.data)) {
+      if (started(game)) {
+        if (!finished(game)) {
           throw new Error('jogo em andamento com placar parcial; corrija ou encerre antes da troca');
         }
         historicalMatchIds.push(doc.ref.id);
@@ -110,16 +108,9 @@ function plan(edit, participantDocs, matchDocs, resultDocs) {
     const playerUids = [...new Set([...(next.team1Uids || []), ...(next.team2Uids || [])])];
     const matchData = data.jogo ? { ...data, jogo: next, playerUids } : { ...next, playerUids };
     matches.push({ ref: doc.ref, data: matchData });
-    const resultDoc = byResult.get(doc.ref.id);
-    if (resultDoc) {
-      results.push({ ref: resultDoc.ref, data: { ...resultDoc.data,
-        p1: next.p1, p2: next.p2, team1Uids: next.team1Uids,
-        team2Uids: next.team2Uids, p1Uid: next.p1Uid || null,
-        p2Uid: next.p2Uid || null, playerUids } });
-    }
   }
   if (!matches.length) throw new Error('não há jogo atual ou futuro para esta substituição');
-  if (matches.length > 100 || 2 * matches.length + 16 > 450) throw new Error('substituição excede limite da transação');
+  if (matches.length > 100) throw new Error('substituição excede limite da transação');
   const sourceId = edit.source.participantKind === 'account'
     ? { uid: edit.source.participantUid } : { manualParticipantId: edit.source.manualParticipantId };
   if (matchDocs.some((doc) => !referenced.has(doc.ref.id) &&
@@ -127,7 +118,7 @@ function plan(edit, participantDocs, matchDocs, resultDocs) {
         const side = (doc.data.jogo || doc.data)[key];
         return side && side.fixedPairId === edit.source.fixedPairId && slot.hasIdentity(side, sourceId);
       }))) throw new Error('referência da vaga sem atualização');
-  return { participant: { oldRef: mirror.ref, newId, data: participantData }, matches, results,
+  return { participant: { oldRef: mirror.ref, newId, data: participantData }, matches,
     historicalMatchIds, liveMatchIds };
 }
 
