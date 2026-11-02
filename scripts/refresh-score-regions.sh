@@ -8,10 +8,13 @@ mode="${1:---preflight}"
 node scripts/check-vendor-fresh.js
 source_commit="$(git log -1 --format=%H -- functions-autodraw)"
 [[ "$source_commit" =~ ^[a-f0-9]{40}$ ]] || exit 1
-# O código-fonte e o vendor devem conter a trava da fase classificatória.
-rg -q "_bracketPhaseFormat\(t\) === 'classification'" js/views/bracket-logic.js functions-autodraw/vendor/bracket-logic.js || {
-  echo 'trava classificatória ausente' >&2; exit 1;
-}
+# O código-fonte e o vendor devem guardar o próprio gerador de 3º lugar.
+# Uma ocorrência solta de `_isEliminationBracket` não comprova essa proteção.
+for logic in js/views/bracket-logic.js functions-autodraw/vendor/bracket-logic.js; do
+  rg -U -q 'function _maybeGenerate3rdPlace\(t\) \{(?:[^\n]*\n){0,12}  if \(!_isEliminationBracket\(t\)\)' "$logic" || {
+    echo "trava classificatória ausente em $logic" >&2; exit 1;
+  }
+done
 for version in v2 v3; do
   node scripts/check-operation-regions-mixed.js "$version" --allow-legacy-court
 done
