@@ -114,14 +114,44 @@ function privateBackup(snapshot, outputDir = BACKUP_DIR) {
   return { filename, sha256: backup.sha256 };
 }
 
-function receiptFile(id) { return path.join(RECEIPT_DIR, 'e08-' + id + '-apply-receipt-private.json'); }
-function saveReceipt(id, plan, backup, approval, status, reason = '', filename = receiptFile(id)) {
+function receiptFile(id, digest, dir = RECEIPT_DIR) {
+  if (!/^[a-f0-9]{64}$/.test(digest || '')) throw new Error('[E08] digest de recibo inválido');
+  return path.join(dir, 'e08-' + id + '-' + digest + '-apply-receipt-private.json');
+}
+function assertPriorReceipts(id, digest, dir = RECEIPT_DIR) {
+  receiptFile(id, digest, dir);
+  if (!fs.existsSync(dir)) return;
+  const escaped = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp('^e08-' + escaped + '-(?:([a-f0-9]{64})-)?apply-receipt-private\\.json$');
+  for (const name of fs.readdirSync(dir)) {
+    const match = pattern.exec(name);
+    if (!match) continue;
+    let prior;
+    try { prior = JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8')); }
+    catch (_) { throw new Error('[E08] recibo anterior ilegível exige auditoria manual'); }
+    if (prior.schema !== 'scoreplace/e08-index-apply-receipt/1' || prior.project !== PROJECT ||
+        prior.tournamentId !== id || !/^[a-f0-9]{64}$/.test(prior.planDigest || '') ||
+        (match[1] && match[1] !== prior.planDigest)) {
+      throw new Error('[E08] recibo anterior inválido exige auditoria manual');
+    }
+    if (prior.planDigest === digest || prior.status !== 'APPLIED_AUDITED') {
+      throw new Error('[E08] recibo anterior exige auditoria manual antes de novo lote');
+    }
+  }
+}
+function saveReceipt(id, plan, backup, approval, status, reason = '', filename = receiptFile(id, plan.digest)) {
   const body = { schema: 'scoreplace/e08-index-apply-receipt/1', project: PROJECT,
     tournamentId: id, planDigest: plan.digest, backupSha256: backup.sha256,
     authorizationRef: approval.authorizationRef, authorizedBy: approval.authorizedBy,
     status, ...(reason ? { failure: String(reason).slice(0, 240) } : {}),
     observedAt: new Date().toISOString() };
   fs.mkdirSync(path.dirname(filename), { recursive: true });
+  if (status === 'PREPARED') {
+    const fd = fs.openSync(filename, 'wx', 0o600);
+    try { fs.writeFileSync(fd, JSON.stringify(body, null, 2) + '\n'); fs.fsyncSync(fd); }
+    finally { fs.closeSync(fd); }
+    return body;
+  }
   const temporary = filename + '.partial-' + process.pid + '-' + crypto.randomBytes(6).toString('hex');
   fs.writeFileSync(temporary, JSON.stringify(body, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
   try { fs.renameSync(temporary, filename); fs.chmodSync(filename, 0o600); }
@@ -143,8 +173,7 @@ async function main(args = process.argv.slice(2)) {
     if (args[1] !== plan.digest) throw new Error('[E08] digest do lote divergente');
     await requirePublishedRelease();
     requireApproval(plan, id);
-    const prior = receiptFile(id);
-    if (fs.existsSync(prior)) throw new Error('[E08] recibo anterior exige auditoria manual antes de retry');
+    assertPriorReceipts(id, plan.digest);
   }
   const fresh = await freshPlan(id, plan);
   if (check) { process.stdout.write(JSON.stringify(fresh, null, 2) + '\n'); return; }
@@ -173,7 +202,7 @@ async function main(args = process.argv.slice(2)) {
 }
 
 module.exports = { readPlan, requireRelease, requirePublishedRelease, requireApproval, freshPlan, serviceDb,
-  capture, privateBackup, saveReceipt, main };
+  capture, privateBackup, receiptFile, assertPriorReceipts, saveReceipt, main };
 if (require.main === module) main().catch(error => {
   console.error('[E08] operação interrompida: ' + error.message);
   process.exitCode = 1;

@@ -65,6 +65,41 @@ try {
   cli.saveReceipt(id, plan, backup, approval, 'APPLIED_AUDITED', '', receiptFile);
   assert.equal(JSON.parse(fs.readFileSync(receiptFile, 'utf8')).status, 'APPLIED_AUDITED');
 
+  const records = path.join(tmp, 'records');
+  fs.mkdirSync(records);
+  const otherDigest = 'd'.repeat(64);
+  assert.equal(path.basename(cli.receiptFile(id, plan.digest, records)),
+    `e08-${id}-${plan.digest}-apply-receipt-private.json`);
+  assert.throws(() => cli.receiptFile(id, '../invalid', records), /digest/);
+  cli.assertPriorReceipts(id, plan.digest, records);
+  const legacy = path.join(records, `e08-${id}-apply-receipt-private.json`);
+  const prior = { schema: 'scoreplace/e08-index-apply-receipt/1', project: 'scoreplace-app',
+    tournamentId: id, planDigest: plan.digest, status: 'APPLIED_AUDITED' };
+  fs.writeFileSync(legacy, JSON.stringify(prior));
+  assert.throws(() => cli.assertPriorReceipts(id, plan.digest, records), /recibo anterior/);
+  fs.writeFileSync(legacy, '{');
+  assert.throws(() => cli.assertPriorReceipts(id, plan.digest, records), /ilegível/);
+  fs.writeFileSync(legacy, JSON.stringify({ ...prior, planDigest: otherDigest, status: 'PREPARED' }));
+  assert.throws(() => cli.assertPriorReceipts(id, plan.digest, records), /recibo anterior/);
+  fs.writeFileSync(legacy, JSON.stringify({ ...prior, planDigest: otherDigest }));
+  cli.assertPriorReceipts(id, plan.digest, records);
+  const otherFile = cli.receiptFile(id, otherDigest, records);
+  fs.writeFileSync(otherFile, JSON.stringify({ ...prior, planDigest: otherDigest, status: 'FALHA_POS_AUDITORIA' }));
+  assert.throws(() => cli.assertPriorReceipts(id, plan.digest, records), /recibo anterior/);
+  fs.writeFileSync(otherFile, JSON.stringify({ ...prior, planDigest: otherDigest }));
+  cli.assertPriorReceipts(id, plan.digest, records);
+  const newFile = cli.receiptFile(id, plan.digest, records);
+  cli.saveReceipt(id, plan, backup, approval, 'PREPARED', '', newFile);
+  assert.throws(() => cli.saveReceipt(id, plan, backup, approval, 'PREPARED', '', newFile), /EEXIST/);
+  assert.throws(() => cli.assertPriorReceipts(id, plan.digest, records), /recibo anterior/);
+  cli.saveReceipt(id, plan, backup, approval, 'APPLIED_AUDITED', '', newFile);
+  assert.equal(JSON.parse(fs.readFileSync(newFile, 'utf8')).status, 'APPLIED_AUDITED');
+  // Se cair após o wx e antes de completar o JSON, a limpeza exige auditoria manual.
+  fs.unlinkSync(legacy);
+  fs.unlinkSync(otherFile);
+  fs.writeFileSync(newFile, '{');
+  assert.throws(() => cli.assertPriorReceipts(id, otherDigest, records), /ilegível/);
+
   console.log('E08: manifesto, digest, recibo E20 e autorização específica conferidos');
 } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 }
