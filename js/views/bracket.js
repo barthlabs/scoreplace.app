@@ -8521,6 +8521,12 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // inputs de TB ao registrar 6-5/5-6 (default trigger = gamesPerSet - 1).
   const _tbEnabled = !!(_msc && _msc.tiebreakEnabled !== false &&
       (_msc.gamesPerSet || useSets));
+  const _gameInputCap = useSets && typeof window._normalSetGameInputCap === 'function'
+    ? window._normalSetGameInputCap(_msc, t.sport) : null;
+  const _gameInputAttrs = (kind) => kind === 'set' && _gameInputCap != null
+    ? ' max="' + _gameInputCap + '" onfocus="this.dataset.spValidGame=this.value"' : '';
+  const _gameInputGuard = (kind) => kind === 'set' && _gameInputCap != null
+    ? 'window._limitNormalSetGameInput(this,' + _gameInputCap + ');' : '';
   const _tbInputStyle = 'width:40px;text-align:center;font-size:0.9rem;font-weight:700;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.3);color:var(--text-bright);border-radius:5px;padding:2px 4px;vertical-align:super;';
   const p1TbInput = showInputs && _tbEnabled
     ? `<input type="number" id="tb1-${m.id}" min="0" placeholder="tb" title="Tie-break"
@@ -8560,8 +8566,8 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       ? '<input type="number" id="tb' + side + '-' + m.id + '" min="0" placeholder="tb" title="Tie-break"' +
         ' class="sp-set-tb" style="display:none;" oninput="window._highlightWinner(\'' + _esc(m.id) + '\')">'
       : '';
-    return '<span class="sp-set-score-entry"><input type="number" id="s' + side + '-' + m.id + '" min="0" placeholder="0" class="sp-set-inp sp-set-inp--live"' +
-      ' oninput="window._highlightWinner(\'' + _esc(m.id) + '\')" onchange="window._warnGrossSetScore(\'' + _esc(m.id) + '\')">' + tb + '</span>';
+    return '<span class="sp-set-score-entry"><input type="number" id="s' + side + '-' + m.id + '" min="0" placeholder="0" class="sp-set-inp sp-set-inp--live"' + _gameInputAttrs(c.kind) +
+      ' oninput="' + _gameInputGuard(c.kind) + 'window._highlightWinner(\'' + _esc(m.id) + '\')" onchange="window._warnGrossSetScore(\'' + _esc(m.id) + '\')">' + tb + '</span>';
   };
   // Correção de resultado é o MESMO placar do card, no MESMO lugar. Nenhum diálogo
   // paralelo: os números viram campos já preenchidos e o restante do card não se move.
@@ -8579,7 +8585,9 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     const sync = ' oninput="window._syncEditedSetInputs(\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\',' + idx + ')"';
     const input = '<input type="number" min="0" inputmode="numeric" value="' +
       (value != null ? window._safeHtml(value) : '') + '" id="sp-edit-set-' + _esc(m.id) + '-' + idx + '-' + side +
-      '" class="sp-set-inp" style="width:100%;min-width:0;box-sizing:border-box;color:' + scoreColor + ';"' + sync + ' onclick="event.stopPropagation()">';
+      '" class="sp-set-inp" style="width:100%;min-width:0;box-sizing:border-box;color:' + scoreColor + ';"' + _gameInputAttrs(c.kind) +
+      (c.kind === 'set' && _gameInputCap != null ? ' oninput="' + _gameInputGuard(c.kind) + 'window._syncEditedSetInputs(\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\',' + idx + ')"' : sync) +
+      ' onclick="event.stopPropagation()">';
     // O TB só surge se o placar do set exige tie-break. STB já usa os campos principais.
     if (isStb || c.kind !== 'set') return input;
     const tbNeeded = Number.isFinite(Number(original.gamesP1)) && Number.isFinite(Number(original.gamesP2)) &&
@@ -8608,7 +8616,8 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   const _initialEntryCell = (c, side) => {
     const hidden = c.state === 'stb-entry';
     const wrap = hidden ? ' id="stbcol-' + side + '-' + m.id + '" style="display:none;--w:' + c.w + 'px;"' : ' style="--w:' + c.w + 'px;"';
-    const input = '<input type="number" id="s' + side + '-' + m.id + '-' + c.i + '" min="0" placeholder="0" class="sp-set-inp sp-set-inp--live" oninput="window._highlightWinner(\'' + _esc(m.id) + '\')" onchange="window._warnGrossSetScore(\'' + _esc(m.id) + '\',' + c.i + ')">';
+    const input = '<input type="number" id="s' + side + '-' + m.id + '-' + c.i + '" min="0" placeholder="0" class="sp-set-inp sp-set-inp--live"' + _gameInputAttrs(c.kind) +
+      ' oninput="' + _gameInputGuard(c.kind) + 'window._highlightWinner(\'' + _esc(m.id) + '\')" onchange="window._warnGrossSetScore(\'' + _esc(m.id) + '\',' + c.i + ')">';
     const tb = c.kind === 'set' && _tbEnabled ? '<input type="number" id="tb' + side + '-' + m.id + '-' + c.i + '" min="0" placeholder="tb" title="Tie-break" class="sp-set-tb" style="display:none;" oninput="window._highlightWinner(\'' + _esc(m.id) + '\')">' : '';
     return '<div class="sp-set-col" data-sp-set-index="' + c.i + '"' + wrap + '><span class="sp-set-score-entry">' + input + tb + '</span></div>';
   };
@@ -8663,9 +8672,9 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   const _setGridHtml = (side) => '<div class="sp-set-grid"' + _setCountAttr + _setFormatAttr + ' style="' + _numFsVar + '">' + _setCellsHtml(side) + '</div>';
 
   const p1Score = showInputs
-    ? `<input type="number" id="s1-${m.id}" min="0" placeholder="0"
+    ? `<input type="number" id="s1-${m.id}" min="0" placeholder="0"${_gameInputAttrs('set')}
         class="sp-mc-inp"
-        oninput="window._highlightWinner('${_esc(m.id)}')" onchange="window._warnGrossSetScore('${_esc(m.id)}')">${p1TbInput}`
+        oninput="${_gameInputGuard('set')}window._highlightWinner('${_esc(m.id)}')" onchange="window._warnGrossSetScore('${_esc(m.id)}')">${p1TbInput}`
     : null;
   // v0.17.1: quando pending, lê scoreP1/scoreP2 (ou sets) do _pr em vez do m.
   // v2.1.89: para partidas W.O., deriva o lado ausente de woAbsentSide (ou do
@@ -8706,9 +8715,9 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     : null;
 
   const p2Score = showInputs
-    ? `<input type="number" id="s2-${m.id}" min="0" placeholder="0"
+    ? `<input type="number" id="s2-${m.id}" min="0" placeholder="0"${_gameInputAttrs('set')}
         class="sp-mc-inp"
-        oninput="window._highlightWinner('${_esc(m.id)}')" onchange="window._warnGrossSetScore('${_esc(m.id)}')">${p2TbInput}`
+        oninput="${_gameInputGuard('set')}window._highlightWinner('${_esc(m.id)}')" onchange="window._warnGrossSetScore('${_esc(m.id)}')">${p2TbInput}`
     : null;
   const _p2Display = hasPending
     ? formatSetScores(_prFmt, 2)   // mesmo formatador do lado 1 — ver o comentário acima
