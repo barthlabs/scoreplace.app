@@ -776,7 +776,7 @@ window._addPlaceholdersCore = function (id, qtd, onDone, opts) {
         return true;
     }
     var t = opts.tournament || window.AppStore.tournaments.find(function (tour) { return tour.id.toString() === id.toString(); });
-    if (!t) return;
+    if (!t) return false;
     if (!Array.isArray(t.participants)) t.participants = t.participants ? Object.values(t.participants) : [];
     var hasDraw = (Array.isArray(t.matches) && t.matches.length > 0) || (Array.isArray(t.rounds) && t.rounds.length > 0) || (Array.isArray(t.groups) && t.groups.length > 0);
     // v4.5.92: antes de numerar os novos, DEDUP + cura os placeholders existentes (números
@@ -1935,7 +1935,7 @@ window._scrollToBracketSection = function(tId, matchId) {
 // Forma a dupla de fato (caminho canônico, reusado por organizador e por aceite de convite).
 window._formDuplaByUids = function(tId, name1, uid1, name2, uid2, pairRequestId) {
     var t = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
-    if (!t) return false;
+    if (!t) return;
     // CF-ONLY (regra do dono "tudo na CF, cliente só dispara"): a Function é quem
     // forma a dupla. A resposta traz o roster canônico e PRECISA hidratar a tela
     // imediatamente: aguardar só o snapshot deixa o toast dizer "Dupla formada" com
