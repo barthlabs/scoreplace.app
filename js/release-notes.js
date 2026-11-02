@@ -1,6 +1,9 @@
 // Próximo corte web da etapa 3 — prévia de fases, operações de inscrição com
 // confirmação do servidor e placar lido do jogo físico. A migração E05 dos
 // dados antigos e a atualização dos aplicativos nativos são entregas separadas.
+// A saída de inscrição recusa prosseguir quando a pessoa já está no sorteio e
+// não há vaga de W.O. identificada. Alterações de categoria aguardam o salvamento
+// em curso para evitar que uma ação rejeitada apareça como concluída.
 // 2.5.83 — O placar de set comum impede um segundo dígito quando a regra fecha
 // em até nove games. Tie-break e super tie-break continuam aceitando dois dígitos.
 // Se um placar inválido chegar à confirmação, o aviso mostra o set e os números lidos.
