@@ -207,16 +207,11 @@ const torneio = {
   ok(!/CF_ONLY_TOURNAMENT_SUBCOLLECTIONS/.test(core),
      'a lista à mão de subcoleções do torneio não voltou ao módulo');
 
-  // O cliente segue com a lista dele — e ela segue incompleta. Isso é ESPERADO: quem
-  // completa é a CF. A asserção existe pra ninguém "consertar" o cliente e tomar
-  // permission-denied em silêncio.
+  // A lista antiga do cliente foi retirada. Só a CF enumera as partes; adicionar
+  // limpeza no navegador voltaria a falhar para subcoleções sem permissão.
   const db = ler('js/firebase-db.js');
-  const m = db.match(/_tournamentSubcollections:\s*\[([^\]]*)\]/);
-  ok(!!m, 'o cliente ainda declara _tournamentSubcollections');
-  ['participants', 'communications'].forEach((sub) => {
-    ok(m && !m[1].includes("'" + sub + "'"),
-       "'" + sub + "' NÃO pode entrar na lista do cliente (tomaria permission-denied)");
-  });
+  ok(!/_tournamentSubcollections|_sandboxSubcollections|_deleteSubcollection/.test(db),
+     'cliente não conserva lista ou apagador sem consumidor');
 }
 
 // ── (10b) PRESENÇAS: o plano "vou a este torneio" morre com ele ───────────

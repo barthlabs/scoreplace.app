@@ -79,7 +79,6 @@ const SUITES = [
   'tests/deploy-functions-stripe-only.test.js',
   'tests/mirror-deploy-guard.test.js',
   'tests/rules-tournament-billing.test.js',
-  'tests/rules-result-visibility-parent-probe.test.js', // emulador 8133; ensaio isolado da 3.2.8
   'tests/result-history-visibility-parity.test.js', // emulador 8134; política JS × Rules aninhadas
   'tests/result-visibility-write-plan.test.js', // E01: plano atômico, teto e prova de roster
   'tests/result-history-page-core.test.js', // paginação, filtragem e cursor opaco da 3.2.8
@@ -610,8 +609,6 @@ const SUITES = [
   'tests/e05-aplicador-jogos-inline.test.js',
   'tests/e05-web-canonical-result-reader.test.js',
   'tests/e05-confirmacao-fisica-web.test.js',
-  'tests/mirror-transaction-core.test.js',
-  'tests/mirror-reconcile-queue-hidden.test.js',
   'tests/result-history-callable-errors.test.js',
   'tests/backfill-indice-fases.test.js',
   'tests/callback-tardio-nao-troca-detalhe-por-inscritos.test.js',
@@ -1426,7 +1423,6 @@ const SUITES = [
   'tests/mapa-de-perfis-e-isolado-por-invocacao.test.js',   // AsyncLocalStorage sob concorrência
   'tests/recuperar-fase2-no-emulador.test.js',              // emulador 8134 — ordem do dono
   'tests/rules-contencao-avanco-de-fase.test.js',           // emulador 8106/8107, com controle
-  'tests/rules-resultado-do-jogo-e-do-servidor.test.js',   // emulador 8108/8109, com controle
   'tests/rules-letzplayscan-nao-e-proprio.test.js',      // emulador 8101, com controle
 
   /* ── LEVA 2.2: o link do grupo de WhatsApp passa a ser gravado pela CF ─────────────── */
@@ -2457,7 +2453,6 @@ const PRENDEM_PORTA = [
   'tests/e08-fase14-emulator.test.js', // E08: 14 jogos, CAS e rollback no Firestore Emulator
   'tests/storage-payment-proof.test.js',         // Firestore + Storage nas portas 8130/9198
   'tests/rules-tournament-billing.test.js',       // Firestore 8125; o hub compartilhado falhou sob carga paralela na CI
-  'tests/rules-result-visibility-parent-probe.test.js', // Firestore 8133; Rules temporárias da 3.2.8
   'tests/result-history-visibility-parity.test.js', // Firestore 8134; paridade de autorização da 3.2.8
   'tests/result-history-page-emulator.test.js', // Firestore em porta dinâmica; consulta Admin da 3.2.8
   'tests/e12-duplas-emulator.test.js',      // Firestore em porta dinâmica; partilha hub/logging do Firebase CLI
@@ -2481,7 +2476,6 @@ const PRENDEM_PORTA = [
   // Abre dois emuladores em sequência; sob carga paralela o Firebase CLI pode esperar
   // sem devolver controle, portanto precisa da mesma exclusividade dos demais emuladores.
   'tests/rules-contencao-avanco-de-fase.test.js',
-  'tests/rules-resultado-do-jogo-e-do-servidor.test.js',
   'tests/rules-letzplayscan-nao-e-proprio.test.js',
   /* Sobem Firestore + Auth nas portas do firebase.sandbox.json (8093/9092) e carregam as
    * Cloud Functions de verdade. Duas delas ao mesmo tempo disputam a MESMA porta — medido em

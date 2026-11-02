@@ -28,8 +28,8 @@
  *
  * ── O SEGUNDO ÓRFÃO, QUE O RELATO NÃO TINHA VISTO ─────────────────────────────────────
  * `tournaments/{tid}/participants` (o espelho do roster, v1.7.29/1.7.98) **também fica
- * pendurado**: `_tournamentSubcollections` no cliente lista só `['results','letzplayScans']`.
- * E ele NÃO pode simplesmente entrar naquela lista — **não existe `match /participants`
+ * pendurado**: a antiga lista de limpeza do cliente cobria só duas coleções.
+ * E ele NÃO podia simplesmente entrar naquela lista — **não existe `match /participants`
  * no firestore.rules** (o Firestore nega por omissão; foi esse o achado da 1.7.97), então
  * o cliente tomaria `permission-denied` e o órfão continuaria lá. Só a CF alcança.
  * É a mesma classe dos 151 `results` órfãos da 1.6.78 — órfão não é dado inerte.
@@ -65,7 +65,7 @@ const TOPLEVEL_COLLECTIONS_BY_TOURNAMENT = ["presences"];
 
 /* ⚠️ NÃO existe lista de subcoleções DE `tournaments/{tid}` — elas são ENUMERADAS em
  * tempo de execução (`doc.listCollections()`, Admin SDK). Isto é decisão de projeto, não
- * preguiça: a lista à mão do cliente (`_tournamentSubcollections`) já deixou passar DUAS
+ * preguiça: a antiga lista à mão do cliente já deixou passar DUAS
  * — `participants` (o espelho do roster) e `communications` (comunicados do organizador),
  * as duas descobertas só ao medir o banco, as duas sem regra no firestore.rules e
  * portanto inalcançáveis pelo cliente. Enumerar mata a classe inteira do bug: subcoleção

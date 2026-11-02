@@ -480,9 +480,8 @@ service cloud.firestore {
         allow write: if false;
       }
       match /resultsSandbox/{matchId} {
-        // E05: o placar vive somente em matches/{id}.jogo; nem o dono recria o índice.
-        allow read: if request.auth != null && request.auth.uid == sbDono();
-        allow write: if false;
+        // E26: o índice foi migrado; nem o dono lê ou recria cópias antigas.
+        allow read, write: if false;
       }
     }
 
@@ -884,34 +883,11 @@ service cloud.firestore {
         allow read, write: if false;
       }
 
-      // ─── Resultados históricos durante a migração E05 ───
-      // A fonte canônica é `matches/{id}.jogo`. `results/{matchId}` ainda existe em
-      // torneios antigos até a tradução administrativa e a auditoria E05/E06.
-      // Escrita direta do cliente permanece negada: `playerUids` neste índice pode
-      // atribuir um placar ao histórico de outra pessoa. A transição E01 de
-      // ocultar/liberar usa o servidor e o fence até a retirada desses documentos.
-      // `purgeTournamentCopies` enumera subcoleções ao excluir um torneio, inclusive
-      // `results`. O sandbox histórico usa o caminho separado `resultsSandbox`.
-      // A leitura do grupo histórico continua sujeita às regras abaixo enquanto
-      // existirem clientes e documentos antigos; a retirada requer corte coordenado.
+      // E26: o placar canônico vive somente em matches/{id}.jogo. Cópias antigas
+      // foram migradas; nenhum cliente pode ler ou recriar este caminho.
       match /results/{matchId} {
-        function parentT() {
-          return get(/databases/$(database)/documents/tournaments/$(tournamentId)).data;
-        }
-        // `request.auth != null` PRIMEIRO no OR: curto-circuita sem o get() do
-        // parentT() → deixa a query collectionGroup de `results` (Fase B: ler os
-        // jogos de um uid sem carregar torneio) eficiente. Semântica idêntica à
-        // ordem anterior (authed já lia qualquer result subdoc); só evita 1 get()
-        // por doc na listagem. Público (sem auth) ainda cai no parentT().isPublic.
-        allow read: if canReadTournamentData(parentT());
-        // ⛔ RESERVADOS A PROCESSO PRIVILEGIADO — o cliente escrevia o resultado do jogo
-        // direto neste documento; quem lança placar hoje fala com a Function. Ver
-        // tests/pontos-frageis.js.
-        allow create: if false;
-        // ⛔ RESERVADOS A PROCESSO PRIVILEGIADO (ver a linha acima e tests/pontos-frageis.js).
-        allow update: if false;
-        // ⛔ RESERVADOS A PROCESSO PRIVILEGIADO (ver a linha acima e tests/pontos-frageis.js).
-        allow delete: if false;
+        // RESERVADOS A PROCESSO PRIVILEGIADO: cliente não lê nem escreve cópias.
+        allow read, write: if false;
       }
 
       // ─── FASE 2 · OS JOGOS FORA DO DOCUMENTO ──────────────────────────────
@@ -1155,41 +1131,11 @@ service cloud.firestore {
       }
     }
 
-    // ─── Placares por COLLECTION GROUP ────────────────────────────────────────
-    // `tournaments/{id}/results/{matchId}` é o lugar onde o placar vive. Pra ler os jogos
-    // de UMA PESSOA sem carregar torneio nenhum, a consulta é
-    // `collectionGroup('results').where('playerUids','array-contains', uid)`.
-    //
-    // ⚠️ REGRA ANINHADA NÃO VALE PRA COLLECTION GROUP. A permissão declarada dentro de
-    // `match /tournaments/{tournamentId}/...` só se aplica àquele caminho; uma consulta de
-    // collection group é avaliada contra `match /{path=**}/results/{matchId}` e mais nada.
-    // Sem esta regra a consulta voltava permission-denied SEMPRE — e a ficha de quem jogou
-    // aqui aparecia com "Torneios 0 · Rankings 0 · Jogos 0", como se a pessoa nunca tivesse
-    // jogado. Medido em 01/ago/2026 no perfil da Flávia Barchetta.
-    // Leitura só; escrita continua exclusivamente pelo caminho aninhado, que valida o
-    // torneio pai.
-    /* ⚠️ ESTREITADO EM 2.1.87 — era `allow read: if request.auth != null`, ou seja
-     * QUALQUER logado lia QUALQUER doc de `results` de QUALQUER torneio, por id.
-     * Agora vale o padrão seguro canônico do Firestore: o doc só é legível por quem
-     * ESTÁ nele. Isso mantém de pé os DOIS únicos usos legítimos do cliente, que já
-     * filtram exatamente assim (inventariados antes de mexer):
-     *   · js/firebase-db.js  loadMyMatchResults  — histórico de partidas na ficha
-     *   · js/views/tournaments-enrollment-report.js — relatório/cartão do jogador
-     * ambos `collectionGroup('results').where('playerUids','array-contains', uid)`.
-     * (`functions/index.js` usa admin SDK e não passa por regra.)
-     *
-     * ⛔ E POR QUE O SANDBOX NÃO GUARDA `results` COM ESSE NOME: regra de collection
-     * group NÃO pode ser escopada por coleção-pai — não existe "results, mas só sob
-     * tournaments". Como a cópia do sandbox é FIEL, ela preserva `playerUids` reais;
-     * mantendo o nome, o participante real passaria por esta mesma regra e leria os
-     * resultados do sandbox. Acrescentar aqui uma condição de sandbox recusaria a query
-     * legítima inteira (condição não restringida pela query) e exigiria backfill nos
-     * docs legados. Por isso o sandbox grava em `resultsSandbox`, que este curinga não
-     * alcança — a ÚNICA exceção de forma persistida, e ela muda só o NOME do caminho.
-     * Ver o bloco `match /sandboxes/{sandboxId}` acima. */
+    // E26: negar também consultas collectionGroup('results'). A regra aninhada
+    // não limita o curinga; ambas precisam negar acesso. O histórico autorizado
+    // usa a Function paginada que consulta matches físicos e confere a raiz.
     match /{path=**}/results/{matchId} {
-      allow read: if request.auth != null
-        && (request.auth.uid in resource.data.get('playerUids', []));
+      allow read, write: if false;
     }
 
     // ─── Histórico letzplay: 1 doc por COMPETIÇÃO, 1 doc por PARTIDA ──────────

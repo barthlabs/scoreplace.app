@@ -12,7 +12,7 @@
  *   ① pedir ao servidor passando UM id e mais nada;
  *   ② nunca gravar o torneio ele mesmo;
  *   ③ rotear parent e subcoleções pra coleção certa, sem heurística de nome;
- *   ④ usar `resultsSandbox` no sandbox e `results` no torneio real.
+ *   ④ manter nome único para as partes canônicas nas duas coleções.
  */
 'use strict';
 const fs = require('fs');
@@ -88,15 +88,15 @@ const ok = (n, c, x) => { if (c) console.log('  ✓ ' + n); else { console.log('
     ok('⭐⭐ leitura canônica declara sandbox pelo fato persistido', rosterPayload && rosterPayload.sandbox === true);
     await real.loadCanonicalTournamentRoster('real_1');
     ok('⭐⭐ leitura canônica do torneio normal não troca coleção', rosterPayload && rosterPayload.sandbox === false);
-    console.log('\n── ④ results → resultsSandbox só no sandbox ──');
-    ok('⭐⭐ sandbox: results vira resultsSandbox', real._subNome('sb_2', 'results') === 'resultsSandbox');
-    ok('⭐⭐ torneio real: results continua results', real._subNome('real_1', 'results') === 'results');
+    console.log('\n── ④ nome único de subcoleção ──');
+    ok('⭐⭐ subcoleção física usa o mesmo nome no sandbox', real._subNome('sb_2', 'matches') === 'matches');
+    ok('⭐⭐ subcoleção física usa o mesmo nome no torneio real', real._subNome('real_1', 'matches') === 'matches');
     ok('  → e as outras subcoleções não mudam de nome nem no sandbox',
       ['matches','inscritos','opponentHistory','grupos','history','checkedIn','woLog','woClaims','resultQueue']
         .every((c) => real._subNome('sb_2', c) === c));
     ok('⭐ _tSub monta o caminho completo do sandbox',
-      real._tSub('sb_2', 'results').path === 'sandboxes/sb_2/resultsSandbox', real._tSub('sb_2', 'results').path);
-    ok('⭐ e o do torneio real', real._tSub('real_1', 'results').path === 'tournaments/real_1/results');
+      real._tSub('sb_2', 'matches').path === 'sandboxes/sb_2/matches', real._tSub('sb_2', 'matches').path);
+    ok('⭐ e o do torneio real', real._tSub('real_1', 'matches').path === 'tournaments/real_1/matches');
   }
 
   /* ── ⑥ NO SANDBOX, QUEM ESCREVE AS PARTES É O CLIENTE — e escreve o DELTA ────────────
@@ -194,7 +194,7 @@ const ok = (n, c, x) => { if (c) console.log('  ✓ ' + n); else { console.log('
    * A lista de subcoleções do sandbox tem que COBRIR o que a Function copia. Se uma parte
    * nova entrar na cópia e não entrar aqui, ela sobrevive órfã numa coleção onde ninguém
    * mais passa — a mesma origem dos 151 `results` órfãos de 01/ago/2026. */
-  console.log('\n── ⑧ a lista de exclusão do sandbox cobre o que a cópia cria ──');
+  console.log('\n── ⑧ exclusão do sandbox enumera todas as partes ──');
   if (temHelpers) {
     const regras = fs.readFileSync(path.join(ROOT, 'firestore.rules'), 'utf8');
     const iSb = regras.indexOf('match /sandboxes/{sandboxId} {');
@@ -207,7 +207,6 @@ const ok = (n, c, x) => { if (c) console.log('  ✓ ' + n); else { console.log('
     const bloco = proximoTopLevel < 0 ? aposParent : aposParent.slice(0, proximoTopLevel);
     const nasRegras = (bloco.match(/match \/([A-Za-z]+)\/\{/g) || [])
       .map((s) => s.replace('match /', '').replace(/\/\{$/, ''));
-    const naLista = (real._sandboxSubcollections || []).map((c) => real._subNome('sb_2', c));
     ok('as regras declaram ' + nasRegras.length + ' subcoleções de sandbox', nasRegras.length >= 12, JSON.stringify(nasRegras));
     // Recibos são exclusivos do servidor. A exclusão REAL do sandbox usa
     // deleteTournament, que enumera listCollections() antes de apagar o pai.
@@ -226,13 +225,8 @@ const ok = (n, c, x) => { if (c) console.log('  ✓ ' + n); else { console.log('
     ok('⛔ o cliente delega a exclusão à Function, sem apagar apenas o documento pai',
       real.deleteTournament.toString().includes("this._callFn('deleteTournament'") &&
       !real.deleteTournament.toString().includes('_deleteSubcollection'));
-    const faltando = nasRegras.filter((c) => !['operationReceipts', 'operationControl'].includes(c) && naLista.indexOf(c) === -1);
-    ok('⭐⭐ nenhuma delas fica de fora do apagar (faltando: ' + faltando.join(', ') + ')',
-      faltando.length === 0, JSON.stringify({ nasRegras: nasRegras, naLista: naLista }));
-    ok('⭐⭐ e `results` do sandbox é apagado como `resultsSandbox`',
-      naLista.indexOf('resultsSandbox') !== -1, JSON.stringify(naLista));
-    ok('⛔ CONTROLE: em torneio REAL a lista continua a curta (results + letzplayScans)',
-      JSON.stringify(real._tournamentSubcollections) === JSON.stringify(['results', 'letzplayScans']));
+    ok('⭐⭐ listas antigas e apagador cliente não permanecem',
+      !('_sandboxSubcollections' in real) && !('_tournamentSubcollections' in real) && !('_deleteSubcollection' in real));
   }
 
   console.log('\n── ⑤ ESTRUTURAL: nada de segunda fonte no cliente ──');

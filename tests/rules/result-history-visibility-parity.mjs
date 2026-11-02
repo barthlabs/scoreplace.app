@@ -1,11 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { collectionGroup, doc, documentId, getDoc, getDocs, orderBy, query, setDoc, where } from 'firebase/firestore';
+import { collection, collectionGroup, deleteDoc, doc, getDoc, getDocs, query, setDoc, where } from 'firebase/firestore';
 
-const require = createRequire(import.meta.url);
-const { canReadTournamentData } = require('../../functions/result-history-visibility-core.js');
 const [host, port] = String(process.env.FIRESTORE_EMULATOR_HOST || '').split(':');
 assert.equal(host, '127.0.0.1');
 assert.equal(Number(port), 8134);
@@ -13,44 +10,49 @@ const env = await initializeTestEnvironment({ projectId: 'demo-scoreplace',
   firestore: { rules: readFileSync(process.env.SP_RESULT_PARITY_RULES, 'utf8'),
     host, port: Number(port) } });
 
-const rows = [
-  { id: 'public', data: { isPublic: true } },
-  { id: 'logged', data: { isPublic: false } },
-  { id: 'members', data: { membersOnly: true, memberUids: ['member'] } },
-  { id: 'organizers', data: { organizerOnly: true, memberUids: ['member'] } },
-  { id: 'sandbox', data: { isSandbox: true, memberUids: ['member'] } },
-  { id: 'organizers_ref', data: { organizerOnly: true, refereeUids: ['referee'] } }
-].map(row => ({ ...row, data: { creatorUid: 'owner', adminUids: ['cohost'],
-  refereeUids: ['referee'], memberUids: [], isPublic: false,
-  organizerOnly: false, membersOnly: false, isSandbox: false, ...row.data } }));
-const callers = [null, 'owner', 'cohost', 'member', 'referee', 'stranger'];
 try {
   await env.withSecurityRulesDisabled(async context => {
     const db = context.firestore();
-    for (const row of rows) {
-      await setDoc(doc(db, 'tournaments', row.id), row.data);
-      await setDoc(doc(db, 'tournaments', row.id, 'results', 'm1'), {
-        matchId: 'm1', playerUids: callers.filter(Boolean)
-      });
-    }
-    const byPath = await getDocs(query(collectionGroup(db, 'results'),
-      where('playerUids', 'array-contains', 'member'), orderBy(documentId())));
-    assert.equal(byPath.size, rows.length,
-      'cursor por caminho deve preservar docs sem updatedAt');
+    await setDoc(doc(db, 'tournaments', 'public'), {
+      creatorUid: 'owner', isPublic: true, memberUids: ['member']
+    });
+    await setDoc(doc(db, 'tournaments', 'public', 'matches', 'm1'), {
+      jogo: { id: 'm1', scoreP1: 6, scoreP2: 4 }, playerUids: ['member']
+    });
+    await setDoc(doc(db, 'tournaments', 'public', 'results', 'm1'), {
+      matchId: 'm1', playerUids: ['owner', 'member']
+    });
+    await setDoc(doc(db, 'sandboxes', 'sb_old'), {
+      sandboxOwnerUid: 'owner', creatorUid: 'owner', isSandbox: true
+    });
+    await setDoc(doc(db, 'sandboxes', 'sb_old', 'resultsSandbox', 'm1'), {
+      matchId: 'm1', playerUids: ['owner', 'member']
+    });
   });
-  for (const row of rows) for (const caller of callers) {
-    const db = caller === null ? env.unauthenticatedContext().firestore()
+
+  for (const caller of [null, 'owner', 'member', 'stranger']) {
+    const db = caller == null ? env.unauthenticatedContext().firestore()
       : env.authenticatedContext(caller).firestore();
-    const promise = getDoc(doc(db, 'tournaments', row.id, 'results', 'm1'));
-    const expected = canReadTournamentData(row.data, caller);
-    if (expected) await assertSucceeds(promise);
-    else {
-      const error = await assertFails(promise);
-      assert.equal(error.code, 'permission-denied');
+    const forbidden = [
+      () => getDoc(doc(db, 'tournaments', 'public', 'results', 'm1')),
+      () => getDocs(collection(db, 'tournaments', 'public', 'results')),
+      () => getDocs(query(collectionGroup(db, 'results'), where('playerUids', 'array-contains', 'member'))),
+      () => getDoc(doc(db, 'sandboxes', 'sb_old', 'resultsSandbox', 'm1')),
+      () => getDocs(collection(db, 'sandboxes', 'sb_old', 'resultsSandbox')),
+      () => setDoc(doc(db, 'tournaments', 'public', 'results', 'new'), { playerUids: [caller] }),
+      () => setDoc(doc(db, 'tournaments', 'public', 'results', 'm1'), { scoreP1: 7 }, { merge: true }),
+      () => deleteDoc(doc(db, 'tournaments', 'public', 'results', 'm1')),
+      () => setDoc(doc(db, 'sandboxes', 'sb_old', 'resultsSandbox', 'new'), { scoreP1: 7 }),
+    ];
+    for (const operation of forbidden) {
+      const error = await assertFails(operation());
+      assert.equal(error.code, 'permission-denied', String(caller));
+    }
+    if (caller === 'owner' || caller === 'member') {
+      await assertSucceeds(getDoc(doc(db, 'tournaments', 'public', 'matches', 'm1')));
     }
   }
-  assert.equal(canReadTournamentData(null, 'owner'), false);
-  console.log('PARIDADE: OK (' + (rows.length * callers.length) + ' combinações)');
+  console.log('RESULTS: 36 negativas GET/LIST/group/write; matches físico preservado');
 } finally {
   await env.cleanup();
 }

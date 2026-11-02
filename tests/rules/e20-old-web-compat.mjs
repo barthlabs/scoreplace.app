@@ -3,8 +3,8 @@ import { readFileSync } from 'node:fs';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
 import { collection, doc, getDoc, getDocs, limit, orderBy, query, setDoc } from 'firebase/firestore';
 
-// As chamadas repetem os caminhos do cliente web 2.5.83: raiz, matches físicos
-// e results diretos, inclusive a janela recente ordenada por updatedAt.
+// A versão web antiga ainda pode abrir a raiz e os jogos físicos. Resultados
+// diretos foram retirados; o histórico atual passa pela Function paginada.
 const [host, port] = String(process.env.FIRESTORE_EMULATOR_HOST || '').split(':');
 assert.equal(host, '127.0.0.1');
 const env = await initializeTestEnvironment({ projectId: 'demo-scoreplace',
@@ -37,15 +37,15 @@ try {
     const db = dbFor(uid);
     await assertSucceeds(getDoc(doc(db, 'tournaments', 'public-old-web')));
     await assertSucceeds(getDocs(collection(db, 'tournaments', 'public-old-web', 'matches')));
-    await assertSucceeds(getDocs(query(collection(db, 'tournaments', 'public-old-web', 'results'),
+    await assertFails(getDocs(query(collection(db, 'tournaments', 'public-old-web', 'results'),
       orderBy('updatedAt', 'desc'), limit(1))));
-    await assertSucceeds(getDoc(doc(db, 'tournaments', 'public-old-web', 'results', 'm1')));
+    await assertFails(getDoc(doc(db, 'tournaments', 'public-old-web', 'results', 'm1')));
   }
   const org = dbFor('e20-org');
   await assertSucceeds(getDoc(doc(org, 'tournaments', 'private-old-web')));
   await assertSucceeds(getDocs(collection(org, 'tournaments', 'private-old-web', 'matches')));
-  await assertSucceeds(getDocs(collection(org, 'tournaments', 'private-old-web', 'results')));
+  await assertFails(getDocs(collection(org, 'tournaments', 'private-old-web', 'results')));
   await assertFails(getDoc(doc(dbFor('e20-member'), 'tournaments', 'private-old-web')));
   await assertFails(getDoc(doc(dbFor('e20-member'), 'tournaments', 'private-old-web', 'results', 'm1')));
-  console.log('✅ E20: leituras da web 2.5.83 aceitas nas novas Rules para público e organização; privado protegido');
+  console.log('✅ E26: raiz e matches legíveis; results antigos fechados');
 } finally { await env.cleanup(); }

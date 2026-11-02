@@ -145,42 +145,9 @@ function eq(a, b, m) { ok(a === b, m + ' — esperado ' + JSON.stringify(b) + ',
     const re = /match \/(\w+)\/\{/g;
     let m;
     while ((m = re.exec(dentro.slice(0, dentro.indexOf('\n    }')))) !== null) subs.push(m[1]);
-    /* ⭐ 2.0.96 — QUEM LIMPA DEPENDE DE QUEM ESCREVE.
-     * Este teste nasceu quando toda subcoleção era do CLIENTE, e a regra era simples:
-     * está nas regras ⇒ tem que estar na lista de limpeza do cliente.
-     * A Fase 2 trouxe subcoleção que o cliente NÃO ESCREVE (`allow write: if false`) —
-     * `tournaments/{id}/matches` é espelhada pelo gatilho `tournamentMirror` (admin SDK).
-     * Pôr essa na lista do cliente não conserta nada: ele leva permission-denied.
-     * Então a exigência se divide, e nenhuma das duas metades pode ficar sem dono. */
-    /* ⚠️ 2.0.103 — O QUE DECIDE É QUEM PODE **APAGAR**, não quem pode escrever.
-     * A fila do placar (`resultQueue`) quebrou a suposição antiga: o cliente CRIA nela
-     * (é o ponto — a intenção precisa caber na fila offline dele), mas a regra nega
-     * `delete`, porque o item é o RECIBO do que a pessoa mandou. Classificando por
-     * "escreve?", ela caía na lista do cliente — que levaria permission-denied na hora
-     * de limpar. Limpeza é sobre APAGAR. */
-    const escritaNegada = function (sub) {
-      const i = dentro.indexOf('match /' + sub + '/{');
-      if (i < 0) return false;
-      // ⚠️ janela LARGA: a regra de `matches` ganhou o comentário que explica por que a
-      // escrita é negada (o cliente dispara, a CF escreve). Com 900 o `allow write: if
-      // false` ficava fora do recorte e o teste dizia que a subcoleção era do cliente.
-      const bloco = dentro.slice(i, i + 2600);
-      const corpo = bloco.slice(0, bloco.indexOf('\n      }') + 1);
-      /* ⚠️ 2.2 — a forma `allow read, write: if false` NÃO casava com `/allow write:/`, e as
-       * duas subcoleções novas do avanço (`advanceReceipts`, `outbox`) foram classificadas
-       * como "do cliente". O teste então exigia que ele as limpasse — coisa que ele nem pode
-       * fazer, já que a mesma regra nega tudo. O classificador é que estava estreito: o que
-       * importa é se o DELETE do cliente está negado, e `read, write: if false` nega. */
-      return /allow (?:[a-z]+, )*write:\s*if false/.test(corpo)
-          || /allow update, delete:\s*if false/.test(corpo)
-          || /allow delete:\s*if false/.test(corpo);
-    };
-    const doServidor = [];
-    subs.forEach(function (s) {
-      if (escritaNegada(s)) { doServidor.push(s); return; }
-      ok(DB._tournamentSubcollections.indexOf(s) >= 0,
-        'subcoleção "' + s + '" das regras está na lista de limpeza (senão vira órfão novo)');
-    });
+    // O servidor enumera todas as subcoleções, independentemente das permissões
+    // de escrita do cliente. A antiga lista no navegador não tinha consumidor.
+    const doServidor = subs.slice();
     ok(subs.length >= 2, 'achou as subcoleções nas regras (' + subs.join(', ') + ')');
 
     // ⛔ "o servidor limpa" não pode ser promessa: tem que estar escrito no gatilho.
@@ -197,30 +164,8 @@ function eq(a, b, m) { ok(a === b, m + ' — esperado ' + JSON.stringify(b) + ',
         'o gatilho trata o torneio APAGADO (é ele que limpa o que o cliente não pode)');
       ok(/lote\.delete\(d\.ref\)/.test(trecho),
         'e apaga os documentos do espelho de verdade — senão "o servidor limpa" é só promessa');
-      /* ⛔ 23/set/2026 — A ASSERÇÃO ANTIGA MEDIA A PREMISSA ERRADA, e o corte de `results`
-       * (o subdoc de resultado virou escrita-só-do-servidor) a derrubou. Ela exigia que
-       * subcoleção de escrita negada ficasse FORA de `_tournamentSubcollections`. Só que
-       * essa lista NÃO TEM CONSUMIDOR: `grep` em `js/` devolve a própria declaração e nada
-       * mais — ninguém nunca limpou nada por ela. E ela está FIXADA de propósito pela suíte
-       * do sandbox (`tests/sandbox-cliente-roteia-e-nao-fabrica.test.js`), que a usa como
-       * contrato.
-       * ⭐ Então provo o que é verdade: a lista é DECLARAÇÃO, não código. Se alguém ligar um
-       * consumidor, isto reprova — e é exatamente aí que a asserção antiga precisa voltar. */
-      const _dirJs = path.join(__dirname, '..', 'js');
-      const _varrer = function (dir) {
-        let hits = 0;
-        fs.readdirSync(dir, { withFileTypes: true }).forEach(function (e) {
-          if (e.isDirectory()) { hits += _varrer(path.join(dir, e.name)); return; }
-          if (!/\.js$/.test(e.name)) return;
-          const txt = fs.readFileSync(path.join(dir, e.name), 'utf8');
-          const m = txt.match(/_tournamentSubcollections/g);
-          if (m) hits += m.length;
-        });
-        return hits;
-      };
-      ok(_varrer(_dirJs) === 1,
-        '⭐ `_tournamentSubcollections` é DECLARAÇÃO, não código: 1 aparição em js/ e nenhum consumidor'
-        + ' (achei ' + _varrer(_dirJs) + ')');
+      ok(!('_tournamentSubcollections' in DB) && !('_deleteSubcollection' in DB),
+        'cliente não mantém lista ou apagador sem consumidor');
       /* ⛔ 2.2 — E AGORA POR NOME, que é a parte que faltava. Antes eu só exigia que o
        * gatilho TIVESSE código de apagar; ele tem, mas varria uma LISTA À MÃO — e à mão ela
        * havia esquecido QUATRO (`grupos`, `checkedIn`, `woLog`, `woClaims`), além das duas

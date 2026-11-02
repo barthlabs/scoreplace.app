@@ -5,12 +5,13 @@ const fs = require('node:fs');
 const { spawnSync } = require('node:child_process');
 
 const root = path.join(__dirname, '..');
-const projection = require('../functions/mirror-transaction-core');
 const source = fs.readFileSync(path.join(root, 'functions/index.js'), 'utf8');
 assert.doesNotMatch(source, /exports\.(syncSplitMatchResult|syncSplitEnrollmentResults|retryMirrorReconcilePending|sweepMirrorReconcilePending)\s*=/,
   'exports exclusivos do espelho saíram');
-assert.equal(projection.MIRROR_FOCAL_FALLBACK_READY, false,
-  'sem artefato de prova de carga e privacidade, a constante de liberação não pode virar true');
+for (const retired of ['mirror-transaction-core.js', 'mirror-reconcile-queue-core.js']) {
+  assert.equal(fs.existsSync(path.join(root, 'functions', retired)), false,
+    retired + ' não pode voltar ao runtime');
+}
 function dry(target, ...args) {
   return spawnSync('bash', ['scripts/deploy-functions.sh', target, ...args, '--dry-run'],
     { cwd: root, encoding: 'utf8' });

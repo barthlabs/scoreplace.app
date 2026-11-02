@@ -13,16 +13,14 @@ const original = fs.readFileSync(realRulesPath, 'utf8');
 const digest = value => crypto.createHash('sha256').update(value).digest('hex');
 const originalHash = digest(original);
 const wildcard = `    match /{path=**}/results/{matchId} {
-      allow read: if request.auth != null
-        && (request.auth.uid in resource.data.get('playerUids', []));
+      allow read, write: if false;
     }`;
-assert.equal(original.split(wildcard).length, 2, 'curinga results deve ocorrer uma vez');
-const nestedOnly = original.replace(wildcard, '');
+assert.equal(original.split(wildcard).length, 2, 'curinga results negado deve ocorrer uma vez');
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-result-visibility-parity-'));
 try {
-  const rulesPath = path.join(temp, 'nested-only.rules');
+  const rulesPath = path.join(temp, 'closed-results.rules');
   const configPath = path.join(temp, 'firebase.json');
-  fs.writeFileSync(rulesPath, nestedOnly);
+  fs.writeFileSync(rulesPath, original);
   fs.writeFileSync(configPath, JSON.stringify({
     firestore: { rules: rulesPath },
     emulators: {
@@ -42,8 +40,8 @@ try {
       SP_RESULT_PARITY_RULES: rulesPath
     }
   });
-  assert.match(output, /PARIDADE: OK/);
-  console.log('✅ 3.2.8: paridade da política de leitura de torneio com Rules aninhadas');
+  assert.match(output, /RESULTS: 36 negativas GET\/LIST\/group\/write/);
+  console.log('✅ E26: resultados antigos negados no caminho aninhado e no collection group');
 } finally {
   assert.equal(digest(fs.readFileSync(realRulesPath, 'utf8')), originalHash,
     'firestore.rules de produção foi modificado');

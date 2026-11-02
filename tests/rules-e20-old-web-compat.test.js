@@ -13,6 +13,6 @@ try {
     '--project', 'demo-scoreplace', 'node tests/rules/e20-old-web-compat.mjs'],
   { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
     env: { ...process.env, PATH: '/opt/homebrew/opt/openjdk/bin:' + process.env.PATH } });
-  if (!output.includes('✅ E20: leituras da web 2.5.83')) throw new Error(output.slice(-1500));
-  console.log('✅ E20: contrato da web publicada sob as novas Rules passou no emulador');
+  if (!output.includes('✅ E26: raiz e matches legíveis')) throw new Error(output.slice(-1500));
+  console.log('✅ E26: web antiga preserva raiz/jogos, sem ler results');
 } finally { fs.rmSync(temp, { recursive: true, force: true }); }

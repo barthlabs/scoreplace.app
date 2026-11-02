@@ -150,8 +150,10 @@ console.log('  ── o registro contra o código de verdade ──');
   // Alterar esta lista exige rever o incidente correspondente. O ponto 30 foi retirado
   // deliberadamente quando a reserva global de displayName foi eliminada do produto.
   // E05 aposentou o reaplicador do espelho (16) e o gatilho de projeção (23).
+  // E26 fechou leitura e escrita de results numa única linha: 10b/10c foram
+  // absorvidos pelo ponto 10, que ainda exige a anotação do incidente.
   // A lista continua duplicada para proteger os demais pontos contra remoção acidental.
-  const IDS = ['1','2','3','4','5','6','7','8','9','10','10b','10c','11','12','13','14','15','17','18','19','20','21','22','24','25','26','27','28','29'];
+  const IDS = ['1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','17','18','19','20','21','22','24','25','26','27','28','29'];
   const atuais = REGISTRO.map((e) => e.id);
   const sumiram = IDS.filter((id) => atuais.indexOf(id) === -1);
   ok(sumiram.length === 0, 'nenhum ponto foi removido do registro'

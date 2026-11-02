@@ -409,11 +409,9 @@ window.FirestoreDB = {
     return this.db.collection(this._ehSandbox(idOuT) ? 'sandboxes' : 'tournaments').doc(id);
   },
 
-  /* Rota de limpeza de sandboxes antigos: o índice legado chama-se
-   * `resultsSandbox` para não entrar no collection group global de `results`.
-   * E05: novos sandboxes não criam esse índice; o placar vive em `matches`. */
+  /* O nome da parte é único nas duas coleções. O placar vive em `matches`. */
   _subNome(idOuT, sub) {
-    return (String(sub) === 'results' && this._ehSandbox(idOuT)) ? 'resultsSandbox' : String(sub);
+    return String(sub);
   },
 
   /* A referência de uma SUBCOLEÇÃO do torneio, já roteada. */
@@ -2300,40 +2298,6 @@ window.FirestoreDB = {
       id1: (opts && opts.id1) != null ? opts.id1 : '',
       id2: (opts && opts.id2) != null ? opts.id2 : ''
     });
-  },
-
-  // Subcoleções que vivem SOB o torneio. Apagar o doc pai NÃO as apaga (Firestore não tem
-  // delete recursivo) — quem esquece isso deixa dado vivo sem dono.
-  _tournamentSubcollections: ['results', 'letzplayScans'],
-
-  /* ⭐ APAGAR UM SANDBOX É APAGAR O SANDBOX INTEIRO (2.1.88). Num torneio REAL o cliente só
-   * limpa `results` e `letzplayScans` — as outras subcoleções ele nem pode escrever, e quem
-   * as remove é a CF `purgeTournamentCopies` (gatilho em `tournaments/{id}`). Só que esse
-   * gatilho NÃO observa `sandboxes/`: se o cliente apagasse só o documento, TODAS as partes
-   * do sandbox (jogos, inscritos, grupos, histórico, placares) ficariam vivas e sem dono —
-   * exatamente os 151 `results` órfãos medidos em 01/ago/2026, agora numa coleção onde
-   * ninguém mais passa. No sandbox o dono pode escrever, então é ele quem limpa.
-   * A lista cobre as partes criadas hoje E o índice legado dos sandboxes antigos.
-   * `results` aqui é traduzido para `resultsSandbox` por `_subNome`. */
-  _sandboxSubcollections: ['matches', 'courtState', 'courtReleases', 'inscritos', 'opponentHistory', 'grupos', 'checkedIn',
-    'woLog', 'woClaims', 'history', 'resultQueue', 'categoryNotifications',
-    'letzplayScans', 'results'],
-
-  // Apaga TODOS os docs de uma subcoleção, em lotes de 400 (o teto do batch é 500).
-  // Devolve quantos foram apagados. Best-effort: erro num lote não derruba o resto.
-  async _deleteSubcollection(tournamentId, sub) {
-    var col = this._tSub(tournamentId, sub);
-    var apagados = 0;
-    for (var volta = 0; volta < 50; volta++) {           // teto de segurança (20 mil docs)
-      var snap = await col.limit(400).get();
-      if (snap.empty) break;
-      var lote = this.db.batch();
-      snap.forEach(function (d) { lote.delete(d.ref); });
-      await lote.commit();
-      apagados += snap.size;
-      if (snap.size < 400) break;
-    }
-    return apagados;
   },
 
   // APAGAR UM TORNEIO É UMA OPERAÇÃO DO SERVIDOR. A implementação anterior fazia a remoção

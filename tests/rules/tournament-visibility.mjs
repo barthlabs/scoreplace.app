@@ -71,7 +71,7 @@ try {
       }
     }
   });
-  for (const path of ['tournaments/hidden', 'tournaments_summary/hidden', 'tournaments/hidden/inscritos/p1', 'tournaments/hidden/history/h1', 'tournaments/hidden/results/m1', 'tournaments/hidden/courtState/main', 'tournaments/hidden/courtReleases/m1']) {
+  for (const path of ['tournaments/hidden', 'tournaments_summary/hidden', 'tournaments/hidden/inscritos/p1', 'tournaments/hidden/history/h1', 'tournaments/hidden/courtState/main', 'tournaments/hidden/courtReleases/m1']) {
     await succeeds(org, path);
     await succeeds(cohost, path); // adminUid ativo, mesmo fora de memberUids do torneio
     await succeeds(referee, path);
@@ -81,8 +81,8 @@ try {
     await fails(stranger, path);
     await fails(null, path);
   }
-  // As duas coleções têm a mesma autorização para uma leitura por ID.
-  for (const col of ['matches', 'results']) {
+  // Somente matches físicos seguem a visibilidade da raiz.
+  for (const col of ['matches']) {
     const hidden = 'tournaments/hidden/' + col + '/m1';
     for (const uid of [org, cohost, referee]) await succeeds(uid, hidden);
     for (const uid of [null, member, stranger]) await fails(uid, hidden);
@@ -92,6 +92,10 @@ try {
     await succeeds(member, 'tournaments/members/' + col + '/m1');
     await fails(stranger, 'tournaments/members/' + col + '/m1');
     await fails(null, 'tournaments/members/' + col + '/m1');
+  }
+  for (const uid of [null, org, cohost, referee, member, stranger]) {
+    await fails(uid, 'tournaments/hidden/results/m1');
+    await fails(uid, 'tournaments/public/results/m1');
   }
   for (const path of ['tournaments/members', 'tournaments_summary/members', 'tournaments/members/inscritos/p1', 'tournaments/members/courtState/main', 'tournaments/members/courtReleases/m1']) {
     await succeeds(org, path);
@@ -141,11 +145,9 @@ try {
   if (ownPrivate.docs.filter(d => d.data().isPublic === false).map(d => d.id).join(',') !== 'members') {
     throw new Error('contagem de privados do inscrito não deve incluir torneio oculto');
   }
-  // O espelho de torneio oculto não indexa jogadores; o histórico continua
-  // funcionando para outros torneios sem revelar o sorteio no app antigo.
+  // O índice antigo está fechado também para consulta collection group.
   const memberDb = env.authenticatedContext(member).firestore();
-  const history = await assertSucceeds(getDocs(query(collectionGroup(memberDb, 'results'), where('playerUids', 'array-contains', member))));
-  if (history.docs.some(d => d.ref.parent.parent.id === 'hidden')) throw new Error('histórico vazou o sorteio oculto');
+  await assertFails(getDocs(query(collectionGroup(memberDb, 'results'), where('playerUids', 'array-contains', member))));
   console.log('✅ visibilidade do torneio: geral, inscritos e organizadores');
 } finally {
   await env.cleanup();
