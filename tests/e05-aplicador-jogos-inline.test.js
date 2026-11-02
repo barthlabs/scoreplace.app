@@ -149,6 +149,9 @@ function fakeDb(f, target, options = {}) {
     ['scripts/aplicar-jogos-inline-e05.js', '--apply', manifest.digest],
     { cwd: require('node:path').join(__dirname, '..'), encoding: 'utf8' });
   assert.notEqual(command.status, 0);
-  assert.match(command.stderr, /recibo E20 ausente|digest autorizado divergente/);
+  // A cópia isolada do preflight omite `.claude/tmp` de propósito: sem o
+  // manifesto privado a CLI deve recusar antes de qualquer credencial/escrita.
+  assert.match(command.stderr,
+    /recibo E20 ausente|digest autorizado divergente|ENOENT:.*e05-inline-manifest-private\.json/);
   console.log('E05: aplicador CAS e gate de release recusam alteração insegura');
 })().catch(error => { console.error(error); process.exitCode = 1; });
