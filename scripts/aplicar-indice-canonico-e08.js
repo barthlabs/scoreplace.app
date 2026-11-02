@@ -6,11 +6,14 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { execFileSync } = require('node:child_process');
 const admin = require('../functions/node_modules/firebase-admin');
 const { credentialPath, accessTokenForServiceAccount } = require('./firebase-service-account-token.js');
 const { stable, digest, buildOperationalBackup } = require('./backup-torneio-operacional-core.js');
 const planner = require('./planejar-indice-canonico-e08.js');
 const core = require('./aplicar-indice-canonico-e08-core.js');
+const { releaseGate } = require('./aplicar-pares-e05.js');
+const { verifyPublishedReader } = require('./aplicar-jogos-inline-e05.js');
 
 const MANIFEST = path.resolve(__dirname, '../.claude/tmp/e08-indice-canonico-manifest-private.json');
 const RECEIPT_DIR = path.resolve(__dirname, '../.claude/tmp');
@@ -26,14 +29,22 @@ function readPlan(id, filename = MANIFEST) {
   return candidates[0];
 }
 
-function requireRelease(receiptFile = process.env.SCOREPLACE_E08_STAGE3_RELEASE_RECEIPT) {
+function requireRelease(receiptFile = process.env.SCOREPLACE_E08_STAGE3_RELEASE_RECEIPT, mainCommit) {
   if (!receiptFile || !path.isAbsolute(receiptFile)) throw new Error('[E08] recibo E20 ausente');
   const receipt = JSON.parse(fs.readFileSync(receiptFile, 'utf8'));
-  if (receipt.schema !== 'scoreplace/stage3-release/1' || receipt.project !== PROJECT ||
-      receipt.stage3Published !== true || receipt.mirrorExportsRetired !== true ||
-      !/^[a-f0-9]{40}$/i.test(receipt.hostingCommit || '')) {
-    throw new Error('[E08] corte E20 ou retirada do gatilho de espelho não comprovados');
-  }
+  try { releaseGate(receipt, mainCommit); }
+  catch (_) { throw new Error('[E08] corte E20 ou leitor publicado não comprovados'); }
+  return receipt;
+}
+
+async function requirePublishedRelease(receiptFile = process.env.SCOREPLACE_E08_STAGE3_RELEASE_RECEIPT,
+  hooks = {}) {
+  if (!hooks.mainCommit) execFileSync('git', ['fetch', 'origin', 'main'],
+    { cwd: path.resolve(__dirname, '..'), stdio: 'ignore', timeout: 30000 });
+  const mainCommit = hooks.mainCommit || execFileSync('git', ['rev-parse', 'origin/main'],
+    { cwd: path.resolve(__dirname, '..'), encoding: 'utf8' }).trim();
+  const receipt = requireRelease(receiptFile, mainCommit);
+  await (hooks.verifyReader || verifyPublishedReader)(receipt);
   return receipt;
 }
 
@@ -130,7 +141,7 @@ async function main(args = process.argv.slice(2)) {
   const plan = readPlan(id);
   if (apply) {
     if (args[1] !== plan.digest) throw new Error('[E08] digest do lote divergente');
-    requireRelease();
+    await requirePublishedRelease();
     requireApproval(plan, id);
     const prior = receiptFile(id);
     if (fs.existsSync(prior)) throw new Error('[E08] recibo anterior exige auditoria manual antes de retry');
@@ -161,7 +172,7 @@ async function main(args = process.argv.slice(2)) {
     backupSha256: backup.sha256, updatedMatches: changed, audited: true }, null, 2) + '\n');
 }
 
-module.exports = { readPlan, requireRelease, requireApproval, freshPlan, serviceDb,
+module.exports = { readPlan, requireRelease, requirePublishedRelease, requireApproval, freshPlan, serviceDb,
   capture, privateBackup, saveReceipt, main };
 if (require.main === module) main().catch(error => {
   console.error('[E08] operação interrompida: ' + error.message);
