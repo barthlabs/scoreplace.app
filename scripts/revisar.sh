@@ -163,6 +163,20 @@ arquivos_do_diff() {
     git ls-files --others --exclude-standard 2>/dev/null || true
   } | sed '/^$/d' | sort -u
 }
+arquivo_removido_no_corte() {
+  local f="$1"
+  # Um arquivo removido no commit ainda tem conteúdo no diff da base. Exigir
+  # status D impede que qualquer caminho antigo ou inexistente entre no lote.
+  if git cat-file -e "$BASE_DIFF:$f" 2>/dev/null &&
+     git diff --diff-filter=D --name-only "$BASE_DIFF"...HEAD -- "$f" | grep -Fxq "$f"; then
+    return 0
+  fi
+  if git cat-file -e "HEAD:$f" 2>/dev/null &&
+     git diff --diff-filter=D --name-only HEAD -- "$f" | grep -Fxq "$f"; then
+    return 0
+  fi
+  return 1
+}
 # Um orquestrador de lotes pode restringir a revisão a uma lista explícita. Sem
 # essa variável, a revisão preserva o comportamento histórico e cobre o corte
 # inteiro.
@@ -174,7 +188,7 @@ arquivos_do_escopo() {
       [[ -n "$f" ]] || continue
       # Exclusão rastreada ainda tem diff; caminho inexistente e não rastreado
       # seria omitido silenciosamente do lote.
-      if [[ ! -f "$f" ]] && ! git ls-files --error-unmatch -- "$f" >/dev/null 2>&1; then
+      if [[ ! -f "$f" ]] && ! arquivo_removido_no_corte "$f"; then
         echo "✗ arquivo da lista inexistente: $f" >&2
         return 1
       fi
@@ -516,7 +530,7 @@ EOF
     while IFS= read -r f; do
       [[ -n "$f" ]] || continue
       if [[ ! -f "$f" ]]; then
-        if git ls-files --error-unmatch -- "$f" >/dev/null 2>&1; then
+        if arquivo_removido_no_corte "$f"; then
           echo "--- arquivo REMOVIDO rastreado (diff acima): $f"
           continue
         fi
