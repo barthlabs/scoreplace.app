@@ -1,3 +1,4 @@
+// 2.5.86 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.85 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.84 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // Próximo corte web da etapa 3 — prévia de fases, operações de inscrição com
