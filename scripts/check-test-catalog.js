@@ -44,6 +44,8 @@ const EMULADOR_MANUAL = {
     'node scripts/rodar-emulador.js --only firestore --config firebase.emulator.json --project demo-scoreplace "node tests/aplicar-indice-canonico-e08-emulator.test.js"',
   'tests/aplicar-pares-e05-emulator.test.js':
     'node scripts/rodar-emulador.js --only firestore --config firebase.emulator.json --project demo-scoreplace "node tests/aplicar-pares-e05-emulator.test.js"',
+  'tests/e24-fmt2-vazio-emulator.test.js':
+    'node scripts/rodar-emulador.js --only firestore --config firebase.emulator.json --project demo-scoreplace "node tests/e24-fmt2-vazio-emulator.test.js"',
   'tests/e05-historico-aplicador-emulator.test.js':
     'node scripts/rodar-emulador.js --only firestore --config firebase.emulator.json --project demo-scoreplace "node tests/e05-historico-aplicador-emulator.test.js"',
   'tests/phase-rest-transaction-emulator.test.js':

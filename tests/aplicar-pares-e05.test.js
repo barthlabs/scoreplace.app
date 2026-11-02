@@ -31,6 +31,9 @@ const snapshot = { ref: { path }, root, physicalCollectionNames: ['matches', 're
   assert(!JSON.stringify(plan).includes('privado@example.invalid'));
   core.validatePlan(plan);
   core.verifyReadSet(snapshot, plan);
+  const divergent = { ...snapshot, collections: { ...snapshot.collections,
+    results: [doc(result.ref.path, { ...result.data(), scoreP2: 5 })] } };
+  await assert.rejects(() => core.makePlan(divergent), /par pareado bloqueado/);
   assert.throws(() => core.checkSnapshot({ ...snapshot, collections: {
     matches: Array(1000).fill(match), results: [result] } }), /1000 documentos/);
   assert.throws(() => core.verifyReadSet({ ...snapshot,
