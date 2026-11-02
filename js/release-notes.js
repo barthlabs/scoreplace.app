@@ -1,3 +1,6 @@
+// Próximo corte web da etapa 3 — prévia de fases, operações de inscrição com
+// confirmação do servidor e placar lido do jogo físico. A migração E05 dos
+// dados antigos e a atualização dos aplicativos nativos são entregas separadas.
 // 2.5.83 — O placar de set comum impede um segundo dígito quando a regra fecha
 // em até nove games. Tie-break e super tie-break continuam aceitando dois dígitos.
 // Se um placar inválido chegar à confirmação, o aviso mostra o set e os números lidos.
@@ -1192,6 +1195,9 @@ window._RELEASE_NOTES_HTML = (function () {
         '<li><b>🎾 Jogos e quadras:</b> a chave separa dias, aceita busca pelo nome da equipe e mostra a chamada confirmada para quadra com o tempo decorrido.</li>' +
         '<li><b>⏱️ Operação da chave:</b> relógios de chamada, aquecimento e jogo acompanham a TV. A chave conserva a ordem dos jogos e recupera quadras, classificação e resultados após reconectar; quadras ocupadas não podem receber outra chamada.</li>' +
         '<li><b>🗓️ Próximos jogos:</b> vários cards aparecem lado a lado quando há espaço, com a rodada publicada acima de cada partida.</li>' +
+        '<li><b>🌐 Fases na web:</b> depois de entrar na conta, a prévia do torneio abre a fase atual e carrega as fases anteriores quando você as escolhe.</li>' +
+        '<li><b>👥 Inscrições na web:</b> inscrição, saída, formação de dupla e mudanças feitas pela organização só aparecem como concluídas depois da confirmação do servidor. A lista de espera e as categorias seguem a mesma regra.</li>' +
+        '<li><b>🎾 Placar e privacidade na web:</b> o jogo passa a ser a fonte do placar; ocultar ou liberar resultados respeita a visibilidade do torneio. A tradução dos dados antigos será feita em lotes separados, com conferência dos placares.</li>' +
       '</ul>' +
     '</div>' +
     // v2.4 — a configuração de torneios por equipes agora é realmente por categoria:
