@@ -775,9 +775,8 @@ function _canonicalLateResponseRoster(t, promotedIds) {
  * reservar vagas antes de decidir sua categoria sem fabricar uma inscrição
  * incompleta que o motor poderia sortear como válida. */
 function _placeholderReservations(t) {
-  // Mantém a mesma projeção usada por addTournamentPlaceholders e pelo novo
-  // A organização usa esta projeção nos comandos do pacote autodraw; a leitura
-  // canônica para o cliente vive exclusivamente em functions/index.js.
+  // Mantém a projeção de addTournamentPlaceholders para os comandos da organização.
+  // A leitura canônica para o cliente vive exclusivamente em functions/index.js.
   const seen = new Set();
   return (Array.isArray(t && t.placeholderReservations) ? t.placeholderReservations : [])
     .filter((entry) => entry && entry.isPlaceholder === true)
