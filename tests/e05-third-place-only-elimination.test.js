@@ -29,6 +29,13 @@ for (const [name, W] of [['web', client], ['Function', server]]) {
   W._maybeGenerate3rdPlace(unknown);
   assert.equal(unknown.thirdPlaceMatch, undefined, `${name}: não inventa terceiro lugar sem eliminatória`);
 
+  for (const format of ['Liga', 'Ranking']) {
+    const legacy = bracket(format);
+    legacy.thirdPlaceMatch = { id: 'ghost', p1: 'B', p2: 'D', winner: null };
+    W._maybeGenerate3rdPlace(legacy);
+    assert.equal(legacy.thirdPlaceMatch, undefined, `${name}: ${format} não mantém terceiro lugar vazio`);
+  }
+
   const scored = bracket('Fase de Grupos');
   scored.thirdPlaceMatch = { id: 'historical', p1: 'B', p2: 'D', winner: 'B', score1: 6, score2: 4 };
   W._maybeGenerate3rdPlace(scored);
