@@ -27,6 +27,10 @@ W._applyCFTournament=()=>{};
   assert(toasts.some(item=>item.title.includes('Dupla na espera')),
     'formação sem vaga não anuncia integração na chave');
   assert(!calls.some(item=>item.kind==='legacyForm'));
+  const beforeMissing=calls.length;
+  W._formLateJoinDupla(t.id,'ausente','b');await flush();
+  assert.equal(calls.length,beforeMissing,'inscrição canônica ausente não cai no formLatePair legado');
+  assert(toasts.some(item=>item.title==='Dupla não formada'));
   t.standbyParticipants=[{p1Uid:'a',p2Uid:'b',categoryId:'cat',fixedPairId:'pair-1'}];
   W._splitLateDupla(t.id,'a','b');await flush();
   assert(calls.some(item=>item.kind==='splitPair'&&item.opts.categoryId==='cat'));

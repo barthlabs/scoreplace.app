@@ -5176,12 +5176,14 @@ window._lateCanonicalPairRefresh = function (tId) {
 window._formLateJoinDupla = function (tId, src, tgt, opts) {
   var _cards = (opts && opts.cards) || null;
   if (!src || !tgt || src === tgt) { if (typeof window._ljClearForming === 'function') window._ljClearForming(_cards); return; }
+  var _t = window.AppStore && Array.isArray(window.AppStore.tournaments)
+    ? window.AppStore.tournaments.find(function (item) { return String(item.id) === String(tId); }) : null;
   var _source = window._lateCanonicalPairEntry(tId, src);
-  if (_source && _source.tournament.canonicalRegistrationMigration && _source.tournament.canonicalRegistrationMigration.fingerprint) {
+  if (_t && _t.canonicalRegistrationMigration && _t.canonicalRegistrationMigration.fingerprint) {
     var _target = window._lateCanonicalPairEntry(tId, tgt);
-    var _a = window._lateCanonicalPairIdentity(_source.entry), _b = _target && window._lateCanonicalPairIdentity(_target.entry);
-    var _cat = String(_source.entry.categoryId || '');
-    if (!_a || !_b || !_cat || _cat !== String(_target.entry.categoryId || '')) {
+    var _a = _source && window._lateCanonicalPairIdentity(_source.entry), _b = _target && window._lateCanonicalPairIdentity(_target.entry);
+    var _cat = String(_source && _source.entry.categoryId || '');
+    if (!_a || !_b || !_cat || _cat !== String(_target && _target.entry.categoryId || '')) {
       if (typeof window._ljClearForming === 'function') window._ljClearForming(_cards);
       if (typeof showNotification !== 'undefined') showNotification('Dupla não formada', 'Escolha duas inscrições identificadas da mesma categoria.', 'warning');
       return;
