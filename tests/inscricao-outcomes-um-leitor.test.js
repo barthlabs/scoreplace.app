@@ -150,6 +150,14 @@ for (const outcome of ['rejected', 'conflict', 'unconfirmed', 'futureOutcome']) 
   ok(sb._applyEnrollResult(t, 'tid', undefined, { self:true, successToast:true, refresh:false }) === 'unconfirmed'
     && sb.toasts[0].k === 'error', 'resposta ausente falha fechada');
 }
+{
+  const sb = monta();
+  const t = { name:'Teste', participants:[] };
+  ok(sb._applyEnrollResult(t, 'tid', { participants:[{ uid:'fresco' }] },
+    { self:true, successToast:true, refresh:false }) === 'unconfirmed'
+    && sb.toasts[0].k === 'error' && t.participants[0].uid === 'fresco',
+  'lista fresca sem outcome não afirma inscrição desta chamada');
+}
 
 // ── FIAÇÃO: as três portas diretas usam o leitor; a inscrição em dupla delega
 // à autoinscrição após pedir consentimento individual de cada atleta. ─────────

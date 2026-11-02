@@ -486,6 +486,7 @@ window._applyEnrollResult = function (t, tId, res, ctx) {
   else if (res.alreadyWaitlisted) verdict = 'alreadyWaitlisted';
   else if (res.waitlisted) verdict = 'waitlisted';
   else if (res.outcome === 'enrolled') verdict = 'enrolled';
+  // Lista de participantes sem desfecho não prova que esta chamada inscreveu alguém.
   else verdict = 'unconfirmed';
   var ok = (verdict === 'enrolled' || verdict === 'waitlisted');
 

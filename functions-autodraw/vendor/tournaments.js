@@ -1935,7 +1935,7 @@ window._scrollToBracketSection = function(tId, matchId) {
 // Forma a dupla de fato (caminho canônico, reusado por organizador e por aceite de convite).
 window._formDuplaByUids = function(tId, name1, uid1, name2, uid2, pairRequestId) {
     var t = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
-    if (!t) return;
+    if (!t) return false;
     // CF-ONLY (regra do dono "tudo na CF, cliente só dispara"): a Function é quem
     // forma a dupla. A resposta traz o roster canônico e PRECISA hidratar a tela
     // imediatamente: aguardar só o snapshot deixa o toast dizer "Dupla formada" com
