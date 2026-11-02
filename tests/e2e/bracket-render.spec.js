@@ -11,39 +11,33 @@
 // scripts; senão prod).
 
 const { test, expect } = require('@playwright/test');
+const { buildDupla, simulate } = require('../render-harness');
 
-// monta 14 duplas (Dupla Eliminatória + repescagem), simula tudo e injeta o render na página.
+// O servidor decide a repescagem; o navegador só renderiza a chave decidida.
 async function renderDupla14(page) {
-  return page.evaluate(() => {
-    const E = window._phasesEngine;
-    const mkPool = (n) => { const a = []; for (let i = 0; i < n; i++) a.push({ displayName: 'D' + i, categories: ['C'] }); return a; };
-    const cfg = { format: 'Dupla Eliminatória', formatCode: 'elim_dupla', teamSize: 2, bracketResolution: 'playin', source: { type: 'enrollment' }, categories: ['C'] };
-    const t = { id: 'E2E', name: 'E2E Dupla', format: 'Dupla Eliminatória', teamSize: 2, matches: [], currentPhaseIndex: 0, status: 'active' };
-    const b = E.generatePhase(mkPool(14), cfg, { idPrefix: 'p', ordered: true, t, isVip: () => false, catOf: (e) => (e.categories || [])[0] });
-    E.storePhase(t, 0, b);
-    (b.repMetaByCat || [b.repMeta]).forEach((mm) => window._buildRepechageDoubleElim(t, mm));
-    let g = 0;
-    while (g++ < 5000) {
-      const m = t.matches.find((x) => x && !x.winner && !x.isBye && x.p1 && x.p2 && x.p1 !== 'TBD' && x.p2 !== 'TBD' && x.p1 !== 'BYE' && x.p2 !== 'BYE' && !/aguard|derrotad|melhor/i.test(String(x.p1) + String(x.p2)));
-      if (!m) break;
-      m.winner = m.p1; m.scoreP1 = 6; m.scoreP2 = g % 5;
-      window._advanceWinner(t, m);
-      if (window._resolveRepFills) window._resolveRepFills(t);
-    }
+  const t = JSON.parse(JSON.stringify(simulate(buildDupla(14))));
+  const grand = t.matches.find((m) => m.bracket === 'grand');
+  const info = { matches: t.matches.length, gfWinner: grand && grand.winner,
+    grand: grand && { p1: grand.p1, p2: grand.p2 },
+    unfinished: t.matches.filter((m) => !m.winner && !m.isBye).map((m) => ({ id: m.id, bracket: m.bracket, p1: m.p1, p2: m.p2 })).slice(0, 8) };
+  expect(info.gfWinner, 'fixture do motor local: ' + JSON.stringify({ grand: info.grand, unfinished: info.unfinished })).toBeTruthy();
+  await page.evaluate((t) => {
+    const authUser = window.firebase && typeof window.firebase.auth === 'function' ? window.firebase.auth().currentUser : null;
+    if (window.AppStore.currentUser || authUser) throw new Error('E2E sintético exige sessão deslogada');
     window.AppStore.tournaments = [t];
     window._currentBracketTournament = t;
     const c = document.getElementById('view-container');
     c.innerHTML = window._renderPodiumsAndClassif(t) + window.renderDoubleElimBracket(t, false, '');
-    return { matches: t.matches.length, gfWinner: (t.matches.find((m) => m.bracket === 'grand') || {}).winner };
-  });
+  }, t);
+  return info;
 }
 
-test.describe('Bracket render — Dupla Eliminatória (navegador real)', () => {
+test.describe('Render de Dupla — fixture do motor local, DOM do Hosting', () => {
   test('nomes de rodada, SEM "Linha", box escuro do pódio, classificação', async ({ page }) => {
     await page.goto('/', { waitUntil: 'load' });
     const info = await renderDupla14(page);
     expect(info.matches).toBe(28);           // 14 duplas → 28 jogos (mesma estrutura do headless)
-    expect(info.gfWinner).toBeTruthy();       // grande final decidida
+    expect(info.gfWinner, 'fixture do motor local').toBeTruthy();
 
     const vc = page.locator('#view-container');
 
@@ -56,16 +50,17 @@ test.describe('Bracket render — Dupla Eliminatória (navegador real)', () => {
     await expect(vc).not.toContainText(/Linha \d/);
 
     // --- VISUAL que o vm-sandbox NÃO pega: cor COMPUTADA do box do pódio ---
-    const podium = await page.evaluate(() => {
+    const podium = await page.evaluate((winner) => {
       // acha o container do pódio (div com o título "Torneio Encerrado")
       const titles = Array.from(document.querySelectorAll('#view-container div'));
       const box = titles.find((d) => /Torneio Encerrado/.test(d.textContent || '') && /gradient/.test(d.getAttribute('style') || ''));
       if (!box) return null;
       const cs = getComputedStyle(box);
       const r = box.getBoundingClientRect();
-      return { bgImage: cs.backgroundImage, visibleH: Math.round(r.height), visibleW: Math.round(r.width) };
-    });
+      return { bgImage: cs.backgroundImage, visibleH: Math.round(r.height), visibleW: Math.round(r.width), championVisible: (box.textContent || '').includes(winner) };
+    }, info.gfWinner);
     expect(podium, 'box do pódio existe no DOM').not.toBeNull();
+    expect(podium.championVisible, 'campeão da fixture local aparece no pódio publicado').toBe(true);
     // box ESCURO: o gradiente computado contém o slate escuro (15, 23, 42)
     expect(podium.bgImage).toContain('gradient');
     expect(podium.bgImage).toMatch(/15,\s*23,\s*42/);
@@ -116,6 +111,8 @@ test.describe('Bracket render — Dupla Eliminatória (navegador real)', () => {
 // render. Reconstrói t.groups dos matches (o app faz isso no render de grupos/monarch).
 async function renderViaEngine(page, format, extraCfg, n, renderFn) {
   return page.evaluate(({ format, extraCfg, n, renderFn }) => {
+    const authUser = window.firebase && typeof window.firebase.auth === 'function' ? window.firebase.auth().currentUser : null;
+    if (window.AppStore.currentUser || authUser) throw new Error('E2E sintético exige sessão deslogada');
     const E = window._phasesEngine;
     const pool = []; for (let i = 0; i < n; i++) pool.push({ displayName: 'J' + i, categories: ['C'] });
     const cfg = Object.assign({ format, teamSize: 1, source: { type: 'enrollment' }, categories: ['C'] }, extraCfg);
@@ -194,6 +191,8 @@ test.describe('Rei/Rainha render (navegador real)', () => {
     // jogos, então o 1º jogador de cada grupo fica 3V/0D → ganha a coroa.
     await page.goto('/', { waitUntil: 'load' });
     const info = await page.evaluate(() => {
+      const authUser = window.firebase && typeof window.firebase.auth === 'function' ? window.firebase.auth().currentUser : null;
+      if (window.AppStore.currentUser || authUser) throw new Error('E2E sintético exige sessão deslogada');
       const parts = []; for (let i = 0; i < 8; i++) parts.push({ displayName: 'J' + i, name: 'J' + i, uid: 'u' + i });
       const t = { id: 'E2E', name: 'RR E2E', format: 'Liga', teamSize: 1, participants: parts, rounds: [], matches: [], currentPhaseIndex: 0, status: 'active', drawMode: 'rei_rainha', ligaRoundFormat: 'rei_rainha' };
       window._generateNextRound(t);   // 8 jogadores → 1 rodada, 2 grupos de 4, 3 jogos por grupo
@@ -259,7 +258,11 @@ test.describe('Pontos Corridos (Liga) render (navegador real)', () => {
     expect(info.nStandings).toBe(8);       // classificação INDIVIDUAL: 8 jogadores (mesmo jogando em duplas)
 
     const vc = page.locator('#view-container');
-    await expect(vc.locator('table').first()).toBeVisible();
-    await expect(vc).toContainText(info.leader);  // líder aparece na tabela renderizada
+    const standings = vc.locator('details').filter({ has: page.locator('summary h3.card-title', { hasText: 'Classificação' }) }).first();
+    await expect(standings, 'classificação de torneio ativo começa recolhida').toBeAttached();
+    expect(await standings.evaluate((el) => el.open), 'classificação de torneio ativo começa recolhida').toBe(false);
+    await standings.locator('summary').click();
+    await expect(standings.locator('table')).toBeVisible();
+    await expect(standings.locator('tbody tr').first()).toContainText(info.leader);
   });
 });
