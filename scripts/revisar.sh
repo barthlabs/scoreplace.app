@@ -382,6 +382,9 @@ if [[ "$MODO" == diff && "${SP_REVIEW_VALIDATE:-0}" == 1 ]]; then
     local rotulo="$1"; shift
     if "$@" > "$LOG_VALIDACAO" 2>&1; then
       printf '✓ %s (exit 0)\n' "$rotulo"
+      # O parecer precisa da contagem real, não só do exit code: um teste que
+      # falhou em uma submissão anterior só fica resolvido com a nova saída.
+      if [[ "$rotulo" == "suíte completa" ]]; then tail -n 5 "$LOG_VALIDACAO"; fi
     else
       printf '✗ %s falhou; últimas linhas:\n' "$rotulo"
       tail -80 "$LOG_VALIDACAO"
