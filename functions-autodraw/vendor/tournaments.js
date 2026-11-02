@@ -776,7 +776,7 @@ window._addPlaceholdersCore = function (id, qtd, onDone, opts) {
         return true;
     }
     var t = opts.tournament || window.AppStore.tournaments.find(function (tour) { return tour.id.toString() === id.toString(); });
-    if (!t) return false;
+    if (!t) return;
     if (!Array.isArray(t.participants)) t.participants = t.participants ? Object.values(t.participants) : [];
     var hasDraw = (Array.isArray(t.matches) && t.matches.length > 0) || (Array.isArray(t.rounds) && t.rounds.length > 0) || (Array.isArray(t.groups) && t.groups.length > 0);
     // v4.5.92: antes de numerar os novos, DEDUP + cura os placeholders existentes (números
