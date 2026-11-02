@@ -102,6 +102,7 @@ const SUITES = [
   'tests/operation-router-v3.test.js',
   'tests/operation-router-central-actions.test.js',
   'tests/check-served-operation-revision.test.js',
+  'tests/refresh-score-regions-rollback.test.js',
   'tests/operation-regions-v3-config.test.js',
   'tests/operation-control-transaction.test.js',
   'tests/operation-queue-protocol.test.js',
@@ -2426,6 +2427,7 @@ const { spawn, execFileSync } = require('child_process');
 /* (1a) MEXEM EM ARQUIVO DO REPO — corrompem de propósito e restauram. Quem ler o mesmo
  *      arquivo ao mesmo tempo falha ao acaso. Cada linha diz o que ela corrompe. */
 const MEXEM_NO_REPO = [
+  'tests/refresh-score-regions-rollback.test.js',     // isola um gcloud simulado em tmp
   'tests/operation-regional-sync.test.js',            // cria binários e estado falsos em tmp; runner detecta writeFileSync
   'tests/operation-gate-check-live.test.js',           // cria binários e candidato falsos em tmp
   'tests/build-www-deterministico.test.js',           // cria/remova o manifesto regional de fixture
