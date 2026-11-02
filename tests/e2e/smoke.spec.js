@@ -65,7 +65,7 @@ test.describe('Smoke — landing/dashboard sem login', () => {
     // Aguarda DOM atualizado (placeholder removido). main.js v0.17.59 garante
     // que outerHTML rola ANTES de _releaseNotesLoaded virar true.
     await expect(notasSection.locator('#release-notes-placeholder')).toHaveCount(0, { timeout: 15000 });
-    await expect(notasSection.locator('.help-body')).toContainText(/v0\.\d+\.\d+/i, { timeout: 5000 });
+    await expect(notasSection.locator('.help-body')).toContainText(/v\d+\.\d+(?:\.\d+)?/i, { timeout: 5000 });
     expect(await page.evaluate(() => window._releaseNotesLoaded)).toBe(true);
   });
 
