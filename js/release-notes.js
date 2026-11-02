@@ -2,6 +2,7 @@
 // Próximo corte web da etapa 3 — prévia de fases, operações de inscrição com
 // confirmação do servidor e placar lido do jogo físico. A migração E05 dos
 // dados antigos e a atualização dos aplicativos nativos são entregas separadas.
+// Uma partida repetida entre páginas do histórico conta uma vez por torneio e jogo.
 // A saída de inscrição recusa prosseguir quando a pessoa já está no sorteio e
 // não há vaga de W.O. identificada. Alterações de categoria aguardam o salvamento
 // em curso para evitar que uma ação rejeitada apareça como concluída.

@@ -1968,7 +1968,7 @@ window.FirestoreDB = {
   // updatedAt, então ordená-los na query excluiria resultados legítimos.
   async loadMyMatchResults(uid, opts) {
     if (!uid) return [];
-    var out = [], cursor = null, seen = {};
+    var out = [], cursor = null, seen = {}, seenItems = {};
     for (var page = 0; page < 100; page++) {
       var reply = await this._callFn('getTournamentResultHistoryPage', {
         targetUid: String(uid), cursor: cursor
@@ -1976,7 +1976,17 @@ window.FirestoreDB = {
       if (!reply || !Array.isArray(reply.items)) {
         throw Object.assign(new Error('Resposta de histórico inválida'), { code: 'functions/data-loss' });
       }
-      out.push.apply(out, reply.items);
+      reply.items.forEach(function (item) {
+        // Uma página concorrente pode repetir o último jogo da anterior. A
+        // identidade física é torneio + jogo; outro torneio pode ter o mesmo ID.
+        var key = item && item.tournamentId != null && item.matchId != null
+          ? String(item.tournamentId) + '\u0000' + String(item.matchId) : null;
+        if (key !== null) {
+          if (seenItems[key]) return;
+          seenItems[key] = true;
+        }
+        out.push(item);
+      });
       if (!reply.cursor) {
         function ts(value) {
           if (value && typeof value.toMillis === 'function') return value.toMillis();

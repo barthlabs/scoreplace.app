@@ -32,6 +32,17 @@ const method = vm.runInNewContext('({' + src.slice(start, end + 5) + '})').loadM
   assert.equal(limited.length, 1);
   assert.equal(limited[0].tournamentId, 't1');
 
+  const duplicateRows = {
+    '': { items: [{ tournamentId: 't1', matchId: 'm1', updatedAt: '2026-01-01' }], cursor: 'next' },
+    next: { items: [{ tournamentId: 't1', matchId: 'm1', updatedAt: '2026-01-01' },
+      { tournamentId: 't2', matchId: 'm1', updatedAt: '2026-01-02' }], cursor: null }
+  };
+  client._callFn = async (_, payload) => duplicateRows[payload.cursor || ''];
+  const deduplicated = await method.call(client, 'person');
+  assert.equal(deduplicated.length, 2, 'partida repetida em duas páginas conta uma vez');
+  assert.deepEqual(Array.from(deduplicated, item => item.tournamentId), ['t2', 't1'],
+    'mesmo matchId em torneios diferentes continua sendo dois jogos');
+
   client._callFn = async () => ({ items: [], cursor: 'same' });
   await assert.rejects(method.call(client, 'person'), /Cursor de histórico repetido/);
   client._callFn = async () => { throw new Error('offline'); };
