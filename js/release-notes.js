@@ -1,3 +1,4 @@
+// 2.5.84 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // Próximo corte web da etapa 3 — prévia de fases, operações de inscrição com
 // confirmação do servidor e placar lido do jogo físico. A migração E05 dos
 // dados antigos e a atualização dos aplicativos nativos são entregas separadas.
