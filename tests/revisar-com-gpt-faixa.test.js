@@ -42,6 +42,9 @@ function run(script, args, opts) {
   // parecer. Cada cenário injeta abaixo somente o que pretende provar.
   delete env.REVISOR; delete env.CLAUDECODE; delete env.SP_SEM_GPT;
   Object.keys(env).filter((k) => k.indexOf('CODEX_') === 0).forEach((k) => delete env[k]);
+  // O revisor roda este laboratório dentro do próprio gate. Suas variáveis de
+  // lote não podem apontar os cenários para arquivos fora do repo temporário.
+  Object.keys(env).filter((k) => k.startsWith('SP_REVIEW_')).forEach((k) => delete env[k]);
   Object.assign(env, SEM_REVISOR, opts.env || {});
   // o núcleo testa `-n CLAUDECODE` e `^CODEX_`: pra simular "fora do Claude Code" a variável
   // tem que SUMIR, não ficar vazia
