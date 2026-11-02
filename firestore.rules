@@ -612,9 +612,9 @@ service cloud.firestore {
        * ⚠️ O QUE ISTO **NÃO** FECHA, dito para ninguém ler como resolvido:
        *   • `allow create` segue aceitando esses campos ⇒ nascer com uid de terceiro continua
        *     possível; `memberUids` só vira fronteira com as DUAS levas somadas;
-       *   • o `playerUids` que de fato autoriza jogador vive em `results/{matchId}`, que o
-       *     organizador grava direto (e o cliente escreve por `reseedMatchRoster`). Aqui fecha uma
-       *     CÓPIA, não a fronteira.
+       *   • o `playerUids` que autoriza o placar vive no jogo físico em `matches/{matchId}`;
+       *     só a Cloud Function grava o jogo. A regra da raiz protege o elenco do torneio,
+       *     não substitui a validação da porta de placar.
        * ⛔ E sem escape de reset: `ehResetOk()` não compara campo de elenco nenhum, então usá-lo
        * como escape reabriria a rota exatamente pelo reset. O reset tem porta própria. */
       function elencoIntacto() {
@@ -899,13 +899,9 @@ service cloud.firestore {
       // mesmos jogos que já estão no documento, e o documento já é legível por este mesmo
       // público. É paridade de leitura, não exposição nova.
       //
-      // ⛔ ESCRITA CONTINUA NEGADA AO CLIENTE. Quem escreve aqui é o gatilho
-      // `tournamentMirror` (admin SDK, não passa por regra). A escrita pelo cliente é a
-      // Fase 2b e exige uma coisa que o documento espelhado AINDA NÃO TEM: `playerUids`
-      // no topo, gravado por caminho de confiança (sorteio/avanço) — é ele que permite a
-      // regra "só quem joga ESTE jogo escreve, e não pode se auto-incluir", igual à de
-      // `results` logo acima. Sem `playerUids`, liberar update aqui seria liberar pra
-      // qualquer inscrito mexer em qualquer jogo.
+      // ⛔ ESCRITA NEGADA AO CLIENTE. O jogo físico é a fonte canônica e a Cloud
+      // Function (Admin SDK) é a única porta de gravação do placar. `playerUids`
+      // identifica os jogadores autorizados; o servidor confere essa identidade.
       match /matches/{matchId} {
         function parentTm() {
           return get(/databases/$(database)/documents/tournaments/$(tournamentId)).data;
@@ -916,8 +912,8 @@ service cloud.firestore {
         // arquitetura: _"cada card desenhado de forma leve, puxando as informações que vão
         // nele, com os BOTÕES QUE DISPARAM FUNÇÕES NO SERVIDOR"_.
         //
-        // Eu tinha escrito aqui um `allow update` por jogador (espelhando `results`).
-        // Funcionava, mas contradiz o princípio: coloca a AUTORIZAÇÃO em dois lugares —
+        // Uma versão antiga tinha `allow update` por jogador. Contradizia o princípio:
+        // colocava a AUTORIZAÇÃO em dois lugares —
         // nesta regra e no cliente — e regra de segurança é o pior lugar pra manter lógica
         // de negócio (não dá pra testar junto, não dá pra logar, e diverge em silêncio,
         // que foi a causa de três bugs em 25/ago).
@@ -930,7 +926,7 @@ service cloud.firestore {
         allow write: if false;
       }
 
-      // Revisão transacional dos escritores de results. Nenhum cliente lê ou
+      // Fence histórico da transição de resultados. Nenhum cliente lê ou
       // altera este contador; o Admin SDK é a única porta.
       match /resultVisibilityFence/{fenceId} {
         allow read, write: if false;
@@ -1139,8 +1135,8 @@ service cloud.firestore {
     }
 
     // ─── Histórico letzplay: 1 doc por COMPETIÇÃO, 1 doc por PARTIDA ──────────
-    // letzplayTournaments/{compId}/matches/{gid} — mesmo molde dos nossos jogos
-    // (tournaments/{id}/results/{matchId}), que é como o letzplay também organiza.
+    // letzplayTournaments/{compId}/matches/{gid} — mesmo molde dos jogos físicos
+    // (tournaments/{id}/matches/{matchId}), que é como o letzplay também organiza.
     //
     // POR QUE NÃO É UM DOC POR USUÁRIO: uma partida do letzplay tem 4 pessoas, então ela
     // é importada até 4 vezes (uma por perspectiva). Como doc compartilhado, o mesmo jogo
@@ -1152,10 +1148,10 @@ service cloud.firestore {
     // leitura/escrita por qualquer authed — mesma política de letzplayScans. A whitelist
     // de chaves é o que impede um cliente de pendurar campo arbitrário.
     //
-    // A leitura do histórico de alguém é collectionGroup('matches') com
-    // where('players','array-contains', handle) — o mesmo padrão que `results` usa pra ler
-    // os jogos de um uid sem carregar o torneio. Por isso `allow read` NÃO faz get() no
-    // pai: um get() por doc tornaria a listagem cara.
+    // A leitura do histórico letzplay de alguém é collectionGroup('matches') com
+    // where('players','array-contains', handle). Este acervo tem regra própria;
+    // os jogos do Scoreplace são lidos pelo caminho físico autorizado. Por isso
+    // `allow read` aqui NÃO faz get() no pai: um get() por doc encareceria a listagem.
     match /letzplayTournaments/{compId} {
       allow read: if request.auth != null;
       allow create, update: if request.auth != null
@@ -1406,10 +1402,10 @@ service cloud.firestore {
       // e desenhava a grade de estatísticas ZERADA — recusa e "nunca jogou" ficavam
       // visualmente idênticas. Ver [[project_stats_visibility_user_choice]].
       //
-      // AUSENTE = 'public' (decisão do dono, 06/ago/2026): as 185 contas que já existem
-      // continuam com a ficha funcionando. Não abre nada novo — `matchHistory` é cópia
-      // desnormalizada do que JÁ é legível: `{path=**}/results` (qualquer autenticado) e
-      // `casualMatches` (leitura livre). Quem quiser fechar, fecha no perfil.
+      // AUSENTE = 'public' (decisão do dono, 06/ago/2026): as contas sem preferência
+      // continuam com a ficha funcionando para usuários autenticados. `matchHistory`
+      // é o canal da ficha conforme `statsVisibility`; `results` não é legível pelo
+      // cliente. Quem quiser fechar a ficha para terceiros, fecha no perfil.
       //
       // ESCRITA continua SÓ do dono — visibilidade muda quem LÊ, nunca quem grava.
       match /matchHistory/{matchId} {

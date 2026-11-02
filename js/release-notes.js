@@ -1,3 +1,6 @@
+// 2.5.87 — O histórico dos torneios usa os jogos físicos como fonte única. Cópias
+// antigas de resultados deixam de ser legíveis ou graváveis pelo cliente. As
+// configurações e placares dos torneios existentes não são alterados por este corte.
 // 2.5.86 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.85 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.84 — Atualização consolidada de produção com as correções validadas desde a última publicação.
