@@ -598,6 +598,8 @@ const SUITES = [
   'tests/planejar-sandbox-e05.test.js',
   'tests/planejar-indice-canonico-e08.test.js',
   'tests/aplicar-indice-canonico-e08.test.js',
+  'tests/e08-fase-loc-especial.test.js',
+  'tests/e08-fase14-emulator.test.js',
   'tests/aplicar-pares-e05.test.js',
   'tests/check-e05-mirror-functions.test.js',
   'tests/retirar-writers-e20.test.js',
@@ -2451,6 +2453,7 @@ const PRENDEM_PORTA = [
   'tests/rules-e20-old-web-compat.test.js', // Firestore 8199; web 2.5.83 contra as Rules novas
   'tests/migrar-uid-jogos-e05.test.js', // Firestore Emulator e transação CAS E05
   'tests/e29-ordem-confra.test.js', // inicia Firestore Emulator para CAS do lote E29
+  'tests/e08-fase14-emulator.test.js', // E08: 14 jogos, CAS e rollback no Firestore Emulator
   'tests/storage-payment-proof.test.js',         // Firestore + Storage nas portas 8130/9198
   'tests/rules-tournament-billing.test.js',       // Firestore 8125; o hub compartilhado falhou sob carga paralela na CI
   'tests/rules-result-visibility-parent-probe.test.js', // Firestore 8133; Rules temporárias da 3.2.8

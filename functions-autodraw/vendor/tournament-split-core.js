@@ -103,7 +103,7 @@
     if (!m || typeof m !== 'object' || !loc) return null;
     var tag = m.phaseIndex;
     var ausente = !Object.prototype.hasOwnProperty.call(m, 'phaseIndex') || tag === undefined;
-    if (loc.tipo === 'matches') {
+    if (loc.tipo === 'matches' || loc.tipo === 'groupRounds' || loc.tipo === 'thirdPlace') {
       return Number.isSafeInteger(tag) && tag >= 0 ? tag : null;
     }
     var estrutural = null;
