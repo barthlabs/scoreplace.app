@@ -14,6 +14,10 @@ if (!admin.apps.length) admin.initializeApp({ projectId: 'demo-scoreplace' });
 const db = admin.firestore();
 const groupTarget = preview.TARGETS[1];
 let seq = 0;
+const approval = manifest => ({ schema: 'scoreplace/e05-inline-approval/1',
+  project: 'scoreplace-app', manifestDigest: manifest.digest,
+  targetNames: manifest.targets.map(item => item.name), authorizedBy: 'emulator',
+  authorizationRef: 'test/only', expiresAt: '2100-01-01T00:00:00Z' });
 
 async function fixture(target) {
   const id = 'e05-inline-emu-' + process.pid + '-' + (++seq);
@@ -78,7 +82,8 @@ async function withBatch(fn) {
 
 (async () => {
   await withBatch(async ({ fixtures, backups, manifest }, receiptFile) => {
-    const report = await cli.run(db, manifest, backups, true, { receiptFile });
+    await assert.rejects(() => cli.run(db, manifest, backups, true, { receiptFile }), /autorização específica/);
+    const report = await cli.run(db, manifest, backups, true, { receiptFile, approval: approval(manifest) });
     assert.equal(report.productionGamesCreated, 14);
     assert.equal(report.productionRootsUpdated, 3);
     assert.equal(JSON.parse(fs.readFileSync(receiptFile, 'utf8')).auditStatus, 'APPLIED_AUDITED');
@@ -90,14 +95,14 @@ async function withBatch(fn) {
         Array(preview.TARGETS[i].count).fill(6));
       assert.equal((await item.ref.collection('results').get()).size, preview.TARGETS[i].count);
     }
-    const retry = await cli.run(db, manifest, backups, true, { receiptFile });
+    const retry = await cli.run(db, manifest, backups, true, { receiptFile, approval: approval(manifest) });
     assert.equal(retry.productionGamesCreated, 0, 'retry do lote completo é leitura');
     assert(retry.targets.every(item => item.status === 'done'));
   });
 
   await withBatch(async ({ fixtures, backups, manifest }, receiptFile) => {
     await assert.rejects(() => cli.run(db, manifest, backups, true, {
-      receiptFile, beforeTransaction: async () => {
+      receiptFile, approval: approval(manifest), beforeTransaction: async () => {
         await fixtures[1].ref.update({ changedBeforeTransaction: true });
       }
     }), 'mudança de raiz após a prévia aborta o commit inteiro');
@@ -106,7 +111,7 @@ async function withBatch(fn) {
 
   await withBatch(async ({ fixtures, backups, manifest }, receiptFile) => {
     await assert.rejects(() => cli.run(db, manifest, backups, true, {
-      receiptFile, beforeTransaction: async () => {
+      receiptFile, approval: approval(manifest), beforeTransaction: async () => {
         await fixtures[2].ref.collection('matches').doc(fixtures[2].games[0].id)
           .create({ unrelated: true });
       }
@@ -118,7 +123,7 @@ async function withBatch(fn) {
 
   await withBatch(async ({ fixtures, backups, manifest }, receiptFile) => {
     await assert.rejects(() => cli.run(db, manifest, backups, true, {
-      receiptFile, beforeWrite: async prepared => {
+      receiptFile, approval: approval(manifest), beforeWrite: async prepared => {
         const last = prepared[2], id = last.entry.entries[0].id;
         last.records.set(id, { ...last.records.get(id), oversized: 'x'.repeat(1100000) });
       }
@@ -128,14 +133,15 @@ async function withBatch(fn) {
 
   await withBatch(async ({ fixtures, backups, manifest }, receiptFile) => {
     assert.equal(await cli.applyTarget(db, preview.TARGETS[0], manifest.targets[0]), 'applied');
-    await assert.rejects(() => cli.run(db, manifest, backups, true, { receiptFile }), /parcialmente migrado/);
+    await assert.rejects(() => cli.run(db, manifest, backups, true,
+      { receiptFile, approval: approval(manifest) }), /parcialmente migrado/);
     assert.equal((await fixtures[1].ref.collection('matches').get()).size, 0);
     assert.equal((await fixtures[2].ref.collection('matches').get()).size, 0);
   });
 
   await withBatch(async ({ fixtures, backups, manifest }, receiptFile) => {
     await assert.rejects(() => cli.run(db, manifest, backups, true, {
-      receiptFile, afterCommit: async () => {
+      receiptFile, approval: approval(manifest), afterCommit: async () => {
         await fixtures[0].ref.collection('matches').doc(fixtures[0].games[0].id)
           .update({ 'jogo.scoreP1': 5 });
       }
@@ -145,7 +151,8 @@ async function withBatch(fn) {
     assert.match(failure.auditFailure, /jogo\.scoreP1/);
     const check = await cli.run(db, manifest, backups, false, { receiptFile });
     assert.equal(check.postAuditFailure, true);
-    await assert.rejects(() => cli.run(db, manifest, backups, true, { receiptFile }), /revisão manual/);
+    await assert.rejects(() => cli.run(db, manifest, backups, true,
+      { receiptFile, approval: approval(manifest) }), /revisão manual/);
   });
 
   const ok = await fixture(groupTarget);

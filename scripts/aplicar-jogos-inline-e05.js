@@ -15,6 +15,27 @@ const core = require('./aplicar-jogos-inline-e05-core.js');
 const MANIFEST = path.resolve(__dirname, '../.claude/tmp/e05-inline-manifest-private.json');
 const RECEIPT = path.resolve(__dirname, '../.claude/tmp/e05-inline-apply-receipt-private.json');
 const RELEASE_ENV = 'SCOREPLACE_E05_STAGE3_RELEASE_RECEIPT';
+const APPROVAL_ENV = 'SCOREPLACE_E05_INLINE_APPROVAL_FILE';
+
+function approvalGate(approval, manifest, now = Date.now()) {
+  const targetNames = manifest.targets.map(item => item.name);
+  if (!approval || approval.schema !== 'scoreplace/e05-inline-approval/1' ||
+      approval.project !== 'scoreplace-app' || approval.manifestDigest !== manifest.digest ||
+      JSON.stringify(approval.targetNames) !== JSON.stringify(targetNames) ||
+      typeof approval.authorizedBy !== 'string' || !approval.authorizedBy.trim() ||
+      typeof approval.authorizationRef !== 'string' || !approval.authorizationRef.trim() ||
+      !Number.isFinite(Date.parse(approval.expiresAt)) || Date.parse(approval.expiresAt) <= now) {
+    throw new Error('[E05] autorização específica dos jogos inline ausente ou divergente');
+  }
+  return approval;
+}
+
+function readApproval(manifest, env = process.env) {
+  const filename = env[APPROVAL_ENV];
+  if (!filename || !path.isAbsolute(filename)) throw new Error('[E05] arquivo de autorização específica ausente');
+  if ((fs.statSync(filename).mode & 0o077) !== 0) throw new Error('[E05] autorização precisa ser privada (0600)');
+  return approvalGate(JSON.parse(fs.readFileSync(filename, 'utf8')), manifest);
+}
 
 function releaseGate(digest, env = process.env) {
   const filename = env[RELEASE_ENV];
@@ -244,6 +265,7 @@ function saveReceipt(digest, statuses, filename = RECEIPT, auditStatus = 'APPLIE
 }
 
 async function run(db, manifest, backups, apply, options = {}) {
+  if (apply) approvalGate(options.approval, manifest);
   const receiptFile = options.receiptFile || RECEIPT;
   let priorFailure = false;
   if (fs.existsSync(receiptFile)) {
@@ -298,17 +320,19 @@ async function main(args = process.argv.slice(2)) {
     if (args[1] !== manifest.digest) throw new Error('digest autorizado divergente');
     await verifyPublishedReader(releaseGate(manifest.digest));
   }
+  const approval = apply ? readApproval(manifest) : null;
   const key = JSON.parse(fs.readFileSync(credentialPath(process.env), 'utf8'));
   if (key.type !== 'service_account' || key.project_id !== 'scoreplace-app') {
     throw new Error('credencial/projeto inválido');
   }
   const backups = previewCli.loadBackups();
   if (!admin.apps.length) admin.initializeApp({ credential: admin.credential.cert(key), projectId: 'scoreplace-app' });
-  const report = await run(admin.firestore(), manifest, backups, apply);
+  const report = await run(admin.firestore(), manifest, backups, apply, { approval });
   process.stdout.write(JSON.stringify(report, null, 2) + '\n');
 }
 
-module.exports = { releaseGate, verifyPublishedReader, readManifest, inspectTarget, applyTarget, applyBatch,
+module.exports = { releaseGate, verifyPublishedReader, approvalGate, readApproval,
+  readManifest, inspectTarget, applyTarget, applyBatch,
   auditBatch, saveReceipt, run, main };
 if (require.main === module) main().catch(error => {
   console.error('[E05] operação interrompida: ' + error.message);

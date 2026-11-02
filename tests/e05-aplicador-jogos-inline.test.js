@@ -84,8 +84,26 @@ function fakeDb(f, target, options = {}) {
   await assert.rejects(() => cli.applyTarget(changedCount.db, target, f.entry), /contagem física mudou/);
   assert.equal(changedCount.calls.length, 0);
   assert.throws(() => cli.releaseGate(manifest.digest, {}), /recibo E20 ausente/);
+  const approval = { schema: 'scoreplace/e05-inline-approval/1', project: 'scoreplace-app',
+    manifestDigest: manifest.digest, targetNames: manifest.targets.map(item => item.name),
+    authorizedBy: 'proprietário', authorizationRef: 'conversa/lote-exato',
+    expiresAt: '2100-01-01T00:00:00Z' };
+  assert.throws(() => cli.approvalGate(null, manifest), /autorização específica/);
+  assert.equal(cli.approvalGate(approval, manifest), approval);
+  for (const invalid of [
+    { ...approval, manifestDigest: '0'.repeat(64) },
+    { ...approval, targetNames: approval.targetNames.slice(1) },
+    { ...approval, authorizationRef: '' },
+    { ...approval, expiresAt: '2000-01-01T00:00:00Z' }
+  ]) assert.throws(() => cli.approvalGate(invalid, manifest), /autorização específica/);
   const receiptDir = fs.mkdtempSync(path.join(os.tmpdir(), 'scoreplace-e05-gate-'));
   try {
+    const approvalFile = path.join(receiptDir, 'approval.json');
+    fs.writeFileSync(approvalFile, JSON.stringify(approval), { mode: 0o600 });
+    assert.equal(cli.readApproval(manifest, { SCOREPLACE_E05_INLINE_APPROVAL_FILE: approvalFile }).manifestDigest,
+      manifest.digest);
+    fs.chmodSync(approvalFile, 0o644);
+    assert.throws(() => cli.readApproval(manifest, { SCOREPLACE_E05_INLINE_APPROVAL_FILE: approvalFile }), /0600/);
     const receiptFile = path.join(receiptDir, 'receipt.json');
     const env = { SCOREPLACE_E05_STAGE3_RELEASE_RECEIPT: receiptFile };
     const sha = value => crypto.createHash('sha256').update(value).digest('hex');
