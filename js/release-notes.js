@@ -1,3 +1,6 @@
+// 2.5.83 — O placar de set comum impede um segundo dígito quando a regra fecha
+// em até nove games. Tie-break e super tie-break continuam aceitando dois dígitos.
+// Se um placar inválido chegar à confirmação, o aviso mostra o set e os números lidos.
 // 2.5.82 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.81 — Inscrições pagas por Pix ou link do organizador ficam pendentes até
 // a conferência do comprovante. A organização pode consultar a taxa do torneio,
