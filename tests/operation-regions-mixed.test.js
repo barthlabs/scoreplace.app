@@ -19,8 +19,16 @@ const manifestsPresent = ['v2', 'v3'].every(version =>
 const historyPath = path.join(root, '.claude/tmp/operation-regions-current-sync.json');
 const history = fs.existsSync(historyPath) ? JSON.parse(fs.readFileSync(historyPath, 'utf8')) : null;
 const legacyAvailability = legacyFixtureAvailability();
-const baselineRows = version => history?.originals?.[version] || legacyFixtureRows(JSON.parse(fs.readFileSync(
-  path.join(root, `.claude/tmp/operation-regions-manifest-${version}.json`))), legacyAvailability.parent);
+const baselineRows = version => {
+  if (history?.originals?.[version]) return history.originals[version];
+  // O manifesto operacional evolui por porta. Para testar o corte histórico,
+  // normalize a fixture ao commit da release antes de derivar o pai: depois
+  // da atualização só de placar, a lista real já é mista e não seria traduzida.
+  const rows = JSON.parse(fs.readFileSync(path.join(root,
+    `.claude/tmp/operation-regions-manifest-${version}.json`)));
+  return legacyFixtureRows(rows.map(row => ({ ...row,
+    commit: '40be907dfc593db2eb4de1d6ed9783493b301787' })), legacyAvailability.parent);
+};
 const skipReason = gitRepo.status !== 0 ? 'sem histórico Git (cópia git archive)'
   : !current ? 'sem commit de functions-autodraw no histórico Git'
     : !manifestsPresent ? 'manifestos regionais ignorados pelo git archive' : false;
