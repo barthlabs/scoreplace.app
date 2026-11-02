@@ -35,6 +35,11 @@ assert.equal(operations[0][1].playerUids, 'DELETE_FIELD');
 assert(operations.some(([ref, doc]) => ref === 'resultVisibilityFence/state' && doc.revision === 'INCREMENT_ONE'));
 assert.deepEqual(operations.find(([ref]) => ref === 'resultVisibilityFence/state')[2], { merge: true },
   'fence ausente é criado por set com merge e increment, inclusive no primeiro revision');
+const releaseOperations = [];
+plan.applyPlan({ set: (...args) => releaseOperations.push(args), delete: () => assert.fail('não deve apagar documento') },
+  fakeRef, release, { FieldValue: { delete: () => 'DELETE_FIELD', increment: () => 'INCREMENT_ONE' } });
+assert.deepEqual(releaseOperations.find(([ref]) => ref === 'resultVisibilityFence/state')[2], { merge: true },
+  'liberação também atualiza o fence com merge na mesma transação');
 
 const counted = (n) => plan.planWrites(before, hidden, ctx({ mode: 'hide',
   entries: Array.from({ length: n }, (_, i) => ({ id: `m${i}` })) }));
