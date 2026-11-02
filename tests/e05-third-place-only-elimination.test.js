@@ -25,6 +25,15 @@ for (const [name, W] of [['web', client], ['Function', server]]) {
     assert.equal(group.thirdPlaceMatch, undefined, `${name}: não recria terceiro lugar em grupos`);
   }
 
+  const groupWithEliminationPhase = bracket('Fase de Grupos', [
+    { kind: 'elimination', elimination: { bracketType: 'single' } }
+  ]);
+  assert.equal(W._isEliminationPhase(groupWithEliminationPhase), true,
+    `${name}: fase eliminatória explícita prevalece sobre rótulo legado de grupos`);
+  W._maybeGenerate3rdPlace(groupWithEliminationPhase);
+  assert.ok(groupWithEliminationPhase.thirdPlaceMatch,
+    `${name}: fase eliminatória explícita gera terceiro lugar`);
+
   const unknown = bracket('Formato desconhecido');
   W._maybeGenerate3rdPlace(unknown);
   assert.equal(unknown.thirdPlaceMatch, undefined, `${name}: não inventa terceiro lugar sem eliminatória`);
