@@ -32,6 +32,42 @@ function checkServed(service, revision, row) {
   return name;
 }
 
+// Decisão anterior ao corte de tráfego. A revisão recém-criada pode estar
+// pronta mas "retired" enquanto a rota continua fixada na revisão antiga.
+// Nunca confundir spec.template (desejo) com a revisão que recebe requisições.
+function candidateDecision(service, revision, expected) {
+  const name = service.status?.latestCreatedRevisionName;
+  if (!expected || !expected.previousRevision ||
+      !/^[a-f0-9]{64}$/.test(expected.sourceDigest || '') ||
+      !/^[a-z]+(?:-[a-z]+)*[0-9]+$/.test(expected.region || '') || !name ||
+      name === expected.previousRevision ||
+      (expected.revision && name !== expected.revision) ||
+      revision.metadata?.name !== name) throw new Error('Revisão candidata ausente ou divergente');
+  const conditions = revision.status?.conditions || [];
+  const ready = type => conditions.some(item => item.type === type && String(item.status) === 'True');
+  if (!ready('Ready') || !ready('ContainerReady')) {
+    throw new Error('Revisão candidata não pronta');
+  }
+  const container = revision.spec?.containers?.[0];
+  const env = Object.fromEntries((container?.env || []).map(item => [item.name, item.value]));
+  const image = container?.image;
+  if (!image?.includes('@sha256:') || (expected.image && image !== expected.image)) {
+    throw new Error('Imagem candidata divergente');
+  }
+  if (env.SP_SOURCE_DIGEST !== expected.sourceDigest || env.SP_OPERATION_REGION !== expected.region) {
+    throw new Error('Fonte ou região candidata divergente');
+  }
+  if (revision.metadata?.annotations?.['run.googleapis.com/base-images']) {
+    throw new Error('Atualização automática da imagem candidata');
+  }
+  if (expected.url && service.status?.url !== expected.url) throw new Error('URL candidata divergente');
+  const served = servedRevisionName(service);
+  if (served !== expected.previousRevision && served !== name) {
+    throw new Error('Tráfego aponta para revisão inesperada');
+  }
+  return { action: served === name ? 'current' : 'promote', revision: name, image };
+}
+
 if (require.main === module) {
   const service = JSON.parse(process.env.SP_SERVICE_JSON || '{}');
   const revision = JSON.parse(process.env.SP_REVISION_JSON || '{}');
@@ -40,4 +76,4 @@ if (require.main === module) {
   if (rows.length !== 1) throw new Error('Manifesto ausente ou duplicado');
   process.stdout.write(checkServed(service, revision, rows[0]) + '\n');
 }
-module.exports = { servedRevisionName, checkServed };
+module.exports = { servedRevisionName, checkServed, candidateDecision };

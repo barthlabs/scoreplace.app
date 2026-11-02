@@ -44,7 +44,11 @@ fi
 
 project=scoreplace-app
 describe() { gcloud run services describe "$1" --project "$project" --region "$2" --format=json; }
+revision() { gcloud run revisions describe "$1" --project "$project" --region "$2" --format=json; }
 field() { node -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>{let x=JSON.parse(s);for(const p of process.argv[1].split("."))x=x?.[p];process.stdout.write(x==null?"":String(x))})' "$1"; }
+served_name() {
+  SP_SERVICE_JSON="$1" node -e 'const x=require("./scripts/check-served-operation-revision");process.stdout.write(x.servedRevisionName(JSON.parse(process.env.SP_SERVICE_JSON)))'
+}
 probe() {
   local file code
   file="$(mktemp)"
@@ -58,30 +62,78 @@ NODE
 }
 check_service() {
   local json="$1" file="$2" name="$3" region="$4"
-  SP_JSON="$json" SP_FILE="$file" SP_NAME="$name" SP_REGION="$region" node - <<'NODE'
-const fs=require('fs'),m=JSON.parse(fs.readFileSync(process.env.SP_FILE));
-const rows=m.filter(x=>x.name===process.env.SP_NAME&&x.region===process.env.SP_REGION);
-if(rows.length!==1)process.exit(1);
-const r=rows[0],s=JSON.parse(process.env.SP_JSON),e=Object.fromEntries((s.spec?.template?.spec?.containers?.[0]?.env||[]).map(x=>[x.name,x.value]));
-if(r.image!==s.spec?.template?.spec?.containers?.[0]?.image||r.revision!==s.status?.latestReadyRevisionName||
-  r.url!==s.status?.url||e.SP_SOURCE_DIGEST!==r.sourceDigest||e.SP_OPERATION_REGION!==r.region||
-  s.spec?.template?.metadata?.annotations?.['run.googleapis.com/base-images'])process.exit(1);
+  local served rev_json
+  served="$(served_name "$json")"
+  rev_json="$(revision "$served" "$region")"
+  SP_SERVICE_JSON="$json" SP_REVISION_JSON="$rev_json" SP_FILE="$file" SP_NAME="$name" SP_REGION="$region" node scripts/check-served-operation-revision.js >/dev/null
+  probe "$(printf '%s' "$json" | field status.url)"
+}
+check_old() {
+  local json="$1" name="$2" region="$3" served rev_json baseline
+  baseline="${SP_SCORE_BASELINE_FILE:-.claude/tmp/operation-regions-manifest-${name##*-}.json}"
+  served="$(served_name "$json")"
+  rev_json="$(revision "$served" "$region")"
+  SP_SERVICE_JSON="$json" SP_REVISION_JSON="$rev_json" SP_FILE="$baseline" \
+    SP_NAME="$name" SP_REGION="$region" node - <<'NODE'
+const fs=require('fs');
+const {checkServed}=require('./scripts/check-served-operation-revision');
+const s=JSON.parse(process.env.SP_SERVICE_JSON),r=JSON.parse(process.env.SP_REVISION_JSON);
+const rows=JSON.parse(fs.readFileSync(process.env.SP_FILE)).filter(x=>x.name===process.env.SP_NAME&&x.region===process.env.SP_REGION);
+if(rows.length!==1)throw Error('linha anterior ausente ou duplicada');
+checkServed(s,r,rows[0]);
 NODE
   probe "$(printf '%s' "$json" | field status.url)"
 }
+candidate_action() {
+  SP_SERVICE_JSON="$1" SP_REVISION_JSON="$2" SP_PREVIOUS="$3" SP_REGION="$4" \
+    SP_DIGEST="$5" SP_IMAGE="$6" node - <<'NODE'
+const {candidateDecision}=require('./scripts/check-served-operation-revision');
+const s=JSON.parse(process.env.SP_SERVICE_JSON),r=JSON.parse(process.env.SP_REVISION_JSON);
+const result=candidateDecision(s,r,{previousRevision:process.env.SP_PREVIOUS,
+  sourceDigest:process.env.SP_DIGEST,region:process.env.SP_REGION,
+  ...(process.env.SP_IMAGE?{image:process.env.SP_IMAGE}:{})});
+process.stdout.write(result.action);
+NODE
+}
+check_promoted() {
+  local json="$1" rev_json="$2" name="$3" region="$4" digest="$5" expected="$6"
+  SP_JSON="$json" SP_REV_JSON="$rev_json" SP_NAME="$name" SP_REGION="$region" \
+    SP_DIGEST="$digest" SP_EXPECTED="$expected" node - <<'NODE'
+const {checkServed}=require('./scripts/check-served-operation-revision');
+const s=JSON.parse(process.env.SP_JSON),r=JSON.parse(process.env.SP_REV_JSON);
+if(s.status?.latestReadyRevisionName!==process.env.SP_EXPECTED)throw Error('revisão nova não está pronta');
+checkServed(s,r,{revision:process.env.SP_EXPECTED,region:process.env.SP_REGION,
+  image:r.spec?.containers?.[0]?.image,sourceDigest:process.env.SP_DIGEST,url:s.status.url});
+NODE
+  probe "$(printf '%s' "$json" | field status.url)"
+}
+rollback_traffic() {
+  local name="$1" region="$2" previous="$3" current
+  echo "✗ promoção sem confirmação: revertendo $name/$region" >&2
+  if ! gcloud run services update-traffic "$name" --project "$project" --region "$region" \
+      --to-revisions "$previous=100" --quiet >/dev/null; then
+    echo "✗ REVERSÃO NÃO CONFIRMADA $name/$region" >&2; exit 78
+  fi
+  current="$(describe "$name" "$region")" || { echo "✗ REVERSÃO NÃO CONFIRMADA $name/$region" >&2; exit 78; }
+  check_old "$current" "$name" "$region" || { echo "✗ REVERSÃO NÃO CONFIRMADA $name/$region" >&2; exit 78; }
+  echo "✓ tráfego antigo restaurado $name/$region" >&2
+  exit 1
+}
 record() {
-  local json="$1" file="$2" name="$3" region="$4" digest="$5"
-  SP_JSON="$json" SP_FILE="$file" SP_NAME="$name" SP_REGION="$region" SP_DIGEST="$digest" SP_COMMIT="$source_commit" node - <<'NODE'
-const fs=require('fs'),s=JSON.parse(process.env.SP_JSON),e=Object.fromEntries((s.spec?.template?.spec?.containers?.[0]?.env||[]).map(x=>[x.name,x.value]));
-const m=JSON.parse(fs.readFileSync(process.env.SP_FILE));
+  local json="$1" rev_json="$2" file="$3" name="$4" region="$5" digest="$6"
+  SP_JSON="$json" SP_REV_JSON="$rev_json" SP_FILE="$file" SP_NAME="$name" SP_REGION="$region" SP_DIGEST="$digest" SP_COMMIT="$source_commit" node - <<'NODE'
+const fs=require('fs'),m=JSON.parse(fs.readFileSync(process.env.SP_FILE));
+const {checkServed,servedRevisionName}=require('./scripts/check-served-operation-revision');
+const s=JSON.parse(process.env.SP_JSON),r=JSON.parse(process.env.SP_REV_JSON);
 const i=m.findIndex(x=>x.name===process.env.SP_NAME&&x.region===process.env.SP_REGION);
 const old=m[i];
-if(i<0||e.SP_SOURCE_DIGEST!==process.env.SP_DIGEST||e.SP_OPERATION_REGION!==process.env.SP_REGION||
-  !s.spec?.template?.spec?.containers?.[0]?.image?.includes('@sha256:')||
-  !s.status?.url||s.status.url!==old.url||!s.status?.latestReadyRevisionName||s.spec?.template?.metadata?.annotations?.['run.googleapis.com/base-images'])process.exit(1);
+if(i<0||!s.status?.url||s.status.url!==old.url)process.exit(1);
+const rev=servedRevisionName(s),image=r.spec?.containers?.[0]?.image;
+const e=Object.fromEntries((r.spec?.containers?.[0]?.env||[]).map(x=>[x.name,x.value]));
+checkServed(s,r,{revision:rev,region:process.env.SP_REGION,image,sourceDigest:process.env.SP_DIGEST,url:s.status.url});
 m[i]={name:process.env.SP_NAME,region:process.env.SP_REGION,target:'applyMatchResult',codebase:'functions-autodraw',
   commit:process.env.SP_COMMIT,sourceDigest:process.env.SP_DIGEST,
-  image:s.spec.template.spec.containers[0].image,url:s.status.url,revision:s.status.latestReadyRevisionName,env:e};
+  image,url:s.status.url,revision:rev,env:e};
 fs.writeFileSync(process.env.SP_FILE,JSON.stringify(m,null,2)+'\n');
 NODE
 }
@@ -100,36 +152,74 @@ for version in v3 v2; do
   source_image=''
   for region in "${regions[@]}"; do
     json="$(describe "$name" "$region")"
+    previous="$(SP_FILE="$manifest" SP_NAME="$name" SP_REGION="$region" node -e 'const x=JSON.parse(require("fs").readFileSync(process.env.SP_FILE));const r=x.find(v=>v.name===process.env.SP_NAME&&v.region===process.env.SP_REGION);if(!r)process.exit(1);process.stdout.write(r.revision)')"
     current_digest="$(printf '%s' "$json" | node -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>{const x=JSON.parse(s);process.stdout.write((x.spec?.template?.spec?.containers?.[0]?.env||[]).find(e=>e.name==="SP_SOURCE_DIGEST")?.value||"")})')"
-    if [[ "$current_digest" == "$digest" ]]; then
-      receipt="$candidate"
-      [[ -e "$receipt" ]] || receipt="$manifest"
-      check_service "$json" "$receipt" "$name" "$region"
-      echo "✓ já atualizado $name/$region"
-    else
+    if [[ "$current_digest" == "$digest" && "$(printf '%s' "$json" | field status.latestCreatedRevisionName)" == "$previous" ]]; then
+      check_service "$json" "$manifest" "$name" "$region"
+      if [[ "$region" == us-east1 ]]; then
+        source_image="$(revision "$previous" "$region" | field spec.containers.0.image)"
+      fi
+      echo "✓ já atualizado e servindo $name/$region"
+      continue
+    fi
+    if [[ "$current_digest" != "$digest" ]]; then
       check_service "$json" "$manifest" "$name" "$region"
       echo "✓ antigo verificado $name/$region"
       if [[ "$mode" == --deploy ]]; then
+        suffix="e08$(date +%s)$RANDOM"
         if [[ "$region" == us-east1 ]]; then
           export_dir="$(mktemp -d)"
           git archive HEAD functions-autodraw | tar -x -C "$export_dir"
           runtime="$(node -p "require('./functions-autodraw/package.json').engines.node")"
           gcloud run deploy "$name" --project "$project" --region "$region" --source "$export_dir/functions-autodraw" \
-            --function applyMatchResult --base-image "nodejs$runtime" --no-automatic-updates \
+            --function applyMatchResult --base-image "nodejs$runtime" --no-automatic-updates --revision-suffix "$suffix" \
             --set-env-vars "SP_SOURCE_DIGEST=$digest,SP_OPERATION_REGION=$region" --allow-unauthenticated --quiet
           rm -rf "$export_dir"
         else
           [[ -n "$source_image" ]] || { echo 'imagem da região de origem ausente' >&2; exit 1; }
           gcloud run deploy "$name" --project "$project" --region "$region" --image "$source_image" \
-            --set-env-vars "SP_SOURCE_DIGEST=$digest,SP_OPERATION_REGION=$region" --allow-unauthenticated --quiet
+            --revision-suffix "$suffix" --set-env-vars "SP_SOURCE_DIGEST=$digest,SP_OPERATION_REGION=$region" --allow-unauthenticated --quiet
         fi
         json="$(describe "$name" "$region")"
-        record "$json" "$candidate" "$name" "$region" "$digest"
-        check_service "$json" "$candidate" "$name" "$region"
-        echo "✓ publicado $name/$region"
+        [[ "$(printf '%s' "$json" | field status.latestCreatedRevisionName)" == "$name-$suffix" ]] || {
+          echo "revisão criada não corresponde ao deploy: $name/$region" >&2; exit 1;
+        }
       fi
     fi
-    if [[ "$region" == us-east1 ]]; then source_image="$(printf '%s' "$json" | field spec.template.spec.containers.0.image)"; fi
+    if [[ "$current_digest" == "$digest" || "$mode" == --deploy ]]; then
+      next="$(printf '%s' "$json" | field status.latestCreatedRevisionName)"
+      [[ -n "$next" && "$next" != "$previous" ]] || { echo "revisão candidata ausente: $name/$region" >&2; exit 1; }
+      next_json="$(revision "$next" "$region")"
+      expected_image="$source_image"
+      if [[ "$region" == us-east1 && "$current_digest" == "$digest" ]]; then
+        # O manifesto só é promovido no fim da versão: numa retomada ele pode
+        # guardar a imagem anterior. O candidato só fixa a imagem se registrar
+        # exatamente esta revisão; senão a prova é SHA + digest/ambiente do rev.
+        expected_image="$(SP_FILE="$candidate" SP_NAME="$name" SP_REGION="$region" SP_REVISION="$next" SP_DIGEST="$digest" node -e 'const fs=require("fs");if(!fs.existsSync(process.env.SP_FILE))process.exit(0);const x=JSON.parse(fs.readFileSync(process.env.SP_FILE));const r=x.find(v=>v.name===process.env.SP_NAME&&v.region===process.env.SP_REGION);if(r&&r.revision===process.env.SP_REVISION&&r.sourceDigest===process.env.SP_DIGEST)process.stdout.write(r.image)')"
+      fi
+      action="$(candidate_action "$json" "$next_json" "$previous" "$region" "$digest" "$expected_image")"
+      if [[ "$action" == promote ]]; then check_old "$json" "$name" "$region"; fi
+      if [[ "$mode" == --preflight ]]; then
+        echo "✓ revisão candidata $name/$region: $action"
+      else
+        if [[ "$action" == promote ]]; then
+          gcloud run services update-traffic "$name" --project "$project" --region "$region" \
+            --to-revisions "$next=100" --quiet || rollback_traffic "$name" "$region" "$previous"
+        fi
+        confirmed=0
+        for attempt in {1..10}; do
+          json="$(describe "$name" "$region")"
+          next_json="$(revision "$next" "$region")"
+          if check_promoted "$json" "$next_json" "$name" "$region" "$digest" "$next"; then confirmed=1; break; fi
+          sleep 2
+        done
+        [[ "$confirmed" == 1 ]] || rollback_traffic "$name" "$region" "$previous"
+        record "$json" "$next_json" "$candidate" "$name" "$region" "$digest"
+        check_service "$json" "$candidate" "$name" "$region"
+        echo "✓ tráfego confirmado $name/$region em $next"
+      fi
+      if [[ "$region" == us-east1 ]]; then source_image="$(printf '%s' "$next_json" | field spec.containers.0.image)"; fi
+    fi
   done
   if [[ "$mode" == --deploy ]]; then
     SP_FILE="$candidate" SP_NAME="$name" SP_DIGEST="$digest" SP_REGIONS="${regions[*]}" node - <<'NODE'
