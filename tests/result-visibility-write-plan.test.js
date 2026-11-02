@@ -33,6 +33,8 @@ plan.applyPlan({ set: (...args) => operations.push(args), delete: () => assert.f
 assert.equal(operations.length, 4);
 assert.equal(operations[0][1].playerUids, 'DELETE_FIELD');
 assert(operations.some(([ref, doc]) => ref === 'resultVisibilityFence/state' && doc.revision === 'INCREMENT_ONE'));
+assert.deepEqual(operations.find(([ref]) => ref === 'resultVisibilityFence/state')[2], { merge: true },
+  'fence ausente é criado por set com merge e increment, inclusive no primeiro revision');
 
 const counted = (n) => plan.planWrites(before, hidden, ctx({ mode: 'hide',
   entries: Array.from({ length: n }, (_, i) => ({ id: `m${i}` })) }));
