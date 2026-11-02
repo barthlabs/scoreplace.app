@@ -41,11 +41,11 @@ const scoreDigest = skipReason ? '' : execFileSync('node',
   { cwd: root }).toString().trim();
 
 for (const version of ['v2', 'v3']) {
-  const run = (rows, allowLegacyCourt = false, extraEnv = {}, requireCurrent = false) => {
+  const run = (rows, allowLegacyCourt = false, extraEnv = {}, requireCurrent = false, requireScoreRefresh = false) => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-region-test-'));
     const file = path.join(dir, 'manifest.json');
     fs.writeFileSync(file, JSON.stringify(rows));
-    try { return spawnSync('node', [script, version, ...(allowLegacyCourt ? ['--allow-legacy-court'] : []), ...(requireCurrent ? ['--require-current'] : [])],
+    try { return spawnSync('node', [script, version, ...(allowLegacyCourt ? ['--allow-legacy-court'] : []), ...(requireCurrent ? ['--require-current'] : []), ...(requireScoreRefresh ? ['--require-score-refresh'] : [])],
       { cwd: root, env: { ...process.env, ...extraEnv, SP_REGION_MANIFEST: file }, encoding: 'utf8' }); }
     finally { fs.rmSync(dir, { recursive: true, force: true }); }
   };
@@ -129,6 +129,24 @@ for (const version of ['v2', 'v3']) {
     });
     assert.equal(run(aligned).status, 0);
     assert.equal(run(aligned, false, {}, true).status, 0, 'release exige as seis portas no commit atual');
+    assert.notEqual(run(aligned, false, {}, false, true).status, 0, 'corte dirigido recusa placar antigo');
+    assert.equal(run(original, false, {}, false, true).status, 0, 'corte dirigido aceita só placar novo');
+    assert.notEqual(run(original, true, {}, false, true).status, 0, 'flags incompatíveis são recusadas');
+    assert.notEqual(run(original, false, {}, true, true).status, 0, 'dois modos obrigatórios são recusados');
+    const wrongOther = structuredClone(original);
+    const scoreCommit = original.find(row => row.name === `sp-op-score-${version}`).commit;
+    const courtDigest = sourceDigest('assignMatchCourt', scoreCommit,
+      sourceDescriptor('functions-autodraw', scoreCommit, true));
+    for (const row of wrongOther.filter(row => row.name === `sp-op-court-${version}`)) {
+      row.commit = scoreCommit;
+      row.sourceDigest = courtDigest;
+    }
+    assert.notEqual(run(wrongOther, false, {}, false, true).status, 0,
+      'porta não-score em commit novo é recusada');
+    const wrongRegion = structuredClone(original);
+    wrongRegion.find(row => row.name === `sp-op-score-${version}`).commit = commit;
+    assert.notEqual(run(wrongRegion, false, {}, false, true).status, 0,
+      'região de placar divergente é recusada');
     const unexpected = structuredClone(aligned);
     unexpected[0].region = 'europe-west1';
     assert.notEqual(run(unexpected).status, 0);

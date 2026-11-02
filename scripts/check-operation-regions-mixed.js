@@ -10,9 +10,12 @@ const version = process.argv[2];
 if (!['v2', 'v3'].includes(version)) throw new Error('uso: check-operation-regions-mixed.js v2|v3');
 const allowLegacyCourt = process.argv.includes('--allow-legacy-court');
 const requireCurrent = process.argv.includes('--require-current');
+const requireScoreRefresh = process.argv.includes('--require-score-refresh');
+if (requireScoreRefresh && (requireCurrent || allowLegacyCourt)) throw new Error('modos regionais incompatíveis');
 // SHA fixado para este corte; no próximo release regional, atualizar junto com
 // sync-operation-regions-current.js e os manifestos, antes de abrir o Hosting.
 const releaseCommit = '40be907dfc593db2eb4de1d6ed9783493b301787';
+const scoreRefreshCommit = '8d35143abe0c1412d4e3f3752222bb1ee2586511';
 const regions = version === 'v2'
   ? ['us-east1', 'us-east4', 'us-south1']
   : ['us-east1', 'us-east4', 'us-south1', 'us-central1', 'southamerica-east1'];
@@ -57,8 +60,12 @@ const uniformCurrent = rows.every(row => row.commit === releaseCommit);
 const directed = [`sp-op-score-${version}`, `sp-op-end-court-${version}`].some(name =>
   rows.find(row => row.name === name)?.commit !== baseline);
 if (requireCurrent && !uniformCurrent) throw new Error('malha regional não usa o commit integral do corte');
+if (requireScoreRefresh && rows.some(row => row.commit !==
+    (row.name === `sp-op-score-${version}` ? scoreRefreshCommit : releaseCommit))) {
+  throw new Error('malha regional diverge do corte dirigido de placar');
+}
 if (!allowLegacyCourt && !requireCurrent && !uniformCurrent && !directed) {
   throw new Error('nenhuma porta direcionada usa o código atual');
 }
-process.stdout.write(JSON.stringify({ version, legacyCommit: baseline, courtCommit: rows.find(row => row.name === `sp-op-end-court-${version}`).commit,
+process.stdout.write(JSON.stringify({ version, mode: requireScoreRefresh ? 'score-refresh' : requireCurrent ? 'current' : 'mixed', legacyCommit: baseline, courtCommit: rows.find(row => row.name === `sp-op-end-court-${version}`).commit,
   mixed, rows: rows.length }) + '\n');
