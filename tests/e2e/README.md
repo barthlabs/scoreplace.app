@@ -1,7 +1,9 @@
 # E2E Tests — Playwright
 
-Tests de ponta-a-ponta rodam contra `https://scoreplace.app/` (default) ou
-contra um servidor local via env var `SCOREPLACE_URL`.
+Tests de ponta-a-ponta rodam contra `http://localhost:8899` por padrão; use
+`SCOREPLACE_URL` para outro alvo. O app local ainda aponta ao Firebase real,
+então os specs usam stubs ou ações somente leitura. A fixture `safe-test.js`
+bloqueia escritas no Firestore e chamadas POST de Functions.
 
 ## Setup (uma vez)
 

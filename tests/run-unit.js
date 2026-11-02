@@ -54,6 +54,7 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 const SUITES = [
+  'tests/e2e/safe-test-guard.test.js', // E31: classificação das escritas bloqueadas no navegador
   'functions/test-placeholder-category-batch-core.js',
   'tests/placeholder-category-batch-emulator.test.js',
   'tests/placeholder-category-batch-client.test.js',

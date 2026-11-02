@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./safe-test');
 const path = require('path');
 
 test('convite individual exige clique consciente e apaga token da URL', async ({ page }) => {

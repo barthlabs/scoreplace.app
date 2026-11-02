@@ -7,9 +7,9 @@
 // detecta e-mail vs celular, a máscara BR do telefone, e o seletor de DDI que aparece só no modo
 // telefone. Mais a presença dos 3 caminhos (identificador, e-mail+senha, Google).
 //
-// Read-only (nenhuma escrita, nenhuma chamada externa) — roda contra staging OU prod.
+// Read-only (nenhuma escrita, nenhuma chamada externa). Padrão: localhost:8899.
 
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./safe-test');
 
 test.describe('LOGIN — UI do modal (validação, sem round-trip externo)', () => {
   test.beforeEach(async ({}, testInfo) => {
@@ -18,6 +18,7 @@ test.describe('LOGIN — UI do modal (validação, sem round-trip externo)', () 
 
   test('3 caminhos presentes + detecção email/celular + máscara BR + DDI condicional', async ({ page }) => {
     test.setTimeout(45000);
+    await page.route('**/iniciarEntradaPorPasskey', (route) => route.abort('blockedbyclient'));
     await page.goto('/', { waitUntil: 'load' });
     await page.waitForTimeout(1500);
 

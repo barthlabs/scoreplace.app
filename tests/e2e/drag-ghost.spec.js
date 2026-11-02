@@ -14,7 +14,7 @@
 //   SCOREPLACE_URL=http://localhost:8899 npx playwright test tests/e2e/drag-ghost.spec.js
 // Nada é escrito no Firestore: o teste monta a lista na mão e intercepta _executeMerge.
 
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./safe-test');
 
 // Monta uma lista de inscritos sintética num host fixo (viewport real = hit-test funciona)
 // e liga o arraste por toque de verdade (window._initMergeTouchDrag).

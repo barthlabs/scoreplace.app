@@ -10,9 +10,9 @@
 //  • advantage → no Aplicar, `_gsmUpdateAdvantageUI` reseta `#gsm-advantageRule` pro default do
 //    esporte (controle vive no form principal `#gsm-advantage-toggle`, não no modal) → flaky por design.
 //  • super-tiebreak → a linha do modal fica oculta (condicional, ex.: setsToWin≥2) → não clicável aqui.
-// Toggle-switch esconde o <input> → clica no `.toggle-slider` irmão (dispara o onchange real).
+// A regra de empate usa botões Prorrogar/Tie-break; o checkbox é só espelho interno.
 
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./safe-test');
 
 async function openGsm(page) {
   await page.goto('/', { waitUntil: 'load' });
@@ -28,8 +28,9 @@ async function openGsm(page) {
 const val = (page, id) => page.evaluate((i) => { var el = document.getElementById(i); return el ? el.value : null; }, id);
 const checked = (page, id) => page.evaluate((i) => { var el = document.getElementById(i); return el ? el.checked : null; }, id);
 async function setToggle(page, inputId, target) {
-  if (await checked(page, inputId) !== target) await page.locator('#' + inputId + ' + .toggle-slider').click();
+  if (await checked(page, inputId) !== target) await page.locator('#gsm-tierule-seg button').nth(target ? 1 : 0).click();
   expect(await checked(page, inputId)).toBe(target);
+  await expect(page.locator('#gsm-tierule-seg')).toHaveAttribute('data-tierule', target ? 'tiebreak' : 'extend');
 }
 const aplicar = (page) => page.locator('#gsm-config-overlay button:has-text("Aplicar")').click();
 

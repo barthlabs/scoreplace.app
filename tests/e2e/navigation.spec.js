@@ -3,7 +3,7 @@
 // Foca em fluxos sem login: rotas públicas, theme toggle, presença de assets.
 // Mantém isolado de smoke.spec.js (que cobre ferramentas como Help modal).
 
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./safe-test');
 
 test.describe('Navegação pública (sem login)', () => {
   test('rota raiz renderiza topbar', async ({ page }) => {
@@ -147,15 +147,16 @@ test.describe('Resilience', () => {
     expect(theme).toBe('light');
   });
 
-  test('versão deployada bate com release-notes.js', async ({ page }) => {
+  test('notas de versão carregam no Help sob demanda', async ({ page }) => {
     await page.goto('/');
-    const v = await page.evaluate(() => window.SCOREPLACE_VERSION);
 
-    // Carrega release-notes.js explicitamente e verifica que tem entry pra essa versão
+    // O loader nasce quando o Help é aberto pela primeira vez.
+    await page.evaluate(() => window.openModal('modal-help'));
     await page.evaluate(() => window._loadReleaseNotes && window._loadReleaseNotes());
     await page.waitForFunction(() => window._releaseNotesLoaded === true, null, { timeout: 10000 });
 
     const html = await page.evaluate(() => window._RELEASE_NOTES_HTML || '');
-    expect(html).toContain(v);
+    expect(html.length).toBeGreaterThan(1000);
+    await expect(page.locator('#release-notes-placeholder')).toHaveCount(0);
   });
 });

@@ -1,7 +1,7 @@
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./safe-test');
 const path = require('path');
 
-test('confirmar contas na importação mantém a rolagem do modal', async ({ page }) => {
+test('remover uma dupla da prévia mantém a rolagem do modal', async ({ page }) => {
   await page.setViewportSize({ width: 440, height: 640 });
   await page.setContent('<main>Prévia isolada</main>');
   await page.addStyleTag({ path: path.join(__dirname, '..', '..', 'css', 'components.css') });
@@ -22,9 +22,6 @@ test('confirmar contas na importação mantém a rolagem do modal', async ({ pag
         text: 'LIGHT FEMININO\n' + Array.from({ length: 8 }, (_, i) =>
           (i + 1) + '. ' + names[i * 2] + ' Souza + ' + names[i * 2 + 1] + ' Lima').join('\n'),
       } });
-      if (name === 'searchTournamentImportCandidates') return Promise.resolve({ data: {
-        candidates: [{ uid: 'account-' + data.query, name: data.query }],
-      } });
       throw new Error('Chamada inesperada: ' + name);
     };
   });
@@ -36,15 +33,17 @@ test('confirmar contas na importação mantém a rolagem do modal', async ({ pag
     name: 'foto.png', mimeType: 'image/png', buffer: Buffer.from([1, 2, 3]),
   });
   await expect(page.locator('.sp-import-pair')).toHaveCount(8);
-  await expect(page.locator('.sp-import-candidate')).toHaveCount(16);
+  await expect(page.locator('.sp-import-candidate')).toHaveCount(0);
   const panel = page.locator('.sp-import-panel');
-  const candidate = page.locator('.sp-import-pair').nth(5).locator('.sp-import-candidate').first();
-  await candidate.scrollIntoViewIfNeeded();
+  // O render substitui o painel; a regra da fixture precisa sobreviver à troca do nó.
+  await page.addStyleTag({ content: '#tournament-import-dialog .sp-import-panel { max-height:320px !important; }' });
+  const remove = page.locator('.sp-import-pair').nth(3).locator('[data-act="remove"]');
+  await remove.scrollIntoViewIfNeeded();
   const before = await panel.evaluate((node) => node.scrollTop);
   expect(before).toBeGreaterThan(0);
-  await candidate.click();
+  await remove.click();
   const after = await panel.evaluate((node) => node.scrollTop);
   expect(Math.abs(after - before)).toBeLessThan(8);
-  await expect(page.locator('.sp-import-pair').nth(5)).toContainText('Conta vinculada');
-  await expect(page.locator('.sp-import-pair').nth(6)).toBeVisible();
+  await expect(page.locator('.sp-import-pair')).toHaveCount(7);
+  await expect(page.locator('.sp-import-pair').nth(3)).toContainText('Dupla 5');
 });

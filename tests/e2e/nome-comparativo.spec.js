@@ -12,7 +12,7 @@
 // Rodar: SCOREPLACE_URL=http://localhost:8097 npx playwright test \
 //        tests/e2e/nome-comparativo.spec.js --project=mobile-chromium
 
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./safe-test');
 const path = require('path');
 const fs = require('fs');
 

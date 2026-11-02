@@ -15,10 +15,10 @@
 // ficou sem nenhum visível — grid, coluna de rodada, box de grupo, <details> de rodada.
 // Este teste FALHA no código anterior (o box do grupo sem Kelly continuava visível).
 //
-// Roda contra SCOREPLACE_URL (staging por padrão). Pra validar o código LOCAL:
+// Padrão: localhost:8899. Para servir outra árvore local:
 //   python3 -m http.server 8099   &&   SCOREPLACE_URL=http://localhost:8099 npx playwright test bracket-search-filter
 
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./safe-test');
 
 const NAMES = ['Rodrigo Barth', 'Erika de Paula', 'Livia Morais', 'Loraine Soares',
                'Kelly Barth', 'Nelson Barth', 'Zilda Quintas', 'Ana Paula Schmidt'];
@@ -187,29 +187,33 @@ test.describe('Busca nas chaves — Pontos Corridos/Liga (navegador real)', () =
     expect(st.cards).toBe(info.cards);
     const detsWithCards = st.dets;
 
-    // o contador do <details> acompanha o filtro (não pode anunciar "(3)" mostrando 1)
+    // O contador preserva o total canônico da rodada enquanto a busca só revela os acertos.
     const summaryCount = () => page.evaluate(() => {
-      const d = Array.from(document.querySelectorAll('details')).find((x) => x.querySelector('[data-players]'));
+      const d = Array.from(document.querySelectorAll('details')).find((x) => x.querySelector('[data-players]') && /Demais jogos/.test(x.querySelector('summary')?.textContent || ''));
       if (!d) return null;
-      const m = /\((\d+)\)\s*$/.exec((d.querySelector('summary').textContent || '').trim());
+      const summary = d.querySelector('summary');
+      const label = summary.querySelector('span') || summary;
+      const m = /\((\d+)\)\s*$/.exec((label.textContent || '').trim());
       return m ? Number(m[1]) : null;
     });
     const beforeN = await summaryCount();
 
-    // busca por alguém DE DENTRO do <details>: o contador passa a dizer quantos sobraram
+    // Busca por alguém de dentro do <details>: os acertos aparecem, sem reduzir o total da rodada.
     const oneName = await page.evaluate(() => {
-      const d = Array.from(document.querySelectorAll('details')).find((x) => x.querySelector('[data-players]'));
+      const d = Array.from(document.querySelectorAll('details')).find((x) => x.querySelector('[data-players]') && /Demais jogos/.test(x.querySelector('summary')?.textContent || ''));
       return (d.querySelector('[data-players]').getAttribute('data-players') || '').split(/\s*,\s*|\s*\/\s*/)[0];
     });
     await typeSearch(page, oneName);
     const partial = await page.evaluate(() => {
-      const d = Array.from(document.querySelectorAll('details')).find((x) => x.querySelector('[data-players]'));
+      const d = Array.from(document.querySelectorAll('details')).find((x) => x.querySelector('[data-players]') && /Demais jogos/.test(x.querySelector('summary')?.textContent || ''));
       const inside = Array.from(d.querySelectorAll('[data-players]'));
-      const m = /\((\d+)\)\s*$/.exec((d.querySelector('summary').textContent || '').trim());
+      const summary = d.querySelector('summary');
+      const label = summary.querySelector('span') || summary;
+      const m = /\((\d+)\)\s*$/.exec((label.textContent || '').trim());
       return { vis: inside.filter((c) => c.style.display !== 'none').length, label: m ? Number(m[1]) : null };
     });
     expect(partial.vis).toBeGreaterThan(0);
-    expect(partial.label, 'contador do <details> = jogos que sobraram').toBe(partial.vis);
+    expect(partial.label, 'contador do <details> preserva o total canônico').toBe(beforeN);
 
     await typeSearch(page, 'zzzznaoexiste');
     st = await countVisible();

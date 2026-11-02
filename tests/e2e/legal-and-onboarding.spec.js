@@ -7,7 +7,7 @@
 //   - Modal de login tem disclaimer com links
 //   - terms-acceptance.js exposto e configurado corretamente
 //   - PWA icons full-bleed (sem rx — fix v0.17.73)
-//   - Beach Tennis sport pill tem ícone com filter hue-rotate
+//   - Beach Tennis sport pill usa ícone SVG laranja próprio
 //
 // Caçariam regressões em:
 //   - Privacy/Terms removidos do index.html (aconteceu entre v0.17.71 e v0.17.78)
@@ -15,7 +15,7 @@
 //   - Disclaimer no login removido
 //   - Ícones PWA voltando a ter cantos arredondados próprios
 
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./safe-test');
 
 test.describe('Legal pages — Privacy', () => {
   test('rota #privacy renderiza com seções LGPD', async ({ page }) => {
@@ -29,7 +29,7 @@ test.describe('Legal pages — Privacy', () => {
     expect(html).toContain('Como usamos seus dados');
     expect(html).toContain('Visibilidade');
     expect(html).toContain('LGPD');
-    expect(html).toContain('scoreplace.app@gmail.com');
+    expect(html).toContain('contato@barthlabs.com');
   });
 
   test('rota #privacy não tem keys cruas', async ({ page }) => {
@@ -85,6 +85,8 @@ test.describe('Footer + Login disclaimer', () => {
   });
 
   test('modal de login tem disclaimer com links pra Termos+Privacy', async ({ page }) => {
+    // Abrir o modal consulta a disponibilidade de passkey; esta spec só testa o disclaimer.
+    await page.route('**/iniciarEntradaPorPasskey', (route) => route.abort('blockedbyclient'));
     await page.goto('/', { waitUntil: 'load' });
     await page.evaluate(() => window.openModal && window.openModal('modal-login'));
     await page.waitForTimeout(500);
@@ -193,18 +195,14 @@ test.describe('PWA icons — full-bleed (sem cantos arredondados próprios)', ()
   });
 });
 
-test.describe('Sport icons — Beach Tennis hue-rotate', () => {
-  test('Beach Tennis pill tem filter hue-rotate (ícone laranja)', async ({ page }) => {
+test.describe('Sport icons — Beach Tennis SVG', () => {
+  test('Beach Tennis pill tem SVG próprio laranja', async ({ page }) => {
     await page.goto('/', { waitUntil: 'load' });
     await page.waitForTimeout(800);
 
-    const html = await page.evaluate(() => {
-      const m = document.getElementById('view-container');
-      return m ? m.innerHTML : '';
-    });
-    // O ícone Beach Tennis usa <span style="filter:hue-rotate(...) saturate(...)">🎾</span>
-    expect(html).toContain('hue-rotate');
-    expect(html).toMatch(/aria-label="Beach Tennis"/);
+    const icon = page.locator('.landing-sport-pill:has-text("Beach Tennis") svg[aria-label="Beach Tennis"]');
+    await expect(icon).toBeVisible();
+    await expect(icon.locator('circle')).toHaveAttribute('fill', '#fb923c');
   });
 });
 
@@ -266,8 +264,9 @@ test.describe('SW + PWA manifest', () => {
     const manifest = await m.json();
     expect(manifest.icons).toBeTruthy();
     expect(Array.isArray(manifest.icons)).toBe(true);
-    manifest.icons.forEach((icon) => {
-      expect(icon.purpose).toContain('maskable');
-    });
+    for (const size of ['192x192', '512x512']) {
+      expect(manifest.icons.some((icon) => icon.sizes === size && icon.purpose === 'any')).toBe(true);
+      expect(manifest.icons.some((icon) => icon.sizes === size && icon.purpose === 'maskable')).toBe(true);
+    }
   });
 });

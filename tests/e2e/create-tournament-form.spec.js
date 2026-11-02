@@ -1,70 +1,53 @@
-// scoreplace.app — CAMADA 2 (clique→valor) do formulário Criar Torneio
-//
-// Campanha de congelamento, camada 2: o FORMULÁRIO grava o campo certo ao CLICAR.
-// A camada 1 (headless) prova que o MOTOR consome t.format/t.drawMode corretamente;
-// aqui provamos o ELO que falta: o clique no botão real do DOM aterrissa o valor no
-// sink certo (#select-formato / #draw-mode — as fontes únicas que o resto do form lê).
-//
-// Read-only: só abre o modal e clica toggles/botões; NUNCA salva (não cria torneio,
-// não toca Firestore). Não precisa de login (o modal abre via openModal).
-// Roda contra baseURL (PROD por default, ou SCOREPLACE_URL=staging).
-
-const { test, expect } = require('@playwright/test');
+// Configurador único format2: cliques nos controles atuais gravam a configuração
+// canônica da fase. Somente leitura do formulário; nenhum torneio é salvo.
+// O padrão do Playwright é http://localhost:8899; SCOREPLACE_URL altera o alvo.
+const { test, expect } = require('./safe-test');
 
 async function openCreateModal(page) {
   await page.goto('/', { waitUntil: 'load' });
-  await page.waitForTimeout(2500); // SPA boot (auth/SW resolvem)
-  await page.evaluate(() => {
-    try { window.setupCreateTournament && window.setupCreateTournament(); } catch (e) {}
-    window.openModal && window.openModal('modal-create-tournament');
-  });
-  await expect(page.locator('#modal-create-tournament')).toBeVisible();
-  await expect(page.locator('#select-formato')).toBeAttached();
+  await page.evaluate(() => window.renderCreateTournamentPage(document.getElementById('view-container')));
+  await expect(page.locator('#f2-config-mount')).toBeVisible();
+  await expect(page.locator('#formato-buttons')).toHaveCount(0);
+  await expect(page.locator('#draw-mode-buttons')).toHaveCount(0);
 }
-const selVal = (page, id) => page.evaluate((i) => { var el = document.getElementById(i); return el ? el.value : null; }, id);
+const cfg = (page) => page.evaluate(() => window._f2GetConfig());
 
-test.describe('Camada 2 — Criar Torneio: clique→valor (Formato)', () => {
-  test('cada botão de Formato grava o valor interno certo em #select-formato', async ({ page }) => {
+test.describe('Criar Torneio — configurador canônico por clique', () => {
+  test('classificatória e número de grupos gravam no format2', async ({ page }) => {
     await openCreateModal(page);
+    const toggle = page.locator('#f2-config-mount input[onchange*="_f2ClassifAtiva"] + .toggle-slider');
+    expect((await cfg(page)).classifAtiva).toBe(true);
+    await toggle.click();
+    expect((await cfg(page)).classifAtiva).toBe(false);
+    expect((await cfg(page)).eliminatoria.ativa).toBe(true);
+    await toggle.click();
+    expect((await cfg(page)).classifAtiva).toBe(true);
 
-    await page.click('#formato-buttons .formato-btn[data-fmt="grupos"]');
-    expect(await selVal(page, 'select-formato')).toBe('grupos_mata');
-    await expect(page.locator('#formato-buttons .formato-btn[data-fmt="grupos"]')).toHaveClass(/formato-btn-active/);
-
-    await page.click('#formato-buttons .formato-btn[data-fmt="pontos"]');
-    expect(await selVal(page, 'select-formato')).toBe('liga'); // "Pontos Corridos" exibido, valor interno 'liga' (intocado)
-
-    await page.click('#formato-buttons .formato-btn[data-fmt="elim"]');
-    expect(await selVal(page, 'select-formato')).toBe('elim_simples');
-    // só um botão ativo por vez
-    expect(await page.locator('#formato-buttons .formato-btn-active').count()).toBe(1);
+    const groups = page.locator('#f2-config-mount input[onchange*="_f2Grupos"]');
+    await groups.focus();
+    await groups.press('ArrowRight');
+    expect((await cfg(page)).grupos).toBe(2);
   });
 
-  test('toggle Dupla Eliminatória alterna elim_simples ↔ elim_dupla', async ({ page }) => {
+  test('Dupla Eliminatória alterna a estrutura da fase eliminatória', async ({ page }) => {
     await openCreateModal(page);
-    await page.click('#formato-buttons .formato-btn[data-fmt="elim"]');
-    expect(await selVal(page, 'select-formato')).toBe('elim_simples');
-
-    const toggle = page.locator('#toggle-dupla-elim');
-    if (await toggle.count()) {
-      await page.evaluate(() => { var t = document.getElementById('toggle-dupla-elim'); t.checked = true; window._toggleDuplaElim(true); });
-      expect(await selVal(page, 'select-formato')).toBe('elim_dupla');
-      await page.evaluate(() => { var t = document.getElementById('toggle-dupla-elim'); t.checked = false; window._toggleDuplaElim(false); });
-      expect(await selVal(page, 'select-formato')).toBe('elim_simples');
-    }
+    const toggle = page.locator('#f2-config-mount input[onchange*="_f2ElimDupla"] + .toggle-slider');
+    expect((await cfg(page)).eliminatoria.dupla).toBe(false);
+    await toggle.click();
+    expect((await cfg(page)).eliminatoria.dupla).toBe(true);
+    await toggle.click();
+    expect((await cfg(page)).eliminatoria.dupla).toBe(false);
   });
-});
 
-test.describe('Camada 2 — Criar Torneio: clique→valor (Modo de sorteio)', () => {
-  test('cada botão de Modo de Sorteio grava data-value em #draw-mode', async ({ page }) => {
+  test('formação de equipes grava Rei/Rainha, montadas e sorteadas', async ({ page }) => {
     await openCreateModal(page);
-
-    await page.click('#draw-mode-buttons .draw-mode-btn[data-value="rei_rainha"]');
-    expect(await selVal(page, 'draw-mode')).toBe('rei_rainha');
-    await expect(page.locator('#draw-mode-buttons .draw-mode-btn[data-value="rei_rainha"]')).toHaveClass(/draw-mode-active/);
-
-    await page.click('#draw-mode-buttons .draw-mode-btn[data-value="sorteio"]');
-    expect(await selVal(page, 'draw-mode')).toBe('sorteio');
-    expect(await page.locator('#draw-mode-buttons .draw-mode-active').count()).toBe(1);
+    const buttons = page.locator('#f2-config-mount button[onclick*="_f2TeamForm"]');
+    await buttons.filter({ hasText: 'Rei/Rainha' }).click();
+    expect((await cfg(page)).parceria).toBe('rei_rainha');
+    await buttons.filter({ hasText: 'Montadas' }).click();
+    expect((await cfg(page)).parceria).toBe('fixa');
+    expect((await cfg(page)).formacaoDupla).toBe('manual');
+    await buttons.filter({ hasText: 'Sorteio' }).click();
+    expect((await cfg(page)).parceria).toBe('sorteio_rodada');
   });
 });

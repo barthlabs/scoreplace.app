@@ -2,7 +2,7 @@
 // que concluiu depois de receber e aplicar a fotografia canônica da Function.
 // Este cenário roda no navegador, sem Firebase e sem escrever em produção.
 const path = require('path');
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./safe-test');
 
 const drawView = path.join(__dirname, '..', '..', 'js', 'views', 'tournaments-draw.js');
 
@@ -11,11 +11,15 @@ test.describe('Restauração pré-publicação', () => {
     await page.setContent('<!doctype html><html><body></body></html>');
     await page.addScriptTag({ content: `
       window.AppStore = { tournaments: [{
-        id: 'neon', allowPrePublicationRestore: true, status: 'ongoing',
+        id: 'fixture', isSandbox: true, allowPrePublicationRestore: true, status: 'ongoing',
         matches: [{ id: 'jogo-antigo', scoreP1: 6, scoreP2: 4 }],
         rounds: [{ matches: [{ id: 'jogo-antigo' }] }]
       }] };
       window._mergePresenceNoRegress = function () {};
+      window._applyCFTournament = function (id, receipt) {
+        var t = window.AppStore.tournaments.find(function (item) { return item.id === id; });
+        Object.assign(t, receipt);
+      };
       window._rerenderBracket = function () { window.__rerendered = true; };
       window._softRefreshView = function () { window.__refreshed = true; };
       window._error = function () {};
@@ -34,7 +38,7 @@ test.describe('Restauração pré-publicação', () => {
     await page.addScriptTag({ path: drawView });
 
     await page.evaluate(() => {
-      window._restoreTournamentPrePublication('neon');
+      window._restoreTournamentPrePublication('fixture');
       window.__confirmRestore();
     });
 
@@ -43,17 +47,17 @@ test.describe('Restauração pré-publicação', () => {
     });
     await expect.poll(() => page.evaluate(() => window.__call)).toEqual({
       name: 'resetTournamentToEnrollment',
-      payload: { tournamentId: 'neon', restoreMode: 'prePublication' }
+      payload: { tournamentId: 'fixture', restoreMode: 'prePublication' }
     });
     await expect.poll(() => page.evaluate(() => window.AppStore.tournaments[0])).toMatchObject({
-      id: 'neon', status: 'open', matches: [], rounds: []
+      id: 'fixture', status: 'open', matches: [], rounds: []
     });
   });
 
   test('não confirma sucesso sem recibo canônico da Function', async ({ page }) => {
     await page.setContent('<!doctype html><html><body></body></html>');
     await page.addScriptTag({ content: `
-      window.AppStore = { tournaments: [{ id: 'neon', allowPrePublicationRestore: true, matches: [{ id: 'antigo' }] }] };
+      window.AppStore = { tournaments: [{ id: 'fixture', isSandbox: true, allowPrePublicationRestore: true, matches: [{ id: 'antigo' }] }] };
       window._error = function () {};
       window.showNotification = function (title, message, kind) { window.__notice = { title, message, kind }; };
       window.showAlertDialog = function (_title, _message, onConfirm) { window.__confirmRestore = onConfirm; };
@@ -61,7 +65,7 @@ test.describe('Restauração pré-publicação', () => {
     ` });
     await page.addScriptTag({ path: drawView });
 
-    await page.evaluate(() => { window._restoreTournamentPrePublication('neon'); window.__confirmRestore(); });
+    await page.evaluate(() => { window._restoreTournamentPrePublication('fixture'); window.__confirmRestore(); });
     await expect.poll(() => page.evaluate(() => window.__notice)).toMatchObject({ title: 'Erro ao restaurar', kind: 'error' });
     await expect(page.evaluate(() => window.AppStore.tournaments[0].matches.length)).resolves.toBe(1);
   });

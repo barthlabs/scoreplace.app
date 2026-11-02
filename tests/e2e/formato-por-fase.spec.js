@@ -9,7 +9,7 @@
 // era a que valia → o bloco terminava solto acima das fases.
 //
 // Este spec mede o DOM depois do MESMO caminho da tela. Read-only: abre o form e não salva.
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./safe-test');
 
 async function abrirFormDeTorneio(page) {
   await page.goto('/', { waitUntil: 'load' });

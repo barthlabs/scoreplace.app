@@ -7,10 +7,9 @@
 // Estratégia: usa as MESMAS funções que o app já carregou (window._phasesEngine,
 // _buildRepechageDoubleElim, _advanceWinner, renderDoubleElimBracket, _renderPodiumsAndClassif)
 // pra montar+simular+renderizar um torneio de 14 duplas, injeta no #view-container e assere
-// no DOM renderizado. Aponta pro código sob teste via SCOREPLACE_URL (staging por padrão nos
-// scripts; senão prod).
+// no DOM renderizado. O padrão é localhost:8899; SCOREPLACE_URL altera o alvo.
 
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./safe-test');
 const { buildDupla, simulate } = require('../render-harness');
 
 // O servidor decide a repescagem; o navegador só renderiza a chave decidida.

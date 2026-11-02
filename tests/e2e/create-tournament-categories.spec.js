@@ -4,13 +4,13 @@
 // o valor no sink certo:
 //   • Gênero: pills _toggleGenderCat → #tourn-gender-categories (CSV; misto_aleatorio ⟂ misto_obrigatorio)
 //   • Skill:  pills _toggleSkillCat → #tourn-skill-categories (CSV em ordem canônica A,B,C,D,FUN)
-// Read-only (nunca salva). Roda via npm run test:e2e contra baseURL (PROD default / SCOREPLACE_URL).
+// Read-only (nunca salva). Padrão: http://localhost:8899; SCOREPLACE_URL altera o alvo.
 //
 // Obs: o "Modo de Inscrição" (#select-inscricao) NÃO é testado por clique aqui — desde v2.7.83
 // os toggles individual/time saíram da UI (ficam 0×0, ocultos): o valor passou a ser DERIVADO do
 // tipo de jogo (Duplas). Testar o toggle oculto seria congelar UI morta.
 
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./safe-test');
 
 async function openCreateModal(page) {
   await page.goto('/', { waitUntil: 'load' });

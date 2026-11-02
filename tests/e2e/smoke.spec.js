@@ -4,7 +4,7 @@
 // Mantenha rápido (<10s por test). Asserts focados em "página viva".
 // Não logar — login com Google é testado em testes de fluxo separados.
 
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./safe-test');
 
 test.describe('Smoke — landing/dashboard sem login', () => {
   test('home renderiza com topbar e botão Login', async ({ page }) => {

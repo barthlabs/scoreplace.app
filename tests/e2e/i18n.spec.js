@@ -6,10 +6,9 @@
 // "btn.save", etc. em vez do texto traduzido. Persiste até refresh
 // (HTML do modal fica cacheado com keys baked).
 //
-// Filosofia: testar o DOM "ao boot" — se algum modal/setup build HTML
-// usando _t() e o dict não tá pronto, o teste falha imediato.
+// Os modais são criados sob demanda; verificar as traduções na primeira abertura.
 
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./safe-test');
 
 // Padrões de keys i18n cruas que aparecem como texto visível (entre tags
 // ou em atributos visíveis). Se um desses padrões aparecer dentro de um
@@ -35,11 +34,11 @@ function findRawKeys(html) {
   return [...new Set(found)];
 }
 
-test.describe('i18n — modais não devem ter keys cruas no DOM ao boot', () => {
+test.describe('i18n — modais não devem ter keys cruas na primeira abertura', () => {
   test('modal-create-tournament renderiza com labels traduzidos', async ({ page }) => {
     await page.goto('/', { waitUntil: 'load' });
 
-    // setupCreateTournamentModal é IIFE que roda ao boot — modal já existe no DOM
+    await page.evaluate(() => window.openModal('modal-create-tournament'));
     await page.waitForFunction(
       () => document.getElementById('modal-create-tournament') !== null,
       null,
@@ -71,6 +70,7 @@ test.describe('i18n — modais não devem ter keys cruas no DOM ao boot', () => 
 
   test('modal-help renderiza com seções traduzidas', async ({ page }) => {
     await page.goto('/', { waitUntil: 'load' });
+    await page.evaluate(() => window.openModal('modal-help'));
 
     await page.waitForFunction(
       () => document.getElementById('modal-help') !== null,
@@ -99,6 +99,7 @@ test.describe('i18n — modais não devem ter keys cruas no DOM ao boot', () => 
 
   test('modal-quick-create renderiza com botões traduzidos', async ({ page }) => {
     await page.goto('/', { waitUntil: 'load' });
+    await page.evaluate(() => window.openModal('modal-quick-create'));
 
     await page.waitForFunction(
       () => document.getElementById('modal-quick-create') !== null,

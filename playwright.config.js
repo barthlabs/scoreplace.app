@@ -42,6 +42,9 @@ module.exports = defineConfig({
   },
   use: {
     baseURL: LOCAL_URL,
+    // A guarda de rede em tests/e2e/safe-test.js precisa interceptar também
+    // requisições que o Service Worker poderia atender fora do route do contexto.
+    serviceWorkers: 'block',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
