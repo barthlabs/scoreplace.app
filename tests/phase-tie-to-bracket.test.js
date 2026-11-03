@@ -43,6 +43,9 @@ for (const [index, scores] of [[4, 6], [4, 6], [4, 6]].entries()) {
     { type: 'score', decisionId: flow.tie.decisionId,
       matchId: flow.decision.matches[index].id, sets: [{ p1: scores[0], p2: scores[1] }] }, 1);
 }
+assert.equal(flow.status, 'review');
+flow = tie.resolvePhaseTies(tournamentTriangular, 0, pool, nextPhase, compare,
+  { type: 'confirm', decisionId: flow.tie.decisionId, at: '2026-11-03T12:00:00.000Z' }, 1);
 assert.equal(flow.status, 'ready');
 const afterPlay = entrants('Outro nome sem regra especial', flow);
 assert.deepEqual(pairs(afterPlay, 'line_a'), ['A+D']);

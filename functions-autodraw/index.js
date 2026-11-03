@@ -1672,7 +1672,6 @@ exports.drawRound = onCall(async (request) => {
     /* ⛔ INSTANTE ESTÁVEL DA OPERAÇÃO — calculado UMA VEZ, FORA do callback.
      * O Firestore RE-EXECUTA o callback no retry; um `new Date()` lá dentro faria
      * cada tentativa produzir espelho e plano diferentes. */
-    const _agoraIsoTx = new Date().toISOString();
     if (request.data && request.data.operationId != null &&
         !_operationReceipt.UUID_V4_RE.test(String(request.data.operationId))) {
       throw new HttpsError('invalid-argument', 'Identificador do sorteio inválido.');
@@ -1680,6 +1679,7 @@ exports.drawRound = onCall(async (request) => {
     const _manualOperationId = request.data && request.data.operationId
       ? String(request.data.operationId) : randomUUID();
     const _manualSeed = _manualOperationId + ':' + tId;
+    const _agoraIsoTx = new Date().toISOString();
     out = await db.runTransaction(async (tx) => {
     if (sandbox) await _assertSandboxDrawOwner(tx, await tx.get(ref), uid);
     const t = await _leTorneio(tx, ref, tId);
