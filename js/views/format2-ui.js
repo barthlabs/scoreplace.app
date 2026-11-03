@@ -821,7 +821,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var um = cfg.grupos === 1;
     var rotativo = isDupla && (cfg.parceria === 'rei_rainha' || cfg.parceria === 'sorteio_rodada');
     var scoreInd = cfg._scoreBy === 'individual';
-    var classif = '';
+    var entryControls = '', formationControls = '', scoringControls = '', structureControls = '';
     // v4.5.49: o AGENDAMENTO (Rodadas: repetição + nº de rodadas) e as DATAS/Inscrições da fase
     // (#f2-classif-extra) vão num acumulador SEPARADO — ficam SEMPRE editáveis, mesmo com a fase
     // classificatória já sorteada (o organizador ajusta a temporada: repetição, nº de rodadas e
@@ -850,10 +850,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // Disputa só aparece onde o esporte permite singles (tênis/tênis de mesa). Nos demais
     // (sempre duplas) não faz sentido mostrar nada — é óbvio.
     if (allowsS) {
-      classif += _sec('Disputa', _pill(cfg.disputa === 'individual', 'window._f2Disputa(\'individual\')', '👤 Individual') + _pill(isDupla, 'window._f2Disputa(\'dupla\')', '👥 Duplas'));
+      entryControls += _sec('Unidade que entra em quadra', _pill(cfg.disputa === 'individual', 'window._f2Disputa(\'individual\')', '👤 Individual') + _pill(isDupla, 'window._f2Disputa(\'dupla\')', '👥 Duplas'));
+    } else {
+      entryControls += '<p style="font-size:.85rem;color:var(--text-main);">Neste esporte, cada jogo é disputado em duplas.</p>';
     }
 
-    classif += _sec('Estrutura — nº de grupos',
+    structureControls += _sec('Estrutura — nº de grupos',
       '<div style="display:flex;align-items:center;gap:12px;">' +
       '<input type="range" min="1" max="16" value="' + cfg.grupos + '" oninput="window._f2GruposLive(this.value)" onchange="window._f2Grupos(this.value)" style="flex:1;accent-color:#818cf8;">' +
       '<span id="f2-grupos-val" style="min-width:30px;text-align:center;font-weight:800;font-size:1.15rem;color:var(--sp-c-c7d2fe,#c7d2fe);">' + cfg.grupos + '</span></div>' +
@@ -861,7 +863,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 
     // (A FORMAÇÃO das duplas — participantes montam × organizador, + times sorteados vs
     //  montados — fica nos toggles detalhados da seção "Formação de Duplas" abaixo do form.)
-    if (isDupla) {
+    if (isDupla && cfg.classifAtiva) {
       var pr = cfg.parceria;
       // v4.4.19: "Formação das equipes" — como as duplas se formam. Montadas (organizador/
       // jogadores montam) × Sorteio (sorteadas), ambas FIXAS. Rei/Rainha (rotativo) só com 1 grupo.
@@ -881,7 +883,19 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
             ? 'A cada rodada, parceiro (e adversário) são sorteados de novo — pontuação individual.'
             : 'A dupla é sorteada 1× e permanece fixa até o fim do torneio.') + '</div>';
       }
-      classif += _sec('Formação das equipes', fBtns);
+      formationControls += _sec('Formação das duplas', fBtns);
+    }
+    if (isDupla && !cfg.classifAtiva) {
+      formationControls += _blocoAbrirComRR(cfg, false);
+      if (!cfg.eliminatoria.openReiRainha) {
+        formationControls += _sec('Duplas na eliminatória',
+          _pill(cfg.formacaoDupla === 'manual', 'window._f2Form(\'manual\')', '🤝 Já formadas') +
+          _pill(cfg.formacaoDupla !== 'manual', 'window._f2Form(\'sorteio\')', '🎲 Sorteadas'));
+        if (cfg.formacaoDupla === 'manual') {
+          formationControls += _toggleRight('Participantes podem formar suas duplas',
+            !!cfg.manualPairingOpen, 'window._f2ElimManualPairing(this.checked)');
+        }
+      }
     }
 
     // Grupos configuráveis não são um novo formato: as categorias continuam classificatórias de
@@ -937,7 +951,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
               '<div style="font-size:.72rem;color:var(--text-muted);margin-top:6px;">' + (tc.schedule.mode === 'structured' ? 'Os mesmos times se enfrentam na mesma ordem em cada categoria.' : 'Cada categoria recebe seus próprios confrontos sorteados.') + '</div>' +
             '</div>');
       }
-      classif += _sec('Times', tcToggle);
+      scoringControls += _sec('Pontuação agregada para times', tcToggle);
     }
 
     var rModo = cfg.rodadas.modo;
@@ -987,11 +1001,6 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         : 'Após os critérios estatísticos, vale a ordem definida no sorteio original. Nenhuma nova partida é criada.') + '</div>');
 
     var e = cfg.eliminatoria;
-    // Toggle da eliminatória (habilitado, MENOS quando a fase já avançou → travado). Desligar →
-    // torneio termina na classificatória. Sem classificatória, desligar religa a classif.
-    var elimToggle = '<label class="toggle-switch" style="cursor:' + (_elimLocked ? 'not-allowed' : 'pointer') + ';' + (_elimLocked ? 'opacity:0.5;' : '') + '">' +
-      '<input type="checkbox"' + (e.ativa ? ' checked' : '') + (_elimLocked ? ' disabled' : '') + ' onchange="window._f2Elim(this.checked)">' +
-      '<span class="toggle-slider"></span></label>';
     var eb = '';
     // v1.3.99: slot do FORM (DATAS + INSCRIÇÕES durante a fase) da fase INICIAL na eliminação
     // DIRETA. Fica FORA do wrapper de trava (igual às datas da classificatória) → editável no
@@ -1003,31 +1012,6 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         // v4.4.33: ELIMINAÇÃO DIRETA (sem classificatória) — todos os inscritos entram no bracket
         // por sorteio. A disputa e a formação das duplas moram AQUI (o início da eliminatória).
         eb += '<div style="font-size:0.74rem;color:var(--sp-c-fbbf24,#fbbf24);background:rgba(251,191,36,0.08);border-radius:8px;padding:8px 10px;margin-bottom:12px;">Sem fase classificatória — todos os inscritos entram direto na eliminatória.</div>';
-        if (allowsS) {
-          eb += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">Disputa</div>' +
-            _pill(cfg.disputa === 'individual', 'window._f2Disputa(\'individual\')', '👤 Individual') +
-            _pill(isDupla, 'window._f2Disputa(\'dupla\')', '👥 Duplas') + '<div style="height:12px;"></div>';
-        }
-        if (isDupla) {
-          var _openRR = !!cfg.eliminatoria.openReiRainha;
-          eb += _blocoAbrirComRR(cfg, false);
-          if (!_openRR) {
-            eb += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">Duplas na eliminatória</div>' +
-              _pill(cfg.formacaoDupla === 'manual', 'window._f2Form(\'manual\')', '🤝 Já formadas') +
-              _pill(cfg.formacaoDupla !== 'manual', 'window._f2Form(\'sorteio\')', '🎲 Sorteadas') + '<div style="height:10px;"></div>';
-            if (cfg.formacaoDupla === 'manual') {
-              // Já formadas: quem forma as duplas? Toggle ON = participantes podem (arrastar/soltar);
-              // OFF (padrão) = só o organizador. → t.manualPairing ('open' | 'organizer_only').
-              eb += _toggleRight('Participantes podem formar suas duplas', !!cfg.manualPairingOpen, 'window._f2ElimManualPairing(this.checked)') +
-                '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">' + (cfg.manualPairingOpen
-                  ? 'Os participantes podem formar suas próprias duplas (arrastar e soltar). O organizador também pode.'
-                  : 'Apenas o organizador forma as duplas.') + '</div><div style="height:12px;"></div>';
-            } else {
-              // Sorteadas: as duplas da R1 saem no sorteio, seguindo livre/equilibrado entre gêneros.
-              eb += '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:-2px;">As duplas da 1ª rodada são <b>sorteadas</b> no momento do sorteio, seguindo a opção <b>livre</b> ou <b>equilibrado entre gêneros</b>.</div><div style="height:12px;"></div>';
-            }
-          }
-        }
       } else {
         // COM classificatória: escopo (2+ grupos) + Nº de classificados + resumo.
         var perGroupScope = cfg.grupos > 1 && cfg.classifScope !== 'overall';
@@ -1202,19 +1186,14 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // Slot (Datas + Inscrições) dentro da CLASSIFICATÓRIA quando ela está ativa.
     if (cfg.classifAtiva) classifSchedule += '<div id="f2-classif-extra" style="margin-top:4px;"></div>';
 
-    // Toggle da classificatória (sempre habilitado, MENOS quando já sorteada → travado).
-    // Desligar → eliminação direta.
-    var classifToggle = '<label class="toggle-switch" style="cursor:' + (_classifLocked ? 'not-allowed' : 'pointer') + ';' + (_classifLocked ? 'opacity:0.5;' : '') + '">' +
-      '<input type="checkbox"' + (cfg.classifAtiva ? ' checked' : '') + (_classifLocked ? ' disabled' : '') + ' onchange="window._f2ClassifAtiva(this.checked)">' +
-      '<span class="toggle-slider"></span></label>';
-    var classifInner = cfg.classifAtiva ? (classif + classifSchedule) : '';
+    var classifInner = cfg.classifAtiva ? (structureControls + classifSchedule) : '';
     // v4.4.51/v4.5.49: fase classificatória já sorteada → só a ESTRUTURA (formato/grupos/formação)
     // fica cinza e sem interação. O AGENDAMENTO (repetição, nº de rodadas) e as DATAS/Inscrições
     // (#f2-classif-extra, dentro de classifSchedule) ficam FORA do wrapper → SEMPRE editáveis, pra
     // o organizador ajustar a temporada durante a fase (reduzir/estender rodadas, mudar o término).
     if (_classifLocked) {
       classifInner = '<div style="font-size:0.76rem;color:var(--sp-c-c7d2fe,#c7d2fe);background:rgba(129,140,248,0.12);border:1px solid rgba(129,140,248,0.35);border-radius:9px;padding:9px 11px;margin-bottom:12px;line-height:1.45;">🔒 <b>Estrutura travada</b> — formato, grupos e formação não mudam mais (fase já sorteada). Você ainda pode ajustar o <b>agendamento</b> (repetição, nº de rodadas, término da fase) e a <b>fase eliminatória</b>.</div>' +
-        '<div style="pointer-events:none;opacity:0.5;filter:grayscale(0.4);" aria-disabled="true">' + classif + '</div>' +
+        '<div style="pointer-events:none;opacity:0.5;filter:grayscale(0.4);" aria-disabled="true">' + structureControls + '</div>' +
         classifSchedule;
     }
 
@@ -1223,8 +1202,25 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       var lk = locked ? '<span title="Fase travada — configuração não pode mais mudar" style="font-size:1.2rem;line-height:1;">🔒</span>' : '';
       return '<span style="display:inline-flex;align-items:center;gap:12px;">' + lk + toggle + '</span>';
     }
-    var h = _phaseBlock('🎯 Fase Classificatória', '#818cf8', classifInner, _hdrRight(_classifLocked, classifToggle)) +
-      _phaseBlock('🏆 Fase Eliminatória', '#fbbf24', elimInner, _hdrRight(_elimLocked, elimToggle));
+    var priorLocked = _p0Drawn
+      ? '<div style="pointer-events:none;opacity:.55;" aria-disabled="true">'
+      : '<div>';
+    var entryStep = _phaseBlock('2. Quem disputa os jogos?', '#818cf8',
+      priorLocked + entryControls + '</div>');
+    var formationStep = _phaseBlock('3. Como se formam as duplas?', '#818cf8',
+      priorLocked + (formationControls || '<p style="font-size:.85rem;color:var(--text-main);">Não há formação de duplas nesta escolha.</p>') + '</div>');
+    var scoringStep = _phaseBlock('4. Para quem valem os resultados?', '#818cf8',
+      (_classifLocked ? '<div style="pointer-events:none;opacity:.55;" aria-disabled="true">' : '<div>') +
+      '<p style="font-size:.85rem;color:var(--text-main);">A partida é registrada uma vez. A classificação pode pontuar ' +
+      (scoreInd ? 'atletas' : 'duplas') + (cfg.teamCompetition && cfg.teamCompetition.enabled ? ' e times.' : '.') + '</p>' +
+      scoringControls + '</div>');
+    var classifChoice = _phaseBlock('5. Haverá classificatória?', '#818cf8',
+      (_p0Drawn ? '<div style="pointer-events:none;opacity:.55;" aria-disabled="true">' : '<div>') +
+      _pill(cfg.classifAtiva, 'window._f2ClassifAtiva(true)', 'Sim') +
+      _pill(!cfg.classifAtiva, 'window._f2ClassifAtiva(false)', 'Não · entrada direta na eliminatória') + '</div>');
+    var h = entryStep + formationStep + scoringStep + classifChoice +
+      (cfg.classifAtiva ? _phaseBlock('6–7. 🎯 Fase Classificatória', '#818cf8', classifInner,
+        _hdrRight(_classifLocked, '')) : '');
     var _titleUnit = cfg.teamCompetition && cfg.teamCompetition.enabled
       ? (cfg.teamCompetition.classificationUnit === 'pair' ? 'dupla' : 'time')
       : (cfg._scoreBy === 'individual' ? 'atleta' : 'dupla');
@@ -1232,7 +1228,16 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       ? 'Saída escolhida: entrada direta na eliminatória.'
       : (e.ativa ? 'Saída escolhida: a classificatória seleciona participantes para a eliminatória.'
         : 'Saída escolhida: classificação final de ' + _titleUnit + ', sem eliminatória.');
-    return '<div style="font-size:0.78rem;color:var(--text-main);background:rgba(129,140,248,0.08);border:1px solid rgba(129,140,248,0.25);border-radius:9px;padding:9px 11px;margin-bottom:12px;">' + _outcome + '</div>' + h;
+    var exitChoice = cfg.classifAtiva ? _phaseBlock('8. Como o torneio define o campeão?', '#fbbf24',
+      (_elimLocked ? '<div style="pointer-events:none;opacity:.55;" aria-disabled="true">' : '<div>') +
+      _pill(!e.ativa, 'window._f2Elim(false)', 'Pela classificação final') +
+      _pill(e.ativa, 'window._f2Elim(true)', 'Por eliminatória posterior') + '</div>') : '';
+    var eliminationStep = e.ativa ? _phaseBlock('9–10. 🏆 Fase Eliminatória', '#fbbf24', elimInner,
+      _hdrRight(_elimLocked, '')) : '';
+    var review = _phaseBlock('11. Revisão das decisões', '#818cf8',
+      '<p style="font-size:.85rem;color:var(--text-main);">' + _safe(_outcome) + '</p>' +
+      '<p style="font-size:.78rem;color:var(--text-muted);">' + _safe(window.FORMAT2.summary(cfg)) + '</p>');
+    return h + exitChoice + eliminationStep + review;
   }
 
   // ── Handlers globais (form + page) ──

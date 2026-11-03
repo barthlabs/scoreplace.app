@@ -139,6 +139,14 @@ uiCfg.parceria = 'fixa';
 uiHarness.window._f2MountInForm(uiBox, 'Beach Tennis', uiCfg, { id: 'future-test' });
 assert.match(uiBox.innerHTML, /Confrontos na chave/, 'organizador vê a decisão de semeadura');
 assert.match(uiBox.innerHTML, /Saída escolhida: a classificatória seleciona participantes para a eliminatória/);
+const decisionTitles = ['2. Quem disputa os jogos?', '3. Como se formam as duplas?',
+  '4. Para quem valem os resultados?', '5. Haverá classificatória?',
+  '6–7. 🎯 Fase Classificatória', '8. Como o torneio define o campeão?',
+  '9–10. 🏆 Fase Eliminatória', '11. Revisão das decisões'];
+assert.deepStrictEqual(decisionTitles.map(title => uiBox.innerHTML.indexOf(title)).filter(index => index >= 0).length,
+  decisionTitles.length, 'o fluxo exibe todas as perguntas aplicáveis');
+assert.deepStrictEqual(decisionTitles.map(title => uiBox.innerHTML.indexOf(title)).slice().sort((a, b) => a - b),
+  decisionTitles.map(title => uiBox.innerHTML.indexOf(title)), 'as perguntas seguem a ordem fixa');
 uiHarness.window._f2Semeadura('equilibrio');
 assert.equal(uiHarness.window._f2GetConfig().eliminatoria.semeadura, 'equilibrio',
   'o clique persiste na configuração que será enviada ao servidor');
@@ -147,6 +155,10 @@ assert.equal(uiHarness.window._f2GetConfig().eliminatoria.semeadura, 'sorteio',
   'o organizador também pode escolher sorteio da posição na chave');
 uiHarness.window._f2Elim(false);
 assert.match(uiBox.innerHTML, /Saída escolhida: classificação final de dupla, sem eliminatória/);
+assert.doesNotMatch(uiBox.innerHTML, /9–10\. 🏆 Fase Eliminatória/, 'título pela tabela não exibe chave');
+uiHarness.window._f2ClassifAtiva(false);
+assert.doesNotMatch(uiBox.innerHTML, /6–7\. 🎯 Fase Classificatória/, 'entrada direta não exibe perguntas classificatórias');
+assert.match(uiBox.innerHTML, /9–10\. 🏆 Fase Eliminatória/, 'entrada direta exige a decisão eliminatória');
 const mixedCfg = FORMAT2.defaultConfig('Futevôlei');
 mixedCfg.disputa = 'dupla';
 mixedCfg.parceria = 'fixa';

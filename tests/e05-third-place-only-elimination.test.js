@@ -23,6 +23,11 @@ for (const [name, W] of [['web', client], ['Function', server]]) {
     assert.equal(group.thirdPlaceMatch, undefined, `${name}: remove placeholder de grupos`);
     W._maybeGenerate3rdPlace(group);
     assert.equal(group.thirdPlaceMatch, undefined, `${name}: não recria terceiro lugar em grupos`);
+    const before = JSON.stringify(group);
+    assert.equal(W._ensureFutureRounds(group, false, { now: 123456 }), false,
+      `${name}: reparo de rodadas ignora classificatória`);
+    assert.equal(JSON.stringify(group), before,
+      `${name}: reparo não inventa jogos nem altera a classificatória`);
   }
 
   const groupWithEliminationPhase = bracket('Fase de Grupos', [
@@ -33,6 +38,18 @@ for (const [name, W] of [['web', client], ['Function', server]]) {
   W._maybeGenerate3rdPlace(groupWithEliminationPhase);
   assert.ok(groupWithEliminationPhase.thirdPlaceMatch,
     `${name}: fase eliminatória explícita gera terceiro lugar`);
+
+  const twoSemis = bracket('Fase de Grupos', [
+    { kind: 'classification', classification: { structure: 'groups' } },
+    { kind: 'elimination', elimination: { bracketType: 'single' } }
+  ]);
+  twoSemis.currentPhaseIndex = 0;
+  assert.equal(W._ensureFutureRounds(twoSemis, false, { now: 123456 }), false,
+    `${name}: fase classificatória de torneio com eliminatória futura não gera terceiro`);
+  twoSemis.currentPhaseIndex = 1;
+  W._maybeGenerate3rdPlace(twoSemis);
+  assert.ok(twoSemis.thirdPlaceMatch,
+    `${name}: terceiro lugar nasce quando a eliminatória chega às semifinais`);
 
   const unknown = bracket('Formato desconhecido');
   W._maybeGenerate3rdPlace(unknown);

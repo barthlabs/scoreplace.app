@@ -128,7 +128,9 @@ const rd = dc.drawInitial(t3, {});
 ok(!!(rd && rd.ok), '④ drawInitial ok');
 const e0 = jogarFase(t3, 0);
 ok(!e0, '④ fase 0 jogou sem erro (' + (e0 || '') + ')');
-W._advanceMultiPhase(t3.id);
+const materialized = dc.materializeNextPhase(t3,
+  g => dc.standingsDaFaseAnterior(g, t3, {}, false), 'liga-fase-1');
+ok(!!(materialized && materialized.ok), '④ avanço pelo motor canônico do servidor');
 ok(t3.currentPhaseIndex === 1, '④ ⭐ cheguei na fase 1 ANDANDO, não escrevendo o índice (veio ' + t3.currentPhaseIndex + ')');
 const fase1 = (t3.phases || [])[1] || {};
 ok(fase1.kind === 'classification' && fase1.classification && fase1.classification.structure === 'round_robin',

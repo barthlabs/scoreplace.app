@@ -3938,6 +3938,9 @@ function _maybeFinishElimination(t) {
 // ─── Reparação de rodadas futuras (motor canônico, sem DOM) ─────────────────
 function _ensureFutureRounds(t, dryRun, opts) {
   opts = opts || {};
+  // O reconciliador roda para qualquer torneio. Rodadas de uma classificatória
+  // não são uma chave: reparar sua contagem aqui inventaria final e 3º lugar.
+  if (!_isEliminationBracket(t)) return false;
   if (!t.matches || !t.matches.length) return false;
   // Repechage tournaments already have all rounds built — skip
   if (t.hasRepechage) return false;
@@ -3945,8 +3948,8 @@ function _ensureFutureRounds(t, dryRun, opts) {
 
   // Filtrar apenas matches do bracket principal (upper ou sem bracket)
   const mainMatches = isDupla
-    ? t.matches.filter(m => m.bracket === 'upper')
-    : t.matches.filter(m => !m.bracket || (m.bracket !== 'lower' && m.bracket !== 'grand'));
+    ? t.matches.filter(m => m.bracket === 'upper' && !m.isThirdPlace)
+    : t.matches.filter(m => !m.isThirdPlace && (!m.bracket || (m.bracket !== 'lower' && m.bracket !== 'grand')));
 
   const roundsMap = {};
   mainMatches.forEach(m => {
@@ -4029,8 +4032,11 @@ function _ensureFutureRounds(t, dryRun, opts) {
     });
   }
 
-  // Inicializar thirdPlaceMatch se configurado e ainda não existe
-  if (!t.thirdPlaceMatch) {
+  // Só os dois perdedores das semifinais podem disputar 3º/4º. Em uma chave
+  // sem duas semifinais reais não existe essa partida.
+  const semiRound = allRoundNums.length >= 2 ? allRoundNums[allRoundNums.length - 2] : null;
+  const semis = semiRound ? (currentRoundsMap[semiRound] || []).filter(m => m && !m.isBye && !m.isThirdPlace) : [];
+  if (!isDupla && semis.length === 2 && !t.thirdPlaceMatch) {
     const finalRound = allRoundNums[allRoundNums.length - 1];
     window._appendCanonicalColumn(t, {
       phase: 'thirdplace',
@@ -4044,10 +4050,9 @@ function _ensureFutureRounds(t, dryRun, opts) {
   }
 
   // Sempre recalcular participantes do 3º lugar baseado nas semifinais
-  if (t.thirdPlaceMatch && !t.thirdPlaceMatch.winner) {
-    const semiRound = allRoundNums.length >= 2 ? allRoundNums[allRoundNums.length - 2] : null;
+  if (!isDupla && semis.length === 2 && t.thirdPlaceMatch && !t.thirdPlaceMatch.winner) {
     if (semiRound && currentRoundsMap[semiRound]) {
-      const losers = currentRoundsMap[semiRound]
+      const losers = semis
         .filter(m => m.winner && m.winner !== 'draw' && !m.isBye)
         .map(m => window._matchWinnerSide(m) === 1 ? m.p2 : m.p1)
         .filter(name => name && name !== 'TBD' && name !== 'BYE');

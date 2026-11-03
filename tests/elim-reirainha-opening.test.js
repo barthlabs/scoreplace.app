@@ -127,7 +127,8 @@ function sameGroup(ns) { var pre = ns.map(function (n) { return n[0]; }); return
   ok(usos >= 3, '(3) o bloco é definido e usado nos DOIS ramos (ocorrências: ' + usos + ')');
   ok(/_blocoAbrirComRR\(cfg, true\)/.test(ui), '(3) usado no ramo COM classificatória');
   ok(/_blocoAbrirComRR\(cfg, false\)/.test(ui), '(3) usado no ramo SEM classificatória');
-  ok(/if \(!\(isDupla && cfg\.eliminatoria\.openReiRainha\)\)/.test(ui),
+  ok(/if \(!\(isDupla && cfg\.eliminatoria\.openReiRainha\)\)/.test(ui) ||
+     /if \(isDupla && !cfg\.eliminatoria\.openReiRainha\)/.test(ui),
     '(3) com o toggle ON a "Estratégia da eliminatória" some (era o MESMO cfg.formacao)');
   // o texto muda conforme o contexto: com classificatória ele explica a cabeça de chave
   ok(/cabeças de chave/.test(ui), '(3) o texto do bloco explica a cabeça de chave quando há classificatória');

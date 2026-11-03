@@ -2894,7 +2894,7 @@
            '" style="min-width:0;flex:1;"><button type="button" class="btn btn-primary" data-tie-match="' + index + '">Salvar placar</button></div>') + '</div>';
       });
     }
-    overlay.innerHTML = '<div role="dialog" aria-modal="true" aria-label="Desempate antes do avanço" style="background:var(--bg-card,#1e293b);color:var(--text-main,#fff);width:min(560px,100%);max-height:90vh;overflow:auto;border-radius:16px;padding:22px;border:1px solid rgba(255,255,255,.2);">' +
+    overlay.innerHTML = '<div role="dialog" aria-modal="true" aria-label="Desempate antes do avanço" style="background:var(--bg-card,#1e293b);color:var(--text-main,#fff);width:min(560px,100%);max-height:90%;overflow:auto;border-radius:16px;padding:22px;border:1px solid rgba(255,255,255,.2);">' +
       '<h3 style="margin:0 0 10px;">Desempate antes da próxima fase</h3>' + body +
       '<button type="button" id="phase-tie-close" class="btn btn-secondary" style="margin-top:16px;">Fechar por enquanto</button></div>';
     document.body.appendChild(overlay);

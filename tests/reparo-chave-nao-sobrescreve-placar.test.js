@@ -4,7 +4,8 @@
 'use strict';
 const fs = require('fs');
 const { _window: W } = require('../functions-autodraw/draw-core.js');
-const fresh = { id: 'T1', format: 'Eliminatória', matches: [
+const fresh = { id: 'T1', format: 'Eliminatórias Simples',
+  phases: [{ kind: 'elimination', elimination: { bracketType: 'single' } }], matches: [
   { id: 'R1-A', round: 1, p1: 'A', p2: 'B', winner: 'A', scoreP1: 6, scoreP2: 3 },
   { id: 'R1-B', round: 1, p1: 'C', p2: 'D', winner: null }
 ] };
