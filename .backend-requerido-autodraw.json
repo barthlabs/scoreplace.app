@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "backendCommit": "e2ea81128e776ab30b8eaeb09f90f2076e14e3d2",
-  "scopeNote": "Publicação integral do codebase autodraw após mudanças compartilhadas no placar, divisão do torneio e fluxo de fases; cada callable exige recibo deste commit.",
+  "backendCommit": "a3b21ad1eda5c35a35c2462d5605ae110e24db19",
+  "scopeNote": "Publicação integral do codebase autodraw após sincronizar o motor de placar por set com o vendor; todas as callables incluem o bundle comum.",
   "functions": [
     "acceptLigaSubstitutionInvite",
     "acceptTournamentFeeTerms",
