@@ -21,12 +21,15 @@ const ENUMS = [
   ['eliminatoria.lateEnrollment', ['inherit', 'closed', 'standby', 'expand']],
   ['eliminatoria.newMatchups', ['inherit', true, false]],
   ['eliminatoria.lineAssignment', ['strategy', 'rank_ranges']],
+  ['eliminatoria.bestNextByGroup.metric', ['points_per_game', 'win_rate', 'total_points']],
   ['eliminatoria.grandFinalReset', [true, false]]
 ];
 const INTEGERS = [
   ['grupos', 1],
   ['eliminatoria.linhas', 1],
   ['eliminatoria.finalSeriesBestOf', 1],
+  ['eliminatoria.bestNextByGroup.count', 0],
+  ['eliminatoria.bestNextByGroup.destIndex', 0],
   ['classificados', 1],
   ['rodadas.n', 1],
   ['classificationPairing.clusterSize', 2],
@@ -175,6 +178,21 @@ function validateNewFormatIntent(fmt2, HttpsError, stored, requestedTeamSize) {
     throw new HttpsError('invalid-argument', 'A série final e o reinício da grande final são escolhas alternativas.');
   }
   const elim = fmt2.eliminatoria || {};
+  const extra = elim.bestNextByGroup || null;
+  if (extra != null && (!extra || typeof extra !== 'object' || Array.isArray(extra))) {
+    throw new HttpsError('invalid-argument', 'Vagas extras inválidas.');
+  }
+  if (extra && Number(extra.count || 0) > 0) {
+    if (fmt2.classifAtiva === false || elim.ativa === false || Number(fmt2.grupos || 1) < 2 ||
+        fmt2.classifScope !== 'per_group' || elim.qualifyAll === true ||
+        elim.lineAssignment === 'rank_ranges' || elim.openReiRainha === true ||
+        Number(extra.count) > Number(fmt2.grupos) || Number(extra.destIndex || 0) >= Number(elim.linhas || 1)) {
+      throw new HttpsError('invalid-argument', 'Vagas extras exigem grupos comparáveis e uma chave de destino válida.');
+    }
+    if (fmt2.disputa === 'dupla' && fmt2.parceria && fmt2.parceria !== 'fixa' && Number(extra.count) % 2) {
+      throw new HttpsError('invalid-argument', 'Vagas extras individuais precisam formar duplas completas.');
+    }
+  }
   if (elim.lineAssignment === 'rank_ranges') {
     const ranges = elim.lineRankRanges;
     const lines = Number(elim.linhas || 1);

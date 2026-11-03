@@ -660,10 +660,14 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         return '<div style="margin-top:8px;font-size:0.78rem;color:var(--sp-c-fde68a,#fde68a);background:rgba(251,191,36,0.09);border:1px solid rgba(251,191,36,0.18);border-radius:8px;padding:9px 11px;line-height:1.5;">👥 <b>Todos</b> os inscritos entram na eliminatória — o total (duplas · jogos · tempo) aparece quando houver gente inscrita.</div>';
       }
     }
-    var q = cfg.eliminatoria.qualifyAll ? gi.units : (perGroupScope ? cfg.grupos * cfg.classificados : cfg.classificados);
-    if (gi.units > 0) q = Math.min(q, gi.units);
-    var teams = Math.max(0, q);
-    var people = teams * (isDupla ? 2 : 1);
+    var rankedIndividuals = isDupla && cfg._scoreBy === 'individual';
+    var available = rankedIndividuals ? gi.people : gi.units;
+    var extras = (!cfg.eliminatoria.qualifyAll && perGroupScope && cfg.eliminatoria.bestNextByGroup)
+      ? Number(cfg.eliminatoria.bestNextByGroup.count || 0) : 0;
+    var q = cfg.eliminatoria.qualifyAll ? available : (perGroupScope ? cfg.grupos * cfg.classificados : cfg.classificados) + extras;
+    if (available > 0) q = Math.min(q, available);
+    var teams = Math.max(0, rankedIndividuals ? Math.floor(q / 2) : q);
+    var people = rankedIndividuals ? q : teams * (isDupla ? 2 : 1);
     var games = (teams >= 2) ? (teams - 1) + (teams >= 4 ? 1 : 0) : 0;   // 3º lugar sempre
     // v2.0.74: tempo POR SET × sets da partida DESTA fase (a eliminatória).
     var gd = _minPartidaForm(gi, _elimEffScoring(cfg.eliminatoria || {}));
@@ -1064,6 +1068,27 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
             '<span id="f2-class-val" style="min-width:30px;text-align:center;font-weight:800;font-size:1.15rem;color:var(--sp-c-fde68a,#fde68a);">' + cfg.classificados + '</span></div>';
         } else {
           eb += '<div style="font-size:0.74rem;color:var(--sp-c-fde68a,#fde68a);margin-bottom:6px;">Todos os participantes da classificatória entram no bracket, semeados pela classificação.</div>';
+        }
+        if (!qAll && perGroupScope && e.lineAssignment !== 'rank_ranges' && !e.openReiRainha) {
+          var extra = e.bestNextByGroup || { count: 0, metric: 'points_per_game', destIndex: 0 };
+          eb += '<div style="margin:12px 0;padding:10px;border:1px solid rgba(129,140,248,.25);border-radius:8px;">' +
+            '<div style="font-size:.8rem;color:var(--text-main);margin-bottom:6px;">Vagas extras: melhores colocados seguintes entre os grupos</div>' +
+            '<label style="font-size:.75rem;color:var(--text-muted);">Quantidade total ' +
+            '<input type="number" min="0" max="' + cfg.grupos + '" class="form-control" value="' + extra.count +
+            '" onchange="window._f2BestNext(\'count\',this.value)" style="width:75px;display:inline-block;margin-left:6px;"></label>';
+          if (extra.count > 0) {
+            eb += '<div style="font-size:.72rem;color:var(--text-muted);margin:7px 0;">Após os ' + cfg.classificados +
+              ' primeiros de cada grupo, compara-se o próximo colocado de cada grupo.</div>' +
+              '<label style="font-size:.75rem;color:var(--text-muted);">Comparar por <select class="form-control" onchange="window._f2BestNext(\'metric\',this.value)" style="display:inline-block;max-width:220px;margin-left:6px;">' +
+              [['points_per_game', 'Pontos por jogo'], ['win_rate', 'Aproveitamento de vitórias'], ['total_points', 'Pontos totais (mesmo nº de jogos)']].map(function (option) {
+                return '<option value="' + option[0] + '"' + (extra.metric === option[0] ? ' selected' : '') + '>' + option[1] + '</option>';
+              }).join('') + '</select></label>';
+            if (e.linhas > 1) eb += '<div style="margin-top:7px;"><label style="font-size:.75rem;color:var(--text-muted);">Enviar para <select class="form-control" onchange="window._f2BestNext(\'destIndex\',this.value)" style="display:inline-block;max-width:220px;margin-left:6px;">' +
+              Array.from({ length: e.linhas }, function (_, index) {
+                return '<option value="' + index + '"' + (extra.destIndex === index ? ' selected' : '') + '>' + _safe(e.nomes[index] || ('Chave ' + (index + 1))) + '</option>';
+              }).join('') + '</select></label></div>';
+          }
+          eb += '</div>';
         }
         // v4.4.41: resumo LOGO ABAIXO do slider (pedido do dono).
         eb += '<div id="f2-elim-summary">' + _elimSummary(cfg) + '</div>';
@@ -1912,6 +1937,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (!Array.isArray(e.lineRankRanges)) e.lineRankRanges = [];
     if (!e.lineRankRanges[index]) e.lineRankRanges[index] = { from: 1, to: 1 };
     e.lineRankRanges[index][field] = Number(value);
+    _norm(); _rerender();
+  };
+  window._f2BestNext = function (field, value) {
+    if (!S || ['count', 'metric', 'destIndex'].indexOf(field) < 0) return;
+    if (!S.cfg.eliminatoria.bestNextByGroup) S.cfg.eliminatoria.bestNextByGroup = {};
+    S.cfg.eliminatoria.bestNextByGroup[field] = field === 'metric' ? value : Number(value);
     _norm(); _rerender();
   };
 

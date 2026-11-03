@@ -104,6 +104,17 @@ function boundariesFor(nextPhase, count) {
   const limit = !limitRaw || limitRaw >= 999 ? count : Math.min(count, limitRaw);
   const cuts = [];
   const lines = mapping.length;
+  if (source.lineAssignment === 'rank_ranges') {
+    const destination = rank => {
+      const route = mapping.find(m => rank >= Number(m.rankFrom || 1) && rank <= Number(m.rankTo || 0));
+      return route ? String(route.dest) : '__excluded__';
+    };
+    for (let cut = 1; cut < limit; cut++) {
+      if (destination(cut) !== destination(cut + 1)) cuts.push(cut);
+    }
+    if (limit < count) cuts.push(limit);
+    return Array.from(new Set(cuts)).sort((a, b) => a - b);
+  }
   if (lines > 1 && limit > 1) {
     const strategy = nextPhase.pairingStrategy || 'top';
     const fixedPairs = nextPhase.fixedPairs !== false && source.rankingBasis !== 'team';

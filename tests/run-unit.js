@@ -127,6 +127,7 @@ const SUITES = [
   'tests/dupla-final-option.test.js',
   'tests/final-series.test.js',
   'tests/line-rank-ranges.test.js',
+  'tests/best-next-by-group.test.js',
   'functions-autodraw/test-super-eight.js',
   'tests/format2-legacy-translation.test.js',
   'tests/migrar-fmt2-core.test.js',

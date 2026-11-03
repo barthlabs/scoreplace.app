@@ -35,6 +35,18 @@ assert.deepStrictEqual(tie.boundariesFor({ fixedPairs: true, pairingStrategy: 't
   mapping: [{ dest: 'a', rankFrom: 1, rankTo: 4 }, { dest: 'b', rankFrom: 1, rankTo: 4 }]
 } }, 4), [2], 'duas linhas após Rei/Rainha separam 2º e 3º');
 assert.deepStrictEqual(tie.boundariesFor({ source: { mapping: [{ dest: 'main', rankFrom: 1, rankTo: 2 }] } }, 4), [2]);
+assert.deepStrictEqual(tie.boundariesFor({ source: { lineAssignment: 'rank_ranges', mapping: [
+  { dest: 'a', rankFrom: 1, rankTo: 2 }, { dest: 'b', rankFrom: 3, rankTo: 4 }
+] } }, 4), [2], 'faixas explícitas pedem desempate na fronteira entre destinos');
+const wildRows = [{ uid: 'x', name: 'X', points: 9 }, { uid: 'y', name: 'Y', points: 9 },
+  { uid: 'z', name: 'Z', points: 7 }];
+const wildCompare = (a, b) => b.points - a.points;
+wildCompare.originalOrder = { x: 0, y: 1, z: 2 };
+const wildChoice = tie.resolvePhaseTies({}, 0, [{ id: 'wildcards', rows: wildRows }],
+  { source: { mapping: [{ dest: 'main', rankFrom: 1, rankTo: 1 }] } }, () => wildCompare,
+  null, 1, false, () => 93);
+assert.equal(wildChoice.status, 'choice');
+assert.equal(wildChoice.tie.decisionId, 'wildcards:0:1');
 assert.deepStrictEqual(tie.boundariesFor({ fixedPairs: true, pairingStrategy: 'balanced', source: {
   mapping: [{ dest: 'a', rankFrom: 1, rankTo: 2 }, { dest: 'b', rankFrom: 3, rankTo: 4 }]
 } }, 4), [1, 3], 'pareamento equilibrado muda a linha nas pontas do ranking');

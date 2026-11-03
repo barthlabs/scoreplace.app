@@ -156,6 +156,44 @@ function renderRules(container, tournamentId) {
       </div>`;
   })();
 
+  const organizerFlowHtml = (() => {
+    if (!(t.rulesContractVersion >= 2) || !t.fmt2) return '';
+    const cfg = t.fmt2, e = cfg.eliminatoria || {}, safe = window._safeHtml || (x => String(x || ''));
+    const lines = [];
+    lines.push(cfg.classifAtiva === false ? 'Entrada direta na eliminatória.' :
+      ('Classificatória em ' + (cfg.grupos || 1) + ' grupo(s); ' +
+        (e.ativa === false ? 'título pela classificação, sem disputa de 3º/4º.' : 'segue para eliminatória.')));
+    if (cfg.classifAtiva !== false && e.ativa !== false) {
+      lines.push(e.qualifyAll ? 'Todos avançam.' :
+        ('Avançam ' + (cfg.classificados || 1) + ' por ' +
+          (cfg.classifScope === 'per_group' ? 'grupo' : 'classificação geral') + '.'));
+      const extras = e.bestNextByGroup || {};
+      if (extras.count > 0) lines.push('Mais ' + extras.count + ' vaga(s) para os melhores colocados seguintes entre grupos; comparação por ' +
+        ({ points_per_game: 'pontos por jogo', win_rate: 'aproveitamento de vitórias', total_points: 'pontos totais' }[extras.metric] || extras.metric) + '.');
+    }
+    if (e.ativa !== false) {
+      const names = Array.isArray(e.nomes) ? e.nomes : [];
+      lines.push((e.dupla ? 'Dupla eliminatória clássica' : 'Eliminatória simples') +
+        ' com ' + (e.linhas || 1) + ' chave(s)' +
+        (e.dupla ? '.' : ': ' + Array.from({ length: e.linhas || 1 }, (_, i) => names[i] || ('Chave ' + (i + 1))).join(', ') + '.'));
+      if (e.lineAssignment === 'rank_ranges') (e.lineRankRanges || []).forEach((range, i) => {
+        lines.push((names[i] || ('Chave ' + (i + 1))) + ': colocados do ' + range.from + 'º ao ' + range.to + 'º.');
+      });
+      if (e.dupla || Number(e.linhas || 1) > 1) lines.push(e.grandFinal === false
+        ? 'As chaves encerram com campeões próprios.' : 'Os campeões das chaves disputam a final geral.');
+      if (e.grandFinalReset === true) lines.push('A final da dupla eliminatória prevê partida de reinício se o vencedor da chave inferior ganhar a primeira.');
+      if (Number(e.finalSeriesBestOf || 1) > 1) lines.push('A final é uma série de até ' + e.finalSeriesBestOf + ' partidas; vence quem atingir a maioria.');
+    }
+    if (cfg.rankingSitOutScoring && cfg.rankingSitOutScoring.mode) {
+      const mode = cfg.rankingSitOutScoring;
+      lines.push('Pontuação da folga no ranking: ' + (mode.mode === 'average' ? 'média dinâmica recalculada' :
+        mode.mode === 'zero' ? 'zero' : String(mode.points || 0) + ' pontos fixos') + '.');
+    }
+    return '<div style="margin-top:1.25rem;padding:0.9rem 1rem;background:rgba(129,140,248,.08);border:1px solid rgba(129,140,248,.25);border-radius:10px;line-height:1.5;font-size:.85rem;">' +
+      '<b>Fluxo definido pela organização</b><ul style="margin:7px 0 0;padding-left:19px;">' +
+      lines.map(line => '<li>' + safe(line) + '</li>').join('') + '</ul></div>';
+  })();
+
   const historyHtml = (t.history && t.history.length)
     ? [...t.history].reverse().slice(0, 20).map((log, i) => {
         let date = '—';
@@ -262,10 +300,11 @@ function renderRules(container, tournamentId) {
             </li>` : ''}
         </ul>
 
+        ${organizerFlowHtml}
         ${t.fmt2 && t.fmt2.tieResolution ? `<div style="margin-top:1.25rem;padding:0.9rem 1rem;background:rgba(129,140,248,.08);border:1px solid rgba(129,140,248,.25);border-radius:10px;line-height:1.5;font-size:.85rem;">
           <b>Empate residual na definição dos destinos</b><br>
           ${t.fmt2.tieResolution === 'singles_then_draw'
-            ? 'Depois de todos os critérios de desempate, dois atletas ainda empatados podem jogar uma simples; três podem disputar um triangular de simples, em que todos se enfrentam. Cada jogo extra recebe o número do último jogo do grupo que gerou o empate, seguido de A, B ou C. O triangular ordena por vitórias, saldo de sets e saldo de games. Na hora do avanço, se não houver tempo, a organização registra a dispensa dos jogos e usa a ordem do sorteio original. Se o triangular continuar empatado, essa mesma ordem original é o último recurso.'
+            ? 'Depois de todos os critérios de desempate, dois atletas ainda empatados podem jogar uma simples; três podem disputar um triangular de simples, em que todos se enfrentam. Cada jogo extra recebe o número do último jogo da classificação que gerou o empate, seguido de letras em sequência (A, B, C…). O triangular ordena por vitórias, saldo de sets e saldo de games. Na hora do avanço, se não houver tempo, a organização registra a dispensa dos jogos e usa a ordem do sorteio original. Se o triangular continuar empatado, essa mesma ordem original é o último recurso.'
             : 'Depois de todos os critérios de desempate, vale a ordem do sorteio original. Não há novo sorteio na hora do avanço.'}
         </div>` : ''}
 

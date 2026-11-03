@@ -403,6 +403,7 @@
       shuffle: _shuffleDet || undefined,
       scope: src.scope || 'per_group',
       lineAssignment: src.lineAssignment === 'rank_ranges' ? 'rank_ranges' : 'strategy',
+      bestNextByGroup: src.bestNextByGroup || null,
       rankingBasis: src.rankingBasis || 'individual',
       flatOverall: src.flatOverall === true,
       includeInactive: (cfg && cfg._includeInactive) || null,
@@ -587,11 +588,47 @@
       var gdepth = (maxRankTo >= 999 || maxRankTo <= 0) ? global.length : Math.min(maxRankTo, global.length);
       _distributePool(global.slice(0, gdepth), destKeys);
     } else {
+      var _nextCandidates = [];
       (prevGroups || []).forEach(function (g) {
         var standings = computeStandings(g) || [];
         var depth = (maxRankTo >= 999 || maxRankTo <= 0) ? standings.length : Math.min(maxRankTo, standings.length);
         _distributePool(standings.slice(0, depth), destKeys);
+        if (opts.bestNextByGroup && standings[depth]) {
+          _nextCandidates.push({ entry: standings[depth], groupIndex: _nextCandidates.length,
+            played: Number(standings[depth].played || 0) });
+        }
       });
+      var _bestNext = opts.bestNextByGroup;
+      if (_bestNext && Number(_bestNext.count) > 0) {
+        if (!byDest[_bestNext.dest]) throw new Error('Destino das vagas extras não pertence às chaves configuradas.');
+        if (_nextCandidates.length < Number(_bestNext.count)) throw new Error('Não há colocados seguintes suficientes para as vagas extras.');
+        if (_bestNext.metric === 'total_points' && _nextCandidates.some(function (x) {
+          return x.played !== _nextCandidates[0].played;
+        })) throw new Error('Pontos totais entre grupos exigem o mesmo número de jogos disputados.');
+        function _metricCandidate(x) {
+          var e = x.entry || {}, played = x.played;
+          if (_bestNext.metric === 'win_rate') return played ? Number(e.wins || 0) / played : 0;
+          var points = Number(e.points != null ? e.points : (e.advancedPoints != null ? e.advancedPoints : e.wins || 0));
+          return _bestNext.metric === 'total_points' ? points : (played ? points / played : 0);
+        }
+        var cmpConfigured = _cmpConfigurado(), cmpStandard = _cmpCanonico();
+        _nextCandidates.sort(function (a, b) {
+          var d = _metricCandidate(b) - _metricCandidate(a);
+          if (d) return d;
+          if (cmpConfigured && Array.isArray(opts.promotionTiebreakers) && opts.promotionTiebreakers.length)
+            d = cmpConfigured(a.entry, b.entry, { tiebreakers: opts.promotionTiebreakers, h2h: {}, birth: {}, ordem: {} });
+          else if (cmpStandard) d = cmpStandard(a.entry, b.entry, false);
+          if (d) return d;
+          var order = opts.tieOrder || null;
+          var ka = a.entry && (a.entry.uid ? 'uid:' + a.entry.uid : 'name:' + a.entry.name);
+          var kb = b.entry && (b.entry.uid ? 'uid:' + b.entry.uid : 'name:' + b.entry.name);
+          var pa = order && order[ka], pb = order && order[kb];
+          if (pa && pb && pa.decisionId === pb.decisionId) return pa.rank - pb.rank;
+          // Último desempate previsto: ordem dos grupos do sorteio original.
+          return a.groupIndex - b.groupIndex;
+        });
+        _distributePool(_nextCandidates.slice(0, Number(_bestNext.count)).map(function (x) { return x.entry; }), [_bestNext.dest]);
+      }
       // ESCOPO POR GRUPO: os inativos não pertencem a nenhum grupo → não há como entrar
       // na formação {1º,2º}/{3º,4º} de um grupo. Como são os piores classificados (0 pts),
       // entram como duplas entre si no FIM da PIOR linha. É a mesma consequência de

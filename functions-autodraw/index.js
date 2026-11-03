@@ -5748,6 +5748,7 @@ exports.applyTournamentFormat = onCall(async (request) => {
     if (!_isTournamentAdmin(t, uid)) {
       throw _drawFail('permission-denied', 'Só a organização configura o formato.', { tId, uid });
     }
+    if (t.status === 'finished') throw _drawFail('failed-precondition', 'Torneio encerrado não pode receber novo contrato.', { tId });
     if (hasDrawnBracket(t)) throw _drawFail('failed-precondition', 'already-drawn', { tId });
     // A terceira porta de gravação recebe fmt2 cru; clonar e validar ANTES de
     // compilar impede a normalização tolerante de esconder uma escolha inválida.
@@ -5777,6 +5778,7 @@ exports.applyTournamentFormat = onCall(async (request) => {
     Object.assign(t, out.topLevel);
     t.phases = out.phases;
     t.fmt2 = out.cfg;
+    t.rulesContractVersion = 2;
     _phaseTieCore.canonicalizeTieFallback(t);
     if (t.format === 'Fase de Grupos') {
       t.ligaRoundFormat = 'standard';
@@ -5957,8 +5959,10 @@ exports.advanceTournamentPhase = onCall(async (request) => {
       try {
         const scoring = (currentCfg && currentCfg.scoring) || t.scoring || {};
         const setsToWin = Number(scoring.setsToWin) || 1;
+        const requestedTieAction = request.data && request.data.tieAction;
         tieFlow = _phaseTieCore.resolvePhaseTies(t, current, pools, nextCfg,
-          compareForPool, request.data && request.data.tieAction, setsToWin,
+          compareForPool, requestedTieAction && String(requestedTieAction.decisionId || '').startsWith('wildcards:')
+            ? null : requestedTieAction, setsToWin,
           tieRule === 'draw_order', tieRule === 'singles_then_draw' ? numberForPool : null);
       } catch (err) {
         throw new HttpsError('failed-precondition', 'Desempate não aplicado: ' + String(err.message || err));
@@ -5990,6 +5994,56 @@ exports.advanceTournamentPhase = onCall(async (request) => {
           byName.set(String(g && g.name || ('Grupo ' + index)), pool.rows);
         });
         calculateStandings = g => byName.get(String(g && g.name || '')) || phaseStandingsFn(g, t, tbOpts, hasMonarch);
+      }
+      const bestNext = !overall && nextCfg.source.bestNextByGroup;
+      if (bestNext && Number(bestNext.count) > 0) {
+        const rank = Number(nextCfg.source.qualifyTopN || 0);
+        const wildcardRows = sourceGroups.map(g => (calculateStandings(g) || [])[rank]).filter(Boolean);
+        if (wildcardRows.length < Number(bestNext.count)) {
+          throw new HttpsError('failed-precondition', 'Não há colocados seguintes suficientes para as vagas extras.');
+        }
+        const played = wildcardRows.map(row => Number(row.played || 0));
+        if (bestNext.metric === 'total_points' && played.some(n => n !== played[0])) {
+          throw new HttpsError('failed-precondition', 'Pontos totais entre grupos exigem o mesmo número de jogos disputados.');
+        }
+        const baseCompare = compareForPool({ id: 'wildcards' });
+        const metric = row => {
+          const games = Number(row.played || 0);
+          if (bestNext.metric === 'win_rate') return games ? Number(row.wins || 0) / games : 0;
+          const points = Number(row.points != null ? row.points : (row.advancedPoints != null ? row.advancedPoints : row.wins || 0));
+          return bestNext.metric === 'total_points' ? points : (games ? points / games : 0);
+        };
+        const wildcardCompare = (a, b) => (metric(b) - metric(a)) || baseCompare(a, b);
+        wildcardCompare.originalOrder = baseCompare.originalOrder;
+        const wildcardNext = { source: { mapping: [{ dest: bestNext.dest || 'main', rankFrom: 1,
+          rankTo: Number(bestNext.count) }] } };
+        let wildcardFlow;
+        try {
+          wildcardFlow = _phaseTieCore.resolvePhaseTies(t, current,
+            [{ id: 'wildcards', rows: wildcardRows }], wildcardNext, () => wildcardCompare,
+            requestedTieAction && String(requestedTieAction.decisionId || '').startsWith('wildcards:')
+              ? requestedTieAction : null, Number(((currentCfg && currentCfg.scoring) || t.scoring || {}).setsToWin) || 1,
+            tieRule === 'draw_order', tieRule === 'singles_then_draw' ? numberForPool : null);
+        } catch (err) {
+          throw new HttpsError('failed-precondition', 'Desempate das vagas extras não aplicado: ' + String(err.message || err));
+        }
+        if (wildcardFlow.changed && requestedTieAction) {
+          if (!Array.isArray(t.history)) t.history = [];
+          t.history.push({ date: agoraIso, message: requestedTieAction.type === 'draw'
+            ? 'Vagas extras: organização dispensou a simples/triangular e aplicou a ordem do sorteio original.'
+            : requestedTieAction.type === 'play'
+              ? 'Vagas extras: organização escolheu disputar a simples/triangular prevista.'
+              : 'Vagas extras: placar de simples registrado.', byUid: uid });
+        }
+        if (wildcardFlow.status !== 'ready') {
+          const saved = wildcardFlow.changed ? _gravaTorneio(tx, ref, t, antes, { agoraIso }) : null;
+          return { ok: false, reason: wildcardFlow.status === 'choice' ? 'tie-choice-required' : 'tie-match-pending',
+            tie: wildcardFlow.tie, decision: wildcardFlow.decision || null, tournament: saved && saved.clean };
+        }
+        phaseTieOrder = {};
+        (wildcardFlow.orderedPools[0].rows || []).forEach((row, order) => {
+          phaseTieOrder[_phaseTieCore.key(row)] = { decisionId: 'wildcards-order-' + current, rank: order };
+        });
       }
     }
     // A fase comum recebe um retrato apenas quando a mesma classificação que

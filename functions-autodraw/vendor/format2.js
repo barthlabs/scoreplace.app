@@ -437,6 +437,7 @@
         nomes: [''],
         lineAssignment: 'strategy', // alternativa: faixas explícitas de classificação
         lineRankRanges: [],
+        bestNextByGroup: { count: 0, metric: 'points_per_game', destIndex: 0 },
         origem: 'ja_formadas',
         formacao: 'performance', // Como parear classificados ou formar as novas duplas.
         semeadura: 'performance', // Como distribuir confrontos na chave simples, independentemente da formação.
@@ -732,6 +733,14 @@
       var to = Math.max(from, parseInt(r && r.to, 10) || from);
       return { from: from, to: to };
     }) : [];
+    var bestNext = e.bestNextByGroup && typeof e.bestNextByGroup === 'object' ? e.bestNextByGroup : {};
+    e.bestNextByGroup = {
+      count: Math.max(0, Math.min(out.grupos, parseInt(bestNext.count, 10) || 0)),
+      metric: ['points_per_game', 'win_rate', 'total_points'].indexOf(bestNext.metric) >= 0 ? bestNext.metric : 'points_per_game',
+      destIndex: Math.max(0, Math.min(e.linhas - 1, parseInt(bestNext.destIndex, 10) || 0))
+    };
+    if (!out.classifAtiva || !e.ativa || out.grupos < 2 || out.classifScope !== 'per_group' ||
+        e.qualifyAll || e.lineAssignment === 'rank_ranges' || e.openReiRainha) e.bestNextByGroup.count = 0;
     // v4.4.40: origem é DETERMINADA pela classificatória (não é escolha livre): pontuação
     // individual (rei/rainha, sorteio-a-cada-rodada) → FORMAR as duplas dos indivíduos;
     // dupla fixa → duplas carregam (já formadas).
@@ -1226,6 +1235,10 @@
           qualifyMode: qAll ? 'all' : (perGroup ? 'per_group' : 'overall'),
           qualifyQuantity: qAll ? 'all' : 'top', qualifyTopN: topN, mapping: mapping,
           lineAssignment: e.lineAssignment,
+          bestNextByGroup: e.bestNextByGroup.count > 0 ? {
+            count: e.bestNextByGroup.count, metric: e.bestNextByGroup.metric,
+            dest: dests[e.bestNextByGroup.destIndex]
+          } : null,
           // v4.4.x: Rei/Rainha em escopo GERAL → grupos rotativos de 4 = ranking geral é lista
           // plana → motor usa pool global (respeita o slider), sem degenerar pra por-grupo.
           flatOverall: (cfg.parceria === 'rei_rainha' && !perGroup)
