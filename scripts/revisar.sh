@@ -407,13 +407,15 @@ if [[ "$MODO" == diff && "${SP_REVIEW_VALIDATE:-0}" == 1 ]]; then
   }
   if ! {
     echo "Comandos executados pelo gate obrigatório nesta submissão:"
-    validar_para_revisao "agenda geral" node tests/bracket-geral-agenda.test.js
-    validar_para_revisao "atalho da dashboard" node tests/dashboard-card-opens-next-game.test.js
-    validar_para_revisao "suíte completa" npm test
+    validar_para_revisao "agenda geral" node tests/bracket-geral-agenda.test.js &&
+    validar_para_revisao "atalho da dashboard" node tests/dashboard-card-opens-next-game.test.js &&
+    validar_para_revisao "suíte completa" npm test &&
+    {
     echo
     echo "Status do teste de dashboard contra origin/main:"
     git log --oneline -3 -- tests/dashboard-card-opens-next-game.test.js
     git diff --stat origin/main HEAD -- tests/dashboard-card-opens-next-game.test.js
+    }
   } > "$EVIDENCIA_REVISAO"; then
     cat "$EVIDENCIA_REVISAO"
     exit 1

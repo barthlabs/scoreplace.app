@@ -54,11 +54,13 @@ eq(r.sitOut[0], 'Bob', 'NOVO faz Bob (0 folgas) folgar');
 
 console.log('──── empate na menor quantidade de folgas é sorteado ────');
 var tied = mkT();
+tied.rulesContractVersion = 2;
 var draws = [0.9, 0.1, 0.8, 0.7];
 var chosen = W._chooseSitOutPlayers(tied, ['Ana', 'Bob', 'Cadu', 'Dan'], 1, null,
   function () { return draws.shift(); });
 eq(chosen.sitOut[0], 'Bob', 'o sorteio escolhe entre contagens iguais, sem usar a posição do ranking');
 var cycle = mkT(), remaining = ['Ana', 'Bob', 'Cadu', 'Dan'];
+cycle.rulesContractVersion = 2;
 for (var turn = 0; turn < 4; turn++) {
   var one = W._chooseSitOutPlayers(cycle, remaining, 1, null, function () { return 0.5; });
   ok(one.sitOut.length === 1 && remaining.indexOf(one.sitOut[0]) >= 0,
