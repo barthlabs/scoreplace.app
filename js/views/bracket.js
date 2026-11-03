@@ -7300,7 +7300,8 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
     // v3.1.30: sem grande final (linhas separadas) NÃO renderiza box de Grande Final /
     // 3º-4º geral — nem que sobre jogo de GF resíduo. Cada linha é independente.
     var _gfBoxes = _gfEnabled
-      ? (renderFinalBox('grandfinal', '🏆 Grande Final', '#fbbf24') + renderFinalBox('thirdplace', '🥉 Disputa de 3º / 4º lugar', '#cd7f32'))
+      ? (renderFinalBox('finalstage', 'Etapa final entre chaves', '#fbbf24') +
+        renderFinalBox('grandfinal', '🏆 Grande Final', '#fbbf24') + renderFinalBox('thirdplace', '🥉 Disputa de 3º / 4º lugar', '#cd7f32'))
       : '';
     body = tiersHtml + _gfBoxes + _sb;
   }

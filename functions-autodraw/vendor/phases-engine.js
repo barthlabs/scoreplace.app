@@ -1827,6 +1827,9 @@
     if (!Array.isArray(mapping) || mapping.length < 2 || cfg.elimination.bracketType !== 'single') {
       return _genElimFromPool(pool, cfg, idPrefix);
     }
+    if (pool.length < mapping.length) {
+      throw new Error('A quantidade de chaves paralelas excede a de participantes elegíveis.');
+    }
     // Na inscrição ainda não existe ranking. O pool já foi sorteado e contém as
     // unidades competitivas prontas (atleta, dupla ou time). Distribuir os próprios
     // objetos preserva UIDs e duplas; passar por buildEntrantsByDest os formaria de novo.

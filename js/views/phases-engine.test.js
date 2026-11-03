@@ -611,6 +611,10 @@ ok(mres3.ok === false && mres3.error === 'already-materialized', 'guard _phaseMa
       count + ' linhas: nomes livres aparecem nos jogos do sorteio inicial');
     eq(new Set(direct.matches.map(function (m) { return m.id; })).size, direct.matches.length,
       count + ' linhas: IDs únicos no sorteio inicial');
+    var rejected = false;
+    try { eng.generatePhase(pool.slice(0, count - 1), compiled, { idPrefix: 'short-' + count, ordered: true }); }
+    catch (error) { rejected = /chaves paralelas excede/.test(String(error && error.message)); }
+    ok(rejected, count + ' linhas: recusa mais linhas do que participantes');
   });
 })();
 
