@@ -35,8 +35,8 @@ android {
         applicationId "app.scoreplace"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 176
-        versionName "2.5.18"
+        versionCode 178
+        versionName "2.5.87"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
