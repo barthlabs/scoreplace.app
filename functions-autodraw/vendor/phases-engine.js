@@ -2972,8 +2972,17 @@
       });
       var _drawOperationId = null;
       if (_nextCfg.bracketSeeding === 'draw') {
-        _drawOperationId = (window.crypto && typeof window.crypto.randomUUID === 'function')
-          ? window.crypto.randomUUID() : null;
+        var _crypto = window.crypto;
+        if (_crypto && typeof _crypto.randomUUID === 'function') _drawOperationId = _crypto.randomUUID();
+        else if (_crypto && typeof _crypto.getRandomValues === 'function') {
+          var _uuidBytes = new Uint8Array(16);
+          _crypto.getRandomValues(_uuidBytes);
+          _uuidBytes[6] = (_uuidBytes[6] & 15) | 64;
+          _uuidBytes[8] = (_uuidBytes[8] & 63) | 128;
+          var _hex = Array.prototype.map.call(_uuidBytes, function (byte) { return byte.toString(16).padStart(2, '0'); }).join('');
+          _drawOperationId = _hex.slice(0, 8) + '-' + _hex.slice(8, 12) + '-' + _hex.slice(12, 16) + '-' +
+            _hex.slice(16, 20) + '-' + _hex.slice(20);
+        }
         if (!_drawOperationId) {
           if (window.showNotification) window.showNotification('Não foi possível avançar',
             'Este dispositivo não conseguiu criar a semente do sorteio. Atualize o aplicativo.', 'error');
