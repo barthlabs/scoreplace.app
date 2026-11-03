@@ -82,6 +82,12 @@ const teamGroups = { ...teamBase, phases: [{ kind: 'classification', classificat
 assert.deepEqual(resolve(teamGroups).titles.map(x => [x.scope, x.label, x.winnerId]),
   [['group', 'Praia', 't1'], ['group', 'Serra', 't3']],
   'times de grupos independentes recebem campeões por grupo, sem campeão geral');
+const objectTeams = { ...teamGroups, groups: teamGroups.groups.map(g => ({ ...g,
+  matches: g.matches.map(m => ({ ...m, team1Obj: { competitionTeamId: m.p1CompetitionTeamId },
+    team2Obj: { competitionTeamId: m.p2CompetitionTeamId },
+    p1CompetitionTeamId: undefined, p2CompetitionTeamId: undefined })) })) };
+assert.deepEqual(resolve(objectTeams).titles.map(x => x.winnerId), ['t1', 't3'],
+  'times identificados só pelos objetos das partidas ainda disputam os títulos por grupo');
 assert.equal(realEngine.phaseComplete(teamGroups), true);
 assert.deepEqual(resolve(teamGroups, { engine: realEngine }).titles.map(x => [x.scope, x.label, x.winnerId]),
   [['group', 'Praia', 't1'], ['group', 'Serra', 't3']],
@@ -99,4 +105,15 @@ const pairGroups = { ...teamGroups, competitionPairs: [{ id: 'ghost', name: 'AAA
     scoring: { win: -1, draw: -1, loss: 0 } } };
 assert.deepEqual(resolve(pairGroups).titles.map(x => x.winnerName), ['C / D', 'K / L'],
   'dupla inscrita fora do grupo não entra na tabela daquele grupo, mesmo com pontuação negativa');
+const realPairs = { ...teamGroups, competitionPairs: [
+  { id: 'a', name: 'A / B' }, { id: 'b', name: 'C / D' },
+  { id: 'c', name: 'I / J' }, { id: 'd', name: 'K / L' },
+  { id: 'ghost', name: 'AAA / BBB' }
+], teamCompetition: { ...teamGroups.teamCompetition, classificationUnit: 'pair' },
+groups: teamGroups.groups.map((g, gi) => ({ ...g, matches: [
+  { ...g.matches[0], p1PairId: gi ? 'c' : 'a', p2PairId: gi ? 'd' : 'b' }
+] })) };
+assert.deepEqual(resolve(realPairs).titles.map(x => [x.label, x.winnerId]),
+  [['Praia', 'a'], ['Serra', 'c']],
+  'duplas reais são pontuadas pelos jogos do próprio grupo e mantêm seus IDs');
 console.log('✓ títulos resolvidos por final, linha, grupo, ranking e time/categoria');
