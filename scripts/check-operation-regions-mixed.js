@@ -15,7 +15,7 @@ if (requireScoreRefresh && (requireCurrent || allowLegacyCourt)) throw new Error
 // SHA fixado para este corte; no próximo release regional, atualizar junto com
 // sync-operation-regions-current.js e os manifestos, antes de abrir o Hosting.
 const releaseCommit = '40be907dfc593db2eb4de1d6ed9783493b301787';
-const scoreRefreshCommit = '8d35143abe0c1412d4e3f3752222bb1ee2586511';
+const scoreRefreshCommit = 'a3b21ad1eda5c35a35c2462d5605ae110e24db19';
 const regions = version === 'v2'
   ? ['us-east1', 'us-east4', 'us-south1']
   : ['us-east1', 'us-east4', 'us-south1', 'us-central1', 'southamerica-east1'];
