@@ -68,11 +68,12 @@ const must = (v, m) => { assert.ok(v, m); ok++; };
   must(/secondServerPicked: !!state\.secondServerPicked/.test(src),
     '⛔ `secondServerPicked` precisa ir no liveState — sem isso o outro lado adivinha');
   const corpo = fatia('  function _applyRemoteState(remote) {', '\n    _localizeRoleLabels();\n  }', true);
+  const gamesInSet = fatia('  function _gamesInCurrentSet() {', '\n  function _serveEligibleNow()');
   function aplica(remote, inicial) {
     const state = Object.assign({ sets: [], serveOrder: [], secondServerPicked: false }, inicial || {});
     const ctx = { state: state, _courtLeft: null, _matchStartTime: null, _matchEndTime: null,
       p1Players: ['A', 'B'], p2Players: ['C', 'D'], console, _localizeRoleLabels: function () {} };
-    vm.runInNewContext(corpo + '\n_applyRemoteState(remote);', Object.assign(ctx, { remote: remote }));
+    vm.runInNewContext(gamesInSet + corpo + '\n_applyRemoteState(remote);', Object.assign(ctx, { remote: remote }));
     return ctx.state;
   }
   const rotacao = [{ team: 1, name: 'A' }, { team: 2, name: 'C' }, { team: 1, name: 'B' }, { team: 2, name: 'D' }];
@@ -84,6 +85,10 @@ const must = (v, m) => { assert.ok(v, m); ok++; };
     'documento ANTIGO (sem o campo) no 1º game: a pergunta ainda cabe');
   must(aplica({ _ts: 1, serveOrder: rotacao, totalGamesPlayed: 2 }).secondServerPicked === true,
     'documento ANTIGO com 2 games jogados: a pergunta já não cabe — inferência conservadora');
+  const novoSet = aplica({ _ts: 1, serveOrder: [], totalGamesPlayed: 6, setStartGamesPlayed: 6,
+    secondServerPicked: false }, { serveOrder: rotacao });
+  must(novoSet.serveOrder.length === 0 && novoSet.secondServerPicked === false,
+    'estado remoto de set novo limpa rotação anterior e abre nova escolha');
 }
 
 console.log('✅ casual: ' + ok + ' asserções — rótulo colado na caixa do setup e 2º sacador perguntado de novo');

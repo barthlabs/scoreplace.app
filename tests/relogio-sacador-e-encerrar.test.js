@@ -43,7 +43,7 @@ function check(nome, cond) {
 check('o snapshot lê a seleção VIVA do picker quando ele está aberto',
   /_needsServePick\(\)\s*&&\s*_pickerSel[\s\S]{0,220}_spCurRaw\s*=\s*_pkArr\[_pickerSel\.idx\]/.test(BRACKET));
 check('serveOrder continua valendo quando o picker está fechado (fallback)',
-  /if \(!_spCurRaw && state\.serveOrder && state\.serveOrder\[state\.totalGamesPlayed\]\)/.test(BRACKET));
+  /if \(!_spCurRaw && state\.serveOrder && state\.serveOrder\[_gamesInCurrentSet\(\)\]\)/.test(BRACKET));
 check('servePickCurrent segue abreviando pelo mesmo _wn (o "aceso" tem que casar)',
   /servePickCurrent:\s*_wn\(_spCurRaw\)/.test(BRACKET));
 check('cada toque no nome avisa o relógio na hora',
