@@ -246,12 +246,36 @@ function clearAbsenceAndWoHistory(t, side) {
   });
 }
 
+function invalidateFinalSnapshots(t, m) {
+  if (t.rulesContractVersion >= 2) {
+    // Retratos finais são fatos publicados, mas uma correção administrativa
+    // auditada precisa invalidar apenas os retratos que dependem deste jogo.
+    const groups = [];
+    (t.groups || []).forEach(group => groups.push(group));
+    (t.rounds || []).forEach(round => (round && round.monarchGroups || []).forEach(group => groups.push(group)));
+    (t.phaseRounds || []).forEach(phase => (phase && phase.rounds || []).forEach(round =>
+      (round && round.monarchGroups || []).forEach(group => groups.push(group))));
+    groups.forEach(group => {
+      if (!group) return;
+      const contains = (Array.isArray(group.matchIds) ? group.matchIds : []).some(id => String(id) === String(m.id)) ||
+        (Array.isArray(group.matches) ? group.matches : []).some(game => game && String(game.id) === String(m.id));
+      if (contains) { delete group.classifCongelada; delete group.classifCongeladaAt; }
+    });
+    if (t.classifFinalDaLinha) {
+      const lineKey = String(m.bracket || 'main');
+      delete t.classifFinalDaLinha[lineKey];
+      delete t.classifFinalDaLinha[lineKey + '_at'];
+    }
+  }
+}
+
 function reopenMatch(t, m) {
   if (m.winner || m.wo) {
     undoAdvancement(t, m);
   }
   clearResultFields(m);
   if (t.rulesContractVersion >= 2) {
+    invalidateFinalSnapshots(t, m);
     if (m.seriesRootId) t.matches = (t.matches || []).filter(x => !x ||
       x.seriesRootId !== m.seriesRootId || Number(x.seriesGameNumber || 1) <= Number(m.seriesGameNumber || 1));
     if (t.status === 'finished') { t.status = 'active'; delete t.finishedAt; }
@@ -320,6 +344,10 @@ function applyResult(t, opts) {
   if (!matchId) return { ok: false, reason: 'no-match-id' };
   const m = (typeof win._findMatch === 'function') ? win._findMatch(t, matchId) : null;
   if (!m) return { ok: false, reason: 'match-not-found' };
+  if (t && t.rulesContractVersion >= 2 &&
+      Number(t.currentPhaseIndex || 0) > Number(m.phaseIndex || 0)) {
+    return { ok: false, reason: 'later-phase-already-started' };
+  }
 
   // Reabrir, refazer e reverter W.O. são operações administrativas. Elas não podem
   // depender de uma tela que ainda tenha o vencedor/ausência em memória: a CF usa o
@@ -335,6 +363,7 @@ function applyResult(t, opts) {
       undoAdvancement(t, m);
       delete m.wo; delete m.woAbsentSide;
       clearResultFields(m);
+      invalidateFinalSnapshots(t, m);
       clearAbsenceAndWoHistory(t, m.p1);
       clearAbsenceAndWoHistory(t, m.p2);
       if (m.roundIndex !== undefined && Array.isArray(t.rounds) && t.rounds[m.roundIndex]) {
@@ -354,12 +383,25 @@ function applyResult(t, opts) {
     return { ok: true, outcome: payload.action === 'reset-match' ? 'match-reset' : 'result-reopened', reason: '' };
   }
 
+  // Um placar já decidido também pode ser editado diretamente pelo organizador.
+  // Essa porta precisa da mesma proteção da reabertura: uma mudança de games,
+  // mesmo sem trocar o vencedor, pode mudar quem passou à fase seguinte.
+  if (t && t.rulesContractVersion >= 2 && m.winner &&
+      payload.action !== 'contest-pending' && payload.action !== 'counter-pending') {
+    const descendants = checkDescendantsBeforeReopen(t, m);
+    if (!descendants.ok) return descendants;
+  }
+
   // O overlay ao vivo manda somente o placar final calculado na quadra. A CF reaplica
   // esse payload no jogo fresco, sem exigir a aprovação entre times (o jogo foi
   // acompanhado ponto a ponto), e é a única que marca o resultado como ao vivo.
   if (payload.action === 'live-final') {
     const authz = authorize(t, m, actor);
     if (!authz.ok) return { ok: false, reason: authz.reason };
+    if (t.rulesContractVersion >= 2 && m.winner) {
+      if (!authz.isAdmin && !authz.isReferee) return { ok: false, reason: 'already-decided' };
+      reopenMatch(t, m);
+    }
     const finalPayload = Object.assign({}, payload);
     delete finalPayload.action;
     const appliedLive = win._applyResultToTournament(t, matchId, finalPayload);
@@ -451,6 +493,9 @@ function applyResult(t, opts) {
 
   const authz = authorize(t, m, actor);
   if (!authz.ok) return { ok: false, reason: authz.reason };
+  if (t.rulesContractVersion >= 2 && m.winner && !authz.isAdmin && !authz.isReferee) {
+    return { ok: false, reason: 'already-decided' };
+  }
 
   // ⭐ JOGO EM ANDAMENTO (melhor de 3 / melhor de 5) NÃO PEDE APROVAÇÃO.
   // O que a aprovação do adversário protege é o RESULTADO — quem venceu a partida. Um set
@@ -486,6 +531,7 @@ function applyResult(t, opts) {
   }
 
   // Caminho definitivo: a MESMA mutação do cliente, re-aplicada sobre o doc FRESCO.
+  if (t.rulesContractVersion >= 2 && m.winner) reopenMatch(t, m);
   const applied = win._applyResultToTournament(t, matchId, payload);
   if (!applied) return { ok: false, reason: 'apply-failed' };
   if (typeof win._maybeFinishElimination === 'function') win._maybeFinishElimination(t);

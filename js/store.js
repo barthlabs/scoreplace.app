@@ -12437,6 +12437,12 @@ window.AppStore = {
         if (_reason === 'pending-other-side') {
           showNotification('O outro time lançou primeiro',
             'Use Confirmar, Editar ou Contestar o placar que já está aguardando aprovação.', 'info');
+        } else if (_reason === 'later-phase-already-started' ||
+                   _reason === 'descendant-already-decided' ||
+                   _reason === 'later-series-game-already-started' ||
+                   _reason === 'later-final-game-already-started') {
+          showNotification('Correção exige revisão da chave',
+            'O resultado não foi alterado porque já existem jogos posteriores vinculados a ele. A organização precisa revisar esses jogos antes de corrigir o placar.', 'warning');
         } else {
           showNotification('Não consegui lançar o placar',
             'O servidor não confirmou este placar. Confira a conexão e tente novamente.', 'error');

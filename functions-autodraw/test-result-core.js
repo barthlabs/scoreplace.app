@@ -437,6 +437,34 @@ console.log('\n──── paridade com o cliente ────');
   first.phaseIndex = 0; first.winner = first.p1;
   const denied = core.applyResult(T, { matchId: 'm1', payload: { action: 'reopen-result' }, actor: { uid: UID_ORG }, now: 1 });
   t('fase posterior iniciada impede reabrir origem', !denied.ok && denied.reason === 'later-phase-already-started', JSON.stringify(denied));
+  const direct = core.applyResult(T, { matchId: 'm1', payload: { s1: 6, s2: 4, useSets: false },
+    actor: { uid: UID_ORG }, now: 2 });
+  t('fase posterior iniciada impede também corrigir placar diretamente',
+    !direct.ok && direct.reason === 'later-phase-already-started' && first.winner === first.p1,
+    JSON.stringify(direct));
+}
+{
+  const T = mkT({ rulesContractVersion: 2, format: 'Eliminatórias Simples',
+    phases: [{ kind: 'elimination', resultEntry: 'organizer' }], rounds: [] });
+  const first = { id: 'm1', phaseIndex: 0, round: 1, nextMatchId: 'next',
+    p1: 'A', p2: 'B', p1Uid: 'a', p2Uid: 'b', winner: 'A', scoreP1: 6, scoreP2: 3 };
+  const next = { id: 'next', phaseIndex: 0, round: 2, p1: 'A', p1Uid: 'a',
+    p2: 'TBD', winner: null };
+  T.matches = [first, next];
+  const corrected = core.applyResult(T, { matchId: 'm1',
+    payload: { s1: 3, s2: 6, useSets: false }, actor: { uid: UID_ORG }, now: 3 });
+  t('correção antes de jogar o descendente substitui o avançado antigo',
+    corrected.ok && first.winner === 'B' && next.p1 === 'B' && next.p1Uid === 'b',
+    JSON.stringify({ corrected, next }));
+}
+{
+  const T = mkT({ rulesContractVersion: 2, groups: [{ matchIds: ['m1'],
+    classifCongelada: [{ name: 'Ana' }], classifCongeladaAt: 'antes' }] });
+  const m = win._findMatch(T, 'm1'); m.winner = m.p1;
+  const corrected = core.applyResult(T, { matchId: 'm1',
+    payload: { s1: 6, s2: 4, useSets: false }, actor: { uid: UID_ORG }, now: 4 });
+  t('correção invalida o retrato antigo do grupo afetado', corrected.ok &&
+    !T.groups[0].classifCongelada && !T.groups[0].classifCongeladaAt, JSON.stringify(corrected));
 }
 
 console.log('\n──── árbitro confirmado ────');
