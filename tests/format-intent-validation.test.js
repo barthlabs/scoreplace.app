@@ -293,7 +293,7 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
   const create = makeCreateTournament({
     db: { collection: () => ({ doc: id => ({ id }) }), runTransaction: async () => { createTransactions++; } },
     HttpsError, FieldValue: { serverTimestamp: () => 'now' },
-    fields: new Set(['name', 'sport', 'format', 'teamSize', 'fmt2']),
+    fields: new Set(['name', 'sport', 'format', 'teamSize', 'fmt2', 'lateEnrollment', 'newMatchups']),
     cloneConfig,
     validateIntent: validateNewFormatIntent,
     compile: () => { createCompiled++; return { topLevel: {}, phases: [], cfg: {} }; },
@@ -308,6 +308,12 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
   } }), error => error.code === 'invalid-argument' && error.message.includes('fmt2.classificationSchedule.gamesPerUnit'));
   assert.equal(createCompiled, 0, 'criação rejeita antes de compilar');
   assert.equal(createTransactions, 0, 'criação rejeita antes da transação');
+  await assert.rejects(create({ auth: { uid: 'owner' }, data: {
+    tournamentId: 'tour_' + Date.now() + '_' + 'd'.repeat(32),
+    config: { name: 'Entrada fechada', sport: 'Beach Tennis', format: 'Liga',
+      lateEnrollment: 'closed', newMatchups: true }
+  } }), { code: 'invalid-argument', message: 'Novos confrontos exigem inscrições abertas.' });
+  assert.equal(createTransactions, 0, 'combinação incoerente não abre transação');
   await assert.rejects(create({ auth: { uid: 'owner' }, data: {
     tournamentId: 'tour_' + Date.now() + '_' + 'b'.repeat(32),
     config: { name: 'Individual histórico forjado', sport: 'Futevôlei', format: 'Eliminatórias Simples',
