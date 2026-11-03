@@ -12,7 +12,11 @@ const mapping = [
 const nextPhase = { fixedPairs: true, pairingStrategy: 'top', source: { scope: 'per_group', mapping } };
 const rows = ['A', 'B', 'C', 'D'].map((name, index) => ({ uid: name, name, wins: index ? 1 : 3 }));
 const pool = [{ id: 'group-0', rows }];
-const compare = () => (a, b) => b.wins - a.wins;
+const compare = () => {
+  const cmp = (a, b) => b.wins - a.wins;
+  cmp.originalOrder = { A: 0, B: 1, C: 2, D: 3 };
+  return cmp;
+};
 
 function entrants(name, decision) {
   const group = { name, standings: decision.orderedPools[0].rows };

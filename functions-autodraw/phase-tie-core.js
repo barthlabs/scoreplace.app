@@ -26,12 +26,19 @@ function originalDrawMatches(phaseGames) {
     }));
 }
 
+function drawPosition(row, originalOrder) {
+  if (!row || !originalOrder) return null;
+  const uid = row.uid && originalOrder[String(row.uid)];
+  if (uid != null) return uid;
+  const name = row.name && originalOrder[String(row.name)];
+  return name == null ? null : name;
+}
+
 function rankInitialRows(rows, compare, originalOrder) {
   return rows.map((row, index) => ({ row, index })).sort((a, b) => {
     const merit = compare(a.row, b.row);
     if (merit) return merit;
-    const ka = a.row && (a.row.uid || a.row.name), kb = b.row && (b.row.uid || b.row.name);
-    const ia = originalOrder && originalOrder[ka], ib = originalOrder && originalOrder[kb];
+    const ia = drawPosition(a.row, originalOrder), ib = drawPosition(b.row, originalOrder);
     if (ia != null && ib != null && ia !== ib) return ia - ib;
     if (ia != null && ib == null) return -1;
     if (ia == null && ib != null) return 1;
@@ -167,6 +174,9 @@ function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, actio
     let rows = rankInitialRows(pool.rows, compare, compare.originalOrder);
     const ties = allBoundaryTies(rows, boundariesFor(nextPhase, rows.length), compare);
     for (const tie of ties) {
+      if (tie.players.some(player => drawPosition(player, compare.originalOrder) == null)) {
+        throw new Error('ordem do sorteio original ausente para atleta empatado');
+      }
       const decisionId = pool.id + ':' + tie.from + ':' + tie.to;
       let decision = phaseBook[decisionId];
       const keys = tie.players.map(p => p.key);
@@ -221,4 +231,4 @@ function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, actio
   return { status: 'ready', orderedPools, changed };
 }
 
-module.exports = { key, canonicalizeTieFallback, originalDrawMatches, rankInitialRows, findBoundaryTie, allBoundaryTies, boundariesFor, matchesFor, scoreMatch, rankPlayers, applyOrder, resolvePhaseTies };
+module.exports = { key, canonicalizeTieFallback, originalDrawMatches, drawPosition, rankInitialRows, findBoundaryTie, allBoundaryTies, boundariesFor, matchesFor, scoreMatch, rankPlayers, applyOrder, resolvePhaseTies };

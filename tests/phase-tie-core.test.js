@@ -4,6 +4,7 @@ const tie = require('../functions-autodraw/phase-tie-core');
 
 const rows = ['A', 'B', 'C', 'D'].map((name, i) => ({ uid: name, name, wins: i ? 1 : 3 }));
 const cmp = (a, b) => b.wins - a.wins;
+cmp.originalOrder = { A: 0, B: 1, C: 2, D: 3 };
 const published = { fmt2: { tieResolution: 'singles_then_draw' },
   tiebreakers: ['sorteio', 'saldo_games', 'vitorias'], tiebreakersExcluded: ['sorteio'] };
 tie.canonicalizeTieFallback(published);
@@ -15,6 +16,8 @@ const firstDraw = tie.originalDrawMatches([
 ]);
 assert.deepStrictEqual(firstDraw.map(m => [m.round, m.gameNumber, m.p1]),
   [[1, 1, 'B'], [2, 2, 'A']], 'a primeira rodada conserva a prioridade do sorteio original');
+assert.strictEqual(tie.drawPosition({ uid: 'B', name: 'B' }, { B: 1 }), 1,
+  'ordem por nome cobre jogo histórico sem UID no slot');
 const ordered = tie.rankInitialRows([rows[3], rows[2], rows[1], rows[0]], cmp,
   { A: 0, B: 1, C: 2, D: 3 });
 assert.deepStrictEqual(ordered.map(r => r.name), ['A', 'B', 'C', 'D'], 'mérito antes da ordem sorteada original');
@@ -84,4 +87,8 @@ assert.deepStrictEqual(drawn.orderedPools[0].rows.map(p => p.name), rows.map(p =
 const automatic = {};
 assert.strictEqual(tie.resolvePhaseTies(automatic, 0, pools, next, () => cmp, null, 1, true).status, 'ready');
 assert.strictEqual(automatic.phaseTieDecisions['0']['group-a:1:3'].reason, 'rule-original-draw-order');
+const noDraw = (a, b) => b.wins - a.wins;
+noDraw.originalOrder = { A: 0, B: 1, C: 2 };
+assert.throws(() => tie.resolvePhaseTies({}, 0, pools, next, () => noDraw, null, 1, true),
+  /ordem do sorteio original ausente/, 'não inventa prioridade do atleta sem posição no sorteio');
 console.log('phase-tie-core: ok');
