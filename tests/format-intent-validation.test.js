@@ -54,6 +54,7 @@ for (const [patch, field] of [
   [{ classificationPairing: { strategy: 'desconhecida' } }, 'classificationPairing.strategy'],
   [{ classificationSchedule: { gamesPerUnit: 3, mode: 'structred' } }, 'classificationSchedule.mode'],
   [{ eliminatoria: { linhas: 3 } }, 'eliminatoria.linhas'],
+  [{ eliminatoria: { semeadura: 'aleatoria' } }, 'eliminatoria.semeadura'],
   [{ eliminatoria: { newMatchups: 'yes' } }, 'eliminatoria.newMatchups']
 ]) {
   assert.throws(() => validateNewFormatIntent(patch, HttpsError), error =>
@@ -104,6 +105,46 @@ assert.match(editor, /\[1, 2, 4\]\.map\(function \(n\).*_f2Linhas/s);
 assert.match(compiler, /mode: value\.mode === 'structured' \? 'structured' : 'free'/);
 assert.match(editor, /current\.mode = mode === 'structured' \? 'structured' : 'free'/);
 const FORMAT2 = require('../functions-autodraw/draw-core')._window.FORMAT2;
+const seedingCfg = FORMAT2.defaultConfig('Beach Tennis');
+seedingCfg.parceria = 'fixa';
+seedingCfg.eliminatoria.formacao = 'performance';
+seedingCfg.eliminatoria.semeadura = 'equilibrio';
+let seededPhase = FORMAT2.compileToPhases(seedingCfg, { sport: 'Beach Tennis' }).phases.at(-1);
+assert.equal(seededPhase.pairingStrategy, 'top');
+assert.equal(seededPhase.bracketSeeding, 'balanced', 'organizador escolhe confronto sem mudar pareamento');
+seedingCfg.eliminatoria.formacao = 'equilibrio';
+seedingCfg.eliminatoria.semeadura = 'performance';
+seededPhase = FORMAT2.compileToPhases(seedingCfg, { sport: 'Beach Tennis' }).phases.at(-1);
+assert.equal(seededPhase.pairingStrategy, 'balanced');
+assert.equal(seededPhase.bracketSeeding, 'seed', 'organizador escolhe pareamento sem mudar confronto');
+seedingCfg.eliminatoria.semeadura = 'sorteio';
+seededPhase = FORMAT2.compileToPhases(seedingCfg, { sport: 'Beach Tennis' }).phases.at(-1);
+assert.equal(seededPhase.bracketSeeding, 'draw', 'sorteio da posição na chave chega à fase');
+delete seedingCfg.eliminatoria.semeadura;
+seededPhase = FORMAT2.compileToPhases(seedingCfg, { sport: 'Beach Tennis' }).phases.at(-1);
+assert.equal(seededPhase.bracketSeeding, 'balanced', 'configuração antiga conserva a semeadura derivada');
+seedingCfg.classifAtiva = false;
+seedingCfg.eliminatoria.openReiRainha = true;
+seedingCfg.eliminatoria.semeadura = 'performance';
+assert.equal(FORMAT2.compileToPhases(seedingCfg, { sport: 'Beach Tennis' }).phases[1].bracketSeeding, 'seed',
+  'rodada inicial Rei/Rainha também respeita a decisão independente');
+const uiHarness = require('./headless');
+const uiBox = { innerHTML: '' };
+uiHarness.window.document = { getElementById: id => id === 'f2-config-mount' ? uiBox : null };
+uiHarness.load('format2-ui.js');
+const uiCfg = uiHarness.window.FORMAT2.defaultConfig('Beach Tennis');
+uiCfg.parceria = 'fixa';
+uiHarness.window._f2MountInForm(uiBox, 'Beach Tennis', uiCfg, { id: 'future-test' });
+assert.match(uiBox.innerHTML, /Confrontos na chave/, 'organizador vê a decisão de semeadura');
+assert.match(uiBox.innerHTML, /Saída escolhida: a classificatória seleciona participantes para a eliminatória/);
+uiHarness.window._f2Semeadura('equilibrio');
+assert.equal(uiHarness.window._f2GetConfig().eliminatoria.semeadura, 'equilibrio',
+  'o clique persiste na configuração que será enviada ao servidor');
+uiHarness.window._f2Semeadura('sorteio');
+assert.equal(uiHarness.window._f2GetConfig().eliminatoria.semeadura, 'sorteio',
+  'o organizador também pode escolher sorteio da posição na chave');
+uiHarness.window._f2Elim(false);
+assert.match(uiBox.innerHTML, /Saída escolhida: classificação final de dupla, sem eliminatória/);
 const mixedCfg = FORMAT2.defaultConfig('Futevôlei');
 mixedCfg.disputa = 'dupla';
 mixedCfg.parceria = 'fixa';

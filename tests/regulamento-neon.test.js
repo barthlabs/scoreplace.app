@@ -39,7 +39,7 @@ assert(browser._isNeonTournament({ id: neonId, name: neonName }));
 const sandbox = { id: 'sb_' + neonId + '_teste', name: neonName, isSandbox: true, sandboxOf: neonId };
 assert(browser._isNeonTournament(sandbox), 'sandbox autenticado pelo vínculo com o original usa o mesmo regulamento');
 assert(!browser._isNeonTournament({ id: 'outro', name: neonName }));
-assert(!browser._isNeonTournament({ id: neonId, name: 'Outro torneio' }));
+assert(browser._isNeonTournament({ id: neonId, name: 'Outro torneio' }), 'renomear o documento histórico não troca seu regulamento');
 assert(!browser._isNeonTournament({ id: 'sb_' + neonId, name: neonName, isSandbox: true, sandboxOf: 'outro' }));
 
 const html = page({ id: neonId, name: neonName });
@@ -52,6 +52,7 @@ assert(!html.includes('A inscrição implica'), 'sem transcrição divergente do
 const sandboxHtml = page(sandbox);
 assert(sandboxHtml.includes('data-neon-regulation'), 'sandbox mostra o mesmo PDF oficial');
 assert(sandboxHtml.includes('src="/assets/regulamento-neon-nightmare-2026.pdf#toolbar=1"'));
+assert(page({ id:neonId, name:'Outro torneio' }).includes('data-neon-regulation'), 'documento histórico renomeado conserva o PDF');
 const pdf = fs.readFileSync(path.join(root, 'assets/regulamento-neon-nightmare-2026.pdf'));
 assert(pdf.subarray(0, 5).toString() === '%PDF-', 'arquivo PDF válido');
 assert.strictEqual(crypto.createHash('sha256').update(pdf).digest('hex'),

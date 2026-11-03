@@ -84,10 +84,11 @@
   }
   function rankingSections(t, matches, teams) {
     var core = window.ScoreplaceTeamCompetition;
-    var configured = window._isNeonTournament && window._isNeonTournament(t) && core && typeof core.configurationForTournament === 'function'
+    var configured = core && typeof core.configurationForTournament === 'function'
       ? core.configurationForTournament(t) : (t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition);
-    if (!core || !configured || configured.enabled !== true) return [];
+    if (!core) return [];
     var cfg = typeof core.rankingConfigForTournament === 'function' ? core.rankingConfigForTournament(t) : core.normalize(configured);
+    if (!cfg || cfg.enabled !== true) return [];
     var pairs = Array.isArray(t.competitionPairs) ? t.competitionPairs : [];
     var categories = cfg.aggregation === 'per_category'
       ? Array.from(new Set(matches.map(function (m) { return String(m.category || ''); }).filter(Boolean)))

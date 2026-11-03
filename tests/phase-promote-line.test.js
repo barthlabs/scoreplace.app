@@ -4,6 +4,7 @@
  * baixo → entra como pior semente de cima. node tests/phase-promote-line.test.js
  */
 var E = require('../js/views/phases-engine.js');
+var Advance = require('../functions-autodraw/advance-core.js');
 
 var pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
@@ -41,6 +42,38 @@ function entrantsInLine(res, lineLabel) {
 // mantemos as linhas com ≥2 pra medir via matches; o guard (não-esvaziar) é medido pelo Ouro.
 var SCORE = { A: 8, B: 7, C: 6, D: 5, E: 4, F: 3, G: 2, H: 1 };
 function groups() { return [{ name: 'Geral', groupIdx: 0, players: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].map(function (n) { return { name: n, displayName: n }; }) }]; }
+
+// Mesmo ranking, duas decisões de semeadura: o MOTOR de chaves precisa mudar
+// os confrontos reais, não apenas carregar bracketSeeding no documento.
+(function () {
+  var base = { kind: 'elimination', name: 'Eliminatória', fixedPairs: false,
+    pairingStrategy: 'top', grandFinal: false,
+    source: { type: 'previous_phase', scope: 'overall', rankingBasis: 'individual',
+      mapping: [{ dest: 'main', rankFrom: 1, rankTo: 8 }] } };
+  var seed = E.buildPhaseBrackets(groups(), Object.assign({}, base, { bracketSeeding: 'seed' }), csScore(SCORE), 'seed');
+  var balanced = E.buildPhaseBrackets(groups(), Object.assign({}, base, { bracketSeeding: 'balanced' }), csScore(SCORE), 'balanced');
+  var draw = E.buildPhaseBrackets(groups(), Object.assign({}, base, { bracketSeeding: 'draw' }),
+    csScore(SCORE), 'draw', { rnd: function () { return 0.5; } });
+  var repeatedDraw = E.buildPhaseBrackets(groups(), Object.assign({}, base, { bracketSeeding: 'draw' }),
+    csScore(SCORE), 'another-name', { rnd: function () { return 0.5; } });
+  var first = function (r) { return (r.matches || []).filter(function (m) { return m.round === 1 && !m.isThirdPlace; })[0]; };
+  ok(first(seed).p1 === 'A' && first(seed).p2 === 'H', 'cabeças protegidas: 1º × 8º na chave real');
+  ok(first(balanced).p1 === 'A' && first(balanced).p2 === 'B', 'confrontos parelhos: 1º × 2º na chave real');
+  ok(first(draw).p1 === 'A' && first(draw).p2 === 'F', 'sorteio: 1º × 6º com a sequência de sorteio informada');
+  ok(first(draw).p1 === first(repeatedDraw).p1 && first(draw).p2 === first(repeatedDraw).p2,
+    'mesma operação de sorteio reproduz confronto independentemente do nome do torneio');
+  var operationId = 'c07d44a5-34f0-4f0d-889e-f1a84770c5f1';
+  var stamp = Advance.stampDe(operationId, 'configured-tournament', 1);
+  var seededDet = function () { return { rnd: Advance.prngDe(stamp), ts: Advance.tsDe(stamp) }; };
+  var publishedA = E.buildPhaseBrackets(groups(), Object.assign({}, base, { bracketSeeding: 'draw' }),
+    csScore(SCORE), 'published-a', seededDet());
+  var publishedB = E.buildPhaseBrackets(groups(), Object.assign({}, base, { bracketSeeding: 'draw' }),
+    csScore(SCORE), 'published-b', seededDet());
+  var pairs = function (result) { return result.matches.filter(function (m) { return m.round === 1 && !m.isThirdPlace; })
+    .map(function (m) { return [m.p1, m.p2].join(' × '); }); };
+  ok(JSON.stringify(pairs(publishedA)) === JSON.stringify(pairs(publishedB)),
+    'semente da operação reproduz todos os confrontos da primeira rodada');
+})();
 
 // ── 1. SEM promover: Ouro=4, Prata=4 ──
 (function () {

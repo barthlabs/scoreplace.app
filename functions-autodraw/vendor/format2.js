@@ -433,9 +433,8 @@
         linhas: 1,
         nomes: [''],
         origem: 'ja_formadas',
-        formacao: 'performance', // ESTRATÉGIA geral: performance (beneficia os melhores) | equilibrio
-                                 // (jogos disputados) | sorteio. Dirige FORMAÇÃO das duplas E semeadura
-                                 // dos confrontos de uma vez só (compilador deriva bracketSeeding).
+        formacao: 'performance', // Como parear classificados ou formar as novas duplas.
+        semeadura: 'performance', // Como distribuir confrontos na chave simples, independentemente da formação.
         qualifyAll: false,       // false = os X melhores (slider); true = TODOS avançam
         terceiro: true,
         grandFinal: true,        // v4.4.73: grande final unindo as linhas. Só editável na SIMPLES
@@ -700,6 +699,11 @@
     // dupla fixa → duplas carregam (já formadas).
     e.origem = (out._scoreBy === 'individual' && isDupla) ? 'formar' : 'ja_formadas';
     if (['performance', 'equilibrio', 'sorteio'].indexOf(e.formacao) === -1) e.formacao = 'performance';
+    // Configurações anteriores não tinham esta decisão: preservar exatamente a
+    // semeadura que o compilador derivava de formacao antes da separação.
+    if (e.semeadura !== 'performance' && e.semeadura !== 'equilibrio' && e.semeadura !== 'sorteio') {
+      e.semeadura = e.formacao === 'equilibrio' ? 'equilibrio' : 'performance';
+    }
     // 'sorteio' só faz sentido FORMANDO duplas (senão não há o que sortear — os confrontos
     // seguem a classificação). Fora disso cai em 'performance' (beneficia os melhores).
     if (e.formacao === 'sorteio' && !(isDupla && e.origem === 'formar')) e.formacao = 'performance';
@@ -857,7 +861,7 @@
       return { dest: dst, rankFrom: 1, rankTo: cutRR, label: (e0.nomes && e0.nomes[di]) || '' };
     });
     var pairRR = ({ performance: 'top', equilibrio: 'balanced', sorteio: 'draw_among' }[e0.formacao] || 'top');
-    var seedRR = ({ performance: 'seed', equilibrio: 'balanced', sorteio: 'seed' }[e0.formacao] || 'seed');
+    var seedRR = ({ performance: 'seed', equilibrio: 'balanced', sorteio: 'draw' }[e0.semeadura] || 'seed');
     var elimDuplaRR = !!e0.dupla;
     var pElimRR = Object.assign(_phaseBase(re), {
       kind: 'elimination', elimination: { bracketType: elimDuplaRR ? 'double' : 'single' }, name: 'Eliminatória',
@@ -1131,10 +1135,7 @@
       var elimPairing = (isDupla)
         ? ({ performance: 'top', equilibrio: 'balanced', sorteio: 'draw_among' }[e.formacao] || 'top')
         : 'top';
-      // v4.4.x: CONCEITO ÚNICO — a MESMA estratégia dirige a semeadura dos confrontos:
-      // performance → cabeças de chave (seed, protege os melhores); equilíbrio → confrontos
-      // parelhos (balanced); sorteio → duplas já vêm embaralhadas, semeadura neutra (seed).
-      var elimSeeding = ({ performance: 'seed', equilibrio: 'balanced', sorteio: 'seed' }[e.formacao] || 'seed');
+      var elimSeeding = ({ performance: 'seed', equilibrio: 'balanced', sorteio: 'draw' }[e.semeadura] || 'seed');
       var qAll = !!e.qualifyAll;
       var elimDupla = !!e.dupla; // v4.4.58: Dupla Eliminatória (repescagem)
       var p1 = Object.assign(_phaseBase(re), {

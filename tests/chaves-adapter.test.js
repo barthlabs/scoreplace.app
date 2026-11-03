@@ -27,6 +27,15 @@ function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
 const isBye = (x) => !x || x === 'TBD' || /BYE/.test(String(x));
 const parts = (n) => Array.from({ length: n }, (_, i) => ({ displayName: 'D' + (i + 1), uid: 'u' + (i + 1) }));
 
+const balancedOdd = W._chavesAdapter.build(5, 'simples', {
+  participantes: parts(5), semear: true, seedingMode: 'balanced'
+});
+const oddFirstRound = balancedOdd.matches.filter(m => m.round === 1);
+ok(oddFirstRound[0].p1 === 'D2' && oddFirstRound[0].p2 === 'D3',
+  'com cinco classificados, equilíbrio pareia colocações adjacentes');
+ok(oddFirstRound.some(m => m.p1 === 'D1' && m.p2 === 'TBD'),
+  'a melhor campanha conserva a posição de folga/repescagem na chave ímpar');
+
 function novoTorneio(N, formato) {
   const built = W._chavesAdapter.build(N, formato, { participantes: parts(N), tierThird: true });
   return {

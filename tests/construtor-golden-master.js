@@ -80,7 +80,8 @@ const CASOS = [
 
   { nome: 'B2 · idem, corte 4 e formação por equilíbrio', sport: 'Beach Tennis',
     patch: { disputa: 'dupla', classifAtiva: false,
-      eliminatoria: { ativa: true, openReiRainha: true, reiRainhaCut: 4, formacao: 'equilibrio' } } },
+      eliminatoria: { ativa: true, openReiRainha: true, reiRainhaCut: 4,
+        formacao: 'equilibrio', semeadura: 'equilibrio' } } },
 
   { nome: 'C · classificatória de 5 rodadas + eliminatória', sport: 'Beach Tennis',
     patch: { disputa: 'dupla', classifAtiva: true, grupos: 1, classificados: 2,

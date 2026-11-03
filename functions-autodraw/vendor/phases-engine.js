@@ -938,7 +938,8 @@
     var mapping = mappingDaTransicao(phaseCfg);
     var fixedPairs = phaseCfg ? (phaseCfg.fixedPairs !== false) : true;
     var pairingStrategy = (phaseCfg && phaseCfg.pairingStrategy) || 'top';
-    var bracketSeeding = (phaseCfg && phaseCfg.bracketSeeding === 'balanced') ? 'balanced' : 'seed'; // cabeças × equilíbrio
+    var bracketSeeding = (phaseCfg && ['balanced', 'draw'].indexOf(phaseCfg.bracketSeeding) >= 0)
+      ? phaseCfg.bracketSeeding : 'seed';
 
     // v4.4.110: inativos "incluídos" (phaseCfg._includeInactive) entram POR CLASSIFICAÇÃO
     // dentro de buildEntrantsByDest — escopo geral ranqueia junto; por-grupo cai na pior
@@ -1004,6 +1005,8 @@
        * [[feedback_enumerar_todos_os_caminhos_antes_de_dar_por_pronto]] — terceira vez nesta leva. */
       var res = _genElimFromChaves(byDest[dest],
         { _terceiroNestaChave: _tierThird, politicaDaChave: (phaseCfg && phaseCfg.politicaDaChave) || null,
+          bracketSeeding: bracketSeeding,
+          _det: det,
           _prepareSurplusDecision: phaseCfg && phaseCfg._prepareSurplusDecision,
           _surplusPhaseIndex: phaseCfg && phaseCfg._surplusPhaseIndex,
           _surplusCategory: phaseCfg && phaseCfg._surplusCategory },
@@ -1725,7 +1728,9 @@
       politicaDaChave: (cfg && cfg.politicaDaChave) || (cfg && cfg.torneio && cfg.torneio.politicaDaChave) || null,
       ns: _nsDeterministico(idPrefix),
       bracketKey: bracketKey || null,
-      semear: !_daInscricao
+      semear: !_daInscricao,
+      seedingMode: cfg && ['balanced', 'draw'].indexOf(cfg.bracketSeeding) >= 0 ? cfg.bracketSeeding : 'seed',
+      rnd: cfg && cfg._det && cfg._det.rnd
     });
     // chaves monta a chave INTEIRA (na dupla: superior + inferior + grande final),
     // então nada de needsDoubleElim — não há 2º construtor pra rodar depois.
@@ -2954,7 +2959,8 @@
     // Primeiro a decisão de promoção de linhas; só depois a posição da sobra
     // pode ser materializada pelo servidor. Não criar chave otimista diferente
     // no navegador: apenas o recibo canônico altera a tela.
-    if (_nextCfg && ((_nextCfg.politicaDaChave || t.politicaDaChave) === 'sobra_unica')) {
+    if (_nextCfg && (((_nextCfg.politicaDaChave || t.politicaDaChave) === 'sobra_unica') ||
+        _nextCfg.bracketSeeding === 'draw')) {
       if (typeof window._callCF !== 'function') {
         if (window.showNotification) window.showNotification('Não foi possível avançar',
           'Conexão com o servidor indisponível. Nenhuma nova chave foi criada nesta tela.', 'error');
@@ -2964,8 +2970,18 @@
         return { bracketResolution: phase && phase.bracketResolution,
           classificationRounds: phase && phase.rounds };
       });
+      var _drawOperationId = null;
+      if (_nextCfg.bracketSeeding === 'draw') {
+        _drawOperationId = (window.crypto && typeof window.crypto.randomUUID === 'function')
+          ? window.crypto.randomUUID() : null;
+        if (!_drawOperationId) {
+          if (window.showNotification) window.showNotification('Não foi possível avançar',
+            'Este dispositivo não conseguiu criar a semente do sorteio. Atualize o aplicativo.', 'error');
+          return;
+        }
+      }
       window._callCF('advanceTournamentPhase',
-        { tournamentId: String(tId), phaseChoices: _choices },
+        { tournamentId: String(tId), phaseChoices: _choices, operationId: _drawOperationId },
         'Entre na sua conta para avançar a fase.').then(function (response) {
         var out = (response && response.data) || {};
         if (!out.ok || !out.tournament || typeof window._applyCFTournament !== 'function') {

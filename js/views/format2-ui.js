@@ -1053,27 +1053,23 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         }
         // v4.4.41: resumo LOGO ABAIXO do slider (pedido do dono).
         eb += '<div id="f2-elim-summary">' + _elimSummary(cfg) + '</div>';
-        // v4.4.x: ESTRATÉGIA da eliminatória — UM conceito geral (pedido do dono). Vale pra
-        // TODO torneio (individual E duplas). NÃO são duas escolhas (formar duplas × confrontos):
-        // é UMA só. Performance = beneficiar os melhores (duplas fortes juntas + cabeças de chave
-        // protegidas). Equilíbrio = jogos disputados (duplas equilibradas + confrontos parelhos).
-        // A Dupla Eliminatória tem semeadura própria (repescagem) → sem escolha de confronto, mas
-        // a formação das duplas (quando aplicável) ainda usa a estratégia.
+        // Formação/pareamento e semeadura são decisões independentes do organizador.
+        // A dupla eliminatória mantém sua semeadura própria; a formação ainda vale.
         var _forma = isDupla && e.origem === 'formar';       // há duplas a FORMAR dos indivíduos
         var _hP = _forma
-          ? 'Beneficia os melhores: duplas fortes juntas (1º+2º, 3º+4º…) e cabeças de chave protegidas — os melhores só se cruzam no fim.'
-          : 'Beneficia os melhores: cabeças de chave protegidas — o 1º pega o último, o 2º o penúltimo… os melhores só se cruzam no fim.';
+          ? 'Forma duplas por colocação: 1º+2º, 3º+4º…'
+          : 'Mantém as duplas classificadas por colocação.';
         var _hE = _forma
-          ? 'Jogos mais disputados: duplas equilibradas (1º+4º, 2º+3º…) e confrontos parelhos (1º×2º, 3º×4º…) desde a 1ª rodada.'
-          : 'Jogos mais disputados: confrontos parelhos (1º×2º, 3º×4º…) desde a 1ª rodada — sem proteger os melhores.';
-        var _hints = { performance: _hP, equilibrio: _hE, sorteio: 'Duplas e confrontos definidos por sorteio, sem usar a classificação.' };
+          ? 'Forma duplas equilibradas: 1º+4º, 2º+3º…'
+          : 'Pareia as duplas classificadas por colocação oposta.';
+        var _hints = { performance: _hP, equilibrio: _hE, sorteio: 'Forma as duplas por sorteio entre os classificados.' };
         var _fx = (e.formacao === 'sorteio' && !_forma) ? 'performance' : e.formacao; // sorteio só quando forma duplas
         // ⚠️ COM "Abrir com Rei/Rainha" LIGADO a estratégia é escolhida DENTRO daquele bloco
         // ("Como formar as duplas no grupo") — é o MESMO cfg.eliminatoria.formacao. Mostrar os
         // dois seria dois controles pro mesmo valor na mesma tela, que é o tipo de duplicidade
         // que este trabalho existe pra tirar.
-        if (!(isDupla && cfg.eliminatoria.openReiRainha)) {
-          eb += '<div style="margin-top:14px;font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;">Estratégia da eliminatória</div>' +
+        if (isDupla && !cfg.eliminatoria.openReiRainha) {
+          eb += '<div style="margin-top:14px;font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;">' + (_forma ? 'Como formar as duplas classificadas' : 'Como parear as duplas classificadas') + '</div>' +
             '<div>' + _pill(_fx === 'performance', 'window._f2Formacao(\'performance\')', '📈 Performance') +
             _pill(_fx === 'equilibrio', 'window._f2Formacao(\'equilibrio\')', '⚖️ Equilíbrio') +
             (_forma ? _pill(_fx === 'sorteio', 'window._f2Formacao(\'sorteio\')', '🎲 Sorteio') : '') + '</div>' +
@@ -1082,6 +1078,20 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         // A rodada de FORMAÇÃO (Rei/Rainha) na entrada da eliminatória — agora também quando
         // há classificatória. Vem depois do "quem avança", que é o pool que ela recebe.
         if (isDupla) eb += '<div style="margin-top:14px;">' + _blocoAbrirComRR(cfg, true) + '</div>';
+      }
+      // Só há colocação para semear quando uma fase anterior classificou os
+      // participantes. A chave direta sem fase anterior segue o sorteio de entrada.
+      if ((cfg.classifAtiva || e.openReiRainha) && !e.dupla) {
+        eb += '<div style="margin-top:14px;font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;">Confrontos na chave</div>' +
+          _pill(e.semeadura === 'performance', 'window._f2Semeadura(\'performance\')', '🏅 Cabeças protegidas') +
+          _pill(e.semeadura === 'equilibrio', 'window._f2Semeadura(\'equilibrio\')', '⚖️ Confrontos parelhos') +
+          _pill(e.semeadura === 'sorteio', 'window._f2Semeadura(\'sorteio\')', '🎲 Posições sorteadas') +
+          '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;line-height:1.45;">' +
+          (e.semeadura === 'sorteio'
+            ? 'As posições na chave são sorteadas entre os classificados; o sorteio fica vinculado à operação publicada.'
+            : e.semeadura === 'equilibrio'
+            ? 'Colocações próximas se enfrentam desde a primeira rodada.'
+            : 'As melhores colocações ficam em lados opostos da chave e tendem a se encontrar no fim.') + '</div>';
       }
       // v4.4.58: Dupla Eliminatória (repescagem) — toggle + explicação de como funciona.
       // Quando ON é UMA chave só (força 1 linha no normalize) → o controle de Linhas some.
@@ -1207,7 +1217,14 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     }
     var h = _phaseBlock('🎯 Fase Classificatória', '#818cf8', classifInner, _hdrRight(_classifLocked, classifToggle)) +
       _phaseBlock('🏆 Fase Eliminatória', '#fbbf24', elimInner, _hdrRight(_elimLocked, elimToggle));
-    return h;
+    var _titleUnit = cfg.teamCompetition && cfg.teamCompetition.enabled
+      ? (cfg.teamCompetition.classificationUnit === 'pair' ? 'dupla' : 'time')
+      : (cfg._scoreBy === 'individual' ? 'atleta' : 'dupla');
+    var _outcome = !cfg.classifAtiva
+      ? 'Saída escolhida: entrada direta na eliminatória.'
+      : (e.ativa ? 'Saída escolhida: a classificatória seleciona participantes para a eliminatória.'
+        : 'Saída escolhida: classificação final de ' + _titleUnit + ', sem eliminatória.');
+    return '<div style="font-size:0.78rem;color:var(--text-main);background:rgba(129,140,248,0.08);border:1px solid rgba(129,140,248,0.25);border-radius:9px;padding:9px 11px;margin-bottom:12px;">' + _outcome + '</div>' + h;
   }
 
   // ── Handlers globais (form + page) ──
@@ -1782,9 +1799,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // v4.5.51: abrir a eliminatória com rodada Rei/Rainha (grupos de 4 formam as duplas).
   window._f2ElimOpenRR = function (checked) { if (!S) return; S.cfg.eliminatoria.openReiRainha = !!checked; _norm(); _rerender(); };
   window._f2ElimRRCut = function (n) { if (!S) return; S.cfg.eliminatoria.reiRainhaCut = (parseInt(n, 10) === 2) ? 2 : 4; _norm(); _rerender(); };
-  // v4.4.x: estratégia ÚNICA da eliminatória (performance/equilíbrio/sorteio) — dirige formação
-  // das duplas E semeadura dos confrontos (compilador deriva bracketSeeding).
+  // Formação/pareamento e semeadura são escolhas independentes.
   window._f2Formacao = function (v) { S.cfg.eliminatoria.formacao = v; _norm(); _rerender(); };
+  window._f2Semeadura = function (v) { S.cfg.eliminatoria.semeadura = v; _norm(); _rerender(); };
   /* window._f2Terceiro APAGADO (2.1.41): setter SEM CHAMADOR de um campo que `_norm()`
    * força a `true` na linha seguinte. Decoy — faz o próximo leitor consertar o lugar
    * errado. [[project_third_place_always]] [[feedback_funcao_dentro_de_outra_nao_existe]] */

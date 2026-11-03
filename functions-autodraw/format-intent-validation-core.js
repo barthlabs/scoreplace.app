@@ -14,6 +14,7 @@ const ENUMS = [
   ['classificationPairing.rematchPolicy', ['exhaust_cluster_before_repeat']],
   ['classificationSchedule.mode', ['free', 'structured']],
   ['eliminatoria.formacao', ['performance', 'equilibrio', 'sorteio']],
+  ['eliminatoria.semeadura', ['performance', 'equilibrio', 'sorteio']],
   ['eliminatoria.lateEnrollment', ['inherit', 'closed', 'standby', 'expand']],
   ['eliminatoria.newMatchups', ['inherit', true, false]],
   ['eliminatoria.linhas', [1, 2, 4]]

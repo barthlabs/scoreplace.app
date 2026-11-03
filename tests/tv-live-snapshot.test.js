@@ -54,6 +54,10 @@ const unrelatedMultiPhase = window._tvLiveBuildSnapshot({ ...t, id:'other-tourna
   teamCompetition:multiPhaseConfig, phases:[{ teamCompetition:multiPhaseConfig }, { teamCompetition:plannedLaterPhase }] });
 assert.equal(unrelatedMultiPhase.rankings[0].title, 'Fem Light',
   'torneio multifase comum preserva o escopo por categoria já usado na TV');
+const futureOnly = window._tvLiveBuildSnapshot({ ...t, id:'future-only', teamCompetition:null,
+  phases:[{ teamCompetition:{ enabled:false } }, { teamCompetition:plannedLaterPhase }] });
+assert.equal(futureOnly.rankings.length, 0,
+  'regra de time de uma fase futura não cria tabela de times na fase atual');
 const neonMultiPhase = window._tvLiveBuildSnapshot({ ...t,
   id:'tour_1790628592058_c342a1e8f5068424887f1702a1633a44',
   name:'NEON NIGHTMARE – THE TOURNAMENT',

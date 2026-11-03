@@ -115,6 +115,7 @@ const _legacyPhaseProjection = require('./vendor/legacy-phase-projection-core.js
  * recortado e avaliado por `tests/l7-creation-replay-behavior.test.js` num escopo sem
  * `require` — um require lá dentro derruba aquele teste com ReferenceError. */
 const _configAtiva = require('./config-ativa-core.js');
+const _advanceDet = require('./advance-core.js');
 try {
   const _dc = require('./draw-core.js');
   generateLigaRound = _dc.generateLigaRound;
@@ -5734,6 +5735,7 @@ exports.advanceTournamentPhase = onCall(async (request) => {
   const uid = request.auth && request.auth.uid;
   const tId = String((request.data && request.data.tournamentId) || '').trim();
   const phaseChoices = Array.isArray(request.data && request.data.phaseChoices) ? request.data.phaseChoices : [];
+  const requestedOperationId = request.data && request.data.operationId;
   if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
   if (!tId || !materializePhaseFn || !phaseStandingsFn || !phaseCompleteFn) {
     throw new HttpsError('failed-precondition', 'Motor de fases indisponível.');
@@ -5816,9 +5818,22 @@ exports.advanceTournamentPhase = onCall(async (request) => {
     };
     const standings = groupCapture ? frozenEntrants : calculateStandings;
     const next = current + 1;
-    const res = materializePhaseFn(t, standings, 'ph-' + tId + '-' + next, undefined,
+    const randomSeeding = t.phases[next] && t.phases[next].bracketSeeding === 'draw';
+    let drawStamp = null, operationId = null, det = null;
+    if (randomSeeding) {
+      try { operationId = _advanceDet.validaOperationId(requestedOperationId); }
+      catch (_) { throw new HttpsError('invalid-argument', 'Identificador do sorteio inválido. Atualize o app e tente novamente.'); }
+      drawStamp = _advanceDet.stampDe(operationId, tId, next);
+      det = { ts: _advanceDet.tsDe(drawStamp), rnd: _advanceDet.prngDe(drawStamp), agoraIso };
+    }
+    const res = materializePhaseFn(t, standings, 'ph-' + tId + '-' + next, det,
       current > 0 && groupCapture ? { usarClassificacaoCongelada: true, sourceGroups, standingsForGroup: frozenEntrants } : undefined);
     if (!res || !res.ok) return { ok: false, reason: (res && res.error) || 'phase-not-materialized' };
+    if (randomSeeding) {
+      t.phaseDrawAudit = Object.assign({}, t.phaseDrawAudit || {});
+      t.phaseDrawAudit[String(next)] = { operationId, seed: drawStamp,
+        algorithm: 'xorshift128-fisher-yates-v1', seedingMode: 'draw', createdAt: agoraIso };
+    }
     if (groupCapture) {
       t.phaseGroupStandings = Object.assign({}, t.phaseGroupStandings || {});
       t.phaseGroupStandings[String(current)] = groupCapture.snapshot;

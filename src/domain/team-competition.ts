@@ -99,13 +99,23 @@ namespace ScoreplaceTeamCompetition {
   export function rankingConfigForTournament(value: unknown): Config {
     const tournament = record(value);
     const neonId = 'tour_1790628592058_c342a1e8f5068424887f1702a1633a44';
-    const isNeon = text(tournament.name) === 'NEON NIGHTMARE – THE TOURNAMENT' &&
-      (text(tournament.id) === neonId || (tournament.isSandbox === true && text(tournament.sandboxOf) === neonId));
-    // A classificação dos demais torneios sempre leu topo ou fase zero.
-    // A resolução de todas as fases é necessária somente para a agenda do Neon.
+    // Compatibilidade de um documento antigo específico; o nome é só exibição.
+    const isNeon = text(tournament.id) === neonId ||
+      (tournament.isSandbox === true && text(tournament.sandboxOf) === neonId);
     const phases = Array.isArray(tournament.phases) ? tournament.phases : [];
+    const currentIndex = Number.isSafeInteger(tournament.currentPhaseIndex)
+      ? tournament.currentPhaseIndex as number : 0;
+    const current = record(phases[currentIndex]);
+    const top = record(tournament.teamCompetition);
+    const phase = record(current.teamCompetition);
+    const intent = record(record(tournament.fmt2).teamCompetition);
+    // A tabela lê a regra explícita da fase corrente. Uma agenda confirmada
+    // numa fase FUTURA serve ao sorteio, mas não muda a tabela de hoje.
+    const candidates = [top, phase, intent];
+    const explicit = candidates.find((candidate) => candidate.enabled === true &&
+      (candidate.aggregation != null || candidate.classificationUnit != null));
     const source = isNeon ? configurationForTournament(tournament)
-      : (tournament.teamCompetition || record(phases[0]).teamCompetition);
+      : (explicit || candidates.find((candidate) => candidate.enabled === true) || {});
     const cfg = normalize(source);
     if (isNeon) {
       cfg.aggregation = 'overall';

@@ -21,6 +21,13 @@ ok(['src/domain/team-competition.ts', 'js/domain/team-competition.js',
 const neonBase = { name: 'NEON NIGHTMARE – THE TOURNAMENT', teamCompetition: { enabled:true, aggregation:'per_category', classificationUnit:'pair' } };
 const neonRanking = C.rankingConfigForTournament({ ...neonBase, id:neonId });
 ok(neonRanking.aggregation === 'overall' && neonRanking.classificationUnit === 'team', 'Neon: classificação única geral por time');
+ok(C.rankingConfigForTournament({ ...neonBase, id:neonId, name:'Nome alterado' }).classificationUnit === 'team',
+  'o torneio histórico mantém sua regra mesmo se o nome mudar');
+const sameRulesNewTournament = C.rankingConfigForTournament({ id:'tour_future', name:'Evento novo',
+  teamCompetition: { ...neonBase.teamCompetition, aggregation:'overall', classificationUnit:'team' } });
+ok(sameRulesNewTournament.aggregation === neonRanking.aggregation &&
+  sameRulesNewTournament.classificationUnit === neonRanking.classificationUnit,
+  'torneio novo reproduz a classificação do Neon por configuração, sem nome ou ID especial');
 ok(!neonRanking.tiebreakers,
   'Neon concluído mantém os desempates legados sem injeção por ID');
 const neonSandboxRanking = C.rankingConfigForTournament({ ...neonBase, id:'sb_' + neonId, isSandbox:true, sandboxOf:neonId });
@@ -71,6 +78,10 @@ const incompleteTopLevel = { enabled: true, teamNames: ['Venom', 'Blackout'] };
 const resolvedPlan = C.configurationForTournament({ teamCompetition: incompleteTopLevel, phases: [{ teamCompetition: phasePlan }] });
 ok(resolvedPlan === phasePlan,
   'configuração parcial no topo não esconde o modo, a agenda e a confirmação guardados na fase');
+ok(C.rankingConfigForTournament({ id: 'tour_future', name: 'Torneio livre',
+  teamCompetition: incompleteTopLevel, phases: [{ teamCompetition: { ...phasePlan,
+    aggregation: 'per_category', classificationUnit: 'pair' } }] }).classificationUnit === 'pair',
+  'a classificação de torneio novo lê a decisão completa sem depender do nome Neon');
 const fmt2Plan = { enabled:true, schedule:{ enabled:true, mode:'structured', modeChosen:true } };
 const legacyDefault = { enabled:true, schedule:{ enabled:true, mode:'structured' } };
 ok(C.configurationForTournament({ teamCompetition:legacyDefault, fmt2:{ teamCompetition:fmt2Plan } }) === fmt2Plan,

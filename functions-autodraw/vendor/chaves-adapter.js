@@ -97,6 +97,24 @@
     return out;
   }
 
+  // Confrontos parelhos: colocações adjacentes na R1. Na chave ímpar, a
+  // posição final é a folga/repescagem; ela continua com a melhor campanha.
+  function _ordemBalanceada(arr) {
+    var a = arr.slice();
+    if (a.length % 2 === 1) a.push(a.shift());
+    return a;
+  }
+
+  function _ordemSorteada(arr, rnd) {
+    var a = arr.slice();
+    rnd = typeof rnd === 'function' ? rnd : Math.random;
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = Math.floor(rnd() * (i + 1));
+      var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+    }
+    return a;
+  }
+
   // ─── Carimba uma ENTRADA num slot: RÓTULO + IDENTIDADE (v1.5.10) ────────────────────
   // BUG MEDIDO no torneio ao vivo (tour_1785038880593_sb, 26/jul): a dupla que entrou tarde
   // apareceu na chave como **"#10"** e o organizador concluiu que ela não tinha entrado —
@@ -149,7 +167,9 @@
     var parts = opts.participantes || [];
     // ordem significativa (classificação de fase, linha Ouro/Prata) → semeadura espelho.
     // ordem aleatória (inscrição já embaralhada) → mantém como veio. Ver _ordemEspelho.
-    if (opts.semear) parts = _ordemEspelho(parts);
+    if (opts.semear) parts = opts.seedingMode === 'draw'
+      ? _ordemSorteada(parts, opts.rnd)
+      : (opts.seedingMode === 'balanced' ? _ordemBalanceada(parts) : _ordemEspelho(parts));
     var C = _resolveChaves();
     if (!C) throw new Error('chaves-adapter: window._chaves não carregado');
     if (N < 2) return { matches: [], meta: { N: N, formato: formato, vazio: true } };

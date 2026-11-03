@@ -81,6 +81,36 @@ function structure(t) {
   };
 }
 
+// O mesmo contrato de configuração deve produzir o mesmo formato para qualquer
+// nome comercial. Oito duplas fixas em turno único têm C(8, 2) = 28 jogos.
+(function () {
+  function configuredTournament(name) {
+    const cfg = core._window.FORMAT2.defaultConfig('Beach Tennis');
+    Object.assign(cfg, { disputa: 'dupla', parceria: 'fixa', formacaoDupla: 'manual', grupos: 1 });
+    cfg.rodadas.modo = 'todos';
+    cfg.eliminatoria.ativa = false;
+    return mkT('configured-' + name, {
+      name: name,
+      fmt2: cfg,
+      participants: Array.from({ length: 8 }, function (_, i) {
+        return {
+          displayName: 'A' + i + ' / B' + i,
+          p1Uid: 'a' + i, p2Uid: 'b' + i,
+          participants: [{ uid: 'a' + i }, { uid: 'b' + i }],
+        };
+      }),
+    });
+  }
+  ['Super Oito', 'Evento livre'].forEach(function (name) {
+    const t = configuredTournament(name);
+    const compiled = core.compileFromFmt2(t);
+    const drawn = compiled.ok && core.drawInitial(t, { idStamp: 'configured' });
+    const games = (t.matches || []).filter(function (m) { return !m.isBye && !m.isSitOut; });
+    ok('oito duplas configuradas geram 28 jogos: ' + name,
+      compiled.ok && drawn.ok && games.length === 28, JSON.stringify({ compiled: compiled, drawn: drawn && drawn.ok, games: games.length }));
+  });
+})();
+
 // Cenários que exercitam os ramos reais do motor.
 const CASES = [
   ['Eliminatórias Simples · 8 individuais', { format: 'Eliminatórias Simples' }, 8],
@@ -231,7 +261,7 @@ const CASES = [
   const realConfig = Object.assign({}, neonConfig, { schedule:Object.assign({}, neonConfig.schedule, {
     gamesPerPair:3, gamesPerTeam:3, mode:'structured',
     pairsPerTeamByCategory:{ 'Fem Light':3, 'Fem Power':1, 'Fem Extreme':1, 'Masc Light':1, 'Masc Power':1, 'Masc Extreme':1 },
-    pairDayAssignments, rosterSnapshot
+    pairDayAssignments, rosterSnapshot, originDayPolicy:'female-light-enrollment-origin'
   }) });
   function realTournament() { return {
     id:'neon-64', name:'Neon 64', status:'open', format:'Fase de Grupos', teamSize:2, enrollmentMode:'teams',
@@ -248,6 +278,23 @@ const CASES = [
         .map(function (day) { return { category, day, order:1 }; });
     }) }
   }; }
+  const futureSameShape = realTournament();
+  futureSameShape.id = 'future-same-shape';
+  futureSameShape.name = 'Novo torneio com seis categorias';
+  const futureConfig = JSON.parse(JSON.stringify(realConfig));
+  delete futureConfig.schedule.originDayPolicy;
+  const futureAssignment = core.assignCompetitionTeamsAtInitialDraw(futureSameShape, futureConfig);
+  ok('novo torneio com geometria do Neon não recebe plano histórico por inferência',
+    futureAssignment.ok === true && futureSameShape.participants.every(function (entry) {
+      return !entry.competitionPlayDay;
+    }), JSON.stringify({ result:futureAssignment.ok, reason:futureAssignment.reason }));
+  const historicSameShape = realTournament();
+  historicSameShape.id = 'tour_1790628592058_c342a1e8f5068424887f1702a1633a44';
+  const historicalAssignment = core.assignCompetitionTeamsAtInitialDraw(historicSameShape, futureConfig);
+  ok('documento histórico mantém plano por dia mesmo sem política explícita',
+    historicalAssignment.ok === true && historicSameShape.participants.slice(0, 24).every(function (entry) {
+      return !!entry.competitionPlayDay;
+    }), JSON.stringify({ result:historicalAssignment.ok, reason:historicalAssignment.reason }));
   const neon64 = realTournament(), realDraw = core.drawInitial(neon64, { idStamp:'neon-64' });
   const realMatches = neon64.matches || [];
   const lightMatches = realMatches.filter(function (match) { return match.category === 'Fem Light'; });
