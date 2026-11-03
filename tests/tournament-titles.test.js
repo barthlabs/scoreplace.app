@@ -37,6 +37,13 @@ const groups = { phases: [{ kind: 'classification', classification: { structure:
   ] };
 assert.deepEqual(resolve(groups).titles.map(x => [x.scope, x.label, x.winnerName]),
   [['group', 'Grupo Leste', 'L1'], ['group', 'Grupo Oeste', 'O1']]);
+const groupedTie = { ...groups, groups: [{ name: 'Grupo Leste', standings: [
+  { name: 'L1', uid: 'uL1' }, { name: 'L2', uid: 'uL2' }
+] }, groups.groups[1]], phaseTieDecisions: { 0: { 'group-0:0:1': {
+  status: 'complete', contenders: ['uid:uL1', 'uid:uL2'], order: ['uid:uL2', 'uid:uL1']
+} } } };
+assert.deepEqual(resolve(groupedTie).titles.map(x => x.winnerName), ['L2', 'O1'],
+  'cada grupo independente respeita seu próprio desempate confirmado');
 assert.equal(titles.resolve(groups, { engine: { phaseComplete: () => true } }).reason,
   'standings-unavailable', 'sem motor de tabela a resolução retorna erro controlado');
 const playedGroups = { phases: groups.phases, currentPhaseIndex: 0, groups: [
@@ -48,12 +55,17 @@ assert.deepEqual(resolve(playedGroups, { engine: realEngine }).titles.map(x => x
 assert.deepEqual(resolve({ phases: [{ kind: 'classification', classification: { structure: 'round_robin' } }],
   currentPhaseIndex: 0, standings: [{ name: 'Líder', uid: 'u1' }] }).titles.map(x => x.winnerName), ['Líder']);
 const titleTie = { phases: [{ kind: 'classification', classification: { structure: 'round_robin' } }],
-  currentPhaseIndex: 0, standings: [{ name: 'Líder', uid: 'u1' }],
-  phaseTieDecisions: { 0: { extra: { status: 'review' } } } };
+  currentPhaseIndex: 0, standings: [{ name: 'Líder', uid: 'u1' }, { name: 'Rival', uid: 'u2' }],
+  phaseTieDecisions: { 0: { 'overall:0:1': { status: 'review' } } } };
 assert.equal(resolve(titleTie).reason, 'tie-pending',
   'encerramento não atribui título antes de confirmar o desempate extra');
-assert.deepEqual(resolve({ ...titleTie, phaseTieDecisions: { 0: { extra: { status: 'complete' } } } })
-  .titles.map(x => x.winnerName), ['Líder']);
+const decidedTitleTie = { ...titleTie, phaseTieDecisions: { 0: { 'overall:0:1': {
+  status: 'complete', contenders: ['uid:u1', 'uid:u2'], order: ['uid:u2', 'uid:u1']
+} } } };
+assert.deepEqual(resolve(decidedTitleTie).titles.map(x => x.winnerName), ['Rival'],
+  'simples confirmada prevalece sobre a ordem anterior da tabela');
+assert.equal(resolve({ ...decidedTitleTie, standings: [{ name: 'Líder', uid: 'u1' }] }).reason,
+  'tie-order-invalid', 'desempate cuja classificação mudou não atribui campeão errado');
 
 const teamBase = { phases: [{ kind: 'classification', classification: { structure: 'groups' }, gruposCount: 1 }],
   currentPhaseIndex: 0, competitionTeams: [{ id: 't1', name: 'Time Um' }, { id: 't2', name: 'Time Dois' }],

@@ -29,6 +29,33 @@
     return { scope: scope, label: label || '', winnerName: String(row.displayName || row.name || ''),
       winnerUids: ids, winnerId: row.id ? String(row.id) : '', sourceMatchId: '' };
   }
+  function titleRowAfterTie(rows, poolId, phaseTies) {
+    if (!Array.isArray(rows) || !rows.length) return { row: null };
+    var keys = Object.keys(phaseTies || {}).filter(function (id) {
+      return id.indexOf(poolId + ':0:') === 0;
+    });
+    if (!keys.length) return { row: rows[0] };
+    if (keys.length !== 1) return { error: 'tie-order-invalid' };
+    var decision = phaseTies[keys[0]];
+    if (!decision || decision.status !== 'complete' || !Array.isArray(decision.order) ||
+        !Array.isArray(decision.contenders) || !decision.order.length ||
+        decision.order.length !== decision.contenders.length ||
+        new Set(decision.order).size !== decision.order.length ||
+        decision.order.some(function (key) { return decision.contenders.indexOf(key) < 0; })) {
+      return { error: 'tie-order-invalid' };
+    }
+    var rowKeys = rows.map(function (row) {
+      return row.uid ? 'uid:' + String(row.uid) : 'name:' + String(row.name || '');
+    });
+    if (decision.contenders.some(function (key) { return rowKeys.indexOf(key) < 0; })) {
+      return { error: 'tie-order-invalid' };
+    }
+    var first = rows.filter(function (row) {
+      var key = row.uid ? 'uid:' + String(row.uid) : 'name:' + String(row.name || '');
+      return key === decision.order[0];
+    });
+    return first.length === 1 ? { row: first[0] } : { error: 'tie-order-invalid' };
+  }
   function phaseMatches(t, index) {
     var out = [], seen = {};
     function add(m) {
@@ -160,14 +187,20 @@
           return { ok: false, reason: 'standings-unavailable', titles: [] };
         }
         var groups = deps.engine.prevPhaseGroups(t);
+        var invalidGroupTie = false;
         groups.forEach(function (g, i) {
           var rows = deps.engine.groupTeamStandings(g, { tiebreakers: t.tiebreakers });
-          var title = awardFromRow(rows[0], 'group', String(g.name || 'Grupo ' + (i + 1)));
+          var chosen = titleRowAfterTie(rows, 'group-' + i, phaseTies);
+          if (chosen.error) { invalidGroupTie = true; return; }
+          var title = awardFromRow(chosen.row, 'group', String(g.name || 'Grupo ' + (i + 1)));
           if (title) titles.push(title);
         });
+        if (invalidGroupTie) return { ok: false, reason: 'tie-order-invalid', titles: [] };
       } else if (typeof deps.standings === 'function') {
         var ranking = deps.standings(t);
-        var leader = awardFromRow(ranking && ranking[0], 'overall', '');
+        var chosenOverall = titleRowAfterTie(ranking, 'overall', phaseTies);
+        if (chosenOverall.error) return { ok: false, reason: chosenOverall.error, titles: [] };
+        var leader = awardFromRow(chosenOverall.row, 'overall', '');
         if (leader) titles.push(leader);
       }
     }
