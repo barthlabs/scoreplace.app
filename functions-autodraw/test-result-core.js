@@ -424,6 +424,20 @@ console.log('\n──── paridade com o cliente ────');
   t('último jogo da série reabre título e torneio', reopened.ok && T.status === 'active' && !T.titleAwards && !second.winner, JSON.stringify(reopened));
 }
 {
+  const T = mkT({ rulesContractVersion: 2, status: 'finished', titleAwards: [{ label: 'Campeão' }] });
+  const first = win._findMatch(T, 'm1');
+  first.winner = first.p1;
+  first.seriesRootId = 'm1'; first.seriesGameNumber = 1;
+  const unplayed = { ...first, id: 'm1-S2', seriesGameNumber: 2 };
+  delete unplayed.winner;
+  T.matches.push(unplayed);
+  const reopened = core.applyResult(T, { matchId: 'm1', payload: { action: 'reopen-result' },
+    actor: { uid: UID_ORG }, now: 3 });
+  t('reabrir primeira partida remove somente jogo posterior ainda não disputado',
+    reopened.ok && !first.winner && !T.matches.some(m => m.id === 'm1-S2') && T.status === 'active',
+    JSON.stringify({ reopened, games: T.matches }));
+}
+{
   const T = mkT({ rulesContractVersion: 2 });
   const first = win._findMatch(T, 'm1');
   first.bracket = 'grand'; first.winner = first.p1;
