@@ -6130,6 +6130,44 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
   var catSuffix = category ? '-' + category.replace(/\s+/g, '_') : '';
   var catLabel = category && window._displayCategoryName ? ' (' + window._displayCategoryName(category) + ')' : (category ? ' (' + category + ')' : '');
 
+  if (t.superEight === true) {
+    var core = window.ScoreplaceSuperEight;
+    if (!core || typeof core.build !== 'function') throw new Error('Motor de oito atletas indisponível.');
+    if (players.length !== 8 || new Set(players).size !== 8) {
+      throw new Error('Esta configuração exige exatamente oito atletas ativos e identificáveis por nome.');
+    }
+    if (roundNum > 7) throw new Error('O ciclo de oito atletas já terminou.');
+    var nameToUid = _buildNameToUid(t);
+    if (!t.superEightOrders) t.superEightOrders = {};
+    var eightKey = category || '_default_';
+    if (!Array.isArray(t.superEightOrders[eightKey])) {
+      t.superEightOrders[eightKey] = players.map(function (name) {
+        return { uid: nameToUid[name] || null, name: name };
+      });
+    }
+    var ordered = t.superEightOrders[eightKey].map(function (entry) {
+      return players.filter(function (name) {
+        return entry.uid ? nameToUid[name] === entry.uid : name === entry.name;
+      })[0];
+    });
+    if (ordered.some(function (name) { return !name; }) || new Set(ordered).size !== 8) {
+      throw new Error('O elenco de oito atletas mudou durante o ciclo.');
+    }
+    var scheduled = core.build(ordered).rounds[roundNum - 1];
+    var eightGroups = scheduled.map(function (duel, gi) {
+      var group = _buildMonarchGroup({ roundNum: roundNum, roundIndex: (t.rounds || []).length,
+        gi: gi, players: duel[0].concat(duel[1]), category: category, ts: ts,
+        nameToUid: nameToUid, nameSuffix: ' · oito atletas' });
+      group.matches = group.matches.slice(0, 1);
+      return group;
+    });
+    if (isLiga) _recordOpponentHistory(t, eightGroups, category);
+    window._appendCanonicalColumn(t, { phase: 'monarch', round: roundNum, status: 'active',
+      format: 'rei_rainha', matches: eightGroups.map(function (g) { return g.matches[0]; }),
+      monarchGroups: eightGroups });
+    return;
+  }
+
   // Torneios novos: ativos sem quarteto folgam por sorteio e recebem a média
   // dinâmica. Torneios antigos conservam a lista de espera que já usavam.
   var remainder = players.length % 4;
@@ -6695,6 +6733,8 @@ function _phaseGenNextLeagueRound(t, phaseIdx, det) {
   var _cfgMonarch = (cfg.reiRainha === true || cfg.drawMode === 'rei_rainha');
   var faux = {
     id: t.id, format: 'Liga', ligaDrawMode: 'standard',
+    superEight: cfg.superEight === true,
+    superEightOrders: st.superEightOrders,
     ligaRoundFormat: _cfgMonarch ? 'rei_rainha' : 'standard',
     // Rei/Rainha: formação dos grupos de 4 honra o eixo da FASE (cfg.groupsBy:
     // 'sorteio'|'ranking'); fallback pro top-level e pro default do gerador ('ranking').
@@ -6712,6 +6752,7 @@ function _phaseGenNextLeagueRound(t, phaseIdx, det) {
   var before = faux.rounds.length;
   try { window._generateNextRound(faux, det); }
   catch (e) { if (window._warn) window._warn('[brick4] gen liga round falhou', e); return false; }
+  if (faux.superEightOrders) st.superEightOrders = faux.superEightOrders;
   if (faux.rounds.length <= before) return false;
   var newRound = faux.rounds[faux.rounds.length - 1];
   if (!newRound || !Array.isArray(newRound.matches) || !newRound.matches.length) return false;

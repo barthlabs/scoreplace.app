@@ -513,7 +513,8 @@
       ? Math.max(2, parseInt(first.gruposCount || tournament.gruposCount, 10) || 2)
       : 1;
     var pairing = classif.pairing || {};
-    if (pairing.strategy === 'monarch_groups') cfg.parceria = 'rei_rainha';
+    if (first.superEight === true || tournament.superEight === true) cfg.parceria = 'super_eight';
+    else if (pairing.strategy === 'monarch_groups') cfg.parceria = 'rei_rainha';
     else if (cfg.disputa === 'dupla') cfg.parceria = pairing.entryMode === 'fixed' ? 'fixa' : 'sorteio_rodada';
     if (cfg.grupos === 1 && classif.structure !== 'groups') {
       var rounds = parseInt(first.rounds || tournament.swissRounds, 10);
@@ -633,7 +634,7 @@
     if (!isDupla) {
       out.parceria = null;
     } else {
-      if (['fixa', 'rei_rainha', 'sorteio_rodada'].indexOf(out.parceria) === -1) out.parceria = 'fixa';
+      if (['fixa', 'rei_rainha', 'sorteio_rodada', 'super_eight'].indexOf(out.parceria) === -1) out.parceria = 'fixa';
       // Rei/Rainha (grupos de 4 rotativos) só faz sentido com 1 grupo. 2+ grupos ⇒ dupla fixa
       // (montadas ou sorteadas). Pedido do dono: "rei/rainha só aparece se for 1 grupo".
       if (!umGrupo && out.parceria !== 'fixa') out.parceria = 'fixa';
@@ -642,7 +643,7 @@
     out.manualPairingOpen = !!out.manualPairingOpen;
 
     // Pontuação individual quando singles OU parceria rotativa.
-    out._scoreBy = (!isDupla || out.parceria === 'rei_rainha' || out.parceria === 'sorteio_rodada')
+    out._scoreBy = (!isDupla || out.parceria === 'rei_rainha' || out.parceria === 'sorteio_rodada' || out.parceria === 'super_eight')
       ? 'individual' : 'dupla';
     if (out._scoreBy !== 'individual' || (out.teamCompetition && out.teamCompetition.enabled)) {
       out.tieResolution = 'draw_order';
@@ -652,7 +653,7 @@
     // Dupla fixa = round-robin ('todos'). Singles = 'todos' (round-robin) ou 'fixo' (Liga limitada).
     // IDA-E-VOLTA só em TABELA ÚNICA (grupos=1), todos-contra-todos (dupla fixa ou singles).
     out.rodadas = out.rodadas || {};
-    var rotativo = isDupla && (out.parceria === 'rei_rainha' || out.parceria === 'sorteio_rodada');
+    var rotativo = isDupla && (out.parceria === 'rei_rainha' || out.parceria === 'sorteio_rodada' || out.parceria === 'super_eight');
     if (rotativo) {
       out.rodadas.modo = 'fixo'; out.rodadas.turnos = 'ida'; // rotativo = por-rodada
     } else {
@@ -665,6 +666,7 @@
       out.rodadas.turnos = (out.rodadas.modo === 'todos' && out.rodadas.turnos === 'ida_volta') ? 'ida_volta' : 'ida';
     }
     out.rodadas.n = Math.max(1, parseInt(out.rodadas.n, 10) || 1);
+    if (out.parceria === 'super_eight') out.rodadas.n = 7;
     // Agendamento dos sorteios (só relevante no modo "nº de rodadas").
     out.rodadas.drawFirstDate = out.rodadas.drawFirstDate || '';
     out.rodadas.drawFirstTime = out.rodadas.drawFirstTime || '19:00';
@@ -799,7 +801,8 @@
     var resolved = resolveTurnos(cfg);
     parts.push(resolved.groups === 1 ? 'Pontos Corridos' : (resolved.groups + ' grupos'));
     if (cfg.disputa === 'dupla') {
-      if (cfg.parceria === 'rei_rainha') parts.push('Rei/Rainha');
+      if (cfg.parceria === 'super_eight') parts.push('oito atletas · todas as parcerias');
+      else if (cfg.parceria === 'rei_rainha') parts.push('Rei/Rainha');
       else if (cfg.parceria === 'sorteio_rodada') parts.push('sorteio/rodada');
       else parts.push(cfg.formacaoDupla === 'manual' ? 'duplas montadas' : 'duplas sorteadas');
     }
@@ -995,11 +998,12 @@
     // "Nº de rodadas" (modo 'fixo') = Liga rodada-a-rodada com agendamento — vale p/ singles E
     // dupla fixa (pontos corridos com nº determinado de rodadas). Todos-contra-todos = grupos.
     var useLiga = isDupla
-      ? (cfg.parceria === 'rei_rainha' || cfg.parceria === 'sorteio_rodada' || cfg.rodadas.modo === 'fixo')
+      ? (cfg.parceria === 'rei_rainha' || cfg.parceria === 'sorteio_rodada' || cfg.parceria === 'super_eight' || cfg.rodadas.modo === 'fixo')
       : (cfg.rodadas.modo === 'fixo');
 
     if (useLiga) {
-      var isRR = isDupla && cfg.parceria === 'rei_rainha';
+      var isSuperEight = isDupla && cfg.parceria === 'super_eight';
+      var isRR = isDupla && (cfg.parceria === 'rei_rainha' || isSuperEight);
       // dupla FIXA com nº de rodadas → Liga com pares travados (não rotativo).
       var ligaFixedPairs = isDupla && cfg.parceria === 'fixa';
       var _roundPairing = isRR
@@ -1010,6 +1014,7 @@
       top.teamSize = teamSize;
       top.enrollmentMode = ligaFixedPairs ? 'teams' : 'individual';
       top.ligaRoundFormat = isRR ? 'rei_rainha' : 'standard';
+      if (isSuperEight) top.superEight = true;
       top.rankingSitOutScoring = cfg.rankingSitOutScoring;
       if (isRR) top.rankingRemainderPolicy = cfg.rankingRemainderPolicy;
       top.ligaDrawMode = 'standard';           // rodada-a-rodada (não RR pré-gerado)
@@ -1032,7 +1037,7 @@
       p0 = Object.assign(_phaseBase(re), {
         kind: 'classification', classification: { structure: 'round_robin', pairing: _roundPairing }, name: isRR ? 'Rei/Rainha' : 'Pontos Corridos',
         formatCode: 'classification_rounds',
-        drawMode: top.drawMode, reiRainha: isRR,
+        drawMode: top.drawMode, reiRainha: isRR, superEight: isSuperEight,
         rankingRemainderPolicy: isRR ? cfg.rankingRemainderPolicy : null,
         rankingSitOutScoring: cfg.rankingSitOutScoring,
         rounds: cfg.rodadas.n, groupsBy: 'sorteio',

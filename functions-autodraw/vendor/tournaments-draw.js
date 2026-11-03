@@ -2338,7 +2338,8 @@ window._buildPhase0Cfg = function (t) {
     } else throw new Error('Domínio da fase inicial inválido; sorteio não iniciado.');
     var phaseDrawMode = phase0 && phase0.drawMode;
     var rei = (phase0 && phase0.reiRainha === true) || phaseDrawMode === 'rei_rainha'
-        || (t.drawMode === 'rei_rainha') || (t.ligaRoundFormat === 'rei_rainha') || /Rei|Rainha/i.test(fmt);
+        || (t.drawMode === 'rei_rainha') || (t.ligaRoundFormat === 'rei_rainha')
+        || (!(t.rulesContractVersion >= 2) && /Rei|Rainha/i.test(fmt));
     var cfg = {
         format: fmt, formatCode: code,
         kind: phase0.kind,
@@ -2354,6 +2355,7 @@ window._buildPhase0Cfg = function (t) {
         politicaDaChave: (phase0 && phase0.politicaDaChave) || t.politicaDaChave || null,
         drawMode: phaseDrawMode || t.drawMode || (rei ? 'rei_rainha' : 'sorteio'),
         reiRainha: rei,
+        superEight: !!(phase0 && phase0.superEight === true),
         gruposCount: parseInt((phase0 && phase0.gruposCount) != null ? phase0.gruposCount : t.gruposCount, 10) || 4,
         gruposClassified: parseInt((phase0 && phase0.gruposClassified) != null ? phase0.gruposClassified : t.gruposClassified, 10) || 2,
         gruposEqualOnly: (phase0 && phase0.gruposEqualOnly) === true || t.gruposEqualOnly === true,

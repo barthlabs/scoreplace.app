@@ -15,6 +15,7 @@ const valid = {
 };
 assert.doesNotThrow(() => validateNewFormatIntent(valid, HttpsError));
 assert.doesNotThrow(() => validateNewFormatIntent({ tieResolution: 'singles_then_draw' }, HttpsError));
+assert.doesNotThrow(() => validateNewFormatIntent({ disputa: 'dupla', parceria: 'super_eight' }, HttpsError));
 assert.doesNotThrow(() => validateNewFormatIntent({ disputa: 'individual', parceria: null }, HttpsError));
 assert.doesNotThrow(() => validateNewFormatIntent({ parceria: null }, HttpsError));
 assert.doesNotThrow(() => validateNewFormatIntent({ eliminatoria: { ativa: false } }, HttpsError));

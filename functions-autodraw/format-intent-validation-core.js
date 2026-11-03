@@ -5,7 +5,7 @@
 // documentos já salvos durante leitura, sorteio ou lançamento de resultado.
 const ENUMS = [
   ['disputa', ['individual', 'dupla']],
-  ['parceria', ['fixa', 'rei_rainha', 'sorteio_rodada']],
+  ['parceria', ['fixa', 'rei_rainha', 'sorteio_rodada', 'super_eight']],
   ['formacaoDupla', ['manual', 'sorteio']],
   ['classifScope', ['overall', 'per_group']],
   ['tieResolution', ['draw_order', 'singles_then_draw']],

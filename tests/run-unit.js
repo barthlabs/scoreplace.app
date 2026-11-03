@@ -123,6 +123,8 @@ const SUITES = [
   'tests/native-release-candidate.test.js',
   'tests/format-intent-validation.test.js',
   'tests/tournament-titles.test.js',
+  'tests/super-eight-core.test.js',
+  'functions-autodraw/test-super-eight.js',
   'tests/format2-legacy-translation.test.js',
   'tests/migrar-fmt2-core.test.js',
   'tests/busca-nomes-sem-acento.test.js',

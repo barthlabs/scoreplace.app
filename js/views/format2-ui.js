@@ -819,7 +819,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var allowsS = window.FORMAT2.allowsSingles(sport);
     var isDupla = cfg.disputa === 'dupla';
     var um = cfg.grupos === 1;
-    var rotativo = isDupla && (cfg.parceria === 'rei_rainha' || cfg.parceria === 'sorteio_rodada');
+    var rotativo = isDupla && (cfg.parceria === 'rei_rainha' || cfg.parceria === 'sorteio_rodada' || cfg.parceria === 'super_eight');
     var scoreInd = cfg._scoreBy === 'individual';
     var entryControls = '', formationControls = '', scoringControls = '', structureControls = '';
     // v4.5.49: o AGENDAMENTO (Rodadas: repetição + nº de rodadas) e as DATAS/Inscrições da fase
@@ -873,6 +873,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       var fBtns = _pill(montadas, 'window._f2TeamForm(\'montadas\')', '🤝 Montadas') +
         _pill(isSorteio, 'window._f2TeamForm(\'sorteio\')', '🎲 Sorteio');
       if (um) fBtns += _pill(pr === 'rei_rainha', 'window._f2TeamForm(\'rei_rainha\')', '👑 Rei/Rainha');
+      if (um) fBtns += _pill(pr === 'super_eight', 'window._f2TeamForm(\'super_eight\')', '8️⃣ Oito atletas · todas as parcerias');
+      if (pr === 'super_eight') fBtns += '<p style="font-size:.75rem;color:var(--text-muted);">Exige oito atletas ativos. Sete rodadas, duas partidas por rodada; cada parceria ocorre uma vez.</p>';
       // v4.4.30: Sorteio + 1 grupo → toggle "Novo parceiro a cada rodada" (ON por padrão).
       // ON = sorteio_rodada (rotativo, individual); OFF = dupla sorteada 1× e fixa até o fim.
       // 2+ grupos: só dupla fixa sorteada (rotativo exige 1 grupo) → sem toggle.
@@ -1368,6 +1370,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       else { S.cfg.parceria = 'fixa'; S.cfg.formacaoDupla = 'sorteio'; }
     }
     else if (v === 'rei_rainha') { S.cfg.parceria = 'rei_rainha'; }
+    else if (v === 'super_eight') { S.cfg.parceria = 'super_eight'; }
     _norm(); _rerender();
   };
   // v4.4.30: toggle "Novo parceiro a cada rodada" dentro do Sorteio. ON = sorteio_rodada
