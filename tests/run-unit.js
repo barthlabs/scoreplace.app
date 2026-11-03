@@ -103,6 +103,8 @@ const SUITES = [
   'tests/check-served-operation-revision.test.js',
   'tests/refresh-score-regions-rollback.test.js',
   'tests/refresh-score-regions-stage.test.js',
+  'tests/draw-operation-audit.test.js',
+  'tests/advance-legacy-native-operation.test.js',
   'tests/operation-regions-v3-config.test.js',
   'tests/operation-control-transaction.test.js',
   'tests/operation-queue-protocol.test.js',

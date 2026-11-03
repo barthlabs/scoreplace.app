@@ -103,6 +103,9 @@ function _hidrataGrupos(t, onde, tId) {
 }
 function _recordSeededDraw(t, details) {
   if (!t || !(t.rulesContractVersion >= 2)) return;
+  if (!details || !details.seed || !details.operationId) {
+    throw new Error('Sorteio sem semente ou operação identificada.');
+  }
   const keys = (t.participants || []).map(p => {
     if (!p) return '';
     if (p.uid) return 'uid:' + p.uid;
@@ -116,7 +119,9 @@ function _recordSeededDraw(t, details) {
   t.drawOperationsV2.push({ phaseIndex: t.currentPhaseIndex || 0,
     roundIndex: Math.max(0, (t.rounds || []).length - 1), seed: String(details.seed),
     operationId: String(details.operationId || ''), algorithm: 'fnv1a-xorshift32-fisher-yates-v1',
-    eligibleKeys: keys, ruleHash, decisionsHash: details.decisionsHash || null,
+    eligibleCount: keys.length,
+    eligibleKeysHash: createHash('sha256').update(JSON.stringify(keys)).digest('hex'),
+    ruleHash, decisionsHash: details.decisionsHash || null,
     at: String(details.at || '') });
 }
 // L6.R1 (2.1.80): a agenda do sorteio no FUSO DO EVENTO — janela de 1 minuto, calendário
@@ -5885,6 +5890,10 @@ exports.advanceTournamentPhase = onCall(async (request) => {
   if (!_isTournamentAdmin(pre.data(), uid)) throw _drawFail('permission-denied', 'Só a organização avança a fase.', { tId, uid });
   await _preloadDrawNames(pre.data());
   const agoraIso = new Date().toISOString();
+  // Apps nativos já publicados não enviam operationId nesta porta. A semente
+  // de compatibilidade nasce uma vez por chamada, fora da transação, para
+  // continuar idêntica se o Firestore repetir o callback.
+  const compatOperationId = requestedOperationId == null ? randomUUID() : requestedOperationId;
   const out = await db.runTransaction(async (tx) => {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
@@ -6184,7 +6193,7 @@ exports.advanceTournamentPhase = onCall(async (request) => {
       ['draw_among', 'seed'].includes(nextPhaseConfig.pairingStrategy);
     let drawStamp = null, operationId = null, det = null;
     if (randomSeeding) {
-      try { operationId = _advanceDet.validaOperationId(requestedOperationId); }
+      try { operationId = _advanceDet.validaOperationId(compatOperationId); }
       catch (_) { throw new HttpsError('invalid-argument', 'Identificador do sorteio inválido. Atualize o app e tente novamente.'); }
       drawStamp = _advanceDet.stampDe(operationId, tId, next);
       det = { ts: _advanceDet.tsDe(drawStamp), rnd: _advanceDet.prngDe(drawStamp), agoraIso };

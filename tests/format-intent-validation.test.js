@@ -584,7 +584,10 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
   } });
   assert.equal(changedGameType.ok, true, 'mudança de tipo pré-sorteio pode recompor categorias');
   assert.equal(categoryProjections, 1, 'mudança de tipo projetou a nova categoria tipada');
-  const currentFormat = FORMAT2.compileToPhases(FORMAT2.defaultConfig('Beach Tennis'), { sport: 'Beach Tennis' });
+  const currentChoice = FORMAT2.defaultConfig('Beach Tennis');
+  currentChoice.grupos = 2;
+  currentChoice.classifScope = 'per_group';
+  const currentFormat = FORMAT2.compileToPhases(currentChoice, { sport: 'Beach Tennis' });
   configTournament = { id: 'tour_test', creatorUid: 'owner', sport: 'Beach Tennis', teamSize: 2,
     rulesContractVersion: 2, status: 'active', fmt2: currentFormat.cfg, phases: currentFormat.phases,
     currentPhaseIndex: 0, _phaseMaterialized: 0,
@@ -594,6 +597,7 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
     .update(JSON.stringify(configTournament.fmt2)).digest('hex');
   configDrawWindow.FORMAT2 = FORMAT2;
   const futureChoice = structuredClone(configTournament.fmt2);
+  futureChoice.classifScope = 'overall';
   futureChoice.classificados = 4;
   futureChoice.eliminatoria.linhas = 3;
   futureChoice.eliminatoria.nomes = ['Céu', 'Mar', 'Terra'];
@@ -607,6 +611,8 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
   assert.equal(configTournament.phases[1].mapping.length, 3);
   assert.equal(configTournament.gruposClassified, 4);
   assert.equal(configTournament.politicaDaChave, 'bye');
+  assert.equal(configTournament.fmt2.classifScope, 'overall');
+  assert.equal(configTournament.phases[1].source.scope, 'overall', 'escopo altera apenas a origem da fase futura');
   assert.deepEqual(configTournament.phases[0], phaseZeroBefore, 'fase atual sorteada não é recompilada');
   assert.equal(configTournament.matches[0].winner, 'A', 'jogo da fase corrente permanece intacto');
   assert.equal(configTournament.futureConfigRevisionsV2.length, 1, 'revisão futura guarda identidade e hashes');

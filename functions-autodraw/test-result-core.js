@@ -428,13 +428,16 @@ console.log('\n──── paridade com o cliente ────');
   const first = win._findMatch(T, 'm1');
   first.winner = first.p1;
   first.seriesRootId = 'm1'; first.seriesGameNumber = 1;
-  const unplayed = { ...first, id: 'm1-S2', seriesGameNumber: 2 };
+  const unplayed = { ...first, id: 'm1-S2', seriesGameNumber: 2,
+    scheduledAt: '2026-11-04T12:00:00Z', court: 'Quadra 2' };
   delete unplayed.winner;
   T.matches.push(unplayed);
+  T.rounds[0].matches.push(unplayed);
   const reopened = core.applyResult(T, { matchId: 'm1', payload: { action: 'reopen-result' },
     actor: { uid: UID_ORG }, now: 3 });
-  t('reabrir primeira partida remove somente jogo posterior ainda não disputado',
-    reopened.ok && !first.winner && !T.matches.some(m => m.id === 'm1-S2') && T.status === 'active',
+  t('reabrir primeira partida preserva jogo posterior ainda não disputado',
+    reopened.ok && !first.winner && T.matches.some(m => m.id === 'm1-S2' && m.scheduledAt === unplayed.scheduledAt) &&
+      T.rounds[0].matches.includes(unplayed) && T.status === 'active',
     JSON.stringify({ reopened, games: T.matches }));
 }
 {

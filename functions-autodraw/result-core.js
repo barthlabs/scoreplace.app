@@ -269,15 +269,15 @@ function invalidateFinalSnapshots(t, m) {
   }
 }
 
-function reopenMatch(t, m, pruneFutureSeries) {
+function reopenMatch(t, m) {
   if (m.winner || m.wo) {
     undoAdvancement(t, m);
   }
   clearResultFields(m);
   if (t.rulesContractVersion >= 2) {
     invalidateFinalSnapshots(t, m);
-    if (pruneFutureSeries && m.seriesRootId) t.matches = (t.matches || []).filter(x => !x ||
-      x.seriesRootId !== m.seriesRootId || Number(x.seriesGameNumber || 1) <= Number(m.seriesGameNumber || 1));
+    // Jogos seguintes da série podem já ter agenda, quadra ou referências em
+    // rodadas. Reabrir este resultado não apaga documentos de partida.
     if (t.status === 'finished') { t.status = 'active'; delete t.finishedAt; }
     delete t.titleAwards; delete t.titleAwardsAt;
   }
@@ -378,7 +378,7 @@ function applyResult(t, opts) {
       if (o.logMessage) pushHistory(t, o.logMessage, o.now);
       return { ok: true, outcome: 'wo-reverted', reason: '' };
     }
-    reopenMatch(t, m, true);
+    reopenMatch(t, m);
     if (o.logMessage) pushHistory(t, o.logMessage, o.now);
     return { ok: true, outcome: payload.action === 'reset-match' ? 'match-reset' : 'result-reopened', reason: '' };
   }
