@@ -5461,6 +5461,9 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização atualiza a configuração.', { tId, uid });
+    if (t.rulesContractVersion >= 2 && t.status === 'finished') {
+      throw new HttpsError('failed-precondition', 'O torneio já foi encerrado; a configuração publicada não pode ser alterada.');
+    }
     if ('membersOnly' in patch || 'organizerOnly' in patch) {
       const effective = {
         isPublic: 'isPublic' in patch ? patch.isPublic : t.isPublic === true,
