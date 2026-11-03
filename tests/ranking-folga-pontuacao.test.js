@@ -58,6 +58,7 @@ function actualRankingDraw(parceria, names, policy) {
   const cfg = { ...initial, parceria, rodadas: { ...initial.rodadas, modo: 'fixo', n: 2 },
     eliminatoria: { ...initial.eliminatoria, ativa: false }, rankingSitOutScoring: policy };
   const actual = { id: 'ranking-real-' + parceria, sport: 'Beach Tennis', fmt2: cfg,
+    rulesContractVersion: 2,
     participants: names.map((name, i) => ({ uid: 'uid-' + i, displayName: name, ligaActive: true })),
     rounds: [], matches: [], status: 'draft' };
   assert.ok(drawCore.compileFromFmt2(actual).ok);
@@ -80,7 +81,8 @@ const fixedActualSitOut = fixedActual.rounds[0].matches.find(m => m.isSitOut);
 assert.ok(fixedActualSitOut && fixedActualSitOut.p1Uid);
 assert.equal(W._computeStandings(fixedActual).find(s => s.name === fixedActualSitOut.p1).points, 5);
 
-const historicalPairs = { ...fixedActual, id: 'ranking-historico', rankingSitOutScoring: undefined,
+const historicalPairs = { ...fixedActual, id: 'ranking-historico', rulesContractVersion: undefined,
+  rankingSitOutScoring: undefined,
   rounds: [], matches: [], sitOutHistory: undefined, status: 'active' };
 W._generateNextRound(historicalPairs, { rnd: () => 0.5 });
 assert.equal(historicalPairs.rounds[0].matches.filter(m => m.isBye).length, 1,
