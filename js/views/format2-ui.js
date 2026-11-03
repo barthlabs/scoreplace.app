@@ -963,7 +963,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         (cfg.parceria === 'rei_rainha' ? 'grupos de 4, parceiros rotativos' : 'parceiro e adversário sorteados') +
         '; pontuação individual.</div>' + _schedBlock(cfg.rodadas);
       if (cfg.parceria === 'rei_rainha' && cfg.rankingRemainderPolicy === 'lottery_average') {
-        rInner += '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">Atletas ativos sem quarteto ficam de folga por sorteio. A média de pontos é recalculada a cada rodada; antes de repetir uma folga, são priorizados os que ainda não folgaram.</div>';
+        rInner += '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">Atletas ativos sem quarteto ficam de folga por sorteio; antes de repetir uma folga, são priorizados os que ainda não folgaram.</div>';
       }
     } else if (tc && tc.enabled && tc.teamCount >= 2) {
       // A competição por times tem grade parcial própria. Os modos antigos descrevem
@@ -994,6 +994,23 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       rInner = _groupScheduleControls(cfg);
     }
     classifSchedule += _sec('Rodadas', rInner);
+    var isRankingRounds = cfg.classifAtiva && cfg.grupos === 1 && cfg.rodadas.modo === 'fixo' && !(tc && tc.enabled);
+    if (isRankingRounds) {
+      var so = cfg.rankingSitOutScoring || { mode: 'average' };
+      var scoringLocked = !!(S.t && (((S.t.currentPhaseIndex || 0) > 0) || S.t.status === 'finished'));
+      var scoringControls =
+        '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:8px;">A organização escolhe a pontuação de uma folga sorteada. Inatividade e W.O. não recebem esse crédito. A escolha pode mudar durante a classificatória e recalcula a tabela; fica travada após o avanço de fase.</div>' +
+        _pill(so.mode === 'average', "window._f2SitOutScoring('average')", '📈 Média dinâmica (sugerida)') +
+        _pill(so.mode === 'zero', "window._f2SitOutScoring('zero')", '0 pontos') +
+        _pill(so.mode === 'fixed', "window._f2SitOutScoring('fixed')", 'Valor fixo') +
+        (so.mode === 'fixed'
+          ? '<label style="display:block;font-size:0.72rem;color:var(--text-muted);margin-top:8px;">Pontos por folga <input type="number" min="0" step="1" value="' + _safe(so.points || 0) + '" onchange="window._f2SitOutPoints(this.value)" style="width:82px;margin-left:6px;"></label>'
+          : '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">' +
+            (so.mode === 'average' ? 'Cada nova rodada recalcula a média do desempenho real e atualiza também as folgas anteriores.' : 'Toda folga sorteada vale zero ponto.') + '</div>');
+      classifSchedule += _sec('Pontos de quem folga', scoringLocked
+        ? '<div style="pointer-events:none;opacity:.5;" aria-disabled="true">' + scoringControls + '</div>'
+        : scoringControls);
+    }
     if (cfg._scoreBy === 'individual' && !(tc && tc.enabled)) classifSchedule += _sec('Empate após os critérios de desempate',
       '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:8px;">Quando atletas empatados seguiriam para destinos diferentes:</div>' +
       _pill(cfg.tieResolution !== 'singles_then_draw', "window._f2TieResolution('draw_order')", '🎲 Ordem do sorteio original') +
@@ -1249,6 +1266,18 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // ── Handlers globais (form + page) ──
   window._f2Disputa = function (v) { S.cfg.disputa = v; _norm(); _rerender(); };
   window._f2TieResolution = function (v) { if (!S) return; S.cfg.tieResolution = v; _norm(); _rerender(); };
+  window._f2SitOutScoring = function (mode) {
+    if (!S) return;
+    S.cfg.rankingSitOutScoring = mode === 'fixed'
+      ? { mode: 'fixed', points: (S.cfg.rankingSitOutScoring && S.cfg.rankingSitOutScoring.points) || 0 }
+      : { mode: mode === 'zero' ? 'zero' : 'average' };
+    _norm(); _rerender();
+  };
+  window._f2SitOutPoints = function (value) {
+    if (!S) return;
+    S.cfg.rankingSitOutScoring = { mode: 'fixed', points: Number(value) };
+    _norm(); _rerender();
+  };
   // ONINPUT (durante o arraste) — atualização LEVE e fluida: o número muda na hora, e os
   // números de baixo (grupos · pessoas/grupo · duplas/grupo + tempo) atualizam via
   // requestAnimationFrame (coalesce → no máx. 1 update por frame, sem lag). SEM re-render do

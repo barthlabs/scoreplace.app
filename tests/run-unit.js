@@ -1681,6 +1681,7 @@ const SUITES = [
   'tests/match-roster-uid.test.js',
   'tests/fairness-uid-identity.test.js',
   'tests/rei-rainha-folga-sorteada.test.js',
+  'tests/ranking-folga-pontuacao.test.js',
   'tests/delete-account-dupla-orphan.test.js',
   'tests/delete-account-tournament-transaction.test.js',
   'tests/merge-federated-wins.test.js',

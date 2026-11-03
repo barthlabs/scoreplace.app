@@ -14,6 +14,7 @@ const ENUMS = [
   ['classificationPairing.strategy', ['ranking_clusters', 'free_draw']],
   ['classificationPairing.rematchPolicy', ['exhaust_cluster_before_repeat']],
   ['rankingRemainderPolicy', ['lottery_average', 'waitlist_legacy']],
+  ['rankingSitOutScoring.mode', ['average', 'zero', 'fixed']],
   ['classificationSchedule.mode', ['free', 'structured']],
   ['eliminatoria.formacao', ['performance', 'equilibrio', 'sorteio']],
   ['eliminatoria.semeadura', ['performance', 'equilibrio', 'sorteio']],
@@ -111,11 +112,18 @@ function validateNewFormatIntent(fmt2, HttpsError, stored, requestedTeamSize) {
   }
   // Um contêiner explicitamente enviado não pode sumir durante a validação
   // dos filhos e reaparecer como default no compilador tolerante de legado.
-  for (const path of ['rodadas', 'classificationPairing', 'eliminatoria']) {
+  for (const path of ['rodadas', 'classificationPairing', 'eliminatoria', 'rankingSitOutScoring']) {
     const field = explicitValue(fmt2, path);
     if (field.present && (!field.value || typeof field.value !== 'object' ||
         Array.isArray(field.value) || Object.getPrototypeOf(field.value) !== Object.prototype)) {
       throw new HttpsError('invalid-argument', 'Valor de formato inválido em fmt2.' + path + '.');
+    }
+  }
+  const sitOutScoring = explicitValue(fmt2, 'rankingSitOutScoring');
+  if (sitOutScoring.present && sitOutScoring.value.mode === 'fixed') {
+    const points = explicitValue(fmt2, 'rankingSitOutScoring.points');
+    if (!points.present || !Number.isSafeInteger(points.value) || points.value < 0) {
+      throw new HttpsError('invalid-argument', 'Valor de formato inválido em fmt2.rankingSitOutScoring.points.');
     }
   }
   for (const [path, allowed] of ENUMS) {

@@ -5197,7 +5197,7 @@ const _CAMPOS_CONFIG_TORNEIO = new Set([
   'drawFirstDate','drawFirstTime','drawIntervalDays','drawManual','temporada','equilibrado',
   'clusterSize','balanceBy','genderRatio','genderRatioDisabled','wlGroupBalance','ligaNewPlayerScore',
   'ligaInactivity','ligaInactivityX','allowSelfDeactivation','ligaOpenEnrollment',
-  'ligaRoundFormat','ligaDrawMode','ligaTurnos','ligaRRSchedule','rankingRemainderPolicy',
+  'ligaRoundFormat','ligaDrawMode','ligaTurnos','ligaRRSchedule','rankingRemainderPolicy','rankingSitOutScoring',
   'ligaSeasonMonths','elimRankingType','gruposCount','gruposClassified','gruposEqualOnly','turnos',
   'teamCompetition','categorySchedule','scheduleWindow',
   'gruposSeedVip','gruposSeedCategory','drawMode','reiRainhaGroupsBy','monarchAdvanceToElim',
@@ -5225,7 +5225,7 @@ const _CONFIG_ESTRUTURAL = new Set([
   'format','sport','teamSize','gameTypes','drawMode','fmt2','phases','swissRounds','registrationSettings','genderRatioDisabled',
   'gruposCount','gruposClassified','gruposEqualOnly','gruposSeedVip','gruposSeedCategory',
   'teamCompetition','categorySchedule','turnos','categoryDefinitions',
-  'ligaRoundFormat','ligaDrawMode','ligaTurnos','ligaRRSchedule','rankingRemainderPolicy','monarchAdvanceToElim',
+  'ligaRoundFormat','ligaDrawMode','ligaTurnos','ligaRRSchedule','rankingRemainderPolicy','rankingSitOutScoring','monarchAdvanceToElim',
   /* ⛔⛔⛔ COMO A CHAVE RESOLVE O RESTO É ESTRUTURAL: ela decide quem espera a estreia, quem volta
    * depois de perder e onde cai a folga. Trocá-la com a chave já sorteada redesenha confrontos que as
    * pessoas já viram e muda quem está dentro e quem está fora.
@@ -5453,6 +5453,32 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
       patch.categoryDefinitions = await _categoryDefinitionsForLabels(tx, ref, t, finalLabels || []);
     }
     const hasDraw = hasDrawnBracket(t);
+    // Pontos de folga podem mudar enquanto a classificatória de ranking ainda
+    // decide a tabela. Depois do avanço, a mudança alteraria vagas já publicadas.
+    const oldSitOutScoring = t.rankingSitOutScoring || { mode: 'average' };
+    const fmt2SitOutScoring = patch.fmt2 && patch.fmt2.rankingSitOutScoring;
+    if (fmt2SitOutScoring && patch.rankingSitOutScoring &&
+        !_configAtiva.igual(fmt2SitOutScoring, patch.rankingSitOutScoring)) {
+      throw new HttpsError('invalid-argument', 'Pontuação de folga divergente entre formato e torneio.');
+    }
+    const requestedSitOutScoring = fmt2SitOutScoring || patch.rankingSitOutScoring;
+    const sitOutScoringChanged = requestedSitOutScoring &&
+      !_configAtiva.igual(oldSitOutScoring, requestedSitOutScoring);
+    const canEditRankingScoring = _configAtiva.canEditRankingSitOutScoring(t);
+    if (sitOutScoringChanged) {
+      if (hasDraw && !canEditRankingScoring) {
+        throw new HttpsError('failed-precondition', 'A pontuação de folga não pode mudar depois do avanço da classificatória.');
+      }
+      require('./format-intent-validation-core').validateNewFormatIntent(
+        { rankingSitOutScoring: requestedSitOutScoring }, HttpsError);
+      if (hasDraw && !t.fmt2) {
+        throw new HttpsError('failed-precondition', 'Este torneio precisa de uma configuração de fases para alterar a pontuação de folga.');
+      }
+      if (t.fmt2 && !patch.fmt2) {
+        patch.fmt2 = Object.assign({}, t.fmt2, { rankingSitOutScoring: requestedSitOutScoring });
+      }
+      patch.rankingSitOutScoring = requestedSitOutScoring;
+    }
     // A ficha reenvia fmt2 mesmo quando só muda nome/prazo. Um envelope igual
     // não é intenção nova, mas a identidade de um individual histórico precisa
     // continuar protegida mesmo quando o patch não traz fmt2.
@@ -5513,6 +5539,7 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
         // save e ela volta com as chaves em outra ordem. Comparar por conteúdo evita recusar um
         // pedido em que o campo estrutural está IGUAL ao que já está gravado.
         if (_configAtiva.igualEstrutural(key, t[key], patch[key])) { delete patch[key]; return; }
+        if (key === 'rankingSitOutScoring' && canEditRankingScoring) return;
         if (key === 'fmt2') {
           const v = _configAtiva.fmt2Atualizavel(t.fmt2, patch.fmt2);
           if (v.ok) { _fmt2Mesclado = v.valor; return; }
@@ -5546,6 +5573,9 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
         t[key] = patch[key];
       }
     });
+    if (sitOutScoringChanged && Array.isArray(t.phases) && t.phases[0]) {
+      t.phases[0].rankingSitOutScoring = t.rankingSitOutScoring;
+    }
     // Preço e meios de recebimento são condições materiais. Um aceite anterior
     // não autoriza cobrar sob outra configuração, mesmo que os termos gerais
     // do catálogo financeiro ainda tenham a mesma versão.

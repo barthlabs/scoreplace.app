@@ -840,10 +840,16 @@ function drawInitial(t, opts) {
   // (bug do Confra). Espelha as linhas 1547-1548. Ver project_rei_rainha_is_drawmode_not_format.
   const _isMon0 = !!(_cfg0 && (_cfg0.reiRainha === true || _cfg0.drawMode === 'rei_rainha'))
     || !!(win._isMonarchFormat && win._isMonarchFormat(t));
+  // Pareamento rotativo (inclusive dupla sorteada por rodada) recebe PESSOAS no
+  // motor de Liga. Pré-formar duplas aqui escondia o atleta ímpar do gerador:
+  // cinco inscritos viravam duas duplas + um avulso sem folga registrada.
+  const _rotatingEntries0 = !!(_cfg0 && _cfg0.kind === 'classification' &&
+    _cfg0.classification && _cfg0.classification.pairing &&
+    _cfg0.classification.pairing.entryMode === 'rotate');
 
-  let _ts0 = _isMon0 ? 1 : (parseInt(t.teamSize, 10) || 1);
+  let _ts0 = (_isMon0 || _rotatingEntries0) ? 1 : (parseInt(t.teamSize, 10) || 1);
   const _enr0 = t.enrollmentMode || t.enrollment || 'individual';
-  if (!_isMon0 && win._isTeamEnrollMode(_enr0) && _ts0 < 2) _ts0 = 2;
+  if (!_isMon0 && !_rotatingEntries0 && win._isTeamEnrollMode(_enr0) && _ts0 < 2) _ts0 = 2;
 
   let _allMale = 0;
   if (_ts0 > 1) {

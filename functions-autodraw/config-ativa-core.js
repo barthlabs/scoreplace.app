@@ -27,7 +27,8 @@
 const CAMINHOS_ATIVOS_FMT2 = [
   'eliminatoria.roundBounds',
   'eliminatoria.endDate',
-  'eliminatoria.endTime'
+  'eliminatoria.endTime',
+  'rankingSitOutScoring'
 ];
 
 function _clone(v) { return (v === undefined) ? undefined : JSON.parse(JSON.stringify(v)); }
@@ -62,9 +63,17 @@ function _politicaCanonica(v) {
 }
 function igualEstrutural(campo, atual, enviado) {
   if (campo === 'genderRatioDisabled') return igual(atual == null ? false : atual, enviado == null ? false : enviado);
+  if (campo === 'rankingSitOutScoring') return igual(atual || { mode: 'average' }, enviado || { mode: 'average' });
   return campo === 'politicaDaChave'
     ? _politicaCanonica(atual) === _politicaCanonica(enviado)
     : igual(atual, enviado);
+}
+
+function canEditRankingSitOutScoring(t) {
+  const first = t && Array.isArray(t.phases) && t.phases[0];
+  return !!(t && t.status !== 'finished' && (t.currentPhaseIndex || 0) === 0 &&
+    first && first.kind === 'classification' && first.classification &&
+    first.classification.structure === 'round_robin');
 }
 
 /* Defaults que a tela atual materializa em documentos antigos. Eles não alteram os
@@ -94,6 +103,14 @@ function _removaDefaultsLegados(atual, comparado) {
   if (_leia(atual, 'teamCompetition') === undefined &&
       igual(_leia(comparado, 'teamCompetition'), _TIME_COMPETITION_DESLIGADA)) {
     _escreva(comparado, 'teamCompetition', undefined);
+  }
+  if (_leia(atual, 'rankingRemainderPolicy') === undefined &&
+      _leia(comparado, 'rankingRemainderPolicy') === 'waitlist_legacy') {
+    _escreva(comparado, 'rankingRemainderPolicy', undefined);
+  }
+  if (_leia(atual, 'rankingSitOutScoring') === undefined &&
+      igual(_leia(comparado, 'rankingSitOutScoring'), { mode: 'average' })) {
+    _escreva(comparado, 'rankingSitOutScoring', undefined);
   }
 }
 
@@ -135,7 +152,12 @@ function fmt2Atualizavel(atual, enviado, caminhos) {
     return { ok: false, motivo: 'o torneio ainda não tem configuração de formato gravada' };
   }
   const mescla = _clone(atual);
-  lista.forEach((c) => { _escreva(mescla, c, _clone(_leia(enviado, c))); });
+  lista.forEach((c) => {
+    const proposed = _leia(enviado, c);
+    if (c === 'rankingSitOutScoring' && _leia(atual, c) === undefined &&
+        igual(proposed, { mode: 'average' })) return;
+    _escreva(mescla, c, _clone(proposed));
+  });
   /* A mesma compatibilidade precisa existir DENTRO do fmt2 inteiro. Não inserimos a
    * política no documento legado: só retiramos do espelho de comparação o default que a
    * normalização da tela acabou de materializar. Assim nenhum campo estrutural novo entra
@@ -148,4 +170,5 @@ function fmt2Atualizavel(atual, enviado, caminhos) {
   return { ok: true, valor: mescla };
 }
 
-module.exports = { CAMINHOS_ATIVOS_FMT2, fmt2Atualizavel, igual, igualEstrutural };
+module.exports = { CAMINHOS_ATIVOS_FMT2, fmt2Atualizavel, igual, igualEstrutural,
+  canEditRankingSitOutScoring };

@@ -445,6 +445,22 @@ function _playerRoundStats(t, playerName, category) {
 }
 window._playerRoundStats = _playerRoundStats;
 
+// Crédito da folga na unidade de pontuação da tabela. A escolha pertence ao
+// torneio, não ao modo de formação da dupla. Ausência do campo preserva a média
+// dinâmica dos documentos anteriores. Inatividade e W.O. já foram excluídos
+// de satOutCompensable em _playerRoundStats.
+function _rankingSitOutCredit(t, playedPoints, stats) {
+  if (!stats || !stats.satOutCompensable) return 0;
+  var cfg = t && t.rankingSitOutScoring || {};
+  if (cfg.mode === 'zero') return 0;
+  if (cfg.mode === 'fixed') {
+    var fixed = Number(cfg.points);
+    return (Number.isSafeInteger(fixed) && fixed >= 0 ? fixed : 0) * stats.satOutCompensable;
+  }
+  return stats.played > 0 ? Math.round((playedPoints / stats.played) * stats.satOutCompensable) : 0;
+}
+window._rankingSitOutCredit = _rankingSitOutCredit;
+
 // Punição de W.O. nos Pontos Avançados — FONTE ÚNICA (motor + diálogos + render).
 // Configurável pelo organizador (linha "Punição por W.O." na Pontuação Avançada):
 //  • PA desligado → 0 (sem punição);
@@ -679,20 +695,20 @@ function _calcAdvancedPoints(t, playerName, category, matchesOverride, uidOverri
       breakdown.push(mBreakdown);
   });
 
-  // v2.3.12: compensação de FOLGA = MÉDIA dos pontos avançados das rodadas
-  // JOGADAS × nº de folgas, RECALCULADA a cada rodada (não congelada). Quem
-  // folga na rodada 1 não fica com 0: assim que joga, a média das rodadas
-  // jogadas passa a valer também pelas rodadas de folga.
+  // Crédito de folga por sorteio: zero, valor fixo ou média das rodadas
+  // jogadas recalculada após cada novo resultado, conforme escolha do torneio.
   var _rs = _playerRoundStats(t, playerName, category);
   // v2.3.81: só folgas COMPENSÁVEIS (sorteio) recebem a média. Folga por
   // inatividade (desativado) = 0 e não conta.
-  if (_rs.satOutCompensable > 0 && _rs.played > 0) {
-    var _advAvg = total / _rs.played;
-    var _comp = Math.round(_advAvg * _rs.satOutCompensable);
+  if (_rs.satOutCompensable > 0) {
+    var _comp = _rankingSitOutCredit(t, total, _rs);
     if (_comp !== 0) {
+      var _sitMode = (t.rankingSitOutScoring && t.rankingSitOutScoring.mode) || 'average';
       breakdown.push({
         round: 0, opponent: '', isSitOutComp: true, sitOutRounds: _rs.satOutCompensable, won: false, draw: false,
-        items: [{ key: 'sitout_avg', count: _rs.satOutCompensable, unit: Math.round(_advAvg), value: _comp }],
+        items: [{ key: _sitMode === 'fixed' ? 'sitout_fixed' : 'sitout_avg',
+          count: _rs.satOutCompensable,
+          unit: _sitMode === 'fixed' ? Number(t.rankingSitOutScoring.points) : Math.round(total / _rs.played), value: _comp }],
         total: _comp
       });
       total += _comp;
@@ -748,6 +764,12 @@ window._computeAvgAdvancedPerRound = _computeAvgAdvancedPerRound;
 // média dos pontos simples (3/1/0). É a regra do torneio — quem folga recebe a
 // sua média no critério que rankeia a tabela.
 function _sitOutComp(t, playerName, category) {
+  var policy = t && t.rankingSitOutScoring || {};
+  if (policy.mode === 'zero') return 0;
+  if (policy.mode === 'fixed') {
+    var points = Number(policy.points);
+    return Number.isSafeInteger(points) && points >= 0 ? points : 0;
+  }
   if (t && t.advancedScoring && t.advancedScoring.enabled) {
     return _computeAvgAdvancedPerRound(t, playerName, category);
   }
@@ -1171,18 +1193,14 @@ function _computeStandings(t, category) {
     });
   }
 
-  // v2.3.12: compensação de FOLGA nos pontos SIMPLES (3/1/0) = MÉDIA das rodadas
-  // JOGADAS × nº de folgas, recalculada a cada rodada. (Os avançados já têm a
-  // compensação embutida acima.) Sem rodada jogada → sem média → 0.
+  // O mesmo crédito de folga vale para pontos simples e avançados. Média sem
+  // rodada jogada é zero; valor fixo pode pontuar antes da primeira partida.
   standings.forEach(function(s) {
     var _rsB = _playerRoundStats(t, s.name, category);
     s.sitOutRounds = _rsB.satOut;
     // v2.3.81: compensa só folgas por sorteio (satOutCompensable). Folga por
     // inatividade (desativado) = 0 pts e não muda a média.
-    if (_rsB.satOutCompensable > 0 && _rsB.played > 0) {
-      var _basicAvg = s.points / _rsB.played;
-      s.points += Math.round(_basicAvg * _rsB.satOutCompensable);
-    }
+    s.points += _rankingSitOutCredit(t, s.points, _rsB);
   });
 
   // v0.17.40: ordem padrão recomendada (alinhada com a UI em
@@ -6371,7 +6389,7 @@ function _generateNextRoundForPlayers(t, category, _rn, det) {
     }
   }
   // Liga: filter out inactive players
-  const players = (_isLigaFmtHere && activeNamesSwiss)
+  let players = (_isLigaFmtHere && activeNamesSwiss)
     ? allPlayersSwiss.filter(function(n) { return activeNamesSwiss[n]; })
     : allPlayersSwiss;
   if (players.length < 2) {
@@ -6436,7 +6454,7 @@ function _generateNextRoundForPlayers(t, category, _rn, det) {
     }
     _recordOpponentHistory(t, _ligaGroups, category);
 
-    // Sit-out matches: remainder + inactive players receive average points
+    // Sit-out matches: a pontuação depende da escolha do organizador.
     var allSitOuts = sitOutPlayers.concat(inactiveSitOutsSwiss);
     // v2.6.70: inativos NÃO contam na fairness do sorteio (reason 'inactive').
     _recordSitOut(t, inactiveSitOutsSwiss, category, 'inactive');
@@ -6453,7 +6471,18 @@ function _generateNextRoundForPlayers(t, category, _rn, det) {
     return;
   }
 
-  // ─── Non-Liga: Swiss pairing (1v1) ──────────────────────────────────────
+  // Ranking novo de entradas fixas: a entrada sem adversário folga por sorteio,
+  // com histórico de folgas e a mesma política de pontos das demais modalidades.
+  // Torneios antigos, sem essa decisão gravada, conservam o BYE histórico.
+  var _fixedRankingSitOuts = [];
+  if (_fixedClassificationEntries && t.rankingSitOutScoring && players.length % 2) {
+    var _fixedSitOutSelection = _chooseSitOutPlayers(t, players, 1, category, det.rnd);
+    players = _fixedSitOutSelection.playing;
+    _fixedRankingSitOuts = _fixedSitOutSelection.sitOut;
+    _recordSitOut(t, _fixedRankingSitOuts, category);
+  }
+
+  // ─── Entradas fixas: pareamento por ranking ou sorteio livre ────────────
   var pairCounts = {};
   var _pairKey = function (a, b) {
     // As entradas deste fluxo são times/participantes fixos. A chave ordenada
@@ -6583,10 +6612,15 @@ function _generateNextRoundForPlayers(t, category, _rn, det) {
     }
   }
 
-  // Remainder: BYE for non-Liga
+  // Remainder: BYE legado; no ranking novo, folga creditada conforme a regra.
   players.filter(p => !matched.has(p)).forEach(p => {
     var byeObj = _buildBye({ player: p, playerUid: _uidForName(p), roundNum: roundNum, roundIndex: roundIdx, category: category, ts: timestamp, idPrefix: 'bye-r' });
     newMatches.push(byeObj);
+  });
+  _fixedRankingSitOuts.forEach(function(name, idx) {
+    newMatches.push(_buildSitOut({ player: name, playerUid: _uidForName(name), roundNum: roundNum,
+      roundIndex: roundIdx, category: category, ts: timestamp, idPrefix: 'sitout-r',
+      idIndex: idx, reason: 'remainder', points: _sitOutComp(t, name, category) }));
   });
 
   window._appendCanonicalColumn(t, {
@@ -6645,6 +6679,7 @@ function _phaseGenNextLeagueRound(t, phaseIdx, det) {
     // 'sorteio'|'ranking'); fallback pro top-level e pro default do gerador ('ranking').
     reiRainhaGroupsBy: cfg.groupsBy || t.reiRainhaGroupsBy || 'ranking',
     rankingRemainderPolicy: cfg.rankingRemainderPolicy || t.rankingRemainderPolicy || 'waitlist_legacy',
+    rankingSitOutScoring: cfg.rankingSitOutScoring || t.rankingSitOutScoring || { mode: 'average' },
     participants: st.pool.slice(),
     rounds: st.rounds, matches: [],
     combinedCategories: [], skillCategories: [],

@@ -424,7 +424,8 @@
       // Pareamento de classificatórias por rodadas. O tamanho é só a faixa de
       // ranking; seus integrantes são recalculados após cada rodada pelos pontos.
       classificationPairing: { strategy: 'ranking_clusters', clusterSize: 8, rematchPolicy: 'exhaust_cluster_before_repeat' },
-      rankingRemainderPolicy: 'lottery_average', // Rei/Rainha: ativos sem quarteto folgam por sorteio e recebem média dinâmica
+      rankingRemainderPolicy: 'lottery_average', // Rei/Rainha: ativos sem quarteto folgam por sorteio
+      rankingSitOutScoring: { mode: 'average' }, // escolha do organizador; média dinâmica sugerida
       classifAtiva: true,        // false = SEM classificatória → eliminação direta do enrollment
       classificados: 2,          // X que classificam (por grupo OU total, conforme classifScope)
       classifScope: 'per_group', // 'per_group' (melhores de cada grupo) | 'overall' (tabela geral)
@@ -619,6 +620,16 @@
     };
     out.rankingRemainderPolicy = out.rankingRemainderPolicy === 'lottery_average'
       ? 'lottery_average' : 'waitlist_legacy';
+    var sitOutScoring = out.rankingSitOutScoring;
+    if (!sitOutScoring || typeof sitOutScoring !== 'object' || Array.isArray(sitOutScoring)) sitOutScoring = {};
+    var sitOutMode = sitOutScoring.mode;
+    if (sitOutMode !== 'zero' && sitOutMode !== 'fixed') sitOutMode = 'average';
+    out.rankingSitOutScoring = { mode: sitOutMode };
+    if (sitOutMode === 'fixed') {
+      var fixedSitOutPoints = Number(sitOutScoring.points);
+      out.rankingSitOutScoring.points = Number.isSafeInteger(fixedSitOutPoints) && fixedSitOutPoints >= 0
+        ? fixedSitOutPoints : 0;
+    }
 
     if (!isDupla) {
       out.parceria = null;
@@ -991,6 +1002,7 @@
       top.teamSize = teamSize;
       top.enrollmentMode = ligaFixedPairs ? 'teams' : 'individual';
       top.ligaRoundFormat = isRR ? 'rei_rainha' : 'standard';
+      top.rankingSitOutScoring = cfg.rankingSitOutScoring;
       if (isRR) top.rankingRemainderPolicy = cfg.rankingRemainderPolicy;
       top.ligaDrawMode = 'standard';           // rodada-a-rodada (não RR pré-gerado)
       top.gruposCount = 1;
@@ -1014,6 +1026,7 @@
         formatCode: 'classification_rounds',
         drawMode: top.drawMode, reiRainha: isRR,
         rankingRemainderPolicy: isRR ? cfg.rankingRemainderPolicy : null,
+        rankingSitOutScoring: cfg.rankingSitOutScoring,
         rounds: cfg.rodadas.n, groupsBy: 'sorteio',
         source: { type: 'enrollment' },
         fixedPairs: ligaFixedPairs, gruposCount: 1, gruposClassified: cfg.classificados,

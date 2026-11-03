@@ -101,6 +101,11 @@ window._faseCorrenteUsaEntradasRotativas = function(t) {
         // Documento com phases ainda sem `kind` é legado/projetado pela ponte:
         // conservar a operação antiga até a migração materializá-lo por completo.
         if (!phase || !phase.kind) return !!window._isLigaFormat(t);
+        var pairing = phase.classification && phase.classification.pairing;
+        if (phase.kind === 'classification' && pairing &&
+            (pairing.entryMode === 'rotate' || pairing.entryMode === 'fixed')) {
+            return pairing.entryMode === 'rotate';
+        }
         return !!window._faseCorrenteEhLiga(t);
     }
     return !!window._isLigaFormat(t);
