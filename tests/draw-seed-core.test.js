@@ -1,0 +1,15 @@
+'use strict';
+const assert = require('node:assert/strict');
+const { withSeed } = require('../functions-autodraw/draw-seed-core.js');
+const original = Math.random;
+const draw = seed => withSeed(seed, () => Array.from({ length: 20 }, () => Math.random()));
+const first = draw('operation-a'), replay = draw('operation-a'), different = draw('operation-b');
+assert.deepEqual(first, replay);
+assert.notDeepEqual(first, different);
+assert.ok(first.every(value => value >= 0 && value < 1));
+assert.equal(Math.random, original);
+assert.throws(() => withSeed('operation-a', () => { throw new Error('draw rejected'); }), /draw rejected/);
+assert.equal(Math.random, original, 'falha do motor restaura a fonte global');
+assert.throws(() => withSeed('operation-a', async () => 1), /assíncrono/);
+assert.equal(Math.random, original);
+console.log('draw-seed-core: OK');

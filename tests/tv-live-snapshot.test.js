@@ -99,6 +99,14 @@ assert.equal(window._tvLiveBuildSnapshot(pendingTie).nextGame.a, 'Atleta B',
   'TV anuncia a simples de desempate mesmo sem jogo na tabela da fase');
 assert.equal(window._tvLiveBuildSnapshot(pendingTie).nextGame.number, '93A');
 assert.match(window._tvLiveBodyHtml(window._tvLiveBuildSnapshot(pendingTie)), /Desempate da classificatória/);
+const calledTie = { ...pendingTie, phaseTieDecisions: { 0: { 'group-0:1:2': {
+  status: 'pending', matches: [{ id: 'tie-93A', displayGameNumber: '93A',
+    p1: { name: 'Atleta B' }, p2: { name: 'Atleta C' }, winnerKey: null,
+    court: 'Quadra 8', courtCalledAt: '2026-10-22T21:00:00Z' }]
+} } } };
+assert.equal(window._tvLiveBuildSnapshot(calledTie, Date.parse('2026-10-22T21:02:10Z'))
+  .courts.find(card => card.name === 'Quadra 8').number, '93A',
+  'partida extra chamada aparece na quadra da TV');
 vm.runInContext(fs.readFileSync(path.join(root, 'js/domain/court-occupancy.js'), 'utf8'), context);
 const samePlayerQueue = { ...queue, matches: [
   match(19, 'Quadra 4', 'VORTEX', 'BLAST', { p1:'Atleta ativa / Parceira A', p2:'Adversaria A / Adversaria B', team1Uids:['same-uid','pair-a'], courtCalledAt:'2026-10-23T18:00:00Z' }),

@@ -92,6 +92,12 @@ flow = tie.resolvePhaseTies(fresh, 0, pools, next, () => cmp,
   { type: 'play', decisionId: flow.tie.decisionId }, 1, false, () => 93);
 assert.strictEqual(flow.status, 'pending');
 assert.deepStrictEqual(flow.decision.matches.map(m => m.displayGameNumber), ['93A', '93B', '93C']);
+flow = tie.resolvePhaseTies(fresh, 0, pools, next, () => cmp,
+  { type: 'court', decisionId: flow.tie.decisionId, matchId: flow.decision.matches[0].id, court: 'Quadra 1' }, 1, false, () => 93);
+assert.equal(flow.decision.matches[0].court, 'Quadra 1');
+flow = tie.resolvePhaseTies(fresh, 0, pools, next, () => cmp,
+  { type: 'call', decisionId: flow.tie.decisionId, matchId: flow.decision.matches[0].id, at: '2026-11-03T12:00:00Z' }, 1, false, () => 93);
+assert.equal(flow.decision.matches[0].courtCalledAt, '2026-11-03T12:00:00Z');
 const sameBase = { phaseTieDecisions: { '0': { earlier: {
   baseGameNumber: 93, matches: [{}, {}]
 } } } };
@@ -106,8 +112,17 @@ for (const [index, score] of [[6, 4], [4, 6], [6, 4]].entries()) {
     { type: 'score', decisionId: flow.tie.decisionId, matchId: flow.decision.matches[index].id,
       sets: [{ p1: score[0], p2: score[1] }] }, 1, false, () => 93);
 }
+assert.strictEqual(flow.status, 'review');
+flow = tie.resolvePhaseTies(fresh, 0, pools, next, () => cmp,
+  { type: 'score', decisionId: flow.tie.decisionId, matchId: flow.decision.matches[0].id,
+    sets: [{ p1: 4, p2: 6 }], at: '2026-11-03T12:30:00Z' }, 1, false, () => 93);
+assert.equal(flow.decision.corrections.length, 1);
+assert.strictEqual(flow.status, 'review');
+flow = tie.resolvePhaseTies(fresh, 0, pools, next, () => cmp,
+  { type: 'confirm', decisionId: flow.tie.decisionId, at: '2026-11-03T12:31:00Z' }, 1, false, () => 93);
 assert.strictEqual(flow.status, 'ready');
-assert.deepStrictEqual(flow.orderedPools[0].rows.map(p => p.name), ['A', 'B', 'C', 'D']);
+assert.deepStrictEqual(flow.orderedPools[0].rows.map(p => p.name), ['A', 'C', 'D', 'B'],
+  'placar corrigido altera a classificação confirmada');
 assert.strictEqual(fresh.phaseTieDecisions['0']['group-a:1:3'].matches.length, 3);
 
 const quick = {};

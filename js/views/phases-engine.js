@@ -3045,16 +3045,28 @@
         ((tie.players || []).length <= 3 ? '<button type="button" id="phase-tie-play" class="btn btn-primary">🎾 Jogar desempate</button>' : '') +
         '<button type="button" id="phase-tie-draw" class="btn btn-secondary">Usar ordem do sorteio original</button></div>';
     } else if (decision) {
+      var liveTournament = window._findTournamentById && window._findTournamentById(tId);
+      var courtNames = liveTournament && Array.isArray(liveTournament.courtNames) ? liveTournament.courtNames.map(String) : [];
+      if (!courtNames.length && liveTournament) for (var ci = 1; ci <= Number(liveTournament.courtCount || 0); ci++) courtNames.push('Quadra ' + ci);
       body += '<p style="font-size:.82rem;">' + ((tie.players || []).length === 3 ? 'Triangular' : 'Simples') +
-        ' · ' + decision.setsToWin + ' set(s) para vencer cada partida. Registre os placares por set, por exemplo <b>6-4, 3-6, 6-2</b>.</p>';
+        ' · ' + decision.setsToWin + ' set(s) para vencer cada partida. Registre os placares por set, por exemplo <b>6-4, 3-6, 6-2</b>. Revise todos os resultados antes de confirmar o avanço.</p>';
       (decision.matches || []).forEach(function (match, index) {
+        var courtOptions = '<option value="">Escolha a quadra</option>' + courtNames.map(function (name) {
+          return '<option value="' + safe(name) + '"' + (name === match.court ? ' selected' : '') + '>' + safe(name) + '</option>';
+        }).join('');
+        var scoreText = (match.sets || []).map(function (set) { return set.p1 + '-' + set.p2; }).join(', ');
         body += '<div style="padding:10px;margin:8px 0;border:1px solid rgba(255,255,255,.2);border-radius:9px;">' +
           '<b>Jogo ' + safe(match.displayGameNumber || 'extra') + ' · ' + safe(match.p1.name) + ' × ' + safe(match.p2.name) + '</b>' +
-          (match.winnerKey ? ' · resultado registrado' :
-           '<div style="display:flex;gap:8px;margin-top:8px;"><input class="form-control" id="phase-tie-score-' + index +
-           '" aria-label="Placar por set" placeholder="6-4' + (decision.setsToWin > 1 ? ', 6-3' : '') +
-           '" style="min-width:0;flex:1;"><button type="button" class="btn btn-primary" data-tie-match="' + index + '">Salvar placar</button></div>') + '</div>';
+          (match.winnerKey ? ' · resultado registrado' : '') +
+          (!match.winnerKey && courtNames.length ? '<div style="display:flex;gap:8px;margin-top:8px;"><select class="form-control" aria-label="Quadra do jogo extra" data-tie-court="' + index + '">' + courtOptions +
+            '</select><button type="button" class="btn btn-secondary" data-tie-call="' + index + '"' + (!match.court ? ' disabled' : '') + '>' +
+            (match.courtCalledAt ? 'Chamado' : 'Chamar') + '</button></div>' : '') +
+          '<div style="display:flex;gap:8px;margin-top:8px;"><input class="form-control" id="phase-tie-score-' + index +
+          '" aria-label="Placar por set" value="' + safe(scoreText) + '" placeholder="6-4' + (decision.setsToWin > 1 ? ', 6-3' : '') +
+          '" style="min-width:0;flex:1;"><button type="button" class="btn btn-primary" data-tie-match="' + index + '">' +
+          (match.winnerKey ? 'Corrigir placar' : 'Salvar placar') + '</button></div></div>';
       });
+      if (out.reason === 'tie-match-review') body += '<button type="button" id="phase-tie-confirm" class="btn btn-primary" style="margin-top:12px;">Confirmar resultados e avançar</button>';
     }
     overlay.innerHTML = '<div role="dialog" aria-modal="true" aria-label="Desempate antes do avanço" style="background:var(--bg-card,#1e293b);color:var(--text-main,#fff);width:min(560px,100%);max-height:90%;overflow:auto;border-radius:16px;padding:22px;border:1px solid rgba(255,255,255,.2);">' +
       '<h3 style="margin:0 0 10px;">Desempate antes da próxima fase</h3>' + body +
@@ -3065,6 +3077,18 @@
     if (play) play.onclick = function () { _phaseTieRequest(tId, context, { type: 'play', decisionId: tie.decisionId }); };
     var draw = overlay.querySelector('#phase-tie-draw');
     if (draw) draw.onclick = function () { _phaseTieRequest(tId, context, { type: 'draw', decisionId: tie.decisionId }); };
+    var confirm = overlay.querySelector('#phase-tie-confirm');
+    if (confirm) confirm.onclick = function () { _phaseTieRequest(tId, context, { type: 'confirm', decisionId: tie.decisionId }); };
+    Array.prototype.forEach.call(overlay.querySelectorAll('[data-tie-court]'), function (select) {
+      select.onchange = function () { var index = Number(select.getAttribute('data-tie-court'));
+        _phaseTieRequest(tId, context, { type: 'court', decisionId: tie.decisionId,
+          matchId: decision.matches[index].id, court: select.value }); };
+    });
+    Array.prototype.forEach.call(overlay.querySelectorAll('[data-tie-call]'), function (button) {
+      button.onclick = function () { var index = Number(button.getAttribute('data-tie-call'));
+        _phaseTieRequest(tId, context, { type: 'call', decisionId: tie.decisionId,
+          matchId: decision.matches[index].id }); };
+    });
     Array.prototype.forEach.call(overlay.querySelectorAll('[data-tie-match]'), function (button) {
       button.onclick = function () {
         var index = Number(button.getAttribute('data-tie-match'));
@@ -3088,7 +3112,7 @@
     return window._callCF('advanceTournamentPhase', data, 'Entre na sua conta para avançar a fase.').then(function (response) {
       var out = (response && response.data) || {};
       if (out.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(String(tId), out.tournament);
-      if (out.reason === 'tie-choice-required' || out.reason === 'tie-match-pending') {
+      if (out.reason === 'tie-choice-required' || out.reason === 'tie-match-pending' || out.reason === 'tie-match-review') {
         _phaseTiePanel(tId, out, context);
         return;
       }
@@ -3211,7 +3235,8 @@
     // pode ser materializada pelo servidor. Não criar chave otimista diferente
     // no navegador: apenas o recibo canônico altera a tela.
     if (_nextCfg && (((_nextCfg.politicaDaChave || t.politicaDaChave) === 'sobra_unica') ||
-        _nextCfg.bracketSeeding === 'draw' || (t.fmt2 && t.fmt2.tieResolution))) {
+        _nextCfg.bracketSeeding === 'draw' || ['draw_among', 'seed'].indexOf(_nextCfg.pairingStrategy) >= 0 ||
+        (t.fmt2 && t.fmt2.tieResolution))) {
       if (typeof window._callCF !== 'function') {
         if (window.showNotification) window.showNotification('Não foi possível avançar',
           'Conexão com o servidor indisponível. Nenhuma nova chave foi criada nesta tela.', 'error');
@@ -3222,7 +3247,7 @@
           classificationRounds: phase && phase.rounds };
       });
       var _drawOperationId = null;
-      if (_nextCfg.bracketSeeding === 'draw') {
+      if (_nextCfg.bracketSeeding === 'draw' || ['draw_among', 'seed'].indexOf(_nextCfg.pairingStrategy) >= 0) {
         var _crypto = window.crypto;
         if (_crypto && typeof _crypto.randomUUID === 'function') _drawOperationId = _crypto.randomUUID();
         else if (_crypto && typeof _crypto.getRandomValues === 'function') {

@@ -252,23 +252,55 @@ function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, actio
         phaseBook[decisionId] = decision;
         changed = true;
       }
-      if (decision.status === 'pending') {
+      if (decision.status === 'pending' || decision.status === 'review') {
+        const matchIndex = action && action.decisionId === decisionId && !usedAction
+          ? decision.matches.findIndex(m => m.id === action.matchId) : -1;
+        if (action && ['court', 'call', 'score'].includes(action.type) && action.decisionId === decisionId && !usedAction && matchIndex < 0) {
+          throw new Error('partida de desempate não encontrada');
+        }
+        if (matchIndex >= 0 && action.type === 'court') {
+          usedAction = true;
+          const court = String(action.court || '').trim();
+          if (court.length > 80) throw new Error('nome da quadra inválido');
+          if (decision.matches[matchIndex].courtCalledAt) throw new Error('chamada da quadra já confirmada');
+          decision.matches[matchIndex].court = court || null;
+          changed = true;
+        }
+        if (matchIndex >= 0 && action.type === 'call') {
+          usedAction = true;
+          if (!decision.matches[matchIndex].court || decision.matches[matchIndex].winnerKey) throw new Error('partida sem quadra ou já concluída');
+          decision.matches[matchIndex].courtCalledAt = String(action.at || '');
+          if (!decision.matches[matchIndex].courtCalledAt) throw new Error('horário da chamada ausente');
+          changed = true;
+        }
         if (action && action.type === 'score' && action.decisionId === decisionId && !usedAction) {
           usedAction = true;
-          const index = decision.matches.findIndex(m => m.id === action.matchId);
-          if (index < 0) throw new Error('partida de desempate não encontrada');
-          if (decision.matches[index].winnerKey) throw new Error('placar da partida já registrado');
-          decision.matches[index] = scoreMatch(decision.matches[index], action.sets, decision.setsToWin);
+          const previous = decision.matches[matchIndex];
+          const scored = scoreMatch(previous, action.sets, decision.setsToWin);
+          scored.resultAt = String(action.at || '');
+          if (previous.winnerKey) {
+            decision.corrections = Array.isArray(decision.corrections) ? decision.corrections : [];
+            decision.corrections.push({ matchId: previous.id, previousSets: previous.sets,
+              previousWinnerKey: previous.winnerKey, at: String(action.at || '') });
+          }
+          decision.matches[matchIndex] = scored;
           changed = true;
           if (decision.matches.every(m => m.winnerKey)) {
             decision.order = rankPlayers(tie, decision.matches);
-            decision.status = 'complete';
+            decision.status = 'review';
           }
         }
-        if (decision.status === 'pending') {
+        if (action && action.type === 'confirm' && action.decisionId === decisionId && !usedAction) {
+          if (decision.status !== 'review') throw new Error('confirmação antes de concluir todos os jogos');
+          usedAction = true;
+          decision.status = 'complete';
+          decision.confirmedAt = String(action.at || '');
+          changed = true;
+        }
+        if (decision.status === 'pending' || decision.status === 'review') {
           t.phaseTieDecisions = book;
           book[String(phaseIndex)] = phaseBook;
-          return { status: 'pending', tie: Object.assign({ decisionId, poolId: pool.id, baseGameNumber: baseNumber }, tie), decision, changed, orderedPools };
+          return { status: decision.status, tie: Object.assign({ decisionId, poolId: pool.id, baseGameNumber: baseNumber }, tie), decision, changed, orderedPools };
         }
       }
       rows = applyOrder(rows, tie, decision.order);

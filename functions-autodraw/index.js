@@ -10,6 +10,7 @@ const { randomUUID, createHash } = require('crypto');
 const _operationReceipt = require('./operation-receipt-core');
 const _operationDay = require('./operation-day');
 const _phaseTieCore = require('./phase-tie-core');
+const _drawSeed = require('./draw-seed-core');
 const _operationProbeReply = () => ({
   ok: true,
   region: String(process.env.SP_OPERATION_REGION || ''),
@@ -99,6 +100,24 @@ function _hidrataGrupos(t, onde, tId) {
     console.error('[hidratacao] FALHOU em ' + onde + ' (torneio ' + (tId || (t && t.id) || '?') + '):', (e && e.message) || e);
     return false;
   }
+}
+function _recordSeededDraw(t, details) {
+  if (!t || !(t.rulesContractVersion >= 2)) return;
+  const keys = (t.participants || []).map(p => {
+    if (!p) return '';
+    if (p.uid) return 'uid:' + p.uid;
+    if (p.manualParticipantId) return 'manual:' + p.manualParticipantId;
+    const sides = [p.p1Uid, p.p2Uid, p.p1ManualId, p.p2ManualId].filter(Boolean).map(String).sort();
+    return sides.length ? 'team:' + sides.join('|') : '';
+  }).filter(Boolean).sort();
+  const ruleHash = createHash('sha256').update(JSON.stringify({ fmt2: t.fmt2 || null,
+    tiebreakers: t.tiebreakers || null, phase: t.currentPhaseIndex || 0 })).digest('hex');
+  t.drawOperationsV2 = Array.isArray(t.drawOperationsV2) ? t.drawOperationsV2 : [];
+  t.drawOperationsV2.push({ phaseIndex: t.currentPhaseIndex || 0,
+    roundIndex: Math.max(0, (t.rounds || []).length - 1), seed: String(details.seed),
+    operationId: String(details.operationId || ''), algorithm: 'fnv1a-xorshift32-fisher-yates-v1',
+    eligibleKeys: keys, ruleHash, decisionsHash: details.decisionsHash || null,
+    at: String(details.at || '') });
 }
 // L6.R1 (2.1.80): a agenda do sorteio no FUSO DO EVENTO — janela de 1 minuto, calendário
 // em dias civis e a trava de slot. Puro e testado à parte (test-agenda-core.js).
@@ -1183,7 +1202,7 @@ const _CAMPOS_RASCUNHO_SORTEIO_INICIAL = [
   'waitlist', 'standbyParticipants', 'checkedIn', 'absent',
   'status', 'currentStage', 'currentPhaseIndex', '_phaseMaterialized',
   'phaseStartedAt', '_canonicalDraw', 'sobraUnicaDecisoesV1', 'history', 'lastAutoDrawAt',
-  'tournamentStarted', 'drawSlotAt', 'nextDrawAt'
+  'tournamentStarted', 'drawSlotAt', 'nextDrawAt', 'drawOperationsV2'
 ];
 function _rascunhoDoSorteioInicial(t) {
   const draft = {};
@@ -1654,6 +1673,9 @@ exports.drawRound = onCall(async (request) => {
      * O Firestore RE-EXECUTA o callback no retry; um `new Date()` lá dentro faria
      * cada tentativa produzir espelho e plano diferentes. */
     const _agoraIsoTx = new Date().toISOString();
+    const _manualOperationId = _operationReceipt.UUID_V4_RE.test(String(request.data && request.data.operationId || ''))
+      ? String(request.data.operationId) : randomUUID();
+    const _manualSeed = _manualOperationId + ':' + tId;
     out = await db.runTransaction(async (tx) => {
     if (sandbox) await _assertSandboxDrawOwner(tx, await tx.get(ref), uid);
     const t = await _leTorneio(tx, ref, tId);
@@ -1698,7 +1720,9 @@ exports.drawRound = onCall(async (request) => {
       _clearForRedraw(t);
     }
 
-    const res = drawInitial(t, { idStamp: Date.now(), decisions: decisions });
+    const res = _drawSeed.withSeed(_manualSeed, () => drawInitial(t, {
+      idStamp: Date.parse(_agoraIsoTx), decisions: decisions
+    }));
     if (!res || !res.ok) {
       // Um motor que não gerou chave nunca pode virar sucesso apenas porque a
       // estimativa da grade devolveu zero jogos.
@@ -1707,6 +1731,8 @@ exports.drawRound = onCall(async (request) => {
           participantes: (t.participants || []).length, p2Resolution: t.p2Resolution,
           decisoes: decisions, erro: (res && res.error) || '' });
     }
+    _recordSeededDraw(t, { seed: _manualSeed, operationId: _manualOperationId, at: _agoraIsoTx,
+      decisionsHash: createHash('sha256').update(JSON.stringify(decisions || null)).digest('hex') });
     const teamSchedule = t.teamCompetition && t.teamCompetition.schedule;
     const allDrawnMatches = drawWindow && typeof drawWindow._collectAllMatches === 'function'
       ? drawWindow._collectAllMatches(t) : (Array.isArray(t.matches) ? t.matches : []);
@@ -5880,6 +5906,32 @@ exports.advanceTournamentPhase = onCall(async (request) => {
       const pools = overall
         ? [{ id: 'overall', rows: phaseEngine.globalStandings(sourceGroups, calculateStandings) }]
         : sourceGroups.map((g, index) => ({ id: 'group-' + index, rows: calculateStandings(g), group: g }));
+      const requestedTieAction = request.data && request.data.tieAction;
+      if (requestedTieAction && ['court', 'call'].includes(requestedTieAction.type)) {
+        const declared = Array.isArray(t.courtNames) && t.courtNames.length
+          ? t.courtNames.map(String) : Array.from({ length: Math.max(0, Number(t.courtCount) || 0) }, (_, i) => 'Quadra ' + (i + 1));
+        const phaseDecisions = (t.phaseTieDecisions || {})[String(current)] || {};
+        const decision = phaseDecisions[String(requestedTieAction.decisionId || '')];
+        const target = decision && (decision.matches || []).find(m => m.id === requestedTieAction.matchId);
+        if (!target || decision.status !== 'pending') throw new HttpsError('failed-precondition', 'Jogo extra não está aguardando chamada.');
+        const court = requestedTieAction.type === 'call' ? target.court : String(requestedTieAction.court || '').trim();
+        if (court && !declared.includes(court)) throw new HttpsError('failed-precondition', 'Quadra não cadastrada no torneio.');
+        if (requestedTieAction.type === 'call' && !court) throw new HttpsError('failed-precondition', 'Escolha uma quadra antes da chamada.');
+        if (court && requestedTieAction.type === 'call') {
+          const regular = typeof drawWindow._collectAllMatches === 'function' ? drawWindow._collectAllMatches(t) : [];
+          const activeRegular = (regular || []).filter(m => m && _courtOccupancy.occupiesCourt(m));
+          const otherTieMatches = Object.values(phaseDecisions).flatMap(d => d && d.matches || [])
+            .filter(m => m && m.id !== target.id && m.courtCalledAt && !m.winnerKey);
+          if (activeRegular.some(m => String(m.court || '') === court) ||
+              otherTieMatches.some(m => String(m.court || '') === court)) {
+            throw new HttpsError('failed-precondition', 'Quadra ocupada por outro jogo.');
+          }
+          const playerKeys = [target.p1 && target.p1.key, target.p2 && target.p2.key].filter(Boolean);
+          if (otherTieMatches.some(m => playerKeys.includes(m.p1 && m.p1.key) || playerKeys.includes(m.p2 && m.p2.key))) {
+            throw new HttpsError('failed-precondition', 'Um dos atletas já está em quadra.');
+          }
+        }
+      }
       const criterionList = Array.isArray(t.tiebreakers) ? t.tiebreakers.filter(k => k !== 'sorteio') : null;
       const advanced = !!(phaseEngine.effectiveAdvancedScoring &&
         (phaseEngine.effectiveAdvancedScoring(t, current) || {}).enabled);
@@ -5959,7 +6011,9 @@ exports.advanceTournamentPhase = onCall(async (request) => {
       try {
         const scoring = (currentCfg && currentCfg.scoring) || t.scoring || {};
         const setsToWin = Number(scoring.setsToWin) || 1;
-        const requestedTieAction = request.data && request.data.tieAction;
+        if (requestedTieAction && ['call', 'score', 'confirm'].includes(requestedTieAction.type)) {
+          requestedTieAction.at = agoraIso;
+        }
         tieFlow = _phaseTieCore.resolvePhaseTies(t, current, pools, nextCfg,
           compareForPool, requestedTieAction && String(requestedTieAction.decisionId || '').startsWith('wildcards:')
             ? null : requestedTieAction, setsToWin,
@@ -5969,17 +6023,20 @@ exports.advanceTournamentPhase = onCall(async (request) => {
       }
       if (tieFlow.changed && request.data && request.data.tieAction) {
         const action = request.data.tieAction;
-        const message = action.type === 'draw'
-          ? 'Desempate residual: organização dispensou a simples/triangular e aplicou a ordem do sorteio original.'
-          : action.type === 'play'
-            ? 'Desempate residual: organização escolheu disputar a simples/triangular prevista no regulamento.'
-            : 'Desempate residual: placar de simples registrado.';
+        const tieMessages = { draw: 'Desempate residual: organização aplicou a ordem do sorteio original.',
+          play: 'Desempate residual: organização escolheu disputar a simples/triangular.',
+          court: 'Desempate residual: quadra da partida extra definida.',
+          call: 'Desempate residual: partida extra chamada para a quadra.',
+          score: 'Desempate residual: placar da partida extra registrado ou corrigido.',
+          confirm: 'Desempate residual: resultados revisados e confirmados.' };
+        const message = tieMessages[action.type] || 'Desempate residual atualizado.';
         if (!Array.isArray(t.history)) t.history = [];
         t.history.push({ date: agoraIso, message, byUid: uid });
       }
       if (tieFlow.status !== 'ready') {
         const saved = tieFlow.changed ? _gravaTorneio(tx, ref, t, antes, { agoraIso }) : null;
-        return { ok: false, reason: tieFlow.status === 'choice' ? 'tie-choice-required' : 'tie-match-pending',
+        return { ok: false, reason: tieFlow.status === 'choice' ? 'tie-choice-required' :
+          tieFlow.status === 'review' ? 'tie-match-review' : 'tie-match-pending',
           tie: tieFlow.tie, decision: tieFlow.decision || null, tournament: saved && saved.clean };
       }
       if (overall) {
@@ -6029,15 +6086,13 @@ exports.advanceTournamentPhase = onCall(async (request) => {
         }
         if (wildcardFlow.changed && requestedTieAction) {
           if (!Array.isArray(t.history)) t.history = [];
-          t.history.push({ date: agoraIso, message: requestedTieAction.type === 'draw'
-            ? 'Vagas extras: organização dispensou a simples/triangular e aplicou a ordem do sorteio original.'
-            : requestedTieAction.type === 'play'
-              ? 'Vagas extras: organização escolheu disputar a simples/triangular prevista.'
-              : 'Vagas extras: placar de simples registrado.', byUid: uid });
+          t.history.push({ date: agoraIso, message: 'Vagas extras: decisão de desempate atualizada (' +
+            String(requestedTieAction.type || '') + ').', byUid: uid });
         }
         if (wildcardFlow.status !== 'ready') {
           const saved = wildcardFlow.changed ? _gravaTorneio(tx, ref, t, antes, { agoraIso }) : null;
-          return { ok: false, reason: wildcardFlow.status === 'choice' ? 'tie-choice-required' : 'tie-match-pending',
+          return { ok: false, reason: wildcardFlow.status === 'choice' ? 'tie-choice-required' :
+            wildcardFlow.status === 'review' ? 'tie-match-review' : 'tie-match-pending',
             tie: wildcardFlow.tie, decision: wildcardFlow.decision || null, tournament: saved && saved.clean };
         }
         phaseTieOrder = {};
@@ -6076,7 +6131,9 @@ exports.advanceTournamentPhase = onCall(async (request) => {
     };
     const standings = groupCapture ? frozenEntrants : calculateStandings;
     const next = current + 1;
-    const randomSeeding = t.phases[next] && t.phases[next].bracketSeeding === 'draw';
+    const nextPhaseConfig = t.phases[next] || {};
+    const randomSeeding = nextPhaseConfig.bracketSeeding === 'draw' ||
+      ['draw_among', 'seed'].includes(nextPhaseConfig.pairingStrategy);
     let drawStamp = null, operationId = null, det = null;
     if (randomSeeding) {
       try { operationId = _advanceDet.validaOperationId(requestedOperationId); }
@@ -6087,12 +6144,15 @@ exports.advanceTournamentPhase = onCall(async (request) => {
     const materializeOpts = current > 0 && groupCapture
       ? { usarClassificacaoCongelada: true, sourceGroups, standingsForGroup: frozenEntrants } : {};
     if (phaseTieOrder) materializeOpts.tieOrder = phaseTieOrder;
-    const res = materializePhaseFn(t, standings, 'ph-' + tId + '-' + next, det, materializeOpts);
+    const materialize = () => materializePhaseFn(t, standings, 'ph-' + tId + '-' + next, det, materializeOpts);
+    const res = randomSeeding ? _drawSeed.withSeed(drawStamp, materialize) : materialize();
     if (!res || !res.ok) return { ok: false, reason: (res && res.error) || 'phase-not-materialized' };
     if (randomSeeding) {
       t.phaseDrawAudit = Object.assign({}, t.phaseDrawAudit || {});
       t.phaseDrawAudit[String(next)] = { operationId, seed: drawStamp,
-        algorithm: 'xorshift128-fisher-yates-v1', seedingMode: 'draw', createdAt: agoraIso };
+        algorithm: 'xorshift128-fisher-yates-v1',
+        seedingMode: nextPhaseConfig.pairingStrategy || nextPhaseConfig.bracketSeeding,
+        createdAt: agoraIso };
     }
     if (groupCapture) {
       t.phaseGroupStandings = Object.assign({}, t.phaseGroupStandings || {});
@@ -6225,6 +6285,7 @@ exports.resolvePendingDraw = onCall(async (request) => {
         t.pendingDraw=null; if(refPrivado) tx.delete(refPrivado);
       } else {
         t.rounds=Array.isArray(pd.rounds)?pd.rounds:[];
+        if (Array.isArray(pd.drawOperationsV2)) t.drawOperationsV2 = pd.drawOperationsV2;
         ['standings','sitOutHistory','opponentHistory','monarchWaitlist'].forEach(k=>{ if(pd[k]) t[k]=pd[k]; });
         t.status=pd.status||'active'; t.drawVisibility=publicRelease ? 'public' : 'private';
         if(t.drawManual!==true&&!t.tournamentStarted) { const ms=Date.parse(pd.generatedAt||''); t.tournamentStarted=Number.isFinite(ms)&&ms>0?ms:Date.now(); }
@@ -7367,8 +7428,10 @@ exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
           if (!_agenda.reivindicarSlot(tf, _devidoFresco)) return { pulou: 'slot-ja-sorteado' };
 
           _enrichParticipantsFromProfiles(tf); // gênero/skill/e-mail por uid
-          const _res = generateLigaRound(tf, new Date(_devidoFresco));
+          const _automaticSeed = tId + ':slot:' + _devidoFresco + ':round:' + (tf.rounds || []).length;
+          const _res = _drawSeed.withSeed(_automaticSeed, () => generateLigaRound(tf, new Date(_devidoFresco)));
           if (!_res || !_res.ok) return { pulou: (_res && _res.reason) || 'no-round-generated' };
+          _recordSeededDraw(tf, { seed: _automaticSeed, operationId: 'slot:' + _devidoFresco, at: _agoraIsoTx });
 
           // o motor também mexe em lastAutoDrawAt; a marca do slot é a nossa e fica.
           tf.drawSlotAt = _devidoFresco;
@@ -7384,7 +7447,7 @@ exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
             tEspera.pendingDraw = {
               rounds: tf.rounds || [], standings: tf.standings || null,
               sitOutHistory: tf.sitOutHistory || null, opponentHistory: tf.opponentHistory || null,
-              monarchWaitlist: tf.monarchWaitlist || null, status: 'active',
+              monarchWaitlist: tf.monarchWaitlist || null, drawOperationsV2: tf.drawOperationsV2 || null, status: 'active',
               roundIndex: _res.roundIndex, roundNumber: _res.roundNumber, firstDraw: !!_res.firstDraw,
               generatedAt: new Date().toISOString(), source: 'autoDraw'
             };

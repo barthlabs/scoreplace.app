@@ -113,12 +113,24 @@
     // O listener recebe uma cópia nova. Use a numeração canônica da chave.
     if (typeof window._assignGlobalGameNumbers === 'function') window._assignGlobalGameNumbers(t);
     var matches = typeof window._collectAllMatches === 'function' ? window._collectAllMatches(t) : (t.matches || []);
+    var tieBook = t.phaseTieDecisions && t.phaseTieDecisions[String(t.currentPhaseIndex || 0)];
+    var tieMatches = tieBook ? Object.keys(tieBook).sort().reduce(function (all, id) {
+      var decision = tieBook[id];
+      return all.concat(decision && decision.matches || []);
+    }, []).map(function (m) {
+      return { id: m.id, _gameNum: m.displayGameNumber, category: 'Desempate da classificatória',
+        p1: String(m.p1 && m.p1.name || ''), p2: String(m.p2 && m.p2.name || ''),
+        court: m.court, courtCalledAt: m.courtCalledAt, resultAt: m.resultAt,
+        winner: m.winnerKey || null, sets: (m.sets || []).map(function (set) {
+          return { gamesP1: set.p1, gamesP2: set.p2 };
+        }) };
+    }) : [];
     var teams = Array.isArray(t.competitionTeams) ? t.competitionTeams : [];
     var courtNames = courtsOf(t);
     var timing = clock.config(t);
     var now = nowMs == null ? Date.now() : nowMs;
     var occupancy = window.ScoreplaceCourtOccupancy || { isFinished: function (m) { return !!(m.resultAt || m.winner != null || m.wo === true); } };
-    var allActive = matches.filter(function (m) {
+    var allActive = matches.concat(tieMatches).filter(function (m) {
       return m && !released[String(m.id)] && !occupancy.isFinished(m) && !m.isBye && !m.isSitOut && m.court && (m.courtCalledAt || m.startedAt);
     }).sort(function (a, b) { return timestamp(b.courtCalledAt || b.startedAt) - timestamp(a.courtCalledAt || a.startedAt); });
     if (!courtNames.length) courtNames = Array.from(new Set(allActive.map(function (m) { return String(m.court); })));
@@ -164,7 +176,6 @@
     } : null;
     // Partidas extras decidem a rota, mas não pontuam na tabela da fase encerrada.
     // Elas ficam no livro de decisões; a TV anuncia a próxima mesmo sem quadra atribuída.
-    var tieBook = t.phaseTieDecisions && t.phaseTieDecisions[String(t.currentPhaseIndex || 0)];
     if (tieBook) {
       var tiePending = Object.keys(tieBook).sort().map(function (id) { return tieBook[id]; })
         .filter(function (decision) { return decision && decision.status === 'pending'; })
@@ -176,12 +187,12 @@
     }
     var zone = eventZone(t);
     var today = localDay(now, zone);
-    var resultDays = matches.filter(function (m) { return m && occupancy.isFinished(m) && !m.isBye && !m.isSitOut; })
+    var resultDays = matches.concat(tieMatches).filter(function (m) { return m && occupancy.isFinished(m) && !m.isBye && !m.isSitOut; })
       .map(function (m) { return matchDay(m, zone); })
       .filter(function (day) { return day && day <= today; })
       .sort().reverse();
     var resultDay = resultDays[0] || today;
-    var results = matches.filter(function (m) { return m && occupancy.isFinished(m) && !m.isBye && !m.isSitOut &&
+    var results = matches.concat(tieMatches).filter(function (m) { return m && occupancy.isFinished(m) && !m.isBye && !m.isSitOut &&
       matchDay(m, zone) === resultDay; })
       .sort(function (a, b) { return timestamp(b.resultAt || b.completedAt || b.scheduledAt) - timestamp(a.resultAt || a.completedAt || a.scheduledAt); })
       .map(function (m) {
