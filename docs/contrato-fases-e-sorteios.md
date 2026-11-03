@@ -3,6 +3,22 @@
 Este documento fixa o vocabulário de domínio usado pelo Scoreplace. Ele vale
 para torneios novos e para a projeção lossless dos documentos históricos.
 
+## Ordem apresentada ao organizador
+
+A criação começa pela modalidade, nome, número previsto de inscritos, local,
+datas e quadras. Em seguida o organizador define as categorias, a unidade que
+entra em quadra e, se houver duplas, como elas são formadas: escolhidas pelos
+participantes, sorteadas uma vez ou sorteadas por rodada/encontro. Categorias
+distintas nunca se enfrentam; seus resultados só se somam numa tabela de times
+quando essa agregação é escolhida explicitamente.
+
+Depois vêm a escolha de ter ou não classificatória, seu modelo e agenda, os
+efeitos dos resultados na tabela e a saída por título na tabela ou por chave.
+A eliminatória é configurada apenas quando foi escolhida ou quando não há
+classificatória. Regras de inscrição durante a fase, revisão e publicação vêm
+depois que o desenho dos jogos já é compreensível. Opções condicionais não são
+mostradas quando decisões anteriores as tornam inaplicáveis.
+
 ## Fases
 
 Um torneio contém uma ou mais fases ordenadas. Só existem dois tipos:

@@ -1308,18 +1308,18 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       priorLocked + entryControls + '</div>');
     var formationStep = _phaseBlock('3. Como se formam as duplas?', '#818cf8',
       priorLocked + (formationControls || '<p style="font-size:.85rem;color:var(--text-main);">Não há formação de duplas nesta escolha.</p>') + '</div>');
-    var scoringStep = _phaseBlock('4. Para quem valem os resultados?', '#818cf8',
+    var scoringStep = _phaseBlock('7. Para quem valem os resultados?', '#818cf8',
       (_classifLocked ? '<div style="pointer-events:none;opacity:.55;" aria-disabled="true">' : '<div>') +
       '<p style="font-size:.85rem;color:var(--text-main);">A partida é registrada uma vez. A classificação pode pontuar ' +
       (scoreInd ? 'atletas' : 'duplas') + (cfg.teamCompetition && cfg.teamCompetition.enabled ? ' e times.' : '.') + '</p>' +
       scoringControls + '</div>');
-    var classifChoice = _phaseBlock('5. Haverá classificatória?', '#818cf8',
+    var classifChoice = _phaseBlock('4. Haverá classificatória?', '#818cf8',
       (_p0Drawn ? '<div style="pointer-events:none;opacity:.55;" aria-disabled="true">' : '<div>') +
       _pill(cfg.classifAtiva, 'window._f2ClassifAtiva(true)', 'Sim') +
       _pill(!cfg.classifAtiva, 'window._f2ClassifAtiva(false)', 'Não · entrada direta na eliminatória') + '</div>');
-    var h = entryStep + formationStep + scoringStep + classifChoice +
-      (cfg.classifAtiva ? _phaseBlock('6–7. 🎯 Fase Classificatória', '#818cf8', classifInner,
-        _hdrRight(_classifLocked, '')) : '');
+    var h = entryStep + formationStep + classifChoice +
+      (cfg.classifAtiva ? _phaseBlock('5–6. 🎯 Fase Classificatória', '#818cf8', classifInner,
+        _hdrRight(_classifLocked, '')) + scoringStep : '');
     var _titleUnit = cfg.teamCompetition && cfg.teamCompetition.enabled
       ? (cfg.teamCompetition.classificationUnit === 'pair' ? 'dupla' : 'time')
       : (cfg._scoreBy === 'individual' ? 'atleta' : 'dupla');

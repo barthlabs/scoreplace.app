@@ -163,8 +163,8 @@ uiHarness.window._f2MountInForm(uiBox, 'Beach Tennis', uiCfg, { id: 'future-test
 assert.match(uiBox.innerHTML, /Confrontos na chave/, 'organizador vê a decisão de semeadura');
 assert.match(uiBox.innerHTML, /Saída escolhida: a classificatória seleciona participantes para a eliminatória/);
 const decisionTitles = ['2. Quem disputa os jogos?', '3. Como se formam as duplas?',
-  '4. Para quem valem os resultados?', '5. Haverá classificatória?',
-  '6–7. 🎯 Fase Classificatória', '8. Como o torneio define o campeão?',
+  '4. Haverá classificatória?', '5–6. 🎯 Fase Classificatória',
+  '7. Para quem valem os resultados?', '8. Como o torneio define o campeão?',
   '9–10. 🏆 Fase Eliminatória', '11. Revisão das decisões'];
 assert.deepStrictEqual(decisionTitles.map(title => uiBox.innerHTML.indexOf(title)).filter(index => index >= 0).length,
   decisionTitles.length, 'o fluxo exibe todas as perguntas aplicáveis');
@@ -181,7 +181,8 @@ assert.match(uiBox.innerHTML, /Saída escolhida: classificação final de dupla,
 assert.match(uiBox.innerHTML, /Não há partida de disputa de 3º e 4º lugar/);
 assert.doesNotMatch(uiBox.innerHTML, /9–10\. 🏆 Fase Eliminatória/, 'título pela tabela não exibe chave');
 uiHarness.window._f2ClassifAtiva(false);
-assert.doesNotMatch(uiBox.innerHTML, /6–7\. 🎯 Fase Classificatória/, 'entrada direta não exibe perguntas classificatórias');
+assert.doesNotMatch(uiBox.innerHTML, /5–6\. 🎯 Fase Classificatória/, 'entrada direta não exibe perguntas classificatórias');
+assert.doesNotMatch(uiBox.innerHTML, /7\. Para quem valem os resultados\?/, 'entrada direta não pede pontuação de tabela inexistente');
 assert.match(uiBox.innerHTML, /9–10\. 🏆 Fase Eliminatória/, 'entrada direta exige a decisão eliminatória');
 const mixedCfg = FORMAT2.defaultConfig('Futevôlei');
 mixedCfg.disputa = 'dupla';
