@@ -52,6 +52,23 @@ var r = W._chooseSitOutPlayers(t, players, 1, null);
 ok(r.sitOut.indexOf('Ana Silva') === -1, 'NOVO (por uid) Ana JOGA — contador seguiu o uid');
 eq(r.sitOut[0], 'Bob', 'NOVO faz Bob (0 folgas) folgar');
 
+console.log('──── empate na menor quantidade de folgas é sorteado ────');
+var tied = mkT();
+var draws = [0.9, 0.1, 0.8, 0.7];
+var chosen = W._chooseSitOutPlayers(tied, ['Ana', 'Bob', 'Cadu', 'Dan'], 1, null,
+  function () { return draws.shift(); });
+eq(chosen.sitOut[0], 'Bob', 'o sorteio escolhe entre contagens iguais, sem usar a posição do ranking');
+var cycle = mkT(), remaining = ['Ana', 'Bob', 'Cadu', 'Dan'];
+for (var turn = 0; turn < 4; turn++) {
+  var one = W._chooseSitOutPlayers(cycle, remaining, 1, null, function () { return 0.5; });
+  ok(one.sitOut.length === 1 && remaining.indexOf(one.sitOut[0]) >= 0,
+    'folga da rodada ' + (turn + 1) + ' sai de quem ainda não folgou');
+  W._recordSitOut(cycle, one.sitOut, null);
+  remaining = remaining.filter(function (name) { return name !== one.sitOut[0]; });
+}
+ok(Object.values(cycle.sitOutHistory._default_).every(function (count) { return count === 1; }),
+  'ninguém recebe segunda folga antes de todos receberem a primeira');
+
 // migração lossless: contador legado por NOME é herdado pela chave de uid ao gravar.
 console.log('──── migração lossless do contador legado (nome→uid) ────');
 var t2 = mkT();

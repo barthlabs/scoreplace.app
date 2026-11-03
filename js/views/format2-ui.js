@@ -1236,6 +1236,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       _hdrRight(_elimLocked, '')) : '';
     var review = _phaseBlock('11. Revisão das decisões', '#818cf8',
       '<p style="font-size:.85rem;color:var(--text-main);">' + _safe(_outcome) + '</p>' +
+      (cfg.classifAtiva && !e.ativa
+        ? '<p style="font-size:.78rem;color:var(--text-muted);">As colocações saem da tabela. Não há partida de disputa de 3º e 4º lugar.</p>'
+        : '') +
       '<p style="font-size:.78rem;color:var(--text-muted);">' + _safe(window.FORMAT2.summary(cfg)) + '</p>');
     return h + exitChoice + eliminationStep + review;
   }

@@ -155,6 +155,7 @@ assert.equal(uiHarness.window._f2GetConfig().eliminatoria.semeadura, 'sorteio',
   'o organizador também pode escolher sorteio da posição na chave');
 uiHarness.window._f2Elim(false);
 assert.match(uiBox.innerHTML, /Saída escolhida: classificação final de dupla, sem eliminatória/);
+assert.match(uiBox.innerHTML, /Não há partida de disputa de 3º e 4º lugar/);
 assert.doesNotMatch(uiBox.innerHTML, /9–10\. 🏆 Fase Eliminatória/, 'título pela tabela não exibe chave');
 uiHarness.window._f2ClassifAtiva(false);
 assert.doesNotMatch(uiBox.innerHTML, /6–7\. 🎯 Fase Classificatória/, 'entrada direta não exibe perguntas classificatórias');

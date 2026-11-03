@@ -4850,8 +4850,8 @@ function _fairnessKey(n2u, name) {
   return u ? ('uid:' + u) : String(name);
 }
 
-// Helper: choose which players sit out this round based on fairness (least sit-outs first)
-function _chooseSitOutPlayers(t, players, numToSitOut, category) {
+// Helper: sorteia a folga entre os ativos com menos folgas anteriores.
+function _chooseSitOutPlayers(t, players, numToSitOut, category, rnd) {
   if (numToSitOut <= 0) return { playing: players, sitOut: [] };
   // Build sit-out count per player from history
   var history = t.sitOutHistory || {};
@@ -4867,19 +4867,22 @@ function _chooseSitOutPlayers(t, players, numToSitOut, category) {
   // afeta resultado de partida).
   var catKey = category || '_default_';
   var catHistory = history[catKey] || {};
-  // Sort players by sit-out count ascending, then by standing position (worse players sit out first)
+  var random = typeof rnd === 'function' ? rnd : Math.random;
+  // A posição na classificação não decide a folga. O sorteio só desempata
+  // atletas com o mesmo número de folgas anteriores.
   var indexed = players.map(function(name, idx) {
     var k = _fairnessKey(_n2u, name);
     // uid-first; cai no contador legado chaveado por nome (docs antigos) quando a
     // chave de uid ainda não existe — sem perder o histórico já acumulado.
     var so = catHistory[k];
     if (so === undefined && k !== name) so = catHistory[name];
-    return { name: name, sitOuts: so || 0, rank: idx };
+    return { name: name, sitOuts: so || 0, lot: random(), index: idx };
   });
-  // Players with fewest sit-outs go first (play); ties broken by rank (worse rank sits out)
+  // Quem menos folgou entra primeiro no sorteio da folga. O último critério
+  // estável só resolve uma colisão exata do gerador aleatório.
   indexed.sort(function(a, b) {
-    if (a.sitOuts !== b.sitOuts) return a.sitOuts - b.sitOuts; // fewest sit-outs = should play now
-    return b.rank - a.rank; // worse rank = more likely to sit out
+    if (a.sitOuts !== b.sitOuts) return a.sitOuts - b.sitOuts;
+    return a.lot - b.lot || a.index - b.index;
   });
   var sitOut = indexed.slice(0, numToSitOut).map(function(x) { return x.name; });
   var playing = players.filter(function(p) { return sitOut.indexOf(p) === -1; });
@@ -6374,7 +6377,7 @@ function _generateNextRoundForPlayers(t, category, _rn, det) {
     var playingPlayers = shuffled;
     var sitOutPlayers = [];
     if (remainder > 0) {
-      var result = _chooseSitOutPlayers(t, shuffled, remainder, category);
+      var result = _chooseSitOutPlayers(t, shuffled, remainder, category, det.rnd);
       playingPlayers = result.playing;
       sitOutPlayers = result.sitOut;
       _recordSitOut(t, sitOutPlayers, category);
