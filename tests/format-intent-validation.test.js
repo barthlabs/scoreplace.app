@@ -277,6 +277,12 @@ const categoryGuard = new Function('hasDrawnBracket', 'HttpsError', '_tSplit',
 let configWrites = 0;
 let categoryProjections = 0;
 let configSplitPart = '';
+const configDrawWindow = {};
+const activePhases = new Function('HttpsError', '_CONFIG_FASE_ATIVA', '_clonaConfigDeclarativa',
+  server.slice(server.indexOf('function _fasesDeConfiguracaoAtualizaveis('),
+    server.indexOf('// Pedidos de criação duram 24 horas.', server.indexOf('function _fasesDeConfiguracaoAtualizaveis('))) +
+  '\nreturn _fasesDeConfiguracaoAtualizaveis;')(HttpsError,
+  new Set(['name', 'startDate', 'endDate', 'roundBounds']), cloneConfig);
 let configTournament = { id: 'tour_test', creatorUid: 'owner', sport: 'Beach Tennis', fmt2: {} };
 const configDb = {
   collection: () => ({ doc: id => ({ id, collection: part => ({ part, limit() { return this; } }) }) }),
@@ -291,18 +297,18 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
   '_CONFIG_ESTRUTURAL', '_clonaConfigDeclarativa', '_assertSandboxDrawOwner', '_leTorneio',
   '_isTournamentAdmin', '_drawFail', 'hasDrawnBracket', '_configAtiva', '_antesDoMotor',
   '_gravaTorneio', '_fasesDeConfiguracaoAtualizaveis', 'drawWindow', 'require',
-  '_assertCategoryConfigBeforeDraw', '_categoryDefinitionsForLabels', '_phaseTieCore',
+  '_assertCategoryConfigBeforeDraw', '_categoryDefinitionsForLabels', '_phaseTieCore', 'createHash',
   'const exports = {};\n' + configSource + '\nreturn exports.updateTournamentConfiguration;')(
-  fn => fn, HttpsError, configDb, new Set(['fmt2', 'name', 'teamSize', 'genderCategories', 'combinedCategories', 'gameTypes']), new Set(['fmt2', 'teamSize', 'gameTypes']), cloneConfig,
+  fn => fn, HttpsError, configDb, new Set(['fmt2', 'phases', 'name', 'teamSize', 'gruposClassified', 'politicaDaChave', 'genderCategories', 'combinedCategories', 'gameTypes']), new Set(['fmt2', 'phases', 'teamSize', 'gruposClassified', 'politicaDaChave', 'gameTypes']), cloneConfig,
   async () => {}, async () => configTournament, () => true,
   (code, message) => new HttpsError(code, message), t => Array.isArray(t.matches) && t.matches.length > 0,
   require('../functions-autodraw/config-ativa-core'), () => ({}),
-  (_tx, _ref, t) => { configWrites++; return { clean: t }; }, () => [], {},
+  (_tx, _ref, t) => { configWrites++; return { clean: t }; }, activePhases, configDrawWindow,
   require('node:module').createRequire(path.join(__dirname, '..', 'functions-autodraw', 'index.js')),
   categoryGuard, async (_tx, _ref, _t, labels) => {
     categoryProjections++;
     return labels.map((label) => ({ id: 'cat-' + label, label }));
-  }, require('../functions-autodraw/phase-tie-core')
+  }, require('../functions-autodraw/phase-tie-core'), require('node:crypto').createHash
 );
 
 (async () => {
@@ -556,5 +562,32 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
   } });
   assert.equal(changedGameType.ok, true, 'mudança de tipo pré-sorteio pode recompor categorias');
   assert.equal(categoryProjections, 1, 'mudança de tipo projetou a nova categoria tipada');
+  const currentFormat = FORMAT2.compileToPhases(FORMAT2.defaultConfig('Beach Tennis'), { sport: 'Beach Tennis' });
+  configTournament = { id: 'tour_test', creatorUid: 'owner', sport: 'Beach Tennis', teamSize: 2,
+    rulesContractVersion: 2, status: 'active', fmt2: currentFormat.cfg, phases: currentFormat.phases,
+    currentPhaseIndex: 0, _phaseMaterialized: 0,
+    matches: [{ id: 'resultado-publicado', phaseIndex: 0, winner: 'A' }] };
+  configDrawWindow.FORMAT2 = FORMAT2;
+  const futureChoice = structuredClone(configTournament.fmt2);
+  futureChoice.classificados = 4;
+  futureChoice.eliminatoria.linhas = 3;
+  futureChoice.eliminatoria.nomes = ['Céu', 'Mar', 'Terra'];
+  futureChoice.eliminatoria.politicaDaChave = 'bye';
+  const futureCompiled = FORMAT2.compileToPhases(futureChoice, { sport: 'Beach Tennis' });
+  const resultFuture = await configHandler({ auth: { uid: 'owner' }, data: { tournamentId: 'tour_test',
+    patch: { fmt2: futureChoice, phases: futureCompiled.phases,
+      gruposClassified: futureCompiled.topLevel.gruposClassified,
+      politicaDaChave: futureCompiled.topLevel.politicaDaChave } } });
+  assert.equal(resultFuture.ok, true, 'ficha aceita reconfigurar fase futura ainda sem jogos');
+  assert.equal(configTournament.phases[1].mapping.length, 3);
+  assert.equal(configTournament.gruposClassified, 4);
+  assert.equal(configTournament.politicaDaChave, 'bye');
+  assert.equal(configTournament.matches[0].winner, 'A', 'jogo da fase corrente permanece intacto');
+  assert.equal(configTournament.futureConfigRevisionsV2.length, 1, 'revisão futura guarda identidade e hashes');
+  configTournament.currentPhaseIndex = 1;
+  const laterChoice = structuredClone(configTournament.fmt2);
+  laterChoice.eliminatoria.linhas = 4;
+  await assert.rejects(configHandler({ auth: { uid: 'owner' }, data: { tournamentId: 'tour_test',
+    patch: { fmt2: laterChoice } } }), { code: 'failed-precondition' });
   console.log('✓ intenção nova rejeita valor e contêiner inválidos nas duas portas de escrita');
 })().catch(error => { console.error(error); process.exitCode = 1; });

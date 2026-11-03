@@ -84,6 +84,28 @@ console.log('\n== Dupla Eliminatória — saída observável ==');
 
 // ---------- 4. VARREDURA: qualquer n não-pow2 → estrutura + render coerentes ----------
 (function () {
+  const matches = [
+    { bracket: 'lower', round: 1, gameNumber: 1, p1: 'W1', p1Uid: 'w1', p2: 'A', p2Uid: 'a',
+      winner: 'W1', scoreP1: 6, scoreP2: 1, sets: [{ gamesP1: 6, gamesP2: 1 }] },
+    { bracket: 'lower', round: 1, gameNumber: 2, p1: 'W2', p1Uid: 'w2', p2: 'B', p2Uid: 'b',
+      winner: 'W2', scoreP1: 6, scoreP2: 5, sets: [{ gamesP1: 6, gamesP2: 5 }] }
+  ];
+  const byDraw = { rulesContractVersion: 2, matches, tiebreakers: ['sorteio'] };
+  W._updateDuplaElimClassification(byDraw);
+  eq([byDraw.classification.A, byDraw.classification.B], [3, 4],
+    'v2: sorteio original ordena eliminados da mesma rodada');
+  const byGames = { rulesContractVersion: 2, matches, tiebreakers: ['saldo_games', 'sorteio'] };
+  W._updateDuplaElimClassification(byGames);
+  eq([byGames.classification.A, byGames.classification.B], [4, 3],
+    'v2: critério escolhido antecede o sorteio');
+  const historical = { matches, tiebreakers: ['sorteio'] };
+  W._updateDuplaElimClassification(historical);
+  eq([historical.classification.A, historical.classification.B], [4, 3],
+    'legado conserva a ordenação por margem do jogo');
+})();
+
+// ---------- 5. VARREDURA: qualquer n não-pow2 → estrutura + render coerentes ----------
+(function () {
   let sweepFail = 0, checked = 0;
   for (let n = 5; n <= 24; n++) {
     if ((n & (n - 1)) === 0) continue; // pow2 = dupla elim padrão (outro caminho)

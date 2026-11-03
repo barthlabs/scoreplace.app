@@ -130,6 +130,7 @@ const SUITES = [
   'tests/best-next-by-group.test.js',
   'tests/draw-seed-core.test.js',
   'tests/draw-replay-name-independent.test.js',
+  'tests/future-phase-config.test.js',
   'functions-autodraw/test-super-eight.js',
   'tests/format2-legacy-translation.test.js',
   'tests/migrar-fmt2-core.test.js',

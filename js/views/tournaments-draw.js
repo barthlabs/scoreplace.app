@@ -3611,8 +3611,24 @@ window.generateDrawFunction = function (tId) {
         // último passo (a chamada da CF que pode DEMORAR), re-mostra a tela pra NÃO parecer travado.
         // Some sozinho no hashchange do #bracket (sucesso) ou no _hideLoading do catch (erro).
         if (typeof window._showLoading === 'function') window._showLoading('🎾 Sorteando…');
+        var _drawCrypto = window.crypto;
+        var _drawOperationId = _drawCrypto && typeof _drawCrypto.randomUUID === 'function'
+          ? _drawCrypto.randomUUID() : null;
+        if (!_drawOperationId && _drawCrypto && typeof _drawCrypto.getRandomValues === 'function') {
+          var _drawBytes = new Uint8Array(16);
+          _drawCrypto.getRandomValues(_drawBytes);
+          _drawBytes[6] = (_drawBytes[6] & 15) | 64; _drawBytes[8] = (_drawBytes[8] & 63) | 128;
+          var _drawHex = Array.prototype.map.call(_drawBytes, function (byte) { return byte.toString(16).padStart(2, '0'); }).join('');
+          _drawOperationId = _drawHex.slice(0, 8) + '-' + _drawHex.slice(8, 12) + '-' + _drawHex.slice(12, 16) + '-' +
+            _drawHex.slice(16, 20) + '-' + _drawHex.slice(20);
+        }
+        if (t.rulesContractVersion >= 2 && !_drawOperationId) {
+          if (typeof window._hideLoading === 'function') window._hideLoading();
+          if (window.showNotification) window.showNotification('Sorteio não iniciado', 'Este dispositivo não conseguiu criar a semente do sorteio.', 'error');
+          return;
+        }
         var _doDrawDispatch = function () {
-        window._callDrawRound({ tournamentId: String(tId), sandbox:!!(window.FirestoreDB && typeof window.FirestoreDB._ehSandbox === 'function' && window.FirestoreDB._ehSandbox(tId)), allowRedraw: _redraw, decisions: _decisions }).then(function (_res) {
+        window._callDrawRound({ tournamentId: String(tId), sandbox:!!(window.FirestoreDB && typeof window.FirestoreDB._ehSandbox === 'function' && window.FirestoreDB._ehSandbox(tId)), allowRedraw: _redraw, decisions: _decisions, operationId: _drawOperationId }).then(function (_res) {
             if (window._dtrace) window._dtrace('cf:ok', { matchCount: (_res && _res.data && _res.data.matchCount) });
             var d = (_res && _res.data) || {};
             if (!d.ok || !d.tournament) throw new Error('resposta inválida do servidor');

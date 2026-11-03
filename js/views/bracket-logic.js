@@ -3072,6 +3072,65 @@ function _updateDuplaElimClassification(t) {
   });
   var roundNums = Object.keys(lowerByRound).map(Number).sort(function(a, b) { return b - a; });
 
+  // Na v2, a mesma lista de desempates do organizador ordena quem caiu na
+  // mesma rodada da inferior. Os torneios antigos conservam a margem histórica.
+  var configured = t.rulesContractVersion >= 2 && Array.isArray(t.tiebreakers) &&
+    typeof window._standingsCompareConfig === 'function';
+  var birth = configured && typeof window._tbBirthByName === 'function' ? window._tbBirthByName(t) : {};
+  function identity(m, side) { return _classifEntryKey(m[side], _slotUids(m, side)); }
+  var order = {}, h2h = {}, nextOrder = 0;
+  if (configured) {
+    t.matches.slice().filter(Boolean).sort(function(a, b) {
+      return (Number(a.round) || 0) - (Number(b.round) || 0) ||
+        (Number(a.gameNumber || a.number) || 0) - (Number(b.gameNumber || b.number) || 0);
+    }).forEach(function(m) {
+      ['p1', 'p2'].forEach(function(side) {
+        var key = identity(m, side);
+        if (key && order[key] == null) order[key] = nextOrder++;
+      });
+      if (!m.winner || m.isBye || m.isSitOut) return;
+      var winnerSide = window._matchWinnerSide(m);
+      if (winnerSide !== 1 && winnerSide !== 2) return;
+      var win = identity(m, winnerSide === 1 ? 'p1' : 'p2');
+      var lose = identity(m, winnerSide === 1 ? 'p2' : 'p1');
+      if (win && lose) h2h[win + '|||' + lose] = (h2h[win + '|||' + lose] || 0) + 1;
+    });
+  }
+  function line(entry) {
+    var key = identity(entry.match, entry.loserSide);
+    var result = { name: entry.loser, uid: key, wins: 0, played: 0,
+      pointsFor: 0, pointsAgainst: 0, setsWon: 0, setsLost: 0,
+      gamesWon: 0, gamesLost: 0, tbPointsWon: 0, tbPointsLost: 0 };
+    t.matches.forEach(function(m) {
+      if (!m || !m.winner || m.isBye || m.isSitOut) return;
+      var first = identity(m, 'p1') === key, second = identity(m, 'p2') === key;
+      if (!first && !second) return;
+      var own = first ? 1 : 2, other = own === 1 ? 2 : 1;
+      result.played++;
+      if (window._matchWinnerSide(m) === own) result.wins++;
+      result.pointsFor += Number(m['scoreP' + own]) || 0;
+      result.pointsAgainst += Number(m['scoreP' + other]) || 0;
+      (Array.isArray(m.sets) ? m.sets : []).forEach(function(s) {
+        var a = Number(s['gamesP' + own]) || 0, b = Number(s['gamesP' + other]) || 0;
+        if (s.superTiebreak) {
+          result.tbPointsWon += a; result.tbPointsLost += b;
+        } else {
+          result.gamesWon += a; result.gamesLost += b;
+          if (a > b) result.setsWon++;
+          else if (b > a) result.setsLost++;
+          var tb = s.tiebreak;
+          if (tb) {
+            result.tbPointsWon += Number(own === 1 ? (tb.pointsP1 ?? tb.p1) : (tb.pointsP2 ?? tb.p2)) || 0;
+            result.tbPointsLost += Number(other === 1 ? (tb.pointsP1 ?? tb.p1) : (tb.pointsP2 ?? tb.p2)) || 0;
+          }
+        }
+      });
+    });
+    result.winRate = result.played ? result.wins / result.played : 0;
+    if (birth && birth[entry.loser] != null && birth[key] == null) birth[key] = birth[entry.loser];
+    return result;
+  }
+
   var nextPos = 3;
   roundNums.forEach(function(rn) {
     var matchesInRound = lowerByRound[rn];
@@ -3088,8 +3147,15 @@ function _updateDuplaElimClassification(t) {
       if (_classifHas(t, loser, _slotUids(m, loserSide))) return; // já placed
       losersWithMatch.push({ match: m, loser: loser, loserSide: loserSide });
     });
-    // Sort by score margin (close = melhor posição dentro do bloco)
+    if (configured) losersWithMatch.forEach(function(entry) { entry.line = line(entry); });
+    // Torneios novos seguem os critérios declarados; o legado conserva a margem.
     losersWithMatch.sort(function(a, b) {
+      if (configured) {
+        var compared = window._standingsCompareConfig(a.line, b.line,
+          { tiebreakers: t.tiebreakers, ordem: order, h2h: h2h, birth: birth });
+        if (compared) return compared;
+        return (order[a.line.uid] ?? Infinity) - (order[b.line.uid] ?? Infinity);
+      }
       var aLS = window._matchWinnerSide(a.match) === 1 ? (parseInt(a.match.scoreP2) || 0) : (parseInt(a.match.scoreP1) || 0);
       var aWS = window._matchWinnerSide(a.match) === 1 ? (parseInt(a.match.scoreP1) || 0) : (parseInt(a.match.scoreP2) || 0);
       var bLS = window._matchWinnerSide(b.match) === 1 ? (parseInt(b.match.scoreP2) || 0) : (parseInt(b.match.scoreP1) || 0);

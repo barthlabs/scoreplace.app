@@ -1673,7 +1673,11 @@ exports.drawRound = onCall(async (request) => {
      * O Firestore RE-EXECUTA o callback no retry; um `new Date()` lá dentro faria
      * cada tentativa produzir espelho e plano diferentes. */
     const _agoraIsoTx = new Date().toISOString();
-    const _manualOperationId = _operationReceipt.UUID_V4_RE.test(String(request.data && request.data.operationId || ''))
+    if (request.data && request.data.operationId != null &&
+        !_operationReceipt.UUID_V4_RE.test(String(request.data.operationId))) {
+      throw new HttpsError('invalid-argument', 'Identificador do sorteio inválido.');
+    }
+    const _manualOperationId = request.data && request.data.operationId
       ? String(request.data.operationId) : randomUUID();
     const _manualSeed = _manualOperationId + ':' + tId;
     out = await db.runTransaction(async (tx) => {
@@ -5580,6 +5584,16 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
      * objeto que veio da tela. Qualquer diferença fora dos prazos continua recusada, com a
      * mesma mensagem. */
     let _fmt2Mesclado = null;
+    let _futurePlan = null;
+    if (hasDraw && patch.fmt2 && t.fmt2 &&
+        !_configAtiva.fmt2Atualizavel(t.fmt2, patch.fmt2).ok &&
+        drawWindow && drawWindow.FORMAT2 && typeof drawWindow.FORMAT2.compileToPhases === 'function') {
+      _futurePlan = require('./future-phase-config-core').plan(t, patch.fmt2,
+        drawWindow.FORMAT2.compileToPhases,
+        require('./format-intent-validation-core').validateNewFormatIntent, HttpsError);
+    }
+    const _futurePreviousHash = _futurePlan
+      ? createHash('sha256').update(JSON.stringify(t.fmt2)).digest('hex') : null;
     const _recusados = [];
     if (hasDraw) {
       Object.keys(patch).forEach(key => {
@@ -5589,7 +5603,12 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
         // pedido em que o campo estrutural está IGUAL ao que já está gravado.
         if (_configAtiva.igualEstrutural(key, t[key], patch[key])) { delete patch[key]; return; }
         if (key === 'rankingSitOutScoring' && canEditRankingScoring) return;
+        if (_futurePlan && key === 'gruposClassified' &&
+            _configAtiva.igual(patch[key], _futurePlan.gruposClassified)) return;
+        if (_futurePlan && key === 'politicaDaChave' &&
+            _configAtiva.igual(patch[key], _futurePlan.politicaDaChave)) return;
         if (key === 'fmt2') {
+          if (_futurePlan) { _fmt2Mesclado = _futurePlan.fmt2; return; }
           const v = _configAtiva.fmt2Atualizavel(t.fmt2, patch.fmt2);
           if (v.ok) { _fmt2Mesclado = v.valor; return; }
         }
@@ -5607,7 +5626,10 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     const antes = _antesDoMotor(t);
     Object.keys(patch).forEach(key => {
       if (key === 'phases' && hasDraw) {
-        t.phases = _fasesDeConfiguracaoAtualizaveis(Array.isArray(t.phases) ? t.phases : [], patch.phases);
+        if (_futurePlan) {
+          if (!Array.isArray(patch.phases) || !patch.phases[0]) throw new HttpsError('invalid-argument', 'Fase atual ausente.');
+          t.phases[0] = _fasesDeConfiguracaoAtualizaveis([t.phases[0]], [patch.phases[0]])[0];
+        } else t.phases = _fasesDeConfiguracaoAtualizaveis(Array.isArray(t.phases) ? t.phases : [], patch.phases);
       } else if (key === 'fmt2' && _fmt2Mesclado) {
         t.fmt2 = _fmt2Mesclado;   // a mescla conferida, nunca o objeto cru da tela
       } else if (key === 'coverUrl' && patch[key] === '') {
@@ -5622,6 +5644,15 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
         t[key] = patch[key];
       }
     });
+    if (_futurePlan) {
+      t.phases = [t.phases[0]].concat(_futurePlan.phases);
+      t.gruposClassified = _futurePlan.gruposClassified;
+      t.politicaDaChave = _futurePlan.politicaDaChave;
+      t.futureConfigRevisionsV2 = Array.isArray(t.futureConfigRevisionsV2) ? t.futureConfigRevisionsV2 : [];
+      t.futureConfigRevisionsV2.push({ phaseIndex: 0, at: agoraIso, byUid: uid,
+        previousHash: _futurePreviousHash,
+        nextHash: createHash('sha256').update(JSON.stringify(t.fmt2)).digest('hex') });
+    }
     if (sitOutScoringChanged && Array.isArray(t.phases) && t.phases[0]) {
       t.phases[0].rankingSitOutScoring = t.rankingSitOutScoring;
     }
@@ -5652,7 +5683,8 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     if (!hasDraw && t.status === 'closed' && !require('./registration-settings-core').requiresClosedEnrollment(t.registrationSettings) && Number.isFinite(openingAt) && openingAt > Date.now()) t.status = 'open';
     t.updatedAt = agoraIso;
     if (!Array.isArray(t.history)) t.history = [];
-    t.history.push({ date: agoraIso, message: 'Regras atualizadas pela organização.' });
+    t.history.push({ date: agoraIso, message: _futurePlan
+      ? 'Configuração da fase futura revisada antes de gerar seus jogos.' : 'Regras atualizadas pela organização.', byUid: uid });
     const extras = [];
     if (wasOrganizerOnly && t.organizerOnly !== true && !t.isSandbox) {
       const admins = new Set([t.creatorUid].concat(Array.isArray(t.adminUids) ? t.adminUids : []).map(String));
