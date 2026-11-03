@@ -13,6 +13,7 @@ const ENUMS = [
   ['rodadas.turnos', ['ida', 'ida_volta']],
   ['classificationPairing.strategy', ['ranking_clusters', 'free_draw']],
   ['classificationPairing.rematchPolicy', ['exhaust_cluster_before_repeat']],
+  ['rankingRemainderPolicy', ['lottery_average', 'waitlist_legacy']],
   ['classificationSchedule.mode', ['free', 'structured']],
   ['eliminatoria.formacao', ['performance', 'equilibrio', 'sorteio']],
   ['eliminatoria.semeadura', ['performance', 'equilibrio', 'sorteio']],

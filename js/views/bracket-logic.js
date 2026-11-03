@@ -5870,6 +5870,9 @@ window._onParticipantAddedToMonarchRound = function (t, playerName, category) {
     ? window._motorDaFaseUsaReiRainha(t)
     : t.ligaRoundFormat === 'rei_rainha';
   if (!isLiga || !isMonarch) return res;
+  // Nesta política, o inscrito entra no sorteio da próxima rodada; não completa
+  // um quarteto depois de a rodada corrente ter sido sorteada.
+  if (t.rankingRemainderPolicy === 'lottery_average') return res;
   var rounds = t.rounds || [];
   var target = null;
   for (var i = rounds.length - 1; i >= 0; i--) {
@@ -5900,6 +5903,7 @@ window._onParticipantAddedToMonarchRound = function (t, playerName, category) {
 // rodízio agendado legítimo (o jogador joga em outras rodadas), não fila.
 window._healMonarchRemainderToWaitlist = function (t) {
   if (!t || !Array.isArray(t.rounds)) return false;
+  if (t.rankingRemainderPolicy === 'lottery_average') return false;
   var _rotativaAqui = typeof window._faseCorrenteUsaEntradasRotativas === 'function'
     ? window._faseCorrenteUsaEntradasRotativas(t)
     : !!(window._isLigaFormat && window._isLigaFormat(t));
@@ -6064,12 +6068,14 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
   }
   // decompõe entradas-time nos indivíduos (após o filtro de ativos, que é por entrada)
   players = _monarchIndividuals(t, players);
+  var lotteryRemainder = isLiga && t.rankingRemainderPolicy === 'lottery_average';
 
-  if (players.length < 2) {
+  if (players.length === 0) return;
+  if (players.length < 2 && !lotteryRemainder) {
     window._warn('[bracket-logic] Not enough active players for Rei/Rainha round:', players.length);
     return;
   }
-  if (players.length < 4) {
+  if (players.length < 4 && !lotteryRemainder) {
     // Not enough for Rei/Rainha groups, fallback to standard pairing
     _generateNextRoundForPlayers(t, category, _rn);
     return;
@@ -6085,15 +6091,19 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
   var catSuffix = category ? '-' + category.replace(/\s+/g, '_') : '';
   var catLabel = category && window._displayCategoryName ? ' (' + window._displayCategoryName(category) + ')' : (category ? ' (' + category + ')' : '');
 
-  // v2.6.99: a SOBRA da divisão por 4 NÃO é mais folga-com-média — vira LISTA DE
-  // ESPERA. Quem já estava na espera entra nos grupos primeiro (prioridade), e a
-  // nova sobra é a lista de espera desta rodada (carrega pra próxima, sem média).
+  // Torneios novos: ativos sem quarteto folgam por sorteio e recebem a média
+  // dinâmica. Torneios antigos conservam a lista de espera que já usavam.
   var remainder = players.length % 4;
   var playingPlayers = players;
-  var sitOutPlayers = []; // só INATIVOS viram folga agora (a sobra vira espera)
+  var sitOutPlayers = [];
 
   if (isLiga) {
-    if (remainder > 0) {
+    if (lotteryRemainder) {
+      var selection = _chooseSitOutPlayers(t, players, remainder, category, det.rnd);
+      playingPlayers = selection.playing;
+      sitOutPlayers = selection.sitOut;
+      _recordSitOut(t, sitOutPlayers, category, 'remainder');
+    } else if (remainder > 0) {
       var _prevWl = window._getMonarchWaitlist(t, category).filter(function (n) { return players.indexOf(n) !== -1; });
       var _rest = players.filter(function (n) { return _prevWl.indexOf(n) === -1; });
       var _ordered = _prevWl.concat(_rest);
@@ -6200,13 +6210,21 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
       }
       groups.push(_buildMonarchGroup({ roundNum: roundNum, roundIndex: (t.rounds || []).length, gi: gi, players: gPlayers, category: category, ts: ts, nameToUid: _n2uMap }));
     });
-    // sobra da proporção entra na fila JUNTO com a sobra da divisão por 4 (que já foi
-    // gravada acima) — nunca some, e é chamada quando aparecer gente do gênero que falta.
+    // Se a proporção impedir outro quarteto, a política nova também registra
+    // essas pessoas como folga da rodada, sem montar grupo incompleto.
     if (_plano.leftover.length) {
-      var _wlAtual = window._getMonarchWaitlist(t, category);
-      _setMonarchWaitlist(t, category, _wlAtual.concat(_plano.leftover.filter(function (n) {
-        return _wlAtual.indexOf(n) === -1;
-      })));
+      if (lotteryRemainder) {
+        var _extraSitOuts = _plano.leftover.filter(function (n) {
+          return sitOutPlayers.indexOf(n) === -1;
+        });
+        sitOutPlayers = sitOutPlayers.concat(_extraSitOuts);
+        _recordSitOut(t, _extraSitOuts, category, 'remainder');
+      } else {
+        var _wlAtual = window._getMonarchWaitlist(t, category);
+        _setMonarchWaitlist(t, category, _wlAtual.concat(_plano.leftover.filter(function (n) {
+          return _wlAtual.indexOf(n) === -1;
+        })));
+      }
     }
   } else {
     for (var gi = 0; gi < numGroups; gi++) {
@@ -6279,10 +6297,8 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
     format: 'rei_rainha', matches: allMatches, monarchGroups: groups
   });
 
-  // v2.6.99: se a lista de espera já tiver 4+ (ex.: sobra acumulada), forma grupo
-  // na hora. Normalmente a sobra desta rodada é < 4, então isso é no-op aqui — o
-  // gatilho real é o +participante (que empurra pra ≥4).
-  if (isLiga) window._tryFormMonarchWaitlistGroups(t, category, roundNum, det);
+  // Só o contrato antigo completa grupos com a lista de espera durante a rodada.
+  if (isLiga && !lotteryRemainder) window._tryFormMonarchWaitlistGroups(t, category, roundNum, det);
 };
 
 function _generateNextRoundForPlayers(t, category, _rn, det) {
@@ -6628,6 +6644,7 @@ function _phaseGenNextLeagueRound(t, phaseIdx, det) {
     // Rei/Rainha: formação dos grupos de 4 honra o eixo da FASE (cfg.groupsBy:
     // 'sorteio'|'ranking'); fallback pro top-level e pro default do gerador ('ranking').
     reiRainhaGroupsBy: cfg.groupsBy || t.reiRainhaGroupsBy || 'ranking',
+    rankingRemainderPolicy: cfg.rankingRemainderPolicy || t.rankingRemainderPolicy || 'waitlist_legacy',
     participants: st.pool.slice(),
     rounds: st.rounds, matches: [],
     combinedCategories: [], skillCategories: [],

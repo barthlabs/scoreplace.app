@@ -5197,7 +5197,7 @@ const _CAMPOS_CONFIG_TORNEIO = new Set([
   'drawFirstDate','drawFirstTime','drawIntervalDays','drawManual','temporada','equilibrado',
   'clusterSize','balanceBy','genderRatio','genderRatioDisabled','wlGroupBalance','ligaNewPlayerScore',
   'ligaInactivity','ligaInactivityX','allowSelfDeactivation','ligaOpenEnrollment',
-  'ligaRoundFormat','ligaDrawMode','ligaTurnos','ligaRRSchedule',
+  'ligaRoundFormat','ligaDrawMode','ligaTurnos','ligaRRSchedule','rankingRemainderPolicy',
   'ligaSeasonMonths','elimRankingType','gruposCount','gruposClassified','gruposEqualOnly','turnos',
   'teamCompetition','categorySchedule','scheduleWindow',
   'gruposSeedVip','gruposSeedCategory','drawMode','reiRainhaGroupsBy','monarchAdvanceToElim',
@@ -5225,7 +5225,7 @@ const _CONFIG_ESTRUTURAL = new Set([
   'format','sport','teamSize','gameTypes','drawMode','fmt2','phases','swissRounds','registrationSettings','genderRatioDisabled',
   'gruposCount','gruposClassified','gruposEqualOnly','gruposSeedVip','gruposSeedCategory',
   'teamCompetition','categorySchedule','turnos','categoryDefinitions',
-  'ligaRoundFormat','ligaDrawMode','ligaTurnos','ligaRRSchedule','monarchAdvanceToElim',
+  'ligaRoundFormat','ligaDrawMode','ligaTurnos','ligaRRSchedule','rankingRemainderPolicy','monarchAdvanceToElim',
   /* ⛔⛔⛔ COMO A CHAVE RESOLVE O RESTO É ESTRUTURAL: ela decide quem espera a estreia, quem volta
    * depois de perder e onde cai a folga. Trocá-la com a chave já sorteada redesenha confrontos que as
    * pessoas já viram e muda quem está dentro e quem está fora.

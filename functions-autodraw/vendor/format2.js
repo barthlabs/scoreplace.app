@@ -424,6 +424,7 @@
       // Pareamento de classificatórias por rodadas. O tamanho é só a faixa de
       // ranking; seus integrantes são recalculados após cada rodada pelos pontos.
       classificationPairing: { strategy: 'ranking_clusters', clusterSize: 8, rematchPolicy: 'exhaust_cluster_before_repeat' },
+      rankingRemainderPolicy: 'lottery_average', // Rei/Rainha: ativos sem quarteto folgam por sorteio e recebem média dinâmica
       classifAtiva: true,        // false = SEM classificatória → eliminação direta do enrollment
       classificados: 2,          // X que classificam (por grupo OU total, conforme classifScope)
       classifScope: 'per_group', // 'per_group' (melhores de cada grupo) | 'overall' (tabela geral)
@@ -475,6 +476,11 @@
     var first = projected[0] || {};
     var elimination = projected.filter(function (phase) { return phase && phase.kind === 'elimination'; })[0] || null;
     var cfg = defaultConfig(sport || tournament.sport);
+    // Um torneio anterior a esta regra conserva a lista de espera original.
+    // Só um torneio criado com a política explícita usa folga sorteada.
+    cfg.rankingRemainderPolicy = tournament.rankingRemainderPolicy === 'lottery_average' ||
+      (tournament.fmt2 && tournament.fmt2.rankingRemainderPolicy === 'lottery_average')
+      ? 'lottery_average' : 'waitlist_legacy';
     var savedTeamCompetition = window.ScoreplaceTeamCompetition && window.ScoreplaceTeamCompetition.configurationForTournament
       ? window.ScoreplaceTeamCompetition.configurationForTournament(tournament)
       : (tournament.teamCompetition || (first && first.teamCompetition) ||
@@ -611,6 +617,8 @@
       clusterSize: Math.max(2, Math.min(64, pairingClusterSize >= 2 ? pairingClusterSize : 8)),
       rematchPolicy: 'exhaust_cluster_before_repeat'
     };
+    out.rankingRemainderPolicy = out.rankingRemainderPolicy === 'lottery_average'
+      ? 'lottery_average' : 'waitlist_legacy';
 
     if (!isDupla) {
       out.parceria = null;
@@ -983,6 +991,7 @@
       top.teamSize = teamSize;
       top.enrollmentMode = ligaFixedPairs ? 'teams' : 'individual';
       top.ligaRoundFormat = isRR ? 'rei_rainha' : 'standard';
+      if (isRR) top.rankingRemainderPolicy = cfg.rankingRemainderPolicy;
       top.ligaDrawMode = 'standard';           // rodada-a-rodada (não RR pré-gerado)
       top.gruposCount = 1;
       top.gruposClassified = cfg.classificados;
@@ -1004,6 +1013,7 @@
         kind: 'classification', classification: { structure: 'round_robin', pairing: _roundPairing }, name: isRR ? 'Rei/Rainha' : 'Pontos Corridos',
         formatCode: 'classification_rounds',
         drawMode: top.drawMode, reiRainha: isRR,
+        rankingRemainderPolicy: isRR ? cfg.rankingRemainderPolicy : null,
         rounds: cfg.rodadas.n, groupsBy: 'sorteio',
         source: { type: 'enrollment' },
         fixedPairs: ligaFixedPairs, gruposCount: 1, gruposClassified: cfg.classificados,

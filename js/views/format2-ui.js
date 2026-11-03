@@ -962,6 +962,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       rInner = '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:2px;">Sorteio a cada rodada — ' +
         (cfg.parceria === 'rei_rainha' ? 'grupos de 4, parceiros rotativos' : 'parceiro e adversário sorteados') +
         '; pontuação individual.</div>' + _schedBlock(cfg.rodadas);
+      if (cfg.parceria === 'rei_rainha' && cfg.rankingRemainderPolicy === 'lottery_average') {
+        rInner += '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">Atletas ativos sem quarteto ficam de folga por sorteio. A média de pontos é recalculada a cada rodada; antes de repetir uma folga, são priorizados os que ainda não folgaram.</div>';
+      }
     } else if (tc && tc.enabled && tc.teamCount >= 2) {
       // A competição por times tem grade parcial própria. Os modos antigos descrevem
       // liga e esconderiam os dois controles que determinam os confrontos.
