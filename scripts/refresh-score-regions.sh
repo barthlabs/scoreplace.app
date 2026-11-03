@@ -3,7 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 mode="${1:---preflight}"
-[[ "$mode" == --preflight || "$mode" == --deploy ]] || exit 2
+[[ "$mode" == --preflight || "$mode" == --stage || "$mode" == --deploy ]] || exit 2
 [[ -z "$(git status --porcelain)" ]] || { echo 'árvore suja' >&2; exit 1; }
 node scripts/check-vendor-fresh.js
 source_commit="$(git log -1 --format=%H -- functions-autodraw)"
@@ -35,7 +35,7 @@ if [[ "$mode" == --preflight ]]; then
     echo '✓ retomada parcial: a configuração pública será regenerada após completar as oito portas'
   fi
 fi
-if [[ "$mode" == --deploy && ! -e .claude/tmp/operation-regions-manifest-v2.score-candidate.json &&
+if [[ "$mode" != --preflight && ! -e .claude/tmp/operation-regions-manifest-v2.score-candidate.json &&
       ! -e .claude/tmp/operation-regions-manifest-v3.score-candidate.json && "$resume_started" == 0 ]]; then
   # Confronta as oito portas antes da primeira mudança. Numa retomada, cada
   # porta já atualizada é verificada contra o candidato salvo no loop abaixo.
@@ -137,6 +137,24 @@ m[i]={name:process.env.SP_NAME,region:process.env.SP_REGION,target:'applyMatchRe
 fs.writeFileSync(process.env.SP_FILE,JSON.stringify(m,null,2)+'\n');
 NODE
 }
+record_stage() {
+  local json="$1" rev_json="$2" file="$3" name="$4" region="$5" digest="$6" next="$7"
+  SP_JSON="$json" SP_REV_JSON="$rev_json" SP_FILE="$file" SP_NAME="$name" \
+    SP_REGION="$region" SP_DIGEST="$digest" SP_COMMIT="$source_commit" SP_NEXT="$next" node - <<'NODE'
+const fs=require('fs'),m=JSON.parse(fs.readFileSync(process.env.SP_FILE));
+const s=JSON.parse(process.env.SP_JSON),r=JSON.parse(process.env.SP_REV_JSON);
+const i=m.findIndex(x=>x.name===process.env.SP_NAME&&x.region===process.env.SP_REGION);
+if(i<0||!s.status?.url||r.metadata?.name!==process.env.SP_NEXT||
+  s.status?.latestReadyRevisionName!==process.env.SP_NEXT)process.exit(1);
+const image=r.spec?.containers?.[0]?.image;
+const env=Object.fromEntries((r.spec?.containers?.[0]?.env||[]).map(x=>[x.name,x.value]));
+if(!image||env.SP_SOURCE_DIGEST!==process.env.SP_DIGEST||env.SP_OPERATION_REGION!==process.env.SP_REGION)process.exit(1);
+m[i]={name:process.env.SP_NAME,region:process.env.SP_REGION,target:'applyMatchResult',codebase:'functions-autodraw',
+  commit:process.env.SP_COMMIT,sourceDigest:process.env.SP_DIGEST,image,
+  url:s.status.url,revision:process.env.SP_NEXT,env};
+fs.writeFileSync(process.env.SP_FILE,JSON.stringify(m,null,2)+'\n');
+NODE
+}
 
 for version in v3 v2; do
   name="sp-op-score-$version"
@@ -148,8 +166,10 @@ for version in v3 v2; do
     regions=(us-east1 us-east4 us-south1)
   fi
   digest="$(node scripts/operation-source-digest.js functions-autodraw applyMatchResult "$source_commit")"
-  if [[ "$mode" == --deploy && ! -e "$candidate" ]]; then cp "$manifest" "$candidate"; fi
+  if [[ "$mode" != --preflight && ! -e "$candidate" ]]; then cp "$manifest" "$candidate"; fi
   source_image=''
+  no_traffic=()
+  if [[ "$mode" == --stage ]]; then no_traffic=(--no-traffic); fi
   for region in "${regions[@]}"; do
     json="$(describe "$name" "$region")"
     previous="$(SP_FILE="$manifest" SP_NAME="$name" SP_REGION="$region" node -e 'const x=JSON.parse(require("fs").readFileSync(process.env.SP_FILE));const r=x.find(v=>v.name===process.env.SP_NAME&&v.region===process.env.SP_REGION);if(!r)process.exit(1);process.stdout.write(r.revision)')"
@@ -165,7 +185,7 @@ for version in v3 v2; do
     if [[ "$current_digest" != "$digest" ]]; then
       check_service "$json" "$manifest" "$name" "$region"
       echo "✓ antigo verificado $name/$region"
-      if [[ "$mode" == --deploy ]]; then
+      if [[ "$mode" == --deploy || "$mode" == --stage ]]; then
         suffix="e08$(date +%s)$RANDOM"
         if [[ "$region" == us-east1 ]]; then
           export_dir="$(mktemp -d)"
@@ -173,12 +193,14 @@ for version in v3 v2; do
           runtime="$(node -p "require('./functions-autodraw/package.json').engines.node")"
           gcloud run deploy "$name" --project "$project" --region "$region" --source "$export_dir/functions-autodraw" \
             --function applyMatchResult --base-image "nodejs$runtime" --no-automatic-updates --revision-suffix "$suffix" \
-            --set-env-vars "SP_SOURCE_DIGEST=$digest,SP_OPERATION_REGION=$region" --allow-unauthenticated --quiet
+            --set-env-vars "SP_SOURCE_DIGEST=$digest,SP_OPERATION_REGION=$region" --allow-unauthenticated \
+            "${no_traffic[@]}" --quiet
           rm -rf "$export_dir"
         else
           [[ -n "$source_image" ]] || { echo 'imagem da região de origem ausente' >&2; exit 1; }
           gcloud run deploy "$name" --project "$project" --region "$region" --image "$source_image" \
-            --revision-suffix "$suffix" --set-env-vars "SP_SOURCE_DIGEST=$digest,SP_OPERATION_REGION=$region" --allow-unauthenticated --quiet
+            --revision-suffix "$suffix" --set-env-vars "SP_SOURCE_DIGEST=$digest,SP_OPERATION_REGION=$region" --allow-unauthenticated \
+            "${no_traffic[@]}" --quiet
         fi
         json="$(describe "$name" "$region")"
         [[ "$(printf '%s' "$json" | field status.latestCreatedRevisionName)" == "$name-$suffix" ]] || {
@@ -186,7 +208,7 @@ for version in v3 v2; do
         }
       fi
     fi
-    if [[ "$current_digest" == "$digest" || "$mode" == --deploy ]]; then
+    if [[ "$current_digest" == "$digest" || "$mode" == --deploy || "$mode" == --stage ]]; then
       next="$(printf '%s' "$json" | field status.latestCreatedRevisionName)"
       [[ -n "$next" && "$next" != "$previous" ]] || { echo "revisão candidata ausente: $name/$region" >&2; exit 1; }
       next_json="$(revision "$next" "$region")"
@@ -201,6 +223,11 @@ for version in v3 v2; do
       if [[ "$action" == promote ]]; then check_old "$json" "$name" "$region"; fi
       if [[ "$mode" == --preflight ]]; then
         echo "✓ revisão candidata $name/$region: $action"
+      elif [[ "$mode" == --stage ]]; then
+        [[ "$action" == promote ]] || { echo "revisão candidata inesperada: $name/$region ($action)" >&2; exit 1; }
+        record_stage "$json" "$next_json" "$candidate" "$name" "$region" "$digest" "$next"
+        check_old "$json" "$name" "$region"
+        echo "✓ revisão preparada sem tráfego $name/$region em $next"
       else
         if [[ "$action" == promote ]]; then
           gcloud run services update-traffic "$name" --project "$project" --region "$region" \
@@ -221,16 +248,20 @@ for version in v3 v2; do
       if [[ "$region" == us-east1 ]]; then source_image="$(printf '%s' "$next_json" | field spec.containers.0.image)"; fi
     fi
   done
-  if [[ "$mode" == --deploy ]]; then
+  if [[ "$mode" == --deploy || "$mode" == --stage ]]; then
     SP_FILE="$candidate" SP_NAME="$name" SP_DIGEST="$digest" SP_REGIONS="${regions[*]}" node - <<'NODE'
 const m=JSON.parse(require('fs').readFileSync(process.env.SP_FILE));
 const rows=m.filter(x=>x.name===process.env.SP_NAME);
 if(rows.length!==process.env.SP_REGIONS.split(' ').length||rows.some(x=>x.sourceDigest!==process.env.SP_DIGEST)||
   new Set(rows.map(x=>x.image)).size!==1)process.exit(1);
 NODE
-    mv "$candidate" "$manifest"
-    node scripts/check-operation-regions-mixed.js "$version"
-    echo "✓ manifesto $version promovido após verificar todas as regiões"
+    if [[ "$mode" == --deploy ]]; then
+      mv "$candidate" "$manifest"
+      node scripts/check-operation-regions-mixed.js "$version"
+      echo "✓ manifesto $version promovido após verificar todas as regiões"
+    else
+      echo "✓ manifesto candidato $version completo; tráfego antigo preservado"
+    fi
   fi
 done
 if [[ "$mode" == --deploy ]]; then
