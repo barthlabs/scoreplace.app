@@ -126,6 +126,11 @@ function validateNewFormatIntent(fmt2, HttpsError, stored, requestedTeamSize) {
     }
   }
   const sitOutScoring = explicitValue(fmt2, 'rankingSitOutScoring');
+  const dayPolicy = explicitValue(fmt2, 'teamCompetition.schedule.originDayPolicy');
+  if (dayPolicy.present && !['', 'organizer-pair-days'].includes(dayPolicy.value) &&
+      (!stored || stored.rulesContractVersion >= 2)) {
+    throw new HttpsError('invalid-argument', 'A divisão de duplas por dia precisa ser escolhida no configurador.');
+  }
   if (sitOutScoring.present && sitOutScoring.value.mode === 'fixed') {
     const points = explicitValue(fmt2, 'rankingSitOutScoring.points');
     if (!points.present || !Number.isSafeInteger(points.value) || points.value < 0) {

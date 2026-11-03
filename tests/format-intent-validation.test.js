@@ -21,6 +21,13 @@ assert.doesNotThrow(() => validateNewFormatIntent({ parceria: null }, HttpsError
 assert.doesNotThrow(() => validateNewFormatIntent({ eliminatoria: { ativa: false } }, HttpsError));
 assert.doesNotThrow(() => validateNewFormatIntent({ eliminatoria: { linhas: 3 } }, HttpsError));
 assert.doesNotThrow(() => validateNewFormatIntent({ eliminatoria: { linhas: 5 } }, HttpsError));
+assert.doesNotThrow(() => validateNewFormatIntent({ teamCompetition: { schedule: {
+  originDayPolicy: 'organizer-pair-days' } } }, HttpsError));
+assert.throws(() => validateNewFormatIntent({ teamCompetition: { schedule: {
+  originDayPolicy: 'female-light-organization-final' } } }, HttpsError), { code: 'invalid-argument' });
+assert.doesNotThrow(() => validateNewFormatIntent({ teamCompetition: { schedule: {
+  originDayPolicy: 'female-light-organization-final' } } }, HttpsError,
+{ rulesContractVersion: 1 }), 'a política antiga só é lida em torneios históricos');
 assert.doesNotThrow(() => validateNewFormatIntent({ eliminatoria: { finalSeriesBestOf: 9 } }, HttpsError));
 assert.throws(() => validateNewFormatIntent({ eliminatoria: { finalSeriesBestOf: 4 } }, HttpsError), { code: 'invalid-argument' });
 assert.throws(() => validateNewFormatIntent({ eliminatoria: { finalSeriesBestOf: 3, grandFinalReset: true } }, HttpsError), { code: 'invalid-argument' });
@@ -480,10 +487,10 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
     tournamentId: 'tour_test', fmt2: { disputa: 'dupla' }
   } }), { code: 'failed-precondition' });
   assert.equal(writes, beforeMixedApply, 'apply não remove marcador');
-  const appliedMixed = await edit({ auth: { uid: 'owner' }, data: {
+  await assert.rejects(edit({ auth: { uid: 'owner' }, data: {
     tournamentId: 'tour_test', fmt2: structuredClone(storedMixed.fmt2)
-  } });
-  assert.equal(appliedMixed.ok, true, 'apply recompila shape terminal no harness sem sorteio');
+  } }), { code: 'failed-precondition', message: 'Torneio encerrado não pode receber novo contrato.' });
+  assert.equal(writes, beforeMixedApply, 'contrato encerrado permanece intacto');
   assert.equal(tournament.fmt2.completedMixedGroupOnly, true);
   assert.equal(tournament.phases.length, 1);
 

@@ -2868,6 +2868,7 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
     });
     function defaultCategorySlot(category, index) {
       var stored = byCategory[category]; if (stored && stored.length) return stored[0];
+      if (t.rulesContractVersion >= 2) return { day:days[0], order:index + 1 };
       // Um torneio com dois dias e categorias explicitamente Fem/Masc começa
       // com a divisão mais útil, mas continua inteiramente editável.
       var female = /(^|\s)(fem|femin)/i.test(category), male = /(^|\s)(masc|mascul)/i.test(category);
@@ -2900,7 +2901,9 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
         countByCategory[category] = (countByCategory[category] || 0) + 1;
     });
     var quotas = cfg.schedule && cfg.schedule.pairsPerTeamByCategory || {};
-    var neonQuota = categories.length === 6 && cfg.teamCount === 8 &&
+    // Compatibilidade exclusiva dos torneios anteriores ao contrato explícito.
+    // A configuração nova lê as cotas e a política de dias declaradas pelo organizador.
+    var neonQuota = !(t.rulesContractVersion >= 2) && categories.length === 6 && cfg.teamCount === 8 &&
       categories.some(function (category) { return /^Fem Light$/i.test(category) && countByCategory[category] === 24; });
     // ⛔ A capacidade declarada não troca silenciosamente a regra de outro
     // torneio. O Neon com 64 duplas exige o mapa 3/1, que será persistido no

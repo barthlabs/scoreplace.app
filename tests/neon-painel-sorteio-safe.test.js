@@ -124,6 +124,25 @@ delete participants[0].category;
 W._showTeamCompetitionDrawReview(tournament.id, { _canonicalRosterLoaded:true });
 if (/O sorteio está bloqueado/.test(overlay.innerHTML)) throw new Error('Categoria canônica sem rótulo legado não deve bloquear o painel');
 participants[0].category = category;
+// Um torneio novo com o mesmo elenco de exemplo só usa decisões explícitas.
+tournament.rulesContractVersion = 2;
+tournament.teamCompetition.schedule.pairsPerTeamByCategory = Object.fromEntries(categories.map(label =>
+  [label, label === 'Fem Light' ? 3 : 1]));
+tournament.teamCompetition.schedule.originDayPolicy = '';
+tournament.categorySchedule = { slots:[{ category:'Fem Light', day:'2026-10-22', order:1 },
+  { category:'Fem Light', day:'2026-10-23', order:1 }] };
+W._showTeamCompetitionDrawReview(tournament.id, { _canonicalRosterLoaded:true });
+if (dayEditor.innerHTML !== '' || /O sorteio está bloqueado/.test(overlay.innerHTML)) {
+  throw new Error('Contrato novo não ativa dias nominais nem quota especial pelo formato do exemplo');
+}
+tournament.teamCompetition.schedule.originDayPolicy = 'organizer-pair-days';
+W._showTeamCompetitionDrawReview(tournament.id, { _canonicalRosterLoaded:true });
+if (!/Sortear dias livremente/.test(dayEditor.innerHTML)) {
+  throw new Error('Contrato novo expõe divisão por dia após escolha explícita do organizador');
+}
+delete tournament.rulesContractVersion;
+delete tournament.categorySchedule;
+tournament.teamCompetition.schedule.originDayPolicy = 'female-light-organization-final';
 let saves = 0, ready = 0, savedPayload;
 W.FirestoreDB = {
   _ehSandbox(){ return true; },

@@ -951,6 +951,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
               '<div style="font-size:.72rem;color:var(--text-muted);margin-bottom:6px;">Times por grupo <b id="f2-team-schedule-teams-value" style="color:var(--text-main);">' + tc.schedule.teamsPerGroup + '</b></div>' +
               '<input id="f2-team-schedule-teams" type="range" min="2" max="' + tc.teamCount + '" value="' + tc.schedule.teamsPerGroup + '" oninput="window._f2TeamSchedule(\'teamsPerGroup\',this.value,this)" style="width:100%;">' +
               _teamCategoryPairControls(tc) +
+              '<div style="margin-top:12px;">' + _toggleRight('Distribuir duplas por dia quando uma categoria joga em dois dias',
+                tc.schedule.originDayPolicy === 'organizer-pair-days', 'window._f2TeamPairDays(this.checked)') +
+              '<div style="font-size:.72rem;color:var(--text-muted);margin-top:6px;">Os dias de cada dupla aparecem para revisão no painel de sorteio. Ative somente se quiser dividir a mesma categoria entre dias.</div></div>' +
               '<div style="margin-top:12px;font-size:.72rem;color:var(--text-muted);margin-bottom:6px;">Grade entre categorias</div>' +
               _pill(tc.schedule.mode !== 'structured', 'window._f2TeamSchedule(\'mode\',\'free\')', '🎲 Sorteio livre') +
               _pill(tc.schedule.mode === 'structured', 'window._f2TeamSchedule(\'mode\',\'structured\')', '📋 Estruturado') +
@@ -1698,6 +1701,13 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     } else tc.schedule.gamesPerPairByCategory = {};
     _norm(); _rerender();
     if (typeof window._recalcDuration === 'function') window._recalcDuration();
+  };
+  window._f2TeamPairDays = function (enabled) {
+    if (!S || !S.cfg.teamCompetition) return;
+    var schedule = S.cfg.teamCompetition.schedule || (S.cfg.teamCompetition.schedule = {});
+    schedule.originDayPolicy = enabled ? 'organizer-pair-days' : '';
+    if (!enabled) { schedule.pairDayAssignments = []; schedule.rosterSnapshot = []; }
+    _norm(); _rerender();
   };
   function _f2TeamScheduleRefresh(tc) {
     if (!tc || !tc.schedule) return;
