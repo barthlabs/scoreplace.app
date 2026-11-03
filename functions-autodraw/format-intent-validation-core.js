@@ -19,11 +19,14 @@ const ENUMS = [
   ['eliminatoria.formacao', ['performance', 'equilibrio', 'sorteio']],
   ['eliminatoria.semeadura', ['performance', 'equilibrio', 'sorteio']],
   ['eliminatoria.lateEnrollment', ['inherit', 'closed', 'standby', 'expand']],
-  ['eliminatoria.newMatchups', ['inherit', true, false]]
+  ['eliminatoria.newMatchups', ['inherit', true, false]],
+  ['eliminatoria.lineAssignment', ['strategy', 'rank_ranges']],
+  ['eliminatoria.grandFinalReset', [true, false]]
 ];
 const INTEGERS = [
   ['grupos', 1],
   ['eliminatoria.linhas', 1],
+  ['eliminatoria.finalSeriesBestOf', 1],
   ['classificados', 1],
   ['rodadas.n', 1],
   ['classificationPairing.clusterSize', 2],
@@ -163,6 +166,42 @@ function validateNewFormatIntent(fmt2, HttpsError, stored, requestedTeamSize) {
     if (path === 'eliminatoria.linhas' && parsed > 32) {
       throw new HttpsError('invalid-argument', 'São permitidas no máximo 32 chaves paralelas.');
     }
+    if (path === 'eliminatoria.finalSeriesBestOf' && (parsed > 99 || parsed % 2 !== 1)) {
+      throw new HttpsError('invalid-argument', 'A série final exige de 1 a 99 partidas, em número ímpar.');
+    }
+  }
+  if (fmt2.eliminatoria && Number(fmt2.eliminatoria.finalSeriesBestOf || 1) > 1 &&
+      fmt2.eliminatoria.grandFinalReset === true) {
+    throw new HttpsError('invalid-argument', 'A série final e o reinício da grande final são escolhas alternativas.');
+  }
+  const elim = fmt2.eliminatoria || {};
+  if (elim.lineAssignment === 'rank_ranges') {
+    const ranges = elim.lineRankRanges;
+    const lines = Number(elim.linhas || 1);
+    if (fmt2.classifAtiva === false || elim.ativa === false || elim.dupla === true || lines < 2 ||
+        !Array.isArray(ranges) || ranges.length !== lines) {
+      throw new HttpsError('invalid-argument', 'As faixas exigem classificatória e duas ou mais chaves simples.');
+    }
+    const used = new Set();
+    ranges.forEach((range, index) => {
+      const from = Number(range && range.from), to = Number(range && range.to);
+      if (!Number.isSafeInteger(from) || !Number.isSafeInteger(to) || from < 1 || to < from || to > 999) {
+        throw new HttpsError('invalid-argument', 'Faixa inválida na chave ' + (index + 1) + '.');
+      }
+      const limit = elim.openReiRainha ? Number(elim.reiRainhaCut || 4)
+        : (elim.qualifyAll ? 999 : Number(fmt2.classificados || 1));
+      if (to > limit) {
+        throw new HttpsError('invalid-argument', 'A faixa da chave ' + (index + 1) + ' supera os classificados definidos.');
+      }
+      if (fmt2.disputa === 'dupla' && fmt2.parceria && fmt2.parceria !== 'fixa' &&
+          (to - from + 1) % 2 !== 0) {
+        throw new HttpsError('invalid-argument', 'A faixa da chave ' + (index + 1) + ' precisa formar duplas completas.');
+      }
+      for (let rank = from; rank <= to; rank++) {
+        if (used.has(rank)) throw new HttpsError('invalid-argument', 'As faixas de classificação não podem se sobrepor.');
+        used.add(rank);
+      }
+    });
   }
 }
 

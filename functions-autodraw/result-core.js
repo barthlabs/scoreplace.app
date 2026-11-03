@@ -194,6 +194,21 @@ function descendantIsDecided(m) {
 // ainda preenchido não prova disputa. Uma aresta sem destino é erro de integridade,
 // nunca licença para limpar o resultado de origem.
 function checkDescendantsBeforeReopen(t, source) {
+  if (t && t.rulesContractVersion >= 2) {
+    if (Number(t.currentPhaseIndex || 0) > Number(source.phaseIndex || 0)) {
+      return { ok: false, reason: 'later-phase-already-started' };
+    }
+    if (source.seriesRootId) {
+      const laterPlayed = (t.matches || []).some(m => m && m.seriesRootId === source.seriesRootId &&
+        Number(m.seriesGameNumber || 1) > Number(source.seriesGameNumber || 1) && descendantIsDecided(m));
+      if (laterPlayed) return { ok: false, reason: 'later-series-game-already-started' };
+    }
+    if (source.bracket === 'grand' && !source.isExtra) {
+      const resetPlayed = (t.matches || []).some(m => m && m.isExtra && m.bracket === 'grand' &&
+        descendantIsDecided(m));
+      if (resetPlayed) return { ok: false, reason: 'later-final-game-already-started' };
+    }
+  }
   const visited = new Set([String(source.id)]);
   const pending = [source.nextMatchId, source.loserMatchId, source.loserNextMatchId].filter(Boolean);
   while (pending.length) {
@@ -236,6 +251,12 @@ function reopenMatch(t, m) {
     undoAdvancement(t, m);
   }
   clearResultFields(m);
+  if (t.rulesContractVersion >= 2) {
+    if (m.seriesRootId) t.matches = (t.matches || []).filter(x => !x ||
+      x.seriesRootId !== m.seriesRootId || Number(x.seriesGameNumber || 1) <= Number(m.seriesGameNumber || 1));
+    if (t.status === 'finished') { t.status = 'active'; delete t.finishedAt; }
+    delete t.titleAwards; delete t.titleAwardsAt;
+  }
   if (typeof win._propagateMatchUpdate === 'function') win._propagateMatchUpdate(t, m);
 }
 
@@ -323,6 +344,7 @@ function applyResult(t, opts) {
         try { win._poeStandings(t); } catch (e) { /* derived standings never block a safe reopen */ }
       }
       if (t.status === 'finished') { t.status = 'active'; delete t.finishedAt; }
+      if (t.rulesContractVersion >= 2) { delete t.titleAwards; delete t.titleAwardsAt; }
       if (typeof win._propagateMatchUpdate === 'function') win._propagateMatchUpdate(t, m);
       if (o.logMessage) pushHistory(t, o.logMessage, o.now);
       return { ok: true, outcome: 'wo-reverted', reason: '' };

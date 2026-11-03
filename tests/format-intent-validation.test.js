@@ -21,6 +21,9 @@ assert.doesNotThrow(() => validateNewFormatIntent({ parceria: null }, HttpsError
 assert.doesNotThrow(() => validateNewFormatIntent({ eliminatoria: { ativa: false } }, HttpsError));
 assert.doesNotThrow(() => validateNewFormatIntent({ eliminatoria: { linhas: 3 } }, HttpsError));
 assert.doesNotThrow(() => validateNewFormatIntent({ eliminatoria: { linhas: 5 } }, HttpsError));
+assert.doesNotThrow(() => validateNewFormatIntent({ eliminatoria: { finalSeriesBestOf: 9 } }, HttpsError));
+assert.throws(() => validateNewFormatIntent({ eliminatoria: { finalSeriesBestOf: 4 } }, HttpsError), { code: 'invalid-argument' });
+assert.throws(() => validateNewFormatIntent({ eliminatoria: { finalSeriesBestOf: 3, grandFinalReset: true } }, HttpsError), { code: 'invalid-argument' });
 assert.throws(() => validateNewFormatIntent({ eliminatoria: { lateEnrollment: 'closed', newMatchups: true } }, HttpsError),
   { code: 'invalid-argument', message: 'Novos confrontos exigem inscrições abertas na fase eliminatória.' });
 assert.doesNotThrow(() => validateNewFormatIntent({ classificationSchedule: null, rodadas: { modo: 'todos' } }, HttpsError));

@@ -407,6 +407,38 @@ for (const action of ['reset-match', 'reopen-result', 'revert-wo']) {
 
 console.log('\n──── paridade com o cliente ────');
 
+// Contrato novo: uma correção não pode apagar jogos já disputados numa série,
+// no reset da dupla eliminação ou em fase posterior. Reabrir o último jogo
+// desfaz o título publicado e permite novo resultado auditável.
+{
+  const T = mkT({ rulesContractVersion: 2, status: 'finished', titleAwards: [{ label: 'Campeão' }],
+    titleAwardsAt: 123 });
+  const first = win._findMatch(T, 'm1');
+  first.winner = first.p1;
+  first.seriesRootId = 'm1'; first.seriesGameNumber = 1;
+  const second = { ...first, id: 'm1-S2', seriesGameNumber: 2, winner: first.p2 };
+  T.matches.push(second);
+  const denied = core.applyResult(T, { matchId: 'm1', payload: { action: 'reopen-result' }, actor: { uid: UID_ORG }, now: 1 });
+  t('série disputada impede reabrir partida anterior', !denied.ok && denied.reason === 'later-series-game-already-started', JSON.stringify(denied));
+  const reopened = core.applyResult(T, { matchId: 'm1-S2', payload: { action: 'reopen-result' }, actor: { uid: UID_ORG }, now: 2 });
+  t('último jogo da série reabre título e torneio', reopened.ok && T.status === 'active' && !T.titleAwards && !second.winner, JSON.stringify(reopened));
+}
+{
+  const T = mkT({ rulesContractVersion: 2 });
+  const first = win._findMatch(T, 'm1');
+  first.bracket = 'grand'; first.winner = first.p1;
+  T.matches.push({ ...first, id: 'gf-extra', isExtra: true, winner: first.p2 });
+  const denied = core.applyResult(T, { matchId: 'm1', payload: { action: 'reopen-result' }, actor: { uid: UID_ORG }, now: 1 });
+  t('reset disputado impede reabrir primeira final', !denied.ok && denied.reason === 'later-final-game-already-started', JSON.stringify(denied));
+}
+{
+  const T = mkT({ rulesContractVersion: 2, currentPhaseIndex: 1 });
+  const first = win._findMatch(T, 'm1');
+  first.phaseIndex = 0; first.winner = first.p1;
+  const denied = core.applyResult(T, { matchId: 'm1', payload: { action: 'reopen-result' }, actor: { uid: UID_ORG }, now: 1 });
+  t('fase posterior iniciada impede reabrir origem', !denied.ok && denied.reason === 'later-phase-already-started', JSON.stringify(denied));
+}
+
 console.log('\n──── árbitro confirmado ────');
 {
   const T = mkT({ phases: [{ resultEntry: ['organizer', 'referee'] }], arbitros: [{ uid: 'uid_ref', status: 'confirmed', name: 'Árbitro' }] });

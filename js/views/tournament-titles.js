@@ -68,7 +68,10 @@
     }
     var titles = [];
     if (phase.kind === 'elimination') {
-      var gf = matches.filter(function (m) { return m.bracket === 'grandfinal' || m.bracket === 'grand'; })[0];
+      var grandMatches = matches.filter(function (m) { return m.bracket === 'grandfinal' || m.bracket === 'grand'; });
+      var gf = grandMatches.filter(function (m) { return m.winner; }).sort(function (a, b) {
+        return Number(b.seriesGameNumber || (b.isExtra ? 2 : 1)) - Number(a.seriesGameNumber || (a.isExtra ? 2 : 1));
+      })[0] || grandMatches[0];
       if (gf) {
         var global = awardFromMatch(gf, 'overall', '');
         if (global) titles.push(global);
@@ -82,9 +85,14 @@
         Object.keys(byLine).forEach(function (key) {
           var finals = byLine[key].filter(function (m) { return !m.nextMatchId && m.winner &&
             (!m.isBye || byLine[key].length === 1); });
-          if (finals.length !== 1) return;
+          var roots = new Set(finals.map(function (m) { return String(m.seriesRootId || m.id); }));
+          if (roots.size !== 1) return;
+          finals.sort(function (a, b) { return Number(b.seriesGameNumber || 1) - Number(a.seriesGameNumber || 1); });
+          var classicDouble = phase.elimination && phase.elimination.bracketType === 'double';
+          var lineLabel = classicDouble && key === 'upper' ? 'Chave superior'
+            : classicDouble && key === 'lower' ? 'Chave inferior' : finals[0].tierLabel || '';
           var title = awardFromMatch(finals[0], Object.keys(byLine).length > 1 ? 'line' : 'overall',
-            finals[0].tierLabel || '');
+            lineLabel);
           if (title) titles.push(title);
         });
       }

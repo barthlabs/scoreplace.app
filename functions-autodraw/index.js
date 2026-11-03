@@ -2716,6 +2716,24 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
       logMessage: logMessage
     });
     if (!res || !res.ok) return { ok: false, reason: (res && res.reason) || 'apply-failed' };
+    if (t.rulesContractVersion >= 2) {
+      const titleResolver = drawWindow && drawWindow.ScoreplaceTournamentTitles;
+      if (!titleResolver || typeof titleResolver.resolve !== 'function') {
+        throw new HttpsError('internal', 'Resolvedor de títulos indisponível.');
+      }
+      const titleResult = titleResolver.resolve(t, {
+        engine: drawWindow._phasesEngine,
+        teamCore: drawWindow.ScoreplaceTeamCompetition,
+        standings: drawWindow._computeStandings
+      });
+      if (titleResult.ok && t.status === 'finished') {
+        t.titleAwards = titleResult.titles.map(title => Object.assign({ rulesContractVersion: 2 }, title));
+        t.titleAwardsAt = _agoraIsoTx;
+      } else if (!titleResult.ok && t.titleAwards) {
+        delete t.titleAwards; delete t.titleAwardsAt;
+        if (t.status === 'finished') { t.status = 'active'; delete t.finishedAt; }
+      }
+    }
     _reconcileSurplusBeforeWrite(t, tId, _tAntes);
     const b = _gravaTorneio(tx, ref, t, _tAntes, { agoraIso: _agoraIsoTx }); // clobber-free; divide se o marcador mandar
     // O mesmo commit do placar contém o antes/depois. Diferentemente do histórico de

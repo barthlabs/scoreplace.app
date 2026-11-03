@@ -2031,6 +2031,36 @@ function _advanceWinner(t, completedMatch) {
   // Carimba a identidade do vencedor no próprio match (winnerUid não existia).
   completedMatch.winnerUids = _winUids;
   completedMatch.winnerUid = _winUids.length === 1 ? _winUids[0] : null;
+  // Série de partidas: cada partida é um jogo físico com resultado próprio.
+  // O próximo jogo só nasce enquanto nenhum lado alcançou a maioria configurada.
+  if (Number(completedMatch.seriesBestOf || 1) > 1) {
+    var _bestOf = Number(completedMatch.seriesBestOf);
+    var _root = String(completedMatch.seriesRootId || completedMatch.id);
+    var _series = (t.matches || []).filter(function (m) { return m && String(m.seriesRootId || '') === _root; });
+    var _won1 = _series.filter(function (m) { return m.winner && window._matchWinnerSide(m) === 1; }).length;
+    var _won2 = _series.filter(function (m) { return m.winner && window._matchWinnerSide(m) === 2; }).length;
+    var _need = Math.floor(_bestOf / 2) + 1;
+    var _pendingSeries = _series.filter(function (m) { return !m.winner && m !== completedMatch; });
+    if (Math.max(_won1, _won2) < _need && !_pendingSeries.length) {
+      var _nextGame = _series.length + 1;
+      if (_nextGame > _bestOf) throw new Error('Série sem vencedor após todas as partidas previstas.');
+      var _seriesMatch = {
+        id: _root + '-S' + _nextGame, round: (completedMatch.round || 1) + 1,
+        bracket: completedMatch.bracket, phaseIndex: completedMatch.phaseIndex || 0,
+        p1: completedMatch.p1, p2: completedMatch.p2,
+        p1Uid: completedMatch.p1Uid || null, p2Uid: completedMatch.p2Uid || null,
+        team1Uids: _slotUids(completedMatch, 'p1'), team2Uids: _slotUids(completedMatch, 'p2'),
+        team1Obj: _slotObj(completedMatch, 'p1'), team2Obj: _slotObj(completedMatch, 'p2'),
+        winner: null, seriesRootId: _root, seriesBestOf: _bestOf,
+        seriesGameNumber: _nextGame, label: 'Final · partida ' + _nextGame
+      };
+      if (completedMatch.category != null) _seriesMatch.category = completedMatch.category;
+      if (completedMatch.tierLabel) _seriesMatch.tierLabel = completedMatch.tierLabel;
+      t.matches.push(_seriesMatch);
+    } else if (Math.max(_won1, _won2) >= _need && _pendingSeries.length) {
+      t.matches = t.matches.filter(function (m) { return _pendingSeries.indexOf(m) === -1; });
+    }
+  }
   // Loser-drop pra chave de perdedores. Vale pra Dupla Eliminatória de torneio
   // normal E pra fase final (playoff) de Liga em Dupla Eliminatória — neste caso
   // o match tem phase:'playoff' + bracket ('upper'/'lower'/'grand'). Aditivo e
@@ -2199,6 +2229,34 @@ function _advanceWinner(t, completedMatch) {
    * próprio global. A marca é posta por `draw-core` ao carregar. */
   if (_souOServidor) {
     try { window._reassignBestLosersToRepechage(t); } catch (e) {}
+  }
+
+  // Reinício da grande final é uma partida separada e só nasce se a regra
+  // publicada o previu E o vencedor da chave inferior ganhou a primeira.
+  if (completedMatch.bracket === 'grand' && !completedMatch.isExtra) {
+    var _resetPhase = (t.phases || [])[completedMatch.phaseIndex || 0] || {};
+    if (_resetPhase.grandFinalReset === true) {
+      var _resetId = String(completedMatch.id) + '-EXTRA';
+      var _existingReset = (t.matches || []).filter(function (m) { return String(m.id) === _resetId; })[0];
+      if (window._matchWinnerSide(completedMatch) === 2) {
+        if (!_existingReset) {
+          var _resetMatch = {
+            id: _resetId, round: (completedMatch.round || 1) + 1,
+            bracket: 'grand', phaseIndex: completedMatch.phaseIndex || 0,
+            p1: completedMatch.p1, p2: completedMatch.p2,
+            p1Uid: completedMatch.p1Uid || null, p2Uid: completedMatch.p2Uid || null,
+            team1Uids: _slotUids(completedMatch, 'p1'), team2Uids: _slotUids(completedMatch, 'p2'),
+            team1Obj: _slotObj(completedMatch, 'p1'), team2Obj: _slotObj(completedMatch, 'p2'),
+            winner: null, isExtra: true, label: 'Partida de reinício'
+          };
+          if (completedMatch.category != null) _resetMatch.category = completedMatch.category;
+          t.matches.push(_resetMatch);
+        }
+      } else if (_existingReset) {
+        if (_existingReset.winner) throw new Error('A partida de reinício já tem resultado; revise a correção da final.');
+        t.matches = t.matches.filter(function (m) { return String(m.id) !== _resetId; });
+      }
+    }
   }
 
   _maybeGenerate3rdPlace(t);
@@ -3811,6 +3869,10 @@ function _maybeFinishMultiPhase(t) {
   }
 
   if (!_publishTitlesIfReady(t)) return false;
+  if (t.rulesContractVersion >= 2) {
+    champion = Array.isArray(t.titleAwards) && t.titleAwards.length === 1 && t.titleAwards[0].scope === 'overall'
+      ? t.titleAwards[0].winnerName : null;
+  }
   t.status = 'finished';
   if (!t.finishedAt) t.finishedAt = new Date().toISOString();
   var _startMs = (typeof t.tournamentStarted === 'number' && t.tournamentStarted > 0) ? t.tournamentStarted : null;
@@ -3947,6 +4009,10 @@ function _maybeFinishElimination(t) {
     var finalMatches = allMatches.filter(function(m) { return m.round === lastRound && !m.isBye; });
     if (finalMatches.length > 0 && finalMatches[0].winner) {
       _finChampion = finalMatches[0].winner;
+    }
+    if (t.rulesContractVersion >= 2) {
+      _finChampion = Array.isArray(t.titleAwards) && t.titleAwards.length === 1 && t.titleAwards[0].scope === 'overall'
+        ? t.titleAwards[0].winnerName : null;
     }
     showNotification(_t('bui.tournamentFinished'), _finChampion ? _t('bui.tournamentFinishedChamp', { name: _finChampion }) : _t('bui.tournamentFinishedMsg'), 'success');
   }

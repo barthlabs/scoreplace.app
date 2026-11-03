@@ -1111,8 +1111,21 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // Quando ON é UMA chave só (força 1 linha no normalize) → o controle de Linhas some.
       eb += '<div style="margin-top:14px;">' + _toggleRight('Dupla Eliminatória', !!e.dupla, 'window._f2ElimDupla(this.checked)') + '</div>' +
         '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;line-height:1.45;">' + (e.dupla
-          ? 'Cada ' + (isDupla ? 'dupla' : 'jogador') + ' só é ' + (isDupla ? 'eliminada' : 'eliminado') + ' após <b>2 derrotas</b>: quem perde na <b>chave de cima</b> cai na <b>chave de baixo</b> (ainda no torneio) e as duas se encontram na <b>grande final</b>.'
+          ? 'Cada ' + (isDupla ? 'dupla' : 'jogador') + ' segue para a chave inferior após perder na superior. A organização decide abaixo se os vencedores das duas chaves se enfrentam.'
           : 'Eliminação simples — uma derrota e está fora. Ative para <b>Dupla Eliminatória</b>: só sai com 2 derrotas (quem perde na chave de cima cai na de baixo).') + '</div>';
+      if (e.dupla) {
+        eb += '<div style="margin-top:14px;">' + _toggleRight('Confronto entre vencedores das chaves', e.grandFinal !== false, 'window._f2GrandFinal(this.checked)') + '</div>' +
+          '<div style="font-size:.72rem;color:var(--text-muted);margin-top:6px;">' +
+          (e.grandFinal !== false ? 'O confronto decide o título geral. Sem ele, cada chave terá seu vencedor.'
+            : 'Os vencedores das chaves superior e inferior recebem títulos separados.') + '</div>';
+        if (e.grandFinal !== false && e.finalSeriesBestOf === 1) eb += '<div style="margin-top:12px;">' +
+          _toggleRight('Segunda partida se o vencedor da chave inferior ganhar a primeira',
+            e.grandFinalReset === true, 'window._f2GrandFinalReset(this.checked)') + '</div>';
+      }
+      eb += '<div style="margin-top:14px;font-size:.72rem;color:var(--text-muted);">Final: melhor de quantas partidas?</div>' +
+        '<input type="number" class="form-control" min="1" max="99" step="2" value="' + (e.finalSeriesBestOf || 1) +
+        '" onchange="window._f2FinalSeries(this.value)" aria-label="Partidas na série final" style="max-width:110px;box-sizing:border-box;">' +
+        '<div style="font-size:.72rem;color:var(--text-muted);margin-top:5px;">Cada partida tem placar próprio. Um número ímpar define a maioria; os sets de cada partida são configurados abaixo.</div>';
       /* ⛔⛔⛔ COMO O RESTO É RESOLVIDO — a escolha do organizador entre os três desenhos.
        * Só aparece na eliminatória SIMPLES: na dupla, a "repescagem" é o próprio formato (todo mundo
        * precisa perder duas vezes), não tratamento de resto — oferecer a escolha ali seria oferecer
@@ -1156,6 +1169,26 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           // à mão (padding 7px 10px, SEM font-size → herdava menor): campo mais baixo e
           // fonte menor que o resto do form.
           eb += '<div style="margin-top:8px;"><input type="text" class="form-control" value="' + _safe(e.nomes[i] || '') + '" placeholder="Nome da chave ' + (i + 1) + ' (opcional)" oninput="window._f2LineName(' + i + ',this.value)" style="max-width:300px;box-sizing:border-box;"></div>';
+        }
+        if (cfg.classifAtiva && e.linhas > 1) {
+          eb += '<div style="margin-top:14px;font-size:.72rem;color:var(--text-muted);">Como cada chave recebe classificados</div>' +
+            _pill(e.lineAssignment !== 'rank_ranges', "window._f2LineAssignment('strategy')", 'Distribuir por formação e semeadura') +
+            _pill(e.lineAssignment === 'rank_ranges', "window._f2LineAssignment('rank_ranges')", 'Faixas de colocação por chave');
+          if (e.lineAssignment === 'rank_ranges') {
+            eb += '<div style="font-size:.72rem;color:var(--text-muted);margin:6px 0;">A colocação é ' +
+              (cfg.classifScope === 'per_group' || (cfg.parceria === 'rei_rainha' && cfg.rodadas.n === 1)
+                ? 'de cada grupo' : 'da classificação geral') +
+              '. As faixas não devem se sobrepor. Duplas novas são formadas dentro de cada faixa.</div>';
+            for (var ri = 0; ri < e.linhas; ri++) {
+              var range = (e.lineRankRanges || [])[ri] || { from: ri + 1, to: ri + 1 };
+              eb += '<div style="display:flex;align-items:center;gap:7px;margin-top:7px;flex-wrap:wrap;color:var(--text-main);">' +
+                '<span style="min-width:95px;">' + _safe(e.nomes[ri] || ('Chave ' + (ri + 1))) + '</span>' +
+                '<label>do <input type="number" min="1" max="999" class="form-control" value="' + range.from +
+                '" onchange="window._f2LineRange(' + ri + ',\'from\',this.value)" style="width:75px;display:inline-block;"></label>' +
+                '<label>ao <input type="number" min="1" max="999" class="form-control" value="' + range.to +
+                '" onchange="window._f2LineRange(' + ri + ',\'to\',this.value)" style="width:75px;display:inline-block;"></label></div>';
+            }
+          }
         }
         // Grande Final — na SIMPLES com mais de uma linha (na dupla-elim é sempre,
         // não tem toggle). ON = campeões das linhas se cruzam numa grande final (após a
@@ -1803,6 +1836,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   };
 
   window._f2GrandFinal = function (checked) { if (!S) return; S.cfg.eliminatoria.grandFinal = !!checked; _norm(); _rerender(); };
+  window._f2GrandFinalReset = function (checked) { if (!S) return; S.cfg.eliminatoria.grandFinalReset = !!checked; _norm(); _rerender(); };
+  window._f2FinalSeries = function (value) { if (!S) return; S.cfg.eliminatoria.finalSeriesBestOf = Number(value); _norm(); _rerender(); };
   // Dupla eliminação não usa BYE/sobra única. A troca solicitada pelo organizador
   // é explícita e visível antes da normalização tolerante de documentos antigos.
   window._f2ElimDupla = function (checked) {
@@ -1857,6 +1892,28 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
    * força a `true` na linha seguinte. Decoy — faz o próximo leitor consertar o lugar
    * errado. [[project_third_place_always]] [[feedback_funcao_dentro_de_outra_nao_existe]] */
   window._f2LineName = function (i, v) { if (S && S.cfg.eliminatoria.nomes) S.cfg.eliminatoria.nomes[i] = v; };
+  window._f2LineAssignment = function (value) {
+    if (!S) return;
+    var e = S.cfg.eliminatoria;
+    e.lineAssignment = value === 'rank_ranges' ? 'rank_ranges' : 'strategy';
+    if (e.lineAssignment === 'rank_ranges' && (!e.lineRankRanges || e.lineRankRanges.length !== e.linhas)) {
+      var total = Math.max(S.cfg.classificados || 1, e.linhas);
+      var base = Math.floor(total / e.linhas), extra = total % e.linhas, rank = 1;
+      e.lineRankRanges = Array.from({ length: e.linhas }, function (_, i) {
+        var count = base + (i < extra ? 1 : 0), out = { from: rank, to: rank + count - 1 };
+        rank += count; return out;
+      });
+    }
+    _norm(); _rerender();
+  };
+  window._f2LineRange = function (index, field, value) {
+    if (!S || (field !== 'from' && field !== 'to')) return;
+    var e = S.cfg.eliminatoria;
+    if (!Array.isArray(e.lineRankRanges)) e.lineRankRanges = [];
+    if (!e.lineRankRanges[index]) e.lineRankRanges[index] = { from: 1, to: 1 };
+    e.lineRankRanges[index][field] = Number(value);
+    _norm(); _rerender();
+  };
 
   // ── MODO FORM: monta os controles dentro do #fase1-box do editar/criar. ──
   // sport: modalidade; initialCfg: config existente (t.fmt2) ou null (default do esporte).

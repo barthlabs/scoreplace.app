@@ -435,12 +435,15 @@
         dupla: false,         // v4.4.58: false = eliminatória simples; true = Dupla Eliminatória (repescagem)
         linhas: 1,
         nomes: [''],
+        lineAssignment: 'strategy', // alternativa: faixas explícitas de classificação
+        lineRankRanges: [],
         origem: 'ja_formadas',
         formacao: 'performance', // Como parear classificados ou formar as novas duplas.
         semeadura: 'performance', // Como distribuir confrontos na chave simples, independentemente da formação.
         qualifyAll: false,       // false = os X melhores (slider); true = TODOS avançam
         terceiro: true,
         grandFinal: true,        // v4.4.73: grande final unindo as linhas. Só editável na SIMPLES
+        finalSeriesBestOf: 1,   // número de partidas na final; sets seguem em scoring
                                  // com 2/4 linhas (desativar = linhas independentes). Dupla = sempre.
         lateEnrollment: 'inherit', // inscrições durante a ELIMINATÓRIA: inherit (segue a fase inicial) | closed | standby | expand
         // Novos confrontos só existem com inscrições abertas; 'inherit' segue a fase inicial.
@@ -693,11 +696,14 @@
     e.dupla = e.dupla === true;
     if (e.dupla) e.linhas = 1;
     e.linhas = Math.max(1, Math.min(32, parseInt(e.linhas, 10) || 1));
-    // v4.4.73: grande final. Default ON. Dupla Eliminatória SEMPRE tem (inerente ao
-    // formato). Só a SIMPLES com 2/4 linhas pode desativar (→ linhas independentes,
-    // cada uma com seu campeão). 1 linha não tem conceito de grande final.
+    // O encontro entre vencedores das chaves é decisão do organizador também
+    // na dupla eliminatória. Sem ele, cada chave declara seu próprio vencedor.
     e.grandFinal = (e.grandFinal !== false);
-    if (e.dupla) e.grandFinal = true;
+    e.grandFinalReset = e.grandFinalReset === true;
+    var seriesCount = Number(e.finalSeriesBestOf);
+    e.finalSeriesBestOf = Number.isInteger(seriesCount) && seriesCount >= 1 && seriesCount <= 99 && seriesCount % 2 === 1
+      ? seriesCount : 1;
+    if (e.finalSeriesBestOf > 1) e.grandFinalReset = false;
     /* ⛔⛔⛔ COMO O RESTO É RESOLVIDO — a escolha do organizador entre os três desenhos.
      *
      * O problema que ela resolve: a chave só desce limpa quando o número de equipes da rodada é
@@ -719,6 +725,13 @@
     if (!Array.isArray(e.nomes)) e.nomes = [];
     while (e.nomes.length < e.linhas) e.nomes.push('');
     e.nomes = e.nomes.slice(0, e.linhas);
+    e.lineAssignment = e.lineAssignment === 'rank_ranges' ? 'rank_ranges' : 'strategy';
+    if (!out.classifAtiva || !e.ativa || e.dupla || e.linhas < 2) e.lineAssignment = 'strategy';
+    e.lineRankRanges = Array.isArray(e.lineRankRanges) ? e.lineRankRanges.slice(0, e.linhas).map(function (r) {
+      var from = Math.max(1, parseInt(r && r.from, 10) || 1);
+      var to = Math.max(from, parseInt(r && r.to, 10) || from);
+      return { from: from, to: to };
+    }) : [];
     // v4.4.40: origem é DETERMINADA pela classificatória (não é escolha livre): pontuação
     // individual (rei/rainha, sorteio-a-cada-rodada) → FORMAR as duplas dos indivíduos;
     // dupla fixa → duplas carregam (já formadas).
@@ -824,6 +837,14 @@
     }
     return mapping;
   }
+  function _configuredMapping(e, dests, fallback) {
+    if (e.lineAssignment !== 'rank_ranges') return fallback;
+    return dests.map(function (dest, i) {
+      var r = (e.lineRankRanges || [])[i] || {};
+      return { dest: dest, rankFrom: Math.max(1, parseInt(r.from, 10) || 1),
+        rankTo: Math.max(1, parseInt(r.to, 10) || 1), label: (e.nomes && e.nomes[i]) || '' };
+    });
+  }
   function _lineDests(count) {
     if (count === 1) return ['main'];
     var dests = ['upper', 'lower'];
@@ -890,9 +911,10 @@
     });
     var dRR = _lineDests(e0.linhas);
     // per_group: cada linha puxa até `cutRR` de CADA grupo de 4 (rankTo = corte).
-    var mapRR = dRR.map(function (dst, di) {
+    var mapRRDefault = dRR.map(function (dst, di) {
       return { dest: dst, rankFrom: 1, rankTo: cutRR, label: (e0.nomes && e0.nomes[di]) || '' };
     });
+    var mapRR = _configuredMapping(e0, dRR, mapRRDefault);
     var pairRR = ({ performance: 'top', equilibrio: 'balanced', sorteio: 'draw_among' }[e0.formacao] || 'top');
     var seedRR = ({ performance: 'seed', equilibrio: 'balanced', sorteio: 'draw' }[e0.semeadura] || 'seed');
     var elimDuplaRR = !!e0.dupla;
@@ -905,10 +927,14 @@
       source: {
         type: 'previous_phase', fromPhaseOffset: 1,
         byGroupRank: true, scope: 'per_group',
-        qualifyMode: 'per_group', qualifyQuantity: 'top', qualifyTopN: cutRR, mapping: mapRR
+        qualifyMode: 'per_group', qualifyQuantity: 'top', qualifyTopN: cutRR, mapping: mapRR,
+        lineAssignment: e0.lineAssignment
       },
       fixedPairs: true, pairingStrategy: pairRR, bracketSeeding: seedRR,
-      mapping: mapRR, grandFinal: elimDuplaRR || (e0.linhas > 1 && e0.grandFinal !== false),
+      mapping: mapRR, grandFinal: elimDuplaRR ? e0.grandFinal !== false : (e0.linhas > 1 && e0.grandFinal !== false),
+      grandFinalPolicy: elimDuplaRR ? (e0.grandFinal !== false ? 'play' : 'separate') : null,
+      grandFinalReset: e0.grandFinalReset === true,
+      finalSeriesBestOf: e0.finalSeriesBestOf,
       thirdPlace: e0.terceiro, lateEnrollment: _elimLE(e0.lateEnrollment, opts),
       newMatchups: _elimNM(e0.newMatchups, opts, _elimLE(e0.lateEnrollment, opts)), drawManual: false,
       // Formato da partida PRÓPRIO da eliminatória (null = herda t.scoring). A rodada de
@@ -987,7 +1013,10 @@
         source: { type: 'enrollment' },
         fixedPairs: isDupla, pairingStrategy: 'top', // eliminação direta: inscritos sorteados (sem ranking → semeadura neutra)
         mapping: _buildMapping(d0, e0.nomes, Math.max(e0.linhas, 2) * 8, e0.linhas),
-        grandFinal: elimDupla0 || (e0.linhas > 1 && e0.grandFinal !== false), thirdPlace: e0.terceiro, drawManual: false
+        grandFinal: elimDupla0 ? e0.grandFinal !== false : (e0.linhas > 1 && e0.grandFinal !== false),
+        grandFinalPolicy: elimDupla0 ? (e0.grandFinal !== false ? 'play' : 'separate') : null,
+        grandFinalReset: e0.grandFinalReset === true, thirdPlace: e0.terceiro, drawManual: false,
+        finalSeriesBestOf: e0.finalSeriesBestOf
       });
       if (opts.lateEnrollment) p0.lateEnrollment = opts.lateEnrollment; // eliminação direta: fase inicial = painel
       if (opts.newMatchups === true || opts.newMatchups === false) p0.newMatchups = opts.lateEnrollment === 'closed' ? false : opts.newMatchups;
@@ -1165,9 +1194,10 @@
       // v4.4.x: quantos avançam vem do SLIDER (classificados). "Todos" (qualifyAll) NÃO é limitado
       // pelo número do slider — é o MÁXIMO (todos) → mapping com rankTo:999 (profundidade = todos
       // no motor, buildEntrantsByDest). Sem "Todos" → faixas do slider via _buildMapping.
-      var mapping = qAll0
+      var defaultMapping = qAll0
         ? dests.map(function (dst, di) { return { dest: dst, rankFrom: 1, rankTo: 999, label: (e.nomes && e.nomes[di]) || '' }; })
         : _buildMapping(dests, e.nomes, topN, nLines);
+      var mapping = _configuredMapping(e, dests, defaultMapping);
       // Origem: "formar" (indivíduos → duplas) só quando pontuação individual.
       var forma = (e.origem === 'formar' && scoreInd && isDupla);
       var elimFixedPairs = !!forma;            // forma duplas dos indivíduos
@@ -1195,12 +1225,16 @@
           byGroupRank: perGroup, scope: perGroup ? 'per_group' : 'overall',
           qualifyMode: qAll ? 'all' : (perGroup ? 'per_group' : 'overall'),
           qualifyQuantity: qAll ? 'all' : 'top', qualifyTopN: topN, mapping: mapping,
+          lineAssignment: e.lineAssignment,
           // v4.4.x: Rei/Rainha em escopo GERAL → grupos rotativos de 4 = ranking geral é lista
           // plana → motor usa pool global (respeita o slider), sem degenerar pra por-grupo.
           flatOverall: (cfg.parceria === 'rei_rainha' && !perGroup)
         },
         fixedPairs: elimFixedPairs, pairingStrategy: elimPairing, bracketSeeding: elimSeeding,
-        mapping: mapping, grandFinal: elimDupla || (nLines > 1 && e.grandFinal !== false), thirdPlace: e.terceiro,
+        mapping: mapping, grandFinal: elimDupla ? e.grandFinal !== false : (nLines > 1 && e.grandFinal !== false),
+        grandFinalPolicy: elimDupla ? (e.grandFinal !== false ? 'play' : 'separate') : null,
+        grandFinalReset: e.grandFinalReset === true, thirdPlace: e.terceiro,
+        finalSeriesBestOf: e.finalSeriesBestOf,
         lateEnrollment: _elimLE(e.lateEnrollment, opts), // inscrições durante a elim: herda a fase inicial por padrão
         newMatchups: _elimNM(e.newMatchups, opts, _elimLE(e.lateEnrollment, opts)),
         scoring: e.scoring || null,                      // formato da partida DESTA fase (null = herda t.scoring)

@@ -211,6 +211,12 @@
      * Cloud Function do sorteio roda a MESMA cópia por vendor. Quem acrescentar um segundo caminho
      * para desenhar chave recria o defeito. */
     var desenho = C.chave(N, formato, opts.politicaDaChave, decisoes);
+    var semGrandeFinal = formato === 'dupla' && opts.grandFinal === false;
+    var ordemPublicada = desenho.ordem.filter(function (id) {
+      if (formato !== 'dupla') return true;
+      if (semGrandeFinal && (id === 'GF' || id === 'GF-EXTRA')) return false;
+      return id !== 'GF-EXTRA' || opts.grandFinalReset !== false;
+    });
     // Namespace determinístico (fase + categoria). Sem ele, a fase 0 e a fase 1 —
     // ou duas categorias — teriam, cada uma, um jogo chamado 'VC-R1-P1', e
     // _findMatch acharia o errado. NUNCA pode conter timestamp: o id precisa
@@ -221,7 +227,7 @@
     // 1ª passada: cria os matches vazios, na ORDEM CRONOLÓGICA do desenho
     // (a ordem importa: repescagem depois dos jogos normais da R1, porque
     //  a repescagem consome o perdedor de um jogo normal).
-    desenho.ordem.forEach(function (id) {
+    ordemPublicada.forEach(function (id) {
       var j = desenho.porId[id];
       var m = {
         id: ns + j.id,                              // ← ESTRUTURAL. É esta a correção.
@@ -258,7 +264,7 @@
     });
 
     // 2ª passada: INVERTE as arestas — cada `entrada` vira ponteiro gravado na ORIGEM.
-    desenho.ordem.forEach(function (id) {
+    ordemPublicada.forEach(function (id) {
       var j = desenho.porId[id];
       var m = byId[id];
       j.entradas.forEach(function (e, k) {
@@ -379,11 +385,11 @@
         N: N, formato: formato,
         plano: desenho.plano,
         rodadas: desenho.rodadas,
-        totalJogos: desenho.totalJogos,
+        totalJogos: semGrandeFinal ? matches.filter(function (m) { return !m.isThirdPlace; }).length : desenho.totalJogos,
         // dupla com menos de 2 rodadas (N=2) NÃO tem chave inferior nem grande
         // final — o desenho não as cria. Apontar pra 'GF' inexistente deixava o
         // torneio "sem campeão" (pego pelo playout).
-        finalId: ns + (desenho.porId['GF'] ? 'GF' : ('VC-R' + desenho.rodadas + '-P1'))
+        finalId: ns + (!semGrandeFinal && desenho.porId['GF'] ? 'GF' : ('VC-R' + desenho.rodadas + '-P1'))
       }
     };
   }
@@ -853,7 +859,7 @@
 
       // grande final: campeão da superior × campeão da inferior
       var finalSup = porIdFinal[ns + 'VC-R' + (desenho.rodadas + 1) + '-P1'];
-      if (finalSup && inf.campeaoDe) {
+      if (finalSup && inf.campeaoDe && opts.grandFinal !== false) {
         var gf = {
           id: ns + 'GF', round: (inf.rodadas.length || 0) + 1, bracket: 'grand',
           p1: 'TBD', p2: 'TBD', winner: null,
@@ -1117,6 +1123,9 @@
     // nos documentos legados, como em phases-engine.phaseGames.
     var faseAtiva = Number(opts && opts.phaseIndex != null ? opts.phaseIndex : (t.currentPhaseIndex || 0));
     var faseCfg = Array.isArray(t.phases) ? t.phases[faseAtiva] : null;
+    var gfDaFase = !(faseCfg && faseCfg.grandFinalPolicy === 'separate');
+    var resetDaFase = faseCfg && Object.prototype.hasOwnProperty.call(faseCfg, 'grandFinalReset')
+      ? faseCfg.grandFinalReset === true : undefined;
     var faseClassificatoria = faseCfg && (faseCfg.kind === 'classification' ||
       faseCfg.formatCode === 'grupos_mata' || faseCfg.formatCode === 'liga');
     if (faseClassificatoria) return res;
@@ -1365,6 +1374,7 @@
          * catch do integrador, o recálculo devolvia zero jogos, e 16 suítes de tardio ficaram vermelhas
          * de uma vez. [[feedback_engolir_erro_custa_horas_do_dono]] — e [[feedback_funcao_dentro_de_outra_nao_existe]]. */
         politicaDaChave: politicaDaFase,
+        grandFinal: gfDaFase, grandFinalReset: resetDaFase,
         redesenhoConfirmado: _decidida && _politicaAqui === 'bye',
         ns: ns || null,
         category: cat,
@@ -1392,6 +1402,7 @@
            * com pedido de confirmação — hoje quem barra é o guarda de confronto PUBLICADO, e ele não
            * cobre o caso de ainda não haver confronto publicado. */
           politicaDaChave: politicaDaFase,
+          grandFinal: gfDaFase, grandFinalReset: resetDaFase,
           ns: ns || null, category: cat,
           phaseIndex: (doGrupo[0] && doGrupo[0].phaseIndex) || 0,
           tournamentId: t.id

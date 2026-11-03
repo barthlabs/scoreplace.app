@@ -402,6 +402,7 @@
     return {
       shuffle: _shuffleDet || undefined,
       scope: src.scope || 'per_group',
+      lineAssignment: src.lineAssignment === 'rank_ranges' ? 'rank_ranges' : 'strategy',
       rankingBasis: src.rankingBasis || 'individual',
       flatOverall: src.flatOverall === true,
       includeInactive: (cfg && cfg._includeInactive) || null,
@@ -539,6 +540,35 @@
     // Entram POR CLASSIFICAÇÃO — a MESMA régua dos ativos. Não jogaram → 0 pts naquelas
     // rodadas; quem jogou antes guarda os pontos. Ver project_phase_inactive_resolution.
     var _ina = (opts.includeInactive || []).filter(Boolean);
+    // Contrato novo: o organizador pode atribuir faixas de colocação a cada
+    // linha. O recorte acontece ANTES da formação das duplas; assim 1º+2º
+    // nunca acaba misturado com 3º+4º por uma redistribuição posterior.
+    // Ausência de lineAssignment mantém exatamente a distribuição histórica.
+    if (opts.lineAssignment === 'rank_ranges') {
+      function routeRanges(standings) {
+        mapping.forEach(function (mp) {
+          var from = Math.max(1, parseInt(mp.rankFrom, 10) || 1);
+          var to = Math.max(from, parseInt(mp.rankTo, 10) || from);
+          _distributePool(standings.slice(from - 1, to >= 999 ? undefined : to), [mp.dest]);
+        });
+      }
+      if (_useOverall) routeRanges(_globalStandings(prevGroups || [], computeStandings, opts));
+      else (prevGroups || []).forEach(function (g) { routeRanges(computeStandings(g) || []); });
+      if (_ina.length) {
+        var lowest = _lowestDestKey(byDest);
+        if (lowest) {
+          var step = fixedPairs ? 2 : 1;
+          for (var ii = 0; ii < _ina.length; ii += step) {
+            byDest[lowest].push(mkTeam(_ina.slice(ii, ii + step).map(function (p) {
+              return { name: (p && (p.displayName || p.name)) || '', uid: p && p.uid,
+                manualParticipantId: p && p.manualParticipantId };
+            })));
+          }
+        }
+      }
+      if (pairingStrategy === 'top') _ordenaDuplasPorMeritoCombinado(byDest, opts);
+      return byDest;
+    }
     if (_useOverall) {
       // ESCOPO GERAL: monta um grupo SINTÉTICO só com os inativos + TODOS os jogos da
       // fase, e joga no _globalStandings — assim eles são ranqueados junto com todo mundo
@@ -919,6 +949,14 @@
   }
 
   var DEST_BRACKET = { upper: 'gold', lower: 'silver', main: 'main', line3: 'line3', line4: 'line4' };
+  function markFinalSeries(matches, finalId, count) {
+    if (!(count > 1) || !finalId) return;
+    var final = (matches || []).filter(function (m) { return m && m.id === finalId && !m.isBye; })[0];
+    if (!final) return;
+    final.seriesBestOf = count;
+    final.seriesRootId = final.id;
+    final.seriesGameNumber = 1;
+  }
   // v2.6.79: sem rótulos Ouro/Prata hardcoded — o nome de cada linha/chave vem do
   // que o organizador digitou (mapping[].label); fallback genérico "Chave N".
   var DEST_LABEL = { main: 'Eliminatória' };
@@ -1116,6 +1154,9 @@
       converge = { gf: gfN, third: thirdN, semis: semisN, matches: convN };
     }
 
+    var bestOf = Number(phaseCfg && phaseCfg.finalSeriesBestOf || 1);
+    if (converge && converge.gf) markFinalSeries(allMatches, converge.gf.id, bestOf);
+    else destOrder.forEach(function (dest) { markFinalSeries(allMatches, tiers[dest].finalMatchId, bestOf); });
     return { matches: allMatches, tiers: tiers, converge: converge, byDest: byDest, waitlist: phaseWaitlist };
   }
 
@@ -1789,12 +1830,20 @@
        * ⚠️ A leitura é do DOCUMENTO, não da tela: a política é decidida antes do sorteio e congelada,
        * e quem desenha é o servidor pela mesma cópia. */
       politicaDaChave: (cfg && cfg.politicaDaChave) || (cfg && cfg.torneio && cfg.torneio.politicaDaChave) || null,
+      grandFinal: !(cfg && cfg.grandFinalPolicy === 'separate'),
+      grandFinalReset: cfg && Object.prototype.hasOwnProperty.call(cfg, 'grandFinalReset')
+        ? cfg.grandFinalReset === true : undefined,
       ns: _nsDeterministico(idPrefix),
       bracketKey: bracketKey || null,
       semear: !_daInscricao,
       seedingMode: cfg && ['balanced', 'draw'].indexOf(cfg.bracketSeeding) >= 0 ? cfg.bracketSeeding : 'seed',
       rnd: cfg && cfg._det && cfg._det.rnd
     });
+    markFinalSeries(built.matches, built.meta.finalId, Number(cfg && cfg.finalSeriesBestOf || 1));
+    if (dupla && cfg && cfg.grandFinalPolicy === 'separate') {
+      built.matches.filter(function (m) { return m.bracket === 'lower' && !m.nextMatchId; })
+        .forEach(function (m) { markFinalSeries(built.matches, m.id, Number(cfg.finalSeriesBestOf || 1)); });
+    }
     // chaves monta a chave INTEIRA (na dupla: superior + inferior + grande final),
     // então nada de needsDoubleElim — não há 2º construtor pra rodar depois.
     //
