@@ -16,6 +16,13 @@ const firstDraw = tie.originalDrawMatches([
 ]);
 assert.deepStrictEqual(firstDraw.map(m => [m.round, m.gameNumber, m.p1]),
   [[1, 1, 'B'], [2, 2, 'A']], 'a primeira rodada conserva a prioridade do sorteio original');
+assert.equal(tie.baseGameNumber([{ id: 'grupo-1' }, { id: 'grupo-2' }], [
+  { match: { id: 'grupo-1', _gameNum: 91 } },
+  { match: { id: 'grupo-2', _gameNum: 93 } },
+  { match: { id: 'outro-grupo', _gameNum: 120 } }
+]), 93, 'o jogo extra herda o último número do grupo, não do torneio inteiro');
+assert.deepStrictEqual([0, 1, 2, 25, 26, 27].map(tie.letterIndex),
+  ['A', 'B', 'C', 'Z', 'AA', 'AB']);
 assert.strictEqual(tie.drawPosition({ uid: 'B', name: 'B' }, { B: 1 }), 1,
   'ordem por nome cobre jogo histórico sem UID no slot');
 const ordered = tie.rankInitialRows([rows[3], rows[2], rows[1], rows[0]], cmp,
@@ -40,8 +47,9 @@ assert.deepStrictEqual(tie.boundariesFor({ fixedPairs: false, pairingStrategy: '
 assert.deepStrictEqual(tie.boundariesFor({ fixedPairs: true, pairingStrategy: 'draw_among', source: {
   mapping: [{ dest: 'a', rankTo: 4 }, { dest: 'b', rankTo: 4 }]
 } }, 5), [4], 'sorteio de parcerias só resolve o corte de entrada');
-const games = tie.matchesFor(found, 'phase-0-group-0');
+const games = tie.matchesFor(found, 'phase-0-group-0', 93, 0);
 assert.deepStrictEqual(games.map(m => [m.p1.name, m.p2.name]), [['B', 'C'], ['B', 'D'], ['C', 'D']]);
+assert.deepStrictEqual(games.map(m => m.displayGameNumber), ['93A', '93B', '93C']);
 games[0] = tie.scoreMatch(games[0], [{ p1: 6, p2: 4 }], 1); // B > C
 games[1] = tie.scoreMatch(games[1], [{ p1: 6, p2: 2 }], 1); // B > D
 games[2] = tie.scoreMatch(games[2], [{ p1: 6, p2: 3 }], 1); // C > D
@@ -64,15 +72,27 @@ const next = { fixedPairs: true, pairingStrategy: 'top', source: { mapping: [
   { dest: 'first', rankFrom: 1, rankTo: 4 }, { dest: 'second', rankFrom: 1, rankTo: 4 }
 ] } };
 const pools = [{ id: 'group-a', rows }];
-let flow = tie.resolvePhaseTies(fresh, 0, pools, next, () => cmp, null, 1);
+let flow = tie.resolvePhaseTies(fresh, 0, pools, next, () => cmp, null, 1, false, () => 93);
 assert.strictEqual(flow.status, 'choice');
+assert.strictEqual(flow.tie.baseGameNumber, 93);
+assert.strictEqual(flow.tie.firstExtraGameNumber, '93A');
 flow = tie.resolvePhaseTies(fresh, 0, pools, next, () => cmp,
-  { type: 'play', decisionId: flow.tie.decisionId }, 1);
+  { type: 'play', decisionId: flow.tie.decisionId }, 1, false, () => 93);
 assert.strictEqual(flow.status, 'pending');
+assert.deepStrictEqual(flow.decision.matches.map(m => m.displayGameNumber), ['93A', '93B', '93C']);
+const sameBase = { phaseTieDecisions: { '0': { earlier: {
+  baseGameNumber: 93, matches: [{}, {}]
+} } } };
+const sameBaseChoice = tie.resolvePhaseTies(sameBase, 0, pools, next, () => cmp, null, 1, false, () => 93);
+assert.strictEqual(sameBaseChoice.tie.firstExtraGameNumber, '93C');
+const sameBasePlay = tie.resolvePhaseTies(sameBase, 0, pools, next, () => cmp,
+  { type: 'play', decisionId: sameBaseChoice.tie.decisionId }, 1, false, () => 93);
+assert.deepStrictEqual(sameBasePlay.decision.matches.map(m => m.displayGameNumber), ['93C', '93D', '93E'],
+  'outra disputa extra ligada ao mesmo jogo-base não reutiliza letras');
 for (const [index, score] of [[6, 4], [4, 6], [6, 4]].entries()) {
   flow = tie.resolvePhaseTies(fresh, 0, pools, next, () => cmp,
     { type: 'score', decisionId: flow.tie.decisionId, matchId: flow.decision.matches[index].id,
-      sets: [{ p1: score[0], p2: score[1] }] }, 1);
+      sets: [{ p1: score[0], p2: score[1] }] }, 1, false, () => 93);
 }
 assert.strictEqual(flow.status, 'ready');
 assert.deepStrictEqual(flow.orderedPools[0].rows.map(p => p.name), ['A', 'B', 'C', 'D']);
@@ -91,4 +111,6 @@ const noDraw = (a, b) => b.wins - a.wins;
 noDraw.originalOrder = { A: 0, B: 1, C: 2 };
 assert.throws(() => tie.resolvePhaseTies({}, 0, pools, next, () => noDraw, null, 1, true),
   /ordem do sorteio original ausente/, 'não inventa prioridade do atleta sem posição no sorteio');
+assert.throws(() => tie.resolvePhaseTies({}, 0, pools, next, () => cmp, null, 1, false, () => null),
+  /número canônico/, 'não inventa número para partidas extras');
 console.log('phase-tie-core: ok');

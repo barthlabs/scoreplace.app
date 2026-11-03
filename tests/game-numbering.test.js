@@ -157,6 +157,11 @@ ok(typeof W._monarchGlobalJogoNum === 'undefined',
     '[CONFRA] censo da classificatória preserva os 81 jogos numerados');
   ok(t.matches[0]._gameNum === 82,
     '[CONFRA] primeiro jogo da eliminatória recebe Jogo 82, não fica sem número');
+  const tie = require('../functions-autodraw/phase-tie-core');
+  const phaseGames = W._phasesEngine.phaseGames(t, 0);
+  const sourceGroup = t.rounds[0].monarchGroups[6];
+  ok(tie.baseGameNumber(sourceGroup.matchIds.map(id => ({ id })), phaseGames) === 21,
+    '[EXTRA] desempate do sétimo grupo usa 21A, apesar de a classificatória terminar no Jogo 81');
 })();
 
 // ── Posição P<n>: IDs do Firestore ordenam P10 antes de P2 se tratados como texto. ──

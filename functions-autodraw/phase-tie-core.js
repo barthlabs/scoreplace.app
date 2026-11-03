@@ -26,6 +26,31 @@ function originalDrawMatches(phaseGames) {
     }));
 }
 
+function baseGameNumber(groupMatches, numberedPhaseGames) {
+  const numbers = new Map();
+  (numberedPhaseGames || []).forEach(entry => {
+    const match = entry && entry.match;
+    const number = Number(match && (match._gameNum || match.scheduledGameNumber));
+    if (match && match.id != null && Number.isInteger(number) && number > 0) {
+      numbers.set(String(match.id), number);
+    }
+  });
+  const groupNumbers = (groupMatches || []).map(match => match && match.id != null
+    ? numbers.get(String(match.id)) : null).filter(number => Number.isInteger(number) && number > 0);
+  return groupNumbers.length ? Math.max(...groupNumbers) : null;
+}
+
+function letterIndex(index) {
+  if (!Number.isInteger(index) || index < 0) throw new Error('índice do jogo extra inválido');
+  let remaining = index + 1, label = '';
+  while (remaining > 0) {
+    remaining--;
+    label = String.fromCharCode(65 + remaining % 26) + label;
+    remaining = Math.floor(remaining / 26);
+  }
+  return label;
+}
+
 function drawPosition(row, originalOrder) {
   if (!row || !originalOrder) return null;
   const uid = row.uid && originalOrder[String(row.uid)];
@@ -102,11 +127,13 @@ function boundariesFor(nextPhase, count) {
   return Array.from(new Set(cuts)).sort((a, b) => a - b);
 }
 
-function matchesFor(tie, idPrefix) {
+function matchesFor(tie, idPrefix, baseNumber, suffixOffset) {
   if (!tie || ![2, 3].includes(tie.players.length)) throw new Error('simples exige dois ou três atletas');
   const pairs = tie.players.length === 2 ? [[0, 1]] : [[0, 1], [0, 2], [1, 2]];
   return pairs.map((pair, index) => ({
     id: String(idPrefix) + '-' + index,
+    displayGameNumber: Number.isInteger(baseNumber) && baseNumber > 0
+      ? String(baseNumber) + letterIndex((suffixOffset || 0) + index) : null,
     p1: tie.players[pair[0]], p2: tie.players[pair[1]],
     sets: [], winnerKey: null
   }));
@@ -164,7 +191,7 @@ function applyOrder(rows, tie, orderKeys) {
 
 // O servidor chama esta função dentro de sua transação. `action` é uma intenção
 // administrativa; a classificação e os atletas sempre vêm do documento fresco.
-function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, action, setsToWin, autoDraw) {
+function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, action, setsToWin, autoDraw, numberForPool) {
   const book = t.phaseTieDecisions || {};
   const phaseBook = book[String(phaseIndex)] || {};
   let changed = false, usedAction = false;
@@ -178,6 +205,14 @@ function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, actio
         throw new Error('ordem do sorteio original ausente para atleta empatado');
       }
       const decisionId = pool.id + ':' + tie.from + ':' + tie.to;
+      const baseNumber = !autoDraw && numberForPool ? numberForPool(pool) : null;
+      if (!autoDraw && numberForPool && (!Number.isInteger(baseNumber) || baseNumber <= 0)) {
+        throw new Error('número canônico do último jogo do grupo indisponível');
+      }
+      const suffixOffset = Object.values(phaseBook).filter(item => item && item.baseGameNumber === baseNumber)
+        .reduce((sum, item) => sum + ((item.matches || []).length), 0);
+      const firstExtraGameNumber = Number.isInteger(baseNumber) && baseNumber > 0
+        ? String(baseNumber) + letterIndex(suffixOffset) : null;
       let decision = phaseBook[decisionId];
       const keys = tie.players.map(p => p.key);
       if (decision && (decision.contenders.length !== keys.length ||
@@ -188,16 +223,19 @@ function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, actio
         const type = autoDraw && !action ? 'draw' : action && action.decisionId === decisionId && !usedAction ? action.type : null;
         if (!type) {
           if (changed) { book[String(phaseIndex)] = phaseBook; t.phaseTieDecisions = book; }
-          return { status: 'choice', tie: Object.assign({ decisionId, poolId: pool.id }, tie), changed, orderedPools };
+          return { status: 'choice', tie: Object.assign({ decisionId, poolId: pool.id,
+            baseGameNumber: baseNumber, firstExtraGameNumber }, tie), changed, orderedPools };
         }
         if (!autoDraw) usedAction = true;
         if (type !== 'play' && type !== 'draw') throw new Error('escolha de desempate inválida');
         if (type === 'play' && ![2, 3].includes(keys.length)) throw new Error('simples disponível só para dois ou três atletas');
         decision = { contenders: keys, players: tie.players.map(p => ({ key: p.key, name: p.name })),
+          baseGameNumber: baseNumber,
           originalOrder: keys.slice(), choice: type,
           status: type === 'draw' ? 'complete' : 'pending',
           order: type === 'draw' ? keys.slice() : null,
-          matches: type === 'play' ? matchesFor(tie, 'tie-' + phaseIndex + '-' + decisionId.replace(/[^a-zA-Z0-9_-]/g, '-')) : [],
+          matches: type === 'play' ? matchesFor(tie,
+            'tie-' + phaseIndex + '-' + decisionId.replace(/[^a-zA-Z0-9_-]/g, '-'), baseNumber, suffixOffset) : [],
           setsToWin: Number.isInteger(setsToWin) && setsToWin >= 1 && setsToWin <= 5 ? setsToWin : 1,
           reason: type === 'draw' ? (autoDraw ? 'rule-original-draw-order' : 'organizer-used-original-draw-order') : 'organizer-chose-singles' };
         phaseBook[decisionId] = decision;
@@ -219,7 +257,7 @@ function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, actio
         if (decision.status === 'pending') {
           t.phaseTieDecisions = book;
           book[String(phaseIndex)] = phaseBook;
-          return { status: 'pending', tie: Object.assign({ decisionId, poolId: pool.id }, tie), decision, changed, orderedPools };
+          return { status: 'pending', tie: Object.assign({ decisionId, poolId: pool.id, baseGameNumber: baseNumber }, tie), decision, changed, orderedPools };
         }
       }
       rows = applyOrder(rows, tie, decision.order);
@@ -231,4 +269,6 @@ function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, actio
   return { status: 'ready', orderedPools, changed };
 }
 
-module.exports = { key, canonicalizeTieFallback, originalDrawMatches, drawPosition, rankInitialRows, findBoundaryTie, allBoundaryTies, boundariesFor, matchesFor, scoreMatch, rankPlayers, applyOrder, resolvePhaseTies };
+module.exports = { key, canonicalizeTieFallback, originalDrawMatches, baseGameNumber, letterIndex,
+  drawPosition, rankInitialRows, findBoundaryTie, allBoundaryTies, boundariesFor, matchesFor,
+  scoreMatch, rankPlayers, applyOrder, resolvePhaseTies };

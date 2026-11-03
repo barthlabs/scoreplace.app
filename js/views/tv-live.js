@@ -170,7 +170,7 @@
         .filter(function (decision) { return decision && decision.status === 'pending'; })
         .reduce(function (all, decision) { return all.concat(decision.matches || []); }, [])
         .find(function (match) { return match && !match.winnerKey; });
-      if (tiePending) nextGame = { number: 'EXTRA', category: 'Desempate da classificatória',
+      if (tiePending) nextGame = { number: String(tiePending.displayGameNumber || 'EXTRA'), category: 'Desempate da classificatória',
         a: String(tiePending.p1 && tiePending.p1.name || ''), b: String(tiePending.p2 && tiePending.p2.name || ''),
         ta: { name: '', color: '#94a3b8' }, tb: { name: '', color: '#94a3b8' } };
     }

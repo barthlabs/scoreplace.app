@@ -5844,6 +5844,36 @@ exports.advanceTournamentPhase = onCall(async (request) => {
       // usa a ordem da PRIMEIRA distribuição publicada, nunca a última rodada.
       const originalDrawMatches = typeof phaseEngine.phaseGames === 'function'
         ? _phaseTieCore.originalDrawMatches(phaseEngine.phaseGames(t, current)) : [];
+      let numberedPhaseGames = [];
+      if (tieRule === 'singles_then_draw') {
+        if (typeof drawWindow._assignGlobalGameNumbers !== 'function' ||
+            typeof phaseEngine.phaseGames !== 'function') {
+          throw new HttpsError('failed-precondition', 'Numeração canônica dos jogos indisponível.');
+        }
+        // O numerador carimba _gameNum. Uma cópia impede que esse cálculo
+        // regrave ou altere números dos jogos já publicados no torneio real.
+        const numberSnapshot = JSON.parse(JSON.stringify(t));
+        drawWindow._assignGlobalGameNumbers(numberSnapshot);
+        numberedPhaseGames = phaseEngine.phaseGames(numberSnapshot, current);
+      }
+      const numberForPool = pool => {
+        const matches = sourceMatches(pool);
+        const referencedIds = pool.group && Array.isArray(pool.group.matchIds)
+          ? pool.group.matchIds.map(id => ({ id })) : [];
+        let base = _phaseTieCore.baseGameNumber(matches.concat(referencedIds), numberedPhaseGames);
+        if (base || !pool.group) return base;
+        // Fases posteriores podem fornecer apenas a classificação do grupo.
+        // Nesse caso, a posição do grupo identifica seus jogos na fase numerada.
+        const groupIndex = pool.group.groupIdx != null
+          ? Number(pool.group.groupIdx) : sourceGroups.indexOf(pool.group);
+        const groupGames = numberedPhaseGames.filter(entry => {
+          const match = entry && entry.match;
+          const index = entry && entry.groupIdx != null ? entry.groupIdx : match && match.groupIdx;
+          return sourceGroups.length === 1 || (index != null && Number(index) === groupIndex);
+        });
+        base = _phaseTieCore.baseGameNumber(groupGames.map(entry => entry.match), groupGames);
+        return base;
+      };
       const compareForPool = pool => {
         const slotKeys = (match, side) => {
           const uids = typeof drawWindow._slotUids === 'function' ? drawWindow._slotUids(match, side) : null;
@@ -5875,7 +5905,8 @@ exports.advanceTournamentPhase = onCall(async (request) => {
         const scoring = (currentCfg && currentCfg.scoring) || t.scoring || {};
         const setsToWin = Number(scoring.setsToWin) || 1;
         tieFlow = _phaseTieCore.resolvePhaseTies(t, current, pools, nextCfg,
-          compareForPool, request.data && request.data.tieAction, setsToWin, tieRule === 'draw_order');
+          compareForPool, request.data && request.data.tieAction, setsToWin,
+          tieRule === 'draw_order', tieRule === 'singles_then_draw' ? numberForPool : null);
       } catch (err) {
         throw new HttpsError('failed-precondition', 'Desempate não aplicado: ' + String(err.message || err));
       }

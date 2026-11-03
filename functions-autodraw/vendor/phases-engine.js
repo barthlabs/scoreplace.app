@@ -2877,7 +2877,8 @@
       body += '<p style="font-size:.82rem;line-height:1.5;">O regulamento prevê ' +
         (tie.players && tie.players.length === 3 ? 'um triangular de três partidas de simples' :
          tie.players && tie.players.length === 2 ? 'uma partida extra de simples' : 'a ordem do sorteio original') +
-        '. Se faltar tempo, a organização pode dispensar os jogos e aplicar a ordem do sorteio original, sem sortear novamente.</p>' +
+        '. Se faltar tempo, a organização pode dispensar os jogos e aplicar a ordem do sorteio original, sem sortear novamente.' +
+        (tie.firstExtraGameNumber ? ' Se jogados, os números começam em <b>' + safe(tie.firstExtraGameNumber) + '</b>.' : '') + '</p>' +
         '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:16px;">' +
         ((tie.players || []).length <= 3 ? '<button type="button" id="phase-tie-play" class="btn btn-primary">🎾 Jogar desempate</button>' : '') +
         '<button type="button" id="phase-tie-draw" class="btn btn-secondary">Usar ordem do sorteio original</button></div>';
@@ -2886,7 +2887,7 @@
         ' · ' + decision.setsToWin + ' set(s) para vencer cada partida. Registre os placares por set, por exemplo <b>6-4, 3-6, 6-2</b>.</p>';
       (decision.matches || []).forEach(function (match, index) {
         body += '<div style="padding:10px;margin:8px 0;border:1px solid rgba(255,255,255,.2);border-radius:9px;">' +
-          '<b>' + safe(match.p1.name) + ' × ' + safe(match.p2.name) + '</b>' +
+          '<b>Jogo ' + safe(match.displayGameNumber || 'extra') + ' · ' + safe(match.p1.name) + ' × ' + safe(match.p2.name) + '</b>' +
           (match.winnerKey ? ' · resultado registrado' :
            '<div style="display:flex;gap:8px;margin-top:8px;"><input class="form-control" id="phase-tie-score-' + index +
            '" aria-label="Placar por set" placeholder="6-4' + (decision.setsToWin > 1 ? ', 6-3' : '') +

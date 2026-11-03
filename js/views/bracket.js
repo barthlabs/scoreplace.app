@@ -3989,7 +3989,8 @@ function renderBracket(container, tournamentId, isInline) {
         const names = decision.contenders.map(k => labels[k] || String(k).replace(/^name:/, ''));
         const matches = (decision.matches || []).map(m => {
           const score = (m.sets || []).map(s => s.p1 + '–' + s.p2).join(', ');
-          return '<li>' + window._safeHtml(m.p1 && m.p1.name || '') + ' × ' +
+          return '<li>Jogo ' + window._safeHtml(m.displayGameNumber || 'extra') + ' · ' +
+            window._safeHtml(m.p1 && m.p1.name || '') + ' × ' +
             window._safeHtml(m.p2 && m.p2.name || '') +
             (score ? ' · ' + window._safeHtml(score) : ' · aguardando resultado') + '</li>';
         }).join('');

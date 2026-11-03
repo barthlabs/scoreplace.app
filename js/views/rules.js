@@ -265,7 +265,7 @@ function renderRules(container, tournamentId) {
         ${t.fmt2 && t.fmt2.tieResolution ? `<div style="margin-top:1.25rem;padding:0.9rem 1rem;background:rgba(129,140,248,.08);border:1px solid rgba(129,140,248,.25);border-radius:10px;line-height:1.5;font-size:.85rem;">
           <b>Empate residual na definição dos destinos</b><br>
           ${t.fmt2.tieResolution === 'singles_then_draw'
-            ? 'Depois de todos os critérios de desempate, dois atletas ainda empatados podem jogar uma simples; três podem disputar um triangular de simples, em que todos se enfrentam. O triangular ordena por vitórias, saldo de sets e saldo de games. Na hora do avanço, se não houver tempo, a organização registra a dispensa dos jogos e usa a ordem do sorteio original. Se o triangular continuar empatado, essa mesma ordem original é o último recurso.'
+            ? 'Depois de todos os critérios de desempate, dois atletas ainda empatados podem jogar uma simples; três podem disputar um triangular de simples, em que todos se enfrentam. Cada jogo extra recebe o número do último jogo do grupo que gerou o empate, seguido de A, B ou C. O triangular ordena por vitórias, saldo de sets e saldo de games. Na hora do avanço, se não houver tempo, a organização registra a dispensa dos jogos e usa a ordem do sorteio original. Se o triangular continuar empatado, essa mesma ordem original é o último recurso.'
             : 'Depois de todos os critérios de desempate, vale a ordem do sorteio original. Não há novo sorteio na hora do avanço.'}
         </div>` : ''}
 
