@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "backendCommit": "9e89febd7570df5d2bc1addacd689d5b7a306732",
+  "backendCommit": "aef039411005e1c1f02c8b70ba89b7bb615622df",
   "scopeNote": "Publicação integral do codebase autodraw após mudanças compartilhadas no placar, divisão do torneio e fluxo de fases; cada callable exige recibo deste commit.",
   "functions": [
     "acceptLigaSubstitutionInvite",
