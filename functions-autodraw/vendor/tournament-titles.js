@@ -66,6 +66,13 @@
     if (!complete) {
       return { ok: false, reason: 'phase-incomplete', titles: [] };
     }
+    // Uma simples/triangular extra não integra a lista comum de jogos da fase.
+    // Sua decisão só vale depois da revisão e confirmação pela organização.
+    var phaseTies = t.phaseTieDecisions && t.phaseTieDecisions[String(index)];
+    if (phaseTies && Object.keys(phaseTies).some(function (key) {
+      var decision = phaseTies[key];
+      return decision && decision.status !== 'complete';
+    })) return { ok: false, reason: 'tie-pending', titles: [] };
     var titles = [];
     if (phase.kind === 'elimination') {
       var grandMatches = matches.filter(function (m) { return m.bracket === 'grandfinal' || m.bracket === 'grand'; });

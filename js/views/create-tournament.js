@@ -1851,6 +1851,18 @@ function setupCreateTournamentModal() {
     // o bloco solto acima das fases, com cara de "formato único do torneio inteiro".
     var _formParent = box.parentElement;
     if (_formParent) {
+      // Primeiro, dimensão e infraestrutura do evento. Esses campos já existiam,
+      // mas apareciam depois das regras da chave. Mover os próprios nós preserva
+      // os valores digitados, listeners e IDs usados pelo save.
+      var _capacity = document.getElementById('cap-max-container');
+      var _capacityRow = _capacity && _capacity.parentElement;
+      var _venue = document.getElementById('venue-photo-box');
+      if (_capacityRow && _capacityRow.parentElement === _formParent) {
+        try { _formParent.insertBefore(_capacityRow, box); } catch (e) {}
+      }
+      if (_venue && _venue.parentElement === _formParent) {
+        try { _formParent.insertBefore(_venue, box); } catch (e) {}
+      }
       // Bloco de categorias (sem id próprio): sobe de #gender-cat-buttons até o filho DIRETO
       // de #fase1-box (posição inicial) OU de #formParent (já realocado numa render anterior) —
       // assim o achamos de novo mesmo depois de movido (senão a ordem invertia entre re-renders).
@@ -1860,8 +1872,8 @@ function setupCreateTournamentModal() {
         while (_pp && _pp.parentElement && _pp.parentElement.id !== 'fase1-box' && _pp.parentElement !== _formParent) _pp = _pp.parentElement;
         if (_pp && _pp.parentElement && (_pp.parentElement.id === 'fase1-box' || _pp.parentElement === _formParent)) _catBlock = _pp;
       }
-      // Ordem final determinística (idempotente a cada render): … Máx. Participantes ·
-      // Categorias · #fase1-box (com o Formato da Partida DENTRO da fase inicial).
+      // Ordem final determinística: capacidade · local/quadras · categorias ·
+      // decisões do torneio (com o formato da partida na fase inicial).
       if (_catBlock && _catBlock.parentElement) { try { _formParent.insertBefore(_catBlock, box); } catch (e) {} }
       // v1.15.28: o Rigor da inscrição vive DENTRO do box de Categorias (no topo),
       // então acompanha a realocação do bloco de categorias — sem mover separado.

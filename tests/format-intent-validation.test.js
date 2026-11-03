@@ -163,13 +163,21 @@ uiHarness.window._f2MountInForm(uiBox, 'Beach Tennis', uiCfg, { id: 'future-test
 assert.match(uiBox.innerHTML, /Confrontos na chave/, 'organizador vê a decisão de semeadura');
 assert.match(uiBox.innerHTML, /Saída escolhida: a classificatória seleciona participantes para a eliminatória/);
 const decisionTitles = ['2. Quem disputa os jogos?', '3. Como se formam as duplas?',
-  '4. Haverá classificatória?', '5–6. 🎯 Fase Classificatória',
+  '4. Haverá classificatória?', 'Times na classificatória', '5–6. 🎯 Fase Classificatória',
   '7. Para quem valem os resultados?', '8. Como o torneio define o campeão?',
   '9–10. 🏆 Fase Eliminatória', '11. Revisão das decisões'];
 assert.deepStrictEqual(decisionTitles.map(title => uiBox.innerHTML.indexOf(title)).filter(index => index >= 0).length,
   decisionTitles.length, 'o fluxo exibe todas as perguntas aplicáveis');
 assert.deepStrictEqual(decisionTitles.map(title => uiBox.innerHTML.indexOf(title)).slice().sort((a, b) => a - b),
   decisionTitles.map(title => uiBox.innerHTML.indexOf(title)), 'as perguntas seguem a ordem fixa');
+assert.equal((uiBox.innerHTML.match(/onchange="window\._f2TeamCompetition\(this\.checked\)"/g) || []).length, 1,
+  'a decisão de ter times aparece uma vez antes dos detalhes de pontuação');
+uiHarness.window._f2TeamCompetition(true);
+assert.equal(uiHarness.window._f2GetConfig().teamCompetition.enabled, true,
+  'a escolha antecipada por times chega à configuração do torneio');
+assert.match(uiBox.innerHTML, /Pontuação agregada para times/,
+  'os detalhes de pontuação surgem após escolher times');
+uiHarness.window._f2TeamCompetition(false);
 uiHarness.window._f2Semeadura('equilibrio');
 assert.equal(uiHarness.window._f2GetConfig().eliminatoria.semeadura, 'equilibrio',
   'o clique persiste na configuração que será enviada ao servidor');

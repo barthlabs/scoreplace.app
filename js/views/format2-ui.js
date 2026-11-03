@@ -837,7 +837,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var um = cfg.grupos === 1;
     var rotativo = isDupla && (cfg.parceria === 'rei_rainha' || cfg.parceria === 'sorteio_rodada' || cfg.parceria === 'super_eight');
     var scoreInd = cfg._scoreBy === 'individual';
-    var entryControls = '', formationControls = '', scoringControls = '', structureControls = '';
+    var entryControls = '', formationControls = '', teamChoiceControls = '', scoringControls = '', structureControls = '';
     // v4.5.49: o AGENDAMENTO (Rodadas: repetição + nº de rodadas) e as DATAS/Inscrições da fase
     // (#f2-classif-extra) vão num acumulador SEPARADO — ficam SEMPRE editáveis, mesmo com a fase
     // classificatória já sorteada (o organizador ajusta a temporada: repetição, nº de rodadas e
@@ -926,6 +926,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       var tcLocked = _classifLocked;
       var tcToggle = '<label style="display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:' + (tcLocked ? 'not-allowed' : 'pointer') + ';font-size:.9rem;color:var(--text-main);' + (tcLocked ? 'opacity:.55;' : '') + '">' +
         '<span>🏆 Competição por times</span><span class="toggle-switch"><input type="checkbox"' + (tc.enabled ? ' checked' : '') + (tcLocked ? ' disabled' : '') + ' onchange="window._f2TeamCompetition(this.checked)"><span class="toggle-slider"></span></span></label>';
+      teamChoiceControls = _sec('Haverá times?', tcToggle +
+        '<div style="font-size:.72rem;color:var(--text-muted);margin-top:7px;line-height:1.45;">' +
+        (tc.enabled ? 'Sim. As duplas permanecem nas suas categorias; configure abaixo como os resultados contam para os times.' :
+          'Não. A classificação usa apenas atletas ou duplas, conforme a formação escolhida.') + '</div>');
+      tcToggle = '';
       if (tc.enabled) {
         var internalAvoidRequired = _teamScheduleRequiresInternalAvoid(tc);
         tcToggle += '<div style="font-size:.72rem;color:var(--text-muted);margin:6px 0 12px;line-height:1.45;">As duplas permanecem nas suas categorias e são distribuídas entre os times no sorteio. A tabela soma os resultados de todas as categorias.</div>' +
@@ -976,7 +981,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
               '<div style="font-size:.72rem;color:var(--text-muted);margin-top:6px;">' + (tc.schedule.mode === 'structured' ? 'Os mesmos times se enfrentam na mesma ordem em cada categoria.' : 'Cada categoria recebe seus próprios confrontos sorteados.') + '</div>' +
             '</div>');
       }
-      scoringControls += _sec('Pontuação agregada para times', tcToggle);
+      if (tc.enabled) scoringControls += _sec('Pontuação agregada para times', tcToggle);
     }
 
     var rModo = cfg.rodadas.modo;
@@ -1317,7 +1322,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       (_p0Drawn ? '<div style="pointer-events:none;opacity:.55;" aria-disabled="true">' : '<div>') +
       _pill(cfg.classifAtiva, 'window._f2ClassifAtiva(true)', 'Sim') +
       _pill(!cfg.classifAtiva, 'window._f2ClassifAtiva(false)', 'Não · entrada direta na eliminatória') + '</div>');
-    var h = entryStep + formationStep + classifChoice +
+    var teamChoiceStep = teamChoiceControls ? _phaseBlock('Times na classificatória', '#818cf8',
+      (_classifLocked ? '<div style="pointer-events:none;opacity:.55;" aria-disabled="true">' : '<div>') +
+      teamChoiceControls + '</div>') : '';
+    var h = entryStep + formationStep + classifChoice + teamChoiceStep +
       (cfg.classifAtiva ? _phaseBlock('5–6. 🎯 Fase Classificatória', '#818cf8', classifInner,
         _hdrRight(_classifLocked, '')) + scoringStep : '');
     var _titleUnit = cfg.teamCompetition && cfg.teamCompetition.enabled

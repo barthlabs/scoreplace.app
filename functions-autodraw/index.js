@@ -6847,6 +6847,7 @@ exports.finishTournament = onCall(async request => {
         throw new HttpsError('failed-precondition',
           result.reason === 'more-phases' ? 'Ainda há uma fase por disputar.' :
           result.reason === 'phase-incomplete' ? 'Há jogos ou rodadas pendentes.' :
+          result.reason === 'tie-pending' ? 'Há desempate extra aguardando resultado ou confirmação.' :
           'Não foi possível determinar o título pelas regras do torneio.');
       }
       t.titleAwards = result.titles.map(title => Object.assign({ rulesContractVersion: 2 }, title));

@@ -47,6 +47,13 @@ assert.equal(realEngine.phaseComplete(playedGroups), true);
 assert.deepEqual(resolve(playedGroups, { engine: realEngine }).titles.map(x => x.winnerName), ['A1', 'B2']);
 assert.deepEqual(resolve({ phases: [{ kind: 'classification', classification: { structure: 'round_robin' } }],
   currentPhaseIndex: 0, standings: [{ name: 'Líder', uid: 'u1' }] }).titles.map(x => x.winnerName), ['Líder']);
+const titleTie = { phases: [{ kind: 'classification', classification: { structure: 'round_robin' } }],
+  currentPhaseIndex: 0, standings: [{ name: 'Líder', uid: 'u1' }],
+  phaseTieDecisions: { 0: { extra: { status: 'review' } } } };
+assert.equal(resolve(titleTie).reason, 'tie-pending',
+  'encerramento não atribui título antes de confirmar o desempate extra');
+assert.deepEqual(resolve({ ...titleTie, phaseTieDecisions: { 0: { extra: { status: 'complete' } } } })
+  .titles.map(x => x.winnerName), ['Líder']);
 
 const teamBase = { phases: [{ kind: 'classification', classification: { structure: 'groups' }, gruposCount: 1 }],
   currentPhaseIndex: 0, competitionTeams: [{ id: 't1', name: 'Time Um' }, { id: 't2', name: 'Time Dois' }],
