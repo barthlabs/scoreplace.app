@@ -933,6 +933,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           '<div style="margin-top:12px;font-size:.72rem;color:var(--text-muted);margin-bottom:6px;">Escopo da tabela</div>' +
           _pill(tc.aggregation !== 'per_category', 'window._f2TeamAggregation(\'overall\')', '🌐 Geral') +
           _pill(tc.aggregation === 'per_category', 'window._f2TeamAggregation(\'per_category\')', '🏷️ Por categoria') +
+          (cfg.grupos > 1 && !cfg.eliminatoria.ativa
+            ? '<div style="font-size:.72rem;color:var(--text-muted);margin-top:7px;line-height:1.45;">Sem final entre grupos, cada grupo tem seu campeão. “Geral” soma as categorias <b>dentro de cada grupo</b>; “Por categoria” dá um título por categoria em cada grupo.</div>'
+            : '') +
           '<div style="margin-top:8px;">' +
           _pill(tc.classificationUnit !== 'pair', 'window._f2TeamClassificationUnit(\'team\')', '👥 Por time') +
           _pill(tc.classificationUnit === 'pair', 'window._f2TeamClassificationUnit(\'pair\')', '🤝 Por dupla') + '</div>' +

@@ -25,6 +25,12 @@ rodadas/emparelhamentos. Em todos-contra-todos com `n` equipes, cada equipe
 joga `n - 1` confrontos; em grupos menores a agenda não pode inventar jogos
 além dessa quantidade.
 
+Quando a classificatória por vários grupos encerra o torneio sem final entre
+eles, cada grupo declara seu próprio campeão. Na competição por times, a opção
+de somar categorias produz uma tabela geral **dentro de cada grupo**; a opção
+por categoria produz um título por categoria **em cada grupo**. A pontuação
+de grupos que não se enfrentaram nunca cria um campeão geral implícito.
+
 Pareamento por ranking e clusters dinâmicos é uma configuração da
 classificatória. É a equivalência canônica do que documentos antigos chamavam
 de “suíço”: após cada rodada, os pontos podem mover pessoas entre clusters; o

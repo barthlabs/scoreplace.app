@@ -1,3 +1,7 @@
+// 2.5.89 — Numa competição por times encerrada pela classificatória em vários
+// grupos, cada grupo recebe seu campeão. A escolha de tabela geral soma as
+// categorias dentro do grupo; a escolha por categoria dá títulos por categoria
+// em cada grupo. Não se declara campeão geral sem uma final entre grupos.
 // 2.5.88 — Torneios novos seguem o mesmo configurador de decisões: classificatória
 // opcional, títulos por tabela ou eliminatória, grupos e linhas com nomes livres,
 // vagas de avanço, formação de duplas, desempates na ordem escolhida, folgas de

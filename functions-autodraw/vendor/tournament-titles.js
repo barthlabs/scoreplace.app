@@ -101,15 +101,43 @@
       var teamConfig = teamCore && teamCore.rankingConfigForTournament && teamCore.rankingConfigForTournament(t);
       if (teamConfig && teamConfig.enabled) {
         var pairs = t.competitionPairs || [];
-        var categories = teamConfig.aggregation === 'per_category'
-          ? Array.from(new Set(matches.map(function (m) { return m.category; }).filter(Boolean))).sort() : [null];
-        categories.forEach(function (category) {
-          var chosen = category ? matches.filter(function (m) { return m.category === category; }) : matches;
-          var rows = teamConfig.classificationUnit === 'pair'
-            ? teamCore.pairStandings(pairs, chosen, teamConfig, category || undefined)
-            : teamCore.standings(t.competitionTeams || [], chosen, teamConfig);
-          var title = awardFromRow(rows[0], category ? 'category' : 'overall', category || '');
-          if (title) titles.push(title);
+        var grouped = phase.classification && phase.classification.structure === 'groups' &&
+          Number(phase.gruposCount || t.gruposCount || 1) > 1;
+        if (grouped && (!deps.engine || typeof deps.engine.prevPhaseGroups !== 'function')) {
+          return { ok: false, reason: 'standings-unavailable', titles: [] };
+        }
+        var pools = grouped ? deps.engine.prevPhaseGroups(t).map(function (g, index) {
+          var games = (g.matches || []).concat((g.rounds || []).reduce(function (all, round) {
+            return all.concat((round && round.matches) || []);
+          }, []));
+          return { label: String(g.name || 'Grupo ' + (index + 1)), matches: games };
+        }) : [{ label: '', matches: matches }];
+        if (grouped && pools.length !== Number(phase.gruposCount || t.gruposCount)) {
+          return { ok: false, reason: 'standings-unavailable', titles: [] };
+        }
+        pools.forEach(function (pool) {
+          var categories = teamConfig.aggregation === 'per_category'
+            ? Array.from(new Set(pool.matches.map(function (m) { return m.category; }).filter(Boolean))).sort() : [null];
+          categories.forEach(function (category) {
+            var chosen = category ? pool.matches.filter(function (m) { return m.category === category; }) : pool.matches;
+            var ids = {};
+            if (grouped) chosen.forEach(function (m) {
+              ['p1', 'p2'].forEach(function (side) {
+                var teamId = m[side + 'CompetitionTeamId'] ||
+                  (m[side === 'p1' ? 'team1Obj' : 'team2Obj'] || {}).competitionTeamId;
+                if (teamId) ids[String(teamId)] = true;
+              });
+            });
+            var eligibleTeams = grouped ? (t.competitionTeams || []).filter(function (team) {
+              return ids[String(team.id || '')];
+            }) : (t.competitionTeams || []);
+            var rows = teamConfig.classificationUnit === 'pair'
+              ? teamCore.pairStandings(grouped ? [] : pairs, chosen, teamConfig, category || undefined)
+              : teamCore.standings(eligibleTeams, chosen, teamConfig);
+            var label = [pool.label, category].filter(Boolean).join(' · ');
+            var title = awardFromRow(rows[0], grouped ? 'group' : category ? 'category' : 'overall', label);
+            if (title) titles.push(title);
+          });
         });
       } else if (phase.classification && phase.classification.structure === 'groups' &&
           Number(phase.gruposCount || t.gruposCount || 1) > 1) {

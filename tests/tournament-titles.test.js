@@ -48,7 +48,7 @@ assert.deepEqual(resolve(playedGroups, { engine: realEngine }).titles.map(x => x
 assert.deepEqual(resolve({ phases: [{ kind: 'classification', classification: { structure: 'round_robin' } }],
   currentPhaseIndex: 0, standings: [{ name: 'Líder', uid: 'u1' }] }).titles.map(x => x.winnerName), ['Líder']);
 
-const teamBase = { phases: [{ kind: 'classification', classification: { structure: 'groups' }, gruposCount: 2 }],
+const teamBase = { phases: [{ kind: 'classification', classification: { structure: 'groups' }, gruposCount: 1 }],
   currentPhaseIndex: 0, competitionTeams: [{ id: 't1', name: 'Time Um' }, { id: 't2', name: 'Time Dois' }],
   teamCompetition: { enabled: true, classificationUnit: 'team', aggregation: 'overall' },
   matches: [
@@ -60,4 +60,43 @@ assert.deepEqual(resolve(teamBase).titles.map(x => [x.scope, x.winnerId]), [['ov
 const categoryTeams = { ...teamBase, teamCompetition: { ...teamBase.teamCompetition, aggregation: 'per_category' } };
 assert.deepEqual(resolve(categoryTeams).titles.map(x => [x.scope, x.label, x.winnerId]),
   [['category', 'Feminino', 't1'], ['category', 'Masculino', 't2']]);
+const teamGroups = { ...teamBase, phases: [{ kind: 'classification', classification: { structure: 'groups' }, gruposCount: 2 }], competitionTeams: [
+  { id: 't1', name: 'Time Um' }, { id: 't2', name: 'Time Dois' },
+  { id: 't3', name: 'Time Três' }, { id: 't4', name: 'Time Quatro' }
+], groups: [
+  { name: 'Praia', matches: [
+    { id: 'g1f', category: 'Feminino', p1: 'A / B', p2: 'C / D',
+      p1CompetitionTeamId: 't1', p2CompetitionTeamId: 't2', winner: 'A / B' },
+    { id: 'g1m', category: 'Masculino', p1: 'E / F', p2: 'G / H',
+      p1CompetitionTeamId: 't1', p2CompetitionTeamId: 't2', winner: 'E / F' }
+  ] },
+  { name: 'Serra', matches: [
+    { id: 'g2f', category: 'Feminino', p1: 'I / J', p2: 'K / L',
+      p1CompetitionTeamId: 't3', p2CompetitionTeamId: 't4', winner: 'I / J' },
+    { id: 'g2f2', category: 'Feminino', p1: 'Q / R', p2: 'S / T',
+      p1CompetitionTeamId: 't3', p2CompetitionTeamId: 't4', winner: 'Q / R' },
+    { id: 'g2m', category: 'Masculino', p1: 'M / N', p2: 'O / P',
+      p1CompetitionTeamId: 't3', p2CompetitionTeamId: 't4', winner: 'O / P' }
+  ] }
+] };
+assert.deepEqual(resolve(teamGroups).titles.map(x => [x.scope, x.label, x.winnerId]),
+  [['group', 'Praia', 't1'], ['group', 'Serra', 't3']],
+  'times de grupos independentes recebem campeões por grupo, sem campeão geral');
+assert.equal(realEngine.phaseComplete(teamGroups), true);
+assert.deepEqual(resolve(teamGroups, { engine: realEngine }).titles.map(x => [x.scope, x.label, x.winnerId]),
+  [['group', 'Praia', 't1'], ['group', 'Serra', 't3']],
+  'o resolvedor usa os grupos do motor real, não uma tabela de teste');
+assert.equal(resolve({ ...teamGroups, groups: [teamGroups.groups[0]] }).reason,
+  'standings-unavailable', 'grupo ausente impede título parcial');
+assert.deepEqual(resolve({ ...teamGroups, teamCompetition: {
+  ...teamGroups.teamCompetition, aggregation: 'per_category'
+} }).titles.map(x => [x.scope, x.label, x.winnerId]), [
+  ['group', 'Praia · Feminino', 't1'], ['group', 'Praia · Masculino', 't1'],
+  ['group', 'Serra · Feminino', 't3'], ['group', 'Serra · Masculino', 't4']
+], 'categoria escolhida pela organização não mistura grupos independentes');
+const pairGroups = { ...teamGroups, competitionPairs: [{ id: 'ghost', name: 'AAA / BBB' }],
+  teamCompetition: { ...teamGroups.teamCompetition, classificationUnit: 'pair',
+    scoring: { win: -1, draw: -1, loss: 0 } } };
+assert.deepEqual(resolve(pairGroups).titles.map(x => x.winnerName), ['C / D', 'K / L'],
+  'dupla inscrita fora do grupo não entra na tabela daquele grupo, mesmo com pontuação negativa');
 console.log('✓ títulos resolvidos por final, linha, grupo, ranking e time/categoria');
