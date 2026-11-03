@@ -589,6 +589,9 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
     rulesContractVersion: 2, status: 'active', fmt2: currentFormat.cfg, phases: currentFormat.phases,
     currentPhaseIndex: 0, _phaseMaterialized: 0,
     matches: [{ id: 'resultado-publicado', phaseIndex: 0, winner: 'A' }] };
+  const phaseZeroBefore = structuredClone(configTournament.phases[0]);
+  const oldFutureHash = require('node:crypto').createHash('sha256')
+    .update(JSON.stringify(configTournament.fmt2)).digest('hex');
   configDrawWindow.FORMAT2 = FORMAT2;
   const futureChoice = structuredClone(configTournament.fmt2);
   futureChoice.classificados = 4;
@@ -604,8 +607,12 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
   assert.equal(configTournament.phases[1].mapping.length, 3);
   assert.equal(configTournament.gruposClassified, 4);
   assert.equal(configTournament.politicaDaChave, 'bye');
+  assert.deepEqual(configTournament.phases[0], phaseZeroBefore, 'fase atual sorteada não é recompilada');
   assert.equal(configTournament.matches[0].winner, 'A', 'jogo da fase corrente permanece intacto');
   assert.equal(configTournament.futureConfigRevisionsV2.length, 1, 'revisão futura guarda identidade e hashes');
+  assert.equal(configTournament.futureConfigRevisionsV2[0].previousHash, oldFutureHash);
+  assert.equal(configTournament.futureConfigRevisionsV2[0].nextHash,
+    require('node:crypto').createHash('sha256').update(JSON.stringify(configTournament.fmt2)).digest('hex'));
   configTournament.currentPhaseIndex = 1;
   const laterChoice = structuredClone(configTournament.fmt2);
   laterChoice.eliminatoria.linhas = 4;
