@@ -66,6 +66,27 @@ ok('grupo histórico idêntico no pai e na subcoleção remonta',
 duplicadoLegado.config.rounds[0].monarchGroups[0].classifCongelada[0].uid = 'outro';
 ok('grupo histórico divergente continua bloqueado', S.remontar(duplicadoLegado) === null);
 
+// O primeiro placar conseguia limpar os grupos duplicados, mas o planejador
+// devolvia as 35 cópias ao pai. A segunda tentativa então falhava na leitura.
+const WritePlan = require(path.join(ROOT, 'functions-autodraw/write-plan.js'));
+const antesPlacar = JSON.parse(JSON.stringify(t0));
+antesPlacar._nGrupos = p.grupos.length;
+antesPlacar._semPesados = ['matches', 'participants', 'opponentHistory', 'grupos'];
+const depoisPlacar = JSON.parse(JSON.stringify(antesPlacar));
+depoisPlacar.rounds[0].matches[0].score1 = 6;
+const planoPlacar = WritePlan.planWrites(antesPlacar, depoisPlacar, {
+  split: S, boundary: t => ({ persist: t, clean: t }), agoraIso: '2026-11-03T15:00:00.000Z'
+});
+const raizGravada = planoPlacar.ops.find(op => op.colecao === null).doc;
+ok('placar mantém grupos históricos na subcoleção',
+  S.partesParaGravar(depoisPlacar).includes('grupos') &&
+  raizGravada.rounds.every(r => !r.monarchGroups || r.monarchGroups.length === 0) &&
+  raizGravada._nGrupos === p.grupos.length && planoPlacar.ops.every(op => op.colecao !== 'grupos'));
+const segundaLeitura = S.remontar({ config: raizGravada, grupos: p.grupos,
+  matches: S.dividir(depoisPlacar, ['matches']).matches, participants: [], opponentHistory: [] });
+ok('segundo placar consegue remontar o torneio',
+  !!segundaLeitura && S.iguais(segundaLeitura.rounds, depoisPlacar.rounds));
+
 // ── ② a chave é identidade, e a POSIÇÃO vem do _loc ──────────────────────────
 const ks = p.grupos.map((x) => x._chave);
 ok('⛔ nenhuma chave se repete', new Set(ks).size === ks.length);

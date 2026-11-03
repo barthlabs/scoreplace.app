@@ -58,7 +58,7 @@ function planWrites(tAntes, tDepois, ctx) {
   if (!o.agoraIso) throw new Error('[write-plan] ctx.agoraIso é obrigatório — instante estável entra por argumento');
 
   const split = o.split;
-  if (!split || typeof split.dividir !== 'function' || typeof split.partesDe !== 'function') {
+  if (!split || typeof split.dividir !== 'function' || typeof split.partesParaGravar !== 'function') {
     throw new Error('[write-plan] tradutor de partes indisponível — recuso planejar torneio dividido');
   }
   const b = o.boundary(tDepois);
@@ -68,7 +68,7 @@ function planWrites(tAntes, tDepois, ctx) {
    * aplicativo nativo antigo, mas uma fotografia sem ele NÃO pode mudar esta decisão:
    * tratá-la como inteira devolveria jogos/inscritos ao documento pai e recriaria as duas
    * fontes de verdade. `partesDe` aplica o fallback canônico e o plano repõe o marcador. */
-  const fora = split.partesDe(tDepois);
+  const fora = split.partesParaGravar(tDepois);
 
   const pDepois = split.dividir(_clone(b.persist), fora);
   // A fronteira recebe uma fotografia que pode carregar marca antiga. O set

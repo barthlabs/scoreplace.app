@@ -1345,8 +1345,8 @@ window.FirestoreDB = {
      * antiga não trouxe `_semPesados`; o plano abaixo volta a gravar o marcador para o
      * aplicativo nativo que ainda o consulta. */
     var _splitSalvar = (typeof window !== 'undefined') ? window._tSplit : null;
-    var _fora = (!cleanData._syncSandboxSemPartes && _splitSalvar && typeof _splitSalvar.partesDe === 'function')
-      ? _splitSalvar.partesDe(cleanData) : null;
+    var _fora = (!cleanData._syncSandboxSemPartes && _splitSalvar && typeof _splitSalvar.partesParaGravar === 'function')
+      ? _splitSalvar.partesParaGravar(cleanData) : null;
 
     /* ⛔⛔ NÃO GRAVAR PARTE QUE NÃO CHEGOU — O GUARDA QUE FALTAVA, E É UM SÓ.
      *
@@ -1812,8 +1812,8 @@ window.FirestoreDB = {
       /* Mutação transacional também recebe documento magro: ausência do marcador não
        * autoriza devolver partes ao pai. A regra é a mesma de saveTournament. */
       var _splitMutar = (typeof window !== 'undefined') ? window._tSplit : null;
-      var _foraM = (_splitMutar && typeof _splitMutar.partesDe === 'function')
-        ? _splitMutar.partesDe(_persist) : null;
+      var _foraM = (_splitMutar && typeof _splitMutar.partesParaGravar === 'function')
+        ? _splitMutar.partesParaGravar(_persist) : null;
       if (_foraM && _foraM.length && typeof window !== 'undefined' && window._tSplit && typeof window._tSplit.dividir === 'function') {
         try {
           var _pM = window._tSplit.dividir(JSON.parse(JSON.stringify(_persist)), _foraM);

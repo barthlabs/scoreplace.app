@@ -93,6 +93,17 @@
     return PARTES_CANONICAS.slice();
   }
 
+  /* O contrato novo tem três partes. Alguns torneios históricos também têm
+   * grupos físicos: a leitura já os recupera por _nGrupos, e a escrita precisa
+   * usar a mesma extensão para não devolvê-los ao documento pai a cada placar. */
+  function partesParaGravar(t) {
+    var fora = partesDe(t);
+    var antigos = Array.isArray(t && t._semPesados) ? t._semPesados : [];
+    if (antigos.indexOf('grupos') !== -1 || Number(t && t._nGrupos || 0) > 0 ||
+        Number(t && t._nPartes && t._nPartes.grupos || 0) > 0) fora.push('grupos');
+    return fora;
+  }
+
   function _arr(x) { return Array.isArray(x) ? x : []; }
   function _clone(x) { return x === undefined ? undefined : JSON.parse(JSON.stringify(x)); }
 
@@ -799,7 +810,7 @@
               colecaoDaParte: colecaoDaParte, chaveDoGrupo: chaveDoGrupo, montarDoBanco: montarDoBanco,
               jogosQueMudaram: jogosQueMudaram, faseIndexavel: _faseIndexavel,
               PESADOS: PESADOS, PARTES: PARTES, PARTES_CANONICAS: PARTES_CANONICAS,
-              partesDe: partesDe, canonico: canonico, iguais: iguais };
+              partesDe: partesDe, partesParaGravar: partesParaGravar, canonico: canonico, iguais: iguais };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (raiz) { raiz._tSplit = api; }
 })(typeof window !== 'undefined' ? window : null);
