@@ -246,8 +246,21 @@ function clearAbsenceAndWoHistory(t, side) {
   });
 }
 
-function invalidateFinalSnapshots(t, m) {
+function invalidateFinalSnapshots(t, m, now) {
   if (t.rulesContractVersion >= 2) {
+    const phaseKey = String(Number(m.phaseIndex || 0));
+    const previousTieDecisions = t.phaseTieDecisions && t.phaseTieDecisions[phaseKey];
+    if (previousTieDecisions && Object.keys(previousTieDecisions).length) {
+      // A escolha dependia da classificação anterior. Guardamos o fato completo
+      // no histórico dividido antes de pedir uma nova decisão para esta fase.
+      if (!Array.isArray(t.history)) t.history = [];
+      t.history.push({
+        date: new Date((typeof now === 'number') ? now : Date.now()).toISOString(),
+        message: 'Decisões de desempate da fase ' + (Number(phaseKey) + 1) + ' invalidadas por correção de placar',
+        phaseTieDecisions: JSON.parse(JSON.stringify(previousTieDecisions))
+      });
+      delete t.phaseTieDecisions[phaseKey];
+    }
     // Retratos finais são fatos publicados, mas uma correção administrativa
     // auditada precisa invalidar apenas os retratos que dependem deste jogo.
     const groups = [];
@@ -269,13 +282,13 @@ function invalidateFinalSnapshots(t, m) {
   }
 }
 
-function reopenMatch(t, m) {
+function reopenMatch(t, m, now) {
   if (m.winner || m.wo) {
     undoAdvancement(t, m);
   }
   clearResultFields(m);
   if (t.rulesContractVersion >= 2) {
-    invalidateFinalSnapshots(t, m);
+    invalidateFinalSnapshots(t, m, now);
     // Jogos seguintes da série podem já ter agenda, quadra ou referências em
     // rodadas. Reabrir este resultado não apaga documentos de partida.
     if (t.status === 'finished') { t.status = 'active'; delete t.finishedAt; }
@@ -363,7 +376,7 @@ function applyResult(t, opts) {
       undoAdvancement(t, m);
       delete m.wo; delete m.woAbsentSide;
       clearResultFields(m);
-      invalidateFinalSnapshots(t, m);
+      invalidateFinalSnapshots(t, m, o.now);
       clearAbsenceAndWoHistory(t, m.p1);
       clearAbsenceAndWoHistory(t, m.p2);
       if (m.roundIndex !== undefined && Array.isArray(t.rounds) && t.rounds[m.roundIndex]) {
@@ -378,7 +391,7 @@ function applyResult(t, opts) {
       if (o.logMessage) pushHistory(t, o.logMessage, o.now);
       return { ok: true, outcome: 'wo-reverted', reason: '' };
     }
-    reopenMatch(t, m);
+    reopenMatch(t, m, o.now);
     if (o.logMessage) pushHistory(t, o.logMessage, o.now);
     return { ok: true, outcome: payload.action === 'reset-match' ? 'match-reset' : 'result-reopened', reason: '' };
   }
@@ -404,7 +417,7 @@ function applyResult(t, opts) {
     if (!authz.ok) return { ok: false, reason: authz.reason };
     if (t.rulesContractVersion >= 2 && m.winner) {
       if (!authz.isAdmin && !authz.isReferee) return { ok: false, reason: 'already-decided' };
-      reopenMatch(t, m);
+      reopenMatch(t, m, o.now);
     }
     const finalPayload = Object.assign({}, payload);
     delete finalPayload.action;
@@ -535,7 +548,7 @@ function applyResult(t, opts) {
   }
 
   // Caminho definitivo: a MESMA mutação do cliente, re-aplicada sobre o doc FRESCO.
-  if (t.rulesContractVersion >= 2 && m.winner) reopenMatch(t, m);
+  if (t.rulesContractVersion >= 2 && m.winner) reopenMatch(t, m, o.now);
   const applied = win._applyResultToTournament(t, matchId, payload);
   if (!applied) return { ok: false, reason: 'apply-failed' };
   if (typeof win._maybeFinishElimination === 'function') win._maybeFinishElimination(t);

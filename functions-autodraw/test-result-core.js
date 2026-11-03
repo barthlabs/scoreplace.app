@@ -10,6 +10,7 @@
 // qualquer código que tente resolver por nome falhe aqui. [[project_uid_identity_canon_locked]]
 
 const core = require('./result-core.js');
+const phaseTie = require('./phase-tie-core.js');
 const win = core._window;
 
 let ok = 0, fail = 0;
@@ -47,6 +48,34 @@ function mkT(over) {
 }
 
 const PAYLOAD = { s1: 6, s2: 3, useSets: false, pending: { scoreP1: 6, scoreP2: 3, winner: 'Ana / Bia' } };
+
+// Uma correção antes do avanço precisa desfazer a escolha baseada no placar
+// anterior, mesmo quando o novo empate ocupa a mesma fronteira com outros nomes.
+{
+  const decision = { contenders: ['uid:B', 'uid:C', 'uid:D'], choice: 'play', status: 'pending',
+    matches: [{ id: 'extra-1', displayGameNumber: '93A' }] };
+  const T = mkT({ rulesContractVersion: 2, currentPhaseIndex: 0,
+    phaseTieDecisions: { '0': { 'group-a:1:3': decision } } });
+  const m = win._findMatch(T, 'm1');
+  m.winner = 'Ana / Bia';
+  m.scoreP1 = 6; m.scoreP2 = 3;
+  const reopened = core.applyResult(T, { matchId: 'm1', payload: { action: 'reopen-result' },
+    actor: { uid: UID_ORG }, now: Date.parse('2026-11-03T12:00:00Z') });
+  t('correção reabre o placar da fase atual', reopened.ok, JSON.stringify(reopened));
+  t('decisão antiga sai do fluxo e permanece auditável no histórico',
+    !T.phaseTieDecisions['0'] && T.history.some(h => h.phaseTieDecisions &&
+      h.phaseTieDecisions['group-a:1:3'].matches[0].displayGameNumber === '93A'));
+  const rows = ['A', 'B', 'C', 'E'].map((name, i) => ({ uid: name, name, wins: i ? 1 : 3 }));
+  const compare = (a, b) => b.wins - a.wins;
+  compare.originalOrder = { A: 0, B: 1, C: 2, E: 3 };
+  const next = { fixedPairs: true, pairingStrategy: 'top', source: { mapping: [
+    { dest: 'first', rankFrom: 1, rankTo: 4 }, { dest: 'second', rankFrom: 1, rankTo: 4 }
+  ] } };
+  const flow = phaseTie.resolvePhaseTies(T, 0, [{ id: 'group-a', rows }], next,
+    () => compare, null, 1, false, () => 93);
+  t('avanço pede nova escolha após mudar os empatados',
+    flow.status === 'choice' && flow.tie.players.map(p => p.name).join(',') === 'B,C,E');
+}
 
 console.log('\n──── result-core: autorização ────');
 

@@ -2756,10 +2756,10 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
     catch (e) { throw _drawFail('failed-precondition', (e && e.message) || 'Folga ainda pendente.', { tId, matchId }); }
     const res = applyResultFn(t, {
       matchId: matchId, payload: payload, actor: { uid: ator.uid, email: ator.email || '', name: ator.name || '' },
-      logMessage: logMessage
+      logMessage: logMessage, now: Date.parse(_agoraIsoTx)
     });
     if (!res || !res.ok) return { ok: false, reason: (res && res.reason) || 'apply-failed' };
-    if (t.rulesContractVersion >= 2) {
+    if (t.rulesContractVersion >= 2 && (t.status === 'finished' || t.titleAwards)) {
       const titleResolver = drawWindow && drawWindow.ScoreplaceTournamentTitles;
       if (!titleResolver || typeof titleResolver.resolve !== 'function') {
         throw new HttpsError('internal', 'Resolvedor de títulos indisponível.');
