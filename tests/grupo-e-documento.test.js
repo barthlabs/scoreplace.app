@@ -54,6 +54,18 @@ ok('  → e o retrato congelado volta inteiro',
   JSON.stringify(v.rounds[0].monarchGroups[0].classifCongelada) === JSON.stringify(t0.rounds[0].monarchGroups[0].classifCongelada),
   'é a ordem PUBLICADA — o que não pode mudar depois');
 
+// Um torneio histórico pode ter cópias idênticas dos grupos no pai e na
+// subcoleção. Essa redundância não pode impedir o lançamento de placar; uma
+// divergência real continua sendo erro de integridade.
+const duplicadoLegado = JSON.parse(JSON.stringify(p));
+duplicadoLegado.config.rounds = JSON.parse(JSON.stringify(t0.rounds));
+duplicadoLegado.config._nGrupos = p.grupos.length;
+const remontadoLegado = S.remontar(duplicadoLegado);
+ok('grupo histórico idêntico no pai e na subcoleção remonta',
+  remontadoLegado && S.iguais(remontadoLegado.rounds, t0.rounds));
+duplicadoLegado.config.rounds[0].monarchGroups[0].classifCongelada[0].uid = 'outro';
+ok('grupo histórico divergente continua bloqueado', S.remontar(duplicadoLegado) === null);
+
 // ── ② a chave é identidade, e a POSIÇÃO vem do _loc ──────────────────────────
 const ks = p.grupos.map((x) => x._chave);
 ok('⛔ nenhuma chave se repete', new Set(ks).size === ks.length);

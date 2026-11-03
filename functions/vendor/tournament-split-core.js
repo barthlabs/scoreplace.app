@@ -602,8 +602,18 @@
       .slice().sort(function (x, y) { return (x._loc.ri - y._loc.ri) || (x._loc.gi - y._loc.gi); })
       .forEach(function (x) {
         var r = _arr(t.rounds)[x._loc.ri];
-        if (!r || (r.monarchGroups != null && !Array.isArray(r.monarchGroups)) ||
-            (Array.isArray(r.monarchGroups) && r.monarchGroups[x._loc.gi] != null)) {
+        if (!r || (r.monarchGroups != null && !Array.isArray(r.monarchGroups))) {
+          invalido = true;
+          return;
+        }
+        var inline = Array.isArray(r.monarchGroups) ? r.monarchGroups[x._loc.gi] : null;
+        if (inline != null) {
+          // Torneios anteriores à separação canônica podem guardar o mesmo grupo
+          // no pai e na subcoleção. A cópia idêntica é redundante; divergência
+          // continua bloqueada para não escolher uma classificação arbitrária.
+          var legadoComGruposExternos = Number(t._nGrupos || 0) > 0 ||
+            (Array.isArray(t._semPesados) && t._semPesados.indexOf('grupos') !== -1);
+          if (legadoComGruposExternos && iguais(inline, x.grupo)) return;
           invalido = true;
           return;
         }

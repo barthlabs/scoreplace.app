@@ -8,6 +8,8 @@
 // Firestore invalida uma tentativa, sem confirmar vaga ou jogo pela metade.
 // Correções de placar protegem jogos posteriores e atualizam a chave quando
 // ainda não houve disputa dependente. Torneios históricos não são migrados.
+// O leitor aceita grupos históricos duplicados no documento e na subcoleção
+// apenas quando as duas cópias são idênticas; divergências continuam bloqueadas.
 // 2.5.87 — O histórico dos torneios usa os jogos físicos como fonte única. Cópias
 // antigas de resultados deixam de ser legíveis ou graváveis pelo cliente. As
 // configurações e placares dos torneios existentes não são alterados por este corte.
