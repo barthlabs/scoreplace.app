@@ -2,6 +2,8 @@
 // grupos, cada grupo recebe seu campeão. A escolha de tabela geral soma as
 // categorias dentro do grupo; a escolha por categoria dá títulos por categoria
 // em cada grupo. Não se declara campeão geral sem uma final entre grupos.
+// Se faltar a identidade de um time em qualquer grupo, o encerramento não
+// publica uma lista parcial de campeões; a organização deve corrigir o jogo.
 // 2.5.88 — Torneios novos seguem o mesmo configurador de decisões: classificatória
 // opcional, títulos por tabela ou eliminatória, grupos e linhas com nomes livres,
 // vagas de avanço, formação de duplas, desempates na ordem escolhida, folgas de
