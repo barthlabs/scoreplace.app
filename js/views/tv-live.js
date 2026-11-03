@@ -162,6 +162,18 @@
       a: sideName(t, nextMatch, 'p1'), b: sideName(t, nextMatch, 'p2'),
       ta: teamFor(nextMatch, 1, teams), tb: teamFor(nextMatch, 2, teams)
     } : null;
+    // Partidas extras decidem a rota, mas não pontuam na tabela da fase encerrada.
+    // Elas ficam no livro de decisões; a TV anuncia a próxima mesmo sem quadra atribuída.
+    var tieBook = t.phaseTieDecisions && t.phaseTieDecisions[String(t.currentPhaseIndex || 0)];
+    if (tieBook) {
+      var tiePending = Object.keys(tieBook).sort().map(function (id) { return tieBook[id]; })
+        .filter(function (decision) { return decision && decision.status === 'pending'; })
+        .reduce(function (all, decision) { return all.concat(decision.matches || []); }, [])
+        .find(function (match) { return match && !match.winnerKey; });
+      if (tiePending) nextGame = { number: 'EXTRA', category: 'Desempate da classificatória',
+        a: String(tiePending.p1 && tiePending.p1.name || ''), b: String(tiePending.p2 && tiePending.p2.name || ''),
+        ta: { name: '', color: '#94a3b8' }, tb: { name: '', color: '#94a3b8' } };
+    }
     var zone = eventZone(t);
     var today = localDay(now, zone);
     var resultDays = matches.filter(function (m) { return m && occupancy.isFinished(m) && !m.isBye && !m.isSitOut; })

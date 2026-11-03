@@ -8,6 +8,7 @@ const ENUMS = [
   ['parceria', ['fixa', 'rei_rainha', 'sorteio_rodada']],
   ['formacaoDupla', ['manual', 'sorteio']],
   ['classifScope', ['overall', 'per_group']],
+  ['tieResolution', ['draw_order', 'singles_then_draw']],
   ['rodadas.modo', ['todos', 'fixo']],
   ['rodadas.turnos', ['ida', 'ida_volta']],
   ['classificationPairing.strategy', ['ranking_clusters', 'free_draw']],

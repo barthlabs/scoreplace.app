@@ -113,7 +113,7 @@
     return f(m);
   }
 
-  function _globalStandings(prevGroups, computeStandings) {
+  function _globalStandings(prevGroups, computeStandings, opts) {
     var all = [];
     (prevGroups || []).forEach(function (g) { (computeStandings(g) || []).forEach(function (s) { all.push(s); }); });
     // window (browser / vendor da CF) OU require (Node) — a MESMA regra nos dois, nunca
@@ -133,7 +133,14 @@
       }
       return all;
     }
-    all.sort(function (a, b) { return cmp(a, b, false); });
+    all.sort(function (a, b) {
+      var tieOrder = opts && opts.tieOrder;
+      var ka = a && (a.uid ? 'uid:' + a.uid : 'name:' + a.name);
+      var kb = b && (b.uid ? 'uid:' + b.uid : 'name:' + b.name);
+      var pa = tieOrder && tieOrder[ka], pb = tieOrder && tieOrder[kb];
+      if (pa && pb && pa.decisionId === pb.decisionId) return pa.rank - pb.rank;
+      return cmp(a, b, false);
+    });
     return all;
   }
 
@@ -403,6 +410,7 @@
       // (não à configuração persistida da fase), portanto chegam só pelo contexto.
       promotionTiebreakers: ctx.tiebreakers || (cfg && cfg._promotionTiebreakers) || null,
       promotionBirthByName: ctx.birthByName || (cfg && cfg._promotionBirthByName) || null,
+      tieOrder: (cfg && cfg._tieOrder) || null,
       // quem chama é que sabe qual era a fase ANTERIOR; sem essa informação não se
       // reinterpreta nada (ver ehReiRainhaRodadaUnica).
       prevRRRodadaUnica: (ctx.prevRRRodadaUnica === true) || (cfg && cfg._prevRRRodadaUnica) === true
@@ -545,7 +553,7 @@
         var _inaNames = _ina.map(function (p) { return (p && (p.displayName || p.name)) || ''; }).filter(Boolean);
         _pgForGlobal = (prevGroups || []).concat([{ name: '__inativos__', players: _inaNames, matches: _allMs }]);
       }
-      var global = _globalStandings(_pgForGlobal, computeStandings);
+      var global = _globalStandings(_pgForGlobal, computeStandings, opts);
       var gdepth = (maxRankTo >= 999 || maxRankTo <= 0) ? global.length : Math.min(maxRankTo, global.length);
       _distributePool(global.slice(0, gdepth), destKeys);
     } else {
@@ -2696,6 +2704,7 @@
     try {
       cfg = projectPhaseCfg(t.phases[nextIdx], t, nextIdx);
       prevCfg = projectPhaseCfg(t.phases[cur], t, cur);
+      if (opts.tieOrder) cfg = Object.assign({}, cfg, { _tieOrder: opts.tieOrder });
     } catch (e) {
       return { ok: false, error: 'invalid-phase-config' };
     }
@@ -2855,6 +2864,85 @@
     return { ok: true, matches: built.matches, built: built };
   }
 
+  function _phaseTiePanel(tId, out, context) {
+    var old = document.getElementById('phase-tie-panel'); if (old) old.remove();
+    var tie = out.tie || {}, decision = out.decision || null;
+    var safe = window._safeHtml || function (value) { return String(value || ''); };
+    var overlay = document.createElement('div');
+    overlay.id = 'phase-tie-panel';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.88);display:flex;align-items:center;justify-content:center;padding:16px;';
+    var names = (tie.players || []).map(function (p) { return safe(p.name); }).join(', ');
+    var body = '<p style="font-size:.88rem;line-height:1.5;">Os critérios de desempate terminaram empatados na posição que define o destino de <b>' + names + '</b>.</p>';
+    if (out.reason === 'tie-choice-required') {
+      body += '<p style="font-size:.82rem;line-height:1.5;">O regulamento prevê ' +
+        (tie.players && tie.players.length === 3 ? 'um triangular de três partidas de simples' :
+         tie.players && tie.players.length === 2 ? 'uma partida extra de simples' : 'a ordem do sorteio original') +
+        '. Se faltar tempo, a organização pode dispensar os jogos e aplicar a ordem do sorteio original, sem sortear novamente.</p>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:16px;">' +
+        ((tie.players || []).length <= 3 ? '<button type="button" id="phase-tie-play" class="btn btn-primary">🎾 Jogar desempate</button>' : '') +
+        '<button type="button" id="phase-tie-draw" class="btn btn-secondary">Usar ordem do sorteio original</button></div>';
+    } else if (decision) {
+      body += '<p style="font-size:.82rem;">' + ((tie.players || []).length === 3 ? 'Triangular' : 'Simples') +
+        ' · ' + decision.setsToWin + ' set(s) para vencer cada partida. Registre os placares por set, por exemplo <b>6-4, 3-6, 6-2</b>.</p>';
+      (decision.matches || []).forEach(function (match, index) {
+        body += '<div style="padding:10px;margin:8px 0;border:1px solid rgba(255,255,255,.2);border-radius:9px;">' +
+          '<b>' + safe(match.p1.name) + ' × ' + safe(match.p2.name) + '</b>' +
+          (match.winnerKey ? ' · resultado registrado' :
+           '<div style="display:flex;gap:8px;margin-top:8px;"><input class="form-control" id="phase-tie-score-' + index +
+           '" aria-label="Placar por set" placeholder="6-4' + (decision.setsToWin > 1 ? ', 6-3' : '') +
+           '" style="min-width:0;flex:1;"><button type="button" class="btn btn-primary" data-tie-match="' + index + '">Salvar placar</button></div>') + '</div>';
+      });
+    }
+    overlay.innerHTML = '<div role="dialog" aria-modal="true" aria-label="Desempate antes do avanço" style="background:var(--bg-card,#1e293b);color:var(--text-main,#fff);width:min(560px,100%);max-height:90vh;overflow:auto;border-radius:16px;padding:22px;border:1px solid rgba(255,255,255,.2);">' +
+      '<h3 style="margin:0 0 10px;">Desempate antes da próxima fase</h3>' + body +
+      '<button type="button" id="phase-tie-close" class="btn btn-secondary" style="margin-top:16px;">Fechar por enquanto</button></div>';
+    document.body.appendChild(overlay);
+    overlay.querySelector('#phase-tie-close').onclick = function () { overlay.remove(); };
+    var play = overlay.querySelector('#phase-tie-play');
+    if (play) play.onclick = function () { _phaseTieRequest(tId, context, { type: 'play', decisionId: tie.decisionId }); };
+    var draw = overlay.querySelector('#phase-tie-draw');
+    if (draw) draw.onclick = function () { _phaseTieRequest(tId, context, { type: 'draw', decisionId: tie.decisionId }); };
+    Array.prototype.forEach.call(overlay.querySelectorAll('[data-tie-match]'), function (button) {
+      button.onclick = function () {
+        var index = Number(button.getAttribute('data-tie-match'));
+        var input = overlay.querySelector('#phase-tie-score-' + index);
+        var pieces = String(input && input.value || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+        var sets = pieces.map(function (part) { var m = /^(\d{1,2})\s*[-:]\s*(\d{1,2})$/.exec(part); return m ? { p1: Number(m[1]), p2: Number(m[2]) } : null; });
+        if (!sets.length || sets.some(function (s) { return !s; })) {
+          if (window.showNotification) window.showNotification('Placar inválido', 'Use 6-4, 3-6, 6-2, por exemplo.', 'error');
+          return;
+        }
+        _phaseTieRequest(tId, context, { type: 'score', decisionId: tie.decisionId,
+          matchId: decision.matches[index].id, sets: sets });
+      };
+    });
+  }
+
+  function _phaseTieRequest(tId, context, tieAction) {
+    var data = { tournamentId: String(tId), phaseChoices: context.phaseChoices,
+      operationId: context.operationId };
+    if (tieAction) data.tieAction = tieAction;
+    return window._callCF('advanceTournamentPhase', data, 'Entre na sua conta para avançar a fase.').then(function (response) {
+      var out = (response && response.data) || {};
+      if (out.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(String(tId), out.tournament);
+      if (out.reason === 'tie-choice-required' || out.reason === 'tie-match-pending') {
+        _phaseTiePanel(tId, out, context);
+        return;
+      }
+      if (!out.ok) throw new Error(out.reason || 'advance-failed');
+      if (!out.tournament || typeof window._applyCFTournament !== 'function') throw new Error('phase-snapshot-missing');
+      var panel = document.getElementById('phase-tie-panel'); if (panel) panel.remove();
+      if (window._rerenderBracket) window._rerenderBracket(tId);
+      var current = window._findTournamentById && window._findTournamentById(tId);
+      var phase = current && current.phases && current.phases[out.phaseIndex];
+      if (window.showNotification) window.showNotification('Avançou para ' + ((phase && phase.name) || ('Fase ' + (Number(out.phaseIndex) + 1))),
+        'Fase confirmada pelo servidor.', 'success');
+    }).catch(function (error) {
+      if (window._warn) window._warn('[advancePhase] CF falhou', error);
+      if (window.showNotification) window.showNotification('Não foi possível avançar', String(error.message || error), 'error');
+    });
+  }
+
   // Wrapper de UI: avança a fase do torneio tId (organizador).
   function advanceMultiPhase(tId) {
     var AppStore = window.AppStore;
@@ -2960,7 +3048,7 @@
     // pode ser materializada pelo servidor. Não criar chave otimista diferente
     // no navegador: apenas o recibo canônico altera a tela.
     if (_nextCfg && (((_nextCfg.politicaDaChave || t.politicaDaChave) === 'sobra_unica') ||
-        _nextCfg.bracketSeeding === 'draw')) {
+        _nextCfg.bracketSeeding === 'draw' || (t.fmt2 && t.fmt2.tieResolution))) {
       if (typeof window._callCF !== 'function') {
         if (window.showNotification) window.showNotification('Não foi possível avançar',
           'Conexão com o servidor indisponível. Nenhuma nova chave foi criada nesta tela.', 'error');
@@ -2989,23 +3077,7 @@
           return;
         }
       }
-      window._callCF('advanceTournamentPhase',
-        { tournamentId: String(tId), phaseChoices: _choices, operationId: _drawOperationId },
-        'Entre na sua conta para avançar a fase.').then(function (response) {
-        var out = (response && response.data) || {};
-        if (!out.ok || !out.tournament || typeof window._applyCFTournament !== 'function') {
-          throw new Error(out.reason || 'phase-snapshot-missing');
-        }
-        window._applyCFTournament(String(tId), out.tournament);
-        if (window._rerenderBracket) window._rerenderBracket(tId);
-        var name = (t.phases[out.phaseIndex] || {}).name || ('Fase ' + (Number(out.phaseIndex) + 1));
-        if (window.showNotification) window.showNotification('Avançou para ' + name,
-          'Chave confirmada pelo servidor.', 'success');
-      }).catch(function (error) {
-        if (window._warn) window._warn('[advancePhase] CF falhou', error);
-        if (window.showNotification) window.showNotification('Não foi possível avançar',
-          'Nenhuma nova chave foi confirmada nesta tela. Atualize para conferir o servidor.', 'error');
-      });
+      _phaseTieRequest(tId, { phaseChoices: _choices, operationId: _drawOperationId }, null);
       return;
     }
 

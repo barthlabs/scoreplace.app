@@ -13,6 +13,8 @@ const start = source.indexOf('    // Primeiro a decisão de promoção de linhas
 const end = source.indexOf('    // ⛔ CONGELA A CLASSIFICAÇÃO DO GRUPO NO AVANÇO', start);
 assert(start > 0 && end > start, 'ramo canônico do avanço encontrado');
 const branch = source.slice(start, end);
+const helpers = source.slice(source.indexOf('  function _phaseTiePanel('), source.indexOf('  // Wrapper de UI: avança a fase do torneio'));
+assert(helpers.includes('function _phaseTieRequest'), 'helper canônico do avanço encontrado');
 
 function promotionFixture(promoteHelps) {
   const events = [];
@@ -25,7 +27,7 @@ function promotionFixture(promoteHelps) {
   };
   const gateStart = source.indexOf('    var _cur = t.currentPhaseIndex || 0;', source.indexOf('  function advanceMultiPhase(tId)'));
   const gate = source.slice(gateStart, end);
-  const ctx = { window,
+  const ctx = { window, document: { getElementById: () => null },
     projectPhaseCfg: cfg => cfg,
     _phaseIsGroups: () => false, _phaseIsMonarch: () => false, _phaseIsLiga: () => false,
     prevPhaseGroups: () => [{}], bracketPhaseGroups: () => [],
@@ -33,7 +35,7 @@ function promotionFixture(promoteHelps) {
     selectQualifiers: () => ({ gold: [1, 2, 3], silver: [4, 5, 6] }),
     ehReiRainhaRodadaUnica: () => false
   };
-  const run = vm.runInNewContext('(function(tId,t,cs){' + gate + '})', ctx);
+  const run = vm.runInNewContext('(function(tId,t,cs){' + helpers + gate + '})', ctx);
   run('tour', { id: 'tour', currentPhaseIndex: 0, phases: [
     { name: 'Grupos' }, { name: 'Final', politicaDaChave: 'sobra_unica' }
   ] }, () => []);
@@ -52,7 +54,8 @@ function fixture(callCF, unavailable) {
     showNotification: (...args) => events.push(['notice', ...args]),
     _warn: () => {}
   };
-  const run = vm.runInNewContext('(function(tId,t,_niIdx){var _nextCfg=t.phases[_niIdx];' + branch + '})', { window });
+  const run = vm.runInNewContext('(function(tId,t,_niIdx){' + helpers + 'var _nextCfg=t.phases[_niIdx];' + branch + '})',
+    { window, document: { getElementById: () => null } });
   run('tour', old, 1);
   return { events, old };
 }

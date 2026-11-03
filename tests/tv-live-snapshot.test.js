@@ -92,6 +92,12 @@ assert.equal(window._tvLiveBuildSnapshot(queue).nextGame.number, 20,
   'após retomar o segundo dia, exclui jogo chamado, finalizado e adversário indefinido; desempata por número');
 const emptyQueue = { ...queue, matches: queue.matches.slice(0, 3) };
 assert.equal(window._tvLiveBuildSnapshot(emptyQueue).nextGame, null, 'sem jogo elegível após recarregar não inventa confronto');
+const pendingTie = { ...emptyQueue, phaseTieDecisions: { 0: { 'group-0:1:2': {
+  status: 'pending', matches: [{ p1: { name: 'Atleta B' }, p2: { name: 'Atleta C' }, winnerKey: null }]
+} } } };
+assert.equal(window._tvLiveBuildSnapshot(pendingTie).nextGame.a, 'Atleta B',
+  'TV anuncia a simples de desempate mesmo sem jogo na tabela da fase');
+assert.match(window._tvLiveBodyHtml(window._tvLiveBuildSnapshot(pendingTie)), /Desempate da classificatória/);
 vm.runInContext(fs.readFileSync(path.join(root, 'js/domain/court-occupancy.js'), 'utf8'), context);
 const samePlayerQueue = { ...queue, matches: [
   match(19, 'Quadra 4', 'VORTEX', 'BLAST', { p1:'Atleta ativa / Parceira A', p2:'Adversaria A / Adversaria B', team1Uids:['same-uid','pair-a'], courtCalledAt:'2026-10-23T18:00:00Z' }),

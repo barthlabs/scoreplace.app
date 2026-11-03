@@ -977,6 +977,14 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       rInner = _groupScheduleControls(cfg);
     }
     classifSchedule += _sec('Rodadas', rInner);
+    if (cfg._scoreBy === 'individual' && !(tc && tc.enabled)) classifSchedule += _sec('Empate após os critérios de desempate',
+      '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:8px;">Quando atletas empatados seguiriam para destinos diferentes:</div>' +
+      _pill(cfg.tieResolution !== 'singles_then_draw', "window._f2TieResolution('draw_order')", '🎲 Ordem do sorteio original') +
+      _pill(cfg.tieResolution === 'singles_then_draw', "window._f2TieResolution('singles_then_draw')", '🎾 Simples / triangular; sorteio original se dispensado') +
+      '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;line-height:1.45;">' +
+      (cfg.tieResolution === 'singles_then_draw'
+        ? 'A regra prevê 1 simples para 2 empatados ou 3 simples em triangular para 3. Na hora do avanço, a organização pode dispensar os jogos por falta de tempo; nesse caso vale a ordem do sorteio original, sem novo sorteio.'
+        : 'Após os critérios estatísticos, vale a ordem definida no sorteio original. Nenhuma nova partida é criada.') + '</div>');
 
     var e = cfg.eliminatoria;
     // Toggle da eliminatória (habilitado, MENOS quando a fase já avançou → travado). Desligar →
@@ -1229,6 +1237,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 
   // ── Handlers globais (form + page) ──
   window._f2Disputa = function (v) { S.cfg.disputa = v; _norm(); _rerender(); };
+  window._f2TieResolution = function (v) { if (!S) return; S.cfg.tieResolution = v; _norm(); _rerender(); };
   // ONINPUT (durante o arraste) — atualização LEVE e fluida: o número muda na hora, e os
   // números de baixo (grupos · pessoas/grupo · duplas/grupo + tempo) atualizam via
   // requestAnimationFrame (coalesce → no máx. 1 update por frame, sem lag). SEM re-render do

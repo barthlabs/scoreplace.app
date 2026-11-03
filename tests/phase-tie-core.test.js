@@ -1,0 +1,87 @@
+'use strict';
+const assert = require('assert');
+const tie = require('../functions-autodraw/phase-tie-core');
+
+const rows = ['A', 'B', 'C', 'D'].map((name, i) => ({ uid: name, name, wins: i ? 1 : 3 }));
+const cmp = (a, b) => b.wins - a.wins;
+const published = { fmt2: { tieResolution: 'singles_then_draw' },
+  tiebreakers: ['sorteio', 'saldo_games', 'vitorias'], tiebreakersExcluded: ['sorteio'] };
+tie.canonicalizeTieFallback(published);
+assert.deepStrictEqual(published.tiebreakers, ['saldo_games', 'vitorias', 'sorteio']);
+assert.deepStrictEqual(published.tiebreakersExcluded, []);
+const firstDraw = tie.originalDrawMatches([
+  { roundIdx: 0, match: { p1: 'B', p2: 'A', round: 3 } },
+  { roundIdx: 1, match: { p1: 'A', p2: 'B', round: 1 } }
+]);
+assert.deepStrictEqual(firstDraw.map(m => [m.round, m.gameNumber, m.p1]),
+  [[1, 1, 'B'], [2, 2, 'A']], 'a primeira rodada conserva a prioridade do sorteio original');
+const ordered = tie.rankInitialRows([rows[3], rows[2], rows[1], rows[0]], cmp,
+  { A: 0, B: 1, C: 2, D: 3 });
+assert.deepStrictEqual(ordered.map(r => r.name), ['A', 'B', 'C', 'D'], 'mérito antes da ordem sorteada original');
+const found = tie.findBoundaryTie(rows, [2], cmp);
+assert.deepStrictEqual(found.players.map(p => p.name), ['B', 'C', 'D']);
+assert.deepStrictEqual([found.from, found.to, found.cut], [1, 3, 2]);
+assert.deepStrictEqual(tie.boundariesFor({ fixedPairs: true, pairingStrategy: 'top', source: {
+  mapping: [{ dest: 'a', rankFrom: 1, rankTo: 4 }, { dest: 'b', rankFrom: 1, rankTo: 4 }]
+} }, 4), [2], 'duas linhas após Rei/Rainha separam 2º e 3º');
+assert.deepStrictEqual(tie.boundariesFor({ source: { mapping: [{ dest: 'main', rankFrom: 1, rankTo: 2 }] } }, 4), [2]);
+assert.deepStrictEqual(tie.boundariesFor({ fixedPairs: true, pairingStrategy: 'balanced', source: {
+  mapping: [{ dest: 'a', rankFrom: 1, rankTo: 2 }, { dest: 'b', rankFrom: 3, rankTo: 4 }]
+} }, 4), [1, 3], 'pareamento equilibrado muda a linha nas pontas do ranking');
+assert.deepStrictEqual(tie.boundariesFor({ fixedPairs: true, pairingStrategy: 'top', source: {
+  mapping: [{ dest: 'a', rankTo: 8 }, { dest: 'b', rankTo: 8 }]
+} }, 8), [4], 'duas linhas com quatro duplas separam as duplas centrais');
+assert.deepStrictEqual(tie.boundariesFor({ fixedPairs: false, pairingStrategy: 'top', source: {
+  mapping: [{ dest: 'a', rankTo: 8 }, { dest: 'b', rankTo: 8 }]
+} }, 8), [4], 'indivíduos também usam a fronteira real entre linhas');
+assert.deepStrictEqual(tie.boundariesFor({ fixedPairs: true, pairingStrategy: 'draw_among', source: {
+  mapping: [{ dest: 'a', rankTo: 4 }, { dest: 'b', rankTo: 4 }]
+} }, 5), [4], 'sorteio de parcerias só resolve o corte de entrada');
+const games = tie.matchesFor(found, 'phase-0-group-0');
+assert.deepStrictEqual(games.map(m => [m.p1.name, m.p2.name]), [['B', 'C'], ['B', 'D'], ['C', 'D']]);
+games[0] = tie.scoreMatch(games[0], [{ p1: 6, p2: 4 }], 1); // B > C
+games[1] = tie.scoreMatch(games[1], [{ p1: 6, p2: 2 }], 1); // B > D
+games[2] = tie.scoreMatch(games[2], [{ p1: 6, p2: 3 }], 1); // C > D
+assert.deepStrictEqual(tie.rankPlayers(found, games), ['uid:B', 'uid:C', 'uid:D']);
+const moved = tie.applyOrder(rows, found, ['uid:D', 'uid:B', 'uid:C']);
+assert.deepStrictEqual(moved.map(r => r.name), ['A', 'D', 'B', 'C']);
+
+const cycle = tie.matchesFor(found, 'cycle');
+cycle[0] = tie.scoreMatch(cycle[0], [{ p1: 6, p2: 4 }], 1); // B > C
+cycle[1] = tie.scoreMatch(cycle[1], [{ p1: 4, p2: 6 }], 1); // D > B
+cycle[2] = tie.scoreMatch(cycle[2], [{ p1: 6, p2: 4 }], 1); // C > D
+assert.deepStrictEqual(tie.rankPlayers(found, cycle), ['uid:B', 'uid:C', 'uid:D'], 'empate circular usa a ordem original');
+
+assert.deepStrictEqual(tie.findBoundaryTie(rows, [1], cmp), null, 'a fronteira fora do bloco empatado não abre disputa');
+assert.throws(() => tie.scoreMatch(games[0], [{ p1: 6, p2: 6 }], 1), /placar inválido/);
+assert.throws(() => tie.scoreMatch(games[0], [{ p1: 6, p2: 4 }], 2), /incompleta/);
+
+const fresh = {};
+const next = { fixedPairs: true, pairingStrategy: 'top', source: { mapping: [
+  { dest: 'first', rankFrom: 1, rankTo: 4 }, { dest: 'second', rankFrom: 1, rankTo: 4 }
+] } };
+const pools = [{ id: 'group-a', rows }];
+let flow = tie.resolvePhaseTies(fresh, 0, pools, next, () => cmp, null, 1);
+assert.strictEqual(flow.status, 'choice');
+flow = tie.resolvePhaseTies(fresh, 0, pools, next, () => cmp,
+  { type: 'play', decisionId: flow.tie.decisionId }, 1);
+assert.strictEqual(flow.status, 'pending');
+for (const [index, score] of [[6, 4], [4, 6], [6, 4]].entries()) {
+  flow = tie.resolvePhaseTies(fresh, 0, pools, next, () => cmp,
+    { type: 'score', decisionId: flow.tie.decisionId, matchId: flow.decision.matches[index].id,
+      sets: [{ p1: score[0], p2: score[1] }] }, 1);
+}
+assert.strictEqual(flow.status, 'ready');
+assert.deepStrictEqual(flow.orderedPools[0].rows.map(p => p.name), ['A', 'B', 'C', 'D']);
+assert.strictEqual(fresh.phaseTieDecisions['0']['group-a:1:3'].matches.length, 3);
+
+const quick = {};
+const question = tie.resolvePhaseTies(quick, 0, pools, next, () => cmp, null, 1);
+const drawn = tie.resolvePhaseTies(quick, 0, pools, next, () => cmp,
+  { type: 'draw', decisionId: question.tie.decisionId }, 1);
+assert.strictEqual(drawn.status, 'ready');
+assert.deepStrictEqual(drawn.orderedPools[0].rows.map(p => p.name), rows.map(p => p.name));
+const automatic = {};
+assert.strictEqual(tie.resolvePhaseTies(automatic, 0, pools, next, () => cmp, null, 1, true).status, 'ready');
+assert.strictEqual(automatic.phaseTieDecisions['0']['group-a:1:3'].reason, 'rule-original-draw-order');
+console.log('phase-tie-core: ok');

@@ -6749,6 +6749,15 @@ window._saveTournamentClickHandler = async function() {
         if (tbExcl) {
           tourData.tiebreakersExcluded = Array.from(tbExcl.querySelectorAll('li')).map(li => li.dataset.tb).filter(Boolean);
         }
+        // O sorteio original é a ÚLTIMA solução do contrato novo, depois dos
+        // critérios estatísticos e da simples/triangular prevista na regra.
+        if (_f2cfg && _f2cfg.tieResolution && Array.isArray(tourData.tiebreakers)) {
+          tourData.tiebreakers = tourData.tiebreakers.filter(function (key) { return key !== 'sorteio'; });
+          tourData.tiebreakers.push('sorteio');
+          if (Array.isArray(tourData.tiebreakersExcluded)) {
+            tourData.tiebreakersExcluded = tourData.tiebreakersExcluded.filter(function (key) { return key !== 'sorteio'; });
+          }
+        }
 
         // Sistema de Pontos Avançado: vale em qualquer CLASSIFICATÓRIA (tem tabela de pontos).
         // v4.4.59 (pedido do dono): antes só Liga/Suíço; agora também Fase de Grupos / Pontos

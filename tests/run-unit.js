@@ -913,6 +913,8 @@ const SUITES = [
   'tests/phase-chaining.test.js',
   'tests/phase-inactive-include.test.js',
   'tests/phase-promote-line.test.js',
+  'tests/phase-tie-core.test.js',
+  'tests/phase-tie-to-bracket.test.js',
   // A promoção entre linhas compara o desempenho COMBINADO da dupla e obedece a
   // ordem de desempate do organizador; não pode escolher o melhor indivíduo isolado.
   'tests/promocao-da-melhor-dupla.test.js',

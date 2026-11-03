@@ -14,6 +14,7 @@ const valid = {
   eliminatoria: { formacao: 'performance', lateEnrollment: 'inherit', newMatchups: false, linhas: 2 }
 };
 assert.doesNotThrow(() => validateNewFormatIntent(valid, HttpsError));
+assert.doesNotThrow(() => validateNewFormatIntent({ tieResolution: 'singles_then_draw' }, HttpsError));
 assert.doesNotThrow(() => validateNewFormatIntent({ disputa: 'individual', parceria: null }, HttpsError));
 assert.doesNotThrow(() => validateNewFormatIntent({ parceria: null }, HttpsError));
 assert.doesNotThrow(() => validateNewFormatIntent({ eliminatoria: { ativa: false } }, HttpsError));
@@ -50,6 +51,7 @@ assert.throws(() => validateNewFormatIntent(historicalSingles, HttpsError, { fmt
 for (const [patch, field] of [
   [{ disputa: 'equipe' }, 'disputa'],
   [{ parceria: 'aleatoria' }, 'parceria'],
+  [{ tieResolution: 'new_draw' }, 'tieResolution'],
   [{ rodadas: { modo: 'infinito' } }, 'rodadas.modo'],
   [{ classificationPairing: { strategy: 'desconhecida' } }, 'classificationPairing.strategy'],
   [{ classificationSchedule: { gamesPerUnit: 3, mode: 'structred' } }, 'classificationSchedule.mode'],
@@ -220,11 +222,11 @@ const drawWindow = { FORMAT2: { compileToPhases: (fmt2, context) => {
     : { topLevel: {}, phases: [], cfg: {} };
 }, summary: () => '' } };
 const edit = new Function('onCall', 'HttpsError', 'db', 'drawWindow', '_leTorneio', '_isTournamentAdmin',
-  'hasDrawnBracket', '_clonaConfigDeclarativa', '_drawFail', '_antesDoMotor', '_gravaTorneio', 'require',
+  'hasDrawnBracket', '_clonaConfigDeclarativa', '_drawFail', '_antesDoMotor', '_gravaTorneio', '_phaseTieCore', 'require',
   'const exports = {};\n' + handlerSource + '\nreturn exports.applyTournamentFormat;')(
   fn => fn, HttpsError, db, drawWindow, async () => tournament, () => true, () => false,
   cloneConfig, (code, message) => new HttpsError(code, message),
-  () => ({}), () => { writes++; return { clean: tournament }; },
+  () => ({}), () => { writes++; return { clean: tournament }; }, require('../functions-autodraw/phase-tie-core'),
   require('node:module').createRequire(path.join(__dirname, '..', 'functions-autodraw', 'index.js'))
 );
 
@@ -257,7 +259,7 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
   '_CONFIG_ESTRUTURAL', '_clonaConfigDeclarativa', '_assertSandboxDrawOwner', '_leTorneio',
   '_isTournamentAdmin', '_drawFail', 'hasDrawnBracket', '_configAtiva', '_antesDoMotor',
   '_gravaTorneio', '_fasesDeConfiguracaoAtualizaveis', 'drawWindow', 'require',
-  '_assertCategoryConfigBeforeDraw', '_categoryDefinitionsForLabels',
+  '_assertCategoryConfigBeforeDraw', '_categoryDefinitionsForLabels', '_phaseTieCore',
   'const exports = {};\n' + configSource + '\nreturn exports.updateTournamentConfiguration;')(
   fn => fn, HttpsError, configDb, new Set(['fmt2', 'name', 'teamSize', 'genderCategories', 'combinedCategories', 'gameTypes']), new Set(['fmt2', 'teamSize', 'gameTypes']), cloneConfig,
   async () => {}, async () => configTournament, () => true,
@@ -268,7 +270,7 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
   categoryGuard, async (_tx, _ref, _t, labels) => {
     categoryProjections++;
     return labels.map((label) => ({ id: 'cat-' + label, label }));
-  }
+  }, require('../functions-autodraw/phase-tie-core')
 );
 
 (async () => {

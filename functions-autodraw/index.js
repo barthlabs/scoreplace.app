@@ -9,6 +9,7 @@ const { getStorage } = require('firebase-admin/storage');
 const { randomUUID, createHash } = require('crypto');
 const _operationReceipt = require('./operation-receipt-core');
 const _operationDay = require('./operation-day');
+const _phaseTieCore = require('./phase-tie-core');
 const _operationProbeReply = () => ({
   ok: true,
   region: String(process.env.SP_OPERATION_REGION || ''),
@@ -5472,6 +5473,14 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
         formatGate.validateCompletedMixedIdentity(t, requestedTeamSize, HttpsError);
       }
     }
+    if (!hasDraw && (fmt2Present || 'tiebreakers' in patch || 'tiebreakersExcluded' in patch)) {
+      const effectiveTie = { fmt2: patch.fmt2 || t.fmt2,
+        tiebreakers: 'tiebreakers' in patch ? patch.tiebreakers : t.tiebreakers,
+        tiebreakersExcluded: 'tiebreakersExcluded' in patch ? patch.tiebreakersExcluded : t.tiebreakersExcluded };
+      _phaseTieCore.canonicalizeTieFallback(effectiveTie);
+      if (Array.isArray(effectiveTie.tiebreakers)) patch.tiebreakers = effectiveTie.tiebreakers;
+      if (Array.isArray(effectiveTie.tiebreakersExcluded)) patch.tiebreakersExcluded = effectiveTie.tiebreakersExcluded;
+    }
     const requestedOpeningAt = Date.parse(String(patch.registrationOpenAt || ''));
     // Mesmo que o horário já esteja gravado, uma edição precisa recuperar o estado
     // "aberto quando chegar a hora" se uma versão antiga o deixou status=closed.
@@ -5715,6 +5724,7 @@ exports.applyTournamentFormat = onCall(async (request) => {
     Object.assign(t, out.topLevel);
     t.phases = out.phases;
     t.fmt2 = out.cfg;
+    _phaseTieCore.canonicalizeTieFallback(t);
     if (t.format === 'Fase de Grupos') {
       t.ligaRoundFormat = 'standard';
       t.ligaDrawMode = 'standard';
@@ -5791,15 +5801,125 @@ exports.advanceTournamentPhase = onCall(async (request) => {
         (((t.phaseRounds || [])[current] || {}).rounds || []).some(r => (r && r.matches || []).some(m => m && (m.bracket === 'monarch' || m.isMonarch)));
     const tbOpts = { tiebreakers: t.tiebreakers, rankingPrimary: t.rankingPrimary,
       birthByName: typeof drawWindow._tbBirthByName === 'function' ? drawWindow._tbBirthByName(t) : {} };
-    const calculateStandings = g => phaseStandingsFn(g, t, tbOpts, hasMonarch);
+    let calculateStandings = g => (current > 0 && Array.isArray(g.rankingRows))
+      ? g.rankingRows : phaseStandingsFn(g, t, tbOpts, hasMonarch);
+    let phaseTieOrder = null;
+    const tieRule = t.fmt2 && t.fmt2.tieResolution;
+    const tieRuleEnabled = !!(currentCfg && currentCfg.kind === 'classification') &&
+      (tieRule === 'singles_then_draw' || tieRule === 'draw_order');
+    if (request.data && request.data.tieAction && (!tieRuleEnabled || tieRule !== 'singles_then_draw')) {
+      throw new HttpsError('failed-precondition', 'Este torneio não prevê partidas extras de desempate.');
+    }
+    if (tieRuleEnabled) {
+      const nextCfg = phaseEngine && typeof phaseEngine.projectPhaseCfg === 'function'
+        ? phaseEngine.projectPhaseCfg(t.phases[current + 1], t, current + 1) : null;
+      if (!nextCfg || !nextCfg.source || nextCfg.source.type !== 'previous_phase') {
+        throw new HttpsError('failed-precondition', 'Origem da próxima fase indisponível para o desempate.');
+      }
+      const previousSingleMonarch = !!(phaseEngine.ehReiRainhaRodadaUnica &&
+        phaseEngine.ehReiRainhaRodadaUnica(currentCfg));
+      const overall = !!(phaseEngine.usaRankingGeral && phaseEngine.usaRankingGeral(
+        nextCfg.source.scope || 'per_group',
+        (nextCfg.source.mapping || []).length, sourceGroups.length,
+        nextCfg.source.flatOverall === true, previousSingleMonarch));
+      const pools = overall
+        ? [{ id: 'overall', rows: phaseEngine.globalStandings(sourceGroups, calculateStandings) }]
+        : sourceGroups.map((g, index) => ({ id: 'group-' + index, rows: calculateStandings(g), group: g }));
+      const criterionList = Array.isArray(t.tiebreakers) ? t.tiebreakers.filter(k => k !== 'sorteio') : null;
+      const advanced = !!(phaseEngine.effectiveAdvancedScoring &&
+        (phaseEngine.effectiveAdvancedScoring(t, current) || {}).enabled);
+      const sourceMatches = pool => {
+        const groupsToRead = pool.group ? [pool.group] : sourceGroups;
+        const seen = new Set(), out = [];
+        groupsToRead.forEach(g => {
+          (g.matches || []).concat((g.rounds || []).reduce((a, r) => a.concat((r && r.matches) || []), [])).forEach(m => {
+            if (!m || (m.id && seen.has(String(m.id)))) return;
+            if (m.id) seen.add(String(m.id));
+            out.push(m);
+          });
+        });
+        return out;
+      };
+      // A última rodada Rei/Rainha pode ter outros quartetos. O desempate final
+      // usa a ordem da PRIMEIRA distribuição publicada, nunca a última rodada.
+      const originalDrawMatches = typeof phaseEngine.phaseGames === 'function'
+        ? _phaseTieCore.originalDrawMatches(phaseEngine.phaseGames(t, current)) : [];
+      const compareForPool = pool => {
+        const slotKeys = (match, side) => {
+          const uids = typeof drawWindow._slotUids === 'function' ? drawWindow._slotUids(match, side) : null;
+          if (uids && uids.length) return uids;
+          const names = side === 'p1' ? match.team1 : match.team2;
+          if (Array.isArray(names) && names.length) return names.filter(Boolean);
+          const one = side === 'p1' ? match.p1 : match.p2;
+          return one ? [String(one)] : [];
+        };
+        const matches = sourceMatches(pool);
+        const originalOrder = typeof drawWindow._standingsOrdemChave === 'function'
+          ? drawWindow._standingsOrdemChave(originalDrawMatches.length ? originalDrawMatches : matches, slotKeys) : {};
+        if (!criterionList) {
+          const legacyCompare = (a, b) => drawWindow._standingsCompare(a, b, advanced);
+          legacyCompare.originalOrder = originalOrder;
+          return legacyCompare;
+        }
+        const h2h = typeof drawWindow._standingsBuildH2H === 'function'
+          ? drawWindow._standingsBuildH2H(matches, slotKeys) : {};
+        const opts = { tiebreakers: criterionList.length ? criterionList : ['__none__'],
+          primaryField: t.rankingPrimary === 'games_diff' ? 'games_diff' : 'points',
+          adv: advanced, h2h, birth: tbOpts.birthByName || {} };
+        const compare = (a, b) => drawWindow._standingsCompareConfig(a, b, opts);
+        compare.originalOrder = originalOrder;
+        return compare;
+      };
+      let tieFlow;
+      try {
+        const scoring = (currentCfg && currentCfg.scoring) || t.scoring || {};
+        const setsToWin = Number(scoring.setsToWin) || 1;
+        tieFlow = _phaseTieCore.resolvePhaseTies(t, current, pools, nextCfg,
+          compareForPool, request.data && request.data.tieAction, setsToWin, tieRule === 'draw_order');
+      } catch (err) {
+        throw new HttpsError('failed-precondition', 'Desempate não aplicado: ' + String(err.message || err));
+      }
+      if (tieFlow.changed && request.data && request.data.tieAction) {
+        const action = request.data.tieAction;
+        const message = action.type === 'draw'
+          ? 'Desempate residual: organização dispensou a simples/triangular e aplicou a ordem do sorteio original.'
+          : action.type === 'play'
+            ? 'Desempate residual: organização escolheu disputar a simples/triangular prevista no regulamento.'
+            : 'Desempate residual: placar de simples registrado.';
+        if (!Array.isArray(t.history)) t.history = [];
+        t.history.push({ date: agoraIso, message, byUid: uid });
+      }
+      if (tieFlow.status !== 'ready') {
+        const saved = tieFlow.changed ? _gravaTorneio(tx, ref, t, antes, { agoraIso }) : null;
+        return { ok: false, reason: tieFlow.status === 'choice' ? 'tie-choice-required' : 'tie-match-pending',
+          tie: tieFlow.tie, decision: tieFlow.decision || null, tournament: saved && saved.clean };
+      }
+      if (overall) {
+        phaseTieOrder = {};
+        (tieFlow.orderedPools[0].rows || []).forEach((row, rank) => {
+          phaseTieOrder[_phaseTieCore.key(row)] = { decisionId: 'overall-order-' + current, rank };
+        });
+      } else {
+        const byName = new Map();
+        tieFlow.orderedPools.forEach((pool, index) => {
+          const g = sourceGroups[index];
+          byName.set(String(g && g.name || ('Grupo ' + index)), pool.rows);
+        });
+        calculateStandings = g => byName.get(String(g && g.name || '')) || phaseStandingsFn(g, t, tbOpts, hasMonarch);
+      }
+    }
     // A fase comum recebe um retrato apenas quando a mesma classificação que
     // criará a próxima chave pôde ser consolidada no documento fresco.
     let groupCapture = null;
     if (isGroupsCfg && !hasMonarch && phaseEngine && typeof phaseEngine.capturePhaseGroupStandings === 'function') {
       try {
+        const hasResolvedTie = !!(t.phaseTieDecisions && t.phaseTieDecisions[String(current)] &&
+          Object.keys(t.phaseTieDecisions[String(current)]).length);
+        const captureGroups = hasResolvedTie
+          ? sourceGroups.map(g => Object.assign({}, g, { classifCongelada: null })) : sourceGroups;
         groupCapture = phaseEngine.capturePhaseGroupStandings(t,
-          current > 0 ? g => g.rankingRows || [] : calculateStandings,
-          agoraIso, sourceGroups, current);
+          current > 0 && !tieRuleEnabled ? g => g.rankingRows || [] : calculateStandings,
+          agoraIso, captureGroups, current);
       } catch (err) {
         console.error('[advanceTournamentPhase] classificação não consolidada', err && err.message);
         throw new HttpsError('failed-precondition', 'Não foi possível consolidar a classificação desta fase.');
@@ -5826,8 +5946,10 @@ exports.advanceTournamentPhase = onCall(async (request) => {
       drawStamp = _advanceDet.stampDe(operationId, tId, next);
       det = { ts: _advanceDet.tsDe(drawStamp), rnd: _advanceDet.prngDe(drawStamp), agoraIso };
     }
-    const res = materializePhaseFn(t, standings, 'ph-' + tId + '-' + next, det,
-      current > 0 && groupCapture ? { usarClassificacaoCongelada: true, sourceGroups, standingsForGroup: frozenEntrants } : undefined);
+    const materializeOpts = current > 0 && groupCapture
+      ? { usarClassificacaoCongelada: true, sourceGroups, standingsForGroup: frozenEntrants } : {};
+    if (phaseTieOrder) materializeOpts.tieOrder = phaseTieOrder;
+    const res = materializePhaseFn(t, standings, 'ph-' + tId + '-' + next, det, materializeOpts);
     if (!res || !res.ok) return { ok: false, reason: (res && res.error) || 'phase-not-materialized' };
     if (randomSeeding) {
       t.phaseDrawAudit = Object.assign({}, t.phaseDrawAudit || {});

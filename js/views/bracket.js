@@ -3976,6 +3976,40 @@ function renderBracket(container, tournamentId, isInline) {
     headerHtml += window._weatherSlotHtml(t, 'sm');
   }
 
+  // O desempate de fronteira faz parte do resultado publicado do torneio.
+  // Ele mora fora de t.matches porque não altera a pontuação da classificatória.
+  if (t.phaseTieDecisions && typeof t.phaseTieDecisions === 'object') {
+    const tieItems = [];
+    Object.keys(t.phaseTieDecisions).sort((a, b) => Number(a) - Number(b)).forEach(phaseIndex => {
+      const book = t.phaseTieDecisions[phaseIndex] || {};
+      Object.keys(book).sort().forEach(decisionId => {
+        const decision = book[decisionId];
+        if (!decision || !Array.isArray(decision.contenders)) return;
+        const labels = Object.fromEntries((decision.players || []).map(p => [p.key, p.name]));
+        const names = decision.contenders.map(k => labels[k] || String(k).replace(/^name:/, ''));
+        const matches = (decision.matches || []).map(m => {
+          const score = (m.sets || []).map(s => s.p1 + '–' + s.p2).join(', ');
+          return '<li>' + window._safeHtml(m.p1 && m.p1.name || '') + ' × ' +
+            window._safeHtml(m.p2 && m.p2.name || '') +
+            (score ? ' · ' + window._safeHtml(score) : ' · aguardando resultado') + '</li>';
+        }).join('');
+        const choice = decision.choice === 'play'
+          ? (decision.status === 'complete' ? 'Desempate disputado' : 'Desempate em andamento')
+          : (decision.reason === 'organizer-used-original-draw-order'
+            ? 'Jogos extras dispensados pela organização; aplicada a ordem do sorteio original'
+            : 'Aplicada a ordem do sorteio original');
+        const result = decision.status === 'complete' && Array.isArray(decision.order)
+          ? '<div>Ordem definida: ' + decision.order.map(k => window._safeHtml(labels[k] || String(k).replace(/^name:/, ''))).join(' → ') + '</div>' : '';
+        const phaseName = t.phases && t.phases[Number(phaseIndex)] && t.phases[Number(phaseIndex)].name || ('Fase ' + (Number(phaseIndex) + 1));
+        tieItems.push('<div style="padding:8px 0;border-top:1px solid var(--border-color);"><b>' + window._safeHtml(phaseName) +
+          '</b> · ' + window._safeHtml(names.join(', ')) + '<div>' + choice + '</div>' +
+          (matches ? '<ul style="margin:4px 0 4px 18px;">' + matches + '</ul>' : '') + result + '</div>');
+      });
+    });
+    if (tieItems.length) headerHtml += '<section aria-label="Desempates da classificatória" style="margin:12px 0;padding:12px 16px;border:1px solid var(--border-color);border-radius:10px;">' +
+      '<b>Desempates da classificatória</b>' + tieItems.join('') + '</section>';
+  }
+
   // ── Banner "Iniciar Torneio" e Progress Bar (skip quando inline — já existem no card acima) ──
   const hasDrawContent = (t.matches && t.matches.length > 0) || (t.rounds && t.rounds.length > 0) || (t.groups && t.groups.length > 0);
   // v2.7.5: banner "Iniciar Torneio" segue SÓ tournamentStarted (fonte única). Auto-draw

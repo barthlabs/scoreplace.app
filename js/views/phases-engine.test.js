@@ -914,5 +914,18 @@ ok(mres3.ok === false && mres3.error === 'already-materialized', 'guard _phaseMa
   eq(realR1, ['R3×R4', 'R5×R6'], 'balanced fora de pow2: resto pareia adjacente');
 })();
 
+// A decisão de desempate publicada via CF precisa chegar também ao escopo geral:
+// _globalStandings ordena o pool novamente antes de formar as vagas da próxima fase.
+(function () {
+  var members = [{ name: 'A', uid: 'A', wins: 1 }, { name: 'B', uid: 'B', wins: 1 }];
+  var groups = [{ name: 'Origem', standings: members }];
+  var mapping = [{ dest: 'main', rankFrom: 1, rankTo: 1 }];
+  var byDest = eng.buildEntrantsByDest(groups, mapping, false, function (g) { return g.standings; }, 'top', {
+    scope: 'overall', tieOrder: { 'uid:A': { decisionId: 'overall', rank: 1 }, 'uid:B': { decisionId: 'overall', rank: 0 } }
+  });
+  eq((byDest.main || []).map(function (team) { return team.displayName || team.name; }), ['B'],
+    'a ordem decidida no desempate geral define a vaga real da fase seguinte');
+})();
+
 console.log('\n' + (fail === 0 ? '✅' : '❌') + ' phases-engine: ' + pass + ' asserts ok, ' + fail + ' falharam');
 process.exit(fail === 0 ? 0 : 1);
