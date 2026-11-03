@@ -415,17 +415,12 @@ function assignCompetitionTeamsAtInitialDraw(t, rawConfig) {
     }
   }
   const neonLight = categoriesToValidate.find(function (category) { return /^Fem Light$/i.test(category); });
-  const legacyNeonId = 'tour_1790628592058_c342a1e8f5068424887f1702a1633a44';
-  const historicalNeon = String(t.id || '') === legacyNeonId ||
-    (t.isSandbox === true && String(t.sandboxOf || '') === legacyNeonId);
   const dayPolicy = cfg.schedule && cfg.schedule.originDayPolicy;
   const legacyDayPolicy = ['female-light-enrollment-origin', 'female-light-five-plus-three',
     'female-light-organization-final'].includes(dayPolicy);
-  // A geometria 8 times × 6 categorias, sozinha, não é uma decisão do
-  // organizador. O plano histórico só vale para o documento antigo ou quando
-  // a política legada foi explicitamente gravada. Planos novos usam os dias
-  // nominais de organizer-pair-days, independentemente do nome do torneio.
-  const dayPlanRequired = (historicalNeon || legacyDayPolicy) && teams.length === 8 &&
+  // A geometria e o nome do torneio não escolhem o plano: só a política
+  // declarada pelo organizador determina a distribuição das duplas por dia.
+  const dayPlanRequired = legacyDayPolicy && teams.length === 8 &&
     categoriesToValidate.length === 6 && neonLight && pairsRequired(neonLight) === 3;
   let pairDayById = null;
   // Pedido do organizador em 19/out: o plano nominal passa a ser editado no app,

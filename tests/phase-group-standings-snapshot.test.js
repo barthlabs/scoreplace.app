@@ -148,6 +148,18 @@ laterMatches.forEach(match => {
 const laterGroups = E.bracketPhaseGroups(later, 1);
 assert(laterGroups.every(group => group.rankingRows.length === group.standings.length),
   'a classificação posterior preserva linhas completas e equipes para o avanço');
+const correctedMatch = laterMatches.find(match => !match.isBye && !match.isSitOut);
+const beforeCorrection = laterGroups.flatMap(group => group.rankingRows)
+  .find(row => row.name === correctedMatch.p1);
+const originalResult = { winner: correctedMatch.winner, scoreP1: correctedMatch.scoreP1, scoreP2: correctedMatch.scoreP2 };
+correctedMatch.winner = correctedMatch.p2;
+correctedMatch.scoreP1 = 4;
+correctedMatch.scoreP2 = 6;
+const afterCorrection = E.bracketPhaseGroups(later, 1).flatMap(group => group.rankingRows)
+  .find(row => row.name === correctedMatch.p1);
+assert.strictEqual(afterCorrection.wins, beforeCorrection.wins - 1,
+  'classificação posterior é calculada dos jogos frescos após correção de placar');
+Object.assign(correctedMatch, originalResult);
 const plainPoints = laterGroups.flatMap(group => group.rankingRows.map(row => row.points));
 later.phases[1].advancedScoring = { enabled: true, categories: { match_won: { enabled: true, value: 10 } } };
 const advancedGroups = E.bracketPhaseGroups(later, 1);

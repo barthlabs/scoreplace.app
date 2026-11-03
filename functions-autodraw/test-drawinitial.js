@@ -291,9 +291,9 @@ const CASES = [
   const historicSameShape = realTournament();
   historicSameShape.id = 'tour_1790628592058_c342a1e8f5068424887f1702a1633a44';
   const historicalAssignment = core.assignCompetitionTeamsAtInitialDraw(historicSameShape, futureConfig);
-  ok('documento histórico mantém plano por dia mesmo sem política explícita',
-    historicalAssignment.ok === true && historicSameShape.participants.slice(0, 24).every(function (entry) {
-      return !!entry.competitionPlayDay;
+  ok('identificador histórico não ativa plano por dia sem política explícita',
+    historicalAssignment.ok === true && historicSameShape.participants.every(function (entry) {
+      return !entry.competitionPlayDay;
     }), JSON.stringify({ result:historicalAssignment.ok, reason:historicalAssignment.reason }));
   const neon64 = realTournament(), realDraw = core.drawInitial(neon64, { idStamp:'neon-64' });
   const realMatches = neon64.matches || [];

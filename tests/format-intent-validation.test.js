@@ -240,7 +240,7 @@ assert(start >= 0 && end > start, 'handler real de edição encontrado');
 const handlerSource = server.slice(start, end);
 let compiled = 0;
 let writes = 0;
-let tournament = { id: 'tour_test', creatorUid: 'owner', sport: 'Tênis', matches: [], phases: [] };
+let tournament = { id: 'tour_test', creatorUid: 'owner', sport: 'Tênis', matches: [], phases: [], rulesContractVersion: 2 };
 const db = {
   collection: () => ({ doc: id => ({ id }) }),
   runTransaction: async callback => callback({
@@ -312,6 +312,14 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
 );
 
 (async () => {
+  const newContractTournament = tournament;
+  tournament = { ...tournament, rulesContractVersion: 1 };
+  const writesBeforeLegacyEdit = writes;
+  await assert.rejects(edit({ auth: { uid: 'owner' }, data: {
+    tournamentId: 'tour_test', fmt2: { disputa: 'dupla' }
+  } }), { code: 'failed-precondition' }, 'torneio legado aberto não é migrado implicitamente');
+  assert.equal(writes, writesBeforeLegacyEdit, 'torneio legado permanece intacto');
+  tournament = newContractTournament;
   const openConfigTournament = configTournament;
   configTournament = { ...openConfigTournament, rulesContractVersion: 2, status: 'finished' };
   const writesBeforeFinished = configWrites;
@@ -406,6 +414,7 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
   assert.equal(tournament.teamSize, 1);
   assert.equal(typeof tournament.teamSize, 'number');
   assert.equal(tournament.fmt2.historicalSinglesOverride, true);
+  assert.equal(tournament.rulesContractVersion, undefined, 'edição histórica não migra o contrato de encerramento');
   assert.equal(writes, beforeApply + 1);
   for (const [fmt2, field] of [
     [{ disputa: 'equipe' }, 'disputa'],

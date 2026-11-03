@@ -5818,6 +5818,11 @@ exports.applyTournamentFormat = onCall(async (request) => {
       throw _drawFail('permission-denied', 'Só a organização configura o formato.', { tId, uid });
     }
     if (t.status === 'finished') throw _drawFail('failed-precondition', 'Torneio encerrado não pode receber novo contrato.', { tId });
+    const historicalFormatEdit = !!(t.fmt2 &&
+      (t.fmt2.historicalSinglesOverride === true || t.fmt2.completedMixedGroupOnly === true));
+    if (!(t.rulesContractVersion >= 2) && !historicalFormatEdit) {
+      throw _drawFail('failed-precondition', 'Este torneio usa regras anteriores; o novo contrato só se aplica a torneios criados com ele.', { tId });
+    }
     if (hasDrawnBracket(t)) throw _drawFail('failed-precondition', 'already-drawn', { tId });
     // A terceira porta de gravação recebe fmt2 cru; clonar e validar ANTES de
     // compilar impede a normalização tolerante de esconder uma escolha inválida.
@@ -5847,7 +5852,7 @@ exports.applyTournamentFormat = onCall(async (request) => {
     Object.assign(t, out.topLevel);
     t.phases = out.phases;
     t.fmt2 = out.cfg;
-    t.rulesContractVersion = 2;
+    if (t.rulesContractVersion >= 2) t.rulesContractVersion = 2;
     _phaseTieCore.canonicalizeTieFallback(t);
     if (t.format === 'Fase de Grupos') {
       t.ligaRoundFormat = 'standard';
