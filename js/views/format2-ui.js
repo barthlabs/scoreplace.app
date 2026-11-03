@@ -626,7 +626,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   function _estimateLine(cfg) {
     var gi = _groupInfo(cfg);
     if (!gi.people) return '<div style="margin-top:8px;font-size:0.72rem;color:var(--text-muted);">Sem inscritos ainda — a divisão dos grupos e o tempo aparecem quando houver gente inscrita.</div>';
-    var groupGames = gi.assessment.matches;
+    if (cfg.parceria === 'super_eight' && gi.people !== 8) return '<div role="status" style="margin-top:8px;font-size:0.72rem;color:var(--sp-c-fbbf24,#fbbf24);">Super 8 individual exige exatamente oito atletas ativos; inscritos agora: ' + gi.people + '.</div>';
+    var groupGames = cfg.parceria === 'super_eight' ? 14 : gi.assessment.matches;
     var elimGames = 0;
     if (cfg.eliminatoria.ativa) {
       var q = (cfg.grupos > 1) ? cfg.grupos * cfg.classificados : cfg.classificados;
@@ -684,16 +685,27 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   }
   // Apresentação abaixo do slider: rótulo (1 grupo) OU números grandes (N grupos).
   function _estruturaBlock(cfg) {
-    if (cfg.grupos === 1) {
-      return '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:6px;">1 grupo — <b>Pontos Corridos</b> (tabela única, classificação geral)</div>' + _estimateLine(cfg);
-    }
     var gi = _groupInfo(cfg);
+    var superEight = window.FORMAT2.superEightVariant(cfg,
+      cfg.parceria === 'super_eight' ? gi.people : gi.units);
+    // Categorias distintas geram grades separadas; oito duplas no total não
+    // provam oito duplas elegíveis dentro de cada grade.
+    if (superEight === 'pairs' && gi.t && Array.isArray(gi.t.categories) && gi.t.categories.length > 1) superEight = null;
+    if (cfg.grupos === 1) {
+      return '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:6px;">1 grupo — <b>' +
+        (cfg.parceria === 'super_eight' ? 'Super 8 individual' : superEight === 'pairs' ? 'Super 8 de duplas' : 'Pontos Corridos') +
+        '</b> (tabela única, classificação geral)</div>' +
+        (superEight === 'pairs' ? '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">Oito duplas fixas, montadas ou sorteadas; sete jogos por dupla, sem repetir adversária.</div>' : '') +
+        _estimateLine(cfg);
+    }
     var col = function (n, lbl) { return '<div style="text-align:center;min-width:62px;"><div style="font-size:1.7rem;font-weight:800;color:var(--sp-c-c7d2fe,#c7d2fe);line-height:1;">' + n + '</div><div style="font-size:0.66rem;color:var(--text-muted);margin-top:3px;">' + lbl + '</div></div>'; };
     var dot = '<div style="font-size:1.1rem;color:var(--text-muted);align-self:center;opacity:0.6;">·</div>';
     var nums = '<div style="display:flex;gap:10px;justify-content:center;align-items:flex-start;margin:12px 0 4px;">' +
       col(cfg.grupos, 'grupos') + dot + col(gi.perP, gi.isDupla ? 'pessoas/grupo' : 'por grupo') +
       (gi.isDupla ? (dot + col(gi.perU, 'duplas/grupo')) : '') + '</div>' +
-      '<div style="text-align:center;font-size:0.74rem;color:var(--text-muted);"><b>Fase de Grupos</b> — classificação por grupo</div>';
+      '<div style="text-align:center;font-size:0.74rem;color:var(--text-muted);"><b>' +
+      (superEight === 'pairs' ? 'Super 8 de duplas por grupo' : 'Fase de Grupos') +
+      '</b> — classificação por grupo</div>';
     return nums + _estimateLine(cfg);
   }
 
@@ -877,8 +889,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       var fBtns = _pill(montadas, 'window._f2TeamForm(\'montadas\')', '🤝 Montadas') +
         _pill(isSorteio, 'window._f2TeamForm(\'sorteio\')', '🎲 Sorteio');
       if (um) fBtns += _pill(pr === 'rei_rainha', 'window._f2TeamForm(\'rei_rainha\')', '👑 Rei/Rainha');
-      if (um) fBtns += _pill(pr === 'super_eight', 'window._f2TeamForm(\'super_eight\')', '8️⃣ Oito atletas · todas as parcerias');
-      if (pr === 'super_eight') fBtns += '<p style="font-size:.75rem;color:var(--text-muted);">Exige oito atletas ativos. Sete rodadas, duas partidas por rodada; cada parceria ocorre uma vez.</p>';
+      if (um) fBtns += _pill(pr === 'super_eight', 'window._f2TeamForm(\'super_eight\')', '8️⃣ Super 8 individual');
+      if (pr === 'super_eight') fBtns += '<p style="font-size:.75rem;color:var(--text-muted);">Oito atletas ativos. Sete rodadas, duas partidas por rodada; cada atleta joga com os outros sete como parceiro uma vez.</p>';
+      if (pr === 'fixa') fBtns += '<p style="font-size:.75rem;color:var(--text-muted);">Com oito duplas fixas por grupo, turno único e todos contra todos, a classificatória é Super 8 de duplas. As duplas podem ser montadas ou sorteadas antes dos jogos.</p>';
       // v4.4.30: Sorteio + 1 grupo → toggle "Novo parceiro a cada rodada" (ON por padrão).
       // ON = sorteio_rodada (rotativo, individual); OFF = dupla sorteada 1× e fixa até o fim.
       // 2+ grupos: só dupla fixa sorteada (rotativo exige 1 grupo) → sem toggle.

@@ -104,6 +104,19 @@
     return { groups: groups, turnos: turnos, ligaTurnos: turnos === 'ida_volta' ? 2 : 1 };
   }
 
+  // Super 8 de duplas é a leitura de uma configuração completa, não um formato
+  // oculto: oito duplas FIXAS por grupo, turno único e todos contra todos.
+  // A checagem dos confrontos reais continua pertencendo ao gerador de grupos.
+  function superEightVariant(cfg, units) {
+    if (!cfg || cfg.classifAtiva === false || cfg.disputa !== 'dupla') return null;
+    if (cfg.parceria === 'super_eight') return Number(units) === 8 ? 'individual' : null;
+    var turns = resolveTurnos(cfg);
+    if (cfg.parceria !== 'fixa' || !cfg.rodadas || cfg.rodadas.modo !== 'todos' ||
+        turns.turnos !== 'ida' || cfg.classificationSchedule ||
+        cfg.teamCompetition && cfg.teamCompetition.enabled) return null;
+    return Number(units) === turns.groups * 8 ? 'pairs' : null;
+  }
+
   // Política pública de uma chave eliminatória. `playin` foi um nome interno
   // usado pelo primeiro motor para a rodada preliminar; nunca foi um quarto
   // desenho disponível ao organizador. Ao reler um documento que o tenha
@@ -823,7 +836,7 @@
     var resolved = resolveTurnos(cfg);
     parts.push(resolved.groups === 1 ? 'Pontos Corridos' : (resolved.groups + ' grupos'));
     if (cfg.disputa === 'dupla') {
-      if (cfg.parceria === 'super_eight') parts.push('oito atletas · todas as parcerias');
+      if (cfg.parceria === 'super_eight') parts.push('Super 8 individual · todas as parcerias');
       else if (cfg.parceria === 'rei_rainha') parts.push('Rei/Rainha');
       else if (cfg.parceria === 'sorteio_rodada') parts.push('sorteio/rodada');
       else parts.push(cfg.formacaoDupla === 'manual' ? 'duplas montadas' : 'duplas sorteadas');
@@ -1073,7 +1086,7 @@
         top.drawIntervalDays = (cfg.rodadas.drawIntervalDays >= 1) ? cfg.rodadas.drawIntervalDays : null; // vazio = sem repetição
       }
       p0 = Object.assign(_phaseBase(re), {
-        kind: 'classification', classification: { structure: 'round_robin', pairing: _roundPairing }, name: isRR ? 'Rei/Rainha' : 'Pontos Corridos',
+        kind: 'classification', classification: { structure: 'round_robin', pairing: _roundPairing }, name: isSuperEight ? 'Super 8 individual' : isRR ? 'Rei/Rainha' : 'Pontos Corridos',
         formatCode: 'classification_rounds',
         drawMode: top.drawMode, reiRainha: isRR, superEight: isSuperEight,
         rankingRemainderPolicy: isRR ? cfg.rankingRemainderPolicy : null,
@@ -1398,6 +1411,7 @@
     compileToPhases: compileToPhases,
     translateLegacyTournament: translateLegacyTournament,
     assessGroupSchedule: assessGroupSchedule,
-    resolveTurnos: resolveTurnos
+    resolveTurnos: resolveTurnos,
+    superEightVariant: superEightVariant
   };
 })();

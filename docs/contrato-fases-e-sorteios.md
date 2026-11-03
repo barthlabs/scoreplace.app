@@ -37,6 +37,15 @@ de “suíço”: após cada rodada, os pontos podem mover pessoas entre cluster
 planejador evita repetir parceiros, adversários e sobras até esgotar as opções
 do cluster, mas não bloqueia uma repetição inevitável.
 
+Super 8 tem duas variações dentro da classificatória. Na variação de duplas,
+oito duplas formadas ou sorteadas antes dos jogos permanecem fixas e cada uma
+enfrenta as outras sete uma vez: 28 confrontos em sete rodadas, sem repetição.
+Com menos duplas ou agenda menor, a fase continua sendo uma classificatória por
+grupos. Na variação individual, oito atletas trocam de dupla até cada atleta
+ter sido parceiro dos outros sete uma vez; o sorteio minimiza reencontros como
+adversários. O nome não seleciona regras por si só: formação, quantidade,
+agenda e pontuação são decisões explícitas.
+
 ## Sorteio
 
 O sorteio é um plano de fase, nunca um terceiro caminho de torneio. Ele pode:

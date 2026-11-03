@@ -106,6 +106,15 @@ ok(estimateLine({ ...baseCfg, rodadas: { turnos: 'ida_volta' } }).includes('(24 
   'prévia: ida e volta dobram os confrontos e a duração');
 ok(estimateLine({ ...baseCfg, grupos: 2, rodadas: { turnos: 'ida_volta' } }).includes('(12 jogos'),
   'prévia: dois grupos não dobram, conforme a fase compilada');
+const individualEightEstimate = new Function('_groupInfo', '_minPartidaForm', '_scoringInicial', '_elimEffScoring', 'document',
+  extractFunction(uiSource, 'function _estimateLine') + '; return _estimateLine;'
+)(cfg => ({ people: cfg.people, units: Math.floor(cfg.people / 2), ng: 1, isDupla: true,
+  t: { courtCount: 1 }, assessment: { matches: 6 } }), () => 20, () => null,
+  () => null, { getElementById: () => null });
+ok(individualEightEstimate({ people: 8, parceria: 'super_eight', eliminatoria: { ativa: false } }).includes('(14 jogos'),
+  'prévia: Super 8 individual mostra os 14 jogos do ciclo real');
+ok(individualEightEstimate({ people: 7, parceria: 'super_eight', eliminatoria: { ativa: false } }).includes('exatamente oito atletas'),
+  'prévia: Super 8 individual incompleto não anuncia jogos impossíveis');
 
 // O compilador é a fronteira que decide se o pedido de volta chega ao gerador.
 // Testar só genGroupsFromPool com turnos forçados aprovaria uma configuração
@@ -241,6 +250,32 @@ ok(E.genGroupsFromPool(players(4), { ...conflictBase, _doubleRR: true }, 'legacy
 const legacyGroupPhase = { gruposCount: 2, turnos: 'ida', _doubleRR: true };
 ok(E.genGroupsFromPool(players(16), legacyGroupPhase, 'legacy-two-groups').matches.length === 56,
   'fase legada de 2 grupos normalizada pelo adaptador gera 56 jogos de ida');
+
+// Super 8 de duplas é a combinação explícita de formação fixa e todos-contra-todos;
+// o nome só aparece quando cada grupo tem exatamente oito duplas e uma ida.
+const superPairsCfg = sandbox.FORMAT2.normalize({ disputa: 'dupla', parceria: 'fixa',
+  formacaoDupla: 'sorteio', classifAtiva: true, grupos: 1,
+  rodadas: { modo: 'todos', turnos: 'ida' }, eliminatoria: { ativa: false } }, 'Beach Tennis');
+ok(sandbox.FORMAT2.superEightVariant(superPairsCfg, 8) === 'pairs',
+  'oito duplas sorteadas e fixas em turno único são Super 8 de duplas');
+ok(sandbox.FORMAT2.superEightVariant({ ...superPairsCfg, formacaoDupla: 'manual' }, 8) === 'pairs',
+  'oito duplas montadas e fixas seguem a mesma regra');
+ok(sandbox.FORMAT2.superEightVariant(superPairsCfg, 7) === null &&
+  sandbox.FORMAT2.superEightVariant({ ...superPairsCfg, classificationSchedule: { gamesPerUnit: 6 } }, 8) === null &&
+  sandbox.FORMAT2.superEightVariant({ ...superPairsCfg, rodadas: { modo: 'todos', turnos: 'ida_volta' } }, 8) === null,
+  'grupos menores, agenda curta e ida/volta não recebem o rótulo Super 8');
+const fixedPairs = Array.from({ length: 8 }, (_, i) => ({
+  displayName: 'Dupla ' + i, name: 'Dupla ' + i, fixedPair: true,
+  participants: [{ name: 'A' + i, uid: 'a' + i }, { name: 'B' + i, uid: 'b' + i }]
+}));
+const eightDraw = E.genGroupsFromPool(fixedPairs,
+  sandbox.FORMAT2.compileToPhases(superPairsCfg, { sport: 'Beach Tennis' }).phases[0], 'super8-pairs');
+const eightEdges = eightDraw.matches.map(m => [m.p1, m.p2].sort().join('|'));
+const eightRounds = new Set(eightDraw.matches.map(m => m.round));
+ok(eightDraw.matches.length === 28 && new Set(eightEdges).size === 28 && eightRounds.size === 7,
+  'gerador real cria 28 confrontos únicos em sete rodadas para as oito duplas');
+ok(fixedPairs.every(pair => eightDraw.matches.filter(m => m.p1 === pair.name || m.p2 === pair.name).length === 7),
+  'cada dupla disputa exatamente sete jogos');
 
 console.log(fail ? `❌ partial-group-schedule: ${pass} ok, ${fail} falharam` : `✅ partial-group-schedule: ${pass} verificações`);
 process.exit(fail ? 1 : 0);
