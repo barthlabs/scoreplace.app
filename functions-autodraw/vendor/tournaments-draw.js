@@ -797,9 +797,9 @@ window._buildPhase0Pool = function (t, isMon, ts) {
 //    0  = nada a fazer (sem duplas formadas, ou 1 dupla sem par disponível → aguarda)
 //   -3  = Tier 3 (R2 do lower já começou) → suplentes individuais (caller dissolve as duplas)
 // CÂNONE (dono, 21/jul): "Novos Confrontos" e "Abertas" são INDEPENDENTES. Abertas = aceitar
-// novos inscritos após o sorteio (viram suplentes na espera). Novos Confrontos = suplentes/duplas
-// formadas ENTRAM na chave na hora (novo jogo ou preenche "a definir") — vale MESMO com as
-// inscrições fechadas. Toda a integração tardia gateia por AQUI, nunca mais por lateEnrollment==='expand'.
+// novos inscritos após o sorteio (viram suplentes na espera). Com inscrições abertas,
+// a organização decide se entram apenas como suplentes ou geram novos confrontos.
+// Inscrições fechadas desativam a geração de novos confrontos.
 // Compat: torneios antigos só têm lateEnrollment; 'expand' implicava Novos Confrontos ON.
 window._allowsNewMatchups = function (t) {
   if (!t) return false;
@@ -808,9 +808,10 @@ window._allowsNewMatchups = function (t) {
   // existia disfarçado de lateEnrollment='expand' → voltava a depender de "Abertas" (o que o
   // dono viu). Ordem: fase corrente → torneio → compat legado (lateEnrollment efetivo).
   var ph = (Array.isArray(t.phases) && t.phases[t.currentPhaseIndex || 0]) || null;
+  var le = window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : (ph && ph.lateEnrollment || t.lateEnrollment);
+  if (le === 'closed') return false;
   if (ph && ph.newMatchups != null) return ph.newMatchups === true;
   if (t.newMatchups != null) return t.newMatchups === true;
-  var le = window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment;
   return le === 'expand';
 };
 

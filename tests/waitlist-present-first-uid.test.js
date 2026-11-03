@@ -87,6 +87,21 @@ ok(somenteWo.includes('Nathalya Calil') && somenteWo.includes('R1 Grupo H2'),
 ok(somenteWo.includes('participant-card'),
   'W.O. reutiliza o cartão canônico de participante após o avanço de fase');
 
+// (7) A decisão operacional existe antes de alguém cair na espera.
+W._phaseWoDeactivated = () => [];
+const semEspera = W._renderStandbyPanel(t, true);
+ok(semEspera.includes('bracket-late-mode-enrollment') && semEspera.includes('Fechadas'),
+  'organizador vê o controle de entrada tardia mesmo com a espera vazia');
+ok(!W._renderStandbyPanel(t, false).includes('bracket-late-mode-enrollment'),
+  'participante não recebe controle administrativo');
+t.lateEnrollment = 'closed';
+t.newMatchups = true;
+const escolhaPreservada = W._renderStandbyPanel(t, true);
+ok(escolhaPreservada.includes("this.checked ? 'standby' : 'closed'"),
+  'com inscrições fechadas, reabrir oferece suplentes antes de novos confrontos');
+ok(!W._renderStandbyPanel({ ...t, status: 'finished' }, true).includes('bracket-late-mode-enrollment'),
+  'torneio encerrado não oferece alteração operacional');
+
 console.log('  ' + pass + ' asserts OK, ' + fail + ' falhas');
 if (fail > 0) { console.error('❌ waitlist-present-first-uid FALHOU'); process.exit(1); }
 console.log('✅ waitlist-present-first-uid: OK');

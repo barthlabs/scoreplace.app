@@ -5522,7 +5522,6 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
   // são o único caminho visual para recuperar o histórico e reativar alguém.
   var _hasOutsideStandby = ((typeof window._phasePendingInactives === 'function' && (window._phasePendingInactives(t) || []).length) ||
     (typeof window._phaseWoDeactivated === 'function' && (window._phaseWoDeactivated(t) || []).length));
-  if (_merged.length === 0 && !_hasOutsideStandby) return '';
 
   // v1.3.97 (dono, "não travado, alterável durante a fase"): controle do organizador AO VIVO pra
   // ligar/desligar a ENTRADA TARDIA desta fase. O default do torneio é 'closed' (o dono não escolheu
@@ -5531,7 +5530,7 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
   // repescagem (vs a definir). Só pro organizador; presente NOS DOIS caminhos de retorno (pareamento
   // e lista). Ver [[project_late_enrollment_per_phase]].
   var _lateToggleHtml = '';
-  if (isOrg) {
+  if (isOrg && t.status !== 'finished') {
     var _leCur = (typeof window._effectiveLateEnrollment === 'function') ? window._effectiveLateEnrollment(t) : t.lateEnrollment;
     var _tIdTog = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     /* ── ATALHO DO QUE JÁ EXISTE NO EDITAR, NÃO UM CONTROLE NOVO ─────────────────────────
@@ -5546,7 +5545,10 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
      * Antes disto a chave tinha um toggle de DOIS estados sobre um campo de TRÊS: desligar
      * pulava de 'expand' direto pra 'closed' e "Suplentes Apenas" era inalcançável aqui. */
     var _leFechadas = (_leCur === 'closed');
-    var _leConf = (_leCur !== 'closed' && _leCur !== 'standby');   // legado (undefined) = permite
+    var _phaseLate = Array.isArray(t.phases) ? t.phases[t.currentPhaseIndex || 0] : null;
+    var _leConf = !_leFechadas && (_phaseLate && typeof _phaseLate.newMatchups === 'boolean'
+      ? _phaseLate.newMatchups
+      : (typeof t.newMatchups === 'boolean' ? t.newMatchups : (_leCur !== 'standby')));
     // O atalho pode ser renderizado isoladamente nos testes. No produto a
     // fábrica canônica vem de create-tournament; o fallback mantém exatamente
     // a mesma estrutura enquanto esse módulo ainda não foi carregado.
@@ -5576,6 +5578,12 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
           ariaPrefix: 'Entradas da lista de espera', onchange: "event.stopPropagation(); window._setPhaseLateEnrollment('" + _tIdTog + "', this.checked ? 'expand' : 'standby');" }) : '') +
         '</div>' +
       '</div>';
+  }
+
+  // O organizador deve conseguir escolher a política antes de existir alguém na
+  // espera. O painel de pessoas continua ausente quando a fila está vazia.
+  if (_merged.length === 0 && !_hasOutsideStandby) {
+    return _lateToggleHtml ? '<div id="standby-panel-section" style="margin-top:2rem;">' + _lateToggleHtml + '</div>' : '';
   }
 
   // v4.5.18: DUPLAS com janela de inscrição tardia ABERTA (R1) → a lista de espera vira

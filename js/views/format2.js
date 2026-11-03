@@ -749,12 +749,13 @@
     e.qualifyAll = !!e.qualifyAll;
     // 'inherit' (default) = a elim segue a inscrição da fase inicial; só coage o que for inválido.
     if (['inherit', 'closed', 'standby', 'expand'].indexOf(e.lateEnrollment) === -1) e.lateEnrollment = 'inherit';
-    // newMatchups é ORTOGONAL ao lateEnrollment (não coage um pelo outro). Compat: config antiga
-    // sem o campo, mas com lateEnrollment EXPLÍCITO, herda o significado antigo ('expand' = ON).
+    // Novos confrontos só existem quando a inscrição desta fase está aberta.
+    // Config antiga sem o campo herda o significado antigo ('expand' = ON).
     if (e.newMatchups !== true && e.newMatchups !== false) {
       e.newMatchups = (['closed', 'standby', 'expand'].indexOf(e.lateEnrollment) >= 0)
         ? (e.lateEnrollment === 'expand') : 'inherit';
     }
+    if (e.lateEnrollment === 'closed') e.newMatchups = false;
     e.terceiro = true; // 3º lugar SEMPRE existe (project_third_place_always) — não é opcional.
     // v4.4.33: fase classificatória on/off. Ao menos UMA fase ativa: sem classificatória ⇒
     // eliminatória obrigatória (eliminação direta do enrollment).
@@ -843,9 +844,10 @@
   function _elimLE(cfgLE, opts) {
     return (cfgLE && cfgLE !== 'inherit') ? cfgLE : ((opts && opts.lateEnrollment) || 'closed');
   }
-  // "Novos Confrontos" da elim: valor EXPLÍCITO manda; 'inherit' segue a fase inicial
-  // (opts.newMatchups) e, na falta dela, o significado legado de lateEnrollment='expand'.
-  function _elimNM(cfgNM, opts) {
+  // Com inscrições fechadas não há novos confrontos. Quando abertas, a escolha
+  // explícita manda; 'inherit' segue a decisão da fase inicial.
+  function _elimNM(cfgNM, opts, effectiveLateEnrollment) {
+    if (effectiveLateEnrollment === 'closed') return false;
     if (cfgNM === true || cfgNM === false) return cfgNM;
     if (opts && (opts.newMatchups === true || opts.newMatchups === false)) return opts.newMatchups;
     return (((opts && opts.lateEnrollment) || 'closed') === 'expand');
@@ -901,7 +903,7 @@
       fixedPairs: true, pairingStrategy: pairRR, bracketSeeding: seedRR,
       mapping: mapRR, grandFinal: elimDuplaRR || (e0.linhas > 1 && e0.grandFinal !== false),
       thirdPlace: e0.terceiro, lateEnrollment: _elimLE(e0.lateEnrollment, opts),
-      newMatchups: _elimNM(e0.newMatchups, opts), drawManual: false,
+      newMatchups: _elimNM(e0.newMatchups, opts, _elimLE(e0.lateEnrollment, opts)), drawManual: false,
       // Formato da partida PRÓPRIO da eliminatória (null = herda t.scoring). A rodada de
       // FORMAÇÃO (pRR, acima) fica com null de propósito: ela é uma rodada Rei/Rainha, irmã
       // da classificatória — quem muda de formato é a disputa eliminatória em si.
@@ -947,6 +949,7 @@
         // A rodada de formação vem da INSCRIÇÃO (é a 1ª fase do torneio).
         var parDireto = _parReiRainhaMaisElim(cfg, re, { type: 'enrollment' }, opts);
         if (opts.lateEnrollment) parDireto[0].lateEnrollment = opts.lateEnrollment; // fase inicial = painel
+        if (opts.newMatchups === true || opts.newMatchups === false) parDireto[0].newMatchups = opts.lateEnrollment === 'closed' ? false : opts.newMatchups;
         return { topLevel: top, phases: parDireto, cfg: cfg };
       }
 
@@ -980,6 +983,7 @@
         grandFinal: elimDupla0 || (e0.linhas > 1 && e0.grandFinal !== false), thirdPlace: e0.terceiro, drawManual: false
       });
       if (opts.lateEnrollment) p0.lateEnrollment = opts.lateEnrollment; // eliminação direta: fase inicial = painel
+      if (opts.newMatchups === true || opts.newMatchups === false) p0.newMatchups = opts.lateEnrollment === 'closed' ? false : opts.newMatchups;
       return { topLevel: top, phases: [p0], cfg: cfg };
     }
 
@@ -1120,7 +1124,7 @@
       phases.push(parEmpilhado[0]);   // formação
       phases.push(parEmpilhado[1]);   // eliminatória (lê a formação, fromPhaseOffset 1)
       if (opts.lateEnrollment) phases[0].lateEnrollment = opts.lateEnrollment;
-      if (opts.newMatchups === true || opts.newMatchups === false) phases[0].newMatchups = opts.newMatchups;
+      if (opts.newMatchups === true || opts.newMatchups === false) phases[0].newMatchups = opts.lateEnrollment === 'closed' ? false : opts.newMatchups;
       return { topLevel: top, phases: phases, cfg: cfg };
     }
 
@@ -1189,7 +1193,7 @@
         fixedPairs: elimFixedPairs, pairingStrategy: elimPairing, bracketSeeding: elimSeeding,
         mapping: mapping, grandFinal: elimDupla || (nLines > 1 && e.grandFinal !== false), thirdPlace: e.terceiro,
         lateEnrollment: _elimLE(e.lateEnrollment, opts), // inscrições durante a elim: herda a fase inicial por padrão
-        newMatchups: _elimNM(e.newMatchups, opts),       // ⊥ de "Abertas" — a elim tem a SUA regra
+        newMatchups: _elimNM(e.newMatchups, opts, _elimLE(e.lateEnrollment, opts)),
         scoring: e.scoring || null,                      // formato da partida DESTA fase (null = herda t.scoring)
         drawManual: false,
         endDate: e.endDate || '', endTime: e.endTime || '',
@@ -1202,7 +1206,7 @@
     // fase" (t.lateEnrollment). A eliminatória (fase 2) tem o SEU próprio valor
     // (cfg.eliminatoria.lateEnrollment), já compilado acima → cada fase gerencia a sua.
     if (opts.lateEnrollment) phases[0].lateEnrollment = opts.lateEnrollment;
-    if (opts.newMatchups === true || opts.newMatchups === false) phases[0].newMatchups = opts.newMatchups;
+    if (opts.newMatchups === true || opts.newMatchups === false) phases[0].newMatchups = opts.lateEnrollment === 'closed' ? false : opts.newMatchups;
     return { topLevel: top, phases: phases, cfg: cfg };
   }
 

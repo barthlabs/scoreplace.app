@@ -157,11 +157,9 @@ console.log('── SWEEP INTEGRAÇÃO TARDIA: formato × config × N ──');
   });
 });
 
-// ══ 7. INDEPENDÊNCIA "Novos Confrontos" × "Abertas" (dono, 21/jul) ══
-// newMatchups:true integra a dupla formada MESMO com inscrições fechadas (lateEnrollment:'closed').
-// Sem newMatchups (ou false), a dupla fica SUPLENTE (não entra) — os dois flags são independentes.
-console.log('\n── independência Novos Confrontos × Abertas ──');
-[['closed', true, true], ['closed', false, false], ['closed', undefined, false], ['standby', true, true], ['expand', undefined, true]].forEach(function (c) {
+// ══ 7. Novos confrontos exigem inscrições abertas; quando abertas, a escolha é do organizador. ══
+console.log('\n── novos confrontos dependem de inscrições abertas ──');
+[['closed', true, false], ['closed', false, false], ['closed', undefined, false], ['standby', true, true], ['expand', undefined, true]].forEach(function (c) {
   const le = c[0], nm = c[1], shouldIntegrate = c[2];
   // 5 e não 4: 4 é potência de 2 EXATA (chave cheia) e lá um tardio SOZINHO espera par, por
   // regra do dono — o que confundiria a pergunta deste bloco, que é a INDEPENDÊNCIA entre
@@ -175,7 +173,7 @@ console.log('\n── independência Novos Confrontos × Abertas ──');
   dc.integrateLateEntries(t, {});
   const inBr = inBracket(t, 'Zx / Zy');
   const label = 'le=' + le + ' newMatchups=' + nm;
-  ok(inBr === shouldIntegrate, 'independência :: ' + label + ' → integra=' + shouldIntegrate + ' (got ' + inBr + ')');
+  ok(inBr === shouldIntegrate, 'dependência :: ' + label + ' → integra=' + shouldIntegrate + ' (got ' + inBr + ')');
 });
 
 console.log('\n' + (fail === 0 ? '✅ late-integration-sweep: OK' : '❌ ' + fail + ' FALHA(S)') + '  (' + pass + ' asserts ok)');

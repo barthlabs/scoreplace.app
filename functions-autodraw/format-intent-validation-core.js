@@ -135,6 +135,10 @@ function validateNewFormatIntent(fmt2, HttpsError, stored, requestedTeamSize) {
       throw new HttpsError('invalid-argument', 'Valor de formato inválido em fmt2.' + path + '.');
     }
   }
+  if (fmt2.eliminatoria && fmt2.eliminatoria.lateEnrollment === 'closed' &&
+      fmt2.eliminatoria.newMatchups === true) {
+    throw new HttpsError('invalid-argument', 'Novos confrontos exigem inscrições abertas na fase eliminatória.');
+  }
   // O compilador tolerante lê documentos históricos, mas uma intenção nova
   // não pode transformar "3abc" ou 3.5 em três jogos sem avisar o organizador.
   // Não há teto aqui: a edição integral pode reenviar valores antigos acima do

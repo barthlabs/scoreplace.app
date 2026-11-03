@@ -84,6 +84,9 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
       catch (error) { fail('invalid-argument', error.message); }
     }
     if (config.fmt2 && validateIntent) validateIntent(config.fmt2, HttpsError, undefined, undefined);
+    if (config.lateEnrollment === 'closed' && config.newMatchups === true) {
+      fail('invalid-argument', 'Novos confrontos exigem inscrições abertas.');
+    }
     require('./phase-tie-core').canonicalizeTieFallback(config);
     if (validateCapacity) validateCapacity(config);
     const hasFmt2 = !!(config.fmt2 && typeof config.fmt2 === 'object' && !Array.isArray(config.fmt2));

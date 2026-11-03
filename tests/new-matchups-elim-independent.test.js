@@ -1,8 +1,5 @@
-// BUG DO DONO (22/jul): "na fase classificatória 'Novos Confrontos' e 'Abertas' são independentes;
-// na ELIMINATÓRIA o conjunto ainda parece dependente e não deveria."
-// Raiz: a elim não tinha flag própria — o "Novos Confrontos" dela só existia disfarçado de
-// lateEnrollment==='expand', e o gate _allowsNewMatchups lia só o TOP-LEVEL (cego pra fase).
-// Aqui travo os dois lados: o COMPILADOR (cada fase carrega a sua flag) e o GATE (lê a fase).
+// Decisão atual: novos confrontos dependem de inscrições abertas. Com a porta
+// aberta, a organização escolhe entre suplentes e novos confrontos por fase.
 // [[project_new_matchups_independent]] / [[project_late_enrollment_per_phase]]
 const { window: W } = require('./render-harness');
 // format2.js (o COMPILADOR de fases) não está no harness de render — carrega o arquivo REAL no
@@ -21,9 +18,9 @@ const cfgBase = () => ({
 });
 const compile = (cfg, opts) => W.FORMAT2.compileToPhases(cfg, Object.assign({ sport: 'Beach Tennis', resultEntry: ['organizer'] }, opts || {}));
 
-console.log('\n── ELIMINATÓRIA: "Novos Confrontos" ⊥ "Abertas" ──');
+console.log('\n── ELIMINATÓRIA: novos confrontos dependem de inscrições abertas ──');
 
-// 1) COMPILADOR: elim com inscrição FECHADA + Novos Confrontos LIGADO (o combo do cânone)
+// 1) Mesmo uma intenção incoerente não publica confrontos com inscrição fechada.
 {
   const cfg = cfgBase();
   cfg.eliminatoria.lateEnrollment = 'closed';
@@ -31,7 +28,7 @@ console.log('\n── ELIMINATÓRIA: "Novos Confrontos" ⊥ "Abertas" ──');
   const out = compile(cfg, { lateEnrollment: 'closed', newMatchups: false });
   const elim = out.phases[out.phases.length - 1];
   ok(elim.lateEnrollment === 'closed', 'compilador :: elim fica com inscrição FECHADA — got ' + elim.lateEnrollment);
-  ok(elim.newMatchups === true, 'compilador :: e AINDA ASSIM com Novos Confrontos ligado — got ' + elim.newMatchups);
+  ok(elim.newMatchups === false, 'compilador :: inscrição fechada DESLIGA Novos Confrontos — got ' + elim.newMatchups);
 }
 
 // 2) COMPILADOR: o inverso — inscrição ABERTA e Novos Confrontos DESLIGADO (suplentes apenas)
@@ -65,7 +62,9 @@ console.log('\n── ELIMINATÓRIA: "Novos Confrontos" ⊥ "Abertas" ──');
     id: 'X', lateEnrollment: 'closed', newMatchups: false, currentPhaseIndex: 1,
     phases: [{ lateEnrollment: 'expand', newMatchups: true }, { lateEnrollment: 'closed', newMatchups: true }],
   };
-  ok(W._allowsNewMatchups(t) === true, 'gate :: na ELIM, inscrição fechada NÃO bloqueia Novos Confrontos');
+  ok(W._allowsNewMatchups(t) === false, 'gate :: inscrição fechada bloqueia novos confrontos mesmo com flag antiga ligada');
+  t.phases[1].lateEnrollment = 'expand';
+  ok(W._allowsNewMatchups(t) === true, 'gate :: ao abrir a fase, a escolha explícita por confrontos passa a valer');
   t.phases[1].newMatchups = false;
   ok(W._allowsNewMatchups(t) === false, 'gate :: desligado na elim → não integra, mesmo com a fase 0 ligada');
   t.currentPhaseIndex = 0;

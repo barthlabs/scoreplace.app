@@ -2161,11 +2161,12 @@ function setupCreateTournamentModal() {
 
     var isOpen = !!open.checked;
     var isClosed = !isOpen;
+    if (isClosed) expand.checked = false;
     var value = isClosed ? 'closed' : (expand.checked ? 'expand' : 'standby');
     var hidden = document.getElementById('late-enrollment');
     if (hidden) hidden.value = value;
     var nmHidden = document.getElementById('new-matchups');
-    if (nmHidden) nmHidden.value = expand.checked ? 'true' : 'false';
+    if (nmHidden) nmHidden.value = isOpen && expand.checked ? 'true' : 'false';
 
     window._setLateEnrollmentModeVisual(document.getElementById('late-mode-enrollment'), isOpen);
     window._setLateEnrollmentModeVisual(document.getElementById('late-mode-matchups'), !!expand.checked);
@@ -6506,7 +6507,7 @@ window._saveTournamentClickHandler = async function() {
           // Política fixa: a escolha individual/time acontece no card do jogo.
           woScope: 'individual',
           lateEnrollment: (document.getElementById('late-enrollment') || {}).value || 'closed',
-          newMatchups: ((document.getElementById('new-matchups') || {}).value === 'true'), // v1.3.x: independente de Abertas
+          newMatchups: ((document.getElementById('late-enrollment') || {}).value !== 'closed' && (document.getElementById('new-matchups') || {}).value === 'true'),
           venue: venueVal,
           venueAccess: venueAccessVal,
           // L6.R2.1: entram CRUS aqui e saem normalizados pela fronteira, logo abaixo —
@@ -8748,7 +8749,7 @@ window._saveCurrentFormAsTemplate = function(saveButton) {
       resultEntry: get('select-result-entry') || 'organizer',
       woScope: 'individual',
       lateEnrollment: get('late-enrollment') || 'closed',
-      newMatchups: (get('new-matchups') === 'true'), // v1.3.x: "Novos Confrontos" independente de "Abertas"
+      newMatchups: get('late-enrollment') !== 'closed' && get('new-matchups') === 'true',
       roundBoundsEditorEnabled: getChecked('round-bounds-enabled'),
       courtCount: parseInt(get('tourn-court-count')) || '',
       courtNames: (get('tourn-court-names') || '').trim(),

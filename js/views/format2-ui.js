@@ -192,7 +192,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // A preferência de novos confrontos continua independente e é preservada, mas só é
     // configurável com inscrições abertas. [[regression_closed_phase_has_no_late_entry_choice]]
     var _nmInh = (function () { var el = document.getElementById('new-matchups'); if (el) return el.value === 'true'; return _inh === 'expand'; })();
-    var isExpand = (e.newMatchups === true || e.newMatchups === false) ? e.newMatchups : _nmInh;
+    var isExpand = !isClosed && ((e.newMatchups === true || e.newMatchups === false) ? e.newMatchups : _nmInh);
     // A mesma estrutura de dois rótulos existe no form e no atalho da chave.
     // `on` é sempre o estado da direita: Abertas / Novos Confrontos.
     // Alguns testes de render carregam esta tela sem o construtor completo. A
@@ -1817,17 +1817,16 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // A escolha simples é normalizada para leitura; writes explícitos incompatíveis
   // continuam recusados pela Function, independentemente desta interface.
   window._f2PoliticaDaChave = function (v) { S.cfg.eliminatoria.politicaDaChave = String(v || ''); _norm(); _rerender(); };
-  // A direita do seletor é Abertas: ON abre inscrições; OFF fecha. Novos
-  // Confrontos continua independente e não é alterado por esta escolha.
+  // Novos confrontos só são escolhidos enquanto as inscrições estão abertas.
   window._f2ElimLateMaster = function (openOn) {
     if (!S) return; var e = S.cfg.eliminatoria;
-    if (!openOn) e.lateEnrollment = 'closed';
+    if (!openOn) { e.lateEnrollment = 'closed'; e.newMatchups = false; }
     else e.lateEnrollment = (e.newMatchups === true) ? 'expand' : 'standby';
     _norm(); _rerender();
   };
   window._f2ElimLateConf = function (expandOn) {
     if (!S) return; var e = S.cfg.eliminatoria;
-    // Vale MESMO com as inscrições fechadas (o suplente que já está na espera entra na chave).
+    if (e.lateEnrollment === 'closed') return;
     e.newMatchups = !!expandOn;
     // lateEnrollment segue só a inscrição; mantém 'expand'/'standby' coerente quando ABERTA
     // (compat com quem lê o valor antigo), sem nunca reabrir uma inscrição fechada.

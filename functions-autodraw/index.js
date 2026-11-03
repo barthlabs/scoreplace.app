@@ -5125,13 +5125,18 @@ exports.setPhaseLateEnrollment = onCall(async (request) => {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização altera a entrada tardia.', { tId, uid });
+    if (t.status === 'finished') throw _drawFail('failed-precondition', 'O torneio já foi encerrado.', { tId });
     const current = Number.isInteger(t.currentPhaseIndex) ? t.currentPhaseIndex : 0;
     const phase = Array.isArray(t.phases) ? t.phases[current] : null;
-    if (t.lateEnrollment === mode && t.newMatchups === (mode === 'expand') && (!phase || (phase.lateEnrollment === mode && phase.newMatchups === (mode === 'expand')))) return { ok: true, changed: false };
+    // Com inscrições fechadas, novos confrontos deixam de ser uma opção.
+    const matchups = require('./phase-late-enrollment-core')
+      .nextPhaseLateEnrollment(mode).newMatchups;
+    if (t.lateEnrollment === mode && t.newMatchups === matchups &&
+        (!phase || (phase.lateEnrollment === mode && phase.newMatchups === matchups))) return { ok: true, changed: false };
     const before = _antesDoMotor(t);
     t.lateEnrollment = mode;
-    t.newMatchups = mode === 'expand';
-    if (phase) { phase.lateEnrollment = mode; phase.newMatchups = mode === 'expand'; }
+    t.newMatchups = matchups;
+    if (phase) { phase.lateEnrollment = mode; phase.newMatchups = matchups; }
     const b = _gravaTorneio(tx, ref, t, before, { agoraIso });
     return { ok: true, changed: true, tournament: b.clean };
   });

@@ -18,6 +18,8 @@ assert.doesNotThrow(() => validateNewFormatIntent({ tieResolution: 'singles_then
 assert.doesNotThrow(() => validateNewFormatIntent({ disputa: 'individual', parceria: null }, HttpsError));
 assert.doesNotThrow(() => validateNewFormatIntent({ parceria: null }, HttpsError));
 assert.doesNotThrow(() => validateNewFormatIntent({ eliminatoria: { ativa: false } }, HttpsError));
+assert.throws(() => validateNewFormatIntent({ eliminatoria: { lateEnrollment: 'closed', newMatchups: true } }, HttpsError),
+  { code: 'invalid-argument', message: 'Novos confrontos exigem inscrições abertas na fase eliminatória.' });
 assert.doesNotThrow(() => validateNewFormatIntent({ classificationSchedule: null, rodadas: { modo: 'todos' } }, HttpsError));
 assert.doesNotThrow(() => validateNewFormatIntent({ grupos: 20, classificationPairing: { clusterSize: 100 } }, HttpsError), 'não impõe teto novo em edição histórica');
 assert.doesNotThrow(() => validateNewFormatIntent({ grupos: '20', classificationSchedule: { gamesPerUnit: '3' } }, HttpsError));

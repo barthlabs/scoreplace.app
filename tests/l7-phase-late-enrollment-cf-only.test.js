@@ -13,4 +13,5 @@ const cf = block(server, 'exports.setPhaseLateEnrollment = onCall', '\nexports.s
 ok(/request\.auth/.test(cf) && /_isTournamentAdmin/.test(cf), 'Function exige autenticação e organização');
 ok(/db\.runTransaction/.test(cf) && /_leTorneio/.test(cf) && /_gravaTorneio/.test(cf), 'Function relê e grava o documento fresco');
 ok(/phase\.lateEnrollment/.test(cf) && /phase\.newMatchups/.test(cf) && /t\.lateEnrollment/.test(cf), 'Function mantém a fase e o espelho do torneio coerentes');
+ok(/t\.status === 'finished'/.test(cf), 'Function recusa alterar entrada tardia de torneio encerrado');
 process.exitCode = bad ? 1 : 0;
