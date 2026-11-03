@@ -840,7 +840,7 @@ function drawInitial(t, opts) {
   // Pareamento rotativo (inclusive dupla sorteada por rodada) recebe PESSOAS no
   // motor de Liga. Pré-formar duplas aqui escondia o atleta ímpar do gerador:
   // cinco inscritos viravam duas duplas + um avulso sem folga registrada.
-  const _rotatingEntries0 = !!(_cfg0 && _cfg0.kind === 'classification' &&
+  const _rotatingEntries0 = !!(t.rulesContractVersion >= 2 && _cfg0 && _cfg0.kind === 'classification' &&
     _cfg0.classification && _cfg0.classification.pairing &&
     _cfg0.classification.pairing.entryMode === 'rotate');
 

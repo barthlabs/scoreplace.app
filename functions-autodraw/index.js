@@ -5181,7 +5181,7 @@ exports.setPhaseLateEnrollment = onCall(async (request) => {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização altera a entrada tardia.', { tId, uid });
-    if (t.status === 'finished') throw _drawFail('failed-precondition', 'O torneio já foi encerrado.', { tId });
+    if (t.rulesContractVersion >= 2 && t.status === 'finished') throw _drawFail('failed-precondition', 'O torneio já foi encerrado.', { tId });
     const current = Number.isInteger(t.currentPhaseIndex) ? t.currentPhaseIndex : 0;
     const phase = Array.isArray(t.phases) ? t.phases[current] : null;
     // Com inscrições fechadas, novos confrontos deixam de ser uma opção.
@@ -6199,6 +6199,7 @@ exports.advanceTournamentPhase = onCall(async (request) => {
       t.phaseDrawAudit = Object.assign({}, t.phaseDrawAudit || {});
       t.phaseDrawAudit[String(next)] = { operationId, seed: drawStamp,
         algorithm: 'xorshift128-fisher-yates-v1',
+        fallbackAlgorithm: 'fnv1a-xorshift32-fisher-yates-v1',
         seedingMode: nextPhaseConfig.pairingStrategy || nextPhaseConfig.bracketSeeding,
         createdAt: agoraIso };
     }

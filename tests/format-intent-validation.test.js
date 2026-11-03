@@ -33,6 +33,10 @@ assert.throws(() => validateNewFormatIntent({ eliminatoria: { finalSeriesBestOf:
 assert.throws(() => validateNewFormatIntent({ eliminatoria: { finalSeriesBestOf: 3, grandFinalReset: true } }, HttpsError), { code: 'invalid-argument' });
 assert.throws(() => validateNewFormatIntent({ eliminatoria: { lateEnrollment: 'closed', newMatchups: true } }, HttpsError),
   { code: 'invalid-argument', message: 'Novos confrontos exigem inscrições abertas na fase eliminatória.' });
+assert.throws(() => validateNewFormatIntent({ eliminatoria: { lateEnrollment: 'closed', newMatchups: true } },
+  HttpsError, { rulesContractVersion: 2 }), { code: 'invalid-argument' });
+assert.doesNotThrow(() => validateNewFormatIntent({ eliminatoria: { lateEnrollment: 'closed', newMatchups: true } },
+  HttpsError, { rulesContractVersion: 1 }), 'eco de configuração histórica não é migração implícita');
 assert.doesNotThrow(() => validateNewFormatIntent({ classificationSchedule: null, rodadas: { modo: 'todos' } }, HttpsError));
 assert.doesNotThrow(() => validateNewFormatIntent({ grupos: 20, classificationPairing: { clusterSize: 100 } }, HttpsError), 'não impõe teto novo em edição histórica');
 assert.doesNotThrow(() => validateNewFormatIntent({ grupos: '20', classificationSchedule: { gamesPerUnit: '3' } }, HttpsError));

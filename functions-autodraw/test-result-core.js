@@ -438,6 +438,21 @@ console.log('\n──── paridade com o cliente ────');
     JSON.stringify({ reopened, games: T.matches }));
 }
 {
+  const T = mkT({ rulesContractVersion: 2, status: 'active' });
+  const first = win._findMatch(T, 'm1');
+  first.winner = first.p1;
+  first.seriesRootId = 'm1'; first.seriesGameNumber = 1;
+  const scheduled = { ...first, id: 'm1-S2', seriesGameNumber: 2,
+    scheduledAt: '2026-11-04T12:00:00Z', court: 'Quadra 1' };
+  delete scheduled.winner;
+  T.matches.push(scheduled);
+  const corrected = core.applyResult(T, { matchId: 'm1',
+    payload: { s1: 6, s2: 4, useSets: false }, actor: { uid: UID_ORG }, now: 3 });
+  t('corrigir placar diretamente preserva jogo posterior agendado e ainda não disputado',
+    corrected.ok && T.matches.some(m => m.id === 'm1-S2' && m.scheduledAt === scheduled.scheduledAt && m.court === scheduled.court),
+    JSON.stringify({ corrected, games: T.matches }));
+}
+{
   const T = mkT({ rulesContractVersion: 2 });
   const first = win._findMatch(T, 'm1');
   first.bracket = 'grand'; first.winner = first.p1;

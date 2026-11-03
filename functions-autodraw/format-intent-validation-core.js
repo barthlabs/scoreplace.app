@@ -147,7 +147,7 @@ function validateNewFormatIntent(fmt2, HttpsError, stored, requestedTeamSize) {
     }
   }
   if (fmt2.eliminatoria && fmt2.eliminatoria.lateEnrollment === 'closed' &&
-      fmt2.eliminatoria.newMatchups === true) {
+      fmt2.eliminatoria.newMatchups === true && (!stored || stored.rulesContractVersion >= 2)) {
     throw new HttpsError('invalid-argument', 'Novos confrontos exigem inscrições abertas na fase eliminatória.');
   }
   // O compilador tolerante lê documentos históricos, mas uma intenção nova
