@@ -145,7 +145,8 @@ const fs=require('fs'),m=JSON.parse(fs.readFileSync(process.env.SP_FILE));
 const s=JSON.parse(process.env.SP_JSON),r=JSON.parse(process.env.SP_REV_JSON);
 const i=m.findIndex(x=>x.name===process.env.SP_NAME&&x.region===process.env.SP_REGION);
 if(i<0||!s.status?.url||r.metadata?.name!==process.env.SP_NEXT||
-  s.status?.latestReadyRevisionName!==process.env.SP_NEXT)process.exit(1);
+  s.status?.latestCreatedRevisionName!==process.env.SP_NEXT||
+  !r.status?.conditions?.some(x=>x.type==='Ready'&&x.status==='True'))process.exit(1);
 const image=r.spec?.containers?.[0]?.image;
 const env=Object.fromEntries((r.spec?.containers?.[0]?.env||[]).map(x=>[x.name,x.value]));
 if(!image||env.SP_SOURCE_DIGEST!==process.env.SP_DIGEST||env.SP_OPERATION_REGION!==process.env.SP_REGION)process.exit(1);

@@ -15,8 +15,10 @@ const recordStage = script.slice(start, end);
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-score-stage-'));
 const manifest = path.join(dir, 'candidate.json');
 const row = { name: 'sp-op-score-v3', region: 'us-east1', revision: 'old-rev', url: 'https://score.test' };
-const service = { status: { url: row.url, latestReadyRevisionName: 'new-rev' } };
-const revision = { metadata: { name: 'new-rev' }, spec: { containers: [{ image: 'image:sha', env: [
+const service = { status: { url: row.url, latestCreatedRevisionName: 'new-rev', latestReadyRevisionName: 'old-rev' } };
+const revision = { metadata: { name: 'new-rev' }, status: { conditions: [
+  { type: 'Ready', status: 'True', reason: 'Retired' }
+] }, spec: { containers: [{ image: 'image:sha', env: [
   { name: 'SP_SOURCE_DIGEST', value: 'digest-new' }, { name: 'SP_OPERATION_REGION', value: 'us-east1' }
 ] }] } };
 function run(rev) {
