@@ -87,6 +87,7 @@ public final class ScoreEngine {
         var serveSkipped = false
         var secondServerPicked = false
         var totalGamesPlayed = 0
+        var setStartGamesPlayed = 0
     }
 
     // config imutável (bracket-ui.js:4165-4184)
@@ -191,11 +192,13 @@ public final class ScoreEngine {
     }
 
     // ── _needsServePick (bracket-ui.js:5423) ──
+    var gamesInCurrentSet: Int { state.totalGamesPlayed - state.setStartGamesPlayed }
+
     func needsServePick() -> Bool {
         if state.serveSkipped { return false }
         if state.isFinished || state.tieRulePending { return false }
-        if state.totalGamesPlayed == 0 && state.serveOrder.isEmpty { return true }
-        if isDoubles && state.totalGamesPlayed == 1 && state.serveOrder.count >= 2 && !state.secondServerPicked { return true }
+        if gamesInCurrentSet == 0 && state.serveOrder.isEmpty { return true }
+        if isDoubles && gamesInCurrentSet == 1 && state.serveOrder.count >= 2 && !state.secondServerPicked { return true }
         return false
     }
 
@@ -203,7 +206,7 @@ public final class ScoreEngine {
     func pickerPlayers() -> [(team: Int, idx: Int)] {
         guard needsServePick() else { return [] }
         var out: [(Int, Int)] = []
-        if state.totalGamesPlayed == 0 {
+        if gamesInCurrentSet == 0 {
             for i in p1Players.indices { out.append((1, i)) }
             for i in p2Players.indices { out.append((2, i)) }
             return out
@@ -236,17 +239,17 @@ public final class ScoreEngine {
             state.secondServerPicked = true
             return
         }
-        if state.totalGamesPlayed == 1 { state.secondServerPicked = true }
+        if gamesInCurrentSet == 1 { state.secondServerPicked = true }
         setServer(team: sel.team, playerIdx: sel.idx)
     }
 
     // ── _liveSetServer (bracket-ui.js:5826) ──
     func setServer(team: Int, playerIdx: Int) {
-        if state.totalGamesPlayed >= 2 { return }        // HARD LOCK
+        if gamesInCurrentSet >= 2 { return }        // HARD LOCK no set atual
         let players = team == 1 ? p1Players : p2Players
         guard playerIdx < players.count else { return }
         let name = players[playerIdx]
-        if state.totalGamesPlayed == 0 {
+        if gamesInCurrentSet == 0 {
             var teammate: String? = nil
             for p in players where p != name { teammate = p; break }
             let otherTeam = team == 1 ? 2 : 1
@@ -257,7 +260,7 @@ public final class ScoreEngine {
                 ServeSlot(team: team, name: teammate ?? "Jogador \(team == 1 ? 2 : 4)"),
                 ServeSlot(team: otherTeam, name: opponents.count > 1 ? opponents[1] : "Jogador \(otherTeam == 1 ? 2 : 4)")
             ]
-        } else if state.totalGamesPlayed == 1 {
+        } else if gamesInCurrentSet == 1 {
             guard state.serveOrder.count >= 4, state.serveOrder[1].team == team else { return }
             var other: String? = nil
             for p in players where p != name { other = p; break }
@@ -403,6 +406,10 @@ public final class ScoreEngine {
             state.winner = matchWinner
         } else {
             state.sets.append(SetScore())
+            state.setStartGamesPlayed = state.totalGamesPlayed
+            state.serveOrder = []
+            state.secondServerPicked = false
+            pickerSel = nil
         }
     }
 
@@ -474,9 +481,9 @@ public final class ScoreEngine {
         if state.isTiebreak || isDecidingSet() {
             let totalPts = state.currentGameP1 + state.currentGameP2
             let tbOffset = totalPts == 0 ? 0 : (totalPts + 1) / 2
-            idx = (state.totalGamesPlayed + tbOffset) % state.serveOrder.count
+            idx = (gamesInCurrentSet + tbOffset) % state.serveOrder.count
         } else {
-            idx = state.totalGamesPlayed % state.serveOrder.count
+            idx = gamesInCurrentSet % state.serveOrder.count
         }
         return idx < state.serveOrder.count ? state.serveOrder[idx] : nil
     }
@@ -484,9 +491,9 @@ public final class ScoreEngine {
     // ── _serveEligibleNow (bracket-ui.js:5400) ──
     func serveEligibleNow() -> [(team: Int, playerIdx: Int, name: String)] {
         if state.serveSkipped || !isDoubles || state.isFinished { return [] }
-        if state.totalGamesPlayed >= 2 { return [] }
+        if gamesInCurrentSet >= 2 { return [] }
         var out: [(Int, Int, String)] = []
-        if state.totalGamesPlayed == 0 {
+        if gamesInCurrentSet == 0 {
             for (i, n) in p1Players.enumerated() where !n.isEmpty { out.append((1, i, n)) }
             for (i, n) in p2Players.enumerated() where !n.isEmpty { out.append((2, i, n)) }
             return out
@@ -549,8 +556,8 @@ public final class ScoreEngine {
             let arr = sel.team == 1 ? p1Players : p2Players
             if sel.idx < arr.count { spCurRaw = arr[sel.idx] }
         }
-        if spCurRaw.isEmpty && state.totalGamesPlayed < state.serveOrder.count {
-            spCurRaw = state.serveOrder[state.totalGamesPlayed].name
+        if spCurRaw.isEmpty && gamesInCurrentSet < state.serveOrder.count {
+            spCurRaw = state.serveOrder[gamesInCurrentSet].name
         }
         var snap: [String: Any] = [
             "v": 1,
@@ -576,7 +583,7 @@ public final class ScoreEngine {
             "rrSuggest": false,              // exige 2 pares distintos na sessão — 1 par ⇒ false
             "canSetServer": !elig.isEmpty,
             "serveEligible": elig,
-            "servePickPhase": !elig.isEmpty ? state.totalGamesPlayed : -1,
+            "servePickPhase": !elig.isEmpty ? gamesInCurrentSet : -1,
             "servePickOpen": needsServePick(),
             "servePickCurrent": wn(spCurRaw),
             "isFinished": state.isFinished,

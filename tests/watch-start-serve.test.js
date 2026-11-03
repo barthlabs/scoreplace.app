@@ -91,7 +91,7 @@ const wait = (ms) => new Promise(r => setTimeout(r, ms));
   ok(c.calls.indexOf('serveConfirm') === -1, 'placar não abriu: nada é confirmado');
   ok(c.calls.length === 1, 'placar não abriu: desiste em silêncio (sem retry infinito)');
 
-  // ── 4. Com o placar JÁ aberto, setServer vai direto (comportamento antigo) ─
+  // ── 4. Com o placar aberto, confirmar no relógio fecha o picker do telefone ─
   const d = loadBridge();
   d.win.WatchBridge.applyIntent({ type: 'start', id: 'i5' });
   await wait(400);
@@ -99,6 +99,8 @@ const wait = (ms) => new Promise(r => setTimeout(r, ms));
   d.win.WatchBridge.applyIntent({ type: 'setServer', team: 1, playerIdx: 0, id: 'i6' });
   ok(d.calls.indexOf('serveSelect:1,0') !== -1,
      'com placar aberto, setServer passa pela seleção canônica de saque');
+  ok(d.calls.slice(before).join('|') === 'serveSelect:1,0|serveConfirm',
+     'relógio seleciona E confirma no telefone, inclusive o segundo sacador');
   ok(d.calls.length > before, 'a intenção não foi engolida');
 
   console.log('  ' + pass + ' asserts OK, ' + fail + ' falhas');

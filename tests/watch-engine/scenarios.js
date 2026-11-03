@@ -94,9 +94,22 @@ module.exports = [
       games('112111'),      // + games até 5-1 (Ana 5, Caio 2)... sequência: t1,t1,t2,t1,t1,t1
       // set 1: Ana precisa de 6 games: já tem 5 do bloco acima? (1º game foi do Caio)
       game(1),              // fecha o set 1
+      serve(2, 0),          // set 2 pergunta novamente quem abre o saque
       games('222222')       // Caio leva o set 2 6-0 → 1-1... continua? setsToWin 2
       // ⚠️ o cenário TERMINA com a partida ABERTA de propósito: vetor também
       // cobre estado intermediário estável (1 set a 1, super TB à frente).
+    )
+  },
+  {
+    name: 'tenis-duplas-saque-por-set',
+    sport: 'Tênis', players: DUPLAS,
+    note: 'Em cada set, pergunta de novo primeiro e segundo sacadores; bloqueia ponto até confirmar.',
+    events: flat(
+      serve(1, 0), game(1), serve(2, 1), games('11111'),
+      pt(2),                 // set 2: ainda sem primeiro sacador, ponto bloqueado
+      serve(2, 0), game(2),
+      pt(1),                 // segundo sacador do set 2 pendente, ponto bloqueado
+      serve(1, 1), games('22222')
     )
   },
   {

@@ -89,6 +89,22 @@ const VEC_DIR = path.join(__dirname, 'watch-engine', 'vectors');
     ok(ten.config.advantageRule === true && ten.config.setsToWin === 2, 'config do tênis veio REAL do sport-rules.js');
   } else ok(false, 'cenário tenis-simples-vantagem-e-2-sets existe');
 
+  const setsDoubles = by['tenis-duplas-saque-por-set'];
+  if (setsDoubles) {
+    const st = setsDoubles.steps;
+    const nextSet = st.findIndex((s, i) => i > 0 && s.state.setLabel === 'Set 2');
+    ok(nextSet > 0 && st[nextSet].state.servePickOpen && st[nextSet].state.servePickPhase === 0,
+       '🔒 cada set reabre escolha de time e primeiro sacador');
+    ok(st[nextSet + 1] && st[nextSet + 1].event.kind === 'point'
+       && gen.stable(st[nextSet + 1].state) === gen.stable(st[nextSet].state),
+       '🔒 ponto do novo set fica bloqueado até confirmar primeiro sacador');
+    const second = st.findIndex((s, i) => i > nextSet && s.state.setLabel === 'Set 2'
+      && s.state.servePickOpen && s.state.servePickPhase === 1);
+    ok(second > nextSet && st[second + 1] && st[second + 1].event.kind === 'point'
+       && gen.stable(st[second + 1].state) === gen.stable(st[second].state),
+       '🔒 segundo sacador é perguntado novamente e bloqueia pontos até confirmar');
+  } else ok(false, 'cenário de dois sets em duplas existe');
+
   const pk = by['pickleball-numerico'];
   if (pk) {
     ok(pk.config.countingType === 'numeric', 'pickleball: contagem numérica real');

@@ -4802,6 +4802,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     servePending: false, // true when waiting for user to pick a server
     secondServerPicked: false, // Tela 2 (duplas): 2º sacador (do outro time) já foi escolhido?
     totalGamesPlayed: 0, // total games completed (for serve rotation)
+    setStartGamesPlayed: 0, // total de games ao abrir o set atual; saque recomeça em cada set
     gameLog: [],         // [{winner:1|2, serverName, serverTeam}] per completed normal game
     pointLog: []         // [{team:1|2, endSet:bool}] every point scored, set boundaries marked
   };
@@ -4849,9 +4850,11 @@ window._openLiveScoring = function(tId, matchId, opts) {
     if (_ils.winner != null) state.winner = _ils.winner;
     state.tieRulePending = !!_ils.tieRulePending;
     if (_ils.totalGamesPlayed) state.totalGamesPlayed = _ils.totalGamesPlayed;
+    state.setStartGamesPlayed = Number.isInteger(_ils.setStartGamesPlayed) ? _ils.setStartGamesPlayed : null;
     if (_ils.tieRule) state.tieRule = _ils.tieRule;
-    if (Array.isArray(_ils.serveOrder) && _ils.serveOrder.length) state.serveOrder = _ils.serveOrder;
-    if (state.serveOrder.length > 0) state.secondServerPicked = true; // partida retomada → não re-perguntar
+    if (Array.isArray(_ils.serveOrder)) state.serveOrder = _ils.serveOrder;
+    state.secondServerPicked = typeof _ils.secondServerPicked === 'boolean'
+      ? _ils.secondServerPicked : (state.serveOrder.length > 0 && _gamesInCurrentSet() >= 2);
     state.serveSkipped = !!_ils.serveSkipped;
     if (Array.isArray(_ils.gameLog)) state.gameLog = _ils.gameLog.slice();
     if (Array.isArray(_ils.pointLog)) state.pointLog = _ils.pointLog.slice();
@@ -4894,8 +4897,11 @@ window._openLiveScoring = function(tId, matchId, opts) {
             state.winner = remote.winner != null ? remote.winner : null;
             state.tieRulePending = !!remote.tieRulePending;
             state.totalGamesPlayed = remote.totalGamesPlayed || 0;
+            state.setStartGamesPlayed = Number.isInteger(remote.setStartGamesPlayed) ? remote.setStartGamesPlayed : null;
             state.tieRule = remote.tieRule || state.tieRule;
-            if (Array.isArray(remote.serveOrder) && remote.serveOrder.length > 0) { state.serveOrder = remote.serveOrder; state.secondServerPicked = true; }
+            if (Array.isArray(remote.serveOrder)) state.serveOrder = remote.serveOrder;
+            state.secondServerPicked = typeof remote.secondServerPicked === 'boolean'
+              ? remote.secondServerPicked : (state.serveOrder.length > 0 && _gamesInCurrentSet() >= 2);
             state.serveSkipped = !!remote.serveSkipped;
             if (Array.isArray(remote.gameLog)) state.gameLog = remote.gameLog.slice();
             if (Array.isArray(remote.pointLog)) state.pointLog = remote.pointLog.slice();
@@ -5379,7 +5385,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
         _finishSet(gameWinner);
       } else {
         // Normal game won — log server and winner for stats
-        var _srvIdx = state.serveOrder.length > 0 ? (state.totalGamesPlayed % state.serveOrder.length) : -1;
+        var _srvIdx = state.serveOrder.length > 0 ? (_gamesInCurrentSet() % state.serveOrder.length) : -1;
         var _srvEntry = _srvIdx >= 0 ? state.serveOrder[_srvIdx] : null;
         state.gameLog.push({
           winner: gameWinner,
@@ -5469,6 +5475,12 @@ window._openLiveScoring = function(tId, matchId, opts) {
     } else {
       // Start new set
       state.sets.push({ gamesP1: 0, gamesP2: 0, tiebreak: null });
+      if (!_replay) {
+        state.setStartGamesPlayed = state.totalGamesPlayed;
+        state.serveOrder = [];
+        state.secondServerPicked = false;
+        _pickerSel = null;
+      }
       // Som: set fechado e a partida continua → fanfarra "Set". Mudo no replay pelo
       // mesmo motivo do "Game" acima.
       if (window._sound && !_replay) window._sound('set');
@@ -6081,11 +6093,17 @@ window._openLiveScoring = function(tId, matchId, opts) {
   //                                   abriu já está travado.
   //   daí em diante           → ninguém (hard lock no _liveSetServer).
   // A regra vive AQUI (celular); o relógio só desenha a lista que receber.
+  function _gamesInCurrentSet() {
+    // Documento antigo sem a marca continua com a ordem anterior até o próximo
+    // set; o primeiro set novo recebe a marca ao ser aberto por _finishSet.
+    return state.totalGamesPlayed - (Number.isInteger(state.setStartGamesPlayed) ? state.setStartGamesPlayed : 0);
+  }
+
   function _serveEligibleNow() {
     if (state.serveSkipped || !isDoubles || state.isFinished) return [];
-    if (state.totalGamesPlayed >= 2) return [];
+    if (_gamesInCurrentSet() >= 2) return [];
     var out = [], i;
-    if (state.totalGamesPlayed === 0) {
+    if (_gamesInCurrentSet() === 0) {
       for (i = 0; i < p1Players.length; i++) {
         if (p1Players[i]) out.push({ team: 1, playerIdx: i, name: p1Players[i] });
       }
@@ -6108,9 +6126,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
     if (state.serveSkipped) return false;
     if (state.isFinished || state.tieRulePending) return false;
     // Tela 1: antes do 1º game e nenhum sacador escolhido.
-    if (state.totalGamesPlayed === 0 && state.serveOrder.length === 0) return true;
+    if (_gamesInCurrentSet() === 0 && state.serveOrder.length === 0) return true;
     // Tela 2 (só duplas): entre o 1º e o 2º game, 2º sacador (do outro time) ainda não escolhido.
-    if (isDoubles && state.totalGamesPlayed === 1 && state.serveOrder.length >= 2 && !state.secondServerPicked) return true;
+    if (isDoubles && _gamesInCurrentSet() === 1 && state.serveOrder.length >= 2 && !state.secondServerPicked) return true;
     return false;
   }
 
@@ -6135,9 +6153,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // In tiebreak: advance serve position every 2 points (first server serves 1, then 2 each)
       var totalPts = state.currentGameP1 + state.currentGameP2;
       var tbOffset = (totalPts === 0) ? 0 : Math.floor((totalPts + 1) / 2);
-      idx = (state.totalGamesPlayed + tbOffset) % state.serveOrder.length;
+      idx = (_gamesInCurrentSet() + tbOffset) % state.serveOrder.length;
     } else {
-      idx = state.totalGamesPlayed % state.serveOrder.length;
+      idx = _gamesInCurrentSet() % state.serveOrder.length;
     }
     return state.serveOrder[idx] || null;
   }
@@ -6223,7 +6241,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // bandeira local nasceria `false` — foi isso que apagou o título e o Iniciar.
   if (typeof window._spServePickerOn === 'undefined') window._spServePickerOn = false;
 
-  function _serveStage() { return (state.totalGamesPlayed === 0) ? 1 : 2; }
+  function _serveStage() { return (_gamesInCurrentSet() === 0) ? 1 : 2; }
 
   function _servePickerPlayers(stage) {
     var out = [];
@@ -6386,7 +6404,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
       _watchNotify();
       return;
     }
-    if (state.totalGamesPlayed === 1) state.secondServerPicked = true;
+    if (_gamesInCurrentSet() === 1) {
+      if (state.serveOrder.length < 4 || state.serveOrder[1].team !== sel.team) return;
+      state.secondServerPicked = true;
+    }
     _liveSetServer(sel.team, sel.idx);
   };
 
@@ -6414,15 +6435,15 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // Set 1st server by dragging ball to a player name (inline, on the live scoring screen)
   // Before game 1: any player can be set as 1st server → auto-sets 3rd (teammate)
   // Before game 2: only the other team's players → sets 2nd server → auto-sets 4th
-  // After game 2: locked
+  // After game 2 of the current set: locked until the next set
   window._liveSetServer = function(team, playerIdx) {
-    // HARD LOCK: after 2 games, nobody's serve order can change — ever.
-    if (state.totalGamesPlayed >= 2) { _render(); return; }
+    // HARD LOCK: after 2 games of this set, the order stays until the next set.
+    if (_gamesInCurrentSet() >= 2) { _render(); return; }
     var players = team === 1 ? p1Players : p2Players;
     var name = players[playerIdx];
     if (!name) return;
 
-    if (state.totalGamesPlayed === 0) {
+    if (_gamesInCurrentSet() === 0) {
       // Setting 1st server: this player + teammate fills slots 0,2. Other team fills 1,3.
       var teammate = null;
       var teamAll = team === 1 ? p1Players : p2Players;
@@ -6437,7 +6458,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
         { team: team, name: teammate || ('Jogador ' + (team === 1 ? 2 : 4)), pIdx: 1 },
         { team: otherTeam, name: opponents[1] || ('Jogador ' + (otherTeam === 1 ? 2 : 4)), pIdx: 1 }
       ];
-    } else if (state.totalGamesPlayed === 1) {
+    } else if (_gamesInCurrentSet() === 1) {
       // Setting 2nd server: MUST be from the team that serves 2nd (serveOrder[1].team).
       // The team that started serving (serveOrder[0].team) is already locked.
       if (state.serveOrder.length < 4) { _render(); return; }
@@ -7348,7 +7369,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
 
     // A bola de saque pode ser arrastada pra trocar o sacador enquanto a ordem
     // ainda não travou (2 jogos). Quem desenha a bola é _lsNameRow.
-    var _canDragServe = !state.isFinished && !state.serveSkipped && isDoubles && state.totalGamesPlayed < 2;
+    var _canDragServe = !state.isFinished && !state.serveSkipped && isDoubles && _gamesInCurrentSet() < 2;
 
     // Finish button (isFinished handled above with early return)
     var finishBtn = '';
@@ -8175,7 +8196,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
       drops.forEach(function(d) {
         var parts = d.getAttribute('data-serve-drop').split('-');
         var dropTeam = parseInt(parts[0]);
-        var canDrop = (state.totalGamesPlayed === 0) || (state.totalGamesPlayed === 1 && state.serveOrder.length > 1 && dropTeam === state.serveOrder[1].team);
+        var canDrop = (_gamesInCurrentSet() === 0) || (_gamesInCurrentSet() === 1 && state.serveOrder.length > 1 && dropTeam === state.serveOrder[1].team);
         if (canDrop) d.style.background = 'rgba(255,200,0,0.15)';
       });
     }
@@ -8187,8 +8208,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
       var parts = target.dataset.serveDrop.split('-');
       var dropTeam = parseInt(parts[0]);
       var dropIdx = parseInt(parts[1]);
-      if (state.totalGamesPlayed >= 2) return false;
-      if (state.totalGamesPlayed === 1 && state.serveOrder.length > 1 && dropTeam !== state.serveOrder[1].team) return false;
+      if (_gamesInCurrentSet() >= 2) return false;
+      if (_gamesInCurrentSet() === 1 && state.serveOrder.length > 1 && dropTeam !== state.serveOrder[1].team) return false;
       window._liveSetServer(dropTeam, dropIdx);
       return true;
     }
@@ -8560,6 +8581,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
       winner: state.winner,
       tieRulePending: state.tieRulePending,
       totalGamesPlayed: state.totalGamesPlayed,
+      setStartGamesPlayed: state.setStartGamesPlayed,
       serveOrder: state.serveOrder.map(function(s) { return { team: s.team, name: s.name }; }),
       serveSkipped: state.serveSkipped,
       // ⛔ O FLAG DO 2º SACADOR PRECISA VIAJAR. Sem ele no `liveState`, quem recebe o estado
@@ -8590,15 +8612,16 @@ window._openLiveScoring = function(tId, matchId, opts) {
     state.winner = remote.winner != null ? remote.winner : state.winner;
     state.tieRulePending = !!remote.tieRulePending;
     state.totalGamesPlayed = remote.totalGamesPlayed || 0;
+    state.setStartGamesPlayed = Number.isInteger(remote.setStartGamesPlayed) ? remote.setStartGamesPlayed : null;
     state.tieRule = remote.tieRule || state.tieRule;
-    if (Array.isArray(remote.serveOrder) && remote.serveOrder.length > 0) {
+    if (Array.isArray(remote.serveOrder)) {
       state.serveOrder = remote.serveOrder;
       // A tela 1 já grava a rotação INTEIRA, então "tem serveOrder" nunca significou "o 2º
       // sacador foi escolhido". Agora o estado diz; só documento ANTIGO (sem o campo) é inferido,
       // e de forma conservadora: `totalGamesPlayed >= 2` é quando a pergunta já não cabe mais.
       state.secondServerPicked = (typeof remote.secondServerPicked === 'boolean')
         ? remote.secondServerPicked
-        : ((remote.totalGamesPlayed || 0) >= 2);
+        : (_gamesInCurrentSet() >= 2);
     }
     state.serveSkipped = !!remote.serveSkipped;
     if (Array.isArray(remote.gameLog)) state.gameLog = remote.gameLog.slice();
@@ -9246,8 +9269,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
       var _pkArr = _pickerSel.team === 1 ? p1Players : p2Players;
       _spCurRaw = _pkArr[_pickerSel.idx] || '';
     }
-    if (!_spCurRaw && state.serveOrder && state.serveOrder[state.totalGamesPlayed]) {
-      _spCurRaw = state.serveOrder[state.totalGamesPlayed].name || '';
+    if (!_spCurRaw && state.serveOrder && state.serveOrder[_gamesInCurrentSet()]) {
+      _spCurRaw = state.serveOrder[_gamesInCurrentSet()].name || '';
     }
     return {
       v: 1,
@@ -9313,7 +9336,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // Fase da escolha: 0 = quem ABRE o saque (4 nomes) · 1 = quem faz o 2º
       // saque do set (só o time que não abriu) · -1 = travado. O relógio usa a
       // MUDANÇA de fase pra pedir confirmação entre o 1º e o 2º game.
-      servePickPhase: _elig.length > 0 ? state.totalGamesPlayed : -1,
+      servePickPhase: _elig.length > 0 ? _gamesInCurrentSet() : -1,
       // v1.6.88: o CELULAR diz quando a escolha está aberta; o relógio não deduz.
       // Antes o relógio abria o seletor só na fase 1 (2º sacador) e a fase 0 (1º
       // sacador) era coberta pela tela "Iniciar" — que NÃO aparece na 2ª partida,
@@ -9578,6 +9601,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
         state.winner = null;
         state.tieRulePending = false;
         state.totalGamesPlayed = 0;
+        state.setStartGamesPlayed = 0;
         state.serveOrder = [];
         state.serveSkipped = false;
         state.servePending = false;
@@ -9728,7 +9752,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     state.currentGameP1 = 0; state.currentGameP2 = 0;
     state.isTiebreak = false; state.isFinished = false;
     state.winner = null; state.tieRulePending = false;
-    state.totalGamesPlayed = 0; state.serveOrder = [];
+    state.totalGamesPlayed = 0; state.setStartGamesPlayed = 0; state.serveOrder = [];
     state.serveSkipped = false; state.servePending = false;
     state.gameLog = []; state.pointLog = [];
     state.tieRule = sc.tieRule || null;
@@ -10152,6 +10176,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
         state.winner = null;
         state.tieRulePending = false;
         state.totalGamesPlayed = 0;
+        state.setStartGamesPlayed = 0;
         state.serveOrder = [];
         state.serveSkipped = false;
         state.servePending = false;

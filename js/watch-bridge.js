@@ -348,11 +348,13 @@
         }
         break;
       case 'setServer':
-        // Compatibilidade com relógios antigos: selecionar não confirma. Passar
-        // pelo mesmo estado do telefone impede avanço isolado no relógio.
+        // Caminho unitário do relógio: o toque em Confirmar já escolheu o nome.
+        // Reproduzir seleção E confirmação no telefone; deixar só a seleção
+        // mantinha o picker aberto e exigia outro toque no celular.
         if ((intent.team === 1 || intent.team === 2) && typeof intent.playerIdx === 'number') {
           if (typeof window._liveServeSelect === 'function') {
             window._liveServeSelect(intent.team, intent.playerIdx);
+            if (typeof window._liveServeConfirm === 'function') window._liveServeConfirm();
           } else {
             // Ainda no LOBBY: o placar não abriu, então _liveSetServer nem existe e a
             // escolha do relógio caía no vazio. Guarda pra aplicar no `start`.

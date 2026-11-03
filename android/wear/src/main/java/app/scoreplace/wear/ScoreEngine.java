@@ -70,6 +70,7 @@ public final class ScoreEngine {
         List<ServeSlot> serveOrder = new ArrayList<>();
         boolean serveSkipped, secondServerPicked;
         int totalGamesPlayed;
+        int setStartGamesPlayed;
         State() { sets.add(new SetScore()); }
         State copy() {
             State s = new State();
@@ -82,6 +83,7 @@ public final class ScoreEngine {
             s.serveOrder = new ArrayList<>(serveOrder);   // slots são imutáveis
             s.serveSkipped = serveSkipped; s.secondServerPicked = secondServerPicked;
             s.totalGamesPlayed = totalGamesPlayed;
+            s.setStartGamesPlayed = setStartGamesPlayed;
             return s;
         }
     }
@@ -163,18 +165,20 @@ public final class ScoreEngine {
         }
     }
 
+    private int gamesInCurrentSet() { return state.totalGamesPlayed - state.setStartGamesPlayed; }
+
     boolean needsServePick() {
         if (state.serveSkipped) return false;
         if (state.isFinished || state.tieRulePending) return false;
-        if (state.totalGamesPlayed == 0 && state.serveOrder.isEmpty()) return true;
-        return isDoubles && state.totalGamesPlayed == 1 && state.serveOrder.size() >= 2
+        if (gamesInCurrentSet() == 0 && state.serveOrder.isEmpty()) return true;
+        return isDoubles && gamesInCurrentSet() == 1 && state.serveOrder.size() >= 2
                 && !state.secondServerPicked;
     }
 
     private List<int[]> pickerPlayers() {
         List<int[]> out = new ArrayList<>();
         if (!needsServePick()) return out;
-        if (state.totalGamesPlayed == 0) {
+        if (gamesInCurrentSet() == 0) {
             for (int i = 0; i < p1Players.size(); i++) out.add(new int[]{1, i});
             for (int i = 0; i < p2Players.size(); i++) out.add(new int[]{2, i});
             return out;
@@ -209,16 +213,16 @@ public final class ScoreEngine {
             state.secondServerPicked = true;
             return;
         }
-        if (state.totalGamesPlayed == 1) state.secondServerPicked = true;
+        if (gamesInCurrentSet() == 1) state.secondServerPicked = true;
         setServer(selTeam, selIdx);
     }
 
     private void setServer(int team, int playerIdx) {
-        if (state.totalGamesPlayed >= 2) return;   // HARD LOCK
+        if (gamesInCurrentSet() >= 2) return;   // HARD LOCK no set atual
         List<String> players = team == 1 ? p1Players : p2Players;
         if (playerIdx >= players.size()) return;
         String name = players.get(playerIdx);
-        if (state.totalGamesPlayed == 0) {
+        if (gamesInCurrentSet() == 0) {
             String teammate = null;
             for (String p : players) if (!p.equals(name)) { teammate = p; break; }
             int otherTeam = team == 1 ? 2 : 1;
@@ -231,7 +235,7 @@ public final class ScoreEngine {
                     teammate != null ? teammate : "Jogador " + (team == 1 ? 2 : 4)));
             state.serveOrder.add(new ServeSlot(otherTeam,
                     opponents.size() > 1 ? opponents.get(1) : "Jogador " + (otherTeam == 1 ? 2 : 4)));
-        } else if (state.totalGamesPlayed == 1) {
+        } else if (gamesInCurrentSet() == 1) {
             if (state.serveOrder.size() < 4 || state.serveOrder.get(1).team != team) return;
             String other = null;
             for (String p : players) if (!p.equals(name)) { other = p; break; }
@@ -370,6 +374,10 @@ public final class ScoreEngine {
             state.winner = matchWinner;
         } else {
             state.sets.add(new SetScore());
+            state.setStartGamesPlayed = state.totalGamesPlayed;
+            state.serveOrder.clear();
+            state.secondServerPicked = false;
+            pickerSel = null;
         }
     }
 
@@ -438,9 +446,9 @@ public final class ScoreEngine {
         if (state.isTiebreak || isDecidingSet()) {
             int totalPts = state.currentGameP1 + state.currentGameP2;
             int tbOffset = totalPts == 0 ? 0 : (totalPts + 1) / 2;
-            idx = (state.totalGamesPlayed + tbOffset) % state.serveOrder.size();
+            idx = (gamesInCurrentSet() + tbOffset) % state.serveOrder.size();
         } else {
-            idx = state.totalGamesPlayed % state.serveOrder.size();
+            idx = gamesInCurrentSet() % state.serveOrder.size();
         }
         return idx < state.serveOrder.size() ? state.serveOrder.get(idx) : null;
     }
@@ -448,8 +456,8 @@ public final class ScoreEngine {
     private List<int[]> serveEligibleNow() {
         List<int[]> out = new ArrayList<>();
         if (state.serveSkipped || !isDoubles || state.isFinished) return out;
-        if (state.totalGamesPlayed >= 2) return out;
-        if (state.totalGamesPlayed == 0) {
+        if (gamesInCurrentSet() >= 2) return out;
+        if (gamesInCurrentSet() == 0) {
             for (int i = 0; i < p1Players.size(); i++)
                 if (!p1Players.get(i).isEmpty()) out.add(new int[]{1, i});
             for (int i = 0; i < p2Players.size(); i++)
@@ -515,8 +523,8 @@ public final class ScoreEngine {
             List<String> arr = pickerSel[0] == 1 ? p1Players : p2Players;
             if (pickerSel[1] < arr.size()) spCurRaw = arr.get(pickerSel[1]);
         }
-        if (spCurRaw.isEmpty() && state.totalGamesPlayed < state.serveOrder.size()) {
-            spCurRaw = state.serveOrder.get(state.totalGamesPlayed).name;
+        if (spCurRaw.isEmpty() && gamesInCurrentSet() < state.serveOrder.size()) {
+            spCurRaw = state.serveOrder.get(gamesInCurrentSet()).name;
         }
 
         List<int[]> elig = serveEligibleNow();
@@ -558,7 +566,7 @@ public final class ScoreEngine {
         }
         eb.append("]");
         m.put("serveEligible", eb.toString());
-        m.put("servePickPhase", String.valueOf(!elig.isEmpty() ? state.totalGamesPlayed : -1));
+        m.put("servePickPhase", String.valueOf(!elig.isEmpty() ? gamesInCurrentSet() : -1));
         m.put("servePickOpen", bool(needsServePick()));
         m.put("servePickCurrent", str(wn(wnMap, spCurRaw)));
         m.put("isFinished", bool(state.isFinished));

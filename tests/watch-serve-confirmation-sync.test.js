@@ -9,7 +9,8 @@ function ok(name, condition) { if (condition) pass++; else { fail++; console.err
 const from = bridge.indexOf("case 'setServer'");
 const legacy = bridge.slice(from, bridge.indexOf("case 'hello'", from));
 ok('relógio seleciona pelo mesmo estado do telefone', /_liveServeSelect\(intent\.team, intent\.playerIdx\)/.test(legacy));
-ok('relógio não aplica sacador antes da confirmação', !/_liveSetServer\(intent\.team, intent\.playerIdx\)/.test(legacy));
+ok('confirmar no relógio confirma também no telefone', /_liveServeConfirm\(\)/.test(legacy));
+ok('relógio usa confirmação canônica do telefone', !/_liveSetServer\(intent\.team, intent\.playerIdx\)/.test(legacy));
 ok('confirmar tem alvo vertical de 52px', /id="live-serve-confirm"[\s\S]{0,500}min-height:52px/.test(ui));
 console.log((fail ? '❌' : '✅') + ' watch-serve-confirmation-sync: ' + pass + ' ok, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);

@@ -11,6 +11,10 @@
 // O leitor aceita grupos históricos duplicados no documento e na subcoleção
 // apenas quando as duas cópias são idênticas; divergências continuam bloqueadas.
 // Novos placares mantêm esses grupos na subcoleção e não recriam a cópia no pai.
+// No placar ao vivo, confirmar o sacador no relógio confirma também no celular.
+// Cada set volta a perguntar quem abre o saque e, em duplas, quem saca no
+// segundo game; pontos aguardam as confirmações. Web, Apple Watch e Wear OS
+// seguem a mesma regra.
 // 2.5.87 — O histórico dos torneios usa os jogos físicos como fonte única. Cópias
 // antigas de resultados deixam de ser legíveis ou graváveis pelo cliente. As
 // configurações e placares dos torneios existentes não são alterados por este corte.
