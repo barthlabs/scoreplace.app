@@ -64,7 +64,7 @@ assert(/regression_score_submit_never_jumps_bracket/.test(require('fs').readFile
   'a confirmação do placar preserva a âncora da chave em vez de reiniciar a página');
 assert(/core\.rankingConfigForTournament\(t\)/.test(bracket),
   'a classificação lê o critério gravado e o escopo geral por time do Neon pelo domínio compartilhado');
-assert(/configuredCfg = typeof core\.configurationForTournament === 'function'/.test(bracket),
+assert(/core\.normalize\(typeof core\.configurationForTournament === 'function'/.test(bracket),
   'classificação encontra a configuração por times sem condicionar o recurso ao nome do Neon');
 assert(/regression_team_competition_hides_pair_standings/.test(bracket) && /pairStandingsHtml = _isTeamCompetitionGS \? ''/.test(bracket),
   'agenda entre times não mostra classificação técnica por participantes/duplas');

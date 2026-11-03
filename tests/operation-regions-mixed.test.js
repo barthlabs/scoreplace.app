@@ -130,7 +130,10 @@ for (const version of ['v2', 'v3']) {
     assert.equal(run(aligned).status, 0);
     assert.equal(run(aligned, false, {}, true).status, 0, 'release exige as seis portas no commit atual');
     assert.notEqual(run(aligned, false, {}, false, true).status, 0, 'corte dirigido recusa placar antigo');
-    assert.equal(run(original, false, {}, false, true).status, 0, 'corte dirigido aceita só placar novo');
+    const scoreFresh = original.filter(row => row.name === `sp-op-score-${version}`)
+      .every(row => row.commit === current && row.sourceDigest === scoreDigest);
+    assert.equal(run(original, false, {}, false, true).status === 0, scoreFresh,
+      'corte dirigido só aceita placar na revisão atual do backend');
     assert.notEqual(run(original, true, {}, false, true).status, 0, 'flags incompatíveis são recusadas');
     assert.notEqual(run(original, false, {}, true, true).status, 0, 'dois modos obrigatórios são recusados');
     const wrongOther = structuredClone(original);
