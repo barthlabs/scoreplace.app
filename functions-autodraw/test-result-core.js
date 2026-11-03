@@ -453,6 +453,18 @@ console.log('\n──── paridade com o cliente ────');
     JSON.stringify({ corrected, games: T.matches }));
 }
 {
+  const T = mkT({ rulesContractVersion: 2, status: 'finished',
+    titleAwards: [{ label: 'Campeão' }], titleAwardsAt: 123 });
+  const first = win._findMatch(T, 'm1');
+  first.winner = first.p1;
+  const before = JSON.stringify(T);
+  const corrected = core.applyResult(T, { matchId: 'm1',
+    payload: { s1: 6, s2: 4, useSets: false }, actor: { uid: UID_ORG }, now: 4 });
+  t('placar direto em torneio v2 encerrado exige reabertura explícita e preserva título',
+    !corrected.ok && corrected.reason === 'tournament-finished-use-reopen' && JSON.stringify(T) === before,
+    JSON.stringify(corrected));
+}
+{
   const T = mkT({ rulesContractVersion: 2 });
   const first = win._findMatch(T, 'm1');
   first.bracket = 'grand'; first.winner = first.p1;

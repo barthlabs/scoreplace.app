@@ -383,6 +383,10 @@ function applyResult(t, opts) {
     return { ok: true, outcome: payload.action === 'reset-match' ? 'match-reset' : 'result-reopened', reason: '' };
   }
 
+  if (t.rulesContractVersion >= 2 && t.status === 'finished' && m.winner) {
+    return { ok: false, reason: 'tournament-finished-use-reopen' };
+  }
+
   // Um placar já decidido também pode ser editado diretamente pelo organizador.
   // Essa porta precisa da mesma proteção da reabertura: uma mudança de games,
   // mesmo sem trocar o vencedor, pode mudar quem passou à fase seguinte.
