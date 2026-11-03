@@ -312,6 +312,15 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
 );
 
 (async () => {
+  const openConfigTournament = configTournament;
+  configTournament = { ...openConfigTournament, rulesContractVersion: 2, status: 'finished' };
+  const writesBeforeFinished = configWrites;
+  await assert.rejects(configHandler({ auth: { uid: 'owner' }, data: {
+    tournamentId: 'tour_test', patch: { name: 'Nome alterado após encerramento' }
+  } }), { code: 'failed-precondition', message: 'O torneio já foi encerrado; a configuração publicada não pode ser alterada.' });
+  assert.equal(configWrites, writesBeforeFinished, 'torneio encerrado não sofre escrita de configuração');
+  configTournament = openConfigTournament;
+
   let createCompiled = 0, createTransactions = 0;
   const create = makeCreateTournament({
     db: { collection: () => ({ doc: id => ({ id }) }), runTransaction: async () => { createTransactions++; } },

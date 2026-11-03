@@ -84,6 +84,9 @@ const next = { fixedPairs: true, pairingStrategy: 'top', source: { mapping: [
   { dest: 'first', rankFrom: 1, rankTo: 4 }, { dest: 'second', rankFrom: 1, rankTo: 4 }
 ] } };
 const pools = [{ id: 'group-a', rows }];
+assert.throws(() => tie.resolvePhaseTies({}, 0, pools, next, () => cmp,
+  { type: 'play', decisionId: 'decisao-inexistente' }, 1, false, () => 93),
+  /decisão de desempate desatualizada/, 'escolha não aceita decisão de desempate desconhecida');
 let flow = tie.resolvePhaseTies(fresh, 0, pools, next, () => cmp, null, 1, false, () => 93);
 assert.strictEqual(flow.status, 'choice');
 assert.strictEqual(flow.tie.baseGameNumber, 93);
@@ -92,6 +95,10 @@ flow = tie.resolvePhaseTies(fresh, 0, pools, next, () => cmp,
   { type: 'play', decisionId: flow.tie.decisionId }, 1, false, () => 93);
 assert.strictEqual(flow.status, 'pending');
 assert.deepStrictEqual(flow.decision.matches.map(m => m.displayGameNumber), ['93A', '93B', '93C']);
+assert.throws(() => tie.resolvePhaseTies(fresh, 0, pools, next, () => cmp,
+  { type: 'score', decisionId: 'decisao-inexistente', matchId: flow.decision.matches[0].id,
+    sets: [{ p1: 6, p2: 4 }] }, 1, false, () => 93),
+  /decisão de desempate desatualizada/, 'placar não aceita decisão de desempate desconhecida');
 flow = tie.resolvePhaseTies(fresh, 0, pools, next, () => cmp,
   { type: 'court', decisionId: flow.tie.decisionId, matchId: flow.decision.matches[0].id, court: 'Quadra 1' }, 1, false, () => 93);
 assert.equal(flow.decision.matches[0].court, 'Quadra 1');

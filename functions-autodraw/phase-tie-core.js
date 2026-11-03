@@ -233,6 +233,7 @@ function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, actio
       if (!decision) {
         const type = autoDraw && !action ? 'draw' : action && action.decisionId === decisionId && !usedAction ? action.type : null;
         if (!type) {
+          if (action && !usedAction) throw new Error('decisão de desempate desatualizada');
           if (changed) { book[String(phaseIndex)] = phaseBook; t.phaseTieDecisions = book; }
           return { status: 'choice', tie: Object.assign({ decisionId, poolId: pool.id,
             baseGameNumber: baseNumber, firstExtraGameNumber }, tie), changed, orderedPools };
@@ -298,6 +299,7 @@ function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, actio
           changed = true;
         }
         if (decision.status === 'pending' || decision.status === 'review') {
+          if (action && !usedAction) throw new Error('decisão de desempate desatualizada');
           t.phaseTieDecisions = book;
           book[String(phaseIndex)] = phaseBook;
           return { status: decision.status, tie: Object.assign({ decisionId, poolId: pool.id, baseGameNumber: baseNumber }, tie), decision, changed, orderedPools };
