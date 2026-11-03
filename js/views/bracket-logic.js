@@ -4032,8 +4032,8 @@ function _ensureFutureRounds(t, dryRun, opts) {
     });
   }
 
-  // Só os dois perdedores das semifinais podem disputar 3º/4º. Em uma chave
-  // sem duas semifinais reais não existe essa partida.
+  // Nesta fase eliminatória, a disputa de 3º/4º recebe os dois derrotados das
+  // semifinais. Sem quatro competidores reais não há 3º e 4º colocados.
   const semiRound = allRoundNums.length >= 2 ? allRoundNums[allRoundNums.length - 2] : null;
   const semis = semiRound ? (currentRoundsMap[semiRound] || []).filter(m => m && !m.isBye && !m.isThirdPlace) : [];
   if (!isDupla && semis.length === 2 && !t.thirdPlaceMatch) {

@@ -39,6 +39,17 @@ ok(typeof P.phaseComplete === 'function', 'phaseComplete disponível');
 ok(typeof P.pendingMatches === 'function', 'pendingMatches disponível');
 ok(typeof P.phaseGames === 'function', 'phaseGames (o leitor único) está exportado');
 
+const soClassificatoria = {
+  phases: [{ kind: 'classification', classification: { structure: 'groups' } }],
+  currentPhaseIndex: 0,
+  groups: [{ name: 'Grupo A', matches: [{ id: 'unica-fase-1', p1: 'A', p2: 'B', winner: null }] }]
+};
+ok(P.phaseComplete(soClassificatoria) === false && P.pendingMatches(soClassificatoria).length === 1,
+  'classificatória única ainda tem um jogo pendente');
+soClassificatoria.groups[0].matches[0].winner = 'A';
+ok(P.phaseComplete(soClassificatoria) === true && P.pendingMatches(soClassificatoria).length === 0,
+  'classificatória única fica completa ao decidir todos os jogos');
+
 function jogo(id, decidido, extra) {
   const m = { id: id, p1: 'A / B', p2: 'C / D' };
   if (decidido) { m.winner = 'A / B'; m.scoreP1 = 6; m.scoreP2 = 2; }

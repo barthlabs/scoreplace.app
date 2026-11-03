@@ -2440,7 +2440,9 @@
 
   // A fase ATUAL está completa? (libera o avanço)
   function phaseComplete(t) {
-    if (!isMultiPhase(t)) return false;
+    // A mesma pergunta vale para o encerramento de uma classificatória que é a
+    // única fase do torneio. "Há próxima fase?" é uma decisão separada.
+    if (!t || !Array.isArray(t.phases) || !t.phases.length) return false;
     var cur = t.currentPhaseIndex || 0;
     var currentCfg = _readPhaseCfg(t.phases[cur], t, cur);
     if (!currentCfg) return false;
@@ -2522,7 +2524,7 @@
   // ⚠️ Já foi um ESPELHO de phaseComplete — as duas repetiam a varredura dos 3 storages, e o
   // comentário aqui dizia isso com todas as letras. Agora as duas leem por phaseGames.
   function pendingMatches(t) {
-    if (!isMultiPhase(t)) return [];
+    if (!t || !Array.isArray(t.phases) || !t.phases.length) return [];
     var cur = t.currentPhaseIndex || 0;
     // Era uma CÓPIA da varredura de phaseComplete (o comentário acima já dizia "espelho").
     // Agora os dois leem do mesmo lugar: some a chance de um enxergar um storage que o

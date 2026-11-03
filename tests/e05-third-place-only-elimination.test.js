@@ -50,7 +50,7 @@ for (const [name, W] of [['web', client], ['Function', server]]) {
   twoSemis.currentPhaseIndex = 1;
   W._maybeGenerate3rdPlace(twoSemis);
   assert.ok(twoSemis.thirdPlaceMatch,
-    `${name}: terceiro lugar nasce quando a eliminatória chega às semifinais`);
+    `${name}: terceiro lugar nasce quando a fase corrente é eliminatória`);
 
   const unknown = bracket('Formato desconhecido');
   W._maybeGenerate3rdPlace(unknown);
@@ -77,7 +77,7 @@ for (const [name, W] of [['web', client], ['Function', server]]) {
     currentPhaseIndex: 0, matches: [{ id: 'final-only', round: 1, p1: 'A', p2: 'B', winner: null }] };
   W._maybeGenerate3rdPlace(onlyFinal);
   assert.equal(onlyFinal.thirdPlaceMatch, undefined,
-    `${name}: final sem semifinais não gera disputa de 3º/4º`);
+    `${name}: com apenas dois competidores não existem 3º e 4º colocados`);
 
   const doubleElimination = bracket('Dupla Eliminatória');
   doubleElimination.thirdPlaceMatch = { id: 'phantom' };
@@ -107,4 +107,10 @@ assert.ok(tableMatches.every(m => !m.isThirdPlace), 'sorteio não cria disputa d
 const tableBefore = JSON.stringify(tableOnly);
 assert.equal(server._ensureFutureRounds(tableOnly, false, { now: 123456 }), false);
 assert.equal(JSON.stringify(tableOnly), tableBefore, 'reconciliador não altera classificatória real');
+tableMatches.filter(m => m && !m.isBye && !m.isSitOut).forEach(m => { m.winner = m.p1; });
+assert.equal(drawCore.phaseComplete(tableOnly), true,
+  'a classificatória única completa com todos os jogos decididos');
+assert.equal(server._ensureFutureRounds(tableOnly, false, { now: 123456 }), false);
+assert.ok(server._collectAllMatches(tableOnly).every(m => !m.isThirdPlace),
+  'mesmo após a última rodada não nasce disputa de 3º/4º');
 console.log('E05: terceiro lugar só em eliminatória simples — web e Function OK');
