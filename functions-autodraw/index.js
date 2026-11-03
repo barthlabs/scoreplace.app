@@ -2487,7 +2487,11 @@ exports.integrateLateEntries = onCall(async (request) => {
      * O Firestore RE-EXECUTA o callback no retry; um `new Date()` lá dentro faria
      * cada tentativa produzir espelho e plano diferentes. */
     const _agoraIsoTx = new Date().toISOString();
-    out = await db.runTransaction(async (tx) => {
+    // Corridas de chegada × integração podem encerrar a transação durante a
+    // releitura das subcoleções. Reabrir uma transação fresca é seguro: nenhuma
+    // escrita da tentativa abortada foi confirmada, e o motor deduplica a vaga.
+    for (let _tentativa = 0; _tentativa < 3; _tentativa++) {
+    try { out = await db.runTransaction(async (tx) => {
       const t = await _leTorneio(tx, ref, tId, null, true);
       if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
       const names = await _preloadDrawNames(t, tx);
@@ -2549,7 +2553,11 @@ exports.integrateLateEntries = onCall(async (request) => {
                dissolved: res.dissolved, monarch: res.monarch, repfill: res.repfill, placed: res.placed,
                wlClean: res.wlClean, promoted:promoted.length, recusas, tournament: b.clean };
       });
-    });
+    }); break; } catch (error) {
+      if (_tentativa === 2 || Number(error && error.code) !== 3 ||
+          !/Transaction is invalid or closed/i.test(String(error && error.message || ''))) throw error;
+    }
+    }
   } catch (e) {
     if (e instanceof HttpsError) throw e;
     console.error(`integrateLateEntries EXPLODIU no torneio ${tId} (uid ${uid}):`, e && e.stack || e);

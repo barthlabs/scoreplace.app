@@ -4,6 +4,8 @@
 // ranking e finais por partidas. Simples e triangular extras só entram se a
 // regra publicada os permitir; recebem número com letra e decisão auditada.
 // O avanço aguarda a confirmação dos placares extras pela organização.
+// Inscrições tardias concorrentes são relidas em nova transação quando o
+// Firestore invalida uma tentativa, sem confirmar vaga ou jogo pela metade.
 // Correções de placar protegem jogos posteriores e atualizam a chave quando
 // ainda não houve disputa dependente. Torneios históricos não são migrados.
 // 2.5.87 — O histórico dos torneios usa os jogos físicos como fonte única. Cópias

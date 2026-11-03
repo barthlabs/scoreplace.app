@@ -159,12 +159,13 @@ const decls = (src.match(/const _agoraIsoTx = new Date\(\)\.toISOString\(\);/g) 
 const usos = (src.match(/agoraIso: _agoraIsoTx/g) || []).length;
 ok(decls >= 9, '⑤ cada transação que grava declara o instante ANTES do callback (achei ' + decls + ')');
 ok(usos >= 10, '⑤ e cada chamada de _gravaTorneio o repassa (achei ' + usos + ')');
-/* a declaração tem de vir ANTES do runTransaction, nunca dentro do callback */
+/* a declaração tem de vir ANTES do runTransaction, inclusive quando há um
+ * retry externo limitado para uma transação invalidada pelo Firestore. */
 const linhas = src.split('\n');
 let forasDeLugar = 0;
 linhas.forEach((l, i) => {
   if (l.indexOf('const _agoraIsoTx') === -1) return;
-  const seguinte = linhas.slice(i + 1, i + 4).join(' ');
+  const seguinte = linhas.slice(i + 1, i + 9).join(' ');
   if (seguinte.indexOf('runTransaction') === -1) forasDeLugar++;
 });
 ok(forasDeLugar === 0, '⑤ ⭐ toda declaração do instante fica imediatamente antes de runTransaction');
