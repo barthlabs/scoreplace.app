@@ -42,6 +42,8 @@ const torneio = () => ({
 
 // ── ① ida e volta ─────────────────────────────────────────────────────────────
 const t0 = torneio();
+const partesFisicas = S.partesParaGravar({ _semPesados: ['grupos'], _nGrupos: 3 });
+ok('grupo físico entra uma vez no plano de escrita', partesFisicas.filter(p => p === 'grupos').length === 1);
 const p = S.dividir(JSON.parse(JSON.stringify(t0)), ['grupos']);
 ok('⭐ os 3 grupos saem do documento', p.grupos.length === 3);
 ok('  → e o documento fica com a lista VAZIA, não ausente',

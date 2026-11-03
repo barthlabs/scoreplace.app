@@ -113,6 +113,10 @@
         });
       } else if (phase.classification && phase.classification.structure === 'groups' &&
           Number(phase.gruposCount || t.gruposCount || 1) > 1) {
+        if (!deps.engine || typeof deps.engine.prevPhaseGroups !== 'function' ||
+            typeof deps.engine.groupTeamStandings !== 'function') {
+          return { ok: false, reason: 'standings-unavailable', titles: [] };
+        }
         var groups = deps.engine.prevPhaseGroups(t);
         groups.forEach(function (g, i) {
           var rows = deps.engine.groupTeamStandings(g, { tiebreakers: t.tiebreakers });

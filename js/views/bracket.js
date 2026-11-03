@@ -3518,9 +3518,10 @@ window._bracketTentarPartesDeNovo = function (tId) {
 function _renderCompetitionTeamStandings(t) {
   var core = window.ScoreplaceTeamCompetition;
   if (!core || typeof core.standings !== 'function' || !t) return '';
-  var configuredCfg = typeof core.configurationForTournament === 'function'
-    ? core.configurationForTournament(t) : (t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition);
-  var cfg = typeof core.rankingConfigForTournament === 'function' ? core.rankingConfigForTournament(t) : core.normalize(configuredCfg);
+  var cfg = typeof core.rankingConfigForTournament === 'function'
+    ? core.rankingConfigForTournament(t)
+    : core.normalize(typeof core.configurationForTournament === 'function'
+      ? core.configurationForTournament(t) : (t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition));
   if (!cfg || cfg.enabled !== true) return '';
   var matches = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (t.matches || []);
   // A entrada de uma dupla pode estar no elenco antes do primeiro jogo. Inscritos

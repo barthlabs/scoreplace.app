@@ -97,10 +97,12 @@
    * grupos físicos: a leitura já os recupera por _nGrupos, e a escrita precisa
    * usar a mesma extensão para não devolvê-los ao documento pai a cada placar. */
   function partesParaGravar(t) {
-    var fora = partesDe(t);
+    var fora = partesDe(t).slice();
     var antigos = Array.isArray(t && t._semPesados) ? t._semPesados : [];
     if (antigos.indexOf('grupos') !== -1 || Number(t && t._nGrupos || 0) > 0 ||
-        Number(t && t._nPartes && t._nPartes.grupos || 0) > 0) fora.push('grupos');
+        Number(t && t._nPartes && t._nPartes.grupos || 0) > 0) {
+      if (fora.indexOf('grupos') === -1) fora.push('grupos');
+    }
     return fora;
   }
 

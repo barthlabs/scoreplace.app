@@ -251,6 +251,20 @@ function invalidateFinalSnapshots(t, m, now) {
     const phaseKey = String(Number(m.phaseIndex || 0));
     const previousTieDecisions = t.phaseTieDecisions && t.phaseTieDecisions[phaseKey];
     if (previousTieDecisions && Object.keys(previousTieDecisions).length) {
+      const byBase = {};
+      Object.values(previousTieDecisions).forEach(decision => {
+        const number = Number(decision && decision.baseGameNumber);
+        if (Number.isInteger(number) && number > 0) {
+          const key = phaseKey + ':' + number;
+          byBase[key] = (byBase[key] || 0) + ((decision.matches || []).length);
+        }
+      });
+      if (Object.keys(byBase).length) {
+        t.phaseTieNextSuffix = t.phaseTieNextSuffix || {};
+        Object.keys(byBase).forEach(key => {
+          t.phaseTieNextSuffix[key] = Math.max(Number(t.phaseTieNextSuffix[key] || 0), byBase[key]);
+        });
+      }
       // A escolha dependia da classificação anterior. Guardamos o fato completo
       // no histórico dividido antes de pedir uma nova decisão para esta fase.
       if (!Array.isArray(t.history)) t.history = [];
@@ -283,16 +297,17 @@ function invalidateFinalSnapshots(t, m, now) {
 }
 
 function reopenMatch(t, m, now) {
+  const hadResult = !!(m.winner || m.wo || m.draw || hasRealPlay(m));
   if (m.winner || m.wo) {
     undoAdvancement(t, m);
   }
   clearResultFields(m);
   if (t.rulesContractVersion >= 2) {
-    invalidateFinalSnapshots(t, m, now);
+    if (hadResult) invalidateFinalSnapshots(t, m, now);
     // Jogos seguintes da série podem já ter agenda, quadra ou referências em
     // rodadas. Reabrir este resultado não apaga documentos de partida.
-    if (t.status === 'finished') { t.status = 'active'; delete t.finishedAt; }
-    delete t.titleAwards; delete t.titleAwardsAt;
+    if (hadResult && t.status === 'finished') { t.status = 'active'; delete t.finishedAt; }
+    if (hadResult) { delete t.titleAwards; delete t.titleAwardsAt; }
   }
   if (typeof win._propagateMatchUpdate === 'function') win._propagateMatchUpdate(t, m);
 }

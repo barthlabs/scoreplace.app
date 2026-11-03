@@ -6074,7 +6074,7 @@ exports.advanceTournamentPhase = onCall(async (request) => {
         tieFlow = _phaseTieCore.resolvePhaseTies(t, current, pools, nextCfg,
           compareForPool, requestedTieAction && String(requestedTieAction.decisionId || '').startsWith('wildcards:')
             ? null : requestedTieAction, setsToWin,
-          tieRule === 'draw_order', tieRule === 'singles_then_draw' ? numberForPool : null);
+          tieRule === 'draw_order', tieRule === 'singles_then_draw' ? numberForPool : null, agoraIso);
       } catch (err) {
         throw new HttpsError('failed-precondition', 'Desempate não aplicado: ' + String(err.message || err));
       }
@@ -6137,7 +6137,7 @@ exports.advanceTournamentPhase = onCall(async (request) => {
             [{ id: 'wildcards', rows: wildcardRows }], wildcardNext, () => wildcardCompare,
             requestedTieAction && String(requestedTieAction.decisionId || '').startsWith('wildcards:')
               ? requestedTieAction : null, Number(((currentCfg && currentCfg.scoring) || t.scoring || {}).setsToWin) || 1,
-            tieRule === 'draw_order', tieRule === 'singles_then_draw' ? numberForPool : null);
+            tieRule === 'draw_order', tieRule === 'singles_then_draw' ? numberForPool : null, agoraIso);
         } catch (err) {
           throw new HttpsError('failed-precondition', 'Desempate das vagas extras não aplicado: ' + String(err.message || err));
         }

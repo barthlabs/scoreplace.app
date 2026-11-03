@@ -36,6 +36,10 @@ ok(!neonSandboxRanking.tiebreakers, 'sandbox do Neon preserva os mesmos desempat
 ok(C.rankingConfigForTournament({ ...neonBase, id: neonId, teamCompetition: { ...neonBase.teamCompetition, tiebreakers: ['games_vencidos'] } }).tiebreakers.join(',') === 'games_vencidos',
   'lista explicitamente salva prevalece sobre a ordem padrão do Neon');
 ok(C.rankingConfigForTournament({ ...neonBase, id:'outro' }).classificationUnit === 'pair', 'outro torneio preserva sua configuração própria');
+ok(C.rankingConfigForTournament({ id:'legado-fase-2', currentPhaseIndex:1, phases:[
+  { teamCompetition:{ enabled:true, aggregation:'per_category', classificationUnit:'team' } },
+  { kind:'elimination' }
+] }).aggregation === 'per_category', 'competição legada na fase inicial segue legível após avançar');
 const pairA1 = { competitionTeamId: 'a' }, pairA2 = { competitionTeamId: 'a' }, pairB = { competitionTeamId: 'b' };
 
 ok(C.allowsMatch(pairA1, pairA2, config) === false, 'toggle desligado: duplas do mesmo time não se enfrentam');

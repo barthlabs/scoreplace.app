@@ -195,13 +195,13 @@ for version in v3 v2; do
           gcloud run deploy "$name" --project "$project" --region "$region" --source "$export_dir/functions-autodraw" \
             --function applyMatchResult --base-image "nodejs$runtime" --no-automatic-updates --revision-suffix "$suffix" \
             --set-env-vars "SP_SOURCE_DIGEST=$digest,SP_OPERATION_REGION=$region" --allow-unauthenticated \
-            "${no_traffic[@]}" --quiet
+            ${no_traffic[@]+"${no_traffic[@]}"} --quiet
           rm -rf "$export_dir"
         else
           [[ -n "$source_image" ]] || { echo 'imagem da região de origem ausente' >&2; exit 1; }
           gcloud run deploy "$name" --project "$project" --region "$region" --image "$source_image" \
             --revision-suffix "$suffix" --set-env-vars "SP_SOURCE_DIGEST=$digest,SP_OPERATION_REGION=$region" --allow-unauthenticated \
-            "${no_traffic[@]}" --quiet
+            ${no_traffic[@]+"${no_traffic[@]}"} --quiet
         fi
         json="$(describe "$name" "$region")"
         [[ "$(printf '%s' "$json" | field status.latestCreatedRevisionName)" == "$name-$suffix" ]] || {

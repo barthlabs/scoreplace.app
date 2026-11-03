@@ -21,6 +21,9 @@ assert.equal(result.main.length, 7);
 assert.ok(result.main.some(x => x.p1Name === 'B3'), 'pontos por jogo: 9/3 supera 8/4 e 10/5');
 assert.ok(!result.main.some(x => x.p1Name === 'A3' || x.p1Name === 'C3'));
 assert.throws(() => E.buildEntrantsByDest(groups, mapping, false, g => g.standings, 'top', {
+  scope: 'per_group', bestNextByGroup: { count: 1, metric: 'unknown', dest: 'main' }
+}), /Critério das vagas extras inválido/);
+assert.throws(() => E.buildEntrantsByDest(groups, mapping, false, g => g.standings, 'top', {
   scope: 'per_group', bestNextByGroup: { count: 1, metric: 'total_points', dest: 'main' }
 }), /mesmo número de jogos/);
 

@@ -1007,7 +1007,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (isRankingRounds) {
       var so = cfg.rankingSitOutScoring || { mode: 'average' };
       var scoringLocked = !!(S.t && (((S.t.currentPhaseIndex || 0) > 0) || S.t.status === 'finished'));
-      var scoringControls =
+      var sitOutControls =
         '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:8px;">A organização escolhe a pontuação de uma folga sorteada. Inatividade e W.O. não recebem esse crédito. A escolha pode mudar durante a classificatória e recalcula a tabela; fica travada após o avanço de fase.</div>' +
         _pill(so.mode === 'average', "window._f2SitOutScoring('average')", '📈 Média dinâmica (sugerida)') +
         _pill(so.mode === 'zero', "window._f2SitOutScoring('zero')", '0 pontos') +
@@ -1017,8 +1017,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           : '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">' +
             (so.mode === 'average' ? 'Cada nova rodada recalcula a média do desempenho real e atualiza também as folgas anteriores.' : 'Toda folga sorteada vale zero ponto.') + '</div>');
       classifSchedule += _sec('Pontos de quem folga', scoringLocked
-        ? '<div style="pointer-events:none;opacity:.5;" aria-disabled="true">' + scoringControls + '</div>'
-        : scoringControls);
+        ? '<div style="pointer-events:none;opacity:.5;" aria-disabled="true">' + sitOutControls + '</div>'
+        : sitOutControls);
     }
     if (cfg._scoreBy === 'individual' && !(tc && tc.enabled)) classifSchedule += _sec('Empate após os critérios de desempate',
       '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:8px;">Quando atletas empatados seguiriam para destinos diferentes:</div>' +

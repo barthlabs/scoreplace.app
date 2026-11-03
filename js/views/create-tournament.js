@@ -6752,7 +6752,8 @@ window._saveTournamentClickHandler = async function() {
         }
         // O sorteio original é a ÚLTIMA solução do contrato novo, depois dos
         // critérios estatísticos e da simples/triangular prevista na regra.
-        if (_f2cfg && _f2cfg.tieResolution && Array.isArray(tourData.tiebreakers)) {
+        if (_f2cfg && _f2cfg.tieResolution && (!editId || (editingTournament && editingTournament.rulesContractVersion >= 2)) &&
+            Array.isArray(tourData.tiebreakers)) {
           tourData.tiebreakers = tourData.tiebreakers.filter(function (key) { return key !== 'sorteio'; });
           tourData.tiebreakers.push('sorteio');
           if (Array.isArray(tourData.tiebreakersExcluded)) {

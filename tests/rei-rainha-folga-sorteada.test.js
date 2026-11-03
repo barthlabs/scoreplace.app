@@ -4,7 +4,7 @@ const { window: W } = require('./headless');
 
 function tournament(count, policy) {
   return {
-    id: 'ranking-folgas-' + count, format: 'Liga', teamSize: 2,
+    id: 'ranking-folgas-' + count, rulesContractVersion: 2, format: 'Liga', teamSize: 2,
     ligaRoundFormat: 'rei_rainha', ligaDrawMode: 'standard',
     rankingRemainderPolicy: policy, status: 'active', rounds: [], matches: [],
     participants: Array.from({ length: count }, (_, i) => ({
@@ -65,6 +65,7 @@ for (const n of [1, 2, 3]) {
 }
 
 const legacy = tournament(7, undefined);
+legacy.rulesContractVersion = 1;
 W._generateNextRound(legacy, { rnd: () => 0.5 });
 assert.equal(legacy.rounds[0].matches.filter(m => m.isSitOut).length, 0,
   'torneio anterior mantém a lista de espera');

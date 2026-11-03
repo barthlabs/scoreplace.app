@@ -108,10 +108,12 @@ namespace ScoreplaceTeamCompetition {
     const current = record(phases[currentIndex]);
     const top = record(tournament.teamCompetition);
     const phase = record(current.teamCompetition);
+    const firstPhase = record(record(phases[0]).teamCompetition);
     const intent = record(record(tournament.fmt2).teamCompetition);
-    // A tabela lê a regra explícita da fase corrente. Uma agenda confirmada
-    // numa fase FUTURA serve ao sorteio, mas não muda a tabela de hoje.
-    const candidates = [top, phase, intent];
+    // A tabela prefere a regra do topo e da fase corrente. A primeira fase
+    // preserva a classificação de torneios antigos após o avanço de fase;
+    // uma agenda confirmada numa fase futura não muda a tabela de hoje.
+    const candidates = [top, phase, firstPhase, intent];
     const explicit = candidates.find((candidate) => candidate.enabled === true &&
       (candidate.aggregation != null || candidate.classificationUnit != null));
     const source = isNeon ? configurationForTournament(tournament)

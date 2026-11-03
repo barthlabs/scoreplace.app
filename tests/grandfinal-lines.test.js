@@ -76,6 +76,15 @@ function fourLines(strat, expRoute, tag) {
 fourLines('top', { gold: 'semi1', silver: 'semi2', line3: 'semi2', line4: 'semi1' }, "[4 linhas/'top']");
 fourLines('balanced', { gold: 'semi1', silver: 'semi2', line3: 'semi1', line4: 'semi2' }, "[4 linhas/'balanced']");
 
+// Três campeões só formam uma semifinal na convergência; cada chave mantém
+// seu próprio 3º/4º, pois não há dois perdedores de semifinal no nível geral.
+(function () {
+  const r = E.buildPhaseBrackets(grp(12), cfg(['upper', 'lower', 'line3']), cs, 'C3');
+  ok(r.converge && r.converge.gf, '[3 linhas] grande final gerada');
+  ok(!r.converge.third, '[3 linhas] sem disputa geral fictícia de 3º/4º');
+  ok(thirdCount(r) === 3, '[3 linhas] cada linha conserva seu 3º/4º');
+})();
+
 // ── D. GRANDE FINAL OFF (2 linhas) → independentes, 3º por linha ───────────
 (function () {
   const r = E.buildPhaseBrackets(grp(8), cfg(['upper', 'lower'], { grandFinal: false }), cs, 'D');

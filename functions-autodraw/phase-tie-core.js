@@ -202,7 +202,7 @@ function applyOrder(rows, tie, orderKeys) {
 
 // O servidor chama esta função dentro de sua transação. `action` é uma intenção
 // administrativa; a classificação e os atletas sempre vêm do documento fresco.
-function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, action, setsToWin, autoDraw, numberForPool) {
+function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, action, setsToWin, autoDraw, numberForPool, nowIso) {
   const book = t.phaseTieDecisions || {};
   const phaseBook = book[String(phaseIndex)] || {};
   let changed = false, usedAction = false;
@@ -220,15 +220,32 @@ function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, actio
       if (!autoDraw && numberForPool && (!Number.isInteger(baseNumber) || baseNumber <= 0)) {
         throw new Error('número canônico do último jogo do grupo indisponível');
       }
-      const suffixOffset = Object.values(phaseBook).filter(item => item && item.baseGameNumber === baseNumber)
+      const activeSuffixes = Object.values(phaseBook).filter(item => item && item.baseGameNumber === baseNumber)
         .reduce((sum, item) => sum + ((item.matches || []).length), 0);
+      const suffixKey = String(phaseIndex) + ':' + String(baseNumber);
+      const suffixOffset = Math.max(activeSuffixes, Number((t.phaseTieNextSuffix || {})[suffixKey] || 0));
       const firstExtraGameNumber = Number.isInteger(baseNumber) && baseNumber > 0
         ? String(baseNumber) + letterIndex(suffixOffset) : null;
       let decision = phaseBook[decisionId];
       const keys = tie.players.map(p => p.key);
       if (decision && (decision.contenders.length !== keys.length ||
           decision.contenders.some((key, index) => key !== keys[index]))) {
-        throw new Error('classificação mudou depois da decisão de desempate');
+        // W.O. e outros ajustes de fase podem alterar a fronteira por fora do
+        // placar. A escolha antiga deixa de valer, mas seus jogos e placares
+        // ficam no histórico antes de pedir uma nova decisão.
+        if (!Array.isArray(t.history)) t.history = [];
+        t.history.push({ date: String(nowIso || new Date().toISOString()),
+          message: 'Decisão de desempate invalidada após mudança na classificação da fase ' + (Number(phaseIndex) + 1),
+          phaseTieDecision: JSON.parse(JSON.stringify(decision)) });
+        delete phaseBook[decisionId];
+        book[String(phaseIndex)] = phaseBook;
+        t.phaseTieDecisions = book;
+        if (Number.isInteger(baseNumber) && baseNumber > 0) {
+          t.phaseTieNextSuffix = t.phaseTieNextSuffix || {};
+          t.phaseTieNextSuffix[suffixKey] = suffixOffset;
+        }
+        return { status: 'choice', tie: Object.assign({ decisionId, poolId: pool.id,
+          baseGameNumber: baseNumber, firstExtraGameNumber }, tie), changed: true, orderedPools };
       }
       if (!decision) {
         const type = autoDraw && !action ? 'draw' : action && action.decisionId === decisionId && !usedAction ? action.type : null;
@@ -251,6 +268,10 @@ function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, actio
           setsToWin: Number.isInteger(setsToWin) && setsToWin >= 1 && setsToWin <= 5 ? setsToWin : 1,
           reason: type === 'draw' ? (autoDraw ? 'rule-original-draw-order' : 'organizer-used-original-draw-order') : 'organizer-chose-singles' };
         phaseBook[decisionId] = decision;
+        if (decision.matches.length && Number.isInteger(baseNumber) && baseNumber > 0) {
+          t.phaseTieNextSuffix = t.phaseTieNextSuffix || {};
+          t.phaseTieNextSuffix[suffixKey] = suffixOffset + decision.matches.length;
+        }
         changed = true;
       }
       if (decision.status === 'pending' || decision.status === 'review') {

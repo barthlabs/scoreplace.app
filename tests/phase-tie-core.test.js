@@ -132,6 +132,20 @@ assert.deepStrictEqual(flow.orderedPools[0].rows.map(p => p.name), ['A', 'C', 'D
   'placar corrigido altera a classificação confirmada');
 assert.strictEqual(fresh.phaseTieDecisions['0']['group-a:1:3'].matches.length, 3);
 
+const changedRows = ['A', 'B', 'C', 'E'].map((name, i) => ({ uid: name, name, wins: i ? 1 : 3 }));
+const changedCompare = (a, b) => b.wins - a.wins;
+changedCompare.originalOrder = { A: 0, B: 1, C: 2, E: 3 };
+const stale = { phaseTieDecisions: JSON.parse(JSON.stringify(fresh.phaseTieDecisions)) };
+const changedFlow = tie.resolvePhaseTies(stale, 0, [{ id: 'group-a', rows: changedRows }],
+  next, () => changedCompare, null, 1, false, () => 93, '2026-11-03T12:40:00Z');
+assert.equal(changedFlow.status, 'choice', 'W.O. posterior à escolha pede nova decisão em vez de travar');
+assert.equal(stale.history[0].phaseTieDecision.matches.length, 3, 'jogos extras anteriores ficam auditáveis');
+assert.equal(stale.phaseTieDecisions['0']['group-a:1:3'], undefined);
+assert.equal(changedFlow.tie.firstExtraGameNumber, '93D', 'nova escolha não reutiliza números de jogos arquivados');
+const refreshedFlow = tie.resolvePhaseTies(stale, 0, [{ id: 'group-a', rows: changedRows }],
+  next, () => changedCompare, null, 1, false, () => 93);
+assert.equal(refreshedFlow.tie.firstExtraGameNumber, '93D');
+
 const quick = {};
 const question = tie.resolvePhaseTies(quick, 0, pools, next, () => cmp, null, 1);
 const drawn = tie.resolvePhaseTies(quick, 0, pools, next, () => cmp,

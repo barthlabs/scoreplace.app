@@ -122,9 +122,13 @@ W.document = { getElementById: id => id === 'f2-config-mount' ? box : null };
 harness.load('format2-ui.js');
 const editable = { id: 'future-ranking', currentPhaseIndex: 0, status: 'in_progress',
   rounds: [{ matches: [] }], matches: [], phases: activeRanking.phases };
-const uiConfig = { ...initial, parceria: 'sorteio_rodada' };
+const uiConfig = { ...initial, parceria: 'fixa' };
 W._f2MountInForm(box, 'Beach Tennis', uiConfig, editable);
 assert.match(box.innerHTML, /Pontos de quem folga/);
+assert.equal((box.innerHTML.match(/Pontos de quem folga/g) || []).length, 1,
+  'controle de folga aparece em um único passo');
+assert.match(box.innerHTML, /Pontuação agregada para times/,
+  'controle de competição por times permanece visível no ranking');
 assert.match(box.innerHTML, /Média dinâmica \(sugerida\)/);
 W._f2SitOutScoring('zero');
 assert.equal(W._f2GetConfig().rankingSitOutScoring.mode, 'zero');

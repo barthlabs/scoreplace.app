@@ -37,6 +37,8 @@ const groups = { phases: [{ kind: 'classification', classification: { structure:
   ] };
 assert.deepEqual(resolve(groups).titles.map(x => [x.scope, x.label, x.winnerName]),
   [['group', 'Grupo Leste', 'L1'], ['group', 'Grupo Oeste', 'O1']]);
+assert.equal(titles.resolve(groups, { engine: { phaseComplete: () => true } }).reason,
+  'standings-unavailable', 'sem motor de tabela a resolução retorna erro controlado');
 const playedGroups = { phases: groups.phases, currentPhaseIndex: 0, groups: [
   { name: 'A', players: ['A1', 'A2'], matches: [{ id: 'a', p1: 'A1', p2: 'A2', winner: 'A1', scoreP1: 6, scoreP2: 4 }] },
   { name: 'B', players: ['B1', 'B2'], matches: [{ id: 'b', p1: 'B1', p2: 'B2', winner: 'B2', scoreP1: 3, scoreP2: 6 }] }

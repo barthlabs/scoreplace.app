@@ -809,7 +809,7 @@ window._allowsNewMatchups = function (t) {
   // dono viu). Ordem: fase corrente → torneio → compat legado (lateEnrollment efetivo).
   var ph = (Array.isArray(t.phases) && t.phases[t.currentPhaseIndex || 0]) || null;
   var le = window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : (ph && ph.lateEnrollment || t.lateEnrollment);
-  if (le === 'closed') return false;
+  if (t.rulesContractVersion >= 2 && le === 'closed') return false;
   if (ph && ph.newMatchups != null) return ph.newMatchups === true;
   if (t.newMatchups != null) return t.newMatchups === true;
   return le === 'expand';

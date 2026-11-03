@@ -600,6 +600,9 @@
       });
       var _bestNext = opts.bestNextByGroup;
       if (_bestNext && Number(_bestNext.count) > 0) {
+        if (['points_per_game', 'win_rate', 'total_points'].indexOf(_bestNext.metric) < 0) {
+          throw new Error('Critério das vagas extras inválido.');
+        }
         if (!byDest[_bestNext.dest]) throw new Error('Destino das vagas extras não pertence às chaves configuradas.');
         if (_nextCandidates.length < Number(_bestNext.count)) throw new Error('Não há colocados seguintes suficientes para as vagas extras.');
         if (_bestNext.metric === 'total_points' && _nextCandidates.some(function (x) {
@@ -1070,7 +1073,10 @@
      * condições que nunca eram falsas, cada uma um lugar onde o jogo podia sumir de novo.
      * [[project_third_place_always]] */
     var _wth = true;
-    var _tierThird = _wth && !(_wgf && destOrder.length > 1);
+    // Com três linhas há só uma semifinal na convergência: não existem dois
+    // perdedores de semifinais para formar 3º/4º geral. Cada linha conserva
+    // sua própria disputa de 3º/4º.
+    var _tierThird = _wth && !(_wgf && (destOrder.length === 2 || destOrder.length >= 4));
 
     destOrder.forEach(function (dest) {
       var bracketKey = DEST_BRACKET[dest] || dest;
@@ -1592,6 +1598,10 @@
     var marker = '__scoreplacePhaseProjectionMarker';
     if (cfg && Object.prototype.hasOwnProperty.call(cfg, marker)) throw new Error('Marcador de fase reservado.');
     if (!cfg || typeof cfg !== 'object') throw new Error('Configuração de fase inválida.');
+    if (Object.prototype.hasOwnProperty.call(cfg, '_entrantsByDest')) {
+      cfg = Object.assign({}, cfg);
+      delete cfg._entrantsByDest; // plano de entradas é calculado, nunca aceito do documento
+    }
     if (cfg.kind != null) {
       if (cfg.kind !== 'classification' && cfg.kind !== 'elimination') throw new Error('Domínio da fase ausente ou inválido.');
       var domain = cfg.kind === 'classification'
@@ -2602,6 +2612,7 @@
     // A mesma pergunta vale para o encerramento de uma classificatória que é a
     // única fase do torneio. "Há próxima fase?" é uma decisão separada.
     if (!t || !Array.isArray(t.phases) || !t.phases.length) return false;
+    if (!isMultiPhase(t) && !(t.phases[0] && t.phases[0].kind)) return false;
     var cur = t.currentPhaseIndex || 0;
     var currentCfg = _readPhaseCfg(t.phases[cur], t, cur);
     if (!currentCfg) return false;
@@ -2684,6 +2695,7 @@
   // comentário aqui dizia isso com todas as letras. Agora as duas leem por phaseGames.
   function pendingMatches(t) {
     if (!t || !Array.isArray(t.phases) || !t.phases.length) return [];
+    if (!isMultiPhase(t) && !(t.phases[0] && t.phases[0].kind)) return [];
     var cur = t.currentPhaseIndex || 0;
     // Era uma CÓPIA da varredura de phaseComplete (o comentário acima já dizia "espelho").
     // Agora os dois leem do mesmo lugar: some a chance de um enxergar um storage que o
@@ -2745,7 +2757,7 @@
     var gf = pm.filter(function (m) { return m.bracket === 'grandfinal'; })[0];
     var third = pm.filter(function (m) { return m.bracket === 'thirdplace'; })[0];
     var tierMatches = pm.filter(function (m) {
-      return m.bracket === 'gold' || m.bracket === 'silver' || m.bracket === 'main' || /^line[3-9][0-9]*$/.test(m.bracket || '');
+      return m.bracket === 'gold' || m.bracket === 'silver' || m.bracket === 'main' || /^line([3-9]|[1-9][0-9]+)$/.test(m.bracket || '');
     });
 
     // v3.1: fase anterior é FASE DE GRUPOS (round-robin) → standings por grupo
@@ -3029,7 +3041,9 @@
   function _phaseTiePanel(tId, out, context) {
     var old = document.getElementById('phase-tie-panel'); if (old) old.remove();
     var tie = out.tie || {}, decision = out.decision || null;
-    var safe = window._safeHtml || function (value) { return String(value || ''); };
+    var safe = window._safeHtml || function (value) { return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;'); };
     var overlay = document.createElement('div');
     overlay.id = 'phase-tie-panel';
     overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.88);display:flex;align-items:center;justify-content:center;padding:16px;';

@@ -22,5 +22,18 @@ ok(src.indexOf('function _ensureFutureRounds') === -1 && src.indexOf('function _
   'a view não conserva motor nem writer de reparação');
 ok(src.indexOf('AppStore.mutate(t.id') === -1,
   'a abertura da chave não persiste rodadas futuras pelo cliente');
-console.log('reparo-chave-nao-sobrescreve-placar: ' + (5 - fail) + ' passou, ' + fail + ' falhou');
+const later = { id: 'T2', format: 'Eliminatórias Simples', rulesContractVersion: 2,
+  currentPhaseIndex: 1, phases: [
+    { kind: 'classification', classification: { structure: 'groups' } },
+    { kind: 'elimination', elimination: { bracketType: 'single' } }
+  ], matches: [
+    { id: 'L1', phaseIndex: 1, round: 1, p1: 'A', p2: 'B', winner: null },
+    { id: 'L2', phaseIndex: 1, round: 1, p1: 'C', p2: 'D', winner: null }
+  ] };
+ok(W._ensureFutureRounds(later, false, { now: 123456 }) === true,
+  'reparo também materializa final de fase posterior');
+ok(later.matches.filter(m => m.round === 2).every(m => m.phaseIndex === 1) &&
+  later.thirdPlaceMatch && later.thirdPlaceMatch.phaseIndex === 1,
+  'final e disputa de terceiro recebem o índice da fase posterior');
+console.log('reparo-chave-nao-sobrescreve-placar: ' + (7 - fail) + ' passou, ' + fail + ' falhou');
 process.exit(fail ? 1 : 0);

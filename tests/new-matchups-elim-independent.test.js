@@ -59,7 +59,7 @@ console.log('\n── ELIMINATÓRIA: novos confrontos dependem de inscrições a
 // 5) GATE DE RUNTIME: é ELE que decide se o tardio entra na chave. Tem que ler a FASE.
 {
   const t = {
-    id: 'X', lateEnrollment: 'closed', newMatchups: false, currentPhaseIndex: 1,
+    id: 'X', rulesContractVersion: 2, lateEnrollment: 'closed', newMatchups: false, currentPhaseIndex: 1,
     phases: [{ lateEnrollment: 'expand', newMatchups: true }, { lateEnrollment: 'closed', newMatchups: true }],
   };
   ok(W._allowsNewMatchups(t) === false, 'gate :: inscrição fechada bloqueia novos confrontos mesmo com flag antiga ligada');

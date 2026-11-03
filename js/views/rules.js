@@ -158,7 +158,9 @@ function renderRules(container, tournamentId) {
 
   const organizerFlowHtml = (() => {
     if (!(t.rulesContractVersion >= 2) || !t.fmt2) return '';
-    const cfg = t.fmt2, e = cfg.eliminatoria || {}, safe = window._safeHtml || (x => String(x || ''));
+    const cfg = t.fmt2, e = cfg.eliminatoria || {}, safe = window._safeHtml || (x => String(x == null ? '' : x)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;'));
     const lines = [];
     lines.push(cfg.classifAtiva === false ? 'Entrada direta na eliminatória.' :
       ('Classificatória em ' + (cfg.grupos || 1) + ' grupo(s); ' +

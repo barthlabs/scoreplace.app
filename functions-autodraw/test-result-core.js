@@ -52,7 +52,7 @@ const PAYLOAD = { s1: 6, s2: 3, useSets: false, pending: { scoreP1: 6, scoreP2: 
 // Uma correção antes do avanço precisa desfazer a escolha baseada no placar
 // anterior, mesmo quando o novo empate ocupa a mesma fronteira com outros nomes.
 {
-  const decision = { contenders: ['uid:B', 'uid:C', 'uid:D'], choice: 'play', status: 'pending',
+  const decision = { contenders: ['uid:B', 'uid:C', 'uid:D'], choice: 'play', status: 'pending', baseGameNumber: 93,
     matches: [{ id: 'extra-1', displayGameNumber: '93A' }] };
   const T = mkT({ rulesContractVersion: 2, currentPhaseIndex: 0,
     phaseTieDecisions: { '0': { 'group-a:1:3': decision } } });
@@ -75,6 +75,17 @@ const PAYLOAD = { s1: 6, s2: 3, useSets: false, pending: { scoreP1: 6, scoreP2: 
     () => compare, null, 1, false, () => 93);
   t('avanço pede nova escolha após mudar os empatados',
     flow.status === 'choice' && flow.tie.players.map(p => p.name).join(',') === 'B,C,E');
+  t('partida extra arquivada não reutiliza o sufixo', flow.tie.firstExtraGameNumber === '93B');
+}
+{
+  const decision = { contenders: ['uid:B', 'uid:C'], choice: 'play', status: 'pending',
+    matches: [{ id: 'extra-pending', displayGameNumber: '93A' }] };
+  const T = mkT({ rulesContractVersion: 2, phaseTieDecisions: { '0': { 'group-a:1:2': decision } },
+    titleAwards: [{ label: 'Título preservado' }] });
+  const reset = core.applyResult(T, { matchId: 'm1', payload: { action: 'reset-match' },
+    actor: { uid: UID_ORG }, now: 1 });
+  t('reset sem placar não descarta decisão de desempate nem título', reset.ok &&
+    T.phaseTieDecisions['0']['group-a:1:2'] === decision && T.titleAwards.length === 1);
 }
 
 console.log('\n──── result-core: autorização ────');

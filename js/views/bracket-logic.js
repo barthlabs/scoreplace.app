@@ -2056,10 +2056,25 @@ function _advanceWinner(t, completedMatch) {
       };
       if (completedMatch.category != null) _seriesMatch.category = completedMatch.category;
       if (completedMatch.tierLabel) _seriesMatch.tierLabel = completedMatch.tierLabel;
+      // A vaga seguinte e a descida do perdedor pertencem ao resultado da
+      // série, não ao primeiro jogo físico. O jogo decisivo herda as arestas.
+      ['nextMatchId', 'nextSlot', 'loserMatchId', 'loserSlot',
+        'loserNextMatchId', 'loserNextSlot'].forEach(function (key) {
+        if (completedMatch[key] != null) _seriesMatch[key] = completedMatch[key];
+      });
       t.matches.push(_seriesMatch);
     } else if (Math.max(_won1, _won2) >= _need && _pendingSeries.length) {
+      // Se uma agenda antiga já havia criado partidas excedentes, a partida
+      // decisiva assume também as saídas que só estavam nelas.
+      _pendingSeries.forEach(function (pending) {
+        ['nextMatchId', 'nextSlot', 'loserMatchId', 'loserSlot',
+          'loserNextMatchId', 'loserNextSlot'].forEach(function (key) {
+          if (completedMatch[key] == null && pending[key] != null) completedMatch[key] = pending[key];
+        });
+      });
       t.matches = t.matches.filter(function (m) { return _pendingSeries.indexOf(m) === -1; });
     }
+    if (Math.max(_won1, _won2) < _need) return;
   }
   // Loser-drop pra chave de perdedores. Vale pra Dupla Eliminatória de torneio
   // normal E pra fase final (playoff) de Liga em Dupla Eliminatória — neste caso
@@ -3101,6 +3116,7 @@ function _updateDuplaElimClassification(t) {
     var result = { name: entry.loser, uid: key, wins: 0, played: 0,
       pointsFor: 0, pointsAgainst: 0, setsWon: 0, setsLost: 0,
       gamesWon: 0, gamesLost: 0, tbPointsWon: 0, tbPointsLost: 0 };
+    if (!key) return result;
     t.matches.forEach(function(m) {
       if (!m || !m.winner || m.isBye || m.isSitOut) return;
       var first = identity(m, 'p1') === key, second = identity(m, 'p2') === key;
@@ -3154,7 +3170,13 @@ function _updateDuplaElimClassification(t) {
         var compared = window._standingsCompareConfig(a.line, b.line,
           { tiebreakers: t.tiebreakers, ordem: order, h2h: h2h, birth: birth });
         if (compared) return compared;
-        return (order[a.line.uid] ?? Infinity) - (order[b.line.uid] ?? Infinity);
+        var aOrder = a.line.uid ? order[a.line.uid] : undefined;
+        var bOrder = b.line.uid ? order[b.line.uid] : undefined;
+        if (aOrder != null && bOrder != null && aOrder !== bOrder) return aOrder - bOrder;
+        if (aOrder != null && bOrder == null) return -1;
+        if (bOrder != null && aOrder == null) return 1;
+        return String(a.loser).localeCompare(String(b.loser)) ||
+          String(a.match.id || '').localeCompare(String(b.match.id || ''));
       }
       var aLS = window._matchWinnerSide(a.match) === 1 ? (parseInt(a.match.scoreP2) || 0) : (parseInt(a.match.scoreP1) || 0);
       var aWS = window._matchWinnerSide(a.match) === 1 ? (parseInt(a.match.scoreP1) || 0) : (parseInt(a.match.scoreP2) || 0);
@@ -4169,6 +4191,7 @@ function _ensureFutureRounds(t, dryRun, opts) {
       const nm = {
         id: `match-r${r}-${idx}-${timestamp + r}`,
         round: r,
+        ...(t.rulesContractVersion >= 2 ? { phaseIndex: Number(t.currentPhaseIndex || 0) } : {}),
         bracket: isDupla ? 'upper' : undefined,
         p1: 'TBD', p2: 'TBD', winner: null
       };
@@ -4212,6 +4235,7 @@ function _ensureFutureRounds(t, dryRun, opts) {
       matches: [{
         id: `match-3rd-${timestamp + 97}`,
         round: finalRound || 1,
+        ...(t.rulesContractVersion >= 2 ? { phaseIndex: Number(t.currentPhaseIndex || 0) } : {}),
         label: opts.thirdPlaceLabel || ((typeof window._t === 'function') ? window._t('bracket.thirdPlaceLabel') : 'Disputa de 3º lugar'),
         p1: 'TBD', p2: 'TBD', winner: null
       }]
@@ -5038,6 +5062,7 @@ function _chooseSitOutPlayers(t, players, numToSitOut, category, rnd) {
   // afeta resultado de partida).
   var catKey = category || '_default_';
   var catHistory = history[catKey] || {};
+  var legacyOrder = Number(t.rulesContractVersion || 0) < 2;
   var random = typeof rnd === 'function' ? rnd : Math.random;
   // A posição na classificação não decide a folga. O sorteio só desempata
   // atletas com o mesmo número de folgas anteriores.
@@ -5047,13 +5072,13 @@ function _chooseSitOutPlayers(t, players, numToSitOut, category, rnd) {
     // chave de uid ainda não existe — sem perder o histórico já acumulado.
     var so = catHistory[k];
     if (so === undefined && k !== name) so = catHistory[name];
-    return { name: name, sitOuts: so || 0, lot: random(), index: idx };
+    return { name: name, sitOuts: so || 0, lot: legacyOrder ? 0 : random(), index: idx };
   });
   // Quem menos folgou entra primeiro no sorteio da folga. O último critério
   // estável só resolve uma colisão exata do gerador aleatório.
   indexed.sort(function(a, b) {
     if (a.sitOuts !== b.sitOuts) return a.sitOuts - b.sitOuts;
-    return a.lot - b.lot || a.index - b.index;
+    return legacyOrder ? b.index - a.index : a.lot - b.lot || a.index - b.index;
   });
   var sitOut = indexed.slice(0, numToSitOut).map(function(x) { return x.name; });
   var playing = players.filter(function(p) { return sitOut.indexOf(p) === -1; });
@@ -6248,7 +6273,7 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
   }
   if (players.length < 4 && !lotteryRemainder) {
     // Not enough for Rei/Rainha groups, fallback to standard pairing
-    _generateNextRoundForPlayers(t, category, _rn);
+    _generateNextRoundForPlayers(t, category, _rn, det);
     return;
   }
 
