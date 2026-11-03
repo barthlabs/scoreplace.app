@@ -18,6 +18,8 @@ assert.doesNotThrow(() => validateNewFormatIntent({ tieResolution: 'singles_then
 assert.doesNotThrow(() => validateNewFormatIntent({ disputa: 'individual', parceria: null }, HttpsError));
 assert.doesNotThrow(() => validateNewFormatIntent({ parceria: null }, HttpsError));
 assert.doesNotThrow(() => validateNewFormatIntent({ eliminatoria: { ativa: false } }, HttpsError));
+assert.doesNotThrow(() => validateNewFormatIntent({ eliminatoria: { linhas: 3 } }, HttpsError));
+assert.doesNotThrow(() => validateNewFormatIntent({ eliminatoria: { linhas: 5 } }, HttpsError));
 assert.throws(() => validateNewFormatIntent({ eliminatoria: { lateEnrollment: 'closed', newMatchups: true } }, HttpsError),
   { code: 'invalid-argument', message: 'Novos confrontos exigem inscrições abertas na fase eliminatória.' });
 assert.doesNotThrow(() => validateNewFormatIntent({ classificationSchedule: null, rodadas: { modo: 'todos' } }, HttpsError));
@@ -57,7 +59,7 @@ for (const [patch, field] of [
   [{ rodadas: { modo: 'infinito' } }, 'rodadas.modo'],
   [{ classificationPairing: { strategy: 'desconhecida' } }, 'classificationPairing.strategy'],
   [{ classificationSchedule: { gamesPerUnit: 3, mode: 'structred' } }, 'classificationSchedule.mode'],
-  [{ eliminatoria: { linhas: 3 } }, 'eliminatoria.linhas'],
+  [{ eliminatoria: { linhas: '3abc' } }, 'eliminatoria.linhas'],
   [{ eliminatoria: { semeadura: 'aleatoria' } }, 'eliminatoria.semeadura'],
   [{ eliminatoria: { newMatchups: 'yes' } }, 'eliminatoria.newMatchups']
 ]) {
@@ -76,6 +78,8 @@ for (const [patch, field] of [
   [{ grupos: '3abc' }, 'grupos'], [{ grupos: 3.5 }, 'grupos'],
   [{ grupos: '' }, 'grupos'], [{ grupos: ' 3' }, 'grupos'],
   [{ grupos: '1e2' }, 'grupos'], [{ grupos: 0 }, 'grupos'],
+  [{ eliminatoria: { linhas: 0 } }, 'eliminatoria.linhas'],
+  [{ eliminatoria: { linhas: 1.5 } }, 'eliminatoria.linhas'],
   [{ classificados: -1 }, 'classificados'], [{ classificados: null }, 'classificados'],
   [{ rodadas: { n: '' } }, 'rodadas.n'], [{ rodadas: { n: 1.5 } }, 'rodadas.n'],
   [{ classificationPairing: { clusterSize: 1 } }, 'classificationPairing.clusterSize'],
@@ -89,6 +93,8 @@ for (const [patch, field] of [
   assert.throws(() => validateNewFormatIntent(patch, HttpsError), error =>
     error.code === 'invalid-argument' && error.message.includes('fmt2.' + field), field);
 }
+assert.throws(() => validateNewFormatIntent({ eliminatoria: { linhas: 33 } }, HttpsError),
+  { code: 'invalid-argument', message: 'São permitidas no máximo 32 chaves paralelas.' });
 
 const server = fs.readFileSync(path.join(__dirname, '..', 'functions-autodraw', 'index.js'), 'utf8');
 const cloneStart = server.indexOf('function _clonaConfigDeclarativa(');
@@ -104,8 +110,8 @@ assert.match(compiler, /out\.rodadas\.modo !== 'todos' && out\.rodadas\.modo !==
 assert.match(editor, /_f2Modo\(\\'fixo\\'\).*_f2Modo\(\\'todos\\'\)/s);
 assert.match(compiler, /out\.rodadas\.turnos === 'ida_volta'\) \? 'ida_volta' : 'ida'/);
 assert.match(editor, /_f2Turnos\(this\.checked \? \\'ida_volta\\' : \\'ida\\'\)/);
-assert.match(compiler, /\[1, 2, 4\]\.indexOf\(e\.linhas\)/);
-assert.match(editor, /\[1, 2, 4\]\.map\(function \(n\).*_f2Linhas/s);
+assert.match(compiler, /e\.linhas = Math\.max\(1, Math\.min\(32, parseInt\(e\.linhas, 10\) \|\| 1\)\)/);
+assert.match(editor, /type="number"[^\n]*onchange="window\._f2Linhas\(this\.value\)"/);
 assert.match(compiler, /mode: value\.mode === 'structured' \? 'structured' : 'free'/);
 assert.match(editor, /current\.mode = mode === 'structured' \? 'structured' : 'free'/);
 const FORMAT2 = require('../functions-autodraw/draw-core')._window.FORMAT2;

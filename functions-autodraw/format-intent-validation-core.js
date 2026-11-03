@@ -19,11 +19,11 @@ const ENUMS = [
   ['eliminatoria.formacao', ['performance', 'equilibrio', 'sorteio']],
   ['eliminatoria.semeadura', ['performance', 'equilibrio', 'sorteio']],
   ['eliminatoria.lateEnrollment', ['inherit', 'closed', 'standby', 'expand']],
-  ['eliminatoria.newMatchups', ['inherit', true, false]],
-  ['eliminatoria.linhas', [1, 2, 4]]
+  ['eliminatoria.newMatchups', ['inherit', true, false]]
 ];
 const INTEGERS = [
   ['grupos', 1],
+  ['eliminatoria.linhas', 1],
   ['classificados', 1],
   ['rodadas.n', 1],
   ['classificationPairing.clusterSize', 2],
@@ -159,6 +159,9 @@ function validateNewFormatIntent(fmt2, HttpsError, stored, requestedTeamSize) {
     const parsed = typeof value === 'string' && /^[0-9]+$/.test(value) ? Number(value) : value;
     if (!Number.isSafeInteger(parsed) || parsed < minimum) {
       throw new HttpsError('invalid-argument', 'Valor de formato inválido em fmt2.' + path + '.');
+    }
+    if (path === 'eliminatoria.linhas' && parsed > 32) {
+      throw new HttpsError('invalid-argument', 'São permitidas no máximo 32 chaves paralelas.');
     }
   }
 }
