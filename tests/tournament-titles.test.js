@@ -88,6 +88,12 @@ const objectTeams = { ...teamGroups, groups: teamGroups.groups.map(g => ({ ...g,
     p1CompetitionTeamId: undefined, p2CompetitionTeamId: undefined })) })) };
 assert.deepEqual(resolve(objectTeams).titles.map(x => x.winnerId), ['t1', 't3'],
   'times identificados só pelos objetos das partidas ainda disputam os títulos por grupo');
+const unknownTeam = { ...teamGroups, groups: [teamGroups.groups[0], {
+  ...teamGroups.groups[1], matches: teamGroups.groups[1].matches.map(m => ({ ...m,
+    p1CompetitionTeamId: undefined, team1Obj: undefined }))
+}] };
+assert.equal(resolve(unknownTeam).reason, 'standings-unavailable',
+  'identidade ausente em um grupo impede a publicação parcial de campeões');
 assert.equal(realEngine.phaseComplete(teamGroups), true);
 assert.deepEqual(resolve(teamGroups, { engine: realEngine }).titles.map(x => [x.scope, x.label, x.winnerId]),
   [['group', 'Praia', 't1'], ['group', 'Serra', 't3']],

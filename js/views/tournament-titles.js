@@ -115,6 +115,7 @@
         if (grouped && pools.length !== Number(phase.gruposCount || t.gruposCount)) {
           return { ok: false, reason: 'standings-unavailable', titles: [] };
         }
+        var incompleteGroup = false;
         pools.forEach(function (pool) {
           var categories = teamConfig.aggregation === 'per_category'
             ? Array.from(new Set(pool.matches.map(function (m) { return m.category; }).filter(Boolean))).sort() : [null];
@@ -122,23 +123,29 @@
             var chosen = category ? pool.matches.filter(function (m) { return m.category === category; }) : pool.matches;
             var ids = {};
             if (grouped) chosen.forEach(function (m) {
+              if (m.isBye || m.isSitOut) return;
               ['p1', 'p2'].forEach(function (side) {
                 var teamId = m[side + 'CompetitionTeamId'] ||
                   (m[side === 'p1' ? 'team1Obj' : 'team2Obj'] || {}).competitionTeamId;
                 if (teamId) ids[String(teamId)] = true;
+                else if (teamConfig.classificationUnit !== 'pair') incompleteGroup = true;
               });
             });
             var eligibleTeams = grouped ? (t.competitionTeams || []).filter(function (team) {
               return ids[String(team.id || '')];
             }) : (t.competitionTeams || []);
+            // Em grupos, os próprios jogos fornecem as duplas elegíveis e seus IDs.
+            // A lista global incluiria inscritas que nunca disputaram este grupo.
             var rows = teamConfig.classificationUnit === 'pair'
               ? teamCore.pairStandings(grouped ? [] : pairs, chosen, teamConfig, category || undefined)
               : teamCore.standings(eligibleTeams, chosen, teamConfig);
+            if (grouped && !rows.length) { incompleteGroup = true; return; }
             var label = [pool.label, category].filter(Boolean).join(' · ');
             var title = awardFromRow(rows[0], grouped ? 'group' : category ? 'category' : 'overall', label);
             if (title) titles.push(title);
           });
         });
+        if (incompleteGroup) return { ok: false, reason: 'standings-unavailable', titles: [] };
       } else if (phase.classification && phase.classification.structure === 'groups' &&
           Number(phase.gruposCount || t.gruposCount || 1) > 1) {
         if (!deps.engine || typeof deps.engine.prevPhaseGroups !== 'function' ||
