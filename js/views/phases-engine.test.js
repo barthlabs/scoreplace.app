@@ -566,6 +566,54 @@ ok(mres3.ok === false && mres3.error === 'already-materialized', 'guard _phaseMa
   ok(!!(conv.converge && conv.converge.third), 'convergência: 3º/4º existe no nível da grande final');
 })();
 
+// Quantidade de linhas escolhida pelo organizador: linhas independentes ou
+// convergência com folgas. Uma linha vazia não pode criar jogo fictício.
+(function () {
+  function make(count, grandFinal) {
+    var names = []; for (var i = 1; i <= count * 2; i++) names.push({ name: 'L' + i });
+    var dests = ['upper', 'lower'];
+    for (var j = 3; j <= count; j++) dests.push('line' + j);
+    var mapping = dests.map(function (d, k) { return { dest: d, rankFrom: k * 2 + 1, rankTo: k * 2 + 2, label: 'Faixa ' + (k + 1) }; });
+    return eng.buildPhaseBrackets([{ standings: names }],
+      { name: 'E', source: { mapping: mapping }, fixedPairs: false, grandFinal: grandFinal },
+      function (g) { return g.standings; }, 'n' + count + (grandFinal ? 'c' : 'i'));
+  }
+  var three = make(3, true);
+  eq(three.matches.filter(function (m) { return m.bracket === 'finalstage'; }).length, 1,
+    '3 linhas: uma semifinal para completar a final');
+  eq(three.matches.filter(function (m) { return m.bracket === 'grandfinal'; }).length, 1,
+    '3 linhas: final geral');
+  eq(three.matches.filter(function (m) { return m.bracket === 'thirdplace'; }).length, 0,
+    '3 linhas: sem jogo fictício de terceiro/quarto quando só há uma semifinal');
+  var five = make(5, true);
+  eq(five.matches.filter(function (m) { return m.bracket === 'finalstage'; }).length, 3,
+    '5 linhas: entrada de duas linhas, duas semifinais');
+  eq(five.matches.filter(function (m) { return m.bracket === 'thirdplace'; }).length, 1,
+    '5 linhas: perdedores das duas semifinais disputam terceiro/quarto');
+  eq(new Set(five.matches.map(function (m) { return m.id; })).size, five.matches.length,
+    '5 linhas: identificadores únicos em todas as partidas');
+  var independent = make(5, false);
+  eq(independent.matches.filter(function (m) { return m.bracket === 'finalstage' || m.bracket === 'grandfinal'; }).length, 0,
+    '5 linhas independentes: sem cruzamento');
+  [3, 5].forEach(function (count) {
+    var cfg = window.FORMAT2.defaultConfig('Tênis');
+    cfg.disputa = 'individual'; cfg.classifAtiva = false;
+    cfg.eliminatoria.linhas = count;
+    cfg.eliminatoria.nomes = Array.from({ length: count }, function (_, i) { return 'Livre ' + (i + 1); });
+    var compiled = window.FORMAT2.compileToPhases(cfg, { sport: 'Tênis' }).phases[0];
+    var pool = Array.from({ length: count * 2 }, function (_, i) {
+      return { name: 'Pessoa ' + (i + 1), displayName: 'Pessoa ' + (i + 1), uid: 'u' + i };
+    });
+    var direct = eng.generatePhase(pool, compiled, { idPrefix: 'direct-' + count, ordered: true });
+    eq(direct.matches.filter(function (m) { return m.bracket === 'grandfinal'; }).length, 1,
+      count + ' linhas: eliminatória direta respeita a grande final');
+    eq(new Set(direct.matches.filter(function (m) { return /^Livre /.test(m.tierLabel || ''); }).map(function (m) { return m.tierLabel; })).size, count,
+      count + ' linhas: nomes livres aparecem nos jogos do sorteio inicial');
+    eq(new Set(direct.matches.map(function (m) { return m.id; })).size, direct.matches.length,
+      count + ' linhas: IDs únicos no sorteio inicial');
+  });
+})();
+
 // v2.8.17: repescagem cruza VENCEDORES ADJACENTES na oitavas (W jogo1 × W jogo2,
 // W jogo3 × W jogo4 …); quando acabam, os melhores perdedores se enfrentam (R1×R2, R3×R4).
 (function () {

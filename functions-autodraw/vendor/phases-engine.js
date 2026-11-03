@@ -955,7 +955,7 @@
     // ⭐ OS MESMOS OPTS DO PRÉ-CHEQUE (`selectQualifiers`) — montados por `optsDaTransicao`,
     // não à mão. Enquanto eram dois blocos parecidos, o `flatOverall` chegava num e no
     // outro não, e o painel de promoção decidia sobre um conjunto que não era este.
-    var byDest = buildEntrantsByDest(prevGroups, mapping, fixedPairs, computeStandings, pairingStrategy,
+    var byDest = phaseCfg && phaseCfg._entrantsByDest || buildEntrantsByDest(prevGroups, mapping, fixedPairs, computeStandings, pairingStrategy,
       optsDaTransicao(phaseCfg, null));
 
     // v4.1.29: DUPLA ELIMINATÓRIA CLÁSSICA como fase (pedido do dono: "escolhi dupla
@@ -980,8 +980,8 @@
     var tiers = {};
     var phaseWaitlist = []; // v2.7.25: cortados que vão pra lista de espera (resolution 'standby')
     // ordem estável: upper(Ouro) antes de lower(Prata)
-    var destOrder = ['upper', 'lower', 'main'].filter(function (d) { return byDest[d]; });
-    Object.keys(byDest).forEach(function (d) { if (destOrder.indexOf(d) === -1) destOrder.push(d); });
+    var destOrder = ['upper', 'lower', 'main'].filter(function (d) { return byDest[d] && byDest[d].length; });
+    Object.keys(byDest).forEach(function (d) { if (byDest[d] && byDest[d].length && destOrder.indexOf(d) === -1) destOrder.push(d); });
 
     // v2.8.14: 3º/4º POR LINHA só quando a linha é INDEPENDENTE (sem grande final).
     // Com convergência (grande final entre 2/4 linhas), o 3º/4º é o do nível da
@@ -995,7 +995,7 @@
      * condições que nunca eram falsas, cada uma um lugar onde o jogo podia sumir de novo.
      * [[project_third_place_always]] */
     var _wth = true;
-    var _tierThird = _wth && !(_wgf && (destOrder.length === 2 || destOrder.length === 4));
+    var _tierThird = _wth && !(_wgf && destOrder.length > 1);
 
     destOrder.forEach(function (dest) {
       var bracketKey = DEST_BRACKET[dest] || dest;
@@ -1013,6 +1013,7 @@
        * [[feedback_enumerar_todos_os_caminhos_antes_de_dar_por_pronto]] — terceira vez nesta leva. */
       var res = _genElimFromChaves(byDest[dest],
         { _terceiroNestaChave: _tierThird, politicaDaChave: (phaseCfg && phaseCfg.politicaDaChave) || null,
+          source: phaseCfg && phaseCfg.source,
           bracketSeeding: bracketSeeding,
           _det: det,
           _prepareSurplusDecision: phaseCfg && phaseCfg._prepareSurplusDecision,
@@ -1066,6 +1067,53 @@
       linkTierToFinal(tiers[tierKeys[pair[1][0]]], semi2, 'p1', null, null, allMatches);
       linkTierToFinal(tiers[tierKeys[pair[1][1]]], semi2, 'p2', null, null, allMatches);
       converge = { gf: gf4, third: third4, semis: [semi1, semi2], matches: conv4 };
+    } else if (withGF && tierKeys.length > 2) {
+      // As linhas são entradas da etapa final. Semeadura padrão com folgas:
+      // 3 linhas geram uma semifinal e uma final; 5-8 geram quartas quando
+      // necessárias, duas semifinais, final e disputa entre os perdedores delas.
+      // Mantém os caminhos históricos de 2/4 linhas acima sem alterá-los.
+      var size = 2;
+      while (size < tierKeys.length) size *= 2;
+      var seeds = [1, 2];
+      while (seeds.length < size) {
+        var nextSize = seeds.length * 2 + 1;
+        var expanded = [];
+        seeds.forEach(function (s) { expanded.push(s, nextSize - s); });
+        seeds = expanded;
+      }
+      var counter = 0, convN = [];
+      function connect(source, match, slot) {
+        if (!source) return;
+        if (source.tier) linkTierToFinal(source.tier, match, slot, null, null, allMatches);
+        else { source.match.nextMatchId = match.id; source.match.nextSlot = slot; }
+      }
+      function branch(start, span) {
+        if (span === 1) {
+          var key = tierKeys[seeds[start] - 1];
+          return key ? { tier: tiers[key] } : null;
+        }
+        var left = branch(start, span / 2), right = branch(start + span / 2, span / 2);
+        if (!left || !right) return left || right;
+        var isFinal = span === size;
+        var match = _mkConv('-convergence-' + (++counter), isFinal ? 'grandfinal' : 'finalstage',
+          isFinal ? '🏆 Grande Final' : 'Etapa final');
+        match.round = 99 - Math.log2(size / span);
+        if (isFinal) match.id = idPrefix + '-grandfinal';
+        connect(left, match, 'p1'); connect(right, match, 'p2');
+        convN.push(match);
+        return { match: match };
+      }
+      var root = branch(0, size);
+      var gfN = root && root.match;
+      var semisN = convN.filter(function (m) { return m.round === 98; });
+      var thirdN = semisN.length === 2 ? _mkConv('-thirdplace', 'thirdplace', '🥉 Disputa de 3º/4º') : null;
+      if (thirdN) {
+        semisN[0].loserNextMatchId = thirdN.id; semisN[0].loserNextSlot = 'p1';
+        semisN[1].loserNextMatchId = thirdN.id; semisN[1].loserNextSlot = 'p2';
+        convN.push(thirdN);
+      }
+      allMatches = allMatches.concat(convN);
+      converge = { gf: gfN, third: thirdN, semis: semisN, matches: convN };
     }
 
     return { matches: allMatches, tiers: tiers, converge: converge, byDest: byDest, waitlist: phaseWaitlist };
@@ -1774,6 +1822,21 @@
     return _genElimFromChaves(pool, cfg, idPrefix, dupla);
   }
 
+  function _genElimByLinesFromPool(pool, cfg, idPrefix) {
+    var mapping = cfg && cfg.mapping;
+    if (!Array.isArray(mapping) || mapping.length < 2 || cfg.elimination.bracketType !== 'single') {
+      return _genElimFromPool(pool, cfg, idPrefix);
+    }
+    // Na inscrição ainda não existe ranking. O pool já foi sorteado e contém as
+    // unidades competitivas prontas (atleta, dupla ou time). Distribuir os próprios
+    // objetos preserva UIDs e duplas; passar por buildEntrantsByDest os formaria de novo.
+    var byDest = {};
+    mapping.forEach(function (m) { byDest[m.dest] = []; });
+    pool.forEach(function (entry, i) { byDest[mapping[i % mapping.length].dest].push(entry); });
+    var phaseCfg = Object.assign({}, cfg, { source: { type: 'enrollment', mapping: mapping }, _entrantsByDest: byDest });
+    return buildPhaseBrackets([], phaseCfg, null, idPrefix, cfg._det);
+  }
+
   function generatePhase(pool, cfg, ctx) {
     ctx = ctx || {};
     var complete = cfg && ((cfg.kind === 'classification' && cfg.classification && cfg.classification.structure != null) ||
@@ -1897,7 +1960,7 @@
         cats.forEach(function (cat, ci) {
           var catPool = pool.filter(function (e) { return String(ctx.catOf(e) || '') === String(cat); });
           if (!catPool.length) return;
-          var b = _genElimFromPool(catPool,
+          var b = _genElimByLinesFromPool(catPool,
             Object.assign({}, cfg, { _surplusCategory: cat }), idPrefix + '-c' + ci);
           (b.matches || []).forEach(function (m) {
             m.category = cat;
@@ -1924,7 +1987,7 @@
         // categoria, tagueia os jogos com ela (o filtro por categoria em _computeStandings
         // exige a tag). Igual ao ramo do split: matches taggeados + repMeta.category setado
         // → _buildRepechageDoubleElim carimba os jogos que cria depois (upper R2+/lower/grand).
-        built = _genElimFromPool(pool, Object.assign({}, cfg, {
+        built = _genElimByLinesFromPool(pool, Object.assign({}, cfg, {
           _surplusCategory: (cfg && Array.isArray(cfg.categories) && cfg.categories.length === 1)
             ? cfg.categories[0] : (cfg && cfg.category)
         }), idPrefix);
@@ -2585,8 +2648,9 @@
     function entry(nm) { return nameTeam[nm] || { name: nm, displayName: nm }; }
     var gf = pm.filter(function (m) { return m.bracket === 'grandfinal'; })[0];
     var third = pm.filter(function (m) { return m.bracket === 'thirdplace'; })[0];
-    var TIERS = ['gold', 'silver', 'main', 'line3', 'line4'];
-    var tierMatches = pm.filter(function (m) { return TIERS.indexOf(m.bracket) !== -1; });
+    var tierMatches = pm.filter(function (m) {
+      return m.bracket === 'gold' || m.bracket === 'silver' || m.bracket === 'main' || /^line[3-9][0-9]*$/.test(m.bracket || '');
+    });
 
     // v3.1: fase anterior é FASE DE GRUPOS (round-robin) → standings por grupo
     // (cada grupo vira um "grupo" pra próxima fase puxar suas colocações, igual

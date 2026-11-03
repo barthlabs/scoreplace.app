@@ -1945,7 +1945,7 @@ window._assignGlobalGameNumbers = function (t) {
       var present = {};
       ms.forEach(function (m) {
         var bk = m.bracket || 'main';
-        if (bk !== 'grandfinal' && bk !== 'thirdplace' && !_ehTerceiro(m)) present[bk] = 1;
+        if (bk !== 'grandfinal' && bk !== 'thirdplace' && bk !== 'finalstage' && !_ehTerceiro(m)) present[bk] = 1;
       });
       var tierKeys = tierOrder.filter(function (k) { return present[k]; });
       Object.keys(present).forEach(function (k) { if (tierKeys.indexOf(k) === -1) tierKeys.push(k); });
@@ -1965,6 +1965,8 @@ window._assignGlobalGameNumbers = function (t) {
         });
       });
       ms.filter(_ehTerceiro).forEach(stamp);
+      ms.filter(function (m) { return (m.bracket || '') === 'finalstage'; })
+        .sort(function (a, b) { return (a.round || 0) - (b.round || 0); }).forEach(stamp);
       ms.filter(function (m) { return (m.bracket || '') === 'grandfinal'; }).forEach(stamp);
     });
   });

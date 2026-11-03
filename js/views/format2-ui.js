@@ -1147,7 +1147,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // Linhas (chaves paralelas): só na eliminatória SIMPLES — a dupla-elim é chave única.
       if (!e.dupla) {
         eb += '<div style="margin-top:12px;font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;">Chaves paralelas (nomes livres)</div>';
-        eb += [1, 2, 4].map(function (n) { return _pill(e.linhas === n, 'window._f2Linhas(' + n + ')', String(n)); }).join('');
+        eb += '<input type="number" class="form-control" min="1" max="32" step="1" value="' + e.linhas + '" onchange="window._f2Linhas(this.value)" aria-label="Quantidade de chaves paralelas" style="max-width:110px;box-sizing:border-box;">';
         for (var i = 0; i < e.linhas; i++) {
           // v1.2.40: PADRÃO do formulário = class="form-control" (padding .75rem 1rem,
           // font-size 1rem) — igual aos campos de Início/Término da fase. Antes era estilo
@@ -1155,7 +1155,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           // fonte menor que o resto do form.
           eb += '<div style="margin-top:8px;"><input type="text" class="form-control" value="' + _safe(e.nomes[i] || '') + '" placeholder="Nome da chave ' + (i + 1) + ' (opcional)" oninput="window._f2LineName(' + i + ',this.value)" style="max-width:300px;box-sizing:border-box;"></div>';
         }
-        // v4.4.73: Grande Final — só na SIMPLES com 2/4 linhas (na dupla-elim é sempre,
+        // Grande Final — na SIMPLES com mais de uma linha (na dupla-elim é sempre,
         // não tem toggle). ON = campeões das linhas se cruzam numa grande final (após a
         // 1ª linha). OFF = linhas independentes, cada uma com seu campeão.
         if (e.linhas > 1) {
@@ -1732,7 +1732,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   window._f2Elim = function (b) { if (!S) return; S.cfg.eliminatoria.ativa = !!b; if (!b) S.cfg.classifAtiva = true; _norm(); _rerender(); };
   // v4.4.33: toggle da fase classificatória. Desligar → eliminação direta (elim obrigatória).
   window._f2ClassifAtiva = function (checked) { if (!S) return; S.cfg.classifAtiva = !!checked; if (!checked) S.cfg.eliminatoria.ativa = true; _norm(); _rerender(); };
-  window._f2Linhas = function (n) { S.cfg.eliminatoria.linhas = n; _norm(); _rerender(); };
+  window._f2Linhas = function (n) { if (!S) return; S.cfg.eliminatoria.linhas = parseInt(n, 10) || 1; _norm(); _rerender(); };
   // ── Formato da partida da ELIMINATÓRIA (cfg.eliminatoria.scoring) ──
   // Ligar o toggle NÃO muda o jogo: começa com uma cópia do formato da fase inicial, e a
   // pessoa então escolhe outro. (Ligar e já mudar o placar por baixo seria surpresa.)

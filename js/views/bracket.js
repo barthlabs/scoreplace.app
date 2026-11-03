@@ -7079,7 +7079,7 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
   var _tierDefault = { main: (_t('bracket.knockout') || 'Eliminatória') };
   var _tierOrder = ['gold', 'silver', 'main', 'line3', 'line4'];
   var _present = {};
-  pm.forEach(function (m) { var bk = m.bracket || 'main'; if (bk !== 'grandfinal' && bk !== 'thirdplace') _present[bk] = 1; });
+  pm.forEach(function (m) { var bk = m.bracket || 'main'; if (bk !== 'grandfinal' && bk !== 'thirdplace' && bk !== 'finalstage') _present[bk] = 1; });
   var _tierKeys = _tierOrder.filter(function (k) { return _present[k]; });
   Object.keys(_present).forEach(function (k) { if (_tierKeys.indexOf(k) === -1) _tierKeys.push(k); });
   var _palette = ['#fbbf24', '#cbd5e1', '#10b981', '#cd7f32', '#3b82f6', '#ec4899', '#14b8a6', '#f97316'];
@@ -7288,7 +7288,8 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
     // GERAL ÚNICA (não por linha) no topo. Computa em ordem de exibição p/ a numeração
     // dos jogos seguir o layout (globalNum).
     var _firstHtml = _tierHtmlAt(_tierKeys[0], 0, false);
-    var _gfHtml = renderFinalBox('grandfinal', '🏆 Grandes Semifinais & Final', '#fbbf24');
+    var _gfHtml = renderFinalBox('finalstage', 'Etapa final entre chaves', '#fbbf24') +
+      renderFinalBox('grandfinal', '🏆 Grande Final', '#fbbf24');
     var _thirdHtml = renderFinalBox('thirdplace', '🥉 Disputa de 3º / 4º lugar', '#cd7f32');
     var _restHtml = _tierKeys.slice(1).map(function (bk, i) { return _tierHtmlAt(bk, i + 1, false); }).join('');
     var _unified = _unifiedClassifHtml();

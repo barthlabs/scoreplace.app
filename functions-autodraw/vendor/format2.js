@@ -443,8 +443,7 @@
         grandFinal: true,        // v4.4.73: grande final unindo as linhas. Só editável na SIMPLES
                                  // com 2/4 linhas (desativar = linhas independentes). Dupla = sempre.
         lateEnrollment: 'inherit', // inscrições durante a ELIMINATÓRIA: inherit (segue a fase inicial) | closed | standby | expand
-        // "Novos Confrontos" da ELIMINATÓRIA — INDEPENDENTE de "Abertas", igual à fase inicial
-        // (cânone project_new_matchups_independent). 'inherit' = segue a fase inicial | true | false.
+        // Novos confrontos só existem com inscrições abertas; 'inherit' segue a fase inicial.
         newMatchups: 'inherit',
         // FORMATO DA PARTIDA (GSM) PRÓPRIO da eliminatória — v1.9.111. null = joga com o MESMO
         // formato da classificatória (t.scoring, o bloco "🎾 Formato da Partida" do form, que
@@ -687,11 +686,11 @@
 
     var e = out.eliminatoria || {};
     e.ativa = !!e.ativa; // v4.4.32: pode desligar SEMPRE (grupos ou pontos corridos); default = defaultConfig
-    // v4.4.58: Dupla Eliminatória (repescagem). É UMA chave só — força 1 linha (chaves
-    // paralelas de dupla-elim fogem do escopo). Simples pode ter 1/2/4 linhas.
+    // Dupla eliminatória clássica usa uma chave. Na simples o organizador define
+    // quantas linhas independentes ou convergentes terá o torneio.
     e.dupla = e.dupla === true;
     if (e.dupla) e.linhas = 1;
-    if ([1, 2, 4].indexOf(e.linhas) === -1) e.linhas = 1;
+    e.linhas = Math.max(1, Math.min(32, parseInt(e.linhas, 10) || 1));
     // v4.4.73: grande final. Default ON. Dupla Eliminatória SEMPRE tem (inerente ao
     // formato). Só a SIMPLES com 2/4 linhas pode desativar (→ linhas independentes,
     // cada uma com seu campeão). 1 linha não tem conceito de grande final.
@@ -822,7 +821,12 @@
     }
     return mapping;
   }
-  var _LINE_DESTS = { 1: ['main'], 2: ['upper', 'lower'], 4: ['upper', 'lower', 'line3', 'line4'] };
+  function _lineDests(count) {
+    if (count === 1) return ['main'];
+    var dests = ['upper', 'lower'];
+    for (var i = 3; i <= count; i++) dests.push('line' + i);
+    return dests;
+  }
 
   // Base comum de campos por-fase (datas/W.O./resultado) — o motor tolera defaults.
   function _phaseBase(resultEntry) {
@@ -881,7 +885,7 @@
       pairingStrategy: daInscricao ? 'top' : 'seed',
       grandFinal: true, lateEnrollment: 'closed', drawManual: false
     });
-    var dRR = _LINE_DESTS[e0.linhas] || ['main'];
+    var dRR = _lineDests(e0.linhas);
     // per_group: cada linha puxa até `cutRR` de CADA grupo de 4 (rankTo = corte).
     var mapRR = dRR.map(function (dst, di) {
       return { dest: dst, rankFrom: 1, rankTo: cutRR, label: (e0.nomes && e0.nomes[di]) || '' };
@@ -962,7 +966,7 @@
       // Duplas já formadas: se o org habilitou, os PARTICIPANTES podem formar suas duplas
       // (arrastar/soltar); senão só o organizador. Sorteadas → irrelevante (organizer_only).
       top.manualPairing = (formadas0 && cfg.manualPairingOpen) ? 'open' : 'organizer_only';
-      var d0 = _LINE_DESTS[e0.linhas] || ['main'];
+      var d0 = _lineDests(e0.linhas);
       p0 = Object.assign(_phaseBase(re), {
         kind: 'elimination', elimination: { bracketType: elimDupla0 ? 'double' : 'single' }, name: 'Eliminatória',
         formatCode: elimDupla0 ? 'elim_dupla' : 'elim_simples',
@@ -1107,7 +1111,7 @@
     if (cfg.eliminatoria.ativa && cfg.eliminatoria.openReiRainha && isDupla) {
       var eRR = cfg.eliminatoria;
       var perGroupRR = cfg.grupos > 1 && cfg.classifScope === 'per_group';
-      var destsRR = _LINE_DESTS[eRR.linhas] || ['main'];
+      var destsRR = _lineDests(eRR.linhas);
       var mapClassif = !!eRR.qualifyAll
         ? destsRR.map(function (dst, di) { return { dest: dst, rankFrom: 1, rankTo: 999, label: (eRR.nomes && eRR.nomes[di]) || '' }; })
         : _buildMapping(destsRR, eRR.nomes, cfg.classificados, eRR.linhas);
@@ -1150,7 +1154,7 @@
       var _rrRodadaUnica = (cfg.parceria === 'rei_rainha') && (((cfg.rodadas || {}).n || 1) === 1);
       var perGroup = _rrRodadaUnica || (cfg.grupos > 1 && cfg.classifScope === 'per_group');
       var nLines = e.linhas;
-      var dests = _LINE_DESTS[nLines] || ['main'];
+      var dests = _lineDests(nLines);
       var topN = cfg.classificados;            // quantos classificam = valor do SLIDER
       var qAll0 = !!e.qualifyAll;              // "Todos" = atalho do slider no máximo
       // v4.4.x: quantos avançam vem do SLIDER (classificados). "Todos" (qualifyAll) NÃO é limitado
