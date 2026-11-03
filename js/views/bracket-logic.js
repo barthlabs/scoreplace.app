@@ -896,6 +896,23 @@ function _poeStandings(t) {
 }
 window._poeStandings = _poeStandings;
 
+function _publishTitlesIfReady(t) {
+  if (!t || !(t.rulesContractVersion >= 2)) return true;
+  var resolver = window.ScoreplaceTournamentTitles;
+  if (!resolver || !window._phasesEngine) return false;
+  var resolved = resolver.resolve(t, {
+    engine: window._phasesEngine,
+    teamCore: window.ScoreplaceTeamCompetition,
+    standings: _computeStandings
+  });
+  if (!resolved.ok) return false;
+  t.titleAwards = resolved.titles.map(function (title) {
+    return Object.assign({ rulesContractVersion: 2 }, title);
+  });
+  return true;
+}
+window._publishTitlesIfReady = _publishTitlesIfReady;
+
 function _computeStandings(t, category) {
   const scoreMap = {};
 
@@ -3793,6 +3810,7 @@ function _maybeFinishMultiPhase(t) {
     }
   }
 
+  if (!_publishTitlesIfReady(t)) return false;
   t.status = 'finished';
   if (!t.finishedAt) t.finishedAt = new Date().toISOString();
   var _startMs = (typeof t.tournamentStarted === 'number' && t.tournamentStarted > 0) ? t.tournamentStarted : null;
@@ -3916,6 +3934,7 @@ function _maybeFinishElimination(t) {
   }
 
   // All matches done — mark as finished
+  if (!_publishTitlesIfReady(t)) return;
   t.status = 'finished';
   // v2.0.4: o "relógio para" no campeão — registra fim + duração do torneio.
   if (!t.finishedAt) t.finishedAt = new Date().toISOString();
@@ -4398,6 +4417,7 @@ window._applyRoundCloseToTournament = function (t, roundIdx) {
     // Ponte de execução para um torneio iniciado por versão antiga e ainda sem
     // phases[]. Todo sorteio novo chega acima, no contrato multifase.
     if (t.p2Resolution === 'swiss' && t.currentStage === 'swiss' && t.p2TargetCount) return 'transition';
+    if (!_publishTitlesIfReady(t)) return 'phaseComplete';
     t.status = 'finished';
     return 'classificationFinished';
   }
@@ -4686,6 +4706,7 @@ function _doCloseRound(t, tId, roundIdx, anchorMatchId, resultCtx, _forcarLocal)
       return;
     } else {
       // Classificatória de fase única: encerra ao completar as rodadas.
+      if (!_publishTitlesIfReady(t)) return;
       t.status = 'finished';
       showNotification(_t('bui.swissFinishedRounds'), _t('bui.swissFinishedRoundsMsg', { n: maxRounds }), 'success');
       // Notify all participants about Swiss tournament finish

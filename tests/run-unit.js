@@ -122,6 +122,7 @@ const SUITES = [
   'tests/native-update-policy.test.js',
   'tests/native-release-candidate.test.js',
   'tests/format-intent-validation.test.js',
+  'tests/tournament-titles.test.js',
   'tests/format2-legacy-translation.test.js',
   'tests/migrar-fmt2-core.test.js',
   'tests/busca-nomes-sem-acento.test.js',

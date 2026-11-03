@@ -134,6 +134,7 @@ function creator(db,time=clock){return makeCreateTournament({db,HttpsError,Field
   const declarative={...payload.config,fmt2:cfg};delete declarative.format;
   const out=await creator(db)({auth,data:{...payload,config:declarative}});
   assert(out.tournament.phases.length);assert.deepEqual(out.tournament.matches,[]);assert(out.tournament.fmt2);
+  assert.equal(out.tournament.rulesContractVersion,2,'somente criação nova com configurador recebe contrato de títulos');
  });
  await test('marcador transitório aninhado é descartado pela fronteira do servidor',async()=>{
   const db=fakeDB(),cfg=win.FORMAT2.defaultConfig();

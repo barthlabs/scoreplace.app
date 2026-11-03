@@ -237,6 +237,7 @@ require('./vendor/tournaments.js');             // _countCompetitors/_waitlistPe
                                                 // usar ESTAS (medido: cópia divergia em 10/28).
 require('./vendor/tournaments-categories.js');  // _displayCategoryName, _sortCategoriesBySkillOrder, _getParticipantCategories, _participantInCategory
 require('./vendor/format2.js');                 // FORMAT2.normalize/compileToPhases (precisa de SPORT_RULES)
+require('./vendor/tournament-titles.js');      // resolvedor único de títulos para encerramento
 require('./vendor/bracket-model.js');           // _appendCanonicalColumn
 require('./vendor/bracket-logic.js');           // _computeStandings, _generateNextRound, geradores
 require('./vendor/bracket-policy.js');          // _bracketPolicy — contrato de política, ainda sem alterar o desenho legado

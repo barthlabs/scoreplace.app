@@ -1,0 +1,61 @@
+'use strict';
+const assert = require('node:assert/strict');
+global.window = global;
+const titles = require('../js/views/tournament-titles.js');
+const teamCore = require('../js/domain/team-competition.js');
+const realEngine = require('../js/views/phases-engine.js');
+const engine = { phaseComplete: () => true, prevPhaseGroups: t => t.groups || [], groupTeamStandings: g => g.standings };
+const resolve = (t, overrides = {}) => titles.resolve(t, { engine, teamCore, standings: () => t.standings || [], ...overrides });
+
+const gf = { id: 'final', phaseIndex: 1, bracket: 'grandfinal', p1: 'A', p2: 'B',
+  p1Uid: 'uA', p2Uid: 'uB', winner: 'A' };
+const elimination = { phases: [{ kind: 'classification' }, { kind: 'elimination' }],
+  currentPhaseIndex: 1, matches: [gf] };
+assert.deepEqual(resolve(elimination).titles.map(x => [x.scope, x.winnerName, x.winnerUids]),
+  [['overall', 'A', ['uA']]]);
+assert.deepEqual(resolve({ ...elimination, matches: [{ ...gf, p1: 'Mesmo nome', p2: 'Mesmo nome',
+  winner: 'Mesmo nome', winnerUid: 'uB', winnerUids: ['uB'] }] }).titles.map(x => x.winnerUids), [['uB']]);
+assert.equal(resolve({ ...elimination, currentPhaseIndex: 0 }).reason, 'more-phases');
+assert.equal(resolve({ ...elimination, matches: [{ ...gf, winner: null }] },
+  { engine: { phaseComplete: () => false } }).reason, 'phase-incomplete');
+
+const independent = { phases: [{ kind: 'elimination' }], currentPhaseIndex: 0, matches: [
+  { id: 'a', bracket: 'gold', tierLabel: 'Mar', p1: 'A', p2: 'B', winner: 'A', p1Uid: 'uA' },
+  { id: 'b', bracket: 'silver', tierLabel: 'Serra', p1: 'C', p2: 'D', winner: 'D', p2Uid: 'uD' }
+] };
+assert.deepEqual(resolve(independent).titles.map(x => [x.scope, x.label, x.winnerName]),
+  [['line', 'Mar', 'A'], ['line', 'Serra', 'D']]);
+assert.deepEqual(resolve({ ...independent, matches: [independent.matches[0], {
+  id: 'c-bye', bracket: 'line3', tierLabel: 'Vale', p1: 'E', p2: 'BYE (Avança Direto)',
+  winner: 'E', isBye: true, p1Uid: 'uE'
+}] }).titles.map(x => x.winnerName), ['A', 'E']);
+
+const groups = { phases: [{ kind: 'classification', classification: { structure: 'groups' }, gruposCount: 2 }],
+  currentPhaseIndex: 0, groups: [
+    { name: 'Grupo Leste', standings: [{ name: 'L1', uid: 'uL1' }] },
+    { name: 'Grupo Oeste', standings: [{ name: 'O1', uid: 'uO1' }] }
+  ] };
+assert.deepEqual(resolve(groups).titles.map(x => [x.scope, x.label, x.winnerName]),
+  [['group', 'Grupo Leste', 'L1'], ['group', 'Grupo Oeste', 'O1']]);
+const playedGroups = { phases: groups.phases, currentPhaseIndex: 0, groups: [
+  { name: 'A', players: ['A1', 'A2'], matches: [{ id: 'a', p1: 'A1', p2: 'A2', winner: 'A1', scoreP1: 6, scoreP2: 4 }] },
+  { name: 'B', players: ['B1', 'B2'], matches: [{ id: 'b', p1: 'B1', p2: 'B2', winner: 'B2', scoreP1: 3, scoreP2: 6 }] }
+] };
+assert.equal(realEngine.phaseComplete(playedGroups), true);
+assert.deepEqual(resolve(playedGroups, { engine: realEngine }).titles.map(x => x.winnerName), ['A1', 'B2']);
+assert.deepEqual(resolve({ phases: [{ kind: 'classification', classification: { structure: 'round_robin' } }],
+  currentPhaseIndex: 0, standings: [{ name: 'Líder', uid: 'u1' }] }).titles.map(x => x.winnerName), ['Líder']);
+
+const teamBase = { phases: [{ kind: 'classification', classification: { structure: 'groups' }, gruposCount: 2 }],
+  currentPhaseIndex: 0, competitionTeams: [{ id: 't1', name: 'Time Um' }, { id: 't2', name: 'Time Dois' }],
+  teamCompetition: { enabled: true, classificationUnit: 'team', aggregation: 'overall' },
+  matches: [
+    { id: 'f', bracket: 'group', category: 'Feminino', p1: 'F1', p2: 'F2', p1CompetitionTeamId: 't1', p2CompetitionTeamId: 't2', winner: 'F1' },
+    { id: 'm', bracket: 'group', category: 'Masculino', p1: 'M1', p2: 'M2', p1CompetitionTeamId: 't2', p2CompetitionTeamId: 't1', winner: 'M1' },
+    { id: 'f2', bracket: 'group', category: 'Feminino', p1: 'F3', p2: 'F4', p1CompetitionTeamId: 't1', p2CompetitionTeamId: 't2', winner: 'F3' }
+  ] };
+assert.deepEqual(resolve(teamBase).titles.map(x => [x.scope, x.winnerId]), [['overall', 't1']]);
+const categoryTeams = { ...teamBase, teamCompetition: { ...teamBase.teamCompetition, aggregation: 'per_category' } };
+assert.deepEqual(resolve(categoryTeams).titles.map(x => [x.scope, x.label, x.winnerId]),
+  [['category', 'Feminino', 't1'], ['category', 'Masculino', 't2']]);
+console.log('✓ títulos resolvidos por final, linha, grupo, ranking e time/categoria');

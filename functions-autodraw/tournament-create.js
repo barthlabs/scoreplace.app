@@ -113,6 +113,9 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
         const out = compile(config.fmt2, { sport: t.sport, resultEntry: t.resultEntry || ['organizer'], lateEnrollment: t.lateEnrollment, newMatchups: t.newMatchups });
         Object.assign(t, out.topLevel);
         t.phases = out.phases; t.fmt2 = out.cfg;
+        // Só torneios criados depois deste contrato recebem títulos derivados
+        // no encerramento. Documentos históricos não são migrados nem regravados.
+        t.rulesContractVersion = 2;
         if (Array.isArray(config.roundBounds) && t.phases[0]) t.phases[0].roundBounds = config.roundBounds;
         const lastBounds = config.fmt2.eliminatoria && config.fmt2.eliminatoria.roundBounds;
         if (Array.isArray(lastBounds) && t.phases.length > 1) t.phases[t.phases.length - 1].roundBounds = lastBounds;

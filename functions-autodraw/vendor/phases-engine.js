@@ -1746,7 +1746,14 @@
     // exige N>=2 — sem este guard, uma linha de 1 estourava.
     if (!pool || pool.length === 0) return { matches: [], finalMatchId: null, soleWinner: null };
     if (pool.length === 1) {
-      return { matches: [], finalMatchId: null, soleWinner: pool[0].displayName || pool[0].name || null };
+      var loneName = pool[0].displayName || pool[0].name || null;
+      var loneUids = (typeof window !== 'undefined' && typeof window._participantUids === 'function')
+        ? window._participantUids(pool[0]) : [];
+      return { matches: [{ id: idPrefix + '-bye', round: 1, bracket: bracketKey || 'main',
+        p1: loneName, p2: 'BYE (Avança Direto)', winner: loneName, isBye: true,
+        team1Obj: pool[0], p1Uid: loneUids.length === 1 ? loneUids[0] : null,
+        team1Uids: loneUids, winnerUid: loneUids.length === 1 ? loneUids[0] : null,
+        winnerUids: loneUids }], finalMatchId: null, soleWinner: loneName };
     }
     // SEMEADURA: a chave emparelha posições adjacentes (é o que permite crescer sem
     // resortear). Quando o pool chega ORDENADO POR MÉRITO — classificados de uma fase

@@ -46,6 +46,7 @@ const FILES = [
   'tournaments.js',
   'tournaments-categories.js', // _displayCategoryName, _sortCategoriesBySkillOrder, _getParticipantCategories, _participantInCategory
   'format2.js',                // FORMAT2.normalize/compileToPhases — CONFIGURADOR canônico (fmt2 → phases)
+  'tournament-titles.js',      // títulos derivados da configuração e da última fase decidida
   'bracket-model.js',          // _appendCanonicalColumn
   'bracket-logic.js',          // _computeStandings, _generateNextRound, geradores Rei/Rainha + padrão + round-robin
   'bracket-policy.js',         // contrato puro: políticas fechadas de chave e sobra única

@@ -15774,6 +15774,21 @@ window._linePodiumHtml = function (t, lineMatches, title, color) {
 window._renderPodiumsAndClassif = function (t) {
   if (typeof window._classifSearchReset === 'function') window._classifSearchReset();
   if (!t) return '';
+  // Torneios novos publicam os títulos derivados da configuração e dos resultados.
+  // A visualização histórica abaixo permanece exclusiva dos torneios anteriores.
+  if (t.rulesContractVersion >= 2 && Array.isArray(t.titleAwards) && t.titleAwards.length) {
+    var escapeTitle = function (value) { return String(value == null ? '' : value).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    }); };
+    return '<div class="tournament-title-awards" style="display:grid;gap:10px;margin:12px 0;">' + t.titleAwards.map(function (award) {
+      var scope = award.scope === 'group' ? 'Campeão do grupo' : award.scope === 'category' ? 'Campeão da categoria' :
+        award.scope === 'line' ? 'Campeão da chave' : 'Campeão geral';
+      var label = award.label ? ' · ' + escapeTitle(award.label) : '';
+      return '<div style="padding:14px;border:1px solid var(--border-color);border-radius:12px;background:var(--bg-dark);">' +
+        '<div style="font-size:0.78rem;color:var(--text-muted);">🏆 ' + scope + label + '</div>' +
+        '<div style="font-weight:800;font-size:1.05rem;">' + escapeTitle(award.winnerName) + '</div></div>';
+    }).join('') + '</div>';
+  }
   var cur = (typeof t.currentPhaseIndex === 'number') ? t.currentPhaseIndex : 0;
   var isMulti = Array.isArray(t.phases) && t.phases.length > 1 && cur > 0;
   var fp = isMulti ? (t.phases[cur] || {}) : {};
