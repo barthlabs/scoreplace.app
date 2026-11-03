@@ -1,7 +1,8 @@
 'use strict';
 const assert = require('node:assert/strict');
 const client = require('./headless').window;
-const server = require('../functions-autodraw/draw-core.js')._window;
+const drawCore = require('../functions-autodraw/draw-core.js');
+const server = drawCore._window;
 
 function bracket(format, phases) {
   return {
@@ -72,9 +73,38 @@ for (const [name, W] of [['web', client], ['Function', server]]) {
   W._maybeGenerate3rdPlace(elimination);
   assert.ok(elimination.thirdPlaceMatch, `${name}: eliminatória simples gera terceiro lugar`);
 
+  const onlyFinal = { format: 'Eliminatórias Simples', phases: [{ kind: 'elimination' }],
+    currentPhaseIndex: 0, matches: [{ id: 'final-only', round: 1, p1: 'A', p2: 'B', winner: null }] };
+  W._maybeGenerate3rdPlace(onlyFinal);
+  assert.equal(onlyFinal.thirdPlaceMatch, undefined,
+    `${name}: final sem semifinais não gera disputa de 3º/4º`);
+
   const doubleElimination = bracket('Dupla Eliminatória');
   doubleElimination.thirdPlaceMatch = { id: 'phantom' };
   W._maybeGenerate3rdPlace(doubleElimination);
   assert.equal(doubleElimination.thirdPlaceMatch, undefined, `${name}: dupla eliminatória não tem disputa separada`);
 }
+
+// Percurso real: configuração → compilação no servidor → sorteio da classificatória
+// → reconciliador. Um torneio que termina pela tabela não cria jogo de colocação.
+const tableOnly = {
+  id: 'third-place-table-only', sport: 'Beach Tennis', teamSize: 2,
+  fmt2: { disputa: 'dupla', parceria: 'fixa', grupos: 1, classifAtiva: true,
+    rodadas: { modo: 'todos', turnos: 'ida' }, eliminatoria: { ativa: false } },
+  participants: Array.from({ length: 8 }, (_, i) => ({
+    p1Uid: 'a' + i, p1Name: 'A' + i, p2Uid: 'b' + i, p2Name: 'B' + i,
+    displayName: 'A' + i + ' / B' + i
+  })),
+  matches: [], rounds: [], groups: [], checkedIn: {}, absent: {}
+};
+assert.ok(drawCore.compileFromFmt2(tableOnly).ok);
+assert.equal(tableOnly.phases.length, 1);
+assert.equal(tableOnly.phases[0].kind, 'classification');
+assert.ok(drawCore.drawInitial(tableOnly, {}).ok);
+const tableMatches = server._collectAllMatches(tableOnly);
+assert.ok(tableMatches.length > 0, 'classificatória real contém jogos');
+assert.ok(tableMatches.every(m => !m.isThirdPlace), 'sorteio não cria disputa de 3º/4º');
+const tableBefore = JSON.stringify(tableOnly);
+assert.equal(server._ensureFutureRounds(tableOnly, false, { now: 123456 }), false);
+assert.equal(JSON.stringify(tableOnly), tableBefore, 'reconciliador não altera classificatória real');
 console.log('E05: terceiro lugar só em eliminatória simples — web e Function OK');
