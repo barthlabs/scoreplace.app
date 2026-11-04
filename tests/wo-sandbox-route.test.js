@@ -2,6 +2,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
+const pendingDecision = require('../functions-autodraw/phase-pending-decision-core.js');
 const source = fs.readFileSync('functions-autodraw/index.js', 'utf8');
 const start = source.indexOf('exports.applyTournamentWO = onCall(');
 const end = source.indexOf('// ─── Presença da organização', start);
@@ -41,6 +42,7 @@ async function scenario({ id, flag, uid = 'owner', valid = true, preview = false
     _drawFail:(code,message) => new HttpsError(code,message),
     _preloadDrawNames:async()=>{}, _leTorneio:async(tx,ref) => { const snap = await tx.get(ref); return snap.exists ? structuredClone(snap.data()) : null; },
     _enrichParticipantsFromProfiles:()=>{}, _antesDoMotor:t=>structuredClone(t),
+    _phasePendingDecision:pendingDecision,
     _woClaimCore:{ validateTeamWO:() => ({ok:true,team:{slot:'p1',uids:['ana'],label:'Ana / Bia'}}) },
     drawWindow:{ _collectAllMatches:t=>t.matches, _matchHasRealPlay:()=>false,
       _memberNameByUid:(_,u)=>u, _woFindEligibleTeamStandby:()=>candidate ? {chosen:{}} : null },
