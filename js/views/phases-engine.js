@@ -1020,7 +1020,20 @@
   // Devolve { matches:[...], tiers:{dest:res}, converge:{gf,third} }.
   function buildPhaseBrackets(prevGroups, phaseCfg, computeStandings, idPrefix, det) {
     det = det || (phaseCfg && phaseCfg._det) || {};
-    idPrefix = idPrefix || ('ph-' + ((phaseCfg && phaseCfg.name) || 'x').replace(/\s+/g, '_'));
+    if (idPrefix) {
+      // Prefixos dos chamadores de produção já são seguros e estáveis. Fechamos
+      // também a entrada explícita para chamadas diretas do gerador.
+      idPrefix = String(idPrefix).replace(/[^A-Za-z0-9_-]+/g, '_') || 'ph-x';
+    } else {
+      // O nome da fase é texto livre. Codificação reversível evita que aspas ou
+      // sinais de HTML entrem no ID e distingue nomes como "Fase 1"/"Fase_1".
+      var phaseNameForId = String((phaseCfg && phaseCfg.name) || '');
+      var encodedName = '';
+      for (var nameIndex = 0; nameIndex < phaseNameForId.length; nameIndex++) {
+        encodedName += phaseNameForId.charCodeAt(nameIndex).toString(16).padStart(4, '0');
+      }
+      idPrefix = encodedName ? 'ph-u' + encodedName : 'ph-x';
+    }
     var mapping = mappingDaTransicao(phaseCfg);
     var fixedPairs = phaseCfg ? (phaseCfg.fixedPairs !== false) : true;
     var pairingStrategy = (phaseCfg && phaseCfg.pairingStrategy) || 'top';

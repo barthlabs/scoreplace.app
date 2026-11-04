@@ -75,6 +75,12 @@ function cfg(over) {
   var saved = F.compileToPhases(opening, { sport: 'Beach Tennis' });
   var edit = F.configFromTournament({ sport: 'Beach Tennis', teamSize: 2, fmt2: saved.cfg, phases: saved.phases }, 'Beach Tennis');
   ok(edit.eliminatoria.nome === 'Finals', '(1) edição lê o nome explícito do fmt2');
+  var oversized = F.configFromTournament({ sport: 'Beach Tennis', teamSize: 2,
+    fmt2: { eliminatoria: { nome: '  ' + 'A'.repeat(45) + '  ' } }, phases: saved.phases }, 'Beach Tennis');
+  ok(oversized.eliminatoria.nome === 'A'.repeat(40), '(1) edição aplica o mesmo limite e trim da gravação');
+  var recomp = F.compileToPhases(oversized, { sport: 'Beach Tennis' });
+  ok(recomp.phases.filter(function (phase) { return phase.kind === 'elimination'; })[0].name === 'A'.repeat(40),
+    '(1) compilação posterior conserva exatamente as 40 letras do nome salvo');
   var legacy = F.configFromTournament({ sport: 'Beach Tennis', teamSize: 2, format: 'Eliminatórias Simples' }, 'Beach Tennis');
   ok(!legacy.eliminatoria.nome, '(1) edição legada não toma o formato projetado como nome livre');
 })();
@@ -118,6 +124,35 @@ var cs = function (g) { return g.players.map(function (p) { return { name: p.nam
 var groups = [grp(['A1', 'A2', 'A3', 'A4']), grp(['B1', 'B2', 'B3', 'B4'])];
 function members(team) { return (team.participants || []).map(function (m) { return m.name; }); }
 function sameGroup(ns) { var pre = ns.map(function (n) { return n[0]; }); return pre.every(function (p) { return p === pre[0]; }); }
+
+(function idsDeFaseSeguros() {
+  var base = { formatCode: 'elim_simples', fixedPairs: true, grandFinal: false,
+    source: { mapping: [{ dest: 'main', rankFrom: 1, rankTo: 4 }] } };
+  function ids(name, prefix) {
+    var phase = Object.assign({}, base, { name: name });
+    var built = E.buildPhaseBrackets(groups, phase, cs, prefix);
+    return (built.matches || []).map(function (match) { return match.id; });
+  }
+  var badName = 'Final "Ouro" \'<script>';
+  var dangerous = ids(badName);
+  ok(dangerous.length > 0 && dangerous.every(function (id) { return /^[A-Za-z0-9_-]+$/.test(id); }),
+    '(2) nome com aspas, apóstrofo e HTML gera somente IDs seguros');
+  ok(new Set(dangerous).size === dangerous.length, '(2) IDs da mesma fase permanecem únicos');
+  var space = ids('Fase 1'), underscore = ids('Fase_1');
+  ok(space.length && underscore.length && space[0] !== underscore[0],
+    '(2) nomes distintos com espaço e underscore não colidem após codificação');
+  ok(ids('Eliminatória').every(function (id) { return /^[A-Za-z0-9_-]+$/.test(id); }),
+    '(2) nome acentuado também produz ID seguro');
+  ok(ids('')[0].indexOf('ph-x-') === 0, '(2) nome vazio recebe prefixo seguro');
+  ok(ids('Finals', 'plan-1')[0].indexOf('plan-1-') === 0 &&
+     ids('Finals', 'plan-2')[0].indexOf('plan-2-') === 0 &&
+     ids('Finals', 'plan-1')[0] !== ids('Finals', 'plan-2')[0],
+    '(2) prefixos reais distinguem duas fases com o mesmo nome');
+  ok(ids('Finals', 'bad"\'<prefix>')[0].match(/^[A-Za-z0-9_-]+$/),
+    '(2) prefixo explícito malicioso também é sanitizado');
+  ok(ids('A'.repeat(40))[0].match(/^[A-Za-z0-9_-]+$/),
+    '(2) nome vindo do round-trip de 40 letras mantém ID seguro');
+})();
 
 (function () {
   // corte 4, performance → cada grupo vira 2 duplas: (1º+2º),(3º+4º)
@@ -217,6 +252,21 @@ function sameGroup(ns) { var pre = ns.map(function (n) { return n[0]; }); return
   ok(container.toast && container.toast.innerHTML.indexOf('&lt;img onerror=alert(1)&gt;') >= 0 &&
      container.toast.innerHTML.indexOf('<img') < 0,
     '(3) toast de avanço escapa nome livre antes de escrever innerHTML');
+})();
+
+(function () {
+  // O nome compilado é texto não confiável. A chave pública o transforma em HTML
+  // só depois de escapar; esta checagem impede retirar a fronteira de exibição.
+  var fs = require('fs'), path = require('path');
+  var bracket = fs.readFileSync(path.join(__dirname, '../js/views/bracket.js'), 'utf8');
+  var dashboard = fs.readFileSync(path.join(__dirname, '../js/views/dashboard.js'), 'utf8');
+  var malicious = '<img onerror=alert(1)>';
+  var phase = F.compileToPhases(cfg({ eliminatoria: { ativa: true, nome: malicious } }), { sport: 'Beach Tennis' }).phases[0];
+  ok(phase.name === malicious, '(3) compilador preserva o nome como dado textual');
+  ok(/var phaseTitle = window\._safeHtml\(phaseCfg\.name/.test(bracket) &&
+     /\+ phaseTitle \+ '<\/span>'/.test(bracket), '(3) cabeçalho público da chave escapa phase.name antes do HTML');
+  ok(/_sf\(_metaStr \|\| 'Próximo jogo'\)/.test(dashboard),
+    '(3) dashboard escapa o rótulo da fase na linha do próximo jogo');
 })();
 
 

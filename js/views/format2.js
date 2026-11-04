@@ -496,7 +496,7 @@
     var cfg = defaultConfig(sport || tournament.sport);
     if (tournament.fmt2 && tournament.fmt2.eliminatoria &&
         typeof tournament.fmt2.eliminatoria.nome === 'string') {
-      cfg.eliminatoria.nome = tournament.fmt2.eliminatoria.nome;
+      cfg.eliminatoria.nome = tournament.fmt2.eliminatoria.nome.trim().slice(0, 40);
     }
     // Um torneio anterior a esta regra conserva a lista de espera original.
     // Só um torneio criado com a política explícita usa folga sorteada.
