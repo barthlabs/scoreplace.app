@@ -73,6 +73,8 @@ assert.equal(skipped.pulou, 'agenda-categoria-invalida', 'autoDraw pula agenda i
 assert.equal(JSON.stringify(badStored), beforeCheck, 'checagem não grava nem altera a rodada');
 assert.equal(assessGenerated(short, window._schGradeEstimada, HttpsError).pulou,
   'agenda-categoria-nao-cabe', 'autoDraw pula rodada que excede a janela');
+assert.equal(assessGenerated(t, undefined, HttpsError).pulou,
+  'agenda-categoria-nao-cabe', 'autoDraw falha fechado sem estimador de capacidade');
 assert.equal(assessGenerated(t, window._schGradeEstimada, HttpsError), null, 'agenda válida pode seguir');
 const autoSource = fs.readFileSync(require.resolve('./index.js'), 'utf8');
 for (const marker of ['Auto-draw: agenda por categoria inválida', 'Auto-draw phase: agenda por categoria inválida']) {
