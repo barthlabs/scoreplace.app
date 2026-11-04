@@ -1,18 +1,11 @@
 {
   "schema": 1,
-  "backendCommit": "a5f138ea30cb4abb3184783390917af48b48cf97",
-  "scopeNote": "Guarda de jogos congelados falha fechada sem coletor; onze rotas de W.O., substituição e vaga foram republicadas de forma direcionada. finishTournament e avanço mantêm recibos anteriores.",
+  "backendCommit": "db70d3b2551e2b2ce6a991bdcd16d16b006ad1a7",
+  "scopeNote": "Configuração reversível das fases do torneio: quatro callables de criação, edição, aplicação do formato e sorteio publicadas no mesmo lote direcionado.",
   "functions": [
-    "applyLigaGroupWO",
-    "applyMonarchGroupWO",
-    "applyTournamentWO",
-    "fillLigaGuest",
-    "manageWOClaim",
-    "occupyTournamentPlaceholder",
-    "resolveWOSubstitutionChoice",
-    "revertLigaGroupWO",
-    "revertMonarchGroupWO",
-    "setTournamentPresenceWithWOSubstitution",
-    "substituteLigaGroupDirect"
+    "createTournament",
+    "updateTournamentConfiguration",
+    "applyTournamentFormat",
+    "autoDraw"
   ]
 }
