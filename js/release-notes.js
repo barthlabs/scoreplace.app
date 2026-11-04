@@ -1,3 +1,4 @@
+// 2.5.90 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // Próximo corte web — A criação começa por modalidade, participantes, datas,
 // quadras, categorias e formação de duplas; depois apresenta classificatória,
 // eliminatória e as escolhas que dependem delas. O Super 8 de duplas fixas
