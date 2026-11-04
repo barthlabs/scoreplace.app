@@ -909,7 +909,6 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       formationControls += _sec('Formação das duplas', fBtns);
     }
     if (isDupla && !cfg.classifAtiva) {
-      formationControls += _blocoAbrirComRR(cfg, false);
       if (!cfg.eliminatoria.openReiRainha) {
         formationControls += _sec('Duplas na eliminatória',
           _pill(cfg.formacaoDupla === 'manual', 'window._f2Form(\'manual\')', '🤝 Já formadas') +
@@ -1062,6 +1061,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var _elimInitExtra = '';
     var _elimEndExtra = '';   // v1.6.80: bloco "📅 Término da fase" da eliminatória (fora da trava)
     if (e.ativa) {
+      eb += '<label style="display:block;font-size:0.78rem;color:var(--text-muted);margin-bottom:12px;">Nome da fase eliminatória' +
+        '<input type="text" class="form-control" maxlength="40" placeholder="Eliminatória" value="' + _safe(e.nome || '') +
+        '" oninput="window._f2ElimName(this.value)" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;"></label>';
+      if (isDupla) eb += '<div style="margin-bottom:14px;">' + _blocoAbrirComRR(cfg, !!cfg.classifAtiva) + '</div>';
       if (!cfg.classifAtiva) {
         // v4.4.33: ELIMINAÇÃO DIRETA (sem classificatória) — todos os inscritos entram no bracket
         // por sorteio. A disputa e a formação das duplas moram AQUI (o início da eliminatória).
@@ -1142,9 +1145,6 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
             (_forma ? _pill(_fx === 'sorteio', 'window._f2Formacao(\'sorteio\')', '🎲 Sorteio') : '') + '</div>' +
             '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;line-height:1.45;">' + (_hints[_fx] || _hints.performance) + '</div>';
         }
-        // A rodada de FORMAÇÃO (Rei/Rainha) na entrada da eliminatória — agora também quando
-        // há classificatória. Vem depois do "quem avança", que é o pool que ela recebe.
-        if (isDupla) eb += '<div style="margin-top:14px;">' + _blocoAbrirComRR(cfg, true) + '</div>';
       }
       // Só há colocação para semear quando uma fase anterior classificou os
       // participantes. A chave direta sem fase anterior segue o sorteio de entrada.
@@ -1950,6 +1950,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   window._f2ElimEndTime = function (v, el) { if (!S) return; S.cfg.eliminatoria.endTime = String(v || ''); _norm(); _rerenderSemAtrapalhar(el); };
   // v4.5.51: abrir a eliminatória com rodada Rei/Rainha (grupos de 4 formam as duplas).
   window._f2ElimOpenRR = function (checked) { if (!S) return; S.cfg.eliminatoria.openReiRainha = !!checked; _norm(); _rerender(); };
+  window._f2ElimName = function (value) { if (!S) return; S.cfg.eliminatoria.nome = String(value || '').slice(0, 40); };
   window._f2ElimRRCut = function (n) { if (!S) return; S.cfg.eliminatoria.reiRainhaCut = (parseInt(n, 10) === 2) ? 2 : 4; _norm(); _rerender(); };
   // Formação/pareamento e semeadura são escolhas independentes.
   window._f2Formacao = function (v) { S.cfg.eliminatoria.formacao = v; _norm(); _rerender(); };

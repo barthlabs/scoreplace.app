@@ -49,6 +49,36 @@ function cfg(over) {
   ok(out2.phases[1].mapping[0].rankTo === 2, '(1) mapping rankTo = 2');
 })();
 
+(function () {
+  var direct = cfg({ eliminatoria: { ativa: true, openReiRainha: false, nome: 'Final Ouro' } });
+  ok(F.compileToPhases(direct, { sport: 'Beach Tennis' }).phases[0].name === 'Final Ouro',
+    '(1) eliminatória direta usa o nome escolhido');
+  var opening = cfg({ eliminatoria: { ativa: true, openReiRainha: true, nome: 'Finals', reiRainhaCut: 2 } });
+  var phases = F.compileToPhases(opening, { sport: 'Beach Tennis' }).phases;
+  ok(phases[0].name === 'Rei/Rainha' && phases[1].name === 'Finals',
+    '(1) nome livre só na eliminatória posterior à abertura Rei/Rainha');
+  var withClassif = cfg({ classifAtiva: true, eliminatoria: { ativa: true, openReiRainha: true, nome: 'Decisões', reiRainhaCut: 4 } });
+  phases = F.compileToPhases(withClassif, { sport: 'Beach Tennis' }).phases;
+  ok(phases.length === 3 && phases[1].name === 'Rei/Rainha' && phases[2].name === 'Decisões',
+    '(1) classificatória + abertura Rei/Rainha preserva o nome da eliminatória');
+  withClassif.eliminatoria.openReiRainha = false;
+  phases = F.compileToPhases(withClassif, { sport: 'Beach Tennis' }).phases;
+  ok(phases[1].name === 'Decisões', '(1) classificatória + eliminatória direta preserva o nome');
+  [' ', '', null].forEach(function (nome) {
+    var c = cfg({ eliminatoria: { ativa: true, openReiRainha: true, nome: nome } });
+    ok(F.compileToPhases(c, { sport: 'Beach Tennis' }).phases[1].name === 'Eliminatória',
+      '(1) nome vazio usa o padrão atual');
+  });
+  var long = 'X'.repeat(45);
+  ok(F.normalize(cfg({ eliminatoria: { ativa: true, nome: long } }), 'Beach Tennis').eliminatoria.nome.length === 40,
+    '(1) nome livre é limitado a 40 caracteres');
+  var saved = F.compileToPhases(opening, { sport: 'Beach Tennis' });
+  var edit = F.configFromTournament({ sport: 'Beach Tennis', teamSize: 2, fmt2: saved.cfg, phases: saved.phases }, 'Beach Tennis');
+  ok(edit.eliminatoria.nome === 'Finals', '(1) edição lê o nome explícito do fmt2');
+  var legacy = F.configFromTournament({ sport: 'Beach Tennis', teamSize: 2, format: 'Eliminatórias Simples' }, 'Beach Tennis');
+  ok(!legacy.eliminatoria.nome, '(1) edição legada não toma o formato projetado como nome livre');
+})();
+
 // ⚠️ ASSERÇÃO REVISADA DE PROPÓSITO (1.8.56) — o motivo fica aqui pra ninguém achar que
 // afrouxei a trava. Ela exigia `openReiRainha === false` quando há classificatória, e o
 // comentário dela própria dizia por quê: "com classificatória (3 fases) é PRÓXIMO PASSO".
@@ -113,25 +143,80 @@ function sameGroup(ns) { var pre = ns.map(function (n) { return n[0]; }); return
   ok(ps.indexOf('A1+A4') !== -1 && ps.indexOf('A2+A3') !== -1, '(2) cut4/equil: grupo A → (A1+A4),(A2+A3) [' + ps.join(',') + ']');
 })();
 
-// ── (3) A TELA OFERECE A OPÇÃO NOS DOIS ARRANJOS ──────────────────────────────
-// O motor pode até compilar 3 fases, mas se o toggle continuar escondido dentro do ramo
-// "sem classificatória" a forma que o dono descreveu segue inexistente pra quem usa. Foi
-// exatamente esse o defeito: o bloco vivia DENTRO daquele ramo. Aqui a varredura garante
-// que ele é UM só e é usado nos DOIS lugares — e que a estratégia não vira dois controles
-// para o mesmo valor na mesma tela.
+// ── (3) A TELA OFERECE A OPÇÃO NO INÍCIO DA ELIMINATÓRIA ───────────────────────
+// Um único controle atende os dois arranjos; o contexto informa a origem dos atletas.
 (function () {
   var fs = require('fs'), path = require('path');
   var ui = fs.readFileSync(path.join(__dirname, '../js/views/format2-ui.js'), 'utf8');
   ok(/function _blocoAbrirComRR\s*\(/.test(ui), '(3) existe UM bloco único _blocoAbrirComRR');
   var usos = (ui.match(/_blocoAbrirComRR\(/g) || []).length;
-  ok(usos >= 3, '(3) o bloco é definido e usado nos DOIS ramos (ocorrências: ' + usos + ')');
-  ok(/_blocoAbrirComRR\(cfg, true\)/.test(ui), '(3) usado no ramo COM classificatória');
-  ok(/_blocoAbrirComRR\(cfg, false\)/.test(ui), '(3) usado no ramo SEM classificatória');
+  ok(usos === 2, '(3) uma definição e uma chamada para os dois contextos (ocorrências: ' + usos + ')');
+  var elimStart = ui.indexOf('if (e.ativa) {');
+  var control = ui.indexOf('_blocoAbrirComRR(cfg, !!cfg.classifAtiva)', elimStart);
+  var branch = ui.indexOf('if (!cfg.classifAtiva) {', elimStart);
+  ok(elimStart >= 0 && control > elimStart && control < branch && /if \(isDupla\) eb \+=/.test(ui.slice(elimStart, control)),
+    '(3) o controle aparece no começo de eb, antes dos ramos com/sem classificatória, só para duplas');
+  ok(/var elimInner = e\.ativa \? \(eb \+/.test(ui) && /aria-disabled="true"[^\n]*\+ eb \+/.test(ui),
+    '(3) o controle permanece no trecho da eliminatória bloqueado após sorteio');
   ok(/if \(!\(isDupla && cfg\.eliminatoria\.openReiRainha\)\)/.test(ui) ||
      /if \(isDupla && !cfg\.eliminatoria\.openReiRainha\)/.test(ui),
     '(3) com o toggle ON a "Estratégia da eliminatória" some (era o MESMO cfg.formacao)');
   // o texto muda conforme o contexto: com classificatória ele explica a cabeça de chave
   ok(/cabeças de chave/.test(ui), '(3) o texto do bloco explica a cabeça de chave quando há classificatória');
+})();
+
+(function () {
+  var fs = require('fs'), path = require('path'), vm = require('vm');
+  var H = require('./render-harness'), W = H.window;
+  W._safeHtml = function (value) { return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;'); };
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../js/views/format2-ui.js'), 'utf8'), H.sandbox, { filename: 'format2-ui.js' });
+  var c = W.FORMAT2.defaultConfig('Beach Tennis');
+  c.classifAtiva = false;
+  c.eliminatoria.nome = '<img onerror=alert(1)>';
+  var form = { innerHTML: '' };
+  W._f2MountInForm(form, 'Beach Tennis', c, null);
+  ok(form.innerHTML.indexOf('value="&lt;img onerror=alert(1)&gt;"') >= 0,
+    '(3) nome livre é escapado no input do formulário');
+  ok(form.innerHTML.indexOf('Nome da fase eliminatória') >= 0 &&
+     form.innerHTML.indexOf('Abrir com rodada Rei/Rainha') > form.innerHTML.indexOf('Nome da fase eliminatória'),
+    '(3) nome e abertura Rei/Rainha aparecem no início da seção');
+  W._f2ElimName('Final Prata');
+  ok(W._f2GetConfig().eliminatoria.nome === 'Final Prata', '(3) edição do nome entra no formato salvo');
+  var saved = W.FORMAT2.compileToPhases(W._f2GetConfig(), { sport: 'Beach Tennis' });
+  var tournament = { id: 't1', sport: 'Beach Tennis', teamSize: 2, fmt2: saved.cfg, phases: saved.phases };
+  W._f2MountInForm(form, 'Beach Tennis', tournament.fmt2, tournament);
+  ok(form.innerHTML.indexOf('value="Final Prata"') >= 0, '(3) formulário de edição recupera nome explícito');
+  W._renderBackHeader = function () { return ''; };
+  W._findTournamentById = function () { return tournament; };
+  W.location.hash = '#formato/t1';
+  var page = { innerHTML: '' };
+  W.renderFormatoPage(page);
+  ok(page.innerHTML.indexOf('value="Final Prata"') >= 0, '(3) página de formato recupera nome explícito');
+})();
+
+(function () {
+  // A fase usa o toast global ao avançar. Exercita o mesmo caminho de HTML do toast,
+  // porque o nome livre não pode transformar um aviso em uma tag executável.
+  var fs = require('fs'), path = require('path'), vm = require('vm');
+  var source = fs.readFileSync(path.join(__dirname, '../js/notifications.js'), 'utf8');
+  var start = source.indexOf('function _safeText(');
+  var end = source.indexOf('// Modal de Confirmação Customizado', start);
+  var container = { appendChild: function (node) { this.toast = node; },
+    querySelector: function () { return null; }, querySelectorAll: function () { return []; } };
+  var context = {
+    window: {}, CSS: { escape: function (s) { return s; } },
+    document: { getElementById: function () { return container; },
+      createElement: function () { return { style: {}, setAttribute: function () {} }; } },
+    requestAnimationFrame: function () {}, setTimeout: function () { return 1; },
+    clearTimeout: function () {}
+  };
+  vm.runInNewContext(source.slice(start, end), context, { filename: 'notifications.js' });
+  context.showNotification('Avançou para <img onerror=alert(1)>', 'Fase iniciada');
+  ok(container.toast && container.toast.innerHTML.indexOf('&lt;img onerror=alert(1)&gt;') >= 0 &&
+     container.toast.innerHTML.indexOf('<img') < 0,
+    '(3) toast de avanço escapa nome livre antes de escrever innerHTML');
 })();
 
 

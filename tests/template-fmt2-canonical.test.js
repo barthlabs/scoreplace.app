@@ -27,6 +27,7 @@ config.rodadas.drawFirstDate = '2026-10-01';
 config.rodadas.drawFirstTime = '20:30';
 config.rodadas.drawIntervalDays = 3;
 config.eliminatoria.politicaDaChave = 'sobra_unica';
+config.eliminatoria.nome = 'Finals';
 config.eliminatoria.endDate = '2026-10-31';
 config.eliminatoria.endTime = '23:00';
 config.eliminatoria.roundBounds = ['2026-10-20T23:00'];
@@ -36,6 +37,7 @@ config.eliminatoria.participants = ['uid-from-old-tournament'];
 const original = JSON.stringify(config);
 const savedByOldForm = formatWindow.FORMAT2.normalize(config, 'Beach Tennis');
 const copied = copy(savedByOldForm);
+assert.strictEqual(copied.eliminatoria.nome, 'Finals', 'template preserva nome livre da eliminatória');
 for (const [label, source, target, transient] of [
   ['fmt2', savedByOldForm, copied, []],
   ['rodadas', savedByOldForm.rodadas, copied.rodadas, ['matches']],

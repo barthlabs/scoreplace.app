@@ -445,6 +445,7 @@
       tieResolution: 'draw_order', // após critérios: ordem do sorteio original; ou simples/triangular prevista na regra
       eliminatoria: {
         ativa: true,          // ativo por padrão (dono)
+        nome: '',             // nome livre da fase; vazio mantém "Eliminatória"
         dupla: false,         // v4.4.58: false = eliminatória simples; true = Dupla Eliminatória (repescagem)
         linhas: 1,
         nomes: [''],
@@ -493,6 +494,10 @@
     var first = projected[0] || {};
     var elimination = projected.filter(function (phase) { return phase && phase.kind === 'elimination'; })[0] || null;
     var cfg = defaultConfig(sport || tournament.sport);
+    if (tournament.fmt2 && tournament.fmt2.eliminatoria &&
+        typeof tournament.fmt2.eliminatoria.nome === 'string') {
+      cfg.eliminatoria.nome = tournament.fmt2.eliminatoria.nome;
+    }
     // Um torneio anterior a esta regra conserva a lista de espera original.
     // Só um torneio criado com a política explícita usa folga sorteada.
     cfg.rankingRemainderPolicy = tournament.rankingRemainderPolicy === 'lottery_average' ||
@@ -812,6 +817,7 @@
     // (o bloco "🎾 Formato da Partida" do form, que a UI reloca pra dentro dela) — um formato
     // só, sem duas fontes pro mesmo jogo.
     e.scoring = normScoring(e.scoring);
+    e.nome = typeof e.nome === 'string' ? e.nome.trim().slice(0, 40) : '';
     e.endDate = /^\d{4}-\d{2}-\d{2}$/.test(String(e.endDate || '')) ? String(e.endDate) : '';
     e.endTime = (e.endDate && /^\d{2}:\d{2}$/.test(String(e.endTime || ''))) ? String(e.endTime) : '';
     e.roundBounds = Array.isArray(e.roundBounds) ? e.roundBounds.slice() : [];
@@ -941,7 +947,7 @@
     var seedRR = ({ performance: 'seed', equilibrio: 'balanced', sorteio: 'draw' }[e0.semeadura] || 'seed');
     var elimDuplaRR = !!e0.dupla;
     var pElimRR = Object.assign(_phaseBase(re), {
-      kind: 'elimination', elimination: { bracketType: elimDuplaRR ? 'double' : 'single' }, name: 'Eliminatória',
+      kind: 'elimination', elimination: { bracketType: elimDuplaRR ? 'double' : 'single' }, name: e0.nome || 'Eliminatória',
       formatCode: elimDuplaRR ? 'elim_dupla' : 'elim_simples',
       format: elimDuplaRR ? 'Dupla Eliminatória' : 'Eliminatórias Simples',
       reiRainha: false, drawMode: 'sorteio', rounds: 1,
@@ -1024,7 +1030,7 @@
       top.manualPairing = (formadas0 && cfg.manualPairingOpen) ? 'open' : 'organizer_only';
       var d0 = _lineDests(e0.linhas);
       p0 = Object.assign(_phaseBase(re), {
-        kind: 'elimination', elimination: { bracketType: elimDupla0 ? 'double' : 'single' }, name: 'Eliminatória',
+        kind: 'elimination', elimination: { bracketType: elimDupla0 ? 'double' : 'single' }, name: e0.nome || 'Eliminatória',
         formatCode: elimDupla0 ? 'elim_dupla' : 'elim_simples',
         format: elimDupla0 ? 'Dupla Eliminatória' : 'Eliminatórias Simples',
         reiRainha: false, drawMode: 'sorteio', rounds: 1,
@@ -1237,7 +1243,7 @@
       var qAll = !!e.qualifyAll;
       var elimDupla = !!e.dupla; // v4.4.58: Dupla Eliminatória (repescagem)
       var p1 = Object.assign(_phaseBase(re), {
-        kind: 'elimination', elimination: { bracketType: elimDupla ? 'double' : 'single' }, name: 'Eliminatória',
+        kind: 'elimination', elimination: { bracketType: elimDupla ? 'double' : 'single' }, name: e.nome || 'Eliminatória',
         formatCode: elimDupla ? 'elim_dupla' : 'elim_simples',
         format: elimDupla ? 'Dupla Eliminatória' : 'Eliminatórias Simples',
         reiRainha: false, drawMode: 'sorteio', rounds: 1,

@@ -464,9 +464,9 @@ function setupCreateTournamentModal() {
                 <input type="hidden" id="tourn-public" value="true">
                 <input type="hidden" id="tourn-visibility" value="public">
                 <div id="tournament-visibility-mode" role="group" aria-label="${_t('create.visibilitySection')}" style="display:flex;gap:6px;flex-wrap:wrap;">
-                  <button type="button" class="btn" data-visibility="public" onclick="window._setVisibility('public')">${_t('create.visibilityGeneral')}</button>
-                  <button type="button" class="btn" data-visibility="members" onclick="window._setVisibility('members')">${_t('create.visibilityMembers')}</button>
-                  <button type="button" class="btn" data-visibility="organizers" onclick="window._setVisibility('organizers')">${_t('create.visibilityOrganizers')}</button>
+                  <button type="button" class="btn" data-visibility="public" aria-pressed="true" onclick="window._setVisibility('public')">${_t('create.visibilityGeneral')}</button>
+                  <button type="button" class="btn" data-visibility="members" aria-pressed="false" onclick="window._setVisibility('members')">${_t('create.visibilityMembers')}</button>
+                  <button type="button" class="btn" data-visibility="organizers" aria-pressed="false" onclick="window._setVisibility('organizers')">${_t('create.visibilityOrganizers')}</button>
                 </div>
                 <p id="vis-desc" style="margin:8px 0 0;font-size:0.8rem;color:var(--text-muted);">${_t('create.publicDesc')}</p>
               </div>
@@ -2905,8 +2905,6 @@ function setupCreateTournamentModal() {
     if (row) row.querySelectorAll('[data-visibility]').forEach(function(btn) {
       var selected = btn.getAttribute('data-visibility') === chosen;
       btn.setAttribute('aria-pressed', selected ? 'true' : 'false');
-      btn.style.border = selected ? '2px solid #60a5fa' : '1px solid rgba(255,255,255,0.2)';
-      btn.style.background = selected ? 'rgba(59,130,246,0.3)' : 'rgba(255,255,255,0.05)';
     });
   };
 
@@ -8093,7 +8091,7 @@ window._f2TemplateCopy = function(fmt2Bruto) {
   if (raw.classificationSchedule) out.classificationSchedule = pick(raw.classificationSchedule,
     ['gamesPerUnit', 'mode']);
   if (raw.eliminatoria) {
-    out.eliminatoria = pick(raw.eliminatoria, ['ativa', 'dupla', 'linhas', 'nomes', 'origem',
+    out.eliminatoria = pick(raw.eliminatoria, ['ativa', 'nome', 'dupla', 'linhas', 'nomes', 'origem',
       'formacao', 'qualifyAll', 'terceiro', 'grandFinal', 'lateEnrollment', 'newMatchups',
       'scoring', 'roundBoundsEditorEnabled', 'politicaDaChave', 'openReiRainha', 'reiRainhaCut',
       'lineAssignment', 'lineRankRanges', 'bestNextByGroup', 'semeadura',

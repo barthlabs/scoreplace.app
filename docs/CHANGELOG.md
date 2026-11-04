@@ -1,3 +1,9 @@
+## 2.5.94 — 04/nov/2026 (formulário de torneio)
+
+- Geral, Inscritos e Organização e árbitros recebem cores legíveis desde a abertura do formulário. A seleção inicial e as mudanças posteriores compartilham `aria-pressed`; a borda selecionada mantém a mesma espessura para não mover os botões.
+- A opção de abrir a eliminatória com uma rodada Rei/Rainha fica no início da fase, tanto com quanto sem classificatória anterior. O organizador escolhe quantos avançam e como formar as duplas fixas.
+- O nome da fase eliminatória é livre; se ficar vazio, permanece “Eliminatória”.
+
 ## 2.5.90 — encerramento e avanço da classificatória
 
 - O encerramento por tabela usa o desempate extra previsto nas regras e exige resultado confirmado antes de atribuir o título. Sem jogo extra, aplica a ordem original do sorteio.
