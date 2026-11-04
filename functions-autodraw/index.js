@@ -5903,6 +5903,8 @@ exports.advanceTournamentPhase = onCall(async (request) => {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização avança a fase.', { tId, uid });
+    const antes = _antesDoMotor(t);
+    _hidrataGrupos(t, 'advanceTournamentPhase', tId);
     const phaseEngine = drawWindow && drawWindow._phasesEngine;
     const pendingDecision = _phasePendingDecision.decide(t, phaseCompleteFn(t), phaseEngine,
       request.data && request.data.acceptedPendingMatchIds);
@@ -5914,7 +5916,6 @@ exports.advanceTournamentPhase = onCall(async (request) => {
     const seedAccepted = pendingDecision.seedChoiceAccepted;
     const current = t.currentPhaseIndex || 0;
     if (!Array.isArray(t.phases) || current + 1 >= t.phases.length) return { ok: false, reason: 'no-next-phase' };
-    const antes = _antesDoMotor(t);
     // O painel pode ter decidido play-in e rodadas classificatórias no snapshot da tela.
     // A CF aceita somente essas duas escolhas de configuração e as reaplica no doc fresco
     // antes de materializar; nenhum placar, participante ou chave vem do cliente.
@@ -5932,7 +5933,6 @@ exports.advanceTournamentPhase = onCall(async (request) => {
       }
     });
     _enrichParticipantsFromProfiles(t);
-    _hidrataGrupos(t, 'advanceTournamentPhase', tId);
     const sourceGroups = current === 0
       ? (phaseEngine && typeof phaseEngine.prevPhaseGroups === 'function' ? phaseEngine.prevPhaseGroups(t) : [])
       : (phaseEngine && typeof phaseEngine.bracketPhaseGroups === 'function' ? phaseEngine.bracketPhaseGroups(t, current) : []);

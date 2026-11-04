@@ -9,6 +9,12 @@ const scorePath = serverSource.slice(serverSource.indexOf('async function _aplic
 assert(scorePath.indexOf('_phasePendingDecision.isFrozenMatch(t, matchId)') >= 0 &&
   scorePath.indexOf('_phasePendingDecision.isFrozenMatch(t, matchId)') < scorePath.indexOf('const res = applyResultFn(t,'),
   'as portas direta e enfileirada recusam placar congelado antes de aplicar o resultado');
+const advancePath = serverSource.slice(serverSource.indexOf('exports.advanceTournamentPhase ='),
+  serverSource.indexOf('exports.finishTournament ='));
+assert(advancePath.indexOf("_hidrataGrupos(t, 'advanceTournamentPhase', tId)") >= 0 &&
+  advancePath.indexOf("_hidrataGrupos(t, 'advanceTournamentPhase', tId)") <
+    advancePath.indexOf('_phasePendingDecision.decide(t,'),
+  'o servidor hidrata os grupos antes de decidir sobre os jogos pendentes');
 
 const match = (id, p1, p2, winner) => ({
   id, p1, p2, winner: winner || null, scoreP1: winner === p1 ? 6 : winner === p2 ? 2 : null,

@@ -45,12 +45,14 @@ const tournament = () => ({
   standings: [{ uid: 'A', name: 'A', wins: 1 }, { uid: 'B', name: 'B', wins: 1 }]
 });
 const now = '2026-11-03T12:00:00.000Z';
-const t = tournament();
+let t = tournament();
 let flow = resolveTie(t, null, now);
 assert.equal(flow.status, 'choice');
 assert.equal(flow.tie.firstExtraGameNumber, '93A');
 flow = resolveTie(t, { type: 'play', decisionId: flow.tie.decisionId }, now);
 assert.equal(flow.status, 'pending');
+assert.equal(flow.changed, true);
+t = structuredClone(t); // a callable persiste a decisão; a próxima chamada relê o documento
 assert.equal(flow.decision.matches[0].displayGameNumber, '93A');
 const matchId = flow.decision.matches[0].id;
 flow = resolveTie(t, { type: 'court', decisionId: flow.tie.decisionId,
@@ -59,8 +61,12 @@ assert.equal(flow.decision.matches[0].court, 'Quadra 1');
 flow = resolveTie(t, { type: 'score', decisionId: flow.tie.decisionId,
   matchId, sets: [{ p1: 4, p2: 6 }] }, now);
 assert.equal(flow.status, 'review');
+assert.equal(flow.changed, true);
+t = structuredClone(t); // o placar extra precisa sobreviver à próxima transação
+assert.equal(t.phaseTieDecisions['0'][flow.tie.decisionId].matches[0].winnerKey, 'uid:B');
 flow = resolveTie(t, { type: 'confirm', decisionId: flow.tie.decisionId }, now);
 assert.equal(flow.status, 'ready');
+assert.equal(flow.changed, true);
 assert.equal(titles.resolve(t, { engine: { phaseComplete: () => true },
   standings: () => t.standings }).titles[0].winnerName, 'B');
 
