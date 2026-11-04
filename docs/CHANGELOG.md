@@ -3,6 +3,7 @@
 - O encerramento por tabela usa o desempate extra previsto nas regras e exige resultado confirmado antes de atribuir o título. Sem jogo extra, aplica a ordem original do sorteio.
 - Empate na liderança de competição por times exige ordem de sorteio registrada; não atribui campeão por ordem alfabética.
 - Jogos pendentes de grupos só permitem avançar quando há prova de que não alteram as vagas. Se puderem alterar apenas a ordem, a organização confirma cada pendência e o servidor registra o congelamento da ordem atual; resultados posteriores desses jogos são recusados.
+- O aceite congela o jogo dispensado inteiro. Edições administrativas nesse jogo, inclusive mudanças de quadra, numeração ou outros metadados, são recusadas após o avanço.
 - Clientes web anteriores à 2.5.90 não exibem o painel para confirmar jogos pendentes que só alteram a ordem; nessa situação o servidor recusa o avanço até a página ser atualizada.
 
 ## 2.5.72 — 28/out/2026 (datas de jogos futuros e cards canônicos)
