@@ -39,6 +39,8 @@ base.eliminatoria.lineRankRanges = [{ from: 1, to: 2 }, { from: 3, to: 4 }];
 base.eliminatoria.scoring = { type: 'standard', setsToWin: 2, gamesPerSet: 6 };
 base.eliminatoria.endDate = '2026-12-15';
 base.eliminatoria.endTime = '19:00';
+base.eliminatoria.roundBoundsEditorEnabled = true;
+base.eliminatoria.roundBounds = ['2026-12-10T19:00'];
 base.teamCompetition.enabled = true;
 headless.window._f2MountInForm(box, 'Beach Tennis', base, { id: 'test' });
 const get = () => headless.window._f2GetConfig();
@@ -63,6 +65,7 @@ assert(!box.innerHTML.includes('Estrutura — nº de grupos'), 'classificatória
 assert(!box.innerHTML.includes('2026-12-15'), 'eliminação direta não mostra data guardada da segunda fase');
 assert(!box.innerHTML.includes('f2-elim-end-date'), 'eliminação direta usa data da fase inicial');
 assert(!box.innerHTML.includes('f2elim'), 'eliminação direta usa formato da partida inicial');
+assert(!box.innerHTML.includes('f2-elim-round-bounds-box'), 'eliminação direta não mostra a régua guardada da segunda fase');
 assert(titles().every(x => x >= 0), 'classificatória off conserva cabeçalho');
 assert.equal(F.compileToPhases(get(), { sport: 'Beach Tennis' }).phases.length, 1);
 headless.window._f2Elim(false);

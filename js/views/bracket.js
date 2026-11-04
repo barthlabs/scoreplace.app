@@ -8184,7 +8184,7 @@ function _matchCardRoundDeadlineMs(t, m) {
     var rawBounds = Array.isArray(phase.roundBounds) ? phase.roundBounds :
       (phaseIndex === 0 && Array.isArray(t.roundBounds) ? t.roundBounds : null);
     var isLastPhase = !Array.isArray(t.phases) || !t.phases.length || phaseIndex === t.phases.length - 1;
-    if ((!rawBounds || !rawBounds.length) && isLastPhase && t.fmt2 && t.fmt2.eliminatoria &&
+    if ((!rawBounds || !rawBounds.length) && isLastPhase && t.fmt2 && t.fmt2.classifAtiva !== false && t.fmt2.eliminatoria &&
         Array.isArray(t.fmt2.eliminatoria.roundBounds)) {
       rawBounds = t.fmt2.eliminatoria.roundBounds;
     }

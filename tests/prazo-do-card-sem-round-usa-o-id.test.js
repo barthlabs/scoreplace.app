@@ -31,4 +31,14 @@ const a = f(t, completo), b = f(t, magro);
 must(a != null, '② o jogo COMPLETO resolve um prazo (' + a + ')');
 must(b === a, '② ⭐⭐ o jogo MAGRO da dashboard resolve o MESMO prazo pelo id (' + b + ')');
 must(new Date(a).getDate() === 16 && new Date(a).getMonth() === 9, '② e é o prazo da 2ª rodada: 16/10 (o "Jogar até" que o dono espera)');
+const direct = { id: 'D', startDate: '2026-09-02T10:00', endDate: '2026-09-30T23:00',
+  phases: [{ kind: 'elimination', roundBounds: [] }],
+  matches: [{ phaseIndex: 0, round: 2 }],
+  fmt2: { classifAtiva: false, eliminatoria: { roundBounds: ['2026-09-20T23:00'] } } };
+const withoutDormantBounds = JSON.parse(JSON.stringify(direct));
+withoutDormantBounds.fmt2.eliminatoria.roundBounds = [];
+const directRound = { phaseIndex: 0, round: 1, p1: 'A', p2: 'B' };
+must(f(direct, directRound) != null, '③ a eliminação direta resolve o prazo da rodada');
+must(f(direct, directRound) === f(withoutDormantBounds, directRound),
+  '③ limites guardados da segunda fase não alteram o prazo da chave direta');
 console.log('\n✅ ' + ok + ' verificações');
