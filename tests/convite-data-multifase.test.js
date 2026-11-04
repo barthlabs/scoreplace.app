@@ -94,7 +94,7 @@ const F = sF.FORMAT2;
   c3.classifAtiva = false;                 // eliminação direta
   c3.eliminatoria.ativa = true; c3.eliminatoria.endDate = '2026-09-12';
   const n3 = F.normalize(c3, 'Beach Tennis');
-  eq(n3.eliminatoria.endDate, '', 'eliminação direta: sem término próprio (usa as datas do form)');
+  eq(n3.eliminatoria.endDate, '2026-09-12', 'eliminação direta guarda a data configurada para eventual religamento da classificatória');
   const out3 = F.compileToPhases(c3, {});
   ok(!out3.phases[out3.phases.length - 1].endDate, 'eliminação direta: nenhuma fase ganha endDate');
 })();

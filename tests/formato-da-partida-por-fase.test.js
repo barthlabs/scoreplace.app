@@ -142,7 +142,7 @@ function confraCfg() {
   c.classifAtiva = false;
   c.eliminatoria.scoring = MELHOR_DE_3;
   const n = F.normalize(c, 'Beach Tennis');
-  eq(n.eliminatoria.scoring, null, 'eliminação direta: scoring próprio é zerado (a elim é a fase inicial)');
+  eq(n.eliminatoria.scoring.setsToWin, 2, 'eliminação direta guarda o scoring configurado para eventual religamento da classificatória');
   const out = F.compileToPhases(n, { sport: 'Beach Tennis' });
   eq(out.phases[0].scoring, null, 'fase 0 da eliminação direta usa t.scoring');
 })();

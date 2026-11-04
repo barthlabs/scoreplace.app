@@ -112,6 +112,9 @@ function phaseProjection(original, compiled) {
 function normalizeEffective(tournament, effective) {
   const result = structuredClone(effective);
   if (tournament.format === 'Eliminatórias Simples' && !result.politicaDaChave) result.politicaDaChave = 'repescagem';
+  // A tradução explicita {enabled:false}; o legado usava {} para a mesma
+  // ausência de competição por times. Compare o sorteio efetivo, não essa forma.
+  if (result.teamCompetition && result.teamCompetition.enabled !== true) delete result.teamCompetition;
   return result;
 }
 function buildPatch(tournament) {
