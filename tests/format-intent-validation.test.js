@@ -163,15 +163,13 @@ uiHarness.window._f2MountInForm(uiBox, 'Beach Tennis', uiCfg, { id: 'future-test
 assert.match(uiBox.innerHTML, /Confrontos na chave/, 'organizador vê a decisão de semeadura');
 assert.match(uiBox.innerHTML, /Saída escolhida: a classificatória seleciona participantes para a eliminatória/);
 const decisionTitles = ['2. Quem disputa os jogos?', '3. Como se formam as duplas?',
-  '4. Haverá classificatória?', 'Times na classificatória', '5–6. 🎯 Fase Classificatória',
-  '7. Para quem valem os resultados?', '8. Como o torneio define o campeão?',
-  '9–10. 🏆 Fase Eliminatória', '11. Revisão das decisões'];
+  '4. 🎯 Fase Classificatória', '5. 🏆 Fase Eliminatória', '6. Revisão das decisões'];
 assert.deepStrictEqual(decisionTitles.map(title => uiBox.innerHTML.indexOf(title)).filter(index => index >= 0).length,
   decisionTitles.length, 'o fluxo exibe todas as perguntas aplicáveis');
 assert.deepStrictEqual(decisionTitles.map(title => uiBox.innerHTML.indexOf(title)).slice().sort((a, b) => a - b),
   decisionTitles.map(title => uiBox.innerHTML.indexOf(title)), 'as perguntas seguem a ordem fixa');
 assert.equal((uiBox.innerHTML.match(/onchange="window\._f2TeamCompetition\(this\.checked\)"/g) || []).length, 1,
-  'a decisão de ter times aparece uma vez antes dos detalhes de pontuação');
+  'a decisão de ter times aparece uma vez dentro da classificatória');
 uiHarness.window._f2TeamCompetition(true);
 assert.equal(uiHarness.window._f2GetConfig().teamCompetition.enabled, true,
   'a escolha antecipada por times chega à configuração do torneio');
@@ -187,11 +185,13 @@ assert.equal(uiHarness.window._f2GetConfig().eliminatoria.semeadura, 'sorteio',
 uiHarness.window._f2Elim(false);
 assert.match(uiBox.innerHTML, /Saída escolhida: classificação final de dupla, sem eliminatória/);
 assert.match(uiBox.innerHTML, /Não há partida de disputa de 3º e 4º lugar/);
-assert.doesNotMatch(uiBox.innerHTML, /9–10\. 🏆 Fase Eliminatória/, 'título pela tabela não exibe chave');
+assert.match(uiBox.innerHTML, /5\. 🏆 Fase Eliminatória/, 'o bloco desligado permanece visível');
+assert.doesNotMatch(uiBox.innerHTML, /Confrontos na chave/, 'o bloco desligado recolhe as decisões da chave');
+uiHarness.window._f2Elim(true);
 uiHarness.window._f2ClassifAtiva(false);
-assert.doesNotMatch(uiBox.innerHTML, /5–6\. 🎯 Fase Classificatória/, 'entrada direta não exibe perguntas classificatórias');
-assert.doesNotMatch(uiBox.innerHTML, /7\. Para quem valem os resultados\?/, 'entrada direta não pede pontuação de tabela inexistente');
-assert.match(uiBox.innerHTML, /9–10\. 🏆 Fase Eliminatória/, 'entrada direta exige a decisão eliminatória');
+assert.match(uiBox.innerHTML, /4\. 🎯 Fase Classificatória/, 'o bloco desligado permanece visível');
+assert.doesNotMatch(uiBox.innerHTML, /Pontuação agregada para times/, 'entrada direta recolhe a pontuação de times');
+assert.match(uiBox.innerHTML, /5\. 🏆 Fase Eliminatória/, 'entrada direta mantém a eliminatória');
 const mixedCfg = FORMAT2.defaultConfig('Futevôlei');
 mixedCfg.disputa = 'dupla';
 mixedCfg.parceria = 'fixa';

@@ -662,7 +662,7 @@
     // Pontuação individual quando singles OU parceria rotativa.
     out._scoreBy = (!isDupla || out.parceria === 'rei_rainha' || out.parceria === 'sorteio_rodada' || out.parceria === 'super_eight')
       ? 'individual' : 'dupla';
-    if (out._scoreBy !== 'individual' || (out.teamCompetition && out.teamCompetition.enabled)) {
+    if (out._scoreBy !== 'individual' || (out.classifAtiva !== false && out.teamCompetition && out.teamCompetition.enabled)) {
       out.tieResolution = 'draw_order';
     }
 
@@ -740,7 +740,7 @@
     while (e.nomes.length < e.linhas) e.nomes.push('');
     e.nomes = e.nomes.slice(0, e.linhas);
     e.lineAssignment = e.lineAssignment === 'rank_ranges' ? 'rank_ranges' : 'strategy';
-    if (!out.classifAtiva || !e.ativa || e.dupla || e.linhas < 2) e.lineAssignment = 'strategy';
+    if (e.dupla || e.linhas < 2) e.lineAssignment = 'strategy';
     e.lineRankRanges = Array.isArray(e.lineRankRanges) ? e.lineRankRanges.slice(0, e.linhas).map(function (r) {
       var from = Math.max(1, parseInt(r && r.from, 10) || 1);
       var to = Math.max(from, parseInt(r && r.to, 10) || from);
@@ -752,7 +752,7 @@
       metric: ['points_per_game', 'win_rate', 'total_points'].indexOf(bestNext.metric) >= 0 ? bestNext.metric : 'points_per_game',
       destIndex: Math.max(0, Math.min(e.linhas - 1, parseInt(bestNext.destIndex, 10) || 0))
     };
-    if (!out.classifAtiva || !e.ativa || out.grupos < 2 || out.classifScope !== 'per_group' ||
+    if (out.grupos < 2 || out.classifScope !== 'per_group' ||
         e.qualifyAll || e.lineAssignment === 'rank_ranges' || e.openReiRainha) e.bestNextByGroup.count = 0;
     // v4.4.40: origem é DETERMINADA pela classificatória (não é escolha livre): pontuação
     // individual (rei/rainha, sorteio-a-cada-rodada) → FORMAR as duplas dos indivíduos;
@@ -801,7 +801,7 @@
     // Rei/Rainha e parceiro por rodada não preservam a dupla; eliminatória direta não
     // tem a classificatória onde a tabela de times existe. Desligar nesses casos evita
     // uma configuração visualmente possível, mas sem unidade estável para representar o time.
-    if (!isDupla || out.parceria !== 'fixa' || !out.classifAtiva) out.teamCompetition.enabled = false;
+    if (!isDupla || out.parceria !== 'fixa') out.teamCompetition.enabled = false;
     if (out.classifAtiva && resolveTurnos(out).groups > 1) out.rodadas.turnos = 'ida';
     // v1.6.80: término PRÓPRIO da eliminatória — só faz sentido quando ela é 2ª fase. Na
     // eliminação DIRETA ela É a fase inicial e já usa as datas do form (t.startDate/t.endDate),
@@ -811,8 +811,8 @@
     // Na eliminação DIRETA a eliminatória É a fase inicial e joga com o formato do TORNEIO
     // (o bloco "🎾 Formato da Partida" do form, que a UI reloca pra dentro dela) — um formato
     // só, sem duas fontes pro mesmo jogo.
-    e.scoring = out.classifAtiva ? normScoring(e.scoring) : null;
-    e.endDate = (out.classifAtiva && /^\d{4}-\d{2}-\d{2}$/.test(String(e.endDate || ''))) ? String(e.endDate) : '';
+    e.scoring = normScoring(e.scoring);
+    e.endDate = /^\d{4}-\d{2}-\d{2}$/.test(String(e.endDate || '')) ? String(e.endDate) : '';
     e.endTime = (e.endDate && /^\d{2}:\d{2}$/.test(String(e.endTime || ''))) ? String(e.endTime) : '';
     e.roundBounds = Array.isArray(e.roundBounds) ? e.roundBounds.slice() : [];
     // Compat: configuração antiga que já gravou prazos continua mostrando o editor; nova
@@ -988,7 +988,12 @@
     // v4.4.33: SEM fase classificatória → ELIMINAÇÃO DIRETA. Todos os inscritos entram no
     // bracket por sorteio; duplas já formadas (enrollment=teams) ou sorteadas (individual).
     if (!cfg.classifAtiva) {
-      var e0 = cfg.eliminatoria;
+      // Decisões da fase desligada permanecem no fmt2. Na eliminação direta,
+      // formato e datas vêm da fase inicial; não usar escolhas da fase posterior.
+      var e0 = Object.assign({}, cfg.eliminatoria, {
+        scoring: null, endDate: '', endTime: '', roundBounds: [],
+        lineAssignment: 'strategy', bestNextByGroup: { count: 0 }
+      });
 
       // v4.5.51: ELIMINATÓRIA QUE ABRE COM REI/RAINHA (eliminação direta). p0 = 1 rodada
       // Rei/Rainha (grupos de 4 sorteados do enrollment) → p1 = eliminatória que lê POR GRUPO

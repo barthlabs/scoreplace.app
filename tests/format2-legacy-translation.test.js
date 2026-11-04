@@ -105,6 +105,12 @@ for (const phaseCounts of [null, [4, 2]]) {
   assert.equal(beforeCfg.drawMode, 'sorteio');
   assert.equal(afterCfg.drawMode, 'sorteio');
   beforeCfg.politicaDaChave ||= 'repescagem';
+  assert.equal(beforeCfg.teamCompetition && beforeCfg.teamCompetition.enabled === true, false);
+  assert.equal(afterCfg.teamCompetition && afterCfg.teamCompetition.enabled === true, false);
+  // A fase direta antiga não declarava times ({}); o fmt2 novo explicita OFF.
+  // As duas formas produzem o mesmo sorteio efetivo.
+  delete beforeCfg.teamCompetition;
+  delete afterCfg.teamCompetition;
   assert.deepEqual(beforeCfg, afterCfg, 'sorteio inicial mantém configuração efetiva');
   assert.deepEqual(drawWindow._chaves.plano(9, 'simples', null),
     drawWindow._chaves.plano(9, 'simples', 'repescagem'));

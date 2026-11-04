@@ -87,6 +87,14 @@ ok(C.rankingConfigForTournament({ id: 'tour_future', name: 'Torneio livre',
     aggregation: 'per_category', classificationUnit: 'pair' } }] }).classificationUnit === 'pair',
   'a classificação de torneio novo lê a decisão completa sem depender do nome Neon');
 const fmt2Plan = { enabled:true, schedule:{ enabled:true, mode:'structured', modeChosen:true } };
+const dormantTeams = { id: 'tour_1790628592058_c342a1e8f5068424887f1702a1633a44',
+  teamCompetition: phasePlan, phases: [{ teamCompetition: phasePlan }],
+  fmt2: { classifAtiva: false, teamCompetition: phasePlan } };
+ok(C.configurationForTournament(dormantTeams).enabled === false &&
+  C.rankingConfigForTournament(dormantTeams).enabled === false,
+  'classificatória desligada desativa times inclusive no ramo Neon, sem apagar a decisão interna');
+ok(C.configurationForTournament({ teamCompetition: phasePlan, fmt2: { teamCompetition: phasePlan } }).enabled === true,
+  'documento antigo sem classifAtiva conserva a leitura de times');
 const legacyDefault = { enabled:true, schedule:{ enabled:true, mode:'structured' } };
 ok(C.configurationForTournament({ teamCompetition:legacyDefault, fmt2:{ teamCompetition:fmt2Plan } }) === fmt2Plan,
   'escolha explícita no configurador vence um modo legado sem confirmação');

@@ -1,3 +1,6 @@
+// 2.5.93 — Classificatória e eliminatória têm toggles nos próprios blocos.
+// Desligar uma fase recolhe seus controles e a exclui do torneio, preservando
+// as escolhas para quando for religada. Ao menos uma fase permanece ativa.
 // 2.5.92 — Inscrições no formulário de torneio começam recolhidas e se abrem
 // pelo título, como Personalização. Botões desse bloco têm fundo e texto
 // contrastantes. Templates preservam nove decisões que eram perdidas na cópia:

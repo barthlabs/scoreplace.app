@@ -328,6 +328,9 @@ if (!g.window._phasesEngine || typeof g.window._phasesEngine.generatePhase !== '
 // acontecer no servidor, após formar as duplas e antes de gerar os jogos; fazer
 // no cliente permitiria que duas telas atribuíssem a mesma dupla a times distintos.
 function assignCompetitionTeamsAtInitialDraw(t, rawConfig) {
+  if (t && t.fmt2 && t.fmt2.classifAtiva === false) {
+    return { ok: true, config: { enabled: false } };
+  }
   const win = g.window;
   const core = win.ScoreplaceTeamCompetition;
   const cfg = core && typeof core.normalize === 'function' ? core.normalize(rawConfig) : null;

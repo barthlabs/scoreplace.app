@@ -19,6 +19,16 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 
   function _tid() { var h = (location.hash || '').replace(/^#/, '').split('/'); return h[1] || ''; }
   function _norm() { if (S) S.cfg = window.FORMAT2.normalize(S.cfg, S.sport); }
+  function _faseLockState(state) {
+    var t = state && state.t, cfg = state && state.cfg;
+    var p0Drawn = !!(t && ((Array.isArray(t.matches) && t.matches.some(function (m) { return (m.phaseIndex || 0) === 0; })) ||
+      (Array.isArray(t.rounds) && t.rounds.length > 0)));
+    var elimAdvanced = !!(t && ((Array.isArray(t.matches) && t.matches.some(function (m) { return (m.phaseIndex || 0) >= 1; })) ||
+      ((t.currentPhaseIndex || 0) >= 1)));
+    return { p0Drawn: p0Drawn, classifLocked: p0Drawn && !!cfg.classifAtiva,
+      classifToggleLocked: p0Drawn,
+      elimLocked: (cfg.classifAtiva ? elimAdvanced : p0Drawn) && !!cfg.eliminatoria.ativa };
+  }
   function _teamTiebreakersBlock(tc) {
     var labels = { vitorias: 'Número de vitórias', games_vencidos: 'Games vencidos', saldo_games: 'Saldo de games', pontos: 'Pontos', sorteio: 'Sorteio da organização' };
     var list = Array.isArray(tc.tiebreakers) ? tc.tiebreakers : null;
@@ -137,10 +147,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       '<span>' + label + '</span></label>';
   }
   // Toggle em linha cheia: rótulo à ESQUERDA, controle alinhado à DIREITA.
-  function _toggleRight(label, checked, onchange) {
-    return '<label style="display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;font-size:0.9rem;color:var(--text-main);width:100%;">' +
+  function _toggleRight(label, checked, onchange, disabled) {
+    return '<label style="display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:' + (disabled ? 'not-allowed' : 'pointer') + ';font-size:0.9rem;color:var(--text-main);width:100%;">' +
       '<span>' + label + '</span>' +
-      '<span class="toggle-switch"><input type="checkbox"' + (checked ? ' checked' : '') + ' onchange="' + onchange + '"><span class="toggle-slider"></span></span></label>';
+      '<span class="toggle-switch"><input type="checkbox"' + (checked ? ' checked' : '') + (disabled ? ' disabled' : '') + ' onchange="' + onchange + '"><span class="toggle-slider"></span></span></label>';
   }
   // ── "ABRIR COM RODADA REI/RAINHA" — bloco ÚNICO, usado nos DOIS contextos ─────────
   // A eliminatória pode começar por uma rodada Rei/Rainha (grupos de 4 que FORMAM as duplas
@@ -274,7 +284,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // fase inicial (campos ocultos do form = t.scoring, fonte única _gsmReadHidden). É o mesmo
   // que window._effectiveScoring(t, match) resolve na hora do jogo.
   function _elimEffScoring(e) {
-    if (e.scoring && e.scoring.type) return e.scoring;
+    if (S && S.cfg && S.cfg.classifAtiva && e.scoring && e.scoring.type) return e.scoring;
     return (typeof window._gsmReadHidden === 'function') ? window._gsmReadHidden() : null;
   }
   // v2.0.74: `tourn-game-duration` é o tempo POR SET (ver sport-rules.js). Aqui o
@@ -295,7 +305,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // ⚠️ NÃO filtrar por `type`: torneio novo nasce com `gsm-type = 'simple'` e valores de 1 set.
   // Filtrar por type deixava a grade da eliminatória SEM NENHUM botão aceso e sem resumo.
   function _elimSelKey(e) {
-    if (e.scoring && e.scoring.type) return _elimPresetKey(e.scoring);
+    if (S && S.cfg && S.cfg.classifAtiva && e.scoring && e.scoring.type) return _elimPresetKey(e.scoring);
     try { return (typeof window._gsmDetectPreset === 'function') ? window._gsmDetectPreset() : null; } catch (x) { return null; }
   }
   // O preset que a FASE INICIAL está acendendo — usado pra decidir se a escolha da eliminatória
@@ -775,7 +785,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   function _phaseBlock(title, color, inner, headerRight) {
     var pill = '<span style="display:inline-block;font-size:1.05rem;font-weight:800;letter-spacing:0.4px;text-transform:uppercase;color:' + window._spCor(color, 'color') + ';background:' + window._spCor(color, 'background') + '22;padding:9px 17px;border-radius:10px;">' + title + '</span>';
     var header = headerRight
-      ? '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;">' + pill + headerRight + '</div>'
+      ? '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px;">' + pill + headerRight + '</div>'
       : '<div style="margin-bottom:16px;">' + pill + '</div>';
     return '<div style="border:1px solid ' + window._spCor(color, 'borda') + '55;border-radius:14px;padding:14px 14px 8px;margin-bottom:16px;background:' + window._spCor(color, 'background') + '0d;">' +
       header + inner + '</div>';
@@ -848,20 +858,14 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // DELA (cinza, sem cliques). A eliminatória segue editável até avançar de fase. Em criação
     // (S.t null) e antes do sorteio → tudo livre. "Sorteada" = há jogos da fase 0 (t.matches
     // taggeado phaseIndex 0) OU rodadas nativas (t.rounds, Liga/Suíço classificatória).
-    var _p0Drawn = !!(S && S.t && (
-      (Array.isArray(S.t.matches) && S.t.matches.some(function (m) { return (m.phaseIndex || 0) === 0; })) ||
-      (Array.isArray(S.t.rounds) && S.t.rounds.length > 0)
-    ));
-    var _classifLocked = _p0Drawn && cfg.classifAtiva;
+    var _phaseLocks = _faseLockState(S);
+    var _p0Drawn = _phaseLocks.p0Drawn;
+    var _classifLocked = _phaseLocks.classifLocked;
     // v4.4.52: a eliminatória trava assim que a fase AVANÇA (é gerada) — depois disso a config
     // dela não muda mais. Com classificatória, a elim é fase posterior → travada quando
     // currentPhaseIndex>=1 (avançou) ou há jogos taggeados phaseIndex>=1. Sem classificatória
     // (eliminação direta), a elim É a fase 0 → trava quando a fase 0 é sorteada (_p0Drawn).
-    var _elimAdvanced = !!(S && S.t && (
-      (Array.isArray(S.t.matches) && S.t.matches.some(function (m) { return (m.phaseIndex || 0) >= 1; })) ||
-      ((S.t.currentPhaseIndex || 0) >= 1)
-    ));
-    var _elimLocked = (cfg.classifAtiva ? _elimAdvanced : _p0Drawn) && cfg.eliminatoria.ativa;
+    var _elimLocked = _phaseLocks.elimLocked;
 
     // Disputa só aparece onde o esporte permite singles (tênis/tênis de mesa). Nos demais
     // (sempre duplas) não faz sentido mostrar nada — é óbvio.
@@ -1318,16 +1322,15 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       '<p style="font-size:.85rem;color:var(--text-main);">A partida é registrada uma vez. A classificação pode pontuar ' +
       (scoreInd ? 'atletas' : 'duplas') + (cfg.teamCompetition && cfg.teamCompetition.enabled ? ' e times.' : '.') + '</p>' +
       scoringControls + '</div>');
-    var classifChoice = _phaseBlock('4. Haverá classificatória?', '#818cf8',
-      (_p0Drawn ? '<div style="pointer-events:none;opacity:.55;" aria-disabled="true">' : '<div>') +
-      _pill(cfg.classifAtiva, 'window._f2ClassifAtiva(true)', 'Sim') +
-      _pill(!cfg.classifAtiva, 'window._f2ClassifAtiva(false)', 'Não · entrada direta na eliminatória') + '</div>');
-    var teamChoiceStep = teamChoiceControls ? _phaseBlock('Times na classificatória', '#818cf8',
+    var teamChoiceStep = teamChoiceControls ?
       (_classifLocked ? '<div style="pointer-events:none;opacity:.55;" aria-disabled="true">' : '<div>') +
-      teamChoiceControls + '</div>') : '';
-    var h = entryStep + formationStep + classifChoice + teamChoiceStep +
-      (cfg.classifAtiva ? _phaseBlock('5–6. 🎯 Fase Classificatória', '#818cf8', classifInner,
-        _hdrRight(_classifLocked, '')) + scoringStep : '');
+      teamChoiceControls + '</div>' : '';
+    var classifStep = _phaseBlock('4. 🎯 Fase Classificatória', '#818cf8',
+      cfg.classifAtiva ? (teamChoiceStep + classifInner + scoringStep) : '',
+      _hdrRight(_phaseLocks.classifToggleLocked,
+        _toggleRight('Ativa', cfg.classifAtiva, 'window._f2ClassifAtiva(this.checked)',
+          _phaseLocks.classifToggleLocked || (cfg.classifAtiva && !e.ativa))));
+    var h = entryStep + formationStep + classifStep;
     var _titleUnit = cfg.teamCompetition && cfg.teamCompetition.enabled
       ? (cfg.teamCompetition.classificationUnit === 'pair' ? 'dupla' : 'time')
       : (cfg._scoreBy === 'individual' ? 'atleta' : 'dupla');
@@ -1335,19 +1338,17 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       ? 'Saída escolhida: entrada direta na eliminatória.'
       : (e.ativa ? 'Saída escolhida: a classificatória seleciona participantes para a eliminatória.'
         : 'Saída escolhida: classificação final de ' + _titleUnit + ', sem eliminatória.');
-    var exitChoice = cfg.classifAtiva ? _phaseBlock('8. Como o torneio define o campeão?', '#fbbf24',
-      (_elimLocked ? '<div style="pointer-events:none;opacity:.55;" aria-disabled="true">' : '<div>') +
-      _pill(!e.ativa, 'window._f2Elim(false)', 'Pela classificação final') +
-      _pill(e.ativa, 'window._f2Elim(true)', 'Por eliminatória posterior') + '</div>') : '';
-    var eliminationStep = e.ativa ? _phaseBlock('9–10. 🏆 Fase Eliminatória', '#fbbf24', elimInner,
-      _hdrRight(_elimLocked, '')) : '';
-    var review = _phaseBlock('11. Revisão das decisões', '#818cf8',
+    var eliminationStep = _phaseBlock('5. 🏆 Fase Eliminatória', '#fbbf24', e.ativa ? elimInner : '',
+      _hdrRight(_elimLocked,
+        _toggleRight('Ativa', e.ativa, 'window._f2Elim(this.checked)',
+          _elimLocked || (e.ativa && !cfg.classifAtiva))));
+    var review = _phaseBlock('6. Revisão das decisões', '#818cf8',
       '<p style="font-size:.85rem;color:var(--text-main);">' + _safe(_outcome) + '</p>' +
       (cfg.classifAtiva && !e.ativa
         ? '<p style="font-size:.78rem;color:var(--text-muted);">As colocações saem da tabela. Não há partida de disputa de 3º e 4º lugar.</p>'
         : '') +
       '<p style="font-size:.78rem;color:var(--text-muted);">' + _safe(window.FORMAT2.summary(cfg)) + '</p>');
-    return h + exitChoice + eliminationStep + review;
+    return h + eliminationStep + review;
   }
 
   // ── Handlers globais (form + page) ──
@@ -1823,10 +1824,16 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     S.cfg.teamCompetition.scoring = S.cfg.teamCompetition.scoring || {};
     S.cfg.teamCompetition.scoring[field] = value; _norm(); _rerenderSemAtrapalhar(el);
   };
-  // Ao menos UMA fase ativa (sem travar toggle): desligar a eliminatória religa a classificatória.
-  window._f2Elim = function (b) { if (!S) return; S.cfg.eliminatoria.ativa = !!b; if (!b) S.cfg.classifAtiva = true; _norm(); _rerender(); };
-  // v4.4.33: toggle da fase classificatória. Desligar → eliminação direta (elim obrigatória).
-  window._f2ClassifAtiva = function (checked) { if (!S) return; S.cfg.classifAtiva = !!checked; if (!checked) S.cfg.eliminatoria.ativa = true; _norm(); _rerender(); };
+  window._f2Elim = function (checked) {
+    if (!S || _faseLockState(S).elimLocked || (!checked && !S.cfg.classifAtiva)) { _rerender(); return; }
+    S.cfg.eliminatoria.ativa = !!checked;
+    _norm(); _rerender();
+  };
+  window._f2ClassifAtiva = function (checked) {
+    if (!S || _faseLockState(S).classifToggleLocked || (!checked && !S.cfg.eliminatoria.ativa)) { _rerender(); return; }
+    S.cfg.classifAtiva = !!checked;
+    _norm(); _rerender();
+  };
   window._f2Linhas = function (n) { if (!S) return; S.cfg.eliminatoria.linhas = parseInt(n, 10) || 1; _norm(); _rerender(); };
   // ── Formato da partida da ELIMINATÓRIA (cfg.eliminatoria.scoring) ──
   // Ligar o toggle NÃO muda o jogo: começa com uma cópia do formato da fase inicial, e a

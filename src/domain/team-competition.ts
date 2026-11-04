@@ -85,6 +85,7 @@ namespace ScoreplaceTeamCompetition {
    */
   export function configurationForTournament(value: unknown): RecordValue {
     const tournament = record(value);
+    if (record(tournament.fmt2).classifAtiva === false) return { enabled: false };
     const phases = Array.isArray(tournament.phases) ? tournament.phases : [];
     const candidates = [tournament.teamCompetition].concat(phases.map((phase) => record(phase).teamCompetition), [record(tournament.fmt2).teamCompetition]);
     const active = candidates.filter((candidate) => record(candidate).enabled === true);
@@ -98,6 +99,7 @@ namespace ScoreplaceTeamCompetition {
   /** A classificação pública do Neon soma todas as categorias pelo time, inclusive no sandbox. */
   export function rankingConfigForTournament(value: unknown): Config {
     const tournament = record(value);
+    if (record(tournament.fmt2).classifAtiva === false) return normalize({ enabled: false });
     const neonId = 'tour_1790628592058_c342a1e8f5068424887f1702a1633a44';
     // Compatibilidade de um documento antigo específico; o nome é só exibição.
     const isNeon = text(tournament.id) === neonId ||

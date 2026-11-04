@@ -1907,12 +1907,16 @@ function setupCreateTournamentModal() {
       tourn = window._findTournamentById(editId);
       if (tourn && tourn.fmt2) {
         initCfg = JSON.parse(JSON.stringify(tourn.fmt2));
-        var savedTeamCompetition = window.ScoreplaceTeamCompetition && window.ScoreplaceTeamCompetition.configurationForTournament
-          ? window.ScoreplaceTeamCompetition.configurationForTournament(tourn)
-          : (tourn.teamCompetition || (tourn.phases && tourn.phases[0] && tourn.phases[0].teamCompetition));
-        if (!savedTeamCompetition || savedTeamCompetition.enabled !== true) savedTeamCompetition = tourn.teamCompetition || (tourn.phases && tourn.phases[0] && tourn.phases[0].teamCompetition) || initCfg.teamCompetition;
-        if (savedTeamCompetition && typeof savedTeamCompetition === 'object') {
-          initCfg.teamCompetition = JSON.parse(JSON.stringify(savedTeamCompetition));
+        // Com a classificatória desligada, a decisão de times fica guardada no fmt2
+        // para um religamento futuro; a leitura efetiva do torneio devolve times OFF.
+        if (initCfg.classifAtiva !== false) {
+          var savedTeamCompetition = window.ScoreplaceTeamCompetition && window.ScoreplaceTeamCompetition.configurationForTournament
+            ? window.ScoreplaceTeamCompetition.configurationForTournament(tourn)
+            : (tourn.teamCompetition || (tourn.phases && tourn.phases[0] && tourn.phases[0].teamCompetition));
+          if (!savedTeamCompetition || savedTeamCompetition.enabled !== true) savedTeamCompetition = tourn.teamCompetition || (tourn.phases && tourn.phases[0] && tourn.phases[0].teamCompetition) || initCfg.teamCompetition;
+          if (savedTeamCompetition && typeof savedTeamCompetition === 'object') {
+            initCfg.teamCompetition = JSON.parse(JSON.stringify(savedTeamCompetition));
+          }
         }
       }
     }
@@ -4594,7 +4598,7 @@ function setupCreateTournamentModal() {
      * ignorar 8 times × 4 jogos = 16 confrontos/categoria. A conta deve consumir os
      * mesmos três valores que o sorteio: times, grade e ida/volta.
      * [[regression_estimate_reads_team_schedule_without_redundant_enabled_flag]] */
-    var teamSchedule = tc && tc.enabled && tc.schedule ? {
+    var teamSchedule = f2cfg && f2cfg.classifAtiva && tc && tc.enabled && tc.schedule ? {
       enabled: true,
       teamsPerGroup: tc.schedule.teamsPerGroup,
       gamesPerPair: tc.schedule.gamesPerPair || tc.schedule.gamesPerTeam,
