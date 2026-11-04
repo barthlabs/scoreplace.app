@@ -1,8 +1,9 @@
 {
   "schema": 1,
-  "backendCommit": "c618b75550546c804bfd01c9dda1326588e5136e",
-  "scopeNote": "Correção dirigida da hidratação transacional antes da decisão de avanço; os demais quinze endpoints do fluxo foram publicados no lote anterior e não mudaram desde então.",
+  "backendCommit": "b0c635210fcfa9359c23110a64a095fb382f4a5c",
+  "scopeNote": "Correção de decisões de desempate obsoletas e reenvio idempotente; avanço e encerramento foram publicados de forma direcionada. Os demais endpoints do fluxo mantêm os recibos anteriores.",
   "functions": [
-    "advanceTournamentPhase"
+    "advanceTournamentPhase",
+    "finishTournament"
   ]
 }
