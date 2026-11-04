@@ -164,7 +164,7 @@ function setupHelpModal() {
         '<div style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:10px;padding:12px;margin-bottom:12px;">' +
           '<div style="font-weight:700;font-size:0.85rem;color:var(--text-bright);margin-bottom:8px;">Passo 3: Criar ou Participar de um Torneio</div>' +
           '<ol style="padding-left:20px;margin:6px 0;">' +
-            '<li><b>Criar:</b> Na dashboard, clique em <b>"+ Novo Torneio"</b>, escolha o esporte e clique em "Criar Torneio"</li>' +
+            '<li><b>Criar:</b> Na dashboard, clique em <b>"+ Novo Torneio"</b>, escolha o esporte e clique em "Configurar torneio"; revise as decisões antes de salvar</li>' +
             '<li><b>Participar:</b> Na dashboard o <b>feed de descoberta</b> já lista torneios públicos abertos — clique em <b>"Inscrever-se"</b> direto do card. Para encontrar jogadores e ver os torneios deles, use o botão <b>👥 Pessoas</b> na dashboard</li>' +
             '<li><b>Convite:</b> Se recebeu um link de convite, clique nele, faça login e você será inscrito automaticamente</li>' +
           '</ol>' +
@@ -219,19 +219,18 @@ function setupHelpModal() {
       id: 'criar-torneio',
       title: _t('help.createTournament'),
       icon: '➕',
-      content: '<p>Duas formas de criar um torneio:</p>' +
+      content: '<p>Crie o torneio percorrendo as decisões do organizador:</p>' +
         '<div style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.15);border-radius:10px;padding:12px;margin-bottom:12px;">' +
-          '<div style="font-weight:700;font-size:0.85rem;color:var(--text-bright);margin-bottom:8px;">Criação Rápida</div>' +
-          '<p>Clique em "+ Novo Torneio" → escolha o esporte → "Criar Torneio". Pronto! Nome automático, formato Eliminatórias, inscrição individual.</p>' +
+          '<div style="font-weight:700;font-size:0.85rem;color:var(--text-bright);margin-bottom:8px;">Começar a configurar</div>' +
+          '<p>Clique em "+ Novo Torneio", escolha o esporte e toque em "Configurar torneio". O torneio só é criado quando você revisa e salva o formulário.</p>' +
         '</div>' +
         '<div style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.15);border-radius:10px;padding:12px;margin-bottom:12px;">' +
-          '<div style="font-weight:700;font-size:0.85rem;color:var(--text-bright);margin-bottom:8px;">Formulário Completo</div>' +
-          '<p>Na criação rápida, clique em "Detalhes Avançados" ou use "Editar" em um torneio existente.</p>' +
+          '<div style="font-weight:700;font-size:0.85rem;color:var(--text-bright);margin-bottom:8px;">Formulário completo</div>' +
+          '<p>Defina participantes, local, datas, quadras, categorias e duplas; depois escolha classificatória, saída por tabela ou eliminatória e as regras aplicáveis.</p>' +
           '<p><b>Esporte</b> — Beach Tennis, Pickleball, Tênis, Tênis de Mesa, Padel, Vôlei de Praia, Futevôlei. Cada um tem padrões de pontuação próprios.</p>' +
-          '<p><b>Formato</b> — Eliminatórias, Dupla Eliminatória, Grupos + Elim., Liga. Cada formato tem configurações específicas.</p>' +
-          '<p><b>Modo de Sorteio</b> — Sorteio (aleatório) ou Rei/Rainha da Praia (grupos de 4 com parceiros rotativos).</p>' +
-          '<p><b>Modo de Inscrição</b> — Individual, Apenas Times ou Misto (aceita ambos).</p>' +
-          '<p><b>Tipo de Jogo</b> — Simples (1v1) ou Duplas (2v2). Ambos ligados = chaves paralelas.</p>' +
+          '<p><b>Fases</b> — Escolha se há classificatória. Se houver, decida se o título sai da tabela ou de uma eliminatória posterior. Sem classificatória, os inscritos entram direto na eliminatória.</p>' +
+          '<p><b>Confrontos</b> — Defina simples ou duplas, como as parcerias surgem, a agenda da fase e os critérios de desempate. Rei/Rainha e Super 8 são configurações de jogo, não regras acionadas pelo nome.</p>' +
+          '<p><b>Inscrição</b> — Escolha inscrição individual, por dupla ou mista quando aplicável. A fase define se novos inscritos geram jogos ou ficam como suplentes.</p>' +
         '</div>' +
         '<div style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:10px;padding:12px;margin-bottom:12px;">' +
           '<div style="font-weight:700;font-size:0.85rem;color:var(--text-bright);margin-bottom:8px;">Campos do Formulário</div>' +
@@ -1446,13 +1445,10 @@ window.setupQuickCreateModal = function setupQuickCreateModal() {
         <div id="qc-template-area" style="margin-bottom:10px;display:none;"></div>
         <div style="display:flex; flex-direction:column; gap:10px;">
           <button class="btn btn-primary btn-block" id="btn-quick-create">
-            🏆 ${(window._t || function(k){return k;})('quickCreate.create')}
+            ⚙️ ${(window._t || function(k){return k;})('quickCreate.create')}
           </button>
           <button class="btn btn-tool-amber btn-block" id="btn-quick-template">
             💾 Usar Template
-          </button>
-          <button class="btn btn-secondary btn-block" id="btn-quick-advanced">
-            ⚙️ ${(window._t || function(k){return k;})('quickCreate.advanced')}
           </button>
           <button class="btn btn-secondary btn-block" onclick="if(typeof closeModal==='function')closeModal('modal-quick-create');">
             ${(window._t || function(k){return k;})('btn.cancel')}
@@ -1481,107 +1477,13 @@ window.setupQuickCreateModal = function setupQuickCreateModal() {
     if (sel) {
       var val = btn.getAttribute('data-sport');
       for (var i = 0; i < sel.options.length; i++) {
-        if (sel.options[i].text === val) { sel.selectedIndex = i; break; }
+        if (sel.options[i].value === val) { sel.selectedIndex = i; break; }
       }
     }
   };
 
-  // Criar Torneio (rápido com auto-nome)
-  document.getElementById('btn-quick-create').addEventListener('click', async function () {
-    var button = this;
-    if (button.disabled) return;
-    button.disabled = true;
-    try {
-    const sportRaw = document.getElementById('quick-create-sport').value || '';
-    // FONTE \u00DANICA (_sportBaseName, store.js) \u2014 era uma 2\u00AA c\u00F3pia da mesma regex.
-    const sportClean = ((typeof window._sportBaseName === 'function')
-      ? window._sportBaseName(sportRaw)
-      : sportRaw.replace(/^[^\w\u00C0-\u024F]+/u, '').trim()) || 'Esportes';
-    const userName = (window.AppStore.currentUser && window.AppStore.currentUser.displayName)
-      ? window.AppStore.currentUser.displayName : 'Organizador';
-    let autoName = 'Torneio Eliminatórias de ' + sportClean + ' de ' + userName;
-
-    // Impede nome duplicado — adiciona sufixo numérico se necessário
-    let suffix = 1;
-    while (window.AppStore.tournaments.some(function(t) { return t.name && t.name.trim().toLowerCase() === autoName.toLowerCase(); })) {
-      suffix++;
-      autoName = 'Torneio Eliminatórias de ' + sportClean + ' de ' + userName + ' (' + suffix + ')';
-    }
-
-    // Determine team size from sport defaults
-    const _qcSportTeamDefaults = {
-      'Beach Tennis': 2, 'Pickleball': 2, 'Tênis': 1, 'Tênis de Mesa': 1, 'Padel': 2
-    };
-    const qcTeamSize = _qcSportTeamDefaults[sportClean] || 1;
-
-    // Honor _venuePrefill left by #venues "Criar torneio aqui" — turns the
-    // discover → create loop into one click.
-    var _venuePref = null;
-    try {
-      var _raw = sessionStorage.getItem('_venuePrefill');
-      if (_raw) { _venuePref = JSON.parse(_raw); sessionStorage.removeItem('_venuePrefill'); }
-    } catch (e) {}
-
-    const tourData = {
-      id: 'tour_' + Date.now(),
-      name: autoName,
-      // ⚠️ sportCLEAN, nunca o rótulo cru: `sport` é campo de DADO, o emoji é
-      // decoração do seletor. Gravar "🎾 Beach Tennis" fazia todo leitor que
-      // compara/indexa por esporte tratá-lo como um esporte desconhecido — o
-      // tie-break parava de abrir no 6-5 (caía no default do tênis, 7-6). O
-      // ícone continua vindo de _sportIcon(t.sport) na hora de exibir.
-      sport: sportClean,
-      format: 'Eliminatórias Simples',
-      venue: (_venuePref && _venuePref.venueName) || '',
-      venuePlaceId: (_venuePref && _venuePref.placeId) || '',
-      venueLat: (_venuePref && _venuePref.lat) || null,
-      venueLon: (_venuePref && _venuePref.lon) || null,
-      isPublic: true,
-      enrollmentMode: 'individual',
-      teamSize: qcTeamSize,
-      gameTypes: qcTeamSize > 1 ? 'duplas' : 'simples',
-      status: 'open',
-      // ⚠️ STORAGE CANÔNICO — torneio NOVO nasce com os jogos da fase classificatória em
-      // `t.matches` taggeado (junto com a chave), não mais em `t.rounds`. Doc SEM esta marca
-      // é legado e continua onde está: migrar o que já existe reescreveria sorteio feito e
-      // placar lançado (o Confra é o único nessa situação, e a limpeza dele está agendada
-      // pra 15/nov/2026). Ver `_appendCanonicalColumn` e `_matchesDeClassificatoria`.
-      storageCanonico: true,
-      createdAt: new Date().toISOString(),
-      organizerId: window.AppStore.currentUser ? window.AppStore.currentUser.uid : 'local',
-/* ⛔⛔ E-MAIL DO ORGANIZADOR NÃO É CAMPO DO DOCUMENTO (LGPD, 25/set/2026).
- * Medido: 76 dos 78 torneios são públicos e o documento é legível SEM LOGIN — o endereço ia junto.
- * Nenhuma Rule decide por ele e nenhuma Function autoriza por ele: só a tela usava, e a tela
- * agora recebe o endereço pela porta autenticada de contato, só para quem está inscrito.
- * Quem voltar a gravar aqui republica o dado. */
-      creatorUid: window.AppStore.currentUser ? window.AppStore.currentUser.uid : '',
-      coHosts: [],
-      participants: [],
-      matches: [],
-      tiebreakers: ['confronto_direto', 'saldo_pontos', 'vitorias', 'buchholz', 'sonneborn_berger', 'sorteio'],
-      scoring: (window._sportScoringDefaults && window._sportScoringDefaults[sportClean])
-        ? Object.assign({}, window._sportScoringDefaults[sportClean])
-        : { type: 'simple', setsToWin: 1, gamesPerSet: 1, tiebreakEnabled: false, tiebreakPoints: 7, tiebreakMargin: 2, superTiebreak: false, superTiebreakPoints: 10, countingType: 'numeric', advantageRule: false }
-    };
-
-    button._pendingCreation = button._pendingCreation || tourData;
-    var createdName = button._pendingCreation.name;
-    var createdId = await window.AppStore.addTournament(button._pendingCreation);
-    delete button._pendingCreation;
-    if (typeof closeModal === 'function') closeModal('modal-quick-create');
-    // Flag to auto-scroll to Edit button and show hint on tournament detail page
-    try { sessionStorage.setItem('scoreplace_scroll_to_edit', '1'); } catch (e) {}
-    window.location.hash = '#tournaments/' + createdId;
-    if (typeof showNotification === 'function') {
-      showNotification(window._t ? window._t('quickCreate.created') : 'Torneio Criado!', createdName, 'success');
-    }
-    } catch (err) {
-      if (typeof showNotification === 'function') showNotification('Não foi possível criar o torneio', err.message, 'error');
-    } finally { button.disabled = false; }
-  });
-
-  // Detalhes Avançados — abre formulário completo com sport pré-selecionado
-  document.getElementById('btn-quick-advanced').addEventListener('click', function () {
+  // Porta única de criação: modalidade primeiro, depois formulário completo.
+  document.getElementById('btn-quick-create').addEventListener('click', function () {
     var _t = window._t || function(k) { return k; };
     const sportVal = document.getElementById('quick-create-sport').value;
     if (typeof closeModal === 'function') closeModal('modal-quick-create');

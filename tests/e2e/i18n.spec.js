@@ -97,8 +97,9 @@ test.describe('i18n — modais não devem ter keys cruas no DOM ao boot', () => 
     expect(rawKeys).toEqual([]);
   });
 
-  test('modal-quick-create renderiza com botões traduzidos', async ({ page }) => {
+  test('modal-quick-create renderiza com botões traduzidos ao abrir', async ({ page }) => {
     await page.goto('/', { waitUntil: 'load' });
+    await page.evaluate(() => window.openModal('modal-quick-create'));
 
     await page.waitForFunction(
       () => document.getElementById('modal-quick-create') !== null,

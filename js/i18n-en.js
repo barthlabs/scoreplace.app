@@ -490,9 +490,7 @@ window._translations['en'] = {
   // Quick create
   'quickCreate.title': 'New Tournament',
   'quickCreate.sportLabel': 'Sport',
-  'quickCreate.create': 'Create Tournament',
-  'quickCreate.advanced': 'Advanced Settings',
-  'quickCreate.created': 'Tournament Created!',
+  'quickCreate.create': 'Configure tournament',
 
   // Privacy + Terms (v0.17.71 — scaffolding for beta-readiness)
   'privacy.title': 'Privacy Policy',

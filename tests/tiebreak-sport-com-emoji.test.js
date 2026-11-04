@@ -89,11 +89,29 @@ ok(W._tbLoserGames({ gamesPerSet: 6, tiebreakAt: 'g' }, '🎾 Beach Tennis') ===
 ok(W._tbLoserGames({ gamesPerSet: 6, tiebreakAt: 'g-1' }, '🏸 Padel') === 5,
   'override tiebreakAt=g-1 vence o default de Padel, mesmo com emoji');
 
-// ── o quick-create não pode voltar a gravar o rótulo cru (varredura de código) ──
+// ── o formulário completo grava modalidade canônica, sem emoji ──
 const fs = require('fs');
-const mainSrc = fs.readFileSync(require('path').join(__dirname, '..', 'js', 'main.js'), 'utf8');
-ok(/sport:\s*sportClean/.test(mainSrc), 'quick-create grava sport LIMPO (sport: sportClean)');
-ok(!/sport:\s*sportRaw/.test(mainSrc), 'quick-create NÃO grava o rótulo cru (sport: sportRaw)');
+const path = require('path');
+const createSrc = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'create-tournament.js'), 'utf8');
+const mainSrc = fs.readFileSync(path.join(__dirname, '..', 'js', 'main.js'), 'utf8');
+ok(/sport:\s*sportClean/.test(createSrc), 'formulário completo grava sport LIMPO (sport: sportClean)');
+ok(!/sport:\s*sportRaw/.test(createSrc), 'formulário completo NÃO grava o rótulo cru (sport: sportRaw)');
+ok(!/AppStore\.addTournament/.test(mainSrc.slice(mainSrc.indexOf('window.setupQuickCreateModal'), mainSrc.indexOf('// ─── Template Integration'))), 'modal inicial não cria torneio antes do formulário');
+
+// O rótulo tem emoji; a seleção precisa comparar o valor canônico do option.
+const selectStart = mainSrc.indexOf('window._qcSelectSport = function(btn)');
+const selectEnd = mainSrc.indexOf('  // Porta única de criação:', selectStart);
+const options = [
+  { value: 'Beach Tennis', text: '🎾 Beach Tennis' },
+  { value: 'Pickleball', text: '🥒 Pickleball' }
+];
+const select = { options, selectedIndex: 0 };
+const btn = { style: {}, getAttribute: () => 'Pickleball', classList: { add() {}, remove() {} } };
+const documentStub = { querySelectorAll: () => [btn], getElementById: () => select };
+const sportWindow = {};
+require('vm').runInNewContext(mainSrc.slice(selectStart, selectEnd), { window: sportWindow, document: documentStub });
+sportWindow._qcSelectSport(btn);
+ok(select.selectedIndex === 1, 'botão Pickleball seleciona o valor canônico apesar do emoji no rótulo');
 
 console.log('\n' + (fail === 0 ? '✅ tiebreak-sport-com-emoji: OK' : '❌ ' + fail + ' FALHA(S)') + '  (' + pass + ' asserts ok)');
 if (fails.length) { fails.forEach(function (f) { console.error('  ✗ ' + f); }); }

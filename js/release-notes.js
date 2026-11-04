@@ -1,3 +1,7 @@
+// 2.5.91 — Novo torneio abre o configurador completo antes de gravar qualquer
+// documento. A modalidade escolhida no primeiro painel chega ao formulário pelo
+// valor canônico, sem emoji. O atalho anterior que criava eliminação simples com
+// regras implícitas foi removido; templates continuam disponíveis para revisão.
 // 2.5.90 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // Próximo corte web — A criação começa por modalidade, participantes, datas,
 // quadras, categorias e formação de duplas; depois apresenta classificatória,
