@@ -100,6 +100,19 @@ assert.equal(archivedByTeams.status, 'ready');
 assert.equal(archivedByTeams.changed, true);
 assert.equal(changedToTeams.phaseTieDecisions['0'], undefined);
 delete drawWindow.ScoreplaceTeamCompetition;
+const beforeLastPhase = structuredClone(t);
+beforeLastPhase.phases.push({ kind: 'elimination' });
+beforeLastPhase.fmt2.tieResolution = 'none';
+beforeLastPhase.phaseTieDecisions['0'][decisionId].status = 'review';
+assert.equal(resolveTie(beforeLastPhase, null, now).status, 'ready');
+assert.equal(titles.resolve(beforeLastPhase, { engine: { phaseComplete: () => true },
+  standings: () => beforeLastPhase.standings }).reason, 'more-phases',
+  'fase não final nunca atribui título, antes de consultar decisões pendentes');
+const incomplete = structuredClone(t);
+context.phaseCompleteFn = () => false;
+assert.throws(() => resolveTie(incomplete, null, now), /Conclua os jogos/,
+  'fase incompleta permanece bloqueada até concluir os jogos');
+context.phaseCompleteFn = () => true;
 
 const automatic = tournament();
 automatic.fmt2.tieResolution = 'draw_order';
