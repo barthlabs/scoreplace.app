@@ -1,3 +1,7 @@
+// 2.5.92 — Inscrições no formulário de torneio começam recolhidas e se abrem
+// pelo título, como Personalização. Botões desse bloco têm fundo e texto
+// contrastantes. Templates preservam nove decisões que eram perdidas na cópia:
+// folgas, desempate extra, distribuição das linhas e política da final.
 // 2.5.91 — Novo torneio abre o configurador completo antes de gravar qualquer
 // documento. A modalidade escolhida no primeiro painel chega ao formulário pelo
 // valor canônico, sem emoji. O atalho anterior que criava eliminação simples com

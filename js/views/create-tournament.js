@@ -471,8 +471,9 @@ function setupCreateTournamentModal() {
                 <p id="vis-desc" style="margin:8px 0 0;font-size:0.8rem;color:var(--text-muted);">${_t('create.publicDesc')}</p>
               </div>
 
-              <div class="form-group mb-2" style="background:rgba(52,211,153,0.06);border:1px solid rgba(52,211,153,0.2);border-radius:12px;padding:1rem;">
-                <p style="margin:0 0 0.75rem;font-size:0.8rem;color:#6ee7b7;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Inscrições</p>
+              <details id="registration-settings" class="registration-settings form-group mb-2">
+                <summary>📝 Inscrições</summary>
+                <div class="registration-settings-content">
                 <div role="group" aria-label="Origem das inscrições" style="display:flex;gap:6px;flex-wrap:wrap;">
                   <button type="button" class="btn" data-registration-source="scoreplace" onclick="window._setRegistrationSource('scoreplace',true)">Pelo Scoreplace</button>
                   <button type="button" class="btn" data-registration-source="external" onclick="window._setRegistrationSource('external',true)">Externa</button>
@@ -512,7 +513,8 @@ function setupCreateTournamentModal() {
                   <p>A taxa do Scoreplace incide sobre as pessoas confirmadas também quando as inscrições vêm de fora. O valor, os prazos e o aceite são os do contrato deste torneio.</p>
                   <button type="button" class="btn" onclick="window._openTournamentFeeTermsFromEditor()">Ver condições e aceitar</button>
                 </div>
-              </div>
+                </div>
+              </details>
 
               <!-- ═══════════ BOX FASE 1 ═══════════
                    Agrupa: Formato · Modo de Sorteio · campos condicionais ·
@@ -2918,8 +2920,9 @@ function setupCreateTournamentModal() {
     document.querySelectorAll('[data-registration-source]').forEach(function(btn) {
       var active = btn.getAttribute('data-registration-source') === chosen;
       btn.setAttribute('aria-pressed', active ? 'true' : 'false');
-      btn.style.border = active ? '2px solid #34d399' : '1px solid rgba(255,255,255,0.2)';
-      btn.style.background = active ? 'rgba(16,185,129,0.28)' : 'rgba(255,255,255,0.05)';
+      btn.style.border = active ? '2px solid #34d399' : '1px solid #54b6a7';
+      btn.style.background = active ? '#145f53' : '#244b50';
+      btn.style.color = '#fff';
     });
     if (chosen === 'scoreplace') window._renderRegistrationPrices();
   };
@@ -6825,6 +6828,8 @@ window._saveTournamentClickHandler = async function() {
         if (!editId || window._registrationSettingsTouched || (window._editingTournament && window._editingTournament.registrationSettings)) {
           try { tourData.registrationSettings = window._readRegistrationSettings(); }
           catch (error) {
+            var registrationDetails = document.getElementById('registration-settings');
+            if (registrationDetails) registrationDetails.open = true;
             showAlertDialog('Valor da inscrição', error.message, null, { type:'warning' });
             return;
           }
@@ -8072,7 +8077,8 @@ window._f2TemplateCopy = function(fmt2Bruto) {
     return out;
   };
   var out = pick(raw, ['disputa', 'grupos', 'parceria', 'formacaoDupla', 'manualPairingOpen',
-    'classifAtiva', 'classificados', 'classifScope', '_scoreBy', 'historicalSinglesOverride']);
+    'classifAtiva', 'classificados', 'classifScope', '_scoreBy', 'historicalSinglesOverride',
+    'rankingRemainderPolicy', 'rankingSitOutScoring', 'tieResolution']);
   if (raw.rodadas) {
     out.rodadas = pick(raw.rodadas, ['modo', 'turnos', 'n', 'drawFirstTime', 'drawIntervalDays',
       'drawManual', 'allowSelfDeactivation', '_intervalAuto']);
@@ -8085,7 +8091,9 @@ window._f2TemplateCopy = function(fmt2Bruto) {
   if (raw.eliminatoria) {
     out.eliminatoria = pick(raw.eliminatoria, ['ativa', 'dupla', 'linhas', 'nomes', 'origem',
       'formacao', 'qualifyAll', 'terceiro', 'grandFinal', 'lateEnrollment', 'newMatchups',
-      'scoring', 'roundBoundsEditorEnabled', 'politicaDaChave', 'openReiRainha', 'reiRainhaCut']);
+      'scoring', 'roundBoundsEditorEnabled', 'politicaDaChave', 'openReiRainha', 'reiRainhaCut',
+      'lineAssignment', 'lineRankRanges', 'bestNextByGroup', 'semeadura',
+      'finalSeriesBestOf', 'grandFinalReset']);
     out.eliminatoria.endDate = '';
     out.eliminatoria.endTime = '';
     out.eliminatoria.roundBounds = [];

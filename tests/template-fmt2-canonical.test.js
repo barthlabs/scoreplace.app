@@ -36,6 +36,43 @@ config.eliminatoria.participants = ['uid-from-old-tournament'];
 const original = JSON.stringify(config);
 const savedByOldForm = formatWindow.FORMAT2.normalize(config, 'Beach Tennis');
 const copied = copy(savedByOldForm);
+for (const [label, source, target, transient] of [
+  ['fmt2', savedByOldForm, copied, []],
+  ['rodadas', savedByOldForm.rodadas, copied.rodadas, ['matches']],
+  ['eliminatoria', savedByOldForm.eliminatoria, copied.eliminatoria, ['participants']],
+  ['teamCompetition', savedByOldForm.teamCompetition, copied.teamCompetition, []]
+]) {
+  assert.deepStrictEqual(Object.keys(source).filter(key => !transient.includes(key) &&
+    !Object.prototype.hasOwnProperty.call(target, key)), [],
+    `${label}: template preserva todas as escolhas de formato`);
+}
+const choices = formatWindow.FORMAT2.defaultConfig('Beach Tennis');
+choices.rankingRemainderPolicy = 'waitlist_legacy';
+choices.rankingSitOutScoring = { mode: 'fixed', points: 7 };
+choices.tieResolution = 'singles_then_draw';
+choices.eliminatoria.finalSeriesBestOf = 7;
+choices.eliminatoria.semeadura = 'sorteio';
+choices.eliminatoria.grandFinalReset = true;
+choices.eliminatoria.lineAssignment = 'rank_ranges';
+choices.eliminatoria.lineRankRanges = [{ from: 1, to: 4 }, { from: 5, to: 8 }];
+choices.eliminatoria.bestNextByGroup = { count: 1, metric: 'win_rate', destIndex: 1 };
+const replay = copy(choices);
+for (const key of ['rankingRemainderPolicy', 'rankingSitOutScoring', 'tieResolution'])
+  assert.strictEqual(JSON.stringify(replay[key]), JSON.stringify(choices[key]), `template preserva ${key}`);
+for (const key of ['finalSeriesBestOf', 'semeadura', 'grandFinalReset', 'lineAssignment', 'lineRankRanges', 'bestNextByGroup'])
+  assert.strictEqual(JSON.stringify(replay.eliminatoria[key]), JSON.stringify(choices.eliminatoria[key]), `template preserva eliminatoria.${key}`);
+const replayedRules = formatWindow.FORMAT2.normalize(replay, 'Beach Tennis');
+const replayedPhases = formatWindow.FORMAT2.compileToPhases(replayedRules, { sport: 'Beach Tennis' }).phases;
+assert.strictEqual(replayedRules.tieResolution, 'singles_then_draw');
+assert.strictEqual(replayedRules.rankingSitOutScoring.points, 7);
+assert.strictEqual(replayedPhases[0].rankingSitOutScoring.points, 7);
+assert.strictEqual(replayedPhases[replayedPhases.length - 1].finalSeriesBestOf, 7);
+assert.strictEqual(replayedRules.eliminatoria.grandFinalReset, false,
+  'série longa desliga o reset incompatível após copiar o template');
+const resetChoice = formatWindow.FORMAT2.defaultConfig('Beach Tennis');
+resetChoice.eliminatoria.grandFinalReset = true;
+assert.strictEqual(formatWindow.FORMAT2.normalize(copy(resetChoice), 'Beach Tennis').eliminatoria.grandFinalReset,
+  true, 'final de uma partida preserva o reset permitido');
 assert.strictEqual(copied.rodadas.drawFirstDate, '');
 assert.strictEqual(copied.rodadas.drawFirstTime, '20:30');
 assert.strictEqual(copied.rodadas.drawIntervalDays, 3);
