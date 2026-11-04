@@ -6846,17 +6846,30 @@ function _resolveFinalClassificationTie(t, action, nowIso) {
   const current = t.currentPhaseIndex || 0;
   const phase = Array.isArray(t.phases) && t.phases[current];
   const rule = t.fmt2 && t.fmt2.tieResolution;
+  const archiveObsoleteFinalTies = () => {
+    const book = t.phaseTieDecisions && t.phaseTieDecisions[String(current)];
+    if (!book || !Object.keys(book).length) return false;
+    if (!Array.isArray(t.history)) t.history = [];
+    Object.keys(book).forEach(id => {
+      t.history.push({ date: String(nowIso || new Date().toISOString()),
+        message: 'Decisão de desempate do título arquivada após mudança na configuração da fase ' + (current + 1),
+        phaseTieDecision: JSON.parse(JSON.stringify(book[id])) });
+    });
+    delete t.phaseTieDecisions[String(current)];
+    return true;
+  };
   if (!phase || phase.kind !== 'classification' || current !== t.phases.length - 1 ||
       !['draw_order', 'singles_then_draw'].includes(rule)) {
     if (action) throw new HttpsError('failed-precondition', 'Este torneio não prevê desempate extra no encerramento.');
-    return { status: 'ready', changed: false };
+    return { status: 'ready', changed: phase && phase.kind === 'classification' &&
+      current === t.phases.length - 1 ? archiveObsoleteFinalTies() : false };
   }
   const teamCore = drawWindow && drawWindow.ScoreplaceTeamCompetition;
   const teamConfig = teamCore && teamCore.rankingConfigForTournament &&
     teamCore.rankingConfigForTournament(t);
   if (teamConfig && teamConfig.enabled) {
     if (action) throw new HttpsError('failed-precondition', 'Desempate individual não se aplica à tabela de times.');
-    return { status: 'ready', changed: false };
+    return { status: 'ready', changed: archiveObsoleteFinalTies() };
   }
   if (!phaseCompleteFn || !phaseCompleteFn(t)) {
     throw new HttpsError('failed-precondition', 'Conclua os jogos da classificatória antes do desempate pelo título.');

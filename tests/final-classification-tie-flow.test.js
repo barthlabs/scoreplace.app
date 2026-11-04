@@ -86,6 +86,20 @@ assert.equal(corrected.phaseTieDecisions['0'][decisionId], undefined);
 assert.equal(corrected.history.at(-1).phaseTieDecision.matches[0].winnerKey, 'uid:B');
 assert.equal(titles.resolve(corrected, { engine: { phaseComplete: () => true },
   standings: () => corrected.standings }).ok, true);
+const changedRule = structuredClone(t);
+changedRule.fmt2.tieResolution = 'none';
+const archivedByRule = resolveTie(changedRule, null, now);
+assert.equal(archivedByRule.status, 'ready');
+assert.equal(archivedByRule.changed, true);
+assert.equal(changedRule.phaseTieDecisions['0'], undefined);
+assert.equal(changedRule.history.at(-1).phaseTieDecision.matches[0].winnerKey, 'uid:B');
+const changedToTeams = structuredClone(t);
+drawWindow.ScoreplaceTeamCompetition = { rankingConfigForTournament: () => ({ enabled: true }) };
+const archivedByTeams = resolveTie(changedToTeams, null, now);
+assert.equal(archivedByTeams.status, 'ready');
+assert.equal(archivedByTeams.changed, true);
+assert.equal(changedToTeams.phaseTieDecisions['0'], undefined);
+delete drawWindow.ScoreplaceTeamCompetition;
 
 const automatic = tournament();
 automatic.fmt2.tieResolution = 'draw_order';

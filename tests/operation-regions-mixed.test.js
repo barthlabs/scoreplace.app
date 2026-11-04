@@ -130,13 +130,18 @@ for (const version of ['v2', 'v3']) {
     assert.equal(run(aligned).status, 0);
     assert.equal(run(aligned, false, {}, true).status, 0, 'release exige as seis portas no commit atual');
     assert.notEqual(run(aligned, false, {}, false, true).status, 0, 'corte dirigido recusa placar antigo');
+    // Este corte regional é uma implantação dirigida histórica. A referência
+    // aqui é a revisão REAL das funções sp-op-score nas regiões, registrada
+    // nos manifestos operacionais; o backend central em us-central1 tem recibo
+    // separado e mais recente. Usar HEAD aqui atestaria uma implantação
+    // regional que ainda não ocorreu.
     const recordedScoreCommit = '822cbc2ad7fc5839b20a986f5133af9e9ef6f7e6';
     const recordedScoreDigest = sourceDigest('applyMatchResult', recordedScoreCommit,
       sourceDescriptor('functions-autodraw', recordedScoreCommit, true));
     const scoreFresh = original.filter(row => row.name === `sp-op-score-${version}`)
       .every(row => row.commit === recordedScoreCommit && row.sourceDigest === recordedScoreDigest);
     assert.equal(run(original, false, {}, false, true).status === 0, scoreFresh,
-      'corte dirigido só aceita placar na revisão atual do backend');
+      'corte dirigido só aceita a revisão de placar efetivamente publicada nas regiões');
     assert.notEqual(run(original, true, {}, false, true).status, 0, 'flags incompatíveis são recusadas');
     assert.notEqual(run(original, false, {}, true, true).status, 0, 'dois modos obrigatórios são recusados');
     const wrongOther = structuredClone(original);
