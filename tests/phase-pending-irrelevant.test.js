@@ -49,6 +49,10 @@ const team = structuredClone(tournament);
 team.teamCompetition = { enabled: true };
 assert.equal(E.pendingIrrelevantForAdvance(team), false,
   'pontuação agregada por times exige análise própria');
+const customPoints = structuredClone(tournament);
+customPoints.phases[0].advancedScoring = { enabled: true, winPoints: 5 };
+assert.equal(E.pendingIrrelevantForAdvance(customPoints), false,
+  'pontuação configurada na fase não usa o limite básico de três pontos');
 const lines = structuredClone(tournament);
 lines.phases[1].source.mapping.push({ dest: 'second', rankFrom: 2, rankTo: 4 });
 assert.equal(E.pendingIrrelevantForAdvance(lines), false,

@@ -2717,6 +2717,7 @@
         (t.phaseRounds && t.phaseRounds[cur] && Array.isArray(t.phaseRounds[cur].rounds)) ||
         (t.teamCompetition && t.teamCompetition.enabled) ||
         (t.advancedScoring && t.advancedScoring.enabled) ||
+        (effectiveAdvancedScoring(t, cur) && effectiveAdvancedScoring(t, cur).enabled) ||
         t.rankingPrimary === 'games_diff') return false;
     var source = next.source || {}, mapping = source.mapping || [];
     if (source.type !== 'previous_phase' || source.scope === 'overall' ||
@@ -3194,7 +3195,7 @@
       };
     });
   }
-  window._phaseTiePanelForFinish = function (tId, out) {
+  if (typeof window !== 'undefined') window._phaseTiePanelForFinish = function (tId, out) {
     _phaseTiePanel(tId, out, { finish: true });
   };
 
