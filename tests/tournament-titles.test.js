@@ -76,6 +76,15 @@ const teamBase = { phases: [{ kind: 'classification', classification: { structur
     { id: 'f2', bracket: 'group', category: 'Feminino', p1: 'F3', p2: 'F4', p1CompetitionTeamId: 't1', p2CompetitionTeamId: 't2', winner: 'F3' }
   ] };
 assert.deepEqual(resolve(teamBase).titles.map(x => [x.scope, x.winnerId]), [['overall', 't1']]);
+const tiedTeams = { ...teamBase, matches: [], teamCompetition: {
+  ...teamBase.teamCompetition, tiebreakers: ['sorteio']
+} };
+assert.equal(resolve(tiedTeams).reason, 'team-tie-unresolved',
+  'nome alfabético do time não concede título quando falta a ordem do sorteio');
+assert.deepEqual(resolve({ ...tiedTeams, teamCompetition: {
+  ...tiedTeams.teamCompetition, tieDrawOrder: ['t2', 't1']
+} }).titles.map(x => x.winnerId), ['t2'],
+  'ordem de sorteio registrada pelo organizador define o time campeão');
 const categoryTeams = { ...teamBase, teamCompetition: { ...teamBase.teamCompetition, aggregation: 'per_category' } };
 assert.deepEqual(resolve(categoryTeams).titles.map(x => [x.scope, x.label, x.winnerId]),
   [['category', 'Feminino', 't1'], ['category', 'Masculino', 't2']]);
@@ -101,6 +110,14 @@ const teamGroups = { ...teamBase, phases: [{ kind: 'classification', classificat
 assert.deepEqual(resolve(teamGroups).titles.map(x => [x.scope, x.label, x.winnerId]),
   [['group', 'Praia', 't1'], ['group', 'Serra', 't3']],
   'times de grupos independentes recebem campeões por grupo, sem campeão geral');
+const drawnTeamGroups = { ...teamGroups, teamCompetition: {
+  ...teamGroups.teamCompetition, tiebreakers: ['sorteio'],
+  tieDrawOrder: ['t2', 't1', 't4', 't3']
+}, groups: teamGroups.groups.map(group => ({ ...group, matches: group.matches.map(match => ({
+  ...match, winner: null
+})) })) };
+assert.deepEqual(resolve(drawnTeamGroups).titles.map(x => x.winnerId), ['t2', 't4'],
+  'ordem global do sorteio é aplicada separadamente aos times de cada grupo');
 const objectTeams = { ...teamGroups, groups: teamGroups.groups.map(g => ({ ...g,
   matches: g.matches.map(m => ({ ...m, team1Obj: { competitionTeamId: m.p1CompetitionTeamId },
     team2Obj: { competitionTeamId: m.p2CompetitionTeamId },

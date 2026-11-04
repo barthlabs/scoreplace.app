@@ -2705,6 +2705,78 @@
     return phaseGames(t, cur).filter(function (u) { return !_jogoResolvido(u.match, !emChave); });
   }
 
+  // Prova estrita de irrelevância: só libera jogos pendentes ENTRE não classificados
+  // quando nem todas as vitórias restantes (3 pontos cada) alcançam a última vaga.
+  // Qualquer dúvida sobre formato, seeding ou identidade mantém o bloqueio.
+  function _pendingQualificationFixed(t, mayChangeSeeding) {
+    if (!t || !Array.isArray(t.phases)) return false;
+    var cur = t.currentPhaseIndex || 0, phase = t.phases[cur], next = t.phases[cur + 1];
+    if (!phase || !next || phase.kind !== 'classification' ||
+        !phase.classification || phase.classification.structure !== 'groups' ||
+        (Array.isArray(t.rounds) && t.rounds.length) ||
+        (t.phaseRounds && t.phaseRounds[cur] && Array.isArray(t.phaseRounds[cur].rounds)) ||
+        (t.teamCompetition && t.teamCompetition.enabled) ||
+        (t.advancedScoring && t.advancedScoring.enabled) ||
+        t.rankingPrimary === 'games_diff') return false;
+    var source = next.source || {}, mapping = source.mapping || [];
+    if (source.type !== 'previous_phase' || source.scope === 'overall' ||
+        source.flatOverall === true || source.rankingBasis === 'team' ||
+        source.bestNextByGroup || source.lineAssignment ||
+        mapping.length !== 1 || Number(mapping[0].rankFrom || 1) !== 1) return false;
+    var cutoff = Number(mapping[0].rankTo);
+    if (!Number.isInteger(cutoff) || cutoff < 1 || cutoff >= 999) return false;
+    var groups = prevPhaseGroups(t), pending = pendingMatches(t);
+    if (!pending.length || pending.length > 128 ||
+        groups.length !== Number(phase.gruposCount || t.gruposCount || 1) ||
+        pending.some(function (item) {
+          var index = Number(item.groupIdx);
+          return !Number.isInteger(index) || index < 0 || index >= groups.length ||
+            !item.match || !item.match.id;
+        })) return false;
+    for (var gi = 0; gi < groups.length; gi++) {
+      var groupPending = pending.filter(function (item) { return Number(item.groupIdx) === gi; });
+      var group = groups[gi], matches = (group.matches || []).concat((group.rounds || []).reduce(function (all, round) {
+        return all.concat((round && round.matches) || []);
+      }, []));
+      if (!matches.length) return false;
+      if (!groupPending.length) continue;
+      var rows = _groupTeamStandings(group, { tiebreakers: t.tiebreakers, rankingPrimary: t.rankingPrimary });
+      if (!Array.isArray(rows) || rows.length <= cutoff ||
+          rows.slice(0, cutoff).some(function (row, index) {
+            return !Number.isFinite(Number(row.points)) ||
+              (!mayChangeSeeding && index > 0 &&
+                Number(rows[index - 1].points) <= Number(row.points));
+          })) return false;
+      var safe = Object.create(null);
+      var qualified = Object.create(null);
+      rows.slice(0, cutoff).forEach(function (row) { if (row && row.name) qualified[String(row.name)] = true; });
+      if (Object.keys(qualified).length !== cutoff) return false;
+      rows.slice(cutoff).forEach(function (row) {
+        if (row && row.name) safe[String(row.name)] = { points: Number(row.points), remaining: 0 };
+      });
+      if (Object.keys(safe).length !== rows.length - cutoff) return false;
+      for (var pi = 0; pi < groupPending.length; pi++) {
+        var match = groupPending[pi].match;
+        if ((!safe[String(match.p1)] && !(mayChangeSeeding && qualified[String(match.p1)])) ||
+            (!safe[String(match.p2)] && !(mayChangeSeeding && qualified[String(match.p2)])) ||
+            String(match.p1) === String(match.p2)) return false;
+        if (safe[String(match.p1)]) safe[String(match.p1)].remaining++;
+        if (safe[String(match.p2)]) safe[String(match.p2)].remaining++;
+      }
+      var floor = Number(rows[cutoff - 1].points);
+      if (Object.keys(safe).some(function (name) {
+        var row = safe[name];
+        return !Number.isFinite(row.points) || row.points + 3 * row.remaining >= floor;
+      })) return false;
+    }
+    return true;
+  }
+  function pendingIrrelevantForAdvance(t) { return _pendingQualificationFixed(t, false); }
+  function pendingSeedOnlyForAdvance(t) {
+    return _pendingQualificationFixed(t, true) && !pendingIrrelevantForAdvance(t)
+      ? pendingMatches(t).map(function (item) { return String(item.match.id); }) : [];
+  }
+
   // ── Fase 1+ → próxima fase: derivar colocações de uma CHAVE já jogada ─────────
   // (v2.6.94, Motor Chunk 4 — encadeamento além de 0→1.)
 
@@ -3048,7 +3120,9 @@
     overlay.id = 'phase-tie-panel';
     overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.88);display:flex;align-items:center;justify-content:center;padding:16px;';
     var names = (tie.players || []).map(function (p) { return safe(p.name); }).join(', ');
-    var body = '<p style="font-size:.88rem;line-height:1.5;">Os critérios de desempate terminaram empatados na posição que define o destino de <b>' + names + '</b>.</p>';
+    var finalTitle = !!(context && context.finish);
+    var body = '<p style="font-size:.88rem;line-height:1.5;">Os critérios de desempate terminaram empatados na posição que define ' +
+      (finalTitle ? 'o título' : 'o destino') + ' de <b>' + names + '</b>.</p>';
     if (out.reason === 'tie-choice-required') {
       body += '<p style="font-size:.82rem;line-height:1.5;">O regulamento prevê ' +
         (tie.players && tie.players.length === 3 ? 'um triangular de três partidas de simples' :
@@ -3063,7 +3137,8 @@
       var courtNames = liveTournament && Array.isArray(liveTournament.courtNames) ? liveTournament.courtNames.map(String) : [];
       if (!courtNames.length && liveTournament) for (var ci = 1; ci <= Number(liveTournament.courtCount || 0); ci++) courtNames.push('Quadra ' + ci);
       body += '<p style="font-size:.82rem;">' + ((tie.players || []).length === 3 ? 'Triangular' : 'Simples') +
-        ' · ' + decision.setsToWin + ' set(s) para vencer cada partida. Registre os placares por set, por exemplo <b>6-4, 3-6, 6-2</b>. Revise todos os resultados antes de confirmar o avanço.</p>';
+        ' · ' + decision.setsToWin + ' set(s) para vencer cada partida. Registre os placares por set, por exemplo <b>6-4, 3-6, 6-2</b>. Revise todos os resultados antes de confirmar ' +
+        (finalTitle ? 'o encerramento.' : 'o avanço.') + '</p>';
       (decision.matches || []).forEach(function (match, index) {
         var courtOptions = '<option value="">Escolha a quadra</option>' + courtNames.map(function (name) {
           return '<option value="' + safe(name) + '"' + (name === match.court ? ' selected' : '') + '>' + safe(name) + '</option>';
@@ -3080,10 +3155,11 @@
           '" style="min-width:0;flex:1;"><button type="button" class="btn btn-primary" data-tie-match="' + index + '">' +
           (match.winnerKey ? 'Corrigir placar' : 'Salvar placar') + '</button></div></div>';
       });
-      if (out.reason === 'tie-match-review') body += '<button type="button" id="phase-tie-confirm" class="btn btn-primary" style="margin-top:12px;">Confirmar resultados e avançar</button>';
+      if (out.reason === 'tie-match-review') body += '<button type="button" id="phase-tie-confirm" class="btn btn-primary" style="margin-top:12px;">Confirmar resultados e ' +
+        (finalTitle ? 'encerrar' : 'avançar') + '</button>';
     }
-    overlay.innerHTML = '<div role="dialog" aria-modal="true" aria-label="Desempate antes do avanço" style="background:var(--bg-card,#1e293b);color:var(--text-main,#fff);width:min(560px,100%);max-height:90%;overflow:auto;border-radius:16px;padding:22px;border:1px solid rgba(255,255,255,.2);">' +
-      '<h3 style="margin:0 0 10px;">Desempate antes da próxima fase</h3>' + body +
+    overlay.innerHTML = '<div role="dialog" aria-modal="true" aria-label="Desempate antes de concluir a fase" style="background:var(--bg-card,#1e293b);color:var(--text-main,#fff);width:min(560px,100%);max-height:90%;overflow:auto;border-radius:16px;padding:22px;border:1px solid rgba(255,255,255,.2);">' +
+      '<h3 style="margin:0 0 10px;">' + (finalTitle ? 'Desempate pelo título' : 'Desempate antes da próxima fase') + '</h3>' + body +
       '<button type="button" id="phase-tie-close" class="btn btn-secondary" style="margin-top:16px;">Fechar por enquanto</button></div>';
     document.body.appendChild(overlay);
     overlay.querySelector('#phase-tie-close').onclick = function () { overlay.remove(); };
@@ -3118,14 +3194,41 @@
       };
     });
   }
+  window._phaseTiePanelForFinish = function (tId, out) {
+    _phaseTiePanel(tId, out, { finish: true });
+  };
 
   function _phaseTieRequest(tId, context, tieAction) {
+    if (context && context.finish) {
+      return window._finishTournamentCF(tId, tieAction).then(function (out) {
+        if (out.reason === 'tie-choice-required' || out.reason === 'tie-match-pending' || out.reason === 'tie-match-review') {
+          _phaseTiePanel(tId, out, context);
+          return;
+        }
+        if (!out.ok) throw new Error(out.reason || 'finish-failed');
+        var panel = document.getElementById('phase-tie-panel'); if (panel) panel.remove();
+        var container = document.getElementById('view-container');
+        if (container && typeof window.renderTournaments === 'function') window.renderTournaments(container, tId);
+        if (window.showNotification) window.showNotification('Torneio encerrado', 'Título definido pelo desempate confirmado.', 'success');
+      }).catch(function (error) {
+        if (window.showNotification) window.showNotification('Desempate não aplicado', String(error.message || error), 'error');
+      });
+    }
     var data = { tournamentId: String(tId), phaseChoices: context.phaseChoices,
       operationId: context.operationId };
+    if (context.acceptedPendingMatchIds) data.acceptedPendingMatchIds = context.acceptedPendingMatchIds;
     if (tieAction) data.tieAction = tieAction;
     return window._callCF('advanceTournamentPhase', data, 'Entre na sua conta para avançar a fase.').then(function (response) {
       var out = (response && response.data) || {};
       if (out.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(String(tId), out.tournament);
+      if (out.reason === 'seed-choice-required' || out.reason === 'seed-choice-stale') {
+        var currentSeedTournament = window._findTournamentById && window._findTournamentById(tId);
+        var currentSeedIds = currentSeedTournament && pendingSeedOnlyForAdvance(currentSeedTournament);
+        if (currentSeedIds && currentSeedIds.length) _seedPendingPanel(tId, currentSeedTournament, currentSeedIds);
+        else if (window.showNotification) window.showNotification('Classificação mudou',
+          'Atualize o torneio e revise os jogos pendentes antes de avançar.', 'warning');
+        return;
+      }
       if (out.reason === 'tie-choice-required' || out.reason === 'tie-match-pending' || out.reason === 'tie-match-review') {
         _phaseTiePanel(tId, out, context);
         return;
@@ -3137,19 +3240,66 @@
       var current = window._findTournamentById && window._findTournamentById(tId);
       var phase = current && current.phases && current.phases[out.phaseIndex];
       if (window.showNotification) window.showNotification('Avançou para ' + ((phase && phase.name) || ('Fase ' + (Number(out.phaseIndex) + 1))),
-        'Fase confirmada pelo servidor.', 'success');
+        out.seedChoiceAccepted ? 'Ordem atual congelada pela organização; ' + out.ignoredPendingCount + ' jogo(s) ficaram pendentes.' :
+        out.ignoredPendingCount ? 'Fase confirmada; ' + out.ignoredPendingCount + ' jogo(s) sem impacto na classificação ficaram pendentes.' :
+          'Fase confirmada pelo servidor.', 'success');
     }).catch(function (error) {
       if (window._warn) window._warn('[advancePhase] CF falhou', error);
       if (window.showNotification) window.showNotification('Não foi possível avançar', String(error.message || error), 'error');
     });
   }
 
+  function _seedPendingPanel(tId, t, ids) {
+    if (!ids || !ids.length) return;
+    var old = document.getElementById('phase-seed-pending-panel'); if (old) old.remove();
+    var safe = window._safeHtml || function (value) { return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;'); };
+    var byId = {};
+    pendingMatches(t).forEach(function (item) { if (item.match && item.match.id) byId[String(item.match.id)] = item.match; });
+    var overlay = document.createElement('div');
+    overlay.id = 'phase-seed-pending-panel';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.88);display:flex;align-items:center;justify-content:center;padding:16px;';
+    overlay.innerHTML = '<div role="dialog" aria-modal="true" aria-label="Jogos pendentes e classificação" style="background:var(--bg-card,#1e293b);color:var(--text-main,#fff);width:min(560px,100%);max-height:90%;overflow:auto;border-radius:16px;padding:22px;border:1px solid rgba(255,255,255,.2);">' +
+      '<h3 style="margin:0 0 10px;">Jogos que podem alterar a ordem</h3>' +
+      '<p style="font-size:.84rem;line-height:1.5;">As vagas já estão definidas, mas os jogos abaixo podem alterar a ordem dos classificados. Você pode lançar esses placares primeiro ou marcar cada jogo que ficará pendente. Ao avançar, a ordem atual será congelada para formar a próxima fase.</p>' +
+      ids.map(function (id, index) {
+        var match = byId[String(id)] || {};
+        return '<label style="display:flex;gap:9px;align-items:flex-start;margin:9px 0;padding:9px;border:1px solid rgba(255,255,255,.2);border-radius:8px;">' +
+          '<input type="checkbox" data-seed-pending="' + index + '" style="margin-top:3px;">' +
+          '<span>Deixar pendente: <b>' + safe(match.p1 || 'Participante 1') + ' × ' +
+          safe(match.p2 || 'Participante 2') + '</b></span></label>';
+      }).join('') +
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;">' +
+      '<button type="button" id="phase-seed-pending-confirm" class="btn btn-primary">Avançar com a ordem atual</button>' +
+      '<button type="button" id="phase-seed-pending-close" class="btn btn-secondary">Voltar aos jogos</button></div></div>';
+    document.body.appendChild(overlay);
+    overlay.querySelector('#phase-seed-pending-close').onclick = function () { overlay.remove(); };
+    overlay.querySelector('#phase-seed-pending-confirm').onclick = function () {
+      var checked = overlay.querySelectorAll('[data-seed-pending]:checked');
+      if (checked.length !== ids.length) {
+        if (window.showNotification) window.showNotification('Jogos ainda pendentes',
+          'Marque cada jogo que ficará pendente ou volte e registre os demais placares.', 'warning');
+        return;
+      }
+      overlay.remove();
+      advanceMultiPhase(tId, ids.slice());
+    };
+  }
+
   // Wrapper de UI: avança a fase do torneio tId (organizador).
-  function advanceMultiPhase(tId) {
+  function advanceMultiPhase(tId, acceptedPendingMatchIds) {
     var AppStore = window.AppStore;
     var t = AppStore && AppStore.tournaments ? AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); }) : null;
     if (!t) return;
-    if (!phaseComplete(t)) {
+    var seedOnlyIds = !phaseComplete(t) && !pendingIrrelevantForAdvance(t)
+      ? pendingSeedOnlyForAdvance(t) : [];
+    if (seedOnlyIds.length && (!Array.isArray(acceptedPendingMatchIds) ||
+        acceptedPendingMatchIds.slice().sort().join('|') !== seedOnlyIds.slice().sort().join('|'))) {
+      _seedPendingPanel(tId, t, seedOnlyIds);
+      return;
+    }
+    if (!phaseComplete(t) && !pendingIrrelevantForAdvance(t) && !seedOnlyIds.length) {
       if (window.showAlertDialog) window.showAlertDialog('Fase incompleta', 'Conclua todos os jogos da fase atual antes de avançar.', null, { type: 'warning' });
       return;
     }
@@ -3250,7 +3400,7 @@
     // no navegador: apenas o recibo canônico altera a tela.
     if (_nextCfg && (((_nextCfg.politicaDaChave || t.politicaDaChave) === 'sobra_unica') ||
         _nextCfg.bracketSeeding === 'draw' || ['draw_among', 'seed'].indexOf(_nextCfg.pairingStrategy) >= 0 ||
-        (t.fmt2 && t.fmt2.tieResolution))) {
+        (t.fmt2 && t.fmt2.tieResolution) || pendingIrrelevantForAdvance(t) || seedOnlyIds.length)) {
       if (typeof window._callCF !== 'function') {
         if (window.showNotification) window.showNotification('Não foi possível avançar',
           'Conexão com o servidor indisponível. Nenhuma nova chave foi criada nesta tela.', 'error');
@@ -3279,7 +3429,8 @@
           return;
         }
       }
-      _phaseTieRequest(tId, { phaseChoices: _choices, operationId: _drawOperationId }, null);
+      _phaseTieRequest(tId, { phaseChoices: _choices, operationId: _drawOperationId,
+        acceptedPendingMatchIds: seedOnlyIds.length ? acceptedPendingMatchIds : null }, null);
       return;
     }
 
@@ -3638,6 +3789,8 @@
     bracketPhaseGroups: bracketPhaseGroups,
     phaseComplete: phaseComplete,
     pendingMatches: pendingMatches,
+    pendingIrrelevantForAdvance: pendingIrrelevantForAdvance,
+    pendingSeedOnlyForAdvance: pendingSeedOnlyForAdvance,
     phaseGames: phaseGames,        // leitor único de "onde estão os jogos desta fase"
     globalStandings: _globalStandings,   // ordem que decide quem sobe de fase
     materializeNextPhase: materializeNextPhase,

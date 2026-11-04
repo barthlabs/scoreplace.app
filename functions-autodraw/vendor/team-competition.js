@@ -248,7 +248,7 @@ var ScoreplaceTeamCompetition;
             return firstScore > secondScore ? 1 : 2;
         return null;
     }
-    function compareRows(a, b, cfg, drawOrder) {
+    function compareMerit(a, b, cfg, drawOrder) {
         const primary = cfg.ranking === 'games_diff' ? b.gamesDiff - a.gamesDiff : b.points - a.points;
         if (primary)
             return primary;
@@ -277,12 +277,25 @@ var ScoreplaceTeamCompetition;
             if (legacy)
                 return legacy;
         }
-        return a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
+        return 0;
+    }
+    function compareRows(a, b, cfg, drawOrder) {
+        return compareMerit(a, b, cfg, drawOrder) ||
+            a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
     }
     function validDrawOrder(cfg, ids) {
         const order = cfg.tieDrawOrder || [];
         return order.length === ids.length && ids.every((id) => order.includes(id)) ? order : [];
     }
+    /** O nome e o ID ordenam a tela, mas não são critérios para conceder um título. */
+    function hasUnresolvedTopTie(rows, config) {
+        if (!Array.isArray(rows) || rows.length < 2)
+            return false;
+        const cfg = normalize(config);
+        const drawOrder = validDrawOrder(cfg, rows.map(row => row.id));
+        return compareMerit(rows[0], rows[1], cfg, drawOrder) === 0;
+    }
+    ScoreplaceTeamCompetition.hasUnresolvedTopTie = hasUnresolvedTopTie;
     /**
      * Soma somente jogos reais e decididos. Folga, W.O. sem adversário, pendência e dupla
      * sem time não viram ponto de ninguém. O chamador fornece os times existentes para que

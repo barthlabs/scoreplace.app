@@ -149,7 +149,7 @@
         if (grouped && pools.length !== Number(phase.gruposCount || t.gruposCount)) {
           return { ok: false, reason: 'standings-unavailable', titles: [] };
         }
-        var incompleteGroup = false;
+        var incompleteGroup = false, unresolvedTeamTie = false;
         pools.forEach(function (pool) {
           var categories = teamConfig.aggregation === 'per_category'
             ? Array.from(new Set(pool.matches.map(function (m) { return m.category; }).filter(Boolean))).sort() : [null];
@@ -170,16 +170,29 @@
             }) : (t.competitionTeams || []);
             // Em grupos, os próprios jogos fornecem as duplas elegíveis e seus IDs.
             // A lista global incluiria inscritas que nunca disputaram este grupo.
+            var poolConfig = teamConfig;
+            if (grouped && Array.isArray(teamConfig.tieDrawOrder) && teamConfig.classificationUnit !== 'pair') {
+              var eligibleIds = eligibleTeams.map(function (team) { return String(team.id || ''); });
+              poolConfig = Object.assign({}, teamConfig, { tieDrawOrder: teamConfig.tieDrawOrder.filter(function (id) {
+                return eligibleIds.indexOf(String(id)) >= 0;
+              }) });
+            }
             var rows = teamConfig.classificationUnit === 'pair'
-              ? teamCore.pairStandings(grouped ? [] : pairs, chosen, teamConfig, category || undefined)
-              : teamCore.standings(eligibleTeams, chosen, teamConfig);
+              ? teamCore.pairStandings(grouped ? [] : pairs, chosen, poolConfig, category || undefined)
+              : teamCore.standings(eligibleTeams, chosen, poolConfig);
             if (grouped && !rows.length) { incompleteGroup = true; return; }
+            if (teamConfig.classificationUnit !== 'pair' &&
+                typeof teamCore.hasUnresolvedTopTie === 'function' &&
+                teamCore.hasUnresolvedTopTie(rows, poolConfig)) {
+              unresolvedTeamTie = true; return;
+            }
             var label = [pool.label, category].filter(Boolean).join(' · ');
             var title = awardFromRow(rows[0], grouped ? 'group' : category ? 'category' : 'overall', label);
             if (title) titles.push(title);
           });
         });
         if (incompleteGroup) return { ok: false, reason: 'standings-unavailable', titles: [] };
+        if (unresolvedTeamTie) return { ok: false, reason: 'team-tie-unresolved', titles: [] };
       } else if (phase.classification && phase.classification.structure === 'groups' &&
           Number(phase.gruposCount || t.gruposCount || 1) > 1) {
         if (!deps.engine || typeof deps.engine.prevPhaseGroups !== 'function' ||

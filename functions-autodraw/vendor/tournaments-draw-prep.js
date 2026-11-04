@@ -750,7 +750,7 @@ window._createDrawPoll = function(tId, context, options, hours) {
     });
 };
 
-window._finishTournamentCF = function(tId) { if(typeof window._callCF!=='function')return Promise.reject(new Error('Function indisponível'));return window._callCF('finishTournament',{tournamentId:String(tId)},'Entre na sua conta para encerrar o torneio.').then(function(res){var d=(res&&res.data)||{};if(d.tournament&&typeof window._applyCFTournament==='function')window._applyCFTournament(tId,d.tournament);return d;});};
+window._finishTournamentCF = function(tId,tieAction) { if(typeof window._callCF!=='function')return Promise.reject(new Error('Function indisponível'));var data={tournamentId:String(tId)};if(tieAction)data.tieAction=tieAction;return window._callCF('finishTournament',data,'Entre na sua conta para encerrar o torneio.').then(function(res){var d=(res&&res.data)||{};if(d.tournament&&typeof window._applyCFTournament==='function')window._applyCFTournament(tId,d.tournament);return d;});};
 
 window._reopenEnrollmentForTarget = function(tId, target, autoClose) {
     if (typeof window._callCF !== 'function') return Promise.reject(new Error('Function indisponível'));
@@ -3454,7 +3454,7 @@ window.finishTournament = function(tId) {
         _t('predraw.finishTitle'),
         msg,
         function() {
-            window._finishTournamentCF(tId).then(function(data) { if(data.changed===false)return; if(window._sound)window._sound('campeao'); const container=document.getElementById('view-container');if(container)renderTournaments(container,tId);showNotification(_t('draw.finishDone'),_t('draw.finishDoneMsg',{name:t.name}),'success'); }).catch(function(err){if(window._warn)window._warn('[finishTournament] falhou',err);showNotification('Não foi possível encerrar','Nada foi alterado. Atualize e tente novamente.','error');});
+            window._finishTournamentCF(tId).then(function(data) { if(data.reason==='tie-choice-required'||data.reason==='tie-match-pending'||data.reason==='tie-match-review'){if(typeof window._phaseTiePanelForFinish==='function')window._phaseTiePanelForFinish(tId,data);else showNotification('Desempate pendente','Atualize o aplicativo para decidir o título.','error');return;}if(data.changed===false)return; if(window._sound)window._sound('campeao'); const container=document.getElementById('view-container');if(container)renderTournaments(container,tId);showNotification(_t('draw.finishDone'),_t('draw.finishDoneMsg',{name:t.name}),'success'); }).catch(function(err){if(window._warn)window._warn('[finishTournament] falhou',err);showNotification('Não foi possível encerrar',String(err&&err.message||'Nada foi alterado. Atualize e tente novamente.').slice(0,260),'error');});
         },
         null,
         { type: 'warning', confirmText: _t('btn.finishTourn'), cancelText: _t('btn.cancel') }

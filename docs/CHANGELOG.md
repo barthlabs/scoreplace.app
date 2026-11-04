@@ -1,3 +1,9 @@
+## Próximo corte web — encerramento e avanço da classificatória
+
+- O encerramento por tabela usa o desempate extra previsto nas regras e exige resultado confirmado antes de atribuir o título. Sem jogo extra, aplica a ordem original do sorteio.
+- Empate na liderança de competição por times exige ordem de sorteio registrada; não atribui campeão por ordem alfabética.
+- Jogos pendentes de grupos só permitem avançar quando há prova de que não alteram as vagas. Se puderem alterar apenas a ordem, a organização confirma cada pendência e o servidor registra o congelamento da ordem atual.
+
 ## 2.5.72 — 28/out/2026 (datas de jogos futuros e cards canônicos)
 
 - A organização pode preparar datas e grupos de WhatsApp de qualquer jogo futuro ainda sem lados definidos, inclusive final e 3º lugar. Participantes não recebem essa permissão. Jogos iniciados, concluídos ou com resultado pendente não aceitam proposta nova de data nem criação de grupo novo de WhatsApp, inclusive por chamada direta às Functions. O servidor valida o estado fresco do jogo antes de gravar.

@@ -10,6 +10,7 @@ const { randomUUID, createHash } = require('crypto');
 const _operationReceipt = require('./operation-receipt-core');
 const _operationDay = require('./operation-day');
 const _phaseTieCore = require('./phase-tie-core');
+const _phasePendingDecision = require('./phase-pending-decision-core');
 const _drawSeed = require('./draw-seed-core');
 const _operationProbeReply = () => ({
   ok: true,
@@ -5898,7 +5899,15 @@ exports.advanceTournamentPhase = onCall(async (request) => {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização avança a fase.', { tId, uid });
-    if (!phaseCompleteFn(t)) return { ok: false, reason: 'phase-incomplete' };
+    const phaseEngine = drawWindow && drawWindow._phasesEngine;
+    const pendingDecision = _phasePendingDecision.decide(t, phaseCompleteFn(t), phaseEngine,
+      request.data && request.data.acceptedPendingMatchIds);
+    if (pendingDecision.reason === 'invalid-argument') {
+      throw new HttpsError('invalid-argument', 'Seleção de jogos pendentes inválida.');
+    }
+    if (!pendingDecision.ok) return pendingDecision;
+    const ignoredPending = pendingDecision.ignoredPendingIds;
+    const seedAccepted = pendingDecision.seedChoiceAccepted;
     const current = t.currentPhaseIndex || 0;
     if (!Array.isArray(t.phases) || current + 1 >= t.phases.length) return { ok: false, reason: 'no-next-phase' };
     const antes = _antesDoMotor(t);
@@ -5920,7 +5929,6 @@ exports.advanceTournamentPhase = onCall(async (request) => {
     });
     _enrichParticipantsFromProfiles(t);
     _hidrataGrupos(t, 'advanceTournamentPhase', tId);
-    const phaseEngine = drawWindow && drawWindow._phasesEngine;
     const sourceGroups = current === 0
       ? (phaseEngine && typeof phaseEngine.prevPhaseGroups === 'function' ? phaseEngine.prevPhaseGroups(t) : [])
       : (phaseEngine && typeof phaseEngine.bracketPhaseGroups === 'function' ? phaseEngine.bracketPhaseGroups(t, current) : []);
@@ -6222,8 +6230,18 @@ exports.advanceTournamentPhase = onCall(async (request) => {
       const metas = res.built.repMetaByCat && res.built.repMetaByCat.length ? res.built.repMetaByCat : [res.built.repMeta];
       metas.forEach(meta => drawWindow._buildRepechageDoubleElim(t, meta, { phaseIndex: t.currentPhaseIndex }));
     }
+    if (ignoredPending.length) {
+      if (!Array.isArray(t.history)) t.history = [];
+      t.history.push({ date: agoraIso, byUid: uid,
+        message: seedAccepted
+          ? 'Organização confirmou avanço com jogos pendentes que podem alterar apenas a ordem dos classificados; classificação congelada na ordem atual.'
+          : 'Fase avançada com jogos pendentes sem impacto matemático nas vagas ou na ordem dos classificados.',
+        ignoredPendingMatchIds: ignoredPending });
+    }
     const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
-    return { ok: true, changed: true, phaseIndex: t.currentPhaseIndex, tournament: b.clean };
+    return { ok: true, changed: true, phaseIndex: t.currentPhaseIndex,
+      ignoredPendingCount: ignoredPending.length, seedChoiceAccepted: seedAccepted,
+      tournament: b.clean };
   });
   if (out.ok) await _notifyAdvancedPhase(out.tournament, tId, out.phaseIndex, agoraIso);
   return out;
@@ -6820,6 +6838,147 @@ exports.runEnrollmentSlotsDraw = onCall(async request => {
 });
 
 // ─── Encerramento manual: status, classificação e aviso server-side ─────────
+function _resolveFinalClassificationTie(t, action, nowIso) {
+  const current = t.currentPhaseIndex || 0;
+  const phase = Array.isArray(t.phases) && t.phases[current];
+  const rule = t.fmt2 && t.fmt2.tieResolution;
+  if (!phase || phase.kind !== 'classification' || current !== t.phases.length - 1 ||
+      !['draw_order', 'singles_then_draw'].includes(rule)) {
+    if (action) throw new HttpsError('failed-precondition', 'Este torneio não prevê desempate extra no encerramento.');
+    return { status: 'ready', changed: false };
+  }
+  const teamCore = drawWindow && drawWindow.ScoreplaceTeamCompetition;
+  const teamConfig = teamCore && teamCore.rankingConfigForTournament &&
+    teamCore.rankingConfigForTournament(t);
+  if (teamConfig && teamConfig.enabled) {
+    if (action) throw new HttpsError('failed-precondition', 'Desempate individual não se aplica à tabela de times.');
+    return { status: 'ready', changed: false };
+  }
+  if (!phaseCompleteFn || !phaseCompleteFn(t)) {
+    throw new HttpsError('failed-precondition', 'Conclua os jogos da classificatória antes do desempate pelo título.');
+  }
+  const engine = drawWindow && drawWindow._phasesEngine;
+  const standings = drawWindow && drawWindow._computeStandings;
+  const compareConfig = drawWindow && drawWindow._standingsCompareConfig;
+  const compareLegacy = drawWindow && drawWindow._standingsCompare;
+  const originalOrderFn = drawWindow && drawWindow._standingsOrdemChave;
+  if (!engine || !standings || !compareConfig || !compareLegacy || !originalOrderFn ||
+      typeof engine.phaseGames !== 'function') {
+    throw new HttpsError('failed-precondition', 'Motor de desempate indisponível para o encerramento.');
+  }
+  const grouped = phase.classification && phase.classification.structure === 'groups' &&
+    Number(phase.gruposCount || t.gruposCount || 1) > 1;
+  const groups = grouped ? engine.prevPhaseGroups(t) : [];
+  if (grouped && groups.length !== Number(phase.gruposCount || t.gruposCount)) {
+    throw new HttpsError('failed-precondition', 'Grupos incompletos para definir os títulos.');
+  }
+  const pools = grouped ? groups.map((g, index) => ({
+    id: 'group-' + index, group: g,
+    rows: engine.groupTeamStandings(g, { tiebreakers: t.tiebreakers })
+  })) : [{ id: 'overall', rows: standings(t) }];
+  if (pools.some(pool => !Array.isArray(pool.rows) || !pool.rows.length)) {
+    throw new HttpsError('failed-precondition', 'Classificação indisponível para definir o título.');
+  }
+  // Simples/triangular desempata atletas individuais. Para duplas ou times,
+  // a última regra continua sendo a ordem do sorteio original.
+  const individualRows = pools.every(pool => pool.rows.every(row =>
+    row && !row.fixedPair && !row.p1Uid &&
+    !(Array.isArray(row.participants) && row.participants.length > 1) &&
+    !String(row.uid || '').startsWith('pair:')));
+  const useDrawOrder = rule === 'draw_order' || !individualRows;
+  if (action && useDrawOrder) {
+    throw new HttpsError('failed-precondition', 'Esta classificação usa a ordem do sorteio original.');
+  }
+  const phaseGames = engine.phaseGames(t, current);
+  const originalGames = _phaseTieCore.originalDrawMatches(phaseGames);
+  const slotKeys = (match, side) => {
+    const ids = typeof drawWindow._slotUids === 'function' ? drawWindow._slotUids(match, side) : [];
+    if (ids && ids.length) return ids;
+    const names = match[side === 'p1' ? 'team1' : 'team2'];
+    if (Array.isArray(names) && names.length) return names.filter(Boolean);
+    return match[side] ? [String(match[side])] : [];
+  };
+  const originalOrder = originalOrderFn(originalGames, slotKeys);
+  originalGames.forEach((match, index) => {
+    ['p1', 'p2'].forEach((side, sideIndex) => {
+      const label = String(match[side] || '');
+      if (label && originalOrder[label] == null) originalOrder[label] = index * 2 + sideIndex;
+    });
+  });
+  const criterionList = Array.isArray(t.tiebreakers)
+    ? t.tiebreakers.filter(key => key !== 'sorteio') : null;
+  const compareForPool = pool => {
+    const ownMatches = pool.group
+      ? (pool.group.matches || []).concat((pool.group.rounds || []).flatMap(round => round.matches || []))
+      : phaseGames.map(entry => entry.match);
+    const h2h = typeof drawWindow._standingsBuildH2H === 'function'
+      ? drawWindow._standingsBuildH2H(ownMatches, slotKeys) : {};
+    const compare = criterionList
+      ? (a, b) => compareConfig(a, b, {
+        tiebreakers: criterionList.length ? criterionList : ['__none__'],
+        primaryField: t.rankingPrimary === 'games_diff' ? 'games_diff' : 'points',
+        h2h, birth: typeof drawWindow._tbBirthByName === 'function' ? drawWindow._tbBirthByName(t) : {}
+      })
+      : (a, b) => compareLegacy(a, b, false);
+    compare.originalOrder = originalOrder;
+    return compare;
+  };
+  let numberedGames = [];
+  if (!useDrawOrder) {
+    if (typeof drawWindow._assignGlobalGameNumbers !== 'function') {
+      throw new HttpsError('failed-precondition', 'Numeração dos jogos indisponível para o desempate.');
+    }
+    const snapshot = JSON.parse(JSON.stringify(t));
+    drawWindow._assignGlobalGameNumbers(snapshot);
+    numberedGames = engine.phaseGames(snapshot, current);
+  }
+  const numberForPool = pool => {
+    const ids = pool.group
+      ? new Set((pool.group.matches || []).concat((pool.group.rounds || []).flatMap(round => round.matches || []))
+        .map(match => String(match.id || ''))) : null;
+    const own = ids ? numberedGames.filter(entry => ids.has(String(entry.match && entry.match.id || ''))) : numberedGames;
+    return _phaseTieCore.baseGameNumber(own.map(entry => entry.match), own);
+  };
+  const next = { source: { mapping: [{ dest: 'title', rankFrom: 1, rankTo: 1 }] } };
+  if (action && ['court', 'call'].includes(action.type)) {
+    const book = (t.phaseTieDecisions || {})[String(current)] || {};
+    const decision = book[String(action.decisionId || '')];
+    const match = decision && (decision.matches || []).find(item => item.id === action.matchId);
+    if (!match || decision.status !== 'pending') {
+      throw new HttpsError('failed-precondition', 'Jogo extra não está aguardando chamada.');
+    }
+    const courts = Array.isArray(t.courtNames) && t.courtNames.length
+      ? t.courtNames.map(String)
+      : Array.from({ length: Math.max(0, Number(t.courtCount) || 0) }, (_, i) => 'Quadra ' + (i + 1));
+    const court = action.type === 'call' ? match.court : String(action.court || '').trim();
+    if (court && !courts.includes(court)) throw new HttpsError('failed-precondition', 'Quadra não cadastrada no torneio.');
+    if (action.type === 'call' && !court) throw new HttpsError('failed-precondition', 'Escolha uma quadra antes da chamada.');
+    if (action.type === 'call') {
+      const occupied = typeof drawWindow._collectAllMatches === 'function'
+        ? drawWindow._collectAllMatches(t).filter(item => item && _courtOccupancy.occupiesCourt(item)) : [];
+      const otherExtras = Object.values(book).flatMap(item => item && item.matches || [])
+        .filter(item => item && item.id !== match.id && item.courtCalledAt && !item.winnerKey);
+      if (occupied.some(item => String(item.court || '') === court) ||
+          otherExtras.some(item => String(item.court || '') === court)) {
+        throw new HttpsError('failed-precondition', 'Quadra ocupada por outro jogo.');
+      }
+      const athletes = [match.p1 && match.p1.key, match.p2 && match.p2.key].filter(Boolean);
+      if (otherExtras.some(item => athletes.includes(item.p1 && item.p1.key) ||
+          athletes.includes(item.p2 && item.p2.key))) {
+        throw new HttpsError('failed-precondition', 'Um dos atletas já está em quadra.');
+      }
+    }
+  }
+  if (action && ['call', 'score', 'confirm'].includes(action.type)) action.at = nowIso;
+  try {
+    return _phaseTieCore.resolvePhaseTies(t, current, pools, next, compareForPool,
+      action || null, Number((phase.scoring || t.scoring || {}).setsToWin) || 1,
+      useDrawOrder, !useDrawOrder ? numberForPool : null, nowIso);
+  } catch (error) {
+    throw new HttpsError('failed-precondition', 'Desempate do título não aplicado: ' + String(error.message || error));
+  }
+}
+
 exports.finishTournament = onCall(async request => {
   const uid = request.auth && request.auth.uid;
   const tId = String((request.data && request.data.tournamentId) || '').trim();
@@ -6827,6 +6986,10 @@ exports.finishTournament = onCall(async request => {
   if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
   if (!tId) throw new HttpsError('invalid-argument', 'Torneio obrigatório.');
   const ref = db.collection('tournaments').doc(tId);
+  const pre = await ref.get();
+  if (!pre.exists) throw new HttpsError('not-found', 'Torneio não encontrado.');
+  if (!_isTournamentAdmin(pre.data(), uid)) throw _drawFail('permission-denied', 'Só a organização encerra o torneio.', { tId, uid });
+  await _preloadDrawNames(pre.data());
   return db.runTransaction(async tx => {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
@@ -6834,6 +6997,14 @@ exports.finishTournament = onCall(async request => {
     if (t.status === 'finished') return { ok: true, changed: false, tournament: t };
     const before = _antesDoMotor(t);
     if (t.rulesContractVersion >= 2) {
+      _hidrataGrupos(t, 'finishTournament', tId);
+      const tieFlow = _resolveFinalClassificationTie(t, request.data && request.data.tieAction, nowIso);
+      if (tieFlow.status !== 'ready') {
+        const saved = tieFlow.changed ? _gravaTorneio(tx, ref, t, before, { agoraIso: nowIso }) : null;
+        return { ok: false, reason: tieFlow.status === 'choice' ? 'tie-choice-required' :
+          tieFlow.status === 'review' ? 'tie-match-review' : 'tie-match-pending',
+          tie: tieFlow.tie, decision: tieFlow.decision || null, tournament: saved && saved.clean };
+      }
       const resolver = drawWindow && drawWindow.ScoreplaceTournamentTitles;
       if (!resolver || typeof resolver.resolve !== 'function') {
         throw new HttpsError('internal', 'O resolvedor de títulos está indisponível.');
@@ -6849,6 +7020,7 @@ exports.finishTournament = onCall(async request => {
           result.reason === 'phase-incomplete' ? 'Há jogos ou rodadas pendentes.' :
           result.reason === 'tie-pending' ? 'Há desempate extra aguardando resultado ou confirmação.' :
           result.reason === 'tie-order-invalid' ? 'A ordem confirmada do desempate não corresponde à classificação atual.' :
+          result.reason === 'team-tie-unresolved' ? 'Há empate na liderança dos times. Registre a ordem do sorteio prevista no regulamento.' :
           'Não foi possível determinar o título pelas regras do torneio.');
       }
       t.titleAwards = result.titles.map(title => Object.assign({ rulesContractVersion: 2 }, title));

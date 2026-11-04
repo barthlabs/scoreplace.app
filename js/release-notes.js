@@ -1,3 +1,17 @@
+// Próximo corte web — A criação começa por modalidade, participantes, datas,
+// quadras, categorias e formação de duplas; depois apresenta classificatória,
+// eliminatória e as escolhas que dependem delas. O Super 8 de duplas fixas
+// reúne oito duplas, com sete jogos para cada uma; a variante individual reúne
+// oito atletas que trocam de parceiro sem repetir parceria. Outros tamanhos
+// continuam sendo classificatórias por grupos, sem receber o nome Super 8.
+// O encerramento de uma classificatória sem eliminatória
+// resolve empates pelo sorteio original ou pela simples/triangular extra quando
+// essa opção consta do regulamento. O placar e a confirmação do jogo extra
+// definem o título. Na competição por times, empate na liderança exige a
+// ordem de sorteio registrada antes do encerramento. No avanço de grupos,
+// partidas pendentes só deixam de bloquear quando as vagas estão provadamente
+// definidas; se ainda puderem mudar a ordem, a organização confirma cada
+// pendência e congela a ordem atual com registro da decisão.
 // 2.5.89 — Numa competição por times encerrada pela classificatória em vários
 // grupos, cada grupo recebe seu campeão. A escolha de tabela geral soma as
 // categorias dentro do grupo; a escolha por categoria dá títulos por categoria

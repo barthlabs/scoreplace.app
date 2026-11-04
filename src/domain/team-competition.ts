@@ -301,7 +301,7 @@ namespace ScoreplaceTeamCompetition {
     return null;
   }
 
-  function compareRows(a: TeamRow, b: TeamRow, cfg: Config, drawOrder: string[]): number {
+  function compareMerit(a: TeamRow, b: TeamRow, cfg: Config, drawOrder: string[]): number {
     const primary = cfg.ranking === 'games_diff' ? b.gamesDiff - a.gamesDiff : b.points - a.points;
     if (primary) return primary;
     if (cfg.tiebreakers) {
@@ -321,12 +321,25 @@ namespace ScoreplaceTeamCompetition {
         : (b.wins - a.wins);
       if (legacy) return legacy;
     }
-    return a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
+    return 0;
+  }
+
+  function compareRows(a: TeamRow, b: TeamRow, cfg: Config, drawOrder: string[]): number {
+    return compareMerit(a, b, cfg, drawOrder) ||
+      a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
   }
 
   function validDrawOrder(cfg: Config, ids: string[]): string[] {
     const order = cfg.tieDrawOrder || [];
     return order.length === ids.length && ids.every((id) => order.includes(id)) ? order : [];
+  }
+
+  /** O nome e o ID ordenam a tela, mas não são critérios para conceder um título. */
+  export function hasUnresolvedTopTie(rows: TeamRow[], config: unknown): boolean {
+    if (!Array.isArray(rows) || rows.length < 2) return false;
+    const cfg = normalize(config);
+    const drawOrder = validDrawOrder(cfg, rows.map(row => row.id));
+    return compareMerit(rows[0], rows[1], cfg, drawOrder) === 0;
   }
 
   /**
