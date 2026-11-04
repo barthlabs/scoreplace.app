@@ -1,8 +1,9 @@
 {
   "schema": 1,
-  "backendCommit": "294396709236649ed3ed71bef0dc9c40a90aa0cc",
-  "scopeNote": "Limpeza de desempate quando a configuração final muda; finishTournament foi republicada de forma direcionada. advanceTournamentPhase e demais endpoints mantêm os recibos dos lotes anteriores.",
+  "backendCommit": "36b4c9b531114f5bea08b4d594c46ae8c9c3b553",
+  "scopeNote": "Título de duplas exige desempate válido e W.O. respeita jogos congelados; applyTournamentWO e finishTournament foram publicados de forma direcionada. Os demais endpoints mantêm os recibos dos lotes anteriores.",
   "functions": [
+    "applyTournamentWO",
     "finishTournament"
   ]
 }
