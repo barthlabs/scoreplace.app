@@ -1238,8 +1238,10 @@ function _gravaTorneio(tx, ref, tDepois, tAntes, ctx) {
   // Uma fase já avançada não pode ter seus jogos dispensados alterados.
   if (tAntes && Array.isArray(tAntes.history) &&
       tAntes.history.some(entry => entry && entry.seedChoiceAccepted === true)) {
-    const collect = tournament => drawWindow && typeof drawWindow._collectAllMatches === 'function'
-      ? drawWindow._collectAllMatches(tournament) : (Array.isArray(tournament.matches) ? tournament.matches : []);
+    if (!drawWindow || typeof drawWindow._collectAllMatches !== 'function') {
+      throw new HttpsError('internal', 'Não foi possível conferir os jogos congelados desta fase.');
+    }
+    const collect = tournament => drawWindow._collectAllMatches(tournament);
     const alteredFrozen = _phasePendingDecision.changedFrozenMatchIds(tAntes, collect(tAntes), collect(tDepois));
     if (alteredFrozen.length) {
       throw new HttpsError('failed-precondition', 'Jogo dispensado no avanço da fase não pode ser alterado.');

@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const { E } = require('./headless.js');
 const pendingDecision = require('../functions-autodraw/phase-pending-decision-core.js');
 const fs = require('node:fs');
+const vm = require('node:vm');
 const serverSource = fs.readFileSync(require.resolve('../functions-autodraw/index.js'), 'utf8');
 const scorePath = serverSource.slice(serverSource.indexOf('async function _aplicaPlacarNaTransacao('),
   serverSource.indexOf('exports.applyMatchResult ='));
@@ -11,6 +12,15 @@ const writePath = serverSource.slice(serverSource.indexOf('function _gravaTornei
 assert(writePath.indexOf('_phasePendingDecision.changedFrozenMatchIds(tAntes,') >= 0 &&
   writePath.indexOf('_phasePendingDecision.changedFrozenMatchIds(tAntes,') < writePath.indexOf('_wp.applyPlan(tx,'),
   'todas as rotas de W.O. e substituição passam pela guarda antes da gravação');
+const writeContext = { drawWindow: null, _phasePendingDecision: pendingDecision,
+  HttpsError: class HttpsError extends Error { constructor(code, message) { super(message); this.code = code; } } };
+vm.createContext(writeContext);
+vm.runInContext(writePath, writeContext);
+assert.throws(() => writeContext._gravaTorneio({}, {}, {}, {
+  history: [{ seedChoiceAccepted: true, ignoredPendingMatchIds: ['7'] }],
+  groups: [{ matches: [{ id: '7', p1: 'A', p2: 'B' }] }]
+}, { agoraIso: '2026-11-03T12:00:00Z' }), error => error.code === 'internal',
+'sem motor de jogos, a escrita de grupo congelado falha fechada');
 const woPath = serverSource.slice(serverSource.indexOf('exports.applyTournamentWO ='),
   serverSource.indexOf('exports.setTournamentPresenceWithWOSubstitution ='));
 assert(woPath.indexOf('const before = _antesDoMotor(t)') >= 0 &&

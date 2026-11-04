@@ -41,6 +41,9 @@ function isFrozenMatch(t, matchId) {
 }
 
 function changedFrozenMatchIds(before, beforeMatches, afterMatches) {
+  // O aceite congela o jogo inteiro, inclusive quadra, numeração e metadados.
+  // Uma atualização cosmética também deve ser recusada até que a organização
+  // revise a decisão de avanço; comparar só placar deixaria mutações ocultas.
   const later = new Map((afterMatches || []).filter(match => match && match.id != null)
     .map(match => [String(match.id), match]));
   return (beforeMatches || []).filter(match => match && match.id != null &&
