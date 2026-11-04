@@ -206,6 +206,7 @@ function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, actio
   const book = t.phaseTieDecisions || {};
   const phaseBook = book[String(phaseIndex)] || {};
   let changed = false, usedAction = false;
+  const activeDecisionIds = new Set();
   const orderedPools = [];
   for (const pool of pools) {
     const compare = compareForPool(pool);
@@ -216,6 +217,7 @@ function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, actio
         throw new Error('ordem do sorteio original ausente para atleta empatado');
       }
       const decisionId = pool.id + ':' + tie.from + ':' + tie.to;
+      activeDecisionIds.add(decisionId);
       const baseNumber = !autoDraw && numberForPool ? numberForPool(pool) : null;
       if (!autoDraw && numberForPool && (!Number.isInteger(baseNumber) || baseNumber <= 0)) {
         throw new Error('número canônico do último jogo do grupo indisponível');
@@ -274,6 +276,12 @@ function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, actio
         }
         changed = true;
       }
+      // Um retry da mesma intenção não cria outro jogo nem confirma duas vezes.
+      if (action && action.decisionId === decisionId && !usedAction &&
+          ((action.type === 'play' && decision.choice === 'play') ||
+           (action.type === 'confirm' && decision.status === 'complete'))) {
+        usedAction = true;
+      }
       if (decision.status === 'pending' || decision.status === 'review') {
         const matchIndex = action && action.decisionId === decisionId && !usedAction
           ? decision.matches.findIndex(m => m.id === action.matchId) : -1;
@@ -331,6 +339,17 @@ function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, actio
     orderedPools.push({ id: pool.id, rows });
   }
   if (action && !usedAction) throw new Error('decisão de desempate desatualizada');
+  // A fronteira pode deixar de existir após uma correção de resultado. Decisões
+  // antigas não podem bloquear o título; os jogos ficam preservados no histórico.
+  Object.keys(phaseBook).forEach(decisionId => {
+    if (activeDecisionIds.has(decisionId)) return;
+    if (!Array.isArray(t.history)) t.history = [];
+    t.history.push({ date: String(nowIso || new Date().toISOString()),
+      message: 'Decisão de desempate arquivada após mudança na classificação da fase ' + (Number(phaseIndex) + 1),
+      phaseTieDecision: JSON.parse(JSON.stringify(phaseBook[decisionId])) });
+    delete phaseBook[decisionId];
+    changed = true;
+  });
   if (changed) { book[String(phaseIndex)] = phaseBook; t.phaseTieDecisions = book; }
   return { status: 'ready', orderedPools, changed };
 }

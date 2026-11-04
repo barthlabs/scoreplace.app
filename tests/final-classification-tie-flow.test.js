@@ -53,6 +53,11 @@ flow = resolveTie(t, { type: 'play', decisionId: flow.tie.decisionId }, now);
 assert.equal(flow.status, 'pending');
 assert.equal(flow.changed, true);
 t = structuredClone(t); // a callable persiste a decisão; a próxima chamada relê o documento
+const decisionId = flow.tie.decisionId;
+const retryPlay = resolveTie(t, { type: 'play', decisionId }, now);
+assert.equal(retryPlay.status, 'pending');
+assert.equal(retryPlay.changed, false);
+assert.equal(t.phaseTieDecisions['0'][decisionId].matches.length, 1);
 assert.equal(flow.decision.matches[0].displayGameNumber, '93A');
 const matchId = flow.decision.matches[0].id;
 flow = resolveTie(t, { type: 'court', decisionId: flow.tie.decisionId,
@@ -67,8 +72,20 @@ assert.equal(t.phaseTieDecisions['0'][flow.tie.decisionId].matches[0].winnerKey,
 flow = resolveTie(t, { type: 'confirm', decisionId: flow.tie.decisionId }, now);
 assert.equal(flow.status, 'ready');
 assert.equal(flow.changed, true);
+const retryConfirm = resolveTie(t, { type: 'confirm', decisionId }, now);
+assert.equal(retryConfirm.status, 'ready');
+assert.equal(retryConfirm.changed, false);
 assert.equal(titles.resolve(t, { engine: { phaseComplete: () => true },
   standings: () => t.standings }).titles[0].winnerName, 'B');
+const corrected = structuredClone(t);
+corrected.standings[0].wins = 2;
+const cleared = resolveTie(corrected, null, now);
+assert.equal(cleared.status, 'ready');
+assert.equal(cleared.changed, true);
+assert.equal(corrected.phaseTieDecisions['0'][decisionId], undefined);
+assert.equal(corrected.history.at(-1).phaseTieDecision.matches[0].winnerKey, 'uid:B');
+assert.equal(titles.resolve(corrected, { engine: { phaseComplete: () => true },
+  standings: () => corrected.standings }).ok, true);
 
 const automatic = tournament();
 automatic.fmt2.tieResolution = 'draw_order';
