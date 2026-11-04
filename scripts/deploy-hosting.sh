@@ -372,6 +372,10 @@ if ! node "$RAIZ/scripts/auditar-transicao-classificatoria-legada.js" > "$AUDITO
   exit 1
 fi
 cat "$AUDITORIA_TRANSICAO"
+if [[ -n "${SP_REVIEW_EVIDENCE:-}" && -f "$SP_REVIEW_EVIDENCE" ]]; then
+  printf '\n' >> "$AUDITORIA_TRANSICAO"
+  cat "$SP_REVIEW_EVIDENCE" >> "$AUDITORIA_TRANSICAO"
+fi
 echo "▸ 1.8 revisão cruzada sobre o corte remoto $BASE_REVISAO..HEAD…"
 if ! SP_REVIEW_BASE="$BASE_REVISAO" SP_REVIEW_EVIDENCE="$AUDITORIA_TRANSICAO" "$RAIZ/scripts/revisar-diff-em-lotes.sh"; then
   echo
