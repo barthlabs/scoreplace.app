@@ -11,7 +11,8 @@
 // ordem de sorteio registrada antes do encerramento. No avanço de grupos,
 // partidas pendentes só deixam de bloquear quando as vagas estão provadamente
 // definidas; se ainda puderem mudar a ordem, a organização confirma cada
-// pendência e congela a ordem atual com registro da decisão.
+// pendência e congela a ordem atual com registro da decisão. Nesse caso,
+// placares posteriores desses jogos não alteram a classificação congelada.
 // 2.5.89 — Numa competição por times encerrada pela classificatória em vários
 // grupos, cada grupo recebe seu campeão. A escolha de tabela geral soma as
 // categorias dentro do grupo; a escolha por categoria dá títulos por categoria

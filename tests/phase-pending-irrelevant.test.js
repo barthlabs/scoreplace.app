@@ -2,6 +2,13 @@
 const assert = require('node:assert/strict');
 const { E } = require('./headless.js');
 const pendingDecision = require('../functions-autodraw/phase-pending-decision-core.js');
+const fs = require('node:fs');
+const serverSource = fs.readFileSync(require.resolve('../functions-autodraw/index.js'), 'utf8');
+const scorePath = serverSource.slice(serverSource.indexOf('async function _aplicaPlacarNaTransacao('),
+  serverSource.indexOf('exports.applyMatchResult ='));
+assert(scorePath.indexOf('_phasePendingDecision.isFrozenMatch(t, matchId)') >= 0 &&
+  scorePath.indexOf('_phasePendingDecision.isFrozenMatch(t, matchId)') < scorePath.indexOf('const res = applyResultFn(t,'),
+  'as portas direta e enfileirada recusam placar congelado antes de aplicar o resultado');
 
 const match = (id, p1, p2, winner) => ({
   id, p1, p2, winner: winner || null, scoreP1: winner === p1 ? 6 : winner === p2 ? 2 : null,
@@ -38,6 +45,13 @@ assert.equal(pendingDecision.decide(seeding, false, E, null).reason, 'seed-choic
 assert.equal(pendingDecision.decide(seeding, false, E, ['6']).reason, 'seed-choice-stale',
   'aceite parcial não libera um jogo sem escolha');
 assert.equal(pendingDecision.decide(seeding, false, E, ['6', '7']).seedChoiceAccepted, true);
+seeding.history = [{ seedChoiceAccepted: true, ignoredPendingMatchIds: ['6', '7'] }];
+assert.equal(pendingDecision.isFrozenMatch(seeding, '7'), true,
+  'placar posterior de jogo ignorado não altera a ordem congelada');
+assert.equal(pendingDecision.isFrozenMatch(seeding, 'outro'), false);
+assert.equal(pendingDecision.isFrozenMatch({ history: [{ seedChoiceAccepted: false,
+  ignoredPendingMatchIds: ['7'] }] }, '7'), false,
+  'jogo sem impacto matemático continua lançável');
 assert.equal(pendingDecision.decide(seeding, true, E, ['6', '7']).reason, 'seed-choice-stale',
   'aceite antigo não vale depois que a classificação muda');
 assert.equal(pendingDecision.decide(seeding, false, E, ['6', '6']).reason, 'invalid-argument');

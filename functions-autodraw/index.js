@@ -2747,6 +2747,10 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
       }
     }
     _hidrataGrupos(t, 'aplicaPlacarNaTransacao', tId);
+    if (_phasePendingDecision.isFrozenMatch(t, matchId)) {
+      return { ok: false, reason: 'phase-seeding-frozen',
+        message: 'Este jogo ficou pendente quando a organização congelou a ordem da classificação para avançar a fase.' };
+    }
     if (typeof assertSurplusMatchMayStartFn !== 'function') {
       throw _drawFail('internal', 'Trava da folga indisponível.', { tId, matchId });
     }
@@ -6236,7 +6240,7 @@ exports.advanceTournamentPhase = onCall(async (request) => {
         message: seedAccepted
           ? 'Organização confirmou avanço com jogos pendentes que podem alterar apenas a ordem dos classificados; classificação congelada na ordem atual.'
           : 'Fase avançada com jogos pendentes sem impacto matemático nas vagas ou na ordem dos classificados.',
-        ignoredPendingMatchIds: ignoredPending });
+        ignoredPendingMatchIds: ignoredPending, seedChoiceAccepted: seedAccepted });
     }
     const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
     return { ok: true, changed: true, phaseIndex: t.currentPhaseIndex,

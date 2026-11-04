@@ -33,4 +33,11 @@ function decide(t, complete, engine, requestedIds) {
   return { ok: true, ignoredPendingIds: ids, seedChoiceAccepted: true };
 }
 
-module.exports = { decide };
+function isFrozenMatch(t, matchId) {
+  return !!(t && Array.isArray(t.history) && t.history.some(entry =>
+    entry && entry.seedChoiceAccepted === true &&
+    Array.isArray(entry.ignoredPendingMatchIds) &&
+    entry.ignoredPendingMatchIds.some(id => String(id) === String(matchId))));
+}
+
+module.exports = { decide, isFrozenMatch };

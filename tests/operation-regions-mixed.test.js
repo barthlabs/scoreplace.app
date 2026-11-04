@@ -36,6 +36,9 @@ const historicalSkipReason = skipReason || (!history?.originals && legacyAvailab
 const digest = skipReason ? '' : execFileSync('node',
   ['scripts/operation-source-digest.js', 'functions-autodraw', 'endMatchOnCourt', current, '--from-git'],
   { cwd: root }).toString().trim();
+const scoreDigest = skipReason ? '' : execFileSync('node',
+  ['scripts/operation-source-digest.js', 'functions-autodraw', 'applyMatchResult', current, '--from-git'],
+  { cwd: root }).toString().trim();
 
 for (const version of ['v2', 'v3']) {
   const run = (rows, allowLegacyCourt = false, extraEnv = {}, requireCurrent = false, requireScoreRefresh = false) => {
