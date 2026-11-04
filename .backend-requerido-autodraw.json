@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "backendCommit": "3dd5a949ff6625943cb17ff6c06f2ffa831f9e18",
-  "scopeNote": "Guarda de jogos congelados na escrita transacional comum; rotas de W.O., substituição e vaga foram publicadas de forma direcionada. finishTournament e avanço mantêm recibos anteriores.",
+  "backendCommit": "a5f138ea30cb4abb3184783390917af48b48cf97",
+  "scopeNote": "Guarda de jogos congelados falha fechada sem coletor; onze rotas de W.O., substituição e vaga foram republicadas de forma direcionada. finishTournament e avanço mantêm recibos anteriores.",
   "functions": [
     "applyLigaGroupWO",
     "applyMonarchGroupWO",
