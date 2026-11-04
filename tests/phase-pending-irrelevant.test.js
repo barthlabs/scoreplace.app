@@ -6,6 +6,16 @@ const fs = require('node:fs');
 const serverSource = fs.readFileSync(require.resolve('../functions-autodraw/index.js'), 'utf8');
 const scorePath = serverSource.slice(serverSource.indexOf('async function _aplicaPlacarNaTransacao('),
   serverSource.indexOf('exports.applyMatchResult ='));
+const writePath = serverSource.slice(serverSource.indexOf('function _gravaTorneio('),
+  serverSource.indexOf('function _', serverSource.indexOf('function _gravaTorneio(') + 1));
+assert(writePath.indexOf('_phasePendingDecision.changedFrozenMatchIds(tAntes,') >= 0 &&
+  writePath.indexOf('_phasePendingDecision.changedFrozenMatchIds(tAntes,') < writePath.indexOf('_wp.applyPlan(tx,'),
+  'todas as rotas de W.O. e substituição passam pela guarda antes da gravação');
+const woPath = serverSource.slice(serverSource.indexOf('exports.applyTournamentWO ='),
+  serverSource.indexOf('exports.setTournamentPresenceWithWOSubstitution ='));
+assert(woPath.indexOf('const before = _antesDoMotor(t)') >= 0 &&
+  woPath.indexOf('const before = _antesDoMotor(t)') < woPath.indexOf('changedFrozenMatchIds(before,'),
+  'o W.O. compara o estado fresco completo, incluindo history');
 assert(scorePath.indexOf('_phasePendingDecision.isFrozenMatch(t, matchId)') >= 0 &&
   scorePath.indexOf('_phasePendingDecision.isFrozenMatch(t, matchId)') < scorePath.indexOf('const res = applyResultFn(t,'),
   'as portas direta e enfileirada recusam placar congelado antes de aplicar o resultado');

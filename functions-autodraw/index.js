@@ -1234,6 +1234,17 @@ function _aplicaRascunhoDoSorteioInicial(t, draft) {
  * ⛔ E `participants`/`history` só saem do documento se estiverem NO MARCADOR — `dividir`
  * extrai os três por natureza, e gravar a config crua dele zeraria o elenco. */
 function _gravaTorneio(tx, ref, tDepois, tAntes, ctx) {
+  // Toda rota de W.O., substituição, placar e edição passa por esta escrita.
+  // Uma fase já avançada não pode ter seus jogos dispensados alterados.
+  if (tAntes && Array.isArray(tAntes.history) &&
+      tAntes.history.some(entry => entry && entry.seedChoiceAccepted === true)) {
+    const collect = tournament => drawWindow && typeof drawWindow._collectAllMatches === 'function'
+      ? drawWindow._collectAllMatches(tournament) : (Array.isArray(tournament.matches) ? tournament.matches : []);
+    const alteredFrozen = _phasePendingDecision.changedFrozenMatchIds(tAntes, collect(tAntes), collect(tDepois));
+    if (alteredFrozen.length) {
+      throw new HttpsError('failed-precondition', 'Jogo dispensado no avanço da fase não pode ser alterado.');
+    }
+  }
   if (tDepois?.billingContract?.schema === 1 && !tDepois.isSandbox && !tAntes) {
     throw new Error('[tournament-billing] gravação sem estado anterior do torneio');
   }
