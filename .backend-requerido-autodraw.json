@@ -1,9 +1,8 @@
 {
   "schema": 1,
-  "backendCommit": "b0c635210fcfa9359c23110a64a095fb382f4a5c",
-  "scopeNote": "Correção de decisões de desempate obsoletas e reenvio idempotente; avanço e encerramento foram publicados de forma direcionada. Os demais endpoints do fluxo mantêm os recibos anteriores.",
+  "backendCommit": "294396709236649ed3ed71bef0dc9c40a90aa0cc",
+  "scopeNote": "Limpeza de desempate quando a configuração final muda; finishTournament foi republicada de forma direcionada. advanceTournamentPhase e demais endpoints mantêm os recibos dos lotes anteriores.",
   "functions": [
-    "advanceTournamentPhase",
     "finishTournament"
   ]
 }

@@ -398,8 +398,8 @@
       "mode": "only"
     },
     "finishTournament": {
-      "backendCommit": "b0c635210fcfa9359c23110a64a095fb382f4a5c",
-      "deployedAt": "2026-11-04T02:31:17.930Z",
+      "backendCommit": "294396709236649ed3ed71bef0dc9c40a90aa0cc",
+      "deployedAt": "2026-11-04T02:39:06.829Z",
       "result": "success",
       "mode": "only"
     },
