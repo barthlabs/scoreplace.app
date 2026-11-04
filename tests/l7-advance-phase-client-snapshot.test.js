@@ -5,7 +5,7 @@ const fs = require('fs');
 const vm = require('vm');
 
 const source = fs.readFileSync('js/views/phases-engine.js', 'utf8');
-const advance = source.slice(source.indexOf('  function advanceMultiPhase(tId)'));
+const advance = source.slice(source.indexOf('  function advanceMultiPhase(tId,'));
 const gate = advance.indexOf('window._showPhasePromotePanel(tId)');
 const call = advance.indexOf("window._callCF('advanceTournamentPhase'");
 assert(gate >= 0 && call > gate, 'promoção Ouro/Prata é oferecida antes da chamada de avanço');
@@ -25,7 +25,7 @@ function promotionFixture(promoteHelps) {
     _callCF: name => { events.push(['call', name]); return Promise.resolve({ data: {} }); },
     showNotification: () => {}, _warn: () => {}
   };
-  const gateStart = source.indexOf('    var _cur = t.currentPhaseIndex || 0;', source.indexOf('  function advanceMultiPhase(tId)'));
+  const gateStart = source.indexOf('    var _cur = t.currentPhaseIndex || 0;', source.indexOf('  function advanceMultiPhase(tId,'));
   const gate = source.slice(gateStart, end);
   const ctx = { window, document: { getElementById: () => null },
     projectPhaseCfg: cfg => cfg,
@@ -35,7 +35,7 @@ function promotionFixture(promoteHelps) {
     selectQualifiers: () => ({ gold: [1, 2, 3], silver: [4, 5, 6] }),
     ehReiRainhaRodadaUnica: () => false
   };
-  const run = vm.runInNewContext('(function(tId,t,cs){' + helpers + gate + '})', ctx);
+  const run = vm.runInNewContext('(function(tId,t,cs){var seedOnlyIds=[];function pendingIrrelevantForAdvance(){return false;}' + helpers + gate + '})', ctx);
   run('tour', { id: 'tour', currentPhaseIndex: 0, phases: [
     { name: 'Grupos' }, { name: 'Final', politicaDaChave: 'sobra_unica' }
   ] }, () => []);
@@ -54,7 +54,7 @@ function fixture(callCF, unavailable) {
     showNotification: (...args) => events.push(['notice', ...args]),
     _warn: () => {}
   };
-  const run = vm.runInNewContext('(function(tId,t,_niIdx){' + helpers + 'var _nextCfg=t.phases[_niIdx];' + branch + '})',
+  const run = vm.runInNewContext('(function(tId,t,_niIdx){var seedOnlyIds=[];function pendingIrrelevantForAdvance(){return false;}' + helpers + 'var _nextCfg=t.phases[_niIdx];' + branch + '})',
     { window, document: { getElementById: () => null } });
   run('tour', old, 1);
   return { events, old };

@@ -37,10 +37,10 @@ must(forapor.length === 0,
   '② ⛔ nenhuma chamada crua a _hydrateMonarchGroups fora da porta (achei ' + forapor.length + ')');
 const chamadas = [];
 linhas.forEach((l, i) => { const m = /_hidrataGrupos\(t, '([^']+)', ([A-Za-z_$][\w$.]*)\)/.exec(l); if (m) chamadas.push({ n: i + 1, onde: m[1], id: m[2] }); });
-must(chamadas.length === 8, '② os oito pontos passam pela porta (achei ' + chamadas.length + ')');
+must(chamadas.length === 9, '② os nove pontos passam pela porta (achei ' + chamadas.length + ')');
 must(chamadas.every((c) => !/^linha \d+$/.test(c.onde)),
   '② ⛔ nenhum ponto se identifica por NÚMERO DE LINHA — número envelhece no primeiro patch');
-must(new Set(chamadas.map((c) => c.onde)).size === 8, '② e cada um tem nome próprio, sem repetido');
+must(new Set(chamadas.map((c) => c.onde)).size === 9, '② e cada um tem nome próprio, sem repetido');
 
 // ── ③ o identificador do torneio EXISTE no escopo de cada chamada ───────────
 function escopoDe(nLinha) {
