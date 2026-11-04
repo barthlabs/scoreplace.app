@@ -5587,7 +5587,24 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
       if (hasDraw && patch.scheduleWindow !== undefined && !_configAtiva.igual(oldWindowForCompare, newWindowForCompare)) {
         throw new HttpsError('failed-precondition', 'Horários de jogos já publicados não podem mudar depois do sorteio.');
       }
-      if (patch.scheduleWindow !== undefined) patch.scheduleWindow = effectiveWindow;
+      if (patch.scheduleWindow !== undefined) {
+        // Uma aba anterior reenvia {version:1, days} mesmo quando a agenda já é
+        // idêntica. A mescla acima pode acrescentar apenas metadados ausentes
+        // (version/categoryWindows) e fazer a comparação genérica marcar mudança.
+        // Conservar o documento fresco nesse caso evita uma escrita sem alteração
+        // operacional; uma versão diferente de 1 continua sendo mudança explícita.
+        const existingSchedule = t.scheduleWindow && typeof t.scheduleWindow === 'object' &&
+          !Array.isArray(t.scheduleWindow) ? t.scheduleWindow : null;
+        const sameSchedule = !!existingSchedule &&
+          _configAtiva.igual(oldWindowForCompare, newWindowForCompare);
+        const knownPatch = Object.keys(patch.scheduleWindow).every((key) =>
+          key === 'version' || key === 'days' || key === 'categoryWindows');
+        const sameVersion = patch.scheduleWindow.version === undefined ||
+          (existingSchedule && patch.scheduleWindow.version === existingSchedule.version) ||
+          (existingSchedule && existingSchedule.version === undefined && patch.scheduleWindow.version === 1);
+        if (sameSchedule && knownPatch && sameVersion) delete patch.scheduleWindow;
+        else patch.scheduleWindow = effectiveWindow;
+      }
     }
     // Pontos de folga podem mudar enquanto a classificatória de ranking ainda
     // decide a tabela. Depois do avanço, a mudança alteraria vagas já publicadas.

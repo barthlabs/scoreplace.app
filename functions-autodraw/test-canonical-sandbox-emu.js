@@ -152,6 +152,10 @@ const categories = [{ id: 'light', label: 'Light' }];
   const legacyNoVersion = await callFn('updateTournamentConfiguration', { tournamentId:legacyId,
     patch:{ scheduleWindow:{ version:1, days } } }, owner);
   assert.equal(legacyNoVersion.status, 200, 'versão ausente não bloqueia dias publicados idênticos');
+  assert.equal(legacyNoVersion.body.result.changed, false,
+    'reenviar só a versão implícita da agenda não grava uma mudança');
+  assert.deepEqual((await legacyRef.get()).data().scheduleWindow, { days },
+    'a escrita redundante não acrescenta metadados ao torneio legado');
   const invalidDrawId = 'sb_category-windows-invalid-draw';
   const invalidDrawRef = db.collection('sandboxes').doc(invalidDrawId);
   const invalidDraw = { id:invalidDrawId, isSandbox:true, sandboxOf:id, sandboxOwnerUid:'sb-owner',
