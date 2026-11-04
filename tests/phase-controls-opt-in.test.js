@@ -52,6 +52,7 @@ headless.window._f2Elim(false);
 assert.equal(get().eliminatoria.ativa, false);
 assert(titles().every(x => x >= 0), 'eliminatória off conserva cabeçalho');
 assert(!box.innerHTML.includes('Confrontos na chave'), 'eliminatória off recolhe controles');
+assert(!box.innerHTML.includes('2026-12-15'), 'eliminatória off não mostra a data guardada como ativa');
 assert.equal(F.compileToPhases(get(), { sport: 'Beach Tennis' }).phases.length, 1);
 headless.window._f2ClassifAtiva(false);
 assert.equal(get().classifAtiva, true, 'última fase não pode desligar');
@@ -59,6 +60,9 @@ headless.window._f2Elim(true);
 headless.window._f2ClassifAtiva(false);
 assert.equal(get().classifAtiva, false);
 assert(!box.innerHTML.includes('Estrutura — nº de grupos'), 'classificatória off recolhe controles');
+assert(!box.innerHTML.includes('2026-12-15'), 'eliminação direta não mostra data guardada da segunda fase');
+assert(!box.innerHTML.includes('f2-elim-end-date'), 'eliminação direta usa data da fase inicial');
+assert(!box.innerHTML.includes('f2elim'), 'eliminação direta usa formato da partida inicial');
 assert(titles().every(x => x >= 0), 'classificatória off conserva cabeçalho');
 assert.equal(F.compileToPhases(get(), { sport: 'Beach Tennis' }).phases.length, 1);
 headless.window._f2Elim(false);
@@ -72,6 +76,13 @@ assert.equal(direct.phases[0].scoring || null, null, 'eliminação direta usa o 
 assert.equal(direct.phases[0].endDate || '', '', 'eliminação direta usa datas iniciais, não a data preservada da segunda fase');
 assert.equal(direct.phases[0].teamCompetition || null, null, 'fase direta não ativa os times guardados na classificatória');
 assert.equal(direct.topLevel.teamCompetition || null, null, 'topo direto não ativa os times guardados');
+const dormantTie = F.normalize({ ...base, classifAtiva: false, tieResolution: 'singles_then_draw',
+  eliminatoria: { ...base.eliminatoria, ativa: true } }, 'Beach Tennis');
+const noTeamTie = F.normalize({ ...base, classifAtiva: false, tieResolution: 'singles_then_draw',
+  teamCompetition: { ...base.teamCompetition, enabled: false },
+  eliminatoria: { ...base.eliminatoria, ativa: true } }, 'Beach Tennis');
+assert.equal(dormantTie.tieResolution, noTeamTie.tieResolution,
+  'times guardados não alteram o desempate efetivo sem classificatória');
 const reopened = F.normalize(JSON.parse(JSON.stringify(direct.cfg)), 'Beach Tennis');
 assert.equal(reopened.teamCompetition.enabled, true, 'salvar e reabrir mantém a decisão interna de times');
 assert.equal(reopened.eliminatoria.endDate, '2026-12-15', 'salvar e reabrir mantém data interna');
