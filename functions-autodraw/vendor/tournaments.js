@@ -254,7 +254,7 @@ window._duplaCard = function (t, p, draggable, ctx) {
     var bgStyle = draggable
       ? 'background:linear-gradient(135deg,rgba(67,56,202,0.6),rgba(99,102,241,0.6));border:1px solid rgba(99,102,241,0.5);'
       : 'background:linear-gradient(135deg,rgba(15,118,110,0.6),rgba(20,184,166,0.6));border:1px solid rgba(20,184,166,0.5);';
-    var _canPairDrag = isOrg || (t && t.manualPairing === 'open');
+    var _canPairDrag = (isOrg && t && t.manualPairing !== 'athletes_only') || (t && (t.manualPairing === 'open' || t.manualPairing === 'athletes_only'));
     // Formar dupla é mutação: nome é rótulo de leitura, jamais a chave da pessoa.
     // Um slot legado ainda sem UID/manualParticipantId continua visível, mas precisa ser
     // materializado antes de qualquer arraste. Isso impede escolher o homônimo errado.
@@ -640,7 +640,7 @@ window._buildDoublesInscritosSection = function (t, ctx) {
         ? ('<div style="margin-bottom:1.2rem;">' +
             '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap;">' +
               '<span style="font-size:0.75rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);text-transform:uppercase;letter-spacing:0.6px;">🙋 Sem dupla (' + _semDuplaTotal + ')</span>' +
-              '<span style="font-size:0.65rem;color:var(--text-muted);">' + ((isOrg || t.manualPairing === 'open') ? '— Arraste um card sobre outro para formar a dupla' : '— As duplas são formadas pelo organizador') + '</span>' +
+              '<span style="font-size:0.65rem;color:var(--text-muted);">' + (((isOrg && t.manualPairing !== 'athletes_only') || t.manualPairing === 'open' || t.manualPairing === 'athletes_only') ? '— Arraste seu card sobre outro para formar a dupla' : '— As duplas são formadas pelo organizador') + '</span>' +
             '</div>' +
             (_soloAvailable.length > 0 ? ('<div class="sp-dnd-host" style="' + window._INSCRITO_GRID_SOLO + '">' + _soloAvailable.map(function (p) { return window._duplaCard(t, p, true, _dctx); }).join('') + '</div>') : '') +
             _pendingCardsHtml +
@@ -2666,7 +2666,7 @@ function renderTournaments(container, tournamentId = null) {
         var _hasMatchesDD = (Array.isArray(t.matches) && t.matches.length) ||
                             (Array.isArray(t.rounds) && t.rounds.length) ||
                             (Array.isArray(t.groups) && t.groups.length);
-        if (isOrg) {
+        if (isOrg && t.manualPairing !== 'athletes_only') {
             if (typeof window._showDropChoiceOverlay === 'function') {
                 window._showDropChoiceOverlay({
                     tId: tId,

@@ -110,6 +110,7 @@ window._cloneTournament = async function(tournamentId) {
         coverGradientColor: t.coverGradientColor || '#0f172a',
         coverGradientEnabled: t.coverGradientEnabled === true,
         coverGradientAngle: t.coverGradientAngle != null ? t.coverGradientAngle : 135,
+        coverGradientBalance: t.coverGradientBalance != null ? t.coverGradientBalance : 50,
         logoLocked: t.logoLocked || false,
         logoShape: t.logoShape || 'square',
         logoRadius: (t.logoRadius != null ? t.logoRadius : 14),

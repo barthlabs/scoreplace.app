@@ -7,6 +7,7 @@ const ENUMS = [
   ['disputa', ['individual', 'dupla']],
   ['parceria', ['fixa', 'rei_rainha', 'sorteio_rodada', 'super_eight']],
   ['formacaoDupla', ['manual', 'sorteio']],
+  ['manualPairingPolicy', ['organizer_only', 'athletes_only', 'open']],
   ['classifScope', ['overall', 'per_group']],
   ['tieResolution', ['draw_order', 'singles_then_draw']],
   ['rodadas.modo', ['todos', 'fixo']],

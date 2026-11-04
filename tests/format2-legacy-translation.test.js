@@ -277,7 +277,11 @@ for (const key of ['format', 'enrollmentMode', 'gruposClassified', 'gruposCount'
   delete sample[key];
   assert.equal(checkPure(sample).reason, key === 'gruposCount' ? 'unverified-gruposClassified' : 'unverified-' + key);
 }
-for (const [key, value] of [['format', 'Ranking'], ['enrollmentMode', 'teams'], ['gruposClassified', 999]]) {
+const alternateEnrollment = structuredClone(duo);
+alternateEnrollment.enrollmentMode = duo.enrollmentMode === 'teams' ? 'individual' : 'teams';
+assert.equal(checkPure(alternateEnrollment).derived.topLevel.enrollmentMode, alternateEnrollment.enrollmentMode,
+  'tradução preserva tanto inscrição individual quanto dupla formada');
+for (const [key, value] of [['format', 'Ranking'], ['enrollmentMode', 'other'], ['gruposClassified', 999]]) {
   const sample = structuredClone(duo);
   sample[key] = value;
   assert.equal(checkPure(sample).reason, 'mismatch-top.' + key);

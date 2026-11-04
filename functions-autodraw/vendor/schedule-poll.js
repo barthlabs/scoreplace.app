@@ -847,6 +847,85 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
     return out;
   };
 
+  // Janelas específicas dividem as mesmas quadras. O encaixe é por instante,
+  // não por categoria inteira: Diamante 08–15 e Ouro 09:30–16 podem se sobrepor
+  // nas quadras livres, sem empurrar Ouro para depois das 15h.
+  function _schGradeComJanelasCategorias(t, jan, jogos, quadras) {
+    var configured = t.scheduleWindow.categoryWindows || [], agenda = window._schCategorySchedule(t);
+    var porCategoria = {}, categoriesWithWindow = {};
+    configured.forEach(function (item) {
+      var cat = String(item.category || ''), day = String(item.day || '');
+      (porCategoria[cat] || (porCategoria[cat] = {}))[day] = item;
+      categoriesWithWindow[cat] = true;
+    });
+    var blocks = {}, list = [], slots = [], booked = [];
+    jogos.forEach(function (m) {
+      var cat = _schCategoriaDoJogo(m), phase = m.phaseIndex == null ? (t.currentPhaseIndex || 0) : m.phaseIndex, round = m.round == null ? 0 : m.round;
+      var key = cat + '\u0000' + phase + '\u0000' + round + '\u0000' + (m.requiredDay || '');
+      if (!blocks[key]) { blocks[key] = { cat:cat, phase:phase, round:round, requiredDay:m.requiredDay || '', games:[] }; list.push(blocks[key]); }
+      blocks[key].games.push(m);
+    });
+    var byCategory = {};
+    list.forEach(function (block) { (byCategory[block.cat] || (byCategory[block.cat] = [])).push(block); });
+    Object.keys(byCategory).forEach(function (cat) {
+      var group = byCategory[cat].sort(function (a, b) { return a.phase - b.phase || a.round - b.round; });
+      var planned = agenda[cat] || [];
+      if (planned.length) group.forEach(function (block, index) {
+        if (!block.requiredDay) block.plannedDay = planned[Math.min(planned.length - 1, Math.floor(index * planned.length / group.length))].day;
+      });
+    });
+    function windows(block) {
+      return jan.dias.map(function (day, dayIndex) {
+        if (block.requiredDay && block.requiredDay !== day.ymd) return null;
+        if (block.plannedDay && block.plannedDay !== day.ymd) return null;
+        var catWindow = (porCategoria[block.cat] || {})[day.ymd];
+        if (categoriesWithWindow[block.cat] && !catWindow) return null;
+        return { dayIndex:dayIndex, start:catWindow ? _ms(day.ymd, catWindow.startTime) : day.iniMs,
+          end:catWindow ? _ms(day.ymd, catWindow.endTime) : day.fimMs };
+      }).filter(Boolean);
+    }
+    list.sort(function (a, b) {
+      var aw = windows(a), bw = windows(b);
+      var ad = aw.length ? aw[aw.length - 1].end : 0, bd = bw.length ? bw[bw.length - 1].end : 0;
+      return ad - bd || a.phase - b.phase || a.round - b.round || a.cat.localeCompare(b.cat);
+    });
+    var lastBlockEnd = {}, failure = false, slotMin = 30;
+    list.forEach(function (block) {
+      if (failure) return;
+      var allowed = windows(block), priorEnd = lastBlockEnd[block.cat] || 0, blockEnd = priorEnd;
+      if (!allowed.length) { failure = true; return; }
+      block.games.forEach(function (m) {
+        if (failure) return;
+        var duration = (window._minutosDaPartida(t, window._faseDoTorneio(t, block.phase)) || 30) * _MIN;
+        slotMin = Math.min(slotMin, duration / _MIN);
+        var uids = _schMatchUids(t, m), units = _schMatchRestUnits(m), found = null;
+        allowed.some(function (range) {
+          for (var ms = Math.max(range.start, priorEnd); ms + duration <= range.end; ms += 5 * _MIN) {
+            var overlaps = booked.filter(function (other) { return ms < other.end && other.ms < ms + duration; });
+            if (overlaps.length >= quadras) continue;
+            if (overlaps.some(function (other) {
+              return uids.some(function (uid) { return other.uids.indexOf(uid) !== -1; }) ||
+                units.some(function (unit) { return other.units.indexOf(unit) !== -1; });
+            })) continue;
+            found = { matchId:String(m.id), ms:ms, iso:new Date(ms).toISOString(), dia:range.dayIndex,
+              onda:Math.floor((ms - jan.dias[range.dayIndex].iniMs) / duration), extrapolaJanela:false };
+            booked.push({ ms:ms, end:ms + duration, uids:uids, units:units });
+            blockEnd = Math.max(blockEnd, ms + duration);
+            slots.push(found);
+            return true;
+          }
+          return false;
+        });
+        if (!found) failure = true;
+      });
+      lastBlockEnd[block.cat] = blockEnd;
+    });
+    return { slots:slots, quadras:quadras, dias:jan.dias.length, cabe:!failure && slots.length === jogos.length,
+      fimMs:slots.reduce(function (max, slot) { return Math.max(max, slot.ms); }, jan.dias[0].iniMs),
+      extraPorDia:jan.dias.map(function () { return 0; }), extraMs:failure ? slotMin * _MIN : 0,
+      executionOrder:'categories', slotMin:slotMin };
+  }
+
   // Num sorteio de três jogos por dupla, "rodada" do documento pode ser a
   // posição visual na grade (R1..R7). A cadência esportiva deve ser derivada
   // dos confrontos: cada estágio contém exatamente um jogo de cada dupla.
@@ -1110,7 +1189,8 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
       // Acima de três dias a estimativa histórica não se aventura a adivinhar
       // agenda. Uma agenda explícita por categoria, porém, é justamente a
       // decisão do organizador que torna o planejamento determinístico.
-      var temAgendaCategorias = Object.keys(window._schCategorySchedule(t)).length > 0;
+      var temAgendaCategorias = Object.keys(window._schCategorySchedule(t)).length > 0 ||
+        !!(t.scheduleWindow && Array.isArray(t.scheduleWindow.categoryWindows) && t.scheduleWindow.categoryWindows.length);
       if (!jan || jan.invalida || !jan.dias.length || (jan.dias.length > 3 && !temAgendaCategorias)) return null;
       var quadras = Math.max(1, parseInt(t.courtCount, 10) || (Array.isArray(t.courtNames) ? t.courtNames.length : 0) || 1);
       var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (Array.isArray(t.matches) ? t.matches : []);
@@ -1118,6 +1198,9 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
         return m && !m.isBye && !m.isSitOut && !m.winner;
       });
       if (!jogos.length) return null;
+      if (t.scheduleWindow && Array.isArray(t.scheduleWindow.categoryWindows) && t.scheduleWindow.categoryWindows.length) {
+        return _schGradeComJanelasCategorias(t, jan, jogos, quadras);
+      }
 
       // Agrupa por categoria/fase/rodada. Quando há agenda de categorias,
       // cada bloco começa no dia e na posição explicitamente escolhidos; sem

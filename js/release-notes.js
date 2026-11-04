@@ -1,3 +1,8 @@
+// 2.5.95 — Inscrição individual ou em dupla formada, com permissão de formação
+// pela organização, pelos atletas ou por ambos. Beach Tennis também permite
+// simples. Cada categoria pode ter uma faixa própria de jogos dentro do dia.
+// O fundo do torneio mostra o gradiente nas cores escolhidas, com direção e
+// proporção ajustáveis entre 10/90 e 90/10.
 // 2.5.94 — Os botões de visibilidade do torneio mostram texto legível desde
 // a abertura do formulário e deixam clara a opção selecionada. A abertura
 // Rei/Rainha aparece no início da fase eliminatória com ou sem classificatória.

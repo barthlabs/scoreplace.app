@@ -162,12 +162,15 @@ uiCfg.parceria = 'fixa';
 uiHarness.window._f2MountInForm(uiBox, 'Beach Tennis', uiCfg, { id: 'future-test' });
 assert.match(uiBox.innerHTML, /Confrontos na chave/, 'organizador vê a decisão de semeadura');
 assert.match(uiBox.innerHTML, /Saída escolhida: a classificatória seleciona participantes para a eliminatória/);
-const decisionTitles = ['2. Quem disputa os jogos?', '3. Como se formam as duplas?',
-  '4. 🎯 Fase Classificatória', '5. 🏆 Fase Eliminatória', '6. Revisão das decisões'];
+const decisionTitles = ['4. 🎯 Fase Classificatória', '5. 🏆 Fase Eliminatória', '6. Revisão das decisões'];
 assert.deepStrictEqual(decisionTitles.map(title => uiBox.innerHTML.indexOf(title)).filter(index => index >= 0).length,
-  decisionTitles.length, 'o fluxo exibe todas as perguntas aplicáveis');
+  decisionTitles.length, 'o fluxo exibe só as seções que controlam decisões');
 assert.deepStrictEqual(decisionTitles.map(title => uiBox.innerHTML.indexOf(title)).slice().sort((a, b) => a - b),
-  decisionTitles.map(title => uiBox.innerHTML.indexOf(title)), 'as perguntas seguem a ordem fixa');
+  decisionTitles.map(title => uiBox.innerHTML.indexOf(title)), 'as seções seguem a ordem fixa');
+assert.doesNotMatch(uiBox.innerHTML, /Quem disputa os jogos\?|Como se formam as duplas\?/,
+  'perguntas estáticas antigas não ocupam espaço no formulário');
+assert.match(uiBox.innerHTML, /Simples[\s\S]*?Duplas[\s\S]*?Inscrição individual[\s\S]*?Dupla formada/,
+  'modalidade e inscrição são escolhas explícitas');
 assert.equal((uiBox.innerHTML.match(/onchange="window\._f2TeamCompetition\(this\.checked\)"/g) || []).length, 1,
   'a decisão de ter times aparece uma vez dentro da classificatória');
 uiHarness.window._f2TeamCompetition(true);

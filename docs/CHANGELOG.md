@@ -1,3 +1,10 @@
+## 2.5.95 — 04/nov/2026 (inscrições, agenda e fundo do torneio)
+
+- O formulário distingue Simples/Duplas e inscrição individual/dupla formada; a organização escolhe quem pode formar duplas. Beach Tennis também admite Simples.
+- Inscrições, política de vagas e rigor ficam no painel Inscrições. Controles sem decisão foram removidos.
+- Cada categoria pode ter horário próprio por dia dentro da janela geral. A edição preserva janelas gravadas por outra aba; o servidor recusa agendas inválidas e sorteios sem capacidade.
+- O gradiente do fundo usa as duas cores escolhidas. Arrastar a roda altera ângulo e participação relativa entre 10/90 e 90/10.
+
 ## 2.5.94 — 04/nov/2026 (formulário de torneio)
 
 - Geral, Inscritos e Organização e árbitros recebem cores legíveis desde a abertura do formulário. A seleção inicial e as mudanças posteriores compartilham `aria-pressed`; a borda selecionada mantém a mesma espessura para não mover os botões.

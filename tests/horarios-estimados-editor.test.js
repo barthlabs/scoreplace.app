@@ -11,7 +11,7 @@ if (start >= 0 && end > start) {
   const nodes = {
     'tourn-start-date':{ value:'2026-10-22' }, 'tourn-end-date':{ value:'2026-10-23' },
     'tourn-start-time':{ value:'18:00' }, 'tourn-end-time':{ value:'22:40' },
-    'estimated-games-window-days':{ innerHTML:'', textContent:'', insertAdjacentHTML(){} }
+    'estimated-games-window-days':{ innerHTML:'', textContent:'', insertAdjacentHTML(){}, querySelector(){ return null; } }
   };
   const context = { window:{}, document:{ getElementById:id => nodes[id] || null }, Date, Object, Array, String };
   vm.runInNewContext(source.slice(start, end), context);

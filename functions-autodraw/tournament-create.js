@@ -72,6 +72,7 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
       catch (error) { fail('invalid-argument', error.message); }
     });
     checkNested(config, fail);
+    require('./category-window-core').validate(config, HttpsError);
     if ('membersOnly' in config || 'organizerOnly' in config) {
       if (typeof config.isPublic !== 'boolean' || typeof config.membersOnly !== 'boolean' || typeof config.organizerOnly !== 'boolean'
         || [config.isPublic, config.membersOnly, config.organizerOnly].filter(Boolean).length !== 1) {

@@ -337,6 +337,7 @@ const SUITES = [
   'tests/analise-geometria-real.test.js',
   'tests/analise-header-compacto.test.js',
   'functions-autodraw/test-category-capacity-core.js',
+  'functions-autodraw/test-category-window-core.js',
   'tests/test-utils.js',
   // A FAIXA da revisão do GPT (scripts/revisar-com-gpt.sh) é uma REGRA sobre os arquivos, e
   // os escapes só ELEVAM. O próprio revisor pediu este teste (parecer BLOQUEIO, 04/set/2026):

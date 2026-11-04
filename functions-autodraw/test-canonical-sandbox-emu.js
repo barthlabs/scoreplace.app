@@ -71,6 +71,108 @@ const categories = [{ id: 'light', label: 'Light' }];
   assert.equal(JSON.stringify((await real.get()).data()), realBefore, 'cliente sem flag não altera original');
   console.log('✓ configuração do sandbox grava só na coleção privada');
 
+  // A confirmação do sorteio pode trazer dias de uma aba antiga sem a chave de
+  // janelas. A callable mescla com o documento fresco da transação e devolve o
+  // resultado para a prévia. Alterações explícitas seguem as mesmas regras.
+  const windowId = 'sb_category-windows';
+  const windowRef = db.collection('sandboxes').doc(windowId);
+  const playDay = '2026-11-13';
+  const days = [{ day:playDay, startTime:'08:00', endTime:'19:30' }];
+  const categoryWindows = [{ category:'Diamante', day:playDay, startTime:'08:00', endTime:'15:00' }];
+  await windowRef.set({ id:windowId, isSandbox:true, sandboxOf:id, sandboxOwnerUid:'sb-owner', sbState:'ready', notificationsMuted:true,
+    creatorUid:'sb-owner', adminUids:['sb-owner'], combinedCategories:['Diamante','Ouro'],
+    startDate:playDay + 'T08:00', endDate:playDay + 'T19:30',
+    scheduleWindow:{ version:1, days, categoryWindows } });
+  const merged = await callFn('updateTournamentConfiguration', { tournamentId:windowId,
+    patch:{ scheduleWindow:{ version:1, days } } }, owner);
+  assert.equal(merged.status, 200, JSON.stringify(merged.body));
+  assert.deepEqual(merged.body.result.scheduleWindow.categoryWindows, categoryWindows,
+    'resposta devolve janelas frescas mescladas');
+  assert.deepEqual((await windowRef.get()).data().scheduleWindow.categoryWindows, categoryWindows,
+    'patch de uma aba antiga não apaga janelas de categoria');
+  const categoryOnly = await callFn('updateTournamentConfiguration', { tournamentId:windowId,
+    patch:{ scheduleWindow:{ categoryWindows } } }, owner);
+  assert.equal(categoryOnly.status, 200, 'editar apenas janelas preserva os dias do documento fresco');
+  assert.deepEqual(categoryOnly.body.result.scheduleWindow.days, days);
+  const nullWindow = await callFn('updateTournamentConfiguration', { tournamentId:windowId,
+    patch:{ scheduleWindow:null } }, owner);
+  assert.equal(nullWindow.body.error.status, 'INVALID_ARGUMENT', 'agenda nula não apaga dias');
+  for (const windowPatch of [
+    { categoryWindows:null },
+    { days:[{ day:playDay, startTime:'08:00', endTime:'14:00' }], categoryWindows:null }
+  ]) {
+    const invalid = await callFn('updateTournamentConfiguration', { tournamentId:windowId,
+      patch:{ scheduleWindow:windowPatch } }, owner);
+    assert.equal(invalid.body.error.status, 'INVALID_ARGUMENT', 'null explícito não apaga janela nem quando dias mudam');
+  }
+  await windowRef.update({ 'scheduleWindow.extra':'outro-escritor' });
+  const unknown = await callFn('updateTournamentConfiguration', { tournamentId:windowId,
+    patch:{ endDate:playDay + 'T19:30' } }, owner);
+  assert.equal(unknown.body.error.status, 'FAILED_PRECONDITION', 'chave desconhecida existente não é descartada na edição');
+  await windowRef.update({ 'scheduleWindow.extra':admin.firestore.FieldValue.delete() });
+  const shortened = await callFn('updateTournamentConfiguration', { tournamentId:windowId,
+    patch:{ scheduleWindow:{ version:1, days:[{ day:playDay, startTime:'08:00', endTime:'14:00' }] } } }, owner);
+  assert.equal(shortened.body.error.status, 'FAILED_PRECONDITION', 'encurtar dia não corta janela silenciosamente');
+  const shortenedExplicit = await callFn('updateTournamentConfiguration', { tournamentId:windowId,
+    patch:{ scheduleWindow:{ version:1, days:[{ day:playDay, startTime:'08:00', endTime:'14:00' }], categoryWindows } } }, owner);
+  assert.equal(shortenedExplicit.body.error.status, 'FAILED_PRECONDITION',
+    'encurtar dia com janela reenviada também é conflito');
+  const removedCategory = await callFn('updateTournamentConfiguration', { tournamentId:windowId,
+    patch:{ combinedCategories:['Ouro'] } }, owner);
+  assert.equal(removedCategory.body.error.status, 'FAILED_PRECONDITION', 'remover categoria com janela é conflito');
+  assert.match(removedCategory.body.error.message, /Diamante.*2026-11-13/);
+  const shortenedPhase = await callFn('updateTournamentConfiguration', { tournamentId:windowId,
+    patch:{ endDate:'2026-11-12T19:30' } }, owner);
+  assert.equal(shortenedPhase.body.error.status, 'FAILED_PRECONDITION', 'encurtar fase não descarta janela');
+  assert.match(shortenedPhase.body.error.message, /Diamante.*2026-11-13/);
+  const cleared = await callFn('updateTournamentConfiguration', { tournamentId:windowId,
+    patch:{ scheduleWindow:{ version:1, days, categoryWindows:[] } } }, owner);
+  assert.equal(cleared.status, 200, JSON.stringify(cleared.body));
+  assert.deepEqual((await windowRef.get()).data().scheduleWindow.categoryWindows, [],
+    'lista vazia explícita remove as janelas antes do sorteio');
+  await windowRef.update({ 'scheduleWindow.categoryWindows':categoryWindows,
+    matches:[{ id:'played-1', category:'Diamante' }] });
+  const sameAfterDraw = await callFn('updateTournamentConfiguration', { tournamentId:windowId,
+    patch:{ scheduleWindow:{ version:1, days, categoryWindows } } }, owner);
+  assert.equal(sameAfterDraw.status, 200, 'janela idêntica após sorteio é no-op');
+  const changedAfterDraw = await callFn('updateTournamentConfiguration', { tournamentId:windowId,
+    patch:{ scheduleWindow:{ version:1, days, categoryWindows:[{ category:'Diamante', day:playDay,
+      startTime:'09:00', endTime:'15:00' }] } } }, owner);
+  assert.equal(changedAfterDraw.body.error.status, 'FAILED_PRECONDITION', 'janela publicada não muda');
+  const legacyId = 'sb_category-windows-legacy';
+  const legacyRef = db.collection('sandboxes').doc(legacyId);
+  await legacyRef.set({ id:legacyId, isSandbox:true, sandboxOf:id, sandboxOwnerUid:'sb-owner', sbState:'ready', notificationsMuted:true,
+    creatorUid:'sb-owner', adminUids:['sb-owner'], combinedCategories:['Ouro'],
+    startDate:playDay + 'T08:00', endDate:playDay + 'T19:30',
+    scheduleWindow:{ version:1, days }, matches:[{ id:'played-1', category:'Ouro' }] });
+  const legacyNoop = await callFn('updateTournamentConfiguration', { tournamentId:legacyId,
+    patch:{ scheduleWindow:{ version:1, days } } }, owner);
+  assert.equal(legacyNoop.status, 200, 'torneio sorteado legado aceita agenda idêntica sem categoryWindows');
+  await legacyRef.update({ scheduleWindow:{ days } });
+  const legacyNoVersion = await callFn('updateTournamentConfiguration', { tournamentId:legacyId,
+    patch:{ scheduleWindow:{ version:1, days } } }, owner);
+  assert.equal(legacyNoVersion.status, 200, 'versão ausente não bloqueia dias publicados idênticos');
+  const invalidDrawId = 'sb_category-windows-invalid-draw';
+  const invalidDrawRef = db.collection('sandboxes').doc(invalidDrawId);
+  const invalidDraw = { id:invalidDrawId, isSandbox:true, sandboxOf:id, sandboxOwnerUid:'sb-owner',
+    sbState:'ready', notificationsMuted:true, creatorUid:'sb-owner', adminUids:['sb-owner'],
+    startDate:playDay + 'T08:00', endDate:playDay + 'T19:30', combinedCategories:['Ouro'],
+    scheduleWindow:{ version:1, days, categoryWindows:[{ category:'Ouro', day:playDay,
+      startTime:'07:00', endTime:'15:00' }] }, participants:[], matches:[], checkedIn:['athlete-1'], absent:['athlete-2'] };
+  await invalidDrawRef.set(invalidDraw);
+  const rejectedDraw = await callFn('drawRound', { tournamentId:invalidDrawId, sandbox:true }, owner);
+  assert.equal(rejectedDraw.body.error.status, 'FAILED_PRECONDITION',
+    'sorteio recusa janela inválida antes da hidratação e do cálculo');
+  assert.deepEqual((await invalidDrawRef.get()).data().checkedIn, ['athlete-1']);
+  assert.deepEqual((await invalidDrawRef.get()).data().absent, ['athlete-2']);
+  const scalarId = 'sb_category-windows-scalar-legacy';
+  const scalarRef = db.collection('sandboxes').doc(scalarId);
+  await scalarRef.set({ ...invalidDraw, id:scalarId, scheduleWindow:'legacy-invalid' });
+  const scalarDraw = await callFn('drawRound', { tournamentId:scalarId, sandbox:true }, owner);
+  assert.doesNotMatch(JSON.stringify(scalarDraw.body), /Agenda de jogos inválida|Horários por categoria inválidos/,
+    'agenda escalar legada sem janelas não recebe nova recusa de categoria');
+  console.log('✓ janelas por categoria preservadas, editáveis antes e bloqueadas após sorteio');
+
   const imageRequest = { tournamentId:routedId, sandbox:true, type:'logo',
     dataUrl:'data:image/png;base64,iVBORw0KGgo=' };
   const deniedImage = await callFn('uploadTournamentImage', imageRequest, stranger);

@@ -7958,8 +7958,8 @@ exports.setMatchSchedule = onCall(
   }
 );
 function _pairInvitationForCaller(tournament, callerUid, opts, isOrganizer) {
-  if (isOrganizer) return null;
-  if (tournament.manualPairing !== 'open' || !opts.uid1 || !opts.uid2 || opts.manualId1 || opts.manualId2) {
+  if (isOrganizer && tournament.manualPairing !== 'athletes_only') return null;
+  if ((tournament.manualPairing !== 'open' && tournament.manualPairing !== 'athletes_only') || !opts.uid1 || !opts.uid2 || opts.manualId1 || opts.manualId2) {
     throw new HttpsError('failed-precondition', 'formação por participante exige convite entre duas contas inscritas');
   }
   const pair = new Set([String(opts.uid1), String(opts.uid2)]);

@@ -53,6 +53,13 @@ console.log('\n── formar com fmt2 (formacaoDupla=manual) ──');
   ok('fmt2.formatCode preservado', r.updateData.fmt2 && r.updateData.fmt2.formatCode === 'elim');
   ok('NÃO usa manualPairing legado quando há fmt2', r.updateData.manualPairing === undefined);
 }
+{
+  const t = mkT();
+  t.manualPairing = 'organizer_only';
+  const r = computeFormPair(t, { uid1:'uidA', uid2:'uidB' });
+  ok('formação legada preserva permissão restrita explícita',
+     r.updateData.manualPairing === 'organizer_only', r.updateData.manualPairing);
+}
 
 console.log('\n── formar: alvo inexistente / mesmo ──');
 {

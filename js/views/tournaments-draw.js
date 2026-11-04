@@ -1742,7 +1742,7 @@ window._rebuildIntegratedBracket = function(t) {
 window._isManualPairing = function (t) {
   if (!t) return false;
   if (t.fmt2 && typeof t.fmt2 === 'object' && t.fmt2.formacaoDupla) return t.fmt2.formacaoDupla === 'manual';
-  return t.manualPairing === 'open';
+  return t.manualPairing === 'open' || t.manualPairing === 'athletes_only';
 };
 // v4.5.94: formar dupla à mão passa a regra pra "Já formadas" — grava na FONTE que
 // _isManualPairing lê (fmt2.formacaoDupla p/ format2; manualPairing p/ legado). Assim o
@@ -3270,9 +3270,9 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
             savedOriginPolicy === 'female-light-organization-final' || savedOriginPolicy === 'female-light-five-plus-three'
               ? savedOriginPolicy : 'organizer-pair-days';
         }
-        db._callFn('updateTournamentConfiguration', { tournamentId:String(tId), sandbox:typeof db._ehSandbox === 'function' && db._ehSandbox(tId), patch:{ categorySchedule:{ version:1, confirmed:true, slots:slots }, scheduleWindow:{ version:1, days:scheduleWindowDays }, courtOrder:selectedCourtOrder, teamCompetition:nextCompetition } }).then(function () {
+        db._callFn('updateTournamentConfiguration', { tournamentId:String(tId), sandbox:typeof db._ehSandbox === 'function' && db._ehSandbox(tId), patch:{ categorySchedule:{ version:1, confirmed:true, slots:slots }, scheduleWindow:{ version:1, days:scheduleWindowDays }, courtOrder:selectedCourtOrder, teamCompetition:nextCompetition } }).then(function (result) {
           t.categorySchedule = { version:1, confirmed:true, slots:slots };
-          t.scheduleWindow = { version:1, days:scheduleWindowDays };
+          t.scheduleWindow = (result && result.scheduleWindow) || { version:1, days:scheduleWindowDays, categoryWindows:(t.scheduleWindow && t.scheduleWindow.categoryWindows) || [] };
           t.courtOrder = selectedCourtOrder;
           t.teamCompetition = nextCompetition;
           window._teamDrawReviewApproved[String(tId)] = true;
@@ -4868,7 +4868,7 @@ window._participantSelfPair = function(tId, name1, uid1, name2, uid2) {
         if (typeof showNotification === 'function') showNotification('Torneio individual', 'Este torneio não permite a formação de times.', 'info');
         return;
     }
-    if (t.manualPairing !== 'open') {
+    if (t.manualPairing !== 'open' && t.manualPairing !== 'athletes_only') {
         if (typeof showNotification === 'function') showNotification('Apenas o organizador', 'Neste torneio, só o organizador forma as duplas.', 'info');
         return;
     }

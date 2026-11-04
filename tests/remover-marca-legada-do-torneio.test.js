@@ -32,9 +32,12 @@ try { vm.runInNewContext(client.slice(start, end), sandbox); } catch (err) { fai
 const bg = sandbox.window._tournamentCoverBackground;
 ok(!!bg && sandbox.window._tourUsesCoverPhoto({ coverUrl: 'https://img', coverMode: 'color' }) === false,
   'modo cor vence URL velha de capa — ela não pode reaparecer');
-const gradient = bg && bg({ coverMode: 'color', coverColor: '#123456', coverGradientColor: '#abcdef', coverGradientEnabled: true, coverGradientAngle: 271 });
-ok(gradient && gradient.css === 'linear-gradient(271deg, #123456, #abcdef)',
-  'as duas cores e os 360° do gradiente chegam à renderização canônica');
+const gradient = bg && bg({ coverMode: 'color', coverColor: '#123456', coverGradientColor: '#abcdef', coverGradientEnabled: true, coverGradientAngle: 0, coverGradientBalance: 90 });
+ok(gradient && gradient.css.includes('linear-gradient(0deg, #123456') && gradient.css.includes('#abcdef 100%') && gradient.css.includes('#123456 80%'),
+  'ângulo zero e proporção 90/10 chegam à renderização canônica');
+const otherSide = bg && bg({ coverMode: 'color', coverColor: '#123456', coverGradientColor: '#abcdef', coverGradientEnabled: true, coverGradientAngle: 271, coverGradientBalance: 10 });
+ok(otherSide && otherSide.css.includes('#123456 0%') && otherSide.css.includes('#abcdef 20%'),
+  'a proporção 10/90 também chega à renderização canônica');
 ok(/coverPhotoData:[\s\S]*?coverMode:[\s\S]*?coverColor:[\s\S]*?coverGradientColor:[\s\S]*?coverGradientEnabled:[\s\S]*?coverGradientAngle:/.test(organizer),
   'clonar torneio preserva foto ou cor/gradiente, não só o logo');
 const creator = fs.readFileSync('js/views/create-tournament.js', 'utf8');
@@ -42,6 +45,8 @@ ok(/id="cover-hue-wheel"/.test(creator) && /window\._pickCoverHue/.test(creator)
   'a escolha de cor oferece roda visual, não só controles lineares');
 ok(/id="cover-angle-wheel"/.test(creator) && /window\._pickCoverAngle/.test(creator) && /_coverPointAngle/.test(creator),
   'a direção do gradiente é uma roda 360° e mantém o valor numérico exato');
+ok(/wheel\.style\.background = gradient/.test(creator) && /Math\.hypot\(dx, dy\)/.test(creator) && /min="10" max="90"/.test(creator),
+  'a roda usa as cores escolhidas e o arrasto radial ajusta a proporção entre 10 e 90%');
 ok(/function _startCoverWheelDrag[\s\S]*?setPointerCapture[\s\S]*?pointermove[\s\S]*?pointerup/.test(creator) && /_startCoverWheelDrag\(event, wheel/.test(creator),
   'as duas rodas aceitam clique e arrasto contínuo, inclusive fora da borda da roda');
 process.exit(fail ? 1 : 0);

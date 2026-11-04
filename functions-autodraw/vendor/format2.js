@@ -34,7 +34,7 @@
   function allowsSingles(sport) {
     var R = window.SPORT_RULES || {};
     var r = R[sport];
-    return !!(r && r.teamSize === 1);
+    return sport === 'Beach Tennis' || !!(r && r.teamSize === 1);
   }
   function teamSizeFor(disputa) { return disputa === 'dupla' ? 2 : 1; }
 
@@ -425,7 +425,8 @@
   }
 
   function defaultConfig(sport) {
-    var dispDefault = allowsSingles(sport) ? 'individual' : 'dupla';
+    var rules = (window.SPORT_RULES || {})[sport];
+    var dispDefault = rules && rules.teamSize === 1 ? 'individual' : 'dupla';
     return normalize({
       disputa: dispDefault,
       grupos: 1,
@@ -433,6 +434,7 @@
       formacaoDupla: 'sorteio',
       manualPairingOpen: false,   // duplas "já formadas": os PARTICIPANTES podem formar duplas?
                                   // false (padrão) = só o organizador forma. → t.manualPairing.
+      manualPairingPolicy: 'organizer_only',
       rodadas: { modo: 'fixo', turnos: 'ida', n: 5, drawFirstDate: '', drawFirstTime: '19:00', drawIntervalDays: 7, drawManual: false, allowSelfDeactivation: true, _intervalAuto: true },
       // Pareamento de classificatórias por rodadas. O tamanho é só a faixa de
       // ranking; seus integrantes são recalculados após cada rodada pelos pontos.
@@ -516,6 +518,9 @@
       ((options && options.historicalSinglesOverride === true) ||
         (tournament.fmt2 && tournament.fmt2.historicalSinglesOverride === true));
     cfg.disputa = (tournament.teamSize === 1 || tournament.teamSize === '1') ? 'individual' : 'dupla';
+    cfg.manualPairingPolicy = ['organizer_only', 'athletes_only', 'open'].indexOf(tournament.manualPairing) >= 0
+      ? tournament.manualPairing : 'organizer_only';
+    cfg.formacaoDupla = tournament.enrollmentMode === 'teams' || tournament.enrollmentMode === 'time' ? 'manual' : 'sorteio';
     if (historicalSingles) cfg.historicalSinglesOverride = true;
     var historicalMixed = completedMixedGroupOnly(tournament) &&
       ((options && options.completedMixedGroupOnly === true) ||
@@ -663,6 +668,10 @@
     }
     if (out.formacaoDupla !== 'manual' && out.formacaoDupla !== 'sorteio') out.formacaoDupla = 'sorteio';
     out.manualPairingOpen = !!out.manualPairingOpen;
+    if (['organizer_only', 'athletes_only', 'open'].indexOf(out.manualPairingPolicy) < 0) {
+      out.manualPairingPolicy = out.manualPairingOpen ? 'open' : 'organizer_only';
+    }
+    out.manualPairingOpen = out.manualPairingPolicy !== 'organizer_only';
 
     // Pontuação individual quando singles OU parceria rotativa.
     out._scoreBy = (!isDupla || out.parceria === 'rei_rainha' || out.parceria === 'sorteio_rodada' || out.parceria === 'super_eight')
@@ -1027,7 +1036,7 @@
       top.enrollmentMode = formadas0 ? 'teams' : 'individual';
       // Duplas já formadas: se o org habilitou, os PARTICIPANTES podem formar suas duplas
       // (arrastar/soltar); senão só o organizador. Sorteadas → irrelevante (organizer_only).
-      top.manualPairing = (formadas0 && cfg.manualPairingOpen) ? 'open' : 'organizer_only';
+      top.manualPairing = formadas0 ? cfg.manualPairingPolicy : 'organizer_only';
       var d0 = _lineDests(e0.linhas);
       p0 = Object.assign(_phaseBase(re), {
         kind: 'elimination', elimination: { bracketType: elimDupla0 ? 'double' : 'single' }, name: e0.nome || 'Eliminatória',
@@ -1074,7 +1083,8 @@
       top.format = 'Liga';
       top.drawMode = isRR ? 'rei_rainha' : 'sorteio';
       top.teamSize = teamSize;
-      top.enrollmentMode = ligaFixedPairs ? 'teams' : 'individual';
+      top.enrollmentMode = ligaFixedPairs && cfg.formacaoDupla === 'manual' ? 'teams' : 'individual';
+      top.manualPairing = ligaFixedPairs && cfg.formacaoDupla === 'manual' ? cfg.manualPairingPolicy : 'organizer_only';
       top.ligaRoundFormat = isRR ? 'rei_rainha' : 'standard';
       if (isSuperEight) top.superEight = true;
       top.rankingSitOutScoring = cfg.rankingSitOutScoring;
@@ -1123,7 +1133,8 @@
       top.format = 'Fase de Grupos';
       top.drawMode = 'sorteio';
       top.teamSize = teamSize;
-      top.enrollmentMode = 'individual';
+      top.enrollmentMode = isDupla && cfg.formacaoDupla === 'manual' ? 'teams' : 'individual';
+      top.manualPairing = top.enrollmentMode === 'teams' ? cfg.manualPairingPolicy : 'organizer_only';
       top.gruposCount = _teamGroupCount;
       top.gruposClassified = cfg.classificados;
       if (cfg.teamCompetition && cfg.teamCompetition.enabled) top.teamCompetition = cfg.teamCompetition;

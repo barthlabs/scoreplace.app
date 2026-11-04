@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.5.94';
+window.SCOREPLACE_VERSION = '2.5.95';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -2521,10 +2521,13 @@ window._formatLabel = function (t) {
     var c1 = _coverHex(t.coverColor), c2 = _coverHex(t.coverGradientColor);
     if (!c1) return null;
     if (!c2) c2 = c1;
-    var angle = Math.max(0, Math.min(360, parseInt(t.coverGradientAngle, 10) || 135));
+    var angleValue = Number(t.coverGradientAngle);
+    var angle = Math.max(0, Math.min(360, t.coverGradientAngle == null || !Number.isFinite(angleValue) ? 135 : angleValue));
+    var balance = Math.max(10, Math.min(90, Number(t.coverGradientBalance) || 50));
+    var blendHalf = Math.min(15, balance, 100 - balance);
     var gradient = t.coverGradientEnabled === true;
     return {
-      css: gradient ? 'linear-gradient(' + angle + 'deg, ' + c1 + ', ' + c2 + ')' : c1,
+      css: gradient ? 'linear-gradient(' + angle + 'deg, ' + c1 + ' 0%, ' + c1 + ' ' + (balance - blendHalf) + '%, ' + c2 + ' ' + (balance + blendHalf) + '%, ' + c2 + ' 100%)' : c1,
       textColor: ((_coverLuma(c1) + _coverLuma(c2)) / 2) > 158 ? '#111827' : '#f8fafc'
     };
   };

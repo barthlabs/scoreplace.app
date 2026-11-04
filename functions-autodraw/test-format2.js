@@ -316,6 +316,65 @@ ok('canRecompile: currentPhaseIndex > 0 → false', core.canRecompile({ id: 'a',
 ok('canRecompile: fase já materializada → false', core.canRecompile({ id: 'a', _phaseMaterialized: 1 }) === false);
 ok('canRecompile: arrays vazios (pré-sorteio) → true', core.canRecompile({ id: 'a', matches: [], rounds: [] }) === true);
 
+// A inscrição é individual até que uma dupla já formada seja escolhida. Sorteio
+// e desempenho dos jogos nunca exigem que uma dupla exista no ato da inscrição.
+(function () {
+  for (const policy of ['organizer_only', 'athletes_only', 'open']) {
+    const cfg = A.defaultConfig(SPORT);
+    cfg.parceria = 'fixa'; cfg.formacaoDupla = 'manual'; cfg.manualPairingPolicy = policy;
+    cfg.rodadas.modo = 'todos';
+    const out = A.compileToPhases(cfg, OPTS).topLevel;
+    ok('dupla formada · ' + policy + ' → inscrição em dupla e autoridade explícita',
+      out.enrollmentMode === 'teams' && out.manualPairing === policy);
+  }
+  const drawn = A.defaultConfig(SPORT);
+  drawn.parceria = 'fixa'; drawn.formacaoDupla = 'sorteio'; drawn.rodadas.modo = 'fixo';
+  ok('dupla sorteada → inscrição individual', A.compileToPhases(drawn, OPTS).topLevel.enrollmentMode === 'individual');
+  for (const roundsMode of ['fixo', 'todos']) {
+    const storedCfg = A.defaultConfig(SPORT);
+    storedCfg.parceria = 'fixa'; storedCfg.formacaoDupla = 'manual'; storedCfg.rodadas.modo = roundsMode;
+    const compiled = A.compileToPhases(storedCfg, OPTS);
+    const stored = { sport:SPORT, ...compiled.topLevel, phases:compiled.phases,
+      fmt2:{ ...storedCfg, formacaoDupla:'sorteio' } };
+    const reopened = A.configFromTournament(stored, SPORT);
+    const recompilation = A.compileToPhases(reopened, OPTS);
+    ok('torneio antigo ' + roundsMode + ' com teams mantém inscrição em dupla ao reabrir',
+      reopened.formacaoDupla === 'manual' && recompilation.topLevel.enrollmentMode === 'teams');
+    const serverCopy = JSON.parse(JSON.stringify(stored));
+    const serverResult = core.compileFromFmt2(serverCopy);
+    ok('torneio antigo ' + roundsMode + ' com teams mantém inscrição em dupla no sorteio',
+      serverResult.ok === true && serverCopy.enrollmentMode === 'teams' &&
+      serverCopy.fmt2.formacaoDupla === 'manual');
+    const changedToDraw = JSON.parse(JSON.stringify(stored));
+    changedToDraw.enrollmentMode = 'individual';
+    const changedResult = core.compileFromFmt2(changedToDraw);
+    ok('mudança explícita para sorteio mantém inscrição individual em ' + roundsMode,
+      changedResult.ok === true && changedToDraw.enrollmentMode === 'individual');
+  }
+  const groupCfg = A.defaultConfig(SPORT);
+  groupCfg.parceria = 'fixa'; groupCfg.formacaoDupla = 'manual';
+  groupCfg.grupos = 2; groupCfg.rodadas.modo = 'todos';
+  const groupOut = A.compileToPhases(groupCfg, OPTS);
+  const oldGroup = { sport:SPORT, ...groupOut.topLevel, phases:groupOut.phases,
+    fmt2:{ ...groupCfg, formacaoDupla:'sorteio' } };
+  const oldGroupResult = core.compileFromFmt2(oldGroup);
+  ok('grupos antigos com teams mantêm inscrição em dupla no sorteio',
+    oldGroupResult.ok === true && oldGroup.enrollmentMode === 'teams');
+  for (const formation of ['rei_rainha', 'super_eight']) {
+    const cfg = A.defaultConfig(SPORT);
+    cfg.parceria = formation; cfg.formacaoDupla = 'sorteio';
+    ok('dupla por resultado · ' + formation + ' → inscrição individual',
+      A.compileToPhases(cfg, OPTS).topLevel.enrollmentMode === 'individual');
+  }
+  const elimination = A.defaultConfig(SPORT);
+  elimination.classifAtiva = false; elimination.eliminatoria.openReiRainha = true;
+  ok('abertura Rei/Rainha da eliminatória → inscrição individual',
+    A.compileToPhases(elimination, OPTS).topLevel.enrollmentMode === 'individual');
+  const singles = A.defaultConfig(SPORT);
+  singles.disputa = 'individual';
+  ok('Beach Tennis pode disputar simples', A.compileToPhases(singles, OPTS).topLevel.teamSize === 1);
+})();
+
 console.log('');
 console.log('════════════════════════════════════════');
 if (fail === 0) {

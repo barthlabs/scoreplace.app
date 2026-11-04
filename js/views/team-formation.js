@@ -66,7 +66,7 @@
   function requestPair(t, inviterUid, inviteeUid, inviterName, inviteeName, opts) {
     opts = opts || {};
     if (!t || (t.teamSize || 1) < 2) return { ok: false, error: 'nao-duplas' };
-    if (t.manualPairing !== 'open') return { ok: false, error: 'participante-sem-permissao' };
+    if (t.manualPairing !== 'open' && t.manualPairing !== 'athletes_only') return { ok: false, error: 'participante-sem-permissao' };
     if (!inviterUid || !inviteeUid || inviterUid === inviteeUid) return { ok: false, error: 'mesma-pessoa' };
     if (isInAnyTeam(t, inviterUid)) return { ok: false, error: 'voce-ja-em-dupla' };
     if (isInAnyTeam(t, inviteeUid)) return { ok: false, error: 'alvo-ja-em-dupla' };

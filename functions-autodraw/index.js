@@ -1715,6 +1715,8 @@ exports.drawRound = onCall(async (request) => {
     }
 
     if (!hasDrawnBracket(t)) _requireExplicitTeamDrawPlan(t, tId);
+    try { require('./category-window-core').validate(t, HttpsError); }
+    catch (error) { throw _drawFail('failed-precondition', error.message, { tId }); }
 
     // Rei/Rainha: o doc fresco traz grupos só com matchIds — hidrata ANTES do motor,
     // igual mutateTournament faz antes do mutator.
@@ -1768,7 +1770,7 @@ exports.drawRound = onCall(async (request) => {
       Array.isArray(teamSchedule.pairDayAssignments) && teamSchedule.pairDayAssignments.length > 0 &&
       unscoredDrawnMatches.some(m => !!m.requiredDay) &&
       realDrawnMatches.length === unscoredDrawnMatches.length;
-    if (strictTeamDays) {
+    if (strictTeamDays || (t.scheduleWindow && Array.isArray(t.scheduleWindow.categoryWindows) && t.scheduleWindow.categoryWindows.length)) {
       let plan = null;
       try {
         if (drawWindow && typeof drawWindow._schGradeEstimada === 'function') {
@@ -5282,7 +5284,7 @@ const _CAMPOS_CONFIG_TORNEIO = new Set([
   'maxParticipants','maxParticipantsPerCategory','maxParticipantsByCategory','autoCloseOnFull','enrollmentLimitMode','targetSlots','callPolicy',
   'resultEntry','woScope','lateEnrollment','newMatchups','venue','venueAccess','venueLat',
   'venueLon','venueAddress','venuePlaceId','venueCity','venueState','venueCountry',
-  'venuePhotoUrl','coverUrl','coverMode','coverColor','coverGradientColor','coverGradientEnabled','coverGradientAngle','logoUrl','logoLocked','logoShape','logoRadius','logoAspect','courtCount',
+  'venuePhotoUrl','coverUrl','coverMode','coverColor','coverGradientColor','coverGradientEnabled','coverGradientAngle','coverGradientBalance','logoUrl','logoLocked','logoShape','logoRadius','logoAspect','courtCount',
   'courtNames','courtOrder','callTime','warmupTime','gameDuration','scoring','swissRounds',
   'drawFirstDate','drawFirstTime','drawIntervalDays','drawManual','temporada','equilibrado',
   'clusterSize','balanceBy','genderRatio','genderRatioDisabled','wlGroupBalance','ligaNewPlayerScore',
@@ -5546,6 +5548,47 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
       patch.categoryDefinitions = await _categoryDefinitionsForLabels(tx, ref, t, finalLabels || []);
     }
     const hasDraw = hasDrawnBracket(t);
+    if (patch.scheduleWindow !== undefined || categoryChanged || patch.startDate !== undefined || patch.endDate !== undefined) {
+      if (patch.scheduleWindow !== undefined &&
+          (!patch.scheduleWindow || typeof patch.scheduleWindow !== 'object' || Array.isArray(patch.scheduleWindow))) {
+        throw new HttpsError('invalid-argument', 'Agenda de jogos inválida.');
+      }
+      if (patch.scheduleWindow && Object.prototype.hasOwnProperty.call(patch.scheduleWindow, 'categoryWindows') &&
+          patch.scheduleWindow.categoryWindows === null) {
+        throw new HttpsError('invalid-argument', 'Horários por categoria inválidos.');
+      }
+      const existingCategoryWindows = (t.scheduleWindow && t.scheduleWindow.categoryWindows) || [];
+      const daysChanged = patch.scheduleWindow !== undefined &&
+        patch.scheduleWindow.days !== undefined &&
+        !_configAtiva.igual((t.scheduleWindow && t.scheduleWindow.days) || [], patch.scheduleWindow.days);
+      const effectiveWindow = patch.scheduleWindow !== undefined
+        ? Object.assign({}, t.scheduleWindow || {}, patch.scheduleWindow, {
+          days: patch.scheduleWindow.days !== undefined ? patch.scheduleWindow.days : ((t.scheduleWindow && t.scheduleWindow.days) || []),
+          categoryWindows: patch.scheduleWindow && patch.scheduleWindow.categoryWindows !== undefined
+            ? patch.scheduleWindow.categoryWindows : existingCategoryWindows
+        }) : t.scheduleWindow;
+      try {
+        require('./category-window-core').validate({
+          combinedCategories: patch.combinedCategories !== undefined ? patch.combinedCategories : t.combinedCategories,
+          startDate: patch.startDate !== undefined ? patch.startDate : t.startDate,
+          endDate: patch.endDate !== undefined ? patch.endDate : t.endDate,
+          scheduleWindow: effectiveWindow
+        }, HttpsError);
+      } catch (error) {
+        if ((categoryChanged || daysChanged || patch.startDate !== undefined || patch.endDate !== undefined ||
+            (patch.scheduleWindow !== undefined && patch.scheduleWindow.categoryWindows === undefined)) &&
+            Array.isArray(existingCategoryWindows) && existingCategoryWindows.length) {
+          throw new HttpsError('failed-precondition', error.message);
+        }
+        throw error;
+      }
+      const oldWindowForCompare = { days: (t.scheduleWindow && t.scheduleWindow.days) || [], categoryWindows: existingCategoryWindows };
+      const newWindowForCompare = { days: (effectiveWindow && effectiveWindow.days) || [], categoryWindows: (effectiveWindow && effectiveWindow.categoryWindows) || [] };
+      if (hasDraw && patch.scheduleWindow !== undefined && !_configAtiva.igual(oldWindowForCompare, newWindowForCompare)) {
+        throw new HttpsError('failed-precondition', 'Horários de jogos já publicados não podem mudar depois do sorteio.');
+      }
+      if (patch.scheduleWindow !== undefined) patch.scheduleWindow = effectiveWindow;
+    }
     // Pontos de folga podem mudar enquanto a classificatória de ranking ainda
     // decide a tabela. Depois do avanço, a mudança alteraria vagas já publicadas.
     const oldSitOutScoring = t.rankingSitOutScoring || { mode: 'average' };
@@ -5612,7 +5655,7 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     const removesLegacyBranding = (patch.coverUrl === '' && !!(t.coverUrl || t.coverPhotoData)) ||
       (patch.logoUrl === '' && !!(t.logoUrl || t.logoData));
     const changed = scheduledOpeningRestoresState || removesLegacyBranding || Object.keys(patch).some(key => JSON.stringify(t[key]) !== JSON.stringify(patch[key]));
-    if (!changed) return { ok:true, changed:false, tournament:t };
+    if (!changed) return { ok:true, changed:false, tournament:t, scheduleWindow:t.scheduleWindow || null };
     /* ⏱️ COM A CHAVE SORTEADA, O PRAZO AINDA SE CORRIGE. Relato do dono (12/set/2026, Confra
      * com a Fase 2 rodando): _"não consigo salvar alterações nas datas"_. Arrastar a régua da
      * eliminatória muda `fmt2.eliminatoria.roundBounds`, a tela manda `fmt2` inteiro, e `fmt2`
@@ -5744,7 +5787,7 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
       } });
     }
     const b = _gravaTorneio(tx, ref, t, antes, { agoraIso, extras });
-    return { ok:true, changed:true, tournament:b.clean };
+    return { ok:true, changed:true, tournament:b.clean, scheduleWindow:b.clean.scheduleWindow || null };
   });
 });
 
@@ -7699,6 +7742,12 @@ exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
           const _automaticSeed = tId + ':slot:' + _devidoFresco + ':round:' + (tf.rounds || []).length;
           const _res = _drawSeed.withSeed(_automaticSeed, () => generateLigaRound(tf, new Date(_devidoFresco)));
           if (!_res || !_res.ok) return { pulou: (_res && _res.reason) || 'no-round-generated' };
+          const _windowCheck = require('./category-window-core').assessGenerated(
+            tf, drawWindow && drawWindow._schGradeEstimada, HttpsError);
+          if (_windowCheck) {
+            if (_windowCheck.error) console.error(`Auto-draw: agenda por categoria inválida em ${tId}:`, _windowCheck.error.message);
+            return { pulou: _windowCheck.pulou };
+          }
           _recordSeededDraw(tf, { seed: _automaticSeed, operationId: 'slot:' + _devidoFresco, at: _agoraIsoTx });
 
           // o motor também mexe em lastAutoDrawAt; a marca do slot é a nossa e fica.
@@ -7960,6 +8009,12 @@ async function _autoDrawIncrementalPhaseRound(t, tId, now) {
     if (typeof drawWindow._rehydrateEntryNames === 'function') drawWindow._rehydrateEntryNames(tf);
     const ok = drawWindow._phaseGenNextLeagueRound(tf, cur);
     if (!ok) return { pulou: 'gen-falhou-ou-jogadores-insuficientes' };
+    const _windowCheck = require('./category-window-core').assessGenerated(
+      tf, drawWindow && drawWindow._schGradeEstimada, HttpsError);
+    if (_windowCheck) {
+      if (_windowCheck.error) console.error(`Auto-draw phase: agenda por categoria inválida em ${tId}:`, _windowCheck.error.message);
+      return { pulou: _windowCheck.pulou };
+    }
     // v3.1.16 (inc 8): a rodada da fase mora em `phaseRounds[cur]`; o dedup por slot é o
     // `lastAutoDrawAt` da própria fase, e a marca canônica é `drawSlotAt` (topo).
     tf.phaseRounds[cur].lastAutoDrawAt = owed;

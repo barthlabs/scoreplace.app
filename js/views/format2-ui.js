@@ -61,9 +61,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // Toggles de FORMAÇÃO DE DUPLAS (participantes montam · times sorteados vs montados) só
     // fazem sentido com DUPLAS FIXAS — não em singles nem em parceria rotativa (Rei/Rainha /
     // sorteio-a-cada-rodada). Sincroniza a visibilidade conforme a config.
-    var fixedDupla = cfg.disputa === 'dupla' && (cfg.grupos > 1 || cfg.parceria === 'fixa');
     ['manual-pairing-container', 'mixed-pairing-container'].forEach(function (id) {
-      var el = document.getElementById(id); if (el) el.style.display = fixedDupla ? '' : 'none';
+      var el = document.getElementById(id); if (el) el.style.setProperty('display', 'none', 'important');
     });
     // Pontuação Avançada (💯 pontos individuais custom) é feature de PONTOS CORRIDOS (1 grupo).
     var adv = document.getElementById('adv-scoring-section');
@@ -133,6 +132,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var on = 'border:2px solid #818cf8;background:rgba(99,102,241,0.22);color:var(--sp-c-c7d2fe,#c7d2fe);';
     var off = 'border:2px solid var(--sp-b-255-255-255-016,rgba(255,255,255,0.16));background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));color:var(--text-main);';
     return '<button type="button" onclick="' + onclick + '" style="padding:8px 14px;border-radius:10px;font-size:0.85rem;font-weight:600;cursor:pointer;white-space:nowrap;margin:0 4px 4px 0;' + (active ? on : off) + '">' + label + '</button>';
+  }
+  function _binaryChoice(left, right, rightActive, onchange, ariaLabel) {
+    return '<label style="display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;font-size:.88rem;font-weight:700;color:var(--text-main);cursor:pointer;margin:8px 0;">' +
+      '<span style="color:' + (rightActive ? 'var(--text-muted)' : 'var(--sp-c-c7d2fe,#c7d2fe)') + '">' + left + '</span>' +
+      '<span class="toggle-switch"><input type="checkbox" aria-label="' + ariaLabel + '"' + (rightActive ? ' checked' : '') + ' onchange="' + onchange + '"><span class="toggle-slider"></span></span>' +
+      '<span style="color:' + (rightActive ? 'var(--sp-c-c7d2fe,#c7d2fe)' : 'var(--text-muted)') + '">' + right + '</span></label>';
   }
   function _sec(title, inner) {
     return '<div style="margin-bottom:16px;"><div style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:7px;">' + title + '</div>' + inner + '</div>';
@@ -867,13 +872,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // (eliminação direta), a elim É a fase 0 → trava quando a fase 0 é sorteada (_p0Drawn).
     var _elimLocked = _phaseLocks.elimLocked;
 
-    // Disputa só aparece onde o esporte permite singles (tênis/tênis de mesa). Nos demais
-    // (sempre duplas) não faz sentido mostrar nada — é óbvio.
-    if (allowsS) {
-      entryControls += _sec('Unidade que entra em quadra', _pill(cfg.disputa === 'individual', 'window._f2Disputa(\'individual\')', '👤 Individual') + _pill(isDupla, 'window._f2Disputa(\'dupla\')', '👥 Duplas'));
-    } else {
-      entryControls += '<p style="font-size:.85rem;color:var(--text-main);">Neste esporte, cada jogo é disputado em duplas.</p>';
-    }
+    entryControls += _binaryChoice('Simples', 'Duplas', isDupla,
+      "window._f2Disputa(this.checked?'dupla':'individual')", 'Disputa em simples ou duplas');
 
     structureControls += _sec('Estrutura — nº de grupos',
       '<div style="display:flex;align-items:center;gap:12px;">' +
@@ -890,12 +890,19 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       var montadas = pr === 'fixa' && cfg.formacaoDupla === 'manual';
       // "Sorteio" cobre por-rodada (sorteio_rodada) E dupla fixa sorteada (fixa+sorteio).
       var isSorteio = (pr === 'sorteio_rodada') || (pr === 'fixa' && cfg.formacaoDupla !== 'manual');
-      var fBtns = _pill(montadas, 'window._f2TeamForm(\'montadas\')', '🤝 Montadas') +
-        _pill(isSorteio, 'window._f2TeamForm(\'sorteio\')', '🎲 Sorteio');
-      if (um) fBtns += _pill(pr === 'rei_rainha', 'window._f2TeamForm(\'rei_rainha\')', '👑 Rei/Rainha');
-      if (um) fBtns += _pill(pr === 'super_eight', 'window._f2TeamForm(\'super_eight\')', '8️⃣ Super 8 individual');
-      if (pr === 'super_eight') fBtns += '<p style="font-size:.75rem;color:var(--text-muted);">Oito atletas ativos. Sete rodadas, duas partidas por rodada; cada atleta joga com os outros sete como parceiro uma vez.</p>';
-      if (pr === 'fixa') fBtns += '<p style="font-size:.75rem;color:var(--text-muted);">Com oito duplas fixas por grupo, turno único e todos contra todos, a classificatória é Super 8 de duplas. As duplas podem ser montadas ou sorteadas antes dos jogos.</p>';
+      var fBtns = _binaryChoice('Inscrição individual', 'Dupla formada', montadas,
+        'window._f2EnrollmentTeam(this.checked)', 'Inscrição individual ou dupla formada');
+      if (montadas) {
+        fBtns += _sec('Quem pode formar a dupla',
+          _pill(cfg.manualPairingPolicy === 'organizer_only', "window._f2PairAuthority('organizer_only')", 'Organização') +
+          _pill(cfg.manualPairingPolicy === 'athletes_only', "window._f2PairAuthority('athletes_only')", 'Atletas') +
+          _pill(cfg.manualPairingPolicy === 'open', "window._f2PairAuthority('open')", 'Organização e atletas'));
+      } else {
+        fBtns += _sec('Como a dupla será definida',
+          _pill(isSorteio, "window._f2TeamForm('sorteio')", '🎲 Sorteio') +
+          (um ? _pill(pr === 'rei_rainha', "window._f2TeamForm('rei_rainha')", '👑 Resultado · Rei/Rainha') +
+            _pill(pr === 'super_eight', "window._f2TeamForm('super_eight')", '8️⃣ Resultado · Super 8') : ''));
+      }
       // v4.4.30: Sorteio + 1 grupo → toggle "Novo parceiro a cada rodada" (ON por padrão).
       // ON = sorteio_rodada (rotativo, individual); OFF = dupla sorteada 1× e fixa até o fim.
       // 2+ grupos: só dupla fixa sorteada (rotativo exige 1 grupo) → sem toggle.
@@ -906,18 +913,19 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
             ? 'A cada rodada, parceiro (e adversário) são sorteados de novo — pontuação individual.'
             : 'A dupla é sorteada 1× e permanece fixa até o fim do torneio.') + '</div>';
       }
-      formationControls += _sec('Formação das duplas', fBtns);
+      formationControls += fBtns;
     }
     if (isDupla && !cfg.classifAtiva) {
       if (!cfg.eliminatoria.openReiRainha) {
-        formationControls += _sec('Duplas na eliminatória',
-          _pill(cfg.formacaoDupla === 'manual', 'window._f2Form(\'manual\')', '🤝 Já formadas') +
-          _pill(cfg.formacaoDupla !== 'manual', 'window._f2Form(\'sorteio\')', '🎲 Sorteadas'));
+        formationControls += _binaryChoice('Inscrição individual · sorteio', 'Dupla formada', cfg.formacaoDupla === 'manual',
+          "window._f2Form(this.checked?'manual':'sorteio')", 'Inscrição individual ou dupla formada');
         if (cfg.formacaoDupla === 'manual') {
-          formationControls += _toggleRight('Participantes podem formar suas duplas',
-            !!cfg.manualPairingOpen, 'window._f2ElimManualPairing(this.checked)');
+          formationControls += _sec('Quem pode formar a dupla',
+            _pill(cfg.manualPairingPolicy === 'organizer_only', "window._f2PairAuthority('organizer_only')", 'Organização') +
+            _pill(cfg.manualPairingPolicy === 'athletes_only', "window._f2PairAuthority('athletes_only')", 'Atletas') +
+            _pill(cfg.manualPairingPolicy === 'open', "window._f2PairAuthority('open')", 'Organização e atletas'));
         }
-      }
+      } else formationControls += '<p style="font-size:.84rem;color:var(--text-main);">Inscrição individual. A rodada Rei/Rainha forma as duplas pelo resultado.</p>';
     }
 
     // Grupos configuráveis não são um novo formato: as categorias continuam classificatórias de
@@ -1175,15 +1183,19 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           _toggleRight('Segunda partida se o vencedor da chave inferior ganhar a primeira',
             e.grandFinalReset === true, 'window._f2GrandFinalReset(this.checked)') + '</div>';
       }
-      eb += '<div style="margin-top:14px;font-size:.72rem;color:var(--text-muted);">Final: melhor de quantas partidas?</div>' +
-        '<input type="number" class="form-control" min="1" max="99" step="2" value="' + (e.finalSeriesBestOf || 1) +
-        '" onchange="window._f2FinalSeries(this.value)" aria-label="Partidas na série final" style="max-width:110px;box-sizing:border-box;">' +
-        '<div style="font-size:.72rem;color:var(--text-muted);margin-top:5px;">Cada partida tem placar próprio. Um número ímpar define a maioria; os sets de cada partida são configurados abaixo.</div>';
       /* ⛔⛔⛔ COMO O RESTO É RESOLVIDO — a escolha do organizador entre os três desenhos.
        * Só aparece na eliminatória SIMPLES: na dupla, a "repescagem" é o próprio formato (todo mundo
        * precisa perder duas vezes), não tratamento de resto — oferecer a escolha ali seria oferecer
        * um botão que não muda nada. A conta e as fórmulas de cada desenho estão em `chaves.js`. */
-      if (!e.dupla) {
+      var _knownCount = cfg.classifAtiva && !e.qualifyAll
+        ? (cfg.classifScope === 'per_group' && cfg.grupos > 1 ? cfg.grupos * cfg.classificados : cfg.classificados)
+        : (_peopleCount(S.t) || Number((document.getElementById('tourn-max-participants') || {}).value) || 0);
+      if (cfg.disputa === 'dupla' && !cfg.classifAtiva && !e.openReiRainha) _knownCount = Math.floor(_knownCount / 2);
+      if (cfg.disputa === 'dupla' && e.openReiRainha) _knownCount = Math.floor(_knownCount / 2);
+      var _lateMode = e.lateEnrollment === 'inherit'
+        ? ((document.getElementById('late-enrollment') || {}).value || 'closed') : e.lateEnrollment;
+      var _mayChangeCount = _lateMode !== 'closed';
+      if (!e.dupla && (_mayChangeCount || (_knownCount > 0 && (_knownCount & (_knownCount - 1)) !== 0))) {
         var _pol = e.politicaDaChave || 'repescagem';
         var _POLS = [
           ['repescagem', 'Repescagem', 'Todas jogam a estreia e as melhores derrotadas VOLTAM, até fechar a potência de 2. Ninguém fica de fora do primeiro dia, mas o torneio cresce: com 36 duplas são 50 jogos, e 14 das 18 que perdem seguem vivas.'],
@@ -1214,8 +1226,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       }
       // Linhas (chaves paralelas): só na eliminatória SIMPLES — a dupla-elim é chave única.
       if (!e.dupla) {
-        eb += '<div style="margin-top:12px;font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;">Chaves paralelas (nomes livres)</div>';
-        eb += '<input type="number" class="form-control" min="1" max="32" step="1" value="' + e.linhas + '" onchange="window._f2Linhas(this.value)" aria-label="Quantidade de chaves paralelas" style="max-width:110px;box-sizing:border-box;">';
+        eb += '<div style="margin-top:12px;">' + _binaryChoice('Uma chave', 'Chaves paralelas', e.linhas > 1,
+          'window._f2ParallelLines(this.checked)', 'Usar chaves paralelas') + '</div>';
+        if (e.linhas > 1) {
+          eb += '<label style="display:block;font-size:.72rem;color:var(--text-muted);margin-bottom:5px;">Total de chaves</label>' +
+            '<input type="number" class="form-control" min="2" max="32" step="1" value="' + e.linhas + '" onchange="window._f2Linhas(this.value)" aria-label="Quantidade total de chaves paralelas" style="max-width:110px;box-sizing:border-box;">';
         for (var i = 0; i < e.linhas; i++) {
           // v1.2.40: PADRÃO do formulário = class="form-control" (padding .75rem 1rem,
           // font-size 1rem) — igual aos campos de Início/Término da fase. Antes era estilo
@@ -1251,6 +1266,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
             '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;line-height:1.45;">' + (e.grandFinal !== false
               ? 'Os campeões das chaves se cruzam numa <b>grande final</b> (com grandes semifinais), renderizada logo após a 1ª chave. Desative para deixar as chaves <b>independentes</b> — cada uma com seu próprio campeão.'
               : 'Chaves <b>independentes</b> — cada chave tem seu próprio campeão, sem grande final unindo-as. Ative para cruzá-las numa grande final.') + '</div>';
+        }
         }
       }
       // 🎾 FORMATO DA PARTIDA DESTA FASE — só quando a eliminatória é fase POSTERIOR. Na
@@ -1313,20 +1329,15 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var priorLocked = _p0Drawn
       ? '<div style="pointer-events:none;opacity:.55;" aria-disabled="true">'
       : '<div>';
-    var entryStep = _phaseBlock('2. Quem disputa os jogos?', '#818cf8',
+    var entryStep = _phaseBlock('Disputa', '#818cf8',
       priorLocked + entryControls + '</div>');
-    var formationStep = _phaseBlock('3. Como se formam as duplas?', '#818cf8',
-      priorLocked + (formationControls || '<p style="font-size:.85rem;color:var(--text-main);">Não há formação de duplas nesta escolha.</p>') + '</div>');
-    var scoringStep = _phaseBlock('7. Para quem valem os resultados?', '#818cf8',
-      (_classifLocked ? '<div style="pointer-events:none;opacity:.55;" aria-disabled="true">' : '<div>') +
-      '<p style="font-size:.85rem;color:var(--text-main);">A partida é registrada uma vez. A classificação pode pontuar ' +
-      (scoreInd ? 'atletas' : 'duplas') + (cfg.teamCompetition && cfg.teamCompetition.enabled ? ' e times.' : '.') + '</p>' +
-      scoringControls + '</div>');
+    var formationStep = isDupla ? _phaseBlock('Inscrição e formação de duplas', '#818cf8',
+      priorLocked + formationControls + '</div>') : '';
     var teamChoiceStep = teamChoiceControls ?
       (_classifLocked ? '<div style="pointer-events:none;opacity:.55;" aria-disabled="true">' : '<div>') +
       teamChoiceControls + '</div>' : '';
     var classifStep = _phaseBlock('4. 🎯 Fase Classificatória', '#818cf8',
-      cfg.classifAtiva ? (teamChoiceStep + classifInner + scoringStep) : '',
+      cfg.classifAtiva ? (teamChoiceStep + classifInner + scoringControls) : '',
       _hdrRight(_phaseLocks.classifToggleLocked,
         _toggleRight('Ativa', cfg.classifAtiva, 'window._f2ClassifAtiva(this.checked)',
           _phaseLocks.classifToggleLocked || (cfg.classifAtiva && !e.ativa))));
@@ -1353,6 +1364,13 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 
   // ── Handlers globais (form + page) ──
   window._f2Disputa = function (v) { S.cfg.disputa = v; _norm(); _rerender(); };
+  window._f2EnrollmentTeam = function (formed) { if (!S) return; window._f2TeamForm(formed ? 'montadas' : 'sorteio'); };
+  window._f2PairAuthority = function (policy) {
+    if (!S || ['organizer_only', 'athletes_only', 'open'].indexOf(policy) < 0) return;
+    S.cfg.manualPairingPolicy = policy;
+    S.cfg.manualPairingOpen = policy !== 'organizer_only';
+    _norm(); _rerender();
+  };
   window._f2TieResolution = function (v) { if (!S) return; S.cfg.tieResolution = v; _norm(); _rerender(); };
   window._f2SitOutScoring = function (mode) {
     if (!S) return;
@@ -1452,11 +1470,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (v === 'montadas') { S.cfg.parceria = 'fixa'; S.cfg.formacaoDupla = 'manual'; }
     else if (v === 'sorteio') {
       // v4.4.30: Sorteio defaulta pra "por rodada" (só com 1 grupo); 2+ grupos = dupla fixa sorteada.
+      S.cfg.formacaoDupla = 'sorteio';
       if (S.cfg.grupos === 1) { S.cfg.parceria = 'sorteio_rodada'; }
       else { S.cfg.parceria = 'fixa'; S.cfg.formacaoDupla = 'sorteio'; }
     }
-    else if (v === 'rei_rainha') { S.cfg.parceria = 'rei_rainha'; }
-    else if (v === 'super_eight') { S.cfg.parceria = 'super_eight'; }
+    else if (v === 'rei_rainha') { S.cfg.parceria = 'rei_rainha'; S.cfg.formacaoDupla = 'sorteio'; }
+    else if (v === 'super_eight') { S.cfg.parceria = 'super_eight'; S.cfg.formacaoDupla = 'sorteio'; }
     _norm(); _rerender();
   };
   // v4.4.30: toggle "Novo parceiro a cada rodada" dentro do Sorteio. ON = sorteio_rodada
@@ -1835,6 +1854,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     _norm(); _rerender();
   };
   window._f2Linhas = function (n) { if (!S) return; S.cfg.eliminatoria.linhas = parseInt(n, 10) || 1; _norm(); _rerender(); };
+  window._f2ParallelLines = function (enabled) { if (!S) return; S.cfg.eliminatoria.linhas = enabled ? 2 : 1; _norm(); _rerender(); };
   // ── Formato da partida da ELIMINATÓRIA (cfg.eliminatoria.scoring) ──
   // Ligar o toggle NÃO muda o jogo: começa com uma cópia do formato da fase inicial, e a
   // pessoa então escolhe outro. (Ligar e já mudar o placar por baixo seria surpresa.)

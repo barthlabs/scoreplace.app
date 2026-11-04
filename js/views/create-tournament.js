@@ -75,7 +75,8 @@ function _estimatedGameDays() {
 window._renderEstimatedGameHours = function (datesChanged) {
   var mount = document.getElementById('estimated-games-window-days');
   if (!mount) return;
-  var state = window._estimatedGameHoursState || (window._estimatedGameHoursState = { saved:null, valuesByDay:{}, touched:false, locked:false });
+  var categoriesOpen = !!(mount.querySelector('details') && mount.querySelector('details').open);
+  var state = window._estimatedGameHoursState || (window._estimatedGameHoursState = { saved:null, valuesByDay:{}, categoryByKey:{}, touched:false, locked:false });
   if (datesChanged && !state.locked) state.touched = true;
   var days = _estimatedGameDays();
   if (!days.length) { mount.textContent = 'Informe as datas de início e fim da fase.'; return; }
@@ -94,7 +95,43 @@ window._renderEstimatedGameHours = function (datesChanged) {
       + '<label>às <input type="time" class="form-control" style="width:110px;display:inline-block" value="' + end + '" data-day="' + day + '" data-kind="endTime" oninput="window._setEstimatedGameHour(this)"' + (state.locked ? ' disabled' : '') + '></label>'
       + '</div>';
   }).join('');
+  var cats = (typeof window._getCreateFormCategoryData === 'function' && window._getCreateFormCategoryData().combinedCategories) || [];
+  if (cats.length) {
+    var savedCats = state.saved && Array.isArray(state.saved.categoryWindows) ? state.saved.categoryWindows : [];
+    var byCat = function (cat, day) {
+      var key = cat + '\u0000' + day;
+      if (Object.prototype.hasOwnProperty.call(state.categoryByKey || {}, key)) return state.categoryByKey[key];
+      return savedCats.find(function (item) { return item && item.category === cat && item.day === day; }) || null;
+    };
+    var escape = function (value) { return String(value).replace(/[&<>"']/g, function (ch) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]; }); };
+    mount.insertAdjacentHTML('beforeend', '<details' + (categoriesOpen ? ' open' : '') + ' style="margin-top:12px;border:1px solid rgba(129,140,248,.3);border-radius:9px;padding:9px"><summary style="cursor:pointer;font-weight:700">Horário de cada categoria</summary><div style="font-size:.75rem;color:var(--text-muted);margin:6px 0 10px">Cada categoria pode usar o dia inteiro ou ficar concentrada em uma faixa. Os horários definidos aqui limitam os jogos dessa categoria.</div>' + days.map(function (day) {
+      var global = state.valuesByDay[day] || saved.find(function (item) { return item && item.day === day; }) || {};
+      var start = global.startTime || defaultStart, end = global.endTime || defaultEnd;
+      return '<div style="margin:10px 0"><strong>' + escape(new Date(day + 'T12:00:00').toLocaleDateString('pt-BR', {weekday:'short',day:'2-digit',month:'2-digit'})) + '</strong>' + cats.map(function (cat) {
+        var current = byCat(cat, day), active = !!current, encoded = encodeURIComponent(cat);
+        return '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.08)"><label style="min-width:170px"><input type="checkbox" data-category="' + encoded + '" data-day="' + day + '" onchange="window._setCategoryGameWindow(this)"' + (active ? ' checked' : '') + (state.locked ? ' disabled' : '') + '> ' + escape(cat) + '</label><label>Das <input type="time" class="form-control" style="width:105px;display:inline-block" data-category="' + encoded + '" data-day="' + day + '" data-kind="startTime" value="' + escape(active ? current.startTime : start) + '" oninput="window._setCategoryGameWindow(this)"' + (!active || state.locked ? ' disabled' : '') + '></label><label>às <input type="time" class="form-control" style="width:105px;display:inline-block" data-category="' + encoded + '" data-day="' + day + '" data-kind="endTime" value="' + escape(active ? current.endTime : end) + '" oninput="window._setCategoryGameWindow(this)"' + (!active || state.locked ? ' disabled' : '') + '></label></div>';
+      }).join('') + '</div>';
+    }).join('') + '</details>');
+  }
   if (state.locked) mount.insertAdjacentHTML('beforeend', '<div style="color:var(--text-muted);font-size:.75rem;margin-top:8px">Agenda já sorteada: estes horários são exibidos sem alterar os jogos publicados.</div>');
+};
+
+window._setCategoryGameWindow = function (input) {
+  var state = window._estimatedGameHoursState;
+  if (!state || state.locked) return;
+  var cat = decodeURIComponent(input.dataset.category || ''), day = input.dataset.day || '', key = cat + '\u0000' + day;
+  if (!cat || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return;
+  if (input.type === 'checkbox') {
+    var global = state.valuesByDay[day] || (state.saved && (state.saved.days || []).find(function (item) { return item.day === day; })) || {};
+    state.categoryByKey[key] = input.checked ? { category:cat, day:day, startTime:global.startTime || '09:00', endTime:global.endTime || '22:00' } : null;
+    state.touched = true;
+    window._renderEstimatedGameHours();
+    return;
+  }
+  var current = state.categoryByKey[key] || (state.saved && (state.saved.categoryWindows || []).find(function (item) { return item.category === cat && item.day === day; }));
+  if (!current || (input.dataset.kind !== 'startTime' && input.dataset.kind !== 'endTime')) return;
+  state.categoryByKey[key] = Object.assign({}, current, { [input.dataset.kind]:input.value });
+  state.touched = true;
 };
 
 window._setEstimatedGameHour = function (input) {
@@ -109,7 +146,11 @@ window._setEstimatedGameHour = function (input) {
 
 window._readEstimatedGameHours = function () {
   var state = window._estimatedGameHoursState;
-  if (!state || !state.touched || state.locked) return null;
+  if (!state || state.locked) return null;
+  var currentCats = (typeof window._getCreateFormCategoryData === 'function' && window._getCreateFormCategoryData().combinedCategories) || [];
+  var oldWindows = state.saved && Array.isArray(state.saved.categoryWindows) ? state.saved.categoryWindows : [];
+  if (oldWindows.some(function (item) { return item && currentCats.indexOf(item.category) < 0; })) state.touched = true;
+  if (!state.touched) return null;
   var days = _estimatedGameDays();
   if (!days.length || days.length > 8) return { error:'Informe uma fase válida de até 8 dias.' };
   var saved = (state.saved && Array.isArray(state.saved.days)) ? state.saved.days : [];
@@ -125,7 +166,21 @@ window._readEstimatedGameHours = function () {
   if (result.some(function (item) { return !/^\d{2}:\d{2}$/.test(item.startTime) || !/^\d{2}:\d{2}$/.test(item.endTime) || item.endTime <= item.startTime; })) {
     return { error:'Em cada dia, o horário final deve ser posterior ao inicial.' };
   }
-  return { version:1, days:result };
+  var cats = (typeof window._getCreateFormCategoryData === 'function' && window._getCreateFormCategoryData().combinedCategories) || [];
+  var savedCats = state.saved && Array.isArray(state.saved.categoryWindows) ? state.saved.categoryWindows : [];
+  var categoryWindows = [];
+  cats.forEach(function (cat) { days.forEach(function (day) {
+    var key = cat + '\u0000' + day;
+    var current = Object.prototype.hasOwnProperty.call(state.categoryByKey || {}, key)
+      ? state.categoryByKey[key] : savedCats.find(function (item) { return item && item.category === cat && item.day === day; });
+    if (current) categoryWindows.push({ category:cat, day:day, startTime:current.startTime, endTime:current.endTime });
+  }); });
+  if (categoryWindows.some(function (item) {
+    var global = result.find(function (day) { return day.day === item.day; });
+    return !/^([01]\d|2[0-3]):[0-5]\d$/.test(item.startTime || '') || !/^([01]\d|2[0-3]):[0-5]\d$/.test(item.endTime || '') ||
+      item.startTime >= item.endTime || !global || item.startTime < global.startTime || item.endTime > global.endTime;
+  })) return { error:'Cada faixa de categoria deve caber dentro do horário geral do respectivo dia.' };
+  return { version:1, days:result, categoryWindows:categoryWindows };
 };
 
 function setupCreateTournamentModal() {
@@ -430,7 +485,7 @@ function setupCreateTournamentModal() {
                   </div>
                   <div style="display:grid;grid-template-columns:minmax(172px,1fr) minmax(172px,1fr);gap:18px;align-items:start;max-width:520px;">
                     <div style="display:grid;justify-items:center;gap:7px;"><strong style="font-size:.76rem;">Roda de cores</strong><button type="button" id="cover-hue-wheel" aria-label="Escolher matiz na roda de cores: clique ou arraste" onpointerdown="window._pickCoverHue(event)" style="width:142px;height:142px;border-radius:50%;border:3px solid #e2e8f0;background:conic-gradient(#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00);box-shadow:inset 0 0 0 28px rgba(15,23,42,.96),0 3px 14px rgba(0,0,0,.3);cursor:crosshair;position:relative;touch-action:none;user-select:none;"><span id="cover-hue-wheel-marker" aria-hidden="true" style="position:absolute;left:calc(50% - 6px);top:2px;width:12px;height:12px;border:2px solid white;border-radius:50%;box-shadow:0 0 0 1px #111;"></span></button><span id="cover-hue-wheel-value" style="font-size:.75rem;color:var(--text-muted);">Matiz 215°</span></div>
-                    <div style="display:grid;justify-items:center;gap:7px;"><strong style="font-size:.76rem;">Direção do gradiente</strong><button type="button" id="cover-angle-wheel" aria-label="Escolher direção do gradiente em 360 graus: clique ou arraste" onpointerdown="window._pickCoverAngle(event)" style="width:142px;height:142px;border-radius:50%;border:3px solid #818cf8;background:radial-gradient(circle,#172554 0 34%,transparent 35%),conic-gradient(from 0deg,#818cf8,#22d3ee,#34d399,#fbbf24,#f472b6,#818cf8);box-shadow:0 3px 14px rgba(0,0,0,.3);cursor:crosshair;position:relative;touch-action:none;user-select:none;"><span id="cover-angle-wheel-marker" aria-hidden="true" style="position:absolute;left:calc(50% - 3px);top:8px;width:6px;height:52px;background:#fff;border-radius:6px;transform-origin:3px 62px;box-shadow:0 0 0 1px #111;"></span><span style="position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-weight:900;font-variant-numeric:tabular-nums;text-shadow:0 1px 2px #000;"><span id="tourn-cover-angle-value">135°</span></span></button><label style="font-size:.74rem;color:var(--text-muted);">Ângulo exato <input type="number" id="tourn-cover-gradient-angle-number" min="0" max="360" value="135" oninput="window._syncCoverAngle(this.value)" style="width:65px;padding:5px 7px;border-radius:7px;background:#0f172a;color:var(--text-bright);border:1px solid #475569;"></label><input type="hidden" id="tourn-cover-gradient-angle" value="135"></div>
+                    <div style="display:grid;justify-items:center;gap:7px;"><strong style="font-size:.76rem;">Direção e proporção do gradiente</strong><button type="button" id="cover-angle-wheel" aria-label="Arraste ao redor para mudar o ângulo e para dentro ou fora para ajustar a proporção das cores" onpointerdown="window._pickCoverAngle(event)" style="width:142px;height:142px;border-radius:50%;border:3px solid #818cf8;box-shadow:0 3px 14px rgba(0,0,0,.3);cursor:crosshair;position:relative;touch-action:none;user-select:none;overflow:hidden;"><span id="cover-angle-wheel-axis" aria-hidden="true" style="position:absolute;left:calc(50% - 2px);bottom:50%;width:4px;height:36px;background:white;border-radius:4px;transform-origin:bottom center;box-shadow:0 0 0 1px #111;"></span><span id="cover-angle-wheel-marker" aria-hidden="true" style="position:absolute;width:14px;height:14px;background:white;border:2px solid #111;border-radius:50%;box-shadow:0 0 0 1px white;"></span><span style="position:absolute;left:calc(50% - 23px);top:calc(50% - 13px);width:46px;height:26px;display:grid;place-items:center;border-radius:12px;background:#172554;color:#fff;font-weight:900;font-size:.72rem;font-variant-numeric:tabular-nums;"><span id="tourn-cover-angle-value">135°</span></span></button><label style="font-size:.74rem;color:var(--text-muted);">Ângulo <input type="number" id="tourn-cover-gradient-angle-number" min="0" max="360" value="135" oninput="window._syncCoverAngle(this.value)" style="width:65px;padding:5px 7px;border-radius:7px;background:#0f172a;color:var(--text-bright);border:1px solid #475569;"></label><label style="font-size:.74rem;color:var(--text-muted);">Cor 1 <input type="range" id="tourn-cover-gradient-balance" min="10" max="90" value="50" oninput="window._syncCoverBalance(this.value)" style="width:110px;vertical-align:middle;accent-color:#818cf8;"> <span id="tourn-cover-balance-value">50% / 50%</span></label><input type="hidden" id="tourn-cover-gradient-angle" value="135"></div>
                   </div>
                   <div style="display:grid;grid-template-columns:repeat(2,minmax(130px,1fr));gap:8px;margin-top:.85rem;max-width:520px;">
                     <label style="font-size:.72rem;color:var(--text-muted);">Saturação <input type="range" id="tourn-cover-saturation" min="0" max="100" value="27" oninput="window._syncCoverColorFromHsl()" style="width:100%;accent-color:#818cf8;"></label>
@@ -1181,15 +1236,10 @@ function setupCreateTournamentModal() {
               <div class="form-group mb-3" id="enroll-model-section">
                 <label class="form-label">Modelo de inscrição</label>
                 <input type="hidden" id="enrollment-limit-mode" value="cap">
-                <div style="display:flex;flex-direction:column;gap:8px;" id="enroll-limit-mode-buttons">
-                  <div class="toggle-row" id="elm-row-cap" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(96,165,250,0.25);background:rgba(96,165,250,0.08);">
-                    <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">🏁</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">Limite com corrida</span><div class="toggle-desc" style="font-size:0.72rem;margin-top:2px;">As vagas enchem por ordem de inscrição — pode gerar corrida.</div></div></div>
-                    <label class="toggle-switch" style="--toggle-on-bg:#60a5fa;--toggle-on-glow:rgba(96,165,250,0.3);--toggle-on-border:#60a5fa;"><input type="checkbox" id="elm-toggle-cap" aria-label="Limite com corrida" checked onchange="window._syncEnrollLimitMode('cap')"><span class="toggle-slider"></span></label>
-                  </div>
-                  <div class="toggle-row" id="elm-row-draw" style="padding:8px 12px;border-radius:10px;border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03));">
-                    <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">🎲</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">Vagas com sorteio</span><div class="toggle-desc" style="font-size:0.72rem;margin-top:2px;">Inscrição aberta sem corrida; ao encerrar, um sorteio define quem entra e a lista de espera.</div></div></div>
-                    <label class="toggle-switch" style="--toggle-on-bg:#a78bfa;--toggle-on-glow:rgba(167,139,250,0.3);--toggle-on-border:#a78bfa;"><input type="checkbox" id="elm-toggle-draw" aria-label="Vagas com sorteio" onchange="window._syncEnrollLimitMode('draw')"><span class="toggle-slider"></span></label>
-                  </div>
+                <div id="enroll-limit-mode-buttons" style="display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;padding:12px;border:1px solid rgba(129,140,248,.3);border-radius:10px;">
+                  <span id="elm-label-cap" style="font-weight:700;color:var(--sp-c-c7d2fe,#c7d2fe);">🏁 Limite com corrida</span>
+                  <label class="toggle-switch"><input type="checkbox" id="elm-mode-toggle" aria-label="Limite com corrida ou vagas com sorteio" onchange="window._syncEnrollLimitMode()"><span class="toggle-slider"></span></label>
+                  <span id="elm-label-draw" style="font-weight:700;color:var(--text-muted);">🎲 Vagas com sorteio</span>
                 </div>
                 <!-- Config do modo Vagas (oculto salvo no modo draw) -->
                 <div id="draw-slots-container" style="display:none;margin-top:10px;padding:10px 12px;border-radius:10px;border:1px solid rgba(167,139,250,0.25);background:rgba(167,139,250,0.06);">
@@ -1298,6 +1348,16 @@ function setupCreateTournamentModal() {
       </div>
     `;
     document.body.appendChild(createInteractiveElement(modalHtml));
+
+    // Inscrição é uma seção única: os controles continuam com os mesmos IDs e
+    // handlers, mas agora acompanham a abertura do painel Inscrições.
+    var registrationContent = document.querySelector('#registration-settings .registration-settings-content');
+    if (registrationContent) {
+      ['rigor-section', 'enroll-model-section', 'auto-close-container'].forEach(function (id) {
+        var section = document.getElementById(id);
+        if (section) registrationContent.appendChild(section);
+      });
+    }
 
     // v2.6.86: ordem do form — primeiro o que é de TODO o torneio (inscrição, desempate),
     // depois o que é particular das FASES. Move o box da Fase 1 + o construtor de fases
@@ -2222,27 +2282,16 @@ function setupCreateTournamentModal() {
   // com sorteio" (draw). No modo draw a inscrição fica aberta a janela inteira
   // e o organizador define um número de vagas; o sorteio roda no fechamento.
   window._syncEnrollLimitMode = function(source) {
-    var capT = document.getElementById('elm-toggle-cap');
-    var drawT = document.getElementById('elm-toggle-draw');
-    if (!capT || !drawT) return;
-    // Mutual exclusion (radio-like). Se source ausente (re-render), preserva.
-    if (source === 'cap' && capT.checked) drawT.checked = false;
-    else if (source === 'draw' && drawT.checked) capT.checked = false;
-    if (!capT.checked && !drawT.checked) capT.checked = true; // nunca os dois off
-    var mode = drawT.checked ? 'draw' : 'cap';
+    var toggle = document.getElementById('elm-mode-toggle');
+    if (!toggle) return;
+    if (source === 'cap' || source === 'draw') toggle.checked = source === 'draw';
+    var mode = toggle.checked ? 'draw' : 'cap';
     var hidden = document.getElementById('enrollment-limit-mode');
     if (hidden) hidden.value = mode;
-    // Visual das rows
-    var capRow = document.getElementById('elm-row-cap');
-    if (capRow) {
-      capRow.style.border = capT.checked ? '1px solid rgba(96,165,250,0.25)' : '1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08))';
-      capRow.style.background = capT.checked ? 'rgba(96,165,250,0.08)' : 'rgba(255,255,255,0.03)';
-    }
-    var drawRow = document.getElementById('elm-row-draw');
-    if (drawRow) {
-      drawRow.style.border = drawT.checked ? '1px solid rgba(167,139,250,0.25)' : '1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08))';
-      drawRow.style.background = drawT.checked ? 'rgba(167,139,250,0.08)' : 'rgba(255,255,255,0.03)';
-    }
+    var capLabel = document.getElementById('elm-label-cap');
+    var drawLabel = document.getElementById('elm-label-draw');
+    if (capLabel) capLabel.style.color = mode === 'cap' ? 'var(--sp-c-c7d2fe,#c7d2fe)' : 'var(--text-muted)';
+    if (drawLabel) drawLabel.style.color = mode === 'draw' ? 'var(--sp-c-c7d2fe,#c7d2fe)' : 'var(--text-muted)';
     // Mostra/esconde o bloco de vagas e o limite por corrida
     var slotsBox = document.getElementById('draw-slots-container');
     if (slotsBox) slotsBox.style.display = (mode === 'draw') ? 'block' : 'none';
@@ -2614,9 +2663,14 @@ function setupCreateTournamentModal() {
   var _coverColorTarget = 1;
   function _setCoverWheelMarker(id, angle) {
     var marker = document.getElementById(id); if (!marker) return;
-    marker.style.transform = id === 'cover-angle-wheel-marker'
-      ? 'rotate(' + angle + 'deg)'
-      : 'rotate(' + angle + 'deg) translateY(-58px) rotate(' + (-angle) + 'deg)';
+    if (id === 'cover-angle-wheel-marker') {
+      var balance = Math.max(10, Math.min(90, Number((document.getElementById('tourn-cover-gradient-balance') || {}).value) || 50));
+      var radius = 15 + (balance - 10) * 48 / 80;
+      marker.style.left = 'calc(50% + ' + (Math.sin(angle * Math.PI / 180) * radius - 7) + 'px)';
+      marker.style.top = 'calc(50% - ' + (Math.cos(angle * Math.PI / 180) * radius + 7) + 'px)';
+      var axis = document.getElementById('cover-angle-wheel-axis');
+      if (axis) { axis.style.height = radius + 'px'; axis.style.transform = 'rotate(' + angle + 'deg)'; }
+    } else marker.style.transform = 'rotate(' + angle + 'deg) translateY(-58px) rotate(' + (-angle) + 'deg)';
     if (id === 'cover-hue-wheel-marker') { marker.style.top = 'calc(50% - 6px)'; marker.style.left = 'calc(50% - 6px)'; }
   }
   function _coverPointAngle(event, el) {
@@ -2672,7 +2726,17 @@ function setupCreateTournamentModal() {
     var wheel = document.getElementById('cover-angle-wheel'); if (!wheel) return;
     _startCoverWheelDrag(event, wheel, function(ev, el) {
       window._syncCoverAngle(_coverPointAngle(ev, el));
+      var rect = el.getBoundingClientRect(), dx = ev.clientX - rect.left - rect.width / 2, dy = ev.clientY - rect.top - rect.height / 2;
+      window._syncCoverBalance(Math.round(10 + (Math.hypot(dx, dy) - 15) * 80 / 48));
     });
+  };
+  window._syncCoverBalance = function(value) {
+    var n = Math.max(10, Math.min(90, Number(value) || 50));
+    var input = document.getElementById('tourn-cover-gradient-balance'), label = document.getElementById('tourn-cover-balance-value');
+    if (input) input.value = n;
+    if (label) label.textContent = n + '% / ' + (100 - n) + '%';
+    _setCoverWheelMarker('cover-angle-wheel-marker', Number((document.getElementById('tourn-cover-gradient-angle') || {}).value) || 0);
+    window._refreshCoverPreview();
   };
   window._syncCoverAngle = function(value) {
     var n = Math.max(0, Math.min(360, parseInt(value, 10) || 0));
@@ -2704,10 +2768,16 @@ function setupCreateTournamentModal() {
     var c1 = (document.getElementById('tourn-cover-color') || {}).value || '#1f2937';
     var c2 = (document.getElementById('tourn-cover-gradient-color') || {}).value || '#0f172a';
     var grad = !!((document.getElementById('tourn-cover-gradient-enabled') || {}).checked);
-    var angle = Math.max(0, Math.min(360, parseInt((document.getElementById('tourn-cover-gradient-angle') || {}).value, 10) || 135));
+    var angleValue = Number((document.getElementById('tourn-cover-gradient-angle') || {}).value);
+    var angle = Math.max(0, Math.min(360, Number.isFinite(angleValue) ? angleValue : 135));
+    var balance = Math.max(10, Math.min(90, Number((document.getElementById('tourn-cover-gradient-balance') || {}).value) || 50));
     if (!_coverHexOk(c1)) c1 = '#1f2937'; if (!_coverHexOk(c2)) c2 = '#0f172a';
     var photo = (document.getElementById('tourn-cover-data') || {}).value || '';
-    prev.style.backgroundImage = (mode === 'photo' && photo) ? 'url(' + photo + ')' : (grad ? 'linear-gradient(' + angle + 'deg, ' + c1 + ', ' + c2 + ')' : 'none');
+    var blendHalf = Math.min(15, balance, 100 - balance);
+    var gradient = 'linear-gradient(' + angle + 'deg, ' + c1 + ' 0%, ' + c1 + ' ' + (balance - blendHalf) + '%, ' + c2 + ' ' + (balance + blendHalf) + '%, ' + c2 + ' 100%)';
+    prev.style.backgroundImage = (mode === 'photo' && photo) ? 'url(' + photo + ')' : (grad ? gradient : 'none');
+    var wheel = document.getElementById('cover-angle-wheel');
+    if (wheel) wheel.style.background = gradient;
     prev.style.backgroundColor = (mode === 'photo' && photo) ? '' : c1;
     prev.style.borderStyle = (mode === 'photo' && photo) ? 'solid' : 'dashed';
   };
@@ -3600,6 +3670,7 @@ function setupCreateTournamentModal() {
     if (combined.length === 0 && ageCombined.length === 0) {
       preview.style.display = 'none';
       if (typeof window._syncCategoryCapacity === 'function') window._syncCategoryCapacity();
+      if (typeof window._renderEstimatedGameHours === 'function') window._renderEstimatedGameHours();
       return;
     }
 
@@ -3654,6 +3725,7 @@ function setupCreateTournamentModal() {
     list.innerHTML = rows.join('');
     preview.style.display = '';
     if (typeof window._syncCategoryCapacity === 'function') window._syncCategoryCapacity();
+    if (typeof window._renderEstimatedGameHours === 'function') window._renderEstimatedGameHours();
   };
 
   window._getCreateFormCategoryData = function() {
@@ -3694,6 +3766,14 @@ function setupCreateTournamentModal() {
     // v1.2.0-beta: ler ageCategories também
     var ageCats = (document.getElementById('tourn-age-categories') || {}).value || '';
     ageCats = ageCats ? ageCats.split(',').filter(Boolean) : [];
+    ageCats.forEach(function (age) {
+      var ageBase = genderVals.length ? genderVals.map(function (g) { return (genderLabels[g] || g) + ' ' + age; }) : [age];
+      ageBase.forEach(function (name) {
+        if (gameTypes.length === 2) gameTypes.forEach(function (type) { combined.push(name + ' ' + type); });
+        else combined.push(name);
+      });
+    });
+    combined = combined.filter(function (name, index) { return combined.indexOf(name) === index; });
     return { genderCategories: genderVals, skillCategories: skillCats, ageCategories: ageCats, customCategories: customCats, combinedCategories: combined };
   };
 
@@ -5416,7 +5496,7 @@ function setupCreateTournamentModal() {
     document.getElementById('tourn-end-date').value = endD;
     document.getElementById('tourn-end-time').value = endT;
     window._estimatedGameHoursState = {
-      saved:t.scheduleWindow || null, valuesByDay:{}, touched:false,
+      saved:t.scheduleWindow || null, valuesByDay:{}, categoryByKey:{}, touched:false,
       locked:typeof window._tournamentHasDraw === 'function' && window._tournamentHasDraw(t)
     };
     window._renderEstimatedGameHours();
@@ -5502,10 +5582,8 @@ function setupCreateTournamentModal() {
     document.getElementById('tourn-auto-close').checked = !!t.autoCloseOnFull;
     // Sorteio de Vagas (read defensivo: ausente ⇒ 'cap', idêntico ao legado)
     var _elmEdit = t.enrollmentLimitMode || 'cap';
-    var _capT = document.getElementById('elm-toggle-cap');
-    var _drawT = document.getElementById('elm-toggle-draw');
-    if (_capT) _capT.checked = _elmEdit === 'cap';
-    if (_drawT) _drawT.checked = _elmEdit === 'draw';
+    var _elmToggle = document.getElementById('elm-mode-toggle');
+    if (_elmToggle) _elmToggle.checked = _elmEdit === 'draw';
     var _slotsEl = document.getElementById('tourn-target-slots');
     if (_slotsEl) _slotsEl.value = t.targetSlots || '';
     var _cpEdit = t.callPolicy || 'present';
@@ -5587,6 +5665,7 @@ function setupCreateTournamentModal() {
         if (ge) ge.checked = t.coverGradientEnabled === true;
         if (typeof window._syncCoverColorFromPicker === 'function') window._syncCoverColorFromPicker();
         if (typeof window._syncCoverAngle === 'function') window._syncCoverAngle(t.coverGradientAngle != null ? t.coverGradientAngle : 135);
+        if (typeof window._syncCoverBalance === 'function') window._syncCoverBalance(t.coverGradientBalance != null ? t.coverGradientBalance : 50);
         var hasCoverPhoto = window._tourUsesCoverPhoto ? window._tourUsesCoverPhoto(t) : !!window._tourCoverSrc(t);
         window._applyCoverPhoto(hasCoverPhoto ? (window._tourCoverSrc(t) || '') : '');
         if (!hasCoverPhoto && typeof window._setCoverMode === 'function') window._setCoverMode('color');
@@ -6422,7 +6501,9 @@ window._saveTournamentClickHandler = async function() {
         const coverColorVal = (document.getElementById('tourn-cover-color') || {}).value || '#1f2937';
         const coverGradientColorVal = (document.getElementById('tourn-cover-gradient-color') || {}).value || '#0f172a';
         const coverGradientEnabledVal = !!((document.getElementById('tourn-cover-gradient-enabled') || {}).checked);
-        const coverGradientAngleVal = Math.max(0, Math.min(360, parseInt((document.getElementById('tourn-cover-gradient-angle') || {}).value, 10) || 135));
+        const coverAngleInput = Number((document.getElementById('tourn-cover-gradient-angle') || {}).value);
+        const coverGradientAngleVal = Math.max(0, Math.min(360, Number.isFinite(coverAngleInput) ? coverAngleInput : 135));
+        const coverGradientBalanceVal = Math.max(10, Math.min(90, Number((document.getElementById('tourn-cover-gradient-balance') || {}).value) || 50));
         const logoDataVal = document.getElementById('tourn-logo-data').value || '';
         const logoLockedVal = document.getElementById('tourn-logo-locked').value === '1';
         const logoShapeVal = (document.getElementById('tourn-logo-shape') || {}).value === 'circle' ? 'circle' : 'square';
@@ -6543,6 +6624,7 @@ window._saveTournamentClickHandler = async function() {
           coverGradientColor: /^#[0-9a-f]{6}$/i.test(coverGradientColorVal) ? coverGradientColorVal : '#0f172a',
           coverGradientEnabled: coverGradientEnabledVal,
           coverGradientAngle: coverGradientAngleVal,
+          coverGradientBalance: coverGradientBalanceVal,
           logoData: logoDataVal,
           logoLocked: logoLockedVal,
           logoShape: logoShapeVal,
@@ -6982,6 +7064,8 @@ window._saveTournamentClickHandler = async function() {
   window._setRegistrationSource('scoreplace', false);
   window._renderRegistrationPrices();
   window._renderEstimatedGameHours();
+  window._syncCoverAngle(135);
+  window._syncCoverBalance(50);
 }
 
 // ─── v2.1.33: datas/horários NUNCA são sugeridos — ficam em branco por padrão.
@@ -8078,7 +8162,7 @@ window._f2TemplateCopy = function(fmt2Bruto) {
     });
     return out;
   };
-  var out = pick(raw, ['disputa', 'grupos', 'parceria', 'formacaoDupla', 'manualPairingOpen',
+  var out = pick(raw, ['disputa', 'grupos', 'parceria', 'formacaoDupla', 'manualPairingOpen', 'manualPairingPolicy',
     'classifAtiva', 'classificados', 'classifScope', '_scoreBy', 'historicalSinglesOverride',
     'rankingRemainderPolicy', 'rankingSitOutScoring', 'tieResolution']);
   if (raw.rodadas) {
@@ -8222,8 +8306,7 @@ window._prefillFromTemplate = function(tpl) {
   // Sorteio de Vagas: modelo de inscrição + vagas + chamada da fila
   if (tpl.enrollmentLimitMode) {
     var _elmTpl = tpl.enrollmentLimitMode;
-    _setC('elm-toggle-cap', _elmTpl === 'cap');
-    _setC('elm-toggle-draw', _elmTpl === 'draw');
+    _setC('elm-mode-toggle', _elmTpl === 'draw');
     _setV('tourn-target-slots', tpl.targetSlots);
     var _cpTpl = tpl.callPolicy || 'present';
     _setC('cp-toggle-present', _cpTpl === 'present');
@@ -8251,6 +8334,7 @@ window._prefillFromTemplate = function(tpl) {
     _setC('tourn-cover-gradient-enabled', !!tpl.coverGradientEnabled);
     if (typeof window._syncCoverColorFromPicker === 'function') window._syncCoverColorFromPicker();
     if (typeof window._syncCoverAngle === 'function') window._syncCoverAngle(tpl.coverGradientAngle != null ? tpl.coverGradientAngle : 135);
+    if (typeof window._syncCoverBalance === 'function') window._syncCoverBalance(tpl.coverGradientBalance != null ? tpl.coverGradientBalance : 50);
     window._applyCoverPhoto(tpl.coverPhotoData || '');
     if (!tpl.coverPhotoData && typeof window._setCoverMode === 'function') window._setCoverMode('color');
   }
@@ -8798,7 +8882,8 @@ window._saveCurrentFormAsTemplate = function(saveButton) {
       coverColor: get('tourn-cover-color') || '#1f2937',
       coverGradientColor: get('tourn-cover-gradient-color') || '#0f172a',
       coverGradientEnabled: getChecked('tourn-cover-gradient-enabled'),
-      coverGradientAngle: parseInt(get('tourn-cover-gradient-angle'), 10) || 135,
+      coverGradientAngle: Number.isFinite(Number(get('tourn-cover-gradient-angle'))) ? Math.max(0, Math.min(360, Number(get('tourn-cover-gradient-angle')))) : 135,
+      coverGradientBalance: Math.max(10, Math.min(90, Number(get('tourn-cover-gradient-balance')) || 50)),
       logoData: get('tourn-logo-data') || '',
       logoLocked: get('tourn-logo-locked') === '1',
       logoShape: get('tourn-logo-shape') === 'circle' ? 'circle' : 'square',

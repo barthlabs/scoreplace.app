@@ -115,7 +115,10 @@ function markDuplasManualUpdate(data) {
     var fmt2 = Object.assign({}, data.fmt2, { formacaoDupla: 'manual' });
     return { fmt2: fmt2 };
   }
-  return { manualPairing: 'open' };
+  // Formar uma dupla num documento legado não deve ampliar uma permissão
+  // explícita já escolhida pela organização.
+  return { manualPairing: ['organizer_only', 'athletes_only', 'open'].includes(data.manualPairing)
+    ? data.manualPairing : 'open' };
 }
 
 // Decide a FORMAÇÃO da dupla a partir do doc atual. Espelha _formDuplaByUids.

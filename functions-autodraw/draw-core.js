@@ -710,7 +710,14 @@ function compileFromFmt2(t, opts) {
     }
   }
   try {
-    const out = win.FORMAT2.compileToPhases(t.fmt2, {
+    // Em torneios antigos, formacaoDupla podia ser "sorteio" mesmo quando a
+    // inscrição efetiva já era em equipes. O campo só ganhou esse significado
+    // depois: o valor persistido em enrollmentMode preserva a regra histórica.
+    const legacyTeams = t.enrollmentMode === 'teams' && Number(t.teamSize) === 2 &&
+      (t.format === 'Liga' || t.format === 'Fase de Grupos' || t.format === 'Fase de Grupos + Eliminatórias');
+    const fmt2Intent = legacyTeams && t.fmt2.formacaoDupla !== 'manual'
+      ? Object.assign({}, t.fmt2, { formacaoDupla: 'manual' }) : t.fmt2;
+    const out = win.FORMAT2.compileToPhases(fmt2Intent, {
       sport: opts.sport || t.sport,
       resultEntry: t.resultEntry,
       lateEnrollment: t.lateEnrollment,

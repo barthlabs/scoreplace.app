@@ -5036,7 +5036,8 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
     if (tsb) return 1;                // só b presente → b sobe
     return 0;                         // nenhum presente → mantém a ordem original
   });
-  var _canPair = isOrg || (t && t.manualPairing === 'open' && !(t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint));
+  var _canPair = (isOrg && t && t.manualPairing !== 'athletes_only') ||
+    (t && (t.manualPairing === 'open' || t.manualPairing === 'athletes_only') && !(t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint));
   var ci = window._presencaViva(t);
   var _nameFs = (window._INSCRITO_NAME_FONT_PX || 17);
 
