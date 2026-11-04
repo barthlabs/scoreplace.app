@@ -2,6 +2,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
+const phasePendingDecision = require('../functions-autodraw/phase-pending-decision-core.js');
 
 const source = fs.readFileSync('functions-autodraw/index.js', 'utf8');
 const start = source.indexOf('async function _aplicaPlacarNaTransacao(');
@@ -38,6 +39,7 @@ const context = {
   _isTournamentParticipant: () => true,
   _isTournamentAdmin: () => true,
   _hidrataGrupos: () => {},
+  _phasePendingDecision: phasePendingDecision,
   assertSurplusMatchMayStartFn: () => {},
   applyResultFn: (t) => { calls.push('motor'); t.matches[0].winner = 'p1'; return { ok: true, outcome: 'applied' }; },
   _reconcileSurplusBeforeWrite: () => {},
@@ -82,5 +84,14 @@ vm.runInNewContext(source.slice(start, end), context);
   assert.ok(writes.some((path) => path.includes('/notificationOutbox/')));
   assert.ok(!writes.some((path) => path.includes('/matchHistory/')),
     'placar de torneio não duplica resultado no histórico pessoal');
+  reads.length = writes.length = calls.length = 0;
+  activeTournament = { id: 'tour_test', matches: [{ id: 'j1' }],
+    history: [{ seedChoiceAccepted: true, ignoredPendingMatchIds: ['j1'] }] };
+  const frozen = await context._aplicaPlacarNaTransacao(db, 'tour_test', 'j1', { action: 'set-score' },
+    { uid: 'owner' }, '', false);
+  assert.equal(frozen.ok, false);
+  assert.equal(frozen.reason, 'phase-seeding-frozen');
+  assert.ok(!calls.includes('motor') && !calls.includes('grava'),
+    'jogo pendente após congelamento não recebe placar nem escrita');
   console.log('✓ mesmo motor de placar; sandbox isolado e histórico de torneio sem cópia');
 })().catch((error) => { console.error(error); process.exitCode = 1; });
