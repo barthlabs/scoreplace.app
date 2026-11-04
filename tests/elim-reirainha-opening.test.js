@@ -134,23 +134,30 @@ function sameGroup(ns) { var pre = ns.map(function (n) { return n[0]; }); return
     return (built.matches || []).map(function (match) { return match.id; });
   }
   var badName = 'Final "Ouro" \'<script>';
-  var dangerous = ids(badName);
+  var dangerous = ids(badName, 'plan-1');
   ok(dangerous.length > 0 && dangerous.every(function (id) { return /^[A-Za-z0-9_-]+$/.test(id); }),
     '(2) nome com aspas, apóstrofo e HTML gera somente IDs seguros');
   ok(new Set(dangerous).size === dangerous.length, '(2) IDs da mesma fase permanecem únicos');
-  var space = ids('Fase 1'), underscore = ids('Fase_1');
-  ok(space.length && underscore.length && space[0] !== underscore[0],
-    '(2) nomes distintos com espaço e underscore não colidem após codificação');
-  ok(ids('Eliminatória').every(function (id) { return /^[A-Za-z0-9_-]+$/.test(id); }),
-    '(2) nome acentuado também produz ID seguro');
-  ok(ids('')[0].indexOf('ph-x-') === 0, '(2) nome vazio recebe prefixo seguro');
+  var space = ids('Fase 1', 'plan-1'), underscore = ids('Fase_1', 'plan-1');
+  ok(space.length && underscore.length && JSON.stringify(space) === JSON.stringify(underscore),
+    '(2) renomear a fase com o mesmo prefixo conserva os IDs');
+  ok(ids('Eliminatória', 'plan-1').every(function (id) { return /^[A-Za-z0-9_-]+$/.test(id); }),
+    '(2) nome acentuado com prefixo estável produz ID seguro');
+  var missingPrefixError = null;
+  try { ids(badName); } catch (error) { missingPrefixError = error; }
+  ok(missingPrefixError && /Prefixo estável de IDs obrigatório/.test(String(missingPrefixError.message)),
+    '(2) chamada sem prefixo estrutural é recusada com erro específico');
+  var emptyPrefixError = null;
+  try { ids('', ''); } catch (error) { emptyPrefixError = error; }
+  ok(emptyPrefixError && /Prefixo estável de IDs obrigatório/.test(String(emptyPrefixError.message)),
+    '(2) prefixo vazio também é recusado');
   ok(ids('Finals', 'plan-1')[0].indexOf('plan-1-') === 0 &&
      ids('Finals', 'plan-2')[0].indexOf('plan-2-') === 0 &&
      ids('Finals', 'plan-1')[0] !== ids('Finals', 'plan-2')[0],
     '(2) prefixos reais distinguem duas fases com o mesmo nome');
   ok(ids('Finals', 'bad"\'<prefix>')[0].match(/^[A-Za-z0-9_-]+$/),
     '(2) prefixo explícito malicioso também é sanitizado');
-  ok(ids('A'.repeat(40))[0].match(/^[A-Za-z0-9_-]+$/),
+  ok(ids('A'.repeat(40), 'plan-1')[0].match(/^[A-Za-z0-9_-]+$/),
     '(2) nome vindo do round-trip de 40 letras mantém ID seguro');
 })();
 

@@ -2,7 +2,7 @@
 // a abertura do formulário e deixam clara a opção selecionada. A abertura
 // Rei/Rainha aparece no início da fase eliminatória com ou sem classificatória.
 // A fase eliminatória aceita nome escolhido pela organização, inclusive após a rodada de formação.
-// Nomes personalizados não alteram os identificadores dos jogos.
+// Renomear a fase preserva os identificadores dos jogos: eles exigem um prefixo estrutural estável.
 // 2.5.93 — Classificatória e eliminatória têm toggles nos próprios blocos.
 // Desligar uma fase recolhe seus controles e a exclui do torneio, preservando
 // as escolhas para quando for religada. Ao menos uma fase permanece ativa.
