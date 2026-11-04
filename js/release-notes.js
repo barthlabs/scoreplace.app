@@ -9,11 +9,14 @@
 // resolve empates pelo sorteio original ou pela simples/triangular extra quando
 // essa opção consta do regulamento. O placar e a confirmação do jogo extra
 // definem o título. Na competição por times, empate na liderança exige a
-// ordem de sorteio registrada antes do encerramento. No avanço de grupos,
+// ordem de sorteio registrada antes do encerramento. O mesmo vale para duplas:
+// um empate no topo não atribui título pela ordem alfabética. No avanço de grupos,
 // partidas pendentes só deixam de bloquear quando as vagas estão provadamente
 // definidas; se ainda puderem mudar a ordem, a organização confirma cada
 // pendência e congela a ordem atual com registro da decisão. Nesse caso,
 // placares posteriores desses jogos não alteram a classificação congelada.
+// O congelamento protege o jogo inteiro; W.O., substituição e edição de quadra
+// ou metadados nesse jogo são recusados depois do avanço da fase.
 // 2.5.89 — Numa competição por times encerrada pela classificatória em vários
 // grupos, cada grupo recebe seu campeão. A escolha de tabela geral soma as
 // categorias dentro do grupo; a escolha por categoria dá títulos por categoria
