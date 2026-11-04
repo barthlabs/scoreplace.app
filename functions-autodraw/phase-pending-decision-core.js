@@ -40,4 +40,12 @@ function isFrozenMatch(t, matchId) {
     entry.ignoredPendingMatchIds.some(id => String(id) === String(matchId))));
 }
 
-module.exports = { decide, isFrozenMatch };
+function changedFrozenMatchIds(before, beforeMatches, afterMatches) {
+  const later = new Map((afterMatches || []).filter(match => match && match.id != null)
+    .map(match => [String(match.id), match]));
+  return (beforeMatches || []).filter(match => match && match.id != null &&
+    isFrozenMatch(before, match.id) &&
+    JSON.stringify(match) !== JSON.stringify(later.get(String(match.id)))).map(match => String(match.id));
+}
+
+module.exports = { decide, isFrozenMatch, changedFrozenMatchIds };

@@ -55,6 +55,13 @@ seeding.history = [{ seedChoiceAccepted: true, ignoredPendingMatchIds: ['6', '7'
 assert.equal(pendingDecision.isFrozenMatch(seeding, '7'), true,
   'placar posterior de jogo ignorado não altera a ordem congelada');
 assert.equal(pendingDecision.isFrozenMatch(seeding, 'outro'), false);
+const beforeFrozen = [match('7', 'A', 'D', null), match('8', 'B', 'C', null)];
+const afterFrozen = structuredClone(beforeFrozen);
+afterFrozen[0].winner = 'A';
+afterFrozen[1].winner = 'B';
+assert.deepEqual(pendingDecision.changedFrozenMatchIds(seeding, beforeFrozen, afterFrozen), ['7'],
+  'W.O. ou substituição não pode alterar jogo congelado, mesmo quando outro jogo continua livre');
+assert.deepEqual(pendingDecision.changedFrozenMatchIds(seeding, beforeFrozen, beforeFrozen), []);
 assert.equal(pendingDecision.isFrozenMatch({ history: [{ seedChoiceAccepted: false,
   ignoredPendingMatchIds: ['7'] }] }, '7'), false,
   'jogo sem impacto matemático continua lançável');

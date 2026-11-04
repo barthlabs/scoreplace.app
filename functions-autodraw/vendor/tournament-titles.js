@@ -134,6 +134,9 @@
       var teamCore = deps.teamCore;
       var teamConfig = teamCore && teamCore.rankingConfigForTournament && teamCore.rankingConfigForTournament(t);
       if (teamConfig && teamConfig.enabled) {
+        if (typeof teamCore.hasUnresolvedTopTie !== 'function') {
+          return { ok: false, reason: 'standings-unavailable', titles: [] };
+        }
         var pairs = t.competitionPairs || [];
         var grouped = phase.classification && phase.classification.structure === 'groups' &&
           Number(phase.gruposCount || t.gruposCount || 1) > 1;
@@ -177,13 +180,19 @@
                 return eligibleIds.indexOf(String(id)) >= 0;
               }) });
             }
+            if (grouped && Array.isArray(teamConfig.tieDrawOrder) && teamConfig.classificationUnit === 'pair') {
+              var groupPairIds = teamCore.pairStandings([], chosen,
+                Object.assign({}, teamConfig, { tieDrawOrder: [] }), category || undefined)
+                .map(function (row) { return String(row.id); });
+              poolConfig = Object.assign({}, teamConfig, { tieDrawOrder: teamConfig.tieDrawOrder.filter(function (id) {
+                return groupPairIds.indexOf(String(id)) >= 0;
+              }) });
+            }
             var rows = teamConfig.classificationUnit === 'pair'
               ? teamCore.pairStandings(grouped ? [] : pairs, chosen, poolConfig, category || undefined)
               : teamCore.standings(eligibleTeams, chosen, poolConfig);
             if (grouped && !rows.length) { incompleteGroup = true; return; }
-            if (teamConfig.classificationUnit !== 'pair' &&
-                typeof teamCore.hasUnresolvedTopTie === 'function' &&
-                teamCore.hasUnresolvedTopTie(rows, poolConfig)) {
+            if (teamCore.hasUnresolvedTopTie(rows, poolConfig)) {
               unresolvedTeamTie = true; return;
             }
             var label = [pool.label, category].filter(Boolean).join(' · ');

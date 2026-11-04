@@ -3546,6 +3546,12 @@ exports.applyTournamentWO = onCall(async (request) => {
     };
     const depoisPorId = {};
     coletar(t).forEach((m) => { if (m && m.id != null) depoisPorId[String(m.id)] = m; });
+    const alteredFrozen = _phasePendingDecision.changedFrozenMatchIds(before,
+      Object.values(porIdAntes), Object.values(depoisPorId));
+    if (alteredFrozen.length) {
+      throw _drawFail('failed-precondition', 'Jogo dispensado no avanço da fase não pode receber W.O. ou substituição.',
+        { tId, matchIds: alteredFrozen });
+    }
     /* Defesa de persistência: o motor já consome a suplente por UID, mas esta
      * callable é a última fronteira antes de gravar o snapshot transacional.
      * Reaplicar a remoção usando o recibo que o próprio motor produziu impede

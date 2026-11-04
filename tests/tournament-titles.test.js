@@ -145,8 +145,11 @@ assert.deepEqual(resolve({ ...teamGroups, teamCompetition: {
 const pairGroups = { ...teamGroups, competitionPairs: [{ id: 'ghost', name: 'AAA / BBB' }],
   teamCompetition: { ...teamGroups.teamCompetition, classificationUnit: 'pair',
     scoring: { win: -1, draw: -1, loss: 0 } } };
-assert.deepEqual(resolve(pairGroups).titles.map(x => x.winnerName), ['C / D', 'K / L'],
-  'dupla inscrita fora do grupo não entra na tabela daquele grupo, mesmo com pontuação negativa');
+assert.equal(resolve(pairGroups).reason, 'team-tie-unresolved',
+  'pontuação negativa que empata líderes não atribui título por nome');
+assert.equal(teamCore.pairStandings([], pairGroups.groups[0].matches,
+  pairGroups.teamCompetition).some(row => row.id === 'ghost'), false,
+  'dupla inscrita fora do grupo não entra na tabela local');
 const realPairs = { ...teamGroups, competitionPairs: [
   { id: 'a', name: 'A / B' }, { id: 'b', name: 'C / D' },
   { id: 'c', name: 'I / J' }, { id: 'd', name: 'K / L' },
@@ -158,4 +161,14 @@ groups: teamGroups.groups.map((g, gi) => ({ ...g, matches: [
 assert.deepEqual(resolve(realPairs).titles.map(x => [x.label, x.winnerId]),
   [['Praia', 'a'], ['Serra', 'c']],
   'duplas reais são pontuadas pelos jogos do próprio grupo e mantêm seus IDs');
+const tiedPairs = { ...realPairs, groups: realPairs.groups.map(group => ({ ...group,
+  matches: group.matches.map(match => ({ ...match, winner: null })) })) };
+assert.equal(resolve(tiedPairs).reason, 'team-tie-unresolved',
+  'duplas empatadas não ganham título pela ordem alfabética');
+assert.deepEqual(resolve({ ...tiedPairs, teamCompetition: { ...tiedPairs.teamCompetition,
+  tiebreakers: ['sorteio'], tieDrawOrder: ['b', 'a', 'd', 'c'] } }).titles.map(x => x.winnerId), ['b', 'd'],
+  'a ordem original registrada desempata duplas dentro de cada grupo');
+assert.equal(resolve(tiedPairs, { teamCore: { ...teamCore,
+  hasUnresolvedTopTie: undefined } }).reason, 'standings-unavailable',
+  'sem a verificação de empate, não se concede título por duplas');
 console.log('✓ títulos resolvidos por final, linha, grupo, ranking e time/categoria');
