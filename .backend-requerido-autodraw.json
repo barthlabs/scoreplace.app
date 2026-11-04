@@ -1,23 +1,8 @@
 {
   "schema": 1,
-  "backendCommit": "0afaa82d607c9f7a0071e0abff81995fee948fa4",
-  "scopeNote": "Corte direcionado do fluxo de criação e execução de torneios: configuração, sorteio, fase classificatória, desempate, título e placar; demais funções preservam a revisão já publicada.",
+  "backendCommit": "c618b75550546c804bfd01c9dda1326588e5136e",
+  "scopeNote": "Correção dirigida da hidratação transacional antes da decisão de avanço; os demais quinze endpoints do fluxo foram publicados no lote anterior e não mudaram desde então.",
   "functions": [
-    "advanceTournamentPhase",
-    "applyMatchResult",
-    "applyQueuedResult",
-    "applyTournamentFormat",
-    "autoDraw",
-    "createTournament",
-    "drawRound",
-    "finishTournament",
-    "getPendingInitialDraw",
-    "resolvePendingDraw",
-    "setPendingInitialSchedule",
-    "setPhaseLateEnrollment",
-    "setPhasePromotion",
-    "setTeamTieDrawOrder",
-    "startTournament",
-    "updateTournamentConfiguration"
+    "advanceTournamentPhase"
   ]
 }
