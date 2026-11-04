@@ -1,9 +1,18 @@
 {
   "schema": 1,
-  "backendCommit": "36b4c9b531114f5bea08b4d594c46ae8c9c3b553",
-  "scopeNote": "Título de duplas exige desempate válido e W.O. respeita jogos congelados; applyTournamentWO e finishTournament foram publicados de forma direcionada. Os demais endpoints mantêm os recibos dos lotes anteriores.",
+  "backendCommit": "3dd5a949ff6625943cb17ff6c06f2ffa831f9e18",
+  "scopeNote": "Guarda de jogos congelados na escrita transacional comum; rotas de W.O., substituição e vaga foram publicadas de forma direcionada. finishTournament e avanço mantêm recibos anteriores.",
   "functions": [
+    "applyLigaGroupWO",
+    "applyMonarchGroupWO",
     "applyTournamentWO",
-    "finishTournament"
+    "fillLigaGuest",
+    "manageWOClaim",
+    "occupyTournamentPlaceholder",
+    "resolveWOSubstitutionChoice",
+    "revertLigaGroupWO",
+    "revertMonarchGroupWO",
+    "setTournamentPresenceWithWOSubstitution",
+    "substituteLigaGroupDirect"
   ]
 }
