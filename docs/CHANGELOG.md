@@ -3,6 +3,7 @@
 - Geral, Inscritos e Organização e árbitros recebem cores legíveis desde a abertura do formulário. A seleção inicial e as mudanças posteriores compartilham `aria-pressed`; a borda selecionada mantém a mesma espessura para não mover os botões.
 - A opção de abrir a eliminatória com uma rodada Rei/Rainha fica no início da fase, tanto com quanto sem classificatória anterior. O organizador escolhe quantos avançam e como formar as duplas fixas.
 - O nome da fase eliminatória é livre; se ficar vazio, permanece “Eliminatória”.
+- Nomes personalizados são tratados de forma segura ao formar os identificadores dos jogos.
 
 ## 2.5.90 — encerramento e avanço da classificatória
 
