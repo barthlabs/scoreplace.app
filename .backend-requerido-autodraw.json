@@ -1,11 +1,11 @@
 {
   "schema": 1,
-  "backendCommit": "db70d3b2551e2b2ce6a991bdcd16d16b006ad1a7",
-  "scopeNote": "Configuração reversível das fases do torneio: quatro callables de criação, edição, aplicação do formato e sorteio publicadas no mesmo lote direcionado.",
+  "backendCommit": "780ccd1b6785bc7da1f7309160dfa6b42e4c2fc7",
+  "scopeNote": "Agenda e ensaio do torneio: sorteio, publicação do rascunho, início e limpeza de chamada publicados no mesmo lote direcionado.",
   "functions": [
-    "createTournament",
-    "updateTournamentConfiguration",
-    "applyTournamentFormat",
-    "autoDraw"
+    "drawRound",
+    "resolvePendingDraw",
+    "startTournament",
+    "resetTournamentCheckIn"
   ]
 }
