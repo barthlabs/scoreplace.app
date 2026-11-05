@@ -25,7 +25,9 @@ const game = scheduledAt => ({ id:'game-1', requiredDay:'2026-10-22', scheduledA
 assert.equal(check(t, { matches:[game('2026-10-22T21:30:00-03:00')] }), false);
 assert.equal(check(t, { matches:[game('2026-10-22T22:15:00-03:00')] }), true);
 assert.equal(check(t, { matches:[game('2026-10-23T00:10:00-03:00')] }), true);
-assert.equal(check(t, { matches:[game(null)] }), true);
+assert.equal(check(t, { matches:[game(null)] }), false, 'chave sem agenda mantém publicação anterior');
+assert.equal(check(t, { matches:[game('2026-10-22T21:30:00-03:00'),
+  { id:'game-2', requiredDay:'2026-10-22' }] }), true, 'agenda parcial não oculta jogo sem horário');
 const route = source.slice(source.indexOf('exports.resolvePendingDraw ='), source.indexOf('exports.setPendingInitialSchedule ='));
 assert(route.indexOf('_pendingInitialScheduleExceedsWindow(t, pd.draft)') > 0);
 assert(route.indexOf('_pendingInitialScheduleExceedsWindow(t, pd.draft)') < route.indexOf('_aplicaRascunhoDoSorteioInicial(t, pd.draft)'));

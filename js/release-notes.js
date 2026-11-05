@@ -1,3 +1,4 @@
+// 2.5.98 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.97 — O botão “Sortear dias livremente” no configurador de sorteio
 // mostra texto branco sobre fundo escuro, inclusive ao passar o cursor.
 // 2.5.96 — Jogos em melhor de três, cinco ou formato personalizado aceitam

@@ -278,6 +278,11 @@ ok(gradeJanelaFechada && gradeJanelaFechada.cabe === false && gradeJanelaFechada
 ok(W._operationalSchedulePlan(janelaFechada).cabe === false && W._operationalSchedulePlan(janelaFechada).unscheduledCount === 0 &&
   W._operationalSchedulePlan(janelaFechada).items.filter(function (item) { return item.extrapolaJanela; }).length === 1,
   'a agenda operacional mostra o jogo excedente zebrado no próprio dia');
+const janelaEstendida = structuredClone(janelaFechada);
+janelaEstendida.scheduleWindow.days[0].endTime = '19:30';
+ok(W._operationalSchedulePlan(janelaEstendida).cabe === true &&
+  W._operationalSchedulePlan(janelaEstendida).items.every(function (item) { return !item.extrapolaJanela; }),
+  'a organização pode estender a janela e liberar a mesma agenda para publicação');
 const janelaTrocada = W._operationalSchedulePlan(janelaFechada, [
   { matchId:'J1', court:'Quadra 1', scheduledAt:new Date('2026-10-22T19:00:00-03:00').toISOString() },
   { matchId:'J3', court:'Quadra 1', scheduledAt:new Date('2026-10-22T18:00:00-03:00').toISOString() }

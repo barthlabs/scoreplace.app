@@ -1115,9 +1115,14 @@ function _scheduleLocalDay(iso) {
 
 function _pendingInitialScheduleExceedsWindow(t, draft) {
   if (!t.scheduleWindow || !Array.isArray(t.scheduleWindow.days) || !t.scheduleWindow.days.length) return false;
+  const games = (draft.matches || []).filter(m => m && !m.isBye && !m.isSitOut);
+  // Alguns formatos publicam uma chave ainda sem agenda. Só há janela a
+  // fiscalizar quando algum jogo do rascunho recebeu horário; agenda parcial
+  // continua inválida para não esconder um jogo sem encaixe.
+  if (!games.some(m => !!m.scheduledAt)) return false;
   const windowPlan = drawWindow && drawWindow._schJanelaTorneio && drawWindow._schJanelaTorneio(t);
   if (!windowPlan || windowPlan.invalida || !Array.isArray(windowPlan.dias)) return true;
-  return (draft.matches || []).filter(m => m && !m.isBye && !m.isSitOut).some(m => {
+  return games.some(m => {
     const at = Date.parse(m.scheduledAt || '');
     if (!Number.isFinite(at)) return true;
     const localDay = _scheduleLocalDay(m.scheduledAt);
