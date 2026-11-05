@@ -1,3 +1,4 @@
+// 2.5.99 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.98 — A agenda de torneios com várias categorias usa todas as quadras,
 // alterna as categorias na ordem escolhida e mostra os jogos que excedem a
 // janela para ajuste antes da publicação. O botão Pular jogo usa a mesma fila
