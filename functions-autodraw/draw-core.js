@@ -813,6 +813,30 @@ function canRecompile(t) {
 //
 // PRÉ-CONDIÇÃO: `canRecompile(t)` — sem chave ainda. Chamar com chave existente é
 // re-sorteio, que é decisão do organizador no cliente (project_draw_once_canonical_order).
+function repeatedMemberInPair(entries, resolveName) {
+  const normalize = value => String(value || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+    .trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR');
+  for (const entry of entries || []) {
+    if (!entry || typeof entry !== 'object') continue;
+    const first = String(entry.p1Uid || entry.p1ManualId || entry.p1Name || '');
+    const second = String(entry.p2Uid || entry.p2ManualId || entry.p2Name || '');
+    if (!first || !second) continue;
+    if ((entry.p1Uid && entry.p2Uid && entry.p1Uid === entry.p2Uid) ||
+        (entry.p1ManualId && entry.p2ManualId && entry.p1ManualId === entry.p2ManualId)) {
+      return String(entry.p1Name || entry.p2Name || 'mesmo cadastro');
+    }
+    // UID e inscrição manual podem ser duas fichas da mesma pessoa. Um nome
+    // igual nesse par é ambíguo: não publicar a dupla até corrigir a inscrição.
+    // Dois UIDs distintos são identidades comprovadas e podem ser homônimos.
+    if (!entry.p1Uid || !entry.p2Uid) {
+      const a = entry.p1Uid && resolveName ? resolveName(entry.p1Uid) || entry.p1Name : entry.p1Name;
+      const b = entry.p2Uid && resolveName ? resolveName(entry.p2Uid) || entry.p2Name : entry.p2Name;
+      if (normalize(a) && normalize(a) === normalize(b)) return String(a || b);
+    }
+  }
+  return '';
+}
+
 function drawInitial(t, opts) {
   opts = opts || {};
   const win = g.window;
@@ -866,6 +890,9 @@ function drawInitial(t, opts) {
       _ts0, t.teamOrigins, t._drawBalanceMode, t);
     t.participants = _f0.participants;
     _allMale = _f0.allMaleCount || 0;   // o cliente TOASTA isto; aqui volta no retorno
+    const repeated = repeatedMemberInPair(t.participants, win._nameForUid);
+    if (repeated) return { ok: false, reason: 'Dupla inválida: ' + repeated +
+      ' aparece nos dois lugares. Corrija as inscrições antes do sorteio.' };
     if (t.mixedPairingSeparated && _enr0 === 'misto' && _ts0 === 2 && typeof win._applyMixedOriginCategories === 'function') {
       win._applyMixedOriginCategories(t, t.participants);
     }
@@ -1516,4 +1543,4 @@ function decidirTardioNaFolga(t, opts) {
   return { ok: true, mudou: true, acao, aplicados: r.placed || 0 };
 }
 
-module.exports = { decidirTardioNaFolga, generateLigaRound, applyTournamentWO, setPresenceWithWOSubstitution, resolveWOSubstitutionChoice, setTournamentWOAbsence, acceptLigaSubstitution, runLigaAction, compileFromFmt2, canRecompile, hasDrawnBracket, drawInitial, assignCompetitionTeamsAtInitialDraw, integrateLateEntries, formLatePairCore, splitLatePairCore, closeRoundCore, materializeNextPhase: g.window._phasesEngine && g.window._phasesEngine.materializeNextPhase, standingsDaFaseAnterior: g.window._phasesEngine && g.window._phasesEngine.standingsDaFaseAnterior, phaseComplete: g.window._phasesEngine && g.window._phasesEngine.phaseComplete, groupTeamStandings: g.window._phasesEngine && g.window._phasesEngine.groupTeamStandings, _window: g.window };
+module.exports = { decidirTardioNaFolga, generateLigaRound, applyTournamentWO, setPresenceWithWOSubstitution, resolveWOSubstitutionChoice, setTournamentWOAbsence, acceptLigaSubstitution, runLigaAction, compileFromFmt2, canRecompile, hasDrawnBracket, drawInitial, repeatedMemberInPair, assignCompetitionTeamsAtInitialDraw, integrateLateEntries, formLatePairCore, splitLatePairCore, closeRoundCore, materializeNextPhase: g.window._phasesEngine && g.window._phasesEngine.materializeNextPhase, standingsDaFaseAnterior: g.window._phasesEngine && g.window._phasesEngine.standingsDaFaseAnterior, phaseComplete: g.window._phasesEngine && g.window._phasesEngine.phaseComplete, groupTeamStandings: g.window._phasesEngine && g.window._phasesEngine.groupTeamStandings, _window: g.window };

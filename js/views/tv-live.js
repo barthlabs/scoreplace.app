@@ -6,6 +6,7 @@
   var popupTournamentId = '', popupGeneration = 0, lastHeartbeatAt = 0, lastHeartbeatVisible = false;
   var highestGenerationById = Object.create(null);
   var lastCompleteTournament = null, loadingTournament = false, lastLoadAttempt = 0;
+  var liveMatchTournamentId = '', liveMatches = new Map(), liveMatchesUnsubscribe = null;
   var clock = window.ScoreplaceMatchTiming;
   function esc(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, function (c) {
@@ -113,6 +114,15 @@
     // O listener recebe uma cópia nova. Use a numeração canônica da chave.
     if (typeof window._assignGlobalGameNumbers === 'function') window._assignGlobalGameNumbers(t);
     var matches = typeof window._collectAllMatches === 'function' ? window._collectAllMatches(t) : (t.matches || []);
+    // O torneio completo pode continuar em memória enquanto a mesa grava uma
+    // chamada numa parte externa. A janela acompanha a mesma subcoleção canônica
+    // que loadTournamentById lê; cada jogo recém-gravado substitui só seu retrato.
+    if (String(t.id) === liveMatchTournamentId && liveMatches.size) {
+      matches = matches.map(function (m) {
+        var live = m && liveMatches.get(String(m.id));
+        return live ? Object.assign({}, m, live, { _gameNum: live._gameNum || m._gameNum }) : m;
+      });
+    }
     var tieBook = t.phaseTieDecisions && t.phaseTieDecisions[String(t.currentPhaseIndex || 0)];
     var tieMatches = tieBook ? Object.keys(tieBook).sort().reduce(function (all, id) {
       var decision = tieBook[id];
@@ -443,7 +453,7 @@
   function syncButton() {
     var current = window._currentBracketTournament;
     if (popup && current && popupTournamentId && String(current.id) !== popupTournamentId) {
-      popup = null; popupTournamentId = ''; popupGeneration = 0; lastHeartbeatAt = 0; lastHeartbeatVisible = false;
+      stop(); return;
     }
     var on = isActive();
     window._tvLiveWindow = on ? popup : null;
@@ -477,6 +487,8 @@
     syncButton();
   });
   function stop() {
+    if (liveMatchesUnsubscribe) liveMatchesUnsubscribe();
+    liveMatchesUnsubscribe = null; liveMatches = new Map(); liveMatchTournamentId = '';
     if (wakeSentinel && typeof wakeSentinel.release === 'function') wakeSentinel.release().catch(function () {});
     wakeSentinel = null;
     if (tick) clearInterval(tick);
@@ -531,6 +543,26 @@
     keepTvAwake();
     lastMarkup = '';
     lastCompleteTournament = completeTournament(tournament) ? tournament : null;
+    var matchDb = window.FirestoreDB && window.FirestoreDB.db;
+    if (liveMatchesUnsubscribe) liveMatchesUnsubscribe();
+    liveMatches = new Map(); liveMatchTournamentId = id;
+    if (matchDb) {
+      liveMatchesUnsubscribe = matchDb.collection(id.startsWith('sb_') ? 'sandboxes' : 'tournaments')
+        .doc(id).collection('matches').onSnapshot(function (snapshot) {
+          snapshot.docChanges().forEach(function (change) {
+            var matchId = String(change.doc.id);
+            if (change.type === 'removed') liveMatches.delete(matchId);
+            else {
+              var match = (change.doc.data() || {}).jogo;
+              if (match && String(match.id) === matchId) liveMatches.set(matchId, match);
+            }
+          });
+          if (typeof window._tvLiveRefresh === 'function') window._tvLiveRefresh();
+        }, function (error) {
+          if (typeof window._warn === 'function') window._warn('[tv-live] jogos ao vivo indisponíveis', error);
+          window._tvLiveEnsureFresh(id);
+        });
+    }
     window._tvLiveEnsureFresh(tournament.id);
     function refresh() {
       if (!popup || popup.closed) { stop(); return; }

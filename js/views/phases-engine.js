@@ -3141,7 +3141,11 @@
       var courtNames = liveTournament && Array.isArray(liveTournament.courtNames) ? liveTournament.courtNames.map(String) : [];
       if (!courtNames.length && liveTournament) for (var ci = 1; ci <= Number(liveTournament.courtCount || 0); ci++) courtNames.push('Quadra ' + ci);
       body += '<p style="font-size:.82rem;">' + ((tie.players || []).length === 3 ? 'Triangular' : 'Simples') +
-        ' · ' + decision.setsToWin + ' set(s) para vencer cada partida. Registre os placares por set, por exemplo <b>6-4, 3-6, 6-2</b>. Revise todos os resultados antes de confirmar ' +
+        (decision.pointsToWin ? ' · tie-break até ' + decision.pointsToWin + ' pontos' +
+          (decision.pointMargin === 2 ? ', com dois pontos de vantagem' : ', vence quem chegar primeiro') +
+          '. Registre o placar, por exemplo <b>' + decision.pointsToWin + '-3</b>.' :
+          ' · ' + decision.setsToWin + ' set(s) para vencer cada partida. Registre os placares por set, por exemplo <b>6-4, 3-6, 6-2</b>.') +
+        ' Revise todos os resultados antes de confirmar ' +
         (finalTitle ? 'o encerramento.' : 'o avanço.') + '</p>';
       (decision.matches || []).forEach(function (match, index) {
         var courtOptions = '<option value="">Escolha a quadra</option>' + courtNames.map(function (name) {
@@ -3155,7 +3159,8 @@
             '</select><button type="button" class="btn btn-secondary" data-tie-call="' + index + '"' + (!match.court ? ' disabled' : '') + '>' +
             (match.courtCalledAt ? 'Chamado' : 'Chamar') + '</button></div>' : '') +
           '<div style="display:flex;gap:8px;margin-top:8px;"><input class="form-control" id="phase-tie-score-' + index +
-          '" aria-label="Placar por set" value="' + safe(scoreText) + '" placeholder="6-4' + (decision.setsToWin > 1 ? ', 6-3' : '') +
+          '" aria-label="Placar por set" value="' + safe(scoreText) + '" placeholder="' +
+          (decision.pointsToWin || 6) + '-3' + (decision.setsToWin > 1 ? ', 6-3' : '') +
           '" style="min-width:0;flex:1;"><button type="button" class="btn btn-primary" data-tie-match="' + index + '">' +
           (match.winnerKey ? 'Corrigir placar' : 'Salvar placar') + '</button></div></div>';
       });

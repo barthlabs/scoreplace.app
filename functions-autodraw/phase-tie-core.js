@@ -150,7 +150,7 @@ function matchesFor(tie, idPrefix, baseNumber, suffixOffset) {
   }));
 }
 
-function scoreMatch(match, sets, setsToWin) {
+function scoreMatch(match, sets, setsToWin, pointsToWin, pointMargin) {
   if (!match || !Array.isArray(sets) || !sets.length) throw new Error('placar da simples ausente');
   const target = Number.isInteger(setsToWin) && setsToWin >= 1 && setsToWin <= 5 ? setsToWin : 1;
   if (sets.length > target * 2 - 1) throw new Error('sets demais para o formato escolhido');
@@ -163,6 +163,14 @@ function scoreMatch(match, sets, setsToWin) {
     const p1 = Number(set.p1), p2 = Number(set.p2);
     if (!Number.isInteger(p1) || !Number.isInteger(p2) || p1 < 0 || p2 < 0 || p1 > 99 || p2 > 99 || p1 === p2) {
       throw new Error('placar inválido no set ' + (index + 1));
+    }
+    if (Number.isInteger(pointsToWin)) {
+      const winner = Math.max(p1, p2), loser = Math.min(p1, p2);
+      const margin = pointMargin === 2 ? 2 : 1;
+      if (winner !== Math.max(pointsToWin, loser + margin) || winner > 99) {
+        throw new Error('placar inválido: desempate até ' + pointsToWin +
+          (margin === 2 ? ' com dois pontos de vantagem' : ', sem vantagem de dois pontos'));
+      }
     }
     if (w1 >= target || w2 >= target) throw new Error('set após a partida já estar decidida');
     if (p1 > p2) w1++; else w2++;
@@ -267,7 +275,11 @@ function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, actio
           order: type === 'draw' ? keys.slice() : null,
           matches: type === 'play' ? matchesFor(tie,
             'tie-' + phaseIndex + '-' + decisionId.replace(/[^a-zA-Z0-9_-]/g, '-'), baseNumber, suffixOffset) : [],
-          setsToWin: Number.isInteger(setsToWin) && setsToWin >= 1 && setsToWin <= 5 ? setsToWin : 1,
+          setsToWin: 1,
+          pointsToWin: Number.isInteger(Number(t.fmt2 && t.fmt2.tieSinglesPoints)) &&
+            Number(t.fmt2 && t.fmt2.tieSinglesPoints) >= 1 && Number(t.fmt2 && t.fmt2.tieSinglesPoints) <= 99
+            ? Number(t.fmt2.tieSinglesPoints) : 5,
+          pointMargin: t.fmt2 && t.fmt2.tieSinglesMargin === 2 ? 2 : 1,
           reason: type === 'draw' ? (autoDraw ? 'rule-original-draw-order' : 'organizer-used-original-draw-order') : 'organizer-chose-singles' };
         phaseBook[decisionId] = decision;
         if (decision.matches.length && Number.isInteger(baseNumber) && baseNumber > 0) {
@@ -306,7 +318,8 @@ function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, actio
         if (action && action.type === 'score' && action.decisionId === decisionId && !usedAction) {
           usedAction = true;
           const previous = decision.matches[matchIndex];
-          const scored = scoreMatch(previous, action.sets, decision.setsToWin);
+          const scored = scoreMatch(previous, action.sets, decision.setsToWin,
+            decision.pointsToWin, decision.pointMargin);
           scored.resultAt = String(action.at || '');
           if (previous.winnerKey) {
             decision.corrections = Array.isArray(decision.corrections) ? decision.corrections : [];

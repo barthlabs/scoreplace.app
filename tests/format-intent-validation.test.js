@@ -15,6 +15,10 @@ const valid = {
 };
 assert.doesNotThrow(() => validateNewFormatIntent(valid, HttpsError));
 assert.doesNotThrow(() => validateNewFormatIntent({ tieResolution: 'singles_then_draw' }, HttpsError));
+assert.doesNotThrow(() => validateNewFormatIntent({ tieResolution: 'singles_then_draw', tieSinglesPoints: 5,
+  tieSinglesMargin: 1 }, HttpsError));
+assert.throws(() => validateNewFormatIntent({ tieSinglesPoints: 100 }, HttpsError), { code: 'invalid-argument' });
+assert.throws(() => validateNewFormatIntent({ tieSinglesMargin: 3 }, HttpsError), { code: 'invalid-argument' });
 assert.doesNotThrow(() => validateNewFormatIntent({ disputa: 'dupla', parceria: 'super_eight' }, HttpsError));
 assert.doesNotThrow(() => validateNewFormatIntent({ disputa: 'individual', parceria: null }, HttpsError));
 assert.doesNotThrow(() => validateNewFormatIntent({ parceria: null }, HttpsError));
@@ -130,6 +134,12 @@ assert.match(editor, /type="number"[^\n]*onchange="window\._f2Linhas\(this\.valu
 assert.match(compiler, /mode: value\.mode === 'structured' \? 'structured' : 'free'/);
 assert.match(editor, /current\.mode = mode === 'structured' \? 'structured' : 'free'/);
 const FORMAT2 = require('../functions-autodraw/draw-core')._window.FORMAT2;
+const openingMonarch = FORMAT2.defaultConfig('Beach Tennis');
+openingMonarch.classifAtiva = false;
+openingMonarch.eliminatoria.openReiRainha = true;
+openingMonarch.tieResolution = 'singles_then_draw';
+assert.equal(FORMAT2.normalize(openingMonarch).tieResolution, 'singles_then_draw',
+  'rodada Rei/Rainha no início da eliminatória preserva a simples de desempate');
 const seedingCfg = FORMAT2.defaultConfig('Beach Tennis');
 seedingCfg.parceria = 'fixa';
 seedingCfg.eliminatoria.formacao = 'performance';

@@ -274,7 +274,17 @@ const fakePopup = { name:'scoreplace-live-tv-neon-test', closed: false, navigato
 let openCalls = 0;
 window.open = () => { openCalls++; return fakePopup; };
 window._findTournamentById = () => t;
+let matchListener, matchUnsubscribed = false;
+window.FirestoreDB = { db: { collection() { return { doc() { return { collection() { return {
+  onSnapshot(callback) { matchListener = callback; return () => { matchUnsubscribed = true; }; }
+}; } }; } }; } } };
 window._tvLiveToggle();
+assert.equal(typeof matchListener, 'function', 'a tela assina os jogos canônicos');
+const updated = { ...t.matches[2], courtCalledAt: new Date(Date.now() - 5000).toISOString() };
+delete updated._gameNum;
+matchListener({ docChanges: () => [{ type:'modified', doc: { id:String(updated.id), data: () => ({ jogo:updated }) } }] });
+assert.equal(window._tvLiveBuildSnapshot(t).courts[2].number, 3,
+  'chamada salva na subcoleção ocupa a quadra mesmo com o torneio em memória desatualizado');
 assert.equal(liveButton.attributes['aria-pressed'], 'false', 'abrir a janela ainda não liga NO AR sem confirmação da própria página');
 assert.equal(window._tvLiveWindow, null, 'botão renderizado depois da abertura ainda nasce desligado');
 assert.equal(wakeRequests, 1, 'NO AR solicita bloqueio de repouso da tela');
@@ -440,6 +450,7 @@ childTick();
 assert.equal(childWarning.hidden, false, 'janela avisa perda prolongada da conexão com a aba');
 window._tvLiveToggle();
 assert.equal(window._tvLiveRefresh, null, 'janela fechada solta o refresh em tempo real');
+assert.equal(matchUnsubscribed, true, 'janela fechada encerra a assinatura dos jogos');
 assert.equal(liveButton.attributes['aria-pressed'], 'false', 'fechar a página apaga o NO AR');
 fakePopup.closed = false;
 window._tvLiveToggle();

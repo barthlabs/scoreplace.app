@@ -188,7 +188,19 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       '<div style="font-size:0.72rem;color:var(--text-muted);margin:6px 0 12px;line-height:1.45;">' + (fx === 'performance'
         ? 'Performance: os melhores do grupo jogam juntos (1º+2º, depois 3º+4º).'
         : 'Equilíbrio: forte com fraco (1º+4º, 2º+3º) — duplas mais parelhas.') + '</div>';
+    if (!temClassif) s += _sec('Desempate da rodada Rei/Rainha',
+      _pill(cfg.tieResolution !== 'singles_then_draw', "window._f2TieResolution('draw_order')", '🎲 Ordem do sorteio original') +
+      _pill(cfg.tieResolution === 'singles_then_draw', "window._f2TieResolution('singles_then_draw')", '🎾 Simples / triangular') +
+      (cfg.tieResolution === 'singles_then_draw' ? _tieSinglesControls(cfg) : ''));
     return s;
+  }
+
+  function _tieSinglesControls(cfg) {
+    return '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-top:10px;">' +
+      '<label>Pontos para vencer <input type="number" min="1" max="99" step="1" value="' + _safe(cfg.tieSinglesPoints || 5) +
+      '" onchange="window._f2TieSinglesPoints(this.value)" style="width:74px;margin-left:6px;"></label>' +
+      _pill(cfg.tieSinglesMargin !== 2, 'window._f2TieSinglesMargin(1)', 'Quem chega primeiro') +
+      _pill(cfg.tieSinglesMargin === 2, 'window._f2TieSinglesMargin(2)', 'Vantagem de 2 pontos') + '</div>';
   }
 
   // Painel "Inscrições durante a fase" DA ELIMINATÓRIA (2ª fase). Espelha visualmente o bloco do
@@ -1059,7 +1071,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;line-height:1.45;">' +
       (cfg.tieResolution === 'singles_then_draw'
         ? 'A regra prevê 1 simples para 2 empatados ou 3 simples em triangular para 3. Na hora do avanço, a organização pode dispensar os jogos por falta de tempo; nesse caso vale a ordem do sorteio original, sem novo sorteio.'
-        : 'Após os critérios estatísticos, vale a ordem definida no sorteio original. Nenhuma nova partida é criada.') + '</div>');
+        : 'Após os critérios estatísticos, vale a ordem definida no sorteio original. Nenhuma nova partida é criada.') + '</div>' +
+      (cfg.tieResolution === 'singles_then_draw'
+        ? _tieSinglesControls(cfg)
+        : ''));
 
     var e = cfg.eliminatoria;
     var eb = '';
@@ -1372,6 +1387,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     _norm(); _rerender();
   };
   window._f2TieResolution = function (v) { if (!S) return; S.cfg.tieResolution = v; _norm(); _rerender(); };
+  window._f2TieSinglesPoints = function (v) { if (!S) return; S.cfg.tieSinglesPoints = v; _norm(); _rerender(); };
+  window._f2TieSinglesMargin = function (v) { if (!S) return; S.cfg.tieSinglesMargin = v; _norm(); _rerender(); };
   window._f2SitOutScoring = function (mode) {
     if (!S) return;
     S.cfg.rankingSitOutScoring = mode === 'fixed'

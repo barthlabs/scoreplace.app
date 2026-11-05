@@ -52,6 +52,8 @@ const choices = formatWindow.FORMAT2.defaultConfig('Beach Tennis');
 choices.rankingRemainderPolicy = 'waitlist_legacy';
 choices.rankingSitOutScoring = { mode: 'fixed', points: 7 };
 choices.tieResolution = 'singles_then_draw';
+choices.tieSinglesPoints = 7;
+choices.tieSinglesMargin = 2;
 choices.eliminatoria.finalSeriesBestOf = 7;
 choices.eliminatoria.semeadura = 'sorteio';
 choices.eliminatoria.grandFinalReset = true;
@@ -59,7 +61,7 @@ choices.eliminatoria.lineAssignment = 'rank_ranges';
 choices.eliminatoria.lineRankRanges = [{ from: 1, to: 4 }, { from: 5, to: 8 }];
 choices.eliminatoria.bestNextByGroup = { count: 1, metric: 'win_rate', destIndex: 1 };
 const replay = copy(choices);
-for (const key of ['rankingRemainderPolicy', 'rankingSitOutScoring', 'tieResolution'])
+for (const key of ['rankingRemainderPolicy', 'rankingSitOutScoring', 'tieResolution', 'tieSinglesPoints', 'tieSinglesMargin'])
   assert.strictEqual(JSON.stringify(replay[key]), JSON.stringify(choices[key]), `template preserva ${key}`);
 for (const key of ['finalSeriesBestOf', 'semeadura', 'grandFinalReset', 'lineAssignment', 'lineRankRanges', 'bestNextByGroup'])
   assert.strictEqual(JSON.stringify(replay.eliminatoria[key]), JSON.stringify(choices.eliminatoria[key]), `template preserva eliminatoria.${key}`);

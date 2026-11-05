@@ -64,7 +64,7 @@ flow = resolveTie(t, { type: 'court', decisionId: flow.tie.decisionId,
   matchId, court: 'Quadra 1' }, now);
 assert.equal(flow.decision.matches[0].court, 'Quadra 1');
 flow = resolveTie(t, { type: 'score', decisionId: flow.tie.decisionId,
-  matchId, sets: [{ p1: 4, p2: 6 }] }, now);
+  matchId, sets: [{ p1: 4, p2: 5 }] }, now);
 assert.equal(flow.status, 'review');
 assert.equal(flow.changed, true);
 t = structuredClone(t); // o placar extra precisa sobreviver à próxima transação

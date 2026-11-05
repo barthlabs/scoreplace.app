@@ -10,6 +10,7 @@ const ENUMS = [
   ['manualPairingPolicy', ['organizer_only', 'athletes_only', 'open']],
   ['classifScope', ['overall', 'per_group']],
   ['tieResolution', ['draw_order', 'singles_then_draw']],
+  ['tieSinglesMargin', [1, 2]],
   ['rodadas.modo', ['todos', 'fixo']],
   ['rodadas.turnos', ['ida', 'ida_volta']],
   ['classificationPairing.strategy', ['ranking_clusters', 'free_draw']],
@@ -32,6 +33,7 @@ const INTEGERS = [
   ['eliminatoria.bestNextByGroup.count', 0],
   ['eliminatoria.bestNextByGroup.destIndex', 0],
   ['classificados', 1],
+  ['tieSinglesPoints', 1],
   ['rodadas.n', 1],
   ['classificationPairing.clusterSize', 2],
   ['classificationSchedule.gamesPerUnit', 1]
@@ -174,6 +176,9 @@ function validateNewFormatIntent(fmt2, HttpsError, stored, requestedTeamSize) {
     }
     if (path === 'eliminatoria.linhas' && parsed > 32) {
       throw new HttpsError('invalid-argument', 'São permitidas no máximo 32 chaves paralelas.');
+    }
+    if (path === 'tieSinglesPoints' && parsed > 99) {
+      throw new HttpsError('invalid-argument', 'O desempate de simples aceita de 1 a 99 pontos.');
     }
     if (path === 'eliminatoria.finalSeriesBestOf' && (parsed > 99 || parsed % 2 !== 1)) {
       throw new HttpsError('invalid-argument', 'A série final exige de 1 a 99 partidas, em número ímpar.');

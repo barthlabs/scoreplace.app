@@ -1,3 +1,8 @@
+// 2.5.101 — O sorteio recusa duplas com a mesma pessoa nos dois lugares.
+// A chamada para quadra reutiliza o servidor alinhado e só procura outro se
+// houver falha. A Tela no ar acompanha os jogos das quadras em tempo real.
+// O desempate por simples permite configurar a pontuação e a vantagem;
+// por padrão, vence quem fizer cinco pontos primeiro.
 // 2.5.100 — O painel de jogos em quadra mantém o relógio dentro do card, usa
 // a altura real do conteúdo e mostra Cancelar com o X canônico do aplicativo.
 // O mesmo card é usado em todos os torneios concentrados.

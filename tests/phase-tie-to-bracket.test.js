@@ -38,7 +38,7 @@ let flow = tie.resolvePhaseTies(tournamentTriangular, 0, pool, nextPhase, compar
 assert.equal(flow.status, 'choice');
 flow = tie.resolvePhaseTies(tournamentTriangular, 0, pool, nextPhase, compare,
   { type: 'play', decisionId: flow.tie.decisionId }, 1);
-for (const [index, scores] of [[4, 6], [4, 6], [4, 6]].entries()) {
+for (const [index, scores] of [[4, 5], [4, 5], [4, 5]].entries()) {
   flow = tie.resolvePhaseTies(tournamentTriangular, 0, pool, nextPhase, compare,
     { type: 'score', decisionId: flow.tie.decisionId,
       matchId: flow.decision.matches[index].id, sets: [{ p1: scores[0], p2: scores[1] }] }, 1);

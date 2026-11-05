@@ -66,8 +66,11 @@ const headers = { Authorization: 'Bearer test' };
   const firstRegion = elected;
   assert.equal(calls.filter(x => x.payload.probe).length, names.length * regions.length);
   assert.equal(calls.filter(x => x.name === 'sp-op-court-v2' && !x.payload.probe).length, 1);
+  const currentBeforeSecond = calls.filter(x => x.name === 'sp-op-control-v2' && x.payload.action === 'current').length;
   failedRegion = elected; committed = false; receipt = false;
   assert.equal((await router.call('assignMatchCourt', payload, headers)).ok, true);
+  assert.equal(calls.filter(x => x.name === 'sp-op-control-v2' && x.payload.action === 'current').length,
+    currentBeforeSecond, 'segunda ação reutiliza a região já selecionada');
   assert.notEqual(elected, firstRegion);
   const operations = calls.filter(x => x.name === 'sp-op-court-v2' && !x.payload.probe);
   assert.equal(operations.length, 3);
@@ -146,5 +149,18 @@ const headers = { Authorization: 'Bearer test' };
     { tournamentId: 'tour_score', operationId: 'op' }, headers),
     error => error.code === 'unavailable',
     'ausência em uma região não permite repetir escrita se outra região ficou inalcançável');
+  // Um sandbox de evento passado preserva a região entre chamadas. A data
+  // configurada é virtual para o ensaio e não invalida o alinhamento.
+  probeFailure = false;
+  failedRegion = '';
+  receipt = false;
+  context._findTournamentById = () => ({ id: 'sb_test' });
+  context.ScoreplaceMatchDay = { localDay: () => '2026-11-05', eventZone: () => 'America/Sao_Paulo' };
+  const sandboxPayload = { tournamentId: 'sb_test', matchId: 'sb-m1', court: 4, sandbox: true };
+  assert.equal((await router.call('assignMatchCourt', sandboxPayload, headers)).ok, true);
+  const sandboxCurrent = calls.filter(x => x.name === 'sp-op-control-v2' && x.payload.action === 'current' && x.payload.tournamentId === 'sb_test').length;
+  assert.equal((await router.call('assignMatchCourt', sandboxPayload, headers)).ok, true);
+  assert.equal(calls.filter(x => x.name === 'sp-op-control-v2' && x.payload.action === 'current' && x.payload.tournamentId === 'sb_test').length,
+    sandboxCurrent, 'data virtual do sandbox não provoca novo alinhamento');
   console.log('✓ eleição, aderência, troca por falha, mesmo operationId e recibo sem escrita duplicada');
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -45,7 +45,7 @@
   function withoutId(payload) {
     var copy = Object.assign({}, payload); delete copy.operationId; return JSON.stringify(copy);
   }
-  function progress(open, region) {
+  function progress(open, region, needsAlignment) {
     var id = 'sp-region-align-progress';
     var node = document.getElementById(id);
     if (open) progressCount++;
@@ -55,10 +55,10 @@
       node = document.createElement('div'); node.id = id;
       node.setAttribute('role', 'status'); node.setAttribute('aria-live', 'polite');
       node.style.cssText = 'position:fixed;z-index:2147483640;left:50%;top:50%;transform:translate(-50%,-50%);background:#10243a;color:#fff;border:1px solid #51c5ee;border-radius:12px;padding:20px 26px;box-shadow:0 8px 30px #0009;font-weight:700';
-      node.textContent = 'Alinhando servidores e gravando…'; document.body.appendChild(node);
+      node.textContent = needsAlignment ? 'Alinhando servidores e gravando…' : 'Gravando…'; document.body.appendChild(node);
     } else if (open && node) {
       clearTimeout(node._removeTimer);
-      node.textContent = 'Alinhando servidores e gravando…';
+      node.textContent = needsAlignment ? 'Alinhando servidores e gravando…' : 'Gravando…';
     } else if (!open && node) {
       if (region) {
         node.textContent = 'Operação confirmada em ' + region;
@@ -162,16 +162,18 @@
   async function control(cfg, region, payload, headers) {
     return post(url(cfg, region, 'tournamentOperationControl'), payload, headers, 10000);
   }
+  function selectedDayMatches(tId, state, sandbox) {
+    // O ensaio usa o dia do evento mesmo quando o relógio real aponta outro dia.
+    if (sandbox) return true;
+    var day = window.ScoreplaceMatchDay;
+    var tournament = typeof window._findTournamentById === 'function' ? window._findTournamentById(tId) : null;
+    if (!day || !tournament || !state.day) return true;
+    var today = day.localDay(Date.now(), day.eventZone(tournament));
+    return !today || today === state.day;
+  }
   async function align(cfg, tId, sandbox, headers) {
     var existing = selection.get(tId);
-    if (existing) {
-      try {
-        var state = await control(cfg, existing.region, { action: 'current', tournamentId: tId, sandbox: sandbox }, headers);
-        if (state.selected && state.day === existing.day) {
-          selection.set(tId, state); return state;
-        }
-      } catch (_) { /* Só então sondar todas as regiões. */ }
-    }
+    if (existing && existing.schema === cfg.schema && selectedDayMatches(tId, existing, sandbox)) return existing;
     if (aligning.has(tId)) return aligning.get(tId);
     var task = (async function () {
         var list = await healthy(cfg, headers);
@@ -186,6 +188,7 @@
             region: next.region, observedRevision: state.revision, reason: 'infrastructure',
             sourceDigest: cfg.services[CONTROL.replace(/-v2$/, '-v' + cfg.schema)].digest }, headers);
         }
+        state.schema = cfg.schema;
         selection.set(tId, state);
         return state;
       })().finally(function () { aligning.delete(tId); });
@@ -271,7 +274,7 @@
         throw error;
       }
     }
-    progress(true);
+    progress(true, '', !selection.has(tId) || !selectedDayMatches(tId, selection.get(tId), payload.sandbox === true));
     var progressRegion = '';
     var progressCompleted = false;
     try {
@@ -282,6 +285,7 @@
       try { answer = await post(url(cfg, state.region, name), payload, headers, 20000); }
       catch (error) {
         if (!error.infrastructure) throw error;
+        selection.delete(tId);
         var list = await healthy(cfg, headers);
         var available = list.map(function (item) { return item.region; });
         var found = await findReceipt(cfg, available, payload, headers);
@@ -293,6 +297,8 @@
             sandbox: payload.sandbox === true, region: alternative.region, observedRevision: state.revision,
             reason: 'infrastructure', sourceDigest: cfg.services[CONTROL.replace(/-v2$/, '-v' + cfg.schema)].digest }, headers);
           selection.set(tId, next);
+          next.schema = cfg.schema;
+          progressRegion = next.region;
           answer = await post(url(cfg, next.region, name), payload, headers, 20000);
         }
       }

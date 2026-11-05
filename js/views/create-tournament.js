@@ -8164,7 +8164,7 @@ window._f2TemplateCopy = function(fmt2Bruto) {
   };
   var out = pick(raw, ['disputa', 'grupos', 'parceria', 'formacaoDupla', 'manualPairingOpen', 'manualPairingPolicy',
     'classifAtiva', 'classificados', 'classifScope', '_scoreBy', 'historicalSinglesOverride',
-    'rankingRemainderPolicy', 'rankingSitOutScoring', 'tieResolution']);
+    'rankingRemainderPolicy', 'rankingSitOutScoring', 'tieResolution', 'tieSinglesPoints', 'tieSinglesMargin']);
   if (raw.rodadas) {
     out.rodadas = pick(raw.rodadas, ['modo', 'turnos', 'n', 'drawFirstTime', 'drawIntervalDays',
       'drawManual', 'allowSelfDeactivation', '_intervalAuto']);

@@ -111,6 +111,32 @@ function structure(t) {
   });
 })();
 
+// Uma inscrição manual ligada à mesma pessoa da conta não pode virar os dois
+// membros da dupla. O bloqueio ocorre antes de publicar a chave no servidor.
+(function () {
+  const cfg = core._window.FORMAT2.defaultConfig('Beach Tennis');
+  Object.assign(cfg, { disputa:'dupla', parceria:'fixa', formacaoDupla:'manual', grupos:1 });
+  cfg.rodadas.modo = 'todos'; cfg.eliminatoria.ativa = false;
+  const t = mkT('duplicate-pair', { fmt2:cfg, teamSize:2, enrollmentMode:'teams', participants:[
+    { p1Uid:'duplicate-account', p1Name:'Monique Traude', p2ManualId:'duplicate-manual',
+      p2Name:'Monique Traude', displayName:'Monique Traude / Monique Traude' },
+    { p1Uid:'other-a', p1Name:'Outra A', p2Uid:'other-b', p2Name:'Outra B',
+      displayName:'Outra A / Outra B' }
+  ] });
+  const compiled = core.compileFromFmt2(t);
+  const result = compiled.ok && core.drawInitial(t, { idStamp:'duplicate' });
+  ok('dupla com conta e ficha manual da mesma pessoa bloqueia o sorteio',
+    compiled.ok && result.ok === false && /Dupla inválida/.test(result.reason) && !t.matches,
+    result && result.reason);
+  ok('dois UIDs distintos podem ter o mesmo nome',
+    !core.repeatedMemberInPair([{ p1Uid:'homonym-a', p1Name:'Maria Silva',
+      p2Uid:'homonym-b', p2Name:'Maria Silva' }], () => ''),
+    'identidades diferentes');
+  ok('dupla legada sem IDs também recusa o mesmo nome nos dois lugares',
+    core.repeatedMemberInPair([{ p1Name:'Monique Traude', p2Name:'Monique Traude' }]) === 'Monique Traude',
+    'fichas legadas sem conta');
+})();
+
 // Cenários que exercitam os ramos reais do motor.
 const CASES = [
   ['Eliminatórias Simples · 8 individuais', { format: 'Eliminatórias Simples' }, 8],

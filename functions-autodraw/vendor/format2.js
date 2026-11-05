@@ -445,6 +445,8 @@
       classificados: 2,          // X que classificam (por grupo OU total, conforme classifScope)
       classifScope: 'per_group', // 'per_group' (melhores de cada grupo) | 'overall' (tabela geral)
       tieResolution: 'draw_order', // após critérios: ordem do sorteio original; ou simples/triangular prevista na regra
+      tieSinglesPoints: 5,
+      tieSinglesMargin: 1,
       eliminatoria: {
         ativa: true,          // ativo por padrão (dono)
         nome: '',             // nome livre da fase; vazio mantém "Eliminatória"
@@ -676,7 +678,8 @@
     // Pontuação individual quando singles OU parceria rotativa.
     out._scoreBy = (!isDupla || out.parceria === 'rei_rainha' || out.parceria === 'sorteio_rodada' || out.parceria === 'super_eight')
       ? 'individual' : 'dupla';
-    if (out._scoreBy !== 'individual' || (out.classifAtiva !== false && out.teamCompetition && out.teamCompetition.enabled)) {
+    if ((out._scoreBy !== 'individual' && !(out.eliminatoria && out.eliminatoria.openReiRainha)) ||
+        (out.classifAtiva !== false && out.teamCompetition && out.teamCompetition.enabled)) {
       out.tieResolution = 'draw_order';
     }
 
@@ -713,6 +716,8 @@
 
     out.classificados = Math.max(1, parseInt(out.classificados, 10) || 2);
     out.tieResolution = out.tieResolution === 'singles_then_draw' ? 'singles_then_draw' : 'draw_order';
+    out.tieSinglesPoints = Math.max(1, Math.min(99, parseInt(out.tieSinglesPoints, 10) || 5));
+    out.tieSinglesMargin = Number(out.tieSinglesMargin) === 2 ? 2 : 1;
     // Escopo da classificação: por grupo × geral. Com 1 grupo é sempre geral (não há grupos).
     if (out.classifScope !== 'overall' && out.classifScope !== 'per_group') out.classifScope = 'per_group';
     if (umGrupo) out.classifScope = 'overall';

@@ -78,6 +78,13 @@ assert.deepStrictEqual(tie.rankPlayers(found, cycle), ['uid:B', 'uid:C', 'uid:D'
 assert.deepStrictEqual(tie.findBoundaryTie(rows, [1], cmp), null, 'a fronteira fora do bloco empatado não abre disputa');
 assert.throws(() => tie.scoreMatch(games[0], [{ p1: 6, p2: 6 }], 1), /placar inválido/);
 assert.throws(() => tie.scoreMatch(games[0], [{ p1: 6, p2: 4 }], 2), /incompleta/);
+assert.equal(tie.scoreMatch(games[0], [{ p1: 5, p2: 4 }], 1, 5, 1).winnerKey, 'uid:B',
+  'no tie-break sem vantagem, o primeiro a chegar a cinco vence');
+assert.throws(() => tie.scoreMatch(games[0], [{ p1: 6, p2: 4 }], 1, 5, 1), /placar inválido/,
+  'não aceita ponto extra depois de a simples terminar');
+assert.equal(tie.scoreMatch(games[0], [{ p1: 6, p2: 4 }], 1, 5, 2).winnerKey, 'uid:B',
+  'configuração alternativa de vantagem exige o sexto ponto em 4 a 4');
+assert.throws(() => tie.scoreMatch(games[0], [{ p1: 5, p2: 4 }], 1, 5, 2), /placar inválido/);
 
 const fresh = {};
 const next = { fixedPairs: true, pairingStrategy: 'top', source: { mapping: [
@@ -94,6 +101,9 @@ assert.strictEqual(flow.tie.firstExtraGameNumber, '93A');
 flow = tie.resolvePhaseTies(fresh, 0, pools, next, () => cmp,
   { type: 'play', decisionId: flow.tie.decisionId }, 1, false, () => 93);
 assert.strictEqual(flow.status, 'pending');
+assert.equal(flow.decision.pointsToWin, 5);
+assert.equal(flow.decision.pointMargin, 1);
+assert.equal(flow.decision.setsToWin, 1);
 assert.deepStrictEqual(flow.decision.matches.map(m => m.displayGameNumber), ['93A', '93B', '93C']);
 assert.throws(() => tie.resolvePhaseTies(fresh, 0, pools, next, () => cmp,
   { type: 'score', decisionId: 'decisao-inexistente', matchId: flow.decision.matches[0].id,
@@ -114,7 +124,7 @@ const sameBasePlay = tie.resolvePhaseTies(sameBase, 0, pools, next, () => cmp,
   { type: 'play', decisionId: sameBaseChoice.tie.decisionId }, 1, false, () => 93);
 assert.deepStrictEqual(sameBasePlay.decision.matches.map(m => m.displayGameNumber), ['93C', '93D', '93E'],
   'outra disputa extra ligada ao mesmo jogo-base não reutiliza letras');
-for (const [index, score] of [[6, 4], [4, 6], [6, 4]].entries()) {
+for (const [index, score] of [[5, 4], [4, 5], [5, 4]].entries()) {
   flow = tie.resolvePhaseTies(fresh, 0, pools, next, () => cmp,
     { type: 'score', decisionId: flow.tie.decisionId, matchId: flow.decision.matches[index].id,
       sets: [{ p1: score[0], p2: score[1] }] }, 1, false, () => 93);
@@ -122,7 +132,7 @@ for (const [index, score] of [[6, 4], [4, 6], [6, 4]].entries()) {
 assert.strictEqual(flow.status, 'review');
 flow = tie.resolvePhaseTies(fresh, 0, pools, next, () => cmp,
   { type: 'score', decisionId: flow.tie.decisionId, matchId: flow.decision.matches[0].id,
-    sets: [{ p1: 4, p2: 6 }], at: '2026-11-03T12:30:00Z' }, 1, false, () => 93);
+    sets: [{ p1: 4, p2: 5 }], at: '2026-11-03T12:30:00Z' }, 1, false, () => 93);
 assert.equal(flow.decision.corrections.length, 1);
 assert.strictEqual(flow.status, 'review');
 flow = tie.resolvePhaseTies(fresh, 0, pools, next, () => cmp,
