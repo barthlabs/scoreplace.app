@@ -2,8 +2,8 @@
   "schema": 1,
   "entries": {
     "drawRound": {
-      "backendCommit": "860fe65c3b48ced282ac41398e3f5ea4baedb944",
-      "deployedAt": "2026-11-04T22:05:52.805Z",
+      "backendCommit": "780ccd1b6785bc7da1f7309160dfa6b42e4c2fc7",
+      "deployedAt": "2026-11-05T14:35:49.949Z",
       "result": "success",
       "mode": "only"
     },
@@ -14,8 +14,8 @@
       "mode": "only"
     },
     "resolvePendingDraw": {
-      "backendCommit": "0afaa82d607c9f7a0071e0abff81995fee948fa4",
-      "deployedAt": "2026-11-04T01:39:06.714Z",
+      "backendCommit": "780ccd1b6785bc7da1f7309160dfa6b42e4c2fc7",
+      "deployedAt": "2026-11-05T14:35:49.949Z",
       "result": "success",
       "mode": "only"
     },
@@ -92,8 +92,8 @@
       "mode": "only"
     },
     "startTournament": {
-      "backendCommit": "0afaa82d607c9f7a0071e0abff81995fee948fa4",
-      "deployedAt": "2026-11-04T01:40:36.986Z",
+      "backendCommit": "780ccd1b6785bc7da1f7309160dfa6b42e4c2fc7",
+      "deployedAt": "2026-11-05T14:35:49.949Z",
       "result": "success",
       "mode": "only"
     },
@@ -506,8 +506,8 @@
       "mode": "only"
     },
     "resetTournamentCheckIn": {
-      "backendCommit": "8d35143abe0c1412d4e3f3752222bb1ee2586511",
-      "deployedAt": "2026-11-02T14:23:05.438Z",
+      "backendCommit": "780ccd1b6785bc7da1f7309160dfa6b42e4c2fc7",
+      "deployedAt": "2026-11-05T14:35:49.949Z",
       "result": "success",
       "mode": "only"
     },
