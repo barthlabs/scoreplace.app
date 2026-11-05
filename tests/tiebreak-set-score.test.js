@@ -121,6 +121,10 @@ const first = W._confirmSetFromCard(tour.id, mid, {
 Promise.resolve(first).then(() => {
   ok(intermediate === 1 && !committed && !match.winner && match.sets.length === 1,
     'primeiro set com tie-break grava e deixa a partida aberta');
+  const reloaded = JSON.parse(JSON.stringify(match));
+  const reloadedPlan = W._matchSetPlan(scoring, reloaded);
+  ok(reloadedPlan.played.length === 1 && reloadedPlan.live && reloadedPlan.live.i === 1,
+    'placar parcial serializado reabre no segundo set após recarga');
   const secondPlan = W._matchSetPlan(scoring, match);
   ok(secondPlan.live && secondPlan.live.i === 1 && secondPlan.columns.length === 2,
     'segundo set aparece após confirmar o primeiro');
@@ -131,6 +135,14 @@ Promise.resolve(first).then(() => {
     'segundo set fecha 2×0 sem perder o tie-break do primeiro');
   const invalid = W._validateNormalSetScore(scoring, tour.sport, 65, 1);
   ok(!invalid.ok && invalid.detail.includes('65'), '65×1 continua inválido no segundo set');
+  const attrs = {};
+  const field = (value) => ({ value, getAttribute(key) { return attrs[key] || null; },
+    setAttribute(key, next) { attrs[key] = next; } });
+  const liveFields = { ['s1-' + mid]: field('65'), ['s2-' + mid]: field('1') };
+  W.document.getElementById = id => liveFields[id] || null;
+  alert = '';
+  W._warnGrossSetScore(mid);
+  ok(alert.includes('65×1'), 'aviso ao sair do campo vivo identifica o placar inválido');
   console.log('  ' + pass + ' asserts OK, ' + fail + ' falhas');
   if (fail > 0) { console.error('❌ tiebreak-set-score FALHOU'); process.exitCode = 1; }
   else console.log('✅ tiebreak-set-score: OK');

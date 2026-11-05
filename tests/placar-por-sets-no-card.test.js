@@ -151,6 +151,11 @@ function regua() {
     miniHtml1.includes('min-width:' + mini1.reservedGridW + 'px') &&
     mini0.reservedGridW === mini1.reservedGridW,
     'mini-card reserva a mesma largura do placar em 0-0 e 1-0');
+  const dashboardSource = read('js/views/dashboard.js');
+  ok(dashboardSource.includes('window._matchSetPlan(_mSc, item.m') &&
+    dashboardSource.includes('window._setHeadHtml(_plan') &&
+    dashboardSource.includes('window._setGridHtml(_plan, side'),
+    'tela inicial consome o mesmo plano e os mesmos helpers exercitados acima');
 }
 
 /* ── ② A DECISÃO + ③ O QUE O PARCIAL GRAVA ────────────────────────────────────────── */
