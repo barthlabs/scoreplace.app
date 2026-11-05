@@ -340,8 +340,7 @@ const CASES = [
   ok('Neon 64: mapa de dupla excluída não fabrica inscrição',
     competitionAssignments.overlay(projectedAgain.slice(1), savedAssignments).length === 63);
   const estimated = core._window._schGradeEstimada(neon64);
-  // A janela da cópia tem nove horários: três estágios de 16 jogos, sem
-  // antecipar o segundo jogo de uma dupla enquanto outra aguarda o primeiro.
+  // Os três estágios dividem as faixas de fronteira sem deixar quadras vazias.
   const plannedDaysValid = estimated && estimated.slots.every(function (slot) {
     const match = realMatches.find(function (m) { return String(m.id) === slot.matchId; });
     return !match.requiredDay || match.requiredDay === ['2026-10-22','2026-10-23'][slot.dia];
@@ -353,7 +352,7 @@ const CASES = [
     return Object.values(counts);
   });
   ok('Neon 64: 96 jogos em 48 por dia e três estágios de 16', estimated && estimated.cabe === true && estimated.slots.length === 96 &&
-    plannedDaysValid && applied === 96 && waves.every(function (day) { return day.length === 9 && day.join(',') === '6,6,4,6,6,4,6,6,4'; }) &&
+    plannedDaysValid && applied === 96 && waves.every(function (day) { return day.length === 8 && day.every(function (n) { return n === 6; }); }) &&
     estimated.slots.every(function (slot) {
       const match = realMatches.find(function (m) { return String(m.id) === slot.matchId; });
       return !match.requiredDay || new Date(slot.iso).toLocaleDateString('en-CA', { timeZone:'America/Sao_Paulo' }) === match.requiredDay;
@@ -371,18 +370,27 @@ const CASES = [
     });
     return Object.values(counts);
   });
-  ok('Neon 64 livre: três jogos por dupla em nove horários por dia',
+  ok('Neon 64 livre: três jogos por dupla em oito horários por dia',
     freeDraw.ok && neonFree64.matches.length === 96 && freeGrade && freeGrade.cabe === true &&
     freeGrade.slots.length === 96 && freeWaves.every(function (day) {
-      return day.length === 9 && day.join(',') === '6,6,4,6,6,4,6,6,4';
+      return day.length === 8 && day.every(function (n) { return n === 6; });
     }) && neonFree64.participants.every(function (entry) {
       return neonFree64.matches.filter(function (match) {
         return match.team1Obj.fixedPairId === entry.fixedPairId || match.team2Obj.fixedPairId === entry.fixedPairId;
       }).length === 3;
     }), JSON.stringify({ drawn:freeDraw.ok, reason:freeDraw.reason, matches:neonFree64.matches && neonFree64.matches.length, waves:freeWaves }));
-  // strict-team-insufficient-aborts-transaction / strict-free-mode-insufficient-aborts-transaction:
-  // o motor ainda forma os confrontos, mas o plano de oito horários não cabe.
-  // drawRound deve detectar isso dentro da transação antes de gravar a chave.
+  const missingCategory = JSON.parse(JSON.stringify(neonFree64));
+  missingCategory.matches[0].category = '';
+  missingCategory.matches[0].team1Obj.category = '';
+  missingCategory.matches[0].team2Obj.category = '';
+  const missingCategoryPlan = core._window._schGradeEstimada(missingCategory);
+  ok('categoria ausente não quebra a prévia nem autoriza cadência estrita',
+    !missingCategoryPlan || (missingCategoryPlan.cadenceValid !== true && missingCategoryPlan.cabe === false),
+    JSON.stringify({ cabe:missingCategoryPlan && missingCategoryPlan.cabe,
+      cadenceValid:missingCategoryPlan && missingCategoryPlan.cadenceValid,
+      slots:missingCategoryPlan && missingCategoryPlan.slots.length }));
+  // Uma janela de sete horários conserva os 48 jogos por dia no rascunho,
+  // com a oitava faixa marcada como excedente para decisão da organização.
   ['structured', 'free'].forEach(function (mode) {
     const short = realTournament();
     short.id = 'neon-short-' + mode;
@@ -391,14 +399,15 @@ const CASES = [
     });
     short.phases = [{ teamCompetition:short.teamCompetition }];
     short.scheduleWindow = { days:short.scheduleWindow.days.map(function (day) {
-      return Object.assign({}, day, { endTime:'22:05' });
+      return Object.assign({}, day, { endTime:'21:30' });
     }) };
     const result = core.drawInitial(short, { idStamp:'neon-short-' + mode });
     const plan = result.ok && core._window._schGradeEstimada(short);
     const appliedCount = core._window._schAplicarGrade(short, []);
-    ok('strict-' + mode + '-insufficient: 96 confrontos, mas janela 8/8 recusa a grade',
+    ok('strict-' + mode + '-insufficient: 96 confrontos e janela 7/7 produzem prévia zebrada',
       result.ok === true && short.matches.length === 96 && plan && plan.cabe === false &&
-      appliedCount === 0 && short.matches.every(function (match) { return !match.scheduledAt; }));
+      plan.cadenceValid === true && plan.slots.length === 96 && plan.slots.filter(function (slot) { return slot.extrapolaJanela; }).length === 12 &&
+      appliedCount === 96 && short.matches.every(function (match) { return !!match.scheduledAt; }));
   });
   // individual-schedule-unchanged: o gate novo é exclusivo de times com dias
   // fixos; este caso mantém o sorteio individual e sua grade estimada.
@@ -445,7 +454,7 @@ const CASES = [
   });
   ok('Neon 64 livre: sandbox e produção usam o mesmo motor e satisfazem a mesma grade',
     sandboxDraw.ok && sandboxGrade && sandboxGrade.cabe === true && neonSandbox64.matches.length === neonFree64.matches.length &&
-    sandboxWaves.every(function (day) { return day.length === 9 && day.join(',') === '6,6,4,6,6,4,6,6,4'; }) &&
+    sandboxWaves.every(function (day) { return day.length === 8 && day.every(function (n) { return n === 6; }); }) &&
     neonSandbox64.participants.every(function (entry) {
       return neonSandbox64.matches.filter(function (match) {
         return match.team1Obj.fixedPairId === entry.fixedPairId || match.team2Obj.fixedPairId === entry.fixedPairId;
@@ -472,6 +481,27 @@ const CASES = [
     return new Set(simultaneous[key]).size === simultaneous[key].length;
   }));
   const slotById = new Map(estimated.slots.map(function (slot) { return [slot.matchId, slot.ms]; }));
+  const priorByDay = [{}, {}], unfairGames = [];
+  [0, 1].forEach(function (day) {
+    const times = Array.from(new Set(estimated.slots.filter(function (slot) { return slot.dia === day; }).map(function (slot) { return slot.ms; }))).sort(function (a, b) { return a - b; });
+    times.forEach(function (at, wave) {
+      const games = estimated.slots.filter(function (slot) { return slot.dia === day && slot.ms === at; });
+      games.forEach(function (slot) {
+        const match = matchesById.get(slot.matchId), a = match.team1Obj.fixedPairId, b = match.team2Obj.fixedPairId;
+        if ((priorByDay[day][a] || 0) !== (priorByDay[day][b] || 0)) unfairGames.push(slot.matchId);
+        if (wave > 2 && (!priorByDay[day][a] || !priorByDay[day][b])) unfairGames.push(slot.matchId);
+      });
+      games.forEach(function (slot) {
+        const match = matchesById.get(slot.matchId);
+        [match.team1Obj.fixedPairId, match.team2Obj.fixedPairId].forEach(function (pair) {
+          priorByDay[day][pair] = (priorByDay[day][pair] || 0) + 1;
+        });
+      });
+    });
+  });
+  ok('Neon 64: cada confronto opõe duplas com a mesma experiência e todas estreiam até a terceira faixa',
+    unfairGames.length === 0 && priorByDay.every(function (counts) { return Object.values(counts).every(function (n) { return n === 3; }); }),
+    JSON.stringify({ unfairGames:unfairGames.length }));
   const roundTimes = {};
   realMatches.forEach(function (match) {
     [match.team1Obj.fixedPairId, match.team2Obj.fixedPairId].forEach(function (id) {
@@ -500,7 +530,7 @@ const CASES = [
   }, 0) / Object.keys(restByPair).length;
   const diversity = Object.values(teamsByWave).map(function (teams) { return teams.size; });
   ok('Neon 64: grade prioriza descanso sem perder a cadência de três estágios',
-    backToBack <= 20 && diversity.length === 18 && averageSpan >= 4,
+    backToBack <= 24 && diversity.length === 16 && averageSpan >= 4,
     JSON.stringify({ backToBack, averageSpan, diversity }));
   // No fluxo por categorias, a primeira semente pode falhar. A grade abaixo
   // depende de uma semente posterior e deve continuar igual à grade histórica.

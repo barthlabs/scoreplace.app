@@ -300,6 +300,7 @@ const SUITES = [
   'functions-autodraw/test-closeround.js',
   'functions-autodraw/test-closeround-authz.js',
   'functions-autodraw/test-drawinitial.js',
+  'functions-autodraw/test-pending-overflow-window.js',
   'functions-autodraw/test-surplus-reconcile.js',
   'functions-autodraw/test-drawround-authz.js',
   'functions-autodraw/test-format2.js',

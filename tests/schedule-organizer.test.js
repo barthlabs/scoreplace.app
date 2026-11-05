@@ -275,8 +275,9 @@ const gradeJanelaFechada = W._schGradeEstimada(janelaFechada);
 ok(gradeJanelaFechada && gradeJanelaFechada.cabe === false && gradeJanelaFechada.extraMs === 30 * 60000 &&
   gradeJanelaFechada.slots.length === 3 && gradeJanelaFechada.slots.filter(function (slot) { return slot.extrapolaJanela; }).length === 1,
   'a grade mantém todos os jogos no próprio dia e marca o excedente da janela');
-ok(W._operationalSchedulePlan(janelaFechada).cabe === false && W._operationalSchedulePlan(janelaFechada).unscheduledCount === 1,
-  'a agenda operacional bloqueia e explicita o jogo sem slot dentro da janela');
+ok(W._operationalSchedulePlan(janelaFechada).cabe === false && W._operationalSchedulePlan(janelaFechada).unscheduledCount === 0 &&
+  W._operationalSchedulePlan(janelaFechada).items.filter(function (item) { return item.extrapolaJanela; }).length === 1,
+  'a agenda operacional mostra o jogo excedente zebrado no próprio dia');
 const janelaTrocada = W._operationalSchedulePlan(janelaFechada, [
   { matchId:'J1', court:'Quadra 1', scheduledAt:new Date('2026-10-22T19:00:00-03:00').toISOString() },
   { matchId:'J3', court:'Quadra 1', scheduledAt:new Date('2026-10-22T18:00:00-03:00').toISOString() }
@@ -309,10 +310,10 @@ const janelaDoisDiasRigidos = W._schJanelaTorneio(doisDiasRigidos);
 ok(janelaDoisDiasRigidos && janelaDoisDiasRigidos.dias.length === 2 && gradeDoisDiasRigidos && gradeDoisDiasRigidos.cabe === false &&
   gradeDoisDiasRigidos.slots.every(function (slot) { return slot.iso.slice(0, 10) !== '2026-10-24'; }),
   'janelas explícitas não herdam um terceiro dia da data final legada');
-ok(planDoisDiasRigidos.cabe === false && planDoisDiasRigidos.unscheduledCount === 1 &&
+ok(planDoisDiasRigidos.cabe === false && planDoisDiasRigidos.unscheduledCount === 0 &&
   planDoisDiasRigidos.items.every(function (item) { return item.scheduledAt.slice(0, 10) !== '2026-10-24'; }) &&
-  !planDoisDiasRigidos.items.some(function (item) { return item.extrapolaJanela; }),
-  'a prévia não cria terceiro dia nem horário excedente: deixa o jogo sem vaga explicitamente pendente');
+  planDoisDiasRigidos.items.some(function (item) { return item.extrapolaJanela; }),
+  'a prévia conserva o dia escolhido e zebra o horário excedente sem criar terceiro dia');
 const sequenciaCategorias = {
   startDate:'2026-10-22T18:00', endDate:'2026-10-22T23:00', courtCount:1, gameDuration:30,
   scheduleWindow:{ version:1, days:[{ day:'2026-10-22', startTime:'18:00', endTime:'23:00', categoryFlow:'categories' }] },

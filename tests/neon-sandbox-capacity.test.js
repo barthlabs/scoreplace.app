@@ -33,14 +33,13 @@ const limits = byDay.map((matches, dayIndex) => {
       concentratedMinimum: Math.max(Math.ceil(list.length / t.courtCount), ...degrees.values()) };
   });
   const concentrated = groupStats.reduce((sum, group) => sum + group.concentratedMinimum, 0);
-  // Alternadas globais: em cada estágio, todas as duplas fazem exatamente um
-  // jogo; só depois começa o estágio seguinte. Há 16 jogos por estágio/dia.
+  // As faixas de fronteira misturam estágios com duplas distintas.
   const pairs = groupStats.reduce((sum, group) => sum + group.pairCount, 0);
-  const alternating = 3 * Math.ceil((pairs / 2) / t.courtCount);
+  const alternating = Math.ceil(matches.length / t.courtCount);
   assert.strictEqual(pairs, 32);
   return { day: dayIndex + 1, available: slots[dayIndex], alternating, concentrated };
 });
-assert.deepStrictEqual(limits.map(item => item.alternating), [9, 9]);
+assert.deepStrictEqual(limits.map(item => item.alternating), [8, 8]);
 assert.deepStrictEqual(limits.map(item => item.concentrated), [10, 12]);
 for (const item of limits) console.log('Dia ' + item.day + ': disponíveis ' + item.available + ' horários; mínimo Alternadas ' + item.alternating + '; mínimo Concentradas ' + item.concentrated + '.');
-console.log('NEON_SANDBOX_CAPACITY_OK: nenhum modo estrito cabe na janela original de 8 horários.');
+console.log('NEON_SANDBOX_CAPACITY_OK: Alternadas cabem na janela original de 8 horários; Concentradas não cabem.');

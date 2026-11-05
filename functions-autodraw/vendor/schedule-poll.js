@@ -931,7 +931,7 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
   // dos confrontos: cada estágio contém exatamente um jogo de cada dupla.
   function _schPackTeamDayStrict(t, matches, day, dayIndex, courts, slotMs) {
     var count = Math.floor((day.fimMs - day.iniMs) / slotMs);
-    if (!count || count > 30 || matches.length > count * courts) return null;
+    if (count > 30) return null;
     var order = (t.categorySchedule && t.categorySchedule.slots || [])
       .filter(function (slot) { return slot.day === day.ymd; })
       .sort(function (a, b) { return Number(a.order || 0) - Number(b.order || 0); })
@@ -986,13 +986,92 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
     }
     var ordered = [];
     if (day.categoryFlow === 'rounds') {
+      var byStage = [];
       for (var round = 0; round < totalStages; round++) {
         var pending = categories.map(function (category) { return (staged[category] && staged[category][round] || []).slice(); });
+        var stageGames = [];
         while (pending.some(function (list) { return list.length; })) {
-          for (var c = 0; c < pending.length; c++) if (pending[c].length) ordered.push(pending[c].shift());
+          for (var c = 0; c < pending.length; c++) if (pending[c].length) stageGames.push(pending[c].shift());
         }
-        // Fecha o estágio antes de iniciar o próximo, mesmo que sobrem quadras.
-        while (ordered.length % courts) ordered.push(null);
+        byStage.push(stageGames);
+      }
+      if (byStage.some(function (stage) {
+        var ids = [];
+        stage.forEach(function (game) {
+          ids.push(String(game.team1Obj.fixedPairId), String(game.team2Obj.fixedPairId));
+        });
+        return new Set(ids).size !== ids.length;
+      })) return null;
+      // Com 32 duplas e 48 jogos, cada estágio tem 16 partidas. As duas
+      // quadras livres nas fronteiras recebem jogos do estágio seguinte,
+      // desde que nenhuma dupla jogue duas vezes na mesma faixa.
+      var fullEightWaves = courts === 6 && matches.length === 48 &&
+        byStage.length === 3 && byStage.every(function (stage) { return stage.length === 16; });
+      if (fullEightWaves) {
+        function pairIds(game) {
+          return [String(game.team1Obj.fixedPairId), String(game.team2Obj.fixedPairId)];
+        }
+        function disjoint(game, others) {
+          var ids = pairIds(game);
+          return others.every(function (other) {
+            var occupied = pairIds(other);
+            return ids.every(function (id) { return occupied.indexOf(id) === -1; });
+          });
+        }
+        function interleave(source, afterCategory) {
+          var queues = categories.map(function (category) {
+            return source.filter(function (game) { return _schCategoriaDoJogo(game) === category; });
+          });
+          var result = [], cursor = Math.max(0, categories.indexOf(afterCategory) + 1) % categories.length;
+          while (result.length < source.length) {
+            var found = false;
+            for (var tries = 0; tries < categories.length; tries++) {
+              var index = (cursor + tries) % categories.length;
+              if (!queues[index].length) continue;
+              result.push(queues[index].shift());
+              cursor = (index + 1) % categories.length;
+              found = true;
+              break;
+            }
+            if (!found) return null;
+          }
+          return result;
+        }
+        function takeInCategoryCycle(source, boundary, amount, afterCategory) {
+          var selected = [], available = source.slice(), cursor = Math.max(0, categories.indexOf(afterCategory) + 1) % categories.length;
+          while (selected.length < amount) {
+            var found = false;
+            for (var tries = 0; tries < categories.length; tries++) {
+              var index = (cursor + tries) % categories.length;
+              var choice = available.findIndex(function (game) {
+                return _schCategoriaDoJogo(game) === categories[index] && disjoint(game, boundary);
+              });
+              if (choice < 0) continue;
+              selected.push(available.splice(choice, 1)[0]);
+              cursor = (index + 1) % categories.length;
+              found = true;
+              break;
+            }
+            if (!found) return null;
+          }
+          return { selected:selected, remaining:interleave(available, _schCategoriaDoJogo(selected[selected.length - 1])) };
+        }
+        var first = byStage[0], second = byStage[1], third = byStage[2];
+        var lastFirst = first.slice(12), earlySecond = takeInCategoryCycle(second, lastFirst, 2,
+          _schCategoriaDoJogo(lastFirst[lastFirst.length - 1]));
+        if (!earlySecond || !earlySecond.remaining) return null;
+        var lateSecond = earlySecond.remaining.slice(12);
+        var earlyThird = takeInCategoryCycle(third, lateSecond, 4,
+          _schCategoriaDoJogo(lateSecond[lateSecond.length - 1]));
+        if (!earlyThird || !earlyThird.remaining) return null;
+        ordered = first.slice(0, 12).concat(lastFirst, earlySecond.selected,
+          earlySecond.remaining.slice(0, 12), lateSecond, earlyThird.selected,
+          earlyThird.remaining);
+      } else {
+        byStage.forEach(function (stage) {
+          ordered = ordered.concat(stage);
+          while (ordered.length % courts) ordered.push(null);
+        });
       }
     } else {
       categories.forEach(function (category) {
@@ -1003,10 +1082,10 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
       });
     }
     var waves = Math.ceil(ordered.length / courts);
-    if (waves > count) return null;
     return ordered.filter(Boolean).map(function (game) {
       var position = ordered.indexOf(game), wave = Math.floor(position / courts), at = day.iniMs + wave * slotMs;
-      return { matchId:String(game.id), ms:at, iso:new Date(at).toISOString(), dia:dayIndex, onda:wave, extrapolaJanela:false };
+      return { matchId:String(game.id), ms:at, iso:new Date(at).toISOString(), dia:dayIndex, onda:wave,
+        extrapolaJanela:at + slotMs > day.fimMs };
     });
   }
 
@@ -1283,11 +1362,25 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
               _schPackStructuredDay(t, matches, jan.dias[index], index, quadras, durationMinutes * _MIN);
             if (!result) full = false; else packed = packed.concat(result);
           });
-          if (full && packed.length === jogos.length) return {
-            slots:packed, quadras:quadras, dias:jan.dias.length, cabe:true,
+          if (full && packed.length === jogos.length && new Set(packed.map(function (slot) { return slot.matchId; })).size === jogos.length) {
+            var extraPacked = jan.dias.map(function () { return 0; });
+            packed.forEach(function (slot) {
+              extraPacked[slot.dia] = Math.max(extraPacked[slot.dia], Math.max(0, slot.ms + durationMinutes * _MIN - jan.dias[slot.dia].fimMs));
+            });
+            var manualOutside = strictTeamDay && jogos.some(function (m) {
+              if (!m.scheduledAt || (m.scheduledKind === 'estimate' && m.scheduleLocked !== true)) return false;
+              var at = Date.parse(m.scheduledAt);
+              var day = jan.dias.find(function (d) { return d.ymd === String(m.requiredDay || '').slice(0, 10); });
+              return !day || !isFinite(at) || at < day.iniMs || at + durationMinutes * _MIN > day.fimMs;
+            });
+            return {
+            slots:packed, quadras:quadras, dias:jan.dias.length,
+            cabe:!manualOutside && extraPacked.every(function (value) { return value === 0; }),
+            cadenceValid:strictTeamDay && !manualOutside,
             fimMs:packed.reduce(function (max, slot) { return Math.max(max, slot.ms + durationMinutes * _MIN); }, jan.dias[0].iniMs),
-            extraPorDia:jan.dias.map(function () { return 0; }), extraMs:0, executionOrder:ordemLegada, slotMin:durationMinutes
-          };
+            extraPorDia:extraPacked, extraMs:extraPacked.reduce(function (sum, value) { return sum + value; }, 0),
+            executionOrder:ordemLegada, slotMin:durationMinutes
+          }; }
           if (strictTeamDay) strictFailed = true;
         }
         // Se o plano estrito não couber, o caminho histórico abaixo ainda
@@ -1486,7 +1579,7 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
         // UI. `slots` é sempre a lista canônica de {matchId, ms} consumida pela
         // agenda operacional — manter esse contrato entre cliente e vendor.
         slots: slots, quadras: quadras, dias: jan.dias.length,
-        cabe: !estourou && !strictFailed, fimMs: fimMs, extraPorDia:extraPorDia,
+        cabe: !estourou && !strictFailed, cadenceValid:false, fimMs: fimMs, extraPorDia:extraPorDia,
         extraMs: extraPorDia.reduce(function (sum, value) { return sum + value; }, 0),
         executionOrder:ordemLegada,
         // slotMin da 1ª fase — só informativo (cada fase tem o seu, ver o loop acima)
@@ -1509,7 +1602,7 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
   // desta régua existir, e o único jeito de ter data lá era alguém ter combinado.
   window._schAplicarGrade = function (t, alterados) {
     var plano = window._schGradeEstimada(t);
-    if (!plano || !plano.cabe || !plano.slots.length) return 0;
+    if (!plano || !plano.slots.length || (!plano.cabe && plano.cadenceValid !== true)) return 0;
     var n = 0;
     plano.slots.forEach(function (s) {
       var m = _schFindMatch(t, s.matchId);
@@ -2332,7 +2425,7 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
     var t = _findT(tId); if (!t || !_isOrg(t)) return;
     var plano = window._schGradeEstimada(t);
     if (plano && !plano.cabe) {
-      if (typeof showNotification === 'function') showNotification('Agenda não cabe', 'Faltam ' + Math.ceil((plano.extraMs || 0) / _MIN) + ' min nas janelas dos dias configurados. Nenhum jogo será levado para fora do evento.', 'error');
+      if (typeof showNotification === 'function') showNotification('Agenda excedente', 'Faltam ' + Math.ceil((plano.extraMs || 0) / _MIN) + ' min nas janelas configuradas. Confira os jogos zebrados na prévia antes de publicar.', 'warning');
       return;
     }
     var _alterados = [];

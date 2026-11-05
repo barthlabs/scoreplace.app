@@ -46,6 +46,11 @@
     return (Number(a.phaseIndex || 0) - Number(b.phaseIndex || 0)) || (Number(a.round || 0) - Number(b.round || 0)) || String(a.id).localeCompare(String(b.id));
   }
   function iso(ms) { return new Date(ms).toISOString(); }
+  function localDay(ms) {
+    var parts = new Intl.DateTimeFormat('en-US', { timeZone:'America/Sao_Paulo', year:'numeric', month:'2-digit', day:'2-digit' }).formatToParts(new Date(ms));
+    function value(type) { return (parts.find(function (part) { return part.type === type; }) || {}).value; }
+    return value('year') + '-' + value('month') + '-' + value('day');
+  }
   // O excedente pertence ao SLOT ATUAL, nunca ao jogo que antes o ocupava. O
   // planejador é reexecutado a cada drag-and-drop; reaproveitar a marca da grade
   // inicial deixava a faixa zebrada grudada no card depois de ele voltar para
@@ -57,7 +62,7 @@
     if (!windows || !Array.isArray(windows.dias) || !windows.dias.length || isNaN(at)) return false;
     // `at === fimMs` ainda pertence a esta janela para medir o excedente; ele
     // continua FORA porque a duração torna `at + duração > fimMs` logo abaixo.
-    var day = windows.dias.find(function (item) { return at >= Number(item.iniMs) && at <= Number(item.fimMs); });
+    var day = windows.dias.find(function (item) { return item.ymd === localDay(at); });
     return !day || at + duration(t, match) > Number(day.fimMs);
   }
   // `changes` fixa explicitamente um ou mais jogos; o restante pendente ocupa o
@@ -127,17 +132,16 @@
         if (a && c) items.push({ matchId:String(m.id), court:String(c), scheduledAt:String(a), scheduleLocked:true, scheduleSource:'organizer', extrapolaJanela:exceedsConfiguredWindow(t, m, a) });
         return;
       }
-      // ⛔ LIMITE RÍGIDO DA JANELA: se a grade declarativa não encontrou
-      // capacidade para este jogo, ele fica sem slot e a aplicação é bloqueada.
-      // Nunca use o cursor de fallback para empurrá-lo para outro dia/horário:
-      // isso já exibiu um sábado inexistente em evento de quinta e sexta.
+      // A grade declarativa conserva o dia escolhido, inclusive se o último
+      // horário estimado ultrapassar a janela e precisar aparecer zebrado.
       if (hasGrade && !isFinite(preferred[String(m.id)])) { unscheduled++; return; }
       var len = duration(t, m), at = isFinite(preferred[String(m.id)]) ? preferred[String(m.id)] : cursor;
-      var day = configuredDays && configuredDays.dias && configuredDays.dias.find(function (d) { return at >= Number(d.iniMs) && at < Number(d.fimMs); });
+      var day = configuredDays && configuredDays.dias && configuredDays.dias.find(function (d) {
+        return d.ymd === String(m.requiredDay || localDay(at)).slice(0, 10) && localDay(at) === d.ymd;
+      });
       if (configuredDays && !day) { unscheduled++; return; }
-      var limit = day ? Number(day.fimMs) : at + 2000 * 5 * MIN;
       var court = '';
-      for (; at + len <= limit; at += 5 * MIN) {
+      for (var attempts = 0; attempts < 288 && (!day || (localDay(at) === day.ymd && localDay(at + len - 1) === day.ymd)); attempts++, at += 5 * MIN) {
         court = cs.find(function (c) { return free(c, at, len); }) || '';
         if (court) break;
       }
@@ -156,7 +160,7 @@
       var match = ms.find(function (candidate) { return String(candidate.id) === String(item.matchId); });
       var at = new Date(item.scheduledAt || '').getTime();
       if (isNaN(at) || !match || !windows || !Array.isArray(windows.dias)) return;
-      var day = windows.dias.find(function (candidate) { return at >= Number(candidate.iniMs) && at <= Number(candidate.fimMs); });
+      var day = windows.dias.find(function (candidate) { return candidate.ymd === localDay(at); });
       if (!day) return;
       overflowByDay[day.ymd] = Math.max(Number(overflowByDay[day.ymd] || 0), Math.max(0, at + duration(t, match) - Number(day.fimMs)));
     });
@@ -415,7 +419,7 @@
       var board = window._operationalScheduleGrid(fresh, plan, { prefix:'agenda', activeDay:activeDay, revealNames:revealNames }); activeDay = board.activeDay;
       slot.innerHTML = '<section class="sp-operational-schedule" style="margin:12px 0;padding:12px 14px;border:1px solid rgba(56,189,248,.35);border-radius:12px;background:rgba(14,116,144,.10);display:flex;gap:12px;align-items:center;flex-wrap:wrap">' +
         '<div style="flex:1;min-width:220px"><strong>📍 Agenda operacional</strong><div style="font-size:.82rem;opacity:.78;margin-top:3px">' + total + ' jogos pendentes · ' + plan.courts.map(esc).join(' · ') + '. Cada horário aparece uma vez na régua vertical; arraste um jogo sobre outro para trocar seus slots. Nada é salvo antes de aplicar.</div></div>' +
-        (!plan.cabe ? '<div style="width:100%;color:#fbbf24;font-size:.8rem;font-weight:700">A agenda não cabe nas janelas configuradas: ' + (plan.unscheduledCount ? plan.unscheduledCount + ' jogo(s) sem horário. ' : '') + (plan.extraMs ? 'Excedente de ' + Math.ceil(plan.extraMs / MIN) + ' min. ' : '') + 'Nenhum jogo novo será colocado fora dos dias/horários do evento.</div>' : '') +
+        (!plan.cabe ? '<div style="width:100%;color:#fbbf24;font-size:.8rem;font-weight:700">A agenda excede as janelas configuradas: ' + (plan.unscheduledCount ? plan.unscheduledCount + ' jogo(s) sem horário. ' : '') + (plan.extraMs ? 'Excedente de ' + Math.ceil(plan.extraMs / MIN) + ' min. ' : '') + 'Os jogos fora do horário estão zebrados na prévia. Ajuste a agenda antes de publicar.</div>' : '') +
         '<button type="button" class="btn btn-primary" id="sp-agenda-apply-' + esc(fresh.id) + '"' + (!plan.cabe ? ' disabled aria-disabled="true" style="opacity:.45;cursor:not-allowed"' : '') + '>Aplicar agenda</button>' +
         '<div style="width:100%;margin-top:2px">' + board.html + '</div></section>';
       if (typeof window._hydrateUidNames === 'function') window._hydrateUidNames(slot);

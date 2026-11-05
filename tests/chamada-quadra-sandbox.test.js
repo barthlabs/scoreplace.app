@@ -300,6 +300,19 @@ const game = (id, court, scheduledAt = '2026-10-22T21:00:00.000Z') => ({ id, cou
   assert.equal((await postpone('fila2', 1, skip2)).changed, true);
   assert.deepEqual(Array.from(courtStates.get(statePath).postponed), ['fila1', 'fila2']);
   assert.equal(tournament.matches.every(m => !m.courtCalledAt), true, 'pular não chama nem altera partida');
+  const sandboxStatePath = 'sandboxes/sb_test/courtState/main';
+  courtStates.set(sandboxStatePath, { released: {}, postponed: [], revision: 0 });
+  const postponeSandbox = (matchId, expectedRevision, operationId) => endOnCourt({ auth: { uid: 'owner' }, data: {
+    tournamentId: 'sb_test', sandbox: true, matchId, action: 'postpone', expectedRevision, operationId
+  } });
+  assert.equal((await postponeSandbox('fila1', 0, 'bde5da89-4b8c-4fd9-9b1d-c59a5504fefa')).changed, true);
+  assert.equal(paths.at(-1), 'sandboxes/sb_test');
+  assert.deepEqual(Array.from(courtStates.get(sandboxStatePath).postponed), ['fila1']);
+  assert.equal((await postponeSandbox('fila2', 1, '9709bf3e-6341-4e7c-a610-ef3c75d1b1f6')).changed, true);
+  assert.deepEqual(Array.from(courtStates.get(sandboxStatePath).postponed), ['fila1', 'fila2']);
+  assert.equal(tournament.matches.every(m => !m.courtCalledAt), true, 'sandbox pular não altera partidas');
+  assert.deepEqual(Array.from(courtStates.get(statePath).postponed), ['fila1', 'fila2'],
+    'pular no sandbox não altera a fila de um torneio real');
   tournament.matches[2].courtCalledAt = nowIso;
   await assert.rejects(postpone('fila3', 1, 'fb51aff9-5549-47ca-96e8-c1f4b5f7c26d'),
     e => e.code === 'failed-precondition' && /já saiu da fila/.test(e.message));

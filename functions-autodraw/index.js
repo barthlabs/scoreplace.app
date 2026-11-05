@@ -1113,6 +1113,22 @@ function _scheduleLocalDay(iso) {
   return `${value('year')}-${value('month')}-${value('day')}`;
 }
 
+function _pendingInitialScheduleExceedsWindow(t, draft) {
+  if (!t.scheduleWindow || !Array.isArray(t.scheduleWindow.days) || !t.scheduleWindow.days.length) return false;
+  const windowPlan = drawWindow && drawWindow._schJanelaTorneio && drawWindow._schJanelaTorneio(t);
+  if (!windowPlan || windowPlan.invalida || !Array.isArray(windowPlan.dias)) return true;
+  return (draft.matches || []).filter(m => m && !m.isBye && !m.isSitOut).some(m => {
+    const at = Date.parse(m.scheduledAt || '');
+    if (!Number.isFinite(at)) return true;
+    const localDay = _scheduleLocalDay(m.scheduledAt);
+    const day = windowPlan.dias.find(item => item.ymd === localDay);
+    if (!day || (m.requiredDay && String(m.requiredDay).slice(0, 10) !== localDay)) return true;
+    const phase = drawWindow._faseDoTorneio(t, m.phaseIndex == null ? (t.currentPhaseIndex || 0) : m.phaseIndex);
+    const duration = (drawWindow._minutosDaPartida(t, phase) || 30) * 60000;
+    return at < day.iniMs || at + duration > day.fimMs;
+  });
+}
+
 // O marcador de revisão fica no documento do torneio para o motor pausar e a
 // organização saber que há uma decisão pendente. O conteúdo do sorteio inicial
 // (times, confrontos e agenda) não pode ficar nesse documento: hoje ele ainda é
@@ -1759,6 +1775,10 @@ exports.drawRound = onCall(async (request) => {
     _recordSeededDraw(t, { seed: _manualSeed, operationId: _manualOperationId, at: _agoraIsoTx,
       decisionsHash: createHash('sha256').update(JSON.stringify(decisions || null)).digest('hex') });
     const teamSchedule = t.teamCompetition && t.teamCompetition.schedule;
+    const _tcCore = drawWindow && drawWindow.ScoreplaceTeamCompetition;
+    const _tcCfg = _tcCore && typeof _tcCore.configurationForTournament === 'function'
+      ? _tcCore.configurationForTournament(t)
+      : (t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition || null);
     const allDrawnMatches = drawWindow && typeof drawWindow._collectAllMatches === 'function'
       ? drawWindow._collectAllMatches(t) : (Array.isArray(t.matches) ? t.matches : []);
     const realDrawnMatches = (allDrawnMatches || []).filter(m => m && !m.isBye && !m.isSitOut);
@@ -1779,9 +1799,11 @@ exports.drawRound = onCall(async (request) => {
       } catch (error) {
         console.error(`drawRound v${CF_VERSION}: falha ao estimar grade estrita para ${tId}:`, error);
       }
-      if (!plan || plan.cabe !== true) {
+      const stagedOverflow = !!(plan && strictTeamDays && !hadBracket && _tcCfg && _tcCfg.enabled === true &&
+        plan.cadenceValid === true && Array.isArray(plan.slots) && plan.slots.length === unscoredDrawnMatches.length);
+      if (!plan || (strictTeamDays && plan.cadenceValid !== true) || (plan.cabe !== true && !stagedOverflow)) {
         throw _drawFail('failed-precondition',
-          'A agenda não comporta todos os jogos na cadência escolhida; ajuste os horários ou quadras antes de sortear.',
+          'Não foi possível gerar uma agenda completa com a cadência escolhida.',
           { tId, matches:unscoredDrawnMatches.length, courts:t.courtCount,
             slots:plan && plan.slots && plan.slots.length, mode:teamSchedule.mode });
       }
@@ -1806,10 +1828,6 @@ exports.drawRound = onCall(async (request) => {
      * confirmação explícita. Assim a organização pode conferir/reordenar antes de
      * avisar os participantes. Um re-sorteio de chave já pública continua sendo uma
      * alteração explícita e não é escondido num rascunho. */
-    const _tcCore = drawWindow && drawWindow.ScoreplaceTeamCompetition;
-    const _tcCfg = _tcCore && typeof _tcCore.configurationForTournament === 'function'
-      ? _tcCore.configurationForTournament(t)
-      : (t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition || null);
     if (t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint &&
         _tcCfg && _tcCfg.enabled && Array.isArray(t.competitionTeams) && t.competitionTeams.length) {
       // A fronteira canônica restaura participants antes da gravação. Persistir
@@ -6429,6 +6447,10 @@ exports.resolvePendingDraw = onCall(async (request) => {
     else {
       const publicRelease = _drawCanBePublishedPublicly(t);
       if (pd.kind === 'initial') {
+        if (_pendingInitialScheduleExceedsWindow(t, pd.draft)) {
+          throw new HttpsError('failed-precondition',
+            'Há jogos fora dos horários configurados. Ajuste a agenda do rascunho antes de publicar.');
+        }
         /* [[regression_pending_draw_draft_materializes_matches_call]]
          * A publicação consome o mesmo rascunho validado pelo organizador,
          * inclusive `matches`; sem esta chamada a chave perderia R2–R4.
