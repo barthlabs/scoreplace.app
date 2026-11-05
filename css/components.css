@@ -699,6 +699,17 @@ body.hamburger-open .topbar {
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.4);
 }
 
+/* O botão do sorteio de dias usa .btn sem variante de cor. Defina o fundo para
+   que o texto branco não caia sobre o cinza claro padrão do navegador. */
+#team-draw-review-panel [data-team-free-pair-days] {
+  background: #1e3a5f;
+  color: #fff;
+  border-color: #60a5fa;
+}
+#team-draw-review-panel [data-team-free-pair-days]:hover {
+  background: #294d78;
+}
+
 /* A escolha de visibilidade tem contraste definido antes do primeiro clique. */
 #tournament-visibility-mode .btn {
   background: #23364d;

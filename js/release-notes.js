@@ -1,3 +1,5 @@
+// 2.5.97 — O botão “Sortear dias livremente” no configurador de sorteio
+// mostra texto branco sobre fundo escuro, inclusive ao passar o cursor.
 // 2.5.96 — Jogos em melhor de três, cinco ou formato personalizado aceitam
 // confirmar cada set assim que termina. O jogo permanece aberto até o set
 // decisivo; tie-break e super tie-break conservam suas validações.
