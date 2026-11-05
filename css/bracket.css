@@ -92,8 +92,8 @@
 .sp-operations-empty { min-height: 70px; display: flex; align-items: center; color: var(--text-muted); font-size: .82rem; }
 .sp-match-end-court { border:1px solid #38bdf8;border-radius:7px;background:#075985;color:#fff;font:inherit;font-size:.68rem;font-weight:800;padding:4px 7px;cursor:pointer; }
 .sp-match-end-court:disabled { opacity:.5;cursor:wait; }
-.sp-match-cancel-court { display:inline-flex;align-items:center;justify-content:center;flex:0 0 30px;width:30px;height:30px;border:1px solid #fca5a5;border-radius:50%;background:#b91c1c;color:#fff;font:inherit;font-size:1rem;font-weight:900;line-height:1;padding:0;cursor:pointer; }
-.sp-match-cancel-court:disabled { opacity:.5;cursor:wait; }
+.cancel-x-btn[data-cancel-court-action] { --cx-size:30px; }
+.cancel-x-btn[data-cancel-court-action]:disabled { opacity:.5;cursor:wait; }
 .sp-bracket-presence-button { display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;padding:0;border:0;background:transparent;color:inherit;line-height:0;cursor:pointer;border-radius:50%; }
 .sp-bracket-presence-button:focus-visible { outline:2px solid #38bdf8;outline-offset:2px; }
 .sp-bracket-presence-button:disabled { opacity:.55;cursor:wait; }

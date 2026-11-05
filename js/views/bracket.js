@@ -9291,10 +9291,10 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     typeof window._isUserAuthority === 'function' && window._isUserAuthority(t, window.AppStore && window.AppStore.currentUser);
   var _cancelCourtAction = _courtReleased[String(m.id)] ? 'restore' : (m.courtCalledAt ? 'cancel-call' : '');
   var _cancelCourtChip = _canCancelCourt && _cancelCourtAction
-    ? '<button type="button" class="sp-match-cancel-court" data-cancel-court-action="' + _cancelCourtAction +
+    ? '<button type="button" data-cancel-court-action="' + _cancelCourtAction +
       '" onclick="event.stopPropagation();window._cancelCourtAction(\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\',\'' +
       _cancelCourtAction + '\',this)" aria-label="' + (_cancelCourtAction === 'restore' ? 'Restaurar à quadra original' : 'Cancelar chamada') +
-      '" title="' + (_cancelCourtAction === 'restore' ? 'Restaurar à quadra original; relógio contínuo' : 'Desfazer a chamada; o jogo volta à fila sem cronômetro') + '">✕</button>' : '';
+      '" title="' + (_cancelCourtAction === 'restore' ? 'Restaurar à quadra original; relógio contínuo' : 'Desfazer a chamada; o jogo volta à fila sem cronômetro') + '" class="cancel-x-btn">✕</button>' : '';
   var _canEndCourt = !_readOnly && !_setsEdit && m.court && (m.courtCalledAt || m.startedAt) &&
     !_courtFinished && !_courtReleased[String(m.id)] && typeof window._isUserAuthority === 'function' &&
     window._isUserAuthority(t, window.AppStore && window.AppStore.currentUser);
