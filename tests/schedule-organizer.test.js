@@ -200,6 +200,22 @@ const gradeSemSlot = W._schGradeEstimada(janelaSemSlot);
 ok(gradeSemSlot && gradeSemSlot.slots.length === 6 && gradeSemSlot.cadenceValid === true &&
   gradeSemSlot.cabe === false && gradeSemSlot.slots.every(function (slot) { return slot.extrapolaJanela; }),
   'janela menor que um jogo conserva todos os seis confrontos zebrados na prévia privada');
+const strictSource = fs.readFileSync(path.join(__dirname, '..', 'js/views/schedule-poll.js'), 'utf8');
+const strictStart = strictSource.indexOf('function _schPackTeamDayStrict(');
+const strictEnd = strictSource.indexOf('function _schPackStructuredDay(', strictStart);
+ok(strictStart > 0 && strictEnd > strictStart, 'empacotador estrito real está disponível para testar o dia sem slot');
+if (strictStart > 0 && strictEnd > strictStart) {
+  const packStrictDay = vm.runInNewContext(
+    '(function () { function _schCategoriaDoJogo(m) { return m.category; } ' +
+    strictSource.slice(strictStart, strictEnd) + ' return _schPackTeamDayStrict; })()',
+    { Array, Set, Date, Math, Number, String });
+  const begin = Date.parse('2026-10-22T18:00:00-03:00');
+  const direct = packStrictDay(janelaSemSlot, janelaSemSlot.matches,
+    { ymd:'2026-10-22', iniMs:begin, fimMs:begin + 60000, categoryFlow:'rounds' },
+    0, 2, 30 * 60000);
+  ok(direct && direct.length === 6 && direct.every(function (slot) { return slot.extrapolaJanela; }),
+    'empacotador estrito real mantém seis jogos zebrados quando count === 0');
+}
 const ondasNeon = Array.from(new Set(gradeNeonSemLacunas.slots.map(function (slot) { return slot.ms; }))).sort(function (a, b) { return a - b; });
 const inicioNeon = new Date('2026-10-22T18:00:00-03:00').getTime();
 ok(ondasNeon.length === 8 && ondasNeon.every(function (ms, index) { return ms === inicioNeon + index * 35 * 60000; }) &&
