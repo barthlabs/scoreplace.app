@@ -283,6 +283,21 @@ janelaEstendida.scheduleWindow.days[0].endTime = '19:30';
 ok(W._operationalSchedulePlan(janelaEstendida).cabe === true &&
   W._operationalSchedulePlan(janelaEstendida).items.every(function (item) { return !item.extrapolaJanela; }),
   'a organização pode estender a janela e liberar a mesma agenda para publicação');
+const gradeOriginal = W._schGradeEstimada;
+W._schGradeEstimada = null;
+const diaPosteriorSemGrade = W._operationalSchedulePlan({
+  startDate:'2026-10-22T18:00:00-03:00', endDate:'2026-10-23T19:00:00-03:00',
+  courtCount:1, gameDuration:30,
+  scheduleWindow:{ days:[
+    { day:'2026-10-22', startTime:'18:00', endTime:'19:00' },
+    { day:'2026-10-23', startTime:'18:00', endTime:'19:00' }
+  ] },
+  matches:[{ id:'SEX', requiredDay:'2026-10-23', p1:'A', p2:'B' }]
+});
+W._schGradeEstimada = gradeOriginal;
+ok(diaPosteriorSemGrade.unscheduledCount === 0 && diaPosteriorSemGrade.items.length === 1 &&
+  diaPosteriorSemGrade.items[0].scheduledAt === '2026-10-23T21:00:00.000Z',
+  'sem grade estimada, jogo da sexta começa na abertura da sexta mesmo com cursor inicial na quinta');
 const janelaTrocada = W._operationalSchedulePlan(janelaFechada, [
   { matchId:'J1', court:'Quadra 1', scheduledAt:new Date('2026-10-22T19:00:00-03:00').toISOString() },
   { matchId:'J3', court:'Quadra 1', scheduledAt:new Date('2026-10-22T18:00:00-03:00').toISOString() }
@@ -290,6 +305,12 @@ const janelaTrocada = W._operationalSchedulePlan(janelaFechada, [
 ok(janelaTrocada.items.find(function (item) { return item.matchId === 'J1'; }).extrapolaJanela === true &&
   janelaTrocada.items.find(function (item) { return item.matchId === 'J3'; }).extrapolaJanela === false,
   'a faixa zebrada acompanha o slot atual: sai do jogo trazido para dentro e entra no que foi levado para fora');
+const antesDaJanela = W._operationalSchedulePlan(janelaFechada, [
+  { matchId:'J1', court:'Quadra 1', scheduledAt:new Date('2026-10-22T17:30:00-03:00').toISOString() }
+]);
+ok(antesDaJanela.items.find(function (item) { return item.matchId === 'J1'; }).extrapolaJanela === true &&
+  antesDaJanela.cabe === false && antesDaJanela.extraMs >= 30 * 60000,
+  'jogo movido para antes da abertura da janela também fica zebrado e bloqueia a publicação');
 // REGRESSÃO: janelas explícitas são a fronteira do evento. Mesmo que a data final
 // legada alcance o sábado, uma configuração quinta/sexta não pode criar aba, slot
 // ou sugestão no sábado para tentar acomodar o que não coube.

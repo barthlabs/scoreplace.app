@@ -63,7 +63,7 @@
     // `at === fimMs` ainda pertence a esta janela para medir o excedente; ele
     // continua FORA porque a duração torna `at + duração > fimMs` logo abaixo.
     var day = windows.dias.find(function (item) { return item.ymd === localDay(at); });
-    return !day || at + duration(t, match) > Number(day.fimMs);
+    return !day || at < Number(day.iniMs) || at + duration(t, match) > Number(day.fimMs);
   }
   // `changes` fixa explicitamente um ou mais jogos; o restante pendente ocupa o
   // primeiro horário livre. Uma troca de quadra, portanto, reorganiza todos os
@@ -136,6 +136,12 @@
       // horário estimado ultrapassar a janela e precisar aparecer zebrado.
       if (hasGrade && !isFinite(preferred[String(m.id)])) { unscheduled++; return; }
       var len = duration(t, m), at = isFinite(preferred[String(m.id)]) ? preferred[String(m.id)] : cursor;
+      // Sem estimativa, o cursor global pode estar no dia anterior ao dia
+      // obrigatório desta categoria. Começar na abertura desse dia evita
+      // esgotar as tentativas de cinco minutos ainda no dia anterior.
+      var requiredWindow = m.requiredDay && configuredDays && configuredDays.dias &&
+        configuredDays.dias.find(function (d) { return d.ymd === String(m.requiredDay).slice(0, 10); });
+      if (requiredWindow && at < requiredWindow.iniMs) at = requiredWindow.iniMs;
       var day = configuredDays && configuredDays.dias && configuredDays.dias.find(function (d) {
         return d.ymd === String(m.requiredDay || localDay(at)).slice(0, 10) && localDay(at) === d.ymd;
       });
@@ -162,7 +168,7 @@
       if (isNaN(at) || !match || !windows || !Array.isArray(windows.dias)) return;
       var day = windows.dias.find(function (candidate) { return candidate.ymd === localDay(at); });
       if (!day) return;
-      overflowByDay[day.ymd] = Math.max(Number(overflowByDay[day.ymd] || 0), Math.max(0, at + duration(t, match) - Number(day.fimMs)));
+      overflowByDay[day.ymd] = Math.max(Number(overflowByDay[day.ymd] || 0), Math.max(0, Number(day.iniMs) - at, at + duration(t, match) - Number(day.fimMs)));
     });
     var actualExtraMs = Object.keys(overflowByDay).reduce(function (sum, key) { return sum + overflowByDay[key]; }, 0);
     var actualOutside = items.some(function (item) { return item.extrapolaJanela === true; });

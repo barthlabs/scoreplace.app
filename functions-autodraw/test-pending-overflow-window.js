@@ -26,9 +26,21 @@ assert.equal(check(t, { matches:[game('2026-10-22T21:30:00-03:00')] }), false);
 assert.equal(check(t, { matches:[game('2026-10-22T22:15:00-03:00')] }), true);
 assert.equal(check(t, { matches:[game('2026-10-23T00:10:00-03:00')] }), true);
 assert.equal(check(t, { matches:[game(null)] }), false, 'chave sem agenda mantém publicação anterior');
+assert.equal(check(t, { matches:[Object.assign(game(null), { scheduledKind:'estimate' })] }), true,
+  'marcador de agenda sem horário não publica uma grade incompleta');
 assert.equal(check(t, { matches:[game('2026-10-22T21:30:00-03:00'),
   { id:'game-2', requiredDay:'2026-10-22' }] }), true, 'agenda parcial não oculta jogo sem horário');
 const route = source.slice(source.indexOf('exports.resolvePendingDraw ='), source.indexOf('exports.setPendingInitialSchedule ='));
 assert(route.indexOf('_pendingInitialScheduleExceedsWindow(t, pd.draft)') > 0);
 assert(route.indexOf('_pendingInitialScheduleExceedsWindow(t, pd.draft)') < route.indexOf('_aplicaRascunhoDoSorteioInicial(t, pd.draft)'));
+const drawRoute = source.slice(source.indexOf('exports.drawRound ='), source.indexOf('exports.closeRound ='));
+assert(drawRoute.indexOf('_pendingInitialScheduleExceedsWindow(t, _rascunhoDoSorteioInicial(t))') >
+  drawRoute.indexOf('if (_stageInitial)'));
+assert(drawRoute.indexOf('_pendingInitialScheduleExceedsWindow(t, _rascunhoDoSorteioInicial(t))') <
+  drawRoute.lastIndexOf('_gravaTorneio(tx, ref, t, _tAntes'));
+const editRoute = source.slice(source.indexOf('exports.setPendingInitialSchedule ='),
+  source.indexOf('exports.getPendingInitialDraw ='));
+assert(editRoute.indexOf('tx.set(refPrivado, pd)') > 0 &&
+  editRoute.indexOf('_gravaTorneio(tx, ref, t, antes') > editRoute.indexOf('tx.set(refPrivado, pd)'));
+assert(!editRoute.includes('_aplicaRascunhoDoSorteioInicial(t, pd.draft)'));
 console.log('✓ publicação direta do rascunho recusa horário excedente antes de materializar a chave');

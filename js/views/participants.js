@@ -829,7 +829,7 @@ window._resetCheckIn = function (tId) {
     if (typeof showNotification === 'function') showNotification('Chamada não limpa', 'Atualize o aplicativo e tente novamente.', 'error');
     return;
   }
-  window._callCF('resetTournamentCheckIn', { tournamentId: String(tId) }, 'Entre na sua conta para limpar a chamada.')
+  window._callCF('resetTournamentCheckIn', { tournamentId: String(tId), sandbox: String(tId).startsWith('sb_') }, 'Entre na sua conta para limpar a chamada.')
     .then(function () {
       _reRenderParticipants();
       if (typeof showNotification === 'function') showNotification(_t('participants.resetCheckin'), _t('participants.resetCheckinMsg'), 'info');
@@ -1122,7 +1122,7 @@ window._startTournament = function (tId) {
     if (typeof showNotification === 'function') showNotification('Início não salvo', message, 'error');
     return;
   }
-  window._callCF('startTournament', { tournamentId: String(tId) }, 'Entre na sua conta para iniciar o torneio.')
+  window._callCF('startTournament', { tournamentId: String(tId), sandbox: String(tId).startsWith('sb_') }, 'Entre na sua conta para iniciar o torneio.')
     .then(function () {
       if (typeof showNotification === 'function') showNotification(_t('participants.tournamentStarted'), _t('participants.tournamentStartedMsg'), 'success');
       // Re-render current view somente depois da confirmação do servidor.

@@ -409,6 +409,18 @@ const CASES = [
       plan.cadenceValid === true && plan.slots.length === 96 && plan.slots.filter(function (slot) { return slot.extrapolaJanela; }).length === 12 &&
       appliedCount === 96 && short.matches.every(function (match) { return !!match.scheduledAt; }));
   });
+  const semFaixaCompleta = JSON.parse(JSON.stringify(neonFree64));
+  semFaixaCompleta.scheduleWindow.days = semFaixaCompleta.scheduleWindow.days.map(function (day) {
+    return Object.assign({}, day, { endTime:'17:35' });
+  });
+  const planoSemFaixaCompleta = core._window._schGradeEstimada(semFaixaCompleta);
+  ok('janela menor que um slot: rascunho completo permite mostrar todos os excedentes',
+    planoSemFaixaCompleta && planoSemFaixaCompleta.cabe === false &&
+    planoSemFaixaCompleta.cadenceValid === true && planoSemFaixaCompleta.slots.length === 96 &&
+    planoSemFaixaCompleta.slots.every(function (slot) { return slot.extrapolaJanela === true; }),
+    JSON.stringify(planoSemFaixaCompleta && { cabe:planoSemFaixaCompleta.cabe,
+      cadenceValid:planoSemFaixaCompleta.cadenceValid, slots:planoSemFaixaCompleta.slots.length,
+      notStriped:planoSemFaixaCompleta.slots.filter(function (slot) { return !slot.extrapolaJanela; }).slice(0, 2) }));
   // individual-schedule-unchanged: o gate novo é exclusivo de times com dias
   // fixos; este caso mantém o sorteio individual e sua grade estimada.
   const individual = mkT('individual-schedule-unchanged', {

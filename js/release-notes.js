@@ -1,4 +1,8 @@
-// 2.5.98 — Atualização consolidada de produção com as correções validadas desde a última publicação.
+// 2.5.98 — A agenda de torneios com várias categorias usa todas as quadras,
+// alterna as categorias na ordem escolhida e mostra os jogos que excedem a
+// janela para ajuste antes da publicação. O botão Pular jogo usa a mesma fila
+// no sandbox e no torneio real. O sandbox pode iniciar o torneio e repetir a
+// chamada antes da data do evento, sem notificar participantes.
 // 2.5.97 — O botão “Sortear dias livremente” no configurador de sorteio
 // mostra texto branco sobre fundo escuro, inclusive ao passar o cursor.
 // 2.5.96 — Jogos em melhor de três, cinco ou formato personalizado aceitam

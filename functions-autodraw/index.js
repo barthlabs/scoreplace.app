@@ -1119,7 +1119,11 @@ function _pendingInitialScheduleExceedsWindow(t, draft) {
   // Alguns formatos publicam uma chave ainda sem agenda. Só há janela a
   // fiscalizar quando algum jogo do rascunho recebeu horário; agenda parcial
   // continua inválida para não esconder um jogo sem encaixe.
-  if (!games.some(m => !!m.scheduledAt)) return false;
+  if (!games.some(m => !!m.scheduledAt)) {
+    // Uma chave ainda não agendada pode ser publicada em outros formatos.
+    // Marcador de estimativa sem horário, porém, é uma agenda incompleta.
+    return games.some(m => !!m.scheduledKind || !!m.scheduleSource);
+  }
   const windowPlan = drawWindow && drawWindow._schJanelaTorneio && drawWindow._schJanelaTorneio(t);
   if (!windowPlan || windowPlan.invalida || !Array.isArray(windowPlan.dias)) return true;
   return games.some(m => {
@@ -1869,6 +1873,13 @@ exports.drawRound = onCall(async (request) => {
     // O marcador de quadra liberada pertence à chave anterior, não ao ID textual
     // de um jogo. Apagá-lo na mesma transação impede que re-sorteio reutilize o ID.
     if (hadBracket) tx.delete(ref.collection('courtState').doc('main'));
+    // O sorteio inicial sem revisão privada também precisa respeitar a janela.
+    // Na rota em revisão, o excedente permanece apenas no cofre até o gate de
+    // resolvePendingDraw; aqui a gravação seria diretamente pública.
+    if (!hadBracket && _pendingInitialScheduleExceedsWindow(t, _rascunhoDoSorteioInicial(t))) {
+      throw _drawFail('failed-precondition',
+        'Há jogos fora dos horários configurados. Ajuste a agenda antes de publicar.', { tId });
+    }
     const b = _gravaTorneio(tx, ref, t, _tAntes, { agoraIso: _agoraIsoTx }); // clobber-free; divide se o marcador mandar
     // Devolve o doc COM nome (b.clean, não b.persist) — o cliente precisa dele pra notificar
     // (_notifyDrawPersonalized lê os nomes) e pra sincronizar o AppStore sem esperar o listener.
@@ -5834,15 +5845,20 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
 // ─── Ciclo presencial: comandos estreitos, nunca mutadores da tela ───────────
 exports.startTournament = onCall(async (request) => {
   const uid = request.auth && request.auth.uid;
-  const tId = String((request.data && request.data.tournamentId) || '').trim();
+  const data = request.data || {};
+  const tId = String(data.tournamentId || '').trim();
+  const sandbox = tId.startsWith('sb_');
   if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
-  if (!tId) throw new HttpsError('invalid-argument', 'Torneio obrigatório.');
-  const ref = db.collection('tournaments').doc(tId), agora = new Date(), agoraIso = agora.toISOString();
+  if (!tId || (data.sandbox !== undefined && data.sandbox !== sandbox) || (sandbox && data.sandbox !== true)) {
+    throw new HttpsError('invalid-argument', 'Torneio inválido.');
+  }
+  const ref = db.collection(sandbox ? 'sandboxes' : 'tournaments').doc(tId), agora = new Date(), agoraIso = agora.toISOString();
   const startLocal = agora.toLocaleString('sv-SE', { timeZone:'America/Sao_Paulo', year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', hour12:false }).replace(' ', 'T');
   return db.runTransaction(async tx => {
+    if (sandbox) await _assertSandboxDrawOwner(tx, await tx.get(ref), uid);
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
-    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização inicia o torneio.', { tId, uid });
+    if (!sandbox && !_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização inicia o torneio.', { tId, uid });
     if (t.status === 'finished') throw _drawFail('failed-precondition', 'O torneio já foi encerrado.', { tId, uid });
     if (t.tournamentStarted && t.status === 'in_progress') return { ok:true, changed:false };
     const antes = _antesDoMotor(t);
@@ -5888,14 +5904,19 @@ exports.setTeamTieDrawOrder = onCall(async (request) => {
 
 exports.resetTournamentCheckIn = onCall(async (request) => {
   const uid = request.auth && request.auth.uid;
-  const tId = String((request.data && request.data.tournamentId) || '').trim();
+  const data = request.data || {};
+  const tId = String(data.tournamentId || '').trim();
+  const sandbox = tId.startsWith('sb_');
   if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
-  if (!tId) throw new HttpsError('invalid-argument', 'Torneio obrigatório.');
-  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  if (!tId || (data.sandbox !== undefined && data.sandbox !== sandbox) || (sandbox && data.sandbox !== true)) {
+    throw new HttpsError('invalid-argument', 'Torneio inválido.');
+  }
+  const ref = db.collection(sandbox ? 'sandboxes' : 'tournaments').doc(tId), agoraIso = new Date().toISOString();
   return db.runTransaction(async tx => {
+    if (sandbox) await _assertSandboxDrawOwner(tx, await tx.get(ref), uid);
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
-    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização limpa a chamada.', { tId, uid });
+    if (!sandbox && !_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização limpa a chamada.', { tId, uid });
     if (!Object.keys(t.checkedIn || {}).length && !Object.keys(t.absent || {}).length && !Object.keys(t.checkedInConfirmed || {}).length) return { ok:true, changed:false };
     const antes = _antesDoMotor(t);
     t.checkedIn = {}; t.absent = {}; t.checkedInConfirmed = {};
@@ -6496,6 +6517,8 @@ exports.resolvePendingDraw = onCall(async (request) => {
 // pacote `pendingDraw.draft`; escrever no torneio aqui seria publicar sem querer.
 // Esta porta aceita somente a lista completa calculada pelo planejador e grava a
 // intenção no próprio rascunho, dentro de uma transação e só para a organização.
+// Horários excedentes são aceitos aqui para aparecerem zebrados na prévia;
+// resolvePendingDraw impede que esse rascunho vire chave publicada.
 exports.setPendingInitialSchedule = onCall(async (request) => {
   const uid = request.auth && request.auth.uid;
   const data = request.data || {};

@@ -1,3 +1,10 @@
+## 2.5.98 — 05/nov/2026 (agenda e ensaio do torneio)
+
+- A distribuição estrita de jogos entre categorias ocupa as seis quadras em oito faixas de 35 minutos quando há 48 jogos por dia, respeitando a ordem alternada escolhida e fazendo cada dupla estrear até a terceira faixa.
+- Uma janela insuficiente mantém a grade inteira no rascunho privado, com os horários excedentes marcados. O servidor impede a publicação enquanto restar jogo fora da janela.
+- A ação Pular jogo usa a mesma fila e a mesma Function no sandbox e em torneios reais, sem alterar confronto ou placar.
+- O organizador pode iniciar um sandbox antes da data do evento e limpar sua chamada para repetir o ensaio. A trava de dia da chamada de quadra continua valendo apenas para torneios reais; iniciar o torneio não tinha trava de data.
+
 ## 2.5.95 — 04/nov/2026 (inscrições, agenda e fundo do torneio)
 
 - O formulário distingue Simples/Duplas e inscrição individual/dupla formada; a organização escolhe quem pode formar duplas. Beach Tennis também admite Simples.

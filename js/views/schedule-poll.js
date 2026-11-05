@@ -931,6 +931,8 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
   // dos confrontos: cada estágio contém exatamente um jogo de cada dupla.
   function _schPackTeamDayStrict(t, matches, day, dayIndex, courts, slotMs) {
     var count = Math.floor((day.fimMs - day.iniMs) / slotMs);
+    // count === 0 continua gerando o rascunho completo: a organização precisa
+    // enxergar todos os jogos zebrados mesmo se a janela for menor que um slot.
     if (count > 30) return null;
     var order = (t.categorySchedule && t.categorySchedule.slots || [])
       .filter(function (slot) { return slot.day === day.ymd; })
