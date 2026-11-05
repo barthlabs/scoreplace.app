@@ -44,6 +44,41 @@ assert.equal(stageInitial(false, {}, { enabled:true }), true,
   'equipe sem dias estritos nem horários segue para rascunho privado');
 assert.equal(stageInitial(true, {}, { enabled:true }), false,
   'nova rodada de chave já publicada não é reclassificada como rascunho inicial');
+// Executa o ramo real da callable, incluindo a escrita do rascunho privado e
+// o retorno antecipado. A simples avaliação da expressão acima não prova que
+// a chave deixa de alcançar a gravação pública logo abaixo.
+const branchStart = drawRoute.indexOf('const _stageInitial = ');
+const branchEnd = drawRoute.indexOf('    const b = _gravaTorneio(tx, ref, t, _tAntes', branchStart);
+assert(branchStart > 0 && branchEnd > branchStart);
+const writes = [];
+const branchContext = {
+  hadBracket:false, t:{ teamCompetition:{ enabled:true }, matches:[] },
+  _tcCfg:{ enabled:true }, _tAntes:{}, _agoraIsoTx:'2026-10-22T18:00:00.000Z',
+  res:{ matchCount:1, format:'equipes', native:true }, duplicatesRemoved:0,
+  estimatedScheduleApplied:0, ref:{ path:'sandboxes/sb_ensaio' },
+  tx:{ set:(target, value) => writes.push({ path:target.path, value }) },
+  _rascunhoDoSorteioInicial:() => ({ matches:[{ id:'j1' }] }),
+  _marcadorPublicoDoRascunhoInicial:() => ({ kind:'initial' }),
+  _refRascunhoInicialPrivado:() => ({ path:'sandboxes/sb_ensaio/pending/initial' }),
+  _gravaTorneio:(_tx, target, value) => {
+    writes.push({ path:target.path, value });
+    return { clean:value };
+  },
+  _pendingInitialScheduleExceedsWindow:() => {
+    throw new Error('o rascunho de equipes não pode alcançar a rota pública');
+  },
+  JSON, Date, Number, Array, console
+};
+const runInitialBranch = vm.runInNewContext(
+  `(async function () { ${drawRoute.slice(branchStart, branchEnd)} })`, branchContext);
+runInitialBranch().then(result => {
+  assert.equal(result.staged, true);
+  assert.deepEqual(writes.map(write => write.path),
+    ['sandboxes/sb_ensaio/pending/initial', 'sandboxes/sb_ensaio']);
+  assert.equal(writes[1].value.pendingDraw.kind, 'initial');
+  assert.equal(writes[1].value.matches, undefined,
+    'a chave de equipes sem agenda não é publicada diretamente');
+}).catch(error => { console.error(error); process.exitCode = 1; });
 assert(drawRoute.indexOf('if (_stageInitial)') < drawRoute.indexOf('_pendingInitialScheduleExceedsWindow(t, _rascunhoDoSorteioInicial(t))'),
   'o desvio para rascunho privado vem antes da rota de publicação direta');
 assert(drawRoute.indexOf('_pendingInitialScheduleExceedsWindow(t, _rascunhoDoSorteioInicial(t))') >
