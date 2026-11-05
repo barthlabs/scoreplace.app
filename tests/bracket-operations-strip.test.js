@@ -275,20 +275,19 @@ assert(start > 0 && end > start);
     const bestOfThree = await page.evaluate(() => {
       const op = document.createElement('div');
       op.innerHTML = '<button data-confirm-for="m3" style="display:none">✓</button>' +
-        [0, 1, 2].map(i => '<input data-operations-source-input="s1-m3-' + i + '"><input data-operations-source-input="s2-m3-' + i + '">').join('');
+        '<input data-operations-source-input="s1-m3"><input data-operations-source-input="s2-m3">';
       const fields = [...op.querySelectorAll('input')];
-      fields[0].value = '6'; fields[1].value = '2';
-      fields[2].value = '6'; fields[3].value = '4';
+      fields[0].value = '6';
       _bracketOperationsSyncReplicaScore(op, 'm3');
-      const twoSetWin = op.querySelector('button').style.display !== 'none';
-      fields[2].value = '4'; fields[3].value = '6';
+      const missingSideHidden = op.querySelector('button').style.display === 'none';
+      fields[1].value = '0';
       _bracketOperationsSyncReplicaScore(op, 'm3');
-      const splitNeedsThird = op.querySelector('button').style.display === 'none';
-      fields[4].value = '10'; fields[5].value = '8';
+      const firstSetReady = op.querySelector('button').style.display !== 'none';
+      fields[0].value = '';
       _bracketOperationsSyncReplicaScore(op, 'm3');
-      return { twoSetWin, splitNeedsThird, thirdUnlocks: op.querySelector('button').style.display !== 'none' };
+      return { missingSideHidden, firstSetReady, clearingHides: op.querySelector('button').style.display === 'none' };
     });
-    assert.deepEqual(bestOfThree, { twoSetWin: true, splitNeedsThird: true, thirdUnlocks: true });
+    assert.deepEqual(bestOfThree, { missingSideHidden: true, firstSetReady: true, clearingHides: true });
     const endStart = source.indexOf('function _courtOperationId()');
     const endStop = source.indexOf('function _syncMatchCourtCopies(', endStart);
     assert(endStart > 0 && endStop > endStart);
@@ -356,7 +355,7 @@ assert(start > 0 && end > start);
         window._isConcentratedTournament = () => true;
         window._souOrganizador = () => true;
         window._isUserAuthority = () => true;
-        window._matchSetPlan = () => ({ multi: false, initialTwoSetEntry: false, columns: [] });
+        window._matchSetPlan = () => ({ multi: false, columns: [] });
         const standard = document.createElement('template');
         standard.innerHTML = window.renderMatchCard(match, true, tournament.id, 1, false, null);
         const replica = document.createElement('template');
@@ -411,8 +410,23 @@ assert(start > 0 && end > start);
         window._findMatch = (t, id) => t.matches.find(match => match.id === id);
         window._effectiveScoring = t => t.scoring;
         window._scoringUsesSets = scoring => scoring.type === 'sets';
-        window._matchSetPlan = (scoring, match) => match.id === 'best3'
-          ? { initialTwoSetEntry: true, superTiebreak: true, superTiebreakPoints: 10, tiebreakMargin: 2 } : null;
+        window._matchSetPlan = (scoring, match) => {
+          if (match.id !== 'best3') return null;
+          const played = match.sets || [];
+          return { multi: true, played, setsToWin: 2, tiebreakMargin: 2,
+            live: { i: played.length, kind: played.length === 2 ? 'stb' : 'set',
+              label: played.length === 2 ? 'STB' : String(played.length + 1), points: 10 } };
+        };
+        window._saveSetsEmAndamento = (_tid, mid, sets, p1, p2) => {
+          const match = matches.find(m => m.id === mid);
+          match.sets = sets;
+          calls.push({ mid, payload: { setsInProgress: true, sets, setsWonP1: p1, setsWonP2: p2 } });
+          return Promise.resolve(true);
+        };
+        window._commitSetsResult = (_tid, mid, sets, p1, p2) => {
+          calls.push({ mid, payload: { sets, setsWonP1: p1, setsWonP2: p2 } });
+          return Promise.resolve(true);
+        };
         window._validateNormalSetScore = () => ({ ok: true });
         window._tbLoserGames = () => 6;
         window._isTiebreakSetScore = (a, b) => Math.min(a, b) === 6 && Math.max(a, b) === 7;
@@ -435,18 +449,22 @@ assert(start > 0 && end > start);
           await window._saveResultInline(tournament.id, id, op);
         };
         await submit('simple', { 's1-simple': 6, 's2-simple': 3 });
-        tournament.scoring = { type: 'sets', tiebreakEnabled: true };
-        await submit('best3', { 's1-best3-0': 6, 's2-best3-0': 4, 's1-best3-1': 4,
-          's2-best3-1': 6, 's1-best3-2': 10, 's2-best3-2': 8 });
+        tournament.scoring = { type: 'sets', setsToWin: 2, gamesPerSet: 6, superTiebreak: true, tiebreakEnabled: true };
+        await submit('best3', { 's1-best3': 6, 's2-best3': 4 });
+        await submit('best3', { 's1-best3': 4, 's2-best3': 6 });
+        await submit('best3', { 's1-best3': 10, 's2-best3': 8 });
         await submit('tiebreak', { 's1-tiebreak': 7, 's2-tiebreak': 6, 'tb1-tiebreak': 7, 'tb2-tiebreak': 5 });
         return calls.map(call => ({ mid: call.mid, payload: call.payload }));
       });
-      assert.deepEqual(saved.map(call => call.mid), ['simple', 'best3', 'tiebreak']);
+      assert.deepEqual(saved.map(call => call.mid), ['simple', 'best3', 'best3', 'best3', 'tiebreak']);
       assert.deepEqual([saved[0].payload.s1, saved[0].payload.s2], [6, 3]);
-      assert.deepEqual(saved[1].payload.sets.map(set => [set.gamesP1, set.gamesP2]), [[6, 4], [4, 6], [10, 8]]);
-      assert.deepEqual([saved[1].payload.setsWonP1, saved[1].payload.setsWonP2], [2, 1]);
-      assert.deepEqual([saved[2].payload.s1, saved[2].payload.s2, saved[2].payload.tbP1, saved[2].payload.tbP2], [7, 6, 7, 5]);
-      assert.equal(saved[2].payload.isTiebreakEntry, true);
+      assert.equal(saved[1].payload.setsInProgress, true);
+      assert.deepEqual(saved[1].payload.sets.map(set => [set.gamesP1, set.gamesP2]), [[6, 4]]);
+      assert.deepEqual(saved[2].payload.sets.map(set => [set.gamesP1, set.gamesP2]), [[6, 4], [4, 6]]);
+      assert.deepEqual(saved[3].payload.sets.map(set => [set.gamesP1, set.gamesP2]), [[6, 4], [4, 6], [10, 8]]);
+      assert.deepEqual([saved[3].payload.setsWonP1, saved[3].payload.setsWonP2], [2, 1]);
+      assert.deepEqual([saved[4].payload.s1, saved[4].payload.s2, saved[4].payload.tbP1, saved[4].payload.tbP2], [7, 6, 7, 5]);
+      assert.equal(saved[4].payload.isTiebreakEntry, true);
     } finally { await scoringPage.close(); }
     console.log('✓ faixa replica o card completo com IDs únicos, chamada, placar e relógio');
   } finally { await browser.close(); }

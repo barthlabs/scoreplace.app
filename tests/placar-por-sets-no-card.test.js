@@ -140,6 +140,17 @@ function regua() {
   const antes = plano(MELHOR3, []).columns[0].w;
   const depois = plano(MELHOR3, [S(6, 4)]).columns[0].w;
   ok(antes >= depois, 'cartão vazio nunca é menor que a escala após Set 1 (' + antes + 'px → ' + depois + 'px)');
+  // O mini-card da tela inicial usa estes helpers, com o mesmo plano da chave.
+  const mini0 = plano(MELHOR3, []), mini1 = plano(MELHOR3, [S(6, 4)]);
+  const miniHtml0 = W._setHeadHtml(mini0) + W._setGridHtml(mini0, 1);
+  const miniHtml1 = W._setHeadHtml(mini1) + W._setGridHtml(mini1, 1);
+  ok((miniHtml0.match(/class="sp-set-col"/g) || []).length === 2 &&
+    (miniHtml1.match(/class="sp-set-col"/g) || []).length === 4,
+    'mini-card mostra um set em 0-0 e dois em 1-0, com rótulos alinhados');
+  ok(miniHtml0.includes('min-width:' + mini0.reservedGridW + 'px') &&
+    miniHtml1.includes('min-width:' + mini1.reservedGridW + 'px') &&
+    mini0.reservedGridW === mini1.reservedGridW,
+    'mini-card reserva a mesma largura do placar em 0-0 e 1-0');
 }
 
 /* ── ② A DECISÃO + ③ O QUE O PARCIAL GRAVA ────────────────────────────────────────── */
@@ -288,7 +299,7 @@ function cardHtml(scoring, sets, extra) {
 async function tela() {
   console.log('\n④ A tela — Chromium com o CSS real: rótulo EM CIMA do box');
   const casos = [
-    { nome: 'melhor de 3 · Set 1 e Set 2 prontos para lançar', sc: MELHOR3, sets: [], cols: 2 },
+    { nome: 'melhor de 3 · Set 1 pronto para lançar', sc: MELHOR3, sets: [], cols: 1 },
     { nome: 'melhor de 3 · Set 1 confirmado', sc: MELHOR3, sets: [S(6, 4)], cols: 2 },
     { nome: 'melhor de 3 · 1-1, super tie-break', sc: MELHOR3, sets: [S(6, 4), S(3, 6)], cols: 3 },
     { nome: 'melhor de 5 · 2-2, super tie-break', sc: MELHOR5, sets: [S(6, 4), S(3, 6), S(6, 2), S(4, 6)], cols: 5 }
@@ -352,6 +363,7 @@ async function tela() {
         rotulos: lbls, p1: linha(1), p2: linha(2),
         inputs: [...box.querySelectorAll('input[id^="s1-"],input[id^="s2-"]')].map((e) => e.id),
         larguraCard: +box.getBoundingClientRect().width.toFixed(1),
+        larguraGrade: +box.querySelector('.sp-set-head .sp-set-grid').getBoundingClientRect().width.toFixed(1),
         transbordo: box.scrollWidth - box.clientWidth
       });
     });
@@ -376,6 +388,10 @@ async function tela() {
     ok(casa, c.nome + ': cada rótulo está EM CIMA do seu box, nas duas linhas');
     ok(g.transbordo <= 0, c.nome + ': o card não transborda na horizontal (' + g.transbordo + 'px)');
   });
+  ok(r.casos[0].inputs.sort().join(',') === 's1-M1,s2-M1', 'melhor de 3 vazio só edita o primeiro set');
+  ok(!/s1-M1-0|stbcol|stblbl/.test(htmls[0]), 'entrada inicial não cria campos indexados nem STB oculto');
+  ok(r.casos[0].larguraCard === r.casos[2].larguraCard && r.casos[0].larguraGrade >= r.casos[2].larguraGrade - 0.5,
+    'card e espaço reservado do placar mantêm a largura até 1×1');
   ok(/Set 1$/.test(r.casos[0].headline), 'a linha nova aparece: "' + r.casos[0].headline + '"');
   ok(/Super Tie-Break \(dif 2 pts\)$/.test(r.casos[2].headline),
     'assim que empata, a linha JÁ anuncia o super tie-break: "' + r.casos[2].headline + '"');
@@ -395,20 +411,19 @@ async function tela() {
  * que o STB comporta 10 e que, ao abrir TB, rótulo + duas linhas aumentam juntos. */
 async function stbDoisDigitosETieBreakLateral() {
   console.log('\n④·2 STB de dois dígitos e tie-break lateral');
-  // O STB é reservado, mas fica oculto, no card inicial de melhor de 3.
-  const initialHtml = cardHtml(MELHOR3, [], { id: 'M-STB' });
+  // O STB vivo em 1×1 usa a largura reservada desde o card inicial.
+  const initialHtml = cardHtml(MELHOR3, [S(6, 4), S(3, 6)], { id: 'M-STB' });
   const tbHtml = cardHtml(MELHOR3, [S(6, 4)], { id: 'M-TB' });
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 430, height: 720 } });
   await page.setContent('<style>' + CSS + '</style><body style="background:#0b1220;padding:8px;">' +
     '<div id="stb-case">' + initialHtml + '</div><div id="tb-case">' + tbHtml + '</div></body>', { waitUntil: 'load' });
   const before = await page.evaluate(() => {
-    document.querySelectorAll('#stb-case [id^="stbcol-"], #stb-case [id^="stblbl-"]').forEach((e) => { e.style.display = 'block'; });
     const stb = document.querySelector('#stb-case [data-sp-set-index="2"] .sp-set-inp');
     const q = stb.getBoundingClientRect();
     return { width: q.width, textWidth: (() => { const c = document.createElement('span'); const cs = getComputedStyle(stb); c.textContent = '10'; c.style.cssText = 'font-family:' + cs.fontFamily + ';font-size:' + cs.fontSize + ';font-weight:' + cs.fontWeight + ';visibility:hidden;white-space:nowrap'; stb.parentNode.appendChild(c); const w = c.getBoundingClientRect().width; c.remove(); return w; })() };
   });
-  ok(before.width >= before.textWidth + 10, 'STB reservado comporta 10 com folga (' + before.width.toFixed(1) + 'px)');
+  ok(before.width >= before.textWidth + 10, 'STB vivo comporta 10 com folga (' + before.width.toFixed(1) + 'px)');
   await page.evaluate(() => {
     const card = document.querySelector('#tb-case .sp-match-card');
     const a = document.querySelector('#tb-case #s1-M-TB'), b = document.querySelector('#tb-case #s2-M-TB');
@@ -630,16 +645,18 @@ async function espacoDosSetsResponsivo() {
 
 async function entradaE30() {
   console.log('\n⑧ Games comuns não recebem segundo dígito');
-  const html = cardHtml(Object.assign({}, MELHOR3, { tiebreakAt: 'g-1' }), [], { id: 'M-E30' });
+  const e30Scoring = Object.assign({}, MELHOR3, { tiebreakAt: 'g-1' });
+  const html = cardHtml(e30Scoring, [], { id: 'M-E30' });
+  const stbHtml = cardHtml(e30Scoring, [S(6, 4), S(3, 6)], { id: 'M-E31' });
   const browser = await chromium.launch();
   const page = await browser.newPage();
-  await page.setContent('<body>' + html + '</body>');
+  await page.setContent('<body>' + html + stbHtml + '</body>');
   await page.addScriptTag({ content: 'window._limitNormalSetGameInput = ' + W._limitNormalSetGameInput.toString() +
     '; window._highlightWinner = function(){}; window._warnGrossSetScore = function(){};' });
-  const games = page.locator('#s1-M-E30-1');
+  const games = page.locator('#s1-M-E30');
   await games.fill('6');
   await games.press('5');
-  ok(await games.inputValue() === '6', '6 seguido de 5 no 2º set permanece 6 no navegador');
+  ok(await games.inputValue() === '6', '6 seguido de 5 no set em disputa permanece 6 no navegador');
   ok(await games.getAttribute('max') === '6', 'campo de games anuncia máximo 6');
   await games.evaluate((el) => {
     el.defaultValue = '6';
@@ -648,8 +665,8 @@ async function entradaE30() {
     el.dispatchEvent(new Event('input', { bubbles: true }));
   });
   ok(await games.inputValue() === '6', 'game pré-preenchido restaura 6 sem depender de foco');
-  const tb = page.locator('#tb1-M-E30-0');
-  const stb = page.locator('#s1-M-E30-2');
+  const tb = page.locator('#tb1-M-E30');
+  const stb = page.locator('#s1-M-E31');
   await tb.evaluate((el) => { el.value = '12'; el.dispatchEvent(new Event('input', { bubbles: true })); });
   await stb.evaluate((el) => { el.value = '10'; el.dispatchEvent(new Event('input', { bubbles: true })); });
   ok(await tb.inputValue() === '12' && await stb.inputValue() === '10',

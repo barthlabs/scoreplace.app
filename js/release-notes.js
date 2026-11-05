@@ -1,3 +1,6 @@
+// 2.5.96 — Jogos em melhor de três, cinco ou formato personalizado aceitam
+// confirmar cada set assim que termina. O jogo permanece aberto até o set
+// decisivo; tie-break e super tie-break conservam suas validações.
 // 2.5.95 — Inscrição individual ou em dupla formada, com permissão de formação
 // pela organização, pelos atletas ou por ambos. Beach Tennis também permite
 // simples. Cada categoria pode ter uma faixa própria de jogos dentro do dia.

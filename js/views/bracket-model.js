@@ -1600,9 +1600,14 @@ window._rotaMostraAChaveDeste = function (hash, id) {
       cols.push(live);
     }
 
-    // Melhor de 3 abre com os dois sets normais disponíveis. O espaço seguinte
-    // fica reservado ao STB e só é revelado pelo card quando o placar fica 1 × 1.
-    var initialTwoSetEntry = multi && bestOf === 3 && !done && played.length === 0;
+    // Reserva a largura máxima do melhor de 3 desde o primeiro set. Só a coluna
+    // em disputa é editável, mas o placar não desloca os nomes quando surge o STB.
+    var esc3 = window._setColEscala(3);
+    // Melhor de 5 mantém a grade progressiva existente: reservar cinco colunas
+    // no card vazio sacrificaria a largura dos nomes nas chaves estreitas.
+    var reservedGridW = multi && bestOf === 3
+      ? 2 * larg('set', null, esc3) + larg(stbOn ? 'stb' : 'set', null, esc3) + 20
+      : null;
 
     // ⭐ A LINHA DE CIMA ANUNCIA O SUPER TIE-BREAK ASSIM QUE EMPATA. Ordem do dono
     // (23/ago/2026), corrigindo a minha 1ª versão que dizia "Set 3": _"não pode ser set 3
@@ -1626,20 +1631,14 @@ window._rotaMostraAChaveDeste = function (hash, id) {
     return {
       multi: multi, setsToWin: setsToWin, bestOf: bestOf,
       superTiebreak: stbOn, superTiebreakPoints: stbPts, tiebreakMargin: margem,
-      // ⛔ A coluna do STB que já fica RESERVADA no melhor de 3 nasce pela mesma
-      // régua da coluna que aparece depois de 1×1. Antes o card inicial copiava a
-      // largura do Set 1 (um dígito) e só então revelava um campo que recebe 10,
-      // 12 ou mais pontos. O resultado era o STB apertado até a próxima pintura.
-      // Expor o valor aqui mantém plano, rótulo e campo em uma única fonte.
+      // No melhor de 3, as três grades reservam a escala completa desde o início.
+      // O STB mantém a largura mínima para dois dígitos quando chega a 1×1.
       // [[regressao_stb_dois_digitos_e_tb_lateral]]
-      // A reserva inicial usa a escala do FORMATO completo (melhor de 3), não a
-      // escala temporária de "só Set 1 visível". O campo não pode estreitar no
-      // instante em que revela o STB.
-      stbEntryW: stbOn ? larg('stb', null, window._setColEscala(bestOf)) : null,
+      reservedGridW: reservedGridW,
       numFs: esc.fs,      // tamanho do número desta grade (degrau da escala)
       difPtsAviso: _avisoDif,
       played: played, setsWonP1: wonP1, setsWonP2: wonP2,
-      done: done, columns: cols, live: live, initialTwoSetEntry: initialTwoSetEntry,
+      done: done, columns: cols, live: live,
       headline: head + ' · ' + atual + _stbNoTitulo
     };
   };
@@ -2015,6 +2014,7 @@ window._assignGlobalGameNumbers = function (t) {
       catch (e) { return fb; }
     };
     var fsVar = plan.numFs ? ('--sp-num-fs-set:' + plan.numFs + 'rem;') : '';
+    var reserve = plan.reservedGridW ? ('min-width:' + plan.reservedGridW + 'px;justify-content:flex-end;') : '';
     var countAttr = ' data-sp-set-count="' + plan.columns.length + '"';
     var formatAttr = plan.bestOf ? (' data-sp-best-of="' + plan.bestOf + '"') : '';
     var labels = plan.columns.map(function (c) {
@@ -2026,7 +2026,7 @@ window._assignGlobalGameNumbers = function (t) {
         (opts.firstLine != null ? String(opts.firstLine) : (opts.hideHeadline ? '' : '<span class="sp-set-head-ttl">' + _sf(plan.headline) + '</span>')) +
         '<div class="sp-set-head-linha2">' +
           '<span class="sp-set-head-sets">' + _sf(_tr('bracket.setsLabel', 'SETS')) + '</span>' +
-          '<div class="sp-set-grid"' + countAttr + formatAttr + ' style="' + fsVar + '">' + labels + '</div>' +
+          '<div class="sp-set-grid"' + countAttr + formatAttr + ' style="' + fsVar + reserve + '">' + labels + '</div>' +
         '</div>' +
       '</div>';
   };
@@ -2042,6 +2042,7 @@ window._assignGlobalGameNumbers = function (t) {
     opts = opts || {};
     if (!plan || !plan.multi || !plan.columns || !plan.columns.length) return '';
     var fsVar = plan.numFs ? ('--sp-num-fs-set:' + plan.numFs + 'rem;') : '';
+    var reserve = plan.reservedGridW ? ('min-width:' + plan.reservedGridW + 'px;justify-content:flex-end;') : '';
     var countAttr = ' data-sp-set-count="' + plan.columns.length + '"';
     var formatAttr = plan.bestOf ? (' data-sp-best-of="' + plan.bestOf + '"') : '';
     var cels = plan.columns.map(function (c) {
@@ -2050,7 +2051,7 @@ window._assignGlobalGameNumbers = function (t) {
         : _spSetNum(c, side, !!opts.italico);
       return '<div class="sp-set-col" style="--w:' + c.w + 'px;">' + dentro + '</div>';
     }).join('');
-    return '<div class="sp-set-grid"' + countAttr + formatAttr + ' style="' + fsVar + '">' + cels + '</div>';
+    return '<div class="sp-set-grid"' + countAttr + formatAttr + ' style="' + fsVar + reserve + '">' + cels + '</div>';
   };
 
   /* ── ⭐ CADA SET É UMA COLUNA — TAMBÉM NO PLACAR JÁ ENCERRADO ──────────────────

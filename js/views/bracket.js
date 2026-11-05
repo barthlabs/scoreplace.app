@@ -1395,24 +1395,6 @@ function _bracketOperationsSyncReplicaScore(op, mid, t, m) {
   var find = function (id) { return inputs.find(function (el) { return el.getAttribute('data-operations-source-input') === id; }); };
   var a = find('s1-' + mid), b = find('s2-' + mid);
   var scoreEntered = !!(a && b && a.value !== '' && b.value !== '');
-  // O primeiro lançamento de melhor de três precisa dos dois primeiros sets;
-  // o terceiro só é exigido quando cada lado venceu um. Repete a mesma regra
-  // do card da chave sem consultar IDs globais de uma aba possivelmente oculta.
-  var first = [find('s1-' + mid + '-0'), find('s2-' + mid + '-0')];
-  var second = [find('s1-' + mid + '-1'), find('s2-' + mid + '-1')];
-  if (first[0] && first[1] && second[0] && second[1]) {
-    var full = function (pair) { return pair[0].value.trim() !== '' && pair[1].value.trim() !== ''; };
-    var tied = full(first) && full(second) &&
-      ((Number(first[0].value) > Number(first[1].value)) !== (Number(second[0].value) > Number(second[1].value)));
-    var third = [find('s1-' + mid + '-2'), find('s2-' + mid + '-2')];
-    scoreEntered = full(first) && full(second) && (!tied || (third[0] && third[1] && full(third)));
-    ['1', '2'].forEach(function (side) {
-      var col = op.querySelector('[id$="stbcol-' + side + '-' + mid + '"]');
-      if (col) col.style.display = tied ? '' : 'none';
-    });
-    var label = op.querySelector('[id$="stblbl-' + mid + '"]');
-    if (label) label.style.display = tied ? '' : 'none';
-  }
   // Os campos de tie-break acompanham o mesmo par de games dentro desta cópia.
   var tbPairs = [[a, b, find('tb1-' + mid), find('tb2-' + mid)]];
   [0, 1, 2].forEach(function (i) {
@@ -8638,26 +8620,8 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // Set confirmado é CLICÁVEL pra corrigir enquanto o jogo não fechou — sem isso um 6-4
   // digitado errado no set 1 fica preso até o fim da partida.
   const _podeCorrigirSet = !isDecided && !hasPending && canEnterResult && !_readOnly;
-  const _initialTwoSetEntry = !!_plan.initialTwoSetEntry && showInputs && !hasPending && !_setsEdit;
-  const _entryColumns = _initialTwoSetEntry ? [
-    { i: 0, kind: 'set', label: '1', w: _plan.columns[0] ? _plan.columns[0].w : 34, state: 'entry' },
-    { i: 1, kind: 'set', label: '2', w: _plan.columns[0] ? _plan.columns[0].w : 34, state: 'entry' },
-    // ⛔ STB não herda a largura do Set 1: o plano já calculou a largura mínima
-    // para dois dígitos (e para o alvo configurado, que pode ser maior que 10).
-    // Não reintroduzir `columns[0].w` aqui — foi a regressão do STB estreito.
-    { i: 2, kind: _plan.superTiebreak ? 'stb' : 'set', label: _plan.superTiebreak ? 'STB' : '3', w: _plan.superTiebreak ? _plan.stbEntryW : (_plan.columns[0] ? _plan.columns[0].w : 34), state: 'stb-entry' }
-  ] : _plan.columns;
-  const _initialEntryCell = (c, side) => {
-    const hidden = c.state === 'stb-entry';
-    const wrap = hidden ? ' id="stbcol-' + side + '-' + m.id + '" style="display:none;--w:' + c.w + 'px;"' : ' style="--w:' + c.w + 'px;"';
-    const input = '<input type="number" id="s' + side + '-' + m.id + '-' + c.i + '" min="0" placeholder="0" class="sp-set-inp sp-set-inp--live"' + _gameInputAttrs(c.kind) +
-      ' oninput="' + _gameInputGuard(c.kind) + 'window._highlightWinner(\'' + _esc(m.id) + '\')" onchange="window._warnGrossSetScore(\'' + _esc(m.id) + '\',' + c.i + ')">';
-    const tb = c.kind === 'set' && _tbEnabled ? '<input type="number" id="tb' + side + '-' + m.id + '-' + c.i + '" min="0" placeholder="tb" title="Tie-break" class="sp-set-tb" style="display:none;" oninput="window._highlightWinner(\'' + _esc(m.id) + '\')">' : '';
-    return '<div class="sp-set-col" data-sp-set-index="' + c.i + '"' + wrap + '><span class="sp-set-score-entry">' + input + tb + '</span></div>';
-  };
-  const _setCellsHtml = (side) => _entryColumns.map(function (c, idx) {
+  const _setCellsHtml = (side) => _plan.columns.map(function (c, idx) {
     if (_setsEdit) return _setColOpen(c, _colunaEditaTieBreak(c) ? ' sp-set-col--tb-open' : '') + _setEditHtml(c, side, idx) + '</div>';
-    if (c.state === 'entry' || c.state === 'stb-entry') return _initialEntryCell(c, side);
     if (c.state === 'live') return _setColOpen(c) + _setLiveHtml(c, side) + '</div>';
     const fix = _podeCorrigirSet
       ? ' sp-set-col--fix" title="Editar placar"' +
@@ -8665,8 +8629,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       : '';
     return '<div class="sp-set-col' + fix + '" style="--w:' + c.w + 'px;">' + _setNumHtml(c, side) + '</div>';
   }).join('');
-  const _setLabelsHtml = () => _entryColumns.map(function (c) {
-    if (c.state === 'stb-entry') return '<div id="stblbl-' + m.id + '" class="sp-set-col" style="display:none;--w:' + c.w + 'px;"><span class="sp-set-lbl">' + window._safeHtml(c.label) + '</span></div>';
+  const _setLabelsHtml = () => _plan.columns.map(function (c) {
     return _setColOpen(c, (_setsEdit && _colunaEditaTieBreak(c)) ? ' sp-set-col--tb-open' : '') + '<span class="sp-set-lbl' + (c.state === 'live' ? ' sp-set-lbl--live' : '') + '">' +
       window._safeHtml(c.label) + '</span></div>';
   }).join('');
@@ -8685,6 +8648,8 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // colunas o número é maior, com cinco ele encolhe. Vai como variável no elemento pra o
   // rótulo, o box e o número lerem a MESMA fonte sem um segundo lugar decidindo.
   const _numFsVar = (_plan && _plan.numFs) ? ('--sp-num-fs-set:' + _plan.numFs + 'rem;') : '';
+  const _gridReserveStyle = (_plan && _plan.reservedGridW)
+    ? ('min-width:' + _plan.reservedGridW + 'px;justify-content:flex-end;') : '';
   const _setCountAttr = (_plan && _plan.columns) ? (' data-sp-set-count="' + _plan.columns.length + '"') : '';
   const _setFormatAttr = (_plan && _plan.bestOf) ? (' data-sp-best-of="' + _plan.bestOf + '"') : '';
   const _mostraCabecaSet = _multiSet;
@@ -8699,11 +8664,11 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     ? '<div id="sethead-' + m.id + '" class="sp-set-head">' +
         '<div class="sp-set-head-linha2">' +
           '<span class="sp-set-head-sets">' + window._safeHtml(_t('bracket.setsLabel')) + '</span>' +
-          '<div class="sp-set-grid"' + _setCountAttr + _setFormatAttr + ' style="' + _numFsVar + '">' + _setLabelsHtml() + '</div>' +
+          '<div class="sp-set-grid"' + _setCountAttr + _setFormatAttr + ' style="' + _numFsVar + _gridReserveStyle + '">' + _setLabelsHtml() + '</div>' +
         '</div>' +
       '</div>'
     : '';
-  const _setGridHtml = (side) => '<div class="sp-set-grid"' + _setCountAttr + _setFormatAttr + ' style="' + _numFsVar + '">' + _setCellsHtml(side) + '</div>';
+  const _setGridHtml = (side) => '<div class="sp-set-grid"' + _setCountAttr + _setFormatAttr + ' style="' + _numFsVar + _gridReserveStyle + '">' + _setCellsHtml(side) + '</div>';
 
   const p1Score = showInputs
     ? `<input type="number" id="s1-${m.id}" min="0" placeholder="0"${_gameInputAttrs('set')}

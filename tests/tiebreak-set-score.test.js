@@ -91,38 +91,47 @@ W._limitNormalSetGameInput(gameInput, 6);
 ok(gameInput.value === '6', 'segundo dígito é recusado imediatamente no campo de games');
 
 const mid = 'jogo-e30';
-const fields = {};
-for (const [key, value] of Object.entries({
-  ['s1-' + mid + '-0']: '6', ['s2-' + mid + '-0']: '5',
-  ['tb1-' + mid + '-0']: '7', ['tb2-' + mid + '-0']: '5',
-  ['s1-' + mid + '-1']: '6', ['s2-' + mid + '-1']: '1'
-})) fields[key] = { value, getAttribute() { return null; }, setAttribute() {} };
-W.document.getElementById = (id) => fields[id] || null;
-W._matchSetPlan = () => ({ initialTwoSetEntry: true });
-W._buildManualSet = (a, b, tb) => ({ sets: [{ gamesP1: a, gamesP2: b,
-  ...(tb && tb.isTiebreakEntry ? { tiebreak: { pointsP1: tb.tbP1, pointsP2: tb.tbP2 } } : {}) }] });
-let committed = null, alert = '';
-W._commitSetsResult = (tid, id, sets, p1, p2) => { committed = { sets, p1, p2 }; return true; };
-W.showAlertDialog = (title, detail) => { alert = detail; };
-const tour = { id: 'torneio-e30', sport: 'Beach Tennis', scoring, matches: [{ id: mid }] };
-W._saveInitialBestOfThreeFromCard(tour.id, mid, tour, tour.matches[0], scoring);
-ok(committed && committed.p1 === 2 && committed.p2 === 0 && committed.sets.length === 2 &&
-  committed.sets[0].tiebreak.pointsP1 === 7 && committed.sets[0].tiebreak.pointsP2 === 5 &&
-  committed.sets[1].gamesP1 === 6 && committed.sets[1].gamesP2 === 1,
-  '6×5 (TB 7×5), 6×1 salva dois sets e vencedor 2×0');
-fields['s1-' + mid + '-1'].value = '65';
-committed = null; alert = '';
-W._saveInitialBestOfThreeFromCard(tour.id, mid, tour, tour.matches[0], scoring);
-ok(committed === null && alert.includes('2º set') && alert.includes('65×1'),
-  '65×1 no 2º set não grava e avisa coluna e placar exatos');
+const match = { id: mid, p1: 'Ana', p2: 'Bia' };
+const tour = { id: 'torneio-e30', sport: 'Beach Tennis', scoring, matches: [match] };
 W.AppStore.tournaments = [tour];
+W._findTournamentById = () => tour;
+W._findMatch = (_t, id) => id === mid ? match : null;
 W._collectAllMatches = (t) => t.matches;
 W._effectiveScoring = (t) => t.scoring;
-alert = '';
-W._warnGrossSetScore(mid, 1);
-ok(alert.includes('2º set') && alert.includes('65×1'),
-  'aviso ao sair do campo também identifica 2º set e 65×1');
-
-console.log('  ' + pass + ' asserts OK, ' + fail + ' falhas');
-if (fail > 0) { console.error('❌ tiebreak-set-score FALHOU'); process.exit(1); }
-console.log('✅ tiebreak-set-score: OK');
+let intermediate = 0, committed = null, alert = '';
+W._saveSetsEmAndamento = (_tid, _id, sets, p1, p2) => {
+  intermediate++;
+  match.sets = sets;
+  match.setsWonP1 = p1;
+  match.setsWonP2 = p2;
+  return Promise.resolve(true);
+};
+W._commitSetsResult = (_tid, _id, sets, p1, p2) => {
+  committed = { sets, p1, p2 };
+  return true;
+};
+W.showAlertDialog = (_title, detail) => { alert = detail; };
+const firstPlan = W._matchSetPlan(scoring, match);
+ok(firstPlan.live && firstPlan.live.i === 0 && firstPlan.columns.length === 1,
+  'melhor de 3 vazio oferece apenas o primeiro set');
+const first = W._confirmSetFromCard(tour.id, mid, {
+  s1: 6, s2: 5, tbP1: 7, tbP2: 5, isTiebreakEntry: true,
+  plan: firstPlan, scoring
+});
+Promise.resolve(first).then(() => {
+  ok(intermediate === 1 && !committed && !match.winner && match.sets.length === 1,
+    'primeiro set com tie-break grava e deixa a partida aberta');
+  const secondPlan = W._matchSetPlan(scoring, match);
+  ok(secondPlan.live && secondPlan.live.i === 1 && secondPlan.columns.length === 2,
+    'segundo set aparece após confirmar o primeiro');
+  W._confirmSetFromCard(tour.id, mid, { s1: 6, s2: 1, plan: secondPlan, scoring });
+  ok(committed && committed.p1 === 2 && committed.p2 === 0 && committed.sets.length === 2 &&
+    committed.sets[0].tiebreak.pointsP1 === 7 &&
+    committed.sets[1].gamesP1 === 6 && committed.sets[1].gamesP2 === 1,
+    'segundo set fecha 2×0 sem perder o tie-break do primeiro');
+  const invalid = W._validateNormalSetScore(scoring, tour.sport, 65, 1);
+  ok(!invalid.ok && invalid.detail.includes('65'), '65×1 continua inválido no segundo set');
+  console.log('  ' + pass + ' asserts OK, ' + fail + ' falhas');
+  if (fail > 0) { console.error('❌ tiebreak-set-score FALHOU'); process.exitCode = 1; }
+  else console.log('✅ tiebreak-set-score: OK');
+}).catch(e => { console.error(e); process.exitCode = 1; });

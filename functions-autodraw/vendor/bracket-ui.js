@@ -1582,29 +1582,8 @@ window._buildManualSet = function (s1, s2, opts) {
  * lado só, confirmar gravaria um placar incompleto. Zero é valor VÁLIDO (6-0 existe), então
  * o teste é sobre a string estar preenchida, NUNCA sobre o número ser verdadeiro — `!0` é
  * `true` e engoliria todo 6-0. */
-window._syncInitialBestOfThree = function (matchId) {
-  // `stblbl` é o marcador exclusivo da entrada inicial de melhor de 3. Não use
-  // somente o id indexado: alguns renderizadores legados e mocks resolvem prefixos
-  // de input e fariam o fluxo especial sequestrar um placar normal.
-  if (!document.getElementById('stblbl-' + matchId) || !document.getElementById('s1-' + matchId + '-0')) return false;
-  var read = function (idx) {
-    var a = document.getElementById('s1-' + matchId + '-' + idx), b = document.getElementById('s2-' + matchId + '-' + idx);
-    return { a: a ? parseInt(a.value, 10) : NaN, b: b ? parseInt(b.value, 10) : NaN, full: !!(a && b && String(a.value).trim() && String(b.value).trim()) };
-  };
-  var first = read(0), second = read(1);
-  var tied = first.full && second.full && !isNaN(first.a) && !isNaN(first.b) && !isNaN(second.a) && !isNaN(second.b) && ((first.a > first.b) !== (second.a > second.b));
-  ['1', '2'].forEach(function (side) { var col = document.getElementById('stbcol-' + side + '-' + matchId); if (col) col.style.display = tied ? '' : 'none'; });
-  var label = document.getElementById('stblbl-' + matchId); if (label) label.style.display = tied ? '' : 'none';
-  var btn = document.getElementById('confirm-' + matchId), third = read(2);
-  if (btn) btn.style.display = first.full && second.full && (!tied || third.full) ? '' : 'none';
-  return true;
-};
 window._syncConfirmBtn = function (matchId) {
   try {
-    // Alguns caminhos de edição e os testes de contrato carregam somente este helper.
-    // O card especial é opcional nesse contexto; o card simples não pode deixar de
-    // sincronizar por causa disso.
-    if (typeof window._syncInitialBestOfThree === 'function' && window._syncInitialBestOfThree(matchId)) return;
     var btn = document.getElementById('confirm-' + matchId);
     if (!btn) return;
     var s1 = document.getElementById('s1-' + matchId);
@@ -1641,32 +1620,6 @@ window._highlightWinner = function (matchId) {
       el.classList.add('sp-set-col--tb-open');
     });
   };
-  if (document.getElementById('stblbl-' + matchId) && document.getElementById('s1-' + matchId + '-0')) {
-    try {
-      var tour = null, match = null;
-      (window.AppStore && window.AppStore.tournaments || []).some(function (t) {
-        var matches = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (t.matches || []);
-        return matches.some(function (m) { if (m && m.id === matchId) { tour = t; match = m; return true; } return false; });
-      });
-      var sc = tour && ((typeof window._effectiveScoring === 'function') ? window._effectiveScoring(tour, match) : tour.scoring);
-      var trigger = sc && sc.tiebreakEnabled !== false ? window._tbLoserGames(sc, tour.sport) : null;
-      [0, 1, 2].forEach(function (idx) {
-        var aEl = document.getElementById('s1-' + matchId + '-' + idx), bEl = document.getElementById('s2-' + matchId + '-' + idx);
-        var ta = document.getElementById('tb1-' + matchId + '-' + idx), tb = document.getElementById('tb2-' + matchId + '-' + idx);
-        if (!aEl || !bEl) return;
-        var a = parseInt(aEl.value, 10), b = parseInt(bEl.value, 10);
-        if (ta && tb && trigger !== null && window._isTiebreakSetScore(a, b, trigger)) {
-          ta.style.display = 'inline-block'; tb.style.display = 'inline-block';
-          _abrirColunaDoTieBreak(ta);
-          _abrirColunaDoTieBreak(tb);
-          var initialHint = document.getElementById('tbhint-' + matchId);
-          if (initialHint) initialHint.style.display = 'block';
-        }
-        if (!isNaN(a) && !isNaN(b)) { aEl.style.color = a > b ? '#4ade80' : a < b ? '#f87171' : 'var(--text-bright)'; bEl.style.color = b > a ? '#4ade80' : b < a ? '#f87171' : 'var(--text-bright)'; }
-      });
-    } catch (e) {}
-    return;
-  }
   const s1El = document.getElementById(`s1-${matchId}`);
   const s2El = document.getElementById(`s2-${matchId}`);
   if (!s1El || !s2El) return;
@@ -2407,39 +2360,6 @@ window._applyResultToTournament = function (t, matchId, payload) {
   return m;
 };
 
-window._saveInitialBestOfThreeFromCard = function (tId, matchId, t, m, scoring, sourceRoot) {
-  var plan = window._matchSetPlan(scoring, m); if (!plan || !plan.initialTwoSetEntry) return false;
-  var field = function (id) { return sourceRoot
-    ? Array.prototype.find.call(sourceRoot.querySelectorAll('input[data-operations-source-input]'), function (el) { return el.getAttribute('data-operations-source-input') === id; })
-    : document.getElementById(id); };
-  var read = function (idx) { var a = field('s1-' + matchId + '-' + idx), b = field('s2-' + matchId + '-' + idx); return { a: a ? parseInt(a.value, 10) : NaN, b: b ? parseInt(b.value, 10) : NaN }; };
-  var raw = [read(0), read(1)];
-  if (isNaN(raw[0].a) || isNaN(raw[0].b) || isNaN(raw[1].a) || isNaN(raw[1].b)) { _showSetScoreProblem({ detail: 'Preencha os dois sets para registrar o melhor de 3.' }); return true; }
-  var sets = [], p1 = 0, p2 = 0;
-  for (var i = 0; i < 2; i++) {
-    var problem = window._validateNormalSetScore(scoring, t.sport, raw[i].a, raw[i].b);
-    if (!problem.ok) { _showSetScoreProblem({ detail: (i + 1) + 'º set: ' + problem.detail }); return true; }
-    var isTb = scoring.tiebreakEnabled !== false && window._isTiebreakSetScore(raw[i].a, raw[i].b, window._tbLoserGames(scoring, t.sport));
-    var tb1 = parseInt((field('tb1-' + matchId + '-' + i) || {}).value, 10), tb2 = parseInt((field('tb2-' + matchId + '-' + i) || {}).value, 10);
-    if (isTb && (isNaN(tb1) || isNaN(tb2) || (raw[i].a > raw[i].b ? tb1 <= tb2 : tb2 <= tb1))) { _showSetScoreProblem({ detail: 'Informe o tie-break e mantenha o vencedor igual ao do set.' }); return true; }
-    sets.push(window._buildManualSet(raw[i].a, raw[i].b, { isTiebreakEntry: isTb, tbP1: tb1, tbP2: tb2 }).sets[0]);
-    if (raw[i].a > raw[i].b) p1++; else p2++;
-  }
-  if (p1 === 1 && p2 === 1) {
-    var finalSet = read(2); if (isNaN(finalSet.a) || isNaN(finalSet.b)) { _showSetScoreProblem({ detail: plan.superTiebreak ? 'Os sets estão em 1 × 1. Informe o Super Tie-Break.' : 'Os sets estão em 1 × 1. Informe o terceiro set.' }); return true; }
-    if (plan.superTiebreak) {
-      var min = plan.superTiebreakPoints || 10, margin = plan.tiebreakMargin || 2;
-      if (finalSet.a === finalSet.b || Math.max(finalSet.a, finalSet.b) < min || Math.abs(finalSet.a - finalSet.b) < margin) { _showSetScoreProblem({ detail: 'O Super Tie-Break vai até ' + min + ' pontos e termina com diferença de ' + margin + '.' }); return true; }
-      var stbSet = window._buildManualSet(finalSet.a, finalSet.b).sets[0]; stbSet.superTiebreak = true; sets.push(stbSet);
-    } else {
-      var finalProblem = window._validateNormalSetScore(scoring, t.sport, finalSet.a, finalSet.b); if (!finalProblem.ok) { _showSetScoreProblem(finalProblem); return true; }
-      sets.push(window._buildManualSet(finalSet.a, finalSet.b).sets[0]);
-    }
-    if (finalSet.a > finalSet.b) p1++; else p2++;
-  }
-  return window._commitSetsResult(tId, matchId, sets, p1, p2, false) || true;
-};
-
 window._saveResultInline = function (tId, matchId, sourceRoot) {
   const t = window._findTournamentById(tId);
   if (!t) return;
@@ -2467,11 +2387,9 @@ window._saveResultInline = function (tId, matchId, sourceRoot) {
     return;
   }
 
-  var initialScoring = (typeof window._effectiveScoring === 'function') ? window._effectiveScoring(t, m) : t.scoring;
   var field = function (id) { return sourceRoot
     ? Array.prototype.find.call(sourceRoot.querySelectorAll('input[data-operations-source-input]'), function (el) { return el.getAttribute('data-operations-source-input') === id; })
     : document.getElementById(id); };
-  if (field('s1-' + matchId + '-0')) return window._saveInitialBestOfThreeFromCard(tId, matchId, t, m, initialScoring, sourceRoot);
 
   const s1El = field(`s1-${matchId}`);
   const s2El = field(`s2-${matchId}`);

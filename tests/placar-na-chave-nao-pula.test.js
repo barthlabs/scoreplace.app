@@ -140,12 +140,9 @@ async function naoPula(browser) {
   ok(pre.rolavel > 200, 'a cena tem rolagem horizontal de verdade (' + pre.rolavel + 'px) — sem isso o teste não prova nada');
 
   const pos = await page.evaluate((id) => {
-    // Melhor de 3 abre os dois sets desde o início: a confirmação grava a partida
-    // completa (e só revela STB se os sets empatarem 1×1).
-    document.getElementById('s1-'+id+'-0').value = '6';
-    document.getElementById('s2-'+id+'-0').value = '4';
-    document.getElementById('s1-'+id+'-1').value = '6';
-    document.getElementById('s2-'+id+'-1').value = '4';
+    // O primeiro Confirmar grava só o primeiro set e mantém a chave no lugar.
+    document.getElementById('s1-'+id).value = '6';
+    document.getElementById('s2-'+id).value = '4';
     window._highlightWinner(id);
     document.getElementById('confirm-'+id).click();
     return null;
@@ -282,8 +279,12 @@ async function aprovacao(browser) {
   const page = await abreChave(browser, t, { uid: eu.uid, displayName: eu.displayName||eu.name, org:false });
 
   const fecho = await page.evaluate((id) => {
-    document.getElementById('s1-'+id+'-0').value='6'; document.getElementById('s2-'+id+'-0').value='4';
-    document.getElementById('s1-'+id+'-1').value='6'; document.getElementById('s2-'+id+'-1').value='3';
+    document.getElementById('s1-'+id).value='6'; document.getElementById('s2-'+id).value='4';
+    window._highlightWinner(id);
+    document.getElementById('confirm-'+id).click();
+    const first = (window.AppStore.tournaments[0].matches||[]).find(x=>x.id===id);
+    if (!first || (first.sets || []).length !== 1 || first.winner || first.pendingResult) throw new Error('primeiro set deve ficar em andamento');
+    document.getElementById('s1-'+id).value='6'; document.getElementById('s2-'+id).value='3';
     window._highlightWinner(id);
     document.getElementById('confirm-'+id).click();
     const m = (window.AppStore.tournaments[0].matches||[]).find(x=>x.id===id);
@@ -360,12 +361,12 @@ async function difDoisPontos(browser) {
   const noSet = await page.evaluate((id) => {
     const vis = e => !!e && getComputedStyle(e).display !== 'none';
     const antes = vis(document.getElementById('tbhint-'+id));
-    document.getElementById('s1-'+id+'-0').value='7'; document.getElementById('s2-'+id+'-0').value='6';
+    document.getElementById('s1-'+id).value='7'; document.getElementById('s2-'+id).value='6';
     window._highlightWinner(id);
     const el = document.getElementById('tbhint-'+id);
     return { antes: antes, depois: vis(el), hintStyle: el && el.style.display, texto: el ? el.textContent.trim() : null,
-             camposTb: vis(document.getElementById('tb1-'+id+'-0')),
-             tbStyle: (document.getElementById('tb1-'+id+'-0') || {}).style && (document.getElementById('tb1-'+id+'-0') || {}).style.display };
+             camposTb: vis(document.getElementById('tb1-'+id)),
+             tbStyle: (document.getElementById('tb1-'+id) || {}).style && (document.getElementById('tb1-'+id) || {}).style.display };
   }, zerado.id);
   ok(!noSet.antes, 'o aviso do tie-break de SET nasce escondido');
   ok(noSet.hintStyle === 'block' && noSet.tbStyle === 'inline-block', 'e aparece NO MESMO instante que os campos de tie-break (' + noSet.tbStyle + ')');
