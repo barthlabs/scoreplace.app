@@ -11,7 +11,7 @@ test.describe('Restauração pré-publicação', () => {
   test('substitui imediatamente a chave local pelo recibo limpo da Function', async ({ page }) => {
     await page.setContent('<!doctype html><html><body><main id="view-container">Agenda antiga: jogo-antigo</main><div id="sp-pending-schedule-overlay">Revisão antiga</div></body></html>');
     await page.addScriptTag({ content: `
-      window.location.hash = '#tournaments/neon';
+      window.location.hash = '#tournaments/neon?ref=convite';
       window.AppStore = { tournaments: [{
         id: 'neon', isSandbox: true, allowPrePublicationRestore: true, status: 'ongoing',
         matches: [{ id: 'jogo-antigo', scoreP1: 6, scoreP2: 4 }],

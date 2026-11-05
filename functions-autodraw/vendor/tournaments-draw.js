@@ -310,11 +310,15 @@ window._restoreTournamentPrePublication = function (tId) {
             delete courtCache[id];
           }
           var oldSchedule = document.getElementById('sp-pending-schedule-overlay');
+          // O servidor já apagou o rascunho: a prévia antiga deve sair mesmo se
+          // a repintura do detalhe falhar; o catch abaixo mostra o erro.
           if (oldSchedule) oldSchedule.remove();
           window._applyCFTournament(String(tId), result.tournament);
           var currentHash = String((window.location && window.location.hash) || '');
+          var detailHash = '#tournaments/' + encodeURIComponent(id);
           var container = document.getElementById('view-container');
-          if (container && currentHash === '#tournaments/' + encodeURIComponent(id) &&
+          if (container && (currentHash === detailHash || currentHash.indexOf(detailHash + '?') === 0 ||
+              currentHash.indexOf(detailHash + '/') === 0) &&
               typeof window.renderTournaments === 'function') {
             window.renderTournaments(container, id);
           }
