@@ -37,8 +37,15 @@ const route = source.slice(source.indexOf('exports.resolvePendingDraw ='), sourc
 assert(route.indexOf('_pendingInitialScheduleExceedsWindow(t, pd.draft)') > 0);
 assert(route.indexOf('_pendingInitialScheduleExceedsWindow(t, pd.draft)') < route.indexOf('_aplicaRascunhoDoSorteioInicial(t, pd.draft)'));
 const drawRoute = source.slice(source.indexOf('exports.drawRound ='), source.indexOf('exports.closeRound ='));
-assert(drawRoute.includes('const _stageInitial = !hadBracket && (t.stagedDraw === true || !!(_tcCfg && _tcCfg.enabled))'),
-  'competição por equipes sempre passa pelo rascunho privado antes de publicar');
+const stageExpression = drawRoute.match(/const _stageInitial = ([^;]+);/);
+assert(stageExpression, 'decisão de rascunho não encontrada na porta real');
+const stageInitial = vm.runInNewContext(`(function(hadBracket, t, _tcCfg) { return ${stageExpression[1]}; })`);
+assert.equal(stageInitial(false, {}, { enabled:true }), true,
+  'equipe sem dias estritos nem horários segue para rascunho privado');
+assert.equal(stageInitial(true, {}, { enabled:true }), false,
+  'nova rodada de chave já publicada não é reclassificada como rascunho inicial');
+assert(drawRoute.indexOf('if (_stageInitial)') < drawRoute.indexOf('_pendingInitialScheduleExceedsWindow(t, _rascunhoDoSorteioInicial(t))'),
+  'o desvio para rascunho privado vem antes da rota de publicação direta');
 assert(drawRoute.indexOf('_pendingInitialScheduleExceedsWindow(t, _rascunhoDoSorteioInicial(t))') >
   drawRoute.indexOf('if (_stageInitial)'));
 assert(drawRoute.indexOf('_pendingInitialScheduleExceedsWindow(t, _rascunhoDoSorteioInicial(t))') <

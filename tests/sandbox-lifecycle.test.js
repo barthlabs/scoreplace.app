@@ -60,7 +60,10 @@ const context = {
   _drawFail:(code, message) => new HttpsError(code, message)
 };
 vm.runInNewContext(slice('function _isTournamentAdmin(', '/* Concluir o sorteio'), context);
+// Carrega a guarda REAL do index.js; só Firestore, relógio e persistência são
+// simulados. start/reset abaixo chamam esta definição, sem stub de autorização.
 vm.runInNewContext(slice('async function _assertSandboxDrawOwner(', 'function _scheduleLocalDay('), context);
+assert.equal(typeof context._assertSandboxDrawOwner, 'function');
 vm.runInNewContext(slice('exports.startTournament = onCall(', 'exports.setTeamTieDrawOrder ='), context);
 vm.runInNewContext(slice('exports.resetTournamentCheckIn = onCall(', 'exports.setDefaultTournamentScoring ='), context);
 const start = context.exports.startTournament;
@@ -98,8 +101,12 @@ docs.set('sandboxes/sb_evento', Object.assign({}, structuredClone(original), {
 
   for (const action of [start, reset]) {
     const before = writes.length;
+    reads = [];
     await assert.rejects(action(request('sb_inexistente', true)),
       e => e.code === 'not-found', 'sandbox ausente é recusado antes da leitura do torneio');
+    assert.deepEqual(reads, ['sandboxes/sb_inexistente'],
+      'a guarda real consulta só a coleção privada e para no documento ausente');
+    assert.equal(writes.length, before, 'sandbox inexistente não produz escrita');
     await assert.rejects(action({ auth:{ uid:'cohost' }, data:{ tournamentId:'sb_evento' } }),
       e => e.code === 'invalid-argument', 'sandbox exige flag explícito');
     await assert.rejects(action(request('sb_evento', false)), e => e.code === 'invalid-argument');

@@ -1090,7 +1090,8 @@ async function _leTorneio(tx, ref, tId, readCounter = null, projectLateCandidate
 // Toda mutação deve validar o dono E a autorização atual no original dentro da
 // própria transação. Nunca procurar em tournaments se sandboxes falhar.
 async function _assertSandboxDrawOwner(tx, snap, uid) {
-  const sb = snap.exists ? snap.data() || {} : {};
+  if (!snap.exists) throw new HttpsError('not-found', 'Torneio não encontrado.');
+  const sb = snap.data() || {};
   if (sb.isSandbox !== true || sb.sbState !== 'ready' ||
       sb.notificationsMuted !== true || !String(sb.sandboxOf || '') ||
       sb.sandboxOwnerUid !== uid) {
@@ -1846,6 +1847,8 @@ exports.drawRound = onCall(async (request) => {
       // registrations continua a única fonte de nomes/categorias/identidade.
       t.competitionPairAssignments = _competitionAssignments.snapshot(t.participants);
     }
+    // Competição por equipes sempre entra no rascunho privado, mesmo sem
+    // agenda obrigatória. Só resolvePendingDraw pode publicar essa chave.
     const _stageInitial = !hadBracket && (t.stagedDraw === true || !!(_tcCfg && _tcCfg.enabled));
     if (_stageInitial) {
       const tEspera = JSON.parse(JSON.stringify(_tAntes));
