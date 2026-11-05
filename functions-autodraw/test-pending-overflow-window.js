@@ -26,6 +26,9 @@ assert.equal(check(t, { matches:[game('2026-10-22T21:30:00-03:00')] }), false);
 assert.equal(check(t, { matches:[game('2026-10-22T22:15:00-03:00')] }), true);
 assert.equal(check(t, { matches:[game('2026-10-23T00:10:00-03:00')] }), true);
 assert.equal(check(t, { matches:[game(null)] }), false, 'chave sem agenda mantém publicação anterior');
+assert.equal(check(Object.assign({}, t, { teamCompetition:{ enabled:true } }),
+  { matches:[game(null)] }), false,
+  'competição por equipes sem dias estritos pode publicar chave sem agenda e marcar jogos depois');
 assert.equal(check(t, { matches:[Object.assign(game(null), { scheduledKind:'estimate' })] }), true,
   'marcador de agenda sem horário não publica uma grade incompleta');
 assert.equal(check(t, { matches:[game('2026-10-22T21:30:00-03:00'),
@@ -34,6 +37,8 @@ const route = source.slice(source.indexOf('exports.resolvePendingDraw ='), sourc
 assert(route.indexOf('_pendingInitialScheduleExceedsWindow(t, pd.draft)') > 0);
 assert(route.indexOf('_pendingInitialScheduleExceedsWindow(t, pd.draft)') < route.indexOf('_aplicaRascunhoDoSorteioInicial(t, pd.draft)'));
 const drawRoute = source.slice(source.indexOf('exports.drawRound ='), source.indexOf('exports.closeRound ='));
+assert(drawRoute.includes('const _stageInitial = !hadBracket && (t.stagedDraw === true || !!(_tcCfg && _tcCfg.enabled))'),
+  'competição por equipes sempre passa pelo rascunho privado antes de publicar');
 assert(drawRoute.indexOf('_pendingInitialScheduleExceedsWindow(t, _rascunhoDoSorteioInicial(t))') >
   drawRoute.indexOf('if (_stageInitial)'));
 assert(drawRoute.indexOf('_pendingInitialScheduleExceedsWindow(t, _rascunhoDoSorteioInicial(t))') <

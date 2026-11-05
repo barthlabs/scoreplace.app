@@ -1120,7 +1120,9 @@ function _pendingInitialScheduleExceedsWindow(t, draft) {
   // fiscalizar quando algum jogo do rascunho recebeu horário; agenda parcial
   // continua inválida para não esconder um jogo sem encaixe.
   if (!games.some(m => !!m.scheduledAt)) {
-    // Uma chave ainda não agendada pode ser publicada em outros formatos.
+    // Uma chave ainda não agendada pode ser publicada em formatos sem agenda
+    // obrigatória, inclusive competição por equipes sem dias estritos. Essa
+    // chave só ganha horários numa operação posterior; não há janela a medir.
     // Marcador de estimativa sem horário, porém, é uma agenda incompleta.
     return games.some(m => !!m.scheduledKind || !!m.scheduleSource);
   }

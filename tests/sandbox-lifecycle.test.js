@@ -98,6 +98,8 @@ docs.set('sandboxes/sb_evento', Object.assign({}, structuredClone(original), {
 
   for (const action of [start, reset]) {
     const before = writes.length;
+    await assert.rejects(action(request('sb_inexistente', true)),
+      e => e.code === 'not-found', 'sandbox ausente é recusado antes da leitura do torneio');
     await assert.rejects(action({ auth:{ uid:'cohost' }, data:{ tournamentId:'sb_evento' } }),
       e => e.code === 'invalid-argument', 'sandbox exige flag explícito');
     await assert.rejects(action(request('sb_evento', false)), e => e.code === 'invalid-argument');
