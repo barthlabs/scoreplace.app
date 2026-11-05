@@ -31,6 +31,9 @@ assert.equal(check(Object.assign({}, t, { teamCompetition:{ enabled:true } }),
   'competição por equipes sem dias estritos pode publicar chave sem agenda e marcar jogos depois');
 assert.equal(check(t, { matches:[Object.assign(game(null), { scheduledKind:'estimate' })] }), true,
   'marcador de agenda sem horário não publica uma grade incompleta');
+assert.equal(check(Object.assign({}, t, { teamCompetition:{ enabled:true } }),
+  { matches:[Object.assign(game(null), { scheduledKind:'estimate' })] }), true,
+  'equipe também não publica estimativa marcada sem horário');
 assert.equal(check(t, { matches:[game('2026-10-22T21:30:00-03:00'),
   { id:'game-2', requiredDay:'2026-10-22' }] }), true, 'agenda parcial não oculta jogo sem horário');
 const route = source.slice(source.indexOf('exports.resolvePendingDraw ='), source.indexOf('exports.setPendingInitialSchedule ='));
@@ -89,5 +92,8 @@ const editRoute = source.slice(source.indexOf('exports.setPendingInitialSchedule
   source.indexOf('exports.getPendingInitialDraw ='));
 assert(editRoute.indexOf('tx.set(refPrivado, pd)') > 0 &&
   editRoute.indexOf('_gravaTorneio(tx, ref, t, antes') > editRoute.indexOf('tx.set(refPrivado, pd)'));
+assert(editRoute.includes('const antes = _antesDoMotor(t);') &&
+  editRoute.includes('_gravaTorneio(tx, ref, t, antes, { agoraIso })'),
+  'a edição grava no torneio somente seu estado anterior e o marcador, nunca pd.draft');
 assert(!editRoute.includes('_aplicaRascunhoDoSorteioInicial(t, pd.draft)'));
 console.log('✓ publicação direta do rascunho recusa horário excedente antes de materializar a chave');

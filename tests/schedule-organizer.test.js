@@ -182,6 +182,24 @@ const neonSemLacunas = {
   }
 });
 const gradeNeonSemLacunas = W._schGradeEstimada(neonSemLacunas);
+// Uma janela menor que UM jogo não pode apagar a chave: o ensaio mostra todas
+// as partidas fora do horário, para o organizador corrigir a grade antes de publicar.
+const janelaSemSlot = {
+  id:'janela-sem-slot', startDate:'2026-10-22T18:00', endDate:'2026-10-22T18:01',
+  courtCount:2, gameDuration:30,
+  scheduleWindow:{ days:[{ day:'2026-10-22', startTime:'18:00', endTime:'18:01', categoryFlow:'rounds' }] },
+  categorySchedule:{ confirmed:true, slots:[{ category:'Mista', day:'2026-10-22', order:1 }] },
+  teamCompetition:{ schedule:{ enabled:true, mode:'structured', gamesPerTeam:3,
+    pairDayAssignments:[{ day:'2026-10-22' }] } },
+  matches:[['A','B'], ['A','C'], ['A','D'], ['B','C'], ['B','D'], ['C','D']].map(function (pair, index) {
+    return { id:'Z' + index, category:'Mista', requiredDay:'2026-10-22',
+      team1Obj:{ fixedPairId:pair[0] }, team2Obj:{ fixedPairId:pair[1] } };
+  })
+};
+const gradeSemSlot = W._schGradeEstimada(janelaSemSlot);
+ok(gradeSemSlot && gradeSemSlot.slots.length === 6 && gradeSemSlot.cadenceValid === true &&
+  gradeSemSlot.cabe === false && gradeSemSlot.slots.every(function (slot) { return slot.extrapolaJanela; }),
+  'janela menor que um jogo conserva todos os seis confrontos zebrados na prévia privada');
 const ondasNeon = Array.from(new Set(gradeNeonSemLacunas.slots.map(function (slot) { return slot.ms; }))).sort(function (a, b) { return a - b; });
 const inicioNeon = new Date('2026-10-22T18:00:00-03:00').getTime();
 ok(ondasNeon.length === 8 && ondasNeon.every(function (ms, index) { return ms === inicioNeon + index * 35 * 60000; }) &&
