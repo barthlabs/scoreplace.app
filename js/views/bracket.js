@@ -1649,7 +1649,9 @@ window._bracketOperationsRefresh = function (t, root) {
     // Tudo ocorre no mesmo turno para não expor uma faixa intermediária à tela.
     operationsTrack.style.setProperty('--sp-operations-card-height', 'auto');
     var cardHeights = Array.prototype.map.call(existing.querySelectorAll('.sp-operations-replica > .sp-match-card'), function (card) {
-      return Math.ceil(card.getBoundingClientRect().height);
+      var style = window.getComputedStyle(card);
+      var borders = parseFloat(style.borderTopWidth) + parseFloat(style.borderBottomWidth);
+      return Math.ceil(Math.max(card.getBoundingClientRect().height, card.scrollHeight + borders));
     });
     operationsTrack.style.setProperty('--sp-operations-card-height', Math.max.apply(null, [120].concat(cardHeights)) + 'px');
     operationsTrack.scrollLeft = trackScroll;
@@ -9291,7 +9293,8 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   var _cancelCourtChip = _canCancelCourt && _cancelCourtAction
     ? '<button type="button" class="sp-match-cancel-court" data-cancel-court-action="' + _cancelCourtAction +
       '" onclick="event.stopPropagation();window._cancelCourtAction(\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\',\'' +
-      _cancelCourtAction + '\',this)" title="' + (_cancelCourtAction === 'restore' ? 'Restaurar à quadra original; relógio contínuo' : 'Desfazer a chamada; o jogo volta à fila sem cronômetro') + '">Cancelar</button>' : '';
+      _cancelCourtAction + '\',this)" aria-label="' + (_cancelCourtAction === 'restore' ? 'Restaurar à quadra original' : 'Cancelar chamada') +
+      '" title="' + (_cancelCourtAction === 'restore' ? 'Restaurar à quadra original; relógio contínuo' : 'Desfazer a chamada; o jogo volta à fila sem cronômetro') + '">✕</button>' : '';
   var _canEndCourt = !_readOnly && !_setsEdit && m.court && (m.courtCalledAt || m.startedAt) &&
     !_courtFinished && !_courtReleased[String(m.id)] && typeof window._isUserAuthority === 'function' &&
     window._isUserAuthority(t, window.AppStore && window.AppStore.currentUser);

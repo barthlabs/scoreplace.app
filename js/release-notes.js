@@ -1,3 +1,6 @@
+// 2.5.100 — O painel de jogos em quadra mantém o relógio dentro do card, usa
+// a altura real do conteúdo e mostra Cancelar como X branco em círculo vermelho.
+// O mesmo card é usado em todos os torneios concentrados.
 // 2.5.99 — Restaurar o sandbox ao estado anterior ao sorteio limpa também a
 // agenda, a fila e a prévia antigas na página aberta, inclusive em links com
 // parâmetros. Configuração e duplas formadas manualmente são preservadas.
