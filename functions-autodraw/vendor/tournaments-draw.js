@@ -290,11 +290,35 @@ window._restoreTournamentPrePublication = function (tId) {
            * onSnapshot é essencial: redesenhar antes com o objeto velho do AppStore
            * faz a chave e os placares continuarem visíveis mesmo depois de o servidor
            * tê-los apagado. [[regression_prepublication_restore_stale_screen]] */
-          if (!result || result.ok !== true || !result.tournament || typeof window._applyCFTournament !== 'function') {
+          if (!result || result.ok !== true || !result.tournament ||
+              result.tournament.pendingDraw != null ||
+              !Array.isArray(result.tournament.matches) || result.tournament.matches.length ||
+              !Array.isArray(result.tournament.rounds) || result.tournament.rounds.length ||
+              typeof window._applyCFTournament !== 'function') {
             throw new Error('A restauração não devolveu o estado canônico confirmado. Atualize e tente novamente.');
           }
+          var id = String(tId);
+          if (typeof window._invalidatePendingDrawReview === 'function') window._invalidatePendingDrawReview(id);
+          if (window._teamDrawReviewApproved) delete window._teamDrawReviewApproved[id];
+          var courtCache = window._bracketCourtReleaseCache;
+          var courtEntry = courtCache && courtCache[id];
+          if (courtEntry) {
+            if (courtEntry.retryTimer) clearTimeout(courtEntry.retryTimer);
+            if (typeof courtEntry.unsubscribe === 'function') {
+              try { courtEntry.unsubscribe(); } catch (e) { window._warn && window._warn('[restorePrePublication] court listener cleanup:', e); }
+            }
+            delete courtCache[id];
+          }
+          var oldSchedule = document.getElementById('sp-pending-schedule-overlay');
+          if (oldSchedule) oldSchedule.remove();
           window._applyCFTournament(String(tId), result.tournament);
-          if (typeof showNotification === 'function') showNotification('↩️ Pré-publicação restaurada', 'A grade e as duplas formadas foram preservadas; a chave e os placares foram apagados.', 'success');
+          var currentHash = String((window.location && window.location.hash) || '');
+          var container = document.getElementById('view-container');
+          if (container && currentHash === '#tournaments/' + encodeURIComponent(id) &&
+              typeof window.renderTournaments === 'function') {
+            window.renderTournaments(container, id);
+          }
+          if (typeof showNotification === 'function') showNotification('↩️ Pré-publicação restaurada', 'As configurações e duplas formadas manualmente foram preservadas; jogos e placares foram apagados.', 'success');
         })
         .catch(function (err) {
           window._error && window._error('[restorePrePublication] server error:', err);

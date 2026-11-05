@@ -7403,6 +7403,14 @@ window._rememberPendingDrawMarker = function (tId, marker) {
   var all = window.__pendingDrawMarkers || (window.__pendingDrawMarkers = {});
   all[String(tId)] = marker;
 };
+window._invalidatePendingDrawReview = function (tId) {
+  var id = String(tId);
+  var generations = window.__pendingDrawMarkerGeneration || (window.__pendingDrawMarkerGeneration = {});
+  generations[id] = (Number(generations[id]) || 0) + 1;
+  if (window.__pendingInitialDraws) delete window.__pendingInitialDraws[id];
+  if (window.__pendingDrawMarkers) delete window.__pendingDrawMarkers[id];
+  if (window.__pendingDrawMarkerLoads) delete window.__pendingDrawMarkerLoads[id];
+};
 window._pendingDrawMarkerFor = function (t) {
   if (!t) return null;
   var cached = window.__pendingDrawMarkers && window.__pendingDrawMarkers[String(t.id)];
@@ -7415,8 +7423,10 @@ window._hydratePendingDrawMarker = function (tId) {
   if (!id || !(window._callCF)) return Promise.resolve(null);
   var state = window.__pendingDrawMarkerLoads || (window.__pendingDrawMarkerLoads = {});
   if (state[id] && state[id].promise) return state[id].promise;
+  var generation = Number((window.__pendingDrawMarkerGeneration || {})[id]) || 0;
   var promise = window._callCF('getPendingDrawReviewState', { tournamentId:id, sandbox:id.indexOf('sb_')===0 }, 'Entre na sua conta para revisar o sorteio.')
     .then(function (res) {
+      if ((Number((window.__pendingDrawMarkerGeneration || {})[id]) || 0) !== generation) return null;
       var out = (res && res.data) || res || {}, marker = out.pendingDraw || null;
       if (marker) window._rememberPendingDrawMarker(id, marker);
       else if (window.__pendingDrawMarkers) delete window.__pendingDrawMarkers[id];
@@ -7429,7 +7439,10 @@ window._hydratePendingDrawMarker = function (tId) {
       }
       return marker;
     })
-    .catch(function () { return null; });
+    .catch(function () {
+      if ((Number((window.__pendingDrawMarkerGeneration || {})[id]) || 0) !== generation) return null;
+      return null;
+    });
   state[id] = { promise: promise };
   return promise;
 };
@@ -7492,9 +7505,7 @@ window._publishPendingDraw = async function (tId) {
     var res=await window._callCF('resolvePendingDraw',{ tournamentId:String(tId), sandbox:String(tId).indexOf('sb_')===0, action:'publish' },'Entre na sua conta para publicar o sorteio.');
     var out=(res&&res.data)||{};
     if(!out.changed) return false;
-    if (window.__pendingInitialDraws) delete window.__pendingInitialDraws[String(tId)];
-    if (window.__pendingDrawMarkers) delete window.__pendingDrawMarkers[String(tId)];
-    if (window.__pendingDrawMarkerLoads) delete window.__pendingDrawMarkerLoads[String(tId)];
+    window._invalidatePendingDrawReview(tId);
     if(window.showNotification) window.showNotification(
       out.publishedPublicly === true ? '🚀 Chave publicada!' : '✓ Chave privada finalizada',
       out.publishedPublicly === true
@@ -7509,9 +7520,7 @@ window._publishPendingDraw = async function (tId) {
 window._annulPendingDraw = function (tId) {
   var go=function(){ return window._callCF('resolvePendingDraw',{ tournamentId:String(tId), sandbox:String(tId).indexOf('sb_')===0, action:'annul' },'Entre na sua conta para anular o sorteio.').then(function(res){
     var out=(res&&res.data)||{};
-    if(window.__pendingInitialDraws) delete window.__pendingInitialDraws[String(tId)];
-    if(window.__pendingDrawMarkers) delete window.__pendingDrawMarkers[String(tId)];
-    if(window.__pendingDrawMarkerLoads) delete window.__pendingDrawMarkerLoads[String(tId)];
+    window._invalidatePendingDrawReview(tId);
     // Anular devolve o torneio ao ponto anterior ao primeiro sorteio. A aprovação
     // local da tela também precisa sumir, ou uma segunda tentativa pula as escolhas
     // obrigatórias de dias/ordem e de estruturado/livre.

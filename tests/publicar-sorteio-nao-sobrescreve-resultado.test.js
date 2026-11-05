@@ -5,7 +5,9 @@ const vm = require('vm');
 const src = fs.readFileSync('js/views/bracket-logic.js', 'utf8');
 const start = src.indexOf('window._publishPendingDraw = async function');
 const end = src.indexOf('window._annulPendingDraw = function', start);
-if (start < 0 || end < 0) throw new Error('não encontrei _publishPendingDraw');
+const helperStart = src.indexOf('window._invalidatePendingDrawReview = function');
+const helperEnd = src.indexOf('window._pendingDrawMarkerFor = function', helperStart);
+if (start < 0 || end < 0 || helperStart < 0 || helperEnd < 0) throw new Error('não encontrei a publicação e sua invalidação de revisão');
 
 let notification = null;
 let command = null;
@@ -17,7 +19,8 @@ const sandbox = {
 };
 sandbox.window = sandbox;
 vm.createContext(sandbox);
-vm.runInContext(src.slice(start, end), sandbox, { filename: 'bracket-logic.js:_publishPendingDraw' });
+vm.runInContext(src.slice(helperStart, helperEnd) + '\n' + src.slice(start, end), sandbox,
+  { filename: 'bracket-logic.js:_publishPendingDraw' });
 
 (async () => {
   await sandbox._publishPendingDraw('T1');
