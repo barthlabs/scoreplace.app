@@ -2,8 +2,8 @@
   "schema": 1,
   "entries": {
     "drawRound": {
-      "backendCommit": "994ad8bb6f2eb8ffd2f2e3dad33e67a001c68e0a",
-      "deployedAt": "2026-11-06T16:31:43.026Z",
+      "backendCommit": "b6a48be97c99e14902fc29bdd70a1d47273773df",
+      "deployedAt": "2026-11-06T17:26:48.293Z",
       "result": "success",
       "mode": "only"
     },
