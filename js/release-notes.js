@@ -3,7 +3,8 @@
 // partidas, ou quando a chave contém apenas um avanço automático isolado.
 // O convite de co-organizador volta a localizar amizades antigas
 // recíprocas. A busca aceita "Erika" para "Érica" sem confundir nomes com K
-// inicial; no sandbox o convite fica simulado, sem aviso ao destinatário.
+// inicial; no sandbox o convite fica simulado, sem aviso ao destinatário,
+// mesmo se a ficha local ainda não tiver recebido o marcador de sandbox.
 // 2.5.102 — Ao confirmar um placar, o servidor devolve o resultado do jogo
 // na própria resposta. A chave troca só o card confirmado, sem esperar outra
 // leitura, e preserva a posição mesmo se o layout se ajustar logo depois.

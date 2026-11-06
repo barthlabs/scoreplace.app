@@ -149,6 +149,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var t = (window.AppStore.tournaments || []).find(function(x) { return String(x.id) === String(tId); });
     var user = window.AppStore.currentUser;
     if (!t || !user || !target || !target.uid) return Promise.resolve({ error: true });
+    var sandbox = t.isSandbox === true || String(t.id).indexOf('sb_') === 0;
     return _mutateHostOrganization(tId, 'invite', 'cohost', target.uid).then(function (out) {
       if (!out.changed) {
         if (typeof showNotification === 'function') showNotification(_tH('org.alreadyInvited'), (target.displayName || _pName(target)) + ' ' + _tH('org.alreadyInvitedMsg'), 'warning');
@@ -156,17 +157,17 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       }
       var name = out.targetName || target.displayName || '';
       // O convite e o aviso ao destinatário são gravados juntos na Function.
-      if (!t.isSandbox) _notifyUser(user.uid, {
+      if (!sandbox) _notifyUser(user.uid, {
         type: 'cohost_invite_sent', tournamentId: String(t.id), tournamentName: out.tournamentName || t.name,
         targetName: name, message: _tH('org.cohostInviteSent') + ' ' + name + '.', level: 'all', inviteType: 'cohost'
       });
-      if (t.isSandbox || !window.FirestoreDB || typeof window.FirestoreDB.sendCoHostInviteEmail !== 'function') return { enviado: false };
+      if (sandbox || !window.FirestoreDB || typeof window.FirestoreDB.sendCoHostInviteEmail !== 'function') return { enviado: false };
       return Promise.resolve(window.FirestoreDB.sendCoHostInviteEmail(String(t.id), String(out.targetUid || target.uid)))
         .catch(function (e) { window._warn('[co-org] e-mail falhou:', e && e.message); return { enviado: false }; });
     }).then(function (veredito) {
       if (veredito && veredito.alreadyInvited) return veredito;
       var quem = target.displayName || target.email || '';
-      if (t.isSandbox) {
+      if (sandbox) {
         if (typeof showNotification === 'function') showNotification('Convite simulado', 'No sandbox, o convite não é entregue e só você vê o torneio.', 'info');
       } else if (veredito && veredito.enviado) {
         if (typeof showNotification === 'function') showNotification(_tH('org.inviteSent'), _tH('org.awaitingResponse') + ' ' + quem, 'info');

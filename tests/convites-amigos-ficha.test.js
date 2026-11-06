@@ -237,17 +237,19 @@ const root = path.join(__dirname, '..');
     assert.equal(await page.getByRole('button', { name: 'notif.accept' }).count(), 0);
 
     const sandboxDelivery = await page.evaluate(async () => {
-      window.AppStore.tournaments.push({ id: 'sb_tour-test', name: 'Ensaio', isSandbox: true });
+      window.AppStore.tournaments.push({ id: 'sb_tour-test', name: 'Ensaio' });
       let notifications = 0;
       let emails = 0;
       window._callCF = async () => ({ changed: true, targetUid: 'friend-joao' });
       window._sendUserNotification = async () => { notifications++; };
       window.FirestoreDB.sendCoHostInviteEmail = async () => { emails++; };
       await window._realInitiateCoHostInvite('sb_tour-test', { uid: 'friend-joao', displayName: 'João Silva' });
+      window.AppStore.tournaments.push({ id: 'sandbox_tour-test', name: 'Ensaio antigo', isSandbox: true });
+      await window._realInitiateCoHostInvite('sandbox_tour-test', { uid: 'friend-joao', displayName: 'João Silva' });
       return { notifications, emails };
     });
     assert.deepEqual(sandboxDelivery, { notifications: 0, emails: 0 },
-      'convite simulado no sandbox não envia notificação nem e-mail pelo cliente');
+      'ID do sandbox suprime notificação e e-mail mesmo com marcador ausente na memória');
 
     const source = fs.readFileSync(path.join(root, 'js/views/tournaments.js'), 'utf8');
     assert(source.includes("_viewerIsOrg ? '<button type=\"button\" class=\"btn btn-sm"));
