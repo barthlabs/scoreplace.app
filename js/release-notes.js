@@ -1,3 +1,4 @@
+// 2.5.104 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.103 — A chave Rei/Rainha mostra os jogos já gravados no armazenamento
 // canônico, inclusive no sandbox. O sorteio só confirma sucesso quando gerou
 // partidas, ou quando a chave contém apenas um avanço automático isolado.
