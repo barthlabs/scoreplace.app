@@ -837,6 +837,12 @@ function repeatedMemberInPair(entries, resolveName) {
 
 // PRÉ-CONDIÇÃO: `canRecompile(t)` — sem chave ainda. Chamar com chave existente é
 // re-sorteio, que é decisão do organizador no cliente (project_draw_once_canonical_order).
+function hasSoleByeAdvancement(t, res) {
+  if (!res || res.matchCount !== 0) return false;
+  const matches = (t && t.matches || []).filter(m => m && (m.phaseIndex || 0) === 0);
+  return matches.length === 1 && matches[0].isBye === true;
+}
+
 function drawInitial(t, opts) {
   opts = opts || {};
   const win = g.window;
@@ -1552,4 +1558,4 @@ function decidirTardioNaFolga(t, opts) {
   return { ok: true, mudou: true, acao, aplicados: r.placed || 0 };
 }
 
-module.exports = { decidirTardioNaFolga, generateLigaRound, applyTournamentWO, setPresenceWithWOSubstitution, resolveWOSubstitutionChoice, setTournamentWOAbsence, acceptLigaSubstitution, runLigaAction, compileFromFmt2, canRecompile, hasDrawnBracket, drawInitial, repeatedMemberInPair, assignCompetitionTeamsAtInitialDraw, integrateLateEntries, formLatePairCore, splitLatePairCore, closeRoundCore, materializeNextPhase: g.window._phasesEngine && g.window._phasesEngine.materializeNextPhase, standingsDaFaseAnterior: g.window._phasesEngine && g.window._phasesEngine.standingsDaFaseAnterior, phaseComplete: g.window._phasesEngine && g.window._phasesEngine.phaseComplete, groupTeamStandings: g.window._phasesEngine && g.window._phasesEngine.groupTeamStandings, _window: g.window };
+module.exports = { decidirTardioNaFolga, generateLigaRound, applyTournamentWO, setPresenceWithWOSubstitution, resolveWOSubstitutionChoice, setTournamentWOAbsence, acceptLigaSubstitution, runLigaAction, compileFromFmt2, canRecompile, hasDrawnBracket, drawInitial, hasSoleByeAdvancement, repeatedMemberInPair, assignCompetitionTeamsAtInitialDraw, integrateLateEntries, formLatePairCore, splitLatePairCore, closeRoundCore, materializeNextPhase: g.window._phasesEngine && g.window._phasesEngine.materializeNextPhase, standingsDaFaseAnterior: g.window._phasesEngine && g.window._phasesEngine.standingsDaFaseAnterior, phaseComplete: g.window._phasesEngine && g.window._phasesEngine.phaseComplete, groupTeamStandings: g.window._phasesEngine && g.window._phasesEngine.groupTeamStandings, _window: g.window };

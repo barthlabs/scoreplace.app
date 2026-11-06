@@ -59,6 +59,20 @@ for (const canonical of [true, false]) {
   }
 }
 
+const oneEntrant = {
+  id: 'single-bye', format: 'Eliminatórias', status: 'open', teamSize: 1,
+  enrollmentMode: 'individual', participants: [{ name: 'Pessoa única' }],
+  phases: [{ kind: 'elimination', name: 'Eliminatória', formatCode: 'knockout', source: { type: 'enrollment' } }]
+};
+const byeReceipt = core.drawInitial(oneEntrant, { idStamp: 'bye-test' });
+assert.equal(byeReceipt.matchCount, 0);
+assert.equal(core.hasSoleByeAdvancement(oneEntrant, byeReceipt), true,
+  'avanço automático isolado pode materializar a chave sem partida');
+assert.equal(core.hasSoleByeAdvancement({ matches: [] }, { matchCount: 0 }), false,
+  'sorteio vazio não pode virar sucesso');
+assert.equal(core.hasSoleByeAdvancement({ matches: [{ isBye: true }, { isBye: true }] }, { matchCount: 0 }), false,
+  'múltiplas folgas sem confrontos não mascaram erro do motor');
+
 const engine = core._window._phasesEngine;
 const generatePhase = engine.generatePhase;
 try {

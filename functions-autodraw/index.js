@@ -63,6 +63,7 @@ let setTournamentWOAbsenceFn = null;
 let acceptLigaSubstitutionFn = null;
 let runLigaActionFn = null;
 let drawInitial = null;   // v1.2.25: motor do SORTEIO INICIAL (Etapa 3 · fase A) — usado pela drawRound
+let hasSoleByeAdvancement = null;
 let integrateLateFn = null; // v1.2.57: integração de tardios no servidor — usado pela integrateLateEntries
 let decidirTardioNaFolgaFn = null; // regra da decisão do tardio em chave de folga (motor)
 let formLatePairFn = null;  // formar dupla na espera + integrar, atômico — usado pela formLatePair
@@ -152,6 +153,7 @@ try {
   acceptLigaSubstitutionFn = _dc.acceptLigaSubstitution;
   runLigaActionFn = _dc.runLigaAction;
   drawInitial = _dc.drawInitial;
+  hasSoleByeAdvancement = _dc.hasSoleByeAdvancement;
   integrateLateFn = _dc.integrateLateEntries;
   /* a decisão do tardio em chave de folga é função PURA do motor — a callable é só a casca */
   decidirTardioNaFolgaFn = _dc.decidirTardioNaFolga;
@@ -1784,7 +1786,8 @@ exports.drawRound = onCall(async (request) => {
           participantes: (t.participants || []).length, p2Resolution: t.p2Resolution,
           decisoes: decisions, erro: (res && res.error) || '' });
     }
-    if (!Number.isSafeInteger(res.matchCount) || res.matchCount < 1) {
+    if (!Number.isSafeInteger(res.matchCount) ||
+        (res.matchCount < 1 && !(hasSoleByeAdvancement && hasSoleByeAdvancement(t, res)))) {
       throw _drawFail('failed-precondition', 'O sorteio não gerou partidas. Confira inscritos e categorias antes de tentar novamente.',
         { tId, format:t.format, participants:(t.participants || []).length, storageCanonico:t.storageCanonico === true });
     }

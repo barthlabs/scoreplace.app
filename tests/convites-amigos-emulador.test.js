@@ -141,6 +141,10 @@ const notifId = require('../functions/cohost-core.js').cohostInviteNotifId;
   await assert.rejects(funcs.mutateHostOrganization.run({ auth: { uid: owner, token: {} },
     data: { tournamentId: canonicalSandboxId, inviteType: 'cohost', action: 'invite', targetUid: outsider } }),
   { code: 'failed-precondition' }, 'terceiro sem amizade recíproca não recebe convite');
+  await db.doc('sandboxes/' + canonicalSandboxId).update({ sbState: 'creating' });
+  await assert.rejects(funcs.mutateHostOrganization.run({ auth: { uid: owner, token: {} },
+    data: { tournamentId: canonicalSandboxId, inviteType: 'cohost', action: 'cancel', targetUid: historical } }),
+  { code: 'not-found' }, 'cópia ainda em criação não aceita mutação de convite');
 
   const refereeId = 'referee_' + suffix + '_' + 'r'.repeat(24);
   const refereeTour = db.doc('tournaments/' + refereeId);
