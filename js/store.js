@@ -12248,7 +12248,18 @@ window.AppStore = {
                * gravou, sem derivar placar do payload nem consultar `results`. */
               var _midConfirmado = String(matchId);
               var _visualConfirmado = false;
-              if (window.FirestoreDB && typeof window.FirestoreDB.loadPhysicalMatchResult === 'function') {
+              var _respostaDoJogo = _d.matchResult &&
+                String(_d.matchResult.matchId) === _midConfirmado ? _d.matchResult : null;
+              if (_respostaDoJogo) {
+                var _jogoDaResposta = (typeof window._findMatch === 'function')
+                  ? window._findMatch(_lt, _midConfirmado)
+                  : (_lt.matches || []).find(function (m) { return String(m.id) === _midConfirmado; });
+                if (_jogoDaResposta && typeof this._applyPhysicalResultOnMatch === 'function') {
+                  this._applyPhysicalResultOnMatch(_jogoDaResposta, _respostaDoJogo);
+                  _visualConfirmado = true;
+                }
+              }
+              if (!_visualConfirmado && window.FirestoreDB && typeof window.FirestoreDB.loadPhysicalMatchResult === 'function') {
                 try {
                   var _resultadoConfirmado = null;
                   for (var _resultAttempt = 0; _resultAttempt < 4 && !_resultadoConfirmado; _resultAttempt++) {

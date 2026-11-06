@@ -2,14 +2,14 @@
   "schema": 1,
   "entries": {
     "drawRound": {
-      "backendCommit": "780ccd1b6785bc7da1f7309160dfa6b42e4c2fc7",
-      "deployedAt": "2026-11-05T14:35:49.949Z",
+      "backendCommit": "026ed165af60785d945d05493b6412e7a977ea68",
+      "deployedAt": "2026-11-06T14:18:35.312Z",
       "result": "success",
       "mode": "only"
     },
     "updateTournamentConfiguration": {
-      "backendCommit": "79f52eef49f875a7c5da935eb49bf4cd8149b06f",
-      "deployedAt": "2026-11-04T23:53:29.315Z",
+      "backendCommit": "026ed165af60785d945d05493b6412e7a977ea68",
+      "deployedAt": "2026-11-06T14:18:35.312Z",
       "result": "success",
       "mode": "only"
     },
@@ -38,8 +38,8 @@
       "mode": "only"
     },
     "createTournament": {
-      "backendCommit": "860fe65c3b48ced282ac41398e3f5ea4baedb944",
-      "deployedAt": "2026-11-04T22:05:52.805Z",
+      "backendCommit": "026ed165af60785d945d05493b6412e7a977ea68",
+      "deployedAt": "2026-11-06T14:18:35.312Z",
       "result": "success",
       "mode": "only"
     },
@@ -98,14 +98,14 @@
       "mode": "only"
     },
     "applyTournamentFormat": {
-      "backendCommit": "860fe65c3b48ced282ac41398e3f5ea4baedb944",
-      "deployedAt": "2026-11-04T22:05:52.805Z",
+      "backendCommit": "026ed165af60785d945d05493b6412e7a977ea68",
+      "deployedAt": "2026-11-06T14:18:35.312Z",
       "result": "success",
       "mode": "only"
     },
     "advanceTournamentPhase": {
-      "backendCommit": "294c8b6843472b86ea5058bb3cdc96d3ce635234",
-      "deployedAt": "2026-11-04T18:35:53.813Z",
+      "backendCommit": "026ed165af60785d945d05493b6412e7a977ea68",
+      "deployedAt": "2026-11-06T14:18:35.312Z",
       "result": "success",
       "mode": "only"
     },
@@ -398,14 +398,14 @@
       "mode": "only"
     },
     "finishTournament": {
-      "backendCommit": "36b4c9b531114f5bea08b4d594c46ae8c9c3b553",
-      "deployedAt": "2026-11-04T02:44:12.613Z",
+      "backendCommit": "026ed165af60785d945d05493b6412e7a977ea68",
+      "deployedAt": "2026-11-06T14:18:35.312Z",
       "result": "success",
       "mode": "only"
     },
     "formLatePair": {
-      "backendCommit": "8d35143abe0c1412d4e3f3752222bb1ee2586511",
-      "deployedAt": "2026-11-02T14:20:03.638Z",
+      "backendCommit": "026ed165af60785d945d05493b6412e7a977ea68",
+      "deployedAt": "2026-11-06T14:18:35.312Z",
       "result": "success",
       "mode": "only"
     },

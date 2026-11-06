@@ -1,3 +1,6 @@
+// 2.5.102 — Ao confirmar um placar, o servidor devolve o resultado do jogo
+// na própria resposta. A chave troca só o card confirmado, sem esperar outra
+// leitura, e preserva a posição mesmo se o layout se ajustar logo depois.
 // 2.5.101 — O sorteio recusa duplas com a mesma pessoa nos dois lugares.
 // A chamada para quadra reutiliza o servidor alinhado e só procura outro se
 // houver falha. A Tela no ar acompanha os jogos das quadras em tempo real.

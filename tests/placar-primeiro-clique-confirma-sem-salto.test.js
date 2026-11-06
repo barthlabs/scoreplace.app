@@ -56,12 +56,12 @@ store._matchResultFields = ['winner', 'scoreP1', 'scoreP2'];
   assert.equal(button.disabled, true, 'o primeiro clique trava o botão enquanto espera a região');
   assert.equal(button.textContent, '⏳ Gravando…');
   assert.equal(calls, 1, 'uma intenção foi enviada');
-  // A resposta curta é possível quando a porta devolve um recibo já aplicado.
-  // O clique original precisa reler torneio e resultado, sem reenviar.
-  resolveServer({ data: { ok: true } });
+  // A resposta normal já carrega o resultado da mesma transação.
+  resolveServer({ data: { ok: true, tournament: { id: 'T1', status: 'active' },
+    matchResult: { matchId: 'M1', winner: 'A', scoreP1: 6, scoreP2: 4 } } });
   assert.equal(await click, true);
   assert.equal(calls, 1, 'o alinhamento e a releitura não pedem segundo clique');
-  assert.equal(resultReads, 1);
+  assert.equal(resultReads, 0, 'a resposta normal dispensa releitura física');
   assert.equal(match.winner, 'A');
   assert.equal(refreshes, 1, 'o card é trocado no próprio lugar pelo estado confirmado');
   assert.equal(redraws, 0, 'a grade inteira não é remontada');
@@ -76,6 +76,7 @@ store._matchResultFields = ['winner', 'scoreP1', 'scoreP2'];
   const lateCard = store.commitResultTx('T1', 'M1', { s1: 6, s2: 4 }, 'Resultado');
   resolveServer({ data: { ok: true } });
   assert.equal(await lateCard, true);
+  assert.equal(resultReads, 1, 'recibo antigo sem jogo ainda usa a releitura física');
   assert.equal(button.disabled, true, 'resultado confirmado sem card redesenhado não reativa Confirmar');
   assert.equal(button.textContent, '⏳ Gravando…');
   let softRefreshes = 0;

@@ -192,6 +192,19 @@ async function respostaCanonicaFicaNoCard(browser) {
     'o card permanece na posição visual após a resposta do servidor');
   ok(r.after.x === r.before.x && r.after.y === r.before.y,
     'as rolagens vertical e horizontal não mudam');
+  await page.evaluate(() => {
+    setTimeout(function () {
+      document.documentElement.style.overflowAnchor = 'none';
+      document.getElementById('inline-bracket-container').style.paddingTop = '80px';
+    }, 40);
+  });
+  await page.waitForTimeout(460);
+  const delayed = await page.evaluate((id) => {
+    const c = document.getElementById('card-' + id);
+    return { top: c.getBoundingClientRect().top, left: c.getBoundingClientRect().left };
+  }, alvo);
+  ok(Math.abs(delayed.top - r.before.top) <= 2 && Math.abs(delayed.left - r.before.left) <= 2,
+    'reflow tardio mantém o mesmo card no mesmo ponto da tela');
   await page.close();
 }
 

@@ -2858,6 +2858,18 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
     });
     const _matchDepois = (typeof drawWindow._findMatch === 'function')
       ? drawWindow._findMatch(t, matchId) : null;
+    // A transação já conhece o jogo canônico. Devolva seus campos de resultado
+    // para que o card confirme o placar sem uma segunda viagem ao Firestore.
+    // Recibos antigos podem não conter este recorte; o cliente mantém a releitura.
+    const _matchResult = _matchDepois ? { matchId: String(matchId) } : null;
+    if (_matchResult) {
+      ['scoreP1', 'scoreP2', 'winner', 'winnerUid', 'winnerUids', 'draw', 'sets',
+        'setsWonP1', 'setsWonP2', 'totalGamesP1', 'totalGamesP2', 'fixedSet',
+        'resultAt', 'updatedAt', 'startedAt', 'pendingResult', 'wo', 'woAbsent',
+        'woAbsentSide', 'confirmedAt'].forEach((key) => {
+        if (Object.prototype.hasOwnProperty.call(_matchDepois, key)) _matchResult[key] = _matchDepois[key];
+      });
+    }
     // Histórico de torneio é lido do jogo físico. A transação não cria uma
     // segunda cópia de placar em users/{uid}/matchHistory.
     const _notif = sandbox ? null : _scoreNotificationEvent(t, _matchDepois, res.outcome, ator, _agoraIsoTx, {
@@ -2886,7 +2898,7 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
     }
     if (receiptRef) tx.create(receiptRef, _operationReceipt.document(receipt,
       { ok: true, outcome: res.outcome }, Date.parse(_agoraIsoTx)));
-    return { ok: true, outcome: res.outcome, tournament: b.clean };
+    return { ok: true, outcome: res.outcome, tournament: b.clean, matchResult: _matchResult };
   });
 }
 

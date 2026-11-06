@@ -2142,18 +2142,55 @@ window._refreshConfirmedMatchCard = function (t, tId, matchId) {
   var m = _findMatch(t, matchId);
   if (!m) return false;
   var sx = window.scrollX || 0, sy = window.scrollY || 0;
+  var cardTop = card.getBoundingClientRect().top;
   var hscroll = _lerRolagensDaChave();
+  var scrollports = [];
+  for (var parent = card.parentElement; parent && parent !== document.body; parent = parent.parentElement) {
+    if (parent.scrollTop || parent.scrollLeft) scrollports.push({ el: parent, top: parent.scrollTop, left: parent.scrollLeft });
+  }
+  var hash = window.location.hash;
+  var generation = (window._bracketRestoreGeneration || 0) + 1;
+  window._bracketRestoreGeneration = generation;
   var root = document.documentElement;
   var oldAnchor = root && root.style ? root.style.overflowAnchor : '';
   var oldScrollLock = window._travaRolagemDaChave;
   if (root && root.style) root.style.overflowAnchor = 'none';
   window._travaRolagemDaChave = true;
   var changed = false;
+  var userMoved = false;
+  var intentEvents = ['wheel', 'touchstart', 'pointerdown', 'keydown'];
+  var onIntent = function () { userMoved = true; };
+  var listening = false;
+  function stopListening() {
+    if (!listening) return;
+    listening = false;
+    intentEvents.forEach(function (name) { window.removeEventListener(name, onIntent); });
+  }
+  function restorePosition() {
+    if (userMoved || window._bracketRestoreGeneration !== generation || window.location.hash !== hash) return;
+    var current = document.getElementById('card-' + matchId);
+    if (!current || !current.isConnected) return;
+    scrollports.forEach(function (port) {
+      if (port.el.isConnected) { port.el.scrollTop = port.top; port.el.scrollLeft = port.left; }
+    });
+    _aplicarRolagensDaChave(hscroll);
+    window.scrollTo(sx, sy);
+    // Se outra faixa acima mudou de altura, preserve também o lugar visual do card.
+    var delta = current.getBoundingClientRect().top - cardTop;
+    if (Math.abs(delta) > 1) window.scrollBy(0, delta);
+  }
   try {
     changed = _finalizeRoundCardInPlace(t, m, tId, matchId);
     if (changed) {
-      window.scrollTo(sx, sy);
-      _aplicarRolagensDaChave(hscroll);
+      restorePosition();
+      intentEvents.forEach(function (name) { window.addEventListener(name, onIntent, { passive: true }); });
+      listening = true;
+      requestAnimationFrame(function () {
+        restorePosition();
+        requestAnimationFrame(restorePosition);
+      });
+      [120, 350, 800].forEach(function (delay) { setTimeout(restorePosition, delay); });
+      setTimeout(stopListening, 1000);
     }
   } finally {
     if (root && root.style) root.style.overflowAnchor = oldAnchor;
