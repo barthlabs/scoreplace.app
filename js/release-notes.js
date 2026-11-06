@@ -5,6 +5,7 @@
 // recíprocas. A busca aceita "Erika" para "Érica" sem confundir nomes com K
 // inicial; no sandbox o convite fica simulado, sem aviso ao destinatário,
 // mesmo se a ficha local ainda não tiver recebido o marcador de sandbox.
+// O servidor também usa a identidade da cópia para suprimir esses avisos.
 // 2.5.102 — Ao confirmar um placar, o servidor devolve o resultado do jogo
 // na própria resposta. A chave troca só o card confirmado, sem esperar outra
 // leitura, e preserva a posição mesmo se o layout se ajustar logo depois.

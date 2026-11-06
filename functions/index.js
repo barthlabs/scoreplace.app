@@ -8304,7 +8304,7 @@ exports.mutateHostOrganization = onCall(
       if (result.outcome === "invalidTarget") throw new HttpsError("failed-precondition", "participante inválido para organização");
       if (result.outcome !== "applied" || !result.updateData) return { ok: true, changed: false, tournamentName: t.name || "" };
       _splitParts.gravar(tx, ref, before, Object.assign({}, result.updateData, { updatedAt: new Date().toISOString() }));
-      if (inviteRef && action === "invite" && !t.isSandbox) {
+      if (inviteRef && action === "invite" && !sandbox && !t.isSandbox) {
         const now = new Date().toISOString();
         const baseUrl = "https://scoreplace.app/#cohost/";
         tx.set(inviteRef, {
@@ -8316,7 +8316,7 @@ exports.mutateHostOrganization = onCall(
           acceptUrl: baseUrl + "accept/" + encodeURIComponent(tournamentId) + "/cohost",
           rejectUrl: baseUrl + "reject/" + encodeURIComponent(tournamentId) + "/cohost"
         }, { merge: true });
-      } else if (!t.isSandbox && inviteRef && action === "cancel" && inviteSnap && inviteSnap.exists &&
+      } else if (!sandbox && !t.isSandbox && inviteRef && action === "cancel" && inviteSnap && inviteSnap.exists &&
           (inviteSnap.data() || {}).inviteStatus === "pending") {
         tx.update(inviteRef, { inviteStatus: "canceled" });
       }
