@@ -7104,7 +7104,7 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
   // v3.1.8: _renderPhaseLeague removido — Fase N Liga reusa renderStandings (canônico
   // da Fase 0) via faux-t no dispatch do `body` abaixo. Ver comentário lá.
   var _isGroupPhase = pm.some(function (m) { return m.bracket === 'group'; });
-  var _isMonarchPhase = pm.some(function (m) { return m.bracket === 'monarch'; });
+  var _isMonarchPhase = pm.some(function (m) { return m.bracket === 'monarch' || m.isMonarch === true; });
   // v3.1.16 (inc 8): Liga incremental de fase posterior agora mora em t.phaseRounds[cur]
   // (rodadas reais, mesma forma de t.rounds da Fase 0) — não mais em t.matches. A Liga
   // ESTÁTICA (todos contra todos) continua materializada em t.matches (bracket:'league').
@@ -7118,15 +7118,23 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
     // v3.1.6: Fase N rei/rainha = MESMO renderer canônico da Fase 0 (_renderMonarchStage),
     // via faux-t reconstruído das partidas desta fase. Render mais rico (Pts/Saldo/%/coroa
     // invicto/CLASSIF) e único caminho. Match cards usam t.id real → result-entry intacto.
-    var _mMs = pm.filter(function (m) { return m.bracket === 'monarch'; });
+    var _mMs = pm.filter(function (m) { return m.bracket === 'monarch' || m.isMonarch === true; });
     var _mByG = {};
     _mMs.forEach(function (m) {
-      var k = (m.groupIdx != null) ? m.groupIdx : 0;
-      if (!_mByG[k]) _mByG[k] = { name: m.groupName || ('Grupo ' + String.fromCharCode(65 + k)), idx: k, matches: [], players: {} };
-      _mByG[k].matches.push(m);
-      (m.team1 || []).concat(m.team2 || []).forEach(function (n) { _mByG[k].players[n] = 1; });
+      var k = Number((m.groupIdx != null) ? m.groupIdx : ((m.monarchGroup != null) ? m.monarchGroup : 0));
+      if (!Number.isFinite(k)) k = 0;
+      var category = String(m.category || '');
+      var key = category + '|' + k;
+      if (!_mByG[key]) _mByG[key] = {
+        name: (category ? category + ' · ' : '') + (m.groupName || ('Grupo ' + String.fromCharCode(65 + k))),
+        category: category, idx: k, matches: [], players: {}
+      };
+      _mByG[key].matches.push(m);
+      (m.team1 || []).concat(m.team2 || []).forEach(function (n) { _mByG[key].players[n] = 1; });
     });
-    var _mGroups = Object.keys(_mByG).sort(function (a, b) { return _mByG[a].idx - _mByG[b].idx; }).map(function (k) {
+    var _mGroups = Object.keys(_mByG).sort(function (a, b) {
+      return _mByG[a].category.localeCompare(_mByG[b].category) || _mByG[a].idx - _mByG[b].idx;
+    }).map(function (k) {
       var g = _mByG[k];
       return { name: g.name, players: Object.keys(g.players), matches: g.matches, rounds: [{ matches: g.matches }] };
     });

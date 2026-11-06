@@ -1,3 +1,7 @@
+// 2.5.103 — A chave Rei/Rainha mostra os jogos já gravados no armazenamento
+// canônico, inclusive no sandbox. O sorteio só confirma sucesso quando gerou
+// partidas. O convite de co-organizador volta a localizar amizades antigas
+// recíprocas; no sandbox ele fica simulado, sem aviso ao destinatário.
 // 2.5.102 — Ao confirmar um placar, o servidor devolve o resultado do jogo
 // na própria resposta. A chave troca só o card confirmado, sem esperar outra
 // leitura, e preserva a posição mesmo se o layout se ajustar logo depois.

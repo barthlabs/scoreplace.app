@@ -1996,7 +1996,10 @@
         /* Contrato compartilhado com functions-autodraw/draw-core: a primeira
          * rodada devolve somente jogos reais; BYE/folga não contam nem no cliente
          * nem na resposta do sorteio do servidor. */
-        var _lrc = ((LT.rounds[0] && LT.rounds[0].matches) || []).filter(function (m) { return m && !m.isSitOut && !m.isBye; }).length;
+        var _roundMatches = LT.storageCanonico === true
+          ? (LT.matches || []).filter(function (m) { return m && (m.phaseIndex || 0) === (LT.currentPhaseIndex || 0); })
+          : ((LT.rounds[0] && LT.rounds[0].matches) || []);
+        var _lrc = _roundMatches.filter(function (m) { return m && !m.isSitOut && !m.isBye; }).length;
         return { kind: 'league', appliedToT: true, roundMatchCount: _lrc };
       }
       // Cadência = eixo da cfg (mesma lógica do buildPhaseLeagueStage, p/ identidade):

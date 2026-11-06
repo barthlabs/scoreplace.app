@@ -977,9 +977,12 @@ function drawInitial(t, opts) {
     /* A resposta de sorteio alimenta histórico e mensagens. A fallback não pode
      * tratar BYE como jogo só porque a rodada veio de um formato/registro legado:
      * folga e BYE são ambos marcadores, nunca partidas. */
+    const _roundMatches = t.storageCanonico === true
+      ? (t.matches || []).filter(function (m) { return m && (m.phaseIndex || 0) === (t.currentPhaseIndex || 0); })
+      : (t.rounds && t.rounds[0] && t.rounds[0].matches || []);
     const _lrc = (_built0.roundMatchCount != null) ? _built0.roundMatchCount
-      : ((t.rounds && t.rounds[0] && t.rounds[0].matches || []).filter(function (m) { return m && !m.isSitOut && !m.isBye; }).length);
-    const _lso = (t.rounds && t.rounds[0] && t.rounds[0].matches || []).filter(function (m) { return m.isSitOut; }).length;
+      : _roundMatches.filter(function (m) { return m && !m.isSitOut && !m.isBye; }).length;
+    const _lso = _roundMatches.filter(function (m) { return m && m.isSitOut; }).length;
     t.updatedAt = new Date().toISOString();
     return { ok: true, native: true, format: t.format, matchCount: _lrc, sitOuts: _lso, allMaleCount: _allMale, decisions: _decisions };
   }

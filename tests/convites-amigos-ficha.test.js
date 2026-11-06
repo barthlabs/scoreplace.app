@@ -32,7 +32,7 @@ const root = path.join(__dirname, '..');
           'friend-joao': { displayName: 'João Silva' },
           'friend-maria': { displayName: 'Maria Lopes' },
           'friend-legacy': { displayName: 'Amizade Antiga' },
-          'cache-only': { displayName: 'Pessoa só no cache' },
+          'cache-only': { displayName: 'Érica de Paula' },
           'pending-user': { displayName: 'João Pendente' }
         };
       };
@@ -42,14 +42,17 @@ const root = path.join(__dirname, '..');
     });
     await page.addScriptTag({ path: path.join(root, 'js/views/host-transfer.js') });
     await page.evaluate(() => {
+      window._realInitiateCoHostInvite = window._initiateCoHostInvite;
       window._initiateCoHostInvite = async (id, target) => { window._sent.push({ id, uid: target.uid, role: 'cohost' }); return { changed: true }; };
       window._arbitrosInvite = async (uid, id) => { window._sent.push({ id, uid, role: 'referee' }); return { changed: true }; };
       window._openTournamentFriendInvitePicker('tour-test', 'cohost');
     });
     await page.getByRole('button', { name: 'João Silva' }).waitFor();
     assert.equal(await page.getByRole('button', { name: /Amigo sem nome público/ }).count(), 0, 'perfil sem nome não pode ser confundido com outro amigo');
-    assert.equal(await page.locator('#tournament-friend-invite-overlay').getByText('Pessoa só no cache').count(), 0, 'cache antigo não entra no picker mesmo com nome público');
+    assert.equal(await page.locator('#tournament-friend-invite-overlay div[style*="overflow-y"] button').filter({ hasText: 'Érica de Paula' }).count(), 1, 'amizade antiga do perfil aparece para convite de co-organização');
     assert.equal(await page.getByRole('button', { name: 'Solicitar reconfirmação' }).count(), 1, 'relação legada não recebe convite de organização');
+    await page.locator('input[aria-label="Buscar amigo pelo nome"]').fill('erika');
+    assert.equal(await page.locator('#tournament-friend-invite-overlay div[style*="overflow-y"] button').filter({ hasText: 'Érica de Paula' }).count(), 1, 'busca encontra Érica ao digitar erika');
     await page.locator('input[aria-label="Buscar amigo pelo nome"]').fill('joao');
     await page.waitForFunction(() => document.querySelectorAll('#tournament-friend-invite-overlay div[style*="overflow-y"] button').length === 1);
     await page.locator('#tournament-friend-invite-overlay div[style*="overflow-y"] button').click();
@@ -65,6 +68,20 @@ const root = path.join(__dirname, '..');
     await page.getByRole('button', { name: 'Enviar convite' }).click();
     assert.deepEqual(await page.evaluate(() => window._sent), [{ id: 'tour-test', uid: 'friend-joao', role: 'cohost' }]);
     assert.equal(await page.evaluate(() => window.AppStore.tournaments[0].coHosts.some(x => x.uid === 'friend-joao' && x.status === 'pending')), true);
+
+    await page.evaluate(() => {
+      window._initiateCoHostInvite = window._realInitiateCoHostInvite;
+      window._callCF = async () => { throw Object.assign(new Error('amizade não confirmada'), { code: 'failed-precondition' }); };
+      window._notices = [];
+      window.showNotification = (...args) => window._notices.push(args);
+      window._openTournamentFriendInvitePicker('tour-test', 'cohost');
+    });
+    await page.locator('input[aria-label="Buscar amigo pelo nome"]').fill('erika');
+    await page.locator('#tournament-friend-invite-overlay div[style*="overflow-y"] button').filter({ hasText: 'Érica de Paula' }).click();
+    await page.getByRole('button', { name: 'Enviar convite' }).click();
+    await page.waitForFunction(() => window._notices.some(args => args[0] === 'Não foi possível convidar'));
+    assert.equal(await page.locator('#tournament-friend-invite-overlay').count(), 1, 'amizade unilateral recusada mantém busca aberta');
+    await page.getByRole('button', { name: 'Fechar' }).click();
 
     await page.evaluate(() => window._openTournamentFriendInvitePicker('tour-test', 'referee'));
     await page.locator('input[aria-label="Buscar amigo pelo nome"]').fill('maria');

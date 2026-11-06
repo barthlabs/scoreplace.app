@@ -8258,10 +8258,18 @@ exports.mutateHostOrganization = onCall(
     const targetUid = String(data.targetUid || "").trim();
     if (!tournamentId || !targetUid) throw new HttpsError("invalid-argument", "torneio e participante são obrigatórios");
     const db = admin.firestore();
-    const ref = db.collection("tournaments").doc(tournamentId);
+    const sandbox = tournamentId.startsWith('sb_');
+    const ref = db.collection(sandbox ? 'sandboxes' : 'tournaments').doc(tournamentId);
     return db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+      if (sandbox) {
+        const raw = snap.data() || {};
+        if (raw.isSandbox !== true || raw.sbState !== 'ready' || raw.notificationsMuted !== true ||
+            raw.sandboxOwnerUid !== callerUid || !raw.sandboxOf) {
+          throw new HttpsError('not-found', 'torneio não existe');
+        }
+      }
       const t = await _splitParts.hidratar(tx, ref, snap.data() || {});
       if (!_isTournamentOrgCaller(t, callerUid)) throw new HttpsError("permission-denied", "só a organização altera convites");
       let friendAccepted = false;
@@ -8276,7 +8284,12 @@ exports.mutateHostOrganization = onCall(
         ]);
         const target = targetSnap.exists ? (targetSnap.data() || {}) : null;
         targetActive = !!target && target.deleted !== true && !target.deletedAt && !target.mergedInto;
-        friendAccepted = targetActive && friendSnap.exists && (friendSnap.data() || {}).status === "accepted";
+        const caller = callerSnap.exists ? (callerSnap.data() || {}) : {};
+        // Os caches antigos não concedem acesso a dados privados. Aqui servem apenas
+        // para permitir um convite, que só se torna cargo após o destinatário aceitar.
+        const reciprocalLegacy = !friendSnap.exists &&
+          _coHostCore.canInviteHistoricalContact(caller, target, callerUid, targetUid);
+        friendAccepted = targetActive && ((friendSnap.exists && (friendSnap.data() || {}).status === "accepted") || reciprocalLegacy);
         inviterName = callerSnap.exists ? String((callerSnap.data() || {}).displayName || "") : "";
       }
       if (inviteType === "cohost" && (action === "cancel" || action === "invite")) {
@@ -8303,7 +8316,7 @@ exports.mutateHostOrganization = onCall(
           acceptUrl: baseUrl + "accept/" + encodeURIComponent(tournamentId) + "/cohost",
           rejectUrl: baseUrl + "reject/" + encodeURIComponent(tournamentId) + "/cohost"
         }, { merge: true });
-      } else if (inviteRef && action === "cancel" && inviteSnap && inviteSnap.exists &&
+      } else if (!t.isSandbox && inviteRef && action === "cancel" && inviteSnap && inviteSnap.exists &&
           (inviteSnap.data() || {}).inviteStatus === "pending") {
         tx.update(inviteRef, { inviteStatus: "canceled" });
       }

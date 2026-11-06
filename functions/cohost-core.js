@@ -236,6 +236,14 @@ function participantDisplayName(data, uid) {
   return '';
 }
 
+// Caches legados são apenas uma pista para enviar um convite com aceite explícito.
+// Exigir os dois lados impede que um vínculo unilateral antigo baste para dispará-lo.
+function canInviteHistoricalContact(caller, target, callerUid, targetUid) {
+  return !!callerUid && !!targetUid && callerUid !== targetUid &&
+    Array.isArray(caller && caller.friends) && caller.friends.includes(targetUid) &&
+    Array.isArray(target && target.friends) && target.friends.includes(callerUid);
+}
+
 function _hostOutcome(data, action, inviteType, targetUid, targetName, updateData) {
   return {
     outcome: 'applied', action: action, inviteType: inviteType,
@@ -312,6 +320,6 @@ function cohostInviteNotifId(tournamentId, uid) {
 
 module.exports = {
   computeAdminUids, computeAdminEmails, pendingCoHostIndex, computeRespondHostInvite,
-  tournamentHasMember, participantDisplayName, computeMutateHostOrganization,
+  tournamentHasMember, participantDisplayName, canInviteHistoricalContact, computeMutateHostOrganization,
   claimReservedOrganizer, cohostInviteNotifId
 };

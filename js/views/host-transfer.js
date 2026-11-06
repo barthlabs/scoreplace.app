@@ -156,17 +156,19 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       }
       var name = out.targetName || target.displayName || '';
       // O convite e o aviso ao destinatário são gravados juntos na Function.
-      _notifyUser(user.uid, {
+      if (!t.isSandbox) _notifyUser(user.uid, {
         type: 'cohost_invite_sent', tournamentId: String(t.id), tournamentName: out.tournamentName || t.name,
         targetName: name, message: _tH('org.cohostInviteSent') + ' ' + name + '.', level: 'all', inviteType: 'cohost'
       });
-      if (!window.FirestoreDB || typeof window.FirestoreDB.sendCoHostInviteEmail !== 'function') return { enviado: false };
+      if (t.isSandbox || !window.FirestoreDB || typeof window.FirestoreDB.sendCoHostInviteEmail !== 'function') return { enviado: false };
       return Promise.resolve(window.FirestoreDB.sendCoHostInviteEmail(String(t.id), String(out.targetUid || target.uid)))
         .catch(function (e) { window._warn('[co-org] e-mail falhou:', e && e.message); return { enviado: false }; });
     }).then(function (veredito) {
       if (veredito && veredito.alreadyInvited) return veredito;
       var quem = target.displayName || target.email || '';
-      if (veredito && veredito.enviado) {
+      if (t.isSandbox) {
+        if (typeof showNotification === 'function') showNotification('Convite simulado', 'No sandbox, o convite não é entregue e só você vê o torneio.', 'info');
+      } else if (veredito && veredito.enviado) {
         if (typeof showNotification === 'function') showNotification(_tH('org.inviteSent'), _tH('org.awaitingResponse') + ' ' + quem, 'info');
       } else if (typeof showNotification === 'function') {
         showNotification('Convite registrado', quem + ' já pode ver o convite no app — mas o e-mail de aviso não pôde ser enviado agora.', 'warning');
@@ -216,11 +218,13 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     panel.appendChild(title); panel.appendChild(input); panel.appendChild(list); panel.appendChild(confirmRow);
     overlay.appendChild(panel); document.body.appendChild(overlay);
     overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
-    var normalize = function(s) { return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(); };
+    // Busca de nome: "erika" encontra "Érica" sem mudar o nome exibido nem a identidade (UID).
+    var normalize = function(s) { return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/k/g, 'c').trim(); };
     var busy = false;
     var friends = [];
     var selected = null;
     var accepted = new Set();
+    var known = new Set();
     var pendingReconfirmation = null;
     var loaded = false;
     function loadAcceptedFriendUids() {
@@ -254,7 +258,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       })
         .catch(function() { return []; });
       return Promise.all([loadAcceptedFriendUids(), legacyOptional]).then(function(results) {
-        var uids = results[0];
+        var acceptedUids = results[0];
+        var knownUids = (role === 'cohost' && Array.isArray(user.friends) ? user.friends : []).filter(function(uid) {
+          return typeof uid === 'string' && uid && uid.indexOf('@') === -1 && uid !== user.uid;
+        });
+        var uids = Array.from(new Set(acceptedUids.concat(knownUids)));
         var legacy = results[1];
         if (!Array.isArray(legacy)) throw new Error('lista de amizades inválida');
         var preload = typeof window._preloadUserProfiles === 'function'
@@ -262,13 +270,14 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           : Promise.resolve();
         return preload.then(function() {
           if (!overlay.isConnected) return;
-          accepted = new Set(uids);
+          accepted = new Set(acceptedUids);
+          known = new Set(knownUids);
           var cache = window._userProfileCache || {};
           var fallback = window._friendProfilesCache || {};
           friends = uids.filter(availableForRole).map(function(uid) {
             var p = cache[uid] || fallback[uid] || {};
             return { uid: uid, name: String(p.displayName || p.name || '').trim(),
-              photo: p.photoURL || '', state: 'accepted' };
+              photo: p.photoURL || '', state: accepted.has(uid) ? 'accepted' : 'known' };
           }).filter(function(friend) { return !!friend.name; });
           legacy.forEach(function(r) {
             var uid = r && String(r.uid || '');
@@ -288,7 +297,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       });
     }
     send.addEventListener('click', function() {
-      if (busy || !loaded || !selected || !accepted.has(selected.uid)) return;
+      if (busy || !loaded || !selected || (!accepted.has(selected.uid) && !known.has(selected.uid))) return;
       busy = true; send.disabled = true;
       var invitation = role === 'cohost'
         ? window._initiateCoHostInvite(tId, { uid: selected.uid, displayName: selected.name })
@@ -330,17 +339,18 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       var matches = friends.filter(function(f) { return !q || normalize(f.name).includes(q); });
       if (!matches.length) { list.textContent = friends.length ? 'Nenhum amigo com esse nome.' : 'Nenhum amigo disponível.'; return; }
       matches.forEach(function(friend) {
-        var row = document.createElement(friend.state === 'accepted' ? 'button' : 'div');
-        if (friend.state === 'accepted') { row.type = 'button'; row.className = 'btn btn-sm'; }
+        var selectable = friend.state === 'accepted' || friend.state === 'known';
+        var row = document.createElement(selectable ? 'button' : 'div');
+        if (selectable) { row.type = 'button'; row.className = 'btn btn-sm'; }
         row.style.cssText = 'display:flex;align-items:center;text-align:left;gap:10px;width:100%;padding:9px;';
         var img = document.createElement(friend.photo ? 'img' : 'span');
         if (friend.photo) { img.src = friend.photo; img.alt = ''; img.style.cssText = 'width:32px;height:32px;border-radius:50%;object-fit:cover;'; }
         else { img.textContent = friend.name.slice(0, 1).toUpperCase(); img.style.cssText = 'width:32px;height:32px;border-radius:50%;background:#334155;display:grid;place-items:center;'; }
         var label = document.createElement('span'); label.textContent = friend.name;
         row.appendChild(img); row.appendChild(label);
-        if (friend.state === 'accepted') {
+        if (selectable) {
           row.addEventListener('click', function() {
-            if (busy || !loaded || !accepted.has(friend.uid)) return;
+            if (busy || !loaded || (!accepted.has(friend.uid) && !known.has(friend.uid))) return;
             selected = friend;
             selectedName.textContent = friend.name;
             confirmRow.style.display = 'flex';

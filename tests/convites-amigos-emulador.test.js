@@ -121,6 +121,27 @@ const notifId = require('../functions/cohost-core.js').cohostInviteNotifId;
   assert.equal(sandboxInvite.changed, true);
   assert.equal((await db.doc('users/' + friend + '/notifications/' + notifId(sandboxId, friend)).get()).exists, false);
 
+  const historical = 'invite-historical-' + suffix;
+  const canonicalSandboxId = 'sb_tour_' + suffix + '_' + 's'.repeat(32) + '_' + suffix;
+  await Promise.all([
+    db.doc('users/' + owner).update({ friends: [historical] }),
+    db.doc('users/' + historical).set({ displayName: 'Amizade Antiga', friends: [owner] }),
+    db.doc('sandboxes/' + canonicalSandboxId).set({
+      creatorUid: owner, sandboxOwnerUid: owner, sandboxOf: id,
+      name: 'Ensaio privado', memberUids: [owner], adminUids: [owner],
+      participants: [], coHosts: [], isSandbox: true, sbState: 'ready', notificationsMuted: true
+    })
+  ]);
+  const canonicalInvite = await funcs.mutateHostOrganization.run({ auth: { uid: owner, token: {} },
+    data: { tournamentId: canonicalSandboxId, inviteType: 'cohost', action: 'invite', targetUid: historical } });
+  assert.equal(canonicalInvite.changed, true, 'sandbox canônico aceita amizade antiga recíproca para convite');
+  assert.equal((await db.doc('sandboxes/' + canonicalSandboxId).get()).data().coHosts[0].status, 'pending');
+  assert.equal((await db.doc('users/' + historical + '/notifications/' + notifId(canonicalSandboxId, historical)).get()).exists,
+    false, 'sandbox não envia aviso ao amigo');
+  await assert.rejects(funcs.mutateHostOrganization.run({ auth: { uid: owner, token: {} },
+    data: { tournamentId: canonicalSandboxId, inviteType: 'cohost', action: 'invite', targetUid: outsider } }),
+  { code: 'failed-precondition' }, 'terceiro sem amizade recíproca não recebe convite');
+
   const refereeId = 'referee_' + suffix + '_' + 'r'.repeat(24);
   const refereeTour = db.doc('tournaments/' + refereeId);
   const refereeNotice = db.doc('users/' + friend + '/notifications/referee-invite-' + refereeId);

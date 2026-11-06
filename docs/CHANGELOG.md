@@ -1,3 +1,9 @@
+## 2.5.103 — 06/nov/2026 (sorteio e convite no sandbox)
+
+- A fase Rei/Rainha lê os jogos canônicos que já estavam gravados, inclusive os grupos do CULT. O servidor devolve a quantidade efetiva de jogos e recusa um sorteio que não gerou nenhum.
+- O convite de co-organizador aceita amizades antigas recíprocas quando não há registro novo de amizade. Um vínculo unilateral ou uma amizade nova recusada não autoriza o convite. A pessoa convidada ainda precisa aceitar para receber o cargo.
+- No sandbox, o convite é apenas uma simulação privada, sem notificação ou e-mail para a pessoa. Nenhum inscrito ou partida existente é alterado por este corte.
+
 ## 2.5.98 — 05/nov/2026 (agenda e ensaio do torneio)
 
 - A distribuição estrita de jogos entre categorias ocupa as seis quadras em oito faixas de 35 minutos quando há 48 jogos por dia, respeitando a ordem alternada escolhida e fazendo cada dupla estrear até a terceira faixa.

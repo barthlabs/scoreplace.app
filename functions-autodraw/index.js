@@ -1784,6 +1784,10 @@ exports.drawRound = onCall(async (request) => {
           participantes: (t.participants || []).length, p2Resolution: t.p2Resolution,
           decisoes: decisions, erro: (res && res.error) || '' });
     }
+    if (!Number.isSafeInteger(res.matchCount) || res.matchCount < 1) {
+      throw _drawFail('failed-precondition', 'O sorteio não gerou partidas. Confira inscritos e categorias antes de tentar novamente.',
+        { tId, format:t.format, participants:(t.participants || []).length, storageCanonico:t.storageCanonico === true });
+    }
     _recordSeededDraw(t, { seed: _manualSeed, operationId: _manualOperationId, at: _agoraIsoTx,
       decisionsHash: createHash('sha256').update(JSON.stringify(decisions || null)).digest('hex') });
     const teamSchedule = t.teamCompetition && t.teamCompetition.schedule;
