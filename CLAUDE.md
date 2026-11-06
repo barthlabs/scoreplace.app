@@ -580,7 +580,8 @@ menor escopo útil: código, testes, configurações e metadados públicos
 pertinentes. Não incluir credenciais, tokens, dados pessoais de inscritos,
 exportações do banco ou conteúdo privado desnecessário. Se a revisão exigir
 compartilhar algum desses dados, pedir autorização específica antes de enviá-los.
-O veredito `APROVADO` continua obrigatório nas faixas normal e crítica; esta
+O plano continua exigindo `APROVADO`; no diff, `RESSALVAS` sem defeito bloqueante
+ficam registradas e liberam o corte sem ressubmissão. Esta
 autorização de compartilhamento não equivale à aprovação técnica do revisor nem
 autoriza por si só uma alteração de dados de produção ou uma publicação que o
 dono não pediu. Uma recusa do controle automático de aprovação da ferramenta
@@ -637,8 +638,10 @@ ou `/model` no Codex) ou executa por subagente com `model:` correspondente. Perf
    `ESCALAR: SIM` do Claude bloqueia a mudança para investigação concreta; não dispara outra
    chamada automaticamente.
 3. **Diff antes de publicar.** O `deploy-hosting.sh` roda `revisar.sh diff` (auto) no passo
-   1.8 (origin/main..HEAD + sujo). Só APROVADO deixa passar; o resto **para o deploy antes do
-   push** — "abort é o aviso". Sem veredito (exit 3) e cota esgotada (exit 4) NÃO são aprovação.
+   1.8 (origin/main..HEAD + sujo). `APROVADO` e `RESSALVAS` sem defeito bloqueante deixam
+   seguir; as ressalvas ficam registradas e não exigem ressubmissão. Um ajuste obrigatório
+   precisa vir como `BLOQUEIO`, com defeito, cenário e correção concretos. `BLOQUEIO`,
+   ausência de veredito (exit 3) e cota esgotada (exit 4) param antes do push.
 4. Escapes: `SP_GPT_FAIXA=normal|critica` só ELEVA (trivial é recusado). `SP_SEM_GPT=1` só no
    diff e só com uma linha `sem-gpt: <motivo>` num commit a publicar; nunca vale pra plano.
 5. **Interruptor, um por lado:** `revisar-com-gpt.sh desligar "<motivo>"` / `ligar` e

@@ -15,7 +15,7 @@
 #
 # DUAS PORTAS:
 #   plano  — ANTES de editar: quem vai implementar escreve o que muda e o revisor confere contra
-#            o código REAL (leitura da árvore, nunca escrita). Só APROVADO libera; na resubmissão
+#            o código REAL (leitura da árvore, nunca escrita). No plano só APROVADO libera;
 #            o parecer anterior vai junto pra ele conferir o que foi atendido.
 #   diff   — ANTES de publicar: revisa o corte atual desde SP_REVIEW_BASE (ou
 #            origin/main na ausência dele) + o que não foi commitado. O deploy
@@ -38,7 +38,7 @@
 #
 # SAÍDA: .claude/tmp/parecer-<revisor>-plano-<assunto>.md ou parecer-<revisor>-diff.md (último)
 # + cópia datada. 1ª linha `VEREDITO: APROVADO | RESSALVAS | BLOQUEIO`; 2ª `EXECUTOR: modelo=… esforco=…`.
-#   exit 0 → APROVADO (único que libera)        exit 1 → RESSALVAS (ajuste e SUBMETA DE NOVO)
+#   exit 0 → APROVADO ou RESSALVAS no diff; no plano, RESSALVAS exige ajuste e nova revisão
 #   exit 2 → BLOQUEIO (idem; diagnóstico em xeque) exit 3 → sem veredito legível (NÃO aprova)
 #   exit 4 → cota esgotada / revisor indisponível (NÃO aprova)
 #
@@ -356,7 +356,7 @@ fi
 # ── recibo do parecer: antes de qualquer validação cara ──────────────────────────────
 # A mesma árvore pode passar duas vezes por esta porta: uma quando quem implementou pede
 # o parecer, outra quando o publicador confirma o mesmo corte. Rodar `npm test` ANTES de
-# saber se já há um APROVADO para o mesmo conteúdo fazia a segunda passagem gastar vários
+# saber se já há um parecer não bloqueante para o mesmo conteúdo fazia a segunda passagem gastar vários
 # minutos sem aumentar a segurança. O fingerprint inclui a base, o diff e o hash de cada
 # arquivo do escopo; qualquer mudança invalida o recibo e volta a exigir revisão+gates.
 if [[ "$MODO" == "plano" ]]; then
@@ -378,10 +378,19 @@ if [[ "$MODO" == diff ]]; then
       else printf 'removido:%s\n' "$f"; fi
     done < "$LISTA"
   } | shasum -a 256 | awk '{print $1}')
-  if [[ -s "$OUT" && -s "$RECIBO" && -s "$RECIBO_BASE" && "$(cat "$RECIBO")" == "$FINGERPRINT" && "$(cat "$RECIBO_BASE")" == "$BASE_DIFF" ]] && grep -qE '(^|\*\*)VEREDITO: *APROVADO' "$OUT"; then
-    echo "  ✓ parecer APROVADO reaproveitado: mesmo corte e conteúdo ($FINGERPRINT)."
+  if [[ -s "$OUT" && -s "$RECIBO" && -s "$RECIBO_BASE" && "$(cat "$RECIBO")" == "$FINGERPRINT" && "$(cat "$RECIBO_BASE")" == "$BASE_DIFF" ]] && grep -qE '(^|\*\*)VEREDITO: *(APROVADO|RESSALVAS)' "$OUT"; then
+    echo "  ✓ parecer não bloqueante reaproveitado: mesmo corte e conteúdo ($FINGERPRINT)."
     exit 0
   fi
+fi
+if [[ "$MODO" == diff ]]; then
+  POLITICA_RESSALVAS='No DIFF, RESSALVAS são observações sem defeito bloqueante: registre-as de forma explícita,
+com arquivo:linha e efeito esperado, e o corte pode seguir sem resubmissão. Se uma mudança é
+obrigatória antes de publicar, escolha BLOQUEIO e descreva o defeito reproduzível, o cenário
+afetado e a correção necessária. Se não houver observação com arquivo:linha e efeito,
+escolha APROVADO. Não use RESSALVAS para pedir investigação indefinida.'
+else
+  POLITICA_RESSALVAS='No PLANO, RESSALVAS exigem ajuste e nova revisão antes da implementação.'
 fi
 
 # ── o pedido ao revisor ──────────────────────────────────────────────────────────────
@@ -464,10 +473,11 @@ FORMATO OBRIGATÓRIO — as DUAS primeiras linhas, exatamente assim:
 VEREDITO: APROVADO | RESSALVAS | BLOQUEIO      (escolha UMA)
 EXECUTOR: $EXECUTOR_DICA — <por quê, 1 linha>
 ESCALAR: SIM | NAO
-(APROVADO = pode implementar como está; RESSALVAS = só depois de atender o que você lista —
-o texto volta pra você; BLOQUEIO = vai quebrar produção, perder dado, violar regra do
+(APROVADO = pode seguir como está; RESSALVAS = observações conforme a política abaixo;
+BLOQUEIO = vai quebrar produção, perder dado, violar regra do
 CLAUDE.md, ou o diagnóstico está errado. Se é resubmissão, diga na linha EXECUTOR se os pontos
 anteriores foram atendidos.)
+$POLITICA_RESSALVAS
 
 Use ESCALAR: SIM SOMENTE se medium não permitiu uma conclusão confiável porque falta
 investigação técnica concreta (por exemplo, uma cadeia transacional extensa ou uma dúvida
@@ -709,7 +719,14 @@ echo "════════ fim · salvo em $OUT_DATADO ═══════
 [[ -n "$EXECUTOR" ]] && echo "🎯 $EXECUTOR"
 case "$VEREDITO" in
   APROVADO)  [[ -n "$FINGERPRINT" ]] && printf '%s\n' "$FINGERPRINT" > "$RECIBO"; echo "✅ APROVADO — pode implementar/publicar."; exit 0 ;;
-  RESSALVAS) echo "🔁 RESSALVAS — atenda os pontos e SUBMETA DE NOVO (o parecer vai junto na próxima)."; exit 1 ;;
+  RESSALVAS)
+    if [[ "$MODO" == diff ]]; then
+      [[ -n "$FINGERPRINT" ]] && printf '%s\n' "$FINGERPRINT" > "$RECIBO"
+      echo "✅ RESSALVAS não bloqueantes registradas — o diff pode seguir sem resubmissão."
+      exit 0
+    fi
+    echo "🔁 RESSALVAS no plano — atenda os pontos e submeta de novo."
+    exit 1 ;;
   BLOQUEIO)  echo "⛔ BLOQUEIO — atenda os pontos e SUBMETA DE NOVO."; exit 2 ;;
   *) echo "✗ parecer sem VEREDITO legível — isso NÃO é aprovação."; exit 3 ;;
 esac

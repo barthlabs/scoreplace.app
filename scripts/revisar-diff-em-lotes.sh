@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Mantém a segunda opinião obrigatória quando o corte excede o limite de uma
-# chamada. Todo arquivo entra em exatamente um lote e todos precisam aprovar.
+# chamada. Todo arquivo entra em exatamente um lote e nenhum lote pode ter bloqueio.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -184,5 +184,5 @@ done
 if [[ "$MODE" == --plan ]]; then
   echo "✓ plano de $count lotes montado; nenhuma revisão foi executada"
 else
-  echo "✅ todos os $count lotes receberam parecer APROVADO"
+  echo "✅ todos os $count lotes receberam parecer sem bloqueio"
 fi

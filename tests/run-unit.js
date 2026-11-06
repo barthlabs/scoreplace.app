@@ -1821,6 +1821,7 @@ const SUITES = [
   'tests/aviso-fuso-na-ficha.test.js',            // L6.R2.2: o aviso de fuso na FICHA (organizador)
   'tests/deploy-liga-firebase-admin.test.js',     // L6.R2.2: "PULADA" não é aprovação no deploy
   'tests/preflight-antes-do-push.test.js',        // L6.R2.3: gates ANTES do push (repo e remoto reais)
+  'tests/hosting-prerequisites.test.js',          // recibos de convite e trava regional antes da suíte
   'functions-autodraw/test-agenda-core.js',       // L6.R1: fuso do evento, janela de 1 min, trava de slot
   'functions-autodraw/test-match-ready-notifications.js', // avisos de confronto definido e prazo configurado
   'functions-autodraw/test-autodraw-dividido.js', // L6.R1: sorteio agendado em torneio DIVIDIDO

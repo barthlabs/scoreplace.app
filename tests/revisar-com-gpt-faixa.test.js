@@ -295,6 +295,38 @@ ok(LOTES.includes('BASE="$(git rev-parse --verify "${BASE_REF}^{commit}")"') &&
 ok(NUCLEO.includes('CHECKLIST FINAL DE RESPOSTA (OBRIGATÓRIO)') &&
    NUCLEO.includes('Não entregue\nresumo, tabela ou observação antes delas'),
   'o revisor recebe o contrato de veredito também no fim do prompt, após o diff');
+
+// Uma ressalva sem defeito bloqueante deve custar uma única revisão no diff.
+// A mesma resposta ainda exige correção quando a porta é um plano.
+const fakeRessalvas = path.join(lab, 'claude-ressalvas.sh');
+const chamadasRessalvas = path.join(lab, 'chamadas-ressalvas.txt');
+fs.writeFileSync(fakeRessalvas, `#!/usr/bin/env bash
+echo chamada >> "${'$'}FAKE_CHAMADAS"
+result=$'VEREDITO: RESSALVAS\\nEXECUTOR: modelo=haiku esforço=medium — observação sem defeito\\nESCALAR: NAO\\nObservação em js/store.js:1: simplificar a redação no futuro.'
+node -e 'process.stdout.write(JSON.stringify({result:process.argv[1],usage:{input_tokens:1,output_tokens:1},total_cost_usd:0}))' "${'$'}result"
+`);
+fs.chmodSync(fakeRessalvas, 0o755);
+fs.appendFileSync(path.join(lab, 'js/store.js'), '// ressalva não bloqueante\n');
+const envRessalvas = { CLAUDE_BIN: fakeRessalvas, FAKE_CHAMADAS: chamadasRessalvas,
+  SP_REVIEW_FILE_LIST: approvedList, SP_REVIEW_PART: 'ressalvas-lab' };
+r = runLab(labCLAUDE, ['diff'], envRessalvas);
+ok(r.code === 0 && /RESSALVAS não bloqueantes registradas/.test(r.out),
+  'diff com ressalvas sem bloqueio segue sem escape');
+r = runLab(labCLAUDE, ['diff'], envRessalvas);
+ok(r.code === 0 && fs.readFileSync(chamadasRessalvas, 'utf8').trim() === 'chamada',
+  'o mesmo diff reaproveita o parecer sem ressubmeter');
+r = runLab(labCLAUDE, ['plano', planoAdapt], envRessalvas);
+ok(r.code === 1, 'plano com ressalvas ainda exige ajuste');
+const fakeBloqueio = path.join(lab, 'claude-bloqueio.sh');
+fs.writeFileSync(fakeBloqueio, `#!/usr/bin/env bash
+result=$'VEREDITO: BLOQUEIO\\nEXECUTOR: modelo=haiku esforço=medium — defeito concreto\\nESCALAR: NAO\\njs/store.js:1: falha reproduzível que impede o release.'
+node -e 'process.stdout.write(JSON.stringify({result:process.argv[1],usage:{input_tokens:1,output_tokens:1},total_cost_usd:0}))' "${'$'}result"
+`);
+fs.chmodSync(fakeBloqueio, 0o755);
+r = runLab(labCLAUDE, ['diff'], { ...envRessalvas, CLAUDE_BIN: fakeBloqueio,
+  SP_REVIEW_PART: 'bloqueio-lab' });
+ok(r.code === 2, 'diff com defeito bloqueante continua barrado');
+
 fs.rmSync(lab, { recursive: true, force: true });
 console.log(fail ? '❌ revisar (faixa/interruptor/auto): ' + fail + ' falha(s), ' + pass + ' ok' : '✅ revisar (faixa/interruptor/auto): ' + pass + ' ok');
 process.exit(fail ? 1 : 0);

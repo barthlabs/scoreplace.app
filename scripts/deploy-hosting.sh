@@ -486,6 +486,12 @@ fi
 echo "▸ preflight: código novo recebeu uma versão nova?"
 SP_RELEASE_PRODUCTION_VERSION="$VERSAO_NO_AR" node "$RAIZ/scripts/check-release-version-fresh.js" || exit 1
 
+# Recibos de convite e da trava regional são falhas rápidas. Conferir antes da suíte
+# impede descobrir essas pendências depois de minutos de testes ou após o push.
+if [[ -f "$RAIZ/scripts/check-hosting-prerequisites.js" ]]; then
+  node "$RAIZ/scripts/check-hosting-prerequisites.js" || exit 1
+fi
+
 fase "gates de versão"
 SP_PREFLIGHT_ATTEST="$SP_DEPLOY_DIR/preflight-${COMMIT}.ok"
 PRE_OK=1
