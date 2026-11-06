@@ -13,7 +13,7 @@ const root = path.join(__dirname, '..');
     await page.addStyleTag({ path: path.join(root, 'css/components.css') });
     await page.evaluate(() => {
       window.AppStore = {
-        currentUser: { uid: 'owner', friends: ['friend-joao', 'friend-maria', 'pending-user', 'cache-only'] },
+        currentUser: { uid: 'owner', friends: ['friend-joao', 'friend-maria', 'pending-user', 'cache-only', 'cache-celly'] },
         tournaments: [{ id: 'tour-test', name: 'Teste', coHosts: [{ uid: 'pending-user', status: 'pending' }], arbitros: [] }]
       };
       window._acceptedIds = ['friend-joao', 'friend-maria', 'friend-noname', 'pending-user'];
@@ -33,6 +33,7 @@ const root = path.join(__dirname, '..');
           'friend-maria': { displayName: 'Maria Lopes' },
           'friend-legacy': { displayName: 'Amizade Antiga' },
           'cache-only': { displayName: 'Érica de Paula' },
+          'cache-celly': { displayName: 'Celly de Paula' },
           'pending-user': { displayName: 'João Pendente' }
         };
       };
@@ -53,6 +54,8 @@ const root = path.join(__dirname, '..');
     assert.equal(await page.getByRole('button', { name: 'Solicitar reconfirmação' }).count(), 1, 'relação legada não recebe convite de organização');
     await page.locator('input[aria-label="Buscar amigo pelo nome"]').fill('erika');
     assert.equal(await page.locator('#tournament-friend-invite-overlay div[style*="overflow-y"] button').filter({ hasText: 'Érica de Paula' }).count(), 1, 'busca encontra Érica ao digitar erika');
+    await page.locator('input[aria-label="Buscar amigo pelo nome"]').fill('kelly');
+    assert.equal(await page.locator('#tournament-friend-invite-overlay div[style*="overflow-y"] button').filter({ hasText: 'Celly de Paula' }).count(), 0, 'K inicial de Kelly não casa com Celly');
     await page.locator('input[aria-label="Buscar amigo pelo nome"]').fill('joao');
     await page.waitForFunction(() => document.querySelectorAll('#tournament-friend-invite-overlay div[style*="overflow-y"] button').length === 1);
     await page.locator('#tournament-friend-invite-overlay div[style*="overflow-y"] button').click();

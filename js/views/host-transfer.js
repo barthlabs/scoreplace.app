@@ -218,8 +218,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     panel.appendChild(title); panel.appendChild(input); panel.appendChild(list); panel.appendChild(confirmRow);
     overlay.appendChild(panel); document.body.appendChild(overlay);
     overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
-    // Busca de nome: "erika" encontra "Érica" sem mudar o nome exibido nem a identidade (UID).
-    var normalize = function(s) { return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/k/g, 'c').trim(); };
+    // Em nomes portugueses, "erika" encontra "Érica"; K inicial (Kelly) não vira C.
+    // A tolerância afeta só o filtro visual. A identidade do convite continua sendo o UID.
+    var normalize = function(s) { return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/([aeiou])k(?=[aeiou])/g, '$1c').trim(); };
     var busy = false;
     var friends = [];
     var selected = null;
