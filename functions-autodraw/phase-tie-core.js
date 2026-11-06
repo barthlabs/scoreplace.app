@@ -161,13 +161,14 @@ function scoreMatch(match, sets, setsToWin, pointsToWin, pointMargin) {
       throw new Error('placar inválido no set ' + (index + 1));
     }
     const p1 = Number(set.p1), p2 = Number(set.p2);
-    if (!Number.isInteger(p1) || !Number.isInteger(p2) || p1 < 0 || p2 < 0 || p1 > 99 || p2 > 99 || p1 === p2) {
+    if (!Number.isSafeInteger(p1) || !Number.isSafeInteger(p2) || p1 < 0 || p2 < 0 ||
+        (!Number.isInteger(pointsToWin) && (p1 > 99 || p2 > 99)) || p1 === p2) {
       throw new Error('placar inválido no set ' + (index + 1));
     }
     if (Number.isInteger(pointsToWin)) {
       const winner = Math.max(p1, p2), loser = Math.min(p1, p2);
       const margin = pointMargin === 2 ? 2 : 1;
-      if (winner !== Math.max(pointsToWin, loser + margin) || winner > 99) {
+      if (winner !== Math.max(pointsToWin, loser + margin)) {
         throw new Error('placar inválido: desempate até ' + pointsToWin +
           (margin === 2 ? ' com dois pontos de vantagem' : ', sem vantagem de dois pontos'));
       }

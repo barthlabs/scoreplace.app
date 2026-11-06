@@ -1955,7 +1955,10 @@ window._confirmSetFromCard = function (tId, matchId, o) {
   var result = window._saveEditedSetsInline(tId, matchId, o.scoring, rows, null, null, { rejectAfterDecision: true });
   if (result === undefined) return;
   return Promise.resolve(result).then(function (saved) {
-    if (saved === true && !m.winner && typeof showNotification === 'function')
+    var freshTour = window._findTournamentById(tId);
+    var freshMatch = freshTour && _findMatch(freshTour, matchId);
+    var freshPlan = freshMatch && window._matchSetPlan(o.scoring, freshMatch);
+    if (saved === true && freshPlan && freshPlan.live && !freshMatch.pendingResult && typeof showNotification === 'function')
       showNotification('Set confirmado', 'Placar salvo; siga para o próximo set.', 'success');
     return saved;
   });

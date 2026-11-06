@@ -85,6 +85,8 @@ assert.throws(() => tie.scoreMatch(games[0], [{ p1: 6, p2: 4 }], 1, 5, 1), /plac
 assert.equal(tie.scoreMatch(games[0], [{ p1: 6, p2: 4 }], 1, 5, 2).winnerKey, 'uid:B',
   'configuração alternativa de vantagem exige o sexto ponto em 4 a 4');
 assert.throws(() => tie.scoreMatch(games[0], [{ p1: 5, p2: 4 }], 1, 5, 2), /placar inválido/);
+assert.equal(tie.scoreMatch(games[0], [{ p1: 100, p2: 98 }], 1, 99, 2).winnerKey, 'uid:B',
+  'meta de 99 com dois pontos de vantagem permite terminar após 98 a 98');
 
 const fresh = {};
 const next = { fixedPairs: true, pairingStrategy: 'top', source: { mapping: [

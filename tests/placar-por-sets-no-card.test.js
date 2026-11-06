@@ -160,7 +160,7 @@ function regua() {
 }
 
 /* ── ② A DECISÃO + ③ O QUE O PARCIAL GRAVA ────────────────────────────────────────── */
-function decisao() {
+async function decisao() {
   console.log('\n② O Confirmar fecha o SET; só o último fecha a PARTIDA');
 
   function cenario(scoring) {
@@ -279,6 +279,16 @@ function decisao() {
   c = cenario(MELHOR3);
   c.confirma(6, 4, { field: campos({ 's1-M1': '6', 's2-M1': '4', 's1-M1-1': '', 's2-M1-1': '3' }) });
   ok(c.notas.length === 1 && !(c.m.sets || []).length, 'set seguinte pela metade impede gravar o anterior');
+
+  c = cenario(MELHOR3);
+  W._commitSetsResult = function (_tid, _mid, sets) {
+    c.m.sets = sets;
+    c.m.winner = c.m.p1;
+    return Promise.resolve(true);
+  };
+  await W._confirmSetFromCard('T1', 'M1', { plan: W._matchSetPlan(MELHOR3, c.m), scoring: MELHOR3,
+    field: campos({ 's1-M1': '6', 's2-M1': '4', 's1-M1-1': '6', 's2-M1-1': '3' }) });
+  ok(!c.notas.includes('Set confirmado'), 'set decisivo não avisa para seguir ao próximo set');
 
   // 1 SET não passa por aqui
   c = cenario(UM_SET);
@@ -701,7 +711,7 @@ async function entradaE30() {
 
 (async function () {
   regua();
-  decisao();
+  await decisao();
   await tela();
   await stbDoisDigitosETieBreakLateral();
   await correcoesDoSandbox();

@@ -91,6 +91,14 @@ const headers = { Authorization: 'Bearer test' };
   assert.equal(externalChecks.length, 2, 'divergência exige segunda leitura do controle');
   assert.notEqual(externalChecks[0].region, externalChecks[1].region,
     'a segunda leitura não confia de novo na região antiga');
+  // Se o controle perdeu a eleição entre as leituras, a nova seleção deve
+  // ocorrer na região consultada, sem voltar à região antiga do cache.
+  elected = null; revision = 0;
+  const beforeReselect = calls.length;
+  assert.equal((await router.call('assignMatchCourt', payload, headers)).ok, true);
+  const reselect = calls.slice(beforeReselect).find(x => x.name === 'sp-op-control-v2' && x.payload.action === 'select');
+  assert(reselect && reselect.region !== firstRegion && reselect.payload.region === reselect.region,
+    'reeleição usa a região alternativa que confirmou ausência de seleção');
   failedRegion = elected; committed = false; receipt = true;
   const before = calls.filter(x => x.name === 'sp-op-court-v2' && !x.payload.probe).length;
   readFailure = true;

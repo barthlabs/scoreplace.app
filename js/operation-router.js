@@ -194,8 +194,8 @@
         var controlRegion = existing && (list.find(function (item) { return item.region !== existing.region; }) || list[0]) || list[0];
         var state = await control(cfg, controlRegion.region, { action: 'current', tournamentId: tId, sandbox: sandbox }, headers);
         if (!state.selected) {
-          state = await control(cfg, list[0].region, { action: 'select', tournamentId: tId, sandbox: sandbox,
-            region: list[0].region, sourceDigest: cfg.services[CONTROL.replace(/-v2$/, '-v' + cfg.schema)].digest }, headers);
+          state = await control(cfg, controlRegion.region, { action: 'select', tournamentId: tId, sandbox: sandbox,
+            region: controlRegion.region, sourceDigest: cfg.services[CONTROL.replace(/-v2$/, '-v' + cfg.schema)].digest }, headers);
         } else if (!list.some(function (item) { return item.region === state.region; })) {
           var next = list.find(function (item) { return item.region !== state.region; });
           if (!next) throw fail('Região fixada indisponível e sem alternativa.', 'unavailable', true);

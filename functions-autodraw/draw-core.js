@@ -1238,6 +1238,12 @@ function formLatePairCore(t, opts) {
   const _nm = function (p) { return ((win._pName ? win._pName(p, '') : (p && (p.displayName || p.name)) || '') || (typeof p === 'object' ? (p.displayName || p.name) : p) || ''); };
   const an = _nm(a), bn = _nm(b);
   if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = [];
+  const duplicate = repeatedMemberInPair([{ p1Uid: a && a.uid, p1ManualId: a && a.manualParticipantId,
+    p1Name: an, p2Uid: b && b.uid, p2ManualId: b && b.manualParticipantId, p2Name: bn }], win._nameForUid);
+  if (duplicate) {
+    t.standbyParticipants.push(a, b);
+    return { ok: false, reason: 'duplicate-member', name: duplicate };
+  }
   if (typeof win._ensureEnrollSeqs === 'function') { try { win._ensureEnrollSeqs(t); } catch (e) {} }
   const _sqA = (typeof a === 'object' && a && a.enrollSeq != null) ? a.enrollSeq : null;
   const _sqB = (typeof b === 'object' && b && b.enrollSeq != null) ? b.enrollSeq : null;
