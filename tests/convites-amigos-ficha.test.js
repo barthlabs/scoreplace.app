@@ -236,6 +236,19 @@ const root = path.join(__dirname, '..');
     await page.waitForFunction(() => !!document.querySelector('[data-notif-autoread="1"]'));
     assert.equal(await page.getByRole('button', { name: 'notif.accept' }).count(), 0);
 
+    const sandboxDelivery = await page.evaluate(async () => {
+      window.AppStore.tournaments.push({ id: 'sb_tour-test', name: 'Ensaio', isSandbox: true });
+      let notifications = 0;
+      let emails = 0;
+      window._callCF = async () => ({ changed: true, targetUid: 'friend-joao' });
+      window._sendUserNotification = async () => { notifications++; };
+      window.FirestoreDB.sendCoHostInviteEmail = async () => { emails++; };
+      await window._realInitiateCoHostInvite('sb_tour-test', { uid: 'friend-joao', displayName: 'João Silva' });
+      return { notifications, emails };
+    });
+    assert.deepEqual(sandboxDelivery, { notifications: 0, emails: 0 },
+      'convite simulado no sandbox não envia notificação nem e-mail pelo cliente');
+
     const source = fs.readFileSync(path.join(root, 'js/views/tournaments.js'), 'utf8');
     assert(source.includes("_viewerIsOrg ? '<button type=\"button\" class=\"btn btn-sm"));
     const inviteCss = fs.readFileSync(path.join(root, 'css/components.css'), 'utf8');
