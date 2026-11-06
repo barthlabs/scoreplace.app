@@ -1946,6 +1946,7 @@ const SUITES = [
   // _formDuplaByUids/_splitDupla). A replicação sandbox roda no emulador (test-pair-replicate.js). v1.3.x.
   'functions/test-pair-core.js',
   'functions/test-placeholder-pair-core.js',
+  'functions/test-reservation-withdraw-core.js',
   // Inscrição/desinscrição no servidor (CF) — espelha a transação do cliente.
   'functions/test-enroll-core.js',
   'functions/test-canonical-enrollment-core.js',

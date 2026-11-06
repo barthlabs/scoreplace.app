@@ -112,6 +112,7 @@ const _registrationMigration = require("./registration-migration-core");
 const _registrationBatchPlan = require("./registration-batch-plan-core");
 const _registrationBatchApply = require("./registration-batch-apply-core");
 const _registrationMutations = require("./registration-mutations-core");
+const _reservationWithdraw = require("./reservation-withdraw-core");
 const _registrationClaim = require("./registration-claim-core");
 const _editCanonicalSlot = require("./edit-canonical-slot-core");
 const _publishedSlotEdit = require("./published-slot-edit-core");
@@ -4488,6 +4489,41 @@ exports.deenrollParticipant = onCall(
         const checked = await _loadCanonicalRosterForMutation(tx, docRef, rawTournament, logicalId);
         const decision = _registrationMutations.withdraw(logicalId, checked.registrations,
           userUid ? { uid: userUid } : { manualParticipantId: manualParticipantId });
+        const reservationPlan = manualParticipantId
+          ? (() => {
+              try { return _reservationWithdraw.plan(rawTournament.placeholderReservations, checked.registrations, manualParticipantId); }
+              catch (error) { throw new HttpsError('failed-precondition', error.message); }
+            })()
+          : null;
+        if (reservationPlan && reservationPlan.outcome === 'reservation') {
+          const inlineDraw = ['matches', 'rounds', 'groups'].some((key) =>
+            Array.isArray(rawTournament[key]) && rawTournament[key].length > 0);
+          if (inlineDraw || await _temPartesDeJogo(tx, docRef, rawTournament)) {
+            throw new HttpsError('failed-precondition', 'Não é possível remover uma reserva após o sorteio.');
+          }
+          const mirrorRef = docRef.collection('inscritos').doc('m' + manualParticipantId);
+          const mirrorSnap = await tx.get(mirrorRef);
+          if (!mirrorSnap.exists) throw new HttpsError('failed-precondition', 'Espelho da reserva ausente.');
+          const mirrorItem = (mirrorSnap.data() || {}).item || {};
+          if (mirrorItem.isPlaceholder !== true || String(mirrorItem.manualParticipantId || '') !== manualParticipantId) {
+            throw new HttpsError('failed-precondition', 'Espelho da reserva não corresponde ao participante.');
+          }
+          const counts = rawTournament._nPartes || {};
+          const n = Number(counts.participants);
+          if (!Number.isInteger(n) || n < 1) {
+            throw new HttpsError('failed-precondition', 'Contagem do elenco divergente.');
+          }
+          const next = _writeCanonicalRosterChanges(tx, docRef, rawTournament, checked.registrations,
+            { updates: [], creates: [] }, { placeholderReservations: reservationPlan.reservationsAfter,
+              _nPartes: { ...counts, participants: n - 1 } }, logicalId);
+          tx.delete(mirrorRef);
+          return { outcome: 'removed', participants: next.participants,
+            placeholderReservations: reservationPlan.reservationsAfter, canonical: true };
+        }
+        if (reservationPlan && reservationPlan.outcome === 'notFound' && decision.outcome === 'notFound') {
+          return { outcome: 'notFound', participants: checked.participants,
+            placeholderReservations: Array.isArray(rawTournament.placeholderReservations) ? rawTournament.placeholderReservations : [], canonical: true };
+        }
         const previousById = new Map(checked.registrations.map(item => [item.registrationId, item]));
         const withdrawalIds = new Set();
         let prepared;
@@ -4501,7 +4537,8 @@ exports.deenrollParticipant = onCall(
         } catch (error) { throw new HttpsError('failed-precondition', error.message); }
         const next = _writeCanonicalRosterUpdates(tx, docRef, rawTournament, checked.registrations,
           prepared, logicalId, withdrawalIds);
-        return { outcome: decision.outcome === "changed" ? "removed" : "notFound", participants: next.participants, canonical: true };
+        return { outcome: decision.outcome === "changed" ? "removed" : "notFound", participants: next.participants,
+          placeholderReservations: Array.isArray(rawTournament.placeholderReservations) ? rawTournament.placeholderReservations : [], canonical: true };
       }
       if (manualParticipantId) {
         throw new HttpsError("failed-precondition", "vaga manual legada deve usar a porta administrativa correspondente");
@@ -4527,8 +4564,10 @@ exports.deenrollParticipant = onCall(
       });
     }
 
-    if (out.outcome === "notFound") return { notFound: true, participants: out.participants };
-    return { notFound: false, participants: out.participants };
+    if (out.outcome === "notFound") return { notFound: true, participants: out.participants,
+      ...(out.canonical ? { placeholderReservations: out.placeholderReservations } : {}) };
+    return { notFound: false, participants: out.participants,
+      ...(out.canonical ? { placeholderReservations: out.placeholderReservations } : {}) };
   }
 );
 

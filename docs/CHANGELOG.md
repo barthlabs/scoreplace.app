@@ -1,3 +1,8 @@
+## 2.5.105 — 06/nov/2026 (exclusão de reserva manual)
+
+- Excluir um placeholder individual sem conta remove a reserva e seu espelho na mesma transação. Inscrições históricas retiradas permanecem intactas.
+- O servidor recusa exclusão se já houver jogo, ID ambíguo, espelho ausente ou reserva de dupla, sem apagar o parceiro.
+
 ## 2.5.103 — 06/nov/2026 (sorteio e convite no sandbox)
 
 - A fase Rei/Rainha lê os jogos canônicos que já estavam gravados, inclusive os grupos do CULT. O servidor devolve a quantidade efetiva de jogos e recusa um sorteio vazio; uma chave com um único avanço automático continua válida.

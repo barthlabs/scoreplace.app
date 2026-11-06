@@ -1,3 +1,6 @@
+// 2.5.105 — Excluir uma reserva individual sem conta remove o card e seu espelho
+// do elenco no mesmo commit. O servidor recusa reservas de dupla e estados
+// divergentes para preservar o outro participante.
 // 2.5.104 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.103 — A chave Rei/Rainha mostra os jogos já gravados no armazenamento
 // canônico, inclusive no sandbox. O sorteio só confirma sucesso quando gerou

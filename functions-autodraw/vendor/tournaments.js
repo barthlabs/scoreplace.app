@@ -971,13 +971,15 @@ window.removeParticipantFunction = function (tId, participantName, memberUid) {
                 var _canonical = _tPre && _tPre.canonicalRegistrationMigration && _tPre.canonicalRegistrationMigration.fingerprint;
                 if (_canonical) {
                     var _manualId = '';
-                    (Array.isArray(_tPre.participants) ? _tPre.participants : []).some(function (entry) {
+                    var _findManualId = function (entry) {
                         if (!entry || typeof entry !== 'object') return false;
                         if (String(entry.manualParticipantId || '') === String(memberUid || '')) { _manualId = String(memberUid); return true; }
                         if (String(entry.p1ManualId || '') === String(memberUid || '')) { _manualId = String(memberUid); return true; }
                         if (String(entry.p2ManualId || '') === String(memberUid || '')) { _manualId = String(memberUid); return true; }
                         return false;
-                    });
+                    };
+                    var _inParticipants = (Array.isArray(_tPre.participants) ? _tPre.participants : []).some(_findManualId);
+                    if (!_inParticipants) (Array.isArray(_tPre.placeholderReservations) ? _tPre.placeholderReservations : []).some(_findManualId);
                     if (!memberUid) {
                         if (typeof showNotification === 'function') showNotification('Identidade necessária', 'Reabra a lista: este participante não tem uma identidade canônica disponível.', 'warning');
                         return;
@@ -992,6 +994,7 @@ window.removeParticipantFunction = function (tId, participantName, memberUid) {
                             return;
                         }
                         _tPre.participants = result.participants;
+                        if (Array.isArray(result.placeholderReservations)) _tPre.placeholderReservations = result.placeholderReservations;
                         if (result.notFound && typeof showNotification === 'function') showNotification('Inscrição não encontrada', 'Este participante já não constava no elenco.', 'info');
                         const container = document.getElementById('view-container');
                         if (container) {
