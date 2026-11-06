@@ -11,6 +11,10 @@ assert(deploy.indexOf('check-hosting-prerequisites.js') < deploy.indexOf('SP_PRE
   'pré-checagem deve vir antes da suíte');
 assert(deploy.indexOf('check-hosting-prerequisites.js') < deploy.indexOf('git push --force-with-lease='),
   'pré-checagem deve vir antes do push');
+const batches = fs.readFileSync(path.join(root, 'scripts/revisar-diff-em-lotes.sh'), 'utf8');
+assert(deploy.includes('SP_REVIEW_VALIDATE_FIRST_BATCH=0') &&
+  batches.includes('SP_REVIEW_VALIDATE_FIRST_BATCH:-1'),
+  'publicador roda a suíte no preflight uma vez; revisão manual preserva validação');
 
 const saved = [{ name: 'applyMatchResult', updateTime: 'antigo' }];
 const live = [{ name: 'projects/p/locations/us-central1/functions/applyMatchResult',

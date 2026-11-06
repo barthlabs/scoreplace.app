@@ -176,7 +176,7 @@ for file in "$TMP"/batch-*; do
   n="${file##*-}"; file_count=$(wc -l < "$file" | tr -d ' ')
   echo "── lote $n/$count: $file_count arquivo(s)"
   if [[ "$MODE" == --plan ]]; then sed 's/^/   /' "$file"; continue; fi
-  validate=0; [[ "$n" == 1 ]] && validate=1
+  validate=0; [[ "$n" == 1 ]] && validate="${SP_REVIEW_VALIDATE_FIRST_BATCH:-1}"
   SP_REVIEW_BASE="$BASE" SP_REVIEW_FILE_LIST="$file" SP_REVIEW_PART="$n-de-$count" \
     SP_REVIEW_CROSS_BATCH_EVIDENCE="$CROSS_EVIDENCE" \
     SP_REVIEW_VALIDATE="$validate" "$ROOT/scripts/revisar.sh" diff

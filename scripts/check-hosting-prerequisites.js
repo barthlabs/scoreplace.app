@@ -25,11 +25,14 @@ function main() {
   console.log('▸ pré-checagem rápida: convite e trava regional antes da suíte');
   execFileSync(process.execPath, [path.join(__dirname, 'check-invite-functions-published.js')],
     { cwd: root, stdio: 'inherit' });
+  if (!fs.existsSync(gatePath)) {
+    throw new Error('manifesto da trava regional ausente: ' + gatePath);
+  }
   const gate = JSON.parse(fs.readFileSync(gatePath, 'utf8'));
   const live = JSON.parse(execFileSync('gcloud', [
     'functions', 'list', '--project', 'scoreplace-app', '--regions', 'us-central1',
     '--v2', '--format=json',
-  ], { cwd: root, encoding: 'utf8' }));
+  ], { cwd: root, encoding: 'utf8', timeout: 60000 }));
   const errors = validateCallables(gate.normal, live);
   if (errors.length) {
     for (const error of errors) console.error('✗ ' + error);

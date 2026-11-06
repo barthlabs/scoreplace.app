@@ -377,7 +377,9 @@ if [[ -n "${SP_REVIEW_EVIDENCE:-}" && -f "$SP_REVIEW_EVIDENCE" ]]; then
   cat "$SP_REVIEW_EVIDENCE" >> "$AUDITORIA_TRANSICAO"
 fi
 echo "▸ 1.8 revisão cruzada sobre o corte remoto $BASE_REVISAO..HEAD…"
-if ! SP_REVIEW_BASE="$BASE_REVISAO" SP_REVIEW_EVIDENCE="$AUDITORIA_TRANSICAO" "$RAIZ/scripts/revisar-diff-em-lotes.sh"; then
+# O preflight abaixo executa a suíte inteira no mesmo corte. A revisão recebe
+# a evidência da auditoria e não repete npm test antes dessa execução.
+if ! SP_REVIEW_VALIDATE_FIRST_BATCH=0 SP_REVIEW_BASE="$BASE_REVISAO" SP_REVIEW_EVIDENCE="$AUDITORIA_TRANSICAO" "$RAIZ/scripts/revisar-diff-em-lotes.sh"; then
   echo
   echo "✗ O REVISOR NÃO APROVOU (ou não respondeu) — nada foi empurrado nem publicado."
   echo "  Parecer em .claude/tmp/parecer-<revisor>-diff.md: atenda os pontos e rode de novo (o"
