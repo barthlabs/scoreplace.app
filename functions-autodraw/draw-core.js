@@ -811,8 +811,6 @@ function canRecompile(t) {
 // um delta atômico sobre o doc fresco — ver project_concurrency_safe_saves). Aqui só muta
 // `t` em memória e devolve o que mudou.
 //
-// PRÉ-CONDIÇÃO: `canRecompile(t)` — sem chave ainda. Chamar com chave existente é
-// re-sorteio, que é decisão do organizador no cliente (project_draw_once_canonical_order).
 function repeatedMemberInPair(entries, resolveName) {
   const normalize = value => String(value || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
     .trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR');
@@ -837,6 +835,8 @@ function repeatedMemberInPair(entries, resolveName) {
   return '';
 }
 
+// PRÉ-CONDIÇÃO: `canRecompile(t)` — sem chave ainda. Chamar com chave existente é
+// re-sorteio, que é decisão do organizador no cliente (project_draw_once_canonical_order).
 function drawInitial(t, opts) {
   opts = opts || {};
   const win = g.window;

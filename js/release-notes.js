@@ -3,6 +3,8 @@
 // houver falha. A Tela no ar acompanha os jogos das quadras em tempo real.
 // O desempate por simples permite configurar a pontuação e a vantagem;
 // por padrão, vence quem fizer cinco pontos primeiro.
+// Jogos em melhor de três ou cinco mostram os sets seguintes e aceitam salvar
+// cada set concluído sem encerrar a partida antes da decisão.
 // 2.5.100 — O painel de jogos em quadra mantém o relógio dentro do card, usa
 // a altura real do conteúdo e mostra Cancelar com o X canônico do aplicativo.
 // O mesmo card é usado em todos os torneios concentrados.

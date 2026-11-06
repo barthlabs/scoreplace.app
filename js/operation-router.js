@@ -172,12 +172,27 @@
     return !today || today === state.day;
   }
   async function align(cfg, tId, sandbox, headers) {
-    var existing = selection.get(tId);
-    if (existing && existing.schema === cfg.schema && selectedDayMatches(tId, existing, sandbox)) return existing;
     if (aligning.has(tId)) return aligning.get(tId);
+    var existing = selection.get(tId);
     var task = (async function () {
+        // A eleição é feita uma vez; nos cliques seguintes basta conferir o
+        // registro atual. Outro aparelho pode ter trocado a região desde então.
+        // Esta leitura não repete as sondas nem a eleição quando nada mudou.
+        if (existing && existing.schema === cfg.schema && selectedDayMatches(tId, existing, sandbox)) {
+          try {
+            var currentState = await control(cfg, existing.region, { action: 'current', tournamentId: tId, sandbox: sandbox }, headers);
+            if (currentState.selected && currentState.region === existing.region &&
+                currentState.revision === existing.revision && currentState.day === existing.day) return existing;
+          } catch (error) {
+            if (!error.infrastructure) throw error;
+          }
+          selection.delete(tId);
+        }
         var list = await healthy(cfg, headers);
-        var state = await control(cfg, list[0].region, { action: 'current', tournamentId: tId, sandbox: sandbox }, headers);
+        // Se a resposta da região antiga divergiu, consulte outra região
+        // saudável antes de adotar a nova escolha.
+        var controlRegion = existing && (list.find(function (item) { return item.region !== existing.region; }) || list[0]) || list[0];
+        var state = await control(cfg, controlRegion.region, { action: 'current', tournamentId: tId, sandbox: sandbox }, headers);
         if (!state.selected) {
           state = await control(cfg, list[0].region, { action: 'select', tournamentId: tId, sandbox: sandbox,
             region: list[0].region, sourceDigest: cfg.services[CONTROL.replace(/-v2$/, '-v' + cfg.schema)].digest }, headers);

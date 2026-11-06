@@ -105,6 +105,16 @@ assert.equal(flow.decision.pointsToWin, 5);
 assert.equal(flow.decision.pointMargin, 1);
 assert.equal(flow.decision.setsToWin, 1);
 assert.deepStrictEqual(flow.decision.matches.map(m => m.displayGameNumber), ['93A', '93B', '93C']);
+const legacyDecision = JSON.parse(JSON.stringify(flow.decision));
+legacyDecision.setsToWin = 2;
+delete legacyDecision.pointsToWin;
+delete legacyDecision.pointMargin;
+const legacyTournament = { phaseTieDecisions: { '0': { [flow.tie.decisionId]: legacyDecision } } };
+const legacyScore = tie.resolvePhaseTies(legacyTournament, 0, pools, next, () => cmp,
+  { type: 'score', decisionId: flow.tie.decisionId, matchId: legacyDecision.matches[0].id,
+    sets: [{ p1: 6, p2: 4 }, { p1: 3, p2: 6 }, { p1: 6, p2: 4 }] }, 1, false, () => 93);
+assert.equal(legacyScore.decision.matches[0].winnerKey, legacyDecision.matches[0].p1.key,
+  'decisão legada já iniciada, melhor de três e sem meta de pontos, pode concluir o jogo');
 assert.throws(() => tie.resolvePhaseTies(fresh, 0, pools, next, () => cmp,
   { type: 'score', decisionId: 'decisao-inexistente', matchId: flow.decision.matches[0].id,
     sets: [{ p1: 6, p2: 4 }] }, 1, false, () => 93),

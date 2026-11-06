@@ -1582,112 +1582,90 @@ window._buildManualSet = function (s1, s2, opts) {
  * lado só, confirmar gravaria um placar incompleto. Zero é valor VÁLIDO (6-0 existe), então
  * o teste é sobre a string estar preenchida, NUNCA sobre o número ser verdadeiro — `!0` é
  * `true` e engoliria todo 6-0. */
-window._syncConfirmBtn = function (matchId) {
+window._scoreField = function (root, id) {
+  if (!root) return document.getElementById(id);
+  var replica = Array.prototype.find.call(root.querySelectorAll('input[data-operations-source-input]'), function (el) {
+    return el.getAttribute('data-operations-source-input') === id;
+  });
+  if (replica) return replica;
+  return Array.prototype.find.call(root.querySelectorAll('[id]'), function (el) { return el.id === id; }) || null;
+};
+
+window._syncConfirmBtn = function (matchId, root) {
   try {
-    var btn = document.getElementById('confirm-' + matchId);
+    var field = function (id) { return window._scoreField(root, id); };
+    var btn = field('confirm-' + matchId);
     if (!btn) return;
-    var s1 = document.getElementById('s1-' + matchId);
-    var s2 = document.getElementById('s2-' + matchId);
+    var s1 = field('s1-' + matchId), s2 = field('s2-' + matchId);
     var cheio = function (el) { return !!(el && String(el.value).trim() !== ''); };
     var escrito = cheio(s1) && cheio(s2);
+    // Melhor de N também pode receber um set seguinte no mesmo clique. Qualquer
+    // campo preenchido tira o Ao Vivo de cena; Confirmar então explica um buraco.
+    if (root && root.querySelectorAll('.sp-set-inp--live').length) {
+      escrito = Array.prototype.some.call(root.querySelectorAll('.sp-set-inp--live'), cheio);
+    }
     btn.style.display = escrito ? '' : 'none';
-    /* ⛔ E O "AO VIVO" SOME NA MESMA HORA — eles são um PAR EXCLUDENTE.
-     * Ordem do dono: _"se a pessoa digitar um placar deve aparecer o confirmar e sumir o ao
-     * vivo (o jogo foi feito sem ao vivo)"_. Digitar o placar à mão É a declaração de que
-     * ninguém acompanhou ao vivo; deixar os dois lado a lado oferece um caminho que já não
-     * faz sentido. Apagar o que foi digitado devolve o "Ao Vivo" — nada é irreversível. */
-    var live = document.getElementById('live-' + matchId);
+    var live = field('live-' + matchId);
     if (live) live.style.display = escrito ? 'none' : '';
   } catch (e) {}
 };
 
-window._highlightWinner = function (matchId) {
-  window._syncConfirmBtn(matchId);
-  // O campo de TB é horizontal ao placar que o abriu. Não basta mostrar o input:
-  // a coluna do placar, a coluna correspondente do outro lado e o rótulo precisam
-  // abrir JUNTOS, ou o cabeçalho deixa de apontar para seu próprio campo.
-  // Esta função não conhece IDs alternativos nem p1/p2; ela deriva o índice da
-  // coluna que contém o input e sincroniza só os elementos daquele set.
-  // [[regressao_stb_dois_digitos_e_tb_lateral]]
-  var _abrirColunaDoTieBreak = function (tbEl) {
-    if (!tbEl || !tbEl.closest) return;
-    var col = tbEl.closest('.sp-set-col[data-sp-set-index]');
-    if (!col) return; // placar de set único continua no seu layout canônico.
-    var idx = col.getAttribute('data-sp-set-index');
-    var card = col.closest('.sp-match-card');
-    if (!card || idx == null) return;
-    Array.prototype.forEach.call(card.querySelectorAll('.sp-set-col[data-sp-set-index="' + idx + '"]'), function (el) {
-      el.classList.add('sp-set-col--tb-open');
-    });
-  };
-  const s1El = document.getElementById(`s1-${matchId}`);
-  const s2El = document.getElementById(`s2-${matchId}`);
-  if (!s1El || !s2El) return;
-  const s1 = parseInt(s1El.value);
-  const s2 = parseInt(s2El.value);
-
-  // Reveal tiebreak inputs when both games equal the tiebreak trigger (e.g. 6-6)
-  const tb1El = document.getElementById(`tb1-${matchId}`);
-  const tb2El = document.getElementById(`tb2-${matchId}`);
-  if (tb1El && tb2El) {
-    var _trigger = null;
-    try {
-      var _tours = window.AppStore && window.AppStore.tournaments;
-      if (Array.isArray(_tours)) {
-        for (var ti = 0; ti < _tours.length; ti++) {
-          var _tour = _tours[ti];
-          var _matches = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(_tour) : (_tour.matches || []);
-          for (var mi = 0; mi < _matches.length; mi++) {
-            if (_matches[mi] && _matches[mi].id === matchId) {
-              // v1.0.72-beta: trigger TB em qualquer torneio com tiebreakEnabled
-              // (não exige type==='sets'). Permite TB inputs em torneios simples
-              // que tenham tiebreak configurado.
-              var _tsc = (typeof window._effectiveScoring === 'function') ? window._effectiveScoring(_tour, _matches[mi]) : _tour.scoring;
-              if (window._scoringUsesSets(_tsc) && _tsc.tiebreakEnabled !== false) {
-                // _trigger = games do PERDEDOR no set decidido no TB, conforme a regra do torneio
-                // (scoring.tiebreakAt: 'g-1'→6-5, 'g'→7-6; fallback por esporte). Ver _tbLoserGames.
-                _trigger = window._tbLoserGames(_tsc, _tour && _tour.sport);
-              }
-              break;
-            }
-          }
-          if (_trigger !== null) break;
-        }
+window._highlightWinner = function (matchId, root) {
+  window._syncConfirmBtn(matchId, root);
+  var field = function (id) { return window._scoreField(root, id); };
+  var card = root || (field('s1-' + matchId) && field('s1-' + matchId).closest('.sp-match-card'));
+  var suffixes = [''];
+  if (card) {
+    Array.prototype.forEach.call(card.querySelectorAll('input.sp-set-inp--live'), function (el) {
+      var key = el.getAttribute('data-operations-source-input') || el.id || '';
+      var prefix = 's1-' + matchId + '-';
+      if (key.indexOf(prefix) === 0) {
+        var suffix = key.slice(('s1-' + matchId).length);
+        if (suffixes.indexOf(suffix) < 0) suffixes.push(suffix);
       }
-    } catch(e) {}
-    // v1.0.77-beta: TB inputs uma vez mostrados NUNCA escondem (até re-render
-    // do card). User: 'continua escondendo'. Abordagem v1.0.76 ainda escondia
-    // em alguns casos por race do dataset.tbShown vs reflow. Agora: simples —
-    // se trigger hit, mostra E marca data-tb-shown. Se data-tb-shown='1', fica.
-    // Reset só quando card re-renderiza (input novo, sem o data attribute).
-    // _trigger = gamesPerSet configurado pelo dono → revela os campos de TB SÓ no placar do
-    // gatilho: gp6 → 7-6, gp5 → 6-5 (nunca 6-5 num set de 6, nem 8-7 — o set fecha no gatilho).
-    var triggerHit = _trigger !== null && window._isTiebreakSetScore(s1, s2, _trigger);
-    if (window._dtrace && !isNaN(s1) && !isNaN(s2)) window._dtrace('tbReveal', { v: (window.SCOREPLACE_VERSION || '?'), s: s1 + '-' + s2, trigger: _trigger, hit: triggerHit });
-    var alreadyShown = tb1El.getAttribute('data-tb-shown') === '1';
-    if (triggerHit || alreadyShown) {
-      tb1El.style.display = 'inline-block';
-      tb2El.style.display = 'inline-block';
-      _abrirColunaDoTieBreak(tb1El);
-      _abrirColunaDoTieBreak(tb2El);
-      tb1El.setAttribute('data-tb-shown', '1');
-      tb2El.setAttribute('data-tb-shown', '1');
-      // ⭐ O aviso "dif 2 pts" aparece NO MESMO instante que os campos — mesmo gatilho, uma
-      // decisão só. Ele nasce escondido no card (bracket.js, `tbhint-<id>`) e só existe
-      // quando a margem é 2+. [[project_placar_por_sets_no_card]]
-      var _hint = document.getElementById('tbhint-' + matchId);
-      if (_hint) _hint.style.display = 'block';
-    }
-    // NÃO esconde — uma vez visível, persiste. User pode deixar vazio se
-    // não foi TB de fato. Save logic ignora valores vazios.
+    });
   }
-
-  if (isNaN(s1) || isNaN(s2)) return;
-  // Game count is authoritative for winner (7-6 ⇒ player with 7 wins the TB)
-  s1El.style.color = s1 > s2 ? '#4ade80' : s1 < s2 ? '#f87171' : 'var(--text-bright)';
-  s2El.style.color = s2 > s1 ? '#4ade80' : s2 < s1 ? '#f87171' : 'var(--text-bright)';
+  var trigger = null;
+  try {
+    var tours = window.AppStore && window.AppStore.tournaments;
+    for (var ti = 0; Array.isArray(tours) && ti < tours.length && trigger === null; ti++) {
+      var tour = tours[ti];
+      var matches = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(tour) : (tour.matches || []);
+      for (var mi = 0; mi < matches.length; mi++) if (matches[mi] && matches[mi].id === matchId) {
+        var sc = (typeof window._effectiveScoring === 'function') ? window._effectiveScoring(tour, matches[mi]) : tour.scoring;
+        if (sc && window._scoringUsesSets(sc) && sc.tiebreakEnabled !== false)
+          trigger = window._tbLoserGames(sc, tour.sport);
+        break;
+      }
+    }
+  } catch (e) {}
+  suffixes.forEach(function (suffix) {
+    var s1El = field('s1-' + matchId + suffix), s2El = field('s2-' + matchId + suffix);
+    if (!s1El || !s2El) return;
+    var s1 = parseInt(s1El.value, 10), s2 = parseInt(s2El.value, 10);
+    var tb1 = field('tb1-' + matchId + suffix), tb2 = field('tb2-' + matchId + suffix);
+    if (tb1 && tb2 && trigger !== null) {
+      var hit = window._isTiebreakSetScore(s1, s2, trigger);
+      if (hit || tb1.getAttribute('data-tb-shown') === '1') {
+        tb1.style.display = tb2.style.display = 'inline-block';
+        tb1.setAttribute('data-tb-shown', '1'); tb2.setAttribute('data-tb-shown', '1');
+        [tb1, tb2].forEach(function (el) {
+          var col = el.closest && el.closest('.sp-set-col[data-sp-set-index]');
+          var idx = col && col.getAttribute('data-sp-set-index');
+          var host = col && col.closest('.sp-match-card');
+          if (idx != null && host) Array.prototype.forEach.call(host.querySelectorAll('.sp-set-col[data-sp-set-index="' + idx + '"]'), function (x) {
+            x.classList.add('sp-set-col--tb-open');
+          });
+        });
+        var hint = field('tbhint-' + matchId);
+        if (hint) hint.style.display = 'block';
+      }
+    }
+    if (isNaN(s1) || isNaN(s2)) return;
+    s1El.style.color = s1 > s2 ? '#4ade80' : s1 < s2 ? '#f87171' : 'var(--text-bright)';
+    s2El.style.color = s2 > s1 ? '#4ade80' : s2 < s1 ? '#f87171' : 'var(--text-bright)';
+  });
 };
-
 
 window._saveSetResult = function(tId, matchId) {
   const t = window._findTournamentById(tId);
@@ -1952,65 +1930,33 @@ window._confirmSetFromCard = function (tId, matchId, o) {
   var m = _findMatch(t, matchId); if (!m) return;
   var plan = o.plan, col = plan && plan.live;
   if (!plan || !col) return;
-  var s1 = o.s1, s2 = o.s2;
-  var _tt = function (k, fb, par) {
-    var v = (typeof _t === 'function') ? _t(k, par) : null;
-    if (!v || v === k) { v = fb; Object.keys(par || {}).forEach(function (x) { v = v.replace('{' + x + '}', par[x]); }); }
-    return v;
-  };
-  if (col.kind === 'set') {
-    var setProblem = window._validateNormalSetScore(o.scoring, t.sport, s1, s2);
-    if (!setProblem.ok) { _showSetScoreProblem(setProblem); return; }
-  }
-  // ⛔ SET NÃO EMPATA — nem em grupo, onde a PARTIDA pode empatar. O empate é do jogo,
-  // nunca de um set: 6-6 é tie-break, e tie-break tem vencedor.
-  if (s1 === s2) {
-    showAlertDialog(_tt('bracket.setNoDraw', 'Set não pode empatar'),
-      _tt('bracket.setNoDrawDetail', 'O {set} precisa de um vencedor.', { set: col.label }), null, { type: 'warning' });
-    return;
-  }
-  if (col.kind === 'stb' && Math.max(s1, s2) < col.points) {
-    showAlertDialog(_tt('bracket.stbShort', 'Super tie-break incompleto'),
-      _tt('bracket.stbShortDetail', 'O super tie-break vai até {n} pontos.', { n: col.points }), null, { type: 'warning' });
-    return;
-  }
-  // ⛔ AVISAR A MARGEM E NÃO COBRÁ-LA SERIA MENTIR. A linha de cima anuncia "Super
-  // Tie-Break (dif 2 pts)" desde que os sets empatam; se o 10-9 passasse mesmo assim, a tela
-  // prometeria uma regra e o jogo jogaria outra — que é exatamente o buraco que o dono já
-  // pegou uma vez no empate do set. A margem é a MESMA do plano, lida uma vez.
-  // [[feedback_behavior_is_pure_function_of_config]] · [[project_empate_do_set_vive_no_formato]]
-  var _margem = plan.tiebreakMargin || 2;
-  if (col.kind === 'stb' && _margem >= 2 && Math.abs(s1 - s2) < _margem) {
-    showAlertDialog(_tt('bracket.stbMargin', 'Super tie-break sem a diferença'),
-      _tt('bracket.stbMarginDetail', 'O super tie-break só termina com {n} pontos de diferença.', { n: _margem }),
-      null, { type: 'warning' });
-    return;
-  }
-  // FONTE ÚNICA do set gravado (games + subplacar do tie-break): _buildManualSet.
-  var novo = window._buildManualSet(s1, s2, {
-    isTiebreakEntry: !!o.isTiebreakEntry, tbP1: o.tbP1, tbP2: o.tbP2
-  }).sets[0];
-  if (col.kind === 'stb') novo.superTiebreak = true;   // marca o que ESTE set foi, pro replay/histórico
-
-  var sets = plan.played.concat([novo]);
-  var p1 = 0, p2 = 0;
-  sets.forEach(function (s) {
-    var a = Number(s.gamesP1) || 0, b = Number(s.gamesP2) || 0;
-    if (a > b) p1++; else if (b > a) p2++;
+  var field = o.field || function (id) { return document.getElementById(id); };
+  var rows = (plan.columns || []).map(function (c, i) {
+    var original = plan.played[i] || null;
+    if (original) {
+      var tb = original.tiebreak || {};
+      return { original: original, col: c, isStb: !!original.superTiebreak || c.kind === 'stb',
+        a: { value: String(original.gamesP1) }, b: { value: String(original.gamesP2) },
+        tbA: { value: String(tb.pointsP1 != null ? tb.pointsP1 : (tb.p1 != null ? tb.p1 : '')) },
+        tbB: { value: String(tb.pointsP2 != null ? tb.pointsP2 : (tb.p2 != null ? tb.p2 : '')) } };
+    }
+    var suffix = c.state === 'open' ? '-' + c.i : '';
+    return { original: null, col: c, isStb: c.kind === 'stb',
+      a: field('s1-' + matchId + suffix) || (!o.field ? { value: c === col ? o.s1 : '' } : null),
+      b: field('s2-' + matchId + suffix) || (!o.field ? { value: c === col ? o.s2 : '' } : null),
+      tbA: field('tb1-' + matchId + suffix) || { value: c === col && o.tbP1 != null ? o.tbP1 : '' },
+      tbB: field('tb2-' + matchId + suffix) || { value: c === col && o.tbP2 != null ? o.tbP2 : '' } };
   });
-  if (p1 >= plan.setsToWin || p2 >= plan.setsToWin) {
-    return window._commitSetsResult(tId, matchId, sets, p1, p2, false);   // ← a partida fecha aqui
+  if (rows.some(function (r) { return !r.a || !r.b; })) {
+    showNotification('Placar indisponível', 'Atualize o card e tente novamente.', 'warning');
+    return;
   }
-  return Promise.resolve(window._saveSetsEmAndamento(tId, matchId, sets, p1, p2)).then(function (estado) {
-    // "Confirmado" quer dizer que a CF respondeu e o set entrou no estado
-    // autoritativo. Se ficou na fila offline, commitResultTx já informou isso;
-    // se falhou, nunca prometemos um placar que o servidor não recebeu.
-    if (estado !== true || typeof showNotification !== 'function') return estado;
-    var prox = window._matchSetPlan(o.scoring, m, { sets: sets });
-    showNotification(_tt('bracket.setSaved', 'Set confirmado'),
-      _tt('bracket.setSavedNext', '{set} registrado. Agora o {next}.',
-        { set: col.label, next: (prox && prox.live) ? prox.live.label : '' }), 'success');
-    return estado;
+  var result = window._saveEditedSetsInline(tId, matchId, o.scoring, rows, null, null, { rejectAfterDecision: true });
+  if (result === undefined) return;
+  return Promise.resolve(result).then(function (saved) {
+    if (saved === true && !m.winner && typeof showNotification === 'function')
+      showNotification('Set confirmado', 'Placar salvo; siga para o próximo set.', 'success');
+    return saved;
   });
 };
 
@@ -2026,7 +1972,7 @@ window._editSetsInline = function (tId, matchId) {
   var draftMatch = {};
   Object.keys(m).forEach(function (k) { draftMatch[k] = m[k]; });
   draftMatch.sets = sourceSets.slice();
-  var plan = window._matchSetPlan(sc, draftMatch, { sets: draftMatch.sets });
+  var plan = window._matchSetPlan(sc, draftMatch, { sets: draftMatch.sets, editing: true });
   if (!plan || !plan.multi) return;
   window._setsEditState = { tId: String(tId), matchId: String(matchId) };
   window._suppressSoftRefresh = true;
@@ -2070,7 +2016,7 @@ window._saveEditedSetsInCard = function (tId, matchId) {
   var sc = (typeof window._effectiveScoring === 'function') ? window._effectiveScoring(t, m) : t.scoring;
   var sourceSets = (m.pendingResult && Array.isArray(m.pendingResult.sets)) ? m.pendingResult.sets : (m.sets || []);
   var draftMatch = {}; Object.keys(m).forEach(function (k) { draftMatch[k] = m[k]; }); draftMatch.sets = sourceSets.slice();
-  var plan = window._matchSetPlan(sc, draftMatch, { sets: draftMatch.sets });
+  var plan = window._matchSetPlan(sc, draftMatch, { sets: draftMatch.sets, editing: true });
   var rows = (plan.columns || []).map(function (col, i) {
     var original = sourceSets[i] || col.set || null;
     return {
@@ -2081,52 +2027,66 @@ window._saveEditedSetsInCard = function (tId, matchId) {
       tbB: document.getElementById('sp-edit-tb-' + matchId + '-' + i + '-2') || { value: '' }
     };
   });
-  if (rows.some(function (r) { return !r.a || !r.b; })) return;
+  if (rows.some(function (r) { return !r.a || !r.b; })) {
+    showNotification('Placar indisponível', 'Atualize o card e tente novamente.', 'warning');
+    return;
+  }
   return window._saveEditedSetsInline(tId, matchId, sc, rows, null, function () {
     window._setsEditState = null;
     window._suppressSoftRefresh = false;
   });
 };
 
-window._saveEditedSetsInline = function (tId, matchId, sc, rows, overlay, onAccepted) {
+window._saveEditedSetsInline = function (tId, matchId, sc, rows, overlay, onAccepted, options) {
   var t = window._findTournamentById(tId); if (!t) return;
   var m = _findMatch(t, matchId); if (!m) return;
-  var sets = [], sawBlank = false;
+  var sets = [], sawBlank = false, p1 = 0, p2 = 0;
+  var setsToWin = window._matchSetPlan(sc, m).setsToWin;
+  var rejectAfterDecision = !!(options && options.rejectAfterDecision);
+  var countSet = function (s) { if (s.gamesP1 > s.gamesP2) p1++; else if (s.gamesP2 > s.gamesP1) p2++; };
   for (var i = 0; i < rows.length; i++) {
     var r = rows[i], av = String(r.a.value || '').trim(), bv = String(r.b.value || '').trim();
     if (!av && !bv) { sawBlank = true; continue; }
     if (!av || !bv || sawBlank) { showNotification('Placar incompleto', 'Preencha os dois lados de cada set, sem pular sets.', 'warning'); return; }
     var a = parseInt(av, 10), b = parseInt(bv, 10);
-    if (isNaN(a) || isNaN(b) || a < 0 || b < 0 || a === b) { showNotification('Placar inválido', 'Cada set precisa de dois placares diferentes.', 'warning'); return; }
     var ta = String(r.tbA.value || '').trim(), tb = String(r.tbB.value || '').trim();
+    var tba = ta ? parseInt(ta, 10) : null, tbb = tb ? parseInt(tb, 10) : null;
+    var originalTb = r.original && r.original.tiebreak;
+    var oldA = r.original && Number(r.original.gamesP1), oldB = r.original && Number(r.original.gamesP2);
+    var oldTbA = originalTb && Number(originalTb.pointsP1 != null ? originalTb.pointsP1 : originalTb.p1);
+    var oldTbB = originalTb && Number(originalTb.pointsP2 != null ? originalTb.pointsP2 : originalTb.p2);
+    if (rejectAfterDecision && (p1 >= setsToWin || p2 >= setsToWin)) {
+      showNotification('Placar após o fim', 'Apague o set preenchido após a partida já estar decidida.', 'warning'); return;
+    }
+    if (r.original && a === oldA && b === oldB &&
+        (tba == null ? oldTbA == null : tba === oldTbA) &&
+        (tbb == null ? oldTbB == null : tbb === oldTbB)) {
+      sets.push(r.original); countSet(r.original); continue;
+    }
+    if (isNaN(a) || isNaN(b) || a < 0 || b < 0 || a === b) { showNotification('Placar inválido', 'Cada set precisa de dois placares diferentes.', 'warning'); return; }
     var isStb = r.isStb;
     if (!isStb) {
       var normalProblem = window._validateNormalSetScore(sc, t.sport, a, b);
       if (!normalProblem.ok) { _showSetScoreProblem({ detail: (i + 1) + 'º set: ' + normalProblem.detail }); return; }
     }
-    var tbTrigger = window._tbLoserGames(sc, t.sport);
-    var isTb = !isStb && window._isTiebreakSetScore(a, b, tbTrigger);
+    var tbEnabled = sc && sc.tiebreakEnabled !== false;
+    var tbTrigger = tbEnabled ? window._tbLoserGames(sc, t.sport) : null;
+    var isTb = !isStb && tbEnabled && window._isTiebreakSetScore(a, b, tbTrigger);
     if (isTb && (!ta || !tb)) { showNotification('Tie-break incompleto', 'Informe os pontos do tie-break deste set.', 'warning'); return; }
     if ((ta && !tb) || (!ta && tb)) { showNotification('Tie-break incompleto', 'Informe os dois lados do tie-break.', 'warning'); return; }
-    var tba = ta ? parseInt(ta, 10) : null, tbb = tb ? parseInt(tb, 10) : null;
     if (ta && (isNaN(tba) || isNaN(tbb) || tba === tbb || (a > b ? tba <= tbb : tbb <= tba))) { showNotification('Tie-break inválido', 'O vencedor do tie-break deve ser o vencedor do set.', 'warning'); return; }
-    var originalTb = r.original && r.original.tiebreak;
-    var oldA = r.original && Number(r.original.gamesP1), oldB = r.original && Number(r.original.gamesP2);
-    var oldTbA = originalTb && Number(originalTb.pointsP1 != null ? originalTb.pointsP1 : originalTb.p1);
-    var oldTbB = originalTb && Number(originalTb.pointsP2 != null ? originalTb.pointsP2 : originalTb.p2);
-    if (r.original && a === oldA && b === oldB && (tba == null ? oldTbA == null : tba === oldTbA) && (tbb == null ? oldTbB == null : tbb === oldTbB)) {
-      sets.push(r.original); continue;
+    if (isTb && window._tbMargem(sc) >= 2 && Math.abs(tba - tbb) < window._tbMargem(sc)) {
+      showNotification('Tie-break inválido', 'Confira a diferença mínima de pontos.', 'warning'); return;
     }
-    var entry = window._buildManualSet(a, b, { isTiebreakEntry: !!ta, tbP1: tba, tbP2: tbb }).sets[0];
+    var entry = window._buildManualSet(a, b, { isTiebreakEntry: !!ta && tbEnabled, tbP1: tba, tbP2: tbb }).sets[0];
     if (isStb) {
       var planMargin = (window._matchSetPlan(sc, m, { sets: sets }).tiebreakMargin) || 2;
       if (Math.max(a, b) < ((window._matchSetPlan(sc, m, { sets: sets }).live || {}).points || 10) || Math.abs(a - b) < planMargin) { showNotification('Super tie-break inválido', 'Confira a pontuação e a diferença mínima do super tie-break.', 'warning'); return; }
       entry.superTiebreak = true;
     }
-    sets.push(entry);
+    sets.push(entry); countSet(entry);
   }
   if (!sets.length) { showNotification('Sem placar', 'Informe ao menos um set para salvar.', 'warning'); return; }
-  var p1 = 0, p2 = 0; sets.forEach(function (s) { if (s.gamesP1 > s.gamesP2) p1++; else if (s.gamesP2 > s.gamesP1) p2++; });
   if (overlay) overlay.remove();
   if (typeof onAccepted === 'function') onAccepted();
   var finalPlan = window._matchSetPlan(sc, m, { sets: sets });
@@ -2387,9 +2347,7 @@ window._saveResultInline = function (tId, matchId, sourceRoot) {
     return;
   }
 
-  var field = function (id) { return sourceRoot
-    ? Array.prototype.find.call(sourceRoot.querySelectorAll('input[data-operations-source-input]'), function (el) { return el.getAttribute('data-operations-source-input') === id; })
-    : document.getElementById(id); };
+  var field = function (id) { return window._scoreField(sourceRoot, id); };
 
   const s1El = field(`s1-${matchId}`);
   const s2El = field(`s2-${matchId}`);
@@ -2398,6 +2356,12 @@ window._saveResultInline = function (tId, matchId, sourceRoot) {
   const s2 = s2El ? parseInt(s2El.value) : NaN;
 
   if (isNaN(s1) || isNaN(s2)) {
+    if (sourceRoot && Array.prototype.some.call(sourceRoot.querySelectorAll('input.sp-set-inp--live'), function (el) {
+      return el !== s1El && el !== s2El && String(el.value || '').trim() !== '';
+    })) {
+      showNotification('Placar incompleto', 'Preencha os sets em ordem.', 'warning');
+      return;
+    }
     showAlertDialog(_t('result.invalidScore'), _t('result.fillScore'), null, { type: 'warning' });
     return;
   }
@@ -2465,7 +2429,7 @@ window._saveResultInline = function (tId, matchId, sourceRoot) {
   if (_planSave && _planSave.multi && _planSave.live) {
     return window._confirmSetFromCard(tId, matchId, {
       s1: s1, s2: s2, tbP1: tbP1, tbP2: tbP2, isTiebreakEntry: isTiebreakEntry,
-      plan: _planSave, scoring: _isc
+      plan: _planSave, scoring: _isc, field: field
     });
   }
   /* ⛔ MELHOR DE N JÁ DECIDIDO NÃO VOLTA A SER UM SET.

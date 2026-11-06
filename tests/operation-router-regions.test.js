@@ -70,13 +70,27 @@ const headers = { Authorization: 'Bearer test' };
   failedRegion = elected; committed = false; receipt = false;
   assert.equal((await router.call('assignMatchCourt', payload, headers)).ok, true);
   assert.equal(calls.filter(x => x.name === 'sp-op-control-v2' && x.payload.action === 'current').length,
-    currentBeforeSecond, 'segunda ação reutiliza a região já selecionada');
+    currentBeforeSecond + 1, 'segunda ação confere a eleição sem refazer todas as sondas');
   assert.notEqual(elected, firstRegion);
   const operations = calls.filter(x => x.name === 'sp-op-court-v2' && !x.payload.probe);
   assert.equal(operations.length, 3);
   assert.equal(operations[1].payload.operationId, operations[2].payload.operationId,
     'failover repete a mesma intenção');
   assert.equal(committed, true);
+  // Uma troca feita em outro aparelho precisa ser vista antes da próxima escrita.
+  failedRegion = '';
+  elected = firstRegion;
+  revision++;
+  const beforeExternal = calls.filter(x => x.name === 'sp-op-court-v2' && !x.payload.probe).length;
+  const beforeExternalCurrent = calls.filter(x => x.name === 'sp-op-control-v2' && x.payload.action === 'current').length;
+  assert.equal((await router.call('assignMatchCourt', payload, headers)).ok, true);
+  const afterExternal = calls.filter(x => x.name === 'sp-op-court-v2' && !x.payload.probe);
+  assert.equal(afterExternal.length, beforeExternal + 1);
+  assert.equal(afterExternal.at(-1).region, firstRegion, 'nova escrita usa a região reeleita em outro aparelho');
+  const externalChecks = calls.filter(x => x.name === 'sp-op-control-v2' && x.payload.action === 'current').slice(beforeExternalCurrent);
+  assert.equal(externalChecks.length, 2, 'divergência exige segunda leitura do controle');
+  assert.notEqual(externalChecks[0].region, externalChecks[1].region,
+    'a segunda leitura não confia de novo na região antiga');
   failedRegion = elected; committed = false; receipt = true;
   const before = calls.filter(x => x.name === 'sp-op-court-v2' && !x.payload.probe).length;
   readFailure = true;
@@ -161,6 +175,6 @@ const headers = { Authorization: 'Bearer test' };
   const sandboxCurrent = calls.filter(x => x.name === 'sp-op-control-v2' && x.payload.action === 'current' && x.payload.tournamentId === 'sb_test').length;
   assert.equal((await router.call('assignMatchCourt', sandboxPayload, headers)).ok, true);
   assert.equal(calls.filter(x => x.name === 'sp-op-control-v2' && x.payload.action === 'current' && x.payload.tournamentId === 'sb_test').length,
-    sandboxCurrent, 'data virtual do sandbox não provoca novo alinhamento');
+    sandboxCurrent + 1, 'data virtual do sandbox só confere a eleição, sem novo alinhamento');
   console.log('✓ eleição, aderência, troca por falha, mesmo operationId e recibo sem escrita duplicada');
 })().catch(error => { console.error(error); process.exitCode = 1; });

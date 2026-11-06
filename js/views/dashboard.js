@@ -2762,7 +2762,9 @@ function renderDashboard(container) {
         ? window._setHeadHtml(_plan, { id: 'dash-sethead-' + mId }) : '';
       var _setGrid = function (side) {
         return (_multiSet && typeof window._setGridHtml === 'function')
-          ? window._setGridHtml(_plan, side, { italico: !!pendingScores }) : '';
+          ? window._setGridHtml(_plan, side, { italico: !!pendingScores,
+              editable: !!canLaunch && !pendingScores, matchId: mId,
+              tiebreakEnabled: _mSc && _mSc.tiebreakEnabled }) : '';
       };
 
       var p1ScoreHtml = _multiSet ? _setGrid(1) : pendingScores
@@ -2795,7 +2797,7 @@ function renderDashboard(container) {
           ? '<button id="live-' + mId + '" class="btn btn-live btn-micro" onclick="event.stopPropagation();window._openLiveScoringForMatch(\'' + _esc(tId) + '\',\'' + _esc(mId) + '\')" style="flex-shrink:0;font-size:0.72rem;">📡 Ao Vivo</button>'
           : '';
         var confirmBtnHtml = (!pendingScores && canLaunch)
-          ? '<button id="confirm-' + mId + '" data-confirm-for="' + _esc(mId) + '" class="btn btn-success btn-micro" onclick="event.stopPropagation();window._saveResultInline(\'' + _esc(tId) + '\',\'' + _esc(mId) + '\')" style="flex-shrink:0;font-size:0.72rem;display:none;">✓ Confirmar</button>'
+          ? '<button id="confirm-' + mId + '" data-confirm-for="' + _esc(mId) + '" class="btn btn-success btn-micro" onclick="event.stopPropagation();window._saveResultInline(\'' + _esc(tId) + '\',\'' + _esc(mId) + '\',this.closest(\'[data-sp-dashboard-card]\'))" style="flex-shrink:0;font-size:0.72rem;display:none;">✓ Confirmar</button>'
           : '';
         defaultHeaderBtns = liveBtnHtml + confirmBtnHtml;
       }
@@ -2821,7 +2823,7 @@ function renderDashboard(container) {
       // `flex:1 1 18.75rem` mantém o comportamento de fila em tela larga (vários
       // cards lado a lado) e ENCHE a largura no telefone; o teto vira 100%, que
       // é o container — nunca mais um número fixo que ignora a escala.
-      return '<div style="flex:1 1 18.75rem;min-width:0;max-width:100%;display:flex;flex-direction:column;gap:0.6rem;">' +
+      return '<div data-sp-dashboard-card style="flex:1 1 18.75rem;min-width:0;max-width:100%;display:flex;flex-direction:column;gap:0.6rem;">' +
         (opts.hideFaseHeader ? '' :
           '<div style="display:flex;align-items:center;gap:8px;">' +
             '<h4 style="color:' + window._spCor(faseColor, 'color') + ';font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;margin:0;border-left:3px solid ' + window._spCor(faseColor, 'borda') + ';padding-left:8px;flex:1;">' +

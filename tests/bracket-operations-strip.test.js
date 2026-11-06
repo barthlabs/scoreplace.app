@@ -291,6 +291,17 @@ assert(start > 0 && end > start);
       return { missingSideHidden, firstSetReady, clearingHides: op.querySelector('button').style.display === 'none' };
     });
     assert.deepEqual(bestOfThree, { missingSideHidden: true, firstSetReady: true, clearingHides: true });
+    const nextSetButton = await page.evaluate(() => {
+      const op = document.createElement('div');
+      op.innerHTML = '<button data-confirm-for="m3" style="display:none">✓</button>' +
+        '<input class="sp-set-inp--live" data-operations-source-input="s1-m3">' +
+        '<input class="sp-set-inp--live" data-operations-source-input="s2-m3">' +
+        '<input class="sp-set-inp--live" data-operations-source-input="s1-m3-1" value="6">' +
+        '<input class="sp-set-inp--live" data-operations-source-input="s2-m3-1" value="4">';
+      _bracketOperationsSyncReplicaScore(op, 'm3');
+      return op.querySelector('button').style.display !== 'none';
+    });
+    assert.equal(nextSetButton, true, 'a réplica oferece Confirmar se um set seguinte foi preenchido');
     const endStart = source.indexOf('function _courtOperationId()');
     const endStop = source.indexOf('function _syncMatchCourtCopies(', endStart);
     assert(endStart > 0 && endStop > endStart);
@@ -416,9 +427,13 @@ assert(start > 0 && end > start);
         window._matchSetPlan = (scoring, match) => {
           if (match.id !== 'best3') return null;
           const played = match.sets || [];
+          const live = { i: played.length, kind: played.length === 2 ? 'stb' : 'set',
+            state: 'live', label: played.length === 2 ? 'STB' : String(played.length + 1), points: 10 };
+          const columns = played.map((set, i) => ({ i, kind: 'set', state: 'done', set }));
+          columns.push(live);
+          if (!played.length) columns.push({ i: 1, kind: 'set', state: 'open' });
           return { multi: true, played, setsToWin: 2, tiebreakMargin: 2,
-            live: { i: played.length, kind: played.length === 2 ? 'stb' : 'set',
-              label: played.length === 2 ? 'STB' : String(played.length + 1), points: 10 } };
+            live, columns };
         };
         window._saveSetsEmAndamento = (_tid, mid, sets, p1, p2) => {
           const match = matches.find(m => m.id === mid);
@@ -446,7 +461,9 @@ assert(start > 0 && end > start);
         const field = (key, value, scoped) => '<input ' + (scoped ? 'data-operations-source-input' : 'id') + '="' + key + '" value="' + value + '">';
         const submit = async (id, values) => {
           const op = document.createElement('div');
-          op.innerHTML = Object.entries(values).map(([key, value]) => field(key, value, true)).join('');
+          const inputs = id === 'best3' && !(matches.find(m => m.id === id).sets || []).length
+            ? { ...values, 's1-best3-1': '', 's2-best3-1': '' } : values;
+          op.innerHTML = Object.entries(inputs).map(([key, value]) => field(key, value, true)).join('');
           // A chave contém números diferentes: o servidor precisa receber a faixa.
           document.body.innerHTML = Object.keys(values).map(key => field(key, 1, false)).join('');
           await window._saveResultInline(tournament.id, id, op);

@@ -1598,6 +1598,16 @@ window._rotaMostraAChaveDeste = function (hash, id) {
       live = { i: li, kind: kindAt(li), label: labelAt(li), points: kindAt(li) === 'stb' ? stbPts : null,
         state: 'live', set: null, w: larg(kindAt(li)) };
       cols.push(live);
+      // Deixe os próximos sets normais acessíveis no mesmo card. O STB só surge
+      // depois de confirmado o empate; a edição mantém apenas o set em curso.
+      if (!opts.editing) {
+        var initialVisible = setsToWin === 2 ? 2 : 3;
+        for (var oi = cols.length; oi < Math.min(initialVisible, bestOf); oi++) {
+          if (kindAt(oi) === 'stb') break;
+          cols.push({ i: oi, kind: kindAt(oi), label: labelAt(oi), points: null,
+            state: 'open', set: null, w: larg(kindAt(oi)) });
+        }
+      }
     }
 
     // Reserva a largura máxima do melhor de 3 desde o primeiro set. Só a coluna
@@ -2046,10 +2056,19 @@ window._assignGlobalGameNumbers = function (t) {
     var countAttr = ' data-sp-set-count="' + plan.columns.length + '"';
     var formatAttr = plan.bestOf ? (' data-sp-best-of="' + plan.bestOf + '"') : '';
     var cels = plan.columns.map(function (c) {
-      var dentro = (c.state === 'live')
-        ? '<span class="sp-set-zero">\u2013</span>'
-        : _spSetNum(c, side, !!opts.italico);
-      return '<div class="sp-set-col" style="--w:' + c.w + 'px;">' + dentro + '</div>';
+      var pending = c.state === 'live' || c.state === 'open';
+      var dentro = pending ? '<span class="sp-set-zero">\u2013</span>' : _spSetNum(c, side, !!opts.italico);
+      if (pending && opts.editable && opts.matchId) {
+        var mid = String(opts.matchId);
+        var suffix = c.state === 'open' ? '-' + c.i : '';
+        var handler = 'window._highlightWinner(\'' + mid.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',this.closest(\'[data-sp-dashboard-card]\'))';
+        dentro = '<span class="sp-set-score-entry"><input type="number" min="0" inputmode="numeric" placeholder="0"' +
+          ' class="sp-set-inp sp-set-inp--live" id="s' + side + '-' + mid + suffix + '" oninput="' + handler + '">';
+        if (c.kind === 'set' && opts.tiebreakEnabled !== false) dentro += '<input type="number" min="0" inputmode="numeric"' +
+          ' class="sp-set-tb" style="display:none" placeholder="tb" id="tb' + side + '-' + mid + suffix + '" oninput="' + handler + '">';
+        dentro += '</span>';
+      }
+      return '<div class="sp-set-col" data-sp-set-index="' + c.i + '" style="--w:' + c.w + 'px;">' + dentro + '</div>';
     }).join('');
     return '<div class="sp-set-grid"' + countAttr + formatAttr + ' style="' + fsVar + reserve + '">' + cels + '</div>';
   };

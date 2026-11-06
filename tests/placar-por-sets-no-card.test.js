@@ -67,8 +67,8 @@ function regua() {
   // MELHOR DE 3 — a progressão que o dono descreveu
   let p = plano(MELHOR3, []);
   ok(p.multi === true && p.bestOf === 3, 'melhor de 3: multi=true, bestOf=3');
-  eq(rotulos(p), ['1'], 'sem set jogado: só a coluna do Set 1 — rotulada só com o NÚMERO (2.0.35)');
-  eq(estados(p), ['live'], 'e ela está EM DISPUTA');
+  eq(rotulos(p), ['1', '2'], 'sem set jogado: Set 1 e Set 2 disponíveis');
+  eq(estados(p), ['live', 'open'], 'Set 1 em disputa e Set 2 aberto');
   eq(p.headline, 'Melhor de 3 · Set 1', 'a linha nova diz "Melhor de 3 · Set 1"');
 
   p = plano(MELHOR3, [S(6, 4)]);
@@ -100,6 +100,7 @@ function regua() {
   // MELHOR DE 5 — mesma conta, sem caso especial
   p = plano(MELHOR5, []);
   ok(p.multi === true && p.bestOf === 5 && p.setsToWin === 3, 'melhor de 5: bestOf=5, setsToWin=3');
+  eq(estados(p), ['live', 'open', 'open'], 'melhor de 5 permite lançar os três sets iniciais');
   eq(p.headline, 'Melhor de 5 · Set 1', 'a linha nova diz "Melhor de 5 · Set 1"');
   p = plano(MELHOR5, [S(6, 4), S(3, 6), S(6, 2)]);
   eq(rotulos(p), ['1', '2', '3', '4'], '2×1 na de 5: quatro colunas, a 4ª em disputa');
@@ -144,9 +145,9 @@ function regua() {
   const mini0 = plano(MELHOR3, []), mini1 = plano(MELHOR3, [S(6, 4)]);
   const miniHtml0 = W._setHeadHtml(mini0) + W._setGridHtml(mini0, 1);
   const miniHtml1 = W._setHeadHtml(mini1) + W._setGridHtml(mini1, 1);
-  ok((miniHtml0.match(/class="sp-set-col"/g) || []).length === 2 &&
+  ok((miniHtml0.match(/class="sp-set-col"/g) || []).length === 4 &&
     (miniHtml1.match(/class="sp-set-col"/g) || []).length === 4,
-    'mini-card mostra um set em 0-0 e dois em 1-0, com rótulos alinhados');
+    'mini-card mostra dois sets disponíveis desde o início, com rótulos alinhados');
   ok(miniHtml0.includes('min-width:' + mini0.reservedGridW + 'px') &&
     miniHtml1.includes('min-width:' + mini1.reservedGridW + 'px') &&
     mini0.reservedGridW === mini1.reservedGridW,
@@ -244,11 +245,11 @@ function decisao() {
   // recusas
   c = cenario(MELHOR3);
   c.confirma(6, 6);
-  ok(c.avisos.length === 1 && !(c.m.sets || []).length, 'set empatado é RECUSADO (nada gravado)');
+  ok(c.notas.length === 1 && !(c.m.sets || []).length, 'set empatado é RECUSADO (nada gravado)');
   c = cenario(MELHOR3);
   c.confirma(6, 4); c.confirma(3, 6);
   c.confirma(7, 5);
-  ok(c.avisos.length === 1 && (c.m.sets || []).length === 2,
+  ok(c.notas.length === 1 && (c.m.sets || []).length === 2,
     'super tie-break que não chegou a 10 é RECUSADO');
   ok(c.fechou === null, 'e a partida não fecha por engano');
 
@@ -259,6 +260,25 @@ function decisao() {
   c.confirma(6, 2);
   ok(c.fechou !== null, 'melhor de 5: o 3º set vencido fecha');
   eq([c.fechou.p1, c.fechou.p2], [3, 0], 'fecha 3×0');
+
+  // Os campos seguintes já aparecem no card. Confirmar pode salvar um set
+  // isolado ou vários sets preenchidos, sempre em ordem.
+  const campos = (vals) => (id) => Object.prototype.hasOwnProperty.call(vals, id)
+    ? { value: vals[id] } : { value: '' };
+  c = cenario(MELHOR3);
+  c.confirma(6, 4, { field: campos({ 's1-M1': '6', 's2-M1': '4' }) });
+  eq((c.m.sets || []).length, 1, 'Confirmar com só o primeiro set preenchido salva o parcial');
+  c.confirma(6, 3, { field: campos({ 's1-M1': '6', 's2-M1': '3' }) });
+  ok(c.fechou !== null, 'o segundo Confirmar conclui a melhor de três');
+  c = cenario(MELHOR3);
+  c.confirma(6, 4, { field: campos({ 's1-M1': '6', 's2-M1': '4', 's1-M1-1': '6', 's2-M1-1': '3' }) });
+  ok(c.fechou !== null && c.fechou.sets.length === 2, 'dois sets no mesmo Confirmar concluem 2×0');
+  c = cenario(MELHOR5);
+  c.confirma(6, 4, { field: campos({ 's1-M1': '6', 's2-M1': '4', 's1-M1-1': '6', 's2-M1-1': '3', 's1-M1-2': '6', 's2-M1-2': '2' }) });
+  ok(c.fechou !== null && c.fechou.sets.length === 3, 'três sets no mesmo Confirmar concluem 3×0');
+  c = cenario(MELHOR3);
+  c.confirma(6, 4, { field: campos({ 's1-M1': '6', 's2-M1': '4', 's1-M1-1': '', 's2-M1-1': '3' }) });
+  ok(c.notas.length === 1 && !(c.m.sets || []).length, 'set seguinte pela metade impede gravar o anterior');
 
   // 1 SET não passa por aqui
   c = cenario(UM_SET);
@@ -304,7 +324,7 @@ function cardHtml(scoring, sets, extra) {
 async function tela() {
   console.log('\n④ A tela — Chromium com o CSS real: rótulo EM CIMA do box');
   const casos = [
-    { nome: 'melhor de 3 · Set 1 pronto para lançar', sc: MELHOR3, sets: [], cols: 1 },
+    { nome: 'melhor de 3 · Set 1 pronto para lançar', sc: MELHOR3, sets: [], cols: 2 },
     { nome: 'melhor de 3 · Set 1 confirmado', sc: MELHOR3, sets: [S(6, 4)], cols: 2 },
     { nome: 'melhor de 3 · 1-1, super tie-break', sc: MELHOR3, sets: [S(6, 4), S(3, 6)], cols: 3 },
     { nome: 'melhor de 5 · 2-2, super tie-break', sc: MELHOR5, sets: [S(6, 4), S(3, 6), S(6, 2), S(4, 6)], cols: 5 }
@@ -393,7 +413,7 @@ async function tela() {
     ok(casa, c.nome + ': cada rótulo está EM CIMA do seu box, nas duas linhas');
     ok(g.transbordo <= 0, c.nome + ': o card não transborda na horizontal (' + g.transbordo + 'px)');
   });
-  ok(r.casos[0].inputs.sort().join(',') === 's1-M1,s2-M1', 'melhor de 3 vazio só edita o primeiro set');
+  ok(r.casos[0].inputs.sort().join(',') === 's1-M1,s1-M1-1,s2-M1,s2-M1-1', 'melhor de 3 vazio permite editar os dois sets');
   ok(!/s1-M1-0|stbcol|stblbl/.test(htmls[0]), 'entrada inicial não cria campos indexados nem STB oculto');
   ok(r.casos[0].larguraCard === r.casos[2].larguraCard && r.casos[0].larguraGrade >= r.casos[2].larguraGrade - 0.5,
     'card e espaço reservado do placar mantêm a largura até 1×1');
@@ -449,7 +469,7 @@ async function stbDoisDigitosETieBreakLateral() {
   ok(after.cols.length === 3 && after.cols.every((c) => c.open) && after.cols.every((c) => Math.abs(c.w - after.cols[0].w) <= 0.5),
     'rótulo e as duas linhas abrem a mesma coluna de TB, sem desalinhamento');
   const ui = read('js/views/bracket-ui.js');
-  ok(/_abrirColunaDoTieBreak/.test(ui) && /sp-set-col--tb-open/.test(ui),
+  ok(/sp-set-col--tb-open/.test(ui) && /querySelectorAll\('\.sp-set-col\[data-sp-set-index/.test(ui),
     'o revelador real aplica a mesma abertura de coluna; o cenário não depende só do CSS');
   await browser.close();
 }
