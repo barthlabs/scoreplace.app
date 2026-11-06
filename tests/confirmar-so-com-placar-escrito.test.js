@@ -52,7 +52,7 @@ global.document = {
   getElementById: (id) => els[id] || null,
 };
 // carrega SÓ a função (o arquivo inteiro é do browser): recorta e avalia.
-const ini = ui.indexOf('window._syncConfirmBtn = function');
+const ini = ui.indexOf('window._scoreField = function');
 const fim = ui.indexOf('window._highlightWinner = function');
 global.window = {};
 // eslint-disable-next-line no-eval

@@ -1613,7 +1613,8 @@ window._syncConfirmBtn = function (matchId, root) {
 window._highlightWinner = function (matchId, root) {
   window._syncConfirmBtn(matchId, root);
   var field = function (id) { return window._scoreField(root, id); };
-  var card = root || (field('s1-' + matchId) && field('s1-' + matchId).closest('.sp-match-card'));
+  var first = field('s1-' + matchId);
+  var card = root || (first && typeof first.closest === 'function' ? first.closest('.sp-match-card') : null);
   var suffixes = [''];
   if (card) {
     Array.prototype.forEach.call(card.querySelectorAll('input.sp-set-inp--live'), function (el) {

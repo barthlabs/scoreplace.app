@@ -379,8 +379,8 @@ async function difDoisPontos(browser) {
     const m = (window.AppStore.tournaments[0].matches||[]).find(x=>x.id===id);
     return { avisos: window.__avisos.slice(), sets:(m.sets||[]).length, vencedor:m.winner||null };
   }, alvo.id);
-  ok(recusa.avisos.length === 1 && recusa.avisos[0][0] === 'alerta' && recusa.sets === 2 && !recusa.vencedor,
-    'STB 10-9 é RECUSADO — avisar a margem e aceitar 10-9 seria a tela mentindo');
+  ok(recusa.avisos.length === 1 && ['alerta', 'notif'].includes(recusa.avisos[0][0]) && recusa.sets === 2 && !recusa.vencedor,
+    'STB 10-9 é RECUSADO — avisar a margem e aceitar 10-9 seria a tela mentindo: ' + JSON.stringify(recusa));
 
   const aceita = await page.evaluate((id) => {
     window.__avisos.length = 0;

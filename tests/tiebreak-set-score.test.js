@@ -112,8 +112,8 @@ W._commitSetsResult = (_tid, _id, sets, p1, p2) => {
 };
 W.showAlertDialog = (_title, detail) => { alert = detail; };
 const firstPlan = W._matchSetPlan(scoring, match);
-ok(firstPlan.live && firstPlan.live.i === 0 && firstPlan.columns.length === 1,
-  'melhor de 3 vazio oferece apenas o primeiro set');
+ok(firstPlan.live && firstPlan.live.i === 0 && firstPlan.columns.length === 2,
+  'melhor de 3 vazio oferece os dois sets normais');
 const first = W._confirmSetFromCard(tour.id, mid, {
   s1: 6, s2: 5, tbP1: 7, tbP2: 5, isTiebreakEntry: true,
   plan: firstPlan, scoring

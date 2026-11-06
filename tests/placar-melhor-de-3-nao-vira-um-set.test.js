@@ -33,7 +33,7 @@ const must = (v, m) => { assert.ok(v, m); ok++; };
       showAlertDialog: () => { avisou = true; },
       _t: () => null, _isc: {}, m: {}, tId: 't', matchId: 'x',
       s1: 7, s2: 10, tbP1: null, tbP2: null, isTiebreakEntry: false,
-      _planSave: plan, useSets: true, isFixedSet: false, _isStbEntry: false
+      _planSave: plan, useSets: true, isFixedSet: false, _isStbEntry: false, field: () => null
     };
     const r = vm.runInNewContext('(function () {' + trecho + '\nreturn "CAIU_NO_SET_UNICO";})()', ctx);
     return { r, avisou, multi };
