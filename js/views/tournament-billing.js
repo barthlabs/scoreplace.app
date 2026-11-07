@@ -9,6 +9,7 @@
     var result;
     if (name === 'getTournamentFeeStatus') result = await window._callCF('getTournamentFeeStatus', data, message);
     else if (name === 'acceptTournamentFeeTerms') result = await window._callCF('acceptTournamentFeeTerms', data, message);
+    else if (name === 'setTournamentFeePerPerson') result = await window._callCF('setTournamentFeePerPerson', data, message);
     else if (name === 'prepareTournamentFee') result = await window._callCF('prepareTournamentFee', data, message);
     else if (name === 'reportTournamentFeePix') result = await window._callCF('reportTournamentFeePix', data, message);
     else if (name === 'listTournamentFeePixReports') result = await window._callCF('listTournamentFeePixReports', data, message);
@@ -106,6 +107,32 @@
         window._openTournamentFeePixQueue();
       }, true));
       if (data.legacy) { body.append(el('p', '', 'Este torneio é anterior à cobrança. Não há taxa retroativa.')); return; }
+      if (data.financeAdmin && data.contract) {
+        var feeEditor = el('section', 'sp-fee-terms');
+        feeEditor.append(el('h3', '', 'Taxa deste torneio'));
+        line(feeEditor, 'Valor atual por pessoa', money(data.contract.feeCentsPerPerson));
+        var feeLabel = el('label', '', 'Novo valor por pessoa (R$)');
+        var feeInput = el('input', 'sp-fee-input');
+        feeInput.type = 'text'; feeInput.inputMode = 'decimal';
+        feeInput.placeholder = 'Ex.: 0,00';
+        feeInput.autocomplete = 'off';
+        feeInput.setAttribute('aria-label', 'Nova taxa Scoreplace por pessoa em reais');
+        feeLabel.append(feeInput);
+        feeEditor.append(feeLabel, button('Alterar taxa por pessoa', function() {
+          var parsed = /^(\d{1,7})(?:[,.](\d{1,2}))?$/.exec(feeInput.value.trim());
+          var cents = parsed ? Number(parsed[1]) * 100 + Number((parsed[2] || '').padEnd(2, '0')) : NaN;
+          if (!Number.isSafeInteger(cents) || cents < 0 || cents > 100000000) {
+            if (window.showNotification) showNotification('Valor inválido',
+              'Informe a taxa em reais com até duas casas decimais.', 'error');
+            return;
+          }
+          if (cents === data.contract.feeCentsPerPerson) return;
+          if (!window.confirm('Alterar a taxa deste torneio de ' + money(data.contract.feeCentsPerPerson)
+            + ' para ' + money(cents) + ' por pessoa? A cotação e o aceite financeiro serão refeitos.')) return;
+          perform('setTournamentFeePerPerson', { feeCentsPerPerson:cents });
+        }));
+        body.append(feeEditor);
+      }
       var quote = data.quote, paid = !data.stale && data.settlement && data.settlement.state === 'paid'
         && quote && data.settlement.quoteId === quote.quoteId;
       var reversed = data.settlement && data.settlement.state === 'reversed';

@@ -3221,6 +3221,7 @@ const _tournamentFeeService = require('./tournament-billing-service').makeServic
 exports.getTournamentFeeStatus = onCall(_tournamentFeeService.status);
 exports.simulateTournamentRegistrationFees = onCall(_tournamentFeeService.estimate);
 exports.acceptTournamentFeeTerms = onCall(_tournamentFeeService.acceptTerms);
+exports.setTournamentFeePerPerson = onCall(_tournamentFeeService.setFeePerPerson);
 exports.prepareTournamentFee = onCall(_tournamentFeeService.prepare);
 exports.reportTournamentFeePix = onCall(_tournamentFeeService.reportPix);
 exports.rejectTournamentFeePixReport = onCall(_tournamentFeeService.rejectPixReport);

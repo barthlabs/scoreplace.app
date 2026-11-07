@@ -104,6 +104,94 @@ const service = makeService({ db, HttpsError, FieldValue, now:() => clockMs, car
   charges:{ retrieve:async () => recoveryCharge || { payment_intent:'pi_test1' } }
 }) });
 (async () => {
+  const feeTournamentId = 'tour_1790000000001_0123456789abcdef0123456789abcdef';
+  const feePath = 'tournaments/' + feeTournamentId;
+  docs.set(feePath, { ...structuredClone(docs.get(parent)), creatorUid:'dev',
+    canonicalRegistrationMigration:{ fingerprint:'native:' + feeTournamentId, registrationCount:2 } });
+  for (const [suffix, uid] of [['r1', 'u1'], ['r2', 'u2']]) {
+    docs.set(feePath + '/registrations/' + suffix, { registrationId:suffix,
+      participantKind:'account', participantUid:uid, categoryId:'a', status:'confirmed' });
+  }
+  const feeRequest = feeCentsPerPerson => ({ auth:{ uid:'dev' },
+    data:{ tournamentId:feeTournamentId, feeCentsPerPerson } });
+  const acceptFeeTerms = async () => {
+    const terms = (await service.status({ auth:{ uid:'dev' }, data:{ tournamentId:feeTournamentId } })).terms;
+    await service.acceptTerms({ auth:{ uid:'dev' }, data:{ tournamentId:feeTournamentId,
+      agree:true, termsVersion:terms.version, termsHash:terms.hash } });
+  };
+  await assert.rejects(service.setFeePerPerson({ data:feeRequest(0).data }), error => error.code === 'unauthenticated');
+  await assert.rejects(service.setFeePerPerson(feeRequest(-1)), error => error.code === 'invalid-argument');
+  await assert.rejects(service.setFeePerPerson({ auth:{ uid:'owner' }, data:feeRequest(0).data }),
+    error => error.code === 'permission-denied');
+  await assert.rejects(service.setFeePerPerson({ auth:{ uid:'dev' }, data:{ tournamentId:tId, feeCentsPerPerson:0 } }),
+    error => error.code === 'permission-denied', 'desenvolvedor sem vínculo de organizador não altera torneio');
+  const legacyFeeId = 'tour_1790000000002_0123456789abcdef0123456789abcdef';
+  docs.set('tournaments/' + legacyFeeId, { creatorUid:'dev', status:'closed' });
+  await assert.rejects(service.setFeePerPerson({ auth:{ uid:'dev' },
+    data:{ tournamentId:legacyFeeId, feeCentsPerPerson:0 } }),
+  error => error.code === 'failed-precondition', 'torneio antigo sem contrato recebe erro específico');
+  await acceptFeeTerms();
+  const originalFeeQuote = await service.prepare({ auth:{ uid:'dev' }, data:{ tournamentId:feeTournamentId } });
+  assert.deepStrictEqual(await service.setFeePerPerson(feeRequest(0)),
+    { changed:true, feeCentsPerPerson:0, feeRevision:1 });
+  assert.strictEqual(docs.get(feePath).billingContract.quoteId, undefined);
+  assert.strictEqual(docs.get(feePath).billingQuote, undefined);
+  assert.strictEqual(docs.get(feePath).billingSettlement, undefined);
+  assert.strictEqual(docs.get(feePath).billingTermsAcceptance, undefined);
+  assert.strictEqual(docs.get(feePath + '/billingFeeChanges/1').previousFeeCentsPerPerson, 2000);
+  assert.strictEqual((await service.status({ auth:{ uid:'dev' }, data:{ tournamentId:feeTournamentId } })).termsAccepted, false);
+  assert.deepStrictEqual(await service.setFeePerPerson(feeRequest(0)),
+    { changed:false, feeCentsPerPerson:0 });
+  assert.strictEqual(docs.get(feePath).billingContract.feeRevision, 1);
+  await acceptFeeTerms();
+  const freeQuote = await service.prepare({ auth:{ uid:'dev' }, data:{ tournamentId:feeTournamentId } });
+  assert.strictEqual(freeQuote.quote.totalCents, 0);
+  assert.strictEqual(freeQuote.settlement.method, 'waiver');
+  assert.deepStrictEqual(await service.setFeePerPerson(feeRequest(2000)),
+    { changed:true, feeCentsPerPerson:2000, feeRevision:2 });
+  await acceptFeeTerms();
+  const revisedFeeQuote = await service.prepare({ auth:{ uid:'dev' }, data:{ tournamentId:feeTournamentId } });
+  assert.notStrictEqual(revisedFeeQuote.quote.quoteId, originalFeeQuote.quote.quoteId,
+    'a volta ao mesmo valor com o mesmo elenco deve gerar nova identidade de cobrança');
+  const beforeCard = docs.get(feePath);
+  docs.set(feePath, { ...beforeCard, billingQuote:{ ...beforeCard.billingQuote, cardAttemptId:'attempt' } });
+  await assert.rejects(service.setFeePerPerson(feeRequest(0)), error => error.code === 'failed-precondition');
+  docs.set(feePath, beforeCard);
+  const beforeSettlement = docs.get(feePath);
+  docs.set(feePath, { ...beforeSettlement, billingSettlement:{ state:'paid', method:'pix_manual', amountCents:4000 } });
+  await assert.rejects(service.setFeePerPerson(feeRequest(0)), error => error.code === 'failed-precondition');
+  docs.set(feePath, { ...beforeSettlement, billingSettlement:{ state:'reversed' } });
+  await assert.rejects(service.setFeePerPerson(feeRequest(0)), error => error.code === 'failed-precondition');
+  docs.set(feePath, beforeSettlement);
+  const beforePassThrough = docs.get(feePath);
+  docs.set(feePath, { ...beforePassThrough,
+    registrationSettings:{ ...beforePassThrough.registrationSettings, passServiceFeeToParticipant:true } });
+  docs.set(feePath + '/registrations/r1', { ...docs.get(feePath + '/registrations/r1'), paymentDueCents:2000 });
+  await assert.rejects(service.setFeePerPerson(feeRequest(0)), error => error.code === 'failed-precondition');
+  docs.set(feePath + '/registrations/r1', { ...docs.get(feePath + '/registrations/r1'), paymentDueCents:null });
+  docs.set(feePath, beforePassThrough);
+  await service.reportPix({ auth:{ uid:'dev' }, data:{ tournamentId:feeTournamentId, reference:'Pix informado 1234' } });
+  await assert.rejects(service.setFeePerPerson(feeRequest(0)), error => error.code === 'failed-precondition');
+  await service.rejectPixReport({ auth:{ uid:'dev' }, data:{ tournamentId:feeTournamentId,
+    evidence:'Transação não encontrada no extrato' } });
+  const oldPrivatePix = feePath + '/billingPixReports/' + revisedFeeQuote.quote.quoteId;
+  assert.strictEqual(docs.get(oldPrivatePix).state, 'rejected');
+  await service.setFeePerPerson(feeRequest(0));
+  assert.strictEqual(docs.get(feePath).billingPixReport, undefined);
+  assert.strictEqual(docs.get(oldPrivatePix).state, 'rejected', 'o registro financeiro privado é preservado');
+  await service.setFeePerPerson(feeRequest(2000));
+  await acceptFeeTerms();
+  const secondReturnQuote = await service.prepare({ auth:{ uid:'dev' }, data:{ tournamentId:feeTournamentId } });
+  assert.notStrictEqual(secondReturnQuote.quote.quoteId, revisedFeeQuote.quote.quoteId);
+  await service.reportPix({ auth:{ uid:'dev' }, data:{ tournamentId:feeTournamentId,
+    reference:'Nova transferência 5678' } });
+  assert.strictEqual(docs.get(feePath + '/billingPixReports/' + secondReturnQuote.quote.quoteId).state, 'reported');
+  await service.rejectPixReport({ auth:{ uid:'dev' }, data:{ tournamentId:feeTournamentId,
+    evidence:'Novo registro de teste recusado' } });
+  const beforeDrawFee = docs.get(feePath);
+  docs.set(feePath, { ...beforeDrawFee, pendingDraw:{ id:'draw' } });
+  await assert.rejects(service.setFeePerPerson(feeRequest(0)), error => error.code === 'failed-precondition');
+  docs.set(feePath, beforeDrawFee);
   const productionLocked = makeService({ db, HttpsError, FieldValue,
     now:() => clockMs, stripe:() => { throw new Error('Stripe não deve ser chamado'); } });
   assert.strictEqual((await productionLocked.status({ auth:{ uid:'owner' },
@@ -468,6 +556,7 @@ const service = makeService({ db, HttpsError, FieldValue, now:() => clockMs, car
   assert(feeUi.includes('if (reversed) return;'), 'a tela não oferece novo pagamento após estorno');
   assert(feeUi.includes('Pagamento estornado ou contestado.'), 'a tela explica o bloqueio financeiro');
   assert(feeUi.includes('cancelTournamentFeeCardAttempt'), 'a tela oferece cancelamento da tentativa registrada');
+  assert(feeUi.includes("name === 'setTournamentFeePerPerson'"), 'o modal chama a porta da taxa por torneio');
   assert(feeUi.includes('ScoreplacePixBRCode.build(data.pixKey, quote.totalCents'),
     'o Pix copia e cola da taxa deve usar o valor da cobrança do servidor');
   await assert.rejects(service.confirmPix({ auth:{ uid:'owner' }, data:{ tournamentId:tId, evidence:'comprovante123' } }),

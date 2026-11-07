@@ -184,6 +184,59 @@ function makeService({ db, HttpsError, FieldValue, stripe, now = Date.now, cardO
       return { accepted:true, changed:true };
     });
   }
+  async function setFeePerPerson(request) {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) fail(HttpsError, 'unauthenticated', 'Entre na sua conta.');
+    const feeCentsPerPerson = request.data && request.data.feeCentsPerPerson;
+    if (!money(feeCentsPerPerson)) {
+      fail(HttpsError, 'invalid-argument', 'Informe a taxa por pessoa em centavos, de zero até o limite permitido.');
+    }
+    const ref = tournamentRef(request.data && request.data.tournamentId);
+    return db.runTransaction(async tx => {
+      const cfg = (await tx.get(configRef)).data() || {};
+      if (!cfg.developerUid || uid !== cfg.developerUid) {
+        fail(HttpsError, 'permission-denied', 'Apenas o desenvolvedor pode definir a taxa deste torneio.');
+      }
+      const t = await current(tx, ref, uid);
+      if (hasDraw(t)) fail(HttpsError, 'failed-precondition', 'A taxa não pode mudar depois do sorteio.');
+      const settlement = t.billingSettlement || {};
+      if (settlement.state === 'reversed' || (settlement.state === 'paid'
+        && (settlement.method !== 'waiver' || settlement.amountCents !== 0))) {
+        fail(HttpsError, 'failed-precondition', 'Esta cobrança já foi paga ou estornada; é necessário acerto financeiro assistido.');
+      }
+      if (t.billingQuote?.cardAttemptId) {
+        fail(HttpsError, 'failed-precondition', 'Há uma tentativa de cartão que pode ser paga. Concilie-a antes de alterar a taxa.');
+      }
+      if (t.billingPixReport?.state === 'reported') {
+        fail(HttpsError, 'failed-precondition', 'Há um Pix informado aguardando conferência. Concilie-o antes de alterar a taxa.');
+      }
+      const previous = t.billingContract?.feeCentsPerPerson;
+      if (!money(previous)) fail(HttpsError, 'failed-precondition', 'Tarifa atual do torneio inválida.');
+      if (previous === feeCentsPerPerson) return { changed:false, feeCentsPerPerson:previous };
+      if (t.registrationSettings?.passServiceFeeToParticipant === true) {
+        // Mesmo uma inscrição retirada pode ter histórico de cobrança e ser reativada.
+        const registrations = await tx.get(ref.collection('registrations'));
+        if (registrations.docs.some(doc => Number(doc.data()?.paymentDueCents) > 0)) {
+          fail(HttpsError, 'failed-precondition', 'Já existe inscrição com cobrança da taxa repassada. É necessário acerto financeiro assistido.');
+        }
+      }
+      const priorRevision = t.billingContract.feeRevision == null ? 0 : t.billingContract.feeRevision;
+      if (!Number.isSafeInteger(priorRevision) || priorRevision < 0 || priorRevision >= 1000000) {
+        fail(HttpsError, 'failed-precondition', 'Histórico da taxa indisponível.');
+      }
+      const feeRevision = priorRevision + 1;
+      const { quoteId:ignoredQuoteId, ...priorContract } = t.billingContract;
+      const contract = { ...priorContract, feeCentsPerPerson, feeRevision };
+      tx.update(ref, { billingContract:contract, billingQuote:FieldValue.delete(),
+        billingSettlement:FieldValue.delete(), billingPixReport:FieldValue.delete(),
+        billingTermsAcceptance:FieldValue.delete(), updatedAt:FieldValue.serverTimestamp() });
+      tx.create(ref.collection('billingFeeChanges').doc(String(feeRevision)), {
+        changedBy:uid, previousFeeCentsPerPerson:previous, feeCentsPerPerson,
+        feeRevision, changedAt:FieldValue.serverTimestamp()
+      });
+      return { changed:true, feeCentsPerPerson, feeRevision };
+    });
+  }
   async function prepare(request) {
     const uid = request.auth && request.auth.uid;
     if (!uid) fail(HttpsError, 'unauthenticated', 'Entre na sua conta.');
@@ -226,8 +279,14 @@ function makeService({ db, HttpsError, FieldValue, stripe, now = Date.now, cardO
         discountCents = voucher.discountCents;
       }
       const amount = Core.quote(live, t.billingContract.feeCentsPerPerson, discountCents);
-      const quoteId = hash([ref.id, live.fingerprint, amount.feeCentsPerPerson,
-        amount.totalCents, voucherHash].join(':'));
+      const revision = t.billingContract.feeRevision == null ? 0 : t.billingContract.feeRevision;
+      if (!Number.isSafeInteger(revision) || revision < 0) {
+        fail(HttpsError, 'failed-precondition', 'Histórico da taxa indisponível.');
+      }
+      const quoteParts = [ref.id, live.fingerprint, amount.feeCentsPerPerson,
+        amount.totalCents, voucherHash];
+      if (revision > 0) quoteParts.push(revision);
+      const quoteId = hash(quoteParts.join(':'));
       if (t.billingQuote && t.billingQuote.quoteId === quoteId) return response(t);
       if (t.billingQuote?.cardAttemptId) {
         fail(HttpsError, 'failed-precondition', 'Já existe uma tentativa de cartão que pode ser paga. A conciliação financeira é necessária antes de alterar esta cobrança.');
@@ -727,7 +786,7 @@ function makeService({ db, HttpsError, FieldValue, stripe, now = Date.now, cardO
       return { reversed:matches, reviewRequired:!matches };
     });
   }
-  return { status, estimate, acceptTerms, prepare, reportPix, rejectPixReport, listPixReports, financeAdminStatus,
+  return { status, estimate, acceptTerms, setFeePerPerson, prepare, reportPix, rejectPixReport, listPixReports, financeAdminStatus,
     checkout, cancelCardAttempt, confirmPix, reconcileReversedTournamentFee, webhookEvent };
 }
 

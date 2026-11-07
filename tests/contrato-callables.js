@@ -173,6 +173,7 @@ const TABELA = [
   { nome: "previewCanonicalRegistrationMigrationBatch", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "previewTournamentImport", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "prepareTournamentFee", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
+  { nome: "setTournamentFeePerPerson", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "previewTournamentTeamWO", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "reconcileBracket", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "reconcileMonarchEnrollment", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
