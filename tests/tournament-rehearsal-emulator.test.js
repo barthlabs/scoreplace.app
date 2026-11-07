@@ -124,6 +124,17 @@ const service = makeService({ db, HttpsError });
   assert.equal((await ref.collection('matches').get()).empty, true);
 
   await service.activate(request());
+  await ref.collection('matches').doc('temporary').set({ score: '6x4' });
+  // Batch 2 is the final photograph write. The extra match is still present:
+  // this stops exactly between restoring originals and deleting extras.
+  await assert.rejects(interruptedService(2).restore(request()), /interrupção simulada/);
+  assert.equal((await ref.collection('registrations').get()).size, 144);
+  assert.ok((await ref.collection('matches').doc('temporary').get()).exists);
+  assert.equal((await service.restore(request())).ok, true);
+  assert.deepEqual((await ref.get()).data(), root);
+  assert.equal((await ref.collection('matches').get()).empty, true);
+
+  await service.activate(request());
   await ref.collection('matches').doc('temporary').set({ wo: true });
   // Two write batches, then the extras deletion. No original registration is
   // ever removed, even when the process stops after that deletion commits.
