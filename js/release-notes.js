@@ -1,3 +1,4 @@
+// 2.5.111 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.110 — O desenvolvedor pode fotografar um torneio privado antes do ensaio
 // e restaurar inscrições, números, categorias e demais dados originais depois.
 // Sorteio, placares, W.O. e registros criados no ensaio são removidos; se a
