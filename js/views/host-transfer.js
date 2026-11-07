@@ -236,26 +236,27 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     phoneLabel.textContent = 'Ou convide por telefone';
     phoneLabel.style.cssText = 'color:var(--text-bright);font-weight:700;margin-top:8px;';
     var phoneRow = document.createElement('div');
-    phoneRow.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;';
-    function phoneField(label, placeholder, width, value) {
-      var field = document.createElement('input');
-      field.type = 'tel'; field.inputMode = 'numeric'; field.placeholder = placeholder;
-      field.value = value || ''; field.setAttribute('aria-label', label);
-      field.style.cssText = 'flex:0 1 ' + width + 'px;min-width:0;padding:10px;border-radius:8px;background:var(--bg-input,#111827);color:var(--text-bright);border:1px solid var(--border-color);';
-      return field;
-    }
-    var ddiInput = phoneField('DDI', 'DDI', 68, '55');
-    var dddInput = phoneField('DDD', 'DDD', 68, '');
-    var numberInput = phoneField('Número de telefone', 'Telefone', 160, '');
+    phoneRow.style.cssText = 'display:flex;gap:8px;align-items:center;';
+    var countrySelect = document.createElement('select');
+    countrySelect.className = 'form-control';
+    countrySelect.setAttribute('aria-label', 'País e DDI do telefone');
+    countrySelect.style.cssText = 'flex:0 0 auto;width:auto;max-width:110px;padding:10px 6px;background:var(--bg-input,#111827);color:var(--text-bright);border:1px solid var(--border-color);';
+    countrySelect.innerHTML = typeof window._phoneCountryOptionsHtml === 'function'
+      ? window._phoneCountryOptionsHtml('55') : '<option value="55">🇧🇷 +55</option>';
+    var numberInput = document.createElement('input');
+    numberInput.type = 'tel'; numberInput.inputMode = 'numeric'; numberInput.autocomplete = 'tel-national';
+    numberInput.setAttribute('aria-label', 'DDD e telefone');
+    numberInput.style.cssText = 'flex:1;min-width:0;padding:10px;border-radius:8px;background:var(--bg-input,#111827);color:var(--text-bright);border:1px solid var(--border-color);';
     var phoneSend = document.createElement('button');
     phoneSend.type = 'button'; phoneSend.className = 'btn btn-sm'; phoneSend.textContent = 'Preparar SMS';
-    phoneRow.appendChild(ddiInput); phoneRow.appendChild(dddInput); phoneRow.appendChild(numberInput); phoneRow.appendChild(phoneSend);
+    phoneSend.style.alignSelf = 'flex-start';
+    phoneRow.appendChild(countrySelect); phoneRow.appendChild(numberInput);
     var phoneStatus = document.createElement('div');
     phoneStatus.setAttribute('role', 'status');
     phoneStatus.style.cssText = 'color:var(--text-bright);min-height:1.3em;';
     panel.appendChild(title); panel.appendChild(input); panel.appendChild(list); panel.appendChild(confirmRow);
     panel.appendChild(emailLabel); panel.appendChild(emailRow); panel.appendChild(emailStatus);
-    panel.appendChild(phoneLabel); panel.appendChild(phoneRow); panel.appendChild(phoneStatus);
+    panel.appendChild(phoneLabel); panel.appendChild(phoneRow); panel.appendChild(phoneSend); panel.appendChild(phoneStatus);
     overlay.appendChild(panel); document.body.appendChild(overlay);
     overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
     // Em nomes portugueses, "erika" encontra "Érica"; K inicial (Kelly) não vira C.
@@ -283,11 +284,58 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           emailStatus.textContent = error && error.message ? error.message : 'Não foi possível enviar o convite.';
         }).finally(function() { busy = false; emailSend.disabled = false; });
     });
+    function readNationalPhone(allowPastedDdi) {
+      var ddi = countrySelect.value;
+      var max = typeof window._phoneDigitsFor === 'function' ? window._phoneDigitsFor(ddi) : 11;
+      var raw = numberInput.value.trim();
+      var digits = raw.replace(/\D/g, '');
+      if (raw.charAt(0) === '+') {
+        if (digits.indexOf(ddi) !== 0) return { error: 'O DDI do número não corresponde ao país selecionado.' };
+        digits = digits.slice(ddi.length);
+      } else if (allowPastedDdi && digits.length > max && digits.indexOf(ddi) === 0 && digits.length - ddi.length <= max) {
+        digits = digits.slice(ddi.length);
+      }
+      if (digits.length > max) return { error: 'Número longo demais para o país selecionado.' };
+      return { ddi: ddi, digits: digits, max: max };
+    }
+    function formatNationalPhone(allowPastedDdi) {
+      var phone = readNationalPhone(allowPastedDdi);
+      if (phone.error) { phoneStatus.textContent = phone.error; return phone; }
+      var digits = phone.digits;
+      // O mesmo formato brasileiro, com quatro dígitos antes do hífen no telefone de 8 dígitos.
+      var formatted = phone.ddi === '55' && digits.length === 10
+        ? '(' + digits.slice(0, 2) + ') ' + digits.slice(2, 6) + '-' + digits.slice(6)
+        : (typeof window._phoneMaskFor === 'function' ? window._phoneMaskFor(digits, phone.ddi) : digits);
+      numberInput.value = formatted;
+      phoneStatus.textContent = '';
+      return phone;
+    }
+    function updatePhonePlaceholder() {
+      var ddi = countrySelect.value;
+      var max = typeof window._phoneDigitsFor === 'function' ? window._phoneDigitsFor(ddi) : 11;
+      numberInput.placeholder = typeof window._phoneMaskFor === 'function'
+        ? window._phoneMaskFor('9'.repeat(max), ddi) : '(11) 99999-9999';
+    }
+    numberInput.addEventListener('input', function(e) { formatNationalPhone(e.inputType === 'insertFromPaste'); });
+    countrySelect.addEventListener('change', function() { updatePhonePlaceholder(); formatNationalPhone(); });
+    updatePhonePlaceholder();
     phoneSend.addEventListener('click', function() {
-      var ddi = ddiInput.value.replace(/\D/g, '');
-      var ddd = dddInput.value.replace(/\D/g, '');
-      var number = numberInput.value.replace(/\D/g, '');
-      if (busy || !ddi || !ddd || !number) { phoneStatus.textContent = 'Informe DDI, DDD e telefone.'; return; }
+      if (busy) return;
+      var phone = formatNationalPhone();
+      if (phone.error) return;
+      var digits = phone.digits;
+      var ddi = phone.ddi;
+      var areaExample = typeof window._phoneMaskFor === 'function'
+        ? window._phoneMaskFor('9'.repeat(phone.max), ddi) : '(99) 99999-9999';
+      var areaMatch = areaExample.match(/^\D*(\d+)/);
+      var areaLength = areaMatch ? areaMatch[1].length : 2;
+      var ddd = digits.slice(0, areaLength);
+      var number = digits.slice(areaLength);
+      var validLength = ddi === '55' ? (digits.length === 10 || digits.length === 11) : digits.length === phone.max;
+      var validParts = /^\d{1,3}$/.test(ddi) && /^\d{1,4}$/.test(ddd) && /^\d{6,10}$/.test(number) &&
+        (ddi + digits).length >= 10 && (ddi + digits).length <= 15 &&
+        (ddi !== '55' || (/^[1-9][0-9]$/.test(ddd) && (number.length === 8 || number.length === 9)));
+      if (!validLength || !validParts) { phoneStatus.textContent = 'Informe um DDD e telefone válidos para o país selecionado.'; return; }
       if (typeof window._callCF !== 'function') { phoneStatus.textContent = 'Convite indisponível agora.'; return; }
       busy = true; phoneSend.disabled = true; phoneStatus.textContent = 'Preparando convite…';
       window._callCF('createTeamPhoneInvite', { tournamentId: tId, role: role, ddi: ddi, ddd: ddd, number: number }, 'Entre para criar o convite.')

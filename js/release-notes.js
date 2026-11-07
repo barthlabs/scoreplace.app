@@ -1,3 +1,5 @@
+// 2.5.113 — Convites de organizador e árbitro por telefone agora têm seleção de país
+// com bandeira e um campo único para DDD e número, formatado automaticamente.
 // 2.5.112 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.111 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.110 — O desenvolvedor pode fotografar um torneio privado antes do ensaio

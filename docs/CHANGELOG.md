@@ -1,3 +1,8 @@
+## 2.5.113 — 07/nov/2026 (telefone nos convites)
+
+- O convite de co-organizador e árbitro usa seletor de país com bandeira e DDI e um único campo nacional com máscara para DDD e número.
+- A criação do convite recusa números incompletos, DDIs divergentes e entradas que excedam a máscara, sem truncar o destinatário do SMS.
+
 ## 2.5.105 — 06/nov/2026 (exclusão de reserva manual)
 
 - Excluir um placeholder individual sem conta remove a reserva e seu espelho na mesma transação. Inscrições históricas retiradas permanecem intactas.
