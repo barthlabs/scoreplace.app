@@ -115,7 +115,10 @@ function makeService({ db, HttpsError }) {
       const t = root.exists ? root.data() : null;
       authority(uid, id, t);
       const previous = oldBase.exists ? oldBase.data() : null;
-      if (previous && previous.state === 'capturing' && marker(t) === 'capturing' &&
+      // A failed final verification must preserve the original photograph.
+      // Resuming capture here would overwrite it with rehearsal data.
+      if (previous && previous.state === 'capturing' && previous.step !== 'verification-failed' &&
+          marker(t) === 'capturing' && t.rehearsal?.step !== 'verification-failed' &&
           previous.epoch === t.rehearsal.epoch && previous.root) {
         epoch = previous.epoch;
         return; // Resume an interrupted capture; original root is already safe.
@@ -202,9 +205,13 @@ function makeService({ db, HttpsError }) {
   }
 
   async function writeTree(ref, tree) {
-    for (let i = 0; i < tree.length; i += 400) {
+    // Parents must exist before children. If a process stops between batches,
+    // the next recursive scan can still discover everything already written.
+    const ordered = [...tree].sort((a, b) =>
+      a.path.split('/').length - b.path.split('/').length || a.path.localeCompare(b.path));
+    for (let i = 0; i < ordered.length; i += 400) {
       const batch = db.batch();
-      tree.slice(i, i + 400).forEach(item => batch.set(db.doc(`${ref.path}/${item.path}`), item.data));
+      ordered.slice(i, i + 400).forEach(item => batch.set(db.doc(`${ref.path}/${item.path}`), item.data));
       await batch.commit();
     }
   }

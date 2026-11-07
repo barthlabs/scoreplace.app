@@ -74,10 +74,63 @@ const service = makeService({ db, HttpsError });
   await db.collection('tournamentRehearsalBaselines').doc(id).update({ state: 'capturing', step: 'verification-failed' });
   await ref.update({ rehearsal: { state: 'capturing', step: 'verification-failed', epoch: retry.epoch, hash: retry.hash } });
   await ref.collection('matches').doc('after-failed-capture').set({ score: '6x4' });
+  const protectedBaseline = (await db.collection('tournamentRehearsalBaselines').doc(id).get()).data();
+  await assert.rejects(service.activate(request()), error => error.code === 'failed-precondition');
+  assert.deepEqual((await db.collection('tournamentRehearsalBaselines').doc(id).get()).data(), protectedBaseline);
   const recovered = await service.restore(request());
   assert.equal(recovered.ok, true);
   assert.deepEqual((await ref.get()).data(), root);
   assert.equal((await ref.collection('matches').get()).empty, true);
-  console.log('ensaio real: 144 inscrições intactas; sorteio, placar, W.O., fila e histórico do ensaio removidos');
+  // Force more than one delete and write batch, including nested documents.
+  // Throw after Firestore commits a batch to emulate the function dying before
+  // it can acknowledge progress. The same callable must safely resume.
+  await ref.collection('fixture').doc('root').set({ before: true });
+  for (let i = 0; i < 420; i += 400) {
+    const batch = db.batch();
+    for (let j = i; j < Math.min(i + 400, 420); j++) {
+      batch.set(ref.collection('fixture').doc('root').collection('slots').doc(String(j).padStart(3, '0')), { number: j });
+    }
+    await batch.commit();
+  }
+  function interruptedService(failOnBatch) {
+    let count = 0;
+    const faultDb = new Proxy(db, { get(target, property) {
+      if (property === 'batch') return () => {
+        const batch = target.batch();
+        const commit = batch.commit.bind(batch);
+        batch.commit = async () => {
+          const result = await commit();
+          if (++count === failOnBatch) throw new Error('interrupção simulada após commit');
+          return result;
+        };
+        return batch;
+      };
+      const value = target[property];
+      return typeof value === 'function' ? value.bind(target) : value;
+    }});
+    return makeService({ db: faultDb, HttpsError });
+  }
+  const expectedTree = (await service.activate(request()),
+    (await db.collection('tournamentRehearsalBaselines').doc(id).get()).data().tree);
+  assert.ok(expectedTree.length > 400);
+  await ref.collection('matches').doc('temporary').set({ score: '6x4' });
+  await assert.rejects(interruptedService(1).restore(request()), /interrupção simulada/);
+  assert.equal((await ref.get()).data().rehearsal.state, 'resetting');
+  assert.equal((await service.restore(request())).ok, true);
+  assert.deepEqual((await ref.get()).data(), root);
+  assert.equal((await ref.collection('fixture').doc('root').collection('slots').get()).size, 420);
+  assert.equal((await ref.collection('matches').get()).empty, true);
+
+  await service.activate(request());
+  await ref.collection('matches').doc('temporary').set({ wo: true });
+  // Two delete batches, then the first write batch. A parent-first restore
+  // makes its partial tree visible to the next recursive deletion.
+  await assert.rejects(interruptedService(3).restore(request()), /interrupção simulada/);
+  assert.equal((await ref.get()).data().rehearsal.state, 'resetting');
+  assert.equal((await service.restore(request())).ok, true);
+  assert.deepEqual((await ref.get()).data(), root);
+  assert.equal((await ref.collection('fixture').doc('root').collection('slots').get()).size, 420);
+  assert.equal((await ref.collection('matches').get()).empty, true);
+  console.log('ensaio real: 144 inscrições intactas; reset completo e retomada após interrupções na exclusão e na gravação');
   await admin.app().delete();
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -279,7 +279,7 @@ window._realTournamentRehearsalAction = function (tId, action) {
   if (!t || uid !== 'B17n7JCXYOfqahlcLZ0fKxGGyUu1' || t.creatorUid !== uid || t.isSandbox === true ||
       !window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function' || typeof showAlertDialog !== 'function') return;
   var isReset = action === 'reset';
-  if (isReset ? !(t.rehearsal && (t.rehearsal.state === 'active' || t.rehearsal.step === 'verification-failed'))
+  if (isReset ? !(t.rehearsal && (t.rehearsal.state === 'active' || t.rehearsal.state === 'resetting' || t.rehearsal.step === 'verification-failed'))
               : !!(t.rehearsal && t.rehearsal.state && t.rehearsal.state !== 'capturing')) return;
   showAlertDialog(isReset ? '🔄 Restaurar o torneio antes do ensaio?' : '🧪 Iniciar ensaio neste torneio?',
     isReset
