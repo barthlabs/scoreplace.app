@@ -1,9 +1,9 @@
 {
   "schema": 1,
-  "backendCommit": "044ed5cfa037dd35cc73a40d51248a49313c3a70",
-  "scopeNote": "Delta de recuperação do ensaio: captura e reset; as outras funções do ensaio já foram publicadas no corte anterior.",
+  "backendCommit": "6d03e3fdd126cebca9e919469202546c379796ff",
+  "scopeNote": "Captura automática no sorteio manual e ordem dos quartetos nos sorteios manual e automático.",
   "functions": [
-    "startTournamentRehearsal",
-    "resetTournamentToEnrollment"
+    "drawRound",
+    "autoDraw"
   ]
 }
