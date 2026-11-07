@@ -3985,20 +3985,31 @@ function renderBracket(container, tournamentId, isInline) {
             (score ? ' · ' + window._safeHtml(score) : ' · aguardando resultado') + '</li>';
         }).join('');
         const choice = decision.choice === 'play'
-          ? (decision.status === 'complete' ? 'Desempate disputado' : 'Desempate em andamento')
+          ? (decision.status === 'complete' ? 'Desempate disputado' : 'Desempate necessário para definir quem avança')
           : (decision.reason === 'organizer-used-original-draw-order'
             ? 'Jogos extras dispensados pela organização; aplicada a ordem do sorteio original'
             : 'Aplicada a ordem do sorteio original');
         const result = decision.status === 'complete' && Array.isArray(decision.order)
           ? '<div>Ordem definida: ' + decision.order.map(k => window._safeHtml(labels[k] || String(k).replace(/^name:/, ''))).join(' → ') + '</div>' : '';
         const phaseName = t.phases && t.phases[Number(phaseIndex)] && t.phases[Number(phaseIndex)].name || ('Fase ' + (Number(phaseIndex) + 1));
+        const manage = isOrg && Number(phaseIndex) === Number(t.currentPhaseIndex || 0) &&
+          (decision.status === 'pending' || decision.status === 'review')
+          ? '<button type="button" class="btn btn-primary btn-sm no-print" style="margin-top:8px;" onclick="window._phaseTiePanelForExisting(\'' +
+            _tIdSafe + '\',' + window._safeHtml(JSON.stringify(decisionId)) + ')">Abrir desempate</button>' : '';
         tieItems.push('<div style="padding:8px 0;border-top:1px solid var(--border-color);"><b>' + window._safeHtml(phaseName) +
-          '</b> · ' + window._safeHtml(names.join(', ')) + '<div>' + choice + '</div>' +
-          (matches ? '<ul style="margin:4px 0 4px 18px;">' + matches + '</ul>' : '') + result + '</div>');
+          (decision.groupName ? ' · ' + window._safeHtml(decision.groupName) : '') +
+          '</b> · ' + window._safeHtml(names.join(', ')) + '<div><b>' + choice + '</b>' +
+          (decision.choice === 'play' && decision.status !== 'complete'
+            ? '. A classificação deste grupo aguarda esta simples.' : '') + '</div>' +
+          (matches ? '<ul style="margin:4px 0 4px 18px;">' + matches + '</ul>' : '') + result + manage + '</div>');
       });
     });
     if (tieItems.length) headerHtml += '<section aria-label="Desempates da classificatória" style="margin:12px 0;padding:12px 16px;border:1px solid var(--border-color);border-radius:10px;">' +
       '<b>Desempates da classificatória</b>' + tieItems.join('') + '</section>';
+  }
+  if (isOrg && t.phaseTieAutoError && Number(t.phaseTieAutoError.phaseIndex) === Number(t.currentPhaseIndex || 0)) {
+    headerHtml += '<div role="alert" style="margin:12px 0;padding:12px 16px;border:1px solid #f59e0b;border-radius:10px;color:#fbbf24;">' +
+      '<b>Desempate pendente de ajuste:</b> ' + window._safeHtml(t.phaseTieAutoError.message || 'Verifique a configuração do desempate.') + '</div>';
   }
 
   // ── Banner "Iniciar Torneio" e Progress Bar (skip quando inline — já existem no card acima) ──

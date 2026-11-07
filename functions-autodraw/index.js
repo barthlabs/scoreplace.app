@@ -2897,6 +2897,24 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
       logMessage: logMessage, now: Date.parse(_agoraIsoTx)
     });
     if (!res || !res.ok) return { ok: false, reason: (res && res.reason) || 'apply-failed' };
+    const _tieBeforeResult = {
+      decisions: t.phaseTieDecisions && JSON.parse(JSON.stringify(t.phaseTieDecisions)),
+      suffix: t.phaseTieNextSuffix && JSON.parse(JSON.stringify(t.phaseTieNextSuffix)),
+      history: t.history && JSON.parse(JSON.stringify(t.history))
+    };
+    try { _refreshAutomaticPhaseTies(t, matchId, _agoraIsoTx); }
+    catch (err) {
+      if (_tieBeforeResult.decisions) t.phaseTieDecisions = _tieBeforeResult.decisions;
+      else delete t.phaseTieDecisions;
+      if (_tieBeforeResult.suffix) t.phaseTieNextSuffix = _tieBeforeResult.suffix;
+      else delete t.phaseTieNextSuffix;
+      if (_tieBeforeResult.history) t.history = _tieBeforeResult.history;
+      else delete t.history;
+      t.phaseTieAutoError = { phaseIndex: Number(t.currentPhaseIndex || 0),
+        message: String(err && err.message || err).slice(0, 240), at: _agoraIsoTx };
+      console.error('Desempate automático pendente após placar confirmado', { tId, matchId,
+        error: String(err && err.message || err) });
+    }
     if (t.rulesContractVersion >= 2 && (t.status === 'finished' || t.titleAwards)) {
       const titleResolver = drawWindow && drawWindow.ScoreplaceTournamentTitles;
       if (!titleResolver || typeof titleResolver.resolve !== 'function') {
@@ -6124,6 +6142,195 @@ exports.applyTournamentFormat = onCall(async (request) => {
   });
 });
 
+function _buildPhaseTieRuntime(t, current, sourceGroups, currentCfg, phaseEngine, calculateStandings, tbOpts, tieRule) {
+  const nextCfg = phaseEngine && typeof phaseEngine.projectPhaseCfg === 'function'
+    ? phaseEngine.projectPhaseCfg(t.phases[current + 1], t, current + 1) : null;
+  if (!nextCfg || !nextCfg.source || nextCfg.source.type !== 'previous_phase') {
+    throw new HttpsError('failed-precondition', 'Origem da próxima fase indisponível para o desempate.');
+  }
+
+  const previousSingleMonarch = !!(phaseEngine.ehReiRainhaRodadaUnica &&
+    phaseEngine.ehReiRainhaRodadaUnica(currentCfg));
+  const overall = !!(phaseEngine.usaRankingGeral && phaseEngine.usaRankingGeral(
+    nextCfg.source.scope || 'per_group',
+    (nextCfg.source.mapping || []).length, sourceGroups.length,
+    nextCfg.source.flatOverall === true, previousSingleMonarch));
+  const pools = overall
+    ? [{ id: 'overall', rows: phaseEngine.globalStandings(sourceGroups, calculateStandings) }]
+    : sourceGroups.map((g, index) => ({ id: 'group-' + index, rows: calculateStandings(g), group: g }));
+  const criterionList = Array.isArray(t.tiebreakers) ? t.tiebreakers.filter(k => k !== 'sorteio') : null;
+  const advanced = !!(phaseEngine.effectiveAdvancedScoring &&
+    (phaseEngine.effectiveAdvancedScoring(t, current) || {}).enabled);
+  const sourceMatches = pool => {
+    const groupsToRead = pool.group ? [pool.group] : sourceGroups;
+    const seen = new Set(), out = [];
+    groupsToRead.forEach(g => {
+      (g.matches || []).concat((g.rounds || []).reduce((a, r) => a.concat((r && r.matches) || []), [])).forEach(m => {
+        if (!m || (m.id && seen.has(String(m.id)))) return;
+        if (m.id) seen.add(String(m.id));
+        out.push(m);
+      });
+    });
+    return out;
+  };
+  // A última rodada Rei/Rainha pode ter outros quartetos. O desempate final
+  // usa a ordem da PRIMEIRA distribuição publicada, nunca a última rodada.
+  const originalDrawMatches = typeof phaseEngine.phaseGames === 'function'
+    ? _phaseTieCore.originalDrawMatches(phaseEngine.phaseGames(t, current)) : [];
+  let numberedPhaseGames = [];
+  if (tieRule === 'singles_then_draw') {
+    if (typeof drawWindow._assignGlobalGameNumbers !== 'function' ||
+        typeof phaseEngine.phaseGames !== 'function') {
+      throw new HttpsError('failed-precondition', 'Numeração canônica dos jogos indisponível.');
+    }
+    // O numerador carimba _gameNum. Uma cópia impede que esse cálculo
+    // regrave ou altere números dos jogos já publicados no torneio real.
+    const numberSnapshot = JSON.parse(JSON.stringify(t));
+    drawWindow._assignGlobalGameNumbers(numberSnapshot);
+    numberedPhaseGames = phaseEngine.phaseGames(numberSnapshot, current);
+  }
+  const numberForPool = pool => {
+    const matches = sourceMatches(pool);
+    const referencedIds = pool.group && Array.isArray(pool.group.matchIds)
+      ? pool.group.matchIds.map(id => ({ id })) : [];
+    let base = _phaseTieCore.baseGameNumber(matches.concat(referencedIds), numberedPhaseGames);
+    if (base || !pool.group) return base;
+    // Fases posteriores podem fornecer apenas a classificação do grupo.
+    // Nesse caso, a posição do grupo identifica seus jogos na fase numerada.
+    const groupIndex = pool.group.groupIdx != null
+      ? Number(pool.group.groupIdx) : sourceGroups.indexOf(pool.group);
+    const groupGames = numberedPhaseGames.filter(entry => {
+      const match = entry && entry.match;
+      const index = entry && entry.groupIdx != null ? entry.groupIdx : match && match.groupIdx;
+      return sourceGroups.length === 1 || (index != null && Number(index) === groupIndex);
+    });
+    base = _phaseTieCore.baseGameNumber(groupGames.map(entry => entry.match), groupGames);
+    return base;
+  };
+  const compareForPool = pool => {
+    const slotKeys = (match, side) => {
+      const uids = typeof drawWindow._slotUids === 'function' ? drawWindow._slotUids(match, side) : null;
+      if (uids && uids.length) return uids;
+      const names = side === 'p1' ? match.team1 : match.team2;
+      if (Array.isArray(names) && names.length) return names.filter(Boolean);
+      const one = side === 'p1' ? match.p1 : match.p2;
+      return one ? [String(one)] : [];
+    };
+    const matches = sourceMatches(pool);
+    const originalOrder = typeof drawWindow._standingsOrdemChave === 'function'
+      ? drawWindow._standingsOrdemChave(originalDrawMatches.length ? originalDrawMatches : matches, slotKeys) : {};
+    if (!criterionList) {
+      const legacyCompare = (a, b) => drawWindow._standingsCompare(a, b, advanced);
+      legacyCompare.originalOrder = originalOrder;
+      return legacyCompare;
+    }
+    const h2h = typeof drawWindow._standingsBuildH2H === 'function'
+      ? drawWindow._standingsBuildH2H(matches, slotKeys) : {};
+    const opts = { tiebreakers: criterionList.length ? criterionList : ['__none__'],
+      primaryField: t.rankingPrimary === 'games_diff' ? 'games_diff' : 'points',
+      adv: advanced, h2h, birth: tbOpts.birthByName || {} };
+    const compare = (a, b) => drawWindow._standingsCompareConfig(a, b, opts);
+    compare.originalOrder = originalOrder;
+    return compare;
+  };
+  return { nextCfg, overall, pools, numberForPool, compareForPool };
+}
+
+// O mesmo motor de desempate usado no avanço roda quando o último placar do
+// quarteto é confirmado. Nenhum horário ou quadra é reservado no sorteio.
+function _refreshAutomaticPhaseTies(t, matchId, nowIso) {
+  if (!t || !t.fmt2 || t.fmt2.tieResolution !== 'singles_then_draw' ||
+      !Array.isArray(t.phases)) return;
+  const current = Number(t.currentPhaseIndex || 0);
+  if (!t.phases[current + 1]) {
+    delete t.phaseTieAutoError;
+    return;
+  }
+  const phaseEngine = drawWindow && drawWindow._phasesEngine;
+  if (!phaseEngine || typeof phaseEngine.phaseGames !== 'function') return;
+  const currentCfg = typeof phaseEngine.projectPhaseCfg === 'function'
+    ? phaseEngine.projectPhaseCfg(t.phases[current], t, current) : null;
+  if (!currentCfg || currentCfg.kind !== 'classification') {
+    delete t.phaseTieAutoError;
+    return;
+  }
+  const nextCfg = phaseEngine.projectPhaseCfg(t.phases[current + 1], t, current + 1);
+  if (!nextCfg || !nextCfg.source || nextCfg.source.type !== 'previous_phase') return;
+  const games = phaseEngine.phaseGames(t, current);
+  const touched = games.find(entry => entry.match && String(entry.match.id) === String(matchId));
+  if (!touched) return;
+  const sourceGroups = current === 0 && typeof phaseEngine.prevPhaseGroups === 'function'
+    ? phaseEngine.prevPhaseGroups(t) : typeof phaseEngine.bracketPhaseGroups === 'function'
+      ? phaseEngine.bracketPhaseGroups(t, current) : [];
+  if (!sourceGroups.length) return;
+  const previousSingleMonarch = !!(phaseEngine.ehReiRainhaRodadaUnica &&
+    phaseEngine.ehReiRainhaRodadaUnica(currentCfg));
+  const overall = !!(phaseEngine.usaRankingGeral && phaseEngine.usaRankingGeral(
+    nextCfg.source.scope || 'per_group', (nextCfg.source.mapping || []).length,
+    sourceGroups.length, nextCfg.source.flatOverall === true, previousSingleMonarch));
+  const monarchRounds = current === 0 ? (t.rounds || []).filter(r =>
+    r && Array.isArray(r.monarchGroups) && r.monarchGroups.length) : [];
+  const plannedMonarchRounds = Number.parseInt((t.phases[current] || {}).rounds, 10) || 1;
+  const resolved = entry => !!(entry.match && (entry.match.winner ||
+    (entry.match.isBye && !entry.match.sobraAguardaDecisao) || entry.match.isSitOut));
+  const groupIdx = Number(touched.groupIdx);
+  const poolId = 'group-' + groupIdx;
+  const groupGames = games.filter(entry => Number(entry.groupIdx) === groupIdx);
+  if (monarchRounds.length && monarchRounds.length < plannedMonarchRounds) {
+    _phaseTieCore.archivePoolDecisions(t, current, overall ? 'overall' : poolId, nowIso);
+    delete t.phaseTieAutoError;
+    return;
+  }
+  if (overall && !phaseCompleteFn(t)) {
+    _phaseTieCore.archivePoolDecisions(t, current, 'overall', nowIso);
+    delete t.phaseTieAutoError;
+    return;
+  }
+  if (!overall && Number.isInteger(groupIdx) && groupGames.length && !groupGames.every(resolved)) {
+    _phaseTieCore.archivePoolDecisions(t, current, poolId, nowIso);
+    delete t.phaseTieAutoError;
+    return;
+  }
+  if (!overall && (!Number.isInteger(groupIdx) || !groupGames.length)) {
+    delete t.phaseTieAutoError;
+    return;
+  }
+  // O placar é a autoridade. Se uma configuração antiga impedir gerar o jogo
+  // extra, o resultado permanece gravado e o erro fica visível à organização.
+  const before = {
+    decisions: t.phaseTieDecisions && JSON.parse(JSON.stringify(t.phaseTieDecisions)),
+    suffix: t.phaseTieNextSuffix && JSON.parse(JSON.stringify(t.phaseTieNextSuffix)),
+    history: t.history && JSON.parse(JSON.stringify(t.history))
+  };
+  try {
+    const hasMonarch = current === 0
+      ? (t.rounds || []).some(r => r && Array.isArray(r.monarchGroups) && r.monarchGroups.length) ||
+        sourceGroups.some(g => (g.matches || []).some(m => m && m.isMonarch))
+      : !!(phaseEngine.isMonarchDraw && phaseEngine.isMonarchDraw(currentCfg));
+    const tbOpts = { tiebreakers: t.tiebreakers, rankingPrimary: t.rankingPrimary,
+      birthByName: typeof drawWindow._tbBirthByName === 'function' ? drawWindow._tbBirthByName(t) : {} };
+    const calculateStandings = g => current > 0 && Array.isArray(g.rankingRows)
+      ? g.rankingRows : phaseStandingsFn(g, t, tbOpts, hasMonarch);
+    const runtime = _buildPhaseTieRuntime(t, current, sourceGroups, currentCfg,
+      phaseEngine, calculateStandings, tbOpts, 'singles_then_draw');
+    const pools = overall ? runtime.pools : runtime.pools.filter(pool => pool.id === poolId);
+    if (!pools.length) {
+      delete t.phaseTieAutoError;
+      return;
+    }
+    _phaseTieCore.resolvePhaseTies(t, current, pools, runtime.nextCfg,
+      runtime.compareForPool, null, 1, false, runtime.numberForPool, nowIso,
+      { autoPlay: true, retainOtherDecisions: !overall });
+    delete t.phaseTieAutoError;
+  } catch (err) {
+    if (before.decisions) t.phaseTieDecisions = before.decisions; else delete t.phaseTieDecisions;
+    if (before.suffix) t.phaseTieNextSuffix = before.suffix; else delete t.phaseTieNextSuffix;
+    if (before.history) t.history = before.history; else delete t.history;
+    t.phaseTieAutoError = { phaseIndex: current, poolId: overall ? 'overall' : poolId,
+      message: String(err && err.message || err).slice(0, 240), at: nowIso };
+  }
+}
+
 exports.advanceTournamentPhase = onCall(async (request) => {
   const uid = request.auth && request.auth.uid;
   const tId = String((request.data && request.data.tournamentId) || '').trim();
@@ -6150,8 +6357,10 @@ exports.advanceTournamentPhase = onCall(async (request) => {
     const antes = _antesDoMotor(t);
     _hidrataGrupos(t, 'advanceTournamentPhase', tId);
     const phaseEngine = drawWindow && drawWindow._phasesEngine;
-    const pendingDecision = _phasePendingDecision.decide(t, phaseCompleteFn(t), phaseEngine,
-      request.data && request.data.acceptedPendingMatchIds);
+    const earlyTieAction = !!(request.data && request.data.tieAction && !phaseCompleteFn(t));
+    const pendingDecision = earlyTieAction ? { ok: true, ignoredPendingIds: [], seedChoiceAccepted: false }
+      : _phasePendingDecision.decide(t, phaseCompleteFn(t), phaseEngine,
+        request.data && request.data.acceptedPendingMatchIds);
     if (pendingDecision.reason === 'invalid-argument') {
       throw new HttpsError('invalid-argument', 'Seleção de jogos pendentes inválida.');
     }
@@ -6205,20 +6414,8 @@ exports.advanceTournamentPhase = onCall(async (request) => {
       throw new HttpsError('failed-precondition', 'Este torneio não prevê partidas extras de desempate.');
     }
     if (tieRuleEnabled) {
-      const nextCfg = phaseEngine && typeof phaseEngine.projectPhaseCfg === 'function'
-        ? phaseEngine.projectPhaseCfg(t.phases[current + 1], t, current + 1) : null;
-      if (!nextCfg || !nextCfg.source || nextCfg.source.type !== 'previous_phase') {
-        throw new HttpsError('failed-precondition', 'Origem da próxima fase indisponível para o desempate.');
-      }
-      const previousSingleMonarch = !!(phaseEngine.ehReiRainhaRodadaUnica &&
-        phaseEngine.ehReiRainhaRodadaUnica(currentCfg));
-      const overall = !!(phaseEngine.usaRankingGeral && phaseEngine.usaRankingGeral(
-        nextCfg.source.scope || 'per_group',
-        (nextCfg.source.mapping || []).length, sourceGroups.length,
-        nextCfg.source.flatOverall === true, previousSingleMonarch));
-      const pools = overall
-        ? [{ id: 'overall', rows: phaseEngine.globalStandings(sourceGroups, calculateStandings) }]
-        : sourceGroups.map((g, index) => ({ id: 'group-' + index, rows: calculateStandings(g), group: g }));
+      const { nextCfg, overall, pools, numberForPool, compareForPool } = _buildPhaseTieRuntime(
+        t, current, sourceGroups, currentCfg, phaseEngine, calculateStandings, tbOpts, tieRule);
       const requestedTieAction = request.data && request.data.tieAction;
       if (requestedTieAction && ['court', 'call'].includes(requestedTieAction.type)) {
         const declared = Array.isArray(t.courtNames) && t.courtNames.length
@@ -6245,81 +6442,6 @@ exports.advanceTournamentPhase = onCall(async (request) => {
           }
         }
       }
-      const criterionList = Array.isArray(t.tiebreakers) ? t.tiebreakers.filter(k => k !== 'sorteio') : null;
-      const advanced = !!(phaseEngine.effectiveAdvancedScoring &&
-        (phaseEngine.effectiveAdvancedScoring(t, current) || {}).enabled);
-      const sourceMatches = pool => {
-        const groupsToRead = pool.group ? [pool.group] : sourceGroups;
-        const seen = new Set(), out = [];
-        groupsToRead.forEach(g => {
-          (g.matches || []).concat((g.rounds || []).reduce((a, r) => a.concat((r && r.matches) || []), [])).forEach(m => {
-            if (!m || (m.id && seen.has(String(m.id)))) return;
-            if (m.id) seen.add(String(m.id));
-            out.push(m);
-          });
-        });
-        return out;
-      };
-      // A última rodada Rei/Rainha pode ter outros quartetos. O desempate final
-      // usa a ordem da PRIMEIRA distribuição publicada, nunca a última rodada.
-      const originalDrawMatches = typeof phaseEngine.phaseGames === 'function'
-        ? _phaseTieCore.originalDrawMatches(phaseEngine.phaseGames(t, current)) : [];
-      let numberedPhaseGames = [];
-      if (tieRule === 'singles_then_draw') {
-        if (typeof drawWindow._assignGlobalGameNumbers !== 'function' ||
-            typeof phaseEngine.phaseGames !== 'function') {
-          throw new HttpsError('failed-precondition', 'Numeração canônica dos jogos indisponível.');
-        }
-        // O numerador carimba _gameNum. Uma cópia impede que esse cálculo
-        // regrave ou altere números dos jogos já publicados no torneio real.
-        const numberSnapshot = JSON.parse(JSON.stringify(t));
-        drawWindow._assignGlobalGameNumbers(numberSnapshot);
-        numberedPhaseGames = phaseEngine.phaseGames(numberSnapshot, current);
-      }
-      const numberForPool = pool => {
-        const matches = sourceMatches(pool);
-        const referencedIds = pool.group && Array.isArray(pool.group.matchIds)
-          ? pool.group.matchIds.map(id => ({ id })) : [];
-        let base = _phaseTieCore.baseGameNumber(matches.concat(referencedIds), numberedPhaseGames);
-        if (base || !pool.group) return base;
-        // Fases posteriores podem fornecer apenas a classificação do grupo.
-        // Nesse caso, a posição do grupo identifica seus jogos na fase numerada.
-        const groupIndex = pool.group.groupIdx != null
-          ? Number(pool.group.groupIdx) : sourceGroups.indexOf(pool.group);
-        const groupGames = numberedPhaseGames.filter(entry => {
-          const match = entry && entry.match;
-          const index = entry && entry.groupIdx != null ? entry.groupIdx : match && match.groupIdx;
-          return sourceGroups.length === 1 || (index != null && Number(index) === groupIndex);
-        });
-        base = _phaseTieCore.baseGameNumber(groupGames.map(entry => entry.match), groupGames);
-        return base;
-      };
-      const compareForPool = pool => {
-        const slotKeys = (match, side) => {
-          const uids = typeof drawWindow._slotUids === 'function' ? drawWindow._slotUids(match, side) : null;
-          if (uids && uids.length) return uids;
-          const names = side === 'p1' ? match.team1 : match.team2;
-          if (Array.isArray(names) && names.length) return names.filter(Boolean);
-          const one = side === 'p1' ? match.p1 : match.p2;
-          return one ? [String(one)] : [];
-        };
-        const matches = sourceMatches(pool);
-        const originalOrder = typeof drawWindow._standingsOrdemChave === 'function'
-          ? drawWindow._standingsOrdemChave(originalDrawMatches.length ? originalDrawMatches : matches, slotKeys) : {};
-        if (!criterionList) {
-          const legacyCompare = (a, b) => drawWindow._standingsCompare(a, b, advanced);
-          legacyCompare.originalOrder = originalOrder;
-          return legacyCompare;
-        }
-        const h2h = typeof drawWindow._standingsBuildH2H === 'function'
-          ? drawWindow._standingsBuildH2H(matches, slotKeys) : {};
-        const opts = { tiebreakers: criterionList.length ? criterionList : ['__none__'],
-          primaryField: t.rankingPrimary === 'games_diff' ? 'games_diff' : 'points',
-          adv: advanced, h2h, birth: tbOpts.birthByName || {} };
-        const compare = (a, b) => drawWindow._standingsCompareConfig(a, b, opts);
-        compare.originalOrder = originalOrder;
-        return compare;
-      };
       let tieFlow;
       try {
         const scoring = (currentCfg && currentCfg.scoring) || t.scoring || {};
@@ -6327,10 +6449,15 @@ exports.advanceTournamentPhase = onCall(async (request) => {
         if (requestedTieAction && ['call', 'score', 'confirm'].includes(requestedTieAction.type)) {
           requestedTieAction.at = agoraIso;
         }
-        tieFlow = _phaseTieCore.resolvePhaseTies(t, current, pools, nextCfg,
+        const actionPools = requestedTieAction && !String(requestedTieAction.decisionId || '').startsWith('wildcards:')
+          ? pools.filter(pool => String(requestedTieAction.decisionId || '').startsWith(pool.id + ':')) : pools;
+        if (requestedTieAction && !String(requestedTieAction.decisionId || '').startsWith('wildcards:') &&
+            !actionPools.length) throw new Error('Desempate deste grupo não encontrado.');
+        tieFlow = _phaseTieCore.resolvePhaseTies(t, current, actionPools, nextCfg,
           compareForPool, requestedTieAction && String(requestedTieAction.decisionId || '').startsWith('wildcards:')
             ? null : requestedTieAction, setsToWin,
-          tieRule === 'draw_order', tieRule === 'singles_then_draw' ? numberForPool : null, agoraIso);
+          tieRule === 'draw_order', tieRule === 'singles_then_draw' ? numberForPool : null, agoraIso,
+          { autoPlay: tieRule === 'singles_then_draw', retainOtherDecisions: !!requestedTieAction });
       } catch (err) {
         throw new HttpsError('failed-precondition', 'Desempate não aplicado: ' + String(err.message || err));
       }
@@ -6351,6 +6478,10 @@ exports.advanceTournamentPhase = onCall(async (request) => {
         return { ok: false, reason: tieFlow.status === 'choice' ? 'tie-choice-required' :
           tieFlow.status === 'review' ? 'tie-match-review' : 'tie-match-pending',
           tie: tieFlow.tie, decision: tieFlow.decision || null, tournament: saved && saved.clean };
+      }
+      if (requestedTieAction && !String(requestedTieAction.decisionId || '').startsWith('wildcards:')) {
+        const saved = tieFlow.changed ? _gravaTorneio(tx, ref, t, antes, { agoraIso }) : null;
+        return { ok: true, reason: 'tie-updated', tournament: saved && saved.clean };
       }
       if (overall) {
         phaseTieOrder = {};

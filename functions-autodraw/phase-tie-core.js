@@ -209,9 +209,32 @@ function applyOrder(rows, tie, orderKeys) {
   return rows.slice(0, tie.from).concat(orderKeys.map(k => byKey.get(k)), rows.slice(tie.to + 1));
 }
 
+function archivePoolDecisions(t, phaseIndex, poolId, nowIso) {
+  const book = t.phaseTieDecisions && t.phaseTieDecisions[String(phaseIndex)];
+  if (!book) return false;
+  let changed = false;
+  Object.keys(book).forEach(decisionId => {
+    if (!decisionId.startsWith(poolId + ':')) return;
+    // Uma decisão publicada continua válida se o placar base for reaberto e,
+    // depois da correção, a fronteira permanecer igual. Decisões ainda não
+    // confirmadas deixam de estar operáveis enquanto o grupo está incompleto.
+    if (book[decisionId] && book[decisionId].status === 'complete') return;
+    if (!Array.isArray(t.history)) t.history = [];
+    t.history.push({ date: String(nowIso || new Date().toISOString()),
+      message: 'Decisão de desempate arquivada após reabertura de jogo da fase ' + (Number(phaseIndex) + 1),
+      phaseTieDecision: JSON.parse(JSON.stringify(book[decisionId])) });
+    delete book[decisionId];
+    changed = true;
+  });
+  return changed;
+}
+
 // O servidor chama esta função dentro de sua transação. `action` é uma intenção
 // administrativa; a classificação e os atletas sempre vêm do documento fresco.
-function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, action, setsToWin, autoDraw, numberForPool, nowIso) {
+function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, action, setsToWin, autoDraw, numberForPool, nowIso, options) {
+  const opts = options || {};
+  const automaticSingles = opts.autoPlay === true && t.fmt2 && t.fmt2.tieResolution === 'singles_then_draw';
+  const automaticDraw = autoDraw && (!t.fmt2 || t.fmt2.tieResolution !== 'singles_then_draw');
   const book = t.phaseTieDecisions || {};
   const phaseBook = book[String(phaseIndex)] || {};
   let changed = false, usedAction = false;
@@ -255,21 +278,23 @@ function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, actio
           t.phaseTieNextSuffix = t.phaseTieNextSuffix || {};
           t.phaseTieNextSuffix[suffixKey] = suffixOffset;
         }
-        return { status: 'choice', tie: Object.assign({ decisionId, poolId: pool.id,
-          baseGameNumber: baseNumber, firstExtraGameNumber }, tie), changed: true, orderedPools };
+        decision = null;
+        changed = true;
       }
       if (!decision) {
-        const type = autoDraw && !action ? 'draw' : action && action.decisionId === decisionId && !usedAction ? action.type : null;
+        const type = action && action.decisionId === decisionId && !usedAction ? action.type
+          : !action && automaticSingles ? 'play' : !action && automaticDraw ? 'draw' : null;
         if (!type) {
           if (action && !usedAction) throw new Error('decisão de desempate desatualizada');
           if (changed) { book[String(phaseIndex)] = phaseBook; t.phaseTieDecisions = book; }
           return { status: 'choice', tie: Object.assign({ decisionId, poolId: pool.id,
             baseGameNumber: baseNumber, firstExtraGameNumber }, tie), changed, orderedPools };
         }
-        if (!autoDraw) usedAction = true;
+        if (action) usedAction = true;
         if (type !== 'play' && type !== 'draw') throw new Error('escolha de desempate inválida');
         if (type === 'play' && ![2, 3].includes(keys.length)) throw new Error('simples disponível só para dois ou três atletas');
         decision = { contenders: keys, players: tie.players.map(p => ({ key: p.key, name: p.name })),
+          groupName: pool.group && pool.group.name || null, cutRank: tie.cut,
           baseGameNumber: baseNumber,
           originalOrder: keys.slice(), choice: type,
           status: type === 'draw' ? 'complete' : 'pending',
@@ -281,7 +306,8 @@ function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, actio
             Number(t.fmt2 && t.fmt2.tieSinglesPoints) >= 1 && Number(t.fmt2 && t.fmt2.tieSinglesPoints) <= 99
             ? Number(t.fmt2.tieSinglesPoints) : 5,
           pointMargin: t.fmt2 && t.fmt2.tieSinglesMargin === 2 ? 2 : 1,
-          reason: type === 'draw' ? (autoDraw ? 'rule-original-draw-order' : 'organizer-used-original-draw-order') : 'organizer-chose-singles' };
+          reason: type === 'draw' ? (automaticDraw ? 'rule-original-draw-order' : 'organizer-used-original-draw-order')
+            : automaticSingles && !action ? 'rule-automatic-singles' : 'organizer-chose-singles' };
         phaseBook[decisionId] = decision;
         if (decision.matches.length && Number.isInteger(baseNumber) && baseNumber > 0) {
           t.phaseTieNextSuffix = t.phaseTieNextSuffix || {};
@@ -356,7 +382,8 @@ function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, actio
   // A fronteira pode deixar de existir após uma correção de resultado. Decisões
   // antigas não podem bloquear o título; os jogos ficam preservados no histórico.
   Object.keys(phaseBook).forEach(decisionId => {
-    if (activeDecisionIds.has(decisionId)) return;
+    if (activeDecisionIds.has(decisionId) ||
+        (opts.retainOtherDecisions && !pools.some(pool => decisionId.startsWith(pool.id + ':')))) return;
     if (!Array.isArray(t.history)) t.history = [];
     t.history.push({ date: String(nowIso || new Date().toISOString()),
       message: 'Decisão de desempate arquivada após mudança na classificação da fase ' + (Number(phaseIndex) + 1),
@@ -370,4 +397,4 @@ function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, actio
 
 module.exports = { key, canonicalizeTieFallback, originalDrawMatches, baseGameNumber, letterIndex,
   drawPosition, rankInitialRows, findBoundaryTie, allBoundaryTies, boundariesFor, matchesFor,
-  scoreMatch, rankPlayers, applyOrder, resolvePhaseTies };
+  scoreMatch, rankPlayers, applyOrder, archivePoolDecisions, resolvePhaseTies };

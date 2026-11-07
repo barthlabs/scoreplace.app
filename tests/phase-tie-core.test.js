@@ -183,4 +183,47 @@ assert.throws(() => tie.resolvePhaseTies({}, 0, pools, next, () => noDraw, null,
   /ordem do sorteio original ausente/, 'não inventa prioridade do atleta sem posição no sorteio');
 assert.throws(() => tie.resolvePhaseTies({}, 0, pools, next, () => cmp, null, 1, false, () => null),
   /número canônico/, 'não inventa número para partidas extras');
+
+const autoRows = [
+  { uid: 'A', name: 'A', wins: 3 }, { uid: 'B', name: 'B', wins: 2 },
+  { uid: 'C', name: 'C', wins: 2 }, { uid: 'D', name: 'D', wins: 0 }
+];
+const autoCfg = { source: { mapping: [{ dest: 'next', rankFrom: 1, rankTo: 2 }] } };
+const autoTournament = { fmt2: { tieResolution: 'singles_then_draw', tieSinglesPoints: 5,
+  tieSinglesMargin: 1 } };
+const autoPool = [{ id: 'group-0', group: { name: 'Diamante · Grupo 1' }, rows: autoRows }];
+const autoOpts = { autoPlay: true, retainOtherDecisions: true };
+let autoFlow = tie.resolvePhaseTies(autoTournament, 0, autoPool, autoCfg, () => cmp,
+  null, 1, false, () => 3, '2026-11-07T15:00:00Z', autoOpts);
+assert.equal(autoFlow.status, 'pending', 'a simples surge no fechamento do quarteto sem escolha manual');
+assert.equal(autoFlow.decision.matches.length, 1, 'segundo e terceiro jogam uma simples');
+assert.equal(autoFlow.decision.matches[0].displayGameNumber, '3A');
+assert.equal(autoFlow.decision.groupName, 'Diamante · Grupo 1');
+assert.equal(autoFlow.decision.reason, 'rule-automatic-singles');
+assert.equal(autoFlow.decision.matches[0].court, undefined, 'quadra é escolhida quando o empate aparece');
+const extraId = autoFlow.decision.matches[0].id;
+autoFlow = tie.resolvePhaseTies(autoTournament, 0, autoPool, autoCfg, () => cmp,
+  null, 1, false, () => 3, '2026-11-07T15:01:00Z', autoOpts);
+assert.equal(autoFlow.decision.matches[0].id, extraId, 'repetir o mesmo placar não duplica a simples');
+const otherId = 'group-1:1:2';
+autoTournament.phaseTieDecisions['0'][otherId] = { contenders: ['uid:X', 'uid:Y'], matches: [] };
+tie.resolvePhaseTies(autoTournament, 0, autoPool, autoCfg, () => cmp,
+  null, 1, false, () => 3, '2026-11-07T15:02:00Z', autoOpts);
+assert(autoTournament.phaseTieDecisions['0'][otherId], 'um grupo não apaga desempate de outro');
+assert(tie.archivePoolDecisions(autoTournament, 0, 'group-0', '2026-11-07T15:03:00Z'),
+  'reabrir o terceiro placar invalida só a simples daquele grupo');
+assert(autoTournament.phaseTieDecisions['0'][otherId], 'a simples do outro grupo permanece');
+autoFlow = tie.resolvePhaseTies(autoTournament, 0, autoPool, autoCfg, () => cmp,
+  null, 1, false, () => 3, '2026-11-07T15:04:00Z', autoOpts);
+assert.equal(autoFlow.decision.matches[0].displayGameNumber, '3B', 'novo jogo não reutiliza número arquivado');
+const staleAuto = { fmt2: autoTournament.fmt2, phaseTieDecisions: { '0': {
+  'group-0:1:2': { contenders: ['uid:B', 'uid:D'], choice: 'draw', status: 'complete',
+    order: ['uid:B', 'uid:D'], baseGameNumber: 3, matches: [] }
+} } };
+const newAuto = tie.resolvePhaseTies(staleAuto, 0, autoPool, autoCfg, () => cmp,
+  null, 1, true, () => 3, '2026-11-07T15:05:00Z', autoOpts);
+assert.equal(newAuto.status, 'pending', 'a fronteira corrigida cria simples no mesmo salvamento');
+assert.equal(newAuto.decision.choice, 'play', 'sorteio automático não substitui simples configurada');
+assert.equal(staleAuto.history[0].phaseTieDecision.choice, 'draw',
+  'a escolha antiga fica no histórico após a correção');
 console.log('phase-tie-core: ok');

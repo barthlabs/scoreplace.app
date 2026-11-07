@@ -12248,7 +12248,9 @@ window.AppStore = {
             if (_lt) {
               _canonicalApplied = true;
               var _statusBeforeResult = _lt.status;
+              var _tieBeforeResult = JSON.stringify(_lt.phaseTieDecisions || {});
               Object.keys(_d.tournament).forEach(function (k) { _lt[k] = _d.tournament[k]; });
+              var _tieChangedWithResult = _tieBeforeResult !== JSON.stringify(_lt.phaseTieDecisions || {});
               /* A callable confirma a transação. O card relê o jogo físico que ela
                * gravou, sem derivar placar do payload nem consultar `results`. */
               var _midConfirmado = String(matchId);
@@ -12361,7 +12363,7 @@ window.AppStore = {
                 var _currentScoreRoute = window.location.hash || '';
                 if (_currentScoreRoute.indexOf('#tournaments/' + String(tournamentId)) === 0 ||
                     _currentScoreRoute.indexOf('#bracket/' + String(tournamentId)) === 0) {
-                  if (_keepBracketViewport && _statusBeforeResult !== 'finished' && _lt.status !== 'finished' &&
+                  if (!_tieChangedWithResult && _keepBracketViewport && _statusBeforeResult !== 'finished' && _lt.status !== 'finished' &&
                       typeof window._refreshConfirmedMatchCard === 'function' &&
                       window._refreshConfirmedMatchCard(_lt, tournamentId, matchId)) {
                     // O eco da própria gravação não pode remontar o detalhe três
@@ -12382,6 +12384,13 @@ window.AppStore = {
                     clearTimeout(window._scoreResultSuppressTimer);
                     window._scoreResultSuppressTimer = setTimeout(function () { window._suppressSoftRefresh = false; }, 3000);
                     window._rerenderBracket(tournamentId, matchId);
+                    if (_tieChangedWithResult && typeof showNotification === 'function') {
+                      var _bookAfterResult = (_lt.phaseTieDecisions || {})[String(_lt.currentPhaseIndex || 0)] || {};
+                      if (Object.values(_bookAfterResult).some(function (d) { return d && d.status === 'pending'; })) {
+                        showNotification('Desempate necessário',
+                          'Há uma simples para definir quem avança. Abra o desempate na chave.', 'warning');
+                      }
+                    }
                   } else {
                     window._suppressSoftRefresh = false;
                     window._tdetailSig = null;

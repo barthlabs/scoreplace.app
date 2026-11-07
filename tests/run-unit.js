@@ -931,6 +931,7 @@ const SUITES = [
   'tests/phase-inactive-include.test.js',
   'tests/phase-promote-line.test.js',
   'tests/phase-tie-core.test.js',
+  'tests/automatic-phase-tie-after-score.test.js',
   'tests/final-classification-tie-flow.test.js',
   'tests/phase-pending-irrelevant.test.js',
   'tests/phase-tie-to-bracket.test.js',

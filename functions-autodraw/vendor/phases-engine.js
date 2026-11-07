@@ -3149,7 +3149,7 @@
           '. Registre o placar, por exemplo <b>' + decision.pointsToWin + '-3</b>.' :
           ' · ' + decision.setsToWin + ' set(s) para vencer cada partida. Registre os placares por set, por exemplo <b>6-4, 3-6, 6-2</b>.') +
         ' Revise todos os resultados antes de confirmar ' +
-        (finalTitle ? 'o encerramento.' : 'o avanço.') + '</p>';
+        (finalTitle ? 'o encerramento.' : context && context.existing ? 'o desempate.' : 'o avanço.') + '</p>';
       (decision.matches || []).forEach(function (match, index) {
         var courtOptions = '<option value="">Escolha a quadra</option>' + courtNames.map(function (name) {
           return '<option value="' + safe(name) + '"' + (name === match.court ? ' selected' : '') + '>' + safe(name) + '</option>';
@@ -3167,8 +3167,8 @@
           '" style="min-width:0;flex:1;"><button type="button" class="btn btn-primary" data-tie-match="' + index + '">' +
           (match.winnerKey ? 'Corrigir placar' : 'Salvar placar') + '</button></div></div>';
       });
-      if (out.reason === 'tie-match-review') body += '<button type="button" id="phase-tie-confirm" class="btn btn-primary" style="margin-top:12px;">Confirmar resultados e ' +
-        (finalTitle ? 'encerrar' : 'avançar') + '</button>';
+      if (out.reason === 'tie-match-review') body += '<button type="button" id="phase-tie-confirm" class="btn btn-primary" style="margin-top:12px;">' +
+        (finalTitle ? 'Confirmar resultados e encerrar' : context && context.existing ? 'Confirmar desempate' : 'Confirmar resultados') + '</button>';
     }
     overlay.innerHTML = '<div role="dialog" aria-modal="true" aria-label="Desempate antes de concluir a fase" style="background:var(--bg-card,#1e293b);color:var(--text-main,#fff);width:min(560px,100%);max-height:90%;overflow:auto;border-radius:16px;padding:22px;border:1px solid rgba(255,255,255,.2);">' +
       '<h3 style="margin:0 0 10px;">' + (finalTitle ? 'Desempate pelo título' : 'Desempate antes da próxima fase') + '</h3>' + body +
@@ -3209,6 +3209,17 @@
   if (typeof window !== 'undefined') window._phaseTiePanelForFinish = function (tId, out) {
     _phaseTiePanel(tId, out, { finish: true });
   };
+  if (typeof window !== 'undefined') window._phaseTiePanelForExisting = function (tId, decisionId) {
+    var t = window._findTournamentById && window._findTournamentById(tId);
+    var phaseIndex = Number(t && t.currentPhaseIndex || 0);
+    var decision = t && t.phaseTieDecisions && t.phaseTieDecisions[String(phaseIndex)] &&
+      t.phaseTieDecisions[String(phaseIndex)][String(decisionId)];
+    if (!decision || !['pending', 'review'].includes(decision.status)) return;
+    var players = decision.players || [];
+    _phaseTiePanel(tId, { reason: decision.status === 'review' ? 'tie-match-review' : 'tie-match-pending',
+      tie: { decisionId: String(decisionId), players: players }, decision: decision },
+    { existing: true, phaseChoices: [] });
+  };
 
   function _phaseTieRequest(tId, context, tieAction) {
     if (context && context.finish) {
@@ -3246,6 +3257,13 @@
         return;
       }
       if (!out.ok) throw new Error(out.reason || 'advance-failed');
+      if (out.reason === 'tie-updated') {
+        var updatedPanel = document.getElementById('phase-tie-panel'); if (updatedPanel) updatedPanel.remove();
+        if (window._rerenderBracket) window._rerenderBracket(tId);
+        if (window.showNotification) window.showNotification('Desempate confirmado',
+          'O resultado ficou registrado. A próxima fase poderá avançar quando os demais jogos terminarem.', 'success');
+        return;
+      }
       if (!out.tournament || typeof window._applyCFTournament !== 'function') throw new Error('phase-snapshot-missing');
       var panel = document.getElementById('phase-tie-panel'); if (panel) panel.remove();
       if (window._rerenderBracket) window._rerenderBracket(tId);
