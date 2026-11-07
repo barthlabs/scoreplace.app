@@ -1,4 +1,7 @@
-// 2.5.110 — Atualização consolidada de produção com as correções validadas desde a última publicação.
+// 2.5.110 — O desenvolvedor pode fotografar um torneio privado antes do ensaio
+// e restaurar inscrições, números, categorias e demais dados originais depois.
+// Sorteio, placares, W.O. e registros criados no ensaio são removidos; se a
+// restauração for interrompida, o botão permite retomá-la sem perder a fotografia.
 // 2.5.109 — Organizadores podem convidar co-organizadores e árbitros por e-mail
 // ou preparar uma mensagem de SMS com DDI, DDD e telefone. O acesso é ativado
 // somente quando a pessoa entra com o contato verificado na própria conta.
