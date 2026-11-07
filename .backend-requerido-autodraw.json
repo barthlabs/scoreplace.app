@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "backendCommit": "006911b74371b5d988fd4bcac0d30afa60f76c56",
+  "backendCommit": "044ed5cfa037dd35cc73a40d51248a49313c3a70",
   "scopeNote": "Delta de recuperação do ensaio: captura e reset; as outras funções do ensaio já foram publicadas no corte anterior.",
   "functions": [
     "startTournamentRehearsal",
