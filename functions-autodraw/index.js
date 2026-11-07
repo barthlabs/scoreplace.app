@@ -1738,6 +1738,32 @@ exports.drawRound = onCall(async (request) => {
        * organizador. A defesa vazava pela borda do erro. */
       { tId, uid, creatorUid: _p.creatorUid, adminUids: _p.adminUids });
   }
+  // A fotografia do ensaio privado pertence ao próprio ato de sortear. Ela é
+  // concluída e conferida antes da transação que cria qualquer partida.
+  let rehearsalActivatedHere = false;
+  let out;
+  try {
+  if (!sandbox && uid === _rehearsal.OWNER_UID && pre.data().creatorUid === uid &&
+      pre.data().isPublic === false && pre.data().organizerOnly === true &&
+      (!pre.data().rehearsal?.state || pre.data().rehearsal.state === 'capturing') &&
+      !hasDrawnBracket(pre.data()) && !allowRedraw) {
+    // Rejeições previsíveis devem ocorrer ANTES de congelar a inscrição. Se a
+    // transação ainda falhar, o catch abaixo restaura a fotografia imediatamente.
+    const candidate = { ...pre.data() };
+    if (decisions && decisions.groupConfig) {
+      const g = decisions.groupConfig;
+      candidate.gruposCount = parseInt(g.numGroups, 10) || candidate.gruposCount;
+      candidate.gruposClassified = parseInt(g.classPerGroup, 10) || candidate.gruposClassified;
+      if (g.advanceTotal) candidate.gruposAdvanceTotal = parseInt(g.advanceTotal, 10);
+      if (typeof g.equalOnly === 'boolean') candidate.gruposEqualOnly = g.equalOnly;
+    }
+    if (decisions && (decisions.groupConfig || decisions.closeEnrollment)) candidate.status = 'closed';
+    _requireExplicitTeamDrawPlan(candidate, tId);
+    try { require('./category-window-core').validate(candidate, HttpsError); }
+    catch (error) { throw _drawFail('failed-precondition', error.message, { tId }); }
+    await _rehearsal.makeService({ db, HttpsError }).activate(request);
+    rehearsalActivatedHere = true;
+  }
   await _preloadDrawNames(pre.data()); // popula drawWindow._profileNameByUid
   // L6.R1: o fuso do evento é resolvido FORA da transação (pode custar uma leitura de
   // perfil) e entra na trava de slot lá dentro, que é síncrona.
@@ -1748,8 +1774,6 @@ exports.drawRound = onCall(async (request) => {
   console.log(`drawRound v${CF_VERSION}: pedido de ${uid} pro torneio ${tId}` + (allowRedraw ? ' [re-sorteio]' : '') +
     (decisions ? ' decisoes=' + JSON.stringify(decisions) : ' (sem decisoes)'));
 
-  let out;
-  try {
     /* ⛔ INSTANTE ESTÁVEL DA OPERAÇÃO — calculado UMA VEZ, FORA do callback.
      * O Firestore RE-EXECUTA o callback no retry; um `new Date()` lá dentro faria
      * cada tentativa produzir espelho e plano diferentes. */
@@ -1933,6 +1957,14 @@ exports.drawRound = onCall(async (request) => {
              redraw: hadBracket, tournament: b.clean };
     });
   } catch (e) {
+    if (rehearsalActivatedHere) {
+      try {
+        await _rehearsal.makeService({ db, HttpsError }).restore(request);
+      } catch (resetError) {
+        console.error(`drawRound: sorteio falhou e reset automático requer retomada em ${tId}:`, resetError && resetError.stack || resetError);
+        throw new HttpsError('data-loss', 'Sorteio falhou; a restauração automática não terminou. Use Resetar teste para retomá-la.');
+      }
+    }
     // HttpsError já foi logado pelo _drawFail — repassa. Qualquer OUTRO erro (motor
     // estourando, Firestore, bug meu) chegaria ao cliente como 'internal' SEM RASTRO:
     // loga com stack antes de repassar. Foi a cegueira do 1º teste real.

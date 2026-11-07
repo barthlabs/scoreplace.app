@@ -575,7 +575,10 @@ const CASES = [
   const scheduleSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'schedule-poll.js'), 'utf8');
   const packStart = scheduleSource.indexOf('  function _schPackStructuredDay(');
   const packEnd = scheduleSource.indexOf('\n  // Plano PURO:', packStart);
-  const legacyPack = vm.runInNewContext(scheduleSource.slice(packStart, packEnd) + '\n_schPackStructuredDay', {
+  const groupStart = scheduleSource.indexOf('  function _schGroupIdx(');
+  const groupEnd = scheduleSource.indexOf('  window._schGroupKey', groupStart);
+  const legacyPack = vm.runInNewContext(scheduleSource.slice(groupStart, groupEnd) + '\n' +
+    scheduleSource.slice(packStart, packEnd) + '\n_schPackStructuredDay', {
     _schMatchUids: function () { return []; }
   });
   const categoryFixture = [[3,4,3], [1,5,0], [2,2,1], [2,3,6], [1,0,7], [2,1,4]].map(function (entry, index) {

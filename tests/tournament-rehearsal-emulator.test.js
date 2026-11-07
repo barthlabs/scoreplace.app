@@ -8,6 +8,7 @@ const { makeService, fingerprint, OWNER_UID } = require('../functions-autodraw/t
 if (!process.env.FIRESTORE_EMULATOR_HOST) throw new Error('Este teste exige Firestore Emulator.');
 process.env.GCLOUD_PROJECT = 'demo-scoreplace';
 process.env.FIREBASE_CONFIG = JSON.stringify({ projectId: 'demo-scoreplace' });
+const { drawRound } = require('../functions-autodraw');
 if (!admin.apps.length) admin.initializeApp({ projectId: 'demo-scoreplace' });
 const db = admin.firestore();
 class HttpsError extends Error { constructor(code, message) { super(message); this.code = code; } }
@@ -74,6 +75,15 @@ const service = makeService({ db, HttpsError });
   await service.restore(request());
   assert.equal((await ref.get()).data().status, 'closed', 'a restauração devolve o estado fechado');
   await ref.update({ status:'open' });
+  // drawRound pode falhar após a captura automática. A operação deve devolver
+  // integralmente o torneio antes de deixar o organizador tentar de novo.
+  await assert.rejects(drawRound.run({ auth:{ uid:OWNER_UID },
+    data:{ tournamentId:id, operationId:'identificador-invalido' } }));
+  assert.equal((await db.collection('tournamentRehearsalBaselines').doc(id).get()).data().state, 'restored',
+    'falha posterior à captura executa reset automático');
+  assert.equal((await ref.get()).data().rehearsal, undefined);
+  assert.equal((await ref.get()).data().notificationsMuted, undefined);
+  assert.equal((await ref.collection('registrations').get()).size, 144);
   // A final activation check can fail after the full baseline was saved.
   // This state must remain recoverable from the same restore action.
   const retry = await service.activate(request());

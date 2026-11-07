@@ -59,6 +59,14 @@
   }
   function collect(t, allMatches) {
     var seen = new Set();
+    var plannedCourts = {}, plannedNumbers = {};
+    if (typeof root._operationalSchedulePlan === 'function') {
+      var plan = root._operationalSchedulePlan(t);
+      (plan && plan.items || []).forEach(function (item) {
+        plannedCourts[text(item.matchId)] = text(item.court);
+        plannedNumbers[text(item.matchId)] = Number(item.scheduledGameNumber) || null;
+      });
+    }
     var matches = (allMatches || []).filter(function (m) {
       if (!m || m.isBye || m.isSitOut || !m.scheduledAt || !localDay(m.scheduledAt)) return false;
       var key = text(m.id) || [m.scheduledAt, m.court, m.p1, m.p2].join('|');
@@ -68,7 +76,8 @@
     }).map(function (m) {
       return {
         id: text(m.id), day: localDay(m.scheduledAt), time: localTime(m.scheduledAt), at: timestamp(m.scheduledAt),
-        court: text(m.court), number: matchNumber(m), category: text(m.category || m.categoryName),
+        court: text(m.court) || plannedCourts[text(m.id)] || '',
+        number:Number(m.scheduledGameNumber) || plannedNumbers[text(m.id)] || matchNumber(m), category: text(m.category || m.categoryName),
         round: m.round == null ? '' : String(m.round),
         p1: displaySide(t, m, 'p1'), p2: displaySide(t, m, 'p2'),
         team1: teamName(t, m, 'p1'), team2: teamName(t, m, 'p2'),

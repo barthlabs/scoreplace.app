@@ -102,11 +102,20 @@
       var manual = m.scheduleLocked === true || m.scheduleSource === 'organizer' || m.scheduledKind === 'organizer' || m.scheduledKind === 'consensus' || legacyAllocated || !!change;
       if (played(m) || manual) blocked.push(m); else pending.push(m);
     });
-    var occupied = {};
+    var occupied = {}, occupiedUnits = [];
+    function matchUnits(m) {
+      var units = typeof window._schMatchUids === 'function'
+        ? window._schMatchUids(t, m).map(function (id) { return 'uid:' + id; }) : [];
+      var group = typeof window._schGroupKey === 'function' ? window._schGroupKey(m) : '';
+      if (group) units.push(group);
+      return units;
+    }
     function reserve(m, at, court) {
       if (!at || !court) return;
       var a = new Date(at).getTime(); if (isNaN(a)) return;
-      (occupied[court] || (occupied[court] = [])).push({ a: a, b: a + duration(t, m) });
+      var interval = { a:a, b:a + duration(t, m), units:matchUnits(m) };
+      (occupied[court] || (occupied[court] = [])).push(interval);
+      occupiedUnits.push(interval);
     }
     blocked.forEach(function (m) {
       var change = changesByMatch[String(m.id)];
@@ -114,7 +123,12 @@
       var court = change ? change.court : m.court;
       reserve(m, at, court);
     });
-    function free(court, at, len) { return !(occupied[court] || []).some(function (x) { return at < x.b && at + len > x.a; }); }
+    function free(court, at, len, units) {
+      if ((occupied[court] || []).some(function (x) { return at < x.b && at + len > x.a; })) return false;
+      return !occupiedUnits.some(function (x) {
+        return at < x.b && at + len > x.a && units.some(function (unit) { return x.units.indexOf(unit) >= 0; });
+      });
+    }
     var cursor = start(t), items = [];
     var configuredDays = window._schJanelaTorneio && window._schJanelaTorneio(t);
     var unscheduled = 0;
@@ -146,9 +160,9 @@
         return d.ymd === String(m.requiredDay || localDay(at)).slice(0, 10) && localDay(at) === d.ymd;
       });
       if (configuredDays && !day) { unscheduled++; return; }
-      var court = '';
+      var court = '', units = matchUnits(m);
       for (var attempts = 0; attempts < 288 && (!day || (localDay(at) === day.ymd && localDay(at + len - 1) === day.ymd)); attempts++, at += 5 * MIN) {
-        court = cs.find(function (c) { return free(c, at, len); }) || '';
+        court = cs.find(function (c) { return free(c, at, len, units); }) || '';
         if (court) break;
       }
       if (!court) { unscheduled++; return; }

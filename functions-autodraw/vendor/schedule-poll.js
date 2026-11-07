@@ -894,11 +894,28 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
       if (failure) return;
       var allowed = windows(block), priorEnd = lastBlockEnd[block.cat] || 0, blockEnd = priorEnd;
       if (!allowed.length) { failure = true; return; }
+      // Um quarteto joga a primeira parceria antes de qualquer quarteto repetir.
+      // Isto reordena somente os jogos dentro do bloco da categoria; a ordem e
+      // as janelas configuradas para as categorias continuam intactas.
+      var groups = {}, groupOrder = [], orderedGames = [];
       block.games.forEach(function (m) {
+        var key = _schGroupKey(m) || 'match:' + String(m.id);
+        if (!groups[key]) { groups[key] = []; groupOrder.push(key); }
+        groups[key].push(m);
+      });
+      for (var pass = 0, remaining = true; remaining; pass++) {
+        remaining = false;
+        groupOrder.forEach(function (key) {
+          if (groups[key][pass]) { orderedGames.push(groups[key][pass]); remaining = true; }
+        });
+      }
+      orderedGames.forEach(function (m) {
         if (failure) return;
         var duration = (window._minutosDaPartida(t, window._faseDoTorneio(t, block.phase)) || 30) * _MIN;
         slotMin = Math.min(slotMin, duration / _MIN);
         var uids = _schMatchUids(t, m), units = _schMatchRestUnits(m), found = null;
+        var groupUnit = _schGroupKey(m);
+        if (groupUnit) units.push(groupUnit);
         allowed.some(function (range) {
           for (var ms = Math.max(range.start, priorEnd); ms + duration <= range.end; ms += 5 * _MIN) {
             var overlaps = booked.filter(function (other) { return ms < other.end && other.ms < ms + duration; });
@@ -1105,12 +1122,17 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
       function key(obj, side) {
         var pair = String(obj.fixedPairId || '');
         var ids = _schMatchUids(t, m);
-        return pair ? 'pair:' + pair : 'side:' + side + ':' + ids.join('|');
+        var label = String((side === 'p1' ? m.p1 : m.p2) || obj.displayName || obj.name || '').trim();
+        return pair ? 'pair:' + pair : (ids.length ? 'side:' + side + ':' + ids.join('|') : (label ? 'side:' + label : 'match:' + String(m.id) + ':' + side));
       }
       var pairUnits = [key(left, 'p1'), key(right, 'p2')];
+      var groupUnit = _schGroupKey(m), allUnits = pairUnits.concat(_schMatchUids(t, m).map(function (id) { return 'uid:' + id; }));
+      if (groupUnit) allUnits.push(groupUnit);
+      var restUnits = pairUnits.some(function (unit) { return unit.indexOf('pair:') === 0; }) ? pairUnits : _schMatchUids(t, m).map(function (id) { return 'uid:' + id; });
+      if (groupUnit) restUnits.push(groupUnit);
       return { m:m, round:Number(m.round || 0),
-        units:Array.from(new Set(pairUnits.concat(_schMatchUids(t, m).map(function (id) { return 'uid:' + id; })))),
-        restUnits:pairUnits.some(function (unit) { return unit.indexOf('pair:') === 0; }) ? pairUnits : _schMatchUids(t, m).map(function (id) { return 'uid:' + id; }),
+        units:Array.from(new Set(allUnits)),
+        restUnits:restUnits,
         teams:Array.from(new Set([m.p1CompetitionTeamId || left.competitionTeamId, m.p2CompetitionTeamId || right.competitionTeamId].filter(Boolean).map(String))) };
     });
     var related = entries.map(function (entry) { return entries.map(function (other, index) {
@@ -1408,7 +1430,12 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
         // mais antiga. Ainda respeitamos a capacidade das quadras e nunca
         // colocamos o mesmo jogador em duas partidas simultâneas.
         var ondas = [];
-        var pendentes = bloco.ms.map(function (m, index) { return { m:m, index:index, uids:_schMatchUids(t, m), units:_schMatchRestUnits(m) }; });
+        var pendentes = bloco.ms.map(function (m, index) {
+          var group = _schGroupKey(m);
+          var units = _schMatchRestUnits(m);
+          if (group) units.push(group);
+          return { m:m, index:index, uids:_schMatchUids(t, m), units:units, group:group };
+        });
         var categoriaDescanso = bloco.categoria || '__sem_categoria__';
         var ultimas = ultimaOndaPorCategoria[categoriaDescanso] || (ultimaOndaPorCategoria[categoriaDescanso] = {});
         var ondaCategoria = proximaOndaPorCategoria[categoriaDescanso] || 0;
@@ -1424,7 +1451,8 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
           var alvo = { jogos: [], uids: {}, units: [] };
           candidatos.forEach(function (item) {
             if (alvo.jogos.length >= quadras) return;
-            var conflita = item.uids.some(function (u) { return alvo.uids[u]; });
+            var conflita = item.uids.some(function (u) { return alvo.uids[u]; }) ||
+              (item.group && alvo.units.indexOf(item.group) !== -1);
             if (conflita) return;
             alvo.jogos.push(item.m);
             alvo.units = alvo.units.concat(item.units);
@@ -1487,6 +1515,7 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
           s._fase = (m && m.phaseIndex != null) ? m.phaseIndex : (t.currentPhaseIndex || 0);
           s._rodada = (m && m.round != null) ? m.round : 0;
           s._uids = _schMatchUids(t, m);
+          s._group = _schGroupKey(m);
           s._duracao = (window._minutosDaPartida(t, window._faseDoTorneio(t, s._fase)) || 30) * _MIN;
         });
         function anterior(a, b) {
@@ -1504,7 +1533,8 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
             var ocupante = slots[j];
             if (ocupante === slot || ocupante.dia !== slot.dia ||
                 !(destino < ocupante.ms + ocupante._duracao && ocupante.ms < destino + slot._duracao)) continue;
-            if (slot._uids.some(function (uid) { return ocupante._uids.indexOf(uid) !== -1; })) return false;
+            if ((slot._group && slot._group === ocupante._group) ||
+                slot._uids.some(function (uid) { return ocupante._uids.indexOf(uid) !== -1; })) return false;
           }
           /* Preencher uma quadra vazia não pode fabricar uma sequência de dois
            * jogos sem descanso. A compactação só antecipa; portanto este freio
@@ -1514,7 +1544,8 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
           for (var k = 0; k < slots.length; k++) {
             var anteriorDireto = slots[k];
             if (anteriorDireto === slot || anteriorDireto.dia !== slot.dia || anteriorDireto.ms + anteriorDireto._duracao !== destino) continue;
-            if (slot._uids.some(function (uid) { return anteriorDireto._uids.indexOf(uid) !== -1; })) return false;
+            if ((slot._group && slot._group === anteriorDireto._group) ||
+                slot._uids.some(function (uid) { return anteriorDireto._uids.indexOf(uid) !== -1; })) return false;
           }
           return true;
         }
@@ -1556,7 +1587,7 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
             });
           });
         }
-        slots.forEach(function (s) { delete s._categoria; delete s._fase; delete s._rodada; delete s._uids; delete s._duracao; });
+        slots.forEach(function (s) { delete s._categoria; delete s._fase; delete s._rodada; delete s._uids; delete s._group; delete s._duracao; });
       }
       _compactarSlotsNaMesmaJanela();
       // A compactação pode trazer para dentro uma partida que inicialmente
@@ -1736,6 +1767,14 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
     if (m.monarchGroup != null) return m.monarchGroup;
     return null;
   }
+  function _schGroupKey(m) {
+    var index = _schGroupIdx(m);
+    if (!m || !m.isMonarch || index == null) return '';
+    // O índice recomeça em cada categoria; a categoria faz parte da identidade.
+    return 'grp:' + JSON.stringify([m.phaseIndex == null ? null : m.phaseIndex,
+      m.round == null ? null : m.round, String(m.category || ''), String(index)]);
+  }
+  window._schGroupKey = _schGroupKey;
 
   // Quem são os IRMÃOS de grupo do m0 (os outros jogos das mesmas 4 pessoas).
   //
@@ -1756,7 +1795,9 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
       var sibs = all.filter(function (m) {
         if (!m || !m.isMonarch || m.round !== round) return false;
         if (_schGroupIdx(m) !== gi) return false;
-        return ((m.phaseIndex != null) ? m.phaseIndex : null) === ph;
+        if (((m.phaseIndex != null) ? m.phaseIndex : null) !== ph) return false;
+        // Dados antigos sem categoria ainda seguem a identidade estrutural.
+        return !m.category || !m0.category || String(m.category) === String(m0.category);
       });
       if (sibs.length) return _sane(sibs, m0);
     }
