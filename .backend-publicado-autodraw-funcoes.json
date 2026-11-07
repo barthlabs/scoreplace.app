@@ -104,8 +104,8 @@
       "mode": "only"
     },
     "advanceTournamentPhase": {
-      "backendCommit": "c4823d7e4bf5351e1ea4c197f3d7645bd7f10e40",
-      "deployedAt": "2026-11-07T12:57:15.384Z",
+      "backendCommit": "80d2d1c25e420a7a2ed42e906c8b39a9dd0c6e31",
+      "deployedAt": "2026-11-07T21:36:51.411Z",
       "result": "success",
       "mode": "only"
     },
@@ -140,8 +140,8 @@
       "mode": "only"
     },
     "applyMatchResult": {
-      "backendCommit": "044ed5cfa037dd35cc73a40d51248a49313c3a70",
-      "deployedAt": "2026-11-07T14:06:04.258Z",
+      "backendCommit": "80d2d1c25e420a7a2ed42e906c8b39a9dd0c6e31",
+      "deployedAt": "2026-11-07T21:36:51.411Z",
       "result": "success",
       "mode": "only"
     },
