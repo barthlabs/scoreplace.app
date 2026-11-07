@@ -121,7 +121,7 @@ for (const version of ['v2', 'v3']) {
   });
   test(`${version}: seis portas alinhadas no código atual`, { skip: skipReason }, () => {
     const original = JSON.parse(fs.readFileSync(path.join(root, `.claude/tmp/operation-regions-manifest-${version}.json`)));
-    const commit = execFileSync('git', ['rev-parse', '40be907df'], { cwd: root }).toString().trim();
+    const commit = execFileSync('git', ['rev-parse', '470c6c97'], { cwd: root }).toString().trim();
     const descriptors = new Map();
     const aligned = original.map(row => {
       if (!descriptors.has(row.codebase)) descriptors.set(row.codebase, sourceDescriptor(row.codebase, commit, true));
@@ -135,7 +135,7 @@ for (const version of ['v2', 'v3']) {
     // nos manifestos operacionais; o backend central em us-central1 tem recibo
     // separado e mais recente. Usar HEAD aqui atestaria uma implantação
     // regional que ainda não ocorreu.
-    const recordedScoreCommit = '822cbc2ad7fc5839b20a986f5133af9e9ef6f7e6';
+    const recordedScoreCommit = '80d2d1c25e420a7a2ed42e906c8b39a9dd0c6e31';
     const recordedScoreDigest = sourceDigest('applyMatchResult', recordedScoreCommit,
       sourceDescriptor('functions-autodraw', recordedScoreCommit, true));
     const scoreFresh = original.filter(row => row.name === `sp-op-score-${version}`)
