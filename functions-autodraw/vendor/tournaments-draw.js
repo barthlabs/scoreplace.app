@@ -286,8 +286,9 @@ window._realTournamentRehearsalAction = function (tId, action) {
       ? 'O servidor vai apagar todo o sorteio, jogos, placares, W.O. e dados criados no ensaio. Só concluirá depois de comparar o banco com a fotografia anterior. Os inscritos, números e categorias voltarão exatamente ao estado capturado.'
       : 'O servidor vai fotografar as inscrições e configurações atuais antes de qualquer sorteio. Durante o ensaio, inscrições ficam congeladas e notificações silenciadas. Ao final, use o botão de restaurar.',
     function () {
-      window.FirestoreDB._callFn(isReset ? 'resetTournamentToEnrollment' : 'startTournamentRehearsal',
-        isReset ? { tournamentId: String(tId), restoreMode: 'rehearsal' } : { tournamentId: String(tId) })
+      (isReset
+        ? window.FirestoreDB._callFn('resetTournamentToEnrollment', { tournamentId: String(tId), restoreMode: 'rehearsal' })
+        : window.FirestoreDB._callFn('startTournamentRehearsal', { tournamentId: String(tId) }))
         .then(function (result) {
           if (!result || result.ok !== true) throw new Error('O servidor não confirmou a operação.');
           if (isReset && result.tournament && typeof window._applyCFTournament === 'function') {

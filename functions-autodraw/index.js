@@ -1265,10 +1265,11 @@ function _aplicaRascunhoDoSorteioInicial(t, draft) {
  * ⛔ E `participants`/`history` só saem do documento se estiverem NO MARCADOR — `dividir`
  * extrai os três por natureza, e gravar a config crua dele zeraria o elenco. */
 function _gravaTorneio(tx, ref, tDepois, tAntes, ctx) {
-  if (_rehearsal.locked(tAntes)) {
+  const rehearsalState = tAntes && tAntes.rehearsal && tAntes.rehearsal.state;
+  if (rehearsalState === 'capturing' || rehearsalState === 'resetting') {
     throw new HttpsError('failed-precondition', 'Ensaio em captura ou restauração; operação temporariamente bloqueada.');
   }
-  if (_rehearsal.marker(tAntes) === 'active' && [
+  if (rehearsalState === 'active' && [
     'categoryDefinitions', 'canonicalRegistrationMigration', 'registrationSettings',
     'placeholderReservations', 'maxParticipantsByCategory', 'enrollmentRigor',
     'isPublic', 'organizerOnly'

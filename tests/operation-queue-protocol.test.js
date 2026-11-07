@@ -33,6 +33,7 @@ async function runQueue(operationId) {
     })
   };
   const context = { exports: {}, HttpsError, _operationReceipt: receipts,
+    _rehearsal: { locked: () => false },
     createHash: require('node:crypto').createHash, getFirestore: () => db,
     onDocumentCreated: (_options, handler) => handler,
     applyResultFn: () => ({ ok: true }), drawWindow: {},
@@ -47,7 +48,10 @@ async function runQueue(operationId) {
   const item = { matchId: 'game', actorUid: 'owner', payload: { action: 'score' } };
   if (operationId !== undefined) item.operationId = operationId;
   await context.exports.applyQueuedResult({ params: { tournamentId: 'tour_queue_protocol', itemId: 'queued_1' },
-    data: { exists: true, data: () => item, ref: { set: async fields => marks.push(fields) } } });
+    data: { exists: true, data: () => item, ref: {
+      get: async () => ({ exists: true }),
+      update: async fields => marks.push(fields)
+    } } });
   assert.equal(marks.length, 1);
   assert.equal(marks[0].status, 'recusado');
   assert.equal(marks[0].reason, 'protocol');
