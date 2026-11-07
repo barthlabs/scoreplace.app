@@ -82,7 +82,7 @@
    * telemetria só pode ser uma das chaves que o router entende; qualquer outra
    * coisa perde o valor antes de chegar ao evento. */
   var _rotasSentry = {
-    dashboard: 1, tournament: 1, tournaments: 1, 'phase-preview': 1, pair: 1, cohost: 1,
+    dashboard: 1, tournament: 1, tournaments: 1, 'phase-preview': 1, pair: 1, cohost: 1, 'role-invite': 1,
     bracket: 1, match: 1, formato: 1, participants: 1, rules: 1,
     explore: 1, 'todos-torneios': 1, 'todas-pessoas': 1, notifications: 1,
     live: 1, casual: 1, presence: 1, venues: 1, place: 1, 'my-venues': 1,

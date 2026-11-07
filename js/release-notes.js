@@ -1,6 +1,8 @@
 // 2.5.109 — Organizadores podem convidar co-organizadores e árbitros por e-mail
 // ou preparar uma mensagem de SMS com DDI, DDD e telefone. O acesso é ativado
 // somente quando a pessoa entra com o contato verificado na própria conta.
+// O link abre a tela do convite mesmo antes do login, e a busca de amigos
+// continua disponível para convidar diretamente pelo aplicativo.
 // 2.5.108 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.107 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.106 — Atualização consolidada de produção com as correções validadas desde a última publicação.

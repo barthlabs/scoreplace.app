@@ -6,7 +6,7 @@ const vm = require('node:vm');
 
 const root = path.join(__dirname, '..');
 const router = fs.readFileSync(path.join(root, 'js/router.js'), 'utf8');
-const gate = router.match(/if \((view === 'claim-registration' \|\| view === 'tournament-claim')\) _isLegalView = true;/);
+const gate = router.match(/if \((view === 'claim-registration' \|\| view === 'tournament-claim' \|\| view === 'role-invite')\) _isLegalView = true;/);
 assert.ok(gate, 'o link compartilhado deve alcançar seu CTA mesmo sem login');
 const log = router.match(/window\._log\('\[scoreplace-router\] route', ([^,]+),/);
 assert.ok(log && log[1].includes("view === 'tournament-claim'"), 'token não pode ir ao log do roteador');

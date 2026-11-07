@@ -208,6 +208,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     input.setAttribute('aria-label', 'Buscar amigo pelo nome');
     input.style.cssText = 'width:100%;padding:10px;border-radius:8px;background:var(--bg-input,#111827);color:var(--text-bright);border:1px solid var(--border-color);';
     var list = document.createElement('div');
+    list.id = 'tournament-friend-invite-list';
     list.style.cssText = 'overflow-y:auto;min-height:80px;display:flex;flex-direction:column;gap:6px;';
     var confirmRow = document.createElement('div');
     confirmRow.style.cssText = 'display:none;align-items:center;justify-content:space-between;gap:8px;';
