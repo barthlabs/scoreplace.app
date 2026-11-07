@@ -114,7 +114,7 @@ const service = makeService({ db, HttpsError, FieldValue, now:() => clockMs, car
     data:{ tournamentId:freeTournamentId } })).terms;
   await service.acceptTerms({ auth:{ uid:'owner' }, data:{ tournamentId:freeTournamentId,
     agree:true, termsVersion:freeTerms.version, termsHash:freeTerms.hash } });
-  for (const count of [8, 12, 16]) {
+  for (const count of [8, 12, 13, 16]) {
     const previous = docs.get(freePath).canonicalRegistrationMigration.registrationCount;
     for (let number = previous; number < count; number++) {
       docs.set(freePath + '/registrations/r' + number, { registrationId:'r' + number,

@@ -47,7 +47,7 @@ assert.throws(() => core.rosterSnapshot([person('x', 'u1'), person('x', 'u2')], 
 assert.throws(() => core.rosterSnapshot([person('x', '')], []));
 assert.throws(() => core.quote(snap, 1.5, 0, paidSettings));
 assert.throws(() => core.quote(snap, 2000), /contexto/);
-for (const count of [1, 8, 12, 15, 16]) {
+for (let count = 1; count <= 16; count++) {
   const sample = { participantCount:count };
   assert.strictEqual(core.quote(sample, 2000, 0, freeSettings).totalCents, 0);
   assert.strictEqual(core.quote(sample, 2000, 0, paidSettings).totalCents, count * 2000);
