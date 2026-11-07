@@ -318,7 +318,11 @@ function servidor() {
       }) });
     };
     window.removeParticipantFunction('x', 'Pessoa', uid);
-    await new Promise(r => setTimeout(r, 1100));
+    await new Promise(r => setTimeout(r, 200));
+    for (let n = 0; n < 40 && document.body.classList.contains('sp-scroll-locked'); n++) {
+      await new Promise(r => setTimeout(r, 100));
+    }
+    if (document.body.classList.contains('sp-scroll-locked')) return 'overlay não fechou';
     window.dispatchEvent(new Event('wheel'));
     window.scrollTo(0, 2800);
     await new Promise(r => setTimeout(r, 300));
