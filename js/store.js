@@ -1770,7 +1770,9 @@ window._cancelXBtn = window._cancelXBtn || function(onclickJs, title, opts) {
 // navegação nova, ou preserva em soft-refresh; scroll intencional pra um jogo via
 // _goToTournamentMatch também roda fora daqui).
 window._autoKeepScroll = function() {
-  if (window._inRouterRender) return;
+  // Uma ação estável já é dona da posição e cancela a restauração quando a
+  // pessoa rola manualmente. Agendar outra restauração aqui a puxava de volta.
+  if (window._inRouterRender || window._travaAlturaExterna) return;
   var y = window.pageYOffset || window.scrollY || 0;
   if (!y) return; // já no topo: nada a restaurar
   // Trava a altura do container durante o swap (documento não encurta → o browser
@@ -8136,7 +8138,7 @@ window._waitlistExpandPool = function(t, namesOnly) {
 // scroll ao fechar). Cobre overlays criados dinamicamente E modais .active.
 (function () {
   if (typeof window === 'undefined' || typeof MutationObserver === 'undefined') return;
-  var locked = false, savedY = 0, raf = null;
+  var locked = false, savedY = 0, savedRoute = '', raf = null;
   function isOverlay(el) {
     if (!el || el.nodeType !== 1) return false;
     var tag = el.tagName;
@@ -8159,13 +8161,16 @@ window._waitlistExpandPool = function(t, namesOnly) {
     if (want && !locked) {
       locked = true;
       savedY = window.scrollY || window.pageYOffset || 0;
+      savedRoute = window.location.hash;
       document.body.style.top = (-savedY) + 'px';
       document.body.classList.add('sp-scroll-locked');
     } else if (!want && locked) {
       locked = false;
       document.body.classList.remove('sp-scroll-locked');
       document.body.style.top = '';
-      window.scrollTo(0, savedY);
+      // Um modal de outra rota não pode reposicionar a tela atual ao fechar.
+      // Uma atualização estável já assumiu a posição e respeita a rolagem manual.
+      if (window.location.hash === savedRoute && !window._travaAlturaExterna) window.scrollTo(0, savedY);
     }
   }
   function schedule() { if (raf) return; raf = requestAnimationFrame(function () { raf = null; apply(); }); }
@@ -12368,7 +12373,11 @@ window.AppStore = {
                     window._suppressSoftRefresh = true;
                     clearTimeout(window._scoreResultSuppressTimer);
                     window._scoreResultSuppressTimer = setTimeout(function () { window._suppressSoftRefresh = false; }, 3000);
-                  } else if (_keepBracketViewport && typeof window._rerenderBracket === 'function') {
+                  } else if (_statusBeforeResult !== 'finished' && _lt.status !== 'finished' &&
+                      (_keepBracketViewport ||
+                      (((window.location.hash || '').indexOf('#tournaments/' + String(tournamentId)) === 0) &&
+                       !!document.getElementById('inline-bracket-container'))) &&
+                      typeof window._rerenderBracket === 'function') {
                     window._suppressSoftRefresh = true;
                     clearTimeout(window._scoreResultSuppressTimer);
                     window._scoreResultSuppressTimer = setTimeout(function () { window._suppressSoftRefresh = false; }, 3000);

@@ -82,6 +82,7 @@ function servidor() {
 
   const fx = JSON.parse(fs.readFileSync(path.join(ROOT, 'tests', 'fixtures', 'confra-pos-sorteio.json'), 'utf8'));
   await p.evaluate((t) => {
+    t.id = 'x';
     window._findTournamentById = () => t;
     window.AppStore = Object.assign(window.AppStore || {}, {
       currentUser: { uid: t.creatorUid || 'org', email: t.organizerEmail || 'o@x.com', displayName: 'Org' },
@@ -231,6 +232,99 @@ function servidor() {
   ok(meio.fim === total, 'a lista fica completa depois (' + meio.fim + '/' + total + ')');
   ok(meio.travaFim === '', 'e a trava de altura sai — só depois da última fatia');
   ok(meio.yFim === meio.yAntes, 'e o scroll continua no mesmo ponto no fim (' + meio.yFim + ')');
+
+  const acao = await p.evaluate(async () => {
+    const c = document.getElementById('view-container');
+    window.scrollTo(0, 6000);
+    window._reRenderParticipantsStable();
+    const anterior = window._inscritosPinturaCompleta;
+    window._reRenderParticipantsStable();
+    const donoNovo = window._travaAlturaDona;
+    anterior(); // término atrasado da pintura anterior
+    const antigoNaoSoltou = window._travaAlturaDona === donoNovo && !!c.style.minHeight;
+    window.dispatchEvent(new Event('wheel'));
+    window.scrollTo(0, 6400);
+    await new Promise(r => setTimeout(r, 80));
+    return { antigoNaoSoltou, y: Math.round(window.scrollY),
+      travaSolta: !window._travaAlturaExterna && !c.style.minHeight };
+  });
+  ok(acao.antigoNaoSoltou, 'pintura antiga não solta a trava da nova');
+  ok(acao.y === 6400, 'rolagem manual permanece onde o usuário a deixou (' + acao.y + ')');
+  ok(acao.travaSolta, 'a pintura termina e solta a trava mesmo após rolagem manual');
+
+  const remocao = await p.evaluate(async () => {
+    const t = window.AppStore.tournaments[0];
+    const uid = t.participants[0].uid;
+    window.showConfirmDialog = function (_title, _message, yes) { yes(); };
+    window.showNotification = function () {};
+    window._applyCFTournament = function (_id, fresh) { Object.assign(t, fresh); };
+    window.FirestoreDB._callFn = function () {
+      return Promise.resolve({ tournament: Object.assign({}, t, {
+        participants: t.participants.filter(item => item.uid !== uid)
+      }) });
+    };
+    window.scrollTo(0, 4000);
+    const before = Math.round(window.scrollY);
+    const n = t.participants.length;
+    window.removeParticipantFunction('x', 'Pessoa', uid);
+    await new Promise(r => setTimeout(r, 80));
+    return { before, after: Math.round(window.scrollY), count: t.participants.length,
+      cards: document.querySelectorAll('[data-part-card]').length, expected: n - 1 };
+  });
+  ok(remocao.count === remocao.expected && remocao.cards === remocao.expected,
+    'excluir inscrito atualiza os dados e a lista visível');
+  ok(remocao.after === remocao.before,
+    'excluir inscrito não desloca a tela (' + remocao.before + ' → ' + remocao.after + ')');
+
+  await p.waitForFunction(() => !document.body.classList.contains('sp-scroll-locked'));
+
+  const detalhe = await p.evaluate(async () => {
+    const c = document.getElementById('view-container');
+    const t = window.AppStore.tournaments[0];
+    history.replaceState(null, '', '#tournaments/x');
+    window.renderTournaments(c, 'x');
+    await new Promise(r => setTimeout(r, 120));
+    window.scrollTo(0, 2500);
+    const before = Math.round(window.scrollY);
+    const uid = t.participants[0].uid;
+    const count = t.participants.length;
+    const calls = [];
+    window._applyCFTournament = function (_id, fresh) { Object.assign(t, fresh); };
+    window.FirestoreDB._callFn = function (name) {
+      calls.push(['call', name]);
+      return Promise.resolve({ tournament: Object.assign({}, t, {
+        participants: t.participants.filter(item => item.uid !== uid)
+      }) });
+    };
+    window.showNotification = function () { calls.push(['notice', arguments[0], arguments[1]]); };
+    window.removeParticipantFunction('x', 'Pessoa', uid);
+    await new Promise(r => setTimeout(r, 1100));
+    return { before, after: Math.round(window.scrollY), count: t.participants.length,
+      expected: count - 1, route: window.location.hash, html: c.textContent.slice(0, 130),
+      height: Math.round(document.documentElement.scrollHeight),
+      rendered: !!c.querySelector('#inline-bracket-container'), calls };
+  });
+  ok(detalhe.count === detalhe.expected, 'exclusão pelo detalhe atualiza o elenco ' + JSON.stringify(detalhe));
+  ok(detalhe.after === detalhe.before && detalhe.route === '#tournaments/x',
+    'exclusão pelo detalhe mantém o local na página ' + JSON.stringify(detalhe));
+
+  const manualNoDetalhe = await p.evaluate(async () => {
+    const t = window.AppStore.tournaments[0];
+    const uid = t.participants[0].uid;
+    window.scrollTo(0, 2500);
+    window.FirestoreDB._callFn = function () {
+      return Promise.resolve({ tournament: Object.assign({}, t, {
+        participants: t.participants.filter(item => item.uid !== uid)
+      }) });
+    };
+    window.removeParticipantFunction('x', 'Pessoa', uid);
+    await new Promise(r => setTimeout(r, 1100));
+    window.dispatchEvent(new Event('wheel'));
+    window.scrollTo(0, 2800);
+    await new Promise(r => setTimeout(r, 300));
+    return Math.round(window.scrollY);
+  });
+  ok(manualNoDetalhe === 2800, 'rolagem manual após excluir no detalhe fica onde a pessoa moveu (' + manualNoDetalhe + ')');
 
   await b.close();
   srv.close();

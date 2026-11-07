@@ -18,8 +18,9 @@ let calls = 0;
 let redraws = 0;
 let refreshes = 0;
 let resultReads = 0;
+let inlineVisible = false;
 const context = {
-  document: { getElementById(id) { return id === 'confirm-M1' ? button : id === 'card-M1' ? { id } : null; } },
+  document: { getElementById(id) { return id === 'confirm-M1' ? button : id === 'card-M1' ? { id } : id === 'inline-bracket-container' && inlineVisible ? { id } : null; } },
   window: {
     location: { hash: '#tournaments/T1' },
     _callApplyMatchResult() { calls++; return new Promise(resolve => { resolveServer = resolve; }); },
@@ -79,6 +80,29 @@ store._matchResultFields = ['winner', 'scoreP1', 'scoreP2'];
   assert.equal(resultReads, 1, 'recibo antigo sem jogo ainda usa a releitura física');
   assert.equal(button.disabled, true, 'resultado confirmado sem card redesenhado não reativa Confirmar');
   assert.equal(button.textContent, '⏳ Gravando…');
+  // O card não estava montado quando o operador confirmou em outra seção do
+  // detalhe, mas a chave inline existe. A resposta não pode usar refresh geral.
+  context.document.getElementById = id => id === 'confirm-M1' ? button :
+    id === 'inline-bracket-container' && inlineVisible ? { id } : null;
+  inlineVisible = true;
+  context.window._refreshConfirmedMatchCard = () => false;
+  const beforeFallback = redraws;
+  let fallbackSoftRefreshes = 0;
+  context.window._softRefreshView = () => { fallbackSoftRefreshes++; };
+  const inlineFallback = store.commitResultTx('T1', 'M1', { s1: 6, s2: 4 }, 'Resultado');
+  resolveServer({ data: { ok: true, tournament: { id: 'T1', status: 'active' },
+    matchResult: { matchId: 'M1', winner: 'A', scoreP1: 6, scoreP2: 4 } } });
+  assert.equal(await inlineFallback, true);
+  assert.equal(redraws, beforeFallback + 1,
+    'card ausente na captura mantém o caminho de chave inline, sem refresh geral');
+  assert.equal(fallbackSoftRefreshes, 0, 'não reconstrói a página inteira após confirmar o placar');
+  const beforeFinishedRedraws = redraws;
+  const finished = store.commitResultTx('T1', 'M1', { s1: 6, s2: 4 }, 'Final');
+  resolveServer({ data: { ok: true, tournament: { id: 'T1', status: 'finished' },
+    matchResult: { matchId: 'M1', winner: 'A', scoreP1: 6, scoreP2: 4 } } });
+  assert.equal(await finished, true);
+  assert.equal(redraws, beforeFinishedRedraws, 'último jogo não redesenha apenas a chave');
+  assert.equal(fallbackSoftRefreshes, 1, 'último jogo repinta o detalhe completo para mostrar o pódio');
   let softRefreshes = 0;
   context.window.FirestoreDB.loadTournamentById = async () => null;
   context.window._softRefreshView = () => { softRefreshes++; };

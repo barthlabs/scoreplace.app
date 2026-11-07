@@ -936,7 +936,80 @@ window._applyOrganizerParticipantRemoval = function(t, participantName, memberUi
 // memberUid = a IDENTIDADE de quem o card representa. O card individual manda o uid; o nome é
 // só fallback (fictício sem conta / doc legado). Sem o uid, excluir alguém que está EM DUPLA era
 // no-op silencioso — o nome da entrada é "A / B", nunca "A" — e o dono via o ✕ "não fazer nada".
+// A exclusão deve atualizar a tela onde foi pedida, sem navegar ou perder a
+// posição. Ambas as callables de remoção terminam nesta porta.
+function _renderAfterParticipantRemoval(tId, viewBeforeRemoval) {
+    var route = window.location.hash || '';
+    if (viewBeforeRemoval && route !== viewBeforeRemoval.route) return;
+    if (route.split('/')[1] !== String(tId)) return;
+    if (route.indexOf('#participants/') === 0) {
+        if (typeof window._reRenderParticipantsStable === 'function') window._reRenderParticipantsStable();
+        return;
+    }
+    if (route.indexOf('#tournaments/') !== 0 || typeof renderTournaments !== 'function') return;
+    var container = document.getElementById('view-container');
+    if (!container) return;
+    if (typeof window._participantRemovalViewportCleanup === 'function') window._participantRemovalViewportCleanup();
+    var y = viewBeforeRemoval ? viewBeforeRemoval.y : (window.scrollY || window.pageYOffset || 0);
+    var token = {};
+    var oldMin = container.style.minHeight;
+    var oldAnchor = document.documentElement.style.overflowAnchor;
+    var userMoved = false;
+    var events = ['wheel', 'touchmove', 'pointermove', 'keydown'];
+    var active = true;
+    var onIntent = function (ev) {
+        if (ev.type === 'keydown' && !['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(ev.key)) return;
+        if (ev.type === 'pointermove' && !ev.buttons) return;
+        userMoved = true;
+        cleanup();
+    };
+    function restore() {
+        if (!active || userMoved || window.location.hash !== route ||
+            window._travaAlturaDona !== token) return;
+        window.scrollTo(0, y);
+    }
+    function cleanup() {
+        if (!active) return;
+        active = false;
+        events.forEach(function (name) { window.removeEventListener(name, onIntent); });
+        window.removeEventListener('hashchange', cleanup);
+        if (window._participantRemovalViewportCleanup === cleanup) window._participantRemovalViewportCleanup = null;
+        var anotherOwner = window._travaAlturaDona && window._travaAlturaDona !== token;
+        if (window._travaAlturaDona === token) {
+            window._travaAlturaDona = null;
+            window._travaAlturaExterna = false;
+        }
+        if (!anotherOwner && container.isConnected) container.style.minHeight = oldMin;
+        if (!anotherOwner) document.documentElement.style.overflowAnchor = oldAnchor;
+    }
+    if (container.offsetHeight > 0) container.style.minHeight = Math.max(container.offsetHeight, parseFloat(oldMin) || 0) + 'px';
+    window._travaAlturaDona = token;
+    window._travaAlturaExterna = true;
+    window._participantRemovalViewportCleanup = cleanup;
+    document.documentElement.style.overflowAnchor = 'none';
+    events.forEach(function (name) { window.addEventListener(name, onIntent, { passive: true }); });
+    window.addEventListener('hashchange', cleanup);
+    try { renderTournaments(container, tId); }
+    catch (e) { cleanup(); throw e; }
+    var t = window._findTournamentById && window._findTournamentById(tId);
+    if (t && typeof window._tournamentDetailSig === 'function') window._tdetailSig = window._tournamentDetailSig(t);
+    restore();
+    requestAnimationFrame(function () { restore(); requestAnimationFrame(restore); });
+    setTimeout(restore, 120);
+    setTimeout(restore, 350);
+    // Depois da pintura, libera o dono da trava para os próximos refreshes. Se a
+    // página encurtou no fim, mantém o piso de altura até a próxima rolagem manual.
+    setTimeout(function () {
+        restore();
+        if (!active || window._travaAlturaDona !== token) return;
+        window._travaAlturaDona = null;
+        window._travaAlturaExterna = false;
+        document.documentElement.style.overflowAnchor = oldAnchor;
+    }, 850);
+}
+
 window.removeParticipantFunction = function (tId, participantName, memberUid) {
+    var _viewBeforeRemoval = { route: window.location.hash || '', y: window.scrollY || window.pageYOffset || 0 };
     // Remoção é mutação: nome pode ser mostrado, mas não escolhe um homônimo.
     if (!memberUid) {
         if (typeof showNotification === 'function') showNotification('Identidade necessária', 'Atualize ou materialize este inscrito antes de removê-lo.', 'warning');
@@ -996,11 +1069,7 @@ window.removeParticipantFunction = function (tId, participantName, memberUid) {
                         _tPre.participants = result.participants;
                         if (Array.isArray(result.placeholderReservations)) _tPre.placeholderReservations = result.placeholderReservations;
                         if (result.notFound && typeof showNotification === 'function') showNotification('Inscrição não encontrada', 'Este participante já não constava no elenco.', 'info');
-                        const container = document.getElementById('view-container');
-                        if (container) {
-                            if ((window.location.hash || '').indexOf('#participants') === 0 && typeof window.renderParticipants === 'function') window.renderParticipants(container, tId);
-                            else if (typeof renderTournaments === 'function') renderTournaments(container, tId);
-                        }
+                        _renderAfterParticipantRemoval(tId, _viewBeforeRemoval);
                     }).catch(function(err) { if (typeof showNotification === 'function') showNotification('Erro', (err && err.message) || 'Não foi possível remover o participante.', 'error'); });
                     return;
                 }
@@ -1010,11 +1079,7 @@ window.removeParticipantFunction = function (tId, participantName, memberUid) {
                         return;
                     }
                     window._applyCFTournament(tId, result.tournament);
-                    const container = document.getElementById('view-container');
-                    if (container) {
-                        if ((window.location.hash || '').indexOf('#participants') === 0 && typeof window.renderParticipants === 'function') window.renderParticipants(container, tId);
-                        else if (typeof renderTournaments === 'function') renderTournaments(container, tId);
-                    }
+                    _renderAfterParticipantRemoval(tId, _viewBeforeRemoval);
                 }).catch(function(err) { if (typeof showNotification === 'function') showNotification('Erro', (err && err.message) || 'Não foi possível remover o participante.', 'error'); });
             } else if (typeof showNotification === 'function') showNotification('Erro', 'Não foi possível remover o participante.', 'error');
         },

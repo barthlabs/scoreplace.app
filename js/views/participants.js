@@ -72,6 +72,19 @@ window._applyCanonicalWoMatchUpdates = function(tId, updates) {
 function _reRenderParticipantsStable() {
   var _y = 0;
   try { _y = window.scrollY || window.pageYOffset || (document.documentElement && document.documentElement.scrollTop) || 0; } catch (_e) {}
+  var _route = window.location.hash;
+  var _token = {};
+  var _generation = null;
+  var _userMoved = false;
+  var _intentEvents = ['wheel', 'touchmove', 'pointermove', 'keydown'];
+  var _onIntent = function (ev) {
+    if (ev.type === 'keydown' && !['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(ev.key)) return;
+    if (ev.type === 'pointermove' && !ev.buttons) return;
+    _userMoved = true;
+  };
+  if (typeof window.addEventListener === 'function') _intentEvents.forEach(function (name) {
+    window.addEventListener(name, _onIntent, { passive: true });
+  });
   // TRAVA DE ALTURA (mesma técnica do _rerenderBracket): `renderParticipants` faz
   // container.innerHTML = '' antes de repintar → o documento COLAPSA por 1 frame → o browser
   // clampa o scroll pra cima → o restore traz de volta = "sobe uma linha e desce rapidinho".
@@ -83,13 +96,24 @@ function _reRenderParticipantsStable() {
   window._suppressSoftRefresh = true;
   clearTimeout(window._presenceRefreshRelease);
   window._presenceRefreshRelease = setTimeout(function () { window._suppressSoftRefresh = false; }, 1600);
-  var _restore = function () { try { window.scrollTo(0, _y); } catch (_e) {} };
+  var _restore = function () {
+    if (_userMoved || window.location.hash !== _route ||
+        (_generation !== null && _generation !== window._inscritosGeracaoAtual()) ||
+        window._travaAlturaDona !== _token) return;
+    try { window.scrollTo(0, _y); } catch (_e) {}
+  };
   var _solto = false;
   // enquanto esta trava está posta, ELA é a dona da altura do container —
   // `_autoKeepScroll` (store.js) não mexe. Ver o comentário lá.
   window._travaAlturaExterna = true;
+  window._travaAlturaDona = _token;
   var _unlock = function () {
     if (_solto) return; _solto = true;
+    if (typeof window.removeEventListener === 'function') _intentEvents.forEach(function (name) {
+      window.removeEventListener(name, _onIntent);
+    });
+    if (window._travaAlturaDona !== _token) return;
+    window._travaAlturaDona = null;
     window._travaAlturaExterna = false;
     try { var c = document.getElementById('view-container'); if (c) c.style.minHeight = ''; } catch (_e) {}
   };
@@ -99,8 +123,12 @@ function _reRenderParticipantsStable() {
   // o scroll pra cima e o "sobe uma linha e desce rapidinho" voltaria — agora em tamanho
   // grande, porque falta muita lista. O gancho é lido por `renderParticipants` e disparado
   // quando a última fatia entra.
-  window._inscritosPinturaCompleta = function () { _restore(); _unlock(); };
+  window._inscritosPinturaCompleta = function () {
+    if (_generation === window._inscritosGeracaoAtual()) _restore();
+    _unlock();
+  };
   _reRenderParticipants();
+  _generation = window._inscritosGeracaoAtual();
   // v1.3.92: acabou de re-renderizar com o estado atual → adianta a assinatura pro eco tardio do
   // snapshot ver "igual" e NÃO re-renderizar de novo (o pulinho que sobrava no fallback).
   try {
@@ -172,7 +200,7 @@ var _inscritosPend = [];
 // (dois toques seguidos em Presente fazem exatamente isso). Quem não é da geração atual
 // desiste em silêncio: quem assumiu a tela cuida dela.
 var _fatiaGeracao = 0;
-window._inscritosNovaGeracao = function () { return ++_fatiaGeracao; };
+window._inscritosNovaGeracao = function () { _inscritosPend.length = 0; return ++_fatiaGeracao; };
 window._inscritosGeracaoAtual = function () { return _fatiaGeracao; };
 // Descarga síncrona: termina AGORA o que estiver pendente. É o que o teste headless usa
 // (lá rAF/timeout são de mentira) e a rede pra quem precisa da lista completa no mesmo
