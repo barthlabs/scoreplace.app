@@ -248,8 +248,8 @@
       "mode": "only"
     },
     "prepareTournamentFee": {
-      "backendCommit": "dc2a7e46391211ec281716d51aa4b86ee5a1e56a",
-      "deployedAt": "2026-10-30T13:47:56.703Z",
+      "backendCommit": "109568d18370b11647f79b7f94302332c07736cb",
+      "deployedAt": "2026-11-07T15:24:45.656Z",
       "result": "success",
       "mode": "only"
     },
@@ -676,6 +676,12 @@
     "releasePendingScoreApprovalNotifications": {
       "backendCommit": "c4823d7e4bf5351e1ea4c197f3d7645bd7f10e40",
       "deployedAt": "2026-11-07T12:57:15.384Z",
+      "result": "success",
+      "mode": "only"
+    },
+    "setTournamentFeePerPerson": {
+      "backendCommit": "109568d18370b11647f79b7f94302332c07736cb",
+      "deployedAt": "2026-11-07T15:24:45.656Z",
       "result": "success",
       "mode": "only"
     }
