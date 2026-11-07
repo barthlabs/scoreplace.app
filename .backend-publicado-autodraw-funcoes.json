@@ -290,8 +290,8 @@
       "mode": "only"
     },
     "addTournamentPlaceholders": {
-      "backendCommit": "8d35143abe0c1412d4e3f3752222bb1ee2586511",
-      "deployedAt": "2026-11-02T14:15:31.403Z",
+      "backendCommit": "e007212216f1e16228d4beb6391e237fa17fd0cd",
+      "deployedAt": "2026-11-07T09:25:14.769Z",
       "result": "success",
       "mode": "only"
     },
