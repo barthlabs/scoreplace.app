@@ -9,7 +9,7 @@
   ],
   "services": {
     "sp-op-court-v3": {
-      "digest": "694f6e558f413e96dca17c12289e0ded7ae5c12c8d4667b3d34f39e20dfeeb07",
+      "digest": "6aa02fb8881cc20073b72d772da0cdb3ee170f3ca42be0a2f57b89f33e77d590",
       "urls": {
         "us-east1": "https://sp-op-court-v3-4f45krjr3a-ue.a.run.app",
         "us-east4": "https://sp-op-court-v3-4f45krjr3a-uk.a.run.app",
@@ -19,7 +19,7 @@
       }
     },
     "sp-op-score-v3": {
-      "digest": "13b76402cb7ecc4ad5612debb35f4f3207f632f34cfd604756639b8765c49797",
+      "digest": "00150b8f3e4a7591da2440452068781086a1b62478bcfc3bc4b42789ff22266a",
       "urls": {
         "us-east1": "https://sp-op-score-v3-4f45krjr3a-ue.a.run.app",
         "us-east4": "https://sp-op-score-v3-4f45krjr3a-uk.a.run.app",
@@ -29,7 +29,7 @@
       }
     },
     "sp-op-presence-v3": {
-      "digest": "e14c97d50b8421a5546aa03c45f4929281f14f46d5d16265d938f388a660a720",
+      "digest": "79e444ec3169fa51a728d55d81e81ac9ed45d8b4b0b15a467c42468aebc19af5",
       "urls": {
         "us-east1": "https://sp-op-presence-v3-4f45krjr3a-ue.a.run.app",
         "us-east4": "https://sp-op-presence-v3-4f45krjr3a-uk.a.run.app",
@@ -39,7 +39,7 @@
       }
     },
     "sp-op-presence-wo-v3": {
-      "digest": "8a9df67b719c2cd9233e42e626c84952bbbde45bff63b8b86db470248b476b29",
+      "digest": "8e4fd579a6a34cc9bc79b748d094e96a4dea38b7b7094ee15fdd95a16345436e",
       "urls": {
         "us-east1": "https://sp-op-presence-wo-v3-4f45krjr3a-ue.a.run.app",
         "us-east4": "https://sp-op-presence-wo-v3-4f45krjr3a-uk.a.run.app",
@@ -49,7 +49,7 @@
       }
     },
     "sp-op-end-court-v3": {
-      "digest": "f3e77fef6386c775d77b8ebc25101473c2a5f912133cb93be0e4829d580de511",
+      "digest": "7515546e5b971b279c1318d4d76b0bdd51e7e4af0d1d4860da63649021aaf8d6",
       "urls": {
         "us-east1": "https://sp-op-end-court-v3-4f45krjr3a-ue.a.run.app",
         "us-east4": "https://sp-op-end-court-v3-4f45krjr3a-uk.a.run.app",
@@ -59,7 +59,7 @@
       }
     },
     "sp-op-control-v3": {
-      "digest": "33920d5da10ace098c21985b73131265c8e4e737a2e18f1161e51c0fc08ae561",
+      "digest": "9dd02935d8879f921b9c11ca507d2f3786862e54e4797d69b2f7d6083bf3f6f7",
       "urls": {
         "us-east1": "https://sp-op-control-v3-4f45krjr3a-ue.a.run.app",
         "us-east4": "https://sp-op-control-v3-4f45krjr3a-uk.a.run.app",

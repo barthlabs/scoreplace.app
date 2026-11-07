@@ -10,7 +10,7 @@ const { verify } = require('./verify-function-source');
 
 const root = path.join(__dirname, '..');
 const project = 'scoreplace-app';
-const sourceCommit = '40be907dfc593db2eb4de1d6ed9783493b301787';
+const sourceCommit = '470c6c972130c2d4225952f214755d622595e0a6';
 const gateFile = path.join(root, '.claude/tmp/operation-legacy-gate-manifest-v2.json');
 const regionsFile = path.join(root, '.claude/tmp/operation-regions-manifest-v2.json');
 const stateFile = process.env.SP_GATE_SYNC_STATE || path.join(root, '.claude/tmp/operation-gate-current-sync.json');
@@ -162,30 +162,14 @@ function main() {
   }
   try {
     for (const [name, codebase] of normals) {
-      const f = functionInfo(name), old = one(state.original.normal, name), current = state.candidate.normal.find(row => row.name === name);
+      const f = functionInfo(name), current = state.candidate.normal.find(row => row.name === name);
       if (current) { recordNormal(state, name, codebase); continue; }
       const serviceName = functionRunName(f);
-      if (f.updateTime === old.updateTime) {
-        savePrevious(state, `normal/${name}`, serviceName, 'us-central1', runService(serviceName, 'us-central1'));
-        markFlight(state, `normal/${name}`);
-        run('bash', ['scripts/deploy-functions.sh', codebase === 'functions' ? 'main' : 'autodraw', '--only', name], { stdio: 'inherit' });
-        recordNormal(state, name, codebase);
-        markDone(state, `normal/${name}`);
-      } else {
-        // Já publicada pelo rollout parcial, ou revisão nova com tráfego revertido.
-        const prev = state.previous[`normal/${name}`];
-        if (prev && servedRevisionName(runService(serviceName, 'us-central1')) === prev.revision) {
-          const currentService = runService(serviceName, 'us-central1');
-          const latest = currentService.status?.latestReadyRevisionName;
-          if (!latest || latest === prev.revision) throw new Error(`revisão nova ausente após rollback: ${name}`);
-          markFlight(state, `normal/${name}`);
-          run('gcloud', ['run', 'services', 'update-traffic', serviceName, '--project', project, '--region', 'us-central1', '--to-revisions', `${latest}=100`, '--quiet'], { stdio: 'inherit' });
-          recordNormal(state, name, codebase);
-          markDone(state, `normal/${name}`);
-          continue;
-        }
-        recordNormal(state, name, codebase);
-      }
+      savePrevious(state, `normal/${name}`, serviceName, 'us-central1', runService(serviceName, 'us-central1'));
+      markFlight(state, `normal/${name}`);
+      run('bash', ['scripts/deploy-functions.sh', codebase === 'functions' ? 'main' : 'autodraw', '--only', name], { stdio: 'inherit' });
+      recordNormal(state, name, codebase);
+      markDone(state, `normal/${name}`);
     }
     for (const [name, regional] of recovery) {
       const target = rows.find(row => row.name === regional && row.region === 'us-east1');
