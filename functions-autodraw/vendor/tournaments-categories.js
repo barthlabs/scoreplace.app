@@ -13,6 +13,11 @@ var _t = window._t || function(k) { return k; };
 // leitor lê errado.
 var _catMgrTid = null;
 
+// A mesma regra é usada pelos painéis, pelo sorteio no servidor e pelo avanço.
+window._isMulticategoria = function(t) {
+    return !!(t && Array.isArray(t.combinedCategories) && t.combinedCategories.length > 1);
+};
+
 // ========== Category enrollment helpers ==========
 // Maps user gender to tournament gender category codes
 window._userGenderToCatCodes = function(userGender) {
@@ -43,6 +48,15 @@ window._getParticipantCategories = function(p) {
     if (Array.isArray(p.categories) && p.categories.length > 0) return p.categories;
     if (p.category) return [p.category];
     return [];
+};
+
+window._uncategorizedDrawParticipants = function(t) {
+    if (!window._isMulticategoria(t)) return [];
+    var participants = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+    return participants.filter(function(p) {
+        return !(p && typeof p === 'object' && p.genericPlaceholderReservation === true) &&
+            !window._getParticipantCategories(p).some(function(cat) { return !!String(cat || '').trim(); });
+    });
 };
 
 // Check if participant belongs to a specific category

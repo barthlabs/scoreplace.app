@@ -1322,14 +1322,17 @@ function _completedPhaseGames(t, phaseIdx) {
 // Conta jogáveis = não-BYE (inclui rodadas futuras TBD + convergência se houver).
 // Como usa os grupos ATUAIS da fase anterior, grupos tardios (lista de espera)
 // que aparecem na fase 0 refletem AUTOMATICAMENTE no total da fase seguinte.
-function _simulatePhaseGames(t, phaseIdx) {
-  var eng = window._phasesEngine;
-  if (!eng || typeof eng.buildPhaseBrackets !== 'function') return null;
+function _phaseGroupsForProjection(t, phaseIdx, eng) {
   var cur = t.currentPhaseIndex || 0;
   if (phaseIdx !== cur + 1) return null; // só a PRÓXIMA fase é simulável sem resultados
-  var prevGroups = null;
-  if (cur === 0 && typeof eng.prevPhaseGroups === 'function') prevGroups = eng.prevPhaseGroups(t);
-  else if (typeof eng.bracketPhaseGroups === 'function') prevGroups = eng.bracketPhaseGroups(t, cur);
+  if (cur === 0 && typeof eng.prevPhaseGroups === 'function') return eng.prevPhaseGroups(t);
+  if (typeof eng.bracketPhaseGroups === 'function') return eng.bracketPhaseGroups(t, cur);
+  return null;
+}
+function _simulatePhaseGames(t, phaseIdx) {
+  var eng = window._phasesEngine;
+  if (!eng || typeof eng.buildCategorizedPhaseBrackets !== 'function') return null;
+  var prevGroups = _phaseGroupsForProjection(t, phaseIdx, eng);
   if (!prevGroups || !prevGroups.length) return null;
   // computeStandings só precisa devolver os participantes do grupo (a CONTAGEM da
   // chave depende de quantos entram por linha, não de QUEM). Ordem não importa.
@@ -1341,17 +1344,64 @@ function _simulatePhaseGames(t, phaseIdx) {
     });
   };
   try {
-    var built = eng.buildPhaseBrackets(prevGroups, t.phases[phaseIdx], cs, 'plan-' + phaseIdx);
+    var built = eng.buildCategorizedPhaseBrackets(t, prevGroups, t.phases[phaseIdx], cs, 'plan-' + phaseIdx);
+    if (built.error) return null;
     var _uc = (built.matches || []).filter(function (m) {
       return m && !m.isBye && m.p1 !== 'BYE' && m.p2 !== 'BYE';
     }).length;
     // v4.1.31: Dupla Eliminatória clássica → buildPhaseBrackets devolve só a R1 do upper
     // (uc jogos) + needsDoubleElim. O TOTAL da dupla-elim de N entrantes (uc*2, pot2) é
     // 2N−2 = 4*uc−2 (upper N−1 + lower N−2 + grande final 1). Sem isto contava só a R1.
-    if (built.needsDoubleElim && _uc > 0) return (4 * _uc) - 2;
+    if (built.needsDoubleElim && _uc > 0) return (built.categoryBuilds || []).reduce(function (total, part) {
+      var count = (part.built.matches || []).filter(function (m) {
+        return m && !m.isBye && m.p1 !== 'BYE' && m.p2 !== 'BYE';
+      }).length;
+      return total + (part.built.needsDoubleElim && count > 0 ? (4 * count) - 2 : count);
+    }, 0);
     return _uc;
   } catch (e) { if (window._warn) window._warn('[plan] sim falhou', e); return null; }
 }
+
+// Somente leitura para a súmula: revela a estrutura da próxima chave sem
+// antecipar classificados ou alterar o contador usado nas demais telas.
+window._sumulaUpcomingBracket = function (t, phaseIdx) {
+  var eng = window._phasesEngine;
+  if (!t || !Array.isArray(t.phases) || !eng ||
+      typeof eng.projectPhaseCfg !== 'function' || typeof eng.buildCategorizedPhaseBrackets !== 'function') return null;
+  try {
+    var groups = _phaseGroupsForProjection(t, phaseIdx, eng);
+    if (!groups || !groups.length) return null;
+    var cfg = eng.projectPhaseCfg(t.phases[phaseIdx], t, phaseIdx);
+    if (!cfg || cfg.kind !== 'elimination') return null;
+    var standings = function (g) {
+      var ps = (g && (g.players || g.participants || g.standings)) || [];
+      return ps.map(function (p) {
+        var name = typeof p === 'string' ? p : p && (p.displayName || p.name) || '';
+        return { name: name, displayName: name };
+      });
+    };
+    var projected = eng.buildCategorizedPhaseBrackets(t, groups, cfg, standings, 'sumula-plan-' + phaseIdx);
+    if (projected.error) return { phaseIndex: phaseIdx, pending: projected.error, categories: [] };
+    return { phaseIndex: phaseIdx, name: cfg.name || t.phases[phaseIdx].name || 'Eliminatória',
+      categories: (projected.categoryBuilds || []).map(function (part) {
+        var built = part.built;
+        return { category: part.category, groups: part.groups, partial: !!built.needsDoubleElim,
+          matches: (built.matches || []).filter(function (m) {
+            return m && !m.isBye && m.p1 !== 'BYE' && m.p2 !== 'BYE';
+          }).map(function (m) {
+            return { id:m.id, round:m.round, bracket:m.bracket, isThirdPlace:!!m.isThirdPlace,
+              nextMatchId:m.nextMatchId, nextSlot:m.nextSlot,
+              loserNextMatchId:m.loserNextMatchId, loserNextSlot:m.loserNextSlot,
+              repFill:Array.isArray(m.repFill) ? m.repFill.map(function (r) {
+                return { slot:r.slot, srcRound:r.srcRound, rank:r.rank };
+              }) : [] };
+          }) };
+      }) };
+  } catch (e) {
+    if (window._warn) window._warn('[sumula] roteiro da próxima fase indisponível', e);
+    return null;
+  }
+};
 
 // PLANO canônico: total de jogos previstos somando TODAS as fases.
 // Fase materializada = jogos reais (fase 0 inclui grupos tardios da lista de espera).

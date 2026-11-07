@@ -956,7 +956,7 @@ window._translations['en'] = {
   'draw.tooFewTitle': 'Insufficient Entries',
   'draw.tooFewDrawMsg': 'At least 2 {label} are required to generate the draw.',
   'draw.noCatTitle': 'Participants Without Category',
-  'draw.noCatMsg': '{n} participant(s) have no assigned category: {names}{extra}\n\nUse the Category Manager to assign them before the draw, or proceed (they will be included in the first category).',
+  'draw.noCatMsg': '{n} participant(s) have no assigned category: {names}{extra}\n\nAssign their categories before drawing.',
   'draw.noCatConfirm': 'Proceed',
   'draw.soloModeTitle': 'Individual Mode',
   'draw.soloModeMsg': 'This tournament is set to Individual Mode. Manually forming teams or doubles violates the established parameters.',

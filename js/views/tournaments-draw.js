@@ -77,7 +77,7 @@ window._clearDrawRuntimeFlags = function (t) {
     // recibos de posição pertencem à chave publicada, nunca à configuração do torneio.
     // null é necessário para limpar também no documento salvo com merge:true.
     'sobraUnicaDecisoesV1',
-    '_drawBalanceMode', '_canonicalDraw', '_cleanupApplied', '_skipCatValidation',
+    '_drawBalanceMode', '_canonicalDraw', '_cleanupApplied',
     // v1.2.53: "Flexibilizar equilíbrio" formou as duplas mesmo-gênero → o resto vira só
     // os avulsos (não a sobra pow2). Cancelar/resetar volta ao estado sem-flexibilizar.
     '_flexibilized',
@@ -979,7 +979,7 @@ window._integrateLateDuplas = function (t) {
   if (!window._allowsNewMatchups(t)) return 0;
   if (!_drawIsDoubleElimination(t)) return 0; // Eliminatória Simples: _createExtraGamesFromWaitlist
   if (!Array.isArray(t.matches) || t.matches.length === 0) return 0; // sorteio ainda não feito
-  if (Array.isArray(t.combinedCategories) && t.combinedCategories.length > 1) return 0; // multi-cat: fora do escopo
+  if (window._isMulticategoria(t)) return 0; // multi-cat: fora do escopo
 
   var _isPair = function (p) { return p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name); };
   var _nm = function (p) { return window._pName ? window._pName(p, '') : (p && (p.displayName || p.name)) || ''; };
@@ -1289,7 +1289,7 @@ window._createExtraGamesFromWaitlist = function(t) {
   if (!t) return 0;
   if (!window._allowsNewMatchups(t)) return 0; // v1.3.x: gate independente (ver _allowsNewMatchups)
   if (!_drawIsSingleElimination(t)) return 0;
-  if (Array.isArray(t.combinedCategories) && t.combinedCategories.length > 1) return 0; // multi-categoria: fora do escopo por ora
+  if (window._isMulticategoria(t)) return 0; // multi-categoria: fora do escopo por ora
   if (!Array.isArray(t.matches) || t.matches.length === 0) return 0; // sorteio já feito
   // v1.3.57: 1ª rodada = MENOR round (CF numera round 0; legado round 1). Jogos tardios entram
   // NESTA rodada; _rebuildIntegratedBracket re-resolve o pow2 a partir dela.
@@ -3535,6 +3535,21 @@ window.generateDrawFunction = function (tId) {
         return;
     }
 
+    // Impede o sorteio antes de abrir painéis ou criar qualquer partida.
+    if (window._isMulticategoria(t)) {
+        var _noCat = window._uncategorizedDrawParticipants(t);
+        if (_noCat.length) {
+            var _names = _noCat.map(function(p) {
+                return typeof p === 'string' ? p : (p && (p.displayName || p.name)) || '?';
+            }).slice(0, 5).join(', ');
+            var _extra = _noCat.length > 5 ? ' e mais ' + (_noCat.length - 5) + '...' : '';
+            showAlertDialog(_t('draw.noCatTitle'),
+                _t('draw.noCatMsg', { n: _noCat.length, names: _names, extra: _extra }),
+                null, { type: 'warning' });
+            return;
+        }
+    }
+
     // v4.0.97: "Sorteando…" enquanto a chave é gerada (parte lenta: save + geração +
     // render). Some sozinho quando navega pro #bracket (hashchange) — ver _showLoading.
     // Só aqui (após os guards de re-sorteio) pra não piscar quando há diálogo/painel antes.
@@ -3589,36 +3604,6 @@ window.generateDrawFunction = function (tId) {
         if (!info.isPowerOf2 && !(typeof window._autoResolvesPow2 === 'function' && window._autoResolvesPow2(t))) {
             window.showPowerOf2Panel(tId);
             return;
-        }
-    }
-
-    // ── Validação: participantes sem categoria (quando torneio tem MÚLTIPLAS categorias) ─
-    // Categoria única (ex: Misto isolado) → todos participam da mesma → sem checagem.
-    var _tournHasCats = Array.isArray(t.combinedCategories) && t.combinedCategories.length > 1;
-    if (_tournHasCats) {
-        var _allParts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-        var _noCat = _allParts.filter(function(p) {
-            if (p && typeof p === 'object' && p.genericPlaceholderReservation === true) return false;
-            if (typeof p !== 'object') return true;
-            var cats = window._getParticipantCategories(p);
-            return cats.length === 0;
-        });
-        if (_noCat.length > 0) {
-            var _names = _noCat.map(function(p) {
-                return typeof p === 'string' ? p : (p.displayName || p.name || '?');
-            }).slice(0, 5).join(', ');
-            var _extra = _noCat.length > 5 ? ' e mais ' + (_noCat.length - 5) + '...' : '';
-            showAlertDialog(_t('draw.noCatTitle'),
-                _t('draw.noCatMsg', { n: _noCat.length, names: _names, extra: _extra }),
-                function() {
-                    // User chose to proceed anyway — continue draw
-                    t._skipCatValidation = true;
-                    window.generateDrawFunction(tId);
-                },
-                { type: 'warning', confirmText: _t('draw.noCatConfirm'), cancelText: _t('btn.back') }
-            );
-            if (!t._skipCatValidation) return;
-            delete t._skipCatValidation;
         }
     }
 
@@ -3863,11 +3848,18 @@ window._buildDoubleElimBracket = function (t, opts) {
     // TODOS os jogos novos (upper R2+/lower/grand) com phaseIndex (senão o render da fase,
     // que filtra por phaseIndex, não os enxerga). Sem opts = fase única (comportamento antigo).
     const _pi = (opts && opts.phaseIndex != null) ? opts.phaseIndex : null;
+    const _cat = opts && opts.category != null ? String(opts.category) : null;
+    const _idSuffix = _cat == null ? '' : '-' + _cat.replace(/[^A-Za-z0-9_-]+/g, '_');
+    const _append = (phase, bracket, round, m) => {
+        if (_cat != null) m.category = _cat;
+        window._appendCanonicalColumn(t, { phase, bracket, round, matches: [m] });
+    };
     const _beforeIds = (_pi != null) ? {} : null;
     if (_pi != null) t.matches.forEach(function (m) { if (m && m.id) _beforeIds[m.id] = 1; });
 
     // --- UPPER BRACKET: build rounds like single elim ---
-    const upperR1 = t.matches.filter(m => m.round === 1 && (_pi == null || ((m.phaseIndex || 0) === _pi && (m.bracket === 'upper' || !m.bracket))));
+    const upperR1 = t.matches.filter(m => m.round === 1 && (_cat == null || m.category === _cat) &&
+        (_pi == null || ((m.phaseIndex || 0) === _pi && (m.bracket === 'upper' || !m.bracket))));
     const totalUpperRounds = Math.ceil(Math.log2(upperR1.length * 2));
 
     // Create upper bracket shell rounds
@@ -3878,14 +3870,14 @@ window._buildDoubleElimBracket = function (t, opts) {
         upperRounds[r] = [];
         for (let i = 0; i < nextCount; i++) {
             const m = {
-                id: `upper-r${r}-${i}-${ts}`,
+                id: `upper-r${r}-${i}-${ts}${_idSuffix}`,
                 round: r,
                 bracket: 'upper',
                 label: `Upper R${r} • P${i + 1}`,
                 p1: 'TBD', p2: 'TBD', winner: null
             };
             upperRounds[r].push(m);
-            window._appendCanonicalColumn(t, { phase: 'elim', bracket: 'upper', round: r, matches: [m] });
+            _append('elim', 'upper', r, m);
         }
     }
 
@@ -3923,14 +3915,14 @@ window._buildDoubleElimBracket = function (t, opts) {
             lowerRounds[lowerRoundNum] = [];
             for (let i = 0; i < matchCount; i++) {
                 const m = {
-                    id: `lower-r${lowerRoundNum}-${i}-${ts}`,
+                    id: `lower-r${lowerRoundNum}-${i}-${ts}${_idSuffix}`,
                     round: lowerRoundNum,
                     bracket: 'lower',
                     label: `Lower R${lowerRoundNum} • P${i + 1}`,
                     p1: 'TBD', p2: 'TBD', winner: null
                 };
                 lowerRounds[lowerRoundNum].push(m);
-                window._appendCanonicalColumn(t, { phase: 'elim', bracket: 'lower', round: lowerRoundNum, matches: [m] });
+                _append('elim', 'lower', lowerRoundNum, m);
             }
 
             // Link upper R1 losers → lower R1
@@ -3949,14 +3941,14 @@ window._buildDoubleElimBracket = function (t, opts) {
             lowerRounds[lowerRoundNum] = [];
             for (let i = 0; i < actualMergeCount; i++) {
                 const m = {
-                    id: `lower-r${lowerRoundNum}-${i}-${ts}`,
+                    id: `lower-r${lowerRoundNum}-${i}-${ts}${_idSuffix}`,
                     round: lowerRoundNum,
                     bracket: 'lower',
                     label: `Lower R${lowerRoundNum} • P${i + 1}`,
                     p1: 'TBD', p2: 'TBD', winner: null
                 };
                 lowerRounds[lowerRoundNum].push(m);
-                window._appendCanonicalColumn(t, { phase: 'elim', bracket: 'lower', round: lowerRoundNum, matches: [m] });
+                _append('elim', 'lower', lowerRoundNum, m);
             }
 
             // Link previous lower round winners → this round
@@ -3981,14 +3973,14 @@ window._buildDoubleElimBracket = function (t, opts) {
                 lowerRounds[lowerRoundNum] = [];
                 for (let i = 0; i < battleCount; i++) {
                     const m = {
-                        id: `lower-r${lowerRoundNum}-${i}-${ts}`,
+                        id: `lower-r${lowerRoundNum}-${i}-${ts}${_idSuffix}`,
                         round: lowerRoundNum,
                         bracket: 'lower',
                         label: `Lower R${lowerRoundNum} • P${i + 1}`,
                         p1: 'TBD', p2: 'TBD', winner: null
                     };
                     lowerRounds[lowerRoundNum].push(m);
-                    window._appendCanonicalColumn(t, { phase: 'elim', bracket: 'lower', round: lowerRoundNum, matches: [m] });
+                    _append('elim', 'lower', lowerRoundNum, m);
                 }
 
                 // Link merge round winners → battle round
@@ -4006,13 +3998,13 @@ window._buildDoubleElimBracket = function (t, opts) {
 
     // --- GRAND FINAL ---
     const grandFinal = {
-        id: `grand-final-${ts}`,
+        id: `grand-final-${ts}${_idSuffix}`,
         round: totalUpperRounds + 1,
         bracket: 'grand',
         label: 'Grande Final',
         p1: 'TBD', p2: 'TBD', winner: null
     };
-    window._appendCanonicalColumn(t, { phase: 'grandfinal', bracket: 'grand', round: totalUpperRounds + 1, matches: [grandFinal] });
+    _append('grandfinal', 'grand', totalUpperRounds + 1, grandFinal);
 
     // Link upper bracket final winner → grand final
     const upperFinal = upperRounds[totalUpperRounds];
@@ -4032,7 +4024,8 @@ window._buildDoubleElimBracket = function (t, opts) {
     }
 
     // Auto-advance BYE winners in upper bracket
-    t.matches.filter(m => m.isBye && m.winner && m.bracket === 'upper' && (_pi == null || (m.phaseIndex || 0) === _pi)).forEach(m => {
+    t.matches.filter(m => m.isBye && m.winner && m.bracket === 'upper' &&
+        (_cat == null || m.category === _cat) && (_pi == null || (m.phaseIndex || 0) === _pi)).forEach(m => {
         if (m.nextMatchId) {
             const next = t.matches.find(n => n.id === m.nextMatchId);
             if (next) {
@@ -4301,7 +4294,7 @@ window._rebuildDuplaDownstream = function (t, _mode) {
     var REP = (_mode !== 'bye');                               // PADRÃO = repescagem no ímpar (dupla-elim clássica, com vacância na inferior); 'bye' força folga
     var BYE = 'BYE (Avança Direto)';
     if (window._collectAllMatches(t).some(function (m) { return m && m.winner && !m.isBye; })) return 0; // em andamento
-    var cats = (Array.isArray(t.combinedCategories) && t.combinedCategories.length > 1) ? t.combinedCategories.slice() : [null];
+    var cats = window._isMulticategoria(t) ? t.combinedCategories.slice() : [null];
     var pi = (t.currentPhaseIndex || 0), did = 0;
     cats.forEach(function (cat) {
         var _c = function (m) { return cat == null || m.category === cat; };
@@ -5891,7 +5884,7 @@ window._syncLowerBracket = function (t, opts) {
   opts = opts || {};
   if (!t || !Array.isArray(t.matches)) return false;
   // multi-categoria fora do escopo (mesma regra de toda a integração tardia)
-  if (Array.isArray(t.combinedCategories) && t.combinedCategories.length > 1) return false;
+  if (window._isMulticategoria(t)) return false;
   var _r = function (m) { return (m && typeof m.round === 'number') ? m.round : 1; };
   var _vazio = function (v) { return !v || v === 'TBD' || v === 'BYE (Avança Direto)' || /a definir/i.test(String(v)); };
   var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : t.matches;
@@ -6374,7 +6367,7 @@ window._placeLateEntriesSurgically = function (t, _theCat) {
   // o time formado NUNCA entrava (integrated:false — o bug do dono na "SB Casais"). Agora processa UMA
   // categoria por vez (recursão): o tardio entra na chave DA CATEGORIA DELE. `_theCat` escopa `_all()`
   // e o coletor. Ver project_late_dupla_fills_awaiting_slot.
-  if (_theCat === undefined && Array.isArray(t.combinedCategories) && t.combinedCategories.length > 1) {
+  if (_theCat === undefined && window._isMulticategoria(t)) {
     var _totCat = 0;
     t.combinedCategories.forEach(function (c) { _totCat += window._placeLateEntriesSurgically(t, c); });
     return _totCat;

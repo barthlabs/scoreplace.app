@@ -77,5 +77,36 @@ function playAll(t) {
   ok(lowerR1.every((m) => isReal(m.p1) && isReal(m.p2)), tag + ' lower R1 preenchida pelos perdedores do upper R1');
 });
 
+const separate = {id:'de-categories', matches:[], phases:[{kind:'elimination', elimination:{bracketType:'double'}}], currentPhaseIndex:0};
+['Diamante','Ouro'].forEach((category) => {
+  for (let i = 0; i < 2; i++) separate.matches.push({id:category+'-u'+i, round:1,
+    bracket:'upper', category, p1:category+'-'+(i*2+1), p2:category+'-'+(i*2+2), winner:null});
+});
+['Diamante','Ouro'].forEach(category => W._buildDoubleElimBracket(separate, {phaseIndex:0, category, ts:1234}));
+ok(separate.matches.filter(m => m.bracket === 'grand').length === 2,
+  'cada categoria tem a própria grande final');
+ok(separate.matches.every(m => m.category === 'Diamante' || m.category === 'Ouro'),
+  'todos os jogos da dupla eliminação conservam a categoria');
+ok(new Set(separate.matches.map(m => m.id)).size === separate.matches.length,
+  'IDs da dupla eliminação não colidem entre categorias');
+ok(separate.matches.every(m => !m.nextMatchId || separate.matches.find(n => n.id === m.nextMatchId && n.category === m.category)),
+  'os caminhos das chaves não atravessam categorias');
+
+const mixed = { id:'mixed', matches:[], phases:[{kind:'elimination'}], currentPhaseIndex:0,
+  combinedCategories:['Diamante','Ouro'] };
+for (let i = 0; i < 2; i++) {
+  mixed.matches.push({id:'diamante-u'+i, round:1, bracket:'upper', category:'Diamante',
+    p1:'D'+(i*2+1), p2:'D'+(i*2+2), phaseIndex:0});
+  mixed.matches.push({id:'ouro-u'+i, round:1, bracket:'upper', category:'Ouro',
+    p1:'O'+(i*2+1), p2:'O'+(i*2+2), phaseIndex:0});
+}
+W._buildDoubleElimBracket(mixed, {phaseIndex:0, category:'Diamante'});
+ok(mixed.matches.filter(m => m.category === 'Ouro').length === 2,
+  'uma categoria DE não cria jogos adicionais na categoria simples');
+ok(mixed.matches.filter(m => m.category === 'Ouro').every(m => !m.loserMatchId && !m.nextMatchId),
+  'uma categoria DE não liga jogos da categoria simples à sua chave');
+ok(mixed.matches.filter(m => m.bracket === 'grand').length === 1,
+  'categoria DE isolada cria uma só grande final');
+
 console.log('\n' + (fail === 0 ? '✅' : '❌') + ' double-elim: ' + pass + ' asserts ok, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);

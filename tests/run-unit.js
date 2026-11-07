@@ -954,6 +954,7 @@ const SUITES = [
   'tests/grandfinal-lines.test.js',
   'tests/category-transition.test.js',
   'tests/double-elim.test.js',
+  'tests/draw-category-guard.test.js',
   'tests/repechage.test.js',
   'tests/live-scoring-resolve.test.js',
   'tests/live-scoring-window.test.js',

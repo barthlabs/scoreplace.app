@@ -972,7 +972,7 @@ window._translations['pt'] = {
   'draw.tooFewTitle': 'Inscritos Insuficientes',
   'draw.tooFewDrawMsg': 'São necessários pelo menos 2 {label} para realizar o sorteio.',
   'draw.noCatTitle': 'Participantes sem Categoria',
-  'draw.noCatMsg': '{n} participante(s) ainda não têm categoria atribuída: {names}{extra}\n\nUse o Gerenciador de Categorias para atribuir antes do sorteio, ou prossiga (serão incluídos na primeira categoria).',
+  'draw.noCatMsg': '{n} participante(s) ainda não têm categoria atribuída: {names}{extra}\n\nAtribua as categorias antes de sortear.',
   'draw.noCatConfirm': 'Prosseguir',
   'draw.soloModeTitle': 'Modo Individual',
   'draw.soloModeMsg': 'A regra deste torneio está configurada como Modo Individual. Formar times ou duplas manualmente viola os parâmetros estabelecidos para este torneio.',

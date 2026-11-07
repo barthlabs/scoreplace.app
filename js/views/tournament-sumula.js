@@ -67,15 +67,20 @@
         plannedNumbers[text(item.matchId)] = Number(item.scheduledGameNumber) || null;
       });
     }
-    var matches = (allMatches || []).filter(function (m) {
-      if (!m || m.isBye || m.isSitOut || !m.scheduledAt || !localDay(m.scheduledAt)) return false;
-      var key = text(m.id) || [m.scheduledAt, m.court, m.p1, m.p2].join('|');
+    var real = (allMatches || []).filter(function (m) {
+      if (!m || m.isBye || m.isSitOut || m.p1 === 'BYE' || m.p2 === 'BYE') return false;
+      var dated = !!(m.scheduledAt && localDay(m.scheduledAt));
+      var key = text(m.id) || (dated
+        ? [m.scheduledAt, m.court, m.p1, m.p2].join('|')
+        : [m.scheduledAt, m.court, m.p1, m.p2, m.phaseIndex || 0, m.category || m.categoryName || '', m.round || ''].join('|'));
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
     }).map(function (m) {
+      var dated = !!(m.scheduledAt && localDay(m.scheduledAt));
       return {
-        id: text(m.id), day: localDay(m.scheduledAt), time: localTime(m.scheduledAt), at: timestamp(m.scheduledAt),
+        id: text(m.id), day: dated ? localDay(m.scheduledAt) : '', time: dated ? localTime(m.scheduledAt) : '',
+        at: dated ? timestamp(m.scheduledAt) : NaN, phaseIndex:Number(m.phaseIndex) || 0,
         court: text(m.court) || plannedCourts[text(m.id)] || '',
         number:Number(m.scheduledGameNumber) || plannedNumbers[text(m.id)] || matchNumber(m), category: text(m.category || m.categoryName),
         round: m.round == null ? '' : String(m.round),
@@ -83,12 +88,54 @@
         team1: teamName(t, m, 'p1'), team2: teamName(t, m, 'p2'),
         uids1: m.team1Uids || (m.p1Uid ? [m.p1Uid] : []), uids2: m.team2Uids || (m.p2Uid ? [m.p2Uid] : [])
       };
-    }).sort(function (a, b) {
+    });
+    var matches = real.filter(function (m) { return !!m.day; }).sort(function (a, b) {
       return a.at - b.at || a.court.localeCompare(b.court, 'pt-BR', { numeric:true }) || (a.number || 0) - (b.number || 0) || a.id.localeCompare(b.id);
+    });
+    var undated = real.filter(function (m) { return !m.day; }).sort(function (a, b) {
+      return a.phaseIndex - b.phaseIndex || a.category.localeCompare(b.category, 'pt-BR') ||
+        Number(a.round || 0) - Number(b.round || 0) || (a.number || 0) - (b.number || 0);
     });
     var days = [];
     matches.forEach(function (m) { if (days.indexOf(m.day) < 0) days.push(m.day); });
-    return { tournament: text(t.name || t.title || 'Torneio'), matches: matches, days: days,
+    var future = null, pending = [];
+    var next = (Number(t.currentPhaseIndex) || 0) + 1;
+    if (Array.isArray(t.phases) && t.phases[next]) {
+      if (typeof root._sumulaUpcomingBracket === 'function') future = root._sumulaUpcomingBracket(t, next);
+      if (!future) pending.push('A estrutura da próxima fase ainda não está disponível.');
+    }
+    if (future && future.pending) pending.push(future.pending);
+    if (future && future.categories) {
+      var realNext = real.filter(function (m) { return m.phaseIndex === next; });
+      if (future.categories.length > 1 && realNext.some(function (m) { return !m.category; })) {
+        future.categories = [];
+        pending.push('Jogos da próxima fase sem categoria: roteiro pendente.');
+      } else future.categories = future.categories.filter(function (bucket) {
+        var existing = realNext.filter(function (m) { return m.category === bucket.category; });
+        if (!existing.length) return true;
+        if (existing.length < bucket.matches.length) pending.push(bucket.category + ': ' +
+          (bucket.matches.length - existing.length) + ' confronto(s) ainda não materializado(s).');
+        return false;
+      });
+    }
+    if (Array.isArray(t.phases) && t.phases.length > next + 1)
+      pending.push('Fases posteriores à próxima serão definidas após os resultados.');
+    var tiebreakGroups = [];
+    var cfg0 = Array.isArray(t.phases) && t.phases[0];
+    if (cfg0 && (cfg0.reiRainha === true || cfg0.drawMode === 'rei_rainha') &&
+        t.fmt2 && t.fmt2.tieResolution === 'singles_then_draw' &&
+        root._phasesEngine && typeof root._phasesEngine.prevPhaseGroups === 'function') {
+      try { tiebreakGroups = (root._phasesEngine.prevPhaseGroups(t) || []).map(function (g, i) {
+        var first = g && Array.isArray(g.matches) && g.matches[0];
+        return { name:text(g && g.name) || 'Grupo ' + (i+1),
+          category:text(g && (g.category || g.categoryName) || first && (first.category || first.categoryName)),
+          court:text(first && (first.court || plannedCourts[text(first.id)])) };
+      }); } catch (e) { tiebreakGroups = []; }
+    }
+    return { tournament: text(t.name || t.title || 'Torneio'), matches: matches, undated: undated,
+      days: days, future:future, pending:pending, tiebreakGroups:tiebreakGroups,
+      tiePoints:Math.max(1, Math.min(99, Number(t.fmt2 && t.fmt2.tieSinglesPoints) || 5)),
+      tieMargin:t.fmt2 && t.fmt2.tieSinglesMargin === 2 ? 2 : 1,
       scoring: scoringFor(t) };
   }
   function attendance(model, day) {
@@ -355,6 +402,71 @@
     p.write('scoreplace.app  |  Gerado da grade publicada', x, 583, 7);
     return p;
   }
+  function structuralRows(bucket) {
+    var matches = bucket.matches.slice().sort(function (a, b) {
+      return Number(a.round || 0) - Number(b.round || 0) ||
+        Number(a.isThirdPlace) - Number(b.isThirdPlace) || a.id.localeCompare(b.id);
+    });
+    var refs = {}, incoming = {};
+    matches.forEach(function (m, i) { refs[m.id] = 'C' + (i+1); });
+    matches.forEach(function (m) {
+      if (m.nextMatchId && m.nextSlot) {
+        (incoming[m.nextMatchId] = incoming[m.nextMatchId] || {})[m.nextSlot] = 'Vencedor ' + refs[m.id];
+      }
+      if (m.loserNextMatchId && m.loserNextSlot) {
+        (incoming[m.loserNextMatchId] = incoming[m.loserNextMatchId] || {})[m.loserNextSlot] = 'Perdedor ' + refs[m.id];
+      }
+    });
+    return matches.map(function (m) {
+      var source = incoming[m.id] || {};
+      (m.repFill || []).forEach(function (rep) {
+        source[rep.slot] = 'Repescado da rodada ' + (Number(rep.srcRound || 0) + 1);
+      });
+      return { ref:refs[m.id], round:m.round, third:m.isThirdPlace, final:!m.isThirdPlace && !m.nextMatchId,
+        p1:source.p1 || 'Classificado da fase anterior',
+        p2:source.p2 || 'Classificado da fase anterior' };
+    });
+  }
+  function writingPage(model, title, subtitle, rows, part, total, orientation, kind) {
+    var portrait = orientation === 'portrait', p = portrait ? pdfPage(595, 842) : pdfPage(842, 595);
+    var left = 22, right = p.width - 22, top = 100, step = portrait ? 68 : 57;
+    p.fillRect(0, 0, p.width, 76, '0.071 0.133 0.220');
+    p.write(fitLabel(model.tournament, right-left-70, portrait ? 11 : 13, true), left, 22,
+      portrait ? 11 : 13, true, null, '1 1 1');
+    p.write(fitLabel(title, right-left-70, 9, true), left, 44, 9, true, null, '1 1 1');
+    p.write(fitLabel(subtitle + '  |  Folha ' + part + '/' + total, right-left-70, 7.5, false),
+      left, 61, 7.5, false, null, '1 1 1');
+    p.logo(right-58, 7, 56);
+    rows.forEach(function (row, i) {
+      var y = top + i*step;
+      p.box(left, y-15, right-left, step-4);
+      var label = kind === 'tiebreak' ? 'Desempate, se necessário  |  ' + row.category + '  |  ' + row.name +
+        (row.court ? '  |  ' + row.court : '')
+        : row.ref + '  |  ' + (row.third ? '3º lugar' : row.final ? 'Final' : 'Rodada ' + row.round);
+      p.write(fitLabel(label, right-left-20, 8, true), left+8, y-2, 8, true);
+      if (kind === 'tiebreak') {
+        p.write('Atleta 1:', left+8, y+15, 7);
+        p.line(left+52, y+17, left+(right-left)*0.47, y+17);
+        p.write('Atleta 2:', left+(right-left)*0.5, y+15, 7);
+        p.line(left+(right-left)*0.57, y+17, right-12, y+17);
+        p.write('Simples até ' + model.tiePoints + ' pontos' +
+          (model.tieMargin === 2 ? ', vantagem de 2' : ', vence quem chegar primeiro') +
+          '  |  Placar: ____ x ____  |  Quadra: ______  Hora: ______',
+          left+8, y+34, portrait ? 6.2 : 7);
+      } else {
+        var half = (right-left)/2;
+        p.write(fitLabel(row.p1, half-18, portrait ? 6.8 : 7.2, false), left+8, y+14, portrait ? 6.8 : 7.2);
+        p.write(fitLabel(row.p2, half-18, portrait ? 6.8 : 7.2, false), left+half+8, y+14, portrait ? 6.8 : 7.2);
+        p.line(left+8, y+28, left+half-10, y+28);
+        p.line(left+half+8, y+28, right-10, y+28);
+        p.write('Nomes: __________________________    x    __________________________    Placar: __________',
+          left+8, y+(portrait ? 43 : 35), portrait ? 6.2 : 7.2);
+      }
+    });
+    p.write('Quadra e hora são preenchidas conforme a operação. Assinaturas: ______________________________',
+      left, p.height-16, portrait ? 6.3 : 7);
+    return p;
+  }
   function makePages(model, options) {
     options = options || {};
     var orientation = options.orientation === 'portrait' ? 'portrait' : 'landscape';
@@ -378,6 +490,33 @@
         }
       });
     });
+    var unscheduled = model.undated || [];
+    if (unscheduled.length) {
+      var totalUndated = Math.ceil(unscheduled.length / 12);
+      for (var u=0;u<totalUndated;u++) pages.push(scorePage(model, 'Data a definir',
+        'Quadra prevista no jogo; anote mudanças', unscheduled.slice(u*12, (u+1)*12),
+        u+1, totalUndated, orientation));
+    }
+    if (model.future && Array.isArray(model.future.categories)) model.future.categories.forEach(function (bucket) {
+      var rows = structuralRows(bucket), perPage = orientation === 'portrait' ? 10 : 8;
+      var total = Math.ceil(rows.length / perPage);
+      for (var i=0;i<total;i++) pages.push(writingPage(model,
+        'ROTEIRO DA ' + (model.future.name || 'ELIMINATÓRIA'),
+        (bucket.category || 'Categoria única') + (bucket.partial ? '  |  Dupla eliminatória: roteiro parcial' : ''),
+        rows.slice(i*perPage, (i+1)*perPage), i+1, total, orientation, 'future'));
+    });
+    var reserves = model.tiebreakGroups || [];
+    if (reserves.length) {
+      var perReserve = orientation === 'portrait' ? 10 : 8;
+      var totalReserve = Math.ceil(reserves.length / perReserve);
+      for (var r=0;r<totalReserve;r++) pages.push(writingPage(model, 'RESERVA PARA DESEMPATES',
+        'Grupos Rei/Rainha', reserves.slice(r*perReserve, (r+1)*perReserve),
+        r+1, totalReserve, orientation, 'tiebreak'));
+    }
+    if (model.pending && model.pending.length) pages.push(writingPage(model, 'PENDÊNCIAS DA PROGRESSÃO',
+      'Aguardando definição', model.pending.map(function (note, i) {
+        return { ref:'P' + (i+1), round:'', p1:note, p2:'' };
+      }), 1, 1, orientation, 'future'));
     if (options.attendance) pages.push.apply(pages, makeAttendancePages(model));
     return pages;
   }
@@ -473,8 +612,9 @@
     if (!authorized) return;
     var list = typeof root._collectAllMatches === 'function' ? root._collectAllMatches(t) : (t.matches || []);
     var model = collect(t, list);
-    if (!model.matches.length) {
-      if (typeof root.showNotification === 'function') root.showNotification('Súmula indisponível', 'Não há jogos com dia e hora definidos.', 'warning');
+    if (!model.matches.length && !(model.undated || []).length &&
+        !(model.future && model.future.categories && model.future.categories.some(function (b) { return b.matches.length; }))) {
+      if (typeof root.showNotification === 'function') root.showNotification('Súmula indisponível', 'Não há jogos ou chave disponíveis.', 'warning');
       return;
     }
     var both = orientation === 'both' && !onlyAttendance;

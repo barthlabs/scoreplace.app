@@ -1206,6 +1206,65 @@
     return { matches: allMatches, tiers: tiers, converge: converge, byDest: byDest, waitlist: phaseWaitlist };
   }
 
+  function _groupCategory(g) {
+    var first = g && Array.isArray(g.matches) && g.matches[0];
+    return String((g && (g.category || g.categoryName)) ||
+      (first && (first.category || first.categoryName)) || '').trim();
+  }
+
+  function _stampCategory(built, category) {
+    (built.matches || []).forEach(function (m) {
+      m.category = category;
+      if (Array.isArray(m.repFill)) m.repFill.forEach(function (slot) { if (slot.cat == null) slot.cat = category; });
+    });
+    if (built.repMeta) built.repMeta.category = category;
+    return built;
+  }
+
+  function _splitCategoryItems(items, categories, categoryOf) {
+    return categories.map(function (category, index) {
+      return { category: category, index: index, items: items.filter(function (item) {
+        return String(categoryOf(item) || '') === String(category);
+      }) };
+    }).filter(function (bucket) { return bucket.items.length > 0; });
+  }
+
+  // O avanço real, o contador e a súmula usam este mesmo particionamento.
+  function buildCategorizedPhaseBrackets(t, groups, phaseCfg, computeStandings, idPrefix, det) {
+    var multi = !!(t && Array.isArray(t.combinedCategories) && t.combinedCategories.length > 1);
+    if (!multi) {
+      var one = buildPhaseBrackets(groups, phaseCfg, computeStandings, idPrefix, det);
+      var lone = t && Array.isArray(t.combinedCategories) && t.combinedCategories.length === 1
+        ? String(t.combinedCategories[0]) : '';
+      if (lone) _stampCategory(one, lone);
+      return Object.assign({}, one, {
+        categoryBuilds: [{ category: lone || _groupCategory(groups[0]), groups: groups.length, built: one }]
+      });
+    }
+    var seenCats = Object.create(null), order = [];
+    for (var i = 0; i < groups.length; i++) {
+      var cat = _groupCategory(groups[i]);
+      if (!cat) return { error: 'Há grupos sem categoria identificada. Corrija antes de avançar.' };
+      if (!seenCats[cat]) { seenCats[cat] = true; order.push(cat); }
+    }
+    var combined = { matches: [], waitlist: [], categoryBuilds: [], repMetaByCat: [] };
+    _splitCategoryItems(groups, order, _groupCategory).forEach(function (bucket) {
+      var cat = bucket.category, ci = bucket.index;
+      var cfg = Object.assign({}, phaseCfg, { _surplusCategory: cat });
+      var part = _stampCategory(buildPhaseBrackets(bucket.items, cfg, computeStandings,
+        idPrefix + '-c' + ci, det), cat);
+      combined.categoryBuilds.push({ category: cat, groups: bucket.items.length, built: part });
+      combined.matches = combined.matches.concat(part.matches || []);
+      combined.waitlist = combined.waitlist.concat(part.waitlist || []);
+      if (part.needsDoubleElim) combined.needsDoubleElim = true;
+      if (part.needsRepechageDoubleElim) combined.needsRepechageDoubleElim = true;
+      if (part.repMeta) combined.repMetaByCat.push(part.repMeta);
+      if (part.repMetaByCat) combined.repMetaByCat = combined.repMetaByCat.concat(part.repMetaByCat);
+    });
+    if (combined.repMetaByCat.length) combined.repMeta = combined.repMetaByCat[0];
+    return combined;
+  }
+
   // v3.1.9 (motor canônico, inc 7): agendador round-robin "MÉTODO DO CÍRCULO" — núcleo
   // PURO/determinístico (sem random/Date) COMPARTILHADO entre a Fase 0 (grupos, em
   // tournaments-draw.js) e a Fase N (buildPhaseGroupStage). Rodadas BALANCEADAS: antes do
@@ -2069,17 +2128,11 @@
       var cats = (cfg && Array.isArray(cfg.categories) && cfg.categories.length > 1) ? cfg.categories : null;
       if (cats && ctx && typeof ctx.catOf === 'function') {
         var allM = [], needsDE = false, repMetas = [];
-        cats.forEach(function (cat, ci) {
-          var catPool = pool.filter(function (e) { return String(ctx.catOf(e) || '') === String(cat); });
-          if (!catPool.length) return;
-          var b = _genElimByLinesFromPool(catPool,
+        _splitCategoryItems(pool, cats, ctx.catOf).forEach(function (bucket) {
+          var cat = bucket.category, ci = bucket.index;
+          var b = _genElimByLinesFromPool(bucket.items,
             Object.assign({}, cfg, { _surplusCategory: cat }), idPrefix + '-c' + ci);
-          (b.matches || []).forEach(function (m) {
-            m.category = cat;
-            // repFill do single-elim (genTierBracket) nasce sem categoria (não a conhece).
-            // Estampa aqui pra _resolveRepFills rankear os derrotados DAQUELA categoria.
-            if (Array.isArray(m.repFill)) m.repFill.forEach(function (s) { if (s.cat == null) s.cat = cat; });
-          });
+          _stampCategory(b, cat);
           allM = allM.concat(b.matches || []);
           if (b.needsDoubleElim) needsDE = true;
           // v4.1.x: PROPAGA a Dupla Eliminatória c/ repescagem (não-pow2). Antes o ramo de
@@ -2401,14 +2454,16 @@
     if (!pm.length) return [];
     var byG = {}, order = [];
     pm.forEach(function (m) {
-      var k = (m.groupIdx != null) ? m.groupIdx : (m.monarchGroup != null ? m.monarchGroup : (m.group != null ? m.group : 0));
-      if (!byG[k]) { byG[k] = { name: m.groupName || ('Grupo ' + String.fromCharCode(65 + (parseInt(k, 10) || 0))), groupIdx: parseInt(k, 10) || 0, players: [], _seen: {}, matches: [] }; order.push(k); }
+      var groupIdx = (m.groupIdx != null) ? m.groupIdx : (m.monarchGroup != null ? m.monarchGroup : (m.group != null ? m.group : 0));
+      var category = String(m.category || m.categoryName || '');
+      var k = category + '\u0000' + groupIdx;
+      if (!byG[k]) { byG[k] = { name: m.groupName || ('Grupo ' + String.fromCharCode(65 + (parseInt(groupIdx, 10) || 0))), groupIdx: parseInt(groupIdx, 10) || 0, category: category, players: [], _seen: {}, matches: [] }; order.push(k); }
       byG[k].matches.push(m);
       var ps = (m.isMonarch || m.bracket === 'monarch') ? (m.team1 || []).concat(m.team2 || []) : [m.p1, m.p2];
       ps.forEach(function (n) { if (n && n !== 'BYE' && n !== 'TBD' && n !== 'BYE (Avança Direto)' && !byG[k]._seen[n]) { byG[k]._seen[n] = 1; byG[k].players.push(n); } });
     });
     return order.sort(function (a, b) { return byG[a].groupIdx - byG[b].groupIdx; }).map(function (k) {
-      var g = byG[k]; return { name: g.name, groupIdx: g.groupIdx, players: g.players, matches: g.matches };
+      var g = byG[k]; return { name: g.name, groupIdx: g.groupIdx, category: g.category, players: g.players, matches: g.matches };
     });
   }
 
@@ -2996,7 +3051,7 @@
     } else if (_fmt === 'groups') {
       built = buildPhaseGroupStage(groups, cfg, cs, _id, det);
     } else {
-      built = buildPhaseBrackets(groups, Object.assign({}, cfg, {
+      built = buildCategorizedPhaseBrackets(t, groups, Object.assign({}, cfg, {
         /* ⛔⛔ A POLÍTICA DA CHAVE DA FASE POSTERIOR, com reserva no DOCUMENTO DO TORNEIO. O compilador
          * grava a política em cada fase eliminatória, mas torneio compilado ANTES desta leva tem a
          * fase sem o campo — e aí a fase posterior desenharia repescagem enquanto a fase 0 desenhava
@@ -3026,6 +3081,7 @@
     // (slim: displayName + uid) + opponentHistory/sitOutHistory (acumulam por rodada) +
     // lastAutoDrawAt (dedup do auto-draw, por fase). O cliente (advanceMultiPhase →
     // _phaseGenNextLeagueRound) gera a 1ª rodada logo após, escrevendo em slot.rounds.
+    if (built.error) return { ok: false, error: built.error };
     return storePhase(t, nextIdx, built, det);
   }
 
@@ -3511,7 +3567,13 @@
     // v4.1.29: fase = Dupla Eliminatória clássica → monta upper R2+/lower/grande final a
     // partir da R1 do upper que a materialização criou (phase-aware, tagueando phaseIndex).
     if (res.built && res.built.needsDoubleElim && typeof window._buildDoubleElimBracket === 'function') {
-      window._buildDoubleElimBracket(t, { phaseIndex: t.currentPhaseIndex });
+      var _deCategories = (res.built.categoryBuilds || []).filter(function (part) {
+        return part.built && part.built.needsDoubleElim;
+      });
+      if (t.combinedCategories && t.combinedCategories.length > 1) _deCategories.forEach(function (part) {
+        window._buildDoubleElimBracket(t, { phaseIndex: t.currentPhaseIndex, category: part.category });
+      });
+      else window._buildDoubleElimBracket(t, { phaseIndex: t.currentPhaseIndex });
     }
     if (res.built && res.built.needsRepechageDoubleElim && typeof window._buildRepechageDoubleElim === 'function') {
       var _rm = (res.built.repMetaByCat && res.built.repMetaByCat.length) ? res.built.repMetaByCat : [res.built.repMeta];
@@ -3798,6 +3860,7 @@
     genTierBracket: genTierBracket,
     roundRobinSchedule: roundRobinSchedule,
     buildPhaseBrackets: buildPhaseBrackets,
+    buildCategorizedPhaseBrackets: buildCategorizedPhaseBrackets,
     buildPhaseGroupStage: buildPhaseGroupStage,
     buildPhaseLeagueStage: buildPhaseLeagueStage,
     generatePhase: generatePhase,

@@ -23,7 +23,7 @@ globalThis._souOrganizador = () => false;
 globalThis.AppStore = { currentUser:{uid:'ref-1'} };
 globalThis.showNotification = (...args) => { warning = args; };
 globalThis._downloadTournamentSumula('sem-grade');
-assert.deepStrictEqual(warning, ['Súmula indisponível', 'Não há jogos com dia e hora definidos.', 'warning'],
+assert.deepStrictEqual(warning, ['Súmula indisponível', 'Não há jogos ou chave disponíveis.', 'warning'],
   'árbitro confirmado acessa a súmula; sem grade recebe aviso e nenhum PDF');
 warning = null;
 globalThis.AppStore.currentUser = {uid:'outsider'};
@@ -50,7 +50,8 @@ const matches = [
   { id:'unscheduled', p1:'A / B', p2:'C / D' }
 ];
 const model = core.collect(t, [matches[0], matches[1], matches[2], matches[1], matches[3], matches[4]]);
-assert.strictEqual(model.matches.length, 3, 'não repete espelho de partida nem inclui BYE/sem data');
+assert.strictEqual(model.matches.length, 3, 'não repete espelho de partida nem inclui BYE nos jogos datados');
+assert.strictEqual(model.undated.length, 1, 'jogo real sem data permanece disponível para impressão');
 assert.strictEqual(core.collect(t, [{ id:'sem-quadra', scheduledAt:at('2026-10-22','20:00'),
   p1:'A / B', p2:'C / D' }]).matches.length, 1, 'jogo sem quadra prevista entra na súmula');
 assert.deepStrictEqual(model.days, ['2026-10-22','2026-10-23']);
@@ -67,10 +68,10 @@ const secondDay = core.attendance(model, '2026-10-23');
 assert.strictEqual(secondDay.length, 4);
 assert.strictEqual(secondDay[0].opponents, 'Érica Souza / Fábio Ruiz', 'oponentes são do primeiro jogo do torneio, não do dia');
 const pages = core.makePages(model);
-assert.strictEqual(pages.length, 3, 'uma página por quadra e dia, reunindo categorias');
+assert.strictEqual(pages.length, 4, 'páginas datadas e uma folha separada para jogos sem data');
 assert(pages.every(p => p.width === 842), 'súmula horizontal por padrão');
 const portrait = core.makePages(model, { orientation:'portrait' });
-assert.strictEqual(portrait.length, 3);
+assert.strictEqual(portrait.length, 4);
 assert(portrait.every(p => p.width === 595), 'súmula vertical disponível');
 const bundle = core.zipFiles([
   { name:core.filename(model, 'landscape'), bytes:core.encodePdf(pages) },
@@ -79,7 +80,7 @@ const bundle = core.zipFiles([
 assert.strictEqual(Buffer.from(bundle).readUInt32LE(0), 0x04034b50, 'pacote tem cabeçalho ZIP');
 assert.strictEqual(Buffer.from(bundle).readUInt16LE(bundle.length - 14), 2, 'pacote contém dois arquivos');
 if (process.env.SP_SUMULA_ZIP_SAMPLE) fs.writeFileSync(process.env.SP_SUMULA_ZIP_SAMPLE, bundle);
-assert.strictEqual(core.makePages(model, { attendance:true }).length, 5, 'lista de presença pode ser gerada à parte');
+assert.strictEqual(core.makePages(model, { attendance:true }).length, 6, 'lista de presença pode ser gerada à parte');
 assert.strictEqual(core.makeAttendancePages(model).length, 2, 'presença tem arquivo próprio, sem duplicar súmulas');
 const pdf = Buffer.from(core.encodePdf(pages));
 assert(pdf.subarray(0, 8).toString('latin1').startsWith('%PDF-1.4'));
@@ -101,11 +102,12 @@ const mixed = core.collect(t, [
   { id:'no-court', scheduledGameNumber:40, scheduledAt:at('2026-10-22','16:00'), category:'', p1:'Atleta Sem Quadra / Parceira Sem Quadra', p2:'Rival Sem Quadra / Parceira Rival' },
   { id:'no-date', scheduledGameNumber:50, court:'Quadra 2', category:'Fem Light', p1:'Atleta Sem Data / Parceira Sem Data', p2:'Rival Sem Data / Parceira Rival' },
 ]);
-assert.strictEqual(mixed.matches.length, 4, 'jogo sem data não entra na ordem prevista');
+assert.strictEqual(mixed.matches.length, 4, 'jogo sem data não entra na ordem datada');
+assert.strictEqual(mixed.undated.length, 1);
 for (const orientation of ['landscape','portrait']) {
   const sheets = core.makePages(mixed, { orientation });
-  assert.strictEqual(sheets.length, 3, 'categorias mistas na mesma quadra compartilham folha');
-  const headings = sheets.map(p => p.commands.join('\n').match(/\((Quadra [^)]*?)\)/)[1]);
+  assert.strictEqual(sheets.length, 4, 'categorias mistas na mesma quadra compartilham folha; sem data em outra');
+  const headings = sheets.slice(0,3).map(p => p.commands.join('\n').match(/\((Quadra [^)]*?)\)/)[1]);
   assert.deepStrictEqual(headings, ['Quadra 2','Quadra 10','Quadra a definir'],
     'quadras seguem ordem numérica e a quadra indefinida fica ao final');
   const court2 = sheets[0].commands.join('\n');
@@ -119,8 +121,10 @@ for (const orientation of ['landscape','portrait']) {
   assert.strictEqual(unknownCategory.length, 2, 'categoria sem nome aparece em duas linhas legíveis');
   assert(unknownCategory[0].includes('(Sem)') && unknownCategory[1].includes('(categoria)'),
     'rótulo da categoria não é truncado na coluna estreita');
-  assert(!sheets.some(p => p.commands.join('\n').includes('Atleta Sem Data')),
-    'jogo sem horário válido não é colocado em uma sequência inventada');
+  assert(!sheets.slice(0,3).some(p => p.commands.join('\n').includes('Atleta Sem Data')),
+    'jogo sem horário válido não é colocado em uma sequência datada inventada');
+  assert(sheets[3].commands.join('\n').includes('Atleta Sem Data'),
+    'jogo real sem data aparece na folha específica');
 }
 if (process.env.SP_SUMULA_SAMPLE) require('fs').writeFileSync(process.env.SP_SUMULA_SAMPLE, pdf);
 
@@ -184,4 +188,81 @@ const signatureCommands = core.makePages(longNames)[0].commands.filter(s =>
   / rg BT \/F1 /.test(s) && / 1 0 0 1 (57[1-9]|5[8-9][0-9]|6[0-9][0-9]|7[0-9][0-9]) [\d.]+ Tm /.test(s));
 assert.strictEqual(signatureCommands.length, 48,
   '48 atletas em uma página recebem uma linha cada, sem segunda linha sobreposta');
+// O roteiro usa o mesmo motor da eliminatória, sem expor atletas cuja classificação
+// ainda depende dos placares. Cada categoria tem sua própria chave até a final.
+globalThis.window = globalThis;
+require('../js/views/format2.js');
+require('../js/views/phases-engine.js');
+require('../js/views/tournaments-utils.js');
+const phases = globalThis.FORMAT2.compileToPhases({ disputa:'dupla', grupos:1,
+  classifAtiva:false, eliminatoria:{ ativa:true, openReiRainha:true,
+    reiRainhaCut:2, formacao:'performance', linhas:1, dupla:false, terceiro:true } },
+  { sport:'Beach Tennis' }).phases;
+const makeGroups = (category, n) => Array.from({ length:n }, (_, i) => ({
+  name:'Grupo '+(i+1)+' '+category, category,
+  players:Array.from({ length:4 }, (_, j) => category+' Atleta '+i+'-'+j), matches:[]
+}));
+const camis = { name:'CAMIS', sport:'Beach Tennis', phases, currentPhaseIndex:0,
+  combinedCategories:['Diamante','Ouro','Prata'],
+  fmt2:{ tieResolution:'singles_then_draw', tieSinglesPoints:5, tieSinglesMargin:1 },
+  groups:[...makeGroups('Diamante',8), ...makeGroups('Ouro',16), ...makeGroups('Prata',12)] };
+const before = JSON.stringify(camis);
+const plannedBefore = globalThis._tournamentGamesPlan(camis).totalPlanned;
+const futureModel = core.collect(camis, []);
+assert.strictEqual(JSON.stringify(camis), before, 'o roteiro não modifica torneio, fases nem grupos');
+assert.deepStrictEqual(futureModel.future.categories.map(b => [b.category,b.matches.length]),
+  [['Diamante',8],['Ouro',16],['Prata',14]], 'as três categorias têm chaves separadas');
+const advanced = JSON.parse(JSON.stringify(camis));
+advanced._phaseMaterialized = 0;
+const advancedResult = globalThis._phasesEngine.materializeNextPhase(advanced, g =>
+  g.players.map(name => ({name, displayName:name})), 'camis-advance');
+assert.strictEqual(advancedResult.ok, true, 'o avanço real materializa as três categorias');
+assert.strictEqual(advanced.matches.length, futureModel.future.categories.reduce((n, c) => n + c.matches.length, 0),
+  'súmula e avanço real têm a mesma quantidade de jogos');
+assert.strictEqual(new Set(advanced.matches.map(m => m.id)).size, advanced.matches.length,
+  'os IDs dos jogos de categorias diferentes não colidem');
+assert(advanced.matches.every(m => ['Diamante','Ouro','Prata'].includes(m.category)),
+  'nenhuma partida perde a categoria');
+const uncategorizedGroup = JSON.parse(JSON.stringify(camis));
+uncategorizedGroup._phaseMaterialized = 0;
+delete uncategorizedGroup.groups[1].category;
+const blockedAdvance = globalThis._phasesEngine.materializeNextPhase(uncategorizedGroup, g =>
+  g.players.map(name => ({name, displayName:name})), 'camis-blocked');
+assert.strictEqual(blockedAdvance.ok, false, 'grupo sem categoria bloqueia avanço');
+assert.deepStrictEqual(uncategorizedGroup.matches, undefined, 'avanço bloqueado não cria jogos');
+assert.strictEqual(uncategorizedGroup.currentPhaseIndex, 0, 'avanço bloqueado não muda fase');
+assert.strictEqual(futureModel.tiebreakGroups.length, 36,
+  'cada grupo Rei/Rainha tem reserva de desempate, sem criar partidas');
+const withCourt = core.collect({...camis, groups:[{...camis.groups[0],
+  matches:[{id:'abertura-diamante', category:'Diamante', court:'Quadra 1'}]}, ...camis.groups.slice(1)]}, []);
+assert.strictEqual(withCourt.tiebreakGroups[0].court, 'Quadra 1',
+  'o espaço livre informa a quadra do quarteto quando ela já foi definida');
+assert.strictEqual(globalThis._tournamentGamesPlan(camis).totalPlanned, plannedBefore,
+  'o roteiro não altera o total operacional calculado antes para as fases');
+for (const orientation of ['landscape','portrait']) {
+  const pages = core.makePages(futureModel, { orientation });
+  const printable = Buffer.from(core.encodePdf(pages)).toString('latin1');
+  if (process.env.SP_SUMULA_FUTURE_SAMPLE && orientation === 'landscape')
+    fs.writeFileSync(process.env.SP_SUMULA_FUTURE_SAMPLE, core.encodePdf(pages));
+  assert(printable.includes('Final') && printable.includes(String.raw`3\272 lugar`),
+    'súmula segue até a final e o terceiro lugar');
+  assert(printable.includes('Desempate, se necess'), 'há linhas livres de desempate');
+  assert(printable.includes(String.raw`Simples at\351 5 pontos`), 'a reserva acompanha a regra do CAMIS');
+  assert(!printable.includes('Atleta 0-0'), 'nomes ainda não classificados não são inventados no PDF');
+  assert(pages.every(p => p.width === (orientation === 'portrait' ? 595 : 842)));
+}
+const oneReal = { id:'real-com-outro-prefixo', phaseIndex:1, categoryName:'Ouro', round:1,
+  p1:'Dupla Alfa', p2:'Dupla Beta' };
+const partialModel = core.collect(camis, [oneReal]);
+assert(!partialModel.future.categories.some(b => b.category === 'Ouro'),
+  'um jogo real suprime toda a projeção da sua categoria, sem duplicar confrontos');
+assert.strictEqual(partialModel.undated.length, 1, 'jogo real sem horário ganha folha própria');
+assert(partialModel.pending.some(s => s.includes('Ouro:')), 'materialização parcial fica explícita');
+const noId = { phaseIndex:1, category:'Ouro', p1:'A', p2:'B', round:1 };
+assert.strictEqual(core.collect(camis, [noId,{...noId}]).undated.length, 1,
+  'espelhos sem ID, hora e quadra são deduplicados pela chave composta');
+const unknownCategory = core.collect(camis, [{ phaseIndex:1, p1:'A', p2:'B' }]);
+assert.strictEqual(unknownCategory.future.categories.length, 0,
+  'jogo real sem categoria não deixa projetar nenhuma chave em torneio multicategoria');
+assert(unknownCategory.pending.some(s => s.includes('sem categoria')));
 console.log('✅ Súmula por quadra: 12 jogos por folha, um set e assinatura única por atleta');

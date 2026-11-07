@@ -1699,6 +1699,20 @@ function _requireExplicitTeamDrawPlan(t, tId) {
   }
 }
 
+function _assertDrawParticipantsCategorized(t) {
+  if (!drawWindow || typeof drawWindow._isMulticategoria !== 'function' ||
+      typeof drawWindow._getParticipantCategories !== 'function' ||
+      typeof drawWindow._uncategorizedDrawParticipants !== 'function') {
+    throw _drawFail('failed-precondition', 'Validação de categorias indisponível. Sorteio não realizado.');
+  }
+  const missing = drawWindow._uncategorizedDrawParticipants(t);
+  if (!missing.length) return;
+  const names = missing.slice(0, 5).map(p =>
+    typeof p === 'string' ? p : (p && (p.displayName || p.name)) || '?');
+  throw _drawFail('failed-precondition',
+    `${missing.length} inscrito(s) sem categoria: ${names.join(', ')}${missing.length > 5 ? '…' : ''}. Corrija antes de sortear.`);
+}
+
 exports.drawRound = onCall(async (request) => {
   const uid = request.auth && request.auth.uid;
   const email = request.auth && request.auth.token && request.auth.token.email;
@@ -1738,6 +1752,7 @@ exports.drawRound = onCall(async (request) => {
        * organizador. A defesa vazava pela borda do erro. */
       { tId, uid, creatorUid: _p.creatorUid, adminUids: _p.adminUids });
   }
+  if (allowRedraw || !hasDrawnBracket(pre.data())) _assertDrawParticipantsCategorized(pre.data());
   // A fotografia do ensaio privado pertence ao próprio ato de sortear. Ela é
   // concluída e conferida antes da transação que cria qualquer partida.
   let rehearsalActivatedHere = false;
@@ -1830,6 +1845,8 @@ exports.drawRound = onCall(async (request) => {
       }
       _clearForRedraw(t);
     }
+
+    _assertDrawParticipantsCategorized(t);
 
     const res = _drawSeed.withSeed(_manualSeed, () => drawInitial(t, {
       idStamp: Date.parse(_agoraIsoTx), decisions: decisions
@@ -6610,7 +6627,12 @@ exports.advanceTournamentPhase = onCall(async (request) => {
       t.phaseGroupStandings[String(current)] = groupCapture.snapshot;
     }
     if (res.incrementalLeague && typeof drawWindow._phaseGenNextLeagueRound === 'function') drawWindow._phaseGenNextLeagueRound(t, res.phaseIndex);
-    if (res.built && res.built.needsDoubleElim && typeof drawWindow._buildDoubleElimBracket === 'function') drawWindow._buildDoubleElimBracket(t, { phaseIndex: t.currentPhaseIndex });
+    if (res.built && res.built.needsDoubleElim && typeof drawWindow._buildDoubleElimBracket === 'function') {
+      const deCategories = (res.built.categoryBuilds || []).filter(part => part.built && part.built.needsDoubleElim);
+      if (Array.isArray(t.combinedCategories) && t.combinedCategories.length > 1) deCategories.forEach(part =>
+        drawWindow._buildDoubleElimBracket(t, { phaseIndex: t.currentPhaseIndex, category: part.category }));
+      else drawWindow._buildDoubleElimBracket(t, { phaseIndex: t.currentPhaseIndex });
+    }
     if (res.built && res.built.needsRepechageDoubleElim && typeof drawWindow._buildRepechageDoubleElim === 'function') {
       const metas = res.built.repMetaByCat && res.built.repMetaByCat.length ? res.built.repMetaByCat : [res.built.repMeta];
       metas.forEach(meta => drawWindow._buildRepechageDoubleElim(t, meta, { phaseIndex: t.currentPhaseIndex }));
