@@ -6273,9 +6273,15 @@ function _refreshAutomaticPhaseTies(t, matchId, nowIso) {
   const plannedMonarchRounds = Number.parseInt((t.phases[current] || {}).rounds, 10) || 1;
   const resolved = entry => !!(entry.match && (entry.match.winner ||
     (entry.match.isBye && !entry.match.sobraAguardaDecisao) || entry.match.isSitOut));
-  const groupIdx = Number(touched.groupIdx);
+  const groupIdx = touched.groupIdx != null ? Number(touched.groupIdx)
+    : sourceGroups.findIndex(group => (group.matches || []).some(match =>
+      match && String(match.id) === String(matchId)));
   const poolId = 'group-' + groupIdx;
-  const groupGames = games.filter(entry => Number(entry.groupIdx) === groupIdx);
+  const groupMatchIds = new Set(((sourceGroups[groupIdx] || {}).matches || [])
+    .filter(match => match && match.id != null).map(match => String(match.id)));
+  const groupGames = games.filter(entry => entry.groupIdx != null
+    ? Number(entry.groupIdx) === groupIdx
+    : entry.match && groupMatchIds.has(String(entry.match.id)));
   if (monarchRounds.length && monarchRounds.length < plannedMonarchRounds) {
     _phaseTieCore.archivePoolDecisions(t, current, overall ? 'overall' : poolId, nowIso);
     delete t.phaseTieAutoError;

@@ -21,15 +21,17 @@ const tournament = { fmt2: { tieResolution: 'singles_then_draw', tieSinglesPoint
   tieSinglesMargin: 1 }, phases: [{ kind: 'classification' }, { kind: 'elimination' }],
 currentPhaseIndex: 0, groups: [group], rounds: [] };
 const phaseEngine = {
-  projectPhaseCfg: (phase, t, index) => index === 0 ? { kind: 'classification' }
+  projectPhaseCfg: (phase, t, index) => phase.kind === 'classification' ? { kind: 'classification' }
     : { kind: 'elimination', source: { type: 'previous_phase', scope: t.overall ? 'overall' : 'per_group',
       mapping: [{ dest: 'next', rankFrom: 1, rankTo: 2 }] } },
-  phaseGames: t => t.rounds.some(r => r.monarchGroups && r.monarchGroups.length)
+  phaseGames: (t, index) => t.rounds.some(r => r.monarchGroups && r.monarchGroups.length)
     ? t.rounds.flatMap(r => (r.monarchGroups || []).flatMap((g, groupIdx) =>
       g.matches.map(match => ({ match, groupIdx }))))
-    : t.groups.flatMap((g, groupIdx) => g.matches.map(match => ({ match, groupIdx }))),
+    : t.groups.flatMap((g, groupIdx) => g.matches.map(match => ({ match,
+      groupIdx: index > 0 ? undefined : groupIdx }))),
   prevPhaseGroups: t => t.rounds.some(r => r.monarchGroups && r.monarchGroups.length)
     ? t.rounds.filter(r => r.monarchGroups && r.monarchGroups.length).at(-1).monarchGroups : t.groups,
+  bracketPhaseGroups: t => t.groups,
   ehReiRainhaRodadaUnica: () => true,
   usaRankingGeral: scope => scope === 'overall',
   globalStandings: (groups, calculate) => groups.flatMap(calculate),
@@ -108,6 +110,14 @@ const multi = { fmt2: tournament.fmt2, phases: [{ kind: 'classification', rounds
 refresh(multi, 'r2a', '2026-11-07T15:07:00Z');
 assert(multi.phaseTieDecisions['0']['group-0:1:2'],
   'na última rodada, o grupo completo recebe a simples antes de outros grupos');
+const laterGroup = { name: 'Ouro · Grupo 1', matches: group.matches,
+  rankingRows: group.rows };
+const later = { fmt2: tournament.fmt2, phases: [
+  { kind: 'elimination' }, { kind: 'classification' }, { kind: 'elimination' }
+], currentPhaseIndex: 1, rounds: [], groups: [laterGroup] };
+refresh(later, 'm3', '2026-11-07T15:07:30Z');
+assert(later.phaseTieDecisions['1']['group-0:1:2'],
+  'desempate também surge numa classificatória posterior à primeira fase');
 const overall = { fmt2: tournament.fmt2, phases: tournament.phases,
   currentPhaseIndex: 0, groups: [group, other], rounds: [], overall: true,
   phaseTieAutoError: { phaseIndex: 0, message: 'falha anterior' },

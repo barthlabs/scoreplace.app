@@ -2856,7 +2856,8 @@
       return Object.keys(byM).sort(function (a, b) { return byM[a].groupIdx - byM[b].groupIdx; }).map(function (k) {
         var g = byM[k];
         var st = _monarchStandings(g.matches, Object.keys(g.names));
-        return { name: g.name, standings: st.map(function (s) { return g.names[s.name] || { name: s.name, displayName: s.name }; }) };
+        return { name: g.name, groupIdx: g.groupIdx, matches: g.matches,
+          standings: st.map(function (s) { return g.names[s.name] || { name: s.name, displayName: s.name }; }) };
       });
     }
 
@@ -2878,7 +2879,8 @@
           });
         });
         var lstI = _monarchStandings(leagueMs, Object.keys(lnamesI));
-        return [{ name: lname, standings: lstI.map(function (s) { return lnamesI[s.name] || { name: s.name, displayName: s.name }; }) }];
+        return [{ name: lname, groupIdx: 0, matches: leagueMs,
+          standings: lstI.map(function (s) { return lnamesI[s.name] || { name: s.name, displayName: s.name }; }) }];
       }
       var lobjs = {};
       leagueMs.forEach(function (m) {
@@ -2887,7 +2889,8 @@
       });
       var lst = standingsDaFaseAnterior({ matches: leagueMs, players: Object.keys(lobjs) }, t,
         { tiebreakers: t.tiebreakers, rankingPrimary: t.rankingPrimary }, false, phaseIdx);
-      return [{ name: lname, standings: lst.map(function (s) { return lobjs[s.name] || { name: s.name, displayName: s.name }; }) }];
+      return [{ name: lname, groupIdx: 0, matches: leagueMs,
+        standings: lst.map(function (s) { return lobjs[s.name] || { name: s.name, displayName: s.name }; }) }];
     }
 
     var groupMs = pm.filter(function (m) { return m.bracket === 'group'; });
