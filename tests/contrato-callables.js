@@ -264,6 +264,7 @@ const TABELA = [
   { nome: "splitPair", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "startTournament", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "startTournamentFeeCheckout", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
+  { nome: "startTournamentRehearsal", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "submitTournamentPaymentProof", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "substituteLigaGroupDirect", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "syncProfileTournamentCategory", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
