@@ -1,3 +1,4 @@
+// 2.5.108 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.107 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.106 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.105 — Excluir uma reserva individual sem conta remove o card e seu espelho
