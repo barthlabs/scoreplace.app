@@ -81,7 +81,7 @@ const service = makeService({ db, HttpsError });
   assert.equal(recovered.ok, true);
   assert.deepEqual((await ref.get()).data(), root);
   assert.equal((await ref.collection('matches').get()).empty, true);
-  // Force more than one delete and write batch, including nested documents.
+  // Force more than one write batch, including nested documents.
   // Throw after Firestore commits a batch to emulate the function dying before
   // it can acknowledge progress. The same callable must safely resume.
   await ref.collection('fixture').doc('root').set({ before: true });
@@ -116,6 +116,8 @@ const service = makeService({ db, HttpsError });
   await ref.collection('matches').doc('temporary').set({ score: '6x4' });
   await assert.rejects(interruptedService(1).restore(request()), /interrupção simulada/);
   assert.equal((await ref.get()).data().rehearsal.state, 'resetting');
+  assert.equal((await ref.collection('registrations').get()).size, 144);
+  assert.ok((await ref.collection('matches').doc('temporary').get()).exists);
   assert.equal((await service.restore(request())).ok, true);
   assert.deepEqual((await ref.get()).data(), root);
   assert.equal((await ref.collection('fixture').doc('root').collection('slots').get()).size, 420);
@@ -123,10 +125,11 @@ const service = makeService({ db, HttpsError });
 
   await service.activate(request());
   await ref.collection('matches').doc('temporary').set({ wo: true });
-  // Two delete batches, then the first write batch. A parent-first restore
-  // makes its partial tree visible to the next recursive deletion.
+  // Two write batches, then the extras deletion. No original registration is
+  // ever removed, even when the process stops after that deletion commits.
   await assert.rejects(interruptedService(3).restore(request()), /interrupção simulada/);
   assert.equal((await ref.get()).data().rehearsal.state, 'resetting');
+  assert.equal((await ref.collection('registrations').get()).size, 144);
   assert.equal((await service.restore(request())).ok, true);
   assert.deepEqual((await ref.get()).data(), root);
   assert.equal((await ref.collection('fixture').doc('root').collection('slots').get()).size, 420);

@@ -194,9 +194,10 @@ function makeService({ db, HttpsError }) {
     }
   }
 
-  async function deleteTree(ref) {
+  async function deleteTree(ref, keepPaths) {
     const tree = await readTree(ref);
-    const paths = tree.map(item => item.path).sort((a, b) => b.split('/').length - a.split('/').length);
+    const paths = tree.map(item => item.path).filter(path => !keepPaths.has(path))
+      .sort((a, b) => b.split('/').length - a.split('/').length);
     for (let i = 0; i < paths.length; i += 400) {
       const batch = db.batch();
       paths.slice(i, i + 400).forEach(path => batch.delete(db.doc(`${ref.path}/${path}`)));
@@ -236,13 +237,13 @@ function makeService({ db, HttpsError }) {
     const base = (await baseline.get()).data();
     const expected = { root: base.root, tree: base.tree, summary: base.summary || null };
     if (fingerprint(expected) !== base.hash) fail('data-loss', 'Fotografia não confere; reset interrompido sem excluir dados.');
-    // `tournamentMirror` espelha DENTRO de tournaments/{id} (matches,
-    // inscritos, history...). Apagar e repor a árvore completa também repõe
-    // o espelho; reexecutar o gatilho final após a restauração poderia mudar
-    // o estado que acabamos de comparar com a fotografia.
-    await deleteTree(ref);
+    // Restore the photograph before deleting rehearsal-only documents. An
+    // interruption cannot leave the tournament without its original roster.
+    // Both phases are repeatable while the root stays locked in `resetting`.
     await baseline.update({ step: 'restoring' });
     await writeTree(ref, base.tree);
+    await baseline.update({ step: 'deleting-extras' });
+    await deleteTree(ref, new Set(base.tree.map(item => item.path)));
     const summaryRef = db.collection('tournaments_summary').doc(id);
     if (base.summary == null) await summaryRef.delete();
     else await summaryRef.set(base.summary);
