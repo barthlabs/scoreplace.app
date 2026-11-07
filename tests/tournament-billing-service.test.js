@@ -104,6 +104,47 @@ const service = makeService({ db, HttpsError, FieldValue, now:() => clockMs, car
   charges:{ retrieve:async () => recoveryCharge || { payment_intent:'pi_test1' } }
 }) });
 (async () => {
+  const freeTournamentId = 'tour_1790000000003_0123456789abcdef0123456789abcdef';
+  const freePath = 'tournaments/' + freeTournamentId;
+  const freeBase = { ...structuredClone(docs.get(parent)),
+    registrationSettings:{ source:'scoreplace', pricing:{ mode:'single', cents:0 } },
+    canonicalRegistrationMigration:{ fingerprint:'native:' + freeTournamentId, registrationCount:0 } };
+  docs.set(freePath, freeBase);
+  const freeTerms = (await service.status({ auth:{ uid:'owner' },
+    data:{ tournamentId:freeTournamentId } })).terms;
+  await service.acceptTerms({ auth:{ uid:'owner' }, data:{ tournamentId:freeTournamentId,
+    agree:true, termsVersion:freeTerms.version, termsHash:freeTerms.hash } });
+  for (const count of [8, 12, 16]) {
+    const previous = docs.get(freePath).canonicalRegistrationMigration.registrationCount;
+    for (let number = previous; number < count; number++) {
+      docs.set(freePath + '/registrations/r' + number, { registrationId:'r' + number,
+        participantKind:'account', participantUid:'u' + number, status:'confirmed' });
+    }
+    docs.set(freePath, { ...docs.get(freePath),
+      canonicalRegistrationMigration:{ fingerprint:'native:' + freeTournamentId, registrationCount:count } });
+    const status = await service.status({ auth:{ uid:'owner' }, data:{ tournamentId:freeTournamentId } });
+    assert.strictEqual(status.participantCount, count);
+    assert.strictEqual(status.feeExempt, true);
+    const prepared = await service.prepare({ auth:{ uid:'owner' }, data:{ tournamentId:freeTournamentId } });
+    assert.strictEqual(prepared.quote.totalCents, 0);
+    if (count === 12) {
+      const simulatedPaid = await service.estimate({ auth:{ uid:'owner' }, data:{
+        tournamentId:freeTournamentId, currency:'BRL', passFinancialFee:false, passServiceFee:false,
+        rows:[{ label:'Categoria paga', registrationCents:1000, participantCount:12 }] } });
+      assert.strictEqual(simulatedPaid.feeExempt, false,
+        'simular cobrança de inscrição pelo aplicativo não pode prometer isenção');
+    }
+  }
+  docs.set(freePath + '/registrations/r16', { registrationId:'r16', participantKind:'account',
+    participantUid:'u16', status:'confirmed' });
+  docs.set(freePath, { ...docs.get(freePath),
+    canonicalRegistrationMigration:{ fingerprint:'native:' + freeTournamentId, registrationCount:17 },
+    matches:[{ id:'j1' }], status:'in_progress' });
+  assert.strictEqual((await service.status({ auth:{ uid:'owner' },
+    data:{ tournamentId:freeTournamentId } })).feeExempt, false);
+  const recoted = await service.prepare({ auth:{ uid:'owner' }, data:{ tournamentId:freeTournamentId } });
+  assert.strictEqual(recoted.quote.totalCents, 17 * 2000);
+  assert.strictEqual(recoted.settlement.state, 'pending');
   const feeTournamentId = 'tour_1790000000001_0123456789abcdef0123456789abcdef';
   const feePath = 'tournaments/' + feeTournamentId;
   docs.set(feePath, { ...structuredClone(docs.get(parent)), creatorUid:'dev',
@@ -533,7 +574,8 @@ const service = makeService({ db, HttpsError, FieldValue, now:() => clockMs, car
   assert.deepStrictEqual(await service.reconcileReversedTournamentFee({ auth:{ uid:'dev' }, data:recoveryInput }),
     { paid:true, changed:true });
   assert.notStrictEqual(docs.get(parent).billingQuote.fingerprint, originalQuote.fingerprint);
-  assert.doesNotThrow(() => BillingCore.assertCanPublishPendingDraw('publish', docs.get(parent)));
+  assert.doesNotThrow(() => BillingCore.assertCanPublishPendingDraw('publish', docs.get(parent),
+    docs.get(parent).billingQuote.fingerprint, 0, 0, 2));
   assert.strictEqual(docs.get(parent).billingSettlement.method, 'pix_manual_recovery');
   assert.strictEqual(docs.get(parent).billingSettlement.recoveryOf, originalQuote.quoteId);
   assert.strictEqual(docs.get(parent).billingContract.quoteId, docs.get(parent).billingQuote.quoteId);

@@ -25,6 +25,16 @@ function hasDraw(t) {
     .some(key => Number(t._nPartes[key]) > 0);
   return direct || split || !!t.pendingDraw || !!t.drawSelectionDone || !!t.tournamentStarted;
 }
+function canRecoteAfterFreeDraw(t, live) {
+  const settlement = t.billingSettlement || {};
+  return hasDraw(t) && live && live.participantCount >= 17 &&
+    t.billingContract?.feeCentsPerPerson > 0 &&
+    !(t.billingQuote?.totalCents > 0) && !t.billingQuote?.cardAttemptId &&
+    t.billingPixReport?.state !== 'reported' && settlement.state !== 'reversed' &&
+    !(settlement.amountCents > 0) &&
+    (!settlement.state || settlement.state === 'pending' ||
+      settlement.state === 'paid' && settlement.method === 'waiver');
+}
 function grossUp(netCents, rateBps, fixedCents) {
   if (!money(netCents) || !Number.isSafeInteger(rateBps) || rateBps < 0 || rateBps >= 10000 || !money(fixedCents)) {
     throw new Error('Tabela financeira indisponível.');
@@ -66,10 +76,10 @@ function makeService({ db, HttpsError, FieldValue, stripe, now = Date.now, cardO
       || typeof input.passServiceFee !== 'boolean' || typeof input.passFinancialFee !== 'boolean') {
       fail(HttpsError, 'invalid-argument', 'Dados da simulação inválidos.');
     }
-    let fee = DEFAULT_SERVICE_FEE_CENTS;
+    let fee = DEFAULT_SERVICE_FEE_CENTS, tournament = null;
     if (input.tournamentId != null) {
       const snap = await tournamentRef(input.tournamentId).get();
-      const tournament = snap.exists && snap.data();
+      tournament = snap.exists && snap.data();
       if (!organizer(tournament, uid)) fail(HttpsError, 'permission-denied', 'Só a organização acessa esta cobrança.');
       if (!tournament.billingContract || tournament.billingContract.schema !== 1) {
         fail(HttpsError, 'failed-precondition', 'Este torneio não tem cobrança retroativa.');
@@ -78,7 +88,7 @@ function makeService({ db, HttpsError, FieldValue, stripe, now = Date.now, cardO
     }
     if (!money(fee)) fail(HttpsError, 'failed-precondition', 'Tarifa do torneio indisponível.');
     let count = 0;
-    const estimates = rows.map(row => {
+    rows.forEach(row => {
       if (!row || typeof row.label !== 'string' || !row.label.trim() || row.label.length > 120
         || !money(row.registrationCents) || !Number.isSafeInteger(row.participantCount)
         || row.participantCount < 0 || row.participantCount > 100000) {
@@ -86,15 +96,22 @@ function makeService({ db, HttpsError, FieldValue, stripe, now = Date.now, cardO
       }
       count += row.participantCount;
       if (count > 100000) fail(HttpsError, 'invalid-argument', 'Quantidade acima do limite.');
+    });
+    const freeSimulation = !input.passServiceFee && rows.every(row => row.registrationCents === 0);
+    const exempt = tournament
+      ? fee === 0 || Core.isFeeExempt(tournament, count) && freeSimulation
+      : fee === 0 || count <= 16 && freeSimulation;
+    const effectiveFee = exempt ? 0 : fee;
+    const estimates = rows.map(row => {
       const result = simulateTournamentFees({ currency:'BRL', registrationCents:row.registrationCents,
-        participantCount:row.participantCount, serviceFeeCents:fee,
+        participantCount:row.participantCount, serviceFeeCents:effectiveFee,
         passServiceFee:input.passServiceFee, passFinancialFee:input.passFinancialFee,
         method:{ kind:'pix_proprio', currency:'BRL', rateBps:0, fixedCents:0 } });
       if (!result.ok) fail(HttpsError, 'invalid-argument', 'Valor da simulação acima do limite.');
       return { label:row.label.trim(), participantCount:row.participantCount, ...result };
     });
     const sum = key => estimates.reduce((total, row) => total + row[key] * row.participantCount, 0);
-    return { currency:'BRL', method:'pix_proprio', serviceFeeCents:fee, rows:estimates,
+    return { currency:'BRL', method:'pix_proprio', serviceFeeCents:effectiveFee, feeExempt:exempt, rows:estimates,
       totals:{ participantCount:count, chargedCents:sum('totalCents'),
         financialFeeCents:sum('financialFeeCents'), serviceFeeCents:sum('serviceFeeCents'),
         organizerCents:sum('organizerCents') } };
@@ -141,8 +158,8 @@ function makeService({ db, HttpsError, FieldValue, stripe, now = Date.now, cardO
       if (t.isSandbox === true) return { sandbox:true, financeAdmin:false };
       if (!t.billingContract) return { legacy:true, financeAdmin };
       const terms = termsCatalog(cfg, t);
-      const live = t.billingQuote ? await liveSnapshot(tx, ref, t) : null;
-      const stale = !!(live && live.fingerprint !== t.billingQuote.fingerprint);
+      const live = await liveSnapshot(tx, ref, t);
+      const stale = !!(t.billingQuote && live.fingerprint !== t.billingQuote.fingerprint);
       let pixReport = t.billingPixReport || null;
       if (pixReport && pixReport.quoteId === t.billingQuote?.quoteId) {
         const privateSnap = await tx.get(ref.collection('billingPixReports').doc(pixReport.quoteId));
@@ -157,8 +174,10 @@ function makeService({ db, HttpsError, FieldValue, stripe, now = Date.now, cardO
         cardAvailable:cardOperational && cardCatalogReady(cfg, now()),
         cardTotalCents:t.billingQuote && cardOperational && cardCatalogReady(cfg, now())
           ? grossUp(t.billingQuote.totalCents, cfg.cardFeeBps, cfg.cardFixedCents) : null,
-        unreviewedProofCount:live ? live.unreviewedProofCount : null,
-        unsettledPaymentCount:live ? live.unsettledPaymentCount : null,
+        participantCount:live.participantCount,
+        feeExempt:Core.isFeeExempt(t, live.participantCount),
+        unreviewedProofCount:live.unreviewedProofCount,
+        unsettledPaymentCount:live.unsettledPaymentCount,
         stale };
     });
   }
@@ -168,7 +187,9 @@ function makeService({ db, HttpsError, FieldValue, stripe, now = Date.now, cardO
     const ref = tournamentRef(request.data && request.data.tournamentId);
     return db.runTransaction(async tx => {
       const t = await current(tx, ref, uid);
-      if (hasDraw(t)) fail(HttpsError, 'failed-precondition', 'As condições não podem mudar depois do sorteio.');
+      if (hasDraw(t) && !canRecoteAfterFreeDraw(t, await liveSnapshot(tx, ref, t))) {
+        fail(HttpsError, 'failed-precondition', 'As condições não podem mudar depois do sorteio.');
+      }
       const cfg = (await tx.get(configRef)).data() || {};
       const terms = termsCatalog(cfg, t);
       if (!terms) fail(HttpsError, 'failed-precondition', 'Condições financeiras ainda não configuradas.');
@@ -245,21 +266,23 @@ function makeService({ db, HttpsError, FieldValue, stripe, now = Date.now, cardO
     if (voucherCode.length > 64) fail(HttpsError, 'invalid-argument', 'Voucher inválido.');
     return db.runTransaction(async tx => {
       const t = await current(tx, ref, uid);
-      if (t.status !== 'closed') fail(HttpsError, 'failed-precondition', 'Feche as inscrições antes de calcular a taxa.');
-      if (t.billingSettlement?.state === 'paid') {
+      const live = await liveSnapshot(tx, ref, t);
+      const lateFreeRecote = canRecoteAfterFreeDraw(t, live);
+      if (t.status !== 'closed' && !lateFreeRecote) fail(HttpsError, 'failed-precondition', 'Feche as inscrições antes de calcular a taxa.');
+      if (t.billingSettlement?.state === 'paid' &&
+          !(t.billingSettlement.method === 'waiver' && t.billingSettlement.amountCents === 0)) {
         fail(HttpsError, 'failed-precondition', 'Pagamento já confirmado. Uma alteração posterior do elenco exige acerto financeiro assistido.');
       }
       if (t.billingSettlement?.state === 'reversed') {
         fail(HttpsError, 'failed-precondition', 'Pagamento estornado ou contestado; é necessário acerto financeiro assistido.');
       }
-      if (hasDraw(t)) {
+      if (hasDraw(t) && !lateFreeRecote) {
         fail(HttpsError, 'failed-precondition', 'A cobrança não pode ser recalculada depois do sorteio.');
       }
       const cfg = (await tx.get(configRef)).data() || {};
       if (!termsAccepted(t, termsCatalog(cfg, t))) {
         fail(HttpsError, 'failed-precondition', 'Aceite as condições financeiras atuais antes de calcular a cobrança.');
       }
-      const live = await liveSnapshot(tx, ref, t);
       if (live.unreviewedProofCount > 0) {
         fail(HttpsError, 'failed-precondition', 'Confira os comprovantes de inscrição pendentes antes de calcular a cobrança.');
       }
@@ -278,7 +301,8 @@ function makeService({ db, HttpsError, FieldValue, stripe, now = Date.now, cardO
         }
         discountCents = voucher.discountCents;
       }
-      const amount = Core.quote(live, t.billingContract.feeCentsPerPerson, discountCents);
+      const amount = Core.quote(live, t.billingContract.feeCentsPerPerson, discountCents,
+        t.registrationSettings ?? null);
       const revision = t.billingContract.feeRevision == null ? 0 : t.billingContract.feeRevision;
       if (!Number.isSafeInteger(revision) || revision < 0) {
         fail(HttpsError, 'failed-precondition', 'Histórico da taxa indisponível.');
@@ -656,7 +680,8 @@ function makeService({ db, HttpsError, FieldValue, stripe, now = Date.now, cardO
         fail(HttpsError, 'failed-precondition', 'Resolva as inscrições com pagamento pendente antes da regularização.');
       }
       let amount;
-      try { amount = Core.quote(live, t.billingContract.feeCentsPerPerson, q.discountCents || 0); }
+      try { amount = Core.quote(live, t.billingContract.feeCentsPerPerson, q.discountCents || 0,
+        t.registrationSettings ?? null); }
       catch (_) { fail(HttpsError, 'failed-precondition', 'Não foi possível calcular a dívida atual.'); }
       if (amount.totalCents !== receivedCents) {
         fail(HttpsError, 'failed-precondition', 'O Pix recebido não corresponde à dívida atual do torneio.');

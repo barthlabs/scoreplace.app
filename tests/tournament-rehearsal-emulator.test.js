@@ -68,6 +68,12 @@ const service = makeService({ db, HttpsError });
   assert.equal((await ref.collection('resultQueue').get()).empty, true);
   assert.equal((await ref.collection('matches').doc('m1').collection('events').get()).empty, true);
   await assert.rejects(service.restore(request()), error => error.code === 'failed-precondition');
+  await ref.update({ status:'closed' });
+  const closedRehearsal = await service.activate(request());
+  assert.equal(closedRehearsal.ok, true, 'inscrições encerradas também permitem iniciar ensaio');
+  await service.restore(request());
+  assert.equal((await ref.get()).data().status, 'closed', 'a restauração devolve o estado fechado');
+  await ref.update({ status:'open' });
   // A final activation check can fail after the full baseline was saved.
   // This state must remain recoverable from the same restore action.
   const retry = await service.activate(request());

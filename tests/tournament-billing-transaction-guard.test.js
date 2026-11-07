@@ -11,7 +11,7 @@ assert(pendingRouteStart > 0 && pendingRouteEnd > pendingRouteStart, 'rota da pr
 const pendingRoute = source.slice(pendingRouteStart, pendingRouteEnd);
 const txStart = pendingRoute.indexOf('return db.runTransaction(async tx=>{');
 const pendingRead = pendingRoute.indexOf('const t=await _leTorneio(tx,ref,tId)', txStart);
-const pendingGuard = pendingRoute.indexOf('_tournamentBilling.assertCanPublishPendingDraw(action, t)', pendingRead);
+const pendingGuard = pendingRoute.indexOf('_tournamentBilling.assertCanPublishPendingDraw(action, t,', pendingRead);
 const pendingWrite = pendingRoute.indexOf('_gravaTorneio(tx,ref,t,antes,{agoraIso})', pendingGuard);
 assert(txStart >= 0 && pendingRead > txStart && pendingGuard > pendingRead && pendingWrite > pendingGuard,
   'a porta checa a quitação na transação, após leitura e antes de qualquer gravação');
@@ -73,7 +73,8 @@ function tx() {
   await assert.doesNotReject(read(tx(), ref, 'test'), 'legado sem contrato não muda');
   parent = { billingContract:{ schema:1 }, isSandbox:true, participants:[] };
   await assert.doesNotReject(read(tx(), ref, 'test'), 'sandbox não cobra');
-  const paidBefore = { billingContract:{ schema:1, quoteId:'q1' },
+  const paidBefore = { billingContract:{ schema:1, quoteId:'q1', feeCentsPerPerson:2000 },
+    registrationSettings:{ source:'scoreplace', pricing:{ mode:'single', cents:100 } },
     billingSettlement:{ state:'paid', quoteId:'q1', fingerprint:second }, status:'closed' };
   const writeTx = tx(), ctx = { agoraIso:'2026-10-29T12:00:00.000Z' };
   assert.throws(() => write(writeTx, ref, { ...paidBefore, matches:[{}] }, null, ctx),

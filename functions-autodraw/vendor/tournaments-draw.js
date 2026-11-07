@@ -281,7 +281,7 @@ window._realTournamentRehearsalAction = function (tId, action) {
   var isReset = action === 'reset';
   if (isReset ? !(t.rehearsal && (t.rehearsal.state === 'active' || t.rehearsal.state === 'resetting' || t.rehearsal.step === 'verification-failed'))
               : !!(t.rehearsal && t.rehearsal.state && t.rehearsal.state !== 'capturing')) return;
-  showAlertDialog(isReset ? '🔄 Restaurar o torneio antes do ensaio?' : '🧪 Iniciar ensaio neste torneio?',
+  showAlertDialog(isReset ? '🔄 Restaurar estado anterior ao teste?' : '🧪 Iniciar teste com restauração?',
     isReset
       ? 'O servidor vai apagar todo o sorteio, jogos, placares, W.O. e dados criados no ensaio. Só concluirá depois de comparar o banco com a fotografia anterior. Os inscritos, números e categorias voltarão exatamente ao estado capturado.'
       : 'O servidor vai fotografar as inscrições e configurações atuais antes de qualquer sorteio. Durante o ensaio, inscrições ficam congeladas e notificações silenciadas. Ao final, use o botão de restaurar.',
@@ -307,7 +307,7 @@ window._realTournamentRehearsalAction = function (tId, action) {
           if (typeof showNotification === 'function') showNotification('Ensaio não concluído',
             (error && error.message) || 'Verifique o estado do torneio antes de prosseguir.', 'error');
         });
-    }, { type: isReset ? 'danger' : 'warning', confirmText: isReset ? 'Sim, restaurar' : 'Iniciar ensaio', cancelText: 'Cancelar' });
+    }, { type: isReset ? 'danger' : 'warning', confirmText: isReset ? 'Sim, restaurar' : 'Iniciar teste', cancelText: 'Cancelar' });
 };
 
 // Restauração explicitamente habilitada pela organização para repetir um teste

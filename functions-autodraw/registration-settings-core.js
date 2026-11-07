@@ -1,4 +1,5 @@
 'use strict';
+const { isPaidRegistration } = require('./vendor/tournament-billing-core.js');
 
 // Valores escolhidos pela organização, em centavos. Cobrança e repasse exigem
 // checkout e confirmação de pagamento separados; este módulo não os simula.
@@ -61,15 +62,6 @@ function validate(value, categories) {
   return { source:'scoreplace', pricing:normalizedPricing, ...passThrough,
     paymentMethods:{ organizerPixKey:pixKey, organizerPixName:pixName,
       organizerPixCity:pixCity, organizerPaymentUrl:paymentUrl } };
-}
-
-function isPaidRegistration(value) {
-  if (!value || typeof value !== 'object') return false;
-  const pricing = value.pricing;
-  if (value.passServiceFeeToParticipant === true) return true;
-  if (!pricing || typeof pricing !== 'object') return false;
-  if (pricing.mode === 'single') return Number(pricing.cents) > 0;
-  return pricing.mode === 'category' && Object.values(pricing.centsByCategory || {}).some(cents => Number(cents) > 0);
 }
 
 function requiresClosedEnrollment(value) {

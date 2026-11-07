@@ -44,11 +44,33 @@ function rosterSnapshot(registrations, placeholderReservations) {
   return { participantCount, unreviewedProofCount, unsettledPaymentCount, canonicalJson: JSON.stringify(records) };
 }
 
-function quote(snapshot, feeCentsPerPerson, discountCents = 0) {
+function isPaidRegistration(value) {
+  if (!value || typeof value !== 'object') return false;
+  const pricing = value.pricing;
+  if (value.passServiceFeeToParticipant === true) return true;
+  if (!pricing || typeof pricing !== 'object') return false;
+  if (pricing.mode === 'single') return Number(pricing.cents) > 0;
+  return pricing.mode === 'category' && Object.values(pricing.centsByCategory || {}).some(cents => Number(cents) > 0);
+}
+
+function isFeeExempt(tournament, participantCount) {
+  const fee = tournament && tournament.billingContract && tournament.billingContract.feeCentsPerPerson;
+  if (!Number.isSafeInteger(participantCount) || participantCount < 0 ||
+      !Number.isSafeInteger(fee) || fee < 0) throw new Error('Dados da isenção inválidos.');
+  if (fee === 0) return true;
+  const settings = tournament.registrationSettings;
+  return participantCount <= 16 && !!settings && typeof settings === 'object' &&
+    ['scoreplace', 'external'].includes(settings.source) && !isPaidRegistration(settings);
+}
+
+function quote(snapshot, feeCentsPerPerson, discountCents = 0, registrationSettings) {
   if (!snapshot || !Number.isSafeInteger(snapshot.participantCount) || snapshot.participantCount < 0 ||
       !Number.isSafeInteger(feeCentsPerPerson) || feeCentsPerPerson < 0 ||
-      !Number.isSafeInteger(discountCents) || discountCents < 0) throw new Error('Valor da cobrança inválido.');
-  const subtotalCents = snapshot.participantCount * feeCentsPerPerson;
+      !Number.isSafeInteger(discountCents) || discountCents < 0 || registrationSettings === undefined) {
+    throw new Error('Valor ou contexto da cobrança inválido.');
+  }
+  const exempt = isFeeExempt({ billingContract:{ feeCentsPerPerson }, registrationSettings }, snapshot.participantCount);
+  const subtotalCents = exempt ? 0 : snapshot.participantCount * feeCentsPerPerson;
   if (!Number.isSafeInteger(subtotalCents)) throw new Error('Cobrança acima do limite seguro.');
   return { participantCount: snapshot.participantCount, feeCentsPerPerson,
     subtotalCents, discountCents: Math.min(discountCents, subtotalCents),
@@ -65,10 +87,15 @@ function structuralGeneration(before, after) {
     || (before && before.status !== 'in_progress' && after && after.status === 'in_progress');
 }
 
-function assertCanDraw(before, after, liveFingerprint, unreviewedProofCount, unsettledPaymentCount) {
+function assertCanDraw(before, after, liveFingerprint, unreviewedProofCount, unsettledPaymentCount, participantCount) {
   const contract = after && after.billingContract || before && before.billingContract;
   if (!contract || contract.schema !== 1 || before && before.isSandbox === true) return;
   if (!structuralGeneration(before, after)) return;
+  if (!before || !before.billingContract || !after ||
+      JSON.stringify(before.billingContract) !== JSON.stringify(after.billingContract) ||
+      JSON.stringify(before.registrationSettings || null) !== JSON.stringify(after.registrationSettings || null)) {
+    throw new Error('Contrato ou regra de inscrição mudou durante o sorteio.');
+  }
   if (before && before.status === 'open' || after && after.status === 'open') {
     throw new Error('Feche as inscrições antes de sortear ou iniciar o torneio.');
   }
@@ -84,23 +111,51 @@ function assertCanDraw(before, after, liveFingerprint, unreviewedProofCount, uns
   if (unsettledPaymentCount > 0) {
     throw new Error('Resolva as inscrições aguardando pagamento ou com comprovante recusado antes do sorteio.');
   }
+  if (!Number.isSafeInteger(participantCount) || participantCount < 0 || !liveFingerprint) {
+    throw new Error('A contagem canônica de inscritos não foi verificada nesta transação.');
+  }
   const settlement = before && before.billingSettlement;
+  if (isFeeExempt(before, participantCount)) {
+    if (settlement?.state === 'reversed' || settlement?.amountCents > 0 ||
+        before.billingQuote?.totalCents > 0 || before.billingQuote?.cardAttemptId ||
+        before.billingPixReport?.state === 'reported') {
+      throw new Error('Cobrança anterior requer conciliação antes do sorteio.');
+    }
+    return;
+  }
   if (!liveFingerprint || !settlement || settlement.state !== 'paid' ||
       settlement.fingerprint !== liveFingerprint || settlement.quoteId !== contract.quoteId) {
     throw new Error('Taxa do torneio pendente ou elenco alterado. Feche as inscrições, atualize a cobrança e confirme o pagamento antes do sorteio.');
   }
 }
 
-function assertCanPublishPendingDraw(action, tournament) {
+function assertCanPublishPendingDraw(action, tournament, liveFingerprint, unreviewedProofCount, unsettledPaymentCount, participantCount) {
   if (action !== 'publish' || !tournament || tournament.isSandbox === true) return;
   const contract = tournament.billingContract;
   if (!contract || contract.schema !== 1) return;
+  if (!Number.isSafeInteger(participantCount) || participantCount < 0 || !liveFingerprint ||
+      !Number.isSafeInteger(unreviewedProofCount) || !Number.isSafeInteger(unsettledPaymentCount)) {
+    throw new Error('Elenco canônico não verificado para publicar o sorteio.');
+  }
+  if (unreviewedProofCount > 0 || unsettledPaymentCount > 0) {
+    throw new Error('Resolva os pagamentos individuais antes de publicar o sorteio.');
+  }
   const settlement = tournament.billingSettlement;
-  if (!settlement || settlement.state !== 'paid' || settlement.quoteId !== contract.quoteId) {
+  if (isFeeExempt(tournament, participantCount)) {
+    if (settlement?.state === 'reversed' || settlement?.amountCents > 0 ||
+        tournament.billingQuote?.totalCents > 0 || tournament.billingQuote?.cardAttemptId ||
+        tournament.billingPixReport?.state === 'reported') {
+      throw new Error('Cobrança anterior requer conciliação antes de publicar o sorteio.');
+    }
+    return;
+  }
+  if (!settlement || settlement.state !== 'paid' || settlement.quoteId !== contract.quoteId ||
+      settlement.fingerprint !== liveFingerprint) {
     throw new Error('A quitação da taxa não está válida para publicar este sorteio. Solicite conferência financeira.');
   }
 }
 
-const api = { rosterSnapshot, quote, structuralGeneration, assertCanDraw, assertCanPublishPendingDraw };
+const api = { rosterSnapshot, quote, isPaidRegistration, isFeeExempt,
+  structuralGeneration, assertCanDraw, assertCanPublishPendingDraw };
 if (typeof module !== 'undefined') module.exports = api;
 if (typeof window !== 'undefined') window.ScoreplaceTournamentBillingCore = api;

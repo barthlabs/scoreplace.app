@@ -137,8 +137,15 @@
         && quote && data.settlement.quoteId === quote.quoteId;
       var reversed = data.settlement && data.settlement.state === 'reversed';
       body.append(el('p', 'sp-fee-explainer', 'A taxa do Scoreplace é calculada por pessoa confirmada após o fechamento das inscrições. Reservas e lista de espera não são cobradas.'));
+      if (Number.isSafeInteger(data.participantCount)) line(body, 'Pessoas confirmadas únicas', String(data.participantCount));
+      if (data.feeExempt) body.append(el('p', 'sp-fee-paid',
+        data.contract.feeCentsPerPerson === 0
+          ? 'Taxa deste torneio: R$ 0,00 por pessoa. Não há pagamento pendente para sortear.'
+          : 'Até 16 pessoas e sem cobrança de inscrição pelo aplicativo: taxa Scoreplace isenta. A partir de 17, a taxa vale para todas as pessoas.'));
+      else if (data.participantCount <= 16) body.append(el('p', 'sp-fee-explainer',
+        'A cobrança de inscrição pelo aplicativo ou a origem da inscrição não definida impede a isenção por tamanho.'));
       if (!data.terms) {
-        body.append(el('p', 'sp-fee-pending', 'As condições de cobrança ainda não foram configuradas. Nenhum pagamento pode ser iniciado.'));
+        if (!data.feeExempt) body.append(el('p', 'sp-fee-pending', 'As condições de cobrança ainda não foram configuradas. Nenhum pagamento pode ser iniciado.'));
         return;
       }
       var terms = data.terms;
@@ -163,6 +170,7 @@
       line(disclosure, 'Repasse das inscrições', terms.payoutDeadline);
       line(disclosure, 'Reembolsos e contestações', terms.refundPolicy);
       body.append(disclosure);
+      if (data.feeExempt && !quote && !reversed) return;
       if (!data.termsAccepted) {
         var acceptance = el('label', 'sp-fee-agreement');
         var toggle = el('input'); toggle.type = 'checkbox';

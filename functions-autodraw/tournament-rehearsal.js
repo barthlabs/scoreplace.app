@@ -56,7 +56,8 @@ function makeService({ db, HttpsError }) {
   }
 
   function preflight(t, registrations) {
-    if (!t || t.isSandbox === true || t.isPublic !== false || t.organizerOnly !== true || t.status !== 'open') {
+    if (!t || t.isSandbox === true || t.isPublic !== false || t.organizerOnly !== true ||
+        !['open', 'closed'].includes(t.status)) {
       fail('failed-precondition', 'O torneio precisa estar privado, apenas para a organização e antes do sorteio.');
     }
     if (t.drawFirstDate || t.nextDrawAt || t.pendingDraw || t.drawCompleted ||

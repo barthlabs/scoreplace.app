@@ -767,6 +767,25 @@ function _promoteCanonicalLateEntries(tx, ref, tBefore, tAfter, nowIso) {
     tx.update(ref.collection('registrations').doc(id), { status:'confirmed', updatedAt:nowIso });
     promoted.push(id);
   }
+  // A guarda financeira precisa enxergar o elenco que esta mesma transação
+  // gravará, inclusive inscrições promovidas depois da leitura canônica.
+  if (promoted.length && tAfter.billingContract?.schema === 1 && !tAfter.isSandbox) {
+    const promotedIds = new Set(promoted);
+    const finalRegistrations = source.registrations.map(doc => {
+      const data = doc.data() || {};
+      return promotedIds.has(String(data.registrationId || ''))
+        ? { ...data, status:'confirmed' } : data;
+    });
+    const finalSnapshot = _tournamentBilling.rosterSnapshot(finalRegistrations, tBefore.placeholderReservations);
+    const byPath = _billingSnapshots.get(tx);
+    if (!byPath || !byPath.has(ref.path)) {
+      throw new Error('[tournament-billing] promoção sem snapshot canônico');
+    }
+    byPath.set(ref.path, { fingerprint:createHash('sha256').update(finalSnapshot.canonicalJson).digest('hex'),
+      participantCount:finalSnapshot.participantCount,
+      unreviewedProofCount:finalSnapshot.unreviewedProofCount,
+      unsettledPaymentCount:finalSnapshot.unsettledPaymentCount });
+  }
   return promoted;
 }
 
@@ -1295,7 +1314,8 @@ function _gravaTorneio(tx, ref, tDepois, tAntes, ctx) {
   if (tAntes && tAntes.billingContract && tAntes.billingContract.schema === 1 && !tAntes.isSandbox) {
     const snapshot = _billingSnapshots.get(tx)?.get(ref.path);
     _tournamentBilling.assertCanDraw(tAntes, tDepois, snapshot && snapshot.fingerprint,
-      snapshot && snapshot.unreviewedProofCount, snapshot && snapshot.unsettledPaymentCount);
+      snapshot && snapshot.unreviewedProofCount, snapshot && snapshot.unsettledPaymentCount,
+      snapshot && snapshot.participantCount);
   }
   /* ⭐ 2.2 — ESTA PORTA PASSOU A DELEGAR AO PLANEJADOR ÚNICO (`write-plan.js`).
    * Ordem do revisor externo: a checagem de limite e o executor têm de consumir EXATAMENTE
@@ -2620,8 +2640,8 @@ exports.integrateLateEntries = onCall(async (request) => {
         }
         return { ok: true, changed: false, recusas };
       }
-      const b = _gravaTorneio(tx, ref, t, _tAntes, { agoraIso: _agoraIsoTx }); // clobber-free; divide se o marcador mandar
       const promoted = _promoteCanonicalLateEntries(tx, ref, _tAntes, t, _agoraIsoTx);
+      const b = _gravaTorneio(tx, ref, t, _tAntes, { agoraIso: _agoraIsoTx }); // clobber-free; divide se o marcador mandar
       if (t._canonicalLateSource?.eligible.length && (res.placed > 0 || res.monarch > 0)
         && promoted.length === 0) {
         throw new HttpsError('failed-precondition', 'Entrada tardia sem prova de vaga; nenhuma alteração foi gravada.');
@@ -6510,7 +6530,10 @@ exports.resolvePendingDraw = onCall(async (request) => {
     const t=await _leTorneio(tx,ref,tId); if(!t) throw new HttpsError('not-found','Torneio não encontrado.');
     if(!_isTournamentAdmin(t,uid)) throw _drawFail('permission-denied','Só a organização altera o sorteio em revisão.',{tId,uid});
     let pd=t.pendingDraw; if(!pd) return {ok:true,changed:false};
-    _tournamentBilling.assertCanPublishPendingDraw(action, t);
+    const billingSnapshot = _billingSnapshots.get(tx)?.get(ref.path);
+    _tournamentBilling.assertCanPublishPendingDraw(action, t,
+      billingSnapshot?.fingerprint, billingSnapshot?.unreviewedProofCount,
+      billingSnapshot?.unsettledPaymentCount, billingSnapshot?.participantCount);
     const refPrivado = pd.kind === 'initial' ? _refRascunhoInicialPrivado(ref) : null;
     if (refPrivado && pd.private === true) {
       const secreto = await tx.get(refPrivado);
@@ -6806,8 +6829,8 @@ exports.resolvePendingLateBye = onCall(async (request) => {
     });
     if (!out.ok) throw _drawFail(out.codigo, out.mensagem, { tId, linha });
     if (!out.mudou) return { ok: true, changed: false, motivo: out.motivo || null };
-    const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
     const promoted = _promoteCanonicalLateEntries(tx, ref, antes, t, agoraIso);
+    const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
     if (t._canonicalLateSource && acao === 'confirmar' && out.aplicados > 0 && !promoted.length) {
       throw new HttpsError('failed-precondition', 'Decisão tardia sem inscrição canônica colocada; nenhuma alteração foi gravada.');
     }
@@ -8448,8 +8471,8 @@ async function _formarGruposDaEspera(doc) {
       // `_gravaTorneio` preserva o marcador e grava apenas os registros que mudaram em
       // cada subcoleção. Nunca usar `tx.set` direto: ele recolocaria os pesados no doc ou
       // descartaria mudanças de grupos/jogos ao formar a espera.
-      _gravaTorneio(tx, doc.ref, t, _tAntes, { agoraIso: _agoraIsoTx });
       const promoted = _promoteCanonicalLateEntries(tx, doc.ref, _tAntes, t, _agoraIsoTx);
+      _gravaTorneio(tx, doc.ref, t, _tAntes, { agoraIso: _agoraIsoTx });
       if (canonical && r.monarch > 0 && t._canonicalLateSource?.eligible.length && !promoted.length) {
         throw new HttpsError('failed-precondition', 'Grupo tardio sem inscrição canônica comprovada.');
       }
