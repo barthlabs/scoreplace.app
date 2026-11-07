@@ -63,9 +63,10 @@ function chaveDeCota(uid, tournamentId, agoraMs) {
     .update(String(uid) + ':' + String(tournamentId) + ':' + diaDe(agoraMs)).digest('hex');
 }
 /** Chave do COOLDOWN: por (organizador, torneio, e-mail). Sem o dia — o freio atravessa. */
-function chaveDeCooldown(uid, tournamentId, emailNorm) {
+function chaveDeCooldown(uid, tournamentId, emailNorm, cargo) {
   return crypto.createHash('sha256')
-    .update(String(uid) + ':' + String(tournamentId) + ':' + normalizaEmail(emailNorm)).digest('hex');
+    .update(String(uid) + ':' + String(tournamentId) + ':' + normalizaEmail(emailNorm) +
+      (cargo ? ':role:' + String(cargo) : '')).digest('hex');
 }
 /* ⭐ Id determinístico do outbox: mesma lição da L1.1.1 — `.add()` duplicava no retry. */
 function mailDocIdDoConvite(chaveCooldown, agoraMs) {

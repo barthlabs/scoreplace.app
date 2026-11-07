@@ -110,6 +110,25 @@ var ScoreplaceRefereeRoster;
         return { changed: JSON.stringify(source) !== JSON.stringify(next), arbitros: next };
     }
     ScoreplaceRefereeRoster.apply = apply;
+    /** Convite por contato já validado pela Function contra o Auth verificado. */
+    function claimEmail(current, input) {
+        const targetUid = safeUid(input.targetUid);
+        const callerUid = safeUid(input.callerUid);
+        const now = safeDate(input.now);
+        if (!targetUid || !callerUid || !now)
+            throw new Error('conta, autor e horário são obrigatórios');
+        const before = sanitizeAll(current);
+        if (before.some((entry) => entry.uid === targetUid && entry.status === 'confirmed')) {
+            return { changed: false, arbitros: before };
+        }
+        const existing = before.find((entry) => entry.uid === targetUid);
+        const confirmed = fromPublicProfile(targetUid, callerUid, input.profile, 'confirmed', now);
+        if (existing && existing.invitedAt)
+            confirmed.invitedAt = existing.invitedAt;
+        const next = before.filter((entry) => entry.uid !== targetUid).concat(confirmed);
+        return { changed: true, arbitros: next };
+    }
+    ScoreplaceRefereeRoster.claimEmail = claimEmail;
 })(ScoreplaceRefereeRoster || (ScoreplaceRefereeRoster = {}));
 if (typeof module !== 'undefined' && module)
     module.exports = ScoreplaceRefereeRoster;

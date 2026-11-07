@@ -126,6 +126,20 @@ function withDerived(next, updateData) {
   return updateData;
 }
 
+function claimEmailCoHost(data, uid, now) {
+  if (!data || !uid) throw new Error('torneio e conta são obrigatórios');
+  if (data.creatorUid === uid) return { changed: false, updateData: null };
+  const current = coHostsArray(data);
+  const existing = current.find((item) => item && item.uid === uid);
+  if (existing && existing.status === 'active') return { changed: false, updateData: null };
+  const coHosts = current.map(coHostUidRecord).filter((item) => item.uid !== uid);
+  coHosts.push(Object.assign({}, existing ? coHostUidRecord(existing) : {}, {
+    uid, type: 'cohost', status: 'active', acceptedAt: now
+  }));
+  const next = Object.assign({}, data, { coHosts });
+  return { changed: true, updateData: withDerived(next, { coHosts }) };
+}
+
 /*
  * Responde um convite. Retorna sempre {outcome, updateData, ...} — nunca lança.
  *   inviteType: 'cohost' | 'transfer'
@@ -321,5 +335,5 @@ function cohostInviteNotifId(tournamentId, uid) {
 module.exports = {
   computeAdminUids, computeAdminEmails, pendingCoHostIndex, computeRespondHostInvite,
   tournamentHasMember, participantDisplayName, canInviteHistoricalContact, computeMutateHostOrganization,
-  claimReservedOrganizer, cohostInviteNotifId
+  claimReservedOrganizer, cohostInviteNotifId, claimEmailCoHost
 };

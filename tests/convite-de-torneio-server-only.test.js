@@ -135,14 +135,18 @@ console.log('\n⑤ a reserva é atômica e não usa tx.create\n');
 {
   const res = fs.readFileSync(RESERVA, 'utf8');
   ok(/db\.runTransaction\(/.test(res), 'as escritas vivem numa transação');
-  const tx = res.slice(res.indexOf('return db.runTransaction('));
+  const tx = res.slice(res.indexOf('async function aplicarReserva('));
+  ok(/runTransaction\(\(tx\) => aplicarReserva\(tx, d\)\)/.test(res),
+    'a porta original e a nova usam a mesma reserva transacional');
   ok(/tx\.get\(cdRef\)/.test(tx) && /tx\.get\(cotaRef\)/.test(tx),
     '⭐ LÊ cooldown e cota dentro dela — é isso que serializa as concorrentes');
   ok(tx.indexOf('tx.get(') < tx.indexOf('tx.set('), '   e todas as leituras vêm antes das escritas');
-  ok(/tx\.set\(db\.collection\('mail'\)\.doc\(mailId\)/.test(tx), '   o outbox é escrito na MESMA transação');
+  ok(/if \(!d\.skipMail\) tx\.set\(db\.collection\('mail'\)\.doc\(mailId\)/.test(tx),
+    '   o outbox é escrito na MESMA transação quando há e-mail');
   ok(!/tx\.create\(/.test(res), '⛔ tx.set e não tx.create (create não existe no SDK compat do teste de concorrência)');
-  ok(/const mailId = core\.mailDocIdDoConvite\(chaveCd, agora\);[\s\S]{0,200}return db\.runTransaction/.test(res),
-    '⭐ o id do outbox nasce FORA da transação (dentro, a re-execução mudaria o id)');
+  ok(/const agora = Number\(d\.agora \|\| Date\.now\(\)\)/.test(tx) &&
+    /const mailId = d\.mailId \|\| core\.mailDocIdDoConvite\(chaveCd, agora\)/.test(tx),
+    '⭐ o id do outbox depende de agora fixado pelo chamador');
   ok(/enviados: usados \+ 1/.test(tx), 'a cota é gravada a partir do valor LIDO na transação');
 }
 

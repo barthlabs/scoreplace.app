@@ -198,6 +198,7 @@ const _secReserva = require("./secondary-email-reserva.js"); // e-mail secundár
 const _tInvCore = require("./tournament-invite-core.js");     // convite avulso: decisões puras
 const _invEmail = require("./invite-email-core.js");         // convite de dupla / co-org: decisões puras
 const _tInvReserva = require("./tournament-invite-reserva.js"); // convite avulso: reserva ATÔMICA
+const _teamEmailInvite = require("./team-role-invite-core.js");
 const _amizadeAuth = require("./amizade-authority-core");   // a AUTORIDADE: pairId, transições, merge, exclusão
 /* ⚠️ FieldValue pelo SUBPATH, não por `admin.firestore.FieldValue`. MEDIDO em 29/ago/2026:
  * dentro do runtime do emulador de Functions o namespace vem sem `.FieldValue`, e a
@@ -1825,6 +1826,17 @@ exports.cleanupExpiredProofTokens = onSchedule(
       db.collection("mergeTokens").where("expiresAt", "<", now));             // Timestamp
     const delCodes = await _batchDeleteQuery(
       db.collection("emailVerifyCodes").where("expiresAt", "<", nowMs));      // número (epoch ms)
+    const expiredTeamInvites = await db.collection("teamRoleInvites")
+      .where("expiresAtMs", "<", nowMs).limit(200).get();
+    if (!expiredTeamInvites.empty) {
+      const batch = db.batch();
+      expiredTeamInvites.docs.forEach((doc) => {
+        const invite = doc.data() || {};
+        batch.delete(doc.ref);
+        if (invite.mailId) batch.delete(db.collection("mail").doc(String(invite.mailId)));
+      });
+      await batch.commit();
+    }
     console.log(`[cleanupExpiredProofTokens] provas vencidas: emailVerificationLinks=${delVerificationLinks} emailVerifications=${delVerif} mergeTokens=${delMerge} emailVerifyCodes=${delCodes}`);
     /* ⛔⛔ A QUEIMA DO DESAFIO DE PASSKEY TAMBÉM VENCE, E TEM DE SER VARRIDA AQUI — achado na 4ª
      * rodada de revisão da leva (25/set/2026).
@@ -8275,6 +8287,176 @@ exports.splitPair = onCall(
 // IDENTIDADE = UID SEMPRE (nunca e-mail/nome/telefone). Lógica pura em ./cohost-core.js.
 // Deploy:  firebase deploy --only functions:respondHostInvite
 const _coHostCore = require("./cohost-core");
+
+// O e-mail fica somente no convite privado. O cargo é vinculado ao UID da conta
+// que comprova esse endereço no Firebase Auth; o link sozinho não concede acesso.
+exports.createTeamEmailInvite = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+    const data = request.data || {};
+    const tournamentId = String(data.tournamentId || "").trim();
+    const role = String(data.role || "");
+    const email = _tInvCore.normalizaEmail(data.email);
+    if (!tournamentId || tournamentId.startsWith("sb_") || !_teamEmailInvite.roles[role] || !_tInvCore.emailValido(email)) {
+      throw new HttpsError("invalid-argument", "torneio, cargo ou e-mail inválido");
+    }
+    const db = admin.firestore();
+    const ref = db.collection("tournaments").doc(tournamentId);
+    const secret = _teamEmailInvite.newSecret();
+    const now = Date.now();
+    const outcome = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+      const t = snap.data() || {};
+      if (t.isSandbox === true || !_isTournamentOrgCaller(t, callerUid)) {
+        throw new HttpsError("permission-denied", "só a organização envia convites");
+      }
+      const mailDoc = _teamEmailInvite.mailDoc({
+        email, role, tournamentName: t.name, inviterName: t.organizerName,
+        inviteId: secret.inviteId, token: secret.token, now
+      });
+      const reservation = await _tInvReserva.aplicarReserva(tx, {
+        db, core: _tInvCore, uid: callerUid, tournamentId, email, cargo: role,
+        agora: now, mailId: secret.mailId, mailDoc
+      });
+      if (!reservation.ok) return reservation;
+      tx.set(db.collection("teamRoleInvites").doc(secret.inviteId), {
+        tournamentId, role, email, identityKind: 'email', tokenHash: secret.tokenHash, senderUid: callerUid,
+        mailId: secret.mailId, createdAtMs: now, expiresAtMs: now + _teamEmailInvite.EXPIRY_MS,
+        consumedByUid: ""
+      });
+      return { ok: true };
+    });
+    if (!outcome.ok) {
+      if (outcome.motivo === "invalido") throw new HttpsError("invalid-argument", "dados do convite inválidos");
+      throw new HttpsError("resource-exhausted", outcome.motivo === "cooldown"
+        ? "Aguarde dois minutos antes de reenviar para este e-mail."
+        : "Limite diário de convites deste torneio atingido.");
+    }
+    return { ok: true };
+  }
+);
+
+// Sem provedor de convite SMS no servidor: cria link limitado e devolve o texto
+// para o compositor SMS do aparelho do organizador. Não afirma que enviou.
+exports.createTeamPhoneInvite = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+    const data = request.data || {};
+    const tournamentId = String(data.tournamentId || "").trim();
+    const role = String(data.role || "");
+    const phone = _teamEmailInvite.normalizePhone(data);
+    if (!tournamentId || tournamentId.startsWith("sb_") || !_teamEmailInvite.roles[role] || !phone) {
+      throw new HttpsError("invalid-argument", "torneio, cargo ou telefone inválido");
+    }
+    const db = admin.firestore();
+    const ref = db.collection("tournaments").doc(tournamentId);
+    const secret = _teamEmailInvite.newSecret();
+    const now = Date.now();
+    const outcome = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+      const t = snap.data() || {};
+      if (t.isSandbox === true || !_isTournamentOrgCaller(t, callerUid)) {
+        throw new HttpsError("permission-denied", "só a organização cria convites");
+      }
+      const reservation = await _tInvReserva.aplicarReserva(tx, {
+        db, core: _tInvCore, uid: callerUid, tournamentId, phone,
+        cargo: 'sms:' + role, agora: now, skipMail: true
+      });
+      if (!reservation.ok) return reservation;
+      tx.set(db.collection("teamRoleInvites").doc(secret.inviteId), {
+        tournamentId, role, phone, identityKind: 'phone', tokenHash: secret.tokenHash,
+        senderUid: callerUid, createdAtMs: now, expiresAtMs: now + _teamEmailInvite.EXPIRY_MS,
+        consumedByUid: ""
+      });
+      return { ok: true, name: String(t.name || 'torneio').slice(0, 120) };
+    });
+    if (!outcome.ok) {
+      if (outcome.motivo === "invalido") throw new HttpsError("invalid-argument", "dados do convite inválidos");
+      throw new HttpsError("resource-exhausted", outcome.motivo === "cooldown"
+        ? "Aguarde dois minutos antes de gerar outro convite para este número."
+        : "Limite diário de convites deste torneio atingido.");
+    }
+    const url = _teamEmailInvite.link(secret.inviteId, secret.token);
+    return { ok: true, phone, smsText: 'Convite para ser ' + _teamEmailInvite.roles[role] +
+      ' em ' + outcome.name + '. Entre no Scoreplace com este telefone verificado: ' + url };
+  }
+);
+
+exports.claimTeamInvite = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+    const data = request.data || {};
+    const inviteId = String(data.inviteId || "");
+    const token = String(data.token || "");
+    if (!/^[a-f0-9]{36}$/.test(inviteId) || !/^[a-f0-9]{64}$/.test(token)) {
+      throw new HttpsError("invalid-argument", "convite inválido");
+    }
+    const authUser = await admin.auth().getUser(callerUid);
+    const verifiedEmail = authUser.emailVerified && !authUser.disabled
+      ? _tInvCore.normalizaEmail(authUser.email) : "";
+    const verifiedPhone = !authUser.disabled ? String(authUser.phoneNumber || '') : '';
+    const db = admin.firestore();
+    const inviteRef = db.collection("teamRoleInvites").doc(inviteId);
+    const now = Date.now();
+    return db.runTransaction(async (tx) => {
+      const inviteSnap = await tx.get(inviteRef);
+      if (!inviteSnap.exists) throw new HttpsError("not-found", "convite não encontrado");
+      const invite = inviteSnap.data() || {};
+      if (!_teamEmailInvite.matchesHash(invite.tokenHash, token)) {
+        throw new HttpsError("permission-denied", "convite inválido");
+      }
+      if ((invite.identityKind === 'phone' && invite.phone !== verifiedPhone) ||
+          (invite.identityKind !== 'phone' && invite.email !== verifiedEmail)) {
+        throw new HttpsError("permission-denied", invite.identityKind === 'phone'
+          ? "entre com o telefone convidado e confirme o SMS nesta conta"
+          : "entre com o e-mail convidado e confirme esse e-mail nesta conta");
+      }
+      if (invite.consumedByUid) {
+        if (invite.consumedByUid !== callerUid) throw new HttpsError("permission-denied", "convite já utilizado");
+        return { ok: true, alreadyClaimed: true, tournamentId: invite.tournamentId, role: invite.role };
+      }
+      if (Number(invite.expiresAtMs) < now) throw new HttpsError("failed-precondition", "convite expirado");
+      const tournamentRef = db.collection("tournaments").doc(String(invite.tournamentId || ""));
+      const tournamentSnap = await tx.get(tournamentRef);
+      if (!tournamentSnap.exists) throw new HttpsError("not-found", "torneio não existe");
+      // memberUids depende dos inscritos; jogos e histórico não participam do convite.
+      const t = await _splitParts.hidratar(tx, tournamentRef, tournamentSnap.data() || {}, ['participants']);
+      if (t.isSandbox === true || !_isTournamentOrgCaller(t, invite.senderUid)) {
+        throw new HttpsError("failed-precondition", "a organização deste convite mudou");
+      }
+      let update = null;
+      if (invite.role === "cohost") {
+        const result = _coHostCore.claimEmailCoHost(t, callerUid, new Date(now).toISOString());
+        update = result.updateData;
+      } else if (invite.role === "referee") {
+        const profileSnap = await tx.get(db.collection("usersPublic").doc(callerUid));
+        const profile = profileSnap.exists ? profileSnap.data() : {
+          displayName: authUser.displayName || "Árbitro", photoURL: authUser.photoURL || ""
+        };
+        const result = _refereeRoster.claimEmail(t.arbitros, {
+          action: "self-confirm", targetUid: callerUid, callerUid: invite.senderUid,
+          profile, now: new Date(now).toISOString()
+        });
+        if (result.changed) update = {
+          arbitros: result.arbitros,
+          refereeUids: result.arbitros.filter((entry) => entry.status === "confirmed").map((entry) => entry.uid).sort()
+        };
+      } else throw new HttpsError("failed-precondition", "cargo do convite inválido");
+      if (update) _splitParts.gravar(tx, tournamentRef, t, Object.assign(update, { updatedAt: new Date(now).toISOString() }));
+      tx.update(inviteRef, { consumedByUid: callerUid, consumedAtMs: now });
+      if (invite.mailId) tx.delete(db.collection("mail").doc(String(invite.mailId)));
+      return { ok: true, tournamentId: invite.tournamentId, role: invite.role };
+    });
+  }
+);
 
 exports.respondHostInvite = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },

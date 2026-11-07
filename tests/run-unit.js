@@ -2021,6 +2021,7 @@ const SUITES = [
   // permission-denied em TODO convidado com conta. Também trava a identidade SÓ-UID e a
   // escalada da transferência (terceiro assumindo organização alheia).
   'functions/test-cohost-core.js',
+  'tests/team-email-invite-core.test.js',
   'functions/test-digest-core.js',
   // Nome de exibição ÚNICO entre uids checado no SERVIDOR (registerPhonePassword).
   // Trava o incidente de 02/ago/2026: segunda "Gabriela Ferreira" criada por

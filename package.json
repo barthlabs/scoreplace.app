@@ -18,6 +18,7 @@
     "test:rules:sandbox": "node tests/rules-sandbox-read.test.js",
     "test:sandbox": "node tests/sandbox-cf-emulador.test.js",
     "test:import:emulator": "node tests/tournament-import-emulator.test.js",
+    "test:teamrole": "node scripts/rodar-emulador.js --only firestore,auth --config firebase.amizade.json --project demo-scoreplace \"node functions/test-team-role-invite-emu.js\"",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:ui": "playwright test --ui",

@@ -195,7 +195,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     overlay.id = 'tournament-friend-invite-overlay';
     overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.82);display:flex;align-items:center;justify-content:center;padding:1rem;';
     var panel = document.createElement('div');
-    panel.style.cssText = 'width:min(100%,430px);max-height:80%;display:flex;flex-direction:column;background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;padding:16px;gap:10px;';
+    panel.style.cssText = 'width:min(100%,430px);max-height:80%;overflow-y:auto;display:flex;flex-direction:column;background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;padding:16px;gap:10px;';
     var title = document.createElement('div');
     title.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--text-bright);font-weight:700;';
     title.textContent = role === 'cohost' ? 'Convidar organizador' : 'Convidar árbitro';
@@ -216,13 +216,99 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var send = document.createElement('button');
     send.type = 'button'; send.className = 'btn btn-sm'; send.textContent = 'Enviar convite';
     confirmRow.appendChild(selectedName); confirmRow.appendChild(send);
+    var emailLabel = document.createElement('label');
+    emailLabel.textContent = 'Ou convide por e-mail';
+    emailLabel.style.cssText = 'color:var(--text-bright);font-weight:700;margin-top:8px;';
+    var emailRow = document.createElement('div');
+    emailRow.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;';
+    var emailInput = document.createElement('input');
+    emailInput.type = 'email'; emailInput.autocomplete = 'email'; emailInput.placeholder = 'E-mail da pessoa';
+    emailInput.setAttribute('aria-label', 'E-mail para convite');
+    emailInput.style.cssText = 'flex:1 1 190px;min-width:0;padding:10px;border-radius:8px;background:var(--bg-input,#111827);color:var(--text-bright);border:1px solid var(--border-color);';
+    var emailSend = document.createElement('button');
+    emailSend.type = 'button'; emailSend.className = 'btn btn-sm'; emailSend.textContent = 'Enviar e-mail';
+    var emailStatus = document.createElement('div');
+    emailStatus.setAttribute('role', 'status');
+    emailStatus.style.cssText = 'color:var(--text-bright);min-height:1.3em;';
+    emailRow.appendChild(emailInput); emailRow.appendChild(emailSend);
+    var phoneLabel = document.createElement('label');
+    phoneLabel.textContent = 'Ou convide por telefone';
+    phoneLabel.style.cssText = 'color:var(--text-bright);font-weight:700;margin-top:8px;';
+    var phoneRow = document.createElement('div');
+    phoneRow.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;';
+    function phoneField(label, placeholder, width, value) {
+      var field = document.createElement('input');
+      field.type = 'tel'; field.inputMode = 'numeric'; field.placeholder = placeholder;
+      field.value = value || ''; field.setAttribute('aria-label', label);
+      field.style.cssText = 'flex:0 1 ' + width + 'px;min-width:0;padding:10px;border-radius:8px;background:var(--bg-input,#111827);color:var(--text-bright);border:1px solid var(--border-color);';
+      return field;
+    }
+    var ddiInput = phoneField('DDI', 'DDI', 68, '55');
+    var dddInput = phoneField('DDD', 'DDD', 68, '');
+    var numberInput = phoneField('Número de telefone', 'Telefone', 160, '');
+    var phoneSend = document.createElement('button');
+    phoneSend.type = 'button'; phoneSend.className = 'btn btn-sm'; phoneSend.textContent = 'Preparar SMS';
+    phoneRow.appendChild(ddiInput); phoneRow.appendChild(dddInput); phoneRow.appendChild(numberInput); phoneRow.appendChild(phoneSend);
+    var phoneStatus = document.createElement('div');
+    phoneStatus.setAttribute('role', 'status');
+    phoneStatus.style.cssText = 'color:var(--text-bright);min-height:1.3em;';
     panel.appendChild(title); panel.appendChild(input); panel.appendChild(list); panel.appendChild(confirmRow);
+    panel.appendChild(emailLabel); panel.appendChild(emailRow); panel.appendChild(emailStatus);
+    panel.appendChild(phoneLabel); panel.appendChild(phoneRow); panel.appendChild(phoneStatus);
     overlay.appendChild(panel); document.body.appendChild(overlay);
     overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
     // Em nomes portugueses, "erika" encontra "Érica"; K inicial (Kelly) não vira C.
     // A tolerância afeta só o filtro visual. A identidade do convite continua sendo o UID.
     var normalize = function(s) { return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/([aeiou])k(?=[aeiou])/g, '$1c').trim(); };
     var busy = false;
+    emailSend.addEventListener('click', function() {
+      var email = emailInput.value.trim();
+      if (busy || !emailInput.checkValidity() || !email) {
+        emailStatus.textContent = 'Digite um e-mail válido.';
+        return;
+      }
+      if (typeof window._callCF !== 'function') {
+        emailStatus.textContent = 'Convite indisponível agora.';
+        return;
+      }
+      busy = true; emailSend.disabled = true; emailStatus.textContent = 'Enviando convite…';
+      window._callCF('createTeamEmailInvite', { tournamentId: tId, role: role, email: email }, 'Entre para enviar o convite.')
+        .then(function(result) {
+          emailStatus.textContent = result && result.data && result.data.ok
+            ? 'Convite enviado. O acesso será ativado quando a pessoa entrar com esse e-mail verificado.'
+            : 'Não foi possível enviar o convite.';
+          if (result && result.data && result.data.ok) emailInput.value = '';
+        }).catch(function(error) {
+          emailStatus.textContent = error && error.message ? error.message : 'Não foi possível enviar o convite.';
+        }).finally(function() { busy = false; emailSend.disabled = false; });
+    });
+    phoneSend.addEventListener('click', function() {
+      var ddi = ddiInput.value.replace(/\D/g, '');
+      var ddd = dddInput.value.replace(/\D/g, '');
+      var number = numberInput.value.replace(/\D/g, '');
+      if (busy || !ddi || !ddd || !number) { phoneStatus.textContent = 'Informe DDI, DDD e telefone.'; return; }
+      if (typeof window._callCF !== 'function') { phoneStatus.textContent = 'Convite indisponível agora.'; return; }
+      busy = true; phoneSend.disabled = true; phoneStatus.textContent = 'Preparando convite…';
+      window._callCF('createTeamPhoneInvite', { tournamentId: tId, role: role, ddi: ddi, ddd: ddd, number: number }, 'Entre para criar o convite.')
+        .then(function(result) {
+          var data = result && result.data;
+          if (!data || !data.ok) throw new Error('Não foi possível criar o convite.');
+          phoneStatus.replaceChildren();
+          var msg = document.createElement('span');
+          msg.textContent = 'O SMS está pronto. Envie a mensagem pelo aplicativo do seu aparelho. ';
+          var copy = document.createElement('button');
+          copy.type = 'button'; copy.className = 'btn btn-sm'; copy.textContent = 'Copiar mensagem';
+          copy.addEventListener('click', function() {
+            if (navigator.clipboard) navigator.clipboard.writeText(data.smsText).then(function() { copy.textContent = 'Copiado'; });
+          });
+          var open = document.createElement('a');
+          open.className = 'btn btn-sm'; open.textContent = 'Abrir SMS';
+          open.href = 'sms:' + data.phone + '?body=' + encodeURIComponent(data.smsText);
+          phoneStatus.appendChild(msg); phoneStatus.appendChild(open); phoneStatus.appendChild(copy);
+        }).catch(function(error) {
+          phoneStatus.textContent = error && error.message ? error.message : 'Não foi possível criar o convite.';
+        }).finally(function() { busy = false; phoneSend.disabled = false; });
+    });
     var friends = [];
     var selected = null;
     var accepted = new Set();

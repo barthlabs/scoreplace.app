@@ -302,7 +302,7 @@ function initRouter() {
     var _isLoggedInNow = !!(window.AppStore && window.AppStore.currentUser);
     var _hasAuthCacheNow = false;
     try { _hasAuthCacheNow = !!localStorage.getItem('scoreplace_authCache'); } catch(e) {}
-    window._log('[scoreplace-router] route', (view === 'claim-registration' || view === 'tournament-claim') ? '#' + view : hash,
+    window._log('[scoreplace-router] route', (view === 'claim-registration' || view === 'tournament-claim' || view === 'role-invite') ? '#' + view : hash,
       'loggedIn:', _isLoggedInNow, 'authCache:', _hasAuthCacheNow, 'authResolved:', !!window._authStateResolved);
 
     // v2.1.94-beta: gate expandido para TODAS as rotas. Usuário não logado
@@ -311,7 +311,7 @@ function initRouter() {
     var _isLegalView = (view === 'privacy' || view === 'terms' || view === 'delete-account');
     // O convite individual precisa mostrar o CTA de login sem ler inscrição
     // enquanto deslogado. A Function continua exigindo autenticação.
-    if (view === 'claim-registration' || view === 'tournament-claim') _isLegalView = true;
+    if (view === 'claim-registration' || view === 'tournament-claim' || view === 'role-invite') _isLegalView = true;
     if (!_isLoggedInNow && !_isLegalView && typeof renderLanding === 'function') {
 
       /* ⛔ QUEM ESTÁ ENTRANDO NÃO VOLTA PRA LANDING NEM PRO LOGIN (2.1.45).
@@ -701,6 +701,13 @@ function initRouter() {
           window._coHostActionFromLink(parts[1], parts[2], parts[3]);
         } else {
           window.location.hash = '#tournaments/' + (parts[2] || '');
+        }
+        break;
+      case 'role-invite':
+        if (typeof window.renderTeamEmailInvitePage === 'function') {
+          window.renderTeamEmailInvitePage(viewContainer, param, parts[2]);
+        } else {
+          window.location.replace('#dashboard');
         }
         break;
       case 'bracket':

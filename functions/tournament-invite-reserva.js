@@ -30,20 +30,25 @@
  */
 async function reservarConvite(deps) {
   const d = deps || {};
+  if (!d.db) return { ok: false, motivo: 'invalido' };
+  return d.db.runTransaction((tx) => aplicarReserva(tx, d));
+}
+
+async function aplicarReserva(tx, deps) {
+  const d = deps || {};
   const db = d.db, core = d.core;
   const uid = String(d.uid || '');
   const tid = String(d.tournamentId || '');
-  const email = core.normalizaEmail(d.email);
+  const email = core && core.normalizaEmail(d.email || d.phone);
   const agora = Number(d.agora || Date.now());
   if (!db || !core || !uid || !tid || !email) return { ok: false, motivo: 'invalido' };
 
-  const chaveCd = core.chaveDeCooldown(uid, tid, email);
+  const chaveCd = core.chaveDeCooldown(uid, tid, email, d.cargo);
   const chaveCota = core.chaveDeCota(uid, tid, agora);
   const cdRef = db.collection('tournamentInviteCooldown').doc(chaveCd);
   const cotaRef = db.collection('tournamentInviteQuota').doc(chaveCota);
-  const mailId = core.mailDocIdDoConvite(chaveCd, agora);
+  const mailId = d.mailId || core.mailDocIdDoConvite(chaveCd, agora);
 
-  return db.runTransaction(async (tx) => {
     /* ⚠️ TODAS as leituras ANTES de qualquer escrita — o Firestore recusa o contrário. */
     const [cdSnap, cotaSnap] = await Promise.all([tx.get(cdRef), tx.get(cotaRef)]);
 
@@ -62,7 +67,7 @@ async function reservarConvite(deps) {
      * `increment()` funcionaria, mas esconderia a serialização que este módulo existe pra
      * garantir — e é ela que o teste de concorrência precisa provar. */
     tx.set(cotaRef, { enviados: usados + 1, uid: uid, tournamentId: tid, dia: core.diaDe(agora) }, { merge: true });
-    tx.set(db.collection('mail').doc(mailId), core.montaEmail({
+    if (!d.skipMail) tx.set(db.collection('mail').doc(mailId), d.mailDoc || core.montaEmail({
       email: email, tournamentId: tid, agora: agora,
       tournamentName: (d.dadosDoEmail && d.dadosDoEmail.tournamentName) || '',
       inviterName: (d.dadosDoEmail && d.dadosDoEmail.inviterName) || '',
@@ -70,7 +75,6 @@ async function reservarConvite(deps) {
       venue: (d.dadosDoEmail && d.dadosDoEmail.venue) || ''
     }));
     return { ok: true, mailId: mailId, usadosHoje: usados + 1 };
-  });
 }
 
-module.exports = { reservarConvite };
+module.exports = { reservarConvite, aplicarReserva };

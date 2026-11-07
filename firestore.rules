@@ -1718,6 +1718,9 @@ service cloud.firestore {
     match /mail/{mailId} {
       allow read, write: if false;
     }
+    match /teamRoleInvites/{inviteId} {
+      allow read, write: if false;
+    }
 
     // ─── Notif email digest queue (v2.1.19) ──────────────────────────────────
     // E-mails de NOTIFICAÇÃO entram aqui (janela por importância 5/15/30 min) e
