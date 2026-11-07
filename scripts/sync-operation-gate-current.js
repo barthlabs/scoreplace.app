@@ -136,6 +136,35 @@ function serveLatestNormal(name) {
   const served = runService(serviceName, 'us-central1');
   if (servedRevisionName(served) !== latest) throw new Error(`Function sem 100% na revisão nova: ${name}`);
 }
+function reusePublishedNormal(state, name, codebase) {
+  const old = one(state.original.normal, name);
+  if (functionInfo(name).updateTime === old.updateTime) return false;
+  try { verify(name, codebase, sourceCommit, state.original.startedAt); }
+  catch (_) { return false; }
+  const serviceName = functionRunName(functionInfo(name));
+  savePrevious(state, `normal/${name}`, serviceName, 'us-central1', runService(serviceName, 'us-central1'));
+  markFlight(state, `normal/${name}`);
+  serveLatestNormal(name);
+  recordNormal(state, name, codebase);
+  markDone(state, `normal/${name}`);
+  return true;
+}
+function serveCreatedRecovery(name, target) {
+  const service = runService(name, 'us-east1');
+  const latest = service.status?.latestCreatedRevisionName;
+  if (!latest) throw new Error(`recovery sem revisão criada: ${name}`);
+  const revision = runRevision(latest, 'us-east1');
+  const env = Object.fromEntries((revision.spec?.containers?.[0]?.env || []).map(x => [x.name, x.value]));
+  if (revision.spec?.containers?.[0]?.image !== target.image ||
+      env.SP_SOURCE_DIGEST !== target.sourceDigest || env.SP_OPERATION_REGION !== 'us-east1' ||
+      revision.status?.conditions?.find(x => x.type === 'Ready')?.status !== 'True') {
+    throw new Error(`recovery criada divergente: ${name}`);
+  }
+  if (servedRevisionName(service) !== latest) {
+    run('gcloud', ['run', 'services', 'update-traffic', name, '--project', project,
+      '--region', 'us-east1', '--to-revisions', `${latest}=100`, '--quiet'], { stdio: 'inherit' });
+  }
+}
 function recordRecovery(state, rows, name, regional) {
   const target = rows.filter(row => row.name === regional && row.region === 'us-east1');
   if (target.length !== 1) throw new Error(`porta v2 ausente: ${regional}`);
@@ -174,7 +203,8 @@ function main() {
   }
   try {
     const [presenceName] = normals[0];
-    if (!state.candidate.normal.some(row => row.name === presenceName)) {
+    if (!state.candidate.normal.some(row => row.name === presenceName) &&
+        !reusePublishedNormal(state, presenceName, 'functions')) {
       const serviceName = functionRunName(functionInfo(presenceName));
       savePrevious(state, `normal/${presenceName}`, serviceName, 'us-central1', runService(serviceName, 'us-central1'));
       markFlight(state, `normal/${presenceName}`);
@@ -184,7 +214,9 @@ function main() {
       markDone(state, `normal/${presenceName}`);
     }
     const autodrawNames = normals.slice(1).map(([name]) => name);
-    const pendingAutodraw = autodrawNames.filter(name => !state.candidate.normal.some(row => row.name === name));
+    const pendingAutodraw = autodrawNames.filter(name =>
+      !state.candidate.normal.some(row => row.name === name) &&
+      !reusePublishedNormal(state, name, 'functions-autodraw'));
     if (pendingAutodraw.length) {
       for (const name of pendingAutodraw) {
         const serviceName = functionRunName(functionInfo(name));
@@ -208,10 +240,8 @@ function main() {
       if (servedRevisionName(s) !== original.revision || s.status?.url !== original.url) throw new Error(`recovery mudou sem recibo: ${name}`);
       const prev = state.previous[`recovery/${name}`];
       if (prev && s.spec?.template?.spec?.containers?.[0]?.image === target.image) {
-        const latest = s.status?.latestReadyRevisionName;
-        if (!latest || latest === prev.revision) throw new Error(`revisão nova ausente após rollback: ${name}`);
         markFlight(state, `recovery/${name}`);
-        run('gcloud', ['run', 'services', 'update-traffic', name, '--project', project, '--region', 'us-east1', '--to-revisions', `${latest}=100`, '--quiet'], { stdio: 'inherit' });
+        serveCreatedRecovery(name, target);
         recordRecovery(state, rows, name, regional);
         markDone(state, `recovery/${name}`);
         continue;
@@ -221,6 +251,7 @@ function main() {
       markFlight(state, `recovery/${name}`);
       run('gcloud', ['run', 'deploy', name, '--project', project, '--region', 'us-east1', '--image', target.image,
         '--update-env-vars', `SP_SOURCE_DIGEST=${target.sourceDigest},SP_OPERATION_REGION=us-east1`, '--allow-unauthenticated', '--quiet'], { stdio: 'inherit' });
+      serveCreatedRecovery(name, target);
       recordRecovery(state, rows, name, regional);
       markDone(state, `recovery/${name}`);
     }
