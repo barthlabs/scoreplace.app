@@ -271,6 +271,44 @@ window._resetTournamentToEnrollment = function (tId) {
   );
 };
 
+// Ensaio no torneio real: apenas o criador desenvolvedor pode capturar e
+// restaurar a fotografia. Sorteio e jogos continuam nas portas canônicas.
+window._realTournamentRehearsalAction = function (tId, action) {
+  var t = window.AppStore && window.AppStore.tournaments.find(function (item) { return String(item.id) === String(tId); });
+  var uid = window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid;
+  if (!t || uid !== 'B17n7JCXYOfqahlcLZ0fKxGGyUu1' || t.creatorUid !== uid || t.isSandbox === true ||
+      !window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function' || typeof showAlertDialog !== 'function') return;
+  var isReset = action === 'reset';
+  if (isReset ? !(t.rehearsal && (t.rehearsal.state === 'active' || t.rehearsal.step === 'verification-failed'))
+              : !!(t.rehearsal && t.rehearsal.state && t.rehearsal.state !== 'capturing')) return;
+  showAlertDialog(isReset ? '🔄 Restaurar o torneio antes do ensaio?' : '🧪 Iniciar ensaio neste torneio?',
+    isReset
+      ? 'O servidor vai apagar todo o sorteio, jogos, placares, W.O. e dados criados no ensaio. Só concluirá depois de comparar o banco com a fotografia anterior. Os inscritos, números e categorias voltarão exatamente ao estado capturado.'
+      : 'O servidor vai fotografar as inscrições e configurações atuais antes de qualquer sorteio. Durante o ensaio, inscrições ficam congeladas e notificações silenciadas. Ao final, use o botão de restaurar.',
+    function () {
+      window.FirestoreDB._callFn(isReset ? 'resetTournamentToEnrollment' : 'startTournamentRehearsal',
+        isReset ? { tournamentId: String(tId), restoreMode: 'rehearsal' } : { tournamentId: String(tId) })
+        .then(function (result) {
+          if (!result || result.ok !== true) throw new Error('O servidor não confirmou a operação.');
+          if (isReset && result.tournament && typeof window._applyCFTournament === 'function') {
+            window._applyCFTournament(String(tId), result.tournament);
+          } else if (!isReset && typeof window._applyCFTournament === 'function') {
+            window._applyCFTournament(String(tId), Object.assign({}, t, {
+              rehearsal: { state: 'active', epoch: result.epoch, hash: result.hash }, notificationsMuted: true
+            }));
+          }
+          if (typeof showNotification === 'function') showNotification(
+            isReset ? 'Ensaio restaurado' : 'Ensaio iniciado',
+            isReset ? 'Inscrições e categorias restauradas; sorteio, placares e W.O. removidos e conferidos.' : 'Fotografia conferida. Pode testar o sorteio.',
+            'success');
+        })
+        .catch(function (error) {
+          if (typeof showNotification === 'function') showNotification('Ensaio não concluído',
+            (error && error.message) || 'Verifique o estado do torneio antes de prosseguir.', 'error');
+        });
+    }, { type: isReset ? 'danger' : 'warning', confirmText: isReset ? 'Sim, restaurar' : 'Iniciar ensaio', cancelText: 'Cancelar' });
+};
+
 // Restauração explicitamente habilitada pela organização para repetir um teste
 // de sorteio. Não é um "novo torneio": volta exatamente ao estado configurado
 // antes de publicar a chave. `_clearTournamentDraw` preserva categorias, janelas,

@@ -8,6 +8,7 @@ const { getMessaging } = require('firebase-admin/messaging');
 const { getStorage } = require('firebase-admin/storage');
 const { randomUUID, createHash } = require('crypto');
 const _operationReceipt = require('./operation-receipt-core');
+const _rehearsal = require('./tournament-rehearsal');
 const _operationDay = require('./operation-day');
 const _phaseTieCore = require('./phase-tie-core');
 const _phasePendingDecision = require('./phase-pending-decision-core');
@@ -1264,6 +1265,16 @@ function _aplicaRascunhoDoSorteioInicial(t, draft) {
  * ⛔ E `participants`/`history` só saem do documento se estiverem NO MARCADOR — `dividir`
  * extrai os três por natureza, e gravar a config crua dele zeraria o elenco. */
 function _gravaTorneio(tx, ref, tDepois, tAntes, ctx) {
+  if (_rehearsal.locked(tAntes)) {
+    throw new HttpsError('failed-precondition', 'Ensaio em captura ou restauração; operação temporariamente bloqueada.');
+  }
+  if (_rehearsal.marker(tAntes) === 'active' && [
+    'categoryDefinitions', 'canonicalRegistrationMigration', 'registrationSettings',
+    'placeholderReservations', 'maxParticipantsByCategory', 'enrollmentRigor',
+    'isPublic', 'organizerOnly'
+  ].some(key => _rehearsal.fingerprint(tDepois && tDepois[key]) !== _rehearsal.fingerprint(tAntes && tAntes[key]))) {
+    throw new HttpsError('failed-precondition', 'Configuração e inscrições congeladas durante o ensaio.');
+  }
   // Toda rota de W.O., substituição, placar e edição passa por esta escrita.
   // Uma fase já avançada não pode ter seus jogos dispensados alterados.
   if (tAntes && Array.isArray(tAntes.history) &&
@@ -2386,11 +2397,14 @@ exports.applyMonarchGroupWO = onCall(request => _applyMonarchWO(request, '_monWo
 exports.revertMonarchGroupWO = onCall(request => _applyMonarchWO(request, '_monWoRevert', (d, tId, p, g) => [tId, p, g]));
 
 // ─── Reset para inscrições: confirmação no cliente, mutação completa no servidor ───
-exports.resetTournamentToEnrollment = onCall(async request => {
+exports.resetTournamentToEnrollment = onCall({ timeoutSeconds: 540, memory: '512MiB' }, async request => {
   const uid = request.auth && request.auth.uid;
   const requestData = request.data || {};
   const tId = String(requestData.tournamentId || '').trim();
   const restoreMode = String(requestData.restoreMode || '').trim();
+  if (restoreMode === 'rehearsal') {
+    return _rehearsal.makeService({ db, HttpsError }).restore(request);
+  }
   if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
   if (!tId) throw new HttpsError('invalid-argument', 'Torneio obrigatório.');
   if (!drawWindow || typeof drawWindow._clearTournamentDraw !== 'function') {
@@ -2435,6 +2449,9 @@ exports.resetTournamentToEnrollment = onCall(async request => {
     return { ok: true, changed: true, tournament: boundary.clean };
   });
 });
+
+exports.startTournamentRehearsal = onCall({ timeoutSeconds: 540, memory: '512MiB' }, request =>
+  _rehearsal.makeService({ db, HttpsError }).activate(request));
 
 // ─── Rodada extra manual: intenção estreita, motor e transação no servidor ───
 exports.generateExtraTournamentRound = onCall(async (request) => {
@@ -2955,6 +2972,7 @@ function _notificationPersonName(value, fallback) {
 }
 
 function _scoreNotificationEvent(t, m, outcome, actor, at, context) {
+  if (t && (t.notificationsMuted === true || _rehearsal.enrollmentFrozen(t))) return null;
   // Disputa nunca é confirmação: mesmo que o jogo conserve sets de um placar
   // anterior, só a notificação própria da transição pode sair da transação.
   if (!m || outcome === 'in-progress' || outcome === 'disputed') return null;
@@ -3042,7 +3060,7 @@ function _scoreNotificationEvent(t, m, outcome, actor, at, context) {
 // Contestação não tem novo placar para comunicar; ela é uma transição do fluxo. Ainda
 // assim o aviso nasce junto com a mudança canônica, nunca do navegador que apertou o botão.
 function _disputeNotificationEvent(t, m, actor, at) {
-  if (!t || !m) return null;
+  if (!t || !m || t.notificationsMuted === true || _rehearsal.enrollmentFrozen(t)) return null;
   const recipients = new Set();
   if (t.creatorUid) recipients.add(String(t.creatorUid));
   (Array.isArray(t.adminUids) ? t.adminUids : []).forEach(uid => { if (uid) recipients.add(String(uid)); });
@@ -3070,7 +3088,7 @@ function _disputeNotificationEvent(t, m, actor, at) {
 // placar e nunca no telefone do organizador. Assim participantes recebem o aviso mesmo
 // quando o browser fecha logo depois de apertar o botão.
 function _matchReopenedNotificationEvent(t, m, outcome, actor, at) {
-  if (!t || !m) return null;
+  if (!t || !m || t.notificationsMuted === true || _rehearsal.enrollmentFrozen(t)) return null;
   const recipients = new Set(_slotUidsOf(m, 'p1').concat(_slotUidsOf(m, 'p2')));
   if (t.creatorUid) recipients.add(String(t.creatorUid));
   (Array.isArray(t.adminUids) ? t.adminUids : []).forEach(uid => { if (uid) recipients.add(String(uid)); });
@@ -3159,6 +3177,20 @@ async function _notificarJogosProntosDoTorneio(tournamentId, rawTournament, incl
   }
 }
 
+async function _rehearsalRootEventBlocked(event, tournamentId) {
+  const before = event.data && event.data.before && event.data.before.exists ? event.data.before.data() : null;
+  const after = event.data && event.data.after && event.data.after.exists ? event.data.after.data() : null;
+  if (_rehearsal.locked(before) || _rehearsal.locked(after)) return true;
+  const eventMarker = (after && after.rehearsal) || (before && before.rehearsal);
+  if (eventMarker && eventMarker.state === 'active') {
+    const fresh = await db.collection('tournaments').doc(tournamentId).get();
+    const current = fresh.exists ? fresh.data() : null;
+    if (!current || !current.rehearsal || current.rehearsal.state !== 'active' ||
+        current.rehearsal.epoch !== eventMarker.epoch) return true;
+  }
+  return false;
+}
+
 // Todo write no documento raiz é uma oportunidade para a chave ter preenchido o segundo
 // lado de um confronto. O recibo por `jogo + uid` permite varrer todos os jogos sem
 // depender de uma comparação frágil entre snapshots de torneios divididos.
@@ -3169,6 +3201,8 @@ exports.queueMatchReadyNotifications = onDocumentWritten(
     if (!after || !after.exists) return;
     const tournamentId = String(event.params && event.params.tournamentId || '');
     if (!tournamentId) return;
+    if (await _rehearsalRootEventBlocked(event, tournamentId)) return;
+    if (_rehearsal.marker && _rehearsal.marker(after.data() || {}) === 'active') return;
     try {
       await _notificarJogosProntosDoTorneio(tournamentId, after.data() || {}, false);
     } catch (error) {
@@ -3280,6 +3314,8 @@ exports.deliverScoreNotification = onDocumentWritten(
     if (!['pending', 'ready'].includes(item.dispatchStatus)) return;
     const tId = String(event.params.tournamentId || item.tournamentId || '');
     const eventId = String(event.params.eventId || '');
+    const freshItem = await after.ref.get();
+    if (!freshItem.exists) return;
     const revision = String(item.consolidationRevision || '');
     if (revision) {
       const due = Number(item.consolidateAfterMs || 0);
@@ -3303,8 +3339,11 @@ exports.deliverScoreNotification = onDocumentWritten(
     const recipients = Array.isArray(item.recipients) ? Array.from(new Set(item.recipients.map(String).filter(Boolean))) : [];
     const visibilitySnap = await db.collection('tournaments').doc(tId).get();
     const visibility = visibilitySnap.exists ? (visibilitySnap.data() || {}) : {};
-    if (visibility.organizerOnly === true) {
-      await after.ref.set({ dispatchStatus: 'suppressed', suppressedAt: new Date().toISOString() }, { merge: true });
+    if (_rehearsal.enrollmentFrozen(visibility) || visibility.notificationsMuted === true || visibility.organizerOnly === true) {
+      // update, nunca set: um gatilho atrasado não pode recriar o recibo
+      // depois de o reset ter apagado a árvore do torneio.
+      await after.ref.update({ dispatchStatus: 'suppressed', suppressedAt: new Date().toISOString() })
+        .catch(error => { if (error && error.code !== 5 && error && error.code !== 'not-found') throw error; });
       return;
     }
     const profiles = await _loadLiveNames(new Set(recipients));
@@ -4204,12 +4243,14 @@ exports.applyQueuedResult = onDocumentCreated(
     if (!snap || !snap.exists) return;
     const item = snap.data() || {};
     const db = getFirestore();
+    const [freshItem, freshRoot] = await Promise.all([snap.ref.get(), db.collection('tournaments').doc(tId).get()]);
+    if (!freshItem.exists || !freshRoot.exists || _rehearsal.locked(freshRoot.data())) return;
 
     const marca = async (campos) => {
       // ⛔ `merge` e NUNCA apagar o item: ele é o recibo do que a pessoa mandou. Se a
       // aplicação falhar, é por ele que dá pra saber o que se perdeu — apagar seria
       // repetir o erro de "registrar numa lista que o próximo passo apaga".
-      try { await snap.ref.set(Object.assign({ processedAt: Date.now() }, campos), { merge: true }); }
+      try { await snap.ref.update(Object.assign({ processedAt: Date.now() }, campos)); }
       catch (e) { console.error('[filaPlacar] não consegui marcar', tId, itemId, e); }
     };
 
@@ -7693,6 +7734,7 @@ exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
   for (const doc of snap.docs) {
     let t = doc.data();   // reatribuído pelo torneio MONTADO quando a rodada nasce
     const tId = doc.id;
+    if (_rehearsal.enrollmentFrozen(t)) continue; // ensaio é sorteado apenas sob comando
 
     // v3.1.14 (brick 4 etapa 4): Liga incremental "Pontos Corridos rodada a rodada" de
     // FASE POSTERIOR tem agenda PRÓPRIA por fase. Num multi-fase t.format NÃO é 'Liga' →
@@ -8438,6 +8480,7 @@ exports.autoDrawReconcile = onSchedule('every 30 minutes', async (event) => {
   for (const doc of snap.docs) {
     scanned++;
     const t = doc.data();
+    if (_rehearsal.enrollmentFrozen(t)) continue;
     /* ── L6.R1 · A MESMA DECISÃO CANÔNICA DO `autoDraw` ────────────────────────────────
      * ⛔ Este reconciliador JAMAIS pode recolocar no banco um `nextDrawAt` já vencido: era
      * assim que o documento ficava preso na consulta do cron pra sempre. `_nextOwedDrawMs`
@@ -8593,6 +8636,7 @@ exports.tournamentSummary = onDocumentWritten(
       const db = getFirestore();
       const antes = (event.data && event.data.before && event.data.before.exists) ? event.data.before.data() : null;
       const depois = (event.data && event.data.after && event.data.after.exists) ? event.data.after.data() : null;
+      if (await _rehearsalRootEventBlocked(event, id)) return;
 
       // torneio apagado → o resumo some junto (senão a tela mostraria fantasma)
       if (!depois) {
@@ -8726,6 +8770,7 @@ exports.tournamentMirror = onDocumentWritten(
     try {
       const db = getFirestore();
       const depois = (event.data && event.data.after && event.data.after.exists) ? event.data.after.data() : null;
+      if (await _rehearsalRootEventBlocked(event, id)) return;
 
       // torneio apagado ⇒ o espelho some junto (senão sobra fantasma no banco novo)
       if (!depois) {

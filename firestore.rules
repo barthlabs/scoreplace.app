@@ -8,6 +8,11 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Fotografia privada anterior ao ensaio; contém dados de inscritos.
+    match /tournamentRehearsalBaselines/{tournamentId}/{rest=**} {
+      allow read, write: if false;
+    }
+
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
     // `authEmail()` REMOVIDA (jul/2026): com a identidade só-uid, nenhuma regra decide
@@ -496,6 +501,19 @@ service cloud.firestore {
     }
 
     match /tournaments/{tournamentId} {
+      // A captura e a restauração travam o cliente; durante o ensaio os
+      // controles normais de jogos continuam no mesmo caminho de produção.
+      // O marcador é imutável para o cliente e o elenco continua protegido
+      // por elencoIntacto e pelas portas canônicas do servidor.
+      function rehearsalClientUnlocked() {
+        return !(resource.data.get('rehearsal', {}).get('state', '') in ['capturing', 'resetting']);
+      }
+      function rehearsalClientConfigIntact() {
+        return resource.data.get('rehearsal', {}).get('state', '') != 'active'
+          || (igual('notificationsMuted') && igual('isPublic')
+              && igual('registrationSettings') && igual('maxParticipantsByCategory')
+              && igual('placeholderReservations') && igual('canonicalRegistrationMigration'));
+      }
       match /billingReceipts/{receiptId} {
         allow read: if request.auth != null && (
           request.auth.uid == get(/databases/$(database)/documents/tournaments/$(tournamentId)).data.get('creatorUid', '')
@@ -833,6 +851,9 @@ service cloud.firestore {
       // organizador atravessa, porque o estado de fase é do servidor. A única saída é
       // `ehResetOk()` — o reset para inscrições, exigido inteiro.
       allow update: if request.auth != null
+        && rehearsalClientUnlocked()
+        && rehearsalClientConfigIntact()
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['rehearsal'])
         && (
           isTournamentAdmin(resource.data)
           // v1.8.62: admin por uid (organizador phone-only sem email)
@@ -955,6 +976,7 @@ service cloud.firestore {
         }
         allow read: if canReadTournamentData(parentTq());
         allow create: if request.auth != null
+          && !(parentTq().get('rehearsal', {}).get('state', '') in ['capturing', 'resetting'])
           && request.resource.data.actorUid == request.auth.uid
           && request.resource.data.matchId is string
           && request.resource.data.matchId.size() > 0

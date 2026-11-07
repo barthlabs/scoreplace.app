@@ -4912,10 +4912,16 @@ function _assertLegacyRosterStillAuthoritative(tournament) {
   }
 }
 
+function _assertNoRehearsalEnrollment(tournament) {
+  if (tournament && tournament.rehearsal && tournament.rehearsal.state) {
+    throw new HttpsError('failed-precondition', 'Inscrições congeladas durante o ensaio. Restaure antes de alterar o elenco.');
+  }
+}
 /* Carrega e grava o elenco materializado como uma única fonte. A query é
  * limitada pelo recibo e lê um documento a mais para detectar excesso; cada
  * update toca somente status/vínculo de dupla, jamais a projeção legada. */
 function _canonicalMutationTournament(tournamentRef, tournament, logicalId) {
+  _assertNoRehearsalEnrollment(tournament);
   // A cópia fiel guarda registrations com tournamentId/registrationId do
   // original. O ref físico continua apontando ao sandbox; só a identidade
   // usada pelo núcleo canônico muda. Sem logicalId, as portas existentes
@@ -6382,6 +6388,7 @@ async function _applyCanonicalRegistrationMigrationForOrganizer(db, callerUid, t
     const snap = await tx.get(ref);
     if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
     const rawTournament = snap.data() || {};
+    _assertNoRehearsalEnrollment(rawTournament);
     if (!_isTournamentOrgCaller(rawTournament, callerUid)) {
       throw new HttpsError("permission-denied", "só a organização migra inscrições");
     }
@@ -6483,6 +6490,7 @@ async function _reconcileLegacyCanonicalRegistrationProjectionForOrganizer(db, c
     const snap = await tx.get(ref);
     if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
     const tournament = await _splitParts.hidratar(tx, ref, snap.data() || {}, ["participants"]);
+    _assertNoRehearsalEnrollment(tournament);
     if (!_isTournamentOrgCaller(tournament, callerUid)) {
       throw new HttpsError("permission-denied", "só a organização reconcilia inscrições");
     }
@@ -6657,6 +6665,7 @@ exports.setTournamentCategoryDefinitions = onCall(
       const snap = await tx.get(ref);
       if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
       const tournament = snap.data() || {};
+      _assertNoRehearsalEnrollment(tournament);
       if (!_isTournamentOrgCaller(tournament, callerUid)) {
         throw new HttpsError("permission-denied", "só a organização configura categorias");
       }
@@ -6730,6 +6739,7 @@ exports.requestCanonicalRegistration = onCall(
       const tournamentSnap = await tx.get(tournamentRef);
       if (!tournamentSnap.exists) throw new HttpsError("not-found", "torneio não existe");
       const tournament = tournamentSnap.data() || {};
+      _assertNoRehearsalEnrollment(tournament);
       if (tournament.canonicalRegistrationMigration && tournament.canonicalRegistrationMigration.fingerprint) {
         throw new HttpsError("failed-precondition", "torneio já usa inscrições canônicas; use a porta de inscrição normal");
       }
@@ -7730,6 +7740,7 @@ exports.renameTournamentParticipant = onCall(
       if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
       const t = await _splitParts.hidratar(tx, ref, snap.data() || {});
       if (!_isTournamentOrgCaller(t, callerUid)) throw new HttpsError("permission-denied", "só a organização edita nome de participante");
+      _assertNoRehearsalEnrollment(t);
       const before = JSON.parse(JSON.stringify(t));
       let renamed;
       try { renamed = _participantRename.renameTournamentParticipant(t, { oldName, newName, manualParticipantId }); }
@@ -13563,12 +13574,28 @@ exports.espelhoDoPerfilPublico = onDocumentWritten(
  * tests/profile-name-never-writes-tournaments.test.js.
  */
 
+async function _blockedRehearsalRootEvent(event, tid) {
+  const before = event.data && event.data.before && event.data.before.exists ? event.data.before.data() : null;
+  const after = event.data && event.data.after && event.data.after.exists ? event.data.after.data() : null;
+  const state = t => t && t.rehearsal && t.rehearsal.state;
+  if (['capturing', 'resetting'].includes(state(before)) || ['capturing', 'resetting'].includes(state(after))) return true;
+  const marker = (after && after.rehearsal) || (before && before.rehearsal);
+  if (marker && marker.state === 'active') {
+    const snap = await admin.firestore().collection('tournaments').doc(tid).get();
+    const current = snap.exists ? snap.data() : null;
+    if (!current || !current.rehearsal || current.rehearsal.state !== 'active' ||
+        current.rehearsal.epoch !== marker.epoch) return true;
+  }
+  return false;
+}
+
 exports.syncDiscoveryFeed = onDocumentWritten(
   { document: "tournaments/{tid}", region: "us-central1", memory: "256MiB", timeoutSeconds: 60 },
   async (event) => {
     const tid = event.params.tid;
     const after  = event.data.after.exists  ? (event.data.after.data()  || {}) : null;
     const before = event.data.before.exists ? (event.data.before.data() || {}) : null;
+    if (await _blockedRehearsalRootEvent(event, tid)) return;
     const feedRef = admin.firestore().collection("discoveryFeed").doc(tid);
 
     // Deletado OU deixou de ser público → remover do feed (se lá estava).
@@ -13603,6 +13630,7 @@ exports.syncMatchRosters = onDocumentWritten(
     const tid = event.params.tid;
     const after  = event.data.after.exists  ? (event.data.after.data()  || {}) : null;
     const before = event.data.before.exists ? (event.data.before.data() || {}) : null;
+    if (await _blockedRehearsalRootEvent(event, tid)) return;
     if (!after) return; // torneio deletado — nada a sincronizar
 
     // ── v1.7.36 · VIGIA ESTRUTURAL (modo OBSERVAÇÃO) ───────────────────────

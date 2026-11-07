@@ -30,6 +30,8 @@ const ler = (p) => fs.readFileSync(path.join(RAIZ, p), 'utf8');
  * as `rules-*` disputam as portas 8098/8099 e TODAS usam o projeto `demo-scoreplace`, ou
  * seja, os dados se misturariam. Rodadas em série, como aqui, não colidem. */
 const EMULADOR_MANUAL = {
+  'tests/tournament-rehearsal-emulator.test.js':
+    'node scripts/rodar-emulador.js --only firestore --config firebase.emulator.json --project demo-scoreplace "node tests/tournament-rehearsal-emulator.test.js"',
   'functions/test-team-role-invite-emu.js':
     'npm run test:teamrole',
   'tests/e05-results-obsoletos-emulator.test.js':
