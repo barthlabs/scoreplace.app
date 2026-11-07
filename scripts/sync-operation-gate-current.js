@@ -124,6 +124,18 @@ function recordNormal(state, name, codebase) {
   write(stateFile, state);
   return row;
 }
+function serveLatestNormal(name) {
+  const serviceName = functionRunName(functionInfo(name));
+  const service = runService(serviceName, 'us-central1');
+  const latest = service.status?.latestReadyRevisionName;
+  if (!latest) throw new Error(`Function sem revisão pronta: ${name}`);
+  if (servedRevisionName(service) !== latest) {
+    run('gcloud', ['run', 'services', 'update-traffic', serviceName, '--project', project,
+      '--region', 'us-central1', '--to-revisions', `${latest}=100`, '--quiet'], { stdio: 'inherit' });
+  }
+  const served = runService(serviceName, 'us-central1');
+  if (servedRevisionName(served) !== latest) throw new Error(`Function sem 100% na revisão nova: ${name}`);
+}
 function recordRecovery(state, rows, name, regional) {
   const target = rows.filter(row => row.name === regional && row.region === 'us-east1');
   if (target.length !== 1) throw new Error(`porta v2 ausente: ${regional}`);
@@ -161,15 +173,31 @@ function main() {
     return;
   }
   try {
-    for (const [name, codebase] of normals) {
-      const f = functionInfo(name), current = state.candidate.normal.find(row => row.name === name);
-      if (current) { recordNormal(state, name, codebase); continue; }
-      const serviceName = functionRunName(f);
-      savePrevious(state, `normal/${name}`, serviceName, 'us-central1', runService(serviceName, 'us-central1'));
-      markFlight(state, `normal/${name}`);
-      run('bash', ['scripts/deploy-functions.sh', codebase === 'functions' ? 'main' : 'autodraw', '--only', name], { stdio: 'inherit' });
-      recordNormal(state, name, codebase);
-      markDone(state, `normal/${name}`);
+    const [presenceName] = normals[0];
+    if (!state.candidate.normal.some(row => row.name === presenceName)) {
+      const serviceName = functionRunName(functionInfo(presenceName));
+      savePrevious(state, `normal/${presenceName}`, serviceName, 'us-central1', runService(serviceName, 'us-central1'));
+      markFlight(state, `normal/${presenceName}`);
+      run('bash', ['scripts/deploy-functions.sh', 'main', '--only', presenceName], { stdio: 'inherit' });
+      serveLatestNormal(presenceName);
+      recordNormal(state, presenceName, 'functions');
+      markDone(state, `normal/${presenceName}`);
+    }
+    const autodrawNames = normals.slice(1).map(([name]) => name);
+    const pendingAutodraw = autodrawNames.filter(name => !state.candidate.normal.some(row => row.name === name));
+    if (pendingAutodraw.length) {
+      for (const name of pendingAutodraw) {
+        const serviceName = functionRunName(functionInfo(name));
+        savePrevious(state, `normal/${name}`, serviceName, 'us-central1', runService(serviceName, 'us-central1'));
+        markFlight(state, `normal/${name}`);
+      }
+      run('bash', ['scripts/deploy-functions.sh', 'autodraw', '--only', pendingAutodraw.join(',')],
+        { stdio: 'inherit', env: { ...process.env, SP_DEFER_AUTODRAW_RECEIPT: '1' } });
+      for (const name of pendingAutodraw) {
+        serveLatestNormal(name);
+        recordNormal(state, name, 'functions-autodraw');
+        markDone(state, `normal/${name}`);
+      }
     }
     for (const [name, regional] of recovery) {
       const target = rows.find(row => row.name === regional && row.region === 'us-east1');

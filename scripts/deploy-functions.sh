@@ -173,7 +173,7 @@ _deploy_batch() { # $1=dir $2=targets (máx. 10) $3=descrição
     echo "⚠ firebase saiu com código $_rc DEPOIS de confirmar o deploy; seguindo pela evidência do CLI."
   fi
   rm -f "$_log"
-  if [ "$ALVO" = "autodraw" ] && [ -n "$ONLY" ]; then
+  if [ "$ALVO" = "autodraw" ] && [ -n "$ONLY" ] && [ "${SP_DEFER_AUTODRAW_RECEIPT:-0}" != 1 ]; then
     SP_DEPLOY_CONFIRMED=1 node "$ROOT/scripts/check-backend-publicado.js" --registrar-funcoes "$targets"
   fi
 }
