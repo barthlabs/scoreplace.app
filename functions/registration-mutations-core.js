@@ -234,7 +234,10 @@ function reclassify(tournamentId, registrations, participant, fromCategoryId, to
       throw new Error('participante já possui inscrição ativa na categoria de destino');
     }
     if (existing) {
-      updates.push(Object.assign({}, existing, { status: item.status, fixedPairId: nextPairId }));
+      updates.push(Object.assign({}, existing, {
+        status: item.status, fixedPairId: nextPairId,
+      }, Object.prototype.hasOwnProperty.call(item, 'gender')
+        ? { gender: item.gender || null, genderSource: item.genderSource || null } : {}));
       return;
     }
     creates.push(Object.assign({}, item, {

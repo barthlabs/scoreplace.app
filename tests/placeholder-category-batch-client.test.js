@@ -54,6 +54,18 @@ const edits = rows.map((row) => ({ manualParticipantId:row.manualId,
   assert.equal(calls[0].data.edits[0].fromCategoryId,'retinal');
   assert.equal(calls[0].data.edits[0].toCategoryId,'vitamina-c');
   calls.length=0;
+  await window.__testSaveReservations(tournament,[existing],[
+    {manualParticipantId:'existing',gender:'feminino'}]);
+  assert.equal(calls[0].data.edits[0].fromCategoryId,'retinal');
+  assert.equal(calls[0].data.edits[0].toCategoryId,'retinal');
+  assert.equal(calls[0].data.edits[0].genders[0].gender,'feminino',
+    'gênero isolado é enviado mesmo sem troca de categoria');
+  calls.length=0;
+  await window.__testSaveReservations(tournament,[rows[0]],[
+    {manualParticipantId:'manual-0',category:'Retinal',gender:'feminino'}]);
+  assert.equal(calls[0].data.reservations[0].gender,'feminino',
+    'reserva materializada carrega gênero junto da categoria');
+  calls.length=0;
   await window.__testSaveReservations(tournament,[
     {order:1,uid:'alice',manualId:'',categoryId:'retinal',_duplaIdx:null},
     {order:2,uid:'alice',manualId:'',categoryId:'vitamina-c',_duplaIdx:null}

@@ -112,6 +112,7 @@ const _registrationMigration = require("./registration-migration-core");
 const _registrationBatchPlan = require("./registration-batch-plan-core");
 const _registrationBatchApply = require("./registration-batch-apply-core");
 const _registrationMutations = require("./registration-mutations-core");
+const _registrationGender = require("./registration-gender-core");
 const _reservationWithdraw = require("./reservation-withdraw-core");
 const _registrationClaim = require("./registration-claim-core");
 const _editCanonicalSlot = require("./edit-canonical-slot-core");
@@ -5019,6 +5020,10 @@ function _writeCanonicalRosterChanges(tx, tournamentRef, tournament, registratio
     if (item.participantKind === "manual" && Object.prototype.hasOwnProperty.call(item, "manualDisplayName")) {
       patch.manualDisplayName = item.manualDisplayName;
     }
+    if (Object.prototype.hasOwnProperty.call(item, "gender")) {
+      patch.gender = item.gender || null;
+      patch.genderSource = item.genderSource || null;
+    }
     tx.update(tournamentRef.collection("registrations").doc(item.registrationId), patch);
   });
   creates.forEach((item) => {
@@ -5451,16 +5456,25 @@ function _canonicalAssignmentBatchInput(data) {
   if (!/^[A-Za-z0-9_-]{8,100}$/.test(operationId)) {
     throw new HttpsError('invalid-argument', 'Identificador do salvamento inválido.');
   }
-  const cleanEdits = edits.map((item) => ({
-    userUid: String(item && item.userUid || '').trim(),
-    manualParticipantId: String(item && item.manualParticipantId || '').trim(),
-    fromCategoryId: String(item && item.fromCategoryId || '').trim(),
-    toCategoryId: String(item && item.toCategoryId || '').trim(),
-  }));
-  const cleanReservations = reservations.map((item) => ({
-    manualParticipantId: String(item && item.manualParticipantId || '').trim(),
-    toCategoryId: String(item && item.toCategoryId || '').trim(),
-  }));
+  let cleanEdits, cleanReservations;
+  try {
+    cleanEdits = edits.map((item) => ({
+      userUid: String(item && item.userUid || '').trim(),
+      manualParticipantId: String(item && item.manualParticipantId || '').trim(),
+      fromCategoryId: String(item && item.fromCategoryId || '').trim(),
+      toCategoryId: String(item && item.toCategoryId || '').trim(),
+      ...(item && Object.prototype.hasOwnProperty.call(item, 'genders')
+        ? { genders: _registrationGender.normalizeAssignments(item.genders) } : {}),
+    }));
+    cleanReservations = reservations.map((item) => ({
+      manualParticipantId: String(item && item.manualParticipantId || '').trim(),
+      toCategoryId: String(item && item.toCategoryId || '').trim(),
+      ...(item && Object.prototype.hasOwnProperty.call(item, 'gender')
+        ? { gender: _registrationGender.normalize(item.gender) } : {}),
+    }));
+  } catch (error) {
+    throw new HttpsError('invalid-argument', error.message);
+  }
   const seen = new Set(), editPeople = new Set();
   for (const item of cleanEdits) {
     if (!!item.userUid === !!item.manualParticipantId || !item.fromCategoryId || !item.toCategoryId) {
@@ -5597,6 +5611,10 @@ async function _applyCanonicalAssignmentBatch(request, input) {
           cohort.some((registration) => touchedSourceIds.has(_registrationCore.registrationId(registration.participantKey, item.fromCategoryId)))) {
         throw new HttpsError('invalid-argument', 'Pessoa ou dupla repetida no bloco.');
       }
+      if ((item.genders || []).some((assignment) =>
+        !cohort.some((registration) => registration.participantKey === assignment.participantKey))) {
+        throw new HttpsError('invalid-argument', 'Gênero de pessoa fora da inscrição ou dupla.');
+      }
       cohort.forEach((registration) => touchedSourceIds.add(_registrationCore.registrationId(registration.participantKey, item.fromCategoryId)));
       if (source.categoryId === item.toCategoryId) {
         if (source.categoryId !== item.fromCategoryId &&
@@ -5653,6 +5671,33 @@ async function _applyCanonicalAssignmentBatch(request, input) {
       changes.creates.forEach((entry) => createsById.set(entry.registrationId, entry));
       changed++;
     }
+    // Gênero é atributo da pessoa dentro da inscrição, independente da
+    // categoria. Aplicá-lo depois das reclassificações conserva o valor no
+    // registro de destino e também permite editar apenas o gênero.
+    const genderTargets = [];
+    input.reservations.forEach((item) => {
+      if (Object.prototype.hasOwnProperty.call(item, 'gender')) {
+        genderTargets.push({ participantKey: 'manual:' + (remappedIds.get(item.manualParticipantId) || item.manualParticipantId),
+          categoryId: item.toCategoryId, gender: item.gender });
+      }
+    });
+    input.edits.forEach((item) => (item.genders || []).forEach((assignment) => {
+      genderTargets.push({ participantKey: assignment.participantKey,
+        categoryId: item.toCategoryId, gender: assignment.gender });
+    }));
+    genderTargets.forEach((target) => {
+      const matches = virtualRegistrations.filter((registration) => registration &&
+        registration.participantKey === target.participantKey &&
+        registration.categoryId === target.categoryId && registration.status !== 'withdrawn');
+      if (matches.length !== 1) throw new HttpsError('failed-precondition', 'Inscrição mudou; atualize a Análise antes de salvar o gênero.');
+      const updated = _registrationGender.apply(matches[0], target.gender);
+      if (!updated) return;
+      virtualRegistrations = virtualRegistrations.map((registration) =>
+        registration.registrationId === updated.registrationId ? updated : registration);
+      if (createsById.has(updated.registrationId)) createsById.set(updated.registrationId, updated);
+      else updatesById.set(updated.registrationId, updated);
+      changed++;
+    });
     if (pendingPaymentChecks.length) {
       const billingConfig = (await tx.get(db.collection('billingAdminConfig').doc('active'))).data() || {};
       if (!_billingTerms.termsAccepted(tournament, _billingTerms.termsCatalog(billingConfig, tournament))) {

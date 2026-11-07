@@ -1144,19 +1144,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // O bloco inteiro atravessa uma transação; pares recebem uma única mudança,
   // pois a Function move a dupla toda. O mesmo operationId sobrevive ao retry.
   function _erSaveCanonicalCategoryEdits(t, rows, edits) {
-    // Soltar uma dupla numa coluna de categoria marca também o gênero para a
-    // prévia visual. No roster canônico, porém, o ID tipado da categoria já
-    // determina esse gênero: não há segunda escrita de gênero a fazer. Só uma
-    // mudança isolada de gênero continua proibida.
-    if (edits.some(function (edit) {
-      return Object.prototype.hasOwnProperty.call(edit, 'gender') &&
-        !Object.prototype.hasOwnProperty.call(edit, 'category');
-    })) {
-      return Promise.reject(new Error('Escolha uma categoria para gravar a alteração de gênero neste torneio.'));
-    }
     var seen = Object.create(null), moves = [], reservations = [];
     edits.forEach(function (edit) {
-      if (!Object.prototype.hasOwnProperty.call(edit, 'category')) return;
       var row = rows.filter(function (candidate) {
         return candidate && (edit.sourceRowOrder != null
           ? candidate.order === edit.sourceRowOrder
@@ -1166,30 +1155,41 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       if (!row || (!row.uid && !row.manualId)) {
         throw new Error('inscrição canônica sem identidade estável ou categoryId');
       }
-      var toCategoryId = typeof window._canonicalCategoryIdForDisplay === 'function'
-        ? window._canonicalCategoryIdForDisplay(t, edit.category) : '';
+      var hasCategory = Object.prototype.hasOwnProperty.call(edit, 'category');
+      var hasGender = Object.prototype.hasOwnProperty.call(edit, 'gender');
+      var toCategoryId = hasCategory && typeof window._canonicalCategoryIdForDisplay === 'function'
+        ? window._canonicalCategoryIdForDisplay(t, edit.category) : row.categoryId;
       if (!toCategoryId) throw new Error('categoria escolhida não existe na configuração atual');
       if (row.genericPlaceholderReservation === true) {
         if (!row.manualId || row.uid || row._duplaIdx != null) {
           throw new Error('reserva individual sem identidade estável');
         }
-        if (!reservations.some(function (item) { return item.manualParticipantId === row.manualId; }))
-          reservations.push({ manualParticipantId: row.manualId, toCategoryId: toCategoryId });
+        if (!reservations.some(function (item) { return item.manualParticipantId === row.manualId; })) {
+          var reservation = { manualParticipantId: row.manualId, toCategoryId: toCategoryId };
+          if (hasGender) reservation.gender = edit.gender;
+          reservations.push(reservation);
+        }
         return;
       }
       if (!row.categoryId) throw new Error('inscrição canônica sem categoryId');
       var pairKey = (row._duplaIdx != null ? 'pair:' + String(row._duplaIdx)
         : (row.uid ? 'uid:' + row.uid : 'manual:' + row.manualId)) + '|cat:' + String(row.categoryId);
-      if (seen[pairKey]) return;
-      seen[pairKey] = true;
-      moves.push({
-        userUid: row.uid || '', manualParticipantId: row.manualId || '',
-        // O rótulo projetado nunca é usado como ID no servidor.
-        fromCategoryId: (typeof window._canonicalCategoryIdForDisplay === 'function'
-          ? (window._canonicalCategoryIdForDisplay(t, row.categoryId) || row.categoryId)
-          : row.categoryId),
-        toCategoryId: toCategoryId
-      });
+      var move = seen[pairKey];
+      if (!move) {
+        move = {
+          userUid: row.uid || '', manualParticipantId: row.manualId || '',
+          // O rótulo projetado nunca é usado como ID no servidor.
+          fromCategoryId: (typeof window._canonicalCategoryIdForDisplay === 'function'
+            ? (window._canonicalCategoryIdForDisplay(t, row.categoryId) || row.categoryId)
+            : row.categoryId),
+          toCategoryId: toCategoryId,
+          genders: []
+        };
+        seen[pairKey] = move;
+        moves.push(move);
+      }
+      if (move.toCategoryId !== toCategoryId) throw new Error('Dupla com categorias conflitantes.');
+      if (hasGender) move.genders.push({ userUid: row.uid || '', manualParticipantId: row.manualId || '', gender: edit.gender });
     });
     var count = moves.length + reservations.length;
     if (!count) return Promise.resolve({ ok:true, outcome:'unchanged', changed:0, resolvedEntries:0 });

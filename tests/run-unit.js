@@ -1953,6 +1953,7 @@ const SUITES = [
   'functions/test-registration-core.js',
   'functions/test-registration-migration-core.js',
   'functions/test-registration-mutations-core.js',
+  'functions/test-registration-gender-core.js',
   'functions/test-canonical-registration-boundary-core.js',
   'functions/test-registration-claim-core.js',
   'functions/test-published-claim-core.js',

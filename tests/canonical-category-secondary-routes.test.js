@@ -53,9 +53,9 @@ ok(save.includes('row.categoryId') && save.includes('manualParticipantId: row.ma
   'Análise converte bloco inteiro em mudanças tipadas, sem escolher alvo por nome');
 ok(save.includes("'pair:'") && save.includes('seen[pairKey]'),
   'Análise envia uma única mudança para dupla fixa, pois a Function move ambas juntas');
-ok(save.includes("!Object.prototype.hasOwnProperty.call(edit, 'category')") &&
-   save.includes('Escolha uma categoria para gravar') && !save.includes('applyEnrollmentAssignments'),
-  'Análise aceita gênero derivado da categoria no lote, mas bloqueia gênero isolado e não cai na porta legada');
+ok(save.includes("Object.prototype.hasOwnProperty.call(edit, 'gender')") &&
+   save.includes('move.genders.push') && !save.includes('applyEnrollmentAssignments'),
+  'Análise envia gênero explícito, inclusive isolado, pela porta canônica');
 
 const reportSave = between(reportUi, 'window._erSaveEdits = function', '// ─── Verificação letzplay');
 ok(reportSave.includes('isCanonicalRoster') && reportSave.includes('_erSaveCanonicalCategoryEdits') &&
@@ -90,10 +90,11 @@ ok(reportSave.includes('isCanonicalRoster') && reportSave.includes('_erSaveCanon
   ok(result.changed === 2 && calls.length === 1 && calls[0].payload.edits.length === 2 &&
      calls[0].payload.edits.every((edit) => edit.toCategoryId === 'Masc Light'),
     'lote com gênero derivado envia uma só transação, uma edição por dupla');
-  let genderOnlyRejected = false;
-  try { await fn({ id: 'neon' }, rows, [{ manualParticipantId: 'm113', gender: 'masc' }]); }
-  catch (error) { genderOnlyRejected = /Escolha uma categoria/.test(error.message); }
-  ok(genderOnlyRejected, 'gênero isolado continua bloqueado no roster canônico');
+  const genderOnly = await fn({ id: 'neon' }, rows, [{ manualParticipantId: 'm113', gender: 'masc' }]);
+  ok(genderOnly.changed === 1 && calls.length === 2 && calls[1].payload.edits.length === 1 &&
+     calls[1].payload.edits[0].toCategoryId === '__uncategorized__' &&
+     calls[1].payload.edits[0].genders[0].gender === 'masc',
+    'gênero isolado grava na categoria atual pela porta canônica');
 
   // A seleção por Shift precisa seguir os cards visíveis, não a ordem interna
   // do array de inscrições (que no Neon colocava 111/112 dentro do intervalo).

@@ -15,6 +15,8 @@ namespace ScoreplaceRegistrationRoster {
     participantUid?: unknown;
     manualParticipantId?: unknown;
     manualDisplayName?: unknown;
+    gender?: unknown;
+    genderSource?: unknown;
     status?: unknown;
     fixedPairId?: unknown;
     enrollSeq?: unknown;
@@ -23,7 +25,7 @@ namespace ScoreplaceRegistrationRoster {
     registrationOrder?: unknown;
     createdAt?: unknown;
   }
-  interface Person { key: string; uid: string | null; manualParticipantId: string | null; name: string; originCategoryId: string; order: OrderKey; }
+  interface Person { key: string; uid: string | null; manualParticipantId: string | null; name: string; originCategoryId: string; gender: string; genderSource: string; order: OrderKey; }
   interface OrderKey { rank: number; fallback: string; index: number; }
   function text(value: unknown): string { return typeof value === 'string' ? value.trim() : ''; }
   function active(doc: Registration): boolean { return !!doc && doc.status === 'confirmed'; }
@@ -66,11 +68,13 @@ namespace ScoreplaceRegistrationRoster {
   }
   function member(doc: Registration, index: number): Person {
     const kind = text(doc.participantKind), uid = text(doc.participantUid), manualId = text(doc.manualParticipantId);
-    if (kind === 'account' && uid && !manualId) return { key: 'uid:' + uid, uid, manualParticipantId: null, name: '', originCategoryId: text(doc.originCategoryId), order: orderOf(doc, '', index) };
+    const gender = text(doc.gender), genderSource = text(doc.genderSource);
+    const personal = { gender, genderSource };
+    if (kind === 'account' && uid && !manualId) return { key: 'uid:' + uid, uid, manualParticipantId: null, name: '', originCategoryId: text(doc.originCategoryId), order: orderOf(doc, '', index), ...personal };
     if (kind === 'manual' && manualId && !uid) {
       const name = text(doc.manualDisplayName);
       if (!name) throw new Error('convidado manual sem nome de exibição');
-      return { key: 'manual:' + manualId, uid: null, manualParticipantId: manualId, name, originCategoryId: text(doc.originCategoryId), order: orderOf(doc, name, index) };
+      return { key: 'manual:' + manualId, uid: null, manualParticipantId: manualId, name, originCategoryId: text(doc.originCategoryId), order: orderOf(doc, name, index), ...personal };
     }
     throw new Error('registro de participante inválido');
   }
@@ -80,6 +84,7 @@ namespace ScoreplaceRegistrationRoster {
     // legado. O ID explícito permite que as portas de mutação nunca tenham de
     // recuperar identidade de um rótulo visível.
     const entry: Record<string, unknown> = { categoryId, category: categoryId, categories: [categoryId] };
+    if (person.genderSource === 'organizador') { entry.gender = person.gender; entry.genderSource = person.genderSource; }
     if (person.uid) entry.uid = person.uid;
     else { entry.manualParticipantId = person.manualParticipantId as string; entry.displayName = person.name; entry.name = person.name; }
     return entry;
@@ -102,6 +107,8 @@ namespace ScoreplaceRegistrationRoster {
     if (second.manualParticipantId) entry.p2ManualId = second.manualParticipantId;
     if (first.name) entry.p1Name = first.name;
     if (second.name) entry.p2Name = second.name;
+    if (first.genderSource === 'organizador') { entry.p1Gender = first.gender; entry.p1GenderSource = first.genderSource; }
+    if (second.genderSource === 'organizador') { entry.p2Gender = second.gender; entry.p2GenderSource = second.genderSource; }
     return entry;
   }
   /** Retorna entradas estruturais para o motor; pendentes nunca ocupam vaga. */

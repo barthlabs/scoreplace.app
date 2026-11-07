@@ -57,13 +57,15 @@ var ScoreplaceRegistrationRoster;
     }
     function member(doc, index) {
         const kind = text(doc.participantKind), uid = text(doc.participantUid), manualId = text(doc.manualParticipantId);
+        const gender = text(doc.gender), genderSource = text(doc.genderSource);
+        const personal = { gender, genderSource };
         if (kind === 'account' && uid && !manualId)
-            return { key: 'uid:' + uid, uid, manualParticipantId: null, name: '', originCategoryId: text(doc.originCategoryId), order: orderOf(doc, '', index) };
+            return { key: 'uid:' + uid, uid, manualParticipantId: null, name: '', originCategoryId: text(doc.originCategoryId), order: orderOf(doc, '', index), ...personal };
         if (kind === 'manual' && manualId && !uid) {
             const name = text(doc.manualDisplayName);
             if (!name)
                 throw new Error('convidado manual sem nome de exibição');
-            return { key: 'manual:' + manualId, uid: null, manualParticipantId: manualId, name, originCategoryId: text(doc.originCategoryId), order: orderOf(doc, name, index) };
+            return { key: 'manual:' + manualId, uid: null, manualParticipantId: manualId, name, originCategoryId: text(doc.originCategoryId), order: orderOf(doc, name, index), ...personal };
         }
         throw new Error('registro de participante inválido');
     }
@@ -73,6 +75,10 @@ var ScoreplaceRegistrationRoster;
         // legado. O ID explícito permite que as portas de mutação nunca tenham de
         // recuperar identidade de um rótulo visível.
         const entry = { categoryId, category: categoryId, categories: [categoryId] };
+        if (person.genderSource === 'organizador') {
+            entry.gender = person.gender;
+            entry.genderSource = person.genderSource;
+        }
         if (person.uid)
             entry.uid = person.uid;
         else {
@@ -107,6 +113,14 @@ var ScoreplaceRegistrationRoster;
             entry.p1Name = first.name;
         if (second.name)
             entry.p2Name = second.name;
+        if (first.genderSource === 'organizador') {
+            entry.p1Gender = first.gender;
+            entry.p1GenderSource = first.genderSource;
+        }
+        if (second.genderSource === 'organizador') {
+            entry.p2Gender = second.gender;
+            entry.p2GenderSource = second.genderSource;
+        }
         return entry;
     }
     /** Retorna entradas estruturais para o motor; pendentes nunca ocupam vaga. */

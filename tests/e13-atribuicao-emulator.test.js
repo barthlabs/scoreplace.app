@@ -71,6 +71,30 @@ const rejectCode=(promise,code)=>assert.rejects(promise,(error)=>error&&error.co
   assert.equal(parent.placeholderReservations.length,0);
   assert.equal((await first.ref.collection('registrations').get()).size,6);
   assert.equal((await first.ref.collection('registrationCategoryAudit').get()).size,2);
+  const genderOnly={tournamentId:first.id,sandbox:false,operationId:'e13_gender_'+stamp,
+    reservations:[],edits:[{userUid:'alice',fromCategoryId:'b',toCategoryId:'b',
+      genders:[{userUid:'alice',gender:'feminino'}]}]};
+  const genderReply=await invoke(genderOnly);
+  assert.equal(genderReply.outcome,'assigned');
+  const aliceBId=R.registrationId('uid:alice','b');
+  assert.equal((await first.ref.collection('registrations').doc(aliceBId).get()).data().gender,'feminino');
+  assert.equal((await invoke(genderOnly)).replayed,true);
+  const oldClientReply=await invoke({...genderOnly,operationId:'e13_old_client_'+stamp,
+    edits:[{userUid:'alice',fromCategoryId:'b',toCategoryId:'b'}]});
+  assert.equal(oldClientReply.outcome,'unchanged');
+  assert.equal((await first.ref.collection('registrations').doc(aliceBId).get()).data().gender,'feminino');
+  await rejectCode(invoke({...genderOnly,edits:[{...genderOnly.edits[0],
+    genders:[{userUid:'alice',gender:'masculino'}]}]}),'failed-precondition');
+  await rejectCode(invoke({...genderOnly,operationId:'e13_gender_invalid_'+stamp,
+    edits:[{...genderOnly.edits[0],genders:[{userUid:'alice',gender:'desconhecido'}]}]}),'invalid-argument');
+  await invoke({...genderOnly,operationId:'e13_gender_clear_'+stamp,
+    edits:[{...genderOnly.edits[0],genders:[{userUid:'alice',gender:''}]}]});
+  assert.equal((await first.ref.collection('registrations').doc(aliceBId).get()).data().gender,null);
+  const reservationGender={tournamentId:first.id,sandbox:false,operationId:'e13_res_gender_'+stamp,
+    reservations:[],edits:[{manualParticipantId:'slot-1',fromCategoryId:'a',toCategoryId:'a',
+      genders:[{manualParticipantId:'slot-1',gender:'feminino'}]}]};
+  await invoke(reservationGender);
+  assert.equal((await first.ref.collection('registrations').doc(R.registrationId('manual:slot-1','a')).get()).data().gender,'feminino');
   const historic=await make('k');
   const oldId='slot-1', historicRegistration={registrationId:R.registrationId('manual:'+oldId,'a'),
     tournamentId:historic.id,categoryId:'a',participantKey:'manual:'+oldId,participantKind:'manual',
@@ -81,11 +105,12 @@ const rejectCode=(promise,code)=>assert.rejects(promise,(error)=>error&&error.co
     _nPartes:{participants:1}});
   await historic.ref.collection('inscritos').doc('m'+oldId).set({item:{manualParticipantId:oldId,isPlaceholder:true}});
   const historicPayload={tournamentId:historic.id,sandbox:false,operationId:'e13_historic_'+stamp,
-    reservations:[{manualParticipantId:'slot-1',toCategoryId:'a'},
+    reservations:[{manualParticipantId:'slot-1',toCategoryId:'a',gender:'feminino'},
       {manualParticipantId:'slot-2',toCategoryId:'b'}],edits:[]};
   const historicResult=await invoke(historicPayload);
-  assert.equal(historicResult.changed,2);
+  assert.equal(historicResult.changed,3);
   assert.equal(historicResult.remappedIds['slot-1'],'slot-1-g1');
+  assert.equal((await historic.ref.collection('registrations').doc(R.registrationId('manual:slot-1-g1','a')).get()).data().gender,'feminino');
   assert.equal((await historic.ref.collection('inscritos').doc('mslot-1').get()).exists,false);
   assert.equal((await historic.ref.get()).data()._nPartes.participants,0);
   assert.equal((await historic.ref.collection('registrations').doc(historicRegistration.registrationId).get()).data().status,'withdrawn');
@@ -110,7 +135,7 @@ const rejectCode=(promise,code)=>assert.rejects(promise,(error)=>error&&error.co
   await divergent.ref.collection('inscritos').doc('mslot-1').set({item:{manualParticipantId:'other',isPlaceholder:true}});
   await rejectCode(invoke({...historicPayload,tournamentId:divergent.id,operationId:'e13_divergent_'+stamp}),
     'failed-precondition');
-  const after=clone(parent);
+  const after=clone((await first.ref.get()).data());
   const replay=await invoke(p);
   assert.equal(replay.replayed,true,'resposta perdida retorna recibo anterior');
   assert.equal(replay.operationId,p.operationId);
@@ -147,11 +172,15 @@ const rejectCode=(promise,code)=>assert.rejects(promise,(error)=>error&&error.co
   const duplicatePair={...payload(paired.id,'e13_pair_dup_'+stamp),reservations:[]};
   await rejectCode(invoke(duplicatePair),'invalid-argument');
   assert.equal((await paired.ref.collection('registrations').get()).size,2,'dupla duplicada não cria destino');
-  const pairMove={...payload(paired.id,'e13_pair_move_'+stamp),reservations:[],edits:[duplicatePair.edits[0]]};
+  const pairMove={...payload(paired.id,'e13_pair_move_'+stamp),reservations:[],
+    edits:[{...duplicatePair.edits[0],genders:[{userUid:'alice',gender:'feminino'},
+      {userUid:'bob',gender:'masculino'}]}]};
   const pairResult=await invoke(pairMove);
-  assert.equal(pairResult.changed,1,'uma edição move a dupla inteira');
+  assert.equal(pairResult.changed,3,'uma edição move a dupla e grava gênero de cada membro');
   assert.equal((await paired.ref.collection('registrations').get()).size,4);
   assert.equal((await paired.ref.collection('registrationCategoryAudit').get()).size,2);
+  assert.equal((await paired.ref.collection('registrations').doc(R.registrationId('uid:alice','b')).get()).data().gender,'feminino');
+  assert.equal((await paired.ref.collection('registrations').doc(R.registrationId('uid:bob','b')).get()).data().gender,'masculino');
 
   const financial=await make('h');
   const paidRef=financial.ref.collection('registrations').doc(R.registrationId('uid:alice','a'));
