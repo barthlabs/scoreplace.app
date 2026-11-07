@@ -33,6 +33,13 @@ rejects('failed-precondition', () => plan(TID, 'fingerprint', [reservation('1'),
   [existing('1', '__uncategorized__')], ['1', '2'], 'retinal'));
 rejects('already-exists', () => plan(TID, 'fingerprint', [reservation('1')], [existing('1', 'other')], ['1'], 'retinal'));
 rejects('already-exists', () => plan(TID, 'fingerprint', [reservation('1')], [existing('1', 'other', 'withdrawn')], ['1'], 'retinal'));
+const historic = plan(TID, 'fingerprint', [reservation('1')], [existing('1', 'other', 'withdrawn')],
+  ['1'], 'retinal', { allowHistoricalReplacement: true, occupiedManualIds: ['1-g1'] });
+assert.equal(historic.creates[0].manualParticipantId, '1-g2');
+assert.deepEqual(historic.remapped, { '1': '1-g2' });
+assert.equal(historic.removed, 1);
+rejects('already-exists', () => plan(TID, 'fingerprint', [], [existing('1', 'other', 'withdrawn')],
+  ['1'], 'retinal', { allowHistoricalReplacement: true }));
 rejects('invalid-argument', () => plan(TID, 'fingerprint', [], [], ['1'], 'retinal'));
 rejects('invalid-argument', () => plan(TID, 'fingerprint', [reservation('1'), reservation('1')], [], ['1'], 'retinal'));
 rejects('invalid-argument', () => plan(TID, 'fingerprint', reservations, [], ['1', '1'], 'retinal'));

@@ -12,7 +12,8 @@ const b = ui.indexOf('// v2.7.32:', a);
 const block = ui.slice(a, b);
 ok(/_callFn\('addTournamentPlaceholders'/.test(block) && !/commitTournamentTx/.test(block), 'placeholders só despacham a CF');
 ok(/var data = \(result && result\.data\) \? result\.data : \(result \|\| \{\}\)/.test(block) && /data\.tournament/.test(block), 'retorno callable envelopado atualiza a análise imediatamente');
-ok(!/Escolha a categoria/.test(block) && /placeholders: made/.test(block) && /manualParticipantId: 'manual-'/.test(block), 'cliente permite placeholder genérico, com identidade estável, e devolve as reservas criadas');
+ok(!/Escolha a categoria/.test(block) && /placeholders: made/.test(block) &&
+  /manualParticipantId: manualId/.test(block), 'cliente permite placeholder genérico, com identidade estável, e devolve as reservas criadas');
 const fn = fs.readFileSync('functions-autodraw/index.js', 'utf8');
 const x = fn.indexOf('exports.addTournamentPlaceholders');
 const y = fn.indexOf('// ─── Reset para inscrições', x);
@@ -20,6 +21,19 @@ const server = fn.slice(x, y);
 ok(/_isTournamentAdmin/.test(server) && /runTransaction/.test(server) && /_gravaTorneio/.test(server), 'CF valida organizador e grava o elenco transacionalmente');
 ok(/placeholderReservations/.test(server) && /_appendPlaceholderReservations/.test(server), 'CF persiste placeholder canônico como reserva genérica, sem inscrição sem categoria');
 ok(/_projectedPeopleCount/.test(server) && /t\.competitorsCount = _projectedPeopleCount\(t\.participants\)/.test(server), 'CF atualiza o resumo de inscritos no mesmo commit das reservas');
+const serverWindow = require('../functions-autodraw/draw-core.js')._window;
+const id='tour_1234567890123_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+const live={id,participants:[],placeholderReservations:[]};
+const nonces=['a'.repeat(32),'b'.repeat(32)];
+const created=serverWindow._addPlaceholdersCore(id,2,null,{server:true,tournament:live,silent:true,manualIdNonces:nonces});
+ok(created.placeholders.length===2 && created.placeholders.every((item,i)=>
+  item.manualParticipantId===`manual-${id}-uuid-${nonces[i]}`) &&
+  live.participants.every((item,i)=>item.manualParticipantId===created.placeholders[i].manualParticipantId),
+  'servidor cria identidades novas independentes do número exibido e preserva a mesma identidade no elenco');
+let missingNonceRejected=false;
+try { serverWindow._addPlaceholdersCore(id,1,null,{server:true,tournament:live,silent:true}); }
+catch (_) { missingNonceRejected=true; }
+ok(missingNonceRejected,'servidor recusa criar vaga sem nonces fornecidos pela callable');
 const db = fs.readFileSync('js/firebase-db.js', 'utf8');
 const readStart = db.indexOf('async _montaDeSubcolecoes');
 const readEnd = db.indexOf('  // v2.3.103:', readStart);

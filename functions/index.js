@@ -5543,6 +5543,7 @@ async function _applyCanonicalAssignmentBatch(request, input) {
     let virtualRegistrations = checked.registrations;
     let virtualReservations = Array.isArray(tournament.placeholderReservations) ? tournament.placeholderReservations : [];
     const updatesById = new Map(), createsById = new Map();
+    const remappedIds = new Map();
     const audits = [], paymentNotices = [], pendingPaymentChecks = [];
     let changed = 0;
     const groups = new Map();
@@ -5556,12 +5557,15 @@ async function _applyCanonicalAssignmentBatch(request, input) {
         try {
           planned = _placeholderCategoryBatch.plan(logicalId,
             tournament.canonicalRegistrationMigration.fingerprint, virtualReservations,
-            virtualRegistrations, ids.slice(start, start + 32), toCategoryId);
+            virtualRegistrations, ids.slice(start, start + 32), toCategoryId,
+            { allowHistoricalReplacement: true, occupiedManualIds: checked.participants
+              .map((entry) => String(entry && entry.manualParticipantId || '')).filter(Boolean) });
         } catch (error) { throw new HttpsError(error.code || 'failed-precondition', error.message); }
         if (planned.needsReclassification) {
           throw new HttpsError('failed-precondition', 'Uma dupla já formada precisa de reclassificação antes do bloco.');
         }
         virtualReservations = planned.reservationsAfter;
+        Object.entries(planned.remapped || {}).forEach(([oldId, newId]) => remappedIds.set(oldId, newId));
         if (planned.creates.length) {
           let next;
           try { next = _canonicalRegistrationBoundary.applyCreates(virtualTournament, virtualRegistrations, planned.creates); }
@@ -5655,18 +5659,45 @@ async function _applyCanonicalAssignmentBatch(request, input) {
         throw new HttpsError('failed-precondition', 'As condições financeiras mudaram. Aguarde a organização aceitá-las novamente.');
       }
     }
+    // O ID antigo pertence ao histórico retirado. Nunca reinterpretar um jogo ou
+    // W.O. que ainda o referencie como se fosse a vaga nova.
+    for (const oldId of remappedIds.keys()) {
+      if (['matches', 'woLog', 'woHistory', 'woSubstituteFor'].some((key) =>
+        JSON.stringify(tournament[key] || null).includes('"' + oldId + '"'))) {
+        throw new HttpsError('failed-precondition', 'Vaga histórica ligada a jogo ou W.O.; não é possível remapear automaticamente.');
+      }
+    }
+    const mirrorDeletes = [];
+    for (const oldId of remappedIds.keys()) {
+      const mirrorRef = ref.collection('inscritos').doc('m' + oldId);
+      const mirrorSnap = await tx.get(mirrorRef);
+      if (!mirrorSnap.exists) throw new HttpsError('failed-precondition', 'Espelho da reserva histórica ausente. Atualize a Análise.');
+      const mirrorItem = (mirrorSnap.data() || {}).item || {};
+      if (mirrorItem.isPlaceholder !== true || String(mirrorItem.manualParticipantId || '') !== oldId) {
+        throw new HttpsError('failed-precondition', 'Espelho da reserva histórica divergente. Atualize a Análise.');
+      }
+      mirrorDeletes.push(mirrorRef);
+    }
+    const counts = tournament._nPartes || {};
+    const physicalCount = Number(counts.participants);
+    if (mirrorDeletes.length && (!Number.isInteger(physicalCount) || physicalCount < mirrorDeletes.length)) {
+      throw new HttpsError('failed-precondition', 'Contagem do elenco divergente. Atualize a Análise.');
+    }
     const updates = Array.from(updatesById.values());
     const creates = Array.from(createsById.values());
     const reservationsChanged = JSON.stringify(virtualReservations) !== JSON.stringify(tournament.placeholderReservations || []);
     const writeCount = (updates.length || creates.length || reservationsChanged ? 1 : 0)
-      + updates.length + creates.length + audits.length + paymentNotices.length + 1;
+      + updates.length + creates.length + audits.length + paymentNotices.length + mirrorDeletes.length + 1;
     if (writeCount > 450) throw new HttpsError('failed-precondition', 'Bloco grande demais para uma transação; reduza a seleção.');
     let next = checked;
     if (updates.length || creates.length || reservationsChanged) {
+      const extraPatch = reservationsChanged ? { placeholderReservations: virtualReservations } : {};
+      if (mirrorDeletes.length) extraPatch._nPartes = { ...counts, participants: physicalCount - mirrorDeletes.length };
       next = _writeCanonicalRosterChanges(tx, ref, tournament, checked.registrations,
-        { updates, creates }, reservationsChanged ? { placeholderReservations: virtualReservations } : null,
+        { updates, creates }, Object.keys(extraPatch).length ? extraPatch : null,
         sandbox ? logicalId : '');
     }
+    mirrorDeletes.forEach((mirrorRef) => tx.delete(mirrorRef));
     const auditAt = new Date().toISOString();
     audits.forEach((audit, index) => tx.create(ref.collection('registrationCategoryAudit').doc(input.operationId + '-' + index), {
       schema: 1, kind: 'category-reclassification', at: auditAt, byUid: callerUid, tournamentId, sandbox,
@@ -5692,7 +5723,7 @@ async function _applyCanonicalAssignmentBatch(request, input) {
     });
     const reply = { ok: true, outcome: changed || reservationsChanged ? 'assigned' : 'unchanged',
       changed, resolvedEntries: input.edits.length + input.reservations.length,
-      operationId: input.operationId };
+      operationId: input.operationId, remappedIds: Object.fromEntries(remappedIds) };
     tx.create(receiptRef, { requestHash, callerUid, reply, createdAt: auditAt });
     return reply;
   });

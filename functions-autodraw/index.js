@@ -1980,12 +1980,14 @@ exports.addTournamentPlaceholders = onCall(async request => {
   if (!tId || !quantity) throw new HttpsError('invalid-argument', 'Quantidade inválida.');
   if (!drawWindow || typeof drawWindow._addPlaceholdersCore !== 'function') throw new HttpsError('internal', 'Núcleo de participantes indisponível.');
   const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  // A transação pode repetir o callback: as identidades precisam permanecer iguais.
+  const manualIdNonces = Array.from({ length: quantity }, () => randomUUID().replace(/-/g, ''));
   return db.runTransaction(async tx => {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw new HttpsError('permission-denied', 'Só a organização adiciona placeholders.');
     const before = _antesDoMotor(t);
-    const out = drawWindow._addPlaceholdersCore(tId, quantity, null, { tournament: t, server: true, skipPersist: true, silent: true });
+    const out = drawWindow._addPlaceholdersCore(tId, quantity, null, { tournament: t, server: true, skipPersist: true, silent: true, manualIdNonces });
     if (!out || !out.changed) throw new HttpsError('failed-precondition', 'Não foi possível adicionar placeholders.');
     const canonical = !!(t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint);
     if (canonical) {

@@ -7,7 +7,7 @@ function fail(code, message) { const error = new Error(message); error.code = co
 
 /* Planeja a transição inteira antes de qualquer escrita. Reservas não são
  * inscrições; cada ID manual só pode se tornar um registro individual. */
-function plan(tournamentId, fingerprint, reservations, registrations, manualIds, toCategoryId) {
+function plan(tournamentId, fingerprint, reservations, registrations, manualIds, toCategoryId, opts = {}) {
   const ids = Array.isArray(manualIds) ? manualIds.map(text) : [];
   if (!text(tournamentId) || !text(fingerprint) || !text(toCategoryId) ||
       !ids.length || ids.length > 32 || ids.some((id) => !id) || new Set(ids).size !== ids.length) {
@@ -17,6 +17,10 @@ function plan(tournamentId, fingerprint, reservations, registrations, manualIds,
   const roster = Array.isArray(registrations) ? registrations : [];
   const consumed = new Set();
   const creates = [];
+  const remapped = {};
+  const usedIds = new Set(source.map((item) => text(item && item.manualParticipantId))
+    .concat(roster.map((item) => text(item && item.manualParticipantId)))
+    .concat(Array.isArray(opts.occupiedManualIds) ? opts.occupiedManualIds.map(text) : []));
   let needsReclassification = false;
   let sentinelCount = 0;
   let existingCount = 0;
@@ -42,21 +46,33 @@ function plan(tournamentId, fingerprint, reservations, registrations, manualIds,
       if (matches.length) consumed.add(id);
       return;
     }
-    if (roster.some((item) => item && item.participantKey === key)) {
-      fail('already-exists', 'inscrição histórica não pode ser recriada por esta porta');
+    if (matches.length !== 1) {
+      if (roster.some((item) => item && item.participantKey === key))
+        fail('already-exists', 'inscrição histórica não pode ser recriada por esta porta');
+      fail('invalid-argument', 'reserva não encontrada');
     }
-    if (matches.length !== 1) fail('invalid-argument', 'reserva não encontrada');
     const item = matches[0];
     const name = text(item.manualDisplayName || item.displayName || item.name);
     if (!name) fail('invalid-argument', 'reserva sem nome de apresentação');
+    let targetId = id;
+    if (roster.some((entry) => entry && entry.participantKey === key)) {
+      if (opts.allowHistoricalReplacement !== true) {
+        fail('already-exists', 'inscrição histórica não pode ser recriada por esta porta');
+      }
+      let generation = 1;
+      do { targetId = id + '-g' + generation++; } while (usedIds.has(targetId));
+      remapped[id] = targetId;
+    }
+    usedIds.add(targetId);
+    const targetKey = registration.participantKey({ manualParticipantId: targetId });
     consumed.add(id);
     creates.push({
-      registrationId: registration.registrationId(key, toCategoryId),
-      tournamentId: tournamentId, categoryId: toCategoryId, participantKey: key,
+      registrationId: registration.registrationId(targetKey, toCategoryId),
+      tournamentId: tournamentId, categoryId: toCategoryId, participantKey: targetKey,
       status: 'confirmed', validationState: 'approved',
       migrationFingerprint: fingerprint, fixedPairId: null,
       participantKind: 'manual', participantUid: null,
-      manualParticipantId: id, manualDisplayName: name,
+      manualParticipantId: targetId, manualDisplayName: name,
     });
   });
   // Nunca aplicar metade do lote se outra porta já formou uma dupla sentinela.
@@ -66,7 +82,7 @@ function plan(tournamentId, fingerprint, reservations, registrations, manualIds,
   const reservationsAfter = source.filter((item) => !consumed.has(text(item && item.manualParticipantId)));
   return {
     creates, reservationsAfter, removed: source.length - reservationsAfter.length,
-    existingCount, needsReclassification,
+    existingCount, needsReclassification, remapped,
   };
 }
 

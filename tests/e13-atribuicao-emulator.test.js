@@ -71,6 +71,45 @@ const rejectCode=(promise,code)=>assert.rejects(promise,(error)=>error&&error.co
   assert.equal(parent.placeholderReservations.length,0);
   assert.equal((await first.ref.collection('registrations').get()).size,6);
   assert.equal((await first.ref.collection('registrationCategoryAudit').get()).size,2);
+  const historic=await make('k');
+  const oldId='slot-1', historicRegistration={registrationId:R.registrationId('manual:'+oldId,'a'),
+    tournamentId:historic.id,categoryId:'a',participantKey:'manual:'+oldId,participantKind:'manual',
+    manualParticipantId:oldId,manualDisplayName:'Antiga vaga',status:'withdrawn',
+    validationState:'approved',migrationFingerprint:'e13-k',fixedPairId:null};
+  await historic.ref.collection('registrations').doc(historicRegistration.registrationId).set(historicRegistration);
+  await historic.ref.update({'canonicalRegistrationMigration.registrationCount':3,
+    _nPartes:{participants:1}});
+  await historic.ref.collection('inscritos').doc('m'+oldId).set({item:{manualParticipantId:oldId,isPlaceholder:true}});
+  const historicPayload={tournamentId:historic.id,sandbox:false,operationId:'e13_historic_'+stamp,
+    reservations:[{manualParticipantId:'slot-1',toCategoryId:'a'},
+      {manualParticipantId:'slot-2',toCategoryId:'b'}],edits:[]};
+  const historicResult=await invoke(historicPayload);
+  assert.equal(historicResult.changed,2);
+  assert.equal(historicResult.remappedIds['slot-1'],'slot-1-g1');
+  assert.equal((await historic.ref.collection('inscritos').doc('mslot-1').get()).exists,false);
+  assert.equal((await historic.ref.get()).data()._nPartes.participants,0);
+  assert.equal((await historic.ref.collection('registrations').doc(historicRegistration.registrationId).get()).data().status,'withdrawn');
+  assert.equal((await historic.ref.collection('registrations').get()).size,5);
+  assert.equal((await invoke(historicPayload)).replayed,true);
+  await rejectCode(invoke({...historicPayload,operationId:'e13_stale_'+stamp}),'already-exists');
+  const missing=await make('l');
+  await missing.ref.collection('registrations').doc(R.registrationId('manual:slot-1','a')).set({
+    ...historicRegistration,tournamentId:missing.id,migrationFingerprint:'e13-l'});
+  await missing.ref.update({'canonicalRegistrationMigration.registrationCount':3,_nPartes:{participants:1}});
+  await rejectCode(CF.assignCanonicalPlaceholderCategoryBatch.run({
+    data:{tournamentId:missing.id,sandbox:false,manualParticipantIds:['slot-1'],toCategoryId:'a'},
+    auth:{uid:'org',token:{uid:'org'}},rawRequest:{headers:{}},acceptsStreaming:false
+  }),'already-exists');
+  await rejectCode(invoke({...historicPayload,tournamentId:missing.id,operationId:'e13_missing_'+stamp}),
+    'failed-precondition');
+  assert.equal((await missing.ref.collection('assignmentReceipts').get()).size,0);
+  const divergent=await make('m');
+  await divergent.ref.collection('registrations').doc(R.registrationId('manual:slot-1','a')).set({
+    ...historicRegistration,tournamentId:divergent.id,migrationFingerprint:'e13-m'});
+  await divergent.ref.update({'canonicalRegistrationMigration.registrationCount':3,_nPartes:{participants:1}});
+  await divergent.ref.collection('inscritos').doc('mslot-1').set({item:{manualParticipantId:'other',isPlaceholder:true}});
+  await rejectCode(invoke({...historicPayload,tournamentId:divergent.id,operationId:'e13_divergent_'+stamp}),
+    'failed-precondition');
   const after=clone(parent);
   const replay=await invoke(p);
   assert.equal(replay.replayed,true,'resposta perdida retorna recibo anterior');
@@ -145,5 +184,29 @@ const rejectCode=(promise,code)=>assert.rejects(promise,(error)=>error&&error.co
   assert.equal(bulk.changed,137,'137 reservas cabem no bloco único');
   assert.equal((await bulkRef.collection('registrations').get()).size,137);
   assert.equal((await bulkRef.get()).data().canonicalRegistrationMigration.registrationCount,137);
+  const remapId='tour_'+stamp+'_'+'n'.repeat(32),remapRef=db.doc('tournaments/'+remapId);
+  const remapReservations=Array.from({length:33},(_,i)=>({manualParticipantId:'historic-'+i,
+    displayName:'Jogador '+i,isPlaceholder:true}));
+  await remapRef.set({id:remapId,creatorUid:'org',status:'open',categoryDefinitions:definitions,
+    canonicalRegistrationMigration:{fingerprint:'e13-remap',registrationCount:33},
+    placeholderReservations:remapReservations,participants:[],_nPartes:{participants:33}});
+  const remapBatch=db.batch();
+  remapReservations.forEach((item)=>{
+    const key='manual:'+item.manualParticipantId,registrationId=R.registrationId(key,'a');
+    remapBatch.set(remapRef.collection('registrations').doc(registrationId),{
+      registrationId,tournamentId:remapId,categoryId:'a',participantKey:key,participantKind:'manual',
+      manualParticipantId:item.manualParticipantId,manualDisplayName:item.displayName,status:'withdrawn',
+      validationState:'approved',migrationFingerprint:'e13-remap',fixedPairId:null});
+    remapBatch.set(remapRef.collection('inscritos').doc('m'+item.manualParticipantId),{item});
+  });
+  await remapBatch.commit();
+  const remapped=await invoke({tournamentId:remapId,sandbox:false,operationId:'e13_33_'+stamp,edits:[],
+    reservations:remapReservations.map((item,i)=>({manualParticipantId:item.manualParticipantId,
+      toCategoryId:i%2?'a':'b'}))});
+  assert.equal(remapped.changed,33);
+  assert.equal(Object.keys(remapped.remappedIds).length,33);
+  assert.equal((await remapRef.get()).data()._nPartes.participants,0);
+  assert.equal((await remapRef.collection('inscritos').get()).size,0);
+  assert.equal((await remapRef.collection('registrations').get()).size,66);
   console.log('✓ E13 emulador: lote misto atômico, dupla, 137 vagas, autorização, CAS, retry e concorrência');
 })().catch((error)=>{console.error(error);process.exitCode=1;});

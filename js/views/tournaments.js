@@ -741,6 +741,11 @@ window._addPlaceholdersCore = function (id, qtd, onDone, opts) {
     qtd = parseInt(qtd, 10);
     if (isNaN(qtd) || qtd <= 0) { if (!opts.silent) showNotification('Número inválido', 'Informe um número maior que zero.', 'warning'); return false; }
     if (qtd > 200) qtd = 200;
+    if (opts.server && (!Array.isArray(opts.manualIdNonces) || opts.manualIdNonces.length !== qtd ||
+        opts.manualIdNonces.some(function (nonce) { return !/^[a-f0-9]{32}$/.test(String(nonce)); }) ||
+        new Set(opts.manualIdNonces).size !== qtd)) {
+        throw new Error('identidades das vagas indisponíveis');
+    }
     // Placeholder é uma RESERVA genérica de vaga, não uma inscrição. Por isso ele
     // não recebe categoria neste momento — a categoria só é obrigatória quando uma
     // pessoa real for efetivamente inscrita. A Function persiste as reservas
@@ -813,7 +818,10 @@ window._addPlaceholdersCore = function (id, qtd, onDone, opts) {
         existingNames[nm] = true;
         // Vaga sem conta também é uma pessoa identificável: nunca usar o nome como
         // chave. O ID manual atravessa análise, dupla, categoria, split e importação.
-        made.push({ name: nm, displayName: nm, manualParticipantId: 'manual-' + String(id) + '-' + numStr, isPlaceholder: true });
+        var manualId = opts.server
+            ? 'manual-' + String(id) + '-uuid-' + opts.manualIdNonces[i]
+            : 'manual-' + String(id) + '-' + numStr;
+        made.push({ name: nm, displayName: nm, manualParticipantId: manualId, isPlaceholder: true });
     }
     var dest;
     if (hasDraw) {
