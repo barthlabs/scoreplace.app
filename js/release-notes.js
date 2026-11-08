@@ -1,3 +1,7 @@
+// 2.5.116 — Torneios com várias categorias recusam o sorteio enquanto houver
+// inscritos sem categoria e indicam quem precisa ser corrigido. O avanço
+// preserva chaves separadas por categoria. As súmulas mostram também os jogos
+// previstos das fases seguintes e espaços livres para desempates.
 // 2.5.115 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.114 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.113 — Convites de organizador e árbitro por telefone agora têm seleção de país
