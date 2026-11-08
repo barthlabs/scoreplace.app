@@ -363,6 +363,49 @@ function trecho(inicio, fim) {
     'a agenda esconde rodadas vazias, preserva tabelas de classificação e restaura a chave ao trocar de modo');
   ok(result.categorySchedule.missingScopeFallback, 'falha de montagem executa o filtro canônico e preserva só a rodada selecionada');
 
+  const monarchBundle = await page.evaluate(() => {
+    const start = Date.UTC(2026, 10, 13, 11);
+    const game = (num, offset) => '<article class="sp-match-card" id="card-r' + num + '" data-bracket-tab-category="Fem Diamante" data-bracket-tab-gender="fem" data-bracket-tab-day="2026-11-13" data-bracket-tab-round="1" data-bracket-scheduled-at="' + (start + offset * 60000) + '" data-bracket-court="Quadra 1" data-scheduled-game-number="' + num + '">Jogo ' + num + '<input aria-label="placar ' + num + '"></article>';
+    document.body.innerHTML = '<main id="view-container"><nav id="monarch-root" data-bracket-tabs-root="1" data-tournament-id="monarch"></nav><section class="bracket-scroll-container" id="monarch-source"><div data-group-box="1" data-monarch-large="1" data-monarch-category="Fem Diamante" data-group-label="Grupo 1"><h3>Grupo 1</h3><div class="standings-scroll"><table id="standings-original"><thead><tr><th>Jogador</th><th>Pontos</th></tr></thead><tbody><tr><td>Ana</td><td>6</td></tr><tr><td>Bia</td><td>4</td></tr></tbody></table></div><div>' + game(1, 0) + game(2, 20) + game(3, 40) + '</div></div></section></main>';
+    const root = document.getElementById('monarch-root');
+    root._bracketTabsScope = document.getElementById('view-container');
+    window._currentBracketTournament = { id: 'monarch', matches: [] };
+    window._bracketTabGender = () => 'fem';
+    _bracketGeneralView(root, true, 'fem', false, false);
+    const view = root._bracketGeneralView;
+    const first = {
+      bundles: view.querySelectorAll('.bracket-geral-quarteto').length,
+      cards: [...view.querySelectorAll('.bracket-geral-quarteto > .sp-match-card')].map(c => c.id),
+      labels: [...view.querySelectorAll('.bracket-geral-jogo-horario')].map(e => e.textContent),
+      headings: [...view.querySelectorAll('.bracket-general-round-column h4')].map(e => e.textContent.trim()),
+      table: view.querySelector('.bracket-geral-quarteto-standings table')?.textContent,
+      noDuplicate: ['card-r1', 'card-r2', 'card-r3', 'standings-original'].every(id => document.querySelectorAll('#' + id).length === 1),
+      oneScorePerGame: view.querySelectorAll('.bracket-geral-quarteto input').length === 3
+    };
+    document.querySelector('#standings-original tbody tr td:last-child').textContent = '7';
+    _bracketGeneralRefreshStandings(view);
+    first.updatedStanding = view.querySelector('.bracket-geral-quarteto-standings table').textContent.includes('7');
+    const originalApply = window._bracketTabsApply;
+    window._bracketTabsApply = (_id, _gender, category) => { window.__revealedMonarchCategory = category; };
+    document.querySelector('[data-monarch-large]').hidden = true;
+    _bracketRevealMonarchTarget(document.getElementById('card-r2'));
+    first.revealed = window.__revealedMonarchCategory === 'Fem Diamante';
+    window._bracketTabsApply = originalApply;
+    _bracketGeneralView(root, false, 'fem');
+    first.restored = [...document.querySelectorAll('#monarch-source [data-monarch-large] .sp-match-card')].map(c => c.id).join(',') === 'card-r1,card-r2,card-r3';
+    _bracketGeneralView(root, true, 'fem', true, false);
+    first.upcomingSeparate = view.querySelectorAll('.bracket-geral-quarteto').length === 0 && view.querySelectorAll('.sp-match-card').length === 3;
+    return first;
+  });
+  ok(monarchBundle.bundles === 1 && monarchBundle.cards.join(',') === 'card-r1,card-r2,card-r3' && monarchBundle.oneScorePerGame,
+    'Geral reúne os três cards reais e seus placares num único quarteto');
+  ok(monarchBundle.labels.some(label => label.includes('08:00')) && monarchBundle.labels.some(label => label.includes('08:20')) && monarchBundle.labels.some(label => label.includes('08:40')) && monarchBundle.headings.length === 1,
+    'cada jogo mostra seu horário próprio dentro da coluna de abertura do quarteto');
+  ok(monarchBundle.table.includes('Ana') && monarchBundle.noDuplicate && monarchBundle.updatedStanding,
+    'classificação aparece sem IDs duplicados e reflete o cálculo atualizado do grupo');
+  ok(monarchBundle.revealed && monarchBundle.restored && monarchBundle.upcomingSeparate,
+    'buscar card movido revela a categoria, restaura os três jogos e mantém Próximos jogos individual');
+
   const stableAgenda = await page.evaluate(() => {
     const at = Date.UTC(2026, 9, 22, 21);
     const make = (num, court) => '<div class="wrap"><article class="sp-match-card" id="card-m' + num +

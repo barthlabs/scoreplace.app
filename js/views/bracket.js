@@ -1959,7 +1959,10 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
     var oldGamesStillScheduled = expected && entries.every(function (entry) {
       return entry.card && expected.ids.has(String(entry.card.id || '').replace(/^card-/, ''));
     });
-    if (expected && (!expected.complete || (oldGamesStillScheduled && expected.count > present.size))) return true;
+    if (expected && (!expected.complete || (oldGamesStillScheduled && expected.count > present.size))) {
+      _bracketGeneralRefreshStandings(view);
+      return true;
+    }
   }
   if (!show) {
     for (var r = 0; r < entries.length; r++) {
@@ -2041,8 +2044,42 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
       // card. O container de origem é ocultado separadamente logo abaixo.
       // [[regression_general_agenda_moves_visible_cards]]
       card.hidden = false;
-      entries.push({ card: card, wrapper: wrapper, placeholder: placeholder, at: at, court: card.getAttribute('data-bracket-court') || '', num: Number(card.getAttribute('data-scheduled-game-number')) || 0, position: position, round: Number(card.getAttribute('data-bracket-tab-round')) || 1, justScored: isJustScored });
+      entries.push({ card: card, wrapper: wrapper, placeholder: placeholder, at: at, actualAt: at, court: card.getAttribute('data-bracket-court') || '', num: Number(card.getAttribute('data-scheduled-game-number')) || 0, position: position, round: Number(card.getAttribute('data-bracket-tab-round')) || 1, justScored: isJustScored });
     });
+    // Rei/Rainha é uma única chamada por quarteto. Na Geral os três placares
+    // ficam juntos, mas cada jogo conserva seu horário real no próprio bloco.
+    // Próximos jogos continua sendo uma fila cronológica de partidas avulsas.
+    if (!onlyReady) {
+      var monarchSets = new Map();
+      entries.forEach(function (entry) {
+        var parent = entry.placeholder && entry.placeholder.parentNode;
+        var sourceGroup = parent && parent.closest ? parent.closest('[data-monarch-large="1"]') : null;
+        if (!sourceGroup) return;
+        if (!monarchSets.has(sourceGroup)) monarchSets.set(sourceGroup, []);
+        monarchSets.get(sourceGroup).push(entry);
+      });
+      monarchSets.forEach(function (members, sourceGroup) {
+        var sourceCards = sourceGroup.querySelectorAll('.sp-match-card[data-bracket-scheduled-at]');
+        if (sourceCards.length !== 3 || members.length !== 3) return;
+        var first = members[0];
+        var sameSession = members.every(function (entry) {
+          return entry.card.getAttribute('data-bracket-tab-category') === first.card.getAttribute('data-bracket-tab-category') &&
+            entry.card.getAttribute('data-bracket-tab-day') === first.card.getAttribute('data-bracket-tab-day') &&
+            entry.court === first.court;
+        });
+        if (!sameSession) return;
+        members.sort(function (a, b) { return a.num - b.num || a.position - b.position; });
+        var anchor = members.reduce(function (best, entry) { return entry.actualAt < best.actualAt ? entry : best; }, members[0]);
+        members.forEach(function (entry) {
+          entry.monarchSource = sourceGroup;
+          entry.monarchAnchor = anchor;
+          entry.at = anchor.actualAt;
+        });
+      });
+      if (entries.some(function (entry) { return entry.monarchSource; })) {
+        root._bracketGeneralSlotTimes = entries.map(function (entry) { return entry.at; });
+      }
+    }
     entries.sort(_bracketAgendaCompare);
     var sources = [];
     entries.forEach(function (entry) {
@@ -2123,7 +2160,33 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
     group.innerHTML = '<h4 class="bracket-round-heading" style="margin:0 0 10px;padding:0 0 9px 10px;border-left:4px solid var(--sp-c-fbbf24,#fbbf24);border-bottom:1px solid rgba(255,255,255,.10);color:var(--sp-c-fde68a,#fde68a);font-size:.82rem;letter-spacing:1px;text-transform:uppercase;">' + heading + '</h4>';
     var grid = document.createElement('div');
     grid.style.cssText = 'display:grid;grid-template-columns:minmax(0,1fr);gap:14px;align-items:start;';
-    groups[key].forEach(function (entry) { grid.appendChild(entry.wrapper); });
+    groups[key].forEach(function (entry) {
+      if (!entry.monarchSource) { grid.appendChild(entry.wrapper); return; }
+      if (entry !== entry.monarchAnchor) return;
+      var bundle = document.createElement('section');
+      bundle.className = 'bracket-geral-quarteto';
+      bundle._monarchSource = entry.monarchSource;
+      var title = document.createElement('h5');
+      title.className = 'bracket-geral-quarteto-title';
+      var sourceTitle = entry.monarchSource.querySelector('h3');
+      title.textContent = sourceTitle ? sourceTitle.textContent.trim() : 'Grupo';
+      bundle.appendChild(title);
+      var standings = document.createElement('div');
+      standings.className = 'bracket-geral-quarteto-standings';
+      bundle.appendChild(standings);
+      _bracketGeneralRefreshStandings(bundle);
+      var memberEntries = groups[key].filter(function (member) { return member.monarchSource === entry.monarchSource; });
+      memberEntries.sort(function (a, b) { return a.num - b.num || a.position - b.position; });
+      memberEntries.forEach(function (member) {
+        var time = new Intl.DateTimeFormat('pt-BR', { timeZone: zone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(member.actualAt));
+        var label = document.createElement('div');
+        label.className = 'bracket-geral-jogo-horario';
+        label.textContent = 'Jogo ' + (member.num || member.card.id.replace(/^card-/, '')) + ' · ' + time + (member.court ? ' · ' + member.court : '');
+        bundle.appendChild(label);
+        bundle.appendChild(member.wrapper);
+      });
+      grid.appendChild(bundle);
+    });
     group.appendChild(grid);
     roundsTrack.appendChild(group);
   });
@@ -2137,6 +2200,7 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
   if (typeof requestAnimationFrame === 'function') requestAnimationFrame(function () {
     var operationalCards = Array.prototype.slice.call(view.querySelectorAll('.sp-match-card'));
     operationalCards.forEach(function (card) { card.style.minHeight = ''; });
+    operationalCards = operationalCards.filter(function (card) { return !card.closest('.bracket-geral-quarteto'); });
     var tallest = operationalCards.reduce(function (height, card) {
       return Math.max(height, Math.ceil(card.getBoundingClientRect().height || 0));
     }, 0);
@@ -2186,6 +2250,33 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
   // [[regression_general_round_headings_stick_after_cards_move]]
   _bracketSyncRoundHeadingOffsets();
   return true;
+}
+
+// A classificação vista na agenda é uma fotografia somente de leitura do
+// cálculo canônico já renderizado no grupo. Recriá-la evita dados velhos após
+// um placar salvo sem remontar a agenda e não duplica IDs ou inputs de jogo.
+function _bracketGeneralRefreshStandings(container) {
+  if (!container || !container.querySelectorAll) return;
+  var bundles = container.matches && container.matches('.bracket-geral-quarteto')
+    ? [container] : container.querySelectorAll('.bracket-geral-quarteto');
+  Array.prototype.forEach.call(bundles, function (bundle) {
+    var target = bundle.querySelector('.bracket-geral-quarteto-standings');
+    var sourceTable = bundle._monarchSource && bundle._monarchSource.querySelector('.standings-scroll table');
+    if (!target || !sourceTable) return;
+    var clone = sourceTable.cloneNode(true);
+    Array.prototype.forEach.call([clone].concat(Array.prototype.slice.call(clone.querySelectorAll('*'))), function (el) {
+      Array.prototype.slice.call(el.attributes || []).forEach(function (attribute) {
+        if (attribute.name === 'id' || attribute.name === 'href' || attribute.name === 'tabindex' ||
+            attribute.name === 'contenteditable' || /^on/i.test(attribute.name)) el.removeAttribute(attribute.name);
+      });
+      if (/^(BUTTON|INPUT|SELECT|TEXTAREA|A)$/.test(el.tagName)) {
+        var plain = document.createElement('span');
+        plain.textContent = el.textContent || el.value || '';
+        el.replaceWith(plain);
+      }
+    });
+    target.replaceChildren(clone);
+  });
 }
 
 function _bracketTabsApply(tid, gender, category, requestedRound, forceCanonical) {
@@ -2362,6 +2453,19 @@ function _bracketMonarchGroupsApply(root, category, operational) {
 
 function _bracketRevealMonarchTarget(target) {
   var group = target && target.closest && target.closest('[data-monarch-large="1"]');
+  if (!group && target && target.closest) {
+    var movedCard = target.closest('.sp-match-card');
+    var rootsWithCards = document.querySelectorAll('[data-bracket-tabs-root]');
+    for (var ri = 0; ri < rootsWithCards.length && !group; ri++) {
+      var movedEntries = rootsWithCards[ri]._bracketGeneralEntries || [];
+      for (var ei = 0; ei < movedEntries.length; ei++) {
+        var movedEntry = movedEntries[ei];
+        if (movedEntry.card !== movedCard || !movedEntry.placeholder || !movedEntry.placeholder.parentNode) continue;
+        group = movedEntry.placeholder.parentNode.closest('[data-monarch-large="1"]');
+        break;
+      }
+    }
+  }
   if (!group || !group.hidden) return target;
   var tabs = document.querySelectorAll('[data-bracket-tabs-root]');
   for (var i = 0; i < tabs.length; i++) {
