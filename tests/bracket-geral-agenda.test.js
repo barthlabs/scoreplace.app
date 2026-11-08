@@ -438,10 +438,8 @@ function trecho(inicio, fim) {
   ok(sharedParent.columns.map(column => column.join(',')).join('|') === 'shared-1|shared-2|shared-3' &&
     sharedParent.restored.join(',') === 'shared-1,shared-2,shared-3',
     'cards com o mesmo pai aparecem na rodada correta e voltam à chave na ordem original');
-  ok(sharedParent.futureCards.length === 3 &&
-    sharedParent.futureCards[2].includes('Final') &&
-    sharedParent.futureCards[2].includes('Vencedor C1 × Vencedor C2'),
-    'Geral mostra a estrutura da fase seguinte até a final sem criar jogos reais');
+  ok(sharedParent.futureCards.length === 0,
+    'Geral mostra somente a fase atual; a próxima fase fica no roteiro da súmula');
 
   // O portal usa retângulos de viewport, mas nasce dentro do body com zoom.
   // Medir três colunas prova que o erro não cresce a cada rodada.

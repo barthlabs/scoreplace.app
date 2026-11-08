@@ -251,6 +251,9 @@ const camis = { name:'CAMIS', sport:'Beach Tennis', phases, currentPhaseIndex:0,
 const before = JSON.stringify(camis);
 const plannedBefore = globalThis._tournamentGamesPlan(camis).totalPlanned;
 const futureModel = core.collect(camis, []);
+const reversedRoster = JSON.parse(JSON.stringify(camis));
+reversedRoster.groups.forEach(group => { group.players.reverse(); });
+const reversedFutureModel = core.collect(reversedRoster, []);
 assert.strictEqual(JSON.stringify(camis), before, 'o roteiro não modifica torneio, fases nem grupos');
 assert.deepStrictEqual(futureModel.future.categories.map(b => [b.category,b.matches.length]),
   [['Diamante',8],['Ouro',16],['Prata',14]], 'as três categorias têm chaves separadas');
@@ -283,6 +286,17 @@ assert.strictEqual(globalThis._tournamentGamesPlan(camis).totalPlanned, plannedB
   'o roteiro não altera o total operacional calculado antes para as fases');
 for (const orientation of ['landscape','portrait']) {
   const pages = core.makePages(futureModel, { orientation });
+  const futurePages = pages.filter(page => page.commands.some(command => command.includes('ROTEIRO DA')));
+  const reversedFuturePages = core.makePages(reversedFutureModel, { orientation })
+    .filter(page => page.commands.some(command => command.includes('ROTEIRO DA')));
+  assert.deepStrictEqual(futurePages.map(page => page.commands),
+    reversedFuturePages.map(page => page.commands),
+    'o roteiro não atribui vagas pela ordem dos inscritos');
+  const futureCommands = futurePages.flatMap(page => page.commands).join('\n');
+  assert(futureCommands.includes(String.raw`Classificado da fase anterior \267 Grupo/origem: ____`),
+    'vaga inicial informa a fase de origem e deixa o grupo para preencher');
+  assert(futureCommands.includes('Vencedor C1'),
+    'rodadas seguintes identificam o confronto que fornece cada vencedor');
   const printable = Buffer.from(core.encodePdf(pages)).toString('latin1');
   if (process.env.SP_SUMULA_FUTURE_SAMPLE && orientation === 'landscape')
     fs.writeFileSync(process.env.SP_SUMULA_FUTURE_SAMPLE, core.encodePdf(pages));

@@ -523,8 +523,8 @@
         source[rep.slot] = 'Repescado da rodada ' + (Number(rep.srcRound || 0) + 1);
       });
       return { ref:refs[m.id], round:m.round, third:m.isThirdPlace, final:!m.isThirdPlace && !m.nextMatchId,
-        p1:source.p1 || 'Classificado da fase anterior',
-        p2:source.p2 || 'Classificado da fase anterior' };
+        p1:source.p1 || 'Classificado da fase anterior · Grupo/origem: ____',
+        p2:source.p2 || 'Classificado da fase anterior · Grupo/origem: ____' };
     });
   }
   function writingPage(model, title, subtitle, rows, part, total, orientation, kind) {
