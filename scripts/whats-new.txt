@@ -1,1 +1,1 @@
-A versão 2.5.32 reúne os jogos que precisam de atenção em uma faixa para a arbitragem: próximo a chamar, placares pendentes e quadras ocupadas. Os placares ao vivo aparecem na chave e no Modo TV. Árbitros convidados podem acompanhar o torneio e operar seus jogos. A dashboard mostra um resumo dos participantes do dia, com acesso à lista completa.
+A versão nativa reúne as atualizações recentes do Scoreplace: lançamento de placares por set, operações de chamada para quadra, telas no ar por fase e integração atualizada com o Apple Watch.
