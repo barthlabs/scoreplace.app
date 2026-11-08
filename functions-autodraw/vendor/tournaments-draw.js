@@ -3712,14 +3712,14 @@ window.generateDrawFunction = function (tId) {
                 if (window._sound) window._sound('sino');
                 if (d.staged) {
                     showNotification('🔒 Sorteio em revisão', 'Times, confrontos e agenda estão prontos para conferência. Nada foi publicado nem notificado.', 'info');
-                    // ⛔ NÃO NAVEGAR AO DETALHE ENTRE "Sorteando…" E O PLANEJAMENTO.
+                    // ⛔ NÃO NAVEGAR AO DETALHE ENTRE "Sorteando…" E O RESULTADO.
                     // Esse hash intermediário desmontava o loader e fazia a tela piscar
                     // no detalhe antes de abrir a grade. A transição válida é somente
-                    // Sorteando… → Planejar antes de publicar. O planejador encerra o
+                    // Sorteando… → Conferir resultado. A revisão encerra o
                     // loader depois de montar a própria interface.
                     window.__openingPendingInitialScheduleFromDraw = String(tId);
-                    if (typeof window._openPendingInitialSchedule === 'function') {
-                        window._openPendingInitialSchedule(tId);
+                    if (typeof window._openPendingDrawReview === 'function') {
+                        window._openPendingDrawReview(tId);
                     } else {
                         window.__openingPendingInitialScheduleFromDraw = null;
                         if (typeof window._hideLoading === 'function') window._hideLoading();

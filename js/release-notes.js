@@ -1,3 +1,6 @@
+// 2.5.125 — Após o sorteio, a organização confere cada categoria, grupo e os
+// três confrontos Rei/Rainha antes de publicar. O resultado pode ser reaberto
+// depois e compartilhado em artes PNG numeradas, sem placares.
 // 2.5.124 — A primeira ação de quadra usa imediatamente a região preferida.
 // Após a resposta, o aplicativo verifica outras regiões em segundo plano e
 // registra falhas dessa sondagem para diagnóstico, sem atrasar a chamada.

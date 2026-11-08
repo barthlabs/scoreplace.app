@@ -4668,6 +4668,7 @@ function renderTournaments(container, tournamentId = null) {
               <div class="org-tools-label" style="${_TOOLS_LABEL_CSS} ${_toolsCss} margin-bottom: 10px;">${_t('org.tools')}</div>
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                 ${hasDraw ? `<button class="btn btn-primary hover-lift" onclick="window._scrollToBracketSection('${t.id}')">🏆 ${_t('btn.viewBracket')}</button>` : ''}
+                ${isOrg && Array.isArray(t.matches) && t.matches.some(m => m && (m.isMonarch === true || m.monarchGroup != null)) ? `<button class="btn btn-outline hover-lift" onclick="event.stopPropagation(); window._openPublishedInitialDrawResult('${_escAttr(t.id)}')">🖼️ Resultado do sorteio</button>` : ''}
                 ${/* create-tournament.js is deferred after this view; the hash fallback is intentional so a direct detail render never loses Editar during that load window. */ !isFinished ? `<button class="btn btn-indigo hover-lift btn-shine" onclick="event.stopPropagation(); if (typeof window._navigateToCreateTournament === 'function') { window._navigateToCreateTournament('${_escAttr(t.id)}'); } else { window.location.hash = '#novo-torneio/${_escAttr(t.id)}'; }">✏️ ${_t('btn.edit')}</button>` : ''}
                 <button class="btn btn-purple hover-lift" onclick="event.stopPropagation(); window.location.hash='#comunicados/${t.id}'">📢 Comunicados</button>
                 ${addParticipantBtns}

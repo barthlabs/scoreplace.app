@@ -7080,6 +7080,153 @@ window._checkLigaAutoDraws = async function() {
 //  • Publicar → move pendingDraw → rounds + dispara notificações (vai a público)
 //  • Anular   → descarta pendingDraw (nada público aconteceu); re-sorteia depois.
 // Preview read-only da chave sorteada (grupos Rei/Rainha ou jogos), pra validar.
+// A conferência e a imagem compartilhável consomem exatamente o mesmo modelo.
+window._initialDrawResultModel = function (pd) {
+  var draft = pd && pd.draft || {}, games = Array.isArray(draft.matches) ? draft.matches : [];
+  var rounds = Array.isArray(draft.rounds) ? draft.rounds : [];
+  var teams = Array.isArray(draft.competitionTeams) ? draft.competitionTeams : [];
+  var nameByTeam = {}, categories = [], categoryByName = {}, seen = {};
+  teams.forEach(function (team) { if (team && team.id != null) nameByTeam[String(team.id)] = team.name || String(team.id); });
+  var matchById = {};
+  games.forEach(function (m) { if (m && m.id != null) matchById[String(m.id)] = m; });
+  rounds.forEach(function (r) { (r.matches || []).forEach(function (m) { if (m && m.id != null && !matchById[String(m.id)]) matchById[String(m.id)] = m; }); });
+  function addMatch(m, forcedName, forcedCategory, forcedRound) {
+    if (!m) return;
+    var identity = String(m.id || '') || [forcedName, m.p1, m.p2, m.label].join('|');
+    if (seen[identity]) return;
+    seen[identity] = true;
+    var categoryName = String(m.category || forcedCategory || 'Sem categoria');
+    var category = categoryByName[categoryName];
+    if (!category) { category = { name:categoryName, groups:[], extras:[] }; categoryByName[categoryName] = category; categories.push(category); }
+    function side(number) {
+      var pair = m['team' + number];
+      if (Array.isArray(pair) && pair.length) return pair.filter(Boolean).join(' + ');
+      return nameByTeam[String(m['p' + number + 'CompetitionTeamId'] || '')] || m['p' + number] || 'A definir';
+    }
+    if (m.isBye || m.isSitOut) { category.extras.push({ label:m.isSitOut ? 'Folga' : 'Avanço', name:side(1) }); return; }
+    var round = Number(m.round || forcedRound) || 1;
+    var labelGroup = String(m.label || '').split(' • Jogo ')[0].replace(/^R\d+\s+/, '');
+    var groupId = forcedName || m.groupName || (labelGroup && labelGroup !== String(m.label || '') ? labelGroup : null) ||
+      (m.monarchGroup != null ? window._groupName(Number(m.monarchGroup)) : null);
+    var isGroup = !!(m.isMonarch || m.monarchGroup != null || m.bracket === 'group' || groupId);
+    if (!isGroup) { category.extras.push({ label:'R' + round, name:side(1) + ' × ' + side(2) }); return; }
+    var key = round + '|' + String(groupId || 'Grupo');
+    var group = category.groups.find(function (g) { return g.key === key; });
+    if (!group) { group = { key:key, name:String(groupId || 'Grupo'), round:round, matches:[] }; category.groups.push(group); }
+    var labelNumber = /(?:^|\s)Jogo\s+(\d+)/i.exec(String(m.label || ''));
+    group.matches.push({ id:String(m.id || ''), number:labelNumber ? Number(labelNumber[1]) : group.matches.length + 1, one:side(1), two:side(2) });
+  }
+  games.forEach(function (m) { addMatch(m); });
+  rounds.forEach(function (round, ri) {
+    (round.monarchGroups || []).forEach(function (g) {
+      var refs = (g.matches && g.matches.length ? g.matches : g.matchIds) || [];
+      refs.forEach(function (ref) {
+        var m = typeof ref === 'string' ? matchById[ref] : ref && ref.id && matchById[String(ref.id)] || ref;
+        if (m && typeof m === 'object') addMatch(m, g.name, g.category || round.category, round.round || ri + 1);
+        else {
+          var catName = String(g.category || round.category || 'Sem categoria');
+          var cat = categoryByName[catName];
+          if (!cat) { cat = { name:catName, groups:[], extras:[] }; categoryByName[catName] = cat; categories.push(cat); }
+          var key = String(round.round || ri + 1) + '|' + String(g.name || 'Grupo');
+          var group = cat.groups.find(function (item) { return item.key === key; });
+          if (!group) { group = { key:key, name:String(g.name || 'Grupo'), round:Number(round.round || ri + 1), matches:[] }; cat.groups.push(group); }
+          group.matches.push({ id:'', number:group.matches.length + 1, one:'Jogo não encontrado', two:'' });
+        }
+      });
+    });
+    (round.matches || []).forEach(function (m) { addMatch(m, null, round.category, round.round || ri + 1); });
+  });
+  categories.forEach(function (category) {
+    category.groups.forEach(function (group) { group.matches.sort(function (a, b) { return a.number - b.number; }); });
+  });
+  categories.sort(function (a, b) {
+    function order(name) { var s = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); return /diamante/.test(s) ? 1 : /ouro/.test(s) ? 2 : /prata/.test(s) ? 3 : 4; }
+    return order(a.name) - order(b.name) || a.name.localeCompare(b.name);
+  });
+  // Nomes distintos para categorias que reutilizam as letras dos grupos.
+  if (categories.length > 1) categories.forEach(function (category, ci) {
+    var normalized = category.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    var suffix = /diamante/.test(normalized) ? 1 : /ouro/.test(normalized) ? 2 : /prata/.test(normalized) ? 3 : ci + 1;
+    category.groups.forEach(function (group) {
+      var match = /^(?:R\d+\s+)?Grupo\s+([A-Z])$/i.exec(group.name);
+      if (match) group.name = 'Grupo ' + match[1].toUpperCase() + suffix;
+    });
+  });
+  return { categories:categories, gameCount:categories.reduce(function (sum, c) { return sum + c.groups.reduce(function (n, g) { return n + g.matches.length; }, 0) + c.extras.filter(function (e) { return /^R\d+/.test(e.label); }).length; }, 0), teamCount:Number(pd && pd.teamCount) || teams.length };
+};
+
+window._downloadInitialDrawArt = function (t, pd, categoryIndex, pageIndex) {
+  var model = window._initialDrawResultModel(pd), category = model.categories[categoryIndex];
+  if (!category) return false;
+  var groupsPerPage = 4, page = Math.max(0, Number(pageIndex) || 0);
+  var pages = Math.max(1, Math.ceil(category.groups.length / groupsPerPage));
+  if (page >= pages) return false;
+  var pageGroups = category.groups.slice(page * groupsPerPage, (page + 1) * groupsPerPage);
+  var extras = page === pages - 1 ? category.extras : [];
+  var canvas = document.createElement('canvas'), ctx = canvas.getContext('2d');
+  if (!ctx) return false;
+  var width = 1500, margin = 48, gap = 20, cardWidth = (width - 2 * margin - gap) / 2, line = 30;
+  ctx.font = '24px Arial, sans-serif';
+  function lines(value, maxWidth) {
+    var words = String(value || '').split(/\s+/), out = [], current = '';
+    words.forEach(function (word) {
+      var next = current ? current + ' ' + word : word;
+      if (current && ctx.measureText(next).width > maxWidth) { out.push(current); current = word; }
+      else current = next;
+    });
+    if (current) out.push(current);
+    return out.length ? out : [''];
+  }
+  var blocks = pageGroups.map(function (g) {
+    var rows = g.matches.map(function (m, i) {
+      return { label:'J' + (i + 1), one:lines(m.one, cardWidth - 150), two:lines('× ' + m.two, cardWidth - 150) };
+    });
+    var height = 74 + rows.reduce(function (sum, row) { return sum + 12 + (row.one.length + row.two.length) * line; }, 0) + 14;
+    return { group:g, rows:rows, height:height };
+  });
+  canvas.width = width;
+  var rowHeights = [];
+  for (var bi = 0; bi < blocks.length; bi += 2) rowHeights.push(Math.max(blocks[bi].height, blocks[bi + 1] ? blocks[bi + 1].height : 0));
+  canvas.height = 180 + rowHeights.reduce(function (sum, h) { return sum + h + gap; }, 0) + extras.length * 42 + 60;
+  ctx.fillStyle = '#071322'; ctx.fillRect(0, 0, width, canvas.height);
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 38px Arial, sans-serif';
+  ctx.fillText(t.name || t.title || 'Torneio', margin, 56, width - 2 * margin);
+  ctx.fillStyle = '#fbbf24'; ctx.font = 'bold 30px Arial, sans-serif'; ctx.fillText('RESULTADO DO SORTEIO · ' + category.name + (pages > 1 ? ' · ' + (page + 1) + '/' + pages : ''), margin, 135, width - 2 * margin);
+  var y = 170;
+  blocks.forEach(function (block, index) {
+    var row = Math.floor(index / 2), x = margin + (index % 2) * (cardWidth + gap);
+    var top = 170 + rowHeights.slice(0, row).reduce(function (sum, h) { return sum + h + gap; }, 0);
+    ctx.fillStyle = '#14243a'; ctx.fillRect(x, top, cardWidth, rowHeights[row]);
+    ctx.fillStyle = '#67d5ff'; ctx.font = 'bold 27px Arial, sans-serif'; ctx.fillText(block.group.name, x + 20, top + 38);
+    var rowY = top + 58;
+    block.rows.forEach(function (match) {
+      ctx.fillStyle = '#fbbf24'; ctx.font = 'bold 21px Arial, sans-serif'; ctx.fillText(match.label, x + 20, rowY + 23);
+      ctx.fillStyle = '#fff'; ctx.font = '23px Arial, sans-serif';
+      match.one.concat(match.two).forEach(function (part) { ctx.fillText(part, x + 90, rowY + 23, cardWidth - 112); rowY += line; });
+      rowY += 12;
+    });
+  });
+  y = 170 + rowHeights.reduce(function (sum, h) { return sum + h + gap; }, 0);
+  extras.forEach(function (extra) { ctx.fillStyle = '#dbeafe'; ctx.font = '22px Arial, sans-serif'; ctx.fillText(extra.label + ': ' + extra.name, margin, y + 20); y += 42; });
+  var link = document.createElement('a');
+  var filename = 'resultado-sorteio-' + category.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/gi, '-').toLowerCase() + (pages > 1 ? '-' + (page + 1) + '-de-' + pages : '') + '.png';
+  function download() {
+    link.href = canvas.toDataURL('image/png'); link.download = filename;
+    document.body.appendChild(link); link.click(); link.remove();
+  }
+  if (typeof navigator !== 'undefined' && navigator.share && navigator.canShare && canvas.toBlob && typeof File === 'function') {
+    canvas.toBlob(function (blob) {
+      if (!blob) { download(); return; }
+      var file = new File([blob], filename, { type:'image/png' });
+      if (!navigator.canShare({ files:[file] })) { download(); return; }
+      navigator.share({ files:[file], title:'Resultado do sorteio · ' + category.name }).catch(function (error) {
+        if (!error || error.name !== 'AbortError') download();
+      });
+    }, 'image/png');
+  } else download();
+  return true;
+};
+
 window._renderPendingDrawPreview = function (t) {
   var pd = t && ((window.__pendingInitialDraws || {})[String(t.id)] || t.pendingDraw);
   if (!pd) return '<div style="color:var(--text-muted);font-size:0.8rem;">(sem dados)</div>';
@@ -7089,26 +7236,23 @@ window._renderPendingDrawPreview = function (t) {
    * da organização; a chave pública segue vazia até "Publicar sorteio". */
   if (pd.kind === 'initial') {
     if (!pd.draft) return '<div style="color:var(--text-muted);font-size:0.8rem;">Rascunho protegido. Abra a revisão para conferi-lo.</div>';
-    var draft = pd.draft || {}, games = Array.isArray(draft.matches) ? draft.matches : [];
-    var teams = Array.isArray(draft.competitionTeams) ? draft.competitionTeams : [];
-    if (!games.length) return '<div style="color:var(--text-muted);font-size:0.8rem;">(rascunho sem jogos)</div>';
-    var nameByTeam = {};
-    teams.forEach(function (team) { if (team && team.id != null) nameByTeam[String(team.id)] = team.name || team.id; });
-    var byCategory = {};
-    games.forEach(function (m) {
-      if (!m || m.isBye || m.isSitOut) return;
-      var cat = String(m.category || 'Sem categoria');
-      (byCategory[cat] || (byCategory[cat] = [])).push(m);
-    });
+    var model = window._initialDrawResultModel(pd);
+    if (!model.gameCount) return '<div style="color:var(--text-muted);font-size:0.8rem;">(rascunho sem jogos)</div>';
     var initialHtml = '<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:8px;">' +
-      esc(String(pd.teamCount || teams.length || 0)) + ' times · ' + esc(String(pd.matchCount || games.length)) + ' jogos</div>';
-    Object.keys(byCategory).sort().forEach(function (cat) {
-      initialHtml += '<div style="font-weight:700;color:var(--sp-c-22d3ee,#22d3ee);margin:10px 0 4px;font-size:0.85rem;">' + esc(cat) + '</div>';
-      byCategory[cat].sort(function (a, b) { return (Number(a.round) || 0) - (Number(b.round) || 0); }).forEach(function (m) {
-        var one = nameByTeam[String(m.p1CompetitionTeamId || '')] || m.p1 || 'A definir';
-        var two = nameByTeam[String(m.p2CompetitionTeamId || '')] || m.p2 || 'A definir';
-        initialHtml += '<div style="font-size:0.78rem;color:var(--text-main);padding:2px 0;">R' + esc(String(m.round || 1)) + ' · ' + esc(one) + ' <span style="opacity:0.55;">×</span> ' + esc(two) + '</div>';
+      esc(String(model.teamCount)) + ' times · ' + esc(String(model.gameCount)) + ' jogos</div>';
+    model.categories.forEach(function (category, index) {
+      initialHtml += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin:14px 0 6px;flex-wrap:wrap;"><strong style="color:#22d3ee;">' + esc(category.name) + '</strong><span style="display:flex;gap:6px;flex-wrap:wrap;">';
+      var pageCount = Math.max(1, Math.ceil(category.groups.length / 4));
+      for (var page = 0; page < pageCount; page++) initialHtml += '<button class="btn btn-outline" data-draw-art="' + index + '" data-draw-page="' + page + '">Arte PNG' + (pageCount > 1 ? ' ' + (page + 1) + '/' + pageCount : '') + '</button>';
+      initialHtml += '</span></div>';
+      category.groups.forEach(function (group) {
+        initialHtml += '<div style="background:rgba(255,255,255,.05);border:1px solid rgba(125,211,252,.25);border-radius:8px;padding:8px 10px;margin-bottom:7px;"><strong style="font-size:.82rem;color:#e2e8f0;">' + esc(group.name) + '</strong>';
+        group.matches.forEach(function (m, i) {
+          initialHtml += '<div style="display:grid;grid-template-columns:56px 1fr;gap:8px;font-size:.78rem;color:var(--text-main);padding:3px 0;border-top:1px solid rgba(255,255,255,.07);"><span style="color:#67d5ff;">J' + (i + 1) + '</span><span>' + esc(m.one) + ' <span style="opacity:.6">×</span> ' + esc(m.two) + '</span></div>';
+        });
+        initialHtml += '</div>';
       });
+      category.extras.forEach(function (extra) { initialHtml += '<div style="font-size:.76rem;color:var(--text-muted);">' + esc(extra.label) + ': ' + esc(extra.name) + '</div>'; });
     });
     return initialHtml;
   }
@@ -7137,19 +7281,48 @@ window._renderPendingDrawPreview = function (t) {
   return html;
 };
 
+// O resultado continua disponível depois da publicação: o rascunho protegido é
+// descartado nesse momento, mas os jogos Rei/Rainha publicados preservam os
+// mesmos confrontos. A imagem e a prévia usam o mesmo modelo de dados.
+window._publishedInitialDrawData = function (t) {
+  var matches = t && Array.isArray(t.matches) ? t.matches.filter(function (m) {
+    return m && (m.isMonarch === true || m.monarchGroup != null);
+  }) : [];
+  return matches.length ? { kind:'initial', draft:{ matches:matches, rounds:[], competitionTeams:t.competitionTeams || [] } } : null;
+};
+
+window._openPublishedInitialDrawResult = function (tId) {
+  var t = window._findTournamentById ? window._findTournamentById(tId) :
+    window.AppStore && (window.AppStore.tournaments || []).find(function (x) { return String(x.id) === String(tId); });
+  var pd = window._publishedInitialDrawData(t);
+  if (!pd) {
+    if (window.showNotification) window.showNotification('Resultado indisponível', 'Os jogos do sorteio ainda não foram carregados.', 'error');
+    return;
+  }
+  var old = document.getElementById('published-draw-result-overlay'); if (old) old.remove();
+  var overlay = document.createElement('div');
+  overlay.id = 'published-draw-result-overlay'; overlay.className = 'modal-overlay';
+  var preview = window._renderPendingDrawPreview(Object.assign({}, t, { id:'published:' + String(t.id), pendingDraw:pd }));
+  overlay.innerHTML = '<div class="modal" role="dialog" aria-modal="true" aria-label="Resultado do sorteio" style="width:min(920px,96vw);max-height:88%;display:flex;flex-direction:column;">' +
+    '<div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:10px;"><h2 style="margin:0;font-size:1.15rem;">Resultado do sorteio</h2><button class="btn btn-outline" data-close>Fechar</button></div>' +
+    '<div style="overflow:auto;padding-right:4px;">' + preview + '</div></div>';
+  overlay.querySelector('[data-close]').onclick = function () { overlay.remove(); };
+  overlay.querySelectorAll('[data-draw-art]').forEach(function (button) {
+    button.onclick = function () { window._downloadInitialDrawArt(t, pd, Number(button.getAttribute('data-draw-art')), Number(button.getAttribute('data-draw-page'))); };
+  });
+  document.body.appendChild(overlay);
+};
+
 // Agenda antes da publicação: usa o mesmo planejador da agenda operacional, mas
 // monta uma visão efêmera sobre `pendingDraw.draft`. Assim a organização pode mudar
 // a ordem ou a quadra e ver os outros jogos se rearranjarem sem criar jogos públicos.
+window._finishDrawTransition = function (tId) {
+  if (String(window.__openingPendingInitialScheduleFromDraw || '') !== String(tId)) return;
+  window.__openingPendingInitialScheduleFromDraw = null;
+  if (typeof window._hideLoading === 'function') window._hideLoading();
+  if (typeof window._drawBtnDone === 'function') window._drawBtnDone();
+};
 window._openPendingInitialSchedule = function (tId) {
-  /* Quando este painel é a continuação de um sorteio, o loader global só pode
-   * desaparecer depois que a grade estiver pronta. Assim não existe retorno
-   * visual ao detalhe no intervalo entre a Function e o planejamento. */
-  function finishDrawToPlanningTransition() {
-    if (String(window.__openingPendingInitialScheduleFromDraw || '') !== String(tId)) return;
-    window.__openingPendingInitialScheduleFromDraw = null;
-    if (typeof window._hideLoading === 'function') window._hideLoading();
-    if (typeof window._drawBtnDone === 'function') window._drawBtnDone();
-  }
   var getTournament = window._findTournamentById || function (id) {
     return window.AppStore && (window.AppStore.tournaments || []).find(function (x) { return String(x.id) === String(id); });
   };
@@ -7158,11 +7331,11 @@ window._openPendingInitialSchedule = function (tId) {
     if (window.showNotification) window.showNotification('Abrindo revisão…', 'Carregando o rascunho protegido da organização.', 'info');
     window._callCF('getPendingInitialDraw', { tournamentId:String(tId), sandbox:String(tId).indexOf('sb_')===0 }, 'Entre na sua conta para revisar o sorteio.')
       .then(function (res) { var dado = (res && res.data && res.data.pendingDraw) || null; if (!dado) throw new Error('Rascunho indisponível.'); cache[String(tId)] = dado; window._openPendingInitialSchedule(tId); if (window._rerenderBracket) window._rerenderBracket(tId); })
-      .catch(function (e) { finishDrawToPlanningTransition(); if (window.showNotification) window.showNotification('Revisão indisponível', (e && e.message) || 'Tente novamente.', 'error'); });
+      .catch(function (e) { window._finishDrawTransition(tId); if (window.showNotification) window.showNotification('Revisão indisponível', (e && e.message) || 'Tente novamente.', 'error'); });
     return;
   }
-  if (!t || !draft || !Array.isArray(draft.matches) || typeof window._operationalSchedulePlan !== 'function') {
-    finishDrawToPlanningTransition();
+  if (!t || !draft || !Array.isArray(draft.matches) || !draft.matches.length || typeof window._operationalSchedulePlan !== 'function') {
+    window._finishDrawTransition(tId);
     if (window.showNotification) window.showNotification('Agenda indisponível', 'Atualize a tela e tente novamente.', 'error');
     return;
   }
@@ -7386,7 +7559,7 @@ window._openPendingInitialSchedule = function (tId) {
     });
   }
   document.body.appendChild(overlay); render();
-  finishDrawToPlanningTransition();
+  window._finishDrawTransition(tId);
 };
 
   /* ⛔ REGRESSÃO CRÍTICA — NÃO REMOVER NEM VOLTAR A DEPENDER SÓ DE `t.pendingDraw`.
@@ -7434,7 +7607,7 @@ window._hydratePendingDrawMarker = function (tId) {
        * marcador que torna os controles visíveis. Re-renderiza explicitamente o
        * detalhe que está aberto, no mesmo fluxo e com o mesmo id. */
       var currentHash = window.location.hash || '', container = document.getElementById('view-container');
-      if (container && currentHash.indexOf('#tournaments/' + encodeURIComponent(id)) === 0 && typeof window.renderTournaments === 'function') {
+      if (container && String(window.__openingPendingInitialScheduleFromDraw || '') !== id && currentHash.indexOf('#tournaments/' + encodeURIComponent(id)) === 0 && typeof window.renderTournaments === 'function') {
         window.renderTournaments(container, id);
       }
       return marker;
@@ -7447,18 +7620,37 @@ window._hydratePendingDrawMarker = function (tId) {
   return promise;
 };
 
-window._openPendingDrawReview = function (tId) {
+window._openPendingDrawReview = function (tId, markerRetry) {
   var getTournament = window._findTournamentById || function (id) {
     return window.AppStore && (window.AppStore.tournaments || []).find(function (x) { return String(x.id) === String(id); });
   };
   var t = getTournament(tId), marker = window._pendingDrawMarkerFor(t);
-  if (!t || !marker) return;
+  if (!t) { window._finishDrawTransition(tId); return; }
+  if (!marker) {
+    if (markerRetry) {
+      window._finishDrawTransition(tId);
+      if (window.showNotification) window.showNotification('Revisão indisponível', 'O servidor ainda não confirmou o sorteio. Abra o torneio novamente.', 'error');
+      var container = document.getElementById('view-container');
+      if (container && typeof window.renderTournaments === 'function') window.renderTournaments(container, tId);
+      else window.location.hash = '#tournaments/' + encodeURIComponent(String(tId));
+      return;
+    }
+    if (window.__pendingDrawMarkerLoads) delete window.__pendingDrawMarkerLoads[String(tId)];
+    window._hydratePendingDrawMarker(tId).then(function () { window._openPendingDrawReview(tId, true); });
+    return;
+  }
   var cache = window.__pendingInitialDraws || (window.__pendingInitialDraws = {}), draft = cache[String(tId)];
   if (!draft && marker.kind === 'initial') {
     if (window.showNotification) window.showNotification('Abrindo revisão…', 'Carregando a chave protegida da organização.', 'info');
     window._callCF('getPendingInitialDraw', { tournamentId:String(tId), sandbox:String(tId).indexOf('sb_')===0 }, 'Entre na sua conta para revisar o sorteio.')
       .then(function (res) { var out = (res && res.data) || res || {}; if (!out.pendingDraw) throw new Error('Rascunho indisponível.'); cache[String(tId)] = out.pendingDraw; window._openPendingDrawReview(tId); })
-      .catch(function (e) { if (window.showNotification) window.showNotification('Revisão indisponível', (e && e.message) || 'Tente novamente.', 'error'); });
+      .catch(function (e) {
+        window._finishDrawTransition(tId);
+        if (window.showNotification) window.showNotification('Revisão indisponível', (e && e.message) || 'Tente novamente.', 'error');
+        var container = document.getElementById('view-container');
+        if (container && typeof window.renderTournaments === 'function') window.renderTournaments(container, tId);
+        else window.location.hash = '#tournaments/' + encodeURIComponent(String(tId));
+      });
     return;
   }
   var old = document.getElementById('pending-draw-review-overlay'); if (old) old.remove();
@@ -7471,15 +7663,22 @@ window._openPendingDrawReview = function (tId) {
     '<div style="color:var(--text-muted);font-size:.86rem;margin-bottom:12px;">Ainda privada: participantes não veem nem recebem notificações.</div>' +
     '<div style="overflow:auto;padding-right:4px;">' + (window._renderPendingDrawPreview ? window._renderPendingDrawPreview(t) : '') + '</div>' +
     '<div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:14px;">' +
-      (marker.kind === 'initial' ? '<button class="btn btn-outline" data-plan>📍 Planejar quadras e horários</button>' : '') +
+      (marker.kind === 'initial' ? '<button class="btn btn-outline" data-plan' + (!(draft && draft.draft && Array.isArray(draft.draft.matches) && draft.draft.matches.length) ? ' disabled' : '') + '>📍 Planejar quadras e horários</button>' : '') +
       '<button class="btn btn-outline" style="color:var(--sp-c-f87171,#f87171);border-color:rgba(248,113,113,.5);" data-annul>✕ Anular</button>' +
       '<button class="btn btn-shine" style="background:#10b981;color:#fff;" data-publish>🚀 Publicar sorteio</button>' +
       '<button class="btn btn-outline" data-close>Voltar</button></div></div>';
   overlay.querySelectorAll('[data-close]').forEach(function (b) { b.onclick = function () { overlay.remove(); }; });
+  overlay.querySelectorAll('[data-draw-art]').forEach(function (b) {
+    b.onclick = function () {
+      var pd = (window.__pendingInitialDraws || {})[String(tId)] || t.pendingDraw;
+      window._downloadInitialDrawArt(t, pd, Number(b.getAttribute('data-draw-art')), Number(b.getAttribute('data-draw-page')));
+    };
+  });
   var plan = overlay.querySelector('[data-plan]'); if (plan) plan.onclick = function () { overlay.remove(); window._openPendingInitialSchedule(tId); };
   var annul = overlay.querySelector('[data-annul]'); if (annul) annul.onclick = function () { overlay.remove(); window._annulPendingDraw(tId); };
   var publish = overlay.querySelector('[data-publish]'); if (publish) publish.onclick = function () { overlay.remove(); window._publishPendingDraw(tId); };
   document.body.appendChild(overlay);
+  window._finishDrawTransition(tId);
 };
 
 window._renderPendingDrawBanner = function (t) {
@@ -7492,9 +7691,9 @@ window._renderPendingDrawBanner = function (t) {
   var esc = window._safeHtml || function (s) { return String(s == null ? '' : s); };
   return '<div style="border:2px solid #f59e0b;background:rgba(245,158,11,0.10);border-radius:14px;padding:14px 16px;margin:0 0 1rem;">' +
     '<div style="font-size:1rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);margin-bottom:4px;">🔒 Sorteio em revisão</div>' +
-    '<div style="font-size:0.82rem;color:var(--text-main);line-height:1.45;margin-bottom:10px;">O sorteio segue privado. Abra o planejamento para conferir e ajustar jogos, horários e quadras; publique por lá. Se houver erro, anule este rascunho.</div>' +
+    '<div style="font-size:0.82rem;color:var(--text-main);line-height:1.45;margin-bottom:10px;">Confira os grupos e os confrontos. Você pode ajustar quadras e horários, publicar ou anular este sorteio.</div>' +
     '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
-      (marker.kind === 'initial' ? '<button class="btn btn-outline" onclick="event.stopPropagation(); window._openPendingInitialSchedule(\'' + esc(t.id) + '\')">📍 Ajustar torneio</button>' : '<button class="btn btn-outline" onclick="event.stopPropagation(); window._openPendingDrawReview(\'' + esc(t.id) + '\')">👁️ Conferir torneio</button>') +
+      (marker.kind === 'initial' ? '<button class="btn btn-outline" onclick="event.stopPropagation(); window._openPendingDrawReview(\'' + esc(t.id) + '\')">👁️ Resultado do sorteio</button><button class="btn btn-outline" onclick="event.stopPropagation(); window._openPendingInitialSchedule(\'' + esc(t.id) + '\')">📍 Ajustar torneio</button>' : '<button class="btn btn-outline" onclick="event.stopPropagation(); window._openPendingDrawReview(\'' + esc(t.id) + '\')">👁️ Conferir torneio</button>') +
       '<button class="btn btn-outline" style="color:var(--sp-c-f87171,#f87171);border-color:rgba(248,113,113,0.5);" onclick="event.stopPropagation(); window._annulPendingDraw(\'' + esc(t.id) + '\')">✕ Anular</button>' +
     '</div>' +
   '</div>';

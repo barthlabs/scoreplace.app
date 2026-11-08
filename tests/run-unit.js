@@ -991,6 +991,7 @@ const SUITES = [
   // marcou. Cobre também o buraco do Rei/Rainha, que aparecia SEM data nas Novidades.
   'tests/grade-estimada-e-propor-datas.test.js',
   'tests/schedule-organizer.test.js',
+  'tests/initial-draw-result.test.js',
   'tests/camis-monarch-interleave.test.js',
   'tests/camis-large-monarch-visibility.test.js',
   'tests/propor-datas-organizador-ve-todos-os-grupos.test.js',

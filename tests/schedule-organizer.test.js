@@ -431,8 +431,8 @@ ok(/id="team-draw-cancel-top"/.test(drawSource) && /data-team-draw-scroll/.test(
   'Voltar fica fora da área rolável do modal e não há Cancelar duplicado no rodapé');
 ok(/data-\' \+ prefix \+ \'-empty-slot/.test(organizerSource) && /data-pis-empty-slot/.test(bracketLogicSource) && /Solte um jogo aqui/.test(organizerSource),
   'quadras vazias aceitam arrastar e soltar tanto na agenda quanto na revisão privada');
-ok(/sp-team-draw-time/.test(drawSource) && /__openingPendingInitialScheduleFromDraw/.test(drawSource) && /_openPendingInitialSchedule\(tId\)/.test(drawSource) && !/window\.location\.hash = d\.staged \? '#tournaments\/'/.test(drawSource),
-  'os horários do sorteio usam controle compacto e uma revisão nova vai de Sorteando direto ao planejamento privado, sem voltar ao detalhe');
+ok(/sp-team-draw-time/.test(drawSource) && /__openingPendingInitialScheduleFromDraw/.test(drawSource) && /_openPendingDrawReview\(tId\)/.test(drawSource) && !/window\.location\.hash = d\.staged \? '#tournaments\/'/.test(drawSource),
+  'os horários do sorteio usam controle compacto e uma revisão nova vai de Sorteando direto ao resultado privado, sem voltar ao detalhe');
 ok(!/data-team-court-rank-label/.test(drawSource) && !/paintCourtRanks/.test(drawSource) && /data-team-court-card/.test(drawSource),
   'a prioridade das quadras é definida pela ordem dos cards, sem prefixos ordinais redundantes');
 ok(/_pill\(tc\.schedule\.mode === 'structured',/.test(fs.readFileSync('js/views/format2-ui.js', 'utf8')) &&
