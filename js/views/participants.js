@@ -1108,6 +1108,15 @@ window._editParticipantName = function(tId, oldName, manualParticipantId, btn) {
     span.setAttribute('aria-busy', 'true');
     window._callCF('renameTournamentParticipant', { tournamentId: tId, oldName: oldName, newName: newName, manualParticipantId: manualParticipantId }, 'Salvando nome…')
       .then(function() {
+        var tournament = typeof window._findTournamentById === 'function' ? window._findTournamentById(tId) : null;
+        if (tournament && Array.isArray(tournament.participants)) tournament.participants.forEach(function(entry) {
+          if (!entry || typeof entry !== 'object') return;
+          if (String(entry.manualParticipantId || '') === String(manualParticipantId)) {
+            entry.displayName = newName; entry.name = newName;
+          }
+          if (String(entry.p1ManualId || '') === String(manualParticipantId)) entry.p1Name = newName;
+          if (String(entry.p2ManualId || '') === String(manualParticipantId)) entry.p2Name = newName;
+        });
         if (window.AppStore && typeof window.AppStore.logAction === 'function') window.AppStore.logAction(tId, 'Nome editado: "' + oldName + '" → "' + newName + '"');
         /* ⛔⛔ NÃO PROMETER O QUE A TELA NÃO VAI MOSTRAR (24/set/2026).
          * Quem tem conta é desenhado pelo nome VIVO do perfil (`_displayName` devolve só
@@ -1126,7 +1135,7 @@ window._editParticipantName = function(tId, oldName, manualParticipantId, btn) {
           showNotification(_t('participants.nameUpdated'), _t('participants.nameUpdatedMsg', { old: oldName, 'new': newName }), 'success');
         }
         _cleanup();
-        _reRenderParticipants();
+        _reRenderParticipantsStable();
       })
       .catch(function(err) {
         _cleanup(nomeVivoInicial);

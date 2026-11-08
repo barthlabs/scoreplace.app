@@ -349,6 +349,7 @@ const SUITES = [
   'tests/revisar-com-gpt-faixa.test.js',
   'tests/l9-censo-formatos-legados.test.js',
   'tests/l7-rename-participant-core.test.js',
+  'tests/rename-canonical-participant.test.js',
   'tests/edit-canonical-slot-core.test.js',
   'tests/participant-swap-routing.test.js',
   'tests/edit-canonical-slot-emulator.test.js',

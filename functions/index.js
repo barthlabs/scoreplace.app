@@ -4644,6 +4644,7 @@ exports.leaveStandby = onCall(
 const _pairCore = require("./pair-core");
 const _monarchPairPolicy = require("./monarch-pair-policy");
 const _participantRename = require("./participant-rename-core");
+const _renameCanonicalParticipant = require("./rename-canonical-participant-core");
 const _ligaAvailability = require("./liga-availability-core");
 // Codebases Firebase são pacotes isolados. Em desenvolvimento aproveita o motor
 // completo; no deploy principal usa o adaptador local com a mesma superfície.
@@ -7738,9 +7739,59 @@ exports.renameTournamentParticipant = onCall(
     return db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
-      const t = await _splitParts.hidratar(tx, ref, snap.data() || {});
+      const raw = snap.data() || {};
+      const t = Object.assign({ id: tournamentId }, raw);
       if (!_isTournamentOrgCaller(t, callerUid)) throw new HttpsError("permission-denied", "só a organização edita nome de participante");
       _assertNoRehearsalEnrollment(t);
+      const canonicalProbe = await tx.get(ref.collection("registrations").limit(1));
+      if (!canonicalProbe.empty || Object.prototype.hasOwnProperty.call(raw, 'canonicalRegistrationMigration')) {
+        // A coleção canônica e o recibo são uma unidade. Se um deles faltar,
+        // verifiedRoster recusa; jamais voltamos ao escritor do espelho legado.
+        let migration;
+        try { migration = _canonicalRegistrationBoundary.migrationOf(t); }
+        catch (err) { throw new HttpsError('failed-precondition', err.message); }
+        if (migration.expectedCount > 400) throw new HttpsError('resource-exhausted', 'elenco grande demais para esta edição');
+        const registrationSnap = await tx.get(ref.collection('registrations').limit(migration.expectedCount + 1));
+        const registrations = registrationSnap.docs.map((doc) => {
+          const item = doc.data() || {};
+          if (doc.id !== String(item.registrationId || '')) throw new HttpsError('failed-precondition', 'inscrição sem ID estrutural');
+          return item;
+        });
+        const accountUids = Array.from(new Set(registrations.filter((item) =>
+          item.status !== 'withdrawn' && item.participantKind === 'account' && item.participantUid)
+          .map((item) => String(item.participantUid))));
+        if (accountUids.length > 400) throw new HttpsError('resource-exhausted', 'contas demais para esta edição');
+        const accountSnaps = await Promise.all(accountUids.map((uid) => tx.get(db.collection('usersPublic').doc(uid))));
+        if (accountSnaps.some((item) => !item.exists)) throw new HttpsError('failed-precondition', 'perfil de inscrito indisponível');
+        const accountNames = accountSnaps.map((item) => String((item.data() || {}).displayName || '').trim());
+        if (accountNames.some((name) => !name)) throw new HttpsError('failed-precondition', 'nome de inscrito indisponível');
+        const [matchSnap, groupSnap, participantSnap, opponentHistorySnap, checkedInSnap,
+          woClaimsSnap, woLogSnap] = await Promise.all([
+          tx.get(ref.collection(_tSplitFn.colecaoDaParte('matches'))),
+          tx.get(ref.collection(_tSplitFn.colecaoDaParte('grupos'))),
+          tx.get(ref.collection(_tSplitFn.colecaoDaParte('participants'))),
+          tx.get(ref.collection(_tSplitFn.colecaoDaParte('opponentHistory'))),
+          tx.get(ref.collection(_tSplitFn.colecaoDaParte('checkedIn'))),
+          tx.get(ref.collection(_tSplitFn.colecaoDaParte('woClaims'))),
+          tx.get(ref.collection(_tSplitFn.colecaoDaParte('woLog'))),
+        ]);
+        let planned;
+        try {
+          planned = _renameCanonicalParticipant.plan(t, registrations,
+            { oldName, newName, manualParticipantId }, accountNames,
+            matchSnap.docs.concat(groupSnap.docs, participantSnap.docs, opponentHistorySnap.docs,
+              checkedInSnap.docs, woClaimsSnap.docs, woLogSnap.docs)
+              .map((doc) => ({ ref: doc.ref, data: doc.data() || {} })));
+        } catch (err) { throw new HttpsError('failed-precondition', err.message); }
+        if (!planned.changed) return { ok: true, changed: false };
+        tx.update(registrationSnap.docs.find((doc) => doc.id === planned.target.registrationId).ref,
+          { manualDisplayName: newName, updatedAt: _FV.serverTimestamp() });
+        planned.documents.forEach((item) => tx.set(item.ref, item.data));
+        tx.update(ref, Object.assign({ updatedAt: _FV.serverTimestamp(),
+          _phaseReadCertificate: _FV.delete() }, planned.rootPatch));
+        return { ok: true, changed: true, oldName, newName };
+      }
+      await _splitParts.hidratar(tx, ref, t);
       const before = JSON.parse(JSON.stringify(t));
       let renamed;
       try { renamed = _participantRename.renameTournamentParticipant(t, { oldName, newName, manualParticipantId }); }
