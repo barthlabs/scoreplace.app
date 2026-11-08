@@ -90,17 +90,18 @@ ok(W._sorteioDaFaseEhReiRainha({ phases: [], ligaRoundFormat: 'rei_rainha' }) ==
 ok(W._sorteioDaFaseEhReiRainha({ phases: 'nao-e-lista', drawMode: 'rei_rainha' }) === true,
   '④ ⚠️ mas o que NÃO é lista conta como ausência — aí o topo é tudo que existe');
 
-// ── ⑤ consumidores deliberados do motor de rodadas e do W.O. ────────────────
-/* A porta protege a barreira de duplas formadas no sorteio e a prévia de W.O.
- * da partida. Ambos precisam saber que uma eliminatória posterior não é mais
- * Rei/Rainha, mesmo se o torneio nasceu como tal. Qualquer outro consumidor fora
+// ── ⑤ consumidores deliberados do motor de rodadas, da súmula e do W.O. ──────
+/* A porta protege a barreira de duplas formadas no sorteio, a súmula por quadra
+ * e a prévia de W.O. da partida. Todos precisam saber que uma eliminatória posterior
+ * não é mais Rei/Rainha, mesmo se o torneio nasceu como tal. Qualquer outro consumidor fora
  * desta lista cai no teste: migrar todo o restante sem medir já obrigou reversão.
  * A Análise usa um leitor de comportamento intermediário definido neste mesmo
  * arquivo de utilidades, sem consultar a porta diretamente. */
 const chamadas = varrer(path.join(ROOT, 'js'), /_sorteioDaFaseEhReiRainha\s*\(/g)
   .filter(function (f) { return f !== 'js/views/tournaments-utils.js'; });
-ok(chamadas.length === 2 && chamadas.includes('js/views/tournaments-draw.js') && chamadas.includes('js/views/wo-claim.js'),
-  '⑤ sorteio e W.O. consultam a fase, sem novos consumidores acidentais — achei ' + chamadas.length + ': ' + chamadas.join(', '));
+ok(chamadas.length === 3 && chamadas.includes('js/views/tournaments-draw.js') &&
+  chamadas.includes('js/views/tournament-sumula.js') && chamadas.includes('js/views/wo-claim.js'),
+  '⑤ sorteio, súmula e W.O. consultam a fase, sem novos consumidores acidentais — achei ' + chamadas.length + ': ' + chamadas.join(', '));
 
 // ── ⑥ a porta antiga continua intocada ───────────────────────────────────────
 const utils = fs.readFileSync(path.join(ROOT, 'js/views/tournaments-utils.js'), 'utf8');
