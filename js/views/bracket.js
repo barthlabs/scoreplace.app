@@ -8896,8 +8896,11 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // organização pode ajustar o chamado dos jogos ao longo do evento.
   var _scheduledMs = _isConcentratedEvent ? _matchCardTimestamp(m.scheduledAt) : null;
   var _callAllowedToday = true, _callDayMessage = '';
-  if (_isConcentratedEvent && t && t.isSandbox !== true && !String(tId).startsWith('sb_') && !m.courtCalledAt) {
-    var _callProfile = window.AppStore && window.AppStore.currentUser || null;
+  var _callProfile = window.AppStore && window.AppStore.currentUser || null;
+  var _rehearsalOwnerCall = !!(t && t.rehearsal && t.rehearsal.state === 'active' &&
+    _callProfile && _callProfile.uid && t.creatorUid === _callProfile.uid);
+  if (_isConcentratedEvent && t && t.isSandbox !== true && !String(tId).startsWith('sb_') &&
+      !m.courtCalledAt && !_rehearsalOwnerCall) {
     var _resolvedCallZone = window._venueGeo && typeof window._venueGeo.resolverFuso === 'function'
       ? window._venueGeo.resolverFuso(t, _callProfile) : null;
     var _zoneForCall = _resolvedCallZone && _resolvedCallZone.tz;

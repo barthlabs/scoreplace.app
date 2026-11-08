@@ -1,3 +1,6 @@
+// 2.5.119 — Durante o ensaio privado ativo, o criador desenvolvedor pode
+// chamar jogos para a quadra antes do dia do evento. A trava de data continua
+// para outros usuários e para torneios fora de ensaio.
 // 2.5.118 — A visão Geral preserva todos os jogos da grade em suas rodadas e
 // mostra a estrutura prevista da eliminatória até as finais, sem antecipar
 // classificados. Quando só existe o gênero feminino, a aba única de gênero

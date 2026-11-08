@@ -4554,7 +4554,9 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
         throw _drawFail('failed-precondition', 'A chamada terminou; não é mais possível mudar a quadra.', { tId, matchId });
       }
       if (confirmCall && !court) throw _drawFail('failed-precondition', 'Escolha uma quadra antes de chamar o jogo.', { tId, matchId });
-      if (confirmCall && !m.courtCalledAt && !sandbox) {
+      const rehearsalOwnerCall = uid === _rehearsal.OWNER_UID && t.creatorUid === uid &&
+        t.rehearsal?.state === 'active';
+      if (confirmCall && !m.courtCalledAt && !sandbox && !rehearsalOwnerCall) {
         // A coleção foi resolvida acima pelo ID e pelo flag. O dia do jogo é
         // civil no fuso do evento: uma data UTC pode ser o dia anterior aqui.
         const zone = (await _fusoDoEvento(t, tx)).tz;
