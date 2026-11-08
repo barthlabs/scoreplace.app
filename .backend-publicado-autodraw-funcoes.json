@@ -2,8 +2,8 @@
   "schema": 1,
   "entries": {
     "drawRound": {
-      "backendCommit": "6d03e3fdd126cebca9e919469202546c379796ff",
-      "deployedAt": "2026-11-07T19:05:59.238Z",
+      "backendCommit": "19c1c00a3ca2d2826dc9981d7493fc8118ab6abf",
+      "deployedAt": "2026-11-08T00:01:24.259Z",
       "result": "success",
       "mode": "only"
     },
@@ -104,8 +104,8 @@
       "mode": "only"
     },
     "advanceTournamentPhase": {
-      "backendCommit": "80d2d1c25e420a7a2ed42e906c8b39a9dd0c6e31",
-      "deployedAt": "2026-11-07T21:36:51.411Z",
+      "backendCommit": "19c1c00a3ca2d2826dc9981d7493fc8118ab6abf",
+      "deployedAt": "2026-11-08T00:01:24.259Z",
       "result": "success",
       "mode": "only"
     },
