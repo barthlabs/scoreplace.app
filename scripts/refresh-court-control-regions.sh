@@ -45,7 +45,9 @@ if(rows.length!==1)process.exit(1);
 const r=rows[0],s=JSON.parse(process.env.SP_JSON),e=Object.fromEntries((s.spec?.template?.spec?.containers?.[0]?.env||[]).map(x=>[x.name,x.value]));
 if(r.image!==s.spec?.template?.spec?.containers?.[0]?.image||r.revision!==s.status?.latestReadyRevisionName||
   r.url!==s.status?.url||e.SP_SOURCE_DIGEST!==r.sourceDigest||e.SP_OPERATION_REGION!==r.region||
-  s.spec?.template?.metadata?.annotations?.['run.googleapis.com/base-images'])process.exit(1);
+  s.spec?.template?.metadata?.annotations?.['run.googleapis.com/base-images']||
+  s.status?.traffic?.length!==1||s.status.traffic[0].revisionName!==r.revision||
+  s.status.traffic[0].percent!==100)process.exit(1);
 NODE
   probe "$(printf '%s' "$json" | field status.url)"
 }
@@ -105,6 +107,13 @@ for version in v3 v2; do
           gcloud run deploy "$name" --project "$project" --region "$region" --image "$source_image" \
             --set-env-vars "SP_SOURCE_DIGEST=$digest,SP_OPERATION_REGION=$region" --allow-unauthenticated --quiet
         fi
+        json="$(describe "$name" "$region")"
+        # Cloud Run pode criar a revisão nova sem mover tráfego quando a porta
+        # estava fixada numa revisão antiga. O recibo deve descrever o que serve.
+        next_revision="$(printf '%s' "$json" | field status.latestCreatedRevisionName)"
+        [[ -n "$next_revision" ]] || { echo "revisão nova ausente: $name/$region" >&2; exit 1; }
+        gcloud run services update-traffic "$name" --project "$project" --region "$region" \
+          --to-revisions "$next_revision=100" --quiet
         json="$(describe "$name" "$region")"
         record "$json" "$candidate" "$name" "$region" "$digest"
         check_service "$json" "$candidate" "$name" "$region"
