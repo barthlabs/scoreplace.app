@@ -276,7 +276,8 @@ function servidor() {
   ok(remocao.after === remocao.before,
     'excluir inscrito não desloca a tela (' + remocao.before + ' → ' + remocao.after + ')');
 
-  await p.waitForFunction(() => !document.body.classList.contains('sp-scroll-locked'));
+  await p.waitForFunction(() => !document.body.classList.contains('sp-scroll-locked') &&
+    !window._travaAlturaDona);
 
   const detalhe = await p.evaluate(async () => {
     const c = document.getElementById('view-container');

@@ -121,8 +121,8 @@
     if (Array.isArray(t.phases) && t.phases.length > next + 1)
       pending.push('Fases posteriores à próxima serão definidas após os resultados.');
     var tiebreakGroups = [];
-    var cfg0 = Array.isArray(t.phases) && t.phases[0];
-    if (cfg0 && (cfg0.reiRainha === true || cfg0.drawMode === 'rei_rainha') &&
+    if (typeof root._sorteioDaFaseEhReiRainha === 'function' &&
+        root._sorteioDaFaseEhReiRainha(t, 0) &&
         t.fmt2 && t.fmt2.tieResolution === 'singles_then_draw' &&
         root._phasesEngine && typeof root._phasesEngine.prevPhaseGroups === 'function') {
       try { tiebreakGroups = (root._phasesEngine.prevPhaseGroups(t) || []).map(function (g, i) {
@@ -275,7 +275,7 @@
     var position = right ? x + width - 3 - labelWidth(fitted, size, bold) : x + 3;
     p.write(fitted, position, y, size, bold, null, rgb);
   }
-  function writeSide(p, team, names, x, top, width, portrait, right) {
+  function writeSide(p, team, names, x, top, width, portrait, right, dense) {
     var people = members(names);
     if (!people.length) people = [names];
     var playerSize = portrait ? 8.5 : 9.3;
@@ -288,7 +288,7 @@
       var size = compact ? 7.8 : playerSize, lines;
       while (size >= 6.8 && !(lines = sideLines(name, width - 6, size, true))) size -= 0.2;
       if (!lines) { size = 6.8; lines = [fitLabel(name, width - 6, size, true)]; }
-      var y = top + (portrait ? 21 + 19*i : compact ? 15 + 14*i : 17 + 13*i);
+      var y = top + (dense ? 18 + 17*i : portrait ? 21 + 19*i : compact ? 15 + 14*i : 17 + 13*i);
       sideWrite(p, lines[0], x, y, width, size, true, right);
       if (lines[1]) sideWrite(p, lines[1], x, y + (portrait ? 8 : 7), width,
         Math.min(size, portrait ? 7.8 : 7.3), true, right);
@@ -306,13 +306,14 @@
     if (!shown.length) return fitLabel(prefix + (categories[0] || 'Sem categoria'), width, size, false);
     return prefix + shown.join(', ') + (categories.length > shown.length ? ' +' + (categories.length - shown.length) : '');
   }
-  // Uma página por quadra e dia, no máximo 12 jogos. A quadra efetiva é anotada no campo.
-  function scorePage(model, day, courtLabel, matches, part, total, orientation) {
+  // Quadras com 13 ou 14 jogos usam a altura da folha vertical sem perder placar ou assinaturas.
+  function scorePage(model, day, courtLabel, matches, part, total, orientation, dense) {
     var portrait = orientation === 'portrait';
     var p = portrait ? pdfPage(595, 842) : pdfPage(842, 595);
     var left = portrait ? 18 : 20, right = p.width - left;
     var divider = portrait ? 397 : 559, top = 86, bodyTop = 105;
-    var rowHeight = portrait ? 54 : 38;
+    var rowHeight = dense ? 50 : portrait ? 54 : 38;
+    var bodyRows = dense ? 14 : 12;
     var slots = model.scoring && model.scoring.slots || 1;
     var gamesPerSet = model.scoring && model.scoring.gamesPerSet || 6;
     var gameLabel = slots === 1 ? '1 set de ' + gamesPerSet + ' games' : 'melhor de ' + slots + ' sets';
@@ -327,7 +328,7 @@
     p.write(categoriesLabel(categories, headerWidth, portrait ? 6.7 : 7.2),
       left, 65, portrait ? 6.7 : 7.2, false, null, '1 1 1');
     p.logo(right - 60, 4, 60);
-    p.line(divider, 79, divider, bodyTop + 12*rowHeight, 0.55);
+    p.line(divider, 79, divider, bodyTop + bodyRows*rowHeight, 0.55);
     p.rect(left, top, divider-left-8, 19, 0.92);
     p.rect(divider+8, top, right-divider-8, 19, 0.92);
     var hourX = left + (portrait ? 22 : 24);
@@ -354,8 +355,8 @@
       p.write(categoryLines[0], courtX+3, y+10, 5.5);
       if (categoryLines[1]) p.write(categoryLines[1], courtX+3, y+17, 5.5);
       p.line(courtX+7, y+rowHeight-10, namesX-10, y+rowHeight-10, 0.55);
-      writeSide(p, m.team1, m.p1, namesX, y, sideWidth, portrait, false);
-      writeSide(p, m.team2, m.p2, secondX, y, sideWidth, portrait, true);
+      writeSide(p, m.team1, m.p1, namesX, y, sideWidth, portrait, false, dense);
+      writeSide(p, m.team2, m.p2, secondX, y, sideWidth, portrait, true, dense);
       var cellWidth = scoreWidth / slots;
       for (var s=0;s<slots;s++) {
         var sx = scoreX + s*cellWidth, bw = slots === 1 ? 22 : Math.max(7, Math.floor((cellWidth-12)/2));
@@ -367,7 +368,7 @@
       }
     });
     var people = uniqueAthletes(matches);
-    var step = Math.min(24, (12*rowHeight-14) / Math.max(1, people.length));
+    var step = Math.min(24, (bodyRows*rowHeight-14) / Math.max(1, people.length));
     people.forEach(function (name, i) {
       var y = bodyTop + 11 + i*step;
       var limit = portrait ? 22 : 29;
@@ -401,6 +402,105 @@
     p.write('1º jogo = primeiro confronto cronológico da dupla no torneio. Assinatura ou visto na coluna Presença.', x, 566, 7);
     p.write('scoreplace.app  |  Gerado da grade publicada', x, 583, 7);
     return p;
+  }
+  function callList(model) {
+    var games = (model.matches || []).concat(model.undated || []);
+    var knownIds = new Map(), entries = new Map(), skipped = new Map();
+    function nameKey(category, name) {
+      return (category || 'Sem categoria').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR') + '|' +
+        name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
+    }
+    games.forEach(function (m) {
+      [['p1','uids1'],['p2','uids2']].forEach(function (side) {
+        var names = members(m[side[0]]), ids = m[side[1]];
+        if (!Array.isArray(ids) || ids.length !== names.length) return;
+        names.forEach(function (name, i) {
+          var id = text(ids[i]), key = nameKey(m.category, name);
+          if (id) {
+            if (!knownIds.has(key)) knownIds.set(key, new Set());
+            knownIds.get(key).add(id);
+          }
+        });
+      });
+    });
+    games.forEach(function (m) {
+      var category = m.category || 'Sem categoria';
+      var sides = [members(m.p1), members(m.p2)];
+      if (sides.some(function (people, i) {
+        var raw = i ? m.p2 : m.p1;
+        return !people.length || people.length > 2 ||
+          /(?:^|\s)(?:A definir|TBD|BYE)(?:$|\s)/i.test(raw) ||
+          /^(?:Vencedor|Perdedor|Classificado|Repescado)(?:\s|$)/i.test(text(raw));
+      })) {
+        if (!skipped.has(category)) skipped.set(category, []);
+        skipped.get(category).push(m.number || m.id || 'sem número');
+        return;
+      }
+      sides.forEach(function (people, sideIndex) {
+        var ids = sideIndex ? m.uids2 : m.uids1;
+        if (!Array.isArray(ids) || ids.length !== people.length) ids = [];
+        people.forEach(function (name, i) {
+          var base = nameKey(category, name), id = text(ids[i]);
+          var matches = knownIds.get(base), resolved = id || (matches && matches.size === 1 ? Array.from(matches)[0] : 'sem-id');
+          var key = base + '|' + resolved;
+          if (!entries.has(key)) entries.set(key, { name:name, category:category, games:[] });
+          entries.get(key).games.push({ number:m.number || m.id || '-', day:m.day, time:m.time,
+            court:m.court || 'A definir', partner:people.length === 2 ? people[1-i] : '-',
+            opponents:sides[1-sideIndex].join(' / '), at:m.at });
+        });
+      });
+    });
+    var byCategory = new Map();
+    entries.forEach(function (entry) {
+      if (!byCategory.has(entry.category)) byCategory.set(entry.category, []);
+      entry.games.sort(function (a,b) { return (a.at || Infinity) - (b.at || Infinity) || Number(a.number)-Number(b.number); });
+      byCategory.get(entry.category).push(entry);
+    });
+    skipped.forEach(function (_, category) { if (!byCategory.has(category)) byCategory.set(category, []); });
+    return Array.from(byCategory, function (pair) {
+      pair[1].sort(function (a,b) { return a.name.localeCompare(b.name, 'pt-BR', { sensitivity:'base' }); });
+      return { category:pair[0], athletes:pair[1], skipped:skipped.get(pair[0]) || [] };
+    }).sort(function (a,b) { return a.category.localeCompare(b.category, 'pt-BR', { sensitivity:'base' }); });
+  }
+  function callListPage(model, category, rows, part, total, note) {
+    var p = pdfPage(842, 595), x = [20, 160, 207, 303, 393, 530, 822];
+    p.fillRect(0, 0, p.width, 77, '0.071 0.133 0.220');
+    p.write(fitLabel(model.tournament, 680, 12, true), 20, 23, 12, true, null, '1 1 1');
+    p.write(fitLabel('LISTA DE CHAMADA  |  ' + category + '  |  Folha ' + part + '/' + total, 680, 9, true),
+      20, 48, 9, true, null, '1 1 1');
+    p.logo(763, 8, 54);
+    ['ATLETA', 'JOGO', 'DIA / HORA', 'QUADRA', 'PARCEIRO(A)', 'ADVERSÁRIOS'].forEach(function (label, i) {
+      p.write(label, x[i]+3, 94, 7, true);
+    });
+    p.line(20, 101, 822, 101);
+    rows.forEach(function (row, i) {
+      var y = 117 + i*17;
+      if (i%2 === 0) p.rect(20, y-12, 802, 16, 0.96);
+      p.write(fitLabel(row.name, x[1]-x[0]-7, 7, true), x[0]+3, y, 7, true);
+      p.write(String(row.game.number), x[1]+3, y, 7);
+      p.write(row.game.day ? dayLabel(row.game.day).slice(0,5) + ' ' + row.game.time : 'A definir', x[2]+3, y, 7);
+      p.write(fitLabel(row.game.court, x[4]-x[3]-6, 7), x[3]+3, y, 7);
+      p.write(fitLabel(row.game.partner, x[5]-x[4]-6, 7), x[4]+3, y, 7);
+      p.write(fitLabel(row.game.opponents, x[6]-x[5]-6, 7), x[5]+3, y, 7);
+      p.line(20, y+4, 822, y+4, 0.85);
+    });
+    if (note) p.write(fitLabel(note, 795, 7, true), 22, 562, 7, true);
+    p.write('scoreplace.app  |  Horários e quadras previstos podem mudar durante o evento.', 22, 581, 7);
+    return p;
+  }
+  function makeCallListPages(model) {
+    var pages = [];
+    callList(model).forEach(function (bucket) {
+      var rows = [];
+      bucket.athletes.forEach(function (athlete) {
+        athlete.games.forEach(function (game) { rows.push({ name:athlete.name, game:game }); });
+      });
+      var total = Math.max(1, Math.ceil(rows.length / 26));
+      var note = bucket.skipped.length ? 'Jogos sem participantes definidos: ' + bucket.skipped.join(', ') : '';
+      for (var i=0;i<total;i++) pages.push(callListPage(model, bucket.category,
+        rows.slice(i*26, (i+1)*26), i+1, total, i === total-1 ? note : ''));
+    });
+    return pages;
   }
   function structuralRows(bucket) {
     var matches = bucket.matches.slice().sort(function (a, b) {
@@ -483,19 +583,22 @@
         var matches = model.matches.filter(function (m) {
           return m.day === day && (m.court || 'Quadra a definir') === courtLabel;
         });
-        var total = Math.ceil(matches.length / 12);
+        var total = Math.ceil(matches.length / 14);
         for (var i=0;i<total;i++) {
-          pages.push(scorePage(model, day, courtLabel, matches.slice(i*12, (i+1)*12),
-            i+1, total, orientation));
+          var chunk = matches.slice(i*14, (i+1)*14), dense = chunk.length > 12;
+          pages.push(scorePage(model, day, courtLabel, chunk,
+            i+1, total, dense ? 'portrait' : orientation, dense));
         }
       });
     });
     var unscheduled = model.undated || [];
     if (unscheduled.length) {
-      var totalUndated = Math.ceil(unscheduled.length / 12);
-      for (var u=0;u<totalUndated;u++) pages.push(scorePage(model, 'Data a definir',
-        'Quadra prevista no jogo; anote mudanças', unscheduled.slice(u*12, (u+1)*12),
-        u+1, totalUndated, orientation));
+      var totalUndated = Math.ceil(unscheduled.length / 14);
+      for (var u=0;u<totalUndated;u++) {
+        var undatedChunk = unscheduled.slice(u*14, (u+1)*14), undatedDense = undatedChunk.length > 12;
+        pages.push(scorePage(model, 'Data a definir', 'Quadra prevista no jogo; anote mudanças',
+          undatedChunk, u+1, totalUndated, undatedDense ? 'portrait' : orientation, undatedDense));
+      }
     }
     if (model.future && Array.isArray(model.future.categories)) model.future.categories.forEach(function (bucket) {
       var rows = structuralRows(bucket), perPage = orientation === 'portrait' ? 10 : 8;
@@ -517,6 +620,7 @@
       'Aguardando definição', model.pending.map(function (note, i) {
         return { ref:'P' + (i+1), round:'', p1:note, p2:'' };
       }), 1, 1, orientation, 'future'));
+    pages.push.apply(pages, makeCallListPages(model));
     if (options.attendance) pages.push.apply(pages, makeAttendancePages(model));
     return pages;
   }
@@ -630,6 +734,8 @@
     document.body.appendChild(anchor); anchor.click(); anchor.remove();
     setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
   }
-  root.ScoreplaceSumula = { collect:collect, attendance:attendance, makePages:makePages, makeAttendancePages:makeAttendancePages, encodePdf:encodePdf, filename:filename, zipFiles:zipFiles };
+  root.ScoreplaceSumula = { collect:collect, attendance:attendance, callList:callList, makePages:makePages,
+    makeCallListPages:makeCallListPages, makeAttendancePages:makeAttendancePages, encodePdf:encodePdf,
+    filename:filename, zipFiles:zipFiles };
   root._downloadTournamentSumula = download;
 })(typeof window !== 'undefined' ? window : globalThis);
