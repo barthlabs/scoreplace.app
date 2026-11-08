@@ -254,12 +254,12 @@ ok(listeners.click.capture === true && opened === 1 && click.prevented && click.
   W2.showNotification = function (t2, m2) { avisos.push(String(t2) + '|' + String(m2)); };
   W2._callCF = function () { chamouCF++; return Promise.resolve({}); };
   W2._hydrateUidNames = function () {};
-  W2._reRenderParticipants = function () {};
+  W2._reRenderParticipantsStable = function () {};
   W2._t = function (k) { return k; };
   vm.createContext(W2);
   vm.runInContext('window._resolveEditNameTarget = function (btn, chave) ' + corpoResolve, W2, { filename: 'resolve-alvo' });
   vm.runInContext('var showNotification = window.showNotification; var _t = window._t;' +
-    'var _reRenderParticipants = window._reRenderParticipants;' +
+    'var _reRenderParticipantsStable = window._reRenderParticipantsStable;' +
     'window._editParticipantName = function(tId, oldName, manualParticipantId, btn) ' + corpoEdit, W2, { filename: 'editar-nome' });
 
   /* ⛔ A FIXTURE PASSOU A EDITAR QUEM NÃO TEM CONTA. A edição de conta foi eliminada, então
