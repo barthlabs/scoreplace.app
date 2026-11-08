@@ -17,7 +17,10 @@ if ([requireScoreRefresh, requireCourtControlRefresh, requireCurrent, allowLegac
 // sync-operation-regions-current.js e os manifestos, antes de abrir o Hosting.
 const releaseCommit = '470c6c972130c2d4225952f214755d622595e0a6';
 const scoreRefreshCommit = '80d2d1c25e420a7a2ed42e906c8b39a9dd0c6e31';
-const courtControlRefreshCommit = execFileSync('git', ['log', '-1', '--format=%H', '--', 'functions-autodraw'], { cwd: root }).toString().trim();
+// O manifesto registra a revisão efetivamente publicada para chamada e controle.
+// Mudanças em outros arquivos de functions-autodraw (por exemplo, um vendor usado
+// no sorteio) não alteram a imagem desses dois serviços na malha regional.
+const courtControlRefreshCommit = 'c85ac683465a159a4c77e5f680481f9510871442';
 const regions = version === 'v2'
   ? ['us-east1', 'us-east4', 'us-south1']
   : ['us-east1', 'us-east4', 'us-south1', 'us-central1', 'southamerica-east1'];

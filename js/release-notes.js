@@ -2,6 +2,7 @@
 // três confrontos Rei/Rainha antes de publicar. O resultado pode ser reaberto
 // depois e compartilhado em artes PNG numeradas, sem placares. A conferência
 // mantém o contraste dos títulos e números dos jogos nos temas claro e escuro.
+// Cada página da arte reúne até quatro grupos para facilitar o envio.
 // 2.5.124 — A primeira ação de quadra usa imediatamente a região preferida.
 // Após a resposta, o aplicativo verifica outras regiões em segundo plano e
 // registra falhas dessa sondagem para diagnóstico, sem atrasar a chamada.
