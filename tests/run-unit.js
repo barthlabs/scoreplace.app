@@ -992,6 +992,7 @@ const SUITES = [
   'tests/grade-estimada-e-propor-datas.test.js',
   'tests/schedule-organizer.test.js',
   'tests/camis-monarch-interleave.test.js',
+  'tests/camis-large-monarch-visibility.test.js',
   'tests/propor-datas-organizador-ve-todos-os-grupos.test.js',
   'tests/data-proposta-organizador-celular.test.js',
   // 2.1.98 — o gate dos DOIS chips deixou de ser "é a rodada atual?" e passou a ser "as

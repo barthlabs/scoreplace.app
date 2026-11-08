@@ -783,6 +783,7 @@ function _alvoDeEntrada() {
         if (_paiCard.tagName === 'DETAILS') _paiCard.open = true;
         _paiCard = _paiCard.parentElement;
       }
+      if (_cardAlvo.closest) _bracketRevealMonarchTarget(_cardAlvo);
       return _cardAlvo;
     }
     // Nunca substitua um ID explícito pelo banner, por outro grupo ou pelo
@@ -838,6 +839,7 @@ function _alvoDeEntrada() {
         var _ds = _g.querySelectorAll ? _g.querySelectorAll('details') : [];
         for (var _di = 0; _di < _ds.length; _di++) _ds[_di].open = true;
       } catch (e) {}
+      if (_g.hidden) _bracketRevealMonarchTarget(_g);
       return _g;
     }
   }
@@ -859,9 +861,9 @@ function _alvoDeEntrada() {
   var _meus = document.querySelectorAll('[data-my-group="1"]');
   if (_meus && _meus.length) {
     for (var i = 0; i < _meus.length; i++) {
-      if (_meus[i].querySelector && _meus[i].querySelector('[data-my-pending="1"]')) return _meus[i];
+      if (_meus[i].querySelector && _meus[i].querySelector('[data-my-pending="1"]')) return _bracketRevealMonarchTarget(_meus[i]);
     }
-    return _meus[_meus.length - 1];
+    return _bracketRevealMonarchTarget(_meus[_meus.length - 1]);
   }
   /* 3) SEM GRUPO (eliminatória, chave) — O JOGO DELE. Ordem do dono (12/set/2026):
    *    _"o usuário clicando no card do torneio abre os detalhes e deveria pular para o jogo
@@ -892,7 +894,7 @@ function _alvoDeEntrada() {
   }
   if (!_mine) _mine = document.getElementById('sp-meu-card');
   if (!_mine) return null;
-  return (typeof _mine.closest === 'function' && _mine.closest('[data-group-box]')) || _mine;
+  return _bracketRevealMonarchTarget((typeof _mine.closest === 'function' && _mine.closest('[data-group-box]')) || _mine);
 }
 
 // Exposta pra ser COBRADA por teste (tests/entrar-no-torneio-cai-no-meu-grupo.test.js):
@@ -2311,6 +2313,8 @@ function _bracketTabsApply(tid, gender, category, requestedRound, forceCanonical
   if (!isOperationalView) {
     _bracketGeneralView(root, false, gender);
   }
+  root.setAttribute('data-bracket-operational-view', isOperationalView ? '1' : '0');
+  _bracketMonarchGroupsApply(root, category, isOperationalView);
   var lineMode = root.getAttribute('data-bracket-line-tabs') === '1';
   var cards = _bracketOperationalCards(root, root._bracketTabsScope);
   for (var i = 0; i < cards.length; i++) {
@@ -2414,6 +2418,32 @@ function _bracketTabsApply(tid, gender, category, requestedRound, forceCanonical
   }
   _bracketTabsRefreshRoundRail(root);
   _bracketLayoutEliminationTree(root);
+}
+// Uma chave Rei/Rainha grande conserva todos os cards no DOM para busca e
+// impressão, mas só a categoria aberta participa do layout. A agenda move os
+// cards reais para fora dos grupos antes de exibi-los.
+function _bracketMonarchGroupsApply(root, category, operational) {
+  if (!root || !root._bracketTabsScope) return;
+  var groups = root._bracketTabsScope.querySelectorAll('[data-monarch-large="1"]');
+  for (var i = 0; i < groups.length; i++) {
+    groups[i].hidden = !!operational || groups[i].getAttribute('data-monarch-category') !== category;
+  }
+}
+
+function _bracketRevealMonarchTarget(target) {
+  var group = target && target.closest && target.closest('[data-monarch-large="1"]');
+  if (!group || !group.hidden) return target;
+  var tabs = document.querySelectorAll('[data-bracket-tabs-root]');
+  for (var i = 0; i < tabs.length; i++) {
+    var root = tabs[i];
+    if (!root._bracketTabsScope || !root._bracketTabsScope.contains(group)) continue;
+    var category = group.getAttribute('data-monarch-category');
+    var card = group.querySelector('[data-bracket-tab-gender]');
+    var gender = card ? card.getAttribute('data-bracket-tab-gender') : _bracketTabGender(category);
+    _bracketTabsApply(root.getAttribute('data-tournament-id'), gender, category, '', true);
+    break;
+  }
+  return target;
 }
 window._bracketSelectCategoryTab = function (tid, gender, category, round) {
   _bracketTabsApply(String(tid), String(gender), String(category), round == null ? '' : String(round));
@@ -9711,6 +9741,20 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
         .sort(function(a, b) { return (a.me - b.me) || (a.i - b.i); })
         .map(function(o) { return o.sg; });
 
+  // O CAMIS e outros torneios extensos podem ter dezenas de quartetos. Todos
+  // continuam no HTML; só evitamos colocar várias categorias simultâneas no
+  // layout inicial do navegador. Grupo misto ou sem categoria mantém o fluxo antigo.
+  var _monarchCategories = subgroups.map(function (sg) {
+    var games = (sg.matches || []).filter(function (m) { return m && !m.isSitOut; });
+    if (!games.length) return '';
+    var category = String(games[0].category || sg.category || '');
+    return category && games.every(function (m) {
+      return String(m.category || sg.category || '') === category;
+    }) ? category : '';
+  });
+  var _largeMonarch = !(opts && opts.showHistoricalFullStandings) && subgroups.length > 24 &&
+    _monarchCategories.every(Boolean) &&
+    _monarchCategories.some(function (category) { return category !== _monarchCategories[0]; });
   var _useSetsMonarch = !!(t.scoring && t.scoring.type === 'gsm');
   subgroups.forEach(function(sg, gi) {
     // _computeMonarchStandings tolerates both shapes: group.matches or
@@ -9894,7 +9938,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     var _mineBadgeMon = _isMineMon
       ? '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(34,211,238,0.15);color:var(--sp-c-22d3ee,#22d3ee);font-weight:700;">SEU GRUPO</span>'
       : '';
-    html += '<div data-group-box="1" data-monarch-group="1"' + (_isMineMon ? ' data-my-group="1"' : '') + ' data-group-label="' + window._safeHtml(window._grpKey(sg.name)) + '" style="scroll-margin-top:var(--scroll-anchor,120px);background:var(--bg-card);border:1px solid var(--border-color);border-left:4px solid ' + window._spCor((opts && opts.showHistoricalFullStandings ? '#818cf8' : groupDone ? '#4ade80' : (_isMineMon ? '#22d3ee' : '#fbbf24')), 'borda') + ';border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">' +
+    html += '<div data-group-box="1" data-monarch-group="1"' + (_largeMonarch ? ' data-monarch-large="1" data-monarch-category="' + window._safeHtml(_monarchCategories[gi]) + '" hidden' : '') + (_isMineMon ? ' data-my-group="1"' : '') + ' data-group-label="' + window._safeHtml(window._grpKey(sg.name)) + '" style="scroll-margin-top:var(--scroll-anchor,120px);background:var(--bg-card);border:1px solid var(--border-color);border-left:4px solid ' + window._spCor((opts && opts.showHistoricalFullStandings ? '#818cf8' : groupDone ? '#4ade80' : (_isMineMon ? '#22d3ee' : '#fbbf24')), 'borda') + ';border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">' +
       /* DUAS LINHAS, NÃO TRÊS: título curto em cima, selos embaixo, botões à direita.
        * Antes era tudo numa linha só, com `flex:1` no <h3>: os dois botões grandes
        * comiam a largura, o título quebrava em três linhas e ERA ELE que esticava a
@@ -12746,6 +12790,13 @@ window._bracketApplyFilter = function (origin) {
       markHit(siblings[hs].parentElement);
     }
   }
+  // A busca pode ter revelado um grupo da chave grande. Com a busca limpa,
+  // restaura exatamente a visibilidade da aba corrente (setDisp não remove hidden).
+  if (!q && _scheduledPhaseRoot) {
+    var _activeTab = window._bracketTabState && window._bracketTabState[_scheduledPhaseRoot.getAttribute('data-tournament-id')];
+    if (_activeTab) _bracketMonarchGroupsApply(_scheduledPhaseRoot, _activeTab.category,
+      _scheduledPhaseRoot.getAttribute('data-bracket-operational-view') === '1');
+  }
   // Container sem NENHUM card casando some inteiro (grid, coluna de rodada, box de grupo,
   // <details> de "Demais jogos da rodada"…). Com filtro limpo, todos voltam.
   for (var k = 0; k < conts.length; k++) setDisp(conts[k], contHasHit[k]);
@@ -12831,6 +12882,27 @@ window._bracketApplyFilter = function (origin) {
           }
         }
       }
+    }
+  }
+  // A classificação do quarteto também é pesquisável, embora não seja card
+  // de jogo e portanto não entre em _searchTabCandidates. Abrir sua categoria
+  // antes da próxima passada torna o grupo encontrado realmente visível.
+  if (origin === 'input' && q && !window._bracketAutoTabBusy && hitGroups.length) {
+    var _hiddenHit = hitGroups.find(function (group) {
+      return group.getAttribute('data-monarch-large') === '1' && group.hidden;
+    });
+    if (_hiddenHit && _scheduledPhaseRoot) {
+      var _hitCategory = _hiddenHit.getAttribute('data-monarch-category');
+      var _hitCard = _hiddenHit.querySelector('[data-bracket-tab-gender]');
+      var _hitGender = _hitCard ? _hitCard.getAttribute('data-bracket-tab-gender') : _bracketTabGender(_hitCategory);
+      var _hitTid = _scheduledPhaseRoot.getAttribute('data-tournament-id');
+      window._bracketAutoTabBusy = true;
+      try {
+        _bracketTabsApply(_hitTid, _hitGender, _hitCategory, '', true);
+        _hiddenHit.hidden = false;
+        window._bracketApplyFilter('after-tab');
+      } finally { window._bracketAutoTabBusy = false; }
+      return;
     }
   }
   /* ⛔ 04/set/2026 — O AVISO TEM QUE DIZER QUEM ESVAZIOU A TELA.
