@@ -11,11 +11,13 @@ if (!['v2', 'v3'].includes(version)) throw new Error('uso: check-operation-regio
 const allowLegacyCourt = process.argv.includes('--allow-legacy-court');
 const requireCurrent = process.argv.includes('--require-current');
 const requireScoreRefresh = process.argv.includes('--require-score-refresh');
-if (requireScoreRefresh && (requireCurrent || allowLegacyCourt)) throw new Error('modos regionais incompatíveis');
+const requireCourtControlRefresh = process.argv.includes('--require-court-control-refresh');
+if ([requireScoreRefresh, requireCourtControlRefresh, requireCurrent, allowLegacyCourt].filter(Boolean).length > 1) throw new Error('modos regionais incompatíveis');
 // SHA fixado para este corte; no próximo release regional, atualizar junto com
 // sync-operation-regions-current.js e os manifestos, antes de abrir o Hosting.
 const releaseCommit = '470c6c972130c2d4225952f214755d622595e0a6';
 const scoreRefreshCommit = '80d2d1c25e420a7a2ed42e906c8b39a9dd0c6e31';
+const courtControlRefreshCommit = execFileSync('git', ['log', '-1', '--format=%H', '--', 'functions-autodraw'], { cwd: root }).toString().trim();
 const regions = version === 'v2'
   ? ['us-east1', 'us-east4', 'us-south1']
   : ['us-east1', 'us-east4', 'us-south1', 'us-central1', 'southamerica-east1'];
@@ -64,8 +66,13 @@ if (requireScoreRefresh && rows.some(row => row.commit !==
     (row.name === `sp-op-score-${version}` ? scoreRefreshCommit : releaseCommit))) {
   throw new Error('malha regional diverge do corte dirigido de placar');
 }
+if (requireCourtControlRefresh && rows.some(row => row.commit !==
+    (row.name === `sp-op-score-${version}` ? scoreRefreshCommit :
+      [ `sp-op-court-${version}`, `sp-op-control-${version}` ].includes(row.name) ? courtControlRefreshCommit : releaseCommit))) {
+  throw new Error('malha regional diverge do corte dirigido de chamada e controle');
+}
 if (!allowLegacyCourt && !requireCurrent && !uniformCurrent && !directed) {
   throw new Error('nenhuma porta direcionada usa o código atual');
 }
-process.stdout.write(JSON.stringify({ version, mode: requireScoreRefresh ? 'score-refresh' : requireCurrent ? 'current' : 'mixed', legacyCommit: baseline, courtCommit: rows.find(row => row.name === `sp-op-end-court-${version}`).commit,
+process.stdout.write(JSON.stringify({ version, mode: requireCourtControlRefresh ? 'court-control-refresh' : requireScoreRefresh ? 'score-refresh' : requireCurrent ? 'current' : 'mixed', legacyCommit: baseline, courtCommit: rows.find(row => row.name === `sp-op-court-${version}`).commit,
   mixed, rows: rows.length }) + '\n');

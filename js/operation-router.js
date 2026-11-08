@@ -18,6 +18,9 @@
   var selection = new Map();
   var aligning = new Map();
   var inFlight = new Map();
+  var lastProbe = new Map();
+  var probing = new Set();
+  var probeWinner = new Map();
   var progressCount = 0;
 
   function fail(message, code, infrastructure) {
@@ -45,7 +48,7 @@
   function withoutId(payload) {
     var copy = Object.assign({}, payload); delete copy.operationId; return JSON.stringify(copy);
   }
-  function progress(open, region, needsAlignment) {
+  function progress(open) {
     var id = 'sp-region-align-progress';
     var node = document.getElementById(id);
     if (open) progressCount++;
@@ -55,16 +58,11 @@
       node = document.createElement('div'); node.id = id;
       node.setAttribute('role', 'status'); node.setAttribute('aria-live', 'polite');
       node.style.cssText = 'position:fixed;z-index:2147483640;left:50%;top:50%;transform:translate(-50%,-50%);background:#10243a;color:#fff;border:1px solid #51c5ee;border-radius:12px;padding:20px 26px;box-shadow:0 8px 30px #0009;font-weight:700';
-      node.textContent = needsAlignment ? 'Alinhando servidores e gravando…' : 'Gravando…'; document.body.appendChild(node);
+      node.textContent = 'Gravando…'; document.body.appendChild(node);
     } else if (open && node) {
       clearTimeout(node._removeTimer);
-      node.textContent = needsAlignment ? 'Alinhando servidores e gravando…' : 'Gravando…';
-    } else if (!open && node) {
-      if (region) {
-        node.textContent = 'Operação confirmada em ' + region;
-        node._removeTimer = setTimeout(function () { if (node.isConnected) node.remove(); }, 900);
-      } else node.remove();
-    }
+      node.textContent = 'Gravando…';
+    } else if (!open && node) node.remove();
   }
   function fetchConfig(path, schema) {
       return fetch(path + '?v=' + encodeURIComponent(String(window.SCOREPLACE_VERSION || '3')),
@@ -136,11 +134,11 @@
     }));
     return { region: region, latency: performance.now() - started };
   }
-  async function healthy(cfg, headers) {
+  async function healthy(cfg, headers, allowFallback) {
     var results = await Promise.allSettled(cfg.regions.map(function (region) { return probe(cfg, region, headers); }));
     var list = results.filter(function (item) { return item.status === 'fulfilled'; }).map(function (item) { return item.value; });
     list.sort(function (a, b) { return a.latency - b.latency; });
-    if (!list.length && cfg.schema === 3) {
+    if (!list.length && cfg.schema === 3 && allowFallback !== false) {
       // Todas as portas novas falharam. Volta à malha publicada anteriormente,
       // incluindo o mesmo UUID e recibo da ação que iniciou esta chamada.
       var previous;
@@ -153,6 +151,7 @@
       list = results.filter(function (item) { return item.status === 'fulfilled'; }).map(function (item) { return item.value; });
       list.sort(function (a, b) { return a.latency - b.latency; });
     }
+    if (!list.length && allowFallback === false) return [];
     if (!list.length) {
       configPromise = null;
       throw fail('Nenhuma região validada. A ação não foi enviada.', 'unavailable', true);
@@ -163,7 +162,6 @@
     return post(url(cfg, region, 'tournamentOperationControl'), payload, headers, 10000);
   }
   function selectedDayMatches(tId, state, sandbox) {
-    // O ensaio usa o dia do evento mesmo quando o relógio real aponta outro dia.
     if (sandbox) return true;
     var day = window.ScoreplaceMatchDay;
     var tournament = typeof window._findTournamentById === 'function' ? window._findTournamentById(tId) : null;
@@ -175,28 +173,37 @@
     if (aligning.has(tId)) return aligning.get(tId);
     var existing = selection.get(tId);
     var task = (async function () {
-        // A eleição é feita uma vez; nos cliques seguintes basta conferir o
-        // registro atual. Outro aparelho pode ter trocado a região desde então.
-        // Esta leitura não repete as sondas nem a eleição quando nada mudou.
+        // A primeira operação consulta apenas a região preferida. Nas seguintes,
+        // uma leitura do controle detecta eleição alterada por outro aparelho.
         if (existing && existing.schema === cfg.schema && selectedDayMatches(tId, existing, sandbox)) {
           try {
-            var currentState = await control(cfg, existing.region, { action: 'current', tournamentId: tId, sandbox: sandbox }, headers);
-            if (currentState.selected && currentState.region === existing.region &&
-                currentState.revision === existing.revision && currentState.day === existing.day) return existing;
+            var remote = await control(cfg, existing.region,
+              { action: 'current', tournamentId: tId, sandbox: sandbox }, headers);
+            if (remote.selected && remote.region === existing.region && remote.revision === existing.revision) return existing;
+            var other = cfg.regions.find(function (region) { return region !== existing.region; });
+            if (other) return await selectFrom(other);
           } catch (error) {
             if (!error.infrastructure) throw error;
           }
-          selection.delete(tId);
         }
-        var list = await healthy(cfg, headers);
-        // Se a resposta da região antiga divergiu, consulte outra região
-        // saudável antes de adotar a nova escolha.
-        var controlRegion = existing && (list.find(function (item) { return item.region !== existing.region; }) || list[0]) || list[0];
-        var state = await control(cfg, controlRegion.region, { action: 'current', tournamentId: tId, sandbox: sandbox }, headers);
+        selection.delete(tId);
+        var controlRegion = cfg.regions[0];
+        try {
+          return await selectFrom(controlRegion);
+        } catch (error) {
+          if (!error.infrastructure) throw error;
+          var list = await healthy(cfg, headers);
+          return selectFrom(list[0].region, list);
+        }
+      })().finally(function () { aligning.delete(tId); });
+    async function selectFrom(controlRegion, list) {
+        var state = await control(cfg, controlRegion, { action: 'current', tournamentId: tId, sandbox: sandbox }, headers);
         if (!state.selected) {
-          state = await control(cfg, controlRegion.region, { action: 'select', tournamentId: tId, sandbox: sandbox,
-            region: controlRegion.region, sourceDigest: cfg.services[CONTROL.replace(/-v2$/, '-v' + cfg.schema)].digest }, headers);
-        } else if (!list.some(function (item) { return item.region === state.region; })) {
+          state = await control(cfg, controlRegion, { action: 'select', tournamentId: tId, sandbox: sandbox,
+            region: controlRegion, sourceDigest: cfg.services[CONTROL.replace(/-v2$/, '-v' + cfg.schema)].digest }, headers);
+        } else if (!cfg.regions.includes(state.region) ||
+            (list && !list.some(function (item) { return item.region === state.region; }))) {
+          if (!list) list = await healthy(cfg, headers);
           var next = list.find(function (item) { return item.region !== state.region; });
           if (!next) throw fail('Região fixada indisponível e sem alternativa.', 'unavailable', true);
           state = await control(cfg, next.region, { action: 'failover', tournamentId: tId, sandbox: sandbox,
@@ -206,9 +213,47 @@
         state.schema = cfg.schema;
         selection.set(tId, state);
         return state;
-      })().finally(function () { aligning.delete(tId); });
+    }
     aligning.set(tId, task);
     return task;
+  }
+  function idleFor(tId) {
+    if (aligning.has(tId)) return false;
+    if (Object.keys(readPending()).some(function (key) { return key.split('|')[1] === tId; })) return false;
+    for (var key of inFlight.keys()) if (key.split('|')[1] === tId) return false;
+    return true;
+  }
+  async function probeAfterResponse(cfg, tId, sandbox, headers) {
+    if (probing.has(tId) || !idleFor(tId) || Date.now() - (lastProbe.get(tId) || 0) < 300000) return;
+    var elected = selection.get(tId);
+    if (!elected || elected.schema !== cfg.schema || !selectedDayMatches(tId, elected, sandbox)) return;
+    probing.add(tId); lastProbe.set(tId, Date.now());
+    try {
+      var list = await healthy(cfg, headers, false);
+      if (!idleFor(tId) || selection.get(tId) !== elected) return;
+      var current = list.find(function (item) { return item.region === elected.region; });
+      var best = list[0];
+      if (!current || !best || best.region === elected.region ||
+          current.latency - best.latency < 150 || best.latency > current.latency * 0.7) {
+        probeWinner.delete(tId); return;
+      }
+      var previous = probeWinner.get(tId);
+      if (!previous || previous.region !== best.region || previous.revision !== elected.revision) {
+        probeWinner.set(tId, { region: best.region, revision: elected.revision }); return;
+      }
+      // A revisão no servidor impede trocar uma eleição alterada por outro aparelho.
+      var remote = await control(cfg, elected.region, { action: 'current', tournamentId: tId, sandbox: sandbox }, headers);
+      if (!idleFor(tId) || selection.get(tId) !== elected || !remote.selected ||
+          remote.region !== elected.region || remote.revision !== elected.revision || remote.day !== elected.day) return;
+      if (!idleFor(tId)) return;
+      var next = await control(cfg, best.region, { action: 'failover', tournamentId: tId,
+        sandbox: sandbox, region: best.region, observedRevision: elected.revision, reason: 'performance',
+        sourceDigest: cfg.services[CONTROL.replace(/-v2$/, '-v' + cfg.schema)].digest }, headers);
+      next.schema = cfg.schema;
+      selection.set(tId, next);
+      probeWinner.delete(tId);
+    } catch (_) { /* Sondagem não altera a resposta nem a intenção gravada. */ }
+    finally { probing.delete(tId); }
   }
   async function findReceipt(cfg, regions, payload, headers) {
     var checked = false;
@@ -289,13 +334,10 @@
         throw error;
       }
     }
-    progress(true, '', !selection.has(tId) || !selectedDayMatches(tId, selection.get(tId), payload.sandbox === true));
-    var progressRegion = '';
-    var progressCompleted = false;
+    progress(true);
     try {
       var cfg = await loadConfig();
       var state = await align(cfg, tId, payload.sandbox === true, headers);
-      progressRegion = state.region;
       var answer;
       try { answer = await post(url(cfg, state.region, name), payload, headers, 20000); }
       catch (error) {
@@ -313,19 +355,17 @@
             reason: 'infrastructure', sourceDigest: cfg.services[CONTROL.replace(/-v2$/, '-v' + cfg.schema)].digest }, headers);
           selection.set(tId, next);
           next.schema = cfg.schema;
-          progressRegion = next.region;
           answer = await post(url(cfg, next.region, name), payload, headers, 20000);
         }
       }
       answer = await refreshAnswer(tId, answer);
       delete all[key]; writePending(all);
-      progressCompleted = answer && answer.ok !== false;
       return answer;
     } catch (error) {
       if (!error.infrastructure) { delete all[key]; writePending(all); }
       throw error;
     } finally {
-      progress(false, progressCompleted ? progressRegion : '');
+      progress(false);
     }
   }
   function call(name, input, headers) {
@@ -341,8 +381,15 @@
     }
     var task = callOnce(name, input, headers);
     inFlight.set(key, { signature: withoutId(payload), task: task });
-    function clearInFlight() { if (inFlight.get(key) && inFlight.get(key).task === task) inFlight.delete(key); }
-    task.then(clearInFlight, clearInFlight);
+    function clearInFlight(answer) {
+      if (inFlight.get(key) && inFlight.get(key).task === task) inFlight.delete(key);
+      if (answer && answer.ok !== false && name !== 'endMatchOnCourt') {
+        loadConfig().then(function (cfg) {
+          setTimeout(function () { probeAfterResponse(cfg, String(payload.tournamentId), payload.sandbox === true, headers); }, 0);
+        }).catch(function () {});
+      }
+    }
+    task.then(clearInFlight, function () { clearInFlight(null); });
     return task;
   }
   window.ScoreplaceOperationRouter = { call: call, names: Object.keys(OPERATIONS) };

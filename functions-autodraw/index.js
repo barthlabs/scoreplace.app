@@ -4693,24 +4693,25 @@ exports.tournamentOperationControl = onCall({ invoker: 'public' }, async (reques
     const protocolRef = ref.collection('operationControl').doc('_protocol');
     const [controlSnap, protocolSnap] = await Promise.all([tx.get(controlRef), tx.get(protocolRef)]);
     const current = controlSnap.exists ? controlSnap.data() || {} : null;
-    if (action === 'current') return { selected: !!current, day, region: current && current.region || '', revision: current && current.revision || 0 };
+    if (action === 'current') return { selected: !!current, day, region: current && current.region || '', revision: current && current.revision || 0,
+      reason: current && current.reason || null };
     if (action === 'select') {
-      if (current) return { selected: true, day, region: current.region, revision: current.revision, adopted: true };
+      if (current) return { selected: true, day, region: current.region, revision: current.revision, reason: current.reason || null, adopted: true };
       if (!operator) throw new HttpsError('permission-denied', 'Só a organização ou árbitro confirmado pode iniciar o controle regional.');
       if (protocolSnap.exists && protocolSnap.data().protocolVersion !== 2) throw new HttpsError('failed-precondition', 'Protocolo incompatível.');
       if (!protocolSnap.exists) tx.create(protocolRef, { protocolVersion: 2, activatedAt: now.toISOString(), activatedBy: uid });
-      tx.create(controlRef, { region, revision: 1, day, selectedAt: now.toISOString(), selectedBy: uid,
+      tx.create(controlRef, { region, revision: 1, day, reason: 'initial', selectedAt: now.toISOString(), selectedBy: uid,
         expireAt: new Date(now.getTime() + 30 * 86400000) });
-      return { selected: true, day, region, revision: 1, adopted: false };
+      return { selected: true, day, region, revision: 1, reason: 'initial', adopted: false };
     }
     if (!protocolSnap.exists || protocolSnap.data().protocolVersion !== 2 ||
         !current || Number(data.observedRevision) !== Number(current.revision) || region === current.region ||
-        data.reason !== 'infrastructure') {
+        !['infrastructure', 'performance'].includes(data.reason) || (data.reason === 'performance' && !operator)) {
       throw new HttpsError('failed-precondition', 'Seleção mudou; consulte novamente.');
     }
     tx.update(controlRef, { region, revision: Number(current.revision) + 1, switchedAt: now.toISOString(), switchedBy: uid,
-      previousRegion: current.region, reason: 'infrastructure' });
-    return { selected: true, day, region, revision: Number(current.revision) + 1 };
+      previousRegion: current.region, reason: data.reason });
+    return { selected: true, day, region, revision: Number(current.revision) + 1, reason: data.reason };
   });
 });
 

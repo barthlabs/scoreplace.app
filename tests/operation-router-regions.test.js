@@ -64,7 +64,7 @@ const headers = { Authorization: 'Bearer test' };
   assert.equal((await router.call('assignMatchCourt', payload, headers)).ok, true);
   assert(regions.includes(elected));
   const firstRegion = elected;
-  assert.equal(calls.filter(x => x.payload.probe).length, names.length * regions.length);
+  assert.equal(calls.filter(x => x.payload.probe).length, 0, 'primeiro clique não aguarda sondas');
   assert.equal(calls.filter(x => x.name === 'sp-op-court-v2' && !x.payload.probe).length, 1);
   const currentBeforeSecond = calls.filter(x => x.name === 'sp-op-control-v2' && x.payload.action === 'current').length;
   failedRegion = elected; committed = false; receipt = false;
@@ -142,11 +142,12 @@ const headers = { Authorization: 'Bearer test' };
   assert.equal(recovered.tournament.source, 'server', 'recibo encontrado sem corpo ainda permite releitura');
   receiptBodyMissing = false;
   probeFailure = true;
+  failedRegion = elected;
   const beforeUnavailable = calls.filter(x => x.name === 'sp-op-court-v2' && !x.payload.probe).length;
   await assert.rejects(router.call('assignMatchCourt', { tournamentId: 'tour_other', matchId: 'm2', court: 5 }, headers),
     error => error.code === 'functions/unavailable');
-  assert.equal(calls.filter(x => x.name === 'sp-op-court-v2' && !x.payload.probe).length, beforeUnavailable,
-    'sem região saudável não há escrita');
+  assert.equal(calls.filter(x => x.name === 'sp-op-court-v2' && !x.payload.probe).length, beforeUnavailable + 1,
+    'primeira escrita tenta a região eleita; sem alternativa saudável não repete a ação');
   const routerSource = fs.readFileSync(path.join(__dirname, '../js/operation-router.js'), 'utf8');
   const receiptStart = routerSource.indexOf('  async function findReceipt(');
   const receiptEnd = routerSource.indexOf('  async function refreshAnswer(', receiptStart);

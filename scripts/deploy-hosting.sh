@@ -595,10 +595,10 @@ verificar_contingencia_regional() {
     echo "✗ configuração v3 ausente ou divergente do commit — abortando."
     return 1
   fi
-  # Somente o placar usa a origem nova; as revisões realmente servidas são
-  # conferidas abaixo, inclusive a rota de recuperação.
-  node scripts/check-operation-regions-mixed.js v2 --require-score-refresh || return 1
-  node scripts/check-operation-regions-mixed.js v3 --require-score-refresh || return 1
+  # Placar, chamada e controle usam seus cortes dirigidos; as revisões servidas
+  # são conferidas abaixo, inclusive a rota de recuperação.
+  node scripts/check-operation-regions-mixed.js v2 --require-court-control-refresh || return 1
+  node scripts/check-operation-regions-mixed.js v3 --require-court-control-refresh || return 1
   scripts/deploy-operation-regions.sh --check-v2-live || return 1
   scripts/deploy-operation-regions.sh --check-v3 || return 1
   scripts/deploy-operation-regions.sh --check-legacy-gate-live || return 1
