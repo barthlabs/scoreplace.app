@@ -1,3 +1,4 @@
+// 2.5.121 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.120 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.119 — Durante o ensaio privado ativo, o criador desenvolvedor pode
 // chamar jogos para a quadra antes do dia do evento. A trava de data continua
