@@ -84,9 +84,12 @@ function servidor() {
   await p.evaluate((t) => {
     t.id = 'x';
     window._findTournamentById = () => t;
+    // O fixture já contém o elenco inteiro; este teste mede pintura e rolagem,
+    // sem buscar a subcoleção canônica no Firestore.
+    window._elencoCanonicoAtual = () => true;
     window.AppStore = Object.assign(window.AppStore || {}, {
       currentUser: { uid: t.creatorUid || 'org', email: t.organizerEmail || 'o@x.com', displayName: 'Org' },
-      isOrganizer: () => true, getTournament: () => t, tournaments: [t],
+      isOrganizer: () => true, getTournament: () => t, getVisibleTournaments: () => [t], tournaments: [t],
       /* a porta vive no store.js, que este harness não carrega */
       sync() {}, syncImmediate() { return Promise.resolve(); }, mutate() { return Promise.resolve(); }
     });
@@ -111,7 +114,12 @@ function servidor() {
     // a lista some. Também é pré-existente e alheio a fatiar; este teste chama
     // `renderParticipants` direto e não precisa de router.
     window.initRouter = function () {};
+    // O boot assíncrono pode deixar o loader global sobre uma página renderizada
+    // diretamente pelo harness. Ele fixa o body e impede qualquer medição de scroll.
+    if (window._hideLoading) window._hideLoading();
+    window._showLoading = function () {};
   }, fx);
+  await p.waitForTimeout(400);
 
   const total = (fx.participants || []).length;
   ok(total > 100, 'o fixture é grande de verdade (' + total + ' inscritos) — fatiar só se prova em lista grande');
@@ -284,15 +292,20 @@ function servidor() {
     const t = window.AppStore.tournaments[0];
     history.replaceState(null, '', '#tournaments/x');
     window.renderTournaments(c, 'x');
-    // A renderização do detalhe pode terminar depois do timeout fixo sob carga.
-    // Começar a medir durante a trava de scroll dá before=0 e um falso negativo.
-    for (let n = 0; n < 80 && (document.body.classList.contains('sp-scroll-locked') || window._travaAlturaDona); n++) {
+    // O detalhe carrega conteúdo assíncrono. Só medir a rolagem quando ele já
+    // tem altura suficiente para alcançar o ponto pedido; antes disso o browser
+    // limita scrollY a zero e a asserção compara posições de páginas distintas.
+    for (let n = 0; n < 80 && (document.body.classList.contains('sp-scroll-locked') ||
+      window._travaAlturaDona || document.documentElement.scrollHeight < 3500); n++) {
       await new Promise(r => setTimeout(r, 50));
     }
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     window.scrollTo(0, 2500);
     await new Promise(r => requestAnimationFrame(r));
     const before = Math.round(window.scrollY);
+    if (before < 2000) return { before, height: Math.round(document.documentElement.scrollHeight),
+      route: window.location.hash, bodyClass: document.body.className,
+      error: 'detalhe não ficou pronto para medir rolagem' };
     const uid = t.participants[0].uid;
     const count = t.participants.length;
     const calls = [];
