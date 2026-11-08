@@ -1,3 +1,4 @@
+// 2.5.118 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.117 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.116 — Torneios com várias categorias recusam o sorteio enquanto houver
 // inscritos sem categoria e indicam quem precisa ser corrigido. O avanço
