@@ -486,6 +486,63 @@ assert(start > 0 && end > start);
       assert.deepEqual([saved[4].payload.s1, saved[4].payload.s2, saved[4].payload.tbP1, saved[4].payload.tbP2], [7, 6, 7, 5]);
       assert.equal(saved[4].payload.isTiebreakEntry, true);
     } finally { await scoringPage.close(); }
-    console.log('✓ faixa replica o card completo com IDs únicos, chamada, placar e relógio');
+    const carousel = await page.evaluate(() => {
+      const t = window._findTournamentById();
+      const root = document.querySelector('[data-bracket-tabs-root]');
+      window.AppStore.currentUser = { uid: 'org' };
+      const games = [1, 9, 17].map((num, i) => ({ id: 'group-' + num, _gameNum: num,
+        isMonarch: true, category: 'Fem Diamante', p1: ['Ana / Bia', 'Ana / Carla', 'Ana / Dora'][i],
+        p2: ['Carla / Dora', 'Bia / Dora', 'Bia / Carla'][i],
+        scheduledAt: '2026-11-13T11:00:00Z', court: 'Quadra 4' }));
+      t.matches = games;
+      t.scheduleWindow = { days: [{ day: '2026-11-13', startTime: '08:00', endTime: '21:00' }] };
+      t.rounds = [{ monarchGroups: [{ name: 'R1 Grupo A', category: 'Fem Diamante',
+        players: ['Ana', 'Bia', 'Carla', 'Dora'], matches: games }] }];
+      t._nJogos = 3;
+      t.courtNames = ['Quadra 4'];
+      window._computeMonarchStandings = group => group.players.map((name, i) => ({ name, wins: 3 - i, pointsFor: 6 - i, pointsAgainst: i }));
+      window._bracketCourtReleaseCache = { sb_test: { released: {} } };
+      root._bracketOperationsNav = {};
+      window._bracketOperationsRefresh(t, root);
+      const strip = root._bracketOperationsStrip;
+      const read = () => ({ title: strip.querySelector('.sp-operations-next .sp-operations-nav-title')?.textContent,
+        match: strip.querySelector('.sp-operations-next [data-operations-match]')?.getAttribute('data-operations-match'),
+        canCall: !!strip.querySelector('.sp-operations-next .sp-match-confirm'),
+        classification: !!strip.querySelector('.sp-operations-next .sp-operations-standings'),
+        players: [...strip.querySelectorAll('.sp-operations-next .sp-operations-standings tbody tr')].map(el => el.textContent) });
+      const states = [read()];
+      for (let i = 0; i < 3; i++) {
+        strip.querySelector('.sp-operations-next [data-operations-nav="next"]').click();
+        states.push(read());
+      }
+      strip.querySelector('.sp-operations-next [data-operations-nav="prev"]').click();
+      states.push(read());
+      window._bracketOperationsRefresh(t, root);
+      const survivesRefresh = read().title === 'JOGO 17';
+      strip.querySelector('.sp-operations-next [data-operations-action="live"]').click();
+      const liveMatch = window.live?.[1];
+      const arrows = [...strip.querySelectorAll('.sp-operations-next .sp-operations-nav-arrow')].map(el => ({
+        label: el.textContent, width: el.getBoundingClientRect().width, height: el.getBoundingClientRect().height }));
+      t.scheduleWindow.days.push({ day: '2026-11-14', startTime: '08:00', endTime: '21:00' });
+      window._bracketOperationsRefresh(t, root);
+      const multiDayHasNav = !!strip.querySelector('.sp-operations-next [data-operations-nav]');
+      t.scheduleWindow.days.pop();
+      t.rounds[0].monarchGroups[0].matches = games.slice(0, 2);
+      window._bracketOperationsRefresh(t, root);
+      const incompleteHasNav = !!strip.querySelector('.sp-operations-next [data-operations-nav]');
+      return { states, called: window.called, arrows, survivesRefresh, liveMatch, multiDayHasNav, incompleteHasNav };
+    });
+    assert.deepEqual(carousel.states.map(item => item.title), ['JOGO 1', 'JOGO 9', 'JOGO 17', 'Grupo A', 'JOGO 17']);
+    assert.deepEqual(carousel.states.map(item => item.match), ['group-1', 'group-9', 'group-17', 'group-1', 'group-17']);
+    assert(carousel.states[0].canCall && !carousel.states[1].canCall && !carousel.states[2].canCall,
+      'somente o jogo base pode chamar o quarteto à quadra');
+    assert(carousel.states[3].classification && carousel.states[3].players.length === 4);
+    assert.deepEqual(carousel.arrows.map(item => item.label), ['‹', '›']);
+    assert(carousel.arrows.every(item => item.width >= 44 && item.height >= 44));
+    assert(carousel.survivesRefresh);
+    assert.equal(carousel.liveMatch, 'group-17');
+    assert(!carousel.multiDayHasNav && !carousel.incompleteHasNav);
+    assert.deepEqual(carousel.called, ['sb_test', 'm1', 'Quadra 5'], 'navegar não pode fazer nova chamada');
+    console.log('✓ faixa replica o card completo e navega três jogos do quarteto e a classificação');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

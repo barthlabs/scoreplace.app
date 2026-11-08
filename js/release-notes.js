@@ -1,3 +1,7 @@
+// 2.5.123 — Em torneios Rei/Rainha concentrados em um dia, a faixa operacional
+// alterna os três jogos reais do quarteto e a classificação pelas setas no card.
+// A navegação conserva a chamada única e mantém as ações ligadas ao jogo exibido.
+// Torneios de vários dias preservam a apresentação anterior.
 // 2.5.122 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.121 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.120 — Atualização consolidada de produção com as correções validadas desde a última publicação.

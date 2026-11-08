@@ -69,6 +69,17 @@
 .sp-operations-next .sp-operations-replica > .sp-match-card { border:3px solid var(--sp-c-fbbf24,#fbbf24)!important; }
 .sp-operations-court-slot--active .sp-operations-replica > .sp-match-card { border:3px solid var(--sp-c-22c55e,#22c55e)!important; }
 .sp-operations-replica .sp-match-call-day-hint { overflow-wrap:anywhere; }
+.sp-operations-game-nav { display:inline-flex;align-items:center;gap:2px;color:var(--sp-c-38bdf8,#38bdf8);font:inherit;font-weight:800;white-space:nowrap; }
+.sp-operations-nav-title { color:inherit; }
+.sp-operations-nav-arrow { display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;padding:0;border:0;background:transparent;color:inherit;font:inherit;font-size:1.45rem;font-weight:800;line-height:1;cursor:pointer; }
+.sp-operations-nav-arrow:hover { color:var(--text-bright); }
+.sp-operations-nav-arrow:focus-visible { outline:2px solid currentColor;outline-offset:1px;border-radius:4px; }
+.sp-operations-standings-card { overflow:auto; }
+.sp-operations-standings-card .sp-mc-head { color:var(--sp-c-38bdf8,#38bdf8); }
+.sp-operations-standings-status { margin:4px 0 8px;color:var(--text-muted);font-size:.68rem;font-weight:800;letter-spacing:.04em; }
+.sp-operations-standings { width:100%;border-collapse:collapse;color:var(--text-bright);font-size:.72rem; }
+.sp-operations-standings th,.sp-operations-standings td { padding:5px 4px;border-bottom:1px solid var(--border-color);text-align:left; }
+.sp-operations-standings th:nth-child(n+3),.sp-operations-standings td:nth-child(n+3) { text-align:right; }
 .sp-operations-court-free {
   display: flex;
   flex-direction: column;

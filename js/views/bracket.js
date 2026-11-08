@@ -1306,7 +1306,7 @@ window._bracketOperationsSelect = function (t) {
   var ordered = window._bracketPostponedOrder(upcoming.map(function (entry) { return entry.item.m; }), window._bracketCourtPostponed(t.id));
   var next = window.ScoreplaceNextMatch && typeof window.ScoreplaceNextMatch.firstAvailable === 'function'
     ? window.ScoreplaceNextMatch.firstAvailable(ordered, matches, released) : null;
-  return { next: next, active: active, pending: pending, courts: courts };
+  return { next: next, active: active, pending: pending, courts: courts, matches: matches };
 };
 
 function _bracketReconcileOperationalOrder(root) {
@@ -1368,19 +1368,101 @@ function _bracketScopeReplicaHtml(html, scope) {
   return card.outerHTML;
 }
 
-function _bracketOperationsReplica(m, t, role, label, availability) {
+function _bracketOperationsGroup(t, m, allMatches) {
+  if (!m || !m.isMonarch || !Array.isArray(allMatches)) return null;
+  var days = t && t.scheduleWindow && t.scheduleWindow.days;
+  if (!Array.isArray(days) || days.length !== 1) return null;
+  var byId = new Map();
+  allMatches.forEach(function (match) { if (match && match.id && !byId.has(String(match.id))) byId.set(String(match.id), match); });
+  var rounds = (t.rounds || []).slice();
+  Object.keys(t.phaseRounds || {}).forEach(function (key) {
+    rounds = rounds.concat((t.phaseRounds[key] || {}).rounds || []);
+  });
+  for (var ri = 0; ri < rounds.length; ri++) {
+    var groups = rounds[ri] && rounds[ri].monarchGroups || [];
+    for (var gi = 0; gi < groups.length; gi++) {
+      var group = groups[gi];
+      var ids = (group.matches || []).filter(function (match) { return match && match.isMonarch && !match.isTieBreak; })
+        .map(function (match) { return String(match.id || ''); });
+      if (ids.length !== 3 || new Set(ids).size !== 3 || ids.indexOf(String(m.id)) < 0 ||
+          !ids.every(function (id) { return byId.has(id); })) continue;
+      return { key: ids.slice().sort().join('|'), name: group.name || m.groupName || ('Grupo ' + String.fromCharCode(65 + gi)),
+        roster: group, matches: ids.map(function (id) { return byId.get(id); }) };
+    }
+  }
+  return null;
+}
+
+function _bracketOperationsNavHtml(group, index, slot) {
   var safe = window._safeHtml || function (s) { return String(s); };
-  var postpone = role.postponeReady
+  var name = index === 3 ? String(group.name).replace(/^R\d+\s+/i, '') :
+    'JOGO ' + String(group.matches[index]._gameNum || group.matches[index].scheduledGameNumber || group.matches[index].matchNumber || '');
+  var prefix = 'operations-' + slot.replace(/[^a-zA-Z0-9_-]/g, '-');
+  return '<span class="sp-operations-game-nav" data-operations-group="' + safe(group.key) + '" data-operations-slot="' + safe(slot) + '">' +
+    '<button type="button" id="' + prefix + '-prev" class="sp-operations-nav-arrow" data-operations-nav="prev" aria-label="Jogo anterior do ' + safe(group.name) + '" title="Anterior">‹</button>' +
+    '<span class="sp-operations-nav-title">' + safe(name) + '</span>' +
+    '<button type="button" id="' + prefix + '-next" class="sp-operations-nav-arrow" data-operations-nav="next" aria-label="Próximo jogo ou classificação do ' + safe(group.name) + '" title="Próximo">›</button></span>';
+}
+
+function _bracketOperationsStandingsHtml(group, t, slot) {
+  var safe = window._safeHtml || function (s) { return String(s); };
+  var roster = group.roster;
+  var standings = typeof window._computeMonarchStandings === 'function' ? window._computeMonarchStandings({
+    players: roster.players || [], playersUids: roster.playersUids || [], playersSlotIds: roster.playersSlotIds || [],
+    matches: group.matches, classifCongelada: roster.classifCongelada
+  }, t, roster.category || group.matches[0].category || null) || [] : [];
+  var finished = group.matches.every(function (match) {
+    return (window.ScoreplaceCourtOccupancy && window.ScoreplaceCourtOccupancy.isFinished(match)) ||
+      !!match.resultAt || match.winner != null || match.wo === true || !!match.isBye || !!match.isSitOut;
+  });
+  return '<article class="sp-match-card sp-operations-standings-card"><div class="sp-mc-head">' +
+    _bracketOperationsNavHtml(group, 3, slot) + '</div><div class="sp-operations-standings-status">' +
+    (finished ? 'CLASSIFICAÇÃO' : 'CLASSIFICAÇÃO PARCIAL') + '</div>' +
+    '<table class="sp-operations-standings"><thead><tr><th>#</th><th>Atleta</th><th>V</th><th>Saldo</th></tr></thead><tbody>' +
+    standings.map(function (row, i) { return '<tr><td>' + (i + 1) + 'º</td><td>' + safe(row.name || '') +
+      '</td><td>' + (Number(row.wins) || 0) + '</td><td>' + ((Number(row.pointsFor) || 0) - (Number(row.pointsAgainst) || 0)) +
+      '</td></tr>'; }).join('') + '</tbody></table></article>';
+}
+
+function _bracketOperationsReplica(m, t, role, label, availability, root, allMatches, slot) {
+  var safe = window._safeHtml || function (s) { return String(s); };
+  var group = _bracketOperationsGroup(t, m, allMatches);
+  var nav = root._bracketOperationsNav || (root._bracketOperationsNav = {});
+  var saved = group && nav[slot];
+  var defaultIndex = group ? group.matches.findIndex(function (match) { return String(match.id) === String(m.id); }) : 0;
+  var index = group && saved && saved.key === group.key && saved.baseId === String(m.id) && saved.index >= 0 && saved.index <= 3 ? saved.index : defaultIndex;
+  if (group) nav[slot] = { key: group.key, index: index, baseId: String(m.id) };
+  var selected = group && index < 3 ? group.matches[index] : m;
+  var postpone = role.postponeReady && (!group || index === defaultIndex)
     ? '<button type="button" class="sp-operations-postpone" data-postpone-next="' + safe(String(m.id || '')) +
       '"' + (role.postponeBusy ? ' disabled' : '') + ' title="Postergar este jogo e mostrar o próximo">Pular jogo</button>' : '';
   var canEnter = !!(role.canCall || (typeof window._resultEntryIncludes === 'function' &&
     (window._resultEntryIncludes(t, 'players') || window._resultEntryIncludes(t, 'referee'))));
-  var html = typeof window.renderMatchCard === 'function'
-    ? window.renderMatchCard(m, canEnter, t.id, m._gameNum || m.scheduledGameNumber || m.matchNumber,
-      false, null, { idScope: 'operations-' + String(m.id || ''),
+  var html = group && index === 3 ? _bracketOperationsStandingsHtml(group, t, slot) : typeof window.renderMatchCard === 'function'
+    ? window.renderMatchCard(selected, canEnter, t.id, selected._gameNum || selected.scheduledGameNumber || selected.matchNumber,
+      false, null, { idScope: 'operations-' + String(selected.id || ''),
         preferFirstFreeCourt: !!role.preferFirstFreeCourt, preferredCourt: role.preferredCourt || '' }) : '';
+  if (group && index < 3 && html) {
+    var host = document.createElement('template');
+    host.innerHTML = html;
+    var card = host.content.firstElementChild;
+    var head = card && card.querySelector('.sp-mc-head');
+    if (head) {
+      var title = head.querySelector('span');
+      if (title && /^JOGO\s*\d+/i.test(title.textContent.trim())) title.outerHTML = _bracketOperationsNavHtml(group, index, slot);
+      else if (head.firstChild && head.firstChild.nodeType === 3) {
+        head.firstChild.textContent = '';
+        head.insertAdjacentHTML('afterbegin', _bracketOperationsNavHtml(group, index, slot));
+      }
+    }
+    if (String(selected.id) !== String(m.id)) {
+      // A chamada é única para o quarteto; outras partidas são vistas do mesmo grupo.
+      Array.prototype.forEach.call(card.querySelectorAll('.sp-match-court, .sp-match-confirm, .sp-match-call-day-hint, .sp-match-court-clock'), function (node) { node.remove(); });
+    }
+    html = card.outerHTML;
+  }
   return '<div class="sp-operations-replica' + (role.active ? ' sp-operations-court-card' : '') + '" data-operations-match="' +
-    safe(String(m.id || '')) + '"><span class="sp-operations-label">' + safe(label) + postpone + '</span>' + (availability || '') + html + '</div>';
+    safe(String(selected.id || '')) + '" data-operations-base-match="' + safe(String(m.id || '')) + '"><span class="sp-operations-label">' + safe(label) + postpone + '</span>' + (availability || '') + html + '</div>';
 }
 
 function _bracketOperationsDraftValues(op) {
@@ -1493,6 +1575,17 @@ window._bracketOperationsRefresh = function (t, root) {
       var mid = op.getAttribute('data-operations-match');
       var target = event.target.closest('button,[data-operations-action],[data-operations-open]');
       if (!target || target.disabled) return;
+      if (target.hasAttribute('data-operations-nav')) {
+        event.preventDefault();
+        var navNode = target.closest('[data-operations-slot]');
+        var slot = navNode && navNode.getAttribute('data-operations-slot');
+        var nav = slot && root._bracketOperationsNav && root._bracketOperationsNav[slot];
+        if (!nav || nav.key !== navNode.getAttribute('data-operations-group')) return;
+        nav.index = (nav.index + (target.getAttribute('data-operations-nav') === 'next' ? 1 : 3)) % 4;
+        var currentTournament = typeof window._findTournamentById === 'function' && window._findTournamentById(String(t.id));
+        window._bracketOperationsRefresh(currentTournament || t, root);
+        return;
+      }
       if (target.hasAttribute('data-postpone-next')) {
         event.preventDefault();
         if (existing._spPostponeBusy || !window._callCF) return;
@@ -1501,7 +1594,7 @@ window._bracketOperationsRefresh = function (t, root) {
         existing._spPostponeBusy = true;
         target.disabled = true;
         window._callCF('endMatchOnCourt', {
-          tournamentId: String(t.id), matchId: mid, sandbox: String(t.id).startsWith('sb_'),
+          tournamentId: String(t.id), matchId: target.getAttribute('data-postpone-next'), sandbox: String(t.id).startsWith('sb_'),
           action: 'postpone', expectedRevision: entry.revision, operationId: _courtOperationId()
         }, 'Entre na sua conta para postergar o jogo.').then(function () {
           // O recibo confirma a gravação, mas não inclui a nova revisão.
@@ -1614,11 +1707,12 @@ window._bracketOperationsRefresh = function (t, root) {
   var focused = document.activeElement && document.activeElement.closest && document.activeElement.closest('.sp-operations-replica');
   var focusState = focused && { match: focused.getAttribute('data-operations-match'),
     key: document.activeElement.getAttribute('data-operations-source-input'),
-    id: document.activeElement.id, tag: document.activeElement.tagName };
+    id: document.activeElement.id, tag: document.activeElement.tagName,
+    nav: document.activeElement.hasAttribute('data-operations-nav') };
   if (focusState) try { focusState.start = document.activeElement.selectionStart; focusState.end = document.activeElement.selectionEnd; } catch (e) {}
   Array.prototype.forEach.call(existing.querySelectorAll('.sp-operations-replica'), function (op) {
     var mid = op.getAttribute('data-operations-match');
-    var current = state.active.concat(state.pending, state.next ? [state.next] : []).find(function (m) { return String(m.id) === mid; });
+    var current = state.matches.find(function (m) { return String(m.id) === mid; });
     if (current && op._spFingerprint === _bracketOperationsFingerprint(current)) {
       root._bracketOperationsDrafts[mid] = {
         fingerprint: op._spFingerprint, values: _bracketOperationsDraftValues(op)
@@ -1636,15 +1730,15 @@ window._bracketOperationsRefresh = function (t, root) {
   existing.innerHTML = '<div class="sp-operations-track"><div class="sp-operations-next">' +
     (state.next ? _bracketOperationsReplica(state.next, t, { canCall: canCall, active: false,
       postponeReady: canCall, postponeBusy: existing._spPostponeBusy || !(window._bracketCourtReleaseCache[String(t.id)] || {}).ready,
-      preferFirstFreeCourt: true, preferredCourt: (root._bracketOperationsManualCourt || {})[String(state.next.id)] || '' }, nextLabel, nextAvailability) :
+      preferFirstFreeCourt: true, preferredCourt: (root._bracketOperationsManualCourt || {})[String(state.next.id)] || '' }, nextLabel, nextAvailability, root, state.matches, 'next') :
       '<span class="sp-operations-label">' + nextLabel + '</span>' + nextAvailability + '<div class="sp-operations-empty">Nenhum jogo aguardando chamada</div>') +
     '</div>' + (state.pending.length ? '<div class="sp-operations-pending" aria-label="Placares pendentes"><span class="sp-operations-section-title">PLACARES PENDENTES</span><div class="sp-operations-pending-track">' +
-    state.pending.map(function (m) { return _bracketOperationsReplica(m, t, { canCall: canCall, active: false }, String(m.court || 'Placar pendente')); }).join('') +
+    state.pending.map(function (m) { return _bracketOperationsReplica(m, t, { canCall: canCall, active: false }, String(m.court || 'Placar pendente'), '', root, state.matches, 'pending:' + String(m.id)); }).join('') +
     '</div></div>' : '') + '<div class="sp-operations-courts" aria-label="Jogos em quadra"><span class="sp-operations-section-title">EM QUADRA</span><div class="sp-operations-court-track">' +
     state.courts.map(function (court) {
       var games = state.active.filter(function (m) { return String(m.court) === court; });
       return '<div class="sp-operations-court-slot' + (games.length ? ' sp-operations-court-slot--active' : '') + '">' +
-        (games.length ? games.map(function (m) { return _bracketOperationsReplica(m, t, { canCall: canCall, active: true }, court); }).join('') :
+        (games.length ? games.map(function (m) { return _bracketOperationsReplica(m, t, { canCall: canCall, active: true }, court, '', root, state.matches, 'court:' + String(m.id)); }).join('') :
           '<span class="sp-operations-label">' + window._safeHtml(court) + '</span><div class="sp-operations-court-free"><span>Livre</span></div>') +
         '</div>';
     }).join('') +
@@ -1666,7 +1760,7 @@ window._bracketOperationsRefresh = function (t, root) {
   }
   Array.prototype.forEach.call(existing.querySelectorAll('.sp-operations-replica'), function (op) {
     var mid = op.getAttribute('data-operations-match');
-    var current = state.active.concat(state.pending, state.next ? [state.next] : []).find(function (m) { return String(m.id) === mid; });
+    var current = state.matches.find(function (m) { return String(m.id) === mid; });
     var draft = root._bracketOperationsDrafts[mid];
     if (!current || !draft || draft.fingerprint !== _bracketOperationsFingerprint(current)) {
       delete root._bracketOperationsDrafts[mid];
@@ -1680,19 +1774,24 @@ window._bracketOperationsRefresh = function (t, root) {
     op._spFingerprint = _bracketOperationsFingerprint(current);
   });
   if (focusState && (focusState.key || focusState.id || focusState.tag === 'SELECT')) {
-    var focusedOp = Array.prototype.find.call(existing.querySelectorAll('.sp-operations-replica'), function (op) {
-      return op.getAttribute('data-operations-match') === focusState.match;
-    });
-    var restored = focusedOp && (focusState.key
-      ? Array.prototype.find.call(focusedOp.querySelectorAll('input[data-operations-source-input]'), function (input) {
-        return input.getAttribute('data-operations-source-input') === focusState.key;
-      })
-      : Array.prototype.find.call(focusedOp.querySelectorAll('select,button'), function (node) {
-        return node.id && node.id === focusState.id && node.tagName === focusState.tag;
-      }) || (focusState.tag === 'SELECT' && focusedOp.querySelector('.sp-match-court select')));
-    if (restored) {
-      restored.focus({ preventScroll: true });
-      try { restored.setSelectionRange(focusState.start, focusState.end); } catch (e) {}
+    if (focusState.nav) {
+      var navButton = Array.prototype.find.call(existing.querySelectorAll('button[data-operations-nav]'), function (button) { return button.id === focusState.id; });
+      if (navButton) navButton.focus({ preventScroll: true });
+    } else {
+      var focusedOp = Array.prototype.find.call(existing.querySelectorAll('.sp-operations-replica'), function (op) {
+        return op.getAttribute('data-operations-match') === focusState.match;
+      });
+      var restored = focusedOp && (focusState.key
+        ? Array.prototype.find.call(focusedOp.querySelectorAll('input[data-operations-source-input]'), function (input) {
+          return input.getAttribute('data-operations-source-input') === focusState.key;
+        })
+        : Array.prototype.find.call(focusedOp.querySelectorAll('select,button'), function (node) {
+          return node.id && node.id === focusState.id && node.tagName === focusState.tag;
+        }) || (focusState.tag === 'SELECT' && focusedOp.querySelector('.sp-match-court select')));
+      if (restored) {
+        restored.focus({ preventScroll: true });
+        try { restored.setSelectionRange(focusState.start, focusState.end); } catch (e) {}
+      }
     }
   }
   var nextId = state.next && String(state.next.id);
