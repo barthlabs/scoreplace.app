@@ -11,6 +11,11 @@ const start = source.indexOf('exports.renameTournamentParticipant = onCall');
 const end = source.indexOf('/* ═══ GRUPO GERAL', start);
 assert(start >= 0 && end > start);
 const handlerSource = source.slice(start, end);
+const authStart = source.indexOf('function _isTournamentOrgCaller(');
+const authEnd = source.indexOf('function _hasCanonicalTournamentDraw(', authStart);
+assert(authStart >= 0 && authEnd > authStart);
+const isTournamentOrgCaller = vm.runInNewContext(
+  source.slice(authStart, authEnd) + '\n_isTournamentOrgCaller;');
 const reg = { registrationId: registrationId('manual:m1', 'cat-a'), tournamentId: 't1',
   categoryId: 'cat-a', participantKey: 'manual:m1', participantKind: 'manual',
   participantUid: null, manualParticipantId: 'm1', manualDisplayName: 'Kelly Cristina',
@@ -40,7 +45,7 @@ function fixture(root, records) {
   const ctx = { exports: {}, onCall(_opts, fn) { return fn; }, APP_ORIGINS: [],
     admin: { firestore: () => db }, HttpsError: class HttpsError extends Error {
       constructor(code, message) { super(message); this.code = code; }
-    }, _isTournamentOrgCaller(t, uid) { return t.creatorUid === uid; },
+    }, _isTournamentOrgCaller: isTournamentOrgCaller,
     _assertNoRehearsalEnrollment() {},
     _canonicalRegistrationBoundary: require('../functions/canonical-registration-boundary-core'),
     _renameCanonicalParticipant: core,
@@ -67,6 +72,12 @@ function fixture(root, records) {
     w.patch.manualDisplayName === 'Kelly Barth'));
   assert.equal(canonical.writes.find((w) => w.path === 'root').patch.participants[0].displayName,
     'Kelly Barth');
+
+  const cohost = fixture({ creatorUid: 'org', coHosts: [{ uid: 'cohost', status: 'active' }],
+    participants: [{ manualParticipantId: 'm1', displayName: 'Kelly Cristina' }],
+    canonicalRegistrationMigration: { fingerprint: 'fp', registrationCount: 1 } }, [reg]);
+  assert.equal((await cohost.handler(request('cohost'))).changed, true,
+    'coorganizador ativo é autorizado pelos campos do documento pai antes da hidratação');
 
   const emptyProbe = fixture({ creatorUid: 'org', participants: [],
     canonicalRegistrationMigration: { fingerprint: 'fp', registrationCount: 1 } }, []);
