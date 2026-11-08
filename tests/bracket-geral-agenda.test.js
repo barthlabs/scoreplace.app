@@ -404,6 +404,45 @@ function trecho(inicio, fim) {
   ok(stableAgenda.afterReschedule.join(',') === 'card-m2,card-m3',
     'reagendamento completo retira o jogo do dia antigo sem congelar a Geral');
 
+  // Na chave real, vários cards dividem o mesmo pai. Mover esse pai uma vez
+  // por jogo deixava R1–R8 vazias e concentrava tudo numa rodada posterior.
+  const sharedParent = await page.evaluate(() => {
+    const base = Date.UTC(2026, 10, 13, 11);
+    document.body.innerHTML = '<main id="view-container"><nav id="shared-root"></nav>' +
+      '<section class="bracket-scroll-container" id="shared-source"><div class="shared-parent">' +
+      [0, 40, 80].map((minute, index) => '<article class="sp-match-card" id="shared-' + (index + 1) +
+        '" data-bracket-tab-category="Diamante" data-bracket-tab-gender="fem" data-bracket-scheduled-at="' +
+        (base + minute * 60000) + '" data-bracket-court="Quadra 1">Jogo ' + (index + 1) + '</article>').join('') +
+      '</div></section></main>';
+    const root = document.getElementById('shared-root');
+    root._bracketTabsScope = document.getElementById('view-container');
+    window._currentBracketTournament = { phases:[{}, {}], currentPhaseIndex:0, matches:[] };
+    window.ScoreplaceSumula = { collect:() => ({ future:{ name:'Eliminatória', categories:[{
+      category:'Diamante', matches:[
+        { id:'semi-1', round:0, nextMatchId:'final', nextSlot:'p1' },
+        { id:'semi-2', round:0, nextMatchId:'final', nextSlot:'p2' },
+        { id:'final', round:1 }
+      ]
+    }] } }) };
+    window._bracketGeneralView(root, true, 'fem');
+    const columns = [...root._bracketGeneralView.querySelectorAll('.bracket-general-round-column')]
+      .map(column => [...column.querySelectorAll('.sp-match-card')].map(card => card.id));
+    const futureCards = [...root._bracketGeneralView.querySelectorAll('.bracket-general-future-match')]
+      .map(card => card.textContent);
+    window._bracketGeneralView(root, false, 'fem');
+    const restored = [...document.querySelectorAll('.shared-parent > .sp-match-card')].map(card => card.id);
+    window.ScoreplaceSumula = null;
+    window._currentBracketTournament = null;
+    return { columns, restored, futureCards };
+  });
+  ok(sharedParent.columns.map(column => column.join(',')).join('|') === 'shared-1|shared-2|shared-3' &&
+    sharedParent.restored.join(',') === 'shared-1,shared-2,shared-3',
+    'cards com o mesmo pai aparecem na rodada correta e voltam à chave na ordem original');
+  ok(sharedParent.futureCards.length === 3 &&
+    sharedParent.futureCards[2].includes('Final') &&
+    sharedParent.futureCards[2].includes('Vencedor C1 × Vencedor C2'),
+    'Geral mostra a estrutura da fase seguinte até a final sem criar jogos reais');
+
   // O portal usa retângulos de viewport, mas nasce dentro do body com zoom.
   // Medir três colunas prova que o erro não cresce a cada rodada.
   await page.addScriptTag({ content: trecho('_bracketUpdateRoundHeadingPortal', '_bracketEnsureRoundHeadingResizeListener') });
@@ -484,6 +523,9 @@ function trecho(inicio, fim) {
       rootInDetail: root.parentNode.id === 'view-container',
       afterHeader: root.previousElementSibling.classList.contains('sticky-back-header'),
       singleRoot: document.querySelectorAll('[data-bracket-tabs-root]').length === 1,
+      singleGenderHidden: root.querySelectorAll('[data-bracket-primary-tab]').length === 0,
+      categoriesVisible: !!root.querySelector('[data-bracket-subtab="Light"]') &&
+        !!root.querySelector('[data-bracket-subtab="Power"]'),
       portalTogether: portal.parentNode === root.parentNode,
       stickyTop: rect.top,
       portalVisible: getComputedStyle(portal).display !== 'none' && portalRect.width > 0 && !!portal.querySelector('.bracket-round-heading-portal'),
@@ -516,6 +558,8 @@ function trecho(inicio, fim) {
     'abas e títulos das rodadas ficam fixos, visíveis e clicáveis quando o grupo original está oculto');
   ok(stickyMount.searchRecovered && stickyMount.singleAfterRemount,
     'a remontagem recupera a busca sem duplicar abas e mantém o portal com sua raiz');
+  ok(stickyMount.singleGenderHidden && stickyMount.categoriesVisible,
+    'gênero único não ganha aba redundante; as categorias continuam selecionáveis');
   const tierMount = await page.evaluate(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
     document.body.innerHTML = '<main id="view-container"><div class="sticky-back-header">Voltar</div>' +

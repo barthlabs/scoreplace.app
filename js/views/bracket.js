@@ -2027,13 +2027,16 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
       var hasResult = Number(card.getAttribute('data-bracket-result-at')) > 0 ||
         card.getAttribute('data-bracket-complete') === '1';
       if (onlyReady && hasResult && !isJustScored) return;
-      var wrapper = card.parentNode;
+      // Um contêiner pode reunir vários jogos da mesma rodada. Mover esse
+      // contêiner repetidamente desloca todos para a última coluna visitada.
+      // A agenda move somente o card e deixa um marcador no lugar original.
+      var wrapper = card;
       var placeholder = document.createComment('scoreplace-general-card');
       wrapper.parentNode.insertBefore(placeholder, wrapper);
       // `_bracketTabsApply` esconde todos os cards ao selecionar Geral para
       // retirar a chave categorizada da tela. Aqui o MESMO card passa a viver
       // na agenda; portanto precisa voltar a ser visível antes de mover o seu
-      // wrapper. O container de origem é ocultado separadamente logo abaixo.
+      // card. O container de origem é ocultado separadamente logo abaixo.
       // [[regression_general_agenda_moves_visible_cards]]
       card.hidden = false;
       entries.push({ card: card, wrapper: wrapper, placeholder: placeholder, at: at, court: card.getAttribute('data-bracket-court') || '', num: Number(card.getAttribute('data-scheduled-game-number')) || 0, position: position, round: Number(card.getAttribute('data-bracket-tab-round')) || 1, justScored: isJustScored });
@@ -2123,6 +2126,76 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
     roundsTrack.appendChild(group);
   });
   view.appendChild(roundsTrack);
+  // A fase seguinte ainda não tem atletas classificados, mas sua chave já
+  // pode ser projetada pelo mesmo motor usado na súmula. Exibimos a estrutura
+  // até a final sem criar partidas reais nem antecipar vencedores.
+  if (!onlyReady && window.ScoreplaceSumula && typeof window.ScoreplaceSumula.collect === 'function') {
+    var tournament = window._currentBracketTournament;
+    if (tournament && Array.isArray(tournament.phases) && tournament.phases[(Number(tournament.currentPhaseIndex) || 0) + 1]) {
+      try {
+        var allMatches = typeof window._collectAllMatches === 'function'
+          ? window._collectAllMatches(tournament) : (tournament.matches || []);
+        var future = window.ScoreplaceSumula.collect(tournament, allMatches).future;
+        if (future && Array.isArray(future.categories) && future.categories.some(function (bucket) { return bucket.matches && bucket.matches.length; })) {
+          var futureSection = document.createElement('section');
+          futureSection.className = 'bracket-general-future';
+          futureSection.style.cssText = 'margin-top:22px;padding:16px;border:1px solid rgba(129,140,248,.42);border-radius:12px;background:rgba(17,24,39,.8);';
+          var futureTitle = document.createElement('h3');
+          futureTitle.textContent = future.name || 'Próxima fase';
+          futureTitle.style.cssText = 'margin:0 0 8px;color:#fde68a;font-size:1.05rem;';
+          futureSection.appendChild(futureTitle);
+          var futureNote = document.createElement('p');
+          futureNote.textContent = 'Confrontos previstos; atletas definidos após os resultados da fase atual.';
+          futureNote.style.cssText = 'margin:0 0 16px;color:#cbd5e1;font-size:.83rem;';
+          futureSection.appendChild(futureNote);
+          future.categories.forEach(function (bucket) {
+            if (!bucket.matches || !bucket.matches.length) return;
+            var categorySection = document.createElement('section');
+            var categoryTitle = document.createElement('h5');
+            categoryTitle.textContent = bucket.category || 'Categoria';
+            categoryTitle.style.cssText = 'margin:16px 0 9px;color:#7dd3fc;font-size:.93rem;';
+            categorySection.appendChild(categoryTitle);
+            var list = document.createElement('div');
+            list.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:8px;';
+            var matches = bucket.matches.slice().sort(function (a, b) {
+              return Number(a.round || 0) - Number(b.round || 0) ||
+                Number(a.isThirdPlace) - Number(b.isThirdPlace) || String(a.id).localeCompare(String(b.id));
+            });
+            var refs = {}, incoming = {};
+            matches.forEach(function (match, index) { refs[match.id] = 'C' + (index + 1); });
+            matches.forEach(function (match) {
+              if (match.nextMatchId && match.nextSlot) {
+                (incoming[match.nextMatchId] = incoming[match.nextMatchId] || {})[match.nextSlot] = 'Vencedor ' + refs[match.id];
+              }
+              if (match.loserNextMatchId && match.loserNextSlot) {
+                (incoming[match.loserNextMatchId] = incoming[match.loserNextMatchId] || {})[match.loserNextSlot] = 'Perdedor ' + refs[match.id];
+              }
+            });
+            matches.forEach(function (match) {
+              var source = incoming[match.id] || {};
+              (match.repFill || []).forEach(function (fill) {
+                source[fill.slot] = 'Repescado da rodada ' + (Number(fill.srcRound || 0) + 1);
+              });
+              var card = document.createElement('div');
+              card.className = 'bracket-general-future-match';
+              card.style.cssText = 'padding:10px;border:1px solid rgba(148,163,184,.35);border-radius:8px;background:#1f2937;color:#f8fafc;';
+              var label = document.createElement('strong');
+              label.textContent = refs[match.id] + ' · ' + (match.isThirdPlace ? '3º lugar' : !match.nextMatchId ? 'Final' : 'Rodada ' + (Number(match.round || 0) + 1));
+              label.style.cssText = 'display:block;margin-bottom:5px;color:#7dd3fc;';
+              card.appendChild(label);
+              var sides = document.createElement('div');
+              sides.textContent = (source.p1 || 'Classificado da fase anterior') + ' × ' + (source.p2 || 'Classificado da fase anterior');
+              card.appendChild(sides);
+              list.appendChild(card);
+            });
+            categorySection.appendChild(list);
+            futureSection.appendChild(categorySection);
+          });
+          view.appendChild(futureSection);
+        }
+      } catch (e) { if (window._warn) window._warn('[bracket] prévia da próxima fase indisponível', e); }
+    }
+  }
   view.style.display = '';
   // Os cards operacionais compartilham a mesma grade visual. Depois de mover
   // os cards reais, mede o mais alto e aplica a altura a todos, em vez de
@@ -2809,7 +2882,7 @@ window._bracketCategoryTabsMount = function () {
       var escaped = String(cat).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       return '<button type="button" data-bracket-primary-tab="' + String(cat).replace(/"/g, '&quot;') + '" onclick="window._bracketSelectCategoryTab(\'' + String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'linhas\',\'' + escaped + '\')" style="border:1px solid;border-radius:12px 12px 0 0;padding:10px 24px;min-width:106px;font-size:.94rem;font-weight:850;cursor:pointer;box-shadow:none;">' + (window._safeHtml ? window._safeHtml(_bracketTabLabel(cat, 'linhas')) : _bracketTabLabel(cat, 'linhas')) + '</button>';
     }).join('')
-    : order.filter(function (gender) { return gender !== 'linhas'; }).map(function (gender) {
+    : (order.length === 1 && !dateMode ? [] : order.filter(function (gender) { return gender !== 'linhas'; })).map(function (gender) {
       var firstCategory = dateMode && generalAgendaByGender[gender] ? '__general' : byGender[gender][0];
       var title = dateMode ? gender.slice(8, 10) + '/' + gender.slice(5, 7) : (titles[gender] || gender);
       return '<button type="button" data-bracket-primary-tab="' + gender + '" onclick="window._bracketSelectCategoryTab(\'' + String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'' + gender + '\',\'' + String(firstCategory).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')" style="border:1px solid;border-radius:12px 12px 0 0;padding:10px 24px;min-width:132px;font-size:.94rem;font-weight:850;cursor:pointer;box-shadow:none;">' + title + '</button>';
