@@ -1,4 +1,6 @@
-// 2.5.124 — Atualização consolidada de produção com as correções validadas desde a última publicação.
+// 2.5.124 — A primeira ação de quadra usa imediatamente a região preferida.
+// Após a resposta, o aplicativo verifica outras regiões em segundo plano e
+// registra falhas dessa sondagem para diagnóstico, sem atrasar a chamada.
 // 2.5.123 — Em torneios Rei/Rainha concentrados em um dia, a faixa operacional
 // alterna os três jogos reais do quarteto e a classificação pelas setas no card.
 // A navegação conserva a chamada única e mantém as ações ligadas ao jogo exibido.
