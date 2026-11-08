@@ -385,8 +385,11 @@
       if (inFlight.get(key) && inFlight.get(key).task === task) inFlight.delete(key);
       if (answer && answer.ok !== false && name !== 'endMatchOnCourt') {
         loadConfig().then(function (cfg) {
-          setTimeout(function () { probeAfterResponse(cfg, String(payload.tournamentId), payload.sandbox === true, headers); }, 0);
-        }).catch(function () {});
+          setTimeout(function () {
+            probeAfterResponse(cfg, String(payload.tournamentId), payload.sandbox === true, headers)
+              .catch(function (error) { console.warn('[operation-router] background probe failed', error); });
+          }, 0);
+        }).catch(function (error) { console.warn('[operation-router] background probe config unavailable', error); });
       }
     }
     task.then(clearInFlight, function () { clearInFlight(null); });
