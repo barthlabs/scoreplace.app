@@ -2517,6 +2517,7 @@ const PRENDEM_PORTA = [
    * 14/set/2026: passavam sozinhas e caíam na bateria, sem defeito nenhum. */
   'tests/fusao-e-volta-no-emulador.test.js',
   'tests/celular-do-casal-no-emulador.test.js',
+  'tests/manual-claim-link-emulator.test.js', // mesmas portas 8093/9092 e Functions 5011
 ];
 const EXCLUSIVAS = new Set(MEXEM_NO_REPO.concat(PRENDEM_PORTA));
 
