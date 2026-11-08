@@ -2178,7 +2178,7 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
               });
               var card = document.createElement('div');
               card.className = 'bracket-general-future-match';
-              card.style.cssText = 'padding:10px;border:1px solid rgba(148,163,184,.35);border-radius:8px;background:#1f2937;color:#f8fafc;';
+              card.style.cssText = 'padding:10px;border:1px solid rgba(148,163,184,.35);border-radius:8px;background:#1f2937;color:#cbd5e1;';
               var label = document.createElement('strong');
               label.textContent = refs[match.id] + ' · ' + (match.isThirdPlace ? '3º lugar' : !match.nextMatchId ? 'Final' : 'Rodada ' + (Number(match.round || 0) + 1));
               label.style.cssText = 'display:block;margin-bottom:5px;color:#7dd3fc;';
