@@ -1,4 +1,8 @@
-// 2.5.118 — Atualização consolidada de produção com as correções validadas desde a última publicação.
+// 2.5.118 — A visão Geral preserva todos os jogos da grade em suas rodadas e
+// mostra a estrutura prevista da eliminatória até as finais, sem antecipar
+// classificados. Quando só existe o gênero feminino, a aba única de gênero
+// desaparece e ficam Geral, Próximos jogos, Diamante, Ouro e Prata. A prévia
+// da eliminatória mantém contraste legível.
 // 2.5.117 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.5.116 — Torneios com várias categorias recusam o sorteio enquanto houver
 // inscritos sem categoria e indicam quem precisa ser corrigido. O avanço
@@ -1336,6 +1340,7 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(52,211,153,0.08);">' +
       '<div style="font-weight:800; color:var(--sp-c-a7f3d0,#a7f3d0); font-size:1rem; margin-bottom:8px;">📺 v2.5 — Torneio em quadra, na TV e na súmula <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Outubro, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🗓️ Agenda da chave:</b> a visão Geral mantém todos os jogos nas rodadas corretas e mostra o caminho previsto da eliminatória até as finais. Em torneios com um único gênero, a aba redundante desaparece e as categorias permanecem disponíveis.</li>' +
         '<li><b>📺 Modo TV:</b> saída limpa em janela separada com quadras chamadas, relógios, classificação do torneio e três resultados recentes.</li>' +
         '<li><b>🔴 NO AR:</b> a luz vermelha pisca enquanto a janela de TV está aberta e apaga ao fechá-la.</li>' +
         '<li><b>📋 Súmulas:</b> PDF por quadra e data, com jogos na ordem prevista, até 14 por página, categoria indicada em cada jogo, quadra efetiva preenchida no evento, placar conforme o formato e assinaturas dos atletas. O PDF inclui uma lista de chamada por categoria e atleta, com jogos, parceiro, adversários, horário e quadra. A organização baixa as versões horizontal e vertical juntas em um ZIP pelo botão Súmulas; a lista de presença é baixada em PDF separado.</li>' +
