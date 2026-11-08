@@ -284,8 +284,14 @@ function servidor() {
     const t = window.AppStore.tournaments[0];
     history.replaceState(null, '', '#tournaments/x');
     window.renderTournaments(c, 'x');
-    await new Promise(r => setTimeout(r, 120));
+    // A renderização do detalhe pode terminar depois do timeout fixo sob carga.
+    // Começar a medir durante a trava de scroll dá before=0 e um falso negativo.
+    for (let n = 0; n < 80 && (document.body.classList.contains('sp-scroll-locked') || window._travaAlturaDona); n++) {
+      await new Promise(r => setTimeout(r, 50));
+    }
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     window.scrollTo(0, 2500);
+    await new Promise(r => requestAnimationFrame(r));
     const before = Math.round(window.scrollY);
     const uid = t.participants[0].uid;
     const count = t.participants.length;
