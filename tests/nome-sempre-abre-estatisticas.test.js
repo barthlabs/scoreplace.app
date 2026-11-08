@@ -14,6 +14,9 @@ const style = read('css/style.css');
 const bracket = read('js/views/bracket.js');
 const dashboard = read('js/views/dashboard.js');
 const participants = read('js/views/participants.js');
+ok(/function _reRenderParticipantsStable\(\)/.test(participants) &&
+  /window\._reRenderParticipantsStable = _reRenderParticipantsStable/.test(participants),
+  'o re-render estável usado após editar nome existe no aplicativo');
 
 ok(/window\._personProfileLinkHtml = function/.test(store), 'há um wrapper canônico de ficha por UID');
 ok(/data-player-profile-uid=/.test(store), 'o wrapper carrega a identidade por UID');

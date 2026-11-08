@@ -7791,10 +7791,10 @@ exports.renameTournamentParticipant = onCall(
           _phaseReadCertificate: _FV.delete() }, planned.rootPatch));
         return { ok: true, changed: true, oldName, newName };
       }
-      await _splitParts.hidratar(tx, ref, t);
-      const before = JSON.parse(JSON.stringify(t));
+      const hydrated = await _splitParts.hidratar(tx, ref, t);
+      const before = JSON.parse(JSON.stringify(hydrated));
       let renamed;
-      try { renamed = _participantRename.renameTournamentParticipant(t, { oldName, newName, manualParticipantId }); }
+      try { renamed = _participantRename.renameTournamentParticipant(hydrated, { oldName, newName, manualParticipantId }); }
       catch (err) { throw new HttpsError("failed-precondition", err && err.message ? err.message : "não foi possível renomear participante"); }
       if (!renamed.changed) return { ok: true, changed: false };
       _splitParts.gravar(tx, ref, before, Object.assign({}, renamed.update, { updatedAt: new Date().toISOString() }));

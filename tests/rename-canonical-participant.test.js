@@ -31,4 +31,9 @@ assert.equal(core.plan(tournament, roster, input, [], [{ ref: 'game-1', data: { 
   .documents[0].data.jogo.p1, 'Kelly Barth');
 assert.equal(core.plan({ ...tournament, absent: { 'Kelly Cristina': true } }, roster, input, [], [])
   .rootPatch.absent['Kelly Barth'], true);
+const withRootMirror = core.plan({ ...tournament, participants: [{ manualParticipantId: 'm1',
+  displayName: 'Kelly Cristina' }] }, roster, input, [], []);
+assert.equal(withRootMirror.rootPatch.participants[0].displayName, 'Kelly Barth');
+assert.equal(core.replaceLabel('  Outra   /   Pessoa  ', 'Kelly Cristina', 'Kelly Barth'),
+  '  Outra   /   Pessoa  ');
 console.log('✓ rename-canonical-participant');

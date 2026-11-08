@@ -10,7 +10,7 @@ function replaceLabel(value, oldName, newName) {
   if (typeof value !== 'string') return value;
   if (same(value, oldName)) return newName;
   if (!value.includes(' / ')) return value;
-  return value.split(' / ').map((part) => same(part, oldName) ? newName : part.trim()).join(' / ');
+  return value.split(' / ').map((part) => same(part, oldName) ? newName : part).join(' / ');
 }
 
 function hasIdentity(value, manualId) {
@@ -74,7 +74,7 @@ function plan(tournament, registrations, input, accountNames, physicalDocuments)
     if (JSON.stringify(next) !== JSON.stringify(data)) documents.push({ ref: doc.ref, data: next });
   }
   const rootPatch = {};
-  for (const key of ['classification', 'classificationEntries', 'checkedIn', 'absent', 'vips',
+  for (const key of ['participants', 'classification', 'classificationEntries', 'checkedIn', 'absent', 'vips',
     'standings', 'waitlist', 'standbyParticipants', 'sorteioRealizado', 'monarchWaitlist']) {
     if (!Object.prototype.hasOwnProperty.call(tournament, key)) continue;
     const before = tournament[key];
