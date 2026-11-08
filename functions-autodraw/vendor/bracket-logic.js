@@ -7241,14 +7241,14 @@ window._renderPendingDrawPreview = function (t) {
     var initialHtml = '<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:8px;">' +
       esc(String(model.teamCount)) + ' times · ' + esc(String(model.gameCount)) + ' jogos</div>';
     model.categories.forEach(function (category, index) {
-      initialHtml += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin:14px 0 6px;flex-wrap:wrap;"><strong style="color:#22d3ee;">' + esc(category.name) + '</strong><span style="display:flex;gap:6px;flex-wrap:wrap;">';
+      initialHtml += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin:14px 0 6px;flex-wrap:wrap;"><strong style="color:var(--sp-c-22d3ee,#22d3ee);">' + esc(category.name) + '</strong><span style="display:flex;gap:6px;flex-wrap:wrap;">';
       var pageCount = Math.max(1, Math.ceil(category.groups.length / 4));
       for (var page = 0; page < pageCount; page++) initialHtml += '<button class="btn btn-outline" data-draw-art="' + index + '" data-draw-page="' + page + '">Arte PNG' + (pageCount > 1 ? ' ' + (page + 1) + '/' + pageCount : '') + '</button>';
       initialHtml += '</span></div>';
       category.groups.forEach(function (group) {
-        initialHtml += '<div style="background:rgba(255,255,255,.05);border:1px solid rgba(125,211,252,.25);border-radius:8px;padding:8px 10px;margin-bottom:7px;"><strong style="font-size:.82rem;color:#e2e8f0;">' + esc(group.name) + '</strong>';
+        initialHtml += '<div style="background:rgba(255,255,255,.05);border:1px solid rgba(125,211,252,.25);border-radius:8px;padding:8px 10px;margin-bottom:7px;"><strong style="font-size:.82rem;color:var(--sp-c-e2e8f0,#e2e8f0);">' + esc(group.name) + '</strong>';
         group.matches.forEach(function (m, i) {
-          initialHtml += '<div style="display:grid;grid-template-columns:56px 1fr;gap:8px;font-size:.78rem;color:var(--text-main);padding:3px 0;border-top:1px solid rgba(255,255,255,.07);"><span style="color:#67d5ff;">J' + (i + 1) + '</span><span>' + esc(m.one) + ' <span style="opacity:.6">×</span> ' + esc(m.two) + '</span></div>';
+          initialHtml += '<div style="display:grid;grid-template-columns:56px 1fr;gap:8px;font-size:.78rem;color:var(--text-main);padding:3px 0;border-top:1px solid rgba(255,255,255,.07);"><span style="color:var(--sp-c-38bdf8,#38bdf8);">J' + (i + 1) + '</span><span>' + esc(m.one) + ' <span style="opacity:.6">×</span> ' + esc(m.two) + '</span></div>';
         });
         initialHtml += '</div>';
       });
