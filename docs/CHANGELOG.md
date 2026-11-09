@@ -1,3 +1,10 @@
+## 2.6.1 — 09/nov/2026 (quartetos Rei/Rainha e agenda)
+
+- A faixa operacional encontra os três jogos do quarteto mesmo quando o torneio usa somente a coleção de partidas. As setas junto de JOGO N alternam os confrontos e a classificação. A aba Geral mostra o número do jogo sem expor IDs técnicos.
+- Grupos Rei/Rainha recebem designações visuais distintas por categoria e rodada: Diamante A1, B1…; Ouro A2, B2…; Prata A3, B3…. A identidade interna e os vínculos de W.O. permanecem estáveis.
+- Em torneios de um dia com quartetos completos, a grade reserva os três jogos consecutivos na mesma quadra. Com jogo de 30 minutos, chamada de 5 e aquecimento de 5, o primeiro trio começa às 08:00, 08:40 e 09:10; os minutos de chamada e aquecimento são contados uma só vez. Os números 1…N são únicos e seguem os blocos de quarteto. A grade respeita atletas compartilhados, janelas e escolhas manuais; sem capacidade, não grava um plano parcial.
+- O cálculo no cliente e o vendor de `drawRound` compartilham essa regra. Quadra apenas estimada não oculta a criação do grupo de WhatsApp em torneios distribuídos. Nenhum torneio existente foi migrado, resetado ou alterado nesta correção; web e funções de sorteio são o corte, sem atualização nativa.
+
 ## 2.6.0 — 08/nov/2026 (operação Rei/Rainha de um dia)
 
 - A faixa operacional resolve `matchIds` dos grupos persistidos para navegar pelos três jogos do mesmo quarteto e sua classificação, inclusive em fases. A rodada prevalece quando há cópia antiga do jogo em outra lista.

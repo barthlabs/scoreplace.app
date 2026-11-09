@@ -1,9 +1,9 @@
 {
   "schema": 1,
-  "backendCommit": "80d2d1c25e420a7a2ed42e906c8b39a9dd0c6e31",
-  "scopeNote": "Desempate automático ao confirmar o placar e avanço de fase após a simples.",
+  "backendCommit": "bc8bb35c00bfd524902066be1382a4125c25e0bd",
+  "scopeNote": "Grade contínua e numeração única dos quartetos Rei/Rainha no sorteio.",
   "functions": [
-    "applyMatchResult",
-    "advanceTournamentPhase"
+    "drawRound",
+    "autoDraw"
   ]
 }

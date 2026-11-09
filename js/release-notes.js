@@ -1,3 +1,7 @@
+// 2.6.1 — Em torneios Rei/Rainha de um dia, os três jogos de cada quarteto
+// ficam seguidos na mesma quadra: a chamada e o aquecimento ocorrem uma vez.
+// As setas circulam entre os jogos; grupos de categorias diferentes têm nomes
+// distintos, e a agenda mostra Jogo N sem identificadores técnicos.
 // 2.6.0 — Na faixa de operação Rei/Rainha, as setas mostram os três jogos do
 // mesmo quarteto e sua classificação. Torneios de um dia exibem só o horário.
 // 2.5.125 — Após o sorteio, a organização confere cada categoria, grupo e os
