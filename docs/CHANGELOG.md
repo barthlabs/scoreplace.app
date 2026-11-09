@@ -1,6 +1,7 @@
 ## 2.6.3 — 09/nov/2026 (cabeçalho da chamada em duas linhas)
 
 - A réplica operacional Rei/Rainha organiza o cabeçalho em duas linhas: setas e JOGO N acima; categoria à esquerda e os botões de W.O. e Ao Vivo juntos à direita abaixo. O card original da chave permanece com sua estrutura própria.
+- Os símbolos das setas ficam mais próximos de JOGO N sem reduzir os botões de navegação, que conservam alvos de toque de 44 px.
 - Na agenda Geral, o rótulo acima de cada card do quarteto traz somente Jogo N. A quadra selecionável e o horário aproximado continuam nos controles do card, sem duplicar uma informação fixa acima dele.
 - O teste em Chromium mede a posição das duas linhas, o alinhamento dos botões, o tamanho do título e os limites do card. Corte somente web, sem alterar torneios ou versões nativas.
 

@@ -78,6 +78,9 @@
 .sp-operations-game-nav { display:inline-flex;align-items:center;gap:2px;color:var(--sp-c-38bdf8,#38bdf8);font-size:.7rem;font-weight:700;white-space:nowrap;text-transform:uppercase; }
 .sp-operations-nav-title { color:inherit; }
 .sp-operations-nav-arrow { display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;padding:0;border:0;background:transparent;color:inherit;font:inherit;font-size:1.1rem;font-weight:800;line-height:1;cursor:pointer; }
+.sp-operations-nav-arrow > span { display:block;line-height:1; }
+.sp-operations-nav-arrow[data-operations-nav="prev"] > span { transform:translateX(8px); }
+.sp-operations-nav-arrow[data-operations-nav="next"] > span { transform:translateX(-8px); }
 .sp-operations-nav-arrow:hover { color:var(--text-bright); }
 .sp-operations-nav-arrow:focus-visible { outline:2px solid currentColor;outline-offset:1px;border-radius:4px; }
 .sp-operations-standings-card { overflow:auto; }

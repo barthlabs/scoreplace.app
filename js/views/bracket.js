@@ -1498,9 +1498,9 @@ function _bracketOperationsNavHtml(group, index, slot) {
     'JOGO' + (Number.isInteger(number) && number > 0 ? ' ' + number : '');
   var prefix = 'operations-' + slot.replace(/[^a-zA-Z0-9_-]/g, '-');
   return '<span class="sp-operations-game-nav" data-operations-group="' + safe(group.key) + '" data-operations-slot="' + safe(slot) + '">' +
-    '<button type="button" id="' + prefix + '-prev" class="sp-operations-nav-arrow" data-operations-nav="prev" aria-label="Jogo anterior do ' + safe(group.name) + '" title="Anterior">‹</button>' +
+    '<button type="button" id="' + prefix + '-prev" class="sp-operations-nav-arrow" data-operations-nav="prev" aria-label="Jogo anterior do ' + safe(group.name) + '" title="Anterior"><span>‹</span></button>' +
     '<span class="sp-operations-nav-title">' + safe(name) + '</span>' +
-    '<button type="button" id="' + prefix + '-next" class="sp-operations-nav-arrow" data-operations-nav="next" aria-label="Próximo jogo ou classificação do ' + safe(group.name) + '" title="Próximo">›</button></span>';
+    '<button type="button" id="' + prefix + '-next" class="sp-operations-nav-arrow" data-operations-nav="next" aria-label="Próximo jogo ou classificação do ' + safe(group.name) + '" title="Próximo"><span>›</span></button></span>';
 }
 
 function _bracketOperationsStandingsHtml(group, t, slot) {

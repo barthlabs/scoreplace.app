@@ -628,9 +628,15 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
         arrows: strip.querySelectorAll('.sp-operations-next .sp-operations-nav-arrow').length
       };
       const gameTitle = strip.querySelector('.sp-operations-next .sp-operations-nav-title');
+      const previousGlyph = strip.querySelector('.sp-operations-next [data-operations-nav="prev"] > span');
+      const nextGlyph = strip.querySelector('.sp-operations-next [data-operations-nav="next"] > span');
       const category = strip.querySelector('.sp-operations-next [data-match-time-status]');
       const actionButtons = [...strip.querySelectorAll('.sp-operations-next .sp-mc-acts button')];
       camisUi.fontSize = parseFloat(getComputedStyle(gameTitle).fontSize);
+      camisUi.arrowGap = {
+        left: gameTitle.getBoundingClientRect().left - previousGlyph.getBoundingClientRect().right,
+        right: nextGlyph.getBoundingClientRect().left - gameTitle.getBoundingClientRect().right
+      };
       camisUi.categoryBelowTitle = category.getBoundingClientRect().top >= gameTitle.getBoundingClientRect().bottom;
       camisUi.categoryWithButtons = category.parentElement?.classList.contains('sp-operations-meta-row') &&
         actionButtons.every(button => button.parentElement?.parentElement === category.parentElement) &&
@@ -693,7 +699,9 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert.deepEqual({ title:carousel.camis.ui.title, arrows:carousel.camis.ui.arrows, nextTitle:carousel.camis.ui.nextTitle },
       { title: 'JOGO 1', arrows: 2, nextTitle: 'JOGO 2' });
     assert(carousel.camis.ui.fontSize <= 15 && carousel.camis.ui.categoryBelowTitle &&
-      carousel.camis.ui.categoryWithButtons && carousel.camis.ui.buttonsOnOneLine && carousel.camis.ui.metaFitsCard,
+      carousel.camis.ui.categoryWithButtons && carousel.camis.ui.buttonsOnOneLine && carousel.camis.ui.metaFitsCard &&
+      carousel.camis.ui.arrowGap.left >= 0 && carousel.camis.ui.arrowGap.left <= 14 &&
+      carousel.camis.ui.arrowGap.right >= 0 && carousel.camis.ui.arrowGap.right <= 14,
       'título em cima, categoria e botões juntos embaixo sem corte: ' + JSON.stringify(carousel.camis.ui));
     assert(carousel.standingsInset.left >= 12 && carousel.standingsInset.right >= 12,
       'a primeira posição e o saldo têm respiro nas bordas');
