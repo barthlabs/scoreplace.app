@@ -625,7 +625,6 @@ function initRouter() {
               }
               finally {
                 _finalizarTrocaPrincipal();
-                _abrirResultadoSorteio();
                 // ── O LOADER SÓ SAI COM OS NOMES NOS LUGARES (2.0.41) ─────────
                 // Ordem do dono (24/ago, Confra): a classificação vinha com nomes
                 // e a chave ainda pipocava os dela depois. Se o render publicou a
@@ -640,6 +639,7 @@ function initRouter() {
                     _fecharTour();
                   }
                 }); });
+                _abrirResultadoSorteio();
               }
             };
             // 1.9.75 — CORRIDA rAF × timeout (com trava de uma vez): rAF não dispara em
