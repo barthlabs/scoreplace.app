@@ -102,6 +102,19 @@
       var manual = m.scheduleLocked === true || m.scheduleSource === 'organizer' || m.scheduledKind === 'organizer' || m.scheduledKind === 'consensus' || legacyAllocated || !!change;
       if (played(m) || manual) blocked.push(m); else pending.push(m);
     });
+    if (grade && grade.atomica === true && grade.cabe === true && blocked.length === 0 &&
+        listChanges.length === 0 && grade.slots.length === ms.length && pending.length === ms.length) {
+      var atomicIds = new Set(ms.map(function (m) { return String(m.id); }));
+      if (grade.slots.every(function (slot) { return atomicIds.has(String(slot.matchId)) && cs[slot.courtIndex] === slot.court; })) {
+        return { baseScheduleRevision:Number(t.scheduleRevision || 0),
+          items:grade.slots.map(function (slot) {
+            return { matchId:String(slot.matchId), court:slot.court, scheduledAt:slot.iso,
+              scheduledGameNumber:slot.scheduledGameNumber, scheduleLocked:false,
+              scheduleSource:'estimate', durationMs:slot.durationMs, extrapolaJanela:false };
+          }),
+          courts:cs, cabe:true, extraMs:0, unscheduledCount:0 };
+      }
+    }
     var occupied = {}, occupiedUnits = [];
     function matchUnits(m) {
       var units = typeof window._schMatchUids === 'function'
@@ -186,7 +199,8 @@
     });
     var actualExtraMs = Object.keys(overflowByDay).reduce(function (sum, key) { return sum + overflowByDay[key]; }, 0);
     var actualOutside = items.some(function (item) { return item.extrapolaJanela === true; });
-    // JOGO N é cronológico na agenda aprovada: seis quadras às 18:00 recebem
+    // Fora do trio atômico Rei/Rainha, JOGO N é cronológico na agenda aprovada:
+    // seis quadras às 18:00 recebem
     // Jogos 1–6; o primeiro slot das 18:35 passa a ser o Jogo 7. Não usamos
     // categoria nem a ordem incidental do array para numerar. A prioridade de
     // quadra só desempata jogos que começam no mesmo instante.

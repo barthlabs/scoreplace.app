@@ -1111,6 +1111,35 @@ console.log('══════════════════════�
   ok('sorteio limpa presença (checkedIn/absent)', r.ok && Object.keys(t.checkedIn).length === 0 && Object.keys(t.absent).length === 0);
 })();
 
+// O mesmo vendor que drawRound usa precisa gravar os 108 jogos do ensaio de um
+// dia em quartetos contínuos, antes de a transação persistir t.matches.
+(function () {
+  const categories = [['Fem Diamante', 8], ['Fem Ouro', 16], ['Fem Prata', 12]];
+  let athlete = 0;
+  const matches = categories.flatMap(([category, count], ci) => Array.from({ length:count }, (_, group) => {
+    const uids = Array.from({ length:4 }, () => 'camis-vendor-' + (++athlete));
+    return [0,1,2].map(stage => ({ id:`srv-${ci}-${group}-${stage}`, isMonarch:true,
+      monarchGroup:group, phaseIndex:0, round:1, category,
+      team1Uids:[uids[0],uids[1]], team2Uids:[uids[2],uids[3]],
+      team1:['A','B'], team2:['C','D'] }));
+  }).flat());
+  const t = { id:'camis-vendor-grade', courtCount:8, gameDuration:30, callTime:5, warmupTime:5,
+    startDate:'2026-11-13T08:00:00-03:00', endDate:'2026-11-13T19:30:00-03:00',
+    scheduleWindow:{ days:[{day:'2026-11-13',startTime:'08:00',endTime:'19:30'}] },
+    categoryDefinitions:categories.map(([label]) => ({label})), matches };
+  const plan = core._window._schGradeEstimada(t);
+  const applied = core._window._schAplicarGrade(t);
+  const trio = matches.slice(0,3);
+  ok('CAMIS vendor: 108 jogos recebem horário, quadra e número antes da gravação',
+    plan && plan.atomica === true && plan.cabe === true && applied === 108 &&
+    matches.every(m => m.scheduledAt && m.court && m.scheduleSource === 'estimate' && Number.isInteger(m.scheduledGameNumber)) &&
+    new Set(matches.map(m => m.scheduledGameNumber)).size === 108);
+  ok('CAMIS vendor: 08:00, 08:40, 09:10 na mesma quadra, uma chamada/aquecimento',
+    trio.map(m => m.scheduledAt).join(',') === [
+      '2026-11-13T11:00:00.000Z', '2026-11-13T11:40:00.000Z', '2026-11-13T12:10:00.000Z'].join(',') &&
+    new Set(trio.map(m => m.court)).size === 1 && trio.map(m => m.scheduledGameNumber).join(',') === '1,2,3');
+})();
+
 console.log('');
 console.log('════════════════════════════════════════');
 if (fail === 0) { console.log('✅ drawInitial: ' + pass + ' ok, 0 falharam'); }

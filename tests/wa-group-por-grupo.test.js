@@ -109,6 +109,23 @@ W._openExternalUrl = (u) => { aberto = u; };
 W._waGrpOpenLink(t.id, mCatia.id);
 ok(aberto === null, 'clicar no grupo da Catia NÃO abre o WhatsApp da Raquel');
 
+// Quadra prevista pela grade não é agenda confirmada em torneio distribuído.
+W._isConcentratedTournament = () => false;
+mCatia.court = 'Quadra 1';
+mCatia.scheduledAt = '2026-11-13T11:00:00.000Z';
+mCatia.scheduledKind = 'estimate';
+mCatia.scheduleSource = 'estimate';
+ok(!!W._waGrpGroupChip(t, byGroup(t, 13)), 'quadra estimada mantém Criar grupo');
+mCatia.scheduleLocked = true;
+mCatia.scheduleSource = 'organizer';
+ok(!W._waGrpGroupChip(t, byGroup(t, 13)), 'agenda confirmada oculta Criar grupo');
+mCatia.scheduleLocked = false;
+mCatia.scheduleSource = 'manual-legado';
+delete mCatia.scheduledKind;
+ok(!W._waGrpGroupChip(t, byGroup(t, 13)), 'origem manual legada com quadra e horário também é confirmada');
+delete mCatia.court; delete mCatia.scheduledAt; delete mCatia.scheduledKind;
+delete mCatia.scheduleSource; delete mCatia.scheduleLocked;
+
 // ─── (4) trava de sanidade: sem âncora e sem uid, nunca agrupa ────────────────
 const t2 = mkT();
 W._findTournamentById = () => t2;

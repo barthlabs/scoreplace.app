@@ -564,10 +564,75 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       const onlyRounds = _bracketOperationsGroup({ ...grouped, matches: [],
         rounds: [{ matches: other, monarchGroups: [{ name: 'Grupo A1', matchIds: [1, 2, 3] }] }] }, other[0], other);
       const extra = _bracketOperationsGroup({ ...grouped, rounds: [{ monarchGroups: [{ matches: [...other, { id: 4, isTieBreak: true }] }] }] }, other[0], [...other, { id: 4, isTieBreak: true }]);
+      // Shape real do CAMIS: 3 categorias reutilizam monarchGroup=0; não há
+      // rounds/phaseRounds nem documentos de grupo no torneio carregado.
+      const camis = ['Fem Diamante', 'Fem Ouro', 'Fem Prata'].flatMap((category, ci) =>
+        [0, 1, 2].map((slot, i) => ({
+          id: 'match-rr-r1-g0-' + slot + '-' + category.replace(/ /g, '_') + '-1794172435574',
+          isMonarch: true, monarchGroup: 0, round: 1, phaseIndex: 0,
+          category, groupName: 'R1 Grupo A', _gameNum: ci * 24 + i + 1,
+          team1: ['A', 'B'], team2: ['C', 'D'],
+          scheduledAt: new Date(Date.UTC(2026, 10, 13, 11, i * 20)).toISOString(),
+          p1: 'A / B', p2: 'C / D'
+        })));
+      const camisTournament = { ...t, matches: camis, rounds: [], phaseRounds: {} };
+      window._currentBracketTournament = camisTournament;
+      const camisGroup = _bracketOperationsGroup(camisTournament, camis[0], camis);
+      const camisOther = _bracketOperationsGroup(camisTournament, camis[3], camis);
+      const camisPrata = _bracketOperationsGroup(camisTournament, camis[6], camis);
+      const nextRound = camis.slice(0, 3).map((game, i) => ({ ...game,
+        id: 'match-rr-r2-g0-' + i + '-Fem_Diamante-1794172435574', round: 2, groupName: 'R2 Grupo A' }));
+      const acrossRounds = { ...camisTournament, matches: [...camis, ...nextRound] };
+      window._currentBracketTournament = acrossRounds;
+      const nextRoundLabel = _bracketOperationsGroup(acrossRounds, nextRound[0], acrossRounds.matches)?.name;
+      const sixGames = { ...camisTournament, matches: [...camis, ...camis.slice(0, 3).map((game, i) => ({
+        ...game, id: 'extra-' + i
+      }))] };
+      window._currentBracketTournament = sixGames;
+      const sixGamesHaveNav = !!_bracketOperationsGroup(sixGames, camis[0], sixGames.matches);
+      const idCategories = { ...camisTournament,
+        categoryDefinitions: [{ id: 'diamante', label: 'Fem Diamante' }, { id: 'ouro', label: 'Fem Ouro' }, { id: 'prata', label: 'Fem Prata' }],
+        matches: camis.map(game => ({ ...game, category: ({ 'Fem Diamante': 'diamante', 'Fem Ouro': 'ouro', 'Fem Prata': 'prata' })[game.category] })) };
+      window._currentBracketTournament = idCategories;
+      const idLabel = _bracketOperationsGroup(idCategories, idCategories.matches[3], idCategories.matches)?.name;
+      window._currentBracketTournament = camisTournament;
+      t.matches = camis;
+      t.rounds = [];
+      t.phaseRounds = {};
+      t._nJogos = camis.length;
+      root._bracketOperationsNav = {};
+      window._bracketOperationsRefresh(t, root);
+      const camisUi = {
+        title: strip.querySelector('.sp-operations-next .sp-operations-nav-title')?.textContent,
+        arrows: strip.querySelectorAll('.sp-operations-next .sp-operations-nav-arrow').length
+      };
+      strip.querySelector('.sp-operations-next [data-operations-nav="next"]').click();
+      camisUi.nextTitle = strip.querySelector('.sp-operations-next .sp-operations-nav-title')?.textContent;
+      const categoryCounts = [['Fem Diamante', 8], ['Fem Ouro', 16], ['Fem Prata', 12]];
+      const fullMatches = categoryCounts.flatMap(([category, count]) =>
+        Array.from({ length: count }, (_, groupIndex) => [0, 1, 2].map(slot => ({
+          id: category + '-g' + groupIndex + '-j' + slot, category,
+          phaseIndex: 0, round: 1, isMonarch: true, monarchGroup: groupIndex,
+          groupName: 'R1 Grupo ' + String.fromCharCode(65 + groupIndex),
+          team1: ['A', 'B'], team2: ['C', 'D']
+        }))).flat());
+      const fullTournament = { ...t, matches: fullMatches, _nJogos: 108, rounds: [], phaseRounds: {},
+        categoryDefinitions: categoryCounts.map(([label]) => ({ label })) };
+      window._currentBracketTournament = fullTournament;
+      window._assignGlobalGameNumbers(fullTournament);
+      const fullNumbers = fullMatches.map(game => game._gameNum);
+      const fullLabels = fullMatches.filter(game => game.id.endsWith('-j0')).map(game =>
+        window._bracketMonarchGroupLabel(fullTournament, { name: game.groupName, matches: [game] }));
       return { states, called: window.called, arrows, survivesRefresh, liveMatch, multiDayHasNav, incompleteHasNav,
         groupChecks: { numeric: numeric?.name, distinct: distinct?.name, missing: !!missing,
           tieBreak: !!tieBreak, nonMonarch: !!nonMonarch, refs: refs?.matches.map(m => m.id),
-          canonicalScore: roundCanonical?.matches[0].scoreP1, onlyRounds: onlyRounds?.matches.length, extra: !!extra } };
+          canonicalScore: roundCanonical?.matches[0].scoreP1, onlyRounds: onlyRounds?.matches.length, extra: !!extra },
+        camis: { ids: camisGroup?.matches.map(m => m.id), otherIds: camisOther?.matches.map(m => m.id),
+          labels: [camisGroup?.name, camisOther?.name, camisPrata?.name, nextRoundLabel],
+          sixGamesHaveNav, idLabel, ui: camisUi },
+        fullUniqueness: { games: new Set(fullNumbers).size, min: Math.min(...fullNumbers), max: Math.max(...fullNumbers),
+          groups: new Set(fullLabels).size, count: fullLabels.length,
+          examples: [fullLabels[0], fullLabels[8], fullLabels[24]] } };
     });
     assert.deepEqual(carousel.states.map(item => item.title), ['JOGO 1', 'JOGO 9', 'JOGO 17', 'Grupo A', 'JOGO 1', 'Grupo A']);
     assert.deepEqual(carousel.states.map(item => item.match), ['group-1', 'group-9', 'group-17', 'group-1', 'group-1', 'group-1']);
@@ -576,6 +641,14 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     ]);
     assert.deepEqual(carousel.groupChecks, { numeric: 'Grupo A1', distinct: 'Grupo B1', missing: false,
       tieBreak: false, nonMonarch: false, refs: [1, 2, 3], canonicalScore: 6, onlyRounds: 3, extra: false });
+    assert.deepEqual(carousel.camis.ids.map(id => id.includes('Fem_Diamante')), [true, true, true]);
+    assert.deepEqual(carousel.camis.otherIds.map(id => id.includes('Fem_Ouro')), [true, true, true]);
+    assert.deepEqual(carousel.camis.labels, ['R1 Grupo A1', 'R1 Grupo A2', 'R1 Grupo A3', 'R2 Grupo A4']);
+    assert.equal(carousel.camis.sixGamesHaveNav, false);
+    assert.equal(carousel.camis.idLabel, 'R1 Grupo A2');
+    assert.deepEqual(carousel.camis.ui, { title: 'JOGO 1', arrows: 2, nextTitle: 'JOGO 2' });
+    assert.deepEqual(carousel.fullUniqueness, { games: 108, min: 1, max: 108,
+      groups: 36, count: 36, examples: ['R1 Grupo A1', 'R1 Grupo A2', 'R1 Grupo A3'] });
     assert(carousel.states[0].canCall && !carousel.states[1].canCall && !carousel.states[2].canCall,
       'somente o jogo base pode chamar o quarteto à quadra');
     assert(carousel.states[3].classification && carousel.states[3].players.length === 4);

@@ -361,7 +361,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         window._isConcentratedTournament(t)) return true;
     // scheduledAt pode ser ISO, epoch ou Timestamp do Firestore antes da
     // serialização; a presença do campo é o contrato da agenda publicada.
-    return !!(m && m.court && String(m.court).trim() && m.scheduledAt);
+    if (!m || !m.court || !String(m.court).trim() || !m.scheduledAt) return false;
+    if (m.scheduleLocked === true || m.scheduleSource === 'organizer' ||
+        m.scheduledKind === 'organizer' || m.scheduledKind === 'consensus') return true;
+    // Uma quadra calculada pela grade ainda não foi confirmada pelo organizador.
+    return m.scheduleSource ? m.scheduleSource !== 'estimate' : !m.scheduledKind;
   }
 
   // Chip do JOGO. Regra de exibição idêntica ao irmão (_schCardChip): só jogador do

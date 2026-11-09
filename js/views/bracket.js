@@ -1368,6 +1368,59 @@ function _bracketScopeReplicaHtml(html, scope) {
   return card.outerHTML;
 }
 
+// Rótulo de apresentação estável por torneio: o mesmo índice A/B/C pode existir
+// em várias categorias ou rodadas. O sufixo identifica o contexto sem alterar
+// groupName, IDs, chaves de W.O. ou os vínculos persistidos.
+window._bracketMonarchGroupLabel = function (t, group) {
+  var original = String(group && group.name || '');
+  var first = group && group.matches && group.matches[0];
+  if (!first) return original;
+  var source = window._currentBracketTournament && window._currentBracketTournament.id === t.id
+    ? window._currentBracketTournament : t;
+  var all = [];
+  (source.matches || []).forEach(function (match) { all.push(match); });
+  (source.rounds || []).forEach(function (round) { (round && round.matches || []).forEach(function (match) { all.push(match); }); });
+  Object.keys(source.phaseRounds || {}).forEach(function (key) {
+    ((source.phaseRounds[key] || {}).rounds || []).forEach(function (round) {
+      (round && round.matches || []).forEach(function (match) { all.push(match); });
+    });
+  });
+  if (!all.length) all = group.matches;
+  var context = function (match) {
+    return [Number(match.phaseIndex || 0), Number(match.round || 1), String(match.category || group.category || '')];
+  };
+  var contexts = new Map();
+  all.filter(function (match) { return match && match.isMonarch === true; }).forEach(function (match) {
+    var parts = context(match), key = parts.join('|');
+    if (!contexts.has(key)) contexts.set(key, parts);
+  });
+  if (contexts.size < 2) return original;
+  var categoryRank = new Map();
+  (source.categoryDefinitions || []).forEach(function (item, index) {
+    if (item.label) categoryRank.set(String(item.label), index);
+    if (item.id) categoryRank.set(String(item.id), index);
+  });
+  var ordered = Array.from(contexts.values()).sort(function (a, b) {
+    return a[0] - b[0] || a[1] - b[1] ||
+      (categoryRank.has(a[2]) ? categoryRank.get(a[2]) : 9999) -
+      (categoryRank.has(b[2]) ? categoryRank.get(b[2]) : 9999) || a[2].localeCompare(b[2], 'pt-BR');
+  });
+  var suffix = ordered.findIndex(function (parts) { return parts.join('|') === context(first).join('|'); }) + 1;
+  if (suffix < 1) return original;
+  var groupIndex = Number(first.monarchGroup != null ? first.monarchGroup : group.groupIdx);
+  var letters = '';
+  if (Number.isInteger(groupIndex) && groupIndex >= 0) {
+    for (var n = groupIndex + 1; n > 0; n = Math.floor((n - 1) / 26)) letters = String.fromCharCode(65 + (n - 1) % 26) + letters;
+  } else {
+    var found = /\bGrupo\s+([A-Z]{1,2})\d*\b/.exec(original);
+    letters = found ? found[1].toUpperCase() : '';
+  }
+  if (!letters) return original;
+  return /\bGrupo\s+[A-Z]{1,2}\d*\b/.test(original)
+    ? original.replace(/\bGrupo\s+[A-Z]{1,2}\d*\b/, 'Grupo ' + letters + suffix)
+    : 'Grupo ' + letters + suffix;
+};
+
 function _bracketOperationsGroup(t, m, allMatches) {
   if (!m || !m.isMonarch || !Array.isArray(allMatches)) return null;
   var days = t && t.scheduleWindow && t.scheduleWindow.days;
@@ -1392,17 +1445,57 @@ function _bracketOperationsGroup(t, m, allMatches) {
           .filter(function (id) { return id != null; }).map(function (id) { return String(id); });
       if (ids.length !== 3 || new Set(ids).size !== 3 || ids.indexOf(String(m.id)) < 0 ||
           !ids.every(function (id) { var match = roundById.get(id); return match && match.isMonarch && !match.isTieBreak; })) continue;
-      return { key: ids.slice().sort().join('|'), name: group.name || m.groupName || ('Grupo ' + String.fromCharCode(65 + gi)),
-        roster: group, matches: ids.map(function (id) { return roundById.get(id); }) };
+      var resolved = ids.map(function (id) { return roundById.get(id); });
+      return { key: ids.slice().sort().join('|'),
+        name: window._bracketMonarchGroupLabel(t, { name: group.name || m.groupName || ('Grupo ' + String.fromCharCode(65 + gi)), matches: resolved, category: m.category }),
+        roster: group, matches: resolved };
     }
   }
-  return null;
+  // No storage canônico do CAMIS os 108 jogos vivem em `matches` e não há
+  // `rounds`/`monarchGroups` persistidos. O quarteto é a tripla de partidas com
+  // mesma fase, categoria, rodada e monarchGroup. A categoria é indispensável:
+  // Fem Diamante/Ouro/Prata reutilizam os mesmos índices de grupo.
+  if (m.monarchGroup == null || m.round == null || !m.category) return null;
+  var matches = Array.from(byId.values()).filter(function (candidate) {
+    return candidate && candidate.isMonarch === true && !candidate.isTieBreak &&
+      String(candidate.category || '') === String(m.category) &&
+      Number(candidate.phaseIndex || 0) === Number(m.phaseIndex || 0) &&
+      String(candidate.round) === String(m.round) &&
+      String(candidate.monarchGroup) === String(m.monarchGroup);
+  });
+  if (matches.length !== 3 || !matches.some(function (candidate) { return String(candidate.id) === String(m.id); })) return null;
+  matches.sort(function (a, b) {
+    var aNum = Number(a._gameNum || a.scheduledGameNumber || 0);
+    var bNum = Number(b._gameNum || b.scheduledGameNumber || 0);
+    if (aNum > 0 && bNum > 0 && aNum !== bNum) return aNum - bNum;
+    return _matchCardTimestamp(a.scheduledAt) - _matchCardTimestamp(b.scheduledAt) || String(a.id).localeCompare(String(b.id));
+  });
+  var roster = { players: [], playersUids: [], playersSlotIds: [], matches: matches, category: m.category };
+  var seen = new Set();
+  matches.forEach(function (match) {
+    ['1', '2'].forEach(function (side) {
+      var names = match['team' + side] || [], uids = match['team' + side + 'Uids'] || [];
+      var slotIds = match['team' + side + 'SlotIds'] || [];
+      for (var i = 0; i < Math.max(names.length, uids.length, slotIds.length); i++) {
+        var identity = uids[i] || slotIds[i] || names[i];
+        if (!identity || seen.has(String(identity))) continue;
+        seen.add(String(identity));
+        roster.players.push(names[i] || '');
+        roster.playersUids.push(uids[i] || null);
+        roster.playersSlotIds.push(slotIds[i] || null);
+      }
+    });
+  });
+  return { key: matches.map(function (match) { return String(match.id); }).sort().join('|'),
+    name: window._bracketMonarchGroupLabel(t, { name: m.groupName || ('Grupo ' + String.fromCharCode(65 + Number(m.monarchGroup))), matches: matches, category: m.category }),
+    roster: roster, matches: matches };
 }
 
 function _bracketOperationsNavHtml(group, index, slot) {
   var safe = window._safeHtml || function (s) { return String(s); };
+  var number = index < 3 ? Number(group.matches[index]._gameNum || group.matches[index].scheduledGameNumber) : 0;
   var name = index === 3 ? String(group.name).replace(/^R\d+\s+/i, '') :
-    'JOGO ' + String(group.matches[index]._gameNum || group.matches[index].scheduledGameNumber || group.matches[index].matchNumber || '');
+    'JOGO' + (Number.isInteger(number) && number > 0 ? ' ' + number : '');
   var prefix = 'operations-' + slot.replace(/[^a-zA-Z0-9_-]/g, '-');
   return '<span class="sp-operations-game-nav" data-operations-group="' + safe(group.key) + '" data-operations-slot="' + safe(slot) + '">' +
     '<button type="button" id="' + prefix + '-prev" class="sp-operations-nav-arrow" data-operations-nav="prev" aria-label="Jogo anterior do ' + safe(group.name) + '" title="Anterior">‹</button>' +
@@ -1439,13 +1532,14 @@ function _bracketOperationsReplica(m, t, role, label, availability, root, allMat
   var index = group && saved && saved.key === group.key && saved.baseId === String(m.id) && saved.index >= 0 && saved.index <= 3 ? saved.index : defaultIndex;
   if (group) nav[slot] = { key: group.key, index: index, baseId: String(m.id) };
   var selected = group && index < 3 ? group.matches[index] : m;
+  var selectedNumber = Number(selected._gameNum || selected.scheduledGameNumber);
   var postpone = role.postponeReady && (!group || index === defaultIndex)
     ? '<button type="button" class="sp-operations-postpone" data-postpone-next="' + safe(String(m.id || '')) +
       '"' + (role.postponeBusy ? ' disabled' : '') + ' title="Postergar este jogo e mostrar o próximo">Pular jogo</button>' : '';
   var canEnter = !!(role.canCall || (typeof window._resultEntryIncludes === 'function' &&
     (window._resultEntryIncludes(t, 'players') || window._resultEntryIncludes(t, 'referee'))));
   var html = group && index === 3 ? _bracketOperationsStandingsHtml(group, t, slot) : typeof window.renderMatchCard === 'function'
-    ? window.renderMatchCard(selected, canEnter, t.id, selected._gameNum || selected.scheduledGameNumber || selected.matchNumber,
+    ? window.renderMatchCard(selected, canEnter, t.id, Number.isInteger(selectedNumber) && selectedNumber > 0 ? selectedNumber : null,
       false, null, { idScope: 'operations-' + String(selected.id || ''),
         preferFirstFreeCourt: !!role.preferFirstFreeCourt, preferredCourt: role.preferredCourt || '' }) : '';
   if (group && index < 3 && html) {
@@ -2149,7 +2243,7 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
       // card. O container de origem é ocultado separadamente logo abaixo.
       // [[regression_general_agenda_moves_visible_cards]]
       card.hidden = false;
-      entries.push({ card: card, wrapper: wrapper, placeholder: placeholder, at: at, actualAt: at, court: card.getAttribute('data-bracket-court') || '', num: Number(card.getAttribute('data-scheduled-game-number')) || 0, position: position, round: Number(card.getAttribute('data-bracket-tab-round')) || 1, justScored: isJustScored });
+      entries.push({ card: card, wrapper: wrapper, placeholder: placeholder, at: at, actualAt: at, court: card.getAttribute('data-bracket-court') || '', num: Number(card.getAttribute('data-scheduled-game-number')) || Number(card.getAttribute('data-match-num')) || 0, position: position, round: Number(card.getAttribute('data-bracket-tab-round')) || 1, justScored: isJustScored });
     });
     // Rei/Rainha é uma única chamada por quarteto. Na Geral os três placares
     // ficam juntos, mas cada jogo conserva seu horário real no próprio bloco.
@@ -2289,7 +2383,7 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
         var time = new Intl.DateTimeFormat('pt-BR', { timeZone: zone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(member.actualAt));
         var label = document.createElement('div');
         label.className = 'bracket-geral-jogo-horario';
-        label.textContent = 'Jogo ' + (member.num || member.card.id.replace(/^card-/, '')) + ' · ' + time + (member.court ? ' · ' + member.court : '');
+        label.textContent = (member.num ? 'Jogo ' + member.num + ' · ' : '') + time + (member.court ? ' · ' + member.court : '');
         bundle.appendChild(label);
         bundle.appendChild(member.wrapper);
       });
@@ -10102,7 +10196,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
        * classificação no cabeçalho sem colar. */
       '<div class="btn-row" style="display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:0.45rem;">' +
         '<div style="display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0;flex:1;">' +
-          '<h3 style="margin:0;font-size:1.1rem;line-height:1.15;white-space:nowrap;color:' + window._spCor((_isMineMon ? '#22d3ee' : 'var(--text-bright)'), 'color') + ';">' + window._safeHtml(window._grpRotuloCurto(sg.name, true)) + '</h3>' +
+          '<h3 style="margin:0;font-size:1.1rem;line-height:1.15;white-space:nowrap;color:' + window._spCor((_isMineMon ? '#22d3ee' : 'var(--text-bright)'), 'color') + ';">' + window._safeHtml(window._grpRotuloCurto(window._bracketMonarchGroupLabel(t, sg), true)) + '</h3>' +
           ((_mineBadgeMon || statusBadge) ? '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;white-space:nowrap;">' + _mineBadgeMon + (statusBadge || '') + '</div>' : '') +
         '</div>' +
         _schGrpBtn2 + _waGrpBtn2 + _grpArrived + _woCtrlM +
@@ -11606,7 +11700,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             // dono); com botões, empilha à esquerda e deixa os controles à direita.
             '<div style="display:flex;align-items:center;gap:8px;margin-bottom:0.75rem;flex-wrap:wrap;">' +
               '<div style="display:flex;' + (_rightCtrl ? 'flex-direction:column;align-items:flex-start;gap:5px;' : 'flex-direction:row;align-items:center;gap:8px;flex-wrap:wrap;') + '">' +
-                '<span style="display:inline-flex;align-items:center;gap:6px;"><strong style="font-size:0.9rem;color:var(--text-bright);">' + window._safeHtml(g.name) + '</strong>' + statusBadge + '</span>' +
+                '<span style="display:inline-flex;align-items:center;gap:6px;"><strong style="font-size:0.9rem;color:var(--text-bright);">' + window._safeHtml(window._bracketMonarchGroupLabel(t, g)) + '</strong>' + statusBadge + '</span>' +
                 (isMyGroup ? '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(34,211,238,0.15);color:var(--sp-c-22d3ee,#22d3ee);font-weight:700;">SEU GRUPO</span>' : '') +
                 _monarchBadge +
               '</div>' +

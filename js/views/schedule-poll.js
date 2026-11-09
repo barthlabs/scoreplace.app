@@ -832,6 +832,127 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
   function _schCategoriaDoJogo(m) {
     return String((m && (m.category || (m.team1Obj && m.team1Obj.category) || (m.team2Obj && m.team2Obj.category))) || '').trim();
   }
+
+  // Um quarteto Rei/Rainha ocupa a mesma quadra nos seus três confrontos. A
+  // chamada e o aquecimento pertencem ao primeiro confronto do bloco.
+  function _schGradeMonarchAtomica(t, jan, jogos, all, quadras) {
+    if (jan.dias.length !== 1 || !jogos.length) return null;
+    var canonicos = {}, ordem = [], duplicadoDivergente = false;
+    function registrar(m) {
+      if (!m || m.id == null) return;
+      var id = String(m.id);
+      if (canonicos[id] && canonicos[id] !== m) duplicadoDivergente = true;
+      if (!canonicos[id]) { canonicos[id] = m; ordem.push(id); }
+    }
+    (t.matches || []).forEach(registrar);
+    (t.rounds || []).forEach(function (rd) { (rd && rd.matches || []).forEach(registrar); });
+    if (duplicadoDivergente || !ordem.length) return null;
+    var extras = (all || []).some(function (m) {
+      return m && m.id != null && !m.isSitOut && !(window._isByeMatch ? window._isByeMatch(m) : m.isBye) && !canonicos[String(m.id)];
+    });
+    if (extras) return null;
+    // `monarchGroups.matches` é hidratado por referência no formato atual. Uma
+    // cópia legada separada poderia mostrar número/horário diferente no grupo.
+    var grupoDivergente = (t.rounds || []).some(function (rd) {
+      return (rd && rd.monarchGroups || []).some(function (g) {
+        return (g && g.matches || []).some(function (m) {
+          return !m || m.id == null || canonicos[String(m.id)] !== m;
+        });
+      });
+    });
+    if (grupoDivergente) return null;
+    var reais = ordem.map(function (id) { return canonicos[id]; }).filter(function (m) {
+      return !m.isSitOut && !(window._isByeMatch ? window._isByeMatch(m) : m.isBye);
+    });
+    var eligibleIds = new Set(jogos.map(function (m) { return String(m.id); }));
+    if (reais.length !== eligibleIds.size || reais.some(function (m) {
+      return !m.isMonarch || !m.category || !_schGroupKey(m) ||
+        (typeof window._schPartidaImovel === 'function' && window._schPartidaImovel(m)) ||
+        m.scheduleLocked === true || (m.court && m.scheduleSource !== 'estimate') ||
+        (m.scheduleSource && m.scheduleSource !== 'estimate') ||
+        (m.scheduledAt && m.scheduledKind !== 'estimate') ||
+        (m.scheduledKind && m.scheduledKind !== 'estimate') ||
+        (m.requiredDay && String(m.requiredDay).slice(0, 10) !== jan.dias[0].ymd);
+    })) return null;
+    var groups = {}, keys = [];
+    reais.forEach(function (m) {
+      var key = _schGroupKey(m);
+      if (!groups[key]) { groups[key] = []; keys.push(key); }
+      groups[key].push(m);
+    });
+    if (keys.some(function (key) { return groups[key].length !== 3; })) return null;
+    keys.forEach(function (key) {
+      groups[key].sort(function (a, b) {
+        function stage(m) {
+          var id = String(m.id || ''), rr = /-g\d+-(\d+)(?:-|$)/.exec(id), simple = /-j(\d+)(?:-|$)/.exec(id), tail = /-(\d+)$/.exec(id);
+          return rr ? Number(rr[1]) : (simple ? Number(simple[1]) - 1 : (tail ? Number(tail[1]) : 0));
+        }
+        return stage(a) - stage(b) || ordem.indexOf(String(a.id)) - ordem.indexOf(String(b.id));
+      });
+    });
+    var rank = {};
+    (t.categoryDefinitions || []).forEach(function (c, index) {
+      if (c && c.label != null) rank[String(c.label)] = index;
+      if (c && c.id != null) rank[String(c.id)] = index;
+    });
+    keys.sort(function (a, b) {
+      var A = groups[a][0], B = groups[b][0], ac = _schCategoriaDoJogo(A), bc = _schCategoriaDoJogo(B);
+      var categoryOrder = (rank[ac] == null ? 9999 : rank[ac]) - (rank[bc] == null ? 9999 : rank[bc]) || ac.localeCompare(bc, 'pt-BR');
+      var roundOrder = Number(A.round || 0) - Number(B.round || 0);
+      var ai = Number(A.monarchGroup == null ? A.groupIdx : A.monarchGroup), bi = Number(B.monarchGroup == null ? B.groupIdx : B.monarchGroup);
+      return Number(A.phaseIndex || 0) - Number(B.phaseIndex || 0) ||
+        (jan.dias[0].categoryFlow === 'rounds' ? roundOrder || categoryOrder : categoryOrder || roundOrder) ||
+        (isFinite(ai) && isFinite(bi) ? ai - bi : 0) || ordem.indexOf(String(A.id)) - ordem.indexOf(String(B.id));
+    });
+    var names = Array.isArray(t.courtNames) ? t.courtNames.filter(Boolean).map(String) : [];
+    while (names.length < quadras) names.push('Quadra ' + (names.length + 1));
+    names = names.slice(0, quadras);
+    var chosen = Array.isArray(t.courtOrder) ? t.courtOrder.map(String) : [];
+    var courts = chosen.filter(function (c, index) { return names.indexOf(c) >= 0 && chosen.indexOf(c) === index; });
+    names.forEach(function (c) { if (courts.indexOf(c) < 0) courts.push(c); });
+    var day = jan.dias[0], available = courts.map(function () { return day.iniMs; }), athleteAvailable = {}, slots = [], fail = false, extraNeeded = 0, firstSlotMin = 0;
+    var windows = t.scheduleWindow && t.scheduleWindow.categoryWindows || [];
+    var withWindow = {};
+    windows.forEach(function (w) { if (w && w.category) withWindow[String(w.category)] = true; });
+    keys.forEach(function (key) {
+      if (fail) return;
+      var group = groups[key], category = _schCategoriaDoJogo(group[0]);
+      var range = windows.find(function (w) { return w && String(w.category) === category && String(w.day).slice(0, 10) === day.ymd; });
+      if (withWindow[category] && !range) { fail = true; extraNeeded = _MIN; return; }
+      var start = range ? Math.max(day.iniMs, _ms(day.ymd, range.startTime)) : day.iniMs;
+      var end = range ? Math.min(day.fimMs, _ms(day.ymd, range.endTime)) : day.fimMs;
+      var phase = window._faseDoTorneio(t, group[0].phaseIndex || 0);
+      var gameMin = (parseInt(t.gameDuration, 10) || 30) * (window._setsEsperadosDaFase ? window._setsEsperadosDaFase(t, phase) : 1);
+      var firstMin = window._minutosDaPartida(t, phase) || gameMin;
+      if (!firstSlotMin) firstSlotMin = firstMin;
+      var lengths = [firstMin, gameMin, gameMin].map(function (minutes) { return minutes * _MIN; });
+      var total = lengths[0] + lengths[1] + lengths[2], best = -1, at = Infinity;
+      var athletes = Array.from(new Set(group.reduce(function (uids, m) { return uids.concat(_schMatchUids(t, m)); }, [])));
+      var athleteStart = athletes.reduce(function (ms, uid) { return Math.max(ms, athleteAvailable[uid] || day.iniMs); }, day.iniMs);
+      available.forEach(function (freeAt, index) {
+        var candidate = Math.max(freeAt, start, athleteStart);
+        if (candidate + total <= end && candidate < at) { at = candidate; best = index; }
+      });
+      if (best < 0) {
+        fail = true;
+        extraNeeded = Math.max(_MIN, Math.min.apply(null, available.map(function (freeAt) {
+          return Math.max(freeAt, start, athleteStart) + total - end;
+        })));
+        return;
+      }
+      group.forEach(function (m, index) {
+        slots.push({ matchId:String(m.id), ms:at, iso:new Date(at).toISOString(), dia:0,
+          onda:Math.floor((at - day.iniMs) / (firstMin * _MIN)), courtIndex:best, court:courts[best],
+          durationMs:lengths[index], scheduledGameNumber:slots.length + 1, extrapolaJanela:false });
+        at += lengths[index];
+      });
+      available[best] = at;
+      athletes.forEach(function (uid) { athleteAvailable[uid] = at; });
+    });
+    return { atomica:true, slots:fail ? [] : slots, quadras:quadras, dias:1, cabe:!fail,
+      cadenceValid:false, fimMs:Math.max.apply(null, available), extraPorDia:[extraNeeded],
+      extraMs:extraNeeded, executionOrder:'groups', slotMin:firstSlotMin };
+  }
   window._schCategorySchedule = function (t) {
     var raw = t && t.categorySchedule, slots = raw && Array.isArray(raw.slots) ? raw.slots : [];
     var out = {}, used = {};
@@ -1301,6 +1422,8 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
         return m && !m.isBye && !m.isSitOut && !m.winner;
       });
       if (!jogos.length) return null;
+      var atomica = _schGradeMonarchAtomica(t, jan, jogos, all, quadras);
+      if (atomica) return atomica;
       if (t.scheduleWindow && Array.isArray(t.scheduleWindow.categoryWindows) && t.scheduleWindow.categoryWindows.length) {
         return _schGradeComJanelasCategorias(t, jan, jogos, quadras);
       }
@@ -1641,6 +1764,25 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
       var m = _schFindMatch(t, s.matchId);
       if (!m) return;
       if (window._schPartidaImovel(m)) return;
+      if (plano.atomica === true) {
+        if (m.scheduleLocked === true || (m.court && m.scheduleSource !== 'estimate') ||
+            (m.scheduleSource && m.scheduleSource !== 'estimate') ||
+            (m.scheduledAt && m.scheduledKind !== 'estimate') ||
+            (m.scheduledKind && m.scheduledKind !== 'estimate')) return;
+        var changed = m.scheduledAt !== s.iso || m.scheduledKind !== 'estimate' ||
+          Number(m.scheduledGameNumber) !== s.scheduledGameNumber || m.court !== s.court ||
+          m.scheduleSource !== 'estimate' || m.scheduledBy !== '';
+        if (!changed) return;
+        m.scheduledAt = s.iso;
+        m.scheduledBy = '';
+        m.scheduledKind = 'estimate';
+        m.scheduledGameNumber = s.scheduledGameNumber;
+        m.court = s.court;
+        m.scheduleSource = 'estimate';
+        if (Array.isArray(alterados)) alterados.push(m);
+        n++;
+        return;
+      }
       if (m.scheduledAt && m.scheduledKind !== 'estimate') return; // combinado manda
       if (m.scheduledAt === s.iso && m.scheduledKind === 'estimate') return; // já está lá
       m.scheduledAt = s.iso;
