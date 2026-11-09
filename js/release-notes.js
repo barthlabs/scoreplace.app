@@ -1,3 +1,8 @@
+// 2.6.8 — Na faixa de chamada Rei/Rainha, todos os jogos do quarteto e a
+// classificação do grupo mostram a escolha de quadra e o OK. Na classificação,
+// a chamada identifica o próximo jogo disponível do grupo. Pular jogo também
+// acompanha as quatro telas. JOGO e categoria ficam mais próximos, os botões
+// menores mantêm a altura, e a classificação não encolhe o card ao navegar.
 // 2.6.7 — As duas cabeças de seta da chamada Rei/Rainha são triângulos
 // preenchidos, sem haste, como na referência. O alinhamento permanece.
 // 2.6.6 — As setas da chamada Rei/Rainha agora são setas preenchidas, com

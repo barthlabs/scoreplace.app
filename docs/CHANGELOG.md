@@ -1,3 +1,11 @@
+## 2.6.8 — 09/nov/2026 (chamada em todas as telas do quarteto)
+
+- JOGO 1, 2 e 3 mantêm o seletor de quadra e o OK na faixa operacional Rei/Rainha. O botão age sobre o jogo exibido; as validações de quadra ocupada e atletas em jogo continuam no comando existente.
+- A classificação do grupo também mostra quadra e OK, identificando o próximo jogo do grupo ainda disponível. O controle fica acima da tabela e visível em 320 px.
+- Pular jogo acompanha o jogo exibido nas quatro telas do grupo. A altura dos botões e cards não cresce após atualizações repetidas da faixa.
+- JOGO N e categoria ficam mais próximos, com botões de 42 px. A classificação conserva a régua de altura dos cards do quarteto para a faixa não saltar ao navegar.
+- Corte somente web, sem alterar dados, Functions ou versões nativas.
+
 ## 2.6.7 — 09/nov/2026 (cabeças de seta sem haste)
 
 - As duas setas de navegação da chamada Rei/Rainha agora são triângulos preenchidos, apontando para esquerda e direita, sem haste. Mantive o alinhamento do cabeçalho e os alvos de toque de 44 px.

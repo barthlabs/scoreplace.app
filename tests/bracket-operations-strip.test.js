@@ -496,7 +496,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       assert.deepEqual([saved[4].payload.s1, saved[4].payload.s2, saved[4].payload.tbP1, saved[4].payload.tbP2], [7, 6, 7, 5]);
       assert.equal(saved[4].payload.isTiebreakEntry, true);
     } finally { await scoringPage.close(); }
-    const carousel = await page.evaluate(() => {
+    const carousel = await page.evaluate(async () => {
       const t = window._findTournamentById();
       const root = document.querySelector('[data-bracket-tabs-root]');
       window.AppStore.currentUser = { uid: 'org' };
@@ -513,6 +513,11 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       }] }] } };
       t._nJogos = 3;
       t.courtNames = ['Quadra 4'];
+      window.groupCalls = [];
+      window._confirmMatchCourtCall = (button, tid, mid) => {
+        window.groupCalls.push([mid, button.closest('.sp-match-operational').querySelector('select')?.value]);
+        return Promise.resolve();
+      };
       window._computeMonarchStandings = group => group.players.map((name, i) => ({ name, wins: 3 - i, pointsFor: 6 - i, pointsAgainst: i }));
       window._bracketCourtReleaseCache = { sb_test: { released: {} } };
       root._bracketOperationsNav = {};
@@ -520,14 +525,23 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       const strip = root._bracketOperationsStrip;
       const read = () => ({ title: strip.querySelector('.sp-operations-next .sp-operations-nav-title')?.textContent,
         match: strip.querySelector('.sp-operations-next [data-operations-match]')?.getAttribute('data-operations-match'),
+        postpone: strip.querySelector('.sp-operations-next [data-postpone-next]')?.getAttribute('data-postpone-next'),
+        cardHeight: strip.querySelector('.sp-operations-next .sp-match-card')?.getBoundingClientRect().height,
         teams: [...strip.querySelectorAll('.sp-operations-next .team span')].map(el => el.textContent),
         canCall: !!strip.querySelector('.sp-operations-next .sp-match-confirm'),
+        court: strip.querySelector('.sp-operations-next .sp-match-court select')?.value,
         classification: !!strip.querySelector('.sp-operations-next .sp-operations-standings'),
         players: [...strip.querySelectorAll('.sp-operations-next .sp-operations-standings tbody tr')].map(el => el.textContent) });
+      const callCurrent = async () => {
+        strip.querySelector('.sp-operations-next .sp-match-confirm')?.click();
+        await new Promise(resolve => setTimeout(resolve, 0));
+      };
       const states = [read()];
+      await callCurrent();
       for (let i = 0; i < 3; i++) {
         strip.querySelector('.sp-operations-next [data-operations-nav="next"]').click();
         states.push(read());
+        await callCurrent();
       }
       const standingsCells = strip.querySelectorAll('.sp-operations-next .sp-operations-standings tbody tr:first-child td');
       const standingsInset = {
@@ -666,8 +680,25 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
         cardPaddingRight: getComputedStyle(operationCard).paddingRight };
       camisUi.metaFitsCard = actionButtons[1].getBoundingClientRect().right <= operationCard.getBoundingClientRect().right - 2 &&
         category.getBoundingClientRect().right < actionButtons[0].getBoundingClientRect().left;
+      camisUi.measuredHeights = [];
+      for (let refresh = 0; refresh < 12; refresh++) {
+        window._bracketOperationsRefresh(t, root);
+        camisUi.measuredHeights.push({ card: strip.querySelector('.sp-operations-next .sp-match-card').getBoundingClientRect().height,
+          button: strip.querySelector('.sp-operations-next .sp-mc-acts button').getBoundingClientRect().height });
+      }
       strip.querySelector('.sp-operations-next [data-operations-nav="next"]').click();
       camisUi.nextTitle = strip.querySelector('.sp-operations-next .sp-operations-nav-title')?.textContent;
+      window.skipCalls = [];
+      window._callCF = (name, payload) => { window.skipCalls.push([name, payload.matchId]); return Promise.resolve({ ok: true }); };
+      window._bracketReloadCourtState = () => Promise.resolve();
+      window._bracketCourtReleaseCache = { sb_test: { ready: true, revision: 7, released: {}, postponed: [] } };
+      root._bracketOperationsNav = {};
+      window._bracketOperationsRefresh(t, root);
+      for (let screen = 0; screen < 4; screen++) {
+        strip.querySelector('.sp-operations-next [data-postpone-next]').click();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        if (screen < 3) strip.querySelector('.sp-operations-next [data-operations-nav="next"]').click();
+      }
       window._renderCamisFixture = window.renderMatchCard;
       window.renderMatchCard = simpleRender;
       const categoryCounts = [['Fem Diamante', 8], ['Fem Ouro', 16], ['Fem Prata', 12]];
@@ -685,7 +716,8 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       const fullNumbers = fullMatches.map(game => game._gameNum);
       const fullLabels = fullMatches.filter(game => game.id.endsWith('-j0')).map(game =>
         window._bracketMonarchGroupLabel(fullTournament, { name: game.groupName, matches: [game] }));
-      return { states, called: window.called, arrows, survivesRefresh, liveMatch, multiDayHasNav, incompleteHasNav, standingsInset,
+      return { states, called: window.called, groupCalls: window.groupCalls, skipCalls: window.skipCalls,
+        arrows, survivesRefresh, liveMatch, multiDayHasNav, incompleteHasNav, standingsInset,
         groupChecks: { numeric: numeric?.name, distinct: distinct?.name, missing: !!missing,
           tieBreak: !!tieBreak, nonMonarch: !!nonMonarch, refs: refs?.matches.map(m => m.id),
           canonicalScore: roundCanonical?.matches[0].scoreP1, onlyRounds: onlyRounds?.matches.length, extra: !!extra },
@@ -698,6 +730,14 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     });
     assert.deepEqual(carousel.states.map(item => item.title), ['JOGO 1', 'JOGO 9', 'JOGO 17', 'Grupo A', 'JOGO 1', 'Grupo A']);
     assert.deepEqual(carousel.states.map(item => item.match), ['group-1', 'group-9', 'group-17', 'group-1', 'group-1', 'group-1']);
+    assert.deepEqual(carousel.states.slice(0, 4).map(item => item.postpone),
+      ['group-1', 'group-9', 'group-17', 'group-1'], 'Pular jogo acompanha as quatro telas do grupo');
+    assert.deepEqual(carousel.skipCalls, [
+      ['endMatchOnCourt', 'match-rr-r1-g0-0-Fem_Diamante-1794172435574'],
+      ['endMatchOnCourt', 'match-rr-r1-g0-1-Fem_Diamante-1794172435574'],
+      ['endMatchOnCourt', 'match-rr-r1-g0-2-Fem_Diamante-1794172435574'],
+      ['endMatchOnCourt', 'match-rr-r1-g0-0-Fem_Diamante-1794172435574']
+    ], 'Pular jogo envia o jogo correspondente a cada tela');
     assert.deepEqual(carousel.states.slice(0, 3).map(item => item.teams), [
       ['Ana / Bia', 'Carla / Dora'], ['Ana / Carla', 'Bia / Dora'], ['Ana / Dora', 'Bia / Carla']
     ]);
@@ -710,6 +750,10 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert.equal(carousel.camis.idLabel, 'R1 Grupo A2');
     assert.deepEqual({ title:carousel.camis.ui.title, arrows:carousel.camis.ui.arrows, nextTitle:carousel.camis.ui.nextTitle },
       { title: 'JOGO 1', arrows: 2, nextTitle: 'JOGO 2' });
+    assert(Math.max(...carousel.camis.ui.measuredHeights.map(item => item.card)) -
+      Math.min(...carousel.camis.ui.measuredHeights.map(item => item.card)) <= 2 &&
+      Math.max(...carousel.camis.ui.measuredHeights.map(item => item.button)) <= 44,
+      'atualizações repetidas não esticam card ou botões: ' + JSON.stringify(carousel.camis.ui.measuredHeights));
     assert(carousel.camis.ui.fontSize <= 15 && carousel.camis.ui.categoryBelowTitle && carousel.camis.ui.titleCategoryGap <= 8 &&
       carousel.camis.ui.categoryAlignedLeft && carousel.camis.ui.arrowTargetInsideCard && carousel.camis.ui.actionsSpanTwoLines &&
       carousel.camis.ui.buttonsOnOneLine && carousel.camis.ui.metaFitsCard &&
@@ -721,8 +765,15 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       'a primeira posição e o saldo têm respiro nas bordas');
     assert.deepEqual(carousel.fullUniqueness, { games: 108, min: 1, max: 108,
       groups: 36, count: 36, examples: ['R1 Grupo A1', 'R1 Grupo A2', 'R1 Grupo A3'] });
-    assert(carousel.states[0].canCall && !carousel.states[1].canCall && !carousel.states[2].canCall,
-      'somente o jogo base pode chamar o quarteto à quadra');
+    assert(carousel.states.slice(0, 4).every(item => item.canCall && item.court === 'Quadra 4'),
+      'todos os jogos e a classificação oferecem quadra e OK para o jogo exibido ou próximo jogo do grupo: ' +
+      JSON.stringify(carousel.states.slice(0, 4)));
+    assert(Math.max(...carousel.states.slice(0, 4).map(item => item.cardHeight)) -
+      Math.min(...carousel.states.slice(0, 4).map(item => item.cardHeight)) <= 2,
+      'a classificação mantém a altura do card dos jogos: ' + JSON.stringify(carousel.states.slice(0, 4)));
+    assert.deepEqual(carousel.groupCalls, [
+      ['group-1', 'Quadra 4'], ['group-9', 'Quadra 4'], ['group-17', 'Quadra 4'], ['group-1', 'Quadra 4']
+    ], 'o OK chama o jogo visível; na classificação, o primeiro jogo ainda disponível');
     assert(carousel.states[3].classification && carousel.states[3].players.length === 4);
     assert(carousel.arrows.every(item => item.label && item.triangular && item.width >= 44 && item.height >= 44));
     assert(carousel.survivesRefresh);
@@ -737,11 +788,19 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       const card = root._bracketOperationsStrip.querySelector('.sp-operations-next .sp-match-card');
       const head = card.querySelector('.sp-mc-head');
       const arrow = head.querySelector('[data-operations-nav="prev"]');
-      return { cardWidth: card.clientWidth, cardScroll: card.scrollWidth, headWidth: head.clientWidth, headScroll: head.scrollWidth,
+      const gameBounds = { cardWidth: card.clientWidth, cardScroll: card.scrollWidth,
+        headWidth: head.clientWidth, headScroll: head.scrollWidth,
         arrowLeft: arrow.getBoundingClientRect().left, cardLeft: card.getBoundingClientRect().left };
+      for (let i = 0; i < 3; i++) root._bracketOperationsStrip.querySelector('.sp-operations-next [data-operations-nav="next"]').click();
+      const groupCard = root._bracketOperationsStrip.querySelector('.sp-operations-next .sp-operations-standings-card');
+      const groupSelect = groupCard.querySelector('.sp-match-court select');
+      const groupButton = groupCard.querySelector('.sp-match-confirm');
+      return { ...gameBounds,
+        groupSelectVisible: !!groupSelect && groupSelect.getBoundingClientRect().bottom <= groupCard.getBoundingClientRect().bottom,
+        groupButtonVisible: !!groupButton && groupButton.getBoundingClientRect().bottom <= groupCard.getBoundingClientRect().bottom };
     });
     assert(narrowCall.cardScroll <= narrowCall.cardWidth + 1 && narrowCall.headScroll <= narrowCall.headWidth + 1 &&
-      narrowCall.arrowLeft >= narrowCall.cardLeft + 2,
+      narrowCall.arrowLeft >= narrowCall.cardLeft + 2 && narrowCall.groupSelectVisible && narrowCall.groupButtonVisible,
       'a faixa de chamada não pode cortar os controles em 320px: ' + JSON.stringify(narrowCall));
     assert.equal(carousel.liveMatch, 'group-17');
     assert(!carousel.multiDayHasNav && !carousel.incompleteHasNav);

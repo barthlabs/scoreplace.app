@@ -1503,7 +1503,7 @@ function _bracketOperationsNavHtml(group, index, slot) {
     '<button type="button" id="' + prefix + '-next" class="sp-operations-nav-arrow" data-operations-nav="next" aria-label="Próximo jogo ou classificação do ' + safe(group.name) + '" title="Próximo"><svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><polygon points="3,2 17,10 3,18"/></svg></button></span>';
 }
 
-function _bracketOperationsStandingsHtml(group, t, slot) {
+function _bracketOperationsStandingsHtml(group, t, slot, callTarget, courtHtml) {
   var safe = window._safeHtml || function (s) { return String(s); };
   var roster = group.roster;
   var standings = typeof window._computeMonarchStandings === 'function' ? window._computeMonarchStandings({
@@ -1515,7 +1515,10 @@ function _bracketOperationsStandingsHtml(group, t, slot) {
       !!match.resultAt || match.winner != null || match.wo === true || !!match.isBye || !!match.isSitOut;
   });
   return '<article class="sp-match-card sp-operations-standings-card"><div class="sp-mc-head">' +
-    _bracketOperationsNavHtml(group, 3, slot) + '</div><div class="sp-operations-standings-status">' +
+    _bracketOperationsNavHtml(group, 3, slot) + '</div>' +
+    (courtHtml ? '<div class="sp-operations-standings-call"><span class="sp-operations-standings-call-label">Jogo ' +
+      safe(Number(callTarget._gameNum || callTarget.scheduledGameNumber) || '') + '</span>' + courtHtml + '</div>' : '') +
+    '<div class="sp-operations-standings-status">' +
     (finished ? 'CLASSIFICAÇÃO' : 'CLASSIFICAÇÃO PARCIAL') + '</div>' +
     '<table class="sp-operations-standings"><thead><tr><th>#</th><th>Atleta</th><th>V</th><th>Saldo</th></tr></thead><tbody>' +
     standings.map(function (row, i) { return '<tr><td>' + (i + 1) + 'º</td><td>' + safe(row.name || '') +
@@ -1531,14 +1534,36 @@ function _bracketOperationsReplica(m, t, role, label, availability, root, allMat
   var defaultIndex = group ? group.matches.findIndex(function (match) { return String(match.id) === String(m.id); }) : 0;
   var index = group && saved && saved.key === group.key && saved.baseId === String(m.id) && saved.index >= 0 && saved.index <= 3 ? saved.index : defaultIndex;
   if (group) nav[slot] = { key: group.key, index: index, baseId: String(m.id) };
-  var selected = group && index < 3 ? group.matches[index] : m;
+  var occupancy = window.ScoreplaceCourtOccupancy;
+  var selected = group && index < 3 ? group.matches[index] : group && index === 3
+    ? group.matches.find(function (match) { return !occupancy.isFinished(match) && !match.courtCalledAt && !match.startedAt; }) ||
+      group.matches.find(function (match) { return !occupancy.isFinished(match); }) || group.matches[0]
+    : m;
   var selectedNumber = Number(selected._gameNum || selected.scheduledGameNumber);
-  var postpone = role.postponeReady && (!group || index === defaultIndex)
-    ? '<button type="button" class="sp-operations-postpone" data-postpone-next="' + safe(String(m.id || '')) +
-      '"' + (role.postponeBusy ? ' disabled' : '') + ' title="Postergar este jogo e mostrar o próximo">Pular jogo</button>' : '';
+  var canPostponeSelected = selected && !occupancy.isFinished(selected) && !selected.isBye && !selected.isSitOut &&
+    !selected.courtCalledAt && !selected.startedAt && !selected.draw && !selected.pendingResult && !selected.liveScored &&
+    !(Array.isArray(selected.sets) && selected.sets.length) && !(Number(selected.scoreP1) > 0) && !(Number(selected.scoreP2) > 0);
+  var postpone = role.postponeReady
+    ? '<button type="button" class="sp-operations-postpone" data-postpone-next="' + safe(String(selected.id || '')) +
+      '"' + (role.postponeBusy || !canPostponeSelected ? ' disabled' : '') +
+      ' title="Postergar este jogo e mostrar o próximo">Pular jogo</button>' : '';
   var canEnter = !!(role.canCall || (typeof window._resultEntryIncludes === 'function' &&
     (window._resultEntryIncludes(t, 'players') || window._resultEntryIncludes(t, 'referee'))));
-  var html = group && index === 3 ? _bracketOperationsStandingsHtml(group, t, slot) : typeof window.renderMatchCard === 'function'
+  var standingsCourtHtml = '';
+  if (group && index === 3 && typeof window.renderMatchCard === 'function') {
+    var callCard = document.createElement('template');
+    callCard.innerHTML = window.renderMatchCard(selected, canEnter, t.id,
+      Number.isInteger(selectedNumber) && selectedNumber > 0 ? selectedNumber : null,
+      false, null, { preferFirstFreeCourt: !!role.preferFirstFreeCourt, preferredCourt: role.preferredCourt || '' });
+    var callRow = callCard.content.querySelector('.sp-match-operational');
+    if (callRow) {
+      Array.prototype.forEach.call(callRow.querySelectorAll('.sp-match-estimated-time, .sp-match-court-clock'), function (node) { node.remove(); });
+      standingsCourtHtml = callRow.outerHTML;
+    }
+  }
+  var html = group && index === 3
+    ? _bracketScopeReplicaHtml(_bracketOperationsStandingsHtml(group, t, slot, selected, standingsCourtHtml), 'operations-standings-' + slot)
+    : typeof window.renderMatchCard === 'function'
     ? window.renderMatchCard(selected, canEnter, t.id, Number.isInteger(selectedNumber) && selectedNumber > 0 ? selectedNumber : null,
       false, null, { idScope: 'operations-' + String(selected.id || ''),
         preferFirstFreeCourt: !!role.preferFirstFreeCourt, preferredCourt: role.preferredCourt || '' }) : '';
@@ -1566,10 +1591,6 @@ function _bracketOperationsReplica(m, t, role, label, availability, root, allMat
         titleRow.style.flexWrap = 'nowrap';
         titleRow.style.gap = '0';
       }
-    }
-    if (String(selected.id) !== String(m.id)) {
-      // A chamada é única para o quarteto; outras partidas são vistas do mesmo grupo.
-      Array.prototype.forEach.call(card.querySelectorAll('.sp-match-court, .sp-match-confirm, .sp-match-call-day-hint, .sp-match-court-clock'), function (node) { node.remove(); });
     }
     html = card.outerHTML;
   }
@@ -1859,14 +1880,30 @@ window._bracketOperationsRefresh = function (t, root) {
   var operationsTrack = existing.querySelector('.sp-operations-track');
   if (operationsTrack) {
     // Mede a altura natural de todos os cards antes de aplicar a régua comum.
-    // Tudo ocorre no mesmo turno para não expor uma faixa intermediária à tela.
+    // Não deixe o grid esticar o card até a altura antiga durante a medição:
+    // isso realimenta scrollHeight e aumenta os botões a cada atualização.
     operationsTrack.style.setProperty('--sp-operations-card-height', 'auto');
-    var cardHeights = Array.prototype.map.call(existing.querySelectorAll('.sp-operations-replica > .sp-match-card'), function (card) {
+    operationsTrack.style.alignItems = 'flex-start';
+    var measuredCards = existing.querySelectorAll('.sp-operations-replica > .sp-match-card');
+    Array.prototype.forEach.call(measuredCards, function (card) { card.style.height = 'max-content'; });
+    var cardHeights = Array.prototype.map.call(measuredCards, function (card) {
       var style = window.getComputedStyle(card);
       var borders = parseFloat(style.borderTopWidth) + parseFloat(style.borderBottomWidth);
       return Math.ceil(Math.max(card.getBoundingClientRect().height, card.scrollHeight + borders));
     });
-    operationsTrack.style.setProperty('--sp-operations-card-height', Math.max.apply(null, [120].concat(cardHeights)) + 'px');
+    var nextNav = root._bracketOperationsNav && root._bracketOperationsNav.next;
+    if (nextNav && cardHeights.length) {
+      var groupHeights = root._bracketOperationsGroupHeights || (root._bracketOperationsGroupHeights = {});
+      if (nextNav.index === 3) cardHeights.push(groupHeights[nextNav.key] || 0);
+      else groupHeights[nextNav.key] = Math.max(groupHeights[nextNav.key] || 0, cardHeights[0]);
+    }
+    Array.prototype.forEach.call(measuredCards, function (card) { card.style.removeProperty('height'); });
+    operationsTrack.style.removeProperty('align-items');
+    // O quarteto alterna entre três partidas e uma classificação. Preserve
+    // uma régua mínima comum mesmo quando a tabela for mais alta que o card
+    // sintético de uma partida (ou vice-versa), sem encolher ao navegar.
+    operationsTrack.style.setProperty('--sp-operations-card-height', Math.max.apply(null,
+      [nextNav ? 300 : 120].concat(cardHeights)) + 'px');
     operationsTrack.scrollLeft = trackScroll;
     if (window.scrollY !== pageY || window.scrollX !== pageX) window.scrollTo(pageX, pageY);
   }
