@@ -592,9 +592,25 @@ function initRouter() {
             // chave, o loader não pode esperar a hidratação de outro
             window._bracketNamesPromise = null;
             var _saiuTour = false;
+            var _tourRenderedForDrawResult = false;
+            var _abrirResultadoSorteio = function () {
+              var pending = window.__drawResultAfterPublish;
+              if (!_saiuTour || !_tourRenderedForDrawResult || !_routeIsCurrent() || !pending ||
+                  String(pending.id) !== String(cleanParam)) return;
+              if (Date.now() - Number(pending.at || 0) > 30000) {
+                delete window.__drawResultAfterPublish;
+                return;
+              }
+              var latest = window._findTournamentById && window._findTournamentById(cleanParam);
+              if (!latest || !window._publishedInitialDrawData || !window._publishedInitialDrawData(latest) ||
+                  typeof window._openPublishedInitialDrawResult !== 'function') return;
+              delete window.__drawResultAfterPublish;
+              window._openPublishedInitialDrawResult(cleanParam);
+            };
             var _fecharTour = function () {
               if (_saiuTour || !_routeIsCurrent()) return; _saiuTour = true;
               if (typeof window._hideLoading === 'function') { try { window._hideLoading(); } catch (e) {} }
+              _abrirResultadoSorteio();
             };
             // A leitura tem teto próprio em _ensureTournamentLoaded. Este backstop só
             // protege o loader depois que a rota ainda é a atual; ele nunca derruba o
@@ -605,9 +621,11 @@ function initRouter() {
               try {
                 if (window._medirTrecho) window._medirTrecho('rota-torneio', function () { renderTournaments(viewContainer, cleanParam); });
                 else renderTournaments(viewContainer, cleanParam);
+                _tourRenderedForDrawResult = true;
               }
               finally {
                 _finalizarTrocaPrincipal();
+                _abrirResultadoSorteio();
                 // ── O LOADER SÓ SAI COM OS NOMES NOS LUGARES (2.0.41) ─────────
                 // Ordem do dono (24/ago, Confra): a classificação vinha com nomes
                 // e a chave ainda pipocava os dela depois. Se o render publicou a

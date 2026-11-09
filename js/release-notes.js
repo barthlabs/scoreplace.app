@@ -1,3 +1,7 @@
+// 2.6.2 — Depois de sortear os grupos Rei/Rainha, o resultado abre
+// automaticamente para conferência. Na faixa de chamada, JOGO N e a categoria
+// ficam compactos na mesma linha; os botões permanecem lado a lado e a
+// classificação ganha espaço nas bordas.
 // 2.6.1 — Em torneios Rei/Rainha de um dia, os três jogos de cada quarteto
 // ficam seguidos na mesma quadra: a chamada e o aquecimento ocorrem uma vez.
 // As setas circulam entre os jogos; grupos de categorias diferentes têm nomes

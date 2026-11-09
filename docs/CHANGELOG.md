@@ -1,3 +1,9 @@
+## 2.6.2 — 09/nov/2026 (resultado do sorteio e faixa compacta)
+
+- O sorteio Rei/Rainha publicado diretamente abre sua tela de resultado após a rota do torneio carregar os jogos. O resultado continua acessível pelo botão do organizador; reentradas e snapshots não abrem uma segunda janela.
+- O cabeçalho da faixa operacional restaura o tamanho original de JOGO N, mantém a categoria na mesma linha e aproxima as ações. A classificação recebe margem interna para a posição e o saldo não encostarem na borda.
+- O ajuste é somente web. Não altera jogos, horários ou dados persistidos e não inicia versões nativas.
+
 ## 2.6.1 — 09/nov/2026 (quartetos Rei/Rainha e agenda)
 
 - A faixa operacional encontra os três jogos do quarteto mesmo quando o torneio usa somente a coleção de partidas. As setas junto de JOGO N alternam os confrontos e a classificação. A aba Geral mostra o número do jogo sem expor IDs técnicos.

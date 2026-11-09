@@ -21,6 +21,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
   try {
     const page = await browser.newPage();
     await page.setContent('<main id="view-container"><section id="tourn-grid-container"></section><nav data-bracket-tabs-root="1" data-tournament-id="sb_test"></nav><section id="rounds"><article id="card-m2" class="sp-match-card"></article></section></main>');
+    await page.addStyleTag({ path: 'css/components.css' });
     await page.addStyleTag({ path: 'css/bracket.css' });
     await page.addScriptTag({ path: 'js/domain/next-match.js' });
     await page.addScriptTag({ path: 'js/domain/court-occupancy.js' });
@@ -528,6 +529,11 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
         strip.querySelector('.sp-operations-next [data-operations-nav="next"]').click();
         states.push(read());
       }
+      const standingsCells = strip.querySelectorAll('.sp-operations-next .sp-operations-standings tbody tr:first-child td');
+      const standingsInset = {
+        left: parseFloat(getComputedStyle(standingsCells[0]).paddingLeft),
+        right: parseFloat(getComputedStyle(standingsCells[standingsCells.length - 1]).paddingRight)
+      };
       strip.querySelector('.sp-operations-next [data-operations-nav="next"]').click();
       states.push(read());
       strip.querySelector('.sp-operations-next [data-operations-nav="prev"]').click();
@@ -596,6 +602,21 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       window._currentBracketTournament = idCategories;
       const idLabel = _bracketOperationsGroup(idCategories, idCategories.matches[3], idCategories.matches)?.name;
       window._currentBracketTournament = camisTournament;
+      document.documentElement.style.fontSize = '20px';
+      const simpleRender = window.renderMatchCard;
+      window.renderMatchCard = function (game, canEnter, tid, num, compact, pending, options) {
+        const template = document.createElement('template');
+        template.innerHTML = simpleRender(game, canEnter, tid, num, compact, pending, options);
+        const card = template.content.firstElementChild;
+        if (game.isMonarch) card.querySelector('.sp-mc-head').innerHTML =
+          '<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start;min-width:0;">' +
+          '<div style="display:flex;align-items:center;gap:7px;min-width:0;flex-wrap:wrap;">' +
+          '<span style="font-size:.7rem;font-weight:700;">JOGO ' + num + '</span></div>' +
+          '<span data-match-time-status>Fem Diamante</span></div>' +
+          '<div class="btn-row sp-mc-acts"><button class="btn btn-danger btn-micro">Aplicar W.O.</button>' +
+          '<button class="btn btn-live btn-micro">📡 Ao Vivo</button></div>';
+        return card.outerHTML;
+      };
       t.matches = camis;
       t.rounds = [];
       t.phaseRounds = {};
@@ -606,8 +627,16 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
         title: strip.querySelector('.sp-operations-next .sp-operations-nav-title')?.textContent,
         arrows: strip.querySelectorAll('.sp-operations-next .sp-operations-nav-arrow').length
       };
+      const gameTitle = strip.querySelector('.sp-operations-next .sp-operations-nav-title');
+      const category = strip.querySelector('.sp-operations-next [data-match-time-status]');
+      const actionButtons = [...strip.querySelectorAll('.sp-operations-next .sp-mc-acts button')];
+      camisUi.fontSize = parseFloat(getComputedStyle(gameTitle).fontSize);
+      camisUi.categoryOnTitleLine = Math.abs(gameTitle.getBoundingClientRect().top - category.getBoundingClientRect().top) < 4;
+      camisUi.buttonsOnOneLine = actionButtons.length === 2 &&
+        Math.abs(actionButtons[0].getBoundingClientRect().top - actionButtons[1].getBoundingClientRect().top) < 4;
       strip.querySelector('.sp-operations-next [data-operations-nav="next"]').click();
       camisUi.nextTitle = strip.querySelector('.sp-operations-next .sp-operations-nav-title')?.textContent;
+      window.renderMatchCard = simpleRender;
       const categoryCounts = [['Fem Diamante', 8], ['Fem Ouro', 16], ['Fem Prata', 12]];
       const fullMatches = categoryCounts.flatMap(([category, count]) =>
         Array.from({ length: count }, (_, groupIndex) => [0, 1, 2].map(slot => ({
@@ -623,7 +652,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       const fullNumbers = fullMatches.map(game => game._gameNum);
       const fullLabels = fullMatches.filter(game => game.id.endsWith('-j0')).map(game =>
         window._bracketMonarchGroupLabel(fullTournament, { name: game.groupName, matches: [game] }));
-      return { states, called: window.called, arrows, survivesRefresh, liveMatch, multiDayHasNav, incompleteHasNav,
+      return { states, called: window.called, arrows, survivesRefresh, liveMatch, multiDayHasNav, incompleteHasNav, standingsInset,
         groupChecks: { numeric: numeric?.name, distinct: distinct?.name, missing: !!missing,
           tieBreak: !!tieBreak, nonMonarch: !!nonMonarch, refs: refs?.matches.map(m => m.id),
           canonicalScore: roundCanonical?.matches[0].scoreP1, onlyRounds: onlyRounds?.matches.length, extra: !!extra },
@@ -646,7 +675,12 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert.deepEqual(carousel.camis.labels, ['R1 Grupo A1', 'R1 Grupo A2', 'R1 Grupo A3', 'R2 Grupo A4']);
     assert.equal(carousel.camis.sixGamesHaveNav, false);
     assert.equal(carousel.camis.idLabel, 'R1 Grupo A2');
-    assert.deepEqual(carousel.camis.ui, { title: 'JOGO 1', arrows: 2, nextTitle: 'JOGO 2' });
+    assert.deepEqual({ title:carousel.camis.ui.title, arrows:carousel.camis.ui.arrows, nextTitle:carousel.camis.ui.nextTitle },
+      { title: 'JOGO 1', arrows: 2, nextTitle: 'JOGO 2' });
+    assert(carousel.camis.ui.fontSize <= 15 && carousel.camis.ui.categoryOnTitleLine && carousel.camis.ui.buttonsOnOneLine,
+      'título pequeno, categoria junto ao jogo e botões lado a lado: ' + JSON.stringify(carousel.camis.ui));
+    assert(carousel.standingsInset.left >= 12 && carousel.standingsInset.right >= 12,
+      'a primeira posição e o saldo têm respiro nas bordas');
     assert.deepEqual(carousel.fullUniqueness, { games: 108, min: 1, max: 108,
       groups: 36, count: 36, examples: ['R1 Grupo A1', 'R1 Grupo A2', 'R1 Grupo A3'] });
     assert(carousel.states[0].canCall && !carousel.states[1].canCall && !carousel.states[2].canCall,

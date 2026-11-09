@@ -1554,6 +1554,17 @@ function _bracketOperationsReplica(m, t, role, label, availability, root, allMat
         head.firstChild.textContent = '';
         head.insertAdjacentHTML('afterbegin', _bracketOperationsNavHtml(group, index, slot));
       }
+      // No card concentrado a categoria vinha numa linha separada, entre o
+      // título e os botões. Na faixa de chamada ela cabe junto ao jogo; mover
+      // somente o nó evita duplicar texto ou alterar os cards da chave.
+      var leading = head.firstElementChild;
+      var titleRow = leading && leading.firstElementChild;
+      var category = leading && leading.querySelector('[data-match-time-status]');
+      if (titleRow && category && category.parentElement === leading) {
+        titleRow.appendChild(category);
+        titleRow.style.flexWrap = 'nowrap';
+        titleRow.style.gap = '4px';
+      }
     }
     if (String(selected.id) !== String(m.id)) {
       // A chamada é única para o quarteto; outras partidas são vistas do mesmo grupo.
