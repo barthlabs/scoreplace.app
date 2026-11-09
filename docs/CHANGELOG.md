@@ -1,3 +1,9 @@
+## 2.6.0 — 08/nov/2026 (operação Rei/Rainha de um dia)
+
+- A faixa operacional resolve `matchIds` dos grupos persistidos para navegar pelos três jogos do mesmo quarteto e sua classificação, inclusive em fases. A rodada prevalece quando há cópia antiga do jogo em outra lista.
+- Jogos e cabeçalhos da agenda mostram apenas o horário em torneios concentrados em um dia; torneios de vários dias preservam a data.
+- Web, iOS, Android e Wear recebem o corte de versão 2.6.0; a publicação em cada loja depende do respectivo envio e confirmação.
+
 ## 2.5.113 — 07/nov/2026 (telefone nos convites)
 
 - O convite de co-organizador e árbitro usa seletor de país com bandeira e DDI e um único campo nacional com máscara para DDD e número.

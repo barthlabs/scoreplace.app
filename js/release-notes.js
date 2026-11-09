@@ -1,3 +1,5 @@
+// 2.6.0 — Na faixa de operação Rei/Rainha, as setas mostram os três jogos do
+// mesmo quarteto e sua classificação. Torneios de um dia exibem só o horário.
 // 2.5.125 — Após o sorteio, a organização confere cada categoria, grupo e os
 // três confrontos Rei/Rainha antes de publicar. O resultado pode ser reaberto
 // depois e compartilhado em artes PNG numeradas, sem placares. A conferência
@@ -1353,6 +1355,14 @@ window._RELEASE_NOTES_HTML = (function () {
     // quem está com a 2.0.4 no iPhone lê um torneio que o banco não guarda mais desse jeito.
     // Mesma lição da 1.7.35: quando o formato do dado muda, a ida à loja É o conserto.
     // Os itens abaixo são consolidados por tema, como manda a convenção do arquivo.
+    // v2.6 — operação Rei/Rainha concentrada em um dia.
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(52,211,153,0.08);">' +
+      '<div style="font-weight:800;color:var(--sp-c-a7f3d0,#a7f3d0);font-size:1rem;margin-bottom:8px;">🎾 v2.6 — Jogos do quarteto <span style="color:var(--text-muted);font-weight:400;font-size:0.78rem;">(Novembro, 2026)</span></div>' +
+      '<ul style="margin:0;padding-left:1.1rem;font-size:0.86rem;line-height:1.5;color:var(--text-main);">' +
+        '<li>Na faixa de operação Rei/Rainha, as setas percorrem os três jogos do mesmo quarteto e sua classificação, com as duplas e os placares de cada jogo.</li>' +
+        '<li>Em torneios concentrados em um dia, os jogos e as rodadas mostram só o horário. Eventos de vários dias continuam mostrando a data.</li>' +
+      '</ul>' +
+    '</div>' +
     // v2.5 — corte nativo do que já está no ar na web. A versão 2.5.18
     // segue diretamente para a análise de produção das duas lojas.
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(52,211,153,0.08);">' +
