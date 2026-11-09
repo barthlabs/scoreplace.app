@@ -41,11 +41,11 @@ const scoreDigest = skipReason ? '' : execFileSync('node',
   { cwd: root }).toString().trim();
 
 for (const version of ['v2', 'v3']) {
-  const run = (rows, allowLegacyCourt = false, extraEnv = {}, requireCurrent = false, requireScoreRefresh = false) => {
+  const run = (rows, allowLegacyCourt = false, extraEnv = {}, requireCurrent = false, requireScoreRefresh = false, requireCourtControlRefresh = false) => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-region-test-'));
     const file = path.join(dir, 'manifest.json');
     fs.writeFileSync(file, JSON.stringify(rows));
-    try { return spawnSync('node', [script, version, ...(allowLegacyCourt ? ['--allow-legacy-court'] : []), ...(requireCurrent ? ['--require-current'] : []), ...(requireScoreRefresh ? ['--require-score-refresh'] : [])],
+    try { return spawnSync('node', [script, version, ...(allowLegacyCourt ? ['--allow-legacy-court'] : []), ...(requireCurrent ? ['--require-current'] : []), ...(requireScoreRefresh ? ['--require-score-refresh'] : []), ...(requireCourtControlRefresh ? ['--require-court-control-refresh'] : [])],
       { cwd: root, env: { ...process.env, ...extraEnv, SP_REGION_MANIFEST: file }, encoding: 'utf8' }); }
     finally { fs.rmSync(dir, { recursive: true, force: true }); }
   };
@@ -140,8 +140,12 @@ for (const version of ['v2', 'v3']) {
       sourceDescriptor('functions-autodraw', recordedScoreCommit, true));
     const scoreFresh = original.filter(row => row.name === `sp-op-score-${version}`)
       .every(row => row.commit === recordedScoreCommit && row.sourceDigest === recordedScoreDigest);
-    assert.equal(run(original, false, {}, false, true).status === 0, scoreFresh,
-      'corte dirigido só aceita a revisão de placar efetivamente publicada nas regiões');
+    const recordedCourtCommit = 'c85ac683465a159a4c77e5f680481f9510871442';
+    const courtSources = sourceDescriptor('functions-autodraw', recordedCourtCommit, true);
+    const courtFresh = original.filter(row => [`sp-op-court-${version}`, `sp-op-control-${version}`].includes(row.name))
+      .every(row => row.commit === recordedCourtCommit && row.sourceDigest === sourceDigest(row.target, recordedCourtCommit, courtSources));
+    assert.equal(run(original, false, {}, false, false, true).status === 0, scoreFresh && courtFresh,
+      'corte dirigido só aceita as revisões de placar, chamada e controle efetivamente publicadas');
     assert.notEqual(run(original, true, {}, false, true).status, 0, 'flags incompatíveis são recusadas');
     assert.notEqual(run(original, false, {}, true, true).status, 0, 'dois modos obrigatórios são recusados');
     const wrongOther = structuredClone(original);
@@ -152,11 +156,11 @@ for (const version of ['v2', 'v3']) {
       row.commit = scoreCommit;
       row.sourceDigest = courtDigest;
     }
-    assert.notEqual(run(wrongOther, false, {}, false, true).status, 0,
+    assert.notEqual(run(wrongOther, false, {}, false, false, true).status, 0,
       'porta não-score em commit novo é recusada');
     const wrongRegion = structuredClone(original);
     wrongRegion.find(row => row.name === `sp-op-score-${version}`).commit = commit;
-    assert.notEqual(run(wrongRegion, false, {}, false, true).status, 0,
+    assert.notEqual(run(wrongRegion, false, {}, false, false, true).status, 0,
       'região de placar divergente é recusada');
     const unexpected = structuredClone(aligned);
     unexpected[0].region = 'europe-west1';

@@ -1,1 +1,1 @@
-This native release includes recent Scoreplace updates: set-by-set score entry, court call controls, phase-specific on-air screens, and updated Apple Watch integration.
+In King/Queen groups, arrows cycle through the quartet’s three games and standings. One-day tournaments show game times without repeating the date. This release also includes set-by-set scores, court call controls, phase-specific on-air screens, and updated Apple Watch integration.

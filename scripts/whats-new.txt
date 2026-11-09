@@ -1,1 +1,1 @@
-A versão nativa reúne as atualizações recentes do Scoreplace: lançamento de placares por set, operações de chamada para quadra, telas no ar por fase e integração atualizada com o Apple Watch.
+Na operação Rei/Rainha, as setas percorrem os três jogos do quarteto e sua classificação. Torneios de um dia mostram apenas o horário dos jogos. Esta versão também inclui placares por set, chamadas para quadra, telas no ar por fase e integração atualizada com o Apple Watch.
