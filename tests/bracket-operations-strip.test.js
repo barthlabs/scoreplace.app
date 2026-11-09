@@ -639,25 +639,29 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       };
       camisUi.categoryBelowTitle = category.getBoundingClientRect().top >= gameTitle.getBoundingClientRect().bottom;
       camisUi.titleCategoryGap = category.getBoundingClientRect().top - gameTitle.getBoundingClientRect().bottom;
-      camisUi.categoryWithButtons = category.parentElement?.classList.contains('sp-operations-meta-row') &&
-        actionButtons.every(button => button.parentElement?.parentElement === category.parentElement) &&
-        Math.abs((category.getBoundingClientRect().top + category.getBoundingClientRect().bottom) / 2 -
-          (actionButtons[0].getBoundingClientRect().top + actionButtons[0].getBoundingClientRect().bottom) / 2) < 4;
+      camisUi.categoryAlignedLeft = Math.abs(category.getBoundingClientRect().left - previousGlyph.getBoundingClientRect().left) <= 6;
+      camisUi.actionsSpanTwoLines = actionButtons.every(button =>
+        button.parentElement?.parentElement === category.parentElement?.parentElement &&
+        button.getBoundingClientRect().top <= gameTitle.getBoundingClientRect().top + 5 &&
+        button.getBoundingClientRect().bottom >= category.getBoundingClientRect().bottom - 5);
       camisUi.buttonsOnOneLine = actionButtons.length === 2 &&
         Math.abs(actionButtons[0].getBoundingClientRect().top - actionButtons[1].getBoundingClientRect().top) < 4;
-      const metaBounds = category.parentElement.getBoundingClientRect();
       const operationCard = strip.querySelector('.sp-operations-next .sp-match-card');
       const operationHead = operationCard.querySelector('.sp-mc-head');
       camisUi.bounds = { cardRight: operationCard.getBoundingClientRect().right,
-        headRight: operationHead.getBoundingClientRect().right, metaRight: metaBounds.right,
+        headRight: operationHead.getBoundingClientRect().right,
         categoryLeft: category.getBoundingClientRect().left, categoryRight: category.getBoundingClientRect().right,
+        arrowLeft: previousGlyph.getBoundingClientRect().left,
+        titleTop: gameTitle.getBoundingClientRect().top, categoryBottom: category.getBoundingClientRect().bottom,
+        buttonTop: actionButtons[0].getBoundingClientRect().top, buttonBottom: actionButtons[0].getBoundingClientRect().bottom,
         firstButtonLeft: actionButtons[0].getBoundingClientRect().left,
         lastButtonRight: actionButtons[1].getBoundingClientRect().right,
         cardPaddingRight: getComputedStyle(operationCard).paddingRight };
-      camisUi.metaFitsCard = metaBounds.right <= operationCard.getBoundingClientRect().right - 2 &&
-        actionButtons[1].getBoundingClientRect().right <= metaBounds.right;
+      camisUi.metaFitsCard = actionButtons[1].getBoundingClientRect().right <= operationCard.getBoundingClientRect().right - 2 &&
+        category.getBoundingClientRect().right < actionButtons[0].getBoundingClientRect().left;
       strip.querySelector('.sp-operations-next [data-operations-nav="next"]').click();
       camisUi.nextTitle = strip.querySelector('.sp-operations-next .sp-operations-nav-title')?.textContent;
+      window._renderCamisFixture = window.renderMatchCard;
       window.renderMatchCard = simpleRender;
       const categoryCounts = [['Fem Diamante', 8], ['Fem Ouro', 16], ['Fem Prata', 12]];
       const fullMatches = categoryCounts.flatMap(([category, count]) =>
@@ -699,11 +703,12 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert.equal(carousel.camis.idLabel, 'R1 Grupo A2');
     assert.deepEqual({ title:carousel.camis.ui.title, arrows:carousel.camis.ui.arrows, nextTitle:carousel.camis.ui.nextTitle },
       { title: 'JOGO 1', arrows: 2, nextTitle: 'JOGO 2' });
-    assert(carousel.camis.ui.fontSize <= 15 && carousel.camis.ui.categoryBelowTitle && carousel.camis.ui.titleCategoryGap <= 25 &&
-      carousel.camis.ui.categoryWithButtons && carousel.camis.ui.buttonsOnOneLine && carousel.camis.ui.metaFitsCard &&
+    assert(carousel.camis.ui.fontSize <= 15 && carousel.camis.ui.categoryBelowTitle && carousel.camis.ui.titleCategoryGap <= 8 &&
+      carousel.camis.ui.categoryAlignedLeft && carousel.camis.ui.actionsSpanTwoLines &&
+      carousel.camis.ui.buttonsOnOneLine && carousel.camis.ui.metaFitsCard &&
       carousel.camis.ui.arrowGap.left >= 0 && carousel.camis.ui.arrowGap.left <= 14 &&
       carousel.camis.ui.arrowGap.right >= 0 && carousel.camis.ui.arrowGap.right <= 14,
-      'título em cima, categoria e botões juntos embaixo sem corte: ' + JSON.stringify(carousel.camis.ui));
+      'navegação e categoria alinhadas à esquerda, ações ocupando as duas linhas à direita: ' + JSON.stringify(carousel.camis.ui));
     assert(carousel.standingsInset.left >= 12 && carousel.standingsInset.right >= 12,
       'a primeira posição e o saldo têm respiro nas bordas');
     assert.deepEqual(carousel.fullUniqueness, { games: 108, min: 1, max: 108,
@@ -714,6 +719,20 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert.deepEqual(carousel.arrows.map(item => item.label), ['‹', '›']);
     assert(carousel.arrows.every(item => item.width >= 44 && item.height >= 44));
     assert(carousel.survivesRefresh);
+    await page.setViewportSize({ width: 320, height: 800 });
+    const narrowCall = await page.evaluate(() => {
+      const t = window._findTournamentById();
+      const root = document.querySelector('[data-bracket-tabs-root]');
+      window._currentBracketTournament = t;
+      window.renderMatchCard = window._renderCamisFixture;
+      root._bracketOperationsNav = {};
+      window._bracketOperationsRefresh(t, root);
+      const card = root._bracketOperationsStrip.querySelector('.sp-operations-next .sp-match-card');
+      const head = card.querySelector('.sp-mc-head');
+      return { cardWidth: card.clientWidth, cardScroll: card.scrollWidth, headWidth: head.clientWidth, headScroll: head.scrollWidth };
+    });
+    assert(narrowCall.cardScroll <= narrowCall.cardWidth + 1 && narrowCall.headScroll <= narrowCall.headWidth + 1,
+      'a faixa de chamada não pode cortar os controles em 320px: ' + JSON.stringify(narrowCall));
     assert.equal(carousel.liveMatch, 'group-17');
     assert(!carousel.multiDayHasNav && !carousel.incompleteHasNav);
     assert.deepEqual(carousel.called, ['sb_test', 'm1', 'Quadra 5'], 'navegar não pode fazer nova chamada');

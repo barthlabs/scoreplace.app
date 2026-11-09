@@ -1,3 +1,6 @@
+// 2.6.5 — Na faixa de chamada Rei/Rainha, as setas e JOGO N ficam alinhados
+// à esquerda com a categoria logo abaixo. W.O. e Ao Vivo ocupam juntos as
+// duas linhas à direita, sem deixar uma linha vazia no topo do card.
 // 2.6.4 — O cabeçalho da chamada Rei/Rainha ocupa menos altura: a categoria
 // fica mais próxima de JOGO N, com os botões ao lado na segunda linha.
 // 2.6.3 — Na faixa de chamada Rei/Rainha, as setas e JOGO N ocupam a primeira

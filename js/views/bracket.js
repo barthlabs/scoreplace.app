@@ -1554,22 +1554,17 @@ function _bracketOperationsReplica(m, t, role, label, availability, root, allMat
         head.firstChild.textContent = '';
         head.insertAdjacentHTML('afterbegin', _bracketOperationsNavHtml(group, index, slot));
       }
-      // A faixa de chamada usa duas linhas: navegação em cima, categoria e
-      // ações na mesma linha abaixo. Reorganizar só a réplica preserva o card
-      // canônico da chave e os handlers das ações.
+      // Na réplica, navegação e categoria formam a coluna esquerda. As ações
+      // permanecem na coluna direita e ocupam a altura das duas linhas.
+      // O card canônico da chave conserva sua estrutura e seus handlers.
       var leading = head.firstElementChild;
       var titleRow = leading && leading.firstElementChild;
       var category = leading && leading.querySelector('[data-match-time-status]');
       var actions = head.querySelector('.sp-mc-acts');
       if (titleRow && category && category.parentElement === leading && actions) {
-        var metaRow = document.createElement('div');
-        metaRow.className = 'sp-operations-meta-row';
-        metaRow.appendChild(category);
-        metaRow.appendChild(actions);
-        titleRow.insertAdjacentElement('afterend', metaRow);
         card.classList.add('sp-operations-two-line-header');
         titleRow.style.flexWrap = 'nowrap';
-        titleRow.style.gap = '4px';
+        titleRow.style.gap = '0';
       }
     }
     if (String(selected.id) !== String(m.id)) {
