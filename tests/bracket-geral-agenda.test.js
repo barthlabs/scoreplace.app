@@ -415,8 +415,8 @@ function trecho(inicio, fim) {
   });
   ok(monarchBundle.bundles === 1 && monarchBundle.cards.join(',') === 'card-r1,card-r2,card-r3' && monarchBundle.oneScorePerGame,
     'Geral reúne os três cards reais e seus placares num único quarteto');
-  ok(monarchBundle.headings.length === 1 && monarchBundle.labels.join(',') === 'Jogo 1,Jogo 2,Jogo 3',
-    'cabeçalhos de jogos do quarteto exibem somente os números canônicos, sem horário ou quadra fixos');
+  ok(monarchBundle.headings.length === 1 && monarchBundle.labels.length === 0,
+    'os cards mostram o número canônico sem um segundo Jogo N acima de cada partida');
   ok(monarchBundle.controls.map(control => control.court).join(',') === 'Quadra 1,Quadra 1,Quadra 1' &&
     monarchBundle.controls.map(control => control.approximateTime).join(',') === '≈ 08:00,≈ 08:20,≈ 08:40',
     'quadra selecionável e horário aproximado permanecem nos cards abaixo dos números');

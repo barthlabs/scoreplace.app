@@ -87,6 +87,8 @@ assert.equal(tie.scoreMatch(games[0], [{ p1: 5, p2: 4 }], 1, 5, 1).winnerKey, 'u
   'no tie-break sem vantagem, o primeiro a chegar a cinco vence');
 assert.throws(() => tie.scoreMatch(games[0], [{ p1: 6, p2: 4 }], 1, 5, 1), /placar inválido/,
   'não aceita ponto extra depois de a simples terminar');
+assert.throws(() => tie.scoreMatch(games[0], [{ p1: 6, p2: 5 }], 1, 5, 1), /placar inválido/,
+  '6 a 5 não é possível quando o primeiro a alcançar cinco encerra a simples');
 assert.equal(tie.scoreMatch(games[0], [{ p1: 6, p2: 4 }], 1, 5, 2).winnerKey, 'uid:B',
   'configuração alternativa de vantagem exige o sexto ponto em 4 a 4');
 assert.throws(() => tie.scoreMatch(games[0], [{ p1: 5, p2: 4 }], 1, 5, 2), /placar inválido/);

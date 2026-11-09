@@ -833,6 +833,133 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
     return String((m && (m.category || (m.team1Obj && m.team1Obj.category) || (m.team2Obj && m.team2Obj.category))) || '').trim();
   }
 
+  // Agenda intercalada: os blocos são configuração do torneio, não uma regra por ID.
+  // Também reserva números dos jogos eliminatórios ainda não materializados.
+  function _schGradeIntercalada(t, jan, all, quadras) {
+    var plan = t.scheduleWindow && t.scheduleWindow.interleavedPlan;
+    if (!plan) return null;
+    var invalid = function (reason) { return { interleaved:true, atomica:true, cabe:false, slots:[], reason:reason }; };
+    if (plan.schema !== 1 || jan.dias.length !== 1 || !Array.isArray(plan.blocks) || !plan.blocks.length ||
+        String(plan.day) !== jan.dias[0].ymd || Number(plan.courts) !== quadras) return invalid('configuração da grade');
+    var day = jan.dias[0], real = [], seen = {};
+    (all || []).forEach(function (m) {
+      if (!m || m.id == null || m.isSitOut || (window._isByeMatch ? window._isByeMatch(m) : m.isBye)) return;
+      var id = String(m.id);
+      if (seen[id] && seen[id] !== m) return;
+      if (!seen[id]) { seen[id] = m; real.push(m); }
+    });
+    var groups = {}, elimination = {};
+    real.forEach(function (m) {
+      var category = _schCategoriaDoJogo(m);
+      if (Number(m.phaseIndex || 0) === 0 && m.isMonarch) {
+        var key = _schGroupKey(m);
+        if (!groups[category]) groups[category] = {};
+        if (!groups[category][key]) groups[category][key] = [];
+        groups[category][key].push(m);
+      } else if (Number(m.phaseIndex || 0) === 1) {
+        var er = category + '|' + String(m.round);
+        if (!elimination[er]) elimination[er] = [];
+        elimination[er].push(m);
+      }
+    });
+    var groupLists = {};
+    Object.keys(groups).forEach(function (category) {
+      groupLists[category] = Object.keys(groups[category]).sort(function (a, b) {
+        var ai = Number(_schGroupIdx(groups[category][a][0]));
+        var bi = Number(_schGroupIdx(groups[category][b][0]));
+        return ai - bi || a.localeCompare(b);
+      }).map(function (key) { return groups[category][key]; });
+    });
+    var blocks = plan.blocks.map(function (block, index) {
+      return { block:block, index:index, at:_ms(day.ymd, block.startTime) };
+    }).sort(function (a, b) { return a.at - b.at || a.index - b.index; });
+    var expectedElimination = {}, eliminationCursor = {};
+    blocks.forEach(function (item) {
+      var b = item.block;
+      if (b && b.kind === 'elimination' && Array.isArray(b.courts)) {
+        var key = b.category + '|' + String(b.round);
+        expectedElimination[key] = (expectedElimination[key] || 0) + b.courts.length;
+      }
+    });
+    var slots = [], number = 0, occupied = {}, athleteIntervals = {}, covered = {};
+    function reserve(m, court, ms, duration) {
+      var end = ms + duration * _MIN;
+      if (ms < day.iniMs || end > day.fimMs) return false;
+      var intervals = occupied[court] || (occupied[court] = []);
+      if (intervals.some(function (item) { return ms < item.end && end > item.start; })) return false;
+      intervals.push({ start:ms, end:end });
+      if (m) {
+        var uids = _schMatchUids(t, m);
+        for (var ui = 0; ui < uids.length; ui++) {
+          var played = athleteIntervals[uids[ui]] || (athleteIntervals[uids[ui]] = []);
+          if (played.some(function (item) { return ms < item.end && end > item.start; })) return false;
+          played.push({ start:ms, end:end });
+        }
+        covered[String(m.id)] = true;
+        slots.push({ matchId:String(m.id), ms:ms, iso:new Date(ms).toISOString(), dia:0,
+          court:court, durationMs:duration * _MIN, scheduledGameNumber:number });
+      }
+      return true;
+    }
+    for (var bi = 0; bi < blocks.length; bi++) {
+      var item = blocks[bi], b = item.block, at = item.at;
+      if (!b || !Array.isArray(b.courts) || !b.courts.length || !b.category ||
+          (b.kind !== 'groups' && b.kind !== 'elimination')) return invalid('bloco inválido');
+      var names = Array.isArray(t.courtNames) ? t.courtNames : [];
+      var courtNames = b.courts.map(function (c) { return String(names[Number(c) - 1] || ('Quadra ' + Number(c))); });
+      if (new Set(courtNames).size !== courtNames.length || b.courts.some(function (c) {
+        return !Number.isInteger(Number(c)) || Number(c) < 1 || Number(c) > quadras;
+      })) return invalid('quadra inválida');
+      if (b.kind === 'groups') {
+        var list = groupLists[b.category] || [], first = Number(b.groupStart) - 1;
+        if (!Number.isInteger(first) || first < 0 || first + b.courts.length > list.length) return invalid('grupo ausente');
+        for (var ci = 0; ci < b.courts.length; ci++) {
+          var series = list[first + ci];
+          if (!series || series.length !== 3 || series.some(function (m) { return covered[String(m.id)]; })) return invalid('quarteto incompleto');
+          series.sort(function (a, z) {
+            function stage(m) {
+              var id = String(m.id || ''), rr = /-g\d+-(\d+)(?:-|$)/.exec(id);
+              var simple = /-j(\d+)(?:-|$)/.exec(id), tail = /-(\d+)$/.exec(id);
+              return rr ? Number(rr[1]) : (simple ? Number(simple[1]) - 1 : (tail ? Number(tail[1]) : 0));
+            }
+            return stage(a) - stage(z) || String(a.id).localeCompare(String(z.id));
+          });
+          for (var si = 0; si < 3; si++) {
+            number++;
+            var minutes = si === 0 ? (Number(t.gameDuration) || 30) + (Number(t.callTime) || 0) + (Number(t.warmupTime) || 0) : (Number(t.gameDuration) || 30);
+            var offset = si === 0 ? 0 : (Number(t.gameDuration) || 30) + (Number(t.callTime) || 0) +
+              (Number(t.warmupTime) || 0) + (si - 1) * (Number(t.gameDuration) || 30);
+            if (!reserve(series[si], courtNames[ci], at + offset * _MIN, minutes)) return invalid('conflito de grupo');
+          }
+        }
+      } else {
+        var key = b.category + '|' + String(b.round), matches = elimination[key] || [];
+        matches.sort(function (a, z) {
+          return Number(!!a.isThirdPlace) - Number(!!z.isThirdPlace) || String(a.id).localeCompare(String(z.id), undefined, { numeric:true });
+        });
+        var materialized = t.phaseCategoryMaterialized && t.phaseCategoryMaterialized[b.category];
+        if ((matches.length !== 0 && matches.length !== expectedElimination[key]) ||
+            (materialized && matches.length !== expectedElimination[key])) return invalid('rodada eliminatória incompleta');
+        var length = Number(plan.eliminationMinutes);
+        var playMinutes = Number(plan.eliminationPlayMinutes);
+        if (!Number.isInteger(length) || length < 1 || !Number.isInteger(playMinutes) ||
+            playMinutes < 1 || length !== playMinutes + (Number(t.callTime) || 0) +
+              (Number(t.warmupTime) || 0)) return invalid('duração eliminatória inválida');
+        var cursor = eliminationCursor[key] || 0;
+        for (var ei = 0; ei < b.courts.length; ei++) {
+          number++;
+          if (!reserve(matches[cursor + ei] || null, courtNames[ei], at, length)) return invalid('conflito eliminatório');
+        }
+        eliminationCursor[key] = cursor + b.courts.length;
+      }
+    }
+    if (real.some(function (m) { return !covered[String(m.id)]; })) return invalid('jogo fora da grade');
+    if (Number(plan.totalGames) !== number) return invalid('número total divergente');
+    return { interleaved:true, atomica:true, cabe:true, slots:slots, reservedGameCount:number,
+      quadras:quadras, dias:1, cadenceValid:false, fimMs:day.fimMs, extraPorDia:[0], extraMs:0,
+      executionOrder:'interleaved', slotMin:Number(plan.eliminationMinutes) };
+  }
+
   // Um quarteto Rei/Rainha ocupa a mesma quadra nos seus três confrontos. A
   // chamada e o aquecimento pertencem ao primeiro confronto do bloco.
   function _schGradeMonarchAtomica(t, jan, jogos, all, quadras) {
@@ -1418,6 +1545,7 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
       if (!jan || jan.invalida || !jan.dias.length || (jan.dias.length > 3 && !temAgendaCategorias)) return null;
       var quadras = Math.max(1, parseInt(t.courtCount, 10) || (Array.isArray(t.courtNames) ? t.courtNames.length : 0) || 1);
       var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (Array.isArray(t.matches) ? t.matches : []);
+      if (t.scheduleWindow && t.scheduleWindow.interleavedPlan) return _schGradeIntercalada(t, jan, all, quadras);
       var jogos = (all || []).filter(function (m) {
         return m && !m.isBye && !m.isSitOut && !m.winner;
       });

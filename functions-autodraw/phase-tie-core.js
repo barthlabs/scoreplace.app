@@ -168,7 +168,10 @@ function scoreMatch(match, sets, setsToWin, pointsToWin, pointMargin) {
     if (Number.isInteger(pointsToWin)) {
       const winner = Math.max(p1, p2), loser = Math.min(p1, p2);
       const margin = pointMargin === 2 ? 2 : 1;
-      if (winner !== Math.max(pointsToWin, loser + margin)) {
+      // Sem vantagem, a partida termina no primeiro ponto que alcança a meta.
+      // Portanto 5–4 é válido, mas 6–5 jamais pode ser um placar final.
+      const finalPoint = margin === 1 ? pointsToWin : Math.max(pointsToWin, loser + margin);
+      if (winner !== finalPoint || (margin === 1 && loser >= pointsToWin)) {
         throw new Error('placar inválido: desempate até ' + pointsToWin +
           (margin === 2 ? ' com dois pontos de vantagem' : ', sem vantagem de dois pontos'));
       }

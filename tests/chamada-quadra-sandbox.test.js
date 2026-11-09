@@ -378,5 +378,27 @@ const game = (id, court, scheduledAt = '2026-10-22T21:00:00.000Z') => ({ id, cou
   tournament.matches[2].courtCalledAt = nowIso;
   await assert.rejects(postpone('fila3', 1, 'fb51aff9-5549-47ca-96e8-c1f4b5f7c26d'),
     e => e.code === 'failed-precondition' && /já saiu da fila/.test(e.message));
+  const seriesGame = (id, number, group) => ({ ...game(id, 'Quadra 4', '2026-10-20T17:00:00.000Z'),
+    _gameNum: number, isMonarch: true, category: 'Fem Diamante', round: 1,
+    monarchGroup: group, phaseIndex: 0, p1: 'A / B', p2: 'C / D' });
+  tournament.scheduleWindow = { days: [{ day: '2026-10-20' }] };
+  tournament.matches = [seriesGame('first', 19, 6), seriesGame('second', 20, 6),
+    seriesGame('third', 21, 6), seriesGame('other', 22, 7), seriesGame('another', 25, 8)];
+  courtStates.set(statePath, { released: {}, postponed: [], postponedReady: [], revision: 0 });
+  assert.equal((await postpone('first', 0, 'ad0a63ec-581a-4da9-bd1a-7b4a11fd8c2e')).changed, true);
+  await assert.rejects(callable(request('tour_test', 'second', 'Quadra 5', true)),
+    e => e.code === 'failed-precondition' && /Jogo 19/.test(e.message),
+    'o segundo jogo da série não pode ser chamado antes do primeiro');
+  assert.equal((await callable(request('tour_test', 'other', 'Quadra 5', true))).changed, true);
+  assert.deepEqual(Array.from(courtStates.get(statePath).postponedReady), ['first'],
+    'chamar outro bloco devolve o primeiro jogo pulado');
+  assert.deepEqual(Array.from(courtStates.get(statePath).postponed), []);
+  assert.equal((await postpone('first', 1, 'ae52b249-ae1d-4815-b7b8-364226a3ced2')).changed, true);
+  assert.deepEqual(Array.from(courtStates.get(statePath).postponedReady), [],
+    'novo pulo retira o mesmo jogo da frente');
+  assert.deepEqual(Array.from(courtStates.get(statePath).postponed), ['first']);
+  assert.equal((await callable(request('tour_test', 'another', 'Quadra 4', true))).changed, true);
+  assert.deepEqual(Array.from(courtStates.get(statePath).postponedReady), ['first'],
+    'jogo pulado novamente retorna após outra chamada');
   console.log('✓ sandbox isolado; dia local, ocupação e troca de quadra validados na callable real');
 })().catch(error => { console.error(error); process.exitCode = 1; });

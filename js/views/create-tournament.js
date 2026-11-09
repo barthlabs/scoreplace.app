@@ -2999,6 +2999,7 @@ function setupCreateTournamentModal() {
       preview.style.borderRadius = shape === 'circle' ? '50%' : window._currentLogoRadiusCss();
     }
     if (hidden) hidden.value = dataUrl;
+    if (typeof window._tvEditorRefreshPreview === 'function') window._tvEditorRefreshPreview();
   };
 
   // Atualiza só o border-radius do preview (sem re-injetar a imagem).
@@ -3042,6 +3043,7 @@ function setupCreateTournamentModal() {
     var hidden = document.getElementById('tourn-logo-data');
     if (preview) preview.innerHTML = '<span style="font-size:0.7rem;color:var(--text-muted);text-align:center;padding:4px;">' + _t('create.noLogo') + '</span>';
     if (hidden) hidden.value = '';
+    if (typeof window._tvEditorRefreshPreview === 'function') window._tvEditorRefreshPreview();
     // Reset lock
     window._logoLocked = false;
     var btn = document.getElementById('btn-logo-lock');

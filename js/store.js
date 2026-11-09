@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.6.18';
+window.SCOREPLACE_VERSION = '2.6.20';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -4818,6 +4818,15 @@ window._softRefreshView = function() {
 
   // 3. Save scroll position
   var scrollY = window.scrollY || window.pageYOffset || 0;
+  var _scoreAnchor = window._scoreViewportAnchor;
+  var _scoreCard = _scoreAnchor && _scoreAnchor.route === (window.location.hash || '') &&
+    Date.now() - _scoreAnchor.at < 12000
+      ? document.getElementById('card-' + _scoreAnchor.matchId) : null;
+  var _scoreCardTop = _scoreCard ? _scoreCard.getBoundingClientRect().top : null;
+  var _scoreHorizontal = {};
+  if (_scoreCard) document.querySelectorAll('[data-hscroll]').forEach(function (el) {
+    _scoreHorizontal[el.getAttribute('data-hscroll')] = el.scrollLeft;
+  });
 
   // 4. Set soft-refresh flag so router skips scroll-to-top and fade animation
   window._isSoftRefresh = true;
@@ -4840,6 +4849,17 @@ window._softRefreshView = function() {
   var _softRestore = function () {
     try { window.scrollTo({ top: scrollY, left: 0, behavior: 'instant' }); }
     catch (e) { try { window.scrollTo(0, scrollY); } catch (e2) {} }
+    if (_scoreCardTop != null) {
+      document.querySelectorAll('[data-hscroll]').forEach(function (el) {
+        var saved = _scoreHorizontal[el.getAttribute('data-hscroll')];
+        if (saved != null) el.scrollLeft = saved;
+      });
+      var _scoreCardAfter = document.getElementById('card-' + _scoreAnchor.matchId);
+      if (_scoreCardAfter) {
+        var _scoreDelta = _scoreCardAfter.getBoundingClientRect().top - _scoreCardTop;
+        if (Math.abs(_scoreDelta) > 1) window.scrollBy(0, _scoreDelta);
+      }
+    }
   };
   _softRestore();
 
@@ -4902,8 +4922,8 @@ window._softRefreshView = function() {
 
   // 6. Repete o restore após o paint (miolo async) + solta a trava de altura.
   requestAnimationFrame(function() {
-    _softRestore();
     if (_vcSoft) _vcSoft.style.minHeight = _vcSoftMinH;
+    _softRestore();
     window._isSoftRefresh = false;
   });
 };
@@ -12443,7 +12463,8 @@ window.AppStore = {
         } else {
           // Recusa do servidor: registra pra diagnóstico e devolve falha ao chamador.
           window._lastSaveError = { tournamentId: tournamentId, matchId: matchId,
-            area: 'applyMatchResult', reason: _d.reason || 'unknown', at: new Date().toISOString() };
+            area: 'applyMatchResult', reason: _d.reason || 'unknown', message: _d.message || '',
+            at: new Date().toISOString() };
           if (window._warn) window._warn('[applyMatchResult] recusou: ' + (_d.reason || '?'));
           /* ⛔ RECUSA DO SERVIDOR NÃO PODE PASSAR EM SILÊNCIO. Ordem do dono sobre a queda:
            * "NÃO FECHAR > fechar ERRADO — mas nunca em silêncio". Só `_warn` significa que
@@ -12495,9 +12516,16 @@ window.AppStore = {
     if (!r) {
       try {
         var _reason = window._lastSaveError && window._lastSaveError.reason;
+        var _serverMessage = String(window._lastSaveError && window._lastSaveError.message || '');
         if (_reason === 'pending-other-side') {
           showNotification('O outro time lançou primeiro',
             'Use Confirmar, Editar ou Contestar o placar que já está aguardando aprovação.', 'info');
+        } else if (_reason === 'category-bracket-already-published') {
+          showNotification('Correção exige revisão da chave',
+            'A eliminatória desta categoria já foi publicada. O placar não foi alterado; a organização precisa revisar os jogos posteriores antes de corrigir a classificatória.', 'warning');
+        } else if (/não cabe na agenda publicada|não foi possível gerar a eliminatória/i.test(_serverMessage)) {
+          showNotification('A agenda impediu o lançamento',
+            'O placar não foi gravado porque a eliminatória desta categoria não cabe na agenda publicada. Revise a grade e tente novamente.', 'error');
         } else if (_reason === 'later-phase-already-started' ||
                    _reason === 'descendant-already-decided' ||
                    _reason === 'later-series-game-already-started' ||

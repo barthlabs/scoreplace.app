@@ -6678,6 +6678,13 @@ exports.setTournamentCategoryDefinitions = onCall(
       }
       const migration = tournament.canonicalRegistrationMigration || {};
       const nextLabels = new Set(definitions.map((def) => def.label));
+      const nextIds = new Set(definitions.map((def) => def.id));
+      const removed = new Set((Array.isArray(tournament.categoryDefinitions) ? tournament.categoryDefinitions : [])
+        .map((def) => def && def.id).filter((id) => id && !nextIds.has(id)));
+      const reservationsAfter = removed.size && Array.isArray(tournament.placeholderReservations)
+        ? tournament.placeholderReservations.map((entry) => entry && removed.has(entry.categoryId)
+          ? { ...entry, categoryId:'__uncategorized__' } : entry)
+        : null;
       const obsoleteLabels = (Array.isArray(tournament.categoryDefinitions) ? tournament.categoryDefinitions : [])
         .map((def) => def && def.label).filter((label) => label && !nextLabels.has(label));
       const categoryPrices = tournament.registrationSettings?.pricing;
@@ -6688,17 +6695,27 @@ exports.setTournamentCategoryDefinitions = onCall(
       }
       if (migration.fingerprint) {
         const checked = await _loadCanonicalRosterForMutation(tx, ref, tournament, '');
-        const nextIds = new Set(definitions.map((def) => def.id));
-        const removed = new Set((Array.isArray(tournament.categoryDefinitions) ? tournament.categoryDefinitions : [])
-          .map((def) => def && def.id).filter((id) => id && !nextIds.has(id)));
-        if (checked.registrations.some((item) => item && item.status !== 'withdrawn' && removed.has(item.categoryId))) {
-          throw new HttpsError('failed-precondition', 'Reclassifique as inscrições antes de remover a categoria.');
+        if (removed.size) {
+          let changes;
+          try { changes = require('./category-removal-core').plan(tournamentId, checked.registrations, [...removed]); }
+          catch (error) { throw new HttpsError('failed-precondition', error.message); }
+          if (changes.updates.length || changes.creates.length) {
+            _writeCanonicalRosterChanges(tx, ref, tournament, checked.registrations, changes, {
+              categoryDefinitions:definitions,
+              combinedCategories:definitions.map((def) => def.label),
+              enrollmentRigor:rigor,
+              ...(reservationsAfter ? { placeholderReservations:reservationsAfter } : {}),
+            });
+            return { ok:true, categoryDefinitions:definitions, enrollmentRigor:rigor,
+              uncategorized:changes.uncategorizedPeople };
+          }
         }
       }
       tx.update(ref, {
         categoryDefinitions: definitions,
         combinedCategories: definitions.map((def) => def.label),
         enrollmentRigor: rigor,
+        ...(reservationsAfter ? { placeholderReservations:reservationsAfter } : {}),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
       return { ok: true, categoryDefinitions: definitions, enrollmentRigor: rigor };

@@ -133,6 +133,19 @@ assert.match(customHtml, /tv-custom-board/);
 assert.doesNotMatch(customHtml, /tv-custom-qr/);
 assert.doesNotMatch(customHtml, /class="tv-score"/);
 assert.match(customHtml, /tv-custom-rankings/);
+const paletteLayout = window.ScoreplaceTvLayout.defaults();
+paletteLayout.sections.logo.visible = true;
+window._tournamentCoverBackground = tournament => ({ css: tournament.coverColor });
+const paletteSnapshot = window._tvLiveBuildSnapshot({ ...t, coverColor: '#a12345',
+  coverGradientColor: '#fedcba', titleColor: '#eeddcc', tvLayout: paletteLayout });
+const paletteHtml = window._tvLiveBodyHtml(paletteSnapshot);
+assert.match(paletteHtml, /background:#a12345/, 'fundo acompanha a cor escolhida no torneio');
+assert.match(paletteHtml, /--tv-primary:#a12345;--tv-secondary:#fedcba;--tv-title:#eeddcc/, 'cores do torneio entram na TV');
+assert.match(paletteHtml, /tv-custom-logo.*tv-placed-logo/, 'logo pode ser posicionado independentemente');
+assert.equal((paletteHtml.match(/src="logo\.png"/g) || []).length, 1, 'logo independente não duplica no cabeçalho');
+paletteLayout.backgroundMode = 'custom'; paletteLayout.background = '#112233';
+assert.match(window._tvLiveBodyHtml(window._tvLiveBuildSnapshot({ ...t, coverColor: '#a12345', tvLayout: paletteLayout })),
+  /tv-custom-board" style="background:#112233"/, 'fundo manual sobrepõe a paleta somente quando selecionado');
 const upcomingHtml = window._tvLiveBodyHtml(snapshot).split('class="tv-upcoming"')[1].split('</section>')[0];
 assert.match(upcomingHtml, /JOGO 3 · Fem Light/);
 assert.match(upcomingHtml, /PANIC 1/);
@@ -516,14 +529,10 @@ fakePopup.closed = true;
 reloadIntervals[0]();
 assert.equal(reloadButton.attributes['aria-pressed'], 'false', 'após reload fechar a TV apaga o botão');
 const liveSource = fs.readFileSync(path.join(root, 'js/views/tv-live.js'), 'utf8');
-assert.match(liveSource, /id=\\?"tv-fullscreen-action/, 'janela NO AR oferece entrada em tela cheia na própria janela');
-assert.match(liveSource, /target\.requestFullscreen\(\)/, 'tela cheia é acionada pela janela que será exibida na TV');
-assert.match(popupHtml, /document\.addEventListener\("fullscreenchange",syncFullscreenButton\)/,
-  'TV atualiza o botão quando o navegador sai da tela cheia');
-assert.match(popupHtml, /root\.replaceChildren\.apply\(root,Array\.from\(draft\.childNodes\)\);syncFullscreenButton\(\)/,
-  'TV restaura o rótulo correto após atualizar resultados e quadras');
-assert.match(popupHtml, /html:fullscreen #tv-fullscreen-action\{display:block\}/,
-  'saída explícita continua disponível na própria TV');
+assert.doesNotMatch(liveSource, /tv-fullscreen-action|requestFullscreen/,
+  'janela NO AR não coloca controle de tela cheia sobre a transmissão');
+assert.match(popupHtml, /root\.replaceChildren\.apply\(root,Array\.from\(draft\.childNodes\)\);fit\(\)/,
+  'TV continua ajustando a grade após atualizar resultados e quadras');
 assert.doesNotMatch(fs.readFileSync(path.join(root, 'js/views/tournaments.js'), 'utf8'), /window\._tvMode\(/,
   'ficha do torneio não exibe mais o modo antigo');
 assert.doesNotMatch(fs.readFileSync(path.join(root, 'js/views/bracket-ui.js'), 'utf8'), /window\._tvMode =/,

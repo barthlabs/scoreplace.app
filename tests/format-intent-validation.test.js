@@ -324,6 +324,7 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
   '_isTournamentAdmin', '_drawFail', 'hasDrawnBracket', '_configAtiva', '_antesDoMotor',
   '_gravaTorneio', '_fasesDeConfiguracaoAtualizaveis', 'drawWindow', 'require',
   '_assertCategoryConfigBeforeDraw', '_categoryDefinitionsForLabels', '_phaseTieCore', 'createHash',
+  '_writeCategoryRemoval',
   'const exports = {};\n' + configSource + '\nreturn exports.updateTournamentConfiguration;')(
   fn => fn, HttpsError, configDb, new Set(['fmt2', 'phases', 'name', 'teamSize', 'gruposClassified', 'politicaDaChave', 'genderCategories', 'combinedCategories', 'gameTypes']), new Set(['fmt2', 'phases', 'teamSize', 'gruposClassified', 'politicaDaChave', 'gameTypes']), cloneConfig,
   async () => {}, async () => configTournament, () => true,
@@ -334,7 +335,11 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
   categoryGuard, async (_tx, _ref, _t, labels) => {
     categoryProjections++;
     return labels.map((label) => ({ id: 'cat-' + label, label }));
-  }, require('../functions-autodraw/phase-tie-core'), require('node:crypto').createHash
+  }, require('../functions-autodraw/phase-tie-core'), require('node:crypto').createHash,
+  (_tx, _ref, _t, removal, reservations) => {
+    assert.ok(removal == null, 'edição de formato não remove inscrições de categoria');
+    assert.ok(reservations == null, 'edição de formato não altera vagas reservadas');
+  }
 );
 
 (async () => {

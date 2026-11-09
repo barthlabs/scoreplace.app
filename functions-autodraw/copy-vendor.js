@@ -162,6 +162,7 @@ const CORE_TO_AUTODRAW = [
   'legacy-phase-projection-core.js',
   'legacy-category-definition-core.js',
   'category-eligibility-core.js',
+  'category-removal-core.js',
   'registration-category-bridge-core.js',
   'billing-terms-core.js'
 ];

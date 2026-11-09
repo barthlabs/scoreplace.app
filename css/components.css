@@ -2896,6 +2896,7 @@ html, body,
    do `10` — e a leitura de cima pra baixo desalinha. À direita, a unidade fica sob a
    unidade, que é como placar se lê. [[project_card_de_jogo_geometria_canon]] */
 .sp-set-col{width:var(--w,34px);flex:0 0 var(--w,34px);text-align:right;}
+.sp-set-col[data-sp-stb-preview][hidden]{display:none!important;}
 .sp-set-lbl{display:block;font-size:0.6rem;font-weight:800;line-height:1.05;letter-spacing:0.02em;text-transform:uppercase;color:var(--text-muted);}
 .sp-set-lbl--live{color:#38bdf8;}
 /* o rótulo do set já CONFIRMADO recua — quem tem que saltar é a coluna em disputa */

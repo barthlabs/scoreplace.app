@@ -1224,14 +1224,20 @@ window._bracketCourtReleased = function (tId) {
 window._bracketCourtPostponed = function (tId) {
   return (window._bracketCourtReleaseCache[String(tId)] || {}).postponed || [];
 };
-window._bracketPostponedOrder = function (candidates, postponed) {
+window._bracketCourtPostponedReady = function (tId) {
+  return (window._bracketCourtReleaseCache[String(tId)] || {}).postponedReady;
+};
+window._bracketPostponedOrder = function (candidates, postponed, ready) {
   var order = Array.isArray(postponed) ? postponed.map(String) : [];
-  var rank = new Map(order.map(function (id, index) { return [id, index]; }));
+  var deferred = new Map(order.map(function (id, index) { return [id, index]; }));
+  var returning = new Map((Array.isArray(ready) ? ready : []).map(function (id, index) { return [String(id), index]; }));
   return (candidates || []).map(function (match, index) { return { match: match, index: index }; })
     .sort(function (a, b) {
-      var ai = rank.has(String(a.match.id)) ? rank.get(String(a.match.id)) : -1;
-      var bi = rank.has(String(b.match.id)) ? rank.get(String(b.match.id)) : -1;
-      return (ai < 0 ? -1 : 1) - (bi < 0 ? -1 : 1) || (ai >= 0 ? ai - bi : a.index - b.index);
+      var aid = String(a.match.id), bid = String(b.match.id);
+      var ag = returning.has(aid) ? 0 : deferred.has(aid) ? 2 : 1;
+      var bg = returning.has(bid) ? 0 : deferred.has(bid) ? 2 : 1;
+      return ag - bg || (ag === 0 ? returning.get(aid) - returning.get(bid) :
+        ag === 2 ? deferred.get(aid) - deferred.get(bid) : a.index - b.index);
     }).map(function (entry) { return entry.match; });
 };
 window._bracketReloadCourtState = function (tId, entry) {
@@ -1244,6 +1250,7 @@ window._bracketReloadCourtState = function (tId, entry) {
       var data = snap.exists ? snap.data() || {} : {};
       entry.released = data.released && typeof data.released === 'object' ? data.released : {};
       entry.postponed = Array.isArray(data.postponed) ? data.postponed : [];
+      entry.postponedReady = Array.isArray(data.postponedReady) ? data.postponedReady : null;
       entry.revision = Number(data.revision) || 0;
       entry.ready = true;
       entry.error = null;
@@ -1255,7 +1262,7 @@ window._bracketEnsureCourtReleaseListener = function (tId) {
   var entry = window._bracketCourtReleaseCache[id];
   if (entry && !entry.error) return;
   if (entry && entry.unsubscribe) entry.unsubscribe();
-  if (!entry) entry = { released: {}, postponed: [], revision: 0, ready: false };
+  if (!entry) entry = { released: {}, postponed: [], postponedReady: null, revision: 0, ready: false };
   entry.error = null;
   entry.retryTimer = null;
   window._bracketCourtReleaseCache[id] = entry;
@@ -1264,6 +1271,7 @@ window._bracketEnsureCourtReleaseListener = function (tId) {
       var data = snap.exists ? snap.data() || {} : {};
       entry.released = data.released && typeof data.released === 'object' ? data.released : {};
       entry.postponed = Array.isArray(data.postponed) ? data.postponed : [];
+      entry.postponedReady = Array.isArray(data.postponedReady) ? data.postponedReady : null;
       entry.revision = Number(data.revision) || 0;
       entry.ready = true;
       entry.error = null;
@@ -1303,7 +1311,23 @@ window._bracketOperationsSelect = function (t) {
     (typeof t.courtNames === 'string' ? t.courtNames.split(',').map(function (name) { return name.trim(); }).filter(Boolean) : []);
   if (!courts.length) for (var c = 1; c <= Math.max(0, Number(t.courtCount) || 0); c++) courts.push('Quadra ' + c);
   active.forEach(function (m) { if (courts.indexOf(String(m.court)) === -1) courts.push(String(m.court)); });
-  var ordered = window._bracketPostponedOrder(upcoming.map(function (entry) { return entry.item.m; }), window._bracketCourtPostponed(t.id));
+  // Os três jogos do quarteto são uma série: só o primeiro ainda sem resultado
+  // pode entrar na fila. Pular o primeiro nunca libera o segundo ou o terceiro.
+  var candidates = upcoming.map(function (entry) { return entry.item.m; }).filter(function (m) {
+    var group = _bracketOperationsGroup(t, m, matches);
+    return !group || String((group.matches.find(function (item) { return !occupancy.isFinished(item); }) || {}).id) === String(m.id);
+  });
+  var postponed = window._bracketCourtPostponed(t.id);
+  var ready = window._bracketCourtPostponedReady(t.id);
+  // Estados anteriores a esta versão não tinham a fila de retorno. Se um jogo
+  // posterior já está em quadra, devolva o primeiro adiado à frente da fila.
+  if (!Array.isArray(ready)) {
+    var old = postponed.find(function (id) { return candidates.some(function (m) { return String(m.id) === String(id) &&
+      matches.some(function (called) { return called && called.courtCalledAt &&
+        Number(called._gameNum || called.scheduledGameNumber) > Number(m._gameNum || m.scheduledGameNumber); }); }); });
+    ready = old ? [old] : [];
+  }
+  var ordered = window._bracketPostponedOrder(candidates, postponed, ready);
   var next = window.ScoreplaceNextMatch && typeof window.ScoreplaceNextMatch.firstAvailable === 'function'
     ? window.ScoreplaceNextMatch.firstAvailable(ordered, matches, released) : null;
   return { next: next, active: active, pending: pending, courts: courts, matches: matches };
@@ -1446,6 +1470,10 @@ function _bracketOperationsGroup(t, m, allMatches) {
       if (ids.length !== 3 || new Set(ids).size !== 3 || ids.indexOf(String(m.id)) < 0 ||
           !ids.every(function (id) { var match = roundById.get(id); return match && match.isMonarch && !match.isTieBreak; })) continue;
       var resolved = ids.map(function (id) { return roundById.get(id); });
+      resolved.sort(function (a, b) {
+        return Number(a._gameNum || a.scheduledGameNumber || 0) - Number(b._gameNum || b.scheduledGameNumber || 0) ||
+          _matchCardTimestamp(a.scheduledAt) - _matchCardTimestamp(b.scheduledAt);
+      });
       return { key: ids.slice().sort().join('|'),
         name: window._bracketMonarchGroupLabel(t, { name: group.name || m.groupName || ('Grupo ' + String.fromCharCode(65 + gi)), matches: resolved, category: m.category }),
         roster: group, matches: resolved };
@@ -1495,7 +1523,7 @@ function _bracketOperationsNavHtml(group, index, slot) {
   var safe = window._safeHtml || function (s) { return String(s); };
   var number = index < 3 ? Number(group.matches[index]._gameNum || group.matches[index].scheduledGameNumber) : 0;
   var name = index === 3 ? String(group.name).replace(/^R\d+\s+/i, '') :
-    'JOGO' + (Number.isInteger(number) && number > 0 ? ' ' + number : '');
+    'JOGO' + (Number.isInteger(number) && number > 0 ? ' ' + number : '') + ' (' + (index + 1) + '/3)';
   var prefix = 'operations-' + slot.replace(/[^a-zA-Z0-9_-]/g, '-');
   return '<span class="sp-operations-game-nav" data-operations-group="' + safe(group.key) + '" data-operations-slot="' + safe(slot) + '">' +
     '<button type="button" id="' + prefix + '-prev" class="sp-operations-nav-arrow" data-operations-nav="prev" aria-label="Jogo anterior do ' + safe(group.name) + '" title="Anterior"><svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><polygon points="17,2 3,10 17,18"/></svg></button>' +
@@ -1541,11 +1569,12 @@ function _bracketOperationsReplica(m, t, role, label, availability, root, allMat
       group.matches.find(function (match) { return !occupancy.isFinished(match); }) || group.matches[0]
     : m;
   var selectedNumber = Number(selected._gameNum || selected.scheduledGameNumber);
-  var canPostponeSelected = selected && !occupancy.isFinished(selected) && !selected.isBye && !selected.isSitOut &&
-    !selected.courtCalledAt && !selected.startedAt && !selected.draw && !selected.pendingResult && !selected.liveScored &&
-    !(Array.isArray(selected.sets) && selected.sets.length) && !(Number(selected.scoreP1) > 0) && !(Number(selected.scoreP2) > 0);
+  var postponeMatch = group ? group.matches.find(function (match) { return !occupancy.isFinished(match); }) : selected;
+  var canPostponeSelected = postponeMatch && !occupancy.isFinished(postponeMatch) && !postponeMatch.isBye && !postponeMatch.isSitOut &&
+    !postponeMatch.courtCalledAt && !postponeMatch.startedAt && !postponeMatch.draw && !postponeMatch.pendingResult && !postponeMatch.liveScored &&
+    !(Array.isArray(postponeMatch.sets) && postponeMatch.sets.length) && !(Number(postponeMatch.scoreP1) > 0) && !(Number(postponeMatch.scoreP2) > 0);
   var postpone = role.postponeReady
-    ? '<button type="button" class="sp-operations-postpone" data-postpone-next="' + safe(String(selected.id || '')) +
+    ? '<button type="button" class="sp-operations-postpone" data-postpone-next="' + safe(String(postponeMatch && postponeMatch.id || '')) +
       '"' + (role.postponeBusy || !canPostponeSelected ? ' disabled' : '') +
       ' title="Postergar este jogo e mostrar o próximo">Pular jogo</button>' : '';
   var canEnter = !!(role.canCall || (typeof window._resultEntryIncludes === 'function' &&
@@ -2443,6 +2472,7 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
       if (entry !== entry.monarchAnchor) return;
       var bundle = document.createElement('section');
       bundle.className = 'bracket-geral-quarteto';
+      bundle.setAttribute('data-bracket-phase-label', 'Classificatória · Rei/Rainha');
       bundle._monarchSource = entry.monarchSource;
       var title = document.createElement('h5');
       title.className = 'bracket-geral-quarteto-title';
@@ -2455,15 +2485,7 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
       _bracketGeneralRefreshStandings(bundle);
       var memberEntries = groups[key].filter(function (member) { return member.monarchSource === entry.monarchSource; });
       memberEntries.sort(function (a, b) { return a.num - b.num || a.position - b.position; });
-      memberEntries.forEach(function (member) {
-        if (member.num > 0) {
-          var label = document.createElement('div');
-          label.className = 'bracket-geral-jogo-horario';
-          label.textContent = 'Jogo ' + member.num;
-          bundle.appendChild(label);
-        }
-        bundle.appendChild(member.wrapper);
-      });
+      memberEntries.forEach(function (member) { bundle.appendChild(member.wrapper); });
       grid.appendChild(bundle);
     });
     group.appendChild(grid);
@@ -4533,7 +4555,8 @@ function renderBracket(container, tournamentId, isInline) {
       _applyMyMatchesFilter();
       return;
     }
-    if (_curPh === 0 && isOrg && window._phasesPhaseComplete && window._phasesPhaseComplete(t) && (_curPh + 1) < ((t.phases || []).length)) {
+    if (_curPh === 0 && !(t.scheduleWindow && t.scheduleWindow.interleavedPlan) && isOrg &&
+        window._phasesPhaseComplete && window._phasesPhaseComplete(t) && (_curPh + 1) < ((t.phases || []).length)) {
       var _nextPhaseName = window._safeHtml(((t.phases[_curPh + 1] || {}).name) || 'próxima fase');
       // v4.2.2 (pedido do dono): SEM auto-avanço — botão explícito "Avançar" (o
       // organizador decide quando). Mesmo padrão do banner da Fase 1+ (_nextBanner).
@@ -4573,14 +4596,30 @@ function renderBracket(container, tournamentId, isInline) {
      * [[regression_team_standings_before_canonical_key]]
      */
     _pintarEmEtapas(container, headerHtml + _subChoiceBanner + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml,
-      function () { return _competitionTeamStandingsHtml + window._renderPhaseBracket(t, canEnterResult, standbyHtml); }, _applyMyMatchesFilter);
+      function () {
+        var phase0 = window._renderPhaseBracket(t, canEnterResult, standbyHtml);
+        var hasInterleaved = t.scheduleWindow && t.scheduleWindow.interleavedPlan &&
+          (t.matches || []).some(function (m) { return m && Number(m.phaseIndex) === 1; });
+        if (!hasInterleaved) return _competitionTeamStandingsHtml + phase0;
+        return _competitionTeamStandingsHtml + phase0 +
+          '<h2 style="margin:20px 0 12px;color:var(--text-bright);">Eliminatórias em andamento</h2>' +
+          window._renderPhaseBracket(t, canEnterResult, '', 1);
+      }, _applyMyMatchesFilter);
     return;
   }
 
   // ── Liga / Suíço (Liga inclui antigo Ranking) ──────────────────────────────
   if (isLiga || isSuico) {
     _pintarEmEtapas(container, headerHtml + _subChoiceBanner + _ligaInviteBanner + _phaseAdvanceBanner + startTournamentBanner,
-      function () { return renderStandings(t, isOrg, canEnterResult, '', progressBarHtml, { standbyHtml: standbyHtml }); }, _applyMyMatchesFilter);
+      function () {
+        var standings = renderStandings(t, isOrg, canEnterResult, '', progressBarHtml, { standbyHtml: standbyHtml });
+        var hasInterleaved = t.scheduleWindow && t.scheduleWindow.interleavedPlan &&
+          (t.matches || []).some(function (m) { return m && Number(m.phaseIndex) === 1; });
+        return hasInterleaved && typeof window._renderPhaseBracket === 'function'
+          ? standings + '<h2 style="margin:20px 0 12px;color:var(--text-bright);">Eliminatórias em andamento</h2>' +
+            window._renderPhaseBracket(t, canEnterResult, '', 1)
+          : standings;
+      }, _applyMyMatchesFilter);
     return;
   }
 
@@ -5109,6 +5148,12 @@ window._confirmMatchCourtCall = function(button, tId, matchId) {
     .then(function(res) {
       var d = (res && res.data) || {};
       if (!d.ok) throw new Error(d.reason || 'Não foi possível chamar o jogo.');
+      var queue = window._bracketCourtReleaseCache && window._bracketCourtReleaseCache[tId];
+      if (queue && Array.isArray(d.postponed) && Array.isArray(d.postponedReady)) {
+        queue.postponed = d.postponed;
+        queue.postponedReady = d.postponedReady;
+        if (Number.isFinite(Number(d.courtRevision))) queue.revision = Number(d.courtRevision);
+      }
       if (typeof showNotification === 'function') showNotification('Jogo chamado', court, 'success');
       button.textContent = '✓ OK';
       button.disabled = false;
@@ -7568,7 +7613,7 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
     var _mFaux = {
       id: t.id, matches: _mMs, groups: _mGroups,
       phases: t.phases, currentPhaseIndex: t.currentPhaseIndex,
-      scoring: t.scoring, tiebreakers: t.tiebreakers,
+      scoring: t.scoring, rankingPrimary: t.rankingPrimary, tiebreakers: t.tiebreakers,
       creatorUid: t.creatorUid, coHosts: t.coHosts,
       // v4.1.39: W.O. canônico monarch — o renderer precisa dos ghosts (excluir do
       // standings) e do status/formato (gate do controle de W.O. por grupo).
@@ -9008,7 +9053,8 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // Rótulo e box saem do MESMO array (_plan.columns) e da MESMA largura (`--w`, por TIPO
   // de coluna). É por construção que o rótulo fica em cima do box: não há um segundo
   // lugar decidindo largura pra divergir do primeiro.
-  const _setColOpen = (c, extra) => '<div class="sp-set-col' + (extra || '') + '" data-sp-set-index="' + c.i + '" style="--w:' + c.w + 'px;">';
+  const _setColOpen = (c, extra) => '<div class="sp-set-col' + (extra || '') + '" data-sp-set-index="' + c.i + '"' +
+    (c.previewStb ? ' data-sp-stb-preview hidden' : '') + ' style="--w:' + c.w + 'px;">';
   // Número do set já confirmado: verde pra quem VENCEU aquele set, vermelho pra quem
   // perdeu. A tarja da linha continua respondendo outra pergunta — "o JOGO já fechou?" —
   // e segue neutra enquanto não há vencedor. [[feedback_contraste_sempre_nos_dois_temas]]
@@ -9078,11 +9124,14 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
         ' onclick="event.stopPropagation();window._editSetsInline(\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\')'
       : '';
     return '<div class="sp-set-col' + fix + '" style="--w:' + c.w + 'px;">' + _setNumHtml(c, side) + '</div>';
-  }).join('');
+  }).join('') + (_plan.previewStb && showInputs
+    ? _setColOpen(_plan.previewStb) + _setLiveHtml(_plan.previewStb, side) + '</div>' : '');
   const _setLabelsHtml = () => _plan.columns.map(function (c) {
     return _setColOpen(c, (_setsEdit && _colunaEditaTieBreak(c)) ? ' sp-set-col--tb-open' : '') + '<span class="sp-set-lbl' + ((c.state === 'live' || c.state === 'open') ? ' sp-set-lbl--live' : '') + '">' +
       window._safeHtml(c.label) + '</span></div>';
-  }).join('');
+  }).join('') + (_plan.previewStb && showInputs
+    ? _setColOpen(_plan.previewStb) + '<span class="sp-set-lbl sp-set-lbl--live">' +
+      window._safeHtml(_plan.previewStb.label) + '</span></div>' : '');
   // A LINHA NOVA: "MELHOR DE 3 · SET 2" à esquerda, os rótulos das colunas à direita —
   // em cima dos boxes, no mesmo recuo de 10px que a linha do jogador usa. Ela fica também
   // depois do resultado: em partida de mais de um set, os números sozinhos não dizem qual
@@ -9409,7 +9458,21 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
         : `window._editSetsInline('${_esc(tId)}','${_esc(m.id)}')`}" style="flex-shrink:0;font-size:0.72rem;" title="${_t('bracket.editResult')}">✏️ ${_t('bracket.editResult')}</button>`
     : '');
 
-  const matchLabel = matchNum ? _t('bracket.matchNum', {n: matchNum}) : (m.label || _t('bracket.matchLabel'));
+  var _seriesSuffix = '';
+  if (m.isMonarch && m.id && t && Array.isArray(t.scheduleWindow && t.scheduleWindow.days) &&
+      t.scheduleWindow.days.length === 1 && typeof window._collectAllMatches === 'function') {
+    var _seriesGroup = _bracketOperationsGroup(t, m, window._collectAllMatches(t));
+    var _seriesIndex = _seriesGroup && _seriesGroup.matches.findIndex(function (game) { return String(game.id) === String(m.id); });
+    if (_seriesGroup && _seriesIndex >= 0) _seriesSuffix = ' (' + (_seriesIndex + 1) + '/3)';
+  }
+  const matchLabel = (matchNum ? _t('bracket.matchNum', {n: matchNum}) : (m.label || _t('bracket.matchLabel'))) + _seriesSuffix;
+  var _phaseAgendaLabel = '';
+  if (t && Array.isArray(t.phases) && t.phases.length > 1) {
+    var _phaseAgendaIndex = Number(m.phaseIndex) || 0;
+    var _phaseAgendaCfg = t.phases[_phaseAgendaIndex] || {};
+    _phaseAgendaLabel = (m.isMonarch || _phaseAgendaCfg.kind === 'classification')
+      ? 'Classificatória' : (_phaseAgendaIndex > 0 || _phaseAgendaCfg.kind === 'elimination' ? 'Eliminatória' : '');
+  }
 
   // Detect if current user participates in this match
   const _cu = window.AppStore && window.AppStore.currentUser;
@@ -9562,7 +9625,6 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   } else if (!isDecided && !isByeMatch && !hasTBD) {
     if (matchReady) {
       cardBorder = 'rgba(16,185,129,0.5)';
-      readyBadge = `<span style="font-size:0.6rem;font-weight:800;color:var(--sp-c-10b981,#10b981);background:rgba(16,185,129,0.15);padding:2px 6px;border-radius:4px;text-transform:uppercase;">${_t('bracket.ready')}</span>`;
     } else if (matchPartial) {
       cardBorder = 'rgba(245,158,11,0.4)';
       readyBadge = `<span style="font-size:0.6rem;font-weight:800;color:var(--sp-c-f59e0b,#f59e0b);background:rgba(245,158,11,0.12);padding:2px 6px;border-radius:4px;text-transform:uppercase;">${_t('bracket.partial')}</span>`;
@@ -9936,7 +9998,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   var _operationalPresence = _isConcentratedEvent && !isDecided && !isByeMatch
     ? (matchReady ? 'complete' : (matchPartial ? 'partial' : 'none')) : '';
   var _matchHtml = `
-    <div id="card-${m.id}" class="sp-match-card" data-players="${_searchNames}" data-team-names="${window._safeHtml(_searchTeamNames)}" data-player-uids="${_searchUids}" data-bracket-tab-category="${window._safeHtml(_tabCategory)}" data-bracket-tab-gender="${_tabGender}" data-bracket-tab-source="${_tabSource}" data-bracket-tab-round="${m.round != null ? window._safeHtml(String(m.round)) : ''}" data-bracket-scheduled-at="${_scheduledMs || ''}" data-bracket-result-at="${_playedMs || ''}" data-bracket-complete="${isDecided || m.wo ? '1' : '0'}" data-bracket-pending-match="${_isPendingMatch ? '1' : '0'}" data-bracket-court="${window._safeHtml(String(m.court || ''))}" data-bracket-upcoming="${_isConcentratedEvent && matchReady ? '1' : '0'}" data-bracket-presence="${_operationalPresence}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-scheduled-game-number="${_plannedGameNumber > 0 ? _plannedGameNumber : ''}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:var(--scroll-anchor,120px);background:${window._spCor(_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)', 'background')};border:${_cardBorderStyle};${_courtActive ? '' : _lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};">
+    <div id="card-${m.id}" class="sp-match-card" data-players="${_searchNames}" data-team-names="${window._safeHtml(_searchTeamNames)}" data-player-uids="${_searchUids}" data-bracket-tab-category="${window._safeHtml(_tabCategory)}" data-bracket-tab-gender="${_tabGender}" data-bracket-tab-source="${_tabSource}" data-bracket-tab-round="${m.round != null ? window._safeHtml(String(m.round)) : ''}" data-bracket-phase-label="${window._safeHtml(_phaseAgendaLabel)}" data-bracket-scheduled-at="${_scheduledMs || ''}" data-bracket-result-at="${_playedMs || ''}" data-bracket-complete="${isDecided || m.wo ? '1' : '0'}" data-bracket-pending-match="${_isPendingMatch ? '1' : '0'}" data-bracket-court="${window._safeHtml(String(m.court || ''))}" data-bracket-upcoming="${_isConcentratedEvent && matchReady ? '1' : '0'}" data-bracket-presence="${_operationalPresence}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-scheduled-game-number="${_plannedGameNumber > 0 ? _plannedGameNumber : ''}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:var(--scroll-anchor,120px);background:${window._spCor(_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)', 'background')};border:${_cardBorderStyle};${_courtActive ? '' : _lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};">
       ${_headerHtml}
       ${_pendingBtnsRow}
       ${pendingBanner}
@@ -10076,6 +10138,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     _monarchCategories.every(Boolean) &&
     _monarchCategories.some(function (category) { return category !== _monarchCategories[0]; });
   var _useSetsMonarch = !!(t.scoring && t.scoring.type === 'gsm');
+  var _gamesPrimaryMonarch = t.rankingPrimary === 'games_diff';
   subgroups.forEach(function(sg, gi) {
     // _computeMonarchStandings tolerates both shapes: group.matches or
     // group.rounds[0].matches. We pass the flat form, which is what subgroup
@@ -10172,7 +10235,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     var _compacta = !(opts && opts.showHistoricalFullStandings) &&
       (((t._phaseMaterialized || 0) > _idxFaseMon) || ((t.currentPhaseIndex || 0) > _idxFaseMon));
     var standingsRows = standings.map(function(s, i) {
-      var diff = s.pointsFor - s.pointsAgainst;
+      var diff = _gamesPrimaryMonarch ? s.gamesWon - s.gamesLost : s.pointsFor - s.pointsAgainst;
       var setDiff = s.setsWon - s.setsLost;
       var gameDiff = s.gamesWon - s.gamesLost;
       var winRatePct = s.played > 0 ? Math.round((s.wins / s.played) * 100) : 0;
@@ -10187,10 +10250,10 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
         '<td class="sp-name-fit" data-maxrem="0.85" data-minrem="0.6" style="overflow-wrap:anywhere;padding:6px 10px;font-weight:600;color:' + window._spCor((_presM ? '#4ade80' : 'var(--text-bright)'), 'color') + ';">' + _presDotM + (typeof window._rowNameHtml === 'function' ? window._rowNameHtml : function (s, h) { return h; })(s, (typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(window._liveRowName(s), window._currentBracketTournament) : (typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(window._liveRowName(s), window._currentBracketTournament) : window._safeHtml(window._liveRowName(s))))) + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, standings, s, { groupDone: groupDone }) : '') + '</td>' +
         '<td style="padding:6px 10px;text-align:center;color:var(--sp-c-4ade80,#4ade80);font-weight:700;">' + s.wins + '</td>' +
         (_compacta ? '' : '<td style="padding:6px 10px;text-align:center;color:var(--sp-c-f87171,#f87171);">' + s.losses + '</td>') +
-        (_compacta ? '' : (s.points != null
+        (_compacta || _gamesPrimaryMonarch ? '' : (s.points != null
           ? '<td ' + (typeof window._paCellHandlers === 'function' ? window._paCellHandlers(t.id, s.name, s.category || '') : '') + ' style="padding:6px 10px;text-align:center;color:var(--text-bright);font-weight:800;cursor:pointer;-webkit-touch-callout:none;user-select:none;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px;">' + s.points + '</td>'
           : '<td style="padding:6px 10px;text-align:center;color:var(--text-bright);font-weight:800;" title="Pontos pró (somados em todos os jogos)">' + s.pointsFor + '</td>')) +
-        '<td style="padding:6px 10px;text-align:center;color:' + window._spCor((diff >= 0 ? '#4ade80' : '#f87171'), 'color') + ';" title="Saldo (pró − contra)">' + (diff >= 0 ? '+' : '') + diff + '</td>';
+        '<td style="padding:6px 10px;text-align:center;color:' + window._spCor((diff >= 0 ? '#4ade80' : '#f87171'), 'color') + ';" title="' + (_gamesPrimaryMonarch ? 'Saldo de games' : 'Saldo (pró − contra)') + '">' + (diff >= 0 ? '+' : '') + diff + '</td>';
       if (_useSetsMonarch && !_compacta) {
         row += '<td style="padding:6px 10px;text-align:center;color:var(--sp-c-06b6d4,#06b6d4);" title="Sets V-D">' + s.setsWon + '-' + s.setsLost + '</td>' +
           '<td style="padding:6px 10px;text-align:center;color:' + window._spCor((setDiff >= 0 ? '#06b6d4' : '#f87171'), 'color') + ';" title="Saldo de sets">' + (setDiff >= 0 ? '+' : '') + setDiff + '</td>' +
@@ -10219,10 +10282,10 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
       '<th style="padding:6px 10px;color:var(--text-muted);font-size:0.7rem;' + (_compacta ? 'width:100%;' : '') + '">Jogador</th>' +
       '<th style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;">V</th>' +
       (_compacta ? '' : '<th style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;">D</th>') +
-      (_compacta ? '' : ((t.advancedScoring && t.advancedScoring.enabled)
+      (_compacta || _gamesPrimaryMonarch ? '' : ((t.advancedScoring && t.advancedScoring.enabled)
         ? '<th style="padding:6px 10px;text-align:center;color:var(--sp-c-fbbf24,#fbbf24);font-size:0.7rem;" title="Pontos Avançados — critério principal da classificação">💯 PA</th>'
         : '<th style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;" title="Pontos pró (cada ponto conta)">Pts</th>')) +
-      '<th style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;" title="Saldo de pontos (pró − contra)">Saldo</th>' +
+      '<th style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;" title="' + (_gamesPrimaryMonarch ? 'Saldo de games' : 'Saldo de pontos (pró − contra)') + '">' + (_gamesPrimaryMonarch ? 'Saldo games' : 'Saldo') + '</th>' +
       extraHeaders +
       (_compacta ? '' : '<th style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;" title="Aproveitamento">%</th>') +
       '</tr></thead><tbody>' + standingsRows + '</tbody></table>';
@@ -11569,6 +11632,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             };
             // Pts AVANÇADOS visíveis na tabela quando o torneio usa Pontos Avançados.
             var _advPtsOn = !!(t.advancedScoring && t.advancedScoring.enabled);
+            var _gamesPrimaryGroup = t.rankingPrimary === 'games_diff';
             // Quantos classificam POR GRUPO pra próxima fase (0 = fase única → sem tarja verde).
             var _classifN = (_nextPhT && _nextScopeT !== 'overall' && typeof window._phaseClassifiedCount === 'function') ? window._phaseClassifiedCount(t, _gst.length) : 0;
             if (_gst.length) {
@@ -11608,7 +11672,9 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
               };
               var _gstRows = _gst.map(function(s, idx) {
                 var _pos = idx + 1, _md = _pos === 1 ? '🥇' : _pos === 2 ? '🥈' : _pos === 3 ? '🥉' : '';
-                var _sld = (s.pointsFor || 0) - (s.pointsAgainst || 0);
+                var _sld = _gamesPrimaryGroup
+                  ? (s.gamesWon || 0) - (s.gamesLost || 0)
+                  : (s.pointsFor || 0) - (s.pointsAgainst || 0);
                 var _mk = _woMark(s);
                 var _isRed = _mk === 2;
                 var _isAmb = _mk === 1;
@@ -11671,12 +11737,14 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
                   '<td style="padding:3px 6px;color:' + window._spCor(_nmColor, 'color') + ';">' + (_md ? _md + ' ' : '') + _presDot + _gstNameHtml(s) + _woTag + _grupoNovoTag + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, _gst, s, { groupDone: gDone }) : '') + (typeof window._contactPersonIconHtml === 'function' ? window._contactPersonIconHtml(t, s.uid, s.name, { sameGroup: _gHasMe }) : '') + '</td>' +
                   (_advPtsOn ? '<td ' + (typeof window._paCellHandlers === 'function' ? window._paCellHandlers(t.id, s.name, g.category || '') : '') + ' style="padding:3px 6px;text-align:center;color:var(--sp-c-fbbf24,#fbbf24);font-weight:700;cursor:pointer;-webkit-touch-callout:none;user-select:none;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px;">' + (typeof s.points === 'number' ? s.points : 0) + '</td>' : '') +
                   '<td style="padding:3px 6px;text-align:center;color:var(--sp-c-4ade80,#4ade80);font-weight:700;">' + (s.wins || 0) + '</td>' +
+                  (_gamesPrimaryGroup ? '<td style="padding:3px 6px;text-align:center;color:var(--text-muted);">' + (s.losses || 0) + '</td>' : '') +
                   '<td style="padding:3px 6px;text-align:center;color:var(--text-muted);">' + (_sld >= 0 ? '+' : '') + _sld + '</td>' +
+                  (_gamesPrimaryGroup ? '<td style="padding:3px 6px;text-align:center;color:var(--text-muted);">' + (s.played ? Math.round(100 * s.wins / s.played) : 0) + '%</td>' : '') +
                 '</tr>';
               }).join('');
               _grpStTable = '<div style="margin-bottom:0.6rem;background:var(--sp-g-0-0-0-018,rgba(0,0,0,0.18));border-radius:8px;padding:6px 9px;">' +
                 '<div style="font-size:0.6rem;text-transform:uppercase;letter-spacing:0.4px;color:var(--sp-c-fbbf24,#fbbf24);font-weight:700;margin-bottom:3px;">📊 Classificação do grupo</div>' +
-                '<table style="width:100%;border-collapse:collapse;font-size:0.76rem;"><thead><tr style="color:var(--text-muted);font-size:0.58rem;text-transform:uppercase;"><th></th><th style="text-align:left;font-weight:600;">Jogador</th>' + (_advPtsOn ? '<th style="font-weight:600;color:var(--sp-c-fbbf24,#fbbf24);" title="Pontos Avançados — critério principal da classificação">💯 PA</th>' : '') + '<th style="font-weight:600;" title="Vitórias — 1º desempate">V</th><th style="font-weight:600;" title="Saldo de pontos — desempate">Saldo</th></tr></thead><tbody>' + _gstRows + '</tbody></table>' +
+                '<table style="width:100%;border-collapse:collapse;font-size:0.76rem;"><thead><tr style="color:var(--text-muted);font-size:0.58rem;text-transform:uppercase;"><th></th><th style="text-align:left;font-weight:600;">Jogador</th>' + (_advPtsOn ? '<th style="font-weight:600;color:var(--sp-c-fbbf24,#fbbf24);" title="Pontos Avançados — critério principal da classificação">💯 PA</th>' : '') + '<th style="font-weight:600;" title="Vitórias">V</th>' + (_gamesPrimaryGroup ? '<th style="font-weight:600;" title="Derrotas">D</th>' : '') + '<th style="font-weight:600;" title="' + (_gamesPrimaryGroup ? 'Saldo de games — critério principal' : 'Saldo de pontos — desempate') + '">' + (_gamesPrimaryGroup ? 'Saldo games' : 'Saldo') + '</th>' + (_gamesPrimaryGroup ? '<th style="font-weight:600;" title="Aproveitamento de vitórias">%</th>' : '') + '</tr></thead><tbody>' + _gstRows + '</tbody></table>' +
               '</div>';
             }
           }

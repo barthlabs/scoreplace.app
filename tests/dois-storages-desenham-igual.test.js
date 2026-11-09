@@ -130,6 +130,28 @@ ok((gg.playersUids || []).filter(Boolean).length === 4,
   'o grupo reconstruído tem os 4 uids (identidade, não rótulo) — veio ' + JSON.stringify(gg.playersUids));
 ok((s2.rounds[0]||{}).format === 'rei_rainha', 'a rodada é marcada como Rei/Rainha');
 
+// CAMIS: Diamante e Ouro reutilizam monarchGroup=0 na mesma rodada. A categoria
+// compõe a identidade do quarteto; os placares de um não podem entrar no outro.
+const camisGroups = W._matchesDeClassificatoria({ matches: [
+  ...jogos().map(m => ({ ...m, id: 'd-' + m.id, category: 'Fem Diamante', groupName: 'Grupo A1' })),
+  ...jogos().map(m => ({ ...m, id: 'o-' + m.id, category: 'Fem Ouro', groupName: 'Grupo A2',
+    team1: ['E', 'F'], team1Uids: ['uE', 'uF'], team2: ['G', 'H'], team2Uids: ['uG', 'uH'] }))
+] }).rounds[0].monarchGroups;
+ok(camisGroups.length === 2, 'mesmo monarchGroup em categorias diferentes mantém dois quartetos');
+ok(camisGroups.every(g => g.matches.length === 2 && g.players.length === 4),
+  'cada quarteto recebe só seus jogos e seus quatro atletas');
+ok(camisGroups.map(g => g.category).join(',') === 'Fem Diamante,Fem Ouro',
+  'a categoria segue junto com o quarteto reconstruído');
+const saldoTournament = monta(false);
+saldoTournament.rankingPrimary = 'games_diff';
+saldoTournament.scoring = { type: 'simple' };
+saldoTournament.matches.forEach(m => { m.sets = [{ gamesP1: m.scoreP1, gamesP2: m.scoreP2 }]; });
+const saldoHtml = desenha(saldoTournament);
+ok(saldoHtml.includes('Saldo games') && !/title="Pontos pró \(cada ponto conta\)"/.test(saldoHtml),
+  'saldo de games substitui Pts na classificação Rei/Rainha quando é o critério principal');
+ok(saldoHtml.includes('+6'),
+  'a tabela apresenta saldo real dos games gravados');
+
 console.log('──── 5. TORNEIO NOVO nasce no storage canônico e roda o ciclo inteiro ────');
 // O meio-termo pedido pelo dono: quem nasce agora grava a fase classificatória em
 // `t.matches` (junto com a chave); quem já existe fica onde está. A marca é EXPLÍCITA no

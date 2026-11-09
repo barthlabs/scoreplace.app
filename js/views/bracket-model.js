@@ -836,23 +836,34 @@ window._rotaMostraAChaveDeste = function (hash, id) {
     });
     if (!alvo.length) return vazio;
     var ids = {}; alvo.forEach(function (m) { if (m.id != null) ids[String(m.id)] = true; });
-    // agrupa por RODADA e, dentro dela, por índice de grupo (a âncora estrutural)
+    // Categoria e fase fazem parte da identidade do grupo: A1 do Diamante e
+    // A2 do Ouro podem compartilhar monarchGroup=0, mas nunca a classificação.
+    // O índice isolado juntava os três quartetos e seus placares no mesmo grupo.
     var porRodada = {};
     alvo.forEach(function (m) {
       var r = (m.round == null) ? 1 : m.round;
-      (porRodada[r] = porRodada[r] || []).push(m);
+      var fase = Number(m.phaseIndex) || 0;
+      var key = fase + '|' + r;
+      (porRodada[key] = porRodada[key] || []).push(m);
     });
-    var rounds = Object.keys(porRodada).map(Number).sort(function (a, b) { return a - b; })
-      .map(function (r) {
-        var ms = porRodada[r];
+    var rounds = Object.keys(porRodada).sort(function (a, b) {
+      var aa = a.split('|').map(Number), bb = b.split('|').map(Number);
+      return aa[0] - bb[0] || aa[1] - bb[1];
+    }).map(function (roundKey) {
+        var r = Number(roundKey.split('|')[1]);
+        var ms = porRodada[roundKey];
         var porGrupo = {};
         ms.forEach(function (m) {
           var g = (m.monarchGroup == null) ? 0 : m.monarchGroup;
-          (porGrupo[g] = porGrupo[g] || []).push(m);
+          var key = String(m.category || '') + '|' + g;
+          (porGrupo[key] = porGrupo[key] || []).push(m);
         });
-        var grupos = Object.keys(porGrupo).map(Number).sort(function (a, b) { return a - b; })
-          .map(function (g) {
-            var jogos = porGrupo[g];
+        var grupos = Object.keys(porGrupo).sort(function (a, b) {
+          var aa = a.lastIndexOf('|'), bb = b.lastIndexOf('|');
+          return a.slice(0, aa).localeCompare(b.slice(0, bb)) || Number(a.slice(aa + 1)) - Number(b.slice(bb + 1));
+        }).map(function (groupKey) {
+            var g = Number(groupKey.slice(groupKey.lastIndexOf('|') + 1));
+            var jogos = porGrupo[groupKey];
             // elenco do grupo: união posicional dos slots (uid manda, nome só de reserva)
             var nomes = [], uids = [], slotIds = [], visto = {};
             jogos.forEach(function (m) {
@@ -868,7 +879,7 @@ window._rotaMostraAChaveDeste = function (hash, id) {
             });
             return {
               name: jogos[0].groupName || ('Grupo ' + String.fromCharCode(65 + g)),
-              groupIdx: g, players: nomes, playersUids: uids, playersSlotIds: slotIds, matches: jogos
+              category: jogos[0].category || '', groupIdx: g, players: nomes, playersUids: uids, playersSlotIds: slotIds, matches: jogos
             };
           });
         var ehMonarch = ms.some(function (m) { return m.isMonarch === true; });
@@ -1610,6 +1621,13 @@ window._rotaMostraAChaveDeste = function (hash, id) {
       }
     }
 
+    // A prévia pertence só ao editor. Ela não entra em columns antes do empate:
+    // o plano e o título continuam descrevendo apenas os sets em disputa.
+    var previewStb = stbOn && bestOf === 3 && !done && !opts.editing && played.length < 2
+      ? { i: 2, kind: 'stb', label: labelAt(2), points: stbPts,
+          state: 'open', previewStb: true, set: null, w: larg('stb') }
+      : null;
+
     // Reserva a largura máxima do melhor de 3 desde o primeiro set. Só a coluna
     // em disputa é editável, mas o placar não desloca os nomes quando surge o STB.
     var esc3 = window._setColEscala(3);
@@ -1648,7 +1666,7 @@ window._rotaMostraAChaveDeste = function (hash, id) {
       numFs: esc.fs,      // tamanho do número desta grade (degrau da escala)
       difPtsAviso: _avisoDif,
       played: played, setsWonP1: wonP1, setsWonP2: wonP2,
-      done: done, columns: cols, live: live,
+      done: done, columns: cols, live: live, previewStb: previewStb,
       headline: head + ' · ' + atual + _stbNoTitulo
     };
   };
@@ -1724,8 +1742,12 @@ window._assignGlobalGameNumbers = function (t) {
   _coletarPlanejado(t.matches);
   (t.rounds || []).forEach(function (rd) { _coletarPlanejado(rd && rd.matches); });
   var _planNumbers = _scheduled.map(function (m) { return Number(m.scheduledGameNumber); });
+  var _reservedGames = Number(t.scheduleWindow && t.scheduleWindow.interleavedPlan &&
+    t.scheduleWindow.interleavedPlan.totalGames);
+  var _planMaximum = Number.isInteger(_reservedGames) && _reservedGames > 0
+    ? _reservedGames : _scheduled.length;
   var _validPlanNumbers = _scheduled.length > 0 && _planNumbers.length === _scheduled.length &&
-    _planNumbers.every(function (n) { return Number.isInteger(n) && n > 0 && n <= _scheduled.length; }) &&
+    _planNumbers.every(function (n) { return Number.isInteger(n) && n > 0 && n <= _planMaximum; }) &&
     (new Set(_planNumbers)).size === _scheduled.length;
   if (_validPlanNumbers) {
     _scheduled.forEach(function (m) { m._gameNum = Number(m.scheduledGameNumber); });

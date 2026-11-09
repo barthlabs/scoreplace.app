@@ -206,7 +206,7 @@ try {
 
 // Versão DESTE código de function. Sobe junto com a do app a cada deploy — é o que prova,
 // no log, qual build atendeu a chamada. Ver [[feedback_indicate_version_on_deploy]].
-const CF_VERSION = '2.2.66';
+const CF_VERSION = '2.2.67';
 
 initializeApp();
 const db = getFirestore();
@@ -554,7 +554,8 @@ async function _assertCategoryConfigBeforeDraw(tx, ref, t) {
 }
 
 // Uma lista de rótulos não carrega a identidade de uma renomeação. Reusar o ID
-// pelo rótulo estável e recusar remoção usada evita deixar inscrições órfãs.
+// pelo rótulo estável; categorias excluídas retiram só aquela inscrição e
+// deixam a pessoa sem categoria quando não houver outra inscrição ativa.
 async function _categoryDefinitionsForLabels(tx, ref, t, combinedCategories) {
   const legacy = require('./vendor/legacy-category-definition-core.js');
   const eligibility = require('./vendor/category-eligibility-core.js');
@@ -574,14 +575,47 @@ async function _categoryDefinitionsForLabels(tx, ref, t, combinedCategories) {
   catch (error) { throw new HttpsError('failed-precondition', error.message); }
   const nextIds = new Set(definitions.map((def) => def.id));
   const removed = new Set(previous.map((def) => def && def.id).filter((id) => id && !nextIds.has(id)));
-  if (removed.size) {
+  let removal = null;
+  if (removed.size && t.canonicalRegistrationMigration?.fingerprint) {
     const snap = await tx.get(ref.collection('registrations'));
-    if (snap.docs.some((doc) => {
-      const registration = doc.data() || {};
-      return registration.status !== 'withdrawn' && removed.has(registration.categoryId);
-    })) throw new HttpsError('failed-precondition', 'Reclassifique as inscrições antes de remover a categoria.');
+    const expected = Number(t.canonicalRegistrationMigration.registrationCount);
+    if (!Number.isSafeInteger(expected) || snap.docs.length !== expected) {
+      throw new HttpsError('failed-precondition', 'Inscrições canônicas divergentes; categoria não alterada.');
+    }
+    const registrations = snap.docs.map(doc => {
+      const item = doc.data() || {};
+      if (doc.id !== item.registrationId) throw new HttpsError('failed-precondition', 'Inscrição canônica sem ID estrutural.');
+      return item;
+    });
+    try {
+      removal = require('./vendor/category-removal-core').plan(ref.id, registrations, [...removed]);
+      _registrationRoster.rosterFromRegistrations(removal.nextRegistrations);
+    } catch (error) { throw new HttpsError('failed-precondition', error.message); }
   }
-  return definitions;
+  const reservations = removed.size && Array.isArray(t.placeholderReservations)
+    ? t.placeholderReservations.map(item => item && removed.has(item.categoryId)
+      ? { ...item, categoryId:'__uncategorized__' } : item)
+    : null;
+  return { definitions, removal, reservations };
+}
+
+function _writeCategoryRemoval(tx, ref, t, removal, reservations) {
+  if (reservations) t.placeholderReservations = reservations;
+  if (!removal || (!removal.updates.length && !removal.creates.length)) return;
+  removal.updates.forEach(item => {
+    const update = { status:item.status, fixedPairId:null,
+      withdrawnReason:item.withdrawnReason || null, updatedAt:FieldValue.serverTimestamp() };
+    if (item.validationState !== undefined) update.validationState = item.validationState;
+    if (item.originCategoryId !== undefined) update.originCategoryId = item.originCategoryId;
+    tx.update(ref.collection('registrations').doc(item.registrationId), update);
+  });
+  removal.creates.forEach(item => tx.create(ref.collection('registrations').doc(item.registrationId), {
+    ...item, createdAt:FieldValue.serverTimestamp(), updatedAt:FieldValue.serverTimestamp(),
+  }));
+  t.canonicalRegistrationMigration = {
+    ...t.canonicalRegistrationMigration,
+    registrationCount:Number(t.canonicalRegistrationMigration.registrationCount) + removal.creates.length,
+  };
 }
 
 /* Depois da migração, `participants`/esperas que o motor recebe são somente uma
@@ -1883,7 +1917,9 @@ exports.drawRound = onCall(async (request) => {
       Array.isArray(teamSchedule.pairDayAssignments) && teamSchedule.pairDayAssignments.length > 0 &&
       unscoredDrawnMatches.some(m => !!m.requiredDay) &&
       realDrawnMatches.length === unscoredDrawnMatches.length;
-    if (strictTeamDays || (t.scheduleWindow && Array.isArray(t.scheduleWindow.categoryWindows) && t.scheduleWindow.categoryWindows.length)) {
+    if (strictTeamDays || (t.scheduleWindow && (
+        (Array.isArray(t.scheduleWindow.categoryWindows) && t.scheduleWindow.categoryWindows.length) ||
+        t.scheduleWindow.interleavedPlan))) {
       let plan = null;
       try {
         if (drawWindow && typeof drawWindow._schGradeEstimada === 'function') {
@@ -2900,6 +2936,12 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
     _hidrataGrupos(t, 'aplicaPlacarNaTransacao', tId);
     const _courtSourceBefore = typeof drawWindow._findMatch === 'function'
       ? drawWindow._findMatch(t, matchId) : null;
+    if (t.scheduleWindow && t.scheduleWindow.interleavedPlan && _courtSourceBefore &&
+        Number(_courtSourceBefore.phaseIndex || 0) === 0 &&
+        t.phaseCategoryMaterialized && t.phaseCategoryMaterialized[String(_courtSourceBefore.category || '')]) {
+      return { ok:false, reason:'category-bracket-already-published',
+        message:'A eliminatória desta categoria já foi publicada. Corrija a chave antes de reabrir a classificatória.' };
+    }
     const _courtSeriesEligible = _courtSourceBefore && _courtSourceBefore.isMonarch === true &&
       _courtSourceBefore.court && _courtSourceBefore.courtCalledAt &&
       !_courtOccupancy.isFinished(_courtSourceBefore);
@@ -2948,6 +2990,9 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
         message: String(err && err.message || err).slice(0, 240), at: _agoraIsoTx };
       console.error('Desempate automático pendente após placar confirmado', { tId, matchId,
         error: String(err && err.message || err) });
+    }
+    if (t.scheduleWindow && t.scheduleWindow.interleavedPlan) {
+      _materializeInterleavedReadyCategories(t, tId, _agoraIsoTx);
     }
     if (t.rulesContractVersion >= 2 && (t.status === 'finished' || t.titleAwards)) {
       const titleResolver = drawWindow && drawWindow.ScoreplaceTournamentTitles;
@@ -3560,6 +3605,14 @@ exports.manageWOClaim = onCall(async request => {
     const ctxRaw = action === 'declare' ? data.context : (existing || {});
     const ctx = _woClaimContext(t, ctxRaw);
     if (!ctx) throw _drawFail('failed-precondition', 'O jogo ou grupo não existe mais no torneio fresco.', { tId, action });
+    if (t.scheduleWindow && t.scheduleWindow.interleavedPlan &&
+        (ctx.matchIds || [ctx.match && ctx.match.id]).some(id => {
+          const m = (drawWindow._collectAllMatches(t) || []).find(item => item && String(item.id) === String(id));
+          return m && Number(m.phaseIndex || 0) === 0 && t.phaseCategoryMaterialized &&
+            t.phaseCategoryMaterialized[String(m.category || '')];
+        })) {
+      throw _drawFail('failed-precondition', 'A eliminatória desta categoria já foi publicada; W.O. da classificatória bloqueado.', { tId, action });
+    }
     const before = _antesDoMotor(t);
     const step = _woClaimCore.transition(t, {
       action, uid, isAdmin: _isTournamentAdmin(t, uid), context: ctx,
@@ -3598,6 +3651,9 @@ exports.manageWOClaim = onCall(async request => {
       _reconcileSurplusBeforeWrite(t, tId, before);
       claim.status = 'applied'; claim.resolvedAt = agoraIso;
       if (step.choice) claim.outcomeStage = 'resolved';
+      if (t.scheduleWindow && t.scheduleWindow.interleavedPlan) {
+        _materializeInterleavedReadyCategories(t, tId, agoraIso);
+      }
     }
     const boundary = _gravaTorneio(tx, ref, t, before, { agoraIso });
     return { ok: true, changed: !!step.changed || !!step.apply, claim: step.claim, outcome: motor, tournament: boundary.clean,
@@ -3662,6 +3718,11 @@ exports.applyTournamentWO = onCall(async (request) => {
     const selectedMatch = matchId
       ? (allMatches || []).find(m => m && String(m.id) === matchId)
       : null;
+    if (t.scheduleWindow && t.scheduleWindow.interleavedPlan &&
+        (!selectedMatch || (Number(selectedMatch.phaseIndex || 0) === 0 &&
+          t.phaseCategoryMaterialized && t.phaseCategoryMaterialized[String(selectedMatch.category || '')]))) {
+      throw _drawFail('failed-precondition', 'Selecione um jogo aberto da categoria para aplicar W.O.', { tId, matchId });
+    }
     const selectedHasRealPlay = !!(selectedMatch && (
       (typeof drawWindow._matchHasRealPlay === 'function' && drawWindow._matchHasRealPlay(selectedMatch)) ||
       selectedMatch.winner != null || selectedMatch.startedAt || selectedMatch.resultAt || selectedMatch.liveScored === true ||
@@ -3809,6 +3870,9 @@ exports.applyTournamentWO = onCall(async (request) => {
         beforeUids: uidDoSlot(antesDoJogo, slot), afterUids: uidDoSlot(depoisDoJogo, slot)
       };
     }).filter(Boolean);
+    if (t.scheduleWindow && t.scheduleWindow.interleavedPlan) {
+      _materializeInterleavedReadyCategories(t, tId, agoraIso);
+    }
     const boundary = _gravaTorneio(tx, ref, t, before, { agoraIso, woRepescagemPermits });
     /* ⛔ Um toast de substituição é uma afirmação forte: cada jogo que o motor diz
      * ter trocado PRECISA estar na escrita da subcoleção `matches` desta mesma txn.
@@ -4603,6 +4667,23 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
       if (!Array.isArray(all)) throw _drawFail('internal', 'Não foi possível conferir a ocupação das quadras.', { tId, matchId });
       const activeCandidates = all.filter(item => item && !released[String(item.id)]);
       if (confirmCall && !m.courtCalledAt) {
+        if (m.isMonarch === true && !m.isTieBreak && Array.isArray(t.scheduleWindow?.days) &&
+            t.scheduleWindow.days.length === 1 && m.monarchGroup != null && m.round != null && m.category) {
+          const series = all.filter(item => item && item.isMonarch === true && !item.isTieBreak &&
+            String(item.category || '') === String(m.category) &&
+            Number(item.phaseIndex || 0) === Number(m.phaseIndex || 0) &&
+            String(item.round) === String(m.round) && String(item.monarchGroup) === String(m.monarchGroup));
+          if (series.length === 3) {
+            series.sort((a, b) => Number(a._gameNum || a.scheduledGameNumber || 0) -
+              Number(b._gameNum || b.scheduledGameNumber || 0) ||
+              Date.parse(a.scheduledAt || '') - Date.parse(b.scheduledAt || '') || String(a.id).localeCompare(String(b.id)));
+            const firstPending = series.find(item => !_courtOccupancy.isFinished(item));
+            if (firstPending && String(firstPending.id) !== matchId) {
+              throw _drawFail('failed-precondition', 'Chame primeiro o Jogo ' +
+                String(firstPending._gameNum || firstPending.scheduledGameNumber || firstPending.id) + ' deste grupo.', { tId, matchId });
+            }
+          }
+        }
         const activeMatches = activeCandidates.filter(item => _courtOccupancy.occupiesCourt(item));
         if (!drawWindow.ScoreplaceNextMatch ||
             drawWindow.ScoreplaceNextMatch.conflictsWithActive(m, activeMatches)) {
@@ -4645,8 +4726,23 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
       // quadra cria uma chamada nova; repetir na mesma conserva o instante.
       if (confirmCall && !m.courtCalledAt) m.courtCalledAt = agoraIso;
       const b = _gravaTorneio(tx, ref, t, antes, { agoraIso: agoraIso });
-      tx.set(courtStateRef, { revision: FieldValue.increment(1) }, { merge: true });
-      return commitReply({ ok: true, changed: true, court, courtCalledAt: m.courtCalledAt || null, reassigned, tournament: b.clean });
+      let queueReply = {};
+      if (confirmCall) {
+        const postponed = (Array.isArray(courtState.postponed) ? courtState.postponed : []).map(String)
+          .filter(id => id !== matchId);
+        const ready = (Array.isArray(courtState.postponedReady) ? courtState.postponedReady : []).map(String)
+          .filter(id => id !== matchId);
+        if (postponed.length) {
+          const returning = postponed.shift();
+          if (ready.indexOf(returning) < 0) ready.push(returning);
+        }
+        queueReply = { postponed, postponedReady: ready, courtRevision: Number(courtState.revision || 0) + 1 };
+        tx.set(courtStateRef, { postponed, postponedReady: ready, revision: FieldValue.increment(1) }, { merge: true });
+      } else {
+        tx.set(courtStateRef, { revision: FieldValue.increment(1) }, { merge: true });
+      }
+      return commitReply({ ok: true, changed: true, court, courtCalledAt: m.courtCalledAt || null,
+        reassigned, tournament: b.clean, ...queueReply });
     });
   } catch (e) {
     if (e instanceof HttpsError) throw e;
@@ -4822,7 +4918,10 @@ exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
       const postponed = (Array.isArray(state.postponed) ? state.postponed : [])
         .map(String).filter((id, index, list) => id !== matchId && eligibleIds.has(id) && list.indexOf(id) === index);
       postponed.push(matchId);
-      tx.set(stateRef, { postponed: postponed.slice(-all.length), revision: FieldValue.increment(1) }, { merge: true });
+      const ready = (Array.isArray(state.postponedReady) ? state.postponedReady : [])
+        .map(String).filter((id, index, list) => id !== matchId && eligibleIds.has(id) && list.indexOf(id) === index);
+      tx.set(stateRef, { postponed: postponed.slice(-all.length), postponedReady: ready,
+        revision: FieldValue.increment(1) }, { merge: true });
       return commitReply({ ok: true, changed: true });
     }
     if (action === 'restore') {
@@ -5215,21 +5314,17 @@ exports.deleteEmptyTournamentCategory = onCall(async (request) => {
       const matches = t.categoryDefinitions.filter(def => def && def.label === category);
       if (matches.length !== 1) return { ok:true, changed:false, outcome:'missing' };
       const definition = matches[0];
-      const registrations = await tx.get(ref.collection('registrations'));
-      if (registrations.docs.some(doc => {
-        const item = doc.data() || {};
-        return item.status !== 'withdrawn' && item.categoryId === definition.id;
-      }) || (t.placeholderReservations || []).some(item => item && typeof item === 'object' && (
-        typeof item.categoryId !== 'string' || !item.categoryId.trim() || item.categoryId === definition.id))) {
-        return { ok:true, changed:false, outcome:'occupied' };
-      }
       const prices = t.registrationSettings && t.registrationSettings.pricing;
       if ((prices && prices.mode === 'category' && Object.prototype.hasOwnProperty.call(prices.centsByCategory || {}, category))
         || Object.prototype.hasOwnProperty.call(t.maxParticipantsByCategory || {}, category)) {
         throw new HttpsError('failed-precondition', 'Remova primeiro o preço ou o limite de vagas desta categoria.');
       }
       const next = t.categoryDefinitions.filter(def => def && def.id !== definition.id);
+      const categoryChange = await _categoryDefinitionsForLabels(tx, ref, t, next.map(def => def.label));
+      _writeCategoryRemoval(tx, ref, t, categoryChange.removal, categoryChange.reservations);
       tx.update(ref, { categoryDefinitions:next, combinedCategories:next.map(def => def.label),
+        canonicalRegistrationMigration:t.canonicalRegistrationMigration,
+        ...(categoryChange.reservations ? { placeholderReservations:categoryChange.reservations } : {}),
         updatedAt:FieldValue.serverTimestamp() });
       return { ok:true, changed:true, outcome:'deleted' };
     }
@@ -5402,9 +5497,12 @@ exports.setTournamentCategoryConfig = onCall({ invoker: 'public' }, async (reque
       throw new HttpsError('failed-precondition', 'Categorias foram editadas em outra tela. Recarregue antes de alterá-las.');
     }
     if (!canonical) _assertLegacyRosterMutationAllowed(t, 'configuração legada de categorias');
-    const definitions = canonical ? await _categoryDefinitionsForLabels(tx, ref, t, combinedCategories) : null;
+    const categoryChange = canonical ? await _categoryDefinitionsForLabels(tx, ref, t, combinedCategories) : null;
     const antes = _antesDoMotor(t); t.genderCategories = genderCategories; t.skillCategories = skillCategories; t.combinedCategories = combinedCategories;
-    if (canonical) t.categoryDefinitions = definitions;
+    if (canonical) {
+      t.categoryDefinitions = categoryChange.definitions;
+      _writeCategoryRemoval(tx, ref, t, categoryChange.removal, categoryChange.reservations);
+    }
     const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
     return { ok:true, changed:true, tournament:b.clean };
   });
@@ -5757,6 +5855,7 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     const categoryKeys = ['genderCategories', 'skillCategories', 'ageCategories', 'customCategories', 'combinedCategories'];
     const categoryChanged = categoryKeys.some((key) => Object.prototype.hasOwnProperty.call(patch, key) &&
       JSON.stringify(patch[key]) !== JSON.stringify(t[key]));
+    let categoryChange = null;
     if (categoryChanged && t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint) {
       const axesChanged = categoryKeys.slice(0, 4).some((key) => Object.prototype.hasOwnProperty.call(patch, key) &&
         JSON.stringify(patch[key]) !== JSON.stringify(t[key]));
@@ -5768,7 +5867,8 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
       }
       await _assertCategoryConfigBeforeDraw(tx, ref, t);
       const finalLabels = Object.prototype.hasOwnProperty.call(patch, 'combinedCategories') ? patch.combinedCategories : t.combinedCategories;
-      patch.categoryDefinitions = await _categoryDefinitionsForLabels(tx, ref, t, finalLabels || []);
+      categoryChange = await _categoryDefinitionsForLabels(tx, ref, t, finalLabels || []);
+      patch.categoryDefinitions = categoryChange.definitions;
     }
     const hasDraw = hasDrawnBracket(t);
     if (patch.scheduleWindow !== undefined || categoryChanged || patch.startDate !== undefined || patch.endDate !== undefined) {
@@ -5967,6 +6067,8 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
         t[key] = patch[key];
       }
     });
+    _writeCategoryRemoval(tx, ref, t, categoryChange && categoryChange.removal,
+      categoryChange && categoryChange.reservations);
     if (_futurePlan) {
       t.phases = [t.phases[0]].concat(_futurePlan.phases);
       t.gruposClassified = _futurePlan.gruposClassified;
@@ -6387,6 +6489,73 @@ function _refreshAutomaticPhaseTies(t, matchId, nowIso) {
   }
 }
 
+// Categorias da agenda intercalada avançam no mesmo commit do último resultado.
+// A fase global só muda depois de todas as categorias terem materializado a chave.
+function _materializeInterleavedReadyCategories(t, tId, nowIso) {
+  const plan = t && t.scheduleWindow && t.scheduleWindow.interleavedPlan;
+  if (!plan || Number(t.currentPhaseIndex || 0) !== 0) return [];
+  const phaseEngine = drawWindow && drawWindow._phasesEngine;
+  if (!phaseEngine || typeof phaseEngine.prevPhaseGroups !== 'function' ||
+      typeof phaseEngine.materializeNextPhase !== 'function' ||
+      typeof drawWindow._schGradeEstimada !== 'function' ||
+      typeof drawWindow._schAplicarGrade !== 'function') {
+    throw new HttpsError('failed-precondition', 'Motor da agenda intercalada indisponível.');
+  }
+  const sourceGroups = phaseEngine.prevPhaseGroups(t);
+  const categoryOf = group => String(group && (group.category || group.categoryName) ||
+    (group && group.matches && group.matches[0] && group.matches[0].category) || '');
+  const currentCfg = phaseEngine.projectPhaseCfg(t.phases[0], t, 0);
+  const tbOpts = { tiebreakers:t.tiebreakers, rankingPrimary:t.rankingPrimary,
+    birthByName:typeof drawWindow._tbBirthByName === 'function' ? drawWindow._tbBirthByName(t) : {} };
+  const standings = group => phaseStandingsFn(group, t, tbOpts, true);
+  const tieRuntime = _buildPhaseTieRuntime(t, 0, sourceGroups, currentCfg,
+    phaseEngine, standings, tbOpts, t.fmt2 && t.fmt2.tieResolution);
+  if (tieRuntime.overall) throw new HttpsError('failed-precondition', 'A agenda intercalada exige classificação por grupo.');
+  const expectedGroups = {};
+  (plan.blocks || []).filter(block => block.kind === 'groups').forEach(block => {
+    expectedGroups[String(block.category)] = (expectedGroups[String(block.category)] || 0) +
+      (Array.isArray(block.courts) ? block.courts.length : 0);
+  });
+  const materialized = [];
+  for (const category of (t.combinedCategories || []).map(String)) {
+    if (t.phaseCategoryMaterialized && t.phaseCategoryMaterialized[category]) continue;
+    const pools = tieRuntime.pools.filter(pool => categoryOf(pool.group) === category);
+    if (!expectedGroups[category] || pools.length !== expectedGroups[category]) continue;
+    const done = pools.every(pool => {
+      const matches = (pool.group && pool.group.matches) || [];
+      return matches.length === 3 && matches.every(m => m && (m.winner || m.isBye));
+    });
+    if (!done) continue;
+    const flow = _phaseTieCore.resolvePhaseTies(t, 0, pools, tieRuntime.nextCfg,
+      tieRuntime.compareForPool, null, 1, false, tieRuntime.numberForPool, nowIso,
+      { autoPlay:true, retainOtherDecisions:true });
+    if (flow.status !== 'ready') continue;
+    const byPool = new Map(flow.orderedPools.map(pool => [pool.id, pool.rows]));
+    const byGroup = new Map(pools.map(pool => [pool.group, byPool.get(pool.id)]));
+    const categoryIndex = (t.combinedCategories || []).map(String).indexOf(category);
+    const prefix = 'ph-' + tId + '-1-c' + categoryIndex;
+    const result = phaseEngine.materializeNextPhase(t,
+      group => byGroup.get(group) || standings(group), prefix,
+      { agoraIso:nowIso }, { category });
+    if (!result || !result.ok) {
+      throw new HttpsError('failed-precondition', 'Não foi possível gerar a eliminatória de ' + category + '.');
+    }
+    const schedule = drawWindow._schGradeEstimada(t);
+    const scheduledMatches = typeof drawWindow._collectAllMatches === 'function'
+      ? drawWindow._collectAllMatches(t) : t.matches || [];
+    const realIds = new Set(scheduledMatches.filter(m => m && !m.isBye && !m.isSitOut && m.id != null)
+      .map(m => String(m.id)));
+    if (!schedule || !schedule.cabe || !schedule.interleaved ||
+        schedule.slots.length !== realIds.size) {
+      throw new HttpsError('failed-precondition', 'A eliminatória de ' + category + ' não cabe na agenda publicada.');
+    }
+    drawWindow._schAplicarGrade(t);
+    if (typeof drawWindow._assignGlobalGameNumbers === 'function') drawWindow._assignGlobalGameNumbers(t);
+    materialized.push(category);
+  }
+  return materialized;
+}
+
 exports.advanceTournamentPhase = onCall(async (request) => {
   const uid = request.auth && request.auth.uid;
   const tId = String((request.data && request.data.tournamentId) || '').trim();
@@ -6425,6 +6594,10 @@ exports.advanceTournamentPhase = onCall(async (request) => {
     const seedAccepted = pendingDecision.seedChoiceAccepted;
     const current = t.currentPhaseIndex || 0;
     if (!Array.isArray(t.phases) || current + 1 >= t.phases.length) return { ok: false, reason: 'no-next-phase' };
+    if (current === 0 && t.scheduleWindow && t.scheduleWindow.interleavedPlan &&
+        !(request.data && request.data.tieAction)) {
+      return { ok:false, reason:'interleaved-categories-advance-on-results' };
+    }
     // O painel pode ter decidido play-in e rodadas classificatórias no snapshot da tela.
     // A CF aceita somente essas duas escolhas de configuração e as reaplica no doc fresco
     // antes de materializar; nenhum placar, participante ou chave vem do cliente.
@@ -6536,7 +6709,9 @@ exports.advanceTournamentPhase = onCall(async (request) => {
           tie: tieFlow.tie, decision: tieFlow.decision || null, tournament: saved && saved.clean };
       }
       if (requestedTieAction && !String(requestedTieAction.decisionId || '').startsWith('wildcards:')) {
-        const saved = tieFlow.changed ? _gravaTorneio(tx, ref, t, antes, { agoraIso }) : null;
+        const newCategories = t.scheduleWindow && t.scheduleWindow.interleavedPlan
+          ? _materializeInterleavedReadyCategories(t, tId, agoraIso) : [];
+        const saved = tieFlow.changed || newCategories.length ? _gravaTorneio(tx, ref, t, antes, { agoraIso }) : null;
         return { ok: true, reason: 'tie-updated', tournament: saved && saved.clean };
       }
       if (overall) {

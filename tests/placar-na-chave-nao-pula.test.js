@@ -154,7 +154,7 @@ async function naoPula(browser) {
     const r = c ? c.getBoundingClientRect() : null;
     return { x: Math.round(w ? w.scrollLeft : 0), topo: r?Math.round(r.top):null, esq: r?Math.round(r.left):null,
              scrollY: Math.round(window.scrollY),
-             colunas: c ? c.querySelectorAll('.sp-set-head .sp-set-col').length : 0 };
+             colunas: c ? [...c.querySelectorAll('.sp-set-head .sp-set-col')].filter(el => getComputedStyle(el).display !== 'none').length : 0 };
   }, ALVO);
 
   ok(dep.colunas === 2, 'o set entrou mesmo (o card passou a ter 2 colunas) — obtido ' + dep.colunas);
@@ -205,6 +205,40 @@ async function respostaCanonicaFicaNoCard(browser) {
   }, alvo);
   ok(Math.abs(delayed.top - r.before.top) <= 2 && Math.abs(delayed.left - r.before.left) <= 2,
     'reflow tardio mantém o mesmo card no mesmo ponto da tela');
+  await page.close();
+}
+
+async function ecoDoServidorNaoMoveJogo(browser) {
+  console.log('\n①c Atualização posterior mantém o jogo lançado no mesmo lugar');
+  const t = montaTorneio();
+  const alvo = (t.matches || []).filter(m => m.round === 2)[3].id;
+  const page = await abreChave(browser, t, { uid:'u-org', displayName:'Org', org:true });
+  const result = await page.evaluate((id) => {
+    const t = window.AppStore.tournaments[0];
+    const card = document.getElementById('card-' + id);
+    const wrapper = card.closest('.bracket-scroll-container, .bracket-sticky-scroll-wrapper');
+    window.scrollTo(0, card.getBoundingClientRect().top + window.scrollY - 280);
+    wrapper.scrollLeft = Math.round((wrapper.scrollWidth - wrapper.clientWidth) * 0.6);
+    const before = { top: card.getBoundingClientRect().top, left: card.getBoundingClientRect().left,
+      x: wrapper.scrollLeft };
+    window._scoreViewportAnchor = { tournamentId: t.id, matchId: id, route: window.location.hash, at: Date.now() };
+    window._lastSoftRefresh = 0;
+    window._suppressSoftRefresh = false;
+    window._tdetailSig = 'antes';
+    window._tournamentDetailSig = () => 'depois';
+    window.initRouter = () => {
+      window.renderBracket(document.getElementById('inline-bracket-container'), t.id, true);
+      window.scrollTo(0, 0);
+    };
+    window._softRefreshView();
+    const next = document.getElementById('card-' + id);
+    const nextWrapper = next.closest('.bracket-scroll-container, .bracket-sticky-scroll-wrapper');
+    return { before, after: { top: next.getBoundingClientRect().top,
+      left: next.getBoundingClientRect().left, x: nextWrapper.scrollLeft } };
+  }, alvo);
+  ok(Math.abs(result.after.top - result.before.top) <= 2 &&
+    Math.abs(result.after.left - result.before.left) <= 2 && result.after.x === result.before.x,
+    'o eco que reconstrói a chave mantém o card e a rolagem horizontal');
   await page.close();
 }
 
@@ -370,6 +404,28 @@ async function difDoisPontos(browser) {
   // card COM super tie-break mais alto que o card sem.
   ok((anuncio.rotulos||[]).join('|') === '1|2|STB',
     'e a coluna leva só o número; o STB mantém a palavra, sem os pontos');
+
+  const preview = await page.evaluate((id) => {
+    const card = document.getElementById('card-' + id);
+    const stb = card.querySelector('.sp-set-head [data-sp-stb-preview]');
+    const before = stb && getComputedStyle(stb).display === 'none';
+    for (const [key, value] of [['s1-', 6], ['s2-', 4], ['s1-', 4], ['s2-', 6]]) {
+      const suffix = card.querySelector('#' + key + id + '-1') &&
+        (key === 's1-' && value === 4 || key === 's2-' && value === 6) ? '-1' : '';
+      const input = document.getElementById(key + id + suffix);
+      input.value = String(value);
+      window._highlightWinner(id);
+    }
+    const visible = getComputedStyle(stb).display !== 'none';
+    const headline = card.querySelector('.sp-set-head-ttl').textContent;
+    document.getElementById('s1-' + id + '-1').value = '6';
+    window._highlightWinner(id);
+    const hiddenAgain = getComputedStyle(stb).display === 'none';
+    const persisted = (window.AppStore.tournaments[0].matches.find(m => m.id === id).sets || []).length;
+    return { before, visible, headline, hiddenAgain, persisted };
+  }, zerado.id);
+  ok(preview.before && preview.visible && /Super Tie-Break/.test(preview.headline) && preview.hiddenAgain && preview.persisted === 0,
+    'digitou 1 a 1: STB aparece sem Confirmar; corrigiu o empate: some, sem gravar');
 
   const noSet = await page.evaluate((id) => {
     const vis = e => !!e && getComputedStyle(e).display !== 'none';
@@ -541,6 +597,7 @@ async function numeroDoPlacar(browser) {
   try {
     await naoPula(browser);
     await respostaCanonicaFicaNoCard(browser);
+    await ecoDoServidorNaoMoveJogo(browser);
     await falhaNaoDeixaPlacarOtimista(browser);
     simularJogaOFormato();
     await aprovacao(browser);

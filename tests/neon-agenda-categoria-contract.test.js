@@ -60,7 +60,8 @@ const canonicalRender = block(bracket,
 const groupRender = block(bracket,
   "if (isGrupos && t.groups && t.groups.length > 0)",
   '// Rei/Rainha NÃO é formato de fase');
-ok(canonicalRender.indexOf('_competitionTeamStandingsHtml + window._renderPhaseBracket') >= 0,
+ok(canonicalRender.indexOf('var phase0 = window._renderPhaseBracket') >= 0 &&
+  canonicalRender.indexOf('if (!hasInterleaved) return _competitionTeamStandingsHtml + phase0') >= 0,
   'Neon canônico mostra a classificação geral dos times antes das chaves, por decisão do organizador');
 ok(groupRender.indexOf('_competitionTeamStandingsHtml + renderGroupStage') >= 0,
   'Neon em grupos preserva a mesma ordem: classificação geral antes das chaves');

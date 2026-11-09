@@ -85,6 +85,7 @@ window._clearDrawRuntimeFlags = function (t) {
     '_drawDecisions',
     // estado de PLAY derivado do sorteio (standings/eliminação/W.O./substituição)
     'swissEliminated', 'swissRoundsData', 'swissStandings', 'classification',
+    'phaseCategoryMaterialized',
     'opponentHistory', 'woClaims', 'ligaSubInvites', 'ligaRRSchedule'
     // NOTA: checkedIn/absent NÃO entram aqui — são mapas por-uid lidos com Object.keys
     // sem guarda (participants.js:99/117) e _idMapSet vira no-op se o mapa for null

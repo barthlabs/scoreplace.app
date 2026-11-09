@@ -3013,8 +3013,14 @@
     if (!isMultiPhase(t)) return { ok: false, error: 'not-multiphase' };
     var cur = t.currentPhaseIndex || 0;
     var nextIdx = cur + 1;
+    var interleavedCategory = t.scheduleWindow && t.scheduleWindow.interleavedPlan &&
+      opts.category ? String(opts.category) : '';
+    if (interleavedCategory && (cur !== 0 || nextIdx !== 1 ||
+        (t.phaseCategoryMaterialized && t.phaseCategoryMaterialized[interleavedCategory]))) {
+      return { ok:false, error:'already-materialized' };
+    }
     if (nextIdx >= t.phases.length) return { ok: false, error: 'no-next-phase' };
-    if ((t._phaseMaterialized || 0) >= nextIdx) return { ok: false, error: 'already-materialized' };
+    if (!interleavedCategory && (t._phaseMaterialized || 0) >= nextIdx) return { ok: false, error: 'already-materialized' };
     var cfg, prevCfg;
     try {
       cfg = projectPhaseCfg(t.phases[nextIdx], t, nextIdx);
@@ -3032,6 +3038,7 @@
       groups = opts.usarClassificacaoCongelada ? opts.sourceGroups : bracketPhaseGroups(t, cur);
       cs = opts.usarClassificacaoCongelada ? opts.standingsForGroup : function (g) { return g.standings || []; };
     }
+    if (interleavedCategory) groups = groups.filter(function (g) { return _groupCategory(g) === interleavedCategory; });
     if (!groups.length) return { ok: false, error: 'no-groups' };
     // v3.1.15: roteamento por FORMATO (classifyPhaseFormat → league/groups/elim). O
     // modo de sorteio (Rei/Rainha) e a cadência (rodada a rodada / todos contra todos)
@@ -3087,6 +3094,28 @@
     // lastAutoDrawAt (dedup do auto-draw, por fase). O cliente (advanceMultiPhase →
     // _phaseGenNextLeagueRound) gera a 1ª rodada logo após, escrevendo em slot.rounds.
     if (built.error) return { ok: false, error: built.error };
+    if (interleavedCategory) {
+      if (!Array.isArray(built.matches) || !built.matches.length ||
+          built.matches.some(function (m) { return m.category !== interleavedCategory; })) {
+        return { ok:false, error:'category-bracket-invalid' };
+      }
+      built.matches.forEach(function (m) {
+        m.phaseIndex = nextIdx;
+        _carimbaUidsNoSlot(m);
+      });
+      t.matches = (t.matches || []).concat(built.matches);
+      t.phaseCategoryMaterialized = t.phaseCategoryMaterialized || {};
+      t.phaseCategoryMaterialized[interleavedCategory] = { at:det.agoraIso || new Date().toISOString(),
+        count:built.matches.filter(function (m) { return !m.isBye; }).length };
+      var categories = (t.combinedCategories || []).map(String);
+      if (categories.length && categories.every(function (c) { return !!t.phaseCategoryMaterialized[c]; })) {
+        t.currentPhaseIndex = nextIdx;
+        t._phaseMaterialized = nextIdx;
+        _carimbaInicioDaFase(t, nextIdx, det.agoraIso);
+      }
+      return { ok:true, matches:built.matches, built:built, phaseIndex:nextIdx,
+        category:interleavedCategory };
+    }
     return storePhase(t, nextIdx, built, det);
   }
 

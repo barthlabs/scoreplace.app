@@ -360,10 +360,6 @@ const request = (sandboxFlag) => ({
   console.log('✓ desinscrição legada atualiza a subcoleção de inscritos do sandbox sem tocar em produção');
 
   state.tournaments.t1.doc.creatorUid = 'org';
-  const beforeUsedRemoval = clone(state.tournaments.t1);
-  await assert.rejects(setDefinitions([definitions[1]]), /Reclassifique as inscrições/);
-  assert.deepStrictEqual(clone(state.tournaments.t1), beforeUsedRemoval,
-    'remover categoria usada não escreve em torneio real nem no clone');
   const renamed = definitions.map((def, index) => ({ ...def, label: index === 0 ? 'Categoria A renomeada' : def.label }));
   const configured = await setDefinitions(renamed);
   assert.strictEqual(configured.ok, true);
@@ -371,5 +367,13 @@ const request = (sandboxFlag) => ({
   assert.deepStrictEqual(state.tournaments.t1.doc.combinedCategories, ['Categoria A renomeada', 'cat-b']);
   assert.strictEqual(state.tournaments.t1.doc.enrollmentRigor, 'casual');
   assert(state.tournaments.t1.doc.updatedAt, 'edição tipada atualiza o relógio');
-  console.log('✓ renomeação mantém IDs; remoção de categoria usada recusa sem escrita');
+  const sandboxBeforeRemoval = clone(state.sandboxes.sb_t1);
+  const removedCategory = await setDefinitions([renamed[1]]);
+  assert.strictEqual(removedCategory.uncategorized, 1);
+  assert.deepStrictEqual(state.tournaments.t1.doc.categoryDefinitions.map(def => def.id), ['cat-b']);
+  assert.strictEqual(state.tournaments.t1.registrations[first.registrationId].status, 'withdrawn');
+  assert.strictEqual(state.tournaments.t1.doc.canonicalRegistrationMigration.registrationCount, 2);
+  assert.deepStrictEqual(clone(state.sandboxes.sb_t1), sandboxBeforeRemoval,
+    'exclusão no torneio real não toca o clone');
+  console.log('✓ renomeação mantém IDs; exclusão de categoria usada preserva inscrição sem categoria');
 })().catch((error) => { console.error(error); process.exitCode = 1; });

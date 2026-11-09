@@ -177,6 +177,11 @@ window._computeMonarchStandings = function(group, t, category) {
         }
       });
     }
+    // Na pontuação simples configurada por saldo de games, o placar 6×4 é
+    // diretamente a contagem de games quando o jogo não possui sets[] legado.
+    if (!Array.isArray(m.sets) || !m.sets.length) {
+      if (t && t.rankingPrimary === 'games_diff') { gw1 = s1; gw2 = s2; }
+    }
 
     var _u1m = Array.isArray(m.team1Uids) ? m.team1Uids : [];
     var _u2m = Array.isArray(m.team2Uids) ? m.team2Uids : [];

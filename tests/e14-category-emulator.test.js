@@ -45,6 +45,23 @@ const clone=value=>JSON.parse(JSON.stringify(value));
   const remove=(id,category,uid='org')=>invoke(Draw.deleteEmptyTournamentCategory,{tournamentId:id,category},uid);
   const configure=(id,defs,uid='org')=>invoke(CF.setTournamentCategoryDefinitions,
     {tournamentId:id,definitions:defs,rigor:'casual'},uid);
+  const empty=await make();
+  const emptySaved=await configure(empty.id,[definitions[0]]);
+  assert.equal(emptySaved.ok,true,'porta tipada remove categoria sem inscrições ativas');
+  const emptyData=(await empty.ref.get()).data();
+  assert.deepEqual(emptyData.categoryDefinitions.map(def=>def.id),['a']);
+  assert.deepEqual(emptyData.combinedCategories,['A']);
+  assert.equal(emptyData.canonicalRegistrationMigration.registrationCount,0);
+  const reservedConfig=await make();
+  await reservedConfig.ref.update({placeholderReservations:[
+    {categoryId:'b',participantKey:'guest:reserved'},
+    {categoryId:'a',participantKey:'guest:kept'},
+  ]});
+  assert.equal((await configure(reservedConfig.id,[definitions[0]])).ok,true);
+  assert.deepEqual((await reservedConfig.ref.get()).data().placeholderReservations,[
+    {categoryId:'__uncategorized__',participantKey:'guest:reserved'},
+    {categoryId:'a',participantKey:'guest:kept'},
+  ],'a porta tipada retira também as reservas da categoria apagada');
   await assert.rejects(remove(first.id,'B','intruso'),error=>error.code==='permission-denied');
   assert.equal((await remove(first.id,'B')).outcome,'deleted');
   let parent=(await first.ref.get()).data();
@@ -83,22 +100,59 @@ const clone=value=>JSON.parse(JSON.stringify(value));
     status:'confirmed',validationState:'approved',migrationFingerprint:'e14-2',fixedPairId:null};
   await second.ref.collection('registrations').doc(item.registrationId).set(item);
   await second.ref.update({'canonicalRegistrationMigration.registrationCount':1});
-  assert.equal((await remove(second.id,'B')).outcome,'occupied');
-  await assert.rejects(configure(second.id,[definitions[0]]),error=>error.code==='failed-precondition');
-  assert.deepEqual((await second.ref.get()).data().combinedCategories,['A','B']);
+  assert.equal((await remove(second.id,'B')).outcome,'deleted');
+  assert.deepEqual((await second.ref.get()).data().combinedCategories,['A']);
+  const secondRegs=(await second.ref.collection('registrations').get()).docs.map(doc=>doc.data());
+  assert.equal(secondRegs.find(entry=>entry.registrationId===item.registrationId).status,'withdrawn');
+  assert.equal(secondRegs.find(entry=>entry.categoryId==='__uncategorized__').status,'confirmed');
+  assert.equal((await second.ref.get()).data().canonicalRegistrationMigration.registrationCount,2);
+
+  const editor=await make();
+  await editor.ref.update({customCategories:['A','B'],maxParticipants:48,
+    maxParticipantsByCategory:{A:16,B:32}});
+  for(const person of ['first','second']){
+    const entry={...item,registrationId:registrationCore.registrationId('uid:'+person,'b'),
+      tournamentId:editor.id,participantKey:'uid:'+person,participantUid:person,
+      migrationFingerprint:'e14-'+serial};
+    await editor.ref.collection('registrations').doc(entry.registrationId).set(entry);
+  }
+  await editor.ref.update({'canonicalRegistrationMigration.registrationCount':2});
+  const edit=await invoke(Draw.updateTournamentConfiguration,{tournamentId:editor.id,patch:{
+    customCategories:['Retinol (B)','Colágeno (C)'],
+    combinedCategories:['Retinol (B)','Colágeno (C)'],
+    maxParticipantsByCategory:{'Retinol (B)':16,'Colágeno (C)':32},maxParticipants:48,
+  }});
+  assert.equal(edit.ok,true,'editor grava categorias novas com inscrições antigas');
+  const edited=(await editor.ref.get()).data();
+  assert.deepEqual(edited.combinedCategories,['Retinol (B)','Colágeno (C)']);
+  assert.equal(edited.canonicalRegistrationMigration.registrationCount,4);
+  const editedRegs=(await editor.ref.collection('registrations').get()).docs.map(doc=>doc.data());
+  assert.equal(editedRegs.filter(entry=>entry.status==='confirmed' && entry.categoryId==='__uncategorized__').length,2);
+  assert.equal(editedRegs.filter(entry=>entry.status==='withdrawn' && entry.categoryId==='b').length,2);
+  assert.equal(editedRegs.filter(entry=>entry.status==='confirmed' && entry.categoryId==='b').length,0);
+
+  const typed=await make();
+  const typedEntry={...item,registrationId:registrationCore.registrationId('uid:typed','b'),
+    tournamentId:typed.id,participantKey:'uid:typed',participantUid:'typed',
+    migrationFingerprint:'e14-'+serial};
+  await typed.ref.collection('registrations').doc(typedEntry.registrationId).set(typedEntry);
+  await typed.ref.update({'canonicalRegistrationMigration.registrationCount':1});
+  const typedSaved=await configure(typed.id,[definitions[0]]);
+  assert.equal(typedSaved.uncategorized,1,'porta tipada aplica a mesma regra de exclusão');
+  assert.equal((await typed.ref.get()).data().canonicalRegistrationMigration.registrationCount,2);
+  assert.equal((await typed.ref.collection('registrations').doc(typedEntry.registrationId).get()).data().status,'withdrawn');
 
   const ambiguous=await make();
   await ambiguous.ref.update({placeholderReservations:[{participantKey:'guest:unknown'}]});
-  assert.equal((await remove(ambiguous.id,'B')).outcome,'occupied');
+  assert.equal((await remove(ambiguous.id,'B')).outcome,'deleted');
   parent=(await ambiguous.ref.get()).data();
-  assert.deepEqual(parent.categoryDefinitions,definitions,'reserva sem categoria não autoriza excluir');
-  assert.deepEqual(parent.combinedCategories,['A','B']);
+  assert.deepEqual(parent.categoryDefinitions.map(def=>def.id),['a']);
   assert.deepEqual(parent.placeholderReservations,[{participantKey:'guest:unknown'}]);
-  await ambiguous.ref.update({placeholderReservations:[{categoryId:'  ',participantKey:'guest:unknown'}]});
-  assert.equal((await remove(ambiguous.id,'B')).outcome,'occupied');
-  await ambiguous.ref.update({placeholderReservations:[{categoryId:'a',participantKey:'guest:known'}]});
-  assert.equal((await remove(ambiguous.id,'B')).outcome,'deleted',
-    'reserva tipada da outra categoria não impede excluir B');
+  const reserved=await make();
+  await reserved.ref.update({placeholderReservations:[{categoryId:'b',participantKey:'guest:known'}]});
+  assert.equal((await remove(reserved.id,'B')).outcome,'deleted');
+  assert.equal((await reserved.ref.get()).data().placeholderReservations[0].categoryId,
+    '__uncategorized__','reserva da categoria excluída permanece sem categoria');
 
   // Duas transações disputam a mesma raiz: inscrição e remoção nunca podem
   // confirmar uma categoria ausente com inscrição ativa.
@@ -117,9 +171,11 @@ const clone=value=>JSON.parse(JSON.stringify(value));
     const settled=await Promise.allSettled([enroll,deletion]);
     assert(settled.some(result=>result.status==='fulfilled'),
       'a corrida deve concluir pelo menos uma das operações concorrentes');
-    const live=(await current.ref.collection('registrations').get()).docs.some(doc=>doc.data().status!=='withdrawn');
+    const live=(await current.ref.collection('registrations').get()).docs
+      .map(doc=>doc.data()).filter(entry=>entry.status!=='withdrawn');
     const labels=(await current.ref.get()).data().categoryDefinitions.map(def=>def.id);
-    assert(!live||labels.includes('b'),'corrida não deixa inscrição ativa sem categoria');
+    assert(live.every(entry=>labels.includes(entry.categoryId)||entry.categoryId==='__uncategorized__'),
+      'corrida não deixa inscrição ativa numa categoria excluída');
   }
   console.log('✓ E14 emulador: exclusão/renomeação tipada, preço/limite, autorização e corrida');
 })().catch(error=>{console.error(error);process.exitCode=1;});

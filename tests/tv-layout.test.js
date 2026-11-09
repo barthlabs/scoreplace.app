@@ -17,6 +17,16 @@ const screens = [{ phaseIndex: 0, layout: original }, { phaseIndex: 1, layout: s
 assert.deepEqual(server.normalizeScreens(screens), browser.normalizeScreens(screens));
 assert.equal(browser.forPhase(screens, 1, original).background, '#123456');
 assert.equal(browser.forPhase(screens, 2, original).background, original.background, 'fase sem tela usa o layout anterior');
+assert.equal(original.backgroundMode, 'tournament', 'a tela nova acompanha a paleta do torneio');
+assert.equal(original.sections.logo.visible, false, 'logo independente começa oculto para preservar telas antigas');
+const legacy = { ...original, backgroundMode: undefined, sections: { ...original.sections } };
+delete legacy.backgroundMode;
+delete legacy.sections.logo;
+assert.equal(browser.normalize(legacy).sections.logo.visible, false, 'layout salvo antes do controle de logo continua válido');
+assert.equal(browser.normalize({ ...legacy, background: '#123456' }).backgroundMode, 'custom', 'fundo manual antigo permanece manual');
+assert.deepEqual(browser.snapBox({ x: 48.9, y: 10, w: 20, h: 20 }, [{ x: 50, y: 10, w: 20, h: 20 }], false),
+  { x: 50, y: 10, w: 20, h: 20 }, 'arrastar encaixa em borda vizinha');
+assert.equal(browser.snapBox({ x: 1, y: 1, w: 98.2, h: 20 }, [], true).w, 99, 'redimensionar encaixa na borda da tela');
 assert.throws(() => server.normalizeScreens([screens[0], screens[0]]), 'uma fase não aceita duas telas concorrentes');
 assert.throws(() => server.normalizeScreens([{ phaseIndex: 12, layout: original }]));
 assert.throws(() => server.normalizeScreens([{ phaseIndex: 1, layout: { ...original, background: 'red' } }]));

@@ -132,7 +132,12 @@
   // (acontecem uma vez); só o tempo de jogo multiplica pelos sets.
   window._minutosDaPartida = function (t, fase) {
     t = t || {};
-    return (parseInt(t.gameDuration, 10) || 30) * window._setsEsperadosDaFase(t, fase)
+    var plan = t.scheduleWindow && t.scheduleWindow.interleavedPlan;
+    var phaseMinutes = plan && fase && fase.kind === 'elimination'
+      ? parseInt(plan.eliminationPlayMinutes, 10) : NaN;
+    var gameMinutes = Number.isInteger(phaseMinutes) && phaseMinutes > 0
+      ? phaseMinutes : (parseInt(t.gameDuration, 10) || 30);
+    return gameMinutes * window._setsEsperadosDaFase(t, fase)
       + (parseInt(t.callTime, 10) || 0)
       + (parseInt(t.warmupTime, 10) || 0);
   };

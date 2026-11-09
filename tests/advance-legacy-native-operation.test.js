@@ -25,6 +25,8 @@ assert.equal(resolve(supplied, () => { throw Error('não deveria gerar'); }), su
 assert.throws(() => advance.validaOperationId(resolve('inválido', randomUUID)), /operationId/,
   'campo presente inválido continua recusado');
 const engine = fs.readFileSync(path.join(__dirname, '../js/views/phases-engine.js'), 'utf8');
-assert.match(engine, /if \(\(t\._phaseMaterialized \|\| 0\) >= nextIdx\) return \{ ok: false, error: 'already-materialized' \}/,
-  'mesma fase não materializa duas vezes quando o cliente antigo repete a chamada');
+assert.match(engine, /if \(!interleavedCategory && \(t\._phaseMaterialized \|\| 0\) >= nextIdx\) return \{ ok: false, error: 'already-materialized' \}/,
+  'cliente antigo continua sem materializar duas vezes a fase global');
+assert.match(engine, /t\.phaseCategoryMaterialized\[interleavedCategory\]/,
+  'avanço intercalado tem marcador próprio para não duplicar a categoria');
 console.log('✓ app nativo sem operationId avança com UUID estável na transação');

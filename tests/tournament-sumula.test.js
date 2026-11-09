@@ -268,6 +268,28 @@ assert.strictEqual(new Set(advanced.matches.map(m => m.id)).size, advanced.match
   'os IDs dos jogos de categorias diferentes não colidem');
 assert(advanced.matches.every(m => ['Diamante','Ouro','Prata'].includes(m.category)),
   'nenhuma partida perde a categoria');
+const interleaved = JSON.parse(JSON.stringify(camis));
+interleaved.politicaDaChave = 'bye';
+interleaved.scheduleWindow = { interleavedPlan:{ schema:1 } };
+const standingsFor = g => g.players.map((name, rank) => ({ name, displayName:name,
+  uid:g.category + '-' + g.name + '-' + rank, gameDiff:4-rank }));
+for (const [category, expectedMatches, expectedPairs] of [
+  ['Diamante',8,8], ['Ouro',16,16], ['Prata',12,12]
+]) {
+  const res = globalThis._phasesEngine.materializeNextPhase(interleaved, standingsFor,
+    'camis-' + category, { agoraIso:'2026-11-13T12:00:00Z' }, { category });
+  assert.strictEqual(res.ok, true, category + ' avança sem esperar as demais categorias');
+  const generated = interleaved.matches.filter(m => m.category === category && !m.isBye);
+  assert.strictEqual(generated.length, expectedMatches,
+    category + ' produz a quantidade de jogos da planilha com uma dupla por grupo');
+  const teams = new Set(generated.flatMap(m => [m.team1Obj, m.team2Obj])
+    .filter(team => team && team.fixedPair).map(team => team.displayName));
+  assert.strictEqual(teams.size, expectedPairs, category + ' forma uma única dupla por grupo');
+}
+assert.strictEqual(interleaved.currentPhaseIndex, 1,
+  'fase global só muda quando Diamante, Ouro e Prata estão materializadas');
+assert.strictEqual(new Set(interleaved.matches.map(m => m.id)).size, 36,
+  'as 36 partidas eliminatórias têm IDs distintos');
 const uncategorizedGroup = JSON.parse(JSON.stringify(camis));
 uncategorizedGroup._phaseMaterialized = 0;
 delete uncategorizedGroup.groups[1].category;

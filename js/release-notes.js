@@ -1,3 +1,24 @@
+// 2.6.20 — No CAMIS, Diamante e Ouro podem entrar na eliminatória enquanto
+// a Prata ainda disputa grupos. O 1º e 2º de cada grupo formam uma dupla;
+// a classificação preliminar usa saldo de games e empate no corte vai para
+// simples de cinco pontos, sem exigência de dois de vantagem. A programação
+// intercala as categorias até 20h55 e reserva números únicos de jogo.
+// Um W.O. no último jogo também libera a eliminatória da categoria.
+// Ao excluir uma categoria antes do sorteio, os inscritos permanecem no
+// torneio: seguem em outras categorias que já tinham ou ficam sem categoria.
+// No melhor de três, o super tie-break aparece assim que o placar digitado
+// fica 1 a 1. Lançar um resultado mantém o jogo visível no mesmo lugar.
+// 2.6.19 — Pular jogo no Rei/Rainha adia o bloco sem chamar o segundo ou
+// terceiro jogo antes do primeiro. Após chamar outro bloco, o jogo pulado
+// volta à frente; se for pulado novamente, retorna depois da próxima chamada.
+// A janela No ar não mostra mais o botão Tela cheia sobre a transmissão.
+// O editor usa as cores do torneio, permite posicionar e dimensionar o logo
+// separadamente e encaixa seções próximas ao arrastar ou redimensionar.
+// Nos jogos em quadra, as bolinhas verdes dispensam o selo PRONTO.
+// Cada jogo do trio Rei/Rainha indica (1/3), (2/3) ou (3/3). A agenda
+// distingue classificatória e eliminatória, sem repetir o número do jogo.
+// A classificação de cada quarteto usa seus placares e, quando a regra
+// principal é saldo de games, mostra esse saldo sem a coluna Pts.
 // 2.6.18 — Na faixa de chamada, Aplicar W.O. e Ao Vivo mantêm a altura
 // compacta mesmo após atualizações em tela larga. O código do grupo, como A1,
 // usa a mesma fonte, cor e peso da categoria.

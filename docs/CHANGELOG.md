@@ -1,3 +1,23 @@
+## 2.6.20 — 09/nov/2026 (grade CAMIS intercalada)
+
+- A agenda opcional por blocos intercala grupos e eliminatórias de Diamante, Ouro e Prata em oito quadras, com 144 designações únicas. Chamada e aquecimento ocorrem uma vez por quarteto; cada confronto eliminatório reserva 35 minutos (5+5+25). Último confronto termina às 20h55.
+- A categoria libera sua eliminatória quando todos os grupos e desempates dela terminam, inclusive se o último jogo for encerrado por W.O. O 1º e o 2º de cada grupo formam uma única dupla; Diamante e Ouro podem avançar enquanto a Prata ainda está na classificatória. O avanço é transacional e idempotente.
+- Com saldo de games como classificação preliminar, empate no corte é resolvido por simples até cinco pontos, sem vantagem de dois; 5–4 é válido e 6–5 é rejeitado. A fase eliminatória avança pelo vencedor direto.
+- O plano é opt-in. A regra do Firestore impede que clientes antigos criem ou renumerem jogos desse torneio fora da Function. Este corte não altera versões nativas.
+- Excluir uma categoria antes do sorteio preserva as inscrições: quem continua em outra categoria mantém essa classificação; quem não tem outra fica sem categoria. A edição da ficha grava categorias e inscrições na mesma transação, mantendo o histórico e o contador canônico.
+- Em partidas melhor de três, o super tie-break aparece no card assim que os dois placares digitados deixam a disputa em 1 a 1, sem exigir confirmação prévia do segundo set. Uma atualização posterior da chave preserva o jogo lançado no mesmo ponto da tela, inclusive a rolagem horizontal.
+
+## 2.6.19 — 09/nov/2026 (fila Rei/Rainha e personalização da TV)
+
+- Em torneios Rei/Rainha concentrados, a faixa só oferece o primeiro jogo ainda sem resultado de cada quarteto. Pular em qualquer uma das quatro telas adia esse primeiro jogo, sem liberar o segundo ou o terceiro para chamada.
+- A fila de quadra devolve o jogo pulado assim que outro bloco é chamado. Um novo pulo do mesmo jogo reinicia a espera por outra chamada. A ordem é persistida no estado operacional para todos os navegadores.
+- A janela No ar deixa de mostrar o botão Tela cheia sobre o conteúdo.
+- A tela No ar usa a paleta de cores do torneio. O editor oferece fundo manual opcional, logo independente com tamanho ajustável e encaixe automático de seções nas bordas próximas.
+- O card em quadra deixa de exibir o selo PRONTO; as bolinhas verdes de presença continuam indicando a condição dos atletas.
+- Os jogos do trio Rei/Rainha mostram sua posição (1/3, 2/3, 3/3); a agenda deixa de repetir o número acima do card e identifica a classificatória e a eliminatória quando acontecem em paralelo.
+- O adaptador de jogos canônicos separa os quartetos por fase, categoria e grupo. A classificação lê os placares do grupo certo; quando o critério principal é saldo de games, mostra V, D, saldo de games e aproveitamento sem Pts.
+- Corte web e das Functions de chamada de quadra; sem reset de dados nem versões nativas.
+
 ## 2.6.18 — 09/nov/2026 (altura das ações e código do grupo)
 
 - W.O. e Ao Vivo na faixa de chamada têm altura fixa mesmo durante a medição dos cards e após atualizações repetidas em tela larga.

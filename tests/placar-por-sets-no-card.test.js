@@ -396,7 +396,9 @@ async function tela() {
           return e.scrollWidth > e.clientWidth + 1 || e.scrollHeight > e.clientHeight + 1;
         })(),
         rotulos: lbls, p1: linha(1), p2: linha(2),
-        inputs: [...box.querySelectorAll('input[id^="s1-"],input[id^="s2-"]')].map((e) => e.id),
+        inputs: [...box.querySelectorAll('input[id^="s1-"],input[id^="s2-"]')]
+          .filter((e) => !e.closest('[data-sp-stb-preview][hidden]')).map((e) => e.id),
+        previewHidden: [...box.querySelectorAll('[data-sp-stb-preview]')].every((e) => e.hidden),
         larguraCard: +box.getBoundingClientRect().width.toFixed(1),
         larguraGrade: +box.querySelector('.sp-set-head .sp-set-grid').getBoundingClientRect().width.toFixed(1),
         transbordo: box.scrollWidth - box.clientWidth
@@ -424,6 +426,8 @@ async function tela() {
     ok(g.transbordo <= 0, c.nome + ': o card não transborda na horizontal (' + g.transbordo + 'px)');
   });
   ok(r.casos[0].inputs.sort().join(',') === 's1-M1,s1-M1-1,s2-M1,s2-M1-1', 'melhor de 3 vazio permite editar os dois sets');
+  ok(r.casos[0].previewHidden && r.casos[1].previewHidden,
+    'a prévia do STB permanece oculta até o empate ser digitado');
   ok(!/s1-M1-0|stbcol|stblbl/.test(htmls[0]), 'entrada inicial não cria campos indexados nem STB oculto');
   ok(r.casos[0].larguraCard === r.casos[2].larguraCard && r.casos[0].larguraGrade >= r.casos[2].larguraGrade - 0.5,
     'card e espaço reservado do placar mantêm a largura até 1×1');
@@ -524,7 +528,8 @@ async function correcoesDoSandbox() {
     '</body>', { waitUntil: 'load' });
   const vazios = await page2.evaluate(() => ['a', 'b', 'c'].map((id) => {
     const box = document.getElementById(id);
-    return [...box.querySelectorAll('input[id^="s1-"],input[id^="s2-"]')].map((e) => e.value);
+    return [...box.querySelectorAll('input[id^="s1-"],input[id^="s2-"]')]
+      .filter((e) => !e.closest('[data-sp-stb-preview][hidden]')).map((e) => e.value);
   }));
   eq(vazios[0], ['', ''], '(b) set 1 confirmado → o box do Set 2 nasce VAZIO');
   eq(vazios[1], ['', ''], '(b) 1-1 → o box do super tie-break nasce VAZIO');

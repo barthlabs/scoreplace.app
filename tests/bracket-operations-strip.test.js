@@ -590,7 +590,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       states.push(read());
       strip.querySelector('.sp-operations-next [data-operations-nav="prev"]').click();
       window._bracketOperationsRefresh(t, root);
-      const survivesRefresh = read().title === 'JOGO 17';
+      const survivesRefresh = read().title === 'JOGO 17 (3/3)';
       strip.querySelector('.sp-operations-next [data-operations-action="live"]').click();
       const liveMatch = window.live?.[1];
       const arrows = [...strip.querySelectorAll('.sp-operations-next .sp-operations-nav-arrow')].map(el => ({
@@ -771,7 +771,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
           groups: new Set(fullLabels).size, count: fullLabels.length,
           examples: [fullLabels[0], fullLabels[8], fullLabels[24]] } };
     });
-    assert.deepEqual(carousel.states.map(item => item.title), ['JOGO 1', 'JOGO 9', 'JOGO 17', 'Grupo A', 'JOGO 1', 'Grupo A']);
+    assert.deepEqual(carousel.states.map(item => item.title), ['JOGO 1 (1/3)', 'JOGO 9 (2/3)', 'JOGO 17 (3/3)', 'Grupo A', 'JOGO 1 (1/3)', 'Grupo A']);
     assert(carousel.states.every(item => JSON.stringify(item.navStyle) === JSON.stringify(carousel.states[3].navStyle)),
       'jogos e classificação compartilham a cor, o peso e o tamanho do título do grupo');
     assert.deepEqual(carousel.states.map(item => item.match), ['group-1', 'group-9', 'group-17', 'group-1', 'group-1', 'group-1']);
@@ -779,13 +779,14 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert(carousel.states[3].footerBelowTable && carousel.states[3].categoryAboveStandings && !carousel.states[3].callGameLabel,
       'a classificação deixa quadra e OK no rodapé, categoria no cabeçalho e nenhum Jogo 1');
     assert.deepEqual(carousel.states.slice(0, 4).map(item => item.postpone),
-      ['group-1', 'group-9', 'group-17', 'group-1'], 'Pular jogo acompanha as quatro telas do grupo');
+      ['group-1', 'group-1', 'group-1', 'group-1'],
+      'Pular jogo acompanha as quatro telas, mas preserva o primeiro jogo pendente');
     assert.deepEqual(carousel.skipCalls, [
       ['endMatchOnCourt', 'match-rr-r1-g0-0-Fem_Diamante-1794172435574'],
-      ['endMatchOnCourt', 'match-rr-r1-g0-1-Fem_Diamante-1794172435574'],
-      ['endMatchOnCourt', 'match-rr-r1-g0-2-Fem_Diamante-1794172435574'],
+      ['endMatchOnCourt', 'match-rr-r1-g0-0-Fem_Diamante-1794172435574'],
+      ['endMatchOnCourt', 'match-rr-r1-g0-0-Fem_Diamante-1794172435574'],
       ['endMatchOnCourt', 'match-rr-r1-g0-0-Fem_Diamante-1794172435574']
-    ], 'Pular jogo envia o jogo correspondente a cada tela');
+    ], 'Pular jogo nas quatro telas adia sempre o primeiro jogo pendente da série');
     assert.deepEqual(carousel.states.slice(0, 3).map(item => item.teams), [
       ['Ana / Bia', 'Carla / Dora'], ['Ana / Carla', 'Bia / Dora'], ['Ana / Dora', 'Bia / Carla']
     ]);
@@ -799,7 +800,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert.equal(carousel.camis.ui.categoryText, 'Fem Diamante\u00a0A1');
     assert(carousel.camis.ui.groupTypographyMatches, 'A1 deve usar a mesma fonte, peso e cor da categoria');
     assert.deepEqual({ title:carousel.camis.ui.title, arrows:carousel.camis.ui.arrows, nextTitle:carousel.camis.ui.nextTitle },
-      { title: 'JOGO 1', arrows: 2, nextTitle: 'JOGO 2' });
+      { title: 'JOGO 1 (1/3)', arrows: 2, nextTitle: 'JOGO 2 (2/3)' });
     assert(Math.max(...carousel.camis.ui.measuredHeights.map(item => item.card)) -
       Math.min(...carousel.camis.ui.measuredHeights.map(item => item.card)) <= 2 &&
       Math.max(...carousel.camis.ui.measuredHeights.map(item => item.button)) <= 44,

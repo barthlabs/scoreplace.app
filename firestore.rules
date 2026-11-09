@@ -675,6 +675,18 @@ service cloud.firestore {
           && (!dividido() || (igual('_nJogos') && igual('_nPartes') && igual('_nGrupos')))
           && (!divideParte('matches') || listaVazia('matches'));
       }
+      function planoIntercaladoIntacto() {
+        let windowConfig = d0().get('scheduleWindow', {});
+        return !(windowConfig is map && windowConfig.get('interleavedPlan', null) != null)
+          || (igual('matches') && igual('rounds') && igual('groups')
+            && igual('phaseCategoryMaterialized') && igual('currentPhaseIndex')
+            && igual('_phaseMaterialized') && igual('phaseStartedAt')
+            && igual('scheduleWindow') && igual('phases')
+            && igual('politicaDaChave') && igual('rankingPrimary')
+            && igual('tiebreakers') && igual('fmt2')
+            && igual('gameDuration') && igual('callTime')
+            && igual('warmupTime') && igual('courtCount'));
+      }
 
       // Categoria tipada e rigor são decisão do servidor: o callable valida IDs,
       // critérios e a janela pré-sorteio numa transação. Mesmo a organização não
@@ -741,6 +753,7 @@ service cloud.firestore {
           && nuloOuAusente('phaseGroupStandings')
           && nuloOuAusente('phaseLeagueState')
           && nuloOuAusente('phaseStartedAt')
+          && nuloOuAusente('phaseCategoryMaterialized')
           && nuloOuAusente('standings')
           && nuloOuAusente('thirdPlaceMatch')
           && nuloOuAusente('rodadas')
@@ -863,6 +876,7 @@ service cloud.firestore {
                   || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['pairRequests'])))
         )
         && (faseIntacta() || ehResetOk())
+        && (planoIntercaladoIntacto() || ehResetOk())
         && elencoIntacto()
         // Campos do servidor reunidos numa única diferença. Além de impedir
         // falsificação, evita exceder o teto de expressões no reset completo.

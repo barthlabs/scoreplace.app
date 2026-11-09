@@ -1627,6 +1627,7 @@ window._highlightWinner = function (matchId, root) {
     });
   }
   var trigger = null;
+  var previewSc = null, previewMatch = null, previewTour = null;
   try {
     var tours = window.AppStore && window.AppStore.tournaments;
     for (var ti = 0; Array.isArray(tours) && ti < tours.length && trigger === null; ti++) {
@@ -1634,6 +1635,7 @@ window._highlightWinner = function (matchId, root) {
       var matches = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(tour) : (tour.matches || []);
       for (var mi = 0; mi < matches.length; mi++) if (matches[mi] && matches[mi].id === matchId) {
         var sc = (typeof window._effectiveScoring === 'function') ? window._effectiveScoring(tour, matches[mi]) : tour.scoring;
+        previewSc = sc; previewMatch = matches[mi]; previewTour = tour;
         if (sc && window._scoringUsesSets(sc) && sc.tiebreakEnabled !== false)
           trigger = window._tbLoserGames(sc, tour.sport);
         break;
@@ -1666,6 +1668,36 @@ window._highlightWinner = function (matchId, root) {
     s1El.style.color = s1 > s2 ? '#4ade80' : s1 < s2 ? '#f87171' : 'var(--text-bright)';
     s2El.style.color = s2 > s1 ? '#4ade80' : s2 < s1 ? '#f87171' : 'var(--text-bright)';
   });
+  // Melhor de 3: ao digitar dois sets válidos com um vencedor para cada lado,
+  // mostre imediatamente a terceira coluna. O placar ainda não foi confirmado;
+  // os pontos do STB só serão gravados quando a pessoa clicar em Confirmar.
+  if (card && previewSc && previewMatch && card.querySelector('[data-sp-stb-preview]')) {
+    var played = Array.isArray(previewMatch.sets) ? previewMatch.sets.slice() : [];
+    var draft = played.slice();
+    for (var pi = played.length; pi < 2; pi++) {
+      var suffix = pi === played.length ? '' : '-' + pi;
+      var aEl = field('s1-' + matchId + suffix), bEl = field('s2-' + matchId + suffix);
+      var a = aEl && Number(aEl.value), b = bEl && Number(bEl.value);
+      if (!aEl || !bEl || String(aEl.value).trim() === '' || String(bEl.value).trim() === '' ||
+          !Number.isFinite(a) || !Number.isFinite(b) || a === b ||
+          (typeof window._validateNormalSetScore === 'function' &&
+            !window._validateNormalSetScore(previewSc, previewTour && previewTour.sport, a, b).ok)) break;
+      draft.push({ gamesP1: a, gamesP2: b });
+    }
+    var showStb = draft.length === 2 &&
+      ((draft[0].gamesP1 > draft[0].gamesP2) !== (draft[1].gamesP1 > draft[1].gamesP2));
+    Array.prototype.forEach.call(card.querySelectorAll('[data-sp-stb-preview]'), function (col) {
+      if (!showStb && !col.hidden) Array.prototype.forEach.call(col.querySelectorAll('input'), function (input) { input.value = ''; });
+      col.hidden = !showStb;
+    });
+    var headline = card.querySelector('.sp-set-head-ttl');
+    if (headline) {
+      if (!headline.dataset.spOriginalHeadline) headline.dataset.spOriginalHeadline = headline.textContent;
+      headline.textContent = showStb && typeof window._matchSetPlan === 'function'
+        ? window._matchSetPlan(previewSc, previewMatch, { sets: draft }).headline
+        : headline.dataset.spOriginalHeadline;
+    }
+  }
 };
 
 window._saveSetResult = function(tId, matchId) {
@@ -1767,6 +1799,8 @@ window._commitSetsResult = function (tId, matchId, sets, p1Sets, p2Sets, isFixed
   if (!t) return;
   const m = _findMatch(t, matchId);
   if (!m) return;
+  window._scoreViewportAnchor = { tournamentId: String(tId), matchId: String(matchId),
+    route: window.location.hash || '', at: Date.now() };
   let totalGamesP1Pre = 0, totalGamesP2Pre = 0;
   sets.forEach(function(s) { totalGamesP1Pre += s.gamesP1; totalGamesP2Pre += s.gamesP2; });
 
@@ -2366,6 +2400,8 @@ window._saveResultInline = function (tId, matchId, sourceRoot) {
   if (!t) return;
   const m = _findMatch(t, matchId);
   if (!m) return;
+  window._scoreViewportAnchor = { tournamentId: String(tId), matchId: String(matchId),
+    route: window.location.hash || '', at: Date.now() };
   _invalidarFocoAgendado(tId, matchId);
 
   // ⚠️ JOGO JÁ ENCERRADO NÃO ACEITA PROPOSTA NOVA DE PARTICIPANTE. O card esconde os
