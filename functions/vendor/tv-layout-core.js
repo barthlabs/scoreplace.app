@@ -44,5 +44,24 @@
     CARD_IDS.forEach(function (id) { card[id] = true; });
     return normalize({ version: 1, background: '#060d1a', sections: sections, card: card });
   }
-  return { IDS: IDS, CARD_IDS: CARD_IDS, normalize: normalize, defaults: defaults };
+  function normalizeScreens(input) {
+    if (input == null) return null;
+    if (!Array.isArray(input) || !input.length || input.length > 12) fail();
+    var phases = new Set();
+    var screens = input.map(function (item) {
+      exactKeys(item, ['phaseIndex', 'layout']);
+      if (!Number.isInteger(item.phaseIndex) || item.phaseIndex < 0 || item.phaseIndex > 11 || phases.has(item.phaseIndex)) fail();
+      phases.add(item.phaseIndex);
+      return { phaseIndex: item.phaseIndex, layout: normalize(item.layout) };
+    });
+    if (JSON.stringify(screens).length > 50000) fail();
+    return screens;
+  }
+  function forPhase(screens, phaseIndex, fallback) {
+    var index = Number.isInteger(Number(phaseIndex)) ? Number(phaseIndex) : 0;
+    var found = Array.isArray(screens) && screens.find(function (screen) { return screen.phaseIndex === index; });
+    return found ? found.layout : fallback || null;
+  }
+  return { IDS: IDS, CARD_IDS: CARD_IDS, normalize: normalize, normalizeScreens: normalizeScreens,
+    forPhase: forPhase, defaults: defaults };
 });

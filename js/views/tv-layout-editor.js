@@ -5,13 +5,30 @@
   if (!Core) return;
   var labels = { header: 'Cabeçalho', courts: 'Em quadra', upcoming: 'Próximo jogo', rankings: 'Classificação', results: 'Últimos resultados', qr: 'QR do aplicativo' };
   var cardLabels = { court: 'Quadra', number: 'Número do jogo', category: 'Categoria', teams: 'Times', players: 'Atletas', score: 'Placar', timer: 'Relógio' };
-  var draft = null, touched = false, mounted = null, pendingSet = false, resizeObserver = null, snapshot = null;
+  var draft = null, screens = null, activePhase = 0, touched = false, mounted = null, pendingSet = false, resizeObserver = null, snapshot = null;
   function esc(value) {
     return String(value).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
   function current() { return draft || Core.defaults(); }
+  function setState(layout, savedScreens) {
+    var base = layout ? Core.normalize(layout) : Core.defaults();
+    screens = savedScreens ? Core.normalizeScreens(savedScreens) : null;
+    if (!screens) screens = [{ phaseIndex: 0, layout: base }];
+    activePhase = screens[0].phaseIndex;
+    draft = screens[0].layout;
+    touched = !!layout || !!savedScreens;
+  }
+  function phaseNames() {
+    var phases = window._editingTournament && window._editingTournament.phases || [];
+    try {
+      var cfg = typeof window._f2GetConfig === 'function' ? window._f2GetConfig() : null;
+      if (cfg && window.FORMAT2 && typeof window.FORMAT2.compileToPhases === 'function')
+        phases = window.FORMAT2.compileToPhases(cfg).phases || phases;
+    } catch (e) { /* o formato ainda pode estar sendo editado */ }
+    return phases.map(function (phase, i) { return String(phase && phase.name || 'Fase ' + (i + 1)); });
+  }
   function previewSnapshot(layout) {
     var t = window._editingTournament;
     var editField = document.getElementById('edit-tournament-id');
@@ -31,7 +48,7 @@
       seen.add(game);
       previous.push({ game: game, had: Object.prototype.hasOwnProperty.call(game, '_gameNum'), value: game._gameNum });
     });
-    try { return window._tvLiveBuildSnapshot(Object.assign({}, t, { tvLayout: Core.normalize(layout) }), Date.now()); }
+    try { return window._tvLiveBuildSnapshot(Object.assign({}, t, { tvScreens: null, tvLayout: Core.normalize(layout) }), Date.now()); }
     catch (e) { if (window._warn) window._warn('Prévia da TV indisponível', e); return null; }
     finally { previous.forEach(function (p) { if (p.had) p.game._gameNum = p.value; else delete p.game._gameNum; }); }
   }
@@ -73,8 +90,16 @@
     var host = document.getElementById('tv-layout-editor');
     if (!host) return;
     if (resizeObserver) { resizeObserver.disconnect(); resizeObserver = null; }
-    if (!draft) draft = Core.defaults();
+    if (!screens) setState(null, null);
+    var selected = screens.find(function (screen) { return screen.phaseIndex === activePhase; }) || screens[0];
+    draft = selected.layout;
     var layout = draft;
+    var names = phaseNames();
+    var occupied = new Set(screens.map(function (screen) { return screen.phaseIndex; }));
+    var count = Math.min(12, Math.max(names.length, activePhase + 1, screens.length + 1));
+    var phaseOptions = Array.from({ length: count }, function (_, i) {
+      return '<option value="' + i + '"' + (i === activePhase ? ' selected' : '') + (occupied.has(i) && i !== activePhase ? ' disabled' : '') + '>' + esc(names[i] || 'Fase ' + (i + 1)) + '</option>';
+    }).join('');
     snapshot = previewSnapshot(layout);
     var documentHtml = snapshot ? window._tvLivePreviewDocument(snapshot) : '';
     var visible = Core.IDS.filter(function (id) { return layout.sections[id].visible; });
@@ -82,6 +107,11 @@
     host.innerHTML = '<div style="border-top:1px solid #475569;padding-top:1rem;color:var(--text-main)">' +
       '<h3 style="margin:0 0 .4rem">📺 Tela No ar</h3>' +
       '<p style="font-size:.8rem;color:var(--text-muted)">Arraste as seções para posicioná-las e o canto inferior direito para mudar o tamanho. O X retira a seção; você pode recolocá-la abaixo. As alterações entram no ar ao salvar o torneio.</p>' +
+      '<div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:.6rem 0 .8rem"><label>Tela <select data-tv-screen-list aria-label="Selecionar tela No ar">' +
+      screens.map(function (screen, i) { return '<option value="' + screen.phaseIndex + '"' + (screen.phaseIndex === activePhase ? ' selected' : '') + '>Tela ' + (i + 1) + ' · ' + esc(names[screen.phaseIndex] || 'Fase ' + (screen.phaseIndex + 1)) + '</option>'; }).join('') +
+      '</select></label><label>Usar na fase <select data-tv-phase aria-label="Fase desta tela">' + phaseOptions + '</select></label>' +
+      '<button type="button" data-tv-add-screen class="btn btn-secondary"' + (screens.length >= 12 ? ' disabled' : '') + '>+ Nova tela</button>' +
+      (screens.length > 1 ? '<button type="button" data-tv-delete-screen class="btn btn-secondary">Excluir esta tela</button>' : '') + '</div>' +
       '<label style="display:flex;gap:.6rem;align-items:center;margin-bottom:.6rem">Cor de fundo <input data-tv-background type="color" value="' + esc(layout.background) + '"></label>' +
       '<div data-tv-canvas aria-label="Prévia da tela No ar" style="position:relative;width:100%;aspect-ratio:16/9;background:' + esc(layout.background) + ';border:2px solid #818cf8;border-radius:8px;overflow:hidden;touch-action:none;user-select:none">' +
       (documentHtml ? '<iframe data-tv-frame title="Prévia com dados do torneio" sandbox="allow-same-origin" tabindex="-1" style="position:absolute;left:0;top:0;width:1280px;height:720px;border:0;transform-origin:top left;pointer-events:none"></iframe>' :
@@ -107,6 +137,23 @@
       host.querySelector('[data-tv-canvas]').style.background = layout.background;
       var board = frame && frame.contentDocument && frame.contentDocument.querySelector('.tv-custom-board');
       if (board) board.style.background = layout.background;
+    };
+    host.querySelector('[data-tv-screen-list]').onchange = function (event) {
+      activePhase = Number(event.target.value); render();
+    };
+    host.querySelector('[data-tv-phase]').onchange = function (event) {
+      selected.phaseIndex = Number(event.target.value); activePhase = selected.phaseIndex; touched = true; render();
+    };
+    host.querySelector('[data-tv-add-screen]').onclick = function () {
+      var next = Array.from({ length: 12 }, function (_, i) { return i; }).find(function (i) { return !occupied.has(i); });
+      if (next == null) return;
+      var copy = Core.normalize(layout);
+      screens.push({ phaseIndex: next, layout: copy }); activePhase = next; touched = true; render();
+    };
+    var removeScreen = host.querySelector('[data-tv-delete-screen]');
+    if (removeScreen) removeScreen.onclick = function () {
+      screens = screens.filter(function (screen) { return screen !== selected; });
+      activePhase = screens[0].phaseIndex; touched = true; render();
     };
     host.querySelectorAll('[data-tv-card]').forEach(function (input) { input.onchange = function () {
       layout.card[input.dataset.tvCard] = input.checked; touched = true;
@@ -150,12 +197,12 @@
       };
       box.onpointerup = box.onpointercancel = function () { box.onpointermove = null; };
     }; });
-    host.querySelector('[data-tv-default]').onclick = function () { draft = Core.defaults(); touched = true; render(); };
+    host.querySelector('[data-tv-default]').onclick = function () { selected.layout = Core.defaults(); draft = selected.layout; touched = true; render(); };
     host.querySelector('[data-tv-save-template]').onclick = saveTemplate;
     host.querySelector('[data-tv-load-template]').onclick = function () {
       var select = host.querySelector('[data-tv-template-list]');
       var template = (window._tvTemplateCache || []).find(function (item) { return item._id === select.value; });
-      if (template) window._tvEditorSetLayout(template.tvLayout);
+      if (template) { selected.layout = Core.normalize(template.tvLayout); draft = selected.layout; touched = true; render(); }
     };
     host.querySelector('[data-tv-delete-template]').onclick = async function () {
       var select = host.querySelector('[data-tv-template-list]');
@@ -189,12 +236,19 @@
     });
   }
   window._tvEditorSetLayout = function (value) {
-    try { draft = value ? Core.normalize(value) : null; touched = !!value; }
-    catch (e) { draft = null; touched = false; }
+    try { setState(value, null); }
+    catch (e) { setState(null, null); }
     pendingSet = true;
     if (mounted && mounted.isConnected) { pendingSet = false; render(); }
   };
-  window._tvEditorReadLayout = function () { return touched ? Core.normalize(current()) : null; };
+  window._tvEditorSetScreens = function (value) {
+    try { if (value) setState(screens && screens[0] && screens[0].layout || current(), value); }
+    catch (e) { setState(null, null); }
+    pendingSet = true;
+    if (mounted && mounted.isConnected) { pendingSet = false; render(); }
+  };
+  window._tvEditorReadLayout = function () { return touched ? Core.normalize(screens[0].layout) : null; };
+  window._tvEditorReadScreens = function () { return touched ? Core.normalizeScreens(screens) : null; };
   function mount() {
     var details = document.getElementById('tv-personalization');
     var phase = document.getElementById('fase1-box');
@@ -202,11 +256,11 @@
     if (!details || !phase || !host || mounted === host) return;
     phase.parentNode.insertBefore(details, phase); mounted = host;
     if (!pendingSet) {
-      draft = null; touched = false;
+      setState(null, null);
       var editField = document.getElementById('edit-tournament-id');
       if (window._editingTournament && (!editField || String(editField.value || '') === String(window._editingTournament.id || ''))) {
-        try { draft = window._editingTournament.tvLayout ? Core.normalize(window._editingTournament.tvLayout) : null; touched = !!draft; }
-        catch (e) { draft = null; touched = false; }
+        try { setState(window._editingTournament.tvLayout || null, window._editingTournament.tvScreens || null); }
+        catch (e) { setState(null, null); }
       }
     }
     pendingSet = false; render();

@@ -5511,7 +5511,7 @@ const _CAMPOS_CONFIG_TORNEIO = new Set([
    * com a escolha nova é RECUSADO pelo servidor. O valor é fechado no cliente e reconferido pelo
    * motor, que cai em `repescagem` diante de qualquer coisa que não reconheça. */
   'politicaDaChave',
-  'phase1Name','rankingPrimary','tiebreakers','tiebreakersExcluded','advancedScoring','tvLayout','genderCategories',
+  'phase1Name','rankingPrimary','tiebreakers','tiebreakersExcluded','advancedScoring','tvLayout','tvScreens','genderCategories',
   'skillCategories','ageCategories','customCategories','combinedCategories','rigor','rigorRequire',
   'fmt2','phases'
 ]);
@@ -5689,6 +5689,9 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     }
     if (key === 'tvLayout') {
       try { patch[key] = require('./tv-layout-core').normalize(raw[key]); }
+      catch (error) { throw new HttpsError('invalid-argument', error.message); }
+    } else if (key === 'tvScreens') {
+      try { patch[key] = require('./tv-layout-core').normalizeScreens(raw[key]); }
       catch (error) { throw new HttpsError('invalid-argument', error.message); }
     } else patch[key] = _clonaConfigDeclarativa(raw[key], 0, [key]);
   });

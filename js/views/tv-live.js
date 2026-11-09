@@ -227,7 +227,13 @@
     var publicId = /^tour_[0-9]{13}_[a-f0-9]{32}$/.test(String(t.id || '')) ? String(t.id) : '';
     var qrUrl = site + '/open.html' + (publicId ? '?t=' + encodeURIComponent(publicId) : '');
     var tvLayout = null;
-    try { if (t.tvLayout && window.ScoreplaceTvLayout) tvLayout = window.ScoreplaceTvLayout.normalize(t.tvLayout); } catch (e) { tvLayout = null; }
+    if (window.ScoreplaceTvLayout) {
+      var layoutCore = window.ScoreplaceTvLayout;
+      var fallbackLayout = null, screens = null;
+      try { if (t.tvLayout) fallbackLayout = layoutCore.normalize(t.tvLayout); } catch (e) { /* dado antigo inválido */ }
+      try { if (t.tvScreens) screens = layoutCore.normalizeScreens(t.tvScreens); } catch (e) { /* usa o layout antigo */ }
+      tvLayout = layoutCore.forPhase(screens, t.currentPhaseIndex || 0, fallbackLayout);
+    }
     return { name: String(t.name || ''), logo: typeof window._tourLogoSrc === 'function' ? window._tourLogoSrc(t) : '', tvLayout: tvLayout,
       qrUrl: qrUrl, qrImage: typeof window._qrCodeUrl === 'function' ? window._qrCodeUrl(qrUrl, 320, false) :
         'https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=' + encodeURIComponent(qrUrl) + '&bgcolor=ffffff&color=1a1e2e&margin=10',

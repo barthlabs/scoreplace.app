@@ -5708,6 +5708,7 @@ function setupCreateTournamentModal() {
     window._toggleRegistrationPaymentFields();
     window._renderRegistrationPrices(_regSettingsEdit && _regSettingsEdit.pricing);
     if (typeof window._tvEditorSetLayout === 'function') window._tvEditorSetLayout(t.tvLayout || null);
+    if (typeof window._tvEditorSetScreens === 'function') window._tvEditorSetScreens(t.tvScreens || null);
     // W.O. não é mais configuração: sempre inicia em individual; a organização escolhe
     // individual ou dupla inteira diretamente no card, com confirmação explícita.
     var _woEl = document.getElementById('wo-scope'); if (_woEl) _woEl.value = 'individual';
@@ -6651,6 +6652,7 @@ window._saveTournamentClickHandler = async function() {
           membersOnly: visibilityVal === 'members',
           organizerOnly: visibilityVal === 'organizers',
           tvLayout: (typeof window._tvEditorReadLayout === 'function') ? window._tvEditorReadLayout() : null,
+          tvScreens: (typeof window._tvEditorReadScreens === 'function') ? window._tvEditorReadScreens() : null,
           format,
           sport: sportClean,
           startDate: startDateVal,
@@ -8393,6 +8395,7 @@ window._prefillFromTemplate = function(tpl) {
     if (typeof window._setVisibility === 'function') window._setVisibility(tpl.organizerOnly ? 'organizers' : tpl.membersOnly ? 'members' : tpl.isPublic ? 'public' : 'members');
   }
   if (typeof window._tvEditorSetLayout === 'function') window._tvEditorSetLayout(tpl.tvLayout || null);
+  if (typeof window._tvEditorSetScreens === 'function') window._tvEditorSetScreens(tpl.tvScreens || null);
   // Tipo de jogo, lotação, lançamento de resultado, W.O. já tratado, encerrar ao lotar
   _setV('tourn-game-types', tpl.gameTypes);
   // Lançamento de Resultados — v2.6.62: hidden + render canônica.
@@ -8940,6 +8943,7 @@ window._saveCurrentFormAsTemplate = function(saveButton) {
       membersOnly: get('tourn-visibility') === 'members',
       organizerOnly: get('tourn-visibility') === 'organizers',
       tvLayout: (typeof window._tvEditorReadLayout === 'function') ? window._tvEditorReadLayout() : null,
+      tvScreens: (typeof window._tvEditorReadScreens === 'function') ? window._tvEditorReadScreens() : null,
       scoring: scoring,
       genderCategories: genderCats,
       skillCategories: skillCats,

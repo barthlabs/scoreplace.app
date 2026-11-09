@@ -1,3 +1,9 @@
+## 2.6.17 — 09/nov/2026 (várias telas No ar por fase)
+
+- O editor de TV permite criar, selecionar, editar e excluir telas independentes no mesmo torneio, além de vincular cada uma a uma fase.
+- A janela No ar usa automaticamente a tela da fase atual; quando uma fase não tem tela própria, usa o layout base. Torneios com uma única `tvLayout` mantêm o comportamento anterior.
+- As telas são validadas na criação e edição do torneio; cada fase aceita uma tela e o limite é de 12.
+
 ## 2.6.16 — 09/nov/2026 (duplas legíveis e largura do degradê)
 
 - O resultado do sorteio apresenta cada dupla em coluna, com um atleta por linha e adversárias à direita. A arte PNG usa a mesma disposição.

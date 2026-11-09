@@ -1,3 +1,6 @@
+// 2.6.17 — A tela No ar agora permite salvar vários layouts no mesmo torneio,
+// vincular cada tela a uma fase e alternar automaticamente na TV quando a fase
+// do torneio muda. As telas existentes continuam como layout base.
 // 2.6.16 — O resultado do sorteio mostra as duplas lado a lado, com cada
 // atleta em sua linha, também na arte PNG. A personalização do fundo ganha
 // controle separado para a largura da mistura do gradiente. Salvar modelos

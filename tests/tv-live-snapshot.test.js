@@ -120,6 +120,14 @@ const customLayout = window.ScoreplaceTvLayout.defaults();
 customLayout.sections.qr.visible = false;
 customLayout.card.score = false;
 const customSnapshot = window._tvLiveBuildSnapshot({ ...t, tvLayout: customLayout });
+const phaseTwoLayout = window.ScoreplaceTvLayout.defaults(); phaseTwoLayout.background = '#123456';
+const phaseScreens = vm.runInContext('JSON.parse(' + JSON.stringify(JSON.stringify([
+  { phaseIndex: 0, layout: customLayout }, { phaseIndex: 1, layout: phaseTwoLayout }
+])) + ')', context);
+assert.equal(window._tvLiveBuildSnapshot({ ...t, currentPhaseIndex: 1, tvLayout: customLayout, tvScreens: phaseScreens }).tvLayout.background, '#123456',
+  'TV escolhe automaticamente a tela da fase em andamento');
+assert.equal(window._tvLiveBuildSnapshot({ ...t, currentPhaseIndex: 2, tvLayout: customLayout, tvScreens: phaseScreens }).tvLayout.background, customLayout.background,
+  'fase sem tela própria mantém a tela base');
 const customHtml = window._tvLiveBodyHtml(customSnapshot);
 assert.match(customHtml, /tv-custom-board/);
 assert.doesNotMatch(customHtml, /tv-custom-qr/);
