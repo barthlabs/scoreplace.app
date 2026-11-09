@@ -638,6 +638,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
         right: nextGlyph.getBoundingClientRect().left - gameTitle.getBoundingClientRect().right
       };
       camisUi.categoryBelowTitle = category.getBoundingClientRect().top >= gameTitle.getBoundingClientRect().bottom;
+      camisUi.titleCategoryGap = category.getBoundingClientRect().top - gameTitle.getBoundingClientRect().bottom;
       camisUi.categoryWithButtons = category.parentElement?.classList.contains('sp-operations-meta-row') &&
         actionButtons.every(button => button.parentElement?.parentElement === category.parentElement) &&
         Math.abs((category.getBoundingClientRect().top + category.getBoundingClientRect().bottom) / 2 -
@@ -698,7 +699,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert.equal(carousel.camis.idLabel, 'R1 Grupo A2');
     assert.deepEqual({ title:carousel.camis.ui.title, arrows:carousel.camis.ui.arrows, nextTitle:carousel.camis.ui.nextTitle },
       { title: 'JOGO 1', arrows: 2, nextTitle: 'JOGO 2' });
-    assert(carousel.camis.ui.fontSize <= 15 && carousel.camis.ui.categoryBelowTitle &&
+    assert(carousel.camis.ui.fontSize <= 15 && carousel.camis.ui.categoryBelowTitle && carousel.camis.ui.titleCategoryGap <= 25 &&
       carousel.camis.ui.categoryWithButtons && carousel.camis.ui.buttonsOnOneLine && carousel.camis.ui.metaFitsCard &&
       carousel.camis.ui.arrowGap.left >= 0 && carousel.camis.ui.arrowGap.left <= 14 &&
       carousel.camis.ui.arrowGap.right >= 0 && carousel.camis.ui.arrowGap.right <= 14,

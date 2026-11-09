@@ -68,7 +68,8 @@
 .sp-operations-replica .sp-mc-head { gap:4px;margin-bottom:6px; }
 .sp-operations-replica .sp-mc-head [data-match-time-status] { white-space:nowrap; }
 .sp-operations-two-line-header .sp-mc-head { display:block; }
-.sp-operations-two-line-header .sp-mc-head > div:first-child { width:100%; }
+.sp-operations-two-line-header .sp-mc-head > div:first-child { width:100%;gap:0!important; }
+.sp-operations-two-line-header .sp-mc-head > div:first-child > div:first-child { height:30px; }
 .sp-operations-meta-row { display:flex;align-items:center;justify-content:space-between;gap:6px;min-width:0;width:100%; }
 .sp-operations-meta-row .sp-mc-acts { flex:0 0 auto;margin-left:auto;flex-wrap:nowrap; }
 .sp-operations-replica .sp-match-court-clock { flex:0 0 100%;width:100%;margin-left:0!important;grid-template-columns:27px minmax(0,1fr) 27px 8ch; }

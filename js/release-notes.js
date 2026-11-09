@@ -1,3 +1,5 @@
+// 2.6.4 — O cabeçalho da chamada Rei/Rainha ocupa menos altura: a categoria
+// fica mais próxima de JOGO N, com os botões ao lado na segunda linha.
 // 2.6.3 — Na faixa de chamada Rei/Rainha, as setas e JOGO N ocupam a primeira
 // linha. A categoria fica logo abaixo, com Aplicar W.O. e Ao Vivo ao lado na
 // mesma linha, aproveitando o espaço do card. Na agenda Geral, o cabeçalho de

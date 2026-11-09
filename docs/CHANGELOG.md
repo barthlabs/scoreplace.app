@@ -1,3 +1,8 @@
+## 2.6.4 — 09/nov/2026 (cabeçalho de chamada mais compacto)
+
+- A primeira linha da faixa de chamada fica mais baixa, aproximando a categoria de JOGO N. As setas continuam junto ao número com alvos de toque de 44 px; a categoria e os botões permanecem na segunda linha.
+- O teste em Chromium mede a distância vertical entre título e categoria. Corte somente web, sem alterar dados nem versões nativas.
+
 ## 2.6.3 — 09/nov/2026 (cabeçalho da chamada em duas linhas)
 
 - A réplica operacional Rei/Rainha organiza o cabeçalho em duas linhas: setas e JOGO N acima; categoria à esquerda e os botões de W.O. e Ao Vivo juntos à direita abaixo. O card original da chave permanece com sua estrutura própria.
