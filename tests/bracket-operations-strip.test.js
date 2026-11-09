@@ -233,7 +233,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       return { height: track.clientHeight, content: track.scrollHeight, mobileHeight: getComputedStyle(track).height };
     });
     assert(mobileClip.content <= mobileClip.height, 'mobile não pode cortar cards após resize: ' + JSON.stringify(mobileClip));
-    for (const width of [600, 900, 1440]) {
+    for (const width of [600, 900, 1440, 1971]) {
       await page.setViewportSize({ width, height: 800 });
       const geometry = await page.evaluate(() => {
         const t = window._findTournamentById();
@@ -664,9 +664,9 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
           '<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start;min-width:0;">' +
           '<div style="display:flex;align-items:center;gap:7px;min-width:0;flex-wrap:wrap;">' +
           '<span style="font-size:.7rem;font-weight:700;">JOGO ' + num + '</span></div>' +
-          '<span data-match-time-status>Fem Diamante</span></div>' +
-          '<div class="btn-row sp-mc-acts"><button class="btn btn-danger btn-micro">Aplicar W.O.</button>' +
-          '<button class="btn btn-live btn-micro">📡 Ao Vivo</button></div>';
+          '<span data-match-time-status><span style="font-size:.62rem;font-weight:700;color:var(--sp-c-7dd3fc,#7dd3fc);line-height:1.2;white-space:nowrap;">Fem Diamante</span></span></div>' +
+          '<div class="btn-row sp-mc-acts"><button class="btn btn-danger btn-micro" style="height:auto;min-height:42px;">Aplicar<br>W.O.</button>' +
+          '<button class="btn btn-live btn-micro" style="min-height:42px;">📡 Ao Vivo</button></div>';
         return card.outerHTML;
       };
       t.matches = camis;
@@ -685,6 +685,12 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       const nextGlyph = strip.querySelector('.sp-operations-next [data-operations-nav="next"] > svg');
       const category = strip.querySelector('.sp-operations-next [data-match-time-status]');
       camisUi.categoryText = category.textContent.trim();
+      const categoryWord = category.querySelector('span:first-child');
+      const groupCode = category.querySelector('.sp-operations-group-code');
+      camisUi.groupTypographyMatches = !!groupCode &&
+        getComputedStyle(groupCode).fontSize === getComputedStyle(categoryWord).fontSize &&
+        getComputedStyle(groupCode).color === getComputedStyle(categoryWord).color &&
+        getComputedStyle(groupCode).fontWeight === getComputedStyle(categoryWord).fontWeight;
       const actionButtons = [...strip.querySelectorAll('.sp-operations-next .sp-mc-acts button')];
       camisUi.fontSize = parseFloat(getComputedStyle(gameTitle).fontSize);
       camisUi.arrowGap = {
@@ -790,7 +796,8 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert.deepEqual(carousel.camis.labels, ['R1 Grupo A1', 'R1 Grupo A2', 'R1 Grupo A3', 'R2 Grupo A4']);
     assert.equal(carousel.camis.sixGamesHaveNav, false);
     assert.equal(carousel.camis.idLabel, 'R1 Grupo A2');
-    assert.equal(carousel.camis.ui.categoryText, 'Fem Diamante A1');
+    assert.equal(carousel.camis.ui.categoryText, 'Fem Diamante\u00a0A1');
+    assert(carousel.camis.ui.groupTypographyMatches, 'A1 deve usar a mesma fonte, peso e cor da categoria');
     assert.deepEqual({ title:carousel.camis.ui.title, arrows:carousel.camis.ui.arrows, nextTitle:carousel.camis.ui.nextTitle },
       { title: 'JOGO 1', arrows: 2, nextTitle: 'JOGO 2' });
     assert(Math.max(...carousel.camis.ui.measuredHeights.map(item => item.card)) -

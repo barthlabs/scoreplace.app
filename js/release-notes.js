@@ -1,3 +1,6 @@
+// 2.6.18 — Na faixa de chamada, Aplicar W.O. e Ao Vivo mantêm a altura
+// compacta mesmo após atualizações em tela larga. O código do grupo, como A1,
+// usa a mesma fonte, cor e peso da categoria.
 // 2.6.17 — A tela No ar agora permite salvar vários layouts no mesmo torneio,
 // vincular cada tela a uma fase e alternar automaticamente na TV quando a fase
 // do torneio muda. As telas existentes continuam como layout base.

@@ -1,3 +1,8 @@
+## 2.6.18 — 09/nov/2026 (altura das ações e código do grupo)
+
+- W.O. e Ao Vivo na faixa de chamada têm altura fixa mesmo durante a medição dos cards e após atualizações repetidas em tela larga.
+- O código do grupo ao lado da categoria usa exatamente a fonte, o peso e a cor do rótulo da categoria.
+
 ## 2.6.17 — 09/nov/2026 (várias telas No ar por fase)
 
 - O editor de TV permite criar, selecionar, editar e excluir telas independentes no mesmo torneio, além de vincular cada uma a uma fase.

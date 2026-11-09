@@ -1595,7 +1595,16 @@ function _bracketOperationsReplica(m, t, role, label, availability, root, allMat
         titleRow.style.flexWrap = 'nowrap';
         titleRow.style.gap = '0';
         var groupLabel = String(group.name).replace(/^R\d+\s+/i, '').replace(/^Grupo\s+/i, '');
-        if (category.textContent.indexOf(groupLabel) === -1) category.appendChild(document.createTextNode(' ' + groupLabel));
+        if (category.textContent.indexOf(groupLabel) === -1) {
+          // O rótulo da categoria já traz a fonte e a cor aprovadas. Reutilize
+          // esse mesmo elemento para o código do grupo; texto solto herdava a
+          // fonte grande do card e fazia "A1" parecer outro título.
+          var categoryStyle = category.querySelector('span');
+          var groupCode = categoryStyle ? categoryStyle.cloneNode(false) : document.createElement('span');
+          groupCode.classList.add('sp-operations-group-code');
+          groupCode.textContent = '\u00a0' + groupLabel;
+          category.appendChild(groupCode);
+        }
       }
     }
     html = card.outerHTML;
