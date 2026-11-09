@@ -1,9 +1,9 @@
 {
   "schema": 1,
-  "backendCommit": "bc8bb35c00bfd524902066be1382a4125c25e0bd",
-  "scopeNote": "Grade contínua e numeração única dos quartetos Rei/Rainha no sorteio.",
+  "backendCommit": "611de1560b8c51d3de84eefc085bc3a05e952492",
+  "scopeNote": "Avanço transacional do jogo seguinte na mesma quadra após confirmar placar Rei/Rainha.",
   "functions": [
-    "drawRound",
-    "autoDraw"
+    "applyMatchResult",
+    "applyQueuedResult"
   ]
 }

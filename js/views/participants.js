@@ -1467,10 +1467,30 @@ window._partApplyFilter = function () {
     }
     empty.style.display = _escondeuTudo ? '' : 'none';
   }
-  // v3.0.97: não pula a tela / a barra sticky não sai do lugar quando o filtro esvazia.
-  // v3.1.41: com BUSCA ATIVA, leva o 1º resultado pra logo abaixo da barra (nunca tela
-  // preta embaixo tendo que rolar pra cima).
-  try { if (window._stickyFilterKeepRoom) window._stickyFilterKeepRoom(_keepY, !!q); } catch (e) {}
+  // A busca de nomes mantém a lista no lugar. Levar o pai da barra ao topo fazia
+  // o card do torneio ocupar a tela e tirava os próprios inscritos da viewport.
+  try { if (window._stickyFilterKeepRoom) window._stickyFilterKeepRoom(_keepY, false); } catch (e) {}
+  // Se a redução da lista deixou todos os acertos fora da área visível, enquadre
+  // o nome mais próximo da posição atual, sem voltar ao começo do torneio.
+  if (q && shown && typeof window.scrollTo === 'function' && typeof window.getComputedStyle === 'function') {
+    var _viewportBottom = window.innerHeight || 0;
+    if (_viewportBottom > 0) {
+      var _safeTop = (parseFloat(window.getComputedStyle(document.documentElement)
+        .getPropertyValue('--scroll-anchor')) || 120) + 8;
+      var _safeBottom = _viewportBottom - 8;
+      var _closest = null, _closestRect = null, _distance = Infinity;
+      cards.forEach(function (card) {
+        if (card.style.display === 'none' || typeof card.getBoundingClientRect !== 'function') return;
+        var rect = card.getBoundingClientRect();
+        var distance = rect.bottom < _safeTop ? _safeTop - rect.bottom :
+          (rect.top > _safeBottom ? rect.top - _safeBottom : 0);
+        if (distance < _distance) { _closest = card; _closestRect = rect; _distance = distance; }
+      });
+      if (_closest && _distance > 0) {
+        window.scrollTo({ top: Math.max(0, _docEl.scrollTop + _closestRect.top - _safeTop), behavior: 'auto' });
+      }
+    }
+  }
 };
 
 window._toggleVip = function (tId, identitiesOrUid, manualParticipantId) {

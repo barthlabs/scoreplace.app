@@ -10,7 +10,7 @@ const start = participants.indexOf('window._partSearch = window._partSearch ||')
 const end = participants.indexOf('window._toggleVip = function', start);
 assert(start >= 0 && end > start, 'filtro real de inscritos disponível');
 
-function visibleNames(search) {
+function visibleNames(search, measureScroll) {
   const host = {
     items: [],
     appendChild(card) { this.items.splice(this.items.indexOf(card), 1); this.items.push(card); }
@@ -20,11 +20,12 @@ function visibleNames(search) {
   ['José Ávila', 'João Lima', 'Nilo Fontes'].forEach((name, i) => {
     const attrs = { 'data-part-name': name.toLowerCase(), 'data-part-order': String(i + 1) };
     host.items.push({ name, attrs, parentNode: host, style: {},
+      getBoundingClientRect() { return { top: [-300, 220, 900][i], bottom: [-250, 280, 960][i] }; },
       getAttribute(key) { return Object.hasOwn(this.attrs, key) ? this.attrs[key] : null; } });
   });
   const empty = { style: {} };
   const doc = {
-    scrollingElement: { scrollTop: 0 }, documentElement: { scrollTop: 0 },
+    scrollingElement: { scrollTop: measureScroll ? 600 : 0 }, documentElement: { scrollTop: 0 },
     getElementById(id) {
       if (id === 'part-search') return { value: search };
       if (id === 'part-sort') return { value: 'order-asc' };
@@ -33,16 +34,28 @@ function visibleNames(search) {
     },
     querySelectorAll(selector) { return selector === '[data-part-card]' ? host.items.slice() : []; }
   };
-  const context = { window: { _partSearch: '', _stickyFilterKeepRoom() {} }, document: doc, console };
+  const scrolls = [], keepRoom = [];
+  const context = { window: {
+    _partSearch: '', innerHeight: 800,
+    _stickyFilterKeepRoom(y, toTop) { keepRoom.push({ y, toTop }); },
+    getComputedStyle() { return { getPropertyValue() { return '120px'; } }; },
+    scrollTo(options) { scrolls.push(options); }
+  }, document: doc, console };
   vm.runInNewContext(participants.slice(start, end), context);
   context.window._partApplyFilter();
-  return host.items.filter(card => card.style.display !== 'none').map(card => card.name);
+  const names = host.items.filter(card => card.style.display !== 'none').map(card => card.name);
+  return measureScroll ? { names, scrolls, keepRoom } : names;
 }
 
 assert.deepEqual(visibleNames('jose avila'), ['José Ávila']);
 assert.deepEqual(visibleNames('JOSÉ ÁVILA'), ['José Ávila']);
 assert.deepEqual(visibleNames('nilo'), ['Nilo Fontes'], 'placeholder manual ativo continua pesquisável');
 assert.deepEqual(visibleNames('joao'), ['João Lima']);
+const inView = visibleNames('joao', true);
+assert.equal(inView.scrolls.length, 0, 'nome já visível permanece na posição atual');
+assert.equal(inView.keepRoom[0].toTop, false, 'busca não leva o card do torneio ao topo');
+const belowView = visibleNames('nilo', true);
+assert.equal(belowView.scrolls[0].top, 1372, 'nome fora da tela entra na viewport pela própria posição');
 
 const dbSource = fs.readFileSync(path.join(root, 'js/firebase-db.js'), 'utf8');
 const a = dbSource.indexOf('async searchUsers(queryText, opts)');

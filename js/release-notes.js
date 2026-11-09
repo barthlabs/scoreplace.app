@@ -2,6 +2,8 @@
 // quadra diretamente para o jogo seguinte, sem repetir chamada e aquecimento.
 // O resultado do sorteio abre ao concluir o sorteio, antes das chaves. Os
 // controles da quadra ficam à direita e os botões mantêm altura compacta.
+// A busca de inscritos mostra o nome filtrado no lugar da lista, sem saltar
+// para o topo do card do torneio.
 // 2.6.11 — A classificação do grupo mantém a categoria no cabeçalho e
 // espaçamento nas bordas. Logos transparentes aparecem sem sombra retangular;
 // a cor do título ganha roda própria com prévia imediata.
