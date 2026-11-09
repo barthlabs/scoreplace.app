@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.6.11';
+window.SCOREPLACE_VERSION = '2.6.12';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -12273,6 +12273,17 @@ window.AppStore = {
                   this._applyPhysicalResultOnMatch(_jogoDaResposta, _respostaDoJogo);
                   _visualConfirmado = true;
                 }
+              }
+              // O servidor transfere a quadra para o próximo jogo da série no
+              // mesmo commit. Reflita essa ocupação antes de repintar o card;
+              // o listener dos jogos físicos pode chegar depois da resposta.
+              if (_d.courtAdvance && _d.courtAdvance.matchId) {
+                var _nextCourtMatch = typeof window._findMatch === 'function'
+                  ? window._findMatch(_lt, String(_d.courtAdvance.matchId))
+                  : (_lt.matches || []).find(function (m) { return String(m.id) === String(_d.courtAdvance.matchId); });
+                if (_nextCourtMatch) ['court', 'courtCalledAt', 'startedAt', 'courtClockBaseAt'].forEach(function (key) {
+                  _nextCourtMatch[key] = _d.courtAdvance[key];
+                });
               }
               if (!_visualConfirmado && window.FirestoreDB && typeof window.FirestoreDB.loadPhysicalMatchResult === 'function') {
                 try {

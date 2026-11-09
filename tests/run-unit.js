@@ -993,6 +993,7 @@ const SUITES = [
   'tests/schedule-organizer.test.js',
   'tests/initial-draw-result.test.js',
   'tests/draw-result-after-publish.test.js',
+  'tests/monarch-court-series.test.js',
   'tests/camis-monarch-interleave.test.js',
   'tests/camis-large-monarch-visibility.test.js',
   'tests/propor-datas-organizador-ve-todos-os-grupos.test.js',

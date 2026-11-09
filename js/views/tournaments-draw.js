@@ -3732,7 +3732,9 @@ window.generateDrawFunction = function (tId) {
                     if (!d.redraw && Array.isArray(t.matches) && t.matches.some(function (m) {
                         return m && (m.isMonarch === true || m.monarchGroup != null);
                     })) window.__drawResultAfterPublish = { id: String(tId), at: Date.now() };
-                    window.location.hash = '#bracket/' + tId;
+                    // Entregue o resultado no detalhe, sem saltar para as chaves.
+                    // O router abre a revisão depois de pintar o torneio.
+                    window.location.hash = '#tournaments/' + encodeURIComponent(String(tId));
                     if (d.native) showNotification(_t('tdraw.started'), _t('tdraw.startedMsg', { n: d.matchCount }), 'success');
                     else showNotification(_t('draw.changesSaved'), _t('tdraw.drawDone'), 'success');
                     if (typeof window._notifyDrawPersonalized === 'function') window._notifyDrawPersonalized(t, tId);

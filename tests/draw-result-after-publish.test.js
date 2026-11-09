@@ -5,6 +5,7 @@ const vm = require('node:vm');
 
 const draw = fs.readFileSync('js/views/tournaments-draw.js', 'utf8');
 assert.match(draw, /!d\.redraw[\s\S]{0,220}isMonarch[\s\S]{0,180}__drawResultAfterPublish/, 'o sorteio inicial Rei\/Rainha entrega a intenção de abrir o resultado');
+assert.match(draw, /__drawResultAfterPublish[\s\S]{0,220}window\.location\.hash = '#tournaments\/'/, 'o sorteio publicado abre o detalhe, sem ir às chaves');
 
 const listeners = new Map();
 const frames = [];

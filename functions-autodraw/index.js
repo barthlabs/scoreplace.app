@@ -41,6 +41,7 @@ const _billingSnapshots = new WeakMap();
 const _tournamentFeeStripeKey = defineSecret('STRIPE_SECRET_KEY');
 const _matchTiming = require('./vendor/match-timing.js');
 const _courtOccupancy = require('./vendor/court-occupancy.js');
+const _monarchCourtSeries = require('./monarch-court-series.js');
 const ScoreplaceRefereeRoster = require('./vendor/referee-roster.js');
 const _isConfirmedTournamentReferee = (t, uid) =>
   ScoreplaceRefereeRoster.sanitizeAll(t && t.arbitros).some(e => e.uid === uid && e.status === 'confirmed');
@@ -2897,6 +2898,15 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
       }
     }
     _hidrataGrupos(t, 'aplicaPlacarNaTransacao', tId);
+    const _courtSourceBefore = typeof drawWindow._findMatch === 'function'
+      ? drawWindow._findMatch(t, matchId) : null;
+    const _courtSeriesEligible = _courtSourceBefore && _courtSourceBefore.isMonarch === true &&
+      _courtSourceBefore.court && _courtSourceBefore.courtCalledAt &&
+      !_courtOccupancy.isFinished(_courtSourceBefore);
+    const _courtState = _courtSeriesEligible
+      ? await tx.get(ref.collection('courtState').doc('main')) : null;
+    const _releasedCourts = _courtState && _courtState.exists
+      ? (_courtState.data().released || {}) : {};
     if (_phasePendingDecision.isFrozenMatch(t, matchId)) {
       return { ok: false, reason: 'phase-seeding-frozen',
         message: 'Este jogo ficou pendente quando a organização congelou a ordem da classificação para avançar a fase.' };
@@ -2914,6 +2924,13 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
       logMessage: logMessage, now: Date.parse(_agoraIsoTx)
     });
     if (!res || !res.ok) return { ok: false, reason: (res && res.reason) || 'apply-failed' };
+    const _courtAdvance = _courtSeriesEligible && res.outcome === 'applied' &&
+      typeof drawWindow._collectAllMatches === 'function'
+      ? _monarchCourtSeries.advance(t, drawWindow._findMatch(t, matchId),
+        drawWindow._collectAllMatches(t), _agoraIsoTx, _courtOccupancy, _matchTiming, _releasedCourts)
+      : null;
+    if (_courtAdvance) tx.set(ref.collection('courtState').doc('main'),
+      { revision: FieldValue.increment(1) }, { merge: true });
     const _tieBeforeResult = {
       decisions: t.phaseTieDecisions && JSON.parse(JSON.stringify(t.phaseTieDecisions)),
       suffix: t.phaseTieNextSuffix && JSON.parse(JSON.stringify(t.phaseTieNextSuffix)),
@@ -3011,8 +3028,9 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
       tx.set(ref.collection('notificationOutbox').doc(auditRef.id), _transitionNotif);
     }
     if (receiptRef) tx.create(receiptRef, _operationReceipt.document(receipt,
-      { ok: true, outcome: res.outcome }, Date.parse(_agoraIsoTx)));
-    return { ok: true, outcome: res.outcome, tournament: b.clean, matchResult: _matchResult };
+      { ok: true, outcome: res.outcome, courtAdvance: _courtAdvance }, Date.parse(_agoraIsoTx)));
+    return { ok: true, outcome: res.outcome, tournament: b.clean, matchResult: _matchResult,
+      courtAdvance: _courtAdvance };
   });
 }
 

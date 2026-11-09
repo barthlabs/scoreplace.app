@@ -120,6 +120,14 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       court.querySelector('.sp-match-clock-next').click();
       window._bracketOperationsRefresh(t, root);
       const activeRect = strip.querySelector('.sp-operations-court-slot--active .sp-match-card').getBoundingClientRect();
+      const footer = strip.querySelector('.sp-operations-court-slot--active .sp-operations-court-footer-actions');
+      const footerRect = footer && footer.getBoundingClientRect();
+      const stableHeights = [];
+      for (let i = 0; i < 8; i++) {
+        window._bracketOperationsRefresh(t, root);
+        const current = strip.querySelector('.sp-operations-court-slot--active .sp-match-card');
+        stableHeights.push(current.getBoundingClientRect().height);
+      }
       const clockRect = strip.querySelector('.sp-operations-court-slot--active .sp-match-court-clock').getBoundingClientRect();
       const goldRect = strip.querySelector('.sp-operations-next .sp-match-card').getBoundingClientRect();
       const afterCall = { called: window.called, saved: window.saved, scoreSourceCleared: window._bracketOperationsScoreSource == null,
@@ -130,6 +138,8 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
         activeHeaderActions: strip.querySelectorAll('.sp-operations-court-slot--active .sp-mc-head [data-operations-action="cancel-court"], .sp-operations-court-slot--active .sp-mc-head [data-operations-action="ended"]').length,
         clockInsideCard: clockRect.top >= activeRect.top && clockRect.bottom <= activeRect.bottom - 2 && clockRect.right <= activeRect.right - 2,
         activeBottomAligned: Math.abs(activeRect.bottom - goldRect.bottom) <= 3,
+        footerOnRight: !!footerRect && footerRect.right >= activeRect.right - 20,
+        stableHeights,
         draft: strip.querySelector('.sp-operations-court-card [data-operations-source-input="s1-m1"]').value,
         next: strip.querySelector('.sp-operations-next [data-operations-match]').getAttribute('data-operations-match') };
       window.AppStore.currentUser = { uid: 'ref' };
@@ -164,6 +174,9 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       state.selectorDoesNotOpenBracket && state.selectorStayedInStrip,
     'selecionar a quadra na faixa não pode abrir o card da chave');
     assert(state.afterCall.activeBottomAligned, 'cards em quadra e próximo a chamar devem alinhar pela base');
+    assert(state.afterCall.footerOnRight, 'Cancelar e Encerrado ficam à direita do rodapé');
+    assert(Math.max(...state.afterCall.stableHeights) - Math.min(...state.afterCall.stableHeights) <= 2,
+      'a altura do card não cresce a cada atualização: ' + state.afterCall.stableHeights);
     assert.equal(state.afterCall.draft, '6');
     assert.equal(state.afterCall.next, 'm2');
     assert(state.refereeView.visible && state.refereeView.pending && state.refereeView.releasedCourt);

@@ -1607,14 +1607,15 @@ function _bracketOperationsReplica(m, t, role, label, availability, root, allMat
     var activeHeaderActions = activeCard && activeCard.querySelector('.sp-mc-acts');
     var activeCourtRow = activeCard && activeCard.querySelector('.sp-match-operational');
     if (activeHeaderActions && activeCourtRow) {
-      var actionAnchor = activeCourtRow.querySelector('.sp-match-confirm') || activeCourtRow.querySelector('.sp-match-court');
+      var footerActions = document.createElement('span');
+      footerActions.className = 'sp-operations-court-footer-actions';
       ['cancel-court', 'ended'].forEach(function (action) {
         var button = activeHeaderActions.querySelector('[data-operations-action="' + action + '"]');
         if (!button) return;
-        if (actionAnchor) actionAnchor.after(button);
-        else activeCourtRow.appendChild(button);
-        actionAnchor = button;
+        footerActions.appendChild(button);
       });
+      if (footerActions.childElementCount) activeCourtRow.insertBefore(footerActions,
+        activeCourtRow.querySelector('.sp-match-court-clock') || null);
       html = activeCard.outerHTML;
     }
   }
@@ -1911,16 +1912,9 @@ window._bracketOperationsRefresh = function (t, root) {
     var measuredCards = existing.querySelectorAll('.sp-operations-replica > .sp-match-card');
     Array.prototype.forEach.call(measuredCards, function (card) { card.style.height = 'max-content'; });
     var cardHeights = Array.prototype.map.call(measuredCards, function (card) {
-      var style = window.getComputedStyle(card);
-      var borders = parseFloat(style.borderTopWidth) + parseFloat(style.borderBottomWidth);
-      return Math.ceil(Math.max(card.getBoundingClientRect().height, card.scrollHeight + borders));
+      return Math.ceil(card.getBoundingClientRect().height);
     });
     var nextNav = root._bracketOperationsNav && root._bracketOperationsNav.next;
-    if (nextNav && cardHeights.length) {
-      var groupHeights = root._bracketOperationsGroupHeights || (root._bracketOperationsGroupHeights = {});
-      groupHeights[nextNav.key] = Math.max(groupHeights[nextNav.key] || 0, cardHeights[0]);
-      cardHeights.push(groupHeights[nextNav.key]);
-    }
     Array.prototype.forEach.call(measuredCards, function (card) { card.style.removeProperty('height'); });
     operationsTrack.style.removeProperty('align-items');
     // O quarteto alterna entre três partidas e uma classificação. Preserve

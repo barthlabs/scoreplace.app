@@ -1,3 +1,10 @@
+## 2.6.12 — 09/nov/2026 (sequência em quadra e resultado do sorteio)
+
+- O resultado confirmado do primeiro ou segundo jogo de um quarteto Rei/Rainha transfere a quadra para o jogo seguinte na mesma transação. O relógio do próximo jogo começa na fase de jogo, sem nova chamada ou aquecimento. O terceiro resultado libera a quadra; reenvio de resultado, liberação manual e quadra ocupada não fazem transferência indevida.
+- A faixa operacional mantém Cancelar e Encerrado à direita do rodapé. Pular jogo, W.O. e Ao Vivo têm altura fixa; atualizações repetidas não aumentam o card.
+- Após publicar o sorteio inicial Rei/Rainha, o app abre a revisão do resultado sobre o detalhe do torneio, sem navegar para as chaves. O botão Resultado do sorteio permanece disponível.
+- Corte web e da Function de placar; sem reset de torneios nem alteração de versões nativas.
+
 ## 2.6.11 — 09/nov/2026 (classificação e personalização do torneio)
 
 - Na faixa Rei/Rainha, a classificação mostra categoria e grupo logo abaixo das setas, no cabeçalho. Classificação parcial, tabela, quadra e OK têm margem interna; os quatro títulos de navegação compartilham a mesma cor e tipografia. A altura do card permanece estável.
