@@ -1,3 +1,8 @@
+## 2.6.3 — 09/nov/2026 (cabeçalho da chamada em duas linhas)
+
+- A réplica operacional Rei/Rainha organiza o cabeçalho em duas linhas: setas e JOGO N acima; categoria à esquerda e os botões de W.O. e Ao Vivo juntos à direita abaixo. O card original da chave permanece com sua estrutura própria.
+- O teste em Chromium mede a posição das duas linhas, o alinhamento dos botões, o tamanho do título e os limites do card. Corte somente web, sem alterar torneios ou versões nativas.
+
 ## 2.6.2 — 09/nov/2026 (resultado do sorteio e faixa compacta)
 
 - O sorteio Rei/Rainha publicado diretamente abre sua tela de resultado após a rota do torneio carregar os jogos. O resultado continua acessível pelo botão do organizador; reentradas e snapshots não abrem uma segunda janela.

@@ -1554,14 +1554,20 @@ function _bracketOperationsReplica(m, t, role, label, availability, root, allMat
         head.firstChild.textContent = '';
         head.insertAdjacentHTML('afterbegin', _bracketOperationsNavHtml(group, index, slot));
       }
-      // No card concentrado a categoria vinha numa linha separada, entre o
-      // título e os botões. Na faixa de chamada ela cabe junto ao jogo; mover
-      // somente o nó evita duplicar texto ou alterar os cards da chave.
+      // A faixa de chamada usa duas linhas: navegação em cima, categoria e
+      // ações na mesma linha abaixo. Reorganizar só a réplica preserva o card
+      // canônico da chave e os handlers das ações.
       var leading = head.firstElementChild;
       var titleRow = leading && leading.firstElementChild;
       var category = leading && leading.querySelector('[data-match-time-status]');
-      if (titleRow && category && category.parentElement === leading) {
-        titleRow.appendChild(category);
+      var actions = head.querySelector('.sp-mc-acts');
+      if (titleRow && category && category.parentElement === leading && actions) {
+        var metaRow = document.createElement('div');
+        metaRow.className = 'sp-operations-meta-row';
+        metaRow.appendChild(category);
+        metaRow.appendChild(actions);
+        titleRow.insertAdjacentElement('afterend', metaRow);
+        card.classList.add('sp-operations-two-line-header');
         titleRow.style.flexWrap = 'nowrap';
         titleRow.style.gap = '4px';
       }

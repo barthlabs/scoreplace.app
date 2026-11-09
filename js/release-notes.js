@@ -1,3 +1,6 @@
+// 2.6.3 — Na faixa de chamada Rei/Rainha, as setas e JOGO N ocupam a primeira
+// linha. A categoria fica logo abaixo, com Aplicar W.O. e Ao Vivo ao lado na
+// mesma linha, aproveitando o espaço do card.
 // 2.6.2 — Depois de sortear os grupos Rei/Rainha, o resultado abre
 // automaticamente para conferência depois de a troca de tela terminar. Na faixa de chamada, JOGO N e a categoria
 // ficam compactos na mesma linha; os botões permanecem lado a lado e a

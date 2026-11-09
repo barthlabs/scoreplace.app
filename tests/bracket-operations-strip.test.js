@@ -631,9 +631,24 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       const category = strip.querySelector('.sp-operations-next [data-match-time-status]');
       const actionButtons = [...strip.querySelectorAll('.sp-operations-next .sp-mc-acts button')];
       camisUi.fontSize = parseFloat(getComputedStyle(gameTitle).fontSize);
-      camisUi.categoryOnTitleLine = Math.abs(gameTitle.getBoundingClientRect().top - category.getBoundingClientRect().top) < 4;
+      camisUi.categoryBelowTitle = category.getBoundingClientRect().top >= gameTitle.getBoundingClientRect().bottom;
+      camisUi.categoryWithButtons = category.parentElement?.classList.contains('sp-operations-meta-row') &&
+        actionButtons.every(button => button.parentElement?.parentElement === category.parentElement) &&
+        Math.abs((category.getBoundingClientRect().top + category.getBoundingClientRect().bottom) / 2 -
+          (actionButtons[0].getBoundingClientRect().top + actionButtons[0].getBoundingClientRect().bottom) / 2) < 4;
       camisUi.buttonsOnOneLine = actionButtons.length === 2 &&
         Math.abs(actionButtons[0].getBoundingClientRect().top - actionButtons[1].getBoundingClientRect().top) < 4;
+      const metaBounds = category.parentElement.getBoundingClientRect();
+      const operationCard = strip.querySelector('.sp-operations-next .sp-match-card');
+      const operationHead = operationCard.querySelector('.sp-mc-head');
+      camisUi.bounds = { cardRight: operationCard.getBoundingClientRect().right,
+        headRight: operationHead.getBoundingClientRect().right, metaRight: metaBounds.right,
+        categoryLeft: category.getBoundingClientRect().left, categoryRight: category.getBoundingClientRect().right,
+        firstButtonLeft: actionButtons[0].getBoundingClientRect().left,
+        lastButtonRight: actionButtons[1].getBoundingClientRect().right,
+        cardPaddingRight: getComputedStyle(operationCard).paddingRight };
+      camisUi.metaFitsCard = metaBounds.right <= operationCard.getBoundingClientRect().right - 2 &&
+        actionButtons[1].getBoundingClientRect().right <= metaBounds.right;
       strip.querySelector('.sp-operations-next [data-operations-nav="next"]').click();
       camisUi.nextTitle = strip.querySelector('.sp-operations-next .sp-operations-nav-title')?.textContent;
       window.renderMatchCard = simpleRender;
@@ -677,8 +692,9 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert.equal(carousel.camis.idLabel, 'R1 Grupo A2');
     assert.deepEqual({ title:carousel.camis.ui.title, arrows:carousel.camis.ui.arrows, nextTitle:carousel.camis.ui.nextTitle },
       { title: 'JOGO 1', arrows: 2, nextTitle: 'JOGO 2' });
-    assert(carousel.camis.ui.fontSize <= 15 && carousel.camis.ui.categoryOnTitleLine && carousel.camis.ui.buttonsOnOneLine,
-      'título pequeno, categoria junto ao jogo e botões lado a lado: ' + JSON.stringify(carousel.camis.ui));
+    assert(carousel.camis.ui.fontSize <= 15 && carousel.camis.ui.categoryBelowTitle &&
+      carousel.camis.ui.categoryWithButtons && carousel.camis.ui.buttonsOnOneLine && carousel.camis.ui.metaFitsCard,
+      'título em cima, categoria e botões juntos embaixo sem corte: ' + JSON.stringify(carousel.camis.ui));
     assert(carousel.standingsInset.left >= 12 && carousel.standingsInset.right >= 12,
       'a primeira posição e o saldo têm respiro nas bordas');
     assert.deepEqual(carousel.fullUniqueness, { games: 108, min: 1, max: 108,

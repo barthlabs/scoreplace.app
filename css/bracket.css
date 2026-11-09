@@ -67,6 +67,10 @@
 .sp-operations-replica > .sp-match-card { width:100%;max-width:none;min-height:0;height:var(--sp-operations-card-height);box-sizing:border-box;padding-bottom:14px!important; }
 .sp-operations-replica .sp-mc-head { gap:4px;margin-bottom:6px; }
 .sp-operations-replica .sp-mc-head [data-match-time-status] { white-space:nowrap; }
+.sp-operations-two-line-header .sp-mc-head { display:block; }
+.sp-operations-two-line-header .sp-mc-head > div:first-child { width:100%; }
+.sp-operations-meta-row { display:flex;align-items:center;justify-content:space-between;gap:6px;min-width:0;width:100%; }
+.sp-operations-meta-row .sp-mc-acts { flex:0 0 auto;margin-left:auto;flex-wrap:nowrap; }
 .sp-operations-replica .sp-match-court-clock { flex:0 0 100%;width:100%;margin-left:0!important;grid-template-columns:27px minmax(0,1fr) 27px 8ch; }
 .sp-operations-next .sp-operations-replica > .sp-match-card { border:3px solid var(--sp-c-fbbf24,#fbbf24)!important; }
 .sp-operations-court-slot--active .sp-operations-replica > .sp-match-card { border:3px solid var(--sp-c-22c55e,#22c55e)!important; }
