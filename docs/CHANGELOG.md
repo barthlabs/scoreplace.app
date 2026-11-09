@@ -1,3 +1,8 @@
+## 2.6.7 — 09/nov/2026 (cabeças de seta sem haste)
+
+- As duas setas de navegação da chamada Rei/Rainha agora são triângulos preenchidos, apontando para esquerda e direita, sem haste. Mantive o alinhamento do cabeçalho e os alvos de toque de 44 px.
+- O teste em Chromium confere a forma triangular e a geometria do card. Corte somente web, sem alterar dados nem versões nativas.
+
 ## 2.6.6 — 09/nov/2026 (setas e alinhamento da chamada)
 
 - Troquei os símbolos `‹ ›` por setas SVG preenchidas, com haste, mantendo os alvos de toque de 44 px e os nomes acessíveis dos botões.

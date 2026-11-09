@@ -1498,9 +1498,9 @@ function _bracketOperationsNavHtml(group, index, slot) {
     'JOGO' + (Number.isInteger(number) && number > 0 ? ' ' + number : '');
   var prefix = 'operations-' + slot.replace(/[^a-zA-Z0-9_-]/g, '-');
   return '<span class="sp-operations-game-nav" data-operations-group="' + safe(group.key) + '" data-operations-slot="' + safe(slot) + '">' +
-    '<button type="button" id="' + prefix + '-prev" class="sp-operations-nav-arrow" data-operations-nav="prev" aria-label="Jogo anterior do ' + safe(group.name) + '" title="Anterior"><svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M9 2 1 10l8 8v-5h10V7H9V2Z"/></svg></button>' +
+    '<button type="button" id="' + prefix + '-prev" class="sp-operations-nav-arrow" data-operations-nav="prev" aria-label="Jogo anterior do ' + safe(group.name) + '" title="Anterior"><svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><polygon points="17,2 3,10 17,18"/></svg></button>' +
     '<span class="sp-operations-nav-title">' + safe(name) + '</span>' +
-    '<button type="button" id="' + prefix + '-next" class="sp-operations-nav-arrow" data-operations-nav="next" aria-label="Próximo jogo ou classificação do ' + safe(group.name) + '" title="Próximo"><svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="m11 2 8 8-8 8v-5H1V7h10V2Z"/></svg></button></span>';
+    '<button type="button" id="' + prefix + '-next" class="sp-operations-nav-arrow" data-operations-nav="next" aria-label="Próximo jogo ou classificação do ' + safe(group.name) + '" title="Próximo"><svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><polygon points="3,2 17,10 3,18"/></svg></button></span>';
 }
 
 function _bracketOperationsStandingsHtml(group, t, slot) {

@@ -1,3 +1,5 @@
+// 2.6.7 — As duas cabeças de seta da chamada Rei/Rainha são triângulos
+// preenchidos, sem haste, como na referência. O alinhamento permanece.
 // 2.6.6 — As setas da chamada Rei/Rainha agora são setas preenchidas, com
 // haste. JOGO N começa na altura dos botões, e a categoria termina alinhada
 // à base deles; a seta direita ganhou espaço depois do número.

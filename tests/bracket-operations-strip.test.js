@@ -544,7 +544,8 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       strip.querySelector('.sp-operations-next [data-operations-action="live"]').click();
       const liveMatch = window.live?.[1];
       const arrows = [...strip.querySelectorAll('.sp-operations-next .sp-operations-nav-arrow')].map(el => ({
-        label: el.getAttribute('aria-label'), filled: !!el.querySelector('svg path'),
+        label: el.getAttribute('aria-label'),
+        triangular: el.querySelector('svg polygon')?.getAttribute('points').trim().split(/\s+/).length === 3,
         width: el.getBoundingClientRect().width, height: el.getBoundingClientRect().height }));
       t.scheduleWindow.days.push({ day: '2026-11-14', startTime: '08:00', endTime: '21:00' });
       window._bracketOperationsRefresh(t, root);
@@ -723,7 +724,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert(carousel.states[0].canCall && !carousel.states[1].canCall && !carousel.states[2].canCall,
       'somente o jogo base pode chamar o quarteto à quadra');
     assert(carousel.states[3].classification && carousel.states[3].players.length === 4);
-    assert(carousel.arrows.every(item => item.label && item.filled && item.width >= 44 && item.height >= 44));
+    assert(carousel.arrows.every(item => item.label && item.triangular && item.width >= 44 && item.height >= 44));
     assert(carousel.survivesRefresh);
     await page.setViewportSize({ width: 320, height: 800 });
     const narrowCall = await page.evaluate(() => {
