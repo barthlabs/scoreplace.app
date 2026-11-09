@@ -6603,7 +6603,7 @@ window._saveTournamentClickHandler = async function() {
         const coverAngleInput = Number((document.getElementById('tourn-cover-gradient-angle') || {}).value);
         const coverGradientAngleVal = Math.max(0, Math.min(360, Number.isFinite(coverAngleInput) ? coverAngleInput : 135));
         const coverGradientBalanceVal = Math.max(10, Math.min(90, Number((document.getElementById('tourn-cover-gradient-balance') || {}).value) || 50));
-        const coverGradientBlendVal = window._coverBlendValue();
+        const coverGradientBlendVal = typeof window._coverBlendValue === 'function' ? window._coverBlendValue() : null;
         const logoDataVal = document.getElementById('tourn-logo-data').value || '';
         const logoLockedVal = document.getElementById('tourn-logo-locked').value === '1';
         const logoShapeVal = (document.getElementById('tourn-logo-shape') || {}).value === 'circle' ? 'circle' : 'square';
@@ -8989,7 +8989,7 @@ window._saveCurrentFormAsTemplate = function(saveButton) {
       coverGradientEnabled: getChecked('tourn-cover-gradient-enabled'),
       coverGradientAngle: Number.isFinite(Number(get('tourn-cover-gradient-angle'))) ? Math.max(0, Math.min(360, Number(get('tourn-cover-gradient-angle')))) : 135,
       coverGradientBalance: Math.max(10, Math.min(90, Number(get('tourn-cover-gradient-balance')) || 50)),
-      coverGradientBlend: window._coverBlendValue(),
+      coverGradientBlend: typeof window._coverBlendValue === 'function' ? window._coverBlendValue() : null,
       logoData: get('tourn-logo-data') || '',
       logoLocked: get('tourn-logo-locked') === '1',
       logoShape: get('tourn-logo-shape') === 'circle' ? 'circle' : 'square',
