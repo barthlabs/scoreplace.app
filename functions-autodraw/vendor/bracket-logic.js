@@ -7300,7 +7300,7 @@ window._openPublishedInitialDrawResult = function (tId) {
   }
   var old = document.getElementById('published-draw-result-overlay'); if (old) old.remove();
   var overlay = document.createElement('div');
-  overlay.id = 'published-draw-result-overlay'; overlay.className = 'modal-overlay';
+  overlay.id = 'published-draw-result-overlay'; overlay.className = 'modal-overlay active';
   var preview = window._renderPendingDrawPreview(Object.assign({}, t, { id:'published:' + String(t.id), pendingDraw:pd }));
   overlay.innerHTML = '<div class="modal" role="dialog" aria-modal="true" aria-label="Resultado do sorteio" style="width:min(920px,96vw);max-height:88%;display:flex;flex-direction:column;">' +
     '<div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:10px;"><h2 style="margin:0;font-size:1.15rem;">Resultado do sorteio</h2><button class="btn btn-outline" data-close>Fechar</button></div>' +

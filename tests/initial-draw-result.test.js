@@ -47,6 +47,19 @@ assert(calls.some(c => c[0] === 'text' && String(c[1]).includes('atleta 3d')));
 assert(!calls.some(c => c[0] === 'text' && String(c[1]).includes('placar')));
 const published = window._publishedInitialDrawData({ matches:draft.draft.matches, competitionTeams:[] });
 assert(published && published.draft.matches.length === 9);
+let visibleResult;
+const closeResult = {};
+const originalDocument = sandbox.document;
+sandbox.document = {
+  getElementById() { return null; },
+  createElement() { return { querySelector() { return closeResult; }, querySelectorAll() { return []; } }; },
+  body:{ appendChild(node) { visibleResult = node; } }
+};
+window._findTournamentById = () => ({ id:'camis', matches:draft.draft.matches, competitionTeams:[] });
+window._openPublishedInitialDrawResult('camis');
+assert(visibleResult.className.split(/\s+/).includes('active'), 'resultado publicado precisa ser visível e clicável');
+assert(visibleResult.innerHTML.includes('Grupo A1'), 'o modal visível contém os confrontos publicados');
+sandbox.document = originalDocument;
 const publishedHtml = window._renderPendingDrawPreview({ id:'published:camis', pendingDraw:published });
 assert(publishedHtml.includes('Grupo A1') && publishedHtml.includes('Grupo A2') && publishedHtml.includes('Grupo A3'));
 assert(publishedHtml.includes('Arte PNG'));

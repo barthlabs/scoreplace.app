@@ -1,3 +1,5 @@
+// 2.6.14 — O painel de Resultado do sorteio agora aparece de fato ao abrir:
+// o modal tinha os jogos carregados, mas estava invisível na tela.
 // 2.6.13 — O resultado do sorteio Rei/Rainha aparece ao concluir mesmo quando
 // o organizador já está na página do torneio. A página atualiza os jogos e
 // deixa de mostrar os cards de inscritos anteriores ao sorteio.

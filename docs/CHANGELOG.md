@@ -1,3 +1,8 @@
+## 2.6.14 — 09/nov/2026 (modal visível do resultado do sorteio)
+
+- A conferência no Chrome mostrou o sorteio do CAMIS já carregado com 108 jogos e o botão Resultado do sorteio, mas o painel criado por esse botão herdava `opacity: 0` de `.modal-overlay` porque faltava a classe `active`.
+- O painel agora abre com a classe exigida pelo CSS. O sorteio e o banco não foram alterados.
+
 ## 2.6.13 — 09/nov/2026 (resultado do sorteio na mesma página)
 
 - O sorteio do CAMIS foi confirmado no Firestore às 13:03:36, com 108 jogos Rei/Rainha. A página ficou na tela de inscritos porque a URL do detalhe já era a URL de destino: atribuí-la novamente não gera `hashchange`.
