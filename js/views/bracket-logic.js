@@ -321,8 +321,8 @@ window._computeMonarchStandings = function(group, t, category) {
       return (byName !== undefined) ? byName : 9999;      // fora do retrato → fim
     };
   }
-  var _cfgTb = (t && Array.isArray(t.tiebreakers) && t.tiebreakers.length) ? t.tiebreakers : null;
-  if ((!_cfgTb && (!t || t.rankingPrimary !== 'games_diff')) || typeof window._standingsCompareConfig !== 'function') {
+  var _cfgTb = (t && Array.isArray(t.tiebreakers)) ? t.tiebreakers : null;
+  if ((!_cfgTb && (!t || ['games_diff', 'wins'].indexOf(t.rankingPrimary) < 0)) || typeof window._standingsCompareConfig !== 'function') {
     if (_ordCong) {
       return _linhas.slice().sort(function (a, b) {
         var d = _ordCong(a) - _ordCong(b);
@@ -334,7 +334,7 @@ window._computeMonarchStandings = function(group, t, category) {
   }
   var _opts = {
     tiebreakers: _cfgTb, adv: _adv,
-    primaryField: t && t.rankingPrimary === 'games_diff' ? 'games_diff' : (_adv ? 'advancedPoints' : 'points'),
+    primaryField: t && ['games_diff', 'wins'].indexOf(t.rankingPrimary) >= 0 ? t.rankingPrimary : (_adv ? 'advancedPoints' : 'points'),
     // confronto direto sai dos JOGOS DESTE GRUPO, por uid (nome só pra quem não tem conta)
     h2h: (typeof window._standingsBuildH2H === 'function')
       ? window._standingsBuildH2H(matches, function (m, lado) {
@@ -1226,8 +1226,7 @@ function _computeStandings(t, category) {
   // (xadrez) e FIBA (basquete). Em GSM, critérios de sets/games entram
   // entre Saldo e Vitórias pra dar granularidade ao desempate. Quando
   // Pontos Avançados está ativo, vai pro topo (já era assim).
-  // Empty array fallback: se t.tiebreakers existe mas está vazio,
-  // usar default em vez de [] (que pulava todos os tiebreakers).
+  // O padrão só se aplica a torneios sem lista configurada. [] é explícito.
   var defaultTb = ['confronto_direto', 'saldo_pontos', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio'];
   if (t.scoring && t.scoring.type === 'sets') {
     defaultTb = ['confronto_direto', 'saldo_sets', 'saldo_games', 'saldo_pontos_tiebreak', 'sets_vencidos', 'games_vencidos', 'tiebreaks_vencidos', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio'];
@@ -1235,7 +1234,7 @@ function _computeStandings(t, category) {
   if (t.advancedScoring && t.advancedScoring.enabled) {
     defaultTb = ['pontos_avancados'].concat(defaultTb);
   }
-  const tiebreakers = (Array.isArray(t.tiebreakers) && t.tiebreakers.length > 0) ? t.tiebreakers : defaultTb;
+  const tiebreakers = Array.isArray(t.tiebreakers) ? t.tiebreakers : defaultTb;
 
   // v2.2.47: mapa nome→timestamp de nascimento (pros critérios antiguidade/juventude)
   var birthByName = (typeof window._tbBirthByName === 'function') ? window._tbBirthByName(t) : {};
@@ -1288,7 +1287,7 @@ function _computeStandings(t, category) {
     var _optsStd = {
       tiebreakers: tiebreakers,
       // com pontuação avançada ligada, é ela que lidera — senão os pontos simples
-      primaryField: t.rankingPrimary === 'games_diff' ? 'games_diff' : (_advPrimary ? 'advancedPoints' : 'points'),
+      primaryField: ['games_diff', 'wins'].indexOf(t.rankingPrimary) >= 0 ? t.rankingPrimary : (_advPrimary ? 'advancedPoints' : 'points'),
       h2h: h2h, birth: birthByName,
       // `sorteio` = ORDEM DA CHAVE (quem aparece no jogo mais cedo vem antes) — regra do dono
       ordem: (typeof window._standingsOrdemChave === 'function')
@@ -2460,7 +2459,7 @@ function _rankByTiebreakers(t, playerNames) {
   if (t.scoring && t.scoring.type === 'gsm') {
     defaultTb = ['confronto_direto', 'saldo_sets', 'saldo_games', 'saldo_pontos_tiebreak', 'sets_vencidos', 'games_vencidos', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio'];
   }
-  var tiebreakers = (Array.isArray(t.tiebreakers) && t.tiebreakers.length > 0) ? t.tiebreakers : defaultTb;
+  var tiebreakers = Array.isArray(t.tiebreakers) ? t.tiebreakers : defaultTb;
   var birthByName = (typeof window._tbBirthByName === 'function') ? window._tbBirthByName(t) : {};
 
   // ── DESEMPATE: O MESMO COMPARADOR DO RESTO DO APP ────────────────────────────
@@ -3560,7 +3559,7 @@ function _updateProgressiveClassification(t) {
   // ORDEM DA CHAVE — quem aparece no jogo mais cedo fica na frente.
   var _cmpElim = (typeof window !== 'undefined' && typeof window._standingsCompareConfig === 'function')
     ? window._standingsCompareConfig : null;
-  var _tbElim = (Array.isArray(t.tiebreakers) && t.tiebreakers.length) ? t.tiebreakers : null;
+  var _tbElim = Array.isArray(t.tiebreakers) ? t.tiebreakers : null;
   var _ordElim = (typeof window !== 'undefined' && typeof window._standingsOrdemChave === 'function')
     ? window._standingsOrdemChave(allMatches, function (m, lado) {
         var u = (typeof window._slotUids === 'function') ? (window._slotUids(m, lado) || []) : [];
@@ -3843,7 +3842,7 @@ function _updateProgressiveClassification(t) {
     if (t.advancedScoring && t.advancedScoring.enabled) {
       _defaultTb = ['pontos_avancados'].concat(_defaultTb);
     }
-    var _userTb = (Array.isArray(t.tiebreakers) && t.tiebreakers.length > 0) ? t.tiebreakers : _defaultTb;
+    var _userTb = Array.isArray(t.tiebreakers) ? t.tiebreakers : _defaultTb;
     var _birthByName = (typeof window._tbBirthByName === 'function') ? window._tbBirthByName(t) : {};
 
     // ─── Sort comparator: same logic as _computeStandings sort ───

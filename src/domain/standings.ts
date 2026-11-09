@@ -234,8 +234,10 @@ namespace ScoreplaceStandings {
       const gamesResult = CRITERIOS.saldo_games(a, b);
       if (gamesResult) return gamesResult;
     }
-    if (!Array.isArray(list) || !list.length) return standingsCompare(a, b, Boolean(options.adv));
     if (primary !== 'games_diff' && a[primary] != null && b[primary] != null && n(b[primary]) !== n(a[primary])) return n(b[primary]) - n(a[primary]);
+    // Ausente mantém o legado; [] é a escolha explícita de não desempatar.
+    if (!Array.isArray(list)) return standingsCompare(a, b, Boolean(options.adv));
+    if (!list.length) return 0;
     for (const criterionName of list) {
       const criterion = CRITERIOS[criterionName];
       if (!criterion) continue;

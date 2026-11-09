@@ -6246,8 +6246,8 @@ function _buildPhaseTieRuntime(t, current, sourceGroups, currentCfg, phaseEngine
     }
     const h2h = typeof drawWindow._standingsBuildH2H === 'function'
       ? drawWindow._standingsBuildH2H(matches, slotKeys) : {};
-    const opts = { tiebreakers: criterionList.length ? criterionList : ['__none__'],
-      primaryField: t.rankingPrimary === 'games_diff' ? 'games_diff' : 'points',
+    const opts = { tiebreakers: criterionList,
+      primaryField: ['games_diff', 'wins'].includes(t.rankingPrimary) ? t.rankingPrimary : 'points',
       adv: advanced, h2h, birth: tbOpts.birthByName || {} };
     const compare = (a, b) => drawWindow._standingsCompareConfig(a, b, opts);
     compare.originalOrder = originalOrder;
@@ -7347,8 +7347,8 @@ function _resolveFinalClassificationTie(t, action, nowIso) {
       ? drawWindow._standingsBuildH2H(ownMatches, slotKeys) : {};
     const compare = criterionList
       ? (a, b) => compareConfig(a, b, {
-        tiebreakers: criterionList.length ? criterionList : ['__none__'],
-        primaryField: t.rankingPrimary === 'games_diff' ? 'games_diff' : 'points',
+        tiebreakers: criterionList,
+        primaryField: ['games_diff', 'wins'].includes(t.rankingPrimary) ? t.rankingPrimary : 'points',
         h2h, birth: typeof drawWindow._tbBirthByName === 'function' ? drawWindow._tbBirthByName(t) : {}
       })
       : (a, b) => compareLegacy(a, b, false);

@@ -1,3 +1,7 @@
+// 2.6.10 — A classificação principal pode ser pontos, vitórias ou saldo de
+// games na classificatória, em botões exclusivos; na eliminatória, avança o
+// vencedor direto. A simples de desempate fica acima dos critérios
+// adicionais; Desativar todos deixa a lista vazia sem reativar o sorteio.
 // 2.6.9 — A classificação do grupo mantém a mesma altura dos cards dos jogos,
 // com quadra e OK no rodapé e categoria mais grupo abaixo do seletor. As
 // partidas identificam o grupo; no jogo em quadra, Cancelar e Encerrado ficam

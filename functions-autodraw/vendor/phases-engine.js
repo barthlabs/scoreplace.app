@@ -267,9 +267,10 @@
             var melhorA = (a.tm && a.tm.participants && a.tm.participants[0]) || a.tm || {};
             var melhorB = (b.tm && b.tm.participants && b.tm.participants[0]) || b.tm || {};
             d = cmpPadrao ? cmpPadrao(melhorA, melhorB, false) : 0;
-          } else if (cmpConfigurado && Array.isArray(tiebreakers) && tiebreakers.length) {
+          } else if (cmpConfigurado && Array.isArray(tiebreakers)) {
             d = cmpConfigurado(a.metrica, b.metrica, {
               tiebreakers: tiebreakers,
+              primaryField: ['games_diff', 'wins'].indexOf(opts.promotionRankingPrimary) >= 0 ? opts.promotionRankingPrimary : 'points',
               h2h: {}, birth: nascimentos, ordem: ordem
             });
           } else d = cmpPadrao ? cmpPadrao(a.metrica, b.metrica, false) : 0;
@@ -411,6 +412,7 @@
       // A promoção compara DUPLAS, não pessoas. Estes valores pertencem ao torneio
       // (não à configuração persistida da fase), portanto chegam só pelo contexto.
       promotionTiebreakers: ctx.tiebreakers || (cfg && cfg._promotionTiebreakers) || null,
+      promotionRankingPrimary: ctx.rankingPrimary || (cfg && cfg._promotionRankingPrimary) || 'points',
       promotionBirthByName: ctx.birthByName || (cfg && cfg._promotionBirthByName) || null,
       tieOrder: (cfg && cfg._tieOrder) || null,
       // quem chama é que sabe qual era a fase ANTERIOR; sem essa informação não se
@@ -618,8 +620,10 @@
         _nextCandidates.sort(function (a, b) {
           var d = _metricCandidate(b) - _metricCandidate(a);
           if (d) return d;
-          if (cmpConfigured && Array.isArray(opts.promotionTiebreakers) && opts.promotionTiebreakers.length)
-            d = cmpConfigured(a.entry, b.entry, { tiebreakers: opts.promotionTiebreakers, h2h: {}, birth: {}, ordem: {} });
+          if (cmpConfigured && Array.isArray(opts.promotionTiebreakers))
+            d = cmpConfigured(a.entry, b.entry, { tiebreakers: opts.promotionTiebreakers,
+              primaryField: ['games_diff', 'wins'].indexOf(opts.promotionRankingPrimary) >= 0 ? opts.promotionRankingPrimary : 'points',
+              h2h: {}, birth: {}, ordem: {} });
           else if (cmpStandard) d = cmpStandard(a.entry, b.entry, false);
           if (d) return d;
           var order = opts.tieOrder || null;
@@ -2402,7 +2406,7 @@
     var defaultTb = usesSets
       ? ['confronto_direto', 'saldo_sets', 'saldo_games', 'saldo_pontos_tiebreak', 'sets_vencidos', 'games_vencidos', 'tiebreaks_vencidos', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio']
       : ['confronto_direto', 'saldo_pontos', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio'];
-    var tb = (Array.isArray(opts.tiebreakers) && opts.tiebreakers.length) ? opts.tiebreakers : defaultTb;
+    var tb = Array.isArray(opts.tiebreakers) ? opts.tiebreakers : defaultTb;
     // confronto direto POR UID (nome só pra quem não tem conta — é a identidade que ele tem)
     var _h2hUid = _buildH2H ? _buildH2H(matches, function (m, lado) {
       var slot = (typeof window !== 'undefined' && typeof window._slotUids === 'function') ? window._slotUids(m, lado) : [];
@@ -2432,7 +2436,7 @@
       });
     }
     var _opts = { tiebreakers: tb, h2h: _h2hUid, birth: _birth, ordem: _ordemChave,
-      primaryField: opts.rankingPrimary === 'games_diff' ? 'games_diff' : 'points' };
+      primaryField: ['games_diff', 'wins'].indexOf(opts.rankingPrimary) >= 0 ? opts.rankingPrimary : 'points' };
     function cmp(a, b) { return _cmpCfg(a, b, _opts); }
     return Object.keys(smap).map(function (k) { return smap[k]; }).sort(cmp);
   }
@@ -3069,6 +3073,7 @@
         } : null,
         _prevRRRodadaUnica: _prevRRUnica,
         _promotionTiebreakers: t.tiebreakers,
+        _promotionRankingPrimary: t.rankingPrimary,
         _promotionBirthByName: (typeof window !== 'undefined' && typeof window._tbBirthByName === 'function') ? window._tbBirthByName(t) : {},
         /* o embaralhador determinístico desce até `buildEntrantsByDest` por aqui */
         _det: det

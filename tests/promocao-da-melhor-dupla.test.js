@@ -58,6 +58,16 @@ function nome(tm) { return tm && tm.displayName; }
   ok(nome(r.byDest.upper[r.byDest.upper.length - 1]) === 'Explosiva / Âncora', 'ordem configurada pelo organizador (vitórias antes) vence o saldo');
 })();
 
+// Uma lista vazia não aciona a régua antiga ao classificar duplas formadas.
+(function () {
+  const porSaldo = E.buildPhaseBrackets(grupos, cfg({ _promotionTiebreakers: [], _promotionRankingPrimary: 'games_diff' }), cs, 'saldo');
+  const porVitorias = E.buildPhaseBrackets(grupos, cfg({ _promotionTiebreakers: [], _promotionRankingPrimary: 'wins' }), cs, 'vitorias');
+  ok(nome(porSaldo.byDest.upper[porSaldo.byDest.upper.length - 1]) === 'Constante 1 / Constante 2',
+    'sem desempates adicionais, a promoção da dupla respeita só saldo de games');
+  ok(nome(porVitorias.byDest.upper[porVitorias.byDest.upper.length - 1]) === 'Explosiva / Âncora',
+    'vitórias pode ser a medida principal da dupla sem critério secundário');
+})();
+
 // Pré-cheque e materialização precisam concordar; a segunda recebe t.tiebreakers, que
 // não pertencem ao objeto persistido da fase.
 (function () {

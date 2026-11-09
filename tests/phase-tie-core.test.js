@@ -10,6 +10,11 @@ const published = { fmt2: { tieResolution: 'singles_then_draw' },
 tie.canonicalizeTieFallback(published);
 assert.deepStrictEqual(published.tiebreakers, ['saldo_games', 'vitorias', 'sorteio']);
 assert.deepStrictEqual(published.tiebreakersExcluded, []);
+const noExtras = { fmt2: { tieResolution: 'singles_then_draw' },
+  rankingPrimary: 'games_diff', tiebreakers: [], tiebreakersExcluded: ['sorteio', 'saldo_games'] };
+tie.canonicalizeTieFallback(noExtras);
+assert.deepStrictEqual(noExtras.tiebreakers, [], 'simples com saldo principal não reativa sorteio nem saldo adicional');
+assert.deepStrictEqual(noExtras.tiebreakersExcluded, ['sorteio', 'saldo_games']);
 const firstDraw = tie.originalDrawMatches([
   { roundIdx: 0, match: { p1: 'B', p2: 'A', round: 3 } },
   { roundIdx: 1, match: { p1: 'A', p2: 'B', round: 1 } }

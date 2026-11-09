@@ -19,6 +19,14 @@ const B = line('uB', { wins: 1, gamesWon: 20, gamesLost: 10 });
 ok(D.standingsCompareConfig(A, B, { tiebreakers: ['vitorias', 'saldo_games'] }) < 0, 'a ordem configurada de critérios é preservada');
 ok(D.standingsCompareConfig(A, B, { tiebreakers: ['saldo_games', 'vitorias'] }) > 0, 'mudar a ordem configurada muda quem fica à frente');
 ok(D.standingsCompare(A, B) < 0, 'cadeia padrão mantém vitórias antes de saldo de games');
+ok(D.standingsCompareConfig(A, B, { primaryField: 'games_diff', tiebreakers: [] }) > 0,
+  'saldo de games decide sozinho quando a lista de desempates está vazia');
+ok(D.standingsCompareConfig(line('x', { wins: 3, gamesWon: 12, gamesLost: 10 }),
+  line('y', { wins: 1, gamesWon: 12, gamesLost: 10 }),
+  { primaryField: 'games_diff', tiebreakers: [] }) === 0,
+  'vitórias não desempata saldo igual sem critério adicional');
+ok(D.standingsCompareConfig(A, B, { primaryField: 'wins', tiebreakers: [] }) < 0,
+  'vitórias também pode ser o critério principal exclusivo');
 const G1 = line('g1', {points: 1, wins: 3, gamesWon: 12, gamesLost: 8});
 const G2 = line('g2', {points: 9, wins: 2, gamesWon: 15, gamesLost: 11});
 ok(D.standingsCompareConfig(G1,G2,{primaryField:'games_diff',tiebreakers:['vitorias','games_vencidos']}) < 0,
@@ -37,7 +45,7 @@ ok(live._computeMonarchStandings(group,{tiebreakers:['vitorias']})[0].name === '
   'motor real escolhe pontos ou saldo de games conforme configuração persistida');
 const editor = fs.readFileSync(path.join(ROOT,'js/views/create-tournament.js'),'utf8');
 const server = fs.readFileSync(path.join(ROOT,'functions-autodraw/index.js'),'utf8');
-ok(editor.includes("tourData.rankingPrimary = rankingPrimaryEl") && editor.includes("_rankingPrimaryEl.value = t.rankingPrimary") &&
+ok(editor.includes("tourData.rankingPrimary = rankingPrimaryEl") && editor.includes("window._setRankingPrimary(['games_diff', 'wins']") &&
   server.includes("'phase1Name','rankingPrimary','tiebreakers'"),
   'editor carrega e salva a escolha e o servidor aceita o campo declarativo');
 

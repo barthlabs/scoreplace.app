@@ -100,6 +100,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       if (el) el.innerHTML = _bodyControls();
       _placeExt();
       _mountElimRoundBounds();
+      _renderTieResolution();
     } else {
       var c = document.getElementById('view-container');
       if (c) window.renderFormatoPage(c);
@@ -188,7 +189,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       '<div style="font-size:0.72rem;color:var(--text-muted);margin:6px 0 12px;line-height:1.45;">' + (fx === 'performance'
         ? 'Performance: os melhores do grupo jogam juntos (1º+2º, depois 3º+4º).'
         : 'Equilíbrio: forte com fraco (1º+4º, 2º+3º) — duplas mais parelhas.') + '</div>';
-    if (!temClassif) s += _sec('Desempate da rodada Rei/Rainha',
+    if (!temClassif && S.mode !== 'form') s += _sec('Desempate da rodada Rei/Rainha',
       _pill(cfg.tieResolution !== 'singles_then_draw', "window._f2TieResolution('draw_order')", '🎲 Ordem do sorteio original') +
       _pill(cfg.tieResolution === 'singles_then_draw', "window._f2TieResolution('singles_then_draw')", '🎾 Simples / triangular') +
       (cfg.tieResolution === 'singles_then_draw' ? _tieSinglesControls(cfg) : ''));
@@ -201,6 +202,25 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       '" onchange="window._f2TieSinglesPoints(this.value)" style="width:74px;margin-left:6px;"></label>' +
       _pill(cfg.tieSinglesMargin !== 2, 'window._f2TieSinglesMargin(1)', 'Quem chega primeiro') +
       _pill(cfg.tieSinglesMargin === 2, 'window._f2TieSinglesMargin(2)', 'Vantagem de 2 pontos') + '</div>';
+  }
+
+  function _renderTieResolution() {
+    var el = document.getElementById('tie-resolution-section');
+    if (!el || !S || S.mode !== 'form') return;
+    var cfg = S.cfg;
+    var individual = cfg._scoreBy === 'individual' && !(cfg.teamCompetition && cfg.teamCompetition.enabled);
+    if (!(cfg.classifAtiva && individual) && !(cfg.eliminatoria && cfg.eliminatoria.openReiRainha && !cfg.classifAtiva)) {
+      el.innerHTML = '';
+      return;
+    }
+    var singles = cfg.tieResolution === 'singles_then_draw';
+    el.innerHTML = '<section style="padding:12px;margin:8px 0 14px;border:1px solid var(--sp-b-255-255-255-016,rgba(255,255,255,.16));border-radius:10px;background:var(--sp-g-255-255-255-005,rgba(255,255,255,.05));">' +
+      '<h4 style="margin:0 0 5px;color:var(--text-main);">Empate na classificação</h4>' +
+      '<p style="margin:0 0 10px;font-size:.8rem;color:var(--text-muted);">Quando a classificação empata, dois atletas podem disputar uma simples; três disputam um triangular. Os critérios adicionais abaixo podem ficar todos desativados.</p>' +
+      _pill(singles, "window._f2TieResolution('singles_then_draw')", '🎾 Simples de desempate') +
+      _pill(!singles, "window._f2TieResolution('draw_order')", '🎲 Ordem do sorteio original') +
+      (singles ? '<p style="margin:6px 0 2px;font-size:.76rem;color:var(--text-muted);">Se não houver tempo, a organização pode dispensar as partidas e usar a ordem original do sorteio.</p>' + _tieSinglesControls(cfg) : '') +
+      '</section>';
   }
 
   // Painel "Inscrições durante a fase" DA ELIMINATÓRIA (2ª fase). Espelha visualmente o bloco do
@@ -1064,7 +1084,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         ? '<div style="pointer-events:none;opacity:.5;" aria-disabled="true">' + sitOutControls + '</div>'
         : sitOutControls);
     }
-    if (cfg._scoreBy === 'individual' && !(tc && tc.enabled)) classifSchedule += _sec('Empate após os critérios de desempate',
+    if (S.mode !== 'form' && cfg._scoreBy === 'individual' && !(tc && tc.enabled)) classifSchedule += _sec('Empate após os critérios de desempate',
       '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:8px;">Quando atletas empatados seguiriam para destinos diferentes:</div>' +
       _pill(cfg.tieResolution !== 'singles_then_draw', "window._f2TieResolution('draw_order')", '🎲 Ordem do sorteio original') +
       _pill(cfg.tieResolution === 'singles_then_draw', "window._f2TieResolution('singles_then_draw')", '🎾 Simples / triangular; sorteio original se dispensado') +
@@ -2040,7 +2060,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     }
     S = { mode: 'form', mountEl: container, sport: sport, cfg: cfg, t: tournament || null };
     _syncTeamSize();
-    if (container) { container.innerHTML = _bodyControls(); _placeExt(); _mountElimRoundBounds(); }
+    if (container) { container.innerHTML = _bodyControls(); _placeExt(); _mountElimRoundBounds(); _renderTieResolution(); }
   };
   // Config atual (pro save do form). null se não montado em modo form.
   window._f2GetConfig = function () { return (S && S.mode === 'form') ? window.FORMAT2.normalize(S.cfg, S.sport) : null; };

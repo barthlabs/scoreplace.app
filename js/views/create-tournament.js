@@ -1314,15 +1314,19 @@ function setupCreateTournamentModal() {
 
               <!-- Critérios de Desempate -->
               <div id="tiebreaker-section" style="background: rgba(88,166,255,0.06); border: 1px solid rgba(88,166,255,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
-                <p style="margin: 0 0 0.5rem; font-size: 0.8rem; color: var(--sp-c-58a6ff,#58a6ff); font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.tiebreakerSection')}</p>
-                <small class="text-muted" style="display:block;margin-bottom:0.5rem;">${_t('create.tiebreakerDesc')}</small>
-                <label for="ranking-primary" style="display:block;margin-bottom:0.65rem;color:var(--text-main);font-weight:600;">${_t('create.rankingPrimaryLabel')}</label>
-                <select id="ranking-primary" style="width:100%;padding:9px;border-radius:8px;background:var(--bg-darker,#181b21);color:var(--text-main,#fff);border:1px solid var(--sp-b-255-255-255-02,rgba(255,255,255,.2));margin-bottom:0.4rem;">
-                  <option value="points">${_t('create.rankingPrimaryPoints')}</option><option value="games_diff">${_t('create.rankingPrimaryGamesDiff')}</option>
-                </select>
+                <h3 style="margin:0 0 .65rem;color:var(--text-main);font-size:1rem;">${_t('create.rankingPrimaryLabel')}</h3>
+                <input type="hidden" id="ranking-primary" value="points">
+                <div role="group" aria-label="${_t('create.rankingPrimaryLabel')}" id="ranking-primary-buttons" style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:.55rem;">
+                  <button type="button" data-ranking-primary="points" aria-pressed="true" onclick="window._setRankingPrimary('points')" class="btn btn-secondary btn-sm">${_t('create.rankingPrimaryPoints')}</button>
+                  <button type="button" data-ranking-primary="wins" aria-pressed="false" onclick="window._setRankingPrimary('wins')" class="btn btn-secondary btn-sm">${_t('create.tbWins')}</button>
+                  <button type="button" data-ranking-primary="games_diff" aria-pressed="false" onclick="window._setRankingPrimary('games_diff')" class="btn btn-secondary btn-sm">${_t('create.rankingPrimaryGamesDiff')}</button>
+                </div>
                 <small class="text-muted" style="display:block;margin-bottom:0.65rem;">${_t('create.rankingPrimaryDesc')}</small>
                 <small id="ranking-started-warning" style="display:none;color:var(--sp-c-fbbf24,#fbbf24);margin-bottom:.65rem;">${_t('create.rankingPrimaryStartedWarning')}</small>
-                <div style="display:flex;justify-content:flex-end;margin-bottom:0.6rem;"><button type="button" onclick="window._resetTiebreakers()" style="padding:5px 12px;border-radius:8px;border:1px solid rgba(88,166,255,0.35);background:rgba(88,166,255,0.1);color:var(--sp-c-58a6ff,#58a6ff);font-size:0.74rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:5px;">↺ ${_t('create.tbResetBtn')}</button></div>
+                <div id="tie-resolution-section"></div>
+                <p style="margin: .85rem 0 0.5rem; font-size: 0.8rem; color: var(--sp-c-58a6ff,#58a6ff); font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.tiebreakerSection')}</p>
+                <small class="text-muted" style="display:block;margin-bottom:0.5rem;">${_t('create.tiebreakerDesc')}</small>
+                <div style="display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px;margin-bottom:0.6rem;"><button type="button" class="btn btn-secondary btn-sm" onclick="window._tbExcludeAll()">${_t('create.tbExcludeAll')}</button><button type="button" onclick="window._resetTiebreakers()" style="padding:5px 12px;border-radius:8px;border:1px solid rgba(88,166,255,0.35);background:rgba(88,166,255,0.1);color:var(--sp-c-58a6ff,#58a6ff);font-size:0.74rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:5px;">↺ ${_t('create.tbResetBtn')}</button></div>
                 <ul id="tiebreaker-list" style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px;">
                   <li draggable="true" data-tb="pontos_avancados" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.2);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:6px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span><span style="display:flex;align-items:center;flex-wrap:wrap;gap:2px 6px;flex:1 1 auto;min-width:0;"> 💯 ${_t('create.tbAdvancedPoints')} <small style="color:var(--text-muted); font-size:0.65rem;">${_t('create.tbAdvancedPointsNote')} <span onclick="event.stopPropagation();event.preventDefault();window._showTiebreakInfo('pontos_avancados')" style="cursor:pointer;font-size:1.2em;opacity:1;padding:0 1px;" title="${_t('create.tbInfoBtn')}">ℹ️</span></small></span><span style="display:flex;align-items:center;flex:0 0 auto;margin-left:auto;"><button type="button" data-tb-move class="cancel-x-btn" onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="--cx-size:20px;margin-left:auto;" title="${_t('create.tbRemoveBtn')}">✕</button></span></li>
                   <li draggable="true" data-tb="confronto_direto" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" title="${_t('create.tbHeadToHeadTip')}" style="background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));border:1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1));border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:6px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span><span style="display:flex;align-items:center;flex-wrap:wrap;gap:2px 6px;flex:1 1 auto;min-width:0;"> 🆚 ${_t('create.tbHeadToHead')}</span><span style="display:flex;align-items:center;flex:0 0 auto;margin-left:auto;"><button type="button" data-tb-move class="cancel-x-btn" onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="--cx-size:20px;margin-left:auto;" title="${_t('create.tbRemoveBtn')}">✕</button></span></li>
@@ -1417,6 +1421,17 @@ function setupCreateTournamentModal() {
     }
 
     // Setup tiebreaker drag-and-drop
+    window._setRankingPrimary = function(value) {
+      if (['points', 'wins', 'games_diff'].indexOf(value) < 0) return;
+      var input = document.getElementById('ranking-primary');
+      if (input) input.value = value;
+      document.querySelectorAll('#ranking-primary-buttons [data-ranking-primary]').forEach(function(button) {
+        var active = button.dataset.rankingPrimary === value;
+        button.setAttribute('aria-pressed', active ? 'true' : 'false');
+        button.classList.toggle('ranking-primary-active', active);
+      });
+    };
+    window._setRankingPrimary('points');
     const tbList = document.getElementById('tiebreaker-list');
     const tbExcluded = document.getElementById('tiebreaker-excluded-list');
     if (tbList) {
@@ -1475,6 +1490,16 @@ function setupCreateTournamentModal() {
           if (key === 'antiguidade' || key === 'juventude') window._tbNormalizeAge(key);
         }
         window._tbUpdateRowControls(li);
+      };
+
+      window._tbExcludeAll = function() {
+        var active = document.getElementById('tiebreaker-list');
+        var excluded = document.getElementById('tiebreaker-excluded-list');
+        if (!active || !excluded) return;
+        Array.from(active.querySelectorAll('li[data-tb]')).forEach(function(li) {
+          excluded.appendChild(li);
+          window._tbUpdateRowControls(li);
+        });
       };
 
       // Arranjo SUGERIDO dos critérios (ordem ativa + excluídos). Fonte única do reset.
@@ -5870,7 +5895,7 @@ function setupCreateTournamentModal() {
     var _p1NameInput = document.getElementById('phase1-name');
     if (_p1NameInput) _p1NameInput.value = window._phase1Name || '';
     var _rankingPrimaryEl = document.getElementById('ranking-primary');
-    if (_rankingPrimaryEl) _rankingPrimaryEl.value = t.rankingPrimary === 'games_diff' ? 'games_diff' : 'points';
+    if (_rankingPrimaryEl) window._setRankingPrimary(['games_diff', 'wins'].indexOf(t.rankingPrimary) >= 0 ? t.rankingPrimary : 'points');
     var _rankingStartedWarning = document.getElementById('ranking-started-warning');
     if (_rankingStartedWarning) _rankingStartedWarning.style.display = Array.isArray(t.matches) && t.matches.length ? 'block' : 'none';
 
@@ -5886,6 +5911,12 @@ function setupCreateTournamentModal() {
         });
         // 1) ativos na ordem salva
         if (Array.isArray(t.tiebreakers)) {
+          // [] significa nenhum critério; o HTML nasce com sugestões ativas.
+          Object.keys(_allTbItems).forEach(function(key) {
+            var item = _allTbItems[key];
+            tbExcl.appendChild(item);
+            if (window._tbUpdateRowControls) window._tbUpdateRowControls(item);
+          });
           t.tiebreakers.forEach(function(tb) {
             var item = _allTbItems[tb];
             if (item) { tbList.appendChild(item); if (window._tbUpdateRowControls) window._tbUpdateRowControls(item); }
@@ -6839,7 +6870,7 @@ window._saveTournamentClickHandler = async function() {
 
         // Tiebreakers (ordem configurada pelo organizador)
         var rankingPrimaryEl = document.getElementById('ranking-primary');
-        tourData.rankingPrimary = rankingPrimaryEl && rankingPrimaryEl.value === 'games_diff' ? 'games_diff' : 'points';
+        tourData.rankingPrimary = rankingPrimaryEl && ['games_diff', 'wins'].indexOf(rankingPrimaryEl.value) >= 0 ? rankingPrimaryEl.value : 'points';
         const tbList = document.getElementById('tiebreaker-list');
         if (tbList) {
           tourData.tiebreakers = Array.from(tbList.querySelectorAll('li')).map(li => li.dataset.tb).filter(Boolean);
@@ -6849,10 +6880,10 @@ window._saveTournamentClickHandler = async function() {
         if (tbExcl) {
           tourData.tiebreakersExcluded = Array.from(tbExcl.querySelectorAll('li')).map(li => li.dataset.tb).filter(Boolean);
         }
-        // O sorteio original é a ÚLTIMA solução do contrato novo, depois dos
-        // critérios estatísticos e da simples/triangular prevista na regra.
+        // A lista vazia é uma escolha explícita: só o critério principal decide
+        // a tabela; uma simples pode resolver a fronteira entre destinos.
         if (_f2cfg && _f2cfg.tieResolution && (!editId || (editingTournament && editingTournament.rulesContractVersion >= 2)) &&
-            Array.isArray(tourData.tiebreakers)) {
+            Array.isArray(tourData.tiebreakers) && tourData.tiebreakers.length) {
           tourData.tiebreakers = tourData.tiebreakers.filter(function (key) { return key !== 'sorteio'; });
           tourData.tiebreakers.push('sorteio');
           if (Array.isArray(tourData.tiebreakersExcluded)) {

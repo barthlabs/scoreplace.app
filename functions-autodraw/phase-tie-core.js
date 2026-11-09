@@ -9,10 +9,10 @@ function key(row) {
 
 function canonicalizeTieFallback(config) {
   if (!config || !config.fmt2 || !['draw_order', 'singles_then_draw'].includes(config.fmt2.tieResolution)) return config;
-  if (Array.isArray(config.tiebreakers)) {
+  if (Array.isArray(config.tiebreakers) && config.tiebreakers.length) {
     config.tiebreakers = config.tiebreakers.filter(item => item !== 'sorteio').concat('sorteio');
   }
-  if (Array.isArray(config.tiebreakersExcluded)) {
+  if (Array.isArray(config.tiebreakersExcluded) && Array.isArray(config.tiebreakers) && config.tiebreakers.length) {
     config.tiebreakersExcluded = config.tiebreakersExcluded.filter(item => item !== 'sorteio');
   }
   return config;

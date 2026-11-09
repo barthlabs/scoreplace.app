@@ -1,3 +1,10 @@
+## 2.6.10 — 09/nov/2026 (classificação e simples sem critérios adicionais)
+
+- A classificação da fase preliminar Rei/Rainha usa botões exclusivos para pontos, vitórias ou saldo de games. O saldo pode ser a única medida da tabela. Na eliminatória, continua avançando o vencedor do confronto direto.
+- A simples de desempate, com meta de cinco pontos configurável, aparece antes da lista de critérios adicionais. O botão "Desativar todos" deixa a lista vazia; salvar e reabrir mantém `[]` sem recolocar saldo, vitórias ou sorteio.
+- O comparador no navegador e no servidor respeita a lista vazia. A regra de simples continua a resolver empates no avanço; se dispensada, usa a ordem do sorteio original como solução operacional.
+- Corte web e motor do sorteio. Sem alteração de dados existentes ou versões nativas.
+
 ## 2.6.9 — 09/nov/2026 (altura estável na classificação)
 
 - A classificação Rei/Rainha usa a mesma régua de altura das três partidas, inclusive quando as linhas da tabela crescem. A altura máxima observada no grupo é mantida ao voltar para os jogos.

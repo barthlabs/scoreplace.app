@@ -55,6 +55,29 @@ test.describe('Camada 2 — Criar Torneio: clique→valor (Formato)', () => {
   });
 });
 
+test('saldo principal, simples e nenhum desempate adicional podem coexistir sem salvar', async ({ page }) => {
+  await openCreateModal(page);
+  await page.evaluate(() => {
+    window._f2MountInForm(document.getElementById('f2-config-mount'), 'Beach Tennis', null, null);
+    window._f2ClassifAtiva(true);
+  });
+  await expect(page.locator('#tie-resolution-section')).toContainText('Simples de desempate');
+  await page.locator('[data-ranking-primary="games_diff"]').click();
+  expect(await selVal(page, 'ranking-primary')).toBe('games_diff');
+  await expect(page.locator('#ranking-primary-buttons .ranking-primary-active')).toHaveCount(1);
+  await expect(page.locator('[data-ranking-primary="games_diff"]')).toHaveCSS('background-color', 'rgb(37, 99, 235)');
+  await page.getByRole('button', { name: 'Simples de desempate' }).click();
+  await expect(page.locator('#tie-resolution-section')).toContainText('Pontos para vencer');
+  await page.getByRole('button', { name: 'Desativar todos' }).click();
+  await expect(page.locator('#tiebreaker-list li')).toHaveCount(0);
+  await expect(page.locator('#tiebreaker-list')).toHaveCSS('display', 'flex');
+  const order = await page.evaluate(() => {
+    const parent = document.getElementById('tiebreaker-section');
+    return Array.from(parent.children).map(el => el.id || el.textContent.trim().slice(0, 24));
+  });
+  expect(order.indexOf('tie-resolution-section')).toBeLessThan(order.indexOf('tiebreaker-list'));
+});
+
 test.describe('Camada 2 — Criar Torneio: clique→valor (Modo de sorteio)', () => {
   test('cada botão de Modo de Sorteio grava data-value em #draw-mode', async ({ page }) => {
     await openCreateModal(page);

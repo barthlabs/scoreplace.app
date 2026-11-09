@@ -1047,6 +1047,20 @@ button[style*="linear-gradient"]:not(.btn):active {
   box-shadow: 0 4px 14px rgba(0,0,0,0.2);
 }
 
+#ranking-primary-buttons .ranking-primary-active {
+  background-color: #2563eb !important;
+  color: #fff !important;
+  border-color: #1d4ed8 !important;
+}
+#tiebreaker-list:empty::after {
+  content: 'Nenhum critério adicional. Se houver empate, vale a regra de partida extra acima.';
+  color: var(--text-muted);
+  font-size: .82rem;
+  padding: 10px 12px;
+  border: 1px dashed var(--text-muted);
+  border-radius: 8px;
+}
+
 .btn-outline {
   background: var(--btn-secondary-bg, #1e3a5f);
   color: var(--btn-secondary-text, #93c5fd);
