@@ -1,9 +1,8 @@
 {
   "schema": 1,
-  "backendCommit": "611de1560b8c51d3de84eefc085bc3a05e952492",
-  "scopeNote": "Avanço transacional do jogo seguinte na mesma quadra após confirmar placar Rei/Rainha.",
+  "backendCommit": "c82cba05407acce8ea610ce13355b201f035ac7f",
+  "scopeNote": "Espelho do fluxo de conclusão do sorteio no vendor; publicar drawRound antes do Hosting.",
   "functions": [
-    "applyMatchResult",
-    "applyQueuedResult"
+    "drawRound"
   ]
 }
