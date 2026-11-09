@@ -3726,15 +3726,27 @@ window.generateDrawFunction = function (tId) {
                         window.location.hash = '#tournaments/' + encodeURIComponent(String(tId));
                     }
                 } else {
-                    // O sorteio Rei/Rainha sem revisão privada já foi publicado pela
-                    // Function. Abrir seu resultado depois que a rota do torneio
-                    // terminar de pintar; abrir aqui seria fechado pelo router.
-                    if (!d.redraw && Array.isArray(t.matches) && t.matches.some(function (m) {
-                        return m && (m.isMonarch === true || m.monarchGroup != null);
-                    })) window.__drawResultAfterPublish = { id: String(tId), at: Date.now() };
-                    // Entregue o resultado no detalhe, sem saltar para as chaves.
-                    // O router abre a revisão depois de pintar o torneio.
-                    window.location.hash = '#tournaments/' + encodeURIComponent(String(tId));
+                    // O recibo de um torneio dividido pode não trazer `matches` no
+                    // documento raiz. A decisão de abrir o resultado vem do formato
+                    // que acabou de ser sorteado, não da parte que o cliente recebeu.
+                    var _mostrarResultado = !d.redraw && isCurrentDrawMonarch;
+                    var _destinoSorteio = '#tournaments/' + encodeURIComponent(String(tId));
+                    if (window.location.hash.split('?')[0] === _destinoSorteio) {
+                        // Atribuir a MESMA hash não dispara hashchange. O router
+                        // recarrega as partes e repinta esta página explicitamente.
+                        if (typeof window._refreshDrawnTournamentHere === 'function') {
+                            window._refreshDrawnTournamentHere(tId, _mostrarResultado);
+                        } else {
+                            if (typeof window._hideLoading === 'function') window._hideLoading();
+                            if (typeof window._drawBtnDone === 'function') window._drawBtnDone();
+                            if (window.showNotification) window.showNotification('Sorteio salvo', 'Atualize o torneio para conferir os jogos.', 'warning');
+                        }
+                    } else {
+                        // Navegação real: o router abre a grade depois de pintar o
+                        // detalhe e carregar todas as partes do torneio.
+                        if (_mostrarResultado) window.__drawResultAfterPublish = { id: String(tId), at: Date.now() };
+                        window.location.hash = _destinoSorteio;
+                    }
                     if (d.native) showNotification(_t('tdraw.started'), _t('tdraw.startedMsg', { n: d.matchCount }), 'success');
                     else showNotification(_t('draw.changesSaved'), _t('tdraw.drawDone'), 'success');
                     if (typeof window._notifyDrawPersonalized === 'function') window._notifyDrawPersonalized(t, tId);

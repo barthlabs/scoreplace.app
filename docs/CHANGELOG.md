@@ -1,3 +1,9 @@
+## 2.6.13 — 09/nov/2026 (resultado do sorteio na mesma página)
+
+- O sorteio do CAMIS foi confirmado no Firestore às 13:03:36, com 108 jogos Rei/Rainha. A página ficou na tela de inscritos porque a URL do detalhe já era a URL de destino: atribuí-la novamente não gera `hashchange`.
+- Após o recibo do sorteio, o cliente força a leitura do torneio completo, repinta o detalhe e abre o resultado sobre a página atual. O teste cobre a mesma rota e jogos divididos em subcoleção.
+- Corte web com sincronização do código do sorteio no backend; sem reset de dados nem versões nativas.
+
 ## 2.6.12 — 09/nov/2026 (sequência em quadra e resultado do sorteio)
 
 - O resultado confirmado do primeiro ou segundo jogo de um quarteto Rei/Rainha transfere a quadra para o jogo seguinte na mesma transação. O relógio do próximo jogo começa na fase de jogo, sem nova chamada ou aquecimento. O terceiro resultado libera a quadra; reenvio de resultado, liberação manual e quadra ocupada não fazem transferência indevida.

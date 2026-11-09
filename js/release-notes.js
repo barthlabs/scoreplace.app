@@ -1,3 +1,6 @@
+// 2.6.13 — O resultado do sorteio Rei/Rainha aparece ao concluir mesmo quando
+// o organizador já está na página do torneio. A página atualiza os jogos e
+// deixa de mostrar os cards de inscritos anteriores ao sorteio.
 // 2.6.12 — Na série Rei/Rainha, registrar o resultado transfere a mesma
 // quadra diretamente para o jogo seguinte, sem repetir chamada e aquecimento.
 // O resultado do sorteio abre ao concluir o sorteio, antes das chaves. Os

@@ -1172,3 +1172,41 @@ function initRouter() {
     window.location.hash = '#dashboard';
   }, 5000);
 }
+
+// O sorteio manual normalmente termina no próprio detalhe do torneio. Nesse
+// caso a hash não muda, portanto não existe hashchange para repintar a lista
+// nem abrir o resultado. Releia primeiro o torneio dividido (jogos/inscritos
+// fora do documento raiz), depois atualize a rota e só então abra a grade.
+window._refreshDrawnTournamentHere = function (tId, showResult) {
+  var target = '#tournaments/' + encodeURIComponent(String(tId));
+  if (typeof window._ensureTournamentLoaded !== 'function') {
+    if (typeof window._hideLoading === 'function') window._hideLoading();
+    if (typeof window._drawBtnDone === 'function') window._drawBtnDone();
+    if (window.showNotification) window.showNotification('Sorteio salvo', 'Atualize o torneio para conferir os jogos.', 'warning');
+    return;
+  }
+  var request = {};
+  window._drawResultRefreshRequest = request;
+  window._ensureTournamentLoaded(tId, function (loaded) {
+    if (window._drawResultRefreshRequest !== request || window.location.hash.split('?')[0] !== target) return;
+    window._drawResultRefreshRequest = null;
+    if (!loaded) {
+      if (typeof window._hideLoading === 'function') window._hideLoading();
+      if (typeof window._drawBtnDone === 'function') window._drawBtnDone();
+      if (window.showNotification) window.showNotification('Sorteio salvo', 'Os jogos foram registrados, mas a tela não conseguiu recarregá-los. Atualize o torneio para conferir o resultado.', 'warning');
+      return;
+    }
+    if (typeof window.initRouter === 'function') window.initRouter();
+    if (typeof window._hideLoading === 'function') window._hideLoading();
+    if (typeof window._drawBtnDone === 'function') window._drawBtnDone();
+    if (showResult) {
+      var current = window._findTournamentById && window._findTournamentById(tId);
+      if (current && window._publishedInitialDrawData && window._publishedInitialDrawData(current) &&
+          typeof window._openPublishedInitialDrawResult === 'function') {
+        window._openPublishedInitialDrawResult(tId);
+      } else if (window.showNotification) {
+        window.showNotification('Sorteio salvo', 'Os jogos foram registrados, mas o resultado não pôde ser exibido. Abra “Resultado do sorteio” no torneio.', 'warning');
+      }
+    }
+  }, true);
+};

@@ -4,13 +4,14 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 
 const draw = fs.readFileSync('js/views/tournaments-draw.js', 'utf8');
-assert.match(draw, /!d\.redraw[\s\S]{0,220}isMonarch[\s\S]{0,180}__drawResultAfterPublish/, 'o sorteio inicial Rei\/Rainha entrega a intenção de abrir o resultado');
-assert.match(draw, /__drawResultAfterPublish[\s\S]{0,220}window\.location\.hash = '#tournaments\/'/, 'o sorteio publicado abre o detalhe, sem ir às chaves');
+assert.match(draw, /_mostrarResultado = !d\.redraw && isCurrentDrawMonarch/, 'a intenção de abrir o resultado independe de matches no documento raiz');
+assert.match(draw, /window\.location\.hash\.split\('\?'\)\[0\] === _destinoSorteio[\s\S]{0,330}_refreshDrawnTournamentHere/, 'na mesma rota, o sorteio atualiza a página sem esperar hashchange');
+assert.match(draw, /__drawResultAfterPublish[\s\S]{0,180}window\.location\.hash = _destinoSorteio/, 'em outra rota, o sorteio abre o detalhe sem ir às chaves');
 
 const listeners = new Map();
 const frames = [];
 const timers = [];
-const calls = { opened:0, dismissed:0, painted:0 };
+const calls = { opened:0, dismissed:0, painted:0, loadingHidden:0, busyDone:0, notices:[] };
 const classList = { add() {}, remove() {}, contains() { return false; } };
 const container = { innerHTML:'', style:{}, classList, get firstElementChild() { return this.innerHTML ? {} : null; } };
 const document = {
@@ -27,7 +28,9 @@ const W = {
   _findTournamentById() { return tournament; },
   _publishedInitialDrawData(t) { return t.matches.length ? { draft:{ matches:t.matches } } : null; },
   _openPublishedInitialDrawResult(id) { assert.equal(id, 'camis'); calls.opened++; },
-  _hideLoading() {}, _showLoading() {}, _reflowChrome() {}, _log() {}, _warn() {}, scrollTo() {},
+  _hideLoading() { calls.loadingHidden++; }, _drawBtnDone() { calls.busyDone++; },
+  showNotification(title, message) { calls.notices.push({ title, message }); },
+  _showLoading() {}, _reflowChrome() {}, _log() {}, _warn() {}, scrollTo() {},
   addEventListener(name, fn) { listeners.set(name, fn); },
   removeEventListener(name, fn) { if (listeners.get(name) === fn) listeners.delete(name); }
 };
@@ -66,4 +69,35 @@ assert.equal(calls.opened, 1, 'snapshot e reentrada não reabrem o resultado');
 W.__drawResultAfterPublish = { id:'outro', at:Date.now() };
 route();
 assert.equal(calls.opened, 1, 'intenção de outro torneio não abre no CAMIS');
-console.log('Resultado do sorteio: rota abre uma vez após publicar e pintar o torneio');
+
+// CAMIS real: sorteio feito no mesmo #tournaments/id e jogos divididos em
+// subcoleção. A resposta pode ter _nPartes.matches=108 e matches:[] na raiz.
+delete W.__drawResultAfterPublish;
+W.location.hash = '#tournaments/camis';
+tournament.matches = [];
+tournament._nPartes = { matches:108 };
+let freshReads = 0;
+W._ensureTournamentLoaded = function (id, done, forceFresh) {
+  assert.equal(id, 'camis');
+  assert.equal(forceFresh, true, 'lê as partes atuais do servidor');
+  freshReads++;
+  tournament.matches = [{ id:'jogo-1', isMonarch:true }];
+  done(tournament);
+};
+W.initRouter = context.initRouter;
+const paintedBefore = calls.painted;
+W._refreshDrawnTournamentHere('camis', true);
+assert.equal(W.location.hash, '#tournaments/camis', 'não depende de uma mudança de hash');
+assert.equal(freshReads, 1);
+assert.equal(calls.painted, paintedBefore + 1, 'substitui os cards pré-sorteio pelo detalhe atualizado');
+assert.equal(calls.opened, 2, 'abre o resultado com os jogos carregados');
+
+W._ensureTournamentLoaded = function (_id, done, forceFresh) {
+  assert.equal(forceFresh, true);
+  done(null);
+};
+W._refreshDrawnTournamentHere('camis', true);
+assert.equal(calls.opened, 2, 'falha de leitura não finge ter aberto o resultado');
+assert.equal(calls.notices.at(-1).title, 'Sorteio salvo', 'avisa que a gravação deu certo e só a tela falhou');
+assert.ok(calls.loadingHidden && calls.busyDone, 'encerra o loading após falha de leitura');
+console.log('Resultado do sorteio: outra rota e mesma rota com torneio dividido');
