@@ -2263,7 +2263,7 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
       entries.push({ card: card, wrapper: wrapper, placeholder: placeholder, at: at, actualAt: at, court: card.getAttribute('data-bracket-court') || '', num: Number(card.getAttribute('data-scheduled-game-number')) || Number(card.getAttribute('data-match-num')) || 0, position: position, round: Number(card.getAttribute('data-bracket-tab-round')) || 1, justScored: isJustScored });
     });
     // Rei/Rainha é uma única chamada por quarteto. Na Geral os três placares
-    // ficam juntos, mas cada jogo conserva seu horário real no próprio bloco.
+    // ficam juntos; quadra e horário continuam nos controles do próprio card.
     // Próximos jogos continua sendo uma fila cronológica de partidas avulsas.
     if (!onlyReady) {
       var monarchSets = new Map();
@@ -2397,11 +2397,12 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
       var memberEntries = groups[key].filter(function (member) { return member.monarchSource === entry.monarchSource; });
       memberEntries.sort(function (a, b) { return a.num - b.num || a.position - b.position; });
       memberEntries.forEach(function (member) {
-        var time = new Intl.DateTimeFormat('pt-BR', { timeZone: zone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(member.actualAt));
-        var label = document.createElement('div');
-        label.className = 'bracket-geral-jogo-horario';
-        label.textContent = (member.num ? 'Jogo ' + member.num + ' · ' : '') + time + (member.court ? ' · ' + member.court : '');
-        bundle.appendChild(label);
+        if (member.num > 0) {
+          var label = document.createElement('div');
+          label.className = 'bracket-geral-jogo-horario';
+          label.textContent = 'Jogo ' + member.num;
+          bundle.appendChild(label);
+        }
         bundle.appendChild(member.wrapper);
       });
       grid.appendChild(bundle);

@@ -377,7 +377,7 @@ function trecho(inicio, fim) {
 
   const monarchBundle = await page.evaluate(() => {
     const start = Date.UTC(2026, 10, 13, 11);
-    const game = (num, offset) => '<article class="sp-match-card" id="card-r' + num + '" data-bracket-tab-category="Fem Diamante" data-bracket-tab-gender="fem" data-bracket-tab-day="2026-11-13" data-bracket-tab-round="1" data-bracket-scheduled-at="' + (start + offset * 60000) + '" data-bracket-court="Quadra 1" data-match-num="' + num + '"' + (num === 2 ? ' data-scheduled-game-number="2"' : '') + '>Jogo ' + num + '<input aria-label="placar ' + num + '"></article>';
+    const game = (num, offset) => '<article class="sp-match-card" id="card-r' + num + '" data-bracket-tab-category="Fem Diamante" data-bracket-tab-gender="fem" data-bracket-tab-day="2026-11-13" data-bracket-tab-round="1" data-bracket-scheduled-at="' + (start + offset * 60000) + '" data-bracket-court="Quadra 1" data-match-num="' + num + '"' + (num === 2 ? ' data-scheduled-game-number="2"' : '') + '>Jogo ' + num + '<input aria-label="placar ' + num + '"><div class="sp-match-operational"><select aria-label="Quadra do jogo ' + num + '"><option>Quadra 1</option></select><span>≈ ' + (offset === 0 ? '08:00' : offset === 20 ? '08:20' : '08:40') + '</span></div></article>';
     document.body.innerHTML = '<main id="view-container"><nav id="monarch-root" data-bracket-tabs-root="1" data-tournament-id="monarch"></nav><section class="bracket-scroll-container" id="monarch-source"><div data-group-box="1" data-monarch-large="1" data-monarch-category="Fem Diamante" data-group-label="Grupo 1"><h3>Grupo 1</h3><div class="standings-scroll"><table id="standings-original"><thead><tr><th>Jogador</th><th>Pontos</th></tr></thead><tbody><tr><td>Ana</td><td>6</td></tr><tr><td>Bia</td><td>4</td></tr></tbody></table></div><div>' + game(1, 0) + game(2, 20) + game(3, 40) + '</div></div></section></main>';
     const root = document.getElementById('monarch-root');
     root._bracketTabsScope = document.getElementById('view-container');
@@ -389,6 +389,10 @@ function trecho(inicio, fim) {
       bundles: view.querySelectorAll('.bracket-geral-quarteto').length,
       cards: [...view.querySelectorAll('.bracket-geral-quarteto > .sp-match-card')].map(c => c.id),
       labels: [...view.querySelectorAll('.bracket-geral-jogo-horario')].map(e => e.textContent),
+      controls: [...view.querySelectorAll('.bracket-geral-quarteto > .sp-match-card')].map(card => ({
+        court: card.querySelector('select')?.value,
+        approximateTime: card.querySelector('.sp-match-operational span')?.textContent
+      })),
       headings: [...view.querySelectorAll('.bracket-general-round-column h4')].map(e => e.textContent.trim()),
       table: view.querySelector('.bracket-geral-quarteto-standings table')?.textContent,
       noDuplicate: ['card-r1', 'card-r2', 'card-r3', 'standings-original'].every(id => document.querySelectorAll('#' + id).length === 1),
@@ -411,10 +415,11 @@ function trecho(inicio, fim) {
   });
   ok(monarchBundle.bundles === 1 && monarchBundle.cards.join(',') === 'card-r1,card-r2,card-r3' && monarchBundle.oneScorePerGame,
     'Geral reúne os três cards reais e seus placares num único quarteto');
-  ok(monarchBundle.labels.some(label => label.includes('08:00')) && monarchBundle.labels.some(label => label.includes('08:20')) && monarchBundle.labels.some(label => label.includes('08:40')) && monarchBundle.headings.length === 1,
-    'cada jogo mostra seu horário próprio dentro da coluna de abertura do quarteto');
-  ok(monarchBundle.labels.join(',') === 'Jogo 1 · 08:00 · Quadra 1,Jogo 2 · 08:20 · Quadra 1,Jogo 3 · 08:40 · Quadra 1',
-    'Geral usa o número canônico do card quando não há scheduledGameNumber e nunca mostra o ID técnico');
+  ok(monarchBundle.headings.length === 1 && monarchBundle.labels.join(',') === 'Jogo 1,Jogo 2,Jogo 3',
+    'cabeçalhos de jogos do quarteto exibem somente os números canônicos, sem horário ou quadra fixos');
+  ok(monarchBundle.controls.map(control => control.court).join(',') === 'Quadra 1,Quadra 1,Quadra 1' &&
+    monarchBundle.controls.map(control => control.approximateTime).join(',') === '≈ 08:00,≈ 08:20,≈ 08:40',
+    'quadra selecionável e horário aproximado permanecem nos cards abaixo dos números');
   ok(monarchBundle.table.includes('Ana') && monarchBundle.noDuplicate && monarchBundle.updatedStanding,
     'classificação aparece sem IDs duplicados e reflete o cálculo atualizado do grupo');
   ok(monarchBundle.revealed && monarchBundle.restored && monarchBundle.upcomingSeparate,
