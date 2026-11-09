@@ -1,8 +1,10 @@
 {
   "schema": 1,
-  "backendCommit": "d40e54d6cb075ee0568188fe73da2494de9e9a04",
-  "scopeNote": "Espelho do modal do resultado no vendor; publicar drawRound antes do Hosting.",
+  "backendCommit": "628f52b6fca2eb7dc20e6ebbba5452bdec3711f7",
+  "scopeNote": "Novo campo de largura do gradiente na criação e edição; espelho do resultado do sorteio no vendor. Publicar as três Functions antes do Hosting.",
   "functions": [
+    "createTournament",
+    "updateTournamentConfiguration",
     "drawRound"
   ]
 }
