@@ -77,15 +77,16 @@
 .sp-operations-court-slot--active .sp-operations-replica > .sp-match-card { border:3px solid var(--sp-c-22c55e,#22c55e)!important; }
 .sp-operations-replica .sp-match-call-day-hint { overflow-wrap:anywhere; }
 .sp-operations-game-nav { display:inline-flex;align-items:center;gap:2px;color:var(--sp-c-38bdf8,#38bdf8);font-size:.7rem;font-weight:700;white-space:nowrap;text-transform:uppercase; }
-.sp-operations-two-line-header .sp-operations-game-nav { gap:0; }
+.sp-operations-two-line-header .sp-operations-game-nav { gap:0;position:relative;top:-6px; }
+.sp-operations-two-line-header [data-match-time-status] { margin-top:-5px; }
 .sp-operations-nav-title { color:inherit; }
 .sp-operations-nav-arrow { display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;padding:0;border:0;background:transparent;color:inherit;font:inherit;font-size:1.1rem;font-weight:800;line-height:1;cursor:pointer; }
-.sp-operations-nav-arrow > span { display:block;line-height:1; }
-.sp-operations-nav-arrow[data-operations-nav="prev"] > span { transform:translateX(8px); }
+.sp-operations-nav-arrow > svg { display:block;width:18px;height:18px;fill:currentColor; }
+.sp-operations-nav-arrow[data-operations-nav="prev"] > svg { transform:translateX(8px); }
 .sp-operations-two-line-header .sp-operations-nav-arrow[data-operations-nav="prev"] { justify-content:flex-start;margin-right:-24px; }
-.sp-operations-two-line-header .sp-operations-nav-arrow[data-operations-nav="prev"] > span { transform:translateX(0); }
-.sp-operations-two-line-header .sp-operations-nav-arrow[data-operations-nav="next"] { margin-left:-8px; }
-.sp-operations-nav-arrow[data-operations-nav="next"] > span { transform:translateX(-8px); }
+.sp-operations-two-line-header .sp-operations-nav-arrow[data-operations-nav="prev"] > svg { transform:translateX(0); }
+.sp-operations-two-line-header .sp-operations-nav-arrow[data-operations-nav="next"] { margin-left:-2px; }
+.sp-operations-nav-arrow[data-operations-nav="next"] > svg { transform:translateX(-2px); }
 .sp-operations-nav-arrow:hover { color:var(--text-bright); }
 .sp-operations-nav-arrow:focus-visible { outline:2px solid currentColor;outline-offset:1px;border-radius:4px; }
 .sp-operations-standings-card { overflow:auto; }

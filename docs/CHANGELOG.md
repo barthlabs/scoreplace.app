@@ -1,3 +1,9 @@
+## 2.6.6 — 09/nov/2026 (setas e alinhamento da chamada)
+
+- Troquei os símbolos `‹ ›` por setas SVG preenchidas, com haste, mantendo os alvos de toque de 44 px e os nomes acessíveis dos botões.
+- Alinhei o topo de `JOGO N` com o topo das ações e a base da categoria com a base delas. A seta direita fica 9 px afastada do título no teste em Chromium; o card segue sem corte em 320 px.
+- Corte somente web, sem alterar dados nem versões nativas.
+
 ## 2.6.5 — 09/nov/2026 (alinhamento da faixa de chamada)
 
 - A navegação `‹ JOGO N ›` e a categoria formam uma coluna alinhada à esquerda, sem linha vazia entre elas. Os botões W.O. e Ao Vivo ficam lado a lado na direita e ocupam a altura das duas linhas, começando no topo do jogo.

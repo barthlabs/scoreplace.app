@@ -1,3 +1,6 @@
+// 2.6.6 — As setas da chamada Rei/Rainha agora são setas preenchidas, com
+// haste. JOGO N começa na altura dos botões, e a categoria termina alinhada
+// à base deles; a seta direita ganhou espaço depois do número.
 // 2.6.5 — Na faixa de chamada Rei/Rainha, as setas e JOGO N ficam alinhados
 // à esquerda com a categoria logo abaixo. A área de toque da seta permanece
 // dentro do card. W.O. e Ao Vivo ocupam juntos as duas linhas à direita,
