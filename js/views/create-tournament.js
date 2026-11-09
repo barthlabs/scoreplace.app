@@ -382,7 +382,7 @@ function setupCreateTournamentModal() {
               <div class="mb-3" style="display:flex;flex-direction:column;gap:12px;min-width:0;">
                 <div class="form-group full-width">
                   <label class="form-label">${_t('create.nameLabel')}</label>
-                  <input type="text" class="form-control" id="tourn-name" placeholder="Ex: Copa de Inverno 2026" required>
+                  <input type="text" class="form-control" id="tourn-name" placeholder="Ex: Copa de Inverno 2026" required oninput="window._refreshCoverPreview()">
                 </div>
                 <div class="form-group full-width">
                   <label class="form-label">${_t('create.sportLabel')}</label>
@@ -478,8 +478,16 @@ function setupCreateTournamentModal() {
                   <button type="button" id="cover-mode-photo" onclick="window._setCoverMode('photo')" style="padding:8px 14px;border-radius:10px;border:1px solid rgba(99,102,241,0.35);background:rgba(99,102,241,0.1);color:var(--sp-c-e2e8f0,#e2e8f0);font-size:0.8rem;font-weight:700;cursor:pointer;">🖼️ Foto</button>
                 </div>
                 <label style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 0.8rem;color:var(--text-main);font-size:0.8rem;font-weight:700;">Cor do título do torneio
-                  <input type="color" id="tourn-title-color" value="#ffffff" aria-label="Cor do título do torneio" oninput="window._refreshCoverPreview()" style="width:40px;height:36px;padding:2px;border:1px solid var(--text-muted);border-radius:7px;background:var(--bg-card);cursor:pointer;">
+                  <input type="color" id="tourn-title-color" value="#ffffff" aria-label="Cor do título do torneio" oninput="window._syncTitleColorFromPicker()" style="width:40px;height:36px;padding:2px;border:1px solid var(--text-muted);border-radius:7px;background:var(--bg-card);cursor:pointer;">
                 </label>
+                <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin:0 0 0.8rem;padding:0.75rem;border:1px solid var(--border-color);border-radius:10px;">
+                  <div style="display:grid;justify-items:center;gap:5px;"><strong style="font-size:.76rem;">Roda de cor do título</strong><button type="button" id="title-hue-wheel" aria-label="Escolher a cor do título na roda: clique ou arraste" onpointerdown="window._pickTitleHue(event)" style="width:116px;height:116px;border-radius:50%;border:3px solid var(--text-bright);background:conic-gradient(#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00);box-shadow:inset 0 0 0 23px var(--bg-card);cursor:crosshair;position:relative;touch-action:none;user-select:none;"><span id="title-hue-wheel-marker" aria-hidden="true" style="position:absolute;left:calc(50% - 6px);top:calc(50% - 6px);width:12px;height:12px;border:2px solid white;border-radius:50%;box-shadow:0 0 0 1px #111;"></span></button></div>
+                  <div style="display:grid;gap:9px;flex:1 1 140px;max-width:260px;">
+                    <label style="font-size:.74rem;color:var(--text-main);">Saturação <input type="range" id="tourn-title-saturation" min="0" max="100" value="0" oninput="window._syncTitleColorFromHsl()" style="width:100%;accent-color:#818cf8;"></label>
+                    <label style="font-size:.74rem;color:var(--text-main);">Luminosidade <input type="range" id="tourn-title-lightness" min="0" max="100" value="100" oninput="window._syncTitleColorFromHsl()" style="width:100%;accent-color:#818cf8;"></label>
+                    <input type="hidden" id="tourn-title-hue" value="0">
+                  </div>
+                </div>
                 <div id="cover-color-controls" style="margin:0 0 0.8rem;padding:0.85rem;border-radius:12px;background:rgba(15,23,42,0.55);border:1px solid rgba(129,140,248,0.22);">
                   <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:0.8rem;">
                     <button type="button" id="cover-color-target-1" onclick="window._selectCoverColorTarget(1)" style="display:flex;align-items:center;gap:7px;padding:7px 10px;border-radius:9px;border:2px solid #818cf8;background:rgba(99,102,241,.18);color:var(--text-main);font-weight:800;cursor:pointer;">Cor 1 <input aria-label="Cor 1" type="color" id="tourn-cover-color" value="#1f2937" oninput="window._syncCoverColorFromPicker()" style="width:30px;height:28px;padding:0;border:0;background:none;cursor:pointer;"></button>
@@ -2706,6 +2714,39 @@ function setupCreateTournamentModal() {
     var r = el.getBoundingClientRect(), x = event.clientX - r.left - r.width / 2, y = event.clientY - r.top - r.height / 2;
     return (Math.round(Math.atan2(y, x) * 180 / Math.PI + 90) + 360) % 360;
   }
+  function _titleWheelMarker(hue) {
+    var marker = document.getElementById('title-hue-wheel-marker');
+    if (marker) marker.style.transform = 'rotate(' + hue + 'deg) translateY(-45px) rotate(' + (-hue) + 'deg)';
+  }
+  window._syncTitleColorFromPicker = function() {
+    var picker = document.getElementById('tourn-title-color');
+    if (!picker || !_coverHexOk(picker.value)) return;
+    var hsl = _coverHexToHsl(picker.value);
+    [['tourn-title-hue', hsl.h], ['tourn-title-saturation', hsl.s], ['tourn-title-lightness', hsl.l]].forEach(function(pair) {
+      var el = document.getElementById(pair[0]); if (el) el.value = pair[1];
+    });
+    _titleWheelMarker(hsl.h);
+    window._refreshCoverPreview();
+  };
+  window._syncTitleColorFromHsl = function() {
+    var h = document.getElementById('tourn-title-hue'), s = document.getElementById('tourn-title-saturation');
+    var l = document.getElementById('tourn-title-lightness'), picker = document.getElementById('tourn-title-color');
+    if (!h || !s || !l || !picker) return;
+    picker.value = _coverHslToHex(h.value, s.value, l.value);
+    _titleWheelMarker(Number(h.value));
+    window._refreshCoverPreview();
+  };
+  window._pickTitleHue = function(event) {
+    var wheel = document.getElementById('title-hue-wheel'); if (!wheel) return;
+    _startCoverWheelDrag(event, wheel, function(ev, el) {
+      var h = document.getElementById('tourn-title-hue'), s = document.getElementById('tourn-title-saturation');
+      var l = document.getElementById('tourn-title-lightness');
+      if (h) h.value = _coverPointAngle(ev, el);
+      if (s && Number(s.value) < 5) s.value = 75;
+      if (l && (Number(l.value) < 10 || Number(l.value) > 90)) l.value = 50;
+      window._syncTitleColorFromHsl();
+    });
+  };
   // O gesto é único para mouse, caneta e toque. Pointer capture garante que o
   // ajuste continua mesmo se o ponteiro sai da roda; ao soltar, todos os listeners
   // temporários saem. Sem isso a roda só reagia ao primeiro clique.
@@ -2811,7 +2852,10 @@ function setupCreateTournamentModal() {
     prev.style.borderStyle = (mode === 'photo' && photo) ? 'solid' : 'dashed';
     var title = document.getElementById('cover-title-preview');
     var titleColor = (document.getElementById('tourn-title-color') || {}).value || '#ffffff';
-    if (title) title.style.color = _coverHexOk(titleColor) ? titleColor : '#ffffff';
+    if (title) {
+      title.style.color = _coverHexOk(titleColor) ? titleColor : '#ffffff';
+      title.textContent = (document.getElementById('tourn-name') || {}).value || 'Título do torneio';
+    }
   };
   window._setCoverMode = function(mode) {
     mode = mode === 'photo' ? 'photo' : 'color';
@@ -5696,6 +5740,7 @@ function setupCreateTournamentModal() {
         if (c2 && /^#[0-9a-f]{6}$/i.test(t.coverGradientColor || '')) c2.value = t.coverGradientColor;
         var titleColorInput = document.getElementById('tourn-title-color');
         if (titleColorInput) titleColorInput.value = /^#[0-9a-f]{6}$/i.test(t.titleColor || '') ? t.titleColor : '#ffffff';
+        if (typeof window._syncTitleColorFromPicker === 'function') window._syncTitleColorFromPicker();
         if (ge) ge.checked = t.coverGradientEnabled === true;
         if (typeof window._syncCoverColorFromPicker === 'function') window._syncCoverColorFromPicker();
         if (typeof window._syncCoverAngle === 'function') window._syncCoverAngle(t.coverGradientAngle != null ? t.coverGradientAngle : 135);

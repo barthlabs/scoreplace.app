@@ -100,7 +100,7 @@ function serve(rootDir, port) {
         res.end(body);
       });
     });
-    server.listen(port, () => resolve(server));
+    server.listen(port, '127.0.0.1', () => resolve(server));
   });
 }
 
@@ -139,8 +139,8 @@ async function main() {
       window._prerendering = true;
     });
 
-    console.log(`[prerender] navegando pra http://localhost:${PORT}/…`);
-    await page.goto(`http://localhost:${PORT}/`, { waitUntil: 'load' });
+    console.log(`[prerender] navegando pra http://127.0.0.1:${PORT}/…`);
+    await page.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: 'load' });
 
     // Esperar a landing renderizar de fato
     console.log('[prerender] aguardando landing renderizar…');

@@ -1,3 +1,9 @@
+## 2.6.11 — 09/nov/2026 (classificação e personalização do torneio)
+
+- Na faixa Rei/Rainha, a classificação mostra categoria e grupo logo abaixo das setas, no cabeçalho. Classificação parcial, tabela, quadra e OK têm margem interna; os quatro títulos de navegação compartilham a mesma cor e tipografia. A altura do card permanece estável.
+- Logos transparentes aparecem sobre o fundo dos cards de torneio e do painel sem a sombra retangular que simulava uma moldura. A personalização ganhou roda de cor própria para o título, com saturação e luminosidade; o título real e a cor escolhida aparecem imediatamente na prévia.
+- Correção somente web, sem alterar torneios persistidos nem versões nativas.
+
 ## 2.6.10 — 09/nov/2026 (classificação e simples sem critérios adicionais)
 
 - O logo do torneio volta a aceitar uma nova arte pela ficha: os comandos de logo e preferências da arte recebem preflight CORS, mas login e permissão de organização continuam obrigatórios. A URL antiga não encobre o logo recém-salvo.

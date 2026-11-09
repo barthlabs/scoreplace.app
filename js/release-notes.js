@@ -1,3 +1,6 @@
+// 2.6.11 — A classificação do grupo mantém a categoria no cabeçalho e
+// espaçamento nas bordas. Logos transparentes aparecem sem sombra retangular;
+// a cor do título ganha roda própria com prévia imediata.
 // 2.6.10 — A classificação principal pode ser pontos, vitórias ou saldo de
 // games na classificatória, em botões exclusivos; na eliminatória, avança o
 // vencedor direto. A simples de desempate fica acima dos critérios

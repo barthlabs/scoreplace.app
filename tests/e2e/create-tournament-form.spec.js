@@ -81,8 +81,13 @@ test('saldo principal, simples e nenhum desempate adicional podem coexistir sem 
 test('cor do título aparece na prévia da personalização', async ({ page }) => {
   await openCreateModal(page);
   await page.locator('#tv-personalization').evaluate(el => { el.open = true; });
+  await page.locator('#tourn-name').fill('Camis no Beyond');
+  await expect(page.locator('#cover-title-preview')).toHaveText('Camis no Beyond');
   await page.locator('#tourn-title-color').fill('#ffe100');
   await expect(page.locator('#cover-title-preview')).toHaveCSS('color', 'rgb(255, 225, 0)');
+  await page.locator('#title-hue-wheel').click({ position: { x: 108, y: 58 } });
+  await expect(page.locator('#cover-title-preview')).not.toHaveCSS('color', 'rgb(255, 225, 0)');
+  expect(await page.locator('#tourn-title-color').inputValue()).toMatch(/^#[0-9a-f]{6}$/i);
 });
 
 test('recorte de logo mantém transparência PNG e fundo escolhido gera imagem opaca', async ({ page }) => {

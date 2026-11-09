@@ -1516,15 +1516,15 @@ function _bracketOperationsStandingsHtml(group, t, slot, courtHtml, categoryLabe
   });
   return '<article class="sp-match-card sp-operations-standings-card"><div class="sp-mc-head">' +
     _bracketOperationsNavHtml(group, 3, slot) + '</div>' +
+    '<span class="sp-operations-standings-category">' + safe(categoryLabel || '') + ' · ' +
+      safe(String(group.name).replace(/^R\d+\s+/i, '').replace(/^Grupo\s+/i, '')) + '</span>' +
     '<div class="sp-operations-standings-status">' +
     (finished ? 'CLASSIFICAÇÃO' : 'CLASSIFICAÇÃO PARCIAL') + '</div>' +
     '<table class="sp-operations-standings"><thead><tr><th>#</th><th>Atleta</th><th>V</th><th>Saldo</th></tr></thead><tbody>' +
     standings.map(function (row, i) { return '<tr><td>' + (i + 1) + 'º</td><td>' + safe(row.name || '') +
       '</td><td>' + (Number(row.wins) || 0) + '</td><td>' + ((Number(row.pointsFor) || 0) - (Number(row.pointsAgainst) || 0)) +
       '</td></tr>'; }).join('') + '</tbody></table>' +
-    (courtHtml ? '<div class="sp-operations-standings-footer">' + courtHtml +
-      '<span class="sp-operations-standings-category">' + safe(categoryLabel || '') + ' · ' +
-      safe(String(group.name).replace(/^R\d+\s+/i, '').replace(/^Grupo\s+/i, '')) + '</span></div>' : '') + '</article>';
+    (courtHtml ? '<div class="sp-operations-standings-footer">' + courtHtml + '</div>' : '') + '</article>';
 }
 
 function _bracketOperationsReplica(m, t, role, label, availability, root, allMatches, slot) {
