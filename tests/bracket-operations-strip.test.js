@@ -38,6 +38,8 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       window._resultEntryIncludes = () => true;
       window.renderMatchCard = (m, canEnter, tid, num, compact, pending, opts) => _bracketScopeReplicaHtml(
         '<article class="sp-match-card" id="card-' + m.id + '"><div class="sp-mc-head">JOGO ' + num +
+        (m.courtCalledAt ? '<div class="sp-mc-acts"><button class="cancel-x-btn" onclick="window._cancelCourtAction()">Cancelar</button>' +
+          '<button class="sp-match-end-court" onclick="window._endMatchOnCourt()">Encerrado</button></div>' : '') +
         '<button id="live-' + m.id + '" onclick="window._openLiveScoringForMatch()">📡 Ao Vivo</button>' +
         '<button class="wo-action" onclick="window._woOpenClaim()">Aplicar W.O.</button>' +
         '<button class="open-action" onclick="window._editResultInline()">Editar</button>' +
@@ -123,6 +125,9 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       const afterCall = { called: window.called, saved: window.saved, scoreSourceCleared: window._bracketOperationsScoreSource == null,
         clock: window.clock, live: window.live, wo: window.wo,
         opened: window.opened, confirmVisible,
+        activeBottomActions: [...strip.querySelectorAll('.sp-operations-court-slot--active .sp-match-operational [data-operations-action]')]
+          .map(button => button.getAttribute('data-operations-action')),
+        activeHeaderActions: strip.querySelectorAll('.sp-operations-court-slot--active .sp-mc-head [data-operations-action="cancel-court"], .sp-operations-court-slot--active .sp-mc-head [data-operations-action="ended"]').length,
         clockInsideCard: clockRect.top >= activeRect.top && clockRect.bottom <= activeRect.bottom - 2 && clockRect.right <= activeRect.right - 2,
         activeBottomAligned: Math.abs(activeRect.bottom - goldRect.bottom) <= 3,
         draft: strip.querySelector('.sp-operations-court-card [data-operations-source-input="s1-m1"]').value,
@@ -152,6 +157,8 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert.deepEqual(state.afterCall.saved, ['sb_test', 'm1', '6', '3']);
     assert(state.afterCall.scoreSourceCleared, 'marca de origem do placar deve ser limpa quando a gravação retorna');
     assert.deepEqual(state.afterCall.clock, ['sb_test', 'm1', 'next']);
+    assert.deepEqual(state.afterCall.activeBottomActions, ['cancel-court', 'ended']);
+    assert.equal(state.afterCall.activeHeaderActions, 0, 'Cancelar e Encerrado saem do cabeçalho em quadra');
     assert(state.afterCall.clockInsideCard, 'o cronômetro chamado deve caber inteiramente dentro do card');
     assert(state.afterCall.confirmVisible && state.outsiderHidden && state.selectFocusRestored &&
       state.selectorDoesNotOpenBracket && state.selectorStayedInStrip,
@@ -496,6 +503,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       assert.deepEqual([saved[4].payload.s1, saved[4].payload.s2, saved[4].payload.tbP1, saved[4].payload.tbP2], [7, 6, 7, 5]);
       assert.equal(saved[4].payload.isTiebreakEntry, true);
     } finally { await scoringPage.close(); }
+    await page.addStyleTag({ content: '.sp-operations-standings td { height:48px; }' });
     const carousel = await page.evaluate(async () => {
       const t = window._findTournamentById();
       const root = document.querySelector('[data-bracket-tabs-root]');
@@ -527,6 +535,16 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
         match: strip.querySelector('.sp-operations-next [data-operations-match]')?.getAttribute('data-operations-match'),
         postpone: strip.querySelector('.sp-operations-next [data-postpone-next]')?.getAttribute('data-postpone-next'),
         cardHeight: strip.querySelector('.sp-operations-next .sp-match-card')?.getBoundingClientRect().height,
+        category: strip.querySelector('.sp-operations-next [data-match-time-status], .sp-operations-next .sp-operations-standings-category')?.textContent.trim(),
+        footerBelowTable: (() => { const card = strip.querySelector('.sp-operations-next .sp-operations-standings-card');
+          const table = card?.querySelector('.sp-operations-standings');
+          const footer = card?.querySelector('.sp-operations-standings-footer');
+          return !!footer && footer.getBoundingClientRect().top >= table.getBoundingClientRect().bottom - 2; })(),
+        categoryBelowCourt: (() => { const card = strip.querySelector('.sp-operations-next .sp-operations-standings-card');
+          const court = card?.querySelector('.sp-match-court select');
+          const category = card?.querySelector('.sp-operations-standings-category');
+          return !!category && category.getBoundingClientRect().top >= court.getBoundingClientRect().bottom; })(),
+        callGameLabel: !!strip.querySelector('.sp-operations-next .sp-operations-standings-call-label'),
         teams: [...strip.querySelectorAll('.sp-operations-next .team span')].map(el => el.textContent),
         canCall: !!strip.querySelector('.sp-operations-next .sp-match-confirm'),
         court: strip.querySelector('.sp-operations-next .sp-match-court select')?.value,
@@ -648,6 +666,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       const previousGlyph = strip.querySelector('.sp-operations-next [data-operations-nav="prev"] > svg');
       const nextGlyph = strip.querySelector('.sp-operations-next [data-operations-nav="next"] > svg');
       const category = strip.querySelector('.sp-operations-next [data-match-time-status]');
+      camisUi.categoryText = category.textContent.trim();
       const actionButtons = [...strip.querySelectorAll('.sp-operations-next .sp-mc-acts button')];
       camisUi.fontSize = parseFloat(getComputedStyle(gameTitle).fontSize);
       camisUi.arrowGap = {
@@ -730,6 +749,9 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     });
     assert.deepEqual(carousel.states.map(item => item.title), ['JOGO 1', 'JOGO 9', 'JOGO 17', 'Grupo A', 'JOGO 1', 'Grupo A']);
     assert.deepEqual(carousel.states.map(item => item.match), ['group-1', 'group-9', 'group-17', 'group-1', 'group-1', 'group-1']);
+    assert.equal(carousel.states[3].category, 'Fem Diamante · A');
+    assert(carousel.states[3].footerBelowTable && carousel.states[3].categoryBelowCourt && !carousel.states[3].callGameLabel,
+      'a classificação deixa quadra e OK no rodapé, categoria abaixo do seletor e nenhum Jogo 1');
     assert.deepEqual(carousel.states.slice(0, 4).map(item => item.postpone),
       ['group-1', 'group-9', 'group-17', 'group-1'], 'Pular jogo acompanha as quatro telas do grupo');
     assert.deepEqual(carousel.skipCalls, [
@@ -748,6 +770,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert.deepEqual(carousel.camis.labels, ['R1 Grupo A1', 'R1 Grupo A2', 'R1 Grupo A3', 'R2 Grupo A4']);
     assert.equal(carousel.camis.sixGamesHaveNav, false);
     assert.equal(carousel.camis.idLabel, 'R1 Grupo A2');
+    assert.equal(carousel.camis.ui.categoryText, 'Fem Diamante A1');
     assert.deepEqual({ title:carousel.camis.ui.title, arrows:carousel.camis.ui.arrows, nextTitle:carousel.camis.ui.nextTitle },
       { title: 'JOGO 1', arrows: 2, nextTitle: 'JOGO 2' });
     assert(Math.max(...carousel.camis.ui.measuredHeights.map(item => item.card)) -
@@ -768,9 +791,9 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert(carousel.states.slice(0, 4).every(item => item.canCall && item.court === 'Quadra 4'),
       'todos os jogos e a classificação oferecem quadra e OK para o jogo exibido ou próximo jogo do grupo: ' +
       JSON.stringify(carousel.states.slice(0, 4)));
-    assert(Math.max(...carousel.states.slice(0, 4).map(item => item.cardHeight)) -
-      Math.min(...carousel.states.slice(0, 4).map(item => item.cardHeight)) <= 2,
-      'a classificação mantém a altura do card dos jogos: ' + JSON.stringify(carousel.states.slice(0, 4)));
+    assert(Math.max(...carousel.states.map(item => item.cardHeight)) -
+      Math.min(...carousel.states.map(item => item.cardHeight)) <= 2,
+      'a classificação e a volta aos jogos mantêm a mesma altura: ' + JSON.stringify(carousel.states));
     assert.deepEqual(carousel.groupCalls, [
       ['group-1', 'Quadra 4'], ['group-9', 'Quadra 4'], ['group-17', 'Quadra 4'], ['group-1', 'Quadra 4']
     ], 'o OK chama o jogo visível; na classificação, o primeiro jogo ainda disponível');

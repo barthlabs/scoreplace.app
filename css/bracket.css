@@ -89,10 +89,10 @@
 .sp-operations-nav-arrow[data-operations-nav="next"] > svg { transform:translateX(-2px); }
 .sp-operations-nav-arrow:hover { color:var(--text-bright); }
 .sp-operations-nav-arrow:focus-visible { outline:2px solid currentColor;outline-offset:1px;border-radius:4px; }
-.sp-operations-standings-card { overflow:auto; }
+.sp-operations-standings-card { display:flex;flex-direction:column;overflow:auto; }
 .sp-operations-standings-card .sp-mc-head { color:var(--sp-c-38bdf8,#38bdf8); }
-.sp-operations-standings-call { margin:0 0 8px; }
-.sp-operations-standings-call-label { display:block;margin-bottom:4px;color:var(--text-bright);font-size:.68rem;font-weight:800; }
+.sp-operations-standings-footer { margin-top:auto;padding-top:8px; }
+.sp-operations-standings-category { display:block;margin-top:4px;color:var(--sp-c-38bdf8,#38bdf8);font-size:.68rem;font-weight:700; }
 .sp-operations-standings-status { margin:4px 0 8px;color:var(--text-muted);font-size:.68rem;font-weight:800;letter-spacing:.04em; }
 .sp-operations-standings { width:100%;border-collapse:collapse;color:var(--text-bright);font-size:.72rem; }
 .sp-operations-standings th,.sp-operations-standings td { padding:5px 4px;border-bottom:1px solid var(--border-color);text-align:left; }

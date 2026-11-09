@@ -1,3 +1,7 @@
+// 2.6.9 — A classificação do grupo mantém a mesma altura dos cards dos jogos,
+// com quadra e OK no rodapé e categoria mais grupo abaixo do seletor. As
+// partidas identificam o grupo; no jogo em quadra, Cancelar e Encerrado ficam
+// embaixo, enquanto W.O. e Ao Vivo permanecem no topo.
 // 2.6.8 — Na faixa de chamada Rei/Rainha, todos os jogos do quarteto e a
 // classificação do grupo mostram a escolha de quadra e o OK. Na classificação,
 // a chamada identifica o próximo jogo disponível do grupo. Pular jogo também

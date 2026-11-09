@@ -1,3 +1,10 @@
+## 2.6.9 — 09/nov/2026 (altura estável na classificação)
+
+- A classificação Rei/Rainha usa a mesma régua de altura das três partidas, inclusive quando as linhas da tabela crescem. A altura máxima observada no grupo é mantida ao voltar para os jogos.
+- As três partidas mostram categoria e grupo juntos (ex.: Fem Diamante A1). Na classificação, quadra e OK voltam ao rodapé, a categoria com o grupo aparece abaixo do seletor e o rótulo redundante "Jogo 1" sai.
+- No card em quadra, Cancelar e Encerrado descem para junto do controle de quadra; W.O. e Ao Vivo permanecem no cabeçalho.
+- Conferência visual no CAMIS mostrou diferença residual de cerca de 12 px na 2.6.8; esta correção elimina a oscilação. Corte somente web, sem mudança no banco ou nas versões nativas.
+
 ## 2.6.8 — 09/nov/2026 (chamada em todas as telas do quarteto)
 
 - JOGO 1, 2 e 3 mantêm o seletor de quadra e o OK na faixa operacional Rei/Rainha. O botão age sobre o jogo exibido; as validações de quadra ocupada e atletas em jogo continuam no comando existente.

@@ -1503,7 +1503,7 @@ function _bracketOperationsNavHtml(group, index, slot) {
     '<button type="button" id="' + prefix + '-next" class="sp-operations-nav-arrow" data-operations-nav="next" aria-label="Próximo jogo ou classificação do ' + safe(group.name) + '" title="Próximo"><svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><polygon points="3,2 17,10 3,18"/></svg></button></span>';
 }
 
-function _bracketOperationsStandingsHtml(group, t, slot, callTarget, courtHtml) {
+function _bracketOperationsStandingsHtml(group, t, slot, courtHtml, categoryLabel) {
   var safe = window._safeHtml || function (s) { return String(s); };
   var roster = group.roster;
   var standings = typeof window._computeMonarchStandings === 'function' ? window._computeMonarchStandings({
@@ -1516,14 +1516,15 @@ function _bracketOperationsStandingsHtml(group, t, slot, callTarget, courtHtml) 
   });
   return '<article class="sp-match-card sp-operations-standings-card"><div class="sp-mc-head">' +
     _bracketOperationsNavHtml(group, 3, slot) + '</div>' +
-    (courtHtml ? '<div class="sp-operations-standings-call"><span class="sp-operations-standings-call-label">Jogo ' +
-      safe(Number(callTarget._gameNum || callTarget.scheduledGameNumber) || '') + '</span>' + courtHtml + '</div>' : '') +
     '<div class="sp-operations-standings-status">' +
     (finished ? 'CLASSIFICAÇÃO' : 'CLASSIFICAÇÃO PARCIAL') + '</div>' +
     '<table class="sp-operations-standings"><thead><tr><th>#</th><th>Atleta</th><th>V</th><th>Saldo</th></tr></thead><tbody>' +
     standings.map(function (row, i) { return '<tr><td>' + (i + 1) + 'º</td><td>' + safe(row.name || '') +
       '</td><td>' + (Number(row.wins) || 0) + '</td><td>' + ((Number(row.pointsFor) || 0) - (Number(row.pointsAgainst) || 0)) +
-      '</td></tr>'; }).join('') + '</tbody></table></article>';
+      '</td></tr>'; }).join('') + '</tbody></table>' +
+    (courtHtml ? '<div class="sp-operations-standings-footer">' + courtHtml +
+      '<span class="sp-operations-standings-category">' + safe(categoryLabel || '') + ' · ' +
+      safe(String(group.name).replace(/^R\d+\s+/i, '').replace(/^Grupo\s+/i, '')) + '</span></div>' : '') + '</article>';
 }
 
 function _bracketOperationsReplica(m, t, role, label, availability, root, allMatches, slot) {
@@ -1550,19 +1551,22 @@ function _bracketOperationsReplica(m, t, role, label, availability, root, allMat
   var canEnter = !!(role.canCall || (typeof window._resultEntryIncludes === 'function' &&
     (window._resultEntryIncludes(t, 'players') || window._resultEntryIncludes(t, 'referee'))));
   var standingsCourtHtml = '';
+  var standingsCategoryLabel = '';
   if (group && index === 3 && typeof window.renderMatchCard === 'function') {
     var callCard = document.createElement('template');
     callCard.innerHTML = window.renderMatchCard(selected, canEnter, t.id,
       Number.isInteger(selectedNumber) && selectedNumber > 0 ? selectedNumber : null,
       false, null, { preferFirstFreeCourt: !!role.preferFirstFreeCourt, preferredCourt: role.preferredCourt || '' });
     var callRow = callCard.content.querySelector('.sp-match-operational');
+    var callCategory = callCard.content.querySelector('[data-match-time-status]');
+    standingsCategoryLabel = (callCategory && callCategory.textContent.trim()) || String(selected.category || group.roster.category || '');
     if (callRow) {
       Array.prototype.forEach.call(callRow.querySelectorAll('.sp-match-estimated-time, .sp-match-court-clock'), function (node) { node.remove(); });
       standingsCourtHtml = callRow.outerHTML;
     }
   }
   var html = group && index === 3
-    ? _bracketScopeReplicaHtml(_bracketOperationsStandingsHtml(group, t, slot, selected, standingsCourtHtml), 'operations-standings-' + slot)
+    ? _bracketScopeReplicaHtml(_bracketOperationsStandingsHtml(group, t, slot, standingsCourtHtml, standingsCategoryLabel), 'operations-standings-' + slot)
     : typeof window.renderMatchCard === 'function'
     ? window.renderMatchCard(selected, canEnter, t.id, Number.isInteger(selectedNumber) && selectedNumber > 0 ? selectedNumber : null,
       false, null, { idScope: 'operations-' + String(selected.id || ''),
@@ -1590,9 +1594,29 @@ function _bracketOperationsReplica(m, t, role, label, availability, root, allMat
         card.classList.add('sp-operations-two-line-header');
         titleRow.style.flexWrap = 'nowrap';
         titleRow.style.gap = '0';
+        var groupLabel = String(group.name).replace(/^R\d+\s+/i, '').replace(/^Grupo\s+/i, '');
+        if (category.textContent.indexOf(groupLabel) === -1) category.appendChild(document.createTextNode(' ' + groupLabel));
       }
     }
     html = card.outerHTML;
+  }
+  if (role.active && html) {
+    var activeHost = document.createElement('template');
+    activeHost.innerHTML = html;
+    var activeCard = activeHost.content.firstElementChild;
+    var activeHeaderActions = activeCard && activeCard.querySelector('.sp-mc-acts');
+    var activeCourtRow = activeCard && activeCard.querySelector('.sp-match-operational');
+    if (activeHeaderActions && activeCourtRow) {
+      var actionAnchor = activeCourtRow.querySelector('.sp-match-confirm') || activeCourtRow.querySelector('.sp-match-court');
+      ['cancel-court', 'ended'].forEach(function (action) {
+        var button = activeHeaderActions.querySelector('[data-operations-action="' + action + '"]');
+        if (!button) return;
+        if (actionAnchor) actionAnchor.after(button);
+        else activeCourtRow.appendChild(button);
+        actionAnchor = button;
+      });
+      html = activeCard.outerHTML;
+    }
   }
   return '<div class="sp-operations-replica' + (role.active ? ' sp-operations-court-card' : '') + '" data-operations-match="' +
     safe(String(selected.id || '')) + '" data-operations-base-match="' + safe(String(m.id || '')) + '"><span class="sp-operations-label">' + safe(label) + postpone + '</span>' + (availability || '') + html + '</div>';
@@ -1894,8 +1918,8 @@ window._bracketOperationsRefresh = function (t, root) {
     var nextNav = root._bracketOperationsNav && root._bracketOperationsNav.next;
     if (nextNav && cardHeights.length) {
       var groupHeights = root._bracketOperationsGroupHeights || (root._bracketOperationsGroupHeights = {});
-      if (nextNav.index === 3) cardHeights.push(groupHeights[nextNav.key] || 0);
-      else groupHeights[nextNav.key] = Math.max(groupHeights[nextNav.key] || 0, cardHeights[0]);
+      groupHeights[nextNav.key] = Math.max(groupHeights[nextNav.key] || 0, cardHeights[0]);
+      cardHeights.push(groupHeights[nextNav.key]);
     }
     Array.prototype.forEach.call(measuredCards, function (card) { card.style.removeProperty('height'); });
     operationsTrack.style.removeProperty('align-items');
@@ -1903,7 +1927,7 @@ window._bracketOperationsRefresh = function (t, root) {
     // uma régua mínima comum mesmo quando a tabela for mais alta que o card
     // sintético de uma partida (ou vice-versa), sem encolher ao navegar.
     operationsTrack.style.setProperty('--sp-operations-card-height', Math.max.apply(null,
-      [nextNav ? 300 : 120].concat(cardHeights)) + 'px');
+      [nextNav ? 380 : 120].concat(cardHeights)) + 'px');
     operationsTrack.scrollLeft = trackScroll;
     if (window.scrollY !== pageY || window.scrollX !== pageX) window.scrollTo(pageX, pageY);
   }
