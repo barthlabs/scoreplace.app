@@ -1,10 +1,9 @@
 {
   "schema": 1,
-  "backendCommit": "628f52b6fca2eb7dc20e6ebbba5452bdec3711f7",
-  "scopeNote": "Novo campo de largura do gradiente na criação e edição; espelho do resultado do sorteio no vendor. Publicar as três Functions antes do Hosting.",
+  "backendCommit": "b8837b055625c21e7228208da51cdfc89934ca2c",
+  "scopeNote": "Novo campo tvScreens e validador compartilhado das telas por fase. Publicar criação e edição antes do Hosting.",
   "functions": [
     "createTournament",
-    "updateTournamentConfiguration",
-    "drawRound"
+    "updateTournamentConfiguration"
   ]
 }
