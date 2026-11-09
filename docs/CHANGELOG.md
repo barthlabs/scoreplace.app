@@ -1,7 +1,7 @@
 ## 2.6.5 — 09/nov/2026 (alinhamento da faixa de chamada)
 
 - A navegação `‹ JOGO N ›` e a categoria formam uma coluna alinhada à esquerda, sem linha vazia entre elas. Os botões W.O. e Ao Vivo ficam lado a lado na direita e ocupam a altura das duas linhas, começando no topo do jogo.
-- A geometria é medida em Chromium: alinhamento da primeira seta com a categoria, distância vertical curta, botões cobrindo as duas linhas e ausência de corte no card. Mudança somente web, sem alteração de dados nem versões nativas.
+- A geometria é medida em Chromium: alinhamento da primeira seta com a categoria, área de toque dentro do card em 320 px, distância vertical curta, botões cobrindo as duas linhas e ausência de corte. Mudança somente web, sem alteração de dados nem versões nativas.
 
 ## 2.6.4 — 09/nov/2026 (cabeçalho de chamada mais compacto)
 
