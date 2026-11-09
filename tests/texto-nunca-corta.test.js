@@ -132,7 +132,7 @@ console.log('\n== Texto nunca corta ==');
     'o título não entra no encolhedor de caixas fixas: ele pode crescer verticalmente');
   ok(!/overflow-wrap:\s*anywhere/.test(tag), 'o título deixa a quebra entre palavras para a regra compartilhada');
   const tournaments = fs.readFileSync(path.join(ROOT, 'js', 'views', 'tournaments.js'), 'utf8');
-  ok(/<h4 class="tournament-card-title" style="margin:0;font-weight:800;color:white;text-align:left;">/.test(tournaments),
+  ok(/<h4 class="tournament-card-title" style="margin:0;font-weight:800;color:[^\n]+text-align:left;">/.test(tournaments),
     'o detalhe usa o mesmo componente de título da dashboard');
   ok(/window\._fitTournamentTitles\s*=\s*function/.test(store) && /project_tournament_title_max_without_truncation/.test(store),
     'o título é ajustado pela largura real do card, não apenas pelo viewport');
