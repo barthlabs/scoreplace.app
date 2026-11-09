@@ -477,6 +477,9 @@ function setupCreateTournamentModal() {
                   <button type="button" id="cover-mode-color" onclick="window._setCoverMode('color')" style="padding:8px 14px;border-radius:10px;border:1px solid #818cf8;background:#3730a3;color:#fff;font-size:0.8rem;font-weight:700;cursor:pointer;">🎨 Cor</button>
                   <button type="button" id="cover-mode-photo" onclick="window._setCoverMode('photo')" style="padding:8px 14px;border-radius:10px;border:1px solid rgba(99,102,241,0.35);background:rgba(99,102,241,0.1);color:var(--sp-c-e2e8f0,#e2e8f0);font-size:0.8rem;font-weight:700;cursor:pointer;">🖼️ Foto</button>
                 </div>
+                <label style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 0.8rem;color:var(--text-main);font-size:0.8rem;font-weight:700;">Cor do título do torneio
+                  <input type="color" id="tourn-title-color" value="#ffffff" aria-label="Cor do título do torneio" oninput="window._refreshCoverPreview()" style="width:40px;height:36px;padding:2px;border:1px solid var(--text-muted);border-radius:7px;background:var(--bg-card);cursor:pointer;">
+                </label>
                 <div id="cover-color-controls" style="margin:0 0 0.8rem;padding:0.85rem;border-radius:12px;background:rgba(15,23,42,0.55);border:1px solid rgba(129,140,248,0.22);">
                   <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:0.8rem;">
                     <button type="button" id="cover-color-target-1" onclick="window._selectCoverColorTarget(1)" style="display:flex;align-items:center;gap:7px;padding:7px 10px;border-radius:9px;border:2px solid #818cf8;background:rgba(99,102,241,.18);color:var(--text-main);font-weight:800;cursor:pointer;">Cor 1 <input aria-label="Cor 1" type="color" id="tourn-cover-color" value="#1f2937" oninput="window._syncCoverColorFromPicker()" style="width:30px;height:28px;padding:0;border:0;background:none;cursor:pointer;"></button>
@@ -501,7 +504,8 @@ function setupCreateTournamentModal() {
                 </div>
                 </div>
                 <div id="cover-preview" style="width: 100%; max-width: 300px; aspect-ratio: 2/1; border-radius: 12px; border: 2px dashed rgba(99,102,241,0.3); display: flex; align-items: center; justify-content: center; overflow: hidden; background: var(--sp-g-0-0-0-02,rgba(0,0,0,0.2)); background-size: cover; background-position: center; margin-bottom: 8px;">
-                  <span id="cover-placeholder" style="font-size: 0.72rem; color: #fff; text-shadow:0 1px 3px #000;">Prévia do fundo</span>
+                  <span id="cover-placeholder" style="display:none;">Prévia do fundo</span>
+                  <strong id="cover-title-preview" style="font-size:1rem;color:#fff;text-shadow:0 1px 3px #000;max-width:90%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Título do torneio</strong>
                 </div>
                 <div style="display: flex; gap: 6px; flex-wrap: wrap;">
                   <button type="button" id="btn-cover-choose" onclick="document.getElementById('cover-file-input').click()" style="display:none;padding: 8px 16px; border-radius: 10px; border: 1px solid rgba(99,102,241,0.3); background: rgba(99,102,241,0.15); color: var(--sp-c-a5b4fc,#a5b4fc); font-size: 0.8rem; font-weight: 600; cursor: pointer;">🖼️ Escolher foto</button>
@@ -2805,6 +2809,9 @@ function setupCreateTournamentModal() {
     if (wheel) wheel.style.background = gradient;
     prev.style.backgroundColor = (mode === 'photo' && photo) ? '' : c1;
     prev.style.borderStyle = (mode === 'photo' && photo) ? 'solid' : 'dashed';
+    var title = document.getElementById('cover-title-preview');
+    var titleColor = (document.getElementById('tourn-title-color') || {}).value || '#ffffff';
+    if (title) title.style.color = _coverHexOk(titleColor) ? titleColor : '#ffffff';
   };
   window._setCoverMode = function(mode) {
     mode = mode === 'photo' ? 'photo' : 'color';
@@ -5687,6 +5694,8 @@ function setupCreateTournamentModal() {
         var c1 = document.getElementById('tourn-cover-color'), c2 = document.getElementById('tourn-cover-gradient-color'), ge = document.getElementById('tourn-cover-gradient-enabled');
         if (c1 && /^#[0-9a-f]{6}$/i.test(t.coverColor || '')) c1.value = t.coverColor;
         if (c2 && /^#[0-9a-f]{6}$/i.test(t.coverGradientColor || '')) c2.value = t.coverGradientColor;
+        var titleColorInput = document.getElementById('tourn-title-color');
+        if (titleColorInput) titleColorInput.value = /^#[0-9a-f]{6}$/i.test(t.titleColor || '') ? t.titleColor : '#ffffff';
         if (ge) ge.checked = t.coverGradientEnabled === true;
         if (typeof window._syncCoverColorFromPicker === 'function') window._syncCoverColorFromPicker();
         if (typeof window._syncCoverAngle === 'function') window._syncCoverAngle(t.coverGradientAngle != null ? t.coverGradientAngle : 135);
@@ -6530,6 +6539,7 @@ window._saveTournamentClickHandler = async function() {
         const coverPhotoDataVal = (document.getElementById('tourn-cover-data') || {}).value || '';
         const coverModeVal = ((document.getElementById('tourn-cover-mode') || {}).value === 'photo' && coverPhotoDataVal) ? 'photo' : 'color';
         const coverColorVal = (document.getElementById('tourn-cover-color') || {}).value || '#1f2937';
+        const titleColorVal = (document.getElementById('tourn-title-color') || {}).value || '#ffffff';
         const coverGradientColorVal = (document.getElementById('tourn-cover-gradient-color') || {}).value || '#0f172a';
         const coverGradientEnabledVal = !!((document.getElementById('tourn-cover-gradient-enabled') || {}).checked);
         const coverAngleInput = Number((document.getElementById('tourn-cover-gradient-angle') || {}).value);
@@ -6652,6 +6662,7 @@ window._saveTournamentClickHandler = async function() {
           coverPhotoData: coverPhotoDataVal,
           coverMode: coverModeVal,
           coverColor: /^#[0-9a-f]{6}$/i.test(coverColorVal) ? coverColorVal : '#1f2937',
+          titleColor: /^#[0-9a-f]{6}$/i.test(titleColorVal) ? titleColorVal : '#ffffff',
           coverGradientColor: /^#[0-9a-f]{6}$/i.test(coverGradientColorVal) ? coverGradientColorVal : '#0f172a',
           coverGradientEnabled: coverGradientEnabledVal,
           coverGradientAngle: coverGradientAngleVal,
@@ -8361,6 +8372,7 @@ window._prefillFromTemplate = function(tpl) {
   _setV('tourn-venue-photo-url', '');
   if (typeof window._applyCoverPhoto === 'function') {
     _setV('tourn-cover-color', tpl.coverColor || '#1f2937');
+    _setV('tourn-title-color', /^#[0-9a-f]{6}$/i.test(tpl.titleColor || '') ? tpl.titleColor : '#ffffff');
     _setV('tourn-cover-gradient-color', tpl.coverGradientColor || '#0f172a');
     _setC('tourn-cover-gradient-enabled', !!tpl.coverGradientEnabled);
     if (typeof window._syncCoverColorFromPicker === 'function') window._syncCoverColorFromPicker();
@@ -8911,6 +8923,7 @@ window._saveCurrentFormAsTemplate = function(saveButton) {
       coverPhotoData: (document.getElementById('tourn-cover-data') || {}).value || '',
       coverMode: (get('tourn-cover-mode') === 'photo' && get('tourn-cover-data')) ? 'photo' : 'color',
       coverColor: get('tourn-cover-color') || '#1f2937',
+      titleColor: /^#[0-9a-f]{6}$/i.test(get('tourn-title-color')) ? get('tourn-title-color') : '#ffffff',
       coverGradientColor: get('tourn-cover-gradient-color') || '#0f172a',
       coverGradientEnabled: getChecked('tourn-cover-gradient-enabled'),
       coverGradientAngle: Number.isFinite(Number(get('tourn-cover-gradient-angle'))) ? Math.max(0, Math.min(360, Number(get('tourn-cover-gradient-angle')))) : 135,

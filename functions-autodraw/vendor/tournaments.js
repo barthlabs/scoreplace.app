@@ -4366,7 +4366,7 @@ function renderTournaments(container, tournamentId = null) {
                 </div>
               ` : ''}
               <div class="sp-tournament-title-slot" style="flex:1;min-width:0;display:flex;flex-direction:column;align-self:stretch;">
-                <h4 class="tournament-card-title" style="margin:0;font-weight:800;color:white;text-align:left;">
+                <h4 class="tournament-card-title" style="margin:0;font-weight:800;color:${/^#[0-9a-f]{6}$/i.test(t.titleColor || '') ? t.titleColor : 'white'};text-shadow:0 1px 3px rgba(0,0,0,0.9);text-align:left;">
                   ${window._safeHtml(t.name)}
                 </h4>
               </div>

@@ -1,5 +1,7 @@
 ## 2.6.10 — 09/nov/2026 (classificação e simples sem critérios adicionais)
 
+- O logo do torneio volta a aceitar uma nova arte pela ficha: os comandos de logo e preferências da arte recebem preflight CORS, mas login e permissão de organização continuam obrigatórios. A URL antiga não encobre o logo recém-salvo.
+- O recorte mantém a transparência de PNG quando o fundo escolhido é transparente; fundo opaco e capa continuam em JPEG. A personalização permite escolher a cor do título e a prévia mostra o resultado.
 - A classificação da fase preliminar Rei/Rainha usa botões exclusivos para pontos, vitórias ou saldo de games. O saldo pode ser a única medida da tabela. Na eliminatória, continua avançando o vencedor do confronto direto.
 - A simples de desempate, com meta de cinco pontos configurável, aparece antes da lista de critérios adicionais. O botão "Desativar todos" deixa a lista vazia; salvar e reabrir mantém `[]` sem recolocar saldo, vitórias ou sorteio.
 - O comparador no navegador e no servidor respeita a lista vazia. A regra de simples continua a resolver empates no avanço; se dispensada, usa a ordem do sorteio original como solução operacional.

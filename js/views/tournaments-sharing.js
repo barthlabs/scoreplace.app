@@ -36,7 +36,9 @@ window._editTournamentLogoFromDetail = function(tournamentId) {
           // O navegador envia a imagem; a Function autoriza e altera apenas o logo.
           if (typeof window._callCF !== 'function') { if (window.showNotification) window.showNotification('Erro ao salvar logo', 'Atualize o aplicativo e tente novamente.', 'error'); return; }
           window._callCF('setTournamentBranding', { tournamentId: String(tournamentId), logoData: croppedDataUrl }, 'Entre na sua conta para atualizar o logo.').then(function(res) {
-            if (!((res && res.data) || {}).ok) throw new Error('branding-failed');
+            var data = (res && res.data) || {};
+            if (!data.ok) throw new Error('O servidor não confirmou o logo.');
+            if (data.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(tournamentId, data.tournament);
             if (window.showNotification) window.showNotification('Logo atualizado', '', 'success');
             if (typeof window._softRefreshView === 'function') window._softRefreshView();
           }).catch(function(err) {

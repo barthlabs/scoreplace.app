@@ -34,6 +34,8 @@ const contract = fn.slice(fn.indexOf('const _CAMPOS_CONFIG_TORNEIO'), fn.indexOf
 ok(/'turnos'/.test(contract), 'turnos compilado pela fase de grupos pertence ao contrato da ficha');
 ok(/'categorySchedule'/.test(contract) && /'teamCompetition','categorySchedule','turnos'/.test(contract),
   'agenda por categoria entra no mesmo contrato transacional antes do sorteio e é estrutural depois da chave');
+ok(/'titleColor'/.test(contract) && part.includes("'titleColor' in patch") && ui.includes("id=\"tourn-title-color\"") && ui.includes('titleColor:') && fs.readFileSync('js/views/tournaments.js', 'utf8').includes('t.titleColor'),
+  'cor do título entra na criação, edição e exibição com validação no servidor');
 ok(part.includes('_fasesDeConfiguracaoAtualizaveis') && part.includes('t.history.push'),
   'fases já materializadas preservam o motor e a alteração ganha histórico servidor');
 process.exit(failed ? 1 : 0);

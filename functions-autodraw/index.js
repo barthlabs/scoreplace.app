@@ -5422,7 +5422,9 @@ exports.setPhaseLateEnrollment = onCall(async (request) => {
   });
 });
 
-exports.setTournamentBranding = onCall(async (request) => {
+// O preflight CORS precisa alcançar a callable; login e permissão continuam
+// obrigatórios dentro do comando, como nas demais edições administrativas.
+exports.setTournamentBranding = onCall({ invoker: 'public' }, async (request) => {
   const uid = request.auth && request.auth.uid;
   const data = request.data || {};
   const tId = String(data.tournamentId || '').trim();
@@ -5434,14 +5436,14 @@ exports.setTournamentBranding = onCall(async (request) => {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização altera o logo.', { tId, uid });
-    if (t.logoData === logoData && t.logoLocked === true) return { ok:true, changed:false };
-    const antes = _antesDoMotor(t); t.logoData = logoData; t.logoLocked = true;
+    if (t.logoData === logoData && !t.logoUrl && t.logoLocked === true) return { ok:true, changed:false };
+    const antes = _antesDoMotor(t); t.logoData = logoData; delete t.logoUrl; t.logoLocked = true;
     const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
     return { ok:true, changed:true, tournament:b.clean };
   });
 });
 
-exports.setTournamentFlyerPrefs = onCall(async (request) => {
+exports.setTournamentFlyerPrefs = onCall({ invoker: 'public' }, async (request) => {
   const uid = request.auth && request.auth.uid;
   const data = request.data || {};
   const tId = String(data.tournamentId || '').trim();
@@ -5477,7 +5479,7 @@ const _CAMPOS_CONFIG_TORNEIO = new Set([
   'maxParticipants','maxParticipantsPerCategory','maxParticipantsByCategory','autoCloseOnFull','enrollmentLimitMode','targetSlots','callPolicy',
   'resultEntry','woScope','lateEnrollment','newMatchups','venue','venueAccess','venueLat',
   'venueLon','venueAddress','venuePlaceId','venueCity','venueState','venueCountry',
-  'venuePhotoUrl','coverUrl','coverMode','coverColor','coverGradientColor','coverGradientEnabled','coverGradientAngle','coverGradientBalance','logoUrl','logoLocked','logoShape','logoRadius','logoAspect','courtCount',
+  'venuePhotoUrl','coverUrl','coverMode','coverColor','coverGradientColor','coverGradientEnabled','coverGradientAngle','coverGradientBalance','titleColor','logoUrl','logoLocked','logoShape','logoRadius','logoAspect','courtCount',
   'courtNames','courtOrder','callTime','warmupTime','gameDuration','scoring','swissRounds',
   'drawFirstDate','drawFirstTime','drawIntervalDays','drawManual','temporada','equilibrado',
   'clusterSize','balanceBy','genderRatio','genderRatioDisabled','wlGroupBalance','ligaNewPlayerScore',
@@ -5672,6 +5674,9 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
       catch (error) { throw new HttpsError('invalid-argument', error.message); }
     } else patch[key] = _clonaConfigDeclarativa(raw[key], 0, [key]);
   });
+  if ('titleColor' in patch && (typeof patch.titleColor !== 'string' || !/^#[0-9a-f]{6}$/i.test(patch.titleColor))) {
+    throw new HttpsError('invalid-argument', 'Cor do título inválida.');
+  }
   // Este handler é definido aqui (não por factory); a criação injeta a mesma função
   // na factory para permitir exercitar o handler real com um banco falso nos testes.
   // O patch já é um clone. A validação efetiva acontece com o documento fresco

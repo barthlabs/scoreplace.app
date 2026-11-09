@@ -78,6 +78,44 @@ test('saldo principal, simples e nenhum desempate adicional podem coexistir sem 
   expect(order.indexOf('tie-resolution-section')).toBeLessThan(order.indexOf('tiebreaker-list'));
 });
 
+test('cor do título aparece na prévia da personalização', async ({ page }) => {
+  await openCreateModal(page);
+  await page.locator('#tv-personalization').evaluate(el => { el.open = true; });
+  await page.locator('#tourn-title-color').fill('#ffe100');
+  await expect(page.locator('#cover-title-preview')).toHaveCSS('color', 'rgb(255, 225, 0)');
+});
+
+test('recorte de logo mantém transparência PNG e fundo escolhido gera imagem opaca', async ({ page }) => {
+  await page.goto('/', { waitUntil: 'load' });
+  await page.evaluate(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 24;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ff0000';
+    ctx.fillRect(8, 8, 8, 8);
+    window._cropResults = [];
+    window._openImageCropEditor(canvas.toDataURL('image/png'), { size: 48, radiusControl: true }, data => window._cropResults.push(data));
+  });
+  await expect(page.locator('#crop-canvas')).toBeVisible();
+  await page.locator('#crop-confirm').click();
+  const pngResult = await page.evaluate(async () => {
+    const url = window._cropResults[0];
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 48;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    return { type: url.split(',')[0], cornerAlpha: ctx.getImageData(1, 1, 1, 1).data[3], centerAlpha: ctx.getImageData(24, 24, 1, 1).data[3] };
+  });
+  expect(pngResult).toEqual({ type: 'data:image/png;base64', cornerAlpha: 0, centerAlpha: 255 });
+  await page.evaluate(() => window._openImageCropEditor(window._cropResults[0], { size: 48 }, data => window._cropResults.push(data)));
+  await page.locator('#crop-bg-1').click();
+  await page.locator('#crop-confirm').click();
+  expect(await page.evaluate(() => window._cropResults[1].startsWith('data:image/jpeg;base64,'))).toBe(true);
+});
+
 test.describe('Camada 2 — Criar Torneio: clique→valor (Modo de sorteio)', () => {
   test('cada botão de Modo de Sorteio grava data-value em #draw-mode', async ({ page }) => {
     await openCreateModal(page);

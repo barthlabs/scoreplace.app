@@ -4,6 +4,10 @@ const fn=fs.readFileSync('functions-autodraw/index.js','utf8');
 for (const name of ['setTournamentBranding','setTournamentFlyerPrefs']) {
   const start=fn.indexOf('exports.'+name); const end=fn.indexOf('\nexports.',start+8); const part=fn.slice(start,end<0?fn.length:end);
   ok(start>=0&&part.includes('db.runTransaction')&&part.includes('_isTournamentAdmin')&&part.includes('_gravaTorneio'),name+' é comando administrativo estreito e transacional');
+  ok(part.includes("onCall({ invoker: 'public' }") && part.includes("if (!uid) throw new HttpsError('unauthenticated'"), name+' recebe preflight e exige login');
+  if (name === 'setTournamentBranding') {
+    ok(part.includes('delete t.logoUrl'), 'novo logo não fica oculto pela URL antiga');
+  }
 }
 const ui=fs.readFileSync('js/views/tournaments-sharing.js','utf8');
 const logo=ui.slice(ui.indexOf('window._editTournamentLogoFromDetail'),ui.indexOf('// Abre a modal de detalhe',ui.indexOf('window._editTournamentLogoFromDetail')));

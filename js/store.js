@@ -7659,7 +7659,7 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
   var _canvasRadius = COVER ? '10px' : (RADIUS_CTRL ? (cropRadiusPct + '%') : (SHAPE === 'circle' ? '50%' : '12px'));
   panel.innerHTML =
     '<div style="font-size:0.9rem;font-weight:700;color:var(--text-bright,#f1f5f9);margin-bottom:14px;">' + TITLE + '</div>' +
-    '<canvas id="crop-canvas" width="' + PREV_W + '" height="' + PREV_H + '" style="border-radius:' + _canvasRadius + ';cursor:move;touch-action:none;max-width:100%;"></canvas>' +
+    '<canvas id="crop-canvas" width="' + PREV_W + '" height="' + PREV_H + '" style="border-radius:' + _canvasRadius + ';cursor:move;touch-action:none;max-width:100%;background:repeating-conic-gradient(#64748b 0% 25%,#cbd5e1 0% 50%) 0 0/16px 16px;"></canvas>' +
     '<div style="margin:14px 0 4px;display:flex;align-items:center;gap:10px;">' +
       '<span style="font-size:0.7rem;color:var(--text-muted,#94a3b8);white-space:nowrap;">🔍 Menos</span>' +
       '<input type="range" id="crop-zoom" min="5" max="1200" value="100" aria-label="Zoom da imagem" style="flex:1;accent-color:var(--primary-color,#6366f1);">' +
@@ -7784,10 +7784,12 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
     // em todos os browsers desde sempre.
     if (brightness !== 0) {
       var alpha = Math.abs(brightness) / 100 * 0.9; // 75% → alpha 0.675
+      if (bgColor === 'transparent' && !COVER) ctx.globalCompositeOperation = 'source-atop';
       ctx.fillStyle = brightness > 0
         ? 'rgba(255,255,255,' + alpha + ')'
         : 'rgba(0,0,0,' + alpha + ')';
       ctx.fillRect(0, 0, PREV_W, PREV_H);
+      ctx.globalCompositeOperation = 'source-over';
     }
     ctx.restore();
     // Borda sutil (acompanha a forma)
@@ -7905,12 +7907,18 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
     octx.translate(-(SIZE_W / 2 + offsetX * ratio), -(SIZE_H / 2 + offsetY * ratio));
     if (brightness !== 0) {
       var oAlpha = Math.abs(brightness) / 100 * 0.9;
+      if (bgColor === 'transparent' && !COVER) octx.globalCompositeOperation = 'source-atop';
       octx.fillStyle = brightness > 0
         ? 'rgba(255,255,255,' + oAlpha + ')'
         : 'rgba(0,0,0,' + oAlpha + ')';
       octx.fillRect(0, 0, SIZE_W, SIZE_H);
+      octx.globalCompositeOperation = 'source-over';
     }
-    var result = out.toDataURL('image/jpeg', COVER ? 0.82 : 0.88);
+    // JPEG descarta o canal alpha e transforma o PNG transparente em um quadrado.
+    // Fundo transparente de logo sai em PNG; capas e fundos opacos seguem JPEG.
+    var result = (bgColor === 'transparent' && !COVER)
+      ? out.toDataURL('image/png')
+      : out.toDataURL('image/jpeg', COVER ? 0.82 : 0.88);
     overlay.remove();
     if (typeof callback === 'function') callback(result, RADIUS_CTRL ? cropRadiusPct : undefined, ASPECT_CTRL ? ASPECT : undefined);
   });
