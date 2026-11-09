@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "backendCommit": "c82cba05407acce8ea610ce13355b201f035ac7f",
-  "scopeNote": "Espelho do fluxo de conclusão do sorteio no vendor; publicar drawRound antes do Hosting.",
+  "backendCommit": "d40e54d6cb075ee0568188fe73da2494de9e9a04",
+  "scopeNote": "Espelho do modal do resultado no vendor; publicar drawRound antes do Hosting.",
   "functions": [
     "drawRound"
   ]
