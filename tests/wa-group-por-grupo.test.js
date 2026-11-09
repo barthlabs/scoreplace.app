@@ -123,6 +123,8 @@ mCatia.scheduleLocked = false;
 mCatia.scheduleSource = 'manual-legado';
 delete mCatia.scheduledKind;
 ok(!W._waGrpGroupChip(t, byGroup(t, 13)), 'origem manual legada com quadra e horário também é confirmada');
+delete mCatia.scheduleSource;
+ok(!W._waGrpGroupChip(t, byGroup(t, 13)), 'agenda legada sem campos de origem conserva o critério anterior');
 delete mCatia.court; delete mCatia.scheduledAt; delete mCatia.scheduledKind;
 delete mCatia.scheduleSource; delete mCatia.scheduleLocked;
 
