@@ -2261,7 +2261,10 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
     var slotParts = key.split('|');
     var dateParts = slotParts[0].split('-');
     var slotRound = daySlots[slotParts[0]].indexOf(slotParts[1]) + 1;
-    var heading = 'Rodada ' + slotRound + ' · ' + dateParts[2] + '/' + dateParts[1] + ' · ' + slotParts[1];
+    var agendaTournament = window._currentBracketTournament;
+    var singleDay = agendaTournament && typeof window._isConcentratedTournament === 'function' && window._isConcentratedTournament(agendaTournament) &&
+      agendaTournament.scheduleWindow && Array.isArray(agendaTournament.scheduleWindow.days) && agendaTournament.scheduleWindow.days.length === 1;
+    var heading = 'Rodada ' + slotRound + ' · ' + (singleDay ? '' : dateParts[2] + '/' + dateParts[1] + ' · ') + slotParts[1];
     group.innerHTML = '<h4 class="bracket-round-heading" style="margin:0 0 10px;padding:0 0 9px 10px;border-left:4px solid var(--sp-c-fbbf24,#fbbf24);border-bottom:1px solid rgba(255,255,255,.10);color:var(--sp-c-fde68a,#fde68a);font-size:.82rem;letter-spacing:1px;text-transform:uppercase;">' + heading + '</h4>';
     var grid = document.createElement('div');
     grid.style.cssText = 'display:grid;grid-template-columns:minmax(0,1fr);gap:14px;align-items:start;';
@@ -8373,6 +8376,13 @@ function _matchCardDateTime(ms, t) {
   } catch (e) { return ''; }
 }
 
+function _matchCardVisibleDateTime(ms, t, concentrated) {
+  var formatted = _matchCardDateTime(ms, t);
+  var days = t && t.scheduleWindow && t.scheduleWindow.days;
+  return concentrated && Array.isArray(days) && days.length === 1
+    ? formatted.replace(/^\d{1,2}\/\d{1,2}\s*/, '') : formatted;
+}
+
 // Evento concentrado é uma decisão explícita do planejamento: cada dia ganhou
 // uma janela operacional no pré-sorteio. Não inferir isso por título, duração ou
 // quantidade de dias: a Confra também dura vários dias, mas seus participantes
@@ -9097,7 +9107,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     ? window._spCourtClockHtml(_calledMs || _liveStartMs, t, Date.now(), tId, m.id,
         !!(_calledMs && m.court && _canOperateCourt))
     : _matchTimeMs
-    ? '<span class="sp-match-estimated-time" title="' + (_playedMs ? 'Horário jogado' : 'Horário estimado do jogo') + '" style="margin-left:auto;white-space:nowrap;text-align:right;font-size:.78rem;font-weight:800;color:' + (_playedMs ? 'var(--sp-c-4ade80,#4ade80)' : 'var(--sp-c-7dd3fc,#7dd3fc)') + ';">🕒 ' + (_playedMs ? '' : '≈ ') + window._safeHtml(_matchCardDateTime(_matchTimeMs, t)) + '</span>'
+    ? '<span class="sp-match-estimated-time" title="' + (_playedMs ? 'Horário jogado' : 'Horário estimado do jogo') + '" style="margin-left:auto;white-space:nowrap;text-align:right;font-size:.78rem;font-weight:800;color:' + (_playedMs ? 'var(--sp-c-4ade80,#4ade80)' : 'var(--sp-c-7dd3fc,#7dd3fc)') + ';">🕒 ' + (_playedMs ? '' : '≈ ') + window._safeHtml(_matchCardVisibleDateTime(_matchTimeMs, t, _isConcentratedEvent)) + '</span>'
     : '';
   if (_canChangeCardCourt && _cardCourts.length) {
     var _suggestedCourt = (typeof window._suggestFreedCourtForMatch === 'function') ? window._suggestFreedCourtForMatch(t, m) : '';

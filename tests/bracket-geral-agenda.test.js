@@ -79,6 +79,17 @@ function trecho(inicio, fim) {
       followsDetails: agenda.previousElementSibling && agenda.previousElementSibling.id === 'tourn-grid-container'
     };
 
+    window._currentBracketTournament = { id: 'neon', matches: [],
+      scheduleWindow: { days: [{ day: '2026-10-22' }] } };
+    window._isConcentratedTournament = () => true;
+    window._bracketGeneralView(root, false, 'fem');
+    window._bracketGeneralView(root, true, 'fem');
+    const singleDayHeading = root._bracketGeneralView.querySelector('h4')?.textContent.trim();
+    window._bracketGeneralView(root, false, 'fem');
+    window._currentBracketTournament = null;
+    window._isConcentratedTournament = undefined;
+    window._bracketGeneralView(root, true, 'fem');
+
     document.getElementById('upcoming').click();
     const upcomingState = {
       sourceHidden: document.getElementById('source').hidden,
@@ -309,7 +320,7 @@ function trecho(inicio, fim) {
       moved: !!focusRoot._bracketGeneralView.querySelector('#focus-pending'),
       track: !!focusRoot._bracketGeneralView.querySelector('.bracket-general-rounds-track')
     };
-    return { generalState, upcomingState, freshUpcomingResults, justScoredResults, restored, generalReentry, cleanup, noSchedule, nested, externalSource, categorySchedule, dateTabs, emptyPhase, nextFocus };
+    return { generalState, singleDayHeading, upcomingState, freshUpcomingResults, justScoredResults, restored, generalReentry, cleanup, noSchedule, nested, externalSource, categorySchedule, dateTabs, emptyPhase, nextFocus };
   });
 
   console.log('\n📋 Geral é a agenda completa do torneio, não uma cópia por gênero');
@@ -318,6 +329,7 @@ function trecho(inicio, fim) {
   ok(result.generalState.noClone, 'os cards reais são movidos: não há id nem input duplicado');
   ok(result.generalState.visibleCards, 'os cards movidos para Geral são visíveis, não herdam o hidden do filtro de categoria');
   ok(result.generalState.roundColumns.join(',') === 'Rodada 1 · 22/10 · 18:00,Rodada 2 · 22/10 · 18:35,Rodada 1 · 23/10 · 18:00', 'Geral agrupa pelo horário da grade em cada dia, mesmo quando m.round diverge');
+  ok(result.singleDayHeading === 'Rodada 1 · 18:00', 'torneio concentrado de um dia mostra só a hora no cabeçalho');
   ok(result.generalState.followsDetails, 'Geral fica depois do card de detalhes do torneio, mesmo quando o detalhe é irmão da chave');
   console.log('\n📋 Próximos jogos mostra todos os jogos sem placar');
   ok(result.upcomingState.sourceHidden, 'Próximos jogos também troca a chave canônica por uma única visão operacional');

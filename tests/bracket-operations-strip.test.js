@@ -6,6 +6,15 @@ const source = fs.readFileSync('js/views/bracket.js', 'utf8');
 const start = source.indexOf('function _bracketAgendaCompare(');
 const end = source.indexOf('function _bracketAgendaExpected(', start);
 assert(start > 0 && end > start);
+const dateStart = source.indexOf('function _matchCardDateTime(ms, t)');
+const dateEnd = source.indexOf('\n// Evento concentrado', dateStart);
+assert(dateStart > 0 && dateEnd > dateStart);
+const visibleDateTime = new Function('_matchCardTimeZone', source.slice(dateStart, dateEnd) +
+  '\nreturn _matchCardVisibleDateTime;')(() => 'America/Sao_Paulo');
+const at = Date.parse('2026-11-13T11:00:00Z');
+assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' }] } }, true), '08:00');
+assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' }, { day: '2026-11-14' }] } }, true), '13/11 08:00');
+assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' }] } }, false), '13/11 08:00');
 
 (async () => {
   const browser = await chromium.launch();
