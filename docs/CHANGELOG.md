@@ -1,3 +1,8 @@
+## 2.6.15 — 09/nov/2026 (cabeçalho do resultado visível)
+
+- A conferência no Chrome identificou que o modal do resultado já mostrava os jogos, mas o cabeçalho fixo do torneio cobria o título e o botão Fechar. A camada do resultado agora fica acima desse cabeçalho.
+- Nenhum sorteio foi repetido nem dado do torneio alterado.
+
 ## 2.6.14 — 09/nov/2026 (modal visível do resultado do sorteio)
 
 - A conferência no Chrome mostrou o sorteio do CAMIS já carregado com 108 jogos e o botão Resultado do sorteio, mas o painel criado por esse botão herdava `opacity: 0` de `.modal-overlay` porque faltava a classe `active`.

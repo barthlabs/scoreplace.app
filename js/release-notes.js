@@ -1,3 +1,5 @@
+// 2.6.15 — O título e o botão Fechar do resultado do sorteio ficam acima
+// do cabeçalho fixo do torneio, visíveis na tela.
 // 2.6.14 — O painel de Resultado do sorteio agora aparece de fato ao abrir:
 // o modal tinha os jogos carregados, mas estava invisível na tela.
 // 2.6.13 — O resultado do sorteio Rei/Rainha aparece ao concluir mesmo quando

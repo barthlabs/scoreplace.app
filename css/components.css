@@ -1857,6 +1857,10 @@ a.compact-row,
   pointer-events: auto;
 }
 
+#published-draw-result-overlay {
+  z-index: calc(var(--z-modal) + 2);
+}
+
 .modal {
   background-color: var(--bg-dark);
   border: 1px solid var(--border-color);
