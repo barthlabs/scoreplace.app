@@ -1373,21 +1373,27 @@ function _bracketOperationsGroup(t, m, allMatches) {
   var days = t && t.scheduleWindow && t.scheduleWindow.days;
   if (!Array.isArray(days) || days.length !== 1) return null;
   var byId = new Map();
-  allMatches.forEach(function (match) { if (match && match.id && !byId.has(String(match.id))) byId.set(String(match.id), match); });
+  allMatches.forEach(function (match) { if (match && match.id != null && !byId.has(String(match.id))) byId.set(String(match.id), match); });
   var rounds = (t.rounds || []).slice();
   Object.keys(t.phaseRounds || {}).forEach(function (key) {
     rounds = rounds.concat((t.phaseRounds[key] || {}).rounds || []);
   });
   for (var ri = 0; ri < rounds.length; ri++) {
-    var groups = rounds[ri] && rounds[ri].monarchGroups || [];
+    var round = rounds[ri];
+    var groups = round && round.monarchGroups || [];
+    var roundById = new Map(byId);
+    (round && round.matches || []).forEach(function (match) {
+      if (match && match.id != null) roundById.set(String(match.id), match);
+    });
     for (var gi = 0; gi < groups.length; gi++) {
       var group = groups[gi];
-      var ids = (group.matches || []).filter(function (match) { return match && match.isMonarch && !match.isTieBreak; })
-        .map(function (match) { return String(match.id || ''); });
+      var ids = Array.isArray(group.matchIds) ? group.matchIds.map(function (id) { return String(id); }) :
+        (group.matches || []).map(function (match) { return match && match.id; })
+          .filter(function (id) { return id != null; }).map(function (id) { return String(id); });
       if (ids.length !== 3 || new Set(ids).size !== 3 || ids.indexOf(String(m.id)) < 0 ||
-          !ids.every(function (id) { return byId.has(id); })) continue;
+          !ids.every(function (id) { var match = roundById.get(id); return match && match.isMonarch && !match.isTieBreak; })) continue;
       return { key: ids.slice().sort().join('|'), name: group.name || m.groupName || ('Grupo ' + String.fromCharCode(65 + gi)),
-        roster: group, matches: ids.map(function (id) { return byId.get(id); }) };
+        roster: group, matches: ids.map(function (id) { return roundById.get(id); }) };
     }
   }
   return null;

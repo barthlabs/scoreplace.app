@@ -494,10 +494,13 @@ assert(start > 0 && end > start);
         isMonarch: true, category: 'Fem Diamante', p1: ['Ana / Bia', 'Ana / Carla', 'Ana / Dora'][i],
         p2: ['Carla / Dora', 'Bia / Dora', 'Bia / Carla'][i],
         scheduledAt: '2026-11-13T11:00:00Z', court: 'Quadra 4' }));
-      t.matches = games;
+      t.matches = [];
       t.scheduleWindow = { days: [{ day: '2026-11-13', startTime: '08:00', endTime: '21:00' }] };
-      t.rounds = [{ monarchGroups: [{ name: 'R1 Grupo A', category: 'Fem Diamante',
-        players: ['Ana', 'Bia', 'Carla', 'Dora'], matches: games }] }];
+      t.rounds = [];
+      t.phaseRounds = { classificatoria: { rounds: [{ matches: games, monarchGroups: [{
+        name: 'R1 Grupo A', category: 'Fem Diamante', players: ['Ana', 'Bia', 'Carla', 'Dora'],
+        matchIds: games.map(game => game.id)
+      }] }] } };
       t._nJogos = 3;
       t.courtNames = ['Quadra 4'];
       window._computeMonarchStandings = group => group.players.map((name, i) => ({ name, wins: 3 - i, pointsFor: 6 - i, pointsAgainst: i }));
@@ -507,6 +510,7 @@ assert(start > 0 && end > start);
       const strip = root._bracketOperationsStrip;
       const read = () => ({ title: strip.querySelector('.sp-operations-next .sp-operations-nav-title')?.textContent,
         match: strip.querySelector('.sp-operations-next [data-operations-match]')?.getAttribute('data-operations-match'),
+        teams: [...strip.querySelectorAll('.sp-operations-next .team span')].map(el => el.textContent),
         canCall: !!strip.querySelector('.sp-operations-next .sp-match-confirm'),
         classification: !!strip.querySelector('.sp-operations-next .sp-operations-standings'),
         players: [...strip.querySelectorAll('.sp-operations-next .sp-operations-standings tbody tr')].map(el => el.textContent) });
@@ -515,8 +519,11 @@ assert(start > 0 && end > start);
         strip.querySelector('.sp-operations-next [data-operations-nav="next"]').click();
         states.push(read());
       }
+      strip.querySelector('.sp-operations-next [data-operations-nav="next"]').click();
+      states.push(read());
       strip.querySelector('.sp-operations-next [data-operations-nav="prev"]').click();
       states.push(read());
+      strip.querySelector('.sp-operations-next [data-operations-nav="prev"]').click();
       window._bracketOperationsRefresh(t, root);
       const survivesRefresh = read().title === 'JOGO 17';
       strip.querySelector('.sp-operations-next [data-operations-action="live"]').click();
@@ -527,13 +534,39 @@ assert(start > 0 && end > start);
       window._bracketOperationsRefresh(t, root);
       const multiDayHasNav = !!strip.querySelector('.sp-operations-next [data-operations-nav]');
       t.scheduleWindow.days.pop();
-      t.rounds[0].monarchGroups[0].matches = games.slice(0, 2);
+      t.phaseRounds.classificatoria.rounds[0].monarchGroups[0].matchIds = games.slice(0, 2).map(game => game.id);
       window._bracketOperationsRefresh(t, root);
       const incompleteHasNav = !!strip.querySelector('.sp-operations-next [data-operations-nav]');
-      return { states, called: window.called, arrows, survivesRefresh, liveMatch, multiDayHasNav, incompleteHasNav };
+      const other = [1, 2, 3].map(n => ({ id: n, isMonarch: true, p1: 'Outro A', p2: 'Outro B' }));
+      const grouped = { ...t, rounds: [{ monarchGroups: [
+        { name: 'Grupo A1', matchIds: [1, '2', 3] },
+        { name: 'Grupo B1', matchIds: games.map(game => game.id) }
+      ] }] };
+      const numeric = _bracketOperationsGroup(grouped, other[0], [...other, ...games]);
+      const distinct = _bracketOperationsGroup(grouped, games[0], [...other, ...games]);
+      const missing = _bracketOperationsGroup({ ...grouped, rounds: [{ monarchGroups: [{ matchIds: [1, 2, 99] }] }] }, other[0], other);
+      const tieBreak = _bracketOperationsGroup(grouped, other[0], [{ ...other[0], isTieBreak: true }, ...other.slice(1), ...games]);
+      const nonMonarch = _bracketOperationsGroup(grouped, other[0], [{ ...other[0], isMonarch: false }, ...other.slice(1), ...games]);
+      const refs = _bracketOperationsGroup({ ...grouped, rounds: [{ monarchGroups: [{ matches: other.map(m => ({ id: m.id })) }] }] }, other[0], other);
+      const stale = other.map(m => ({ ...m, scoreP1: 0 }));
+      const fresh = other.map(m => ({ ...m, scoreP1: 6 }));
+      const roundCanonical = _bracketOperationsGroup({ ...grouped, matches: stale,
+        rounds: [{ matches: fresh, monarchGroups: [{ name: 'Grupo A1', matchIds: [1, 2, 3] }] }] }, stale[0], [...stale, ...fresh]);
+      const onlyRounds = _bracketOperationsGroup({ ...grouped, matches: [],
+        rounds: [{ matches: other, monarchGroups: [{ name: 'Grupo A1', matchIds: [1, 2, 3] }] }] }, other[0], other);
+      const extra = _bracketOperationsGroup({ ...grouped, rounds: [{ monarchGroups: [{ matches: [...other, { id: 4, isTieBreak: true }] }] }] }, other[0], [...other, { id: 4, isTieBreak: true }]);
+      return { states, called: window.called, arrows, survivesRefresh, liveMatch, multiDayHasNav, incompleteHasNav,
+        groupChecks: { numeric: numeric?.name, distinct: distinct?.name, missing: !!missing,
+          tieBreak: !!tieBreak, nonMonarch: !!nonMonarch, refs: refs?.matches.map(m => m.id),
+          canonicalScore: roundCanonical?.matches[0].scoreP1, onlyRounds: onlyRounds?.matches.length, extra: !!extra } };
     });
-    assert.deepEqual(carousel.states.map(item => item.title), ['JOGO 1', 'JOGO 9', 'JOGO 17', 'Grupo A', 'JOGO 17']);
-    assert.deepEqual(carousel.states.map(item => item.match), ['group-1', 'group-9', 'group-17', 'group-1', 'group-17']);
+    assert.deepEqual(carousel.states.map(item => item.title), ['JOGO 1', 'JOGO 9', 'JOGO 17', 'Grupo A', 'JOGO 1', 'Grupo A']);
+    assert.deepEqual(carousel.states.map(item => item.match), ['group-1', 'group-9', 'group-17', 'group-1', 'group-1', 'group-1']);
+    assert.deepEqual(carousel.states.slice(0, 3).map(item => item.teams), [
+      ['Ana / Bia', 'Carla / Dora'], ['Ana / Carla', 'Bia / Dora'], ['Ana / Dora', 'Bia / Carla']
+    ]);
+    assert.deepEqual(carousel.groupChecks, { numeric: 'Grupo A1', distinct: 'Grupo B1', missing: false,
+      tieBreak: false, nonMonarch: false, refs: [1, 2, 3], canonicalScore: 6, onlyRounds: 3, extra: false });
     assert(carousel.states[0].canCall && !carousel.states[1].canCall && !carousel.states[2].canCall,
       'somente o jogo base pode chamar o quarteto à quadra');
     assert(carousel.states[3].classification && carousel.states[3].players.length === 4);
