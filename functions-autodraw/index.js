@@ -5497,7 +5497,7 @@ const _CAMPOS_CONFIG_TORNEIO = new Set([
   'maxParticipants','maxParticipantsPerCategory','maxParticipantsByCategory','autoCloseOnFull','enrollmentLimitMode','targetSlots','callPolicy',
   'resultEntry','woScope','lateEnrollment','newMatchups','venue','venueAccess','venueLat',
   'venueLon','venueAddress','venuePlaceId','venueCity','venueState','venueCountry',
-  'venuePhotoUrl','coverUrl','coverMode','coverColor','coverGradientColor','coverGradientEnabled','coverGradientAngle','coverGradientBalance','titleColor','logoUrl','logoLocked','logoShape','logoRadius','logoAspect','courtCount',
+  'venuePhotoUrl','coverUrl','coverMode','coverColor','coverGradientColor','coverGradientEnabled','coverGradientAngle','coverGradientBalance','coverGradientBlend','titleColor','logoUrl','logoLocked','logoShape','logoRadius','logoAspect','courtCount',
   'courtNames','courtOrder','callTime','warmupTime','gameDuration','scoring','swissRounds',
   'drawFirstDate','drawFirstTime','drawIntervalDays','drawManual','temporada','equilibrado',
   'clusterSize','balanceBy','genderRatio','genderRatioDisabled','wlGroupBalance','ligaNewPlayerScore',
@@ -5694,6 +5694,10 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
   });
   if ('titleColor' in patch && (typeof patch.titleColor !== 'string' || !/^#[0-9a-f]{6}$/i.test(patch.titleColor))) {
     throw new HttpsError('invalid-argument', 'Cor do título inválida.');
+  }
+  if ('coverGradientBlend' in patch && patch.coverGradientBlend !== null &&
+      (typeof patch.coverGradientBlend !== 'number' || !Number.isFinite(patch.coverGradientBlend) || patch.coverGradientBlend < 0 || patch.coverGradientBlend > 100)) {
+    throw new HttpsError('invalid-argument', 'Largura da mistura inválida.');
   }
   // Este handler é definido aqui (não por factory); a criação injeta a mesma função
   // na factory para permitir exercitar o handler real com um banco falso nos testes.

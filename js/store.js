@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.6.15';
+window.SCOREPLACE_VERSION = '2.6.16';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -2516,6 +2516,16 @@ window._formatLabel = function (t) {
     var n = parseInt(hex.slice(1), 16), r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
     return (r * 299 + g * 587 + b * 114) / 1000;
   }
+  window._tournamentGradientStops = function (balanceValue, blendValue) {
+    var balance = Math.max(10, Math.min(90, Number(balanceValue) || 50));
+    if (blendValue == null || blendValue === '') {
+      var oldHalf = Math.min(15, balance, 100 - balance);
+      return [balance - oldHalf, balance + oldHalf];
+    }
+    var width = Math.max(0, Math.min(100, Number(blendValue) || 0));
+    var start = Math.max(0, Math.min(100 - width, balance - width / 2));
+    return [start, start + width];
+  };
   // Fonte canônica de cor/gradiente para cards, detalhe e heróis. Não concatena
   // valor livre do usuário: só hex validado e ângulo limitado entram no style.
   window._tournamentCoverBackground = function (t) {
@@ -2526,10 +2536,10 @@ window._formatLabel = function (t) {
     var angleValue = Number(t.coverGradientAngle);
     var angle = Math.max(0, Math.min(360, t.coverGradientAngle == null || !Number.isFinite(angleValue) ? 135 : angleValue));
     var balance = Math.max(10, Math.min(90, Number(t.coverGradientBalance) || 50));
-    var blendHalf = Math.min(15, balance, 100 - balance);
+    var stops = window._tournamentGradientStops(balance, t.coverGradientBlend);
     var gradient = t.coverGradientEnabled === true;
     return {
-      css: gradient ? 'linear-gradient(' + angle + 'deg, ' + c1 + ' 0%, ' + c1 + ' ' + (balance - blendHalf) + '%, ' + c2 + ' ' + (balance + blendHalf) + '%, ' + c2 + ' 100%)' : c1,
+      css: gradient ? 'linear-gradient(' + angle + 'deg, ' + c1 + ' 0%, ' + c1 + ' ' + stops[0] + '%, ' + c2 + ' ' + stops[1] + '%, ' + c2 + ' 100%)' : c1,
       textColor: ((_coverLuma(c1) + _coverLuma(c2)) / 2) > 158 ? '#111827' : '#f8fafc'
     };
   };

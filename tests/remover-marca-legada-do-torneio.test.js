@@ -38,6 +38,15 @@ ok(gradient && gradient.css.includes('linear-gradient(0deg, #123456') && gradien
 const otherSide = bg && bg({ coverMode: 'color', coverColor: '#123456', coverGradientColor: '#abcdef', coverGradientEnabled: true, coverGradientAngle: 271, coverGradientBalance: 10 });
 ok(otherSide && otherSide.css.includes('#123456 0%') && otherSide.css.includes('#abcdef 20%'),
   'a proporção 10/90 também chega à renderização canônica');
+const wideBlend = bg && bg({ coverMode:'color', coverColor:'#123456', coverGradientColor:'#abcdef', coverGradientEnabled:true, coverGradientAngle:137, coverGradientBalance:50, coverGradientBlend:80 });
+ok(wideBlend && wideBlend.css.includes('#123456 10%') && wideBlend.css.includes('#abcdef 90%'),
+  'largura de 80% expande a mistura sem alterar o ângulo nem a proporção');
+const shiftedBlend = bg && bg({ coverMode:'color', coverColor:'#123456', coverGradientColor:'#abcdef', coverGradientEnabled:true, coverGradientAngle:137, coverGradientBalance:90, coverGradientBlend:80 });
+ok(shiftedBlend && shiftedBlend.css.includes('#123456 20%') && shiftedBlend.css.includes('#abcdef 100%'),
+  'a faixa mantém 80% de largura quando a proporção encosta na borda');
+const sharpBlend = bg && bg({ coverMode:'color', coverColor:'#123456', coverGradientColor:'#abcdef', coverGradientEnabled:true, coverGradientBalance:50, coverGradientBlend:0 });
+ok(sharpBlend && sharpBlend.css.includes('#123456 50%') && sharpBlend.css.includes('#abcdef 50%'),
+  'largura zero produz separação nítida');
 ok(/coverPhotoData:[\s\S]*?coverMode:[\s\S]*?coverColor:[\s\S]*?coverGradientColor:[\s\S]*?coverGradientEnabled:[\s\S]*?coverGradientAngle:/.test(organizer),
   'clonar torneio preserva foto ou cor/gradiente, não só o logo');
 const creator = fs.readFileSync('js/views/create-tournament.js', 'utf8');

@@ -1,3 +1,6 @@
+// 2.6.16 — O resultado do sorteio mostra as duplas lado a lado, com cada
+// atleta em sua linha, também na arte PNG. A personalização do fundo ganha
+// controle separado para a largura da mistura do gradiente.
 // 2.6.15 — O título e o botão Fechar do resultado do sorteio ficam acima
 // do cabeçalho fixo do torneio, visíveis na tela.
 // 2.6.14 — O painel de Resultado do sorteio agora aparece de fato ao abrir:

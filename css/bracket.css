@@ -680,3 +680,19 @@ summary::-webkit-details-marker { display: none; }
 .sp-bracket-header-filter[aria-pressed="true"] { border-color:var(--sp-c-fbbf24); background:var(--bg-card-hover); color:var(--sp-c-fbbf24); }
 .sp-bracket-header-filter:focus-visible { outline:2px solid #60a5fa; outline-offset:2px; }
 @media (max-width:600px) { .sp-bracket-header-filters { gap:3px; } .sp-bracket-header-filter { min-height:44px; padding:6px 5px; font-size:.63rem; white-space:normal; max-width:72px; } }
+/* Resultado do sorteio: cada dupla mantém seus dois nomes em coluna. */
+.sp-draw-result-match {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 12px minmax(0, 1fr);
+  gap: 7px;
+  align-items: start;
+  padding: 7px 0;
+  border-top: 1px solid var(--border-color);
+  color: var(--text-main);
+  font-size: .78rem;
+  line-height: 1.3;
+}
+.sp-draw-game { color: var(--sp-c-38bdf8, #38bdf8); font-weight: 700; }
+.sp-draw-versus { color: var(--text-muted); text-align: center; }
+.sp-draw-side { display: grid; gap: 3px; min-width: 0; }
+.sp-draw-player { overflow-wrap: anywhere; }

@@ -72,6 +72,10 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
       catch (error) { fail('invalid-argument', error.message); }
     });
     checkNested(config, fail);
+    if ('coverGradientBlend' in config && config.coverGradientBlend !== null &&
+        (typeof config.coverGradientBlend !== 'number' || !Number.isFinite(config.coverGradientBlend) || config.coverGradientBlend < 0 || config.coverGradientBlend > 100)) {
+      fail('invalid-argument', 'Largura da mistura inválida.');
+    }
     require('./category-window-core').validate(config, HttpsError);
     if ('membersOnly' in config || 'organizerOnly' in config) {
       if (typeof config.isPublic !== 'boolean' || typeof config.membersOnly !== 'boolean' || typeof config.organizerOnly !== 'boolean'

@@ -7097,11 +7097,12 @@ window._initialDrawResultModel = function (pd) {
     var categoryName = String(m.category || forcedCategory || 'Sem categoria');
     var category = categoryByName[categoryName];
     if (!category) { category = { name:categoryName, groups:[], extras:[] }; categoryByName[categoryName] = category; categories.push(category); }
-    function side(number) {
+    function sidePlayers(number) {
       var pair = m['team' + number];
-      if (Array.isArray(pair) && pair.length) return pair.filter(Boolean).join(' + ');
-      return nameByTeam[String(m['p' + number + 'CompetitionTeamId'] || '')] || m['p' + number] || 'A definir';
+      if (Array.isArray(pair) && pair.length) return pair.filter(Boolean).map(String);
+      return [nameByTeam[String(m['p' + number + 'CompetitionTeamId'] || '')] || m['p' + number] || 'A definir'];
     }
+    function side(number) { return sidePlayers(number).join(' + '); }
     if (m.isBye || m.isSitOut) { category.extras.push({ label:m.isSitOut ? 'Folga' : 'Avanço', name:side(1) }); return; }
     var round = Number(m.round || forcedRound) || 1;
     var labelGroup = String(m.label || '').split(' • Jogo ')[0].replace(/^R\d+\s+/, '');
@@ -7113,7 +7114,9 @@ window._initialDrawResultModel = function (pd) {
     var group = category.groups.find(function (g) { return g.key === key; });
     if (!group) { group = { key:key, name:String(groupId || 'Grupo'), round:round, matches:[] }; category.groups.push(group); }
     var labelNumber = /(?:^|\s)Jogo\s+(\d+)/i.exec(String(m.label || ''));
-    group.matches.push({ id:String(m.id || ''), number:labelNumber ? Number(labelNumber[1]) : group.matches.length + 1, one:side(1), two:side(2) });
+    var onePlayers = sidePlayers(1), twoPlayers = sidePlayers(2);
+    group.matches.push({ id:String(m.id || ''), number:labelNumber ? Number(labelNumber[1]) : group.matches.length + 1,
+      one:onePlayers.join(' + '), two:twoPlayers.join(' + '), onePlayers:onePlayers, twoPlayers:twoPlayers });
   }
   games.forEach(function (m) { addMatch(m); });
   rounds.forEach(function (round, ri) {
@@ -7129,7 +7132,7 @@ window._initialDrawResultModel = function (pd) {
           var key = String(round.round || ri + 1) + '|' + String(g.name || 'Grupo');
           var group = cat.groups.find(function (item) { return item.key === key; });
           if (!group) { group = { key:key, name:String(g.name || 'Grupo'), round:Number(round.round || ri + 1), matches:[] }; cat.groups.push(group); }
-          group.matches.push({ id:'', number:group.matches.length + 1, one:'Jogo não encontrado', two:'' });
+          group.matches.push({ id:'', number:group.matches.length + 1, one:'Jogo não encontrado', two:'', onePlayers:['Jogo não encontrado'], twoPlayers:[''] });
         }
       });
     });
@@ -7165,6 +7168,7 @@ window._downloadInitialDrawArt = function (t, pd, categoryIndex, pageIndex) {
   var canvas = document.createElement('canvas'), ctx = canvas.getContext('2d');
   if (!ctx) return false;
   var width = 1500, margin = 48, gap = 20, cardWidth = (width - 2 * margin - gap) / 2, line = 30;
+  var sideWidth = (cardWidth - 104) / 2;
   ctx.font = '24px Arial, sans-serif';
   function lines(value, maxWidth) {
     var words = String(value || '').split(/\s+/), out = [], current = '';
@@ -7178,9 +7182,12 @@ window._downloadInitialDrawArt = function (t, pd, categoryIndex, pageIndex) {
   }
   var blocks = pageGroups.map(function (g) {
     var rows = g.matches.map(function (m, i) {
-      return { label:'J' + (i + 1), one:lines(m.one, cardWidth - 150), two:lines('× ' + m.two, cardWidth - 150) };
+      var one = (m.onePlayers || [m.one]).map(function (name) { return lines(name, sideWidth - 8); });
+      var two = (m.twoPlayers || [m.two]).map(function (name) { return lines(name, sideWidth - 8); });
+      var rowLines = Math.max(2, one.reduce(function (n, parts) { return n + parts.length; }, 0), two.reduce(function (n, parts) { return n + parts.length; }, 0));
+      return { label:'J' + (m.number || i + 1), one:one, two:two, height:rowLines * line + 12 };
     });
-    var height = 74 + rows.reduce(function (sum, row) { return sum + 12 + (row.one.length + row.two.length) * line; }, 0) + 14;
+    var height = 74 + rows.reduce(function (sum, row) { return sum + row.height; }, 0) + 14;
     return { group:g, rows:rows, height:height };
   });
   canvas.width = width;
@@ -7201,8 +7208,16 @@ window._downloadInitialDrawArt = function (t, pd, categoryIndex, pageIndex) {
     block.rows.forEach(function (match) {
       ctx.fillStyle = '#fbbf24'; ctx.font = 'bold 21px Arial, sans-serif'; ctx.fillText(match.label, x + 20, rowY + 23);
       ctx.fillStyle = '#fff'; ctx.font = '23px Arial, sans-serif';
-      match.one.concat(match.two).forEach(function (part) { ctx.fillText(part, x + 90, rowY + 23, cardWidth - 112); rowY += line; });
-      rowY += 12;
+      ctx.fillText('×', x + 70 + sideWidth + 1, rowY + 23, 16);
+      match.one.forEach(function (player, pi) { player.forEach(function (part, li) {
+        var before = match.one.slice(0, pi).reduce(function (n, lines) { return n + lines.length; }, 0);
+        ctx.fillText(part, x + 70, rowY + 23 + (before + li) * line, sideWidth - 8);
+      }); });
+      match.two.forEach(function (player, pi) { player.forEach(function (part, li) {
+        var before = match.two.slice(0, pi).reduce(function (n, lines) { return n + lines.length; }, 0);
+        ctx.fillText(part, x + 82 + sideWidth, rowY + 23 + (before + li) * line, sideWidth - 8);
+      }); });
+      rowY += match.height;
     });
   });
   y = 170 + rowHeights.reduce(function (sum, h) { return sum + h + gap; }, 0);
@@ -7238,7 +7253,7 @@ window._renderPendingDrawPreview = function (t) {
     var model = window._initialDrawResultModel(pd);
     if (!model.gameCount) return '<div style="color:var(--text-muted);font-size:0.8rem;">(rascunho sem jogos)</div>';
     var initialHtml = '<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:8px;">' +
-      esc(String(model.teamCount)) + ' times · ' + esc(String(model.gameCount)) + ' jogos</div>';
+      (model.teamCount ? esc(String(model.teamCount)) + ' times · ' : '') + esc(String(model.gameCount)) + ' jogos</div>';
     model.categories.forEach(function (category, index) {
       initialHtml += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin:14px 0 6px;flex-wrap:wrap;"><strong style="color:var(--sp-c-22d3ee,#22d3ee);">' + esc(category.name) + '</strong><span style="display:flex;gap:6px;flex-wrap:wrap;">';
       var pageCount = Math.max(1, Math.ceil(category.groups.length / 4));
@@ -7247,7 +7262,11 @@ window._renderPendingDrawPreview = function (t) {
       category.groups.forEach(function (group) {
         initialHtml += '<div style="background:rgba(255,255,255,.05);border:1px solid rgba(125,211,252,.25);border-radius:8px;padding:8px 10px;margin-bottom:7px;"><strong style="font-size:.82rem;color:var(--sp-c-e2e8f0,#e2e8f0);">' + esc(group.name) + '</strong>';
         group.matches.forEach(function (m, i) {
-          initialHtml += '<div style="display:grid;grid-template-columns:56px 1fr;gap:8px;font-size:.78rem;color:var(--text-main);padding:3px 0;border-top:1px solid rgba(255,255,255,.07);"><span style="color:var(--sp-c-38bdf8,#38bdf8);">J' + (i + 1) + '</span><span>' + esc(m.one) + ' <span style="opacity:.6">×</span> ' + esc(m.two) + '</span></div>';
+          function playersHtml(names) { return names.map(function (name) { return '<span class="sp-draw-player">' + esc(name) + '</span>'; }).join(''); }
+          initialHtml += '<div class="sp-draw-result-match"><span class="sp-draw-game">J' + (m.number || i + 1) + '</span>' +
+            '<span class="sp-draw-side">' + playersHtml(m.onePlayers || [m.one]) + '</span>' +
+            '<span class="sp-draw-versus">×</span>' +
+            '<span class="sp-draw-side">' + playersHtml(m.twoPlayers || [m.two]) + '</span></div>';
         });
         initialHtml += '</div>';
       });

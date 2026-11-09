@@ -496,7 +496,7 @@ function setupCreateTournamentModal() {
                   </div>
                   <div style="display:grid;grid-template-columns:minmax(172px,1fr) minmax(172px,1fr);gap:18px;align-items:start;max-width:520px;">
                     <div style="display:grid;justify-items:center;gap:7px;"><strong style="font-size:.76rem;">Roda de cores</strong><button type="button" id="cover-hue-wheel" aria-label="Escolher matiz na roda de cores: clique ou arraste" onpointerdown="window._pickCoverHue(event)" style="width:142px;height:142px;border-radius:50%;border:3px solid #e2e8f0;background:conic-gradient(#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00);box-shadow:inset 0 0 0 28px rgba(15,23,42,.96),0 3px 14px rgba(0,0,0,.3);cursor:crosshair;position:relative;touch-action:none;user-select:none;"><span id="cover-hue-wheel-marker" aria-hidden="true" style="position:absolute;left:calc(50% - 6px);top:2px;width:12px;height:12px;border:2px solid white;border-radius:50%;box-shadow:0 0 0 1px #111;"></span></button><span id="cover-hue-wheel-value" style="font-size:.75rem;color:var(--text-muted);">Matiz 215°</span></div>
-                    <div style="display:grid;justify-items:center;gap:7px;"><strong style="font-size:.76rem;">Direção e proporção do gradiente</strong><button type="button" id="cover-angle-wheel" aria-label="Arraste ao redor para mudar o ângulo e para dentro ou fora para ajustar a proporção das cores" onpointerdown="window._pickCoverAngle(event)" style="width:142px;height:142px;border-radius:50%;border:3px solid #818cf8;box-shadow:0 3px 14px rgba(0,0,0,.3);cursor:crosshair;position:relative;touch-action:none;user-select:none;overflow:hidden;"><span id="cover-angle-wheel-axis" aria-hidden="true" style="position:absolute;left:calc(50% - 2px);bottom:50%;width:4px;height:36px;background:white;border-radius:4px;transform-origin:bottom center;box-shadow:0 0 0 1px #111;"></span><span id="cover-angle-wheel-marker" aria-hidden="true" style="position:absolute;width:14px;height:14px;background:white;border:2px solid #111;border-radius:50%;box-shadow:0 0 0 1px white;"></span><span style="position:absolute;left:calc(50% - 23px);top:calc(50% - 13px);width:46px;height:26px;display:grid;place-items:center;border-radius:12px;background:#172554;color:#fff;font-weight:900;font-size:.72rem;font-variant-numeric:tabular-nums;"><span id="tourn-cover-angle-value">135°</span></span></button><label style="font-size:.74rem;color:var(--text-muted);">Ângulo <input type="number" id="tourn-cover-gradient-angle-number" min="0" max="360" value="135" oninput="window._syncCoverAngle(this.value)" style="width:65px;padding:5px 7px;border-radius:7px;background:#0f172a;color:var(--text-bright);border:1px solid #475569;"></label><label style="font-size:.74rem;color:var(--text-muted);">Cor 1 <input type="range" id="tourn-cover-gradient-balance" min="10" max="90" value="50" oninput="window._syncCoverBalance(this.value)" style="width:110px;vertical-align:middle;accent-color:#818cf8;"> <span id="tourn-cover-balance-value">50% / 50%</span></label><input type="hidden" id="tourn-cover-gradient-angle" value="135"></div>
+                    <div style="display:grid;justify-items:center;gap:7px;"><strong style="font-size:.76rem;">Direção e mistura do gradiente</strong><button type="button" id="cover-angle-wheel" aria-label="Arraste ao redor para mudar o ângulo e para dentro ou fora para ajustar a proporção das cores" onpointerdown="window._pickCoverAngle(event)" style="width:142px;height:142px;border-radius:50%;border:3px solid #818cf8;box-shadow:0 3px 14px rgba(0,0,0,.3);cursor:crosshair;position:relative;touch-action:none;user-select:none;overflow:hidden;"><span id="cover-angle-wheel-axis" aria-hidden="true" style="position:absolute;left:calc(50% - 2px);bottom:50%;width:4px;height:36px;background:white;border-radius:4px;transform-origin:bottom center;box-shadow:0 0 0 1px #111;"></span><span id="cover-angle-wheel-marker" aria-hidden="true" style="position:absolute;width:14px;height:14px;background:white;border:2px solid #111;border-radius:50%;box-shadow:0 0 0 1px white;"></span><span style="position:absolute;left:calc(50% - 23px);top:calc(50% - 13px);width:46px;height:26px;display:grid;place-items:center;border-radius:12px;background:#172554;color:#fff;font-weight:900;font-size:.72rem;font-variant-numeric:tabular-nums;"><span id="tourn-cover-angle-value">135°</span></span></button><label style="font-size:.74rem;color:var(--text-muted);">Ângulo <input type="number" id="tourn-cover-gradient-angle-number" min="0" max="360" value="135" oninput="window._syncCoverAngle(this.value)" style="width:65px;padding:5px 7px;border-radius:7px;background:#0f172a;color:var(--text-bright);border:1px solid #475569;"></label><label style="font-size:.74rem;color:var(--text-muted);">Proporção <input type="range" id="tourn-cover-gradient-balance" min="10" max="90" value="50" oninput="window._syncCoverBalance(this.value)" style="width:110px;vertical-align:middle;accent-color:#818cf8;"> <span id="tourn-cover-balance-value">50% / 50%</span></label><label style="font-size:.74rem;color:var(--text-muted);">Largura da mistura <input type="range" id="tourn-cover-gradient-blend" min="0" max="100" value="30" data-explicit="1" oninput="window._syncCoverBlend(this.value)" style="width:110px;vertical-align:middle;accent-color:#818cf8;"> <span id="tourn-cover-blend-value">30%</span></label><input type="hidden" id="tourn-cover-gradient-angle" value="135"></div>
                   </div>
                   <div style="display:grid;grid-template-columns:repeat(2,minmax(130px,1fr));gap:8px;margin-top:.85rem;max-width:520px;">
                     <label style="font-size:.72rem;color:var(--text-muted);">Saturação <input type="range" id="tourn-cover-saturation" min="0" max="100" value="27" oninput="window._syncCoverColorFromHsl()" style="width:100%;accent-color:#818cf8;"></label>
@@ -2808,6 +2808,18 @@ function setupCreateTournamentModal() {
     _setCoverWheelMarker('cover-angle-wheel-marker', Number((document.getElementById('tourn-cover-gradient-angle') || {}).value) || 0);
     window._refreshCoverPreview();
   };
+  window._syncCoverBlend = function(value, explicit) {
+    var n = Math.max(0, Math.min(100, Number(value) || 0));
+    var input = document.getElementById('tourn-cover-gradient-blend');
+    var label = document.getElementById('tourn-cover-blend-value');
+    if (input) { input.value = n; input.dataset.explicit = explicit === false ? '0' : '1'; }
+    if (label) label.textContent = n + '%';
+    window._refreshCoverPreview();
+  };
+  window._coverBlendValue = function() {
+    var input = document.getElementById('tourn-cover-gradient-blend');
+    return input && input.dataset.explicit !== '0' ? Math.max(0, Math.min(100, Number(input.value) || 0)) : null;
+  };
   window._syncCoverAngle = function(value) {
     var n = Math.max(0, Math.min(360, parseInt(value, 10) || 0));
     var range = document.getElementById('tourn-cover-gradient-angle'), number = document.getElementById('tourn-cover-gradient-angle-number'), label = document.getElementById('tourn-cover-angle-value');
@@ -2843,8 +2855,8 @@ function setupCreateTournamentModal() {
     var balance = Math.max(10, Math.min(90, Number((document.getElementById('tourn-cover-gradient-balance') || {}).value) || 50));
     if (!_coverHexOk(c1)) c1 = '#1f2937'; if (!_coverHexOk(c2)) c2 = '#0f172a';
     var photo = (document.getElementById('tourn-cover-data') || {}).value || '';
-    var blendHalf = Math.min(15, balance, 100 - balance);
-    var gradient = 'linear-gradient(' + angle + 'deg, ' + c1 + ' 0%, ' + c1 + ' ' + (balance - blendHalf) + '%, ' + c2 + ' ' + (balance + blendHalf) + '%, ' + c2 + ' 100%)';
+    var stops = window._tournamentGradientStops ? window._tournamentGradientStops(balance, window._coverBlendValue()) : [balance - 15, balance + 15];
+    var gradient = 'linear-gradient(' + angle + 'deg, ' + c1 + ' 0%, ' + c1 + ' ' + stops[0] + '%, ' + c2 + ' ' + stops[1] + '%, ' + c2 + ' 100%)';
     prev.style.backgroundImage = (mode === 'photo' && photo) ? 'url(' + photo + ')' : (grad ? gradient : 'none');
     var wheel = document.getElementById('cover-angle-wheel');
     if (wheel) wheel.style.background = gradient;
@@ -5745,6 +5757,7 @@ function setupCreateTournamentModal() {
         if (typeof window._syncCoverColorFromPicker === 'function') window._syncCoverColorFromPicker();
         if (typeof window._syncCoverAngle === 'function') window._syncCoverAngle(t.coverGradientAngle != null ? t.coverGradientAngle : 135);
         if (typeof window._syncCoverBalance === 'function') window._syncCoverBalance(t.coverGradientBalance != null ? t.coverGradientBalance : 50);
+        if (typeof window._syncCoverBlend === 'function') window._syncCoverBlend(t.coverGradientBlend != null ? t.coverGradientBlend : 30, t.coverGradientBlend != null);
         var hasCoverPhoto = window._tourUsesCoverPhoto ? window._tourUsesCoverPhoto(t) : !!window._tourCoverSrc(t);
         window._applyCoverPhoto(hasCoverPhoto ? (window._tourCoverSrc(t) || '') : '');
         if (!hasCoverPhoto && typeof window._setCoverMode === 'function') window._setCoverMode('color');
@@ -6590,6 +6603,7 @@ window._saveTournamentClickHandler = async function() {
         const coverAngleInput = Number((document.getElementById('tourn-cover-gradient-angle') || {}).value);
         const coverGradientAngleVal = Math.max(0, Math.min(360, Number.isFinite(coverAngleInput) ? coverAngleInput : 135));
         const coverGradientBalanceVal = Math.max(10, Math.min(90, Number((document.getElementById('tourn-cover-gradient-balance') || {}).value) || 50));
+        const coverGradientBlendVal = window._coverBlendValue();
         const logoDataVal = document.getElementById('tourn-logo-data').value || '';
         const logoLockedVal = document.getElementById('tourn-logo-locked').value === '1';
         const logoShapeVal = (document.getElementById('tourn-logo-shape') || {}).value === 'circle' ? 'circle' : 'square';
@@ -6712,6 +6726,7 @@ window._saveTournamentClickHandler = async function() {
           coverGradientEnabled: coverGradientEnabledVal,
           coverGradientAngle: coverGradientAngleVal,
           coverGradientBalance: coverGradientBalanceVal,
+          coverGradientBlend: coverGradientBlendVal,
           logoData: logoDataVal,
           logoLocked: logoLockedVal,
           logoShape: logoShapeVal,
@@ -8423,6 +8438,7 @@ window._prefillFromTemplate = function(tpl) {
     if (typeof window._syncCoverColorFromPicker === 'function') window._syncCoverColorFromPicker();
     if (typeof window._syncCoverAngle === 'function') window._syncCoverAngle(tpl.coverGradientAngle != null ? tpl.coverGradientAngle : 135);
     if (typeof window._syncCoverBalance === 'function') window._syncCoverBalance(tpl.coverGradientBalance != null ? tpl.coverGradientBalance : 50);
+    if (typeof window._syncCoverBlend === 'function') window._syncCoverBlend(tpl.coverGradientBlend != null ? tpl.coverGradientBlend : 30, tpl.coverGradientBlend != null);
     window._applyCoverPhoto(tpl.coverPhotoData || '');
     if (!tpl.coverPhotoData && typeof window._setCoverMode === 'function') window._setCoverMode('color');
   }
@@ -8973,6 +8989,7 @@ window._saveCurrentFormAsTemplate = function(saveButton) {
       coverGradientEnabled: getChecked('tourn-cover-gradient-enabled'),
       coverGradientAngle: Number.isFinite(Number(get('tourn-cover-gradient-angle'))) ? Math.max(0, Math.min(360, Number(get('tourn-cover-gradient-angle')))) : 135,
       coverGradientBalance: Math.max(10, Math.min(90, Number(get('tourn-cover-gradient-balance')) || 50)),
+      coverGradientBlend: window._coverBlendValue(),
       logoData: get('tourn-logo-data') || '',
       logoLocked: get('tourn-logo-locked') === '1',
       logoShape: get('tourn-logo-shape') === 'circle' ? 'circle' : 'square',
