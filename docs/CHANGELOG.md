@@ -2,6 +2,7 @@
 
 - O resultado do sorteio apresenta cada dupla em coluna, com um atleta por linha e adversárias à direita. A arte PNG usa a mesma disposição.
 - A personalização ganhou uma barra para a largura da mistura, independente da proporção e do ângulo. A prévia, os cards, o detalhe, os templates e a edição usam o mesmo valor. Torneios antigos sem esse campo mantêm a faixa anterior.
+- O salvamento de modelos continua disponível mesmo quando o editor visual ainda não foi montado.
 - A configuração aceita o novo campo no backend; nenhum sorteio ou dado existente foi alterado por este corte.
 
 ## 2.6.15 — 09/nov/2026 (cabeçalho do resultado visível)
