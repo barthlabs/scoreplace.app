@@ -1,5 +1,6 @@
 // 2.6.27 — O PDF completo do sorteio baixa mesmo quando o logo falha, avisa
-// sobre erros e permite repetir o download. O logo remoto voltou a carregar.
+// sobre erros e permite repetir o download. O logo remoto voltou a carregar
+// e o arquivo atualizado chega ao navegador com o novo cache buster.
 // 2.6.26 — O resultado do sorteio inteiro sai em um PDF, com as cores do
 // torneio e confrontos legíveis: duplas separadas pelo × e alinhadas nas bordas.
 // 2.6.25 — O foco do próximo jogo ajusta o espaçamento do card quando a
