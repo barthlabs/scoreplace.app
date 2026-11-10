@@ -71,6 +71,14 @@ assert(calls.some(c => c[0] === 'text' && String(c[1]).includes('atleta 3d')));
 assert(calls.some(c => c[0] === 'gradient' && c[2] !== '#071322'), 'a arte usa a cor do torneio');
 assert(calls.some(c => c[0] === 'gradient' && c[2] === '#3e110b'), 'o fundo deriva da cor do torneio sem azul padrão');
 assert.strictEqual(calls.filter(c => c[0] === 'logo').length, 3, 'o logo transparente aparece em todas as páginas sem moldura');
+assert(calls.filter(c => c[0] === 'logo').every(c => c[4] > 82 && Math.abs(c[2] + c[4] - 1452) < .01 && c[3] >= 0 && c[3] + c[5] <= 170),
+  'logo maior, na direita dos cards e dentro do cabeçalho em todas as páginas');
+const headerTitle = calls.find(c => c[0] === 'text' && c[1] === 'Camis no Beyond');
+const headerResult = calls.find(c => c[0] === 'text' && String(c[1]).startsWith('RESULTADO DO SORTEIO'));
+assert(headerTitle && headerResult && headerTitle[2] === 48 && headerResult[2] === 48,
+  'título e resultado permanecem alinhados à esquerda');
+assert([headerTitle, headerResult].every(c => c[2] + c[4] <= 1320 - 28),
+  'o texto do cabeçalho reserva espaço para o logo maior');
 const athlete1a = calls.find(c => c[0] === 'text' && String(c[1]).includes('atleta 1a'));
 const athlete1b = calls.find(c => c[0] === 'text' && String(c[1]).includes('atleta 1b'));
 const athlete1c = calls.find(c => c[0] === 'text' && String(c[1]).includes('atleta 1c'));

@@ -7212,18 +7212,20 @@ window._initialDrawPdfPage = function (t, category, pageGroups, extras, pageNumb
   var titleColor = hex(t.titleColor, '#ffffff');
   if (luminance(titleColor) < .35) titleColor = '#ffffff';
   var accent = hex(t.brandColor, mix(cover, '#ffffff', .68));
+  var headerTextWidth = width - 2 * margin;
   if (logo) {
     var logoWidth = Number(logo.naturalWidth || logo.width) || 1;
     var logoHeight = Number(logo.naturalHeight || logo.height) || 1;
-    var logoScale = Math.min(82 / logoWidth, 82 / logoHeight);
-    ctx.drawImage(logo, margin + (82 - logoWidth * logoScale) / 2, 18 + (82 - logoHeight * logoScale) / 2,
-      logoWidth * logoScale, logoHeight * logoScale);
+    var logoScale = Math.min(132 / logoWidth, 132 / logoHeight);
+    var drawnWidth = logoWidth * logoScale, drawnHeight = logoHeight * logoScale;
+    var logoX = width - margin - drawnWidth;
+    ctx.drawImage(logo, logoX, (170 - drawnHeight) / 2, drawnWidth, drawnHeight);
+    headerTextWidth = logoX - margin - 28;
   }
-  var titleX = logo ? margin + 100 : margin;
   ctx.fillStyle = titleColor; ctx.font = 'bold 38px Arial, sans-serif';
-  ctx.fillText(t.name || t.title || 'Torneio', titleX, logo ? 67 : 56, width - margin - titleX);
+  ctx.fillText(t.name || t.title || 'Torneio', margin, 61, headerTextWidth);
   ctx.fillStyle = accent; ctx.font = 'bold 30px Arial, sans-serif';
-  ctx.fillText('RESULTADO DO SORTEIO · ' + category.name, margin, 135, width - 2 * margin);
+  ctx.fillText('RESULTADO DO SORTEIO · ' + category.name, margin, 135, headerTextWidth);
   var y = 170;
   blocks.forEach(function (block, index) {
     var row = Math.floor(index / 2), x = margin + (index % 2) * (cardWidth + gap);
