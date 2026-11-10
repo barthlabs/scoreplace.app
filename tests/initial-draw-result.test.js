@@ -12,18 +12,35 @@ assert(start >= 0 && end > start && endPublished > end);
 const calls = [];
 const context2d = {
   font:'', fillStyle:'', fillRect(...args) { calls.push(['rect', ...args]); },
-  fillText(...args) { calls.push(['text', ...args]); },
-  measureText(value) { return { width:String(value).length * 11 }; }
+  fillText(...args) { calls.push(['text', ...args, this.textAlign, this.fillStyle]); },
+  drawImage(...args) { calls.push(['logo', ...args]); },
+  measureText(value) { return { width:String(value).length * 11 }; },
+  createLinearGradient() { return { addColorStop(stop, color) { calls.push(['gradient', stop, color]); } }; }
 };
 let downloaded = false;
-const canvas = { width:0, height:0, getContext() { return context2d; }, toDataURL() { return 'data:image/png;base64,AAAA'; } };
+const canvases = [];
+function makeCanvas() {
+  const canvas = { width:0, height:0, getContext() { return context2d; },
+    toDataURL() { return 'data:image/jpeg;base64,AAAA'; } };
+  canvases.push(canvas);
+  return canvas;
+}
 const link = { click() { downloaded = true; }, remove() {} };
-const window = { _groupName(index) { return 'Grupo ' + String.fromCharCode(65 + index); } };
-const sandbox = { window, document:{ createElement(tag) { return tag === 'canvas' ? canvas : link; }, body:{ appendChild() {} } } };
+const window = { _groupName(index) { return 'Grupo ' + String.fromCharCode(65 + index); },
+  _tourLogoSrc(t) { return t.logoUrl || t.logoData || ''; } };
+class FakeImage {
+  constructor() { this.naturalWidth = 100; this.naturalHeight = 50; }
+  set src(value) { this.source = value; this.onload(); }
+}
+let pdfBlob;
+const sandbox = { window, Blob, TextEncoder, Uint8Array, atob, Image:FakeImage, setTimeout() {},
+  URL:{ createObjectURL(blob) { pdfBlob = blob; return 'blob:pdf'; }, revokeObjectURL() {} },
+  document:{ createElement(tag) { return tag === 'canvas' ? makeCanvas() : link; }, body:{ appendChild() {} } } };
 vm.createContext(sandbox);
 vm.runInContext(source.slice(start, end), sandbox);
 vm.runInContext(source.slice(end, endPublished), sandbox);
 
+(async function () {
 const draft = { draft:{ matches:[] } };
 for (const [category, group] of [['Fem Diamante', 'A'], ['Fem Ouro', 'A'], ['Fem Prata', 'A']]) {
   for (const n of [3, 1, 2]) draft.draft.matches.push({
@@ -40,17 +57,30 @@ assert.deepStrictEqual(Array.from(model.categories, c => c.groups[0].name), ['Gr
 assert.deepStrictEqual(Array.from(model.categories[0].groups[0].matches, m => m.number), [1, 2, 3]);
 assert.deepStrictEqual(Array.from(model.categories[0].groups[0].matches[0].onePlayers), ['Fem Diamante atleta 1a', 'Fem Diamante atleta 1b']);
 assert.deepStrictEqual(Array.from(model.categories[0].groups[0].matches[0].twoPlayers), ['Fem Diamante atleta 1c', 'Fem Diamante atleta 1d']);
-assert.strictEqual(window._downloadInitialDrawArt({ name:'Camis no Beyond' }, draft, 0), true);
+assert.strictEqual(await window._downloadInitialDrawPdf({ name:'Camis no Beyond', coverColor:'#ab301e', coverGradientColor:'#f2d7cb', coverGradientEnabled:true,
+  logoData:'data:image/png;base64,AAAA' }, draft), true);
 assert(downloaded);
-assert.strictEqual(link.download, 'resultado-sorteio-fem-diamante.png');
-assert(canvas.width === 1500 && canvas.height > 500);
+assert.strictEqual(link.download, 'resultado-sorteio-camis-no-beyond.pdf');
+assert.strictEqual(pdfBlob.type, 'application/pdf');
+assert.strictEqual(canvases.length, 3, 'as três categorias entram no mesmo PDF');
+assert(canvases.every(c => c.width === 1500 && c.height > 500));
 assert(calls.some(c => c[0] === 'text' && c[1] === 'Grupo A1'));
 assert(calls.some(c => c[0] === 'text' && String(c[1]).includes('atleta 3d')));
+assert(calls.some(c => c[0] === 'gradient' && c[2] !== '#071322'), 'a arte usa a cor do torneio');
+assert(calls.some(c => c[0] === 'gradient' && c[2] === '#3e110b'), 'o fundo deriva da cor do torneio sem azul padrão');
+assert.strictEqual(calls.filter(c => c[0] === 'logo').length, 3, 'o logo transparente aparece em todas as páginas sem moldura');
 const athlete1a = calls.find(c => c[0] === 'text' && String(c[1]).includes('atleta 1a'));
 const athlete1b = calls.find(c => c[0] === 'text' && String(c[1]).includes('atleta 1b'));
 const athlete1c = calls.find(c => c[0] === 'text' && String(c[1]).includes('atleta 1c'));
 assert(athlete1a && athlete1b && athlete1c && athlete1b[3] > athlete1a[3] && athlete1c[2] > athlete1a[2], 'arte: parceira abaixo e adversárias à direita');
+assert.strictEqual(athlete1c[2] - athlete1a[2], 600, 'a coluna da direita fica afastada do ×');
+assert.strictEqual(athlete1c[5], 'right', 'nomes da direita alinhados à borda direita do card');
 assert(!calls.some(c => c[0] === 'text' && String(c[1]).includes('placar')));
+calls.length = 0;
+window._initialDrawPdfPage({ name:'Camis no Beyond', coverColor:'#000000', coverGradientColor:'#242424',
+  coverGradientEnabled:true, titleColor:'#FBFBFB', brandColor:'#FFBD4C' }, model.categories[0], model.categories[0].groups, [], 1, 1, null);
+assert(calls.some(c => c[0] === 'text' && c[1] === 'Grupo A1' && c[5] === '#FFBD4C'), 'os destaques usam o amarelo C6 do torneio');
+assert(calls.some(c => c[0] === 'gradient' && c[2] === '#000000'), 'o fundo C6 começa em preto');
 const published = window._publishedInitialDrawData({ matches:draft.draft.matches, competitionTeams:[] });
 assert(published && published.draft.matches.length === 9);
 let visibleResult;
@@ -70,7 +100,8 @@ const publishedHtml = window._renderPendingDrawPreview({ id:'published:camis', p
 assert(publishedHtml.includes('Grupo A1') && publishedHtml.includes('Grupo A2') && publishedHtml.includes('Grupo A3'));
 assert(publishedHtml.includes('<span class="sp-draw-player">Fem Diamante atleta 1a</span><span class="sp-draw-player">Fem Diamante atleta 1b</span>'));
 assert(publishedHtml.includes('<span class="sp-draw-player">Fem Diamante atleta 1c</span><span class="sp-draw-player">Fem Diamante atleta 1d</span>'));
-assert(publishedHtml.includes('Arte PNG'));
+assert.strictEqual((publishedHtml.match(/data-draw-pdf/g) || []).length, 1, 'há um botão para o PDF completo');
+assert(!publishedHtml.includes('Arte PNG'));
 assert(!publishedHtml.includes('placar'));
 const manyGroups = { kind:'initial', draft:{ matches:[] } };
 for (let group = 0; group < 5; group++) for (let game = 1; game <= 3; game++) {
@@ -79,10 +110,18 @@ for (let group = 0; group < 5; group++) for (let game = 1; game <= 3; game++) {
     team1:[`Atleta ${group}A`, `Atleta ${group}B`], team2:[`Atleta ${group}C`, `Atleta ${group}D`] });
 }
 const manyHtml = window._renderPendingDrawPreview({ id:'many', pendingDraw:manyGroups });
-assert(manyHtml.includes('Arte PNG 1/2') && manyHtml.includes('Arte PNG 2/2'));
+assert.strictEqual((manyHtml.match(/data-draw-pdf/g) || []).length, 1);
 calls.length = 0;
-assert.strictEqual(window._downloadInitialDrawArt({ name:'Torneio' }, manyGroups, 0, 1), true);
-assert.strictEqual(link.download, 'resultado-sorteio-fem-ouro-2-de-2.png');
+const countBefore = canvases.length;
+assert.strictEqual(await window._downloadInitialDrawPdf({ name:'Torneio' }, manyGroups), true);
+assert.strictEqual(link.download, 'resultado-sorteio-torneio.pdf');
+assert.strictEqual(canvases.length - countBefore, 2, 'cinco grupos formam duas páginas no mesmo arquivo');
 assert(calls.some(c => c[0] === 'text' && c[1] === 'Grupo E'));
-assert(!calls.some(c => c[0] === 'text' && c[1] === 'Grupo A'));
-console.log('Resultado do sorteio: grupos, ordem e PNG OK');
+assert(calls.some(c => c[0] === 'text' && c[1] === 'Grupo A'));
+const bytes = await pdfBlob.arrayBuffer();
+  const pdf = Buffer.from(bytes).toString('latin1');
+  assert(pdf.startsWith('%PDF-1.4'));
+  assert(pdf.includes('/Count 2'), 'o PDF contém as duas páginas');
+  assert(pdf.includes('xref\n0 9\n'), 'o índice contém todos os objetos');
+  console.log('Resultado do sorteio: grupos, ordem e PDF único OK');
+})().catch(error => { console.error(error); process.exitCode = 1; });

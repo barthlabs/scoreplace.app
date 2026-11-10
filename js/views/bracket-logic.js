@@ -7162,18 +7162,13 @@ window._initialDrawResultModel = function (pd) {
   return { categories:categories, gameCount:categories.reduce(function (sum, c) { return sum + c.groups.reduce(function (n, g) { return n + g.matches.length; }, 0) + c.extras.filter(function (e) { return /^R\d+/.test(e.label); }).length; }, 0), teamCount:Number(pd && pd.teamCount) || teams.length };
 };
 
-window._downloadInitialDrawArt = function (t, pd, categoryIndex, pageIndex) {
-  var model = window._initialDrawResultModel(pd), category = model.categories[categoryIndex];
-  if (!category) return false;
-  var groupsPerPage = 4, page = Math.max(0, Number(pageIndex) || 0);
-  var pages = Math.max(1, Math.ceil(category.groups.length / groupsPerPage));
-  if (page >= pages) return false;
-  var pageGroups = category.groups.slice(page * groupsPerPage, (page + 1) * groupsPerPage);
-  var extras = page === pages - 1 ? category.extras : [];
+// Um arquivo para o sorteio inteiro. Cada folha conserva o layout da arte, mas
+// todas as categorias e grupos entram no mesmo PDF, na ordem do modelo acima.
+window._initialDrawPdfPage = function (t, category, pageGroups, extras, pageNumber, pageCount, logo) {
   var canvas = document.createElement('canvas'), ctx = canvas.getContext('2d');
-  if (!ctx) return false;
+  if (!ctx) return null;
   var width = 1500, margin = 48, gap = 20, cardWidth = (width - 2 * margin - gap) / 2, line = 30;
-  var sideWidth = (cardWidth - 104) / 2;
+  var sideWidth = 252, leftX = 70, versusX = 354, rightX = cardWidth - 22;
   ctx.font = '24px Arial, sans-serif';
   function lines(value, maxWidth) {
     var words = String(value || '').split(/\s+/), out = [], current = '';
@@ -7187,8 +7182,8 @@ window._downloadInitialDrawArt = function (t, pd, categoryIndex, pageIndex) {
   }
   var blocks = pageGroups.map(function (g) {
     var rows = g.matches.map(function (m, i) {
-      var one = (m.onePlayers || [m.one]).map(function (name) { return lines(name, sideWidth - 8); });
-      var two = (m.twoPlayers || [m.two]).map(function (name) { return lines(name, sideWidth - 8); });
+      var one = (m.onePlayers || [m.one]).map(function (name) { return lines(name, sideWidth); });
+      var two = (m.twoPlayers || [m.two]).map(function (name) { return lines(name, sideWidth); });
       var rowLines = Math.max(2, one.reduce(function (n, parts) { return n + parts.length; }, 0), two.reduce(function (n, parts) { return n + parts.length; }, 0));
       return { label:'J' + (m.number || i + 1), one:one, two:two, height:rowLines * line + 12 };
     });
@@ -7198,51 +7193,139 @@ window._downloadInitialDrawArt = function (t, pd, categoryIndex, pageIndex) {
   canvas.width = width;
   var rowHeights = [];
   for (var bi = 0; bi < blocks.length; bi += 2) rowHeights.push(Math.max(blocks[bi].height, blocks[bi + 1] ? blocks[bi + 1].height : 0));
-  canvas.height = 180 + rowHeights.reduce(function (sum, h) { return sum + h + gap; }, 0) + extras.length * 42 + 60;
-  ctx.fillStyle = '#071322'; ctx.fillRect(0, 0, width, canvas.height);
-  ctx.fillStyle = '#fff'; ctx.font = 'bold 38px Arial, sans-serif';
-  ctx.fillText(t.name || t.title || 'Torneio', margin, 56, width - 2 * margin);
-  ctx.fillStyle = '#fbbf24'; ctx.font = 'bold 30px Arial, sans-serif'; ctx.fillText('RESULTADO DO SORTEIO · ' + category.name + (pages > 1 ? ' · ' + (page + 1) + '/' + pages : ''), margin, 135, width - 2 * margin);
+  canvas.height = 180 + rowHeights.reduce(function (sum, h) { return sum + h + gap; }, 0) + extras.length * 42 + 68;
+  function hex(value, fallback) { return /^#[0-9a-f]{6}$/i.test(String(value || '')) ? value : fallback; }
+  function mix(a, b, amount) {
+    var v = [1, 3, 5].map(function (i) { return Math.round(parseInt(a.slice(i, i + 2), 16) * (1 - amount) + parseInt(b.slice(i, i + 2), 16) * amount); });
+    return '#' + v.map(function (n) { return n.toString(16).padStart(2, '0'); }).join('');
+  }
+  function luminance(value) {
+    var rgb = [1, 3, 5].map(function (i) { var c = parseInt(value.slice(i, i + 2), 16) / 255; return c <= .04045 ? c / 12.92 : Math.pow((c + .055) / 1.055, 2.4); });
+    return .2126 * rgb[0] + .7152 * rgb[1] + .0722 * rgb[2];
+  }
+  var cover = hex(t.coverColor, '#1f2937');
+  var secondary = t.coverGradientEnabled ? hex(t.coverGradientColor, cover) : cover;
+  var bg1 = mix(cover, '#000000', .64), bg2 = mix(secondary, '#000000', .64);
+  var gradient = ctx.createLinearGradient(0, 0, width, canvas.height);
+  gradient.addColorStop(0, bg1); gradient.addColorStop(1, bg2);
+  ctx.fillStyle = gradient; ctx.fillRect(0, 0, width, canvas.height);
+  var titleColor = hex(t.titleColor, '#ffffff');
+  if (luminance(titleColor) < .35) titleColor = '#ffffff';
+  var accent = hex(t.brandColor, mix(cover, '#ffffff', .68));
+  if (logo) {
+    var logoWidth = Number(logo.naturalWidth || logo.width) || 1;
+    var logoHeight = Number(logo.naturalHeight || logo.height) || 1;
+    var logoScale = Math.min(82 / logoWidth, 82 / logoHeight);
+    ctx.drawImage(logo, margin + (82 - logoWidth * logoScale) / 2, 18 + (82 - logoHeight * logoScale) / 2,
+      logoWidth * logoScale, logoHeight * logoScale);
+  }
+  var titleX = logo ? margin + 100 : margin;
+  ctx.fillStyle = titleColor; ctx.font = 'bold 38px Arial, sans-serif';
+  ctx.fillText(t.name || t.title || 'Torneio', titleX, logo ? 67 : 56, width - margin - titleX);
+  ctx.fillStyle = accent; ctx.font = 'bold 30px Arial, sans-serif';
+  ctx.fillText('RESULTADO DO SORTEIO · ' + category.name, margin, 135, width - 2 * margin);
   var y = 170;
   blocks.forEach(function (block, index) {
     var row = Math.floor(index / 2), x = margin + (index % 2) * (cardWidth + gap);
     var top = 170 + rowHeights.slice(0, row).reduce(function (sum, h) { return sum + h + gap; }, 0);
-    ctx.fillStyle = '#14243a'; ctx.fillRect(x, top, cardWidth, rowHeights[row]);
-    ctx.fillStyle = '#67d5ff'; ctx.font = 'bold 27px Arial, sans-serif'; ctx.fillText(block.group.name, x + 20, top + 38);
+    ctx.fillStyle = mix(cover, '#ffffff', .12); ctx.fillRect(x, top, cardWidth, rowHeights[row]);
+    ctx.fillStyle = accent; ctx.font = 'bold 27px Arial, sans-serif'; ctx.fillText(block.group.name, x + 20, top + 38);
     var rowY = top + 58;
     block.rows.forEach(function (match) {
-      ctx.fillStyle = '#fbbf24'; ctx.font = 'bold 21px Arial, sans-serif'; ctx.fillText(match.label, x + 20, rowY + 23);
+      ctx.fillStyle = accent; ctx.font = 'bold 21px Arial, sans-serif'; ctx.fillText(match.label, x + 20, rowY + 23);
       ctx.fillStyle = '#fff'; ctx.font = '23px Arial, sans-serif';
-      ctx.fillText('×', x + 70 + sideWidth + 1, rowY + 23, 16);
+      ctx.textAlign = 'center'; ctx.fillText('×', x + versusX, rowY + 23); ctx.textAlign = 'left';
       match.one.forEach(function (player, pi) { player.forEach(function (part, li) {
         var before = match.one.slice(0, pi).reduce(function (n, lines) { return n + lines.length; }, 0);
-        ctx.fillText(part, x + 70, rowY + 23 + (before + li) * line, sideWidth - 8);
+        ctx.fillText(part, x + leftX, rowY + 23 + (before + li) * line, sideWidth);
       }); });
+      ctx.textAlign = 'right';
       match.two.forEach(function (player, pi) { player.forEach(function (part, li) {
         var before = match.two.slice(0, pi).reduce(function (n, lines) { return n + lines.length; }, 0);
-        ctx.fillText(part, x + 82 + sideWidth, rowY + 23 + (before + li) * line, sideWidth - 8);
+        ctx.fillText(part, x + rightX, rowY + 23 + (before + li) * line, sideWidth);
       }); });
+      ctx.textAlign = 'left';
       rowY += match.height;
     });
   });
   y = 170 + rowHeights.reduce(function (sum, h) { return sum + h + gap; }, 0);
-  extras.forEach(function (extra) { ctx.fillStyle = '#dbeafe'; ctx.font = '22px Arial, sans-serif'; ctx.fillText(extra.label + ': ' + extra.name, margin, y + 20); y += 42; });
-  var link = document.createElement('a');
-  var filename = 'resultado-sorteio-' + category.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/gi, '-').toLowerCase() + (pages > 1 ? '-' + (page + 1) + '-de-' + pages : '') + '.png';
-  function download() {
-    link.href = canvas.toDataURL('image/png'); link.download = filename;
-    document.body.appendChild(link); link.click(); link.remove();
-  }
-  if (typeof navigator !== 'undefined' && navigator.share && navigator.canShare && canvas.toBlob && typeof File === 'function') {
-    canvas.toBlob(function (blob) {
-      if (!blob) { download(); return; }
-      var file = new File([blob], filename, { type:'image/png' });
-      if (!navigator.canShare({ files:[file] })) { download(); return; }
-      navigator.share({ files:[file], title:'Resultado do sorteio · ' + category.name }).catch(function (error) {
-        if (!error || error.name !== 'AbortError') download();
+  extras.forEach(function (extra) { ctx.fillStyle = '#ffffff'; ctx.font = '22px Arial, sans-serif'; ctx.fillText(extra.label + ': ' + extra.name, margin, y + 20, width - 2 * margin); y += 42; });
+  ctx.fillStyle = '#ffffff'; ctx.font = '18px Arial, sans-serif'; ctx.textAlign = 'right';
+  ctx.fillText('Página ' + pageNumber + ' de ' + pageCount, width - margin, canvas.height - 28);
+  ctx.textAlign = 'left';
+  return canvas;
+};
+
+window._initialDrawPdfBlob = function (canvases) {
+  var encoder = new TextEncoder(), parts = [], offsets = [0], size = 0;
+  function add(data) { var bytes = typeof data === 'string' ? encoder.encode(data) : data; parts.push(bytes); size += bytes.length; }
+  function object(number, body) { offsets[number] = size; add(number + ' 0 obj\n'); add(body); add('\nendobj\n'); }
+  add('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n');
+  object(1, '<< /Type /Catalog /Pages 2 0 R >>');
+  var children = canvases.map(function (_c, i) { return (3 + i * 3) + ' 0 R'; });
+  object(2, '<< /Type /Pages /Kids [' + children.join(' ') + '] /Count ' + canvases.length + ' >>');
+  canvases.forEach(function (canvas, i) {
+    var page = 3 + i * 3, content = page + 1, image = page + 2;
+    var w = 750, h = Math.round(canvas.height * w / canvas.width);
+    var base64 = canvas.toDataURL('image/jpeg', .92).split(',')[1];
+    var binary = atob(base64), jpeg = new Uint8Array(binary.length);
+    for (var j = 0; j < binary.length; j++) jpeg[j] = binary.charCodeAt(j);
+    object(page, '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ' + w + ' ' + h + '] /Resources << /XObject << /Im0 ' + image + ' 0 R >> >> /Contents ' + content + ' 0 R >>');
+    var commands = 'q\n' + w + ' 0 0 ' + h + ' 0 0 cm\n/Im0 Do\nQ\n';
+    object(content, '<< /Length ' + encoder.encode(commands).length + ' >>\nstream\n' + commands + 'endstream');
+    offsets[image] = size;
+    add(image + ' 0 obj\n<< /Type /XObject /Subtype /Image /Width ' + canvas.width + ' /Height ' + canvas.height +
+      ' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ' + jpeg.length + ' >>\nstream\n');
+    add(jpeg); add('\nendstream\nendobj\n');
+  });
+  var xref = size, count = 3 + canvases.length * 3;
+  add('xref\n0 ' + count + '\n0000000000 65535 f \n');
+  for (var n = 1; n < count; n++) add(String(offsets[n]).padStart(10, '0') + ' 00000 n \n');
+  add('trailer\n<< /Size ' + count + ' /Root 1 0 R >>\nstartxref\n' + xref + '\n%%EOF\n');
+  return new Blob(parts, { type:'application/pdf' });
+};
+
+window._downloadInitialDrawPdf = async function (t, pd) {
+  var model = window._initialDrawResultModel(pd);
+  if (!model.gameCount) return false;
+  var plan = [];
+  model.categories.forEach(function (category) {
+    var pages = Math.max(1, Math.ceil(category.groups.length / 4));
+    for (var page = 0; page < pages; page++) plan.push({ category:category,
+      groups:category.groups.slice(page * 4, (page + 1) * 4), extras:page === pages - 1 ? category.extras : [] });
+  });
+  var logoSrc = typeof window._tourLogoSrc === 'function' ? window._tourLogoSrc(t) : (t.logoUrl || t.logoData || '');
+  var logo = null;
+  if (logoSrc) {
+    try {
+      logo = await new Promise(function (resolve, reject) {
+        var image = new Image();
+        image.crossOrigin = 'anonymous';
+        image.onload = function () { resolve(image); };
+        image.onerror = function () { reject(new Error('logo')); };
+        image.src = logoSrc;
       });
-    }, 'image/png');
-  } else download();
+    } catch (_logoError) {
+      if (typeof window.alertDialog === 'function') window.alertDialog('Não foi possível carregar o logo do torneio para o PDF. Tente novamente.');
+      return false;
+    }
+  }
+  try {
+    var canvases = plan.map(function (entry, i) {
+      return window._initialDrawPdfPage(t, entry.category, entry.groups, entry.extras, i + 1, plan.length, logo);
+    });
+    if (canvases.some(function (c) { return !c; })) return false;
+    var url = URL.createObjectURL(window._initialDrawPdfBlob(canvases));
+  } catch (_pdfError) {
+    if (typeof window.alertDialog === 'function') window.alertDialog('Não foi possível gerar o PDF do sorteio. Tente novamente.');
+    return false;
+  }
+  var link = document.createElement('a');
+  link.href = url;
+  link.download = 'resultado-sorteio-' + String(t.name || t.title || 'torneio').normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/gi, '-').toLowerCase() + '.pdf';
+  document.body.appendChild(link); link.click(); link.remove();
+  setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
   return true;
 };
 
@@ -7257,13 +7340,12 @@ window._renderPendingDrawPreview = function (t) {
     if (!pd.draft) return '<div style="color:var(--text-muted);font-size:0.8rem;">Rascunho protegido. Abra a revisão para conferi-lo.</div>';
     var model = window._initialDrawResultModel(pd);
     if (!model.gameCount) return '<div style="color:var(--text-muted);font-size:0.8rem;">(rascunho sem jogos)</div>';
-    var initialHtml = '<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:8px;">' +
-      (model.teamCount ? esc(String(model.teamCount)) + ' times · ' : '') + esc(String(model.gameCount)) + ' jogos</div>';
+    var initialHtml = '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:8px;">' +
+      '<span style="font-size:0.78rem;color:var(--text-muted);">' +
+      (model.teamCount ? esc(String(model.teamCount)) + ' times · ' : '') + esc(String(model.gameCount)) + ' jogos</span>' +
+      '<button class="btn btn-outline" data-draw-pdf>Baixar resultado completo (PDF)</button></div>';
     model.categories.forEach(function (category, index) {
-      initialHtml += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin:14px 0 6px;flex-wrap:wrap;"><strong style="color:var(--sp-c-22d3ee,#22d3ee);">' + esc(category.name) + '</strong><span style="display:flex;gap:6px;flex-wrap:wrap;">';
-      var pageCount = Math.max(1, Math.ceil(category.groups.length / 4));
-      for (var page = 0; page < pageCount; page++) initialHtml += '<button class="btn btn-outline" data-draw-art="' + index + '" data-draw-page="' + page + '">Arte PNG' + (pageCount > 1 ? ' ' + (page + 1) + '/' + pageCount : '') + '</button>';
-      initialHtml += '</span></div>';
+      initialHtml += '<div style="margin:14px 0 6px;"><strong style="color:var(--sp-c-22d3ee,#22d3ee);">' + esc(category.name) + '</strong></div>';
       category.groups.forEach(function (group) {
         initialHtml += '<div style="background:rgba(255,255,255,.05);border:1px solid rgba(125,211,252,.25);border-radius:8px;padding:8px 10px;margin-bottom:7px;"><strong style="font-size:.82rem;color:var(--sp-c-e2e8f0,#e2e8f0);">' + esc(group.name) + '</strong>';
         group.matches.forEach(function (m, i) {
@@ -7330,9 +7412,7 @@ window._openPublishedInitialDrawResult = function (tId) {
     '<div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:10px;"><h2 style="margin:0;font-size:1.15rem;">Resultado do sorteio</h2><button class="btn btn-outline" data-close>Fechar</button></div>' +
     '<div style="overflow:auto;padding-right:4px;">' + preview + '</div></div>';
   overlay.querySelector('[data-close]').onclick = function () { overlay.remove(); };
-  overlay.querySelectorAll('[data-draw-art]').forEach(function (button) {
-    button.onclick = function () { window._downloadInitialDrawArt(t, pd, Number(button.getAttribute('data-draw-art')), Number(button.getAttribute('data-draw-page'))); };
-  });
+  overlay.querySelector('[data-draw-pdf]').onclick = function () { window._downloadInitialDrawPdf(t, pd); };
   document.body.appendChild(overlay);
 };
 
@@ -7691,12 +7771,11 @@ window._openPendingDrawReview = function (tId, markerRetry) {
       '<button class="btn btn-shine" style="background:#10b981;color:#fff;" data-publish>🚀 Publicar sorteio</button>' +
       '<button class="btn btn-outline" data-close>Voltar</button></div></div>';
   overlay.querySelectorAll('[data-close]').forEach(function (b) { b.onclick = function () { overlay.remove(); }; });
-  overlay.querySelectorAll('[data-draw-art]').forEach(function (b) {
-    b.onclick = function () {
-      var pd = (window.__pendingInitialDraws || {})[String(tId)] || t.pendingDraw;
-      window._downloadInitialDrawArt(t, pd, Number(b.getAttribute('data-draw-art')), Number(b.getAttribute('data-draw-page')));
-    };
-  });
+  var pdfButton = overlay.querySelector('[data-draw-pdf]');
+  if (pdfButton) pdfButton.onclick = function () {
+    var pd = (window.__pendingInitialDraws || {})[String(tId)] || t.pendingDraw;
+    window._downloadInitialDrawPdf(t, pd);
+  };
   var plan = overlay.querySelector('[data-plan]'); if (plan) plan.onclick = function () { overlay.remove(); window._openPendingInitialSchedule(tId); };
   var annul = overlay.querySelector('[data-annul]'); if (annul) annul.onclick = function () { overlay.remove(); window._annulPendingDraw(tId); };
   var publish = overlay.querySelector('[data-publish]'); if (publish) publish.onclick = function () { overlay.remove(); window._publishPendingDraw(tId); };

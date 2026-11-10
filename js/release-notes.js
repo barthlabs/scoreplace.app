@@ -1,3 +1,5 @@
+// 2.6.26 — O resultado do sorteio inteiro sai em um PDF, com as cores do
+// torneio e confrontos legíveis: duplas separadas pelo × e alinhadas nas bordas.
 // 2.6.25 — O foco do próximo jogo ajusta o espaçamento do card quando a
 // janela é baixa, sem esconder o placar ou o rodapé atrás das abas.
 // 2.6.24 — Ao abrir o próximo jogo ou o último concluído, o card inteiro
@@ -1458,6 +1460,7 @@ window._RELEASE_NOTES_HTML = (function () {
       '<ul style="margin:0;padding-left:1.1rem;font-size:0.86rem;line-height:1.5;color:var(--text-main);">' +
         '<li>Na faixa de operação Rei/Rainha, as setas percorrem os três jogos do mesmo quarteto e sua classificação, com as duplas e os placares de cada jogo.</li>' +
         '<li>Em torneios concentrados em um dia, os jogos e as rodadas mostram só o horário. Eventos de vários dias continuam mostrando a data.</li>' +
+        '<li>O resultado do sorteio pode ser baixado em um único PDF com todas as categorias e grupos, usando as cores e o logo do torneio e mostrando as duplas lado a lado.</li>' +
       '</ul>' +
     '</div>' +
     // v2.5 — corte nativo do que já está no ar na web. A versão 2.5.18

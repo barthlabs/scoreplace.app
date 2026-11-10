@@ -1,3 +1,9 @@
+## 2.6.26 — 10/nov/2026 (resultado completo do sorteio em PDF)
+
+- O resultado do sorteio agora oferece um botão para baixar todas as categorias e todos os grupos em um único PDF, com páginas numeradas. A arte usa as cores e o logo configurados no torneio; as duplas à direita ficam alinhadas pela borda, com o × centralizado e espaço entre os lados.
+- O CAMIS troca a capa vermelha por referências da paleta oficial do patrocinador C6 Bank: preto e grafite no fundo, Marble no título e amarelo nos destaques do PDF. A alteração de configuração usa um script com prévia, fingerprint e backup do torneio.
+- Corte somente web, sem alterar jogos, inscrições ou versões nativas. A configuração visual do CAMIS é atualizada separadamente, com backup e verificação de concorrência.
+
 ## 2.6.25 — 09/nov/2026 (card alto sem corte em janela baixa)
 
 - A conferência em Chrome mostrou um jogo real com card de 455 px em janela de 693 px, ainda cortado pela régua superior. O foco agora compacta somente o espaçamento vertical desse card quando necessário, alinha logo abaixo das abas e mantém placar e rodapé visíveis. A prova de geometria cobre a altura real observada.
