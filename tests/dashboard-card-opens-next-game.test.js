@@ -201,10 +201,10 @@ function section(from, to) {
     applyBlock.includes('if (cards.length) window._bracketApplyFilter();'),
     'organizador sem jogo próprio ainda consome a rolagem pendente da dashboard');
   const pendingReaderStart = bracket.indexOf('if (window._bracketPendingScroll)', applyStart);
-  const pendingReader = pendingReaderStart < 0 ? '' : bracket.slice(pendingReaderStart, pendingReaderStart + 6000);
+  const pendingReader = pendingReaderStart < 0 ? '' : bracket.slice(pendingReaderStart, pendingReaderStart + 12000);
   ok(tournaments.includes('window._bracketPendingScroll = String(tournamentId);') &&
     pendingReader.includes("setTimeout(function () { _goMine('smooth'); }, 80);") &&
-    pendingReader.includes('var _el = _alvoDeEntrada();'),
+    pendingReader.includes('var _el = _entryMatchId ? _alvoDeEntrada(_entryMatchId) : _alvoDeEntrada();'),
     'o alvo explícito arma o leitor da agenda, que espera os cards e rola para o mesmo alvo');
 
   await browser.close();

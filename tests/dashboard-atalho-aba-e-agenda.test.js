@@ -78,7 +78,7 @@ ok(tournaments.includes('if (!_bso.matchId)') &&
   'o consumidor tardio não dispara scroll genérico quando já há card alvo');
 ok(tournaments.includes('window._bracketPendingScroll = String(tournamentId);') &&
   bracket.includes('if (window._bracketPendingScroll)') &&
-  bracket.includes('var _target = _alvoDeEntrada();'),
+  bracket.includes('var _target = _entryMatchId ? _alvoDeEntrada(_entryMatchId) : _alvoDeEntrada();'),
   'a âncora pendente da entrada é consumida pela chave depois de os cards existirem');
 ok(bracket.includes('window._directBracketSlotLabel') && bracket.includes("? 'Perdedor' : 'Vencedor'") && bracket.includes("_origem || 'A definir'"),
   'vagas ligadas diretamente mostram vencedor/perdedor do jogo; A definir fica para classificação');

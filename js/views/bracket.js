@@ -744,7 +744,7 @@ window._flushBracketPaint = function () {
 // cópias da mesma escolha: toda regra nova precisava ser escrita nos dois lugares, e a que
 // ficasse pra trás desfazia a outra (foi assim que o passe fixo de 1400ms já desmanchou uma
 // rolagem certa). [[feedback_unify_dual_entry_points]]
-function _alvoDeEntrada() {
+function _alvoDeEntrada(idExplicito) {
   // 0) JOGO PEDIDO — a intenção explícita da dashboard precisa ganhar de
   // qualquer CTA genérico do detalhe. Antes o banner "Avançar fase", que fica
   // no topo do card do torneio, era testado ANTES deste matchId: a aba Próximos
@@ -759,7 +759,7 @@ function _alvoDeEntrada() {
    * `scroll-margin-top`, então basta pedir por ele. Vale para TODA fase; o grupo continua
    * valendo para quem tem (e é quem abre a seção fechada, lá embaixo). */
   var _pm = null;
-  try { _pm = sessionStorage.getItem('sp_scrollToMatch'); } catch (e) {}
+  try { _pm = idExplicito ? String(idExplicito) : sessionStorage.getItem('sp_scrollToMatch'); } catch (e) {}
   if (_pm) {
     var _cardAlvo = document.getElementById('card-' + String(_pm));
     /* ⛔ O CARD PEDIDO PODE AINDA NÃO EXISTIR NO DOM — e aí a tela caía no topo da chave.
@@ -899,7 +899,7 @@ function _alvoDeEntrada() {
 
 // Exposta pra ser COBRADA por teste (tests/entrar-no-torneio-cai-no-meu-grupo.test.js):
 // a ordem de prioridade é regra de produto do dono, não detalhe interno.
-window._bracketEntryTarget = _alvoDeEntrada;
+window._bracketEntryTarget = function () { return _alvoDeEntrada(); };
 
 // A margem CSS sozinha não inclui as abas fixas, cuja altura muda com a
 // largura. A entrada na faixa usa a borda inferior real desse cabeçalho.
@@ -3440,12 +3440,58 @@ function _applyMyMatchesFilter() {
     window._bracketPendingScroll = null;
     var _entryHash = window.location.hash;
     var _entryCancelled = false;
+    var _entryMatchId = '';
+    try { _entryMatchId = String(sessionStorage.getItem('sp_scrollToMatch') || ''); } catch (e) {}
+    // Uma entrada nova encerra o laço da anterior, inclusive se ela era de grupo.
+    if (window._bracketEntryToken && typeof window._bracketEntryToken.cancel === 'function') {
+      window._bracketEntryToken.cancel();
+    }
+    var _entryToken = {
+      id: _entryMatchId, hash: _entryHash, active: true, ready: false,
+      until: Date.now() + 12000, rafPending: false, goMine: null, cancel: null
+    };
+    window._bracketEntryToken = _entryToken;
     var _removeEntryListeners = function () {
       window.removeEventListener('wheel', _cancelEntry);
       window.removeEventListener('touchstart', _cancelEntry);
       window.removeEventListener('pointerdown', _cancelEntry);
     };
+    var _cancelAnchorInput = function (event) {
+      if (!_entryToken.active) return;
+      if (event && event.type === 'visibilitychange' && !document.hidden) return;
+      if (event && event.type === 'keydown' &&
+          !['Tab', 'PageUp', 'PageDown', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Space', 'Home', 'End'].includes(event.key)) return;
+      _cancelEntry();
+    };
+    var _removeAnchorListeners = function () {
+      window.removeEventListener('wheel', _cancelAnchorInput);
+      window.removeEventListener('touchstart', _cancelAnchorInput);
+      window.removeEventListener('pointerdown', _cancelAnchorInput);
+      window.removeEventListener('keydown', _cancelAnchorInput);
+      window.removeEventListener('hashchange', _cancelAnchorInput);
+      window.removeEventListener('pagehide', _cancelAnchorInput);
+      document.removeEventListener('visibilitychange', _cancelAnchorInput);
+    };
+    _entryToken.cancel = function () {
+      if (!_entryToken.active) return;
+      _entryToken.active = false;
+      _entryCancelled = true;
+      _removeEntryListeners();
+      _removeAnchorListeners();
+      if (window._bracketEntryToken === _entryToken) window._bracketEntryToken = null;
+      if (window._bracketEntryAnchor === _entryToken) window._bracketEntryAnchor = null;
+    };
+    if (_entryMatchId) {
+      window._bracketEntryAnchor = _entryToken;
+      ['wheel', 'touchstart', 'pointerdown', 'keydown', 'hashchange', 'pagehide'].forEach(function (type) {
+        window.addEventListener(type, _cancelAnchorInput, { passive: true });
+      });
+      document.addEventListener('visibilitychange', _cancelAnchorInput);
+      setTimeout(function () { _entryToken.cancel(); }, 12000);
+    }
     var _cancelEntry = function () {
+      if (window._bracketEntryToken !== _entryToken || !_entryToken.active) return;
+      _entryToken.cancel();
       _entryCancelled = true;
       window._suppressSoftRefresh = false;
       _removeEntryListeners();
@@ -3467,6 +3513,7 @@ function _applyMyMatchesFilter() {
     clearTimeout(window._pendingSoftRefresh);
     var _goMine = function (behavior) {
       try {
+        if (!_entryToken.active) return;
         if (_entryCancelled || window.location.hash !== _entryHash || window._travaRolagemDaChave) { _removeEntryListeners(); return; }
         // Re-mede o chrome AGORA. `--scroll-anchor` (topbar + dropdown do hamburger +
         // back-header + barra STICKY de busca + 12px) é o que o `scroll-margin-top` dos
@@ -3475,7 +3522,7 @@ function _applyMyMatchesFilter() {
         // alvo pousava ATRÁS dela e o topo do card/grupo saía cortado (reportado pelo
         // dono: o cabeçalho do grupo, com as pills e os botões, ficava escondido).
         if (typeof window._reflowChrome === 'function') window._reflowChrome();
-        var _target = _alvoDeEntrada();
+        var _target = _entryMatchId ? _alvoDeEntrada(_entryMatchId) : _alvoDeEntrada();
         if (!_target) return;
         if (_target.hasAttribute('data-bracket-operations-strip') &&
             window._bracketFocusOperationsStrip(_target.getAttribute('data-operations-tournament-id'), behavior)) return;
@@ -3491,6 +3538,7 @@ function _applyMyMatchesFilter() {
         _bracketEntryHorizontalGap(_target, true);
       } catch (e) {}
     };
+    _entryToken.goMine = _goMine;
     setTimeout(function () { _goMine('smooth'); }, 80);
     // ── v1.9.0: RE-AFIRMA ATÉ A POSIÇÃO PARAR DE MUDAR ──────────────────────
     // Relato do dono: "quando vai para o grupo B... na segunda vez vai certo, mas na
@@ -3516,9 +3564,10 @@ function _applyMyMatchesFilter() {
         // topo. O resultado é a tela pulando a cada confirmação.
         // ⚠️ Não dá pra "ajustar o tempo": não existe instante certo — a rolagem de entrada
         // e o lançamento são intenções DIFERENTES, e a do dedo ganha sempre.
+        if (window._travaRolagemDaChave && _entryToken.active) _entryToken.ready = true;
         if (_entryCancelled || window.location.hash !== _entryHash || window._travaRolagemDaChave) return;
         _voltas++;
-        var _el = _alvoDeEntrada();   // MESMO alvo do _goMine — senão um desfaz o outro
+        var _el = _entryMatchId ? _alvoDeEntrada(_entryMatchId) : _alvoDeEntrada();   // MESMO alvo do _goMine
         /* ⛔ ALVO AINDA NÃO EXISTE NÃO É "DESISTIR" — É "AINDA NÃO". Relato do dono
          * (12/set/2026, pela terceira vez): _"ao clicar no ir para o torneio tem que ir para o
          * jogo na chave… e não simplesmente abrir a chave e ficar no topo"_.
@@ -3541,6 +3590,7 @@ function _applyMyMatchesFilter() {
           _esperas++;
           if (_esperas < 60) { setTimeout(_tick, 100); return; }
           try { sessionStorage.removeItem('sp_scrollToGroup'); sessionStorage.removeItem('sp_scrollToMatch'); } catch (e) {}
+          _entryToken.ready = true;
           _removeEntryListeners();
           return;
         }
@@ -3578,6 +3628,7 @@ function _applyMyMatchesFilter() {
         // acabou (estabilizou ou estourou o teto): só agora a chave sai, senão a
         // próxima entrada na chave herdaria um pedido velho.
         try { sessionStorage.removeItem('sp_scrollToGroup'); sessionStorage.removeItem('sp_scrollToMatch'); } catch (e) {}
+        _entryToken.ready = true;
         _removeEntryListeners();
       };
       setTimeout(_tick, 220);
@@ -3593,6 +3644,20 @@ function _applyMyMatchesFilter() {
     // soft-refresh, que é o outro papel deste timeout — e ele passa a esperar o laço
     // terminar, senão um re-render no meio da correção mataria o alvo.
     setTimeout(function () { window._suppressSoftRefresh = false; _removeEntryListeners(); }, 6800);
+  }
+  // Um render tardio substitui o card depois de a chave de sessão ser consumida.
+  // Reposiciona só a entrada recente e sem interação; o lançamento de placar vence.
+  var _entryAnchor = window._bracketEntryAnchor;
+  if (_entryAnchor && _entryAnchor.active && _entryAnchor.ready && !_entryAnchor.rafPending) {
+    _entryAnchor.rafPending = true;
+    requestAnimationFrame(function () {
+      _entryAnchor.rafPending = false;
+      if (window._bracketEntryAnchor !== _entryAnchor || !_entryAnchor.active ||
+          !_entryAnchor.ready || Date.now() > _entryAnchor.until ||
+          window.location.hash !== _entryAnchor.hash || window._travaRolagemDaChave) return;
+      if (!document.getElementById('card-' + _entryAnchor.id)) return;
+      _entryAnchor.goMine('auto');
+    });
   }
 }
 

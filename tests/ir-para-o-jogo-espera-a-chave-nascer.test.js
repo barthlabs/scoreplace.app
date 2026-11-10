@@ -42,7 +42,7 @@ must(laco.indexOf("removeItem('sp_scrollToMatch')") > 0, '③ e o jogo pedido sa
 // ── ④ o resto da corrente continua de pé ────────────────────────────────────
 must(/window\._travaRolagemDaChave/.test(laco),
   '④ ⛔ lançar placar continua parando o laço na hora — a rolagem de entrada nunca briga com o dedo');
-const _aIni = BRK.indexOf('function _alvoDeEntrada() {');
+const _aIni = BRK.indexOf('function _alvoDeEntrada(idExplicito) {');
 const alvo = BRK.slice(_aIni, BRK.indexOf('\n  var _p = null;', _aIni));
 must(/_chaveMontaTudo\(document\)/.test(alvo), '④ e a chave segue sendo montada sob demanda pra achar o card pedido');
 must(/getElementById\('card-' \+ String\(_pm\)\)/.test(alvo), '④ pelo id que o card carrega (`card-<id do jogo>`)');

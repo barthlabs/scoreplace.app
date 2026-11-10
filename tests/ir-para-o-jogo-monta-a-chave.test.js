@@ -14,7 +14,7 @@ const assert = require('assert/strict'), fs = require('fs'), path = require('pat
 const BRK = fs.readFileSync(path.join(__dirname, '..', 'js/views/bracket.js'), 'utf8');
 let ok = 0; const must = (v, m) => { assert.ok(v, m); ok++; console.log('  ✓ ' + m); };
 
-const ini = BRK.indexOf('function _alvoDeEntrada() {');
+const ini = BRK.indexOf('function _alvoDeEntrada(idExplicito) {');
 const fim = BRK.indexOf("\n  var _p = null;", ini);
 assert.ok(ini > 0 && fim > ini, 'âncoras do resolvedor de alvo');
 /* recorte por ÂNCORA e fechado à mão: só o começo da função interessa aqui (o ramo do JOGO).

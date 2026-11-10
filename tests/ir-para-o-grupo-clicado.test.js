@@ -37,7 +37,7 @@ ok(/sessionStorage\.getItem\('sp_scrollToGroup'\)/.test(bracket),
    'e o alvo de entrada da chave lê esse pedido');
 
 // ── ⛔ o conserto: montar os lotes adiados antes de desistir ────────────────
-const iAlvo = bracket.indexOf('function _alvoDeEntrada()');
+const iAlvo = bracket.indexOf('function _alvoDeEntrada(idExplicito)');
 const corpoAlvo = bracket.slice(iAlvo, bracket.indexOf('\n}', bracket.indexOf('return _g;', iAlvo)));
 ok(/if \(!_g && typeof window\._chaveMontaTudo === 'function'\)/.test(corpoAlvo),
    '⛔ não achou o grupo pedido → monta os lotes adiados e procura DE NOVO (era aqui que desistia)');
@@ -79,7 +79,7 @@ sb.document = {
 sb.sessionStorage = { getItem: (key) => key === 'sp_scrollToGroup' ? 'r1-grupo-q' : null, removeItem() {} };
 sb.window._chaveMontaTudo = function () { feitos.push('montou'); sb.document._tem = true; };
 vm.createContext(sb);
-const ini = bracket.indexOf('function _alvoDeEntrada()');
+const ini = bracket.indexOf('function _alvoDeEntrada(idExplicito)');
 const fim = bracket.indexOf('\n}', bracket.indexOf('return _g;', ini)) + 2;
 // só o começo da função (item 0 + item 1) — o resto depende de muito DOM
 let fonte = bracket.slice(ini, fim);
