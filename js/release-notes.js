@@ -1,3 +1,4 @@
+// 2.6.21 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.6.20 — No CAMIS, Diamante e Ouro podem entrar na eliminatória enquanto
 // a Prata ainda disputa grupos. O 1º e 2º de cada grupo formam uma dupla;
 // a classificação preliminar usa saldo de games e empate no corte vai para
