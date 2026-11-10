@@ -353,6 +353,10 @@ summary::-webkit-details-marker { display: none; }
   background: rgba(127, 29, 29, .22);
 }
 .sp-match-card[data-bracket-complete="1"] { align-self:start; }
+/* Compacta só o jogo focado numa janela baixa, preservando placar e rodapé. */
+.bracket-general-rounds-track .sp-match-card--entry-focus { padding-top:8px!important; padding-bottom:8px!important; }
+.bracket-general-rounds-track .sp-match-card--entry-focus .sp-mc-head { margin-bottom:5px!important; }
+.bracket-general-rounds-track .sp-match-card--entry-focus .btn-row { margin-top:4px!important; }
 .bracket-geral-quarteto {
   min-width:0;
   padding:10px;

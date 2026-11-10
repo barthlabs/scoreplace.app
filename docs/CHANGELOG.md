@@ -1,3 +1,8 @@
+## 2.6.25 — 09/nov/2026 (card alto sem corte em janela baixa)
+
+- A conferência em Chrome mostrou um jogo real com card de 455 px em janela de 693 px, ainda cortado pela régua superior. O foco agora compacta somente o espaçamento vertical desse card quando necessário, alinha logo abaixo das abas e mantém placar e rodapé visíveis. A prova de geometria cobre a altura real observada.
+- Corte somente web, sem alteração de dados ou versões nativas.
+
 ## 2.6.24 — 09/nov/2026 (card inteiro na entrada pela dashboard)
 
 - Em janelas baixas, o cabeçalho fixo da rodada reservava espaço além do necessário e deixava o rodapé do jogo solicitado fora da tela. A entrada agora calcula o espaço pelo card inteiro e esconde o espelho da rodada apenas enquanto esse card está em foco; a rolagem manual restaura o cabeçalho.

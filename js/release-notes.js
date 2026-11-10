@@ -1,3 +1,5 @@
+// 2.6.25 — O foco do próximo jogo ajusta o espaçamento do card quando a
+// janela é baixa, sem esconder o placar ou o rodapé atrás das abas.
 // 2.6.24 — Ao abrir o próximo jogo ou o último concluído, o card inteiro
 // cabe abaixo das abas mesmo em uma janela baixa; o título fixo da rodada
 // reaparece quando a pessoa volta a rolar a chave.

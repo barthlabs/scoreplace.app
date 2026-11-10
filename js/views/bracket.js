@@ -2140,6 +2140,14 @@ function _bracketReleaseEmptyScheduledPhase(root) {
 // [[regression_operational_card_focus_has_one_geometry]]
 function _bracketFocusOperationalCard(root, card, behavior) {
   if (!root || !card || !card.isConnected || card.hidden || !card.getClientRects().length || window._travaRolagemDaChave) return null;
+  if (root._bracketCompactFocusCard && root._bracketCompactFocusCard !== card)
+    root._bracketCompactFocusCard.classList.remove('sp-match-card--entry-focus');
+  card.classList.remove('sp-match-card--entry-focus');
+  var availableHeight = window.innerHeight - root.getBoundingClientRect().bottom - 12;
+  if (card.getBoundingClientRect().height > availableHeight) {
+    card.classList.add('sp-match-card--entry-focus');
+    root._bracketCompactFocusCard = card;
+  } else root._bracketCompactFocusCard = null;
   var track = card.closest ? card.closest('.bracket-general-rounds-track') : null;
   if (track) {
     var beforeRect = card.getBoundingClientRect();
@@ -2184,8 +2192,9 @@ function _bracketOperationalSafeTop(root, card) {
     if (portalBottom > safeTop) safeTop = portalBottom;
   }
   var cardHeight = Math.ceil(card.getBoundingClientRect().height || 0);
-  var wholeCardTop = window.innerHeight - cardHeight - 12;
-  if (wholeCardTop >= rootRect.bottom + 12 && wholeCardTop < safeTop) safeTop = wholeCardTop;
+  var wholeCardTop = window.innerHeight - cardHeight - 10;
+  if (wholeCardTop >= rootRect.bottom + 2 && wholeCardTop < safeTop) safeTop = wholeCardTop;
+  else if (cardHeight > window.innerHeight - safeTop - 10) safeTop = rootRect.bottom + 2;
   return safeTop;
 }
 window._bracketFocusOperationalCard = _bracketFocusOperationalCard;

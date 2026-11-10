@@ -4,6 +4,8 @@ const fs = require('fs');
 const path = require('path');
 const { chromium } = require('@playwright/test');
 const bracket = fs.readFileSync(path.join(__dirname, '..', 'js/views/bracket.js'), 'utf8');
+const bracketCss = fs.readFileSync(path.join(__dirname, '..', 'css/bracket.css'), 'utf8');
+const compactCss = bracketCss.split('\n').filter(line => line.startsWith('.bracket-general-rounds-track .sp-match-card--entry-focus')).join('\n');
 const focusCode = bracket.slice(bracket.indexOf('function _bracketFocusOperationalCard(root, card, behavior) {'), bracket.indexOf('// A chave de fases usa um scroller HORIZONTAL', bracket.indexOf('function _bracketFocusOperationalCard(root, card, behavior) {')));
 const portalCode = bracket.slice(bracket.indexOf('function _bracketUpdateRoundHeadingPortal(root, scope) {'), bracket.indexOf('function _bracketEnsureRoundHeadingResizeListener()', bracket.indexOf('function _bracketUpdateRoundHeadingPortal(root, scope) {')));
 const goMine = bracket.slice(bracket.indexOf('    var _goMine = function (behavior) {'), bracket.indexOf('    setTimeout(function () { _goMine', bracket.indexOf('    var _goMine = function (behavior) {')));
@@ -29,7 +31,7 @@ const reaffirm = bracket.slice(bracket.indexOf('    var _reafirmar = function ()
     assert.ok(result.top >= result.headingBottom + 12, 'o cabeçalho do card não fica sob as abas');
     assert.ok(Math.abs(result.top - result.safeTop) <= 2, 'foco pousa na mesma geometria da reafirmação');
     await page.setViewportSize({ width: 1180, height: 693 });
-    await page.setContent('<!doctype html><style>body{margin:0;height:3000px}nav{position:fixed;top:124px;left:0;right:0;height:113px;background:#111}main{margin-top:900px}.bracket-round-heading{height:40px}.sp-match-card{height:403px;background:#222}</style><nav data-bracket-tabs-root="1" data-tournament-id="confra"></nav><main id="phase"><div class="bracket-round-column"><h3 class="bracket-round-heading">Final</h3><article id="card-j204" class="sp-match-card">Jogo 204</article></div></main>');
+    await page.setContent('<!doctype html><style>body{margin:0;height:3000px}nav{position:fixed;top:132px;left:0;right:0;height:113px;background:#111}main{margin-top:900px}.bracket-round-heading{height:40px}.sp-match-card{box-sizing:border-box;padding:14px;background:#222}.sp-mc-head{height:100px;margin-bottom:10px}.btn-row{height:309px;margin-top:8px}' + compactCss + '</style><nav data-bracket-tabs-root="1" data-tournament-id="confra"></nav><main id="phase" class="bracket-general-rounds-track"><div class="bracket-round-column"><h3 class="bracket-round-heading">Final</h3><article id="card-j204" class="sp-match-card"><div class="sp-mc-head">Jogo 204</div><div class="btn-row">Rodapé do jogo</div></article></div></main>');
     await page.addScriptTag({ content: 'window._bracketEntryHorizontalGap = function(){return 0}; function _bracketEntryHorizontalGap(){return 0};' + focusCode + portalCode + 'function _bracketSyncRoundHeadingOffsets(){const r=document.querySelector("nav");_bracketUpdateRoundHeadingPortal(r,r._bracketTabsScope)}' });
     const shortWindow = await page.evaluate(() => {
       const root = document.querySelector('nav');
@@ -38,9 +40,12 @@ const reaffirm = bracket.slice(bracket.indexOf('    var _reafirmar = function ()
       window._bracketFocusOperationalCard(root, card, 'instant');
       const portal = root._bracketRoundHeadingPortal;
       return { top: card.getBoundingClientRect().top, bottom: card.getBoundingClientRect().bottom,
+        height: card.getBoundingClientRect().height, compact: card.classList.contains('sp-match-card--entry-focus'),
         viewport: innerHeight, portal: getComputedStyle(portal).display };
     });
-    assert.ok(shortWindow.top >= 249 && shortWindow.bottom <= shortWindow.viewport - 10,
+    assert.equal(shortWindow.compact, true, 'card real de 455px usa espaçamento compacto só no foco');
+    assert.ok(shortWindow.height < 440, 'espaçamento do foco libera a altura necessária');
+    assert.ok(shortWindow.top >= 247 && shortWindow.bottom <= shortWindow.viewport - 10,
       'entrada da dashboard mostra o jogo inteiro abaixo das abas numa janela baixa');
     assert.equal(shortWindow.portal, 'none', 'o espelho da rodada não cobre o jogo em foco');
     const restoredPortal = await page.evaluate(() => {
