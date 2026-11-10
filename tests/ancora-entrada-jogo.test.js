@@ -16,13 +16,21 @@ assert(geometryStart >= 0 && geometryEnd > geometryStart);
   const browser = await chromium.launch();
   try {
     const geometryPage = await browser.newPage({ viewport: { width: 1200, height: 693 } });
-    await geometryPage.setContent(`<style>
+    await geometryPage.route('http://anchor.test/geometry', route => route.fulfill({ contentType: 'text/html', body: `<style>
       body { margin: 0; height: 3000px; }
       #before { height: 900px; }
       .bracket-scroll-container { height: 610px; overflow: auto; }
       #card-a { margin-top: 62px; height: 399px; scroll-margin-top: 137px; }
-    </style><div id="before"></div><div class="bracket-scroll-container"><div id="card-a">JOGO</div><div style="height:300px"></div></div>`);
-    await geometryPage.addScriptTag({ content: src.slice(geometryStart, geometryEnd) });
+    </style><div id="before"></div><div class="bracket-scroll-container"><div id="card-a">JOGO</div><div style="height:300px"></div></div>` }));
+    await geometryPage.goto('http://anchor.test/geometry');
+    await geometryPage.addScriptTag({ content: `
+      function _medirLarguraUtilDaChave() {}
+      function _alvoDeEntrada(id) { return document.getElementById('card-' + id); }
+      function _bracketEntryHorizontalGap() { return 0; }
+      window._bracketOperationalRootForCard = () => null;
+      ${src.slice(geometryStart, geometryEnd)}
+      ${src.slice(start, end)}
+    ` });
     // Geometria medida no Chrome do Confra: janela interna a y=245, card a
     // y=308 (399 px de altura) numa viewport de 693 px. Há rolagem interna,
     // mas o card solicitado está no começo dela (scrollTop=0).
@@ -38,7 +46,12 @@ assert(geometryStart >= 0 && geometryEnd > geometryStart);
       'reproduz o card parcialmente cortado visto no Chrome');
     assert.ok(before.scrollHeight > before.clientHeight, 'a chave tem rolagem vertical interna');
     assert.equal(before.innerScroll, 0, 'o jogo está no início da janela interna');
-    await geometryPage.evaluate(() => _scrollBracketEntryMatchToTop(document.getElementById('card-a'), 'auto'));
+    await geometryPage.evaluate(() => {
+      sessionStorage.setItem('sp_scrollToMatch', 'a');
+      window._bracketPendingScroll = 'fixture';
+      _applyMyMatchesFilter();
+    });
+    await geometryPage.waitForTimeout(850);
     const geometry = await geometryPage.evaluate(() => {
       const card = document.getElementById('card-a');
       const scroller = card.closest('.bracket-scroll-container');
