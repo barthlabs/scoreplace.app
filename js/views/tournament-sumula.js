@@ -520,10 +520,10 @@
       bucket.athletes.forEach(function (athlete) {
         athlete.games.forEach(function (game) { rows.push({ name:athlete.name, game:game }); });
       });
-      var total = Math.max(1, Math.ceil(rows.length / 26));
+      var chunks = balancedChunks(rows, 26), total = chunks.length;
       var note = bucket.skipped.length ? 'Jogos sem participantes definidos: ' + bucket.skipped.join(', ') : '';
       for (var i=0;i<total;i++) pages.push(callListPage(model, bucket.category,
-        rows.slice(i*26, (i+1)*26), i+1, total, i === total-1 ? note : ''));
+        chunks[i], i+1, total, i === total-1 ? note : ''));
     });
     return pages;
   }
@@ -533,20 +533,43 @@
         Number(a.isThirdPlace) - Number(b.isThirdPlace) || a.id.localeCompare(b.id, 'pt-BR', {numeric:true});
     });
     var refs = {}, incoming = {};
-    matches.forEach(function (m, i) { refs[m.id] = m.number ? 'JOGO ' + m.number : 'C' + (i+1); });
+    var category = text(bucket.category).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    var suffix = /diamante/.test(category) ? '1' : /ouro/.test(category) ? '2' : /prata/.test(category) ? '3' : '';
     function originLabel(value) {
-      var name = text(value);
-      return name.replace(/^Grupo\s+/i, '');
+      var name = text(value).replace(/^R\d+\s+/i, '').replace(/^Grupo\s+/i, '');
+      var letter = /^([A-Z]{1,2})(\d*)$/i.exec(name);
+      if (letter) return letter[1].toUpperCase() + (letter[2] || suffix);
+      var ordinal = /^(\d+)(?:\s+.*)?$/.exec(name);
+      if (ordinal && Number(ordinal[1]) > 0) {
+        var index = Number(ordinal[1]) - 1;
+        return String.fromCharCode(65 + index % 26) + (suffix || String(Math.floor(index / 26) + 1));
+      }
+      return name;
     }
+    var counts = {};
+    matches.forEach(function (m) { if (!m.isThirdPlace) counts[m.round] = (counts[m.round] || 0) + 1; });
+    var indexByRound = {};
+    matches.forEach(function (m) {
+      var count = counts[m.round] || 0, index = (indexByRound[m.round] || 0) + 1;
+      if (!m.isThirdPlace) indexByRound[m.round] = index;
+      var one = originLabel(m.source1), two = originLabel(m.source2);
+      var stage = count === 1 ? 'FINAL' : count === 2 ? 'SEMIFINAL ' + index :
+        count === 4 ? 'QUARTAS ' + index : count === 8 ? 'OITAVAS ' + index :
+        'RODADA ' + m.round + ' · ' + index;
+      refs[m.id] = m.number ? 'JOGO ' + m.number : m.isThirdPlace ? '3º LUGAR' :
+        /^[A-Z]{1,2}\d+$/.test(one) && /^[A-Z]{1,2}\d+$/.test(two) ? one + ' × ' + two : stage;
+    });
     function winnerLabel(ref) {
-      return /^JOGO /i.test(ref) ? 'Vencedor do ' + ref : 'Vencedor do confronto ' + ref;
+      return /^JOGO /i.test(ref) ? 'Vencedor do ' + ref :
+        /^(?:FINAL|SEMIFINAL|QUARTAS|OITAVAS)/i.test(ref) ? 'Vencedor da ' + ref : 'Vencedor de ' + ref;
     }
     matches.forEach(function (m) {
       if (m.nextMatchId && m.nextSlot) {
         (incoming[m.nextMatchId] = incoming[m.nextMatchId] || {})[m.nextSlot] = winnerLabel(refs[m.id]);
       }
       if (m.loserNextMatchId && m.loserNextSlot) {
-        (incoming[m.loserNextMatchId] = incoming[m.loserNextMatchId] || {})[m.loserNextSlot] = 'Perdedor ' + refs[m.id];
+        (incoming[m.loserNextMatchId] = incoming[m.loserNextMatchId] || {})[m.loserNextSlot] =
+          /^JOGO /i.test(refs[m.id]) ? 'Perdedor do ' + refs[m.id] : 'Perdedor de ' + refs[m.id];
       }
     });
     return matches.map(function (m) {
@@ -554,8 +577,8 @@
       (m.repFill || []).forEach(function (rep) {
         source[rep.slot] = 'Repescado da rodada ' + (Number(rep.srcRound || 0) + 1);
       });
-      return { id:m.id, ref:m.number ? 'JOGO ' + m.number : refs[m.id], round:m.round,
-        third:m.isThirdPlace, final:!m.isThirdPlace && !m.nextMatchId,
+      return { id:m.id, ref:refs[m.id], round:m.round,
+        third:m.isThirdPlace, final:!m.isThirdPlace && !m.nextMatchId && counts[m.round] === 1,
         nextMatchId:m.nextMatchId, nextSlot:m.nextSlot,
         loserNextMatchId:m.loserNextMatchId, loserNextSlot:m.loserNextSlot,
         p1:m.p1 && m.p1 !== 'A definir' ? m.p1 : '',
@@ -564,25 +587,20 @@
         source2:source.p2 || originLabel(m.source2) };
     });
   }
-  // Chave em paisagem: quatro linhas por confronto (dois nomes por dupla).
-  // O posicionamento usa nextMatchId/nextSlot, não a ordem visual de uma lista.
-  function bracketPage(model, bucket, title) {
-    var rows = structuralRows(bucket), rounds = Array.from(new Set(rows.filter(function (r) {
+  // Cada ramo da chave ocupa uma folha A4 em paisagem, com espaço para os
+  // quatro nomes. A repetição do jogo de conexão liga visualmente as folhas.
+  function bracketPage(model, bucket, title, selectedRows) {
+    var rows = selectedRows || structuralRows(bucket), rounds = Array.from(new Set(rows.filter(function (r) {
       return !r.third;
     }).map(function (r) { return Number(r.round) || 1; }))).sort(function (a,b) { return a-b; });
     if (!rounds.length) return null;
     var firstCount = Math.max.apply(null, rounds.map(function (round) {
       return rows.filter(function (r) { return !r.third && (Number(r.round) || 1) === round; }).length;
     }));
-    var size = firstCount > 18
-      ? [Math.max(2384, Math.ceil((firstCount*78+170)*Math.SQRT2)), firstCount*78+170]
-      : firstCount > 12 || rounds.length > 8 ? [2384,1684]
-      : firstCount > 9 || rounds.length > 6 ? [1684,1191]
-      : firstCount > 5 || rounds.length > 4 ? [1191,842] : [842,595];
-    var p = pdfPage(size[0], size[1]), left = 22, right = p.width-22;
-    var top = 122, usable = p.height-170, gap = p.width > 842 ? 24 : 18;
+    var p = pdfPage(842, 595), left = 22, right = p.width-22;
+    var top = 122, usable = p.height-170, gap = 18;
     var colWidth = (right-left-gap*(rounds.length-1))/rounds.length;
-    var cardHeight = Math.min(72, usable / firstCount - 3), positions = {};
+    var cardHeight = Math.min(145, usable / firstCount - 5), positions = {};
     var byRound = rounds.map(function (round) {
       return rows.filter(function (r) { return !r.third && (Number(r.round) || 1) === round; });
     });
@@ -595,7 +613,7 @@
     p.logo(right-58, 8, 54);
     byRound.forEach(function (group, col) {
       var x = left + col*(colWidth+gap);
-      var heading = col === byRound.length-1 ? 'FINAL' : 'RODADA ' + rounds[col];
+      var heading = group.some(function (row) { return row.final; }) ? 'FINAL' : 'RODADA ' + rounds[col];
       p.fillRect(x, 88, colWidth, 22, '0.90 0.94 0.97');
       p.write(heading, x+7, 103, 8, true, null, '0.071 0.20 0.31');
       group.forEach(function (row, i) {
@@ -631,24 +649,26 @@
     function card(row, x, y) {
       p.fillRect(x, y, colWidth, cardHeight, '0.97 0.98 0.99');
       p.box(x, y, colWidth, cardHeight);
-      p.write(fitLabel(row.ref + (row.third ? ' · 3º LUGAR' : row.final ? ' · FINAL' : ''),
-        colWidth-12, 7.4, true), x+6, y+9, 7.4, true, null, '0.06 0.33 0.51');
+      var scale = cardHeight / 145;
+      var heading = row.ref + (row.third && row.ref !== '3º LUGAR' ? ' · 3º LUGAR' :
+        row.final && row.ref !== 'FINAL' ? ' · FINAL' : '');
+      p.write(fitLabel(heading, colWidth-12, 10, true), x+6, y+13, 10, true, null, '0.06 0.33 0.51');
       var side1 = members(row.p1), side2 = members(row.p2);
       if (!side1.length) side1 = [];
       if (!side2.length) side2 = [];
-      var fs = colWidth < 155 ? 6.3 : 7.2;
+      var fs = colWidth < 155 ? 8 : 10;
       function pair(names, source, base) {
         [names[0] || '', names[1] || ''].forEach(function (name, i) {
-            if (!name) p.line(x+7, y+base+i*9+1, x+colWidth-7, y+base+i*9+1, 0.6);
-            else p.write(fitLabel(name, colWidth-20, fs, true), x+7, y+base+i*9,
+            if (!name) p.line(x+7, y+(base+i*24)*scale+1, x+colWidth-7, y+(base+i*24)*scale+1, 0.6);
+            else p.write(fitLabel(name, colWidth-20, fs, true), x+7, y+(base+i*24)*scale,
               fs, true);
           });
-        p.write(fitLabel(source, colWidth-14, 6.2), x+7, y+base+17, 6.2,
+        p.write(fitLabel(source, colWidth-14, 7), x+7, y+(base+37)*scale, 7,
           false, null, '0.28 0.36 0.43');
       }
-      pair(side1, row.source1, 20);
-      p.line(x+5, y+39, x+colWidth-5, y+39, 0.76);
-      pair(side2, row.source2, 49);
+      pair(side1, row.source1, 31);
+      p.line(x+5, y+73*scale, x+colWidth-5, y+73*scale, 0.76);
+      pair(side2, row.source2, 94);
     }
     byRound.forEach(function (group) { group.forEach(function (row) {
       var pos = positions[row.id]; card(row, pos.x, pos.y);
@@ -669,9 +689,36 @@
       left, p.height-12, 7);
     return p;
   }
+  function bracketPages(model, bucket, title) {
+    var rows = structuralRows(bucket), main = rows.filter(function (r) { return !r.third; });
+    var rounds = Array.from(new Set(main.map(function (r) { return Number(r.round) || 1; }))).sort(function (a,b) { return a-b; });
+    var segments = [];
+    for (var ri=1;ri<rounds.length;ri++) {
+      main.filter(function (r) { return (Number(r.round) || 1) === rounds[ri]; }).forEach(function (dest) {
+        var sources = main.filter(function (r) { return r.nextMatchId === dest.id; });
+        if (!sources.length) return;
+        var segment = sources.concat(dest);
+        if (dest.final) segment = segment.concat(rows.filter(function (r) { return r.third; }));
+        segments.push(segment);
+      });
+    }
+    if (!segments.length) segments = balancedChunks(rows, 3);
+    else {
+      var covered = new Set();
+      segments.forEach(function (segment) { segment.forEach(function (row) { covered.add(row.id); }); });
+      var remaining = rows.filter(function (row) { return !covered.has(row.id); });
+      if (remaining.length) segments = segments.concat(balancedChunks(remaining, 3));
+    }
+    return segments.map(function (segment, index) {
+      return bracketPage(model, bucket, title + (segments.length > 1 ? '  |  Folha ' + (index+1) + '/' + segments.length : ''), segment);
+    }).filter(Boolean);
+  }
   function writingPage(model, title, subtitle, rows, part, total, orientation, kind) {
     var portrait = orientation === 'portrait', p = portrait ? pdfPage(595, 842) : pdfPage(842, 595);
-    var left = 22, right = p.width - 22, top = 100, step = portrait ? 68 : 57;
+    var left = 22, right = p.width - 22, top = 100;
+    var step = kind === 'tiebreak'
+      ? Math.min(portrait ? 150 : 110, Math.floor((p.height - 130) / Math.max(1, rows.length)))
+      : portrait ? 68 : 57;
     p.fillRect(0, 0, p.width, 76, '0.071 0.133 0.220');
     p.write(fitLabel(model.tournament, right-left-70, portrait ? 11 : 13, true), left, 22,
       portrait ? 11 : 13, true, null, '1 1 1');
@@ -709,49 +756,64 @@
       left, p.height-16, portrait ? 6.3 : 7);
     return p;
   }
+  // Distribui o restante entre as folhas da mesma seção. Uma quadra com 15
+  // jogos deixa de produzir 14+1; as duas folhas passam a ter 8+7 jogos.
+  function balancedChunks(rows, capacity) {
+    var count = Math.max(1, Math.ceil(rows.length / capacity));
+    var base = Math.floor(rows.length / count), extra = rows.length % count;
+    var start = 0, chunks = [];
+    for (var i=0;i<count;i++) {
+      var end = start + base + (i < extra ? 1 : 0);
+      chunks.push(rows.slice(start, end));
+      start = end;
+    }
+    return chunks;
+  }
   function makePages(model, options) {
     options = options || {};
     var orientation = options.orientation === 'portrait' ? 'portrait' : 'landscape';
     var pages = [];
-    var courts = Array.from(new Set(model.matches.map(function (m) {
-      return m.court || 'Quadra a definir';
-    }))).sort(function (a, b) {
-      if (a === 'Quadra a definir') return b === a ? 0 : 1;
-      if (b === 'Quadra a definir') return -1;
-      return a.localeCompare(b, 'pt-BR', { numeric:true });
-    });
-    courts.forEach(function (courtLabel) {
-      model.days.forEach(function (day) {
-        var matches = model.matches.filter(function (m) {
-          return m.day === day && (m.court || 'Quadra a definir') === courtLabel;
-        });
-        var total = Math.ceil(matches.length / 14);
-        for (var i=0;i<total;i++) {
-          var chunk = matches.slice(i*14, (i+1)*14), dense = chunk.length > 12;
-          pages.push(scorePage(model, day, courtLabel, chunk,
-            i+1, total, dense ? 'portrait' : orientation, dense));
-        }
+    function appendScorePages(dated, undated) {
+      var courts = Array.from(new Set(dated.map(function (m) {
+        return m.court || 'Quadra a definir';
+      }))).sort(function (a, b) {
+        if (a === 'Quadra a definir') return b === a ? 0 : 1;
+        if (b === 'Quadra a definir') return -1;
+        return a.localeCompare(b, 'pt-BR', { numeric:true });
       });
-    });
-    var unscheduled = model.undated || [];
-    if (unscheduled.length) {
-      var totalUndated = Math.ceil(unscheduled.length / 14);
-      for (var u=0;u<totalUndated;u++) {
-        var undatedChunk = unscheduled.slice(u*14, (u+1)*14), undatedDense = undatedChunk.length > 12;
-        pages.push(scorePage(model, 'Data a definir', 'Quadra prevista no jogo; anote mudanças',
-          undatedChunk, u+1, totalUndated, undatedDense ? 'portrait' : orientation, undatedDense));
+      courts.forEach(function (courtLabel) {
+        model.days.forEach(function (day) {
+          var matches = dated.filter(function (m) {
+            return m.day === day && (m.court || 'Quadra a definir') === courtLabel;
+          });
+          var chunks = matches.length ? balancedChunks(matches, 14) : [];
+          var total = chunks.length;
+          for (var i=0;i<total;i++) {
+            var chunk = chunks[i], dense = chunk.length > 12;
+            pages.push(scorePage(model, day, courtLabel, chunk,
+              i+1, total, dense ? 'portrait' : orientation, dense));
+          }
+        });
+      });
+      if (undated.length) {
+        var undatedChunks = balancedChunks(undated, 14), totalUndated = undatedChunks.length;
+        for (var u=0;u<totalUndated;u++) {
+          var undatedChunk = undatedChunks[u], undatedDense = undatedChunk.length > 12;
+          pages.push(scorePage(model, 'Data a definir', 'Quadra prevista no jogo; anote mudanças',
+            undatedChunk, u+1, totalUndated, undatedDense ? 'portrait' : orientation, undatedDense));
+        }
       }
     }
+    var unscheduled = model.undated || [];
+    appendScorePages(model.matches.filter(function (m) { return !m.elimination; }),
+      unscheduled.filter(function (m) { return !m.elimination; }));
     var realBrackets = new Map();
     model.matches.concat(unscheduled).filter(function (m) { return m.elimination; }).forEach(function (m) {
       var key = [m.phaseIndex, m.category, m.bracket].join('|');
       if (!realBrackets.has(key)) realBrackets.set(key, { category:m.category, bracket:m.bracket, matches:[] });
       realBrackets.get(key).matches.push(m);
     });
-    realBrackets.forEach(function (bucket) {
-      var page = bracketPage(model, bucket, 'Confrontos da fase em andamento');
-      if (page) pages.push(page);
-    });
+    var futureBrackets = [];
     if (model.future && Array.isArray(model.future.categories)) model.future.categories.forEach(function (bucket) {
       var byBracket = new Map();
       bucket.matches.forEach(function (m) {
@@ -760,18 +822,46 @@
         byBracket.get(key).matches.push(m);
       });
       byBracket.forEach(function (part) {
-        var page = bracketPage(model, part, 'ROTEIRO DA ' + (model.future.name || 'ELIMINATÓRIA'));
-        if (page) pages.push(page);
+        futureBrackets.push(part);
       });
     });
-    var reserves = model.tiebreakGroups || [];
-    if (reserves.length) {
-      var perReserve = orientation === 'portrait' ? 10 : 8;
-      var totalReserve = Math.ceil(reserves.length / perReserve);
-      for (var r=0;r<totalReserve;r++) pages.push(writingPage(model, 'RESERVA PARA DESEMPATES',
-        'Grupos Rei/Rainha', reserves.slice(r*perReserve, (r+1)*perReserve),
-        r+1, totalReserve, orientation, 'tiebreak'));
+    var reservesByCategory = new Map(), categoryOrder = [];
+    function addCategory(category) {
+      category = text(category);
+      if (categoryOrder.indexOf(category) < 0) categoryOrder.push(category);
     }
+    (model.tiebreakGroups || []).forEach(function (group) {
+      var category = text(group.category);
+      if (!reservesByCategory.has(category)) reservesByCategory.set(category, []);
+      reservesByCategory.get(category).push(group);
+      addCategory(category);
+    });
+    model.matches.concat(unscheduled).filter(function (m) { return m.elimination; })
+      .forEach(function (m) { addCategory(m.category); });
+    realBrackets.forEach(function (bucket) { addCategory(bucket.category); });
+    futureBrackets.forEach(function (bucket) { addCategory(bucket.category); });
+    categoryOrder.forEach(function (category) {
+      var groups = reservesByCategory.get(category) || [];
+      if (groups.length) {
+        var slots = Math.max(1, Math.min(8, Math.ceil(groups.length / 2)));
+        var rows = Array.from({ length:slots }, function () {
+          return { category:category || 'Sem categoria', name:'Grupo: __________', court:'' };
+        });
+        pages.push(writingPage(model, 'RESERVA PARA DESEMPATES',
+          (category || 'Sem categoria') + '  |  preencher o grupo se houver empate',
+          rows, 1, 1, orientation, 'tiebreak'));
+      }
+      appendScorePages(model.matches.filter(function (m) { return m.elimination && m.category === category; }),
+        unscheduled.filter(function (m) { return m.elimination && m.category === category; }));
+      realBrackets.forEach(function (bucket) {
+        if (bucket.category === category) pages.push.apply(pages,
+          bracketPages(model, bucket, 'Confrontos da fase em andamento'));
+      });
+      futureBrackets.forEach(function (bucket) {
+        if (bucket.category === category) pages.push.apply(pages,
+          bracketPages(model, bucket, 'ROTEIRO DA ' + (model.future.name || 'ELIMINATÓRIA')));
+      });
+    });
     if (model.pending && model.pending.length) pages.push(writingPage(model, 'PENDÊNCIAS DA PROGRESSÃO',
       'Aguardando definição', model.pending.map(function (note, i) {
         return { ref:'P' + (i+1), round:'', p1:note, p2:'' };
@@ -783,8 +873,8 @@
   function makeAttendancePages(model) {
     var pages = [];
     model.days.forEach(function (day) {
-      var rows = attendance(model, day), total = Math.max(1, Math.ceil(rows.length / 22));
-      for (var i = 0; i < total; i++) pages.push(attendancePage(model, day, rows.slice(i * 22, (i + 1) * 22), i + 1, total));
+      var chunks = balancedChunks(attendance(model, day), 22), total = chunks.length;
+      for (var i = 0; i < total; i++) pages.push(attendancePage(model, day, chunks[i], i + 1, total));
     });
     return pages;
   }

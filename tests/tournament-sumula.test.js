@@ -147,6 +147,16 @@ for (const count of [13, 14]) {
   assert.strictEqual((text.match(/\(Rival \d+\)/g) || []).length, count*2,
     'todos os '+count+' jogos têm adversários e assinatura na mesma folha');
 }
+for (const [count, expected] of [[15,[8,7]], [29,[10,10,9]]]) {
+  const court = core.collect(t, Array.from({ length:count }, (_, i) => ({
+    id:'balanced-'+i, scheduledGameNumber:i+1, scheduledAt:at('2026-11-13', '08:00'),
+    court:'Quadra 1', category:'Diamante', p1:'Atleta '+i+' / Parceira '+i,
+    p2:'Rival '+i+' / Outra '+i
+  })));
+  const sheets = core.makePages(court).filter(p => p.commands.join('\n').includes('ASSINATURAS DOS ATLETAS'));
+  const sizes = sheets.map(page => new Set(Array.from(page.commands.join('\n').matchAll(/\(Atleta (\d+)\)/g), m => m[1])).size);
+  assert.deepStrictEqual(sizes, expected, count+' jogos da mesma quadra são distribuídos sem folha com um jogo isolado');
+}
 const rotating = core.collect(t, [
   { id:'r1', scheduledGameNumber:1, scheduledAt:at('2026-11-13','08:00'), court:'Quadra 1', category:'Diamante',
     p1:'Ana Lima / Bia Costa', p2:'Cris Melo / Dora Luz', team1Uids:['ana','bia'], team2Uids:['cris','dora'] },
@@ -259,6 +269,23 @@ const shortGroupBracket = core.makePages(core.collect(shortGroupNames, []))
 assert(shortGroupBracket.commands.join('\n').includes('(A1)') &&
   !shortGroupBracket.commands.join('\n').includes('Classificados do Grupo A1'),
   'abaixo dos nomes aparece só a designação A1');
+const originalGroupNames = JSON.parse(JSON.stringify(camis));
+originalGroupNames.groups.forEach(g => {
+  g.name = 'R1 Grupo ' + g.name.replace(/^Grupo\s+([A-Z])\d+$/, '$1');
+});
+const originalPages = core.makePages(core.collect(originalGroupNames, []));
+const originalBracket = originalPages.find(page => page.commands.some(command => command.includes('CHAVE ELIMINAT')));
+const originalText = originalBracket.commands.join('\n');
+assert(originalText.includes('(A1)') && originalText.includes('(H1)') &&
+  originalText.includes(String.raw`A1 \327 H1`) && !originalText.includes('R1 Grupo A'),
+  'rótulo persistido R1 Grupo A vira A1 e os lados refletem o pareamento real');
+for (const [category, suffix] of [['Ouro','2'], ['Prata','3']]) {
+  const page = originalPages.find(candidate =>
+    candidate.commands.some(command => command.includes('CHAVE ELIMINAT') && command.includes(category)));
+  assert(page && page.commands.join('\n').includes('(A' + suffix + ')') &&
+    !page.commands.join('\n').includes('R1 Grupo A'),
+  'o número do grupo acompanha a categoria ' + category);
+}
 const reversedRoster = JSON.parse(JSON.stringify(camis));
 reversedRoster.groups.forEach(group => { group.players.reverse(); });
 const reversedFutureModel = core.collect(reversedRoster, []);
@@ -312,6 +339,15 @@ const withCourt = core.collect({...camis, groups:[{...camis.groups[0],
   matches:[{id:'abertura-diamante', category:'Diamante', court:'Quadra 1'}]}, ...camis.groups.slice(1)]}, []);
 assert.strictEqual(withCourt.tiebreakGroups[0].court, 'Quadra 1',
   'o espaço livre informa a quadra do quarteto quando ela já foi definida');
+const withPrelim = core.collect(camis, [{ id:'primeira-rodada', phaseIndex:0,
+  scheduledGameNumber:1, scheduledAt:at('2026-11-13','08:00'), court:'Quadra 1',
+  category:'Diamante', p1:'Ana / Bia', p2:'Cris / Dora' }]);
+const orderedPages = core.makePages(withPrelim);
+const scoreIndex = orderedPages.findIndex(page => page.commands.some(command => command.includes('ASSINATURAS DOS ATLETAS')));
+const reserveIndex = orderedPages.findIndex(page => page.commands.some(command => command.includes('RESERVA PARA DESEMPATES')));
+const bracketIndex = orderedPages.findIndex(page => page.commands.some(command => command.includes('CHAVE ELIMINAT')));
+assert(scoreIndex >= 0 && scoreIndex < reserveIndex && reserveIndex < bracketIndex,
+  'folha de desempate fica entre a fase de grupos e a eliminatória');
 assert.strictEqual(globalThis._tournamentGamesPlan(camis).totalPlanned, plannedBefore,
   'o roteiro não altera o total operacional calculado antes para as fases');
 for (const orientation of ['landscape','portrait']) {
@@ -326,8 +362,9 @@ for (const orientation of ['landscape','portrait']) {
   assert(futureCommands.includes('(A1)') && futureCommands.includes('(H1)') &&
     !futureCommands.includes('Classificados do Grupo'),
     'a primeira rodada mostra só o código dos dois grupos de origem');
-  assert(futureCommands.includes('Vencedor do confronto C1'),
-    'rodadas seguintes identificam o confronto que fornece cada vencedor');
+  assert(futureCommands.includes(String.raw`Vencedor de A1 \327 H1`) &&
+    !futureCommands.includes('Vencedor do confronto C1'),
+    'rodadas seguintes identificam os grupos do confronto, sem inventar C1 como jogo');
   const printable = Buffer.from(core.encodePdf(pages)).toString('latin1');
   if (process.env.SP_SUMULA_FUTURE_SAMPLE && orientation === 'landscape')
     fs.writeFileSync(process.env.SP_SUMULA_FUTURE_SAMPLE, core.encodePdf(pages));
@@ -338,11 +375,22 @@ for (const orientation of ['landscape','portrait']) {
   assert(!printable.includes('Atleta 0-0'), 'nomes ainda não classificados não são inventados no PDF');
   const callPageCount = core.makeCallListPages(futureModel).length;
   const bracketPages = pages.filter(page => page.commands.some(command => command.includes('CHAVE ELIMINAT')));
-  assert.strictEqual(bracketPages.length, 3, 'cada categoria tem sua chave completa em uma página');
-  assert(bracketPages.every(page => page.width > page.height),
-    'chaves são sempre horizontais, inclusive no pacote de súmulas verticais');
+  assert(pages.every(page => [page.width,page.height].sort((a,b) => a-b).join('x') === '595x842'),
+    'todas as páginas da súmula usam papel A4');
+  assert.strictEqual(bracketPages.length, 16, 'as três chaves são repartidas em ramos legíveis no A4');
+  assert(bracketPages.every(page => page.width === 842 && page.height === 595),
+    'todas as folhas de chave são A4 horizontais, inclusive no pacote vertical');
   assert(bracketPages.every(page => page.commands.some(command => command.includes(' l S'))),
     'as colunas são ligadas por caminhos vetoriais');
+  const reserves = pages.map((page, index) => ({ page, index })).filter(item =>
+    item.page.commands.some(command => command.includes('RESERVA PARA DESEMPATES')));
+  assert.strictEqual(reserves.length, 3, 'há uma folha de desempate por categoria');
+  for (const category of ['Diamante','Ouro','Prata']) {
+    const reserveIndex = reserves.find(item => item.page.commands.some(command => command.includes(category))).index;
+    const bracketIndex = pages.findIndex(page => page.commands.some(command =>
+      command.includes('CHAVE ELIMINAT') && command.includes(category)));
+    assert(reserveIndex < bracketIndex, 'reserva de '+category+' antecede sua chave eliminatória');
+  }
 }
 const oneReal = { id:'real-com-outro-prefixo', phaseIndex:1, categoryName:'Ouro', round:1,
   p1:'Dupla Alfa', p2:'Dupla Beta' };
@@ -375,6 +423,17 @@ for (const athlete of ['Tatiana Rossi DAmico','Fernanda Gomes','Joana Granato',
   assert(realizedCommands.includes(athlete), 'cada nome das duplas cabe na chave: ' + athlete);
 assert(realizedCommands.includes('JOGO 37') && realizedCommands.includes('JOGO 39') &&
   realizedCommands.includes('Vencedor do JOGO 37'), 'a chave liga o número real do jogo à final');
+const onlyFirstRound = core.collect({...camis, currentPhaseIndex:1},
+  Array.from({ length:8 }, (_, i) => ({ id:'parcial-'+i, phaseIndex:1,
+    category:'Diamante', round:1, scheduledGameNumber:40+i,
+    p1:'Dupla '+i+' / Parceira '+i, p2:'Rival '+i+' / Outra '+i })));
+const partialBrackets = core.makePages(onlyFirstRound).filter(page =>
+  page.commands.some(command => command.includes('CHAVE ELIMINAT')));
+assert.strictEqual(partialBrackets.length, 3,
+  'oito jogos materializados da primeira rodada cabem em três folhas A4, sem folha de jogo único');
+assert(partialBrackets.every(page => page.width === 842 && page.height === 595 &&
+  !page.commands.join('\n').includes(' · FINAL')),
+  'folhas parciais preservam A4 e não anunciam finais inexistentes');
 if (process.env.SP_SUMULA_REAL_SAMPLE)
   fs.writeFileSync(process.env.SP_SUMULA_REAL_SAMPLE, core.encodePdf([realizedBracket]));
 const partialModel = core.collect(camis, [oneReal]);

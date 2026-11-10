@@ -1,3 +1,10 @@
+// 2.6.30 — A súmula das eliminatórias mostra A1, B1, C1 etc. nas vagas
+// da respectiva categoria, seguindo os confrontos da chave do torneio.
+// As linhas para escrever os dois nomes de cada dupla ficaram mais espaçadas.
+// Jogos da mesma quadra são distribuídos entre as folhas sem deixar só um
+// jogo na última página.
+// Todo o PDF usa A4. As chaves grandes seguem em folhas A4 numeradas; há
+// uma folha de reserva para desempate por categoria antes da eliminatória.
 // 2.6.29 — A súmula das eliminatórias apresenta uma chave horizontal por
 // categoria, com o código do grupo em letra pequena abaixo das duas linhas
 // de cada dupla e os confrontos ligados entre rodadas.

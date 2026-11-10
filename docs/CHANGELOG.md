@@ -1,3 +1,11 @@
+## 2.6.30 — 10/nov/2026 (grupos e espaço de escrita na súmula)
+
+- A chave impressa normaliza designações legadas como `R1 Grupo A` para `A1`, `B1` etc. na categoria Diamante, `A2`, `B2` etc. na Ouro e `A3`, `B3` etc. na Prata. Os lados de cada confronto seguem o pareamento gerado pelo motor do torneio.
+- Confrontos ainda sem número deixam de usar identificadores provisórios `C1`, `C2` que podiam ser confundidos com grupos. Cada quadro oferece linhas mais distantes para escrever os dois atletas de cada dupla à mão. Chaves extensas são divididas em ramos A4 horizontais numerados, com os jogos de ligação repetidos para mostrar a continuidade.
+- Ao dividir jogos da mesma quadra entre folhas de placar, o restante é distribuído entre elas: 15 jogos viram 8+7, não 14+1. A mesma paginação equilibrada vale para jogos sem horário, listas de chamada e listas de presença.
+- Cada categoria Rei/Rainha recebe uma única folha A4 de reserva para desempates, com campos livres para anotar os grupos que realmente empatarem. Ela aparece entre as súmulas da fase de grupos e a eliminatória da categoria. Todas as folhas do PDF usam papel A4.
+- Corte somente web. Nenhum torneio, resultado ou versão nativa foi alterado.
+
 ## 2.6.29 — 10/nov/2026 (chave horizontal na súmula eliminatória)
 
 - A súmula inclui uma chave horizontal por categoria, com confronto de cada rodada ligado ao destino do vencedor. Na primeira rodada, só o código do grupo (por exemplo, “A1”) aparece em letra pequena abaixo das duas linhas dos atletas; as seguintes apontam o confronto ou jogo efetivo anterior. Finais e terceiros lugares aparecem no mesmo percurso.
