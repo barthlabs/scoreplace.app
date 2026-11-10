@@ -144,8 +144,12 @@ for (const version of ['v2', 'v3']) {
     const courtSources = sourceDescriptor('functions-autodraw', recordedCourtCommit, true);
     const courtFresh = original.filter(row => [`sp-op-court-${version}`, `sp-op-control-${version}`].includes(row.name))
       .every(row => row.commit === recordedCourtCommit && row.sourceDigest === sourceDigest(row.target, recordedCourtCommit, courtSources));
-    assert.equal(run(original, false, {}, false, false, true).status === 0, scoreFresh && courtFresh,
-      'corte dirigido só aceita as revisões de placar, chamada e controle efetivamente publicadas');
+    const recordedEndCourtCommit = '225fca3e34009c03346991bb9b2b001cc2173b12';
+    const endCourtSources = sourceDescriptor('functions-autodraw', recordedEndCourtCommit, true);
+    const endCourtFresh = original.filter(row => row.name === `sp-op-end-court-${version}`)
+      .every(row => row.commit === recordedEndCourtCommit && row.sourceDigest === sourceDigest(row.target, recordedEndCourtCommit, endCourtSources));
+    assert.equal(run(original, false, {}, false, false, true).status === 0, scoreFresh && courtFresh && endCourtFresh,
+      'corte dirigido só aceita as revisões de placar, chamada, encerramento e controle efetivamente publicadas');
     assert.notEqual(run(original, true, {}, false, true).status, 0, 'flags incompatíveis são recusadas');
     assert.notEqual(run(original, false, {}, true, true).status, 0, 'dois modos obrigatórios são recusados');
     const wrongOther = structuredClone(original);

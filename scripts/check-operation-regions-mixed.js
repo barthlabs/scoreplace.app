@@ -21,6 +21,7 @@ const scoreRefreshCommit = '611de1560b8c51d3de84eefc085bc3a05e952492';
 // Mudanças em outros arquivos de functions-autodraw (por exemplo, um vendor usado
 // no sorteio) não alteram a imagem desses dois serviços na malha regional.
 const courtControlRefreshCommit = 'c85ac683465a159a4c77e5f680481f9510871442';
+const endCourtRefreshCommit = '225fca3e34009c03346991bb9b2b001cc2173b12';
 const regions = version === 'v2'
   ? ['us-east1', 'us-east4', 'us-south1']
   : ['us-east1', 'us-east4', 'us-south1', 'us-central1', 'southamerica-east1'];
@@ -71,7 +72,8 @@ if (requireScoreRefresh && rows.some(row => row.commit !==
 }
 if (requireCourtControlRefresh && rows.some(row => row.commit !==
     (row.name === `sp-op-score-${version}` ? scoreRefreshCommit :
-      [ `sp-op-court-${version}`, `sp-op-control-${version}` ].includes(row.name) ? courtControlRefreshCommit : releaseCommit))) {
+      row.name === `sp-op-end-court-${version}` ? endCourtRefreshCommit :
+        [ `sp-op-court-${version}`, `sp-op-control-${version}` ].includes(row.name) ? courtControlRefreshCommit : releaseCommit))) {
   throw new Error('malha regional diverge do corte dirigido de chamada e controle');
 }
 if (!allowLegacyCourt && !requireCurrent && !uniformCurrent && !directed) {
