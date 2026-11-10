@@ -1,3 +1,5 @@
+// 2.6.28 — O PDF completo do sorteio mostra o logo maior à direita do
+// cabeçalho, alinhado aos cards, em todas as páginas.
 // 2.6.27 — O PDF completo do sorteio baixa mesmo quando o logo falha, avisa
 // sobre erros e permite repetir o download. O logo remoto voltou a carregar
 // e o arquivo atualizado chega ao navegador com o novo cache buster.

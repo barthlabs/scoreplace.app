@@ -1,3 +1,8 @@
+## 2.6.28 — 10/nov/2026 (logo maior no PDF do sorteio)
+
+- O logo do torneio foi ampliado e movido para a direita do cabeçalho, alinhado à borda dos cards em cada página do resultado completo. Título e nome da categoria permanecem em duas linhas à esquerda, com espaço reservado para não atingir o logo.
+- Corte somente web, sem mudar sorteio, jogos, inscrições ou versões nativas.
+
 ## 2.6.27 — 10/nov/2026 (download do PDF do sorteio)
 
 - Corrigida a permissão CORS do bucket de logos para o domínio do site. A configuração reproduzível está em `infra/storage-cors.json`.
