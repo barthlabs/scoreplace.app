@@ -1799,7 +1799,7 @@ window._tProgByDay = function(t) {
       // Isso registra uma partida, mas não comprova uma chamada anterior.
       return start && start !== result ? start : 0;
     }).filter(Boolean);
-    var first = d.matches.map(function(m) { return window.ScoreplaceMatchDay.timestamp(m.startedAt || m.resultAt); }).filter(Boolean);
+    var first = d.matches.map(function(m) { return window.ScoreplaceMatchDay.timestamp(m.courtCalledAt || m.startedAt || m.resultAt); }).filter(Boolean);
     var last = done.map(function(m) { return window.ScoreplaceMatchDay.timestamp(m.resultAt); }).filter(Boolean);
     return { day: d.day, startTime: d.startTime, endTime: d.endTime, total: d.matches.length,
       completed: done.length, firstAt: first.length ? Math.min.apply(null, first) : null,
@@ -1839,8 +1839,12 @@ window._buildProgressInner = function(t, barsOnly) {
   var _allStampsG = [], _endStampsG = [], _scheduledGamesG = [];
   ((typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (t.matches || [])).forEach(function (m) {
     if (!m || m.isBye || m.isSitOut) return;
-    if (m.startedAt) _allStampsG.push(dayStages ? window.ScoreplaceMatchDay.timestamp(m.startedAt) : +m.startedAt);
-    if (m.resultAt) { _allStampsG.push(dayStages ? window.ScoreplaceMatchDay.timestamp(m.resultAt) : +m.resultAt); _endStampsG.push(dayStages ? window.ScoreplaceMatchDay.timestamp(m.resultAt) : +m.resultAt); }
+    var _calledMs = window._tProgParseMs(m.courtCalledAt);
+    var _startedMs = window._tProgParseMs(m.startedAt);
+    var _resultMs = window._tProgParseMs(m.resultAt);
+    if (_calledMs) _allStampsG.push(_calledMs);
+    if (_startedMs) _allStampsG.push(_startedMs);
+    if (_resultMs) { _allStampsG.push(_resultMs); _endStampsG.push(_resultMs); }
     if (m.scheduledAt) {
       var _scheduledGameMs = window._tProgParseMs(m.scheduledAt);
       if (_scheduledGameMs) _scheduledGamesG.push(_scheduledGameMs);
@@ -1848,7 +1852,13 @@ window._buildProgressInner = function(t, barsOnly) {
   });
   var _earliestGameMs = _allStampsG.length ? Math.min.apply(null, _allStampsG) : null;
   var _latestGameMs = _endStampsG.length ? Math.max.apply(null, _endStampsG) : null;
-  var actualStart = t.tournamentStarted ? (+t.tournamentStarted) : _earliestGameMs;
+  var actualStart = t.tournamentStarted ? window._tProgParseMs(t.tournamentStarted) : _earliestGameMs;
+  // O sorteio automático também preenchia tournamentStarted. Quando uma quadra
+  // foi chamada, seu carimbo é a prova do início real, inclusive nos torneios
+  // antigos cujo carimbo do sorteio permaneceu no campo de início.
+  if (_earliestGameMs && window._isConcentratedTournament && window._isConcentratedTournament(t)) {
+    actualStart = _earliestGameMs;
+  }
   var schedStart = window._tProgParseMs(t.startDate);
   // No torneio concentrado, publicar a chave ou clicar em "iniciar" pode
   // preencher tournamentStarted antes do primeiro dia. Para o progresso público,
@@ -2357,7 +2367,16 @@ window._buildProgressInner = function(t, barsOnly) {
   // não há "início real / decorrido"; usamos só a janela programada + barras.
   var _notStarted = !actualStart;
   var elapsedMs = _notStarted ? 0 : (endForElapsed - actualStart);
-  var expectedFrac = (now - schedStart) / (plannedEnd - schedStart);
+  // No evento concentrado, a grade informa a DURAÇÃO prevista, mas o relógio
+  // azul começa no início efetivo. Um torneio adiantado por horas ou dias não
+  // pode permanecer em 0% até a data originalmente marcada.
+  var expectedStart = schedStart;
+  var expectedEnd = plannedEnd;
+  if (actualStart && window._isConcentratedTournament && window._isConcentratedTournament(t)) {
+    expectedStart = actualStart;
+    expectedEnd = actualStart + (plannedEnd - schedStart);
+  }
+  var expectedFrac = (now - expectedStart) / (expectedEnd - expectedStart);
   if (expectedFrac < 0) expectedFrac = 0;
   if (expectedFrac > 1) expectedFrac = 1;
   // v2.3.20: a barra azul é o TEMPO REGULAMENTAR — ela só chega a 100% na hora

@@ -34,6 +34,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       window._safeHtml = value => String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
       window.AppStore = { currentUser: { uid: 'org' } };
       window._isUserAuthority = (t, u) => ['org', 'ref'].includes(u.uid);
+      window._isUserOrgOrCoHost = (t, u) => !!u && u.uid === t.creatorUid;
       window._souOrganizador = () => window.AppStore.currentUser.uid === 'org';
       window._resultEntryIncludes = () => true;
       window.renderMatchCard = (m, canEnter, tid, num, compact, pending, opts) => _bracketScopeReplicaHtml(
@@ -70,9 +71,15 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       document.getElementById('tourn-grid-container').after(root._bracketGeneralView);
       window._bracketOperationsRefresh(t, root);
       const strip = root._bracketOperationsStrip;
+      const simulate = strip.querySelector('[data-operations-simulate]');
+      const heading = strip.querySelector('.sp-operations-courts-heading .sp-operations-section-title');
+      const simulateRect = simulate.getBoundingClientRect();
+      const headingRect = heading.getBoundingClientRect();
+      const stripRect = strip.getBoundingClientRect();
       let next = strip.querySelector('.sp-operations-next .sp-match-card');
       const ids = [...document.querySelectorAll('[id]')].map(node => node.id);
       const initial = { full: !!next && next.querySelectorAll('.team').length === 2 && !!next.querySelector('.sp-mc-head, .versus, .sp-match-operational'),
+        simulateVisible: simulateRect.left >= headingRect.right && simulateRect.right <= stripRect.right && simulateRect.right <= innerWidth,
         names: next.textContent.includes('A / B') && next.textContent.includes('C / D'),
         noCanonical: !document.getElementById('card-m1'), uniqueIds: ids.length === new Set(ids).size,
         linked: next.querySelector('label[for]').htmlFor === next.querySelector('input').id,
@@ -133,6 +140,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       const clockRect = strip.querySelector('.sp-operations-court-slot--active .sp-match-court-clock').getBoundingClientRect();
       const goldRect = strip.querySelector('.sp-operations-next .sp-match-card').getBoundingClientRect();
       const afterCall = { called: window.called, saved: window.saved, scoreSourceCleared: window._bracketOperationsScoreSource == null,
+        simulateEnabled: !strip.querySelector('[data-operations-simulate]').disabled,
         clock: window.clock, live: window.live, wo: window.wo,
         opened: window.opened, confirmVisible,
         activeBottomActions: [...strip.querySelectorAll('.sp-operations-court-slot--active .sp-match-operational [data-operations-action]')]
@@ -151,6 +159,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       window._bracketCourtReleaseCache = { sb_test: { released: { m1: '2026-10-22T18:05:00Z' } } };
       window._bracketOperationsRefresh(t, root);
       const refereeView = {
+        simulateHidden: !strip.querySelector('[data-operations-simulate]'),
         visible: !!strip.querySelector('.sp-operations-next .sp-match-confirm'),
         pending: !!strip.querySelector('.sp-operations-pending [data-operations-match="m1"]'),
         releasedCourt: !!strip.querySelector('.sp-operations-court-slot:nth-child(2) .sp-operations-court-free'),
@@ -162,10 +171,13 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
         selectorStayedInStrip, outsiderHidden: !document.querySelector('[data-bracket-operations-strip]') };
     });
     assert(state.initial.full && state.initial.names && state.initial.noCanonical && state.initial.uniqueIds && state.initial.linked && state.initial.noInline);
+    assert(state.initial.simulateVisible, 'Simular deve aparecer ao lado de EM QUADRA, sem rolar até a última quadra');
     assert.deepEqual(state.initial.courts, ['Quadra 4', 'Quadra 5']);
     assert(state.initial.freeSlotFillsTrack, 'Quadra X deve alinhar com X quadras livres: ' + JSON.stringify(state.initial));
     assert(state.initial.freeSlotMatchesCard, 'o box vazio deve ter a mesma altura e alinhamento do card do próximo jogo: ' + JSON.stringify(state.initial));
     assert.deepEqual(state.afterCall.called, ['sb_test', 'm1', 'Quadra 5']);
+    assert(state.afterCall.simulateEnabled && state.refereeView.simulateHidden,
+      'Simular habilita com jogo em quadra para a organização e não aparece para árbitro');
     assert.deepEqual(state.afterCall.live, ['sb_test', 'm1']);
     assert.deepEqual(state.afterCall.wo, ['sb_test', 'm|m1']);
     assert.deepEqual(state.afterCall.opened, ['sb_test', 'm1']);

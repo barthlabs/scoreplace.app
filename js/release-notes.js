@@ -1,3 +1,6 @@
+// 2.6.35 — O botão Simular fica visível ao lado de Em quadra e registra uma
+// partida por quadra a cada clique. A barra azul começa no primeiro registro
+// real de quadra ou resultado, mesmo dias antes ou depois da data prevista.
 // 2.6.34 — O botão Simular registra uma partida por quadra a cada clique e
 // avança a série Rei/Rainha. A faixa em quadra usa a altura do conteúdo,
 // sem espaço morto, e mantém o enquadramento ao receber placares.

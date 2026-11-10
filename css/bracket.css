@@ -81,7 +81,7 @@
   letter-spacing: .04em;
 }
 .sp-operations-courts .sp-operations-section-title { margin-bottom: 0; }
-.sp-operations-courts-heading { display:flex;align-items:center;justify-content:space-between;gap:8px;height:var(--sp-operations-line-height);min-width:0; }
+.sp-operations-courts-heading { display:flex;align-items:center;justify-content:flex-start;gap:8px;height:var(--sp-operations-line-height);min-width:0; }
 .sp-operations-simulate { flex:0 0 auto;align-self:center;height:18px;min-height:18px;max-height:18px;padding:0 8px;border:1px solid var(--sp-c-38bdf8,#38bdf8);border-radius:6px;background:#075985;color:#fff;font-size:.66rem;font-weight:800;line-height:16px;cursor:pointer; }
 .sp-operations-simulate:disabled { opacity:.5;cursor:default; }
 .sp-operations-court-track {

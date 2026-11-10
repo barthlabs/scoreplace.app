@@ -1,3 +1,10 @@
+## 2.6.35 — 10/nov/2026 (simulação visível e tempo ancorado no início real)
+
+- O botão Simular agora fica junto ao título Em quadra, dentro da área visível, inclusive com oito quadras. Ele habilita para a organização quando há jogo em quadra.
+- A barra azul de tempo previsto usa a duração da grade a partir da primeira chamada, início ou resultado real. A data agendada continua como referência, sem impedir a contagem quando o torneio começa horas ou dias antes ou depois.
+- O primeiro registro de jogo aceita carimbos ISO do servidor; um carimbo anterior criado no sorteio não substitui a primeira ação real de quadra. Testes cobrem adiantamento e atraso de 2, 30 e 3.650 dias, inclusive resultado sem chamada anterior.
+- Corte somente web, sem alterar dados do torneio ou versões nativas.
+
 ## 2.6.34 — 10/nov/2026 (simulação da quadra e estabilidade)
 
 - O botão Simular na faixa Em quadra registra o jogo atual de cada quadra por clique. O próximo jogo da série Rei/Rainha fica para o clique seguinte; os resultados passam pela função autenticada do servidor.
