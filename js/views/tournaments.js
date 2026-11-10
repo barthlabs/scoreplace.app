@@ -1792,6 +1792,7 @@ window._focusTournamentMatchWhenReady = function(tId, matchId, options) {
   var behavior = options && options.behavior ? options.behavior : 'auto';
   var startedHash = window.location.hash;
   var cancelled = false;
+  var reaffirm = !!(options && options.reaffirm);
   var cleanup = function() {
     window.removeEventListener('wheel', cancel);
     window.removeEventListener('touchstart', cancel);
@@ -1805,7 +1806,11 @@ window._focusTournamentMatchWhenReady = function(tId, matchId, options) {
   } catch (eInput) {}
   var focus = function() {
     // Não roubar a rolagem de quem já interagiu ou mudou de rota/aba.
-    if (cancelled || window.location.hash !== startedHash || window._travaRolagemDaChave) { cleanup(); return; }
+    if (cancelled || window.location.hash !== startedHash) { cleanup(); return; }
+    if (window._travaRolagemDaChave) {
+      if (reaffirm && ++attempts < maxAttempts) { setTimeout(focus, 100); return; }
+      cleanup(); return;
+    }
     var target = document.getElementById('card-' + String(matchId));
     if (target && getComputedStyle(target).display !== 'none') {
       if (!(target.closest && target.closest('[hidden], details:not([open])'))) {
@@ -1814,6 +1819,20 @@ window._focusTournamentMatchWhenReady = function(tId, matchId, options) {
           ? window._bracketOperationalRootForCard(target, tId) : null;
         if (root && typeof window._bracketFocusOperationalCard === 'function') {
           window._bracketFocusOperationalCard(root, target, behavior);
+        } else if (reaffirm) {
+          // A entrada da dashboard pode terminar a pintura da chave depois da
+          // primeira rolagem. Alinha a PÁGINA pelo card exato e confere sua
+          // posição até assentar; o usuário e a edição de placar cancelam antes
+          // de qualquer nova correção. [[regression_dashboard_match_whole_card]]
+          var margin = Math.max(0, parseFloat(getComputedStyle(target).scrollMarginTop) || 0);
+          var gap = Math.abs(target.getBoundingClientRect().top - margin);
+          if (gap > 3) {
+            if (typeof window._bracketEntryHorizontalGap === 'function') window._bracketEntryHorizontalGap(target, true);
+            var top = Math.max(0, (window.scrollY || window.pageYOffset || 0) + target.getBoundingClientRect().top - margin);
+            window.scrollTo({ top: top, behavior: 'instant' });
+          }
+          attempts += 1;
+          if (attempts < maxAttempts) { setTimeout(focus, 100); return; }
         } else {
           try { target.scrollIntoView({ behavior: behavior, block: 'start', inline: 'nearest' }); }
           catch (eScroll) { try { target.scrollIntoView(); } catch (eFallback) {} }
@@ -5834,6 +5853,12 @@ function renderTournaments(container, tournamentId = null) {
                 inlineContainer.innerHTML = '<div style="padding:1rem;color:var(--sp-c-f87171,#f87171);font-size:0.85rem;">Erro ao renderizar chaveamento: ' + window._safeHtml(String(inlineErr)) + '</div>';
             }
         }
+    }
+    if (_pendingBracketTarget && _pendingBracketTarget.matchId) {
+        // O render da chave pode completar de forma assíncrona. Esta retentativa
+        // usa o mesmo ID escolhido antes da pintura e só atua na entrada.
+        window._focusTournamentMatchWhenReady(tournamentId, _pendingBracketTarget.matchId,
+            { behavior: 'auto', reaffirm: true });
     }
 
     // ── CARIMBA A ASSINATURA DO DETALHE NA 1ª PINTURA (1.9.77) ───────────────

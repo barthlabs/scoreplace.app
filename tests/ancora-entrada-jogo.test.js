@@ -5,6 +5,12 @@ const path = require('node:path');
 const { chromium } = require('@playwright/test');
 
 const src = fs.readFileSync(path.join(__dirname, '..', 'js/views/bracket.js'), 'utf8');
+const tournamentsSrc = fs.readFileSync(path.join(__dirname, '..', 'js/views/tournaments.js'), 'utf8');
+const detailFocusStart = tournamentsSrc.indexOf('window._focusTournamentMatchWhenReady = function(');
+const detailFocusEnd = tournamentsSrc.indexOf('// A entrada genérica da dashboard', detailFocusStart);
+assert(detailFocusStart >= 0 && detailFocusEnd > detailFocusStart);
+assert(tournamentsSrc.includes('{ behavior: \'auto\', reaffirm: true }'),
+  'o detalhe do torneio precisa ativar a reafirmação depois de renderBracket');
 const start = src.indexOf('function _applyMyMatchesFilter()');
 const end = src.indexOf('// ── v1.8.99: ÂNCORA POR GRUPO', start);
 assert(start >= 0 && end > start);
@@ -85,6 +91,22 @@ assert(geometryStart >= 0 && geometryEnd > geometryStart);
     assert.ok(Math.abs(geometry.top - 137) < 2, 'jogo explícito alinhado ao topo livre da página');
     assert.ok(geometry.bottom <= geometry.viewport, 'card inteiro visível na janela de 693 px');
     assert.equal(geometry.innerScroll, 0, 'sem mover a rolagem vertical interna da chave');
+    await geometryPage.addScriptTag({ content: tournamentsSrc.slice(detailFocusStart, detailFocusEnd) });
+    await geometryPage.evaluate(() => {
+      window._bracketEntryToken?.cancel();
+      window.scrollTo(0, 655);
+      window._travaRolagemDaChave = true;
+      window._focusTournamentMatchWhenReady('fixture', 'a', { behavior: 'auto', reaffirm: true });
+    });
+    await geometryPage.waitForTimeout(180);
+    await geometryPage.evaluate(() => { window._travaRolagemDaChave = false; });
+    await geometryPage.waitForTimeout(500);
+    const detailFocus = await geometryPage.evaluate(() => {
+      const card = document.getElementById('card-a');
+      return { top: card.getBoundingClientRect().top, bottom: card.getBoundingClientRect().bottom };
+    });
+    assert.ok(Math.abs(detailFocus.top - 137) < 2 && detailFocus.bottom <= 693,
+      'a entrada do detalhe aguarda o destravamento e mostra o card inteiro');
     await geometryPage.close();
     const page = await browser.newPage();
     await page.route('http://anchor.test/', route => route.fulfill({ contentType: 'text/html', body:

@@ -1,3 +1,9 @@
+## 2.6.23 — 09/nov/2026 (âncora do jogo na entrada do torneio)
+
+- O atalho da dashboard aguarda a montagem assíncrona da chave e reafirma a posição do card solicitado na rolagem da página. A correção anterior selecionava o jogo certo, mas ainda deixava o rodapé fora da janela no Chrome.
+- Uma ação manual ou a edição do placar cancela a reafirmação; sem próximo jogo, o destino continua sendo o último concluído.
+- Corte somente web, sem alteração de dados nem versões nativas.
+
 ## 2.6.22 — 09/nov/2026 (entrada no jogo sem corte)
 
 - O atalho do card do torneio posiciona o jogo pedido pelo topo real do card na página. Isso evita que a rolagem interna da chave deixe o rodapé fora da janela.
