@@ -88,13 +88,13 @@ console.log('\n② a regra ANTIGA, no mesmo documento, dizia que estava tudo lá
 console.log('\n③ não vira laço: com tudo em memória, não acusa\n');
 {
   const t = confra();
-  t.rounds[0].matches = new Array(115).fill({ id: 'x' });
+  t.rounds[0].matches = Array.from({ length: 115 }, (_, i) => ({ id: 'x-' + i }));
   t.participants = new Array(152).fill({ uid: 'u' });
   t.opponentHistory = [{}];
   const r = enxerta(t, null);
   ok(!r._faltamPesados, '⭐ com 115/152/1 em memória, NÃO acusa (senão buscaria a cada eco)');
   const mais = confra();
-  mais.rounds[0].matches = new Array(200).fill({ id: 'x' });
+  mais.rounds[0].matches = Array.from({ length: 200 }, (_, i) => ({ id: 'x-' + i }));
   mais.participants = new Array(160).fill({ uid: 'u' });
   mais.opponentHistory = [{}];
   ok(!enxerta(mais, null)._faltamPesados, '   e com MAIS do que o contador promete também não');
@@ -121,7 +121,7 @@ console.log('\n④ o que já funcionava continua\n');
   /* o enxerto a partir da memória segue funcionando */
   const novo = confra();
   novo.rounds[0].matches = [];
-  const velho = { rounds: [{ matches: new Array(115).fill({ id: 'y' }) }], participants: new Array(152).fill({ uid: 'u' }), opponentHistory: [{}] };
+  const velho = { rounds: [{ matches: Array.from({ length: 115 }, (_, i) => ({ id: 'y-' + i })) }], participants: new Array(152).fill({ uid: 'u' }), opponentHistory: [{}] };
   const r3 = enxerta(novo, velho);
   ok(r3.rounds[0].matches.length === 115, 'enxerta os jogos do objeto vivo...');
   /* ⚠️ ...e `matches` sai da lista do que falta. `participants` NÃO sai, e isso é correto:

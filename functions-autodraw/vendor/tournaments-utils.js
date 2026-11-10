@@ -1813,7 +1813,7 @@ window._tProgByDay = function(t) {
     total: plan && plan.totalPlanned > 0 ? plan.totalPlanned : prog.total,
     completed: plan && plan.totalDone != null ? plan.totalDone : prog.completed, zone: zone };
 };
-window._buildProgressInner = function(t) {
+window._buildProgressInner = function(t, barsOnly) {
   var prog = window._getTournamentProgress(t);
   var dayStages = window._tProgByDay(t);
   // v4.4.48: Multi-fase (ex.: Fase de Grupos → Eliminatória): a barra VERDE do topo reflete
@@ -2339,6 +2339,8 @@ window._buildProgressInner = function(t) {
     var _estLine2 = (_pending && _estMin2 > 0)
       ? '<div style="margin-top:7px;font-size:0.72rem;color:var(--sp-c-93c5fd,#93c5fd);font-weight:600;text-align:center;">⏱️ Duração estimada: ~' + _estStr2 + '</div>'
       : '';
+    if (barsOnly) return window._progBarPct(prog.pct, c, 18, '7px 7px 0 0', 'rgba(255,255,255,0.1)', c) +
+      window._progBarPct(0, '#3b82f6', 16, '0 0 7px 7px', 'rgba(255,255,255,0.06)', '#3b82f6');
     return head + _waitTop2 +
       window._progBarPct(prog.pct, c, 18, '7px', 'rgba(255,255,255,0.1)', c) +
       (prog.pct === 100 && !isFinished ? '<div style="margin-top:6px;font-size:0.75rem;color:var(--sp-c-10b981,#10b981);font-weight:600;">✅ ' + ((_isLiga || _phaseRoundActive) ? 'Rodada concluída!' : 'Todas as partidas concluídas!') + '</div>' : '') +
@@ -2446,6 +2448,7 @@ window._buildProgressInner = function(t) {
   // percentual de cada uma dentro da própria cor.
   var realBar = window._progBarPct(progFrac * 100, color, 18, '7px 7px 0 0', 'rgba(255,255,255,0.1)', color);
   var blueBar = window._progBarPct(expectedFrac * 100, '#3b82f6', 16, '0 0 7px 7px', 'rgba(255,255,255,0.06)', '#3b82f6');
+  if (barsOnly) return realBar + blueBar;
   var botRow = '<div style="display:grid;grid-template-columns:1fr 1fr;align-items:flex-start;margin-top:7px;gap:8px;">' +
     _progCol(schedStart, _labelSchedStart, 'flex-start') +
     _progCol(plannedEnd, _labelSchedEnd, 'flex-end') +

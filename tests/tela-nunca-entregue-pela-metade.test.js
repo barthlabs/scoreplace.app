@@ -23,9 +23,8 @@
  *
  * ── 2. NENHUMA ANIMAÇÃO `infinite` DENTRO DO APP ───────────────────────────
  * `btnCtaShine` em 6 botões derrubou a rolagem inteira na 1.9.87 (fotografado com
- * ZERO JS rodando). Na 1.9.88 eu a reintroduzi como "brilho que ensina" — um
- * elemento só, mas `infinite`. O aparelho pegou ela viva numa travada de 533ms.
- * O custo não é por elemento, é por QUADRO.
+ * ZERO JS rodando). O "brilho que ensina" também foi removido a pedido do usuário.
+ * O custo das animações era por QUADRO.
  *
  * ⚰️ Esta suíte SUBSTITUI `tests/chave-pinta-em-etapas.test.js`, apagada aqui. Ela
  * travava a pintura em fatias — o comportamento que o aparelho acabou de condenar —
@@ -89,14 +88,10 @@ ok(foraDaLanding.length === 0,
    'btnCtaShine só roda `infinite` na landing — nunca dentro do app' +
    (foraDaLanding.length ? ' — achei: ' + foraDaLanding.map((o) => o.n + ': ' + o.l.trim()).join(' | ') : ''));
 
-// o brilho que ensina: finito, e sem camada permanente
+// O pedido atual removeu as dicas e seu destaque animado do app.
 const iDica = compsVivo.indexOf('.sp-shine-dica::after');
-ok(iDica > 0, 'o brilho que ensina existe');
-const dica = compsVivo.slice(iDica, compsVivo.indexOf('}', iDica));
-ok(/animation:\s*btnCtaShine 4s ease-in-out 2 forwards;/.test(dica),
-   'o brilho que ensina é FINITO (2 passadas), nunca infinite');
-ok(!/will-change\s*:/.test(dica),
-   'e sem will-change: a camada própria ficaria depois de a animação acabar');
+ok(iDica === -1, 'o brilho de orientação não existe mais');
+ok(!/\.sp-shine-dica\s*\{/.test(compsVivo), 'a classe animada de orientação também saiu');
 
 // ── 3. o perfilador NOMEIA quem segurou a thread ───────────────────────────
 const store = R('js/store.js');

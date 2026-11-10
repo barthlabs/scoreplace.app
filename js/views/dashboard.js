@@ -4647,19 +4647,6 @@ function renderDashboard(container) {
   } catch (_ePrev) {}
   // CÂNONE fit-name-to-box: ajusta a fonte dos nomes ao box fixo (saudação etc.).
   if (typeof window._fitNames === 'function') { try { window._fitNames(container); } catch (e) {} }
-  // 1.9.88 — o brilho que ENSINA (um botão por vez) e a seta "encontre seu
-  // torneio". Ambos entram DEPOIS da pintura, no próximo quadro: precisam medir
-  // o que está visível, e medir antes de pintar dá retângulo zerado.
-  try {
-    requestAnimationFrame(function () {
-      if (typeof window._aplicarShineDica === 'function') window._aplicarShineDica();
-      if (typeof window._setaEncontreSeuTorneio === 'function') window._setaEncontreSeuTorneio();
-    });
-    setTimeout(function () {
-      if (typeof window._aplicarShineDica === 'function') window._aplicarShineDica();
-      if (typeof window._setaEncontreSeuTorneio === 'function') window._setaEncontreSeuTorneio();
-    }, 120);   // rede: rAF não dispara em aba de fundo
-  } catch (_eDica) {}
   // v2.8.46: re-aplica a busca in-place após qualquer re-render (ex.: trocar
   // modalidade com busca ativa) — sem isso a busca "sumiria" no re-render.
   if (window._dashSearch && typeof window._applyDashSearchInPlace === 'function') {
@@ -5066,11 +5053,6 @@ function renderDashboard(container) {
     } catch (_ope) {}
   }
 
-  // v2.3.24: jornada de coachmarks (menu → perfil). Atrasado pra dashboard
-  // assentar e não competir com o boot loader. Self-guarda contra disabled/visto.
-  if (window._coach && typeof window._coach.autoStartDashboard === 'function') {
-    setTimeout(function () { try { window._coach.autoStartDashboard(); } catch (e) {} }, 1100);
-  }
 }
 
 // v2.8.32: colapso da seção "Meus Últimos Resultados". Preferência persistida em

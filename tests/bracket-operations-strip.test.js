@@ -847,6 +847,20 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert(carousel.states[3].classification && carousel.states[3].players.length === 4);
     assert(carousel.arrows.every(item => item.label && item.triangular && item.width >= 44 && item.height >= 44));
     assert(carousel.survivesRefresh);
+    const progress = await page.evaluate(() => {
+      const t = window._findTournamentById();
+      const root = document.querySelector('[data-bracket-tabs-root]');
+      window._buildProgressInner = (_t, barsOnly) => barsOnly ? '<div data-test-progress="1">42%</div>' : '';
+      window._bracketOperationsRefresh(t, root);
+      window._bracketOperationsRefresh(t, root);
+      const card = document.getElementById('tourn-grid-container');
+      return { count: document.querySelectorAll('.sp-operations-progress').length,
+        afterCard: card.nextElementSibling === root._bracketOperationsProgress,
+        beforeStrip: root._bracketOperationsProgress.nextElementSibling === root._bracketOperationsStrip,
+        text: root._bracketOperationsProgress.textContent };
+    });
+    assert.deepEqual(progress, { count: 1, afterCard: true, beforeStrip: true, text: '42%' },
+      'atualizações repetidas mantêm uma só barra de progresso antes das quadras');
     await page.setViewportSize({ width: 320, height: 800 });
     const narrowCall = await page.evaluate(() => {
       const t = window._findTournamentById();

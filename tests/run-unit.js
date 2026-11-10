@@ -2062,12 +2062,7 @@ const SUITES = [
   'tests/celular-botao-verificar-acende.test.js',
   'functions/test-orphan-profile-core.js',
   'functions/test-roster-watch.js',
-  // A DICA NUNCA aparece com o placar em quadra aberto. A trava vivia só no
-  // Quem escurece a tela é o coachmarks.js; o teste cobre a proteção contra
-  // placar ao vivo no sistema de dicas efetivamente carregado. Roda o
-  // coachmarks REAL com relógio controlado; contra o código anterior a dica
-  // nasce em cima de quem está marcando ponto.
-  'tests/dica-nunca-no-placar.test.js',
+  // As dicas sobrepostas não são mais carregadas em nenhuma tela.
 
   // O GATE DE TERMOS não pode carimbar quem acabou de nascer. Relato do dono: "o modal
   // de termos nunca aparece pra ninguem" — MEDIDO: 188 de 202 aceites eram grandfather

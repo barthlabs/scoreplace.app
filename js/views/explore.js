@@ -231,8 +231,6 @@ function renderExplore(container) {
   // O filtro segue funcionando: _exploreFilterAllSections varre as seções que restaram.
   if (typeof window._exploreFilterAllSections === 'function') window._exploreFilterAllSections();
 
-  // v2.3.41: tour de coachmarks da tela Pessoas (idle-driven, self-guardado)
-  if (window._coach && typeof window._coach.startExploreTour === 'function') window._coach.startExploreTour();
 }
 
 // ---- Helper: participant identity is UID, never email/name -------------------

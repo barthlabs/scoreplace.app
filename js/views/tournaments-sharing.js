@@ -257,8 +257,6 @@ window.renderInvitePage = function(container) {
       '</div>' +
       '</div>';
     if (typeof window._reflowChrome === 'function') window._reflowChrome();
-    // v2.3.41: tour de coachmarks da tela Convidar (idle-driven, self-guardado)
-    if (window._coach && typeof window._coach.startInviteTour === 'function') window._coach.startInviteTour();
 };
 
 // ─── FASE B: página leve de UM jogo (project_match_result_docs) ──────────────

@@ -849,10 +849,18 @@ window._marcaPartesQueFaltam = function (t, documentoDeTorneio) {
       return window._countCompetitors({ participants: t.participants }).people;
     }
     if (nome === 'matches') {
-      var n = _tam(t.matches);
-      (t.rounds || []).forEach(function (r) { if (r) n += _tam(r.matches); });
-      (t.groups || []).forEach(function (g) { if (g) n += _tam(g.matches); });
-      return n;
+      var ids = Object.create(null), semId = 0;
+      var contar = function (lista) {
+        (Array.isArray(lista) ? lista : []).forEach(function (m) {
+          if (!m) return;
+          if (m.id != null && m.id !== '') ids[String(m.id)] = true;
+          else semId++;
+        });
+      };
+      contar(t.matches);
+      (t.rounds || []).forEach(function (r) { if (r) contar(r.matches); });
+      (t.groups || []).forEach(function (g) { if (g) contar(g.matches); });
+      return Object.keys(ids).length + semId;
     }
     if (nome === 'grupos') {
       var g2 = 0;
@@ -1082,10 +1090,18 @@ window._partesFaltandoComCerteza = function (t) {
       return window._countCompetitors({ participants: t.participants }).people;
     }
     if (nome === 'matches') {
-      var n = _tam(t.matches);
-      (t.rounds || []).forEach(function (r) { if (r) n += _tam(r.matches); });
-      (t.groups || []).forEach(function (g) { if (g) n += _tam(g.matches); });
-      return n;
+      var ids = Object.create(null), semId = 0;
+      var contar = function (lista) {
+        (Array.isArray(lista) ? lista : []).forEach(function (m) {
+          if (!m) return;
+          if (m.id != null && m.id !== '') ids[String(m.id)] = true;
+          else semId++;
+        });
+      };
+      contar(t.matches);
+      (t.rounds || []).forEach(function (r) { if (r) contar(r.matches); });
+      (t.groups || []).forEach(function (g) { if (g) contar(g.matches); });
+      return Object.keys(ids).length + semId;
     }
     if (nome === 'grupos') {
       var g2 = 0;
@@ -16383,11 +16399,12 @@ window._shineDicaUsou = function (id) {
   window._shineDicaGravar(e.chave, e.st);
   var el = document.getElementById(id);
   if (el) el.classList.remove('sp-shine-dica');
-  // a vez passa ao próximo, sem esperar o próximo render
-  setTimeout(function () { window._aplicarShineDica(); }, 400);
 };
 // Escolhe UM botão pra brilhar. Chamar depois de renderizar uma tela.
 window._aplicarShineDica = function () {
+  // A pedido do usuário, nenhum destaque de orientação aparece sobre a interface.
+  document.querySelectorAll('.sp-shine-dica').forEach(function (el) { el.classList.remove('sp-shine-dica'); });
+  return;
   try {
     if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     var atuais = document.querySelectorAll('.sp-shine-dica');
@@ -16544,6 +16561,11 @@ window._conviteAprendido = function (id) {
   window._convitesGravar(e.chave, e.st);
 };
 window._mostrarConviteDeRolagem = function () {
+  // Convites com texto e seta atrapalham a leitura da tela. Remover até um
+  // convite já aberto por uma versão anterior da página.
+  var antigoConvite = document.getElementById('sp-convite-rolar');
+  if (antigoConvite) antigoConvite.remove();
+  return;
   try {
     var ID = 'sp-convite-rolar';
     // ⚠️ O GATE DA RODADA VEM ANTES DE REMOVER O QUE ESTÁ NA TELA. A dashboard

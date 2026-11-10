@@ -9953,11 +9953,6 @@ if (typeof window.renderProfilePage !== 'function') {
 
     if (typeof window._reflowChrome === 'function') window._reflowChrome();
 
-    // v2.3.24: tour de coachmarks dentro do perfil (campos incompletos primeiro,
-    // depois configurações gerais). Self-guarda contra disabled/já-visto.
-    if (window._coach && typeof window._coach.startProfileTour === 'function') {
-      window._coach.startProfileTour();
-    }
   };
 }
 

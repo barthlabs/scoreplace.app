@@ -4907,7 +4907,5 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (deepLinkPlaceId && typeof window._venuesOpenDetail === 'function') {
       setTimeout(function() { window._venuesOpenDetail(deepLinkPlaceId); }, 150);
     }
-    // v2.3.41: tour de coachmarks da tela Place (idle-driven, self-guardado)
-    if (window._coach && typeof window._coach.startPlaceTour === 'function') window._coach.startPlaceTour();
   };
 })();

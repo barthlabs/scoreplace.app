@@ -121,6 +121,47 @@ const parcial = enxerta(doDoc(), {
 });
 ok('⛔ 1 jogo de 115 em memória NÃO passa por completo', parcial._faltamPesados === true);
 
+// O mesmo jogo pode aparecer no índice geral, na rodada e no grupo. O contador
+// remoto descreve jogos únicos; essas três referências não podem completar a
+// hidratação antes de chegarem os jogos das demais rodadas.
+const jogoDuplicado = { id: 'm1' };
+const replicaParcial = {
+  id: 'camis', _semPesados: ['matches'], _nPartes: { matches: 3 },
+  matches: [jogoDuplicado], rounds: [{ matches: [{ id: 'm1' }] }],
+  groups: [{ matches: [{ id: 'm1' }] }]
+};
+ok('três referências ao mesmo jogo ainda são uma parte incompleta',
+  ctx.window._marcaPartesQueFaltam(replicaParcial) === true &&
+  replicaParcial._faltaOQue.includes('matches'));
+ok('o diagnóstico da busca também pede os jogos ausentes',
+  Array.from(ctx.window._partesFaltandoComCerteza(replicaParcial)).includes('matches'));
+replicaParcial.matches.push({ id: 'm2' }, { id: 'm3' });
+ok('a hidratação termina quando chegam três jogos distintos',
+  ctx.window._marcaPartesQueFaltam(replicaParcial) === false);
+
+const apenasRodadas = {
+  id: 'camis-rounds', _semPesados: ['matches'], _nPartes: { matches: 2 },
+  rounds: [{ matches: [{ id: 'r1' }, { id: 'r2' }] }]
+};
+ok('jogos presentes só nas rodadas completam a hidratação',
+  ctx.window._marcaPartesQueFaltam(apenasRodadas) === false &&
+  !Array.from(ctx.window._partesFaltandoComCerteza(apenasRodadas)).includes('matches'));
+
+const apenasGrupos = {
+  id: 'camis-groups', _semPesados: ['matches'], _nPartes: { matches: 2 },
+  groups: [{ matches: [{ id: 'g1' }, { id: 'g2' }] }]
+};
+ok('jogos presentes só nos grupos completam a hidratação',
+  ctx.window._marcaPartesQueFaltam(apenasGrupos) === false &&
+  !Array.from(ctx.window._partesFaltandoComCerteza(apenasGrupos)).includes('matches'));
+
+const semIds = {
+  id: 'camis-sem-ids', _semPesados: ['matches'], _nPartes: { matches: 2 },
+  rounds: [{ matches: [{ team1: 'a' }, { team1: 'b' }] }]
+};
+ok('dois placeholders sem ID não são tratados como um único jogo',
+  ctx.window._marcaPartesQueFaltam(semIds) === false);
+
 // ── a conta deriva da LISTA, não de nomes ────────────────────────────────────
 /* ⚠️ 2.1.66: o LAÇO da conta mudou de casa — saiu de `_enxertaJogos` e foi para
  * `window._marcaPartesQueFaltam`, que os DOIS caminhos (ouvinte e cache) chamam. A

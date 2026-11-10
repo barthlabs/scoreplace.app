@@ -17,6 +17,8 @@
   --sp-operations-card-height: 120px;
 }
 .sp-operations-track::-webkit-scrollbar { display: none; }
+.sp-operations-progress { display:grid;gap:2px;margin:5px 8px 0; }
+.sp-operations-progress[hidden] { display:none; }
 .sp-operations-scrollbar {
   position: relative;
   height: 22px;
@@ -35,14 +37,14 @@
   left: 0;
   height: 16px;
   border-radius: 9px;
-  background: #38bdf8;
-  box-shadow: 0 0 0 1px #075985;
+  background: #cbd5e1;
+  box-shadow: 0 0 0 1px #64748b;
   cursor: grab;
 }
 .sp-operations-scrollbar-thumb:active { cursor: grabbing; }
-.sp-operations-scrollbar:focus-visible { outline: 2px solid #38bdf8; outline-offset: 2px; }
-[data-theme="light"] .sp-operations-scrollbar-thumb { background: #0369a1; box-shadow: 0 0 0 1px #075985; }
-[data-theme="light"] .sp-operations-scrollbar:focus-visible { outline-color: #0369a1; }
+.sp-operations-scrollbar:focus-visible { outline: 2px solid #cbd5e1; outline-offset: 2px; }
+[data-theme="light"] .sp-operations-scrollbar-thumb { background: #475569; box-shadow: 0 0 0 1px #334155; }
+[data-theme="light"] .sp-operations-scrollbar:focus-visible { outline-color: #475569; }
 .sp-operations-next,
 .sp-operations-pending,
 .sp-operations-courts {
@@ -135,6 +137,7 @@
 .sp-operations-standings th:first-child,.sp-operations-standings td:first-child { padding-left:4px; }
 .sp-operations-standings th:last-child,.sp-operations-standings td:last-child { padding-right:4px; }
 .sp-operations-standings th:nth-child(n+3),.sp-operations-standings td:nth-child(n+3) { text-align:right; }
+.sp-monarch-standings-name > .sp-name-fit { display:block;width:100%;height:2.3rem;line-height:1.2;overflow:hidden;overflow-wrap:anywhere;text-wrap:balance; }
 .sp-operations-court-free {
   display: flex;
   flex-direction: column;
@@ -192,9 +195,13 @@
 }
 [data-bracket-tabs-root][data-bracket-toolbar-layout="wide"] > [data-bracket-tabs-primary] {
   width:auto!important;
+  grid-column:2;
+  grid-row:1;
 }
 [data-bracket-tabs-root][data-bracket-toolbar-layout="wide"] > [data-bracket-category-tabs] {
   width:auto!important;
+  grid-column:1;
+  grid-row:1;
   flex-wrap:nowrap!important;
   padding-top:0!important;
   white-space:nowrap;

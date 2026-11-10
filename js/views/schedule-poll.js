@@ -2019,7 +2019,7 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
         (_temProposta ? '📅 Veja<br>data proposta' : '📅 Propor datas') +
         (n ? ' <span style="background:var(--sp-g-255-255-255-025,rgba(255,255,255,0.25));border-radius:999px;padding:1px 7px;font-size:0.62rem;">' + n + '</span>' : ''),
         'event.stopPropagation(); window._schOpenMatch(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')',
-        { extraClass: _temProposta ? 'sp-match-action--compact sp-shine-dica' : '' });
+        { extraClass: _temProposta ? 'sp-match-action--compact' : '' });
     } catch (e) { return ''; }
   };
 
@@ -2143,7 +2143,7 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
       // ⭐ mesma regra do card: com proposta na mesa (deste GRUPO — m0 é o portador), o
       // botão brilha e diz "Veja data proposta", em fonte menor.
       var _temPropostaG = n > 0;
-      return '<button type="button" class="btn btn-micro btn-shine hover-lift' + (_temPropostaG ? ' sp-shine-dica' : '') + '" onclick="' + open + '" style="background:#3b82f6;color:#fff;font-size:' + (_temPropostaG ? '0.62rem' : '0.72rem') + ';font-weight:800;padding:4px 9px;line-height:1.05;text-align:left;' +
+      return '<button type="button" class="btn btn-micro btn-shine hover-lift" onclick="' + open + '" style="background:#3b82f6;color:#fff;font-size:' + (_temPropostaG ? '0.62rem' : '0.72rem') + ';font-weight:800;padding:4px 9px;line-height:1.05;text-align:left;' +
         (_temPropostaG ? '' : '') + '">' +
         '<span style="display:flex;flex-direction:column;align-items:flex-start;gap:1px;">' +
           '<span>📅 ' + (_temPropostaG ? 'Veja data' : 'Propor') + '</span>' +

@@ -396,6 +396,13 @@ function _limparCamadasTransitóriasDaChave(container) {
     if (generalView && generalView.parentNode) generalView.parentNode.removeChild(generalView);
     var operationsStrip = root._bracketOperationsStrip;
     if (operationsStrip && operationsStrip.parentNode) operationsStrip.parentNode.removeChild(operationsStrip);
+    var operationsProgress = root._bracketOperationsProgress;
+    if (operationsProgress && operationsProgress.parentNode) operationsProgress.parentNode.removeChild(operationsProgress);
+    // A busca vive dentro da navegação, que é irmã do container da chave.
+    // Recolocá-la no host antes de remover a navegação mantém o mesmo input
+    // disponível para a remontagem seguinte, inclusive depois de salvar placar.
+    var searchWrap = root.querySelector('#fbwrap-chaves');
+    if (searchWrap && root.parentNode) root.parentNode.insertBefore(searchWrap, root);
     var portalDoRoot = root._bracketRoundHeadingPortal;
     if (portalDoRoot && portalDoRoot.parentNode) portalDoRoot.parentNode.removeChild(portalDoRoot);
     if (root.parentNode) root.parentNode.removeChild(root);
@@ -934,7 +941,7 @@ window._bracketFocusOperationsStrip = function(tId, behavior) {
  * ([[feedback_instrumentacao_nao_pode_cobrar_pedagio]]). */
 function _medirLarguraUtilDaChave() {
   try {
-    var alvo = document.querySelector('[data-hscroll]')
+    var alvo = document.querySelector('[data-hscroll]:not(.sp-operations-track)')
             || document.getElementById('inline-bracket-container')
             || document.getElementById('view-container');
     var w = (alvo && alvo.clientWidth) || 0;
@@ -1340,9 +1347,12 @@ function _bracketReconcileOperationalOrder(root) {
   if (!root) return;
   var card = document.getElementById('tourn-grid-container');
   var strip = root._bracketOperationsStrip;
+  var progress = root._bracketOperationsProgress;
   var general = root._bracketGeneralView;
   if (!card || !card.parentNode) return;
-  if (strip && strip.previousElementSibling !== card) card.insertAdjacentElement('afterend', strip);
+  if (progress && progress.previousElementSibling !== card) card.insertAdjacentElement('afterend', progress);
+  var beforeStrip = progress && progress.parentNode === card.parentNode ? progress : card;
+  if (strip && strip.previousElementSibling !== beforeStrip) beforeStrip.insertAdjacentElement('afterend', strip);
   var anchor = strip && strip.parentNode === card.parentNode ? strip : card;
   if (general && general.previousElementSibling !== anchor) anchor.insertAdjacentElement('afterend', general);
   _bracketSyncRoundHeadingOffsets();
@@ -1780,6 +1790,8 @@ window._bracketOperationsRefresh = function (t, root) {
   if (!authorized || !concentrated || !document.getElementById('tourn-grid-container')) {
     if (existing && existing._spOperationsOnResize) window.removeEventListener('resize', existing._spOperationsOnResize);
     if (existing && existing.parentNode) existing.remove();
+    if (root._bracketOperationsProgress) root._bracketOperationsProgress.remove();
+    root._bracketOperationsProgress = null;
     root._bracketOperationsStrip = null;
     _bracketReconcileOperationalOrder(root);
     return;
@@ -1981,7 +1993,7 @@ window._bracketOperationsRefresh = function (t, root) {
   var freeCount = freeCourts.length;
   var nextAvailability = '<div class="sp-operations-availability' + (freeCount ? '' : ' sp-operations-availability--busy') + '">' +
     freeCount + ' ' + (freeCount === 1 ? 'QUADRA LIVRE' : 'QUADRAS LIVRES') + '</div>';
-  existing.innerHTML = '<div class="sp-operations-track"><div class="sp-operations-next">' +
+  existing.innerHTML = '<div class="sp-operations-track" data-hscroll="ops:track"><div class="sp-operations-next">' +
     (state.next ? _bracketOperationsReplica(state.next, t, { canCall: canCall, active: false,
       postponeReady: canCall, postponeBusy: existing._spPostponeBusy || !(window._bracketCourtReleaseCache[String(t.id)] || {}).ready,
       preferFirstFreeCourt: true, preferredCourt: (root._bracketOperationsManualCourt || {})[String(state.next.id)] || '' }, nextLabel, nextAvailability, root, state.matches, 'next') :
@@ -1998,6 +2010,17 @@ window._bracketOperationsRefresh = function (t, root) {
     }).join('') +
     '</div></div></div><div class="sp-operations-scrollbar" role="scrollbar" tabindex="0" aria-label="Rolar jogos em quadra" aria-orientation="horizontal" aria-valuemin="0"><div class="sp-operations-scrollbar-thumb"></div></div>';
   _bracketReconcileOperationalOrder(root);
+  var compactProgress = root._bracketOperationsProgress;
+  if (!compactProgress) {
+    compactProgress = document.createElement('div');
+    compactProgress.className = 'sp-operations-progress';
+    compactProgress.setAttribute('aria-label', 'Progresso realizado e previsto');
+    root._bracketOperationsProgress = compactProgress;
+    existing.parentNode.insertBefore(compactProgress, existing);
+  }
+  var progressMarkup = typeof window._buildProgressInner === 'function' ? window._buildProgressInner(t, true) : '';
+  if (compactProgress.innerHTML !== progressMarkup) compactProgress.innerHTML = progressMarkup;
+  compactProgress.hidden = !progressMarkup;
   var operationsTrack = existing.querySelector('.sp-operations-track');
   if (operationsTrack) {
     // Mede a altura natural de todos os cards antes de aplicar a régua comum.
@@ -10483,7 +10506,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
         : '';
       var row = '<tr style="border-bottom:1px solid var(--border-color);' + (bg ? 'background:' + window._spCor(bg, 'background') + ';' : '') + '">' +
         '<td style="padding:6px 10px;font-weight:700;color:' + window._spCor(clr, 'color') + ';text-align:center;">' + (i + 1) + 'º</td>' +
-        '<td class="sp-name-fit" data-maxrem="0.85" data-minrem="0.6" style="overflow-wrap:anywhere;padding:6px 10px;font-weight:600;color:' + window._spCor((_presM ? '#4ade80' : 'var(--text-bright)'), 'color') + ';">' + _presDotM + (typeof window._rowNameHtml === 'function' ? window._rowNameHtml : function (s, h) { return h; })(s, (typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(window._liveRowName(s), window._currentBracketTournament) : (typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(window._liveRowName(s), window._currentBracketTournament) : window._safeHtml(window._liveRowName(s))))) + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, standings, s, { groupDone: groupDone }) : '') + '</td>' +
+        '<td class="sp-monarch-standings-name" style="padding:6px 10px;font-weight:600;color:' + window._spCor((_presM ? '#4ade80' : 'var(--text-bright)'), 'color') + ';"><span class="sp-name-fit" data-maxrem="0.85" data-minrem="0.55" data-two-line-maxrem="0.85">' + _presDotM + (typeof window._rowNameHtml === 'function' ? window._rowNameHtml : function (s, h) { return h; })(s, (typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(window._liveRowName(s), window._currentBracketTournament) : (typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(window._liveRowName(s), window._currentBracketTournament) : window._safeHtml(window._liveRowName(s))))) + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, standings, s, { groupDone: groupDone }) : '') + '</span></td>' +
         '<td style="padding:6px 10px;text-align:center;color:var(--sp-c-4ade80,#4ade80);font-weight:700;">' + s.wins + '</td>' +
         (_compacta ? '' : '<td style="padding:6px 10px;text-align:center;color:var(--sp-c-f87171,#f87171);">' + s.losses + '</td>') +
         (_compacta || _gamesPrimaryMonarch ? '' : (s.points != null

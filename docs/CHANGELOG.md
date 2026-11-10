@@ -1,5 +1,9 @@
 ## 2.6.33 — 10/nov/2026 (placar Rei/Rainha sem salto da tela)
 
+- Removidas as dicas sobrepostas com texto e setas da dashboard, busca, perfil, convites e locais.
+- A faixa operacional passa a exibir barras compactas de progresso antes dos jogos; a barra horizontal usa cinza para não ser confundida com o progresso. Atualizações repetidas mantêm uma única faixa.
+- A classificação Rei/Rainha mantém espaço de duas linhas para cada nome. A TV destaca vencedor em verde e perdedor em vermelho nos três jogos da série e substitui `about:blank` na URL da janela quando o navegador permite.
+- A hidratação conta IDs de jogos distintos, mesmo quando o mesmo jogo aparece na lista geral, nas rodadas e nos grupos.
 - Na agenda Geral, o resultado confirmado atualiza a classificação do grupo original e sua cópia visível sem remontar a chave inteira. O recálculo alcança somente o quarteto alterado.
 - Enquanto o salvamento do placar está pendente, o eco do servidor não reconstrói o detalhe; a proteção é liberada mesmo se a operação falhar.
 - Regressão no Chromium com 36 grupos e 108 jogos confirma que a classificação muda, o card permanece único e sua posição vertical fica inalterada.

@@ -131,12 +131,18 @@ function trecho(inicio, fim) {
     const orphanPortal = document.createElement('div');
     orphanPortal.setAttribute('data-bracket-round-heading-portal', '1');
     document.body.appendChild(orphanPortal);
+    const searchBeforeScore = document.createElement('div');
+    searchBeforeScore.id = 'fbwrap-chaves';
+    searchBeforeScore.innerHTML = '<input id="search-before-score" value="B2">';
+    root.appendChild(searchBeforeScore);
     window._limparCamadasTransitóriasDaChave(scope);
     const cleanup = {
       rootGone: !document.querySelector('[data-bracket-tabs-root]'),
       agendaGone: !document.querySelector('[data-bracket-general-view]'),
       cardsReturned: Array.from(document.querySelectorAll('#source > .wrap')).map((el) => el.getAttribute('data-wrap')),
-      portalGone: !document.querySelector('[data-bracket-round-heading-portal]')
+      portalGone: !document.querySelector('[data-bracket-round-heading-portal]'),
+      searchKept: searchBeforeScore.parentElement === scope &&
+        searchBeforeScore.querySelector('input').value === 'B2'
     };
 
     // Horário ausente não é "agenda no fim": é ausência de agenda. A função
@@ -347,6 +353,7 @@ function trecho(inicio, fim) {
     'voltar para Geral reconstrói os cards reais, sem colunas vazias');
   console.log('\n📋 Novo render limpa Geral aberta antes de substituir a chave');
   ok(result.cleanup.rootGone && result.cleanup.agendaGone, 'abas e agenda transitória são destruídas');
+  ok(result.cleanup.searchKept, 'a remontagem preserva a busca e o texto digitado');
   ok(result.cleanup.cardsReturned.join(',') === 'fem-court-5,masc-same-day,fem-round-2,fem-waiting,tomorrow,played-old,played-mid,played-new', 'nenhum card fica órfão fora do container');
   ok(result.cleanup.portalGone, 'portal de cabeçalho de pintura anterior também é removido');
   console.log('\n📋 Sem horário não há agenda enganosa');
