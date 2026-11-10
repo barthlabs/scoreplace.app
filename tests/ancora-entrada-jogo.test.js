@@ -21,8 +21,23 @@ assert(geometryStart >= 0 && geometryEnd > geometryStart);
       #before { height: 900px; }
       .bracket-scroll-container { height: 610px; overflow: auto; }
       #card-a { margin-top: 62px; height: 399px; scroll-margin-top: 137px; }
-    </style><div id="before"></div><div class="bracket-scroll-container"><div id="card-a">JOGO</div></div>`);
+    </style><div id="before"></div><div class="bracket-scroll-container"><div id="card-a">JOGO</div><div style="height:300px"></div></div>`);
     await geometryPage.addScriptTag({ content: src.slice(geometryStart, geometryEnd) });
+    // Geometria medida no Chrome do Confra: janela interna a y=245, card a
+    // y=308 (399 px de altura) numa viewport de 693 px. Há rolagem interna,
+    // mas o card solicitado está no começo dela (scrollTop=0).
+    await geometryPage.evaluate(() => window.scrollTo(0, 655));
+    const before = await geometryPage.evaluate(() => ({
+      top: document.getElementById('card-a').getBoundingClientRect().top,
+      bottom: document.getElementById('card-a').getBoundingClientRect().bottom,
+      innerScroll: document.querySelector('.bracket-scroll-container').scrollTop,
+      scrollHeight: document.querySelector('.bracket-scroll-container').scrollHeight,
+      clientHeight: document.querySelector('.bracket-scroll-container').clientHeight
+    }));
+    assert.ok(Math.abs(before.top - 307) < 2 && before.bottom > 693,
+      'reproduz o card parcialmente cortado visto no Chrome');
+    assert.ok(before.scrollHeight > before.clientHeight, 'a chave tem rolagem vertical interna');
+    assert.equal(before.innerScroll, 0, 'o jogo está no início da janela interna');
     await geometryPage.evaluate(() => _scrollBracketEntryMatchToTop(document.getElementById('card-a'), 'auto'));
     const geometry = await geometryPage.evaluate(() => {
       const card = document.getElementById('card-a');
