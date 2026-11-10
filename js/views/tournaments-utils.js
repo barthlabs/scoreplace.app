@@ -1382,14 +1382,40 @@ window._sumulaUpcomingBracket = function (t, phaseIdx) {
     };
     var projected = eng.buildCategorizedPhaseBrackets(t, groups, cfg, standings, 'sumula-plan-' + phaseIdx);
     if (projected.error) return { phaseIndex: phaseIdx, pending: projected.error, categories: [] };
+    // Identifica a origem pela DUPLA criada pelo motor. Não associa uma vaga a
+    // um grupo quando o mesmo nome aparece em mais de um grupo ou quando a
+    // dupla foi formada com atletas de origens diferentes.
+    function athleteKeys(p) {
+      if (!p) return [];
+      var uid = typeof p === 'string' ? '' : String(p.uid || p.userId || '').trim();
+      var name = typeof p === 'string' ? p : String(p.displayName || p.name || p.fullName || '');
+      name = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+      return (uid ? ['u:' + uid] : []).concat(name ? ['n:' + name] : []);
+    }
+    function sourceGroup(team, sourceGroups) {
+      if (!team || !Array.isArray(team.participants) || !team.participants.length) return '';
+      var athletes = team.participants.map(athleteKeys).filter(function (keys) { return keys.length; });
+      if (!athletes.length) return '';
+      var matches = (Array.isArray(sourceGroups) ? sourceGroups : []).filter(function (g) {
+        var roster = g && (g.players || g.participants || g.standings) || [];
+        var keys = roster.reduce(function (all, p) { return all.concat(athleteKeys(p)); }, []);
+        return athletes.every(function (person) { return person.some(function (key) { return keys.indexOf(key) >= 0; }); });
+      });
+      return matches.length === 1 ? String(matches[0].name || matches[0].label || '').trim() : '';
+    }
     return { phaseIndex: phaseIdx, name: cfg.name || t.phases[phaseIdx].name || 'Eliminatória',
       categories: (projected.categoryBuilds || []).map(function (part) {
         var built = part.built;
+        var categoryGroups = groups.filter(function (g) {
+          return String(g && (g.category || g.categoryName) || '') === String(part.category || '');
+        });
+        if (!categoryGroups.length && (projected.categoryBuilds || []).length === 1) categoryGroups = groups;
         return { category: part.category, groups: part.groups, partial: !!built.needsDoubleElim,
           matches: (built.matches || []).filter(function (m) {
             return m && !m.isBye && m.p1 !== 'BYE' && m.p2 !== 'BYE';
           }).map(function (m) {
             return { id:m.id, round:m.round, bracket:m.bracket, isThirdPlace:!!m.isThirdPlace,
+              source1:sourceGroup(m.team1Obj, categoryGroups), source2:sourceGroup(m.team2Obj, categoryGroups),
               nextMatchId:m.nextMatchId, nextSlot:m.nextSlot,
               loserNextMatchId:m.loserNextMatchId, loserNextSlot:m.loserNextSlot,
               repFill:Array.isArray(m.repFill) ? m.repFill.map(function (r) {

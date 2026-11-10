@@ -241,7 +241,7 @@ const phases = globalThis.FORMAT2.compileToPhases({ disputa:'dupla', grupos:1,
     reiRainhaCut:2, formacao:'performance', linhas:1, dupla:false, terceiro:true } },
   { sport:'Beach Tennis' }).phases;
 const makeGroups = (category, n) => Array.from({ length:n }, (_, i) => ({
-  name:'Grupo '+(i+1)+' '+category, category,
+  name:'Grupo '+String.fromCharCode(65+i)+({Diamante:1,Ouro:2,Prata:3}[category]), category,
   players:Array.from({ length:4 }, (_, j) => category+' Atleta '+i+'-'+j), matches:[]
 }));
 const camis = { name:'CAMIS', sport:'Beach Tennis', phases, currentPhaseIndex:0,
@@ -251,6 +251,14 @@ const camis = { name:'CAMIS', sport:'Beach Tennis', phases, currentPhaseIndex:0,
 const before = JSON.stringify(camis);
 const plannedBefore = globalThis._tournamentGamesPlan(camis).totalPlanned;
 const futureModel = core.collect(camis, []);
+const shortGroupNames = JSON.parse(JSON.stringify(camis));
+shortGroupNames.groups.filter(g => g.category === 'Diamante')
+  .forEach((g, i) => { g.name = String.fromCharCode(65+i) + '1'; });
+const shortGroupBracket = core.makePages(core.collect(shortGroupNames, []))
+  .find(page => page.commands.some(command => command.includes('CHAVE ELIMINAT')));
+assert(shortGroupBracket.commands.join('\n').includes('(A1)') &&
+  !shortGroupBracket.commands.join('\n').includes('Classificados do Grupo A1'),
+  'abaixo dos nomes aparece só a designação A1');
 const reversedRoster = JSON.parse(JSON.stringify(camis));
 reversedRoster.groups.forEach(group => { group.players.reverse(); });
 const reversedFutureModel = core.collect(reversedRoster, []);
@@ -315,24 +323,60 @@ for (const orientation of ['landscape','portrait']) {
     reversedFuturePages.map(page => page.commands),
     'o roteiro não atribui vagas pela ordem dos inscritos');
   const futureCommands = futurePages.flatMap(page => page.commands).join('\n');
-  assert(futureCommands.includes(String.raw`Classificado da fase anterior \267 Grupo/origem: ____`),
-    'vaga inicial informa a fase de origem e deixa o grupo para preencher');
-  assert(futureCommands.includes('Vencedor C1'),
+  assert(futureCommands.includes('(A1)') && futureCommands.includes('(H1)') &&
+    !futureCommands.includes('Classificados do Grupo'),
+    'a primeira rodada mostra só o código dos dois grupos de origem');
+  assert(futureCommands.includes('Vencedor do confronto C1'),
     'rodadas seguintes identificam o confronto que fornece cada vencedor');
   const printable = Buffer.from(core.encodePdf(pages)).toString('latin1');
   if (process.env.SP_SUMULA_FUTURE_SAMPLE && orientation === 'landscape')
     fs.writeFileSync(process.env.SP_SUMULA_FUTURE_SAMPLE, core.encodePdf(pages));
-  assert(printable.includes('Final') && printable.includes(String.raw`3\272 lugar`),
+  assert(printable.includes('FINAL') && printable.includes(String.raw`3\272 LUGAR`),
     'súmula segue até a final e o terceiro lugar');
   assert(printable.includes('Desempate, se necess'), 'há linhas livres de desempate');
   assert(printable.includes(String.raw`Simples at\351 5 pontos`), 'a reserva acompanha a regra do CAMIS');
   assert(!printable.includes('Atleta 0-0'), 'nomes ainda não classificados não são inventados no PDF');
   const callPageCount = core.makeCallListPages(futureModel).length;
-  assert((callPageCount ? pages.slice(0, -callPageCount) : pages)
-    .every(p => p.width === (orientation === 'portrait' ? 595 : 842)));
+  const bracketPages = pages.filter(page => page.commands.some(command => command.includes('CHAVE ELIMINAT')));
+  assert.strictEqual(bracketPages.length, 3, 'cada categoria tem sua chave completa em uma página');
+  assert(bracketPages.every(page => page.width > page.height),
+    'chaves são sempre horizontais, inclusive no pacote de súmulas verticais');
+  assert(bracketPages.every(page => page.commands.some(command => command.includes(' l S'))),
+    'as colunas são ligadas por caminhos vetoriais');
 }
 const oneReal = { id:'real-com-outro-prefixo', phaseIndex:1, categoryName:'Ouro', round:1,
   p1:'Dupla Alfa', p2:'Dupla Beta' };
+const actualGroupMatch = core.collect({...camis, currentPhaseIndex:1}, [{
+  id:'real-a1-h1', phaseIndex:1, category:'Diamante', round:1,
+  p1:'Diamante Atleta 0-0 / Diamante Atleta 0-1',
+  p2:'Diamante Atleta 7-0 / Diamante Atleta 7-1'
+}]).undated[0];
+assert.strictEqual(actualGroupMatch.source1, 'Grupo A1',
+  'o jogo materializado conserva a origem da primeira dupla');
+assert.strictEqual(actualGroupMatch.source2, 'Grupo H1',
+  'o jogo materializado conserva a origem da segunda dupla');
+const realized = core.collect({...camis, currentPhaseIndex:1}, [
+  {id:'q1', phaseIndex:1, category:'Diamante', round:1, scheduledGameNumber:37,
+    p1:'Tatiana Rossi DAmico / Fernanda Gomes', p2:'Joana Granato / Bianca Vicintin Abud',
+    nextMatchId:'final', nextSlot:'p1'},
+  {id:'q2', phaseIndex:1, category:'Diamante', round:1, scheduledGameNumber:38,
+    p1:'Cris Spina / Luciana Campos', p2:'Flávia Fabbrocini Sanches / Fabrizia Frank',
+    nextMatchId:'final', nextSlot:'p2'},
+  {id:'final', phaseIndex:1, category:'Diamante', round:2, scheduledGameNumber:39,
+    p1:'A definir', p2:'A definir'}
+]);
+const realizedBracket = core.makePages(realized, {orientation:'portrait'})
+  .find(page => page.commands.some(command => command.includes('CHAVE ELIMINAT')));
+assert(realizedBracket && realizedBracket.width === 842,
+  'jogos eliminatórios materializados têm chave horizontal mesmo no PDF vertical');
+const realizedCommands = realizedBracket.commands.join('\n');
+for (const athlete of ['Tatiana Rossi DAmico','Fernanda Gomes','Joana Granato',
+  'Bianca Vicintin Abud','Cris Spina','Luciana Campos',String.raw`Fl\341via Fabbrocini Sanches`,'Fabrizia Frank'])
+  assert(realizedCommands.includes(athlete), 'cada nome das duplas cabe na chave: ' + athlete);
+assert(realizedCommands.includes('JOGO 37') && realizedCommands.includes('JOGO 39') &&
+  realizedCommands.includes('Vencedor do JOGO 37'), 'a chave liga o número real do jogo à final');
+if (process.env.SP_SUMULA_REAL_SAMPLE)
+  fs.writeFileSync(process.env.SP_SUMULA_REAL_SAMPLE, core.encodePdf([realizedBracket]));
 const partialModel = core.collect(camis, [oneReal]);
 assert(!partialModel.future.categories.some(b => b.category === 'Ouro'),
   'um jogo real suprime toda a projeção da sua categoria, sem duplicar confrontos');

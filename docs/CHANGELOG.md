@@ -1,3 +1,9 @@
+## 2.6.29 — 10/nov/2026 (chave horizontal na súmula eliminatória)
+
+- A súmula inclui uma chave horizontal por categoria, com confronto de cada rodada ligado ao destino do vencedor. Na primeira rodada, só o código do grupo (por exemplo, “A1”) aparece em letra pequena abaixo das duas linhas dos atletas; as seguintes apontam o confronto ou jogo efetivo anterior. Finais e terceiros lugares aparecem no mesmo percurso.
+- Cada confronto reserva duas linhas de largura integral para os atletas de cada dupla; quando a fase ainda não foi definida, as vagas ficam em branco. Jogos já materializados mostram os nomes e números efetivos.
+- As folhas operacionais de placar por quadra, desempates e listas de chamada permanecem no PDF. A página de chave é horizontal também dentro do pacote vertical. Corte somente web.
+
 ## 2.6.28 — 10/nov/2026 (logo e degradê no PDF do sorteio)
 
 - O logo do torneio foi ampliado e movido para a direita do cabeçalho, alinhado à borda dos cards em cada página do resultado completo. Título e nome da categoria permanecem em duas linhas à esquerda, com espaço reservado para não atingir o logo.

@@ -45,6 +45,27 @@
     var n = Number(m.scheduledGameNumber || m.number || m.matchNumber || m._gameNum);
     return Number.isFinite(n) && n > 0 ? n : null;
   }
+  function originGroupForSide(t, m, slot) {
+    var side = slot === 'p1' ? 'team1Obj' : 'team2Obj';
+    var team = m[side] || {};
+    var raw = Array.isArray(team.participants) && team.participants.length
+      ? team.participants : members(displaySide(t, m, slot));
+    function personName(person) {
+      return text(typeof person === 'string' ? person : person &&
+        (person.displayName || person.name || person.fullName)).normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    }
+    var names = raw.map(personName).filter(Boolean);
+    if (names.length !== 2) return '';
+    var category = text(m.category || m.categoryName);
+    var groups = (Array.isArray(t.groups) ? t.groups : []).filter(function (group) {
+      if (category && text(group && (group.category || group.categoryName)) !== category) return false;
+      var roster = group && (group.players || group.participants || group.standings) || [];
+      var known = roster.map(personName);
+      return names.every(function (name) { return known.indexOf(name) >= 0; });
+    });
+    return groups.length === 1 ? text(groups[0].name || groups[0].label) : '';
+  }
   function scoringFor(t) {
     var defaults = typeof root._sportScoringDefaultsMap === 'function'
       ? root._sportScoringDefaultsMap() : {};
@@ -83,8 +104,12 @@
         at: dated ? timestamp(m.scheduledAt) : NaN, phaseIndex:Number(m.phaseIndex) || 0,
         court: text(m.court) || plannedCourts[text(m.id)] || '',
         number:Number(m.scheduledGameNumber) || plannedNumbers[text(m.id)] || matchNumber(m), category: text(m.category || m.categoryName),
-        round: m.round == null ? '' : String(m.round),
+        round: m.round == null ? '' : String(m.round), bracket:text(m.bracket || 'main'),
+        elimination: typeof root._isEliminationPhase === 'function' && root._isEliminationPhase(t, Number(m.phaseIndex) || 0),
+        isThirdPlace:!!m.isThirdPlace, nextMatchId:text(m.nextMatchId), nextSlot:text(m.nextSlot),
+        loserNextMatchId:text(m.loserNextMatchId), loserNextSlot:text(m.loserNextSlot),
         p1: displaySide(t, m, 'p1'), p2: displaySide(t, m, 'p2'),
+        source1:originGroupForSide(t, m, 'p1'), source2:originGroupForSide(t, m, 'p2'),
         team1: teamName(t, m, 'p1'), team2: teamName(t, m, 'p2'),
         uids1: m.team1Uids || (m.p1Uid ? [m.p1Uid] : []), uids2: m.team2Uids || (m.p2Uid ? [m.p2Uid] : [])
       };
@@ -505,13 +530,20 @@
   function structuralRows(bucket) {
     var matches = bucket.matches.slice().sort(function (a, b) {
       return Number(a.round || 0) - Number(b.round || 0) ||
-        Number(a.isThirdPlace) - Number(b.isThirdPlace) || a.id.localeCompare(b.id);
+        Number(a.isThirdPlace) - Number(b.isThirdPlace) || a.id.localeCompare(b.id, 'pt-BR', {numeric:true});
     });
     var refs = {}, incoming = {};
-    matches.forEach(function (m, i) { refs[m.id] = 'C' + (i+1); });
+    matches.forEach(function (m, i) { refs[m.id] = m.number ? 'JOGO ' + m.number : 'C' + (i+1); });
+    function originLabel(value) {
+      var name = text(value);
+      return name.replace(/^Grupo\s+/i, '');
+    }
+    function winnerLabel(ref) {
+      return /^JOGO /i.test(ref) ? 'Vencedor do ' + ref : 'Vencedor do confronto ' + ref;
+    }
     matches.forEach(function (m) {
       if (m.nextMatchId && m.nextSlot) {
-        (incoming[m.nextMatchId] = incoming[m.nextMatchId] || {})[m.nextSlot] = 'Vencedor ' + refs[m.id];
+        (incoming[m.nextMatchId] = incoming[m.nextMatchId] || {})[m.nextSlot] = winnerLabel(refs[m.id]);
       }
       if (m.loserNextMatchId && m.loserNextSlot) {
         (incoming[m.loserNextMatchId] = incoming[m.loserNextMatchId] || {})[m.loserNextSlot] = 'Perdedor ' + refs[m.id];
@@ -522,10 +554,120 @@
       (m.repFill || []).forEach(function (rep) {
         source[rep.slot] = 'Repescado da rodada ' + (Number(rep.srcRound || 0) + 1);
       });
-      return { ref:refs[m.id], round:m.round, third:m.isThirdPlace, final:!m.isThirdPlace && !m.nextMatchId,
-        p1:source.p1 || 'Classificado da fase anterior · Grupo/origem: ____',
-        p2:source.p2 || 'Classificado da fase anterior · Grupo/origem: ____' };
+      return { id:m.id, ref:m.number ? 'JOGO ' + m.number : refs[m.id], round:m.round,
+        third:m.isThirdPlace, final:!m.isThirdPlace && !m.nextMatchId,
+        nextMatchId:m.nextMatchId, nextSlot:m.nextSlot,
+        loserNextMatchId:m.loserNextMatchId, loserNextSlot:m.loserNextSlot,
+        p1:m.p1 && m.p1 !== 'A definir' ? m.p1 : '',
+        p2:m.p2 && m.p2 !== 'A definir' ? m.p2 : '',
+        source1:source.p1 || originLabel(m.source1),
+        source2:source.p2 || originLabel(m.source2) };
     });
+  }
+  // Chave em paisagem: quatro linhas por confronto (dois nomes por dupla).
+  // O posicionamento usa nextMatchId/nextSlot, não a ordem visual de uma lista.
+  function bracketPage(model, bucket, title) {
+    var rows = structuralRows(bucket), rounds = Array.from(new Set(rows.filter(function (r) {
+      return !r.third;
+    }).map(function (r) { return Number(r.round) || 1; }))).sort(function (a,b) { return a-b; });
+    if (!rounds.length) return null;
+    var firstCount = Math.max.apply(null, rounds.map(function (round) {
+      return rows.filter(function (r) { return !r.third && (Number(r.round) || 1) === round; }).length;
+    }));
+    var size = firstCount > 18
+      ? [Math.max(2384, Math.ceil((firstCount*78+170)*Math.SQRT2)), firstCount*78+170]
+      : firstCount > 12 || rounds.length > 8 ? [2384,1684]
+      : firstCount > 9 || rounds.length > 6 ? [1684,1191]
+      : firstCount > 5 || rounds.length > 4 ? [1191,842] : [842,595];
+    var p = pdfPage(size[0], size[1]), left = 22, right = p.width-22;
+    var top = 122, usable = p.height-170, gap = p.width > 842 ? 24 : 18;
+    var colWidth = (right-left-gap*(rounds.length-1))/rounds.length;
+    var cardHeight = Math.min(72, usable / firstCount - 3), positions = {};
+    var byRound = rounds.map(function (round) {
+      return rows.filter(function (r) { return !r.third && (Number(r.round) || 1) === round; });
+    });
+    p.fillRect(0, 0, p.width, 77, '0.071 0.133 0.220');
+    p.write(fitLabel(model.tournament, right-left-80, 13, true), left, 24, 13, true, null, '1 1 1');
+    p.write(fitLabel('CHAVE ELIMINATÓRIA  |  ' + (bucket.category || 'Categoria única'),
+      right-left-80, 10, true), left, 47, 10, true, null, '1 1 1');
+    p.write(fitLabel(title + (bucket.partial ? '  |  Estrutura parcial' : ''), right-left-80, 8),
+      left, 64, 8, false, null, '1 1 1');
+    p.logo(right-58, 8, 54);
+    byRound.forEach(function (group, col) {
+      var x = left + col*(colWidth+gap);
+      var heading = col === byRound.length-1 ? 'FINAL' : 'RODADA ' + rounds[col];
+      p.fillRect(x, 88, colWidth, 22, '0.90 0.94 0.97');
+      p.write(heading, x+7, 103, 8, true, null, '0.071 0.20 0.31');
+      group.forEach(function (row, i) {
+        var source = rows.filter(function (r) { return r.nextMatchId === row.id && positions[r.id]; });
+        var center = source.length >= 2
+          ? source.reduce(function (sum, r) { return sum+positions[r.id].cy; }, 0)/source.length
+          : source.length === 1 ? positions[source[0].id].cy
+          : top + usable*(i+0.5)/group.length;
+        positions[row.id] = { x:x, y:center-cardHeight/2, cy:center };
+      });
+      // Repescagens podem receber perdedores de outra coluna. Mesmo assim os
+      // quadros desta rodada precisam manter um vão legível entre si.
+      for (var i=1;i<group.length;i++) {
+        var previous = positions[group[i-1].id], current = positions[group[i].id];
+        current.cy = Math.max(current.cy, previous.cy+cardHeight+5);
+      }
+      if (group.length) {
+        var overflow = positions[group[group.length-1].id].cy - (top+usable-cardHeight/2);
+        if (overflow > 0) group.forEach(function (row) { positions[row.id].cy -= overflow; });
+        group.forEach(function (row) { positions[row.id].y = positions[row.id].cy-cardHeight/2; });
+      }
+    });
+    // Linhas entram em posições distintas para os dois lados do confronto.
+    rows.forEach(function (row) {
+      var from = positions[row.id], to = positions[row.nextMatchId];
+      if (!from || !to) return;
+      var tx = to.x, middle = from.x+colWidth+gap/2;
+      var entry = to.cy + (row.nextSlot === 'p2' ? 10 : -10);
+      p.line(from.x+colWidth, from.cy, middle, from.cy, 0.48);
+      p.line(middle, from.cy, middle, entry, 0.48);
+      p.line(middle, entry, tx, entry, 0.48);
+    });
+    function card(row, x, y) {
+      p.fillRect(x, y, colWidth, cardHeight, '0.97 0.98 0.99');
+      p.box(x, y, colWidth, cardHeight);
+      p.write(fitLabel(row.ref + (row.third ? ' · 3º LUGAR' : row.final ? ' · FINAL' : ''),
+        colWidth-12, 7.4, true), x+6, y+9, 7.4, true, null, '0.06 0.33 0.51');
+      var side1 = members(row.p1), side2 = members(row.p2);
+      if (!side1.length) side1 = [];
+      if (!side2.length) side2 = [];
+      var fs = colWidth < 155 ? 6.3 : 7.2;
+      function pair(names, source, base) {
+        [names[0] || '', names[1] || ''].forEach(function (name, i) {
+            if (!name) p.line(x+7, y+base+i*9+1, x+colWidth-7, y+base+i*9+1, 0.6);
+            else p.write(fitLabel(name, colWidth-20, fs, true), x+7, y+base+i*9,
+              fs, true);
+          });
+        p.write(fitLabel(source, colWidth-14, 6.2), x+7, y+base+17, 6.2,
+          false, null, '0.28 0.36 0.43');
+      }
+      pair(side1, row.source1, 20);
+      p.line(x+5, y+39, x+colWidth-5, y+39, 0.76);
+      pair(side2, row.source2, 49);
+    }
+    byRound.forEach(function (group) { group.forEach(function (row) {
+      var pos = positions[row.id]; card(row, pos.x, pos.y);
+    }); });
+    var third = rows.find(function (row) { return row.third; });
+    if (third) {
+      var thirdX = left+(rounds.length-1)*(colWidth+gap), thirdY = p.height-30-cardHeight;
+      card(third, thirdX, thirdY);
+      rows.filter(function (row) { return row.loserNextMatchId === third.id && positions[row.id]; })
+        .forEach(function (row) {
+          var from = positions[row.id], middle = from.x+colWidth+gap/2;
+          p.line(from.x+colWidth, from.cy, middle, from.cy, 0.65);
+          p.line(middle, from.cy, middle, thirdY+cardHeight/2, 0.65);
+          p.line(middle, thirdY+cardHeight/2, thirdX, thirdY+cardHeight/2, 0.65);
+        });
+    }
+    p.write('Cada quadro mostra as duas duplas. As linhas indicam o avanço do vencedor; a disputa de 3º lugar recebe os perdedores das semifinais.',
+      left, p.height-12, 7);
+    return p;
   }
   function writingPage(model, title, subtitle, rows, part, total, orientation, kind) {
     var portrait = orientation === 'portrait', p = portrait ? pdfPage(595, 842) : pdfPage(842, 595);
@@ -600,13 +742,27 @@
           undatedChunk, u+1, totalUndated, undatedDense ? 'portrait' : orientation, undatedDense));
       }
     }
+    var realBrackets = new Map();
+    model.matches.concat(unscheduled).filter(function (m) { return m.elimination; }).forEach(function (m) {
+      var key = [m.phaseIndex, m.category, m.bracket].join('|');
+      if (!realBrackets.has(key)) realBrackets.set(key, { category:m.category, bracket:m.bracket, matches:[] });
+      realBrackets.get(key).matches.push(m);
+    });
+    realBrackets.forEach(function (bucket) {
+      var page = bracketPage(model, bucket, 'Confrontos da fase em andamento');
+      if (page) pages.push(page);
+    });
     if (model.future && Array.isArray(model.future.categories)) model.future.categories.forEach(function (bucket) {
-      var rows = structuralRows(bucket), perPage = orientation === 'portrait' ? 10 : 8;
-      var total = Math.ceil(rows.length / perPage);
-      for (var i=0;i<total;i++) pages.push(writingPage(model,
-        'ROTEIRO DA ' + (model.future.name || 'ELIMINATÓRIA'),
-        (bucket.category || 'Categoria única') + (bucket.partial ? '  |  Dupla eliminatória: roteiro parcial' : ''),
-        rows.slice(i*perPage, (i+1)*perPage), i+1, total, orientation, 'future'));
+      var byBracket = new Map();
+      bucket.matches.forEach(function (m) {
+        var key = m.bracket || 'main';
+        if (!byBracket.has(key)) byBracket.set(key, { category:bucket.category, partial:bucket.partial, matches:[] });
+        byBracket.get(key).matches.push(m);
+      });
+      byBracket.forEach(function (part) {
+        var page = bracketPage(model, part, 'ROTEIRO DA ' + (model.future.name || 'ELIMINATÓRIA'));
+        if (page) pages.push(page);
+      });
     });
     var reserves = model.tiebreakGroups || [];
     if (reserves.length) {

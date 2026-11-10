@@ -1,3 +1,7 @@
+// 2.6.29 — A súmula das eliminatórias apresenta uma chave horizontal por
+// categoria, com o código do grupo em letra pequena abaixo das duas linhas
+// de cada dupla e os confrontos ligados entre rodadas.
+// As folhas de placar por quadra e a lista de chamada seguem no arquivo.
 // 2.6.28 — O PDF completo do sorteio mostra o logo maior à direita do
 // cabeçalho em todas as páginas. O fundo usa o degradê configurado no torneio;
 // os cards mantêm sua cor e a numeração contrasta com o fundo.
@@ -1477,7 +1481,7 @@ window._RELEASE_NOTES_HTML = (function () {
         '<li><b>🗓️ Agenda da chave:</b> a visão Geral mantém todos os jogos nas rodadas corretas e mostra o caminho previsto da eliminatória até as finais. Em torneios com um único gênero, a aba redundante desaparece e as categorias permanecem disponíveis.</li>' +
         '<li><b>📺 Modo TV:</b> saída limpa em janela separada com quadras chamadas, relógios, classificação do torneio e três resultados recentes.</li>' +
         '<li><b>🔴 NO AR:</b> a luz vermelha pisca enquanto a janela de TV está aberta e apaga ao fechá-la.</li>' +
-        '<li><b>📋 Súmulas:</b> PDF por quadra e data, com jogos na ordem prevista, até 14 por página, categoria indicada em cada jogo, quadra efetiva preenchida no evento, placar conforme o formato e assinaturas dos atletas. O PDF inclui uma lista de chamada por categoria e atleta, com jogos, parceiro, adversários, horário e quadra. A organização baixa as versões horizontal e vertical juntas em um ZIP pelo botão Súmulas; a lista de presença é baixada em PDF separado.</li>' +
+        '<li><b>📋 Súmulas:</b> PDF por quadra e data, com jogos na ordem prevista, até 14 por página, categoria indicada em cada jogo, quadra efetiva preenchida no evento, placar conforme o formato e assinaturas dos atletas. As eliminatórias aparecem também em uma chave horizontal por categoria: a primeira rodada identifica os grupos de origem, as próximas mostram de qual confronto vem o vencedor, e cada dupla tem duas linhas. O PDF inclui lista de chamada por categoria e atleta, com jogos, parceiro, adversários, horário e quadra. A organização baixa as versões horizontal e vertical juntas em um ZIP pelo botão Súmulas; a lista de presença é baixada em PDF separado.</li>' +
         '<li><b>🎾 Jogos e quadras:</b> a chave separa dias, aceita busca pelo nome da equipe e mostra a chamada confirmada para quadra com o tempo decorrido.</li>' +
         '<li><b>⏱️ Operação da chave:</b> relógios de chamada, aquecimento e jogo acompanham a TV. A chave conserva a ordem dos jogos e recupera quadras, classificação e resultados após reconectar; quadras ocupadas não podem receber outra chamada.</li>' +
         '<li><b>🗓️ Próximos jogos:</b> vários cards aparecem lado a lado quando há espaço, com a rodada publicada acima de cada partida.</li>' +
