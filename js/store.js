@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.6.32';
+window.SCOREPLACE_VERSION = '2.6.33';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -4637,6 +4637,13 @@ window._dashDataSigFor = function (list) {
 window._softRefreshView = function() {
   // 0. If bracket just re-rendered locally, skip to avoid double-render + scroll jump
   if (window._suppressSoftRefresh) return;
+
+  // O snapshot pode chegar enquanto a callable do placar ainda está aberta.
+  // Nesse intervalo o card continua visível com "Gravando…"; remontar o
+  // detalhe inteiro desloca a tela e multiplica o DOM antes da confirmação.
+  var _scorePendingId = (window.location.hash || '').match(/^#(?:tournaments|bracket)\/([^/]+)/);
+  if (_scorePendingId && window._scoreResultPendingByTournament &&
+      window._scoreResultPendingByTournament[_scorePendingId[1]]) return;
 
   // 0b. #novo-torneio is stateful — renderCreateTournamentPage moves DOM from
   // body into viewContainer. A soft-refresh calls initRouter() which does
@@ -12257,6 +12264,11 @@ window.AppStore = {
       _confirmButton.disabled = true;
       _confirmButton.textContent = '⏳ Gravando…';
     }
+    window._scoreResultPendingByTournament = window._scoreResultPendingByTournament || {};
+    var _scorePendingKey = String(tournamentId);
+    window._scoreResultPendingByTournament[_scorePendingKey] =
+      (window._scoreResultPendingByTournament[_scorePendingKey] || 0) + 1;
+    try {
     // Capture antes do await. A confirmação pode chegar depois da restauração
     // inicial do card, mas ainda precisa redesenhar pela mesma âncora — nunca
     // pelo refresh geral que reposiciona a página no topo.
@@ -12568,6 +12580,11 @@ window.AppStore = {
      * grava é quem acabou de aplicar. É a regra do dono valendo por construção — o
      * cliente dispara, o servidor escreve. [[project_porta_unica_de_escrita_cf]] */
     return r;
+    } finally {
+      var _remainingScoreSaves = (window._scoreResultPendingByTournament[_scorePendingKey] || 1) - 1;
+      if (_remainingScoreSaves > 0) window._scoreResultPendingByTournament[_scorePendingKey] = _remainingScoreSaves;
+      else delete window._scoreResultPendingByTournament[_scorePendingKey];
+    }
   },
 
 

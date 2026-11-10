@@ -208,6 +208,68 @@ async function respostaCanonicaFicaNoCard(browser) {
   await page.close();
 }
 
+async function placarNaAgendaGeralNaoRemonta(browser) {
+  console.log('\n①d Rei/Rainha: a agenda Geral atualiza a classificação sem remontar a chave');
+  const t = H.hydrateMonarchGroups(H.buildViaDraw('Liga', 144, {
+    ligaRoundFormat: 'rei_rainha', drawMode: 'rei_rainha', drawManual: true
+  }));
+  t.name = 'CAMIS'; t.sport = 'Beach Tennis'; t.courtCount = 8;
+  t.scheduleWindow = { days:[{ day:'2026-11-13', startTime:'08:00', endTime:'21:00' }] };
+  t.rankingPrimary = 'games_diff';
+  t.groups.forEach((group, index) => {
+    const category = index < 8 ? 'Fem Diamante' : index < 24 ? 'Fem Ouro' : 'Fem Prata';
+    group.category = category;
+    group.matches.forEach((match) => {
+      match.category = category;
+      match.scheduledAt = '2026-11-13T08:00:00-03:00';
+      match.court = 'Quadra ' + (index % 8 + 1);
+    });
+  });
+  const byId = new Map(t.groups.flatMap(group => group.matches).map(match => [match.id, match]));
+  t.rounds[0].matches.forEach(match => Object.assign(match, byId.get(match.id)));
+  t.rounds[0].monarchGroups.forEach((group, index) => { group.category = t.groups[index].category; });
+  const alvo = t.groups[0].matches[0].id;
+  const page = await abreChave(browser, t, { uid:'u-org', displayName:'Org', org:true });
+  const state = await page.evaluate((id) => {
+    const tour = window.AppStore.tournaments[0];
+    document.getElementById('inline-bracket-container').innerHTML =
+      window._renderMonarchStage(tour, true, true, { suppressAutoAdvance:true });
+    window._currentBracketTournament = tour;
+    window._bracketCategoryTabsMount();
+    const root = document.querySelector('[data-bracket-tabs-root]');
+    if (!root) return { error:'sem abas', cards:document.querySelectorAll('[data-bracket-tab-category]').length,
+      groups:document.querySelectorAll('[data-monarch-group]').length,
+      text:document.getElementById('inline-bracket-container').textContent.slice(0,180) };
+    window._bracketGeneralView(root, true, 'fem');
+    const card = document.getElementById('card-' + id);
+    const bundle = card && card.closest('.bracket-geral-quarteto');
+    if (!bundle) return { error:'sem quarteto na Geral', card:!!card, general:!!root._bracketGeneralView,
+      entries:root._bracketGeneralEntries?.length, bundles:document.querySelectorAll('.bracket-geral-quarteto').length,
+      scheduled:card?.getAttribute('data-bracket-scheduled-at'), text:root._bracketGeneralView?.textContent.slice(0,150) };
+    const original = bundle._monarchSource;
+    const oldTable = original.querySelector('.standings-scroll table');
+    const oldCopy = bundle.querySelector('.bracket-geral-quarteto-standings table');
+    window.scrollTo(0, Math.max(0, card.getBoundingClientRect().top + window.scrollY - 180));
+    const topBefore = card.getBoundingClientRect().top;
+    const scrollBefore = window.scrollY;
+    const t = window.AppStore.tournaments[0];
+    const m = window._findMatch(t, id);
+    m.scoreP1 = 6; m.scoreP2 = 3; m.winner = m.p1; m.resultAt = Date.now();
+    const updated = window._refreshConfirmedMatchCard(t, t.id, id);
+    return { updated, sameRoot:root.isConnected, sameAgenda:root._bracketGeneralView.isConnected,
+      originalChanged:original.querySelector('.standings-scroll table') !== oldTable,
+      copyChanged:bundle.querySelector('.bracket-geral-quarteto-standings table') !== oldCopy,
+      topDelta:Math.round(document.getElementById('card-' + id).getBoundingClientRect().top - topBefore),
+      scrollDelta:Math.round(window.scrollY - scrollBefore),
+      oneCard:document.querySelectorAll('#card-' + CSS.escape(id)).length === 1 };
+  }, alvo);
+  ok(!state.error && state.updated && state.sameRoot && state.sameAgenda &&
+    state.originalChanged && state.copyChanged && state.oneCard &&
+    Math.abs(state.topDelta) <= 2 && Math.abs(state.scrollDelta) <= 2,
+  'placar na Geral mantém DOM/posição e atualiza a classificação do quarteto: ' + JSON.stringify(state));
+  await page.close();
+}
+
 async function ecoDoServidorNaoMoveJogo(browser) {
   console.log('\n①c Atualização posterior mantém o jogo lançado no mesmo lugar');
   const t = montaTorneio();
@@ -597,6 +659,7 @@ async function numeroDoPlacar(browser) {
   try {
     await naoPula(browser);
     await respostaCanonicaFicaNoCard(browser);
+    await placarNaAgendaGeralNaoRemonta(browser);
     await ecoDoServidorNaoMoveJogo(browser);
     await falhaNaoDeixaPlacarOtimista(browser);
     simularJogaOFormato();

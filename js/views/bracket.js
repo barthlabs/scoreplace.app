@@ -10371,6 +10371,11 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
   var _useSetsMonarch = !!(t.scoring && t.scoring.type === 'gsm');
   var _gamesPrimaryMonarch = t.rankingPrimary === 'games_diff';
   subgroups.forEach(function(sg, gi) {
+    // A confirmação de um placar precisa apenas da classificação do seu
+    // quarteto. Calcular e parsear as dezenas de tabelas do torneio inteiro
+    // em cada lançamento pressiona o renderer justamente durante o save.
+    if (opts && opts.standingsOnly && opts.targetGroupLabel &&
+        window._grpKey(sg.name) !== opts.targetGroupLabel) return;
     // _computeMonarchStandings tolerates both shapes: group.matches or
     // group.rounds[0].matches. We pass the flat form, which is what subgroup
     // already exposes.
@@ -10598,12 +10603,18 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
 }
 window._refreshMonarchStandingsInPlace = function (t, matchId) {
   var card = document.getElementById('card-' + String(matchId));
-  var group = card && card.closest('[data-monarch-group="1"]');
+  var bundle = card && card.closest('.bracket-geral-quarteto');
+  // A agenda Geral também marca o invólucro com data-monarch-group, mas sua
+  // tabela é uma cópia de leitura. A fonte editável continua no grupo oculto.
+  var group = bundle ? bundle._monarchSource :
+    (card && card.closest('[data-monarch-group="1"]'));
   if (!group || !t) return false;
   var label = group.getAttribute('data-group-label');
   var oldTable = group.querySelector('.standings-scroll');
   if (!oldTable) return false;
-  var html = _renderMonarchStage(t, false, false, { standingsOnly: true });
+  var html = _renderMonarchStage(t, false, false, {
+    standingsOnly: true, targetGroupLabel: label
+  });
   var detached = document.createElement('div');
   detached.innerHTML = html;
   var newer = Array.prototype.find.call(detached.querySelectorAll('[data-monarch-group="1"]'), function (node) {
@@ -10614,6 +10625,7 @@ window._refreshMonarchStandingsInPlace = function (t, matchId) {
   var horizontalScroll = oldTable.scrollLeft;
   oldTable.replaceWith(newTable);
   newTable.scrollLeft = horizontalScroll;
+  if (bundle) _bracketGeneralRefreshStandings(bundle);
   return true;
 };
 

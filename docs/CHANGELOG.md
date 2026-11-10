@@ -1,3 +1,10 @@
+## 2.6.33 — 10/nov/2026 (placar Rei/Rainha sem salto da tela)
+
+- Na agenda Geral, o resultado confirmado atualiza a classificação do grupo original e sua cópia visível sem remontar a chave inteira. O recálculo alcança somente o quarteto alterado.
+- Enquanto o salvamento do placar está pendente, o eco do servidor não reconstrói o detalhe; a proteção é liberada mesmo se a operação falhar.
+- Regressão no Chromium com 36 grupos e 108 jogos confirma que a classificação muda, o card permanece único e sua posição vertical fica inalterada.
+- Corte somente web. Dados do torneio e versões nativas não foram alterados.
+
 ## 2.6.32 — 10/nov/2026 (barra de rolagem e grupos identificados)
 
 - A faixa Em quadra passa a mostrar uma barra horizontal própria de 22 px, com alça contrastante de 16 px, quando há quadras fora da área visível. Ela pode ser arrastada, clicada ou usada pelo teclado, inclusive no macOS com barras nativas sobrepostas.

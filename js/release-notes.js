@@ -1,3 +1,6 @@
+// 2.6.33 — Ao lançar um placar na agenda Geral, a classificação do grupo
+// atualiza no próprio lugar, sem reconstruir a chave nem mover a tela.
+// O salvamento em andamento protege a página de repinturas prematuras.
 // 2.6.32 — A barra horizontal de Em quadra tem trilho alto e alça destacada,
 // sempre visível quando há mais quadras à direita. Pode ser arrastada ou
 // acionada pelo teclado sem depender da barra discreta do navegador.
