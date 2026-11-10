@@ -414,6 +414,12 @@ function _limparCamadasTransitóriasDaChave(container) {
   for (var p = portals.length - 1; p >= 0; p--) {
     if (portals[p].parentNode) portals[p].parentNode.removeChild(portals[p]);
   }
+  // A faixa, a agenda e o progresso são irmãos da chave. Desmonte também os
+  // nós órfãos de uma pintura anterior antes de montar a próxima.
+  var detail = container.closest && container.closest('#view-container');
+  if (detail) detail.querySelectorAll('[data-bracket-operations-strip], [data-bracket-general-view], [data-bracket-operations-progress]').forEach(function (surface) {
+    surface.remove();
+  });
 }
 window._limparCamadasTransitóriasDaChave = _limparCamadasTransitóriasDaChave;
 
@@ -979,6 +985,17 @@ function _bracketTabLabel(category, gender) {
   if (gender === 'masc') s = s.replace(/^masculino\s*/i, '').replace(/^masc\s*/i, '');
   return s || 'Sem categoria';
 }
+function _bracketCategoryOrder(category, definitions) {
+  var label = String(category || '').toLowerCase();
+  if (/diamante/.test(label)) return 0;
+  if (/ouro/.test(label)) return 1;
+  if (/prata/.test(label)) return 2;
+  var list = Array.isArray(definitions) ? definitions : [];
+  var found = list.findIndex(function (item) {
+    return item && (String(item.label || '').toLowerCase() === label || String(item.id || '').toLowerCase() === label);
+  });
+  return found < 0 ? 10000 : found + 100;
+}
 function _bracketScheduledDay(card, zone) {
   var at = Number(card && card.getAttribute('data-bracket-scheduled-at'));
   if (!isFinite(at) || at <= 0) return '';
@@ -1013,6 +1030,9 @@ function _bracketFindTabsRoot(host, scope, tournamentId) {
   var root = candidates[0] || null;
   for (var i = 1; i < candidates.length; i++) {
     if (candidates[i]._bracketRoundHeadingPortal) candidates[i]._bracketRoundHeadingPortal.remove();
+    if (candidates[i]._bracketGeneralView) candidates[i]._bracketGeneralView.remove();
+    if (candidates[i]._bracketOperationsStrip) candidates[i]._bracketOperationsStrip.remove();
+    if (candidates[i]._bracketOperationsProgress) candidates[i]._bracketOperationsProgress.remove();
     candidates[i].remove();
   }
   return root;
@@ -1343,6 +1363,60 @@ window._bracketOperationsSelect = function (t) {
   return { next: next, active: active, pending: pending, courts: courts, matches: matches };
 };
 
+// Cada clique registra somente a leva que já ocupa as quadras. A próxima
+// partida de uma série entra pela resposta canônica do servidor; ela nunca é
+// incluída no mesmo lote por acidente.
+window._bracketOperationsSimulate = async function (tId) {
+  var t = typeof window._findTournamentById === 'function' && window._findTournamentById(String(tId));
+  if (!t || !window.AppStore || !window.AppStore.currentUser ||
+      typeof window._isUserOrgOrCoHost !== 'function' ||
+      !window._isUserOrgOrCoHost(t, window.AppStore.currentUser) ||
+      typeof window.AppStore.commitResultTx !== 'function') return false;
+  var snapshot = window._bracketOperationsSelect(t);
+  if (!snapshot || !snapshot.active.length) return false;
+  var seenCourts = new Set();
+  var games = snapshot.active.filter(function (m) {
+    if (!m || !m.court || seenCourts.has(String(m.court)) || m.winner || m.pendingResult ||
+        !m.p1 || !m.p2 || m.p1 === 'TBD' || m.p2 === 'TBD' || m.isBye) return false;
+    seenCourts.add(String(m.court));
+    return true;
+  });
+  var done = 0;
+  for (var i = 0; i < games.length; i++) {
+    var m = games[i];
+    var fresh = window._findTournamentById(String(tId));
+    var current = fresh && typeof window._findMatch === 'function' && window._findMatch(fresh, String(m.id));
+    if (!current || current.winner || !current.courtCalledAt ||
+        String(current.court) !== String(m.court)) continue;
+    var sc = typeof window._effectiveScoring === 'function' ? window._effectiveScoring(fresh, current) : fresh.scoring || {};
+    var multi = typeof window._simularPartida === 'function' ? window._simularPartida(sc, { sport: fresh.sport }) : null;
+    var payload;
+    if (multi) {
+      payload = { gsmFinal: true, s1: multi.scoreP1, s2: multi.scoreP2,
+        sets: multi.sets, setsWonP1: multi.setsWonP1, setsWonP2: multi.setsWonP2,
+        isFixedSet: !!sc.fixedSet };
+    } else {
+      var target = Math.max(1, Number(sc && sc.gamesPerSet) || 6);
+      var loser = Math.max(0, target - 3);
+      var firstWins = i % 2 === 0;
+      payload = { s1: firstWins ? target : loser, s2: firstWins ? loser : target,
+        useSets: !!(window._scoringUsesSets && window._scoringUsesSets(sc)),
+        isFixedSet: !!sc.fixedSet };
+    }
+    window._scoreViewportAnchor = { tournamentId: String(tId), matchId: String(m.id),
+      route: window.location.hash || '', at: Date.now(), fromOperations: true };
+    var saved = await window.AppStore.commitResultTx(String(tId), String(m.id), payload,
+      'Resultado simulado na quadra: jogo ' + String(m._gameNum || m.scheduledGameNumber || m.id));
+    if (!saved) break;
+    done++;
+  }
+  if (typeof showNotification === 'function') showNotification(
+    done ? 'Simulação gravada' : 'Nenhum jogo simulado',
+    done + ' de ' + games.length + ' jogos desta leva registrados. A próxima partida da série já pode ser simulada.',
+    done === games.length ? 'success' : 'warning');
+  return done === games.length;
+};
+
 function _bracketReconcileOperationalOrder(root) {
   if (!root) return;
   var card = document.getElementById('tourn-grid-container');
@@ -1561,10 +1635,10 @@ function _bracketOperationsStandingsHtml(group, t, slot, courtHtml, categoryLabe
       safe(String(group.name).replace(/^R\d+\s+/i, '').replace(/^Grupo\s+/i, '')) + '</span>' +
     '<div class="sp-operations-standings-status">' +
     (finished ? 'CLASSIFICAÇÃO' : 'CLASSIFICAÇÃO PARCIAL') + '</div>' +
-    '<table class="sp-operations-standings"><thead><tr><th>#</th><th>Atleta</th><th>V</th><th>Saldo</th></tr></thead><tbody>' +
+    '<div class="sp-operations-standings-body"><table class="sp-operations-standings"><thead><tr><th>#</th><th>Atleta</th><th>V</th><th>Saldo</th></tr></thead><tbody>' +
     standings.map(function (row, i) { return '<tr><td>' + (i + 1) + 'º</td><td>' + safe(row.name || '') +
       '</td><td>' + (Number(row.wins) || 0) + '</td><td>' + ((Number(row.pointsFor) || 0) - (Number(row.pointsAgainst) || 0)) +
-      '</td></tr>'; }).join('') + '</tbody></table>' +
+    '</td></tr>'; }).join('') + '</tbody></table></div>' +
     (courtHtml ? '<div class="sp-operations-standings-footer">' + courtHtml + '</div>' : '') + '</article>';
 }
 
@@ -1835,6 +1909,25 @@ window._bracketOperationsRefresh = function (t, root) {
       }, 0);
     });
     existing.addEventListener('click', function (event) {
+      var simulate = event.target && event.target.closest('[data-operations-simulate]');
+      if (simulate) {
+        event.preventDefault();
+        if (simulate.disabled || existing._spSimulateBusy) return;
+        existing._spSimulateBusy = true;
+        existing._spCourtBusy = (existing._spCourtBusy || 0) + 1;
+        simulate.disabled = true;
+        Promise.resolve(window._bracketOperationsSimulate(String(t.id))).catch(function (error) {
+          if (window._error) window._error('[bracket] Simular em quadra', error);
+          if (typeof showNotification === 'function') showNotification('Simulação interrompida',
+            'Não foi possível gravar o placar. Confira os jogos em quadra antes de tentar novamente.', 'error');
+        }).finally(function () {
+          existing._spSimulateBusy = false;
+          existing._spCourtBusy--;
+          var live = typeof window._findTournamentById === 'function' && window._findTournamentById(String(t.id));
+          window._bracketOperationsRefresh(live || t, root);
+        });
+        return;
+      }
       var op = event.target && event.target.closest('.sp-operations-replica');
       if (!op) return;
       if (event.target.closest('.sp-match-court select, .sp-match-court option')) return;
@@ -2000,7 +2093,11 @@ window._bracketOperationsRefresh = function (t, root) {
       '<span class="sp-operations-label">' + nextLabel + '</span>' + nextAvailability + '<div class="sp-operations-empty">Nenhum jogo aguardando chamada</div>') +
     '</div>' + (state.pending.length ? '<div class="sp-operations-pending" aria-label="Placares pendentes"><span class="sp-operations-section-title">PLACARES PENDENTES</span><div class="sp-operations-pending-track">' +
     state.pending.map(function (m) { return _bracketOperationsReplica(m, t, { canCall: canCall, active: false }, String(m.court || 'Placar pendente'), '', root, state.matches, 'pending:' + String(m.id)); }).join('') +
-    '</div></div>' : '') + '<div class="sp-operations-courts" aria-label="Jogos em quadra"><span class="sp-operations-section-title">EM QUADRA</span><div class="sp-operations-court-track">' +
+    '</div></div>' : '') + '<div class="sp-operations-courts" aria-label="Jogos em quadra"><div class="sp-operations-courts-heading"><span class="sp-operations-section-title">EM QUADRA</span>' +
+    (typeof window._isUserOrgOrCoHost === 'function' && window._isUserOrgOrCoHost(t, user) ?
+      '<button type="button" class="sp-operations-simulate" data-operations-simulate="1" title="Registra placares simulados apenas nos jogos que estão em quadra agora"' +
+      (state.active.some(function (m) { return m && !m.winner && !m.pendingResult; }) ? '' : ' disabled') + '>Simular</button>' : '') +
+    '</div><div class="sp-operations-court-track">' +
     state.courts.map(function (court) {
       var games = state.active.filter(function (m) { return String(m.court) === court; });
       return '<div class="sp-operations-court-slot' + (games.length ? ' sp-operations-court-slot--active' : '') + '">' +
@@ -2014,6 +2111,7 @@ window._bracketOperationsRefresh = function (t, root) {
   if (!compactProgress) {
     compactProgress = document.createElement('div');
     compactProgress.className = 'sp-operations-progress';
+    compactProgress.setAttribute('data-bracket-operations-progress', '1');
     compactProgress.setAttribute('aria-label', 'Progresso realizado e previsto');
     root._bracketOperationsProgress = compactProgress;
     existing.parentNode.insertBefore(compactProgress, existing);
@@ -2028,44 +2126,18 @@ window._bracketOperationsRefresh = function (t, root) {
     // isso realimenta scrollHeight e aumenta os botões a cada atualização.
     operationsTrack.style.setProperty('--sp-operations-card-height', 'auto');
     operationsTrack.style.alignItems = 'flex-start';
-    var measuredCards = existing.querySelectorAll('.sp-operations-replica > .sp-match-card');
+    var measuredCards = existing.querySelectorAll('.sp-operations-replica > .sp-match-card:not(.sp-operations-standings-card)');
     Array.prototype.forEach.call(measuredCards, function (card) { card.style.height = 'max-content'; });
     var cardHeights = Array.prototype.map.call(measuredCards, function (card) {
       return Math.ceil(card.getBoundingClientRect().height);
     });
-    // A classificação do quarteto pode estar fora da tela do carrossel. Meça
-    // essa quarta tela com a mesma largura do card visível; uma altura fixa de
-    // 380px deixava uma faixa morta abaixo dos controles em todas as quadras.
-    if (state.next && root._bracketOperationsNav && root._bracketOperationsNav.next) {
-      var savedNextNav = root._bracketOperationsNav.next;
-      var probeGroup = _bracketOperationsGroup(t, state.next, state.matches);
-      if (probeGroup) {
-        root._bracketOperationsNav.next = { key: probeGroup.key, index: 3, baseId: String(state.next.id) };
-        var probeHtml = _bracketOperationsReplica(state.next, t, {
-          canCall: canCall, active: false, preferFirstFreeCourt: true,
-          preferredCourt: (root._bracketOperationsManualCourt || {})[String(state.next.id)] || ''
-        }, nextLabel, nextAvailability, root, state.matches, 'next');
-        root._bracketOperationsNav.next = savedNextNav;
-        var probe = document.createElement('div');
-        probe.className = 'sp-operations-next';
-        probe.style.cssText = 'position:absolute;left:-10000px;top:0;visibility:hidden;pointer-events:none;width:' +
-          Math.ceil(existing.querySelector('.sp-operations-next').getBoundingClientRect().width) + 'px;';
-        probe.innerHTML = probeHtml;
-        operationsTrack.appendChild(probe);
-        var probeCard = probe.querySelector('.sp-operations-standings-card');
-        if (probeCard) {
-          probeCard.style.height = 'max-content';
-          cardHeights.push(Math.ceil(probeCard.getBoundingClientRect().height));
-        }
-        probe.remove();
-      }
-    }
     Array.prototype.forEach.call(measuredCards, function (card) { card.style.removeProperty('height'); });
     operationsTrack.style.removeProperty('align-items');
-    // A régua usa o conteúdo real da tela mais alta; a classificação continua
-    // estável ao navegar, e as partidas não carregam altura vazia arbitrária.
-    operationsTrack.style.setProperty('--sp-operations-card-height', Math.max.apply(null,
-      [120].concat(cardHeights)) + 'px');
+    // Na tela de classificação o jogo é substituído, mas a régua mantém a
+    // última altura medida dos jogos. A tabela rola dentro desse mesmo card.
+    if (cardHeights.length) root._bracketOperationsGameHeight = Math.max.apply(null, [210].concat(cardHeights));
+    operationsTrack.style.setProperty('--sp-operations-card-height',
+      (root._bracketOperationsGameHeight || 120) + 'px');
     operationsTrack.scrollLeft = trackScroll;
     _bracketOperationsBindScrollbar(operationsTrack, existing.querySelector('.sp-operations-scrollbar'));
     if (window.scrollY !== pageY || window.scrollX !== pageX) window.scrollTo(pageX, pageY);
@@ -2364,6 +2436,7 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
   if (!view) {
     view = document.createElement('section');
     view.setAttribute('data-bracket-general-view', '1');
+    view.setAttribute('data-operations-tournament-id', root.getAttribute('data-tournament-id') || '');
     // A agenda operacional é larga por natureza (uma coluna por rodada), mas
     // jamais pode pintar fora da largura da chave, nem durante um repaint de
     // placar. O trilho interno é o único ponto que pode rolar na horizontal.
@@ -3248,6 +3321,12 @@ window._bracketCategoryTabsMount = function () {
     var gender = card.getAttribute('data-bracket-tab-gender') || _bracketTabGender(cat);
     if (!byGender[gender]) { byGender[gender] = []; order.push(gender); }
     if (byGender[gender].indexOf(cat) === -1) byGender[gender].push(cat);
+  });
+  order.forEach(function (gender) {
+    byGender[gender].sort(function (a, b) {
+      return _bracketCategoryOrder(a, currentTournament.categoryDefinitions) -
+        _bracketCategoryOrder(b, currentTournament.categoryDefinitions);
+    });
   });
   var allCats = order.reduce(function (n, gender) { return n + byGender[gender].length; }, 0);
   if (allCats < 2) return; // chave única continua limpa: não há navegação a oferecer.
@@ -10506,7 +10585,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
         : '';
       var row = '<tr style="border-bottom:1px solid var(--border-color);' + (bg ? 'background:' + window._spCor(bg, 'background') + ';' : '') + '">' +
         '<td style="padding:6px 10px;font-weight:700;color:' + window._spCor(clr, 'color') + ';text-align:center;">' + (i + 1) + 'º</td>' +
-        '<td class="sp-monarch-standings-name" style="padding:6px 10px;font-weight:600;color:' + window._spCor((_presM ? '#4ade80' : 'var(--text-bright)'), 'color') + ';"><span class="sp-name-fit" data-maxrem="0.85" data-minrem="0.55" data-two-line-maxrem="0.85">' + _presDotM + (typeof window._rowNameHtml === 'function' ? window._rowNameHtml : function (s, h) { return h; })(s, (typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(window._liveRowName(s), window._currentBracketTournament) : (typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(window._liveRowName(s), window._currentBracketTournament) : window._safeHtml(window._liveRowName(s))))) + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, standings, s, { groupDone: groupDone }) : '') + '</span></td>' +
+        '<td class="sp-monarch-standings-name" style="padding:6px 10px;font-weight:600;color:' + window._spCor((_presM ? '#4ade80' : 'var(--text-bright)'), 'color') + ';"><div class="sp-monarch-standings-box" data-sp-card-name-box data-sp-one-line-h="2.3rem" data-sp-two-line-h="2.3rem"><span class="sp-name-fit" data-maxrem="0.85" data-minrem="0.34" data-two-line-maxrem="0.85">' + _presDotM + (typeof window._rowNameHtml === 'function' ? window._rowNameHtml : function (s, h) { return h; })(s, (typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(window._liveRowName(s), window._currentBracketTournament) : (typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(window._liveRowName(s), window._currentBracketTournament) : window._safeHtml(window._liveRowName(s))))) + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, standings, s, { groupDone: groupDone }) : '') + '</span></div></td>' +
         '<td style="padding:6px 10px;text-align:center;color:var(--sp-c-4ade80,#4ade80);font-weight:700;">' + s.wins + '</td>' +
         (_compacta ? '' : '<td style="padding:6px 10px;text-align:center;color:var(--sp-c-f87171,#f87171);">' + s.losses + '</td>') +
         (_compacta || _gamesPrimaryMonarch ? '' : (s.points != null

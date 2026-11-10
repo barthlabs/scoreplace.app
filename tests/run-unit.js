@@ -1246,6 +1246,7 @@ const SUITES = [
   'tests/bracket-geral-agenda.test.js',
   'tests/fase-historica-abas-nao-ocultam-jogos.test.js',
   'tests/bracket-operations-strip.test.js',
+  'tests/bracket-operations-simulate.test.js',
   'tests/bracket-avatar-presence.test.js',
   'tests/bracket-avatar-no-jump.test.js',
   'tests/bracket-sem-painel-presenca.test.js',

@@ -2173,11 +2173,23 @@ function _finalizeRoundCardInPlace(t, m, tId, matchId) {
 window._refreshConfirmedMatchCard = function (t, tId, matchId) {
   var card = document.getElementById('card-' + matchId);
   if (!card || !t) return false;
+  // O placar da faixa "Em quadra" é lançado numa réplica. O card canônico
+  // pode estar bem abaixo da tela (ou oculto por uma aba). Ancorar a janela
+  // nesse card fora do enquadramento deslocava a faixa quando ela mudava de
+  // altura após o resultado; o operador deve continuar olhando a mesma área.
+  var scoreOrigin = window._scoreViewportAnchor;
+  var fromOperations = !!(scoreOrigin && scoreOrigin.fromOperations &&
+    scoreOrigin.route === (window.location.hash || '') &&
+    String(scoreOrigin.tournamentId) === String(tId) &&
+    String(scoreOrigin.matchId) === String(matchId));
   var monarchGroupOnScreen = !!(card.closest && card.closest('[data-monarch-group="1"]'));
   var m = _findMatch(t, matchId);
   if (!m) return false;
   var sx = window.scrollX || 0, sy = window.scrollY || 0;
-  var cardTop = card.getBoundingClientRect().top;
+  var cardRect = card.getBoundingClientRect();
+  var anchorVisibleCard = !fromOperations && card.getClientRects().length > 0 &&
+    cardRect.bottom > 0 && cardRect.top < window.innerHeight;
+  var cardTop = anchorVisibleCard ? cardRect.top : null;
   var hscroll = _lerRolagensDaChave();
   var scrollports = [];
   for (var parent = card.parentElement; parent && parent !== document.body; parent = parent.parentElement) {
@@ -2211,8 +2223,16 @@ window._refreshConfirmedMatchCard = function (t, tId, matchId) {
     _aplicarRolagensDaChave(hscroll);
     window.scrollTo(sx, sy);
     // Se outra faixa acima mudou de altura, preserve também o lugar visual do card.
-    var delta = current.getBoundingClientRect().top - cardTop;
-    if (Math.abs(delta) > 1) window.scrollBy(0, delta);
+    if (cardTop != null) {
+      var delta = current.getBoundingClientRect().top - cardTop;
+      if (Math.abs(delta) > 1) {
+        var verticalPort = scrollports.find(function (port) {
+          return port.el.isConnected && port.el.scrollHeight > port.el.clientHeight + 1;
+        });
+        if (verticalPort) verticalPort.el.scrollTop += delta;
+        else window.scrollBy(0, delta);
+      }
+    }
   }
   try {
     changed = _finalizeRoundCardInPlace(t, m, tId, matchId);
@@ -2233,7 +2253,9 @@ window._refreshConfirmedMatchCard = function (t, tId, matchId) {
         requestAnimationFrame(restorePosition);
       });
       [120, 350, 800].forEach(function (delay) { setTimeout(restorePosition, delay); });
-      setTimeout(stopListening, 1000);
+      setTimeout(function () {
+        stopListening();
+      }, 1000);
     }
   } finally {
     if (root && root.style) root.style.overflowAnchor = oldAnchor;
@@ -2410,7 +2432,8 @@ window._saveResultInline = function (tId, matchId, sourceRoot) {
   const m = _findMatch(t, matchId);
   if (!m) return;
   window._scoreViewportAnchor = { tournamentId: String(tId), matchId: String(matchId),
-    route: window.location.hash || '', at: Date.now() };
+    route: window.location.hash || '', at: Date.now(),
+    fromOperations: !!(sourceRoot && sourceRoot.closest && sourceRoot.closest('[data-bracket-operations-strip]')) };
   _invalidarFocoAgendado(tId, matchId);
 
   // ⚠️ JOGO JÁ ENCERRADO NÃO ACEITA PROPOSTA NOVA DE PARTICIPANTE. O card esconde os

@@ -571,7 +571,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
         cardHeight: strip.querySelector('.sp-operations-next .sp-match-card')?.getBoundingClientRect().height,
         category: strip.querySelector('.sp-operations-next [data-match-time-status], .sp-operations-next .sp-operations-standings-category')?.textContent.trim(),
         footerBelowTable: (() => { const card = strip.querySelector('.sp-operations-next .sp-operations-standings-card');
-          const table = card?.querySelector('.sp-operations-standings');
+          const table = card?.querySelector('.sp-operations-standings-body');
           const footer = card?.querySelector('.sp-operations-standings-footer');
           return !!footer && footer.getBoundingClientRect().top >= table.getBoundingClientRect().bottom - 2; })(),
         categoryAboveStandings: (() => { const card = strip.querySelector('.sp-operations-next .sp-operations-standings-card');

@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.6.33';
+window.SCOREPLACE_VERSION = '2.6.34';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -2586,7 +2586,7 @@ window._formatLabel = function (t) {
     _sdkStorage = new Promise(function (resolve, reject) {
       if (window.firebase && window.firebase.storage) { resolve(window.firebase.storage()); return; }
       var s = document.createElement('script');
-      s.src = 'https://www.gstatic.com/firebasejs/12.17.1/firebase-storage-compat.js';
+      s.src = 'https://www.gstatic.com/firebasejs/12.19.0/firebase-storage-compat.js';
       s.onload = function () {
         try { resolve(window.firebase.storage()); } catch (e) { reject(e); }
       };

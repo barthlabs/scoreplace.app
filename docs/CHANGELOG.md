@@ -1,3 +1,10 @@
+## 2.6.34 — 10/nov/2026 (simulação da quadra e estabilidade)
+
+- O botão Simular na faixa Em quadra registra o jogo atual de cada quadra por clique. O próximo jogo da série Rei/Rainha fica para o clique seguinte; os resultados passam pela função autenticada do servidor.
+- A altura da faixa é medida pelo conteúdo dos jogos, evitando o espaço vazio sob o relógio. A classificação mantém a mesma altura visual e rolagem própria; nomes longos cabem em duas linhas.
+- O placar lançado na faixa preserva a posição do operador mesmo após alterações de altura. O backend carrega o comparador de classificação para resolver desempates sem erro.
+- O Firebase Auth web passa à versão 12.19.0 para corrigir a falha de IndexedDB no login Google do MacBook. Corte web e função de sorteio; sem alteração de dados ou versões nativas.
+
 ## 2.6.33 — 10/nov/2026 (placar Rei/Rainha sem salto da tela)
 
 - Removidas as dicas sobrepostas com texto e setas da dashboard, busca, perfil, convites e locais.

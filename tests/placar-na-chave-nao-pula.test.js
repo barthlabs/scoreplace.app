@@ -170,11 +170,17 @@ async function respostaCanonicaFicaNoCard(browser) {
   const alvo = (t.matches || []).filter(m => m.round === 2)[3].id;
   const page = await abreChave(browser, t, { uid:'u-org', displayName:'Org', org:true });
   const r = await page.evaluate((id) => {
+    // É preciso haver rolagem real para provar a compensação de um reflow.
+    const scrollport = document.createElement('div');
+    scrollport.style.cssText = 'height:700px;overflow-y:auto;overflow-x:hidden';
+    const view = document.getElementById('view-container');
+    view.parentNode.insertBefore(scrollport, view);
+    scrollport.appendChild(view);
     const card = document.getElementById('card-' + id);
     const wrapper = card.closest('.bracket-scroll-container, .bracket-sticky-scroll-wrapper');
-    window.scrollTo(0, card.getBoundingClientRect().top + window.scrollY - 250);
+    scrollport.scrollTop = card.getBoundingClientRect().top - scrollport.getBoundingClientRect().top - 250;
     wrapper.scrollLeft = Math.round((wrapper.scrollWidth - wrapper.clientWidth) * 0.6);
-    const before = { y: window.scrollY, x: wrapper.scrollLeft,
+    const before = { y: window.scrollY, portY:scrollport.scrollTop, x: wrapper.scrollLeft,
       top: card.getBoundingClientRect().top, left: card.getBoundingClientRect().left };
     const tour = window.AppStore.tournaments[0];
     const game = tour.matches.find(m => m.id === id);
@@ -183,14 +189,14 @@ async function respostaCanonicaFicaNoCard(browser) {
     game.scoreP1 = 2; game.scoreP2 = 0; game.resultAt = Date.now();
     const changed = window._refreshConfirmedMatchCard(tour, tour.id, id);
     const fresh = document.getElementById('card-' + id);
-    return { changed, before, after: { y: window.scrollY, x: wrapper.scrollLeft,
+    return { changed, before, after: { y: window.scrollY, portY:scrollport.scrollTop, x: wrapper.scrollLeft,
       top: fresh.getBoundingClientRect().top, left: fresh.getBoundingClientRect().left },
       hasEdit: /Editar/.test(fresh.textContent), hasConfirm: !!fresh.querySelector('#confirm-' + id) };
   }, alvo);
   ok(r.changed && r.hasEdit && !r.hasConfirm, 'o resultado confirmado mostra Editar no mesmo card');
   ok(Math.abs(r.after.top - r.before.top) <= 2 && Math.abs(r.after.left - r.before.left) <= 2,
     'o card permanece na posição visual após a resposta do servidor');
-  ok(r.after.x === r.before.x && r.after.y === r.before.y,
+  ok(r.after.x === r.before.x && r.after.y === r.before.y && r.after.portY === r.before.portY,
     'as rolagens vertical e horizontal não mudam');
   await page.evaluate(() => {
     setTimeout(function () {
@@ -204,7 +210,46 @@ async function respostaCanonicaFicaNoCard(browser) {
     return { top: c.getBoundingClientRect().top, left: c.getBoundingClientRect().left };
   }, alvo);
   ok(Math.abs(delayed.top - r.before.top) <= 2 && Math.abs(delayed.left - r.before.left) <= 2,
-    'reflow tardio mantém o mesmo card no mesmo ponto da tela');
+    'reflow tardio mantém o mesmo card no mesmo ponto da tela: ' + JSON.stringify({ before:r.before, delayed:delayed }));
+  await page.close();
+}
+
+async function placarNaFaixaNaoAncoraCardForaDaTela(browser) {
+  console.log('\n①e Placar na faixa não desloca a janela para o card canônico fora da tela');
+  const t = montaTorneio();
+  const alvo = (t.matches || []).filter(m => m.round === 2)[3].id;
+  const page = await abreChave(browser, t, { uid:'u-org', displayName:'Org', org:true });
+  const r = await page.evaluate((id) => {
+    const tour = window.AppStore.tournaments[0];
+    const card = document.getElementById('card-' + id);
+    const strip = document.createElement('div');
+    strip.setAttribute('data-bracket-operations-strip', '1');
+    strip.style.height = '900px';
+    strip.style.background = '#203040';
+    document.body.insertBefore(strip, document.getElementById('view-container'));
+    window.scrollTo(0, 120);
+    const before = { y: window.scrollY, stripTop: strip.getBoundingClientRect().top,
+      sourceTop: card.getBoundingClientRect().top };
+    window._scoreViewportAnchor = { tournamentId: tour.id, matchId: id,
+      route: window.location.hash, at: Date.now(), fromOperations: true };
+    window._bracketOperationsRefresh = () => {
+      // A faixa permanece onde está, mas a chave abaixo ganha conteúdo.
+      document.getElementById('inline-bracket-container').style.paddingTop = '140px';
+    };
+    const game = tour.matches.find(m => m.id === id);
+    game.sets = [{ gamesP1:6, gamesP2:4 }, { gamesP1:6, gamesP2:3 }];
+    game.setsWonP1 = 2; game.setsWonP2 = 0;
+    game.scoreP1 = 2; game.scoreP2 = 0;
+    game.winner = game.p1; game.resultAt = Date.now();
+    const changed = window._refreshConfirmedMatchCard(tour, tour.id, id);
+    return { changed, before, after: { y:window.scrollY,
+      stripTop:strip.getBoundingClientRect().top,
+      sourceTop:document.getElementById('card-' + id).getBoundingClientRect().top } };
+  }, alvo);
+  ok(r.changed && r.before.sourceTop > 900 && r.after.sourceTop - r.before.sourceTop >= 100,
+    'a cena reproduz o card canônico fora da tela e a mudança de altura abaixo da faixa');
+  ok(Math.abs(r.after.y - r.before.y) <= 1 && Math.abs(r.after.stripTop - r.before.stripTop) <= 1,
+    'o enquadramento da faixa permanece exato após o placar: ' + JSON.stringify(r));
   await page.close();
 }
 
@@ -659,6 +704,7 @@ async function numeroDoPlacar(browser) {
   try {
     await naoPula(browser);
     await respostaCanonicaFicaNoCard(browser);
+    await placarNaFaixaNaoAncoraCardForaDaTela(browser);
     await placarNaAgendaGeralNaoRemonta(browser);
     await ecoDoServidorNaoMoveJogo(browser);
     await falhaNaoDeixaPlacarOtimista(browser);

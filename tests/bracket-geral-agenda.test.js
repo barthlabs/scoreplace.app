@@ -135,10 +135,19 @@ function trecho(inicio, fim) {
     searchBeforeScore.id = 'fbwrap-chaves';
     searchBeforeScore.innerHTML = '<input id="search-before-score" value="B2">';
     root.appendChild(searchBeforeScore);
+    const orphanGeneral = document.createElement('section');
+    orphanGeneral.setAttribute('data-bracket-general-view', '1');
+    const orphanStrip = document.createElement('section');
+    orphanStrip.setAttribute('data-bracket-operations-strip', '1');
+    const orphanProgress = document.createElement('section');
+    orphanProgress.setAttribute('data-bracket-operations-progress', '1');
+    scope.append(orphanGeneral, orphanStrip, orphanProgress);
     window._limparCamadasTransitóriasDaChave(scope);
     const cleanup = {
       rootGone: !document.querySelector('[data-bracket-tabs-root]'),
       agendaGone: !document.querySelector('[data-bracket-general-view]'),
+      stripGone: !document.querySelector('[data-bracket-operations-strip]'),
+      progressGone: !document.querySelector('[data-bracket-operations-progress]'),
       cardsReturned: Array.from(document.querySelectorAll('#source > .wrap')).map((el) => el.getAttribute('data-wrap')),
       portalGone: !document.querySelector('[data-bracket-round-heading-portal]'),
       searchKept: searchBeforeScore.parentElement === scope &&
@@ -352,7 +361,8 @@ function trecho(inicio, fim) {
   ok(result.generalReentry.order.join(',') === 'masc-same-day,fem-court-5,fem-waiting,fem-round-2,played-old,played-mid,played-new,tomorrow' && result.generalReentry.visible,
     'voltar para Geral reconstrói os cards reais, sem colunas vazias');
   console.log('\n📋 Novo render limpa Geral aberta antes de substituir a chave');
-  ok(result.cleanup.rootGone && result.cleanup.agendaGone, 'abas e agenda transitória são destruídas');
+  ok(result.cleanup.rootGone && result.cleanup.agendaGone && result.cleanup.stripGone && result.cleanup.progressGone,
+    'abas, agenda e faixa operacional órfãs são destruídas');
   ok(result.cleanup.searchKept, 'a remontagem preserva a busca e o texto digitado');
   ok(result.cleanup.cardsReturned.join(',') === 'fem-court-5,masc-same-day,fem-round-2,fem-waiting,tomorrow,played-old,played-mid,played-new', 'nenhum card fica órfão fora do container');
   ok(result.cleanup.portalGone, 'portal de cabeçalho de pintura anterior também é removido');
@@ -577,6 +587,7 @@ function trecho(inicio, fim) {
   // portal nasceram em um grupo que a Geral esconde, mas a agenda é irmã dele.
   // A montagem precisa tirá-los dali e manter as abas clicáveis após scroll.
   await page.addScriptTag({ content: trecho('_bracketFindTabsRoot', '_bracketIsEliminationTree') });
+  await page.addScriptTag({ content: trecho('_bracketCategoryOrder', '_bracketLineSection') });
   await page.addScriptTag({ content: src.slice(src.indexOf('function _bracketTabsHostReference'), src.indexOf('// O filtro pode encontrar jogos', src.indexOf('function _bracketTabsHostReference'))) });
   const stickyMount = await page.evaluate(async () => {
     document.body.style.zoom = '';

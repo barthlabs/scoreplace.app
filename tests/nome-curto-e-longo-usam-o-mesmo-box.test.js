@@ -9,7 +9,7 @@ const path = require('path');
 const { chromium } = require('playwright');
 const ROOT = path.join(__dirname, '..');
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
-const CSS = read('css/components.css');
+const CSS = read('css/components.css') + '\n' + read('css/bracket.css');
 const STORE = read('js/store.js');
 const BRACKET = read('js/views/bracket.js');
 const DASHBOARD = read('js/views/dashboard.js');
@@ -61,12 +61,27 @@ must(TOURNAMENTS === VENDOR_TOURNAMENTS && CATEGORIES === VENDOR_CATEGORIES,
     const b = document.getElementById('lucia').parentElement.parentElement.getBoundingClientRect();
     return { leila: one('leila'), lucia: one('lucia'), gap: parseFloat(getComputedStyle(document.getElementById('dupla')).gap), rowGap: b.top - a.bottom };
   });
-  await b.close();
   must(m.leila.lines === 1, 'Leila Arida permanece em uma linha');
   must(m.lucia.lines === 2, 'Lucia Helena Silva Cerri usa duas linhas');
   must(m.leila.fs > m.lucia.fs, 'o nome curto fica maior que o nome longo');
 must(Math.abs(m.leila.height - m.lucia.height) < 0.5, 'nomes curtos e longos reservam a mesma altura de duas linhas');
   must(m.gap === 1 && Math.abs(m.rowGap - 1) < 0.5, 'o espaço canônico entre participantes é 1px, sem linha vazia');
   must(!m.leila.cut && !m.lucia.cut, 'nenhum dos dois nomes é truncado');
+  await p.setContent('<style>' + CSS + '</style><table style="table-layout:fixed;width:220px"><tr>' +
+    '<td class="sp-monarch-standings-name" style="width:82px"><div class="sp-monarch-standings-box" data-sp-card-name-box data-sp-one-line-h="2.3rem" data-sp-two-line-h="2.3rem">' +
+    '<span class="sp-name-fit" data-maxrem="0.85" data-minrem="0.34" data-two-line-maxrem="0.85">Maria Florencia Garmendia Ferreira</span></div></td></tr></table>');
+  await p.evaluate((code) => { eval(code); window._fitNames(document, 0); }, FIT);
+  await p.waitForTimeout(250);
+  const standings = await p.evaluate(() => {
+    const el = document.querySelector('.sp-monarch-standings-box > .sp-name-fit');
+    const box = el.parentElement;
+    const range = document.createRange(); range.selectNodeContents(el);
+    return { lines: range.getClientRects().length, font: parseFloat(getComputedStyle(el).fontSize),
+      cut: el.scrollHeight > box.clientHeight || el.scrollWidth > box.clientWidth + 1,
+      height: box.getBoundingClientRect().height };
+  });
+  must(standings.lines <= 2 && !standings.cut && standings.height > 30,
+    'nome extenso na classificação encolhe até duas linhas sem alterar a altura da linha');
+  await b.close();
   console.log('\n✅ nome curto e longo no mesmo box — ' + ok + ' verificações');
 })();

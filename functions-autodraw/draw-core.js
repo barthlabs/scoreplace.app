@@ -211,6 +211,7 @@ g.window.ScoreplaceCourtOccupancy = require('./vendor/court-occupancy.js');
 require('./vendor/next-match.js');
 g.window.ScoreplaceWaitlist = require('./vendor/waitlist.js');
 g.window.ScoreplaceStandings = require('./vendor/standings.js');
+require('./vendor/standings-core.js'); // comparador da classificação e do desempate automático
 g.window.ScoreplaceTeamCompetition = require('./vendor/team-competition.js');
 g.window.ScoreplaceRealtimeFreshness = require('./vendor/realtime-freshness.js');
 g.window._isRemoteFirestoreSnapshot = g.window.ScoreplaceRealtimeFreshness.isRemoteSnapshot;

@@ -1,3 +1,7 @@
+// 2.6.34 — O botão Simular registra uma partida por quadra a cada clique e
+// avança a série Rei/Rainha. A faixa em quadra usa a altura do conteúdo,
+// sem espaço morto, e mantém o enquadramento ao receber placares.
+// A entrada com Google usa a versão corrigida do Firebase Auth no navegador.
 // 2.6.33 — Ao lançar um placar na agenda Geral, a classificação do grupo
 // atualiza no próprio lugar, sem reconstruir a chave nem mover a tela.
 // O salvamento em andamento protege a página de repinturas prematuras.
