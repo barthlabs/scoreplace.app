@@ -1,3 +1,5 @@
+// 2.6.36 — O final estimado e o tempo restante usam a duração da grade
+// contada desde o início efetivo, acompanhando a barra azul.
 // 2.6.35 — O botão Simular fica visível ao lado de Em quadra e registra uma
 // partida por quadra a cada clique. A barra azul começa no primeiro registro
 // real de quadra ou resultado, mesmo dias antes ou depois da data prevista.

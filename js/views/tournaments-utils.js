@@ -2395,6 +2395,10 @@ window._buildProgressInner = function(t, barsOnly) {
   // now se não houver jogo com resultado. Assim o fim mostra a hora/dia do jogo final, não a
   // hora em que o status virou 'finished'.
   else if (isFinished) estEndMs = (_latestGameMs != null ? _latestGameMs : (finishedMs != null ? finishedMs : now));
+  // A previsão do torneio concentrado é o último jogo da grade deslocado para
+  // o início efetivo. O percentual já usa essa janela; o horário e o relógio
+  // devem mostrar o mesmo fim, sem extrapolar o ritmo dos primeiros placares.
+  else if (actualStart && window._isConcentratedTournament && window._isConcentratedTournament(t)) estEndMs = expectedEnd;
   // Rodada eliminatória com prazo definido: a previsão é o limite que o organizador
   // configurou, não uma extrapolação volátil baseada nos poucos jogos já lançados.
   else if (_phaseRoundActive && _schedEndReal) estEndMs = plannedEnd;
@@ -2407,7 +2411,7 @@ window._buildProgressInner = function(t, barsOnly) {
   // a coluna azul da direita mostra como "final programado"/"próximo sorteio") → o relógio
   // do meio conta pra TRÁS até lá. Rodada encerrada ou torneio finalizado congela em "durou".
   var _clk = window._tProgClock2L({
-    deadlineMs: _schedEndReal ? plannedEnd : null,
+    deadlineMs: _schedEndReal ? expectedEnd : null,
     frozen: !!(_roundEndReal || isFinished),
     elapsedMs: elapsedMs, elapsedLabel: _elapsedLabel,
     anchorMs: _notStarted ? null : actualStart

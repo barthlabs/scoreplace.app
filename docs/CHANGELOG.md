@@ -1,3 +1,9 @@
+## 2.6.36 — 10/nov/2026 (fim estimado a partir do início efetivo)
+
+- O final estimado e a contagem restante usam o horário do primeiro registro real mais a duração programada até o último jogo. A linha azul continua mostrando os horários originais como referência.
+- Placar parcial não troca essa previsão por uma extrapolação dos primeiros resultados. Torneios já encerrados continuam mostrando o final real.
+- Corte somente web, sem alterar dados do torneio ou versões nativas.
+
 ## 2.6.35 — 10/nov/2026 (simulação visível e tempo ancorado no início real)
 
 - O botão Simular agora fica junto ao título Em quadra, dentro da área visível, inclusive com oito quadras. Ele habilita para a organização quando há jogo em quadra.

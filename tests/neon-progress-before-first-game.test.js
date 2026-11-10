@@ -47,6 +47,30 @@ try {
       'primeiro placar também inicia a barra azul, mesmo sem chamada ou início de jogo');
   }
 } finally { W._progBarPct = originalBar; }
+const scheduledStart = now + 30 * 86400000;
+const realStart = now - 3600000;
+const plannedDuration = 10 * 3600000;
+const shiftedEnd = realStart + plannedDuration;
+const scheduledMatch = { id: 'm2', p1: 'C', p2: 'D', scheduledAt: new Date(scheduledStart).toISOString() };
+const concentrated = { ...t, status: 'in_progress', startDate: new Date(scheduledStart).toISOString(),
+  endDate: new Date(scheduledStart + plannedDuration).toISOString(),
+  matches: [{ ...t.matches[0], scheduledAt: new Date(scheduledStart).toISOString(),
+    courtCalledAt: new Date(realStart).toISOString() }, scheduledMatch] };
+const shiftedClock = W._buildProgressInner(concentrated);
+assert.match(shiftedClock, new RegExp('data-sp-cd2l="' + shiftedEnd + '"'),
+  'o prazo e a barra azul terminam após a duração planejada contada desde a primeira chamada');
+assert.doesNotMatch(shiftedClock, new RegExp('data-sp-cd2l="' + (scheduledStart + plannedDuration) + '"'),
+  'o relógio não continua apontando para o fim da data programada');
+const partial = W._buildProgressInner({ ...concentrated, matches: [
+  { ...concentrated.matches[0], resultAt: new Date(now - 1800000).toISOString(),
+    score1: 6, score2: 3, winner: 'A' }, scheduledMatch] });
+assert.match(partial, new RegExp('data-sp-cd2l="' + shiftedEnd + '"'),
+  'o primeiro placar não troca a previsão da grade por uma extrapolação do ritmo parcial');
+const finalCol = partial.match(/<span style="font-size:1rem;font-weight:800;color:var\(--text-bright\);line-height:1\.1;">([^<]+)<\/span><span[^>]*>([^<]+)<\/span><span[^>]*>final<br>estimado<\/span>/);
+assert(finalCol, 'o final estimado aparece no painel');
+const expectedDate = new Date(shiftedEnd);
+assert.equal(finalCol[1], String(expectedDate.getHours()).padStart(2, '0') + ':' + String(expectedDate.getMinutes()).padStart(2, '0'));
+assert.equal(finalCol[2], String(expectedDate.getDate()).padStart(2, '0') + '/' + String(expectedDate.getMonth() + 1).padStart(2, '0'));
 W._isConcentratedTournament = () => false;
 const ordinary = W._buildProgressInner({ ...t, id: 'tour_ordinary' });
 assert.match(ordinary, /Torneio em andamento/,
