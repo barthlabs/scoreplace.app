@@ -2209,6 +2209,17 @@ function _bracketEntryHorizontalGap(card, align) {
 }
 window._bracketEntryHorizontalGap = _bracketEntryHorizontalGap;
 
+// `scrollIntoView` alinha primeiro a janela de rolagem da chave. Quando o card
+// está no começo dessa janela, ele pode parar dezenas de pixels abaixo do topo
+// visível e cortar o rodapé em uma janela baixa. A entrada em jogo explícito
+// precisa alinhar a página pelo próprio card; a régua já medida pelo chrome
+// continua vindo de scroll-margin-top.
+function _scrollBracketEntryMatchToTop(card, behavior) {
+  var margin = Math.max(0, parseFloat(getComputedStyle(card).scrollMarginTop) || 0);
+  var top = Math.max(0, window.scrollY + card.getBoundingClientRect().top - margin);
+  window.scrollTo({ top: top, behavior: behavior || 'auto' });
+}
+
 function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categoryFilter) {
   if (!root) return false;
   var scope = root._bracketTabsScope || (root.closest && root.closest('#view-container, #inline-bracket-container'));
@@ -3533,7 +3544,11 @@ function _applyMyMatchesFilter() {
           return;
         }
         _bracketEntryHorizontalGap(_target, true);
-        _target.scrollIntoView({ behavior: behavior, block: 'start', inline: 'nearest' });
+        if (_entryMatchId && _target.id === 'card-' + _entryMatchId) {
+          _scrollBracketEntryMatchToTop(_target, behavior);
+        } else {
+          _target.scrollIntoView({ behavior: behavior, block: 'start', inline: 'nearest' });
+        }
         // `scrollIntoView` pode reajustar X depois do alinhamento inicial.
         _bracketEntryHorizontalGap(_target, true);
       } catch (e) {}

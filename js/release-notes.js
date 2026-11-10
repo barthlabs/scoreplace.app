@@ -1,3 +1,6 @@
+// 2.6.22 — Ao abrir a chave pelo próximo jogo ou pelo último concluído,
+// o card solicitado fica inteiro visível no topo, mesmo com rolagem própria
+// dentro da chave e uma janela de navegador mais baixa.
 // 2.6.21 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.6.20 — No CAMIS, Diamante e Ouro podem entrar na eliminatória enquanto
 // a Prata ainda disputa grupos. O 1º e 2º de cada grupo formam uma dupla;

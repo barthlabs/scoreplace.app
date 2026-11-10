@@ -8,10 +8,32 @@ const src = fs.readFileSync(path.join(__dirname, '..', 'js/views/bracket.js'), '
 const start = src.indexOf('function _applyMyMatchesFilter()');
 const end = src.indexOf('// ── v1.8.99: ÂNCORA POR GRUPO', start);
 assert(start >= 0 && end > start);
+const geometryStart = src.indexOf('function _scrollBracketEntryMatchToTop(');
+const geometryEnd = src.indexOf('function _bracketGeneralView(', geometryStart);
+assert(geometryStart >= 0 && geometryEnd > geometryStart);
 
 (async () => {
   const browser = await chromium.launch();
   try {
+    const geometryPage = await browser.newPage({ viewport: { width: 1200, height: 693 } });
+    await geometryPage.setContent(`<style>
+      body { margin: 0; height: 3000px; }
+      #before { height: 900px; }
+      .bracket-scroll-container { height: 610px; overflow: auto; }
+      #card-a { margin-top: 62px; height: 399px; scroll-margin-top: 137px; }
+    </style><div id="before"></div><div class="bracket-scroll-container"><div id="card-a">JOGO</div></div>`);
+    await geometryPage.addScriptTag({ content: src.slice(geometryStart, geometryEnd) });
+    await geometryPage.evaluate(() => _scrollBracketEntryMatchToTop(document.getElementById('card-a'), 'auto'));
+    const geometry = await geometryPage.evaluate(() => {
+      const card = document.getElementById('card-a');
+      const scroller = card.closest('.bracket-scroll-container');
+      return { top: card.getBoundingClientRect().top, bottom: card.getBoundingClientRect().bottom,
+        viewport: innerHeight, innerScroll: scroller.scrollTop };
+    });
+    assert.ok(Math.abs(geometry.top - 137) < 2, 'jogo explícito alinhado ao topo livre da página');
+    assert.ok(geometry.bottom <= geometry.viewport, 'card inteiro visível na janela de 693 px');
+    assert.equal(geometry.innerScroll, 0, 'sem mover a rolagem vertical interna da chave');
+    await geometryPage.close();
     const page = await browser.newPage();
     await page.route('http://anchor.test/', route => route.fulfill({ contentType: 'text/html', body:
       '<html><body style="margin:0"><div id="card-a" style="position:fixed;top:0">A</div><div id="card-b">B</div></body></html>' }));
@@ -22,6 +44,10 @@ assert(start >= 0 && end > start);
       function _alvoDeEntrada(id) { return document.getElementById('card-' + (id || sessionStorage.getItem('sp_scrollToMatch'))); }
       function _bracketEntryHorizontalGap() { return 0; }
       window._bracketOperationalRootForCard = () => null;
+      function _scrollBracketEntryMatchToTop(target, behavior) {
+        window.calls.push({ id: target.id, behavior });
+        target.style.position = 'fixed'; target.style.top = '0px';
+      }
       Element.prototype.scrollIntoView = function (opts) {
         window.calls.push({ id: this.id, behavior: opts.behavior });
         this.style.position = 'fixed'; this.style.top = '0px';

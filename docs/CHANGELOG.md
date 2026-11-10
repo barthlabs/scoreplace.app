@@ -1,3 +1,9 @@
+## 2.6.22 — 09/nov/2026 (entrada no jogo sem corte)
+
+- O atalho do card do torneio posiciona o jogo pedido pelo topo real do card na página. Isso evita que a rolagem interna da chave deixe o rodapé fora da janela.
+- O próximo jogo continua sendo a prioridade; sem próximo, o atalho abre o último jogo concluído da pessoa. A âncora preserva esse destino após atualizações tardias da chave.
+- Corte somente web; sem mudanças no banco ou nas versões nativas.
+
 ## 2.6.20 — 09/nov/2026 (grade CAMIS intercalada)
 
 - A agenda opcional por blocos intercala grupos e eliminatórias de Diamante, Ouro e Prata em oito quadras, com 144 designações únicas. Chamada e aquecimento ocorrem uma vez por quarteto; cada confronto eliminatório reserva 35 minutos (5+5+25). Último confronto termina às 20h55.
