@@ -1,5 +1,6 @@
 // 2.6.28 — O PDF completo do sorteio mostra o logo maior à direita do
-// cabeçalho, alinhado aos cards, em todas as páginas.
+// cabeçalho em todas as páginas. O fundo usa o degradê configurado no torneio;
+// os cards mantêm sua cor e a numeração contrasta com o fundo.
 // 2.6.27 — O PDF completo do sorteio baixa mesmo quando o logo falha, avisa
 // sobre erros e permite repetir o download. O logo remoto voltou a carregar
 // e o arquivo atualizado chega ao navegador com o novo cache buster.

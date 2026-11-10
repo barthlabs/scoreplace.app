@@ -11,11 +11,11 @@ assert(start >= 0 && end > start && endPublished > end);
 
 const calls = [];
 const context2d = {
-  font:'', fillStyle:'', fillRect(...args) { calls.push(['rect', ...args]); },
+  font:'', fillStyle:'', fillRect(...args) { calls.push(['rect', ...args, this.fillStyle]); },
   fillText(...args) { calls.push(['text', ...args, this.textAlign, this.fillStyle]); },
   drawImage(...args) { calls.push(['logo', ...args]); },
   measureText(value) { return { width:String(value).length * 11 }; },
-  createLinearGradient() { return { addColorStop(stop, color) { calls.push(['gradient', stop, color]); } }; }
+  createLinearGradient(...args) { calls.push(['gradient-line', ...args]); return { addColorStop(stop, color) { calls.push(['gradient', stop, color]); } }; }
 };
 let downloaded = false;
 const canvases = [];
@@ -68,8 +68,8 @@ assert.strictEqual(canvases.length, 3, 'as três categorias entram no mesmo PDF'
 assert(canvases.every(c => c.width === 1500 && c.height > 500));
 assert(calls.some(c => c[0] === 'text' && c[1] === 'Grupo A1'));
 assert(calls.some(c => c[0] === 'text' && String(c[1]).includes('atleta 3d')));
-assert(calls.some(c => c[0] === 'gradient' && c[2] !== '#071322'), 'a arte usa a cor do torneio');
-assert(calls.some(c => c[0] === 'gradient' && c[2] === '#3e110b'), 'o fundo deriva da cor do torneio sem azul padrão');
+assert(calls.some(c => c[0] === 'gradient' && c[2] === '#ab301e'), 'o PDF usa a primeira cor exata do torneio');
+assert(calls.some(c => c[0] === 'gradient' && c[2] === '#f2d7cb'), 'o PDF usa a segunda cor exata do torneio');
 assert.strictEqual(calls.filter(c => c[0] === 'logo').length, 3, 'o logo transparente aparece em todas as páginas sem moldura');
 assert(calls.filter(c => c[0] === 'logo').every(c => c[4] > 82 && Math.abs(c[2] + c[4] - 1452) < .01 && c[3] >= 0 && c[3] + c[5] <= 170),
   'logo maior, na direita dos cards e dentro do cabeçalho em todas as páginas');
@@ -88,9 +88,20 @@ assert.strictEqual(athlete1c[5], 'right', 'nomes da direita alinhados à borda d
 assert(!calls.some(c => c[0] === 'text' && String(c[1]).includes('placar')));
 calls.length = 0;
 window._initialDrawPdfPage({ name:'Camis no Beyond', coverColor:'#000000', coverGradientColor:'#242424',
-  coverGradientEnabled:true, titleColor:'#FBFBFB', brandColor:'#FFBD4C' }, model.categories[0], model.categories[0].groups, [], 1, 1, null);
+  coverGradientEnabled:true, coverGradientAngle:135, coverGradientBalance:60, coverGradientBlend:20,
+  titleColor:'#FBFBFB', brandColor:'#FFBD4C' }, model.categories[0], model.categories[0].groups, [], 1, 1, null);
 assert(calls.some(c => c[0] === 'text' && c[1] === 'Grupo A1' && c[5] === '#FFBD4C'), 'os destaques usam o amarelo C6 do torneio');
 assert(calls.some(c => c[0] === 'gradient' && c[2] === '#000000'), 'o fundo C6 começa em preto');
+assert(calls.some(c => c[0] === 'gradient' && c[1] === .5 && c[2] === '#000000'), 'o início da mistura segue a proporção e largura configuradas');
+assert(calls.some(c => c[0] === 'gradient' && c[1] === .7 && c[2] === '#242424'), 'o fim da mistura segue a proporção e largura configuradas');
+assert(calls.some(c => c[0] === 'gradient-line' && c[1] < c[3] && c[2] < c[4]), 'o ângulo de 135° vai do canto superior esquerdo ao inferior direito');
+assert(calls.some(c => c[0] === 'rect' && c[1] === 48 && c[5] === '#1f1f1f'), 'os cards mantêm a cor original');
+assert(calls.some(c => c[0] === 'text' && c[1] === 'Página 1 de 1' && c[5] === '#ffffff'), 'o número da página continua legível sobre fundo escuro');
+calls.length = 0;
+window._initialDrawPdfPage({ name:'Camis no Beyond', coverColor:'#000000', coverGradientColor:'#ffffff',
+  coverGradientEnabled:true, coverGradientAngle:135, coverGradientBalance:50, coverGradientBlend:30,
+  titleColor:'#FBFBFB', brandColor:'#FFBD4C' }, model.categories[0], model.categories[0].groups, [], 1, 1, null);
+assert(calls.some(c => c[0] === 'text' && c[1] === 'Página 1 de 1' && c[5] === '#000000'), 'o número da página é preto quando o gradiente deixa o rodapé branco');
 const published = window._publishedInitialDrawData({ matches:draft.draft.matches, competitionTeams:[] });
 assert(published && published.draft.matches.length === 9);
 let visibleResult;

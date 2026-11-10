@@ -7205,10 +7205,37 @@ window._initialDrawPdfPage = function (t, category, pageGroups, extras, pageNumb
   }
   var cover = hex(t.coverColor, '#1f2937');
   var secondary = t.coverGradientEnabled ? hex(t.coverGradientColor, cover) : cover;
-  var bg1 = mix(cover, '#000000', .64), bg2 = mix(secondary, '#000000', .64);
-  var gradient = ctx.createLinearGradient(0, 0, width, canvas.height);
-  gradient.addColorStop(0, bg1); gradient.addColorStop(1, bg2);
-  ctx.fillStyle = gradient; ctx.fillRect(0, 0, width, canvas.height);
+  var footerBg = cover;
+  if (t.coverGradientEnabled) {
+    var rawAngle = Number(t.coverGradientAngle);
+    var angle = Math.max(0, Math.min(360, t.coverGradientAngle == null || !Number.isFinite(rawAngle) ? 135 : rawAngle));
+    var radians = angle * Math.PI / 180;
+    var dx = Math.sin(radians), dy = -Math.cos(radians);
+    var halfSpan = (Math.abs(dx) * width + Math.abs(dy) * canvas.height) / 2;
+    var centerX = width / 2, centerY = canvas.height / 2;
+    var gradient = ctx.createLinearGradient(centerX - dx * halfSpan, centerY - dy * halfSpan,
+      centerX + dx * halfSpan, centerY + dy * halfSpan);
+    var balance = Math.max(10, Math.min(90, Number(t.coverGradientBalance) || 50));
+    var blend = t.coverGradientBlend;
+    var stops = typeof window._tournamentGradientStops === 'function'
+      ? window._tournamentGradientStops(balance, blend)
+      : (function () {
+        if (blend == null || blend === '') { var half = Math.min(15, balance, 100 - balance); return [balance - half, balance + half]; }
+        var span = Math.max(0, Math.min(100, Number(blend) || 0));
+        var start = Math.max(0, Math.min(100 - span, balance - span / 2));
+        return [start, start + span];
+      })();
+    gradient.addColorStop(0, cover);
+    gradient.addColorStop(stops[0] / 100, cover);
+    gradient.addColorStop(stops[1] / 100, secondary);
+    gradient.addColorStop(1, secondary);
+    var footerPosition = ((width - margin - 70 - centerX) * dx + (canvas.height - 28 - centerY) * dy + halfSpan) / (2 * halfSpan);
+    var firstStop = stops[0] / 100, secondStop = stops[1] / 100;
+    footerBg = footerPosition <= firstStop ? cover : footerPosition >= secondStop ? secondary
+      : mix(cover, secondary, (footerPosition - firstStop) / (secondStop - firstStop));
+    ctx.fillStyle = gradient;
+  } else ctx.fillStyle = cover;
+  ctx.fillRect(0, 0, width, canvas.height);
   var titleColor = hex(t.titleColor, '#ffffff');
   if (luminance(titleColor) < .35) titleColor = '#ffffff';
   var accent = hex(t.brandColor, mix(cover, '#ffffff', .68));
@@ -7252,7 +7279,7 @@ window._initialDrawPdfPage = function (t, category, pageGroups, extras, pageNumb
   });
   y = 170 + rowHeights.reduce(function (sum, h) { return sum + h + gap; }, 0);
   extras.forEach(function (extra) { ctx.fillStyle = '#ffffff'; ctx.font = '22px Arial, sans-serif'; ctx.fillText(extra.label + ': ' + extra.name, margin, y + 20, width - 2 * margin); y += 42; });
-  ctx.fillStyle = '#ffffff'; ctx.font = '18px Arial, sans-serif'; ctx.textAlign = 'right';
+  ctx.fillStyle = luminance(footerBg) >= .18 ? '#000000' : '#ffffff'; ctx.font = '18px Arial, sans-serif'; ctx.textAlign = 'right';
   ctx.fillText('Página ' + pageNumber + ' de ' + pageCount, width - margin, canvas.height - 28);
   ctx.textAlign = 'left';
   return canvas;

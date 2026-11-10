@@ -1,6 +1,7 @@
-## 2.6.28 — 10/nov/2026 (logo maior no PDF do sorteio)
+## 2.6.28 — 10/nov/2026 (logo e degradê no PDF do sorteio)
 
 - O logo do torneio foi ampliado e movido para a direita do cabeçalho, alinhado à borda dos cards em cada página do resultado completo. Título e nome da categoria permanecem em duas linhas à esquerda, com espaço reservado para não atingir o logo.
+- O fundo do PDF usa as duas cores, a direção, a proporção e a espessura da mistura configuradas no card do torneio. Os cards dos grupos conservam a cor que tinham; a numeração da página passa a usar preto quando o fundo naquele ponto fica claro.
 - Corte somente web, sem mudar sorteio, jogos, inscrições ou versões nativas.
 
 ## 2.6.27 — 10/nov/2026 (download do PDF do sorteio)
