@@ -1,0 +1,8 @@
+[
+  {
+    "origin": ["https://scoreplace.app", "https://scoreplace-app.web.app"],
+    "method": ["GET"],
+    "responseHeader": ["Content-Type"],
+    "maxAgeSeconds": 3600
+  }
+]

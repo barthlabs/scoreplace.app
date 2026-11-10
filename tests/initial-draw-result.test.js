@@ -26,14 +26,16 @@ function makeCanvas() {
   return canvas;
 }
 const link = { click() { downloaded = true; }, remove() {} };
+const notices = [];
 const window = { _groupName(index) { return 'Grupo ' + String.fromCharCode(65 + index); },
+  showNotification(...args) { notices.push(args); },
   _tourLogoSrc(t) { return t.logoUrl || t.logoData || ''; } };
 class FakeImage {
   constructor() { this.naturalWidth = 100; this.naturalHeight = 50; }
   set src(value) { this.source = value; this.onload(); }
 }
 let pdfBlob;
-const sandbox = { window, Blob, TextEncoder, Uint8Array, atob, Image:FakeImage, setTimeout() {},
+const sandbox = { window, Blob, TextEncoder, Uint8Array, atob, Image:FakeImage, setTimeout() {}, clearTimeout() {},
   URL:{ createObjectURL(blob) { pdfBlob = blob; return 'blob:pdf'; }, revokeObjectURL() {} },
   document:{ createElement(tag) { return tag === 'canvas' ? makeCanvas() : link; }, body:{ appendChild() {} } } };
 vm.createContext(sandbox);
@@ -57,8 +59,8 @@ assert.deepStrictEqual(Array.from(model.categories, c => c.groups[0].name), ['Gr
 assert.deepStrictEqual(Array.from(model.categories[0].groups[0].matches, m => m.number), [1, 2, 3]);
 assert.deepStrictEqual(Array.from(model.categories[0].groups[0].matches[0].onePlayers), ['Fem Diamante atleta 1a', 'Fem Diamante atleta 1b']);
 assert.deepStrictEqual(Array.from(model.categories[0].groups[0].matches[0].twoPlayers), ['Fem Diamante atleta 1c', 'Fem Diamante atleta 1d']);
-assert.strictEqual(await window._downloadInitialDrawPdf({ name:'Camis no Beyond', coverColor:'#ab301e', coverGradientColor:'#f2d7cb', coverGradientEnabled:true,
-  logoData:'data:image/png;base64,AAAA' }, draft), true);
+assert((await window._downloadInitialDrawPdf({ name:'Camis no Beyond', coverColor:'#ab301e', coverGradientColor:'#f2d7cb', coverGradientEnabled:true,
+  logoData:'data:image/png;base64,AAAA' }, draft)).url);
 assert(downloaded);
 assert.strictEqual(link.download, 'resultado-sorteio-camis-no-beyond.pdf');
 assert.strictEqual(pdfBlob.type, 'application/pdf');
@@ -113,7 +115,7 @@ const manyHtml = window._renderPendingDrawPreview({ id:'many', pendingDraw:manyG
 assert.strictEqual((manyHtml.match(/data-draw-pdf/g) || []).length, 1);
 calls.length = 0;
 const countBefore = canvases.length;
-assert.strictEqual(await window._downloadInitialDrawPdf({ name:'Torneio' }, manyGroups), true);
+assert((await window._downloadInitialDrawPdf({ name:'Torneio' }, manyGroups)).url);
 assert.strictEqual(link.download, 'resultado-sorteio-torneio.pdf');
 assert.strictEqual(canvases.length - countBefore, 2, 'cinco grupos formam duas páginas no mesmo arquivo');
 assert(calls.some(c => c[0] === 'text' && c[1] === 'Grupo E'));
@@ -123,5 +125,16 @@ const bytes = await pdfBlob.arrayBuffer();
   assert(pdf.startsWith('%PDF-1.4'));
   assert(pdf.includes('/Count 2'), 'o PDF contém as duas páginas');
   assert(pdf.includes('xref\n0 9\n'), 'o índice contém todos os objetos');
+  sandbox.Image = class BrokenImage { set src(_value) { this.onerror(); } };
+  downloaded = false;
+  assert((await window._downloadInitialDrawPdf({ name:'Torneio', logoUrl:'https://example.test/logo.png' }, manyGroups)).url,
+    'falha do logo não impede baixar o resultado');
+  assert(downloaded, 'o PDF é baixado mesmo sem logo');
+  assert(notices.some(n => n[0] === 'Logo não carregado'), 'a ausência do logo é informada');
+  const originalBlob = window._initialDrawPdfBlob;
+  window._initialDrawPdfBlob = () => { throw new Error('pdf'); };
+  assert.strictEqual(await window._downloadInitialDrawPdf({ name:'Torneio' }, manyGroups), false);
+  assert(notices.some(n => n[0] === 'Erro ao gerar PDF'), 'falha do PDF aparece na tela');
+  window._initialDrawPdfBlob = originalBlob;
   console.log('Resultado do sorteio: grupos, ordem e PDF único OK');
 })().catch(error => { console.error(error); process.exitCode = 1; });

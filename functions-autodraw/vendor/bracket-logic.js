@@ -7287,7 +7287,10 @@ window._initialDrawPdfBlob = function (canvases) {
 
 window._downloadInitialDrawPdf = async function (t, pd) {
   var model = window._initialDrawResultModel(pd);
-  if (!model.gameCount) return false;
+  if (!model.gameCount) {
+    if (window.showNotification) window.showNotification('PDF indisponível', 'O sorteio ainda não tem jogos para exportar.', 'error');
+    return false;
+  }
   var plan = [];
   model.categories.forEach(function (category) {
     var pages = Math.max(1, Math.ceil(category.groups.length / 4));
@@ -7301,23 +7304,28 @@ window._downloadInitialDrawPdf = async function (t, pd) {
       logo = await new Promise(function (resolve, reject) {
         var image = new Image();
         image.crossOrigin = 'anonymous';
-        image.onload = function () { resolve(image); };
-        image.onerror = function () { reject(new Error('logo')); };
-        image.src = logoSrc;
+        var timer = setTimeout(function () { reject(new Error('logo timeout')); }, 12000);
+        image.onload = function () { clearTimeout(timer); resolve(image); };
+        image.onerror = function () { clearTimeout(timer); reject(new Error('logo')); };
+        // Evita reutilizar uma resposta sem CORS mantida no cache do navegador.
+        image.src = /^https?:/i.test(logoSrc)
+          ? logoSrc + (logoSrc.indexOf('?') === -1 ? '?' : '&') + 'drawPdf=' + Date.now()
+          : logoSrc;
       });
     } catch (_logoError) {
-      if (typeof window.alertDialog === 'function') window.alertDialog('Não foi possível carregar o logo do torneio para o PDF. Tente novamente.');
-      return false;
+      // O resultado completo continua disponível se o arquivo do logo falhar.
+      if (window.showNotification) window.showNotification('Logo não carregado', 'O PDF será gerado sem o logo. Tente novamente para incluí-lo.', 'warning');
     }
   }
   try {
     var canvases = plan.map(function (entry, i) {
       return window._initialDrawPdfPage(t, entry.category, entry.groups, entry.extras, i + 1, plan.length, logo);
     });
-    if (canvases.some(function (c) { return !c; })) return false;
+    if (canvases.some(function (c) { return !c; })) throw new Error('canvas unavailable');
     var url = URL.createObjectURL(window._initialDrawPdfBlob(canvases));
-  } catch (_pdfError) {
-    if (typeof window.alertDialog === 'function') window.alertDialog('Não foi possível gerar o PDF do sorteio. Tente novamente.');
+  } catch (pdfError) {
+    console.error('[initialDrawPdf] Falha ao gerar o PDF', pdfError);
+    if (window.showNotification) window.showNotification('Erro ao gerar PDF', 'Não foi possível montar o resultado do sorteio. Tente novamente.', 'error');
     return false;
   }
   var link = document.createElement('a');
@@ -7325,8 +7333,34 @@ window._downloadInitialDrawPdf = async function (t, pd) {
   link.download = 'resultado-sorteio-' + String(t.name || t.title || 'torneio').normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/gi, '-').toLowerCase() + '.pdf';
   document.body.appendChild(link); link.click(); link.remove();
-  setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
-  return true;
+  setTimeout(function () { URL.revokeObjectURL(url); }, 300000);
+  return { url:url, filename:link.download };
+};
+
+window._bindInitialDrawPdfButton = function (button, t, pd) {
+  if (!button) return;
+  var originalText = button.textContent;
+  button.onclick = async function () {
+    if (button.disabled) return;
+    button.disabled = true;
+    button.textContent = 'Preparando PDF…';
+    try {
+      var result = await window._downloadInitialDrawPdf(t, pd);
+      if (result && result.url) {
+        button.textContent = 'Baixar PDF novamente';
+        button.onclick = function () {
+          var link = document.createElement('a');
+          link.href = result.url;
+          link.download = result.filename;
+          document.body.appendChild(link); link.click(); link.remove();
+        };
+      } else button.textContent = originalText;
+    } catch (error) {
+      console.error('[initialDrawPdf] Falha inesperada', error);
+      if (window.showNotification) window.showNotification('Erro ao gerar PDF', 'Não foi possível baixar o resultado do sorteio. Tente novamente.', 'error');
+      button.textContent = originalText;
+    } finally { button.disabled = false; }
+  };
 };
 
 window._renderPendingDrawPreview = function (t) {
@@ -7412,7 +7446,7 @@ window._openPublishedInitialDrawResult = function (tId) {
     '<div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:10px;"><h2 style="margin:0;font-size:1.15rem;">Resultado do sorteio</h2><button class="btn btn-outline" data-close>Fechar</button></div>' +
     '<div style="overflow:auto;padding-right:4px;">' + preview + '</div></div>';
   overlay.querySelector('[data-close]').onclick = function () { overlay.remove(); };
-  overlay.querySelector('[data-draw-pdf]').onclick = function () { window._downloadInitialDrawPdf(t, pd); };
+  window._bindInitialDrawPdfButton(overlay.querySelector('[data-draw-pdf]'), t, pd);
   document.body.appendChild(overlay);
 };
 
@@ -7772,10 +7806,7 @@ window._openPendingDrawReview = function (tId, markerRetry) {
       '<button class="btn btn-outline" data-close>Voltar</button></div></div>';
   overlay.querySelectorAll('[data-close]').forEach(function (b) { b.onclick = function () { overlay.remove(); }; });
   var pdfButton = overlay.querySelector('[data-draw-pdf]');
-  if (pdfButton) pdfButton.onclick = function () {
-    var pd = (window.__pendingInitialDraws || {})[String(tId)] || t.pendingDraw;
-    window._downloadInitialDrawPdf(t, pd);
-  };
+  if (pdfButton) window._bindInitialDrawPdfButton(pdfButton, t, (window.__pendingInitialDraws || {})[String(tId)] || t.pendingDraw);
   var plan = overlay.querySelector('[data-plan]'); if (plan) plan.onclick = function () { overlay.remove(); window._openPendingInitialSchedule(tId); };
   var annul = overlay.querySelector('[data-annul]'); if (annul) annul.onclick = function () { overlay.remove(); window._annulPendingDraw(tId); };
   var publish = overlay.querySelector('[data-publish]'); if (publish) publish.onclick = function () { overlay.remove(); window._publishPendingDraw(tId); };
