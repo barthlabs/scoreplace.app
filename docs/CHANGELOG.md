@@ -1,3 +1,9 @@
+## 2.6.27 — 10/nov/2026 (download do PDF do sorteio)
+
+- Corrigida a permissão CORS do bucket de logos para o domínio do site. A configuração reproduzível está em `infra/storage-cors.json`.
+- A exportação do resultado completo agora mostra que está preparando o arquivo, permite repetir o download e informa erros. Se o logo falhar, o PDF com todos os jogos ainda é gerado.
+- Corte somente web, sem alterar torneios, resultados ou versões nativas.
+
 ## 2.6.26 — 10/nov/2026 (resultado completo do sorteio em PDF)
 
 - O resultado do sorteio agora oferece um botão para baixar todas as categorias e todos os grupos em um único PDF, com páginas numeradas. A arte usa as cores e o logo configurados no torneio; as duplas à direita ficam alinhadas pela borda, com o × centralizado e espaço entre os lados.
