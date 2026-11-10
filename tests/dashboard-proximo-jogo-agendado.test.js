@@ -79,7 +79,7 @@ assert.equal(upcomingCards([neonThird, confra, neonSecond, friday], 3).map(e => 
   'painel largo mostra os três próximos jogos do Neon, inclusive do mesmo torneio');
 assert.equal([entry({ id: 'loser', round: 1, p1: 'Dupla A', p2: 'Perdedor do jogo 186' }), readyNoDate].sort(compare)[0], readyNoDate,
   'slot do perdedor de outra partida também não é adversário definido');
-const navStart = tournamentSource.indexOf('window._nextParticipantTournamentMatchTarget = function');
+const navStart = tournamentSource.indexOf('function _tournamentAsMs(value)');
 const navEnd = tournamentSource.indexOf('// Entrada genérica da dashboard:', navStart);
 assert(navStart >= 0 && navEnd > navStart, 'resolvedor do destino de torneio localizado');
 const tournamentContext = { window: {

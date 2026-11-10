@@ -1648,6 +1648,15 @@ if (typeof document !== 'undefined' && typeof document.addEventListener === 'fun
 // partida pendente da pessoa, todos precisam cair na categoria e no jogo dela.
 // Esta é a fonte única do alvo; a dashboard só pode sobrescrevê-la quando o
 // usuário clicou conscientemente em outro jogo específico.
+function _tournamentAsMs(value) {
+  if (value == null || value === '') return 0;
+  if (typeof value === 'object' && typeof value.toMillis === 'function') return Number(value.toMillis()) || 0;
+  if (typeof value === 'object' && value.seconds != null) return (Number(value.seconds) || 0) * 1000;
+  if (typeof value === 'number') return value > 100000000000 ? value : value * 1000;
+  var parsed = Date.parse(String(value));
+  return isNaN(parsed) ? 0 : parsed;
+}
+
 window._nextParticipantTournamentMatchTarget = function(t) {
   var cu = window.AppStore && window.AppStore.currentUser;
   if (!t || !cu || typeof window._collectAllMatches !== 'function' ||
@@ -1677,6 +1686,51 @@ window._nextParticipantTournamentMatchTarget = function(t) {
     return String(a.id || '').localeCompare(String(b.id || ''));
   });
   var m = matches[0];
+  if (!m) {
+    if (typeof window._assignGlobalGameNumbers === 'function') window._assignGlobalGameNumbers(t);
+    var completed = window._collectAllMatches(t).filter(function(item) {
+      return !!(item && item.id != null && item.winner && !item.isBye && !item.isSitOut &&
+        !(typeof window._isByeMatch === 'function' && window._isByeMatch(item)) &&
+        window._userTeamInMatch(t, item, cu) > 0);
+    });
+    var finalTime = function(item) {
+      return _tournamentAsMs(item.completedAt) || _tournamentAsMs(item.resultAt);
+    };
+    var gameNumber = function(item) {
+      var label = String(item.label || '').match(/Jogo\s*(\d+)/i);
+      var number = Number(item._gameNum || item.scheduledGameNumber || (label && label[1]) || 0);
+      return Number.isInteger(number) && number > 0 ? number : 0;
+    };
+    var allFinalTime = completed.length > 0 && completed.every(function(item) { return finalTime(item) > 0; });
+    var allGameNumber = completed.length > 0 && completed.every(function(item) { return gameNumber(item) > 0; });
+    var allScheduled = completed.length > 0 && completed.every(function(item) { return _tournamentAsMs(item.scheduledAt) > 0; });
+    completed.sort(function(a, b) {
+      var difference;
+      if (allFinalTime) {
+        difference = finalTime(b) - finalTime(a);
+        if (difference) return difference;
+        difference = gameNumber(b) - gameNumber(a);
+        if (difference) return difference;
+      } else if (allGameNumber) {
+        difference = gameNumber(b) - gameNumber(a);
+        if (difference) return difference;
+      } else if (allScheduled) {
+        difference = _tournamentAsMs(b.scheduledAt) - _tournamentAsMs(a.scheduledAt);
+        if (difference) return difference;
+      } else {
+        var aKeys = [finalTime(a) > 0 ? 1 : 0, finalTime(a), gameNumber(a) > 0 ? 1 : 0,
+          gameNumber(a), _tournamentAsMs(a.scheduledAt) > 0 ? 1 : 0, _tournamentAsMs(a.scheduledAt), Number(a.round || 0)];
+        var bKeys = [finalTime(b) > 0 ? 1 : 0, finalTime(b), gameNumber(b) > 0 ? 1 : 0,
+          gameNumber(b), _tournamentAsMs(b.scheduledAt) > 0 ? 1 : 0, _tournamentAsMs(b.scheduledAt), Number(b.round || 0)];
+        for (var key = 0; key < aKeys.length; key++) {
+          difference = bKeys[key] - aKeys[key];
+          if (difference) return difference;
+        }
+      }
+      return String(a.id).localeCompare(String(b.id));
+    });
+    m = completed[0];
+  }
   if (!m || m.id == null) return null;
   var category = String(m.category || m.tierLabel || m.bracket || '').trim();
   var label = category.toLowerCase();
@@ -1696,14 +1750,7 @@ window._nextParticipantTournamentMatchTarget = function(t) {
 // [[regression_dashboard_tournament_card_opens_upcoming_match]]
 window._nextScheduledTournamentMatchTarget = function(t) {
   if (!t || typeof window._collectAllMatches !== 'function') return null;
-  var asMs = function(value) {
-    if (value == null || value === '') return 0;
-    if (typeof value === 'object' && typeof value.toMillis === 'function') return Number(value.toMillis()) || 0;
-    if (typeof value === 'object' && value.seconds != null) return (Number(value.seconds) || 0) * 1000;
-    if (typeof value === 'number') return value > 100000000000 ? value : value * 1000;
-    var parsed = Date.parse(String(value));
-    return isNaN(parsed) ? 0 : parsed;
-  };
+  var asMs = _tournamentAsMs;
   var matchTab = function(m) {
     var category = String(m.category || m.tierLabel || m.bracket || '').trim();
     var label = category.toLowerCase();

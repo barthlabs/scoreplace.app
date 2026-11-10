@@ -54,6 +54,7 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 const SUITES = [
+  'tests/entrada-ultimo-jogo.test.js',
   'tests/canonical-monarch-storage.test.js',
   'tests/cohost-historical-contact.test.js',
   'functions/test-placeholder-category-batch-core.js',

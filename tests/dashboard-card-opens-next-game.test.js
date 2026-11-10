@@ -23,7 +23,7 @@ function section(from, to) {
   const browser = await chromium.launch();
   const page = await browser.newPage();
   await page.setContent('<!doctype html><body></body>');
-  await page.addScriptTag({ content: section('window._nextParticipantTournamentMatchTarget = function', '// Entrada genérica da dashboard:') });
+  await page.addScriptTag({ content: section('function _tournamentAsMs(value)', '// Entrada genérica da dashboard:') });
   await page.addScriptTag({ content: section('window._nextScheduledTournamentMatchTarget = function', 'window._scrollToBracketSection = function') });
   await page.addScriptTag({ content: section('window._scrollToBracketSection = function', '// v2.7.85: funções de DUPLA') });
   await page.addScriptTag({ content: bracket.slice(bracket.indexOf('window._bracketFocusOperationsStrip = function'), bracket.indexOf('/* A LARGURA ÚTIL DA CHAVE', bracket.indexOf('window._bracketFocusOperationsStrip = function'))) });
