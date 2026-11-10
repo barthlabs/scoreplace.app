@@ -5,6 +5,7 @@ const path = require('path');
 const { chromium } = require('@playwright/test');
 const bracket = fs.readFileSync(path.join(__dirname, '..', 'js/views/bracket.js'), 'utf8');
 const focusCode = bracket.slice(bracket.indexOf('function _bracketFocusOperationalCard(root, card, behavior) {'), bracket.indexOf('// A chave de fases usa um scroller HORIZONTAL', bracket.indexOf('function _bracketFocusOperationalCard(root, card, behavior) {')));
+const portalCode = bracket.slice(bracket.indexOf('function _bracketUpdateRoundHeadingPortal(root, scope) {'), bracket.indexOf('function _bracketEnsureRoundHeadingResizeListener()', bracket.indexOf('function _bracketUpdateRoundHeadingPortal(root, scope) {')));
 const goMine = bracket.slice(bracket.indexOf('    var _goMine = function (behavior) {'), bracket.indexOf('    setTimeout(function () { _goMine', bracket.indexOf('    var _goMine = function (behavior) {')));
 const reaffirm = bracket.slice(bracket.indexOf('    var _reafirmar = function () {'), bracket.indexOf('    _reafirmar();', bracket.indexOf('    var _reafirmar = function () {')));
 
@@ -27,6 +28,28 @@ const reaffirm = bracket.slice(bracket.indexOf('    var _reafirmar = function ()
     assert.equal(result.found, true, 'card de fase pertence ao root operacional');
     assert.ok(result.top >= result.headingBottom + 12, 'o cabeçalho do card não fica sob as abas');
     assert.ok(Math.abs(result.top - result.safeTop) <= 2, 'foco pousa na mesma geometria da reafirmação');
+    await page.setViewportSize({ width: 1180, height: 693 });
+    await page.setContent('<!doctype html><style>body{margin:0;height:3000px}nav{position:fixed;top:124px;left:0;right:0;height:113px;background:#111}main{margin-top:900px}.bracket-round-heading{height:40px}.sp-match-card{height:403px;background:#222}</style><nav data-bracket-tabs-root="1" data-tournament-id="confra"></nav><main id="phase"><div class="bracket-round-column"><h3 class="bracket-round-heading">Final</h3><article id="card-j204" class="sp-match-card">Jogo 204</article></div></main>');
+    await page.addScriptTag({ content: 'window._bracketEntryHorizontalGap = function(){return 0}; function _bracketEntryHorizontalGap(){return 0};' + focusCode + portalCode + 'function _bracketSyncRoundHeadingOffsets(){const r=document.querySelector("nav");_bracketUpdateRoundHeadingPortal(r,r._bracketTabsScope)}' });
+    const shortWindow = await page.evaluate(() => {
+      const root = document.querySelector('nav');
+      const card = document.getElementById('card-j204');
+      root._bracketTabsScope = document.getElementById('phase');
+      window._bracketFocusOperationalCard(root, card, 'instant');
+      const portal = root._bracketRoundHeadingPortal;
+      return { top: card.getBoundingClientRect().top, bottom: card.getBoundingClientRect().bottom,
+        viewport: innerHeight, portal: getComputedStyle(portal).display };
+    });
+    assert.ok(shortWindow.top >= 249 && shortWindow.bottom <= shortWindow.viewport - 10,
+      'entrada da dashboard mostra o jogo inteiro abaixo das abas numa janela baixa');
+    assert.equal(shortWindow.portal, 'none', 'o espelho da rodada não cobre o jogo em foco');
+    const restoredPortal = await page.evaluate(() => {
+      window.scrollBy(0, 80);
+      const root = document.querySelector('nav');
+      _bracketSyncRoundHeadingOffsets();
+      return getComputedStyle(root._bracketRoundHeadingPortal).display;
+    });
+    assert.equal(restoredPortal, 'block', 'rolagem manual restaura o cabeçalho da rodada');
     assert.match(goMine, /_bracketOperationalRootForCard\(_target\)/);
     assert.match(reaffirm, /_bracketOperationalSafeTop\(_operationalRoot, _el\)/);
     console.log('✅ Jogo 195: topo integral sob as abas e mesma régua na reafirmação');

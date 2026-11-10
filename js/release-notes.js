@@ -1,3 +1,6 @@
+// 2.6.24 — Ao abrir o próximo jogo ou o último concluído, o card inteiro
+// cabe abaixo das abas mesmo em uma janela baixa; o título fixo da rodada
+// reaparece quando a pessoa volta a rolar a chave.
 // 2.6.23 — O atalho para a chave espera a montagem e confirma o alinhamento
 // do jogo solicitado na página, mantendo o card completo na janela.
 // 2.6.22 — Ao abrir a chave pelo próximo jogo ou pelo último concluído,

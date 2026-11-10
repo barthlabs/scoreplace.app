@@ -1,3 +1,8 @@
+## 2.6.24 — 09/nov/2026 (card inteiro na entrada pela dashboard)
+
+- Em janelas baixas, o cabeçalho fixo da rodada reservava espaço além do necessário e deixava o rodapé do jogo solicitado fora da tela. A entrada agora calcula o espaço pelo card inteiro e esconde o espelho da rodada apenas enquanto esse card está em foco; a rolagem manual restaura o cabeçalho.
+- O próximo jogo continua sendo o destino da dashboard; quando não existe próximo, permanece o último jogo concluído da pessoa. Corte somente web, sem alteração de dados ou versões nativas.
+
 ## 2.6.23 — 09/nov/2026 (âncora do jogo na entrada do torneio)
 
 - O atalho da dashboard aguarda a montagem assíncrona da chave e reafirma a posição do card solicitado na rolagem da página. A correção anterior selecionava o jogo certo, mas ainda deixava o rodapé fora da janela no Chrome.

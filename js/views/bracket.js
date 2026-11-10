@@ -2152,6 +2152,13 @@ function _bracketFocusOperationalCard(root, card, behavior) {
   else _bracketEntryHorizontalGap(card, true);
   var cardRect = card.getBoundingClientRect();
   var safeTop = _bracketOperationalSafeTop(root, card);
+  // Numa janela baixa, a faixa fixa da rodada pode consumir o espaço que
+  // falta para mostrar o rodapé do jogo. Enquanto este card permanecer no
+  // foco exato, escondemos apenas o espelho da rodada; a próxima rolagem
+  // manual o restaura. [[regression_dashboard_match_whole_card]]
+  var heading = card.closest && card.closest('.bracket-round-column')?.querySelector('.bracket-round-heading');
+  var reservedTop = root.getBoundingClientRect().bottom + (heading ? Math.ceil(heading.getBoundingClientRect().height || 0) + 30 : 68);
+  root._bracketPortalFocus = safeTop < reservedTop - 2 ? { card: card, top: safeTop } : null;
   var currentTop = window.scrollY || window.pageYOffset || 0;
   var targetTop = Math.max(0, currentTop + cardRect.top - safeTop);
   var scrollRoot = document.scrollingElement || document.documentElement || document.body;
@@ -2176,6 +2183,9 @@ function _bracketOperationalSafeTop(root, card) {
     var portalBottom = Math.ceil(portal.getBoundingClientRect().bottom || 0) + 12;
     if (portalBottom > safeTop) safeTop = portalBottom;
   }
+  var cardHeight = Math.ceil(card.getBoundingClientRect().height || 0);
+  var wholeCardTop = window.innerHeight - cardHeight - 12;
+  if (wholeCardTop >= rootRect.bottom + 12 && wholeCardTop < safeTop) safeTop = wholeCardTop;
   return safeTop;
 }
 window._bracketFocusOperationalCard = _bracketFocusOperationalCard;
@@ -2873,6 +2883,17 @@ function _bracketUpdateRoundHeadingPortal(root, scope) {
     // A navegação pode sair de uma seção de grupos ocultada pela agenda Geral.
     // O espelho das rodadas precisa mudar de pai com ela para continuar visível.
     root.parentNode.insertBefore(portal, root.nextSibling);
+  }
+  var focused = root._bracketPortalFocus;
+  if (focused) {
+    var focusedCard = focused.card;
+    if (focusedCard && focusedCard.isConnected && !focusedCard.hidden && focusedCard.getClientRects().length &&
+        Math.abs(focusedCard.getBoundingClientRect().top - focused.top) <= 3) {
+      portal.style.display = 'none';
+      scope.style.setProperty('--bracket-round-reveal-top', Math.ceil(root.getBoundingClientRect().bottom + 8) + 'px');
+      return;
+    }
+    root._bracketPortalFocus = null;
   }
   portal.innerHTML = '';
   var rootRect = root.getBoundingClientRect();
