@@ -76,6 +76,53 @@ m[i]={name:process.env.SP_NAME,region:process.env.SP_REGION,target:'endMatchOnCo
 fs.writeFileSync(process.env.SP_FILE,JSON.stringify(m,null,2)+'\n');
 NODE
 }
+promote_served_candidate() {
+  local json="$1" file="$2" name="$3" region="$4" digest="$5" revision_json candidate decision
+  candidate="$(printf '%s' "$json" | field status.latestCreatedRevisionName)"
+  [[ -n "$candidate" ]] || { echo "revisão candidata ausente: $name/$region" >&2; exit 1; }
+  revision_json="$(gcloud run revisions describe "$candidate" --project "$project" --region "$region" --format=json)"
+  decision="$(SP_SERVICE_JSON="$json" SP_REVISION_JSON="$revision_json" SP_FILE="$file" SP_NAME="$name" SP_REGION="$region" SP_DIGEST="$digest" node - <<'NODE'
+const fs = require('fs');
+const { candidateDecision, checkServed } = require('./scripts/check-served-operation-revision');
+const service = JSON.parse(process.env.SP_SERVICE_JSON);
+const revision = JSON.parse(process.env.SP_REVISION_JSON);
+const rows = JSON.parse(fs.readFileSync(process.env.SP_FILE));
+const row = rows.find(item => item.name === process.env.SP_NAME && item.region === process.env.SP_REGION);
+if (!row || row.sourceDigest !== process.env.SP_DIGEST) process.exit(1);
+const previousRevision = service.status?.traffic?.[0]?.revisionName;
+if (!previousRevision || (previousRevision !== row.revision && previousRevision !== service.status?.latestCreatedRevisionName)) process.exit(1);
+if (previousRevision === service.status.latestCreatedRevisionName) {
+  checkServed(service, revision, { ...row, revision: previousRevision });
+  process.stdout.write('current');
+  process.exit(0);
+}
+const result = candidateDecision(service, revision, {
+  previousRevision, revision: service.status.latestCreatedRevisionName,
+  sourceDigest: row.sourceDigest, image: row.image, region: row.region, url: row.url
+});
+process.stdout.write(result.action);
+NODE
+)"
+  if [[ "$decision" == promote ]]; then
+    gcloud run services update-traffic "$name" --project "$project" --region "$region" \
+      --to-revisions "$candidate=100" --quiet
+  elif [[ "$decision" != current ]]; then
+    echo "decisão de tráfego inesperada: $name/$region" >&2; exit 1
+  fi
+  json="$(describe "$name" "$region")"
+  SP_SERVICE_JSON="$json" SP_REVISION_JSON="$revision_json" SP_FILE="$file" SP_NAME="$name" SP_REGION="$region" SP_CANDIDATE="$candidate" node - <<'NODE'
+const fs = require('fs');
+const { checkServed } = require('./scripts/check-served-operation-revision');
+const service = JSON.parse(process.env.SP_SERVICE_JSON);
+const revision = JSON.parse(process.env.SP_REVISION_JSON);
+const rows = JSON.parse(fs.readFileSync(process.env.SP_FILE));
+const row = rows.find(item => item.name === process.env.SP_NAME && item.region === process.env.SP_REGION);
+checkServed(service, revision, { ...row, revision: process.env.SP_CANDIDATE });
+row.revision = process.env.SP_CANDIDATE;
+fs.writeFileSync(process.env.SP_FILE, JSON.stringify(rows, null, 2) + '\n');
+NODE
+  echo "✓ tráfego efetivo $name/$region → $candidate"
+}
 
 for version in v3 v2; do
   name="sp-op-end-court-$version"
@@ -95,6 +142,10 @@ for version in v3 v2; do
     if [[ "$current_digest" == "$digest" ]]; then
       receipt="$candidate"
       [[ -e "$receipt" ]] || receipt="$manifest"
+      if [[ "$mode" == --deploy ]]; then
+        promote_served_candidate "$json" "$receipt" "$name" "$region" "$digest"
+        json="$(describe "$name" "$region")"
+      fi
       check_service "$json" "$receipt" "$name" "$region"
       echo "✓ já atualizado $name/$region"
     else
@@ -116,6 +167,8 @@ for version in v3 v2; do
         fi
         json="$(describe "$name" "$region")"
         record "$json" "$candidate" "$name" "$region" "$digest"
+        promote_served_candidate "$json" "$candidate" "$name" "$region" "$digest"
+        json="$(describe "$name" "$region")"
         check_service "$json" "$candidate" "$name" "$region"
         echo "✓ publicado $name/$region"
       fi
