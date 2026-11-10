@@ -201,6 +201,14 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       const noPending = !strip.querySelector('.sp-operations-pending');
       const freeCount = strip.querySelector('.sp-operations-availability').textContent;
       const courtNames = [...strip.querySelectorAll('.sp-operations-court-slot > .sp-operations-label')].map(el => el.textContent);
+      const scrollbar = strip.querySelector('.sp-operations-scrollbar');
+      const scrollbarThumb = scrollbar.querySelector('.sp-operations-scrollbar-thumb');
+      const scrollbarSize = { visible: !scrollbar.hidden, height: scrollbar.getBoundingClientRect().height,
+        thumbHeight: scrollbarThumb.getBoundingClientRect().height, thumbWidth: scrollbarThumb.getBoundingClientRect().width };
+      scrollbar.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true }));
+      const keyboardEnd = track.scrollLeft > 0;
+      scrollbar.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true, cancelable: true }));
+      const keyboardHome = track.scrollLeft === 0;
       track.scrollLeft = 240;
       const sticky = getComputedStyle(next).position === 'sticky' && next.getBoundingClientRect().left <= track.getBoundingClientRect().left + 9;
       const noVerticalClip = track.scrollHeight <= track.clientHeight;
@@ -223,7 +231,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       window._bracketOperationsRefresh(t, root);
       const one = strip.querySelector('.sp-operations-availability').textContent;
       return { noPending, freeCount, courtNames, sticky, noVerticalClip, scrollPreserved, withPending, aligned,
-        width, viewport, zero, one };
+        width, viewport, zero, one, scrollbarSize, keyboardEnd, keyboardHome };
     });
     assert(scrollLayout.noPending && scrollLayout.withPending, 'o painel azul só aparece com placar pendente');
     assert.equal(scrollLayout.freeCount, '4 QUADRAS LIVRES');
@@ -232,6 +240,10 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert.deepEqual(scrollLayout.courtNames, ['Quadra 4', 'Quadra 6', 'Quadra 7', 'Quadra 8']);
     assert(scrollLayout.width > scrollLayout.viewport && scrollLayout.sticky && scrollLayout.scrollPreserved,
       'a faixa inteira deve rolar e manter o próximo jogo fixo: ' + JSON.stringify(scrollLayout));
+    assert(scrollLayout.scrollbarSize.visible && scrollLayout.scrollbarSize.height >= 22 &&
+      scrollLayout.scrollbarSize.thumbHeight >= 16 && scrollLayout.scrollbarSize.thumbWidth >= 72 &&
+      scrollLayout.keyboardEnd && scrollLayout.keyboardHome,
+    'a barra de rolagem deve ser alta, visível e operável por teclado: ' + JSON.stringify(scrollLayout));
     assert(scrollLayout.noVerticalClip && scrollLayout.aligned, 'a faixa não pode cortar ou desalinhavar os cards: ' + JSON.stringify(scrollLayout));
     await page.setViewportSize({ width: 600, height: 800 });
     await page.waitForTimeout(120);

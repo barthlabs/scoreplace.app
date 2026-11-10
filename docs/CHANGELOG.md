@@ -1,3 +1,9 @@
+## 2.6.32 — 10/nov/2026 (barra de rolagem e grupos identificados)
+
+- A faixa Em quadra passa a mostrar uma barra horizontal própria de 22 px, com alça contrastante de 16 px, quando há quadras fora da área visível. Ela pode ser arrastada, clicada ou usada pelo teclado, inclusive no macOS com barras nativas sobrepostas.
+- Na agenda Geral, os jogos da série Rei/Rainha permanecem sob seu grupo e sua classificação, inclusive quando a quadra muda ou a agenda ainda está parcial. A busca por código como B2 mostra o grupo inteiro; o rótulo da fase usa Rainha da Praia nos grupos femininos e Rei da Praia nos masculinos.
+- Corte somente web, sem alterar partidas, resultados ou versões nativas.
+
 ## 2.6.31 — 10/nov/2026 (quadras em tempo real e faixa compacta)
 
 - A faixa operacional remove o selo amarelo de presença parcial; os indicadores junto aos atletas mostram quem chegou. Quadra, OK, Cancelar e Encerrado cabem na mesma linha, com espaço antes do rodapé e altura comum medida pelo conteúdo das partidas e da classificação. A barra horizontal ficou mais larga e visível, e os avisos de resultado surgem acima dela.

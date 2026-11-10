@@ -1713,6 +1713,61 @@ function _bracketOperationsFingerprint(m) {
   return JSON.stringify([m.scoreP1, m.scoreP2, m.sets, m.winner, m.resultAt, m.pendingResult]);
 }
 
+function _bracketOperationsBindScrollbar(track, bar) {
+  if (!track || !bar) return;
+  var thumb = bar.querySelector('.sp-operations-scrollbar-thumb');
+  function sync() {
+    var maxScroll = Math.max(0, track.scrollWidth - track.clientWidth);
+    bar.hidden = maxScroll < 1;
+    if (!maxScroll) return;
+    var width = bar.clientWidth;
+    var thumbWidth = Math.min(width, Math.max(72, Math.round(width * track.clientWidth / track.scrollWidth)));
+    var travel = Math.max(0, width - thumbWidth);
+    thumb.style.width = thumbWidth + 'px';
+    thumb.style.transform = 'translateX(' + Math.round(travel * track.scrollLeft / maxScroll) + 'px)';
+    bar.setAttribute('aria-valuemax', String(Math.round(maxScroll)));
+    bar.setAttribute('aria-valuenow', String(Math.round(track.scrollLeft)));
+  }
+  track.addEventListener('scroll', sync, { passive: true });
+  bar.addEventListener('pointerdown', function (event) {
+    if (event.button !== 0 || bar.hidden) return;
+    event.preventDefault();
+    var rect = bar.getBoundingClientRect();
+    var thumbRect = thumb.getBoundingClientRect();
+    var grabOffset = event.target === thumb ? event.clientX - thumbRect.left : thumbRect.width / 2;
+    function move(clientX) {
+      var travel = bar.clientWidth - thumbRect.width;
+      var maxScroll = track.scrollWidth - track.clientWidth;
+      if (travel > 0 && maxScroll > 0) track.scrollLeft = Math.max(0, Math.min(maxScroll,
+        (clientX - rect.left - grabOffset) * maxScroll / travel));
+    }
+    move(event.clientX);
+    bar.setPointerCapture(event.pointerId);
+    function onMove(e) { if (e.pointerId === event.pointerId) move(e.clientX); }
+    function onEnd(e) {
+      if (e.pointerId !== event.pointerId) return;
+      bar.removeEventListener('pointermove', onMove);
+      bar.removeEventListener('pointerup', onEnd);
+      bar.removeEventListener('pointercancel', onEnd);
+    }
+    bar.addEventListener('pointermove', onMove);
+    bar.addEventListener('pointerup', onEnd);
+    bar.addEventListener('pointercancel', onEnd);
+  });
+  bar.addEventListener('keydown', function (event) {
+    var step = Math.max(80, Math.round(track.clientWidth * .8));
+    if (event.key === 'ArrowRight') track.scrollLeft += 80;
+    else if (event.key === 'ArrowLeft') track.scrollLeft -= 80;
+    else if (event.key === 'PageDown') track.scrollLeft += step;
+    else if (event.key === 'PageUp') track.scrollLeft -= step;
+    else if (event.key === 'Home') track.scrollLeft = 0;
+    else if (event.key === 'End') track.scrollLeft = track.scrollWidth;
+    else return;
+    event.preventDefault();
+  });
+  sync();
+}
+
 window._bracketOperationsRefresh = function (t, root) {
   root = root || Array.prototype.find.call(document.querySelectorAll('[data-bracket-tabs-root]'), function (node) {
     return t && node.getAttribute('data-tournament-id') === String(t.id);
@@ -1941,7 +1996,7 @@ window._bracketOperationsRefresh = function (t, root) {
           '<span class="sp-operations-label">' + window._safeHtml(court) + '</span><div class="sp-operations-court-free"><span>Livre</span></div>') +
         '</div>';
     }).join('') +
-    '</div></div></div>';
+    '</div></div></div><div class="sp-operations-scrollbar" role="scrollbar" tabindex="0" aria-label="Rolar jogos em quadra" aria-orientation="horizontal" aria-valuemin="0"><div class="sp-operations-scrollbar-thumb"></div></div>';
   _bracketReconcileOperationalOrder(root);
   var operationsTrack = existing.querySelector('.sp-operations-track');
   if (operationsTrack) {
@@ -1989,6 +2044,7 @@ window._bracketOperationsRefresh = function (t, root) {
     operationsTrack.style.setProperty('--sp-operations-card-height', Math.max.apply(null,
       [120].concat(cardHeights)) + 'px');
     operationsTrack.scrollLeft = trackScroll;
+    _bracketOperationsBindScrollbar(operationsTrack, existing.querySelector('.sp-operations-scrollbar'));
     if (window.scrollY !== pageY || window.scrollX !== pageX) window.scrollTo(pageX, pageY);
   }
   Array.prototype.forEach.call(existing.querySelectorAll('.sp-operations-replica'), function (op) {
@@ -2415,27 +2471,34 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
       var monarchSets = new Map();
       entries.forEach(function (entry) {
         var parent = entry.placeholder && entry.placeholder.parentNode;
-        var sourceGroup = parent && parent.closest ? parent.closest('[data-monarch-large="1"]') : null;
+        var sourceGroup = parent && parent.closest ? parent.closest('[data-group-box="1"][data-monarch-group="1"]') : null;
         if (!sourceGroup) return;
         if (!monarchSets.has(sourceGroup)) monarchSets.set(sourceGroup, []);
         monarchSets.get(sourceGroup).push(entry);
       });
       monarchSets.forEach(function (members, sourceGroup) {
-        var sourceCards = sourceGroup.querySelectorAll('.sp-match-card[data-bracket-scheduled-at]');
-        if (sourceCards.length !== 3 || members.length !== 3) return;
-        var first = members[0];
-        var sameSession = members.every(function (entry) {
-          return entry.card.getAttribute('data-bracket-tab-category') === first.card.getAttribute('data-bracket-tab-category') &&
-            entry.card.getAttribute('data-bracket-tab-day') === first.card.getAttribute('data-bracket-tab-day') &&
-            entry.court === first.court;
-        });
-        if (!sameSession) return;
-        members.sort(function (a, b) { return a.num - b.num || a.position - b.position; });
-        var anchor = members.reduce(function (best, entry) { return entry.actualAt < best.actualAt ? entry : best; }, members[0]);
+        // A identidade do quarteto vem do box do grupo, não da quadra agendada.
+        // Um remanejamento de quadra ou uma agenda parcial não pode transformar
+        // B2/C2 em partidas soltas na Geral.
+        if (!members.length) return;
+        // Se uma série atravessar dias ou categorias, mantenha cada parte na
+        // respectiva rodada; jamais antecipe um jogo para o dia anterior.
+        var sessions = new Map();
         members.forEach(function (entry) {
-          entry.monarchSource = sourceGroup;
-          entry.monarchAnchor = anchor;
-          entry.at = anchor.actualAt;
+          var day = entry.card.getAttribute('data-bracket-tab-day') || new Date(entry.actualAt).toISOString().slice(0, 10);
+          var category = entry.card.getAttribute('data-bracket-tab-category') || '';
+          var sessionKey = day + '|' + category;
+          if (!sessions.has(sessionKey)) sessions.set(sessionKey, []);
+          sessions.get(sessionKey).push(entry);
+        });
+        sessions.forEach(function (sessionMembers) {
+          sessionMembers.sort(function (a, b) { return a.num - b.num || a.position - b.position; });
+          var anchor = sessionMembers.reduce(function (best, entry) { return entry.actualAt < best.actualAt ? entry : best; }, sessionMembers[0]);
+          sessionMembers.forEach(function (entry) {
+            entry.monarchSource = sourceGroup;
+            entry.monarchAnchor = anchor;
+            entry.at = anchor.actualAt;
+          });
         });
       });
       if (entries.some(function (entry) { return entry.monarchSource; })) {
@@ -2530,7 +2593,16 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
       if (entry !== entry.monarchAnchor) return;
       var bundle = document.createElement('section');
       bundle.className = 'bracket-geral-quarteto';
-      bundle.setAttribute('data-bracket-phase-label', 'Classificatória · Rei/Rainha');
+      bundle.setAttribute('data-group-box', '1');
+      bundle.setAttribute('data-monarch-group', '1');
+      var groupCode = entry.monarchSource.getAttribute('data-group-code');
+      if (groupCode) bundle.setAttribute('data-group-code', groupCode);
+      var categoryGenders = groups[key].filter(function (member) { return member.monarchAnchor === entry; })
+        .map(function (member) { return member.card.getAttribute('data-bracket-tab-gender'); });
+      var phaseLabel = categoryGenders.length && categoryGenders.every(function (value) { return value === 'fem'; })
+        ? 'Rainha da Praia' : categoryGenders.length && categoryGenders.every(function (value) { return value === 'masc'; })
+          ? 'Rei da Praia' : 'Rei/Rainha';
+      bundle.setAttribute('data-bracket-phase-label', phaseLabel);
       bundle._monarchSource = entry.monarchSource;
       var title = document.createElement('h5');
       title.className = 'bracket-geral-quarteto-title';
@@ -2541,7 +2613,7 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame, categ
       standings.className = 'bracket-geral-quarteto-standings';
       bundle.appendChild(standings);
       _bracketGeneralRefreshStandings(bundle);
-      var memberEntries = groups[key].filter(function (member) { return member.monarchSource === entry.monarchSource; });
+      var memberEntries = groups[key].filter(function (member) { return member.monarchAnchor === entry; });
       memberEntries.sort(function (a, b) { return a.num - b.num || a.position - b.position; });
       memberEntries.forEach(function (member) { bundle.appendChild(member.wrapper); });
       grid.appendChild(bundle);
@@ -10488,7 +10560,8 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     var _mineBadgeMon = _isMineMon
       ? '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(34,211,238,0.15);color:var(--sp-c-22d3ee,#22d3ee);font-weight:700;">SEU GRUPO</span>'
       : '';
-    html += '<div data-group-box="1" data-monarch-group="1"' + (_largeMonarch ? ' data-monarch-large="1" data-monarch-category="' + window._safeHtml(_monarchCategories[gi]) + '" hidden' : '') + (_isMineMon ? ' data-my-group="1"' : '') + ' data-group-label="' + window._safeHtml(window._grpKey(sg.name)) + '" style="scroll-margin-top:var(--scroll-anchor,120px);background:var(--bg-card);border:1px solid var(--border-color);border-left:4px solid ' + window._spCor((opts && opts.showHistoricalFullStandings ? '#818cf8' : groupDone ? '#4ade80' : (_isMineMon ? '#22d3ee' : '#fbbf24')), 'borda') + ';border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">' +
+    var _groupCodeMatch = String(window._bracketMonarchGroupLabel(t, sg)).toUpperCase().match(/\b([A-Z]{1,3}\d+)\b/);
+    html += '<div data-group-box="1" data-monarch-group="1"' + (_groupCodeMatch ? ' data-group-code="' + _groupCodeMatch[1] + '"' : '') + (_largeMonarch ? ' data-monarch-large="1" data-monarch-category="' + window._safeHtml(_monarchCategories[gi]) + '" hidden' : '') + (_isMineMon ? ' data-my-group="1"' : '') + ' data-group-label="' + window._safeHtml(window._grpKey(sg.name)) + '" style="scroll-margin-top:var(--scroll-anchor,120px);background:var(--bg-card);border:1px solid var(--border-color);border-left:4px solid ' + window._spCor((opts && opts.showHistoricalFullStandings ? '#818cf8' : groupDone ? '#4ade80' : (_isMineMon ? '#22d3ee' : '#fbbf24')), 'borda') + ';border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">' +
       /* DUAS LINHAS, NÃO TRÊS: título curto em cima, selos embaixo, botões à direita.
        * Antes era tudo numa linha só, com `flex:1` no <h3>: os dois botões grandes
        * comiam a largura, o título quebrava em três linhas e ERA ELE que esticava a
@@ -13159,6 +13232,10 @@ window._bracketApplyFilter = function (origin) {
   // Limite de subida: nunca passar do container da view (senão, numa busca sem resultado,
   // TUDO seria escondido — inclusive a própria barra de busca, e o dono ficaria preso).
   var root = document.getElementById('view-container') || document.body;
+  // Código exibido de grupo é uma busca estrutural exata: B2 deve trazer B2
+  // inteiro, sem confundir com nome de atleta, número ou outro grupo.
+  var _groupCodeQuery = /^[a-z]{1,3}\d+$/.test(q) && root && root.querySelector &&
+    root.querySelector('[data-group-code="' + q.toUpperCase() + '"]') ? q : '';
   var _scheduledPhaseRoot = root && root.querySelector
     ? root.querySelector('[data-bracket-tabs-root][data-bracket-team-schedule="1"]') : null;
   if (typeof _bracketReleaseEmptyScheduledPhase === 'function')
@@ -13221,7 +13298,10 @@ window._bracketApplyFilter = function (origin) {
      * corrida de carregamento. Ver [[project_letzplay_textcontent_engole_estrutura]]: aqui
      * ele é palheiro de busca, não estrutura. */
     var _casa = !q, _awaitingName = false;
-    if (!_casa) {
+    if (_groupCodeQuery) {
+      var _groupOfCard = c.closest && c.closest('[data-group-code]');
+      _casa = !!(_groupOfCard && window._bracketNorm(_groupOfCard.getAttribute('data-group-code')) === _groupCodeQuery);
+    } else if (!_casa) {
       _casa = window._buscaCasa(c.getAttribute('data-players') || '', q) ||
         window._buscaCasa(c.getAttribute('data-team-names') || '', q);
       // O número é identidade operacional do jogo, não nome de atleta. Mantemos a
@@ -13618,6 +13698,9 @@ window._bracketApplyFilter = function (origin) {
   if (q && _hitsDiag.length && (origin === 'input' || origin === 'after-tab') && typeof window.getComputedStyle === 'function') {
     try {
       var _alvoBusca = window._bracketSearchTarget(_hitsDiag, true, root);
+      if (_groupCodeQuery && _alvoBusca && _alvoBusca.closest) {
+        _alvoBusca = _alvoBusca.closest('[data-group-code]') || _alvoBusca;
+      }
       if (_alvoBusca && typeof _alvoBusca.getBoundingClientRect === 'function') {
         var _rc = _alvoBusca.getBoundingClientRect();
         var _ancora = parseFloat(window.getComputedStyle(document.documentElement).getPropertyValue('--scroll-anchor')) || 120;

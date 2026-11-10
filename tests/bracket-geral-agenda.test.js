@@ -378,7 +378,7 @@ function trecho(inicio, fim) {
   const monarchBundle = await page.evaluate(() => {
     const start = Date.UTC(2026, 10, 13, 11);
     const game = (num, offset) => '<article class="sp-match-card" id="card-r' + num + '" data-bracket-tab-category="Fem Diamante" data-bracket-tab-gender="fem" data-bracket-tab-day="2026-11-13" data-bracket-tab-round="1" data-bracket-scheduled-at="' + (start + offset * 60000) + '" data-bracket-court="Quadra 1" data-match-num="' + num + '"' + (num === 2 ? ' data-scheduled-game-number="2"' : '') + '>Jogo ' + num + '<input aria-label="placar ' + num + '"><div class="sp-match-operational"><select aria-label="Quadra do jogo ' + num + '"><option>Quadra 1</option></select><span>≈ ' + (offset === 0 ? '08:00' : offset === 20 ? '08:20' : '08:40') + '</span></div></article>';
-    document.body.innerHTML = '<main id="view-container"><nav id="monarch-root" data-bracket-tabs-root="1" data-tournament-id="monarch"></nav><section class="bracket-scroll-container" id="monarch-source"><div data-group-box="1" data-monarch-large="1" data-monarch-category="Fem Diamante" data-group-label="Grupo 1"><h3>Grupo 1</h3><div class="standings-scroll"><table id="standings-original"><thead><tr><th>Jogador</th><th>Pontos</th></tr></thead><tbody><tr><td>Ana</td><td>6</td></tr><tr><td>Bia</td><td>4</td></tr></tbody></table></div><div>' + game(1, 0) + game(2, 20) + game(3, 40) + '</div></div></section></main>';
+    document.body.innerHTML = '<main id="view-container"><nav id="monarch-root" data-bracket-tabs-root="1" data-tournament-id="monarch"></nav><section class="bracket-scroll-container" id="monarch-source"><div data-group-box="1" data-monarch-group="1" data-monarch-large="1" data-monarch-category="Fem Diamante" data-group-label="Grupo 1"><h3>Grupo 1</h3><div class="standings-scroll"><table id="standings-original"><thead><tr><th>Jogador</th><th>Pontos</th></tr></thead><tbody><tr><td>Ana</td><td>6</td></tr><tr><td>Bia</td><td>4</td></tr></tbody></table></div><div>' + game(1, 0) + game(2, 20) + game(3, 40) + '</div></div></section></main>';
     const root = document.getElementById('monarch-root');
     root._bracketTabsScope = document.getElementById('view-container');
     window._currentBracketTournament = { id: 'monarch', matches: [] };
@@ -424,6 +424,44 @@ function trecho(inicio, fim) {
     'classificação aparece sem IDs duplicados e reflete o cálculo atualizado do grupo');
   ok(monarchBundle.revealed && monarchBundle.restored && monarchBundle.upcomingSeparate,
     'buscar card movido revela a categoria, restaura os três jogos e mantém Próximos jogos individual');
+
+  const groupedSchedule = await page.evaluate(() => {
+    const at = (minutes) => Date.UTC(2026, 10, 13, 12, 40 + minutes);
+    const card = (id, when, court, gender, category) => '<article class="sp-match-card" id="' + id + '" data-bracket-scheduled-at="' + when +
+      '" data-bracket-court="' + court + '" data-bracket-tab-gender="' + gender + '" data-bracket-tab-category="' + category +
+      '" data-match-num="' + id.replace(/\D/g, '') + '">Jogo</article>';
+    document.body.innerHTML = '<main id="view-container"><nav id="grouped-root" data-bracket-tabs-root="1" data-tournament-id="grouped"></nav>' +
+      '<section class="bracket-scroll-container"><div data-group-box="1" data-monarch-group="1" data-monarch-large="1" data-group-code="B2"><h3>Grupo B2</h3>' +
+      '<div class="standings-scroll"><table><tr><td>B2</td></tr></table></div>' +
+      card('b25', at(0), 'Quadra 3', 'fem', 'Fem Ouro') + card('b26', at(35), 'Quadra 4', 'fem', 'Fem Ouro') + card('b27', at(70), 'Quadra 3', 'fem', 'Fem Ouro') + '</div>' +
+      '<div data-group-box="1" data-monarch-group="1" data-monarch-large="1" data-group-code="C2"><h3>Grupo C2</h3>' +
+      '<div class="standings-scroll"><table><tr><td>C2</td></tr></table></div>' +
+      card('c31', at(0), 'Quadra 5', 'fem', 'Fem Ouro') + card('c32', at(35), 'Quadra 5', 'fem', 'Fem Ouro') + '</div>' +
+      '<div data-group-box="1" data-monarch-group="1" data-group-code="A1"><h3>Grupo A1</h3>' +
+      '<div class="standings-scroll"><table><tr><td>A1</td></tr></table></div>' +
+      card('a11', at(0), 'Quadra 1', 'masc', 'Masc Diamante') + '</div>' +
+      '</section></main>';
+    const root = document.getElementById('grouped-root');
+    root._bracketTabsScope = document.getElementById('view-container');
+    window._currentBracketTournament = { id: 'grouped', matches: [] };
+    _bracketGeneralView(root, true, 'fem', false, false);
+    const bundles = [...root._bracketGeneralView.querySelectorAll('.bracket-geral-quarteto')];
+    return bundles.map(bundle => ({
+      code: bundle.getAttribute('data-group-code'),
+      title: bundle.querySelector('h5')?.textContent,
+      label: bundle.getAttribute('data-bracket-phase-label'),
+      cards: [...bundle.querySelectorAll('.sp-match-card')].map(card => card.id),
+      standings: !!bundle.querySelector('table')
+    }));
+  });
+  ok(groupedSchedule.length === 3 && groupedSchedule.map(group => group.code).join(',') === 'A1,B2,C2',
+    'Geral mantém A1, B2 e C2 como grupos identificados, mesmo com agenda parcial ou quadra remanejada');
+  ok(groupedSchedule.find(group => group.code === 'B2')?.cards.join(',') === 'b25,b26,b27' &&
+    groupedSchedule.find(group => group.code === 'C2')?.cards.join(',') === 'c31,c32' && groupedSchedule.every(group => group.standings),
+    'cada grupo conserva a classificação e seus jogos juntos');
+  ok(groupedSchedule.find(group => group.code === 'A1')?.label === 'Rei da Praia' &&
+    groupedSchedule.filter(group => group.code !== 'A1').every(group => group.label === 'Rainha da Praia'),
+    'título da série usa o gênero dos confrontos do grupo');
 
   const stableAgenda = await page.evaluate(() => {
     const at = Date.UTC(2026, 9, 22, 21);

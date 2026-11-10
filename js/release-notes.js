@@ -1,3 +1,10 @@
+// 2.6.32 — A barra horizontal de Em quadra tem trilho alto e alça destacada,
+// sempre visível quando há mais quadras à direita. Pode ser arrastada ou
+// acionada pelo teclado sem depender da barra discreta do navegador.
+// Na agenda Geral, cada série Rei/Rainha aparece com o nome do grupo,
+// classificação e jogos juntos, mesmo após remanejar a quadra. Buscar B1,
+// B2 etc. mostra só aquele grupo. A fase indica Rainha da Praia nos grupos
+// femininos e Rei da Praia nos masculinos.
 // 2.6.31 — A faixa de quadras mantém os comandos na mesma linha, aproxima
 // o rodapé do último dado útil, amplia a barra horizontal e deixa os avisos
 // de resultado acima dela. As bolinhas indicam a presença parcial. O filtro

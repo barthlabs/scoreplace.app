@@ -9,6 +9,12 @@ let pass=0,fail=0; function ok(c,m){if(c)pass++;else{fail++;console.error('  ✗
 function mkEl(attrs, parent){
   const el={ style:{}, dataset:{}, parentElement:parent||null, children:[],
     getAttribute:(k)=>attrs[k],
+    closest:function(selector){
+      for(let node=this;node;node=node.parentElement){
+        if(selector==='[data-group-code]' && node.getAttribute('data-group-code')) return node;
+      }
+      return null;
+    },
     // qualquer seletor de card → TODOS os descendentes com data-players
     querySelectorAll:function(){
       const out=[]; (function walk(n){ n.children.forEach(c=>{ if(c.getAttribute('data-players')!==undefined) out.push(c); walk(c); }); })(this);
@@ -283,6 +289,22 @@ ok(vis()[0]===true && vis()[1]===true && vis()[3]===true,
 ok(vis()[2]===false,'buscar Jogador X não mostra grupo sem Jogador X');
 input.value=''; F();
 ok(vis().every(Boolean),'limpar a busca do Jogador X restaura os jogos');
+
+// Código de grupo é uma identidade da série, não texto de atleta ou jogo.
+// A consulta B2 deve incluir os três confrontos do quarteto e ocultar B1.
+const groupB1=mkEl({'data-group-box':'1','data-monarch-group':'1','data-group-code':'B1'});
+colB.parentElement=groupB1; groupB1.children.push(colB);
+groupBox.getAttribute=(k)=>({'data-group-box':'1','data-monarch-group':'1','data-group-code':'B2'})[k];
+const oldGet=sandbox.document.getElementById;
+sandbox.document.getElementById=(id)=>id==='view-container'
+  ? {querySelector:(sel)=>sel==='[data-group-code="B2"]'?groupBox:sel==='[data-group-code="B1"]'?groupB1:null}
+  : oldGet(id);
+input.value='b2'; F();
+ok(JSON.stringify(vis())==='[true,true,false,true]' && groupBox.style.display!=='none' && groupB1.style.display==='none',
+  'buscar B2 mostra o grupo inteiro e esconde B1');
+input.value='b1'; F();
+ok(JSON.stringify(vis())==='[false,false,true,false]' && groupB1.style.display!=='none',
+  'buscar B1 mostra somente o próprio grupo');
 
 
 // ── A barra tem que existir TAMBÉM no bracket INLINE — e FORA do container dele ──
