@@ -292,14 +292,20 @@ const game = (id, court, scheduledAt = '2026-10-22T21:00:00.000Z') => ({ id, cou
   assert.equal(courtStates.get('tournaments/tour_test/courtState/main').released['dot.part'], undefined,
     'FieldPath preserva ponto no ID e apaga somente a marca do jogo');
   assert.equal(tournament.matches[0].courtClockBaseAt, originalClock,
-    'restauração preserva o relógio contínuo da chamada');
+    'restauração imediata mantém o tempo da chamada');
   assert.equal((await endOnCourt(op('restore', 'dot.part', restoreId))).replayed, true,
     'retry de restauração não depende do marcador já apagado');
+  nowIso = new Date(Date.parse(originalClock) + 60000).toISOString();
   assert.equal((await endOnCourt(op('release', 'dot.part', '6cc8c722-961f-43c1-a72b-75c6fe265f96'))).changed, true,
     'após restaurar, nova liberação cria um evento novo');
+  nowIso = new Date(Date.parse(originalClock) + 180000).toISOString();
   await assert.rejects(endOnCourt(op('cancel-call', 'dot.part', cancelId)),
     e => e.code === 'failed-precondition' && /Restaure primeiro/.test(e.message));
   assert.equal((await endOnCourt(op('restore', 'dot.part', '5f7e6d04-fbb9-4a54-8d93-a1fe4c19e01e'))).changed, true);
+  assert.equal(tournament.matches[0].courtClockBaseAt, new Date(Date.parse(originalClock) + 120000).toISOString(),
+    'dois minutos em placar pendente não entram no tempo de jogo ao restaurar');
+  nowIso = originalClock;
+  tournament.matches[0].courtClockBaseAt = originalClock;
   tournament.matches[0].startedAt = nowIso;
   tournament.matches.push({ ...game('outro-resultado', 'Quadra 5'), winner: 'p1', resultAt: nowIso });
   assert.equal((await endOnCourt(op('cancel-call', 'dot.part', cancelId))).changed, true);

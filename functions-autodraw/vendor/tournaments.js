@@ -5552,7 +5552,7 @@ function renderTournaments(container, tournamentId = null) {
           (Array.isArray(visible[0].groups) && visible[0].groups.length > 0)
         );
         const _myToggleHtml = window._bracketHeaderFilterButtons
-          ? window._bracketHeaderFilterButtons(isOrg, _hasDrawContent) : '';
+          ? window._bracketHeaderFilterButtons(isOrg, _hasDrawContent, visible[0]) : '';
 
         // Navegação de grupos é da FASE ATUAL. `format`/`currentStage` no topo
         // são ponte de documentos antigos; num torneio híbrido eles podem continuar

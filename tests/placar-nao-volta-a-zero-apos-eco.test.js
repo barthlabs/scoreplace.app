@@ -39,6 +39,7 @@ const window = {
   },
   _isRemoteFirestoreSnapshot: () => true,
   _collectAllMatches: t => t.matches,
+  _findTournamentById: id => store.tournaments.find(t => t.id === id),
   _softRefreshView: () => { refreshes++; },
   _error: () => { errors++; }
 };

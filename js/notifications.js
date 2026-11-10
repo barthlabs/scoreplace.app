@@ -348,6 +348,16 @@ function showNotification(title, message, type = 'info') {
     `;
     document.body.appendChild(container);
   }
+  // Na chave, a barra horizontal da faixa operacional pode ficar no meio da
+  // viewport. O aviso de placar termina acima dela enquanto estiver visível.
+  var operationsTrack = typeof document.querySelector === 'function'
+    ? document.querySelector('[data-bracket-operations-strip] .sp-operations-track') : null;
+  var trackRect = operationsTrack && operationsTrack.getBoundingClientRect();
+  if (container.style) {
+    container.style.bottom = trackRect && trackRect.bottom > 260 && trackRect.bottom < window.innerHeight
+      ? Math.max(20, window.innerHeight - trackRect.bottom + 24) + 'px'
+      : '20px';
+  }
 
   // Dedup: if an identical toast (same title+message+type) is already showing,
   // bump its counter and restart its auto-dismiss timer instead of stacking.

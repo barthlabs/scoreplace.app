@@ -2173,6 +2173,7 @@ function _finalizeRoundCardInPlace(t, m, tId, matchId) {
 window._refreshConfirmedMatchCard = function (t, tId, matchId) {
   var card = document.getElementById('card-' + matchId);
   if (!card || !t) return false;
+  var monarchGroupOnScreen = !!(card.closest && card.closest('[data-monarch-group="1"]'));
   var m = _findMatch(t, matchId);
   if (!m) return false;
   var sx = window.scrollX || 0, sy = window.scrollY || 0;
@@ -2215,6 +2216,14 @@ window._refreshConfirmedMatchCard = function (t, tId, matchId) {
   }
   try {
     changed = _finalizeRoundCardInPlace(t, m, tId, matchId);
+    if (changed && monarchGroupOnScreen) {
+      // A classificação é derivada dos três placares. Atualizar só o jogo e
+      // carimbar a assinatura como completa deixava a tabela antiga justamente
+      // no navegador que lançou o resultado, enquanto as outras telas viam o
+      // snapshot novo. Recalcule a tabela no lugar antes de suprimir o eco.
+      changed = !!(window._refreshMonarchStandingsInPlace &&
+        window._refreshMonarchStandingsInPlace(t, matchId));
+    }
     if (changed) {
       restorePosition();
       intentEvents.forEach(function (name) { window.addEventListener(name, onIntent, { passive: true }); });

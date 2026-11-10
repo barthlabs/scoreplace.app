@@ -147,13 +147,16 @@ window._resultEntryIncludes = function(t, role, match) {
 // "Só meus jogos" toggle — hides non-user match cards
 window._showOnlyMyMatches = false;
 window._showOnlyPendingMatches = false;
-window._bracketHeaderFilterButtons = function(isOrg, hasContent) {
+window._bracketHeaderFilterButtons = function(isOrg, hasContent, t) {
   if (!hasContent) return '';
   var mine = window.AppStore && window.AppStore.currentUser;
-  if (!isOrg && !mine) return '';
+  var hasMyGame = !!(mine && t && typeof window._userTeamInMatch === 'function' &&
+    (typeof window._collectAllMatches === 'function' ? window._collectAllMatches(t) : t.matches || [])
+      .some(function (m) { return m && !m.isBye && !m.isSitOut && window._userTeamInMatch(t, m, mine) > 0; }));
+  if (!isOrg && !hasMyGame) return '';
   return '<div class="sp-bracket-header-filters no-print">' +
     (isOrg ? '<button type="button" class="sp-bracket-header-filter" data-bracket-filter="pending" aria-pressed="' + (!!window._showOnlyPendingMatches) + '" onclick="window._togglePendingMatches(!window._showOnlyPendingMatches)">Jogos pendentes</button>' : '') +
-    (mine ? '<button type="button" class="sp-bracket-header-filter" data-bracket-filter="mine" aria-pressed="' + (!!window._showOnlyMyMatches) + '" onclick="window._toggleMyMatches(!window._showOnlyMyMatches)">Só meus jogos</button>' : '') +
+    (hasMyGame ? '<button type="button" class="sp-bracket-header-filter" data-bracket-filter="mine" aria-pressed="' + (!!window._showOnlyMyMatches) + '" onclick="window._toggleMyMatches(!window._showOnlyMyMatches)">Só meus jogos</button>' : '') +
     '</div>';
 };
 window._bracketSyncHeaderFilterButtons = function() {
@@ -1952,14 +1955,39 @@ window._bracketOperationsRefresh = function (t, root) {
     var cardHeights = Array.prototype.map.call(measuredCards, function (card) {
       return Math.ceil(card.getBoundingClientRect().height);
     });
-    var nextNav = root._bracketOperationsNav && root._bracketOperationsNav.next;
+    // A classificação do quarteto pode estar fora da tela do carrossel. Meça
+    // essa quarta tela com a mesma largura do card visível; uma altura fixa de
+    // 380px deixava uma faixa morta abaixo dos controles em todas as quadras.
+    if (state.next && root._bracketOperationsNav && root._bracketOperationsNav.next) {
+      var savedNextNav = root._bracketOperationsNav.next;
+      var probeGroup = _bracketOperationsGroup(t, state.next, state.matches);
+      if (probeGroup) {
+        root._bracketOperationsNav.next = { key: probeGroup.key, index: 3, baseId: String(state.next.id) };
+        var probeHtml = _bracketOperationsReplica(state.next, t, {
+          canCall: canCall, active: false, preferFirstFreeCourt: true,
+          preferredCourt: (root._bracketOperationsManualCourt || {})[String(state.next.id)] || ''
+        }, nextLabel, nextAvailability, root, state.matches, 'next');
+        root._bracketOperationsNav.next = savedNextNav;
+        var probe = document.createElement('div');
+        probe.className = 'sp-operations-next';
+        probe.style.cssText = 'position:absolute;left:-10000px;top:0;visibility:hidden;pointer-events:none;width:' +
+          Math.ceil(existing.querySelector('.sp-operations-next').getBoundingClientRect().width) + 'px;';
+        probe.innerHTML = probeHtml;
+        operationsTrack.appendChild(probe);
+        var probeCard = probe.querySelector('.sp-operations-standings-card');
+        if (probeCard) {
+          probeCard.style.height = 'max-content';
+          cardHeights.push(Math.ceil(probeCard.getBoundingClientRect().height));
+        }
+        probe.remove();
+      }
+    }
     Array.prototype.forEach.call(measuredCards, function (card) { card.style.removeProperty('height'); });
     operationsTrack.style.removeProperty('align-items');
-    // O quarteto alterna entre três partidas e uma classificação. Preserve
-    // uma régua mínima comum mesmo quando a tabela for mais alta que o card
-    // sintético de uma partida (ou vice-versa), sem encolher ao navegar.
+    // A régua usa o conteúdo real da tela mais alta; a classificação continua
+    // estável ao navegar, e as partidas não carregam altura vazia arbitrária.
     operationsTrack.style.setProperty('--sp-operations-card-height', Math.max.apply(null,
-      [nextNav ? 380 : 120].concat(cardHeights)) + 'px');
+      [120].concat(cardHeights)) + 'px');
     operationsTrack.scrollLeft = trackScroll;
     if (window.scrollY !== pageY || window.scrollX !== pageX) window.scrollTo(pageX, pageY);
   }
@@ -3026,6 +3054,9 @@ function _bracketTabsPlaceSearch(root, searchWrap, force) {
   // 2 abas primárias (264px), busca mínima (220px), margens/gaps e folga de
   // leitura. Abaixo disso, uma linha exclusiva é mais estável do que flex-wrap.
   var mode = _bracketTabsHostWidth(root) >= 760 ? 'inline' : 'stack';
+  // A faixa de categorias divide a linha com a busca somente quando o painel
+  // (não a viewport) comporta os dois blocos sem comprimir o campo de filtro.
+  root.setAttribute('data-bracket-toolbar-layout', _bracketTabsHostWidth(root) >= 1320 ? 'wide' : 'stack');
   var target = mode === 'inline' ? inlineSlot : stackSlot;
   var other = mode === 'inline' ? stackSlot : inlineSlot;
   inlineSlot.hidden = mode !== 'inline';
@@ -3184,7 +3215,7 @@ window._bracketCategoryTabsMount = function () {
     // Isso é pintura sobreposta de 2px — não cria margem nem desloca abas — e
     // impede cards da matriz de aparecerem nessas frestas em fullscreen.
     // [[regression_tabs_full_width_seams_are_opaque]]
-    root.style.cssText = 'display:block;box-sizing:border-box;width:100%;max-width:100%;min-width:0;margin:0;padding:4px 12px 6px;border:0;border-radius:0;background:#111114;overflow:visible;position:sticky;top:calc(var(--topbar-h,60px) + var(--hamburger-dd-h,0px) + var(--backheader-h,0px) + var(--stickybar-h,0px) - 1px);z-index:31;isolation:isolate;box-shadow:0 -2px 0 #111114,0 2px 0 #111114,0 8px 12px -12px rgba(0,0,0,.95);';
+    root.style.cssText = 'display:block;box-sizing:border-box;width:100%;max-width:100%;min-width:0;margin:0;padding:4px 12px 6px;border:0;border-radius:0;background:#111114;overflow:visible;position:sticky;top:calc(var(--topbar-h,60px) + var(--hamburger-dd-h,0px) + var(--backheader-h,0px) - 1px);z-index:31;isolation:isolate;box-shadow:0 -2px 0 #111114,0 2px 0 #111114,0 8px 12px -12px rgba(0,0,0,.95);';
     if (tabsHost) tabsHost.insertBefore(root, _bracketTabsHostReference(tabsHost, searchWrap));
     else {
       var anchor = _bracketTabsAnchor(first);
@@ -3333,7 +3364,7 @@ window._bracketCategoryTabsMount = function () {
   // overflow porque também hospeda a busca e suas sugestões.
   root.innerHTML = window._bracketPrimaryTabsHtml(genderHtml, presentationTabs)
     + '<div data-bracket-search-slot="stack" hidden style="width:100%;min-width:0;padding:8px 4px 0;box-sizing:border-box;"></div>'
-    + (isOnlyLines ? '' : '<div style="display:flex;align-items:flex-end;gap:5px;flex-wrap:wrap;width:100%;padding:9px 4px 0;border-bottom:1px solid rgba(129,140,248,.42);">' + categoryHtml + '</div>')
+    + (isOnlyLines ? '' : '<div data-bracket-category-tabs style="display:flex;align-items:flex-end;gap:5px;flex-wrap:wrap;width:100%;padding:9px 4px 0;border-bottom:1px solid rgba(129,140,248,.42);">' + categoryHtml + '</div>')
     + (roundHtml ? '<div style="display:flex;gap:7px;flex-wrap:wrap;width:100%;padding:8px 4px 0;border-top:1px solid rgba(255,255,255,.07);">' + roundHtml + '</div>' : '')
     + (isRoundBased ? '' : '<div data-bracket-round-rail aria-label="Rodadas da chave" hidden style="overflow-x:auto;overflow-y:hidden;max-width:100%;background:#111114;border-bottom:1px solid rgba(255,255,255,.08);scrollbar-width:thin;"></div>');
   document.querySelectorAll('[data-bracket-presentation-fallback]').forEach(function (fallback) {
@@ -4448,7 +4479,7 @@ function renderBracket(container, tournamentId, isInline) {
   // Filtros operacionais do cabeçalho — mesmos controles da visualização inline.
   window._showOnlyMyMatches = false;
   window._showOnlyPendingMatches = false;
-  const _myMatchesToggleHtml = window._bracketHeaderFilterButtons(isOrg, hasContent);
+  const _myMatchesToggleHtml = window._bracketHeaderFilterButtons(isOrg, hasContent, t);
 
   // Group nav buttons for Fase de Grupos (also shown inline)
   const _hasGroupStage = t.groups && t.groups.length > 0;
@@ -5146,7 +5177,7 @@ window._endMatchOnCourt = function (tId, matchId, button) {
 window._cancelCourtAction = function (tId, matchId, action, button) {
   if (action !== 'restore' && action !== 'cancel-call') return Promise.reject(new Error('Ação inválida.'));
   var message = action === 'restore'
-    ? 'Restaurar este jogo à quadra original? O relógio continuará contando desde a chamada inicial.'
+    ? 'Restaurar este jogo à quadra original? O relógio retomará do tempo em que foi pausado.'
     : 'Cancelar esta chamada e devolver o jogo à fila?';
   return _confirmCourtOperation(tId, matchId, action, 'Cancelar ação de quadra', message, function () {
   if (!window._callCF) return Promise.reject(new Error('Serviço indisponível.'));
@@ -5157,7 +5188,7 @@ window._cancelCourtAction = function (tId, matchId, action, button) {
   }, 'Entre na sua conta para cancelar esta ação.').then(function (res) {
     var data = (res && res.data) || {};
     if (!data.ok) throw new Error('Não foi possível cancelar a ação.');
-    if (typeof showNotification === 'function') showNotification('Ação cancelada', action === 'restore' ? 'Jogo restaurado à quadra; o relógio continua.' : 'Chamada desfeita.', 'success');
+    if (typeof showNotification === 'function') showNotification('Ação cancelada', action === 'restore' ? 'Jogo restaurado à quadra; o relógio foi retomado.' : 'Chamada desfeita.', 'success');
     return data;
   }).catch(function (error) {
     if (typeof showNotification === 'function') showNotification('Cancelamento recusado', error && error.message || 'Tente novamente.', 'error');
@@ -5363,13 +5394,17 @@ window._spFormatElapsed = function(start, now) {
 window._spCourtClockHtml = function(start, tournament, now, tId, matchId, controls) {
   var clock = window.ScoreplaceMatchTiming;
   var timing = clock.config(tournament);
+  var releasedAt = window._bracketCourtReleased && window._bracketCourtReleased(tId)[String(matchId)];
+  var frozenAt = Date.parse(String(releasedAt || ''));
+  if (Number.isFinite(frozenAt) && frozenAt >= start) now = Math.min(now, frozenAt);
+  else frozenAt = 0;
   var state = clock.phaseAt(start, timing, now);
   var rewindIcon = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="currentColor"><path d="M11 5 3 12l8 7V5Zm9 0-8 7 8 7V5Z"/></svg>';
   var forwardIcon = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="currentColor"><path d="m4 5 8 7-8 7V5Zm9 0 8 7-8 7V5Z"/></svg>';
   var restartBtn = controls ? '<button type="button" class="sp-match-clock-action" aria-label="Reiniciar etapa do relógio" title="REW · reiniciar tempo" onclick="event.stopPropagation();window._adjustMatchCourtClock(this,\'' + String(tId) + '\',\'' + String(matchId) + '\',\'restart\')">' + rewindIcon + '</button>' : '';
   var canAdvance = state.phase === 'call' || state.phase === 'warmup';
   var nextBtn = controls && canAdvance ? '<button type="button" class="sp-match-clock-action sp-match-clock-next" aria-label="Próxima etapa do relógio" title="FF · próxima etapa" onclick="event.stopPropagation();window._adjustMatchCourtClock(this,\'' + String(tId) + '\',\'' + String(matchId) + '\',\'next\')">' + forwardIcon + '</button>' : '';
-  var timerHtml = '<span class="sp-match-clock-label">' + clock.label(state.phase) + '</span><span class="sp-match-clock-next-slot">' + nextBtn + '</span><span class="sp-match-call-timer" data-start-ms="' + start + '" data-call-min="' + timing.call + '" data-warmup-min="' + timing.warmup + '" data-game-min="' + timing.game + '">' + clock.elapsed(state.phaseStart, now) + '</span>';
+  var timerHtml = '<span class="sp-match-clock-label">' + clock.label(state.phase) + '</span><span class="sp-match-clock-next-slot">' + nextBtn + '</span><span class="sp-match-call-timer" data-start-ms="' + start + '" data-tournament-id="' + window._safeHtml(String(tId)) + '" data-match-id="' + window._safeHtml(String(matchId)) + '" data-call-min="' + timing.call + '" data-warmup-min="' + timing.warmup + '" data-game-min="' + timing.game + '">' + clock.elapsed(state.phaseStart, now) + '</span>';
   return '<span class="sp-match-estimated-time sp-match-court-clock sp-match-phase-' + state.phase + '" title="' + clock.title(state.phase) + '" style="margin-left:auto;white-space:nowrap;text-align:right;font-size:.78rem;font-weight:800;">' +
     restartBtn + timerHtml + '</span>';
 };
@@ -5379,11 +5414,14 @@ window._spRefreshCourtClocks = function() {
   document.querySelectorAll('.sp-match-call-timer[data-start-ms]').forEach(function(el) {
     var start = Number(el.getAttribute('data-start-ms'));
     if (!Number.isFinite(start) || start <= 0) return;
+    var released = window._bracketCourtReleased && window._bracketCourtReleased(el.getAttribute('data-tournament-id'));
+    var frozenAt = Date.parse(String(released && released[el.getAttribute('data-match-id')] || ''));
+    var shownAt = Number.isFinite(frozenAt) && frozenAt >= start ? Math.min(now, frozenAt) : now;
     var timing = { call: Number(el.getAttribute('data-call-min')) || 0,
       warmup: Number(el.getAttribute('data-warmup-min')) || 0,
       game: Number(el.getAttribute('data-game-min')) || 0 };
-    var state = clock.phaseAt(start, timing, now);
-    el.textContent = clock.elapsed(state.phaseStart, now);
+    var state = clock.phaseAt(start, timing, shownAt);
+    el.textContent = clock.elapsed(state.phaseStart, shownAt);
     var parent = el.closest('.sp-match-estimated-time');
     if (parent) {
       parent.classList.remove('sp-match-phase-call', 'sp-match-phase-warmup', 'sp-match-phase-game', 'sp-match-phase-overdue');
@@ -8609,6 +8647,7 @@ if (!window._bracketPresenceClickInstalled && typeof document.addEventListener =
         !(window._isUserOrgOrCoHost && window._isUserOrgOrCoHost(t, window.AppStore && window.AppStore.currentUser))) return;
     var key = tId + ':' + (uid || name);
     if (window._bracketPresencePending[key]) return;
+    var nonPresenceBefore = window._tournamentDetailSig && window._tournamentDetailSig(t, true);
     window._bracketPresencePending[key] = true;
     button.disabled = true;
     Promise.resolve(window._applyCheckInToggle(tId, name, uid)).then(function (saved) {
@@ -8640,9 +8679,17 @@ if (!window._bracketPresenceClickInstalled && typeof document.addEventListener =
         return node.getAttribute('data-tournament-id') === tId;
       });
       if (root && window._bracketOperationsRefresh) window._bracketOperationsRefresh(fresh || t, root);
+      // A foto e a faixa já refletem o recibo: o eco do snapshot não precisa
+      // reconstruir a página. Se outro campo mudou junto, o refresh abaixo
+      // ainda o entregará pela assinatura completa.
+      if (window.location.hash === '#tournaments/' + tId && window._tournamentDetailSig &&
+          nonPresenceBefore === window._tournamentDetailSig(fresh || t, true)) {
+        window._tdetailSig = window._tournamentDetailSig(fresh || t);
+      }
     }).finally(function () {
       delete window._bracketPresencePending[key];
       if (button.isConnected) button.disabled = false;
+      if (window.location.hash === '#tournaments/' + tId && window._softRefreshView) window._softRefreshView();
     });
   }, true);
 }
@@ -9737,7 +9784,9 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       cardBorder = 'rgba(16,185,129,0.5)';
     } else if (matchPartial) {
       cardBorder = 'rgba(245,158,11,0.4)';
-      readyBadge = `<span style="font-size:0.6rem;font-weight:800;color:var(--sp-c-f59e0b,#f59e0b);background:rgba(245,158,11,0.12);padding:2px 6px;border-radius:4px;text-transform:uppercase;">${_t('bracket.partial')}</span>`;
+      // As bolinhas de cada atleta já mostram quem confirmou presença.
+      // Um segundo selo acima do jogo repete a informação e disputa espaço
+      // com os comandos operacionais, sobretudo na quadra.
     }
   }
 
@@ -9917,7 +9966,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     ? '<button type="button" data-cancel-court-action="' + _cancelCourtAction +
       '" onclick="event.stopPropagation();window._cancelCourtAction(\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\',\'' +
       _cancelCourtAction + '\',this)" aria-label="' + (_cancelCourtAction === 'restore' ? 'Restaurar à quadra original' : 'Cancelar chamada') +
-      '" title="' + (_cancelCourtAction === 'restore' ? 'Restaurar à quadra original; relógio contínuo' : 'Desfazer a chamada; o jogo volta à fila sem cronômetro') + '" class="cancel-x-btn">✕</button>' : '';
+      '" title="' + (_cancelCourtAction === 'restore' ? 'Restaurar à quadra original; retomar relógio pausado' : 'Desfazer a chamada; o jogo volta à fila sem cronômetro') + '" class="cancel-x-btn">✕</button>' : '';
   var _canEndCourt = !_readOnly && !_setsEdit && m.court && (m.courtCalledAt || m.startedAt) &&
     !_courtFinished && !_courtReleased[String(m.id)] && typeof window._isUserAuthority === 'function' &&
     window._isUserAuthority(t, window.AppStore && window.AppStore.currentUser);
@@ -10400,6 +10449,14 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
       (_compacta ? '' : '<th style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;" title="Aproveitamento">%</th>') +
       '</tr></thead><tbody>' + standingsRows + '</tbody></table>';
 
+    // Recibo de placar: refaz só a tabela derivada do grupo em um fragmento
+    // desconectado. O card lançado e a posição da chave permanecem montados.
+    if (opts && opts.standingsOnly) {
+      html += '<div data-monarch-group="1" data-group-label="' + window._safeHtml(window._grpKey(sg.name)) +
+        '"><div class="standings-scroll">' + standingsTable + '</div></div>';
+      return;
+    }
+
     // Match cards — 1 "Cheguei" por GRUPO (no header), não por jogo: a presença é do
     // jogador no LOCAL, não de cada partida. Suprime o botão por-jogo aqui.
     window._suppressMatchArrivedBtn = true;
@@ -10466,6 +10523,26 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
 
   return html;
 }
+window._refreshMonarchStandingsInPlace = function (t, matchId) {
+  var card = document.getElementById('card-' + String(matchId));
+  var group = card && card.closest('[data-monarch-group="1"]');
+  if (!group || !t) return false;
+  var label = group.getAttribute('data-group-label');
+  var oldTable = group.querySelector('.standings-scroll');
+  if (!oldTable) return false;
+  var html = _renderMonarchStage(t, false, false, { standingsOnly: true });
+  var detached = document.createElement('div');
+  detached.innerHTML = html;
+  var newer = Array.prototype.find.call(detached.querySelectorAll('[data-monarch-group="1"]'), function (node) {
+    return node.getAttribute('data-group-label') === label;
+  });
+  var newTable = newer && newer.querySelector('.standings-scroll');
+  if (!newTable) return false;
+  var horizontalScroll = oldTable.scrollLeft;
+  oldTable.replaceWith(newTable);
+  newTable.scrollLeft = horizontalScroll;
+  return true;
+};
 
 function renderGroupStage(t, isOrg, canEnterResult, opts) {
   var _t = window._t || function(k) { return k; };

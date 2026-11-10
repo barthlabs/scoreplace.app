@@ -83,6 +83,31 @@
       : (match[slot === 'p1' ? 'team1Uids' : 'team2Uids'] || match[slot + 'Uid']);
     return String(window._resolveSideLive(t, raw, uids) || raw);
   }
+  function monarchSeries(t, current, matches, occupancy, teams) {
+    if (!current || current.isMonarch !== true || current.monarchGroup == null || current.round == null || !current.category) return null;
+    var games = matches.filter(function (game) {
+      return game && game.isMonarch === true && !game.isTieBreak &&
+        String(game.category || '') === String(current.category) &&
+        Number(game.phaseIndex || 0) === Number(current.phaseIndex || 0) &&
+        String(game.round) === String(current.round) &&
+        String(game.monarchGroup) === String(current.monarchGroup);
+    });
+    if (games.length !== 3 || !games.some(function (game) { return String(game.id) === String(current.id); })) return null;
+    games.sort(function (a, b) {
+      return Number(a._gameNum || a.scheduledGameNumber || 0) - Number(b._gameNum || b.scheduledGameNumber || 0) ||
+        timestamp(a.scheduledAt) - timestamp(b.scheduledAt);
+    });
+    return games.map(function (game) {
+      var done = occupancy.isFinished(game);
+      var active = String(game.id) === String(current.id);
+      return { number: game._gameNum || game.scheduledGameNumber || game.matchNumber || '',
+        a: sideName(t, game, 'p1'), b: sideName(t, game, 'p2'),
+        ta: teamFor(game, 1, teams), tb: teamFor(game, 2, teams),
+        scoreA: done || active ? (game.wo ? 'W.O.' : gameScore(game, 1, done)) : '',
+        scoreB: done || active ? (game.wo ? 'W.O.' : gameScore(game, 2, done)) : '',
+        status: done ? 'done' : active ? 'active' : 'waiting' };
+    });
+  }
   function rankingSections(t, matches, teams) {
     var core = window.ScoreplaceTeamCompetition;
     var configured = core && typeof core.configurationForTournament === 'function'
@@ -160,6 +185,7 @@
       if (!m) return { name: name };
       return { name: name, number: m._gameNum || m.scheduledGameNumber || m.matchNumber || '', category: String(m.category || m.tierLabel || ''),
         latest: !!latestPhaseId && String(m.id || '') === latestPhaseId,
+        series: monarchSeries(t, m, matches, occupancy, teams),
         a: sideName(t, m, 'p1'), b: sideName(t, m, 'p2'), ta: teamFor(m, 1, teams), tb: teamFor(m, 2, teams),
         scoreA: gameScore(m, 1) === '–' ? '0' : gameScore(m, 1),
         scoreB: gameScore(m, 2) === '–' ? '0' : gameScore(m, 2),
@@ -256,6 +282,17 @@
   function cardHtml(card, options) {
     options = options || { court: true, number: true, category: true, teams: true, players: true, score: true, timer: true };
     if (!card.number && !card.a && !card.b) return '<article class="tv-court empty">' + (options.court ? '<h2>' + esc(card.name) + '</h2>' : '') + '<p>Aguardando chamada</p></article>';
+    if (card.series) return '<article class="tv-court tv-court-series' + (card.latest ? ' tv-court-latest' : '') + '"><div class="tv-court-top"><h2>' + (options.court ? esc(card.name) : '') + '</h2>' + (options.category ? '<span>' + esc(card.category) + '</span>' : '') + '</div><div class="tv-series-games">' +
+      card.series.map(function (game) {
+        function side(label, score, direction) {
+          var players = String(label || '').split(' / ').map(function (name) { return name.trim(); }).filter(Boolean);
+          return '<div class="tv-series-side tv-series-' + direction + '"><div class="tv-series-players">' + players.map(function (name) { return '<span>' + esc(name) + '</span>'; }).join('') + '</div>' +
+            (options.score && score !== '' ? '<strong>' + esc(score) + '</strong>' : '') + '</div>';
+        }
+        return '<div class="tv-series-game tv-series-' + game.status + '"><b>JOGO ' + esc(game.number) + '</b>' +
+          side(game.a, game.scoreA, 'left') + '<span class="tv-series-versus">×</span>' + side(game.b, game.scoreB, 'right') + '</div>';
+      }).join('') + '</div>' +
+      (options.timer ? '<div class="tv-court-footer"><strong data-tv-start="' + card.timerStart + '">00:00:00</strong></div>' : '') + '</article>';
     return '<article class="tv-court tv-court-active' + (card.latest ? ' tv-court-latest' : '') + '"><div class="tv-court-top"><h2>' + (options.court ? esc(card.name) : '') + (options.number ? ' · JOGO ' + esc(card.number) : '') + '</h2>' + (options.category ? '<span>' + esc(card.category) + '</span>' : '') + '</div>' +
       sideHtml(card.a, card.ta, card.scoreA, options) + '<div class="tv-versus">VS</div>' + sideHtml(card.b, card.tb, card.scoreB, options) +
       (options.timer ? '<div class="tv-court-footer"><strong data-tv-start="' + card.timerStart + '">00:00:00</strong></div>' : '') + '</article>';
@@ -296,7 +333,7 @@
       ';--tv-title:' + esc(theme.title) + ';background:' + esc(theme.background) + '">';
     if (snapshot.tvLayout) return frame + customBodyHtml(snapshot) + '</div>';
     return frame + '<header class="tv-header">' + (snapshot.logo ? '<img src="' + esc(snapshot.logo) + '" alt="">' : '') + '<h1>' + esc(snapshot.name) + '</h1><time id="tv-now"></time></header>' +
-      '<main class="tv-board"><div class="tv-left"><section class="tv-courts">' + snapshot.courts.map(cardHtml).join('') + '</section>' + nextGameHtml(snapshot.nextGame) + '</div>' +
+      '<main class="tv-board"><div class="tv-left"><section class="tv-courts" style="--tv-court-rows:' + Math.ceil(snapshot.courts.length / 2) + '">' + snapshot.courts.map(cardHtml).join('') + '</section>' + nextGameHtml(snapshot.nextGame) + '</div>' +
       '<aside class="tv-sidebar"><section class="tv-rankings"><h2>CLASSIFICAÇÃO</h2>' +
       (snapshot.rankings.length ? snapshot.rankings.map(function (section) { return rankingHtml(section, snapshot.rankings.length > 1); }).join('') : '<p>Classificação ainda não configurada</p>') +
       '</section><section class="tv-results"><div class="tv-results-main"><h2>ÚLTIMOS RESULTADOS</h2><div class="tv-results-list" data-result-day="' + esc(snapshot.resultDay) + '">' +
@@ -316,7 +353,7 @@
     var background = layout.backgroundMode === 'custom' ? layout.background : (snapshot.theme && snapshot.theme.background || '#060d1a');
     return '<main class="tv-custom-board" style="background:' + esc(background) + '">' +
       box('header', '<header class="tv-header">' + (snapshot.logo && !layout.sections.logo.visible ? '<img src="' + esc(snapshot.logo) + '" alt="">' : '') + '<h1>' + esc(snapshot.name) + '</h1><time id="tv-now"></time></header>') +
-      box('courts', '<section class="tv-courts">' + snapshot.courts.map(function (card) { return cardHtml(card, layout.card); }).join('') + '</section>') +
+      box('courts', '<section class="tv-courts" style="--tv-court-rows:' + Math.ceil(snapshot.courts.length / 2) + '">' + snapshot.courts.map(function (card) { return cardHtml(card, layout.card); }).join('') + '</section>') +
       box('upcoming', nextGameHtml(snapshot.nextGame)) + box('rankings', ranking) + box('results', results) + box('qr', qr) +
       box('logo', snapshot.logo ? '<img class="tv-placed-logo" src="' + esc(snapshot.logo) + '" alt="Logo do torneio">' : '') + '</main>';
   }
@@ -435,6 +472,8 @@
     '@media(orientation:portrait){.tv-header time{font-size:clamp(1.2rem,2.8vw,2.4rem)}.tv-sidebar{grid-template-rows:70% 30%}.tv-ranking-head,.tv-ranking-row{grid-template-columns:3vw minmax(0,1fr) 7vw 10vw repeat(3,4vw);gap:.5vw;font-size:clamp(.75rem,1.4vw,1.2rem)}.tv-ranking-row{min-height:2.9vh}.tv-ranking-team{font-size:clamp(.8rem,1.6vw,1.25rem)}.tv-ranking-row b{font-size:clamp(.8rem,1.6vw,1.25rem)}.tv-qr{width:clamp(90px,17vw,180px)}.tv-qr-brand img{width:3vw}}' +
     '#tv-root,.tv-theme{width:100%;height:100%}.tv-theme .tv-header{background:color-mix(in srgb,var(--tv-primary) 24%,#07111f)}.tv-theme .tv-header h1{color:var(--tv-title)}.tv-theme .tv-court,.tv-theme .tv-rankings,.tv-theme .tv-results,.tv-theme .tv-upcoming{background:color-mix(in srgb,var(--tv-primary) 18%,#0d1b2e);border-color:color-mix(in srgb,var(--tv-secondary) 30%,#1b3f61)}.tv-theme .tv-side,.tv-theme .tv-result-side{background:color-mix(in srgb,var(--tv-secondary) 12%,#222)}' +
     '.tv-custom-board{position:relative;width:100%;height:100%;overflow:hidden}.tv-custom-box{position:absolute;min-width:0;min-height:0;overflow:hidden}.tv-custom-box>.tv-header,.tv-custom-box>.tv-courts,.tv-custom-box>.tv-upcoming,.tv-custom-box>.tv-rankings,.tv-custom-box>.tv-results,.tv-custom-box>.tv-qr{width:100%;height:100%;min-height:0;overflow:hidden}.tv-custom-box>.tv-header{padding:.35vw .8vw}.tv-custom-box>.tv-courts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(3,minmax(0,1fr))}.tv-custom-results .tv-results{display:flex}.tv-custom-results .tv-results-main{width:100%}.tv-custom-qr .tv-qr{justify-content:center}.tv-custom-qr .tv-qr-code{max-height:75%;width:auto;max-width:95%}.tv-custom-logo{display:flex;align-items:center;justify-content:center}.tv-placed-logo{display:block;width:100%;height:100%;object-fit:contain}' +
+    '.tv-courts,.tv-custom-box>.tv-courts{grid-template-rows:repeat(var(--tv-court-rows,3),minmax(0,1fr))}' +
+    '.tv-court-series{padding:.35vw .55vw}.tv-court-series .tv-court-top{flex:none;min-height:0;padding-bottom:.12vw}.tv-court-series .tv-court-top h2{font-size:clamp(.9rem,1vw,1.35rem)}.tv-series-games{display:grid;grid-template-rows:repeat(3,minmax(0,1fr));flex:1;min-height:0;gap:.15vw}.tv-series-game{display:grid;grid-template-columns:4.2vw minmax(0,1fr) 1.2vw minmax(0,1fr);align-items:center;gap:.25vw;min-width:0;min-height:0;border-radius:.25vw;background:color-mix(in srgb,var(--tv-secondary) 15%,#16253a);padding:.1vw .3vw}.tv-series-game.tv-series-active{outline:1px solid #38bdf8;background:color-mix(in srgb,var(--tv-primary) 22%,#26394d)}.tv-series-game.tv-series-done{opacity:.88}.tv-series-game>b{color:#7dd3fc;font-size:clamp(.7rem,.75vw,1rem);white-space:nowrap}.tv-series-side{display:flex;align-items:center;justify-content:space-between;gap:.2vw;min-width:0;min-height:0}.tv-series-right{flex-direction:row-reverse}.tv-series-players{display:flex;flex-direction:column;justify-content:center;min-width:0;min-height:0;line-height:1.05}.tv-series-players span{display:block;white-space:normal;overflow-wrap:anywhere;font-size:clamp(.68rem,.78vw,1.04rem);font-weight:750}.tv-series-right .tv-series-players{text-align:right}.tv-series-side strong{flex:none;color:#fff;font-size:clamp(.85rem,1vw,1.4rem);font-variant-numeric:tabular-nums}.tv-series-versus{text-align:center;color:#94a3b8;font-weight:900}.tv-court-series .tv-court-footer{flex:none;margin-top:.1vw}.tv-court-series .tv-court-footer strong{font-size:clamp(.8rem,.95vw,1.25rem)}' +
     '</style>');
   // O editor usa exatamente o HTML e o CSS da janela No ar. O iframe não
   // executa childScript: relógios e hora recebem o valor deste instante.

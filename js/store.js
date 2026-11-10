@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.6.30';
+window.SCOREPLACE_VERSION = '2.6.31';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -4508,7 +4508,7 @@ window._participantsViewSig = function (t) {
 // CONTEÚDO dos jogos (vencedor/placar/adversário — pra resultado lançado / "a definir" preenchido
 // AINDA re-renderizar). Determinística → o pós-toggle in-place adianta window._tdetailSig e o eco vê
 // "igual". Fonte única (gate + pós-toggle). Espelha _participantsViewSig.
-window._tournamentDetailSig = function (t) {
+window._tournamentDetailSig = function (t, withoutPresence) {
   if (!t) return '';
   var _k = function (m) { return m ? Object.keys(m).sort().join(',') : ''; };
   var _all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t)
@@ -4539,9 +4539,14 @@ window._tournamentDetailSig = function (t) {
          (_pr.scoreP1 != null ? _pr.scoreP1 : '') + '-' + (_pr.scoreP2 != null ? _pr.scoreP2 : '') +
          (_pr.isCounterProposal ? ':C' : '') + (_pr.disputed ? ':D' : ''))
       : '';
+    // Quadra e relógio são estado compartilhado do jogo. Sem estes campos,
+    // o snapshot chegava à TV, mas o gate de repaint considerava o torneio
+    // idêntico: FF/REW ficavam visíveis só no computador que clicou.
+    var _court = [m.court || '', m.courtCalledAt || '', m.courtClockBaseAt || '',
+      m.startedAt || '', m.resultAt || ''].join('/');
     return (m.id || '') + ':' + (m.winner || '') + ':' +
       _s1 + '-' + _s2 + ':' +
-      (m.p1 || '') + '/' + (m.p2 || '') + ':' + _prc;
+      (m.p1 || '') + '/' + (m.p2 || '') + ':' + _prc + ':' + _court;
   }).join(',');
   // v1.3.97: inclui o lateEnrollment EFETIVO (fase corrente sobrepõe top-level) — o toggle de
   // "aceitar entradas tardias" muda o painel (lista ↔ pareamento) e o próprio estado do toggle, então
@@ -4554,7 +4559,9 @@ window._tournamentDetailSig = function (t) {
     (Array.isArray(t.waitlist) ? t.waitlist.length : 0) + '|' +
     (t.currentStage || '') + '|' + (t.currentPhaseIndex || 0) + '|' + (t.tournamentStarted ? 1 : 0) + '|' +
     _le + '|' +
-    _k(t.checkedIn) + '|' + _k(t.absent) + '|' + _k(t.checkedInConfirmed) + '|' +
+    (withoutPresence ? '' : _k(t.checkedIn)) + '|' +
+    (withoutPresence ? '' : _k(t.absent)) + '|' +
+    (withoutPresence ? '' : _k(t.checkedInConfirmed)) + '|' +
     _all.length + '|' + _mc;
 };
 // v1.3.93 (dono, "continua sorteando entre todos — sem gambiarra"): as DECISÕES do pré-sorteio
@@ -4678,6 +4685,12 @@ window._softRefreshView = function() {
     try {
       var _tid = (window.location.hash || '').split('/')[1];
       if (_tid) {
+        // O recibo da presença atualiza a foto no próprio card. Seu snapshot
+        // pode chegar antes da resposta da Function; redesenhar a chave aqui
+        // desmontaria a página e provocaria o salto visível no clique.
+        if (window._bracketPresencePending && Object.keys(window._bracketPresencePending).some(function (key) {
+          return key.indexOf(_tid + ':') === 0;
+        })) return;
         var _pool = ((window.AppStore && window.AppStore.tournaments) || []).concat((window.AppStore && window.AppStore.publicDiscovery) || []);
         var _tdetail = _pool.find(function(x){ return x && String(x.id) === String(_tid); });
         if (_tdetail) {
@@ -12301,6 +12314,7 @@ window.AppStore = {
                   : (_lt.matches || []).find(function (m) { return String(m.id) === _midConfirmado; });
                 if (_jogoDaResposta && typeof this._applyPhysicalResultOnMatch === 'function') {
                   this._applyPhysicalResultOnMatch(_jogoDaResposta, _respostaDoJogo);
+                  if (typeof window._propagateMatchUpdate === 'function') window._propagateMatchUpdate(_lt, _jogoDaResposta);
                   _visualConfirmado = true;
                 }
               }
@@ -12347,6 +12361,7 @@ window.AppStore = {
                       : (_lt.matches || []).find(function (m) { return String(m.id) === _midConfirmado; });
                     if (_jogoConfirmado && typeof this._applyPhysicalResultOnMatch === 'function') {
                       this._applyPhysicalResultOnMatch(_jogoConfirmado, _resultadoConfirmado);
+                      if (typeof window._propagateMatchUpdate === 'function') window._propagateMatchUpdate(_lt, _jogoConfirmado);
                       _visualConfirmado = true;
                     }
                   }
@@ -13128,6 +13143,11 @@ window.AppStore = {
          * fala sobre eles — nem pra remover, nem pra esvaziar. Id, partes montadas,
          * inscritos, jogos, congeladas e rota aberta seguem exatamente como estavam. */
         store.tournaments = window._preservaSandboxes(tournaments, _sbGuardados);
+        // A consulta por memberUids já é a fonte do torneio para um membro.
+        // Solte a escuta direta usada por quem abriu o link sem ser membro.
+        if (store._tournamentOpenSub && tournaments.some(function (t) {
+          return t && String(t.id) === store._tournamentOpenSub.id;
+        })) store.pararDeOuvirTorneioAberto();
         /* ⛔ A migração pode chegar DURANTE uma tela aberta. Nesse caso o
          * listener legado de `inscritos` já está ativo; cancelá-lo no mesmo eco
          * que trouxe o fingerprint evita que reponha Jogador NN sobre o cânone. */
@@ -13300,6 +13320,55 @@ window.AppStore = {
     this.startDiscoveryFeedListener();
   },
 
+  // Quem abre um torneio público sem participar dele não entra na consulta
+  // memberUids. A leitura inicial da rota não basta para acompanhar a quadra:
+  // ouça somente o documento da página aberta e deixe as partidas divididas
+  // com ouvirPartesDoTorneio. O ouvinte por membro continua sendo o caminho
+  // normal e evita baixar o mesmo documento duas vezes.
+  ouvirTorneioAberto(tournamentId) {
+    var id = String(tournamentId || '');
+    if (!id || !window.FirestoreDB || !window.FirestoreDB.db) return;
+    if (this._tournamentOpenSub && this._tournamentOpenSub.id === id) return;
+    this.pararDeOuvirTorneioAberto();
+    if ((this.tournaments || []).some(function (t) { return t && String(t.id) === id; })) return;
+    var self = this;
+    var sub = { id: id, un: null };
+    this._tournamentOpenSub = sub;
+    try {
+      sub.un = window.FirestoreDB._tRef(id).onSnapshot({ includeMetadataChanges: true }, function (snap) {
+        if (self._tournamentOpenSub !== sub || !window._isRemoteFirestoreSnapshot(snap)) return;
+        if (!snap.exists) return;
+        if ((self.tournaments || []).some(function (t) { return t && String(t.id) === id; })) {
+          self.pararDeOuvirTorneioAberto();
+          return;
+        }
+        var data = snap.data();
+        if (!data) return;
+        if (!data.id) data.id = id;
+        var list = self.publicDiscovery || (self.publicDiscovery = []);
+        var index = list.findIndex(function (t) { return t && String(t.id) === id; });
+        var old = index >= 0 ? list[index] : null;
+        data = window._preservaPartesMontadas(data, old, true);
+        if (typeof window._projectTournamentPhasesForRead === 'function') data = window._projectTournamentPhasesForRead(data);
+        if (index >= 0) list[index] = data;
+        else list.push(data);
+        if (old && old._resumo !== true && data._faltamPesados !== true) self.ouvirPartesDoTorneio(id);
+        if (typeof window._softRefreshView === 'function') window._softRefreshView();
+      }, function (err) {
+        if (window._warn) window._warn('[torneio] ouvinte do detalhe falhou em ' + id, err);
+      });
+    } catch (e) {
+      this.pararDeOuvirTorneioAberto();
+      if (window._warn) window._warn('[torneio] não consegui ouvir o detalhe de ' + id, e);
+    }
+  },
+
+  pararDeOuvirTorneioAberto() {
+    var sub = this._tournamentOpenSub;
+    this._tournamentOpenSub = null;
+    if (sub && typeof sub.un === 'function') { try { sub.un(); } catch (e) {} }
+  },
+
   // v1.9.92: listener leve em `discoveryFeed`. NÃO é a fonte de dados — quando
   // dispara (alguém criou/alterou/removeu um torneio público), apenas re-busca
   // o feed real via loadPublicDiscovery() (que lê `tournaments`, caminho já
@@ -13346,6 +13415,7 @@ window.AppStore = {
   },
 
   stopRealtimeListener() {
+    this.pararDeOuvirTorneioAberto();
     if (this._realtimeUnsubscribe) {
       this._realtimeUnsubscribe();
       this._realtimeUnsubscribe = null;
@@ -13640,6 +13710,17 @@ window.AppStore = {
         if (!Array.isArray(t.memberUids)) return true;
         return t.memberUids.indexOf(_myUid) === -1;
       });
+      // A vitrine entrega resumos. Não substitua por um resumo o documento
+      // completo que a página aberta está recebendo ao vivo por onSnapshot.
+      var openId = this._tournamentOpenSub && this._tournamentOpenSub.id;
+      var openFull = openId && (this.publicDiscovery || []).find(function (t) {
+        return t && String(t.id) === openId && t._resumo !== true && t._faltamPesados !== true;
+      });
+      if (openFull) {
+        var openIndex = filtered.findIndex(function (t) { return t && String(t.id) === openId; });
+        if (openIndex >= 0) filtered[openIndex] = openFull;
+        else filtered.push(openFull);
+      }
       this.publicDiscovery = opts.append
         ? this.publicDiscovery.concat(filtered)
         : filtered;
@@ -14200,7 +14281,7 @@ window.AppStore = {
   ouvirPartesDoTorneio(tournamentId) {
     var id = String(tournamentId || '');
     if (!id || !window.FirestoreDB || !window.FirestoreDB.db) return;
-    var t = (this.tournaments || []).find(function (x) { return x && String(x.id) === id; });
+    var t = window._findTournamentById(id);
     var _rosterFingerprint = String(t && t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint || '');
     if (this._jogosSub && this._jogosSub.id === id && this._jogosSub.rosterFingerprint === _rosterFingerprint) return;
     // Ao ganhar um fingerprint, o listener antigo de `inscritos` TEM que ser
@@ -14275,7 +14356,7 @@ window.AppStore = {
           .onSnapshot({ includeMetadataChanges: true }, function (snap) {
             try {
               if (!window._isRemoteFirestoreSnapshot(snap)) return;
-              var vivo = (self.tournaments || []).find(function (x) { return x && String(x.id) === id; });
+              var vivo = window._findTournamentById(id);
               if (!vivo) return;
               /* ⚠️ `docChanges` e não o snapshot inteiro: é o delta que faz isto valer a
                * pena. Na PRIMEIRA entrega o Firestore manda tudo como 'added' — e tudo bem,

@@ -45,6 +45,9 @@ const s0 = sig(t);
 t.checkedIn['uidA'] = 1;                 // marca presença (in-place)
 const sAfterToggle = sig(t);            // advanced _tdetailSig
 ok('presença MUDA a sig (eco de outro device re-renderiza)', sAfterToggle !== s0, 'mudou');
+ok('assinatura sem presença distingue o eco isolado do clique', sig(t, true) === sig(mk(), true), 'igual');
+const otherDuringPresence = mk(); otherDuringPresence.matches[0].scoreP1 = 3;
+ok('assinatura sem presença ainda detecta placar simultâneo', sig(otherDuringPresence, true) !== sig(t, true), 'mudou');
 ok('recomputar após o toggle dá IGUAL (eco do próprio write = no-op)', sig(t) === sAfterToggle, 'igual');
 
 // 3. Resultado lançado MUDA a sig (detalhe TEM que re-renderizar)
@@ -78,6 +81,19 @@ const t5 = mk();
 const u0 = sig(t5);
 t5.updatedAt = '2099-01-01T00:00:00.000Z';
 ok('updatedAt NÃO entra na sig (eco não re-renderiza por timestamp)', sig(t5) === u0, 'igual');
+
+// 7. Operação de quadra em outro aparelho muda o detalhe mesmo sem placar.
+const t6 = mk();
+const c0 = sig(t6);
+t6.matches[0].court = 'Quadra 1';
+ok('atribuição remota de quadra muda a sig', sig(t6) !== c0, 'mudou');
+const c1 = sig(t6);
+t6.matches[0].courtCalledAt = '2026-11-10T15:00:00.000Z';
+ok('chamada remota muda a sig', sig(t6) !== c1, 'mudou');
+const c2 = sig(t6);
+t6.matches[0].courtClockBaseAt = '2026-11-10T14:55:00.000Z';
+ok('FF/REW remoto muda a sig e atualiza a TV', sig(t6) !== c2, 'mudou');
+ok('eco idêntico do servidor não repinta novamente', sig(t6) === sig({ ...t6, matches: [{ ...t6.matches[0] }] }), 'igual');
 
 console.log('\n' + '═'.repeat(40));
 console.log((fail === 0 ? '✅' : '❌') + ' tournament-detail-sig: ' + pass + ' ok, ' + fail + ' falharam');

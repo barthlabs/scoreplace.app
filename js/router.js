@@ -467,6 +467,10 @@ function initRouter() {
     var _telaDeTorneio = (view === 'tournaments' || view === 'bracket');
     if (window.AppStore && typeof window.AppStore.pararDeOuvirJogos === 'function'
         && !_telaDeTorneio) window.AppStore.pararDeOuvirJogos();
+    if (window.AppStore && typeof window.AppStore.ouvirTorneioAberto === 'function') {
+      if (_telaDeTorneio && cleanParam) window.AppStore.ouvirTorneioAberto(String(cleanParam));
+      else if (typeof window.AppStore.pararDeOuvirTorneioAberto === 'function') window.AppStore.pararDeOuvirTorneioAberto();
+    }
     if (window.AppStore && typeof window.AppStore.pararDeOuvirResultadosDaDashboard === 'function'
         && view !== '' && view !== 'dashboard') window.AppStore.pararDeOuvirResultadosDaDashboard();
   } catch (_eSolta) {}
@@ -662,7 +666,11 @@ function initRouter() {
                 // a fotografia anterior à atribuição de categorias (96/48 no Neon).
                 window._ensureTournamentLoaded(cleanParam, function (loaded) {
                   if (!_routeIsCurrent()) return;
-                  if (loaded) { _pintaTorneio(); return; }
+                  if (loaded) {
+                    if (window.AppStore && typeof window.AppStore.ouvirPartesDoTorneio === 'function')
+                      window.AppStore.ouvirPartesDoTorneio(String(cleanParam));
+                    _pintaTorneio(); return;
+                  }
                   viewContainer.innerHTML = '<div style="padding:2rem;color:var(--sp-c-f87171,#f87171);">Não foi possível carregar o torneio atualizado do servidor. Tente abrir novamente.</div>';
                   _fecharTour();
                 }, true);

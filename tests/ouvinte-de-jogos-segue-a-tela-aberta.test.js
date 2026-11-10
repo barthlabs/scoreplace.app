@@ -44,6 +44,7 @@ const ctx = {
       partesDe: (t) => (Array.isArray(t && t._semPesados) && t._semPesados.length
         ? t._semPesados : ['matches']) },
     _softRefreshView: () => {}, _error: () => {}, _warn: () => {}, _noteFsReads: () => {},
+    _findTournamentById: id => API.tournaments.find(t => t.id === id),
     _isRemoteFirestoreSnapshot: (snap) => !(snap && snap.metadata && snap.metadata.fromCache === true) },
   JSON: JSON
 };

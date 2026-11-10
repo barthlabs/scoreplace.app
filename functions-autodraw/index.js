@@ -4931,6 +4931,15 @@ exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
       if (_courtOccupancy.occupant(candidates, m.court, matchId)) {
         throw new HttpsError('failed-precondition', 'A quadra original está ocupada; libere-a antes de restaurar o jogo.');
       }
+      // O intervalo em Placares pendentes não pertence ao tempo de jogo.
+      // Deslocar a âncora mantém o tempo transcorrido exato quando a chamada volta.
+      const pausedAt = Date.parse(String(released[matchId] || ''));
+      const clockBase = Date.parse(String(m.courtClockBaseAt || m.courtCalledAt || m.startedAt || ''));
+      if (Number.isFinite(pausedAt) && Number.isFinite(clockBase) && pausedAt >= clockBase) {
+        const before = _antesDoMotor(t);
+        m.courtClockBaseAt = new Date(clockBase + Math.max(0, Date.parse(agoraIso) - pausedAt)).toISOString();
+        _gravaTorneio(tx, ref, t, before, { agoraIso });
+      }
       const auditRef = ref.collection('courtReleases').doc();
       tx.update(stateRef, new FieldPath('released', matchId), FieldValue.delete(), 'revision', FieldValue.increment(1));
       tx.create(auditRef, { kind: 'restore', matchId, court: String(m.court), originalReleasedAt: released[matchId], restoredAt: agoraIso, restoredBy: uid });

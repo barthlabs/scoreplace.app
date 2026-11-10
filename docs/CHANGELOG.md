@@ -1,3 +1,11 @@
+## 2.6.31 — 10/nov/2026 (quadras em tempo real e faixa compacta)
+
+- A faixa operacional remove o selo amarelo de presença parcial; os indicadores junto aos atletas mostram quem chegou. Quadra, OK, Cancelar e Encerrado cabem na mesma linha, com espaço antes do rodapé e altura comum medida pelo conteúdo das partidas e da classificação. A barra horizontal ficou mais larga e visível, e os avisos de resultado surgem acima dela.
+- O filtro “Só meus jogos” só aparece quando a conta tem uma partida no torneio; a organização sem jogo mantém “Jogos pendentes”.
+- O leitor do torneio aberto recebe alterações do servidor sem recarregar. Após lançar resultado, a classificação do grupo é atualizada no mesmo navegador sem refazer a chave; a presença marcada no avatar preserva a posição.
+- A TV mostra os três jogos da série Rei/Rainha por quadra, com as duplas e os placares dos jogos concluídos. Ao liberar a quadra antes do placar, o relógio congela; ao restaurar, continua sem incluir o intervalo pausado.
+- Correção web e da porta `endMatchOnCourt`. Nenhum resultado, inscrição, torneio ou versão nativa foi alterado por este corte.
+
 ## 2.6.30 — 10/nov/2026 (grupos e espaço de escrita na súmula)
 
 - A chave impressa normaliza designações legadas como `R1 Grupo A` para `A1`, `B1` etc. na categoria Diamante, `A2`, `B2` etc. na Ouro e `A3`, `B3` etc. na Prata. Os lados de cada confronto seguem o pareamento gerado pelo motor do torneio.

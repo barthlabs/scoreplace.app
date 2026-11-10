@@ -50,16 +50,19 @@ async function measure(page) {
     const inline = root && root.querySelector('[data-bracket-search-slot="inline"]');
     const stack = root && root.querySelector('[data-bracket-search-slot="stack"]');
     const primary = root && root.querySelector('[data-bracket-tabs-primary]');
+    const categories = root && root.querySelector('[data-bracket-category-tabs]');
     const card = document.querySelector('.fixture-card');
     const rr = root && root.getBoundingClientRect();
     const sr = stack && stack.getBoundingClientRect();
     const pr = primary && primary.getBoundingClientRect();
+    const tr = categories && categories.getBoundingClientRect();
     const cr = card && card.getBoundingClientRect();
     const x = rr ? Math.round(rr.left + Math.min(12, Math.max(1, rr.width - 2))) : 0;
     const y = rr ? Math.round(rr.bottom - 2) : 0;
     const topNode = rr ? document.elementFromPoint(x, y) : null;
     return {
       layout: root && root.getAttribute('data-bracket-search-layout'),
+      toolbarLayout: root && root.getAttribute('data-bracket-toolbar-layout'),
       rootWidth: rr && Math.round(rr.width),
       oneInput: document.querySelectorAll('#bracket-search').length,
       tabRoots: document.querySelectorAll('[data-bracket-tabs-root]').length,
@@ -69,6 +72,8 @@ async function measure(page) {
       inlineHidden: inline && inline.hidden,
       stackHidden: stack && stack.hidden,
       primaryBottom: pr && Math.round(pr.bottom),
+      categoryTop: tr && Math.round(tr.top),
+      sameToolbarRow: !!(pr && tr && Math.abs(pr.bottom - tr.bottom) <= 2),
       stackTop: sr && Math.round(sr.top),
       cardTop: cr && Math.round(cr.top),
       surfaceOnTop: !!(topNode && topNode.closest && topNode.closest('[data-bracket-tabs-root]')),
@@ -86,7 +91,7 @@ async function measure(page) {
     await page.goto('http://sp-layout.test/tournament');
     await page.addScriptTag({ content: bracket });
 
-    for (const width of [320, 390, 559, 664, 768, 1024]) {
+    for (const width of [320, 390, 559, 664, 768, 1024, 1440]) {
       await mount(page, width);
       const state = await measure(page);
       const expected = width >= 760 ? 'inline' : 'stack';
@@ -97,6 +102,9 @@ async function measure(page) {
         : state.inputParent === 'stack' && state.inlineHidden && !state.stackHidden, JSON.stringify(state));
       ok(width + 'px: busca e abas não se sobrepõem', expected === 'inline' || state.stackTop >= state.primaryBottom, JSON.stringify(state));
       ok(width + 'px: camada fixa vence o card que tenta invadir', state.surfaceOnTop, JSON.stringify(state));
+      ok(width + 'px: categorias usam a mesma linha só quando cabem',
+        width >= 1320 ? state.toolbarLayout === 'wide' && state.sameToolbarRow
+          : state.toolbarLayout === 'stack' && !state.sameToolbarRow, JSON.stringify(state));
     }
 
     // A reprodução exata do defeito: viewport desktop, mas painel estreito.

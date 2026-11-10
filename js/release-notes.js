@@ -1,3 +1,12 @@
+// 2.6.31 — A faixa de quadras mantém os comandos na mesma linha, aproxima
+// o rodapé do último dado útil, amplia a barra horizontal e deixa os avisos
+// de resultado acima dela. As bolinhas indicam a presença parcial. O filtro
+// “Só meus jogos” aparece apenas para quem disputa partidas no torneio.
+// A TV acompanha os três jogos da série Rei/Rainha e mostra os placares já
+// encerrados. Classificação, chamada e relógio acompanham a gravação em
+// tempo real nos navegadores abertos; lançar presença ou resultado preserva
+// a posição da chave. Ao liberar um jogo para lançar placar depois, o relógio
+// fica pausado e retoma sem somar esse intervalo quando o jogo é restaurado.
 // 2.6.30 — A súmula das eliminatórias mostra A1, B1, C1 etc. nas vagas
 // da respectiva categoria, seguindo os confrontos da chave do torneio.
 // As linhas para escrever os dois nomes de cada dupla ficaram mais espaçadas.

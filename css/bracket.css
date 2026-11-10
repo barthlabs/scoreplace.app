@@ -12,10 +12,16 @@
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-gutter: stable;
+  scrollbar-width: auto;
+  scrollbar-color: var(--text-muted) var(--bg-dark);
   overflow-anchor: none;
   --sp-operations-line-height: 18px;
   --sp-operations-card-height: 120px;
 }
+.sp-operations-track::-webkit-scrollbar { height: 14px; }
+.sp-operations-track::-webkit-scrollbar-track { background: var(--bg-dark);border-radius: 999px; }
+.sp-operations-track::-webkit-scrollbar-thumb { background: var(--text-muted);border: 2px solid var(--bg-dark);border-radius: 999px; }
+.sp-operations-track::-webkit-scrollbar-thumb:hover { background: var(--text-bright); }
 .sp-operations-next,
 .sp-operations-pending,
 .sp-operations-courts {
@@ -77,7 +83,11 @@
 .sp-operations-replica .sp-mc-acts > button.btn { box-sizing:border-box;flex:0 0 auto;align-self:flex-start!important;height:42px!important;min-height:42px!important;max-height:42px!important; }
 .sp-operations-two-line-header [data-match-time-status] .sp-operations-group-code { font-size:.62rem;font-weight:700;color:var(--sp-c-7dd3fc,#7dd3fc);line-height:1.2; }
 .sp-operations-court-footer-actions { display:inline-flex;align-items:center;gap:8px;flex:0 0 auto;margin-left:auto; }
-.sp-operations-replica .sp-match-court-clock { flex:0 0 100%;width:100%;margin-left:0!important;grid-template-columns:27px minmax(0,1fr) 27px 8ch; }
+.sp-operations-court-card .sp-match-operational { column-gap:6px!important;row-gap:4px;margin-top:8px; }
+.sp-operations-court-card .sp-match-operational .sp-match-court { flex:0 1 122px;max-width:122px;min-width:0; }
+.sp-operations-court-card .sp-match-operational .sp-match-court select { width:100%;padding-right:2px; }
+.sp-operations-court-card .sp-operations-court-footer-actions { gap:6px; }
+.sp-operations-replica .sp-match-court-clock { flex:0 0 100%;width:100%;margin-left:0!important;margin-top:2px;grid-template-columns:27px minmax(0,1fr) 27px 8ch; }
 .sp-operations-next .sp-operations-replica > .sp-match-card { border:3px solid var(--sp-c-fbbf24,#fbbf24)!important; }
 .sp-operations-court-slot--active .sp-operations-replica > .sp-match-card { border:3px solid var(--sp-c-22c55e,#22c55e)!important; }
 .sp-operations-replica .sp-match-call-day-hint { overflow-wrap:anywhere; }
@@ -137,6 +147,40 @@
 }
 @media (min-width: 900px) {
   .sp-operations-next { position:sticky;left:4px;z-index:3;background:var(--bg-card); }
+}
+/* A barra da chave é uma única superfície opaca. Esta pintura cobre a área
+   acima dela inclusive quando o browser arredonda topbar/Voltar em subpixels;
+   topbar e Voltar (z 100/101) continuam à frente e clicáveis. */
+[data-bracket-tabs-root]::before {
+  content:'';
+  position:fixed;
+  top:0;
+  left:0;
+  right:0;
+  height:calc(var(--topbar-h,60px) + var(--hamburger-dd-h,0px) + var(--backheader-h,0px));
+  background:#111114;
+  pointer-events:none;
+  z-index:-1;
+}
+/* Só o painel largo recebe filtros e abas na mesma linha. As larguras menores
+   preservam a busca inteira e a navegação em linhas separadas. */
+[data-bracket-tabs-root][data-bracket-toolbar-layout="wide"] {
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:end;
+}
+[data-bracket-tabs-root][data-bracket-toolbar-layout="wide"] > [data-bracket-tabs-primary] {
+  width:auto!important;
+}
+[data-bracket-tabs-root][data-bracket-toolbar-layout="wide"] > [data-bracket-category-tabs] {
+  width:auto!important;
+  flex-wrap:nowrap!important;
+  padding-top:0!important;
+  white-space:nowrap;
+}
+[data-bracket-tabs-root][data-bracket-toolbar-layout="wide"] > [data-bracket-round-rail],
+[data-bracket-tabs-root][data-bracket-toolbar-layout="wide"] > [data-bracket-search-slot="stack"] {
+  grid-column:1 / -1;
 }
 details[open] > summary .standings-toggle-show { display: none; }
 details[open] > summary .standings-toggle-hide { display: inline !important; }

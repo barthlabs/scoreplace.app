@@ -1247,6 +1247,7 @@ const SUITES = [
   'tests/fase-historica-abas-nao-ocultam-jogos.test.js',
   'tests/bracket-operations-strip.test.js',
   'tests/bracket-avatar-presence.test.js',
+  'tests/bracket-avatar-no-jump.test.js',
   'tests/bracket-sem-painel-presenca.test.js',
   'tests/tv-live-snapshot.test.js',
   'tests/tv-layout.test.js',
@@ -1931,6 +1932,7 @@ const SUITES = [
   // Gate do DETALHE (#tournaments/:id) não pula ao marcar presença: _tournamentDetailSig é
   // determinística (sem updatedAt) → o eco do próprio write vê "igual". v1.3.96.
   'tests/tournament-detail-sig.test.js',
+  'tests/tournament-open-realtime.test.js',
   // Card da dashboard abre a ficha; a chamada é exclusiva de #participants/:id. v2.1.49.
   'tests/detalhe-abre-detalhe-nao-chamada.test.js',
   // Inscritos (individual E duplas) usam GRID responsivo — várias colunas em tela larga, nunca

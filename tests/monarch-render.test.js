@@ -12,6 +12,16 @@ function ok(c, m) { if (c) pass++; else { fail++; console.log('  ✗ ' + m); } }
 
 console.log('\n== Rei/Rainha — saída observável ==');
 
+(function () {
+  const t = hydrateMonarchGroups(buildViaDraw('Liga', 8, { ligaRoundFormat: 'rei_rainha', drawMode: 'rei_rainha', drawManual: true }));
+  const before = W._renderMonarchStage(t, false, false, { standingsOnly: true }) || '';
+  const game = (t.groups[0].matches || [])[0];
+  game.scoreP1 = 6; game.scoreP2 = 3; game.winner = game.p1; game.resultAt = Date.now();
+  const after = W._renderMonarchStage(t, false, false, { standingsOnly: true }) || '';
+  ok(before !== after && /\+3/.test(after), 'classificação parcial do grupo reflete o jogo confirmado no fragmento local');
+  ok(!/id="card-/.test(after), 'recalcular a classificação não reconstrói os cards dos jogos');
+})();
+
 // modelo NOVO (campanha kill-monarch-format): jogos monarca moram em t.rounds[].matches
 // (motor league incremental) — nada em t.matches.
 function monMatches(t) {

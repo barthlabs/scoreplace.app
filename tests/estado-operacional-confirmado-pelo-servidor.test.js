@@ -28,7 +28,7 @@ must(Freshness.serverReadOptions().source === 'server',
   'leitura de recuperação exige o servidor');
 
 const listeners = [
-  ['js/store.js', 6],             // torneios, sandbox, discovery, notificações, perfil
+  ['js/store.js', 7],             // torneios, detalhe aberto, sandbox, discovery, notificações, perfil
   ['js/presence-db.js', 2],       // minha presença e amigos
   ['js/views/presence.js', 1],    // pessoas no local
   ['js/views/bracket-ui.js', 2],  // partida casual e espectador ao vivo

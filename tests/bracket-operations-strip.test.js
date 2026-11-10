@@ -122,6 +122,8 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       const activeRect = strip.querySelector('.sp-operations-court-slot--active .sp-match-card').getBoundingClientRect();
       const footer = strip.querySelector('.sp-operations-court-slot--active .sp-operations-court-footer-actions');
       const footerRect = footer && footer.getBoundingClientRect();
+      const courtSelectRect = strip.querySelector('.sp-operations-court-slot--active .sp-match-court select').getBoundingClientRect();
+      const courtOkRect = strip.querySelector('.sp-operations-court-slot--active .sp-match-confirm').getBoundingClientRect();
       const stableHeights = [];
       for (let i = 0; i < 8; i++) {
         window._bracketOperationsRefresh(t, root);
@@ -139,6 +141,9 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
         clockInsideCard: clockRect.top >= activeRect.top && clockRect.bottom <= activeRect.bottom - 2 && clockRect.right <= activeRect.right - 2,
         activeBottomAligned: Math.abs(activeRect.bottom - goldRect.bottom) <= 3,
         footerOnRight: !!footerRect && footerRect.right >= activeRect.right - 20,
+        footerBesideOk: !!footerRect && Math.abs(footerRect.top - courtOkRect.top) <= 4 &&
+          Math.abs(courtSelectRect.top - courtOkRect.top) <= 4 && footerRect.left > courtOkRect.right,
+        selectorWidth: courtSelectRect.width,
         stableHeights,
         draft: strip.querySelector('.sp-operations-court-card [data-operations-source-input="s1-m1"]').value,
         next: strip.querySelector('.sp-operations-next [data-operations-match]').getAttribute('data-operations-match') };
@@ -170,6 +175,8 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert.deepEqual(state.afterCall.activeBottomActions, ['cancel-court', 'ended']);
     assert.equal(state.afterCall.activeHeaderActions, 0, 'Cancelar e Encerrado saem do cabeçalho em quadra');
     assert(state.afterCall.clockInsideCard, 'o cronômetro chamado deve caber inteiramente dentro do card');
+    assert(state.afterCall.footerBesideOk && state.afterCall.selectorWidth <= 150,
+      'quadra, OK, Cancelar e Encerrado devem caber na mesma linha: ' + JSON.stringify(state.afterCall));
     assert(state.afterCall.confirmVisible && state.outsiderHidden && state.selectFocusRestored &&
       state.selectorDoesNotOpenBracket && state.selectorStayedInStrip,
     'selecionar a quadra na faixa não pode abrir o card da chave');

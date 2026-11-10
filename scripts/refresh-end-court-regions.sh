@@ -8,11 +8,17 @@ mode="${1:---preflight}"
 node scripts/check-vendor-fresh.js
 source_commit="$(git log -1 --format=%H -- functions-autodraw)"
 [[ "$source_commit" =~ ^[a-f0-9]{40}$ ]] || exit 1
-for old in 0510380cf595fd63ab6a79346a571c489513ca56 ecec288d9abe48f9e29697116024563a85dba28b; do
-  diff="$(git diff --name-only "$old" HEAD -- functions functions-autodraw)"
-  [[ "$diff" == functions-autodraw/index.js ]] || { echo "backend fora do corte: $diff" >&2; exit 1; }
-  echo "✓ diff $old → HEAD: $diff"
-done
+# Confira a diferença deste corte contra a base publicada. Os SHAs históricos
+# anteriores a esta leva já contêm outras mudanças legítimas do backend e não
+# descrevem o que será enviado agora. As cópias vendor acompanham os arquivos
+# cliente modificados pelo gate de paridade; só endMatchOnCourt é exposta.
+base_commit="$(git merge-base origin/main HEAD)"
+[[ -n "$base_commit" ]] || exit 1
+diff="$(git diff --name-only "$base_commit" HEAD -- functions functions-autodraw)"
+[[ "$diff" == $'functions-autodraw/index.js\nfunctions-autodraw/vendor/bracket-ui.js\nfunctions-autodraw/vendor/tournaments.js' ]] || {
+  echo "backend fora do corte end-court: $diff" >&2; exit 1;
+}
+echo "✓ diff $base_commit → HEAD: $diff"
 for version in v2 v3; do
   node scripts/check-operation-regions-mixed.js "$version" --allow-legacy-court
 done

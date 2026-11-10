@@ -361,7 +361,7 @@ if (codPools && codCont) {
   // ...mas agora o render inteiro está protegido
   const iSwitch = router.indexOf('switch (view) {');
   const iTry = router.lastIndexOf('try {', iSwitch);
-  ok(iTry > 0 && iSwitch - iTry < 1200,
+  ok(iTry > 0 && iTry < iSwitch && router.indexOf('} catch (_erroRender) {', iSwitch) > iSwitch,
     'o switch de renderização está DENTRO de um try (o catch é o que impede a tela vazia)');
   ok(/\} catch \(_erroRender\) \{/.test(router), 'existe o catch do render');
 

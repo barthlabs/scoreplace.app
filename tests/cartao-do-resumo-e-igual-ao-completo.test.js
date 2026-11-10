@@ -103,7 +103,7 @@ const lista = Array.isArray(arr) ? arr : (arr.tournaments || []);
   ok(/arr\[i\] = t;/.test(corpo),
      '⛔ o completo SUBSTITUI o resumo na lista (empurrar pro fim deixaria os dois, e a busca devolve o PRIMEIRO)');
   const router = fs.readFileSync(path.join(__dirname, '..', 'js', 'router.js'), 'utf8');
-  ok(/_ensureTournamentLoaded\(cleanParam[\s\S]{0,120}_pintaTorneio\(\)/.test(router),
+  ok(/_ensureTournamentLoaded\(cleanParam[\s\S]{0,600}_pintaTorneio\(\)/.test(router),
      '⛔ e a rota do torneio garante o completo ANTES de pintar');
 }
 

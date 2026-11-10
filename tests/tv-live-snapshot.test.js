@@ -73,6 +73,23 @@ assert.equal(snapshot.courts[1].timerStart, Date.parse('2026-10-22T21:02:00Z'));
 assert.equal(snapshot.courts[1].latest, true, 'jogo chamado por último é destacado antes de outra transição');
 assert.equal(snapshot.courts[1].scoreA, '4');
 assert.equal(snapshot.courts[2].number, undefined, 'jogo só agendado não ocupa TV');
+const monarchTv = { ...t, id: 'monarch-tv', courtNames: ['Quadra 1'], teamCompetition: { enabled: false }, matches: [
+  match(31, 'Quadra 1', 'VORTEX', 'BLAST', { isMonarch:true, monarchGroup:0, round:1, phaseIndex:0,
+    resultAt:'2026-10-22T20:15:00Z', winner:'p1', scoreP1:6, scoreP2:3 }),
+  match(32, 'Quadra 1', 'VORTEX', 'VENOM', { isMonarch:true, monarchGroup:0, round:1, phaseIndex:0,
+    courtCalledAt:'2026-10-22T21:00:00Z', scoreP1:4, scoreP2:2 }),
+  match(33, 'Quadra 1', 'BLAST', 'VENOM', { isMonarch:true, monarchGroup:0, round:1, phaseIndex:0 })
+] };
+const monarchSnapshot = window._tvLiveBuildSnapshot(monarchTv, Date.parse('2026-10-22T21:03:00Z'));
+assert.deepEqual(monarchSnapshot.courts[0].series.map(game => game.status), ['done', 'active', 'waiting'],
+  'TV conserva os três jogos do quarteto na quadra');
+assert.equal(monarchSnapshot.courts[0].series[0].scoreA, '6', 'resultado concluído aparece na série');
+assert.equal(monarchSnapshot.courts[0].series[1].scoreA, '4', 'placar atual aparece na série');
+assert.equal(monarchSnapshot.courts[0].series[2].scoreA, '', 'jogo ainda não iniciado não inventa placar');
+const monarchHtml = window._tvLiveBodyHtml(monarchSnapshot);
+assert.match(monarchHtml, /JOGO 31[\s\S]*JOGO 32[\s\S]*JOGO 33/, 'ordem dos jogos fica explícita na TV');
+assert.match(monarchHtml, /tv-series-players/, 'nomes das duas duplas aparecem em cada jogo');
+assert.doesNotMatch(monarchHtml, /text-overflow:ellipsis/, 'HTML dos nomes da série não usa corte por reticências');
 assert.equal(snapshot.nextGame.number, 3, 'jogo agendado e ainda não chamado aparece como próximo');
 window._bracketOperationsSelect = () => null;
 assert.equal(window._tvLiveBuildSnapshot(t).nextGame.number, 3,
@@ -554,10 +571,10 @@ const courtRow = { querySelector: selector => selector.includes('select') ? (cou
 const clockNode = { textContent:'', getAttribute: name => ({
   'data-start-ms': String(phaseBase), 'data-call-min':'1', 'data-warmup-min':'1', 'data-game-min':'1'
 })[name], closest: selector => selector === '.sp-match-operational' ? courtRow : clockParent };
-const bracketClockWindow = { ScoreplaceMatchTiming: timingCore };
+const bracketClockWindow = { ScoreplaceMatchTiming: timingCore, _safeHtml: String };
 vm.runInNewContext(bracketSource.slice(bracketClockStart, bracketClockEnd), {
   window:bracketClockWindow, document:{ querySelectorAll: () => [clockNode], createElement: () => ({}) },
-  Date:{ now: () => clockNow }, setInterval: callback => { clockTick = callback; return 1; },
+  Date:{ now: () => clockNow, parse: Date.parse }, setInterval: callback => { clockTick = callback; return 1; },
   Number, String
 });
 const clockHtml = bracketClockWindow._spCourtClockHtml(phaseBase, phaseTournament, clockNow);

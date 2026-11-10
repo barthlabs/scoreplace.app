@@ -419,6 +419,11 @@ function _refreshPresenceReceiptInPlace(tId, uid, playerName) {
   return changed;
 }
 
+function _bracketAvatarWillRefreshPresence(tId, uid, playerName) {
+  var pending = window._bracketPresencePending;
+  return !!(pending && pending[String(tId) + ':' + (uid || playerName)]);
+}
+
 /* ── DE ONDE SAI O UID DA PRESENÇA ────────────────────────────────────────────────
  * ⛔ MEDIDO NO CONFRA (27/ago/2026, torneio AO VIVO): das 9 presenças VIVAS (<24h), OITO
  * estavam gravadas com o NOME como chave. Não era legado — era o caminho de hoje.
@@ -744,7 +749,8 @@ window._applyCheckInToggle = function (tId, playerName, uid) {
       } else _applyPresenceReceipt(tId, targetKey || uid || playerName, wantPresent ? 'present' : 'clear', legacyKey || '');
     } else _applyPresenceReceipt(tId, targetKey || uid || playerName, wantPresent ? 'present' : 'clear', legacyKey || '');
   }).then(function () {
-    if (!_refreshPresenceReceiptInPlace(tId, uid, playerName)) _reRenderParticipantsStable();
+    if (!_refreshPresenceReceiptInPlace(tId, uid, playerName) &&
+        !_bracketAvatarWillRefreshPresence(tId, uid, playerName)) _reRenderParticipantsStable();
     // A integração tardia também só parte depois do commit da presença; a CF
     // correspondente relê o torneio e é idempotente.
     if (wantPresent && typeof window._triggerLateIntegration === 'function') {
@@ -754,7 +760,7 @@ window._applyCheckInToggle = function (tId, playerName, uid) {
   }).catch(function (e) {
     if (window._error) window._error('[presença] falhou', e);
     if (typeof showNotification === 'function') showNotification('⚠️ Presença não salva', (e && e.message) || 'Tente de novo.', 'warning');
-    _reRenderParticipantsStable();
+    if (!_bracketAvatarWillRefreshPresence(tId, uid, playerName)) _reRenderParticipantsStable();
     return false;
   });
   window._presenceBusyUntil(targetKey || uid || playerName, operation);
