@@ -46,6 +46,30 @@ assert(geometryStart >= 0 && geometryEnd > geometryStart);
       'reproduz o card parcialmente cortado visto no Chrome');
     assert.ok(before.scrollHeight > before.clientHeight, 'a chave tem rolagem vertical interna');
     assert.equal(before.innerScroll, 0, 'o jogo está no início da janela interna');
+    // No Chrome servido, scrollIntoView do card deixou a janela da página em
+    // y=308: a janela interna recebeu a tentativa de alinhamento. Reproduzimos
+    // esse resultado para que o teste falhe se o fluxo voltar a depender dela.
+    await geometryPage.evaluate(() => {
+      document.getElementById('card-a').scrollIntoView = function () {
+        document.querySelector('.bracket-scroll-container').scrollTop = 0;
+      };
+      window._newEntryScroll = _scrollBracketEntryMatchToTop;
+      _scrollBracketEntryMatchToTop = (card, behavior) =>
+        card.scrollIntoView({ behavior, block: 'start', inline: 'nearest' });
+      sessionStorage.setItem('sp_scrollToMatch', 'a');
+      window._bracketPendingScroll = 'fixture';
+      _applyMyMatchesFilter();
+    });
+    await geometryPage.waitForTimeout(850);
+    const legacyBottom = await geometryPage.evaluate(() => {
+      const card = document.getElementById('card-a');
+      const bottom = card.getBoundingClientRect().bottom;
+      window._bracketEntryToken.cancel();
+      _scrollBracketEntryMatchToTop = window._newEntryScroll;
+      window.scrollTo(0, 655);
+      return bottom;
+    });
+    assert.ok(legacyBottom > 693, 'controle com scrollIntoView deixa o rodapé cortado');
     await geometryPage.evaluate(() => {
       sessionStorage.setItem('sp_scrollToMatch', 'a');
       window._bracketPendingScroll = 'fixture';
