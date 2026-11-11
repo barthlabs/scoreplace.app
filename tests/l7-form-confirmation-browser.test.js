@@ -153,8 +153,20 @@ await p.evaluate(()=>{
  return window._saveTournamentClickHandler();
 });
 assert.equal(await p.evaluate(()=>window._logoRemovalRequested),false,'aguardar decisão da pontuação não deixa remoção do logo pendente');
-await p.evaluate(()=>{window._pendingScoring[6]();window._maybeShowScoringReconcile=()=>false;window.AppStore.tournaments[0].logoUrl='https://storage.example/logo-old.png';window._sent=undefined;return window._saveTournamentClickHandler();});
+await p.evaluate(()=>{
+ window.AppStore.tournaments[0].coverMode='photo';
+ window.AppStore.tournaments[0].coverUrl='https://storage.example/cover-old.png';
+ document.getElementById('tourn-cover-mode').value='color';
+ document.getElementById('tourn-cover-data').value='';
+ window._editLogoHydrating='e';window._coverModeChosenByUser=true;
+ window._pendingScoring[6]();
+ window._maybeShowScoringReconcile=()=>false;
+ window.AppStore.tournaments[0].logoUrl='https://storage.example/logo-old.png';
+ window._sent=undefined;return window._saveTournamentClickHandler();
+});
 assert(!Object.hasOwn(await p.evaluate(()=>window._sent),'logoData'),'Salvar após cancelar pontuação preserva o logo');
+assert(!Object.hasOwn(await p.evaluate(()=>window._sent),'coverPhotoData'),
+ 'Salvar após cancelar pontuação preserva a capa publicada');
 await p.evaluate(()=>{
  document.getElementById('edit-tournament-id').value=''; document.getElementById('tourn-name').value='Nova copa';
  window._notes=[];window._beforeHash=location.hash;

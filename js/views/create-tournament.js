@@ -6314,7 +6314,7 @@ function setupCreateTournamentModal() {
     window._showScoringChangePreview(t, oldS, newS, impact,
       function onApply() { window._scoringReconcileConfirmed = true; window._saveTournamentClickHandler(); },
       function onRevert() { window._writeScoringToForm(oldS); window._scoringReconcileConfirmed = true; window._saveTournamentClickHandler(); },
-      function onCancel() { window._logoRemovalRequested = false; }
+      function onCancel() { window._logoRemovalRequested = false; window._coverModeChosenByUser = false; }
     );
     return true;
   };
@@ -6440,7 +6440,7 @@ function setupCreateTournamentModal() {
               enabled: (ratioOpts && ratioOpts.enabled) });
           _seguir(mode === 'equilibrado');
         },
-        onCancel: function () { window._logoRemovalRequested = false; }
+        onCancel: function () { window._logoRemovalRequested = false; window._coverModeChosenByUser = false; }
         // Cancelar = fecha e não salva; o formulário fica como estava.
       });
     };
