@@ -396,6 +396,30 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
   const saveProposal = await configHandler({ auth:{ uid:'owner' }, data:{ tournamentId:'tour_test',
     patch:{ scheduleWindow:{ days:gridDays, interleavedPlan:{ ...proposal.plan, editorVersion:2 } } } } });
   assert.equal(saveProposal.ok, true, 'proposta nova é gravada antes do sorteio');
+  const existingGridTournament = { ...structuredClone(emptyGridTournament),
+    scheduleWindow:{ days:gridDays, interleavedPlan:{ ...proposal.plan, editorVersion:2 } } };
+  configTournament = structuredClone(existingGridTournament);
+  const beforeStaleCategoryPlan = configWrites;
+  await assert.rejects(configHandler({ auth:{ uid:'owner' }, data:{ tournamentId:'tour_test',
+    patch:{ combinedCategories:['Fem Diamante', 'Fem Prata'],
+      scheduleWindow:{ interleavedPlan:{ ...proposal.plan, editorVersion:2 } } } } }),
+  { code:'invalid-argument' }, 'alterar a categoria não pode conservar uma grade com a categoria antiga');
+  assert.equal(configWrites, beforeStaleCategoryPlan, 'grade incompatível com a categoria nova não escreve');
+  const renamedProposal = gridModel.suggest({ days:gridDays, courts:2, gameDuration:25, callTime:5,
+    warmupTime:5, eliminationPlayMinutes:25,
+    categories:[{ name:'Fem Diamante', groups:2 }, { name:'Fem Prata', groups:2 }] });
+  configTournament = structuredClone(existingGridTournament);
+  const saveRenamedPlan = await configHandler({ auth:{ uid:'owner' }, data:{ tournamentId:'tour_test',
+    patch:{ combinedCategories:['Fem Diamante', 'Fem Prata'],
+      scheduleWindow:{ interleavedPlan:{ ...renamedProposal.plan, editorVersion:2 } } } } });
+  assert.equal(saveRenamedPlan.ok, true, 'categoria alterada com grade coerente é aceita antes do sorteio');
+  assert.deepEqual(configTournament.combinedCategories, ['Fem Diamante', 'Fem Prata']);
+  configTournament = structuredClone(existingGridTournament);
+  const beforeStaleWithoutPlan = configWrites;
+  await assert.rejects(configHandler({ auth:{ uid:'owner' }, data:{ tournamentId:'tour_test',
+    patch:{ combinedCategories:['Fem Diamante', 'Fem Prata'] } } }),
+  { code:'invalid-argument' }, 'alterar categoria sem reenviar a grade também é recusado');
+  assert.equal(configWrites, beforeStaleWithoutPlan, 'categoria com grade antiga não escreve');
   const forged = structuredClone(proposal.plan);
   forged.blocks[0].category = 'Fem Prata';
   const beforeForged = configWrites;

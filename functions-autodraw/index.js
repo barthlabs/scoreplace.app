@@ -5889,7 +5889,9 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
       patch.categoryDefinitions = categoryChange.definitions;
     }
     const hasDraw = hasDrawnBracket(t);
-    if (patch.scheduleWindow !== undefined || categoryChanged || patch.startDate !== undefined || patch.endDate !== undefined) {
+    const planInputsChanged = categoryChanged || ['courtCount', 'gameDuration', 'callTime', 'warmupTime',
+      'maxParticipantsPerCategory', 'maxParticipantsByCategory'].some(key => Object.prototype.hasOwnProperty.call(patch, key));
+    if (patch.scheduleWindow !== undefined || planInputsChanged || patch.startDate !== undefined || patch.endDate !== undefined) {
       if (patch.scheduleWindow !== undefined &&
           (!patch.scheduleWindow || typeof patch.scheduleWindow !== 'object' || Array.isArray(patch.scheduleWindow))) {
         throw new HttpsError('invalid-argument', 'Agenda de jogos inválida.');
@@ -5913,10 +5915,11 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
           categoryWindows: patch.scheduleWindow && patch.scheduleWindow.categoryWindows !== undefined
             ? patch.scheduleWindow.categoryWindows : existingCategoryWindows
         }) : t.scheduleWindow;
-      if (patch.scheduleWindow && patch.scheduleWindow.interleavedPlan !== undefined) {
-        const original = t.scheduleWindow && t.scheduleWindow.interleavedPlan;
-        const proposed = patch.scheduleWindow.interleavedPlan;
-        if (!_configAtiva.igual(original, proposed)) {
+      const original = t.scheduleWindow && t.scheduleWindow.interleavedPlan;
+      const planSupplied = !!patch.scheduleWindow && patch.scheduleWindow.interleavedPlan !== undefined;
+      if (planSupplied || (original && planInputsChanged)) {
+        const proposed = planSupplied ? patch.scheduleWindow.interleavedPlan : original;
+        if (!_configAtiva.igual(original, proposed) || planInputsChanged) {
           if (hasDraw) throw new HttpsError('failed-precondition', 'A grade de jogos publicados não pode mudar depois do sorteio.');
           const effectiveTournament = Object.assign({}, t, patch);
           if (!proposed || proposed.schema !== 1 || proposed.editorVersion !== 2 ||
@@ -5925,15 +5928,14 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
               !Number.isSafeInteger(proposed.totalGames) || proposed.totalGames < 1 ||
               !Number.isSafeInteger(proposed.eliminationPlayMinutes) || proposed.eliminationPlayMinutes < 1 ||
               Number(proposed.eliminationMinutes) !== Number(proposed.eliminationPlayMinutes) +
-                Number(effectiveTournament.callTime || 0) + Number(effectiveTournament.warmupTime || 0) ||
-              (original && (Number(proposed.totalGames) !== Number(original.totalGames) ||
-                Number(proposed.eliminationMinutes) !== Number(original.eliminationMinutes) ||
-                Number(proposed.courts) !== Number(original.courts)))) {
+                Number(effectiveTournament.callTime || 0) + Number(effectiveTournament.warmupTime || 0)) {
             throw new HttpsError('invalid-argument', 'A grade não corresponde à programação deste torneio.');
           }
           const proposedTiles = _phaseGridPlan.expand(proposed, effectiveTournament);
           let expected;
-          if (original) expected = _phaseGridPlan.signatures(_phaseGridPlan.expand(original, effectiveTournament));
+          // Quando os insumos não mudam, a referência da grade salva usa a ficha
+          // salva. Se mudarem, a proposta precisa cobrir a nova ficha inteira.
+          if (original && !planInputsChanged) expected = _phaseGridPlan.signatures(_phaseGridPlan.expand(original, t));
           else {
             const labels = effectiveTournament.combinedCategories;
             const capacity = effectiveTournament.maxParticipantsByCategory || {};
