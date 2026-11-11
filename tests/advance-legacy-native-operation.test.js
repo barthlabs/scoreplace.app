@@ -10,6 +10,12 @@ const start = source.indexOf('exports.advanceTournamentPhase = onCall(');
 const end = source.indexOf('async function _notifyAdvancedPhase(', start);
 assert(start >= 0 && end > start);
 const handler = source.slice(start, end);
+assert.match(handler, /^exports\.advanceTournamentPhase = onCall\(\{ invoker: 'public' \}, async \(request\) => \{/,
+  'a callable aceita o preflight CORS do navegador');
+assert(handler.indexOf("if (!uid) throw new HttpsError('unauthenticated'") < handler.indexOf('db.runTransaction'),
+  'a operação exige login antes de escrever');
+assert(handler.indexOf('if (!_isTournamentAdmin(pre.data(), uid))') < handler.indexOf('db.runTransaction'),
+  'a operação exige organizador antes de escrever');
 const assignment = handler.match(/const compatOperationId = ([^;]+);/);
 assert(assignment, 'fallback real do handler encontrado');
 assert(handler.indexOf(assignment[0]) < handler.indexOf('db.runTransaction'),

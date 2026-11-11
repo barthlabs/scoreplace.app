@@ -1345,7 +1345,8 @@ window._bracketOperationsSelect = function (t) {
         courtReleasedAt:m.courtReleasedAt, callCancelledAt:m.callCancelledAt,
         winnerKey:m.winnerKey, woWinnerKey:m.woWinnerKey, resultAt:m.resultAt,
         sets:m.sets, livePoints:m.livePoints, category:category || 'Desempate',
-        tieSeries:decision.matches, tieStatus:decision.status,
+        tieSeries:decision.matches, tieStatus:decision.status, postponedAt:m.postponedAt,
+        tieBaseGameNumber:decision.baseGameNumber,
         tiePointsToWin:decision.pointsToWin, tiePointMargin:decision.pointMargin };
     });
   });
@@ -1394,9 +1395,13 @@ window._bracketOperationsSelect = function (t) {
   // A prévia não libera a chamada antes de a etapa anterior terminar.
   var preview = !next && window.ScoreplaceNextMatch && typeof window.ScoreplaceNextMatch.firstAvailable === 'function'
     ? window.ScoreplaceNextMatch.firstAvailable(seriesCandidates, matches, released) : null;
-  var nextTie = tieMatches.find(function (m) { return !m.winnerKey && !m.courtCalledAt; }) ||
+  var nextTie = tieMatches.find(function (m) { return !m.winnerKey && !m.courtCalledAt && !m.postponedAt; }) ||
+    tieMatches.find(function (m) { return !m.winnerKey && !m.courtCalledAt; }) ||
     tieMatches.find(function (m) { return m.tieStatus === 'review'; });
-  return { next: nextTie || next || preview, nextCallable: !!nextTie || !!next,
+  var samePhaseNext = next && Number(next.phaseIndex || 0) === Number(t.currentPhaseIndex || 0) ? next : null;
+  var callableTie = nextTie && (!nextTie.postponedAt || !samePhaseNext) ? nextTie : null;
+  return { next: callableTie || next || preview, nextCallable: !!callableTie || !!next,
+    tieCanPostpone: !!(callableTie && samePhaseNext && !callableTie.postponedAt),
     active: active, pending: pending, courts: courts, matches: matches };
 };
 
@@ -1660,7 +1665,7 @@ function _bracketOperationsNavHtml(group, index, slot) {
     '<button type="button" id="' + prefix + '-next" class="sp-operations-nav-arrow" data-operations-nav="next" aria-label="Próximo jogo ou classificação do ' + safe(group.name) + '" title="Próximo"><svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><polygon points="3,2 17,10 3,18"/></svg></button></span>';
 }
 
-function _bracketOperationsStandingsHtml(group, t, slot, courtHtml, categoryLabel) {
+function _bracketOperationsStandingsHtml(group, t, slot, courtHtml, categoryLabel, navHtml) {
   var safe = window._safeHtml || function (s) { return String(s); };
   var roster = group.roster;
   var standings = typeof window._computeMonarchStandings === 'function' ? window._computeMonarchStandings({
@@ -1672,7 +1677,7 @@ function _bracketOperationsStandingsHtml(group, t, slot, courtHtml, categoryLabe
       !!match.resultAt || match.winner != null || match.wo === true || !!match.isBye || !!match.isSitOut;
   });
   return '<article class="sp-match-card sp-operations-standings-card"><div class="sp-mc-head">' +
-    _bracketOperationsNavHtml(group, 3, slot) + '</div>' +
+    (navHtml || _bracketOperationsNavHtml(group, 3, slot)) + '</div>' +
     '<span class="sp-operations-standings-category">' + safe(categoryLabel || '') + ' · ' +
       safe(String(group.name).replace(/^R\d+\s+/i, '').replace(/^Grupo\s+/i, '')) + '</span>' +
     '<div class="sp-operations-standings-status">' +
@@ -1684,18 +1689,89 @@ function _bracketOperationsStandingsHtml(group, t, slot, courtHtml, categoryLabe
     (courtHtml ? '<div class="sp-operations-standings-footer">' + courtHtml + '</div>' : '') + '</article>';
 }
 
+function _bracketTieGroupNavHtml(m, group, index, slot, count) {
+  var safe = window._safeHtml || function (s) { return String(s); };
+  var series = m.tieSeries || [];
+  var regularIndex = index - series.length;
+  var title = index < series.length ? 'JOGO ' + String((series[index] || {}).displayGameNumber || m._gameNum || '') :
+    regularIndex < 3 ? 'JOGO ' + String((group.matches[regularIndex] || {})._gameNum || '') + ' (' + (regularIndex + 1) + '/3)' :
+    String(group.name).replace(/^R\d+\s+/i, '');
+  return '<span class="sp-operations-game-nav" data-operations-group="' + safe(m.decisionId) +
+    '" data-operations-slot="' + safe(slot) + '" data-operations-count="' + count + '">' +
+    '<button type="button" class="sp-operations-nav-arrow" data-operations-nav="prev" aria-label="Ver jogo anterior ou classificação do grupo">◀</button>' +
+    '<span class="sp-operations-nav-title">' + safe(title) + '</span>' +
+    '<button type="button" class="sp-operations-nav-arrow" data-operations-nav="next" aria-label="Ver próximo jogo ou classificação do grupo">▶</button></span>';
+}
+
+function _bracketTieGroupCards(t, sg, phaseIndex) {
+  var book = t.phaseTieDecisions && t.phaseTieDecisions[String(phaseIndex)] || {};
+  var groupNumbers = new Set((sg.matches || []).map(function (match) {
+    return Number(match && (match._gameNum || match.scheduledGameNumber));
+  }).filter(function (number) { return Number.isInteger(number) && number > 0; }));
+  var category = String((sg.matches || []).find(function (match) { return match && match.category; })?.category || sg.category || '');
+  return Object.keys(book).sort().flatMap(function (id) {
+    var decision = book[id];
+    if (!decision || decision.choice !== 'play' || !groupNumbers.has(Number(decision.baseGameNumber)) ||
+        (decision.category && category && String(decision.category) !== category)) return [];
+    return (decision.matches || []).filter(Boolean).map(function (match) {
+      var score = match.winnerKey && match.sets && match.sets[0] || match.livePoints || { p1:0, p2:0 };
+      var display = { id:match.id, isTieBreak:true, label:'JOGO ' + String(match.displayGameNumber || ''),
+        _gameNum:match.displayGameNumber, p1:match.p1 && match.p1.name || '', p2:match.p2 && match.p2.name || '',
+        scoreP1:score.p1, scoreP2:score.p2, category:category, court:match.court || '',
+        courtCalledAt:match.courtCalledAt, courtClockBaseAt:match.courtClockBaseAt,
+        resultAt:match.resultAt, winner:match.winnerKey === (match.p1 && match.p1.key) ? match.p1.name :
+          match.winnerKey === (match.p2 && match.p2.key) ? match.p2.name : null,
+        wo:!!match.woWinnerKey };
+      var html = window.renderMatchCard(display, false, t.id, null, false, null,
+        { readOnly:true, idScope:'group-tie-' + String(match.id || '') });
+      var host = document.createElement('template'); host.innerHTML = html;
+      var card = host.content.firstElementChild;
+      if (card) {
+        var status = card.querySelector('[data-match-time-status]');
+        if (status) status.insertAdjacentHTML('afterend', '<span class="sp-operations-tie-designation">SIMPLES DESEMPATE</span>');
+      }
+      return '<div class="sp-group-tie-card" data-group-tie="' + (window._safeHtml || String)(String(match.id)) + '">' +
+        (card ? card.outerHTML : html) + '</div>';
+    });
+  }).join('');
+}
+
 function _bracketOperationsReplica(m, t, role, label, availability, root, allMatches, slot) {
   var safe = window._safeHtml || function (s) { return String(s); };
   if (m.isTieBreak) {
     // A geometria é a do card normal; as ações são roteadas ao livro de
     // desempates, que não faz parte de t.matches nem da classificação do grupo.
     var series = Array.isArray(m.tieSeries) ? m.tieSeries : [];
+    var baseMatch = (allMatches || []).find(function (item) {
+      return Number(item && (item._gameNum || item.scheduledGameNumber)) === Number(m.tieBaseGameNumber);
+    });
+    var tieGroup = baseMatch && _bracketOperationsGroup(t, baseMatch, allMatches);
+    var pageCount = series.length + (tieGroup ? 4 : 0);
     var nav = root._bracketOperationsNav || (root._bracketOperationsNav = {});
     var selectedIndex = Math.max(0, series.findIndex(function (item) { return String(item.id) === String(m.id); }));
     var saved = nav[slot];
-    if (series.length > 1 && saved && saved.key === m.decisionId && saved.baseId === String(m.id))
-      selectedIndex = Math.min(series.length - 1, saved.index);
-    if (series.length > 1) nav[slot] = { key:m.decisionId, baseId:String(m.id), index:selectedIndex };
+    if (pageCount > 1 && saved && saved.key === m.decisionId && saved.baseId === String(m.id))
+      selectedIndex = Math.min(pageCount - 1, saved.index);
+    if (pageCount > 1) nav[slot] = { key:m.decisionId, baseId:String(m.id), index:selectedIndex };
+    if (tieGroup && selectedIndex >= series.length) {
+      var regularIndex = selectedIndex - series.length;
+      var contextHtml = regularIndex === 3
+        ? _bracketOperationsStandingsHtml(tieGroup, t, slot, '', String(baseMatch.category || ''),
+          _bracketTieGroupNavHtml(m, tieGroup, selectedIndex, slot, pageCount))
+        : window.renderMatchCard(tieGroup.matches[regularIndex], false, t.id,
+          Number(tieGroup.matches[regularIndex]._gameNum || tieGroup.matches[regularIndex].scheduledGameNumber) || null,
+          false, null, { readOnly:true, idScope:'operations-tie-context-' + String(tieGroup.matches[regularIndex].id) });
+      if (regularIndex < 3) {
+        var contextHost = document.createElement('template'); contextHost.innerHTML = contextHtml;
+        var contextCard = contextHost.content.firstElementChild;
+        var contextTitle = contextCard && contextCard.querySelector('.sp-mc-head span');
+        if (contextTitle) contextTitle.outerHTML = _bracketTieGroupNavHtml(m, tieGroup, selectedIndex, slot, pageCount);
+        if (contextCard) contextHtml = contextCard.outerHTML;
+      }
+      return '<div class="sp-operations-replica sp-operations-tie-card" data-operations-match="' + safe(String(m.id || '')) +
+        '" data-tie-decision="' + safe(String(m.decisionId || '')) + '" data-operations-base-match="' + safe(String(m.id || '')) + '">' +
+        '<span class="sp-operations-label">' + safe(label) + '</span>' + (availability || '') + contextHtml + '</div>';
+    }
     var chosen = series[selectedIndex] || m;
     var selected = Object.assign({}, m, { id:chosen.id, _gameNum:chosen.displayGameNumber || m._gameNum,
       p1:chosen.p1 && chosen.p1.name || m.p1, p2:chosen.p2 && chosen.p2.name || m.p2,
@@ -1726,24 +1802,33 @@ function _bracketOperationsReplica(m, t, role, label, availability, root, allMat
           tieStatus.removeAttribute('data-match-time-status');
           tieStatus.insertAdjacentHTML('afterend', '<span class="sp-operations-tie-designation">SIMPLES DESEMPATE</span>');
         }
-        if (series.length > 1) {
+        if (pageCount > 1) {
           var title = tieCard.querySelector('.sp-mc-head span');
-          if (title) title.outerHTML = '<span class="sp-operations-game-nav" data-operations-group="' + safe(m.decisionId) +
-            '" data-operations-slot="' + safe(slot) + '" data-operations-count="' + series.length + '">' +
-            '<button type="button" class="sp-operations-nav-arrow" data-operations-nav="prev" aria-label="Jogo anterior do desempate">◀</button>' +
-            '<span class="sp-operations-nav-title">JOGO ' + safe(selected._gameNum || 'extra') + ' (' + (selectedIndex + 1) + '/' + series.length + ')</span>' +
-            '<button type="button" class="sp-operations-nav-arrow" data-operations-nav="next" aria-label="Próximo jogo do desempate">▶</button></span>';
+          if (title) title.outerHTML = tieGroup
+            ? _bracketTieGroupNavHtml(m, tieGroup, selectedIndex, slot, pageCount)
+            : '<span class="sp-operations-game-nav" data-operations-group="' + safe(m.decisionId) +
+              '" data-operations-slot="' + safe(slot) + '" data-operations-count="' + series.length + '">' +
+              '<button type="button" class="sp-operations-nav-arrow" data-operations-nav="prev" aria-label="Jogo anterior do desempate">◀</button>' +
+              '<span class="sp-operations-nav-title">JOGO ' + safe(selected._gameNum || 'extra') + ' (' + (selectedIndex + 1) + '/' + series.length + ')</span>' +
+              '<button type="button" class="sp-operations-nav-arrow" data-operations-nav="next" aria-label="Próximo jogo do desempate">▶</button></span>';
         }
         var tieActions = tieCard.querySelector('.sp-mc-acts');
         var finished = !!selected.winnerKey;
         var released = !!selected.courtReleasedAt;
         var started = !!(selected.livePoints && (selected.livePoints.p1 || selected.livePoints.p2));
+        var woHtml = typeof window._woBtnHtml === 'function'
+          ? window._woBtnHtml('', true, { size:'btn-micro', fontSize:'0.68rem' })
+          : '<button type="button" class="btn btn-danger btn-micro" style="font-size:0.62rem;padding:3px 9px;line-height:1.08;height:auto;white-space:normal;text-align:center;">Aplicar<br>W.O.</button>';
+        var woHost = document.createElement('template'); woHost.innerHTML = woHtml;
+        var woButton = woHost.content.firstElementChild;
+        if (woButton) { woButton.removeAttribute('onclick'); woButton.setAttribute('data-tie-action', 'wo'); }
         if (tieActions) tieActions.innerHTML = finished ?
           (selected.tieStatus === 'review' ? '<button type="button" class="btn btn-success btn-micro" data-tie-action="confirm">Confirmar desempate</button>' : '') :
           (selected.courtCalledAt && !released && !started ? '<button type="button" class="cancel-x-btn" data-tie-action="cancel-call" title="Cancelar chamada">✕</button>' : '') +
           (selected.courtCalledAt && !released ? '<button type="button" class="sp-match-end-court" data-tie-action="release" title="Liberar a quadra e lançar placar depois">Encerrado</button>' : '') +
-          (!started ? '<button type="button" class="btn btn-danger btn-micro" data-tie-action="wo">Aplicar W.O.</button>' : '') +
-          (!released ? '<button type="button" class="btn btn-live btn-micro" data-tie-action="live">📡 Ao Vivo</button>' : '');
+          (!started && woButton ? woButton.outerHTML : '') +
+          (!released ? '<button type="button" class="btn btn-live btn-micro" data-tie-action="live" title="Placar ao vivo" style="flex-shrink:0;font-size:0.72rem;">📡 Ao Vivo</button>' : '') +
+          '<button type="button" class="btn btn-success btn-micro" data-tie-action="score" style="flex-shrink:0;font-size:0.72rem;display:none;">✓ Confirmar</button>';
         if (role.active && tieActions) {
           var footer = document.createElement('span'); footer.className = 'sp-operations-court-footer-actions';
           ['cancel-call', 'release'].forEach(function (action) {
@@ -1775,7 +1860,7 @@ function _bracketOperationsReplica(m, t, role, label, availability, root, allMat
         var courtHtml = finished ? '<span class="sp-match-court sp-match-court--readonly">' + safe(selected.court || '') + '</span>' :
           selected.courtCalledAt ? '<span class="sp-match-court sp-match-court--readonly">' + safe(selected.court || '') + '</span><span class="sp-match-confirm sp-match-confirm--locked">✓ OK</span>' :
           '<label class="sp-match-court"><select aria-label="Quadra" data-tie-court-select>' + opts + '</select></label>' +
-          '<button type="button" class="sp-match-confirm" data-tie-action="call"' + (!displayedCourt ? ' disabled' : '') + '>OK</button>';
+          '<button type="button" class="sp-match-confirm" data-tie-action="call" aria-label="Confirmar chamada para a quadra"' + (!displayedCourt ? ' disabled' : '') + ' style="padding:4px 9px;border-radius:7px;border:1px solid #22c55e;background:#166534;color:#fff;font-weight:800;cursor:pointer;">OK</button>';
         var clockHtml = '';
         if (selected.courtCalledAt && !finished && window._spCourtClockHtml) {
           var anchor = Date.parse(selected.courtClockBaseAt || selected.courtCalledAt);
@@ -1793,18 +1878,23 @@ function _bracketOperationsReplica(m, t, role, label, availability, root, allMat
         if (!finished) {
           var scoreNodes = tieCard.querySelectorAll('.sp-mc-sc');
           Array.prototype.forEach.call(scoreNodes, function (node, index) {
-            node.innerHTML = '<input type="number" min="0" max="999" class="sp-set-inp" data-tie-score="' + (index ? 'p2' : 'p1') +
-              '" aria-label="Pontos de ' + safe(index ? selected.p2 : selected.p1) + '" value="' + Number(index ? score.p2 : score.p1) + '">';
+            var points = Number(index ? score.p2 : score.p1) || 0;
+            node.innerHTML = '<input type="number" min="0" max="999" placeholder="0" class="sp-mc-inp" data-operations-source-input="tie-' + (index ? 'p2-' : 'p1-') + safe(String(selected.id)) + '" data-tie-score="' + (index ? 'p2' : 'p1') +
+              '" aria-label="Pontos de ' + safe(index ? selected.p2 : selected.p1) + '"' +
+              (started ? ' value="' + points + '"' : '') + '>';
           });
         }
         Array.prototype.forEach.call(tieCard.querySelectorAll('.btn-row:not(.sp-mc-acts)'), function (node) { node.remove(); });
-        if (!finished) tieCard.insertAdjacentHTML('beforeend', '<div class="btn-row sp-tie-score-actions"><button type="button" class="btn btn-success btn-micro" data-tie-action="score">Salvar placar</button></div>');
         tieHtml = tieCard.outerHTML;
       }
     }
+    var tiePostpone = role.tieCanPostpone && !selected.courtCalledAt && !selected.winnerKey
+      ? '<button type="button" class="sp-operations-postpone" data-tie-action="postpone" title="Adiar este desempate até não restarem jogos chamáveis nesta fase">Pular jogo</button>' : '';
+    var tieFinalNotice = !role.tieCanPostpone && role.postponeReady && !selected.courtCalledAt && !selected.winnerKey
+      ? '<div class="sp-operations-tie-final-notice">A próxima fase depende deste desempate para prosseguir.</div>' : '';
     return '<div class="sp-operations-replica sp-operations-tie-card" data-operations-match="' + safe(String(selected.id || '')) +
       '" data-tie-decision="' + safe(String(m.decisionId || '')) + '" data-operations-base-match="' + safe(String(m.id || '')) + '">' +
-      '<span class="sp-operations-label">' + safe(label) + '</span>' + (availability || '') + tieHtml + '</div>';
+      '<span class="sp-operations-label">' + safe(label) + tiePostpone + '</span>' + (availability || '') + tieFinalNotice + tieHtml + '</div>';
   }
   var group = _bracketOperationsGroup(t, m, allMatches);
   var nav = root._bracketOperationsNav || (root._bracketOperationsNav = {});
@@ -2021,6 +2111,21 @@ function _bracketTieMatch(tId, decisionId, matchId) {
   return decision && (decision.matches || []).find(function (m) { return String(m.id) === String(matchId); });
 }
 
+function _bracketTieSyncConfirm(card) {
+  if (!card) return;
+  var a = card.querySelector('[data-tie-score="p1"]');
+  var b = card.querySelector('[data-tie-score="p2"]');
+  var entered = !!(a && b && a.value !== '' && b.value !== '');
+  var confirm = card.querySelector('[data-tie-action="score"]');
+  var live = card.querySelector('[data-tie-action="live"]');
+  if (confirm) confirm.style.display = entered ? '' : 'none';
+  if (live) live.style.display = entered ? 'none' : '';
+}
+
+function _bracketTieScoreFingerprint(match) {
+  return JSON.stringify([match && match.winnerKey, match && match.sets, match && match.livePoints]);
+}
+
 function _bracketRefreshTieStrip(tId) {
   var tournament = window._findTournamentById && window._findTournamentById(String(tId));
   if (tournament && typeof window._bracketOperationsRefresh === 'function')
@@ -2132,6 +2237,19 @@ window._bracketOperationsRefresh = function (t, root) {
     existing.addEventListener('pointerdown', function () {
       // Qualquer ação do operador encerra o foco tardio de entrada/aba.
       root._bracketFocusToken = (Number(root._bracketFocusToken) || 0) + 1;
+    });
+    existing.addEventListener('input', function (event) {
+      if (!event.target || !event.target.matches('[data-tie-score]')) return;
+      var card = event.target.closest('.sp-operations-tie-card');
+      _bracketTieSyncConfirm(card);
+      if (!card) return;
+      var mid = card.getAttribute('data-operations-match');
+      var decisionId = card.getAttribute('data-tie-decision');
+      var match = _bracketTieMatch(t.id, decisionId, mid);
+      root._bracketTieDrafts = root._bracketTieDrafts || {};
+      root._bracketTieDrafts[mid] = { decisionId:decisionId, fingerprint:_bracketTieScoreFingerprint(match),
+        p1:card.querySelector('[data-tie-score="p1"]').value,
+        p2:card.querySelector('[data-tie-score="p2"]').value };
     });
     existing.addEventListener('focusout', function (event) {
       if (!event.target || !event.target.matches('.sp-operations-replica .sp-match-court select')) return;
@@ -2363,6 +2481,7 @@ window._bracketOperationsRefresh = function (t, root) {
     existing.addEventListener('input', function (event) {
       var input = event.target && event.target.closest('input[data-operations-source-input]');
       if (!input) return;
+      if (input.hasAttribute('data-tie-score')) return;
       var op = input.closest('.sp-operations-replica');
       var mid = op && op.getAttribute('data-operations-match');
       var tournament = typeof window._findTournamentById === 'function' ? window._findTournamentById(String(t.id)) : t;
@@ -2384,6 +2503,18 @@ window._bracketOperationsRefresh = function (t, root) {
   if (focusState) try { focusState.start = document.activeElement.selectionStart; focusState.end = document.activeElement.selectionEnd; } catch (e) {}
   Array.prototype.forEach.call(existing.querySelectorAll('.sp-operations-replica'), function (op) {
     var mid = op.getAttribute('data-operations-match');
+    if (op.hasAttribute('data-tie-decision')) {
+      var decisionId = op.getAttribute('data-tie-decision');
+      var tieDraft = root._bracketTieDrafts && root._bracketTieDrafts[mid];
+      var tieMatch = _bracketTieMatch(t.id, decisionId, mid);
+      if (tieDraft && tieMatch && tieDraft.decisionId === decisionId &&
+          tieDraft.fingerprint === _bracketTieScoreFingerprint(tieMatch) && !tieMatch.winnerKey) {
+        var a = op.querySelector('[data-tie-score="p1"]');
+        var b = op.querySelector('[data-tie-score="p2"]');
+        if (a && b) { a.value = tieDraft.p1; b.value = tieDraft.p2; _bracketTieSyncConfirm(op); }
+      } else if (root._bracketTieDrafts) delete root._bracketTieDrafts[mid];
+      return;
+    }
     var current = state.matches.find(function (m) { return String(m.id) === mid; });
     if (current && op._spFingerprint === _bracketOperationsFingerprint(current)) {
       root._bracketOperationsDrafts[mid] = {
@@ -2403,6 +2534,7 @@ window._bracketOperationsRefresh = function (t, root) {
     (state.next ? _bracketOperationsReplica(state.next, t, { canCall: canCall && state.nextCallable !== false, active: false,
       readOnly: state.nextCallable === false,
       postponeReady: canCall && state.nextCallable !== false, postponeBusy: existing._spPostponeBusy || !(window._bracketCourtReleaseCache[String(t.id)] || {}).ready,
+      tieCanPostpone: !!state.tieCanPostpone,
       preferFirstFreeCourt: true, preferredCourt: (root._bracketOperationsManualCourt || {})[String(state.next.id)] || '' }, nextLabel, nextAvailability, root, state.matches, 'next') :
       '<span class="sp-operations-label">' + nextLabel + '</span>' + nextAvailability + '<div class="sp-operations-empty">Nenhum jogo aguardando chamada</div>') +
     '</div>' + (state.pending.length ? '<div class="sp-operations-pending" aria-label="Placares pendentes"><span class="sp-operations-section-title">PLACARES PENDENTES</span><div class="sp-operations-pending-track">' +
@@ -10961,6 +11093,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
       // v4.4.68: FONTE ÚNICA — m._gameNum, SEM fallback (o stamp carimba as duas cópias por id).
       return renderMatchCard(m, canEnterResult, t.id, m._gameNum);
     }).join('');
+    if (!(opts && opts.standingsOnly)) matchCards += _bracketTieGroupCards(t, sg, _pIdxM);
     window._suppressMatchArrivedBtn = false;
 
     // "Em andamento" REMOVIDO (pedido do dono — é óbvio, só rouba espaço). Só o

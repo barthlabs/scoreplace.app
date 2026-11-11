@@ -332,8 +332,20 @@ function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, actio
       if (decision.status === 'pending' || decision.status === 'review') {
         const matchIndex = action && action.decisionId === decisionId && !usedAction
           ? decision.matches.findIndex(m => m.id === action.matchId) : -1;
-        if (action && ['court', 'call', 'score', 'point', 'wo', 'cancel-call', 'release', 'restore', 'clock'].includes(action.type) && action.decisionId === decisionId && !usedAction && matchIndex < 0) {
+        if (action && ['court', 'call', 'score', 'point', 'wo', 'postpone', 'cancel-call', 'release', 'restore', 'clock'].includes(action.type) && action.decisionId === decisionId && !usedAction && matchIndex < 0) {
           throw new Error('partida de desempate não encontrada');
+        }
+        if (matchIndex >= 0 && action.type === 'postpone') {
+          usedAction = true;
+          const current = decision.matches[matchIndex];
+          if (current.courtCalledAt || current.winnerKey ||
+              (current.livePoints && (current.livePoints.p1 || current.livePoints.p2)) ||
+              (current.sets && current.sets.length))
+            throw new Error('partida iniciada não pode ser pulada');
+          if (!current.postponedAt) {
+            current.postponedAt = String(action.at || nowIso || '');
+            changed = true;
+          }
         }
         if (matchIndex >= 0 && action.type === 'court') {
           usedAction = true;
@@ -349,6 +361,7 @@ function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, actio
           if (!decision.matches[matchIndex].courtCalledAt) {
             decision.matches[matchIndex].courtCalledAt = String(action.at || '');
             if (!decision.matches[matchIndex].courtCalledAt) throw new Error('horário da chamada ausente');
+            delete decision.matches[matchIndex].postponedAt;
             delete decision.matches[matchIndex].callCancelledAt;
             delete decision.matches[matchIndex].courtReleasedAt;
             changed = true;

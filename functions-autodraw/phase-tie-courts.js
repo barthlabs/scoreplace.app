@@ -26,7 +26,7 @@ function callPending(t, regularMatches, released, occupiesCourt, nowIso) {
   const called = [];
   pending.forEach(([decisionId, decision]) => {
     const next = (decision.matches || []).find(m => m && !m.winnerKey);
-    if (!next || next.courtCalledAt || next.callCancelledAt ||
+    if (!next || next.courtCalledAt || next.callCancelledAt || next.postponedAt ||
         activeKeys.has(next.p1 && next.p1.key) || activeKeys.has(next.p2 && next.p2.key)) return;
     const court = courts.find(name => !busy.has(name));
     if (!court) return;

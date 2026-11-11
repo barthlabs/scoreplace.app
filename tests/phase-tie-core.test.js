@@ -204,6 +204,30 @@ const pairAction = (type, extra) => tie.resolvePhaseTies(pairTournament, 0, pair
     ...(type === 'point' ? { pointId:'00000000-0000-4000-8000-' + String(++pointSequence).padStart(12, '0') } : {}), ...extra },
   1, false, () => 3, '2026-11-11T12:05:00Z', pairOptions);
 assert.equal(pairFlow.decision.matches.length, 1, 'dois empatados criam confronto único');
+const directTournament = { courtCount:1, fmt2:{ tieResolution:'singles_then_draw', tieSinglesPoints:5, tieSinglesMargin:1 } };
+const directChoice = tie.resolvePhaseTies(directTournament, 0, pairPools, pairNext, () => pairCompare,
+  null, 1, false, () => 3, '2026-11-11T12:00:00Z', pairOptions);
+const directScore = tie.resolvePhaseTies(directTournament, 0, pairPools, pairNext, () => pairCompare,
+  { type:'score', decisionId:directChoice.tie.decisionId, matchId:directChoice.decision.matches[0].id,
+    sets:[{ p1:5, p2:3 }], at:'2026-11-11T12:01:00Z' },
+  1, false, () => 3, '2026-11-11T12:01:00Z', pairOptions);
+assert(directScore.decision.matches[0].winnerKey, 'placar direto é aceito sem chamada à quadra');
+assert.equal(directScore.decision.matches[0].courtCalledAt, undefined);
+const postponedTournament = { courtCount:1, fmt2:{ tieResolution:'singles_then_draw', tieSinglesPoints:5, tieSinglesMargin:1 } };
+const postponedChoice = tie.resolvePhaseTies(postponedTournament, 0, pairPools, pairNext, () => pairCompare,
+  null, 1, false, () => 3, '2026-11-11T12:00:00Z', pairOptions);
+const postponedId = postponedChoice.decision.matches[0].id;
+const postponedAction = (type, extra) => tie.resolvePhaseTies(postponedTournament, 0, pairPools, pairNext, () => pairCompare,
+  { type, decisionId:postponedChoice.tie.decisionId, matchId:postponedId,
+    at:'2026-11-11T12:02:00Z', ...extra }, 1, false, () => 3, '2026-11-11T12:02:00Z', pairOptions);
+assert.equal(postponedAction('postpone').decision.matches[0].postponedAt, '2026-11-11T12:02:00Z');
+assert.equal(courts.callPending(postponedTournament, [], {}, () => false, '2026-11-11T12:03:00Z').length, 0,
+  'o servidor não chama automaticamente um desempate que o organizador pulou');
+assert.equal(postponedAction('postpone').changed, false, 'repetir o pedido de adiamento não regrava o jogo');
+const scoredAfterPostpone = postponedAction('score', { sets:[{ p1:5, p2:3 }] });
+assert(scoredAfterPostpone.decision.matches[0].winnerKey);
+assert.throws(() => postponedAction('postpone'),
+  /partida iniciada não pode ser pulada/, 'o placar impede pular um desempate já concluído');
 pairFlow = pairAction('court', { court:'Quadra 1' });
 pairFlow = pairAction('call');
 assert.equal(pairFlow.decision.matches[0].courtCalledAt, '2026-11-11T12:05:00Z');

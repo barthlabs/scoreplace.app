@@ -1,3 +1,10 @@
+// 2.6.49 — O card do desempate usa os mesmos botões e a mesma disposição dos
+// demais jogos. O placar pode ser confirmado diretamente, sem chamada para a
+// quadra; Confirmar aparece apenas depois de preencher os dois lados.
+// O jogo extra também aparece no próprio grupo; sua seta mostra os três jogos
+// classificatórios e a classificação que motivou o desempate.
+// Pular jogo adia a simples enquanto houver outro jogo da fase para chamar;
+// no último jogo, o botão sai e o aviso explica a dependência da próxima fase.
 // 2.6.48 — O card do desempate permite chamar para a quadra, acompanhar o
 // tempo, lançar pontos ao vivo e placar, aplicar W.O. e liberar a quadra.
 // Dois atletas disputam um jogo sem setas; se houver outro confronto no

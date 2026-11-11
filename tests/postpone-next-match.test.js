@@ -90,6 +90,21 @@ assert.equal(nextTie.next.id, 'tie-a', 'desempate pendente precede a próxima pa
 assert.equal(nextTie.next.isTieBreak, true);
 assert.equal(nextTie.next.category, 'Fem Diamante · Grupo A1',
   'metadado do grupo permanece na fila mesmo com a designação curta no card');
+assert.equal(nextTie.tieCanPostpone, false, 'sem outro jogo chamável, a última simples não pode ser pulada');
+const laterDiamond = { id:'diamond-later', category:'Fem Diamante', p1:'Outra A', p2:'Outra B',
+  phaseIndex:0, scheduledAt:'2026-11-13T13:00:00.000Z' };
+withTie.matches.push(laterDiamond);
+assert.equal(context.window._bracketOperationsSelect(withTie).tieCanPostpone, true,
+  'com outro jogo da fase, o desempate oferece Pular jogo');
+withTie.phaseTieDecisions['0']['group-0:1:2'].matches[0].postponedAt = '2026-11-13T12:02:00Z';
+assert.equal(context.window._bracketOperationsSelect(withTie).next.id, laterDiamond.id,
+  'pular a simples deixa o próximo jogo classificatório ser chamado');
+laterDiamond.courtCalledAt = '2026-11-13T13:00:00Z';
+assert.equal(context.window._bracketOperationsSelect(withTie).next.id, 'tie-a',
+  'sem outro jogo chamável, a simples volta antes da fase seguinte');
+assert.equal(context.window._bracketOperationsSelect(withTie).tieCanPostpone, false,
+  'na volta final não existe mais Pular jogo');
+delete withTie.phaseTieDecisions['0']['group-0:1:2'].matches[0].postponedAt;
 withTie.phaseTieDecisions['0']['group-0:1:2'].matches[0].court = 'Quadra 8';
 withTie.phaseTieDecisions['0']['group-0:1:2'].matches[0].courtCalledAt = '2026-11-13T12:00:00Z';
 assert(context.window._bracketOperationsSelect(withTie).active.some(m => m.id === 'tie-a'),

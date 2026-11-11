@@ -1,3 +1,10 @@
+## 2.6.49 — 11/nov/2026 (card de desempate no padrão dos jogos)
+
+- O desempate usa W.O. compacto em duas linhas, Ao Vivo e Confirmar no cabeçalho, seletor de quadra estreito e OK verde como nos outros cards. Confirmar só aparece após preencher os dois placares; o lançamento direto não depende de chamada para a quadra.
+- O jogo extra aparece dentro do seu grupo, após os três jogos classificatórios e junto da classificação. A seta do card percorre o desempate, os três jogos e a classificação, inclusive quando há só duas atletas; os demais grupos permanecem disponíveis.
+- Pular jogo adia a simples enquanto existe outro jogo chamável na fase. Quando ela volta como último jogo necessário, o botão desaparece e a tela avisa que a próxima fase depende do desempate.
+- A callable `advanceTournamentPhase` publica a permissão de invocação HTTP necessária ao preflight do navegador. A operação continua exigindo autenticação e autorização de organizador no código. O adiamento passa por `advanceTournamentPhase`, `applyMatchResult`, `endMatchOnCourt` e `finishTournament`; essas quatro Functions são publicadas. O corte não altera dados do torneio nem versões nativas.
+
 ## 2.6.48 — 11/nov/2026 (operação completa do desempate)
 
 - O card do jogo extra mostra a categoria e opera quadra livre, OK, cancelamento, Encerrado/restauração, relógio, W.O., placar e pontos Ao Vivo no próprio fluxo. Os comandos gravam no livro de desempates sem alterar os placares classificatórios.

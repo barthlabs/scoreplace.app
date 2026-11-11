@@ -6652,7 +6652,9 @@ function _materializeInterleavedReadyCategories(t, tId, nowIso) {
   return materialized;
 }
 
-exports.advanceTournamentPhase = onCall(async (request) => {
+// A chamada de fase é usada pelo navegador. O transporte precisa aceitar o
+// preflight CORS; a operação continua exigindo Auth e organizador logo abaixo.
+exports.advanceTournamentPhase = onCall({ invoker: 'public' }, async (request) => {
   const uid = request.auth && request.auth.uid;
   const tId = String((request.data && request.data.tournamentId) || '').trim();
   const phaseChoices = Array.isArray(request.data && request.data.phaseChoices) ? request.data.phaseChoices : [];
@@ -6784,7 +6786,7 @@ exports.advanceTournamentPhase = onCall(async (request) => {
       try {
         const scoring = (currentCfg && currentCfg.scoring) || t.scoring || {};
         const setsToWin = Number(scoring.setsToWin) || 1;
-        if (requestedTieAction && ['call', 'score', 'confirm', 'point', 'wo', 'cancel-call', 'release', 'restore', 'clock'].includes(requestedTieAction.type)) {
+        if (requestedTieAction && ['call', 'score', 'confirm', 'point', 'wo', 'postpone', 'cancel-call', 'release', 'restore', 'clock'].includes(requestedTieAction.type)) {
           requestedTieAction.at = agoraIso;
         }
         const actionPools = requestedTieAction && !String(requestedTieAction.decisionId || '').startsWith('wildcards:')
@@ -6814,6 +6816,7 @@ exports.advanceTournamentPhase = onCall(async (request) => {
           score: 'Desempate residual: placar da partida extra registrado ou corrigido.',
           point: 'Desempate residual: ponto da partida extra registrado.',
           wo: 'Desempate residual: W.O. da partida extra aplicado.',
+          postpone: 'Desempate residual: partida extra adiada dentro da fase.',
           'cancel-call': 'Desempate residual: chamada da partida extra cancelada.',
           release: 'Desempate residual: quadra da partida extra liberada.',
           restore: 'Desempate residual: partida extra restaurada na quadra.',
@@ -7737,7 +7740,7 @@ function _resolveFinalClassificationTie(t, action, nowIso) {
       action.clockBaseAt = new Date(shifted.start).toISOString();
     }
   }
-  if (action && ['call', 'score', 'confirm', 'point', 'wo', 'cancel-call', 'release', 'restore', 'clock'].includes(action.type)) action.at = nowIso;
+  if (action && ['call', 'score', 'confirm', 'point', 'wo', 'postpone', 'cancel-call', 'release', 'restore', 'clock'].includes(action.type)) action.at = nowIso;
   try {
     return _phaseTieCore.resolvePhaseTies(t, current, pools, next, compareForPool,
       action || null, Number((phase.scoring || t.scoring || {}).setsToWin) || 1,
