@@ -403,7 +403,8 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
   await assert.rejects(configHandler({ auth:{ uid:'owner' }, data:{ tournamentId:'tour_test',
     patch:{ combinedCategories:['Fem Diamante', 'Fem Prata'],
       scheduleWindow:{ interleavedPlan:structuredClone(existingGridTournament.scheduleWindow.interleavedPlan) } } } }),
-  { code:'invalid-argument' }, 'categoria alterada com a grade salva reenviada é recusada');
+  { code:'invalid-argument', message:'A grade não corresponde às categorias e vagas atuais. Gere uma nova proposta de horários.' },
+  'categoria alterada com a grade salva reenviada é recusada pela divergência de assinaturas');
   assert.equal(configWrites, beforeStaleCategoryPlan, 'grade salva reenviada incompatível não escreve');
   assert.deepEqual(configTournament, existingGridTournament, 'a recusa preserva o documento salvo inteiro');
   const renamedProposal = gridModel.suggest({ days:gridDays, courts:2, gameDuration:25, callTime:5,
@@ -419,7 +420,8 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
   const beforeStaleWithoutPlan = configWrites;
   await assert.rejects(configHandler({ auth:{ uid:'owner' }, data:{ tournamentId:'tour_test',
     patch:{ combinedCategories:['Fem Diamante', 'Fem Prata'] } } }),
-  { code:'invalid-argument' }, 'alterar categoria sem reenviar a grade também é recusado');
+  { code:'invalid-argument', message:'A grade não corresponde às categorias e vagas atuais. Gere uma nova proposta de horários.' },
+  'alterar categoria sem reenviar a grade também é recusado pela divergência de assinaturas');
   assert.equal(configWrites, beforeStaleWithoutPlan, 'categoria com grade antiga não escreve');
   const forged = structuredClone(proposal.plan);
   forged.blocks[0].category = 'Fem Prata';

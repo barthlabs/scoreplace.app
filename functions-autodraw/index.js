@@ -5950,8 +5950,10 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
             expected = _phaseGridPlan.expectedSignatures(labels.map(label => ({ name:label,
               groups:Number(Object.prototype.hasOwnProperty.call(capacity, label) ? capacity[label] : general) / 4 })));
           }
-          if (JSON.stringify(expected) !== JSON.stringify(_phaseGridPlan.signatures(proposedTiles)) ||
-              proposedTiles.reduce((total, tile) => total + (tile.kind === 'groups' ? 3 : 1), 0) !== Number(proposed.totalGames) ||
+          if (JSON.stringify(expected) !== JSON.stringify(_phaseGridPlan.signatures(proposedTiles))) {
+            throw new HttpsError('invalid-argument', 'A grade não corresponde às categorias e vagas atuais. Gere uma nova proposta de horários.');
+          }
+          if (proposedTiles.reduce((total, tile) => total + (tile.kind === 'groups' ? 3 : 1), 0) !== Number(proposed.totalGames) ||
               _phaseGridPlan.validate(proposedTiles, proposed, validatedWindow.days)) {
             throw new HttpsError('invalid-argument', 'A grade contém conflito, jogo ausente ou horário fora da janela.');
           }

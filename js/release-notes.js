@@ -7,7 +7,8 @@
 // sobrepor blocos. A eliminatória aguarda os grupos da própria categoria.
 // A proposta confere vagas por categoria e recusa quantidades que não formam quartetos.
 // Quadras de grades antigas também entram no encaixe magnético.
-// Ao mudar categorias ou vagas, a grade salva precisa cobrir a nova configuração.
+// Ao mudar categorias ou vagas, a grade salva precisa cobrir a nova configuração;
+// se não cobrir, o aviso pede uma nova proposta de horários.
 // 2.6.39 — A programação de fases abre numa tela ampla com abas de datas.
 // Rolar a grade não move blocos; o primeiro horário aparece inteiro.
 // 2.6.38 — O organizador escolhe se define os horários dos jogos ou se
