@@ -1,26 +1,9 @@
 {
   "schema": 1,
-  "backendCommit": "4ffa76ea3f887de9a985f6a93aa104df7d532a72",
-  "scopeNote": "Corte 2.6.20: sorteio e grade intercalada do CAMIS, avanço, placar, quadra, W.O., categorias e telas TV.",
+  "backendCommit": "1f7068a4ab16de6e43d27cfd741d0e4c080a620c",
+  "scopeNote": "Corte 2.6.37: ordem concentrada das fases no CAMIS e validação da edição da ordem.",
   "functions": [
-    "drawRound",
-    "applyMatchResult",
-    "applyQueuedResult",
-    "manageWOClaim",
-    "applyTournamentWO",
     "assignMatchCourt",
-    "endMatchOnCourt",
-    "deleteEmptyTournamentCategory",
-    "setTournamentCategoryConfig",
-    "updateTournamentConfiguration",
-    "advanceTournamentPhase",
-    "finishTournament",
-    "createTournament",
-    "autoDraw",
-    "runEnrollmentSlotsDraw",
-    "resolvePendingDraw",
-    "applyTournamentFormat",
-    "closeRound",
-    "autoDrawReconcile"
+    "updateTournamentConfiguration"
   ]
 }
