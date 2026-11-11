@@ -3,11 +3,12 @@
   'use strict';
   var model = window.ScoreplacePhaseGridPlan;
   var overlayOpen = false, previousBodyOverflow = '', previousFocus = null;
+  var preDrawPreviousState = null;
   function esc(value) { return String(value == null ? '' : value).replace(/[&<>"']/g, function (ch) {
     return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch];
   }); }
   function daysOf(state) {
-    var staged = typeof window._readEstimatedGameHours === 'function' ? window._readEstimatedGameHours() : null;
+    var staged = !state.preDrawId && typeof window._readEstimatedGameHours === 'function' ? window._readEstimatedGameHours() : null;
     if (staged && Array.isArray(staged.days) && staged.days.length) return staged.days;
     return state && state.tournament && state.tournament.scheduleWindow &&
       state.tournament.scheduleWindow.days || (state && state.day ? [state.day] : []);
@@ -16,7 +17,7 @@
     var days = daysOf(state);
     return days.find(function (day) { return day.day === state.activeDay; }) || days[0];
   }
-  function section() { return document.getElementById('phase-call-order-editor'); }
+  function section() { return document.getElementById('phase-grid-predraw-mount') || document.getElementById('phase-call-order-editor'); }
   function overlay() { return document.getElementById('phase-grid-overlay'); }
   function gridRoot() { return overlayOpen ? overlay() : section(); }
   function showError(message) {
@@ -66,7 +67,7 @@
       document.body.style.overflow = previousBodyOverflow;
       if (state) state.placing = false;
     }
-    var scheduleState = window._estimatedGameHoursState;
+    var scheduleState = state && state.preDrawId ? null : window._estimatedGameHoursState;
     if (scheduleState && scheduleState.mode === 'participants') {
       if (overlayOpen) window._closePhaseGridEditor();
       mount.innerHTML = ''; return;
@@ -112,9 +113,12 @@
       return '<span class="phase-grid-time-line" style="top:' + (time - start) * 3 + 'px"></span>';
     }).join('');
     root.innerHTML = '<section class="phase-grid-editor phase-grid-fullscreen" role="dialog" aria-modal="true" aria-label="Programação visual das fases">' +
-      '<div class="phase-grid-toolbar"><div><h2>Fases na grade de quadras e horários</h2>' +
-      '<p>Cada grupo reserva três jogos na mesma quadra. Arraste blocos com o mouse. Para mudar de dia, selecione o bloco, escolha a data e use “Posicionar bloco”. Rolar a grade não altera a programação.</p></div>' +
-      '<button type="button" class="btn btn-secondary phase-grid-close" onclick="window._closePhaseGridEditor()">Voltar à edição</button></div>' +
+      '<div class="phase-grid-toolbar"><div><h2>' + (state.preDrawId ? 'Revisar a grade antes do sorteio' : 'Fases na grade de quadras e horários') + '</h2>' +
+      '<p>Cada grupo reserva três jogos na mesma quadra. Arraste blocos para ajustar quadras e horários; a numeração abaixo acompanha a grade. Rolar não altera a programação.</p></div>' +
+      '<div class="phase-grid-toolbar-actions">' + (state.preDrawId ?
+        '<button type="button" class="btn btn-secondary" onclick="window._phaseGridEditBeforeDraw()">Editar configuração do torneio</button>' +
+        '<button type="button" class="btn btn-primary" id="phase-grid-draw-button" onclick="window._phaseGridSaveAndDraw()">Salvar grade e sortear</button>' : '') +
+      '<button type="button" class="btn btn-secondary phase-grid-close" onclick="window._closePhaseGridEditor()">' + (state.preDrawId ? 'Voltar sem sortear' : 'Voltar à edição') + '</button></div></div>' +
       '<div class="phase-grid-controls">' +
       '<div class="phase-grid-summary">' + summary.map(function (row) {
         return '<span>' + esc(row.label) + ': <strong>' + row.count + '</strong> ' + (row.kind === 'groups' ? 'grupos' : 'partidas') + '</span>';
@@ -248,7 +252,68 @@
     overlayOpen = false;
     document.body.style.overflow = previousBodyOverflow;
     var state = window._phaseCallOrderState; if (state) state.placing = false;
+    if (state && state.preDrawId) {
+      var mount = document.getElementById('phase-grid-predraw-mount'); if (mount) mount.remove();
+      window._phaseCallOrderState = preDrawPreviousState;
+      preDrawPreviousState = null;
+    }
     if (previousFocus && previousFocus.isConnected) previousFocus.focus({ preventScroll:true });
+  };
+  window._openMonarchPreDrawReview = function (tId) {
+    var tournament = typeof window._findTournamentById === 'function' && window._findTournamentById(tId);
+    var plan = tournament && tournament.scheduleWindow && tournament.scheduleWindow.interleavedPlan;
+    var days = tournament && tournament.scheduleWindow && tournament.scheduleWindow.days;
+    if (!tournament || !plan || !Array.isArray(plan.blocks) || !plan.blocks.length || !Array.isArray(days) || !days.length) {
+      if (typeof window.showAlertDialog === 'function') window.showAlertDialog('Grade de jogos ausente',
+        'Configure as categorias, vagas, quadras e horários na edição do torneio antes de sortear.', null, { type:'warning' });
+      return false;
+    }
+    if (overlayOpen) window._closePhaseGridEditor();
+    preDrawPreviousState = window._phaseCallOrderState;
+    var mount = document.createElement('div'); mount.id = 'phase-grid-predraw-mount'; mount.hidden = true;
+    document.body.appendChild(mount);
+    window._phaseCallOrderState = { tournament:tournament, plan:plan, day:days[0], activeDay:days[0].day,
+      tiles:model.expand(plan, tournament), locked:false, touched:false, preDrawId:String(tId) };
+    window._openPhaseGridEditor();
+    return true;
+  };
+  window._phaseGridEditBeforeDraw = function () {
+    var state = window._phaseCallOrderState, id = state && state.preDrawId;
+    if (!id) return;
+    window._closePhaseGridEditor();
+    window.location.hash = '#novo-torneio/' + encodeURIComponent(id);
+  };
+  window._phaseGridSaveAndDraw = async function () {
+    var state = window._phaseCallOrderState;
+    if (!state || !state.preDrawId || state.saving) return;
+    var error = model.validate(state.tiles, state.plan, daysOf(state));
+    if (error) { showError(error); return; }
+    var button = document.getElementById('phase-grid-draw-button');
+    state.saving = true;
+    if (button) { button.disabled = true; button.textContent = 'Salvando…'; }
+    try {
+      if (state.touched) {
+        var plan = model.toPlan(state.plan, state.tiles);
+        plan.editorVersion = 2;
+        var db = window.FirestoreDB;
+        if (!db || typeof db._callFn !== 'function') throw new Error('Serviço de gravação indisponível.');
+        var result = await db._callFn('updateTournamentConfiguration', {
+          tournamentId:state.preDrawId, sandbox:db._ehSandbox(state.preDrawId),
+          patch:{ scheduleWindow:{ interleavedPlan:plan } }
+        });
+        if (!result || result.ok === false) throw new Error(result && result.message || 'A grade não foi salva.');
+        state.tournament.scheduleWindow.interleavedPlan = plan;
+      }
+      var id = state.preDrawId;
+      window._monarchDrawReviewApproved = window._monarchDrawReviewApproved || {};
+      window._monarchDrawReviewApproved[id] = true;
+      window._closePhaseGridEditor();
+      window.generateDrawFunction(id);
+    } catch (cause) {
+      showError('Não foi possível salvar a grade: ' + (cause && cause.message || String(cause)));
+      state.saving = false;
+      if (button) { button.disabled = false; button.textContent = 'Salvar grade e sortear'; }
+    }
   };
   document.addEventListener('keydown', function (event) {
     if (overlayOpen && event.key === 'Escape') { event.preventDefault(); window._closePhaseGridEditor(); }

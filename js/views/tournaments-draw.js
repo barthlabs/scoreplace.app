@@ -2174,6 +2174,19 @@ window.showFinalReviewPanel = function (tId) {
     const t = window._findTournamentById(tId);
     if (!t) return;
 
+    // Torneios Rei/Rainha com horário definido revisam a grade real antes do sorteio.
+    if (t.scheduleWindow && t.scheduleWindow.mode === 'organizer') {
+        var monarch = Array.isArray(t.phases)
+          ? (typeof window._sorteioDaFaseEhReiRainha === 'function' && window._sorteioDaFaseEhReiRainha(t))
+          : (typeof window._isMonarchFormat === 'function' && window._isMonarchFormat(t));
+        if (monarch) {
+            if (typeof window._openMonarchPreDrawReview === 'function') window._openMonarchPreDrawReview(tId);
+            else if (typeof window.showAlertDialog === 'function') window.showAlertDialog('Revisão da grade indisponível',
+                'Recarregue a página antes de sortear. É necessário conferir quadras e horários.', null, { type:'warning' });
+            return;
+        }
+    }
+
     const existing = document.getElementById('final-review-panel');
     if (existing) existing.remove();
 
@@ -3549,6 +3562,19 @@ window.generateDrawFunction = function (tId) {
                 null, { type: 'warning' });
             return;
         }
+    }
+
+    // Protege também atalhos que chegam diretamente aqui, sem showFinalReviewPanel.
+    if (isCurrentDrawMonarch && t.scheduleWindow && t.scheduleWindow.mode === 'organizer') {
+        window._monarchDrawReviewApproved = window._monarchDrawReviewApproved || {};
+        if (!window._monarchDrawReviewApproved[String(tId)]) {
+            if (typeof window._drawBtnDone === 'function') window._drawBtnDone();
+            if (typeof window._openMonarchPreDrawReview === 'function') window._openMonarchPreDrawReview(tId);
+            else if (typeof window.showAlertDialog === 'function') showAlertDialog('Revisão da grade indisponível',
+                'Recarregue a página antes de sortear. É necessário conferir quadras e horários.', null, { type:'warning' });
+            return;
+        }
+        delete window._monarchDrawReviewApproved[String(tId)];
     }
 
     // v4.0.97: "Sorteando…" enquanto a chave é gerada (parte lenta: save + geração +

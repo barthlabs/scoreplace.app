@@ -1,3 +1,7 @@
+// 2.6.42 — Antes do sorteio Rei/Rainha com horários definidos, a organização
+// confere a grade completa e pode mover grupos entre quadras e horários na
+// própria revisão. A grade ajustada é salva antes de iniciar o sorteio.
+// Configurações estruturais continuam disponíveis na edição do torneio.
 // 2.6.41 — A tela No ar permite montar a final da Ouro e da Prata lado a lado:
 // final e terceiro lugar em cima, classificações abaixo e placares ao vivo.
 // O QR Code permanece visível e pode ser movido ou redimensionado.

@@ -1,3 +1,9 @@
+## 2.6.42 — 11/nov/2026 (grade de quadras no pré-sorteio)
+
+- O sorteio Rei/Rainha com horários definidos abre a grade completa de grupos e eliminatórias, com quadras, horários e os três jogos de cada grupo. O organizador pode mover os blocos antes de sortear.
+- Os ajustes da grade são validados e salvos no servidor antes do sorteio. A revisão oferece acesso à edição do torneio para mudanças estruturais; sem uma grade válida, o sorteio não começa.
+- Corte somente web; não altera automaticamente dados de torneios nem versões nativas.
+
 ## 2.6.41 — 11/nov/2026 (final Ouro e Prata na TV)
 
 - O editor da tela No ar oferece um modelo com cabeçalho, finais e terceiros lugares da Ouro e da Prata em colunas, e classificação de cada linha abaixo. Cada partida ou classificação pode ser escolhida individualmente; os placares acompanham as atualizações do torneio.

@@ -1000,6 +1000,7 @@ const SUITES = [
   'tests/camis-monarch-interleave.test.js',
   'tests/camis-interleaved-plan.test.js',
   'tests/phase-grid-plan.test.js',
+  'tests/monarch-predraw-grid.test.js',
   'tests/phase-call-order.test.js',
   'tests/camis-category-advance.test.js',
   'tests/camis-large-monarch-visibility.test.js',
