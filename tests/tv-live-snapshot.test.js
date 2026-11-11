@@ -143,7 +143,11 @@ const samePlayerQueue = { ...queue, matches: [
 ] };
 assert.equal(window._tvLiveBuildSnapshot(samePlayerQueue).nextGame.number, 21,
   'TV pula próximo jogo quando uma atleta já disputa outra partida');
-assert.match(window._tvLiveBodyHtml(window._tvLiveBuildSnapshot(emptyQueue)), /Próximo jogo ainda não definido/);
+assert.match(window._tvLiveBodyHtml(window._tvLiveBuildSnapshot(emptyQueue)), /Próximos jogos ainda não definidos/);
+const fourFuture = { ...t, matches: [20, 21, 22, 23, 24].map(n => match(n, 'Quadra 4', 'VORTEX', 'BLAST')) };
+const fourSnapshot = window._tvLiveBuildSnapshot(fourFuture);
+assert.equal(fourSnapshot.nextGames.map(g => g.number).join(','), '20,21,22,23', 'TV anuncia quatro jogos na ordem da fila');
+assert.match(window._tvLiveBodyHtml(fourSnapshot), /PRÓXIMOS JOGOS[\s\S]*data-tv-autoscroll="upcoming"[\s\S]*JOGO 20[\s\S]*JOGO 23/);
 const customLayout = window.ScoreplaceTvLayout.defaults();
 customLayout.sections.qr.visible = false;
 customLayout.card.score = false;
@@ -191,6 +195,12 @@ assert.match(paletteHtml, /background:#a12345/, 'fundo acompanha a cor escolhida
 assert.match(paletteHtml, /--tv-primary:#a12345;--tv-secondary:#fedcba;--tv-title:#eeddcc/, 'cores do torneio entram na TV');
 assert.match(paletteHtml, /tv-custom-logo.*tv-placed-logo/, 'logo pode ser posicionado independentemente');
 assert.equal((paletteHtml.match(/src="logo\.png"/g) || []).length, 1, 'logo independente não duplica no cabeçalho');
+const overlayLayout = window.ScoreplaceTvLayout.defaults();
+overlayLayout.sections.results.x = 60; overlayLayout.sections.results.w = 39;
+overlayLayout.sections.qr.x = 90;
+const overlayHtml = window._tvLiveBodyHtml(window._tvLiveBuildSnapshot({ ...t, tvLayout: overlayLayout }));
+assert.match(overlayHtml, /tv-results-list" style="padding-right:[1-9][0-9]*%"/,
+  'resultados reservam uma faixa legível onde o QR se sobrepõe');
 paletteLayout.backgroundMode = 'custom'; paletteLayout.background = '#112233';
 assert.match(window._tvLiveBodyHtml(window._tvLiveBuildSnapshot({ ...t, coverColor: '#a12345', tvLayout: paletteLayout })),
   /tv-custom-board" style="background:#112233"/, 'fundo manual sobrepõe a paleta somente quando selecionado');
@@ -414,8 +424,8 @@ assert.match(tvRoot.innerHTML, /ÚLTIMOS RESULTADOS/);
 assert.doesNotMatch(tvRoot.innerHTML, /CHAMADO|EM JOGO/);
 assert.match(tvRoot.innerHTML, /class="tv-team-tag">VORTEX<\/span><div class="tv-players"><span>VORTEX 1<\/span><span>Parceira<\/span>/,
   'card da TV mantém etiqueta vertical do time e atletas em linhas, como na chave');
-assert.match(tvRoot.innerHTML, /<h2>Quadra 4 · JOGO 1<\/h2><span>Fem Light<\/span>/,
-  'quadra e jogo aparecem juntos à esquerda, categoria à direita');
+assert.match(tvRoot.innerHTML, /<h2>Quadra 4 · JOGO 1<\/h2><b class="tv-court-phase">[^<]+<\/b><span>Fem Light<\/span>/,
+  'quadra e jogo ficam à esquerda, fase no centro e categoria à direita');
 assert.match(tvRoot.innerHTML, /class="tv-court-footer"><strong data-tv-start=/,
   'timer aparece sozinho abaixo do confronto');
 assert.doesNotMatch(tvRoot.innerHTML, /ÚLTIMOS 3 RESULTADOS/);

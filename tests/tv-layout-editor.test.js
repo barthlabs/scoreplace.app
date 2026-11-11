@@ -56,6 +56,18 @@ const { chromium } = require('@playwright/test');
       return { left: box.style.left, top: box.style.top, width: box.style.width, height: box.style.height };
     });
     const courtGeometryBefore = await courtGeometry();
+    const canvasBounds = await page.locator('[data-tv-canvas]').boundingBox();
+    const upcomingBounds = await page.locator('[data-tv-box="upcoming"]').boundingBox();
+    const dragStart = { x:upcomingBounds.x + upcomingBounds.width / 2, y:upcomingBounds.y + 12 };
+    await page.mouse.move(dragStart.x, dragStart.y);
+    await page.mouse.down();
+    await page.mouse.move(dragStart.x + canvasBounds.width * .49, dragStart.y - canvasBounds.height * .73, { steps: 4 });
+    assert.equal(await page.locator('[data-tv-guide-y]').evaluate(el => el.style.display), 'block',
+      'guia horizontal aparece ao alinhar próximos jogos com uma linha das quadras');
+    await page.mouse.up();
+    assert.equal(await page.locator('[data-tv-guide-y]').evaluate(el => el.style.display), 'none',
+      'guia desaparece ao soltar o box');
+    await page.evaluate(() => window._tvEditorSetLayout(window.ScoreplaceTvLayout.defaults()));
     await page.locator('[data-tv-add-bracket-button="Fem Diamante"]').click();
     assert.equal(await page.locator('[data-tv-box="bracket-0"]').count(), 1,
       'botão direto coloca a chave da categoria sem alterar os boxes existentes');
@@ -80,8 +92,13 @@ const { chromium } = require('@playwright/test');
       const doc = document.querySelector('[data-tv-frame]').contentDocument;
       const brand = doc.querySelector('.tv-custom-qr .tv-qr-brand').getBoundingClientRect();
       const board = doc.querySelector('.tv-custom-board').getBoundingClientRect();
-      return Math.abs(brand.bottom - board.bottom) < 2;
-    }), 'a marca Abra no Scoreplace acompanha a caixa até o limite da tela');
+      const gap = board.bottom - brand.bottom;
+      return gap >= 4 && gap <= 15;
+    }), 'a marca Abra no Scoreplace tem uma pequena folga inferior sem sair da caixa');
+    assert.equal(await page.evaluate(() => {
+      const frame = document.querySelector('[data-tv-frame]');
+      return frame.contentWindow.getComputedStyle(frame.contentDocument.querySelector('.tv-qr-brand')).color;
+    }), 'rgb(0, 0, 0)', 'Abra no Scoreplace usa texto preto');
     await page.evaluate(() => {
       window.__savedTvPatch = null;
       window.__tvSaveCalls = 0;
@@ -231,6 +248,12 @@ const { chromium } = require('@playwright/test');
       document.getElementById('tv-personalization').open = true;
     });
     await page.locator('[data-tv-add-logo]').click();
+    await page.locator('[data-tv-logo-position="x"]').fill('2');
+    await page.locator('[data-tv-logo-position="y"]').fill('78');
+    assert.deepEqual(await page.evaluate(() => {
+      const logo = window._tvEditorReadLayout().sections.logo;
+      return [logo.x, logo.y];
+    }), [2, 78], 'logo pode ser colocado no outro lado da tela, inclusive sobre a área de outros boxes');
     await page.locator('[data-tv-save-live]').click();
     const placedLogo = await page.evaluate(() => {
       const snapshot = window._tvLiveBuildSnapshot(window._editingTournament, Date.now());
@@ -238,6 +261,7 @@ const { chromium } = require('@playwright/test');
         markup:window._tvLivePreviewDocument(snapshot) };
     });
     assert.equal(placedLogo.visible, true, 'a posição do logo é gravada na tela No ar');
+    assert.equal(await page.evaluate(() => window._editingTournament.tvLayout.sections.logo.x), 2);
     assert.match(placedLogo.markup, /tv-placed-logo/, 'a TV monta o logo gravado na sua caixa');
     await page.evaluate(() => {
       // O teste seguinte verifica o botão fullscreen sem outro box sintético sobre ele.

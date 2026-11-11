@@ -14859,6 +14859,7 @@ window.AppStore = {
           // Só a ação explícita Cor/Remover autoriza limpar a URL publicada.
           if (pair[0] === 'coverPhotoData' && data._coverRemovalRequested !== true) {
             delete _editPatch[pair[1]];
+            if ((tourData.coverUrl || tourData.coverPhotoData) && _editPatch.coverMode === 'color') delete _editPatch.coverMode;
             return Promise.resolve();
           }
           /* ⛔ REMOVER CAPA/LOGO PRECISA SER UMA INTENÇÃO EXPLÍCITA. O save normal

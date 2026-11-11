@@ -1400,7 +1400,10 @@ window._bracketOperationsSelect = function (t) {
     tieMatches.find(function (m) { return m.tieStatus === 'review'; });
   var samePhaseNext = next && Number(next.phaseIndex || 0) === Number(t.currentPhaseIndex || 0) ? next : null;
   var callableTie = nextTie && (!nextTie.postponedAt || !samePhaseNext) ? nextTie : null;
-  return { next: callableTie || next || preview, nextCallable: !!callableTie || !!next || !!preview,
+  var queued = [callableTie || next || preview].concat(ordered).filter(function (m, index, list) {
+    return m && list.findIndex(function (entry) { return entry && String(entry.id) === String(m.id); }) === index;
+  });
+  return { next: callableTie || next || preview, queue: queued, nextCallable: !!callableTie || !!next || !!preview,
     tieCanPostpone: !!(callableTie && samePhaseNext && !callableTie.postponedAt),
     active: active, pending: pending, courts: courts, matches: matches };
 };

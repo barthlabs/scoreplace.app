@@ -174,7 +174,7 @@
       '<div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-bottom:.6rem"><button type="button" data-tv-finals-preset class="btn btn-secondary">Final Ouro e Prata</button><button type="button" data-tv-qr-bottom class="btn btn-secondary">Alinhar QR embaixo</button><label>Fundo <select data-tv-background-mode aria-label="Origem das cores da tela"><option value="tournament"' + (layout.backgroundMode === 'tournament' ? ' selected' : '') + '>Cores do torneio</option><option value="custom"' + (layout.backgroundMode === 'custom' ? ' selected' : '') + '>Cor manual</option></select></label>' +
       '<label data-tv-manual-color' + (layout.backgroundMode === 'custom' ? '' : ' hidden') + '>Cor <input data-tv-background type="color" value="' + esc(layout.background) + '"></label>' +
       (!layout.sections.logo.visible ? '<button type="button" data-tv-add-logo class="btn btn-secondary">+ Colocar logo</button>' :
-        '<label>Largura do logo <input data-tv-logo-size="w" type="number" min="5" max="100" step="0.1" value="' + layout.sections.logo.w + '" style="width:5rem">%</label><label>Altura <input data-tv-logo-size="h" type="number" min="5" max="100" step="0.1" value="' + layout.sections.logo.h + '" style="width:5rem">%</label>') + '</div>' +
+        '<label>Logo esquerda <input data-tv-logo-position="x" type="number" min="0" max="' + (100 - layout.sections.logo.w) + '" step="0.1" value="' + layout.sections.logo.x + '" style="width:5rem">%</label><label>Topo <input data-tv-logo-position="y" type="number" min="0" max="' + (100 - layout.sections.logo.h) + '" step="0.1" value="' + layout.sections.logo.y + '" style="width:5rem">%</label><label>Largura <input data-tv-logo-size="w" type="number" min="5" max="100" step="0.1" value="' + layout.sections.logo.w + '" style="width:5rem">%</label><label>Altura <input data-tv-logo-size="h" type="number" min="5" max="100" step="0.1" value="' + layout.sections.logo.h + '" style="width:5rem">%</label>') + '</div>' +
       '<div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.6rem">' +
       Core.IDS.filter(function (id) { return /^live[1-4]$|^standing[1-4]$/.test(id) && layout.sections[id].visible; }).map(function (id) {
         var choices = id.indexOf('live') === 0 ? choicesByKind.matches : choicesByKind.lines;
@@ -189,6 +189,8 @@
       '<div data-tv-canvas aria-label="Prévia da tela No ar" style="position:relative;width:100%;aspect-ratio:16/9;background:' + esc(layout.backgroundMode === 'custom' ? layout.background : (snapshot && snapshot.theme && snapshot.theme.background || '#060d1a')) + ';border:2px solid #818cf8;border-radius:8px;overflow:hidden;touch-action:none;user-select:none">' +
       (documentHtml ? '<iframe data-tv-frame title="Prévia com dados do torneio" sandbox="allow-same-origin" tabindex="-1" style="position:absolute;left:0;top:0;width:1280px;height:720px;border:0;transform-origin:top left;pointer-events:none"></iframe>' :
         '<div data-tv-empty style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:1rem;text-align:center;color:#cbd5e1;font-size:.9rem">Salve e configure os jogos do torneio para visualizar os dados reais nesta prévia.</div>') +
+      '<div data-tv-guide-x style="position:absolute;z-index:30;top:0;bottom:0;width:2px;background:#fbbf24;pointer-events:none;display:none"></div>' +
+      '<div data-tv-guide-y style="position:absolute;z-index:30;left:0;right:0;height:2px;background:#fbbf24;pointer-events:none;display:none"></div>' +
       visible.map(function (id) { return boxHtml(id, getBox(layout, id), labelFor(layout, id)); }).join('') + '</div>' +
       '<div data-tv-removed style="margin:.8rem 0"><strong style="font-size:.8rem">Seções retiradas</strong><div style="display:flex;flex-wrap:wrap;gap:.45rem;margin-top:.35rem">' +
       (removed.length ? removed.map(function (id) { return '<button type="button" data-tv-restore="' + id + '" class="btn btn-secondary" style="font-size:.8rem">+ ' + esc(labelFor(layout, id)) + '</button>'; }).join('') :
@@ -275,12 +277,21 @@
         inside.style.width = b.w + '%'; inside.style.height = b.h + '%';
         fitPreview(frame.contentDocument, inside);
       }
-      if (id === 'logo') host.querySelectorAll('[data-tv-logo-size]').forEach(function (input) { input.value = b[input.dataset.tvLogoSize]; });
+      if (id === 'logo') {
+        host.querySelectorAll('[data-tv-logo-size]').forEach(function (input) { input.value = b[input.dataset.tvLogoSize]; });
+        host.querySelectorAll('[data-tv-logo-position]').forEach(function (input) { input.value = b[input.dataset.tvLogoPosition]; });
+      }
     }
     host.querySelectorAll('[data-tv-logo-size]').forEach(function (input) { input.oninput = function () {
       var b = layout.sections.logo, key = input.dataset.tvLogoSize, value = Math.round(Number(input.value) * 10) / 10;
       if (!Number.isFinite(value)) return;
       b[key] = Math.max(5, Math.min(100 - b[key === 'w' ? 'x' : 'y'], value));
+      touched = true; updateBox('logo');
+    }; });
+    host.querySelectorAll('[data-tv-logo-position]').forEach(function (input) { input.oninput = function () {
+      var b = layout.sections.logo, key = input.dataset.tvLogoPosition, value = Number(input.value);
+      if (!Number.isFinite(value)) return;
+      b[key] = Math.round(Math.max(0, Math.min(100 - b[key === 'x' ? 'w' : 'h'], value)) * 10) / 10;
       touched = true; updateBox('logo');
     }; });
     host.querySelectorAll('[data-tv-box]').forEach(function (box) { box.onpointerdown = function (event) {
@@ -289,6 +300,8 @@
       var id = box.dataset.tvBox, b = getBox(layout, id), handle = event.target.closest('[data-tv-resize]');
       var edge = handle ? handle.dataset.tvResize : '';
       var rect = host.querySelector('[data-tv-canvas]').getBoundingClientRect();
+      var guideX = host.querySelector('[data-tv-guide-x]'), guideY = host.querySelector('[data-tv-guide-y]');
+      function hideGuides() { guideX.style.display = 'none'; guideY.style.display = 'none'; }
       var x0 = event.clientX, y0 = event.clientY, initial = { x: b.x, y: b.y, w: b.w, h: b.h };
       box.setPointerCapture(event.pointerId);
       box.onpointermove = function (move) {
@@ -306,7 +319,16 @@
           b.y = round(Math.max(0, Math.min(100 - b.h, initial.y + dy)));
         }
         var others = allIds(layout).filter(function (otherId) { return otherId !== id; }).map(function (otherId) { return getBox(layout, otherId); });
-        if (!edge) Object.assign(b, Core.snapBox(b, others, false));
+        if (id === 'upcoming' || id === 'results') {
+          var courts = layout.sections.courts, rows = Math.max(1, Math.ceil(((snapshot && snapshot.courts || []).length || 8) / 2));
+          if (courts.visible) {
+            var gap = 1.33, rowHeight = (courts.h - (rows - 1) * gap) / rows;
+            for (var row = 0; row < rows; row++) others.push({ visible:true,
+              x:Math.min(100, courts.x + courts.w + 1), w:0,
+              y:courts.y + row * (rowHeight + gap), h:rowHeight });
+          }
+        }
+        if (!edge && id !== 'logo') Object.assign(b, Core.snapBox(b, others, false));
         else {
           var xs = [0, 100], ys = [0, 100];
           others.forEach(function (other) { if (other.visible) { xs.push(other.x, other.x + other.w); ys.push(other.y, other.y + other.h); } });
@@ -317,9 +339,18 @@
           if (edge.indexOf('s') >= 0) b.h = round(snap(b.y + b.h, ys) - b.y);
           b.w = Math.max(5, b.w); b.h = Math.max(5, b.h);
         }
+        hideGuides();
+        if (id !== 'logo') {
+          var xs = [], ys = [];
+          others.forEach(function (other) { if (other.visible) { xs.push(other.x, other.x + other.w); ys.push(other.y, other.y + other.h); } });
+          var alignedX = xs.find(function (value) { return Math.abs(value - b.x) < .15 || Math.abs(value - b.x - b.w) < .15; });
+          var alignedY = ys.find(function (value) { return Math.abs(value - b.y) < .15 || Math.abs(value - b.y - b.h) < .15; });
+          if (alignedX != null) { guideX.style.left = alignedX + '%'; guideX.style.display = 'block'; }
+          if (alignedY != null) { guideY.style.top = alignedY + '%'; guideY.style.display = 'block'; }
+        }
         touched = true; updateBox(id);
       };
-      box.onpointerup = box.onpointercancel = function () { box.onpointermove = null; };
+      box.onpointerup = box.onpointercancel = function () { box.onpointermove = null; hideGuides(); };
     }; });
     host.querySelector('[data-tv-default]').onclick = function () { selected.layout = Core.defaults(); draft = selected.layout; touched = true; render(); };
     host.querySelector('[data-tv-save-live]').onclick = async function (event) {

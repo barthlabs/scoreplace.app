@@ -1,5 +1,8 @@
 // 2.6.52 — A tela No ar usa as cores de fundo do cartão do torneio também
-// no cabeçalho e nas quadras. Nomes longos encolhem individualmente, enquanto
+// no cabeçalho e nas quadras. Mostra até quatro próximos jogos da fila,
+// em rolagem suave; o QR não encobre os resultados e sua marca tem folga
+// inferior e texto preto. O editor mostra guias ao alinhar os boxes.
+// Nomes longos encolhem individualmente, enquanto
 // os curtos mantêm o tamanho. O editor mostra um botão de chave por categoria.
 // Cada quadra mostra a fase no centro do cabeçalho, entre quadra e categoria.
 // O Salvar do topo grava logo, cores e tela sem reenviar a grade publicada.

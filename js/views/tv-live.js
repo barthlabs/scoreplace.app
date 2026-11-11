@@ -283,6 +283,7 @@
     });
     var nextSelection = typeof window._bracketOperationsSelect === 'function' ? window._bracketOperationsSelect(t) : null;
     var nextMatch = nextSelection ? nextSelection.next : null;
+    var nextQueue = nextSelection && Array.isArray(nextSelection.queue) ? nextSelection.queue.slice() : [];
     if (!nextSelection) {
       var knownSide = window.ScoreplaceNextMatch.knownSide;
       var nextCandidates = matches.filter(function (m) {
@@ -292,7 +293,9 @@
         return knownSide(a) && knownSide(b);
       }).map(function (m) { return { item: { m: m, tId: t.id } }; });
       nextCandidates.sort(window._dashboardNextMatchCompare);
-      nextMatch = window.ScoreplaceNextMatch.firstAvailable(nextCandidates.map(function (entry) { return entry.item.m; }), matches, released);
+      nextQueue = nextCandidates.map(function (entry) { return entry.item.m; });
+      nextMatch = window.ScoreplaceNextMatch.firstAvailable(nextQueue, matches, released);
+      if (nextMatch) nextQueue = [nextMatch].concat(nextQueue.filter(function (m) { return String(m.id) !== String(nextMatch.id); }));
     }
     var nextGame = nextMatch ? {
       number: nextMatch._gameNum || nextMatch.scheduledGameNumber || nextMatch.matchNumber || '',
@@ -302,15 +305,28 @@
     } : null;
     // Partidas extras decidem a rota, mas não pontuam na tabela da fase encerrada.
     // Elas ficam no livro de decisões; a TV anuncia a próxima mesmo sem quadra atribuída.
+    var tieOverride = false;
     if (tieBook) {
       var tiePending = Object.keys(tieBook).sort().map(function (id) { return tieBook[id]; })
         .filter(function (decision) { return decision && decision.status === 'pending'; })
         .reduce(function (all, decision) { return all.concat(decision.matches || []); }, [])
-        .find(function (match) { return match && !match.winnerKey; });
-      if (tiePending) nextGame = { number: String(tiePending.displayGameNumber || 'EXTRA'), category: 'Desempate da classificatória',
+        .find(function (match) { return match && !match.winnerKey && !match.courtCalledAt && !match.court; });
+      if (tiePending) { tieOverride = true;
+        if (tiePending.id) nextQueue = nextQueue.filter(function (m) { return String(m.id) !== String(tiePending.id); });
+        nextGame = { number: String(tiePending.displayGameNumber || 'EXTRA'), category: 'Desempate da classificatória',
         a: String(tiePending.p1 && tiePending.p1.name || ''), b: String(tiePending.p2 && tiePending.p2.name || ''),
-        ta: { name: '', color: '#94a3b8' }, tb: { name: '', color: '#94a3b8' } };
+        ta: { name: '', color: '#94a3b8' }, tb: { name: '', color: '#94a3b8' } }; }
     }
+    var nextGames = nextQueue.filter(function (m) {
+      if (!m || (!tieOverride && nextMatch && String(m.id) === String(nextMatch.id))) return false;
+      return m.isTieBreak || !window.ScoreplaceNextMatch || typeof window.ScoreplaceNextMatch.firstAvailable !== 'function' ||
+        window.ScoreplaceNextMatch.firstAvailable([m], matches, released) === m;
+    })
+      .map(function (m) { return { number: m._gameNum || m.scheduledGameNumber || m.matchNumber || '',
+        category: String(m.category || m.tierLabel || ''), a: sideName(t, m, 'p1'), b: sideName(t, m, 'p2'),
+        ta: teamFor(m, 1, teams), tb: teamFor(m, 2, teams) }; });
+    if (nextGame) nextGames.unshift(nextGame);
+    nextGames = nextGames.slice(0, 4);
     var zone = eventZone(t);
     var today = localDay(now, zone);
     var resultDays = matches.concat(tieMatches).filter(function (m) { return m && occupancy.isFinished(m) && !m.isBye && !m.isSitOut; })
@@ -393,7 +409,7 @@
       qrUrl: qrUrl, qrImage: typeof window._qrCodeUrl === 'function' ? window._qrCodeUrl(qrUrl, 320, false) :
         'https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=' + encodeURIComponent(qrUrl) + '&bgcolor=ffffff&color=1a1e2e&margin=10',
       scoreplaceLogo: site + '/icons/logo-podium.svg',
-      courts: courtCards, nextGame: nextGame, rankings: rankingSections(t, matches, teams), results: results, resultDay: resultDay,
+      courts: courtCards, nextGame: nextGame, nextGames: nextGames, rankings: rankingSections(t, matches, teams), results: results, resultDay: resultDay,
       matchChoices: matchChoices, selectedMatches: selectedMatches, lineChoices: lineChoices, lineStandings: lineStandings,
       brackets: bracketSections(t, matches),
       timing: timing };
@@ -447,15 +463,17 @@
       '<div class="tv-result-versus">VS</div>' +
       '<div class="tv-result-side tv-result-right" style="--team:' + esc(result.tb.color) + '"><strong class="tv-result-side-score' + scoreBClass + '">' + esc(result.scoreB) + '</strong><div class="tv-result-players">' + players(result.b) + '</div><span class="tv-result-team">' + esc(result.tb.name || 'Time') + '</span></div></div></div>';
   }
-  function nextGameHtml(game) {
-    if (!game) return '<section class="tv-upcoming"><h2>PRÓXIMO JOGO</h2><p>Próximo jogo ainda não definido</p></section>';
+  function nextGameHtml(games) {
+    games = Array.isArray(games) ? games : games ? [games] : [];
+    if (!games.length) return '<section class="tv-upcoming"><h2>PRÓXIMOS JOGOS</h2><p>Próximos jogos ainda não definidos</p></section>';
     function players(label) {
       return String(label || '').split(' / ').map(function (name) { return '<span>' + esc(name.trim()) + '</span>'; }).join('');
     }
-    return '<section class="tv-upcoming"><h2>PRÓXIMO JOGO</h2><small>JOGO ' + esc(game.number) + ' · ' + esc(game.category) + '</small>' +
+    function gameHtml(game) { return '<article class="tv-upcoming-item"><small>JOGO ' + esc(game.number) + ' · ' + esc(game.category) + '</small>' +
       '<div class="tv-result-match"><div class="tv-result-side tv-result-left" style="--team:' + esc(game.ta.color) + '"><span class="tv-result-team">' + esc(game.ta.name || 'Time') + '</span><div class="tv-result-players">' + players(game.a) + '</div></div>' +
       '<div class="tv-result-versus">VS</div>' +
-      '<div class="tv-result-side tv-result-right" style="--team:' + esc(game.tb.color) + '"><div class="tv-result-players">' + players(game.b) + '</div><span class="tv-result-team">' + esc(game.tb.name || 'Time') + '</span></div></div></section>';
+      '<div class="tv-result-side tv-result-right" style="--team:' + esc(game.tb.color) + '"><div class="tv-result-players">' + players(game.b) + '</div><span class="tv-result-team">' + esc(game.tb.name || 'Time') + '</span></div></div></article>'; }
+    return '<section class="tv-upcoming"><h2>PRÓXIMOS JOGOS</h2><div class="tv-upcoming-list" data-tv-autoscroll="upcoming">' + games.map(gameHtml).join('') + '</div></section>';
   }
   function bracketsHtml(part) {
     var rounds = part.rounds || [];
@@ -483,7 +501,7 @@
       ';--tv-title:' + esc(theme.title) + ';background:' + esc(theme.background) + '">';
     if (snapshot.tvLayout) return frame + customBodyHtml(snapshot) + '</div>';
     return frame + '<header class="tv-header">' + (snapshot.logo ? '<img src="' + esc(snapshot.logo) + '" alt="">' : '') + '<h1>' + esc(snapshot.name) + '</h1>' + fullscreenActionHtml() + '<time id="tv-now"></time></header>' +
-      '<main class="tv-board"><div class="tv-left"><section class="tv-courts" style="--tv-court-rows:' + Math.ceil(snapshot.courts.length / 2) + '">' + snapshot.courts.map(cardHtml).join('') + '</section>' + nextGameHtml(snapshot.nextGame) + '</div>' +
+      '<main class="tv-board"><div class="tv-left"><section class="tv-courts" style="--tv-court-rows:' + Math.ceil(snapshot.courts.length / 2) + '">' + snapshot.courts.map(cardHtml).join('') + '</section>' + nextGameHtml(snapshot.nextGames || snapshot.nextGame) + '</div>' +
       '<aside class="tv-sidebar"><section class="tv-rankings"><h2>CLASSIFICAÇÃO</h2>' +
       (snapshot.rankings.length ? snapshot.rankings.map(function (section) { return rankingHtml(section, snapshot.rankings.length > 1); }).join('') : '<p>Classificação em formação</p>') +
       '</section><section class="tv-results"><div class="tv-results-main"><h2>ÚLTIMOS RESULTADOS</h2><div class="tv-results-list" data-result-day="' + esc(snapshot.resultDay) + '">' +
@@ -501,7 +519,11 @@
       return b.visible ? '<div class="tv-custom-box tv-custom-' + id + '" style="left:' + b.x + '%;top:' + b.y + '%;width:' + b.w + '%;height:' + b.h + '%">' + inner + '</div>' : '';
     }
     var ranking = '<section class="tv-rankings"><h2>CLASSIFICAÇÃO</h2>' + (snapshot.rankings.length ? snapshot.rankings.map(function (s) { return rankingHtml(s, snapshot.rankings.length > 1); }).join('') : '<p>Classificação em formação</p>') + '</section>';
-    var results = '<section class="tv-results"><div class="tv-results-main"><h2>ÚLTIMOS RESULTADOS</h2><div class="tv-results-list" data-result-day="' + esc(snapshot.resultDay) + '">' + snapshot.results.map(resultHtml).join('') + '</div></div></section>';
+    var resultBox = layout.sections.results, qrBox = layout.sections.qr;
+    var qrOverlap = resultBox.visible && qrBox.visible && qrBox.y < resultBox.y + resultBox.h && qrBox.y + qrBox.h > resultBox.y
+      ? Math.max(0, Math.min(resultBox.x + resultBox.w, qrBox.x + qrBox.w) - Math.max(resultBox.x, qrBox.x)) : 0;
+    var qrReserve = qrOverlap ? Math.min(45, Math.ceil(qrOverlap / resultBox.w * 100) + 2) : 0;
+    var results = '<section class="tv-results"><div class="tv-results-main"><h2>ÚLTIMOS RESULTADOS</h2><div class="tv-results-list" style="padding-right:' + qrReserve + '%" data-result-day="' + esc(snapshot.resultDay) + '">' + snapshot.results.map(resultHtml).join('') + '</div></div></section>';
     var qr = '<div class="tv-qr"><img class="tv-qr-code" src="' + esc(snapshot.qrImage) + '" alt="QR para abrir o Scoreplace"><div class="tv-qr-brand"><img src="' + esc(snapshot.scoreplaceLogo) + '" alt=""><span>Abra no<br>Scoreplace</span></div></div>';
     function liveGame(id) {
       var game = snapshot.selectedMatches && snapshot.selectedMatches[id];
@@ -528,7 +550,7 @@
     return '<main class="tv-custom-board" style="background:' + esc(background) + '">' +
       box('header', '<header class="tv-header">' + (snapshot.logo && !layout.sections.logo.visible ? '<img src="' + esc(snapshot.logo) + '" alt="">' : '') + '<h1>' + esc(snapshot.name) + '</h1>' + fullscreenActionHtml() + '<time id="tv-now"></time></header>') +
       box('courts', '<section class="tv-courts" data-tv-autoscroll="courts" style="--tv-court-rows:' + Math.ceil(snapshot.courts.length / 2) + '">' + snapshot.courts.map(function (card) { return cardHtml(card, layout.card); }).join('') + '</section>') +
-      box('upcoming', nextGameHtml(snapshot.nextGame).replace('class="tv-upcoming"', 'class="tv-upcoming" data-tv-autoscroll="upcoming"')) +
+      box('upcoming', nextGameHtml(snapshot.nextGames || snapshot.nextGame)) +
       box('rankings', ranking.replace('class="tv-rankings"', 'class="tv-rankings" data-tv-autoscroll="rankings"')) + box('results', results) +
       (layout.bracketBoxes || []).map(function (b, index) {
         var part = (snapshot.brackets || []).find(function (entry) { return entry.category === b.category; }) ||
@@ -696,8 +718,15 @@
     '.tv-theme .tv-court-top,.tv-theme .tv-ranking-head,.tv-theme .tv-ranking-row,.tv-theme .tv-result,.tv-theme .tv-focus-standing-row{border-color:var(--tv-edge)}' +
     '.tv-theme .tv-result.tv-result-latest{background:var(--tv-row-active);border-color:#fbbf24}.tv-theme .tv-series-game.tv-series-latest-update,.tv-theme .tv-series-game.tv-series-latest-result{border:2px solid #fbbf24;outline:0;box-shadow:none}' +
     '.tv-theme .tv-bracket-match-in-court{border-color:#4ade80;box-shadow:none}' +
-    '.tv-theme .tv-qr-brand{background:#080808;color:#ffffff;border-radius:.35vw;padding:.18vw .3vw;box-sizing:border-box}' +
+    '.tv-theme .tv-qr-brand{background:#ffffff;color:#000000;border-radius:.35vw;padding:.18vw .3vw;box-sizing:border-box}' +
     '#tv-fullscreen-action{border-color:#d4d4d4!important;background:#222!important;color:#fff}' +
+    '</style>');
+  styles = styles.replace('</style>',
+    '.tv-upcoming{display:flex;flex-direction:column}.tv-upcoming h2{flex:none}.tv-upcoming-list{flex:1;min-height:0;overflow-y:auto;scrollbar-width:none;overscroll-behavior:contain}.tv-upcoming-list::-webkit-scrollbar{display:none}' +
+    '.tv-upcoming-item{display:flex;flex-direction:column;min-height:9vw;margin:.35vw 0 .55vw;padding-bottom:.4vw;border-bottom:1px solid var(--tv-edge,#555)}' +
+    '.tv-upcoming-item>small{display:block;flex:none;margin:0 0 .2vw;color:#fff;font-size:clamp(.7rem,.8vw,1rem)}' +
+    '.tv-upcoming-item .tv-result-match{height:auto;min-height:7vw;flex:1}.tv-upcoming-item .tv-result-side{min-height:7vw}' +
+    '.tv-custom-qr .tv-qr{padding-bottom:.55vw}.tv-custom-results .tv-results-list{box-sizing:border-box}' +
     '</style>');
   // O editor usa exatamente o HTML e o CSS da janela No ar. O iframe não
   // executa childScript: relógios e hora recebem o valor deste instante.

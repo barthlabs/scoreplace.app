@@ -133,6 +133,12 @@ assert(!Object.hasOwn(await p.evaluate(()=>window._remotePatch || {}),'coverUrl'
  'payload vazio sem intenção explícita não apaga a URL da capa');
 await p.evaluate(()=>{
  window._remotePatch=undefined;
+ return window.AppStore.addTournament({id:'e',coverMode:'color',coverPhotoData:''});
+});
+assert(!Object.hasOwn(await p.evaluate(()=>window._remotePatch || {}),'coverMode'),
+ 'campo vazio acidental também não deixa modo cor com foto publicada');
+await p.evaluate(()=>{
+ window._remotePatch=undefined;
  return window.AppStore.addTournament({id:'e',coverMode:'color',coverPhotoData:'',_coverRemovalRequested:true});
 });
 assert.equal(await p.evaluate(()=>window._remotePatch.coverUrl),'',

@@ -1,5 +1,7 @@
 ## 2.6.52 — 11/nov/2026 (cores e edição da TV)
 
+- A tela No ar mostra o logo ao lado do nome quando o box separado do logo foi retirado. “Próximos jogos” exibe até quatro confrontos da fila operacional em rolagem contínua; os resultados reservam espaço para o QR quando ele se sobrepõe, e a marca recebe uma pequena folga inferior com texto preto.
+- O editor permite posicionar o logo livremente por coordenadas e mostra guias douradas durante o arrasto. O box de próximos jogos e o de resultados podem encaixar nas linhas das quadras, mantendo o pequeno intervalo entre as colunas.
 - A TV deriva cabeçalho, quadras e linhas das cores de fundo do cartão do torneio; no CAMIS, preto e branco produzem tons neutros, sem o azul fixo. A geometria salva da tela não é alterada.
 - Cada nome de atleta que ultrapassa seu espaço reduz só a própria fonte. Nomes que cabem permanecem no tamanho anterior. A prévia do editor usa o mesmo ajuste.
 - O topo de cada quadra mostra a fase do jogo ao centro, entre o número da quadra e a categoria: classificatória, desempate ou a rodada eliminatória correspondente.
