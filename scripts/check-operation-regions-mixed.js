@@ -20,7 +20,7 @@ const scoreRefreshCommit = '611de1560b8c51d3de84eefc085bc3a05e952492';
 // O manifesto registra a revisão efetivamente publicada para chamada e controle.
 // Mudanças em outros arquivos de functions-autodraw (por exemplo, um vendor usado
 // no sorteio) não alteram a imagem desses dois serviços na malha regional.
-const courtControlRefreshCommit = 'c85ac683465a159a4c77e5f680481f9510871442';
+const courtControlRefreshCommit = '48b107f9ad59d1fb992139d61c35a6e28ee656fc';
 const endCourtRefreshCommit = '225fca3e34009c03346991bb9b2b001cc2173b12';
 const regions = version === 'v2'
   ? ['us-east1', 'us-east4', 'us-south1']
