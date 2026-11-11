@@ -1,3 +1,9 @@
+## 2.6.43 — 11/nov/2026 (entrada do pré-sorteio CAMIS)
+
+- A grade salva, mesmo sem o campo `scheduleWindow.mode`, identifica o torneio com horários definidos. O botão Sortear abre a revisão completa de quadras, grupos e horários antes de qualquer jogo ser gerado.
+- A mesma condição protege chamadas diretas ao sorteio. Teste de regressão usa o formato real do documento do CAMIS.
+- Corte somente web; não altera dados do torneio nem versões nativas.
+
 ## 2.6.42 — 11/nov/2026 (grade de quadras no pré-sorteio)
 
 - O sorteio Rei/Rainha com horários definidos abre a grade completa de grupos e eliminatórias, com quadras, horários e os três jogos de cada grupo. O organizador pode mover os blocos antes de sortear.

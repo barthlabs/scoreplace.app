@@ -2170,21 +2170,31 @@ window._linhaDoHistorico = function (log) {
     '<span>' + window._safeHtml(log.message) + '</span></div>';
 };
 
+// Documentos criados antes do seletor `mode` já guardam a grade com dias e blocos.
+// O CAMIS real tem essa estrutura, mas não tem `scheduleWindow.mode`; exigir o
+// campo deixava Sortear cair no painel verde antigo e pulava a revisão da grade.
+window._requiresMonarchPreDrawReview = function (t) {
+    var schedule = t && t.scheduleWindow;
+    if (!schedule || schedule.mode === 'participants') return false;
+    var plan = schedule.interleavedPlan;
+    var hasGrid = Array.isArray(schedule.days) && schedule.days.length > 0 &&
+        plan && Array.isArray(plan.blocks) && plan.blocks.length > 0;
+    if (schedule.mode !== 'organizer' && !hasGrid) return false;
+    return Array.isArray(t.phases)
+        ? (typeof window._sorteioDaFaseEhReiRainha === 'function' && window._sorteioDaFaseEhReiRainha(t))
+        : (typeof window._isMonarchFormat === 'function' && window._isMonarchFormat(t));
+};
+
 window.showFinalReviewPanel = function (tId) {
     const t = window._findTournamentById(tId);
     if (!t) return;
 
     // Torneios Rei/Rainha com horário definido revisam a grade real antes do sorteio.
-    if (t.scheduleWindow && t.scheduleWindow.mode === 'organizer') {
-        var monarch = Array.isArray(t.phases)
-          ? (typeof window._sorteioDaFaseEhReiRainha === 'function' && window._sorteioDaFaseEhReiRainha(t))
-          : (typeof window._isMonarchFormat === 'function' && window._isMonarchFormat(t));
-        if (monarch) {
-            if (typeof window._openMonarchPreDrawReview === 'function') window._openMonarchPreDrawReview(tId);
-            else if (typeof window.showAlertDialog === 'function') window.showAlertDialog('Revisão da grade indisponível',
-                'Recarregue a página antes de sortear. É necessário conferir quadras e horários.', null, { type:'warning' });
-            return;
-        }
+    if (window._requiresMonarchPreDrawReview(t)) {
+        if (typeof window._openMonarchPreDrawReview === 'function') window._openMonarchPreDrawReview(tId);
+        else if (typeof window.showAlertDialog === 'function') window.showAlertDialog('Revisão da grade indisponível',
+            'Recarregue a página antes de sortear. É necessário conferir quadras e horários.', null, { type:'warning' });
+        return;
     }
 
     const existing = document.getElementById('final-review-panel');
@@ -3565,7 +3575,7 @@ window.generateDrawFunction = function (tId) {
     }
 
     // Protege também atalhos que chegam diretamente aqui, sem showFinalReviewPanel.
-    if (isCurrentDrawMonarch && t.scheduleWindow && t.scheduleWindow.mode === 'organizer') {
+    if (window._requiresMonarchPreDrawReview(t)) {
         window._monarchDrawReviewApproved = window._monarchDrawReviewApproved || {};
         if (!window._monarchDrawReviewApproved[String(tId)]) {
             if (typeof window._drawBtnDone === 'function') window._drawBtnDone();

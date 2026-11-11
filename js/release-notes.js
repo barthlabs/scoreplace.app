@@ -1,3 +1,6 @@
+// 2.6.43 — Corrigido o botão Sortear em torneios Rei/Rainha com grade salva
+// antes do seletor de modo: ele abre a revisão das quadras e horários, sem
+// cair no painel antigo. O mesmo bloqueio protege atalhos diretos do sorteio.
 // 2.6.42 — Antes do sorteio Rei/Rainha com horários definidos, a organização
 // confere a grade completa e pode mover grupos entre quadras e horários na
 // própria revisão. A grade ajustada é salva antes de iniciar o sorteio.
