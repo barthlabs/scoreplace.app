@@ -13,10 +13,10 @@
 # Uso:
 #   scripts/deploy-functions.sh main --only applyCanonicalRegistrationMigration
 #                                              # publica somente funções principais nomeadas
-#   scripts/deploy-functions.sh main --all      # codebase principal inteiro (exceção explícita)
-#   scripts/deploy-functions.sh autodraw --all  # sorteio inteiro (exceção explícita)
-#   scripts/deploy-functions.sh stripe --all    # Pro/pagamentos inteiro (exceção explícita)
-#   scripts/deploy-functions.sh all --all       # os três codebases inteiros (recuperação)
+#   scripts/deploy-functions.sh autodraw --only drawRound,updateTournamentConfiguration
+#                                              # mudança comum: publicar apenas os exports afetados
+#   scripts/deploy-functions.sh autodraw --all --recovery --reason 'Restaurar codebase após perda de funções'
+#                                              # recuperação extraordinária de todo o codebase
 #   scripts/deploy-functions.sh main --all --dry-run
 #                                              # só mostra o comando, não roda
 #
@@ -42,6 +42,8 @@ PROJECT="scoreplace-app"
 DRY=0
 ONLY=""
 ALL=0
+RECOVERY=0
+REASON=""
 
 die() { echo "✗ $*" >&2; exit 1; }
 
@@ -51,6 +53,12 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     --dry-run) DRY=1; shift ;;
     --all) ALL=1; shift ;;
+    --recovery) RECOVERY=1; shift ;;
+    --reason)
+      [ "$#" -ge 2 ] || die "--reason exige uma justificativa"
+      REASON="$2"
+      shift 2
+      ;;
     --only)
       [ "$#" -ge 2 ] || die "--only exige uma lista de nomes de funções"
       ONLY="$2"
@@ -65,6 +73,17 @@ done
 # aumenta a superfície de falha. `--all` existe somente para recuperação ou
 # mudança transversal deliberada e precisa ser visível no comando.
 [ -z "$ONLY" ] || [ "$ALL" = "0" ] || die "use --only OU --all, nunca os dois"
+if [ "$ALL" = 1 ] && [ "$DRY" != 1 ]; then
+  [ "$RECOVERY" = 1 ] && [ "${#REASON}" -ge 20 ] ||
+    die "--all em produção é só para recuperação: use --only nome[,nome]; recuperação exige --recovery --reason 'motivo concreto (20+ caracteres)'"
+  [ -t 0 ] || die "recuperação completa exige terminal interativo; automação e entrada redirecionada não podem publicar todas as Functions"
+  CONFIRMATION=""
+  read -r -p "Digite RECUPERAR TODAS AS FUNCTIONS para prosseguir: " CONFIRMATION
+  [ "$CONFIRMATION" = 'RECUPERAR TODAS AS FUNCTIONS' ] || die "recuperação completa não confirmada"
+  echo "⚠️ RECUPERAÇÃO COMPLETA DE FUNCTIONS: $REASON"
+elif [ "$RECOVERY" = 1 ] && [ "$ALL" != 1 ]; then
+  die "--recovery exige --all"
+fi
 
 # `--dry-run` só constrói e mostra a lista de funções. Ele é usado pelo gate
 # unitário para validar o runbook em um runner sem segredos Firebase; pedir a
@@ -228,7 +247,7 @@ case "$ALVO" in
   autodraw) do_autodraw ;;
   stripe)   do_stripe ;;
   all)      do_main; do_autodraw; do_stripe ;;
-  *) die "uso: scripts/deploy-functions.sh [main|autodraw|stripe|all] [--dry-run] [--only nome[,nome]]" ;;
+  *) die "uso: scripts/deploy-functions.sh [main|autodraw|stripe|all] [--dry-run] [--only nome[,nome] | --all --recovery --reason motivo]" ;;
 esac
 # ⭐ CARIMBA — e SÓ o escopo que realmente foi publicado, SÓ em deploy de verdade.
 # ⛔ Carimbar em `--dry-run`, ou carimbar "backend" ao publicar o codebase `main`, faria o carimbo

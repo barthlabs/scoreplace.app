@@ -33,6 +33,23 @@ for (const target of ['main', 'all']) {
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /functions:syncMatchRosters/, target);
 }
+for (const target of ['main', 'autodraw', 'stripe', 'all']) {
+  const broad = spawnSync('bash', ['scripts/deploy-functions.sh', target, '--all'],
+    { cwd: root, encoding: 'utf8' });
+  assert.notEqual(broad.status, 0, target + ' não pode publicar tudo por rotina');
+  assert.match(broad.stderr, /--all em produção é só para recuperação/, target);
+}
+const recoveryWithoutReason = spawnSync('bash',
+  ['scripts/deploy-functions.sh', 'autodraw', '--all', '--recovery'],
+  { cwd: root, encoding: 'utf8' });
+assert.notEqual(recoveryWithoutReason.status, 0);
+assert.match(recoveryWithoutReason.stderr, /--reason/);
+const automatedRecovery = spawnSync('bash',
+  ['scripts/deploy-functions.sh', 'autodraw', '--all', '--recovery',
+    '--reason', 'Restaurar todas as funções após perda confirmada'],
+  { cwd: root, encoding: 'utf8', input: 'RECUPERAR TODAS AS FUNCTIONS\n' });
+assert.notEqual(automatedRecovery.status, 0);
+assert.match(automatedRecovery.stderr, /exige terminal interativo/);
 const unrelated = dry('main', '--only', 'cleanupOldNotifications');
 assert.equal(unrelated.status, 0, unrelated.stderr);
 console.log('✓ guarda E05 prova fonte física antes de alvejar roster; exports de espelho ausentes');
