@@ -63,14 +63,25 @@ assert(!Object.hasOwn(await p.evaluate(()=>window._sent),'coverPhotoData'),'capa
 assert.equal(await p.evaluate(()=>window._sent.coverMode),'photo','capa publicada continua no modo foto durante a hidratação');
 assert(!Object.hasOwn(await p.evaluate(()=>window._sent),'coverUrl'),'salvar ficha não apaga a URL publicada da capa');
 await p.evaluate(()=>{
+ window._editLogoHydrating='';document.getElementById('tourn-cover-data').value='data:image/png;base64,BBBB';
+ return window._saveTournamentClickHandler();
+});
+assert.equal(await p.evaluate(()=>window._sent.coverPhotoData),'data:image/png;base64,BBBB',
+ 'foto nova continua editável com jogos publicados');
+await p.evaluate(()=>{window._editLogoHydrating='e';document.getElementById('tourn-cover-data').value='';});
+await p.evaluate(()=>{
  window._stubAddTournament=window.AppStore.addTournament;
  window.AppStore.addTournament=window._actualStoreAdd;
+ const realAdd=window.AppStore.addTournament;
+ window.AppStore.addTournament=function(data){window._tourDataAtStore=structuredClone(data);return realAdd.call(this,data);};
  window.AppStore._saveToCache=()=>{};
  window._remotePatch=undefined;
  window._callCF=async (_name,command)=>{window._remotePatch=command.patch;return {data:{tournament:{id:'e',coverMode:'photo',coverUrl:'https://storage.example/cover-old.png'}}};};
  return window._saveTournamentClickHandler();
 });
 assert(!Object.hasOwn(await p.evaluate(()=>window._remotePatch),'coverUrl'),'com hidratação ativa, o comando real da store preserva a URL da capa');
+assert(!Object.hasOwn(await p.evaluate(()=>window._tourDataAtStore),'coverPhotoData'),
+ 'com jogos publicados e hidratação ativa, tourData chega à store sem comando de remoção da capa');
 assert.equal(await p.evaluate(()=>window.AppStore.tournaments[0].coverUrl),'https://storage.example/cover-old.png');
 assert.deepEqual(await p.evaluate(()=>window.AppStore.tournaments[0].matches),[{id:'published-match-1',court:'Quadra 1'}],
  'salvar a ficha durante o torneio preserva os jogos publicados');

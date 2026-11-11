@@ -7234,7 +7234,9 @@ window._saveTournamentClickHandler = async function() {
               delete tourData.tvLayout;
               delete tourData.tvScreens;
               delete tourData.logoData;
-              delete tourData.coverPhotoData;
+              // A capa pertence à personalização, não à grade publicada.
+              // coverImagePatch já distingue foto nova, remoção pelo modo cor
+              // e campo vazio enquanto uma foto existente ainda hidrata.
             }
             await window.AppStore.addTournament(tourData);
             var _freshEdit = window.AppStore.tournaments.find(function (x) { return String(x.id) === String(editId); }) || t;

@@ -5,6 +5,7 @@
 // O logo só sai por remoção explícita; a marca do QR segue legível sobre fundo claro.
 // Descartar, cancelar ou falhar ao salvar limpa a intenção de remover o logo;
 // a capa publicada continua em modo foto; a gravação só envia imagem nova ou remoção explícita.
+// A capa pode mudar mesmo depois do sorteio, sem enviar a grade de jogos.
 // A correção do comparador no servidor permite confirmar os jogos Rei/Rainha.
 // Se a resposta da simulação falhar, o próximo toque confere o mesmo placar
 // pendente antes de seguir; um novo sorteio de pontos não bloqueia a tentativa.
