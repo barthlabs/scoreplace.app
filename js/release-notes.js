@@ -3,6 +3,8 @@
 // uma quadra ocupada. Conflitos restantes ficam listrados até o ajuste.
 // O organizador também pode gerar uma proposta de grade a partir das vagas,
 // quadras e durações; fases simultâneas permanecem liberadas para chamada.
+// Se a cascata não couber antes da meia-noite, o movimento é recusado sem
+// sobrepor blocos. A eliminatória aguarda os grupos da própria categoria.
 // 2.6.39 — A programação de fases abre numa tela ampla com abas de datas.
 // Rolar a grade não move blocos; o primeiro horário aparece inteiro.
 // 2.6.38 — O organizador escolhe se define os horários dos jogos ou se
