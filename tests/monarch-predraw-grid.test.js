@@ -24,7 +24,8 @@ async function run() {
   const tournament = {
     id:'camis', participants:[], courtCount:8, gameDuration:30, callTime:5, warmupTime:5,
     phases:[{ drawMode:'rei_rainha' }, { drawMode:'sorteio' }],
-    scheduleWindow:{ days:[{ day:'2026-11-13', startTime:'08:00', endTime:'21:00' }],
+    scheduleWindow:{ days:[{ day:'2026-11-13', startTime:'08:00', endTime:'21:00' },
+      { day:'2026-11-14', startTime:'08:00', endTime:'21:00' }],
       interleavedPlan:plan }
   };
   const calls = [], draws = [];
@@ -67,6 +68,17 @@ async function run() {
     dataTransfer:{ getData:() => last.id }, currentTarget:{ getBoundingClientRect:() => ({ top:0 }) },
     clientY:2220 }, 3);
   assert.equal(window._phaseCallOrderState.tiles.find(tile => tile.id === last.id).court, 3);
+  let draggedId;
+  const transfer = {
+    setData(type, id) { assert.equal(type, 'text/plain'); draggedId = id; },
+    getData:type => type === 'text/plain' ? draggedId : ''
+  };
+  window._phaseGridDragStart({ dataTransfer:transfer }, last.id);
+  assert.equal(draggedId, last.id, 'o bloco deve carregar seu ID no arrasto');
+  window._phaseGridDropDay({ preventDefault() {}, stopPropagation() {}, dataTransfer:transfer }, '2026-11-14');
+  assert.equal(window._phaseCallOrderState.tiles.find(tile => tile.id === last.id).day, '2026-11-14');
+  assert.equal(window._phaseCallOrderState.tiles.find(tile => tile.id === last.id).court, 3);
+  assert.equal(window._phaseCallOrderState.activeDay, '2026-11-14');
   assert.equal(grid.validate(window._phaseCallOrderState.tiles, plan, tournament.scheduleWindow.days), null);
   window.generateDrawFunction = id => draws.push(id);
   await window._phaseGridSaveAndDraw();
@@ -75,7 +87,7 @@ async function run() {
   assert.equal(calls[0].payload.patch.scheduleWindow.interleavedPlan.editorVersion, 2);
   assert.equal(calls[0].payload.patch.scheduleWindow.interleavedPlan.blocks.some(block =>
     block.kind === 'elimination' && block.category === 'Fem Prata' && block.round === 4 &&
-    block.startTime === '20:20' && block.courts.includes(3)), true);
+    block.day === '2026-11-14' && block.startTime === '20:20' && block.courts.includes(3)), true);
   assert.deepEqual(draws, ['camis']);
   assert.equal(elements.has('phase-grid-overlay'), false);
 

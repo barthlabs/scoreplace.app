@@ -23,6 +23,24 @@ assert.equal(compactAgain.error, undefined);
 assert.deepEqual([...openingCategories(compactAgain)], ['Fem Diamante'],
   'voltar a concentrar recupera a ordem da grade original');
 assert.equal(grid.validate(spreadPreset.tiles, fixture, [firstDay]), null);
+const splitDays = [
+  { day:firstDay.day, startTime:'08:00', endTime:'12:00' },
+  { day:secondDay.day, startTime:'09:15', endTime:'21:00' }
+];
+const spreadAcrossDays = grid.preset(tiles, fixture, splitDays, 'spread');
+assert.equal(spreadAcrossDays.error, undefined, 'espalhar três categorias deve respeitar duas janelas diferentes');
+assert.equal(grid.validate(spreadAcrossDays.tiles, fixture, splitDays), null);
+assert.equal(spreadAcrossDays.tiles.some(tile => tile.day === secondDay.day), true);
+assert.equal(spreadAcrossDays.tiles.filter(tile => tile.day === firstDay.day && tile.startTime === '08:00')
+  .map(tile => tile.category).filter((value, index, all) => all.indexOf(value) === index).length, 3,
+  'três categorias dividem as quadras disponíveis desde a abertura');
+assert.equal(spreadAcrossDays.tiles.filter(tile => tile.day === secondDay.day)
+  .every(tile => grid.minutes(tile.startTime) >= grid.minutes('09:15')), true,
+  'o segundo dia nunca começa antes do horário configurado');
+const compactAcrossDays = grid.preset(spreadAcrossDays.tiles, fixture, splitDays, 'compact');
+assert.equal(compactAcrossDays.error, undefined, 'concentrar depois de espalhar preserva todos os blocos');
+assert.equal(grid.validate(compactAcrossDays.tiles, fixture, splitDays), null);
+assert.deepEqual([...openingCategories(compactAcrossDays)], ['Fem Diamante']);
 assert.equal(new Set(Object.values(grid.numbered(tiles, fixture))).size, tiles.length);
 assert.equal(Math.max(...Object.values(grid.numbered(tiles, fixture))), 144);
 const eliminationNames = grid.eliminationLabels(tiles);
