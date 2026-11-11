@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "backendCommit": "48b107f9ad59d1fb992139d61c35a6e28ee656fc",
-  "scopeNote": "Corte 2.6.50: liberar a data programada para chamada de quadra; controles de ordem e ocupação permanecem.",
+  "backendCommit": "3f4e5f046277e2dab42effed0d33e56a9dee492b",
+  "scopeNote": "Corte 2.6.51: chamada manual sem trava de fase ou data; eliminatória exige duplas definidas.",
   "functions": [
     "assignMatchCourt"
   ]
