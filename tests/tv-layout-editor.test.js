@@ -100,7 +100,7 @@ const { chromium } = require('@playwright/test');
       'salvar novamente sem mudanças não envia um layout vazio ao servidor');
     const seriesPositions = await page.evaluate(async () => {
       const game = (number, scoreA, scoreB) => ({
-        number, a:'Laura / Maria Antonia Ometto Lima', b:'Fernanda / Bianca', scoreA, scoreB,
+        number, a:'Laura / Flávia Fabbrocini Sanches', b:'Fernanda / Bianca', scoreA, scoreB,
         status:'done', winnerSide:1
       });
       const snapshot = {
@@ -130,7 +130,8 @@ const { chromium } = require('@playwright/test');
           rightScore:box('.tv-series-right strong').left,
           rightNames:box('.tv-series-right .tv-series-players').left };
       }), colors, shortFont:parseFloat(frame.contentWindow.getComputedStyle(shortName).fontSize),
-        longFont:parseFloat(frame.contentWindow.getComputedStyle(longName).fontSize) };
+        longFont:parseFloat(frame.contentWindow.getComputedStyle(longName).fontSize),
+        longLines:longName.scrollHeight / parseFloat(frame.contentWindow.getComputedStyle(longName).lineHeight) };
     });
     assert.equal(seriesPositions.rows.length, 24, 'oito quadras mantêm seus três jogos');
     seriesPositions.rows.forEach((position, index) => {
@@ -140,6 +141,7 @@ const { chromium } = require('@playwright/test');
     });
     assert(seriesPositions.longFont < seriesPositions.shortFont,
       'só o nome que excede o espaço tem a fonte reduzida');
+    assert(seriesPositions.longLines <= 2.1, 'Flávia Fabbrocini Sanches cabe em no máximo duas linhas');
     seriesPositions.colors.forEach(color => assert(Math.max(...color) - Math.min(...color) <= 1,
       'cabeçalho, quadra e linha usam tons neutros da capa preta e branca'));
     await page.locator('[data-tv-finals-preset]').click();
