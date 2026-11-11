@@ -1,3 +1,11 @@
+## 2.6.40 — 11/nov/2026 (nomes e encaixe da grade)
+
+- A grade mostra oitavas, quartas, semifinais, final e disputa de 3º lugar conforme a sequência de cada categoria, inclusive a fase preliminar da Prata.
+- A coluna de horários e as linhas horizontais usam os inícios previstos dos blocos e jogos. Cada série Rei/Rainha mostra os três horários individuais.
+- Soltar um bloco numa quadra ocupada empurra os blocos seguintes. Sobreposições ou blocos fora do horário ficam listrados e exigem ajuste antes de salvar.
+- Quando ainda não existe grade, a edição pode gerar uma proposta Rei/Rainha usando vagas por categoria, quadras e durações configuradas; no cenário CAMIS, ela distribui 144 jogos sem sobreposição até 20h25. A chamada aceita fases simultâneas da grade editada sem exigir que fases futuras terminem primeiro.
+- Corte somente web; a programação gravada do torneio e as versões nativas não são modificadas automaticamente.
+
 ## 2.6.39 — 11/nov/2026 (grade visual em tela ampla)
 
 - O horário inicial da grade visual deixa de ficar oculto sob o cabeçalho fixo da coluna Hora.

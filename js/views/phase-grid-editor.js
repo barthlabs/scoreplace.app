@@ -36,6 +36,22 @@
     });
     return result;
   }
+  function timeMarks(tiles, tournament, start, last) {
+    var blocks = new Set([start]);
+    var games = new Set();
+    tiles.forEach(function (tile) {
+      blocks.add(model.minutes(tile.startTime));
+      model.gameStarts(tile, tournament).forEach(function (time) { games.add(time); });
+    });
+    var selected = Array.from(blocks).sort(function (a, b) { return a - b; });
+    Array.from(games).sort(function (a, b) { return a - b; }).forEach(function (time) {
+      if (time >= start && time <= last && selected.every(function (mark) { return Math.abs(mark - time) >= 10; }))
+        selected.push(time);
+    });
+    selected.sort(function (a, b) { return a - b; });
+    if (last - selected[selected.length - 1] >= 10) selected.push(last);
+    return selected;
+  }
   function position(event, court) {
     var state = window._phaseCallOrderState, lane = event.currentTarget;
     var y = event.clientY - lane.getBoundingClientRect().top;
@@ -44,19 +60,23 @@
   }
   function redraw(keepScroll) {
     var mount = section(), state = window._phaseCallOrderState;
-    if (!mount || !state) { if (overlayOpen) window._closePhaseGridEditor(); return; }
+    if (!mount) { if (overlayOpen) window._closePhaseGridEditor(); return; }
     if (overlayOpen && !overlay()) {
       overlayOpen = false;
       document.body.style.overflow = previousBodyOverflow;
-      state.placing = false;
+      if (state) state.placing = false;
     }
     var scheduleState = window._estimatedGameHoursState;
     if (scheduleState && scheduleState.mode === 'participants') {
       if (overlayOpen) window._closePhaseGridEditor();
       mount.innerHTML = ''; return;
     }
-    if (!state.plan || !model || !state.tiles.length) {
-      mount.innerHTML = '<div class="phase-grid-editor"><h3>Grade de fases e quadras</h3><p>A grade aparece quando a programação de grupos e eliminatórias está definida.</p></div>';
+    if (!state || !state.plan || !model || !state.tiles.length) {
+      mount.innerHTML = '<div class="phase-grid-editor"><h3>Grade de fases e quadras</h3>' +
+        '<p>Gere uma proposta com as vagas, quadras e durações configuradas. Depois ajuste os blocos na tela ampla.</p>' +
+        '<div class="phase-grid-proposal"><label>Jogo eliminatório <input id="phase-grid-elimination-play" type="number" min="1" max="180" value="25" inputmode="numeric"> min</label>' +
+        '<button type="button" class="btn btn-secondary" onclick="window._phaseGridSuggest()">Gerar proposta de grade</button></div>' +
+        '<p id="phase-grid-proposal-message" role="alert" hidden></p></div>';
       return;
     }
     var day = dayOf(state), start = model.minutes(day && day.startTime), end = model.minutes(day && day.endTime);
@@ -79,13 +99,18 @@
     var last = visible.reduce(function (max, tile) { return Math.max(max, model.minutes(tile.startTime) + tile.duration); }, end);
     var height = (last - start) * 3, columns = Number(state.plan.courts);
     var numbers = model.numbered(state.tiles, state.plan);
+    var eliminationNames = model.eliminationLabels(state.tiles);
+    var overlapping = model.overlapIds(state.tiles, state.plan);
     var categories = Array.from(new Set(state.tiles.map(function (tile) { return tile.category; })));
-    var times = [];
-    for (var time = start; time <= last; time += 20) {
-      var firstHour = time === start;
-      times.push('<span class="phase-grid-hour" style="top:' + (firstHour ? 6 : (time - start) * 3) + 'px' +
-        (firstHour ? ';transform:none' : '') + '">' + model.clock(time) + '</span>');
-    }
+    var marks = timeMarks(visible, state.tournament, start, last);
+    var times = marks.map(function (time) {
+      var firstHour = time === start, finalHour = time === last;
+      return '<span class="phase-grid-hour" style="top:' + (firstHour ? 8 : finalHour ? height - 5 : (time - start) * 3) +
+        'px' + (firstHour ? ';transform:none' : '') + '">' + model.clock(time) + '</span>';
+    });
+    var lines = marks.map(function (time) {
+      return '<span class="phase-grid-time-line" style="top:' + (time - start) * 3 + 'px"></span>';
+    }).join('');
     root.innerHTML = '<section class="phase-grid-editor phase-grid-fullscreen" role="dialog" aria-modal="true" aria-label="Programação visual das fases">' +
       '<div class="phase-grid-toolbar"><div><h2>Fases na grade de quadras e horários</h2>' +
       '<p>Cada grupo reserva três jogos na mesma quadra. Arraste blocos com o mouse. Para mudar de dia, selecione o bloco, escolha a data e use “Posicionar bloco”. Rolar a grade não altera a programação.</p></div>' +
@@ -111,23 +136,27 @@
         var court = i + 1;
         return '<div class="phase-grid-lane" style="height:' + height + 'px" data-court="' + court + '"' +
           (state.locked ? '' : ' onclick="window._phaseGridPlace(event,' + court + ')" ondragover="event.preventDefault()" ondrop="window._phaseGridDrop(event,' + court + ')"') + '>' +
+          lines +
           visible.filter(function (tile) { return tile.court === court; }).map(function (tile) {
             var top = (model.minutes(tile.startTime) - start) * 3, tileHeight = tile.duration * 3 - 3;
-            var id = esc(tile.id), groupName = model.groupLabel(tile), short = tile.kind === 'groups' ? 'Grupo ' + groupName + ' · 3 jogos' : 'Rodada ' + tile.round;
+            var id = esc(tile.id), groupName = model.groupLabel(tile);
+            var title = tile.kind === 'groups' ? label(tile) : eliminationNames[tile.id];
+            var short = tile.kind === 'groups' ? 'Grupo ' + groupName + ' · 3 jogos' : tile.category;
+            var gameTimes = model.gameStarts(tile, state.tournament);
             var accent = 'phase-grid-cat-' + (categories.indexOf(tile.category) % 6);
-            var overflow = model.outsideWindow(tile, day);
+            var overflow = model.outsideWindow(tile, day), collision = overlapping.has(tile.id);
             return '<div class="phase-grid-tile ' + (tile.kind === 'groups' ? 'phase-grid-group' : 'phase-grid-elim') + ' ' + accent +
-              (overflow ? ' phase-grid-overflow' : '') +
+              (overflow || collision ? ' phase-grid-overflow' : '') +
               (state.selectedId === tile.id ? ' selected' : '') + '" style="top:' + top + 'px;height:' + tileHeight + 'px"' +
-              ' data-tile-id="' + id + '" tabindex="0" role="button" aria-label="' + esc(label(tile) + ', ' + short + ', quadra ' + court + ', ' + tile.startTime + (overflow ? ', ultrapassa o fim do dia' : '')) + '"' +
+              ' data-tile-id="' + id + '" tabindex="0" role="button" aria-label="' + esc(title + ', ' + short + ', quadra ' + court + ', ' + tile.startTime + (overflow ? ', ultrapassa o fim do dia' : '') + (collision ? ', sobreposto a outro bloco' : '')) + '"' +
               (state.locked ? '' : ' draggable="' + (window.matchMedia && window.matchMedia('(pointer:fine)').matches ? 'true' : 'false') + '" onclick="event.stopPropagation();window._phaseGridSelect(\'' + id + '\')"' +
                 ' ondragstart="window._phaseGridDragStart(event,\'' + id + '\')" onkeydown="window._phaseGridKey(event,\'' + id + '\')"') + '>' +
-              '<strong>' + esc(label(tile)) + '</strong><small>' + esc(short) + '</small>' +
+              '<strong>' + esc(title) + '</strong><small>' + esc(short) + '</small>' +
               (tile.kind === 'groups' ? '<div class="phase-grid-series">' + [0,1,2].map(function (offset) {
-                return '<span>JOGO ' + (numbers[tile.id] + offset) + ' <small>(' + (offset + 1) + '/3)</small></span>';
+                return '<span>JOGO ' + (numbers[tile.id] + offset) + ' <small>(' + (offset + 1) + '/3) · ' + model.clock(gameTimes[offset]) + '</small></span>';
               }).join('') + '</div>' : '<span class="phase-grid-single">JOGO ' + numbers[tile.id] + '</span>') +
               '<small>' + esc(tile.startTime) + '–' + esc(model.clock(model.minutes(tile.startTime) + tile.duration)) +
-              (overflow ? ' · Excede o horário' : '') + '</small></div>';
+              (overflow ? ' · Excede o horário' : '') + (collision ? ' · Sobreposição' : '') + '</small></div>';
           }).join('') + '</div>';
       }).join('') + '</div></div></section>';
     var viewport = root.querySelector('.phase-grid-viewport');
@@ -136,6 +165,8 @@
       var target = daysOf(state).find(function (d) { return d.day === (tile.day || state.plan.day); });
       return !target || model.outsideWindow(tile, target);
     })) showError('Blocos listrados ultrapassam o horário do dia. Ajuste a grade ou amplie a janela antes de salvar.');
+    else if (overlapping.size) showError('Blocos listrados ocupam a mesma quadra no mesmo horário. Ajuste-os antes de salvar.');
+    else if (state.gridWarning) showError(state.gridWarning + ' Ajuste a sequência antes de salvar.');
   }
   function applyMove(id, court, startTime) {
     var state = window._phaseCallOrderState;
@@ -143,9 +174,59 @@
     var result = model.move(state.tiles, id, court, startTime, state.plan, daysOf(state), dayOf(state).day);
     if (result.error) { showError(result.error); return; }
     state.tiles = result.tiles; state.touched = true; state.selectedId = id; state.placing = false;
+    state.gridWarning = result.warning || null;
     redraw(true);
   }
   window._renderPhaseGridEditor = redraw;
+  window._phaseGridSuggest = function () {
+    var message = document.getElementById('phase-grid-proposal-message');
+    function fail(value) { if (message) { message.hidden = false; message.textContent = value; } }
+    var schedule = window._estimatedGameHoursState;
+    if (!schedule || schedule.mode !== 'organizer') { fail('Selecione jogos determinados pelo organizador.'); return; }
+    var cfg = typeof window._f2GetConfig === 'function' ? window._f2GetConfig() : null;
+    if (!cfg || cfg.parceria !== 'rei_rainha' || cfg.classifAtiva === false ||
+        !cfg.eliminatoria || cfg.eliminatoria.ativa === false) {
+      fail('A proposta automática desta grade requer classificatória Rei/Rainha seguida de eliminatórias.'); return;
+    }
+    var categoryNames = window._getCreateFormCategoryData && window._getCreateFormCategoryData().combinedCategories || [];
+    var custom = !!(document.getElementById('tourn-custom-category-capacity') || {}).checked;
+    var capacity = {};
+    try { capacity = JSON.parse((document.getElementById('tourn-max-by-category') || {}).value || '{}'); } catch (e) {}
+    var general = Number((document.getElementById('tourn-max-per-category') || {}).value);
+    var categories = categoryNames.map(function (name) {
+      var participants = custom ? Number(capacity[name]) : general;
+      return { name:name, groups:participants / 4 };
+    });
+    if (!categories.length || categories.some(function (cat) { return !Number.isInteger(cat.groups); })) {
+      fail('Defina a capacidade de cada categoria em múltiplos de quatro atletas.'); return;
+    }
+    var dayKeys = typeof window._estimatedGameDays === 'function' ? window._estimatedGameDays() : [];
+    var savedDays = schedule.saved && schedule.saved.days || [];
+    var start = (document.getElementById('tourn-start-time') || {}).value || '08:00';
+    var end = (document.getElementById('tourn-end-time') || {}).value || '21:00';
+    var days = dayKeys.map(function (day) {
+      var original = savedDays.find(function (row) { return row.day === day; }) || {};
+      var changed = schedule.valuesByDay[day] || {};
+      return { day:day, startTime:changed.startTime || original.startTime || start,
+        endTime:changed.endTime || original.endTime || end };
+    });
+    var tournament = Object.assign({}, window._phaseCallOrderState && window._phaseCallOrderState.tournament || {}, {
+      gameDuration:Number((document.getElementById('tourn-game-duration') || {}).value),
+      callTime:Number((document.getElementById('tourn-call-time') || {}).value),
+      warmupTime:Number((document.getElementById('tourn-warmup-time') || {}).value),
+      courtNames:((document.getElementById('tourn-court-names') || {}).value || '').split(',').map(function (s) { return s.trim(); })
+    });
+    var result = model.suggest({ days:days, courts:Number((document.getElementById('tourn-court-count') || {}).value),
+      gameDuration:tournament.gameDuration, callTime:tournament.callTime, warmupTime:tournament.warmupTime,
+      eliminationPlayMinutes:Number((document.getElementById('phase-grid-elimination-play') || {}).value),
+      categories:categories });
+    if (result.error) { fail(result.error); return; }
+    schedule.touched = true;
+    window._phaseCallOrderState = { tournament:tournament, plan:result.plan, day:days[0], tiles:result.tiles,
+      activeDay:days[0].day, locked:false, touched:true };
+    redraw(false);
+    window._openPhaseGridEditor();
+  };
   window._openPhaseGridEditor = function () {
     var state = window._phaseCallOrderState;
     if (!state || !state.plan || !state.tiles.length) return;
@@ -223,7 +304,7 @@
     var state = window._phaseCallOrderState; if (!state || state.locked) return;
     var result = model.preset(state.tiles, state.plan, daysOf(state), mode);
     if (result.error) { showError(result.error); return; }
-    state.tiles = result.tiles; state.touched = true; state.selectedId = null; redraw(true);
+    state.tiles = result.tiles; state.touched = true; state.selectedId = null; state.gridWarning = null; redraw(true);
   };
   window._readPhaseGridPlan = function () {
     var state = window._phaseCallOrderState;

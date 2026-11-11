@@ -5917,19 +5917,38 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
         const proposed = patch.scheduleWindow.interleavedPlan;
         if (!_configAtiva.igual(original, proposed)) {
           if (hasDraw) throw new HttpsError('failed-precondition', 'A grade de jogos publicados não pode mudar depois do sorteio.');
-          if (!original || !proposed || proposed.schema !== 1 || proposed.editorVersion !== 2 ||
-              proposed.day !== original.day || Number(proposed.courts) !== Number(original.courts) ||
-              Number(proposed.totalGames) !== Number(original.totalGames) ||
-              Number(proposed.eliminationMinutes) !== Number(original.eliminationMinutes) ||
-              Number(proposed.eliminationPlayMinutes) !== Number(original.eliminationPlayMinutes)) {
+          const effectiveTournament = Object.assign({}, t, patch);
+          if (!proposed || proposed.schema !== 1 || proposed.editorVersion !== 2 ||
+              !Array.isArray(effectiveWindow.days) || !effectiveWindow.days.some(day => day.day === proposed.day) ||
+              Number(proposed.courts) !== Number(effectiveTournament.courtCount) ||
+              !Number.isSafeInteger(proposed.totalGames) || proposed.totalGames < 1 ||
+              !Number.isSafeInteger(proposed.eliminationPlayMinutes) || proposed.eliminationPlayMinutes < 1 ||
+              Number(proposed.eliminationMinutes) !== Number(proposed.eliminationPlayMinutes) +
+                Number(effectiveTournament.callTime || 0) + Number(effectiveTournament.warmupTime || 0) ||
+              (original && (Number(proposed.totalGames) !== Number(original.totalGames) ||
+                Number(proposed.eliminationMinutes) !== Number(original.eliminationMinutes) ||
+                Number(proposed.courts) !== Number(original.courts)))) {
             throw new HttpsError('invalid-argument', 'A grade não corresponde à programação deste torneio.');
           }
-          const originalTiles = _phaseGridPlan.expand(original, t);
-          const proposedTiles = _phaseGridPlan.expand(proposed, t);
-          const signature = tile => [tile.kind, tile.category, tile.round, tile.groupNumber].join('|');
-          const signatures = tiles => tiles.map(signature).sort();
-          if (JSON.stringify(signatures(originalTiles)) !== JSON.stringify(signatures(proposedTiles)) ||
-              proposedTiles.reduce((total, tile) => total + (tile.kind === 'groups' ? 3 : 1), 0) !== Number(original.totalGames) ||
+          const proposedTiles = _phaseGridPlan.expand(proposed, effectiveTournament);
+          let expected;
+          if (original) expected = _phaseGridPlan.signatures(_phaseGridPlan.expand(original, effectiveTournament));
+          else {
+            const labels = effectiveTournament.combinedCategories;
+            const capacity = effectiveTournament.maxParticipantsByCategory || {};
+            const general = Number(effectiveTournament.maxParticipantsPerCategory);
+            if (!Array.isArray(labels) || !labels.length ||
+                labels.some(label => !Number.isSafeInteger(Number(Object.prototype.hasOwnProperty.call(capacity, label) ?
+                  capacity[label] : general)) || Number(Object.prototype.hasOwnProperty.call(capacity, label) ?
+                  capacity[label] : general) < 8 || Number(Object.prototype.hasOwnProperty.call(capacity, label) ?
+                  capacity[label] : general) % 4 !== 0)) {
+              throw new HttpsError('invalid-argument', 'Defina vagas de quatro atletas por grupo antes de salvar a grade.');
+            }
+            expected = _phaseGridPlan.expectedSignatures(labels.map(label => ({ name:label,
+              groups:Number(Object.prototype.hasOwnProperty.call(capacity, label) ? capacity[label] : general) / 4 })));
+          }
+          if (JSON.stringify(expected) !== JSON.stringify(_phaseGridPlan.signatures(proposedTiles)) ||
+              proposedTiles.reduce((total, tile) => total + (tile.kind === 'groups' ? 3 : 1), 0) !== Number(proposed.totalGames) ||
               _phaseGridPlan.validate(proposedTiles, proposed, effectiveWindow.days)) {
             throw new HttpsError('invalid-argument', 'A grade contém conflito, jogo ausente ou horário fora da janela.');
           }

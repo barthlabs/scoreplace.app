@@ -324,7 +324,7 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
   '_isTournamentAdmin', '_drawFail', 'hasDrawnBracket', '_configAtiva', '_antesDoMotor',
   '_gravaTorneio', '_fasesDeConfiguracaoAtualizaveis', 'drawWindow', 'require',
   '_assertCategoryConfigBeforeDraw', '_categoryDefinitionsForLabels', '_phaseTieCore', 'createHash',
-  '_writeCategoryRemoval', '_phaseCallOrder',
+  '_writeCategoryRemoval', '_phaseCallOrder', '_phaseGridPlan',
   'const exports = {};\n' + configSource + '\nreturn exports.updateTournamentConfiguration;')(
   fn => fn, HttpsError, configDb, new Set(['fmt2', 'phases', 'name', 'teamSize', 'gruposClassified', 'politicaDaChave', 'genderCategories', 'combinedCategories', 'gameTypes', 'scheduleWindow']), new Set(['fmt2', 'phases', 'teamSize', 'gruposClassified', 'politicaDaChave', 'gameTypes']), cloneConfig,
   async () => {}, async () => configTournament, () => true,
@@ -339,7 +339,7 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
   (_tx, _ref, _t, removal, reservations) => {
     assert.ok(removal == null, 'edição de formato não remove inscrições de categoria');
     assert.ok(reservations == null, 'edição de formato não altera vagas reservadas');
-  }, require('../js/domain/phase-call-order.js')
+  }, require('../js/domain/phase-call-order.js'), require('../js/domain/phase-grid-plan.js')
 );
 
 (async () => {
@@ -379,6 +379,25 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
     tournamentId: 'tour_test', patch: { scheduleWindow: { phaseCallOrder: invalidOrder } }
   } }), { code: 'invalid-argument' }, 'ordem inválida é rejeitada pela função real');
   assert.equal(configWrites, writesBeforeInvalidOrder, 'ordem inválida não escreve');
+  const gridModel = require('../js/domain/phase-grid-plan.js');
+  const gridDays = [{ day:'2026-11-13', startTime:'08:00', endTime:'21:00' }];
+  const proposal = gridModel.suggest({ days:gridDays, courts:2, gameDuration:25, callTime:5,
+    warmupTime:5, eliminationPlayMinutes:25,
+    categories:[{ name:'Fem Diamante', groups:2 }, { name:'Fem Ouro', groups:2 }] });
+  assert.ok(proposal.plan, 'proposta de grade gerada');
+  configTournament = { ...openConfigTournament, courtCount:2, gameDuration:25, callTime:5, warmupTime:5,
+    combinedCategories:['Fem Diamante', 'Fem Ouro'], maxParticipantsPerCategory:8,
+    maxParticipants:16, scheduleWindow:{ days:gridDays } };
+  const saveProposal = await configHandler({ auth:{ uid:'owner' }, data:{ tournamentId:'tour_test',
+    patch:{ scheduleWindow:{ days:gridDays, interleavedPlan:{ ...proposal.plan, editorVersion:2 } } } } });
+  assert.equal(saveProposal.ok, true, 'proposta nova é gravada antes do sorteio');
+  const forged = structuredClone(proposal.plan);
+  forged.blocks[0].category = 'Fem Prata';
+  const beforeForged = configWrites;
+  await assert.rejects(configHandler({ auth:{ uid:'owner' }, data:{ tournamentId:'tour_test',
+    patch:{ scheduleWindow:{ days:gridDays, interleavedPlan:{ ...forged, editorVersion:2 } } } } }),
+  { code:'invalid-argument' }, 'proposta com categoria forjada é recusada');
+  assert.equal(configWrites, beforeForged, 'proposta inválida não escreve');
   configTournament = openConfigTournament;
   configWrites = 0;
 

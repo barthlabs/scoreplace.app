@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const order = require('../js/domain/phase-call-order.js');
+const grid = require('../js/domain/phase-grid-plan.js');
 const plan = require('./fixtures/camis-interleaved-plan.js');
 const t = { scheduleWindow:{ interleavedPlan:plan }, phaseCategoryMaterialized:{} };
 const categories = [['Fem Diamante',24,8], ['Fem Ouro',48,16], ['Fem Prata',36,12]];
@@ -59,4 +60,27 @@ matches.filter(m => m.category === 'Fem Diamante' && m.phaseIndex === 1).forEach
 matches.filter(m => m.category === 'Fem Ouro' && m.phaseIndex === 1).forEach(m => delete m.resultAt);
 assert(order.allowed(t,matches,game('Fem Diamante',1),done));
 assert(!order.allowed(t,matches,game('Fem Ouro',1),done));
+// A grade editada não pode exigir fases futuras para liberar o primeiro jogo.
+// Fases cujas janelas se sobrepõem dividem as quadras de propósito.
+const proposal = grid.suggest({ days:[{day:'2026-11-13',startTime:'08:00',endTime:'21:00'}],
+  courts:8, gameDuration:30, callTime:5, warmupTime:5, eliminationPlayMinutes:25,
+  categories:[{name:'Fem Diamante',groups:8},{name:'Fem Ouro',groups:16},{name:'Fem Prata',groups:12}] });
+assert.equal(proposal.error, undefined);
+const planned = { gameDuration:30, callTime:5, warmupTime:5, phaseCategoryMaterialized:{},
+  scheduleWindow:{ interleavedPlan:{...proposal.plan, editorVersion:2} } };
+const plannedMatches = categories.flatMap(([category, groups, elimination]) => [
+  ...Array.from({length:groups}, (_, i) => ({ id:category+'-planned-g'+i, category, phaseIndex:0 })),
+  ...Array.from({length:elimination}, (_, i) => ({ id:category+'-planned-e'+i, category, phaseIndex:1 }))
+]);
+const plannedGame = (category, phase) => plannedMatches.find(m => m.category === category && m.phaseIndex === phase);
+assert(order.allowed(planned, plannedMatches, plannedGame('Fem Diamante',0),done));
+assert(!order.allowed(planned, plannedMatches, plannedGame('Fem Ouro',0),done));
+plannedMatches.filter(m => m.category === 'Fem Diamante' && m.phaseIndex === 0).forEach(m => m.resultAt='x');
+planned.phaseCategoryMaterialized['Fem Diamante'] = {at:'x'};
+assert(order.allowed(planned, plannedMatches, plannedGame('Fem Ouro',0),done));
+plannedMatches.filter(m => m.category === 'Fem Ouro' && m.phaseIndex === 0).forEach(m => m.resultAt='x');
+planned.phaseCategoryMaterialized['Fem Ouro'] = {at:'x'};
+assert(order.allowed(planned, plannedMatches, plannedGame('Fem Diamante',1),done));
+assert(order.allowed(planned, plannedMatches, plannedGame('Fem Ouro',1),done));
+assert(order.allowed(planned, plannedMatches, plannedGame('Fem Prata',0),done));
 console.log('Ordem configurável bloqueia Prata até concluir as etapas anteriores');
