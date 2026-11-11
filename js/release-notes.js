@@ -6,6 +6,8 @@
 // Descartar, cancelar ou falhar ao salvar limpa a intenção de remover o logo;
 // a capa publicada continua em modo foto; a gravação só envia imagem nova ou remoção explícita.
 // A correção do comparador no servidor permite confirmar os jogos Rei/Rainha.
+// Se a resposta da simulação falhar, o próximo toque confere o mesmo placar
+// pendente antes de seguir; um novo sorteio de pontos não bloqueia a tentativa.
 // 2.6.51 — A abertura mantém a barra de progresso até a página estar montada;
 // a mensagem prematura de demora e o reload automático não interrompem mais
 // a carga de um torneio grande. A fila do CAMIS segue Diamante, Ouro,
