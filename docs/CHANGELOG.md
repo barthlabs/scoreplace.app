@@ -1,3 +1,8 @@
+## 2.6.51 — 11/nov/2026 (carregamento sem falso erro)
+
+- O splash de abertura mantém logo, bola e barra de progresso até a rota ter conteúdo. O timeout de 12 segundos, o reload automático e a tela “O carregamento demorou mais que o esperado” foram removidos do boot; uma carga longa não interrompe mais o torneio.
+- A chamada antecipada da 2.6.50 foi confirmada no Cloud Run após corrigir o tráfego de `assignMatchCourt`, que ainda apontava 100% para a revisão antiga. Nenhum dado do CAMIS foi alterado neste corte. Sem mudanças de Functions ou versões nativas.
+
 ## 2.6.50 — 11/nov/2026 (grade e chamada durante os testes)
 
 - Soltar um bloco sobre outro troca suas posições. A grade só aplica movimentos que preservam horários, quadras, classificatória e sequência de rodadas; a cascata que deslocava jogos posteriores foi removida.

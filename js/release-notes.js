@@ -1,3 +1,6 @@
+// 2.6.51 — A abertura mantém a barra de progresso até a página estar montada;
+// a mensagem prematura de demora e o reload automático não interrompem mais
+// a carga de um torneio grande.
 // 2.6.50 — A revisão da grade troca blocos ao arrastar sem deslocar rodadas
 // seguintes; um movimento que quebraria a sequência não é aplicado.
 // Salvar e sortear mostra o progresso e mantém a tela até a chave aparecer.
