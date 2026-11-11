@@ -1,6 +1,8 @@
 const assert=require('assert/strict'),fs=require('fs'),path=require('path'),acorn=require('acorn'),{chromium}=require('@playwright/test');
 const root=path.join(__dirname,'../');
 const source=fs.readFileSync(root+'js/views/create-tournament.js','utf8');
+const storeSource=fs.readFileSync(root+'js/store.js','utf8');
+const storeMethod=storeSource.slice(storeSource.indexOf('  addTournament(data) {'),storeSource.indexOf('\n  logAction(',storeSource.indexOf('  addTournament(data) {'))).replace(/,\s*$/,'');
 let handler,branding,discard,askBalance,scoring;
 function visit(n){if(!n||typeof n!=='object')return;if(n.type==='FunctionDeclaration'&&n.id&&n.id.name==='_perguntarEquilibrio')askBalance=source.slice(n.start,n.end);if(n.type==='AssignmentExpression'){const left=source.slice(n.left.start,n.left.end);if(left==='window._saveTournamentClickHandler')handler=source.slice(n.start,n.end)+';';if(left==='window._readTournamentBrandingPatch')branding=source.slice(n.start,n.end)+';';if(left==='window._discardCreateTournament')discard=source.slice(n.start,n.end)+';';if(left==='window._maybeShowScoringReconcile')scoring=source.slice(n.start,n.end)+';';}for(const v of Object.values(n)){if(Array.isArray(v))v.forEach(visit);else if(v&&typeof v==='object')visit(v);}}
 visit(acorn.parse(source,{ecmaVersion:'latest'}));
@@ -21,6 +23,7 @@ await p.evaluate((src)=>{
  window.AppStore={currentUser:{uid:'owner'},tournaments:[{id:'e',name:'Antigo',format:'Eliminatórias Simples'}],addTournament:async data=>{window._sent=data;return data.id||'CREATED';}};
 },handler);
 await p.addScriptTag({content:fs.readFileSync(root+'js/views/format2.js','utf8')});await p.addScriptTag({content:askBalance+';'+scoring+branding+handler+discard});
+await p.addScriptTag({content:'window._actualStoreAdd=({' + storeMethod + '}).addTournament;'});
 await p.evaluate(()=>{window._realMaybeShowScoringReconcile=window._maybeShowScoringReconcile;window._maybeShowScoringReconcile=()=>false;});
 await p.evaluate(()=>{
  window._tvEditorHasChanges=()=>true;
@@ -58,6 +61,17 @@ await p.evaluate(()=>{
 assert(!Object.hasOwn(await p.evaluate(()=>window._sent),'coverPhotoData'),'capa ainda hidratando não vira remoção');
 assert.equal(await p.evaluate(()=>window._sent.coverMode),'photo','capa publicada continua no modo foto durante a hidratação');
 assert(!Object.hasOwn(await p.evaluate(()=>window._sent),'coverUrl'),'salvar ficha não apaga a URL publicada da capa');
+await p.evaluate(()=>{
+ window._stubAddTournament=window.AppStore.addTournament;
+ window.AppStore.addTournament=window._actualStoreAdd;
+ window.AppStore._saveToCache=()=>{};
+ window._remotePatch=undefined;
+ window._callCF=async (_name,command)=>{window._remotePatch=command.patch;return {data:{tournament:{id:'e',coverMode:'photo',coverUrl:'https://storage.example/cover-old.png'}}};};
+ return window._saveTournamentClickHandler();
+});
+assert(!Object.hasOwn(await p.evaluate(()=>window._remotePatch),'coverUrl'),'com hidratação ativa, o comando real da store preserva a URL da capa');
+assert.equal(await p.evaluate(()=>window.AppStore.tournaments[0].coverUrl),'https://storage.example/cover-old.png');
+await p.evaluate(()=>{window.AppStore.addTournament=window._stubAddTournament;});
 await p.evaluate(()=>{window._editLogoHydrating='';window._sent=undefined;return window._saveTournamentClickHandler();});
 assert(!Object.hasOwn(await p.evaluate(()=>window._sent),'coverPhotoData'),'foto publicada sem base64 também é omitida depois da hidratação');
 assert.equal(await p.evaluate(()=>window._sent.coverMode),'photo');
