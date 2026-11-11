@@ -62,8 +62,21 @@ function _estimatedGameDays() {
   var start = (document.getElementById('tourn-start-date') || {}).value || '';
   var end = (document.getElementById('tourn-end-date') || {}).value || '';
   if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end) || end < start) return [];
+  var span = Math.round((Date.parse(end + 'T12:00:00Z') - Date.parse(start + 'T12:00:00Z')) / 86400000) + 1;
+  // Dias escolhidos prevalecem em qualquer duração. O intervalo da fase não
+  // implica que haverá jogos em todas as datas entre a abertura e o prazo.
+  var state = window._estimatedGameHoursState || {};
+  var chosen = state.selectedDays || (state.saved && Array.isArray(state.saved.days)
+    ? state.saved.days.map(function (item) { return item.day; }) : []);
+  var valid = Array.from(new Set(chosen.filter(function (day) {
+    return /^\d{4}-\d{2}-\d{2}$/.test(day || '') && day >= start && day <= end;
+  }))).sort();
+  if (valid.length) return valid;
+  // Em períodos longos, proponha somente o primeiro dia; nos curtos,
+  // conserve a proposta diária para editores legados.
+  if (span > 8) return [start];
   var days = [], cursor = start;
-  while (cursor <= end && days.length <= 8) {
+  while (cursor <= end) {
     days.push(cursor);
     var next = new Date(cursor + 'T12:00:00Z');
     next.setUTCDate(next.getUTCDate() + 1);
@@ -72,19 +85,65 @@ function _estimatedGameDays() {
   return days;
 }
 
+window._addEstimatedGameDay = function () {
+  var input = document.getElementById('estimated-games-add-day');
+  var state = window._estimatedGameHoursState;
+  if (!input || !state || state.locked) return;
+  var start = (document.getElementById('tourn-start-date') || {}).value || '';
+  var end = (document.getElementById('tourn-end-date') || {}).value || '';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.value) || input.value < start || input.value > end) return;
+  state.selectedDays = Array.from(new Set(_estimatedGameDays().concat(input.value))).sort();
+  state.touched = true;
+  window._renderEstimatedGameHours();
+};
+window._removeEstimatedGameDay = function (day) {
+  var state = window._estimatedGameHoursState;
+  if (!state || state.locked || _estimatedGameDays().length <= 1) return;
+  state.selectedDays = _estimatedGameDays().filter(function (value) { return value !== day; });
+  state.touched = true;
+  window._renderEstimatedGameHours();
+};
+
+window._setEstimatedScheduleMode = function (mode) {
+  var state = window._estimatedGameHoursState;
+  if (!state || state.locked || (mode !== 'organizer' && mode !== 'participants')) return;
+  if (mode === 'participants' && state.saved && state.saved.interleavedPlan) return;
+  if (state.mode === mode) return;
+  state.mode = mode;
+  state.touched = true;
+  window._renderEstimatedGameHours();
+};
+
 window._renderEstimatedGameHours = function (datesChanged) {
   var mount = document.getElementById('estimated-games-window-days');
   if (!mount) return;
   var categoriesOpen = !!(mount.querySelector('details') && mount.querySelector('details').open);
-  var state = window._estimatedGameHoursState || (window._estimatedGameHoursState = { saved:null, valuesByDay:{}, categoryByKey:{}, touched:false, locked:false });
+  var state = window._estimatedGameHoursState || (window._estimatedGameHoursState = { saved:null, valuesByDay:{}, categoryByKey:{}, touched:false, locked:false, isNew:true });
   if (datesChanged && !state.locked) state.touched = true;
   var days = _estimatedGameDays();
-  if (!days.length) { mount.textContent = 'Informe as datas de início e fim da fase.'; return; }
-  if (days.length > 8) { mount.textContent = 'Esta agenda permite até 8 dias. Ajuste as datas da fase.'; return; }
+  var savedDays = state.saved && Array.isArray(state.saved.days) ? state.saved.days : [];
+  if (!state.mode) state.mode = state.saved && state.saved.mode ||
+    (savedDays.length ? 'organizer' : 'participants');
+  var modeHtml = '<fieldset class="estimated-games-mode"><legend>Horários dos jogos</legend>'
+    + '<label><input type="checkbox" role="switch" aria-label="Organizador determina os horários dos jogos" onchange="window._setEstimatedScheduleMode(this.checked ? \'organizer\' : \'participants\')"'
+    + (state.mode === 'organizer' ? ' checked' : '') + (state.locked || !!(state.saved && state.saved.interleavedPlan) ? ' disabled' : '')
+    + '> Organizador determina quando cada jogo acontece</label>'
+    + '<p class="estimated-games-help">Desligado: participantes combinam os jogos dentro do prazo do torneio. Ligado: o organizador define os dias e horários previstos.</p></fieldset>';
+  if (state.mode === 'participants') {
+    mount.innerHTML = modeHtml;
+    if (typeof window._renderPhaseCallOrder === 'function') window._renderPhaseCallOrder();
+    return;
+  }
+  if (!days.length) { mount.innerHTML = modeHtml + '<p>Informe as datas de início e fim da fase.</p>'; return; }
+  var startDate = (document.getElementById('tourn-start-date') || {}).value || '';
+  var endDate = (document.getElementById('tourn-end-date') || {}).value || '';
+  var multipleDays = endDate > startDate;
   var saved = (state.saved && Array.isArray(state.saved.days)) ? state.saved.days : [];
   var defaultStart = (document.getElementById('tourn-start-time') || {}).value || '09:00';
   var defaultEnd = (document.getElementById('tourn-end-time') || {}).value || '22:00';
-  mount.innerHTML = days.map(function (day) {
+  mount.innerHTML = modeHtml + (multipleDays && !state.locked ? '<div class="estimated-games-add" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+    + '<label>Dia com jogos <input id="estimated-games-add-day" type="date" class="form-control" min="' + startDate + '" max="' + endDate + '"></label>'
+    + '<button type="button" class="btn btn-secondary" onclick="window._addEstimatedGameDay()">Adicionar dia</button></div>' : '') + days.map(function (day) {
     var existing = state.valuesByDay[day] || saved.find(function (item) { return item && item.day === day; }) || {};
     var start = /^\d{2}:\d{2}$/.test(existing.startTime || '') ? existing.startTime : defaultStart;
     var end = /^\d{2}:\d{2}$/.test(existing.endTime || '') ? existing.endTime : defaultEnd;
@@ -93,6 +152,7 @@ window._renderEstimatedGameHours = function (datesChanged) {
       + '<strong style="min-width:110px">' + label + '</strong>'
       + '<label>Das <input type="time" class="form-control" style="width:110px;display:inline-block" value="' + start + '" data-day="' + day + '" data-kind="startTime" oninput="window._setEstimatedGameHour(this)"' + (state.locked ? ' disabled' : '') + '></label>'
       + '<label>às <input type="time" class="form-control" style="width:110px;display:inline-block" value="' + end + '" data-day="' + day + '" data-kind="endTime" oninput="window._setEstimatedGameHour(this)"' + (state.locked ? ' disabled' : '') + '></label>'
+      + (multipleDays && !state.locked && days.length > 1 ? '<button type="button" class="btn btn-secondary" onclick="window._removeEstimatedGameDay(\'' + day + '\')">Retirar dia</button>' : '')
       + '</div>';
   }).join('');
   var cats = (typeof window._getCreateFormCategoryData === 'function' && window._getCreateFormCategoryData().combinedCategories) || [];
@@ -114,6 +174,7 @@ window._renderEstimatedGameHours = function (datesChanged) {
     }).join('') + '</details>');
   }
   if (state.locked) mount.insertAdjacentHTML('beforeend', '<div style="color:var(--text-muted);font-size:.75rem;margin-top:8px">Agenda já sorteada: estes horários são exibidos sem alterar os jogos publicados.</div>');
+  if (typeof window._renderPhaseCallOrder === 'function') window._renderPhaseCallOrder();
 };
 
 window._setCategoryGameWindow = function (input) {
@@ -147,12 +208,18 @@ window._setEstimatedGameHour = function (input) {
 window._readEstimatedGameHours = function () {
   var state = window._estimatedGameHoursState;
   if (!state || state.locked) return null;
+  if (state.mode === 'participants') {
+    // Um documento legado sem modo poderia ainda gerar horários por inferência
+    // da duração. Gravar a escolha exibida mesmo sem tocar no toggle.
+    return state.isNew || state.touched || !state.saved || !state.saved.mode
+      ? { version:1, mode:'participants', days:[], categoryWindows:[] } : null;
+  }
   var currentCats = (typeof window._getCreateFormCategoryData === 'function' && window._getCreateFormCategoryData().combinedCategories) || [];
   var oldWindows = state.saved && Array.isArray(state.saved.categoryWindows) ? state.saved.categoryWindows : [];
   if (oldWindows.some(function (item) { return item && currentCats.indexOf(item.category) < 0; })) state.touched = true;
   if (!state.touched) return null;
   var days = _estimatedGameDays();
-  if (!days.length || days.length > 8) return { error:'Informe uma fase válida de até 8 dias.' };
+  if (!days.length) return { error:'Informe ao menos um dia com jogos.' };
   var saved = (state.saved && Array.isArray(state.saved.days)) ? state.saved.days : [];
   var defaultStart = (document.getElementById('tourn-start-time') || {}).value || '09:00';
   var defaultEnd = (document.getElementById('tourn-end-time') || {}).value || '22:00';
@@ -180,60 +247,13 @@ window._readEstimatedGameHours = function () {
     return !/^([01]\d|2[0-3]):[0-5]\d$/.test(item.startTime || '') || !/^([01]\d|2[0-3]):[0-5]\d$/.test(item.endTime || '') ||
       item.startTime >= item.endTime || !global || item.startTime < global.startTime || item.endTime > global.endTime;
   })) return { error:'Cada faixa de categoria deve caber dentro do horário geral do respectivo dia.' };
-  return { version:1, days:result, categoryWindows:categoryWindows };
+  return { version:1, mode:'organizer', days:result, categoryWindows:categoryWindows };
 };
 
-// A fila de chamada é independente dos horários já publicados. Cada linha é
-// uma etapa; "simultânea" compartilha as quadras com a etapa imediatamente acima.
 window._renderPhaseCallOrder = function () {
-  var mount = document.getElementById('phase-call-order-editor');
-  var state = window._phaseCallOrderState;
-  if (!mount) return;
-  if (!state || !state.rows.length) { mount.innerHTML = ''; return; }
-  var escape = function (value) { return String(value).replace(/[&<>"']/g, function (ch) {
-    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];
-  }); };
-  mount.innerHTML = '<div style="font-weight:700;margin-bottom:4px">Ordem de chamada por fase e categoria · concentrado</div>' +
-    '<div style="color:var(--text-muted);font-size:.8rem;margin-bottom:8px">Cada etapa reúne os jogos da categoria. Use as setas para ordenar; marque simultânea quando duas etapas dividirem quadras. A etapa seguinte espera a conclusão das anteriores, inclusive desempates. O horário da grade continua sendo uma previsão. Depois do sorteio, mudar a ordem afeta apenas novas chamadas.</div>' +
-    state.rows.map(function (row, i) {
-      var label = (row.kind === 'groups' ? 'Classificatória' : 'Eliminatória') + ' · ' + row.category;
-      return '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:6px 8px;border:1px solid var(--border-color);border-radius:8px;margin-bottom:5px;background:var(--bg-card)">' +
-        '<span style="min-width:0;flex:1 1 180px">' + escape(label) + '</span>' +
-        '<label style="font-size:.8rem;white-space:nowrap"><input type="checkbox" onchange="window._phaseCallOrderParallel(' + i + ',this.checked)"' +
-        (row.parallel ? ' checked' : '') + (i === 0 ? ' disabled' : '') + '> Simultânea à anterior</label>' +
-        '<button type="button" class="btn btn-secondary" aria-label="Mover ' + escape(label) + ' para cima" onclick="window._phaseCallOrderMove(' + i + ',-1)"' + (i === 0 ? ' disabled' : '') + '>↑</button>' +
-        '<button type="button" class="btn btn-secondary" aria-label="Mover ' + escape(label) + ' para baixo" onclick="window._phaseCallOrderMove(' + i + ',1)"' + (i === state.rows.length - 1 ? ' disabled' : '') + '>↓</button></div>';
-    }).join('');
+  if (typeof window._renderPhaseGridEditor === 'function') window._renderPhaseGridEditor();
 };
-window._phaseCallOrderMove = function (index, direction) {
-  var state = window._phaseCallOrderState, target = index + direction;
-  if (!state || target < 0 || target >= state.rows.length) return;
-  var rows = state.rows.slice(), moved = rows.splice(index, 1)[0];
-  rows.splice(target, 0, moved);
-  // A eliminatória depende da classificatória da mesma categoria.
-  rows[0].parallel = false;
-  if (window.ScoreplacePhaseCallOrder && !window.ScoreplacePhaseCallOrder.valid(rows)) return;
-  state.rows = rows; state.touched = true;
-  window._renderPhaseCallOrder();
-};
-window._phaseCallOrderParallel = function (index, checked) {
-  var state = window._phaseCallOrderState;
-  if (!state || index <= 0 || index >= state.rows.length) return;
-  var previous = state.rows[index].parallel;
-  state.rows[index].parallel = !!checked;
-  if (window.ScoreplacePhaseCallOrder && !window.ScoreplacePhaseCallOrder.valid(state.rows)) {
-    state.rows[index].parallel = previous;
-    window._renderPhaseCallOrder();
-    return;
-  }
-  state.touched = true;
-};
-window._readPhaseCallOrder = function () {
-  var state = window._phaseCallOrderState;
-  return state && state.touched ? state.rows.map(function (row) { return {
-    kind:row.kind, category:row.category, parallel:row.parallel === true
-  }; }) : null;
-};
+window._readPhaseCallOrder = function () { return null; };
 
 function setupCreateTournamentModal() {
   window._categoryCapacityLoadGuard = null;
@@ -5641,10 +5661,19 @@ function setupCreateTournamentModal() {
     document.getElementById('tourn-end-time').value = endT;
     window._estimatedGameHoursState = {
       saved:t.scheduleWindow || null, valuesByDay:{}, categoryByKey:{}, touched:false,
-      locked:typeof window._tournamentHasDraw === 'function' && window._tournamentHasDraw(t)
+      locked:typeof window._tournamentHasDraw === 'function' && window._tournamentHasDraw(t),
+      mode:t.scheduleWindow && t.scheduleWindow.mode ||
+        (t.scheduleWindow && Array.isArray(t.scheduleWindow.days) && t.scheduleWindow.days.length ? 'organizer' : 'participants'),
+      isNew:false
     };
     window._renderEstimatedGameHours();
-    window._phaseCallOrderState = { rows:window.ScoreplacePhaseCallOrder ? window.ScoreplacePhaseCallOrder.stages(t) : [], touched:false };
+    window._phaseCallOrderState = {
+      tournament:t, plan:t.scheduleWindow && t.scheduleWindow.interleavedPlan || null,
+      day:t.scheduleWindow && t.scheduleWindow.days && t.scheduleWindow.days[0],
+      tiles:window.ScoreplacePhaseGridPlan && t.scheduleWindow && t.scheduleWindow.interleavedPlan
+        ? window.ScoreplacePhaseGridPlan.expand(t.scheduleWindow.interleavedPlan, t) : [],
+      locked:typeof window._tournamentHasDraw === 'function' && window._tournamentHasDraw(t), touched:false
+    };
     window._renderPhaseCallOrder();
     /* ⏱️ 2.1.98 — a divisão das rodadas da FASE ATUAL volta pro slider. Lê da fase (é onde
      * o cartão de progresso procura) e cai no campo do topo só na fase 0, pela mesma regra
@@ -6593,8 +6622,13 @@ window._saveTournamentClickHandler = async function() {
         const endDateVal = endTimeRaw ? endDateRaw + 'T' + endTimeRaw : endDateRaw;
         const estimatedGameHours = window._readEstimatedGameHours();
         const phaseCallOrder = window._readPhaseCallOrder();
+        const phaseGridPlan = typeof window._readPhaseGridPlan === 'function' ? window._readPhaseGridPlan() : null;
         if (estimatedGameHours && estimatedGameHours.error) {
           showAlertDialog('Horários dos jogos', estimatedGameHours.error, null, { type:'warning' });
+          return;
+        }
+        if (phaseGridPlan && phaseGridPlan.error) {
+          showAlertDialog('Grade de quadras', phaseGridPlan.error, null, { type:'warning' });
           return;
         }
         const regOpenDateRaw = document.getElementById('tourn-reg-open-date').value || '';
@@ -6716,9 +6750,10 @@ window._saveTournamentClickHandler = async function() {
           sport: sportClean,
           startDate: startDateVal,
           endDate: endDateVal,
-          ...((estimatedGameHours || phaseCallOrder) ? { scheduleWindow:Object.assign({},
+          ...((estimatedGameHours || phaseCallOrder || phaseGridPlan) ? { scheduleWindow:Object.assign({},
             window._editingTournament && window._editingTournament.scheduleWindow || {}, estimatedGameHours || {},
-            phaseCallOrder ? { phaseCallOrder:phaseCallOrder } : {}) } : {}),
+            phaseCallOrder ? { phaseCallOrder:phaseCallOrder } : {},
+            phaseGridPlan ? { interleavedPlan:phaseGridPlan } : {}) } : {}),
           /* ⏱️ 2.1.98 — a divisão das rodadas que o organizador arrastou (N-1 datas).
            * VAZIO é o padrão e significa "dias iguais": não se grava um arranjo igual, senão
            * ele congelaria e deixaria de acompanhar uma mudança de data depois. A validação

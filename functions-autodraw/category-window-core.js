@@ -7,10 +7,27 @@ function validate(t, HttpsError) {
   const fail = message => { throw new HttpsError('invalid-argument', message); };
   const schedule = t && t.scheduleWindow;
   if (schedule == null) return [];
+  // Documentos legados sem modo nem janelas preservam a leitura anterior.
+  if (schedule.mode === undefined && schedule.categoryWindows === undefined) return [];
+  if (!schedule || typeof schedule !== 'object' || Array.isArray(schedule) ||
+      Object.keys(schedule).some(key => !['version', 'mode', 'days', 'categoryWindows', 'interleavedPlan', 'phaseCallOrder'].includes(key))) fail('Agenda de jogos inválida.');
+  if (schedule.mode !== undefined && !['organizer', 'participants'].includes(schedule.mode)) fail('Modo de horários inválido.');
+  if (schedule.mode === 'participants' && ((Array.isArray(schedule.days) && schedule.days.length) ||
+      (Array.isArray(schedule.categoryWindows) && schedule.categoryWindows.length) || schedule.interleavedPlan)) fail('Jogos combinados pelos participantes não podem ter grade fixa.');
+  if (schedule.mode === 'organizer' && (!Array.isArray(schedule.days) || !schedule.days.length)) fail('Informe ao menos um dia com jogos.');
+  if (schedule.mode === 'organizer') {
+    const phaseStart = String(t.startDate || '').slice(0, 10), phaseEnd = String(t.endDate || '').slice(0, 10);
+    if (!DATE.test(phaseStart) || !DATE.test(phaseEnd) || phaseStart > phaseEnd) fail('Datas da fase inválidas.');
+    const seen = new Set();
+    schedule.days.forEach(day => {
+      if (!day || typeof day !== 'object' || Array.isArray(day) ||
+          !DATE.test(day.day) || day.day < phaseStart || day.day > phaseEnd || seen.has(day.day) ||
+          !TIME.test(day.startTime) || !TIME.test(day.endTime) || day.startTime >= day.endTime) fail('Dia da agenda inválido.');
+      seen.add(day.day);
+    });
+  }
   const windows = schedule.categoryWindows;
   if (windows === undefined) return [];
-  if (!schedule || typeof schedule !== 'object' || Array.isArray(schedule) ||
-      Object.keys(schedule).some(key => !['version', 'days', 'categoryWindows', 'interleavedPlan', 'phaseCallOrder'].includes(key))) fail('Agenda de jogos inválida.');
   if (!Array.isArray(windows) || windows.length > 200) fail('Horários por categoria inválidos.');
   if (!windows.length) return [];
   const categories = new Set((Array.isArray(t.combinedCategories) ? t.combinedCategories : [])

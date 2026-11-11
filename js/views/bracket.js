@@ -8941,6 +8941,7 @@ function _matchCardVisibleDateTime(ms, t, concentrated) {
 // quantidade de dias: a Confra também dura vários dias, mas seus participantes
 // combinam cada jogo e não usam uma quadra operacional.
 window._isConcentratedTournament = function(t) {
+  if (t && t.scheduleWindow && t.scheduleWindow.mode === 'participants') return false;
   var days = t && t.scheduleWindow && t.scheduleWindow.days;
   if (Array.isArray(days) && days.some(function(day) {
     return day && /^\d{4}-\d{2}-\d{2}$/.test(String(day.day || '').slice(0, 10)) &&

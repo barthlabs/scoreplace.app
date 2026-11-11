@@ -1,3 +1,6 @@
+// 2.6.38 — O organizador escolhe se define os horários dos jogos ou se
+// os participantes combinam cada partida dentro do prazo. A grade de
+// quadras usa os dias definidos, mesmo em torneios de longa duração.
 // 2.6.37 — A edição do torneio organiza a chamada concentrada por etapa e
 // categoria, com etapas simultâneas quando dividem as quadras. A Prata
 // aguarda o fim das eliminatórias Diamante e Ouro configuradas antes dela.

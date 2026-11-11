@@ -1,0 +1,31 @@
+'use strict';
+const assert = require('node:assert/strict');
+const grid = require('../js/domain/phase-grid-plan.js');
+const fixture = require('./fixtures/camis-interleaved-plan.js');
+const tournament = { gameDuration:30, callTime:5, warmupTime:5 };
+const firstDay = { day:'2026-11-13', startTime:'08:00', endTime:'21:00' };
+const secondDay = { day:'2026-11-14', startTime:'08:00', endTime:'21:00' };
+const laterDay = { day:'2027-02-14', startTime:'08:00', endTime:'21:00' };
+const tiles = grid.expand(fixture, tournament);
+assert.equal(tiles.length, 72);
+assert.equal(grid.validate(tiles, fixture, [firstDay]), null);
+assert.equal(new Set(Object.values(grid.numbered(tiles, fixture))).size, tiles.length);
+assert.equal(Math.max(...Object.values(grid.numbered(tiles, fixture))), 144);
+const last = tiles[tiles.length - 1];
+const moved = grid.move(tiles, last.id, last.court, '08:00', fixture, [firstDay, secondDay], secondDay.day);
+assert.equal(moved.error, undefined);
+assert.equal(grid.validate(moved.tiles, fixture, [firstDay, secondDay]), null);
+const saved = grid.toPlan(fixture, moved.tiles);
+assert.equal(saved.blocks.some(block => block.day === secondDay.day), true);
+assert.equal(grid.validate(grid.expand(saved, tournament), saved, [firstDay, secondDay]), null);
+const tooLate = grid.move(tiles, last.id, last.court, '20:45', fixture, [firstDay], firstDay.day);
+assert.equal(tooLate.error, undefined, 'bloco excedente deve continuar visível no rascunho');
+assert.equal(grid.outsideWindow(tooLate.tiles.find(tile => tile.id === last.id), firstDay), true);
+assert.match(grid.validate(tooLate.tiles, fixture, [firstDay]), /fora do horário/);
+const monthMove = grid.move(tiles, last.id, last.court, '08:00', fixture, [firstDay, laterDay], laterDay.day);
+assert.equal(monthMove.error, undefined);
+assert.equal(grid.validate(monthMove.tiles, fixture, [firstDay, laterDay]), null,
+  'a grade aceita dias de jogo meses depois da primeira rodada');
+assert.match(grid.validate(monthMove.tiles, fixture, [firstDay]), /fora do horário/,
+  'um dia fora da agenda explícita não é criado por inferência');
+console.log('Grade com dias esparsos: números, arrasto e excedente visível');

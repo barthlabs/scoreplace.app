@@ -22,7 +22,9 @@
     if (Array.isArray(blocks)) blocks.forEach(function (b) {
       if (!b || (b.kind !== 'groups' && b.kind !== 'elimination') || !b.category) return;
       var found = available.find(function (s) { return key(s) === key(b); });
-      if (!found) available.push({ kind:b.kind, category:String(b.category), firstTime:String(b.startTime || '') });
+      var when = String(b.day || windowConfig.interleavedPlan.day || '') + 'T' + String(b.startTime || '');
+      if (!found) available.push({ kind:b.kind, category:String(b.category), firstTime:when });
+      else if (when < found.firstTime) found.firstTime = when;
     });
     if (!available.length) return [];
     var saved = windowConfig.phaseCallOrder;
@@ -83,6 +85,35 @@
     });
   }
   function allowed(t, matches, match, finished) {
+    var plan = t && t.scheduleWindow && t.scheduleWindow.interleavedPlan;
+    if (plan && plan.editorVersion === 2 && Array.isArray(plan.blocks)) {
+      var intervals = {};
+      plan.blocks.forEach(function (block) {
+        if (!block || !block.category) return;
+        var bits = String(block.startTime || '').split(':');
+        var at = Date.parse(String(block.day || plan.day || '') + 'T00:00:00Z') / 60000 +
+          Number(bits[0]) * 60 + Number(bits[1]);
+        if (!Number.isFinite(at)) return;
+        var duration = block.kind === 'groups' ? 3 * (Number(t.gameDuration) || 30) +
+          (Number(t.callTime) || 0) + (Number(t.warmupTime) || 0) : Number(plan.eliminationMinutes);
+        var id = key(block), interval = intervals[id] || (intervals[id] = {
+          stage:{ kind:block.kind, category:String(block.category) }, first:at, last:at + duration
+        });
+        interval.first = Math.min(interval.first, at);
+        interval.last = Math.max(interval.last, at + duration);
+      });
+      var targetStage = match && { kind:Number(match.phaseIndex || 0) === 0 ? 'groups' : 'elimination',
+        category:String(match.category || '') };
+      var target = targetStage && intervals[key(targetStage)];
+      if (target) return Object.keys(intervals).every(function (id) {
+        var predecessor = intervals[id];
+        if (id === key(targetStage)) return true;
+        var sameCategoryGroups = targetStage.kind === 'elimination' &&
+          predecessor.stage.kind === 'groups' && predecessor.stage.category === targetStage.category;
+        return !sameCategoryGroups && predecessor.last > target.first ||
+          stageDone(t, matches, predecessor.stage, finished);
+      });
+    }
     var state = current(t, matches, finished);
     if (!state) return true;
     var target = state.stages.findIndex(function (s) {

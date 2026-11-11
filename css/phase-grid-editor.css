@@ -1,0 +1,43 @@
+.phase-grid-editor { margin-top: 12px; padding: 14px; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-card); color: var(--text-main); }
+.phase-grid-editor h3 { margin: 0 0 6px; font-size: 1.1rem; }
+.phase-grid-editor p { margin: 0 0 10px; color: var(--text-muted); font-size: .83rem; line-height: 1.45; }
+.phase-grid-summary { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.phase-grid-summary span { border: 1px solid var(--border-color); border-radius: 7px; padding: 5px 8px; font-size: .76rem; background: var(--bg-secondary); }
+.phase-grid-presets { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.phase-grid-presets .btn { min-height: 40px; }
+.phase-grid-days { display:flex; gap:6px; flex-wrap:wrap; margin:10px 0; }
+.phase-grid-day { min-height:44px; padding:7px 12px; border:1px solid var(--border-color); border-radius:7px; background:var(--bg-secondary); color:var(--text-main); cursor:pointer; }
+.phase-grid-day.active { border:2px solid var(--primary-color); font-weight:700; }
+.phase-grid-editor .phase-grid-locked { color: var(--text-main); border: 1px solid var(--border-color); padding: 8px; border-radius: 8px; }
+.phase-grid-editor .phase-grid-error { color: var(--text-main); border: 1px solid var(--danger-color, #ef4444); padding: 8px; border-radius: 8px; }
+.phase-grid-viewport { max-height: 560px; overflow: auto; border: 1px solid var(--border-color); border-radius: 9px; }
+.phase-grid-head, .phase-grid-body { display: grid; min-width: max-content; }
+.phase-grid-head { grid-template-columns: 66px repeat(var(--phase-grid-courts, 8), minmax(140px, 1fr)); position: sticky; top: 0; z-index: 3; background: var(--bg-card); }
+.phase-grid-head span { min-width: 140px; padding: 8px 5px; text-align: center; font-size: .78rem; font-weight: 700; border-right: 1px solid var(--border-color); }
+.phase-grid-head span:first-child { min-width: 66px; }
+.phase-grid-times { position: relative; min-width: 66px; border-right: 1px solid var(--border-color); }
+.phase-grid-hour { position: absolute; left: 5px; transform: translateY(-50%); font-size: .7rem; color: var(--text-muted); }
+.phase-grid-lane { position: relative; min-width: 140px; border-right: 1px solid var(--border-color); background: repeating-linear-gradient(to bottom, transparent 0, transparent 59px, var(--border-color) 60px); cursor: crosshair; }
+.phase-grid-tile { position: absolute; left: 3px; right: 3px; z-index: 1; box-sizing: border-box; overflow: hidden; border-radius: 7px; padding: 6px; display: flex; flex-direction: column; gap: 5px; line-height: 1.2; color: var(--text-main); cursor: grab; }
+.phase-grid-tile strong { font-size: .75rem; overflow-wrap: anywhere; }
+.phase-grid-tile small { font-size: .69rem; }
+.phase-grid-tile.phase-grid-group { border: 2px solid var(--primary-color); background: var(--bg-card); }
+.phase-grid-tile.phase-grid-elim { border: 2px solid var(--success-color, #22c55e); background: var(--bg-card); }
+.phase-grid-tile.phase-grid-cat-0 { border-color: #38bdf8; }
+.phase-grid-tile.phase-grid-cat-1 { border-color: #eab308; }
+.phase-grid-tile.phase-grid-cat-2 { border-color: #a78bfa; }
+.phase-grid-tile.phase-grid-cat-3 { border-color: #14b8a6; }
+.phase-grid-tile.phase-grid-cat-4 { border-color: #f97316; }
+.phase-grid-tile.phase-grid-cat-5 { border-color: #f472b6; }
+.phase-grid-tile.phase-grid-elim { border-style: dashed; }
+.phase-grid-tile.phase-grid-elim::before { content:''; position:absolute; inset:0 auto 0 0; width:5px; background:var(--success-color, #22c55e); }
+.phase-grid-tile.phase-grid-overflow { border-color:#ef4444; background:repeating-linear-gradient(45deg,rgba(239,68,68,.55) 0 10px,rgba(148,163,184,.42) 10px 20px),var(--bg-card); }
+.phase-grid-tile.phase-grid-overflow > * { background:var(--bg-card); border-radius:3px; padding:2px; }
+.phase-grid-series { display: grid; gap: 3px; margin: auto 0; }
+.phase-grid-series span, .phase-grid-single { border: 1px solid var(--border-color); border-radius: 4px; padding: 3px 4px; font-size: .7rem; font-weight: 700; }
+.phase-grid-series small { font-size: .64rem; }
+.phase-grid-tile.selected, .phase-grid-tile:focus-visible { outline: 3px solid var(--text-main); outline-offset: -5px; }
+.estimated-games-mode { display:flex; gap:12px; flex-wrap:wrap; border:1px solid var(--border-color); border-radius:8px; padding:9px 12px; margin:0 0 12px; color:var(--text-main); }
+.estimated-games-mode legend { font-weight:700; padding:0 4px; }
+.estimated-games-mode label { display:flex; align-items:center; gap:6px; min-height:44px; cursor:pointer; }
+.estimated-games-help { color:var(--text-muted); font-size:.83rem; }

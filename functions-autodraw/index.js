@@ -42,6 +42,7 @@ const _tournamentFeeStripeKey = defineSecret('STRIPE_SECRET_KEY');
 const _matchTiming = require('./vendor/match-timing.js');
 const _courtOccupancy = require('./vendor/court-occupancy.js');
 const _phaseCallOrder = require('./vendor/phase-call-order.js');
+const _phaseGridPlan = require('./vendor/phase-grid-plan.js');
 const _monarchCourtSeries = require('./monarch-court-series.js');
 const ScoreplaceRefereeRoster = require('./vendor/referee-roster.js');
 const _isConfirmedTournamentReferee = (t, uid) =>
@@ -5897,6 +5898,10 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
           patch.scheduleWindow.categoryWindows === null) {
         throw new HttpsError('invalid-argument', 'Horários por categoria inválidos.');
       }
+      if (hasDraw && patch.scheduleWindow && patch.scheduleWindow.mode !== undefined &&
+          patch.scheduleWindow.mode !== (t.scheduleWindow && t.scheduleWindow.mode)) {
+        throw new HttpsError('failed-precondition', 'O modo de horários não pode mudar depois do sorteio.');
+      }
       const existingCategoryWindows = (t.scheduleWindow && t.scheduleWindow.categoryWindows) || [];
       const daysChanged = patch.scheduleWindow !== undefined &&
         patch.scheduleWindow.days !== undefined &&
@@ -5907,6 +5912,29 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
           categoryWindows: patch.scheduleWindow && patch.scheduleWindow.categoryWindows !== undefined
             ? patch.scheduleWindow.categoryWindows : existingCategoryWindows
         }) : t.scheduleWindow;
+      if (patch.scheduleWindow && patch.scheduleWindow.interleavedPlan !== undefined) {
+        const original = t.scheduleWindow && t.scheduleWindow.interleavedPlan;
+        const proposed = patch.scheduleWindow.interleavedPlan;
+        if (!_configAtiva.igual(original, proposed)) {
+          if (hasDraw) throw new HttpsError('failed-precondition', 'A grade de jogos publicados não pode mudar depois do sorteio.');
+          if (!original || !proposed || proposed.schema !== 1 || proposed.editorVersion !== 2 ||
+              proposed.day !== original.day || Number(proposed.courts) !== Number(original.courts) ||
+              Number(proposed.totalGames) !== Number(original.totalGames) ||
+              Number(proposed.eliminationMinutes) !== Number(original.eliminationMinutes) ||
+              Number(proposed.eliminationPlayMinutes) !== Number(original.eliminationPlayMinutes)) {
+            throw new HttpsError('invalid-argument', 'A grade não corresponde à programação deste torneio.');
+          }
+          const originalTiles = _phaseGridPlan.expand(original, t);
+          const proposedTiles = _phaseGridPlan.expand(proposed, t);
+          const signature = tile => [tile.kind, tile.category, tile.round, tile.groupNumber].join('|');
+          const signatures = tiles => tiles.map(signature).sort();
+          if (JSON.stringify(signatures(originalTiles)) !== JSON.stringify(signatures(proposedTiles)) ||
+              proposedTiles.reduce((total, tile) => total + (tile.kind === 'groups' ? 3 : 1), 0) !== Number(original.totalGames) ||
+              _phaseGridPlan.validate(proposedTiles, proposed, effectiveWindow.days)) {
+            throw new HttpsError('invalid-argument', 'A grade contém conflito, jogo ausente ou horário fora da janela.');
+          }
+        }
+      }
       if (patch.scheduleWindow && patch.scheduleWindow.phaseCallOrder !== undefined) {
         const proposed = patch.scheduleWindow.phaseCallOrder;
         const canonical = _phaseCallOrder.stages({ scheduleWindow:effectiveWindow });

@@ -1,3 +1,10 @@
+## 2.6.38 — 10/nov/2026 (modo explícito dos horários e grade visual)
+
+- A edição passa a gravar se o organizador determina os horários ou se os participantes combinam as partidas dentro do prazo, sem inferir a escolha pela duração do torneio.
+- A grade visual mostra blocos de classificatória e eliminatória, designações de jogos, quadras, horários, cores por categoria e excedentes listrados. A proposta pode ser concentrada, espalhada ou ajustada por arrasto no plano intercalado do CAMIS.
+- O modo com horários definidos aceita dias esparsos em torneios de qualquer duração. O modo combinado não cria a grade. Torneios antigos sem modo explícito continuam legíveis.
+- Alterações de agenda depois do sorteio permanecem bloqueadas. Corte web e função de sorteio, sem alterar versões nativas ou dados existentes automaticamente.
+
 ## 2.6.37 — 10/nov/2026 (chamada concentrada por etapa)
 
 - A edição do torneio permite ordenar as etapas classificatórias e eliminatórias por categoria e marcar etapas simultâneas. A chamada respeita a primeira etapa ainda incompleta, inclusive na função de quadra; no CAMIS, Diamante e Ouro dividem quadras na eliminatória e a Prata aguarda ambas.

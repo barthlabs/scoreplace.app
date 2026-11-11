@@ -52,10 +52,23 @@ ok(jan && jan.iniHm === '09:00' && jan.fimHm === '18:00', 'janela: horas vêm do
 ok(W._schJanelaTorneio({ startDate: '2026-09-05' }).iniHm === '09:00', 'sem hora no startDate → 09:00 padrão');
 ok(W._schJanelaTorneio({}) === null, 'sem startDate → sem janela (não inventa data)');
 
-// ── 2. A RÉGUA DOS 3 DIAS — acima disso quem marca são os jogadores ───────────
+// ── 2. HORÁRIOS PREVISTOS versus PARTIDAS COMBINADAS ─────────────────────────
 ok(W._schGradeEstimada(mkDia(1, 2)), '1 dia: tem grade');
 ok(W._schGradeEstimada(mkDia(3, 2)), '3 dias: tem grade');
-ok(W._schGradeEstimada(mkDia(4, 2)) === null, '4 dias: SEM grade (o dono disse 1 a 3)');
+ok(W._schGradeEstimada(mkDia(4, 2)), '4 dias: a duração não desliga a grade');
+const shortFlexible = mkDia(1, 2);
+shortFlexible.scheduleWindow = { mode:'participants', days:[], categoryWindows:[] };
+ok(W._schGradeEstimada(shortFlexible) === null, 'mesmo em um dia, jogos combinados pelos participantes não criam grade');
+const monthFlexible = mkDia(1, 2);
+monthFlexible.endDate = '2026-11-05T18:00';
+ok(W._schGradeEstimada(monthFlexible) === null, 'dois meses sem dias previstos: jogadores combinam os jogos');
+const monthScheduled = mkDia(1, 2);
+monthScheduled.endDate = '2026-11-05T18:00';
+monthScheduled.scheduleWindow = { mode:'organizer', days:[
+  { day:'2026-09-05', startTime:'09:00', endTime:'18:00' },
+  { day:'2026-11-05', startTime:'09:00', endTime:'18:00' }
+] };
+ok(!!W._schGradeEstimada(monthScheduled), 'dois meses com dias previstos: grade continua disponível');
 
 // ── 3. A CONTA: 2 quadras, partida de 40min (30×1set + 5 chamada + 5 aquec.) ──
 const g = W._schGradeEstimada(mkDia(1, 2));

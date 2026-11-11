@@ -839,9 +839,10 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
     var plan = t.scheduleWindow && t.scheduleWindow.interleavedPlan;
     if (!plan) return null;
     var invalid = function (reason) { return { interleaved:true, atomica:true, cabe:false, slots:[], reason:reason }; };
-    if (plan.schema !== 1 || jan.dias.length !== 1 || !Array.isArray(plan.blocks) || !plan.blocks.length ||
-        String(plan.day) !== jan.dias[0].ymd || Number(plan.courts) !== quadras) return invalid('configuração da grade');
-    var day = jan.dias[0], real = [], seen = {};
+    if (plan.schema !== 1 || jan.dias.length < 1 || !Array.isArray(plan.blocks) || !plan.blocks.length ||
+        (plan.day && !jan.dias.some(function (d) { return String(plan.day) === d.ymd; })) ||
+        Number(plan.courts) !== quadras) return invalid('configuração da grade');
+    var real = [], seen = {};
     (all || []).forEach(function (m) {
       if (!m || m.id == null || m.isSitOut || (window._isByeMatch ? window._isByeMatch(m) : m.isBye)) return;
       var id = String(m.id);
@@ -871,7 +872,8 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
       }).map(function (key) { return groups[category][key]; });
     });
     var blocks = plan.blocks.map(function (block, index) {
-      return { block:block, index:index, at:_ms(day.ymd, block.startTime) };
+      var day = jan.dias.find(function (d) { return d.ymd === String(block.day || plan.day); });
+      return { block:block, day:day, index:index, at:day ? _ms(day.ymd, block.startTime) : NaN };
     }).sort(function (a, b) { return a.at - b.at || a.index - b.index; });
     var expectedElimination = {}, eliminationCursor = {};
     blocks.forEach(function (item) {
@@ -882,9 +884,9 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
       }
     });
     var slots = [], number = 0, occupied = {}, athleteIntervals = {}, covered = {};
-    function reserve(m, court, ms, duration) {
+    function reserve(m, court, ms, duration, day) {
       var end = ms + duration * _MIN;
-      if (ms < day.iniMs || end > day.fimMs) return false;
+      if (!day || ms < day.iniMs || end > day.fimMs) return false;
       var intervals = occupied[court] || (occupied[court] = []);
       if (intervals.some(function (item) { return ms < item.end && end > item.start; })) return false;
       intervals.push({ start:ms, end:end });
@@ -896,14 +898,14 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
           played.push({ start:ms, end:end });
         }
         covered[String(m.id)] = true;
-        slots.push({ matchId:String(m.id), ms:ms, iso:new Date(ms).toISOString(), dia:0,
+        slots.push({ matchId:String(m.id), ms:ms, iso:new Date(ms).toISOString(), dia:jan.dias.indexOf(day),
           court:court, durationMs:duration * _MIN, scheduledGameNumber:number });
       }
       return true;
     }
     for (var bi = 0; bi < blocks.length; bi++) {
-      var item = blocks[bi], b = item.block, at = item.at;
-      if (!b || !Array.isArray(b.courts) || !b.courts.length || !b.category ||
+      var item = blocks[bi], b = item.block, at = item.at, day = item.day;
+      if (!day || !b || !Array.isArray(b.courts) || !b.courts.length || !b.category ||
           (b.kind !== 'groups' && b.kind !== 'elimination')) return invalid('bloco inválido');
       var names = Array.isArray(t.courtNames) ? t.courtNames : [];
       var courtNames = b.courts.map(function (c) { return String(names[Number(c) - 1] || ('Quadra ' + Number(c))); });
@@ -929,7 +931,7 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
             var minutes = si === 0 ? (Number(t.gameDuration) || 30) + (Number(t.callTime) || 0) + (Number(t.warmupTime) || 0) : (Number(t.gameDuration) || 30);
             var offset = si === 0 ? 0 : (Number(t.gameDuration) || 30) + (Number(t.callTime) || 0) +
               (Number(t.warmupTime) || 0) + (si - 1) * (Number(t.gameDuration) || 30);
-            if (!reserve(series[si], courtNames[ci], at + offset * _MIN, minutes)) return invalid('conflito de grupo');
+            if (!reserve(series[si], courtNames[ci], at + offset * _MIN, minutes, day)) return invalid('conflito de grupo');
           }
         }
       } else {
@@ -948,7 +950,7 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
         var cursor = eliminationCursor[key] || 0;
         for (var ei = 0; ei < b.courts.length; ei++) {
           number++;
-          if (!reserve(matches[cursor + ei] || null, courtNames[ei], at, length)) return invalid('conflito eliminatório');
+          if (!reserve(matches[cursor + ei] || null, courtNames[ei], at, length, day)) return invalid('conflito eliminatório');
         }
         eliminationCursor[key] = cursor + b.courts.length;
       }
@@ -956,7 +958,8 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
     if (real.some(function (m) { return !covered[String(m.id)]; })) return invalid('jogo fora da grade');
     if (Number(plan.totalGames) !== number) return invalid('número total divergente');
     return { interleaved:true, atomica:true, cabe:true, slots:slots, reservedGameCount:number,
-      quadras:quadras, dias:1, cadenceValid:false, fimMs:day.fimMs, extraPorDia:[0], extraMs:0,
+      quadras:quadras, dias:jan.dias.length, cadenceValid:false, fimMs:jan.dias[jan.dias.length - 1].fimMs,
+      extraPorDia:jan.dias.map(function () { return 0; }), extraMs:0,
       executionOrder:'interleaved', slotMin:Number(plan.eliminationMinutes) };
   }
 
@@ -1536,13 +1539,21 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
   window._schGradeEstimada = function (t) {
     try {
       t = t || {};
+      var scheduleMode = t.scheduleWindow && t.scheduleWindow.mode;
+      if (scheduleMode === 'participants') return null;
+      if (scheduleMode === 'organizer' && !(t.scheduleWindow && Array.isArray(t.scheduleWindow.days) && t.scheduleWindow.days.length)) return null;
+      // Uma faixa de semanas ou meses sem dias/horários declarados é jogo
+      // combinado pelos participantes. Não inventar uma grade nos oito
+      // primeiros dias só porque o torneio tem início e fim.
+      var explicitDays = t.scheduleWindow && Array.isArray(t.scheduleWindow.days) && t.scheduleWindow.days.length;
+      var startDay = String(t.startDate || '').slice(0, 10);
+      var endDay = String(t.endDate || '').slice(0, 10);
+      if (!scheduleMode && !explicitDays && /^\d{4}-\d{2}-\d{2}$/.test(startDay) && /^\d{4}-\d{2}-\d{2}$/.test(endDay) &&
+          Date.parse(endDay + 'T00:00:00Z') - Date.parse(startDay + 'T00:00:00Z') > 7 * 86400000) return null;
       var jan = window._schJanelaTorneio(t);
-      // Acima de três dias a estimativa histórica não se aventura a adivinhar
-      // agenda. Uma agenda explícita por categoria, porém, é justamente a
-      // decisão do organizador que torna o planejamento determinístico.
-      var temAgendaCategorias = Object.keys(window._schCategorySchedule(t)).length > 0 ||
-        !!(t.scheduleWindow && Array.isArray(t.scheduleWindow.categoryWindows) && t.scheduleWindow.categoryWindows.length);
-      if (!jan || jan.invalida || !jan.dias.length || (jan.dias.length > 3 && !temAgendaCategorias)) return null;
+      // A presença de dias com horários planejados define o modo agendado;
+      // a duração entre a primeira e a última data não altera essa escolha.
+      if (!jan || jan.invalida || !jan.dias.length) return null;
       var quadras = Math.max(1, parseInt(t.courtCount, 10) || (Array.isArray(t.courtNames) ? t.courtNames.length : 0) || 1);
       var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (Array.isArray(t.matches) ? t.matches : []);
       if (t.scheduleWindow && t.scheduleWindow.interleavedPlan) return _schGradeIntercalada(t, jan, all, quadras);

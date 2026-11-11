@@ -71,4 +71,16 @@ assert.equal(Math.max(...t.matches.map(m => m.scheduledGameNumber || 0)), 144);
 const short = { ...t, matches:matches.map(m => ({ ...m })), endDate:`${day}T19:30`,
   scheduleWindow:{ ...t.scheduleWindow, days:[{ day,startTime:'08:00',endTime:'19:30' }] } };
 assert.equal(W.window._schGradeEstimada(short).cabe, false);
+const secondDay = '2026-11-14';
+const twoDayPlan = JSON.parse(JSON.stringify(blueprint));
+twoDayPlan.blocks[twoDayPlan.blocks.length - 1].day = secondDay;
+twoDayPlan.blocks[twoDayPlan.blocks.length - 1].startTime = '08:00';
+const twoDay = { ...t, matches:matches.map(m => ({ ...m })), endDate:`${secondDay}T21:00`,
+  scheduleWindow:{ days:[{day,startTime:'08:00',endTime:'21:00'},
+    {day:secondDay,startTime:'08:00',endTime:'21:00'}], interleavedPlan:twoDayPlan } };
+const acrossDays = W.window._schGradeEstimada(twoDay);
+assert(acrossDays && acrossDays.cabe && acrossDays.interleaved);
+assert.equal(acrossDays.dias, 2);
+assert.equal(acrossDays.reservedGameCount, 144);
+assert.equal(Math.max(...acrossDays.slots.map(s => s.scheduledGameNumber)), 144);
 console.log('CAMIS: grade intercalada reserva 144 designações e 36 duplas de grupo');

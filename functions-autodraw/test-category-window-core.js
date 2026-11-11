@@ -49,6 +49,18 @@ assert.throws(() => validate(outsidePhase, HttpsError), error =>
   'janela não pode sair da data final da fase mesmo que o dia exista na grade');
 assert.deepEqual(validate({ scheduleWindow:'legacy-invalid' }, HttpsError), [],
   'torneio antigo sem janelas por categoria mantém o comportamento anterior');
+const selectedLong = { startDate:'2026-11-13T08:00', endDate:'2027-01-15T21:00',
+  scheduleWindow:{ version:1, mode:'organizer', days:[
+    { day:'2026-11-13', startTime:'08:00', endTime:'21:00' },
+    { day:'2027-01-14', startTime:'08:00', endTime:'21:00' }
+  ], categoryWindows:[] } };
+assert.deepEqual(validate(selectedLong, HttpsError), [], 'organizador pode marcar dias esparsos durante dois meses');
+assert.deepEqual(validate({ ...selectedLong, scheduleWindow:{ version:1, mode:'participants', days:[], categoryWindows:[] } }, HttpsError), [],
+  'jogadores podem combinar partidas dentro do mesmo prazo');
+assert.throws(() => validate({ ...selectedLong, scheduleWindow:{ ...selectedLong.scheduleWindow, mode:'participants' } }, HttpsError),
+  error => error.code === 'invalid-argument', 'modo por participantes não aceita uma grade fixa');
+assert.throws(() => validate({ ...selectedLong, scheduleWindow:{ version:1, mode:'organizer', days:[], categoryWindows:[] } }, HttpsError),
+  error => error.code === 'invalid-argument', 'modo por organizador exige dias com jogos');
 const unknownKey = structuredClone(t);
 unknownKey.scheduleWindow.extra = 'silencioso';
 assert.throws(() => validate(unknownKey, HttpsError), error => error.code === 'invalid-argument',
