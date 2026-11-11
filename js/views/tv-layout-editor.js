@@ -7,13 +7,17 @@
     live1: 'Partida 1', live2: 'Partida 2', live3: 'Partida 3', live4: 'Partida 4',
     standing1: 'Classificação 1', standing2: 'Classificação 2', standing3: 'Classificação 3', standing4: 'Classificação 4' };
   var cardLabels = { court: 'Quadra', number: 'Número do jogo', category: 'Categoria', teams: 'Times', players: 'Atletas', score: 'Placar', timer: 'Relógio' };
-  var draft = null, screens = null, activePhase = 0, touched = false, mounted = null, pendingSet = false, resizeObserver = null, snapshot = null;
+  var draft = null, screens = null, activePhase = 0, touched = false, mounted = null, pendingSet = false, resizeObserver = null, snapshot = null, savedBaseline = '';
   function esc(value) {
     return String(value).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
   function current() { return draft || Core.defaults(); }
+  function bracketIds(layout) { return (layout.bracketBoxes || []).map(function (_, i) { return 'bracket-' + i; }); }
+  function allIds(layout) { return Core.IDS.concat(bracketIds(layout)); }
+  function getBox(layout, id) { return id.indexOf('bracket-') === 0 ? layout.bracketBoxes[Number(id.slice(8))] : layout.sections[id]; }
+  function labelFor(layout, id) { return id.indexOf('bracket-') === 0 ? 'Eliminatórias · ' + getBox(layout, id).category : labels[id]; }
   function setState(layout, savedScreens) {
     var base = layout ? Core.normalize(layout) : Core.defaults();
     screens = savedScreens ? Core.normalizeScreens(savedScreens) : null;
@@ -21,6 +25,7 @@
     activePhase = screens[0].phaseIndex;
     draft = screens[0].layout;
     touched = !!layout || !!savedScreens;
+    savedBaseline = JSON.stringify(screens);
   }
   function phaseNames() {
     var phases = window._editingTournament && window._editingTournament.phases || [];
@@ -106,11 +111,22 @@
     var canvas = host.querySelector('[data-tv-canvas]'), frame = host.querySelector('[data-tv-frame]');
     if (canvas && frame) frame.style.transform = 'scale(' + (canvas.clientWidth / 1280) + ')';
   }
-  function boxHtml(id, b) {
-    return '<div data-tv-box="' + id + '" role="group" tabindex="0" aria-label="' + labels[id] + '" style="position:absolute;z-index:' + (id === 'qr' ? 5 : 2) + ';left:' + b.x + '%;top:' + b.y + '%;width:' + b.w + '%;height:' + b.h + '%;border:2px solid #67e8f9;border-radius:5px;cursor:move;touch-action:none;box-shadow:inset 0 0 0 1px #06121a88">' +
-      '<span style="position:absolute;top:0;left:0;max-width:calc(100% - 29px);padding:2px 6px;background:#06121ae6;color:#fff;font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + labels[id] + '</span>' +
-      (id === 'qr' ? '' : '<button type="button" data-tv-remove="' + id + '" aria-label="Remover ' + labels[id] + '" title="Remover ' + labels[id] + '" style="position:absolute;right:0;top:0;z-index:3;width:26px;height:26px;background:#991b1b;color:#fff;border:1px solid #fff;border-radius:0 3px 0 5px;font-size:18px;line-height:20px;cursor:pointer">×</button>') +
-      '<span data-tv-resize="' + id + '" aria-label="Redimensionar ' + labels[id] + '" title="Arraste para redimensionar" style="position:absolute;right:0;bottom:0;width:18px;height:18px;background:#fbbf24;border:1px solid #111;cursor:nwse-resize;touch-action:none"></span></div>';
+  function boxHtml(id, b, label) {
+    var handles = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'].map(function (edge) {
+      var style = { n:'top:-5px;left:16px;right:16px;height:10px;cursor:ns-resize',
+        s:'bottom:-5px;left:16px;right:16px;height:10px;cursor:ns-resize',
+        e:'right:-5px;top:16px;bottom:16px;width:10px;cursor:ew-resize',
+        w:'left:-5px;top:16px;bottom:16px;width:10px;cursor:ew-resize',
+        ne:'right:-7px;top:-7px;width:16px;height:16px;cursor:nesw-resize',
+        nw:'left:-7px;top:-7px;width:16px;height:16px;cursor:nwse-resize',
+        se:'right:-7px;bottom:-7px;width:16px;height:16px;cursor:nwse-resize',
+        sw:'left:-7px;bottom:-7px;width:16px;height:16px;cursor:nesw-resize' }[edge];
+      return '<span data-tv-resize="' + edge + '" role="button" aria-label="Redimensionar ' + esc(label) + ' pela borda ' + edge + '" title="Arraste esta borda" style="position:absolute;z-index:4;touch-action:none;' + style + '"></span>';
+    }).join('');
+    return '<div data-tv-box="' + id + '" role="group" tabindex="0" aria-label="' + esc(label) + '" style="position:absolute;z-index:' + (id === 'qr' ? 5 : 2) + ';left:' + b.x + '%;top:' + b.y + '%;width:' + b.w + '%;height:' + b.h + '%;border:2px solid #67e8f9;border-radius:5px;cursor:move;touch-action:none;box-shadow:inset 0 0 0 1px #06121a88">' +
+      '<span style="position:absolute;top:0;left:0;max-width:calc(100% - 29px);padding:2px 6px;background:#06121ae6;color:#fff;font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(label) + '</span>' +
+      (id === 'qr' ? '' : '<button type="button" data-tv-remove="' + id + '" aria-label="Remover ' + esc(label) + '" title="Remover ' + esc(label) + '" style="position:absolute;right:0;top:0;z-index:3;width:26px;height:26px;background:#991b1b;color:#fff;border:1px solid #fff;border-radius:0 3px 0 5px;font-size:18px;line-height:20px;cursor:pointer">×</button>') +
+      handles + '</div>';
   }
   function render() {
     var host = document.getElementById('tv-layout-editor');
@@ -129,17 +145,17 @@
     snapshot = previewSnapshot(layout);
     var choicesByKind = sourceChoices(window._editingTournament, snapshot);
     var documentHtml = snapshot ? window._tvLivePreviewDocument(snapshot) : '';
-    var visible = Core.IDS.filter(function (id) { return layout.sections[id].visible; });
-    var removed = Core.IDS.filter(function (id) { return !layout.sections[id].visible; });
+    var visible = allIds(layout).filter(function (id) { return getBox(layout, id).visible; });
+    var removed = allIds(layout).filter(function (id) { return !getBox(layout, id).visible; });
     host.innerHTML = '<div style="border-top:1px solid #475569;padding-top:1rem;color:var(--text-main)">' +
       '<h3 style="margin:0 0 .4rem">📺 Tela No ar</h3>' +
-      '<p style="font-size:.8rem;color:var(--text-muted)">Arraste as seções para posicioná-las e o canto inferior direito para mudar o tamanho. Bordas próximas se encaixam automaticamente. O QR permanece visível e pode ser movido. As alterações entram no ar ao salvar o torneio.</p>' +
+      '<p style="font-size:.8rem;color:var(--text-muted)">Arraste o interior para mover. Arraste qualquer borda para mudar um eixo ou um canto para mudar os dois. O QR permanece visível. Salve a tela mesmo com o torneio em andamento.</p>' +
       '<div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:.6rem 0 .8rem"><label>Tela <select data-tv-screen-list aria-label="Selecionar tela No ar">' +
       screens.map(function (screen, i) { return '<option value="' + screen.phaseIndex + '"' + (screen.phaseIndex === activePhase ? ' selected' : '') + '>Tela ' + (i + 1) + ' · ' + esc(names[screen.phaseIndex] || 'Fase ' + (screen.phaseIndex + 1)) + '</option>'; }).join('') +
       '</select></label><label>Usar na fase <select data-tv-phase aria-label="Fase desta tela">' + phaseOptions + '</select></label>' +
       '<button type="button" data-tv-add-screen class="btn btn-secondary"' + (screens.length >= 12 ? ' disabled' : '') + '>+ Nova tela</button>' +
       (screens.length > 1 ? '<button type="button" data-tv-delete-screen class="btn btn-secondary">Excluir esta tela</button>' : '') + '</div>' +
-      '<div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-bottom:.6rem"><button type="button" data-tv-finals-preset class="btn btn-secondary">Final Ouro e Prata</button><label>Fundo <select data-tv-background-mode aria-label="Origem das cores da tela"><option value="tournament"' + (layout.backgroundMode === 'tournament' ? ' selected' : '') + '>Cores do torneio</option><option value="custom"' + (layout.backgroundMode === 'custom' ? ' selected' : '') + '>Cor manual</option></select></label>' +
+      '<div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-bottom:.6rem"><button type="button" data-tv-finals-preset class="btn btn-secondary">Final Ouro e Prata</button><button type="button" data-tv-qr-bottom class="btn btn-secondary">Alinhar QR embaixo</button><label>Fundo <select data-tv-background-mode aria-label="Origem das cores da tela"><option value="tournament"' + (layout.backgroundMode === 'tournament' ? ' selected' : '') + '>Cores do torneio</option><option value="custom"' + (layout.backgroundMode === 'custom' ? ' selected' : '') + '>Cor manual</option></select></label>' +
       '<label data-tv-manual-color' + (layout.backgroundMode === 'custom' ? '' : ' hidden') + '>Cor <input data-tv-background type="color" value="' + esc(layout.background) + '"></label>' +
       (!layout.sections.logo.visible ? '<button type="button" data-tv-add-logo class="btn btn-secondary">+ Colocar logo</button>' :
         '<label>Largura do logo <input data-tv-logo-size="w" type="number" min="5" max="100" step="0.1" value="' + layout.sections.logo.w + '" style="width:5rem">%</label><label>Altura <input data-tv-logo-size="h" type="number" min="5" max="100" step="0.1" value="' + layout.sections.logo.h + '" style="width:5rem">%</label>') + '</div>' +
@@ -150,16 +166,19 @@
         return '<label style="font-size:.8rem">' + labels[id] + ' <select data-tv-source="' + id + '" aria-label="' + labels[id] + '" style="max-width:12rem"><option value="">Selecionar...</option>' +
           choices.map(function (choice) { var value = choice.id || choice.key; return '<option value="' + esc(value) + '"' + (source === value ? ' selected' : '') + '>' + esc(choice.label) + '</option>'; }).join('') + '</select></label>';
       }).join('') + '</div>' +
+      '<div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:.4rem 0 .7rem"><label>Eliminatórias <select data-tv-add-bracket aria-label="Categoria da nova chave"><option value="">Escolha a categoria</option>' +
+      (snapshot && snapshot.brackets || []).filter(function (part) { return !(layout.bracketBoxes || []).some(function (b) { return b.category === part.category; }); }).map(function (part) { return '<option value="' + esc(part.category) + '">' + esc(part.category) + '</option>'; }).join('') + '</select></label>' +
+      '<button type="button" data-tv-add-bracket-button class="btn btn-secondary">+ Colocar chave</button></div>' +
       '<div data-tv-canvas aria-label="Prévia da tela No ar" style="position:relative;width:100%;aspect-ratio:16/9;background:' + esc(layout.backgroundMode === 'custom' ? layout.background : (snapshot && snapshot.theme && snapshot.theme.background || '#060d1a')) + ';border:2px solid #818cf8;border-radius:8px;overflow:hidden;touch-action:none;user-select:none">' +
       (documentHtml ? '<iframe data-tv-frame title="Prévia com dados do torneio" sandbox="allow-same-origin" tabindex="-1" style="position:absolute;left:0;top:0;width:1280px;height:720px;border:0;transform-origin:top left;pointer-events:none"></iframe>' :
         '<div data-tv-empty style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:1rem;text-align:center;color:#cbd5e1;font-size:.9rem">Salve e configure os jogos do torneio para visualizar os dados reais nesta prévia.</div>') +
-      visible.map(function (id) { return boxHtml(id, layout.sections[id]); }).join('') + '</div>' +
+      visible.map(function (id) { return boxHtml(id, getBox(layout, id), labelFor(layout, id)); }).join('') + '</div>' +
       '<div data-tv-removed style="margin:.8rem 0"><strong style="font-size:.8rem">Seções retiradas</strong><div style="display:flex;flex-wrap:wrap;gap:.45rem;margin-top:.35rem">' +
-      (removed.length ? removed.map(function (id) { return '<button type="button" data-tv-restore="' + id + '" class="btn btn-secondary" style="font-size:.8rem">+ ' + labels[id] + '</button>'; }).join('') :
+      (removed.length ? removed.map(function (id) { return '<button type="button" data-tv-restore="' + id + '" class="btn btn-secondary" style="font-size:.8rem">+ ' + esc(labelFor(layout, id)) + '</button>'; }).join('') :
         '<span style="font-size:.8rem;color:var(--text-muted)">Nenhuma</span>') + '</div></div>' +
       '<fieldset style="border:1px solid #475569;border-radius:8px"><legend>Informações nos cards em quadra</legend><div style="display:flex;flex-wrap:wrap;gap:.7rem;font-size:.8rem">' +
       Core.CARD_IDS.map(function (id) { return '<label><input type="checkbox" data-tv-card="' + id + '" ' + (layout.card[id] ? 'checked' : '') + '> ' + cardLabels[id] + '</label>'; }).join('') + '</div></fieldset>' +
-      '<div style="display:flex;gap:.5rem;flex-wrap:wrap;margin:.8rem 0"><button type="button" data-tv-default class="btn btn-secondary">Restaurar padrão</button><button type="button" data-tv-save-template class="btn btn-primary">Salvar modelo de TV</button><select data-tv-template-list aria-label="Modelos de TV" style="max-width:220px;background:#0f172a;color:white;border:1px solid #64748b"><option value="">Modelos de TV...</option></select><button type="button" data-tv-load-template class="btn btn-secondary">Usar modelo</button><button type="button" data-tv-delete-template class="btn btn-secondary">Excluir modelo</button></div></div>';
+      '<div style="display:flex;gap:.5rem;flex-wrap:wrap;margin:.8rem 0"><button type="button" data-tv-save-live class="btn btn-primary">Salvar tela No ar</button><button type="button" data-tv-default class="btn btn-secondary">Restaurar padrão</button><button type="button" data-tv-save-template class="btn btn-primary">Salvar modelo de TV</button><select data-tv-template-list aria-label="Modelos de TV" style="max-width:220px;background:#0f172a;color:white;border:1px solid #64748b"><option value="">Modelos de TV...</option></select><button type="button" data-tv-load-template class="btn btn-secondary">Usar modelo</button><button type="button" data-tv-delete-template class="btn btn-secondary">Excluir modelo</button></div></div>';
     var frame = host.querySelector('[data-tv-frame]');
     if (frame) {
       frame.onload = function () { scale(host); fitPreview(frame.contentDocument); };
@@ -187,9 +206,21 @@
       catch (e) { matches = t && t.matches || []; }
       selected.layout = Core.finalsPreset(layout, matches); draft = selected.layout; touched = true; render();
     };
+    host.querySelector('[data-tv-qr-bottom]').onclick = function () {
+      layout.sections.qr.y = Math.round((100 - layout.sections.qr.h) * 10) / 10;
+      touched = true; updateBox('qr');
+    };
     host.querySelectorAll('[data-tv-source]').forEach(function (input) { input.onchange = function () {
       layout.sections[input.dataset.tvSource].source = input.value; touched = true; render();
     }; });
+    host.querySelector('[data-tv-add-bracket-button]').onclick = function () {
+      var category = host.querySelector('[data-tv-add-bracket]').value;
+      if (!category || layout.bracketBoxes.some(function (box) { return box.category === category; })) return;
+      var index = layout.bracketBoxes.length;
+      layout.bracketBoxes.push({ category:category, visible:true, x:50, y:10 + (index % 3) * 16,
+        w:49, h:Math.min(55, 90 - (10 + (index % 3) * 16)) });
+      touched = true; render();
+    };
     host.querySelector('[data-tv-screen-list]').onchange = function (event) {
       activePhase = Number(event.target.value); render();
     };
@@ -212,13 +243,13 @@
       if (snapshot && frame) { snapshot.tvLayout = Core.normalize(layout); frame.srcdoc = window._tvLivePreviewDocument(snapshot); }
     }; });
     host.querySelectorAll('[data-tv-remove]').forEach(function (button) { button.onclick = function (event) {
-      event.stopPropagation(); layout.sections[button.dataset.tvRemove].visible = false; touched = true; render();
+      event.stopPropagation(); getBox(layout, button.dataset.tvRemove).visible = false; touched = true; render();
     }; });
     host.querySelectorAll('[data-tv-restore]').forEach(function (button) { button.onclick = function () {
-      layout.sections[button.dataset.tvRestore].visible = true; touched = true; render();
+      getBox(layout, button.dataset.tvRestore).visible = true; touched = true; render();
     }; });
     function updateBox(id) {
-      var b = layout.sections[id], el = host.querySelector('[data-tv-box="' + id + '"]');
+      var b = getBox(layout, id), el = host.querySelector('[data-tv-box="' + id + '"]');
       if (!el) return;
       el.style.left = b.x + '%'; el.style.top = b.y + '%'; el.style.width = b.w + '%'; el.style.height = b.h + '%';
       var inside = frame && frame.contentDocument && frame.contentDocument.querySelector('.tv-custom-' + id);
@@ -238,27 +269,53 @@
     host.querySelectorAll('[data-tv-box]').forEach(function (box) { box.onpointerdown = function (event) {
       if (event.target.closest('[data-tv-remove]') || (event.button !== 0 && event.pointerType === 'mouse')) return;
       event.preventDefault();
-      var id = box.dataset.tvBox, b = layout.sections[id], resize = !!event.target.closest('[data-tv-resize]');
+      var id = box.dataset.tvBox, b = getBox(layout, id), handle = event.target.closest('[data-tv-resize]');
+      var edge = handle ? handle.dataset.tvResize : '';
       var rect = host.querySelector('[data-tv-canvas]').getBoundingClientRect();
       var x0 = event.clientX, y0 = event.clientY, initial = { x: b.x, y: b.y, w: b.w, h: b.h };
       box.setPointerCapture(event.pointerId);
       box.onpointermove = function (move) {
         var dx = (move.clientX - x0) / rect.width * 100, dy = (move.clientY - y0) / rect.height * 100;
         var round = function (n) { return Math.round(n * 10) / 10; };
-        if (resize) {
-          b.w = round(Math.max(5, Math.min(100 - b.x, initial.w + dx)));
-          b.h = round(Math.max(5, Math.min(100 - b.y, initial.h + dy)));
+        if (edge) {
+          var left = initial.x, top = initial.y, right = initial.x + initial.w, bottom = initial.y + initial.h;
+          if (edge.indexOf('w') >= 0) left = Math.max(0, Math.min(right - 5, initial.x + dx));
+          if (edge.indexOf('e') >= 0) right = Math.min(100, Math.max(left + 5, initial.x + initial.w + dx));
+          if (edge.indexOf('n') >= 0) top = Math.max(0, Math.min(bottom - 5, initial.y + dy));
+          if (edge.indexOf('s') >= 0) bottom = Math.min(100, Math.max(top + 5, initial.y + initial.h + dy));
+          b.x = round(left); b.y = round(top); b.w = round(right - left); b.h = round(bottom - top);
         } else {
           b.x = round(Math.max(0, Math.min(100 - b.w, initial.x + dx)));
           b.y = round(Math.max(0, Math.min(100 - b.h, initial.y + dy)));
         }
-        var snapped = Core.snapBox(b, Core.IDS.filter(function (otherId) { return otherId !== id; }).map(function (otherId) { return layout.sections[otherId]; }), resize);
-        Object.assign(b, snapped);
+        var others = allIds(layout).filter(function (otherId) { return otherId !== id; }).map(function (otherId) { return getBox(layout, otherId); });
+        if (!edge) Object.assign(b, Core.snapBox(b, others, false));
+        else {
+          var xs = [0, 100], ys = [0, 100];
+          others.forEach(function (other) { if (other.visible) { xs.push(other.x, other.x + other.w); ys.push(other.y, other.y + other.h); } });
+          function snap(value, targets) { return targets.reduce(function (best, target) { return Math.abs(target - value) < Math.abs(best - value) && Math.abs(target - value) < 1.4 ? target : best; }, value); }
+          if (edge.indexOf('w') >= 0) { var rightEdge = b.x + b.w; b.x = round(snap(b.x, xs)); b.w = round(rightEdge - b.x); }
+          if (edge.indexOf('e') >= 0) b.w = round(snap(b.x + b.w, xs) - b.x);
+          if (edge.indexOf('n') >= 0) { var bottomEdge = b.y + b.h; b.y = round(snap(b.y, ys)); b.h = round(bottomEdge - b.y); }
+          if (edge.indexOf('s') >= 0) b.h = round(snap(b.y + b.h, ys) - b.y);
+          b.w = Math.max(5, b.w); b.h = Math.max(5, b.h);
+        }
         touched = true; updateBox(id);
       };
       box.onpointerup = box.onpointercancel = function () { box.onpointermove = null; };
     }; });
     host.querySelector('[data-tv-default]').onclick = function () { selected.layout = Core.defaults(); draft = selected.layout; touched = true; render(); };
+    host.querySelector('[data-tv-save-live]').onclick = async function (event) {
+      var btn = event.currentTarget;
+      btn.disabled = true; btn.textContent = 'Salvando tela…';
+      try {
+        var changed = await window._tvEditorSaveChanges();
+        if (window.showNotification) window.showNotification(changed ? 'Tela No ar salva' : 'Tela No ar já salva',
+          changed ? 'Alterações disponíveis na TV.' : 'Nenhuma alteração pendente.', 'success');
+      } catch (error) {
+        if (window.showNotification) window.showNotification('Falha ao salvar a tela No ar', error && error.message || '', 'error');
+      } finally { btn.disabled = false; btn.textContent = 'Salvar tela No ar'; }
+    };
     host.querySelector('[data-tv-save-template]').onclick = saveTemplate;
     host.querySelector('[data-tv-load-template]').onclick = function () {
       var select = host.querySelector('[data-tv-template-list]');
@@ -310,6 +367,15 @@
   };
   window._tvEditorReadLayout = function () { return touched ? Core.normalize(screens[0].layout) : null; };
   window._tvEditorReadScreens = function () { return touched ? Core.normalizeScreens(screens) : null; };
+  window._tvEditorHasChanges = function () { return !!screens && JSON.stringify(screens) !== savedBaseline; };
+  window._tvEditorSaveChanges = async function () {
+    var t = window._editingTournament;
+    if (!t || !t.id || !window.AppStore) throw new Error('Torneio indisponível para salvar a tela.');
+    if (!window._tvEditorHasChanges()) return false;
+    await window.AppStore.addTournament({ id:t.id, tvLayout:window._tvEditorReadLayout(), tvScreens:window._tvEditorReadScreens() });
+    savedBaseline = JSON.stringify(screens);
+    return true;
+  };
   window._tvEditorRefreshPreview = function () { if (mounted && mounted.isConnected) render(); };
   document.addEventListener('input', function (event) {
     if (event.target && /^tourn-(cover-|title-color)/.test(event.target.id || '')) window._tvEditorRefreshPreview();

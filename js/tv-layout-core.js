@@ -14,7 +14,7 @@
     upcoming: { x: 1, y: 83, w: 48, h: 16 },
     rankings: { x: 50, y: 10, w: 49, h: 55 },
     results: { x: 50, y: 66, w: 39, h: 33 },
-    qr: { x: 90, y: 66, w: 9, h: 33 },
+    qr: { x: 90, y: 67, w: 9, h: 33 },
     logo: { x: 79, y: 1, w: 12, h: 8 },
     live1: { x: 1, y: 11, w: 23, h: 32 }, live2: { x: 25, y: 11, w: 23, h: 32 },
     live3: { x: 52, y: 11, w: 23, h: 32 }, live4: { x: 76, y: 11, w: 23, h: 32 },
@@ -27,7 +27,7 @@
   function number(v) { return typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 100 && Math.round(v * 10) === v * 10; }
   function normalize(input) {
     if (input == null) return null;
-    exactKeys(input, ['version', 'background', 'backgroundMode', 'sections', 'card']);
+    exactKeys(input, ['version', 'background', 'backgroundMode', 'sections', 'card', 'bracketBoxes']);
     if (input.version !== 1 || !/^#[0-9a-fA-F]{6}$/.test(input.background)) fail();
     var backgroundMode = input.backgroundMode == null
       ? (input.background.toLowerCase() === '#060d1a' ? 'tournament' : 'custom') : input.backgroundMode;
@@ -47,8 +47,19 @@
     });
     var card = {};
     CARD_IDS.forEach(function (id) { if (typeof input.card[id] !== 'boolean') fail(); card[id] = input.card[id]; });
+    var boxes = input.bracketBoxes == null ? [] : input.bracketBoxes;
+    if (!Array.isArray(boxes) || boxes.length > 100) fail();
+    var boxNames = new Set();
+    boxes = boxes.map(function (box) {
+      exactKeys(box, ['category', 'visible', 'x', 'y', 'w', 'h']);
+      if (typeof box.category !== 'string' || !box.category.trim() || box.category.length > 120 ||
+          boxNames.has(box.category) || typeof box.visible !== 'boolean' || !number(box.x) || !number(box.y) ||
+          !number(box.w) || !number(box.h) || box.w < 5 || box.h < 5 || box.x + box.w > 100 || box.y + box.h > 100) fail();
+      boxNames.add(box.category);
+      return { category:box.category, visible:box.visible, x:box.x, y:box.y, w:box.w, h:box.h };
+    });
     var out = { version: 1, background: input.background.toLowerCase(), backgroundMode: backgroundMode,
-      sections: sections, card: card };
+      sections: sections, card: card, bracketBoxes: boxes };
     if (JSON.stringify(out).length > 12000) fail();
     return out;
   }
@@ -57,7 +68,7 @@
     IDS.forEach(function (id) { var b = DEFAULT_BOXES[id]; sections[id] = { visible: IDS.indexOf(id) < 6, x: b.x, y: b.y, w: b.w, h: b.h }; });
     var card = {};
     CARD_IDS.forEach(function (id) { card[id] = true; });
-    return normalize({ version: 1, background: '#060d1a', backgroundMode: 'tournament', sections: sections, card: card });
+    return normalize({ version: 1, background: '#060d1a', backgroundMode: 'tournament', sections: sections, card: card, bracketBoxes:[] });
   }
   function snapBox(box, others, resize, threshold) {
     var limit = Number.isFinite(threshold) ? threshold : 1.4;
@@ -117,7 +128,7 @@
       var standing = layout.sections['standing' + (index + 1)];
       standing.visible = true; standing.source = key;
     });
-    layout.sections.qr.x = 89; layout.sections.qr.y = 77; layout.sections.qr.w = 10; layout.sections.qr.h = 22;
+    layout.sections.qr.x = 89; layout.sections.qr.y = 78; layout.sections.qr.w = 10; layout.sections.qr.h = 22;
     return normalize(layout);
   }
   function normalizeScreens(input) {

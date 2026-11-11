@@ -1,3 +1,7 @@
+// 2.6.46 — O desempate volta a ser chamado após cada grupo e aparece na
+// operação, inclusive nos torneios com grade intercalada. A Prata espera as
+// eliminatórias Diamante e Ouro. A TV ganhou
+// tela cheia no cabeçalho, chaves por categoria e edição durante o torneio.
 // 2.6.45 — O cabeçalho do torneio ocupa menos altura. A faixa de operação
 // mostra o próximo jogo mesmo com todas as quadras ocupadas, sem liberar a
 // chamada antes da hora. A tela da TV oferece o botão Tela cheia.

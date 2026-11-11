@@ -11,6 +11,9 @@ const _operationReceipt = require('./operation-receipt-core');
 const _rehearsal = require('./tournament-rehearsal');
 const _operationDay = require('./operation-day');
 const _phaseTieCore = require('./phase-tie-core');
+// O desempate é operacional mesmo se o shim do sorteio carregar sem os
+// aliases globais do navegador; use o contrato vendorizado como reserva.
+const _standingsAdapter = require('./vendor/standings-core.js');
 const _phaseTieCourts = require('./phase-tie-courts');
 const _phasePendingDecision = require('./phase-pending-decision-core');
 const _drawSeed = require('./draw-seed-core');
@@ -6459,19 +6462,22 @@ function _buildPhaseTieRuntime(t, current, sourceGroups, currentCfg, phaseEngine
       return one ? [String(one)] : [];
     };
     const matches = sourceMatches(pool);
-    const originalOrder = typeof drawWindow._standingsOrdemChave === 'function'
-      ? drawWindow._standingsOrdemChave(originalDrawMatches.length ? originalDrawMatches : matches, slotKeys) : {};
+    const originalOrder = (typeof drawWindow._standingsOrdemChave === 'function'
+      ? drawWindow._standingsOrdemChave : _standingsAdapter.buildOrdemChave)(
+        originalDrawMatches.length ? originalDrawMatches : matches, slotKeys);
     if (!criterionList) {
-      const legacyCompare = (a, b) => drawWindow._standingsCompare(a, b, advanced);
+      const legacyCompare = (a, b) => (typeof drawWindow._standingsCompare === 'function'
+        ? drawWindow._standingsCompare : _standingsAdapter.standingsCompare)(a, b, advanced);
       legacyCompare.originalOrder = originalOrder;
       return legacyCompare;
     }
-    const h2h = typeof drawWindow._standingsBuildH2H === 'function'
-      ? drawWindow._standingsBuildH2H(matches, slotKeys) : {};
+    const h2h = (typeof drawWindow._standingsBuildH2H === 'function'
+      ? drawWindow._standingsBuildH2H : _standingsAdapter.buildH2H)(matches, slotKeys);
     const opts = { tiebreakers: criterionList,
       primaryField: ['games_diff', 'wins'].includes(t.rankingPrimary) ? t.rankingPrimary : 'points',
       adv: advanced, h2h, birth: tbOpts.birthByName || {} };
-    const compare = (a, b) => drawWindow._standingsCompareConfig(a, b, opts);
+    const compare = (a, b) => (typeof drawWindow._standingsCompareConfig === 'function'
+      ? drawWindow._standingsCompareConfig : _standingsAdapter.standingsCompareConfig)(a, b, opts);
     compare.originalOrder = originalOrder;
     return compare;
   };

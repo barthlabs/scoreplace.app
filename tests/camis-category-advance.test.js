@@ -5,6 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { window: W, E, load } = require('./headless');
 const tieCore = require('../functions-autodraw/phase-tie-core');
+const standingsAdapter = require('../functions-autodraw/vendor/standings-core.js');
 const resultCore = require('../functions-autodraw/result-core');
 const blueprint = require('./fixtures/camis-interleaved-plan');
 load('schedule-poll.js');
@@ -48,7 +49,7 @@ const drawWindow = {
   _schAplicarGrade:W._schAplicarGrade
 };
 const advance = vm.runInNewContext(source.slice(from, to) + '\n_materializeInterleavedReadyCategories;', {
-  drawWindow, _phaseTieCore:tieCore, phaseStandingsFn:g => g.rows,
+  drawWindow, _standingsAdapter:standingsAdapter, _phaseTieCore:tieCore, phaseStandingsFn:g => g.rows,
   HttpsError:class extends Error {}
 });
 assert.equal(W._schAplicarGrade(t), 108, 'sorteio agenda todos os grupos antes dos resultados');

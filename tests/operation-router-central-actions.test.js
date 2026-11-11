@@ -13,7 +13,8 @@ const config = { schema: 2, regions, services: Object.fromEntries(services.map(s
   return [name, { digest, urls: Object.fromEntries(regions.map(r => [r, `https://${r}.example/${name}`])) }];
 })) };
 
-function harness({ noConfig = false, centralError = false, receipt = false, probeError = false } = {}) {
+function harness({ noConfig = false, centralError = false, receipt = false, probeError = false,
+  interleaved = false } = {}) {
   const calls = [], store = new Map();
   let currentReceipt = receipt;
   let failCentral = centralError;
@@ -31,7 +32,7 @@ function harness({ noConfig = false, centralError = false, receipt = false, prob
         ? { ok: false, status: 503 } : { ok: true, json: async () => config };
       const payload = JSON.parse(options.body).data;
       calls.push({ endpoint, payload });
-      if (endpoint.includes('endmatchoncourt-')) return failCentral
+      if (endpoint.includes('endmatchoncourt-') || endpoint.includes('us-central1-scoreplace-app.cloudfunctions.net/')) return failCentral
         ? { ok: false, status: 503, json: async () => ({}) }
         : { ok: true, json: async () => ({ result: { ok: true, changed: true } }) };
       const [, region, name] = /^https:\/\/([^.]*)\.example\/(.*)$/.exec(endpoint) || [];
@@ -51,7 +52,11 @@ function harness({ noConfig = false, centralError = false, receipt = false, prob
   ctx.window = ctx;
   ctx.crypto = { randomUUID: (() => { let i = 0; return () => `12345678-1234-4123-8123-${String(++i).padStart(12, '0')}`; })() };
   ctx.firebase = { auth: () => ({ currentUser: { uid: 'owner' } }) };
-  ctx.FirestoreDB = { loadTournamentById: async () => ({ id: 'tour_test' }) };
+  ctx.FirestoreDB = {
+    loadTournamentById: async () => ({ id: 'tour_test' }),
+    _centralCallableUrl: name => `https://us-central1-scoreplace-app.cloudfunctions.net/${name}`
+  };
+  if (interleaved) ctx._findTournamentById = () => ({ scheduleWindow:{ interleavedPlan:{ editorVersion:2 } } });
   vm.createContext(ctx); vm.runInContext(source, ctx);
   return { router: ctx.ScoreplaceOperationRouter, calls, store,
     setReceipt: v => { currentReceipt = v; }, setCentralError: v => { failCentral = v; },
@@ -74,6 +79,18 @@ function harness({ noConfig = false, centralError = false, receipt = false, prob
   assert(legacy.calls.filter(c => !c.payload.probe && !c.endpoint.includes('control')).every(c =>
     c.endpoint.includes('.example/') && !c.endpoint.includes('endmatchoncourt-')),
   'liberar, restaurar e placar permanecem nas portas regionais');
+
+  const camis = harness({ noConfig:true, interleaved:true });
+  await camis.router.call('applyMatchResult', { tournamentId:'tour_test', matchId:'m1' }, headers);
+  await camis.router.call('assignMatchCourt', { tournamentId:'tour_test', matchId:'m2', court:'Quadra 1' }, headers);
+  assert(camis.calls.every(c => c.endpoint.includes('us-central1-scoreplace-app.cloudfunctions.net/')),
+    'placar e chamada da grade intercalada usam a callable corrigida sem depender da malha antiga');
+  assert.equal(camis.store.get('sp-operation-pending-v2'), '{}');
+  const camisUncertain = harness({ noConfig:true, interleaved:true, centralError:true });
+  await assert.rejects(camisUncertain.router.call('applyMatchResult',
+    { tournamentId:'tour_test', matchId:'m3' }, headers), e => e.infrastructure === true);
+  assert.notEqual(camisUncertain.store.get('sp-operation-pending-v2'), '{}',
+    'falha na central sem conferência regional mantém o UUID pendente para evitar placar duplicado');
 
   const uncertain = harness({ centralError: true, receipt: false });
   const p = payload('postpone');

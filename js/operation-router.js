@@ -307,6 +307,41 @@
       'failed-precondition');
     payload.operationId = old ? old.payload.operationId : (payload.operationId || uuid());
     if (!old) { all[key] = { name: name, payload: payload, actorUid: uid, createdAt: Date.now() }; writePending(all); }
+    // As duas portas regionais ainda executam a versão anterior do motor da
+    // grade intercalada. Até a atualização coordenada das regiões, estes
+    // torneios usam a callable central corrigida com o MESMO UUID e recibo.
+    var tournament = typeof window._findTournamentById === 'function' && window._findTournamentById(tId);
+    var interleaved = tournament && tournament.scheduleWindow && tournament.scheduleWindow.interleavedPlan;
+    if ((name === 'applyMatchResult' || name === 'assignMatchCourt') &&
+        interleaved && interleaved.editorVersion === 2) {
+      progress(true);
+      try {
+        var centralAnswer;
+        try { centralAnswer = await post(window.FirestoreDB._centralCallableUrl(name), payload, headers, 20000); }
+        catch (error) {
+          if (!error.infrastructure) throw error;
+          // Timeout depois do commit: conferir o recibo compartilhado antes
+          // de repetir. A intenção permanece gravada se a conferência falhar.
+          try {
+            var receiptCfg = await loadConfig();
+            var candidates = await healthy(receiptCfg, headers);
+            var receiptAnswer = await findReceipt(receiptCfg,
+              candidates.map(function (item) { return item.region; }), payload, headers);
+            if (!receiptAnswer) throw error;
+            centralAnswer = Object.assign({}, receiptAnswer, { replayed: true, requiresRefresh: true });
+          } catch (_) {
+            throw fail('Sem confirmação da ação. Repita a mesma ação para conferir; o identificador foi preservado.',
+              'unavailable', true);
+          }
+        }
+        centralAnswer = await refreshAnswer(tId, centralAnswer);
+        delete all[key]; writePending(all);
+        return centralAnswer;
+      } catch (error) {
+        if (!error.infrastructure) { delete all[key]; writePending(all); }
+        throw error;
+      } finally { progress(false); }
+    }
     if (name === 'endMatchOnCourt' && (payload.action === 'cancel-call' || payload.action === 'postpone')) {
       try {
         var centralAnswer;

@@ -53,6 +53,66 @@ const { chromium } = require('@playwright/test');
     assert.equal(await page.locator('[data-tv-remove="qr"]').count(), 0, 'QR não oferece exclusão');
     assert.equal(await page.locator('[data-tv-restore="qr"]').count(), 0);
     assert.equal(await page.locator('[data-tv-box="qr"]').count(), 1);
+    await page.evaluate(() => {
+      const layout = window.ScoreplaceTvLayout.defaults();
+      layout.sections.qr.y = 50;
+      window._tvEditorSetLayout(layout);
+    });
+    await page.locator('[data-tv-qr-bottom]').click();
+    assert.equal(await page.evaluate(() => {
+      const qr = window._tvEditorReadLayout().sections.qr;
+      return qr.y + qr.h;
+    }), 100, 'Alinhar QR embaixo encosta a caixa na borda inferior');
+    assert.ok(await page.evaluate(() => {
+      const doc = document.querySelector('[data-tv-frame]').contentDocument;
+      const brand = doc.querySelector('.tv-custom-qr .tv-qr-brand').getBoundingClientRect();
+      const board = doc.querySelector('.tv-custom-board').getBoundingClientRect();
+      return Math.abs(brand.bottom - board.bottom) < 2;
+    }), 'a marca Abra no Scoreplace acompanha a caixa até o limite da tela');
+    await page.evaluate(() => {
+      window.__savedTvPatch = null;
+      window.__tvSaveCalls = 0;
+      window.AppStore = { addTournament: async patch => {
+        window.__tvSaveCalls++;
+        if ('scheduleWindow' in patch || 'courtCount' in patch) throw new Error('A grade foi alterada');
+        window.__savedTvPatch = patch;
+      } };
+    });
+    assert.equal(await page.evaluate(() => window._tvEditorHasChanges()), true);
+    await page.locator('[data-tv-save-live]').click();
+    assert.deepEqual(await page.evaluate(() => Object.keys(window.__savedTvPatch).sort()), ['id','tvLayout','tvScreens']);
+    assert.equal(await page.evaluate(() => window._tvEditorHasChanges()), false, 'salvar a tela limpa as mudanças pendentes');
+    await page.locator('[data-tv-save-live]').click();
+    assert.equal(await page.evaluate(() => window.__tvSaveCalls), 1,
+      'salvar novamente sem mudanças não envia um layout vazio ao servidor');
+    const seriesPositions = await page.evaluate(async () => {
+      const game = (number, scoreA, scoreB) => ({
+        number, a:'Laura / Paula', b:'Fernanda / Bianca', scoreA, scoreB,
+        status:'done', winnerSide:1
+      });
+      const snapshot = {
+        tvLayout:window._tvEditorReadLayout(), theme:{ background:'#060d1a', primary:'#0d1b2e', secondary:'#0d1b2e', title:'#fff' },
+        name:'CAMIS', courts:[{ name:'Quadra 1', number:1, category:'Fem Diamante', series:[game(1,'6','3'),game(2,'2','4'),game(3,'1','0')], timerStart:0 }],
+        nextGame:null, rankings:[], results:[], resultDay:'', qrImage:'', scoreplaceLogo:''
+      };
+      const frame = document.querySelector('[data-tv-frame]');
+      frame.srcdoc = window._tvLivePreviewDocument(snapshot);
+      await new Promise(resolve => frame.addEventListener('load', resolve, { once:true }));
+      return [...frame.contentDocument.querySelectorAll('.tv-series-game')].map(row => {
+        const box = selector => row.querySelector(selector).getBoundingClientRect();
+        return { leftNames:box('.tv-series-left .tv-series-players').left,
+          leftScore:box('.tv-series-left strong').left,
+          middle:box('.tv-series-versus').left,
+          rightScore:box('.tv-series-right strong').left,
+          rightNames:box('.tv-series-right .tv-series-players').left };
+      });
+    });
+    assert.equal(seriesPositions.length, 3, 'a série Rei/Rainha mantém os três jogos');
+    seriesPositions.forEach((position, index) => {
+      assert.ok(position.leftNames < position.leftScore && position.leftScore < position.middle &&
+        position.middle < position.rightScore && position.rightScore < position.rightNames,
+      `jogo ${index + 1}: nomes nas bordas e placares junto ao centro`);
+    });
     await page.locator('[data-tv-finals-preset]').click();
     assert.equal(await page.locator('[data-tv-box="standing1"]').count(), 1, 'modelo inclui a classificação da linha disponível');
     assert.equal(await page.locator('[data-tv-box="qr"]').count(), 1, 'modelo da final conserva o QR');
@@ -73,7 +133,7 @@ const { chromium } = require('@playwright/test');
     assert.equal(layout.card.score, false);
     const innerX = await page.evaluate(() => document.querySelector('[data-tv-frame]').contentDocument.querySelector('.tv-custom-upcoming').style.left);
     assert.equal(innerX, layout.sections.upcoming.x + '%', 'a seção real acompanha o arraste');
-    const handle = await page.locator('[data-tv-resize="courts"]').boundingBox();
+    const handle = await page.locator('[data-tv-box="courts"] [data-tv-resize="e"]').boundingBox();
     const widthBefore = layout.sections.courts.w;
     await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
     await page.mouse.down();
@@ -83,6 +143,16 @@ const { chromium } = require('@playwright/test');
     assert.ok(layout.sections.courts.w > widthBefore, 'redimensionar altera a largura');
     const innerWidth = await page.evaluate(() => document.querySelector('[data-tv-frame]').contentDocument.querySelector('.tv-custom-courts').style.width);
     assert.equal(innerWidth, layout.sections.courts.w + '%', 'os dados reais refluem com o novo tamanho');
+    const north = await page.locator('[data-tv-box="courts"] [data-tv-resize="n"]').boundingBox();
+    const heightBefore = layout.sections.courts.h, bottomBefore = layout.sections.courts.y + heightBefore;
+    await page.mouse.move(north.x + north.width / 2, north.y + north.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(north.x + north.width / 2, north.y + north.height / 2 + 25);
+    await page.mouse.up();
+    layout = await page.evaluate(() => window._tvEditorReadLayout());
+    assert.ok(layout.sections.courts.h < heightBefore && Math.abs(layout.sections.courts.y + layout.sections.courts.h - bottomBefore) < .2,
+      'borda superior muda só a altura e ancora a borda inferior');
+    assert.equal(await page.locator('[data-tv-box="courts"] [data-tv-resize]').count(), 8);
     await page.locator('[data-tv-default]').click();
     assert.equal(await page.evaluate(() => window._tvEditorReadLayout().sections.qr.visible), true);
     await page.locator('[data-tv-add-screen]').click();
@@ -117,6 +187,35 @@ const { chromium } = require('@playwright/test');
     });
     await page.waitForSelector('[data-tv-background][value="#445566"]', { state: 'attached' });
     assert.equal(await page.evaluate(() => window._tvEditorReadLayout().background), '#445566');
+    await page.evaluate(() => {
+      window._currentBracketTournament = window._editingTournament;
+      window._findTournamentById = () => window._editingTournament;
+      const button = document.createElement('button');
+      button.id = 'open-tv-test'; button.textContent = 'Abrir TV';
+      button.onclick = () => window._tvLiveToggle();
+      document.body.appendChild(button);
+    });
+    const popupPromise = page.waitForEvent('popup');
+    await page.locator('#open-tv-test').click();
+    const popup = await popupPromise;
+    await popup.locator('#tv-fullscreen-action').waitFor();
+    const headerPositions = await popup.evaluate(() => {
+      const bounds = selector => document.querySelector(selector).getBoundingClientRect();
+      return { title:bounds('.tv-header h1'), action:bounds('#tv-fullscreen-action'), clock:bounds('#tv-now') };
+    });
+    assert.ok(headerPositions.title.right <= headerPositions.action.left &&
+      headerPositions.action.right <= headerPositions.clock.left,
+    'botão fica entre o nome e o relógio, sem sobreposição');
+    await popup.locator('#tv-fullscreen-action').click();
+    await popup.waitForFunction(() => document.fullscreenElement ||
+      /bloqueada|indisponível/.test(document.querySelector('#tv-fullscreen-action')?.textContent || ''));
+    const fullscreenState = await popup.evaluate(() => ({ active:document.fullscreenElement === document.documentElement,
+      enabled:document.fullscreenEnabled, secure:window.isSecureContext,
+      text:document.querySelector('#tv-fullscreen-action')?.textContent,
+      title:document.querySelector('#tv-fullscreen-action')?.title }));
+    assert.equal(fullscreenState.active, true,
+      'clique do usuário põe a TV em tela cheia no Chromium: ' + JSON.stringify(fullscreenState));
+    await popup.close();
     console.log('✓ editor TV: dados reais, remoção/restauração, arraste e estado intacto');
   } finally { await browser.close(); }
 })().catch(err => { console.error(err); process.exitCode = 1; });

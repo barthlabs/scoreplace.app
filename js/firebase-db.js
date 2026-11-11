@@ -2061,6 +2061,15 @@ window.FirestoreDB = {
    * montar o token FCM e a promessa REJEITA antes de a requisição sair. */
   _callFnMarca: 'callfn-canonico-v1',   // ⛔ a casca procura ESTA marca (ver tournaments-draw.js)
 
+  _centralCallableUrl(name, projectId) {
+    var pid = projectId;
+    if (!pid) {
+      try { pid = window.firebase.app().options.projectId; } catch (_) {}
+    }
+    if (!pid) throw Object.assign(new Error('App não inicializado'), { code: 'functions/internal' });
+    return 'https://us-central1-' + pid + '.cloudfunctions.net/' + name;
+  },
+
   /* ⛔ A CASA DO TRANSPORTE CALLABLE É AQUI — E NÃO PODE SAIR DAQUI. A casca em
    * js/views/tournaments-draw.js só encaminha; quem fala o protocolo é esta função.
    * Mover a implementação para um arquivo de TELA foi o que derrubou a lista de
@@ -2083,7 +2092,7 @@ window.FirestoreDB = {
     var pid = '';
     try { pid = fb.app().options.projectId; } catch (e) {}
     if (!pid) throw Object.assign(new Error(msgs.naoInicializado || 'App não inicializado'), { code: 'functions/internal' });
-    var url = 'https://us-central1-' + pid + '.cloudfunctions.net/' + name;
+    var url = this._centralCallableUrl(name, pid);
     /* Sem usuário, vai SEM cabeçalho de autorização — e o servidor decide. */
     var cab = { 'Content-Type': 'application/json' };
     if (user) cab['Authorization'] = 'Bearer ' + (await user.getIdToken());

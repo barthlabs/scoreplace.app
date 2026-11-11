@@ -105,10 +105,20 @@
       var targetStage = match && { kind:Number(match.phaseIndex || 0) === 0 ? 'groups' : 'elimination',
         category:String(match.category || '') };
       var target = targetStage && intervals[key(targetStage)];
+      var sequence = stages(t);
+      var targetIndex = targetStage ? sequence.findIndex(function (stage) { return key(stage) === key(targetStage); }) : -1;
       if (target) return Object.keys(intervals).every(function (id) {
         var predecessor = intervals[id];
         if (targetStage.kind === 'elimination' && predecessor.stage.kind === 'groups' &&
             predecessor.stage.category === targetStage.category)
+          return stageDone(t, matches, predecessor.stage, finished);
+        if (targetStage.kind === 'elimination' && predecessor.stage.kind === 'groups')
+          return true;
+        // Uma classificatória posterior não toma a vez das eliminatórias já
+        // previstas antes dela, mesmo quando os horários da grade se sobrepõem.
+        // Diamante/Ouro podem dividir quadras; Prata espera ambas terminarem.
+        if (targetStage.kind === 'groups' && predecessor.stage.kind === 'elimination' &&
+            sequence.findIndex(function (stage) { return key(stage) === id; }) < targetIndex)
           return stageDone(t, matches, predecessor.stage, finished);
         if (id === key(targetStage) || predecessor.first >= target.first ||
             predecessor.last > target.first) return true;

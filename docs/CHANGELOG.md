@@ -1,3 +1,11 @@
+## 2.6.46 — 11/nov/2026 (desempate, chamada e tela No ar)
+
+- Corrigido o erro do comparador no desempate automático Rei/Rainha. A faixa de operação mostra o desempate pendente antes dos jogos regulares e o chamado entre os jogos em quadra. Placar e chamada da grade intercalada usam temporariamente a callable central corrigida, preservando UUID e recibo até a atualização coordenada das portas regionais.
+- Diamante pode começar sua eliminatória quando terminar seus grupos, mesmo com Ouro ainda em quadra; Prata aguarda o fim das eliminatórias Diamante e Ouro. A simulação de placar de um set passa a variar resultados.
+- A TV oferece Tela cheia no cabeçalho, à esquerda do relógio. Placar da série fica junto ao centro, nomes junto às bordas, e a última atualização recebe destaque dourado.
+- O editor permite redimensionar por qualquer borda ou canto, alinhar o QR ao limite inferior, incluir um box de eliminatórias por categoria e salvar só a tela durante o torneio. Boxes com conteúdo além da área rolam em ciclo contínuo.
+- Site e funções de operação/edição afetadas; sem alteração automática de dados de produção ou versões nativas.
+
 ## 2.6.45 — 11/nov/2026 (cabeçalho, fila e tela no ar)
 
 - Reduzida a altura da faixa Voltar, nome do torneio e Jogos pendentes na página do torneio, liberando espaço para a operação.

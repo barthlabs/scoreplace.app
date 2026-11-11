@@ -1324,7 +1324,18 @@ window._bracketOperationsSelect = function (t) {
   var released = window._bracketCourtReleased(t.id);
   var expected = Number(t._nJogos);
   if (t._resumo || t._doCache || t._faltamPesados || (expected > 0 && new Set(matches.map(function (m) { return String(m && m.id || ''); })).size < expected)) return null;
-  var active = matches.filter(function (m) { return !released[String(m.id)] && occupancy.occupiesCourt(m); });
+  var tieBook = t.phaseTieDecisions && t.phaseTieDecisions[String(t.currentPhaseIndex || 0)] || {};
+  var tieMatches = Object.keys(tieBook).sort().flatMap(function (decisionId) {
+    var decision = tieBook[decisionId];
+    if (!decision || decision.choice !== 'play' || decision.status !== 'pending') return [];
+    return (decision.matches || []).filter(function (m) { return m && !m.winnerKey; }).map(function (m) {
+      return { id:m.id, isTieBreak:true, decisionId:decisionId, _gameNum:m.displayGameNumber,
+        p1:m.p1 && m.p1.name, p2:m.p2 && m.p2.name, court:m.court,
+        courtCalledAt:m.courtCalledAt, category:String(decision.groupName || 'Simples desempate') };
+    });
+  });
+  var active = matches.filter(function (m) { return !released[String(m.id)] && occupancy.occupiesCourt(m); })
+    .concat(tieMatches.filter(function (m) { return m.court && m.courtCalledAt; }));
   var pending = matches.filter(function (m) { return m && released[String(m.id)] && !occupancy.isFinished(m); });
   var upcoming = matches.filter(function (m) {
     if (!m || occupancy.isFinished(m) || m.isBye || m.isSitOut || occupancy.occupiesCourt(m) ||
@@ -1367,7 +1378,9 @@ window._bracketOperationsSelect = function (t) {
   // A prévia não libera a chamada antes de a etapa anterior terminar.
   var preview = !next && window.ScoreplaceNextMatch && typeof window.ScoreplaceNextMatch.firstAvailable === 'function'
     ? window.ScoreplaceNextMatch.firstAvailable(seriesCandidates, matches, released) : null;
-  return { next: next || preview, nextCallable: !!next, active: active, pending: pending, courts: courts, matches: matches };
+  var nextTie = tieMatches.find(function (m) { return !m.courtCalledAt; });
+  return { next: nextTie || next || preview, nextCallable: !!nextTie || !!next,
+    active: active, pending: pending, courts: courts, matches: matches };
 };
 
 // Cada clique registra somente a leva que já ocupa as quadras. A próxima
@@ -1383,7 +1396,7 @@ window._bracketOperationsSimulate = async function (tId) {
   if (!snapshot || !snapshot.active.length) return false;
   var seenCourts = new Set();
   var games = snapshot.active.filter(function (m) {
-    if (!m || !m.court || seenCourts.has(String(m.court)) || m.winner || m.pendingResult ||
+    if (!m || m.isTieBreak || !m.court || seenCourts.has(String(m.court)) || m.winner || m.pendingResult ||
         !m.p1 || !m.p2 || m.p1 === 'TBD' || m.p2 === 'TBD' || m.isBye) return false;
     seenCourts.add(String(m.court));
     return true;
@@ -1404,8 +1417,8 @@ window._bracketOperationsSimulate = async function (tId) {
         isFixedSet: !!sc.fixedSet };
     } else {
       var target = Math.max(1, Number(sc && sc.gamesPerSet) || 6);
-      var loser = Math.max(0, target - 3);
-      var firstWins = i % 2 === 0;
+      var loser = Math.floor(Math.random() * Math.max(1, target - 1));
+      var firstWins = Math.random() < 0.5;
       payload = { s1: firstWins ? target : loser, s2: firstWins ? loser : target,
         useSets: !!(window._scoringUsesSets && window._scoringUsesSets(sc)),
         isFixedSet: !!sc.fixedSet };
@@ -1656,6 +1669,17 @@ function _bracketOperationsStandingsHtml(group, t, slot, courtHtml, categoryLabe
 
 function _bracketOperationsReplica(m, t, role, label, availability, root, allMatches, slot) {
   var safe = window._safeHtml || function (s) { return String(s); };
+  if (m.isTieBreak) {
+    return '<div class="sp-operations-replica sp-operations-tie-card" data-operations-match="' + safe(String(m.id || '')) + '">' +
+      '<span class="sp-operations-label">' + safe(label) + '</span>' + (availability || '') +
+      '<article class="sp-match-card"><div class="sp-mc-head"><strong>JOGO ' + safe(String(m._gameNum || 'extra')) +
+      ' · SIMPLES DESEMPATE</strong></div><div class="sp-operations-standings-category">' + safe(String(m.category || '')) +
+      '</div><div class="sp-operations-standings-body">' + safe(String(m.p1 || 'A definir')) + ' × ' +
+      safe(String(m.p2 || 'A definir')) + '</div><div class="sp-operations-standings-footer">' +
+      (m.court ? safe(String(m.court)) : 'Aguardando quadra livre') +
+      '<button type="button" class="btn btn-primary btn-sm" data-operations-open-tie="' + safe(String(m.decisionId || '')) +
+      '">Abrir desempate</button></div></article></div>';
+  }
   var group = _bracketOperationsGroup(t, m, allMatches);
   var nav = root._bracketOperationsNav || (root._bracketOperationsNav = {});
   var saved = group && nav[slot];
@@ -1921,6 +1945,13 @@ window._bracketOperationsRefresh = function (t, root) {
       }, 0);
     });
     existing.addEventListener('click', function (event) {
+      var tieButton = event.target && event.target.closest('[data-operations-open-tie]');
+      if (tieButton) {
+        event.preventDefault();
+        if (typeof window._phaseTiePanelForExisting === 'function')
+          window._phaseTiePanelForExisting(String(t.id), tieButton.getAttribute('data-operations-open-tie'));
+        return;
+      }
       var simulate = event.target && event.target.closest('[data-operations-simulate]');
       if (simulate) {
         event.preventDefault();
@@ -2109,7 +2140,7 @@ window._bracketOperationsRefresh = function (t, root) {
     '</div></div>' : '') + '<div class="sp-operations-courts" aria-label="Jogos em quadra"><div class="sp-operations-courts-heading"><span class="sp-operations-section-title">EM QUADRA</span>' +
     (typeof window._isUserOrgOrCoHost === 'function' && window._isUserOrgOrCoHost(t, user) ?
       '<button type="button" class="sp-operations-simulate" data-operations-simulate="1" title="Registra placares simulados apenas nos jogos que estão em quadra agora"' +
-      (state.active.some(function (m) { return m && !m.winner && !m.pendingResult; }) ? '' : ' disabled') + '>Simular</button>' : '') +
+      (state.active.some(function (m) { return m && !m.isTieBreak && !m.winner && !m.pendingResult; }) ? '' : ' disabled') + '>Simular</button>' : '') +
     '</div><div class="sp-operations-court-track">' +
     state.courts.map(function (court) {
       var games = state.active.filter(function (m) { return String(m.court) === court; });

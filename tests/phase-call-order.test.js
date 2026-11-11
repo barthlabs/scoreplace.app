@@ -78,10 +78,16 @@ assert(!order.allowed(planned, plannedMatches, plannedGame('Fem Ouro',0),done));
 plannedMatches.filter(m => m.category === 'Fem Diamante' && m.phaseIndex === 0).forEach(m => m.resultAt='x');
 planned.phaseCategoryMaterialized['Fem Diamante'] = {at:'x'};
 assert(order.allowed(planned, plannedMatches, plannedGame('Fem Ouro',0),done));
+assert(order.allowed(planned, plannedMatches, plannedGame('Fem Diamante',1),done),
+  'Diamante pode iniciar a eliminatória enquanto os grupos Ouro terminam');
 plannedMatches.filter(m => m.category === 'Fem Ouro' && m.phaseIndex === 0).forEach(m => m.resultAt='x');
 planned.phaseCategoryMaterialized['Fem Ouro'] = {at:'x'};
 assert(order.allowed(planned, plannedMatches, plannedGame('Fem Diamante',1),done));
 assert(order.allowed(planned, plannedMatches, plannedGame('Fem Ouro',1),done));
+assert(!order.allowed(planned, plannedMatches, plannedGame('Fem Prata',0),done),
+  'Prata espera as eliminatórias Diamante e Ouro, mesmo com janelas sobrepostas');
+plannedMatches.filter(m => m.phaseIndex === 1 && m.category !== 'Fem Prata')
+  .forEach(m => { m.resultAt = 'x'; });
 assert(order.allowed(planned, plannedMatches, plannedGame('Fem Prata',0),done));
 const sameTime = { ...planned, phaseCategoryMaterialized:{}, scheduleWindow:{
   interleavedPlan:{ ...proposal.plan, editorVersion:2, blocks:proposal.plan.blocks.map(block =>

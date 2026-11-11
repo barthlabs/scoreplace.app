@@ -243,6 +243,31 @@ assert.equal(snapshot.rankings[0].rows[0].gamesDiff, 8);
 assert.equal(snapshot.rankings[0].rows[0].gamesWon, 12);
 assert.equal(snapshot.rankings[0].rows[0].wins, 2);
 assert.equal(snapshot.rankings[0].rows[0].played, 2);
+window._isEliminationPhase = (_t, index) => index === 1;
+vm.runInContext("window.__bracketLayout=window.ScoreplaceTvLayout.defaults();window.__bracketLayout.bracketBoxes=['Diamante','Ouro','Prata'].map((category,index)=>({category,visible:true,x:index*30,y:10,w:29,h:70}));", context);
+const bracketLayout = window.__bracketLayout;
+const elimination = { ...t, combinedCategories:['Diamante','Ouro','Prata'], currentPhaseIndex:1,
+  phases:[{ kind:'groups' }, { kind:'elimination' }], tvLayout:bracketLayout,
+  matches:[
+    { id:'d1', phaseIndex:1, category:'Diamante', round:1, p1:'Ana / Bia', p2:'Cris / Dani', winner:'p1', scoreP1:6, scoreP2:3, resultAt:'2026-10-22T20:00:00Z' },
+    { id:'d2', phaseIndex:1, category:'Diamante', round:1, p1:'Eva / Fran', p2:'Gabi / Helo', court:'Quadra 4', courtCalledAt:'2026-10-22T21:00:00Z' },
+    { id:'d3', phaseIndex:1, category:'Diamante', round:2, p1:'Vencedor d1', p2:'Vencedor d2' },
+    { id:'o1', phaseIndex:1, category:'Ouro', round:1, p1:'Iara / Ju', p2:'Katia / Lu' },
+    { id:'p1', phaseIndex:1, category:'Prata', round:1, p1:'Mara / Na', p2:'Olga / Pa' }
+  ] };
+const eliminationSnap = window._tvLiveBuildSnapshot(elimination, Date.parse('2026-10-22T21:01:00Z'));
+assert.deepEqual(Array.from(eliminationSnap.brackets, part => part.category), ['Diamante','Ouro','Prata']);
+assert.equal(eliminationSnap.brackets[0].activeRound, 1);
+assert.equal(eliminationSnap.brackets[0].matches.find(m => m.id === 'd2').inCourt, true);
+const eliminationHtml = window._tvLiveBodyHtml(eliminationSnap);
+assert.equal((eliminationHtml.match(/<h2>ELIMINATÓRIAS · /g) || []).length, 3, 'um box independente por categoria');
+assert.match(eliminationHtml, /tv-bracket-match-in-court/, 'jogo chamado ganha borda verde');
+assert.match(eliminationHtml, /data-tv-autoscroll="bracket-Diamante"/, 'chave usa rolagem contínua');
+const advancedElimination = { ...elimination, matches:elimination.matches.map(m => m.id === 'd2'
+  ? { ...m, winner:'p1', scoreP1:6, scoreP2:4, resultAt:'2026-10-22T21:30:00Z' } : m) };
+assert.equal(window._tvLiveBuildSnapshot(advancedElimination, Date.parse('2026-10-22T21:31:00Z')).brackets[0].activeRound,
+  2, 'ao encerrar a rodada a categoria avança para a seguinte');
+delete window._isEliminationPhase;
 assert.deepEqual(JSON.parse(JSON.stringify(snapshot.timing)), { call: 0, warmup: 0, game: 0 });
 const phaseBase = Date.parse('2026-10-22T21:00:00Z');
 const phaseTournament = { ...t, callTime: 1, warmupTime: 1, gameDuration: 1, matches: [
@@ -316,6 +341,10 @@ assert.match(toast, /Permita abrir/, 'popup bloqueado informa o organizador');
 const tvRoot = { innerHTML: '' };
 let popupHtml = '';
 let wakeRequests = 0;
+let fullscreenRequests = 0;
+const fullscreenHandlers = {};
+const fullscreenButton = { hidden:false, textContent:'', title:'' };
+const onFullscreen = (name, fn) => (fullscreenHandlers[name] ||= []).push(fn);
 const tvTimer = { start:Date.now() - 15000, getAttribute() { return String(this.start); }, textContent:'', className:'', title:'' };
 t.callTime = 1;
 t.warmupTime = 1;
@@ -324,8 +353,10 @@ const fakePopup = { name:'scoreplace-live-tv-neon-test', closed: false, navigato
   assert.equal(type, 'screen'); wakeRequests++; return Promise.resolve({ addEventListener() {}, release: () => Promise.resolve() });
 } } }, document: {
   open() {}, write(html) { popupHtml = html; }, close() {},
-  visibilityState: 'visible', addEventListener() {},
-  getElementById: id => id === 'tv-root' ? tvRoot : { addEventListener() {} },
+  visibilityState: 'visible', fullscreenElement:null,
+  documentElement: { requestFullscreen() { fullscreenRequests++; fakePopup.document.fullscreenElement = this; fullscreenHandlers.fullscreenchange.forEach(fn => fn()); return Promise.resolve(); } },
+  addEventListener: onFullscreen,
+  getElementById: id => id === 'tv-root' ? tvRoot : id === 'tv-fullscreen-action' ? fullscreenButton : { addEventListener() {} },
   querySelector: () => null,
   querySelectorAll: selector => selector === '[data-tv-start]' ? [tvTimer] : []
 }, focus() {}, close() { this.closed = true; } };
@@ -337,6 +368,14 @@ window.FirestoreDB = { db: { collection() { return { doc() { return { collection
   onSnapshot(callback) { matchListener = callback; return () => { matchUnsubscribed = true; }; }
 }; } }; } }; } } };
 window._tvLiveToggle();
+assert.match(tvRoot.innerHTML, /<h1>NEON NIGHTMARE<\/h1><button id="tv-fullscreen-action"[^>]*>⛶ Tela cheia<\/button><time id="tv-now">/,
+  'ação de tela cheia fica entre o título e o relógio');
+fullscreenHandlers.click[0]({ target:{ closest: () => fullscreenButton } });
+assert.equal(fullscreenRequests, 1, 'o clique solicita tela cheia na própria janela');
+assert.equal(fullscreenButton.hidden, true, 'o botão some depois que a TV ocupa a tela');
+fakePopup.document.fullscreenElement = null;
+fullscreenHandlers.fullscreenchange.forEach(fn => fn());
+assert.equal(fullscreenButton.hidden, false, 'o botão volta ao sair da tela cheia');
 assert.equal(typeof matchListener, 'function', 'a tela assina os jogos canônicos');
 const updated = { ...t.matches[2], courtCalledAt: new Date(Date.now() - 5000).toISOString() };
 delete updated._gameNum;
@@ -568,7 +607,7 @@ assert.equal(reloadButton.attributes['aria-pressed'], 'false', 'após reload fec
 const liveSource = fs.readFileSync(path.join(root, 'js/views/tv-live.js'), 'utf8');
 assert.match(popupHtml, /tv-fullscreen-action/,
   'janela NO AR oferece controle de tela cheia para a TV');
-assert.match(liveSource, /requestFullscreen\(\)/,
+assert.match(liveSource, /requestFullscreen\.call\(doc\.documentElement/,
   'tela cheia é solicitada pelo clique na própria janela da TV');
 assert.match(popupHtml, /root\.replaceChildren\.apply\(root,Array\.from\(draft\.childNodes\)\);fit\(\)/,
   'TV continua ajustando a grade após atualizar resultados e quadras');

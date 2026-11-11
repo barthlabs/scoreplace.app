@@ -13,7 +13,10 @@ const games = ['a1', 'a2', 'a3', 'b1', 'b2', 'b3'].map((id, i) => ({
 }));
 const tournament = { id:'t1', sport:'beach_tennis', scoring:{ gamesPerSet:6 }, matches:games };
 const calls = [];
-const context = { window: {
+const simMath = Object.create(Math);
+const values = [0.1,0.2,0.8,0.8,0.4,0.6,0.9,0.1,0.3,0.7,0.6,0.4,0.2,0.9];
+simMath.random = () => values.shift() ?? 0.5;
+const context = { Math:simMath, window: {
   location: { hash:'#tournaments/t1' },
   AppStore: { currentUser:{ uid:'org' }, async commitResultTx(tid, mid, payload) {
     calls.push([tid, mid, payload]);
@@ -40,10 +43,12 @@ vm.runInContext(source.slice(start, end), context);
     assert.equal(context.window._scoreViewportAnchor.fromOperations, true);
     for (const [, , payload] of calls.slice(before)) {
       assert.equal(Math.max(payload.s1, payload.s2), 6);
-      assert.equal(Math.min(payload.s1, payload.s2), 3);
+      assert(Math.min(payload.s1, payload.s2) <= 4);
     }
   }
   assert.equal(calls.length, 6);
+  assert(new Set(calls.map(([, , payload]) => Math.min(payload.s1, payload.s2))).size > 1,
+    'a simulação varia o placar entre jogos');
   assert.equal(await context.window._bracketOperationsSimulate('t1'), false);
   games.push({ id:'c1', p1:'E / F', p2:'G / H', court:'Quadra 3', courtCalledAt:1 },
     { id:'c2', p1:'E / G', p2:'F / H', court:'Quadra 3', courtCalledAt:1 });

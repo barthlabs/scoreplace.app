@@ -7250,6 +7250,19 @@ window._saveTournamentClickHandler = async function() {
           window.location.hash = '#tournaments/' + editId;
         }
       } catch (err) {
+        // A ficha ampla pode reenviar insumos da grade publicada ao salvar só a
+        // tela No ar. A TV tem uma porta de escrita própria: persiste apenas os
+        // campos visuais, sem afrouxar a proteção da grade já sorteada.
+        var tvEditId = (document.getElementById('edit-tournament-id') || {}).value;
+        if (tvEditId && /A grade de jogos publicados não pode mudar depois do sorteio/.test(String(err && err.message || '')) &&
+            typeof window._tvEditorHasChanges === 'function' && window._tvEditorHasChanges() &&
+            typeof window._tvEditorSaveChanges === 'function') {
+          try {
+            await window._tvEditorSaveChanges();
+            showNotification('Tela No ar salva', 'As alterações da tela foram publicadas. Outras alterações da ficha não foram salvas.', 'success');
+            return;
+          } catch (tvError) { err = tvError; }
+        }
         window._error('Erro ao salvar torneio:', err);
         showNotification(window._t('auth.error'), window._t('create.saveError', {msg: err.message}), 'error');
       } finally {

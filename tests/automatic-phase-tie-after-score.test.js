@@ -4,6 +4,7 @@ const fs = require('fs');
 const vm = require('vm');
 const path = require('path');
 const tieCore = require('../functions-autodraw/phase-tie-core');
+const standingsAdapter = require('../functions-autodraw/vendor/standings-core.js');
 
 const source = fs.readFileSync(path.join(__dirname, '../functions-autodraw/index.js'), 'utf8');
 const from = source.indexOf('function _buildPhaseTieRuntime(');
@@ -46,7 +47,7 @@ const drawWindow = {
   _standingsCompare: (a, b) => b.wins - a.wins
 };
 const refresh = vm.runInNewContext(source.slice(from, to) + '\n_refreshAutomaticPhaseTies;', {
-  drawWindow, _phaseTieCore: tieCore,
+  drawWindow, _standingsAdapter:standingsAdapter, _phaseTieCore: tieCore,
   phaseStandingsFn: g => g.rows,
   phaseCompleteFn: t => phaseEngine.phaseGames(t, 0).every(entry => !!entry.match.winner),
   HttpsError: class extends Error {}
@@ -62,6 +63,12 @@ const decision = decisions['group-0:1:2'];
 assert(decision && decision.status === 'pending');
 assert.deepStrictEqual(decision.matches.map(m => m.displayGameNumber), ['3A']);
 assert.equal(decision.matches[0].court, undefined, 'a quadra não é bloqueada antecipadamente');
+const originalCompare = drawWindow._standingsCompare;
+delete drawWindow._standingsCompare;
+refresh(tournament, 'm3', '2026-11-07T15:01:30Z');
+assert.equal(tournament.phaseTieAutoError, undefined,
+  'a ausência do alias global de comparação não interrompe o desempate');
+drawWindow._standingsCompare = originalCompare;
 refresh(tournament, 'm3', '2026-11-07T15:02:00Z');
 assert.equal(tournament.phaseTieDecisions['0']['group-0:1:2'].matches[0].id,
   decision.matches[0].id, 'repetir a confirmação não duplica a simples');
