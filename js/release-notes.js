@@ -1,3 +1,7 @@
+// 2.6.37 — A edição do torneio organiza a chamada concentrada por etapa e
+// categoria, com etapas simultâneas quando dividem as quadras. A Prata
+// aguarda o fim das eliminatórias Diamante e Ouro configuradas antes dela.
+// Simular confirma o placar do jogo atual antes de avançar a série.
 // 2.6.36 — O final estimado e o tempo restante usam a duração da grade
 // contada desde o início efetivo, acompanhando a barra azul.
 // 2.6.35 — O botão Simular fica visível ao lado de Em quadra e registra uma

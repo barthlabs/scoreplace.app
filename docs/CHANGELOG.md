@@ -1,8 +1,14 @@
+## 2.6.37 — 10/nov/2026 (chamada concentrada por etapa)
+
+- A edição do torneio permite ordenar as etapas classificatórias e eliminatórias por categoria e marcar etapas simultâneas. A chamada respeita a primeira etapa ainda incompleta, inclusive na função de quadra; no CAMIS, Diamante e Ouro dividem quadras na eliminatória e a Prata aguarda ambas.
+- Alterar só a ordem preserva a grade intercalada e os horários já salvos do torneio.
+- O botão Simular só considera gravado um jogo quando o placar foi confirmado; cada clique usa o conjunto que já estava em quadra.
+- Corte web e função de quadra. Sem alterar dados existentes automaticamente ou versões nativas.
+
 ## 2.6.36 — 10/nov/2026 (fim estimado a partir do início efetivo)
 
 - O final estimado e a contagem restante usam o horário do primeiro registro real mais a duração programada até o último jogo. A linha azul continua mostrando os horários originais como referência.
 - Placar parcial não troca essa previsão por uma extrapolação dos primeiros resultados. Torneios já encerrados continuam mostrando o final real.
-- Corte somente web, sem alterar dados do torneio ou versões nativas.
 
 ## 2.6.35 — 10/nov/2026 (simulação visível e tempo ancorado no início real)
 

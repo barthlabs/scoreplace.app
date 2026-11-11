@@ -27,7 +27,7 @@ const courtBlockEnd=cf.indexOf('const b = _gravaTorneio',courtBlockStart);
 ok(courtBlockStart>=0 && courtBlockEnd>courtBlockStart, 'regra real da chamada localizada na Function');
 if(courtBlockStart>=0 && courtBlockEnd>courtBlockStart){
   const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
-  const apply=new AsyncFunction('m','court','confirmCall','agoraIso','_drawFail','tId','matchId','t','drawWindow','_matchTiming','sandbox','_courtOccupancy','_agenda','released','commitReply','uid','_rehearsal',
+  const apply=new AsyncFunction('m','court','confirmCall','agoraIso','_drawFail','tId','matchId','t','drawWindow','_matchTiming','sandbox','_courtOccupancy','_agenda','released','commitReply','uid','_rehearsal','_phaseCallOrder',
     cf.slice(courtBlockStart,courtBlockEnd)+' return {ok:true,changed:true,courtCalledAt:m.courtCalledAt||null};');
   const _matchTiming=require('../js/domain/match-timing.js');
   const occupancy=require('../js/domain/court-occupancy.js');
@@ -36,7 +36,7 @@ if(courtBlockStart>=0 && courtBlockEnd>courtBlockStart){
     apply(m,court,confirmCall,agoraIso,fail,tId,matchId,t,
       drawWindow ? { ...drawWindow, ScoreplaceNextMatch: { conflictsWithActive: () => false } } :
         {_collectAllMatches:()=>[m], ScoreplaceNextMatch: { conflictsWithActive: () => false }},
-      _matchTiming,true,occupancy,agenda,{},reply=>reply,'owner',require('../functions-autodraw/tournament-rehearsal.js'));
+      _matchTiming,true,occupancy,agenda,{},reply=>reply,'owner',require('../functions-autodraw/tournament-rehearsal.js'),require('../js/domain/phase-call-order.js'));
   const m={court:'Quadra 4'};
   const event={callTime:5};
   const fail=()=>new Error('precondition');
@@ -66,6 +66,13 @@ if(courtBlockStart>=0 && courtBlockEnd>courtBlockStart){
   let locked=false;
   try { await testApply(first,'Quadra 8',false,'2026-10-22T17:02:00Z',fail,'t','j1',t,drawWindow); } catch (_) { locked=true; }
   ok(locked && first.court==='Quadra 9' && second.court==='Quadra 8', 'jogo chamado bloqueia nova troca');
+  const plan=require('./fixtures/camis-interleaved-plan.js');
+  const prata={id:'prata-1',category:'Fem Prata',phaseIndex:0,court:'Quadra 8'};
+  const concentrated={scheduleWindow:{interleavedPlan:plan},games:[prata]};
+  let premature=false;
+  try { await testApply(prata,'Quadra 8',true,'2026-10-22T17:00:00Z',fail,'t','prata-1',concentrated,drawWindow); }
+  catch (_) { premature=true; }
+  ok(premature && !prata.courtCalledAt,'Function recusa chamada de Prata antes das etapas Diamante e Ouro');
 }
 ok(src.includes('data-start-ms') && src.includes('_matchCardTimestamp(m.courtClockBaseAt || m.courtCalledAt)') && src.includes('_matchCardTimestamp(m.startedAt)'),
   'card usa chamada para espera e início real para jogo ao vivo');

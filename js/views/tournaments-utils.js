@@ -2371,7 +2371,7 @@ window._buildProgressInner = function(t, barsOnly) {
   // azul começa no início efetivo. Um torneio adiantado por horas ou dias não
   // pode permanecer em 0% até a data originalmente marcada.
   var expectedStart = schedStart;
-  var expectedEnd = plannedEnd;
+  var expectedEnd = plannedEnd; // Torneios sem grade concentrada conservam a janela programada.
   if (actualStart && window._isConcentratedTournament && window._isConcentratedTournament(t)) {
     expectedStart = actualStart;
     expectedEnd = actualStart + (plannedEnd - schedStart);

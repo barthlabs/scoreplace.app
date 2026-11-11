@@ -31,5 +31,6 @@ if (start >= 0 && end > start) {
   context.window._estimatedGameHoursState.locked = true;
   ok(context.window._readEstimatedGameHours() === null, 'não reescreve agenda depois do sorteio');
 }
-ok(/scheduleWindow:estimatedGameHours/.test(source), 'grava na mesma chave usada pelo planejamento e pelo motor');
+ok(/scheduleWindow:Object\.assign\(\{\},\s*window\._editingTournament && window\._editingTournament\.scheduleWindow \|\| \{\}, estimatedGameHours/.test(source),
+  'preserva a grade existente ao gravar a ordem na mesma chave do planejamento e do motor');
 process.exit(failures ? 1 : 0);

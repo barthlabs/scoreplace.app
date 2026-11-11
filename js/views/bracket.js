@@ -1345,7 +1345,8 @@ window._bracketOperationsSelect = function (t) {
   // pode entrar na fila. Pular o primeiro nunca libera o segundo ou o terceiro.
   var candidates = upcoming.map(function (entry) { return entry.item.m; }).filter(function (m) {
     var group = _bracketOperationsGroup(t, m, matches);
-    return !group || String((group.matches.find(function (item) { return !occupancy.isFinished(item); }) || {}).id) === String(m.id);
+    return (!group || String((group.matches.find(function (item) { return !occupancy.isFinished(item); }) || {}).id) === String(m.id)) &&
+      (!window.ScoreplacePhaseCallOrder || window.ScoreplacePhaseCallOrder.allowed(t, matches, m, occupancy.isFinished));
   });
   var postponed = window._bracketCourtPostponed(t.id);
   var ready = window._bracketCourtPostponedReady(t.id);
@@ -1408,6 +1409,11 @@ window._bracketOperationsSimulate = async function (tId) {
     var saved = await window.AppStore.commitResultTx(String(tId), String(m.id), payload,
       'Resultado simulado na quadra: jogo ' + String(m._gameNum || m.scheduledGameNumber || m.id));
     if (!saved) break;
+    // A callable só pode avançar a série depois de confirmar o placar deste
+    // jogo. Uma resposta positiva sem resultado visível não vira "simulado".
+    var after = window._findTournamentById(String(tId));
+    var confirmed = after && typeof window._findMatch === 'function' && window._findMatch(after, String(m.id));
+    if (!confirmed || !(confirmed.resultAt || confirmed.winner != null || confirmed.wo === true)) break;
     done++;
   }
   if (typeof showNotification === 'function') showNotification(

@@ -41,6 +41,7 @@ const _billingSnapshots = new WeakMap();
 const _tournamentFeeStripeKey = defineSecret('STRIPE_SECRET_KEY');
 const _matchTiming = require('./vendor/match-timing.js');
 const _courtOccupancy = require('./vendor/court-occupancy.js');
+const _phaseCallOrder = require('./vendor/phase-call-order.js');
 const _monarchCourtSeries = require('./monarch-court-series.js');
 const ScoreplaceRefereeRoster = require('./vendor/referee-roster.js');
 const _isConfirmedTournamentReferee = (t, uid) =>
@@ -4638,7 +4639,11 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
       if (confirmCall && !court) throw _drawFail('failed-precondition', 'Escolha uma quadra antes de chamar o jogo.', { tId, matchId });
       const rehearsalOwnerCall = uid === _rehearsal.OWNER_UID && t.creatorUid === uid &&
         t.rehearsal?.state === 'active';
-      if (confirmCall && !m.courtCalledAt && !sandbox && !rehearsalOwnerCall) {
+      const hasConcentratedPlan = _phaseCallOrder.covers(t, m);
+      // Apenas jogos cobertos pela grade concentrada podem antecipar a data;
+      // a porta por etapa abaixo ainda impede categorias fora de vez.
+      if (confirmCall && !m.courtCalledAt && !sandbox && !rehearsalOwnerCall &&
+          !hasConcentratedPlan) {
         // A coleção foi resolvida acima pelo ID e pelo flag. O dia do jogo é
         // civil no fuso do evento: uma data UTC pode ser o dia anterior aqui.
         const zone = (await _fusoDoEvento(t, tx)).tz;
@@ -4667,6 +4672,9 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
       if (!Array.isArray(all)) throw _drawFail('internal', 'Não foi possível conferir a ocupação das quadras.', { tId, matchId });
       const activeCandidates = all.filter(item => item && !released[String(item.id)]);
       if (confirmCall && !m.courtCalledAt) {
+        if (!_phaseCallOrder.allowed(t, all, m, _courtOccupancy.isFinished)) {
+          throw _drawFail('failed-precondition', 'Esta fase ainda não está na vez de chamada. Conclua as fases anteriores.', { tId, matchId });
+        }
         if (m.isMonarch === true && !m.isTieBreak && Array.isArray(t.scheduleWindow?.days) &&
             t.scheduleWindow.days.length === 1 && m.monarchGroup != null && m.round != null && m.category) {
           const series = all.filter(item => item && item.isMonarch === true && !item.isTieBreak &&
@@ -5899,6 +5907,16 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
           categoryWindows: patch.scheduleWindow && patch.scheduleWindow.categoryWindows !== undefined
             ? patch.scheduleWindow.categoryWindows : existingCategoryWindows
         }) : t.scheduleWindow;
+      if (patch.scheduleWindow && patch.scheduleWindow.phaseCallOrder !== undefined) {
+        const proposed = patch.scheduleWindow.phaseCallOrder;
+        const canonical = _phaseCallOrder.stages({ scheduleWindow:effectiveWindow });
+        if (!Array.isArray(proposed) || !proposed.length || proposed.length !== canonical.length ||
+            proposed.some((stage, index) => !stage || Object.keys(stage).sort().join(',') !== 'category,kind,parallel' ||
+              stage.kind !== canonical[index].kind || stage.category !== canonical[index].category ||
+              stage.parallel !== canonical[index].parallel)) {
+          throw new HttpsError('invalid-argument', 'Ordem de chamada inválida para as fases deste torneio.');
+        }
+      }
       try {
         require('./category-window-core').validate({
           combinedCategories: patch.combinedCategories !== undefined ? patch.combinedCategories : t.combinedCategories,

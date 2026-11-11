@@ -324,9 +324,9 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
   '_isTournamentAdmin', '_drawFail', 'hasDrawnBracket', '_configAtiva', '_antesDoMotor',
   '_gravaTorneio', '_fasesDeConfiguracaoAtualizaveis', 'drawWindow', 'require',
   '_assertCategoryConfigBeforeDraw', '_categoryDefinitionsForLabels', '_phaseTieCore', 'createHash',
-  '_writeCategoryRemoval',
+  '_writeCategoryRemoval', '_phaseCallOrder',
   'const exports = {};\n' + configSource + '\nreturn exports.updateTournamentConfiguration;')(
-  fn => fn, HttpsError, configDb, new Set(['fmt2', 'phases', 'name', 'teamSize', 'gruposClassified', 'politicaDaChave', 'genderCategories', 'combinedCategories', 'gameTypes']), new Set(['fmt2', 'phases', 'teamSize', 'gruposClassified', 'politicaDaChave', 'gameTypes']), cloneConfig,
+  fn => fn, HttpsError, configDb, new Set(['fmt2', 'phases', 'name', 'teamSize', 'gruposClassified', 'politicaDaChave', 'genderCategories', 'combinedCategories', 'gameTypes', 'scheduleWindow']), new Set(['fmt2', 'phases', 'teamSize', 'gruposClassified', 'politicaDaChave', 'gameTypes']), cloneConfig,
   async () => {}, async () => configTournament, () => true,
   (code, message) => new HttpsError(code, message), t => Array.isArray(t.matches) && t.matches.length > 0,
   require('../functions-autodraw/config-ativa-core'), () => ({}),
@@ -339,7 +339,7 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
   (_tx, _ref, _t, removal, reservations) => {
     assert.ok(removal == null, 'edição de formato não remove inscrições de categoria');
     assert.ok(reservations == null, 'edição de formato não altera vagas reservadas');
-  }
+  }, require('../js/domain/phase-call-order.js')
 );
 
 (async () => {
@@ -359,6 +359,28 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
   } }), { code: 'failed-precondition', message: 'O torneio já foi encerrado; a configuração publicada não pode ser alterada.' });
   assert.equal(configWrites, writesBeforeFinished, 'torneio encerrado não sofre escrita de configuração');
   configTournament = openConfigTournament;
+  const interleavedPlan = require('./fixtures/camis-interleaved-plan.js');
+  const phaseCallOrder = require('../js/domain/phase-call-order.js');
+  const originalOrder = phaseCallOrder.stages({ scheduleWindow: { interleavedPlan } });
+  const reordered = originalOrder.map(stage => ({ ...stage }));
+  reordered[3].parallel = false;
+  configTournament = { ...openConfigTournament, scheduleWindow: { interleavedPlan, days: [] } };
+  const writesBeforeOrder = configWrites;
+  const orderSaved = await configHandler({ auth: { uid: 'owner' }, data: {
+    tournamentId: 'tour_test', patch: { scheduleWindow: { phaseCallOrder: reordered } }
+  } });
+  assert.equal(orderSaved.ok, true, 'ordem válida é aceita pela função real');
+  assert.deepEqual(configTournament.scheduleWindow.phaseCallOrder, reordered);
+  assert(configWrites > writesBeforeOrder, 'ordem válida é gravada');
+  const invalidOrder = reordered.map(stage => ({ ...stage }));
+  invalidOrder[2] = { ...invalidOrder[2], category: invalidOrder[1].category };
+  const writesBeforeInvalidOrder = configWrites;
+  await assert.rejects(configHandler({ auth: { uid: 'owner' }, data: {
+    tournamentId: 'tour_test', patch: { scheduleWindow: { phaseCallOrder: invalidOrder } }
+  } }), { code: 'invalid-argument' }, 'ordem inválida é rejeitada pela função real');
+  assert.equal(configWrites, writesBeforeInvalidOrder, 'ordem inválida não escreve');
+  configTournament = openConfigTournament;
+  configWrites = 0;
 
   let createCompiled = 0, createTransactions = 0;
   const create = makeCreateTournament({

@@ -183,9 +183,62 @@ window._readEstimatedGameHours = function () {
   return { version:1, days:result, categoryWindows:categoryWindows };
 };
 
+// A fila de chamada é independente dos horários já publicados. Cada linha é
+// uma etapa; "simultânea" compartilha as quadras com a etapa imediatamente acima.
+window._renderPhaseCallOrder = function () {
+  var mount = document.getElementById('phase-call-order-editor');
+  var state = window._phaseCallOrderState;
+  if (!mount) return;
+  if (!state || !state.rows.length) { mount.innerHTML = ''; return; }
+  var escape = function (value) { return String(value).replace(/[&<>"']/g, function (ch) {
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];
+  }); };
+  mount.innerHTML = '<div style="font-weight:700;margin-bottom:4px">Ordem de chamada por fase e categoria · concentrado</div>' +
+    '<div style="color:var(--text-muted);font-size:.8rem;margin-bottom:8px">Cada etapa reúne os jogos da categoria. Use as setas para ordenar; marque simultânea quando duas etapas dividirem quadras. A etapa seguinte espera a conclusão das anteriores, inclusive desempates. O horário da grade continua sendo uma previsão. Depois do sorteio, mudar a ordem afeta apenas novas chamadas.</div>' +
+    state.rows.map(function (row, i) {
+      var label = (row.kind === 'groups' ? 'Classificatória' : 'Eliminatória') + ' · ' + row.category;
+      return '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:6px 8px;border:1px solid var(--border-color);border-radius:8px;margin-bottom:5px;background:var(--bg-card)">' +
+        '<span style="min-width:0;flex:1 1 180px">' + escape(label) + '</span>' +
+        '<label style="font-size:.8rem;white-space:nowrap"><input type="checkbox" onchange="window._phaseCallOrderParallel(' + i + ',this.checked)"' +
+        (row.parallel ? ' checked' : '') + (i === 0 ? ' disabled' : '') + '> Simultânea à anterior</label>' +
+        '<button type="button" class="btn btn-secondary" aria-label="Mover ' + escape(label) + ' para cima" onclick="window._phaseCallOrderMove(' + i + ',-1)"' + (i === 0 ? ' disabled' : '') + '>↑</button>' +
+        '<button type="button" class="btn btn-secondary" aria-label="Mover ' + escape(label) + ' para baixo" onclick="window._phaseCallOrderMove(' + i + ',1)"' + (i === state.rows.length - 1 ? ' disabled' : '') + '>↓</button></div>';
+    }).join('');
+};
+window._phaseCallOrderMove = function (index, direction) {
+  var state = window._phaseCallOrderState, target = index + direction;
+  if (!state || target < 0 || target >= state.rows.length) return;
+  var rows = state.rows.slice(), moved = rows.splice(index, 1)[0];
+  rows.splice(target, 0, moved);
+  // A eliminatória depende da classificatória da mesma categoria.
+  rows[0].parallel = false;
+  if (window.ScoreplacePhaseCallOrder && !window.ScoreplacePhaseCallOrder.valid(rows)) return;
+  state.rows = rows; state.touched = true;
+  window._renderPhaseCallOrder();
+};
+window._phaseCallOrderParallel = function (index, checked) {
+  var state = window._phaseCallOrderState;
+  if (!state || index <= 0 || index >= state.rows.length) return;
+  var previous = state.rows[index].parallel;
+  state.rows[index].parallel = !!checked;
+  if (window.ScoreplacePhaseCallOrder && !window.ScoreplacePhaseCallOrder.valid(state.rows)) {
+    state.rows[index].parallel = previous;
+    window._renderPhaseCallOrder();
+    return;
+  }
+  state.touched = true;
+};
+window._readPhaseCallOrder = function () {
+  var state = window._phaseCallOrderState;
+  return state && state.touched ? state.rows.map(function (row) { return {
+    kind:row.kind, category:row.category, parallel:row.parallel === true
+  }; }) : null;
+};
+
 function setupCreateTournamentModal() {
   window._categoryCapacityLoadGuard = null;
   window._estimatedGameHoursState = null;
+  window._phaseCallOrderState = null;
   // Abriu o formulário: esquece a escalação do torneio anterior. Sem isto, abrir "criar" logo
   // depois de editar um torneio só de mulheres esconderia a proporção num torneio sem ninguém.
   window._ctRatioGeneros = null;
@@ -673,6 +726,7 @@ function setupCreateTournamentModal() {
                   <div style="color:var(--text-muted);font-size:.75rem;margin-top:4px">Defina o início e o fim de cada dia. Esses horários aparecerão para confirmação no planejamento do sorteio; não são prazos das rodadas.</div>
                   <div id="estimated-games-window-days" style="margin-top:8px"></div>
                 </div>
+                <div id="phase-call-order-editor" style="margin-top:12px"></div>
                 <!-- ⏱️ 2.1.98 — DIVISÃO DAS RODADAS (slider de stops).
                      Pedido do dono: "um slider com x stops. em cada stop a data dd/mm e entre
                      os stops y dias… o organizador pode esticar umas rodadas e reduzir outras
@@ -5590,6 +5644,8 @@ function setupCreateTournamentModal() {
       locked:typeof window._tournamentHasDraw === 'function' && window._tournamentHasDraw(t)
     };
     window._renderEstimatedGameHours();
+    window._phaseCallOrderState = { rows:window.ScoreplacePhaseCallOrder ? window.ScoreplacePhaseCallOrder.stages(t) : [], touched:false };
+    window._renderPhaseCallOrder();
     /* ⏱️ 2.1.98 — a divisão das rodadas da FASE ATUAL volta pro slider. Lê da fase (é onde
      * o cartão de progresso procura) e cai no campo do topo só na fase 0, pela mesma regra
      * do `_limitesDasRodadas`. `window._editingTournament` fica pro slider poder descobrir
@@ -6536,6 +6592,7 @@ window._saveTournamentClickHandler = async function() {
         const endTimeRaw = document.getElementById('tourn-end-time').value || '';
         const endDateVal = endTimeRaw ? endDateRaw + 'T' + endTimeRaw : endDateRaw;
         const estimatedGameHours = window._readEstimatedGameHours();
+        const phaseCallOrder = window._readPhaseCallOrder();
         if (estimatedGameHours && estimatedGameHours.error) {
           showAlertDialog('Horários dos jogos', estimatedGameHours.error, null, { type:'warning' });
           return;
@@ -6659,7 +6716,9 @@ window._saveTournamentClickHandler = async function() {
           sport: sportClean,
           startDate: startDateVal,
           endDate: endDateVal,
-          ...(estimatedGameHours ? { scheduleWindow:estimatedGameHours } : {}),
+          ...((estimatedGameHours || phaseCallOrder) ? { scheduleWindow:Object.assign({},
+            window._editingTournament && window._editingTournament.scheduleWindow || {}, estimatedGameHours || {},
+            phaseCallOrder ? { phaseCallOrder:phaseCallOrder } : {}) } : {}),
           /* ⏱️ 2.1.98 — a divisão das rodadas que o organizador arrastou (N-1 datas).
            * VAZIO é o padrão e significa "dias iguais": não se grava um arranjo igual, senão
            * ele congelaria e deixaria de acompanhar uma mudança de data depois. A validação
@@ -7179,6 +7238,7 @@ window._saveTournamentClickHandler = async function() {
 // template (templates não carregam datas — são específicas de cada evento).
 window._blankTournamentDates = function() {
   window._estimatedGameHoursState = null;
+  window._phaseCallOrderState = null;
   ['tourn-reg-open-date', 'tourn-reg-open-time', 'tourn-reg-date', 'tourn-reg-time', 'tourn-start-date', 'tourn-start-time', 'tourn-end-date', 'tourn-end-time'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.value = '';

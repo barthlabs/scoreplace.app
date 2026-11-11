@@ -10,7 +10,7 @@ function validate(t, HttpsError) {
   const windows = schedule.categoryWindows;
   if (windows === undefined) return [];
   if (!schedule || typeof schedule !== 'object' || Array.isArray(schedule) ||
-      Object.keys(schedule).some(key => !['version', 'days', 'categoryWindows'].includes(key))) fail('Agenda de jogos inválida.');
+      Object.keys(schedule).some(key => !['version', 'days', 'categoryWindows', 'interleavedPlan', 'phaseCallOrder'].includes(key))) fail('Agenda de jogos inválida.');
   if (!Array.isArray(windows) || windows.length > 200) fail('Horários por categoria inválidos.');
   if (!windows.length) return [];
   const categories = new Set((Array.isArray(t.combinedCategories) ? t.combinedCategories : [])

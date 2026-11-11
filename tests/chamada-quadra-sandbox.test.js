@@ -56,6 +56,7 @@ const context = {
   _gravaTorneio: (_tx, _ref, t) => { saved.push(JSON.stringify(t.matches)); return { clean: {} }; },
   _drawFail: (code, message) => new HttpsError(code, message),
   _courtOccupancy: require('../js/domain/court-occupancy.js'),
+  _phaseCallOrder: require('../js/domain/phase-call-order.js'),
   ScoreplaceRefereeRoster: { sanitizeAll: value => value || [] },
   FieldValue: { increment: n => n, delete: () => deleted },
   FieldPath: class { constructor(...segments) { this.segments = segments; } },
@@ -102,6 +103,14 @@ const game = (id, court, scheduledAt = '2026-10-22T21:00:00.000Z') => ({ id, cou
     e => e.code === 'failed-precondition' && /programado/.test(e.message));
   assert.equal(saved.length, savesBeforeEarlyCall, 'recusa antecipada não grava');
   assert.equal(paths.at(-1), 'tournaments/tour_test');
+  const concentratedPlan = require('./fixtures/camis-interleaved-plan.js');
+  tournament.scheduleWindow = { interleavedPlan: concentratedPlan };
+  tournament.matches[0] = { ...game('j1', 'Quadra 4'), category:'Fem Diamante', phaseIndex:0 };
+  await callable(request('tour_test', 'j1', 'Quadra 4', true));
+  assert.ok(tournament.matches[0].courtCalledAt,
+    'grade concentrada aceita o início real antes do dia previsto na primeira etapa');
+  delete tournament.scheduleWindow;
+  tournament.matches[0] = game('j1', 'Quadra 4');
   const developer = context._rehearsal.OWNER_UID;
   const developerCall = (matchId = 'j1', court = 'Quadra 4') => ({ auth: { uid: developer }, data: {
     tournamentId: 'tour_test', sandbox: false, matchId, court, confirmCall: true
