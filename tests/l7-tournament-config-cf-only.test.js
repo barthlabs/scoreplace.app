@@ -62,5 +62,15 @@ ok(part.includes('_fasesDeConfiguracaoAtualizaveis') && part.includes('t.history
   await editor.addTournament({ id:'tour-tv', logoData:'', logoUrl:'logo-existente' });
   ok(removalPatch.logoUrl === '' && !Object.hasOwn(removalPatch, 'coverUrl'),
     'remoção explícita do logo prevalece sobre a URL antiga; capa é preservada');
+  let photoPatch;
+  editor.tournaments[0].coverMode = 'photo';
+  sandbox.window._callCF = async (_name, command) => {
+    photoPatch = command.patch;
+    return { data:{ tournament:{ id:'tour-tv', coverMode:'photo', coverUrl:'capa-existente', name:'Nome editado' } } };
+  };
+  await editor.addTournament({ id:'tour-tv', name:'Nome editado', coverMode:'photo' });
+  ok(photoPatch.name === 'Nome editado' && !Object.hasOwn(photoPatch,'coverUrl') &&
+    editor.tournaments[0].coverUrl === 'capa-existente',
+    'foto omitida durante hidratação preserva a URL publicada no comando e na resposta');
   process.exit(failed ? 1 : 0);
 })().catch(err => { console.error(err); process.exit(1); });

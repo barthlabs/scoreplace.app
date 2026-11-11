@@ -4,7 +4,7 @@
 // O Salvar do topo grava logo, cores e tela sem reenviar a grade publicada.
 // O logo só sai por remoção explícita; a marca do QR segue legível sobre fundo claro.
 // Descartar, cancelar ou falhar ao salvar limpa a intenção de remover o logo;
-// a capa publicada continua em modo foto enquanto carrega no editor.
+// a capa publicada continua em modo foto e não é reenviada vazia enquanto carrega no editor.
 // A correção do comparador no servidor permite confirmar os jogos Rei/Rainha.
 // 2.6.51 — A abertura mantém a barra de progresso até a página estar montada;
 // a mensagem prematura de demora e o reload automático não interrompem mais

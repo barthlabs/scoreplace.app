@@ -6904,6 +6904,11 @@ window._saveTournamentClickHandler = async function() {
           creatorUid: window.AppStore.currentUser ? window.AppStore.currentUser.uid : '',
           coHosts: []
         };
+        // Na edição, ausência de base64 em modo foto significa "a URL publicada
+        // continua valendo". A store interpreta uma chave coverPhotoData presente
+        // e vazia como comando explícito de remover coverUrl; por isso a chave
+        // precisa sair do payload antes de qualquer caminho de gravação.
+        if (editId && coverModeVal === 'photo' && !coverPhotoDataVal) delete tourData.coverPhotoData;
 
         // Opt-out global do gênero: não materializa `false` em torneios legados que
         // não tinham o campo. Isso evita transformar um save de calendário em mudança
@@ -7223,7 +7228,6 @@ window._saveTournamentClickHandler = async function() {
             // Só o botão ✕ pode remover o logo; a capa só sai se o modo foi
             // explicitamente trocado de foto para cor.
             if (!tourData.logoData && !window._logoRemovalRequested) delete tourData.logoData;
-            if (!tourData.coverPhotoData && tourData.coverMode === 'photo') delete tourData.coverPhotoData;
             if (hasPublishedGames) {
               // A grade publicada é outro documento lógico. Editar datas, nome ou
               // outras opções da ficha nunca reenvia a proposta de sorteio.
