@@ -302,9 +302,21 @@
     var uid = window.firebase.auth().currentUser && window.firebase.auth().currentUser.uid;
     if (old && old.actorUid !== uid) throw fail('Há uma ação pendente de outra conta neste navegador.', 'failed-precondition');
     if (old && Date.now() - old.createdAt > MAX_AGE) throw fail('Esta ação pendente passou de sete dias; confira o torneio antes de repetir.', 'failed-precondition');
-    if (old && withoutId(old.payload) !== withoutId(payload)) throw fail('A ação ' +
-      String(old.payload.action || old.name || 'anterior') + ' ainda não foi confirmada para este jogo. Repita essa ação para conferir antes de mudar.',
-      'failed-precondition');
+    if (old && withoutId(old.payload) !== withoutId(payload)) {
+      // A simulação sorteia outro placar a cada toque. Se a primeira resposta se
+      // perdeu, reenviar o NOVO placar trocaria uma intenção ainda incerta. Reuse
+      // exatamente o placar e UUID pendentes; a CF devolve o recibo se já gravou.
+      var simulated = function (item) {
+        return item && /^Resultado simulado na quadra: jogo /.test(String(item.logMessage || ''));
+      };
+      if (name === 'applyMatchResult' && simulated(old.payload) && simulated(payload)) {
+        payload = Object.assign({}, old.payload);
+      } else {
+        throw fail('A ação ' + String(old.payload.action || old.name || 'anterior') +
+          ' ainda não foi confirmada para este jogo. Repita essa ação para conferir antes de mudar.',
+          'failed-precondition');
+      }
+    }
     payload.operationId = old ? old.payload.operationId : (payload.operationId || uuid());
     if (!old) { all[key] = { name: name, payload: payload, actorUid: uid, createdAt: Date.now() }; writePending(all); }
     // As duas portas regionais ainda executam a versão anterior do motor da

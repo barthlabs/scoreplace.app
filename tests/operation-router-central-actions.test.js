@@ -91,6 +91,19 @@ function harness({ noConfig = false, centralError = false, receipt = false, prob
     { tournamentId:'tour_test', matchId:'m3' }, headers), e => e.infrastructure === true);
   assert.notEqual(camisUncertain.store.get('sp-operation-pending-v2'), '{}',
     'falha na central sem conferência regional mantém o UUID pendente para evitar placar duplicado');
+  const simulated = harness({ noConfig:true, interleaved:true, centralError:true });
+  const simulatedFirst = { tournamentId:'tour_test', matchId:'m4', payload:{ s1:6, s2:3 },
+    logMessage:'Resultado simulado na quadra: jogo 4' };
+  await assert.rejects(simulated.router.call('applyMatchResult', simulatedFirst, headers),
+    e => e.infrastructure === true);
+  const initial = simulated.calls.find(c => c.endpoint.includes('cloudfunctions.net/')).payload;
+  simulated.setCentralError(false);
+  const simulatedRetry = { tournamentId:'tour_test', matchId:'m4', payload:{ s1:6, s2:4 },
+    logMessage:'Resultado simulado na quadra: jogo 4' };
+  assert.equal((await simulated.router.call('applyMatchResult', simulatedRetry, headers)).ok, true);
+  const retried = simulated.calls.filter(c => c.endpoint.includes('cloudfunctions.net/'))[1].payload;
+  assert.deepEqual(retried, initial, 'novo clique da simulação repete placar e UUID originais');
+  assert.equal(simulated.store.get('sp-operation-pending-v2'), '{}');
 
   const uncertain = harness({ centralError: true, receipt: false });
   const p = payload('postpone');

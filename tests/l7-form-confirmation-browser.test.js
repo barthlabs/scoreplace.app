@@ -52,6 +52,7 @@ assert(edited.notes.some(n=>n[0]==='create.tournamentUpdated'));
 await p.evaluate(()=>{
  window.AppStore.tournaments[0].coverMode='photo';
  window.AppStore.tournaments[0].coverUrl='https://storage.example/cover-old.png';
+ window.AppStore.tournaments[0].matches=[{id:'published-match-1',court:'Quadra 1'}];
  document.getElementById('tourn-cover-mode').value='photo';
  document.getElementById('tourn-cover-data').value='';
  window._editLogoHydrating='e';
@@ -71,6 +72,8 @@ await p.evaluate(()=>{
 });
 assert(!Object.hasOwn(await p.evaluate(()=>window._remotePatch),'coverUrl'),'com hidratação ativa, o comando real da store preserva a URL da capa');
 assert.equal(await p.evaluate(()=>window.AppStore.tournaments[0].coverUrl),'https://storage.example/cover-old.png');
+assert.deepEqual(await p.evaluate(()=>window.AppStore.tournaments[0].matches),[{id:'published-match-1',court:'Quadra 1'}],
+ 'salvar a ficha durante o torneio preserva os jogos publicados');
 await p.evaluate(()=>{window.AppStore.addTournament=window._stubAddTournament;});
 await p.evaluate(()=>{window._editLogoHydrating='';window._sent=undefined;return window._saveTournamentClickHandler();});
 assert(!Object.hasOwn(await p.evaluate(()=>window._sent),'coverPhotoData'),'foto publicada sem base64 também é omitida depois da hidratação');
