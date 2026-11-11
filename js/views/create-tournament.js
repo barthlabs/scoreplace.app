@@ -547,8 +547,8 @@ function setupCreateTournamentModal() {
                 <p style="margin: 0 0 0.7rem; font-size: 0.72rem; color: var(--text-muted); line-height: 1.35;">Escolha uma foto ou uma cor. Sem foto, o torneio usa uma cor sólida neutra; o gradiente é opcional e tem duas cores e direção livre.</p>
                 <input type="hidden" id="tourn-cover-mode" value="color">
                 <div role="group" aria-label="Tipo de fundo" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:0.8rem;">
-                  <button type="button" id="cover-mode-color" onclick="window._setCoverMode('color')" style="padding:8px 14px;border-radius:10px;border:1px solid #818cf8;background:#3730a3;color:#fff;font-size:0.8rem;font-weight:700;cursor:pointer;">🎨 Cor</button>
-                  <button type="button" id="cover-mode-photo" onclick="window._setCoverMode('photo')" style="padding:8px 14px;border-radius:10px;border:1px solid rgba(99,102,241,0.35);background:rgba(99,102,241,0.1);color:var(--sp-c-e2e8f0,#e2e8f0);font-size:0.8rem;font-weight:700;cursor:pointer;">🖼️ Foto</button>
+                  <button type="button" id="cover-mode-color" onclick="window._coverModeChosenByUser=true;window._setCoverMode('color')" style="padding:8px 14px;border-radius:10px;border:1px solid #818cf8;background:#3730a3;color:#fff;font-size:0.8rem;font-weight:700;cursor:pointer;">🎨 Cor</button>
+                  <button type="button" id="cover-mode-photo" onclick="window._coverModeChosenByUser=true;window._setCoverMode('photo')" style="padding:8px 14px;border-radius:10px;border:1px solid rgba(99,102,241,0.35);background:rgba(99,102,241,0.1);color:var(--sp-c-e2e8f0,#e2e8f0);font-size:0.8rem;font-weight:700;cursor:pointer;">🖼️ Foto</button>
                 </div>
                 <label style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 0.8rem;color:var(--text-main);font-size:0.8rem;font-weight:700;">Cor do título do torneio
                   <input type="color" id="tourn-title-color" value="#ffffff" aria-label="Cor do título do torneio" oninput="window._syncTitleColorFromPicker()" style="width:40px;height:36px;padding:2px;border:1px solid var(--text-muted);border-radius:7px;background:var(--bg-card);cursor:pointer;">
@@ -2992,7 +2992,7 @@ function setupCreateTournamentModal() {
     if (clr) clr.style.display = dataUrl ? '' : 'none';
     window._setCoverMode(dataUrl ? 'photo' : 'color');
   };
-  window._clearCoverPhoto = function() { window._applyCoverPhoto(''); };
+  window._clearCoverPhoto = function() { window._coverModeChosenByUser = true; window._applyCoverPhoto(''); };
   // A criação começa com a prévia neutra. A edição repõe seus valores depois; não
   // depender de CSS vazio evita a impressão de que a cor escolhida não foi aplicada.
   setTimeout(function() {
@@ -5866,6 +5866,7 @@ function setupCreateTournamentModal() {
     // that timing or it silently falls back to "Sem logo".  Read the canonical URL
     // directly as a defensive fallback (legacy base64 remains supported).
     window._logoRemovalRequested = false;
+    window._coverModeChosenByUser = false;
     var _logoSrcEdit = (typeof window._tourLogoSrc === 'function')
       ? window._tourLogoSrc(t)
       : (t.logoUrl || t.logoData || '');
@@ -6532,6 +6533,7 @@ window._readTournamentBrandingPatch = function(editId) {
     ['logoAspect','tourn-logo-aspect',1]
   ];
   fields.forEach(function (entry) {
+    if (entry[0] === 'coverMode' && previousCover && !window._coverModeChosenByUser && !((cover || {}).value || '')) return;
     var el = read(entry[1]); if (!el) return;
     if (!el.value && entry[0] !== 'coverGradientEnabled' && entry[0] !== 'logoLocked') return;
     var value = entry[0] === 'coverGradientEnabled' ? !!el.checked :
@@ -6544,7 +6546,7 @@ window._readTournamentBrandingPatch = function(editId) {
     var blend = window._coverBlendValue();
     if (blend !== (t.coverGradientBlend == null ? null : t.coverGradientBlend)) patch.coverGradientBlend = blend;
   }
-  if (patch.coverMode === 'color' && previousCover && cover && !cover.value) patch.coverPhotoData = '';
+  if (patch.coverMode === 'color' && previousCover && cover && !cover.value && window._coverModeChosenByUser) patch.coverPhotoData = '';
   return patch;
 };
 window._saveTournamentClickHandler = async function() {
@@ -6566,6 +6568,7 @@ window._saveTournamentClickHandler = async function() {
           if (Object.keys(brandingPatch).length) await window.AppStore.addTournament(Object.assign({ id:editId }, brandingPatch));
           if (tvDirty && typeof window._tvEditorSaveChanges === 'function') await window._tvEditorSaveChanges();
           window._logoRemovalRequested = false;
+          window._coverModeChosenByUser = false;
           showNotification('Personalização salva', 'Logo, cores e tela No ar foram gravados. Outras alterações da ficha não foram salvas.', 'success');
           return;
         }
@@ -6745,12 +6748,14 @@ window._saveTournamentClickHandler = async function() {
         const coverPhotoDataVal = (document.getElementById('tourn-cover-data') || {}).value || '';
         // A URL publicada pode ainda não ter chegado ao campo enquanto o editor
         // hidrata a ficha. Campo vazio nesse intervalo não muda foto para cor.
-        const coverModeVal = ((document.getElementById('tourn-cover-mode') || {}).value === 'photo' &&
+        const preserveExistingCover = !!(editId && editingTournament && (editingTournament.coverUrl || editingTournament.coverPhotoData) &&
+          !window._coverModeChosenByUser && !coverPhotoDataVal);
+        const coverModeVal = preserveExistingCover ? (editingTournament.coverMode || 'photo') : (((document.getElementById('tourn-cover-mode') || {}).value === 'photo' &&
           (coverPhotoDataVal || (editingTournament && (editingTournament.coverUrl || editingTournament.coverPhotoData)) || window._editLogoHydrating))
-          ? 'photo' : 'color';
+          ? 'photo' : 'color');
         // Em modo foto, campo vazio é uma imagem já publicada ainda não hidratada.
         // Só o modo cor carrega '' como comando explícito de remover a foto.
-        const coverImagePatch = (editId && coverModeVal === 'photo' && !coverPhotoDataVal)
+        const coverImagePatch = (editId && (preserveExistingCover || coverModeVal === 'photo') && !coverPhotoDataVal)
           ? {} : { coverPhotoData: coverPhotoDataVal };
         const coverColorVal = (document.getElementById('tourn-cover-color') || {}).value || '#1f2937';
         const titleColorVal = (document.getElementById('tourn-title-color') || {}).value || '#ffffff';
@@ -7347,6 +7352,7 @@ window._saveTournamentClickHandler = async function() {
         showNotification(window._t('auth.error'), window._t('create.saveError', {msg: err.message}), 'error');
       } finally {
         window._logoRemovalRequested = false;
+        window._coverModeChosenByUser = false;
         if (saveButton && typeof window._spinButtonDone === 'function') window._spinButtonDone(saveButton);
         else if (saveButton) saveButton.disabled = false;
       }
@@ -8713,6 +8719,7 @@ window._prefillFromTemplate = function(tpl) {
 // "Alterações descartadas". Se for criação nova, vai pro dashboard.
 window._discardCreateTournament = function() {
   window._logoRemovalRequested = false;
+  window._coverModeChosenByUser = false;
   var _t = window._t || function(k) { return k; };
   var editId = (document.getElementById('edit-tournament-id') || {}).value || '';
   // [[regression_back_from_edit_route_returns_to_tournament]] A edição usa

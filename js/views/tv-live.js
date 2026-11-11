@@ -256,10 +256,24 @@
     });
     var latestUpdateId = latestResult && timestamp(latestResult.resultAt || latestResult.completedAt) > latestTransitionAt
       ? latestResultId : latestPhaseId;
+    function courtPhase(m) {
+      if (m.isTieBreak || String(m.category || '').indexOf('Desempate') >= 0) return 'Desempate';
+      if (m.isThirdPlace) return '3º lugar';
+      if (m.isMonarch || m.monarchGroup != null) return 'Classificatória';
+      var round = Number(m.round);
+      var peers = matches.filter(function (item) { return item && !item.isBye && !item.isSitOut && !item.isThirdPlace &&
+        String(item.category || '') === String(m.category || '') && Number(item.phaseIndex || 0) === Number(m.phaseIndex || 0) &&
+        Number(item.round) === round && String(item.bracket || 'main') === String(m.bracket || 'main'); });
+      if (peers.length === 1) return 'Final';
+      if (peers.length === 2) return 'Semifinal';
+      if (peers.length === 4) return 'Quartas de final';
+      if (peers.length === 8) return 'Oitavas de final';
+      return String(m.roundName || m.phaseName || 'Classificatória');
+    }
     var courtCards = courtNames.map(function (name) {
       var m = allActive.find(function (item) { return String(item.court) === name; });
       if (!m) return { name: name };
-      return { name: name, number: m._gameNum || m.scheduledGameNumber || m.matchNumber || '', category: String(m.category || m.tierLabel || ''),
+      return { name: name, number: m._gameNum || m.scheduledGameNumber || m.matchNumber || '', category: String(m.category || m.tierLabel || ''), phase: courtPhase(m),
         latest: !!latestUpdateId && String(m.id || '') === latestUpdateId,
         series: monarchSeries(t, m, matches, occupancy, teams, latestUpdateId),
         a: sideName(t, m, 'p1'), b: sideName(t, m, 'p2'), ta: teamFor(m, 1, teams), tb: teamFor(m, 2, teams),
@@ -393,7 +407,7 @@
   function cardHtml(card, options) {
     options = options || { court: true, number: true, category: true, teams: true, players: true, score: true, timer: true };
     if (!card.number && !card.a && !card.b) return '<article class="tv-court empty">' + (options.court ? '<h2>' + esc(card.name) + '</h2>' : '') + '<p>Aguardando chamada</p></article>';
-    if (card.series) return '<article class="tv-court tv-court-series"><div class="tv-court-top"><h2>' + (options.court ? esc(card.name) : '') + '</h2>' + (options.category ? '<span>' + esc(card.category) + '</span>' : '') + '</div><div class="tv-series-games">' +
+    if (card.series) return '<article class="tv-court tv-court-series"><div class="tv-court-top"><h2>' + (options.court ? esc(card.name) : '') + '</h2><b class="tv-court-phase">' + esc(card.phase || '') + '</b>' + (options.category ? '<span>' + esc(card.category) + '</span>' : '') + '</div><div class="tv-series-games">' +
       card.series.map(function (game) {
         function side(label, score, direction, outcome) {
           var players = String(label || '').split(' / ').map(function (name) { return name.trim(); }).filter(Boolean);
@@ -409,7 +423,7 @@
           side(game.a, game.scoreA, 'left', game.status === 'done' && winnerSide ? (winnerSide === 1 ? 'win' : 'loss') : '') + '<span class="tv-series-versus">×</span>' + side(game.b, game.scoreB, 'right', game.status === 'done' && winnerSide ? (winnerSide === 2 ? 'win' : 'loss') : '') + '</div>';
       }).join('') + '</div>' +
       (options.timer ? '<div class="tv-court-footer"><strong data-tv-start="' + card.timerStart + '">00:00:00</strong></div>' : '') + '</article>';
-    return '<article class="tv-court tv-court-active' + (card.latest ? ' tv-court-latest' : '') + '"><div class="tv-court-top"><h2>' + (options.court ? esc(card.name) : '') + (options.number ? ' · JOGO ' + esc(card.number) : '') + '</h2>' + (options.category ? '<span>' + esc(card.category) + '</span>' : '') + '</div>' +
+    return '<article class="tv-court tv-court-active' + (card.latest ? ' tv-court-latest' : '') + '"><div class="tv-court-top"><h2>' + (options.court ? esc(card.name) : '') + (options.number ? ' · JOGO ' + esc(card.number) : '') + '</h2><b class="tv-court-phase">' + esc(card.phase || '') + '</b>' + (options.category ? '<span>' + esc(card.category) + '</span>' : '') + '</div>' +
       sideHtml(card.a, card.ta, card.scoreA, options) + '<div class="tv-versus">VS</div>' + sideHtml(card.b, card.tb, card.scoreB, options) +
       (options.timer ? '<div class="tv-court-footer"><strong data-tv-start="' + card.timerStart + '">00:00:00</strong></div>' : '') + '</article>';
   }
@@ -617,7 +631,7 @@
     '.tv-sidebar h2{font-size:clamp(1.2rem,1.5vw,2rem)}' +
     '.tv-header time{font-size:clamp(1.5rem,2vw,3rem);font-weight:800;font-variant-numeric:tabular-nums}' +
     '.tv-win{color:#4ade80}.tv-loss{color:#f87171}' +
-    '.tv-court-top{display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:.4vw;border-bottom:1px solid #314151;padding-bottom:.25vw}.tv-court-top h2{color:#38bdf8;font-size:clamp(.85rem,1.1vw,1.5rem);white-space:nowrap}.tv-court-top>span{color:#fbbf24;font-size:clamp(.65rem,.78vw,1rem);font-weight:800;text-align:right}.tv-side{display:grid;grid-template-columns:auto minmax(0,1fr) auto;grid-template-rows:1fr;align-items:stretch;gap:.55vw;border-left:0;border-radius:.45vw;min-width:0;padding:.35vw;background:#222}.tv-team-tag{display:flex;align-items:center;justify-content:center;writing-mode:vertical-rl;transform:rotate(180deg);padding:.25vw .15vw;border:1px solid var(--team);border-radius:999px;background:color-mix(in srgb,var(--team) 28%,#222);color:#fff;font-size:clamp(.65rem,.8vw,1rem);font-weight:900;white-space:nowrap}.tv-players{min-width:0;display:flex;flex-direction:column;justify-content:space-evenly;gap:.15vw}.tv-players span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#fff;font-size:clamp(.8rem,1vw,1.3rem);font-weight:750}.tv-score{grid-column:3;grid-row:1;align-self:center;min-width:2vw;padding:.1em .3em;border:1px solid #555;border-radius:.35em;background:#303030;text-align:center;font-size:clamp(1.4rem,2.3vw,3rem)}' +
+    '.tv-court-top{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:.4vw;border-bottom:1px solid #314151;padding-bottom:.25vw}.tv-court-phase{justify-self:center;color:#fff;font-size:clamp(.65rem,.78vw,1rem);font-weight:800;white-space:nowrap}.tv-court-top h2{color:#38bdf8;font-size:clamp(.85rem,1.1vw,1.5rem);white-space:nowrap}.tv-court-top>span{color:#fbbf24;font-size:clamp(.65rem,.78vw,1rem);font-weight:800;text-align:right;justify-self:end}.tv-side{display:grid;grid-template-columns:auto minmax(0,1fr) auto;grid-template-rows:1fr;align-items:stretch;gap:.55vw;border-left:0;border-radius:.45vw;min-width:0;padding:.35vw;background:#222}.tv-team-tag{display:flex;align-items:center;justify-content:center;writing-mode:vertical-rl;transform:rotate(180deg);padding:.25vw .15vw;border:1px solid var(--team);border-radius:999px;background:color-mix(in srgb,var(--team) 28%,#222);color:#fff;font-size:clamp(.65rem,.8vw,1rem);font-weight:900;white-space:nowrap}.tv-players{min-width:0;display:flex;flex-direction:column;justify-content:space-evenly;gap:.15vw}.tv-players span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#fff;font-size:clamp(.8rem,1vw,1.3rem);font-weight:750}.tv-score{grid-column:3;grid-row:1;align-self:center;min-width:2vw;padding:.1em .3em;border:1px solid #555;border-radius:.35em;background:#303030;text-align:center;font-size:clamp(1.4rem,2.3vw,3rem)}' +
     '.tv-versus{font-size:clamp(.7rem,.8vw,1rem);letter-spacing:.1em}.tv-court-footer{display:flex;justify-content:flex-end;align-items:center;gap:.5vw;margin-top:.35vw;color:#34d399;font-weight:800}.tv-court-footer strong{font-variant-numeric:tabular-nums;font-size:clamp(1rem,1.2vw,1.8rem)}' +
     '.tv-sidebar{grid-template-rows:60% 40%}' +
     '.tv-rankings{display:flex;flex-direction:column}' +

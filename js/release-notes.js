@@ -1,10 +1,12 @@
 // 2.6.52 — A tela No ar usa as cores de fundo do cartão do torneio também
 // no cabeçalho e nas quadras. Nomes longos encolhem individualmente, enquanto
 // os curtos mantêm o tamanho. O editor mostra um botão de chave por categoria.
+// Cada quadra mostra a fase no centro do cabeçalho, entre quadra e categoria.
 // O Salvar do topo grava logo, cores e tela sem reenviar a grade publicada.
 // O logo só sai por remoção explícita; a marca do QR segue legível sobre fundo claro.
 // Descartar, cancelar ou falhar ao salvar limpa a intenção de remover o logo;
-// a capa publicada continua em modo foto; a gravação só envia imagem nova ou remoção explícita.
+// a capa publicada continua em modo foto, inclusive durante a carga; a gravação
+// só envia imagem nova ou remoção escolhida pelo organizador.
 // A capa pode mudar mesmo depois do sorteio, sem enviar a grade de jogos.
 // A correção do comparador no servidor permite confirmar os jogos Rei/Rainha.
 // Se a resposta da simulação falhar, o próximo toque confere o mesmo placar

@@ -106,7 +106,7 @@ const { chromium } = require('@playwright/test');
       const snapshot = {
         tvLayout:window._tvEditorReadLayout(), theme:{ background:'#000000', primary:'#000000', secondary:'#ffffff', title:'#fff' },
         name:'CAMIS', courts:Array.from({ length:8 }, (_, i) => ({ name:'Quadra ' + (i+1), number:i*3+1,
-          category:'Fem Diamante', series:[game(i*3+1,'6','3'),game(i*3+2,'2','4'),game(i*3+3,'1','0')], timerStart:0 })),
+          category:'Fem Diamante', phase:'Classificatória', series:[game(i*3+1,'6','3'),game(i*3+2,'2','4'),game(i*3+3,'1','0')], timerStart:0 })),
         nextGame:null, rankings:[], results:[], resultDay:'', qrImage:'', scoreplaceLogo:''
       };
       const frame = document.querySelector('[data-tv-frame]');
@@ -122,7 +122,9 @@ const { chromium } = require('@playwright/test');
         ctx.fillRect(0, 0, 1, 1); return [...ctx.getImageData(0, 0, 1, 1).data].slice(0, 3);
       };
       const colors = ['.tv-header','.tv-court','.tv-series-game'].map(sample);
-      return { rows:rows.map(row => {
+      const top = frame.contentDocument.querySelector('.tv-court-top');
+      const topPositions = ['h2','.tv-court-phase','span'].map(selector => top.querySelector(selector).getBoundingClientRect().left);
+      return { topPositions, phase:top.querySelector('.tv-court-phase').textContent, rows:rows.map(row => {
         const box = selector => row.querySelector(selector).getBoundingClientRect();
         return { leftNames:box('.tv-series-left .tv-series-players').left,
           leftScore:box('.tv-series-left strong').left,
@@ -134,6 +136,10 @@ const { chromium } = require('@playwright/test');
         longLines:longName.scrollHeight / parseFloat(frame.contentWindow.getComputedStyle(longName).lineHeight) };
     });
     assert.equal(seriesPositions.rows.length, 24, 'oito quadras mantêm seus três jogos');
+    assert.equal(seriesPositions.phase, 'Classificatória');
+    assert(seriesPositions.topPositions[0] < seriesPositions.topPositions[1] &&
+      seriesPositions.topPositions[1] < seriesPositions.topPositions[2],
+      'fase fica centralizada entre quadra e categoria');
     seriesPositions.rows.forEach((position, index) => {
       assert.ok(position.leftNames < position.leftScore && position.leftScore < position.middle &&
         position.middle < position.rightScore && position.rightScore < position.rightNames,

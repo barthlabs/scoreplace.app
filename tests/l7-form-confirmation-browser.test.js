@@ -63,6 +63,21 @@ assert(!Object.hasOwn(await p.evaluate(()=>window._sent),'coverPhotoData'),'capa
 assert.equal(await p.evaluate(()=>window._sent.coverMode),'photo','capa publicada continua no modo foto durante a hidratação');
 assert(!Object.hasOwn(await p.evaluate(()=>window._sent),'coverUrl'),'salvar ficha não apaga a URL publicada da capa');
 await p.evaluate(()=>{
+ document.getElementById('tourn-cover-mode').value='color';
+ window._coverModeChosenByUser=false;window._sent=undefined;
+ return window._saveTournamentClickHandler();
+});
+assert.equal(await p.evaluate(()=>window._sent.coverMode),'photo',
+ 'modo cor temporário durante a hidratação não altera a capa publicada');
+assert(!Object.hasOwn(await p.evaluate(()=>window._sent),'coverPhotoData'),
+ 'formulário não envia remoção da capa sem escolha explícita');
+assert(!Object.hasOwn(await p.evaluate(()=>window._readTournamentBrandingPatch('e')),'coverPhotoData'),
+ 'salvamento visual também preserva a capa durante a hidratação');
+await p.evaluate(()=>{window._coverModeChosenByUser=true;});
+assert.equal(await p.evaluate(()=>window._readTournamentBrandingPatch('e').coverPhotoData),'',
+ 'troca explícita para cor pode remover a foto publicada');
+await p.evaluate(()=>{window._coverModeChosenByUser=false;document.getElementById('tourn-cover-mode').value='photo';});
+await p.evaluate(()=>{
  window._editLogoHydrating='';document.getElementById('tourn-cover-data').value='data:image/png;base64,BBBB';
  return window._saveTournamentClickHandler();
 });
