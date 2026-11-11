@@ -54,5 +54,13 @@ ok(part.includes('_fasesDeConfiguracaoAtualizaveis') && part.includes('t.history
   await editor.addTournament({ id:'tour-tv', tvScreens:[{ layout:{ background:'#000000' } }] });
   ok(editor.tournaments[0].logoUrl === 'logo-existente' && editor.tournaments[0].coverUrl === 'capa-existente',
     'salvar somente a TV preserva capa e logo existentes');
+  let removalPatch;
+  sandbox.window._callCF = async (_name, command) => {
+    removalPatch = command.patch;
+    return { data:{ tournament:{ id:'tour-tv', coverUrl:'capa-existente' } } };
+  };
+  await editor.addTournament({ id:'tour-tv', logoData:'', logoUrl:'logo-existente' });
+  ok(removalPatch.logoUrl === '' && !Object.hasOwn(removalPatch, 'coverUrl'),
+    'remoção explícita do logo prevalece sobre a URL antiga; capa é preservada');
   process.exit(failed ? 1 : 0);
 })().catch(err => { console.error(err); process.exit(1); });

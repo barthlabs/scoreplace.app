@@ -6553,6 +6553,7 @@ window._saveTournamentClickHandler = async function() {
       if (saveButton && typeof window._spinButton === 'function') window._spinButton(saveButton, 'Salvando…');
       else if (saveButton) saveButton.disabled = true;
       var createdId = null;
+      var keepLogoIntentForDecision = false;
       try {
         const editId = document.getElementById('edit-tournament-id').value;
         // O Salvar do topo também serve a edição da TV. Gravar a ficha inteira
@@ -6594,6 +6595,7 @@ window._saveTournamentClickHandler = async function() {
         // Então a escolha passa a ser feita aqui, ao salvar, e fica gravada em `equilibrado`
         // — que é o que o motor lê (o mesmo motor que a CF autoDraw roda).
         if (!window._drawBalanceConfirmed && _autoDrawAgendadoNoForm()) {
+          keepLogoIntentForDecision = true;
           _perguntarEquilibrio(function () { window._saveTournamentClickHandler(); });
           return;
         }
@@ -6605,7 +6607,10 @@ window._saveTournamentClickHandler = async function() {
         // (zerado) imediatamente pra não vazar pro próximo save.
         if (editId && window._scoringReconcileConfirmed !== true && typeof window._maybeShowScoringReconcile === 'function') {
           var _tForScoring = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(editId); });
-          if (_tForScoring && window._maybeShowScoringReconcile(_tForScoring)) return;
+          if (_tForScoring && window._maybeShowScoringReconcile(_tForScoring)) {
+            keepLogoIntentForDecision = true;
+            return;
+          }
         }
 
         const formatValue = document.getElementById('select-formato').value;
@@ -7333,6 +7338,7 @@ window._saveTournamentClickHandler = async function() {
         window._error('Erro ao salvar torneio:', err);
         showNotification(window._t('auth.error'), window._t('create.saveError', {msg: err.message}), 'error');
       } finally {
+        if (!keepLogoIntentForDecision) window._logoRemovalRequested = false;
         if (saveButton && typeof window._spinButtonDone === 'function') window._spinButtonDone(saveButton);
         else if (saveButton) saveButton.disabled = false;
       }
@@ -8698,6 +8704,7 @@ window._prefillFromTemplate = function(tpl) {
 // v1.6.5-beta: se estiver editando, volta ao card do torneio com toast
 // "Alterações descartadas". Se for criação nova, vai pro dashboard.
 window._discardCreateTournament = function() {
+  window._logoRemovalRequested = false;
   var _t = window._t || function(k) { return k; };
   var editId = (document.getElementById('edit-tournament-id') || {}).value || '';
   // [[regression_back_from_edit_route_returns_to_tournament]] A edição usa
@@ -9046,7 +9053,10 @@ window._renderCreateTournamentHeader = function() {
   };
   var _oClose = window.closeModal;
   window.closeModal = function(id) {
-    if (id === 'modal-create-tournament') restore();
+    if (id === 'modal-create-tournament') {
+      window._logoRemovalRequested = false;
+      restore();
+    }
     if (typeof _oClose === 'function') _oClose(id);
   };
 })();

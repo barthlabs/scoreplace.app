@@ -14851,7 +14851,8 @@ window.AppStore = {
         // Omissão não é pedido para remover a capa ou o logo já publicados.
         if (!Object.prototype.hasOwnProperty.call(data, pair[0]) &&
             !Object.prototype.hasOwnProperty.call(data, pair[1])) return Promise.resolve();
-        var raw = data[pair[0]] || _editPatch[pair[1]];
+        var raw = Object.prototype.hasOwnProperty.call(data, pair[0])
+          ? data[pair[0]] : _editPatch[pair[1]];
         if (!raw) {
           delete _editPatch[pair[0]];
           /* ⛔ REMOVER CAPA/LOGO PRECISA SER UMA INTENÇÃO EXPLÍCITA. O save normal

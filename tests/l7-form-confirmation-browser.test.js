@@ -1,8 +1,8 @@
 const assert=require('assert/strict'),fs=require('fs'),path=require('path'),acorn=require('acorn'),{chromium}=require('@playwright/test');
 const root=path.join(__dirname,'../');
 const source=fs.readFileSync(root+'js/views/create-tournament.js','utf8');
-let handler,branding;
-function visit(n){if(!n||typeof n!=='object')return;if(n.type==='AssignmentExpression'){const left=source.slice(n.left.start,n.left.end);if(left==='window._saveTournamentClickHandler')handler=source.slice(n.start,n.end)+';';if(left==='window._readTournamentBrandingPatch')branding=source.slice(n.start,n.end)+';';}for(const v of Object.values(n)){if(Array.isArray(v))v.forEach(visit);else if(v&&typeof v==='object')visit(v);}}
+let handler,branding,discard;
+function visit(n){if(!n||typeof n!=='object')return;if(n.type==='AssignmentExpression'){const left=source.slice(n.left.start,n.left.end);if(left==='window._saveTournamentClickHandler')handler=source.slice(n.start,n.end)+';';if(left==='window._readTournamentBrandingPatch')branding=source.slice(n.start,n.end)+';';if(left==='window._discardCreateTournament')discard=source.slice(n.start,n.end)+';';}for(const v of Object.values(n)){if(Array.isArray(v))v.forEach(visit);else if(v&&typeof v==='object')visit(v);}}
 visit(acorn.parse(source,{ecmaVersion:'latest'}));
 (async()=>{const b=await chromium.launch();try{const p=await b.newPage();await p.setContent('<form id="form-create-tournament"></form><button id="btn-save-tournament">Salvar</button>');
 await p.evaluate((src)=>{
@@ -20,7 +20,7 @@ await p.evaluate((src)=>{
  window._error=(...x)=>window._notes.push(x.map(y=>String(y)));
  window.AppStore={currentUser:{uid:'owner'},tournaments:[{id:'e',name:'Antigo',format:'Eliminatórias Simples'}],addTournament:async data=>{window._sent=data;return data.id||'CREATED';}};
 },handler);
-await p.addScriptTag({content:fs.readFileSync(root+'js/views/format2.js','utf8')});await p.addScriptTag({content:branding+handler});
+await p.addScriptTag({content:fs.readFileSync(root+'js/views/format2.js','utf8')});await p.addScriptTag({content:branding+handler+discard});
 await p.evaluate(()=>{
  window._tvEditorHasChanges=()=>true;
  window._tvEditorSaveChanges=async()=>{window._tvSaved=true;};
@@ -28,6 +28,7 @@ await p.evaluate(()=>{
 await p.evaluate(()=>window._saveTournamentClickHandler());
 assert(await p.evaluate(()=>window._tvSaved),'Salvar do topo publica a tela No ar editada');
 assert.equal(await p.evaluate(()=>window._sent),undefined,'salvar tela não reenvia a grade publicada');
+assert.equal(await p.evaluate(()=>window.AppStore.tournaments[0].name),'Antigo','Salvar da TV não altera a ficha junto');
 assert(await p.evaluate(()=>window._notes.some(n=>n[0]==='Personalização salva')));
 await p.evaluate(()=>{
  window._tvEditorHasChanges=()=>false;window._sent=undefined;window._notes=[];
@@ -48,6 +49,25 @@ await p.evaluate(()=>{window._logoRemovalRequested=true;window._sent=undefined;w
 await p.evaluate(()=>window._saveTournamentClickHandler());
 assert.deepEqual(await p.evaluate(()=>window._sent),{id:'e',logoData:''},
  'somente remover o logo explicitamente envia o campo vazio');
+await p.evaluate(()=>{
+ window._logoRemovalRequested=true;
+ window._discardCreateTournament();
+ window.AppStore.tournaments.push({id:'outro',name:'Outro',logoUrl:'https://storage.example/outro.png',coverColor:'#000000'});
+ document.getElementById('edit-tournament-id').value='outro';
+ document.getElementById('tourn-cover-color').value='#123456';
+ window._sent=undefined;
+ return window._saveTournamentClickHandler();
+});
+assert.equal(await p.evaluate(()=>window._logoRemovalRequested),false,'descartar limpa intenção de remover logo');
+assert.equal(await p.evaluate(()=>window._sent.coverColor),'#123456');
+assert(!Object.hasOwn(await p.evaluate(()=>window._sent),'logoData'),'salvar outro torneio após descartar não remove seu logo');
+await p.evaluate(()=>{
+ window._logoRemovalRequested=true;
+ document.getElementById('tourn-logo-data').value='';
+ window.AppStore.addTournament=async()=>{throw new Error('falha de rede');};
+ return window._saveTournamentClickHandler();
+});
+assert.equal(await p.evaluate(()=>window._logoRemovalRequested),false,'erro de gravação limpa a intenção de remover logo');
 await p.evaluate(()=>{
  document.getElementById('edit-tournament-id').value=''; document.getElementById('tourn-name').value='Nova copa';
  window._notes=[];window._beforeHash=location.hash;
