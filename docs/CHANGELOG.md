@@ -1,3 +1,10 @@
+## 2.6.39 — 11/nov/2026 (grade visual em tela ampla)
+
+- O horário inicial da grade visual deixa de ficar oculto sob o cabeçalho fixo da coluna Hora.
+- A grade de fases e quadras abre numa tela própria, com abas de datas e área ampla de rolagem. A edição do torneio mostra apenas um atalho e o resumo da grade.
+- Rolar ou clicar na área vazia não reposiciona blocos. A colocação por clique exige selecionar um bloco e acionar o comando explícito; o arrasto com mouse e as setas do teclado continuam disponíveis.
+- Corte somente web; sem alterar partidas, programação salva ou versões nativas.
+
 ## 2.6.38 — 10/nov/2026 (modo explícito dos horários e grade visual)
 
 - A edição passa a gravar se o organizador determina os horários ou se os participantes combinam as partidas dentro do prazo, sem inferir a escolha pela duração do torneio.

@@ -1,3 +1,5 @@
+// 2.6.39 — A programação de fases abre numa tela ampla com abas de datas.
+// Rolar a grade não move blocos; o primeiro horário aparece inteiro.
 // 2.6.38 — O organizador escolhe se define os horários dos jogos ou se
 // os participantes combinam cada partida dentro do prazo. A grade de
 // quadras usa os dias definidos, mesmo em torneios de longa duração.
