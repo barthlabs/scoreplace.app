@@ -9,6 +9,20 @@ const laterDay = { day:'2027-02-14', startTime:'08:00', endTime:'21:00' };
 const tiles = grid.expand(fixture, tournament);
 assert.equal(tiles.length, 72);
 assert.equal(grid.validate(tiles, fixture, [firstDay]), null);
+const compactPreset = grid.preset(tiles, fixture, [firstDay], 'compact');
+const spreadPreset = grid.preset(tiles, fixture, [firstDay], 'spread');
+assert.equal(compactPreset.error, undefined);
+assert.equal(spreadPreset.error, undefined);
+const openingCategories = result => new Set(result.tiles.filter(tile => tile.startTime === '08:00').map(tile => tile.category));
+assert.deepEqual([...openingCategories(compactPreset)], ['Fem Diamante'],
+  'concentrar reserva as primeiras quadras para a primeira categoria');
+assert.equal(openingCategories(spreadPreset).size, 3,
+  'espalhar alterna as três categorias já no primeiro horário');
+const compactAgain = grid.preset(spreadPreset.tiles, fixture, [firstDay], 'compact');
+assert.equal(compactAgain.error, undefined);
+assert.deepEqual([...openingCategories(compactAgain)], ['Fem Diamante'],
+  'voltar a concentrar recupera a ordem da grade original');
+assert.equal(grid.validate(spreadPreset.tiles, fixture, [firstDay]), null);
 assert.equal(new Set(Object.values(grid.numbered(tiles, fixture))).size, tiles.length);
 assert.equal(Math.max(...Object.values(grid.numbered(tiles, fixture))), 144);
 const eliminationNames = grid.eliminationLabels(tiles);

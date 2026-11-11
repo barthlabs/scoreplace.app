@@ -54,6 +54,11 @@ async function run() {
   assert.match(elements.get('phase-grid-overlay').innerHTML, /Grupo A1 · 3 jogos/);
   assert.match(elements.get('phase-grid-overlay').innerHTML, /JOGO 1 <small>\(1\/3\) · 08:00/);
   assert.match(elements.get('phase-grid-overlay').innerHTML, /Quadra 8/);
+  assert.match(elements.get('phase-grid-overlay').innerHTML, /Salvar grade e sortear/);
+  assert.match(elements.get('phase-grid-overlay').innerHTML, /Concentrar antes/);
+  assert.match(elements.get('phase-grid-overlay').innerHTML, /Espalhar ao longo do torneio/);
+  assert.doesNotMatch(elements.get('phase-grid-overlay').innerHTML,
+    /Editar configuração do torneio|Posicionar bloco selecionado|phase-grid-summary/);
   assert.deepEqual(draws, []);
 
   const last = window._phaseCallOrderState.tiles.at(-1);

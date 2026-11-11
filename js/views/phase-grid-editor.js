@@ -28,15 +28,6 @@
     var category = tile.category.replace(/^Fem\s+/i, 'Feminino ').replace(/^Masc\s+/i, 'Masculino ');
     return (tile.kind === 'groups' ? 'Classificatória' : 'Eliminatórias') + ' · ' + category;
   }
-  function stats(tiles) {
-    var result = [];
-    tiles.forEach(function (tile) {
-      var key = model.stageKey(tile), row = result.find(function (r) { return r.key === key; });
-      if (!row) { row = { key:key, label:label(tile), count:0, games:0, kind:tile.kind }; result.push(row); }
-      row.count++; row.games += tile.kind === 'groups' ? 3 : 1;
-    });
-    return result;
-  }
   function timeMarks(tiles, tournament, start, last) {
     var blocks = new Set([start]);
     var games = new Set();
@@ -65,7 +56,7 @@
     if (overlayOpen && !overlay()) {
       overlayOpen = false;
       document.body.style.overflow = previousBodyOverflow;
-      if (state) state.placing = false;
+      if (state) state.selectedId = null;
     }
     var scheduleState = state && state.preDrawId ? null : window._estimatedGameHoursState;
     if (scheduleState && scheduleState.mode === 'participants') {
@@ -85,7 +76,6 @@
       mount.innerHTML = '<div class="phase-grid-editor"><h3>Grade de fases e quadras</h3><p>Defina primeiro o horário do dia.</p></div>';
       return;
     }
-    var summary = stats(state.tiles);
     mount.innerHTML = '<section class="phase-grid-editor phase-grid-launcher" aria-label="Grade de fases e quadras">' +
       '<div><h3>Grade de fases e quadras</h3><p>' + state.tiles.length + ' blocos em ' + daysOf(state).length +
       ' dia(s). ' + (state.touched ? 'Ajustes pendentes de salvar no torneio.' : 'Abra para conferir e ajustar a programação.') + '</p></div>' +
@@ -113,24 +103,19 @@
       return '<span class="phase-grid-time-line" style="top:' + (time - start) * 3 + 'px"></span>';
     }).join('');
     root.innerHTML = '<section class="phase-grid-editor phase-grid-fullscreen" role="dialog" aria-modal="true" aria-label="Programação visual das fases">' +
-      '<div class="phase-grid-toolbar"><div><h2>' + (state.preDrawId ? 'Revisar a grade antes do sorteio' : 'Fases na grade de quadras e horários') + '</h2>' +
-      '<p>Cada grupo reserva três jogos na mesma quadra. Arraste blocos para ajustar quadras e horários; a numeração abaixo acompanha a grade. Rolar não altera a programação.</p></div>' +
+      '<div class="phase-grid-toolbar"><div class="phase-grid-toolbar-main"><h2>' + (state.preDrawId ? 'Revisar a grade antes do sorteio' : 'Fases na grade de quadras e horários') + '</h2>' +
+      '<div class="phase-grid-days" aria-label="Data da grade">' + daysOf(state).map(function (d) {
+        return '<button type="button" class="phase-grid-day' + (d.day === day.day ? ' active' : '') + '" onclick="window._phaseGridDay(\'' + esc(d.day) + '\')"' +
+          (state.locked ? '' : ' ondragover="event.preventDefault()" ondrop="window._phaseGridDropDay(event,\'' + esc(d.day) + '\')"') +
+          '>' + esc(new Date(d.day + 'T12:00:00').toLocaleDateString('pt-BR')) + '</button>';
+      }).join('') + '</div></div>' +
       '<div class="phase-grid-toolbar-actions">' + (state.preDrawId ?
-        '<button type="button" class="btn btn-secondary" onclick="window._phaseGridEditBeforeDraw()">Editar configuração do torneio</button>' +
         '<button type="button" class="btn btn-primary" id="phase-grid-draw-button" onclick="window._phaseGridSaveAndDraw()">Salvar grade e sortear</button>' : '') +
       '<button type="button" class="btn btn-secondary phase-grid-close" onclick="window._closePhaseGridEditor()">' + (state.preDrawId ? 'Voltar sem sortear' : 'Voltar à edição') + '</button></div></div>' +
       '<div class="phase-grid-controls">' +
-      '<div class="phase-grid-summary">' + summary.map(function (row) {
-        return '<span>' + esc(row.label) + ': <strong>' + row.count + '</strong> ' + (row.kind === 'groups' ? 'grupos' : 'partidas') + '</span>';
-      }).join('') + '</div>' +
       (state.locked ? '<p class="phase-grid-locked">O sorteio já publicou os jogos. A grade pode ser conferida; movê-la agora alteraria horários e números de jogos.</p>' :
       '<div class="phase-grid-presets"><button type="button" class="btn btn-secondary" onclick="window._phaseGridPreset(\'compact\')">Concentrar antes</button>' +
-      '<button type="button" class="btn btn-secondary" onclick="window._phaseGridPreset(\'spread\')">Espalhar ao longo do torneio</button>' +
-      '<button type="button" class="btn btn-secondary" data-phase-place onclick="window._phaseGridArmPlacement()"' +
-      (state.selectedId ? '' : ' disabled') + '>' + (state.placing ? 'Clique no horário e na quadra de destino' : 'Posicionar bloco selecionado') + '</button></div>') +
-      '<div class="phase-grid-days">' + daysOf(state).map(function (d) {
-        return '<button type="button" class="phase-grid-day' + (d.day === day.day ? ' active' : '') + '" onclick="window._phaseGridDay(\'' + esc(d.day) + '\')">' + esc(new Date(d.day + 'T12:00:00').toLocaleDateString('pt-BR')) + '</button>';
-      }).join('') + '</div></div>' +
+      '<button type="button" class="btn btn-secondary" onclick="window._phaseGridPreset(\'spread\')">Espalhar ao longo do torneio</button></div>') + '</div>' +
       '<p id="phase-grid-message" class="phase-grid-error" role="alert" hidden></p>' +
       '<div class="phase-grid-viewport"><div class="phase-grid-head" style="--phase-grid-courts:' + columns + '"><span>Hora</span>' +
       Array.from({ length:columns }, function (_, i) { return '<span>' + esc((state.tournament.courtNames || [])[i] || ('Quadra ' + (i + 1))) + '</span>'; }).join('') +
@@ -139,7 +124,7 @@
       Array.from({ length:columns }, function (_, i) {
         var court = i + 1;
         return '<div class="phase-grid-lane" style="height:' + height + 'px" data-court="' + court + '"' +
-          (state.locked ? '' : ' onclick="window._phaseGridPlace(event,' + court + ')" ondragover="event.preventDefault()" ondrop="window._phaseGridDrop(event,' + court + ')"') + '>' +
+          (state.locked ? '' : ' ondragover="event.preventDefault()" ondrop="window._phaseGridDrop(event,' + court + ')"') + '>' +
           lines +
           visible.filter(function (tile) { return tile.court === court; }).map(function (tile) {
             var top = (model.minutes(tile.startTime) - start) * 3, tileHeight = tile.duration * 3 - 3;
@@ -153,7 +138,7 @@
               (overflow || collision ? ' phase-grid-overflow' : '') +
               (state.selectedId === tile.id ? ' selected' : '') + '" style="top:' + top + 'px;height:' + tileHeight + 'px"' +
               ' data-tile-id="' + id + '" tabindex="0" role="button" aria-label="' + esc(title + ', ' + short + ', quadra ' + court + ', ' + tile.startTime + (overflow ? ', ultrapassa o fim do dia' : '') + (collision ? ', sobreposto a outro bloco' : '')) + '"' +
-              (state.locked ? '' : ' draggable="' + (window.matchMedia && window.matchMedia('(pointer:fine)').matches ? 'true' : 'false') + '" onclick="event.stopPropagation();window._phaseGridSelect(\'' + id + '\')"' +
+              (state.locked ? '' : ' draggable="' + (window.matchMedia && window.matchMedia('(pointer:fine)').matches ? 'true' : 'false') + '"' +
                 ' ondragstart="window._phaseGridDragStart(event,\'' + id + '\')" onkeydown="window._phaseGridKey(event,\'' + id + '\')"') + '>' +
               '<strong>' + esc(title) + '</strong><small>' + esc(short) + '</small>' +
               (tile.kind === 'groups' ? '<div class="phase-grid-series">' + [0,1,2].map(function (offset) {
@@ -172,12 +157,14 @@
     else if (overlapping.size) showError('Blocos listrados ocupam a mesma quadra no mesmo horário. Ajuste-os antes de salvar.');
     else if (state.gridWarning) showError(state.gridWarning + ' Ajuste a sequência antes de salvar.');
   }
-  function applyMove(id, court, startTime) {
+  function applyMove(id, court, startTime, targetDay) {
     var state = window._phaseCallOrderState;
     if (!state || state.locked) return;
-    var result = model.move(state.tiles, id, court, startTime, state.plan, daysOf(state), dayOf(state).day);
+    var destination = targetDay || dayOf(state).day;
+    var result = model.move(state.tiles, id, court, startTime, state.plan, daysOf(state), destination);
     if (result.error) { showError(result.error); return; }
-    state.tiles = result.tiles; state.touched = true; state.selectedId = id; state.placing = false;
+    state.tiles = result.tiles; state.touched = true; state.selectedId = id;
+    state.activeDay = destination;
     state.gridWarning = result.warning || null;
     redraw(true);
   }
@@ -251,7 +238,7 @@
     var root = overlay(); if (root) root.remove();
     overlayOpen = false;
     document.body.style.overflow = previousBodyOverflow;
-    var state = window._phaseCallOrderState; if (state) state.placing = false;
+    var state = window._phaseCallOrderState; if (state) state.selectedId = null;
     if (state && state.preDrawId) {
       var mount = document.getElementById('phase-grid-predraw-mount'); if (mount) mount.remove();
       window._phaseCallOrderState = preDrawPreviousState;
@@ -276,12 +263,6 @@
       tiles:model.expand(plan, tournament), locked:false, touched:false, preDrawId:String(tId) };
     window._openPhaseGridEditor();
     return true;
-  };
-  window._phaseGridEditBeforeDraw = function () {
-    var state = window._phaseCallOrderState, id = state && state.preDrawId;
-    if (!id) return;
-    window._closePhaseGridEditor();
-    window.location.hash = '#novo-torneio/' + encodeURIComponent(id);
   };
   window._phaseGridSaveAndDraw = async function () {
     var state = window._phaseCallOrderState;
@@ -322,16 +303,6 @@
     var state = window._phaseCallOrderState; if (!state || !daysOf(state).some(function (d) { return d.day === day; })) return;
     state.activeDay = day; redraw(false);
   };
-  window._phaseGridSelect = function (id) {
-    var state = window._phaseCallOrderState; if (!state || state.locked) return;
-    state.selectedId = state.selectedId === id ? null : id;
-    state.placing = false;
-    gridRoot().querySelectorAll('.phase-grid-tile').forEach(function (el) {
-      el.classList.toggle('selected', el.dataset.tileId === state.selectedId);
-    });
-    var place = gridRoot().querySelector('[data-phase-place]');
-    if (place) { place.disabled = !state.selectedId; place.textContent = 'Posicionar bloco selecionado'; }
-  };
   window._phaseGridDragStart = function (event, id) {
     var state = window._phaseCallOrderState;
     if (!state || state.locked || !state.tiles.some(function (tile) { return tile.id === id; })) { event.preventDefault(); return; }
@@ -344,17 +315,14 @@
     var target = position(event, court);
     applyMove(id, target.court, target.startTime);
   };
-  window._phaseGridArmPlacement = function () {
-    var state = window._phaseCallOrderState;
-    if (!state || !state.selectedId || state.locked) return;
-    state.placing = true;
-    var button = gridRoot().querySelector('[data-phase-place]');
-    if (button) button.textContent = 'Clique no horário e na quadra de destino';
-  };
-  window._phaseGridPlace = function (event, court) {
-    var state = window._phaseCallOrderState; if (!state || !state.placing || !state.selectedId) return;
-    if (event.target.closest('.phase-grid-tile')) return;
-    var target = position(event, court); applyMove(state.selectedId, target.court, target.startTime);
+  window._phaseGridDropDay = function (event, destination) {
+    event.preventDefault(); event.stopPropagation();
+    var state = window._phaseCallOrderState, id = event.dataTransfer.getData('text/plain');
+    var tile = state && state.tiles.find(function (candidate) { return candidate.id === id; });
+    var day = state && daysOf(state).find(function (candidate) { return candidate.day === destination; });
+    if (!tile || !day || state.locked) return;
+    var start = Math.max(model.minutes(tile.startTime), model.minutes(day.startTime));
+    applyMove(id, tile.court, model.clock(start), destination);
   };
   window._phaseGridKey = function (event, id) {
     var state = window._phaseCallOrderState, tile = state && state.tiles.find(function (t) { return t.id === id; });

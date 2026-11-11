@@ -1,3 +1,6 @@
+// 2.6.44 — A revisão antes do sorteio mostra mais da grade de quadras e
+// horários. O organizador ajusta os blocos por arrasto, alterna entre
+// concentrar as categorias ou espalhá-las e confere tudo antes de sortear.
 // 2.6.43 — Corrigido o botão Sortear em torneios Rei/Rainha com grade salva
 // antes do seletor de modo: ele abre a revisão das quadras e horários, sem
 // cair no painel antigo. O mesmo bloqueio protege atalhos diretos do sorteio.

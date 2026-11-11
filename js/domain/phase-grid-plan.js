@@ -214,18 +214,32 @@
       return Date.parse(key + 'T00:00:00Z') / 60000 + minutes(tile.startTime);
     }
     var original = tiles.map(function (tile) { return Object.assign({}, tile); });
-    var keys = [], ranges = {}, dependencies = {};
+    var keys = [], ranges = {}, baseline = {}, dependencies = {};
     original.forEach(function (tile) {
       var key = stageKey(tile), at = absolute(tile), finish = at + tile.duration;
       if (!ranges[key]) { keys.push(key); ranges[key] = { first:at, last:finish }; }
       ranges[key].first = Math.min(ranges[key].first, at);
       ranges[key].last = Math.max(ranges[key].last, finish);
     });
-    keys.sort(function (a, b) { return ranges[a].first - ranges[b].first || a.localeCompare(b); });
+    (plan.blocks || []).forEach(function (block, index) {
+      var tile = original.find(function (candidate) { return candidate.id === 'b' + index + 'c0'; });
+      if (!tile) return;
+      var key = stageKey(tile), at = Date.parse((block.day || plan.day) + 'T00:00:00Z') / 60000 + minutes(block.startTime);
+      if (!baseline[key]) baseline[key] = { first:at, last:at + tile.duration };
+      baseline[key].first = Math.min(baseline[key].first, at);
+      baseline[key].last = Math.max(baseline[key].last, at + tile.duration);
+    });
+    keys.sort(function (a, b) {
+      return (baseline[a] || ranges[a]).first - (baseline[b] || ranges[b]).first || a.localeCompare(b);
+    });
     keys.forEach(function (key) {
-      dependencies[key] = keys.filter(function (other) {
-        return other !== key && ranges[other].last <= ranges[key].first;
-      });
+      // Concentrar recupera a ordem das etapas da grade salva. Espalhar
+      // alterna categorias, mas nunca inicia a eliminatória antes da
+      // classificatória da própria categoria.
+      dependencies[key] = mode === 'compact' ? keys.filter(function (other) {
+        return other !== key && (baseline[other] || ranges[other]).last <= (baseline[key] || ranges[key]).first;
+      }) : key.startsWith('elimination\u0000') && ranges['groups\u0000' + key.slice('elimination\u0000'.length)] ?
+        ['groups\u0000' + key.slice('elimination\u0000'.length)] : [];
     });
     var pending = original.slice().sort(function (a, b) {
       return keys.indexOf(stageKey(a)) - keys.indexOf(stageKey(b)) || a.round - b.round ||
