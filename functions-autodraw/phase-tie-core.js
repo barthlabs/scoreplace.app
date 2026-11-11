@@ -297,7 +297,8 @@ function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, actio
         if (type !== 'play' && type !== 'draw') throw new Error('escolha de desempate inválida');
         if (type === 'play' && ![2, 3].includes(keys.length)) throw new Error('simples disponível só para dois ou três atletas');
         decision = { contenders: keys, players: tie.players.map(p => ({ key: p.key, name: p.name })),
-          groupName: pool.group && pool.group.name || null, cutRank: tie.cut,
+          groupName: pool.group && pool.group.name || null,
+          category:pool.group && pool.group.category || null, cutRank: tie.cut,
           createdAt: String(nowIso || new Date().toISOString()),
           qualifierSlots: tie.cut - tie.from,
           tieMode: type === 'play' && keys.length === 3 ? 'three_player_playoff' : null,
@@ -331,7 +332,7 @@ function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, actio
       if (decision.status === 'pending' || decision.status === 'review') {
         const matchIndex = action && action.decisionId === decisionId && !usedAction
           ? decision.matches.findIndex(m => m.id === action.matchId) : -1;
-        if (action && ['court', 'call', 'score'].includes(action.type) && action.decisionId === decisionId && !usedAction && matchIndex < 0) {
+        if (action && ['court', 'call', 'score', 'point', 'wo', 'cancel-call', 'release', 'restore', 'clock'].includes(action.type) && action.decisionId === decisionId && !usedAction && matchIndex < 0) {
           throw new Error('partida de desempate não encontrada');
         }
         if (matchIndex >= 0 && action.type === 'court') {
@@ -345,16 +346,105 @@ function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, actio
         if (matchIndex >= 0 && action.type === 'call') {
           usedAction = true;
           if (!decision.matches[matchIndex].court || decision.matches[matchIndex].winnerKey) throw new Error('partida sem quadra ou já concluída');
-          decision.matches[matchIndex].courtCalledAt = String(action.at || '');
-          if (!decision.matches[matchIndex].courtCalledAt) throw new Error('horário da chamada ausente');
-          changed = true;
+          if (!decision.matches[matchIndex].courtCalledAt) {
+            decision.matches[matchIndex].courtCalledAt = String(action.at || '');
+            if (!decision.matches[matchIndex].courtCalledAt) throw new Error('horário da chamada ausente');
+            delete decision.matches[matchIndex].callCancelledAt;
+            delete decision.matches[matchIndex].courtReleasedAt;
+            changed = true;
+          }
         }
-        if (action && action.type === 'score' && action.decisionId === decisionId && !usedAction) {
+        if (matchIndex >= 0 && ['cancel-call', 'release', 'restore', 'clock'].includes(action.type)) {
+          usedAction = true;
+          const current = decision.matches[matchIndex];
+          let localChanged = true;
+          if (!current.courtCalledAt || current.winnerKey) throw new Error('partida sem chamada ativa');
+          if (action.type === 'cancel-call') {
+            if (current.courtReleasedAt || (current.livePoints && (current.livePoints.p1 || current.livePoints.p2)))
+              throw new Error('partida iniciada não pode ter chamada cancelada');
+            delete current.courtCalledAt;
+            delete current.courtClockBaseAt;
+            current.callCancelledAt = String(action.at || '');
+          } else if (action.type === 'release') {
+            if (current.courtReleasedAt) throw new Error('quadra já liberada');
+            current.courtReleasedAt = String(action.at || '');
+          } else if (action.type === 'restore') {
+            if (!current.courtReleasedAt) throw new Error('quadra não estava liberada');
+            const paused = Date.parse(current.courtReleasedAt);
+            const anchor = Date.parse(current.courtClockBaseAt || current.courtCalledAt);
+            const now = Date.parse(action.at || '');
+            if (Number.isFinite(paused) && Number.isFinite(anchor) && Number.isFinite(now))
+              current.courtClockBaseAt = new Date(anchor + Math.max(0, now - paused)).toISOString();
+            delete current.courtReleasedAt;
+          } else {
+            if (current.courtReleasedAt || !action.clockBaseAt) throw new Error('relógio indisponível');
+            if (!/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(String(action.clockActionId || '')))
+              throw new Error('identidade da operação do relógio inválida');
+            const recent = Array.isArray(current.clockActionIds) ? current.clockActionIds : [];
+            if (recent.includes(action.clockActionId)) {
+              localChanged = false;
+            } else {
+              current.courtClockBaseAt = String(action.clockBaseAt);
+              current.clockActionIds = recent.concat(action.clockActionId).slice(-32);
+            }
+          }
+          changed = changed || localChanged;
+        }
+        let scoreSets = action && action.type === 'score' ? action.sets : null;
+        let woWinnerKey = null;
+        if (matchIndex >= 0 && action.type === 'point') {
+          usedAction = true;
+          const current = decision.matches[matchIndex];
+          if (!/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(String(action.pointId || '')))
+            throw new Error('identidade do ponto inválida');
+          const recent = Array.isArray(current.pointIds) ? current.pointIds : [];
+          if (!recent.includes(action.pointId)) {
+            if (!current.courtCalledAt || current.courtReleasedAt || current.winnerKey || !Number.isInteger(decision.pointsToWin))
+              throw new Error('placar ao vivo indisponível');
+            if (action.side !== 'p1' && action.side !== 'p2') throw new Error('lado do ponto inválido');
+            const points = current.livePoints || { p1: 0, p2: 0 };
+            points[action.side] = Number(points[action.side] || 0) + 1;
+            if (!Number.isSafeInteger(points[action.side]) || points[action.side] > 999) throw new Error('placar inválido');
+            current.livePoints = points;
+            current.pointIds = recent.concat(action.pointId).slice(-32);
+            const winner = Math.max(points.p1, points.p2);
+            if (winner >= decision.pointsToWin && (decision.pointMargin !== 2 || Math.abs(points.p1 - points.p2) >= 2)) {
+              scoreSets = [points];
+            } else changed = true;
+          }
+        }
+        if (matchIndex >= 0 && action.type === 'wo') {
+          usedAction = true;
+          const current = decision.matches[matchIndex];
+          if (action.winner !== 'p1' && action.winner !== 'p2') throw new Error('vencedor do W.O. inválido');
+          if (current.winnerKey && current.woWinnerKey === current[action.winner].key) {
+            scoreSets = null;
+          } else {
+            if (current.winnerKey || (current.livePoints && (current.livePoints.p1 || current.livePoints.p2)))
+              throw new Error('W.O. indisponível após início do jogo');
+            const target = Number.isInteger(decision.pointsToWin) ? decision.pointsToWin : 6;
+            scoreSets = Array.from({ length:Math.max(1, Number(decision.setsToWin) || 1) }, () =>
+              ({ p1: action.winner === 'p1' ? target : 0, p2: action.winner === 'p2' ? target : 0 }));
+            woWinnerKey = current[action.winner].key;
+          }
+        }
+        if (scoreSets && matchIndex >= 0) {
+          const current = decision.matches[matchIndex];
+          if (current.winnerKey && JSON.stringify(current.sets) === JSON.stringify(scoreSets) &&
+              String(current.woWinnerKey || '') === String(woWinnerKey || '')) {
+            usedAction = true;
+            scoreSets = null;
+          }
+        }
+        if (scoreSets && matchIndex >= 0 && action.decisionId === decisionId) {
           usedAction = true;
           const previous = decision.matches[matchIndex];
-          const scored = scoreMatch(previous, action.sets, decision.setsToWin,
+          const scored = scoreMatch(previous, scoreSets, decision.setsToWin,
             decision.pointsToWin, decision.pointMargin);
           scored.resultAt = String(action.at || '');
+          delete scored.livePoints;
+          if (woWinnerKey) scored.woWinnerKey = woWinnerKey;
+          else delete scored.woWinnerKey;
           if (previous.winnerKey) {
             decision.corrections = Array.isArray(decision.corrections) ? decision.corrections : [];
             decision.corrections.push({ matchId: previous.id, previousSets: previous.sets,

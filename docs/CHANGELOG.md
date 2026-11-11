@@ -1,3 +1,9 @@
+## 2.6.48 — 11/nov/2026 (operação completa do desempate)
+
+- O card do jogo extra mostra a categoria e opera quadra livre, OK, cancelamento, Encerrado/restauração, relógio, W.O., placar e pontos Ao Vivo no próprio fluxo. Os comandos gravam no livro de desempates sem alterar os placares classificatórios.
+- Um confronto de duas atletas não tem setas. Quando o motor cria o próximo confronto de um empate triplo, a navegação aparece no mesmo card. A TV recebe pontos ao vivo e respeita a liberação da quadra.
+- Corte web e funções de desempate/quadra afetadas; sem alteração automática de dados existentes ou versões nativas.
+
 ## 2.6.47 — 11/nov/2026 (card do desempate)
 
 - O jogo extra 3A usa o card visual comum, com uma atleta e um placar em cada lado. A designação é “SIMPLES DESEMPATE”, sem o rótulo incorreto “R1 Grupo A”. A ação continua abrindo o painel próprio de chamada e resultado do desempate.

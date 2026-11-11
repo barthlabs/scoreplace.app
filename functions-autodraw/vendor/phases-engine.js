@@ -3317,6 +3317,43 @@
     { existing: true, phaseChoices: [] });
   };
 
+  // A faixa operacional usa o mesmo recibo do painel, sem reabrir uma janela
+  // após cada ponto. O servidor é a única fonte de placar, quadra e relógio.
+  if (typeof window !== 'undefined') window._phaseTieCardAction = function (tId, decisionId, matchId, action) {
+    var tournament = window._findTournamentById && window._findTournamentById(String(tId));
+    var decision = tournament && tournament.phaseTieDecisions &&
+      tournament.phaseTieDecisions[String(tournament.currentPhaseIndex || 0)] &&
+      tournament.phaseTieDecisions[String(tournament.currentPhaseIndex || 0)][String(decisionId)];
+    if (!decision || !decision.matches ||
+        (action.type !== 'confirm' && !decision.matches.some(function (m) { return String(m.id) === String(matchId); })))
+      return Promise.reject(new Error('Jogo de desempate desatualizado. Atualize a página.'));
+    var payload = Object.assign({ decisionId:String(decisionId), matchId:String(matchId) }, action);
+    if (payload.type === 'point' && !payload.pointId && window.crypto && window.crypto.randomUUID)
+      payload.pointId = window.crypto.randomUUID();
+    if (payload.type === 'clock' && !payload.clockActionId && window.crypto && window.crypto.randomUUID)
+      payload.clockActionId = window.crypto.randomUUID();
+    var lastPhase = !Array.isArray(tournament.phases) ||
+      Number(tournament.currentPhaseIndex || 0) >= tournament.phases.length - 1;
+    // O encerramento usa a callable histórica sem recibo de operação; cada
+    // mutação repetível aqui é deduplicada no próprio jogo (ponto, relógio,
+    // chamada e placar) para que retry não altere o resultado ou o tempo.
+    var request = lastPhase && typeof window._finishTournamentCF === 'function'
+      ? window._finishTournamentCF(String(tId), payload)
+      : window._callCF('advanceTournamentPhase', { tournamentId:String(tId), tieAction:payload,
+          operationId:window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : undefined },
+        'Entre na sua conta para operar o desempate.').then(function (response) { return response && response.data || {}; });
+    return Promise.resolve(request).then(function (out) {
+      if (out.tournament && typeof window._applyCFTournament === 'function')
+        window._applyCFTournament(String(tId), out.tournament);
+      if (!out.ok && !['tie-match-pending', 'tie-match-review'].includes(out.reason))
+        throw new Error(out.reason || 'Desempate não atualizado.');
+      if (out.reason === 'tie-updated' || out.phaseIndex != null) {
+        if (typeof window._rerenderBracket === 'function') window._rerenderBracket(String(tId));
+      }
+      return out;
+    });
+  };
+
   function _phaseTieRequest(tId, context, tieAction) {
     if (context && context.finish) {
       return window._finishTournamentCF(tId, tieAction).then(function (out) {

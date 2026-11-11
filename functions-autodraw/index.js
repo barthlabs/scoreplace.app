@@ -6745,21 +6745,22 @@ exports.advanceTournamentPhase = onCall(async (request) => {
       const { nextCfg, overall, pools, numberForPool, compareForPool } = _buildPhaseTieRuntime(
         t, current, sourceGroups, currentCfg, phaseEngine, calculateStandings, tbOpts, tieRule);
       const requestedTieAction = request.data && request.data.tieAction;
-      if (requestedTieAction && ['court', 'call'].includes(requestedTieAction.type)) {
+      if (requestedTieAction && ['court', 'call', 'restore', 'clock'].includes(requestedTieAction.type)) {
         const declared = Array.isArray(t.courtNames) && t.courtNames.length
           ? t.courtNames.map(String) : Array.from({ length: Math.max(0, Number(t.courtCount) || 0) }, (_, i) => 'Quadra ' + (i + 1));
         const phaseDecisions = (t.phaseTieDecisions || {})[String(current)] || {};
         const decision = phaseDecisions[String(requestedTieAction.decisionId || '')];
         const target = decision && (decision.matches || []).find(m => m.id === requestedTieAction.matchId);
         if (!target || decision.status !== 'pending') throw new HttpsError('failed-precondition', 'Jogo extra não está aguardando chamada.');
-        const court = requestedTieAction.type === 'call' ? target.court : String(requestedTieAction.court || '').trim();
+        const court = ['call', 'restore'].includes(requestedTieAction.type)
+          ? String(target.court || '').trim() : String(requestedTieAction.court || '').trim();
         if (court && !declared.includes(court)) throw new HttpsError('failed-precondition', 'Quadra não cadastrada no torneio.');
         if (requestedTieAction.type === 'call' && !court) throw new HttpsError('failed-precondition', 'Escolha uma quadra antes da chamada.');
-        if (court && requestedTieAction.type === 'call') {
+        if (court && ['call', 'restore'].includes(requestedTieAction.type)) {
           const regular = typeof drawWindow._collectAllMatches === 'function' ? drawWindow._collectAllMatches(t) : [];
           const activeRegular = (regular || []).filter(m => m && _courtOccupancy.occupiesCourt(m));
           const otherTieMatches = Object.values(phaseDecisions).flatMap(d => d && d.matches || [])
-            .filter(m => m && m.id !== target.id && m.courtCalledAt && !m.winnerKey);
+            .filter(m => m && m.id !== target.id && m.courtCalledAt && !m.courtReleasedAt && !m.winnerKey);
           if (activeRegular.some(m => String(m.court || '') === court) ||
               otherTieMatches.some(m => String(m.court || '') === court)) {
             throw new HttpsError('failed-precondition', 'Quadra ocupada por outro jogo.');
@@ -6769,12 +6770,21 @@ exports.advanceTournamentPhase = onCall(async (request) => {
             throw new HttpsError('failed-precondition', 'Um dos atletas já está em quadra.');
           }
         }
+        if (requestedTieAction.type === 'clock') {
+          if (!target.courtCalledAt || target.courtReleasedAt || target.winnerKey ||
+              !['next', 'restart'].includes(requestedTieAction.direction))
+            throw new HttpsError('failed-precondition', 'Relógio do desempate indisponível.');
+          const anchor = Date.parse(String(target.courtClockBaseAt || target.courtCalledAt));
+          if (!Number.isFinite(anchor)) throw new HttpsError('failed-precondition', 'Horário da chamada inválido.');
+          const shifted = _matchTiming.adjust(anchor, _matchTiming.config(t), Date.parse(agoraIso), requestedTieAction.direction);
+          requestedTieAction.clockBaseAt = new Date(shifted.start).toISOString();
+        }
       }
       let tieFlow;
       try {
         const scoring = (currentCfg && currentCfg.scoring) || t.scoring || {};
         const setsToWin = Number(scoring.setsToWin) || 1;
-        if (requestedTieAction && ['call', 'score', 'confirm'].includes(requestedTieAction.type)) {
+        if (requestedTieAction && ['call', 'score', 'confirm', 'point', 'wo', 'cancel-call', 'release', 'restore', 'clock'].includes(requestedTieAction.type)) {
           requestedTieAction.at = agoraIso;
         }
         const actionPools = requestedTieAction && !String(requestedTieAction.decisionId || '').startsWith('wildcards:')
@@ -6789,7 +6799,9 @@ exports.advanceTournamentPhase = onCall(async (request) => {
       } catch (err) {
         throw new HttpsError('failed-precondition', 'Desempate não aplicado: ' + String(err.message || err));
       }
-      if (requestedTieAction && tieFlow.changed && typeof drawWindow._collectAllMatches === 'function') {
+      if (requestedTieAction && tieFlow.changed &&
+          !['cancel-call', 'release', 'restore', 'clock'].includes(requestedTieAction.type) &&
+          typeof drawWindow._collectAllMatches === 'function') {
         _phaseTieCourts.callPending(t, drawWindow._collectAllMatches(t), tieReleased,
           _courtOccupancy.occupiesCourt, agoraIso);
       }
@@ -6800,6 +6812,12 @@ exports.advanceTournamentPhase = onCall(async (request) => {
           court: 'Desempate residual: quadra da partida extra definida.',
           call: 'Desempate residual: partida extra chamada para a quadra.',
           score: 'Desempate residual: placar da partida extra registrado ou corrigido.',
+          point: 'Desempate residual: ponto da partida extra registrado.',
+          wo: 'Desempate residual: W.O. da partida extra aplicado.',
+          'cancel-call': 'Desempate residual: chamada da partida extra cancelada.',
+          release: 'Desempate residual: quadra da partida extra liberada.',
+          restore: 'Desempate residual: partida extra restaurada na quadra.',
+          clock: 'Desempate residual: relógio da partida extra ajustado.',
           confirm: 'Desempate residual: resultados revisados e confirmados.' };
         const message = tieMessages[action.type] || 'Desempate residual atualizado.';
         if (!Array.isArray(t.history)) t.history = [];
@@ -7680,7 +7698,7 @@ function _resolveFinalClassificationTie(t, action, nowIso) {
     return _phaseTieCore.baseGameNumber(own.map(entry => entry.match), own);
   };
   const next = { source: { mapping: [{ dest: 'title', rankFrom: 1, rankTo: 1 }] } };
-  if (action && ['court', 'call'].includes(action.type)) {
+  if (action && ['court', 'call', 'restore', 'clock'].includes(action.type)) {
     const book = (t.phaseTieDecisions || {})[String(current)] || {};
     const decision = book[String(action.decisionId || '')];
     const match = decision && (decision.matches || []).find(item => item.id === action.matchId);
@@ -7690,14 +7708,15 @@ function _resolveFinalClassificationTie(t, action, nowIso) {
     const courts = Array.isArray(t.courtNames) && t.courtNames.length
       ? t.courtNames.map(String)
       : Array.from({ length: Math.max(0, Number(t.courtCount) || 0) }, (_, i) => 'Quadra ' + (i + 1));
-    const court = action.type === 'call' ? match.court : String(action.court || '').trim();
+    const court = ['call', 'restore'].includes(action.type)
+      ? String(match.court || '').trim() : String(action.court || '').trim();
     if (court && !courts.includes(court)) throw new HttpsError('failed-precondition', 'Quadra não cadastrada no torneio.');
     if (action.type === 'call' && !court) throw new HttpsError('failed-precondition', 'Escolha uma quadra antes da chamada.');
-    if (action.type === 'call') {
+    if (['call', 'restore'].includes(action.type)) {
       const occupied = typeof drawWindow._collectAllMatches === 'function'
         ? drawWindow._collectAllMatches(t).filter(item => item && _courtOccupancy.occupiesCourt(item)) : [];
       const otherExtras = Object.values(book).flatMap(item => item && item.matches || [])
-        .filter(item => item && item.id !== match.id && item.courtCalledAt && !item.winnerKey);
+        .filter(item => item && item.id !== match.id && item.courtCalledAt && !item.courtReleasedAt && !item.winnerKey);
       if (occupied.some(item => String(item.court || '') === court) ||
           otherExtras.some(item => String(item.court || '') === court)) {
         throw new HttpsError('failed-precondition', 'Quadra ocupada por outro jogo.');
@@ -7708,8 +7727,17 @@ function _resolveFinalClassificationTie(t, action, nowIso) {
         throw new HttpsError('failed-precondition', 'Um dos atletas já está em quadra.');
       }
     }
+    if (action.type === 'clock') {
+      if (!match.courtCalledAt || match.courtReleasedAt || match.winnerKey ||
+          !['next', 'restart'].includes(action.direction))
+        throw new HttpsError('failed-precondition', 'Relógio do desempate indisponível.');
+      const anchor = Date.parse(String(match.courtClockBaseAt || match.courtCalledAt));
+      if (!Number.isFinite(anchor)) throw new HttpsError('failed-precondition', 'Horário da chamada inválido.');
+      const shifted = _matchTiming.adjust(anchor, _matchTiming.config(t), Date.parse(nowIso), action.direction);
+      action.clockBaseAt = new Date(shifted.start).toISOString();
+    }
   }
-  if (action && ['call', 'score', 'confirm'].includes(action.type)) action.at = nowIso;
+  if (action && ['call', 'score', 'confirm', 'point', 'wo', 'cancel-call', 'release', 'restore', 'clock'].includes(action.type)) action.at = nowIso;
   try {
     return _phaseTieCore.resolvePhaseTies(t, current, pools, next, compareForPool,
       action || null, Number((phase.scoring || t.scoring || {}).setsToWin) || 1,

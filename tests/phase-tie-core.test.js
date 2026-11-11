@@ -188,6 +188,67 @@ const refreshedFlow = tie.resolvePhaseTies(stale, 0, [{ id: 'group-a', rows: cha
 assert.equal(refreshedFlow.tie.firstExtraGameNumber, '93C');
 
 const quick = {};
+const pairRows = [{ uid:'P', name:'Pessoa P', wins:1 }, { uid:'Q', name:'Pessoa Q', wins:1 }];
+const pairCompare = () => 0;
+pairCompare.originalOrder = { P:0, Q:1 };
+const pairPools = [{ id:'pair', rows:pairRows }];
+const pairNext = { source:{ mapping:[{ dest:'main', rankFrom:1, rankTo:1 }] } };
+const pairTournament = { courtCount:1, fmt2:{ tieResolution:'singles_then_draw', tieSinglesPoints:5, tieSinglesMargin:1 } };
+const pairOptions = { autoPlay:true, retainOtherDecisions:true };
+let pairFlow = tie.resolvePhaseTies(pairTournament, 0, pairPools, pairNext, () => pairCompare,
+  null, 1, false, () => 3, '2026-11-11T12:00:00Z', pairOptions);
+const pairId = pairFlow.tie.decisionId, pairMatchId = pairFlow.decision.matches[0].id;
+let pointSequence = 0;
+const pairAction = (type, extra) => tie.resolvePhaseTies(pairTournament, 0, pairPools, pairNext, () => pairCompare,
+  { type, decisionId:pairId, matchId:pairMatchId, at:'2026-11-11T12:05:00Z',
+    ...(type === 'point' ? { pointId:'00000000-0000-4000-8000-' + String(++pointSequence).padStart(12, '0') } : {}), ...extra },
+  1, false, () => 3, '2026-11-11T12:05:00Z', pairOptions);
+assert.equal(pairFlow.decision.matches.length, 1, 'dois empatados criam confronto único');
+pairFlow = pairAction('court', { court:'Quadra 1' });
+pairFlow = pairAction('call');
+assert.equal(pairFlow.decision.matches[0].courtCalledAt, '2026-11-11T12:05:00Z');
+pairFlow = tie.resolvePhaseTies(pairTournament, 0, pairPools, pairNext, () => pairCompare,
+  { type:'call', decisionId:pairId, matchId:pairMatchId, at:'2026-11-11T12:06:00Z' },
+  1, false, () => 3, '2026-11-11T12:06:00Z', pairOptions);
+assert.equal(pairFlow.decision.matches[0].courtCalledAt, '2026-11-11T12:05:00Z', 'retry da chamada não reinicia o tempo');
+pairFlow = pairAction('cancel-call');
+assert.equal(pairFlow.decision.matches[0].courtCalledAt, undefined);
+assert.equal(courts.callPending(pairTournament, [], {}, () => false, '2026-11-11T12:06:00Z').length, 0,
+  'cancelar não chama automaticamente o mesmo jogo');
+pairFlow = pairAction('call');
+pairFlow = pairAction('release');
+assert.equal(pairFlow.decision.matches[0].courtReleasedAt, '2026-11-11T12:05:00Z');
+pairFlow = pairAction('restore');
+assert.equal(pairFlow.decision.matches[0].courtReleasedAt, undefined);
+const clockId = '00000000-0000-4000-8000-000000000100';
+pairFlow = pairAction('clock', { clockBaseAt:'2026-11-11T12:04:00Z', clockActionId:clockId });
+assert.equal(pairFlow.decision.matches[0].courtClockBaseAt, '2026-11-11T12:04:00Z');
+pairFlow = pairAction('clock', { clockBaseAt:'2026-11-11T12:02:00Z', clockActionId:clockId });
+assert.equal(pairFlow.changed, false, 'retry do relógio não avança outra etapa');
+assert.equal(pairFlow.decision.matches[0].courtClockBaseAt, '2026-11-11T12:04:00Z');
+pairFlow = pairAction('point', { side:'p1' });
+const firstPointId = pairFlow.decision.matches[0].pointIds[0];
+pairFlow = pairAction('point', { side:'p1', pointId:firstPointId });
+assert.equal(pairFlow.decision.matches[0].livePoints.p1, 1, 'retry do mesmo ponto não duplica o placar');
+for (let point = 1; point < 5; point++) pairFlow = pairAction('point', { side:'p1' });
+assert.equal(pairFlow.status, 'review', 'o quinto ponto encerra a simples');
+assert.equal(pairFlow.decision.matches[0].winnerKey, 'uid:P');
+assert.equal(pairFlow.decision.matches.length, 1, 'desempate de duas pessoas não cria segundo jogo');
+const scoreRetry = pairAction('score', { sets:[{ p1:5, p2:0 }] });
+assert.equal(scoreRetry.changed, false, 'retry do placar confirmado não cria uma correção');
+const woTournament = { fmt2:{ tieResolution:'singles_then_draw', tieSinglesPoints:5, tieSinglesMargin:1 } };
+const woInitial = tie.resolvePhaseTies(woTournament, 0, pairPools, pairNext, () => pairCompare,
+  null, 1, false, () => 3, '2026-11-11T12:00:00Z', pairOptions);
+const woFlow = tie.resolvePhaseTies(woTournament, 0, pairPools, pairNext, () => pairCompare,
+  { type:'wo', decisionId:woInitial.tie.decisionId, matchId:woInitial.decision.matches[0].id,
+    winner:'p2', at:'2026-11-11T12:07:00Z' }, 1, false, () => 3, '2026-11-11T12:07:00Z', pairOptions);
+assert.equal(woFlow.decision.matches[0].woWinnerKey, 'uid:Q');
+assert.equal(woFlow.status, 'review');
+const woRetry = tie.resolvePhaseTies(woTournament, 0, pairPools, pairNext, () => pairCompare,
+  { type:'wo', decisionId:woInitial.tie.decisionId, matchId:woInitial.decision.matches[0].id,
+    winner:'p2', at:'2026-11-11T12:08:00Z' }, 1, false, () => 3, '2026-11-11T12:08:00Z', pairOptions);
+assert.equal(woRetry.changed, false, 'retry do W.O. não regrava resultado');
+
 const question = tie.resolvePhaseTies(quick, 0, pools, next, () => cmp, null, 1);
 const drawn = tie.resolvePhaseTies(quick, 0, pools, next, () => cmp,
   { type: 'draw', decisionId: question.tie.decisionId }, 1);

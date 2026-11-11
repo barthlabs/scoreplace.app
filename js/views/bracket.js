@@ -1327,18 +1327,32 @@ window._bracketOperationsSelect = function (t) {
   var tieBook = t.phaseTieDecisions && t.phaseTieDecisions[String(t.currentPhaseIndex || 0)] || {};
   var tieMatches = Object.keys(tieBook).sort().flatMap(function (decisionId) {
     var decision = tieBook[decisionId];
-    if (!decision || decision.choice !== 'play' || decision.status !== 'pending') return [];
-    // phase-tie-core grava sets e winnerKey juntos no mesmo recibo. Uma simples
-    // concluída sai da fila; não existe pendingResult neste livro de decisões.
-    return (decision.matches || []).filter(function (m) { return m && !m.winnerKey; }).map(function (m) {
+    if (!decision || decision.choice !== 'play' || !['pending', 'review'].includes(decision.status)) return [];
+    var base = matches.find(function (regular) {
+      return Number(regular && (regular._gameNum || regular.scheduledGameNumber)) === Number(decision.baseGameNumber);
+    });
+    var group = base && _bracketOperationsGroup(t, base, matches);
+    var groupText = String(group && group.name || decision.groupName || '');
+    var groupCode = (groupText.match(/\bGrupo\s+([A-Z]{1,3}\d*)\b/i) || [])[1] ||
+      groupText.replace(/^R\d+\s+/i, '').replace(/^Grupo\s+/i, '');
+    var baseCategory = base && base.category || decision.category || '';
+    var category = baseCategory ? [baseCategory, groupCode].filter(Boolean).join(' · ') :
+      groupText.replace(/^R\d+\s+/i, '');
+    return (decision.matches || []).filter(Boolean).map(function (m) {
       return { id:m.id, isTieBreak:true, decisionId:decisionId, _gameNum:m.displayGameNumber,
         p1:m.p1 && m.p1.name, p2:m.p2 && m.p2.name, court:m.court,
-        courtCalledAt:m.courtCalledAt, category:String(decision.groupName || 'Simples desempate') };
+        courtCalledAt:m.courtCalledAt, courtClockBaseAt:m.courtClockBaseAt,
+        courtReleasedAt:m.courtReleasedAt, callCancelledAt:m.callCancelledAt,
+        winnerKey:m.winnerKey, woWinnerKey:m.woWinnerKey, resultAt:m.resultAt,
+        sets:m.sets, livePoints:m.livePoints, category:category || 'Desempate',
+        tieSeries:decision.matches, tieStatus:decision.status,
+        tiePointsToWin:decision.pointsToWin, tiePointMargin:decision.pointMargin };
     });
   });
   var active = matches.filter(function (m) { return !released[String(m.id)] && occupancy.occupiesCourt(m); })
-    .concat(tieMatches.filter(function (m) { return m.court && m.courtCalledAt; }));
-  var pending = matches.filter(function (m) { return m && released[String(m.id)] && !occupancy.isFinished(m); });
+    .concat(tieMatches.filter(function (m) { return !m.winnerKey && m.court && m.courtCalledAt && !m.courtReleasedAt; }));
+  var pending = matches.filter(function (m) { return m && released[String(m.id)] && !occupancy.isFinished(m); })
+    .concat(tieMatches.filter(function (m) { return !m.winnerKey && !!m.courtReleasedAt; }));
   var upcoming = matches.filter(function (m) {
     if (!m || occupancy.isFinished(m) || m.isBye || m.isSitOut || occupancy.occupiesCourt(m) ||
         m.courtCalledAt || m.startedAt || !_matchCardTimestamp(m.scheduledAt)) return false;
@@ -1380,7 +1394,8 @@ window._bracketOperationsSelect = function (t) {
   // A prévia não libera a chamada antes de a etapa anterior terminar.
   var preview = !next && window.ScoreplaceNextMatch && typeof window.ScoreplaceNextMatch.firstAvailable === 'function'
     ? window.ScoreplaceNextMatch.firstAvailable(seriesCandidates, matches, released) : null;
-  var nextTie = tieMatches.find(function (m) { return !m.courtCalledAt; });
+  var nextTie = tieMatches.find(function (m) { return !m.winnerKey && !m.courtCalledAt; }) ||
+    tieMatches.find(function (m) { return m.tieStatus === 'review'; });
   return { next: nextTie || next || preview, nextCallable: !!nextTie || !!next,
     active: active, pending: pending, courts: courts, matches: matches };
 };
@@ -1672,16 +1687,35 @@ function _bracketOperationsStandingsHtml(group, t, slot, courtHtml, categoryLabe
 function _bracketOperationsReplica(m, t, role, label, availability, root, allMatches, slot) {
   var safe = window._safeHtml || function (s) { return String(s); };
   if (m.isTieBreak) {
-    // O jogo extra é uma simples, mas pertence ao livro de desempates e não a
-    // t.matches. Reaproveite a geometria canônica em modo de leitura e conduza
-    // toda ação ao painel específico, sem instalar handlers do placar regular.
+    // A geometria é a do card normal; as ações são roteadas ao livro de
+    // desempates, que não faz parte de t.matches nem da classificação do grupo.
+    var series = Array.isArray(m.tieSeries) ? m.tieSeries : [];
+    var nav = root._bracketOperationsNav || (root._bracketOperationsNav = {});
+    var selectedIndex = Math.max(0, series.findIndex(function (item) { return String(item.id) === String(m.id); }));
+    var saved = nav[slot];
+    if (series.length > 1 && saved && saved.key === m.decisionId && saved.baseId === String(m.id))
+      selectedIndex = Math.min(series.length - 1, saved.index);
+    if (series.length > 1) nav[slot] = { key:m.decisionId, baseId:String(m.id), index:selectedIndex };
+    var chosen = series[selectedIndex] || m;
+    var selected = Object.assign({}, m, { id:chosen.id, _gameNum:chosen.displayGameNumber || m._gameNum,
+      p1:chosen.p1 && chosen.p1.name || m.p1, p2:chosen.p2 && chosen.p2.name || m.p2,
+      court:chosen.court || '', courtCalledAt:chosen.courtCalledAt,
+      courtClockBaseAt:chosen.courtClockBaseAt, courtReleasedAt:chosen.courtReleasedAt,
+      winnerKey:chosen.winnerKey, woWinnerKey:chosen.woWinnerKey,
+      livePoints:chosen.livePoints, sets:chosen.sets });
+    var score = selected.winnerKey && selected.sets && selected.sets[0] || selected.livePoints || { p1:0, p2:0 };
     var tieDisplay = Object.assign({}, m, {
-      label: 'JOGO ' + String(m._gameNum || 'extra'),
-      category: 'SIMPLES DESEMPATE'
+      id:selected.id, label:'JOGO ' + String(selected._gameNum || 'extra'),
+      p1:selected.p1, p2:selected.p2, scoreP1:score.p1, scoreP2:score.p2,
+      category:selected.category, court:selected.court, courtCalledAt:selected.courtCalledAt,
+      courtClockBaseAt:selected.courtClockBaseAt, resultAt:selected.resultAt,
+      winner:selected.winnerKey === (chosen.p1 && chosen.p1.key) ? selected.p1 :
+        selected.winnerKey === (chosen.p2 && chosen.p2.key) ? selected.p2 : null,
+      wo:!!selected.woWinnerKey
     });
     var tieHtml = typeof window.renderMatchCard === 'function'
       ? window.renderMatchCard(tieDisplay, false, t.id, null, false, null,
-        { readOnly:true, idScope:'operations-tie-' + String(m.id || '') }) : '';
+        { readOnly:true, idScope:'operations-tie-' + String(selected.id || '') }) : '';
     if (tieHtml) {
       var tieHost = document.createElement('template');
       tieHost.innerHTML = tieHtml;
@@ -1690,23 +1724,86 @@ function _bracketOperationsReplica(m, t, role, label, availability, root, allMat
         var tieStatus = tieCard.querySelector('[data-match-time-status]');
         if (tieStatus) {
           tieStatus.removeAttribute('data-match-time-status');
-          tieStatus.innerHTML = '<span class="sp-operations-tie-designation">SIMPLES DESEMPATE</span>';
+          tieStatus.insertAdjacentHTML('afterend', '<span class="sp-operations-tie-designation">SIMPLES DESEMPATE</span>');
+        }
+        if (series.length > 1) {
+          var title = tieCard.querySelector('.sp-mc-head span');
+          if (title) title.outerHTML = '<span class="sp-operations-game-nav" data-operations-group="' + safe(m.decisionId) +
+            '" data-operations-slot="' + safe(slot) + '" data-operations-count="' + series.length + '">' +
+            '<button type="button" class="sp-operations-nav-arrow" data-operations-nav="prev" aria-label="Jogo anterior do desempate">◀</button>' +
+            '<span class="sp-operations-nav-title">JOGO ' + safe(selected._gameNum || 'extra') + ' (' + (selectedIndex + 1) + '/' + series.length + ')</span>' +
+            '<button type="button" class="sp-operations-nav-arrow" data-operations-nav="next" aria-label="Próximo jogo do desempate">▶</button></span>';
         }
         var tieActions = tieCard.querySelector('.sp-mc-acts');
-        if (tieActions) tieActions.innerHTML = '<button type="button" class="btn btn-primary btn-sm" data-operations-open-tie="' +
-          safe(String(m.decisionId || '')) + '">Abrir desempate</button>';
-        // A chamada, a quadra e o placar desta simples são gravados pelo painel
-        // de desempate. Um controle de quadra do jogo regular usaria a callable errada.
+        var finished = !!selected.winnerKey;
+        var released = !!selected.courtReleasedAt;
+        var started = !!(selected.livePoints && (selected.livePoints.p1 || selected.livePoints.p2));
+        if (tieActions) tieActions.innerHTML = finished ?
+          (selected.tieStatus === 'review' ? '<button type="button" class="btn btn-success btn-micro" data-tie-action="confirm">Confirmar desempate</button>' : '') :
+          (selected.courtCalledAt && !released && !started ? '<button type="button" class="cancel-x-btn" data-tie-action="cancel-call" title="Cancelar chamada">✕</button>' : '') +
+          (selected.courtCalledAt && !released ? '<button type="button" class="sp-match-end-court" data-tie-action="release" title="Liberar a quadra e lançar placar depois">Encerrado</button>' : '') +
+          (!started ? '<button type="button" class="btn btn-danger btn-micro" data-tie-action="wo">Aplicar W.O.</button>' : '') +
+          (!released ? '<button type="button" class="btn btn-live btn-micro" data-tie-action="live">📡 Ao Vivo</button>' : '');
+        if (role.active && tieActions) {
+          var footer = document.createElement('span'); footer.className = 'sp-operations-court-footer-actions';
+          ['cancel-call', 'release'].forEach(function (action) {
+            var button = tieActions.querySelector('[data-tie-action="' + action + '"]');
+            if (button) footer.appendChild(button);
+          });
+        }
         var tieCourt = tieCard.querySelector('.sp-match-operational');
-        if (tieCourt) {
-          if (m.court) tieCourt.innerHTML = '<span class="sp-match-court sp-match-court--readonly">' + safe(String(m.court)) + '</span>';
-          else tieCourt.remove();
+        if (!tieCourt) {
+          tieCourt = document.createElement('div'); tieCourt.className = 'sp-match-operational';
+          tieCard.appendChild(tieCourt);
+        }
+        var courts = Array.isArray(t.courtNames) && t.courtNames.length ? t.courtNames.map(String) :
+          Array.from({ length:Math.max(0, Number(t.courtCount) || 0) }, function (_, i) { return 'Quadra ' + (i + 1); });
+        var occupied = new Set((allMatches || []).filter(function (item) {
+          return item && window.ScoreplaceCourtOccupancy && window.ScoreplaceCourtOccupancy.occupiesCourt(item);
+        }).map(function (item) { return String(item.court); }));
+        var book = t.phaseTieDecisions && t.phaseTieDecisions[String(t.currentPhaseIndex || 0)] || {};
+        Object.keys(book).forEach(function (id) { (book[id].matches || []).forEach(function (item) {
+          if (item && item.id !== selected.id && item.courtCalledAt && !item.courtReleasedAt && !item.winnerKey)
+            occupied.add(String(item.court));
+        }); });
+        var firstFree = courts.find(function (name) { return !occupied.has(name); }) || '';
+        var displayedCourt = selected.court && !occupied.has(String(selected.court)) ? selected.court : firstFree;
+        var opts = '<option value="">' + (firstFree ? 'Sem quadra' : 'Todas as quadras ocupadas') + '</option>' +
+          courts.map(function (name) { var busy = occupied.has(name); return '<option value="' + safe(name) + '"' +
+            (name === displayedCourt && !busy ? ' selected' : '') + (busy ? ' disabled' : '') + '>' + safe(name) +
+            (busy ? ' · ocupada' : ' · livre') + '</option>'; }).join('');
+        var courtHtml = finished ? '<span class="sp-match-court sp-match-court--readonly">' + safe(selected.court || '') + '</span>' :
+          selected.courtCalledAt ? '<span class="sp-match-court sp-match-court--readonly">' + safe(selected.court || '') + '</span><span class="sp-match-confirm sp-match-confirm--locked">✓ OK</span>' :
+          '<label class="sp-match-court"><select aria-label="Quadra" data-tie-court-select>' + opts + '</select></label>' +
+          '<button type="button" class="sp-match-confirm" data-tie-action="call"' + (!displayedCourt ? ' disabled' : '') + '>OK</button>';
+        var clockHtml = '';
+        if (selected.courtCalledAt && !finished && window._spCourtClockHtml) {
+          var anchor = Date.parse(selected.courtClockBaseAt || selected.courtCalledAt);
+          var until = released ? Date.parse(selected.courtReleasedAt) : Date.now();
+          if (Number.isFinite(anchor)) {
+            clockHtml = window._spCourtClockHtml(anchor, t, until, t.id, selected.id, false);
+            if (released) clockHtml = clockHtml.replace(/data-start-ms="[^"]*"/, 'data-tie-frozen="1"');
+          }
+        }
+        tieCourt.innerHTML = courtHtml + (released ? '<button type="button" class="cancel-x-btn" data-tie-action="restore">Restaurar</button>' : '') +
+          (role.active && footer && footer.childElementCount ? footer.outerHTML : '') +
+          (selected.courtCalledAt && !released && !finished ? '<button type="button" class="sp-match-clock-action" data-tie-action="clock-restart" aria-label="Reiniciar etapa do relógio">◀◀</button>' +
+            '<button type="button" class="sp-match-clock-action sp-match-clock-next" data-tie-action="clock-next" aria-label="Próxima etapa do relógio">▶▶</button>' : '') + clockHtml;
+        if (selected.courtCalledAt && !released && !finished) tieCard.style.border = '3px solid #22c55e';
+        if (!finished) {
+          var scoreNodes = tieCard.querySelectorAll('.sp-mc-sc');
+          Array.prototype.forEach.call(scoreNodes, function (node, index) {
+            node.innerHTML = '<input type="number" min="0" max="999" class="sp-set-inp" data-tie-score="' + (index ? 'p2' : 'p1') +
+              '" aria-label="Pontos de ' + safe(index ? selected.p2 : selected.p1) + '" value="' + Number(index ? score.p2 : score.p1) + '">';
+          });
         }
         Array.prototype.forEach.call(tieCard.querySelectorAll('.btn-row:not(.sp-mc-acts)'), function (node) { node.remove(); });
+        if (!finished) tieCard.insertAdjacentHTML('beforeend', '<div class="btn-row sp-tie-score-actions"><button type="button" class="btn btn-success btn-micro" data-tie-action="score">Salvar placar</button></div>');
         tieHtml = tieCard.outerHTML;
       }
     }
-    return '<div class="sp-operations-replica sp-operations-tie-card" data-operations-match="' + safe(String(m.id || '')) + '">' +
+    return '<div class="sp-operations-replica sp-operations-tie-card" data-operations-match="' + safe(String(selected.id || '')) +
+      '" data-tie-decision="' + safe(String(m.decisionId || '')) + '" data-operations-base-match="' + safe(String(m.id || '')) + '">' +
       '<span class="sp-operations-label">' + safe(label) + '</span>' + (availability || '') + tieHtml + '</div>';
   }
   var group = _bracketOperationsGroup(t, m, allMatches);
@@ -1917,6 +2014,78 @@ function _bracketOperationsBindScrollbar(track, bar) {
   sync();
 }
 
+function _bracketTieMatch(tId, decisionId, matchId) {
+  var t = window._findTournamentById && window._findTournamentById(String(tId));
+  var book = t && t.phaseTieDecisions && t.phaseTieDecisions[String(t.currentPhaseIndex || 0)] || {};
+  var decision = book[String(decisionId)];
+  return decision && (decision.matches || []).find(function (m) { return String(m.id) === String(matchId); });
+}
+
+function _bracketRefreshTieStrip(tId) {
+  var tournament = window._findTournamentById && window._findTournamentById(String(tId));
+  if (tournament && typeof window._bracketOperationsRefresh === 'function')
+    window._bracketOperationsRefresh(tournament);
+}
+
+function _bracketTieChoice(tId, decisionId, matchId, title, choices) {
+  var previous = document.getElementById('sp-tie-choice'); if (previous) previous.remove();
+  var modal = document.createElement('div'); modal.id = 'sp-tie-choice';
+  modal.className = 'sp-tie-modal';
+  var safe = window._safeHtml || String;
+  modal.innerHTML = '<div role="dialog" aria-modal="true" aria-label="' + safe(title) + '" class="sp-tie-modal-body">' +
+    '<h3>' + safe(title) + '</h3>' + choices.map(function (choice, index) {
+      return '<button type="button" class="btn btn-primary" data-tie-choice="' + index + '">' + safe(choice.label) + '</button>';
+    }).join('') + '<button type="button" class="btn btn-secondary" data-tie-close>Cancelar</button></div>';
+  document.body.appendChild(modal);
+  modal.addEventListener('click', function (event) {
+    if (event.target === modal || event.target.closest('[data-tie-close]')) { modal.remove(); return; }
+    var button = event.target.closest('[data-tie-choice]'); if (!button || modal._busy) return;
+    var choice = choices[Number(button.getAttribute('data-tie-choice'))]; if (!choice) return;
+    modal._busy = true;
+    Array.prototype.forEach.call(modal.querySelectorAll('button'), function (item) { item.disabled = true; });
+    Promise.resolve(window._phaseTieCardAction(tId, decisionId, matchId, choice.action)).then(function () {
+      modal.remove();
+      _bracketRefreshTieStrip(tId);
+    }).catch(function (error) {
+      modal._busy = false;
+      Array.prototype.forEach.call(modal.querySelectorAll('button'), function (item) { item.disabled = false; });
+      if (window.showNotification) window.showNotification('Desempate não atualizado', String(error.message || error), 'error');
+    });
+  });
+}
+
+function _bracketTieLive(tId, decisionId, matchId) {
+  var old = document.getElementById('sp-tie-live'); if (old) old.remove();
+  var overlay = document.createElement('div'); overlay.id = 'sp-tie-live'; overlay.className = 'sp-tie-modal';
+  var safe = window._safeHtml || String;
+  function render() {
+    var match = _bracketTieMatch(tId, decisionId, matchId);
+    if (!match) { overlay.remove(); return; }
+    var points = match.livePoints || match.sets && match.sets[0] || { p1:0, p2:0 };
+    overlay.innerHTML = '<div role="dialog" aria-modal="true" aria-label="Placar ao vivo do desempate" class="sp-tie-modal-body sp-tie-live-body">' +
+      '<h3>JOGO ' + safe(match.displayGameNumber || 'extra') + ' · SIMPLES DESEMPATE</h3>' +
+      '<div class="sp-tie-live-sides"><button type="button" data-tie-point="p1"' + (match.winnerKey ? ' disabled' : '') +
+      '><span>' + safe(match.p1 && match.p1.name || '') + '</span><strong>' + Number(points.p1 || 0) + '</strong><small>+ Ponto</small></button>' +
+      '<button type="button" data-tie-point="p2"' + (match.winnerKey ? ' disabled' : '') +
+      '><span>' + safe(match.p2 && match.p2.name || '') + '</span><strong>' + Number(points.p2 || 0) + '</strong><small>+ Ponto</small></button></div>' +
+      (match.winnerKey ? '<p>Resultado registrado</p>' : '<p>O ponto aparece no torneio e na TV assim que o servidor confirmar.</p>') +
+      '<button type="button" class="btn btn-secondary" data-tie-close>Fechar</button></div>';
+  }
+  document.body.appendChild(overlay); render();
+  overlay.addEventListener('click', function (event) {
+    if (event.target === overlay || event.target.closest('[data-tie-close]')) { overlay.remove(); return; }
+    var button = event.target.closest('[data-tie-point]'); if (!button || overlay._busy) return;
+    overlay._busy = true; button.disabled = true;
+    Promise.resolve(window._phaseTieCardAction(tId, decisionId, matchId,
+      { type:'point', side:button.getAttribute('data-tie-point') })).then(function () {
+      overlay._busy = false; render(); _bracketRefreshTieStrip(tId);
+    }).catch(function (error) {
+      overlay._busy = false; render();
+      if (window.showNotification) window.showNotification('Ponto não registrado', String(error.message || error), 'error');
+    });
+  });
+}
+
 window._bracketOperationsRefresh = function (t, root) {
   root = root || Array.prototype.find.call(document.querySelectorAll('[data-bracket-tabs-root]'), function (node) {
     return t && node.getAttribute('data-tournament-id') === String(t.id);
@@ -1966,6 +2135,7 @@ window._bracketOperationsRefresh = function (t, root) {
     });
     existing.addEventListener('focusout', function (event) {
       if (!event.target || !event.target.matches('.sp-operations-replica .sp-match-court select')) return;
+      if (event.target.hasAttribute('data-tie-court-select')) return;
       setTimeout(function () {
         if (!existing.isConnected || existing._spCourtBusy ||
             existing.contains(document.activeElement) && document.activeElement.matches('.sp-operations-replica .sp-match-court select')) return;
@@ -2012,9 +2182,79 @@ window._bracketOperationsRefresh = function (t, root) {
         var slot = navNode && navNode.getAttribute('data-operations-slot');
         var nav = slot && root._bracketOperationsNav && root._bracketOperationsNav[slot];
         if (!nav || nav.key !== navNode.getAttribute('data-operations-group')) return;
-        nav.index = (nav.index + (target.getAttribute('data-operations-nav') === 'next' ? 1 : 3)) % 4;
+        var count = Number(navNode.getAttribute('data-operations-count')) || 4;
+        nav.index = (nav.index + (target.getAttribute('data-operations-nav') === 'next' ? 1 : count - 1)) % count;
         var currentTournament = typeof window._findTournamentById === 'function' && window._findTournamentById(String(t.id));
         window._bracketOperationsRefresh(currentTournament || t, root);
+        return;
+      }
+      var tieDecisionId = op.getAttribute('data-tie-decision');
+      if (tieDecisionId) {
+        var tieAction = target.getAttribute('data-tie-action');
+        if (!tieAction) return;
+        event.preventDefault();
+        var tieMatch = _bracketTieMatch(t.id, tieDecisionId, mid);
+        if (!tieMatch || typeof window._phaseTieCardAction !== 'function') return;
+        if (tieAction === 'live') {
+          if (tieMatch.courtCalledAt) { _bracketTieLive(t.id, tieDecisionId, mid); return; }
+          var liveSelect = op.querySelector('[data-tie-court-select]');
+          if (!liveSelect || !liveSelect.value) {
+            if (window.showNotification) window.showNotification('Quadra indisponível', 'Escolha uma quadra livre antes de abrir o placar ao vivo.', 'error');
+            return;
+          }
+          if (op._tieBusy) return;
+          op._tieBusy = true; target.disabled = true;
+          var callLive = tieMatch.court === liveSelect.value ? Promise.resolve() :
+            window._phaseTieCardAction(t.id, tieDecisionId, mid, { type:'court', court:liveSelect.value });
+          Promise.resolve(callLive).then(function () {
+            return window._phaseTieCardAction(t.id, tieDecisionId, mid, { type:'call' });
+          }).then(function () {
+            var live = window._findTournamentById && window._findTournamentById(String(t.id));
+            window._bracketOperationsRefresh(live || t, root);
+            _bracketTieLive(t.id, tieDecisionId, mid);
+          }).catch(function (error) {
+            if (window.showNotification) window.showNotification('Ao Vivo indisponível', String(error.message || error), 'error');
+          }).finally(function () { op._tieBusy = false; target.disabled = false; });
+          return;
+        }
+        if (tieAction === 'wo') {
+          _bracketTieChoice(t.id, tieDecisionId, mid, 'Aplicar W.O. · escolha quem venceu', [
+            { label:String(tieMatch.p1 && tieMatch.p1.name || ''), action:{ type:'wo', winner:'p1' } },
+            { label:String(tieMatch.p2 && tieMatch.p2.name || ''), action:{ type:'wo', winner:'p2' } }
+          ]);
+          return;
+        }
+        var payload = { type:tieAction };
+        if (tieAction === 'call') {
+          var courtSelect = op.querySelector('[data-tie-court-select]');
+          if (!courtSelect || !courtSelect.value) return;
+          payload = { type:'call' };
+        } else if (tieAction === 'score') {
+          var a = op.querySelector('[data-tie-score="p1"]');
+          var b = op.querySelector('[data-tie-score="p2"]');
+          var p1 = a && Number(a.value), p2 = b && Number(b.value);
+          if (!a || !b || a.value === '' || b.value === '' || !Number.isSafeInteger(p1) || !Number.isSafeInteger(p2)) {
+            if (window.showNotification) window.showNotification('Placar inválido', 'Digite os pontos das duas atletas.', 'error');
+            return;
+          }
+          payload = { type:'score', sets:[{ p1:p1, p2:p2 }] };
+        } else if (tieAction === 'clock-next' || tieAction === 'clock-restart') {
+          payload = { type:'clock', direction:tieAction === 'clock-next' ? 'next' : 'restart' };
+        }
+        if (op._tieBusy) return;
+        op._tieBusy = true; target.disabled = true;
+        var submit = tieAction === 'call' && tieMatch.court !== op.querySelector('[data-tie-court-select]').value
+          ? window._phaseTieCardAction(t.id, tieDecisionId, mid,
+            { type:'court', court:op.querySelector('[data-tie-court-select]').value }).then(function () {
+              return window._phaseTieCardAction(t.id, tieDecisionId, mid, payload);
+            })
+          : window._phaseTieCardAction(t.id, tieDecisionId, mid, payload);
+        Promise.resolve(submit).then(function () {
+          var live = window._findTournamentById && window._findTournamentById(String(t.id));
+          window._bracketOperationsRefresh(live || t, root);
+        }).catch(function (error) {
+          if (window.showNotification) window.showNotification('Desempate não atualizado', String(error.message || error), 'error');
+        }).finally(function () { op._tieBusy = false; target.disabled = false; });
         return;
       }
       if (target.hasAttribute('data-postpone-next')) {
@@ -2105,6 +2345,7 @@ window._bracketOperationsRefresh = function (t, root) {
     });
     existing.addEventListener('change', function (event) {
       var select = event.target && event.target.closest('.sp-operations-replica .sp-match-court select');
+      if (select && select.hasAttribute('data-tie-court-select')) return;
       if (select && typeof window._assignMatchCourtFromSelect === 'function') {
         var op = select.closest('.sp-operations-replica');
         root._bracketOperationsManualCourt = root._bracketOperationsManualCourt || {};

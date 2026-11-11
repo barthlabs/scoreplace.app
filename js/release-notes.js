@@ -1,3 +1,7 @@
+// 2.6.48 — O card do desempate permite chamar para a quadra, acompanhar o
+// tempo, lançar pontos ao vivo e placar, aplicar W.O. e liberar a quadra.
+// Dois atletas disputam um jogo sem setas; se houver outro confronto no
+// mesmo desempate, as setas permitem navegar entre os jogos.
 // 2.6.47 — O desempate aparece no mesmo card dos demais jogos, com uma
 // atleta de cada lado e seu placar. A designação é SIMPLES DESEMPATE;
 // o número do jogo extra continua sendo 3A.

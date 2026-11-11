@@ -220,8 +220,10 @@
     }, []).map(function (m) {
       return { id: m.id, _gameNum: m.displayGameNumber, category: 'Desempate da classificatória',
         p1: String(m.p1 && m.p1.name || ''), p2: String(m.p2 && m.p2.name || ''),
-        court: m.court, courtCalledAt: m.courtCalledAt, resultAt: m.resultAt,
-        winner: m.winnerKey || null, sets: (m.sets || []).map(function (set) {
+        court: m.court, courtCalledAt: m.courtCalledAt, courtClockBaseAt:m.courtClockBaseAt,
+        courtReleasedAt:m.courtReleasedAt, resultAt: m.resultAt,
+        scoreP1:m.livePoints && m.livePoints.p1, scoreP2:m.livePoints && m.livePoints.p2,
+        winner: m.winnerKey || null, wo:!!m.woWinnerKey, sets: (m.sets || []).map(function (set) {
           return { gamesP1: set.p1, gamesP2: set.p2 };
         }) };
     }) : [];
@@ -231,14 +233,14 @@
     var now = nowMs == null ? Date.now() : nowMs;
     var occupancy = window.ScoreplaceCourtOccupancy || { isFinished: function (m) { return !!(m.resultAt || m.winner != null || m.wo === true); } };
     var allActive = matches.concat(tieMatches).filter(function (m) {
-      return m && !released[String(m.id)] && !occupancy.isFinished(m) && !m.isBye && !m.isSitOut && m.court && (m.courtCalledAt || m.startedAt);
+      return m && !released[String(m.id)] && !m.courtReleasedAt && !occupancy.isFinished(m) && !m.isBye && !m.isSitOut && m.court && (m.courtCalledAt || m.startedAt);
     }).sort(function (a, b) { return timestamp(b.courtCalledAt || b.startedAt) - timestamp(a.courtCalledAt || a.startedAt); });
     if (!courtNames.length) courtNames = Array.from(new Set(allActive.map(function (m) { return String(m.court); })));
     // A borda anuncia a próxima oportunidade de chamar pelo microfone. Cada
     // transição automática compete com uma chamada nova pelo instante em que
     // ocorreu; não basta lembrar qual jogo recebeu OK por último.
     var latestPhaseId = '', latestTransitionAt = 0;
-    var latestResult = matches.filter(function (m) { return m && occupancy.isFinished(m) && timestamp(m.resultAt || m.completedAt) > 0 &&
+    var latestResult = matches.concat(tieMatches).filter(function (m) { return m && occupancy.isFinished(m) && timestamp(m.resultAt || m.completedAt) > 0 &&
       !m.wo && ((m.scoreP1 != null && m.scoreP2 != null) || (Array.isArray(m.sets) && m.sets.length)); })
       .sort(function (a, b) { return timestamp(b.resultAt || b.completedAt) - timestamp(a.resultAt || a.completedAt); })[0];
     var latestResultId = latestResult ? String(latestResult.id || '') : '';
