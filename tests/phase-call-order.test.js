@@ -83,4 +83,16 @@ planned.phaseCategoryMaterialized['Fem Ouro'] = {at:'x'};
 assert(order.allowed(planned, plannedMatches, plannedGame('Fem Diamante',1),done));
 assert(order.allowed(planned, plannedMatches, plannedGame('Fem Ouro',1),done));
 assert(order.allowed(planned, plannedMatches, plannedGame('Fem Prata',0),done));
+const sameTime = { ...planned, phaseCategoryMaterialized:{}, scheduleWindow:{
+  interleavedPlan:{ ...proposal.plan, editorVersion:2, blocks:proposal.plan.blocks.map(block =>
+    block.kind === 'elimination' && block.category === 'Fem Diamante'
+      ? { ...block, startTime:'08:00' } : block) }
+} };
+const simultaneousMatches = plannedMatches.map(match => ({...match}));
+assert(!order.allowed(sameTime, simultaneousMatches, plannedGame('Fem Diamante',1), done),
+  'eliminatória não pode começar junto com sua própria classificatória inconclusa');
+simultaneousMatches.filter(match => match.category === 'Fem Diamante' && match.phaseIndex === 0)
+  .forEach(match => { match.resultAt = 'x'; });
+sameTime.phaseCategoryMaterialized['Fem Diamante'] = {at:'x'};
+assert(order.allowed(sameTime, simultaneousMatches, plannedGame('Fem Diamante',1), done));
 console.log('Ordem configurável bloqueia Prata até concluir as etapas anteriores');

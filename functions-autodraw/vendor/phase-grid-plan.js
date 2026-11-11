@@ -175,17 +175,18 @@
     target.court = Number(court); target.startTime = startTime;
     target.day = destination;
     var cursor = at + target.duration, shifted = [];
-    next.filter(function (tile) { return tile.id !== id && (tile.day || plan.day) === destination && tile.court === target.court; })
-      .sort(function (a, b) { return minutes(a.startTime) - minutes(b.startTime) || a.id.localeCompare(b.id); })
-      .forEach(function (tile) {
-        var tileStart = minutes(tile.startTime);
-        if (tileStart >= cursor) return;
-        if (tileStart + tile.duration <= at) return;
-        if (cursor + tile.duration >= 24 * 60) return;
-        tile.startTime = clock(cursor);
-        cursor += tile.duration;
-        shifted.push(tile.id);
-      });
+    if (cursor > 24 * 60) return { error:'O bloco ultrapassa a meia-noite. Escolha outro horário ou dia.' };
+    var lane = next.filter(function (tile) { return tile.id !== id && (tile.day || plan.day) === destination && tile.court === target.court; })
+      .sort(function (a, b) { return minutes(a.startTime) - minutes(b.startTime) || a.id.localeCompare(b.id); });
+    for (var li = 0; li < lane.length; li++) {
+      var tile = lane[li], tileStart = minutes(tile.startTime);
+      if (tileStart >= cursor || tileStart + tile.duration <= at) continue;
+      if (cursor + tile.duration > 24 * 60)
+        return { error:'A cascata ultrapassa a meia-noite. Escolha outro horário, quadra ou dia.' };
+      tile.startTime = clock(cursor);
+      cursor += tile.duration;
+      shifted.push(tile.id);
+    }
     var warning = validate(next, plan, days, { allowOverflow:true });
     return { tiles:next, shifted:shifted, warning:warning };
   }

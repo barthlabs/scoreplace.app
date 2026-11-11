@@ -107,6 +107,9 @@
       var target = targetStage && intervals[key(targetStage)];
       if (target) return Object.keys(intervals).every(function (id) {
         var predecessor = intervals[id];
+        if (targetStage.kind === 'elimination' && predecessor.stage.kind === 'groups' &&
+            predecessor.stage.category === targetStage.category)
+          return stageDone(t, matches, predecessor.stage, finished);
         if (id === key(targetStage) || predecessor.first >= target.first ||
             predecessor.last > target.first) return true;
         // Só etapas que terminam antes desta começar são pré-requisitos.

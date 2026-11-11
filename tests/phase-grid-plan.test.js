@@ -44,6 +44,14 @@ const shortDay = { day:firstDay.day, startTime:'08:00', endTime:'09:30' };
 const overflowingCascade = grid.move(chain, 'chain-2', 1, '08:00', chainPlan, [shortDay], shortDay.day);
 assert.equal(grid.overlapIds(overflowingCascade.tiles, chainPlan).size, 0);
 assert.match(grid.validate(overflowingCascade.tiles, chainPlan, [shortDay]), /fora do horário/);
+const midnightChain = ['22:40', '23:15'].map((startTime, index) => ({
+  id:'late-' + index, kind:'elimination', category:'Late ' + index,
+  day:firstDay.day, startTime, court:1, round:1, duration:35
+}));
+const midnightDay = { day:firstDay.day, startTime:'08:00', endTime:'23:59' };
+const midnightCascade = grid.move(midnightChain, 'late-0', 1, '23:00', chainPlan, [midnightDay], midnightDay.day);
+assert.match(midnightCascade.error, /meia-noite/, 'a cascata impossível não pode deixar blocos sobrepostos');
+assert.deepEqual(midnightChain.map(tile => tile.startTime), ['22:40', '23:15'], 'falha não altera a grade original');
 const last = tiles[tiles.length - 1];
 const moved = grid.move(tiles, last.id, last.court, '08:00', fixture, [firstDay, secondDay], secondDay.day);
 assert.equal(moved.error, undefined);
