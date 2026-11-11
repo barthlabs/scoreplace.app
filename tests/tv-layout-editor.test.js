@@ -225,6 +225,24 @@ const { chromium } = require('@playwright/test');
     await page.waitForSelector('[data-tv-background][value="#445566"]', { state: 'attached' });
     assert.equal(await page.evaluate(() => window._tvEditorReadLayout().background), '#445566');
     await page.evaluate(() => {
+      window._editingTournament.logoUrl = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"/>';
+      window._tourLogoSrc = t => t.logoUrl || t.logoData || '';
+      window.AppStore.addTournament = async patch => { Object.assign(window._editingTournament, patch); };
+      document.getElementById('tv-personalization').open = true;
+    });
+    await page.locator('[data-tv-add-logo]').click();
+    await page.locator('[data-tv-save-live]').click();
+    const placedLogo = await page.evaluate(() => {
+      const snapshot = window._tvLiveBuildSnapshot(window._editingTournament, Date.now());
+      return { visible:snapshot.tvLayout.sections.logo.visible,
+        markup:window._tvLivePreviewDocument(snapshot) };
+    });
+    assert.equal(placedLogo.visible, true, 'a posição do logo é gravada na tela No ar');
+    assert.match(placedLogo.markup, /tv-placed-logo/, 'a TV monta o logo gravado na sua caixa');
+    await page.evaluate(() => {
+      // O teste seguinte verifica o botão fullscreen sem outro box sintético sobre ele.
+      window._editingTournament.tvScreens = null;
+      window._editingTournament.tvLayout.sections.logo.visible = false;
       window._currentBracketTournament = window._editingTournament;
       window._findTournamentById = () => window._editingTournament;
       const button = document.createElement('button');
