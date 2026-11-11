@@ -1328,6 +1328,8 @@ window._bracketOperationsSelect = function (t) {
   var tieMatches = Object.keys(tieBook).sort().flatMap(function (decisionId) {
     var decision = tieBook[decisionId];
     if (!decision || decision.choice !== 'play' || decision.status !== 'pending') return [];
+    // phase-tie-core grava sets e winnerKey juntos no mesmo recibo. Uma simples
+    // concluída sai da fila; não existe pendingResult neste livro de decisões.
     return (decision.matches || []).filter(function (m) { return m && !m.winnerKey; }).map(function (m) {
       return { id:m.id, isTieBreak:true, decisionId:decisionId, _gameNum:m.displayGameNumber,
         p1:m.p1 && m.p1.name, p2:m.p2 && m.p2.name, court:m.court,
@@ -1670,15 +1672,42 @@ function _bracketOperationsStandingsHtml(group, t, slot, courtHtml, categoryLabe
 function _bracketOperationsReplica(m, t, role, label, availability, root, allMatches, slot) {
   var safe = window._safeHtml || function (s) { return String(s); };
   if (m.isTieBreak) {
+    // O jogo extra é uma simples, mas pertence ao livro de desempates e não a
+    // t.matches. Reaproveite a geometria canônica em modo de leitura e conduza
+    // toda ação ao painel específico, sem instalar handlers do placar regular.
+    var tieDisplay = Object.assign({}, m, {
+      label: 'JOGO ' + String(m._gameNum || 'extra'),
+      category: 'SIMPLES DESEMPATE'
+    });
+    var tieHtml = typeof window.renderMatchCard === 'function'
+      ? window.renderMatchCard(tieDisplay, false, t.id, null, false, null,
+        { readOnly:true, idScope:'operations-tie-' + String(m.id || '') }) : '';
+    if (tieHtml) {
+      var tieHost = document.createElement('template');
+      tieHost.innerHTML = tieHtml;
+      var tieCard = tieHost.content.firstElementChild;
+      if (tieCard) {
+        var tieStatus = tieCard.querySelector('[data-match-time-status]');
+        if (tieStatus) {
+          tieStatus.removeAttribute('data-match-time-status');
+          tieStatus.innerHTML = '<span class="sp-operations-tie-designation">SIMPLES DESEMPATE</span>';
+        }
+        var tieActions = tieCard.querySelector('.sp-mc-acts');
+        if (tieActions) tieActions.innerHTML = '<button type="button" class="btn btn-primary btn-sm" data-operations-open-tie="' +
+          safe(String(m.decisionId || '')) + '">Abrir desempate</button>';
+        // A chamada, a quadra e o placar desta simples são gravados pelo painel
+        // de desempate. Um controle de quadra do jogo regular usaria a callable errada.
+        var tieCourt = tieCard.querySelector('.sp-match-operational');
+        if (tieCourt) {
+          if (m.court) tieCourt.innerHTML = '<span class="sp-match-court sp-match-court--readonly">' + safe(String(m.court)) + '</span>';
+          else tieCourt.remove();
+        }
+        Array.prototype.forEach.call(tieCard.querySelectorAll('.btn-row:not(.sp-mc-acts)'), function (node) { node.remove(); });
+        tieHtml = tieCard.outerHTML;
+      }
+    }
     return '<div class="sp-operations-replica sp-operations-tie-card" data-operations-match="' + safe(String(m.id || '')) + '">' +
-      '<span class="sp-operations-label">' + safe(label) + '</span>' + (availability || '') +
-      '<article class="sp-match-card"><div class="sp-mc-head"><strong>JOGO ' + safe(String(m._gameNum || 'extra')) +
-      ' · SIMPLES DESEMPATE</strong></div><div class="sp-operations-standings-category">' + safe(String(m.category || '')) +
-      '</div><div class="sp-operations-standings-body">' + safe(String(m.p1 || 'A definir')) + ' × ' +
-      safe(String(m.p2 || 'A definir')) + '</div><div class="sp-operations-standings-footer">' +
-      (m.court ? safe(String(m.court)) : 'Aguardando quadra livre') +
-      '<button type="button" class="btn btn-primary btn-sm" data-operations-open-tie="' + safe(String(m.decisionId || '')) +
-      '">Abrir desempate</button></div></article></div>';
+      '<span class="sp-operations-label">' + safe(label) + '</span>' + (availability || '') + tieHtml + '</div>';
   }
   var group = _bracketOperationsGroup(t, m, allMatches);
   var nav = root._bracketOperationsNav || (root._bracketOperationsNav = {});

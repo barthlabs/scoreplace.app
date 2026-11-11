@@ -1439,6 +1439,7 @@ const SUITES = [
   'tests/chamada-quadra-sandbox.test.js',
   'tests/sandbox-lifecycle.test.js',
   'tests/postpone-next-match.test.js',
+  'tests/tie-card-uses-match-card.test.js',
   'tests/operation-regions-mixed.test.js',
   'tests/operation-regional-sync.test.js',
   'tests/operation-recovery-gate.test.js',

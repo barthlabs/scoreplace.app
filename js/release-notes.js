@@ -1,3 +1,6 @@
+// 2.6.47 — O desempate aparece no mesmo card dos demais jogos, com uma
+// atleta de cada lado e seu placar. A designação é SIMPLES DESEMPATE;
+// o número do jogo extra continua sendo 3A.
 // 2.6.46 — O desempate volta a ser chamado após cada grupo e aparece na
 // operação, inclusive nos torneios com grade intercalada. A Prata espera as
 // eliminatórias Diamante e Ouro. A TV ganhou
@@ -1549,6 +1552,7 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(52,211,153,0.08);">' +
       '<div style="font-weight:800;color:var(--sp-c-a7f3d0,#a7f3d0);font-size:1rem;margin-bottom:8px;">🎾 v2.6 — Jogos do quarteto <span style="color:var(--text-muted);font-weight:400;font-size:0.78rem;">(Novembro, 2026)</span></div>' +
       '<ul style="margin:0;padding-left:1.1rem;font-size:0.86rem;line-height:1.5;color:var(--text-main);">' +
+        '<li>O desempate aparece no mesmo card dos jogos: uma atleta de cada lado, placar visível e a indicação “Simples desempate” junto ao número do jogo extra.</li>' +
         '<li>Na faixa de operação Rei/Rainha, as setas percorrem os três jogos do mesmo quarteto e sua classificação, com as duplas e os placares de cada jogo.</li>' +
         '<li>Em torneios concentrados em um dia, os jogos e as rodadas mostram só o horário. Eventos de vários dias continuam mostrando a data.</li>' +
         '<li>O resultado do sorteio pode ser baixado em um único PDF com todas as categorias e grupos, usando as cores e o logo do torneio e mostrando as duplas lado a lado.</li>' +

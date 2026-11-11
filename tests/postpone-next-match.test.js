@@ -88,19 +88,16 @@ const withTie = { id:'tour_full_courts', courtCount:8, matches:[...activeDiamond
 const nextTie = context.window._bracketOperationsSelect(withTie);
 assert.equal(nextTie.next.id, 'tie-a', 'desempate pendente precede a próxima partida regular');
 assert.equal(nextTie.next.isTieBreak, true);
+assert.equal(nextTie.next.category, 'Fem Diamante · Grupo A1',
+  'metadado do grupo permanece na fila mesmo com a designação curta no card');
 withTie.phaseTieDecisions['0']['group-0:1:2'].matches[0].court = 'Quadra 8';
 withTie.phaseTieDecisions['0']['group-0:1:2'].matches[0].courtCalledAt = '2026-11-13T12:00:00Z';
 assert(context.window._bracketOperationsSelect(withTie).active.some(m => m.id === 'tie-a'),
   'desempate chamado aparece entre os jogos em quadra');
-const replicaStart = source.indexOf('function _bracketOperationsReplica(');
-const replicaEnd = source.indexOf('\nfunction _bracketOperationsDraftValues(', replicaStart);
-assert(replicaStart > 0 && replicaEnd > replicaStart);
-vm.runInNewContext(source.slice(replicaStart, replicaEnd), context);
-const tieCard = vm.runInNewContext('_bracketOperationsReplica', context)(nextTie.next, withTie, {},
-  'PRÓXIMO JOGO A CHAMAR', '', {}, [], 'next');
-assert.match(tieCard, /SIMPLES DESEMPATE/);
-assert.match(tieCard, /data-operations-open-tie="group-0:1:2"/,
-  'o card da fila abre o painel canônico de resultado do desempate');
+withTie.phaseTieDecisions['0']['group-0:1:2'].matches[0].sets = [{ p1:5, p2:3 }];
+withTie.phaseTieDecisions['0']['group-0:1:2'].matches[0].winnerKey = 'name:Ana';
+assert(!context.window._bracketOperationsSelect(withTie).active.some(m => m.id === 'tie-a'),
+  'resultado da simples, gravado com winnerKey, retira o card da faixa operacional');
 const concentratedStart = source.indexOf('window._isConcentratedTournament = function');
 const concentratedEnd = source.indexOf('\nwindow._matchCoordsFromId = function', concentratedStart);
 assert(concentratedStart > 0 && concentratedEnd > concentratedStart);

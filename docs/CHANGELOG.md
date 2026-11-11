@@ -1,3 +1,8 @@
+## 2.6.47 — 11/nov/2026 (card do desempate)
+
+- O jogo extra 3A usa o card visual comum, com uma atleta e um placar em cada lado. A designação é “SIMPLES DESEMPATE”, sem o rótulo incorreto “R1 Grupo A”. A ação continua abrindo o painel próprio de chamada e resultado do desempate.
+- Corte somente web; sem alteração de dados, Functions ou versões nativas.
+
 ## 2.6.46 — 11/nov/2026 (desempate, chamada e tela No ar)
 
 - Corrigido o erro do comparador no desempate automático Rei/Rainha. A faixa de operação mostra o desempate pendente antes dos jogos regulares e o chamado entre os jogos em quadra. Placar e chamada da grade intercalada usam temporariamente a callable central corrigida, preservando UUID e recibo até a atualização coordenada das portas regionais.
