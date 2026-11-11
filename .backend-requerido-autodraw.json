@@ -1,12 +1,11 @@
 {
   "schema": 1,
-  "backendCommit": "0c7b249ba528c4186726e46c6c9564f2d5bbba88",
-  "scopeNote": "Corte 2.6.41: chamada de simples desempate na próxima quadra livre e atualização dos resultados.",
+  "backendCommit": "94ec6de3868b485abb932a635d9c143d8c8b6f76",
+  "scopeNote": "Corte 2.6.48: controles completos do desempate e atualização automática da chamada.",
   "functions": [
-    "updateTournamentConfiguration",
     "applyMatchResult",
-    "applyQueuedResult",
     "endMatchOnCourt",
-    "advanceTournamentPhase"
+    "advanceTournamentPhase",
+    "finishTournament"
   ]
 }
