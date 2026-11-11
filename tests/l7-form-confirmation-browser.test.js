@@ -73,7 +73,18 @@ assert(!Object.hasOwn(await p.evaluate(()=>window._sent),'coverPhotoData'),
  'formulário não envia remoção da capa sem escolha explícita');
 assert(!Object.hasOwn(await p.evaluate(()=>window._readTournamentBrandingPatch('e')),'coverPhotoData'),
  'salvamento visual também preserva a capa durante a hidratação');
+await p.evaluate(()=>{
+ // O usuário experimentou Cor e voltou para Foto antes de salvar.
+ window._coverModeChosenByUser=true;
+ document.getElementById('tourn-cover-mode').value='color';
+ document.getElementById('tourn-cover-mode').value='photo';
+ window._sent=undefined;return window._saveTournamentClickHandler();
+});
+assert(!Object.hasOwn(await p.evaluate(()=>window._sent),'coverPhotoData'),
+ 'alternar Cor → Foto sem nova imagem preserva a capa publicada');
+assert(!Object.hasOwn(await p.evaluate(()=>window._sent),'coverUrl'));
 await p.evaluate(()=>{window._coverModeChosenByUser=true;});
+await p.evaluate(()=>{document.getElementById('tourn-cover-mode').value='color';});
 assert.equal(await p.evaluate(()=>window._readTournamentBrandingPatch('e').coverPhotoData),'',
  'troca explícita para cor pode remover a foto publicada');
 await p.evaluate(()=>{window._coverModeChosenByUser=false;document.getElementById('tourn-cover-mode').value='photo';});
@@ -100,6 +111,16 @@ assert(!Object.hasOwn(await p.evaluate(()=>window._tourDataAtStore),'coverPhotoD
 assert.equal(await p.evaluate(()=>window.AppStore.tournaments[0].coverUrl),'https://storage.example/cover-old.png');
 assert.deepEqual(await p.evaluate(()=>window.AppStore.tournaments[0].matches),[{id:'published-match-1',court:'Quadra 1'}],
  'salvar a ficha durante o torneio preserva os jogos publicados');
+await p.evaluate(()=>{
+ window._coverModeChosenByUser=true;
+ document.getElementById('tourn-cover-mode').value='photo';
+ window._remotePatch=undefined;
+ return window._saveTournamentClickHandler();
+});
+assert(!Object.hasOwn(await p.evaluate(()=>window._tourDataAtStore),'coverPhotoData'),
+ 'Cor → Foto chega à store real sem comando vazio para remover a capa');
+assert(!Object.hasOwn(await p.evaluate(()=>window._remotePatch || {}),'coverUrl'),
+ 'Cor → Foto não apaga a URL publicada no comando remoto');
 await p.evaluate(()=>{window.AppStore.addTournament=window._stubAddTournament;});
 await p.evaluate(()=>{window._editLogoHydrating='';window._sent=undefined;return window._saveTournamentClickHandler();});
 assert(!Object.hasOwn(await p.evaluate(()=>window._sent),'coverPhotoData'),'foto publicada sem base64 também é omitida depois da hidratação');
