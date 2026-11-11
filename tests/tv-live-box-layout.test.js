@@ -87,6 +87,16 @@ const { chromium } = require('@playwright/test');
       }));
       assert.equal(customBounds.board.height, 900, 'layout personalizado ocupa toda a altura');
       assert(customBounds.courts.height > 500, 'quadras personalizadas têm área visível');
+      const fill = await customPage.evaluate(() => {
+        const box = document.querySelector('.tv-custom-courts > .tv-courts');
+        const cards = [...box.querySelectorAll('.tv-court')];
+        const b = box.getBoundingClientRect(), last = cards[cards.length - 1].getBoundingClientRect();
+        return { count:cards.length, gap:b.bottom - last.bottom,
+          rowHeight:last.height, font:parseFloat(getComputedStyle(cards[0].querySelector('h2')).fontSize) };
+      });
+      assert.equal(fill.count, 6);
+      assert(fill.gap < 15, 'última fileira alcança a borda inferior do box salvo');
+      assert(fill.font >= 14, 'título da quadra permanece legível');
       await customPage.close();
     } finally { await browser.close(); }
     console.log('✓ TV: etiquetas, placares e próximo jogo contidos nos boxes');

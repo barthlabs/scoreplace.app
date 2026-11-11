@@ -4647,35 +4647,7 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
         throw _drawFail('failed-precondition', 'A chamada terminou; não é mais possível mudar a quadra.', { tId, matchId });
       }
       if (confirmCall && !court) throw _drawFail('failed-precondition', 'Escolha uma quadra antes de chamar o jogo.', { tId, matchId });
-      const rehearsalOwnerCall = uid === _rehearsal.OWNER_UID && t.creatorUid === uid &&
-        t.rehearsal?.state === 'active';
-      const hasConcentratedPlan = _phaseCallOrder.covers(t, m);
-      // Durante os testes da organização, a data programada é uma previsão.
-      // A ordem das fases e a ocupação das quadras continuam validadas abaixo.
-      const enforceScheduledDayForCall = false;
-      if (enforceScheduledDayForCall && confirmCall && !m.courtCalledAt && !sandbox && !rehearsalOwnerCall &&
-          !hasConcentratedPlan) {
-        // A coleção foi resolvida acima pelo ID e pelo flag. O dia do jogo é
-        // civil no fuso do evento: uma data UTC pode ser o dia anterior aqui.
-        const zone = (await _fusoDoEvento(t, tx)).tz;
-        const scheduledMs = Date.parse(String(m.scheduledAt || ''));
-        const requiredDay = /^\d{4}-\d{2}-\d{2}$/.test(String(m.requiredDay || ''))
-          ? String(m.requiredDay) : '';
-        if (!zone || (!requiredDay && !Number.isFinite(scheduledMs))) {
-          throw _drawFail('failed-precondition', 'Data ou fuso do jogo indisponível; chamada não iniciada.', { tId, matchId });
-        }
-        const localDay = ms => {
-          const parts = new Intl.DateTimeFormat('en-GB', {
-            timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit'
-          }).formatToParts(new Date(ms));
-          const part = type => (parts.find(p => p.type === type) || {}).value;
-          return `${part('year')}-${part('month')}-${part('day')}`;
-        };
-        const gameDay = requiredDay || localDay(scheduledMs);
-        if (localDay(Date.parse(agoraIso)) < gameDay) {
-          throw _drawFail('failed-precondition', 'Jogo programado para ' + gameDay + '; a chamada ainda não está disponível.', { tId, matchId });
-        }
-      }
+      // O horário da grade orienta a fila, sem bloquear uma chamada manual.
       if (!drawWindow || typeof drawWindow._collectAllMatches !== 'function') {
         throw _drawFail('internal', 'Não foi possível conferir a ocupação das quadras.', { tId, matchId });
       }
@@ -4683,8 +4655,11 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
       if (!Array.isArray(all)) throw _drawFail('internal', 'Não foi possível conferir a ocupação das quadras.', { tId, matchId });
       const activeCandidates = all.filter(item => item && !released[String(item.id)]);
       if (confirmCall && !m.courtCalledAt) {
-        if (!_phaseCallOrder.allowed(t, all, m, _courtOccupancy.isFinished)) {
-          throw _drawFail('failed-precondition', 'Esta fase ainda não está na vez de chamada. Conclua as fases anteriores.', { tId, matchId });
+        if (Number(m.phaseIndex || 0) > 0 &&
+            (!drawWindow.ScoreplaceNextMatch ||
+             !drawWindow.ScoreplaceNextMatch.knownSide(m.p1) ||
+             !drawWindow.ScoreplaceNextMatch.knownSide(m.p2))) {
+          throw _drawFail('failed-precondition', 'Esta eliminatória depende da definição das duplas classificadas.', { tId, matchId });
         }
         if (m.isMonarch === true && !m.isTieBreak && Array.isArray(t.scheduleWindow?.days) &&
             t.scheduleWindow.days.length === 1 && m.monarchGroup != null && m.round != null && m.category) {

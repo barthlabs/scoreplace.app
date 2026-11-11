@@ -52,7 +52,7 @@
       (Number(match.phaseIndex || 0) === 0 ? 'groups' : 'elimination') === stage.kind &&
       !match.isTieBreak;
   }
-  function stageDone(t, matches, stage, finished) {
+  function stageGamesDone(t, matches, stage, finished) {
     var ids = new Set();
     var games = matches.filter(function (m) {
       if (!belongs(m, stage) || m.isBye || m.isSitOut) return false;
@@ -62,6 +62,18 @@
       return true;
     });
     if (games.length < expected(t, stage) || !games.every(finished)) return false;
+    if (stage.kind === 'groups') {
+      var decisions = t.phaseTieDecisions && t.phaseTieDecisions['0'] || {};
+      if (Object.keys(decisions).some(function (id) {
+        var decision = decisions[id];
+        return decision && String(decision.category || '') === stage.category &&
+          (decision.status === 'pending' || decision.status === 'review');
+      })) return false;
+    }
+    return true;
+  }
+  function stageDone(t, matches, stage, finished) {
+    if (!stageGamesDone(t, matches, stage, finished)) return false;
     if (stage.kind === 'groups') {
       var hasElimination = stages(t).some(function (s) { return s.category === stage.category && s.kind === 'elimination'; });
       if (hasElimination && !(t.phaseCategoryMaterialized && t.phaseCategoryMaterialized[stage.category])) return false;
@@ -109,22 +121,33 @@
       var targetIndex = targetStage ? sequence.findIndex(function (stage) { return key(stage) === key(targetStage); }) : -1;
       if (target) return Object.keys(intervals).every(function (id) {
         var predecessor = intervals[id];
-        if (targetStage.kind === 'elimination' && predecessor.stage.kind === 'groups' &&
-            predecessor.stage.category === targetStage.category)
-          return stageDone(t, matches, predecessor.stage, finished);
-        if (targetStage.kind === 'elimination' && predecessor.stage.kind === 'groups')
+        if (targetStage.kind === 'elimination' && predecessor.stage.kind === 'groups') {
+          var predecessorIndex = sequence.findIndex(function (stage) { return key(stage) === id; });
+          if (predecessorIndex < targetIndex) {
+            return predecessor.stage.category === targetStage.category
+              ? stageDone(t, matches, predecessor.stage, finished)
+              : stageGamesDone(t, matches, predecessor.stage, finished);
+          }
           return true;
+        }
         // Uma classificatória posterior não toma a vez das eliminatórias já
         // previstas antes dela, mesmo quando os horários da grade se sobrepõem.
         // Diamante/Ouro podem dividir quadras; Prata espera ambas terminarem.
         if (targetStage.kind === 'groups' && predecessor.stage.kind === 'elimination' &&
             sequence.findIndex(function (stage) { return key(stage) === id; }) < targetIndex)
           return stageDone(t, matches, predecessor.stage, finished);
+        if (targetStage.kind === 'elimination' && predecessor.stage.kind === 'elimination') {
+          var priorIndex = sequence.findIndex(function (stage) { return key(stage) === id; });
+          if (priorIndex >= 0 && priorIndex < targetIndex && !sequence[targetIndex].parallel)
+            return stageDone(t, matches, predecessor.stage, finished);
+        }
         if (id === key(targetStage) || predecessor.first >= target.first ||
             predecessor.last > target.first) return true;
         // Só etapas que terminam antes desta começar são pré-requisitos.
         // Etapas com janelas sobrepostas dividem as quadras de propósito.
-        return stageDone(t, matches, predecessor.stage, finished);
+        return targetStage.kind === 'groups' && predecessor.stage.kind === 'groups'
+          ? stageGamesDone(t, matches, predecessor.stage, finished)
+          : stageDone(t, matches, predecessor.stage, finished);
       });
     }
     var state = current(t, matches, finished);

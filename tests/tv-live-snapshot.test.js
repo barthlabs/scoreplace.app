@@ -88,7 +88,15 @@ assert.equal(monarchSnapshot.courts[0].series[0].scoreA, '6', 'resultado conclu�
 assert.equal(monarchSnapshot.courts[0].series[0].winnerSide, 1, 'o lado vencedor acompanha o resultado concluído');
 assert.equal(monarchSnapshot.courts[0].series[1].scoreA, '4', 'placar atual aparece na série');
 assert.equal(monarchSnapshot.courts[0].series[2].scoreA, '', 'jogo ainda não iniciado não inventa placar');
+assert.deepEqual(monarchSnapshot.courts[0].series.map(game => !!game.latestUpdate), [false,true,false],
+  'borda da última atualização fica no jogo chamado, não na quadra inteira');
 const monarchHtml = window._tvLiveBodyHtml(monarchSnapshot);
+assert.match(monarchHtml, /tv-series-game tv-series-active tv-series-latest-update/);
+assert.doesNotMatch(monarchHtml, /tv-court-series tv-court-latest/);
+assert.deepEqual(window._tvLiveBuildSnapshot({ ...monarchTv, matches:monarchTv.matches.map((m, i) =>
+  i === 0 ? { ...m, resultAt:'2026-10-22T21:02:00Z' } : m) }, Date.parse('2026-10-22T21:03:00Z'))
+  .courts[0].series.map(game => !!game.latestUpdate), [true,false,false],
+  'um placar mais recente transfere a borda para a linha do resultado');
 assert.match(monarchHtml, /JOGO 31[\s\S]*JOGO 32[\s\S]*JOGO 33/, 'ordem dos jogos fica explícita na TV');
 assert.match(monarchHtml, /tv-series-players/, 'nomes das duas duplas aparecem em cada jogo');
 assert.match(monarchHtml, /tv-series-win[\s\S]*tv-series-loss/, 'vencedor e perdedor recebem cores diferentes');
@@ -153,6 +161,9 @@ assert.match(customHtml, /tv-custom-board/);
 assert.match(customHtml, /tv-custom-qr/, 'QR permanece mesmo se um layout antigo o ocultou');
 assert.doesNotMatch(customHtml, /class="tv-score"/);
 assert.match(customHtml, /tv-custom-rankings/);
+assert.deepEqual(Array.from(window._tvLiveBuildSnapshot({ ...t, combinedCategories:['Fem Diamante','Fem Ouro','Fem Prata'] })
+  .brackets, section => section.category).slice(0, 3), ['Fem Diamante','Fem Ouro','Fem Prata'],
+  'editor oferece chaves das três categorias antes de publicar eliminatórias');
 const finals = [
   match(198, 'Quadra 1', 'VORTEX', 'BLAST', { bracket:'gold', round:3, scoreP1:6, scoreP2:2, winner:'p1' }),
   match(199, 'Quadra 2', 'ECLIPSE', 'VENOM', { bracket:'gold', round:3, isThirdPlace:true, scoreP1:4, scoreP2:6, winner:'p2' }),

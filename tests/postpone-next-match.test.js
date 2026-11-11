@@ -81,7 +81,7 @@ const fullCourts = context.window._bracketOperationsSelect({ id:'tour_full_court
   matches:[...activeDiamond, firstGold] });
 assert.equal(fullCourts.active.length, 8);
 assert.equal(fullCourts.next.id, 'gold-1', 'mostra o primeiro Ouro mesmo com todas as quadras ocupadas');
-assert.equal(fullCourts.nextCallable, false, 'prévia não antecipa a chamada da fase seguinte');
+assert.equal(fullCourts.nextCallable, true, 'jogo definido de outra etapa admite chamada ou adiamento manual');
 const withTie = { id:'tour_full_courts', courtCount:8, matches:[...activeDiamond, firstGold],
   phaseTieDecisions:{ '0':{ 'group-0:1:2':{ choice:'play', status:'pending', groupName:'Fem Diamante · Grupo A1',
     matches:[{ id:'tie-a', displayGameNumber:'3A', p1:{name:'Ana'}, p2:{name:'Bia'} }] } } } };

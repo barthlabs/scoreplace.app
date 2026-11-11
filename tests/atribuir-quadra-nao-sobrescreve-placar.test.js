@@ -34,8 +34,8 @@ if(courtBlockStart>=0 && courtBlockEnd>courtBlockStart){
   const agenda=require('../functions-autodraw/agenda-core.js');
   const testApply=(m,court,confirmCall,agoraIso,fail,tId,matchId,t,drawWindow) =>
     apply(m,court,confirmCall,agoraIso,fail,tId,matchId,t,
-      drawWindow ? { ...drawWindow, ScoreplaceNextMatch: { conflictsWithActive: () => false } } :
-        {_collectAllMatches:()=>[m], ScoreplaceNextMatch: { conflictsWithActive: () => false }},
+      drawWindow ? { ...drawWindow, ScoreplaceNextMatch: { conflictsWithActive: () => false, knownSide: side => !!side && side !== 'TBD' } } :
+        {_collectAllMatches:()=>[m], ScoreplaceNextMatch: { conflictsWithActive: () => false, knownSide: side => !!side && side !== 'TBD' }},
       _matchTiming,true,occupancy,agenda,{},reply=>reply,'owner',require('../functions-autodraw/tournament-rehearsal.js'),require('../js/domain/phase-call-order.js'));
   const m={court:'Quadra 4'};
   const event={callTime:5};
@@ -69,10 +69,14 @@ if(courtBlockStart>=0 && courtBlockEnd>courtBlockStart){
   const plan=require('./fixtures/camis-interleaved-plan.js');
   const prata={id:'prata-1',category:'Fem Prata',phaseIndex:0,court:'Quadra 8'};
   const concentrated={scheduleWindow:{interleavedPlan:plan},games:[prata]};
-  let premature=false;
-  try { await testApply(prata,'Quadra 8',true,'2026-10-22T17:00:00Z',fail,'t','prata-1',concentrated,drawWindow); }
-  catch (_) { premature=true; }
-  ok(premature && !prata.courtCalledAt,'Function recusa chamada de Prata antes das etapas Diamante e Ouro');
+  await testApply(prata,'Quadra 8',true,'2026-10-22T17:00:00Z',fail,'t','prata-1',concentrated,drawWindow);
+  ok(!!prata.courtCalledAt,'Function permite chamada manual fora da ordem prevista na planilha');
+  const unresolved={id:'elimination-1',category:'Fem Ouro',phaseIndex:1,p1:'TBD',p2:'Dupla definida',court:'Quadra 7'};
+  let dependency=false;
+  try { await testApply(unresolved,'Quadra 7',true,'2026-10-22T17:00:00Z',fail,'t','elimination-1',
+    {games:[unresolved]}, {_collectAllMatches: tournament=>tournament.games}); }
+  catch (_) { dependency=true; }
+  ok(dependency && !unresolved.courtCalledAt,'Function recusa eliminatória com dupla ainda indefinida');
 }
 ok(src.includes('data-start-ms') && src.includes('_matchCardTimestamp(m.courtClockBaseAt || m.courtCalledAt)') && src.includes('_matchCardTimestamp(m.startedAt)'),
   'card usa chamada para espera e início real para jogo ao vivo');

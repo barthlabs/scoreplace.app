@@ -1391,8 +1391,8 @@ window._bracketOperationsSelect = function (t) {
   var ordered = window._bracketPostponedOrder(candidates, postponed, ready);
   var next = window.ScoreplaceNextMatch && typeof window.ScoreplaceNextMatch.firstAvailable === 'function'
     ? window.ScoreplaceNextMatch.firstAvailable(ordered, matches, released) : null;
-  // A fase seguinte continua visível enquanto a atual ocupa todas as quadras.
-  // A prévia não libera a chamada antes de a etapa anterior terminar.
+  // A grade ordena a sugestão; uma fase posterior com duplas definidas pode
+  // ser chamada ou adiada manualmente quando não resta jogo anterior disponível.
   var preview = !next && window.ScoreplaceNextMatch && typeof window.ScoreplaceNextMatch.firstAvailable === 'function'
     ? window.ScoreplaceNextMatch.firstAvailable(seriesCandidates, matches, released) : null;
   var nextTie = tieMatches.find(function (m) { return !m.winnerKey && !m.courtCalledAt && !m.postponedAt; }) ||
@@ -1400,7 +1400,7 @@ window._bracketOperationsSelect = function (t) {
     tieMatches.find(function (m) { return m.tieStatus === 'review'; });
   var samePhaseNext = next && Number(next.phaseIndex || 0) === Number(t.currentPhaseIndex || 0) ? next : null;
   var callableTie = nextTie && (!nextTie.postponedAt || !samePhaseNext) ? nextTie : null;
-  return { next: callableTie || next || preview, nextCallable: !!callableTie || !!next,
+  return { next: callableTie || next || preview, nextCallable: !!callableTie || !!next || !!preview,
     tieCanPostpone: !!(callableTie && samePhaseNext && !callableTie.postponedAt),
     active: active, pending: pending, courts: courts, matches: matches };
 };

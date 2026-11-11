@@ -634,9 +634,10 @@ const CACHE_QUENTE = {
       /NUNCA resolver com undefined/.test(swSrc));
     ok('o activate MIGRA o cache velho em vez de só apagar (deploy não vira load 100% rede)',
       /novo\.put\(req, resp\)/.test(swSrc) && !/keys\.filter\(function\(k\) \{ return k !== CACHE_NAME; \}\)\s*\.map\(function\(k\) \{ return caches\.delete\(k\); \}\)/.test(swSrc));
-    ok('o hide() do splash tem fallback pra container vazio (splash nunca revela o preto)',
-      /O SPLASH NUNCA SAI DE CIMA DE UM CONTAINER VAZIO/.test(shell) &&
-      /Tentar de novo/.test(shell));
+    ok('o splash permanece com a barra até a view ter conteúdo, sem aviso prematuro',
+      /hidden \|\| !hasRenderableView\(\)/.test(shell) &&
+      /_bootReady === true\) && hasRenderableView\(\)/.test(shell) &&
+      !/O carregamento demorou mais que o esperado/.test(shell));
     const routerSrc = fs.readFileSync(path.join(__dirname, '..', 'js', 'router.js'), 'utf8');
     ok('o ramo do authCache no router tem VIGIA (auth pendurada não deixa o container vazio pra sempre)',
       /_authNoCacheFallback = setTimeout[\s\S]{0,900}8000\)/.test(routerSrc));

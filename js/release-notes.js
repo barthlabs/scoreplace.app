@@ -1,6 +1,12 @@
 // 2.6.51 — A abertura mantém a barra de progresso até a página estar montada;
 // a mensagem prematura de demora e o reload automático não interrompem mais
-// a carga de um torneio grande.
+// a carga de um torneio grande. A fila do CAMIS segue Diamante, Ouro,
+// eliminatórias e Prata, inserindo o desempate necessário. Chamadas manuais
+// só aguardam quando a dupla da eliminatória ainda não foi definida.
+// Pular jogo continua disponível para reordenar chamadas quando houver outro
+// confronto definido, inclusive fora da etapa sugerida pela grade.
+// Na TV, as quadras preenchem a altura salva, a borda dourada marca o último
+// jogo atualizado e as categorias de eliminatórias aparecem no editor.
 // 2.6.50 — A revisão da grade troca blocos ao arrastar sem deslocar rodadas
 // seguintes; um movimento que quebraria a sequência não é aplicado.
 // Salvar e sortear mostra o progresso e mantém a tela até a chave aparecer.

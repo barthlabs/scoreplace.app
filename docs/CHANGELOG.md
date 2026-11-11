@@ -1,7 +1,10 @@
 ## 2.6.51 — 11/nov/2026 (carregamento sem falso erro)
 
 - O splash de abertura mantém logo, bola e barra de progresso até a rota ter conteúdo. O timeout de 12 segundos, o reload automático e a tela “O carregamento demorou mais que o esperado” foram removidos do boot; uma carga longa não interrompe mais o torneio.
-- A chamada antecipada da 2.6.50 foi confirmada no Cloud Run após corrigir o tráfego de `assignMatchCourt`, que ainda apontava 100% para a revisão antiga. Nenhum dado do CAMIS foi alterado neste corte. Sem mudanças de Functions ou versões nativas.
+- A fila operacional respeita a planilha do CAMIS: classificatória Diamante, classificatória Ouro, eliminatórias Diamante/Ouro e depois Prata. Um desempate pendente entra antes da eliminatória dependente. Chamada manual não é bloqueada pela data ou pela etapa sugerida; a Function recusa eliminatória sem as duas duplas definidas.
+- Pular jogo volta a aparecer quando a fila sugere um confronto já definido de outra etapa; o organizador pode adiá-lo e seguir para outro jogo disponível. A grade continua definindo a sugestão inicial.
+- A TV usa toda a altura do box de quadras que o organizador salvou, mesmo quando elas estão vazias. A borda dourada simples marca somente a linha do jogo com a atualização mais recente, sem brilho na quadra inteira. O editor oferece uma chave de eliminatórias por categoria mesmo antes de publicar os confrontos.
+- `applyMatchResult` foi direcionada à revisão corrigida que mantém os três jogos Rei/Rainha na mesma quadra. `assignMatchCourt` recebeu a regra da chamada manual. Nenhum dado do CAMIS ou versão nativa foi alterado neste corte.
 
 ## 2.6.50 — 11/nov/2026 (grade e chamada durante os testes)
 

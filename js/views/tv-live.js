@@ -83,7 +83,7 @@
       : (match[slot === 'p1' ? 'team1Uids' : 'team2Uids'] || match[slot + 'Uid']);
     return String(window._resolveSideLive(t, raw, uids) || raw);
   }
-  function monarchSeries(t, current, matches, occupancy, teams, latestResultId) {
+  function monarchSeries(t, current, matches, occupancy, teams, latestUpdateId) {
     if (!current || current.isMonarch !== true || current.monarchGroup == null || current.round == null || !current.category) return null;
     var games = matches.filter(function (game) {
       return game && game.isMonarch === true && !game.isTieBreak &&
@@ -107,7 +107,7 @@
         scoreA: done || active ? (game.wo ? 'W.O.' : gameScore(game, 1, done)) : '',
         scoreB: done || active ? (game.wo ? 'W.O.' : gameScore(game, 2, done)) : '',
         status: done ? 'done' : active ? 'active' : 'waiting', winnerSide: sideWinner,
-        latestResult: done && String(game.id || '') === latestResultId };
+        latestUpdate: String(game.id || '') === latestUpdateId };
     });
   }
   function rankingSections(t, matches, teams) {
@@ -176,8 +176,11 @@
         }
       } catch (e) { if (window._warn) window._warn('Prévia das eliminatórias indisponível', e); }
     }
-    actual.concat(projected).forEach(function (m) {
-      var category = String(m.category || 'Geral');
+    // As categorias já existem na classificatória, antes de a eliminatória
+    // ser publicada. O organizador precisa poder colocar essas chaves na TV.
+    actual.concat(projected, matches).forEach(function (m) {
+      if (!m || !m.category) return;
+      var category = String(m.category);
       if (categories.indexOf(category) < 0) categories.push(category);
     });
     var occupancy = window.ScoreplaceCourtOccupancy || { isFinished:function (m) { return !!(m.resultAt || m.winner || m.wo); } };
@@ -251,12 +254,14 @@
         latestPhaseId = String(m.id || '');
       }
     });
+    var latestUpdateId = latestResult && timestamp(latestResult.resultAt || latestResult.completedAt) > latestTransitionAt
+      ? latestResultId : latestPhaseId;
     var courtCards = courtNames.map(function (name) {
       var m = allActive.find(function (item) { return String(item.court) === name; });
       if (!m) return { name: name };
       return { name: name, number: m._gameNum || m.scheduledGameNumber || m.matchNumber || '', category: String(m.category || m.tierLabel || ''),
-        latest: !!latestPhaseId && String(m.id || '') === latestPhaseId,
-        series: monarchSeries(t, m, matches, occupancy, teams, latestResultId),
+        latest: !!latestUpdateId && String(m.id || '') === latestUpdateId,
+        series: monarchSeries(t, m, matches, occupancy, teams, latestUpdateId),
         a: sideName(t, m, 'p1'), b: sideName(t, m, 'p2'), ta: teamFor(m, 1, teams), tb: teamFor(m, 2, teams),
         scoreA: gameScore(m, 1) === '–' ? '0' : gameScore(m, 1),
         scoreB: gameScore(m, 2) === '–' ? '0' : gameScore(m, 2),
@@ -388,7 +393,7 @@
   function cardHtml(card, options) {
     options = options || { court: true, number: true, category: true, teams: true, players: true, score: true, timer: true };
     if (!card.number && !card.a && !card.b) return '<article class="tv-court empty">' + (options.court ? '<h2>' + esc(card.name) + '</h2>' : '') + '<p>Aguardando chamada</p></article>';
-    if (card.series) return '<article class="tv-court tv-court-series' + (card.latest ? ' tv-court-latest' : '') + '"><div class="tv-court-top"><h2>' + (options.court ? esc(card.name) : '') + '</h2>' + (options.category ? '<span>' + esc(card.category) + '</span>' : '') + '</div><div class="tv-series-games">' +
+    if (card.series) return '<article class="tv-court tv-court-series"><div class="tv-court-top"><h2>' + (options.court ? esc(card.name) : '') + '</h2>' + (options.category ? '<span>' + esc(card.category) + '</span>' : '') + '</div><div class="tv-series-games">' +
       card.series.map(function (game) {
         function side(label, score, direction, outcome) {
           var players = String(label || '').split(' / ').map(function (name) { return name.trim(); }).filter(Boolean);
@@ -400,7 +405,7 @@
           var a = Number(game.scoreA), b = Number(game.scoreB);
           if (game.scoreA !== '' && game.scoreB !== '' && Number.isFinite(a) && Number.isFinite(b) && a !== b) winnerSide = a > b ? 1 : 2;
         }
-        return '<div class="tv-series-game tv-series-' + game.status + (game.latestResult ? ' tv-series-latest-result' : '') + '"><b>JOGO ' + esc(game.number) + '</b>' +
+        return '<div class="tv-series-game tv-series-' + game.status + (game.latestUpdate ? ' tv-series-latest-update' : '') + '"><b>JOGO ' + esc(game.number) + '</b>' +
           side(game.a, game.scoreA, 'left', game.status === 'done' && winnerSide ? (winnerSide === 1 ? 'win' : 'loss') : '') + '<span class="tv-series-versus">×</span>' + side(game.b, game.scoreB, 'right', game.status === 'done' && winnerSide ? (winnerSide === 2 ? 'win' : 'loss') : '') + '</div>';
       }).join('') + '</div>' +
       (options.timer ? '<div class="tv-court-footer"><strong data-tv-start="' + card.timerStart + '">00:00:00</strong></div>' : '') + '</article>';
@@ -648,6 +653,7 @@
     '.tv-custom-courts>.tv-courts{grid-template-rows:none;grid-auto-rows:minmax(115px,auto);align-content:start;overflow-y:auto;scrollbar-width:none}.tv-custom-courts>.tv-courts::-webkit-scrollbar,.tv-bracket-list::-webkit-scrollbar{display:none}.tv-custom-upcoming>.tv-upcoming,.tv-custom-rankings>.tv-rankings{overflow-y:auto;scrollbar-width:none}.tv-custom-rankings .tv-ranking-group{max-height:none;overflow:visible}.tv-brackets>.tv-bracket-rounds{display:flex;align-items:center;gap:.25vw;overflow:hidden;white-space:nowrap;color:#94a3b8;font-size:clamp(.6rem,.7vw,.95rem)}.tv-bracket-rounds span{overflow:hidden;text-overflow:ellipsis}.tv-bracket-rounds .tv-bracket-round-active{color:#fbbf24;font-weight:900}.tv-brackets>small{color:#cbd5e1;font-size:clamp(.65rem,.7vw,.9rem);margin:.2vw 0}.tv-bracket-list{flex:1;min-height:0;overflow-y:auto;scrollbar-width:none}.tv-bracket-match{border:1px solid #315376;border-radius:.3vw;margin-bottom:.25vw;background:#10223a}.tv-bracket-match-in-court{border:2px solid #4ade80;box-shadow:0 0 12px #4ade8066}.tv-series-game.tv-series-latest-result{outline:2px solid #fbbf24;box-shadow:0 0 12px #fbbf2466}' +
     '.tv-courts,.tv-custom-box>.tv-courts{grid-template-rows:repeat(var(--tv-court-rows,3),minmax(0,1fr))}.tv-custom-courts>.tv-courts{grid-template-rows:none;grid-auto-rows:minmax(115px,auto)}' +
     '.tv-court-series{padding:.35vw .55vw}.tv-court-series .tv-court-top{flex:none;min-height:0;padding-bottom:.12vw}.tv-court-series .tv-court-top h2{font-size:clamp(.9rem,1vw,1.35rem)}.tv-series-games{display:grid;grid-template-rows:repeat(3,minmax(0,1fr));flex:1;min-height:0;gap:.15vw}.tv-series-game{display:grid;grid-template-columns:4.2vw minmax(0,1fr) 1.2vw minmax(0,1fr);align-items:center;gap:.25vw;min-width:0;min-height:0;border-radius:.25vw;background:color-mix(in srgb,var(--tv-secondary) 15%,#16253a);padding:.1vw .3vw}.tv-series-game.tv-series-active{outline:1px solid #38bdf8;background:color-mix(in srgb,var(--tv-primary) 22%,#26394d)}.tv-series-game.tv-series-done{opacity:.88}.tv-series-game>b{color:#7dd3fc;font-size:clamp(.7rem,.75vw,1rem);white-space:nowrap}.tv-series-side{display:flex;align-items:center;justify-content:space-between;gap:.2vw;min-width:0;min-height:0;border-radius:.2vw;padding:.1vw .2vw}.tv-series-side.tv-series-win{background:#123b2b}.tv-series-side.tv-series-loss{background:#4b2027}.tv-series-players{display:flex;flex-direction:column;justify-content:center;min-width:0;min-height:0;line-height:1.05}.tv-series-players span{display:block;white-space:normal;overflow-wrap:anywhere;font-size:clamp(.68rem,.78vw,1.04rem);font-weight:750}.tv-series-right{flex-direction:row-reverse}.tv-series-right .tv-series-players{text-align:right}.tv-series-side strong{flex:none;color:#fff;font-size:clamp(.85rem,1vw,1.4rem);font-variant-numeric:tabular-nums}.tv-series-win strong{color:#4ade80}.tv-series-loss strong{color:#f87171}.tv-series-versus{text-align:center;color:#94a3b8;font-weight:900}.tv-court-series .tv-court-footer{flex:none;margin-top:.1vw}.tv-court-series .tv-court-footer strong{font-size:clamp(.8rem,.95vw,1.25rem)}' +
+    '.tv-custom-courts>.tv-courts{grid-auto-rows:minmax(115px,1fr);align-content:stretch}.tv-custom-courts .tv-series-game>b{font-size:clamp(.8rem,.9vw,1.2rem)}.tv-custom-courts .tv-series-players span{font-size:clamp(.8rem,1.05vw,1.4rem)}.tv-custom-courts .tv-series-side strong{font-size:clamp(1rem,1.25vw,1.7rem)}.tv-custom-courts .tv-court-top h2{font-size:clamp(1rem,1.2vw,1.6rem)}' +
     '</style>');
   styles = styles.replace('</style>',
     '.tv-custom-qr{z-index:20}.tv-focus-card,.tv-focus-standing{display:flex;flex-direction:column;width:100%;height:100%;min-height:0;overflow:hidden;padding:.7vw;background:color-mix(in srgb,var(--tv-primary) 18%,#0d1b2e);border:1px solid color-mix(in srgb,var(--tv-secondary) 30%,#1b3f61);border-radius:.7vw}' +
@@ -655,6 +661,7 @@
     '.tv-focus-side{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:.4vw;min-height:0;flex:1;padding:.2vw .5vw;background:#222;border-radius:.4vw}.tv-focus-winner{background:#123b2b}' +
     '.tv-focus-players{display:flex;flex-direction:column;justify-content:center;min-width:0;line-height:1.08}.tv-focus-players span{display:block;overflow-wrap:anywhere;font-size:clamp(.72rem,1vw,1.4rem);font-weight:750}' +
     '.tv-focus-side strong{font-size:clamp(1.1rem,1.8vw,2.5rem);font-variant-numeric:tabular-nums}.tv-focus-winner strong{color:#4ade80}.tv-focus-vs{flex:none;text-align:center;color:#94a3b8;font-size:clamp(.65rem,.75vw,1rem);font-weight:900}' +
+    '.tv-theme .tv-court.tv-court-latest,.tv-series-game.tv-series-latest-update{border:2px solid #fbbf24;box-shadow:none}' +
     '.tv-focus-standing-list{flex:1;min-height:0;overflow:auto;padding-bottom:var(--tv-qr-clearance,2vw)}.tv-focus-standing-row{display:grid;grid-template-columns:2vw minmax(0,1fr);gap:.5vw;align-items:center;min-height:2.3vw;padding:.2vw .4vw;border-bottom:1px solid #39475b;font-size:clamp(.85rem,1.05vw,1.4rem)}.tv-focus-standing-row b{color:#fbbf24}.tv-focus-standing-row span{overflow-wrap:anywhere}' +
     '</style>');
   // O editor usa exatamente o HTML e o CSS da janela No ar. O iframe não
