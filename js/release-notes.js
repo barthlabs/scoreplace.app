@@ -9,6 +9,8 @@
 // só envia imagem nova ou remoção escolhida pelo organizador.
 // Cancelar a confirmação de pontuação também descarta a escolha de remover a capa.
 // Alternar de Cor de volta para Foto sem nova imagem preserva a capa publicada.
+// A store só remove a capa quando o clique em Cor ou Remover marca essa intenção;
+// voltar para Foto cancela a remoção, inclusive durante a hidratação do editor.
 // O teste do editor confirma que o logo colocado e salvo aparece na TV.
 // A capa pode mudar mesmo depois do sorteio, sem enviar a grade de jogos.
 // A correção do comparador no servidor permite confirmar os jogos Rei/Rainha.
