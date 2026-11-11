@@ -211,7 +211,19 @@ g.window.ScoreplaceCourtOccupancy = require('./vendor/court-occupancy.js');
 require('./vendor/next-match.js');
 g.window.ScoreplaceWaitlist = require('./vendor/waitlist.js');
 g.window.ScoreplaceStandings = require('./vendor/standings.js');
-require('./vendor/standings-core.js'); // comparador da classificação e do desempate automático
+// index.js também importa este módulo antes de criar `window`. Nesse primeiro
+// require o CommonJS fica em cache sem instalar os aliases globais; um segundo
+// require aqui não executa o módulo de novo e o primeiro placar Rei/Rainha cai
+// ao ordenar a classificação. Instale os aliases a partir do contrato exportado.
+const _standingsCore = require('./vendor/standings-core.js');
+Object.assign(g.window, {
+  _standingsCompare: _standingsCore.standingsCompare,
+  _standingsCompareConfig: _standingsCore.standingsCompareConfig,
+  _standingsBuildH2H: _standingsCore.buildH2H,
+  _standingsOrdemChave: _standingsCore.buildOrdemChave,
+  _standingsExplain: _standingsCore.explainTiebreakers,
+  _standingsTbPoints: _standingsCore.tiebreakPointsOfMatch
+});
 g.window.ScoreplaceTeamCompetition = require('./vendor/team-competition.js');
 g.window.ScoreplaceRealtimeFreshness = require('./vendor/realtime-freshness.js');
 g.window._isRemoteFirestoreSnapshot = g.window.ScoreplaceRealtimeFreshness.isRemoteSnapshot;

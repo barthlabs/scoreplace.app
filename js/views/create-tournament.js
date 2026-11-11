@@ -516,7 +516,7 @@ function setupCreateTournamentModal() {
                       <button type="button" onclick="document.getElementById('logo-file-input').click()" title="Upload de arquivo" style="padding: 8px 10px; border-radius: 10px; border: 1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1)); background: var(--sp-g-255-255-255-005,rgba(255,255,255,0.05)); color: var(--text-muted); font-size: 0.8rem; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">
                         📁
                       </button>
-                      <button type="button" onclick="window._clearTournamentLogo()" title="Remover logo" style="padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(239,68,68,0.2); background: rgba(239,68,68,0.08); color: var(--sp-c-f87171,#f87171); font-size: 0.8rem; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(239,68,68,0.15)'" onmouseout="this.style.background='rgba(239,68,68,0.08)'">
+                      <button type="button" onclick="window._clearTournamentLogo(true)" title="Remover logo" style="padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(239,68,68,0.2); background: rgba(239,68,68,0.08); color: var(--sp-c-f87171,#f87171); font-size: 0.8rem; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(239,68,68,0.15)'" onmouseout="this.style.background='rgba(239,68,68,0.08)'">
                         ✕
                       </button>
                     </div>
@@ -3112,7 +3112,8 @@ function setupCreateTournamentModal() {
     window._updateLogoPreviewShape();
   };
 
-  window._clearTournamentLogo = function() {
+  window._clearTournamentLogo = function(explicitRemoval) {
+    if (explicitRemoval) window._logoRemovalRequested = true;
     var preview = document.getElementById('logo-preview');
     var hidden = document.getElementById('tourn-logo-data');
     if (preview) preview.innerHTML = '<span style="font-size:0.7rem;color:var(--text-muted);text-align:center;padding:4px;">' + _t('create.noLogo') + '</span>';
@@ -5864,6 +5865,7 @@ function setupCreateTournamentModal() {
     // before the shared image accessor is installed; the editor cannot depend on
     // that timing or it silently falls back to "Sem logo".  Read the canonical URL
     // directly as a defensive fallback (legacy base64 remains supported).
+    window._logoRemovalRequested = false;
     var _logoSrcEdit = (typeof window._tourLogoSrc === 'function')
       ? window._tourLogoSrc(t)
       : (t.logoUrl || t.logoData || '');
@@ -5881,7 +5883,7 @@ function setupCreateTournamentModal() {
         if (_logoDb && typeof _logoDb.loadTournamentById === 'function' && !window._editLogoHydrating) {
           window._editLogoHydrating = String(tId);
           _logoDb.loadTournamentById(tId).then(function (_fullLogoTournament) {
-            if (!_fullLogoTournament || String((document.getElementById('edit-tournament-id') || {}).value || '') !== String(tId)) return;
+            if (!_fullLogoTournament || window._logoRemovalRequested || String((document.getElementById('edit-tournament-id') || {}).value || '') !== String(tId)) return;
             var _fullLogo = (typeof window._tourLogoSrc === 'function')
               ? window._tourLogoSrc(_fullLogoTournament)
               : (_fullLogoTournament.logoUrl || _fullLogoTournament.logoData || '');
@@ -6507,6 +6509,42 @@ window._ctPaintRatio = function () {
     onEnabled: 'window._ctSetRatioEnabled'
   });
 };
+window._readTournamentBrandingPatch = function(editId) {
+  var t = window.AppStore && (window.AppStore.tournaments || []).find(function (item) { return String(item.id) === String(editId); });
+  if (!t) return {};
+  var patch = {}, read = function (id) { return document.getElementById(id); };
+  var logo = read('tourn-logo-data');
+  var previousLogo = t.logoUrl || t.logoData || '';
+  if (logo && logo.value && logo.value !== previousLogo) patch.logoData = logo.value;
+  else if (logo && !logo.value && window._logoRemovalRequested && previousLogo) patch.logoData = '';
+  var cover = read('tourn-cover-data'), previousCover = t.coverUrl || t.coverPhotoData || '';
+  if (cover && cover.value && cover.value !== previousCover) patch.coverPhotoData = cover.value;
+  var fields = [
+    ['coverMode','tourn-cover-mode','color'], ['coverColor','tourn-cover-color','#1f2937'],
+    ['coverGradientColor','tourn-cover-gradient-color','#0f172a'],
+    ['coverGradientEnabled','tourn-cover-gradient-enabled',false],
+    ['coverGradientAngle','tourn-cover-gradient-angle',135],
+    ['coverGradientBalance','tourn-cover-gradient-balance',50],
+    ['titleColor','tourn-title-color','#ffffff'], ['logoLocked','tourn-logo-locked',false],
+    ['logoShape','tourn-logo-shape','square'], ['logoRadius','tourn-logo-radius',14],
+    ['logoAspect','tourn-logo-aspect',1]
+  ];
+  fields.forEach(function (entry) {
+    var el = read(entry[1]); if (!el) return;
+    if (!el.value && entry[0] !== 'coverGradientEnabled' && entry[0] !== 'logoLocked') return;
+    var value = entry[0] === 'coverGradientEnabled' ? !!el.checked :
+      entry[0] === 'logoLocked' ? el.value === '1' :
+      ['coverGradientAngle','coverGradientBalance','logoRadius','logoAspect'].indexOf(entry[0]) >= 0 ? Number(el.value) : el.value;
+    var old = t[entry[0]] === undefined ? entry[2] : t[entry[0]];
+    if (JSON.stringify(value) !== JSON.stringify(old)) patch[entry[0]] = value;
+  });
+  if (typeof window._coverBlendValue === 'function') {
+    var blend = window._coverBlendValue();
+    if (blend !== (t.coverGradientBlend == null ? null : t.coverGradientBlend)) patch.coverGradientBlend = blend;
+  }
+  if (patch.coverMode === 'color' && previousCover && cover && !cover.value) patch.coverPhotoData = '';
+  return patch;
+};
 window._saveTournamentClickHandler = async function() {
       var saveButton = document.getElementById('btn-save-tournament');
       if (saveButton && saveButton.disabled) return;
@@ -6517,6 +6555,18 @@ window._saveTournamentClickHandler = async function() {
       var createdId = null;
       try {
         const editId = document.getElementById('edit-tournament-id').value;
+        // O Salvar do topo também serve a edição da TV. Gravar a ficha inteira
+        // reenviava a grade publicada e recusava um layout visual válido.
+        var brandingPatch = editId && typeof window._readTournamentBrandingPatch === 'function'
+          ? window._readTournamentBrandingPatch(editId) : {};
+        var tvDirty = editId && typeof window._tvEditorHasChanges === 'function' && window._tvEditorHasChanges();
+        if (editId && (tvDirty || Object.keys(brandingPatch).length)) {
+          if (Object.keys(brandingPatch).length) await window.AppStore.addTournament(Object.assign({ id:editId }, brandingPatch));
+          if (tvDirty && typeof window._tvEditorSaveChanges === 'function') await window._tvEditorSaveChanges();
+          window._logoRemovalRequested = false;
+          showNotification('Personalização salva', 'Logo, cores e tela No ar foram gravados. Outras alterações da ficha não foram salvas.', 'success');
+          return;
+        }
         var pendingForm = document.getElementById('form-create-tournament');
         if (!editId && pendingForm && pendingForm._pendingCreation) {
           createdId = await window.AppStore.addTournament(pendingForm._pendingCreation);
@@ -7158,6 +7208,23 @@ window._saveTournamentClickHandler = async function() {
             });
             // L7.P1.34: nenhuma alteração local é tratada como salva. A Function
             // valida a configuração contra o documento fresco e devolve o estado canônico.
+            var hasPublishedGames = (Array.isArray(t.matches) && t.matches.length > 0) ||
+              (Array.isArray(t.rounds) && t.rounds.length > 0) ||
+              (Array.isArray(t.groups) && t.groups.length > 0);
+            // Campo de imagem vazio durante a hidratação não é pedido de remoção.
+            // Só o botão ✕ pode remover o logo; a capa só sai se o modo foi
+            // explicitamente trocado de foto para cor.
+            if (!tourData.logoData && !window._logoRemovalRequested) delete tourData.logoData;
+            if (!tourData.coverPhotoData && tourData.coverMode === 'photo') delete tourData.coverPhotoData;
+            if (hasPublishedGames) {
+              // A grade publicada é outro documento lógico. Editar datas, nome ou
+              // outras opções da ficha nunca reenvia a proposta de sorteio.
+              delete tourData.scheduleWindow;
+              delete tourData.tvLayout;
+              delete tourData.tvScreens;
+              delete tourData.logoData;
+              delete tourData.coverPhotoData;
+            }
             await window.AppStore.addTournament(tourData);
             var _freshEdit = window.AppStore.tournaments.find(function (x) { return String(x.id) === String(editId); }) || t;
             // A presença é um comando próprio; só é sincronizada depois de a configuração

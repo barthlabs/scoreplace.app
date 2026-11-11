@@ -106,6 +106,19 @@
         names.forEach(function (el) { el.style.fontSize = size + 'px'; });
       }
     });
+    root.querySelectorAll('.tv-series-players').forEach(function (box) {
+      var names = box.querySelectorAll('span');
+      if (!box.clientHeight || !names.length) return;
+      var slot = Math.floor(box.clientHeight / names.length);
+      names.forEach(function (el) {
+        el.style.fontSize = '';
+        el.style.maxHeight = slot + 'px';
+        var size = parseFloat(doc.defaultView.getComputedStyle(el).fontSize) || 12;
+        while (el.scrollHeight > el.clientHeight + 1 && size > 8) {
+          size = Math.max(8, size - .5); el.style.fontSize = size + 'px';
+        }
+      });
+    });
   }
   function scale(host) {
     var canvas = host.querySelector('[data-tv-canvas]'), frame = host.querySelector('[data-tv-frame]');
@@ -143,6 +156,9 @@
       return '<option value="' + i + '"' + (i === activePhase ? ' selected' : '') + (occupied.has(i) && i !== activePhase ? ' disabled' : '') + '>' + esc(names[i] || 'Fase ' + (i + 1)) + '</option>';
     }).join('');
     snapshot = previewSnapshot(layout);
+    var availableBrackets = (snapshot && snapshot.brackets || []).filter(function (part) {
+      return !(layout.bracketBoxes || []).some(function (b) { return b.category === part.category; });
+    });
     var choicesByKind = sourceChoices(window._editingTournament, snapshot);
     var documentHtml = snapshot ? window._tvLivePreviewDocument(snapshot) : '';
     var visible = allIds(layout).filter(function (id) { return getBox(layout, id).visible; });
@@ -166,9 +182,10 @@
         return '<label style="font-size:.8rem">' + labels[id] + ' <select data-tv-source="' + id + '" aria-label="' + labels[id] + '" style="max-width:12rem"><option value="">Selecionar...</option>' +
           choices.map(function (choice) { var value = choice.id || choice.key; return '<option value="' + esc(value) + '"' + (source === value ? ' selected' : '') + '>' + esc(choice.label) + '</option>'; }).join('') + '</select></label>';
       }).join('') + '</div>' +
-      '<div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:.4rem 0 .7rem"><label>Eliminatórias <select data-tv-add-bracket aria-label="Categoria da nova chave"><option value="">Escolha a categoria</option>' +
-      (snapshot && snapshot.brackets || []).filter(function (part) { return !(layout.bracketBoxes || []).some(function (b) { return b.category === part.category; }); }).map(function (part) { return '<option value="' + esc(part.category) + '">' + esc(part.category) + '</option>'; }).join('') + '</select></label>' +
-      '<button type="button" data-tv-add-bracket-button class="btn btn-secondary">+ Colocar chave</button></div>' +
+      '<div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:.4rem 0 .7rem"><strong>Eliminatórias por categoria</strong>' +
+      (availableBrackets.length ? availableBrackets.map(function (part) {
+        return '<button type="button" data-tv-add-bracket-button="' + esc(part.category) + '" class="btn btn-secondary">+ Chave ' + esc(part.category) + '</button>';
+      }).join('') : '<span style="color:var(--text-muted)">Todas as chaves disponíveis já estão na tela</span>') + '</div>' +
       '<div data-tv-canvas aria-label="Prévia da tela No ar" style="position:relative;width:100%;aspect-ratio:16/9;background:' + esc(layout.backgroundMode === 'custom' ? layout.background : (snapshot && snapshot.theme && snapshot.theme.background || '#060d1a')) + ';border:2px solid #818cf8;border-radius:8px;overflow:hidden;touch-action:none;user-select:none">' +
       (documentHtml ? '<iframe data-tv-frame title="Prévia com dados do torneio" sandbox="allow-same-origin" tabindex="-1" style="position:absolute;left:0;top:0;width:1280px;height:720px;border:0;transform-origin:top left;pointer-events:none"></iframe>' :
         '<div data-tv-empty style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:1rem;text-align:center;color:#cbd5e1;font-size:.9rem">Salve e configure os jogos do torneio para visualizar os dados reais nesta prévia.</div>') +
@@ -213,14 +230,14 @@
     host.querySelectorAll('[data-tv-source]').forEach(function (input) { input.onchange = function () {
       layout.sections[input.dataset.tvSource].source = input.value; touched = true; render();
     }; });
-    host.querySelector('[data-tv-add-bracket-button]').onclick = function () {
-      var category = host.querySelector('[data-tv-add-bracket]').value;
+    host.querySelectorAll('[data-tv-add-bracket-button]').forEach(function (button) { button.onclick = function () {
+      var category = button.dataset.tvAddBracketButton;
       if (!category || layout.bracketBoxes.some(function (box) { return box.category === category; })) return;
       var index = layout.bracketBoxes.length;
       layout.bracketBoxes.push({ category:category, visible:true, x:50, y:10 + (index % 3) * 16,
         w:49, h:Math.min(55, 90 - (10 + (index % 3) * 16)) });
       touched = true; render();
-    };
+    }; });
     host.querySelector('[data-tv-screen-list]').onchange = function (event) {
       activePhase = Number(event.target.value); render();
     };

@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.6.51';
+window.SCOREPLACE_VERSION = '2.6.52';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -14847,6 +14847,10 @@ window.AppStore = {
       // configuração; a escrita Firestore continua exclusivamente na Function.
       var _images = [['logoData', 'logoUrl', 'logo'], ['coverPhotoData', 'coverUrl', 'cover']];
       var _saveEdit = Promise.all(_images.map(function (pair) {
+        // Atualizações parciais (como a tela No ar) omitem imagens por intenção.
+        // Omissão não é pedido para remover a capa ou o logo já publicados.
+        if (!Object.prototype.hasOwnProperty.call(data, pair[0]) &&
+            !Object.prototype.hasOwnProperty.call(data, pair[1])) return Promise.resolve();
         var raw = data[pair[0]] || _editPatch[pair[1]];
         if (!raw) {
           delete _editPatch[pair[0]];

@@ -1,5 +1,7 @@
 'use strict';
 const fs = require('fs');
+const vm = require('vm');
+const assert = require('node:assert/strict');
 let failed = 0;
 const ok = (value, label) => { console.log((value ? '✓ ' : '✗ ') + label); if (!value) failed++; };
 const store = fs.readFileSync('js/store.js', 'utf8');
@@ -38,4 +40,19 @@ ok(/'titleColor'/.test(contract) && part.includes("'titleColor' in patch") && ui
   'cor do título entra na criação, edição e exibição com validação no servidor');
 ok(part.includes('_fasesDeConfiguracaoAtualizaveis') && part.includes('t.history.push'),
   'fases já materializadas preservam o motor e a alteração ganha histórico servidor');
-process.exit(failed ? 1 : 0);
+// O salvamento parcial da TV não pode apagar capa/logo por omissão.
+(async () => {
+  const method = add.replace(/,\s*$/, '');
+  const sandbox = { window:{ _callCF:async (_name, command) => {
+    assert.deepEqual(Object.keys(command.patch), ['tvScreens']);
+    return { data:{ tournament:{ id:'tour-tv', logoUrl:'logo-existente', coverUrl:'capa-existente', tvScreens:command.patch.tvScreens } } };
+  }, _error:() => {} } };
+  const editor = vm.runInNewContext('({' + method + '})', sandbox);
+  sandbox.window.AppStore = editor;
+  editor.tournaments = [{ id:'tour-tv', logoUrl:'logo-existente', coverUrl:'capa-existente' }];
+  editor._saveToCache = () => {};
+  await editor.addTournament({ id:'tour-tv', tvScreens:[{ layout:{ background:'#000000' } }] });
+  ok(editor.tournaments[0].logoUrl === 'logo-existente' && editor.tournaments[0].coverUrl === 'capa-existente',
+    'salvar somente a TV preserva capa e logo existentes');
+  process.exit(failed ? 1 : 0);
+})().catch(err => { console.error(err); process.exit(1); });

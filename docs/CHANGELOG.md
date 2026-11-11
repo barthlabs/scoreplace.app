@@ -1,3 +1,11 @@
+## 2.6.52 — 11/nov/2026 (cores e edição da TV)
+
+- A TV deriva cabeçalho, quadras e linhas das cores de fundo do cartão do torneio; no CAMIS, preto e branco produzem tons neutros, sem o azul fixo. A geometria salva da tela não é alterada.
+- Cada nome de atleta que ultrapassa seu espaço reduz só a própria fonte. Nomes que cabem permanecem no tamanho anterior. A prévia do editor usa o mesmo ajuste.
+- O editor exibe um botão direto para adicionar a chave de cada categoria disponível. O Salvar do topo grava logo, cores e TV sem reenviar a grade publicada; o logo só é removido pelo botão próprio. A marca sob o QR ganha fundo escuro para manter a leitura quando a área atrás é clara.
+- O servidor reinstala o comparador de classificação ao carregar o motor Rei/Rainha, mesmo quando o módulo já entrou no cache CommonJS. Isso corrige a exceção que recusava o primeiro placar e impedia a simulação de avançar. As Functions operacionais afetadas são publicadas antes do Hosting.
+- Sem alteração automática em jogos, placares ou grade. O logo original do CAMIS foi restaurado pontualmente, com autorização do organizador. Sem versões nativas.
+
 ## 2.6.51 — 11/nov/2026 (carregamento sem falso erro)
 
 - O splash de abertura mantém logo, bola e barra de progresso até a rota ter conteúdo. O timeout de 12 segundos, o reload automático e a tela “O carregamento demorou mais que o esperado” foram removidos do boot; uma carga longa não interrompe mais o torneio.

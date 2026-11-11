@@ -1602,6 +1602,7 @@ const SUITES = [
   'tests/classificacao-uma-regra-so.test.js',
   // O domínio tipado preserva todos os desempates e viaja igual ao motor de sorteio.
   'tests/standings-domain.test.js',
+  'tests/autodraw-standings-bootstrap.test.js',
   // OS CRITÉRIOS DE DESEMPATE SÃO OS QUE O ORGANIZADOR CONFIGUROU — em qualquer fase.
   // Duas das quatro funções de classificação ignoravam `t.tiebreakers` (a tabela do
   // Rei/Rainha e a ordem de quem sobe de fase). E `antiguidade`/`juventude` NUNCA

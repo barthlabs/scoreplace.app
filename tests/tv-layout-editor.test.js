@@ -24,6 +24,7 @@ const { chromium } = require('@playwright/test');
         name: 'TORNEIO REAL DA PRÉVIA',
         _nJogos: 1,
         courtNames: ['Quadra 4'],
+        combinedCategories: ['Fem Diamante', 'Fem Ouro', 'Fem Prata'],
         matches: [{
           id: 'jogo-1', court: 'Quadra 4', category: 'Fem Light',
           scheduledAt: '2026-10-25T12:00:00Z', resultAt: '2026-10-25T12:30:00Z',
@@ -48,6 +49,18 @@ const { chromium } = require('@playwright/test');
     assert.match(preview, /TORNEIO REAL DA PRÉVIA/);
     assert.match(preview, /Ana/);
     assert.match(preview, /6/);
+    assert(await page.locator('[data-tv-add-bracket-button]').count() >= 3,
+      'cada categoria tem um botão visível para colocar sua chave');
+    const courtGeometry = () => page.evaluate(() => {
+      const box = document.querySelector('[data-tv-box="courts"]');
+      return { left: box.style.left, top: box.style.top, width: box.style.width, height: box.style.height };
+    });
+    const courtGeometryBefore = await courtGeometry();
+    await page.locator('[data-tv-add-bracket-button="Fem Diamante"]').click();
+    assert.equal(await page.locator('[data-tv-box="bracket-0"]').count(), 1,
+      'botão direto coloca a chave da categoria sem alterar os boxes existentes');
+    assert.deepEqual(await courtGeometry(), courtGeometryBefore,
+      'colocar chave preserva posição e tamanho das quadras');
     assert.equal(await page.evaluate(() => Object.hasOwn(window._editingTournament.matches[0], '_gameNum')), false,
       'montar a prévia não deixa _gameNum no objeto salvo pelo formulário');
     assert.equal(await page.locator('[data-tv-remove="qr"]').count(), 0, 'QR não oferece exclusão');
@@ -87,32 +100,48 @@ const { chromium } = require('@playwright/test');
       'salvar novamente sem mudanças não envia um layout vazio ao servidor');
     const seriesPositions = await page.evaluate(async () => {
       const game = (number, scoreA, scoreB) => ({
-        number, a:'Laura / Paula', b:'Fernanda / Bianca', scoreA, scoreB,
+        number, a:'Laura / Maria Antonia Ometto Lima', b:'Fernanda / Bianca', scoreA, scoreB,
         status:'done', winnerSide:1
       });
       const snapshot = {
-        tvLayout:window._tvEditorReadLayout(), theme:{ background:'#060d1a', primary:'#0d1b2e', secondary:'#0d1b2e', title:'#fff' },
-        name:'CAMIS', courts:[{ name:'Quadra 1', number:1, category:'Fem Diamante', series:[game(1,'6','3'),game(2,'2','4'),game(3,'1','0')], timerStart:0 }],
+        tvLayout:window._tvEditorReadLayout(), theme:{ background:'#000000', primary:'#000000', secondary:'#ffffff', title:'#fff' },
+        name:'CAMIS', courts:Array.from({ length:8 }, (_, i) => ({ name:'Quadra ' + (i+1), number:i*3+1,
+          category:'Fem Diamante', series:[game(i*3+1,'6','3'),game(i*3+2,'2','4'),game(i*3+3,'1','0')], timerStart:0 })),
         nextGame:null, rankings:[], results:[], resultDay:'', qrImage:'', scoreplaceLogo:''
       };
       const frame = document.querySelector('[data-tv-frame]');
       frame.srcdoc = window._tvLivePreviewDocument(snapshot);
       await new Promise(resolve => frame.addEventListener('load', resolve, { once:true }));
-      return [...frame.contentDocument.querySelectorAll('.tv-series-game')].map(row => {
+      const rows = [...frame.contentDocument.querySelectorAll('.tv-series-game')];
+      const shortName = rows[0].querySelector('.tv-series-left .tv-series-players span:first-child');
+      const longName = rows[0].querySelector('.tv-series-left .tv-series-players span:last-child');
+      const sample = selector => {
+        const el = frame.contentDocument.querySelector(selector);
+        const canvas = frame.contentDocument.createElement('canvas'); canvas.width = canvas.height = 1;
+        const ctx = canvas.getContext('2d'); ctx.fillStyle = frame.contentWindow.getComputedStyle(el).backgroundColor;
+        ctx.fillRect(0, 0, 1, 1); return [...ctx.getImageData(0, 0, 1, 1).data].slice(0, 3);
+      };
+      const colors = ['.tv-header','.tv-court','.tv-series-game'].map(sample);
+      return { rows:rows.map(row => {
         const box = selector => row.querySelector(selector).getBoundingClientRect();
         return { leftNames:box('.tv-series-left .tv-series-players').left,
           leftScore:box('.tv-series-left strong').left,
           middle:box('.tv-series-versus').left,
           rightScore:box('.tv-series-right strong').left,
           rightNames:box('.tv-series-right .tv-series-players').left };
-      });
+      }), colors, shortFont:parseFloat(frame.contentWindow.getComputedStyle(shortName).fontSize),
+        longFont:parseFloat(frame.contentWindow.getComputedStyle(longName).fontSize) };
     });
-    assert.equal(seriesPositions.length, 3, 'a série Rei/Rainha mantém os três jogos');
-    seriesPositions.forEach((position, index) => {
+    assert.equal(seriesPositions.rows.length, 24, 'oito quadras mantêm seus três jogos');
+    seriesPositions.rows.forEach((position, index) => {
       assert.ok(position.leftNames < position.leftScore && position.leftScore < position.middle &&
         position.middle < position.rightScore && position.rightScore < position.rightNames,
       `jogo ${index + 1}: nomes nas bordas e placares junto ao centro`);
     });
+    assert(seriesPositions.longFont < seriesPositions.shortFont,
+      'só o nome que excede o espaço tem a fonte reduzida');
+    seriesPositions.colors.forEach(color => assert(Math.max(...color) - Math.min(...color) <= 1,
+      'cabeçalho, quadra e linha usam tons neutros da capa preta e branca'));
     await page.locator('[data-tv-finals-preset]').click();
     assert.equal(await page.locator('[data-tv-box="standing1"]').count(), 1, 'modelo inclui a classificação da linha disponível');
     assert.equal(await page.locator('[data-tv-box="qr"]').count(), 1, 'modelo da final conserva o QR');
