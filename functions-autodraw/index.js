@@ -5906,7 +5906,8 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
       const daysChanged = patch.scheduleWindow !== undefined &&
         patch.scheduleWindow.days !== undefined &&
         !_configAtiva.igual((t.scheduleWindow && t.scheduleWindow.days) || [], patch.scheduleWindow.days);
-      const effectiveWindow = patch.scheduleWindow !== undefined
+      // Use a janela já mesclada tanto para validar a grade quanto para gravá-la.
+      const validatedWindow = patch.scheduleWindow !== undefined
         ? Object.assign({}, t.scheduleWindow || {}, patch.scheduleWindow, {
           days: patch.scheduleWindow.days !== undefined ? patch.scheduleWindow.days : ((t.scheduleWindow && t.scheduleWindow.days) || []),
           categoryWindows: patch.scheduleWindow && patch.scheduleWindow.categoryWindows !== undefined
@@ -5919,7 +5920,7 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
           if (hasDraw) throw new HttpsError('failed-precondition', 'A grade de jogos publicados não pode mudar depois do sorteio.');
           const effectiveTournament = Object.assign({}, t, patch);
           if (!proposed || proposed.schema !== 1 || proposed.editorVersion !== 2 ||
-              !Array.isArray(effectiveWindow.days) || !effectiveWindow.days.some(day => day.day === proposed.day) ||
+              !Array.isArray(validatedWindow.days) || !validatedWindow.days.some(day => day.day === proposed.day) ||
               Number(proposed.courts) !== Number(effectiveTournament.courtCount) ||
               !Number.isSafeInteger(proposed.totalGames) || proposed.totalGames < 1 ||
               !Number.isSafeInteger(proposed.eliminationPlayMinutes) || proposed.eliminationPlayMinutes < 1 ||
@@ -5949,14 +5950,14 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
           }
           if (JSON.stringify(expected) !== JSON.stringify(_phaseGridPlan.signatures(proposedTiles)) ||
               proposedTiles.reduce((total, tile) => total + (tile.kind === 'groups' ? 3 : 1), 0) !== Number(proposed.totalGames) ||
-              _phaseGridPlan.validate(proposedTiles, proposed, effectiveWindow.days)) {
+              _phaseGridPlan.validate(proposedTiles, proposed, validatedWindow.days)) {
             throw new HttpsError('invalid-argument', 'A grade contém conflito, jogo ausente ou horário fora da janela.');
           }
         }
       }
       if (patch.scheduleWindow && patch.scheduleWindow.phaseCallOrder !== undefined) {
         const proposed = patch.scheduleWindow.phaseCallOrder;
-        const canonical = _phaseCallOrder.stages({ scheduleWindow:effectiveWindow });
+        const canonical = _phaseCallOrder.stages({ scheduleWindow:validatedWindow });
         if (!Array.isArray(proposed) || !proposed.length || proposed.length !== canonical.length ||
             proposed.some((stage, index) => !stage || Object.keys(stage).sort().join(',') !== 'category,kind,parallel' ||
               stage.kind !== canonical[index].kind || stage.category !== canonical[index].category ||
@@ -5969,7 +5970,7 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
           combinedCategories: patch.combinedCategories !== undefined ? patch.combinedCategories : t.combinedCategories,
           startDate: patch.startDate !== undefined ? patch.startDate : t.startDate,
           endDate: patch.endDate !== undefined ? patch.endDate : t.endDate,
-          scheduleWindow: effectiveWindow
+          scheduleWindow: validatedWindow
         }, HttpsError);
       } catch (error) {
         if ((categoryChanged || daysChanged || patch.startDate !== undefined || patch.endDate !== undefined ||
@@ -5980,7 +5981,7 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
         throw error;
       }
       const oldWindowForCompare = { days: (t.scheduleWindow && t.scheduleWindow.days) || [], categoryWindows: existingCategoryWindows };
-      const newWindowForCompare = { days: (effectiveWindow && effectiveWindow.days) || [], categoryWindows: (effectiveWindow && effectiveWindow.categoryWindows) || [] };
+      const newWindowForCompare = { days: (validatedWindow && validatedWindow.days) || [], categoryWindows: (validatedWindow && validatedWindow.categoryWindows) || [] };
       if (hasDraw && patch.scheduleWindow !== undefined && !_configAtiva.igual(oldWindowForCompare, newWindowForCompare)) {
         throw new HttpsError('failed-precondition', 'Horários de jogos já publicados não podem mudar depois do sorteio.');
       }
@@ -6000,7 +6001,7 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
           (existingSchedule && patch.scheduleWindow.version === existingSchedule.version) ||
           (existingSchedule && existingSchedule.version === undefined && patch.scheduleWindow.version === 1);
         if (sameSchedule && knownPatch && sameVersion) delete patch.scheduleWindow;
-        else patch.scheduleWindow = effectiveWindow;
+        else patch.scheduleWindow = validatedWindow;
       }
     }
     // Pontos de folga podem mudar enquanto a classificatória de ranking ainda

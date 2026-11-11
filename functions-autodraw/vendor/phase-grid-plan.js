@@ -164,7 +164,7 @@
     return null;
   }
   function move(tiles, id, court, startTime, plan, day, targetDay) {
-    var next = tiles.map(function (tile) { return Object.assign({}, tile); });
+    var next = tiles.map(function (tile) { return Object.assign({}, tile, { court:Number(tile.court) }); });
     var target = next.find(function (tile) { return tile.id === id; });
     if (!target) return { error:'Bloco não encontrado.' };
     var days = daysOf(plan, day), destination = targetDay || target.day || plan.day;
@@ -176,7 +176,7 @@
     target.day = destination;
     var cursor = at + target.duration, shifted = [];
     if (cursor > 24 * 60) return { error:'O bloco ultrapassa a meia-noite. Escolha outro horário ou dia.' };
-    var lane = next.filter(function (tile) { return tile.id !== id && (tile.day || plan.day) === destination && tile.court === target.court; })
+    var lane = next.filter(function (tile) { return tile.id !== id && (tile.day || plan.day) === destination && Number(tile.court) === target.court; })
       .sort(function (a, b) { return minutes(a.startTime) - minutes(b.startTime) || a.id.localeCompare(b.id); });
     for (var li = 0; li < lane.length; li++) {
       var tile = lane[li], tileStart = minutes(tile.startTime);
@@ -187,6 +187,8 @@
       cursor += tile.duration;
       shifted.push(tile.id);
     }
+    // Excedentes do fim da janela ficam listrados no rascunho; validate sem
+    // allowOverflow continua impedindo que uma grade fora do dia seja salva.
     var warning = validate(next, plan, days, { allowOverflow:true });
     return { tiles:next, shifted:shifted, warning:warning };
   }

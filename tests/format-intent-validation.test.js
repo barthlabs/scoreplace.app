@@ -294,9 +294,9 @@ const configStart = server.indexOf('exports.updateTournamentConfiguration = onCa
 const configEnd = server.indexOf('\n// ─── Ciclo presencial:', configStart);
 assert(configStart >= 0 && configEnd > configStart, 'handler real da ficha encontrado');
 const configSource = server.slice(configStart, configEnd);
-assert(configSource.indexOf('const effectiveWindow = patch.scheduleWindow') > -1 &&
-  configSource.indexOf('const effectiveWindow = patch.scheduleWindow') <
-    configSource.indexOf('!Array.isArray(effectiveWindow.days)'),
+assert(configSource.indexOf('const validatedWindow = patch.scheduleWindow') > -1 &&
+  configSource.indexOf('const validatedWindow = patch.scheduleWindow') <
+    configSource.indexOf('!Array.isArray(validatedWindow.days)'),
   'a janela efetiva é declarada no escopo antes da validação da grade');
 const categoryGuardStart = server.indexOf('async function _assertCategoryConfigBeforeDraw(tx, ref, t) {');
 const categoryGuardEnd = server.indexOf('\n// Uma lista de rótulos', categoryGuardStart);
