@@ -66,6 +66,22 @@ assert.equal(context.window._bracketOperationsSelect(event).next.id, 'j19',
 context.window._bracketCourtPostponedReady = () => [];
 assert.equal(context.window._bracketOperationsSelect(event).next.id, 'j22',
   'pular outra vez mantém o mesmo primeiro jogo adiado');
+const activeDiamond = Array.from({ length: 8 }, (_, index) => ({
+  id: 'diamond-' + index, category:'Fem Diamante', p1:'Diamante A' + index, p2:'Diamante B' + index,
+  court:'Quadra ' + (index + 1), courtCalledAt:'2026-11-13T11:00:00.000Z',
+  scheduledAt:'2026-11-13T11:00:00.000Z'
+}));
+const firstGold = { id:'gold-1', category:'Fem Ouro', p1:'Ouro A', p2:'Ouro B',
+  scheduledAt:'2026-11-13T12:40:00.000Z' };
+context.window.ScoreplaceCourtOccupancy = { occupiesCourt:m => !!m.courtCalledAt, isFinished:() => false };
+context.window.ScoreplacePhaseCallOrder = { allowed:(_, __, m) => m.category === 'Fem Diamante' };
+context.window._bracketCourtPostponed = () => [];
+context.window._bracketCourtPostponedReady = () => [];
+const fullCourts = context.window._bracketOperationsSelect({ id:'tour_full_courts', courtCount:8,
+  matches:[...activeDiamond, firstGold] });
+assert.equal(fullCourts.active.length, 8);
+assert.equal(fullCourts.next.id, 'gold-1', 'mostra o primeiro Ouro mesmo com todas as quadras ocupadas');
+assert.equal(fullCourts.nextCallable, false, 'prévia não antecipa a chamada da fase seguinte');
 const concentratedStart = source.indexOf('window._isConcentratedTournament = function');
 const concentratedEnd = source.indexOf('\nwindow._matchCoordsFromId = function', concentratedStart);
 assert(concentratedStart > 0 && concentratedEnd > concentratedStart);

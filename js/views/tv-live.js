@@ -636,8 +636,19 @@
     syncButton();
     try {
       popup.document.open();
-      popup.document.write('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TV · ' + esc(tournament.name) + '</title>' + styles + '<script src="' + esc(window.location.origin + '/js/domain/match-timing.js?v=' + (window.SCOREPLACE_VERSION || '')) + '"></script><style>#tv-connection{position:fixed;right:1vw;bottom:1vw;z-index:20;padding:.4em .7em;border-radius:.5em;background:#7f1d1d;color:#fff;font-weight:800}#tv-connection[hidden]{display:none}</style></head><body><div id="tv-root"></div><div id="tv-connection">Carregando jogos do servidor…</div>' + childScript(tournament.id, popupGeneration) + '</body></html>');
+      popup.document.write('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TV · ' + esc(tournament.name) + '</title>' + styles + '<script src="' + esc(window.location.origin + '/js/domain/match-timing.js?v=' + (window.SCOREPLACE_VERSION || '')) + '"></script><style>#tv-connection{position:fixed;right:1vw;bottom:1vw;z-index:20;padding:.4em .7em;border-radius:.5em;background:#7f1d1d;color:#fff;font-weight:800}#tv-connection[hidden],#tv-fullscreen-action[hidden]{display:none}#tv-fullscreen-action{position:fixed;left:1vw;bottom:1vw;z-index:22;padding:.45em .7em;border:1px solid #67e8f9;border-radius:.5em;background:#10263b;color:#fff;font:700 clamp(12px,1vw,20px) Arial;cursor:pointer}</style></head><body><div id="tv-root"></div><button id="tv-fullscreen-action" type="button">⛶ Tela cheia</button><div id="tv-connection">Carregando jogos do servidor…</div>' + childScript(tournament.id, popupGeneration) + '</body></html>');
       popup.document.close();
+      var fullscreenButton = popup.document.getElementById('tv-fullscreen-action');
+      fullscreenButton.addEventListener('click', function () {
+        if (!popup.document.documentElement.requestFullscreen) return;
+        var request = popup.document.documentElement.requestFullscreen();
+        if (request && request.catch) request.catch(function () {
+          fullscreenButton.textContent = 'Tela cheia indisponível';
+        });
+      });
+      popup.document.addEventListener('fullscreenchange', function () {
+        fullscreenButton.hidden = !!popup.document.fullscreenElement;
+      });
       try { popup.history.replaceState(null, '', window.location.origin + '/#tv-live/' + encodeURIComponent(id)); }
       catch (urlError) { /* O navegador pode manter about:blank ao bloquear alteração da URL. */ }
     } catch (e) {

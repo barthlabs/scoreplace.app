@@ -566,8 +566,10 @@ fakePopup.closed = true;
 reloadIntervals[0]();
 assert.equal(reloadButton.attributes['aria-pressed'], 'false', 'após reload fechar a TV apaga o botão');
 const liveSource = fs.readFileSync(path.join(root, 'js/views/tv-live.js'), 'utf8');
-assert.doesNotMatch(liveSource, /tv-fullscreen-action|requestFullscreen/,
-  'janela NO AR não coloca controle de tela cheia sobre a transmissão');
+assert.match(popupHtml, /tv-fullscreen-action/,
+  'janela NO AR oferece controle de tela cheia para a TV');
+assert.match(liveSource, /requestFullscreen\(\)/,
+  'tela cheia é solicitada pelo clique na própria janela da TV');
 assert.match(popupHtml, /root\.replaceChildren\.apply\(root,Array\.from\(draft\.childNodes\)\);fit\(\)/,
   'TV continua ajustando a grade após atualizar resultados e quadras');
 assert.doesNotMatch(fs.readFileSync(path.join(root, 'js/views/tournaments.js'), 'utf8'), /window\._tvMode\(/,

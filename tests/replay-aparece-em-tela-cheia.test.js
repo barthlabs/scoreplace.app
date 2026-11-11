@@ -38,10 +38,10 @@ const tv = fs.readFileSync(path.join(ROOT, 'js', 'views', 'tv-live.js'), 'utf8')
 
 console.log('\nO REPLAY APARECE — MESMO COM ALGO EM TELA CHEIA');
 
-// A saída NO AR continua em janela própria, sem controle sobreposto de tela
-// cheia. O placar/replay permanece independente na janela principal.
-ok(!/requestFullscreen/.test(tv) && /window\.open\(/.test(tv),
-   'a saída NO AR usa janela separada sem botão de tela cheia');
+// A saída NO AR continua em janela própria e a ação de tela cheia ocorre nela.
+// O placar/replay permanece independente na janela principal.
+ok(/requestFullscreen/.test(tv) && /window\.open\(/.test(tv),
+   'a saída NO AR usa janela separada com tela cheia por clique');
 
 // ── O caminho de hoje: uma tela só ────────────────────────────────────────────
 // `_openLiveScoring` remove o overlay anterior e cria o SEU, que é o que o usuário

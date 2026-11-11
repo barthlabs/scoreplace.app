@@ -1343,10 +1343,12 @@ window._bracketOperationsSelect = function (t) {
   active.forEach(function (m) { if (courts.indexOf(String(m.court)) === -1) courts.push(String(m.court)); });
   // Os três jogos do quarteto são uma série: só o primeiro ainda sem resultado
   // pode entrar na fila. Pular o primeiro nunca libera o segundo ou o terceiro.
-  var candidates = upcoming.map(function (entry) { return entry.item.m; }).filter(function (m) {
+  var seriesCandidates = upcoming.map(function (entry) { return entry.item.m; }).filter(function (m) {
     var group = _bracketOperationsGroup(t, m, matches);
-    return (!group || String((group.matches.find(function (item) { return !occupancy.isFinished(item); }) || {}).id) === String(m.id)) &&
-      (!window.ScoreplacePhaseCallOrder || window.ScoreplacePhaseCallOrder.allowed(t, matches, m, occupancy.isFinished));
+    return !group || String((group.matches.find(function (item) { return !occupancy.isFinished(item); }) || {}).id) === String(m.id);
+  });
+  var candidates = seriesCandidates.filter(function (m) {
+    return !window.ScoreplacePhaseCallOrder || window.ScoreplacePhaseCallOrder.allowed(t, matches, m, occupancy.isFinished);
   });
   var postponed = window._bracketCourtPostponed(t.id);
   var ready = window._bracketCourtPostponedReady(t.id);
@@ -1361,7 +1363,11 @@ window._bracketOperationsSelect = function (t) {
   var ordered = window._bracketPostponedOrder(candidates, postponed, ready);
   var next = window.ScoreplaceNextMatch && typeof window.ScoreplaceNextMatch.firstAvailable === 'function'
     ? window.ScoreplaceNextMatch.firstAvailable(ordered, matches, released) : null;
-  return { next: next, active: active, pending: pending, courts: courts, matches: matches };
+  // A fase seguinte continua visível enquanto a atual ocupa todas as quadras.
+  // A prévia não libera a chamada antes de a etapa anterior terminar.
+  var preview = !next && window.ScoreplaceNextMatch && typeof window.ScoreplaceNextMatch.firstAvailable === 'function'
+    ? window.ScoreplaceNextMatch.firstAvailable(seriesCandidates, matches, released) : null;
+  return { next: next || preview, nextCallable: !!next, active: active, pending: pending, courts: courts, matches: matches };
 };
 
 // Cada clique registra somente a leva que já ocupa as quadras. A próxima
@@ -1670,7 +1676,7 @@ function _bracketOperationsReplica(m, t, role, label, availability, root, allMat
     ? '<button type="button" class="sp-operations-postpone" data-postpone-next="' + safe(String(postponeMatch && postponeMatch.id || '')) +
       '"' + (role.postponeBusy || !canPostponeSelected ? ' disabled' : '') +
       ' title="Postergar este jogo e mostrar o próximo">Pular jogo</button>' : '';
-  var canEnter = !!(role.canCall || (typeof window._resultEntryIncludes === 'function' &&
+  var canEnter = !role.readOnly && !!(role.canCall || (typeof window._resultEntryIncludes === 'function' &&
     (window._resultEntryIncludes(t, 'players') || window._resultEntryIncludes(t, 'referee'))));
   var standingsCourtHtml = '';
   var standingsCategoryLabel = '';
@@ -2093,8 +2099,9 @@ window._bracketOperationsRefresh = function (t, root) {
   var nextAvailability = '<div class="sp-operations-availability' + (freeCount ? '' : ' sp-operations-availability--busy') + '">' +
     freeCount + ' ' + (freeCount === 1 ? 'QUADRA LIVRE' : 'QUADRAS LIVRES') + '</div>';
   existing.innerHTML = '<div class="sp-operations-track" data-hscroll="ops:track"><div class="sp-operations-next">' +
-    (state.next ? _bracketOperationsReplica(state.next, t, { canCall: canCall, active: false,
-      postponeReady: canCall, postponeBusy: existing._spPostponeBusy || !(window._bracketCourtReleaseCache[String(t.id)] || {}).ready,
+    (state.next ? _bracketOperationsReplica(state.next, t, { canCall: canCall && state.nextCallable !== false, active: false,
+      readOnly: state.nextCallable === false,
+      postponeReady: canCall && state.nextCallable !== false, postponeBusy: existing._spPostponeBusy || !(window._bracketCourtReleaseCache[String(t.id)] || {}).ready,
       preferFirstFreeCourt: true, preferredCourt: (root._bracketOperationsManualCourt || {})[String(state.next.id)] || '' }, nextLabel, nextAvailability, root, state.matches, 'next') :
       '<span class="sp-operations-label">' + nextLabel + '</span>' + nextAvailability + '<div class="sp-operations-empty">Nenhum jogo aguardando chamada</div>') +
     '</div>' + (state.pending.length ? '<div class="sp-operations-pending" aria-label="Placares pendentes"><span class="sp-operations-section-title">PLACARES PENDENTES</span><div class="sp-operations-pending-track">' +

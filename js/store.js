@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.6.44';
+window.SCOREPLACE_VERSION = '2.6.45';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -5336,6 +5336,7 @@ window._renderBackHeader = function(opts) {
   }
   var _safeHrefAttr = String(_href).replace(/"/g, '&quot;');
   var _extraStyle = opts.extraStyle ? (' style="' + opts.extraStyle + '"') : '';
+  var _headerClass = opts.headerClass ? (' ' + String(opts.headerClass).replace(/[^a-zA-Z0-9_-]/g, '')) : '';
   var _svg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>';
   var _middle = (opts.middleHtml == null || opts.middleHtml === '')
     ? '<div style="flex:1;"></div>'
@@ -5359,7 +5360,7 @@ window._renderBackHeader = function(opts) {
   }
 
   return (
-    '<div class="sticky-back-header"' + _extraStyle + '>' +
+    '<div class="sticky-back-header' + _headerClass + '"' + _extraStyle + '>' +
       '<div style="display:flex;align-items:center;gap:10px;justify-content:space-between;">' +
         '<button class="btn btn-outline btn-sm hover-lift" type="button" ' +
                 'data-back-nav="1" data-back-href="' + _safeHrefAttr + '"' + _overrideAttr + ' ' +

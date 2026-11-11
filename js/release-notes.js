@@ -1,3 +1,6 @@
+// 2.6.45 — O cabeçalho do torneio ocupa menos altura. A faixa de operação
+// mostra o próximo jogo mesmo com todas as quadras ocupadas, sem liberar a
+// chamada antes da hora. A tela da TV oferece o botão Tela cheia.
 // 2.6.44 — A revisão antes do sorteio mostra mais da grade de quadras e
 // horários. O organizador ajusta os blocos por arrasto, alterna entre
 // concentrar as categorias ou espalhá-las e confere tudo antes de sortear.

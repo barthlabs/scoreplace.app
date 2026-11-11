@@ -5592,7 +5592,8 @@ function renderTournaments(container, tournamentId = null) {
           ? window._renderBackHeader({
               href: '#dashboard',
               middleHtml: _hdrMiddle,
-              rightHtml: _myToggleHtml
+              rightHtml: _myToggleHtml,
+              headerClass: 'sp-tournament-detail-header'
               // v3.0.91: a barra de filtro/busca dos inscritos saiu do belowHtml — agora
               // é STICKY no fluxo do conteúdo (dentro de participantsHtml, acima dos cards).
             })

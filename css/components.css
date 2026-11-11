@@ -304,6 +304,13 @@ input[type="time"].sp-team-draw-time::-webkit-datetime-edit-minute-field {
 .sticky-back-header + * {
   margin-top: 50px;
 }
+.sticky-back-header.sp-tournament-detail-header {
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+.sticky-back-header.sp-tournament-detail-header + * {
+  margin-top: 40px;
+}
 /* A superfície da Análise é opaca, mas não pode pintar ACIMA do Voltar:
    a antiga sombra de 24px invadia o cabeçalho principal. */
 .sticky-back-header.er-analysis-back-header {

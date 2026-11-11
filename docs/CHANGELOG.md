@@ -1,3 +1,10 @@
+## 2.6.45 — 11/nov/2026 (cabeçalho, fila e tela no ar)
+
+- Reduzida a altura da faixa Voltar, nome do torneio e Jogos pendentes na página do torneio, liberando espaço para a operação.
+- O próximo jogo da fase seguinte fica visível mesmo enquanto todas as quadras estão ocupadas; a chamada permanece bloqueada até a fase atual permitir.
+- A janela da TV oferece um botão Tela cheia, que oculta os controles do navegador quando o usuário o aciona.
+- Corte somente web; sem alteração de dados do torneio ou versões nativas.
+
 ## 2.6.44 — 11/nov/2026 (revisão da grade antes do sorteio)
 
 - A revisão de quadras e horários ocupa quase toda a tela. O cabeçalho mostra a data, as ações de salvar e sortear ou voltar, e os modos Concentrar antes e Espalhar ao longo do torneio. Foram retirados o resumo repetido e os botões de edição/posicionamento.
