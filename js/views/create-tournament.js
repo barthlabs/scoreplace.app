@@ -6272,7 +6272,7 @@ function setupCreateTournamentModal() {
     };
   };
 
-  window._showScoringChangePreview = function(t, oldS, newS, impact, onApply, onRevert) {
+  window._showScoringChangePreview = function(t, oldS, newS, impact, onApply, onRevert, onCancel) {
     var modalId = 'modal-scoring-reconcile';
     var old = document.getElementById(modalId); if (old) old.remove();
     var esc = window._safeHtml || function(x){ return x; };
@@ -6298,7 +6298,7 @@ function setupCreateTournamentModal() {
     var close = function() { var m = document.getElementById(modalId); if (m) m.remove(); };
     document.getElementById('scoring-rec-apply').addEventListener('click', function() { close(); onApply(); });
     document.getElementById('scoring-rec-revert').addEventListener('click', function() { close(); onRevert(); });
-    document.getElementById('scoring-rec-cancel').addEventListener('click', function() { close(); });
+    document.getElementById('scoring-rec-cancel').addEventListener('click', function() { close(); if (onCancel) onCancel(); });
   };
 
   // Retorna true se mostrou o preview (e o save deve abortar e esperar a decisão).
@@ -6312,7 +6312,8 @@ function setupCreateTournamentModal() {
     if (impact.playedCount === 0) return false; // sem resultados → nada a preservar, aplica direto
     window._showScoringChangePreview(t, oldS, newS, impact,
       function onApply() { window._scoringReconcileConfirmed = true; window._saveTournamentClickHandler(); },
-      function onRevert() { window._writeScoringToForm(oldS); window._scoringReconcileConfirmed = true; window._saveTournamentClickHandler(); }
+      function onRevert() { window._writeScoringToForm(oldS); window._scoringReconcileConfirmed = true; window._saveTournamentClickHandler(); },
+      function onCancel() { window._logoRemovalRequested = false; }
     );
     return true;
   };
@@ -6437,7 +6438,8 @@ function setupCreateTournamentModal() {
             { persist: false, ratio: (ratioOpts && ratioOpts.ratio), locked: (ratioOpts && ratioOpts.locked),
               enabled: (ratioOpts && ratioOpts.enabled) });
           _seguir(mode === 'equilibrado');
-        }
+        },
+        onCancel: function () { window._logoRemovalRequested = false; }
         // Cancelar = fecha e não salva; o formulário fica como estava.
       });
     };
@@ -6553,7 +6555,6 @@ window._saveTournamentClickHandler = async function() {
       if (saveButton && typeof window._spinButton === 'function') window._spinButton(saveButton, 'Salvando…');
       else if (saveButton) saveButton.disabled = true;
       var createdId = null;
-      var keepLogoIntentForDecision = false;
       try {
         const editId = document.getElementById('edit-tournament-id').value;
         // O Salvar do topo também serve a edição da TV. Gravar a ficha inteira
@@ -6595,7 +6596,6 @@ window._saveTournamentClickHandler = async function() {
         // Então a escolha passa a ser feita aqui, ao salvar, e fica gravada em `equilibrado`
         // — que é o que o motor lê (o mesmo motor que a CF autoDraw roda).
         if (!window._drawBalanceConfirmed && _autoDrawAgendadoNoForm()) {
-          keepLogoIntentForDecision = true;
           _perguntarEquilibrio(function () { window._saveTournamentClickHandler(); });
           return;
         }
@@ -6608,7 +6608,6 @@ window._saveTournamentClickHandler = async function() {
         if (editId && window._scoringReconcileConfirmed !== true && typeof window._maybeShowScoringReconcile === 'function') {
           var _tForScoring = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(editId); });
           if (_tForScoring && window._maybeShowScoringReconcile(_tForScoring)) {
-            keepLogoIntentForDecision = true;
             return;
           }
         }
@@ -6744,7 +6743,11 @@ window._saveTournamentClickHandler = async function() {
         // Campo legado: torneios não herdam nem mantêm foto do local.
         const venuePhotoUrlVal = '';
         const coverPhotoDataVal = (document.getElementById('tourn-cover-data') || {}).value || '';
-        const coverModeVal = ((document.getElementById('tourn-cover-mode') || {}).value === 'photo' && coverPhotoDataVal) ? 'photo' : 'color';
+        // A URL publicada pode ainda não ter chegado ao campo enquanto o editor
+        // hidrata a ficha. Campo vazio nesse intervalo não muda foto para cor.
+        const coverModeVal = ((document.getElementById('tourn-cover-mode') || {}).value === 'photo' &&
+          (coverPhotoDataVal || (editingTournament && (editingTournament.coverUrl || editingTournament.coverPhotoData)) || window._editLogoHydrating))
+          ? 'photo' : 'color';
         const coverColorVal = (document.getElementById('tourn-cover-color') || {}).value || '#1f2937';
         const titleColorVal = (document.getElementById('tourn-title-color') || {}).value || '#ffffff';
         const coverGradientColorVal = (document.getElementById('tourn-cover-gradient-color') || {}).value || '#0f172a';
@@ -7338,7 +7341,7 @@ window._saveTournamentClickHandler = async function() {
         window._error('Erro ao salvar torneio:', err);
         showNotification(window._t('auth.error'), window._t('create.saveError', {msg: err.message}), 'error');
       } finally {
-        if (!keepLogoIntentForDecision) window._logoRemovalRequested = false;
+        window._logoRemovalRequested = false;
         if (saveButton && typeof window._spinButtonDone === 'function') window._spinButtonDone(saveButton);
         else if (saveButton) saveButton.disabled = false;
       }

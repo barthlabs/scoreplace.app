@@ -3,7 +3,7 @@
 - A TV deriva cabeçalho, quadras e linhas das cores de fundo do cartão do torneio; no CAMIS, preto e branco produzem tons neutros, sem o azul fixo. A geometria salva da tela não é alterada.
 - Cada nome de atleta que ultrapassa seu espaço reduz só a própria fonte. Nomes que cabem permanecem no tamanho anterior. A prévia do editor usa o mesmo ajuste.
 - O editor exibe um botão direto para adicionar a chave de cada categoria disponível. O Salvar do topo grava logo, cores e TV sem reenviar a grade publicada; o logo só é removido pelo botão próprio. A marca sob o QR ganha fundo escuro para manter a leitura quando a área atrás é clara.
-- Descartar a edição, fechar o editor ou receber erro ao salvar limpa a intenção de remover logo; uma remoção explícita prevalece sobre a URL antiga, sem afetar a capa.
+- Descartar a edição, fechar o editor, cancelar uma confirmação intermediária ou receber erro ao salvar limpa a intenção de remover logo; uma remoção explícita prevalece sobre a URL antiga. Salvar durante a hidratação preserva a capa publicada em modo foto.
 - O servidor reinstala o comparador de classificação ao carregar o motor Rei/Rainha, mesmo quando o módulo já entrou no cache CommonJS. Isso corrige a exceção que recusava o primeiro placar e impedia a simulação de avançar. As Functions operacionais afetadas são publicadas antes do Hosting.
 - Sem alteração automática em jogos, placares ou grade. O logo original do CAMIS foi restaurado pontualmente, com autorização do organizador. Sem versões nativas.
 

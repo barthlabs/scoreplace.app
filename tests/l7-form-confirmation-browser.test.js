@@ -1,8 +1,8 @@
 const assert=require('assert/strict'),fs=require('fs'),path=require('path'),acorn=require('acorn'),{chromium}=require('@playwright/test');
 const root=path.join(__dirname,'../');
 const source=fs.readFileSync(root+'js/views/create-tournament.js','utf8');
-let handler,branding,discard;
-function visit(n){if(!n||typeof n!=='object')return;if(n.type==='AssignmentExpression'){const left=source.slice(n.left.start,n.left.end);if(left==='window._saveTournamentClickHandler')handler=source.slice(n.start,n.end)+';';if(left==='window._readTournamentBrandingPatch')branding=source.slice(n.start,n.end)+';';if(left==='window._discardCreateTournament')discard=source.slice(n.start,n.end)+';';}for(const v of Object.values(n)){if(Array.isArray(v))v.forEach(visit);else if(v&&typeof v==='object')visit(v);}}
+let handler,branding,discard,askBalance,scoring;
+function visit(n){if(!n||typeof n!=='object')return;if(n.type==='FunctionDeclaration'&&n.id&&n.id.name==='_perguntarEquilibrio')askBalance=source.slice(n.start,n.end);if(n.type==='AssignmentExpression'){const left=source.slice(n.left.start,n.left.end);if(left==='window._saveTournamentClickHandler')handler=source.slice(n.start,n.end)+';';if(left==='window._readTournamentBrandingPatch')branding=source.slice(n.start,n.end)+';';if(left==='window._discardCreateTournament')discard=source.slice(n.start,n.end)+';';if(left==='window._maybeShowScoringReconcile')scoring=source.slice(n.start,n.end)+';';}for(const v of Object.values(n)){if(Array.isArray(v))v.forEach(visit);else if(v&&typeof v==='object')visit(v);}}
 visit(acorn.parse(source,{ecmaVersion:'latest'}));
 (async()=>{const b=await chromium.launch();try{const p=await b.newPage();await p.setContent('<form id="form-create-tournament"></form><button id="btn-save-tournament">Salvar</button>');
 await p.evaluate((src)=>{
@@ -20,7 +20,8 @@ await p.evaluate((src)=>{
  window._error=(...x)=>window._notes.push(x.map(y=>String(y)));
  window.AppStore={currentUser:{uid:'owner'},tournaments:[{id:'e',name:'Antigo',format:'Eliminatórias Simples'}],addTournament:async data=>{window._sent=data;return data.id||'CREATED';}};
 },handler);
-await p.addScriptTag({content:fs.readFileSync(root+'js/views/format2.js','utf8')});await p.addScriptTag({content:branding+handler+discard});
+await p.addScriptTag({content:fs.readFileSync(root+'js/views/format2.js','utf8')});await p.addScriptTag({content:askBalance+';'+scoring+branding+handler+discard});
+await p.evaluate(()=>{window._realMaybeShowScoringReconcile=window._maybeShowScoringReconcile;window._maybeShowScoringReconcile=()=>false;});
 await p.evaluate(()=>{
  window._tvEditorHasChanges=()=>true;
  window._tvEditorSaveChanges=async()=>{window._tvSaved=true;};
@@ -45,6 +46,19 @@ const edited=await p.evaluate(()=>({sent:window._sent,notes:window._notes}));
 assert.equal(edited.sent.id,'e','edição envia ID: sem ele o store criava outro torneio');
 assert(!Object.hasOwn(edited.sent,'logoData'),'logo vazio durante a carga não remove o logo existente');
 assert(edited.notes.some(n=>n[0]==='create.tournamentUpdated'));
+await p.evaluate(()=>{
+ window.AppStore.tournaments[0].coverMode='photo';
+ window.AppStore.tournaments[0].coverUrl='https://storage.example/cover-old.png';
+ document.getElementById('tourn-cover-mode').value='photo';
+ document.getElementById('tourn-cover-data').value='';
+ window._editLogoHydrating='e';
+ window._sent=undefined;
+ return window._saveTournamentClickHandler();
+});
+assert(!Object.hasOwn(await p.evaluate(()=>window._sent),'coverPhotoData'),'capa ainda hidratando não vira remoção');
+assert.equal(await p.evaluate(()=>window._sent.coverMode),'photo','capa publicada continua no modo foto durante a hidratação');
+assert(!Object.hasOwn(await p.evaluate(()=>window._sent),'coverUrl'),'salvar ficha não apaga a URL publicada da capa');
+await p.evaluate(()=>{window._editLogoHydrating='';window.AppStore.tournaments[0].coverMode='color';window.AppStore.tournaments[0].coverUrl='';document.getElementById('tourn-cover-mode').value='color';});
 await p.evaluate(()=>{window._logoRemovalRequested=true;window._sent=undefined;window._notes=[];});
 await p.evaluate(()=>window._saveTournamentClickHandler());
 assert.deepEqual(await p.evaluate(()=>window._sent),{id:'e',logoData:''},
@@ -68,6 +82,33 @@ await p.evaluate(()=>{
  return window._saveTournamentClickHandler();
 });
 assert.equal(await p.evaluate(()=>window._logoRemovalRequested),false,'erro de gravação limpa a intenção de remover logo');
+await p.evaluate(()=>{
+ window.AppStore.addTournament=async data=>{window._sent=data;return data.id;};
+ window.AppStore.tournaments[0].logoUrl='';
+ window.AppStore.tournaments[0].coverColor=document.getElementById('tourn-cover-color').value;
+ document.getElementById('edit-tournament-id').value='e';
+ document.getElementById('tourn-logo-data').value='';
+ window._logoRemovalRequested=true;
+ window._autoDrawAgendadoNoForm=()=>true;
+ window._showDrawBalanceOverlay=opts=>{window._pendingBalance=opts;};
+ return window._saveTournamentClickHandler();
+});
+assert.equal(await p.evaluate(()=>window._logoRemovalRequested),false,'aguardar decisão do sorteio não deixa remoção do logo pendente');
+await p.evaluate(()=>{window._pendingBalance.onCancel();window._autoDrawAgendadoNoForm=()=>false;window.AppStore.tournaments[0].logoUrl='https://storage.example/logo-old.png';window._sent=undefined;return window._saveTournamentClickHandler();});
+assert(!Object.hasOwn(await p.evaluate(()=>window._sent),'logoData'),'Salvar após cancelar sorteio preserva o logo');
+await p.evaluate(()=>{
+ window.AppStore.tournaments[0].logoUrl='';
+ window._logoRemovalRequested=true;
+ window._maybeShowScoringReconcile=window._realMaybeShowScoringReconcile;
+ window._readScoringFromForm=()=>({type:'sets'});
+ window._scoringMeaningfullyChanged=()=>true;
+ window._scoringReconcileImpact=()=>({playedCount:1});
+ window._showScoringChangePreview=(...args)=>{window._pendingScoring=args;};
+ return window._saveTournamentClickHandler();
+});
+assert.equal(await p.evaluate(()=>window._logoRemovalRequested),false,'aguardar decisão da pontuação não deixa remoção do logo pendente');
+await p.evaluate(()=>{window._pendingScoring[6]();window._maybeShowScoringReconcile=()=>false;window.AppStore.tournaments[0].logoUrl='https://storage.example/logo-old.png';window._sent=undefined;return window._saveTournamentClickHandler();});
+assert(!Object.hasOwn(await p.evaluate(()=>window._sent),'logoData'),'Salvar após cancelar pontuação preserva o logo');
 await p.evaluate(()=>{
  document.getElementById('edit-tournament-id').value=''; document.getElementById('tourn-name').value='Nova copa';
  window._notes=[];window._beforeHash=location.hash;
