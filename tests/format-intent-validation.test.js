@@ -294,6 +294,10 @@ const configStart = server.indexOf('exports.updateTournamentConfiguration = onCa
 const configEnd = server.indexOf('\n// ─── Ciclo presencial:', configStart);
 assert(configStart >= 0 && configEnd > configStart, 'handler real da ficha encontrado');
 const configSource = server.slice(configStart, configEnd);
+assert(configSource.indexOf('const effectiveWindow = patch.scheduleWindow') > -1 &&
+  configSource.indexOf('const effectiveWindow = patch.scheduleWindow') <
+    configSource.indexOf('!Array.isArray(effectiveWindow.days)'),
+  'a janela efetiva é declarada no escopo antes da validação da grade');
 const categoryGuardStart = server.indexOf('async function _assertCategoryConfigBeforeDraw(tx, ref, t) {');
 const categoryGuardEnd = server.indexOf('\n// Uma lista de rótulos', categoryGuardStart);
 assert(categoryGuardStart >= 0 && categoryGuardEnd > categoryGuardStart, 'guarda real de categorias encontrada');
@@ -385,9 +389,10 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
     warmupTime:5, eliminationPlayMinutes:25,
     categories:[{ name:'Fem Diamante', groups:2 }, { name:'Fem Ouro', groups:2 }] });
   assert.ok(proposal.plan, 'proposta de grade gerada');
-  configTournament = { ...openConfigTournament, courtCount:2, gameDuration:25, callTime:5, warmupTime:5,
+  const emptyGridTournament = { ...openConfigTournament, courtCount:2, gameDuration:25, callTime:5, warmupTime:5,
     combinedCategories:['Fem Diamante', 'Fem Ouro'], maxParticipantsPerCategory:8,
     maxParticipants:16, scheduleWindow:{ days:gridDays } };
+  configTournament = structuredClone(emptyGridTournament);
   const saveProposal = await configHandler({ auth:{ uid:'owner' }, data:{ tournamentId:'tour_test',
     patch:{ scheduleWindow:{ days:gridDays, interleavedPlan:{ ...proposal.plan, editorVersion:2 } } } } });
   assert.equal(saveProposal.ok, true, 'proposta nova é gravada antes do sorteio');
@@ -398,6 +403,22 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
     patch:{ scheduleWindow:{ days:gridDays, interleavedPlan:{ ...forged, editorVersion:2 } } } } }),
   { code:'invalid-argument' }, 'proposta com categoria forjada é recusada');
   assert.equal(configWrites, beforeForged, 'proposta inválida não escreve');
+  configTournament = { ...structuredClone(emptyGridTournament), maxParticipantsByCategory:{
+    'Fem Diamante':'8', 'Fem Ouro':'8'
+  } };
+  const beforeStringCapacity = configWrites;
+  await assert.rejects(configHandler({ auth:{ uid:'owner' }, data:{ tournamentId:'tour_test',
+    patch:{ scheduleWindow:{ days:gridDays, interleavedPlan:{ ...proposal.plan, editorVersion:2 } } } } }),
+  { code:'invalid-argument' }, 'a validação estrutural anterior recusa vagas serializadas como texto');
+  assert.equal(configWrites, beforeStringCapacity, 'vagas em texto não escrevem');
+  configTournament = { ...structuredClone(emptyGridTournament), maxParticipantsByCategory:{
+    'Fem Diamante':'10', 'Fem Ouro':'8'
+  } };
+  const beforeInvalidCapacity = configWrites;
+  await assert.rejects(configHandler({ auth:{ uid:'owner' }, data:{ tournamentId:'tour_test',
+    patch:{ scheduleWindow:{ days:gridDays, interleavedPlan:{ ...proposal.plan, editorVersion:2 } } } } }),
+  { code:'invalid-argument' }, 'vagas que não formam quartetos são recusadas');
+  assert.equal(configWrites, beforeInvalidCapacity, 'vagas inválidas não escrevem');
   configTournament = openConfigTournament;
   configWrites = 0;
 
