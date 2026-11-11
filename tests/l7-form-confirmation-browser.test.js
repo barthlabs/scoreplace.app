@@ -3,8 +3,8 @@ const root=path.join(__dirname,'../');
 const source=fs.readFileSync(root+'js/views/create-tournament.js','utf8');
 const storeSource=fs.readFileSync(root+'js/store.js','utf8');
 const storeMethod=storeSource.slice(storeSource.indexOf('  addTournament(data) {'),storeSource.indexOf('\n  logAction(',storeSource.indexOf('  addTournament(data) {'))).replace(/,\s*$/,'');
-let handler,branding,discard,askBalance,scoring;
-function visit(n){if(!n||typeof n!=='object')return;if(n.type==='FunctionDeclaration'&&n.id&&n.id.name==='_perguntarEquilibrio')askBalance=source.slice(n.start,n.end);if(n.type==='AssignmentExpression'){const left=source.slice(n.left.start,n.left.end);if(left==='window._saveTournamentClickHandler')handler=source.slice(n.start,n.end)+';';if(left==='window._readTournamentBrandingPatch')branding=source.slice(n.start,n.end)+';';if(left==='window._discardCreateTournament')discard=source.slice(n.start,n.end)+';';if(left==='window._maybeShowScoringReconcile')scoring=source.slice(n.start,n.end)+';';}for(const v of Object.values(n)){if(Array.isArray(v))v.forEach(visit);else if(v&&typeof v==='object')visit(v);}}
+let handler,branding,discard,askBalance,scoring,chooseCover;
+function visit(n){if(!n||typeof n!=='object')return;if(n.type==='FunctionDeclaration'&&n.id&&n.id.name==='_perguntarEquilibrio')askBalance=source.slice(n.start,n.end);if(n.type==='AssignmentExpression'){const left=source.slice(n.left.start,n.left.end);if(left==='window._saveTournamentClickHandler')handler=source.slice(n.start,n.end)+';';if(left==='window._readTournamentBrandingPatch')branding=source.slice(n.start,n.end)+';';if(left==='window._discardCreateTournament')discard=source.slice(n.start,n.end)+';';if(left==='window._maybeShowScoringReconcile')scoring=source.slice(n.start,n.end)+';';if(left==='window._chooseCoverMode')chooseCover=source.slice(n.start,n.end)+';';}for(const v of Object.values(n)){if(Array.isArray(v))v.forEach(visit);else if(v&&typeof v==='object')visit(v);}}
 visit(acorn.parse(source,{ecmaVersion:'latest'}));
 (async()=>{const b=await chromium.launch();try{const p=await b.newPage();await p.setContent('<form id="form-create-tournament"></form><button id="btn-save-tournament">Salvar</button>');
 await p.evaluate((src)=>{
@@ -22,7 +22,7 @@ await p.evaluate((src)=>{
  window._error=(...x)=>window._notes.push(x.map(y=>String(y)));
  window.AppStore={currentUser:{uid:'owner'},tournaments:[{id:'e',name:'Antigo',format:'Eliminatórias Simples'}],addTournament:async data=>{window._sent=data;return data.id||'CREATED';}};
 },handler);
-await p.addScriptTag({content:fs.readFileSync(root+'js/views/format2.js','utf8')});await p.addScriptTag({content:askBalance+';'+scoring+branding+handler+discard});
+await p.addScriptTag({content:fs.readFileSync(root+'js/views/format2.js','utf8')});await p.addScriptTag({content:askBalance+';'+scoring+branding+handler+discard+chooseCover});
 await p.addScriptTag({content:'window._actualStoreAdd=({' + storeMethod + '}).addTournament;'});
 await p.evaluate(()=>{window._realMaybeShowScoringReconcile=window._maybeShowScoringReconcile;window._maybeShowScoringReconcile=()=>false;});
 await p.evaluate(()=>{
@@ -75,19 +75,23 @@ assert(!Object.hasOwn(await p.evaluate(()=>window._readTournamentBrandingPatch('
  'salvamento visual também preserva a capa durante a hidratação');
 await p.evaluate(()=>{
  // O usuário experimentou Cor e voltou para Foto antes de salvar.
- window._coverModeChosenByUser=true;
- document.getElementById('tourn-cover-mode').value='color';
- document.getElementById('tourn-cover-mode').value='photo';
+ window._setCoverMode=mode=>{document.getElementById('tourn-cover-mode').value=mode;if(mode==='color')document.getElementById('tourn-cover-data').value='';};
+ for(const mode of ['color','photo']){
+   const button=document.createElement('button');button.id='cover-mode-'+mode;
+   button.setAttribute('onclick',`window._chooseCoverMode('${mode}')`);document.body.append(button);
+ }
+ document.getElementById('cover-mode-color').click();
+ document.getElementById('cover-mode-photo').click();
  window._sent=undefined;return window._saveTournamentClickHandler();
 });
 assert(!Object.hasOwn(await p.evaluate(()=>window._sent),'coverPhotoData'),
  'alternar Cor → Foto sem nova imagem preserva a capa publicada');
 assert(!Object.hasOwn(await p.evaluate(()=>window._sent),'coverUrl'));
-await p.evaluate(()=>{window._coverModeChosenByUser=true;});
-await p.evaluate(()=>{document.getElementById('tourn-cover-mode').value='color';});
+await p.evaluate(()=>document.getElementById('cover-mode-color').click());
 assert.equal(await p.evaluate(()=>window._readTournamentBrandingPatch('e').coverPhotoData),'',
  'troca explícita para cor pode remover a foto publicada');
-await p.evaluate(()=>{window._coverModeChosenByUser=false;document.getElementById('tourn-cover-mode').value='photo';});
+assert.equal(await p.evaluate(()=>window._readTournamentBrandingPatch('e')._coverRemovalRequested),true);
+await p.evaluate(()=>document.getElementById('cover-mode-photo').click());
 await p.evaluate(()=>{
  window._editLogoHydrating='';document.getElementById('tourn-cover-data').value='data:image/png;base64,BBBB';
  return window._saveTournamentClickHandler();
@@ -112,8 +116,8 @@ assert.equal(await p.evaluate(()=>window.AppStore.tournaments[0].coverUrl),'http
 assert.deepEqual(await p.evaluate(()=>window.AppStore.tournaments[0].matches),[{id:'published-match-1',court:'Quadra 1'}],
  'salvar a ficha durante o torneio preserva os jogos publicados');
 await p.evaluate(()=>{
- window._coverModeChosenByUser=true;
- document.getElementById('tourn-cover-mode').value='photo';
+ document.getElementById('cover-mode-color').click();
+ document.getElementById('cover-mode-photo').click();
  window._remotePatch=undefined;
  return window._saveTournamentClickHandler();
 });
@@ -121,6 +125,20 @@ assert(!Object.hasOwn(await p.evaluate(()=>window._tourDataAtStore),'coverPhotoD
  'Cor → Foto chega à store real sem comando vazio para remover a capa');
 assert(!Object.hasOwn(await p.evaluate(()=>window._remotePatch || {}),'coverUrl'),
  'Cor → Foto não apaga a URL publicada no comando remoto');
+await p.evaluate(()=>{
+ window._remotePatch=undefined;
+ return window.AppStore.addTournament({id:'e',coverPhotoData:''});
+});
+assert(!Object.hasOwn(await p.evaluate(()=>window._remotePatch || {}),'coverUrl'),
+ 'payload vazio sem intenção explícita não apaga a URL da capa');
+await p.evaluate(()=>{
+ window._remotePatch=undefined;
+ return window.AppStore.addTournament({id:'e',coverMode:'color',coverPhotoData:'',_coverRemovalRequested:true});
+});
+assert.equal(await p.evaluate(()=>window._remotePatch.coverUrl),'',
+ 'clicar Cor preserva a opção de apagar a foto publicada');
+assert(!Object.hasOwn(await p.evaluate(()=>window._remotePatch),'_coverRemovalRequested'),
+ 'marcador de intenção é local e não vai ao servidor');
 await p.evaluate(()=>{window.AppStore.addTournament=window._stubAddTournament;});
 await p.evaluate(()=>{window._editLogoHydrating='';window._sent=undefined;return window._saveTournamentClickHandler();});
 assert(!Object.hasOwn(await p.evaluate(()=>window._sent),'coverPhotoData'),'foto publicada sem base64 também é omitida depois da hidratação');

@@ -14835,7 +14835,7 @@ window.AppStore = {
     // ficha inteira nem grava uma transação genérica: só recebe de volta o estado fresco.
     if (_isExisting) {
       var _editPatch = Object.assign({}, data);
-      ['id', '_allowConfigReset', 'storageCanonico', 'coHosts', 'creatorUid',
+      ['id', '_allowConfigReset', '_coverRemovalRequested', 'storageCanonico', 'coHosts', 'creatorUid',
         'creatorEmail', 'organizerUid', 'organizerEmail', 'organizerName',
         'logoData', 'coverPhotoData'].forEach(function (key) { delete _editPatch[key]; });
       Object.keys(_editPatch).forEach(function (key) {
@@ -14855,6 +14855,12 @@ window.AppStore = {
           ? data[pair[0]] : _editPatch[pair[1]];
         if (!raw) {
           delete _editPatch[pair[0]];
+          // Um campo de capa vazio durante a hidratação nunca equivale a apagar.
+          // Só a ação explícita Cor/Remover autoriza limpar a URL publicada.
+          if (pair[0] === 'coverPhotoData' && data._coverRemovalRequested !== true) {
+            delete _editPatch[pair[1]];
+            return Promise.resolve();
+          }
           /* ⛔ REMOVER CAPA/LOGO PRECISA SER UMA INTENÇÃO EXPLÍCITA. O save normal
            * omite imagens para não reenviar base64; reutilizar essa omissão aqui fez
            * o Firestore preservar a URL antiga quando o organizador clicava em
