@@ -402,9 +402,10 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
   const beforeStaleCategoryPlan = configWrites;
   await assert.rejects(configHandler({ auth:{ uid:'owner' }, data:{ tournamentId:'tour_test',
     patch:{ combinedCategories:['Fem Diamante', 'Fem Prata'],
-      scheduleWindow:{ interleavedPlan:{ ...proposal.plan, editorVersion:2 } } } } }),
-  { code:'invalid-argument' }, 'alterar a categoria não pode conservar uma grade com a categoria antiga');
-  assert.equal(configWrites, beforeStaleCategoryPlan, 'grade incompatível com a categoria nova não escreve');
+      scheduleWindow:{ interleavedPlan:structuredClone(existingGridTournament.scheduleWindow.interleavedPlan) } } } }),
+  { code:'invalid-argument' }, 'categoria alterada com a grade salva reenviada é recusada');
+  assert.equal(configWrites, beforeStaleCategoryPlan, 'grade salva reenviada incompatível não escreve');
+  assert.deepEqual(configTournament, existingGridTournament, 'a recusa preserva o documento salvo inteiro');
   const renamedProposal = gridModel.suggest({ days:gridDays, courts:2, gameDuration:25, callTime:5,
     warmupTime:5, eliminationPlayMinutes:25,
     categories:[{ name:'Fem Diamante', groups:2 }, { name:'Fem Prata', groups:2 }] });
