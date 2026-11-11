@@ -58,6 +58,9 @@ await p.evaluate(()=>{
 assert(!Object.hasOwn(await p.evaluate(()=>window._sent),'coverPhotoData'),'capa ainda hidratando não vira remoção');
 assert.equal(await p.evaluate(()=>window._sent.coverMode),'photo','capa publicada continua no modo foto durante a hidratação');
 assert(!Object.hasOwn(await p.evaluate(()=>window._sent),'coverUrl'),'salvar ficha não apaga a URL publicada da capa');
+await p.evaluate(()=>{window._editLogoHydrating='';window._sent=undefined;return window._saveTournamentClickHandler();});
+assert(!Object.hasOwn(await p.evaluate(()=>window._sent),'coverPhotoData'),'foto publicada sem base64 também é omitida depois da hidratação');
+assert.equal(await p.evaluate(()=>window._sent.coverMode),'photo');
 await p.evaluate(()=>{window._editLogoHydrating='';window.AppStore.tournaments[0].coverMode='color';window.AppStore.tournaments[0].coverUrl='';document.getElementById('tourn-cover-mode').value='color';});
 await p.evaluate(()=>{window._logoRemovalRequested=true;window._sent=undefined;window._notes=[];});
 await p.evaluate(()=>window._saveTournamentClickHandler());

@@ -6748,6 +6748,10 @@ window._saveTournamentClickHandler = async function() {
         const coverModeVal = ((document.getElementById('tourn-cover-mode') || {}).value === 'photo' &&
           (coverPhotoDataVal || (editingTournament && (editingTournament.coverUrl || editingTournament.coverPhotoData)) || window._editLogoHydrating))
           ? 'photo' : 'color';
+        // Em modo foto, campo vazio é uma imagem já publicada ainda não hidratada.
+        // Só o modo cor carrega '' como comando explícito de remover a foto.
+        const coverImagePatch = (editId && coverModeVal === 'photo' && !coverPhotoDataVal)
+          ? {} : { coverPhotoData: coverPhotoDataVal };
         const coverColorVal = (document.getElementById('tourn-cover-color') || {}).value || '#1f2937';
         const titleColorVal = (document.getElementById('tourn-title-color') || {}).value || '#ffffff';
         const coverGradientColorVal = (document.getElementById('tourn-cover-gradient-color') || {}).value || '#0f172a';
@@ -6874,7 +6878,7 @@ window._saveTournamentClickHandler = async function() {
           venueState: (document.getElementById('tourn-venue-state') || {}).value || '',
           venueCountry: (document.getElementById('tourn-venue-country') || {}).value || '',
           venuePhotoUrl: venuePhotoUrlVal,
-          coverPhotoData: coverPhotoDataVal,
+          ...coverImagePatch,
           coverMode: coverModeVal,
           coverColor: /^#[0-9a-f]{6}$/i.test(coverColorVal) ? coverColorVal : '#1f2937',
           titleColor: /^#[0-9a-f]{6}$/i.test(titleColorVal) ? titleColorVal : '#ffffff',
@@ -6904,11 +6908,6 @@ window._saveTournamentClickHandler = async function() {
           creatorUid: window.AppStore.currentUser ? window.AppStore.currentUser.uid : '',
           coHosts: []
         };
-        // Na edição, ausência de base64 em modo foto significa "a URL publicada
-        // continua valendo". A store interpreta uma chave coverPhotoData presente
-        // e vazia como comando explícito de remover coverUrl; por isso a chave
-        // precisa sair do payload antes de qualquer caminho de gravação.
-        if (editId && coverModeVal === 'photo' && !coverPhotoDataVal) delete tourData.coverPhotoData;
 
         // Opt-out global do gênero: não materializa `false` em torneios legados que
         // não tinham o campo. Isso evita transformar um save de calendário em mudança
