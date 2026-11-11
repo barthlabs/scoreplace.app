@@ -150,9 +150,26 @@ assert.equal(window._tvLiveBuildSnapshot({ ...t, currentPhaseIndex: 2, tvLayout:
   'fase sem tela própria mantém a tela base');
 const customHtml = window._tvLiveBodyHtml(customSnapshot);
 assert.match(customHtml, /tv-custom-board/);
-assert.doesNotMatch(customHtml, /tv-custom-qr/);
+assert.match(customHtml, /tv-custom-qr/, 'QR permanece mesmo se um layout antigo o ocultou');
 assert.doesNotMatch(customHtml, /class="tv-score"/);
 assert.match(customHtml, /tv-custom-rankings/);
+const finals = [
+  match(198, 'Quadra 1', 'VORTEX', 'BLAST', { bracket:'gold', round:3, scoreP1:6, scoreP2:2, winner:'p1' }),
+  match(199, 'Quadra 2', 'ECLIPSE', 'VENOM', { bracket:'gold', round:3, isThirdPlace:true, scoreP1:4, scoreP2:6, winner:'p2' }),
+  match(200, 'Quadra 3', 'PANIC', 'PHANTOM', { bracket:'silver', round:3, scoreP1:3, scoreP2:6, winner:'p2' }),
+  match(201, 'Quadra 4', 'VOLT', 'BLACKOUT', { bracket:'silver', round:3, isThirdPlace:true, scoreP1:5, scoreP2:7, winner:'p2' })
+];
+const finalsLayout = window.ScoreplaceTvLayout.finalsPreset(window.ScoreplaceTvLayout.defaults(), finals);
+const finalsSnapshot = window._tvLiveBuildSnapshot({ ...t, matches:finals, tvLayout:finalsLayout,
+  classifFinalDaLinha:{ gold:[{ name:'VORTEX 1 / Parceira', pos:1 }], silver:[{ name:'PHANTOM 1 / Parceira', pos:1 }] } });
+assert.equal(finalsSnapshot.selectedMatches.live1.number, 198);
+assert.equal(finalsSnapshot.selectedMatches.live4.number, 201);
+assert.equal(finalsSnapshot.lineStandings.standing1.rows[0].name, 'VORTEX 1 / Parceira');
+const finalsHtml = window._tvLiveBodyHtml(finalsSnapshot);
+assert.match(finalsHtml, /tv-custom-live1[\s\S]*FINAL · JOGO 198/);
+assert.match(finalsHtml, /tv-custom-live2[\s\S]*3º E 4º LUGAR · JOGO 199/);
+assert.match(finalsHtml, /tv-custom-standing2[\s\S]*CLASSIFICAÇÃO · PRATA/);
+assert.ok(finalsHtml.indexOf('tv-custom-standing2') < finalsHtml.indexOf('tv-custom-qr'), 'QR é pintado por cima das tabelas');
 const paletteLayout = window.ScoreplaceTvLayout.defaults();
 paletteLayout.sections.logo.visible = true;
 window._tournamentCoverBackground = tournament => ({ css: tournament.coverColor });

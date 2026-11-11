@@ -3220,12 +3220,15 @@
     overlay.id = 'phase-tie-panel';
     overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.88);display:flex;align-items:center;justify-content:center;padding:16px;';
     var names = (tie.players || []).map(function (p) { return safe(p.name); }).join(', ');
+    var groupName = String(decision && decision.groupName || tie.groupName || '').trim();
+    var groupMatch = groupName.match(/(?:^|\s|·)(Grupo\s+[^·]+)$/i);
+    var tieLabel = 'Simples desempate' + (groupName ? ' · ' + (groupMatch ? groupMatch[1].trim() : groupName) : '');
     var finalTitle = !!(context && context.finish);
     var body = '<p style="font-size:.88rem;line-height:1.5;">Os critérios de desempate terminaram empatados na posição que define ' +
       (finalTitle ? 'o título' : 'o destino') + ' de <b>' + names + '</b>.</p>';
     if (out.reason === 'tie-choice-required') {
       body += '<p style="font-size:.82rem;line-height:1.5;">O regulamento prevê ' +
-        (tie.players && tie.players.length === 3 ? 'um triangular de três partidas de simples' :
+        (tie.players && tie.players.length === 3 ? 'duas simples, com uma terceira se a segunda vaga ainda depender de confronto' :
          tie.players && tie.players.length === 2 ? 'uma partida extra de simples' : 'a ordem do sorteio original') +
         '. Se faltar tempo, a organização pode dispensar os jogos e aplicar a ordem do sorteio original, sem sortear novamente.' +
         (tie.firstExtraGameNumber ? ' Se jogados, os números começam em <b>' + safe(tie.firstExtraGameNumber) + '</b>.' : '') + '</p>' +
@@ -3236,7 +3239,7 @@
       var liveTournament = window._findTournamentById && window._findTournamentById(tId);
       var courtNames = liveTournament && Array.isArray(liveTournament.courtNames) ? liveTournament.courtNames.map(String) : [];
       if (!courtNames.length && liveTournament) for (var ci = 1; ci <= Number(liveTournament.courtCount || 0); ci++) courtNames.push('Quadra ' + ci);
-      body += '<p style="font-size:.82rem;">' + ((tie.players || []).length === 3 ? 'Triangular' : 'Simples') +
+      body += '<p style="font-size:.82rem;">' + safe(tieLabel) +
         (decision.pointsToWin ? ' · tie-break até ' + decision.pointsToWin + ' pontos' +
           (decision.pointMargin === 2 ? ', com dois pontos de vantagem' : ', vence quem chegar primeiro') +
           '. Registre o placar, por exemplo <b>' + decision.pointsToWin + '-3</b>.' :
@@ -3249,7 +3252,7 @@
         }).join('');
         var scoreText = (match.sets || []).map(function (set) { return set.p1 + '-' + set.p2; }).join(', ');
         body += '<div style="padding:10px;margin:8px 0;border:1px solid rgba(255,255,255,.2);border-radius:9px;">' +
-          '<b>Jogo ' + safe(match.displayGameNumber || 'extra') + ' · ' + safe(match.p1.name) + ' × ' + safe(match.p2.name) + '</b>' +
+          '<b>' + safe(tieLabel) + ' · Jogo ' + safe(match.displayGameNumber || 'extra') + ' · ' + safe(match.p1.name) + ' × ' + safe(match.p2.name) + '</b>' +
           (match.winnerKey ? ' · resultado registrado' : '') +
           (!match.winnerKey && courtNames.length ? '<div style="display:flex;gap:8px;margin-top:8px;"><select class="form-control" aria-label="Quadra do jogo extra" data-tie-court="' + index + '">' + courtOptions +
             '</select><button type="button" class="btn btn-secondary" data-tie-call="' + index + '"' + (!match.court ? ' disabled' : '') + '>' +

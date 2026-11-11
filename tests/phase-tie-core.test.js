@@ -1,6 +1,7 @@
 'use strict';
 const assert = require('assert');
 const tie = require('../functions-autodraw/phase-tie-core');
+const courts = require('../functions-autodraw/phase-tie-courts');
 
 const rows = ['A', 'B', 'C', 'D'].map((name, i) => ({ uid: name, name, wins: i ? 1 : 3 }));
 const cmp = (a, b) => b.wins - a.wins;
@@ -113,7 +114,8 @@ assert.strictEqual(flow.status, 'pending');
 assert.equal(flow.decision.pointsToWin, 5);
 assert.equal(flow.decision.pointMargin, 1);
 assert.equal(flow.decision.setsToWin, 1);
-assert.deepStrictEqual(flow.decision.matches.map(m => m.displayGameNumber), ['93A', '93B', '93C']);
+assert.deepStrictEqual(flow.decision.matches.map(m => m.displayGameNumber), ['93A'],
+  'empate triplo cria só a primeira simples; próximas dependem do placar');
 const legacyDecision = JSON.parse(JSON.stringify(flow.decision));
 legacyDecision.setsToWin = 2;
 delete legacyDecision.pointsToWin;
@@ -141,25 +143,35 @@ const sameBaseChoice = tie.resolvePhaseTies(sameBase, 0, pools, next, () => cmp,
 assert.strictEqual(sameBaseChoice.tie.firstExtraGameNumber, '93C');
 const sameBasePlay = tie.resolvePhaseTies(sameBase, 0, pools, next, () => cmp,
   { type: 'play', decisionId: sameBaseChoice.tie.decisionId }, 1, false, () => 93);
-assert.deepStrictEqual(sameBasePlay.decision.matches.map(m => m.displayGameNumber), ['93C', '93D', '93E'],
+assert.deepStrictEqual(sameBasePlay.decision.matches.map(m => m.displayGameNumber), ['93C'],
   'outra disputa extra ligada ao mesmo jogo-base não reutiliza letras');
-for (const [index, score] of [[5, 4], [4, 5], [5, 4]].entries()) {
-  flow = tie.resolvePhaseTies(fresh, 0, pools, next, () => cmp,
-    { type: 'score', decisionId: flow.tie.decisionId, matchId: flow.decision.matches[index].id,
-      sets: [{ p1: score[0], p2: score[1] }] }, 1, false, () => 93);
-}
+flow = tie.resolvePhaseTies(fresh, 0, pools, next, () => cmp,
+  { type: 'score', decisionId: flow.tie.decisionId, matchId: flow.decision.matches[0].id,
+    sets: [{ p1: 5, p2: 4 }] }, 1, false, () => 93);
+assert.strictEqual(flow.status, 'pending');
+assert.deepStrictEqual(flow.decision.matches.map(m => m.displayGameNumber), ['93A', '93B']);
+flow = tie.resolvePhaseTies(fresh, 0, pools, next, () => cmp,
+  { type: 'score', decisionId: flow.tie.decisionId, matchId: flow.decision.matches[1].id,
+    sets: [{ p1: 5, p2: 4 }] }, 1, false, () => 93);
 assert.strictEqual(flow.status, 'review');
+const invalidatedSecondId = flow.decision.matches[1].id;
 flow = tie.resolvePhaseTies(fresh, 0, pools, next, () => cmp,
   { type: 'score', decisionId: flow.tie.decisionId, matchId: flow.decision.matches[0].id,
     sets: [{ p1: 4, p2: 5 }], at: '2026-11-03T12:30:00Z' }, 1, false, () => 93);
 assert.equal(flow.decision.corrections.length, 1);
+assert.strictEqual(flow.status, 'pending', 'corrigir a primeira simples invalida a seguinte');
+assert.notEqual(flow.decision.matches[1].id, invalidatedSecondId,
+  'jogo recriado após correção recebe identidade própria');
+flow = tie.resolvePhaseTies(fresh, 0, pools, next, () => cmp,
+  { type: 'score', decisionId: flow.tie.decisionId, matchId: flow.decision.matches[1].id,
+    sets: [{ p1: 5, p2: 4 }] }, 1, false, () => 93);
 assert.strictEqual(flow.status, 'review');
 flow = tie.resolvePhaseTies(fresh, 0, pools, next, () => cmp,
   { type: 'confirm', decisionId: flow.tie.decisionId, at: '2026-11-03T12:31:00Z' }, 1, false, () => 93);
 assert.strictEqual(flow.status, 'ready');
 assert.deepStrictEqual(flow.orderedPools[0].rows.map(p => p.name), ['A', 'C', 'D', 'B'],
   'placar corrigido altera a classificação confirmada');
-assert.strictEqual(fresh.phaseTieDecisions['0']['group-a:1:3'].matches.length, 3);
+assert.strictEqual(fresh.phaseTieDecisions['0']['group-a:1:3'].matches.length, 2);
 
 const changedRows = ['A', 'B', 'C', 'E'].map((name, i) => ({ uid: name, name, wins: i ? 1 : 3 }));
 const changedCompare = (a, b) => b.wins - a.wins;
@@ -168,12 +180,12 @@ const stale = { phaseTieDecisions: JSON.parse(JSON.stringify(fresh.phaseTieDecis
 const changedFlow = tie.resolvePhaseTies(stale, 0, [{ id: 'group-a', rows: changedRows }],
   next, () => changedCompare, null, 1, false, () => 93, '2026-11-03T12:40:00Z');
 assert.equal(changedFlow.status, 'choice', 'W.O. posterior à escolha pede nova decisão em vez de travar');
-assert.equal(stale.history[0].phaseTieDecision.matches.length, 3, 'jogos extras anteriores ficam auditáveis');
+assert.equal(stale.history[0].phaseTieDecision.matches.length, 2, 'jogos extras anteriores ficam auditáveis');
 assert.equal(stale.phaseTieDecisions['0']['group-a:1:3'], undefined);
-assert.equal(changedFlow.tie.firstExtraGameNumber, '93D', 'nova escolha não reutiliza números de jogos arquivados');
+assert.equal(changedFlow.tie.firstExtraGameNumber, '93C', 'nova escolha não reutiliza números de jogos arquivados');
 const refreshedFlow = tie.resolvePhaseTies(stale, 0, [{ id: 'group-a', rows: changedRows }],
   next, () => changedCompare, null, 1, false, () => 93);
-assert.equal(refreshedFlow.tie.firstExtraGameNumber, '93D');
+assert.equal(refreshedFlow.tie.firstExtraGameNumber, '93C');
 
 const quick = {};
 const question = tie.resolvePhaseTies(quick, 0, pools, next, () => cmp, null, 1);
@@ -233,4 +245,61 @@ assert.equal(newAuto.status, 'pending', 'a fronteira corrigida cria simples no m
 assert.equal(newAuto.decision.choice, 'play', 'sorteio automático não substitui simples configurada');
 assert.equal(staleAuto.history[0].phaseTieDecision.choice, 'draw',
   'a escolha antiga fica no histórico após a correção');
+
+const topRows = ['A', 'B', 'C', 'D'].map((name, i) => ({ uid: name, name, wins: i < 3 ? 2 : 0 }));
+const topPool = [{ id: 'top-group', group: { name: 'Grupo A1' }, rows: topRows }];
+const topConfig = { source: { mapping: [{ dest: 'next', rankFrom: 1, rankTo: 2 }] } };
+function topStep(t, action, at) {
+  return tie.resolvePhaseTies(t, 0, topPool, topConfig, () => cmp,
+    action, 1, false, () => 3, at || '2026-11-11T10:00:00Z', autoOpts);
+}
+const top = { fmt2: { tieResolution: 'singles_then_draw', tieSinglesPoints: 5, tieSinglesMargin: 1 },
+  courtNames: ['Quadra 1', 'Quadra 2', 'Quadra 3'], currentPhaseIndex: 0 };
+let topFlow = topStep(top);
+assert.equal(topFlow.decision.qualifierSlots, 2, 'empate entre os três primeiros disputa duas vagas');
+assert.equal(topFlow.decision.matches.length, 1);
+const occupied = [{ id: 'regular-1', court: 'Quadra 1', courtCalledAt: '2026-11-11T09:00:00Z' }];
+const isOccupied = m => !!(m.court && m.courtCalledAt && !m.winnerKey);
+let called = courts.callPending(top, occupied, {}, isOccupied, '2026-11-11T10:01:00Z');
+assert.deepStrictEqual(called.map(c => c.court), ['Quadra 2'], 'simples usa a próxima quadra livre');
+assert.equal(courts.callPending(top, occupied, {}, isOccupied, '2026-11-11T10:02:00Z').length, 0,
+  'repetir a chamada não duplica o jogo');
+topFlow = topStep(top, { type: 'score', decisionId: topFlow.tie.decisionId,
+  matchId: topFlow.decision.matches[0].id, sets: [{ p1: 5, p2: 4 }] });
+assert.equal(topFlow.decision.matches.length, 2, 'vencedor enfrenta terceiro atleta');
+called = courts.callPending(top, occupied, {}, isOccupied, '2026-11-11T10:03:00Z');
+assert.deepStrictEqual(called.map(c => c.court), ['Quadra 2'], 'quadra da simples concluída fica livre');
+topFlow = topStep(top, { type: 'score', decisionId: topFlow.tie.decisionId,
+  matchId: topFlow.decision.matches[1].id, sets: [{ p1: 5, p2: 4 }] });
+assert.equal(topFlow.decision.matches.length, 3, 'se o mesmo atleta venceu duas vezes, a segunda vaga exige terceira simples');
+assert.equal(topFlow.status, 'pending');
+topFlow = topStep(top, { type: 'score', decisionId: topFlow.tie.decisionId,
+  matchId: topFlow.decision.matches[2].id, sets: [{ p1: 4, p2: 5 }] });
+assert.equal(topFlow.status, 'review');
+assert.deepStrictEqual(topFlow.decision.order, ['uid:A', 'uid:C', 'uid:B'],
+  'terceira simples define a segunda vaga sem recorrer à margem dos placares');
+
+const topTwo = { fmt2: top.fmt2 };
+let topTwoFlow = topStep(topTwo);
+topTwoFlow = topStep(topTwo, { type: 'score', decisionId: topTwoFlow.tie.decisionId,
+  matchId: topTwoFlow.decision.matches[0].id, sets: [{ p1: 5, p2: 4 }] });
+topTwoFlow = topStep(topTwo, { type: 'score', decisionId: topTwoFlow.tie.decisionId,
+  matchId: topTwoFlow.decision.matches[1].id, sets: [{ p1: 4, p2: 5 }] });
+assert.equal(topTwoFlow.decision.matches.length, 2, 'vencedores diferentes resolvem duas vagas com duas simples');
+assert.deepStrictEqual(topTwoFlow.decision.order.slice(0, 2), ['uid:C', 'uid:A']);
+
+const bottom = { fmt2: top.fmt2 };
+let bottomFlow = tie.resolvePhaseTies(bottom, 0, pools, next, () => cmp,
+  null, 1, false, () => 3, '2026-11-11T10:00:00Z', autoOpts);
+assert.equal(bottomFlow.decision.qualifierSlots, 1, 'três últimos disputam uma vaga');
+bottomFlow = tie.resolvePhaseTies(bottom, 0, pools, next, () => cmp,
+  { type: 'score', decisionId: bottomFlow.tie.decisionId,
+    matchId: bottomFlow.decision.matches[0].id, sets: [{ p1: 5, p2: 4 }] },
+  1, false, () => 3, '2026-11-11T10:01:00Z', autoOpts);
+bottomFlow = tie.resolvePhaseTies(bottom, 0, pools, next, () => cmp,
+  { type: 'score', decisionId: bottomFlow.tie.decisionId,
+    matchId: bottomFlow.decision.matches[1].id, sets: [{ p1: 5, p2: 4 }] },
+  1, false, () => 3, '2026-11-11T10:02:00Z', autoOpts);
+assert.equal(bottomFlow.decision.matches.length, 2, 'uma vaga entre três encerra após duas simples');
+assert.equal(bottomFlow.status, 'review');
 console.log('phase-tie-core: ok');

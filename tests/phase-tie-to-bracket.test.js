@@ -38,12 +38,15 @@ let flow = tie.resolvePhaseTies(tournamentTriangular, 0, pool, nextPhase, compar
 assert.equal(flow.status, 'choice');
 flow = tie.resolvePhaseTies(tournamentTriangular, 0, pool, nextPhase, compare,
   { type: 'play', decisionId: flow.tie.decisionId }, 1);
-for (const [index, scores] of [[4, 5], [4, 5], [4, 5]].entries()) {
+for (const scores of [[4, 5], [4, 5]]) {
+  const nextMatch = flow.decision.matches.find(match => !match.winnerKey);
+  assert.ok(nextMatch, 'a próxima simples surge após o resultado anterior');
   flow = tie.resolvePhaseTies(tournamentTriangular, 0, pool, nextPhase, compare,
     { type: 'score', decisionId: flow.tie.decisionId,
-      matchId: flow.decision.matches[index].id, sets: [{ p1: scores[0], p2: scores[1] }] }, 1);
+      matchId: nextMatch.id, sets: [{ p1: scores[0], p2: scores[1] }] }, 1);
 }
 assert.equal(flow.status, 'review');
+assert.equal(flow.decision.matches.length, 2, 'duas simples resolveram a vaga restante');
 flow = tie.resolvePhaseTies(tournamentTriangular, 0, pool, nextPhase, compare,
   { type: 'confirm', decisionId: flow.tie.decisionId, at: '2026-11-03T12:00:00.000Z' }, 1);
 assert.equal(flow.status, 'ready');

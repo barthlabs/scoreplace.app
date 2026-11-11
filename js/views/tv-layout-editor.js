@@ -3,7 +3,9 @@
   'use strict';
   var Core = window.ScoreplaceTvLayout;
   if (!Core) return;
-  var labels = { header: 'Cabeçalho', courts: 'Em quadra', upcoming: 'Próximo jogo', rankings: 'Classificação', results: 'Últimos resultados', qr: 'QR do aplicativo', logo: 'Logo do torneio' };
+  var labels = { header: 'Cabeçalho', courts: 'Em quadra', upcoming: 'Próximo jogo', rankings: 'Classificação', results: 'Últimos resultados', qr: 'QR do aplicativo', logo: 'Logo do torneio',
+    live1: 'Partida 1', live2: 'Partida 2', live3: 'Partida 3', live4: 'Partida 4',
+    standing1: 'Classificação 1', standing2: 'Classificação 2', standing3: 'Classificação 3', standing4: 'Classificação 4' };
   var cardLabels = { court: 'Quadra', number: 'Número do jogo', category: 'Categoria', teams: 'Times', players: 'Atletas', score: 'Placar', timer: 'Relógio' };
   var draft = null, screens = null, activePhase = 0, touched = false, mounted = null, pendingSet = false, resizeObserver = null, snapshot = null;
   function esc(value) {
@@ -28,6 +30,20 @@
         phases = window.FORMAT2.compileToPhases(cfg).phases || phases;
     } catch (e) { /* o formato ainda pode estar sendo editado */ }
     return phases.map(function (phase, i) { return String(phase && phase.name || 'Fase ' + (i + 1)); });
+  }
+  function sourceChoices(t, snapshotData) {
+    if (snapshotData) return { matches: snapshotData.matchChoices || [], lines: snapshotData.lineChoices || [] };
+    var matches = [];
+    try { matches = typeof window._collectAllMatches === 'function' ? window._collectAllMatches(t) || [] : t && t.matches || []; }
+    catch (e) { matches = t && t.matches || []; }
+    var available = matches.filter(function (m) { return m && m.id && !m.isBye && !m.isSitOut; });
+    var lines = Array.from(new Set(available.map(function (m) { return String(m.bracket || 'main'); })));
+    return {
+      matches: available.map(function (m) { return { id: String(m.id), label: 'JOGO ' +
+        (m._gameNum || m.scheduledGameNumber || m.matchNumber || '') + ' · ' +
+        String(m.bracket || m.category || '') + (m.isThirdPlace ? ' · 3º lugar' : '') }; }),
+      lines: lines.map(function (key) { return { key: key, label: key === 'gold' ? 'Ouro' : key === 'silver' ? 'Prata' : key === 'main' ? 'Principal' : key }; })
+    };
   }
   function previewSnapshot(layout) {
     var t = window._editingTournament;
@@ -91,9 +107,9 @@
     if (canvas && frame) frame.style.transform = 'scale(' + (canvas.clientWidth / 1280) + ')';
   }
   function boxHtml(id, b) {
-    return '<div data-tv-box="' + id + '" role="group" tabindex="0" aria-label="' + labels[id] + '" style="position:absolute;z-index:2;left:' + b.x + '%;top:' + b.y + '%;width:' + b.w + '%;height:' + b.h + '%;border:2px solid #67e8f9;border-radius:5px;cursor:move;touch-action:none;box-shadow:inset 0 0 0 1px #06121a88">' +
+    return '<div data-tv-box="' + id + '" role="group" tabindex="0" aria-label="' + labels[id] + '" style="position:absolute;z-index:' + (id === 'qr' ? 5 : 2) + ';left:' + b.x + '%;top:' + b.y + '%;width:' + b.w + '%;height:' + b.h + '%;border:2px solid #67e8f9;border-radius:5px;cursor:move;touch-action:none;box-shadow:inset 0 0 0 1px #06121a88">' +
       '<span style="position:absolute;top:0;left:0;max-width:calc(100% - 29px);padding:2px 6px;background:#06121ae6;color:#fff;font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + labels[id] + '</span>' +
-      '<button type="button" data-tv-remove="' + id + '" aria-label="Remover ' + labels[id] + '" title="Remover ' + labels[id] + '" style="position:absolute;right:0;top:0;z-index:3;width:26px;height:26px;background:#991b1b;color:#fff;border:1px solid #fff;border-radius:0 3px 0 5px;font-size:18px;line-height:20px;cursor:pointer">×</button>' +
+      (id === 'qr' ? '' : '<button type="button" data-tv-remove="' + id + '" aria-label="Remover ' + labels[id] + '" title="Remover ' + labels[id] + '" style="position:absolute;right:0;top:0;z-index:3;width:26px;height:26px;background:#991b1b;color:#fff;border:1px solid #fff;border-radius:0 3px 0 5px;font-size:18px;line-height:20px;cursor:pointer">×</button>') +
       '<span data-tv-resize="' + id + '" aria-label="Redimensionar ' + labels[id] + '" title="Arraste para redimensionar" style="position:absolute;right:0;bottom:0;width:18px;height:18px;background:#fbbf24;border:1px solid #111;cursor:nwse-resize;touch-action:none"></span></div>';
   }
   function render() {
@@ -111,21 +127,29 @@
       return '<option value="' + i + '"' + (i === activePhase ? ' selected' : '') + (occupied.has(i) && i !== activePhase ? ' disabled' : '') + '>' + esc(names[i] || 'Fase ' + (i + 1)) + '</option>';
     }).join('');
     snapshot = previewSnapshot(layout);
+    var choicesByKind = sourceChoices(window._editingTournament, snapshot);
     var documentHtml = snapshot ? window._tvLivePreviewDocument(snapshot) : '';
     var visible = Core.IDS.filter(function (id) { return layout.sections[id].visible; });
     var removed = Core.IDS.filter(function (id) { return !layout.sections[id].visible; });
     host.innerHTML = '<div style="border-top:1px solid #475569;padding-top:1rem;color:var(--text-main)">' +
       '<h3 style="margin:0 0 .4rem">📺 Tela No ar</h3>' +
-      '<p style="font-size:.8rem;color:var(--text-muted)">Arraste as seções para posicioná-las e o canto inferior direito para mudar o tamanho. Bordas próximas se encaixam automaticamente. O X retira a seção; você pode recolocá-la abaixo. As alterações entram no ar ao salvar o torneio.</p>' +
+      '<p style="font-size:.8rem;color:var(--text-muted)">Arraste as seções para posicioná-las e o canto inferior direito para mudar o tamanho. Bordas próximas se encaixam automaticamente. O QR permanece visível e pode ser movido. As alterações entram no ar ao salvar o torneio.</p>' +
       '<div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:.6rem 0 .8rem"><label>Tela <select data-tv-screen-list aria-label="Selecionar tela No ar">' +
       screens.map(function (screen, i) { return '<option value="' + screen.phaseIndex + '"' + (screen.phaseIndex === activePhase ? ' selected' : '') + '>Tela ' + (i + 1) + ' · ' + esc(names[screen.phaseIndex] || 'Fase ' + (screen.phaseIndex + 1)) + '</option>'; }).join('') +
       '</select></label><label>Usar na fase <select data-tv-phase aria-label="Fase desta tela">' + phaseOptions + '</select></label>' +
       '<button type="button" data-tv-add-screen class="btn btn-secondary"' + (screens.length >= 12 ? ' disabled' : '') + '>+ Nova tela</button>' +
       (screens.length > 1 ? '<button type="button" data-tv-delete-screen class="btn btn-secondary">Excluir esta tela</button>' : '') + '</div>' +
-      '<div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-bottom:.6rem"><label>Fundo <select data-tv-background-mode aria-label="Origem das cores da tela"><option value="tournament"' + (layout.backgroundMode === 'tournament' ? ' selected' : '') + '>Cores do torneio</option><option value="custom"' + (layout.backgroundMode === 'custom' ? ' selected' : '') + '>Cor manual</option></select></label>' +
+      '<div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-bottom:.6rem"><button type="button" data-tv-finals-preset class="btn btn-secondary">Final Ouro e Prata</button><label>Fundo <select data-tv-background-mode aria-label="Origem das cores da tela"><option value="tournament"' + (layout.backgroundMode === 'tournament' ? ' selected' : '') + '>Cores do torneio</option><option value="custom"' + (layout.backgroundMode === 'custom' ? ' selected' : '') + '>Cor manual</option></select></label>' +
       '<label data-tv-manual-color' + (layout.backgroundMode === 'custom' ? '' : ' hidden') + '>Cor <input data-tv-background type="color" value="' + esc(layout.background) + '"></label>' +
       (!layout.sections.logo.visible ? '<button type="button" data-tv-add-logo class="btn btn-secondary">+ Colocar logo</button>' :
         '<label>Largura do logo <input data-tv-logo-size="w" type="number" min="5" max="100" step="0.1" value="' + layout.sections.logo.w + '" style="width:5rem">%</label><label>Altura <input data-tv-logo-size="h" type="number" min="5" max="100" step="0.1" value="' + layout.sections.logo.h + '" style="width:5rem">%</label>') + '</div>' +
+      '<div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.6rem">' +
+      Core.IDS.filter(function (id) { return /^live[1-4]$|^standing[1-4]$/.test(id) && layout.sections[id].visible; }).map(function (id) {
+        var choices = id.indexOf('live') === 0 ? choicesByKind.matches : choicesByKind.lines;
+        var source = layout.sections[id].source || '';
+        return '<label style="font-size:.8rem">' + labels[id] + ' <select data-tv-source="' + id + '" aria-label="' + labels[id] + '" style="max-width:12rem"><option value="">Selecionar...</option>' +
+          choices.map(function (choice) { var value = choice.id || choice.key; return '<option value="' + esc(value) + '"' + (source === value ? ' selected' : '') + '>' + esc(choice.label) + '</option>'; }).join('') + '</select></label>';
+      }).join('') + '</div>' +
       '<div data-tv-canvas aria-label="Prévia da tela No ar" style="position:relative;width:100%;aspect-ratio:16/9;background:' + esc(layout.backgroundMode === 'custom' ? layout.background : (snapshot && snapshot.theme && snapshot.theme.background || '#060d1a')) + ';border:2px solid #818cf8;border-radius:8px;overflow:hidden;touch-action:none;user-select:none">' +
       (documentHtml ? '<iframe data-tv-frame title="Prévia com dados do torneio" sandbox="allow-same-origin" tabindex="-1" style="position:absolute;left:0;top:0;width:1280px;height:720px;border:0;transform-origin:top left;pointer-events:none"></iframe>' :
         '<div data-tv-empty style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:1rem;text-align:center;color:#cbd5e1;font-size:.9rem">Salve e configure os jogos do torneio para visualizar os dados reais nesta prévia.</div>') +
@@ -157,6 +181,15 @@
     };
     var addLogo = host.querySelector('[data-tv-add-logo]');
     if (addLogo) addLogo.onclick = function () { layout.sections.logo.visible = true; touched = true; render(); };
+    host.querySelector('[data-tv-finals-preset]').onclick = function () {
+      var t = window._editingTournament, matches = [];
+      try { matches = typeof window._collectAllMatches === 'function' ? window._collectAllMatches(t) || [] : t && t.matches || []; }
+      catch (e) { matches = t && t.matches || []; }
+      selected.layout = Core.finalsPreset(layout, matches); draft = selected.layout; touched = true; render();
+    };
+    host.querySelectorAll('[data-tv-source]').forEach(function (input) { input.onchange = function () {
+      layout.sections[input.dataset.tvSource].source = input.value; touched = true; render();
+    }; });
     host.querySelector('[data-tv-screen-list]').onchange = function (event) {
       activePhase = Number(event.target.value); render();
     };

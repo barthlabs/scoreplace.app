@@ -19,6 +19,17 @@ assert.equal(browser.forPhase(screens, 1, original).background, '#123456');
 assert.equal(browser.forPhase(screens, 2, original).background, original.background, 'fase sem tela usa o layout anterior');
 assert.equal(original.backgroundMode, 'tournament', 'a tela nova acompanha a paleta do torneio');
 assert.equal(original.sections.logo.visible, false, 'logo independente começa oculto para preservar telas antigas');
+assert.equal(original.sections.qr.visible, true, 'QR começa visível');
+const qrHidden = browser.defaults(); qrHidden.sections.qr.visible = false;
+assert.equal(browser.normalize(qrHidden).sections.qr.visible, true, 'QR antigo removido volta ao carregar');
+const finalLayout = browser.finalsPreset(browser.defaults(), [
+  { id: 'gf', bracket: 'gold', round: 3 }, { id: 'gt', bracket: 'gold', round: 3, isThirdPlace: true },
+  { id: 'sf', bracket: 'silver', round: 4 }, { id: 'st', bracket: 'silver', round: 4, isThirdPlace: true }
+]);
+assert.deepEqual(['live1','live2','live3','live4'].map(id => finalLayout.sections[id].source), ['gf','gt','sf','st']);
+assert.deepEqual(['standing1','standing2'].map(id => finalLayout.sections[id].source), ['gold','silver']);
+assert.equal(finalLayout.sections.courts.visible, false);
+assert.equal(finalLayout.sections.qr.visible, true);
 const legacy = { ...original, backgroundMode: undefined, sections: { ...original.sections } };
 delete legacy.backgroundMode;
 delete legacy.sections.logo;

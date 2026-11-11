@@ -1,3 +1,7 @@
+// 2.6.41 — A tela No ar permite montar a final da Ouro e da Prata lado a lado:
+// final e terceiro lugar em cima, classificações abaixo e placares ao vivo.
+// O QR Code permanece visível e pode ser movido ou redimensionado.
+// A chamada de desempate da fase classificatória procura a próxima quadra livre.
 // 2.6.40 — A grade usa oitavas, quartas, semifinais, final e 3º lugar,
 // mostra o início de cada jogo da série e empurra blocos ao mover para
 // uma quadra ocupada. Conflitos restantes ficam listrados até o ajuste.

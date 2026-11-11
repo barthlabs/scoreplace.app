@@ -4736,9 +4736,12 @@ function renderBracket(container, tournamentId, isInline) {
         if (!decision || !Array.isArray(decision.contenders)) return;
         const labels = Object.fromEntries((decision.players || []).map(p => [p.key, p.name]));
         const names = decision.contenders.map(k => labels[k] || String(k).replace(/^name:/, ''));
+        const groupName = String(decision.groupName || '').trim();
+        const groupMatch = groupName.match(/(?:^|\s|·)(Grupo\s+[^·]+)$/i);
+        const tieLabel = 'Simples desempate' + (groupName ? ' · ' + (groupMatch ? groupMatch[1].trim() : groupName) : '');
         const matches = (decision.matches || []).map(m => {
           const score = (m.sets || []).map(s => s.p1 + '–' + s.p2).join(', ');
-          return '<li>Jogo ' + window._safeHtml(m.displayGameNumber || 'extra') + ' · ' +
+          return '<li>' + window._safeHtml(tieLabel) + ' · Jogo ' + window._safeHtml(m.displayGameNumber || 'extra') + ' · ' +
             window._safeHtml(m.p1 && m.p1.name || '') + ' × ' +
             window._safeHtml(m.p2 && m.p2.name || '') +
             (score ? ' · ' + window._safeHtml(score) : ' · aguardando resultado') + '</li>';

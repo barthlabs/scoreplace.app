@@ -50,12 +50,13 @@ const { chromium } = require('@playwright/test');
     assert.match(preview, /6/);
     assert.equal(await page.evaluate(() => Object.hasOwn(window._editingTournament.matches[0], '_gameNum')), false,
       'montar a prévia não deixa _gameNum no objeto salvo pelo formulário');
-    await page.locator('[data-tv-remove="qr"]').click();
-    assert.equal(await page.locator('[data-tv-box="qr"]').count(), 0);
-    assert.equal(await page.locator('[data-tv-restore="qr"]').count(), 1);
-    assert.equal(await page.evaluate(() => window._tvEditorReadLayout().sections.qr.visible), false);
-    await page.locator('[data-tv-restore="qr"]').click();
+    assert.equal(await page.locator('[data-tv-remove="qr"]').count(), 0, 'QR não oferece exclusão');
+    assert.equal(await page.locator('[data-tv-restore="qr"]').count(), 0);
     assert.equal(await page.locator('[data-tv-box="qr"]').count(), 1);
+    await page.locator('[data-tv-finals-preset]').click();
+    assert.equal(await page.locator('[data-tv-box="standing1"]').count(), 1, 'modelo inclui a classificação da linha disponível');
+    assert.equal(await page.locator('[data-tv-box="qr"]').count(), 1, 'modelo da final conserva o QR');
+    await page.locator('[data-tv-default]').click();
     await page.locator('[data-tv-card="score"]').uncheck();
     await page.locator('[data-tv-background-mode]').selectOption('custom');
     await page.locator('[data-tv-background]').fill('#112233');

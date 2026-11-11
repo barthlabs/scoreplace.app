@@ -65,6 +65,7 @@ const context = {
   _rehearsal: require('../functions-autodraw/tournament-rehearsal.js'),
   _matchTiming: require('../js/domain/match-timing.js'),
   _agenda: require('../functions-autodraw/agenda-core.js'),
+  _phaseTieCourts: require('../functions-autodraw/phase-tie-courts.js'),
   Date: TestDate, Intl, Number, String, Array, Set, console
 };
 const helperStart = server.indexOf('async function _fusoDoEvento(');

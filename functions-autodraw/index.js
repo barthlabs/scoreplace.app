@@ -11,6 +11,7 @@ const _operationReceipt = require('./operation-receipt-core');
 const _rehearsal = require('./tournament-rehearsal');
 const _operationDay = require('./operation-day');
 const _phaseTieCore = require('./phase-tie-core');
+const _phaseTieCourts = require('./phase-tie-courts');
 const _phasePendingDecision = require('./phase-pending-decision-core');
 const _drawSeed = require('./draw-seed-core');
 const _operationProbeReply = () => ({
@@ -2947,7 +2948,7 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
     const _courtSeriesEligible = _courtSourceBefore && _courtSourceBefore.isMonarch === true &&
       _courtSourceBefore.court && _courtSourceBefore.courtCalledAt &&
       !_courtOccupancy.isFinished(_courtSourceBefore);
-    const _courtState = _courtSeriesEligible
+    const _courtState = (_courtSeriesEligible || (t.fmt2 && t.fmt2.tieResolution === 'singles_then_draw'))
       ? await tx.get(ref.collection('courtState').doc('main')) : null;
     const _releasedCourts = _courtState && _courtState.exists
       ? (_courtState.data().released || {}) : {};
@@ -2995,6 +2996,11 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
     }
     if (t.scheduleWindow && t.scheduleWindow.interleavedPlan) {
       _materializeInterleavedReadyCategories(t, tId, _agoraIsoTx);
+    }
+    if (t.fmt2 && t.fmt2.tieResolution === 'singles_then_draw' &&
+        typeof drawWindow._collectAllMatches === 'function') {
+      _phaseTieCourts.callPending(t, drawWindow._collectAllMatches(t), _releasedCourts,
+        _courtOccupancy.occupiesCourt, _agoraIsoTx);
     }
     if (t.rulesContractVersion >= 2 && (t.status === 'finished' || t.titleAwards)) {
       const titleResolver = drawWindow && drawWindow.ScoreplaceTournamentTitles;
@@ -4901,9 +4907,14 @@ exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
         throw new HttpsError('failed-precondition', 'O jogo precisa estar em quadra e sem resultado.');
       }
       const auditRef = ref.collection('courtReleases').doc();
-      tx.set(stateRef, { revision: FieldValue.increment(1), released: { ...released, [matchId]: agoraIso } }, { merge: true });
+      const nextReleased = { ...released, [matchId]: agoraIso };
+      const beforeTieCall = _antesDoMotor(t);
+      const calledTies = _phaseTieCourts.callPending(t, all, nextReleased,
+        _courtOccupancy.occupiesCourt, agoraIso);
+      if (calledTies.length) _gravaTorneio(tx, ref, t, beforeTieCall, { agoraIso });
+      tx.set(stateRef, { revision: FieldValue.increment(1), released: nextReleased }, { merge: true });
       tx.create(auditRef, { matchId, court: String(m.court), releasedAt: agoraIso, releasedBy: uid });
-      return commitReply({ ok: true, changed: true, releasedAt: agoraIso });
+      return commitReply({ ok: true, changed: true, releasedAt: agoraIso, calledTies });
     }
     if (hasScore) {
       throw new HttpsError('failed-precondition', 'Resultado já lançado. Use Editar placar para corrigi-lo.');
@@ -6657,6 +6668,9 @@ exports.advanceTournamentPhase = onCall(async (request) => {
   const out = await db.runTransaction(async (tx) => {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    const tieCourtSnap = request.data && request.data.tieAction
+      ? await tx.get(ref.collection('courtState').doc('main')) : null;
+    const tieReleased = tieCourtSnap && tieCourtSnap.exists ? (tieCourtSnap.data().released || {}) : {};
     if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização avança a fase.', { tId, uid });
     const antes = _antesDoMotor(t);
     _hidrataGrupos(t, 'advanceTournamentPhase', tId);
@@ -6768,6 +6782,10 @@ exports.advanceTournamentPhase = onCall(async (request) => {
           { autoPlay: tieRule === 'singles_then_draw', retainOtherDecisions: !!requestedTieAction });
       } catch (err) {
         throw new HttpsError('failed-precondition', 'Desempate não aplicado: ' + String(err.message || err));
+      }
+      if (requestedTieAction && tieFlow.changed && typeof drawWindow._collectAllMatches === 'function') {
+        _phaseTieCourts.callPending(t, drawWindow._collectAllMatches(t), tieReleased,
+          _courtOccupancy.occupiesCourt, agoraIso);
       }
       if (tieFlow.changed && request.data && request.data.tieAction) {
         const action = request.data.tieAction;

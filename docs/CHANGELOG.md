@@ -1,3 +1,10 @@
+## 2.6.41 — 11/nov/2026 (final Ouro e Prata na TV)
+
+- O editor da tela No ar oferece um modelo com cabeçalho, finais e terceiros lugares da Ouro e da Prata em colunas, e classificação de cada linha abaixo. Cada partida ou classificação pode ser escolhida individualmente; os placares acompanham as atualizações do torneio.
+- O QR Code fica sempre visível sobre a composição e pode ser movido ou dimensionado. A lista de classificação rola dentro do bloco sem deslocar o QR.
+- A chamada de desempate da classificatória usa a próxima quadra livre e mantém a designação de simples desempate do grupo.
+- Corte web e função de quadra; sem alterar automaticamente a configuração salva do torneio nem as versões nativas.
+
 ## 2.6.40 — 11/nov/2026 (nomes e encaixe da grade)
 
 - A grade mostra oitavas, quartas, semifinais, final e disputa de 3º lugar conforme a sequência de cada categoria, inclusive a fase preliminar da Prata.

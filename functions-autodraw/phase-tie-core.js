@@ -298,12 +298,16 @@ function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, actio
         if (type === 'play' && ![2, 3].includes(keys.length)) throw new Error('simples disponível só para dois ou três atletas');
         decision = { contenders: keys, players: tie.players.map(p => ({ key: p.key, name: p.name })),
           groupName: pool.group && pool.group.name || null, cutRank: tie.cut,
+          createdAt: String(nowIso || new Date().toISOString()),
+          qualifierSlots: tie.cut - tie.from,
+          tieMode: type === 'play' && keys.length === 3 ? 'three_player_playoff' : null,
           baseGameNumber: baseNumber,
           originalOrder: keys.slice(), choice: type,
           status: type === 'draw' ? 'complete' : 'pending',
           order: type === 'draw' ? keys.slice() : null,
           matches: type === 'play' ? matchesFor(tie,
-            'tie-' + phaseIndex + '-' + decisionId.replace(/[^a-zA-Z0-9_-]/g, '-'), baseNumber, suffixOffset) : [],
+            'tie-' + phaseIndex + '-' + decisionId.replace(/[^a-zA-Z0-9_-]/g, '-'), baseNumber, suffixOffset)
+            .slice(0, keys.length === 3 ? 1 : undefined) : [],
           setsToWin: 1,
           pointsToWin: Number.isInteger(Number(t.fmt2 && t.fmt2.tieSinglesPoints)) &&
             Number(t.fmt2 && t.fmt2.tieSinglesPoints) >= 1 && Number(t.fmt2 && t.fmt2.tieSinglesPoints) <= 99
@@ -355,12 +359,52 @@ function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, actio
             decision.corrections = Array.isArray(decision.corrections) ? decision.corrections : [];
             decision.corrections.push({ matchId: previous.id, previousSets: previous.sets,
               previousWinnerKey: previous.winnerKey, at: String(action.at || '') });
+            if (decision.tieMode === 'three_player_playoff' && matchIndex < decision.matches.length - 1) {
+              decision.corrections[decision.corrections.length - 1].invalidatedMatches =
+                decision.matches.slice(matchIndex + 1);
+              decision.matches.length = matchIndex + 1;
+            }
           }
           decision.matches[matchIndex] = scored;
           changed = true;
           if (decision.matches.every(m => m.winnerKey)) {
-            decision.order = rankPlayers(tie, decision.matches);
-            decision.status = 'review';
+            if (decision.tieMode === 'three_player_playoff') {
+              const first = decision.matches[0];
+              const firstWinner = tie.players.find(p => p.key === first.winnerKey);
+              const firstLoser = tie.players.find(p => p.key !== first.winnerKey && p.key !== tie.players[2].key);
+              const third = tie.players[2];
+              let nextPair = null;
+              if (decision.matches.length === 1) nextPair = [firstWinner, third];
+              else {
+                const second = decision.matches[1];
+                if (decision.matches.length === 2 && decision.qualifierSlots === 2 &&
+                    second.winnerKey === firstWinner.key) nextPair = [firstLoser, third];
+                else if (decision.matches.length === 2) {
+                  decision.order = second.winnerKey === firstWinner.key
+                    ? [firstWinner.key, third.key, firstLoser.key]
+                    : [third.key, firstWinner.key, firstLoser.key];
+                } else {
+                  const thirdMatch = decision.matches[2];
+                  decision.order = [firstWinner.key, thirdMatch.winnerKey,
+                    thirdMatch.winnerKey === firstLoser.key ? third.key : firstLoser.key];
+                }
+              }
+              if (nextPair) {
+                const suffixKey = String(phaseIndex) + ':' + String(decision.baseGameNumber);
+                const suffix = Number((t.phaseTieNextSuffix || {})[suffixKey] || decision.matches.length);
+                const prefix = first.id.replace(/-0$/, '');
+                const nextMatch = matchesFor({ players: nextPair }, prefix + '-extra-' + suffix,
+                  decision.baseGameNumber, suffix)[0];
+                decision.matches.push(nextMatch);
+                t.phaseTieNextSuffix = t.phaseTieNextSuffix || {};
+                t.phaseTieNextSuffix[suffixKey] = suffix + 1;
+                decision.order = null;
+                decision.status = 'pending';
+              } else decision.status = 'review';
+            } else {
+              decision.order = rankPlayers(tie, decision.matches);
+              decision.status = 'review';
+            }
           }
         }
         if (action && action.type === 'confirm' && action.decisionId === decisionId && !usedAction) {

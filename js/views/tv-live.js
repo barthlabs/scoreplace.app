@@ -261,6 +261,39 @@
       try { if (t.tvScreens) screens = layoutCore.normalizeScreens(t.tvScreens); } catch (e) { /* usa o layout antigo */ }
       tvLayout = layoutCore.forPhase(screens, t.currentPhaseIndex || 0, fallbackLayout);
     }
+    var matchChoices = matches.filter(function (m) { return m && m.id && !m.isBye && !m.isSitOut; }).map(function (m) {
+      return { id: String(m.id), label: 'JOGO ' + (m._gameNum || m.scheduledGameNumber || m.matchNumber || '') +
+        ' · ' + String(m.bracket || m.category || '') + (m.isThirdPlace ? ' · 3º lugar' : '') };
+    });
+    var selectedMatches = {};
+    if (tvLayout) ['live1', 'live2', 'live3', 'live4'].forEach(function (id) {
+      var source = tvLayout.sections[id].source;
+      var m = source && matches.find(function (item) { return item && String(item.id) === source; });
+      if (!m) return;
+      selectedMatches[id] = { number: m._gameNum || m.scheduledGameNumber || m.matchNumber || '',
+        category: String(m.category || m.tierLabel || ''), bracket: String(m.bracket || ''),
+        third: !!m.isThirdPlace, a: sideName(t, m, 'p1'), b: sideName(t, m, 'p2'),
+        scoreA: gameScore(m, 1, true), scoreB: gameScore(m, 2, true),
+        winnerSide: typeof window._matchWinnerSide === 'function' ? window._matchWinnerSide(m) :
+          (m.winner === 'p1' ? 1 : m.winner === 'p2' ? 2 : 0) };
+    });
+    var lineKeys = Array.from(new Set(matches.map(function (m) { return m && String(m.bracket || 'main'); }).filter(Boolean)));
+    var lineChoices = lineKeys.map(function (key) {
+      return { key: key, label: key === 'gold' ? 'Ouro' : key === 'silver' ? 'Prata' : key === 'main' ? 'Principal' : key };
+    });
+    var lineStandings = {};
+    if (tvLayout) ['standing1', 'standing2', 'standing3', 'standing4'].forEach(function (id) {
+      var key = tvLayout.sections[id].source;
+      if (!key) return;
+      var lm = matches.filter(function (m) { return m && String(m.bracket || 'main') === key; });
+      var saved = t.classifFinalDaLinha && t.classifFinalDaLinha[key];
+      var rows = Array.isArray(saved) && saved.length ? saved :
+        (typeof window._classifEntriesFromMatches === 'function' ? window._classifEntriesFromMatches(t, lm) : []);
+      lineStandings[id] = { title: (lineChoices.find(function (choice) { return choice.key === key; }) || {}).label || key,
+        rows: rows.map(function (entry) { return { name: String(entry.name || ''), pos: Number(entry.pos || 0) }; })
+          .filter(function (entry) { return entry.name && entry.pos > 0; })
+          .sort(function (a, b) { return a.pos - b.pos || a.name.localeCompare(b.name); }) };
+    });
     var cover = typeof window._tournamentCoverBackground === 'function'
       ? window._tournamentCoverBackground(Object.assign({}, t, { coverMode: 'color' })) : null;
     var primary = /^#[0-9a-f]{6}$/i.test(String(t.coverColor || '')) ? t.coverColor : '#0d1b2e';
@@ -272,6 +305,7 @@
         'https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=' + encodeURIComponent(qrUrl) + '&bgcolor=ffffff&color=1a1e2e&margin=10',
       scoreplaceLogo: site + '/icons/logo-podium.svg',
       courts: courtCards, nextGame: nextGame, rankings: rankingSections(t, matches, teams), results: results, resultDay: resultDay,
+      matchChoices: matchChoices, selectedMatches: selectedMatches, lineChoices: lineChoices, lineStandings: lineStandings,
       timing: timing };
   };
   function sideHtml(label, team, score, options) {
@@ -356,12 +390,36 @@
     var ranking = '<section class="tv-rankings"><h2>CLASSIFICAÇÃO</h2>' + (snapshot.rankings.length ? snapshot.rankings.map(function (s) { return rankingHtml(s, snapshot.rankings.length > 1); }).join('') : '<p>Classificação ainda não configurada</p>') + '</section>';
     var results = '<section class="tv-results"><div class="tv-results-main"><h2>ÚLTIMOS RESULTADOS</h2><div class="tv-results-list" data-result-day="' + esc(snapshot.resultDay) + '">' + snapshot.results.map(resultHtml).join('') + '</div></div></section>';
     var qr = '<div class="tv-qr"><img class="tv-qr-code" src="' + esc(snapshot.qrImage) + '" alt="QR para abrir o Scoreplace"><div class="tv-qr-brand"><img src="' + esc(snapshot.scoreplaceLogo) + '" alt=""><span>Abra no<br>Scoreplace</span></div></div>';
+    function liveGame(id) {
+      var game = snapshot.selectedMatches && snapshot.selectedMatches[id];
+      if (!game) return '<section class="tv-focus-card"><h2>Escolha a partida</h2></section>';
+      var title = game.third ? '3º E 4º LUGAR' : 'FINAL';
+      function side(name, score, winner) {
+        return '<div class="tv-focus-side' + (winner ? ' tv-focus-winner' : '') + '"><div class="tv-focus-players">' +
+          String(name || '').split(' / ').map(function (player) { return '<span>' + esc(player.trim()) + '</span>'; }).join('') +
+          '</div><strong>' + esc(score) + '</strong></div>';
+      }
+      return '<section class="tv-focus-card"><h2>' + title + ' · JOGO ' + esc(game.number) + '</h2>' +
+        side(game.a, game.scoreA, game.winnerSide === 1) + '<div class="tv-focus-vs">VS</div>' +
+        side(game.b, game.scoreB, game.winnerSide === 2) + '</section>';
+    }
+    function lineStanding(id) {
+      var standing = snapshot.lineStandings && snapshot.lineStandings[id];
+      if (!standing) return '<section class="tv-focus-standing"><h2>Escolha a classificação</h2></section>';
+      return '<section class="tv-focus-standing"><h2>CLASSIFICAÇÃO · ' + esc(standing.title).toUpperCase() + '</h2>' +
+        '<div class="tv-focus-standing-list" style="--tv-qr-clearance:' + layout.sections.qr.h + 'vh">' + (standing.rows.length ? standing.rows.map(function (row) {
+          return '<div class="tv-focus-standing-row"><b>' + esc(row.pos) + 'º</b><span>' + esc(row.name) + '</span></div>';
+        }).join('') : '<p>Classificação em andamento</p>') + '</div></section>';
+    }
     var background = layout.backgroundMode === 'custom' ? layout.background : (snapshot.theme && snapshot.theme.background || '#060d1a');
     return '<main class="tv-custom-board" style="background:' + esc(background) + '">' +
       box('header', '<header class="tv-header">' + (snapshot.logo && !layout.sections.logo.visible ? '<img src="' + esc(snapshot.logo) + '" alt="">' : '') + '<h1>' + esc(snapshot.name) + '</h1><time id="tv-now"></time></header>') +
       box('courts', '<section class="tv-courts" style="--tv-court-rows:' + Math.ceil(snapshot.courts.length / 2) + '">' + snapshot.courts.map(function (card) { return cardHtml(card, layout.card); }).join('') + '</section>') +
-      box('upcoming', nextGameHtml(snapshot.nextGame)) + box('rankings', ranking) + box('results', results) + box('qr', qr) +
-      box('logo', snapshot.logo ? '<img class="tv-placed-logo" src="' + esc(snapshot.logo) + '" alt="Logo do torneio">' : '') + '</main>';
+      box('upcoming', nextGameHtml(snapshot.nextGame)) + box('rankings', ranking) + box('results', results) +
+      ['live1', 'live2', 'live3', 'live4'].map(function (id) { return box(id, liveGame(id)); }).join('') +
+      ['standing1', 'standing2', 'standing3', 'standing4'].map(function (id) { return box(id, lineStanding(id)); }).join('') +
+      box('logo', snapshot.logo ? '<img class="tv-placed-logo" src="' + esc(snapshot.logo) + '" alt="Logo do torneio">' : '') +
+      box('qr', qr) + '</main>';
   }
   // A janela continua viva durante o reload automático da aba principal. O
   // script nela mantém os relógios e volta a ler o estado assim que o opener
@@ -480,6 +538,14 @@
     '.tv-custom-board{position:relative;width:100%;height:100%;overflow:hidden}.tv-custom-box{position:absolute;min-width:0;min-height:0;overflow:hidden}.tv-custom-box>.tv-header,.tv-custom-box>.tv-courts,.tv-custom-box>.tv-upcoming,.tv-custom-box>.tv-rankings,.tv-custom-box>.tv-results,.tv-custom-box>.tv-qr{width:100%;height:100%;min-height:0;overflow:hidden}.tv-custom-box>.tv-header{padding:.35vw .8vw}.tv-custom-box>.tv-courts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(3,minmax(0,1fr))}.tv-custom-results .tv-results{display:flex}.tv-custom-results .tv-results-main{width:100%}.tv-custom-qr .tv-qr{justify-content:center}.tv-custom-qr .tv-qr-code{max-height:75%;width:auto;max-width:95%}.tv-custom-logo{display:flex;align-items:center;justify-content:center}.tv-placed-logo{display:block;width:100%;height:100%;object-fit:contain}' +
     '.tv-courts,.tv-custom-box>.tv-courts{grid-template-rows:repeat(var(--tv-court-rows,3),minmax(0,1fr))}' +
     '.tv-court-series{padding:.35vw .55vw}.tv-court-series .tv-court-top{flex:none;min-height:0;padding-bottom:.12vw}.tv-court-series .tv-court-top h2{font-size:clamp(.9rem,1vw,1.35rem)}.tv-series-games{display:grid;grid-template-rows:repeat(3,minmax(0,1fr));flex:1;min-height:0;gap:.15vw}.tv-series-game{display:grid;grid-template-columns:4.2vw minmax(0,1fr) 1.2vw minmax(0,1fr);align-items:center;gap:.25vw;min-width:0;min-height:0;border-radius:.25vw;background:color-mix(in srgb,var(--tv-secondary) 15%,#16253a);padding:.1vw .3vw}.tv-series-game.tv-series-active{outline:1px solid #38bdf8;background:color-mix(in srgb,var(--tv-primary) 22%,#26394d)}.tv-series-game.tv-series-done{opacity:.88}.tv-series-game>b{color:#7dd3fc;font-size:clamp(.7rem,.75vw,1rem);white-space:nowrap}.tv-series-side{display:flex;align-items:center;justify-content:space-between;gap:.2vw;min-width:0;min-height:0;border-radius:.2vw;padding:.1vw .2vw}.tv-series-side.tv-series-win{background:#123b2b}.tv-series-side.tv-series-loss{background:#4b2027}.tv-series-players{display:flex;flex-direction:column;justify-content:center;min-width:0;min-height:0;line-height:1.05}.tv-series-players span{display:block;white-space:normal;overflow-wrap:anywhere;font-size:clamp(.68rem,.78vw,1.04rem);font-weight:750}.tv-series-right .tv-series-players{text-align:right}.tv-series-side strong{flex:none;color:#fff;font-size:clamp(.85rem,1vw,1.4rem);font-variant-numeric:tabular-nums}.tv-series-win strong{color:#4ade80}.tv-series-loss strong{color:#f87171}.tv-series-versus{text-align:center;color:#94a3b8;font-weight:900}.tv-court-series .tv-court-footer{flex:none;margin-top:.1vw}.tv-court-series .tv-court-footer strong{font-size:clamp(.8rem,.95vw,1.25rem)}' +
+    '</style>');
+  styles = styles.replace('</style>',
+    '.tv-custom-qr{z-index:20}.tv-focus-card,.tv-focus-standing{display:flex;flex-direction:column;width:100%;height:100%;min-height:0;overflow:hidden;padding:.7vw;background:color-mix(in srgb,var(--tv-primary) 18%,#0d1b2e);border:1px solid color-mix(in srgb,var(--tv-secondary) 30%,#1b3f61);border-radius:.7vw}' +
+    '.tv-focus-card h2,.tv-focus-standing h2{flex:none;margin:0 0 .4vw;color:#7dd3fc;font-size:clamp(.85rem,1.1vw,1.5rem);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
+    '.tv-focus-side{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:.4vw;min-height:0;flex:1;padding:.2vw .5vw;background:#222;border-radius:.4vw}.tv-focus-winner{background:#123b2b}' +
+    '.tv-focus-players{display:flex;flex-direction:column;justify-content:center;min-width:0;line-height:1.08}.tv-focus-players span{display:block;overflow-wrap:anywhere;font-size:clamp(.72rem,1vw,1.4rem);font-weight:750}' +
+    '.tv-focus-side strong{font-size:clamp(1.1rem,1.8vw,2.5rem);font-variant-numeric:tabular-nums}.tv-focus-winner strong{color:#4ade80}.tv-focus-vs{flex:none;text-align:center;color:#94a3b8;font-size:clamp(.65rem,.75vw,1rem);font-weight:900}' +
+    '.tv-focus-standing-list{flex:1;min-height:0;overflow:auto;padding-bottom:var(--tv-qr-clearance,2vw)}.tv-focus-standing-row{display:grid;grid-template-columns:2vw minmax(0,1fr);gap:.5vw;align-items:center;min-height:2.3vw;padding:.2vw .4vw;border-bottom:1px solid #39475b;font-size:clamp(.85rem,1.05vw,1.4rem)}.tv-focus-standing-row b{color:#fbbf24}.tv-focus-standing-row span{overflow-wrap:anywhere}' +
     '</style>');
   // O editor usa exatamente o HTML e o CSS da janela No ar. O iframe não
   // executa childScript: relógios e hora recebem o valor deste instante.
