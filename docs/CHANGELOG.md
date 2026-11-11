@@ -2,6 +2,7 @@
 
 - A edição do torneio permite ordenar as etapas classificatórias e eliminatórias por categoria e marcar etapas simultâneas. A chamada respeita a primeira etapa ainda incompleta, inclusive na função de quadra; no CAMIS, Diamante e Ouro dividem quadras na eliminatória e a Prata aguarda ambas.
 - Alterar só a ordem preserva a grade intercalada e os horários já salvos do torneio.
+- Concluir todos os grupos de uma categoria forma as duplas do 1º e 2º colocados e materializa a chave dela, sem esperar as classificatórias das outras categorias.
 - O botão Simular só considera gravado um jogo quando o placar foi confirmado; cada clique usa o conjunto que já estava em quadra.
 - Corte web e função de quadra. Sem alterar dados existentes automaticamente ou versões nativas.
 
