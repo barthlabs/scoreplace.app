@@ -1,9 +1,12 @@
 {
   "schema": 1,
-  "backendCommit": "1f7068a4ab16de6e43d27cfd741d0e4c080a620c",
-  "scopeNote": "Corte 2.6.37: ordem concentrada das fases no CAMIS e validação da edição da ordem.",
+  "backendCommit": "0c7b249ba528c4186726e46c6c9564f2d5bbba88",
+  "scopeNote": "Corte 2.6.41: chamada de simples desempate na próxima quadra livre e atualização dos resultados.",
   "functions": [
-    "assignMatchCourt",
-    "updateTournamentConfiguration"
+    "updateTournamentConfiguration",
+    "applyMatchResult",
+    "applyQueuedResult",
+    "endMatchOnCourt",
+    "advanceTournamentPhase"
   ]
 }
