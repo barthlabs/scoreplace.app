@@ -117,6 +117,9 @@ selected_targets() { # $1=todos os alvos, $2=prefixo do codebase
   local out="" name candidate
   local IFS=','
   read -r -a names <<< "$ONLY"
+  # Um deploy normal nunca pode iniciar mais de um lote de dez Functions.
+  # Se mais exports mudaram, revisar e publicar cada grupo nominalmente.
+  [ "${#names[@]}" -le 10 ] || die "--only aceita no máximo 10 Functions por execução; divida e revise os alvos"
   for name in "${names[@]}"; do
     [[ "$name" =~ ^[A-Za-z0-9_]+$ ]] || die "nome de função inválido em --only: $name"
     candidate="${prefix}${name}"

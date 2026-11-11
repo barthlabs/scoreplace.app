@@ -50,6 +50,9 @@ const automatedRecovery = spawnSync('bash',
   { cwd: root, encoding: 'utf8', input: 'RECUPERAR TODAS AS FUNCTIONS\n' });
 assert.notEqual(automatedRecovery.status, 0);
 assert.match(automatedRecovery.stderr, /exige terminal interativo/);
+const broadOnly = dry('autodraw', '--only', Array(11).fill('drawRound').join(','));
+assert.notEqual(broadOnly.status, 0, 'lista nominal grande não pode iniciar 12 lotes');
+assert.match(broadOnly.stderr, /no máximo 10 Functions/);
 const unrelated = dry('main', '--only', 'cleanupOldNotifications');
 assert.equal(unrelated.status, 0, unrelated.stderr);
 console.log('✓ guarda E05 prova fonte física antes de alvejar roster; exports de espelho ausentes');
