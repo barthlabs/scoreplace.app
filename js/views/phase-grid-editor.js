@@ -115,7 +115,8 @@
       '<div class="phase-grid-controls">' +
       (state.locked ? '<p class="phase-grid-locked">O sorteio já publicou os jogos. A grade pode ser conferida; movê-la agora alteraria horários e números de jogos.</p>' :
       '<div class="phase-grid-presets"><button type="button" class="btn btn-secondary" onclick="window._phaseGridPreset(\'compact\')">Concentrar antes</button>' +
-      '<button type="button" class="btn btn-secondary" onclick="window._phaseGridPreset(\'spread\')">Espalhar ao longo do torneio</button></div>') + '</div>' +
+      '<button type="button" class="btn btn-secondary" onclick="window._phaseGridPreset(\'spread\')">Espalhar ao longo do torneio</button></div>' +
+      '<p class="phase-grid-drag-help">Arraste sobre outro bloco para trocar posições; solte numa vaga livre para mover.</p>') + '</div>' +
       '<p id="phase-grid-message" class="phase-grid-error" role="alert" hidden></p>' +
       '<div class="phase-grid-viewport"><div class="phase-grid-head" style="--phase-grid-courts:' + columns + '"><span>Hora</span>' +
       Array.from({ length:columns }, function (_, i) { return '<span>' + esc((state.tournament.courtNames || [])[i] || ('Quadra ' + (i + 1))) + '</span>'; }).join('') +
@@ -157,11 +158,11 @@
     else if (overlapping.size) showError('Blocos listrados ocupam a mesma quadra no mesmo horário. Ajuste-os antes de salvar.');
     else if (state.gridWarning) showError(state.gridWarning + ' Ajuste a sequência antes de salvar.');
   }
-  function applyMove(id, court, startTime, targetDay) {
+  function applyMove(id, court, startTime, targetDay, targetId) {
     var state = window._phaseCallOrderState;
-    if (!state || state.locked) return;
+    if (!state || state.locked || state.saving || state.presetBusy) return;
     var destination = targetDay || dayOf(state).day;
-    var result = model.move(state.tiles, id, court, startTime, state.plan, daysOf(state), destination);
+    var result = model.move(state.tiles, id, court, startTime, state.plan, daysOf(state), destination, targetId);
     if (result.error) { showError(result.error); return; }
     state.tiles = result.tiles; state.touched = true; state.selectedId = id;
     state.activeDay = destination;
@@ -234,7 +235,8 @@
     var close = root.querySelector('.phase-grid-close');
     if (close) close.focus({ preventScroll:true });
   };
-  window._closePhaseGridEditor = function () {
+  window._closePhaseGridEditor = function (resultReady) {
+    if (window._phaseCallOrderState && window._phaseCallOrderState.saving) return;
     var root = overlay(); if (root) root.remove();
     overlayOpen = false;
     document.body.style.overflow = previousBodyOverflow;
@@ -244,7 +246,7 @@
       window._phaseCallOrderState = preDrawPreviousState;
       preDrawPreviousState = null;
     }
-    if (previousFocus && previousFocus.isConnected) previousFocus.focus({ preventScroll:true });
+    if (!resultReady && previousFocus && previousFocus.isConnected) previousFocus.focus({ preventScroll:true });
   };
   window._openMonarchPreDrawReview = function (tId) {
     var tournament = typeof window._findTournamentById === 'function' && window._findTournamentById(tId);
@@ -266,14 +268,44 @@
   };
   window._phaseGridSaveAndDraw = async function () {
     var state = window._phaseCallOrderState;
-    if (!state || !state.preDrawId || state.saving) return;
-    var error = model.validate(state.tiles, state.plan, daysOf(state));
-    if (error) { showError(error); return; }
+    if (!state || !state.preDrawId || state.saving || state.presetBusy) return;
     var button = document.getElementById('phase-grid-draw-button');
     state.saving = true;
-    if (button) { button.disabled = true; button.textContent = 'Salvando…'; }
+    if (button) { button.disabled = true; button.setAttribute('aria-busy', 'true'); button.textContent = 'Preparando sorteio…'; }
+    var progress = document.createElement('div');
+    progress.id = 'phase-grid-draw-progress';
+    progress.setAttribute('role', 'status'); progress.setAttribute('aria-live', 'polite');
+    progress.innerHTML = '<span class="phase-grid-progress-spinner" aria-hidden="true"></span><strong data-phase-grid-progress-label>Preparando o sorteio…</strong><small>Aguarde a chave aparecer antes de continuar.</small>';
+    document.body.appendChild(progress);
+    var updateProgress = function (message) {
+      var label = progress.querySelector('[data-phase-grid-progress-label]');
+      if (label) label.textContent = message;
+      if (button) button.textContent = message;
+    };
+    if (typeof window.setTimeout === 'function') state.progressDelayTimer = window.setTimeout(function () {
+      if (state.saving) {
+        updateProgress('Ainda aguardando o sorteio…');
+        var detail = progress.querySelector('small');
+        if (detail) detail.textContent = 'Aguarde a confirmação; não repita a ação.';
+      }
+    }, 20000);
     try {
+      // Cede dois quadros para pintar o progresso, com saída em abas suspensas.
+      if (typeof window.requestAnimationFrame === 'function') await new Promise(function (resolve) {
+        var finished = false, fallback;
+        var done = function () {
+          if (finished) return;
+          finished = true;
+          if (fallback && typeof window.clearTimeout === 'function') window.clearTimeout(fallback);
+          resolve();
+        };
+        if (typeof window.setTimeout === 'function') fallback = window.setTimeout(done, 150);
+        window.requestAnimationFrame(function () { window.requestAnimationFrame(done); });
+      });
+      var error = model.validate(state.tiles, state.plan, daysOf(state));
+      if (error) throw new Error(error);
       if (state.touched) {
+        updateProgress('Salvando grade…');
         var plan = model.toPlan(state.plan, state.tiles);
         plan.editorVersion = 2;
         var db = window.FirestoreDB;
@@ -288,13 +320,27 @@
       var id = state.preDrawId;
       window._monarchDrawReviewApproved = window._monarchDrawReviewApproved || {};
       window._monarchDrawReviewApproved[id] = true;
-      window._closePhaseGridEditor();
+      updateProgress('Sorteando…');
       window.generateDrawFunction(id);
     } catch (cause) {
-      showError('Não foi possível salvar a grade: ' + (cause && cause.message || String(cause)));
-      state.saving = false;
-      if (button) { button.disabled = false; button.textContent = 'Salvar grade e sortear'; }
+      window._phaseGridDrawFinished(state.preDrawId, cause && cause.message || String(cause));
     }
+  };
+  window._phaseGridDrawFinished = function (tId, error) {
+    var state = window._phaseCallOrderState;
+    if (!state || String(state.preDrawId || '') !== String(tId) || !state.saving) return;
+    if (state.progressDelayTimer && typeof window.clearTimeout === 'function') window.clearTimeout(state.progressDelayTimer);
+    state.progressDelayTimer = null;
+    var progress = document.getElementById('phase-grid-draw-progress');
+    if (progress) progress.remove();
+    state.saving = false;
+    if (error) {
+      var button = document.getElementById('phase-grid-draw-button');
+      if (button) { button.disabled = false; button.removeAttribute('aria-busy'); button.textContent = 'Salvar grade e sortear'; }
+      showError('Sorteio não concluído: ' + error);
+      return;
+    }
+    window._closePhaseGridEditor(true);
   };
   document.addEventListener('keydown', function (event) {
     if (overlayOpen && event.key === 'Escape') { event.preventDefault(); window._closePhaseGridEditor(); }
@@ -313,7 +359,9 @@
     var state = window._phaseCallOrderState, id = event.dataTransfer.getData('text/plain');
     if (!state || !state.tiles.some(function (tile) { return tile.id === id; })) return;
     var target = position(event, court);
-    applyMove(id, target.court, target.startTime);
+    var hovered = event.target && event.target.closest && event.target.closest('[data-tile-id]');
+    applyMove(id, target.court, target.startTime, null,
+      hovered && hovered.getAttribute('data-tile-id') !== id ? hovered.getAttribute('data-tile-id') : null);
   };
   window._phaseGridDropDay = function (event, destination) {
     event.preventDefault(); event.stopPropagation();

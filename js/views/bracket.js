@@ -10076,27 +10076,8 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // organização pode ajustar o chamado dos jogos ao longo do evento.
   var _scheduledMs = _isConcentratedEvent ? _matchCardTimestamp(m.scheduledAt) : null;
   var _callAllowedToday = true, _callDayMessage = '';
-  var _callProfile = window.AppStore && window.AppStore.currentUser || null;
-  var _rehearsalOwnerCall = !!(t && t.rehearsal && t.rehearsal.state === 'active' &&
-    _callProfile && _callProfile.uid && t.creatorUid === _callProfile.uid);
-  if (_isConcentratedEvent && t && t.isSandbox !== true && !String(tId).startsWith('sb_') &&
-      !m.courtCalledAt && !_rehearsalOwnerCall) {
-    var _resolvedCallZone = window._venueGeo && typeof window._venueGeo.resolverFuso === 'function'
-      ? window._venueGeo.resolverFuso(t, _callProfile) : null;
-    var _zoneForCall = _resolvedCallZone && _resolvedCallZone.tz;
-    var _dayForCall = function (ms) {
-      var parts = new Intl.DateTimeFormat('en-GB', { timeZone: _zoneForCall,
-        year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(ms));
-      var part = function (type) { return (parts.find(function (p) { return p.type === type; }) || {}).value; };
-      return part('year') + '-' + part('month') + '-' + part('day');
-    };
-    var _requiredCallDay = /^\d{4}-\d{2}-\d{2}$/.test(String(m.requiredDay || ''))
-      ? String(m.requiredDay) : (_scheduledMs && _zoneForCall ? _dayForCall(_scheduledMs) : '');
-    _callAllowedToday = !!_zoneForCall && !!_requiredCallDay && _dayForCall(Date.now()) >= _requiredCallDay;
-    if (!_callAllowedToday) _callDayMessage = _zoneForCall && _requiredCallDay
-      ? 'Chamada disponível no dia ' + _requiredCallDay.split('-').reverse().join('/')
-      : 'Chamada indisponível: data ou fuso do jogo não definido';
-  }
+  // A data da grade é estimativa enquanto a organização testa o fluxo.
+  // A Function ainda valida ordem de fase, atletas e quadras ocupadas.
   var _playedMs = _isConcentratedEvent ? _matchCardResultTimestamp(m) : null;
   var _calledMs = _isConcentratedEvent && !_playedMs ? _matchCardTimestamp(m.courtClockBaseAt || m.courtCalledAt) : null;
   var _liveStartMs = _isConcentratedEvent && !_playedMs && m.startedAt ? _matchCardTimestamp(m.startedAt) : null;

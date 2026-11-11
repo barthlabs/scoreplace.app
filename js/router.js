@@ -610,11 +610,21 @@ function initRouter() {
                   typeof window._openPublishedInitialDrawResult !== 'function') return;
               delete window.__drawResultAfterPublish;
               window._openPublishedInitialDrawResult(cleanParam);
+              if (typeof window._phaseGridDrawFinished === 'function') window._phaseGridDrawFinished(cleanParam);
+              return true;
             };
             var _fecharTour = function () {
               if (_saiuTour || !_routeIsCurrent()) return; _saiuTour = true;
               if (typeof window._hideLoading === 'function') { try { window._hideLoading(); } catch (e) {} }
-              _abrirResultadoSorteio();
+              var resultIntent = window.__drawResultAfterPublish;
+              var resultOpened = _abrirResultadoSorteio();
+              if (!resultOpened && typeof window._phaseGridDrawFinished === 'function') {
+                var waitingForResult = resultIntent && String(resultIntent.id) === String(cleanParam);
+                window._phaseGridDrawFinished(cleanParam, waitingForResult
+                  ? 'Sorteio salvo, mas a chave ainda não carregou. Atualize o torneio para conferir.' : null);
+                if (waitingForResult && window.showNotification) window.showNotification('Sorteio salvo',
+                  'A chave ainda não carregou. Atualize o torneio para conferir o resultado.', 'warning');
+              }
             };
             // A leitura tem teto próprio em _ensureTournamentLoaded. Este backstop só
             // protege o loader depois que a rota ainda é a atual; ele nunca derruba o
@@ -705,6 +715,9 @@ function initRouter() {
               // finalização o marcador de transição ficava preso e bloqueava todos
               // os controles da página.
               _finalizarTrocaPrincipal();
+              var pendingResult = window.__drawResultAfterPublish;
+              if ((!pendingResult || String(pendingResult.id) !== String(cleanParam)) &&
+                  typeof window._phaseGridDrawFinished === 'function') window._phaseGridDrawFinished(cleanParam);
             }
           }
         } else {
@@ -1202,6 +1215,7 @@ window._refreshDrawnTournamentHere = function (tId, showResult) {
       if (typeof window._hideLoading === 'function') window._hideLoading();
       if (typeof window._drawBtnDone === 'function') window._drawBtnDone();
       if (window.showNotification) window.showNotification('Sorteio salvo', 'Os jogos foram registrados, mas a tela não conseguiu recarregá-los. Atualize o torneio para conferir o resultado.', 'warning');
+      if (typeof window._phaseGridDrawFinished === 'function') window._phaseGridDrawFinished(tId, 'Sorteio salvo, mas o resultado ainda não carregou. Atualize o torneio para conferir.');
       return;
     }
     if (typeof window.initRouter === 'function') window.initRouter();
@@ -1216,5 +1230,6 @@ window._refreshDrawnTournamentHere = function (tId, showResult) {
         window.showNotification('Sorteio salvo', 'Os jogos foram registrados, mas o resultado não pôde ser exibido. Abra “Resultado do sorteio” no torneio.', 'warning');
       }
     }
+    if (typeof window._phaseGridDrawFinished === 'function') window._phaseGridDrawFinished(tId);
   }, true);
 };

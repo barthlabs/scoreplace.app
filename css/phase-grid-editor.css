@@ -10,9 +10,16 @@
 .phase-grid-toolbar { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px 16px; flex:none; }
 .phase-grid-toolbar-main, .phase-grid-toolbar-actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
 .phase-grid-toolbar h2 { margin:0; font-size:1.2rem; }
+.phase-grid-toolbar-actions .btn[aria-busy="true"] { cursor:wait; opacity:.8; }
+#phase-grid-draw-progress { position:fixed; inset:0; z-index:calc(var(--z-hint) + 60); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:24px; box-sizing:border-box; text-align:center; background:var(--bg-darker); color:var(--text-main); }
+#phase-grid-draw-progress strong { font-size:1.4rem; }
+#phase-grid-draw-progress small { color:var(--text-muted); font-size:.95rem; }
+.phase-grid-progress-spinner { width:56px; height:56px; border:5px solid var(--border-color); border-top-color:var(--primary-color); border-radius:50%; animation:phase-grid-progress-spin .8s linear infinite; }
+@keyframes phase-grid-progress-spin { to { transform:rotate(360deg); } }
 .phase-grid-close { flex:none; min-height:44px; }
 .phase-grid-controls { display:flex; align-items:center; flex-wrap:wrap; gap:8px; flex:none; }
 .phase-grid-controls .phase-grid-presets { margin:0; }
+.phase-grid-controls .phase-grid-drag-help { margin:0; color:var(--text-main); font-size:.78rem; }
 .phase-grid-editor h3 { margin: 0 0 6px; font-size: 1.1rem; }
 .phase-grid-editor p { margin: 0 0 10px; color: var(--text-muted); font-size: .83rem; line-height: 1.45; }
 .phase-grid-presets { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }

@@ -100,9 +100,8 @@ const game = (id, court, scheduledAt = '2026-10-22T21:00:00.000Z') => ({ id, cou
   assert.ok(tournament.matches[0].courtCalledAt, 'sandbox pode simular antes do evento');
   tournament.matches[0] = game('j1', 'Quadra 4');
   const savesBeforeEarlyCall = saved.length;
-  await assert.rejects(callable(request('tour_test', 'j1', 'Quadra 4', true)),
-    e => e.code === 'failed-precondition' && /programado/.test(e.message));
-  assert.equal(saved.length, savesBeforeEarlyCall, 'recusa antecipada não grava');
+  await callable(request('tour_test', 'j1', 'Quadra 4', true));
+  assert.equal(saved.length, savesBeforeEarlyCall + 1, 'organizador pode chamar antes da data prevista durante os testes');
   assert.equal(paths.at(-1), 'tournaments/tour_test');
   const concentratedPlan = require('./fixtures/camis-interleaved-plan.js');
   tournament.scheduleWindow = { interleavedPlan: concentratedPlan };
@@ -119,7 +118,7 @@ const game = (id, court, scheduledAt = '2026-10-22T21:00:00.000Z') => ({ id, cou
   tournament.creatorUid = developer;
   tournament.rehearsal = { state: 'active' };
   await callable(developerCall());
-  assert.ok(tournament.matches[0].courtCalledAt, 'criador desenvolvedor chama antes do dia durante ensaio ativo');
+  assert.ok(tournament.matches[0].courtCalledAt);
   tournament.matches.push(game('j2', 'Quadra 5'));
   await assert.rejects(callable(developerCall('j2', 'Quadra 4')),
     e => e.code === 'failed-precondition' && /Quadra ocupada/.test(e.message),
@@ -132,72 +131,17 @@ const game = (id, court, scheduledAt = '2026-10-22T21:00:00.000Z') => ({ id, cou
   context.drawWindow.ScoreplaceNextMatch.conflictsWithActive = originalConflictCheck;
   tournament.matches.pop();
   tournament.matches[0] = game('j1', 'Quadra 4');
-  tournament.rehearsal = { state: 'resetting' };
-  await assert.rejects(callable(developerCall()), e => e.code === 'failed-precondition' && /programado/.test(e.message),
-    'ensaio fora do estado ativo conserva a trava de data');
-  tournament.rehearsal = { state: 'active' };
-  tournament.creatorUid = 'another-owner';
-  await assert.rejects(callable(developerCall()), e => e.code === 'failed-precondition' && /programado/.test(e.message),
-    'desenvolvedor que não criou o torneio continua bloqueado');
-  tournament.creatorUid = developer;
-  await assert.rejects(callable(request('tour_test', 'j1', 'Quadra 4', true)),
-    e => e.code === 'failed-precondition' && /programado/.test(e.message),
-    'co-organizador não recebe exceção mesmo no ensaio ativo');
-  isAdmin = false;
-  tournament.arbitros = [{ uid: 'ref', status: 'confirmed' }];
-  await assert.rejects(callable({ auth: { uid: 'ref' }, data: {
-    tournamentId: 'tour_test', sandbox: false, matchId: 'j1', court: 'Quadra 4', confirmCall: true
-  } }), e => e.code === 'failed-precondition' && /programado/.test(e.message),
-  'árbitro não recebe exceção mesmo no ensaio ativo');
-  isAdmin = true;
-  delete tournament.arbitros;
   delete tournament.rehearsal;
   delete tournament.creatorUid;
-
-  const dayGateStart = client.indexOf('var _callProfile = window.AppStore && window.AppStore.currentUser || null;');
-  const dayGateEnd = client.indexOf('var _playedMs =', dayGateStart);
-  assert(dayGateStart >= 0 && dayGateEnd > dayGateStart, 'regra de data do card localizada');
-  function clientCallAllowed(creatorUid, currentUid, rehearsalState) {
-    const ctx = { window: {
-      AppStore: { currentUser: { uid: currentUid } },
-      _venueGeo: { resolverFuso: () => ({ tz: 'America/Sao_Paulo' }) }
-    }, t: { creatorUid, rehearsal: rehearsalState ? { state: rehearsalState } : null },
-    tId: 'tour_test', m: game('j1', 'Quadra 4'), _isConcentratedEvent: true,
-    _callAllowedToday: true, _callDayMessage: '',
-    _scheduledMs: Date.parse('2026-10-22T21:00:00.000Z'), Date: TestDate, Intl };
-    vm.runInNewContext(client.slice(dayGateStart, dayGateEnd), ctx);
-    return ctx._callAllowedToday;
-  }
-  assert.equal(clientCallAllowed(developer, developer, 'active'), true, 'card libera OK para criador em ensaio ativo');
-  assert.equal(clientCallAllowed(developer, developer, 'resetting'), false, 'card bloqueia fora do ensaio ativo');
-  assert.equal(clientCallAllowed('another-owner', developer, 'active'), false, 'card bloqueia quem não é criador');
-  assert.equal(clientCallAllowed(developer, 'co-organizer', 'active'), false, 'card bloqueia co-organizador');
-  assert.equal(clientCallAllowed(developer, 'ref', 'active'), false, 'card bloqueia árbitro');
-  const withZone = tournament.timeZone;
-  delete tournament.timeZone;
-  await assert.rejects(callable(request('tour_test', 'j1', 'Quadra 4', true)),
-    e => e.code === 'failed-precondition' && /fuso/.test(e.message));
-  tournament.venueCity = 'São Paulo';
-  await assert.rejects(callable(request('tour_test', 'j1', 'Quadra 4', true)),
-    e => e.code === 'failed-precondition' && /programado/.test(e.message), 'fuso do local autoriza a regra de dia');
-  delete tournament.venueCity;
-  tournament.creatorUid = 'owner';
-  ownerProfile = { city: 'São Paulo' };
-  await assert.rejects(callable(request('tour_test', 'j1', 'Quadra 4', true)),
-    e => e.code === 'failed-precondition' && /programado/.test(e.message), 'fuso do perfil do dono autoriza a regra de dia');
-  ownerProfile = null;
-  delete tournament.creatorUid;
-  tournament.timeZone = withZone;
+  assert.match(client, /var _callAllowedToday = true, _callDayMessage = '';/,
+    'card não bloqueia o OK pela data programada');
   await assert.rejects(callable({ auth: { uid: 'owner' }, data: {
     tournamentId: 'sb_test', sandbox: false, matchId: 'j1', court: 'Quadra 4'
   } }), e => e.code === 'not-found');
 
   nowIso = '2026-10-22T02:59:59.000Z';
-  await assert.rejects(callable(request('tour_test', 'j1', 'Quadra 4', true)),
-    e => e.code === 'failed-precondition');
-  nowIso = '2026-10-22T03:00:00.000Z';
   await callable(request('tour_test', 'j1', 'Quadra 4', true));
-  assert.ok(tournament.matches[0].courtCalledAt, 'chamada começa no dia local correto');
+  assert.ok(tournament.matches[0].courtCalledAt, 'chamada pode começar antes do dia local programado');
 
   tournament.matches.push(game('j2', 'Quadra 5', '2026-10-22T22:00:00.000Z'));
   const beforeOccupied = saved.length;

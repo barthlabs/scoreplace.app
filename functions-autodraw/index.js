@@ -4650,9 +4650,10 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
       const rehearsalOwnerCall = uid === _rehearsal.OWNER_UID && t.creatorUid === uid &&
         t.rehearsal?.state === 'active';
       const hasConcentratedPlan = _phaseCallOrder.covers(t, m);
-      // Apenas jogos cobertos pela grade concentrada podem antecipar a data;
-      // a porta por etapa abaixo ainda impede categorias fora de vez.
-      if (confirmCall && !m.courtCalledAt && !sandbox && !rehearsalOwnerCall &&
+      // Durante os testes da organização, a data programada é uma previsão.
+      // A ordem das fases e a ocupação das quadras continuam validadas abaixo.
+      const enforceScheduledDayForCall = false;
+      if (enforceScheduledDayForCall && confirmCall && !m.courtCalledAt && !sandbox && !rehearsalOwnerCall &&
           !hasConcentratedPlan) {
         // A coleção foi resolvida acima pelo ID e pelo flag. O dia do jogo é
         // civil no fuso do evento: uma data UTC pode ser o dia anterior aqui.

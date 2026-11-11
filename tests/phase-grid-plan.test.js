@@ -56,38 +56,45 @@ assert.equal(named('Fem Prata', 1, 1), 'Oitavas de final');
 assert.equal(named('Fem Prata', 2, 1), 'Quartas de final');
 assert.deepEqual(grid.gameStarts(tiles[0], tournament).map(grid.clock), ['08:00', '08:40', '09:10']);
 assert.deepEqual(grid.gameStarts(tiles.find(tile => tile.kind === 'elimination'), tournament).map(grid.clock), ['13:00']);
-const shifted = grid.move(tiles, tiles.find(tile => tile.kind === 'elimination' && tile.category === 'Fem Ouro' && tile.round === 1).id,
-  1, '13:00', fixture, [firstDay], firstDay.day);
-assert.equal(shifted.error, undefined);
-assert.equal(shifted.shifted.length >= 1, true, 'ao soltar numa quadra ocupada, empurra os blocos seguintes');
-assert.equal(shifted.tiles.some(tile => tile.court === 1 && tile.startTime === '13:35'), true);
-assert.equal(grid.overlapIds(shifted.tiles, fixture).size, 0, 'o arrasto não pode deixar duas reservas na mesma quadra');
+const quarters = tiles.filter(tile => tile.kind === 'elimination' && tile.category === 'Fem Diamante' && tile.round === 1);
+const swappedQuarters = grid.move(tiles, quarters[0].id, quarters[1].court, quarters[1].startTime,
+  fixture, [firstDay], firstDay.day, quarters[1].id);
+assert.equal(swappedQuarters.error, undefined);
+assert.equal(swappedQuarters.swapped, quarters[1].id, 'soltar sobre bloco ocupado troca as posições');
+assert.equal(swappedQuarters.tiles.find(tile => tile.id === quarters[0].id).court, quarters[1].court);
+assert.equal(swappedQuarters.tiles.find(tile => tile.id === quarters[1].id).court, quarters[0].court);
+assert.equal(grid.validate(swappedQuarters.tiles, fixture, [firstDay]), null);
+const invalidRound = grid.move(tiles, quarters[0].id, quarters[0].court, '13:20', fixture, [firstDay], firstDay.day);
+assert.match(invalidRound.error, /rodada eliminatória/,
+  'arrastar quartas sobre semifinal não pode iniciar rodada fora da sequência');
+assert.equal(invalidRound.tiles, undefined, 'movimento inválido não é aplicado ao rascunho');
+assert.equal(grid.validate(tiles, fixture, [firstDay]), null, 'a grade original fica intacta');
 const chainPlan = { schema:1, day:firstDay.day, courts:1, eliminationMinutes:35, blocks:[] };
 const chain = ['08:00', '08:35', '09:10'].map((startTime, index) => ({
   id:'chain-' + index, kind:'elimination', category:'Categoria ' + index,
   day:firstDay.day, startTime, court:1, round:1, duration:35
 }));
-const cascade = grid.move(chain, 'chain-2', 1, '08:00', chainPlan, [firstDay], firstDay.day);
-assert.equal(cascade.error, undefined);
-assert.deepEqual(cascade.shifted, ['chain-0', 'chain-1']);
-assert.deepEqual(cascade.tiles.map(tile => tile.startTime), ['08:35', '09:10', '08:00']);
-assert.equal(grid.validate(cascade.tiles, chainPlan, [firstDay]), null);
+const swap = grid.move(chain, 'chain-2', 1, '08:00', chainPlan, [firstDay], firstDay.day);
+assert.equal(swap.error, undefined);
+assert.equal(swap.swapped, 'chain-0');
+assert.deepEqual(swap.tiles.map(tile => tile.startTime), ['09:10', '08:35', '08:00']);
+assert.equal(grid.validate(swap.tiles, chainPlan, [firstDay]), null);
 const legacyCourt = chain.map((tile, index) => ({ ...tile, court:index === 0 ? '1' : 1 }));
 const normalizedCourt = grid.move(legacyCourt, 'chain-2', 1, '08:00', chainPlan, [firstDay], firstDay.day);
-assert.deepEqual(normalizedCourt.shifted, ['chain-0', 'chain-1'], 'quadra legada em texto participa da cascata');
+assert.equal(normalizedCourt.swapped, 'chain-0', 'quadra legada em texto participa da troca');
 assert.equal(grid.overlapIds(normalizedCourt.tiles, chainPlan).size, 0);
 assert.equal(grid.validate(normalizedCourt.tiles, chainPlan, [firstDay]), null);
 const shortDay = { day:firstDay.day, startTime:'08:00', endTime:'09:30' };
-const overflowingCascade = grid.move(chain, 'chain-2', 1, '08:00', chainPlan, [shortDay], shortDay.day);
-assert.equal(grid.overlapIds(overflowingCascade.tiles, chainPlan).size, 0);
-assert.match(grid.validate(overflowingCascade.tiles, chainPlan, [shortDay]), /fora do horário/);
+const overflowingMove = grid.move(chain, 'chain-2', 1, '09:00', chainPlan, [shortDay], shortDay.day);
+assert.match(overflowingMove.error, /fora do horário/);
+assert.equal(overflowingMove.tiles, undefined);
 const midnightChain = ['22:40', '23:15'].map((startTime, index) => ({
   id:'late-' + index, kind:'elimination', category:'Late ' + index,
   day:firstDay.day, startTime, court:1, round:1, duration:35
 }));
 const midnightDay = { day:firstDay.day, startTime:'08:00', endTime:'23:59' };
-const midnightCascade = grid.move(midnightChain, 'late-0', 1, '23:00', chainPlan, [midnightDay], midnightDay.day);
-assert.match(midnightCascade.error, /meia-noite/, 'a cascata impossível não pode deixar blocos sobrepostos');
+const midnightMove = grid.move(midnightChain, 'late-0', 1, '23:55', chainPlan, [midnightDay], midnightDay.day);
+assert.match(midnightMove.error, /fora do horário/, 'um movimento impossível não pode deixar blocos sobrepostos');
 assert.deepEqual(midnightChain.map(tile => tile.startTime), ['22:40', '23:15'], 'falha não altera a grade original');
 const last = tiles[tiles.length - 1];
 const moved = grid.move(tiles, last.id, last.court, '08:00', fixture, [firstDay, secondDay], secondDay.day);
@@ -97,9 +104,8 @@ const saved = grid.toPlan(fixture, moved.tiles);
 assert.equal(saved.blocks.some(block => block.day === secondDay.day), true);
 assert.equal(grid.validate(grid.expand(saved, tournament), saved, [firstDay, secondDay]), null);
 const tooLate = grid.move(tiles, last.id, last.court, '20:45', fixture, [firstDay], firstDay.day);
-assert.equal(tooLate.error, undefined, 'bloco excedente deve continuar visível no rascunho');
-assert.equal(grid.outsideWindow(tooLate.tiles.find(tile => tile.id === last.id), firstDay), true);
-assert.match(grid.validate(tooLate.tiles, fixture, [firstDay]), /fora do horário/);
+assert.match(tooLate.error, /fora do horário/, 'bloco excedente não deve quebrar o rascunho');
+assert.equal(tooLate.tiles, undefined);
 const monthMove = grid.move(tiles, last.id, last.court, '08:00', fixture, [firstDay, laterDay], laterDay.day);
 assert.equal(monthMove.error, undefined);
 assert.equal(grid.validate(monthMove.tiles, fixture, [firstDay, laterDay]), null,

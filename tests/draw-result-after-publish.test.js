@@ -11,7 +11,7 @@ assert.match(draw, /__drawResultAfterPublish[\s\S]{0,180}window\.location\.hash 
 const listeners = new Map();
 const frames = [];
 const timers = [];
-const calls = { opened:0, dismissed:0, painted:0, loadingHidden:0, busyDone:0, notices:[] };
+const calls = { opened:0, dismissed:0, painted:0, loadingHidden:0, busyDone:0, gridFinished:0, gridErrors:[], notices:[] };
 const classList = { add() {}, remove() {}, contains() { return false; } };
 const container = { innerHTML:'', style:{}, classList, get firstElementChild() { return this.innerHTML ? {} : null; } };
 const document = {
@@ -28,6 +28,7 @@ const W = {
   _findTournamentById() { return tournament; },
   _publishedInitialDrawData(t) { return t.matches.length ? { draft:{ matches:t.matches } } : null; },
   _openPublishedInitialDrawResult(id) { assert.equal(id, 'camis'); calls.opened++; },
+  _phaseGridDrawFinished(id, error) { assert.equal(id, 'camis'); calls.gridFinished++; if (error) calls.gridErrors.push(error); },
   _hideLoading() { calls.loadingHidden++; }, _drawBtnDone() { calls.busyDone++; },
   showNotification(title, message) { calls.notices.push({ title, message }); },
   _showLoading() {}, _reflowChrome() {}, _log() {}, _warn() {}, scrollTo() {},
@@ -69,6 +70,34 @@ assert.equal(calls.opened, 1, 'snapshot e reentrada não reabrem o resultado');
 W.__drawResultAfterPublish = { id:'outro', at:Date.now() };
 route();
 assert.equal(calls.opened, 1, 'intenção de outro torneio não abre no CAMIS');
+
+// Redraw não abre a prévia inicial; o progresso da grade termina somente
+// depois que o detalhe do torneio foi pintado na rota de destino.
+delete W.__drawResultAfterPublish;
+const paintedBeforeRedraw = calls.painted;
+const finishedBeforeRedraw = calls.gridFinished;
+W._ultimaRotaPintada = '#other|1|';
+W.location.hash = '#tournaments/camis';
+route();
+assert.equal(calls.painted, paintedBeforeRedraw + 1);
+assert.equal(calls.gridFinished, finishedBeforeRedraw + 1,
+  'sem prévia inicial, o loader da grade termina após o render do redraw');
+const finishedBeforeMainSwitch = calls.gridFinished;
+W._ultimaRotaPintada = '#dashboard|1|';
+route();
+assert.equal(calls.gridFinished, finishedBeforeMainSwitch + 1,
+  'a transição principal também solta a grade somente depois de pintar o torneio');
+
+W.__drawResultAfterPublish = { id:'camis', at:Date.now() };
+W._publishedInitialDrawData = () => null;
+W._ultimaRotaPintada = '#other|1|';
+const finishedBeforeMissingResult = calls.gridFinished;
+route();
+assert.equal(calls.gridFinished, finishedBeforeMissingResult + 1,
+  'resultado ainda indisponível encerra a espera com erro visível');
+assert.match(calls.gridErrors.at(-1), /chave ainda não carregou/);
+delete W.__drawResultAfterPublish;
+W._publishedInitialDrawData = t => t.matches.length ? { draft:{ matches:t.matches } } : null;
 
 // CAMIS real: sorteio feito no mesmo #tournaments/id e jogos divididos em
 // subcoleção. A resposta pode ter _nPartes.matches=108 e matches:[] na raiz.

@@ -7791,10 +7791,15 @@ window._openPendingDrawReview = function (tId, markerRetry) {
     return window.AppStore && (window.AppStore.tournaments || []).find(function (x) { return String(x.id) === String(id); });
   };
   var t = getTournament(tId), marker = window._pendingDrawMarkerFor(t);
-  if (!t) { window._finishDrawTransition(tId); return; }
+  if (!t) {
+    window._finishDrawTransition(tId);
+    if (window._phaseGridDrawFinished) window._phaseGridDrawFinished(tId, 'Torneio indisponível após o sorteio.');
+    return;
+  }
   if (!marker) {
     if (markerRetry) {
       window._finishDrawTransition(tId);
+      if (window._phaseGridDrawFinished) window._phaseGridDrawFinished(tId, 'O servidor ainda não confirmou o sorteio.');
       if (window.showNotification) window.showNotification('Revisão indisponível', 'O servidor ainda não confirmou o sorteio. Abra o torneio novamente.', 'error');
       var container = document.getElementById('view-container');
       if (container && typeof window.renderTournaments === 'function') window.renderTournaments(container, tId);
@@ -7812,6 +7817,7 @@ window._openPendingDrawReview = function (tId, markerRetry) {
       .then(function (res) { var out = (res && res.data) || res || {}; if (!out.pendingDraw) throw new Error('Rascunho indisponível.'); cache[String(tId)] = out.pendingDraw; window._openPendingDrawReview(tId); })
       .catch(function (e) {
         window._finishDrawTransition(tId);
+        if (window._phaseGridDrawFinished) window._phaseGridDrawFinished(tId, (e && e.message) || 'Rascunho indisponível.');
         if (window.showNotification) window.showNotification('Revisão indisponível', (e && e.message) || 'Tente novamente.', 'error');
         var container = document.getElementById('view-container');
         if (container && typeof window.renderTournaments === 'function') window.renderTournaments(container, tId);
@@ -7841,6 +7847,7 @@ window._openPendingDrawReview = function (tId, markerRetry) {
   var publish = overlay.querySelector('[data-publish]'); if (publish) publish.onclick = function () { overlay.remove(); window._publishPendingDraw(tId); };
   document.body.appendChild(overlay);
   window._finishDrawTransition(tId);
+  if (window._phaseGridDrawFinished) window._phaseGridDrawFinished(tId);
 };
 
 window._renderPendingDrawBanner = function (t) {

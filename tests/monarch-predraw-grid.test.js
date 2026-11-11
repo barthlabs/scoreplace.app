@@ -13,6 +13,7 @@ async function run() {
     return {
       get id() { return id; }, set id(value) { id = value; elements.set(value, this); },
       innerHTML:'', style:{}, hidden:false, isConnected:true,
+      setAttribute() {}, removeAttribute() {},
       querySelector() { return null; }, querySelectorAll() { return []; },
       remove() { elements.delete(id); this.isConnected = false; }
     };
@@ -80,8 +81,11 @@ async function run() {
   assert.equal(window._phaseCallOrderState.tiles.find(tile => tile.id === last.id).court, 3);
   assert.equal(window._phaseCallOrderState.activeDay, '2026-11-14');
   assert.equal(grid.validate(window._phaseCallOrderState.tiles, plan, tournament.scheduleWindow.days), null);
+  const realGenerateDrawFunction = window.generateDrawFunction;
   window.generateDrawFunction = id => draws.push(id);
-  await window._phaseGridSaveAndDraw();
+  const drawing = window._phaseGridSaveAndDraw();
+  assert.equal(elements.has('phase-grid-draw-progress'), true, 'o primeiro clique já mostra progresso');
+  await drawing;
   assert.equal(calls.length, 1, 'a alteração precisa ser salva no servidor antes do sorteio');
   assert.equal(calls[0].name, 'updateTournamentConfiguration');
   assert.equal(calls[0].payload.patch.scheduleWindow.interleavedPlan.editorVersion, 2);
@@ -89,7 +93,36 @@ async function run() {
     block.kind === 'elimination' && block.category === 'Fem Prata' && block.round === 4 &&
     block.day === '2026-11-14' && block.startTime === '20:20' && block.courts.includes(3)), true);
   assert.deepEqual(draws, ['camis']);
+  assert.equal(elements.has('phase-grid-overlay'), true, 'a grade não some enquanto o servidor sorteia');
+  assert.equal(elements.has('phase-grid-draw-progress'), true, 'o clique mostra progresso imediatamente');
+  window._phaseGridDrawFinished('camis');
+  assert.equal(elements.has('phase-grid-draw-progress'), false);
+  assert.equal(elements.has('phase-grid-overlay'), false, 'a grade só fecha depois do resultado');
+
+  window.generateDrawFunction = realGenerateDrawFunction;
+  window.ScoreplaceTeamCompetition = { configurationForTournament:() => ({ enabled:true }) };
+  window._showTeamCompetitionDrawReview = () => false;
+  assert.equal(window._openMonarchPreDrawReview('camis'), true);
+  await window._phaseGridSaveAndDraw();
+  assert.equal(elements.has('phase-grid-draw-progress'), false,
+    'revisão por equipes indisponível solta o progresso e permite tentar novamente');
+  assert.equal(elements.has('phase-grid-overlay'), true);
+  window._closePhaseGridEditor();
+  window._showTeamCompetitionDrawReview = () => true;
+  assert.equal(window._openMonarchPreDrawReview('camis'), true);
+  await window._phaseGridSaveAndDraw();
+  assert.equal(elements.has('phase-grid-draw-progress'), false,
+    'revisão por equipes aberta substitui a espera do sorteio');
   assert.equal(elements.has('phase-grid-overlay'), false);
+  delete window.ScoreplaceTeamCompetition;
+
+  assert.equal(window._openMonarchPreDrawReview('camis'), true);
+  window._findTournamentById = () => null;
+  await window._phaseGridSaveAndDraw();
+  assert.equal(elements.has('phase-grid-draw-progress'), false,
+    'torneio que sumiu antes do sorteio não prende a tela inteira');
+  window._closePhaseGridEditor();
+  window._findTournamentById = id => id === 'camis' ? tournament : null;
 
   tournament.scheduleWindow.interleavedPlan = null;
   assert.equal(window._openMonarchPreDrawReview('camis'), false);

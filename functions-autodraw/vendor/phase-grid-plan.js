@@ -163,7 +163,7 @@
     }
     return null;
   }
-  function move(tiles, id, court, startTime, plan, day, targetDay) {
+  function move(tiles, id, court, startTime, plan, day, targetDay, targetId) {
     var next = tiles.map(function (tile) { return Object.assign({}, tile, { court:Number(tile.court) }); });
     var target = next.find(function (tile) { return tile.id === id; });
     if (!target) return { error:'Bloco não encontrado.' };
@@ -172,25 +172,30 @@
     if (!Number.isInteger(Number(court)) || Number(court) < 1 || Number(court) > Number(plan.courts) ||
         !Number.isFinite(at) || !days.some(function (d) { return d.day === destination && at >= minutes(d.startTime); }))
       return { error:'Escolha uma quadra e um horário válidos.' };
-    target.court = Number(court); target.startTime = startTime;
-    target.day = destination;
-    var cursor = at + target.duration, shifted = [];
-    if (cursor > 24 * 60) return { error:'O bloco ultrapassa a meia-noite. Escolha outro horário ou dia.' };
-    var lane = next.filter(function (tile) { return tile.id !== id && (tile.day || plan.day) === destination && Number(tile.court) === target.court; })
-      .sort(function (a, b) { return minutes(a.startTime) - minutes(b.startTime) || a.id.localeCompare(b.id); });
-    for (var li = 0; li < lane.length; li++) {
-      var tile = lane[li], tileStart = minutes(tile.startTime);
-      if (tileStart >= cursor || tileStart + tile.duration <= at) continue;
-      if (cursor + tile.duration > 24 * 60)
-        return { error:'A cascata ultrapassa a meia-noite. Escolha outro horário, quadra ou dia.' };
-      tile.startTime = clock(cursor);
-      cursor += tile.duration;
-      shifted.push(tile.id);
+    var original = { court:target.court, startTime:target.startTime, day:target.day || plan.day };
+    var lane = next.filter(function (tile) { return tile.id !== id && (tile.day || plan.day) === destination && Number(tile.court) === Number(court); });
+    var occupant = targetId ? lane.find(function (tile) { return tile.id === targetId; }) : null;
+    if (targetId && !occupant) return { error:'Solte sobre um bloco da quadra escolhida.' };
+    if (!occupant) occupant = lane.find(function (tile) {
+      var start = minutes(tile.startTime);
+      return at >= start && at < start + tile.duration;
+    });
+    if (!occupant) {
+      var overlapping = lane.filter(function (tile) {
+        var start = minutes(tile.startTime);
+        return at < start + tile.duration && at + target.duration > start;
+      });
+      if (overlapping.length === 1) occupant = overlapping[0];
     }
-    // Excedentes do fim da janela ficam listrados no rascunho; validate sem
-    // allowOverflow continua impedindo que uma grade fora do dia seja salva.
-    var warning = validate(next, plan, days, { allowOverflow:true });
-    return { tiles:next, shifted:shifted, warning:warning };
+    if (occupant) {
+      target.court = occupant.court; target.startTime = occupant.startTime; target.day = occupant.day || plan.day;
+      occupant.court = original.court; occupant.startTime = original.startTime; occupant.day = original.day;
+    } else {
+      target.court = Number(court); target.startTime = startTime; target.day = destination;
+    }
+    var error = validate(next, plan, days);
+    if (error) return { error:'Posição não aplicada: ' + error + ' Solte em outra vaga válida.' };
+    return { tiles:next, swapped:occupant && occupant.id || null, shifted:[] };
   }
   function toPlan(plan, tiles) {
     var next = Object.assign({}, plan);

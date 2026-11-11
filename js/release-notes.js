@@ -1,3 +1,8 @@
+// 2.6.50 — A revisão da grade troca blocos ao arrastar sem deslocar rodadas
+// seguintes; um movimento que quebraria a sequência não é aplicado.
+// Salvar e sortear mostra o progresso e mantém a tela até a chave aparecer.
+// Durante os testes da organização, a chamada para quadra pode anteceder a
+// data prevista da agenda; ocupação e ordem das fases continuam protegidas.
 // 2.6.49 — O card do desempate usa os mesmos botões e a mesma disposição dos
 // demais jogos. O placar pode ser confirmado diretamente, sem chamada para a
 // quadra; Confirmar aparece apenas depois de preencher os dois lados.

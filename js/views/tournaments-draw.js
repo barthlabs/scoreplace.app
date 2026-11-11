@@ -3380,7 +3380,11 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
 
 window.generateDrawFunction = function (tId) {
     const t = window._findTournamentById(tId);
-    if (!t) { if (window._dtrace) window._dtrace('generateDraw:NO-TOURNAMENT', { tId: String(tId) }); return; }
+    if (!t) {
+        if (window._dtrace) window._dtrace('generateDraw:NO-TOURNAMENT', { tId: String(tId) });
+        if (typeof window._phaseGridDrawFinished === 'function') window._phaseGridDrawFinished(tId, 'Torneio indisponível. Atualize a página e tente novamente.');
+        return;
+    }
 
     // O render-harness carrega esta função isoladamente em alguns testes e a
     // extensão pode restaurar uma página antes do bloco global acima executar.
@@ -3410,10 +3414,14 @@ window.generateDrawFunction = function (tId) {
         } catch (_teamReviewError) {
             if (window._dtrace) window._dtrace('generateDraw:teamDrawReview:error', { message: String(_teamReviewError && _teamReviewError.message || _teamReviewError) });
         }
-        if (_openedTeamReview) return;
+        if (_openedTeamReview) {
+            if (typeof window._phaseGridDrawFinished === 'function') window._phaseGridDrawFinished(tId);
+            return;
+        }
         if (typeof window.showNotification === 'function') {
             window.showNotification('Configuração do sorteio indisponível', 'Não foi possível abrir a tela obrigatória de modo, categorias e quadras. Recarregue a página e tente novamente.', 'error');
         }
+        if (typeof window._phaseGridDrawFinished === 'function') window._phaseGridDrawFinished(tId, 'Não foi possível abrir a revisão do sorteio por equipes.');
         return;
     }
 
@@ -3452,6 +3460,8 @@ window.generateDrawFunction = function (tId) {
          * recusa. (Escrevi `_drawBtnBusy(null,false)` na primeira versão: é o método que
          * LIGA o giro, não o que desliga.) */
         if (typeof window._drawBtnDone === 'function') { try { window._drawBtnDone(); } catch (_e2) {} }
+        if (typeof window._phaseGridDrawFinished === 'function')
+            window._phaseGridDrawFinished(tId, 'O elenco ainda está carregando. Aguarde a lista completa antes de sortear.');
         return;
     }
     if (window._dtrace) window._dtrace('generateDraw', { fmt: t.format, parts: (t.participants || []).length });
@@ -3507,6 +3517,7 @@ window.generateDrawFunction = function (tId) {
                 'Liga (Pontos Corridos) e Rei/Rainha usam parceiros ROTATIVOS — inscrição individual. Para DUPLAS FIXAS jogando entre si, use o formato "Fase de Grupos".',
                 null, { type: 'warning' });
             if (typeof window._drawBtnDone === 'function') window._drawBtnDone();
+            if (typeof window._phaseGridDrawFinished === 'function') window._phaseGridDrawFinished(tId, 'Há duplas formadas incompatíveis com esta fase.');
             return;
         }
     }
@@ -3544,6 +3555,7 @@ window.generateDrawFunction = function (tId) {
                 'O sorteio desta fase <b>já foi realizado</b> e a chave eliminatória é uma árvore fechada — a próxima rodada sai dos vencedores, não de um sorteio novo.<br><br>' +
                 'Apagar a chave descartaria os confrontos (e os resultados já lançados) de todo mundo. Se faltou alguém, use <b>entrada tardia</b>; se um jogo precisa de ajuste, corrija o <b>resultado</b> do jogo.',
                 null, { type: 'warning' });
+            if (typeof window._phaseGridDrawFinished === 'function') window._phaseGridDrawFinished(tId, 'Esta fase já foi sorteada.');
             return;
         }
         // Fase de RODADAS SUCESSIVAS: a necessidade legítima é ACRESCENTAR uma rodada.
@@ -3556,6 +3568,7 @@ window.generateDrawFunction = function (tId) {
         } else {
             window._generateExtraRound(tId);
         }
+        if (typeof window._phaseGridDrawFinished === 'function') window._phaseGridDrawFinished(tId, 'Esta fase já foi sorteada.');
         return;
     }
 
@@ -3570,6 +3583,7 @@ window.generateDrawFunction = function (tId) {
             showAlertDialog(_t('draw.noCatTitle'),
                 _t('draw.noCatMsg', { n: _noCat.length, names: _names, extra: _extra }),
                 null, { type: 'warning' });
+            if (typeof window._phaseGridDrawFinished === 'function') window._phaseGridDrawFinished(tId, 'Há participantes sem categoria.');
             return;
         }
     }
@@ -3579,6 +3593,7 @@ window.generateDrawFunction = function (tId) {
         window._monarchDrawReviewApproved = window._monarchDrawReviewApproved || {};
         if (!window._monarchDrawReviewApproved[String(tId)]) {
             if (typeof window._drawBtnDone === 'function') window._drawBtnDone();
+            if (typeof window._phaseGridDrawFinished === 'function') window._phaseGridDrawFinished(tId, 'Confirme a grade antes de sortear.');
             if (typeof window._openMonarchPreDrawReview === 'function') window._openMonarchPreDrawReview(tId);
             else if (typeof window.showAlertDialog === 'function') showAlertDialog('Revisão da grade indisponível',
                 'Recarregue a página antes de sortear. É necessário conferir quadras e horários.', null, { type:'warning' });
@@ -3620,6 +3635,7 @@ window.generateDrawFunction = function (tId) {
     if (!isElim && !isGruposFmt && !isSuicoOrLiga && !t.oddResolution && typeof window.checkOddEntries === 'function') {
         const oddInfo = window.checkOddEntries(t);
         if (oddInfo.isOdd) {
+            if (typeof window._phaseGridDrawFinished === 'function') window._phaseGridDrawFinished(tId, 'Resolva a entrada ímpar antes de sortear.');
             window.showUnifiedResolutionPanel(tId);
             return;
         }
@@ -3634,11 +3650,13 @@ window.generateDrawFunction = function (tId) {
         if (info.count < 2) {
             const _label = (info.teamSize > 1) ? 'times' : 'participantes';
             showAlertDialog(_t('draw.tooFewTitle'), _t('draw.tooFewDrawMsg', { label: _label }), null, { type: 'warning' });
+            if (typeof window._phaseGridDrawFinished === 'function') window._phaseGridDrawFinished(tId, 'São necessários ao menos dois participantes.');
             return;
         }
         // pow2/ímpar AUTO (elim): o programa decide sozinho (bye/play-in) — NÃO abre painel,
         // segue direto pro sorteio. Só formatos sem resolução automática abrem o painel.
         if (!info.isPowerOf2 && !(typeof window._autoResolvesPow2 === 'function' && window._autoResolvesPow2(t))) {
+            if (typeof window._phaseGridDrawFinished === 'function') window._phaseGridDrawFinished(tId, 'Resolva a quantidade de participantes antes de sortear.');
             window.showPowerOf2Panel(tId);
             return;
         }
@@ -3714,6 +3732,7 @@ window.generateDrawFunction = function (tId) {
         if (t.rulesContractVersion >= 2 && !_drawOperationId) {
           if (typeof window._hideLoading === 'function') window._hideLoading();
           if (window.showNotification) window.showNotification('Sorteio não iniciado', 'Este dispositivo não conseguiu criar a semente do sorteio.', 'error');
+          if (typeof window._phaseGridDrawFinished === 'function') window._phaseGridDrawFinished(tId, 'Não foi possível gerar a semente do sorteio neste dispositivo.');
           return;
         }
         var _doDrawDispatch = function () {
@@ -3797,6 +3816,8 @@ window.generateDrawFunction = function (tId) {
             // motivo — foi exatamente o que aconteceu no 1º teste real na staging.
             if (typeof window._hideLoading === 'function') window._hideLoading();
             if (typeof window._drawBtnDone === 'function') window._drawBtnDone();
+            if (typeof window._phaseGridDrawFinished === 'function')
+                window._phaseGridDrawFinished(tId, (err && err.message) || 'O servidor não confirmou o sorteio.');
             var _code = (err && err.code) || '';
             var _msg = (err && err.message) || String(err);
             window._lastSaveError = { tournamentId: tId, code: _code, message: _msg, at: new Date().toISOString() };

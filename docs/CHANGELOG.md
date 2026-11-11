@@ -1,3 +1,9 @@
+## 2.6.50 — 11/nov/2026 (grade e chamada durante os testes)
+
+- Soltar um bloco sobre outro troca suas posições. A grade só aplica movimentos que preservam horários, quadras, classificatória e sequência de rodadas; a cascata que deslocava jogos posteriores foi removida.
+- Salvar grade e sortear mostra progresso desde o clique e mantém a tela de sorteio até o resultado estar disponível, sem voltar ao detalhe do torneio durante a espera.
+- A trava pela data prevista da agenda fica temporariamente desativada para chamadas autorizadas em todos os torneios com agenda, durante os testes. Permanecem as verificações de autorização, quadra ocupada, conflito de atletas e ordem das fases. O corte não altera dados do CAMIS nem versões nativas.
+
 ## 2.6.49 — 11/nov/2026 (card de desempate no padrão dos jogos)
 
 - O desempate usa W.O. compacto em duas linhas, Ao Vivo e Confirmar no cabeçalho, seletor de quadra estreito e OK verde como nos outros cards. Confirmar só aparece após preencher os dois placares; o lançamento direto não depende de chamada para a quadra.
