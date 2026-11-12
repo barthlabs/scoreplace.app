@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "backendCommit": "0fd9de75f13411b7c4874cd6d5fac1230ad75437",
-  "scopeNote": "Corte 2.6.62: classificação da CONFRA por vaga recomposta na repescagem.",
+  "backendCommit": "2c130620cd1e84f885c7d65fa2278eeca365dd98",
+  "scopeNote": "Corte 2.6.63: vendor de cards sincronizado com nomes manuais do CAMIS; cinco callables de resultado republicadas sem mudar a lógica de placar.",
   "functions": [
     "applyMatchResult",
     "applyQueuedResult",
