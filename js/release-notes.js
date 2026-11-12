@@ -5,6 +5,7 @@
 // Últimos resultados usa o mesmo estilo de título e fonte de Próximos jogos.
 // No desempate, Confirmar e Ao Vivo têm a mesma largura; ao gravar,
 // Confirmar mostra o spinner padrão até a resposta do servidor.
+// Enquanto a simples chamada aguarda o resultado, a TV não antecipa a Ouro.
 // 2.6.52 — A tela No ar usa as cores de fundo do cartão do torneio também
 // no cabeçalho e nas quadras. Mostra até quatro próximos jogos da fila,
 // em rolagem suave; o QR não encobre os resultados e sua marca tem folga
