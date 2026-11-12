@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "backendCommit": "2c130620cd1e84f885c7d65fa2278eeca365dd98",
-  "scopeNote": "Corte 2.6.63: vendor de cards sincronizado com nomes manuais do CAMIS; cinco callables de resultado republicadas sem mudar a lógica de placar.",
+  "backendCommit": "ae7ca8f303b341b98fd222bce0c57be10619f8f7",
+  "scopeNote": "Corte 2.6.63: vendor do placar ao vivo sincronizado; cinco callables de resultado republicadas de forma direcionada.",
   "functions": [
     "applyMatchResult",
     "applyQueuedResult",
