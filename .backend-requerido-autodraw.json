@@ -1,8 +1,8 @@
 {
   "schema": 1,
-  "backendCommit": "3f4e5f046277e2dab42effed0d33e56a9dee492b",
-  "scopeNote": "Corte 2.6.51: chamada manual sem trava de fase ou data; eliminatória exige duplas definidas.",
+  "backendCommit": "310da3418586d4c8e54ff0889ae8db03f7e9c0c2",
+  "scopeNote": "Corte 2.6.55: desempate simples pode ser pulado de novo e jogos independentes continuam chamáveis.",
   "functions": [
-    "assignMatchCourt"
+    "advanceTournamentPhase"
   ]
 }
