@@ -882,12 +882,14 @@ service cloud.firestore {
         // falsificação, evita exceder o teto de expressões no reset completo.
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
           'billingContract', 'billingQuote', 'billingSettlement', 'billingPixReport',
-          'billingTermsAcceptance', '_phaseReadCertificate'
+          'billingTermsAcceptance', '_phaseReadCertificate', 'refereeUids',
+          // A tela No ar é editada pela Function autenticada. Saves genéricos
+          // de jogos vindos de abas antigas nunca podem sobrescrevê-la.
+          'tvLayout', 'tvScreens'
         ])
         && cobrancaClienteNaoGeraChave()
         && rosterLegadoProtegidoAposMigracao()
         && categoriasTipadasIntactas()
-        && igual('refereeUids')
         && igual('organizerOnly')
         && (igual('membersOnly') || isTournamentAdmin(resource.data))
         && !(request.resource.data.get('organizerOnly', false) == true

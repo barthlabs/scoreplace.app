@@ -52,7 +52,11 @@
       (Number(match.phaseIndex || 0) === 0 ? 'groups' : 'elimination') === stage.kind &&
       !match.isTieBreak;
   }
-  function stageGamesDone(t, matches, stage, finished) {
+  function knownSide(side) {
+    var value = String(side || '').trim();
+    return !!value && !/^(?:TBD|BYE|a definir|(?:vencedor|vencedora|perdedor|perdedora) d[oea] jogo\b|(?:winner|loser) of match\b)/i.test(value);
+  }
+  function stageScheduledGamesDone(t, matches, stage, finished) {
     var ids = new Set();
     var games = matches.filter(function (m) {
       if (!belongs(m, stage) || m.isBye || m.isSitOut) return false;
@@ -61,7 +65,10 @@
       if (id) ids.add(id);
       return true;
     });
-    if (games.length < expected(t, stage) || !games.every(finished)) return false;
+    return games.length >= expected(t, stage) && games.every(finished);
+  }
+  function stageGamesDone(t, matches, stage, finished) {
+    if (!stageScheduledGamesDone(t, matches, stage, finished)) return false;
     if (stage.kind === 'groups') {
       var decisions = t.phaseTieDecisions && t.phaseTieDecisions['0'] || {};
       if (Object.keys(decisions).some(function (id) {
@@ -119,14 +126,20 @@
       var target = targetStage && intervals[key(targetStage)];
       var sequence = stages(t);
       var targetIndex = targetStage ? sequence.findIndex(function (stage) { return key(stage) === key(targetStage); }) : -1;
+      if (target && targetStage.kind === 'elimination') {
+        var ownGroups = intervals[key({ kind:'groups', category:targetStage.category })];
+        if (ownGroups && (!stageScheduledGamesDone(t, matches, ownGroups.stage, finished) ||
+            !knownSide(match.p1) || !knownSide(match.p2))) return false;
+      }
       if (target) return Object.keys(intervals).every(function (id) {
         var predecessor = intervals[id];
         if (targetStage.kind === 'elimination' && predecessor.stage.kind === 'groups') {
           var predecessorIndex = sequence.findIndex(function (stage) { return key(stage) === id; });
           if (predecessorIndex < targetIndex) {
             return predecessor.stage.category === targetStage.category
-              ? stageDone(t, matches, predecessor.stage, finished)
-              : stageGamesDone(t, matches, predecessor.stage, finished);
+              ? stageScheduledGamesDone(t, matches, predecessor.stage, finished) &&
+                knownSide(match.p1) && knownSide(match.p2)
+              : stageScheduledGamesDone(t, matches, predecessor.stage, finished);
           }
           return true;
         }
@@ -146,7 +159,7 @@
         // Só etapas que terminam antes desta começar são pré-requisitos.
         // Etapas com janelas sobrepostas dividem as quadras de propósito.
         return targetStage.kind === 'groups' && predecessor.stage.kind === 'groups'
-          ? stageGamesDone(t, matches, predecessor.stage, finished)
+          ? stageScheduledGamesDone(t, matches, predecessor.stage, finished)
           : stageDone(t, matches, predecessor.stage, finished);
       });
     }

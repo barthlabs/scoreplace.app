@@ -456,6 +456,11 @@ window.FirestoreDB = {
     // `scripts/apagar-standings-do-doc.js`, rodado uma vez.
     // [[project_teto_do_documento_e_arquitetura_de_dados]] [[project_cache_pinta_mas_nao_decide]]
     delete cleanData.standings;
+    // A tela No ar tem escrita própria pela Function de configuração. Uma cópia
+    // antiga do torneio usada para salvar um jogo não pode devolver ao banco o
+    // desenho de TV que o organizador já alterou em outra janela.
+    delete cleanData.tvLayout;
+    delete cleanData.tvScreens;
     // ── IMAGEM NÃO VIAJA JUNTO COM PLACAR (1.9.49) ──────────────────────────────
     // MEDIDO nos documentos de produção: `logoData` + `coverPhotoData` são 62% do peso
     // de todos os torneios (602 KB de 966 KB). Num doc o par chega a 305 KB de 311 KB —

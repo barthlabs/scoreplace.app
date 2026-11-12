@@ -1,3 +1,9 @@
+// 2.6.55 — Recuperada a tela No ar do CAMIS com as posições que o organizador
+// havia salvo. Gravações comuns de jogos deixam de reenviar o desenho da TV;
+// a edição da tela continua pelo comando próprio do organizador.
+// O jogo extra aparece em vermelho na fila; Confirmar mantém o tamanho
+// compacto. Outras quadras podem seguir com jogos prontos enquanto o
+// desempate aguarda, sem liberar eliminatórias que dependem do resultado.
 // 2.6.54 — O botão Salvar grade e sortear fica cinza, desabilitado e com
 // spinner desde o clique até a chave aparecer; ao falhar, pode ser tentado
 // novamente. A tela de progresso continua visível durante a espera.

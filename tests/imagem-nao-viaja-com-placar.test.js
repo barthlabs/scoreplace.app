@@ -90,11 +90,16 @@ console.log('\nIMAGEM NÃO VIAJA JUNTO COM PLACAR');
   // ── 1. SAVE COMUM (o placar) — a imagem NÃO pode ir junto ───────────────────
   {
     const { FDB, escritas } = montar();
-    await FDB.saveTournament(torneio());
+    const jogoComTelaAntiga = torneio();
+    jogoComTelaAntiga.tvLayout = { sections: { courts: { w: 97.9 } } };
+    jogoComTelaAntiga.tvScreens = [{ phaseIndex: 0, layout: jogoComTelaAntiga.tvLayout }];
+    await FDB.saveTournament(jogoComTelaAntiga);
     ok(escritas.length === 1, 'o save comum gravou uma vez');
     const enviado = escritas[0].data || {};
     ok(!('logoData' in enviado), 'o save comum NÃO reenvia `logoData`');
     ok(!('coverPhotoData' in enviado), 'o save comum NÃO reenvia `coverPhotoData`');
+    ok(!('tvLayout' in enviado) && !('tvScreens' in enviado),
+       'o save do jogo não reenvia layout de TV antigo');
 
     // é o `merge:true` que torna a omissão segura (o banco preserva o campo ausente).
     ok(escritas[0].opts && escritas[0].opts.merge === true,

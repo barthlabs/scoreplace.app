@@ -228,6 +228,8 @@ assert.equal(postponedAction('postpone').decision.matches[0].postponedAt, '2026-
 assert.equal(courts.callPending(postponedTournament, [], {}, () => false, '2026-11-11T12:03:00Z').length, 0,
   'o servidor não chama automaticamente um desempate que o organizador pulou');
 assert.equal(postponedAction('postpone').changed, false, 'repetir o pedido de adiamento não regrava o jogo');
+assert.equal(postponedAction('postpone', { at:'2026-11-11T12:04:00Z' }).decision.matches[0].postponedAt,
+  '2026-11-11T12:04:00Z', 'pular novamente após outra chamada renova a posição na fila');
 const scoredAfterPostpone = postponedAction('score', { sets:[{ p1:5, p2:3 }] });
 assert(scoredAfterPostpone.decision.matches[0].winnerKey);
 assert.throws(() => postponedAction('postpone'),

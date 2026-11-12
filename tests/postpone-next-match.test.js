@@ -90,7 +90,28 @@ assert.equal(nextTie.next.id, 'tie-a', 'desempate pendente precede a próxima pa
 assert.equal(nextTie.next.isTieBreak, true);
 assert.equal(nextTie.next.category, 'Fem Diamante · Grupo A1',
   'metadado do grupo permanece na fila mesmo com a designação curta no card');
-assert.equal(nextTie.tieCanPostpone, false, 'sem outro jogo chamável, a última simples não pode ser pulada');
+assert.equal(nextTie.tieCanPostpone, true, 'outro jogo pronto pode ser chamado mesmo sem prioridade na grade');
+context.window.ScoreplacePhaseCallOrder = { allowed:() => true };
+assert.equal(context.window._bracketOperationsSelect(withTie).tieCanPostpone, true,
+  'com jogo Ouro pronto, organizador pode adiar o desempate Diamante');
+withTie.phaseTieDecisions['0']['group-0:1:2'].matches[0].postponedAt = '2026-11-13T12:02:00Z';
+assert.equal(context.window._bracketOperationsSelect(withTie).next.id, firstGold.id,
+  'pular desempate mostra o Ouro na fila');
+firstGold.courtCalledAt = '2026-11-13T12:03:00Z';
+assert.equal(context.window._bracketOperationsSelect(withTie).next.id, 'tie-a',
+  'após chamar o Ouro, desempate retorna para nova decisão do organizador');
+const secondGold = { id:'gold-2', category:'Fem Ouro', p1:'Ouro C', p2:'Ouro D',
+  scheduledAt:'2026-11-13T12:45:00.000Z' };
+withTie.matches.push(secondGold);
+assert.equal(context.window._bracketOperationsSelect(withTie).tieCanPostpone, true,
+  'o desempate que voltou pode ser pulado novamente se outro jogo está pronto');
+withTie.phaseTieDecisions['0']['group-0:1:2'].matches[0].postponedAt = '2026-11-13T12:04:00Z';
+assert.equal(context.window._bracketOperationsSelect(withTie).next.id, secondGold.id,
+  'novo adiamento oferece o jogo seguinte');
+withTie.matches.pop();
+delete firstGold.courtCalledAt;
+delete withTie.phaseTieDecisions['0']['group-0:1:2'].matches[0].postponedAt;
+context.window.ScoreplacePhaseCallOrder = { allowed:(_, __, m) => m.category === 'Fem Diamante' };
 const laterDiamond = { id:'diamond-later', category:'Fem Diamante', p1:'Outra A', p2:'Outra B',
   phaseIndex:0, scheduledAt:'2026-11-13T13:00:00.000Z' };
 withTie.matches.push(laterDiamond);
@@ -100,21 +121,23 @@ withTie.phaseTieDecisions['0']['group-0:1:2'].matches[0].postponedAt = '2026-11-
 assert.equal(context.window._bracketOperationsSelect(withTie).next.id, laterDiamond.id,
   'pular a simples deixa o próximo jogo classificatório ser chamado');
 laterDiamond.courtCalledAt = '2026-11-13T13:00:00Z';
+firstGold.courtCalledAt = '2026-11-13T13:00:00Z';
 assert.equal(context.window._bracketOperationsSelect(withTie).next.id, 'tie-a',
   'sem outro jogo chamável, a simples volta antes da fase seguinte');
 assert.equal(context.window._bracketOperationsSelect(withTie).tieCanPostpone, false,
   'na volta final não existe mais Pular jogo');
+delete firstGold.courtCalledAt;
 delete withTie.phaseTieDecisions['0']['group-0:1:2'].matches[0].postponedAt;
 withTie.phaseTieDecisions['0']['group-0:1:2'].matches[0].court = 'Quadra 8';
 withTie.phaseTieDecisions['0']['group-0:1:2'].matches[0].courtCalledAt = '2026-11-13T12:00:00Z';
 assert(context.window._bracketOperationsSelect(withTie).active.some(m => m.id === 'tie-a'),
   'desempate chamado aparece entre os jogos em quadra');
-assert.equal(context.window._bracketOperationsSelect(withTie).next, null,
-  'Ouro aguarda o desempate em quadra antes de voltar à sugestão');
-assert.equal(context.window._bracketOperationsSelect(withTie).waitingForTie, true);
+assert.equal(context.window._bracketOperationsSelect(withTie).next.id, firstGold.id,
+  'Ouro continua disponível enquanto o desempate ocupa uma quadra');
+assert.equal(context.window._bracketOperationsSelect(withTie).waitingForTie, false);
 withTie.phaseTieDecisions['0']['group-0:1:2'].matches[0].courtReleasedAt = '2026-11-13T12:03:00Z';
-assert.equal(context.window._bracketOperationsSelect(withTie).next, null,
-  'Ouro segue aguardando se a quadra for liberada antes de confirmar o desempate');
+assert.equal(context.window._bracketOperationsSelect(withTie).next.id, firstGold.id,
+  'Ouro continua disponível se a quadra da simples for liberada');
 withTie.phaseTieDecisions['0']['group-0:1:2'].matches[0].sets = [{ p1:5, p2:3 }];
 withTie.phaseTieDecisions['0']['group-0:1:2'].matches[0].winnerKey = 'name:Ana';
 assert(!context.window._bracketOperationsSelect(withTie).active.some(m => m.id === 'tie-a'),

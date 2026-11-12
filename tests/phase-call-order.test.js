@@ -12,6 +12,7 @@ const matches = categories.flatMap(([category, groups, elimination]) => [
   ...Array.from({length:elimination}, (_, i) => ({ id:category+'-e'+i, category, phaseIndex:1 }))
 ]);
 const game = (category, phase) => matches.find(m => m.category === category && m.phaseIndex === phase);
+matches.forEach(m => { m.p1 = 'Dupla A'; m.p2 = 'Dupla B'; });
 const done = m => !!m.resultAt;
 assert.deepEqual(order.stages(t).map(s => [s.category, s.kind, s.parallel]), [
   ['Fem Diamante','groups',false], ['Fem Ouro','groups',false],
@@ -37,11 +38,18 @@ assert(order.allowed(t,matches,game('Fem Ouro',0),done),
 assert(!order.allowed(t,matches,game('Fem Diamante',1),done));
 const pendingTie = { category:'Fem Diamante', status:'pending' };
 t.phaseTieDecisions = { '0': { 'diamante-a1:1:2':pendingTie } };
-assert(!order.allowed(t,matches,game('Fem Ouro',0),done),
-  'desempate pendente da Diamante deve ser concluído antes da Ouro');
+assert(order.allowed(t,matches,game('Fem Ouro',0),done),
+  'classificatória Ouro pode ocupar as outras quadras enquanto a simples Diamante aguarda');
+assert(!order.allowed(t,matches,game('Fem Diamante',1),done),
+  'eliminatória ainda aguarda o término dos jogos classificatórios do Ouro');
+matches.filter(m => m.category === 'Fem Ouro' && m.phaseIndex === 0).forEach(m => m.resultAt='x');
+assert(order.allowed(t,matches,game('Fem Diamante',1),done),
+  'confronto Diamante com duas duplas definidas segue apesar do desempate de outro grupo');
+const dependentElimination = { ...game('Fem Diamante',1), p2:'A definir' };
+assert(!order.allowed(t,matches,dependentElimination,done),
+  'confronto dependente da simples aguarda a dupla ainda indefinida');
 delete t.phaseTieDecisions;
 t.phaseCategoryMaterialized['Fem Diamante'] = {at:'x'};
-matches.filter(m => m.category === 'Fem Ouro' && m.phaseIndex === 0).forEach(m => m.resultAt='x');
 t.phaseCategoryMaterialized['Fem Ouro'] = {at:'x'};
 const model = fs.readFileSync('js/views/bracket-model.js', 'utf8');
 const collectStart = model.indexOf('window._collectAllMatches = function _collectAllMatches');
@@ -78,6 +86,7 @@ const plannedMatches = categories.flatMap(([category, groups, elimination]) => [
   ...Array.from({length:groups}, (_, i) => ({ id:category+'-planned-g'+i, category, phaseIndex:0 })),
   ...Array.from({length:elimination}, (_, i) => ({ id:category+'-planned-e'+i, category, phaseIndex:1 }))
 ]);
+plannedMatches.forEach(m => { m.p1 = 'Dupla A'; m.p2 = 'Dupla B'; });
 const plannedGame = (category, phase) => plannedMatches.find(m => m.category === category && m.phaseIndex === phase);
 assert(order.allowed(planned, plannedMatches, plannedGame('Fem Diamante',0),done));
 assert(!order.allowed(planned, plannedMatches, plannedGame('Fem Ouro',0),done));
@@ -101,10 +110,12 @@ const sameTime = { ...planned, phaseCategoryMaterialized:{}, scheduleWindow:{
       ? { ...block, startTime:'08:00' } : block) }
 } };
 const simultaneousMatches = plannedMatches.map(match => ({...match}));
+simultaneousMatches.filter(match => match.category === 'Fem Diamante' && match.phaseIndex === 0)
+  .forEach(match => { delete match.resultAt; });
 assert(!order.allowed(sameTime, simultaneousMatches, plannedGame('Fem Diamante',1), done),
   'eliminatória não pode começar junto com sua própria classificatória inconclusa');
 simultaneousMatches.filter(match => match.category === 'Fem Diamante' && match.phaseIndex === 0)
   .forEach(match => { match.resultAt = 'x'; });
 sameTime.phaseCategoryMaterialized['Fem Diamante'] = {at:'x'};
 assert(order.allowed(sameTime, simultaneousMatches, plannedGame('Fem Diamante',1), done));
-console.log('Fila sugere Diamante, Ouro, eliminatórias e Prata; desempate pendente interrompe a sugestão');
+console.log('Fila libera Ouro após jogos Diamante e aguarda desempate antes da eliminatória');

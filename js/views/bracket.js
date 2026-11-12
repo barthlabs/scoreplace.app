@@ -1398,17 +1398,24 @@ window._bracketOperationsSelect = function (t) {
   var nextTie = tieMatches.find(function (m) { return !m.winnerKey && !m.courtCalledAt && !m.postponedAt; }) ||
     tieMatches.find(function (m) { return !m.winnerKey && !m.courtCalledAt; }) ||
     tieMatches.find(function (m) { return m.tieStatus === 'review'; });
-  var samePhaseNext = next && Number(next.phaseIndex || 0) === Number(t.currentPhaseIndex || 0) ? next : null;
-  var callableTie = nextTie && (!nextTie.postponedAt || !samePhaseNext) ? nextTie : null;
-  var waitingForTie = !callableTie && tieMatches.some(function (m) {
+  var otherReady = next || preview;
+  var samePhaseNext = otherReady && Number(otherReady.phaseIndex || 0) === Number(t.currentPhaseIndex || 0) ? otherReady : null;
+  var returnedTie = nextTie && nextTie.postponedAt && matches.some(function (called) {
+    return called && called.courtCalledAt &&
+      Date.parse(String(called.courtCalledAt)) > Date.parse(String(nextTie.postponedAt));
+  });
+  var callableTie = nextTie && (!nextTie.postponedAt || !samePhaseNext || returnedTie) ? nextTie : null;
+  // Uma simples já chamada ocupa só a própria quadra. As outras quadras
+  // continuam recebendo jogos de categorias que estejam prontos na grade.
+  var suggested = callableTie || next || preview;
+  var waitingForTie = !suggested && tieMatches.some(function (m) {
     return m && !m.winnerKey && m.courtCalledAt;
   });
-  var suggested = waitingForTie ? null : callableTie || next || preview;
-  var queued = (waitingForTie ? [] : [suggested].concat(ordered)).filter(function (m, index, list) {
+  var queued = [suggested].concat(ordered).filter(function (m, index, list) {
     return m && list.findIndex(function (entry) { return entry && String(entry.id) === String(m.id); }) === index;
   });
   return { next: suggested, queue: queued, nextCallable: !!suggested, waitingForTie: waitingForTie,
-    tieCanPostpone: !!(callableTie && samePhaseNext && !callableTie.postponedAt),
+    tieCanPostpone: !!(callableTie && samePhaseNext),
     active: active, pending: pending, courts: courts, matches: matches };
 };
 
@@ -1896,10 +1903,10 @@ function _bracketOperationsReplica(m, t, role, label, availability, root, allMat
       }
     }
     var tiePostpone = role.tieCanPostpone && !selected.courtCalledAt && !selected.winnerKey
-      ? '<button type="button" class="sp-operations-postpone" data-tie-action="postpone" title="Adiar este desempate até não restarem jogos chamáveis nesta fase">Pular jogo</button>' : '';
+      ? '<button type="button" class="sp-operations-postpone" data-tie-action="postpone" title="Adiar este desempate e chamar outro jogo pronto">Pular jogo</button>' : '';
     var tieFinalNotice = !role.tieCanPostpone && role.postponeReady && !selected.courtCalledAt && !selected.winnerKey
       ? '<div class="sp-operations-tie-final-notice">A próxima fase depende deste desempate para prosseguir.</div>' : '';
-    return '<div class="sp-operations-replica sp-operations-tie-card" data-operations-match="' + safe(String(selected.id || '')) +
+    return '<div class="sp-operations-replica sp-operations-tie-card sp-operations-tie-extra" data-operations-match="' + safe(String(selected.id || '')) +
       '" data-tie-decision="' + safe(String(m.decisionId || '')) + '" data-operations-base-match="' + safe(String(m.id || '')) + '">' +
       '<span class="sp-operations-label">' + safe(label) + tiePostpone + '</span>' + (availability || '') + tieFinalNotice + tieHtml + '</div>';
   }

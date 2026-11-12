@@ -342,8 +342,9 @@ function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, actio
               (current.livePoints && (current.livePoints.p1 || current.livePoints.p2)) ||
               (current.sets && current.sets.length))
             throw new Error('partida iniciada não pode ser pulada');
-          if (!current.postponedAt) {
-            current.postponedAt = String(action.at || nowIso || '');
+          const postponedAt = String(action.at || nowIso || '');
+          if (current.postponedAt !== postponedAt) {
+            current.postponedAt = postponedAt;
             changed = true;
           }
         }

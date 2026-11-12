@@ -1,3 +1,10 @@
+## 2.6.55 — 11/nov/2026 (proteção da tela No ar)
+
+- O layout da TV do CAMIS foi restaurado da versão histórica salva às 21h11: quadras à esquerda, Próximos jogos e Últimos resultados à direita e QR no canto inferior. Logo, degradê, jogos, placares e sorteio foram preservados.
+- O salvamento genérico de jogos não reenvia `tvLayout`/`tvScreens` de uma aba antiga. As regras do Firestore bloqueiam mudanças diretas desses dois campos; a edição autorizada pelo organizador continua pela Function de configuração.
+- A simples de desempate permanece na fila para chamada e escolha da quadra. O número do jogo extra fica vermelho, e Confirmar ocupa a largura compacta de Ao Vivo. Em qualquer torneio com esse desempate, o organizador pode pular a simples e chamar outro jogo pronto; ela volta após a próxima chamada. As outras quadras seguem operando enquanto ela aguarda ou está em quadra; somente o confronto que precisa da dupla indefinida fica indisponível.
+- Corte web, regras do Firestore e motor de ordem de fases compartilhado; sem versões nativas.
+
 ## 2.6.54 — 11/nov/2026 (feedback no sorteio da grade)
 
 - “Salvar grade e sortear” fica cinza, desabilitado e com spinner desde o clique até a chave aparecer; a mensagem acompanha a gravação da grade e o sorteio. Se falhar, a cor e o botão são restaurados para nova tentativa.

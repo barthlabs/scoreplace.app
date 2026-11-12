@@ -121,7 +121,8 @@
 .sp-operations-tie-final-notice { color:var(--text-main);font-size:.68rem;font-weight:700;line-height:1.25;margin:3px 0 6px; }
 .sp-operations-tie-card .sp-mc-acts { gap:4px; }
 .sp-operations-tie-card .sp-mc-acts > [data-tie-action="live"],
-.sp-operations-tie-card .sp-mc-acts > [data-tie-action="score"] { box-sizing:border-box;flex:0 0 8rem;width:8rem;text-align:center; }
+.sp-operations-tie-card .sp-mc-acts > [data-tie-action="score"] { box-sizing:border-box;flex:0 0 6rem;width:6rem;text-align:center; }
+.sp-operations-tie-extra .sp-operations-nav-title,.sp-operations-tie-extra .sp-mc-head > span:first-child { color:var(--sp-c-f87171,#f87171); }
 .sp-operations-tie-card .sp-match-operational { display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:8px; }
 .sp-operations-tie-card .sp-match-operational .sp-match-court { flex:0 1 122px;max-width:122px;min-width:0; }
 .sp-operations-tie-card .sp-match-operational .sp-match-court select { width:100%;padding-right:2px; }
