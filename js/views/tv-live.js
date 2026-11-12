@@ -311,6 +311,8 @@
         .filter(function (decision) { return decision && decision.status === 'pending'; })
         .reduce(function (all, decision) { return all.concat(decision.matches || []); }, [])
         .find(function (match) { return match && !match.winnerKey && !match.courtCalledAt && !match.court; });
+      // `next === null` com waitingForTie significa que a simples já foi
+      // anunciada e está em quadra: não reapresentar nem antecipar a Ouro.
       if (tiePending && (!nextSelection || (nextSelection.next && nextSelection.next.isTieBreak))) { tieOverride = true;
         nextQueue = [];
         nextGame = { number: String(tiePending.displayGameNumber || 'EXTRA'),

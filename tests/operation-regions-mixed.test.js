@@ -140,7 +140,7 @@ for (const version of ['v2', 'v3']) {
       sourceDescriptor('functions-autodraw', recordedScoreCommit, true));
     const scoreFresh = original.filter(row => row.name === `sp-op-score-${version}`)
       .every(row => row.commit === recordedScoreCommit && row.sourceDigest === recordedScoreDigest);
-    const recordedCourtCommit = 'c85ac683465a159a4c77e5f680481f9510871442';
+    const recordedCourtCommit = '48b107f9ad59d1fb992139d61c35a6e28ee656fc';
     const courtSources = sourceDescriptor('functions-autodraw', recordedCourtCommit, true);
     const courtFresh = original.filter(row => [`sp-op-court-${version}`, `sp-op-control-${version}`].includes(row.name))
       .every(row => row.commit === recordedCourtCommit && row.sourceDigest === sourceDigest(row.target, recordedCourtCommit, courtSources));

@@ -135,6 +135,12 @@ const calledTie = { ...pendingTie, phaseTieDecisions: { 0: { 'group-0:1:2': {
 assert.equal(window._tvLiveBuildSnapshot(calledTie, Date.parse('2026-10-22T21:02:10Z'))
   .courts.find(card => card.name === 'Quadra 8').number, '93A',
   'partida extra chamada aparece na quadra da TV');
+window._bracketOperationsSelect = () => ({ next:null, queue:[], waitingForTie:true });
+const waitingTieSnapshot = window._tvLiveBuildSnapshot(calledTie, Date.parse('2026-10-22T21:02:10Z'));
+assert.equal(waitingTieSnapshot.nextGames.length, 0,
+  'TV não antecipa Ouro enquanto a simples chamada aguarda resultado');
+assert.match(window._tvLiveBodyHtml(waitingTieSnapshot), /Aguardando a definição do desempate/);
+delete window._bracketOperationsSelect;
 vm.runInContext(fs.readFileSync(path.join(root, 'js/domain/court-occupancy.js'), 'utf8'), context);
 const samePlayerQueue = { ...queue, matches: [
   match(19, 'Quadra 4', 'VORTEX', 'BLAST', { p1:'Atleta ativa / Parceira A', p2:'Adversaria A / Adversaria B', team1Uids:['same-uid','pair-a'], courtCalledAt:'2026-10-23T18:00:00Z' }),
