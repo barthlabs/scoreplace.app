@@ -1,3 +1,10 @@
+## 2.6.62 — 12/nov/2026 (classificação da CONFRA por vaga)
+
+- A linha Ouro começou com 36 duplas e a Prata com 34, confirmado nos jogos canônicos em 12/nov. Duas duplas da Prata foram refeitas na repescagem e o cálculo as contava junto das formações anteriores, publicando indevidamente o 36º lugar na Prata.
+- A classificação deixa de contar separadamente a formação antiga quando uma nova dupla ocupa sua vaga de repescagem com vínculo de UID. Os jogos e placares históricos permanecem intactos. Com os quatro jogos decisivos ainda pendentes, o ensaio sobre a CONFRA real produz posições definidas 5º–36º na Ouro e 5º–34º na Prata, sem repetição; 1º–4º dependem dos jogos restantes.
+- O mesmo critério é usado pela classificação progressiva, pela contagem de participantes e pelo retrato final gravado ao encerrar cada linha. O teste cobre a troca de parceira, a preservação do histórico, o congelamento com seis posições e uma entrada independente sem marca de repescagem.
+- Corte web e motor `autodraw` de resultado; sem migração, edição de jogos/placares ou versões nativas.
+
 ## 2.6.61 — 12/nov/2026 (fila de chamadas e ensaio CAMIS)
 
 - Desempates simples entram na fila prioritária e podem ser pulados para qualquer jogo independente pronto, mesmo de outra fase. A chamada continua manual; quadra ocupada por desempate não aceita outro jogo. Eliminatórias sem classificação definida continuam bloqueadas.

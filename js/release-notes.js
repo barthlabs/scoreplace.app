@@ -1,3 +1,6 @@
+// 2.6.62 — A classificação da Confra conserva 36 duplas na Ouro e 34 na Prata.
+// Trocar a formação de uma dupla na repescagem não cria uma vaga extra;
+// os jogos anteriores continuam registrados e as finais seguem em aberto.
 // 2.6.61 — A simples de desempate pode ser pulada para outro jogo pronto,
 // inclusive de outra fase. A súmula do CAMIS inclui classificação por grupo.
 // Resetar teste preserva as telas da TV e retorna aos grupos oficiais sorteados.

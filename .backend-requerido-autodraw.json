@@ -1,12 +1,12 @@
 {
   "schema": 1,
-  "backendCommit": "92b7c240a189c4612dcd65dea28ba6dcb48f9e2d",
-  "scopeNote": "Corte 2.6.61: grupos oficiais CAMIS, reset pós-sorteio e proteção da fila e das quadras.",
+  "backendCommit": "0fd9de75f13411b7c4874cd6d5fac1230ad75437",
+  "scopeNote": "Corte 2.6.62: classificação da CONFRA por vaga recomposta na repescagem.",
   "functions": [
-    "drawRound",
-    "assignMatchCourt",
-    "advanceTournamentPhase",
-    "finishTournament",
-    "resetTournamentToEnrollment"
+    "applyMatchResult",
+    "applyQueuedResult",
+    "applyTournamentWO",
+    "manageWOClaim",
+    "setTournamentWOAbsence"
   ]
 }
