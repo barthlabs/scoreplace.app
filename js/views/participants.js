@@ -1198,11 +1198,15 @@ window._openCamisManualNameActions = function(tId, oldName, manualParticipantId)
           'A vaga agora é de ' + newName + '; resultados concluídos continuam com a atleta anterior.', 'success');
       if (window.FirestoreDB && typeof window.FirestoreDB.loadTournamentById === 'function') {
         return window.FirestoreDB.loadTournamentById(String(tId)).then(function(fresh) {
-          if (fresh && window.AppStore && Array.isArray(window.AppStore.tournaments)) {
+          if (!fresh) throw new Error('leitura posterior indisponível');
+          if (window.AppStore && Array.isArray(window.AppStore.tournaments)) {
             var index = window.AppStore.tournaments.findIndex(function(item) { return String(item.id) === String(tId); });
             if (index >= 0) window.AppStore.tournaments[index] = fresh;
           }
           if (typeof _reRenderParticipantsStable === 'function') _reRenderParticipantsStable();
+        }).catch(function() {
+          if (typeof showNotification === 'function') showNotification('Atleta salva',
+            'A alteração foi confirmada, mas a tela não recarregou. Atualize a página para ver o novo nome.', 'warning');
         });
       }
     }).catch(function(error) {

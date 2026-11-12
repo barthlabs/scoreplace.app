@@ -52,6 +52,8 @@ const replaced = core.plan({...input,matches:scored,action:'replace',newName:'No
 assert.equal(replaced.completedGames,1,'resultado concluído permanece com quem jogou');
 assert.equal(replaced.liveMatches.length,2,'somente jogos futuros mudam');
 assert.equal(replaced.nextRoot.canonicalRegistrationMigration.registrationCount,5);
+assert.equal(registrations.length,4);
+assert.equal(replaced.nextReg.status,'confirmed','a nova inscrição ocupa a vaga ativa');
 assert.equal(replaced.nextBaseline.root.canonicalRegistrationMigration.registrationCount,4,
   'reset retorna a uma lista limpa de quatro vagas');
 assert.equal(replaced.nextBaseline.tree.filter(item => item.path.startsWith('registrations/')).length,4);
@@ -69,9 +71,12 @@ const later = { ...input.tournament,phaseRounds:{ phase2:{ rounds:[{ matches:[
 ] }] } } };
 const laterMatches = scored.concat({ id:'phase2',data:{ jogo:{ id:'phase2',category:'Fem Prata',
   p1:'Kelly Barth',p2:'Flávia',winner:null,scoreP1:null,scoreP2:null } } });
+laterMatches.push({ id:'phase2-old',data:{ jogo:{ id:'phase2-old',category:'Fem Prata',
+  p1:'Kelly Barth',p2:'Lucely',winner:'Lucely',scoreP1:3,scoreP2:6 } } });
 const laterPlan = core.plan({...input,tournament:later,matches:laterMatches,action:'replace',
   newName:'Nova Atleta',newManualParticipantId:'manual-next'});
 assert.equal(laterPlan.liveMatches.length,3,'fase posterior sem monarchGroup também recebe troca');
+assert.equal(laterPlan.completedGames,2,'fase posterior concluída preserva o nome histórico');
 assert.equal(laterPlan.nextRoot.phaseRounds.phase2.rounds[0].matches[0].p1,'Kelly Barth',
   'partida histórica embutida mantém a formação anterior');
 assert.equal(laterPlan.nextRoot.phaseRounds.phase2.rounds[0].matches[1].p1,'Nova Atleta',

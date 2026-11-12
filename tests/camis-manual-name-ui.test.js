@@ -8,7 +8,7 @@ const start = source.indexOf('window._camisManualNameLinkHtml = function');
 const end = source.indexOf('window._startTournament = function',start);
 assert(start > 0 && end > start);
 
-const calls = [], dialogs = [], inputs = [], listeners = {};
+const calls = [], dialogs = [], inputs = [], notices = [], listeners = {};
 let replaceClick, cancelClick;
 const modal = { querySelector(selector) {
   if (selector === '#camis-replace-name-action') return { addEventListener(_name,fn) { replaceClick = fn; } };
@@ -28,7 +28,7 @@ const window = { _findTournamentById:() => t,_souOrganizador:() => true,
 const ctx = {window,document,setTimeout:fn => fn(),
   showConfirmDialog:(title,body,onConfirm,onCancel,options) => dialogs.push({title,body,onConfirm,onCancel,options}),
   showInputDialog:(title,body,onSubmit,options) => inputs.push({title,body,onSubmit,options}),
-  showNotification() {},_reRenderParticipantsStable() {} };
+  showNotification:(title,body,type) => notices.push({title,body,type}),_reRenderParticipantsStable() {} };
 vm.runInNewContext(source.slice(start,end),ctx,{filename:'camis-name-action'});
 const linked = window._camisManualNameLinkHtml(t,'Kelly Barth','<b>Kelly Barth</b>');
 assert(linked.includes('data-camis-manual-id="manual-kelly"'));
@@ -66,5 +66,14 @@ function clickName() {
   assert.equal(calls[1].payload.action,'replace');
   assert.equal(calls[1].payload.newName,'Pessoa Nova');
   assert.equal(Object.hasOwn(calls[1].payload,'uid'),false);
+  window.FirestoreDB.loadTournamentById = async () => null;
+  clickName();
+  dialogs.at(-1).onConfirm();
+  inputs.at(-1).onSubmit('Kelly Corrigida');
+  await new Promise(resolve => setImmediate(resolve));
+  assert(notices.some(item => item.title === 'Atleta salva' && item.type === 'warning'),
+    'falha de leitura após commit pede atualização da tela');
+  assert(!notices.some(item => item.title === 'Edição não concluída'),
+    'leitura posterior falhou, mas a escrita já foi confirmada');
   console.log('✓ CAMIS: toque no nome oferece correção ou substituição manual, sem UID');
 })().catch(error => { console.error(error);process.exitCode=1; });
