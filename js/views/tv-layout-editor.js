@@ -3,7 +3,7 @@
   'use strict';
   var Core = window.ScoreplaceTvLayout;
   if (!Core) return;
-  var labels = { header: 'Cabeçalho', courts: 'Em quadra', upcoming: 'Próximo jogo', rankings: 'Classificação', results: 'Últimos resultados', qr: 'QR do aplicativo', logo: 'Logo do torneio',
+  var labels = { header: 'Cabeçalho', courts: 'Em quadra', upcoming: 'Próximos jogos', rankings: 'Classificação', results: 'Últimos resultados', qr: 'QR do aplicativo', logo: 'Logo do torneio',
     live1: 'Partida 1', live2: 'Partida 2', live3: 'Partida 3', live4: 'Partida 4',
     standing1: 'Classificação 1', standing2: 'Classificação 2', standing3: 'Classificação 3', standing4: 'Classificação 4' };
   var cardLabels = { court: 'Quadra', number: 'Número do jogo', category: 'Categoria', teams: 'Times', players: 'Atletas', score: 'Placar', timer: 'Relógio' };
@@ -110,19 +110,7 @@
         names.forEach(function (el) { el.style.fontSize = size + 'px'; });
       }
     });
-    root.querySelectorAll('.tv-series-players').forEach(function (box) {
-      var names = box.querySelectorAll('span');
-      if (!box.clientHeight || !names.length) return;
-      var slot = Math.floor(box.clientHeight / names.length);
-      names.forEach(function (el) {
-        el.style.fontSize = '';
-        el.style.maxHeight = slot + 'px';
-        var size = parseFloat(doc.defaultView.getComputedStyle(el).fontSize) || 12;
-        while (el.scrollHeight > el.clientHeight + 1 && size > 8) {
-          size = Math.max(8, size - .5); el.style.fontSize = size + 'px';
-        }
-      });
-    });
+    if (typeof window._tvFitSeriesNames === 'function') window._tvFitSeriesNames(doc);
   }
   function scale(host) {
     var canvas = host.querySelector('[data-tv-canvas]'), frame = host.querySelector('[data-tv-frame]');
@@ -195,7 +183,9 @@
       (documentHtml ? '<iframe data-tv-frame title="Prévia com dados do torneio" sandbox="allow-same-origin" tabindex="-1" style="position:absolute;left:0;top:0;width:1280px;height:720px;border:0;transform-origin:top left;pointer-events:none"></iframe>' :
         '<div data-tv-empty style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:1rem;text-align:center;color:#cbd5e1;font-size:.9rem">Salve e configure os jogos do torneio para visualizar os dados reais nesta prévia.</div>') +
       '<div data-tv-guide-x style="position:absolute;z-index:30;top:0;bottom:0;width:2px;background:#fbbf24;pointer-events:none;display:none"></div>' +
+      '<div data-tv-guide-x-end style="position:absolute;z-index:30;top:0;bottom:0;width:2px;background:#fbbf24;pointer-events:none;display:none"></div>' +
       '<div data-tv-guide-y style="position:absolute;z-index:30;left:0;right:0;height:2px;background:#fbbf24;pointer-events:none;display:none"></div>' +
+      '<div data-tv-guide-y-end style="position:absolute;z-index:30;left:0;right:0;height:2px;background:#fbbf24;pointer-events:none;display:none"></div>' +
       visible.map(function (id) { return boxHtml(id, getBox(layout, id), labelFor(layout, id)); }).join('') + '</div>' +
       '<div data-tv-removed style="margin:.8rem 0"><strong style="font-size:.8rem">Seções retiradas</strong><div style="display:flex;flex-wrap:wrap;gap:.45rem;margin-top:.35rem">' +
       (removed.length ? removed.map(function (id) { return '<button type="button" data-tv-restore="' + id + '" class="btn btn-secondary" style="font-size:.8rem">+ ' + esc(labelFor(layout, id)) + '</button>'; }).join('') :
@@ -326,8 +316,13 @@
       var id = box.dataset.tvBox, b = getBox(layout, id), handle = event.target.closest('[data-tv-resize]');
       var edge = handle ? handle.dataset.tvResize : '';
       var rect = host.querySelector('[data-tv-canvas]').getBoundingClientRect();
-      var guideX = host.querySelector('[data-tv-guide-x]'), guideY = host.querySelector('[data-tv-guide-y]');
-      function hideGuides() { guideX.style.display = 'none'; guideY.style.display = 'none'; }
+      var guideXs = [host.querySelector('[data-tv-guide-x]'), host.querySelector('[data-tv-guide-x-end]')];
+      var guideYs = [host.querySelector('[data-tv-guide-y]'), host.querySelector('[data-tv-guide-y-end]')];
+      var canvas = host.querySelector('[data-tv-canvas]');
+      function hideGuides() {
+        guideXs.concat(guideYs).forEach(function (guide) { guide.style.display = 'none'; });
+        canvas.querySelectorAll('[data-tv-guide-intermediate]').forEach(function (guide) { guide.remove(); });
+      }
       var x0 = event.clientX, y0 = event.clientY, initial = { x: b.x, y: b.y, w: b.w, h: b.h };
       box.setPointerCapture(event.pointerId);
       box.onpointermove = function (move) {
@@ -354,11 +349,11 @@
               y:courts.y + row * (rowHeight + gap), h:rowHeight });
           }
         }
-        if (!edge && id !== 'logo') Object.assign(b, Core.snapBox(b, others, false));
+        if (!edge && id !== 'logo') Object.assign(b, Core.snapBox(b, others, false, 2));
         else {
           var xs = [0, 100], ys = [0, 100];
           others.forEach(function (other) { if (other.visible) { xs.push(other.x, other.x + other.w); ys.push(other.y, other.y + other.h); } });
-          function snap(value, targets) { return targets.reduce(function (best, target) { return Math.abs(target - value) < Math.abs(best - value) && Math.abs(target - value) < 1.4 ? target : best; }, value); }
+          function snap(value, targets) { return targets.reduce(function (best, target) { return Math.abs(target - value) < Math.abs(best - value) && Math.abs(target - value) < 2 ? target : best; }, value); }
           if (edge.indexOf('w') >= 0) { var rightEdge = b.x + b.w; b.x = round(snap(b.x, xs)); b.w = round(rightEdge - b.x); }
           if (edge.indexOf('e') >= 0) b.w = round(snap(b.x + b.w, xs) - b.x);
           if (edge.indexOf('n') >= 0) { var bottomEdge = b.y + b.h; b.y = round(snap(b.y, ys)); b.h = round(bottomEdge - b.y); }
@@ -366,13 +361,38 @@
           b.w = Math.max(5, b.w); b.h = Math.max(5, b.h);
         }
         hideGuides();
-        if (id !== 'logo') {
-          var xs = [], ys = [];
-          others.forEach(function (other) { if (other.visible) { xs.push(other.x, other.x + other.w); ys.push(other.y, other.y + other.h); } });
-          var alignedX = xs.find(function (value) { return Math.abs(value - b.x) < .15 || Math.abs(value - b.x - b.w) < .15; });
-          var alignedY = ys.find(function (value) { return Math.abs(value - b.y) < .15 || Math.abs(value - b.y - b.h) < .15; });
-          if (alignedX != null) { guideX.style.left = alignedX + '%'; guideX.style.display = 'block'; }
-          if (alignedY != null) { guideY.style.top = alignedY + '%'; guideY.style.display = 'block'; }
+        var xs = [0, 100], ys = [0, 100];
+        others.forEach(function (other) { if (other.visible) { xs.push(other.x, other.x + other.w); ys.push(other.y, other.y + other.h); } });
+        [b.x, b.x + b.w].forEach(function (value, index) {
+          var aligned = xs.find(function (target) { return Math.abs(target - value) < .15; });
+          if (aligned == null) return;
+          guideXs[index].style.left = aligned === 100 ? 'calc(100% - 2px)' : aligned + '%';
+          guideXs[index].style.display = 'block';
+        });
+        [b.y, b.y + b.h].forEach(function (value, index) {
+          var aligned = ys.find(function (target) { return Math.abs(target - value) < .15; });
+          if (aligned == null) return;
+          guideYs[index].style.top = aligned === 100 ? 'calc(100% - 2px)' : aligned + '%';
+          guideYs[index].style.display = 'block';
+        });
+        // Mostra também as divisões das quadras que ficam dentro do box em
+        // movimento. A guia dos extremos, sozinha, escondia esses encaixes.
+        if ((id === 'upcoming' || id === 'results') && layout.sections.courts.visible) {
+          var courts = layout.sections.courts;
+          var rows = Math.max(1, Math.ceil(((snapshot && snapshot.courts || []).length || 8) / 2));
+          var gap = 1.33, rowHeight = (courts.h - (rows - 1) * gap) / rows;
+          var boundaries = [];
+          for (var row = 0; row < rows; row++) {
+            boundaries.push(courts.y + row * (rowHeight + gap));
+            boundaries.push(courts.y + row * (rowHeight + gap) + rowHeight);
+          }
+          boundaries.forEach(function (value) {
+            if (value <= b.y + .15 || value >= b.y + b.h - .15) return;
+            var guide = document.createElement('div');
+            guide.dataset.tvGuideIntermediate = '';
+            guide.style.cssText = 'position:absolute;z-index:30;left:0;right:0;height:2px;background:#fbbf24;pointer-events:none;top:' + value + '%';
+            canvas.appendChild(guide);
+          });
         }
         touched = true; updateBox(id);
       };

@@ -23,7 +23,7 @@ const { chromium } = require('@playwright/test');
         id: 'tour_1790628592058_c342a1e8f5068424887f1702a1633a44',
         name: 'TORNEIO REAL DA PRÉVIA',
         _nJogos: 1,
-        courtNames: ['Quadra 4'],
+        courtNames: Array.from({ length:8 }, (_, i) => 'Quadra ' + (i + 1)),
         combinedCategories: ['Fem Diamante', 'Fem Ouro', 'Fem Prata'],
         matches: [{
           id: 'jogo-1', court: 'Quadra 4', category: 'Fem Light',
@@ -67,6 +67,34 @@ const { chromium } = require('@playwright/test');
     await page.mouse.up();
     assert.equal(await page.locator('[data-tv-guide-y]').evaluate(el => el.style.display), 'none',
       'guia desaparece ao soltar o box');
+    await page.evaluate(() => {
+      const layout = window.ScoreplaceTvLayout.defaults();
+      layout.sections.rankings.visible = false;
+      layout.sections.results.visible = false;
+      Object.assign(layout.sections.upcoming, { x:50, y:10, w:50, h:72 });
+      window._tvEditorSetLayout(layout);
+    });
+    const aligned = await page.locator('[data-tv-box="upcoming"]').boundingBox();
+    await page.mouse.move(aligned.x + 30, aligned.y + 20);
+    await page.mouse.down();
+    await page.mouse.move(aligned.x + 31, aligned.y + 21);
+    const guides = await page.evaluate(() => ['x','x-end','y','y-end'].map(axis => {
+      const guide = document.querySelector('[data-tv-guide-' + axis + ']');
+      return { visible:guide.style.display, position:axis[0] === 'x' ? guide.style.left : guide.style.top };
+    }));
+    assert.deepEqual(guides, [
+      { visible:'block', position:'50%' },
+      { visible:'block', position:'calc(100% - 2px)' },
+      { visible:'block', position:'10%' },
+      { visible:'block', position:'82%' }
+    ], 'guias mostram ao mesmo tempo as bordas esquerda, direita, superior e inferior encaixadas');
+    assert(await page.locator('[data-tv-guide-intermediate]').count() >= 4,
+      'as divisões intermediárias das quadras também aparecem durante o alinhamento');
+    await page.mouse.up();
+    assert.equal(await page.locator('[data-tv-guide-x-end]').evaluate(el => el.style.display), 'none');
+    assert.equal(await page.locator('[data-tv-guide-y-end]').evaluate(el => el.style.display), 'none');
+    assert.equal(await page.locator('[data-tv-guide-intermediate]').count(), 0,
+      'as guias intermediárias desaparecem ao soltar o box');
     await page.evaluate(() => window._tvEditorSetLayout(window.ScoreplaceTvLayout.defaults()));
     await page.locator('[data-tv-add-bracket-button="Fem Diamante"]').click();
     assert.equal(await page.locator('[data-tv-box="bracket-0"]').count(), 1,
@@ -95,10 +123,14 @@ const { chromium } = require('@playwright/test');
       const gap = board.bottom - brand.bottom;
       return gap >= 4 && gap <= 15;
     }), 'a marca Abra no Scoreplace tem uma pequena folga inferior sem sair da caixa');
-    assert.equal(await page.evaluate(() => {
+    assert.deepEqual(await page.evaluate(() => {
       const frame = document.querySelector('[data-tv-frame]');
-      return frame.contentWindow.getComputedStyle(frame.contentDocument.querySelector('.tv-qr-brand')).color;
-    }), 'rgb(0, 0, 0)', 'Abra no Scoreplace usa texto preto');
+      const doc = frame.contentDocument, win = frame.contentWindow;
+      return [win.getComputedStyle(doc.querySelector('.tv-qr-brand')).color,
+        win.getComputedStyle(doc.querySelector('.tv-qr-brand')).backgroundColor,
+        win.getComputedStyle(doc.querySelector('.tv-qr-code')).backgroundColor];
+    }), ['rgb(255, 255, 255)', 'rgba(0, 0, 0, 0)', 'rgb(255, 255, 255)'],
+    'a marca tem texto branco sem tarja; apenas o QR conserva fundo branco');
     await page.evaluate(() => {
       window.__savedTvPatch = null;
       window.__tvSaveCalls = 0;
@@ -143,7 +175,10 @@ const { chromium } = require('@playwright/test');
       const colors = ['.tv-header','.tv-court','.tv-series-game'].map(sample);
       const top = frame.contentDocument.querySelector('.tv-court-top');
       const topPositions = ['h2','.tv-court-phase','span'].map(selector => top.querySelector(selector).getBoundingClientRect().left);
-      return { topPositions, phase:top.querySelector('.tv-court-phase').textContent, rows:rows.map(row => {
+      const repeatedNameSizes = [...frame.contentDocument.querySelectorAll('.tv-series-players span')]
+        .filter(el => el.textContent === 'Flávia Fabbrocini Sanches')
+        .map(el => parseFloat(frame.contentWindow.getComputedStyle(el).fontSize));
+      return { topPositions, phase:top.querySelector('.tv-court-phase').textContent, repeatedNameSizes, rows:rows.map(row => {
         const box = selector => row.querySelector(selector).getBoundingClientRect();
         return { leftNames:box('.tv-series-left .tv-series-players').left,
           leftScore:box('.tv-series-left strong').left,
@@ -167,6 +202,8 @@ const { chromium } = require('@playwright/test');
     assert(seriesPositions.longFont < seriesPositions.shortFont,
       'só o nome que excede o espaço tem a fonte reduzida');
     assert(seriesPositions.longLines <= 2.1, 'Flávia Fabbrocini Sanches cabe em no máximo duas linhas');
+    assert.equal(new Set(seriesPositions.repeatedNameSizes).size, 1,
+      'o mesmo nome conserva exatamente o mesmo tamanho em todas as quadras e partidas');
     seriesPositions.colors.forEach(color => assert(Math.max(...color) - Math.min(...color) <= 1,
       'cabeçalho, quadra e linha usam tons neutros da capa preta e branca'));
     await page.locator('[data-tv-finals-preset]').click();

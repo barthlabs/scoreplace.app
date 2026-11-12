@@ -1,3 +1,8 @@
+// 2.6.57 — Na TV do torneio, Últimos resultados aparece também quando o
+// ensaio ocorre antes da data prevista. O editor mostra todas as guias de
+// alinhamento das quadras, e cada nome usa a mesma fonte em todas as aparições.
+// Os três jogos de um grupo são reunidos em um bloco de Próximos jogos.
+// A marca abaixo do QR volta ao fundo preto; o código preserva o fundo branco.
 // 2.6.56 — A tela principal salva pelo organizador permanece como padrão da TV.
 // É possível guardar outras telas e escolher qual mostrar durante os jogos,
 // sem alterar o desenho da principal nem os placares.

@@ -171,6 +171,12 @@ assert.doesNotMatch(camisQueueHtml.split('class="tv-upcoming"')[1].split('</sect
   'jogos de duplas não inventam um time');
 assert.match(camisQueueHtml, /tv-upcoming-category">Fem Ouro/,
   'categoria aparece com a cor própria no cabeçalho do próximo jogo');
+assert.match(camisQueueHtml, /tv-upcoming-group[\s\S]*Grupo A[\s\S]*JOGO 25[\s\S]*JOGO 26[\s\S]*JOGO 27/,
+  'três jogos do mesmo grupo aparecem em um único bloco');
+assert.equal((camisQueueHtml.match(/class="tv-upcoming-item tv-upcoming-group"/g) || []).length, 4,
+  'quatro grupos aparecem em quatro boxes, sem repetir um grupo por jogo');
+assert.equal((camisQueueHtml.match(/Grupo A ·/g) || []).length, 1,
+  'o primeiro grupo aparece apenas uma vez na lista');
 const customLayout = window.ScoreplaceTvLayout.defaults();
 customLayout.sections.qr.visible = false;
 customLayout.card.score = false;
@@ -267,6 +273,13 @@ const futureScore = { ...nextDayResults, matches: [...nextDayResults.matches,
   match(44, 'Quadra 7', 'BLAST', 'VOLT', { requiredDay:'2026-10-24', resultAt:'2026-10-23T21:50:00Z', winner:'p1' })] };
 assert.equal(window._tvLiveBuildSnapshot(futureScore, Date.parse('2026-10-23T22:00:00Z')).resultDay,
   '2026-10-23', 'jogo concluído com data operacional futura não troca a TV');
+const earlySimulation = { ...t, matches: [
+  match(46, 'Quadra 1', 'VORTEX', 'BLAST', { requiredDay:'2026-11-13',
+    resultAt:'2026-11-12T07:00:00Z', winner:'p1' })
+] };
+const earlySnapshot = window._tvLiveBuildSnapshot(earlySimulation, Date.parse('2026-11-12T07:05:00Z'));
+assert.equal(earlySnapshot.resultDay, '2026-11-13', 'simulação antecipada usa o dia operacional com placar');
+assert.equal(earlySnapshot.results.map(r => r.number).join(','), '46', 'placar simulado aparece em Últimos resultados');
 const noDay = { ...nextDayResults, matches: [...nextDayResults.matches,
   match(45, 'Quadra 8', 'VORTEX', 'PHANTOM', { scheduledAt:null, resultAt:'2026-10-23T22:02:00Z', winner:'p1' })] };
 assert.equal(window._tvLiveBuildSnapshot(noDay, Date.parse('2026-10-23T22:05:00Z')).resultDay,

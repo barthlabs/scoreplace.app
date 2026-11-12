@@ -357,16 +357,43 @@
     })
       .map(function (m) { return { number: m._gameNum || m.scheduledGameNumber || m.matchNumber || '',
         category: String(m.category || m.tierLabel || ''), a: sideName(t, m, 'p1'), b: sideName(t, m, 'p2'),
-        ta: teamFor(m, 1, teams), tb: teamFor(m, 2, teams) }; });
+        ta: teamFor(m, 1, teams), tb: teamFor(m, 2, teams), source: m }; });
     if (nextGame) nextGames.unshift(nextGame);
+    var announcedGroups = new Set();
+    nextGames = nextGames.filter(function (game) {
+      var source = game.source || (nextMatch && String(game.number) === String(nextGame && nextGame.number) ? nextMatch : null);
+      if (!source || !source.isMonarch || source.monarchGroup == null) return true;
+      var groupKey = [source.category, source.phaseIndex || 0, source.round, source.monarchGroup].join('|');
+      if (announcedGroups.has(groupKey)) return false;
+      announcedGroups.add(groupKey);
+      return true;
+    });
     nextGames = nextGames.slice(0, 4);
+    nextGames.forEach(function (game) {
+      var source = game.source || (nextMatch && String(game.number) === String(nextGame && nextGame.number) ? nextMatch : null);
+      if (!source || !source.isMonarch || source.monarchGroup == null) return;
+      var peers = matches.filter(function (m) { return m && m.isMonarch && !m.isTieBreak && !occupancy.isFinished(m) &&
+        String(m.category || '') === String(source.category || '') &&
+        Number(m.phaseIndex || 0) === Number(source.phaseIndex || 0) &&
+        String(m.round) === String(source.round) &&
+        String(m.monarchGroup) === String(source.monarchGroup); });
+      if (!peers.length) return;
+      game.groupName = String(source.groupName || 'Grupo ' + String.fromCharCode(65 + Number(source.monarchGroup))).replace(/^R\d+\s+/i, '');
+      game.series = peers.sort(function (a, b) { return Number(a._gameNum || a.scheduledGameNumber || 0) - Number(b._gameNum || b.scheduledGameNumber || 0); })
+        .map(function (m) { return { number:m._gameNum || m.scheduledGameNumber || m.matchNumber || '',
+          a:sideName(t, m, 'p1'), b:sideName(t, m, 'p2') }; });
+    });
+    nextGames.forEach(function (game) { delete game.source; });
     var zone = eventZone(t);
     var today = localDay(now, zone);
     var resultDays = matches.concat(tieMatches).filter(function (m) { return m && occupancy.isFinished(m) && !m.isBye && !m.isSitOut; })
       .map(function (m) { return matchDay(m, zone); })
-      .filter(function (day) { return day && day <= today; })
-      .sort().reverse();
-    var resultDay = resultDays[0] || today;
+      .filter(Boolean).sort();
+    // Em ensaios antecipados, placares já gravados podem ter data operacional futura.
+    // Sem resultados de hoje ou de dias anteriores, exiba o dia operacional
+    // mais recente que já tenha placar, mesmo em uma simulação antecipada.
+    var elapsedResultDays = resultDays.filter(function (day) { return day <= today; });
+    var resultDay = elapsedResultDays[elapsedResultDays.length - 1] || resultDays[resultDays.length - 1] || today;
     var results = matches.concat(tieMatches).filter(function (m) { return m && occupancy.isFinished(m) && !m.isBye && !m.isSitOut &&
       matchDay(m, zone) === resultDay; })
       .sort(function (a, b) { return timestamp(b.resultAt || b.completedAt || b.scheduledAt) - timestamp(a.resultAt || a.completedAt || a.scheduledAt); })
@@ -507,7 +534,12 @@
     function players(label) {
       return String(label || '').split(' / ').map(function (name) { return '<span>' + esc(name.trim()) + '</span>'; }).join('');
     }
-    function gameHtml(game) { return '<article class="tv-upcoming-item"><small>JOGO ' + esc(game.number) + ' · <span class="tv-upcoming-category">' + esc(game.category) + '</span></small>' +
+    function gameHtml(game) {
+      if (Array.isArray(game.series) && game.series.length) return '<article class="tv-upcoming-item tv-upcoming-group"><small>' +
+        esc(game.groupName) + ' · <span class="tv-upcoming-category">' + esc(game.category) + '</span></small><div class="tv-upcoming-series">' +
+        game.series.map(function (item) { return '<div class="tv-upcoming-series-game"><b>JOGO ' + esc(item.number) + '</b><span class="tv-upcoming-series-left">' + players(item.a) +
+          '</span><i>×</i><span class="tv-upcoming-series-right">' + players(item.b) + '</span></div>'; }).join('') + '</div></article>';
+      return '<article class="tv-upcoming-item"><small>JOGO ' + esc(game.number) + ' · <span class="tv-upcoming-category">' + esc(game.category) + '</span></small>' +
       '<div class="tv-result-match"><div class="tv-result-side tv-result-left" style="--team:' + esc(game.ta.color) + '">' + (game.ta.name ? '<span class="tv-result-team">' + esc(game.ta.name) + '</span>' : '') + '<div class="tv-result-players">' + players(game.a) + '</div></div>' +
       '<div class="tv-result-versus">VS</div>' +
       '<div class="tv-result-side tv-result-right" style="--team:' + esc(game.tb.color) + '"><div class="tv-result-players">' + players(game.b) + '</div>' + (game.tb.name ? '<span class="tv-result-team">' + esc(game.tb.name) + '</span>' : '') + '</div></div></article>'; }
@@ -604,11 +636,32 @@
   // script nela mantém os relógios e volta a ler o estado assim que o opener
   // termina de carregar a versão nova.
   window._tvLiveBodyHtml = bodyHtml;
-  var fitSeriesNamesSource = 'function fitSeriesNames(){document.querySelectorAll(".tv-series-players").forEach(function(box){' +
-    'var names=box.querySelectorAll("span");if(!box.clientHeight||!names.length)return;' +
-    'var slot=Math.floor(box.clientHeight/names.length);names.forEach(function(el){el.style.fontSize="";el.style.maxHeight=slot+"px";' +
-    'var size=parseFloat(getComputedStyle(el).fontSize)||12;while(el.scrollHeight>el.clientHeight+1&&size>8){' +
-    'size=Math.max(8,size-.5);el.style.fontSize=size+"px";}});});}';
+  function fitSeriesNames(doc) {
+    doc = doc && typeof doc.querySelectorAll === 'function' ? doc : document;
+    var sizes = new Map();
+    doc.querySelectorAll('.tv-series-players').forEach(function (box) {
+      var names = box.querySelectorAll('span');
+      if (!box.parentElement || !box.parentElement.clientHeight || !names.length) return;
+      var slot = Math.max(1, Math.floor((box.parentElement.clientHeight - 2) / names.length));
+      names.forEach(function (el) {
+        el.style.fontSize = '';
+        el.style.maxHeight = slot + 'px';
+        var size = parseFloat(doc.defaultView.getComputedStyle(el).fontSize) || 12;
+        while (el.scrollHeight > el.clientHeight + 1 && size > 6) {
+          size = Math.max(6, size - .5);
+          el.style.fontSize = size + 'px';
+        }
+        var key = el.textContent.trim().normalize('NFC');
+        sizes.set(key, Math.min(sizes.has(key) ? sizes.get(key) : size, size));
+      });
+    });
+    doc.querySelectorAll('.tv-series-players span').forEach(function (el) {
+      var size = sizes.get(el.textContent.trim().normalize('NFC'));
+      if (size) el.style.fontSize = size + 'px';
+    });
+  }
+  window._tvFitSeriesNames = fitSeriesNames;
+  var fitSeriesNamesSource = fitSeriesNames.toString() + ';';
   function childScript(tournamentId, generation) {
     var id = JSON.stringify(String(tournamentId || '')).replace(/</g, '\\u003c');
     var origin = JSON.stringify(window.location.origin).replace(/</g, '\\u003c');
@@ -756,14 +809,15 @@
     '.tv-theme .tv-court-top,.tv-theme .tv-ranking-head,.tv-theme .tv-ranking-row,.tv-theme .tv-result,.tv-theme .tv-focus-standing-row{border-color:var(--tv-edge)}' +
     '.tv-theme .tv-result.tv-result-latest{background:var(--tv-row-active);border-color:#fbbf24}.tv-theme .tv-series-game.tv-series-latest-update,.tv-theme .tv-series-game.tv-series-latest-result{border:2px solid #fbbf24;outline:0;box-shadow:none}' +
     '.tv-theme .tv-bracket-match-in-court{border-color:#4ade80;box-shadow:none}' +
-    '.tv-theme .tv-qr-brand{background:#ffffff;color:#000000;border-radius:.35vw;padding:.18vw .3vw;box-sizing:border-box}' +
+    '.tv-theme .tv-qr-brand{background:transparent;color:var(--tv-title,#ffffff);border-radius:0;padding:.18vw .3vw;box-sizing:border-box}' +
     '#tv-fullscreen-action{border-color:#d4d4d4!important;background:#222!important;color:#fff}' +
     '</style>');
   styles = styles.replace('</style>',
     '.tv-upcoming{display:flex;flex-direction:column}.tv-upcoming h2{flex:none}.tv-upcoming-list{flex:1;min-height:0;overflow-y:auto;scrollbar-width:none;overscroll-behavior:contain}.tv-upcoming-list::-webkit-scrollbar{display:none}' +
-    '.tv-upcoming-item{display:flex;flex-direction:column;min-height:5.4vw;margin:.25vw 0 .4vw;padding-bottom:.3vw;border-bottom:1px solid var(--tv-edge,#555)}' +
+    '.tv-upcoming-item{display:flex;flex-direction:column;min-height:5.4vw;margin:.25vw 0 .4vw;padding:.3vw;border:0}.tv-upcoming-group{border:1px solid var(--tv-edge,#777);border-radius:.45vw;background:var(--tv-row,#333)}' +
     '.tv-upcoming-item>small{display:block;flex:none;margin:0 0 .2vw;color:#fff;font-size:clamp(.7rem,.8vw,1rem)}.tv-upcoming-category{color:#fbbf24;font-weight:700}' +
     '.tv-upcoming-item .tv-result-match{height:auto;min-height:4.3vw;flex:1}.tv-upcoming-item .tv-result-side{min-height:4.3vw}' +
+    '.tv-upcoming-series{display:grid;gap:.15vw}.tv-upcoming-series-game{display:grid;grid-template-columns:4.2vw minmax(0,1fr) 1vw minmax(0,1fr);gap:.25vw;align-items:center;min-height:2.25vw;color:#fff}.tv-upcoming-series-game>b{white-space:nowrap;font-size:clamp(.7rem,.75vw,1rem)}.tv-upcoming-series-game span{min-width:0}.tv-upcoming-series-game span span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:clamp(.7rem,.78vw,1.04rem);font-weight:750}.tv-upcoming-series-right{text-align:right}.tv-upcoming-series-game i{font-style:normal;text-align:center;color:#aaa}' +
     '.tv-results-main>h2{color:#fbbf24;font-size:clamp(.9rem,1.2vw,1.5rem);line-height:normal}' +
     '.tv-results .tv-result-players span{font-size:clamp(.75rem,.95vw,1.3rem)}' +
     '.tv-custom-qr .tv-qr{padding-bottom:.55vw}.tv-custom-results .tv-results-list{box-sizing:border-box}' +

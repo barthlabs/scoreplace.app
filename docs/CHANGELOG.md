@@ -1,3 +1,11 @@
+## 2.6.57 — 12/nov/2026 (leitura da TV e alinhamento do editor)
+
+- O editor mostra guias amarelas nas bordas esquerda, direita, superior e inferior e também nas divisões intermediárias das oito quadras durante o arrasto. O encaixe magnético foi ampliado; nenhuma posição ou proporção salva foi alterada.
+- Um nome longo reduz a fonte para caber em duas linhas e conserva o mesmo tamanho em suas aparições nos cards de quadra da TV e na prévia do editor. Nomes curtos mantêm a fonte normal.
+- Próximos jogos reúne os três confrontos de cada grupo Rei/Rainha em um único box, sem linhas divisórias entre jogos.
+- Últimos resultados inclui placares já concluídos em simulação anterior à data prevista para o torneio. A marca “Abra no Scoreplace” não usa tarja branca; o fundo branco permanece no QR.
+- Corte somente web, sem alteração de jogos, placares, grade, layout salvo, Functions ou versões nativas.
+
 ## 2.6.56 — 12/nov/2026 (tela principal da TV preservada)
 
 - A composição da TV que o organizador salvou para o CAMIS foi restaurada de uma revisão anterior do torneio: quadras à esquerda, Próximos jogos e Últimos resultados à direita e QR no canto inferior. Foram restaurados `tvLayout` e `tvScreens` e selecionada a tela principal; logo, fundo, jogos e placares ficaram intactos.
