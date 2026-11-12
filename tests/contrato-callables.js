@@ -112,6 +112,7 @@ const TABELA = [
   { nome: "deleteOwnTvTemplate", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "deleteTournament", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "editCanonicalTournamentSlot", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
+  { nome: "editCamisManualParticipant", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "desfazerFusao", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "dismissDuplicateAccount", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "dismissDuplicateSuspicion", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
