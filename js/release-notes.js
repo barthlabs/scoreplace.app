@@ -1,3 +1,5 @@
+// 2.6.60 — Últimos resultados da TV mostra a posição na série Rei/Rainha,
+// o grupo e a duração real do jogo. Finais da Confra identificam Ouro e Prata.
 // 2.6.59 — Finais e disputas de terceiro lugar na TV mostram a fase acima
 // do card e os placares por set, seguindo a leitura da tela de Chaves.
 // 2.6.58 — TV: classificações da Ouro e Prata acompanham as finais, com rolagem e cores próprias.

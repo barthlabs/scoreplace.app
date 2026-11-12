@@ -76,12 +76,15 @@ assert.equal(snapshot.courts[2].number, undefined, 'jogo só agendado não ocupa
 window._matchWinnerSide = match => match.winner === 'p1' ? 1 : match.winner === 'p2' ? 2 : 0;
 const monarchTv = { ...t, id: 'monarch-tv', courtNames: ['Quadra 1'], teamCompetition: { enabled: false }, matches: [
   match(31, 'Quadra 1', 'VORTEX', 'BLAST', { isMonarch:true, monarchGroup:0, round:1, phaseIndex:0,
-    resultAt:'2026-10-22T20:15:00Z', winner:'p1', scoreP1:6, scoreP2:3 }),
+    groupName:'Grupo A1', startedAt:'2026-10-22T20:10:28Z', resultAt:'2026-10-22T20:15:00Z', winner:'p1', scoreP1:6, scoreP2:3 }),
   match(32, 'Quadra 1', 'VORTEX', 'VENOM', { isMonarch:true, monarchGroup:0, round:1, phaseIndex:0,
     courtCalledAt:'2026-10-22T21:00:00Z', scoreP1:4, scoreP2:2 }),
   match(33, 'Quadra 1', 'BLAST', 'VENOM', { isMonarch:true, monarchGroup:0, round:1, phaseIndex:0 })
 ] };
 const monarchSnapshot = window._tvLiveBuildSnapshot(monarchTv, Date.parse('2026-10-22T21:03:00Z'));
+assert.equal(monarchSnapshot.results[0].seriesPosition, '1 de 3');
+assert.equal(monarchSnapshot.results[0].groupName, 'Grupo A1');
+assert.equal(monarchSnapshot.results[0].duration, '00:04:32');
 assert.deepEqual(monarchSnapshot.courts[0].series.map(game => game.status), ['done', 'active', 'waiting'],
   'TV conserva os três jogos do quarteto na quadra');
 assert.equal(monarchSnapshot.courts[0].series[0].scoreA, '6', 'resultado concluído aparece na série');
@@ -91,6 +94,8 @@ assert.equal(monarchSnapshot.courts[0].series[2].scoreA, '', 'jogo ainda não in
 assert.deepEqual(monarchSnapshot.courts[0].series.map(game => !!game.latestUpdate), [false,true,false],
   'borda da última atualização fica no jogo chamado, não na quadra inteira');
 const monarchHtml = window._tvLiveBodyHtml(monarchSnapshot);
+assert.match(monarchHtml, /\d\d:15 · JOGO 31 \(1 de 3\) · Fem Light · Grupo A1 \(00:04:32\)/,
+  'resultado da série mostra horário, posição, categoria, grupo e duração na mesma linha');
 assert.match(monarchHtml, /tv-series-game tv-series-active tv-series-latest-update/);
 assert.doesNotMatch(monarchHtml, /tv-court-series tv-court-latest/);
 assert.deepEqual(window._tvLiveBuildSnapshot({ ...monarchTv, matches:monarchTv.matches.map((m, i) =>
@@ -171,11 +176,11 @@ assert.doesNotMatch(camisQueueHtml.split('class="tv-upcoming"')[1].split('</sect
   'jogos de duplas não inventam um time');
 assert.match(camisQueueHtml, /tv-upcoming-category">Fem Ouro/,
   'categoria aparece com a cor própria no cabeçalho do próximo jogo');
-assert.match(camisQueueHtml, /tv-upcoming-group[\s\S]*Grupo A[\s\S]*JOGO 25[\s\S]*JOGO 26[\s\S]*JOGO 27/,
+assert.match(camisQueueHtml, /tv-upcoming-group[\s\S]*Grupo A2[\s\S]*JOGO 25[\s\S]*JOGO 26[\s\S]*JOGO 27/,
   'três jogos do mesmo grupo aparecem em um único bloco');
 assert.equal((camisQueueHtml.match(/class="tv-upcoming-item tv-upcoming-group"/g) || []).length, 4,
   'quatro grupos aparecem em quatro boxes, sem repetir um grupo por jogo');
-assert.equal((camisQueueHtml.match(/Grupo A ·/g) || []).length, 1,
+assert.equal((camisQueueHtml.match(/Grupo A2 ·/g) || []).length, 1,
   'o primeiro grupo aparece apenas uma vez na lista');
 const customLayout = window.ScoreplaceTvLayout.defaults();
 customLayout.sections.qr.visible = false;
@@ -243,8 +248,10 @@ const leagueStandings = window._tvLiveBuildSnapshot({ ...t, matches:finals, tvLa
 assert.deepEqual(Array.from(leagueStandings.lineStandings.standing1.rows, row => row.name), ['Líder salvo', 'Quinto salvo'],
   'sem cards de final selecionados, a TV preserva a classificação salva e não inventa pódio');
 const finalsHtml = window._tvLiveBodyHtml(finalsSnapshot);
-assert.match(finalsHtml, /tv-custom-live1[\s\S]*<h2 class="tv-focus-phase">FINAL<\/h2><div class="tv-focus-match"[^>]*>[\s\S]*JOGO 198/);
-assert.match(finalsHtml, /tv-custom-live2[\s\S]*<h2 class="tv-focus-phase tv-focus-third">3º LUGAR<\/h2><div class="tv-focus-match"[^>]*>[\s\S]*JOGO 199/);
+assert.match(finalsHtml, /tv-custom-live1[\s\S]*<section class="tv-focus-card tv-focus-gold"><h2 class="tv-focus-phase">OURO · FINAL<\/h2><div class="tv-focus-match"[^>]*>[\s\S]*JOGO 198/);
+assert.match(finalsHtml, /tv-custom-live2[\s\S]*<section class="tv-focus-card tv-focus-gold"><h2 class="tv-focus-phase tv-focus-third">OURO · 3º LUGAR<\/h2><div class="tv-focus-match"[^>]*>[\s\S]*JOGO 199/);
+assert.match(finalsHtml, /tv-custom-live3[\s\S]*<section class="tv-focus-card tv-focus-silver"><h2 class="tv-focus-phase">PRATA · FINAL<\/h2>/);
+assert.match(finalsHtml, /tv-custom-live4[\s\S]*<section class="tv-focus-card tv-focus-silver"><h2 class="tv-focus-phase tv-focus-third">PRATA · 3º LUGAR<\/h2>/);
 assert.doesNotMatch(finalsHtml, /Aplicar W\.O\.|Ao Vivo|Criar grupo dos jogos/, 'TV não exibe comandos de operação');
 const setFinals = finals.map((game, index) => index === 0 ? { ...game, winner:'p1',
   sets:[{ gamesP1:6, gamesP2:3 }, { gamesP1:6, gamesP2:4 }] } : game);

@@ -1,3 +1,9 @@
+## 2.6.60 — 12/nov/2026 (contexto dos resultados na TV)
+
+- Cada resultado da série Rei/Rainha mostra, na mesma linha, horário, número e posição do jogo na série, categoria, grupo e duração real entre o início do jogo e o lançamento do placar. Jogos sem início registrado não exibem uma duração estimada.
+- Os cards decisivos da Confra identificam Ouro e Prata acima de Final e 3º lugar; os dois cards da Ouro usam a borda dourada. As posições e proporções salvas da TV permanecem intactas.
+- Corte somente web; sem alteração de jogos, placares, grade, Functions ou versões nativas.
+
 ## 2.6.59 — 12/nov/2026 (cards decisivos na TV da Confra)
 
 - Final e terceiro lugar na TV mostram a fase acima do card, como em Chaves. O card exibe número do jogo, melhor de três, colunas e placares de cada set com cores de vitória e derrota.
