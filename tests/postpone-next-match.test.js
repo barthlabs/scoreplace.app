@@ -71,7 +71,7 @@ const activeDiamond = Array.from({ length: 8 }, (_, index) => ({
   court:'Quadra ' + (index + 1), courtCalledAt:'2026-11-13T11:00:00.000Z',
   scheduledAt:'2026-11-13T11:00:00.000Z'
 }));
-const firstGold = { id:'gold-1', category:'Fem Ouro', p1:'Ouro A', p2:'Ouro B',
+const firstGold = { id:'gold-1', category:'Fem Ouro', phaseIndex:1, p1:'Ouro A', p2:'Ouro B',
   scheduledAt:'2026-11-13T12:40:00.000Z' };
 context.window.ScoreplaceCourtOccupancy = { occupiesCourt:m => !!m.courtCalledAt, isFinished:() => false };
 context.window.ScoreplacePhaseCallOrder = { allowed:(_, __, m) => m.category === 'Fem Diamante' };
@@ -93,14 +93,14 @@ assert.equal(nextTie.next.category, 'Fem Diamante · Grupo A1',
 assert.equal(nextTie.tieCanPostpone, true, 'outro jogo pronto pode ser chamado mesmo sem prioridade na grade');
 context.window.ScoreplacePhaseCallOrder = { allowed:() => true };
 assert.equal(context.window._bracketOperationsSelect(withTie).tieCanPostpone, true,
-  'com jogo Ouro pronto, organizador pode adiar o desempate Diamante');
+  'com jogo pronto de outra fase, organizador pode adiar o desempate Diamante');
 withTie.phaseTieDecisions['0']['group-0:1:2'].matches[0].postponedAt = '2026-11-13T12:02:00Z';
 assert.equal(context.window._bracketOperationsSelect(withTie).next.id, firstGold.id,
   'pular desempate mostra o Ouro na fila');
 firstGold.courtCalledAt = '2026-11-13T12:03:00Z';
 assert.equal(context.window._bracketOperationsSelect(withTie).next.id, 'tie-a',
   'após chamar o Ouro, desempate retorna para nova decisão do organizador');
-const secondGold = { id:'gold-2', category:'Fem Ouro', p1:'Ouro C', p2:'Ouro D',
+const secondGold = { id:'gold-2', category:'Fem Ouro', phaseIndex:1, p1:'Ouro C', p2:'Ouro D',
   scheduledAt:'2026-11-13T12:45:00.000Z' };
 withTie.matches.push(secondGold);
 assert.equal(context.window._bracketOperationsSelect(withTie).tieCanPostpone, true,
@@ -126,6 +126,13 @@ assert.equal(context.window._bracketOperationsSelect(withTie).next.id, 'tie-a',
   'sem outro jogo chamável, a simples volta antes da fase seguinte');
 assert.equal(context.window._bracketOperationsSelect(withTie).tieCanPostpone, false,
   'na volta final não existe mais Pular jogo');
+const dependent = { id:'diamond-final', category:'Fem Diamante', phaseIndex:1,
+  p1:'Classificado A1', p2:'Classificado A2', scheduledAt:'2026-11-13T14:00:00.000Z' };
+withTie.matches.push(dependent);
+context.window.ScoreplaceNextMatch.knownSide = side => !String(side).startsWith('Classificado');
+assert.equal(context.window._bracketOperationsSelect(withTie).tieCanPostpone, false,
+  'eliminatória com classificação indefinida não habilita Pular jogo');
+withTie.matches.pop();
 delete firstGold.courtCalledAt;
 delete withTie.phaseTieDecisions['0']['group-0:1:2'].matches[0].postponedAt;
 withTie.phaseTieDecisions['0']['group-0:1:2'].matches[0].court = 'Quadra 8';

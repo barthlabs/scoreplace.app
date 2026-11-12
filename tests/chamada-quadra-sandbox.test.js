@@ -153,6 +153,21 @@ const game = (id, court, scheduledAt = '2026-10-22T21:00:00.000Z') => ({ id, cou
   await callable(request('tour_test', 'j2', 'Quadra 4', true));
   assert.equal(tournament.matches[1].court, 'Quadra 4', 'resultado libera a quadra');
 
+  tournament.matches = [game('next-after-tie', 'Quadra 5')];
+  tournament.phaseTieDecisions = { 1: { groupA: { matches: [{
+    id: 'tie-15A', court: 'Quadra 4', courtCalledAt: nowIso,
+    p1: { key: 'athlete-a' }, p2: { key: 'athlete-b' }
+  }] } } };
+  const beforeTieCollision = saved.length;
+  await assert.rejects(callable(request('tour_test', 'next-after-tie', 'Quadra 4', true)),
+    e => e.code === 'failed-precondition' && /Quadra ocupada/.test(e.message),
+    'jogo normal não pode entrar na quadra de um desempate chamado');
+  assert.equal(saved.length, beforeTieCollision, 'conflito com desempate não grava o torneio');
+  tournament.phaseTieDecisions[1].groupA.matches[0].courtReleasedAt = nowIso;
+  await callable(request('tour_test', 'next-after-tie', 'Quadra 4', true));
+  assert.equal(tournament.matches[0].court, 'Quadra 4', 'desempate liberado permite próxima chamada');
+  delete tournament.phaseTieDecisions;
+
   tournament.matches = [game('release-prod', 'Quadra 4'), game('follow-prod', 'Quadra 5')];
   tournament.matches[0].courtCalledAt = nowIso;
   const beforeRelease = JSON.stringify(tournament.matches);

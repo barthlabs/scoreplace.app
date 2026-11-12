@@ -6374,6 +6374,27 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
     playingPlayers = _plainShuffle(playingPlayers, det.rnd);
   }
 
+  // Elenco oficial já sorteado fora do app para o torneio de teste CAMIS.
+  // Aceita somente os mesmos atletas da categoria e somente na primeira rodada.
+  var officialGroups = roundNum === 1 && t.id === 'tour_1793804848447_94bfe2282535789667cb35f1080024ee' &&
+    t.camisOfficialGroups && t.camisOfficialGroups[category];
+  if (officialGroups) {
+    if (!Array.isArray(officialGroups)) throw new Error('Grupos oficiais do CAMIS inválidos.');
+    var officialOrder = officialGroups.flat();
+    var identity = function (name) { return String(name || '').trim().normalize('NFKC').toLocaleLowerCase('pt-BR'); };
+    var available = new Map(playingPlayers.map(function (name) { return [identity(name), name]; }));
+    if (!Array.isArray(officialGroups) || officialGroups.length !== Math.floor(playingPlayers.length / 4) ||
+        officialGroups.some(function (group) { return !Array.isArray(group) || group.length !== 4; }) ||
+        officialOrder.length !== playingPlayers.length || available.size !== playingPlayers.length ||
+        new Set(officialOrder.map(identity)).size !== officialOrder.length ||
+        officialOrder.some(function (name) { return !available.has(identity(name)); })) {
+      throw new Error('Grupos oficiais do CAMIS divergem das inscrições da categoria ' + category +
+        ' (' + officialOrder.length + ' planejados, ' + playingPlayers.length + ' disponíveis, ' +
+        officialOrder.filter(function (name) { return !available.has(identity(name)); }).length + ' ausentes).');
+    }
+    playingPlayers = officialOrder.map(function (name) { return available.get(identity(name)); });
+  }
+
   // EQUILÍBRIO DE GÊNERO NOS GRUPOS (t.equilibrado !== false). Pedido do dono
   // (31/jul/2026) num torneio com 91 mulheres e 14 homens: "no sorteio não coloque 2
   // homens num mesmo time / não devem cair num mesmo grupo 2 homens — o mais possível".
@@ -6398,7 +6419,7 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
   //   DESTRAVADA→ este espalhamento: busca a proporção e flexibiliza pra incluir mais gente.
   // É literalmente o que o texto do toggle já prometia ao organizador.
   var _travadaAqui = (typeof window._ratioIsLocked === 'function') ? window._ratioIsLocked(t) : true;
-  if (t.equilibrado !== false && numGroups > 1 && !_travadaAqui && t.genderRatioDisabled !== true) {
+  if (!officialGroups && t.equilibrado !== false && numGroups > 1 && !_travadaAqui && t.genderRatioDisabled !== true) {
     playingPlayers = _spreadMinorityGender(t, playingPlayers, numGroups);
   }
   var groups = [];
@@ -6410,7 +6431,7 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
   // Quem não couber respeitando a proporção NÃO é excluído do torneio: vai pra LISTA DE
   // ESPERA, exatamente como a sobra da divisão por 4 já ia ("a sobra vira espera").
   var _plano = null;
-  if (typeof window._planGroupsByRatio === 'function' &&
+  if (!officialGroups && typeof window._planGroupsByRatio === 'function' &&
       typeof window._drawModeIsLivre === 'function' && !window._drawModeIsLivre(t) &&
       typeof window._ratioConfigured === 'function' && window._ratioConfigured(t, null, category)) {
     // SEM DEFAULT aqui de propósito (ver _ratioConfigured): o sorteio inicial nunca teve

@@ -19,7 +19,9 @@ const { chromium } = require('@playwright/test');
         const page = await browser.newPage({ viewport });
         const errors = [];
         page.on('pageerror', error => errors.push(error.message));
-        await page.setContent(html);
+        // A fixture inclui QR externo fictício; "load" espera a rede sem acrescentar
+        // evidência à geometria que este teste mede.
+        await page.setContent(html, { waitUntil: 'domcontentloaded' });
         await page.evaluate(() => {
           document.querySelectorAll('.tv-team-tag,.tv-result-team').forEach(el => { el.textContent = 'BLACKOUT'; });
           document.querySelectorAll('.tv-upcoming .tv-result-players span').forEach(el => {
@@ -80,7 +82,8 @@ const { chromium } = require('@playwright/test');
         await page.close();
       }
       const customPage = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-      await customPage.setContent(fs.readFileSync(customCapture, 'utf8').replace(/<script src="[^"]*match-timing[^>]*><\/script>/, ''));
+      await customPage.setContent(fs.readFileSync(customCapture, 'utf8').replace(/<script src="[^"]*match-timing[^>]*><\/script>/, ''),
+        { waitUntil: 'domcontentloaded' });
       const customBounds = await customPage.evaluate(() => ({
         board: document.querySelector('.tv-custom-board').getBoundingClientRect().toJSON(),
         courts: document.querySelector('.tv-custom-courts').getBoundingClientRect().toJSON()

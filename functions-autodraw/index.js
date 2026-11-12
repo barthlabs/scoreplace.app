@@ -4647,7 +4647,10 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
       }
       const all = drawWindow._collectAllMatches(t);
       if (!Array.isArray(all)) throw _drawFail('internal', 'Não foi possível conferir a ocupação das quadras.', { tId, matchId });
-      const activeCandidates = all.filter(item => item && !released[String(item.id)]);
+      const activeTies = Object.values(t.phaseTieDecisions || {}).flatMap(book =>
+        Object.values(book || {}).flatMap(decision => decision && decision.matches || []))
+        .filter(item => item && item.courtCalledAt && !item.courtReleasedAt && !item.winnerKey);
+      const activeCandidates = all.filter(item => item && !released[String(item.id)]).concat(activeTies);
       if (confirmCall && !m.courtCalledAt) {
         if (Number(m.phaseIndex || 0) > 0 &&
             (!drawWindow.ScoreplaceNextMatch ||
@@ -6736,7 +6739,8 @@ exports.advanceTournamentPhase = onCall({ invoker: 'public' }, async (request) =
         if (court && ['call', 'restore'].includes(requestedTieAction.type)) {
           const regular = typeof drawWindow._collectAllMatches === 'function' ? drawWindow._collectAllMatches(t) : [];
           const activeRegular = (regular || []).filter(m => m && _courtOccupancy.occupiesCourt(m));
-          const otherTieMatches = Object.values(phaseDecisions).flatMap(d => d && d.matches || [])
+          const otherTieMatches = Object.values(t.phaseTieDecisions || {}).flatMap(book =>
+            Object.values(book || {}).flatMap(d => d && d.matches || []))
             .filter(m => m && m.id !== target.id && m.courtCalledAt && !m.courtReleasedAt && !m.winnerKey);
           if (activeRegular.some(m => String(m.court || '') === court) ||
               otherTieMatches.some(m => String(m.court || '') === court)) {
@@ -7687,7 +7691,8 @@ function _resolveFinalClassificationTie(t, action, nowIso) {
     if (['call', 'restore'].includes(action.type)) {
       const occupied = typeof drawWindow._collectAllMatches === 'function'
         ? drawWindow._collectAllMatches(t).filter(item => item && _courtOccupancy.occupiesCourt(item)) : [];
-      const otherExtras = Object.values(book).flatMap(item => item && item.matches || [])
+      const otherExtras = Object.values(t.phaseTieDecisions || {}).flatMap(phaseBook =>
+        Object.values(phaseBook || {}).flatMap(item => item && item.matches || []))
         .filter(item => item && item.id !== match.id && item.courtCalledAt && !item.courtReleasedAt && !item.winnerKey);
       if (occupied.some(item => String(item.court || '') === court) ||
           otherExtras.some(item => String(item.court || '') === court)) {

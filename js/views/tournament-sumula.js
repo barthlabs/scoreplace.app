@@ -157,8 +157,15 @@
           court:text(first && (first.court || plannedCourts[text(first.id)])) };
       }); } catch (e) { tiebreakGroups = []; }
     }
+    var groupStandings = Object.entries(t.camisOfficialGroups || {}).flatMap(function (entry) {
+      return (Array.isArray(entry[1]) ? entry[1] : []).map(function (names, index) {
+        return { category:entry[0], name:'Grupo ' + (index + 1),
+          athletes:Array.isArray(names) ? names.map(text).filter(Boolean) : [] };
+      }).filter(function (group) { return group.athletes.length === 4; });
+    });
     return { tournament: text(t.name || t.title || 'Torneio'), matches: matches, undated: undated,
       days: days, future:future, pending:pending, tiebreakGroups:tiebreakGroups,
+      groupStandings:groupStandings,
       tiePoints:Math.max(1, Math.min(99, Number(t.fmt2 && t.fmt2.tieSinglesPoints) || 5)),
       tieMargin:t.fmt2 && t.fmt2.tieSinglesMargin === 2 ? 2 : 1,
       scoring: scoringFor(t) };
@@ -769,6 +776,42 @@
     }
     return chunks;
   }
+  function groupStandingPages(model, orientation) {
+    var portrait = orientation === 'portrait', perPage = portrait ? 4 : 3;
+    var groups = model.groupStandings || [], pages = [];
+    if (!groups.length) return pages;
+    balancedChunks(groups, perPage).forEach(function (chunk, pageIndex) {
+      var p = portrait ? pdfPage(595, 842) : pdfPage(842, 595);
+      var left = 24, right = p.width - 24, boxWidth = right - left;
+      p.fillRect(0, 0, p.width, 76, '0.071 0.133 0.220');
+      p.write(fitLabel(model.tournament, boxWidth - 70, 12, true), left, 24, 12, true, null, '1 1 1');
+      p.write('CLASSIFICAÇÃO DOS GRUPOS  |  Folha ' + (pageIndex + 1) + '/' + Math.ceil(groups.length / perPage),
+        left, 52, 8, true, null, '1 1 1');
+      p.logo(right - 58, 7, 56);
+      chunk.forEach(function (group, index) {
+        var y = 100 + index * (portrait ? 174 : 154), head = y + 28, row = 27;
+        p.box(left, y, boxWidth, 146);
+        p.rect(left, y, boxWidth, 25, 0.91);
+        p.write(fitLabel(group.category + '  |  ' + group.name, boxWidth - 20, 9, true), left + 9, y + 17, 9, true);
+        var cols = [left + 9, left + 61, right - 157, right - 109, right - 61];
+        ['POSIÇÃO', 'ATLETA', 'VITÓRIAS', 'DERROTAS', 'SALDO'].forEach(function (label, i) {
+          p.write(label, cols[i], head + 9, 7, true);
+        });
+        group.athletes.forEach(function (name, i) {
+          var yy = head + 15 + i * row;
+          if (!(i % 2)) p.rect(left + 1, yy, boxWidth - 2, row, 0.97);
+          p.write(fitLabel(name, cols[2] - cols[1] - 12, 8, false), cols[1], yy + 17, 8);
+          [cols[0],cols[2],cols[3],cols[4]].forEach(function (x, ci) {
+            p.box(x, yy + 5, ci === 0 ? 29 : 29, 17);
+          });
+        });
+      });
+      p.write('V = vitórias  |  D = derrotas  |  Saldo = games ganhos menos games perdidos',
+        left, p.height - 20, 7);
+      pages.push(p);
+    });
+    return pages;
+  }
   function makePages(model, options) {
     options = options || {};
     var orientation = options.orientation === 'portrait' ? 'portrait' : 'landscape';
@@ -807,6 +850,7 @@
     var unscheduled = model.undated || [];
     appendScorePages(model.matches.filter(function (m) { return !m.elimination; }),
       unscheduled.filter(function (m) { return !m.elimination; }));
+    pages.push.apply(pages, groupStandingPages(model, orientation));
     var realBrackets = new Map();
     model.matches.concat(unscheduled).filter(function (m) { return m.elimination; }).forEach(function (m) {
       var key = [m.phaseIndex, m.category, m.bracket].join('|');

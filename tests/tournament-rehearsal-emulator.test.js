@@ -161,6 +161,38 @@ const service = makeService({ db, HttpsError });
   assert.deepEqual((await ref.get()).data(), root);
   assert.equal((await ref.collection('fixture').doc('root').collection('slots').get()).size, 420);
   assert.equal((await ref.collection('matches').get()).empty, true);
+  await service.activate(request());
+  const liveTv = { tvLayout:{ sections:{ logo:{ x:7, y:13 } } },
+    tvScreens:[{ name:'Principal', layout:{ sections:{ logo:{ x:7, y:13 } } } }],
+    tvActiveScreen:0, logoUrl:'https://example.invalid/logo.png', coverColor:'#123456' };
+  await ref.update(liveTv);
+  const tvReset = await service.restore(request());
+  const afterTvReset = (await ref.get()).data();
+  for (const key of Object.keys(liveTv)) {
+    assert.deepEqual(afterTvReset[key], liveTv[key], `${key} salvo durante o ensaio sobrevive ao reset`);
+    assert.deepEqual(tvReset.tournament[key], liveTv[key]);
+    delete afterTvReset[key];
+  }
+  assert.deepEqual(afterTvReset, root);
+  const priorBaseline = (await db.collection('tournamentRehearsalBaselines').doc(id).get()).data();
+  const checkpointRoot = { ...root, matches:[{ id:'post-draw', p1:'A', p2:'B' }], status:'running' };
+  const checkpoint = { root:checkpointRoot, tree:priorBaseline.tree,
+    summary:{ tournamentId:id, label:'pré ensaio' } };
+  const checkpointHash = fingerprint(checkpoint), checkpointEpoch = 'post-draw-test';
+  await db.collection('tournamentRehearsalBaselines').doc(id).set({
+    ...checkpoint, mode:'postDraw', state:'active', epoch:checkpointEpoch, hash:checkpointHash
+  });
+  await ref.set({ ...checkpointRoot, rehearsal:{ state:'active', epoch:checkpointEpoch, hash:checkpointHash } });
+  await ref.update({ matches:[{ id:'post-draw', p1:'A', p2:'B', winner:'A' }],
+    tvLayout:{ sections:{ logo:{ x:19, y:23 } } } });
+  const postDrawReset = await service.restore(request());
+  assert.equal(postDrawReset.state, 'active', 'checkpoint pós-sorteio continua disponível');
+  assert.deepEqual((await ref.get()).data().matches, checkpointRoot.matches, 'placar volta ao zero');
+  assert.deepEqual((await ref.get()).data().tvLayout, { sections:{ logo:{ x:19, y:23 } } },
+    'layout da TV editado após o sorteio sobrevive');
+  await ref.update({ matches:[{ id:'post-draw', winner:'B' }] });
+  assert.equal((await service.restore(request())).state, 'active', 'Resetar teste pode ser repetido');
+  assert.deepEqual((await ref.get()).data().matches, checkpointRoot.matches);
   console.log('ensaio real: 144 inscrições intactas; reset completo e retomada após interrupções na exclusão e na gravação');
   await admin.app().delete();
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -280,11 +280,14 @@ window._realTournamentRehearsalAction = function (tId, action) {
   if (!t || uid !== 'B17n7JCXYOfqahlcLZ0fKxGGyUu1' || t.creatorUid !== uid || t.isSandbox === true ||
       !window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function' || typeof showAlertDialog !== 'function') return;
   var isReset = action === 'reset';
+  var postDrawReset = isReset && t.rehearsal && t.rehearsal.mode === 'postDraw';
   if (isReset ? !(t.rehearsal && (t.rehearsal.state === 'active' || t.rehearsal.state === 'resetting' || t.rehearsal.step === 'verification-failed'))
               : !!(t.rehearsal && t.rehearsal.state && t.rehearsal.state !== 'capturing')) return;
-  showAlertDialog(isReset ? '🔄 Restaurar estado anterior ao teste?' : '🧪 Iniciar teste com restauração?',
+  showAlertDialog(isReset ? (postDrawReset ? '🔄 Resetar teste para os grupos sorteados?' : '🔄 Restaurar estado anterior ao teste?') : '🧪 Iniciar teste com restauração?',
     isReset
-      ? 'O servidor vai apagar todo o sorteio, jogos, placares, W.O. e dados criados no ensaio. Só concluirá depois de comparar o banco com a fotografia anterior. Os inscritos, números e categorias voltarão exatamente ao estado capturado.'
+      ? (postDrawReset
+        ? 'O servidor vai apagar placares, chamadas, W.O. e dados criados no teste. Os 36 grupos oficiais e seus jogos voltarão sem resultados. As configurações da TV salvas durante o teste serão preservadas.'
+        : 'O servidor vai apagar todo o sorteio, jogos, placares, W.O. e dados criados no ensaio. Só concluirá depois de comparar o banco com a fotografia anterior. Os inscritos, números e categorias voltarão exatamente ao estado capturado.')
       : 'O servidor vai fotografar as inscrições e configurações atuais antes de qualquer sorteio. Durante o ensaio, inscrições ficam congeladas e notificações silenciadas. Ao final, use o botão de restaurar.',
     function () {
       (isReset
@@ -301,7 +304,8 @@ window._realTournamentRehearsalAction = function (tId, action) {
           }
           if (typeof showNotification === 'function') showNotification(
             isReset ? 'Ensaio restaurado' : 'Ensaio iniciado',
-            isReset ? 'Inscrições e categorias restauradas; sorteio, placares e W.O. removidos e conferidos.' : 'Fotografia conferida. Pode testar o sorteio.',
+            isReset ? (postDrawReset ? 'Grupos e jogos restaurados sem placares ou chamadas; TV preservada.' :
+              'Inscrições e categorias restauradas; sorteio, placares e W.O. removidos e conferidos.') : 'Fotografia conferida. Pode testar o sorteio.',
             'success');
         })
         .catch(function (error) {

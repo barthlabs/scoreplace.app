@@ -34,6 +34,19 @@ delete globalThis._souOrganizador;
 delete globalThis.showNotification;
 delete globalThis.AppStore;
 const core = globalThis.ScoreplaceSumula;
+const officialModel = core.collect({ id:'camis-test', name:'CAMIS', camisOfficialGroups:{
+  'Fem Diamante':[['Ana', 'Bia', 'Clara', 'Dora']],
+  'Fem Ouro':[['Eva', 'Flávia', 'Gabi', 'Helena']]
+} }, []);
+assert.strictEqual(officialModel.groupStandings.length, 2);
+for (const orientation of ['landscape','portrait']) {
+  const page = core.makePages(officialModel, { orientation }).find(item =>
+    item.commands.some(command => command.includes('CLASSIFICA')));
+  assert(page, 'súmula tem classificação dos grupos em ' + orientation);
+  const content = page.commands.join('\n');
+  for (const label of ['(POSI', '(ATLETA)', '(VIT', '(DERROTAS)', '(SALDO)', '(Ana)', '(Fl', '(Helena)'])
+    assert(content.includes(label), 'coluna ou atleta ausente: ' + label);
+}
 const at = (day, hour) => new Date(day + 'T' + hour + ':00-03:00').toISOString();
 const t = { name:'NEON NIGHTMARE', sport:'Beach Tennis', scoring:{ type:'sets', setsToWin:1, gamesPerSet:6 },
   competitionTeams:[{ id:'team-1', name:'Venom' }, { id:'team-2', name:'Volt' }] };

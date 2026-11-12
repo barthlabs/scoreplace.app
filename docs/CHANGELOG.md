@@ -1,3 +1,10 @@
+## 2.6.61 — 12/nov/2026 (fila de chamadas e ensaio CAMIS)
+
+- Desempates simples entram na fila prioritária e podem ser pulados para qualquer jogo independente pronto, mesmo de outra fase. A chamada continua manual; quadra ocupada por desempate não aceita outro jogo. Eliminatórias sem classificação definida continuam bloqueadas.
+- O motor do sorteio aceita, somente no torneio de teste CAMIS, os 36 quartetos oficiais informados pelo organizador, após conferir identidade e categoria dos 144 inscritos. A súmula desse torneio inclui folhas de classificação com vitórias, derrotas, saldo e posição.
+- O reset do ensaio aceita um checkpoint pós-sorteio repetível, volta aos jogos sem placar/chamada e preserva os layouts, telas e demais campos visuais da TV salvos depois do checkpoint. O importador oficial valida as três planilhas e exige hash da prévia antes de trocar as 10 inscrições substituídas.
+- Corte web e Functions; sem versões nativas. A importação e o checkpoint no banco de teste são operações posteriores e verificadas separadamente.
+
 ## 2.6.60 — 12/nov/2026 (contexto dos resultados na TV)
 
 - Cada resultado da série Rei/Rainha mostra, na mesma linha, horário, número e posição do jogo na série, categoria, grupo e duração real entre o início do jogo e o lançamento do placar. Jogos sem início registrado não exibem uma duração estimada.

@@ -5,6 +5,20 @@ const { createHash, randomUUID } = require('crypto');
 const OWNER_UID = 'B17n7JCXYOfqahlcLZ0fKxGGyUu1';
 const MAX_BASELINE_BYTES = 512 * 1024;
 const MAX_TREE_DOCUMENTS = 5000;
+const presentationField = key => /^(?:tv[A-Z]|logo[A-Z]|cover[A-Z]|brandColor$|titleColor$)/.test(key);
+
+function televisionFields(t) {
+  const fields = {};
+  for (const key of Object.keys(t || {})) if (presentationField(key)) fields[key] = t[key];
+  return fields;
+}
+
+function withTelevision(root, fields) {
+  const restored = { ...root };
+  for (const key of Object.keys(restored)) if (presentationField(key)) delete restored[key];
+  for (const [key, value] of Object.entries(fields)) if (presentationField(key)) restored[key] = value;
+  return restored;
+}
 
 function canonical(value) {
   if (value === null || value === undefined) return value;
@@ -233,11 +247,18 @@ function makeService({ db, HttpsError }) {
         fail('failed-precondition', 'Não há fotografia íntegra deste ensaio.');
       }
       tx.update(ref, { rehearsal: { state: 'resetting', epoch: b.epoch, hash: b.hash } });
-      tx.update(baseline, { state: 'resetting', step: 'deleting' });
+      // Capture once. A retried reset must keep the TV state from its first
+      // attempt, including an intentional removal of a field.
+      tx.update(baseline, b.state === 'resetting'
+        ? { state: 'resetting', step: 'deleting' }
+        : { state: 'resetting', step: 'deleting', liveTv: televisionFields(t) });
     });
     const base = (await baseline.get()).data();
     const expected = { root: base.root, tree: base.tree, summary: base.summary || null };
     if (fingerprint(expected) !== base.hash) fail('data-loss', 'Fotografia não confere; reset interrompido sem excluir dados.');
+    const restoredRoot = withTelevision(base.root, base.liveTv || televisionFields(base.root));
+    const postDraw = base.mode === 'postDraw';
+    if (postDraw) restoredRoot.rehearsal = { state:'active', mode:'postDraw', epoch:base.epoch, hash:base.hash };
     // Restore the photograph before deleting rehearsal-only documents. An
     // interruption cannot leave the tournament without its original roster.
     // Both phases are repeatable while the root stays locked in `resetting`.
@@ -262,16 +283,17 @@ function makeService({ db, HttpsError }) {
       if (!live.exists || !saved.exists || marker(live.data()) !== 'resetting' || saved.data().hash !== base.hash) {
         fail('aborted', 'Estado do reset mudou.');
       }
-      tx.set(ref, base.root); // Last tournament write; old snapshot has no rehearsal marker.
-      tx.update(baseline, { state: 'restored', step: 'verified', restoredAt: new Date().toISOString() });
+      tx.set(ref, restoredRoot); // Preserve the TV layout last saved before reset.
+      tx.update(baseline, { state: postDraw ? 'active' : 'restored', step: 'verified', restoredAt: new Date().toISOString() });
     });
     const [finalRoot, finalTree, external] = await Promise.all([ref.get(), readTree(ref), readExternal(id)]);
-    if (!finalRoot.exists || external.feedExists || fingerprint({ root: finalRoot.data(), tree: finalTree, summary: external.summary }) !== base.hash) {
+    if (!finalRoot.exists || external.feedExists || fingerprint({ root: finalRoot.data(), tree: finalTree, summary: external.summary }) !==
+        fingerprint({ root: restoredRoot, tree: base.tree, summary: base.summary || null })) {
       await ref.update({ rehearsal: { state: 'resetting', epoch: base.epoch, hash: base.hash } });
       await baseline.update({ state: 'resetting', step: 'verify-failed' });
       fail('data-loss', 'Verificação final falhou; reset travado para repetição.');
     }
-    return { ok: true, state: 'restored', count: base.tree.filter(item => item.path.startsWith('registrations/') && item.path.split('/').length === 2).length, hash: base.hash, tournament: base.root };
+    return { ok: true, state: postDraw ? 'active' : 'restored', count: base.tree.filter(item => item.path.startsWith('registrations/') && item.path.split('/').length === 2).length, hash: base.hash, tournament: restoredRoot };
   }
 
   return { activate, restore };

@@ -1399,12 +1399,11 @@ window._bracketOperationsSelect = function (t) {
     tieMatches.find(function (m) { return !m.winnerKey && !m.courtCalledAt; }) ||
     tieMatches.find(function (m) { return m.tieStatus === 'review'; });
   var otherReady = next || preview;
-  var samePhaseNext = otherReady && Number(otherReady.phaseIndex || 0) === Number(t.currentPhaseIndex || 0) ? otherReady : null;
   var returnedTie = nextTie && nextTie.postponedAt && matches.some(function (called) {
     return called && called.courtCalledAt &&
       Date.parse(String(called.courtCalledAt)) > Date.parse(String(nextTie.postponedAt));
   });
-  var callableTie = nextTie && (!nextTie.postponedAt || !samePhaseNext || returnedTie) ? nextTie : null;
+  var callableTie = nextTie && (!nextTie.postponedAt || !otherReady || returnedTie) ? nextTie : null;
   // Uma simples já chamada ocupa só a própria quadra. As outras quadras
   // continuam recebendo jogos de categorias que estejam prontos na grade.
   var suggested = callableTie || next || preview;
@@ -1415,7 +1414,7 @@ window._bracketOperationsSelect = function (t) {
     return m && list.findIndex(function (entry) { return entry && String(entry.id) === String(m.id); }) === index;
   });
   return { next: suggested, queue: queued, nextCallable: !!suggested, waitingForTie: waitingForTie,
-    tieCanPostpone: !!(callableTie && samePhaseNext),
+    tieCanPostpone: !!(callableTie && otherReady),
     active: active, pending: pending, courts: courts, matches: matches };
 };
 

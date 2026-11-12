@@ -1,3 +1,6 @@
+// 2.6.61 — A simples de desempate pode ser pulada para outro jogo pronto,
+// inclusive de outra fase. A súmula do CAMIS inclui classificação por grupo.
+// Resetar teste preserva as telas da TV e retorna aos grupos oficiais sorteados.
 // 2.6.60 — Últimos resultados da TV mostra a posição na série Rei/Rainha,
 // o grupo e a duração real do jogo. Finais da Confra identificam Ouro e Prata.
 // 2.6.59 — Finais e disputas de terceiro lugar na TV mostram a fase acima
@@ -1630,6 +1633,8 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(52,211,153,0.08);">' +
       '<div style="font-weight:800;color:var(--sp-c-a7f3d0,#a7f3d0);font-size:1rem;margin-bottom:8px;">🎾 v2.6 — Jogos do quarteto <span style="color:var(--text-muted);font-weight:400;font-size:0.78rem;">(Novembro, 2026)</span></div>' +
       '<ul style="margin:0;padding-left:1.1rem;font-size:0.86rem;line-height:1.5;color:var(--text-main);">' +
+        '<li>O desempate pode ser adiado para chamar outro jogo pronto. A quadra ocupada continua protegida, e a eliminatória aguarda a classificação necessária.</li>' +
+        '<li>A súmula do CAMIS inclui espaço para vitórias, derrotas, saldo e posição em cada grupo.</li>' +
         '<li>O desempate aparece no mesmo card dos jogos: uma atleta de cada lado, placar visível e a indicação “Simples desempate” junto ao número do jogo extra.</li>' +
         '<li>Na faixa de operação Rei/Rainha, as setas percorrem os três jogos do mesmo quarteto e sua classificação, com as duplas e os placares de cada jogo.</li>' +
         '<li>Em torneios concentrados em um dia, os jogos e as rodadas mostram só o horário. Eventos de vários dias continuam mostrando a data.</li>' +
