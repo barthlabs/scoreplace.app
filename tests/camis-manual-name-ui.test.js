@@ -75,5 +75,15 @@ function clickName() {
     'falha de leitura após commit pede atualização da tela');
   assert(!notices.some(item => item.title === 'Edição não concluída'),
     'leitura posterior falhou, mas a escrita já foi confirmada');
+  window.FirestoreDB.loadTournamentById = async () => t;
+  ctx._reRenderParticipantsStable = () => { throw new Error('falha de renderização'); };
+  const beforeRenderFailure = notices.length;
+  clickName();
+  dialogs.at(-1).onConfirm();
+  inputs.at(-1).onSubmit('Kelly Nova Grafia');
+  await new Promise(resolve => setImmediate(resolve));
+  assert(notices.slice(beforeRenderFailure).some(item => item.title === 'Atleta salva'),
+    'exceção na renderização após commit também pede atualização da tela');
+  assert(!notices.slice(beforeRenderFailure).some(item => item.title === 'Edição não concluída'));
   console.log('✓ CAMIS: toque no nome oferece correção ou substituição manual, sem UID');
 })().catch(error => { console.error(error);process.exitCode=1; });

@@ -92,4 +92,26 @@ assert.equal(presencePlan.nextRoot.checkedIn['manual:manual-0'],true,
   'presença das outras pessoas permanece');
 assert.equal(presencePlan.nextRoot.checkedInConfirmed['manual:manual-1'],undefined);
 assert.equal(presencePlan.nextRoot.absent['manual:manual-1'],undefined);
+const waiting = mutations.enroll(core.ID,[],{manualParticipantId:'manual-reserve'},[categoryId],
+  {status:'waitlisted',manualDisplayName:'Reserva'}).creates[0];
+waiting.enrollSeq = 5;
+const waitingRegs = registrations.concat({id:waiting.registrationId,data:waiting});
+const fullRoot = {...baseRoot,maxParticipants:4,registrationLimit:4,
+  canonicalRegistrationMigration:{...baseRoot.canonicalRegistrationMigration,registrationCount:5}};
+const fullTree = tree.concat({path:'registrations/'+waiting.registrationId,data:waiting})
+  .sort((a,b) => a.path.localeCompare(b.path));
+const fullPayload = {root:fullRoot,tree:fullTree,summary:null};
+const fullHash = rehearsal.fingerprint(fullPayload);
+const fullPlan = core.plan({...input,tournament:{...fullRoot,rehearsal:{...tournament.rehearsal,hash:fullHash}},
+  baseline:{...fullPayload,state:'active',mode:'postDraw',epoch:'test',hash:fullHash},
+  registrations:waitingRegs,action:'replace',newName:'Nova Atleta',
+  newManualParticipantId:'manual-full'});
+assert.equal(fullPlan.nextRoot.canonicalRegistrationMigration.registrationCount,6);
+assert.equal(fullPlan.nextBaseline.tree.filter(item => item.path.startsWith('registrations/')).length,5);
+assert.equal(fullPlan.nextBaseline.tree.filter(item => item.path.startsWith('registrations/') &&
+  item.data.status === 'confirmed').length,4,'teto da categoria permanece em quatro vagas ativas');
+assert.equal(fullPlan.nextReg.status,'confirmed','nova pessoa ocupa a inscrição confirmada retirada');
+assert.equal(fullPlan.nextBaseline.tree.filter(item => item.path.startsWith('registrations/') &&
+  item.data.status === 'waitlisted').length,1,
+  'reserva permanece na espera quando o teto já está cheio');
 console.log('✓ CAMIS manual: correção preserva identidade; troca preserva resultados; reset volta à lista limpa');

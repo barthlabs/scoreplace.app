@@ -1187,12 +1187,14 @@ window._openCamisManualNameActions = function(tId, oldName, manualParticipantId)
       return;
     }
     if (typeof window._callCF !== 'function') return;
+    var savedOnServer = false;
     window._callCF('editCamisManualParticipant', {
       tournamentId:String(tId),action:action,oldName:String(oldName),newName:newName,
       manualParticipantId:String(manualParticipantId)
     }, 'Salvando atleta…').then(function(result) {
       var receipt = result && (result.data || result);
       if (!receipt || receipt.ok !== true) throw new Error('O servidor não confirmou a edição.');
+      savedOnServer = true;
       if (typeof showNotification === 'function') showNotification(action === 'rename' ? 'Nome corrigido' : 'Atleta substituída',
         action === 'rename' ? 'A mesma inscrição e os jogos agora mostram ' + newName + '.' :
           'A vaga agora é de ' + newName + '; resultados concluídos continuam com a atleta anterior.', 'success');
@@ -1210,8 +1212,10 @@ window._openCamisManualNameActions = function(tId, oldName, manualParticipantId)
         });
       }
     }).catch(function(error) {
-      if (typeof showNotification === 'function') showNotification('Edição não concluída',
-        (error && error.message) || 'Atualize a tela e tente novamente.', 'error');
+      if (typeof showNotification === 'function') showNotification(savedOnServer ? 'Atleta salva' : 'Edição não concluída',
+        savedOnServer ? 'A alteração foi confirmada. Atualize a página para ver o novo nome.' :
+          ((error && error.message) || 'Atualize a tela e tente novamente.'),
+        savedOnServer ? 'warning' : 'error');
     });
   };
   var ask = function(action) {

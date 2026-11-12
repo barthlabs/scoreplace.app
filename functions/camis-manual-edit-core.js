@@ -91,6 +91,8 @@ function plan({ tournament, baseline, registrations, matches, action, oldName, n
   if (!Array.isArray(registrations) || !Array.isArray(matches) || registrations.length > 400 || matches.length > 400)
     fail('elenco ou jogos fora do limite seguro');
   boundary.verifiedRoster(t, registrations.map(item => item.data));
+  if (registrations.some(item => item.id !== item.data.registrationId))
+    fail('identidade física da inscrição diverge do registro canônico');
   const targetRows = registrations.filter(item => item.data.status === 'confirmed' &&
     item.data.participantKind === 'manual' && item.data.manualParticipantId === manualParticipantId);
   if (targetRows.length !== 1 || !same(targetRows[0].data.manualDisplayName,oldName))
@@ -133,8 +135,9 @@ function plan({ tournament, baseline, registrations, matches, action, oldName, n
     ? { ...target.data, manualDisplayName:newName, updatedAt:now }
     : (() => {
         if (!newManualParticipantId) fail('identidade da nova atleta ausente');
-        const created = mutations.enroll(ID,[],{ manualParticipantId:newManualParticipantId },
+        const created = mutations.enroll(ID,registrations.map(item => item.data),{ manualParticipantId:newManualParticipantId },
           [target.data.categoryId],{ status:'confirmed',validationState:'approved',manualDisplayName:newName }).creates[0];
+        if (!created) fail('identidade da nova atleta já existe');
         return { ...target.data, ...created, enrollSeq:target.data.enrollSeq,
           createdAt:now,updatedAt:now };
       })();
@@ -144,6 +147,16 @@ function plan({ tournament, baseline, registrations, matches, action, oldName, n
     ? registrations.map(item => item.id === target.id ? nextReg : item.data)
     : registrations.map(item => item.id === target.id
       ? { ...item.data,status:'withdrawn',withdrawnReason:'replaced',updatedAt:now } : item.data).concat(nextReg);
+  // É uma troca da mesma vaga: a quantidade ativa na categoria e a lista de
+  // espera permanecem idênticas, inclusive quando o teto já foi atingido.
+  if (action === 'replace') {
+    const countActive = rows => rows.filter(item => item.categoryId === target.data.categoryId &&
+      item.status === 'confirmed').length;
+    if (countActive(nextRegistrations) !== countActive(registrations.map(item => item.data)) ||
+        nextRegistrations.filter(item => item.status === 'waitlisted').length !==
+          registrations.filter(item => item.data.status === 'waitlisted').length)
+      fail('substituição alteraria capacidade ou lista de espera');
+  }
   const nextMigration = { ...t.canonicalRegistrationMigration, registrationCount:nextRegistrations.length };
   boundary.verifiedRoster({ ...t,canonicalRegistrationMigration:nextMigration },nextRegistrations);
   const nextRoot = action === 'rename' ? replaceStrings(t,oldName,newName)
