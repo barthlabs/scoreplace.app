@@ -3210,6 +3210,56 @@ function _updateDuplaElimClassification(t) {
   }
 }
 
+// Uma dupla refeita numa vaga de repescagem não cria outra colocação. Conserva
+// os jogos da formação anterior como histórico, mas ela deixa de ser uma entrada
+// separada da classificação quando a nova formação ocupa a vaga. Exige vínculo
+// por UID, derrota anterior e marca explícita de repescagem; nomes não identificam
+// duplas e uma entrada tardia comum não pode apagar uma colocação anterior.
+function _classifDuplasSubstituidas(matches) {
+  var entries = {}, byUid = {}, substituted = {};
+  var brackets = {};
+  (matches || []).forEach(function (m) {
+    if (m && !m.isThirdPlace) brackets[m.bracket || 'main'] = true;
+  });
+  if (Object.keys(brackets).length !== 1) return substituted;
+  (matches || []).forEach(function (m) {
+    if (!m || m.round == null || m.isThirdPlace) return;
+    ['p1', 'p2'].forEach(function (side) {
+      var uids = _slotUids(m, side);
+      if (!Array.isArray(uids) || uids.length !== 2 || !m[side] || m[side] === 'TBD') return;
+      var key = _classifEntryKey(m[side], uids);
+      if (!entries[key]) entries[key] = { key: key, uids: uids, first: m.round, last: m.round, firstMatch: m, firstSide: side, lastMatches: [] };
+      var e = entries[key];
+      if (m.round < e.first) { e.first = m.round; e.firstMatch = m; e.firstSide = side; }
+      if (m.round > e.last) { e.last = m.round; e.lastMatches = []; }
+      if (m.round === e.last) e.lastMatches.push({ match: m, side: side });
+    });
+  });
+  Object.keys(entries).forEach(function (key) {
+    entries[key].uids.forEach(function (uid) { (byUid[uid] = byUid[uid] || []).push(entries[key]); });
+  });
+  Object.keys(entries).forEach(function (key) {
+    var newer = entries[key], m = newer.firstMatch, side = newer.firstSide;
+    if (!m[side + 'FromRepechage']) return;
+    var candidates = {};
+    newer.uids.forEach(function (uid) {
+      (byUid[uid] || []).forEach(function (older) {
+        if (older.key === key || older.last >= newer.first) return;
+        if (older.uids.filter(function (id) { return newer.uids.indexOf(id) !== -1; }).length !== 1) return;
+        if (!older.lastMatches.some(function (item) {
+          var won = window._matchWinnerSide(item.match);
+          return won && won !== (item.side === 'p1' ? 1 : 2);
+        })) return;
+        candidates[older.key] = true;
+      });
+    });
+    var oldKeys = Object.keys(candidates);
+    if (oldKeys.length === 1) substituted[oldKeys[0]] = true;
+  });
+  return substituted;
+}
+if (typeof window !== 'undefined') window._classifDuplasSubstituidas = _classifDuplasSubstituidas;
+
 function _updateProgressiveClassification(t) {
   if (!t.matches || t.matches.length === 0) return;
   // A classificação final de uma fase de grupos também precisa preservar a
@@ -3232,6 +3282,7 @@ function _updateProgressiveClassification(t) {
   _classifReset(t);
 
   var allMatches = t.matches;
+  var _substituidas = _classifDuplasSubstituidas(allMatches);
   var roundNums = {};
   allMatches.forEach(function(m) {
     if (m.round !== undefined && m.bracket !== 'lower' && m.bracket !== 'grand') {
@@ -3299,7 +3350,8 @@ function _updateProgressiveClassification(t) {
       ['p1', 'p2'].forEach(function (side) {
         var nm = m[side];
         if (!_nomeDeGente(nm)) return;
-        set[_classifEntryKey(nm, _slotUids(m, side))] = 1;
+        var key = _classifEntryKey(nm, _slotUids(m, side));
+        if (!_substituidas[key]) set[key] = 1;
       });
     });
     return Object.keys(set).length;
@@ -3507,7 +3559,8 @@ function _updateProgressiveClassification(t) {
           var history = _getPlayerHistory(stats.loserKey);
           _semiByEntry[stats.loserKey] = { name: stats.loser, key: stats.loserKey, match: m, side: stats.loserSide, stats: stats, history: history };
         });
-        var semiLosers = Object.keys(_semiByEntry).map(function(k) { return _semiByEntry[k]; });
+        var semiLosers = Object.keys(_semiByEntry).map(function(k) { return _semiByEntry[k]; })
+          .filter(function (e) { return !_substituidas[e.key]; });
         if (semiLosers.length > 0) {
           positionGroups.push({ posStart: _runPos, losers: semiLosers });
           semiLosers.forEach(function(e) { placed[e.key] = true; });
@@ -3537,6 +3590,7 @@ function _updateProgressiveClassification(t) {
       });
       var losers = Object.keys(_losersByEntry).map(function(k) { return _losersByEntry[k]; });
 
+      losers = losers.filter(function (e) { return !_substituidas[e.key]; });
       if (losers.length > 0) {
         // ⛔ NÃO recebe posição aqui. A colocação destes blocos se conta DO FIM da linha e só
         // depois que a rodada fechou — resolvido no passo abaixo, com as rodadas em ordem

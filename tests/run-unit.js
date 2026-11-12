@@ -169,6 +169,7 @@ const SUITES = [
   'tests/classificacao-nao-sai-com-repescagem-indefinida.test.js',
   'tests/classificacao-congelada-reidrata-o-nome.test.js',
   'tests/classificacao-chave-canonica.test.js',
+  'tests/classificacao-repescagem-dupla-refeita.test.js',
   'tests/trofeu-podio-por-uid.test.js',
   'tests/trophy-writes-are-server-only.test.js',
   'tests/saldo-e-sempre-na-unidade-mais-rica.test.js',

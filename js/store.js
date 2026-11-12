@@ -15609,6 +15609,8 @@ window._classifCompetitors = function (matches) {
 // competidores; folga jamais ganha linha nem entra na contagem de jogos/classificação.
 window._classifCompetitorEntries = function (matches) {
   var set = {}, out = [];
+  var substituidas = (typeof window._classifDuplasSubstituidas === 'function')
+    ? window._classifDuplasSubstituidas(matches) : {};
   (matches || []).forEach(function (m) {
     ['p1', 'p2'].forEach(function (side) {
       var name = String((m && m[side]) == null ? '' : m[side]).trim();
@@ -15616,7 +15618,7 @@ window._classifCompetitorEntries = function (matches) {
       var uids = (typeof window._slotUids === 'function') ? window._slotUids(m, side) : [];
       var key = (typeof window._classifEntryKey === 'function')
         ? window._classifEntryKey(name, uids) : (uids && uids.length ? 'uid:' + uids.slice().sort().join('+') : 'manual:' + name);
-      if (!key || set[key]) return;
+      if (!key || set[key] || substituidas[key]) return;
       set[key] = true;
       out.push({ key: key, name: name, uids: Array.isArray(uids) ? uids.slice() : [] });
     });
