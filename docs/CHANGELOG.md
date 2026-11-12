@@ -1,3 +1,8 @@
+## 2.6.59 — 12/nov/2026 (cards decisivos na TV da Confra)
+
+- Final e terceiro lugar na TV mostram a fase acima do card, como em Chaves. O card exibe número do jogo, melhor de três, colunas e placares de cada set com cores de vitória e derrota.
+- A TV não mostra controles de operação nesses cards. As posições e proporções salvas da tela No ar permanecem intactas; não há alteração de jogos, placares, grade, Functions ou versões nativas.
+
 ## 2.6.58 — 12/nov/2026 (TV CAMIS e Confra)
 
 - A TV da Confra atualiza as quatro primeiras posições da Ouro e da Prata ao confirmar a final e o terceiro lugar; a classificação passa a rolar suavemente, sem divisórias, com cores dourada e prateada e espaço maior entre posição e nome. Os quatro confrontos exibem categoria e chave.

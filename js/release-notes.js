@@ -1,3 +1,5 @@
+// 2.6.59 — Finais e disputas de terceiro lugar na TV mostram a fase acima
+// do card e os placares por set, seguindo a leitura da tela de Chaves.
 // 2.6.58 — TV: classificações da Ouro e Prata acompanham as finais, com rolagem e cores próprias.
 // 2.6.57 — Na TV do torneio, Últimos resultados aparece também quando o
 // ensaio ocorre antes da data prevista. O editor mostra todas as guias de

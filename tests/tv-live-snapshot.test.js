@@ -243,8 +243,20 @@ const leagueStandings = window._tvLiveBuildSnapshot({ ...t, matches:finals, tvLa
 assert.deepEqual(Array.from(leagueStandings.lineStandings.standing1.rows, row => row.name), ['Líder salvo', 'Quinto salvo'],
   'sem cards de final selecionados, a TV preserva a classificação salva e não inventa pódio');
 const finalsHtml = window._tvLiveBodyHtml(finalsSnapshot);
-assert.match(finalsHtml, /tv-custom-live1[\s\S]*FINAL · JOGO 198/);
-assert.match(finalsHtml, /tv-custom-live2[\s\S]*3º E 4º LUGAR · JOGO 199/);
+assert.match(finalsHtml, /tv-custom-live1[\s\S]*<h2 class="tv-focus-phase">FINAL<\/h2><div class="tv-focus-match"[^>]*>[\s\S]*JOGO 198/);
+assert.match(finalsHtml, /tv-custom-live2[\s\S]*<h2 class="tv-focus-phase tv-focus-third">3º LUGAR<\/h2><div class="tv-focus-match"[^>]*>[\s\S]*JOGO 199/);
+assert.doesNotMatch(finalsHtml, /Aplicar W\.O\.|Ao Vivo|Criar grupo dos jogos/, 'TV não exibe comandos de operação');
+const setFinals = finals.map((game, index) => index === 0 ? { ...game, winner:'p1',
+  sets:[{ gamesP1:6, gamesP2:3 }, { gamesP1:6, gamesP2:4 }] } : game);
+const setSnapshot = window._tvLiveBuildSnapshot({ ...t, matches:setFinals,
+  scoring:{ type:'sets', setsToWin:2 }, tvLayout:finalsLayout });
+assert.equal(setSnapshot.selectedMatches.live1.bestOf, 3);
+assert.equal(setSnapshot.selectedMatches.live1.setColumns.length, 2);
+const setHtml = window._tvLiveBodyHtml(setSnapshot);
+assert.match(setHtml, /MELHOR DE 3/);
+assert.match(setHtml, /tv-focus-sets-head/);
+assert.match(setHtml, /tv-focus-set tv-focus-set-win">6<\/span>/);
+assert.match(setHtml, /tv-focus-set tv-focus-set-loss">3<\/span>/);
 assert.match(finalsHtml, /tv-custom-standing2[\s\S]*CLASSIFICAÇÃO · PRATA/);
 assert.match(finalsHtml, /tv-focus-standing-gold[\s\S]*data-tv-autoscroll="standing1"/);
 assert.match(finalsHtml, /tv-focus-standing-silver[\s\S]*data-tv-autoscroll="standing2"/);

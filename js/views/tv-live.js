@@ -438,10 +438,21 @@
       var source = tvLayout.sections[id].source;
       var m = source && matches.find(function (item) { return item && String(item.id) === source; });
       if (!m) return;
+      var scoring = typeof window._effectiveScoring === 'function' ? window._effectiveScoring(t, m) : (m.scoring || t.scoring || {});
+      var plan = typeof window._matchSetPlan === 'function' ? window._matchSetPlan(scoring, m) : null;
+      var playedSets = Array.isArray(m.sets) ? m.sets : [];
+      var setsToWin = Math.max(1, Number(scoring && scoring.setsToWin) || (playedSets.length > 1 ? 2 : 1));
+      var bestOf = plan && plan.multi ? plan.bestOf : setsToWin * 2 - 1;
+      var won = [0, 0];
+      playedSets.forEach(function (set) { if (Number(set.gamesP1) > Number(set.gamesP2)) won[0]++; else if (Number(set.gamesP2) > Number(set.gamesP1)) won[1]++; });
+      var setColumns = plan && plan.multi ? plan.columns.map(function (col) { return { label: col.label, set: col.set || null }; }) :
+        Array.from({ length: Math.min(bestOf, Math.max(bestOf > 1 ? 2 : 1, playedSets.length + (won[0] && won[1] ? 1 : 0))) }, function (_, i) { return { label: String(i + 1), set: playedSets[i] || null }; });
       selectedMatches[id] = { number: m._gameNum || m.scheduledGameNumber || m.matchNumber || '',
         category: String(m.category || m.tierLabel || ''), bracket: String(m.bracket || ''),
         third: !!m.isThirdPlace, a: sideName(t, m, 'p1'), b: sideName(t, m, 'p2'),
         scoreA: gameScore(m, 1, true), scoreB: gameScore(m, 2, true),
+        bestOf: bestOf, headline: plan && plan.multi ? plan.headline : 'MELHOR DE ' + bestOf + ' · ' + (m.winner ? won[0] + ' × ' + won[1] : 'SET ' + Math.min(bestOf, playedSets.length + 1)),
+        setColumns: setColumns, scheduledAt: m.scheduledAt || '',
         winnerSide: typeof window._matchWinnerSide === 'function' ? window._matchWinnerSide(m) :
           (m.winner === 'p1' ? 1 : m.winner === 'p2' ? 2 : 0) };
     });
@@ -618,16 +629,29 @@
     function liveGame(id) {
       var game = snapshot.selectedMatches && snapshot.selectedMatches[id];
       if (!game) return '<section class="tv-focus-card"><h2>Escolha a partida</h2></section>';
-      var title = game.third ? '3º E 4º LUGAR' : 'FINAL';
-      function side(name, score, winner) {
+      var title = game.third ? '3º LUGAR' : 'FINAL';
+      var columns = game.setColumns || [];
+      var setHeader = '<div class="tv-focus-sets-head"><span>SETS</span>' + columns.map(function (col) { return '<b>' + esc(col.label) + '</b>'; }).join('') + '</div>';
+      function setCell(col, side) {
+        var set = col.set;
+        var own = set && set[side === 1 ? 'gamesP1' : 'gamesP2'];
+        var other = set && set[side === 1 ? 'gamesP2' : 'gamesP1'];
+        var filled = own != null && own !== '' && other != null && other !== '';
+        var color = filled && Number(own) !== Number(other) ? (Number(own) > Number(other) ? ' tv-focus-set-win' : ' tv-focus-set-loss') : '';
+        return '<span class="tv-focus-set' + color + '">' + (own == null || own === '' ? '–' : esc(own)) + '</span>';
+      }
+      function side(name, winner, sideNumber) {
         return '<div class="tv-focus-side' + (winner ? ' tv-focus-winner' : '') + '"><div class="tv-focus-players">' +
           String(name || '').split(' / ').map(function (player) { return '<span>' + esc(player.trim()) + '</span>'; }).join('') +
-          '</div><strong>' + esc(score) + '</strong></div>';
+          '</div><div class="tv-focus-set-scores">' + columns.map(function (col) { return setCell(col, sideNumber); }).join('') + '</div></div>';
       }
-      return '<section class="tv-focus-card"><h2>' + title + ' · JOGO ' + esc(game.number) + '</h2>' +
-        '<small class="tv-focus-category">' + esc(game.category) + (game.bracket ? ' · ' + esc(game.bracket === 'gold' ? 'Ouro' : game.bracket === 'silver' ? 'Prata' : game.bracket) : '') + '</small>' +
-        side(game.a, game.scoreA, game.winnerSide === 1) + '<div class="tv-focus-vs">VS</div>' +
-        side(game.b, game.scoreB, game.winnerSide === 2) + '</section>';
+      var time = game.scheduledAt && !Number.isNaN(Date.parse(game.scheduledAt)) ?
+        new Intl.DateTimeFormat('pt-BR', { hour:'2-digit', minute:'2-digit', timeZone:snapshot.timeZone || 'America/Sao_Paulo' }).format(new Date(game.scheduledAt)) : '';
+      return '<section class="tv-focus-card"><h2 class="tv-focus-phase' + (game.third ? ' tv-focus-third' : '') + '">' + title + '</h2><div class="tv-focus-match" style="--tv-focus-count:' + columns.length + '">' +
+        '<div class="tv-focus-match-head"><b class="tv-focus-game-number">JOGO ' + esc(game.number) + '</b>' + (time ? '<time>' + esc(time) + '</time>' : '') + '</div>' +
+        '<div class="tv-focus-set-line"><span>' + esc(game.headline || '') + '</span>' + setHeader + '</div>' +
+        side(game.a, game.winnerSide === 1, 1) + '<div class="tv-focus-vs">VS</div>' +
+        side(game.b, game.winnerSide === 2, 2) + '</div></section>';
     }
     function lineStanding(id) {
       var standing = snapshot.lineStandings && snapshot.lineStandings[id];
@@ -818,6 +842,10 @@
     '.tv-focus-side{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:.4vw;min-height:0;flex:1;padding:.2vw .5vw;background:#222;border-radius:.4vw}.tv-focus-winner{background:#123b2b}' +
     '.tv-focus-players{display:flex;flex-direction:column;justify-content:center;min-width:0;line-height:1.08}.tv-focus-players span{display:block;overflow-wrap:anywhere;font-size:clamp(.72rem,1vw,1.4rem);font-weight:750}' +
     '.tv-focus-side strong{font-size:clamp(1.1rem,1.8vw,2.5rem);font-variant-numeric:tabular-nums}.tv-focus-winner strong{color:#4ade80}.tv-focus-vs{flex:none;text-align:center;color:#94a3b8;font-size:clamp(.65rem,.75vw,1rem);font-weight:900}' +
+    '.tv-focus-card h2.tv-focus-phase{color:#fff;margin:0 0 .45vw;padding-left:.45vw;border-left:3px solid #7dd3fc}.tv-focus-card h2.tv-focus-third{color:#f59e0b;border-left-color:#f59e0b}' +
+    '.tv-focus-match{display:flex;flex:1;flex-direction:column;min-height:0;gap:.16vw;padding:.45vw;background:#2b2b2b;border-left:3px solid #cbd5e1;border-radius:.45vw}.tv-focus-match-head{display:flex;align-items:center;gap:.35vw;min-height:1.25vw}.tv-focus-game-number,.tv-focus-set-line>span{color:#38bdf8;font-size:clamp(.75rem,.93vw,1.3rem);font-weight:800}.tv-focus-match-head time{color:#7dd3fc;font-size:clamp(.68rem,.76vw,1rem)}' +
+    '.tv-focus-set-line{display:flex;justify-content:space-between;align-items:end;gap:.25vw;padding-bottom:.25vw;border-bottom:1px solid #444;min-width:0}.tv-focus-set-line>span{font-size:clamp(.65rem,.77vw,1.05rem);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tv-focus-sets-head{display:grid;grid-template-columns:repeat(var(--tv-focus-count),minmax(1.65vw,2.1vw));justify-items:center;align-items:center;flex:none;color:#9ca3af;font-size:clamp(.62rem,.7vw,.95rem)}.tv-focus-sets-head>span{grid-column:1/-1;justify-self:start}.tv-focus-sets-head b{color:#38bdf8}' +
+    '.tv-focus-match .tv-focus-side{background:#202020;border-left:3px solid #777;min-height:0;flex:1}.tv-focus-match .tv-focus-side.tv-focus-winner{background:#123b2b;border-left-color:#10b981}.tv-focus-set-scores{display:grid;grid-template-columns:repeat(var(--tv-focus-count),minmax(1.65vw,2.1vw));justify-items:center;align-items:center;flex:none}.tv-focus-set{display:block;min-width:1.45vw;padding:.15vw .08vw;text-align:center;color:#aaa;background:#303030;border:1px solid #555;border-radius:.25vw;font-size:clamp(.85rem,1.2vw,1.65rem);font-weight:800;font-variant-numeric:tabular-nums}.tv-focus-set-win{color:#4ade80}.tv-focus-set-loss{color:#f87171}' +
     '.tv-theme .tv-court.tv-court-latest,.tv-series-game.tv-series-latest-update{border:2px solid #fbbf24;box-shadow:none}' +
     '.tv-focus-standing-list{flex:1;min-height:0;overflow:auto;scrollbar-width:none;padding-bottom:var(--tv-qr-clearance,2vw)}.tv-focus-standing-list::-webkit-scrollbar{display:none}.tv-focus-standing-row{display:grid;grid-template-columns:3vw minmax(0,1fr);column-gap:.8vw;align-items:center;min-height:2.3vw;padding:.2vw .4vw;font-size:clamp(.85rem,1.05vw,1.4rem)}.tv-focus-standing-row b{color:#fbbf24}.tv-focus-standing-row span{overflow-wrap:anywhere}' +
     '</style>');
@@ -835,7 +863,7 @@
     '.tv-theme .tv-result.tv-result-latest{background:var(--tv-row-active);border-color:#fbbf24}.tv-theme .tv-series-game.tv-series-latest-update,.tv-theme .tv-series-game.tv-series-latest-result{border:2px solid #fbbf24;outline:0;box-shadow:none}' +
     '.tv-theme .tv-bracket-match-in-court{border-color:#4ade80;box-shadow:none}' +
     '.tv-theme .tv-qr-brand{background:transparent;color:var(--tv-title,#ffffff);border-radius:0;padding:.18vw .3vw;box-sizing:border-box}' +
-    '.tv-theme .tv-focus-standing-gold{border-color:#a16207}.tv-theme .tv-focus-standing-gold h2,.tv-theme .tv-focus-standing-gold .tv-focus-standing-row b{color:#fbbf24}.tv-theme .tv-focus-standing-silver{border-color:#94a3b8}.tv-theme .tv-focus-standing-silver h2,.tv-theme .tv-focus-standing-silver .tv-focus-standing-row b{color:#cbd5e1}' +
+    '.tv-theme .tv-focus-card h2.tv-focus-third{color:#f59e0b}.tv-theme .tv-focus-standing-gold{border-color:#a16207}.tv-theme .tv-focus-standing-gold h2,.tv-theme .tv-focus-standing-gold .tv-focus-standing-row b{color:#fbbf24}.tv-theme .tv-focus-standing-silver{border-color:#94a3b8}.tv-theme .tv-focus-standing-silver h2,.tv-theme .tv-focus-standing-silver .tv-focus-standing-row b{color:#cbd5e1}' +
     '#tv-fullscreen-action{border-color:#d4d4d4!important;background:#222!important;color:#fff}' +
     '</style>');
   styles = styles.replace('</style>',
