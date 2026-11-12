@@ -42,11 +42,14 @@ function check(t) {
   check(fresh.data());
   const customToken = await admin.auth().createCustomToken(UID);
   const signIn = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${API_KEY}`, {
-    method:'POST', headers:{ 'Content-Type':'application/json' },
+    method:'POST', headers:{ 'Content-Type':'application/json', Referer:'https://scoreplace.app/' },
     body:JSON.stringify({ token:customToken, returnSecureToken:true }), signal:AbortSignal.timeout(30000)
   });
   const auth = await signIn.json();
-  if (!signIn.ok || !auth.idToken || auth.localId !== UID) fail('não foi possível obter autenticação do organizador');
+  if (!signIn.ok || !auth.idToken)
+    fail('não foi possível obter autenticação do organizador: ' + (auth.error?.message || signIn.status));
+  const verifiedToken = await admin.auth().verifyIdToken(auth.idToken);
+  if (verifiedToken.uid !== UID) fail('token autenticado não corresponde ao organizador');
   const operationId = crypto.randomUUID();
   const called = await fetch('https://us-central1-scoreplace-app.cloudfunctions.net/drawRound', {
     method:'POST', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${auth.idToken}` },
@@ -59,7 +62,7 @@ function check(t) {
   const sameTv = tvFields.every(key => fingerprint(drawn[key]) === fingerprint(t[key]));
   const all = (drawn.matches || []).slice();
   const subdocs = await ref.collection('matches').get();
-  subdocs.docs.forEach(doc => all.push(doc.data()));
+  subdocs.docs.forEach(doc => all.push(doc.data().jogo || doc.data()));
   const matches = [...new Map(all.filter(item => item && item.id).map(item => [String(item.id), item])).values()];
   if (!sameTv || matches.length !== 108 || matches.some(item => item.winner || item.wo ||
       item.resultAt || item.courtCalledAt || item.startedAt || item.scoreP1 != null || item.scoreP2 != null))

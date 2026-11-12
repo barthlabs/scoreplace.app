@@ -47,7 +47,8 @@ async function load() {
   const official = t.camisOfficialGroups || {}, categories = Object.keys(official);
   if (categories.length !== 3 || categories.reduce((n, name) => n + official[name].length, 0) !== 36)
     fail('36 grupos oficiais ausentes');
-  const all = (t.matches || []).concat(tree.filter(item => /^matches\/[^/]+$/.test(item.path)).map(item => item.data));
+  const all = (t.matches || []).concat(tree.filter(item => /^matches\/[^/]+$/.test(item.path))
+    .map(item => item.data.jogo || item.data));
   const matches = [...new Map(all.filter(item => item && item.id).map(item => [String(item.id),item])).values()];
   if (matches.length !== 108 || matches.some(item => item.winner || item.wo || item.resultAt ||
       item.courtCalledAt || item.startedAt || item.scoreP1 != null || item.scoreP2 != null))
