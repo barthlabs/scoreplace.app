@@ -104,6 +104,20 @@ ok(!/_liveScorePoint|_liveScoreUndo|_liveScoreFinish|_liveScoreReset/.test(card)
 ok(card.indexOf('Ana / Bia') !== -1 && card.indexOf('Cris / Dan') !== -1, 'mostra quem está em quadra');
 ok(card.indexOf('VS') !== -1, 'usa a gramática do card da chave (linha de time · VS · linha de time)');
 ok(card.indexOf('40') !== -1, 'mostra o ponto do game corrente');
+W._formatGamePoint = function (points, _other, _tb, cfg) {
+  ok(cfg.countingType === 'tennis', 'card recebe a regra de pontuação do jogo');
+  return ['0', '15', '30', '40'][points];
+};
+const cardComGames = W._liveNowCardHtml({
+  id:'t_1__m10', kind:'tournament', title:'Final Ouro', p1Players:['Ana'], p2Players:['Bia'],
+  scoring:{countingType:'tennis'}, state:{sets:[{gamesP1:1,gamesP2:2}],
+    currentGameP1:2, currentGameP2:1, isTiebreak:false}
+});
+ok(cardComGames.includes('>1</span>') && cardComGames.includes('>2</span>'),
+  'o card usa gamesP1/gamesP2 do estado real, não os campos antigos p1/p2');
+ok(cardComGames.includes('>30</span>') && cardComGames.includes('>15</span>'),
+  'o card converte os pontos 2 × 1 para 30 × 15');
+delete W._formatGamePoint;
 
 // ── 4b. A TRAVA DE "SÓ ASSISTE" É ESTRUTURAL, E FICA NO CÓDIGO ───────────────
 // O espectador abre a MESMA tela do placar (ordem do dono). Então a garantia não pode

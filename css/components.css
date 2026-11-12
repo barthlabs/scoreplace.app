@@ -2781,6 +2781,11 @@ html, body,
 .sp-mc-vs{text-align:center;font-size:0.65rem;color:var(--text-muted);font-weight:800;letter-spacing:2px;padding:3px 0;}
 .sp-mc-acts{display:flex;align-items:flex-start;gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto;}
 .sp-mc-sc{display:flex;align-items:center;flex-shrink:0;margin-left:5px;}
+.sp-match-card[data-live-scoring="1"] .sp-mc-sc{gap:4px;}
+.sp-live-card-games,.sp-live-card-points{display:inline-flex;align-items:center;justify-content:center;min-width:30px;min-height:30px;padding:2px 5px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-card);color:var(--text-main);font-weight:800;font-variant-numeric:tabular-nums;}
+.sp-live-card-points{min-width:38px;color:var(--text-bright);}
+.sp-match-live-status{margin:7px 0 3px;padding:5px 8px;border:1px solid var(--border-color);border-radius:7px;background:var(--bg-card);color:var(--text-main);font-size:.72rem;font-weight:800;text-align:center;font-variant-numeric:tabular-nums;}
+.sp-match-live-status[hidden]{display:none;}
 /* REP/BYE/PROMO é uma anotação do time, não uma terceira coluna concorrendo com
    nome e placar. O chip compacto recupera largura para os nomes e preserva a
    separação fixa antes do score em todos os cards. */

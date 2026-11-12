@@ -9072,7 +9072,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
       p2Players: p2Players.slice(),
       playerUids: _uids,
       scoring: { type: sc.type || '', gamesPerSet: sc.gamesPerSet || null, setsToWin: sc.setsToWin || null,
-                 countingType: sc.countingType || '' },
+                 countingType: sc.countingType || '', fixedSet:!!sc.fixedSet, deuceRule:sc.deuceRule || null },
       // TORNEIO PRIVADO SÓ APARECE PRA QUEM ESTÁ NELE (1.9.37, ordem do dono). '*' = todo
       // mundo (torneio público e partida casual). No privado a plateia é o elenco + a
       // espera + a organização — as MESMAS pessoas que recebem o convite.

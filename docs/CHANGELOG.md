@@ -5,6 +5,7 @@
 - Kelly Cristina foi corrigida para Kelly Barth no banco do torneio privado CAMIS, sem mudar sua identidade. Corte web e uma Function direcionada; versões nativas intactas.
 - O QR da TV inclui o logo do Scoreplace diretamente no HTML da janela, nos layouts padrão e personalizado, evitando que a marca desapareça quando a imagem externa não é exibida.
 - A tela "No ar" respeita o formato circular cadastrado para o logo do torneio, inclusive na caixa de logo do layout personalizado da Confra.
+- O card do jogo na chave, o card "Ao vivo agora" e a final selecionada na TV acompanham os games e os pontos publicados pelo placar ao vivo antes de o resultado ser confirmado. Para contagem de tênis, os pontos aparecem como 0/15/30/40; ao encerrar, o card da chave volta ao resultado canônico.
 
 ## 2.6.62 — 12/nov/2026 (classificação da CONFRA por vaga)
 

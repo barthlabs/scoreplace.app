@@ -254,16 +254,21 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // sets fechados de cada lado + ponto do game corrente + quem saca
   function _leituraPlacar(d) {
     var st = (d && d.state) || {};
-    var sets = (Array.isArray(st.sets) ? st.sets : []).filter(function (x) { return x && (x.p1 != null || x.p2 != null); });
+    var sets = (Array.isArray(st.sets) ? st.sets : []).filter(function (x) {
+      return x && (x.gamesP1 != null || x.gamesP2 != null || x.p1 != null || x.p2 != null);
+    });
     var srv = null;
     if (Array.isArray(st.serveOrder) && st.serveOrder.length) {
       srv = st.serveOrder[(st.totalGamesPlayed || 0) % st.serveOrder.length] || null;
     }
+    var p1 = Number(st.currentGameP1) || 0, p2 = Number(st.currentGameP2) || 0;
+    var cfg = (d && d.scoring) || {};
+    var fmt = typeof window._formatGamePoint === 'function' ? window._formatGamePoint : function (value) { return String(value); };
     return {
-      s1: sets.map(function (x) { return x.p1 || 0; }),
-      s2: sets.map(function (x) { return x.p2 || 0; }),
-      pt1: st.currentGameP1 == null ? 0 : st.currentGameP1,
-      pt2: st.currentGameP2 == null ? 0 : st.currentGameP2,
+      s1: sets.map(function (x) { return Math.max(0, Number(x.gamesP1 != null ? x.gamesP1 : x.p1) || 0); }),
+      s2: sets.map(function (x) { return Math.max(0, Number(x.gamesP2 != null ? x.gamesP2 : x.p2) || 0); }),
+      pt1: fmt(p1, p2, !!st.isTiebreak, { countingType:cfg.countingType, isFixedSet:!!cfg.fixedSet, deuceRule:cfg.deuceRule }),
+      pt2: fmt(p2, p1, !!st.isTiebreak, { countingType:cfg.countingType, isFixedSet:!!cfg.fixedSet, deuceRule:cfg.deuceRule }),
       saca: srv ? srv.team : 0,
       fim: !!st.isFinished
     };
@@ -317,6 +322,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // inteiro, e quase sempre não haveria nada pra mostrar).
     if (!document.getElementById(slotId) && typeof opts.criarSlot !== 'function') return function () {};
     var pinta = function (lista) {
+      if (typeof opts.onScores === 'function') opts.onScores(lista || []);
       var el = document.getElementById(slotId);
       if (!el && (!lista || !lista.length)) return;                 // nada ao vivo e nada no DOM → nem cria
       if (!el) { try { el = opts.criarSlot(); } catch (e) { return; } }

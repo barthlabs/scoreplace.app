@@ -7,6 +7,7 @@
   var highestGenerationById = Object.create(null);
   var lastCompleteTournament = null, loadingTournament = false, lastLoadAttempt = 0;
   var liveMatchTournamentId = '', liveMatches = new Map(), liveMatchesUnsubscribe = null;
+  var liveScoreTournamentId = '', liveScores = new Map(), liveScoresUnsubscribe = null;
   var clock = window.ScoreplaceMatchTiming;
   function esc(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, function (c) {
@@ -456,19 +457,41 @@
       var m = source && matches.find(function (item) { return item && String(item.id) === source; });
       if (!m) return;
       var scoring = typeof window._effectiveScoring === 'function' ? window._effectiveScoring(t, m) : (m.scoring || t.scoring || {});
-      var plan = typeof window._matchSetPlan === 'function' ? window._matchSetPlan(scoring, m) : null;
-      var playedSets = Array.isArray(m.sets) ? m.sets : [];
+      // O placar ponto a ponto do torneio é publicado em liveScores. O documento
+      // canônico do jogo recebe o resultado apenas no encerramento da partida.
+      var live = String(t.id) === liveScoreTournamentId ? liveScores.get(String(m.id)) : null;
+      var liveState = live && live.status === 'live' && live.kind === 'tournament' &&
+        String(live.tournamentId) === String(t.id) && String(live.matchId) === String(m.id) &&
+        Number(live.lastActivityAt) > 0 && now - Number(live.lastActivityAt) < 60000 &&
+        live.state && !live.state.isFinished && !occupancy.isFinished(m) ? live.state : null;
+      var playedSets = liveState && Array.isArray(liveState.sets) ? liveState.sets :
+        (Array.isArray(m.sets) ? m.sets : []);
+      var plan = typeof window._matchSetPlan === 'function'
+        ? window._matchSetPlan(scoring, m, { sets: playedSets }) : null;
       var setsToWin = Math.max(1, Number(scoring && scoring.setsToWin) || (playedSets.length > 1 ? 2 : 1));
       var bestOf = plan && plan.multi ? plan.bestOf : setsToWin * 2 - 1;
       var won = [0, 0];
-      playedSets.forEach(function (set) { if (Number(set.gamesP1) > Number(set.gamesP2)) won[0]++; else if (Number(set.gamesP2) > Number(set.gamesP1)) won[1]++; });
+      playedSets.forEach(function (set, index) {
+        if (liveState && index === playedSets.length - 1) return;
+        if (Number(set.gamesP1) > Number(set.gamesP2)) won[0]++;
+        else if (Number(set.gamesP2) > Number(set.gamesP1)) won[1]++;
+      });
       var setColumns = plan && plan.multi ? plan.columns.map(function (col) { return { label: col.label, set: col.set || null }; }) :
         Array.from({ length: Math.min(bestOf, Math.max(bestOf > 1 ? 2 : 1, playedSets.length + (won[0] && won[1] ? 1 : 0))) }, function (_, i) { return { label: String(i + 1), set: playedSets[i] || null }; });
+      if (liveState && plan && plan.multi) setColumns.forEach(function (col, index) { col.set = playedSets[index] || null; });
+      var livePoints = null;
+      if (liveState) {
+        var p1 = Number(liveState.currentGameP1) || 0, p2 = Number(liveState.currentGameP2) || 0;
+        var cfg = { countingType: scoring.countingType, isFixedSet: !!scoring.fixedSet, deuceRule:scoring.deuceRule };
+        var fmt = typeof window._formatGamePoint === 'function' ? window._formatGamePoint : function (value) { return String(value); };
+        livePoints = [fmt(p1, p2, !!liveState.isTiebreak, cfg), fmt(p2, p1, !!liveState.isTiebreak, cfg)];
+      }
       selectedMatches[id] = { number: m._gameNum || m.scheduledGameNumber || m.matchNumber || '',
         category: String(m.category || m.tierLabel || ''), bracket: String(m.bracket || ''),
         third: !!m.isThirdPlace, a: sideName(t, m, 'p1'), b: sideName(t, m, 'p2'),
-        scoreA: gameScore(m, 1, true), scoreB: gameScore(m, 2, true),
-        bestOf: bestOf, headline: plan && plan.multi ? plan.headline : 'MELHOR DE ' + bestOf + ' · ' + (m.winner ? won[0] + ' × ' + won[1] : 'SET ' + Math.min(bestOf, playedSets.length + 1)),
+        scoreA: gameScore(m, 1, true), scoreB: gameScore(m, 2, true), livePoints:livePoints,
+        bestOf: bestOf, headline: liveState ? 'AO VIVO · PONTOS ' + livePoints[0] + ' × ' + livePoints[1] :
+          (plan && plan.multi ? plan.headline : 'MELHOR DE ' + bestOf + ' · ' + (m.winner ? won[0] + ' × ' + won[1] : 'SET ' + Math.min(bestOf, playedSets.length + 1))),
         setColumns: setColumns, scheduledAt: m.scheduledAt || '',
         winnerSide: typeof window._matchWinnerSide === 'function' ? window._matchWinnerSide(m) :
           (m.winner === 'p1' ? 1 : m.winner === 'p2' ? 2 : 0) };
@@ -974,6 +997,8 @@
   function stop() {
     if (liveMatchesUnsubscribe) liveMatchesUnsubscribe();
     liveMatchesUnsubscribe = null; liveMatches = new Map(); liveMatchTournamentId = '';
+    if (liveScoresUnsubscribe) liveScoresUnsubscribe();
+    liveScoresUnsubscribe = null; liveScores = new Map(); liveScoreTournamentId = '';
     if (wakeSentinel && typeof wakeSentinel.release === 'function') wakeSentinel.release().catch(function () {});
     wakeSentinel = null;
     if (tick) clearInterval(tick);
@@ -1071,6 +1096,17 @@
           if (typeof window._warn === 'function') window._warn('[tv-live] jogos ao vivo indisponíveis', error);
           window._tvLiveEnsureFresh(id);
         });
+    }
+    if (liveScoresUnsubscribe) liveScoresUnsubscribe();
+    liveScores = new Map(); liveScoreTournamentId = id;
+    if (typeof window._liveNowSubscribe === 'function') {
+      liveScoresUnsubscribe = window._liveNowSubscribe(function (scores) {
+        if (liveScoreTournamentId !== id) return;
+        liveScores = new Map((scores || []).filter(function (entry) {
+          return entry && entry.kind === 'tournament' && String(entry.tournamentId) === id && entry.matchId;
+        }).map(function (entry) { return [String(entry.matchId), entry]; }));
+        if (typeof window._tvLiveRefresh === 'function') window._tvLiveRefresh();
+      }, { tournamentId:id });
     }
     window._tvLiveEnsureFresh(tournament.id);
     function refresh() {

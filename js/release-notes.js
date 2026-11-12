@@ -2,6 +2,8 @@
 // nome da mesma pessoa ou substituí-la por outra, preservando jogos concluídos.
 // O QR da TV volta a exibir o logo do Scoreplace ao lado do convite.
 // A TV também respeita o formato redondo escolhido para o logo do torneio.
+// O card da partida e a TV mostram games e pontos enquanto o placar ao vivo
+// está sendo marcado, inclusive a conversão 15/30/40 do tênis.
 // 2.6.62 — A classificação da Confra conserva 36 duplas na Ouro e 34 na Prata.
 // Trocar a formação de uma dupla na repescagem não cria uma vaga extra;
 // os jogos anteriores continuam registrados e as finais seguem em aberto.

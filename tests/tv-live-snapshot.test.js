@@ -483,6 +483,12 @@ let openCalls = 0;
 window.open = () => { openCalls++; return fakePopup; };
 window._findTournamentById = () => t;
 let matchListener, matchUnsubscribed = false;
+let liveScoreListener, liveScoreUnsubscribed = false;
+window._liveNowSubscribe = (callback, opts) => {
+  assert.equal(opts.tournamentId, t.id, 'a TV consulta apenas o torneio aberto');
+  liveScoreListener = callback;
+  return () => { liveScoreUnsubscribed = true; };
+};
 window.FirestoreDB = { db: { collection() { return { doc() { return { collection() { return {
   onSnapshot(callback) { matchListener = callback; return () => { matchUnsubscribed = true; }; }
 }; } }; } }; } } };
@@ -545,6 +551,29 @@ assert.doesNotMatch(tvRoot.innerHTML, /<h3>Times<\/h3>/, 'classificação geral 
 assert.match(tvRoot.innerHTML, /class="tv-qr-code"[^>]*open\.html/);
 assert.match(tvRoot.innerHTML, /<svg class="tv-scoreplace-mark"[^>]*aria-label="Logo Scoreplace"/,
   'o QR da TV inclui o logo dentro do próprio HTML');
+const beforeLiveMatches = t.matches, beforeLiveLayout = t.tvLayout, beforeLiveScoring = t.scoring;
+t.matches = pendingFinals;
+t.tvLayout = finalsLayout;
+t.scoring = { type:'sets', setsToWin:2, countingType:'tennis' };
+window._formatGamePoint = (points, _other, _tb, cfg) => {
+  assert.equal(cfg.countingType, 'tennis', 'a TV usa a regra do placar do jogo');
+  return ['0','15','30','40'][points];
+};
+liveScoreListener([{kind:'tournament', status:'live', tournamentId:t.id, matchId:'198',
+  lastActivityAt:nowMs, state:{sets:[{gamesP1:2,gamesP2:1}], currentGameP1:2,
+    currentGameP2:1, isTiebreak:false, isFinished:false}}]);
+const liveFinal = window._tvLiveBuildSnapshot(t, nowMs).selectedMatches.live1;
+assert.equal(liveFinal.setColumns[0].set.gamesP1, 2, 'final lê os games do placar ao vivo');
+assert.equal(liveFinal.headline, 'AO VIVO · PONTOS 30 × 15', 'final lê os pontos e a conversão do tênis');
+assert.match(tvRoot.innerHTML, /AO VIVO · PONTOS 30 × 15/, 'a janela aberta repinta ao receber um ponto');
+liveScoreListener([{kind:'tournament', status:'live', tournamentId:t.id, matchId:'198',
+  lastActivityAt:nowMs - 61000, state:{sets:[{gamesP1:2,gamesP2:1}], currentGameP1:2,
+    currentGameP2:1, isTiebreak:false, isFinished:false}}]);
+assert.doesNotMatch(window._tvLiveBuildSnapshot(t, nowMs).selectedMatches.live1.headline, /AO VIVO/,
+  'placar sem sinal recente não aparece como ao vivo');
+liveScoreListener([]);
+t.matches = beforeLiveMatches; t.tvLayout = beforeLiveLayout; t.scoring = beforeLiveScoring;
+delete window._formatGamePoint;
 const childSource = popupHtml.match(/<script>\(function\(\)\{"use strict";[\s\S]*?<\/script>/);
 assert(childSource, 'NO AR inclui um relógio próprio na janela, independente do intervalo da aba');
 const childRoot = { innerHTML: '', querySelector: () => null };
@@ -668,6 +697,7 @@ assert.equal(childWarning.hidden, false, 'janela avisa perda prolongada da conex
 window._tvLiveToggle();
 assert.equal(window._tvLiveRefresh, null, 'janela fechada solta o refresh em tempo real');
 assert.equal(matchUnsubscribed, true, 'janela fechada encerra a assinatura dos jogos');
+assert.equal(liveScoreUnsubscribed, true, 'janela fechada encerra a assinatura dos pontos');
 assert.equal(liveButton.attributes['aria-pressed'], 'false', 'fechar a página apaga o NO AR');
 fakePopup.closed = false;
 window._tvLiveToggle();

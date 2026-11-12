@@ -4983,6 +4983,7 @@ function renderBracket(container, tournamentId, isInline) {
       if (typeof window._renderLiveNowInto === 'function') {
         window.__brLiveUnsub = window._renderLiveNowInto('bracket-live-widget', {
           tournamentId: t.id,
+          onScores: function (scores) { window._bracketPaintLiveMatchScores(scores, container); },
           criarSlot: function () {
             var el = document.createElement('div');
             el.id = 'bracket-live-widget';
@@ -9577,6 +9578,53 @@ function _matchCardTimelineTextHtml(t, m) {
 // conteúdo evita que dashboard e chave tenham um segundo template para o mesmo dado.
 window._matchCardTimelineTextHtml = _matchCardTimelineTextHtml;
 
+// O resultado canônico só é escrito ao fechar o jogo. Durante a partida, o
+// placar ponto a ponto chega pelo mesmo listener de "Ao vivo agora" da chave.
+var _bracketLiveScoreOriginal = new WeakMap();
+window._bracketPaintLiveMatchScores = function (scores, root) {
+  var live = new Map((scores || []).filter(function (entry) {
+    return entry && entry.kind === 'tournament' && entry.matchId;
+  }).map(function (entry) { return [String(entry.matchId), entry]; }));
+  (root || document).querySelectorAll('.sp-match-card[data-bracket-complete="0"]').forEach(function (card) {
+    var panel = card.querySelector('[data-sp-live-score]');
+    if (!panel) return;
+    var entry = live.get(panel.getAttribute('data-sp-live-score'));
+    var state = entry && entry.state;
+    var fresh = entry && entry.status === 'live' && Number(entry.lastActivityAt) > 0 &&
+      Date.now() - Number(entry.lastActivityAt) < 60000 && state && !state.isFinished;
+    var cells = card.querySelectorAll('.sp-mc-sc');
+    if (!fresh || cells.length !== 2) {
+      cells.forEach(function (cell) {
+        if (_bracketLiveScoreOriginal.has(cell)) {
+          cell.innerHTML = _bracketLiveScoreOriginal.get(cell);
+          _bracketLiveScoreOriginal.delete(cell);
+        }
+      });
+      panel.hidden = true;
+      card.removeAttribute('data-live-scoring');
+      return;
+    }
+    var sets = Array.isArray(state.sets) ? state.sets : [];
+    var current = sets[sets.length - 1] || {};
+    var games = [Number(current.gamesP1) || 0, Number(current.gamesP2) || 0];
+    var points = [Number(state.currentGameP1) || 0, Number(state.currentGameP2) || 0];
+    var scoring = entry.scoring || {};
+    var cfg = { countingType:scoring.countingType, isFixedSet:!!scoring.fixedSet, deuceRule:scoring.deuceRule };
+    var fmt = typeof window._formatGamePoint === 'function' ? window._formatGamePoint : function (n) { return String(n); };
+    var shown = [fmt(points[0], points[1], !!state.isTiebreak, cfg), fmt(points[1], points[0], !!state.isTiebreak, cfg)];
+    cells.forEach(function (cell, side) {
+      if (!_bracketLiveScoreOriginal.has(cell)) _bracketLiveScoreOriginal.set(cell, cell.innerHTML);
+      var html = '<span class="sp-live-card-games" title="Games no set">' + games[side] + '</span>' +
+        '<span class="sp-live-card-points" title="Pontos no game">' + shown[side] + '</span>';
+      if (cell.innerHTML !== html) cell.innerHTML = html;
+    });
+    panel.textContent = '🔴 AO VIVO · GAMES ' + games[0] + ' × ' + games[1] +
+      ' · PONTOS ' + shown[0] + ' × ' + shown[1];
+    panel.hidden = false;
+    card.setAttribute('data-live-scoring', '1');
+  });
+};
+
 function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingSub, opts) {
   var _t = window._t || function(k) { return k; };
   if (!m) return '';
@@ -10792,6 +10840,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       ${p1Row}
       ${vsRow}
       ${p2Row}
+      ${!isDecided && !isByeMatch && !hasTBD ? '<div class="sp-match-live-status" data-sp-live-score="' + window._safeHtml(String(m.id)) + '" hidden></div>' : ''}
       ${_tbHintHtml}
       ${winnerBadge}
       ${_courtCardHtml}
