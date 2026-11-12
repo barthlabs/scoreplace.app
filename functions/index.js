@@ -267,6 +267,7 @@ admin.initializeApp();
 // (CORS não é fronteira de segurança aqui: toda CF exige ID token no Authorization.)
 const APP_ORIGINS = [
   "https://scoreplace.app",
+  "https://scoreplace-app.firebaseapp.com", // Hosting oficial de contingência quando o domínio próprio é filtrado
   "capacitor://scoreplace.app",   // iOS nativo (Capacitor)
   "ionic://scoreplace.app",       // iOS legado (iosScheme antigo)
   "capacitor://localhost",        // iOS nativo sem hostname configurado

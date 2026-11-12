@@ -2,6 +2,7 @@
 
 - Quando o app é aberto em `scoreplace-app.firebaseapp.com`, o login Google usa o handler OAuth do próprio Firebase Hosting. `scoreplace.app` e os apps nativos continuam usando `auth.scoreplace.app`.
 - O domínio alternativo já está autorizado no Firebase Auth e no App Check. Nenhum dado de torneio é alterado por este corte web.
+- As Functions de leitura e gestão do torneio permitem a origem oficial `scoreplace-app.firebaseapp.com`, necessária para carregar o CAMIS e acessar os resultados pela contingência; autorização de usuário e organizador permanece obrigatória.
 
 ## 2.6.63 — 12/nov/2026 (nomes manuais no CAMIS)
 
