@@ -1,3 +1,8 @@
+## 2.6.64 — 12/nov/2026 (acesso alternativo durante bloqueio de DNS)
+
+- Quando o app é aberto em `scoreplace-app.firebaseapp.com`, o login Google usa o handler OAuth do próprio Firebase Hosting. `scoreplace.app` e os apps nativos continuam usando `auth.scoreplace.app`.
+- O domínio alternativo já está autorizado no Firebase Auth e no App Check. Nenhum dado de torneio é alterado por este corte web.
+
 ## 2.6.63 — 12/nov/2026 (nomes manuais no CAMIS)
 
 - Nos cards de Inscritos do CAMIS, tocar no nome digitado abre duas ações: corrigir o nome da mesma atleta, mantendo a inscrição, ou substituir a atleta por outra pessoa, com nova inscrição. O toque na foto continua destinado à presença.

@@ -405,6 +405,13 @@ const firebaseConfig = {
   measurementId: "G-PZ25D36JSV"
 };
 
+// A rota oficial do Hosting serve o mesmo projeto quando o domínio próprio está
+// indisponível. Nela, o handler OAuth precisa usar o próprio host do Firebase:
+// depender de auth.scoreplace.app repetiria a falha de DNS do domínio principal.
+if (window.location.hostname === 'scoreplace-app.firebaseapp.com') {
+  firebaseConfig.authDomain = 'scoreplace-app.firebaseapp.com';
+}
+
 // ─── API key por plataforma NO APP NATIVO ────────────────────────────────────
 // v4.3.22: no app Capacitor o JS SDK roda de origem `capacitor://localhost`. A
 // "Browser key" (a apiKey do config web) é restrita por HTTP referrer a
