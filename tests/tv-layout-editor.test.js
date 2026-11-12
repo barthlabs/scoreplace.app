@@ -110,7 +110,9 @@ const { chromium } = require('@playwright/test');
     });
     assert.equal(await page.evaluate(() => window._tvEditorHasChanges()), true);
     await page.locator('[data-tv-save-live]').click();
-    assert.deepEqual(await page.evaluate(() => Object.keys(window.__savedTvPatch).sort()), ['id','tvLayout','tvScreens']);
+    assert.deepEqual(await page.evaluate(() => Object.keys(window.__savedTvPatch).sort()), ['id','tvActiveScreen','tvLayout','tvScreens']);
+    assert.equal(await page.evaluate(() => window.__savedTvPatch.tvActiveScreen), 0,
+      'a primeira tela gravada torna-se o padrão do torneio');
     assert.equal(await page.evaluate(() => window._tvEditorHasChanges()), false, 'salvar a tela limpa as mudanças pendentes');
     await page.locator('[data-tv-save-live]').click();
     assert.equal(await page.evaluate(() => window.__tvSaveCalls), 1,
@@ -209,6 +211,7 @@ const { chromium } = require('@playwright/test');
     assert.equal(await page.locator('[data-tv-box="courts"] [data-tv-resize]').count(), 8);
     await page.locator('[data-tv-default]').click();
     assert.equal(await page.evaluate(() => window._tvEditorReadLayout().sections.qr.visible), true);
+    await page.locator('[data-tv-save-live]').click();
     await page.locator('[data-tv-add-screen]').click();
     assert.equal(await page.locator('[data-tv-screen-list] option').count(), 2);
     await page.locator('[data-tv-background-mode]').selectOption('custom');
@@ -219,10 +222,16 @@ const { chromium } = require('@playwright/test');
     assert.notEqual(savedScreens[0].layout.background, '#223344', 'a segunda tela tem edição independente');
     await page.locator('[data-tv-screen-list]').selectOption('0');
     assert.equal(await page.locator('[data-tv-background]').inputValue(), savedScreens[0].layout.background);
+    assert.match(await page.locator('[data-tv-screen-list] option').first().textContent(), /principal.*padrão/);
+    assert.equal(await page.locator('[data-tv-phase]').isDisabled(), true,
+      'a tela principal não pode ser reatribuída a outra fase');
     await page.locator('[data-tv-screen-list]').selectOption('1');
     await page.locator('[data-tv-phase]').selectOption('2');
     savedScreens = await page.evaluate(() => window._tvEditorReadScreens());
     assert.deepEqual(savedScreens.map(screen => screen.phaseIndex), [0, 2], 'a tela pode ser vinculada a outra fase');
+    await page.locator('[data-tv-save-live]').click();
+    assert.equal(await page.evaluate(() => 'tvLayout' in window.__savedTvPatch), false,
+      'salvar outra tela preserva o layout principal no servidor');
     await page.evaluate(() => {
       const saved = window._tvEditorReadScreens();
       window._tvEditorSetLayout(saved[0].layout);
@@ -231,8 +240,19 @@ const { chromium } = require('@playwright/test');
     assert.equal(await page.locator('[data-tv-screen-list] option').count(), 2, 'as telas gravadas voltam ao editor');
     await page.locator('[data-tv-screen-list]').selectOption('2');
     assert.equal(await page.locator('[data-tv-background]').inputValue(), '#223344');
+    await page.locator('[data-tv-show-screen]').click();
+    assert.equal(await page.evaluate(() => window.__savedTvPatch.tvActiveScreen), 1,
+      'organizador pode colocar a segunda tela no ar durante o torneio');
+    assert.deepEqual(await page.evaluate(() => Object.keys(window.__savedTvPatch).sort()), ['id', 'tvActiveScreen'],
+      'trocar a tela no ar preserva as geometrias gravadas');
+    assert.equal(await page.evaluate(() => window._tvLiveBuildSnapshot({ ...window._editingTournament,
+      tvScreens:window._tvEditorReadScreens(), tvActiveScreen:1 }).tvLayout.background), '#223344');
     await page.locator('[data-tv-delete-screen]').click();
     assert.equal(await page.locator('[data-tv-screen-list] option').count(), 1);
+    assert.equal(await page.evaluate(() => window._tvEditorHasChanges()), true);
+    await page.locator('[data-tv-save-live]').click();
+    assert.equal(await page.evaluate(() => window.__savedTvPatch.tvActiveScreen), 0,
+      'ao excluir a tela ativa, volta para a principal');
     await page.evaluate(() => {
       document.getElementById('form').innerHTML = '<details id="tv-personalization"><summary>Personalização</summary><div id="tv-layout-editor"></div></details><div id="fase1-box">Formato</div>';
       const next = window.ScoreplaceTvLayout.defaults();

@@ -183,6 +183,12 @@ assert.equal(window._tvLiveBuildSnapshot({ ...t, currentPhaseIndex: 1, tvLayout:
   'TV escolhe automaticamente a tela da fase em andamento');
 assert.equal(window._tvLiveBuildSnapshot({ ...t, currentPhaseIndex: 2, tvLayout: customLayout, tvScreens: phaseScreens }).tvLayout.background, customLayout.background,
   'fase sem tela própria mantém a tela base');
+assert.equal(window._tvLiveBuildSnapshot({ ...t, currentPhaseIndex: 1, tvLayout: customLayout,
+  tvScreens: phaseScreens, tvActiveScreen: 0 }).tvLayout.background, customLayout.background,
+  'tela principal explicitamente escolhida continua no ar mesmo após mudar de fase');
+assert.equal(window._tvLiveBuildSnapshot({ ...t, currentPhaseIndex: 0, tvLayout: customLayout,
+  tvScreens: phaseScreens, tvActiveScreen: 1 }).tvLayout.background, '#123456',
+  'organizador troca para outra tela durante a mesma fase');
 const customHtml = window._tvLiveBodyHtml(customSnapshot);
 assert.match(customHtml, /tv-custom-board/);
 assert.match(customHtml, /tv-custom-qr/, 'QR permanece mesmo se um layout antigo o ocultou');

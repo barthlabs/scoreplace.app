@@ -7,7 +7,7 @@
     live1: 'Partida 1', live2: 'Partida 2', live3: 'Partida 3', live4: 'Partida 4',
     standing1: 'Classificação 1', standing2: 'Classificação 2', standing3: 'Classificação 3', standing4: 'Classificação 4' };
   var cardLabels = { court: 'Quadra', number: 'Número do jogo', category: 'Categoria', teams: 'Times', players: 'Atletas', score: 'Placar', timer: 'Relógio' };
-  var draft = null, screens = null, activePhase = 0, touched = false, mounted = null, pendingSet = false, resizeObserver = null, snapshot = null, savedBaseline = '';
+  var draft = null, screens = null, activePhase = 0, activeLiveScreen = null, savedActiveLiveScreen = null, touched = false, mounted = null, pendingSet = false, resizeObserver = null, snapshot = null, savedBaseline = '', savedDefaultLayout = '';
   function esc(value) {
     return String(value).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
@@ -22,10 +22,14 @@
     var base = layout ? Core.normalize(layout) : Core.defaults();
     screens = savedScreens ? Core.normalizeScreens(savedScreens) : null;
     if (!screens) screens = [{ phaseIndex: 0, layout: base }];
+    // tvLayout é a tela principal do torneio. Uma tela extra nunca a substitui.
+    if (layout) screens[0].layout = base;
     activePhase = screens[0].phaseIndex;
     draft = screens[0].layout;
     touched = !!layout || !!savedScreens;
     savedBaseline = JSON.stringify(screens);
+    savedDefaultLayout = JSON.stringify(screens[0].layout);
+    activeLiveScreen = savedActiveLiveScreen = null;
   }
   function phaseNames() {
     var phases = window._editingTournament && window._editingTournament.phases || [];
@@ -167,10 +171,11 @@
       '<h3 style="margin:0 0 .4rem">📺 Tela No ar</h3>' +
       '<p style="font-size:.8rem;color:var(--text-muted)">Arraste o interior para mover. Arraste qualquer borda para mudar um eixo ou um canto para mudar os dois. O QR permanece visível. Salve a tela mesmo com o torneio em andamento.</p>' +
       '<div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:.6rem 0 .8rem"><label>Tela <select data-tv-screen-list aria-label="Selecionar tela No ar">' +
-      screens.map(function (screen, i) { return '<option value="' + screen.phaseIndex + '"' + (screen.phaseIndex === activePhase ? ' selected' : '') + '>Tela ' + (i + 1) + ' · ' + esc(names[screen.phaseIndex] || 'Fase ' + (screen.phaseIndex + 1)) + '</option>'; }).join('') +
+      screens.map(function (screen, i) { return '<option value="' + screen.phaseIndex + '"' + (screen.phaseIndex === activePhase ? ' selected' : '') + '>' + (i === 0 ? 'Tela principal · padrão' : 'Tela ' + (i + 1) + ' · ' + esc(names[screen.phaseIndex] || 'Fase ' + (screen.phaseIndex + 1))) + (i === activeLiveScreen ? ' · no ar' : '') + '</option>'; }).join('') +
       '</select></label><label>Usar na fase <select data-tv-phase aria-label="Fase desta tela">' + phaseOptions + '</select></label>' +
       '<button type="button" data-tv-add-screen class="btn btn-secondary"' + (screens.length >= 12 ? ' disabled' : '') + '>+ Nova tela</button>' +
-      (screens.length > 1 ? '<button type="button" data-tv-delete-screen class="btn btn-secondary">Excluir esta tela</button>' : '') + '</div>' +
+      '<button type="button" data-tv-show-screen class="btn btn-secondary">Mostrar esta tela agora</button>' +
+      (screens.length > 1 && selected !== screens[0] ? '<button type="button" data-tv-delete-screen class="btn btn-secondary">Excluir esta tela</button>' : '') + '</div>' +
       '<div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-bottom:.6rem"><button type="button" data-tv-finals-preset class="btn btn-secondary">Final Ouro e Prata</button><button type="button" data-tv-qr-bottom class="btn btn-secondary">Alinhar QR embaixo</button><label>Fundo <select data-tv-background-mode aria-label="Origem das cores da tela"><option value="tournament"' + (layout.backgroundMode === 'tournament' ? ' selected' : '') + '>Cores do torneio</option><option value="custom"' + (layout.backgroundMode === 'custom' ? ' selected' : '') + '>Cor manual</option></select></label>' +
       '<label data-tv-manual-color' + (layout.backgroundMode === 'custom' ? '' : ' hidden') + '>Cor <input data-tv-background type="color" value="' + esc(layout.background) + '"></label>' +
       (!layout.sections.logo.visible ? '<button type="button" data-tv-add-logo class="btn btn-secondary">+ Colocar logo</button>' :
@@ -243,7 +248,9 @@
     host.querySelector('[data-tv-screen-list]').onchange = function (event) {
       activePhase = Number(event.target.value); render();
     };
+    host.querySelector('[data-tv-phase]').disabled = selected === screens[0];
     host.querySelector('[data-tv-phase]').onchange = function (event) {
+      if (selected === screens[0]) return;
       selected.phaseIndex = Number(event.target.value); activePhase = selected.phaseIndex; touched = true; render();
     };
     host.querySelector('[data-tv-add-screen]').onclick = function () {
@@ -254,8 +261,27 @@
     };
     var removeScreen = host.querySelector('[data-tv-delete-screen]');
     if (removeScreen) removeScreen.onclick = function () {
+      if (selected === screens[0]) return;
+      var removedIndex = screens.indexOf(selected);
       screens = screens.filter(function (screen) { return screen !== selected; });
+      if (activeLiveScreen === removedIndex) activeLiveScreen = 0;
+      else if (activeLiveScreen != null && activeLiveScreen > removedIndex) activeLiveScreen--;
       activePhase = screens[0].phaseIndex; touched = true; render();
+    };
+    host.querySelector('[data-tv-show-screen]').onclick = async function (event) {
+      var button = event.currentTarget, index = screens.indexOf(selected);
+      var previous = activeLiveScreen;
+      button.disabled = true; button.textContent = 'Aplicando…';
+      activeLiveScreen = index;
+      try {
+        await window._tvEditorSaveChanges();
+        if (window.showNotification) window.showNotification('Tela No ar alterada', 'A tela selecionada está disponível na TV.', 'success');
+        render();
+      } catch (error) {
+        activeLiveScreen = previous;
+        if (window.showNotification) window.showNotification('Falha ao trocar a tela No ar', error && error.message || '', 'error');
+        button.disabled = false; button.textContent = 'Mostrar esta tela agora';
+      }
     };
     host.querySelectorAll('[data-tv-card]').forEach(function (input) { input.onchange = function () {
       layout.card[input.dataset.tvCard] = input.checked; touched = true;
@@ -413,15 +439,25 @@
     pendingSet = true;
     if (mounted && mounted.isConnected) { pendingSet = false; render(); }
   };
+  window._tvEditorSetActiveScreen = function (value) {
+    activeLiveScreen = savedActiveLiveScreen = Number.isInteger(value) && value >= 0 && screens && value < screens.length ? value : null;
+    if (mounted && mounted.isConnected) render();
+  };
   window._tvEditorReadLayout = function () { return touched ? Core.normalize(screens[0].layout) : null; };
   window._tvEditorReadScreens = function () { return touched ? Core.normalizeScreens(screens) : null; };
-  window._tvEditorHasChanges = function () { return !!screens && JSON.stringify(screens) !== savedBaseline; };
+  window._tvEditorHasChanges = function () { return !!screens && (JSON.stringify(screens) !== savedBaseline || activeLiveScreen !== savedActiveLiveScreen); };
   window._tvEditorSaveChanges = async function () {
     var t = window._editingTournament;
     if (!t || !t.id || !window.AppStore) throw new Error('Torneio indisponível para salvar a tela.');
     if (!window._tvEditorHasChanges()) return false;
-    await window.AppStore.addTournament({ id:t.id, tvLayout:window._tvEditorReadLayout(), tvScreens:window._tvEditorReadScreens() });
+    var patch = { id:t.id };
+    if (JSON.stringify(screens) !== savedBaseline) patch.tvScreens = window._tvEditorReadScreens();
+    if (JSON.stringify(screens[0].layout) !== savedDefaultLayout) patch.tvLayout = window._tvEditorReadLayout();
+    if (activeLiveScreen !== savedActiveLiveScreen || savedActiveLiveScreen == null) patch.tvActiveScreen = activeLiveScreen == null ? 0 : activeLiveScreen;
+    await window.AppStore.addTournament(patch);
     savedBaseline = JSON.stringify(screens);
+    savedDefaultLayout = JSON.stringify(screens[0].layout);
+    activeLiveScreen = savedActiveLiveScreen = patch.tvActiveScreen == null ? activeLiveScreen : patch.tvActiveScreen;
     return true;
   };
   window._tvEditorRefreshPreview = function () { if (mounted && mounted.isConnected) render(); };
@@ -438,7 +474,8 @@
       setState(null, null);
       var editField = document.getElementById('edit-tournament-id');
       if (window._editingTournament && (!editField || String(editField.value || '') === String(window._editingTournament.id || ''))) {
-        try { setState(window._editingTournament.tvLayout || null, window._editingTournament.tvScreens || null); }
+        try { setState(window._editingTournament.tvLayout || null, window._editingTournament.tvScreens || null);
+          activeLiveScreen = savedActiveLiveScreen = Number.isInteger(window._editingTournament.tvActiveScreen) ? window._editingTournament.tvActiveScreen : null; }
         catch (e) { setState(null, null); }
       }
     }

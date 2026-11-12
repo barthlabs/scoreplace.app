@@ -1,3 +1,10 @@
+## 2.6.56 — 12/nov/2026 (tela principal da TV preservada)
+
+- A composição da TV que o organizador salvou para o CAMIS foi restaurada de uma revisão anterior do torneio: quadras à esquerda, Próximos jogos e Últimos resultados à direita e QR no canto inferior. Foram restaurados `tvLayout` e `tvScreens` e selecionada a tela principal; logo, fundo, jogos e placares ficaram intactos.
+- A primeira tela é identificada como principal e padrão. O editor não permite reatribuí-la a outra fase nem excluí-la. Salvar uma tela secundária não substitui `tvLayout`; trocar a tela exibida não regrava as posições dos boxes.
+- O organizador pode mostrar qualquer tela salva durante o torneio. A escolha fica em `tvActiveScreen`; a TV a usa imediatamente, sem depender da fase. Na ausência desse campo, torneios antigos continuam selecionando telas por fase.
+- Escritas diretas de `tvActiveScreen` foram bloqueadas; a troca passa pela Function autenticada de configuração.
+
 ## 2.6.55 — 11/nov/2026 (proteção da tela No ar)
 
 - O layout da TV do CAMIS foi restaurado da versão histórica salva às 21h11: quadras à esquerda, Próximos jogos e Últimos resultados à direita e QR no canto inferior. Logo, degradê, jogos, placares e sorteio foram preservados.

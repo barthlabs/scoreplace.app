@@ -1,3 +1,6 @@
+// 2.6.56 — A tela principal salva pelo organizador permanece como padrão da TV.
+// É possível guardar outras telas e escolher qual mostrar durante os jogos,
+// sem alterar o desenho da principal nem os placares.
 // 2.6.55 — Recuperada a tela No ar do CAMIS com as posições que o organizador
 // havia salvo. Gravações comuns de jogos deixam de reenviar o desenho da TV;
 // a edição da tela continua pelo comando próprio do organizador.

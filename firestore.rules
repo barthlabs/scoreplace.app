@@ -885,7 +885,7 @@ service cloud.firestore {
           'billingTermsAcceptance', '_phaseReadCertificate', 'refereeUids',
           // A tela No ar é editada pela Function autenticada. Saves genéricos
           // de jogos vindos de abas antigas nunca podem sobrescrevê-la.
-          'tvLayout', 'tvScreens'
+          'tvLayout', 'tvScreens', 'tvActiveScreen'
         ])
         && cobrancaClienteNaoGeraChave()
         && rosterLegadoProtegidoAposMigracao()

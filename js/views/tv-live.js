@@ -397,7 +397,10 @@
       var fallbackLayout = null, screens = null;
       try { if (t.tvLayout) fallbackLayout = layoutCore.normalize(t.tvLayout); } catch (e) { /* dado antigo inválido */ }
       try { if (t.tvScreens) screens = layoutCore.normalizeScreens(t.tvScreens); } catch (e) { /* usa o layout antigo */ }
-      tvLayout = layoutCore.forPhase(screens, t.currentPhaseIndex || 0, fallbackLayout);
+      if (Number.isInteger(t.tvActiveScreen) && t.tvActiveScreen >= 0 &&
+          screens && t.tvActiveScreen < screens.length) {
+        tvLayout = t.tvActiveScreen === 0 ? (fallbackLayout || screens[0].layout) : screens[t.tvActiveScreen].layout;
+      } else tvLayout = layoutCore.forPhase(screens, t.currentPhaseIndex || 0, fallbackLayout);
     }
     var matchChoices = matches.filter(function (m) { return m && m.id && !m.isBye && !m.isSitOut; }).map(function (m) {
       return { id: String(m.id), label: 'JOGO ' + (m._gameNum || m.scheduledGameNumber || m.matchNumber || '') +

@@ -5607,7 +5607,7 @@ const _CAMPOS_CONFIG_TORNEIO = new Set([
    * com a escolha nova é RECUSADO pelo servidor. O valor é fechado no cliente e reconferido pelo
    * motor, que cai em `repescagem` diante de qualquer coisa que não reconheça. */
   'politicaDaChave',
-  'phase1Name','rankingPrimary','tiebreakers','tiebreakersExcluded','advancedScoring','tvLayout','tvScreens','genderCategories',
+  'phase1Name','rankingPrimary','tiebreakers','tiebreakersExcluded','advancedScoring','tvLayout','tvScreens','tvActiveScreen','genderCategories',
   'skillCategories','ageCategories','customCategories','combinedCategories','rigor','rigorRequire',
   'fmt2','phases'
 ]);
@@ -5789,6 +5789,10 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     } else if (key === 'tvScreens') {
       try { patch[key] = require('./tv-layout-core').normalizeScreens(raw[key]); }
       catch (error) { throw new HttpsError('invalid-argument', error.message); }
+    } else if (key === 'tvActiveScreen') {
+      if (!Number.isInteger(raw[key]) || raw[key] < 0 || raw[key] > 11)
+        throw new HttpsError('invalid-argument', 'Tela No ar inválida.');
+      patch[key] = raw[key];
     } else patch[key] = _clonaConfigDeclarativa(raw[key], 0, [key]);
   });
   if ('titleColor' in patch && (typeof patch.titleColor !== 'string' || !/^#[0-9a-f]{6}$/i.test(patch.titleColor))) {
@@ -5811,6 +5815,14 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização atualiza a configuração.', { tId, uid });
+    if ('tvActiveScreen' in patch || 'tvScreens' in patch) {
+      const availableScreens = 'tvScreens' in patch ? patch.tvScreens : t.tvScreens;
+      const activeScreen = 'tvActiveScreen' in patch ? patch.tvActiveScreen : t.tvActiveScreen;
+      if (Number.isInteger(activeScreen) && activeScreen > 0 &&
+          (!Array.isArray(availableScreens) || activeScreen >= availableScreens.length)) {
+        throw new HttpsError('invalid-argument', 'A tela No ar selecionada não existe.');
+      }
+    }
     if (t.rulesContractVersion >= 2 && t.status === 'finished') {
       throw new HttpsError('failed-precondition', 'O torneio já foi encerrado; a configuração publicada não pode ser alterada.');
     }
