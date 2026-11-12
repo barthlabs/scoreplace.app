@@ -32,7 +32,7 @@ function main() {
   const live = JSON.parse(execFileSync('gcloud', [
     'functions', 'list', '--project', 'scoreplace-app', '--regions', 'us-central1',
     '--v2', '--format=json',
-  ], { cwd: root, encoding: 'utf8', timeout: 60000 }));
+  ], { cwd: root, encoding: 'utf8', timeout: 180000 }));
   const errors = validateCallables(gate.normal, live);
   if (errors.length) {
     for (const error of errors) console.error('✗ ' + error);
