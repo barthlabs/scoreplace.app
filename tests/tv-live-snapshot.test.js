@@ -186,6 +186,9 @@ assert.equal(window._tvLiveBuildSnapshot({ ...t, currentPhaseIndex: 2, tvLayout:
 assert.equal(window._tvLiveBuildSnapshot({ ...t, currentPhaseIndex: 1, tvLayout: customLayout,
   tvScreens: phaseScreens, tvActiveScreen: 0 }).tvLayout.background, customLayout.background,
   'tela principal explicitamente escolhida continua no ar mesmo após mudar de fase');
+assert.equal(window._tvLiveBuildSnapshot({ ...t, currentPhaseIndex: 1,
+  tvScreens: phaseScreens, tvActiveScreen: 0 }).tvLayout.background, customLayout.background,
+  'escolha explícita da principal funciona mesmo em torneio legado sem tvLayout');
 assert.equal(window._tvLiveBuildSnapshot({ ...t, currentPhaseIndex: 0, tvLayout: customLayout,
   tvScreens: phaseScreens, tvActiveScreen: 1 }).tvLayout.background, '#123456',
   'organizador troca para outra tela durante a mesma fase');

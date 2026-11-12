@@ -94,6 +94,10 @@ const categories = [{ id: 'light', label: 'Light' }];
   const invalidScreen = await callFn('updateTournamentConfiguration', { tournamentId:routedId,
     sandbox:true, patch:{ tvActiveScreen:12 } }, owner);
   assert.equal(invalidScreen.body.error.status, 'INVALID_ARGUMENT');
+  const removedActive = await callFn('updateTournamentConfiguration', { tournamentId:routedId,
+    sandbox:true, patch:{ tvScreens:[{ phaseIndex:0, layout:mainScreen }] } }, owner);
+  assert.equal(removedActive.body.error.status, 'INVALID_ARGUMENT',
+    'remover a tela ativa exige selecionar outra no mesmo salvamento');
   assert.deepEqual((await routed.get()).data().tvScreens, tvBefore.tvScreens);
   assert.equal(JSON.stringify((await real.get()).data()), realBefore);
   console.log('✓ troca de tela ao vivo preserva o layout principal e recusa índice inexistente');

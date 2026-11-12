@@ -25,6 +25,7 @@ async function req(uid,fields,mask){const r=await fetch(url+(mask?'?updateMask.f
   out.classification=await req(uid,{classification:M({updated:I(1)})},'classification');
   out.tvLayout=await req(uid,{tvLayout:M({background:S('#000000')})},'tvLayout');
   out.tvScreens=await req(uid,{tvScreens:A([])},'tvScreens');
+  out.tvActiveScreen=await req(uid,{tvActiveScreen:I(1)},'tvActiveScreen');
   out.matches=await req(uid,{matches:A([M({id:S('jogo-2'),scheduledGameNumber:I(1)})])},'matches');
   out.plan=await req(uid,{scheduleWindow:M({})},'scheduleWindow');
   out.phases=await req(uid,{phases:A([M({name:S('Fase alterada')})])},'phases');
@@ -49,7 +50,7 @@ try {
   if (!match) throw Error('Driver não devolveu resultado: ' + output.slice(-1000));
   const got = JSON.parse(match[1]);
   const expected = { setup:200, name:200, classification:200, tvLayout:403,
-    tvScreens:403, matches:403, plan:403,
+    tvScreens:403, tvActiveScreen:403, matches:403, plan:403,
     phases:403, fmt2:403, tiebreakers:403, marker:403 };
   for (const [key,status] of Object.entries(expected)) {
     if (got[key] !== status) throw Error(key + ': esperado ' + status + ', veio ' + got[key]);
