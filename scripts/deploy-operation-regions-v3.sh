@@ -15,12 +15,20 @@ original=.claude/tmp/operation-regions-manifest-v3.original.json
 oldmanifest=.claude/tmp/operation-regions-manifest-v2.json
 mkdir -p .claude/tmp
 check_tree() { [[ -z "$(git status --porcelain)" ]] || { echo 'árvore suja' >&2; exit 1; }; node scripts/check-vendor-fresh.js; }
-describe() { gcloud run services describe "$1" --project "$project" --region "$2" --format=json 2>/dev/null; }
+retry_read() {
+  local result attempt
+  for attempt in 1 2 3; do
+    if result="$("$@")"; then printf '%s\n' "$result"; return 0; fi
+    [[ "$attempt" == 3 ]] || sleep 2
+  done
+  return 1
+}
+describe() { retry_read gcloud run services describe "$1" --project "$project" --region "$2" --format=json; }
 field() { node -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>{let x=JSON.parse(s);for(const p of process.argv[1].split("."))x=x?.[p];process.stdout.write(x==null?"":String(x))})' "$1"; }
 probe_no_auth() {
   local file code
   file="$(mktemp)"
-  code="$(curl -sS --max-time 20 -o "$file" -w '%{http_code}' -H 'content-type: application/json' -d '{"data":{"probe":true}}' "$1")"
+  code="$(curl -sS --retry 3 --retry-delay 2 --retry-all-errors --max-time 20 -o "$file" -w '%{http_code}' -H 'content-type: application/json' -d '{"data":{"probe":true}}' "$1")"
   [[ "$code" == 401 || "$code" == 403 ]] || { echo "sonda HTTP $code: $1" >&2; rm -f "$file"; exit 1; }
   node - "$file" <<'NODE'
 const x=JSON.parse(require('fs').readFileSync(process.argv[2]));
@@ -44,7 +52,7 @@ NODE
 verify_served_row() {
   local name="$1" region="$2" json="$3" file="$4" revision_name revision_json
   revision_name="$(SP_SERVICE_JSON="$json" node -e 'const {servedRevisionName}=require("./scripts/check-served-operation-revision");process.stdout.write(servedRevisionName(JSON.parse(process.env.SP_SERVICE_JSON)))')" || return 1
-  revision_json="$(gcloud run revisions describe "$revision_name" --project "$project" --region "$region" --format=json)" || return 1
+  revision_json="$(retry_read gcloud run revisions describe "$revision_name" --project "$project" --region "$region" --format=json)" || return 1
   SP_SERVICE_JSON="$json" SP_REVISION_JSON="$revision_json" SP_FILE="$file" SP_NAME="$name" SP_REGION="$region" \
     node scripts/check-served-operation-revision.js || return 1
   probe_no_auth "$(printf '%s' "$json" | field status.url)"

@@ -24,8 +24,16 @@ source_commit="$(SP_MANIFEST="$source_manifest" node -e 'const m=require("./"+pr
 if [[ "$mode" != '--check-live' ]]; then
   git diff --quiet "$source_commit" HEAD -- functions functions-autodraw || { echo 'codebase mudou após build regional' >&2; exit 1; }
 fi
-describe_run() { gcloud run services describe "$1" --project "$project" --region "$region" --format=json; }
-describe_fn() { gcloud functions describe "$1" --project "$project" --region us-central1 --gen2 --format=json; }
+retry_read() {
+  local result attempt
+  for attempt in 1 2 3; do
+    if result="$("$@")"; then printf '%s\n' "$result"; return 0; fi
+    [[ "$attempt" == 3 ]] || sleep 2
+  done
+  return 1
+}
+describe_run() { retry_read gcloud run services describe "$1" --project "$project" --region "$region" --format=json; }
+describe_fn() { retry_read gcloud functions describe "$1" --project "$project" --region us-central1 --gen2 --format=json; }
 validate_before() {
   for i in "${!recovery[@]}"; do
     SP_JSON="$(describe_run "${recovery[$i]}")" SP_TARGET="${targets[$i]}" node - <<'NODE'
@@ -44,7 +52,7 @@ NODE
 probe_no_auth() {
   local file code
   file="$(mktemp)"
-  code="$(curl -sS --max-time 15 -o "$file" -w '%{http_code}' -H 'content-type: application/json' -d '{"data":{"probe":true}}' "$1")"
+  code="$(curl -sS --retry 3 --retry-delay 2 --retry-all-errors --max-time 15 -o "$file" -w '%{http_code}' -H 'content-type: application/json' -d '{"data":{"probe":true}}' "$1")"
   [[ "$code" == 401 || "$code" == 403 ]] || { echo "sonda sem Auth: HTTP $code" >&2; rm -f "$file"; exit 1; }
   node - "$file" <<'NODE'
 const x=JSON.parse(require('fs').readFileSync(process.argv[2]));
