@@ -1,3 +1,6 @@
+// 2.6.54 — O botão Salvar grade e sortear fica cinza, desabilitado e com
+// spinner desde o clique até a chave aparecer; ao falhar, pode ser tentado
+// novamente. A tela de progresso continua visível durante a espera.
 // 2.6.53 — O desempate entra em Próximo jogo a chamar para o anúncio do árbitro.
 // A chamada para quadra exige OK do organizador; a TV anuncia quatro próximos
 // grupos da mesma etapa, em rolagem suave, com cartões mais baixos, categoria

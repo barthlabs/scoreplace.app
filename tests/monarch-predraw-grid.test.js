@@ -83,8 +83,14 @@ async function run() {
   assert.equal(grid.validate(window._phaseCallOrderState.tiles, plan, tournament.scheduleWindow.days), null);
   const realGenerateDrawFunction = window.generateDrawFunction;
   window.generateDrawFunction = id => draws.push(id);
+  const drawButton = element();
+  drawButton.id = 'phase-grid-draw-button';
   const drawing = window._phaseGridSaveAndDraw();
   assert.equal(elements.has('phase-grid-draw-progress'), true, 'o primeiro clique já mostra progresso');
+  assert.equal(drawButton.disabled, true, 'o botão impede novo clique enquanto sorteia');
+  assert.match(drawButton.innerHTML, /btn-spinner.*(?:Preparando sorteio|Salvando grade)/,
+    'o próprio botão mostra o spinner desde o primeiro clique');
+  assert.match(drawButton.style.filter, /grayscale/, 'o botão fica cinza enquanto sorteia');
   await drawing;
   assert.equal(calls.length, 1, 'a alteração precisa ser salva no servidor antes do sorteio');
   assert.equal(calls[0].name, 'updateTournamentConfiguration');
@@ -95,8 +101,12 @@ async function run() {
   assert.deepEqual(draws, ['camis']);
   assert.equal(elements.has('phase-grid-overlay'), true, 'a grade não some enquanto o servidor sorteia');
   assert.equal(elements.has('phase-grid-draw-progress'), true, 'o clique mostra progresso imediatamente');
+  assert.match(drawButton.innerHTML, /btn-spinner.*Sorteando/,
+    'o spinner persiste durante o sorteio no servidor');
   window._phaseGridDrawFinished('camis');
   assert.equal(elements.has('phase-grid-draw-progress'), false);
+  assert.equal(drawButton.disabled, false, 'a resposta libera o botão');
+  assert.equal(drawButton.style.filter, '', 'a resposta restaura a cor do botão');
   assert.equal(elements.has('phase-grid-overlay'), false, 'a grade só fecha depois do resultado');
 
   window.generateDrawFunction = realGenerateDrawFunction;

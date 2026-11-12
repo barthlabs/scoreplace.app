@@ -271,7 +271,15 @@
     if (!state || !state.preDrawId || state.saving || state.presetBusy) return;
     var button = document.getElementById('phase-grid-draw-button');
     state.saving = true;
-    if (button) { button.disabled = true; button.setAttribute('aria-busy', 'true'); button.textContent = 'Preparando sorteio…'; }
+    if (button) {
+      state.drawButtonStyle = { filter:button.style.filter, cursor:button.style.cursor, opacity:button.style.opacity };
+      button.disabled = true;
+      button.setAttribute('aria-busy', 'true');
+      button.style.filter = 'grayscale(0.9) brightness(0.82)';
+      button.style.cursor = 'wait';
+      button.style.opacity = '0.85';
+      button.innerHTML = '<span class="btn-spinner" aria-hidden="true"></span>Preparando sorteio…';
+    }
     var progress = document.createElement('div');
     progress.id = 'phase-grid-draw-progress';
     progress.setAttribute('role', 'status'); progress.setAttribute('aria-live', 'polite');
@@ -280,7 +288,7 @@
     var updateProgress = function (message) {
       var label = progress.querySelector('[data-phase-grid-progress-label]');
       if (label) label.textContent = message;
-      if (button) button.textContent = message;
+      if (button) button.innerHTML = '<span class="btn-spinner" aria-hidden="true"></span>' + message;
     };
     if (typeof window.setTimeout === 'function') state.progressDelayTimer = window.setTimeout(function () {
       if (state.saving) {
@@ -334,9 +342,18 @@
     var progress = document.getElementById('phase-grid-draw-progress');
     if (progress) progress.remove();
     state.saving = false;
+    var button = document.getElementById('phase-grid-draw-button');
+    if (button) {
+      button.disabled = false;
+      button.removeAttribute('aria-busy');
+      button.innerHTML = 'Salvar grade e sortear';
+      var style = state.drawButtonStyle || {};
+      button.style.filter = style.filter || '';
+      button.style.cursor = style.cursor || '';
+      button.style.opacity = style.opacity || '';
+    }
+    state.drawButtonStyle = null;
     if (error) {
-      var button = document.getElementById('phase-grid-draw-button');
-      if (button) { button.disabled = false; button.removeAttribute('aria-busy'); button.textContent = 'Salvar grade e sortear'; }
       showError('Sorteio não concluído: ' + error);
       return;
     }

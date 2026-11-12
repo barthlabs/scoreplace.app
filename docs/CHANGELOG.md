@@ -1,3 +1,8 @@
+## 2.6.54 — 11/nov/2026 (feedback no sorteio da grade)
+
+- “Salvar grade e sortear” fica cinza, desabilitado e com spinner desde o clique até a chave aparecer; a mensagem acompanha a gravação da grade e o sorteio. Se falhar, a cor e o botão são restaurados para nova tentativa.
+- A tela de progresso do sorteio permanece visível até a resposta. Não altera a grade, a tela No ar, os dados do torneio, Functions ou versões nativas.
+
 ## 2.6.53 — 11/nov/2026 (desempate anunciado antes da chamada)
 
 - O desempate necessário entra primeiro em “Próximo jogo a chamar”. Registrar placar, liberar uma quadra ou criar a decisão não o coloca automaticamente em quadra; a chamada exige a confirmação OK, para que o árbitro possa anunciá-lo.
