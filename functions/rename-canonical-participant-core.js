@@ -84,4 +84,4 @@ function plan(tournament, registrations, input, accountNames, physicalDocuments)
   return { changed: true, target, documents, rootPatch };
 }
 
-module.exports = { plan, hasIdentity, replaceLabel };
+module.exports = { plan, hasIdentity, replaceLabel, replaceStrings, hasOldLabel };

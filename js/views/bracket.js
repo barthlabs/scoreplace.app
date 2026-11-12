@@ -9216,6 +9216,14 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m, slot, showIndividu
     const _presenceAvatar = canCheckIn && t && t.id && (_slotUid || name)
       ? `<button type="button" class="sp-bracket-presence-button" data-bracket-presence-action data-presence-tid="${window._safeHtml(String(t.id))}" data-presence-uid="${window._safeHtml(_slotUid)}" data-presence-name="${window._safeHtml(name)}" aria-label="${_isPresent ? 'Remover presença de ' : 'Marcar presença de '}${window._safeHtml(name || 'jogador')}" title="${_isPresent ? 'Remover presença' : 'Marcar presença'}">${_avatarHtml}</button>`
       : _avatarHtml;
+    const _nameContents = _slotUid
+      ? window._personNameHtml(_slotUid, name) +
+        ((name && typeof window._isOrgName === 'function' && window._currentBracketTournament &&
+          window._isOrgName(name, window._currentBracketTournament)) ? (' ' + (window._CROWN_MINI || '')) : '')
+      : (typeof window._nameWithCrown === 'function' && window._currentBracketTournament
+          ? window._nameWithCrown(name, window._currentBracketTournament) : window._safeHtml(name));
+    const _nameActionContents = !_slotUid && typeof window._camisManualNameLinkHtml === 'function'
+      ? window._camisManualNameLinkHtml(t,name,_nameContents,_slotManualId) : _nameContents;
     html += `<div class="sp-mc-side">` +
       _presenceDot +
       _presenceAvatar +
@@ -9238,14 +9246,7 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m, slot, showIndividu
       /* A faixa interna delimita somente o nome dentro do conteúdo que o auto-fit mede.
        * O 💬 continua irmão dela dentro de .sp-name-fit: assim o toque no nome abre a
        * ficha, o toque no 💬 abre contato, e os dois seguem cabendo na mesma caixa. */
-      `<div class="sp-mc-box"${_boxNomeAttrs} style="${_boxNome}"><span class="sp-name-fit sp-mc-nm" data-maxrem="${_nomeMaxRem}" data-minrem="${_nomeMinRem}" data-two-line-maxrem="${_geo.twoLineMaxRem}"><span class="sp-person-name-content"${_swapAttrs}>${
-        _slotUid
-          ? window._personNameHtml(_slotUid, name) +
-            ((name && typeof window._isOrgName === 'function' && window._currentBracketTournament &&
-              window._isOrgName(name, window._currentBracketTournament)) ? (' ' + (window._CROWN_MINI || '')) : '')
-          : (typeof window._nameWithCrown === 'function' && window._currentBracketTournament
-              ? window._nameWithCrown(name, window._currentBracketTournament) : window._safeHtml(name))
-      }</span>` +
+      `<div class="sp-mc-box"${_boxNomeAttrs} style="${_boxNome}"><span class="sp-name-fit sp-mc-nm" data-maxrem="${_nomeMaxRem}" data-minrem="${_nomeMinRem}" data-two-line-maxrem="${_geo.twoLineMaxRem}"><span class="sp-person-name-content"${_swapAttrs}>${_nameActionContents}</span>` +
       /* ⭐ DENTRO DA CAIXA **E DENTRO DA MEDIÇÃO**. Ordem do dono (02/set/2026): _"os
        * balõezinhos devem ficar junto do nome de cada atleta e não colado no placar"_ — o que
        * o trouxe pra dentro da caixa. E relato dele em 12/set/2026, olhando a tela inicial:
@@ -11035,9 +11036,15 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
       var _presDotM = _presM
         ? '<span title="Presente no local" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 4px rgba(34,197,94,0.7);margin-right:5px;vertical-align:middle;"></span>'
         : '';
+      var _nameCellHtml = (typeof window._rowNameHtml === 'function' ? window._rowNameHtml : function (s, h) { return h; })(s,
+        (typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(window._liveRowName(s), window._currentBracketTournament) :
+          (typeof window._nameWithCrown === 'function' && window._currentBracketTournament
+            ? window._nameWithCrown(window._liveRowName(s), window._currentBracketTournament) : window._safeHtml(window._liveRowName(s)))));
+      if (!s.uid && typeof window._camisManualNameLinkHtml === 'function')
+        _nameCellHtml = window._camisManualNameLinkHtml(t,window._liveRowName(s),_nameCellHtml);
       var row = '<tr style="border-bottom:1px solid var(--border-color);' + (bg ? 'background:' + window._spCor(bg, 'background') + ';' : '') + '">' +
         '<td style="padding:6px 10px;font-weight:700;color:' + window._spCor(clr, 'color') + ';text-align:center;">' + (i + 1) + 'º</td>' +
-        '<td class="sp-monarch-standings-name" style="padding:6px 10px;font-weight:600;color:' + window._spCor((_presM ? '#4ade80' : 'var(--text-bright)'), 'color') + ';"><div class="sp-monarch-standings-box" data-sp-card-name-box data-sp-one-line-h="2.3rem" data-sp-two-line-h="2.3rem"><span class="sp-name-fit" data-maxrem="0.85" data-minrem="0.34" data-two-line-maxrem="0.85">' + _presDotM + (typeof window._rowNameHtml === 'function' ? window._rowNameHtml : function (s, h) { return h; })(s, (typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(window._liveRowName(s), window._currentBracketTournament) : (typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(window._liveRowName(s), window._currentBracketTournament) : window._safeHtml(window._liveRowName(s))))) + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, standings, s, { groupDone: groupDone }) : '') + '</span></div></td>' +
+        '<td class="sp-monarch-standings-name" style="padding:6px 10px;font-weight:600;color:' + window._spCor((_presM ? '#4ade80' : 'var(--text-bright)'), 'color') + ';"><div class="sp-monarch-standings-box" data-sp-card-name-box data-sp-one-line-h="2.3rem" data-sp-two-line-h="2.3rem"><span class="sp-name-fit" data-maxrem="0.85" data-minrem="0.34" data-two-line-maxrem="0.85">' + _presDotM + _nameCellHtml + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, standings, s, { groupDone: groupDone }) : '') + '</span></div></td>' +
         '<td style="padding:6px 10px;text-align:center;color:var(--sp-c-4ade80,#4ade80);font-weight:700;">' + s.wins + '</td>' +
         (_compacta ? '' : '<td style="padding:6px 10px;text-align:center;color:var(--sp-c-f87171,#f87171);">' + s.losses + '</td>') +
         (_compacta || _gamesPrimaryMonarch ? '' : (s.points != null
@@ -11392,16 +11399,23 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
     const _explicitlyDisallowedGS = t.scoring && t.scoring.allowDraw === false;
     const _hasAnyDrawsGS = sorted.some(function(s) { return (s.draws || 0) > 0; });
     const _drawsAllowedGS = !_isSetsBasedGS && !_explicitlyDisallowedGS && _hasAnyDrawsGS;
-    const rows = sorted.map((s, i) => `
+    const rows = sorted.map((s, i) => {
+      var _groupNameHtml = (typeof window._rowNameHtml === 'function' ? window._rowNameHtml : function (s, h) { return h; })(s,
+        typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(window._liveRowName(s), t) :
+          (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(window._liveRowName(s), t) : window._safeHtml(window._liveRowName(s))));
+      if (!s.uid && typeof window._camisManualNameLinkHtml === 'function')
+        _groupNameHtml = window._camisManualNameLinkHtml(t,window._liveRowName(s),_groupNameHtml);
+      return `
       <tr style="border-bottom:1px solid var(--border-color);${i < classified ? 'background:rgba(34,197,94,0.08);' : ''}">
         <td style="padding:8px 12px;font-weight:700;color:${window._spCor(i < classified ? '#4ade80' : 'var(--text-muted)', 'color')};">${medal(i)}</td>
-        <td class="sp-name-fit" data-maxrem="0.9" data-minrem="0.62" style="overflow-wrap:anywhere;padding:8px 12px;font-weight:600;color:var(--text-bright);">${(typeof window._rowNameHtml === 'function' ? window._rowNameHtml : function (s, h) { return h; })(s, typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(window._liveRowName(s), t) : (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(window._liveRowName(s), t) : window._safeHtml(window._liveRowName(s))))}</td>
+        <td class="sp-name-fit" data-maxrem="0.9" data-minrem="0.62" style="overflow-wrap:anywhere;padding:8px 12px;font-weight:600;color:var(--text-bright);">${_groupNameHtml}</td>
         <td style="padding:8px 12px;font-weight:800;color:var(--sp-c-var-primary-color-,var(--primary-color));text-align:center;">${s.points}</td>
         <td style="padding:8px 12px;text-align:center;color:var(--sp-c-4ade80,#4ade80);">${s.wins}</td>
         ${_drawsAllowedGS ? `<td style="padding:8px 12px;text-align:center;color:var(--sp-c-94a3b8,#94a3b8);">${s.draws || 0}</td>` : ''}
         <td style="padding:8px 12px;text-align:center;color:var(--sp-c-f87171,#f87171);">${s.losses}</td>
         <td style="padding:8px 12px;text-align:center;color:${window._spCor(s.pointsDiff >= 0 ? '#4ade80' : '#f87171', 'color')};">${s.pointsDiff >= 0 ? '+' : ''}${s.pointsDiff}</td>
-      </tr>`).join('');
+      </tr>`;
+    }).join('');
 
     // Mostrar TODAS as rodadas do grupo (completas, ativa e pendentes)
     // v0.16.52: cards de jogo viram grid com colunas iguais (auto-fill +
@@ -12493,7 +12507,8 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
                 // nome digitado"). Antes o nome saía clicável com `uid:''` e a ficha caía em
                 // resolução por NOME — que nem funciona aqui, porque o save stripa o nome de
                 // toda entrada com uid. Sem uid = fictício/nome digitado: só texto.
-                if (!s.uid) return _txt;
+                if (!s.uid) return typeof window._camisManualNameLinkHtml === 'function'
+                  ? window._camisManualNameLinkHtml(t,_nomeVivo,_txt) : _txt;
                 return window._personProfileLinkHtml(s.uid, s.name, _txt,
                   '', '', ' data-player-profile-tournament="' + window._safeHtml(String(t.id || '')) + '"');
               };

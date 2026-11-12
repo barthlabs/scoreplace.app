@@ -519,7 +519,6 @@
     return { name: String(t.name || ''), logo: typeof window._tourLogoSrc === 'function' ? window._tourLogoSrc(t) : '', tvLayout: tvLayout, theme: theme,
       qrUrl: qrUrl, qrImage: typeof window._qrCodeUrl === 'function' ? window._qrCodeUrl(qrUrl, 320, false) :
         'https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=' + encodeURIComponent(qrUrl) + '&bgcolor=ffffff&color=1a1e2e&margin=10',
-      scoreplaceLogo: site + '/icons/logo-podium.svg',
       courts: courtCards, nextGame: nextGame, nextGames: nextGames, waitingForTie:!!(nextSelection && nextSelection.waitingForTie),
       rankings: rankingSections(t, matches, teams), results: results, resultDay: resultDay,
       matchChoices: matchChoices, selectedMatches: selectedMatches, lineChoices: lineChoices, lineStandings: lineStandings,
@@ -613,6 +612,17 @@
           '<strong>' + esc(m.a || 'A definir') + '</strong><b>×</b><strong>' + esc(m.b || 'A definir') + '</strong></div>';
       }).join('') : '<p>Duplas e confrontos em formação</p>') + '</div></section>';
   }
+  function qrBrandHtml() {
+    // Desenho embutido: o logo não depende do carregamento de uma segunda imagem
+    // na janela da TV, que pode ficar aberta enquanto o Hosting muda de versão.
+    return '<div class="tv-qr-brand"><svg class="tv-scoreplace-mark" viewBox="0 0 80 60" ' +
+      'xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Logo Scoreplace">' +
+      '<rect x="2" y="30" width="22" height="30" rx="3" fill="#CBD5E1"/>' +
+      '<rect x="29" y="10" width="22" height="50" rx="3" fill="#F59E0B"/>' +
+      '<rect x="56" y="40" width="22" height="20" rx="3" fill="#FB923C"/>' +
+      '<path d="M 40 0 L 42 6 L 48 6 L 43 10 L 45 16 L 40 12 L 35 16 L 37 10 L 32 6 L 38 6 Z" fill="#F59E0B"/>' +
+      '</svg><span>Abra no<br>Scoreplace</span></div>';
+  }
   function bodyHtml(snapshot) {
     var theme = snapshot.theme || { background: '#060d1a', primary: '#0d1b2e', secondary: '#0d1b2e', title: '#ffffff' };
     var frame = '<div class="tv-theme" style="--tv-primary:' + esc(theme.primary) + ';--tv-secondary:' + esc(theme.secondary) +
@@ -624,7 +634,7 @@
       (snapshot.rankings.length ? snapshot.rankings.map(function (section) { return rankingHtml(section, snapshot.rankings.length > 1); }).join('') : '<p>Classificação em formação</p>') +
       '</section><section class="tv-results"><div class="tv-results-main"><h2>ÚLTIMOS RESULTADOS</h2><div class="tv-results-list" data-result-day="' + esc(snapshot.resultDay) + '">' +
       snapshot.results.map(resultHtml).join('') +
-      '</div></div><div class="tv-qr"><img class="tv-qr-code" src="' + esc(snapshot.qrImage) + '" alt="QR para escolher App Store, Google Play ou versão web"><div class="tv-qr-brand"><img src="' + esc(snapshot.scoreplaceLogo) + '" alt=""><span>Abra no<br>Scoreplace</span></div></div>' +
+      '</div></div><div class="tv-qr"><img class="tv-qr-code" src="' + esc(snapshot.qrImage) + '" alt="QR para escolher App Store, Google Play ou versão web">' + qrBrandHtml() + '</div>' +
       '</section></aside></main></div>';
   }
   function fullscreenActionHtml() {
@@ -642,7 +652,7 @@
       ? Math.max(0, Math.min(resultBox.x + resultBox.w, qrBox.x + qrBox.w) - Math.max(resultBox.x, qrBox.x)) : 0;
     var qrReserve = qrOverlap ? Math.min(45, Math.ceil(qrOverlap / resultBox.w * 100) + 2) : 0;
     var results = '<section class="tv-results"><div class="tv-results-main"><h2>ÚLTIMOS RESULTADOS</h2><div class="tv-results-list" style="padding-right:' + qrReserve + '%" data-result-day="' + esc(snapshot.resultDay) + '">' + snapshot.results.map(resultHtml).join('') + '</div></div></section>';
-    var qr = '<div class="tv-qr"><img class="tv-qr-code" src="' + esc(snapshot.qrImage) + '" alt="QR para abrir o Scoreplace"><div class="tv-qr-brand"><img src="' + esc(snapshot.scoreplaceLogo) + '" alt=""><span>Abra no<br>Scoreplace</span></div></div>';
+    var qr = '<div class="tv-qr"><img class="tv-qr-code" src="' + esc(snapshot.qrImage) + '" alt="QR para abrir o Scoreplace">' + qrBrandHtml() + '</div>';
     function liveGame(id) {
       var game = snapshot.selectedMatches && snapshot.selectedMatches[id];
       if (!game) return '<section class="tv-focus-card"><h2>Escolha a partida</h2></section>';
@@ -836,7 +846,7 @@
     '.tv-qr{display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:.55vw;width:clamp(112px,9vw,190px)}' +
     '.tv-qr-code{display:block;width:100%;aspect-ratio:1;background:#fff;padding:.25vw;border-radius:.5vw;object-fit:contain}' +
     '.tv-qr-brand{display:flex;align-items:center;justify-content:center;gap:.3vw;width:100%;color:#e2e8f0;font-size:clamp(.65rem,.75vw,1rem);font-weight:800;line-height:1.1}' +
-    '.tv-qr-brand img{width:2vw;min-width:26px;height:auto}' +
+    '.tv-scoreplace-mark{display:block;flex:none;width:2vw;min-width:26px;height:auto;aspect-ratio:4/3}' +
     '.tv-results-list>h2{margin:0 0 .18vw}.tv-result{padding:.22vw 0 .28vw}.tv-result>small{display:block;margin:0 0 .18vw;line-height:1.15;white-space:nowrap}.tv-result>div.tv-result-match{display:grid;grid-template-columns:minmax(0,1fr) 2.2vw minmax(0,1fr);gap:.3vw;align-items:stretch}.tv-result-side{min-height:4.8vw;padding:.25vw .35vw}.tv-result-players{flex:1;justify-content:center;gap:.1vw}.tv-result-players span{display:block;white-space:normal;overflow-wrap:anywhere;text-overflow:clip;line-height:1.1}.tv-result-left .tv-result-players{text-align:left}.tv-result-right .tv-result-players{text-align:right}.tv-result>div.tv-result-match strong.tv-result-side-score{flex:none;font-size:clamp(1.2rem,1.65vw,2.2rem);font-variant-numeric:tabular-nums}.tv-result>div.tv-result-match strong.tv-result-win{color:#4ade80}.tv-result>div.tv-result-match strong.tv-result-loss{color:#f87171}.tv-result-versus{display:flex;align-items:center;justify-content:center;color:#cbd5e1;font-size:clamp(.7rem,.8vw,1rem);font-weight:900}' +
     '.tv-court.tv-court-latest{border:3px solid #fbbf24;box-shadow:0 0 18px #fbbf2466}' +
     '.tv-left{min-height:0;display:grid;grid-template-rows:minmax(0,1fr) clamp(112px,13vh,170px);gap:.75vw}' +
@@ -846,7 +856,7 @@
     '.tv-upcoming .tv-result-side{min-height:0}.tv-upcoming .tv-result-left .tv-result-players,.tv-upcoming .tv-result-left .tv-result-players span{text-align:left}.tv-upcoming .tv-result-right .tv-result-players,.tv-upcoming .tv-result-right .tv-result-players span{text-align:right}' +
     '.tv-side{grid-template-rows:minmax(0,1fr);overflow:hidden}.tv-side>.tv-team-tag{min-height:0;max-height:100%;overflow:hidden}.tv-side>.tv-players{min-height:0;overflow:hidden}.tv-side>.tv-score{min-height:0;max-height:100%;overflow:hidden;line-height:1.1}.tv-versus{flex:none;position:relative;z-index:1}' +
     '.tv-result-match,.tv-upcoming .tv-result-match{grid-template-rows:minmax(0,1fr);min-height:0}.tv-result-side{min-height:0;overflow:hidden}.tv-result-team{min-height:0;max-height:100%;overflow:hidden;white-space:nowrap}.tv-result-players{min-height:0;overflow:hidden}.tv-upcoming .tv-result-players span{font-size:clamp(.75rem,.95vw,1.3rem)}' +
-    '@media(orientation:portrait){.tv-header time{font-size:clamp(1.2rem,2.8vw,2.4rem)}.tv-sidebar{grid-template-rows:70% 30%}.tv-ranking-head,.tv-ranking-row{grid-template-columns:3vw minmax(0,1fr) 7vw 10vw repeat(3,4vw);gap:.5vw;font-size:clamp(.75rem,1.4vw,1.2rem)}.tv-ranking-row{min-height:2.9vh}.tv-ranking-team{font-size:clamp(.8rem,1.6vw,1.25rem)}.tv-ranking-row b{font-size:clamp(.8rem,1.6vw,1.25rem)}.tv-qr{width:clamp(90px,17vw,180px)}.tv-qr-brand img{width:3vw}}' +
+    '@media(orientation:portrait){.tv-header time{font-size:clamp(1.2rem,2.8vw,2.4rem)}.tv-sidebar{grid-template-rows:70% 30%}.tv-ranking-head,.tv-ranking-row{grid-template-columns:3vw minmax(0,1fr) 7vw 10vw repeat(3,4vw);gap:.5vw;font-size:clamp(.75rem,1.4vw,1.2rem)}.tv-ranking-row{min-height:2.9vh}.tv-ranking-team{font-size:clamp(.8rem,1.6vw,1.25rem)}.tv-ranking-row b{font-size:clamp(.8rem,1.6vw,1.25rem)}.tv-qr{width:clamp(90px,17vw,180px)}.tv-scoreplace-mark{width:3vw}}' +
     '#tv-root,.tv-theme{width:100%;height:100%}.tv-theme .tv-header{background:color-mix(in srgb,var(--tv-primary) 24%,#07111f)}.tv-theme .tv-header h1{color:var(--tv-title)}.tv-theme .tv-court,.tv-theme .tv-rankings,.tv-theme .tv-results,.tv-theme .tv-upcoming{background:color-mix(in srgb,var(--tv-primary) 18%,#0d1b2e);border-color:color-mix(in srgb,var(--tv-secondary) 30%,#1b3f61)}.tv-theme .tv-side,.tv-theme .tv-result-side{background:color-mix(in srgb,var(--tv-secondary) 12%,#222)}' +
     '.tv-custom-board{position:relative;width:100%;height:100%;overflow:hidden}.tv-custom-box{position:absolute;min-width:0;min-height:0;overflow:hidden}.tv-custom-box>.tv-header,.tv-custom-box>.tv-courts,.tv-custom-box>.tv-upcoming,.tv-custom-box>.tv-rankings,.tv-custom-box>.tv-brackets,.tv-custom-box>.tv-results,.tv-custom-box>.tv-qr{width:100%;height:100%;min-height:0;overflow:hidden}.tv-custom-box>.tv-header{padding:.35vw .8vw}.tv-custom-box>.tv-courts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(3,minmax(0,1fr))}.tv-custom-results .tv-results{display:flex}.tv-custom-results .tv-results-main{width:100%}.tv-custom-qr .tv-qr{justify-content:flex-end}.tv-custom-qr .tv-qr-code{max-height:75%;width:auto;max-width:95%}.tv-custom-logo{display:flex;align-items:center;justify-content:center}.tv-placed-logo{display:block;width:100%;height:100%;object-fit:contain}' +
     '.tv-brackets{display:flex;flex-direction:column;background:#0d1b2e;border:1px solid #1b3f61;border-radius:.7vw;padding:.55vw;overflow:hidden}.tv-brackets h2{flex:none;color:#fbbf24;font-size:clamp(.9rem,1.15vw,1.5rem);margin:0 0 .4vw}.tv-bracket-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,12vw),1fr));gap:.5vw;min-height:0;overflow:auto}.tv-bracket-category{min-width:0;border:1px solid #315376;border-radius:.5vw;padding:.4vw;background:#10223a}.tv-bracket-category h3{margin:0;color:#7dd3fc;font-size:clamp(.9rem,1vw,1.3rem)}.tv-bracket-category small{display:block;color:#cbd5e1;margin:.15vw 0 .35vw;font-size:clamp(.65rem,.7vw,.9rem)}.tv-bracket-match{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:.2vw;padding:.2vw;border-top:1px solid #315376;align-items:center;font-size:clamp(.65rem,.75vw,1rem)}.tv-bracket-match>span{grid-column:1/-1;color:#7dd3fc;font-size:.8em}.tv-bracket-match strong{overflow-wrap:anywhere;min-width:0}.tv-bracket-match strong:last-child{text-align:right}.tv-bracket-match b{color:#fbbf24}.tv-series-game.tv-series-latest-result{outline:2px solid #fbbf24;box-shadow:0 0 12px #fbbf2466}' +

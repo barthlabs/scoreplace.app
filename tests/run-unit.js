@@ -354,6 +354,8 @@ const SUITES = [
   'tests/l9-censo-formatos-legados.test.js',
   'tests/l7-rename-participant-core.test.js',
   'tests/rename-canonical-participant.test.js',
+  'tests/camis-manual-edit.test.js',
+  'tests/camis-manual-name-ui.test.js',
   'tests/rename-canonical-participant-handler.test.js',
   'tests/edit-canonical-slot-core.test.js',
   'tests/participant-swap-routing.test.js',

@@ -123,6 +123,14 @@ const { chromium } = require('@playwright/test');
       const gap = board.bottom - brand.bottom;
       return gap >= 4 && gap <= 15;
     }), 'a marca Abra no Scoreplace tem uma pequena folga inferior sem sair da caixa');
+    assert.ok(await page.evaluate(() => {
+      const doc = document.querySelector('[data-tv-frame]').contentDocument;
+      const mark = doc.querySelector('.tv-custom-qr .tv-scoreplace-mark');
+      const qr = doc.querySelector('.tv-custom-qr .tv-qr').getBoundingClientRect();
+      if (!mark) return false;
+      const box = mark.getBoundingClientRect();
+      return box.width >= 26 && box.height >= 19 && box.top >= qr.top && box.bottom <= qr.bottom;
+    }), 'logo do Scoreplace aparece dentro da caixa do QR personalizado');
     assert.deepEqual(await page.evaluate(() => {
       const frame = document.querySelector('[data-tv-frame]');
       const doc = frame.contentDocument, win = frame.contentWindow;

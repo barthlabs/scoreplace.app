@@ -1,3 +1,6 @@
+// 2.6.63 — No CAMIS, tocar no nome de uma atleta digitada oferece corrigir o
+// nome da mesma pessoa ou substituí-la por outra, preservando jogos concluídos.
+// O QR da TV volta a exibir o logo do Scoreplace ao lado do convite.
 // 2.6.62 — A classificação da Confra conserva 36 duplas na Ouro e 34 na Prata.
 // Trocar a formação de uma dupla na repescagem não cria uma vaga extra;
 // os jogos anteriores continuam registrados e as finais seguem em aberto.
@@ -1638,6 +1641,7 @@ window._RELEASE_NOTES_HTML = (function () {
       '<ul style="margin:0;padding-left:1.1rem;font-size:0.86rem;line-height:1.5;color:var(--text-main);">' +
         '<li>O desempate pode ser adiado para chamar outro jogo pronto. A quadra ocupada continua protegida, e a eliminatória aguarda a classificação necessária.</li>' +
         '<li>A súmula do CAMIS inclui espaço para vitórias, derrotas, saldo e posição em cada grupo.</li>' +
+        '<li>No CAMIS, tocar no nome da atleta permite corrigir sua grafia ou colocar outra pessoa na vaga. Jogos já concluídos ficam com quem jogou.</li>' +
         '<li>O desempate aparece no mesmo card dos jogos: uma atleta de cada lado, placar visível e a indicação “Simples desempate” junto ao número do jogo extra.</li>' +
         '<li>Na faixa de operação Rei/Rainha, as setas percorrem os três jogos do mesmo quarteto e sua classificação, com as duplas e os placares de cada jogo.</li>' +
         '<li>Em torneios concentrados em um dia, os jogos e as rodadas mostram só o horário. Eventos de vários dias continuam mostrando a data.</li>' +

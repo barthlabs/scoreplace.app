@@ -1,3 +1,10 @@
+## 2.6.63 — 12/nov/2026 (nomes manuais no CAMIS)
+
+- Nos cards de Inscritos do CAMIS, tocar no nome digitado abre duas ações: corrigir o nome da mesma atleta, mantendo a inscrição, ou substituir a atleta por outra pessoa, com nova inscrição. O toque na foto continua destinado à presença.
+- A transação valida a organização, a inscrição e o checkpoint pós-sorteio. Correções atualizam os jogos da mesma pessoa; substituições preservam resultados concluídos e atualizam jogos futuros. O reset volta à lista corrigida, com os 36 grupos e 108 jogos sem placar, mantendo as telas da TV.
+- Kelly Cristina foi corrigida para Kelly Barth no banco do torneio privado CAMIS, sem mudar sua identidade. Corte web e uma Function direcionada; versões nativas intactas.
+- O QR da TV inclui o logo do Scoreplace diretamente no HTML da janela, nos layouts padrão e personalizado, evitando que a marca desapareça quando a imagem externa não é exibida.
+
 ## 2.6.62 — 12/nov/2026 (classificação da CONFRA por vaga)
 
 - A linha Ouro começou com 36 duplas e a Prata com 34, confirmado nos jogos canônicos em 12/nov. Duas duplas da Prata foram refeitas na repescagem e o cálculo as contava junto das formações anteriores, publicando indevidamente o 36º lugar na Prata.

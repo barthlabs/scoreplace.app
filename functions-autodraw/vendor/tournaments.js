@@ -235,9 +235,13 @@ window._duplaCard = function (t, p, draggable, ctx) {
         var _mUid = (_pairDisplayMembers && _pairDisplayMembers[_mi] && _pairDisplayMembers[_mi].uid) || '';
         var _mContact = (typeof window._contactPersonIconHtml === 'function')
           ? window._contactPersonIconHtml(t, _mUid, n, { sameGroup: true }) : '';
+        var _labelHtml = window._personNameHtml(_mUid, n, 'font-weight:700;font-size:' + (window._INSCRITO_NAME_FONT_PX || 17) + 'px;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;');
+        if (typeof window._camisManualNameLinkHtml === 'function' && !_mUid)
+          _labelHtml = window._camisManualNameLinkHtml(t, n, _labelHtml,
+            _pairDisplayMembers && _pairDisplayMembers[_mi] && _pairDisplayMembers[_mi].manualParticipantId);
         return '<div style="display:flex;align-items:center;gap:6px;overflow:hidden;margin-bottom:2px;">' +
           window._personAvatarHtml(_mUid, n, 'width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;') +
-          window._personNameHtml(_mUid, n, 'font-weight:700;font-size:' + (window._INSCRITO_NAME_FONT_PX || 17) + 'px;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;') +
+          _labelHtml +
           _mContact +
           '</div>';
       }).join('');
@@ -248,8 +252,12 @@ window._duplaCard = function (t, p, draggable, ctx) {
       // hidratava pelo span (_soloUidAttr) — faltava o ÍCONE, que nascia mudo sem perfil.
       var _soloContact = (typeof window._contactPersonIconHtml === 'function')
         ? window._contactPersonIconHtml(t, uid, _soloDisp, { sameGroup: true }) : '';
+      var _soloNameHtml = '<span' + _soloUidAttr + ' style="font-weight:700;font-size:' + (window._INSCRITO_NAME_FONT_PX || 17) + 'px;color:var(--text-bright);text-overflow:ellipsis;white-space:nowrap;overflow:hidden;">' + window._safeHtml(_soloDisp) + '</span>';
+      if (typeof window._camisManualNameLinkHtml === 'function' && !uid)
+        _soloNameHtml = window._camisManualNameLinkHtml(t, _soloDisp, _soloNameHtml,
+          p && typeof p === 'object' && p.manualParticipantId);
       nameHtml = '<div style="display:flex;align-items:center;gap:8px;overflow:hidden;">' +
-        window._personAvatarHtml(uid, nm, 'width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;') + '<span' + _soloUidAttr + ' style="font-weight:700;font-size:' + (window._INSCRITO_NAME_FONT_PX || 17) + 'px;color:var(--text-bright);text-overflow:ellipsis;white-space:nowrap;overflow:hidden;">' + window._safeHtml(_soloDisp) + '</span>' + _soloContact + _crown + '</div>';
+        window._personAvatarHtml(uid, nm, 'width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;') + _soloNameHtml + _soloContact + _crown + '</div>';
     }
     var bgStyle = draggable
       ? 'background:linear-gradient(135deg,rgba(67,56,202,0.6),rgba(99,102,241,0.6));border:1px solid rgba(99,102,241,0.5);'
@@ -308,6 +316,8 @@ window._duplaCard = function (t, p, draggable, ctx) {
         var _nmSpan = window._personNameHtml(_profileUid, _disp,
           'font-weight:700;font-size:' + _nmFs + 'px;color:var(--text-bright);line-height:1.18;max-height:44px;overflow:hidden;word-break:break-word;min-width:0;',
           'sp-fit-name', ' title="' + window._safeHtml(_disp) + '" data-fit-h="44" data-fit-max="' + _nmFs + '"');
+        if (typeof window._camisManualNameLinkHtml === 'function' && !_profileUid)
+          _nmSpan = window._camisManualNameLinkHtml(t, _disp, _nmSpan, _mm.manualParticipantId);
         var _av = right
           ? '<div style="display:flex;align-items:center;gap:7px;max-width:100%;min-width:0;justify-content:flex-end;">' + _nmSpan + _img + '</div>'
           : '<div style="display:flex;align-items:center;gap:7px;max-width:100%;min-width:0;">' + _img + _nmSpan + '</div>';

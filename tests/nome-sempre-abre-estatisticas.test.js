@@ -69,10 +69,13 @@ ok(/\$\{_niContato\}/.test(_nameRowAdmin), 'a lista administrativa mostra o bal�
 ok(/\$\{_niEditBtn\}/.test(_nameRowAdmin), 'a edição da lista administrativa é um botão próprio, não o nome');
 /* ⛔ E o botão só existe para quem foi digitado À MÃO (25/set/2026). Pergunta do dono: "onde
  * renomeia conta que não no perfil do usuário?" — em lugar nenhum. */
-ok(/const _niEditBtn = \(isOrg && !_niUid && _niManualId\)/.test(participants),
-  '⛔ o lápis não aparece para quem tem conta — conta se renomeia no perfil dela');
-ok(/var _pEditBtn = \(isOrg && !_pUid && _pManualId\)/.test(participants) && /var _mEditBtn = \(isOrg && !_mUid && _mManualId\)/.test(participants),
-  'e o mesmo vale no card do inscrito e no membro de dupla — os TRÊS pontos');
+ok(/const _niEditBtn = \(isOrg && !_niUid && _niManualId && !_niCamisAction\)/.test(participants),
+  '⛔ o lápis não aparece para quem tem conta nem no CAMIS, onde o nome abre as ações');
+ok(/var _pEditBtn = \(isOrg && !_pUid && _pManualId && !_pCamisAction\)/.test(participants) &&
+   /var _mEditBtn = \(isOrg && !_mUid && _mManualId && !_mCamisAction\)/.test(participants),
+  'o mesmo vale no card do inscrito e no membro de dupla');
+ok(/data-camis-manual-name/.test(participants) && /_openCamisManualNameActions/.test(participants),
+  'no CAMIS, tocar no nome manual abre corrigir ou substituir sem lápis');
 ok(/if \(!manualParticipantId\) \{[\s\S]{0,260}O nome é da pessoa/.test(participants),
   '⛔ e a própria porta RECUSA conta, como segunda linha — caminho futuro não reabre isso');
 ok(!/onclick=/.test(_nameRowAdmin), 'nenhum onclick sobrou dentro da linha do nome');

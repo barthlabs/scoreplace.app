@@ -535,7 +535,8 @@ assert.match(tvRoot.innerHTML, /<span>GAMES<\/span><span class="tv-win">V<\/span
 assert.match(tvRoot.innerHTML, /class="tv-ranking-team"[^>]*>VORTEX<\/strong><b>\+8<\/b><span>12 - 4<\/span><span class="tv-win">2<\/span><span class="tv-loss">0<\/span><span>2<\/span>/);
 assert.doesNotMatch(tvRoot.innerHTML, /<h3>Times<\/h3>/, 'classificação geral usa somente o cabeçalho da tabela');
 assert.match(tvRoot.innerHTML, /class="tv-qr-code"[^>]*open\.html/);
-assert.match(tvRoot.innerHTML, /scoreplace\.app\/icons\/logo-podium\.svg/);
+assert.match(tvRoot.innerHTML, /<svg class="tv-scoreplace-mark"[^>]*aria-label="Logo Scoreplace"/,
+  'o QR da TV inclui o logo dentro do próprio HTML');
 const childSource = popupHtml.match(/<script>\(function\(\)\{"use strict";[\s\S]*?<\/script>/);
 assert(childSource, 'NO AR inclui um relógio próprio na janela, independente do intervalo da aba');
 const childRoot = { innerHTML: '', querySelector: () => null };

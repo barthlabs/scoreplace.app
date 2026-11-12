@@ -4645,6 +4645,7 @@ const _pairCore = require("./pair-core");
 const _monarchPairPolicy = require("./monarch-pair-policy");
 const _participantRename = require("./participant-rename-core");
 const _renameCanonicalParticipant = require("./rename-canonical-participant-core");
+const _camisManualEdit = require("./camis-manual-edit-core");
 const _ligaAvailability = require("./liga-availability-core");
 // Codebases Firebase são pacotes isolados. Em desenvolvimento aproveita o motor
 // completo; no deploy principal usa o adaptador local com a mesma superfície.
@@ -7816,6 +7817,53 @@ exports.renameTournamentParticipant = onCall(
       if (!renamed.changed) return { ok: true, changed: false };
       _splitParts.gravar(tx, ref, before, Object.assign({}, renamed.update, { updatedAt: new Date().toISOString() }));
       return { ok: true, changed: true, oldName, newName };
+    });
+  }
+);
+
+// CAMIS: nomes são inscrições manuais. Corrigir o rótulo mantém a identidade;
+// substituir cria outra inscrição. A foto pós-sorteio muda na mesma transação,
+// para que "Resetar teste" nunca ressuscite o nome anterior.
+exports.editCamisManualParticipant = onCall(
+  { region:'us-central1',memory:'1GiB',timeoutSeconds:540,cors:APP_ORIGINS },
+  async request => {
+    const uid = request.auth && request.auth.uid;
+    if (uid !== _camisManualEdit.OWNER) throw new HttpsError('permission-denied','só a organização do CAMIS pode editar atletas');
+    const data = request.data || {};
+    if (String(data.tournamentId || '') !== _camisManualEdit.ID)
+      throw new HttpsError('invalid-argument','torneio CAMIS inválido');
+    const action = String(data.action || ''),oldName = String(data.oldName || '').trim();
+    const newName = String(data.newName || '').trim();
+    const manualParticipantId = String(data.manualParticipantId || '').trim();
+    const now = admin.firestore.Timestamp.now();
+    const newManualParticipantId = action === 'replace' ? 'manual-camis-sub-' + require('node:crypto').randomUUID() : '';
+    const db = admin.firestore(),ref = db.collection('tournaments').doc(_camisManualEdit.ID);
+    const baselineRef = db.collection('tournamentRehearsalBaselines').doc(_camisManualEdit.ID);
+    return db.runTransaction(async tx => {
+      const [rootSnap,baseSnap] = await Promise.all([tx.get(ref),tx.get(baselineRef)]);
+      if (!rootSnap.exists || !baseSnap.exists) throw new HttpsError('failed-precondition','torneio ou fotografia ausente');
+      const [registrationSnap,matchSnap] = await Promise.all([
+        tx.get(ref.collection('registrations')),tx.get(ref.collection('matches'))
+      ]);
+      let planned;
+      try {
+        planned = _camisManualEdit.plan({ tournament:{ id:_camisManualEdit.ID,...rootSnap.data() },
+          baseline:baseSnap.data(),registrations:registrationSnap.docs.map(doc => ({ id:doc.id,data:doc.data() })),
+          matches:matchSnap.docs.map(doc => ({ id:doc.id,data:doc.data() })),
+          action,oldName,newName,manualParticipantId,newManualParticipantId,now });
+      } catch (error) { throw new HttpsError('failed-precondition',error.message); }
+      const targetRef = ref.collection('registrations').doc(planned.target.id);
+      tx.set(ref,{ ...planned.nextRoot,updatedAt:now });
+      tx.set(baselineRef,planned.nextBaseline);
+      if (action === 'rename') {
+        tx.update(targetRef,{ manualDisplayName:newName,updatedAt:now });
+      } else {
+        tx.update(targetRef,{ status:'withdrawn',withdrawnReason:'replaced',updatedAt:now });
+        tx.create(ref.collection('registrations').doc(planned.nextReg.registrationId),planned.nextReg);
+      }
+      planned.liveMatches.forEach(item => tx.set(ref.collection('matches').doc(item.id),item.data));
+      return { ok:true,action,oldName,newName,category:planned.category,group:planned.group,
+        updatedGames:planned.liveMatches.length,completedGamesPreserved:planned.completedGames };
     });
   }
 );

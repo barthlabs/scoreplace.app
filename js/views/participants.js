@@ -1156,6 +1156,113 @@ window._editParticipantName = function(tId, oldName, manualParticipantId, btn) {
   });
 };
 
+// CAMIS usa somente inscrições digitadas. O nome abre as duas ações; a foto
+// continua com a presença. Nenhuma das ações depende de conta ou UID.
+window._camisManualNameLinkHtml = function(t, name, innerHtml, manualId) {
+  if (!t || String(t.id) !== 'tour_1793804848447_94bfe2282535789667cb35f1080024ee' ||
+      typeof window._souOrganizador !== 'function' || !window._souOrganizador(t)) return innerHtml;
+  var target = String(name || '').trim().toLocaleLowerCase('pt-BR');
+  var found = (Array.isArray(t.participants) ? t.participants : []).filter(function(p) {
+    return p && typeof p === 'object' && !p.uid && p.manualParticipantId &&
+      String(p.displayName || p.name || '').trim().toLocaleLowerCase('pt-BR') === target;
+  });
+  if (found.length !== 1 || (manualId && String(found[0].manualParticipantId) !== String(manualId))) return innerHtml;
+  var safe = window._safeHtml;
+  return '<span class="sp-person-name-link" role="button" tabindex="0" data-camis-manual-name="1"' +
+    ' data-camis-tid="' + safe(String(t.id)) + '" data-camis-old-name="' + safe(String(name)) +
+    '" data-camis-manual-id="' + safe(String(found[0].manualParticipantId)) +
+    '" title="Editar ou substituir ' + safe(String(name)) + '">' + innerHtml + '</span>';
+};
+
+window._openCamisManualNameActions = function(tId, oldName, manualParticipantId) {
+  var t = window._findTournamentById && window._findTournamentById(tId);
+  if (!t || String(tId) !== 'tour_1793804848447_94bfe2282535789667cb35f1080024ee' ||
+      !window._souOrganizador(t) || !manualParticipantId ||
+      typeof showConfirmDialog !== 'function' || typeof showInputDialog !== 'function') return;
+  var escaped = window._safeHtml(String(oldName));
+  var submit = function(action, newName) {
+    newName = String(newName || '').trim();
+    if (newName.length < 2 || newName.length > 120 || newName === String(oldName).trim()) {
+      if (typeof showNotification === 'function') showNotification('Nome inválido', 'Digite um nome diferente, entre 2 e 120 caracteres.', 'error');
+      return;
+    }
+    if (typeof window._callCF !== 'function') return;
+    window._callCF('editCamisManualParticipant', {
+      tournamentId:String(tId),action:action,oldName:String(oldName),newName:newName,
+      manualParticipantId:String(manualParticipantId)
+    }, 'Salvando atleta…').then(function(result) {
+      var receipt = result && (result.data || result);
+      if (!receipt || receipt.ok !== true) throw new Error('O servidor não confirmou a edição.');
+      if (typeof showNotification === 'function') showNotification(action === 'rename' ? 'Nome corrigido' : 'Atleta substituída',
+        action === 'rename' ? 'A mesma inscrição e os jogos agora mostram ' + newName + '.' :
+          'A vaga agora é de ' + newName + '; resultados concluídos continuam com a atleta anterior.', 'success');
+      if (window.FirestoreDB && typeof window.FirestoreDB.loadTournamentById === 'function') {
+        return window.FirestoreDB.loadTournamentById(String(tId)).then(function(fresh) {
+          if (fresh && window.AppStore && Array.isArray(window.AppStore.tournaments)) {
+            var index = window.AppStore.tournaments.findIndex(function(item) { return String(item.id) === String(tId); });
+            if (index >= 0) window.AppStore.tournaments[index] = fresh;
+          }
+          if (typeof _reRenderParticipantsStable === 'function') _reRenderParticipantsStable();
+        });
+      }
+    }).catch(function(error) {
+      if (typeof showNotification === 'function') showNotification('Edição não concluída',
+        (error && error.message) || 'Atualize a tela e tente novamente.', 'error');
+    });
+  };
+  var ask = function(action) {
+    showInputDialog(action === 'rename' ? 'Corrigir nome da mesma atleta' : 'Substituir atleta',
+      action === 'rename' ? 'A identidade, a vaga e os resultados continuam com esta pessoa.' :
+        'Digite o nome de outra pessoa. Resultados já concluídos ficam com quem jogou; jogos futuros passam para a nova atleta.',
+      function(value) {
+        if (action === 'rename') { submit(action,value); return; }
+        var next = String(value || '').trim();
+        if (next.length < 2 || next.length > 120 || next === String(oldName).trim()) {
+          if (typeof showNotification === 'function') showNotification('Nome inválido', 'Digite o nome da nova atleta.', 'error');
+          return;
+        }
+        showConfirmDialog('Confirmar substituição?', escaped + ' sairá da vaga e ' + window._safeHtml(next) +
+          ' entrará no grupo. Jogos concluídos permanecem com a formação original. O reset do ensaio voltará à nova lista sem placares.',
+          function() { submit('replace',next); }, null,
+          { type:'warning',confirmText:'Substituir atleta',cancelText:'Cancelar' });
+      }, { defaultValue:action === 'rename' ? window._safeHtml(String(oldName)) : '',
+        placeholder:'Nome completo',okText:'Continuar' });
+  };
+  showConfirmDialog('Atleta: ' + oldName,
+    '<div>Escolha o que mudou nesta vaga:</div><button type="button" id="camis-replace-name-action" ' +
+    'style="display:block;margin-top:14px;padding:10px 14px;min-height:44px;border-radius:9px;' +
+    'border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-main);cursor:pointer;' +
+    'font-weight:700;">Substituir atleta por outra pessoa</button>',
+    function() { ask('rename'); }, null,
+    { type:'info',confirmText:'Corrigir nome',cancelText:'Cancelar' });
+  var dialog = document.getElementById('custom-confirm-dialog');
+  var replace = dialog && dialog.querySelector('#camis-replace-name-action');
+  if (replace) replace.addEventListener('click', function() {
+    var cancel = dialog.querySelector('#confirm-cancel-btn');
+    if (cancel) cancel.click();
+    setTimeout(function() { ask('replace'); }, 230);
+  });
+};
+
+if (typeof document !== 'undefined' && document.addEventListener && !window._camisNameDelegationInstalled) {
+  window._camisNameDelegationInstalled = true;
+  var _camisNameTarget = function(node) {
+    return node && typeof node.closest === 'function' ? node.closest('[data-camis-manual-name]') : null;
+  };
+  var _openCamisName = function(event) {
+    var el = _camisNameTarget(event.target);
+    if (!el) return;
+    event.preventDefault(); event.stopPropagation();
+    if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
+    window._openCamisManualNameActions(el.getAttribute('data-camis-tid') || '',
+      el.getAttribute('data-camis-old-name') || '',el.getAttribute('data-camis-manual-id') || '');
+  };
+  document.addEventListener('click',_openCamisName,true);
+  document.addEventListener('keydown',function(event) {
+    if (event.key === 'Enter' || event.key === ' ') _openCamisName(event);
+  },true);
+}
+
 window._startTournament = function (tId) {
   const t = window._findTournamentById(tId);
   if (!t) return;
@@ -1825,12 +1932,17 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
        * outra pessoa não é poder de organizador.
        * ⭐ O lápis FICA para quem o organizador digitou À MÃO: sem conta, o nome escrito é a
        * única identidade que existe, e corrigi-lo é legítimo. */
-      var _mEditBtn = (isOrg && !_mUid && _mManualId)
+      var _mCamisAction = isOrg && String(t.id) === 'tour_1793804848447_94bfe2282535789667cb35f1080024ee' && !_mUid && _mManualId;
+      var _mEditBtn = (isOrg && !_mUid && _mManualId && !_mCamisAction)
         ? '<button type="button" title="Editar ' + _nmH + '" aria-label="Editar ' + _nmH + '" style="border:0;background:transparent;color:var(--text-muted);font-size:0.86rem;line-height:1;padding:3px;cursor:pointer;flex-shrink:0;" onclick="event.stopPropagation();window._editParticipantName(\'' + t.id + '\',\'' + _nmSafe + '\',\'' + _mManualId + '\',this)">✏️</button>'
         : '';
       var _mSwap = isOrg && t.status !== 'finished' && (t.canonicalRegistrationMigration || {}).fingerprint &&
         _mPart && _mPart.fixedPairId && (_mUid || _mManualId);
-      var _mNameAction = _mSwap
+      var _mNameAction = _mCamisAction
+        ? '<span class="sp-person-name-link" role="button" tabindex="0" data-camis-manual-name="1" data-camis-tid="' + window._safeHtml(String(t.id)) +
+          '" data-camis-old-name="' + _nmH + '" data-camis-manual-id="' + window._safeHtml(String(_mManualId)) +
+          '" title="Editar ou substituir ' + _nmH + '">' + _mNameHtml + '</span>'
+        : _mSwap
         ? '<span role="button" tabindex="0" data-tournament-swap="1" data-swap-tid="' + window._safeHtml(String(t.id)) +
           '" data-swap-uid="' + window._safeHtml(String(_mUid)) + '" data-swap-manual-id="' +
           window._safeHtml(String(_mManualId)) + '" data-swap-category="' +
@@ -1881,7 +1993,11 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
       : '<span' + _pUidAttr + ' style="font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;">' + _pDisp + '</span>';
     /* ⛔ Mesmo motivo do bloco acima: conta se renomeia no perfil dela. O lápis fica só
      * para inscrito digitado à mão. */
-    var _pEditBtn = (isOrg && !_pUid && _pManualId)
+    var _pCamisAction = isOrg && String(t.id) === 'tour_1793804848447_94bfe2282535789667cb35f1080024ee' && !_pUid && _pManualId;
+    if (_pCamisAction) _pNameLinkHtml = '<span class="sp-person-name-link" role="button" tabindex="0" data-camis-manual-name="1" data-camis-tid="' +
+      window._safeHtml(String(t.id)) + '" data-camis-old-name="' + _pNameH + '" data-camis-manual-id="' +
+      window._safeHtml(String(_pManualId)) + '" title="Editar ou substituir ' + _pNameH + '">' + _pNameLinkHtml + '</span>';
+    var _pEditBtn = (isOrg && !_pUid && _pManualId && !_pCamisAction)
       ? '<button type="button" title="Editar ' + _pNameH + '" aria-label="Editar ' + _pNameH + '" style="border:0;background:transparent;color:var(--text-muted);font-size:0.86rem;line-height:1;padding:3px;cursor:pointer;flex-shrink:0;" onclick="event.stopPropagation();window._editParticipantName(\'' + t.id + '\',\'' + _pSafe + '\',\'' + _pManualId + '\',this)">✏️</button>'
       : '';
     pNameHtml = '<div data-edit-name-scope data-edit-key="' + window._safeHtml(String(t.id) + '|' + String(_pUid || _pManualId || pName)) + '" style="display:flex;align-items:center;gap:8px;overflow:hidden;">' +
@@ -2924,7 +3040,10 @@ function renderParticipants(container, tournamentId) {
       const _niPair = _nameToParticipant[ind.name];
       const _niSwap = isOrg && t.status !== 'finished' && (t.canonicalRegistrationMigration || {}).fingerprint &&
         (_niPair && _niPair.fixedPairId || ind.fixedPairId) && (_niUid || _niManualId);
-      const _niNameAction = _niSwap
+      const _niCamisAction = isOrg && String(tId) === 'tour_1793804848447_94bfe2282535789667cb35f1080024ee' && !_niUid && _niManualId;
+      const _niNameAction = _niCamisAction
+        ? `<span class="sp-person-name-link" role="button" tabindex="0" data-camis-manual-name="1" data-camis-tid="${window._safeHtml(String(tId))}" data-camis-old-name="${_safeName}" data-camis-manual-id="${window._safeHtml(String(_niManualId))}" title="Editar ou substituir ${_safeName}">${_niNomeHtml}</span>`
+        : _niSwap
         ? `<span role="button" tabindex="0" data-tournament-swap="1" data-swap-tid="${window._safeHtml(String(tId))}" data-swap-uid="${window._safeHtml(String(_niUid))}" data-swap-manual-id="${window._safeHtml(String(_niManualId))}" data-swap-category="${window._safeHtml(String(_niPair && _niPair.categoryId || ind.categoryId || ''))}" title="Trocar participante">${_niNomeHtml}</span>`
         : _niNomeHtml;
       const _niContato = (typeof window._contactPersonIconHtml === 'function')
@@ -2942,7 +3061,7 @@ function renderParticipants(container, tournamentId) {
         ? `<div style="font-size:0.63rem;color:var(--text-muted);opacity:0.75;line-height:1.2;margin-top:1px;">neste torneio: ${window._safeHtml(String(ind.name).trim())}</div>`
         : '';
       /* ⛔ Mesmo motivo: conta se renomeia no perfil dela. Lápis só para digitado à mão. */
-      const _niEditBtn = (isOrg && !_niUid && _niManualId)
+      const _niEditBtn = (isOrg && !_niUid && _niManualId && !_niCamisAction)
         ? `<button type="button" title="Editar ${_safeName}" aria-label="Editar ${_safeName}" style="border:0;background:transparent;color:var(--text-muted);font-size:0.82rem;line-height:1;padding:3px;cursor:pointer;flex-shrink:0;" onclick="event.stopPropagation();window._editParticipantName('${tId}','${safeName}','${_niManualId}',this)">\u270f\ufe0f</button>`
         : '';
       const _nameRow = `<div data-edit-name-scope data-edit-key="${window._safeHtml(String(tId) + '|' + String(_niUid || _niManualId || ind.name || ''))}" style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;min-width:0;">${_niNameAction}${_niContato}${_niEditBtn}${_orgStarC}${isStandby ? presenceDot : ''}</div>${_niRotuloTorneio}`;
