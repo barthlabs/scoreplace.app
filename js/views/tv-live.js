@@ -455,11 +455,31 @@
       if (!key) return;
       var lm = matches.filter(function (m) { return m && String(m.bracket || 'main') === key; });
       var saved = t.classifFinalDaLinha && t.classifFinalDaLinha[key];
-      var rows = Array.isArray(saved) && saved.length ? saved :
-        (typeof window._classifEntriesFromMatches === 'function' ? window._classifEntriesFromMatches(t, lm) : []);
-      lineStandings[id] = { title: (lineChoices.find(function (choice) { return choice.key === key; }) || {}).label || key,
-        rows: rows.map(function (entry) { return { name: String(entry.name || ''), pos: Number(entry.pos || 0) }; })
-          .filter(function (entry) { return entry.name && entry.pos > 0; })
+      var progressive = typeof window._classifEntriesFromMatches === 'function' ? window._classifEntriesFromMatches(t, lm) : [];
+      var base = Array.isArray(saved) && saved.length ? saved : progressive;
+      var rows = base.map(function (entry) { return { name: String(entry.name || ''), pos: Number(entry.pos || 0) }; })
+        .filter(function (entry) { return entry.name && entry.pos > 0; });
+      // Só os confrontos explicitamente escolhidos para a tela de finais
+      // definem o pódio. A última rodada de uma liga não é uma final.
+      var focusMatches = tvLayout ? ['live1', 'live2', 'live3', 'live4'].map(function (boxId) {
+        var source = tvLayout.sections[boxId] && tvLayout.sections[boxId].source;
+        return source && lm.find(function (m) { return m && String(m.id) === String(source); });
+      }).filter(Boolean) : [];
+      var finalMatch = focusMatches.find(function (m) { return !m.isThirdPlace && !m.isBye && !m.isSitOut; });
+      var thirdMatch = focusMatches.find(function (m) { return m.isThirdPlace; });
+      if (finalMatch) rows = rows.filter(function (entry) { return entry.pos !== 1 && entry.pos !== 2; });
+      if (thirdMatch) rows = rows.filter(function (entry) { return entry.pos !== 3 && entry.pos !== 4; });
+      [[finalMatch, 1], [thirdMatch, 3]].forEach(function (pair) {
+        var m = pair[0], start = pair[1];
+        if (!m || !m.winner) return;
+        var side = typeof window._matchWinnerSide === 'function' ? window._matchWinnerSide(m) :
+          (m.winner === 'p1' ? 1 : m.winner === 'p2' ? 2 : 0);
+        if (side !== 1 && side !== 2) return;
+        rows.push({ name: sideName(t, m, side === 1 ? 'p1' : 'p2'), pos:start });
+        rows.push({ name: sideName(t, m, side === 1 ? 'p2' : 'p1'), pos:start + 1 });
+      });
+      lineStandings[id] = { key:key, title:(lineChoices.find(function (choice) { return choice.key === key; }) || {}).label || key,
+        rows:rows.filter(function (entry) { return entry.name && entry.pos > 0; })
           .sort(function (a, b) { return a.pos - b.pos || a.name.localeCompare(b.name); }) };
     });
     var cover = typeof window._tournamentCoverBackground === 'function'
@@ -605,20 +625,25 @@
           '</div><strong>' + esc(score) + '</strong></div>';
       }
       return '<section class="tv-focus-card"><h2>' + title + ' · JOGO ' + esc(game.number) + '</h2>' +
+        '<small class="tv-focus-category">' + esc(game.category) + (game.bracket ? ' · ' + esc(game.bracket === 'gold' ? 'Ouro' : game.bracket === 'silver' ? 'Prata' : game.bracket) : '') + '</small>' +
         side(game.a, game.scoreA, game.winnerSide === 1) + '<div class="tv-focus-vs">VS</div>' +
         side(game.b, game.scoreB, game.winnerSide === 2) + '</section>';
     }
     function lineStanding(id) {
       var standing = snapshot.lineStandings && snapshot.lineStandings[id];
       if (!standing) return '<section class="tv-focus-standing"><h2>Escolha a classificação</h2></section>';
-      return '<section class="tv-focus-standing"><h2>CLASSIFICAÇÃO · ' + esc(standing.title).toUpperCase() + '</h2>' +
-        '<div class="tv-focus-standing-list" style="--tv-qr-clearance:' + layout.sections.qr.h + 'vh">' + (standing.rows.length ? standing.rows.map(function (row) {
+      var standingBox = layout.sections[id], qr = layout.sections.qr;
+      var qrClearance = qr.visible && qr.y < standingBox.y + standingBox.h && qr.y + qr.h > standingBox.y &&
+        qr.x < standingBox.x + standingBox.w && qr.x + qr.w > standingBox.x
+        ? Math.max(0, standingBox.y + standingBox.h - qr.y) : 0;
+      return '<section class="tv-focus-standing tv-focus-standing-' + esc(standing.key) + '"><h2>CLASSIFICAÇÃO · ' + esc(standing.title).toUpperCase() + '</h2>' +
+        '<div class="tv-focus-standing-list" data-tv-autoscroll="' + esc(id) + '" style="--tv-qr-clearance:' + qrClearance + 'vh">' + (standing.rows.length ? standing.rows.map(function (row) {
           return '<div class="tv-focus-standing-row"><b>' + esc(row.pos) + 'º</b><span>' + esc(row.name) + '</span></div>';
         }).join('') : '<p>Classificação em andamento</p>') + '</div></section>';
     }
     var background = layout.backgroundMode === 'custom' ? layout.background : (snapshot.theme && snapshot.theme.background || '#060d1a');
     return '<main class="tv-custom-board" style="background:' + esc(background) + '">' +
-      box('header', '<header class="tv-header">' + (snapshot.logo && !layout.sections.logo.visible ? '<img src="' + esc(snapshot.logo) + '" alt="">' : '') + '<h1>' + esc(snapshot.name) + '</h1>' + fullscreenActionHtml() + '<time id="tv-now"></time></header>') +
+      box('header', '<header class="tv-header">' + (snapshot.logo && (!layout.sections.logo.visible || layout.sections.logo.y >= layout.sections.header.y + layout.sections.header.h) ? '<img src="' + esc(snapshot.logo) + '" alt="">' : '') + '<h1>' + esc(snapshot.name) + '</h1>' + fullscreenActionHtml() + '<time id="tv-now"></time></header>') +
       box('courts', '<section class="tv-courts" data-tv-autoscroll="courts" style="--tv-court-rows:' + Math.ceil(snapshot.courts.length / 2) + '">' + snapshot.courts.map(function (card) { return cardHtml(card, layout.card); }).join('') + '</section>') +
       box('upcoming', nextGameHtml(snapshot.nextGames || snapshot.nextGame, snapshot.waitingForTie)) +
       box('rankings', ranking.replace('class="tv-rankings"', 'class="tv-rankings" data-tv-autoscroll="rankings"')) + box('results', results) +
@@ -719,7 +744,7 @@
       'if(wrapped)resultPosition%=resultCycle;list.scrollTop=resultPosition;' +
       'if(pinArmed&&pinVisibleMs>=30000&&wrapped){pinArmed=false;syncResultPin();}}' +
       'if(document.visibilityState==="visible"&&!(window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches))' +
-      'Object.keys(boxLoops).forEach(function(key){var loop=boxLoops[key];loop.position=(loop.position+elapsed*.022)%loop.cycle;loop.node.scrollTop=loop.position;});' +
+      'Object.keys(boxLoops).forEach(function(key){var loop=boxLoops[key];var speed=key==="upcoming"?.017:.022;loop.position=(loop.position+elapsed*speed)%loop.cycle;loop.node.scrollTop=loop.position;});' +
       'window.requestAnimationFrame(advance);}window.requestAnimationFrame(advance);' +
       'function signal(type){try{if(window.opener&&!window.opener.closed)window.opener.postMessage({type:type,id:id,gen:gen,visible:document.visibilityState==="visible"},origin);}catch(e){}}' +
       'function tick(){if(window.__tvGeneration!==gen){clearInterval(timer);return;}var now=Date.now();' +
@@ -789,12 +814,12 @@
     '</style>');
   styles = styles.replace('</style>',
     '.tv-custom-qr{z-index:20}.tv-focus-card,.tv-focus-standing{display:flex;flex-direction:column;width:100%;height:100%;min-height:0;overflow:hidden;padding:.7vw;background:color-mix(in srgb,var(--tv-primary) 18%,#0d1b2e);border:1px solid color-mix(in srgb,var(--tv-secondary) 30%,#1b3f61);border-radius:.7vw}' +
-    '.tv-focus-card h2,.tv-focus-standing h2{flex:none;margin:0 0 .4vw;color:#7dd3fc;font-size:clamp(.85rem,1.1vw,1.5rem);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
+    '.tv-focus-card h2,.tv-focus-standing h2{flex:none;margin:0 0 .4vw;color:#7dd3fc;font-size:clamp(.85rem,1.1vw,1.5rem);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tv-focus-category{flex:none;margin:-.2vw 0 .4vw;color:#cbd5e1;font-size:clamp(.65rem,.8vw,1rem);font-weight:700}' +
     '.tv-focus-side{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:.4vw;min-height:0;flex:1;padding:.2vw .5vw;background:#222;border-radius:.4vw}.tv-focus-winner{background:#123b2b}' +
     '.tv-focus-players{display:flex;flex-direction:column;justify-content:center;min-width:0;line-height:1.08}.tv-focus-players span{display:block;overflow-wrap:anywhere;font-size:clamp(.72rem,1vw,1.4rem);font-weight:750}' +
     '.tv-focus-side strong{font-size:clamp(1.1rem,1.8vw,2.5rem);font-variant-numeric:tabular-nums}.tv-focus-winner strong{color:#4ade80}.tv-focus-vs{flex:none;text-align:center;color:#94a3b8;font-size:clamp(.65rem,.75vw,1rem);font-weight:900}' +
     '.tv-theme .tv-court.tv-court-latest,.tv-series-game.tv-series-latest-update{border:2px solid #fbbf24;box-shadow:none}' +
-    '.tv-focus-standing-list{flex:1;min-height:0;overflow:auto;padding-bottom:var(--tv-qr-clearance,2vw)}.tv-focus-standing-row{display:grid;grid-template-columns:2vw minmax(0,1fr);gap:.5vw;align-items:center;min-height:2.3vw;padding:.2vw .4vw;border-bottom:1px solid #39475b;font-size:clamp(.85rem,1.05vw,1.4rem)}.tv-focus-standing-row b{color:#fbbf24}.tv-focus-standing-row span{overflow-wrap:anywhere}' +
+    '.tv-focus-standing-list{flex:1;min-height:0;overflow:auto;scrollbar-width:none;padding-bottom:var(--tv-qr-clearance,2vw)}.tv-focus-standing-list::-webkit-scrollbar{display:none}.tv-focus-standing-row{display:grid;grid-template-columns:3vw minmax(0,1fr);column-gap:.8vw;align-items:center;min-height:2.3vw;padding:.2vw .4vw;font-size:clamp(.85rem,1.05vw,1.4rem)}.tv-focus-standing-row b{color:#fbbf24}.tv-focus-standing-row span{overflow-wrap:anywhere}' +
     '</style>');
   // A TV deriva as superfícies das cores da capa. No CAMIS, preto e branco
   // geram tons neutros, sem azul fixo no cabeçalho, quadras ou jogos.
@@ -810,6 +835,7 @@
     '.tv-theme .tv-result.tv-result-latest{background:var(--tv-row-active);border-color:#fbbf24}.tv-theme .tv-series-game.tv-series-latest-update,.tv-theme .tv-series-game.tv-series-latest-result{border:2px solid #fbbf24;outline:0;box-shadow:none}' +
     '.tv-theme .tv-bracket-match-in-court{border-color:#4ade80;box-shadow:none}' +
     '.tv-theme .tv-qr-brand{background:transparent;color:var(--tv-title,#ffffff);border-radius:0;padding:.18vw .3vw;box-sizing:border-box}' +
+    '.tv-theme .tv-focus-standing-gold{border-color:#a16207}.tv-theme .tv-focus-standing-gold h2,.tv-theme .tv-focus-standing-gold .tv-focus-standing-row b{color:#fbbf24}.tv-theme .tv-focus-standing-silver{border-color:#94a3b8}.tv-theme .tv-focus-standing-silver h2,.tv-theme .tv-focus-standing-silver .tv-focus-standing-row b{color:#cbd5e1}' +
     '#tv-fullscreen-action{border-color:#d4d4d4!important;background:#222!important;color:#fff}' +
     '</style>');
   styles = styles.replace('</style>',
@@ -820,7 +846,7 @@
     '.tv-upcoming-series{display:grid;gap:.15vw}.tv-upcoming-series-game{display:grid;grid-template-columns:4.2vw minmax(0,1fr) 1vw minmax(0,1fr);gap:.25vw;align-items:center;min-height:2.25vw;color:#fff}.tv-upcoming-series-game>b{white-space:nowrap;font-size:clamp(.7rem,.75vw,1rem)}.tv-upcoming-series-game span{min-width:0}.tv-upcoming-series-game span span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:clamp(.7rem,.78vw,1.04rem);font-weight:750}.tv-upcoming-series-right{text-align:right}.tv-upcoming-series-game i{font-style:normal;text-align:center;color:#aaa}' +
     '.tv-results-main>h2{color:#fbbf24;font-size:clamp(.9rem,1.2vw,1.5rem);line-height:normal}' +
     '.tv-results .tv-result-players span{font-size:clamp(.75rem,.95vw,1.3rem)}' +
-    '.tv-custom-qr .tv-qr{padding-bottom:.55vw}.tv-custom-results .tv-results-list{box-sizing:border-box}' +
+    '.tv-custom-qr .tv-qr{padding-bottom:.55vw}.tv-custom-results .tv-results{padding:.55vw .8vw}.tv-custom-results .tv-results-list{box-sizing:border-box}' +
     '</style>');
   // O editor usa exatamente o HTML e o CSS da janela No ar. O iframe não
   // executa childScript: relógios e hora recebem o valor deste instante.

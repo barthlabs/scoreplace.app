@@ -218,10 +218,36 @@ const finalsSnapshot = window._tvLiveBuildSnapshot({ ...t, matches:finals, tvLay
 assert.equal(finalsSnapshot.selectedMatches.live1.number, 198);
 assert.equal(finalsSnapshot.selectedMatches.live4.number, 201);
 assert.equal(finalsSnapshot.lineStandings.standing1.rows[0].name, 'VORTEX 1 / Parceira');
+assert.deepEqual(Array.from(finalsSnapshot.lineStandings.standing1.rows.slice(0, 4), row => row.pos), [1, 2, 3, 4],
+  'final e disputa de terceiro lugar atualizam as quatro primeiras posições');
+assert.equal(finalsSnapshot.lineStandings.standing2.rows[0].name, 'PHANTOM 1 / Parceira',
+  'a classificação prata usa o resultado da sua própria final');
+const pendingFinals = finals.map(game => ({ ...game, winner:null, scoreP1:null, scoreP2:null }));
+const pendingStandings = window._tvLiveBuildSnapshot({ ...t, matches:pendingFinals, tvLayout:finalsLayout,
+  classifFinalDaLinha:{ gold:[{ name:'VORTEX 1 / Parceira', pos:1 }] } });
+assert.equal(pendingStandings.lineStandings.standing1.rows.some(row => row.pos <= 4), false,
+  'posição salva antiga não antecipa vencedor de final ainda não encerrada');
+const finalOnly = finals.map(game => game.isThirdPlace ? { ...game, winner:null, scoreP1:null, scoreP2:null } : game);
+const finalOnlyStandings = window._tvLiveBuildSnapshot({ ...t, matches:finalOnly, tvLayout:finalsLayout });
+assert.deepEqual(Array.from(finalOnlyStandings.lineStandings.standing1.rows.filter(row => row.pos <= 4), row => row.pos), [1, 2],
+  'primeiro e segundo surgem assim que a final é confirmada, sem esperar o terceiro lugar');
+const thirdOnly = finals.map(game => !game.isThirdPlace ? { ...game, winner:null, scoreP1:null, scoreP2:null } : game);
+const thirdOnlyStandings = window._tvLiveBuildSnapshot({ ...t, matches:thirdOnly, tvLayout:finalsLayout });
+assert.deepEqual(Array.from(thirdOnlyStandings.lineStandings.standing2.rows.filter(row => row.pos <= 4), row => row.pos), [3, 4],
+  'terceiro e quarto surgem assim que sua disputa é confirmada, mesmo com a final pendente');
+const leagueLayout = window.ScoreplaceTvLayout.defaults();
+leagueLayout.sections.standing1.visible = true;
+leagueLayout.sections.standing1.source = 'gold';
+const leagueStandings = window._tvLiveBuildSnapshot({ ...t, matches:finals, tvLayout:leagueLayout,
+  classifFinalDaLinha:{ gold:[{ name:'Líder salvo', pos:1 }, { name:'Quinto salvo', pos:5 }] } });
+assert.deepEqual(Array.from(leagueStandings.lineStandings.standing1.rows, row => row.name), ['Líder salvo', 'Quinto salvo'],
+  'sem cards de final selecionados, a TV preserva a classificação salva e não inventa pódio');
 const finalsHtml = window._tvLiveBodyHtml(finalsSnapshot);
 assert.match(finalsHtml, /tv-custom-live1[\s\S]*FINAL · JOGO 198/);
 assert.match(finalsHtml, /tv-custom-live2[\s\S]*3º E 4º LUGAR · JOGO 199/);
 assert.match(finalsHtml, /tv-custom-standing2[\s\S]*CLASSIFICAÇÃO · PRATA/);
+assert.match(finalsHtml, /tv-focus-standing-gold[\s\S]*data-tv-autoscroll="standing1"/);
+assert.match(finalsHtml, /tv-focus-standing-silver[\s\S]*data-tv-autoscroll="standing2"/);
 assert.ok(finalsHtml.indexOf('tv-custom-standing2') < finalsHtml.indexOf('tv-custom-qr'), 'QR é pintado por cima das tabelas');
 const paletteLayout = window.ScoreplaceTvLayout.defaults();
 paletteLayout.sections.logo.visible = true;

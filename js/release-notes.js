@@ -1,3 +1,4 @@
+// 2.6.58 — TV: classificações da Ouro e Prata acompanham as finais, com rolagem e cores próprias.
 // 2.6.57 — Na TV do torneio, Últimos resultados aparece também quando o
 // ensaio ocorre antes da data prevista. O editor mostra todas as guias de
 // alinhamento das quadras, e cada nome usa a mesma fonte em todas as aparições.

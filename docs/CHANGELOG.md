@@ -1,3 +1,9 @@
+## 2.6.58 — 12/nov/2026 (TV CAMIS e Confra)
+
+- A TV da Confra atualiza as quatro primeiras posições da Ouro e da Prata ao confirmar a final e o terceiro lugar; a classificação passa a rolar suavemente, sem divisórias, com cores dourada e prateada e espaço maior entre posição e nome. Os quatro confrontos exibem categoria e chave.
+- A tela do CAMIS troca a posição dos boxes de resultados e próximos jogos, coloca o logo acima do QR e rola os próximos jogos um pouco mais devagar que os resultados, preservando os demais elementos salvos. A Confra reduz o vão central.
+- Corte somente web e configuração de TV; sem mudanças em jogos, placares, grade, Functions ou versões nativas.
+
 ## 2.6.57 — 12/nov/2026 (leitura da TV e alinhamento do editor)
 
 - O editor mostra guias amarelas nas bordas esquerda, direita, superior e inferior e também nas divisões intermediárias das oito quadras durante o arrasto. O encaixe magnético foi ampliado; nenhuma posição ou proporção salva foi alterada.
