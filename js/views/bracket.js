@@ -1400,10 +1400,14 @@ window._bracketOperationsSelect = function (t) {
     tieMatches.find(function (m) { return m.tieStatus === 'review'; });
   var samePhaseNext = next && Number(next.phaseIndex || 0) === Number(t.currentPhaseIndex || 0) ? next : null;
   var callableTie = nextTie && (!nextTie.postponedAt || !samePhaseNext) ? nextTie : null;
-  var queued = [callableTie || next || preview].concat(ordered).filter(function (m, index, list) {
+  var waitingForTie = !callableTie && tieMatches.some(function (m) {
+    return m && !m.winnerKey && m.courtCalledAt;
+  });
+  var suggested = waitingForTie ? null : callableTie || next || preview;
+  var queued = (waitingForTie ? [] : [suggested].concat(ordered)).filter(function (m, index, list) {
     return m && list.findIndex(function (entry) { return entry && String(entry.id) === String(m.id); }) === index;
   });
-  return { next: callableTie || next || preview, queue: queued, nextCallable: !!callableTie || !!next || !!preview,
+  return { next: suggested, queue: queued, nextCallable: !!suggested, waitingForTie: waitingForTie,
     tieCanPostpone: !!(callableTie && samePhaseNext && !callableTie.postponedAt),
     active: active, pending: pending, courts: courts, matches: matches };
 };
@@ -2363,7 +2367,10 @@ window._bracketOperationsRefresh = function (t, root) {
           payload = { type:'clock', direction:tieAction === 'clock-next' ? 'next' : 'restart' };
         }
         if (op._tieBusy) return;
-        op._tieBusy = true; target.disabled = true;
+        op._tieBusy = true;
+        if (tieAction === 'score' && typeof window._spinButton === 'function')
+          window._spinButton(target, 'Gravando…');
+        else target.disabled = true;
         var submit = tieAction === 'call' && tieMatch.court !== op.querySelector('[data-tie-court-select]').value
           ? window._phaseTieCardAction(t.id, tieDecisionId, mid,
             { type:'court', court:op.querySelector('[data-tie-court-select]').value }).then(function () {
@@ -2375,7 +2382,11 @@ window._bracketOperationsRefresh = function (t, root) {
           window._bracketOperationsRefresh(live || t, root);
         }).catch(function (error) {
           if (window.showNotification) window.showNotification('Desempate não atualizado', String(error.message || error), 'error');
-        }).finally(function () { op._tieBusy = false; target.disabled = false; });
+        }).finally(function () {
+          op._tieBusy = false;
+          if (tieAction === 'score' && typeof window._spinButtonDone === 'function') window._spinButtonDone(target);
+          else target.disabled = false;
+        });
         return;
       }
       if (target.hasAttribute('data-postpone-next')) {
@@ -2539,7 +2550,8 @@ window._bracketOperationsRefresh = function (t, root) {
       postponeReady: canCall && state.nextCallable !== false, postponeBusy: existing._spPostponeBusy || !(window._bracketCourtReleaseCache[String(t.id)] || {}).ready,
       tieCanPostpone: !!state.tieCanPostpone,
       preferFirstFreeCourt: true, preferredCourt: (root._bracketOperationsManualCourt || {})[String(state.next.id)] || '' }, nextLabel, nextAvailability, root, state.matches, 'next') :
-      '<span class="sp-operations-label">' + nextLabel + '</span>' + nextAvailability + '<div class="sp-operations-empty">Nenhum jogo aguardando chamada</div>') +
+      '<span class="sp-operations-label">' + nextLabel + '</span>' + nextAvailability + '<div class="sp-operations-empty">' +
+      (state.waitingForTie ? 'Aguardando a definição do desempate para continuar a fila' : 'Nenhum jogo aguardando chamada') + '</div>') +
     '</div>' + (state.pending.length ? '<div class="sp-operations-pending" aria-label="Placares pendentes"><span class="sp-operations-section-title">PLACARES PENDENTES</span><div class="sp-operations-pending-track">' +
     state.pending.map(function (m) { return _bracketOperationsReplica(m, t, { canCall: canCall, active: false }, String(m.court || 'Placar pendente'), '', root, state.matches, 'pending:' + String(m.id)); }).join('') +
     '</div></div>' : '') + '<div class="sp-operations-courts" aria-label="Jogos em quadra"><div class="sp-operations-courts-heading"><span class="sp-operations-section-title">EM QUADRA</span>' +

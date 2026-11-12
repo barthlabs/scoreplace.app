@@ -2,6 +2,10 @@
 const assert = require('assert');
 const tie = require('../functions-autodraw/phase-tie-core');
 const courts = require('../functions-autodraw/phase-tie-courts');
+const fs = require('fs');
+const operations = fs.readFileSync(require.resolve('../functions-autodraw/index.js'), 'utf8');
+assert.doesNotMatch(operations, /_phaseTieCourts\.callPending\(/,
+  'placar, liberação de quadra e criação do desempate não chamam a simples automaticamente');
 
 const rows = ['A', 'B', 'C', 'D'].map((name, i) => ({ uid: name, name, wins: i ? 1 : 3 }));
 const cmp = (a, b) => b.wins - a.wins;

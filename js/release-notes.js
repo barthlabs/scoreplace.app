@@ -1,3 +1,10 @@
+// 2.6.53 — O desempate entra em Próximo jogo a chamar para o anúncio do árbitro.
+// A chamada para quadra exige OK do organizador; a TV anuncia quatro próximos
+// grupos da mesma etapa, em rolagem suave, com cartões mais baixos, categoria
+// em dourado e sem rótulo de time para duplas sem nome de equipe.
+// Últimos resultados usa o mesmo estilo de título e fonte de Próximos jogos.
+// No desempate, Confirmar e Ao Vivo têm a mesma largura; ao gravar,
+// Confirmar mostra o spinner padrão até a resposta do servidor.
 // 2.6.52 — A tela No ar usa as cores de fundo do cartão do torneio também
 // no cabeçalho e nas quadras. Mostra até quatro próximos jogos da fila,
 // em rolagem suave; o QR não encobre os resultados e sua marca tem folga

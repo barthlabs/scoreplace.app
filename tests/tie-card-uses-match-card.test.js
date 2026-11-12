@@ -65,6 +65,7 @@ const { chromium } = require('playwright');
       const postponable = render(tie, { postponeReady:true, tieCanPostpone:true });
       const finalTie = render(tie, { postponeReady:true, tieCanPostpone:false });
       const waitingCard = document.querySelector('.sp-operations-tie-card');
+      const liveWidth = waitingCard.querySelector('[data-tie-action="live"]').getBoundingClientRect().width;
       waitingCard.querySelector('[data-tie-score="p1"]').value = '6';
       _bracketTieSyncConfirm(waitingCard);
       const afterFirstScore = waitingCard.querySelector('[data-tie-action="score"]').style.display;
@@ -72,6 +73,7 @@ const { chromium } = require('playwright');
       _bracketTieSyncConfirm(waitingCard);
       const scoreEntry = { afterFirstScore,
         confirmVisible:waitingCard.querySelector('[data-tie-action="score"]').style.display !== 'none',
+        liveWidth, confirmWidth:waitingCard.querySelector('[data-tie-action="score"]').getBoundingClientRect().width,
         liveHidden:waitingCard.querySelector('[data-tie-action="live"]').style.display === 'none',
         courtStillUncalled:!!waitingCard.querySelector('[data-tie-action="call"]') };
       const called = render({ ...tie, court:'Quadra 8', courtCalledAt:'2026-11-11T12:00:00Z',
@@ -152,6 +154,8 @@ const { chromium } = require('playwright');
     assert.equal(cards.scoreEntry.afterFirstScore, 'none');
     assert(cards.scoreEntry.confirmVisible && cards.scoreEntry.liveHidden && cards.scoreEntry.courtStillUncalled,
       'Confirmar aparece ao digitar os dois placares mesmo antes da chamada para quadra');
+    assert.equal(cards.scoreEntry.confirmWidth, cards.scoreEntry.liveWidth,
+      'Confirmar mantém exatamente a largura do Ao Vivo');
     assert(cards.waiting.actions.includes('call'), 'chamada OK no próprio card');
     assert.equal(cards.waiting.nav, 0, 'dois atletas: um jogo, sem setas');
     assert(cards.postponable.postpone, 'Pular jogo aparece quando há outro jogo chamável na fase');

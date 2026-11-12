@@ -109,10 +109,18 @@ withTie.phaseTieDecisions['0']['group-0:1:2'].matches[0].court = 'Quadra 8';
 withTie.phaseTieDecisions['0']['group-0:1:2'].matches[0].courtCalledAt = '2026-11-13T12:00:00Z';
 assert(context.window._bracketOperationsSelect(withTie).active.some(m => m.id === 'tie-a'),
   'desempate chamado aparece entre os jogos em quadra');
+assert.equal(context.window._bracketOperationsSelect(withTie).next, null,
+  'Ouro aguarda o desempate em quadra antes de voltar à sugestão');
+assert.equal(context.window._bracketOperationsSelect(withTie).waitingForTie, true);
+withTie.phaseTieDecisions['0']['group-0:1:2'].matches[0].courtReleasedAt = '2026-11-13T12:03:00Z';
+assert.equal(context.window._bracketOperationsSelect(withTie).next, null,
+  'Ouro segue aguardando se a quadra for liberada antes de confirmar o desempate');
 withTie.phaseTieDecisions['0']['group-0:1:2'].matches[0].sets = [{ p1:5, p2:3 }];
 withTie.phaseTieDecisions['0']['group-0:1:2'].matches[0].winnerKey = 'name:Ana';
 assert(!context.window._bracketOperationsSelect(withTie).active.some(m => m.id === 'tie-a'),
   'resultado da simples, gravado com winnerKey, retira o card da faixa operacional');
+assert.equal(context.window._bracketOperationsSelect(withTie).next.id, firstGold.id,
+  'Ouro volta à fila depois da decisão do desempate');
 const concentratedStart = source.indexOf('window._isConcentratedTournament = function');
 const concentratedEnd = source.indexOf('\nwindow._matchCoordsFromId = function', concentratedStart);
 assert(concentratedStart > 0 && concentratedEnd > concentratedStart);

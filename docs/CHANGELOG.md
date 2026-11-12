@@ -1,3 +1,11 @@
+## 2.6.53 — 11/nov/2026 (desempate anunciado antes da chamada)
+
+- O desempate necessário entra primeiro em “Próximo jogo a chamar”. Registrar placar, liberar uma quadra ou criar a decisão não o coloca automaticamente em quadra; a chamada exige a confirmação OK, para que o árbitro possa anunciá-lo.
+- Enquanto a simples está em quadra ou com placar pendente de confirmação, Ouro aguarda a decisão na sugestão de chamada. Após o resultado, a fila retoma a grade.
+- “Próximos jogos” na TV mostra até quatro primeiros confrontos dos grupos da mesma etapa, em cartões mais baixos e rolagem contínua. Categoria em dourado; duplas sem equipe não recebem o rótulo “Time”. “Últimos resultados” usa o mesmo tamanho e cor de título, e nomes na mesma escala.
+- No card da simples, “Confirmar” e “Ao Vivo” ocupam exatamente a mesma largura ao alternar depois de digitar o placar. Ao confirmar, o botão fica cinza com o spinner padrão e “Gravando…” até a resposta do servidor.
+- O layout salvo da TV, placares e dados do CAMIS não foram alterados por este corte. Nenhuma versão nativa foi modificada.
+
 ## 2.6.52 — 11/nov/2026 (cores e edição da TV)
 
 - A tela No ar mostra o logo ao lado do nome quando o box separado do logo foi retirado. “Próximos jogos” exibe até quatro confrontos da fila operacional em rolagem contínua; os resultados reservam espaço para o QR quando ele se sobrepõe, e a marca recebe uma pequena folga inferior com texto preto.

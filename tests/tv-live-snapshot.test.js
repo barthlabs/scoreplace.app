@@ -148,6 +148,23 @@ const fourFuture = { ...t, matches: [20, 21, 22, 23, 24].map(n => match(n, 'Quad
 const fourSnapshot = window._tvLiveBuildSnapshot(fourFuture);
 assert.equal(fourSnapshot.nextGames.map(g => g.number).join(','), '20,21,22,23', 'TV anuncia quatro jogos na ordem da fila');
 assert.match(window._tvLiveBodyHtml(fourSnapshot), /PRÓXIMOS JOGOS[\s\S]*data-tv-autoscroll="upcoming"[\s\S]*JOGO 20[\s\S]*JOGO 23/);
+const camisQueue = { ...t, id:'camis-tv-queue', competitionTeams:[], teamCompetition:{ enabled:false },
+  matches:[...Array.from({ length:8 }, (_, i) => ({ id:'diamond-' + i, _gameNum:1 + i * 3,
+    category:'Fem Diamante', p1:'Diamante ' + i + ' A', p2:'Diamante ' + i + ' B',
+    court:'Quadra ' + (i + 1), courtCalledAt:'2026-10-22T18:00:00Z', scheduledAt:'2026-10-22T18:00:00Z' })),
+    ...Array.from({ length:4 }, (_, group) => Array.from({ length:3 }, (_, game) => ({
+      id:'gold-' + group + '-' + game, _gameNum:25 + group * 3 + game, category:'Fem Ouro',
+      isMonarch:true, monarchGroup:group, round:1, phaseIndex:0,
+      p1:'Ouro ' + group + ' A', p2:'Ouro ' + group + ' B', scheduledAt:'2026-10-22T19:40:00Z'
+    }))).flat()] };
+const camisQueueSnapshot = window._tvLiveBuildSnapshot(camisQueue);
+assert.equal(camisQueueSnapshot.nextGames.map(g => g.number).join(','), '25,28,31,34',
+  'TV mostra quatro grupos Ouro sem anunciar o segundo jogo antes do primeiro');
+const camisQueueHtml = window._tvLiveBodyHtml(camisQueueSnapshot);
+assert.doesNotMatch(camisQueueHtml.split('class="tv-upcoming"')[1].split('</section>')[0], /tv-result-team|>Time</,
+  'jogos de duplas não inventam um time');
+assert.match(camisQueueHtml, /tv-upcoming-category">Fem Ouro/,
+  'categoria aparece com a cor própria no cabeçalho do próximo jogo');
 const customLayout = window.ScoreplaceTvLayout.defaults();
 customLayout.sections.qr.visible = false;
 customLayout.card.score = false;
@@ -205,7 +222,7 @@ paletteLayout.backgroundMode = 'custom'; paletteLayout.background = '#112233';
 assert.match(window._tvLiveBodyHtml(window._tvLiveBuildSnapshot({ ...t, coverColor: '#a12345', tvLayout: paletteLayout })),
   /tv-custom-board" style="background:#112233"/, 'fundo manual sobrepõe a paleta somente quando selecionado');
 const upcomingHtml = window._tvLiveBodyHtml(snapshot).split('class="tv-upcoming"')[1].split('</section>')[0];
-assert.match(upcomingHtml, /JOGO 3 · Fem Light/);
+assert.match(upcomingHtml, /JOGO 3 · <span class="tv-upcoming-category">Fem Light<\/span>/);
 assert.match(upcomingHtml, /PANIC 1/);
 assert.doesNotMatch(upcomingHtml, /tv-result-side-score|tv-score/, 'próximo jogo não tem placar');
 assert.equal(snapshot.results.length, 4, 'histórico acumula resultados para rolagem');
