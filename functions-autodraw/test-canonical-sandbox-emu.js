@@ -71,6 +71,33 @@ const categories = [{ id: 'light', label: 'Light' }];
   assert.equal(JSON.stringify((await real.get()).data()), realBefore, 'cliente sem flag não altera original');
   console.log('✓ configuração do sandbox grava só na coleção privada');
 
+  // Trocar a tela exibida durante os jogos é uma atualização pontual: não
+  // regrava as posições salvas nem a tela principal do torneio.
+  const tvCore = require('./tv-layout-core');
+  const mainScreen = tvCore.defaults();
+  const otherScreen = tvCore.defaults();
+  otherScreen.backgroundMode = 'custom';
+  otherScreen.background = '#223344';
+  await routed.update({ status:'ongoing', rulesContractVersion:2, tvLayout:mainScreen,
+    tvScreens:[{ phaseIndex:0, layout:mainScreen }, { phaseIndex:1, layout:otherScreen }] });
+  const tvBefore = (await routed.get()).data();
+  const showOther = await callFn('updateTournamentConfiguration', { tournamentId:routedId,
+    sandbox:true, patch:{ tvActiveScreen:1 } }, owner);
+  assert.equal(showOther.status, 200, JSON.stringify(showOther.body));
+  const tvAfter = (await routed.get()).data();
+  assert.equal(tvAfter.tvActiveScreen, 1);
+  assert.deepEqual(tvAfter.tvLayout, tvBefore.tvLayout);
+  assert.deepEqual(tvAfter.tvScreens, tvBefore.tvScreens);
+  const missingScreen = await callFn('updateTournamentConfiguration', { tournamentId:routedId,
+    sandbox:true, patch:{ tvActiveScreen:2 } }, owner);
+  assert.equal(missingScreen.body.error.status, 'INVALID_ARGUMENT');
+  const invalidScreen = await callFn('updateTournamentConfiguration', { tournamentId:routedId,
+    sandbox:true, patch:{ tvActiveScreen:12 } }, owner);
+  assert.equal(invalidScreen.body.error.status, 'INVALID_ARGUMENT');
+  assert.deepEqual((await routed.get()).data().tvScreens, tvBefore.tvScreens);
+  assert.equal(JSON.stringify((await real.get()).data()), realBefore);
+  console.log('✓ troca de tela ao vivo preserva o layout principal e recusa índice inexistente');
+
   // A confirmação do sorteio pode trazer dias de uma aba antiga sem a chave de
   // janelas. A callable mescla com o documento fresco da transação e devolve o
   // resultado para a prévia. Alterações explícitas seguem as mesmas regras.

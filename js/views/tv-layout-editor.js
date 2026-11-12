@@ -453,7 +453,7 @@
     var patch = { id:t.id };
     if (JSON.stringify(screens) !== savedBaseline) patch.tvScreens = window._tvEditorReadScreens();
     if (JSON.stringify(screens[0].layout) !== savedDefaultLayout) patch.tvLayout = window._tvEditorReadLayout();
-    if (activeLiveScreen !== savedActiveLiveScreen || savedActiveLiveScreen == null) patch.tvActiveScreen = activeLiveScreen == null ? 0 : activeLiveScreen;
+    if (activeLiveScreen !== savedActiveLiveScreen) patch.tvActiveScreen = activeLiveScreen == null ? 0 : activeLiveScreen;
     await window.AppStore.addTournament(patch);
     savedBaseline = JSON.stringify(screens);
     savedDefaultLayout = JSON.stringify(screens[0].layout);

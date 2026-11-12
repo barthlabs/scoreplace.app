@@ -110,9 +110,9 @@ const { chromium } = require('@playwright/test');
     });
     assert.equal(await page.evaluate(() => window._tvEditorHasChanges()), true);
     await page.locator('[data-tv-save-live]').click();
-    assert.deepEqual(await page.evaluate(() => Object.keys(window.__savedTvPatch).sort()), ['id','tvActiveScreen','tvLayout','tvScreens']);
-    assert.equal(await page.evaluate(() => window.__savedTvPatch.tvActiveScreen), 0,
-      'a primeira tela gravada torna-se o padrão do torneio');
+    assert.deepEqual(await page.evaluate(() => Object.keys(window.__savedTvPatch).sort()), ['id','tvLayout','tvScreens']);
+    assert.equal(await page.evaluate(() => 'tvActiveScreen' in window.__savedTvPatch), false,
+      'salvar uma tela não muda a escolha automática por fase de torneios antigos');
     assert.equal(await page.evaluate(() => window._tvEditorHasChanges()), false, 'salvar a tela limpa as mudanças pendentes');
     await page.locator('[data-tv-save-live]').click();
     assert.equal(await page.evaluate(() => window.__tvSaveCalls), 1,
@@ -232,6 +232,8 @@ const { chromium } = require('@playwright/test');
     await page.locator('[data-tv-save-live]').click();
     assert.equal(await page.evaluate(() => 'tvLayout' in window.__savedTvPatch), false,
       'salvar outra tela preserva o layout principal no servidor');
+    assert.equal(await page.evaluate(() => 'tvActiveScreen' in window.__savedTvPatch), false,
+      'salvar outra tela em torneio antigo não fixa a TV na principal sem escolha explícita');
     await page.evaluate(() => {
       const saved = window._tvEditorReadScreens();
       window._tvEditorSetLayout(saved[0].layout);
