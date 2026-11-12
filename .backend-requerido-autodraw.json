@@ -1,8 +1,12 @@
 {
   "schema": 1,
-  "backendCommit": "310da3418586d4c8e54ff0889ae8db03f7e9c0c2",
-  "scopeNote": "Corte 2.6.55: desempate simples pode ser pulado de novo e jogos independentes continuam chamáveis.",
+  "backendCommit": "92b7c240a189c4612dcd65dea28ba6dcb48f9e2d",
+  "scopeNote": "Corte 2.6.61: grupos oficiais CAMIS, reset pós-sorteio e proteção da fila e das quadras.",
   "functions": [
-    "advanceTournamentPhase"
+    "drawRound",
+    "assignMatchCourt",
+    "advanceTournamentPhase",
+    "finishTournament",
+    "resetTournamentToEnrollment"
   ]
 }
