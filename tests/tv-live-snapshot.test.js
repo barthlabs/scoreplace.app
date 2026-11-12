@@ -45,6 +45,11 @@ const t = { id: 'neon-test', name: 'NEON NIGHTMARE', logo: 'logo.png', courtName
     match(7, 'Quadra 7', 'PHANTOM', 'VORTEX', { winner: 'p2', scoreP1: 1, scoreP2: 6, resultAt: '2026-10-22T19:00:00Z' })
   ] };
 const snapshot = window._tvLiveBuildSnapshot(t, Date.parse('2026-10-22T21:02:10Z'));
+const roundLogo = window._tvLiveBuildSnapshot({ ...t, logoShape:'circle', logoRadius:50 },
+  Date.parse('2026-10-22T21:02:10Z'));
+assert.equal(roundLogo.logoRadius,'50%','a TV recebe o formato circular cadastrado');
+assert.match(window._tvLiveBodyHtml(roundLogo), /class="tv-theme tv-logo-circle" style="--tv-logo-radius:50%/,
+  'o cabeçalho da TV usa a máscara circular');
 assert.equal(window._tvLiveIsComplete({ ...t, _nJogos: 8 }), false, 'NO AR recusa fotografia com um jogo faltando');
 assert.equal(window._tvLiveIsComplete({ ...t, _nJogos: 7 }), true, 'NO AR aceita os sete IDs canônicos completos');
 const multiPhaseConfig = { enabled:true, aggregation:'per_category', classificationUnit:'pair' };
@@ -186,6 +191,9 @@ const customLayout = window.ScoreplaceTvLayout.defaults();
 customLayout.sections.qr.visible = false;
 customLayout.card.score = false;
 const customSnapshot = window._tvLiveBuildSnapshot({ ...t, tvLayout: customLayout });
+assert.match(window._tvLiveBodyHtml(window._tvLiveBuildSnapshot({ ...t,logoShape:'circle',tvLayout:customLayout })),
+  /class="tv-theme tv-logo-circle" style="--tv-logo-radius:50%/,
+  'o logo circular também alcança a tela personalizada');
 const phaseTwoLayout = window.ScoreplaceTvLayout.defaults(); phaseTwoLayout.background = '#123456';
 const phaseScreens = vm.runInContext('JSON.parse(' + JSON.stringify(JSON.stringify([
   { phaseIndex: 0, layout: customLayout }, { phaseIndex: 1, layout: phaseTwoLayout }

@@ -4,6 +4,7 @@
 - A transação valida a organização, a inscrição e o checkpoint pós-sorteio. Correções atualizam os jogos da mesma pessoa; substituições preservam resultados concluídos e atualizam jogos futuros. O reset volta à lista corrigida, com os 36 grupos e 108 jogos sem placar, mantendo as telas da TV.
 - Kelly Cristina foi corrigida para Kelly Barth no banco do torneio privado CAMIS, sem mudar sua identidade. Corte web e uma Function direcionada; versões nativas intactas.
 - O QR da TV inclui o logo do Scoreplace diretamente no HTML da janela, nos layouts padrão e personalizado, evitando que a marca desapareça quando a imagem externa não é exibida.
+- A tela "No ar" respeita o formato circular cadastrado para o logo do torneio, inclusive na caixa de logo do layout personalizado da Confra.
 
 ## 2.6.62 — 12/nov/2026 (classificação da CONFRA por vaga)
 

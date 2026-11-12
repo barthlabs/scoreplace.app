@@ -310,6 +310,8 @@ const { chromium } = require('@playwright/test');
     assert.equal(await page.evaluate(() => window._tvEditorReadLayout().background), '#445566');
     await page.evaluate(() => {
       window._editingTournament.logoUrl = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"/>';
+      window._editingTournament.logoShape = 'circle';
+      window._editingTournament.logoRadius = 50;
       window._tourLogoSrc = t => t.logoUrl || t.logoData || '';
       window.AppStore.addTournament = async patch => { Object.assign(window._editingTournament, patch); };
       document.getElementById('tv-personalization').open = true;
@@ -330,6 +332,16 @@ const { chromium } = require('@playwright/test');
     assert.equal(placedLogo.visible, true, 'a posição do logo é gravada na tela No ar');
     assert.equal(await page.evaluate(() => window._editingTournament.tvLayout.sections.logo.x), 2);
     assert.match(placedLogo.markup, /tv-placed-logo/, 'a TV monta o logo gravado na sua caixa');
+    const logoCircleComputed = await page.evaluate(() => {
+      const doc = document.querySelector('[data-tv-frame]').contentDocument;
+      const logo = doc.querySelector('.tv-placed-logo');
+      return logo ? { clip:doc.defaultView.getComputedStyle(logo).clipPath,
+        radius:doc.defaultView.getComputedStyle(logo).borderRadius,
+        frame:doc.querySelector('.tv-theme')?.className } : null;
+    });
+    assert.ok(logoCircleComputed && logoCircleComputed.frame.includes('tv-logo-circle') &&
+      logoCircleComputed.radius === '50%' && logoCircleComputed.clip.startsWith('circle('),
+      'logo circular da TV é recortado em círculo na caixa personalizada');
     await page.evaluate(() => {
       // O teste seguinte verifica o botão fullscreen sem outro box sintético sobre ele.
       window._editingTournament.tvScreens = null;
