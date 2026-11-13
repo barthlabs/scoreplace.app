@@ -1354,6 +1354,18 @@ window._bracketOperationsSelect = function (t) {
     .concat(tieMatches.filter(function (m) { return !m.winnerKey && m.court && m.courtCalledAt && !m.courtReleasedAt; }));
   var pending = matches.filter(function (m) { return m && released[String(m.id)] && !occupancy.isFinished(m); })
     .concat(tieMatches.filter(function (m) { return !m.winnerKey && !!m.courtReleasedAt; }));
+  // Os placares dos jogos 1 e 2 continuam acessíveis pelas setas do card da
+  // série enquanto o jogo seguinte ocupa a mesma quadra. Só após o terceiro
+  // encerramento a série aparece na seção global de pendentes.
+  pending = pending.filter(function (m) {
+    if (!m.isMonarch) return true;
+    var group = _bracketOperationsGroup(t, m, matches);
+    if (!group) return true;
+    var index = group.matches.findIndex(function (item) { return String(item.id) === String(m.id); });
+    return index < 0 || !group.matches.slice(index + 1).some(function (later) {
+      return !released[String(later.id)] && occupancy.occupiesCourt(later);
+    });
+  });
   var upcoming = matches.filter(function (m) {
     if (!m || occupancy.isFinished(m) || m.isBye || m.isSitOut || occupancy.occupiesCourt(m) ||
         m.courtCalledAt || m.startedAt || !_matchCardTimestamp(m.scheduledAt)) return false;
@@ -5801,8 +5813,16 @@ function _confirmCourtOperation(tId, matchId, action, title, message, run) {
   return operation.finally(function () { _courtConfirmationPending.delete(key); });
 }
 window._endMatchOnCourt = function (tId, matchId, button) {
-  return _confirmCourtOperation(tId, matchId, 'release', 'Liberar quadra',
-    'Liberar esta quadra sem placar? O jogo ficará em Placares pendentes.', function () {
+  var tournament = window._findTournamentById && window._findTournamentById(String(tId));
+  var allMatches = tournament && window._collectAllMatches && window._collectAllMatches(tournament);
+  var match = allMatches && allMatches.find(function (item) { return String(item.id) === String(matchId); });
+  var group = match && _bracketOperationsGroup(tournament, match, allMatches);
+  var position = group && group.matches.findIndex(function (item) { return String(item.id) === String(matchId); });
+  var continues = position >= 0 && position < 2;
+  return _confirmCourtOperation(tId, matchId, 'release', continues ? 'Encerrar jogo' : 'Liberar quadra',
+    continues
+      ? 'Encerrar este jogo sem placar? O próximo jogo começa na mesma quadra, e o placar anterior continua acessível pelas setas.'
+      : 'Liberar esta quadra sem placar? O jogo ficará em Placares pendentes.', function () {
   if (!window._callCF) return Promise.reject(new Error('Serviço indisponível.'));
   if (button) button.disabled = true;
   return window._callCF('endMatchOnCourt', {
@@ -5811,7 +5831,8 @@ window._endMatchOnCourt = function (tId, matchId, button) {
   }, 'Entre na sua conta para liberar a quadra.').then(function (res) {
     var data = (res && res.data) || {};
     if (!data.ok) throw new Error('Não foi possível liberar a quadra.');
-    if (typeof showNotification === 'function') showNotification('Quadra liberada', 'Placar pendente', 'success');
+    if (typeof showNotification === 'function') showNotification(data.seriesContinues ? 'Próximo jogo em quadra' : 'Quadra liberada',
+      data.seriesContinues ? 'O relógio do próximo jogo começou. O placar anterior permanece na série.' : 'Placar pendente', 'success');
     return data;
   }).catch(function (error) {
     if (typeof showNotification === 'function') showNotification('Quadra não liberada', error && error.message || 'Tente novamente.', 'error');

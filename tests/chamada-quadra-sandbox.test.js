@@ -375,5 +375,29 @@ const game = (id, court, scheduledAt = '2026-10-22T21:00:00.000Z') => ({ id, cou
   assert.equal((await callable(request('tour_test', 'another', 'Quadra 4', true))).changed, true);
   assert.deepEqual(Array.from(courtStates.get(statePath).postponedReady), ['first'],
     'jogo pulado novamente retorna após outra chamada');
+  tournament.matches = [seriesGame('series-1', 1, 0), seriesGame('series-2', 2, 0), seriesGame('series-3', 3, 0)];
+  tournament.matches[0].court = 'Quadra 1';
+  tournament.matches[0].courtCalledAt = nowIso;
+  courtStates.set(statePath, { released:{}, postponed:[], postponedReady:[], revision:0 });
+  nowIso = '2026-10-20T18:00:00.000Z';
+  const firstEnded = await endOnCourt({ auth:{ uid:'owner' }, data:{
+    tournamentId:'tour_test', sandbox:false, matchId:'series-1'
+  } });
+  assert.equal(firstEnded.nextMatchId, 'series-2', 'encerrar jogo 1 chama automaticamente jogo 2');
+  assert.equal(tournament.matches[1].court, 'Quadra 1');
+  assert.equal(tournament.matches[1].courtClockBaseAt, nowIso, 'relógio do jogo 2 começa no encerramento');
+  assert.ok(courtStates.get(statePath).released['series-1'], 'placar do jogo 1 continua pendente');
+  nowIso = '2026-10-20T18:10:00.000Z';
+  const secondEnded = await endOnCourt({ auth:{ uid:'owner' }, data:{
+    tournamentId:'tour_test', sandbox:false, matchId:'series-2'
+  } });
+  assert.equal(secondEnded.nextMatchId, 'series-3', 'encerrar jogo 2 chama automaticamente jogo 3');
+  assert.equal(tournament.matches[2].courtClockBaseAt, nowIso, 'relógio do jogo 3 inicia independente');
+  nowIso = '2026-10-20T18:20:00.000Z';
+  const thirdEnded = await endOnCourt({ auth:{ uid:'owner' }, data:{
+    tournamentId:'tour_test', sandbox:false, matchId:'series-3'
+  } });
+  assert.equal(thirdEnded.seriesContinues, false, 'só o terceiro encerramento libera a quadra');
+  assert.deepEqual(Object.keys(courtStates.get(statePath).released).sort(), ['series-1','series-2','series-3']);
   console.log('✓ sandbox isolado; dia local, ocupação e troca de quadra validados na callable real');
 })().catch(error => { console.error(error); process.exitCode = 1; });

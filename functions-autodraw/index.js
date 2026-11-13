@@ -4668,7 +4668,10 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
             series.sort((a, b) => Number(a._gameNum || a.scheduledGameNumber || 0) -
               Number(b._gameNum || b.scheduledGameNumber || 0) ||
               Date.parse(a.scheduledAt || '') - Date.parse(b.scheduledAt || '') || String(a.id).localeCompare(String(b.id)));
-            const firstPending = series.find(item => !_courtOccupancy.isFinished(item));
+            // Encerrar um jogo sem placar mantém a série na quadra e chama o
+            // seguinte. O marcador de liberação, portanto, também conclui a
+            // etapa operacional anterior para fins de ordem de chamada.
+            const firstPending = series.find(item => !_courtOccupancy.isFinished(item) && !released[String(item.id)]);
             if (firstPending && String(firstPending.id) !== matchId) {
               throw _drawFail('failed-precondition', 'Chame primeiro o Jogo ' +
                 String(firstPending._gameNum || firstPending.scheduledGameNumber || firstPending.id) + ' deste grupo.', { tId, matchId });
@@ -4882,11 +4885,54 @@ exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
       if (!m.court || !(m.courtCalledAt || m.startedAt) || hasScore) {
         throw new HttpsError('failed-precondition', 'O jogo precisa estar em quadra e sem resultado.');
       }
+      let nextInSeries = null;
+      if (m.isMonarch === true && !m.isTieBreak && Array.isArray(t.scheduleWindow?.days) &&
+          t.scheduleWindow.days.length === 1 && m.monarchGroup != null && m.round != null && m.category) {
+        const series = all.filter(item => item && item.isMonarch === true && !item.isTieBreak &&
+          String(item.category || '') === String(m.category) &&
+          Number(item.phaseIndex || 0) === Number(m.phaseIndex || 0) &&
+          String(item.round) === String(m.round) && String(item.monarchGroup) === String(m.monarchGroup));
+        if (series.length === 3) {
+          series.sort((a, b) => Number(a._gameNum || a.scheduledGameNumber || 0) -
+            Number(b._gameNum || b.scheduledGameNumber || 0) ||
+            Date.parse(a.scheduledAt || '') - Date.parse(b.scheduledAt || '') || String(a.id).localeCompare(String(b.id)));
+          const index = series.findIndex(item => String(item.id) === matchId);
+          if (index >= 0 && index < 2) {
+            if (!series.slice(0, index).every(item => _courtOccupancy.isFinished(item) || released[String(item.id)]))
+              throw new HttpsError('failed-precondition', 'Encerre os jogos anteriores deste grupo primeiro.');
+            const next = series[index + 1];
+            if (released[String(next.id)] || next.courtCalledAt || next.startedAt ||
+                _courtOccupancy.isFinished(next) || next.pendingResult || next.liveScored ||
+                (Array.isArray(next.sets) && next.sets.length) || Number(next.scoreP1) > 0 || Number(next.scoreP2) > 0)
+              throw new HttpsError('failed-precondition', 'O próximo jogo já foi iniciado ou alterado. Atualize a tela.');
+            const competing = all.find(item => item && String(item.id) !== matchId &&
+              String(item.id) !== String(next.id) && !released[String(item.id)] &&
+              String(item.court || '') === String(m.court) && _courtOccupancy.occupiesCourt(item));
+            if (competing) throw new HttpsError('failed-precondition', 'Outra partida ocupa esta quadra. Atualize a tela.');
+            nextInSeries = next;
+          }
+        }
+      }
       const auditRef = ref.collection('courtReleases').doc();
       const nextReleased = { ...released, [matchId]: agoraIso };
-      tx.set(stateRef, { revision: FieldValue.increment(1), released: nextReleased }, { merge: true });
-      tx.create(auditRef, { matchId, court: String(m.court), releasedAt: agoraIso, releasedBy: uid });
-      return commitReply({ ok: true, changed: true, releasedAt: agoraIso });
+      const courtPatch = { revision: FieldValue.increment(1), released: nextReleased };
+      if (nextInSeries) {
+        const before = _antesDoMotor(t);
+        nextInSeries.court = String(m.court);
+        nextInSeries.courtCalledAt = agoraIso;
+        nextInSeries.courtClockBaseAt = agoraIso;
+        delete nextInSeries.callCancelledAt;
+        _gravaTorneio(tx, ref, t, before, { agoraIso });
+        courtPatch.postponed = (Array.isArray(state.postponed) ? state.postponed : []).map(String)
+          .filter(id => id !== String(nextInSeries.id));
+        courtPatch.postponedReady = (Array.isArray(state.postponedReady) ? state.postponedReady : []).map(String)
+          .filter(id => id !== String(nextInSeries.id));
+      }
+      tx.set(stateRef, courtPatch, { merge: true });
+      tx.create(auditRef, { matchId, court: String(m.court), releasedAt: agoraIso, releasedBy: uid,
+        nextMatchId: nextInSeries ? String(nextInSeries.id) : null });
+      return commitReply({ ok: true, changed: true, releasedAt: agoraIso,
+        nextMatchId: nextInSeries ? String(nextInSeries.id) : null, seriesContinues: !!nextInSeries });
     }
     if (hasScore) {
       throw new HttpsError('failed-precondition', 'Resultado já lançado. Use Editar placar para corrigi-lo.');
