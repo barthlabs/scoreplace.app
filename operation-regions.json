@@ -7,7 +7,7 @@
   ],
   "services": {
     "sp-op-court-v2": {
-      "digest": "1227957d3fd7f2eb02f4c5a26e6bb922df59a0abda104a637c097b448b0bdb22",
+      "digest": "33e4118c9ef8a6781f147c27608c9695105effc8bee2a8b1a2667c9719b2442c",
       "urls": {
         "us-east1": "https://sp-op-court-v2-4f45krjr3a-ue.a.run.app",
         "us-east4": "https://sp-op-court-v2-4f45krjr3a-uk.a.run.app",
@@ -47,7 +47,7 @@
       }
     },
     "sp-op-control-v2": {
-      "digest": "117e668c52a12cd2ed9949cd1a05d5de3499047bfb13c47cb439f6d8dceafea1",
+      "digest": "1c6e403cdfbd7b66bf8ac9abf7111f40d96426c7dd0d9dcefc8a420d42ba2d15",
       "urls": {
         "us-east1": "https://sp-op-control-v2-4f45krjr3a-ue.a.run.app",
         "us-east4": "https://sp-op-control-v2-4f45krjr3a-uk.a.run.app",
