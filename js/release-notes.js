@@ -1,5 +1,6 @@
 // 2.6.83 — Os demais próximos jogos rolam dentro da primeira coluna da operação,
-// com fase e horário estimado. Placares pendentes mostram a fase e ficam ao lado.
+// com fase e horário estimado. Placares pendentes mostram a fase ao lado da
+// quadra, no cabeçalho do cartão, e ficam próximos do jogo a chamar.
 // A rolagem horizontal permanece na quadra atual ao encerrar ou lançar placar.
 // A escolha da TV distingue tela principal e secundária e permite detectar
 // novamente o monitor HDMI. A janela aberta recebe o CSS novo; nomes longos

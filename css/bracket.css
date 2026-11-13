@@ -76,7 +76,8 @@
 .sp-operations-pending-track { display:flex;flex-direction:column;gap:8px;overflow-y:auto;min-height:0; }
 .sp-operations-availability { display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;color:var(--sp-c-4ade80,#4ade80);font-size:.69rem;font-weight:800;line-height:14px; }
 .sp-operations-availability--busy { color:var(--sp-c-f87171,#f87171); }
-.sp-operations-pending .sp-operations-label { color:var(--sp-c-38bdf8,#38bdf8); }
+.sp-operations-pending .sp-operations-label { display:flex;align-items:center;justify-content:space-between;gap:6px;min-width:0;color:var(--sp-c-38bdf8,#38bdf8); }
+.sp-operations-pending .sp-operations-stage { font-size:.72rem;overflow:hidden;text-overflow:ellipsis; }
 .sp-operations-pending .sp-operations-replica > .sp-match-card { border:3px solid var(--sp-c-38bdf8,#38bdf8)!important; }
 .sp-operations-section-title {
   display: block;
