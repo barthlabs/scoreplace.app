@@ -1,3 +1,8 @@
+## 2.6.68 — 13/nov/2026 (centralização do QR na TV do CAMIS)
+
+- QR e tarja “Abra no Scoreplace” ficam no mesmo eixo horizontal do logo CAMIS, com a mesma largura, centralizados verticalmente no espaço inferior e com margem da borda direita da TV.
+- Corte somente web; sem alterações em partidas, resultados, Functions ou versões nativas.
+
 ## 2.6.67 — 13/nov/2026 (logo e alinhamento da TV do CAMIS)
 
 - A caixa do QR aproveita o espaço livre acima dela sem alterar o layout salvo nem cobrir outra caixa. A imagem oval do CAMIS usa essa altura e compensa apenas as margens transparentes laterais, preservando o desenho completo. O logo pequeno sai do cabeçalho e o título começa à esquerda.

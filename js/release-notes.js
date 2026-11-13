@@ -1,3 +1,4 @@
+// 2.6.68 — QR e legenda centralizados no eixo do logo CAMIS, com folga vertical e da TV.
 // 2.6.67 — Na TV do CAMIS, o logo maior fica apenas acima do QR, sem cortes.
 // O título começa à esquerda; quadras e coluna lateral têm respiro, os títulos
 // laterais se alinham, o QR ganha folga da borda da TV e o próximo grupo

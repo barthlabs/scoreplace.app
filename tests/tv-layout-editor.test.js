@@ -440,6 +440,20 @@ const { chromium } = require('@playwright/test');
         box('.tv-custom-results .tv-results').left - box('.tv-custom-courts .tv-courts').right >= 5 &&
         box('.tv-custom-upcoming .tv-upcoming').left - box('.tv-custom-courts .tv-courts').right >= 5;
     }), 'títulos laterais alinhados e separados das quadras');
+    assert.ok(await page.evaluate(() => {
+      const doc = document.querySelector('[data-tv-frame]').contentDocument;
+      const box = s => doc.querySelector(s).getBoundingClientRect();
+      const slot = box('.tv-custom-qr');
+      const logo = box('.tv-qr-tournament-logo-camis');
+      const code = box('.tv-custom-qr .tv-qr-code');
+      const brand = box('.tv-custom-qr .tv-qr-brand');
+      const center = r => (r.left + r.right) / 2;
+      return Math.abs(center(logo) - center(code)) < 2 &&
+        Math.abs(center(code) - center(brand)) < 2 &&
+        Math.abs(code.width - brand.width) < 2 &&
+        Math.abs((code.top - logo.bottom) - (slot.bottom - brand.bottom)) < 20 &&
+        brand.right < doc.documentElement.clientWidth - 8;
+    }), 'QR e legenda centralizados no eixo do logo, com folgas verticais e da borda da TV');
     console.log('✓ editor TV: dados reais, remoção/restauração, arraste e estado intacto');
   } finally { await browser.close(); }
 })().catch(err => { console.error(err); process.exitCode = 1; });
