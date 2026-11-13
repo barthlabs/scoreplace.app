@@ -79,6 +79,11 @@
   }
   function sideName(t, match, slot) {
     var raw = String(match[slot] || '');
+    if (!raw || /^(?:TBD|A definir)$/i.test(raw)) {
+      var source = typeof window._directBracketSlotLabel === 'function'
+        ? window._directBracketSlotLabel(t, match, slot) : '';
+      return source || 'A definir';
+    }
     if (typeof window._resolveSideLive !== 'function') return raw;
     var uids = typeof window._slotUidsPositional === 'function'
       ? window._slotUidsPositional(match, slot, t)
@@ -388,13 +393,23 @@
     });
     // A chave de uma categoria já fechada pode ser anunciada antes de chegar
     // sua vez de ocupar quadra. A autorização da chamada continua na operação.
+    var publishedRoundByCategory = {};
+    matches.forEach(function (m) {
+      if (!m || Number(m.phaseIndex || 0) !== 1 || !m.courtCalledAt ||
+          m.isThirdPlace || m.bracket === 'thirdplace') return;
+      var category = String(m.category || '');
+      publishedRoundByCategory[category] = Math.max(publishedRoundByCategory[category] || 1, Number(m.round || 1));
+    });
     var publishedElimination = t.scheduleWindow && t.scheduleWindow.interleavedPlan
       ? matches.filter(function (m) {
-        if (!m || Number(m.phaseIndex || 0) !== 1 || Number(m.round || 1) !== 1 ||
+        if (!m || Number(m.phaseIndex || 0) !== 1) return false;
+        var currentRound = publishedRoundByCategory[String(m.category || '')] || 1;
+        var round = Number(m.round || 1);
+        if ((currentRound === 1 ? round !== 1 : round < currentRound) ||
             !(m.officialGroupBracket || (t.phaseCategoryMaterialized && t.phaseCategoryMaterialized[String(m.category || '')])) ||
             occupancy.isFinished(m) || m.isBye || m.isSitOut || m.courtCalledAt || m.startedAt) return false;
-        return window.ScoreplaceNextMatch && window.ScoreplaceNextMatch.knownSide(m.p1) &&
-          window.ScoreplaceNextMatch.knownSide(m.p2);
+        return Number(m.round || 1) > 1 || (window.ScoreplaceNextMatch &&
+          window.ScoreplaceNextMatch.knownSide(m.p1) && window.ScoreplaceNextMatch.knownSide(m.p2));
       }).sort(function (a, b) {
         return timestamp(a.scheduledAt) - timestamp(b.scheduledAt) ||
           Number(a._gameNum || a.scheduledGameNumber || 0) - Number(b._gameNum || b.scheduledGameNumber || 0);
@@ -405,6 +420,8 @@
     var nextGames = nextQueue.filter(function (m) {
       if (!m || (!tieOverride && nextMatch && String(m.id) === String(nextMatch.id))) return false;
       if (m.isMonarch && m.monarchGroup != null && !futureGroups.some(function (game) { return String(game.id) === String(m.id); })) return false;
+      if (publishedElimination.indexOf(m) !== -1 && Number(m.round || 1) > 1 &&
+          (!window.ScoreplaceNextMatch.knownSide(m.p1) || !window.ScoreplaceNextMatch.knownSide(m.p2))) return true;
       return m.isTieBreak || !window.ScoreplaceNextMatch || typeof window.ScoreplaceNextMatch.firstAvailable !== 'function' ||
         window.ScoreplaceNextMatch.firstAvailable([m], matches, released) === m;
     })
@@ -421,7 +438,8 @@
       announcedGroups.add(groupKey);
       return true;
     });
-    nextGames = nextGames.slice(0, 4);
+    // A lista rola sozinha: preservar as etapas futuras publicadas e os grupos
+    // da categoria seguinte, mesmo quando há mais de quatro partidas.
     nextGames.forEach(function (game) {
       var source = game.source || (nextMatch && String(game.number) === String(nextGame && nextGame.number) ? nextMatch : null);
       if (!source || !source.isMonarch || source.monarchGroup == null) return;
@@ -842,22 +860,22 @@
     doc = doc && typeof doc.querySelectorAll === 'function' ? doc : document;
     var sizes = new Map();
     doc.querySelectorAll('.tv-series-players').forEach(function (box) {
-      var names = box.querySelectorAll('span');
+      var names = box.querySelectorAll(':scope > span');
       if (!box.parentElement || !box.parentElement.clientHeight || !names.length) return;
       var slot = Math.max(1, Math.floor((box.parentElement.clientHeight - 2) / names.length));
       names.forEach(function (el) {
         el.style.fontSize = '';
         el.style.maxHeight = slot + 'px';
         var size = parseFloat(doc.defaultView.getComputedStyle(el).fontSize) || 12;
-        while (el.scrollHeight > el.clientHeight + 1 && size > 6) {
-          size = Math.max(6, size - .5);
+        while (el.scrollHeight > el.clientHeight + 1 && size > 11) {
+          size = Math.max(11, size - .5);
           el.style.fontSize = size + 'px';
         }
         var key = el.textContent.trim().normalize('NFC');
         sizes.set(key, Math.min(sizes.has(key) ? sizes.get(key) : size, size));
       });
     });
-    doc.querySelectorAll('.tv-series-players span').forEach(function (el) {
+    doc.querySelectorAll('.tv-series-players > span').forEach(function (el) {
       var size = sizes.get(el.textContent.trim().normalize('NFC'));
       if (size) el.style.fontSize = size + 'px';
     });
@@ -987,7 +1005,7 @@
     '.tv-brackets{display:flex;flex-direction:column;background:#0d1b2e;border:1px solid #1b3f61;border-radius:.7vw;padding:.55vw;overflow:hidden}.tv-brackets h2{flex:none;color:#fbbf24;font-size:clamp(.9rem,1.15vw,1.5rem);margin:0 0 .4vw}.tv-bracket-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,12vw),1fr));gap:.5vw;min-height:0;overflow:auto}.tv-bracket-category{min-width:0;border:1px solid #315376;border-radius:.5vw;padding:.4vw;background:#10223a}.tv-bracket-category h3{margin:0;color:#7dd3fc;font-size:clamp(.9rem,1vw,1.3rem)}.tv-bracket-category small{display:block;color:#cbd5e1;margin:.15vw 0 .35vw;font-size:clamp(.65rem,.7vw,.9rem)}.tv-bracket-match{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:.2vw;padding:.2vw;border-top:1px solid #315376;align-items:center;font-size:clamp(.65rem,.75vw,1rem)}.tv-bracket-match>span{grid-column:1/-1;color:#7dd3fc;font-size:.8em}.tv-bracket-match strong{overflow-wrap:anywhere;min-width:0}.tv-bracket-match strong:last-child{text-align:right}.tv-bracket-match b{color:#fbbf24}.tv-series-game.tv-series-latest-result{outline:2px solid #fbbf24;box-shadow:0 0 12px #fbbf2466}' +
     '.tv-custom-courts>.tv-courts{grid-template-rows:none;grid-auto-rows:minmax(115px,auto);align-content:start;overflow-y:auto;scrollbar-width:none;width:calc(100% - .3vw)}.tv-custom-results>.tv-results,.tv-custom-upcoming>.tv-upcoming{width:calc(100% - .3vw);margin-left:.3vw}.tv-custom-results h2{margin-top:0}.tv-custom-courts>.tv-courts::-webkit-scrollbar,.tv-bracket-list::-webkit-scrollbar{display:none}.tv-custom-upcoming>.tv-upcoming,.tv-custom-rankings>.tv-rankings{overflow-y:auto;scrollbar-width:none}.tv-custom-rankings .tv-ranking-group{max-height:none;overflow:visible}.tv-brackets>.tv-bracket-rounds{display:flex;align-items:center;gap:.25vw;overflow:hidden;white-space:nowrap;color:#94a3b8;font-size:clamp(.6rem,.7vw,.95rem)}.tv-bracket-rounds span{overflow:hidden;text-overflow:ellipsis}.tv-bracket-rounds .tv-bracket-round-active{color:#fbbf24;font-weight:900}.tv-brackets>small{color:#cbd5e1;font-size:clamp(.65rem,.7vw,.9rem);margin:.2vw 0}.tv-bracket-list{flex:1;min-height:0;overflow-y:auto;scrollbar-width:none}.tv-bracket-match{border:1px solid #315376;border-radius:.3vw;margin-bottom:.25vw;background:#10223a}.tv-bracket-match-in-court{border:2px solid #4ade80;box-shadow:0 0 12px #4ade8066}.tv-series-game.tv-series-latest-result{outline:2px solid #fbbf24;box-shadow:0 0 12px #fbbf2466}' +
     '.tv-courts,.tv-custom-box>.tv-courts{grid-template-rows:repeat(var(--tv-court-rows,3),minmax(0,1fr))}.tv-custom-courts>.tv-courts{grid-template-rows:none;grid-auto-rows:minmax(115px,auto)}' +
-    '.tv-court-series{padding:.35vw .55vw}.tv-court-series .tv-court-top{flex:none;min-height:0;padding-bottom:.12vw}.tv-court-series .tv-court-top h2{font-size:clamp(.9rem,1vw,1.35rem)}.tv-series-games{display:grid;grid-template-rows:repeat(3,minmax(0,1fr));flex:1;min-height:0;gap:.15vw}.tv-series-game{display:grid;grid-template-columns:4.2vw minmax(0,1fr) 1.2vw minmax(0,1fr);align-items:center;gap:.25vw;min-width:0;min-height:0;border-radius:.25vw;background:color-mix(in srgb,var(--tv-secondary) 15%,#16253a);padding:.1vw .3vw}.tv-series-game.tv-series-active{outline:1px solid #38bdf8;background:color-mix(in srgb,var(--tv-primary) 22%,#26394d)}.tv-series-game.tv-series-done{opacity:.88}.tv-series-game>b{color:#7dd3fc;font-size:clamp(.7rem,.75vw,1rem);white-space:nowrap}.tv-series-side{display:flex;align-items:center;justify-content:space-between;gap:.2vw;min-width:0;min-height:0;border-radius:.2vw;padding:.1vw .2vw}.tv-series-side.tv-series-win{background:#123b2b}.tv-series-side.tv-series-loss{background:#4b2027}.tv-series-players{display:flex;flex-direction:column;justify-content:center;min-width:0;min-height:0;line-height:1.05}.tv-series-players span{display:block;white-space:normal;overflow-wrap:anywhere;font-size:clamp(.68rem,.78vw,1.04rem);font-weight:750}.tv-series-right{flex-direction:row-reverse}.tv-series-right .tv-series-players{text-align:right}.tv-series-side strong{flex:none;color:#fff;font-size:clamp(.85rem,1vw,1.4rem);font-variant-numeric:tabular-nums}.tv-series-win strong{color:#4ade80}.tv-series-loss strong{color:#f87171}.tv-series-versus{text-align:center;color:#94a3b8;font-weight:900}.tv-court-series .tv-court-footer{flex:none;margin-top:.1vw}.tv-court-series .tv-court-footer strong{font-size:clamp(.8rem,.95vw,1.25rem)}' +
+    '.tv-court-series{padding:.35vw .55vw}.tv-court-series .tv-court-top{flex:none;min-height:0;padding-bottom:.12vw}.tv-court-series .tv-court-top h2{font-size:clamp(.9rem,1vw,1.35rem)}.tv-series-games{display:grid;grid-template-rows:repeat(3,minmax(0,1fr));flex:1;min-height:0;gap:.15vw}.tv-series-game{display:grid;grid-template-columns:4.2vw minmax(0,1fr) 1.2vw minmax(0,1fr);align-items:center;gap:.25vw;min-width:0;min-height:0;border-radius:.25vw;background:color-mix(in srgb,var(--tv-secondary) 15%,#16253a);padding:.1vw .3vw}.tv-series-game.tv-series-active{outline:1px solid #38bdf8;background:color-mix(in srgb,var(--tv-primary) 22%,#26394d)}.tv-series-game.tv-series-done{opacity:.88}.tv-series-game>b{color:#7dd3fc;font-size:clamp(.7rem,.75vw,1rem);white-space:nowrap}.tv-series-side{display:flex;align-items:center;justify-content:space-between;gap:.2vw;min-width:0;min-height:0;border-radius:.2vw;padding:.1vw .2vw}.tv-series-side.tv-series-win{background:#123b2b}.tv-series-side.tv-series-loss{background:#4b2027}.tv-series-players{display:flex;flex:1 1 0;width:0;flex-direction:column;justify-content:center;min-width:0;min-height:0;line-height:1.05}.tv-series-players span{display:block;white-space:normal;overflow-wrap:anywhere;font-size:clamp(.68rem,.78vw,1.04rem);font-weight:750}.tv-series-right{flex-direction:row-reverse}.tv-series-right .tv-series-players{text-align:right}.tv-series-side strong{flex:none;color:#fff;font-size:clamp(.85rem,1vw,1.4rem);font-variant-numeric:tabular-nums}.tv-series-win strong{color:#4ade80}.tv-series-loss strong{color:#f87171}.tv-series-versus{text-align:center;color:#94a3b8;font-weight:900}.tv-court-series .tv-court-footer{flex:none;margin-top:.1vw}.tv-court-series .tv-court-footer strong{font-size:clamp(.8rem,.95vw,1.25rem)}' +
     '.tv-custom-courts>.tv-courts{grid-auto-rows:minmax(115px,1fr);align-content:stretch}.tv-custom-courts .tv-series-game>b{font-size:clamp(.8rem,.9vw,1.2rem)}.tv-custom-courts .tv-series-players span{font-size:clamp(.8rem,1.05vw,1.4rem)}.tv-custom-courts .tv-series-side strong{font-size:clamp(1rem,1.25vw,1.7rem)}.tv-custom-courts .tv-court-top h2{font-size:clamp(1rem,1.2vw,1.6rem)}' +
     '</style>');
   styles = styles.replace('</style>',

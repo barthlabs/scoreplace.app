@@ -7240,7 +7240,9 @@ window._saveTournamentClickHandler = async function() {
             });
             // L7.P1.34: nenhuma alteração local é tratada como salva. A Function
             // valida a configuração contra o documento fresco e devolve o estado canônico.
-            var hasPublishedGames = (Array.isArray(t.matches) && t.matches.length > 0) ||
+            var hasPublishedGames = Number(t._nJogos || 0) > 0 ||
+              Number(t._nPartes && t._nPartes.matches || 0) > 0 ||
+              (Array.isArray(t.matches) && t.matches.length > 0) ||
               (Array.isArray(t.rounds) && t.rounds.length > 0) ||
               (Array.isArray(t.groups) && t.groups.length > 0);
             // Campo de imagem vazio durante a hidratação não é pedido de remoção.

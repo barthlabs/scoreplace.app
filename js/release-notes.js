@@ -1,3 +1,7 @@
+// 2.6.80 — A tela No Ar mostra as quartas, semifinais, final e 3º lugar da Ouro,
+// com “Vencedor do jogo…” nas vagas pendentes, além da classificação da Prata.
+// Nomes longos nas séries mantêm tamanho legível dos dois lados da quadra.
+// Mudar a visibilidade de um torneio sorteado não altera sua grade de jogos.
 // 2.6.79 — O chaveamento do Camis Day volta a abrir após recuperar os jogos
 // da Ouro. Placares de oitavas e semifinais deixam de disparar a remontagem
 // da classificatória. O botão No Ar continua visível ao abrir a operação.

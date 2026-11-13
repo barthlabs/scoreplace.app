@@ -330,7 +330,7 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
   '_assertCategoryConfigBeforeDraw', '_categoryDefinitionsForLabels', '_phaseTieCore', 'createHash',
   '_writeCategoryRemoval', '_phaseCallOrder', '_phaseGridPlan',
   'const exports = {};\n' + configSource + '\nreturn exports.updateTournamentConfiguration;')(
-  fn => fn, HttpsError, configDb, new Set(['fmt2', 'phases', 'name', 'teamSize', 'gruposClassified', 'politicaDaChave', 'genderCategories', 'combinedCategories', 'gameTypes', 'scheduleWindow']), new Set(['fmt2', 'phases', 'teamSize', 'gruposClassified', 'politicaDaChave', 'gameTypes']), cloneConfig,
+  fn => fn, HttpsError, configDb, new Set(['fmt2', 'phases', 'name', 'teamSize', 'gruposClassified', 'politicaDaChave', 'genderCategories', 'combinedCategories', 'gameTypes', 'scheduleWindow', 'isPublic', 'membersOnly', 'organizerOnly', 'courtCount', 'gameDuration', 'callTime', 'warmupTime', 'maxParticipantsPerCategory']), new Set(['fmt2', 'phases', 'teamSize', 'gruposClassified', 'politicaDaChave', 'gameTypes']), cloneConfig,
   async () => {}, async () => configTournament, () => true,
   (code, message) => new HttpsError(code, message), t => Array.isArray(t.matches) && t.matches.length > 0,
   require('../functions-autodraw/config-ativa-core'), () => ({}),
@@ -398,6 +398,21 @@ const configHandler = new Function('onCall', 'HttpsError', 'db', '_CAMPOS_CONFIG
   assert.equal(saveProposal.ok, true, 'proposta nova é gravada antes do sorteio');
   const existingGridTournament = { ...structuredClone(emptyGridTournament),
     scheduleWindow:{ days:gridDays, interleavedPlan:{ ...proposal.plan, editorVersion:2 } } };
+  const drawnGridTournament = { ...structuredClone(existingGridTournament), matches:[{ id:'drawn-1' }],
+    isPublic:false, membersOnly:false, organizerOnly:true };
+  configTournament = structuredClone(drawnGridTournament);
+  const visibilityAfterDraw = await configHandler({ auth:{ uid:'owner' }, data:{ tournamentId:'tour_test',
+    patch:{ isPublic:true, membersOnly:false, organizerOnly:false,
+      courtCount:2, gameDuration:25, callTime:5, warmupTime:5,
+      maxParticipantsPerCategory:8,
+      scheduleWindow:{ interleavedPlan:structuredClone(existingGridTournament.scheduleWindow.interleavedPlan) } } } });
+  assert.equal(visibilityAfterDraw.ok, true, 'visibilidade muda após sorteio com insumos idênticos reenviados');
+  assert.equal(configTournament.isPublic, true);
+  configTournament = structuredClone(drawnGridTournament);
+  await assert.rejects(configHandler({ auth:{ uid:'owner' }, data:{ tournamentId:'tour_test',
+    patch:{ isPublic:true, courtCount:3 } } }),
+  error => error.code === 'failed-precondition',
+  'alterar uma quadra real continua proibido após sorteio');
   configTournament = structuredClone(existingGridTournament);
   const beforeStaleCategoryPlan = configWrites;
   await assert.rejects(configHandler({ auth:{ uid:'owner' }, data:{ tournamentId:'tour_test',

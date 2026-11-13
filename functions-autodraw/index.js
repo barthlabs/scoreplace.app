@@ -5947,7 +5947,8 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     }
     const hasDraw = hasDrawnBracket(t);
     const planInputsChanged = categoryChanged || ['courtCount', 'gameDuration', 'callTime', 'warmupTime',
-      'maxParticipantsPerCategory', 'maxParticipantsByCategory'].some(key => Object.prototype.hasOwnProperty.call(patch, key));
+      'maxParticipantsPerCategory', 'maxParticipantsByCategory'].some(key =>
+      Object.prototype.hasOwnProperty.call(patch, key) && !_configAtiva.igual(patch[key], t[key]));
     if (patch.scheduleWindow !== undefined || planInputsChanged || patch.startDate !== undefined || patch.endDate !== undefined) {
       if (patch.scheduleWindow !== undefined &&
           (!patch.scheduleWindow || typeof patch.scheduleWindow !== 'object' || Array.isArray(patch.scheduleWindow))) {

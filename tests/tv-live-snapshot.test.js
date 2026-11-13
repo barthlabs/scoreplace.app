@@ -24,6 +24,9 @@ vm.runInContext(fs.readFileSync(path.join(root, 'js/domain/match-timing.js'), 'u
 vm.runInContext(fs.readFileSync(path.join(root, 'js/domain/next-match.js'), 'utf8'), context);
 vm.runInContext(fs.readFileSync(path.join(root, 'js/domain/match-day.js'), 'utf8'), context);
 vm.runInContext(fs.readFileSync(path.join(root, 'js/tv-layout-core.js'), 'utf8'), context);
+const directBracketSource = fs.readFileSync(path.join(root, 'js/views/bracket.js'), 'utf8');
+vm.runInContext(directBracketSource.slice(directBracketSource.indexOf('window._directBracketSlotSource = function'),
+  directBracketSource.indexOf('// A mesma vaga pendente', directBracketSource.indexOf('window._directBracketSlotSource = function'))), context);
 const dashSource = fs.readFileSync(path.join(root, 'js/views/dashboard.js'), 'utf8');
 vm.runInContext(dashSource.slice(dashSource.indexOf('window._dashboardNextMatchCompare = function'), dashSource.indexOf('// A tela só solicita o fecho')), context);
 vm.runInContext(fs.readFileSync(path.join(root, 'js/views/tv-live.js'), 'utf8'), context);
@@ -168,7 +171,7 @@ assert.equal(window._tvLiveBuildSnapshot(samePlayerQueue).nextGame.number, 21,
 assert.match(window._tvLiveBodyHtml(window._tvLiveBuildSnapshot(emptyQueue)), /Próximos jogos ainda não definidos/);
 const fourFuture = { ...t, matches: [20, 21, 22, 23, 24].map(n => match(n, 'Quadra 4', 'VORTEX', 'BLAST')) };
 const fourSnapshot = window._tvLiveBuildSnapshot(fourFuture);
-assert.equal(fourSnapshot.nextGames.map(g => g.number).join(','), '20,21,22,23', 'TV anuncia quatro jogos na ordem da fila');
+assert.equal(fourSnapshot.nextGames.map(g => g.number).join(','), '20,21,22,23,24', 'TV anuncia toda a fila na ordem para rolagem automática');
 assert.match(window._tvLiveBodyHtml(fourSnapshot), /PRÓXIMOS JOGOS[\s\S]*data-tv-autoscroll="upcoming"[\s\S]*JOGO 20[\s\S]*JOGO 23/);
 const camisQueue = { ...t, id:'camis-tv-queue', competitionTeams:[], teamCompetition:{ enabled:false },
   matches:[...Array.from({ length:8 }, (_, i) => ({ id:'diamond-' + i, _gameNum:1 + i * 3,
@@ -194,11 +197,40 @@ const publishedDiamond = { ...camisQueue, id:'camis-published-diamond',
     category:'Fem Diamante',phaseIndex:1,round,p1:'TBD',p2:'TBD' }))] };
 window._bracketOperationsSelect = tournament => ({ next:tournament.matches[0], queue:[tournament.matches[0]], waitingForTie:false });
 const publishedSnapshot = window._tvLiveBuildSnapshot(publishedDiamond);
-assert.deepEqual(Array.from(publishedSnapshot.nextGames, game => game.number), [25, 73, 74, 75],
+assert.deepEqual(Array.from(publishedSnapshot.nextGames, game => game.number), [25, 73, 74, 75, 76],
   'TV anuncia as quartas Diamante já definidas enquanto a última chamada Ouro segue na frente');
 assert.equal(publishedSnapshot.nextGames[0].stage, 'Classificatória');
 assert.equal(publishedSnapshot.nextGames[1].stage, 'Quartas de final');
 assert.match(window._tvLiveBodyHtml(publishedSnapshot), /JOGO 73 · <span class="tv-upcoming-category">Fem Diamante<\/span> · <span class="tv-upcoming-stage">Quartas de final<\/span>/);
+const goldQuarterPreview = { ...publishedDiamond, id:'camis-ouro-quarters',
+  phaseCategoryMaterialized:{ 'Fem Ouro':{ at:'2026-11-13T18:30:00Z' } },
+  matches:[publishedDiamond.matches[0],
+    { id:'ouro-r1', _gameNum:85, category:'Fem Ouro', phaseIndex:1, round:1,
+      p1:'Dupla A', p2:'Dupla B', court:'Quadra 8', courtCalledAt:'2026-11-13T18:30:00Z', scheduledAt:'2026-11-13T18:30:00Z', nextMatchId:'ouro-qf-waiting', nextSlot:'p1' },
+    { id:'ouro-qf-called', _gameNum:91, category:'Fem Ouro', phaseIndex:1, round:2,
+      p1:'Dupla C', p2:'Dupla D', court:'Quadra 4', courtCalledAt:'2026-11-13T19:00:00Z', scheduledAt:'2026-11-13T19:00:00Z', roundName:'Quartas de final', nextMatchId:'ouro-semi-2', nextSlot:'p1' },
+    { id:'ouro-qf-waiting', _gameNum:92, category:'Fem Ouro', phaseIndex:1, round:2,
+      p1:'TBD', p2:'TBD', court:'Quadra 6', scheduledAt:'2026-11-13T19:00:00Z', nextMatchId:'ouro-semi-2', nextSlot:'p2' },
+    { id:'ouro-semi', _gameNum:93, category:'Fem Ouro', phaseIndex:1, round:3,
+      p1:'TBD', p2:'TBD', court:'Quadra 1', scheduledAt:'2026-11-13T20:00:00Z', nextMatchId:'ouro-final', nextSlot:'p1', loserNextMatchId:'ouro-third', loserNextSlot:'p1' },
+    { id:'ouro-semi-2', _gameNum:94, category:'Fem Ouro', phaseIndex:1, round:3,
+      p1:'TBD', p2:'TBD', court:'Quadra 2', scheduledAt:'2026-11-13T20:00:00Z', nextMatchId:'ouro-final', nextSlot:'p2', loserNextMatchId:'ouro-third', loserNextSlot:'p2' },
+    { id:'ouro-final', _gameNum:113, category:'Fem Ouro', phaseIndex:1, round:4,
+      p1:'TBD', p2:'TBD', court:'Quadra 1', scheduledAt:'2026-11-13T21:00:00Z' },
+    { id:'ouro-third', _gameNum:114, category:'Fem Ouro', phaseIndex:1, round:4,
+      isThirdPlace:true, p1:'TBD', p2:'TBD', court:'Quadra 2', scheduledAt:'2026-11-13T21:00:00Z' }] };
+const goldQuarterSnapshot = window._tvLiveBuildSnapshot(goldQuarterPreview);
+assert.deepEqual(Array.from(goldQuarterSnapshot.nextGames, game => game.number), [25, 92, 93, 94, 113, 114],
+  'TV anuncia as quartas restantes e as etapas futuras da Ouro com vagas a definir');
+assert.equal(goldQuarterSnapshot.nextGames[1].stage, 'Quartas de final');
+assert.equal(goldQuarterSnapshot.nextGames[4].stage, 'Final');
+assert.equal(goldQuarterSnapshot.nextGames[5].stage, '3º lugar');
+assert.equal(goldQuarterSnapshot.nextGames[1].a, 'Vencedor do jogo 85');
+assert.equal(goldQuarterSnapshot.nextGames[3].a, 'Vencedor do jogo 91');
+assert.equal(goldQuarterSnapshot.nextGames[3].b, 'Vencedor do jogo 92');
+assert.equal(goldQuarterSnapshot.nextGames[4].a, 'Vencedor do jogo 93');
+assert.equal(goldQuarterSnapshot.nextGames[5].a, 'Perdedor do jogo 93');
+assert.match(window._tvLiveBodyHtml(goldQuarterSnapshot), /JOGO 92[\s\S]*Vencedor do jogo 85/);
 delete window._bracketOperationsSelect;
 const camisQueueHtml = window._tvLiveBodyHtml(camisQueueSnapshot);
 assert.doesNotMatch(camisQueueHtml.split('<section class="tv-courts"')[1].split('</section>')[0], /tv-team-tag|>Time</,
