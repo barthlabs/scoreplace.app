@@ -675,9 +675,8 @@
       '</section></aside></main></div>';
   }
   function fullscreenActionHtml() {
-    return (tvFrame ? '<button id="tv-exit-action" type="button" aria-label="Fechar tela da TV">✕ Sair da TV</button>' : '') +
-      (tvFrame && document.fullscreenElement === tvFrame ? '' :
-        '<button id="tv-fullscreen-action" type="button" aria-label="Ativar modo tela cheia">⛶ Tela cheia</button>');
+    return tvFrame && document.fullscreenElement === tvFrame ? '' :
+      '<button id="tv-fullscreen-action" type="button" aria-label="Ativar modo tela cheia">⛶ Tela cheia</button>';
   }
   function customBodyHtml(snapshot) {
     var layout = snapshot.tvLayout;
@@ -1146,11 +1145,10 @@
     syncButton();
     try {
       popup.document.open();
-      popup.document.write('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TV · ' + esc(tournament.name) + '</title>' + styles + '<script src="' + esc(window.location.origin + '/js/domain/match-timing.js?v=' + (window.SCOREPLACE_VERSION || '')) + '"></script><style>#tv-connection{position:fixed;right:1vw;bottom:1vw;z-index:20;padding:.4em .7em;border-radius:.5em;background:#7f1d1d;color:#fff;font-weight:800}#tv-connection[hidden],#tv-fullscreen-action[hidden]{display:none}#tv-fullscreen-action,#tv-exit-action{flex:none;align-self:center;min-height:36px;padding:.3em .65em;border:2px solid #67e8f9;border-radius:.5em;background:#10263b;color:#fff;font:800 clamp(14px,1.1vw,22px) Arial;white-space:nowrap;cursor:pointer}html:fullscreen #tv-fullscreen-action{display:none}</style></head><body><div id="tv-root"></div><div id="tv-connection">Carregando jogos do servidor…</div>' + childScript(tournament.id, popupGeneration) + '</body></html>');
+      popup.document.write('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TV · ' + esc(tournament.name) + '</title>' + styles + '<script src="' + esc(window.location.origin + '/js/domain/match-timing.js?v=' + (window.SCOREPLACE_VERSION || '')) + '"></script><style>#tv-connection{position:fixed;right:1vw;bottom:1vw;z-index:20;padding:.4em .7em;border-radius:.5em;background:#7f1d1d;color:#fff;font-weight:800}#tv-connection[hidden],#tv-fullscreen-action[hidden]{display:none}#tv-fullscreen-action{flex:none;align-self:center;min-height:36px;padding:.3em .65em;border:2px solid #67e8f9;border-radius:.5em;background:#10263b;color:#fff;font:800 clamp(14px,1.1vw,22px) Arial;white-space:nowrap;cursor:pointer}html:fullscreen #tv-fullscreen-action{display:none}</style></head><body><div id="tv-root"></div><div id="tv-connection">Carregando jogos do servidor…</div>' + childScript(tournament.id, popupGeneration) + '</body></html>');
       popup.document.close();
       // O conteúdo de tv-root é substituído a cada atualização; o listener fica no documento.
       popup.document.addEventListener('click', function (event) {
-        if (tvFrame && event.target.closest && event.target.closest('#tv-exit-action')) { stop(); return; }
         var button = event.target.closest && event.target.closest('#tv-fullscreen-action');
         if (!button) return;
         if (tvFrame) {

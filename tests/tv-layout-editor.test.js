@@ -441,10 +441,12 @@ const { chromium } = require('@playwright/test');
       const action = document.querySelector('iframe[title^="TV · "]')?.contentDocument?.querySelector('#tv-fullscreen-action');
       return !action || action.hidden;
     });
-    await page.frameLocator('iframe[title^="TV · "]').locator('#tv-exit-action').click();
+    assert.equal(await page.frameLocator('iframe[title^="TV · "]').locator('#tv-exit-action').count(), 0,
+      'a apresentação não mostra botão Sair da TV');
+    await page.evaluate(() => window._tvLiveToggle());
     await page.locator('iframe[title^="TV · "]').waitFor({ state:'detached' });
     assert.equal(await page.evaluate(() => document.fullscreenElement), null,
-      'fechar a TV devolve o aplicativo ao estado anterior');
+      'desligar NO AR na operação fecha a TV e devolve o aplicativo');
     await page.evaluate(() => {
       window._editingTournament.name = 'Camis no Beyond';
       const layout = window.ScoreplaceTvLayout.defaults();
