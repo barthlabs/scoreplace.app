@@ -1,9 +1,8 @@
 {
   "schema": 1,
-  "backendCommit": "a13b8bdfaa6328bebdfe8655018ea3ed0e65cfa3",
-  "scopeNote": "Camis Day: eliminatórias gravam placar sem remontar a classificação; chaves oficiais seguem a planilha.",
+  "backendCommit": "8dd01259b67bd4f422cc3ba33246d043b0288700",
+  "scopeNote": "Edição da visibilidade após sorteio compara alterações reais nos insumos da grade.",
   "functions": [
-    "applyMatchResult",
-    "applyQueuedResult"
+    "updateTournamentConfiguration"
   ]
 }
