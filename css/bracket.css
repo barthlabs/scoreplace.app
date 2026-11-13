@@ -492,6 +492,15 @@ summary::-webkit-details-marker { display: none; }
 [data-theme="light"] .bracket-geral-quarteto[data-bracket-phase-label]::before { color:#075985; }
 [data-tv-live-button]::before { content:""; display:inline-block; width:.55em; height:.55em; margin-right:.4em; border-radius:50%; background:#7f1d1d; vertical-align:middle; }
 [data-tv-live-button][aria-pressed="true"]::before { background:#ef4444; box-shadow:0 0 0 2px #7f1d1d,0 0 10px #ef4444; animation:sp-tv-rec 1s steps(1,end) infinite; }
+#tv-monitor-picker{position:fixed;inset:0;z-index:2147483645;display:grid;place-items:center;padding:20px;background:rgba(5,12,25,.86);color:#fff}
+#tv-monitor-picker .tv-monitor-dialog{width:min(520px,100%);max-height:calc(100vh - 40px);overflow:auto;padding:24px;background:#15243a;border:1px solid #88aace;border-radius:14px;box-shadow:0 18px 45px #0009}
+#tv-monitor-picker h2{margin:0 0 8px;color:#fff;font-size:1.5rem}
+#tv-monitor-picker p{margin:0 0 18px;color:#d8e5f3;line-height:1.45}
+#tv-monitor-picker .tv-monitor-list{display:grid;gap:10px}
+#tv-monitor-picker button{width:100%;padding:12px 14px;text-align:left;background:#274567;border:1px solid #8db5df;border-radius:8px;color:#fff;font-size:1rem;font-weight:700;cursor:pointer}
+#tv-monitor-picker button small{display:block;margin-top:4px;color:#d8e5f3;font-size:.8rem}
+#tv-monitor-picker .tv-monitor-cancel{margin-top:16px;text-align:center;background:transparent}
+#tv-monitor-picker button:focus-visible{outline:2px solid #fff;outline-offset:2px}
 @keyframes sp-tv-rec { 50% { opacity:.15; } }
 @media (prefers-reduced-motion: reduce) { [data-tv-live-button][aria-pressed="true"]::before { animation:none; } }
 .sp-match-phase-call { color: #38bdf8; }

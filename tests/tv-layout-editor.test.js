@@ -407,6 +407,25 @@ const { chromium } = require('@playwright/test');
     await popup.close();
     await page.waitForFunction(() => !window._tvLiveWindow || window._tvLiveWindow.closed);
     await page.evaluate(() => {
+      Object.defineProperty(window.screen, 'isExtended', { configurable:true, value:true });
+      window.getScreenDetails = async () => ({ screens:[
+        { label:'Principal', isPrimary:true, availLeft:0, availTop:0, availWidth:1400, availHeight:1000, width:1400, height:1000 },
+        { label:'Projetor', isPrimary:false, availLeft:1400, availTop:0, availWidth:1280, availHeight:720, width:1280, height:720 }
+      ] });
+      const originalOpen = window.open.bind(window);
+      window.open = (...args) => { window.__tvOpenFeatures = args[2]; return originalOpen(...args); };
+    });
+    await page.locator('#open-tv-test').click();
+    await page.getByRole('dialog', { name:'Onde mostrar a tela No ar?' }).waitFor();
+    const secondPopupPromise = page.waitForEvent('popup');
+    await page.getByRole('button', { name:/Projetor/ }).click();
+    const secondPopup = await secondPopupPromise;
+    assert.match(await page.evaluate(() => window.__tvOpenFeatures), /left=1400,top=0,width=1260,height=704/,
+      'TV abre na posição e no tamanho do monitor escolhido');
+    await secondPopup.close();
+    await page.waitForFunction(() => !window._tvLiveWindow || window._tvLiveWindow.closed);
+    await page.evaluate(() => { window.getScreenDetails = undefined; });
+    await page.evaluate(() => {
       const actualMatchMedia = window.matchMedia.bind(window);
       window.matchMedia = query => query === '(display-mode: standalone)'
         ? { matches:true, media:query, addListener(){}, removeListener(){}, addEventListener(){}, removeEventListener(){} }
@@ -449,7 +468,8 @@ const { chromium } = require('@playwright/test');
       const title = doc.querySelector('.tv-custom-header h1').getBoundingClientRect();
       const header = doc.querySelector('.tv-custom-header').getBoundingClientRect();
       return slot.top < board.top + board.height * .57 &&
-        logo.width >= code.width * 1.5 && logo.top >= slot.top && logo.bottom <= code.top &&
+        logo.width >= code.width && logo.left >= board.left && logo.right <= board.right &&
+        logo.top >= slot.top && logo.bottom <= code.top &&
         !doc.querySelector('.tv-custom-header img') && title.left - header.left < 30;
     }), 'logo CAMIS usa o vão livre, cresce sem corte e sai do cabeçalho');
     assert.ok(await page.evaluate(() => {
@@ -470,18 +490,32 @@ const { chromium } = require('@playwright/test');
       const brand = box('.tv-custom-qr .tv-qr-brand');
       const center = r => (r.left + r.right) / 2;
       const board = box('.tv-custom-board');
+      const brandElement = doc.querySelector('.tv-custom-qr .tv-qr-brand');
       return { slotX:slot.left - board.left, expectedX:board.width * .922,
         centers:[center(logo),center(code),center(brand)], widths:[code.width,brand.width],
         gaps:[code.top-logo.bottom,slot.bottom-brand.bottom],
-        rightMargin:doc.documentElement.clientWidth-brand.right, boardWidth:board.width };
+        rightMargin:doc.documentElement.clientWidth-brand.right, boardWidth:board.width,
+        contentFits:brandElement.scrollWidth <= brandElement.clientWidth + 1,
+        allInside:[logo,code,brand].every(r => r.left >= board.left && r.right <= board.right && r.top >= board.top && r.bottom <= board.bottom) };
     });
     assert.ok(Math.abs(qrAlignment.slotX - qrAlignment.expectedX) < 2 &&
       Math.abs(qrAlignment.centers[0] - qrAlignment.centers[1]) < 2 &&
       Math.abs(qrAlignment.centers[1] - qrAlignment.centers[2]) < 2 &&
       Math.abs(qrAlignment.widths[0] - qrAlignment.widths[1]) < 2 &&
       Math.abs(qrAlignment.gaps[0] - qrAlignment.gaps[1]) < 20 &&
-      qrAlignment.rightMargin > qrAlignment.boardWidth * .004,
+      qrAlignment.rightMargin > qrAlignment.boardWidth * .004 &&
+      qrAlignment.contentFits && qrAlignment.allInside,
     'QR e legenda centralizados no eixo do logo, com folgas verticais e da borda da TV: ' + JSON.stringify(qrAlignment));
+    const frameFit = await page.evaluate(() => {
+      const doc = document.querySelector('[data-tv-frame]').contentDocument;
+      const rect = selector => doc.querySelector(selector).getBoundingClientRect();
+      const board = rect('.tv-custom-board');
+      const courts = rect('.tv-custom-courts');
+      const clock = rect('.tv-custom-header time');
+      return { leftGap:courts.left-board.left, clockRight:clock.right-board.right };
+    });
+    assert.ok(frameFit.leftGap <= 1 && frameFit.clockRight < 0,
+      'grade começa na borda esquerda e o relógio cabe à direita: ' + JSON.stringify(frameFit));
     console.log('✓ editor TV: dados reais, remoção/restauração, arraste e estado intacto');
   } finally { await browser.close(); }
 })().catch(err => { console.error(err); process.exitCode = 1; });

@@ -3,6 +3,7 @@
 (function () {
   'use strict';
   var popup = null, tvFrame = null, tvFullscreenHandler = null, tick = null, lastMarkup = '', wakeSentinel = null, wakePending = false;
+  var screenPicker = null, selectedMonitor = null, screenPickerRequest = 0;
   var popupTournamentId = '', popupGeneration = 0, lastHeartbeatAt = 0, lastHeartbeatVisible = false;
   var highestGenerationById = Object.create(null);
   var lastCompleteTournament = null, loadingTournament = false, lastLoadAttempt = 0;
@@ -910,7 +911,7 @@
     '.tv-result-match,.tv-upcoming .tv-result-match{grid-template-rows:minmax(0,1fr);min-height:0}.tv-result-side{min-height:0;overflow:hidden}.tv-result-team{min-height:0;max-height:100%;overflow:hidden;white-space:nowrap}.tv-result-players{min-height:0;overflow:hidden}.tv-upcoming .tv-result-players span{font-size:clamp(.75rem,.95vw,1.3rem)}' +
     '@media(orientation:portrait){.tv-header time{font-size:clamp(1.2rem,2.8vw,2.4rem)}.tv-sidebar{grid-template-rows:70% 30%}.tv-ranking-head,.tv-ranking-row{grid-template-columns:3vw minmax(0,1fr) 7vw 10vw repeat(3,4vw);gap:.5vw;font-size:clamp(.75rem,1.4vw,1.2rem)}.tv-ranking-row{min-height:2.9vh}.tv-ranking-team{font-size:clamp(.8rem,1.6vw,1.25rem)}.tv-ranking-row b{font-size:clamp(.8rem,1.6vw,1.25rem)}.tv-qr{width:clamp(90px,17vw,180px)}.tv-scoreplace-mark{width:3vw}}' +
     '#tv-root,.tv-theme{width:100%;height:100%}.tv-theme .tv-header{background:color-mix(in srgb,var(--tv-primary) 24%,#07111f)}.tv-theme .tv-header h1{color:var(--tv-title)}.tv-theme .tv-court,.tv-theme .tv-rankings,.tv-theme .tv-results,.tv-theme .tv-upcoming{background:color-mix(in srgb,var(--tv-primary) 18%,#0d1b2e);border-color:color-mix(in srgb,var(--tv-secondary) 30%,#1b3f61)}.tv-theme .tv-side,.tv-theme .tv-result-side{background:color-mix(in srgb,var(--tv-secondary) 12%,#222)}' +
-    '.tv-custom-board{position:relative;width:100%;height:100%;overflow:hidden}.tv-custom-box{position:absolute;min-width:0;min-height:0;overflow:hidden}.tv-custom-box>.tv-header,.tv-custom-box>.tv-courts,.tv-custom-box>.tv-upcoming,.tv-custom-box>.tv-rankings,.tv-custom-box>.tv-brackets,.tv-custom-box>.tv-results,.tv-custom-box>.tv-qr{width:100%;height:100%;min-height:0;overflow:hidden}.tv-custom-box>.tv-header{padding:.35vw .8vw}.tv-custom-box>.tv-courts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(3,minmax(0,1fr))}.tv-custom-results .tv-results{display:flex}.tv-custom-results .tv-results-main{width:100%}.tv-custom-qr .tv-qr{justify-content:flex-end}.tv-custom-qr .tv-qr-code{max-height:75%;width:88%;height:auto;max-width:88%;box-sizing:border-box;transform:translateX(-.6vw)}.tv-custom-qr .tv-qr-brand{width:88%;max-width:88%;margin-inline:auto;transform:translateX(-.6vw)}.tv-custom-qr .tv-qr-camis .tv-qr-code,.tv-custom-qr .tv-qr-camis .tv-qr-brand{transform:translateY(-1vw)}.tv-custom-qr .tv-qr.tv-qr-has-logo{display:grid;grid-template-rows:minmax(0,1fr) auto auto;justify-content:stretch;justify-items:center;align-items:center;gap:.25vw}.tv-custom-qr .tv-qr-has-logo .tv-qr-tournament-logo{width:100%;height:100%;max-height:100%;max-width:100%;align-self:center;justify-self:center;object-fit:contain}.tv-custom-qr .tv-qr-has-logo .tv-qr-tournament-logo-camis{width:140%;height:auto;max-width:none;max-height:100%;aspect-ratio:1;object-fit:contain}.tv-custom-qr .tv-qr-has-logo .tv-qr-code{max-height:none;justify-self:center}.tv-custom-logo{display:flex;align-items:center;justify-content:center}.tv-placed-logo{display:block;width:100%;height:100%;object-fit:contain;border-radius:var(--tv-logo-radius,14%)}.tv-logo-circle .tv-header img,.tv-logo-circle .tv-placed-logo{clip-path:circle(closest-side at center)}' +
+    '.tv-custom-board{position:relative;width:calc(100% - 1.6vw);height:100%;overflow:hidden}.tv-custom-box{position:absolute;min-width:0;min-height:0;overflow:hidden}.tv-custom-box>.tv-header,.tv-custom-box>.tv-courts,.tv-custom-box>.tv-upcoming,.tv-custom-box>.tv-rankings,.tv-custom-box>.tv-brackets,.tv-custom-box>.tv-results,.tv-custom-box>.tv-qr{width:100%;height:100%;min-height:0;overflow:hidden}.tv-custom-box>.tv-header{padding:.35vw .8vw}.tv-custom-box>.tv-courts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(3,minmax(0,1fr))}.tv-custom-results .tv-results{display:flex}.tv-custom-results .tv-results-main{width:100%}.tv-custom-qr .tv-qr{justify-content:flex-end}.tv-custom-qr .tv-qr-code{max-height:75%;width:88%;height:auto;max-width:88%;box-sizing:border-box;transform:translateX(-.6vw)}.tv-custom-qr .tv-qr-brand{width:88%;max-width:88%;margin-inline:auto;transform:translateX(-.6vw)}.tv-custom-qr .tv-qr-camis .tv-qr-code,.tv-custom-qr .tv-qr-camis .tv-qr-brand{transform:translateX(-.6vw)}.tv-custom-qr .tv-qr.tv-qr-has-logo{display:grid;grid-template-rows:minmax(0,1fr) auto auto;justify-content:stretch;justify-items:center;align-items:center;gap:.25vw}.tv-custom-qr .tv-qr-has-logo .tv-qr-tournament-logo{width:100%;height:100%;max-height:100%;max-width:100%;align-self:center;justify-self:center;object-fit:contain}.tv-custom-qr .tv-qr-has-logo .tv-qr-tournament-logo-camis{width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain;transform:translateX(-.6vw)}.tv-custom-qr .tv-qr-has-logo .tv-qr-code{max-height:none;justify-self:center}.tv-custom-logo{display:flex;align-items:center;justify-content:center}.tv-placed-logo{display:block;width:100%;height:100%;object-fit:contain;border-radius:var(--tv-logo-radius,14%)}.tv-logo-circle .tv-header img,.tv-logo-circle .tv-placed-logo{clip-path:circle(closest-side at center)}' +
     '.tv-brackets{display:flex;flex-direction:column;background:#0d1b2e;border:1px solid #1b3f61;border-radius:.7vw;padding:.55vw;overflow:hidden}.tv-brackets h2{flex:none;color:#fbbf24;font-size:clamp(.9rem,1.15vw,1.5rem);margin:0 0 .4vw}.tv-bracket-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,12vw),1fr));gap:.5vw;min-height:0;overflow:auto}.tv-bracket-category{min-width:0;border:1px solid #315376;border-radius:.5vw;padding:.4vw;background:#10223a}.tv-bracket-category h3{margin:0;color:#7dd3fc;font-size:clamp(.9rem,1vw,1.3rem)}.tv-bracket-category small{display:block;color:#cbd5e1;margin:.15vw 0 .35vw;font-size:clamp(.65rem,.7vw,.9rem)}.tv-bracket-match{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:.2vw;padding:.2vw;border-top:1px solid #315376;align-items:center;font-size:clamp(.65rem,.75vw,1rem)}.tv-bracket-match>span{grid-column:1/-1;color:#7dd3fc;font-size:.8em}.tv-bracket-match strong{overflow-wrap:anywhere;min-width:0}.tv-bracket-match strong:last-child{text-align:right}.tv-bracket-match b{color:#fbbf24}.tv-series-game.tv-series-latest-result{outline:2px solid #fbbf24;box-shadow:0 0 12px #fbbf2466}' +
     '.tv-custom-courts>.tv-courts{grid-template-rows:none;grid-auto-rows:minmax(115px,auto);align-content:start;overflow-y:auto;scrollbar-width:none;width:calc(100% - .3vw)}.tv-custom-results>.tv-results,.tv-custom-upcoming>.tv-upcoming{width:calc(100% - .3vw);margin-left:.3vw}.tv-custom-results h2{margin-top:0}.tv-custom-courts>.tv-courts::-webkit-scrollbar,.tv-bracket-list::-webkit-scrollbar{display:none}.tv-custom-upcoming>.tv-upcoming,.tv-custom-rankings>.tv-rankings{overflow-y:auto;scrollbar-width:none}.tv-custom-rankings .tv-ranking-group{max-height:none;overflow:visible}.tv-brackets>.tv-bracket-rounds{display:flex;align-items:center;gap:.25vw;overflow:hidden;white-space:nowrap;color:#94a3b8;font-size:clamp(.6rem,.7vw,.95rem)}.tv-bracket-rounds span{overflow:hidden;text-overflow:ellipsis}.tv-bracket-rounds .tv-bracket-round-active{color:#fbbf24;font-weight:900}.tv-brackets>small{color:#cbd5e1;font-size:clamp(.65rem,.7vw,.9rem);margin:.2vw 0}.tv-bracket-list{flex:1;min-height:0;overflow-y:auto;scrollbar-width:none}.tv-bracket-match{border:1px solid #315376;border-radius:.3vw;margin-bottom:.25vw;background:#10223a}.tv-bracket-match-in-court{border:2px solid #4ade80;box-shadow:0 0 12px #4ade8066}.tv-series-game.tv-series-latest-result{outline:2px solid #fbbf24;box-shadow:0 0 12px #fbbf2466}' +
     '.tv-courts,.tv-custom-box>.tv-courts{grid-template-rows:repeat(var(--tv-court-rows,3),minmax(0,1fr))}.tv-custom-courts>.tv-courts{grid-template-rows:none;grid-auto-rows:minmax(115px,auto)}' +
@@ -955,7 +956,7 @@
     '.tv-upcoming-series{display:grid;gap:.15vw}.tv-upcoming-series-game{display:grid;grid-template-columns:4.2vw minmax(0,1fr) 1vw minmax(0,1fr);gap:.25vw;align-items:center;min-height:2.25vw;color:#fff}.tv-upcoming-series-game>b{white-space:nowrap;font-size:clamp(.7rem,.75vw,1rem)}.tv-upcoming-series-game span{min-width:0}.tv-upcoming-series-game span span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:clamp(.7rem,.78vw,1.04rem);font-weight:750}.tv-upcoming-series-right{text-align:right}.tv-upcoming-series-game i{font-style:normal;text-align:center;color:#aaa}' +
     '.tv-results-main>h2{color:#fbbf24;font-size:clamp(.9rem,1.2vw,1.5rem);line-height:normal}' +
     '.tv-results .tv-result-players span{font-size:clamp(.75rem,.95vw,1.3rem)}' +
-    '.tv-custom-qr .tv-qr{padding-bottom:.55vw}.tv-custom-results .tv-results{padding:.55vw .8vw}.tv-custom-results .tv-results-list{box-sizing:border-box}' +
+    '.tv-custom-qr{container-type:inline-size}.tv-custom-qr .tv-qr-brand{gap:2px;font-size:clamp(8px,9cqw,16px);line-height:1.05;white-space:nowrap}.tv-custom-qr .tv-scoreplace-mark{width:clamp(14px,24cqw,32px);min-width:0}.tv-custom-qr .tv-qr{padding-bottom:.55vw}.tv-custom-results .tv-results{padding:.55vw .8vw}.tv-custom-results .tv-results-list{box-sizing:border-box}' +
     '</style>');
   // O editor usa exatamente o HTML e o CSS da janela No ar. O iframe não
   // executa childScript: relógios e hora recebem o valor deste instante.
@@ -1018,6 +1019,7 @@
     syncButton();
   });
   function stop() {
+    dismissScreenPicker();
     if (tvFullscreenHandler) { document.removeEventListener('fullscreenchange', tvFullscreenHandler); tvFullscreenHandler = null; }
     if (tvFrame) { tvFrame.remove(); tvFrame = null; }
     if (liveMatchesUnsubscribe) liveMatchesUnsubscribe();
@@ -1029,13 +1031,74 @@
     if (tick) clearInterval(tick);
     tick = null; popup = null; popupTournamentId = ''; popupGeneration = 0;
     lastHeartbeatAt = 0; lastHeartbeatVisible = false;
-    lastMarkup = ''; lastCompleteTournament = null; window._tvLiveRefresh = null; syncButton();
+    lastMarkup = ''; lastCompleteTournament = null; selectedMonitor = null; window._tvLiveRefresh = null; syncButton();
+  }
+  function dismissScreenPicker() {
+    screenPickerRequest++;
+    if (screenPicker) screenPicker.remove();
+    screenPicker = null;
+  }
+  function screenPickerHtml(screens, error) {
+    var list = screens.map(function (screen, index) {
+      var name = String(screen.label || '').trim() || 'Tela ' + (index + 1);
+      var width = Number(screen.width || screen.availWidth || 0);
+      var height = Number(screen.height || screen.availHeight || 0);
+      return '<button type="button" data-tv-monitor="' + index + '">' + esc(name) +
+        (screen.isPrimary ? ' · principal' : '') + '<small>' + width + ' × ' + height + '</small></button>';
+    }).join('');
+    return '<div class="tv-monitor-dialog" role="dialog" aria-modal="true" aria-labelledby="tv-monitor-title">' +
+      '<h2 id="tv-monitor-title">Onde mostrar a tela No ar?</h2>' +
+      '<p>' + (error ? 'O navegador não liberou a lista de monitores. Abra a janela e mova-a para a segunda tela antes de clicar em Tela cheia.' :
+        'Escolha o monitor da apresentação. A janela abrirá nele; clique em Tela cheia na TV para ocultar as barras do navegador.') + '</p>' +
+      '<div class="tv-monitor-list">' + (list || '<button type="button" data-tv-monitor="manual">Abrir janela da TV</button>') + '</div>' +
+      '<button type="button" class="tv-monitor-cancel" data-tv-monitor="cancel">Cancelar</button></div>';
+  }
+  function chooseMonitor(tournament) {
+    if (typeof window.getScreenDetails !== 'function' || (window.screen && window.screen.isExtended === false)) {
+      startTv(tournament, null);
+      return;
+    }
+    dismissScreenPicker();
+    var request = screenPickerRequest;
+    var picker = document.createElement('div');
+    picker.id = 'tv-monitor-picker';
+    picker.innerHTML = '<div class="tv-monitor-dialog" role="dialog" aria-modal="true"><h2>Detectando monitores…</h2></div>';
+    document.body.appendChild(picker);
+    screenPicker = picker;
+    picker.addEventListener('click', function (event) {
+      var choice = event.target.closest('[data-tv-monitor]');
+      if (!choice) return;
+      var value = choice.getAttribute('data-tv-monitor');
+      if (value === 'cancel') { dismissScreenPicker(); return; }
+      var screen = value === 'manual' ? null : picker._screens[Number(value)];
+      dismissScreenPicker();
+      startTv(tournament, screen || null);
+    });
+    try {
+      Promise.resolve(window.getScreenDetails()).then(function (details) {
+        if (!screenPicker || screenPicker !== picker || request !== screenPickerRequest) return;
+        picker._screens = Array.from(details.screens || []);
+        picker.innerHTML = screenPickerHtml(picker._screens, false);
+      }).catch(function () {
+        if (!screenPicker || screenPicker !== picker || request !== screenPickerRequest) return;
+        picker._screens = [];
+        picker.innerHTML = screenPickerHtml([], true);
+      });
+    } catch (error) {
+      picker._screens = [];
+      picker.innerHTML = screenPickerHtml([], true);
+    }
   }
   window._tvLiveToggle = function () {
+    if (screenPicker) { dismissScreenPicker(); return; }
     if (isActive()) { if (tvFrame) stop(); else { popup.close(); stop(); } return; }
     var tournament = window._currentBracketTournament;
     if (!tournament) return;
+    chooseMonitor(tournament);
+  };
+  function startTv(tournament, screen) {
     var id = String(tournament.id || ''), nextPopup;
+    selectedMonitor = screen;
     var installed = window.matchMedia && (window.matchMedia('(display-mode: standalone)').matches || window.matchMedia('(display-mode: fullscreen)').matches);
     try {
       if (installed) {
@@ -1047,10 +1110,19 @@
         document.body.appendChild(tvFrame);
         nextPopup = tvFrame.contentWindow;
         if (tvFrame.requestFullscreen) {
-          var full = tvFrame.requestFullscreen({ navigationUI:'hide' });
+          var full = tvFrame.requestFullscreen(screen ? { navigationUI:'hide', screen:screen } : { navigationUI:'hide' });
           if (full && full.catch) full.catch(function () {});
         }
-      } else nextPopup = window.open('about:blank', 'scoreplace-live-tv-' + id, 'popup,width=1920,height=1080');
+      } else {
+        // Sem permissão para identificar monitores, uma janela menor pode ser
+        // arrastada inteira para a segunda tela antes de entrar em tela cheia.
+        var features = 'popup,width=1024,height=640';
+        if (screen) features = 'popup,left=' + Number(screen.availLeft || screen.left || 0) +
+          ',top=' + Number(screen.availTop || screen.top || 0) +
+          ',width=' + Math.max(400, Number(screen.availWidth || screen.width || 1920) - 20) +
+          ',height=' + Math.max(300, Number(screen.availHeight || screen.height || 1080) - 16);
+        nextPopup = window.open('about:blank', 'scoreplace-live-tv-' + id, features);
+      }
     }
     catch (e) { nextPopup = null; }
     if (!nextPopup) {
@@ -1058,6 +1130,14 @@
       syncButton();
       if (typeof window.showToast === 'function') window.showToast('Permita abrir uma janela para a TV.');
       return;
+    }
+    if (screen && !tvFrame) {
+      // Uma janela nomeada pode ser reutilizada com a geometria anterior.
+      try {
+        nextPopup.moveTo(Number(screen.availLeft || screen.left || 0), Number(screen.availTop || screen.top || 0));
+        nextPopup.resizeTo(Math.max(400, Number(screen.availWidth || screen.width || 1920) - 20),
+          Math.max(300, Number(screen.availHeight || screen.height || 1080) - 16));
+      } catch (e) { /* O navegador pode recusar mover janelas; o botão Tela cheia continua disponível. */ }
     }
     popup = nextPopup; popupTournamentId = id;
     popupGeneration = Math.max(Date.now(), Number(highestGenerationById[id] || 0) + 1);
@@ -1075,7 +1155,7 @@
         if (!button) return;
         if (tvFrame) {
           if (tvFrame.requestFullscreen) {
-            var frameRequest = tvFrame.requestFullscreen({ navigationUI:'hide' });
+            var frameRequest = tvFrame.requestFullscreen(selectedMonitor ? { navigationUI:'hide', screen:selectedMonitor } : { navigationUI:'hide' });
             if (frameRequest && frameRequest.catch) frameRequest.catch(function () {});
           }
           return;
@@ -1084,7 +1164,7 @@
         var requestFullscreen = doc.documentElement.requestFullscreen || doc.documentElement.webkitRequestFullscreen;
         if (!requestFullscreen) { button.textContent = 'Tela cheia indisponível neste navegador'; return; }
         try {
-          var request = requestFullscreen.call(doc.documentElement, { navigationUI: 'hide' });
+          var request = requestFullscreen.call(doc.documentElement, selectedMonitor ? { navigationUI:'hide', screen:selectedMonitor } : { navigationUI:'hide' });
           if (request && request.catch) request.catch(function (error) {
             button.textContent = 'Tela cheia bloqueada — clique novamente';
             button.title = error && error.message || 'O navegador recusou a tela cheia.';
@@ -1092,7 +1172,7 @@
         } catch (error) {
           button.textContent = 'Tela cheia bloqueada — clique novamente';
           button.title = error && error.message || 'O navegador recusou a tela cheia.';
-        }
+  }
       });
       popup.document.addEventListener('fullscreenchange', function () {
         var button = popup.document.getElementById('tv-fullscreen-action');

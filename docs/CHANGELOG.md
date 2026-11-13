@@ -1,3 +1,9 @@
+## 2.6.71 — 13/nov/2026 (TV na segunda tela)
+
+- “NO AR” identifica monitores quando o navegador permite e pergunta onde abrir a TV. A janela é posicionada e dimensionada no monitor escolhido; no app instalado, o quadro pede tela cheia nessa tela.
+- O layout personalizado deixa uma margem segura à direita. No CAMIS, logo, QR e legenda passam a caber sem sobreposição ou corte, inclusive em uma tela de 1280 × 720. O relógio permanece dentro do cabeçalho.
+- Corte somente web; sem alterar partidas, placares, configuração salva da TV, Functions ou versões nativas.
+
 ## 2.6.70 — 13/nov/2026 (TV em tela cheia no app instalado)
 
 - No aplicativo web instalado, o clique em “NO AR” abre a TV em um quadro sobre a própria janela e pede tela cheia com o mesmo gesto; isso evita a janela adicional que consumia a autorização do navegador e deixava as barras aparentes. “Sair da TV” e Escape devolvem o aplicativo. No navegador comum, permanece a janela separada.
