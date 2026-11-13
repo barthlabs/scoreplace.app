@@ -1816,6 +1816,18 @@ function _bracketOperationsStage(m, t, allMatches) {
     remaining === 4 ? '16 avos de final' : 'Rodada ' + String(m.round || 1);
 }
 
+function _bracketOperationsStageLabel(m, t, allMatches) {
+  var stage = _bracketOperationsStage(m, t, allMatches);
+  if (!m || stage !== 'Classificatória') return stage;
+  var groupSource = m.groupName || m.monarchGroup == null ? m : (allMatches || []).find(function (item) { return item && item.groupName &&
+    Number(item.monarchGroup) === Number(m.monarchGroup) && Number(item.phaseIndex || 0) === Number(m.phaseIndex || 0) &&
+    String(item.category || '') === String(m.category || ''); }) || m;
+  var officialGroup = m.isMonarch && typeof _bracketOperationsGroup === 'function' ? _bracketOperationsGroup(t, m, allMatches) : null;
+  var group = String(officialGroup && officialGroup.name || groupSource.groupName || '').replace(/^R\d+\s+/i, '').trim();
+  if (!group && m.monarchGroup != null) group = 'Grupo ' + String.fromCharCode(65 + Number(m.monarchGroup));
+  return stage + (group ? ' · ' + group : '');
+}
+
 function _bracketOperationsFutureHtml(state, t) {
   var safe = window._safeHtml || function (s) { return String(s); };
   var known = window.ScoreplaceNextMatch && window.ScoreplaceNextMatch.knownSide || function (value) { return !!value && value !== 'TBD'; };
@@ -1830,7 +1842,7 @@ function _bracketOperationsFutureHtml(state, t) {
     '<div class="sp-operations-future-list">' + other.map(function (m) {
       var number = m._gameNum || m.scheduledGameNumber || '';
       return '<div class="sp-operations-future-row"><div class="sp-operations-future-heading">JOGO ' + safe(number) +
-        ' · ' + safe(m.category || '') + ' · ' + safe(_bracketOperationsStage(m, t, state.matches)) +
+        ' · ' + safe(m.category || '') + ' · ' + safe(_bracketOperationsStageLabel(m, t, state.matches)) +
         '</div><div class="sp-operations-future-pair">' + safe(side(m, 'p1')) +
         '<span>×</span>' + safe(side(m, 'p2')) + '</div></div>';
     }).join('') + '</div></section>';
@@ -1838,7 +1850,7 @@ function _bracketOperationsFutureHtml(state, t) {
 
 function _bracketOperationsReplica(m, t, role, label, availability, root, allMatches, slot) {
   var safe = window._safeHtml || function (s) { return String(s); };
-  var stage = slot === 'next' ? '<small class="sp-operations-stage">' + safe(_bracketOperationsStage(m, t, allMatches)) + '</small>' : '';
+  var stage = role.active ? '<small class="sp-operations-stage">' + safe(_bracketOperationsStageLabel(m, t, allMatches)) + '</small>' : '';
   if (m.isTieBreak) {
     // A geometria é a do card normal; as ações são roteadas ao livro de
     // desempates, que não faz parte de t.matches nem da classificação do grupo.
@@ -2636,8 +2648,9 @@ window._bracketOperationsRefresh = function (t, root) {
     return !state.active.some(function (m) { return String(m.court) === String(court); });
   });
   var freeCount = freeCourts.length;
-  var nextAvailability = '<div class="sp-operations-availability' + (freeCount ? '' : ' sp-operations-availability--busy') + '">' +
-    freeCount + ' ' + (freeCount === 1 ? 'QUADRA LIVRE' : 'QUADRAS LIVRES') + '</div>';
+  var nextAvailability = '<div class="sp-operations-availability' + (freeCount ? '' : ' sp-operations-availability--busy') + '"><span>' +
+    freeCount + ' ' + (freeCount === 1 ? 'QUADRA LIVRE' : 'QUADRAS LIVRES') + '</span>' +
+    (state.next ? '<strong class="sp-operations-stage">' + (window._safeHtml || String)(_bracketOperationsStageLabel(state.next, t, state.matches)) + '</strong>' : '') + '</div>';
   existing.innerHTML = '<div class="sp-operations-track" data-hscroll="ops:track"><div class="sp-operations-next">' +
     (state.next ? _bracketOperationsReplica(state.next, t, { canCall: canCall && state.nextCallable !== false, active: false,
       readOnly: state.nextCallable === false,

@@ -1259,6 +1259,7 @@ const SUITES = [
   'tests/tv-live-snapshot.test.js',
   'tests/tv-layout.test.js',
   'tests/tv-layout-editor.test.js',
+  'tests/tv-camis-series-fit.test.js',
   'tests/tv-live-box-layout.test.js',
   'tests/tv-open-page.test.js',
   'tests/court-occupancy.test.js',

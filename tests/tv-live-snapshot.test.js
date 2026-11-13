@@ -91,8 +91,10 @@ const monarchTv = { ...t, id: 'monarch-tv', courtNames: ['Quadra 1'], teamCompet
   match(33, 'Quadra 1', 'BLAST', 'VENOM', { isMonarch:true, monarchGroup:0, round:1, phaseIndex:0 })
 ] };
 const monarchSnapshot = window._tvLiveBuildSnapshot(monarchTv, Date.parse('2026-10-22T21:03:00Z'));
+assert.equal(monarchSnapshot.courts[0].phase, 'Classificatória · Grupo A1', 'quadra da TV identifica o grupo');
 assert.equal(monarchSnapshot.results[0].seriesPosition, '1 de 3');
 assert.equal(monarchSnapshot.results[0].groupName, 'Grupo A1');
+assert.equal(monarchSnapshot.results[0].stage, 'Classificatória');
 assert.equal(monarchSnapshot.results[0].duration, '00:04:32');
 const estimatedMonarch = window._tvLiveBuildSnapshot({ ...monarchTv,
   matches:monarchTv.matches.map((game, index) => index === 0 ? { ...game, estimatedDurationMs:25 * 60000 } : game)
@@ -108,7 +110,7 @@ assert.equal(monarchSnapshot.courts[0].series[2].scoreA, '', 'jogo ainda não in
 assert.deepEqual(monarchSnapshot.courts[0].series.map(game => !!game.latestUpdate), [false,true,false],
   'borda da última atualização fica no jogo chamado, não na quadra inteira');
 const monarchHtml = window._tvLiveBodyHtml(monarchSnapshot);
-assert.match(monarchHtml, /\d\d:15 · JOGO 31 \(1 de 3\) · Fem Light · Grupo A1 \(00:04:32\)/,
+assert.match(monarchHtml, /\d\d:15 · JOGO 31 \(1 de 3\) · Fem Light · Classificatória · Grupo A1 \(00:04:32\)/,
   'resultado da série mostra horário, posição, categoria, grupo e duração na mesma linha');
 assert.match(monarchHtml, /tv-series-game tv-series-active tv-series-latest-update/);
 assert.doesNotMatch(monarchHtml, /tv-court-series tv-court-latest/);

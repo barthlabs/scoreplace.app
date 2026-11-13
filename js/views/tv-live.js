@@ -318,7 +318,11 @@
       var m = allActive.find(function (item) { return String(item.court) === name; });
       if (!m) return { name: name };
       var a = sideName(t, m, 'p1'), b = sideName(t, m, 'p2');
-      return { name: name, number: m._gameNum || m.scheduledGameNumber || m.matchNumber || '', category: String(m.category || m.tierLabel || ''), phase: courtPhase(m),
+      var phase = courtPhase(m);
+      var groupSource = m.groupName || m.monarchGroup == null ? m : matches.find(function (item) { return item && item.groupName &&
+        Number(item.monarchGroup) === Number(m.monarchGroup) && Number(item.phaseIndex || 0) === Number(m.phaseIndex || 0) &&
+        String(item.category || '') === String(m.category || ''); }) || m;
+      return { name: name, number: m._gameNum || m.scheduledGameNumber || m.matchNumber || '', category: String(m.category || m.tierLabel || ''), phase: phase + (phase === 'Classificatória' && (m.isMonarch || m.monarchGroup != null || m.groupName) ? ' · ' + monarchGroupName(groupSource) : ''),
         latest: !!latestUpdateId && String(m.id || '') === latestUpdateId,
         series: monarchSeries(t, m, matches, occupancy, teams, latestUpdateId),
         a:a, b:b, aUids:sideUids(t, m, 'p1'), bUids:sideUids(t, m, 'p2'), ta: teamFor(m, 1, teams), tb: teamFor(m, 2, teams),
@@ -491,7 +495,7 @@
           : 'Horário indisponível';
         var hasScore = !m.wo && ended > 0 && ((m.scoreP1 != null && m.scoreP2 != null) ||
           (Array.isArray(m.sets) && m.sets.some(function (set) { return set && set.gamesP1 != null && set.gamesP2 != null; })));
-        return { id: String(m.id || ''), resultAt: ended, hasScore: hasScore, number: m._gameNum || m.scheduledGameNumber || m.matchNumber || '', time: resultTime, category: String(m.category || ''), groupName: m.isMonarch ? monarchGroupName(m) : '', seriesPosition: seriesPosition, a: sideName(t, m, 'p1'), b: sideName(t, m, 'p2'),
+        return { id: String(m.id || ''), resultAt: ended, hasScore: hasScore, number: m._gameNum || m.scheduledGameNumber || m.matchNumber || '', time: resultTime, category: String(m.category || ''), stage: courtPhase(m), groupName: m.isMonarch ? monarchGroupName(m) : '', seriesPosition: seriesPosition, a: sideName(t, m, 'p1'), b: sideName(t, m, 'p2'),
           ta: teamFor(m, 1, teams), tb: teamFor(m, 2, teams), scoreA: m.wo ? 'W.O.' : gameScore(m, 1, true), scoreB: m.wo ? 'W.O.' : gameScore(m, 2, true), duration: duration };
       });
     // Uma decisão por W.O. pode entrar no histórico depois do placar mais
@@ -617,13 +621,13 @@
       brackets: bracketSections(t, matches),
       timing: timing };
   };
-  function playerRows(label, uids) {
+  function playerRows(label, uids, series) {
     var players = String(label || '').split(' / ').map(function (name) { return name.trim(); }).filter(Boolean);
     return players.map(function (name, index) {
       var uid = uids && uids[index] || '';
       var avatar = typeof window._personAvatarHtml === 'function'
         ? window._personAvatarHtml(uid, name, '', ' class="tv-player-photo" alt=""') : '';
-      return '<span>' + avatar + esc(name) + '</span>';
+      return '<span>' + avatar + (series ? '<b class="tv-series-player-name">' + esc(name) + '</b>' : esc(name)) + '</span>';
     }).join('');
   }
   function sideHtml(label, team, score, options, uids) {
@@ -637,7 +641,7 @@
     if (card.series) return '<article class="tv-court tv-court-series"><div class="tv-court-top"><h2>' + (options.court ? esc(card.name) : '') + '</h2><b class="tv-court-phase">' + esc(card.phase || '') + '</b>' + (options.category ? '<span>' + esc(card.category) + '</span>' : '') + '</div><div class="tv-series-games">' +
       card.series.map(function (game) {
         function side(label, uids, score, direction, outcome) {
-          return '<div class="tv-series-side tv-series-' + direction + (outcome ? ' tv-series-' + outcome : '') + '"><div class="tv-series-players">' + playerRows(label, uids) + '</div>' +
+          return '<div class="tv-series-side tv-series-' + direction + (outcome ? ' tv-series-' + outcome : '') + '"><div class="tv-series-players">' + playerRows(label, uids, true) + '</div>' +
             (options.score && score !== '' ? '<strong>' + esc(score) + '</strong>' : '') + '</div>';
         }
         var winnerSide = Number(game.winnerSide) || 0;
@@ -668,7 +672,7 @@
     var a = Number(result.scoreA), b = Number(result.scoreB);
     var scoreAClass = Number.isFinite(a) && Number.isFinite(b) && a !== b ? (a > b ? ' tv-result-win' : ' tv-result-loss') : '';
     var scoreBClass = Number.isFinite(a) && Number.isFinite(b) && a !== b ? (b > a ? ' tv-result-win' : ' tv-result-loss') : '';
-    return '<div class="tv-result' + (index === 0 && result.hasScore ? ' tv-result-latest' : '') + '" data-result-id="' + esc(result.id || '') + '" data-result-at="' + esc(result.resultAt || 0) + '"><small>' + esc(result.time) + ' · JOGO ' + esc(result.number) + (result.seriesPosition ? ' (' + esc(result.seriesPosition) + ')' : '') + ' · ' + esc(result.category) + (result.groupName ? ' · ' + esc(result.groupName) : '') + (result.duration ? ' (' + esc(result.duration) + ')' : '') + '</small>' +
+    return '<div class="tv-result' + (index === 0 && result.hasScore ? ' tv-result-latest' : '') + '" data-result-id="' + esc(result.id || '') + '" data-result-at="' + esc(result.resultAt || 0) + '"><small>' + esc(result.time) + ' · JOGO ' + esc(result.number) + (result.seriesPosition ? ' (' + esc(result.seriesPosition) + ')' : '') + ' · ' + esc(result.category) + (result.stage ? ' · ' + esc(result.stage) : '') + (result.groupName ? ' · ' + esc(result.groupName) : '') + (result.duration ? ' (' + esc(result.duration) + ')' : '') + '</small>' +
       '<div class="tv-result-match"><div class="tv-result-side tv-result-left" style="--team:' + esc(result.ta.color) + '">' + (result.ta.name ? '<span class="tv-result-team">' + esc(result.ta.name) + '</span>' : '') + '<div class="tv-result-players">' + players(result.a) + '</div><strong class="tv-result-side-score' + scoreAClass + '">' + esc(result.scoreA) + '</strong></div>' +
       '<div class="tv-result-versus">VS</div>' +
       '<div class="tv-result-side tv-result-right" style="--team:' + esc(result.tb.color) + '"><strong class="tv-result-side-score' + scoreBClass + '">' + esc(result.scoreB) + '</strong><div class="tv-result-players">' + players(result.b) + '</div>' + (result.tb.name ? '<span class="tv-result-team">' + esc(result.tb.name) + '</span>' : '') + '</div></div></div>';
@@ -864,26 +868,32 @@
       if (!box.parentElement || !box.parentElement.clientHeight || !names.length) return;
       var slot = Math.max(1, Math.floor((box.parentElement.clientHeight - 2) / names.length));
       names.forEach(function (el) {
-        var fullName = el.getAttribute('data-full-name') || el.textContent.trim().normalize('NFC');
-        var nameNode = Array.from(el.childNodes).find(function (node) { return node.nodeType === 3; });
-        if (!nameNode) return;
+        var label = el.querySelector('.tv-series-player-name');
+        if (!label) return;
+        var fullName = el.getAttribute('data-full-name') || label.textContent.trim().normalize('NFC');
         el.setAttribute('data-full-name', fullName);
         el.setAttribute('title', fullName);
-        nameNode.nodeValue = fullName;
+        label.textContent = fullName;
         el.style.fontSize = '';
         el.style.maxHeight = slot + 'px';
         var size = parseFloat(doc.defaultView.getComputedStyle(el).fontSize) || 12;
-        while (el.scrollHeight > el.clientHeight + 1 && size > 11) {
-          size = Math.max(11, size - .5);
-          el.style.fontSize = size + 'px';
-        }
-        // Em painéis estreitos, abreviar apenas o nome do meio preserva
-        // primeiro e último sobrenome legíveis e o nome completo no título.
-        if (el.scrollHeight > el.clientHeight + 1) {
+        function overflowing() { return el.scrollHeight > el.clientHeight + 1 || label.scrollWidth > label.clientWidth + 1; }
+        if (overflowing()) {
           var parts = fullName.split(/\s+/);
-          if (parts.length > 2) {
-            nameNode.nodeValue = parts[0] + ' ' + parts.slice(1, -1).map(function (part) { return part.charAt(0) + '.'; }).join(' ') + ' ' + parts[parts.length - 1];
+          if (parts.length > 2) label.textContent = parts[0] + ' ' + parts.slice(1, -1).map(function (part) { return part.charAt(0) + '.'; }).join(' ') + ' ' + parts[parts.length - 1];
+          while (overflowing() && size > 14) {
+            size = Math.max(14, size - .5);
+            el.style.fontSize = size + 'px';
           }
+          if (overflowing() && parts.length > 1) {
+            label.textContent = parts[0].charAt(0) + '. ' + parts[parts.length - 1];
+            el.style.fontSize = '';
+            size = parseFloat(doc.defaultView.getComputedStyle(el).fontSize) || 12;
+          }
+        }
+        while (overflowing() && size > 10) {
+          size = Math.max(10, size - .5);
+          el.style.fontSize = size + 'px';
         }
         sizes.set(fullName, Math.min(sizes.has(fullName) ? sizes.get(fullName) : size, size));
       });
@@ -1060,7 +1070,7 @@
     '.tv-results-main>h2{color:#fbbf24;font-size:clamp(.9rem,1.2vw,1.5rem);line-height:normal}' +
     '.tv-results .tv-result-players span{font-size:clamp(.75rem,.95vw,1.3rem)}' +
     '.tv-custom-qr{container-type:inline-size}.tv-custom-qr .tv-qr-brand{gap:2px;font-size:clamp(8px,9cqw,16px);line-height:1.05;white-space:nowrap}.tv-custom-qr .tv-scoreplace-mark{width:clamp(14px,24cqw,32px);min-width:0}.tv-custom-qr .tv-qr{padding-bottom:.55vw}.tv-custom-results .tv-results{padding:.55vw .8vw}.tv-custom-results .tv-results-list{box-sizing:border-box}' +
-    '.tv-player-photo{display:block;flex:none;width:clamp(18px,1.5vw,32px);height:clamp(18px,1.5vw,32px);border-radius:50%;object-fit:cover}.tv-players>span,.tv-series-players>span{display:flex;align-items:center;gap:.3vw;min-width:0}.tv-series-players .tv-player-photo{width:clamp(13px,1vw,22px);height:clamp(13px,1vw,22px)}' +
+    '.tv-series-game{grid-template-rows:minmax(0,1fr);overflow:hidden}.tv-series-side,.tv-series-players{height:100%;overflow:hidden}.tv-player-photo{display:block;flex:none;width:clamp(18px,1.5vw,32px);height:clamp(18px,1.5vw,32px);border-radius:50%;object-fit:cover}.tv-players>span{display:flex;align-items:center;gap:.3vw;min-width:0}.tv-series-players>span{display:grid;flex:none;grid-template-columns:clamp(13px,1vw,22px) minmax(0,1fr);align-items:center;gap:.3vw;min-width:0;min-height:0;overflow:hidden;line-height:1.05}.tv-series-player-name{display:block;min-width:0;overflow-wrap:anywhere;font:inherit}.tv-series-right .tv-series-player-name{text-align:right}.tv-series-players .tv-player-photo{width:clamp(13px,1vw,22px);height:clamp(13px,1vw,22px)}' +
     '.tv-custom-board-camis{width:calc(100% - .35vw)}.tv-custom-board-camis .tv-custom-results .tv-results{padding-right:.35vw}.tv-custom-board-camis .tv-qr-camis{padding-bottom:0}.tv-custom-board-camis .tv-custom-qr .tv-qr-has-logo .tv-qr-tournament-logo-camis{position:relative;display:block;overflow:hidden;width:calc(100% - 1.35vw);max-width:calc(100% - 1.35vw);height:100%;transform:none}.tv-custom-board-camis .tv-qr-camis .tv-qr-tournament-logo-camis-image{position:absolute;left:50%;top:50%;display:block;width:157.5%;height:auto;max-width:none;max-height:none;transform:translate(-50%,-50%)}.tv-custom-board-camis .tv-qr-camis .tv-qr-code,.tv-custom-board-camis .tv-qr-camis .tv-qr-brand{width:calc(100% - 2.6vw);max-width:calc(100% - 2.6vw);transform:none;justify-self:center}' +
     '</style>');
   // O editor usa exatamente o HTML e o CSS da janela No ar. O iframe não
@@ -1402,6 +1412,7 @@
         if (markup !== lastMarkup) {
           if (typeof popup.__tvReplaceMarkup === 'function') popup.__tvReplaceMarkup(markup);
           else root.innerHTML = markup;
+          fitSeriesNames(popup.document);
           lastMarkup = markup; popup.__tvLastMarkup = markup;
         }
         popup.__tvTiming = snapshot.timing;

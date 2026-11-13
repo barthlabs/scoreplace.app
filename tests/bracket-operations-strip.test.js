@@ -13,15 +13,21 @@ assert.equal(operationStage(diamondRounds[1], { phases:[{ kind:'classification' 
 assert.equal(operationStage({ ...diamondRounds[0], isMonarch:true, phaseIndex:0 }, { phases:[{ kind:'classification' }] }, diamondRounds), 'Classificatória');
 assert.equal(operationStage({ isTieBreak:true }, {}, []), 'Desempate');
 const futureStart = source.indexOf('function _bracketOperationsFutureHtml(');
+const operationStageLabel = new Function(source.slice(stageStart, futureStart) + '\nreturn _bracketOperationsStageLabel;')();
+assert.equal(operationStageLabel({ isMonarch:true, groupName:'R1 Grupo F' }, { phases:[{ kind:'classification' }] }, []),
+  'Classificatória · Grupo F', 'jogo em quadra identifica o grupo da classificatória');
+assert.equal(operationStageLabel({ isMonarch:true, monarchGroup:5, category:'Fem Prata' },
+  { phases:[{ kind:'classification' }] }, [{ monarchGroup:5, category:'Fem Prata', groupName:'R1 Grupo F' }]),
+  'Classificatória · Grupo F', 'segundo jogo recupera o grupo da mesma série');
 const futureEnd = source.indexOf('function _bracketOperationsReplica(', futureStart);
 assert(futureStart > 0 && futureEnd > futureStart);
-const futureHtml = new Function('window', '_bracketOperationsStage', source.slice(futureStart, futureEnd) +
+const futureHtml = new Function('window', source.slice(stageStart, futureEnd) +
   '\nreturn _bracketOperationsFutureHtml;')({
     _safeHtml: value => String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;'),
     ScoreplaceNextMatch: { knownSide:value => !!value && value !== 'TBD' },
     _directBracketSlotLabel: (_t, m, slot) => ({ '94:p1':'Vencedor do jogo 91', '94:p2':'Vencedor do jogo 92',
       '95:p1':'Vencedor do jogo 93', '95:p2':'Vencedor do jogo 94' })[m._gameNum + ':' + slot] || ''
-  }, operationStage);
+  });
 const futureMatches = [
   { id:'semi-93', _gameNum:93, category:'Fem Ouro', phaseIndex:1, round:3, roundName:'Semifinal', officialGroupBracket:true,
     p1:'Almeida / Pieri', p2:'Gava / Batochio' },
@@ -201,7 +207,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
         pendingBottomCancel: !!strip.querySelector('.sp-operations-pending .sp-match-operational [data-operations-action="cancel-court"]'),
         pendingHeaderCancel: !!strip.querySelector('.sp-operations-pending .sp-mc-head [data-operations-action="cancel-court"]'),
         releasedCourt: !!strip.querySelector('.sp-operations-court-slot:nth-child(2) .sp-operations-court-free'),
-        availableCourt: strip.querySelector('.sp-operations-availability').textContent
+        availableCourt: strip.querySelector('.sp-operations-availability > span').textContent
       };
       window.AppStore.currentUser = { uid: 'other' };
       window._bracketOperationsRefresh(t, root);
@@ -252,7 +258,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       const track = strip.querySelector('.sp-operations-track');
       const next = strip.querySelector('.sp-operations-next');
       const noPending = !strip.querySelector('.sp-operations-pending');
-      const freeCount = strip.querySelector('.sp-operations-availability').textContent;
+      const freeCount = strip.querySelector('.sp-operations-availability > span').textContent;
       const courtNames = [...strip.querySelectorAll('.sp-operations-court-slot > .sp-operations-label')].map(el => el.textContent);
       const scrollbar = strip.querySelector('.sp-operations-scrollbar');
       const scrollbarThumb = scrollbar.querySelector('.sp-operations-scrollbar-thumb');
@@ -279,10 +285,10 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       window._bracketCourtReleaseCache = { sb_test: { released: {} } };
       t.courtNames = ['Quadra 5'];
       window._bracketOperationsRefresh(t, root);
-      const zero = strip.querySelector('.sp-operations-availability').textContent;
+      const zero = strip.querySelector('.sp-operations-availability > span').textContent;
       t.courtNames = ['Quadra 4', 'Quadra 5'];
       window._bracketOperationsRefresh(t, root);
-      const one = strip.querySelector('.sp-operations-availability').textContent;
+      const one = strip.querySelector('.sp-operations-availability > span').textContent;
       return { noPending, freeCount, courtNames, sticky, noVerticalClip, scrollPreserved, withPending, aligned,
         width, viewport, zero, one, scrollbarSize, keyboardEnd, keyboardHome };
     });
