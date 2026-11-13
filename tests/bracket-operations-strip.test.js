@@ -162,6 +162,8 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
         simulateHidden: !strip.querySelector('[data-operations-simulate]'),
         visible: !!strip.querySelector('.sp-operations-next .sp-match-confirm'),
         pending: !!strip.querySelector('.sp-operations-pending [data-operations-match="m1"]'),
+        pendingBottomCancel: !!strip.querySelector('.sp-operations-pending .sp-match-operational [data-operations-action="cancel-court"]'),
+        pendingHeaderCancel: !!strip.querySelector('.sp-operations-pending .sp-mc-head [data-operations-action="cancel-court"]'),
         releasedCourt: !!strip.querySelector('.sp-operations-court-slot:nth-child(2) .sp-operations-court-free'),
         availableCourt: strip.querySelector('.sp-operations-availability').textContent
       };
@@ -199,6 +201,8 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert.equal(state.afterCall.draft, '6');
     assert.equal(state.afterCall.next, 'm2');
     assert(state.refereeView.visible && state.refereeView.pending && state.refereeView.releasedCourt);
+    assert(state.refereeView.pendingBottomCancel && !state.refereeView.pendingHeaderCancel,
+      'Cancelar do placar pendente deve ficar na linha inferior, fora das setas do jogo');
     assert.match(state.refereeView.availableCourt, /2 QUADRAS LIVRES/);
     const scrollLayout = await page.evaluate(() => {
       const t = window._findTournamentById();

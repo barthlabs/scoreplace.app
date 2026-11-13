@@ -2002,7 +2002,7 @@ function _bracketOperationsReplica(m, t, role, label, availability, root, allMat
     }
     html = card.outerHTML;
   }
-  if (role.active && html) {
+  if ((role.active || role.pending) && html) {
     var activeHost = document.createElement('template');
     activeHost.innerHTML = html;
     var activeCard = activeHost.content.firstElementChild;
@@ -2571,7 +2571,7 @@ window._bracketOperationsRefresh = function (t, root) {
       '<span class="sp-operations-label">' + nextLabel + '</span>' + nextAvailability + '<div class="sp-operations-empty">' +
       (state.waitingForTie ? 'Aguardando a definição do desempate para continuar a fila' : 'Nenhum jogo aguardando chamada') + '</div>') +
     '</div>' + (state.pending.length ? '<div class="sp-operations-pending" aria-label="Placares pendentes"><span class="sp-operations-section-title">PLACARES PENDENTES</span><div class="sp-operations-pending-track">' +
-    state.pending.map(function (m) { return _bracketOperationsReplica(m, t, { canCall: canCall, active: false }, String(m.court || 'Placar pendente'), '', root, state.matches, 'pending:' + String(m.id)); }).join('') +
+    state.pending.map(function (m) { return _bracketOperationsReplica(m, t, { canCall: canCall, active: false, pending: true }, String(m.court || 'Placar pendente'), '', root, state.matches, 'pending:' + String(m.id)); }).join('') +
     '</div></div>' : '') + '<div class="sp-operations-courts" aria-label="Jogos em quadra"><div class="sp-operations-courts-heading"><span class="sp-operations-section-title">EM QUADRA</span>' +
     (typeof window._isUserOrgOrCoHost === 'function' && window._isUserOrgOrCoHost(t, user) ?
       '<button type="button" class="sp-operations-simulate" data-operations-simulate="1" title="Registra placares simulados apenas nos jogos que estão em quadra agora"' +

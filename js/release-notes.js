@@ -1,3 +1,5 @@
+// 2.6.73 — O botão para cancelar a chamada de um jogo com placar pendente
+// aparece na linha inferior do cartão, fora das setas de navegação.
 // 2.6.72 — Na operação Rei/Rainha, encerrar o primeiro ou o segundo jogo
 // chama o próximo na mesma quadra e inicia seu relógio. Os placares anteriores
 // continuam no card da série, acessíveis pelas setas. Depois do terceiro

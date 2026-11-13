@@ -1,3 +1,8 @@
+## 2.6.73 — 13/nov/2026 (cancelar chamada no rodapé do placar pendente)
+
+- O botão de cancelar ou restaurar a chamada do jogo em “Placares pendentes” fica na linha operacional inferior do cartão, sem cobrir as setas e o título do jogo.
+- Corte somente web; sem alterar a tela “No Ar”, resultados, dados existentes ou versões nativas.
+
 ## 2.6.72 — 13/nov/2026 (série Rei/Rainha na mesma quadra)
 
 - Encerrar sem placar o jogo 1 ou 2 de um quarteto Rei/Rainha de três jogos chama automaticamente o seguinte na mesma quadra e inicia o relógio dele. O encerramento do jogo 3 libera a quadra.
