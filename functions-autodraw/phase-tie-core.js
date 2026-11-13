@@ -329,7 +329,9 @@ function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, actio
            (action.type === 'confirm' && decision.status === 'complete'))) {
         usedAction = true;
       }
-      if (decision.status === 'pending' || decision.status === 'review') {
+      if (decision.status === 'pending' || decision.status === 'review' ||
+          (decision.status === 'complete' && action && action.decisionId === decisionId &&
+            (action.type === 'score' || action.type === 'wo'))) {
         const matchIndex = action && action.decisionId === decisionId && !usedAction
           ? decision.matches.findIndex(m => m.id === action.matchId) : -1;
         if (action && ['court', 'call', 'score', 'point', 'wo', 'postpone', 'cancel-call', 'release', 'restore', 'clock'].includes(action.type) && action.decisionId === decisionId && !usedAction && matchIndex < 0) {
@@ -504,10 +506,15 @@ function resolvePhaseTies(t, phaseIndex, pools, nextPhase, compareForPool, actio
                 t.phaseTieNextSuffix[suffixKey] = suffix + 1;
                 decision.order = null;
                 decision.status = 'pending';
-              } else decision.status = 'review';
+                delete decision.confirmedAt;
+              } else {
+                decision.status = 'complete';
+                decision.confirmedAt = String(action.at || nowIso || new Date().toISOString());
+              }
             } else {
               decision.order = rankPlayers(tie, decision.matches);
-              decision.status = 'review';
+              decision.status = 'complete';
+              decision.confirmedAt = String(action.at || nowIso || new Date().toISOString());
             }
           }
         }

@@ -65,13 +65,11 @@ flow = resolveTie(t, { type: 'court', decisionId: flow.tie.decisionId,
 assert.equal(flow.decision.matches[0].court, 'Quadra 1');
 flow = resolveTie(t, { type: 'score', decisionId: flow.tie.decisionId,
   matchId, sets: [{ p1: 4, p2: 5 }] }, now);
-assert.equal(flow.status, 'review');
+assert.equal(flow.status, 'ready', 'placar da simples define a classificação sem confirmar outra vez');
 assert.equal(flow.changed, true);
 t = structuredClone(t); // o placar extra precisa sobreviver à próxima transação
-assert.equal(t.phaseTieDecisions['0'][flow.tie.decisionId].matches[0].winnerKey, 'uid:B');
-flow = resolveTie(t, { type: 'confirm', decisionId: flow.tie.decisionId }, now);
-assert.equal(flow.status, 'ready');
-assert.equal(flow.changed, true);
+assert.equal(t.phaseTieDecisions['0'][decisionId].matches[0].winnerKey, 'uid:B');
+assert.equal(t.phaseTieDecisions['0'][decisionId].status, 'complete');
 const retryConfirm = resolveTie(t, { type: 'confirm', decisionId }, now);
 assert.equal(retryConfirm.status, 'ready');
 assert.equal(retryConfirm.changed, false);
@@ -144,4 +142,4 @@ groupFlow = resolveTie(grouped, { type: 'draw', decisionId: groupFlow.tie.decisi
 assert.equal(groupFlow.status, 'ready');
 assert.deepEqual(titles.resolve(grouped, { engine: { ...engine, phaseComplete: () => true } })
   .titles.map(title => title.winnerName), ['A', 'C']);
-console.log('✓ encerramento: empate, simples, placar, confirmação e título pelo resultado');
+console.log('✓ encerramento: empate, simples, placar e título sem confirmação extra');
