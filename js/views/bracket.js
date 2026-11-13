@@ -1859,7 +1859,8 @@ function _bracketOperationsFutureHtml(state, t) {
     estimates.set(String(m.id), at);
     courts[slot] = at + gameMs;
   });
-  return '<section class="sp-operations-future" aria-label="Próximos jogos"><span class="sp-operations-section-title">PRÓXIMOS JOGOS</span>' +
+  return '<section class="sp-operations-future" aria-label="Próximos jogos"><span class="sp-operations-section-title">PRÓXIMOS JOGOS · ' +
+    other.length + ' NA SEQUÊNCIA ↓</span>' +
     '<div class="sp-operations-future-list">' + other.map(function (m) {
       var number = m._gameNum || m.scheduledGameNumber || '';
       var at = estimates.get(String(m.id));
@@ -2680,7 +2681,8 @@ window._bracketOperationsRefresh = function (t, root) {
   var nextAvailability = '<div class="sp-operations-availability' + (freeCount ? '' : ' sp-operations-availability--busy') + '"><span>' +
     freeCount + ' ' + (freeCount === 1 ? 'QUADRA LIVRE' : 'QUADRAS LIVRES') + '</span>' +
     (state.next ? '<strong class="sp-operations-stage">' + (window._safeHtml || String)(_bracketOperationsStageLabel(state.next, t, state.matches)) + '</strong>' : '') + '</div>';
-  existing.innerHTML = '<div class="sp-operations-track" data-hscroll="ops:track"><div class="sp-operations-next"><div class="sp-operations-next-scroll" aria-label="Próximos jogos" data-next-match="' +
+  existing.innerHTML = '<div class="sp-operations-track" data-hscroll="ops:track"><div class="sp-operations-next"><div class="sp-operations-next-scroll' +
+    (!state.next && state.future.length ? ' sp-operations-next-scroll--future-only' : '') + '" aria-label="Próximos jogos" data-next-match="' +
     (window._safeHtml || String)(String(state.next && state.next.id || '')) + '">' +
     (state.next ? _bracketOperationsReplica(state.next, t, { canCall: canCall && state.nextCallable !== false, active: false,
       readOnly: state.nextCallable === false,
@@ -2688,7 +2690,8 @@ window._bracketOperationsRefresh = function (t, root) {
       tieCanPostpone: !!state.tieCanPostpone,
       preferFirstFreeCourt: true, preferredCourt: (root._bracketOperationsManualCourt || {})[String(state.next.id)] || '' }, nextLabel, nextAvailability, root, state.matches, 'next') :
       '<span class="sp-operations-label">' + nextLabel + '</span>' + nextAvailability + '<div class="sp-operations-empty">' +
-      (state.waitingForTie ? 'Aguardando a definição do desempate para continuar a fila' : 'Nenhum jogo aguardando chamada') + '</div>') +
+      (state.waitingForTie ? 'Aguardando a definição do desempate para continuar a fila' :
+        state.future.length ? 'Aguardando definição das duplas; veja a sequência abaixo' : 'Nenhum jogo aguardando chamada') + '</div>') +
     _bracketOperationsFutureHtml(state, t) + '</div></div>' + (state.pending.length ? '<div class="sp-operations-pending" aria-label="Placares pendentes"><span class="sp-operations-section-title">PLACARES PENDENTES</span><div class="sp-operations-pending-track">' +
     state.pending.map(function (m) { return _bracketOperationsReplica(m, t, { canCall: canCall, active: false, pending: true }, String(m.court || 'Placar pendente'), '', root, state.matches, 'pending:' + String(m.id)); }).join('') +
     '</div></div>' : '') + '<div class="sp-operations-courts" aria-label="Jogos em quadra"><div class="sp-operations-courts-heading"><span class="sp-operations-section-title">EM QUADRA</span>' +

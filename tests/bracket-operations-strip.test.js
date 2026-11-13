@@ -55,6 +55,7 @@ assert(futureMarkup.includes('JOGO 94') && futureMarkup.includes('Semifinal'));
 assert(futureMarkup.includes('JOGO 95') && futureMarkup.includes('Final'));
 assert(futureMarkup.includes('Vencedor do jogo 91') && futureMarkup.includes('Vencedor do jogo 94'));
 assert(futureMarkup.includes('JOGO 104') && futureMarkup.includes('Classificatória'));
+assert(futureMarkup.includes('PRÓXIMOS JOGOS · 3 NA SEQUÊNCIA ↓'), 'a fila indica quantos confrontos existem abaixo');
 assert.match(futureMarkup, /🕒 ≈ \d{2}:\d{2}/, 'fila futura mostra horário estimado');
 
 const start = source.indexOf('function _bracketAgendaCompare(');
@@ -1048,6 +1049,16 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert.equal(tieNavigation.titles.length, 6, 'simples desempate navega por jogo e contexto sem travar: ' + JSON.stringify(tieNavigation));
     assert.equal(tieNavigation.tabs, 1, 'abas permanecem montadas após navegar no desempate');
     assert.equal(tieNavigation.strip, 1, 'faixa de operação permanece montada após navegar no desempate');
+    await page.setContent('<div class="sp-operations-track" style="--sp-operations-card-height:300px"><div class="sp-operations-next"><div class="sp-operations-next-scroll sp-operations-next-scroll--future-only"><span class="sp-operations-label">PRÓXIMO JOGO</span><div class="sp-operations-availability">1 QUADRA LIVRE</div><div class="sp-operations-empty">Aguardando definição das duplas</div><section class="sp-operations-future"><span class="sp-operations-section-title">PRÓXIMOS JOGOS · 9 NA SEQUÊNCIA ↓</span><div class="sp-operations-future-list"><div class="sp-operations-future-row">JOGO 136</div></div></section></div></div></div>');
+    const futureOnly = await page.evaluate(() => {
+      const column = document.querySelector('.sp-operations-next').getBoundingClientRect();
+      const heading = document.querySelector('.sp-operations-future .sp-operations-section-title').getBoundingClientRect();
+      const row = document.querySelector('.sp-operations-future-row').getBoundingClientRect();
+      return { headingVisible:heading.bottom <= column.bottom, firstRowVisible:row.bottom <= column.bottom,
+        headingNearTop:heading.top - column.top < 140 };
+    });
+    assert(futureOnly.headingVisible && futureOnly.firstRowVisible && futureOnly.headingNearTop,
+      'sem jogo chamável, a lista futura deve aparecer imediatamente: ' + JSON.stringify(futureOnly));
     console.log('✓ faixa replica o card completo e navega três jogos do quarteto e a classificação');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

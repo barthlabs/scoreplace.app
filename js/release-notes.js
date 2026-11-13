@@ -1,3 +1,6 @@
+// 2.6.86 — Quando o próximo jogo ainda depende dos placares da Prata,
+// a operação mostra imediatamente as eliminatórias futuras na primeira coluna,
+// com a quantidade de confrontos e rolagem vertical para ver todos.
 // 2.6.85 — Depois que a primeira oitava da Prata foi chamada, as demais
 // oitavas oficiais com duplas definidas entram na fila do controle mesmo com
 // placares da Ouro pendentes. A TV fixa cada atleta na mesma faixa vertical

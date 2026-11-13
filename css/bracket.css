@@ -64,6 +64,8 @@
   overflow:hidden;
 }
 .sp-operations-next-scroll { display:grid;grid-template-rows:var(--sp-operations-line-height) var(--sp-operations-line-height) var(--sp-operations-card-height) auto;align-content:start;height:100%;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin; }
+.sp-operations-next-scroll--future-only { grid-template-rows:var(--sp-operations-line-height) var(--sp-operations-line-height) 54px auto; }
+.sp-operations-next-scroll--future-only .sp-operations-empty { min-height:0; }
 .sp-operations-next .sp-operations-replica { display:contents; }
 .sp-operations-courts { display:grid;grid-template-rows:var(--sp-operations-line-height) calc(var(--sp-operations-line-height) + var(--sp-operations-card-height));flex:0 0 auto;width:max-content; }
 .sp-operations-future { display:block;min-width:0;margin-top:10px;padding:8px 0 0;border-top:1px solid var(--border-color); }

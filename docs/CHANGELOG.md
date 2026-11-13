@@ -1,3 +1,8 @@
+## 2.6.86 — 13/nov/2026 (próximos jogos visíveis)
+
+- Quando não há partida chamável porque uma vaga da eliminatória ainda depende de placares, a operação mostra a fila futura imediatamente na primeira coluna. O cabeçalho informa quantos confrontos há na sequência, e a lista continua rolável ali. A Prata mantém os jogos 136–144 visíveis com a origem de cada vaga.
+- O jogo 136 depende do vencedor do Grupo 8; os três resultados do grupo ainda não constam do torneio. A quadra 6 estava livre no sistema na conferência. A correção de alinhamento dos nomes da direita nessa quadra segue na versão 2.6.85.
+
 ## 2.6.85 — 13/nov/2026 (fila da Prata no controle)
 
 - A operação libera os próximos confrontos oficiais da Prata assim que a etapa começou e as duas duplas estão definidas. A regra antiga bloqueava os jogos 134 e 135 por placares da Ouro pendentes, embora o jogo 133 já estivesse chamado. Partidas com “A definir” continuam sem chamada e os resultados da Ouro não foram alterados.
