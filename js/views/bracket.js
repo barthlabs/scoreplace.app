@@ -1442,7 +1442,20 @@ window._bracketOperationsSelect = function (t) {
   var queued = [suggested].concat(ordered).filter(function (m, index, list) {
     return m && list.findIndex(function (entry) { return entry && String(entry.id) === String(m.id); }) === index;
   });
-  return { next: suggested, queue: queued, nextCallable: !!suggested, waitingForTie: waitingForTie,
+  // A fila visual inclui fases futuras ainda sem duplas definidas. Esses
+  // confrontos são apenas informativos até que ambos os lados sejam conhecidos.
+  var future = matches.filter(function (m) {
+    return m && !occupancy.isFinished(m) && !m.isBye && !m.isSitOut &&
+      !m.courtCalledAt && !m.startedAt && !occupancy.occupiesCourt(m) &&
+      (_matchCardTimestamp(m.scheduledAt) || (Number(m.phaseIndex) > 0 && Number(m._gameNum) > 0));
+  }).filter(function (m) {
+    var group = _bracketOperationsGroup(t, m, matches);
+    return !group || String((group.matches.find(function (item) { return !occupancy.isFinished(item); }) || {}).id) === String(m.id);
+  }).sort(function (a, b) {
+    return _bracketAgendaCompare({ at: _matchCardTimestamp(a.scheduledAt), num: a._gameNum },
+      { at: _matchCardTimestamp(b.scheduledAt), num: b._gameNum });
+  });
+  return { next: suggested, queue: queued, future: future, nextCallable: !!suggested, waitingForTie: waitingForTie,
     tieCanPostpone: !!(callableTie && otherReady),
     active: active, pending: pending, courts: courts, matches: matches };
 };
@@ -1801,6 +1814,26 @@ function _bracketOperationsStage(m, t, allMatches) {
   return remaining === 0 ? 'Final' : remaining === 1 ? 'Semifinal' :
     remaining === 2 ? 'Quartas de final' : remaining === 3 ? 'Oitavas de final' :
     remaining === 4 ? '16 avos de final' : 'Rodada ' + String(m.round || 1);
+}
+
+function _bracketOperationsFutureHtml(state, t) {
+  var safe = window._safeHtml || function (s) { return String(s); };
+  var known = window.ScoreplaceNextMatch && window.ScoreplaceNextMatch.knownSide || function (value) { return !!value && value !== 'TBD'; };
+  var other = (state.future || []).filter(function (m) { return !state.next || String(m.id) !== String(state.next.id); });
+  if (!other.length) return '';
+  function side(m, slot) {
+    var name = m[slot] || (Array.isArray(m[slot === 'p1' ? 'team1' : 'team2']) ?
+      m[slot === 'p1' ? 'team1' : 'team2'].join(' / ') : '');
+    return known(name) ? name : (typeof window._directBracketSlotLabel === 'function' && window._directBracketSlotLabel(t, m, slot)) || 'A definir';
+  }
+  return '<section class="sp-operations-future" aria-label="Próximos jogos"><span class="sp-operations-section-title">PRÓXIMOS JOGOS</span>' +
+    '<div class="sp-operations-future-list">' + other.map(function (m) {
+      var number = m._gameNum || m.scheduledGameNumber || '';
+      return '<div class="sp-operations-future-row"><div class="sp-operations-future-heading">JOGO ' + safe(number) +
+        ' · ' + safe(m.category || '') + ' · ' + safe(_bracketOperationsStage(m, t, state.matches)) +
+        '</div><div class="sp-operations-future-pair">' + safe(side(m, 'p1')) +
+        '<span>×</span>' + safe(side(m, 'p2')) + '</div></div>';
+    }).join('') + '</div></section>';
 }
 
 function _bracketOperationsReplica(m, t, role, label, availability, root, allMatches, slot) {
@@ -2613,7 +2646,7 @@ window._bracketOperationsRefresh = function (t, root) {
       preferFirstFreeCourt: true, preferredCourt: (root._bracketOperationsManualCourt || {})[String(state.next.id)] || '' }, nextLabel, nextAvailability, root, state.matches, 'next') :
       '<span class="sp-operations-label">' + nextLabel + '</span>' + nextAvailability + '<div class="sp-operations-empty">' +
       (state.waitingForTie ? 'Aguardando a definição do desempate para continuar a fila' : 'Nenhum jogo aguardando chamada') + '</div>') +
-    '</div>' + (state.pending.length ? '<div class="sp-operations-pending" aria-label="Placares pendentes"><span class="sp-operations-section-title">PLACARES PENDENTES</span><div class="sp-operations-pending-track">' +
+    '</div>' + _bracketOperationsFutureHtml(state, t) + (state.pending.length ? '<div class="sp-operations-pending" aria-label="Placares pendentes"><span class="sp-operations-section-title">PLACARES PENDENTES</span><div class="sp-operations-pending-track">' +
     state.pending.map(function (m) { return _bracketOperationsReplica(m, t, { canCall: canCall, active: false, pending: true }, String(m.court || 'Placar pendente'), '', root, state.matches, 'pending:' + String(m.id)); }).join('') +
     '</div></div>' : '') + '<div class="sp-operations-courts" aria-label="Jogos em quadra"><div class="sp-operations-courts-heading"><span class="sp-operations-section-title">EM QUADRA</span>' +
     (typeof window._isUserOrgOrCoHost === 'function' && window._isUserOrgOrCoHost(t, user) ?

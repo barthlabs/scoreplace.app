@@ -12,6 +12,32 @@ assert.equal(operationStage(diamondRounds[0], { phases:[{ kind:'classification' 
 assert.equal(operationStage(diamondRounds[1], { phases:[{ kind:'classification' }, { kind:'elimination' }] }, diamondRounds), 'Semifinal');
 assert.equal(operationStage({ ...diamondRounds[0], isMonarch:true, phaseIndex:0 }, { phases:[{ kind:'classification' }] }, diamondRounds), 'Classificatória');
 assert.equal(operationStage({ isTieBreak:true }, {}, []), 'Desempate');
+const futureStart = source.indexOf('function _bracketOperationsFutureHtml(');
+const futureEnd = source.indexOf('function _bracketOperationsReplica(', futureStart);
+assert(futureStart > 0 && futureEnd > futureStart);
+const futureHtml = new Function('window', '_bracketOperationsStage', source.slice(futureStart, futureEnd) +
+  '\nreturn _bracketOperationsFutureHtml;')({
+    _safeHtml: value => String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;'),
+    ScoreplaceNextMatch: { knownSide:value => !!value && value !== 'TBD' },
+    _directBracketSlotLabel: (_t, m, slot) => ({ '94:p1':'Vencedor do jogo 91', '94:p2':'Vencedor do jogo 92',
+      '95:p1':'Vencedor do jogo 93', '95:p2':'Vencedor do jogo 94' })[m._gameNum + ':' + slot] || ''
+  }, operationStage);
+const futureMatches = [
+  { id:'semi-93', _gameNum:93, category:'Fem Ouro', phaseIndex:1, round:3, roundName:'Semifinal', officialGroupBracket:true,
+    p1:'Almeida / Pieri', p2:'Gava / Batochio' },
+  { id:'semi-94', _gameNum:94, category:'Fem Ouro', phaseIndex:1, round:3, roundName:'Semifinal', officialGroupBracket:true,
+    p1:'TBD', p2:'TBD' },
+  { id:'final-95', _gameNum:95, category:'Fem Ouro', phaseIndex:1, round:4, roundName:'Final', officialGroupBracket:true,
+    p1:'TBD', p2:'TBD' },
+  { id:'prata', _gameNum:104, category:'Fem Prata', phaseIndex:0, isMonarch:true, p1:'Ana', p2:'Bia' }
+];
+const futureMarkup = futureHtml({ next:futureMatches[0], future:futureMatches, matches:futureMatches }, {});
+assert(!futureMarkup.includes('JOGO 93'), 'a partida principal não duplica na fila visual');
+assert(futureMarkup.includes('JOGO 94') && futureMarkup.includes('Semifinal'));
+assert(futureMarkup.includes('JOGO 95') && futureMarkup.includes('Final'));
+assert(futureMarkup.includes('Vencedor do jogo 91') && futureMarkup.includes('Vencedor do jogo 94'));
+assert(futureMarkup.includes('JOGO 104') && futureMarkup.includes('Classificatória'));
+
 const start = source.indexOf('function _bracketAgendaCompare(');
 const end = source.indexOf('function _bracketAgendaExpected(', start);
 assert(start > 0 && end > start);

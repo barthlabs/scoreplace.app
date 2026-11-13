@@ -65,6 +65,12 @@
 }
 .sp-operations-next .sp-operations-replica { display:contents; }
 .sp-operations-courts { display:grid;grid-template-rows:var(--sp-operations-line-height) calc(var(--sp-operations-line-height) + var(--sp-operations-card-height));flex:0 0 auto;width:max-content; }
+.sp-operations-future { display:grid;grid-template-rows:var(--sp-operations-line-height) minmax(0,1fr);flex:0 0 min(88vw,430px);min-width:0;max-height:calc(var(--sp-operations-card-height) + 2 * var(--sp-operations-line-height) + 16px);padding:8px;border:2px solid var(--border-color);border-radius:12px;background:var(--bg-card);box-sizing:border-box; }
+.sp-operations-future-list { display:grid;align-content:start;gap:5px;min-height:0;overflow-y:auto; }
+.sp-operations-future-row { padding:4px 6px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-card);color:var(--text-bright); }
+.sp-operations-future-heading { font-size:.7rem;font-weight:800; }
+.sp-operations-future-pair { display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:5px;font-size:.72rem;line-height:1.2; }
+.sp-operations-future-pair span { font-weight:800; }
 .sp-operations-pending { display:grid;grid-template-rows:var(--sp-operations-line-height) calc(var(--sp-operations-line-height) + var(--sp-operations-card-height));flex:0 0 min(88vw,380px);border-color:var(--sp-c-38bdf8,#38bdf8);overflow:hidden; }
 .sp-operations-pending-track { display:flex;flex-direction:column;gap:8px;overflow-y:auto;min-height:0; }
 .sp-operations-availability { color:var(--sp-c-4ade80,#4ade80);font-size:.69rem;font-weight:800;line-height:14px; }
