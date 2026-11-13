@@ -5,7 +5,8 @@
 // use NO AR na operação; a apresentação não mostra botão de saída. A margem
 // direita da TV foi afinada e o quadro deslocado um pouco à direita para
 // aproveitar o projetor sem recortar os elementos. O nome do
-// torneio pode ser corrigido sem alterar a grade publicada.
+// torneio pode ser corrigido sem alterar a grade publicada. O seletor de tela
+// mantém o texto legível e a janela inteira mesmo com a escala do navegador.
 // 2.6.70 — No app instalado, NO AR abre a TV na própria janela já em tela cheia.
 // 2.6.69 — Mantém o logo CAMIS no lugar e centraliza somente o QR e a legenda.
 // 2.6.68 — QR e legenda centralizados no eixo do logo CAMIS, com folga vertical e da TV.
