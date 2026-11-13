@@ -86,4 +86,33 @@ assert.equal(new Set(t.matches.map(m => m.id)).size, t.matches.length);
 assert.equal(new Set(W._collectAllMatches(t).filter(m => !m.isBye)
   .map(m => m.scheduledGameNumber)).size, 144);
 assert.equal(Math.max(...t.matches.map(m => m.scheduledGameNumber || 0)), 144);
+// O motor relê os grupos ao materializar. Objetos novos não podem fazer a
+// ordem resolvida pela simples se perder e recolocar a atleta eliminada.
+let reads = 0;
+const freshGroups = () => { reads++; return [{ name:'R1 Grupo B', category:'Fem Diamante',
+  rows:[{name:'Bianca'}, {name:'Leticia'}, {name:'Nina'}],
+  matches:[0,1,2].map(id => ({id:'b'+id,winner:'Bianca'})) }]; };
+let qualifiedNames = null;
+const freshEngine = { prevPhaseGroups:freshGroups, projectPhaseCfg:() => ({}),
+  materializeNextPhase:(_, standingsForGroup) => {
+    qualifiedNames = standingsForGroup(freshGroups()[0]).map(row => row.name);
+    return {ok:true};
+  } };
+const freshWindow = { _phasesEngine:freshEngine, _schGradeEstimada:() => ({cabe:true,interleaved:true,slots:[]}),
+  _schAplicarGrade:() => {}, _collectAllMatches:() => [] };
+const freshAdvance = vm.runInNewContext(source.slice(source.indexOf('function _materializeInterleavedReadyCategories('), to) +
+  '\n_materializeInterleavedReadyCategories;', {
+  drawWindow:freshWindow, phaseStandingsFn:g => g.rows,
+  _buildPhaseTieRuntime:(_, __, groups) => ({ overall:false, pools:groups.map((group,index) =>
+    ({id:'group-'+index,group,rows:group.rows})), nextCfg:{}, compareForPool:() => () => 0 }),
+  _phaseTieCore:{resolvePhaseTies:(_, __, pools) => ({status:'ready',orderedPools:pools.map(pool => ({
+    id:pool.id,rows:[pool.rows[0],pool.rows[2],pool.rows[1]]}))})},
+  HttpsError:class extends Error {}
+});
+assert.deepEqual(Array.from(freshAdvance({ id:'fresh-groups', currentPhaseIndex:0,
+  phases:[{}], combinedCategories:['Fem Diamante'], scheduleWindow:{interleavedPlan:{
+    blocks:[{kind:'groups',category:'Fem Diamante',courts:[1]}] }} }, 'fresh-groups', '2026-11-13T13:00:00Z')),
+  ['Fem Diamante']);
+assert(reads >= 2 && qualifiedNames.join(',') === 'Bianca,Nina,Leticia',
+  'desempate decidido é preservado quando a materialização relê o grupo');
 console.log('CAMIS: 1º+2º formam uma dupla por grupo; categorias avançam separadamente');

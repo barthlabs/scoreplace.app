@@ -6692,11 +6692,14 @@ function _materializeInterleavedReadyCategories(t, tId, nowIso) {
       { autoPlay:true, retainOtherDecisions:true });
     if (flow.status !== 'ready') continue;
     const byPool = new Map(flow.orderedPools.map(pool => [pool.id, pool.rows]));
-    const byGroup = new Map(pools.map(pool => [pool.group, byPool.get(pool.id)]));
+    // materializeNextPhase lê os grupos de novo. A identidade do objeto muda,
+    // então a ordem decidida pela simples precisa ser procurada por grupo estável.
+    const groupKey = group => categoryOf(group) + '\u0000' + String(group && group.name || '');
+    const byGroup = new Map(pools.map(pool => [groupKey(pool.group), byPool.get(pool.id)]));
     const categoryIndex = (t.combinedCategories || []).map(String).indexOf(category);
     const prefix = 'ph-' + tId + '-1-c' + categoryIndex;
     const result = phaseEngine.materializeNextPhase(t,
-      group => byGroup.get(group) || standings(group), prefix,
+      group => byGroup.get(groupKey(group)) || standings(group), prefix,
       { agoraIso:nowIso }, { category });
     if (!result || !result.ok) {
       throw new HttpsError('failed-precondition', 'Não foi possível gerar a eliminatória de ' + category + '.');

@@ -189,11 +189,15 @@ const publishedDiamond = { ...camisQueue, id:'camis-published-diamond',
     category:'Fem Diamante', phaseIndex:1, round:1, court:'Quadra 1',
     p1:'Dupla Diamante A ' + number, p2:'Dupla Diamante B ' + number,
     scheduledAt:'2026-11-13T16:00:00.000Z'
-  }))] };
+  })), ...[2,2,3,3].map((round,index) => ({ id:'diamond-later-'+index,
+    category:'Fem Diamante',phaseIndex:1,round,p1:'TBD',p2:'TBD' }))] };
 window._bracketOperationsSelect = tournament => ({ next:tournament.matches[0], queue:[tournament.matches[0]], waitingForTie:false });
 const publishedSnapshot = window._tvLiveBuildSnapshot(publishedDiamond);
 assert.deepEqual(Array.from(publishedSnapshot.nextGames, game => game.number), [25, 73, 74, 75],
   'TV anuncia as quartas Diamante já definidas enquanto a última chamada Ouro segue na frente');
+assert.equal(publishedSnapshot.nextGames[0].stage, 'Classificatória');
+assert.equal(publishedSnapshot.nextGames[1].stage, 'Quartas de final');
+assert.match(window._tvLiveBodyHtml(publishedSnapshot), /JOGO 73 · <span class="tv-upcoming-category">Fem Diamante<\/span> · <span class="tv-upcoming-stage">Quartas de final<\/span>/);
 delete window._bracketOperationsSelect;
 const camisQueueHtml = window._tvLiveBodyHtml(camisQueueSnapshot);
 assert.doesNotMatch(camisQueueHtml.split('class="tv-upcoming"')[1].split('</section>')[0], /tv-result-team|>Time</,

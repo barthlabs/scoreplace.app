@@ -217,6 +217,26 @@
     // O listener recebe uma cópia nova. Use a numeração canônica da chave.
     if (typeof window._assignGlobalGameNumbers === 'function') window._assignGlobalGameNumbers(t);
     var matches = typeof window._collectAllMatches === 'function' ? window._collectAllMatches(t) : (t.matches || []);
+    function upcomingStage(m) {
+      if (!m) return '';
+      if (m.isTieBreak) return 'Desempate';
+      var phase = Number(m.phaseIndex || 0);
+      var cfg = Array.isArray(t.phases) ? t.phases[phase] : null;
+      if (m.isMonarch || (cfg && cfg.kind === 'classification')) return 'Classificatória';
+      if (m.isThirdPlace || m.bracket === 'thirdplace') return '3º lugar';
+      if (phase === 0 && !(cfg && cfg.kind === 'elimination')) return '';
+      var rounds = matches.filter(function (other) {
+        return other && String(other.category || '') === String(m.category || '') &&
+          Number(other.phaseIndex || 0) === phase &&
+          String(other.bracket || 'main') === String(m.bracket || 'main') &&
+          !other.isThirdPlace && Number.isInteger(Number(other.round));
+      });
+      var maxRound = Math.max.apply(null, rounds.map(function (other) { return Number(other.round); }));
+      var remaining = maxRound - Number(m.round || 1);
+      return remaining === 0 ? 'Final' : remaining === 1 ? 'Semifinal' :
+        remaining === 2 ? 'Quartas de final' : remaining === 3 ? 'Oitavas de final' :
+        remaining === 4 ? '16 avos de final' : 'Rodada ' + String(m.round || 1);
+    }
     // O torneio completo pode continuar em memória enquanto a mesa grava uma
     // chamada numa parte externa. A janela acompanha a mesma subcoleção canônica
     // que loadTournamentById lê; cada jogo recém-gravado substitui só seu retrato.
@@ -309,7 +329,7 @@
     }
     var nextGame = nextMatch ? {
       number: nextMatch._gameNum || nextMatch.scheduledGameNumber || nextMatch.matchNumber || '',
-      category: String(nextMatch.category || nextMatch.tierLabel || ''),
+      category: String(nextMatch.category || nextMatch.tierLabel || ''), stage:upcomingStage(nextMatch),
       a: sideName(t, nextMatch, 'p1'), b: sideName(t, nextMatch, 'p2'),
       ta: teamFor(nextMatch, 1, teams), tb: teamFor(nextMatch, 2, teams)
     } : null;
@@ -326,7 +346,7 @@
       if (tiePending && (!nextSelection || (nextSelection.next && nextSelection.next.isTieBreak))) { tieOverride = true;
         nextQueue = [];
         nextGame = { number: String(tiePending.displayGameNumber || 'EXTRA'),
-        category: nextMatch && nextMatch.isTieBreak ? String(nextMatch.category || 'Desempate') + ' · Simples desempate' : 'Desempate da classificatória',
+        category: nextMatch && nextMatch.isTieBreak ? String(nextMatch.category || 'Desempate') + ' · Simples desempate' : 'Desempate da classificatória', stage:'Desempate',
         a: String(tiePending.p1 && tiePending.p1.name || ''), b: String(tiePending.p2 && tiePending.p2.name || ''),
         ta: { name: '', color: '#94a3b8' }, tb: { name: '', color: '#94a3b8' } }; }
     }
@@ -379,7 +399,7 @@
         window.ScoreplaceNextMatch.firstAvailable([m], matches, released) === m;
     })
       .map(function (m) { return { number: m._gameNum || m.scheduledGameNumber || m.matchNumber || '',
-        category: String(m.category || m.tierLabel || ''), a: sideName(t, m, 'p1'), b: sideName(t, m, 'p2'),
+        category: String(m.category || m.tierLabel || ''), stage:upcomingStage(m), a: sideName(t, m, 'p1'), b: sideName(t, m, 'p2'),
         ta: teamFor(m, 1, teams), tb: teamFor(m, 2, teams), source: m }; });
     if (nextGame) nextGames.unshift(nextGame);
     var announcedGroups = new Set();
@@ -628,10 +648,10 @@
     function gameHtml(game, index) {
       var firstClass = index === 0 ? ' tv-upcoming-first' : '';
       if (Array.isArray(game.series) && game.series.length) return '<article class="tv-upcoming-item tv-upcoming-group' + firstClass + '"><small>' +
-        esc(game.groupName) + ' · <span class="tv-upcoming-category">' + esc(game.category) + '</span></small><div class="tv-upcoming-series">' +
+        esc(game.groupName) + ' · <span class="tv-upcoming-category">' + esc(game.category) + '</span>' + (game.stage ? ' · <span class="tv-upcoming-stage">' + esc(game.stage) + '</span>' : '') + '</small><div class="tv-upcoming-series">' +
         game.series.map(function (item) { return '<div class="tv-upcoming-series-game"><b>JOGO ' + esc(item.number) + '</b><span class="tv-upcoming-series-left">' + players(item.a) +
           '</span><i>×</i><span class="tv-upcoming-series-right">' + players(item.b) + '</span></div>'; }).join('') + '</div></article>';
-      return '<article class="tv-upcoming-item' + firstClass + '"><small>JOGO ' + esc(game.number) + ' · <span class="tv-upcoming-category">' + esc(game.category) + '</span></small>' +
+      return '<article class="tv-upcoming-item' + firstClass + '"><small>JOGO ' + esc(game.number) + ' · <span class="tv-upcoming-category">' + esc(game.category) + '</span>' + (game.stage ? ' · <span class="tv-upcoming-stage">' + esc(game.stage) + '</span>' : '') + '</small>' +
       '<div class="tv-result-match"><div class="tv-result-side tv-result-left" style="--team:' + esc(game.ta.color) + '">' + (game.ta.name ? '<span class="tv-result-team">' + esc(game.ta.name) + '</span>' : '') + '<div class="tv-result-players">' + players(game.a) + '</div></div>' +
       '<div class="tv-result-versus">VS</div>' +
       '<div class="tv-result-side tv-result-right" style="--team:' + esc(game.tb.color) + '"><div class="tv-result-players">' + players(game.b) + '</div>' + (game.tb.name ? '<span class="tv-result-team">' + esc(game.tb.name) + '</span>' : '') + '</div></div></article>'; }
@@ -984,7 +1004,7 @@
   styles = styles.replace('</style>',
     '.tv-upcoming{display:flex;flex-direction:column}.tv-upcoming h2{flex:none}.tv-upcoming-list{flex:1;min-height:0;overflow-y:auto;scrollbar-width:none;overscroll-behavior:contain}.tv-upcoming-list::-webkit-scrollbar{display:none}' +
     '.tv-upcoming-item{display:flex;flex-direction:column;min-height:5.4vw;margin:.25vw 0 .4vw;padding:.3vw;border:0}.tv-upcoming-group{border:1px solid var(--tv-edge,#777);border-radius:.45vw;background:var(--tv-row,#333)}.tv-upcoming-item.tv-upcoming-first{border:2px solid #fbbf24;border-radius:.55vw;box-shadow:0 0 14px #fbbf2440;background:var(--tv-row-active,#16253a)}' +
-    '.tv-upcoming-item>small{display:block;flex:none;margin:0 0 .2vw;color:#fff;font-size:clamp(.7rem,.8vw,1rem)}.tv-upcoming-category{color:#fbbf24;font-weight:700}' +
+    '.tv-upcoming-item>small{display:block;flex:none;margin:0 0 .2vw;color:#fff;font-size:clamp(.7rem,.8vw,1rem)}.tv-upcoming-category{color:#fbbf24;font-weight:700}.tv-upcoming-stage{color:#e5e7eb;font-weight:650}' +
     '.tv-upcoming-item .tv-result-match{height:auto;min-height:4.3vw;flex:1}.tv-upcoming-item .tv-result-side{min-height:4.3vw}' +
     '.tv-upcoming-series{display:grid;gap:.15vw}.tv-upcoming-series-game{display:grid;grid-template-columns:4.2vw minmax(0,1fr) 1vw minmax(0,1fr);gap:.25vw;align-items:center;min-height:2.25vw;color:#fff}.tv-upcoming-series-game>b{white-space:nowrap;font-size:clamp(.7rem,.75vw,1rem)}.tv-upcoming-series-game span{min-width:0}.tv-upcoming-series-game span span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:clamp(.7rem,.78vw,1.04rem);font-weight:750}.tv-upcoming-series-right{text-align:right}.tv-upcoming-series-game i{font-style:normal;text-align:center;color:#aaa}' +
     '.tv-results-main>h2{color:#fbbf24;font-size:clamp(.9rem,1.2vw,1.5rem);line-height:normal}' +
