@@ -864,9 +864,8 @@
     doc = doc && typeof doc.querySelectorAll === 'function' ? doc : document;
     var sizes = new Map();
     doc.querySelectorAll('.tv-series-players').forEach(function (box) {
-      var names = box.querySelectorAll(':scope > span');
-      if (!box.parentElement || !box.parentElement.clientHeight || !names.length) return;
-      var slot = Math.max(1, Math.floor((box.parentElement.clientHeight - 2) / names.length));
+      var names = Array.prototype.slice.call(box.querySelectorAll(':scope > span'));
+      if (!box.clientHeight || !names.length) return;
       names.forEach(function (el) {
         var label = el.querySelector('.tv-series-player-name');
         if (!label) return;
@@ -874,28 +873,42 @@
         el.setAttribute('data-full-name', fullName);
         el.setAttribute('title', fullName);
         label.textContent = fullName;
-        el.style.fontSize = '';
-        el.style.maxHeight = slot + 'px';
-        var size = parseFloat(doc.defaultView.getComputedStyle(el).fontSize) || 12;
-        function overflowing() { return el.scrollHeight > el.clientHeight + 1 || label.scrollWidth > label.clientWidth + 1; }
-        if (overflowing()) {
-          var parts = fullName.split(/\s+/);
-          if (parts.length > 2) label.textContent = parts[0] + ' ' + parts.slice(1, -1).map(function (part) { return part.charAt(0) + '.'; }).join(' ') + ' ' + parts[parts.length - 1];
-          while (overflowing() && size > 14) {
-            size = Math.max(14, size - .5);
-            el.style.fontSize = size + 'px';
-          }
-          if (overflowing() && parts.length > 1) {
-            label.textContent = parts[0].charAt(0) + '. ' + parts[parts.length - 1];
-            el.style.fontSize = '';
-            size = parseFloat(doc.defaultView.getComputedStyle(el).fontSize) || 12;
-          }
+        el.style.maxHeight = 'none';
+      });
+      function fits() {
+        var total = 0;
+        var good = names.every(function (el) {
+          var label = el.querySelector('.tv-series-player-name');
+          if (!label) return true;
+          var lineHeight = parseFloat(doc.defaultView.getComputedStyle(label).lineHeight) || 13;
+          total += Math.max(el.scrollHeight, el.querySelector('.tv-player-photo')?.getBoundingClientRect().height || 0);
+          return label.scrollHeight <= 2 * lineHeight + 2 && label.scrollWidth <= label.clientWidth + 1;
+        });
+        return good && total <= box.clientHeight + 1;
+      }
+      var size = Math.min(16, parseFloat(doc.defaultView.getComputedStyle(names[0]).fontSize) || 16);
+      for (; size >= 10; size -= .5) {
+        names.forEach(function (el) { el.style.fontSize = size + 'px'; });
+        if (fits()) break;
+      }
+      if (size < 10) {
+        names.forEach(function (el) {
+          var label = el.querySelector('.tv-series-player-name');
+          if (!label) return;
+          var parts = el.getAttribute('data-full-name').split(/\s+/);
+          if (parts.length > 2) label.textContent = parts[0] + ' ' + parts.slice(1, -1).map(function (part) {
+            return part.charAt(0) + '.';
+          }).join(' ') + ' ' + parts[parts.length - 1];
+        });
+        for (size = 14; size >= 10; size -= .5) {
+          names.forEach(function (el) { el.style.fontSize = size + 'px'; });
+          if (fits()) break;
         }
-        while (overflowing() && size > 10) {
-          size = Math.max(10, size - .5);
-          el.style.fontSize = size + 'px';
-        }
-        sizes.set(fullName, Math.min(sizes.has(fullName) ? sizes.get(fullName) : size, size));
+      }
+      size = Math.max(10, size);
+      names.forEach(function (el) {
+        var fullName = el.getAttribute('data-full-name');
+        if (fullName) sizes.set(fullName, Math.min(sizes.has(fullName) ? sizes.get(fullName) : size, size));
       });
     });
     doc.querySelectorAll('.tv-series-players > span').forEach(function (el) {
@@ -1070,7 +1083,7 @@
     '.tv-results-main>h2{color:#fbbf24;font-size:clamp(.9rem,1.2vw,1.5rem);line-height:normal}' +
     '.tv-results .tv-result-players span{font-size:clamp(.75rem,.95vw,1.3rem)}' +
     '.tv-custom-qr{container-type:inline-size}.tv-custom-qr .tv-qr-brand{gap:2px;font-size:clamp(8px,9cqw,16px);line-height:1.05;white-space:nowrap}.tv-custom-qr .tv-scoreplace-mark{width:clamp(14px,24cqw,32px);min-width:0}.tv-custom-qr .tv-qr{padding-bottom:.55vw}.tv-custom-results .tv-results{padding:.55vw .8vw}.tv-custom-results .tv-results-list{box-sizing:border-box}' +
-    '.tv-series-game{grid-template-rows:minmax(0,1fr);overflow:hidden}.tv-series-side,.tv-series-players{height:100%;overflow:hidden}.tv-player-photo{display:block;flex:none;width:clamp(18px,1.5vw,32px);height:clamp(18px,1.5vw,32px);border-radius:50%;object-fit:cover}.tv-players>span{display:flex;align-items:center;gap:.3vw;min-width:0}.tv-series-players>span{display:grid;flex:none;grid-template-columns:clamp(13px,1vw,22px) minmax(0,1fr);align-items:center;gap:.3vw;min-width:0;min-height:0;overflow:hidden;line-height:1.05}.tv-series-player-name{display:block;min-width:0;overflow-wrap:anywhere;font:inherit}.tv-series-right .tv-series-player-name{text-align:right}.tv-series-players .tv-player-photo{width:clamp(13px,1vw,22px);height:clamp(13px,1vw,22px)}' +
+    '.tv-series-game{grid-template-rows:minmax(0,1fr);overflow:hidden}.tv-series-side,.tv-series-players{height:100%;overflow:hidden}.tv-player-photo{display:block;flex:none;width:clamp(18px,1.5vw,32px);height:clamp(18px,1.5vw,32px);border-radius:50%;object-fit:cover}.tv-players>span{display:flex;align-items:center;gap:.3vw;min-width:0}.tv-series-players{justify-content:center;gap:0}.tv-series-players>span{display:grid;flex:none;grid-template-columns:clamp(13px,1vw,22px) minmax(0,1fr);align-items:center;gap:.3vw;min-width:0;min-height:0;overflow:hidden;line-height:1.05}.tv-series-player-name{display:block;min-width:0;overflow-wrap:anywhere;white-space:normal;font:inherit;line-height:1.05}.tv-series-right .tv-series-player-name{text-align:right}.tv-series-players .tv-player-photo{width:clamp(13px,1vw,22px);height:clamp(13px,1vw,22px)}' +
     '.tv-custom-board-camis{width:calc(100% - .35vw)}.tv-custom-board-camis .tv-custom-results .tv-results{padding-right:.35vw}.tv-custom-board-camis .tv-qr-camis{padding-bottom:0}.tv-custom-board-camis .tv-custom-qr .tv-qr-has-logo .tv-qr-tournament-logo-camis{position:relative;display:block;overflow:hidden;width:calc(100% - 1.35vw);max-width:calc(100% - 1.35vw);height:100%;transform:none}.tv-custom-board-camis .tv-qr-camis .tv-qr-tournament-logo-camis-image{position:absolute;left:50%;top:50%;display:block;width:157.5%;height:auto;max-width:none;max-height:none;transform:translate(-50%,-50%)}.tv-custom-board-camis .tv-qr-camis .tv-qr-code,.tv-custom-board-camis .tv-qr-camis .tv-qr-brand{width:calc(100% - 2.6vw);max-width:calc(100% - 2.6vw);transform:none;justify-self:center}' +
     '</style>');
   // O editor usa exatamente o HTML e o CSS da janela No ar. O iframe não
@@ -1420,12 +1433,23 @@
         var markup = bodyHtml(snapshot);
         var root = popup.document.getElementById('tv-root');
         if (!root) { syncButton(); return; }
+        var styleVersion = String(window.SCOREPLACE_VERSION || '');
+        var restyled = false;
+        if (popup.__tvStyleVersion !== styleVersion) {
+          var styleNode = popup.document.head && popup.document.head.querySelector('style');
+          var start = styles.indexOf('>') + 1, end = styles.lastIndexOf('</style>');
+          if (styleNode && start > 0 && end > start) {
+            styleNode.textContent = styles.slice(start, end);
+            popup.__tvStyleVersion = styleVersion;
+            restyled = true;
+          }
+        }
         if (markup !== lastMarkup) {
           if (typeof popup.__tvReplaceMarkup === 'function') popup.__tvReplaceMarkup(markup);
           else root.innerHTML = markup;
           fitSeriesNames(popup.document);
           lastMarkup = markup; popup.__tvLastMarkup = markup;
-        }
+        } else if (restyled) fitSeriesNames(popup.document);
         popup.__tvTiming = snapshot.timing;
         popup.__tvLastSync = tickNow;
         popup.__tvParentBeat = tickNow;

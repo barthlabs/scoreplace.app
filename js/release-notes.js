@@ -1,3 +1,9 @@
+// 2.6.83 — Os demais próximos jogos rolam dentro da primeira coluna da operação,
+// com fase e horário estimado. Placares pendentes mostram a fase e ficam ao lado.
+// A rolagem horizontal permanece na quadra atual ao encerrar ou lançar placar.
+// A escolha da TV distingue tela principal e secundária e permite detectar
+// novamente o monitor HDMI. A janela aberta recebe o CSS novo; nomes longos
+// reduzem a fonte e ocupam até duas linhas, com placares sempre visíveis.
 // 2.6.82 — Jogos classificatórios em quadra mostram o grupo na operação e
 // na tela No Ar. Últimos resultados mostram a fase de cada partida.
 // Nomes longos e avatares ficam alinhados nas três linhas da TV do Camis Day.

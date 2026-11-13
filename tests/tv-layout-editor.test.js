@@ -403,6 +403,15 @@ const { chromium } = require('@playwright/test');
     await page.locator('#open-tv-test').click();
     const popup = await popupPromise;
     await popup.locator('#tv-fullscreen-action').waitFor();
+    await popup.evaluate(() => {
+      document.head.querySelector('style').textContent = '.tv-series-player-name{font-size:99px}';
+      window.__tvStyleVersion = 'old-version';
+    });
+    await page.evaluate(() => window._tvLiveRefresh());
+    await popup.waitForFunction(() => document.head.querySelector('style').textContent.includes('.tv-series-players{justify-content:center'));
+    assert.equal(await popup.evaluate(() => window.__tvStyleVersion),
+      await page.evaluate(() => String(window.SCOREPLACE_VERSION || '')),
+      'janela No Ar aberta recebe o CSS novo sem precisar ser fechada');
     const headerPositions = await popup.evaluate(() => {
       const bounds = selector => document.querySelector(selector).getBoundingClientRect();
       return { title:bounds('.tv-header h1'), action:bounds('#tv-fullscreen-action'), clock:bounds('#tv-now') };

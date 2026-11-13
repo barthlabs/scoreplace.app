@@ -1,3 +1,11 @@
+## 2.6.83 — 13/nov/2026 (fila dentro da primeira coluna e monitor HDMI)
+
+- A operação mostra os demais próximos jogos em rolagem vertical dentro da coluna do próximo jogo a chamar. A coluna intermediária foi removida e “Placares pendentes” voltou ao lado do próximo jogo. Cada item informa fase e horário estimado, recalculado conforme quadras e jogos avançam. A posição da rolagem horizontal fica preservada após encerrar jogo, lançar placar ou atualizar a operação.
+- Os placares pendentes mostram a fase no cabeçalho. O jogo 85 da Ouro é identificado como oitavas de final.
+- O seletor “No Ar” consulta os monitores mesmo quando `screen.isExtended` informa falso, identifica tela principal e secundária, e oferece nova detecção quando a primeira leitura só mostra uma tela. A escolha move a janela para o monitor retornado pela API e solicita tela cheia nele.
+- Os três jogos de uma série na TV conservam sempre as duas posições de placar, com “–” antes do lançamento. Nomes longos são reduzidos e distribuídos em até duas linhas dentro do cartão; os da direita ficam alinhados à direita. A janela “No Ar” já aberta recebe o CSS novo sem precisar ser fechada.
+- Foram chamados diretamente os grupos 8, 9, 10 e 11 da Prata nas quadras 6, 7, 2 e 4, respectivamente. A final da Ouro foi chamada na quadra 5 e o 3º lugar na quadra 3 com as duplas indicadas pela organização. Na Prata, o jogo 95 foi corrigido para tie-break 6×8, preservando o 6×7 e a vitória de Júlia Seligmann e Luciane Romani. Os jogos 96 e 97 foram conferidos; os placares 1×6, 4×6 e 6×2 foram registrados nos jogos 98–100 do Grupo 2, com duração aproximada dividida entre os três jogos.
+
 ## 2.6.82 — 13/nov/2026 (grupo em quadra e fases na TV)
 
 - A operação identifica a fase e o grupo de cada jogo classificatório em quadra, inclusive o segundo e o terceiro da série. O próximo jogo a chamar também mostra a fase junto da disponibilidade de quadras.

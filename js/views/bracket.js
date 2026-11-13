@@ -1838,11 +1838,36 @@ function _bracketOperationsFutureHtml(state, t) {
       m[slot === 'p1' ? 'team1' : 'team2'].join(' / ') : '');
     return known(name) ? name : (typeof window._directBracketSlotLabel === 'function' && window._directBracketSlotLabel(t, m, slot)) || 'A definir';
   }
+  var now = Date.now();
+  var timing = window.ScoreplaceMatchTiming && window.ScoreplaceMatchTiming.config(t) || {};
+  var gameMs = Math.max(10, Number(timing.game) || 40) * 60000;
+  var callMs = Math.max(0, Number(timing.call) || 0) * 60000 + Math.max(0, Number(timing.warmup) || 0) * 60000;
+  var courts = (state.courts || []).map(function (court) {
+    var active = (state.active || []).filter(function (m) { return String(m.court) === String(court); });
+    if (!active.length) return now;
+    var first = active[0];
+    var started = Date.parse(first.startedAt || first.courtClockBaseAt || first.courtCalledAt || '');
+    return Math.max(now, (started || now) + (first.startedAt ? 0 : callMs) + gameMs * active.length);
+  });
+  if (!courts.length) courts.push(now);
+  var estimates = new Map();
+  (state.future || []).forEach(function (m) {
+    var earliest = Math.min.apply(null, courts);
+    var slot = courts.indexOf(earliest);
+    var scheduled = Date.parse(m.scheduledAt || '');
+    var at = Math.max(now, earliest, scheduled && scheduled > now ? scheduled : now);
+    estimates.set(String(m.id), at);
+    courts[slot] = at + gameMs;
+  });
   return '<section class="sp-operations-future" aria-label="Próximos jogos"><span class="sp-operations-section-title">PRÓXIMOS JOGOS</span>' +
     '<div class="sp-operations-future-list">' + other.map(function (m) {
       var number = m._gameNum || m.scheduledGameNumber || '';
+      var at = estimates.get(String(m.id));
+      var estimate = Number.isFinite(at) ? new Date(at).toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit', hour12:false,
+        timeZone:typeof _matchCardTimeZone === 'function' ? _matchCardTimeZone(t) : 'America/Sao_Paulo' }) : '';
       return '<div class="sp-operations-future-row"><div class="sp-operations-future-heading">JOGO ' + safe(number) +
         ' · ' + safe(m.category || '') + ' · ' + safe(_bracketOperationsStageLabel(m, t, state.matches)) +
+        (estimate ? ' · <time title="Horário estimado, atualizado conforme as quadras liberam">🕒 ≈ ' + safe(estimate) + '</time>' : '') +
         '</div><div class="sp-operations-future-pair">' + safe(side(m, 'p1')) +
         '<span>×</span>' + safe(side(m, 'p2')) + '</div></div>';
     }).join('') + '</div></section>';
@@ -1850,7 +1875,7 @@ function _bracketOperationsFutureHtml(state, t) {
 
 function _bracketOperationsReplica(m, t, role, label, availability, root, allMatches, slot) {
   var safe = window._safeHtml || function (s) { return String(s); };
-  var stage = role.active ? '<small class="sp-operations-stage">' + safe(_bracketOperationsStageLabel(m, t, allMatches)) + '</small>' : '';
+  var stage = role.active || role.pending ? '<small class="sp-operations-stage">' + safe(_bracketOperationsStageLabel(m, t, allMatches)) + '</small>' : '';
   if (m.isTieBreak) {
     // A geometria é a do card normal; as ações são roteadas ao livro de
     // desempates, que não faz parte de t.matches nem da classificação do grupo.
@@ -2613,7 +2638,8 @@ window._bracketOperationsRefresh = function (t, root) {
   }
   root._bracketOperationsDrafts = root._bracketOperationsDrafts || {};
   var previousTrack = existing.querySelector('.sp-operations-track');
-  var trackScroll = previousTrack ? previousTrack.scrollLeft : 0;
+  var scrollMemory = window._spOperationsScrollByTournament || (window._spOperationsScrollByTournament = {});
+  var trackScroll = previousTrack ? previousTrack.scrollLeft : Number(scrollMemory[String(t.id)] || 0);
   var previousNextScroll = previousTrack && previousTrack.querySelector('.sp-operations-next-scroll');
   var nextScrollTop = previousNextScroll && String(previousNextScroll.getAttribute('data-next-match') || '') ===
     String(state.next && state.next.id || '') ? previousNextScroll.scrollTop : 0;
@@ -2711,6 +2737,10 @@ window._bracketOperationsRefresh = function (t, root) {
     operationsTrack.style.setProperty('--sp-operations-card-height',
       (root._bracketOperationsGameHeight || 120) + 'px');
     operationsTrack.scrollLeft = trackScroll;
+    scrollMemory[String(t.id)] = operationsTrack.scrollLeft;
+    operationsTrack.addEventListener('scroll', function () {
+      scrollMemory[String(t.id)] = operationsTrack.scrollLeft;
+    }, { passive:true });
     var nextScroll = operationsTrack.querySelector('.sp-operations-next-scroll');
     if (nextScroll) nextScroll.scrollTop = nextScrollTop;
     _bracketOperationsBindScrollbar(operationsTrack, existing.querySelector('.sp-operations-scrollbar'));

@@ -10,6 +10,9 @@ const operationStage = new Function(source.slice(stageStart, stageEnd) + '\nretu
 const diamondRounds = [1, 2, 3].map(round => ({ category:'Fem Diamante', phaseIndex:1, bracket:'main', round }));
 assert.equal(operationStage(diamondRounds[0], { phases:[{ kind:'classification' }, { kind:'elimination' }] }, diamondRounds), 'Quartas de final');
 assert.equal(operationStage(diamondRounds[1], { phases:[{ kind:'classification' }, { kind:'elimination' }] }, diamondRounds), 'Semifinal');
+const goldRounds = [1, 2, 3, 4].map(round => ({ category:'Fem Ouro', phaseIndex:1, bracket:'main', round }));
+assert.equal(operationStage(goldRounds[0], { phases:[{ kind:'classification' }, { kind:'elimination' }] }, goldRounds),
+  'Oitavas de final', 'jogo 85 da Ouro identifica a etapa no placar pendente');
 assert.equal(operationStage({ ...diamondRounds[0], isMonarch:true, phaseIndex:0 }, { phases:[{ kind:'classification' }] }, diamondRounds), 'Classificatória');
 assert.equal(operationStage({ isTieBreak:true }, {}, []), 'Desempate');
 const futureStart = source.indexOf('function _bracketOperationsFutureHtml(');
@@ -43,6 +46,7 @@ assert(futureMarkup.includes('JOGO 94') && futureMarkup.includes('Semifinal'));
 assert(futureMarkup.includes('JOGO 95') && futureMarkup.includes('Final'));
 assert(futureMarkup.includes('Vencedor do jogo 91') && futureMarkup.includes('Vencedor do jogo 94'));
 assert(futureMarkup.includes('JOGO 104') && futureMarkup.includes('Classificatória'));
+assert.match(futureMarkup, /🕒 ≈ \d{2}:\d{2}/, 'fila futura mostra horário estimado');
 
 const start = source.indexOf('function _bracketAgendaCompare(');
 const end = source.indexOf('function _bracketAgendaExpected(', start);

@@ -44,8 +44,12 @@ const { chromium } = require('@playwright/test');
           names: [...row.querySelectorAll('.tv-series-players > span')].map(el => {
             const rect = el.getBoundingClientRect();
             const avatar = el.querySelector('.tv-player-photo').getBoundingClientRect();
+            const label = el.querySelector('.tv-series-player-name');
+            const lineHeight = parseFloat(frame.contentWindow.getComputedStyle(label).lineHeight);
             return { full: el.title, shown: el.textContent, height: el.clientHeight, scroll: el.scrollHeight,
-              top: rect.top, bottom: rect.bottom, avatarX: avatar.x };
+              top: rect.top, bottom: rect.bottom, avatarX: avatar.x, labelHeight:label.scrollHeight,
+              lines:label.scrollHeight / lineHeight, align:frame.contentWindow.getComputedStyle(label).textAlign,
+              fontSize:parseFloat(frame.contentWindow.getComputedStyle(el).fontSize) };
           }) };
       });
     });
@@ -57,7 +61,11 @@ const { chromium } = require('@playwright/test');
       'placares lançados e espaços de placar aparecem nos três jogos');
     assert(metrics.every(row => row.scores.every(score => score.top >= row.rowTop && score.bottom <= row.rowBottom)),
       'placares não saem da linha de jogo');
-    assert(metrics.some(row => row.names.some(name => name.shown !== name.full)), 'nomes longos são abreviados');
+    assert(metrics.every(row => row.names.every(name => name.shown === name.full)), 'nomes completos são preservados');
+    assert(metrics.every(row => row.names.every(name => name.lines <= 2.2 && name.fontSize <= 16)),
+      'nomes longos cabem em até duas linhas com fonte reduzida');
+    assert(metrics.every(row => row.names[2].align === 'right' && row.names[3].align === 'right'),
+      'nomes do lado direito ficam alinhados à direita');
     for (let side = 0; side < 4; side++) {
       const positions = metrics.map(row => row.names[side].avatarX);
       assert(Math.max(...positions) - Math.min(...positions) < 1, 'avatares ficam alinhados nos três jogos');
