@@ -6,6 +6,8 @@
 // total desde a chamada inicial é dividida igualmente entre os três jogos;
 // a TV identifica essa duração como aproximada. A lista de últimos resultados
 // segue rolando automaticamente sem mostrar a barra lateral de rolagem.
+// Com tie-break marcado para 6×6, o set 7×5 também é aceito como vitória
+// normal de quem fez sete games; o 7×6 continua abrindo o tie-break.
 // 2.6.71 — A tela No ar permite escolher o monitor para a TV e abre a
 // apresentação em tela cheia na janela escolhida, mantendo a operação na
 // tela original. O logo, o QR,

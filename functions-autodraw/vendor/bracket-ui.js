@@ -1527,7 +1527,10 @@ window._validateNormalSetScore = function (scoring, sport, a, b) {
   var high = Math.max(a, b), low = Math.min(a, b);
   var hasTb = !scoring || scoring.tiebreakEnabled !== false;
   var trigger = window._tbLoserGames(scoring, sport);
-  var regular = high === gp && low <= gp - 2;
+  // Com tie-break em 6×6, 7×5 encerra o set antes do empate; 7×6 usa o TB.
+  // A mesma regra cobre prorrogações configuradas para 7×7 (8×6).
+  var regular = high >= gp && high - low >= 2 &&
+    (!hasTb || (high <= trigger + 1 && low < trigger));
   var byTb = hasTb && high === trigger + 1 && low === trigger;
   var extended = !hasTb && high >= gp && high - low >= 2;
   if (regular || byTb || extended) return { ok: true };

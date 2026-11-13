@@ -76,6 +76,17 @@ ok(W._validateNormalSetScore(scoring, 'Beach Tennis', 6, 5).ok === true,
   'Beach Tennis configurado em 5×5 aceita 6×5');
 ok(W._validateNormalSetScore(scoring, 'Beach Tennis', 6, 1).ok === true,
   '2º set 6×1 é válido');
+const tenisEmSeis = { type: 'sets', setsToWin: 1, gamesPerSet: 6,
+  tiebreakEnabled: true, tiebreakAt: 'g' };
+ok(W._validateNormalSetScore(tenisEmSeis, 'Beach Tennis', 7, 5).ok === true &&
+  W._validateNormalSetScore(tenisEmSeis, 'Beach Tennis', 5, 7).ok === true,
+  'tie-break em 6×6 aceita 7×5 e 5×7 como vitória normal');
+ok(W._validateNormalSetScore(tenisEmSeis, 'Beach Tennis', 7, 6).ok === true &&
+  W._validateNormalSetScore(tenisEmSeis, 'Beach Tennis', 6, 5).ok === false &&
+  W._validateNormalSetScore(tenisEmSeis, 'Beach Tennis', 8, 6).ok === false,
+  '6×5 não encerra; 7×6 é tie-break; 8×6 passa do limite');
+ok(W._validateNormalSetScore(scoring, 'Beach Tennis', 7, 5).ok === false,
+  'tie-break em 5×5 continua encerrando em 6×5');
 ok(W._validateNormalSetScore(scoring, 'Beach Tennis', 65, 1).ok === false,
   '65×1 é rejeitado');
 ok(W._normalSetGameInputCap(scoring, 'Beach Tennis') === 6,
@@ -143,6 +154,15 @@ Promise.resolve(first).then(() => {
   alert = '';
   W._warnGrossSetScore(mid);
   ok(alert.includes('65×1'), 'aviso ao sair do campo vivo identifica o placar inválido');
+  match.sets = []; match.setsWonP1 = 0; match.setsWonP2 = 0;
+  tour.scoring = tenisEmSeis; committed = null;
+  W._saveEditedSetsInline(tour.id, mid, tenisEmSeis, [{ original:null,
+    col:{ kind:'set' }, isStb:false, a:{ value:'7' }, b:{ value:'5' },
+    tbA:{ value:'' }, tbB:{ value:'' } }], null, null, { rejectAfterDecision:true });
+  ok(committed && committed.p1 === 1 && committed.p2 === 0 &&
+    committed.sets[0].gamesP1 === 7 && committed.sets[0].gamesP2 === 5 &&
+    !committed.sets[0].tiebreak,
+    'Confirmar 7×5 encerra 1 set e dá vitória ao lado com sete');
   console.log('  ' + pass + ' asserts OK, ' + fail + ' falhas');
   if (fail > 0) { console.error('❌ tiebreak-set-score FALHOU'); process.exitCode = 1; }
   else console.log('✅ tiebreak-set-score: OK');

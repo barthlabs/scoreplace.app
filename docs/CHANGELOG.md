@@ -4,6 +4,7 @@
 - Os placares ainda não lançados dos jogos anteriores permanecem acessíveis pelas setas do card da série. Eles entram em “Placares pendentes” somente depois do terceiro encerramento.
 - Nos grupos já chamados antes da correção, a duração efetiva da série é medida desde o fim da chamada/aquecimento inicial até o terceiro encerramento ou placar e dividida em três partes iguais. A TV mostra essa duração com “≈”; as séries chamadas depois da correção mantêm o relógio de cada jogo.
 - A lista “Últimos resultados” da TV mantém a rolagem automática e oculta a barra lateral de rolagem.
+- Com tie-break em 6×6, o resultado 7×5 (ou 5×7) encerra o set normalmente e vence quem fez sete games; 7×6 continua exigindo os pontos do tie-break. O validador do card e sua cópia usada pelo servidor seguem a mesma regra.
 - A ordem de chamada do servidor aceita o jogo anterior encerrado sem placar como etapa operacional concluída. A transição e o relógio são gravados na mesma transação; jogos de outros formatos mantêm o fluxo atual.
 - Corte web e portas regionais de `assignMatchCourt` e `endMatchOnCourt`; sem alteração de placares existentes ou versões nativas.
 
