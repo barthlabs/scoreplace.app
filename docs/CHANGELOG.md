@@ -1,3 +1,10 @@
+## 2.6.72 — 13/nov/2026 (série Rei/Rainha na mesma quadra)
+
+- Encerrar sem placar o jogo 1 ou 2 de um quarteto Rei/Rainha de três jogos chama automaticamente o seguinte na mesma quadra e inicia o relógio dele. O encerramento do jogo 3 libera a quadra.
+- Os placares ainda não lançados dos jogos anteriores permanecem acessíveis pelas setas do card da série. Eles entram em “Placares pendentes” somente depois do terceiro encerramento.
+- A ordem de chamada do servidor aceita o jogo anterior encerrado sem placar como etapa operacional concluída. A transição e o relógio são gravados na mesma transação; jogos de outros formatos mantêm o fluxo atual.
+- Corte web e portas regionais de `assignMatchCourt` e `endMatchOnCourt`; sem alteração de placares existentes ou versões nativas.
+
 ## 2.6.71 — 13/nov/2026 (TV na segunda tela)
 
 - “NO AR” identifica monitores quando o navegador permite e pergunta onde abrir a TV na própria janela de apresentação. A escolha move essa janela para o monitor selecionado e ativa tela cheia no mesmo clique, mantendo a operação na tela original. Ao desligar por “NO AR” e ligar novamente, a pergunta reaparece.

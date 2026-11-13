@@ -1,3 +1,8 @@
+// 2.6.72 — Na operação Rei/Rainha, encerrar o primeiro ou o segundo jogo
+// chama o próximo na mesma quadra e inicia seu relógio. Os placares anteriores
+// continuam no card da série, acessíveis pelas setas. Depois do terceiro
+// encerramento, a quadra fica livre e os placares não lançados aparecem em
+// Placares pendentes.
 // 2.6.71 — A tela No ar permite escolher o monitor para a TV e abre a
 // apresentação em tela cheia na janela escolhida, mantendo a operação na
 // tela original. O logo, o QR,

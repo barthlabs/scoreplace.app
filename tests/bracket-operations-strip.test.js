@@ -677,13 +677,25 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       seriesProbe.matches[1].court = 'Quadra 4';
       seriesProbe.matches[1].courtCalledAt = '2026-11-13T11:20:00Z';
       const seriesAfterFirst = seriesState();
+      root._bracketOperationsNav = {};
+      const originalFindTournament = window._findTournamentById;
+      window._findTournamentById = () => seriesProbe;
+      window._bracketOperationsRefresh(seriesProbe, root);
+      const seriesCourt = strip.querySelector('.sp-operations-court-slot--active');
+      const seriesVisibleGame = seriesCourt?.querySelector('[data-operations-match]')?.getAttribute('data-operations-match');
+      seriesCourt?.querySelector('[data-operations-nav="prev"]')?.click();
+      await new Promise(resolve => setTimeout(resolve, 0));
+      const seriesPreviousGame = strip.querySelector('.sp-operations-court-slot--active [data-operations-match]')?.getAttribute('data-operations-match');
       window._bracketCourtReleaseCache.sb_test.released[seriesIds[1]] = '2026-11-13T11:40:00Z';
       seriesProbe.matches[2].court = 'Quadra 4';
       seriesProbe.matches[2].courtCalledAt = '2026-11-13T11:40:00Z';
       const seriesAfterSecond = seriesState();
       window._bracketCourtReleaseCache.sb_test.released[seriesIds[2]] = '2026-11-13T12:00:00Z';
       const seriesAfterThird = seriesState();
+      window._findTournamentById = originalFindTournament;
       window._bracketCourtReleaseCache = { sb_test: { released: {} } };
+      root._bracketOperationsNav = {};
+      window._bracketOperationsRefresh(t, root);
       window._currentBracketTournament = camisTournament;
       const camisGroup = _bracketOperationsGroup(camisTournament, camis[0], camis);
       const camisOther = _bracketOperationsGroup(camisTournament, camis[3], camis);
@@ -814,7 +826,8 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
         groupChecks: { numeric: numeric?.name, distinct: distinct?.name, missing: !!missing,
           tieBreak: !!tieBreak, nonMonarch: !!nonMonarch, refs: refs?.matches.map(m => m.id),
           canonicalScore: roundCanonical?.matches[0].scoreP1, onlyRounds: onlyRounds?.matches.length, extra: !!extra },
-        series: { ids: seriesIds, first: seriesAfterFirst, second: seriesAfterSecond, third: seriesAfterThird },
+        series: { ids: seriesIds, first: seriesAfterFirst, second: seriesAfterSecond, third: seriesAfterThird,
+          visibleGame: seriesVisibleGame, previousGame: seriesPreviousGame },
         camis: { ids: camisGroup?.matches.map(m => m.id), otherIds: camisOther?.matches.map(m => m.id),
           labels: [camisGroup?.name, camisOther?.name, camisPrata?.name, nextRoundLabel],
           sixGamesHaveNav, idLabel, ui: camisUi },
@@ -829,6 +842,8 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       'após jogo 2, jogo 3 ocupa a quadra e placares anteriores permanecem na série');
     assert.deepEqual(carousel.series.third, { active: [], pending: carousel.series.ids },
       'só após jogo 3 a quadra libera e os três placares sem resultado ficam pendentes');
+    assert.equal(carousel.series.visibleGame, carousel.series.ids[1], 'card da quadra avança para jogo 2');
+    assert.equal(carousel.series.previousGame, carousel.series.ids[0], 'seta volta ao jogo 1 para lançar placar');
     assert(carousel.states.every(item => JSON.stringify(item.navStyle) === JSON.stringify(carousel.states[3].navStyle)),
       'jogos e classificação compartilham a cor, o peso e o tamanho do título do grupo');
     assert.deepEqual(carousel.states.map(item => item.match), ['group-1', 'group-9', 'group-17', 'group-1', 'group-1', 'group-1']);
