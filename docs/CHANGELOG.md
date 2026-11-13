@@ -1,3 +1,9 @@
+## 2.6.67 — 13/nov/2026 (logo e alinhamento da TV do CAMIS)
+
+- A caixa do QR aproveita o espaço livre acima dela sem alterar o layout salvo nem cobrir outra caixa. A imagem oval do CAMIS usa essa altura e compensa apenas as margens transparentes laterais, preservando o desenho completo. O logo pequeno sai do cabeçalho e o título começa à esquerda.
+- “Últimos resultados” e “Próximos jogos” usam a mesma distância da borda superior. Há uma separação discreta entre quadras e a coluna lateral. O QR e a legenda mantêm a mesma largura e ficam menores, com folga da borda direita da TV. O primeiro grupo em “Próximos jogos” recebe borda dourada e o destaque acompanha a atualização da fila.
+- Corte somente web; sem alterações em partidas, resultados, Functions ou versões nativas.
+
 ## 2.6.66 — 13/nov/2026 (alinhamento dos logos na TV)
 
 - O logo do torneio usa toda a faixa disponível acima do QR no layout personalizado, centralizado nos dois eixos e sem máscara que corte a imagem. A tarja branca de “Abra no Scoreplace” tem exatamente a largura do fundo branco do QR. A marca colorida fica sobre um quadrado escuro de cantos arredondados.

@@ -183,8 +183,10 @@ assert.match(camisQueueHtml, /tv-upcoming-category">Fem Ouro/,
   'categoria aparece com a cor própria no cabeçalho do próximo jogo');
 assert.match(camisQueueHtml, /tv-upcoming-group[\s\S]*Grupo A2[\s\S]*JOGO 25[\s\S]*JOGO 26[\s\S]*JOGO 27/,
   'três jogos do mesmo grupo aparecem em um único bloco');
-assert.equal((camisQueueHtml.match(/class="tv-upcoming-item tv-upcoming-group"/g) || []).length, 4,
+assert.equal((camisQueueHtml.match(/class="tv-upcoming-item tv-upcoming-group(?: tv-upcoming-first)?"/g) || []).length, 4,
   'quatro grupos aparecem em quatro boxes, sem repetir um grupo por jogo');
+assert.equal((camisQueueHtml.match(/class="tv-upcoming-item tv-upcoming-group tv-upcoming-first"/g) || []).length, 1,
+  'somente o próximo grupo recebe a borda dourada');
 assert.equal((camisQueueHtml.match(/Grupo A2 ·/g) || []).length, 1,
   'o primeiro grupo aparece apenas uma vez na lista');
 const customLayout = window.ScoreplaceTvLayout.defaults();

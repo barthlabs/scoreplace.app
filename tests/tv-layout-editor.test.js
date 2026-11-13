@@ -151,8 +151,10 @@ const { chromium } = require('@playwright/test');
       const doc = document.querySelector('[data-tv-frame]').contentDocument;
       const code = doc.querySelector('.tv-custom-qr .tv-qr-code').getBoundingClientRect();
       const brand = doc.querySelector('.tv-custom-qr .tv-qr-brand').getBoundingClientRect();
-      return Math.abs(code.left - brand.left) <= 1 && Math.abs(code.right - brand.right) <= 1;
-    }), 'tarja branca da legenda coincide com as laterais do QR');
+      const board = doc.querySelector('.tv-custom-board').getBoundingClientRect();
+      return Math.abs(code.left - brand.left) <= 1 && Math.abs(code.right - brand.right) <= 1 &&
+        board.right - code.right >= 12;
+    }), 'tarja branca coincide com o QR e ambos deixam folga para a borda da TV');
     assert.ok(await page.evaluate(() => {
       const doc = document.querySelector('[data-tv-frame]').contentDocument;
       const mark = doc.querySelector('.tv-custom-qr .tv-scoreplace-mark');
@@ -403,6 +405,41 @@ const { chromium } = require('@playwright/test');
     assert.equal(fullscreenState.active, true,
       'clique do usuário põe a TV em tela cheia no Chromium: ' + JSON.stringify(fullscreenState));
     await popup.close();
+    await page.evaluate(() => {
+      window._editingTournament.name = 'Camis no Beyond';
+      const layout = window.ScoreplaceTvLayout.defaults();
+      Object.assign(layout.sections.courts, { x:0, y:9.7, w:67, h:90.3 });
+      layout.sections.rankings.visible = false;
+      Object.assign(layout.sections.results, { x:67, y:9.7, w:33, h:44.6, visible:true });
+      Object.assign(layout.sections.upcoming, { x:67, y:55.4, w:25.2, h:44.6, visible:true });
+      Object.assign(layout.sections.qr, { x:92.2, y:67, w:7.8, h:33, visible:true });
+      window._tvEditorSetLayout(layout);
+    });
+    await page.waitForFunction(() => {
+      const doc = document.querySelector('[data-tv-frame]')?.contentDocument;
+      return doc && doc.querySelector('.tv-custom-qr .tv-qr-tournament-logo-camis');
+    });
+    assert.ok(await page.evaluate(() => {
+      const doc = document.querySelector('[data-tv-frame]').contentDocument;
+      const board = doc.querySelector('.tv-custom-board').getBoundingClientRect();
+      const slot = doc.querySelector('.tv-custom-qr').getBoundingClientRect();
+      const logo = doc.querySelector('.tv-custom-qr .tv-qr-tournament-logo-camis').getBoundingClientRect();
+      const code = doc.querySelector('.tv-custom-qr .tv-qr-code').getBoundingClientRect();
+      const title = doc.querySelector('.tv-custom-header h1').getBoundingClientRect();
+      const header = doc.querySelector('.tv-custom-header').getBoundingClientRect();
+      return slot.top < board.top + board.height * .57 &&
+        logo.width >= code.width * 1.5 && logo.top >= slot.top && logo.bottom <= code.top &&
+        !doc.querySelector('.tv-custom-header img') && title.left - header.left < 30;
+    }), 'logo CAMIS usa o vão livre, cresce sem corte e sai do cabeçalho');
+    assert.ok(await page.evaluate(() => {
+      const doc = document.querySelector('[data-tv-frame]').contentDocument;
+      const box = s => doc.querySelector(s).getBoundingClientRect();
+      const resultOffset = box('.tv-custom-results h2').top - box('.tv-custom-results').top;
+      const upcomingOffset = box('.tv-custom-upcoming h2').top - box('.tv-custom-upcoming').top;
+      return Math.abs(resultOffset - upcomingOffset) <= 2 &&
+        box('.tv-custom-results .tv-results').left - box('.tv-custom-courts .tv-courts').right >= 5 &&
+        box('.tv-custom-upcoming .tv-upcoming').left - box('.tv-custom-courts .tv-courts').right >= 5;
+    }), 'títulos laterais alinhados e separados das quadras');
     console.log('✓ editor TV: dados reais, remoção/restauração, arraste e estado intacto');
   } finally { await browser.close(); }
 })().catch(err => { console.error(err); process.exitCode = 1; });

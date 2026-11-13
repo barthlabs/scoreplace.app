@@ -1,3 +1,7 @@
+// 2.6.67 — Na TV do CAMIS, o logo maior fica apenas acima do QR, sem cortes.
+// O título começa à esquerda; quadras e coluna lateral têm respiro, os títulos
+// laterais se alinham, o QR ganha folga da borda da TV e o próximo grupo
+// recebe borda dourada.
 // 2.6.66 — O logo do torneio ocupa, inteiro e centralizado, o espaço acima
 // do QR na TV. A tarja da legenda alinha com o QR e a marca do Scoreplace
 // fica sobre um quadrado escuro de cantos arredondados.
