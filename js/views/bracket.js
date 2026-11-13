@@ -1452,8 +1452,8 @@ window._bracketOperationsSelect = function (t) {
     var group = _bracketOperationsGroup(t, m, matches);
     return !group || String((group.matches.find(function (item) { return !occupancy.isFinished(item); }) || {}).id) === String(m.id);
   }).sort(function (a, b) {
-    return _bracketAgendaCompare({ at: _matchCardTimestamp(a.scheduledAt), num: a._gameNum },
-      { at: _matchCardTimestamp(b.scheduledAt), num: b._gameNum });
+    return _matchCardTimestamp(a.scheduledAt) - _matchCardTimestamp(b.scheduledAt) ||
+      Number(a._gameNum || a.scheduledGameNumber || 0) - Number(b._gameNum || b.scheduledGameNumber || 0);
   });
   return { next: suggested, queue: queued, future: future, nextCallable: !!suggested, waitingForTie: waitingForTie,
     tieCanPostpone: !!(callableTie && otherReady),
