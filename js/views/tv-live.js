@@ -864,6 +864,12 @@
       if (!box.parentElement || !box.parentElement.clientHeight || !names.length) return;
       var slot = Math.max(1, Math.floor((box.parentElement.clientHeight - 2) / names.length));
       names.forEach(function (el) {
+        var fullName = el.getAttribute('data-full-name') || el.textContent.trim().normalize('NFC');
+        var nameNode = Array.from(el.childNodes).find(function (node) { return node.nodeType === 3; });
+        if (!nameNode) return;
+        el.setAttribute('data-full-name', fullName);
+        el.setAttribute('title', fullName);
+        nameNode.nodeValue = fullName;
         el.style.fontSize = '';
         el.style.maxHeight = slot + 'px';
         var size = parseFloat(doc.defaultView.getComputedStyle(el).fontSize) || 12;
@@ -871,12 +877,19 @@
           size = Math.max(11, size - .5);
           el.style.fontSize = size + 'px';
         }
-        var key = el.textContent.trim().normalize('NFC');
-        sizes.set(key, Math.min(sizes.has(key) ? sizes.get(key) : size, size));
+        // Em painéis estreitos, abreviar apenas o nome do meio preserva
+        // primeiro e último sobrenome legíveis e o nome completo no título.
+        if (el.scrollHeight > el.clientHeight + 1) {
+          var parts = fullName.split(/\s+/);
+          if (parts.length > 2) {
+            nameNode.nodeValue = parts[0] + ' ' + parts.slice(1, -1).map(function (part) { return part.charAt(0) + '.'; }).join(' ') + ' ' + parts[parts.length - 1];
+          }
+        }
+        sizes.set(fullName, Math.min(sizes.has(fullName) ? sizes.get(fullName) : size, size));
       });
     });
     doc.querySelectorAll('.tv-series-players > span').forEach(function (el) {
-      var size = sizes.get(el.textContent.trim().normalize('NFC'));
+      var size = sizes.get(el.getAttribute('data-full-name'));
       if (size) el.style.fontSize = size + 'px';
     });
   }

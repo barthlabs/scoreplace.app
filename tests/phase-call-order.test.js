@@ -105,6 +105,10 @@ assert(order.allowed(planned, plannedMatches, plannedGame('Fem Diamante',1),done
 assert(order.allowed(planned, plannedMatches, plannedGame('Fem Ouro',1),done));
 assert(!order.allowed(planned, plannedMatches, plannedGame('Fem Prata',0),done),
   'Prata espera as eliminatórias Diamante e Ouro, mesmo com janelas sobrepostas');
+plannedGame('Fem Prata',0).courtCalledAt = '2026-11-13T18:30:00Z';
+assert(order.allowed(planned, plannedMatches, plannedMatches.find(m => m.category === 'Fem Prata' && m.phaseIndex === 0 && !m.courtCalledAt),done),
+  'após a organização iniciar a Prata, os próximos grupos podem ser chamados sem aguardar todos os placares da Ouro');
+delete plannedGame('Fem Prata',0).courtCalledAt;
 plannedMatches.filter(m => m.phaseIndex === 1 && m.category !== 'Fem Prata')
   .forEach(m => { m.resultAt = 'x'; });
 assert(order.allowed(planned, plannedMatches, plannedGame('Fem Prata',0),done));

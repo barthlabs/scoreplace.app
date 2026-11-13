@@ -215,7 +215,7 @@ const { chromium } = require('@playwright/test');
       const top = frame.contentDocument.querySelector('.tv-court-top');
       const topPositions = ['h2','.tv-court-phase','span'].map(selector => top.querySelector(selector).getBoundingClientRect().left);
       const repeatedNameSizes = [...frame.contentDocument.querySelectorAll('.tv-series-players span')]
-        .filter(el => el.textContent === 'Flávia Fabbrocini Sanches')
+        .filter(el => el.getAttribute('data-full-name') === 'Flávia Fabbrocini Sanches')
         .map(el => parseFloat(frame.contentWindow.getComputedStyle(el).fontSize));
       return { topPositions, phase:top.querySelector('.tv-court-phase').textContent, repeatedNameSizes, rows:rows.map(row => {
         const box = selector => row.querySelector(selector).getBoundingClientRect();
@@ -226,7 +226,7 @@ const { chromium } = require('@playwright/test');
           rightNames:box('.tv-series-right .tv-series-players').left };
       }), colors, shortFont:parseFloat(frame.contentWindow.getComputedStyle(shortName).fontSize),
         longFont:parseFloat(frame.contentWindow.getComputedStyle(longName).fontSize),
-        longLines:longName.scrollHeight / parseFloat(frame.contentWindow.getComputedStyle(longName).lineHeight) };
+        longLines:longName.scrollHeight / parseFloat(frame.contentWindow.getComputedStyle(longName).lineHeight), abbreviatedName:longName.textContent, fullTitle:longName.title };
     });
     assert.equal(seriesPositions.rows.length, 24, 'oito quadras mantêm seus três jogos');
     assert.equal(seriesPositions.phase, 'Classificatória');
@@ -240,7 +240,9 @@ const { chromium } = require('@playwright/test');
     });
     assert(seriesPositions.longFont < seriesPositions.shortFont,
       'só o nome que excede o espaço tem a fonte reduzida');
-    assert(seriesPositions.longLines <= 2.1, 'Flávia Fabbrocini Sanches cabe em no máximo duas linhas');
+    assert(seriesPositions.longLines <= 2.1, 'nome longo cabe em no máximo duas linhas');
+    assert.equal(seriesPositions.abbreviatedName, 'Flávia F. Sanches');
+    assert.equal(seriesPositions.fullTitle, 'Flávia Fabbrocini Sanches');
     assert.equal(new Set(seriesPositions.repeatedNameSizes).size, 1,
       'o mesmo nome conserva exatamente o mesmo tamanho em todas as quadras e partidas');
     seriesPositions.colors.forEach(color => assert(Math.max(...color) - Math.min(...color) <= 1,

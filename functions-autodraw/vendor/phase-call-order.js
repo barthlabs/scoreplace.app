@@ -124,6 +124,12 @@
       var targetStage = match && { kind:Number(match.phaseIndex || 0) === 0 ? 'groups' : 'elimination',
         category:String(match.category || '') };
       var target = targetStage && intervals[key(targetStage)];
+      // Se a organização já chamou uma classificatória desta categoria, a
+      // etapa começou de fato. Não bloquear os grupos seguintes por uma
+      // eliminatória anterior ainda com placares pendentes em outras quadras.
+      if (target && targetStage.kind === 'groups' && matches.some(function (m) {
+        return belongs(m, targetStage) && !!m.courtCalledAt;
+      })) return true;
       var sequence = stages(t);
       var targetIndex = targetStage ? sequence.findIndex(function (stage) { return key(stage) === key(targetStage); }) : -1;
       if (target && targetStage.kind === 'elimination') {
