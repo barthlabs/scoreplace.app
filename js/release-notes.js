@@ -1,3 +1,6 @@
+// 2.6.82 — Jogos classificatórios em quadra mostram o grupo na operação e
+// na tela No Ar. Últimos resultados mostram a fase de cada partida.
+// Nomes longos e avatares ficam alinhados nas três linhas da TV do Camis Day.
 // 2.6.81 — A operação lista os próximos jogos da Ouro e da Prata.
 // Semifinais e final mostram “Vencedor do jogo…” até as duplas serem definidas.
 // A lista permanece ordenada por horário e número do jogo.

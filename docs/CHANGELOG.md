@@ -1,3 +1,10 @@
+## 2.6.82 — 13/nov/2026 (grupo em quadra e fases na TV)
+
+- A operação identifica a fase e o grupo de cada jogo classificatório em quadra, inclusive o segundo e o terceiro da série. O próximo jogo a chamar também mostra a fase junto da disponibilidade de quadras.
+- A TV mostra o grupo na identificação da quadra e a fase em cada item de “Últimos resultados”.
+- A TV do Camis Day ajusta somente os nomes que excedem a linha de jogo, conserva o nome completo no título e alinha os avatares dos três jogos. A atualização alcança uma janela “No Ar” já aberta.
+- O Grupo 7 da Prata foi chamado diretamente na quadra 8: jogo 115 chamado e jogos 116–117 na sequência.
+
 ## 2.6.81 — 13/nov/2026 (fila completa de próximos jogos na operação)
 
 - A operação conserva o card do próximo jogo a chamar e mostra, ao lado, os demais confrontos futuros em uma lista rolável. Inclui quartas, semifinais, final e classificatórias, mesmo quando as duplas ainda estão pendentes.
