@@ -1,7 +1,7 @@
 // 2.6.76 — O placar da última simples conclui o desempate imediatamente,
 // inclusive por ponto ao vivo ou W.O., sem pedir confirmação extra. Na grade
-// intercalada, a fila respeita a ordem publicada: eliminatórias após os grupos
-// da Ouro e classificatória da Prata após as eliminatórias.
+// intercalada, as quartas da Diamante já definidas aparecem em Próximos jogos;
+// a chamada para quadra respeita a ordem publicada. A Prata vem depois da Ouro.
 // 2.6.75 — Jogos já chamados mantêm sua quadra ao recalcular a grade.
 // A tela No ar do Camis Day preenche as bordas disponíveis; logo, QR e
 // chamada recebem mais largura da área de próximos jogos e a chamada alinha

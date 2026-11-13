@@ -3,7 +3,7 @@
 - Salvar o placar da última simples conclui automaticamente o desempate e aplica a ordem de classificação na mesma transação. Isso vale para placar digitado, ponto ao vivo e W.O.; triangulares seguem criando o próximo confronto somente quando necessário.
 - Uma correção posterior de placar concluído permanece possível e auditável; se alterar o primeiro confronto de uma triangular, os confrontos dependentes são recriados.
 - O placar Rostanda Meireles 5×1 Ana Laura Verdi do Camis Day já consta como concluído no documento de produção.
-- A fila operacional da agenda intercalada deixa de oferecer por antecipação uma fase ainda bloqueada quando não há outro jogo chamável. A eliminatória Diamante espera os últimos resultados da classificatória Ouro; a Ouro divide quadras com a Diamante e a Prata aguarda o término das eliminatórias.
+- A TV mostra em “Próximos jogos” as quartas da Diamante já definidas mesmo enquanto os grupos da Ouro terminam. A fila de chamada não antecipa essas partidas para a quadra: eliminatórias Diamante e Ouro dividem quadras após a classificação Ouro, e a classificação Prata aguarda a última eliminatória Ouro.
 - Corte web e `advanceTournamentPhase`; versões nativas preservadas.
 
 ## 2.6.75 — 13/nov/2026 (quadra chamada estável e TV CAMIS)

@@ -356,7 +356,20 @@
       return timestamp(a.scheduledAt) - timestamp(b.scheduledAt) ||
         Number(a._gameNum || a.scheduledGameNumber || 0) - Number(b._gameNum || b.scheduledGameNumber || 0);
     });
-    nextQueue = nextQueue.concat(futureGroups).filter(function (m, index, list) {
+    // A chave de uma categoria já fechada pode ser anunciada antes de chegar
+    // sua vez de ocupar quadra. A autorização da chamada continua na operação.
+    var publishedElimination = t.scheduleWindow && t.scheduleWindow.interleavedPlan
+      ? matches.filter(function (m) {
+        if (!m || Number(m.phaseIndex || 0) !== 1 || Number(m.round || 1) !== 1 ||
+            !t.phaseCategoryMaterialized || !t.phaseCategoryMaterialized[String(m.category || '')] ||
+            occupancy.isFinished(m) || m.isBye || m.isSitOut || m.courtCalledAt || m.startedAt) return false;
+        return window.ScoreplaceNextMatch && window.ScoreplaceNextMatch.knownSide(m.p1) &&
+          window.ScoreplaceNextMatch.knownSide(m.p2);
+      }).sort(function (a, b) {
+        return timestamp(a.scheduledAt) - timestamp(b.scheduledAt) ||
+          Number(a._gameNum || a.scheduledGameNumber || 0) - Number(b._gameNum || b.scheduledGameNumber || 0);
+      }) : [];
+    nextQueue = (nextMatch ? [nextMatch] : []).concat(publishedElimination, nextQueue, futureGroups).filter(function (m, index, list) {
       return m && list.findIndex(function (other) { return other && String(other.id) === String(m.id); }) === index;
     });
     var nextGames = nextQueue.filter(function (m) {
