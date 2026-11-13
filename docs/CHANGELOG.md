@@ -3096,3 +3096,9 @@ processo.
 - A chave mantém um único controle lateral para revelar a rodada anterior, abaixo do cabeçalho fixo. O acesso à fase anterior permanece em botão horizontal.
 - A classificação exibe o nome conhecido pelo UID quando um jogo histórico guardou o rótulo provisório “Jogador sem perfil”. Posições, UIDs e resultados não são alterados.
 - Na Confra, a Ouro tem a segunda rodada completa (16/16); na Prata há dois jogos sem vencedor (14/16), portanto as demais posições dessa rodada ainda não são definitivas. A Prata registra 34 duplas na estreia e 36 formações históricas após duas substituições de parceira; esta versão não recalcula nem muda esse critério.
+## 2.6.78 — 13/nov/2026 (oitavas Ouro por grupo e fila operacional)
+
+- O Camis Day usa a ordem oficial dos grupos na chave Ouro: G1×G2, G3×G4, G5×G6, G7×G8, G9×G10, G11×G12, G13×G14 e G15×G16. A dupla do G4 segue a planilha oficial. A materialização final preserva os jogos das oitavas já chamados e seus placares.
+- A fila da operação aceita confrontos Ouro já definidos antes do fechamento dos outros grupos e não espera a classificatória Ouro para chamar jogos Diamante prontos. Os seletores da chave acompanham a liberação de quadras em tempo real.
+- A TV e a operação identificam os confrontos Ouro publicados como oitavas de final e incluem os próximos jogos já definidos. A grade intercalada aceita a publicação gradual da rodada oficial.
+

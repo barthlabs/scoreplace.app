@@ -227,6 +227,7 @@
     function upcomingStage(m) {
       if (!m) return '';
       if (m.isTieBreak) return 'Desempate';
+      if (m.officialGroupBracket && m.roundName) return String(m.roundName);
       var phase = Number(m.phaseIndex || 0);
       var cfg = Array.isArray(t.phases) ? t.phases[phase] : null;
       if (m.isMonarch || (cfg && cfg.kind === 'classification')) return 'Classificatória';
@@ -296,6 +297,7 @@
     function courtPhase(m) {
       if (m.isTieBreak || String(m.category || '').indexOf('Desempate') >= 0) return 'Desempate';
       if (m.isThirdPlace) return '3º lugar';
+      if (m.officialGroupBracket && m.roundName) return String(m.roundName);
       if (m.isMonarch || m.monarchGroup != null) return 'Classificatória';
       var round = Number(m.round);
       var peers = matches.filter(function (item) { return item && !item.isBye && !item.isSitOut && !item.isThirdPlace &&
@@ -389,7 +391,7 @@
     var publishedElimination = t.scheduleWindow && t.scheduleWindow.interleavedPlan
       ? matches.filter(function (m) {
         if (!m || Number(m.phaseIndex || 0) !== 1 || Number(m.round || 1) !== 1 ||
-            !t.phaseCategoryMaterialized || !t.phaseCategoryMaterialized[String(m.category || '')] ||
+            !(m.officialGroupBracket || (t.phaseCategoryMaterialized && t.phaseCategoryMaterialized[String(m.category || '')])) ||
             occupancy.isFinished(m) || m.isBye || m.isSitOut || m.courtCalledAt || m.startedAt) return false;
         return window.ScoreplaceNextMatch && window.ScoreplaceNextMatch.knownSide(m.p1) &&
           window.ScoreplaceNextMatch.knownSide(m.p2);

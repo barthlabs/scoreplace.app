@@ -31,17 +31,21 @@ assert(order.allowed(t,matches,game('Fem Diamante',0),done));
 assert(order.covers(t,game('Fem Diamante',0)));
 assert(!order.covers(t,{ id:'extra', category:'Extra', phaseIndex:0 }), 'jogo fora da grade mantém a checagem de data');
 assert(!order.allowed(t,matches,game('Fem Prata',0),done));
+const earlyOuro = {...game('Fem Ouro',1), officialGroupBracket:true};
+assert(order.allowed(t,matches,earlyOuro,done),
+  'confronto Ouro oficial com duas duplas conhecidas pode ser chamado antes dos outros grupos terminarem');
 assert(!order.allowed(t,matches,{ id:'prata-tb', category:'Fem Prata', isTieBreak:true, phaseIndex:0 },done));
 matches.filter(m => m.category === 'Fem Diamante' && m.phaseIndex === 0).forEach(m => m.resultAt='x');
 assert(order.allowed(t,matches,game('Fem Ouro',0),done),
   'Ouro começa após os 24 jogos Diamante, sem exigir sua chave materializada');
-assert(!order.allowed(t,matches,game('Fem Diamante',1),done));
+assert(order.allowed(t,matches,game('Fem Diamante',1),done),
+  'Diamante definida entra na fila mesmo com grupos Ouro em andamento');
 const pendingTie = { category:'Fem Diamante', status:'pending' };
 t.phaseTieDecisions = { '0': { 'diamante-a1:1:2':pendingTie } };
 assert(order.allowed(t,matches,game('Fem Ouro',0),done),
   'classificatória Ouro pode ocupar as outras quadras enquanto a simples Diamante aguarda');
-assert(!order.allowed(t,matches,game('Fem Diamante',1),done),
-  'eliminatória ainda aguarda o término dos jogos classificatórios do Ouro');
+assert(order.allowed(t,matches,game('Fem Diamante',1),done),
+  'desempate de outro grupo não bloqueia um confronto Diamante já definido');
 matches.filter(m => m.category === 'Fem Ouro' && m.phaseIndex === 0).forEach(m => m.resultAt='x');
 assert(order.allowed(t,matches,game('Fem Diamante',1),done),
   'confronto Diamante com duas duplas definidas segue apesar do desempate de outro grupo');
@@ -92,8 +96,8 @@ assert(order.allowed(planned, plannedMatches, plannedGame('Fem Diamante',0),done
 assert(!order.allowed(planned, plannedMatches, plannedGame('Fem Ouro',0),done));
 plannedMatches.filter(m => m.category === 'Fem Diamante' && m.phaseIndex === 0).forEach(m => m.resultAt='x');
 assert(order.allowed(planned, plannedMatches, plannedGame('Fem Ouro',0),done));
-assert(!order.allowed(planned, plannedMatches, plannedGame('Fem Diamante',1),done),
-  'as eliminatórias aguardam as duas classificatórias');
+assert(order.allowed(planned, plannedMatches, plannedGame('Fem Diamante',1),done),
+  'Diamante não aguarda o fechamento da classificatória Ouro');
 planned.phaseCategoryMaterialized['Fem Diamante'] = {at:'x'};
 plannedMatches.filter(m => m.category === 'Fem Ouro' && m.phaseIndex === 0).forEach(m => m.resultAt='x');
 planned.phaseCategoryMaterialized['Fem Ouro'] = {at:'x'};

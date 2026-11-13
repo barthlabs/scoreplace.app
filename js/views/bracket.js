@@ -1315,6 +1315,14 @@ window._bracketEnsureCourtReleaseListener = function (tId) {
       entry.error = null;
       var t = typeof window._findTournamentById === 'function' ? window._findTournamentById(id) : null;
       if (t && typeof window._bracketOperationsRefresh === 'function') window._bracketOperationsRefresh(t);
+      // Os cards da chave não são recriados pelo listener da faixa operacional.
+      // Atualize também seus seletores quando um jogo libera a quadra.
+      if (t && typeof document !== 'undefined' && typeof _syncMatchCourtCopies === 'function') {
+        var ids = new Set(Array.prototype.map.call(document.querySelectorAll('select[data-match-id]'), function (node) {
+          return node.getAttribute('data-match-id');
+        }));
+        ids.forEach(function (matchId) { _syncMatchCourtCopies(id, matchId); });
+      }
     }, function (error) {
       entry.error = error;
       if (typeof window._warn === 'function') window._warn('[courtState] leitura falhou', error);
@@ -1774,6 +1782,7 @@ function _bracketOperationsStage(m, t, allMatches) {
   if (!m) return '';
   if (m.isTieBreak) return 'Desempate';
   if (m.isThirdPlace || m.bracket === 'thirdplace') return '3º lugar';
+  if (m.officialGroupBracket && m.roundName) return String(m.roundName);
   var phase = Number(m.phaseIndex || 0);
   var config = Array.isArray(t.phases) ? t.phases[phase] : null;
   if (m.isMonarch || (config && config.kind === 'classification')) return 'Classificatória';

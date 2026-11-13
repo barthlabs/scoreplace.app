@@ -1255,8 +1255,39 @@
     _splitCategoryItems(groups, order, _groupCategory).forEach(function (bucket) {
       var cat = bucket.category, ci = bucket.index;
       var cfg = Object.assign({}, phaseCfg, { _surplusCategory: cat });
+      if (Array.isArray(phaseCfg.officialGroupBracketOrder) &&
+          phaseCfg.officialGroupBracketOrder.indexOf(cat) >= 0) {
+        // Planilha oficial: cada posição da chave corresponde ao vencedor do
+        // grupo nessa ordem. O mérito decide a dupla dentro do grupo, não a
+        // posição do grupo na árvore de eliminatórias.
+        var mapping = mappingDaTransicao(cfg);
+        var overrides = phaseCfg.officialGroupBracketOverrides && phaseCfg.officialGroupBracketOverrides[cat] || {};
+        var entrants = bucket.items.map(function (group, index) {
+          var expected = overrides[String(index + 1)];
+          var ranked = function (g) {
+            var rows = computeStandings(g) || [];
+            if (!Array.isArray(expected)) return rows;
+            if (expected.length !== 2 || !expected.every(function (name) {
+              return rows.some(function (row) { return row.name === name; });
+            })) throw new Error('Dupla oficial ausente do grupo ' + String(index + 1));
+            return expected.map(function (name) { return rows.find(function (row) { return row.name === name; }); })
+              .concat(rows.filter(function (row) { return expected.indexOf(row.name) < 0; }));
+          };
+          var one = buildEntrantsByDest([group], mapping, cfg.fixedPairs !== false,
+            ranked, cfg.pairingStrategy || 'top', optsDaTransicao(cfg, null));
+          if (!one.main || one.main.length !== 1) throw new Error('Grupo sem uma dupla classificada para a chave oficial: ' + String(group.name || ''));
+          return one.main[0];
+        });
+        cfg._entrantsByDest = { main:entrants };
+        cfg.bracketSeeding = 'balanced';
+      }
       var part = _stampCategory(buildPhaseBrackets(bucket.items, cfg, computeStandings,
         idPrefix + '-c' + ci, det), cat);
+      if (cfg._entrantsByDest) part.matches.forEach(function (m) {
+        m.officialGroupBracket = true;
+        if (Number(m.round) === 1 && !m.isThirdPlace) m.roundName = bucket.items.length === 16
+          ? 'Oitavas de final' : bucket.items.length === 8 ? 'Quartas de final' : '';
+      });
       combined.categoryBuilds.push({ category: cat, groups: bucket.items.length, built: part });
       combined.matches = combined.matches.concat(part.matches || []);
       combined.waitlist = combined.waitlist.concat(part.waitlist || []);
@@ -3103,7 +3134,16 @@
         m.phaseIndex = nextIdx;
         _carimbaUidsNoSlot(m);
       });
-      t.matches = (t.matches || []).concat(built.matches);
+      var existing = new Map((t.matches || []).filter(Boolean).map(function (m) { return [String(m.id), m]; }));
+      var additions = [];
+      built.matches.forEach(function (m) {
+        var prior = existing.get(String(m.id));
+        if (!prior) { additions.push(m); return; }
+        if (prior.category !== m.category || prior.p1 !== m.p1 || prior.p2 !== m.p2) {
+          throw new Error('Confronto oficial já publicado divergiu: ' + String(m.id));
+        }
+      });
+      t.matches = (t.matches || []).concat(additions);
       t.phaseCategoryMaterialized = t.phaseCategoryMaterialized || {};
       t.phaseCategoryMaterialized[interleavedCategory] = { at:det.agoraIso || new Date().toISOString(),
         count:built.matches.filter(function (m) { return !m.isBye; }).length };

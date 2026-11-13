@@ -128,18 +128,19 @@
       var targetIndex = targetStage ? sequence.findIndex(function (stage) { return key(stage) === key(targetStage); }) : -1;
       if (target && targetStage.kind === 'elimination') {
         var ownGroups = intervals[key({ kind:'groups', category:targetStage.category })];
-        if (ownGroups && (!stageScheduledGamesDone(t, matches, ownGroups.stage, finished) ||
-            !knownSide(match.p1) || !knownSide(match.p2))) return false;
+        if (ownGroups && (!knownSide(match.p1) || !knownSide(match.p2) ||
+            (!match.officialGroupBracket && !stageScheduledGamesDone(t, matches, ownGroups.stage, finished)))) return false;
       }
       if (target) return Object.keys(intervals).every(function (id) {
         var predecessor = intervals[id];
         if (targetStage.kind === 'elimination' && predecessor.stage.kind === 'groups') {
           var predecessorIndex = sequence.findIndex(function (stage) { return key(stage) === id; });
           if (predecessorIndex < targetIndex) {
-            return predecessor.stage.category === targetStage.category
-              ? stageScheduledGamesDone(t, matches, predecessor.stage, finished) &&
-                knownSide(match.p1) && knownSide(match.p2)
-              : stageScheduledGamesDone(t, matches, predecessor.stage, finished);
+            // A chave já formada de uma categoria pode ocupar uma quadra enquanto
+            // outra categoria termina seus grupos na grade intercalada.
+            return predecessor.stage.category !== targetStage.category ||
+              ((match.officialGroupBracket || stageScheduledGamesDone(t, matches, predecessor.stage, finished)) &&
+                knownSide(match.p1) && knownSide(match.p2));
           }
           return true;
         }

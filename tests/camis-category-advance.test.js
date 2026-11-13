@@ -30,6 +30,7 @@ const phases = W.FORMAT2.compileToPhases({ disputa:'dupla', grupos:1, classifAti
   eliminatoria:{ ativa:true, openReiRainha:true, reiRainhaCut:2,
     formacao:'performance', linhas:1, dupla:false, terceiro:true } },
   { sport:'Beach Tennis' }).phases;
+phases[1].officialGroupBracketOrder = ['Fem Ouro'];
 const t = { id:'camis-fixture', creatorUid:'organizador', status:'active',
   sport:'Beach Tennis', phases, currentPhaseIndex:0,
   startDate:'2026-11-13T08:00', endDate:'2026-11-13T21:00',
@@ -71,10 +72,37 @@ const quarterResult = resultCore.applyResult(t, { matchId:quarter.id,
 assert(quarterResult.ok && quarter.winner, 'quartas recebem placar com Prata ainda na fase 0');
 assert.equal(t.currentPhaseIndex, 0);
 assert.equal(advance(t, t.id, '2026-11-13T13:00:01Z').length, 0, 'retry não duplica jogos');
+const earlyCfg = E.projectPhaseCfg(phases[1], t, 1);
+const earlyBuilt = E.buildCategorizedPhaseBrackets(t, groups.filter(g => g.category === 'Fem Ouro'),
+  {...earlyCfg, politicaDaChave:'bye'}, g => g.rows, 'ph-' + t.id + '-1-c1', {});
+const earlyMatch = earlyBuilt.matches.find(m => m.round === 1 && m.id.endsWith('VC-R1-P1'));
+assert(earlyMatch);
+earlyMatch.court = 'Quadra 1';
+earlyMatch.phaseIndex = 1;
+earlyMatch.courtCalledAt = '2026-11-13T13:10:00Z';
+earlyMatch.scheduledAt = '2026-11-13T16:00:00Z';
+earlyMatch._gameNum = 77;
+earlyMatch.scheduledGameNumber = 77;
+t.matches.push(earlyMatch);
+const earlyResult = resultCore.applyResult(t, { matchId:earlyMatch.id,
+  payload:{ scoreP1:6, scoreP2:4 }, actor:{ uid:'organizador' }, forceApply:true,
+  now:Date.parse('2026-11-13T13:40:00Z') });
+assert(earlyResult.ok && earlyMatch.winner, 'oitavas da Ouro recebem placar antes do fim da Prata');
 for (const g of groups.filter(g => g.category === 'Fem Ouro')) {
   g.matches.forEach(m => { m.winner=g.players[0]; });
 }
 assert.deepEqual(Array.from(advance(t, t.id, '2026-11-13T15:00:00Z')), ['Fem Ouro']);
+const ouroFirstRound = t.matches.filter(m => m.category === 'Fem Ouro' && m.round === 1 && !m.isThirdPlace);
+assert.equal(ouroFirstRound.length, 8);
+assert.equal(ouroFirstRound.find(m => m.id === earlyMatch.id).courtCalledAt, earlyMatch.courtCalledAt,
+  'materialização posterior preserva o jogo da Ouro já chamado');
+assert.equal(ouroFirstRound.find(m => m.id === earlyMatch.id).winner, earlyMatch.winner,
+  'materialização posterior preserva o placar já lançado');
+ouroFirstRound.forEach((m, i) => {
+  assert(m.officialGroupBracket && m.roundName === 'Oitavas de final');
+  assert(m.p1.includes('Fem Ouro-' + (i * 2) + '-0'), 'lado esquerdo segue G' + (i * 2 + 1));
+  assert(m.p2.includes('Fem Ouro-' + (i * 2 + 1) + '-0'), 'lado direito segue G' + (i * 2 + 2));
+});
 assert.equal(t.currentPhaseIndex, 0, 'Prata ainda joga a classificatória');
 for (const g of groups.filter(g => g.category === 'Fem Prata')) {
   g.matches.forEach(m => { m.winner=g.players[0]; });

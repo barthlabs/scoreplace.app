@@ -1,3 +1,6 @@
+// 2.6.78 — A operação mostra eliminatórias Ouro já definidas enquanto os
+// demais grupos terminam. Oitavas seguem a planilha por número de grupo;
+// quadras liberadas voltam ao seletor sem precisar recarregar a página.
 // 2.6.77 — Na tela No Ar do Camis Day, o logo aparece maior apesar das
 // margens transparentes do arquivo original. O QR e a chamada Scoreplace
 // recuam para deixar mais borda e manter o Camis em destaque.

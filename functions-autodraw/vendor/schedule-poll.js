@@ -940,7 +940,9 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
           return Number(!!a.isThirdPlace) - Number(!!z.isThirdPlace) || String(a.id).localeCompare(String(z.id), undefined, { numeric:true });
         });
         var materialized = t.phaseCategoryMaterialized && t.phaseCategoryMaterialized[b.category];
-        if ((matches.length !== 0 && matches.length !== expectedElimination[key]) ||
+        var partialOfficial = !materialized && matches.length > 0 &&
+          matches.length < expectedElimination[key] && matches.every(function (m) { return m.officialGroupBracket === true; });
+        if ((matches.length !== 0 && matches.length !== expectedElimination[key] && !partialOfficial) ||
             (materialized && matches.length !== expectedElimination[key])) return invalid('rodada eliminatória incompleta');
         var length = Number(plan.eliminationMinutes);
         var playMinutes = Number(plan.eliminationPlayMinutes);
