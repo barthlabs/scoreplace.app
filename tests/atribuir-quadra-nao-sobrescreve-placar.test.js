@@ -18,10 +18,10 @@ ok(src.includes('regression_played_match_court_is_immutable') && src.includes('s
 ok(src.includes("typeof m.scoreP1 === 'number' && m.scoreP1 > 0") && src.includes("typeof m.scoreP2 === 'number' && m.scoreP2 > 0"),
   'cliente também bloqueia seletor quando já existe placar numérico — mesma régua da Function');
 ok(body.includes("confirmCall: true") && body.includes('select.value'), 'OK envia a quadra escolhida e a intenção de chamada na mesma operação');
-ok(cf.includes('if (confirmCall && !court)') && cf.includes('if (confirmCall && !m.courtCalledAt) m.courtCalledAt = agoraIso;'),
+ok(cf.includes('if (confirmCall && !court)') && /if \(confirmCall && !m\.courtCalledAt\)\s*\{\s*m\.courtCalledAt = agoraIso;/.test(cf),
   'servidor exige quadra e registra o instante da chamada');
 ok(cf.includes('atual === court && (!confirmCall || m.courtCalledAt)'), 'chamada repetida não regrava nem reinicia o relógio');
-ok(cf.includes('if (confirmCall && !m.courtCalledAt) m.courtCalledAt = agoraIso;'), 'troca de quadra preserva o início original da chamada');
+ok(/if \(confirmCall && !m\.courtCalledAt\)\s*\{\s*m\.courtCalledAt = agoraIso;/.test(cf), 'troca de quadra preserva o início original da chamada');
 const courtBlockStart=cf.indexOf("const atual = String(m.court || '');",cf.indexOf('exports.assignMatchCourt = onCall'));
 const courtBlockEnd=cf.indexOf('const b = _gravaTorneio',courtBlockStart);
 ok(courtBlockStart>=0 && courtBlockEnd>courtBlockStart, 'regra real da chamada localizada na Function');
