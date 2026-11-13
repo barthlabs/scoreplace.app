@@ -245,6 +245,23 @@ const { chromium } = require('@playwright/test');
     assert.equal(seriesPositions.fullTitle, 'Flávia Fabbrocini Sanches');
     assert.equal(new Set(seriesPositions.repeatedNameSizes).size, 1,
       'o mesmo nome conserva exatamente o mesmo tamanho em todas as quadras e partidas');
+    const prataNameFit = await page.evaluate(() => {
+      const frame = document.querySelector('[data-tv-frame]');
+      const doc = frame.contentDocument;
+      const names = [...doc.querySelector('.tv-series-game .tv-series-left .tv-series-players').children];
+      ['Adriana Ferreira Leite', 'Katia de Carvalho Figueiredo'].forEach((name, i) => {
+        names[i].removeAttribute('data-full-name');
+        names[i].innerHTML = '<img class="tv-player-photo" src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22/%3E" alt="">' + name;
+      });
+      window._tvFitSeriesNames(doc);
+      return names.map(el => ({ full:el.title, shown:el.textContent, font:parseFloat(frame.contentWindow.getComputedStyle(el).fontSize),
+        fits:el.scrollHeight <= el.clientHeight + 1 }));
+    });
+    assert(prataNameFit.every(name => name.fits), 'nomes longos da Prata cabem sem corte na quadra');
+    assert(prataNameFit.every(name => name.font >= 11), 'nomes da Prata conservam fonte legível');
+    assert.equal(prataNameFit[0].full, 'Adriana Ferreira Leite');
+    assert.equal(prataNameFit[1].full, 'Katia de Carvalho Figueiredo');
+
     seriesPositions.colors.forEach(color => assert(Math.max(...color) - Math.min(...color) <= 1,
       'cabeçalho, quadra e linha usam tons neutros da capa preta e branca'));
     await page.locator('[data-tv-finals-preset]').click();

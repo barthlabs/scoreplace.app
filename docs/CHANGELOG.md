@@ -1,7 +1,8 @@
-## 2.6.80 — 13/nov/2026 (quartas Ouro na TV e nomes legíveis)
+## 2.6.80 — 13/nov/2026 (fila Prata, quartas Ouro na TV e nomes legíveis)
 
 - A TV inclui em “Próximos jogos” as quartas, semifinais, final e 3º lugar da Ouro e a classificação da Prata. Vagas pendentes mostram a origem real, como “Vencedor do jogo 89” ou “Perdedor do jogo 93”; sem origem conhecida, mostram “A definir”. A lista rola automaticamente e não limita a quatro itens. A chamada de confronto incompleto continua bloqueada.
-- Os nomes das séries de três jogos usam a mesma largura disponível nos dois lados e mantêm fonte legível, inclusive com avatares embutidos.
+- Depois que a organização inicia a classificatória da Prata, os grupos seguintes entram na fila de chamada mesmo que eliminatórias anteriores ainda tenham placares pendentes. Antes da primeira chamada, a ordem da grade continua valendo.
+- Os nomes das séries de três jogos usam a mesma largura disponível nos dois lados; quando um nome completo não cabe, o nome do meio é abreviado e o nome completo continua no título. Avatares permanecem visíveis.
 - A edição de visibilidade após o sorteio compara os insumos da grade com os valores salvos; campos idênticos reenviados pelo formulário não bloqueiam a alteração. O cliente também reconhece partidas guardadas na subcoleção dividida.
 - O Camis Day foi colocado em visibilidade Geral diretamente no Firestore. Os placares e chamadas oficiais são registrados separadamente.
 
