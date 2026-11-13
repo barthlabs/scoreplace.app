@@ -1,3 +1,9 @@
+## 2.6.84 — 13/nov/2026 (chave oficial da Prata na fila)
+
+- A chave eliminatória da Prata foi materializada no Camis Day conforme a planilha: G1×G2, G3×G4, G5×G6, G7×G8; G9–G12 passam diretamente às quartas. O torneio agora possui os jogos 133–144, com origem explícita para cada vaga ainda indefinida. A fila da operação mostra “Vencedor do Grupo N” até haver classificação e “Vencedor do jogo N” nas fases seguintes.
+- Os líderes dos grupos 1–5 foram calculados pelo motor oficial a partir dos placares já lançados. Os placares dos grupos 3–5 e a simples de desempate 106A do Grupo 4 foram registrados diretamente no torneio. O Grupo 12 da Prata foi chamado na quadra 1.
+- Inclui as correções web preparadas na 2.6.83, cuja publicação havia parado no preflight do emulador Firestore. Versões nativas preservadas.
+
 ## 2.6.83 — 13/nov/2026 (fila dentro da primeira coluna e monitor HDMI)
 
 - A operação mostra os demais próximos jogos em rolagem vertical dentro da coluna do próximo jogo a chamar. A coluna intermediária foi removida e “Placares pendentes” voltou ao lado do próximo jogo. Cada item informa fase e horário estimado, recalculado conforme quadras e jogos avançam. A posição da rolagem horizontal fica preservada após encerrar jogo, lançar placar ou atualizar a operação.

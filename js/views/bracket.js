@@ -9117,6 +9117,10 @@ window._directBracketSlotSource = function (t, match, slot) {
       kind = 'loser';
     }
   }
+  if (!source && Number.isInteger(Number(match[slot + 'GroupSource'])) &&
+      Number(match[slot + 'GroupSource']) > 0) {
+    return { match: null, label: 'Vencedor do Grupo ' + Number(match[slot + 'GroupSource']) };
+  }
   if (!source) return null;
   var n = Number(source._gameNum || source.matchNumber || source.gameNumber || source.number);
   if (!Number.isFinite(n) || n < 1) {

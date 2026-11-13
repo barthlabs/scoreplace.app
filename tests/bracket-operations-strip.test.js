@@ -3,6 +3,15 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const { chromium } = require('@playwright/test');
 const source = fs.readFileSync('js/views/bracket.js', 'utf8');
+const sourceStart = source.indexOf('window._directBracketSlotSource = function');
+const sourceEnd = source.indexOf('// Competições por times', sourceStart);
+assert(sourceStart > 0 && sourceEnd > sourceStart);
+const groupLabels = { _collectAllMatches: () => [], _safeHtml: value => String(value) };
+new Function('window', source.slice(sourceStart, sourceEnd))(groupLabels);
+assert.equal(groupLabels._directBracketSlotLabel({}, { id:'silver-135', p2:'TBD', p2GroupSource:6 }, 'p2'),
+  'Vencedor do Grupo 6', 'vaga da Prata preserva a origem sem simular uma dupla definida');
+assert.equal(groupLabels._directBracketSlotLinkHtml({ id:'camis' }, { id:'silver-135', p2GroupSource:6 }, 'p2'), '',
+  'vaga de grupo ainda não definido não cria link falso para jogo eliminatório');
 const stageStart = source.indexOf('function _bracketOperationsStage(');
 const stageEnd = source.indexOf('function _bracketOperationsReplica(', stageStart);
 assert(stageStart > 0 && stageEnd > stageStart);

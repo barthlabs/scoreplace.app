@@ -1,3 +1,7 @@
+// 2.6.84 — A Prata mostra a chave oficial dos 12 grupos: G1×G2, G3×G4,
+// G5×G6 e G7×G8; G9 a G12 entram nas quartas. Vagas ainda pendentes
+// mostram “Vencedor do Grupo” e os jogos posteriores mostram sua origem.
+// O Grupo 12 foi chamado para a quadra 1.
 // 2.6.83 — Os demais próximos jogos rolam dentro da primeira coluna da operação,
 // com fase e horário estimado. Placares pendentes mostram a fase ao lado da
 // quadra, no cabeçalho do cartão, e ficam próximos do jogo a chamar.
