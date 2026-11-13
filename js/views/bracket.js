@@ -1770,8 +1770,33 @@ function _bracketTieGroupCards(t, sg, phaseIndex) {
   }).join('');
 }
 
+function _bracketOperationsStage(m, t, allMatches) {
+  if (!m) return '';
+  if (m.isTieBreak) return 'Desempate';
+  if (m.isThirdPlace || m.bracket === 'thirdplace') return '3º lugar';
+  var phase = Number(m.phaseIndex || 0);
+  var config = Array.isArray(t.phases) ? t.phases[phase] : null;
+  if (m.isMonarch || (config && config.kind === 'classification')) return 'Classificatória';
+  var peers = (allMatches || []).filter(function (other) {
+    return other && !other.isThirdPlace && !other.isTieBreak &&
+      String(other.category || '') === String(m.category || '') &&
+      Number(other.phaseIndex || 0) === phase &&
+      String(other.bracket || 'main') === String(m.bracket || 'main') &&
+      Number.isInteger(Number(other.round));
+  });
+  if (!peers.length) return String(m.roundName || m.phaseName || 'Classificatória');
+  var maxRound = Math.max.apply(null, peers.map(function (other) { return Number(other.round); }));
+  var remaining = maxRound - Number(m.round || 1);
+  if (remaining === 0 && peers.filter(function (other) { return Number(other.round) === maxRound; }).length > 1)
+    return 'Classificatória';
+  return remaining === 0 ? 'Final' : remaining === 1 ? 'Semifinal' :
+    remaining === 2 ? 'Quartas de final' : remaining === 3 ? 'Oitavas de final' :
+    remaining === 4 ? '16 avos de final' : 'Rodada ' + String(m.round || 1);
+}
+
 function _bracketOperationsReplica(m, t, role, label, availability, root, allMatches, slot) {
   var safe = window._safeHtml || function (s) { return String(s); };
+  var stage = slot === 'next' ? '<small class="sp-operations-stage">' + safe(_bracketOperationsStage(m, t, allMatches)) + '</small>' : '';
   if (m.isTieBreak) {
     // A geometria é a do card normal; as ações são roteadas ao livro de
     // desempates, que não faz parte de t.matches nem da classificação do grupo.
@@ -1804,7 +1829,7 @@ function _bracketOperationsReplica(m, t, role, label, availability, root, allMat
       }
       return '<div class="sp-operations-replica sp-operations-tie-card" data-operations-match="' + safe(String(m.id || '')) +
         '" data-tie-decision="' + safe(String(m.decisionId || '')) + '" data-operations-base-match="' + safe(String(m.id || '')) + '">' +
-        '<span class="sp-operations-label">' + safe(label) + '</span>' + (availability || '') + contextHtml + '</div>';
+        '<span class="sp-operations-label">' + safe(label) + stage + '</span>' + (availability || '') + contextHtml + '</div>';
     }
     var chosen = series[selectedIndex] || m;
     var selected = Object.assign({}, m, { id:chosen.id, _gameNum:chosen.displayGameNumber || m._gameNum,
@@ -1928,7 +1953,7 @@ function _bracketOperationsReplica(m, t, role, label, availability, root, allMat
       ? '<div class="sp-operations-tie-final-notice">A próxima fase depende deste desempate para prosseguir.</div>' : '';
     return '<div class="sp-operations-replica sp-operations-tie-card sp-operations-tie-extra" data-operations-match="' + safe(String(selected.id || '')) +
       '" data-tie-decision="' + safe(String(m.decisionId || '')) + '" data-operations-base-match="' + safe(String(m.id || '')) + '">' +
-      '<span class="sp-operations-label">' + safe(label) + tiePostpone + '</span>' + (availability || '') + tieFinalNotice + tieHtml + '</div>';
+      '<span class="sp-operations-label">' + safe(label) + stage + tiePostpone + '</span>' + (availability || '') + tieFinalNotice + tieHtml + '</div>';
   }
   var group = _bracketOperationsGroup(t, m, allMatches);
   var nav = root._bracketOperationsNav || (root._bracketOperationsNav = {});
@@ -2031,7 +2056,7 @@ function _bracketOperationsReplica(m, t, role, label, availability, root, allMat
     }
   }
   return '<div class="sp-operations-replica' + (role.active ? ' sp-operations-court-card' : '') + '" data-operations-match="' +
-    safe(String(selected.id || '')) + '" data-operations-base-match="' + safe(String(m.id || '')) + '"><span class="sp-operations-label">' + safe(label) + postpone + '</span>' + (availability || '') + html + '</div>';
+    safe(String(selected.id || '')) + '" data-operations-base-match="' + safe(String(m.id || '')) + '"><span class="sp-operations-label">' + safe(label) + stage + postpone + '</span>' + (availability || '') + html + '</div>';
 }
 
 function _bracketOperationsDraftValues(op) {

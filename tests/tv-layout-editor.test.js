@@ -519,8 +519,8 @@ const { chromium } = require('@playwright/test');
       const center = r => (r.left + r.right) / 2;
       const board = box('.tv-custom-board');
       const brandElement = doc.querySelector('.tv-custom-qr .tv-qr-brand');
-      return { slotX:slot.left - board.left, expectedX:board.width * .902,
-        centers:[center(logo),center(code),center(brand)], widths:[code.width,brand.width],
+      return { slotX:slot.left - board.left, expectedX:board.width * .894,
+        centers:[center(logo),center(code),center(brand)], widths:[logo.width,code.width,brand.width],
         gaps:[code.top-logo.bottom,slot.bottom-brand.bottom],
         rightMargin:doc.documentElement.clientWidth-brand.right, boardWidth:board.width,
         contentFits:brandElement.scrollWidth <= brandElement.clientWidth + 1,
@@ -530,8 +530,9 @@ const { chromium } = require('@playwright/test');
       Math.abs(qrAlignment.centers[0] - qrAlignment.centers[1]) < 2 &&
       Math.abs(qrAlignment.centers[1] - qrAlignment.centers[2]) < 2 &&
       Math.abs(qrAlignment.widths[0] - qrAlignment.widths[1]) < 2 &&
+      Math.abs(qrAlignment.widths[1] - qrAlignment.widths[2]) < 2 &&
       Math.abs(qrAlignment.gaps[0] - qrAlignment.gaps[1]) < 20 &&
-      qrAlignment.rightMargin >= -1 && qrAlignment.rightMargin < 2 &&
+      qrAlignment.rightMargin >= 3.5 && qrAlignment.rightMargin < 15 &&
       qrAlignment.contentFits && qrAlignment.allInside,
     'QR e legenda centralizados no eixo do logo e usando toda a borda direita da TV: ' + JSON.stringify(qrAlignment));
     const frameFit = await page.evaluate(() => {

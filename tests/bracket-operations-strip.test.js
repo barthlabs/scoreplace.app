@@ -3,6 +3,15 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const { chromium } = require('@playwright/test');
 const source = fs.readFileSync('js/views/bracket.js', 'utf8');
+const stageStart = source.indexOf('function _bracketOperationsStage(');
+const stageEnd = source.indexOf('function _bracketOperationsReplica(', stageStart);
+assert(stageStart > 0 && stageEnd > stageStart);
+const operationStage = new Function(source.slice(stageStart, stageEnd) + '\nreturn _bracketOperationsStage;')();
+const diamondRounds = [1, 2, 3].map(round => ({ category:'Fem Diamante', phaseIndex:1, bracket:'main', round }));
+assert.equal(operationStage(diamondRounds[0], { phases:[{ kind:'classification' }, { kind:'elimination' }] }, diamondRounds), 'Quartas de final');
+assert.equal(operationStage(diamondRounds[1], { phases:[{ kind:'classification' }, { kind:'elimination' }] }, diamondRounds), 'Semifinal');
+assert.equal(operationStage({ ...diamondRounds[0], isMonarch:true, phaseIndex:0 }, { phases:[{ kind:'classification' }] }, diamondRounds), 'Classificatória');
+assert.equal(operationStage({ isTieBreak:true }, {}, []), 'Desempate');
 const start = source.indexOf('function _bracketAgendaCompare(');
 const end = source.indexOf('function _bracketAgendaExpected(', start);
 assert(start > 0 && end > start);
@@ -79,6 +88,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       let next = strip.querySelector('.sp-operations-next .sp-match-card');
       const ids = [...document.querySelectorAll('[id]')].map(node => node.id);
       const initial = { full: !!next && next.querySelectorAll('.team').length === 2 && !!next.querySelector('.sp-mc-head, .versus, .sp-match-operational'),
+        stage:strip.querySelector('.sp-operations-next .sp-operations-stage')?.textContent,
         simulateVisible: simulateRect.left >= headingRect.right && simulateRect.right <= stripRect.right && simulateRect.right <= innerWidth,
         names: next.textContent.includes('A / B') && next.textContent.includes('C / D'),
         noCanonical: !document.getElementById('card-m1'), uniqueIds: ids.length === new Set(ids).size,
@@ -173,6 +183,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
         selectorStayedInStrip, outsiderHidden: !document.querySelector('[data-bracket-operations-strip]') };
     });
     assert(state.initial.full && state.initial.names && state.initial.noCanonical && state.initial.uniqueIds && state.initial.linked && state.initial.noInline);
+    assert.equal(state.initial.stage, 'Classificatória', 'o próximo jogo na operação mostra a etapa da rodada');
     assert(state.initial.simulateVisible, 'Simular deve aparecer ao lado de EM QUADRA, sem rolar até a última quadra');
     assert.deepEqual(state.initial.courts, ['Quadra 4', 'Quadra 5']);
     assert(state.initial.freeSlotFillsTrack, 'Quadra X deve alinhar com X quadras livres: ' + JSON.stringify(state.initial));

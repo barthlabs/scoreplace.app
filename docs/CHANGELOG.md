@@ -5,6 +5,8 @@
 - O placar Rostanda Meireles 5×1 Ana Laura Verdi do Camis Day já consta como concluído no documento de produção.
 - A TV mostra em “Próximos jogos” as quartas da Diamante já definidas mesmo enquanto os grupos da Ouro terminam. A fila de chamada não antecipa essas partidas para a quadra: eliminatórias Diamante e Ouro dividem quadras após a classificação Ouro, e a classificação Prata aguarda a última eliminatória Ouro.
 - Cada item de “Próximos jogos” na TV identifica a etapa: classificatória, desempate, oitavas, quartas, semifinal, final ou terceiro lugar.
+- A operação também identifica a rodada no próximo jogo a chamar. Na TV, quadras sem equipe cadastrada deixam de exibir “Time” e mostram foto de perfil ou avatar de cada atleta.
+- O Camis Day usa mais largura para logo e QR, com os dois na mesma largura; a chamada Scoreplace ganha margem dos dois lados e as linhas de “Últimos resultados” avançam até perto da borda direita.
 - Os quatro confrontos 73–76 da Diamante do Camis Day foram corrigidos diretamente na produção conforme a foto oficial enviada pela organização: G1×G2, G3×G4, G5×G6 e G7×G8. G2 usa Bianca Vicintin Abud/Nina Domingues. Nenhum dos quatro jogos tinha chamada ou placar.
 - O servidor preserva a ordem decidida pela simples de desempate ao reler os grupos para materializar a eliminatória; antes usava identidade de objetos transitórios e podia recuperar uma classificada anterior.
 - Corte web e `advanceTournamentPhase`; versões nativas preservadas.

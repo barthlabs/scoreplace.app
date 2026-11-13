@@ -85,6 +85,12 @@
       : (match[slot === 'p1' ? 'team1Uids' : 'team2Uids'] || match[slot + 'Uid']);
     return String(window._resolveSideLive(t, raw, uids) || raw);
   }
+  function sideUids(t, match, slot) {
+    var uids = typeof window._slotUidsPositional === 'function'
+      ? window._slotUidsPositional(match, slot, t)
+      : (match[slot === 'p1' ? 'team1Uids' : 'team2Uids'] || match[slot + 'Uid']);
+    return Array.isArray(uids) ? uids : (uids ? [uids] : []);
+  }
   function monarchSeries(t, current, matches, occupancy, teams, latestUpdateId) {
     if (!current || current.isMonarch !== true || current.monarchGroup == null || current.round == null || !current.category) return null;
     var games = matches.filter(function (game) {
@@ -103,8 +109,9 @@
       var done = occupancy.isFinished(game);
       var active = String(game.id) === String(current.id);
       var sideWinner = done && typeof window._matchWinnerSide === 'function' ? window._matchWinnerSide(game) : 0;
+      var a = sideName(t, game, 'p1'), b = sideName(t, game, 'p2');
       return { number: game._gameNum || game.scheduledGameNumber || game.matchNumber || '',
-        a: sideName(t, game, 'p1'), b: sideName(t, game, 'p2'),
+        a:a, b:b, aUids:sideUids(t, game, 'p1'), bUids:sideUids(t, game, 'p2'),
         ta: teamFor(game, 1, teams), tb: teamFor(game, 2, teams),
         scoreA: done || active ? (game.wo ? 'W.O.' : gameScore(game, 1, done)) : '',
         scoreB: done || active ? (game.wo ? 'W.O.' : gameScore(game, 2, done)) : '',
@@ -303,10 +310,11 @@
     var courtCards = courtNames.map(function (name) {
       var m = allActive.find(function (item) { return String(item.court) === name; });
       if (!m) return { name: name };
+      var a = sideName(t, m, 'p1'), b = sideName(t, m, 'p2');
       return { name: name, number: m._gameNum || m.scheduledGameNumber || m.matchNumber || '', category: String(m.category || m.tierLabel || ''), phase: courtPhase(m),
         latest: !!latestUpdateId && String(m.id || '') === latestUpdateId,
         series: monarchSeries(t, m, matches, occupancy, teams, latestUpdateId),
-        a: sideName(t, m, 'p1'), b: sideName(t, m, 'p2'), ta: teamFor(m, 1, teams), tb: teamFor(m, 2, teams),
+        a:a, b:b, aUids:sideUids(t, m, 'p1'), bUids:sideUids(t, m, 'p2'), ta: teamFor(m, 1, teams), tb: teamFor(m, 2, teams),
         scoreA: gameScore(m, 1) === '–' ? '0' : gameScore(m, 1),
         scoreB: gameScore(m, 2) === '–' ? '0' : gameScore(m, 2),
         timerStart: timestamp(m.courtClockBaseAt || m.courtCalledAt || m.startedAt) };
@@ -589,10 +597,18 @@
       brackets: bracketSections(t, matches),
       timing: timing };
   };
-  function sideHtml(label, team, score, options) {
+  function playerRows(label, uids) {
     var players = String(label || '').split(' / ').map(function (name) { return name.trim(); }).filter(Boolean);
-    return '<div class="tv-side" style="--team:' + esc(team.color) + '">' + (options.teams ? '<span class="tv-team-tag">' + esc(team.name || 'Time') + '</span>' : '') +
-      (options.players ? '<div class="tv-players">' + players.map(function (name) { return '<span>' + esc(name) + '</span>'; }).join('') + '</div>' : '') +
+    return players.map(function (name, index) {
+      var uid = uids && uids[index] || '';
+      var avatar = typeof window._personAvatarHtml === 'function'
+        ? window._personAvatarHtml(uid, name, '', ' class="tv-player-photo" alt=""') : '';
+      return '<span>' + avatar + esc(name) + '</span>';
+    }).join('');
+  }
+  function sideHtml(label, team, score, options, uids) {
+    return '<div class="tv-side" style="--team:' + esc(team.color) + '">' + (options.teams && team.name ? '<span class="tv-team-tag">' + esc(team.name) + '</span>' : '') +
+      (options.players ? '<div class="tv-players">' + playerRows(label, uids) + '</div>' : '') +
       (options.score && score !== '' ? '<strong class="tv-score">' + esc(score) + '</strong>' : '') + '</div>';
   }
   function cardHtml(card, options) {
@@ -600,9 +616,8 @@
     if (!card.number && !card.a && !card.b) return '<article class="tv-court empty">' + (options.court ? '<h2>' + esc(card.name) + '</h2>' : '') + '<p>Aguardando chamada</p></article>';
     if (card.series) return '<article class="tv-court tv-court-series"><div class="tv-court-top"><h2>' + (options.court ? esc(card.name) : '') + '</h2><b class="tv-court-phase">' + esc(card.phase || '') + '</b>' + (options.category ? '<span>' + esc(card.category) + '</span>' : '') + '</div><div class="tv-series-games">' +
       card.series.map(function (game) {
-        function side(label, score, direction, outcome) {
-          var players = String(label || '').split(' / ').map(function (name) { return name.trim(); }).filter(Boolean);
-          return '<div class="tv-series-side tv-series-' + direction + (outcome ? ' tv-series-' + outcome : '') + '"><div class="tv-series-players">' + players.map(function (name) { return '<span>' + esc(name) + '</span>'; }).join('') + '</div>' +
+        function side(label, uids, score, direction, outcome) {
+          return '<div class="tv-series-side tv-series-' + direction + (outcome ? ' tv-series-' + outcome : '') + '"><div class="tv-series-players">' + playerRows(label, uids) + '</div>' +
             (options.score && score !== '' ? '<strong>' + esc(score) + '</strong>' : '') + '</div>';
         }
         var winnerSide = Number(game.winnerSide) || 0;
@@ -611,11 +626,11 @@
           if (game.scoreA !== '' && game.scoreB !== '' && Number.isFinite(a) && Number.isFinite(b) && a !== b) winnerSide = a > b ? 1 : 2;
         }
         return '<div class="tv-series-game tv-series-' + game.status + (game.latestUpdate ? ' tv-series-latest-update' : '') + '"><b>JOGO ' + esc(game.number) + '</b>' +
-          side(game.a, game.scoreA, 'left', game.status === 'done' && winnerSide ? (winnerSide === 1 ? 'win' : 'loss') : '') + '<span class="tv-series-versus">×</span>' + side(game.b, game.scoreB, 'right', game.status === 'done' && winnerSide ? (winnerSide === 2 ? 'win' : 'loss') : '') + '</div>';
+          side(game.a, game.aUids, game.scoreA, 'left', game.status === 'done' && winnerSide ? (winnerSide === 1 ? 'win' : 'loss') : '') + '<span class="tv-series-versus">×</span>' + side(game.b, game.bUids, game.scoreB, 'right', game.status === 'done' && winnerSide ? (winnerSide === 2 ? 'win' : 'loss') : '') + '</div>';
       }).join('') + '</div>' +
       (options.timer ? '<div class="tv-court-footer"><strong data-tv-start="' + card.timerStart + '">00:00:00</strong></div>' : '') + '</article>';
     return '<article class="tv-court tv-court-active' + (card.latest ? ' tv-court-latest' : '') + '"><div class="tv-court-top"><h2>' + (options.court ? esc(card.name) : '') + (options.number ? ' · JOGO ' + esc(card.number) : '') + '</h2><b class="tv-court-phase">' + esc(card.phase || '') + '</b>' + (options.category ? '<span>' + esc(card.category) + '</span>' : '') + '</div>' +
-      sideHtml(card.a, card.ta, card.scoreA, options) + '<div class="tv-versus">VS</div>' + sideHtml(card.b, card.tb, card.scoreB, options) +
+      sideHtml(card.a, card.ta, card.scoreA, options, card.aUids) + '<div class="tv-versus">VS</div>' + sideHtml(card.b, card.tb, card.scoreB, options, card.bUids) +
       (options.timer ? '<div class="tv-court-footer"><strong data-tv-start="' + card.timerStart + '">00:00:00</strong></div>' : '') + '</article>';
   }
   function rankingHtml(section, showTitle) {
@@ -721,7 +736,7 @@
         layout.sections.upcoming.visible && layout.sections.qr.visible &&
         Math.abs(layout.sections.upcoming.x + layout.sections.upcoming.w - layout.sections.qr.x) < .1 &&
         layout.sections.upcoming.w >= 20 && layout.sections.qr.w <= 10) {
-      var gained = 2;
+      var gained = 2.8;
       layout = Object.assign({}, layout, { sections:Object.assign({}, layout.sections, {
         upcoming:Object.assign({}, layout.sections.upcoming, { w:layout.sections.upcoming.w - gained }),
         qr:Object.assign({}, layout.sections.qr, { x:layout.sections.qr.x - gained, w:layout.sections.qr.w + gained })
@@ -1010,7 +1025,8 @@
     '.tv-results-main>h2{color:#fbbf24;font-size:clamp(.9rem,1.2vw,1.5rem);line-height:normal}' +
     '.tv-results .tv-result-players span{font-size:clamp(.75rem,.95vw,1.3rem)}' +
     '.tv-custom-qr{container-type:inline-size}.tv-custom-qr .tv-qr-brand{gap:2px;font-size:clamp(8px,9cqw,16px);line-height:1.05;white-space:nowrap}.tv-custom-qr .tv-scoreplace-mark{width:clamp(14px,24cqw,32px);min-width:0}.tv-custom-qr .tv-qr{padding-bottom:.55vw}.tv-custom-results .tv-results{padding:.55vw .8vw}.tv-custom-results .tv-results-list{box-sizing:border-box}' +
-    '.tv-custom-board-camis{width:calc(100% - .35vw)}.tv-custom-board-camis .tv-qr-camis{padding-bottom:0}.tv-custom-board-camis .tv-custom-qr .tv-qr-has-logo .tv-qr-tournament-logo-camis{width:100%;max-width:100%;transform:none}.tv-custom-board-camis .tv-qr-camis .tv-qr-code,.tv-custom-board-camis .tv-qr-camis .tv-qr-brand{width:100%;max-width:100%;transform:none;justify-self:center}' +
+    '.tv-player-photo{display:block;flex:none;width:clamp(18px,1.5vw,32px);height:clamp(18px,1.5vw,32px);border-radius:50%;object-fit:cover}.tv-players>span,.tv-series-players>span{display:flex;align-items:center;gap:.3vw;min-width:0}.tv-series-players .tv-player-photo{width:clamp(13px,1vw,22px);height:clamp(13px,1vw,22px)}' +
+    '.tv-custom-board-camis{width:calc(100% - .35vw)}.tv-custom-board-camis .tv-custom-results .tv-results{padding-right:.35vw}.tv-custom-board-camis .tv-qr-camis{padding-bottom:0}.tv-custom-board-camis .tv-custom-qr .tv-qr-has-logo .tv-qr-tournament-logo-camis{width:calc(100% - .7vw);max-width:calc(100% - .7vw);transform:none}.tv-custom-board-camis .tv-qr-camis .tv-qr-code,.tv-custom-board-camis .tv-qr-camis .tv-qr-brand{width:calc(100% - .7vw);max-width:calc(100% - .7vw);transform:none;justify-self:center}' +
     '</style>');
   // O editor usa exatamente o HTML e o CSS da janela No ar. O iframe não
   // executa childScript: relógios e hora recebem o valor deste instante.

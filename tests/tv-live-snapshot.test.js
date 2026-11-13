@@ -10,6 +10,7 @@ const parentIntervals = [];
 const parentActiveIntervals = new Set();
 const liveButton = { attributes: {}, style: {}, setAttribute(name, value) { this.attributes[name] = value; } };
 const window = { _collectAllMatches: t => t.matches, _tourLogoSrc: t => t.logo,
+  _personAvatarHtml: (uid, name) => '<img class="tv-player-photo" src="photo-' + encodeURIComponent(uid || name) + '" alt="">',
   addEventListener(name, fn) { parentHandlers[name] = fn; },
   location: { origin: 'https://scoreplace.app' },
   _tournamentUrl: id => `https://scoreplace.app/#tournaments/${id}`,
@@ -200,6 +201,10 @@ assert.equal(publishedSnapshot.nextGames[1].stage, 'Quartas de final');
 assert.match(window._tvLiveBodyHtml(publishedSnapshot), /JOGO 73 · <span class="tv-upcoming-category">Fem Diamante<\/span> · <span class="tv-upcoming-stage">Quartas de final<\/span>/);
 delete window._bracketOperationsSelect;
 const camisQueueHtml = window._tvLiveBodyHtml(camisQueueSnapshot);
+assert.doesNotMatch(camisQueueHtml.split('<section class="tv-courts"')[1].split('</section>')[0], /tv-team-tag|>Time</,
+  'quadras Camis não exibem faixa de time sem equipe cadastrada');
+assert.match(camisQueueHtml, /tv-player-photo[^>]*>Diamante 3 A<\/span>/,
+  'atletas da quadra aparecem com foto ou avatar');
 assert.doesNotMatch(camisQueueHtml.split('class="tv-upcoming"')[1].split('</section>')[0], /tv-result-team|>Time</,
   'jogos de duplas não inventam um time');
 assert.match(camisQueueHtml, /tv-upcoming-category">Fem Ouro/,
@@ -573,7 +578,7 @@ assert.match(tvTimer.textContent, /^Atrasado 00:01:\d\d$/, 'o atraso preserva a 
 assert.equal(tvTimer.className, 'tv-phase-overdue', 'atraso usa a fase vermelha');
 assert.match(tvRoot.innerHTML, /ÚLTIMOS RESULTADOS/);
 assert.doesNotMatch(tvRoot.innerHTML, /CHAMADO|EM JOGO/);
-assert.match(tvRoot.innerHTML, /class="tv-team-tag">VORTEX<\/span><div class="tv-players"><span>VORTEX 1<\/span><span>Parceira<\/span>/,
+assert.match(tvRoot.innerHTML, /class="tv-team-tag">VORTEX<\/span><div class="tv-players"><span><img class="tv-player-photo"[^>]*>VORTEX 1<\/span><span><img class="tv-player-photo"[^>]*>Parceira<\/span>/,
   'card da TV mantém etiqueta vertical do time e atletas em linhas, como na chave');
 assert.match(tvRoot.innerHTML, /<h2>Quadra 4 · JOGO 1<\/h2><b class="tv-court-phase">[^<]+<\/b><span>Fem Light<\/span>/,
   'quadra e jogo ficam à esquerda, fase no centro e categoria à direita');
