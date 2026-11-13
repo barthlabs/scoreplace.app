@@ -63,8 +63,8 @@ for (let i = 0; i < names.length; i++) {
 }
 const mixed = new Set(rows.map(row => row.commit)).size > 1;
 const uniformCurrent = rows.every(row => row.commit === releaseCommit);
-const directed = [`sp-op-score-${version}`, `sp-op-end-court-${version}`].some(name =>
-  rows.find(row => row.name === name)?.commit !== baseline);
+const directed = ['court', 'score', 'end-court', 'control'].map(target => `sp-op-${target}-${version}`).some(name =>
+  rows.find(row => row.name === name)?.commit !== releaseCommit);
 if (requireCurrent && !uniformCurrent) throw new Error('malha regional não usa o commit integral do corte');
 if (requireScoreRefresh && rows.some(row => row.commit !==
     (row.name === `sp-op-score-${version}` ? scoreRefreshCommit : releaseCommit))) {
