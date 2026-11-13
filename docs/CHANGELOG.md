@@ -1,3 +1,9 @@
+## 2.6.77 — 13/nov/2026 (logo CAMIS em destaque na TV)
+
+- O logo oficial do Camis Day tem 73 pixels transparentes em cada lateral de uma imagem de 400 pixels. A TV recorta somente essa margem na apresentação, ampliando o desenho visível sem substituir o arquivo do torneio.
+- QR e chamada Scoreplace ficam menores e com mais margem; o logo visível fica maior que o QR sem recortar letras ou a borda oval. A tela No Ar mantém as posições dos demais painéis.
+- Corte somente web; versões nativas e dados do torneio preservados.
+
 ## 2.6.76 — 13/nov/2026 (simples de desempate concluída pelo placar)
 
 - Salvar o placar da última simples conclui automaticamente o desempate e aplica a ordem de classificação na mesma transação. Isso vale para placar digitado, ponto ao vivo e W.O.; triangulares seguem criando o próximo confronto somente quando necessário.

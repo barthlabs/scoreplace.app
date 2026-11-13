@@ -1,3 +1,6 @@
+// 2.6.77 — Na tela No Ar do Camis Day, o logo aparece maior apesar das
+// margens transparentes do arquivo original. O QR e a chamada Scoreplace
+// recuam para deixar mais borda e manter o Camis em destaque.
 // 2.6.76 — O placar da última simples conclui o desempate imediatamente,
 // inclusive por ponto ao vivo ou W.O., sem pedir confirmação extra. Na grade
 // intercalada, as quartas da Diamante já definidas aparecem em Próximos jogos;

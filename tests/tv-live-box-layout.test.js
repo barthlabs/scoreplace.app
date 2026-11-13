@@ -104,19 +104,24 @@ const { chromium } = require('@playwright/test');
       assert(fill.font >= 14, 'título da quadra permanece legível');
       await customPage.close();
       const camisPage = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
-      await camisPage.setContent(fs.readFileSync(camisCapture, 'utf8').replace(/<script src="[^"]*match-timing[^>]*><\/script>/, ''),
+      const camisLogo = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400"><ellipse cx="200" cy="200" rx="127" ry="196" fill="white"/></svg>');
+      await camisPage.setContent(fs.readFileSync(camisCapture, 'utf8').replace(/<script src="[^"]*match-timing[^>]*><\/script>/, '')
+        .replace('src="logo.png"', 'src="' + camisLogo + '"'),
         { waitUntil: 'domcontentloaded' });
       const camisBounds = await camisPage.evaluate(() => {
         const rect = selector => document.querySelector(selector).getBoundingClientRect();
         const board = rect('.tv-custom-board-camis'), header = rect('.tv-custom-header');
         const courts = rect('.tv-custom-courts'), results = rect('.tv-custom-results');
         const upcoming = rect('.tv-custom-upcoming'), qrBox = rect('.tv-custom-qr');
-        const logo = rect('.tv-qr-tournament-logo-camis'), qr = rect('.tv-qr-camis .tv-qr-code');
+        const logo = rect('.tv-qr-tournament-logo-camis'), logoImage = rect('.tv-qr-tournament-logo-camis-image');
+        const qr = rect('.tv-qr-camis .tv-qr-code');
         const brand = rect('.tv-qr-camis .tv-qr-brand');
         return { boardRight:board.right, boardBottom:board.bottom, headerRight:header.right,
           resultsRight:results.right, courtsBottom:courts.bottom, upcomingBottom:upcoming.bottom,
           qrBottom:qrBox.bottom, brandBottom:brand.bottom, qrWidth:qr.width,
-          logoWidth:logo.width, brandWidth:brand.width, upcomingWidth:upcoming.width,
+          logoWidth:logo.width, logoInkWidth:logoImage.width * 254 / 400,
+          logoImageTop:logoImage.top, logoImageBottom:logoImage.bottom, logoTop:logo.top, logoBottom:logo.bottom,
+          brandWidth:brand.width, upcomingWidth:upcoming.width,
           logoCenter:(logo.left+logo.right)/2,
           qrCenter:(qr.left+qr.right)/2, brandCenter:(brand.left+brand.right)/2,
           qrBoxCenter:(qrBox.left+qrBox.right)/2 };
@@ -134,9 +139,13 @@ const { chromium } = require('@playwright/test');
       assert(['logoCenter','qrCenter','brandCenter'].every(key =>
         Math.abs(camisBounds[key] - camisBounds.qrBoxCenter) < 2),
       `logo, QR e chamada ficam centralizados na coluna: ${JSON.stringify(camisBounds)}`);
-      assert(camisBounds.qrWidth > 185 && camisBounds.logoWidth > 185 &&
-        camisBounds.brandWidth > 185 && camisBounds.upcomingWidth < 430,
-      'a largura retirada de próximos jogos aumenta logo, QR e chamada');
+      assert(camisBounds.qrWidth > 150 && camisBounds.logoWidth > 180 &&
+        camisBounds.brandWidth > 150 && camisBounds.upcomingWidth < 430 &&
+        Math.abs(camisBounds.logoInkWidth - camisBounds.logoWidth) < 2 &&
+        camisBounds.logoInkWidth > camisBounds.qrWidth * 1.1 &&
+        camisBounds.logoImageTop >= camisBounds.logoTop - 1 &&
+        camisBounds.logoImageBottom <= camisBounds.logoBottom + 1,
+      'o desenho visível do Camis supera o QR sem corte: ' + JSON.stringify(camisBounds));
       await camisPage.close();
     } finally { await browser.close(); }
     console.log('✓ TV: etiquetas, placares e próximo jogo contidos nos boxes');

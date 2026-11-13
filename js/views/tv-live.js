@@ -707,7 +707,9 @@
     return String(snapshot.id || '') === 'tour_1793804848447_94bfe2282535789667cb35f1080024ee';
   }
   function qrTournamentLogoHtml(snapshot) {
-    return snapshot.logo ? '<img class="tv-qr-tournament-logo' + (isCamisTv(snapshot) ? ' tv-qr-tournament-logo-camis' : '') + '" src="' + esc(snapshot.logo) + '" alt="Logo do torneio">' : '';
+    if (!snapshot.logo) return '';
+    if (isCamisTv(snapshot) && snapshot.tvLayout) return '<span class="tv-qr-tournament-logo tv-qr-tournament-logo-camis" role="img" aria-label="Logo do torneio"><img class="tv-qr-tournament-logo-camis-image" src="' + esc(snapshot.logo) + '" alt=""></span>';
+    return '<img class="tv-qr-tournament-logo" src="' + esc(snapshot.logo) + '" alt="Logo do torneio">';
   }
   function bodyHtml(snapshot) {
     var theme = snapshot.theme || { background: '#060d1a', primary: '#0d1b2e', secondary: '#0d1b2e', title: '#ffffff' };
@@ -1026,7 +1028,7 @@
     '.tv-results .tv-result-players span{font-size:clamp(.75rem,.95vw,1.3rem)}' +
     '.tv-custom-qr{container-type:inline-size}.tv-custom-qr .tv-qr-brand{gap:2px;font-size:clamp(8px,9cqw,16px);line-height:1.05;white-space:nowrap}.tv-custom-qr .tv-scoreplace-mark{width:clamp(14px,24cqw,32px);min-width:0}.tv-custom-qr .tv-qr{padding-bottom:.55vw}.tv-custom-results .tv-results{padding:.55vw .8vw}.tv-custom-results .tv-results-list{box-sizing:border-box}' +
     '.tv-player-photo{display:block;flex:none;width:clamp(18px,1.5vw,32px);height:clamp(18px,1.5vw,32px);border-radius:50%;object-fit:cover}.tv-players>span,.tv-series-players>span{display:flex;align-items:center;gap:.3vw;min-width:0}.tv-series-players .tv-player-photo{width:clamp(13px,1vw,22px);height:clamp(13px,1vw,22px)}' +
-    '.tv-custom-board-camis{width:calc(100% - .35vw)}.tv-custom-board-camis .tv-custom-results .tv-results{padding-right:.35vw}.tv-custom-board-camis .tv-qr-camis{padding-bottom:0}.tv-custom-board-camis .tv-custom-qr .tv-qr-has-logo .tv-qr-tournament-logo-camis{width:calc(100% - .7vw);max-width:calc(100% - .7vw);transform:none}.tv-custom-board-camis .tv-qr-camis .tv-qr-code,.tv-custom-board-camis .tv-qr-camis .tv-qr-brand{width:calc(100% - .7vw);max-width:calc(100% - .7vw);transform:none;justify-self:center}' +
+    '.tv-custom-board-camis{width:calc(100% - .35vw)}.tv-custom-board-camis .tv-custom-results .tv-results{padding-right:.35vw}.tv-custom-board-camis .tv-qr-camis{padding-bottom:0}.tv-custom-board-camis .tv-custom-qr .tv-qr-has-logo .tv-qr-tournament-logo-camis{position:relative;display:block;overflow:hidden;width:calc(100% - 1.35vw);max-width:calc(100% - 1.35vw);height:100%;transform:none}.tv-custom-board-camis .tv-qr-camis .tv-qr-tournament-logo-camis-image{position:absolute;left:50%;top:50%;display:block;width:157.5%;height:auto;max-width:none;max-height:none;transform:translate(-50%,-50%)}.tv-custom-board-camis .tv-qr-camis .tv-qr-code,.tv-custom-board-camis .tv-qr-camis .tv-qr-brand{width:calc(100% - 2.6vw);max-width:calc(100% - 2.6vw);transform:none;justify-self:center}' +
     '</style>');
   // O editor usa exatamente o HTML e o CSS da janela No ar. O iframe não
   // executa childScript: relógios e hora recebem o valor deste instante.

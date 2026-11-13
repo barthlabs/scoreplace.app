@@ -529,10 +529,10 @@ const { chromium } = require('@playwright/test');
     assert.ok(Math.abs(qrAlignment.slotX - qrAlignment.expectedX) < 2 &&
       Math.abs(qrAlignment.centers[0] - qrAlignment.centers[1]) < 2 &&
       Math.abs(qrAlignment.centers[1] - qrAlignment.centers[2]) < 2 &&
-      Math.abs(qrAlignment.widths[0] - qrAlignment.widths[1]) < 2 &&
+      qrAlignment.widths[0] > qrAlignment.widths[1] + 8 &&
       Math.abs(qrAlignment.widths[1] - qrAlignment.widths[2]) < 2 &&
       Math.abs(qrAlignment.gaps[0] - qrAlignment.gaps[1]) < 20 &&
-      qrAlignment.rightMargin >= 3.5 && qrAlignment.rightMargin < 15 &&
+      qrAlignment.rightMargin >= 8 && qrAlignment.rightMargin < 25 &&
       qrAlignment.contentFits && qrAlignment.allInside,
     'QR e legenda centralizados no eixo do logo e usando toda a borda direita da TV: ' + JSON.stringify(qrAlignment));
     const frameFit = await page.evaluate(() => {
