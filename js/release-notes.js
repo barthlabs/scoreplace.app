@@ -2,7 +2,8 @@
 // inclusive por ponto ao vivo ou W.O., sem pedir confirmação extra. Na grade
 // intercalada, as quartas da Diamante já definidas aparecem em Próximos jogos;
 // a chamada para quadra respeita a ordem publicada. A lista identifica a etapa
-// de cada jogo (classificatória, oitavas, quartas, semifinal ou final).
+// de cada jogo (classificatória, oitavas, quartas, semifinal ou final), com
+// o mesmo contraste do cabeçalho da TV.
 // A Prata vem depois da Ouro.
 // 2.6.75 — Jogos já chamados mantêm sua quadra ao recalcular a grade.
 // A tela No ar do Camis Day preenche as bordas disponíveis; logo, QR e
