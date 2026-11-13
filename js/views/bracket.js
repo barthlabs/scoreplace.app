@@ -1383,7 +1383,7 @@ window._bracketOperationsSelect = function (t) {
     });
   });
   var upcoming = matches.filter(function (m) {
-    if (!m || occupancy.isFinished(m) || m.isBye || m.isSitOut || occupancy.occupiesCourt(m) ||
+    if (!m || released[String(m.id)] || occupancy.isFinished(m) || m.isBye || m.isSitOut || occupancy.occupiesCourt(m) ||
         m.courtCalledAt || m.startedAt || !_matchCardTimestamp(m.scheduledAt)) return false;
     var a = m.p1 || (Array.isArray(m.team1) ? m.team1.join(' / ') : '');
     var b = m.p2 || (Array.isArray(m.team2) ? m.team2.join(' / ') : '');
@@ -1445,7 +1445,7 @@ window._bracketOperationsSelect = function (t) {
   // A fila visual inclui fases futuras ainda sem duplas definidas. Esses
   // confrontos são apenas informativos até que ambos os lados sejam conhecidos.
   var future = matches.filter(function (m) {
-    return m && !occupancy.isFinished(m) && !m.isBye && !m.isSitOut &&
+    return m && !released[String(m.id)] && !occupancy.isFinished(m) && !m.isBye && !m.isSitOut &&
       !m.courtCalledAt && !m.startedAt && !occupancy.occupiesCourt(m) &&
       (_matchCardTimestamp(m.scheduledAt) || (Number(m.phaseIndex) > 0 && Number(m._gameNum) > 0));
   }).filter(function (m) {

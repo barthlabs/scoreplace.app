@@ -1,3 +1,9 @@
+// 2.6.85 — Depois que a primeira oitava da Prata foi chamada, as demais
+// oitavas oficiais com duplas definidas entram na fila do controle mesmo com
+// placares da Ouro pendentes. A TV fixa cada atleta na mesma faixa vertical
+// dos três jogos, inclusive nomes longos das quadras 6 e 8.
+// Semifinais já disputadas não voltam aos próximos jogos; placares 6×4 e
+// 6×3 da Ouro e a final 7×5 foram registrados.
 // 2.6.84 — A Prata mostra a chave oficial dos 12 grupos: G1×G2, G3×G4,
 // G5×G6 e G7×G8; G9 a G12 entram nas quartas. Vagas ainda pendentes
 // mostram “Vencedor do Grupo” e os jogos posteriores mostram sua origem.

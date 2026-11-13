@@ -1,3 +1,9 @@
+## 2.6.85 — 13/nov/2026 (fila da Prata no controle)
+
+- A operação libera os próximos confrontos oficiais da Prata assim que a etapa começou e as duas duplas estão definidas. A regra antiga bloqueava os jogos 134 e 135 por placares da Ouro pendentes, embora o jogo 133 já estivesse chamado. Partidas com “A definir” continuam sem chamada e os resultados da Ouro não foram alterados.
+- Na TV, as duplas de cada lado das séries de três jogos ocupam duas faixas verticais fixas. Isso mantém os nomes e avatares da direita alinhados nas quadras 6 e 8, inclusive com nomes longos. O jogo 133 da Prata foi chamado para a quadra 3; após confirmação da organização, a final 113 da Ouro foi liberada sem placar e ficou pendente, e o jogo 134 da Prata foi chamado para a quadra 5.
+- As semifinais 93 e 94 da Ouro, já superadas pela final e pelo 3º lugar, foram retiradas da fila de próximas chamadas. Seus placares informados pela organização foram registrados: Almeida/Pieri 6×4 e Zurita/Silva 6×3. A final 113 foi registrada como vitória de Almeida/Pieri por 7×5. Os 64 jogos da Ouro foram conferidos com resultado; o controle exclui partidas pendentes da fila de próximas chamadas.
+
 ## 2.6.84 — 13/nov/2026 (chave oficial da Prata na fila)
 
 - A chave eliminatória da Prata foi materializada no Camis Day conforme a planilha: G1×G2, G3×G4, G5×G6, G7×G8; G9–G12 passam diretamente às quartas. O torneio agora possui os jogos 133–144, com origem explícita para cada vaga ainda indefinida. A fila da operação mostra “Vencedor do Grupo N” até haver classificação e “Vencedor do jogo N” nas fases seguintes.

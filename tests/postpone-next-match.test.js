@@ -44,6 +44,11 @@ const futureMatches = ['j1', 'j2', 'j3'].map((id, index) => ({ id, p1:'A', p2:'B
 const nextFor = id => context.window._bracketOperationsSelect({ id, courtCount:2, matches:futureMatches }).next.id;
 assert.equal(nextFor('sb_future_event'), 'j2');
 assert.equal(nextFor('tour_future_event'), 'j2');
+context.window._bracketCourtReleased = () => ({ j1:'2026-11-13T13:00:00Z' });
+const withPending = context.window._bracketOperationsSelect({ id:'tour_future_event', courtCount:2, matches:futureMatches });
+assert(!withPending.future.some(m => m.id === 'j1'), 'placar pendente não reaparece nos próximos jogos');
+assert(withPending.pending.some(m => m.id === 'j1'), 'placar permanece acessível em pendentes');
+context.window._bracketCourtReleased = () => ({});
 const groupStart = source.indexOf('function _bracketOperationsGroup(');
 const groupEnd = source.indexOf('\nfunction _bracketOperationsNavHtml(', groupStart);
 assert(groupStart > 0 && groupEnd > groupStart);

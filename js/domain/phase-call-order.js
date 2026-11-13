@@ -132,6 +132,13 @@
       })) return true;
       var sequence = stages(t);
       var targetIndex = targetStage ? sequence.findIndex(function (stage) { return key(stage) === key(targetStage); }) : -1;
+      // Depois da primeira chamada oficial de uma eliminatória, a organização
+      // já iniciou essa etapa. As demais partidas com duplas definidas podem
+      // ocupar quadras livres sem depender de placares de outra categoria.
+      if (target && targetStage.kind === 'elimination' && match.officialGroupBracket &&
+          knownSide(match.p1) && knownSide(match.p2) && matches.some(function (m) {
+            return belongs(m, targetStage) && m.officialGroupBracket && !!m.courtCalledAt;
+          })) return true;
       if (target && targetStage.kind === 'elimination') {
         var ownGroups = intervals[key({ kind:'groups', category:targetStage.category })];
         if (ownGroups && (!knownSide(match.p1) || !knownSide(match.p2) ||

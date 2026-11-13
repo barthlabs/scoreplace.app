@@ -31,6 +31,15 @@ assert(order.allowed(t,matches,game('Fem Diamante',0),done));
 assert(order.covers(t,game('Fem Diamante',0)));
 assert(!order.covers(t,{ id:'extra', category:'Extra', phaseIndex:0 }), 'jogo fora da grade mantém a checagem de data');
 assert(!order.allowed(t,matches,game('Fem Prata',0),done));
+const silverOpened = { ...game('Fem Prata',1), id:'silver-opened', officialGroupBracket:true,
+  courtCalledAt:'2026-11-13T21:30:00Z' };
+const silverNext = { ...game('Fem Prata',1), id:'silver-next', officialGroupBracket:true };
+assert(!order.allowed(t,matches,silverNext,done),
+  'antes da primeira chamada da Prata, a grade conserva a ordem das etapas');
+assert(order.allowed(t,[...matches,silverOpened],silverNext,done),
+  'após a primeira chamada oficial da Prata, o próximo confronto definido entra na fila');
+assert(!order.allowed(t,[...matches,silverOpened],{...silverNext,p2:'TBD'},done),
+  'partida com adversário ainda indefinido não pode ser chamada');
 const earlyOuro = {...game('Fem Ouro',1), officialGroupBracket:true};
 assert(order.allowed(t,matches,earlyOuro,done),
   'confronto Ouro oficial com duas duplas conhecidas pode ser chamado antes dos outros grupos terminarem');
