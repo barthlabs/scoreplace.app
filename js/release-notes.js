@@ -4,7 +4,8 @@
 // encerramento, a quadra fica livre e os placares não lançados aparecem em
 // Placares pendentes. Para séries já chamadas antes desta correção, a duração
 // total desde a chamada inicial é dividida igualmente entre os três jogos;
-// a TV identifica essa duração como aproximada.
+// a TV identifica essa duração como aproximada. A lista de últimos resultados
+// segue rolando automaticamente sem mostrar a barra lateral de rolagem.
 // 2.6.71 — A tela No ar permite escolher o monitor para a TV e abre a
 // apresentação em tela cheia na janela escolhida, mantendo a operação na
 // tela original. O logo, o QR,
