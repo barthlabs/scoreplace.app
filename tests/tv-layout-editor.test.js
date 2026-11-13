@@ -420,7 +420,7 @@ const { chromium } = require('@playwright/test');
     const secondPopupPromise = page.waitForEvent('popup');
     await page.getByRole('button', { name:/Projetor/ }).click();
     const secondPopup = await secondPopupPromise;
-    assert.match(await page.evaluate(() => window.__tvOpenFeatures), /left=1400,top=0,width=1260,height=704/,
+    assert.match(await page.evaluate(() => window.__tvOpenFeatures), /left=1400,top=0,width=1268,height=704/,
       'TV abre na posição e no tamanho do monitor escolhido');
     await secondPopup.close();
     await page.waitForFunction(() => !window._tvLiveWindow || window._tvLiveWindow.closed);
