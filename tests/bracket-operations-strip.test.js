@@ -946,6 +946,46 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert.equal(carousel.liveMatch, 'group-17');
     assert(!carousel.multiDayHasNav && !carousel.incompleteHasNav);
     assert.deepEqual(carousel.called, ['sb_test', 'm1', 'Quadra 5'], 'navegar não pode fazer nova chamada');
+    const tieNavigation = await page.evaluate(() => {
+      const t = window._findTournamentById();
+      const root = document.querySelector('[data-bracket-tabs-root]');
+      const errors = [];
+      window.addEventListener('error', event => errors.push(String(event.error || event.message)));
+      t.currentPhaseIndex = 0;
+      t.phaseTieDecisions = { '0': { 'group-0:1:3': {
+        choice: 'play', status: 'pending', baseGameNumber: 3,
+        category: 'Fem Diamante', groupName: 'R1 Grupo A',
+        matches: [{ id: 'tie-3b', displayGameNumber: '3B',
+          p1: { name: 'Ana', key: 'name:Ana' },
+          p2: { name: 'Bia', key: 'name:Bia' }, sets: [], winnerKey: null }]
+      } } };
+      const renderFixture = window.renderMatchCard;
+      window.renderMatchCard = function (...args) {
+        const template = document.createElement('template');
+        template.innerHTML = renderFixture(...args);
+        const card = template.content.firstElementChild;
+        const head = card && card.querySelector('.sp-mc-head');
+        if (head && !head.querySelector('span')) head.insertAdjacentHTML('afterbegin', '<span>JOGO 3B</span>');
+        return card ? card.outerHTML : '';
+      };
+      root._bracketOperationsNav = {};
+      window._bracketOperationsRefresh(t, root);
+      const titles = [];
+      for (let i = 0; i < 6; i++) {
+        const next = root._bracketOperationsStrip.querySelector('.sp-operations-next [data-operations-nav="next"]');
+        if (!next) break;
+        next.click();
+        titles.push(root._bracketOperationsStrip.querySelector('.sp-operations-next .sp-operations-nav-title')?.textContent);
+      }
+      return { errors, titles, next: root._bracketOperationsStrip.querySelector('.sp-operations-next')?.textContent.slice(0, 120),
+        selected: window._bracketOperationsSelect(t)?.next?.id,
+        tabs: document.querySelectorAll('[data-bracket-tabs-root]').length,
+        strip: document.querySelectorAll('[data-bracket-operations-strip]').length };
+    });
+    assert.deepEqual(tieNavigation.errors, [], 'setas do simples desempate não lançam exceção: ' + JSON.stringify(tieNavigation));
+    assert.equal(tieNavigation.titles.length, 6, 'simples desempate navega por jogo e contexto sem travar: ' + JSON.stringify(tieNavigation));
+    assert.equal(tieNavigation.tabs, 1, 'abas permanecem montadas após navegar no desempate');
+    assert.equal(tieNavigation.strip, 1, 'faixa de operação permanece montada após navegar no desempate');
     console.log('✓ faixa replica o card completo e navega três jogos do quarteto e a classificação');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

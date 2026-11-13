@@ -1,3 +1,9 @@
+## 2.6.74 — 13/nov/2026 (navegação do desempate preserva as chaves)
+
+- A faixa de operação reconhece jogos de simples desempate ao navegar pelas setas e deixa de tentar encontrá-los na lista de partidas comuns, evitando a exceção no navegador.
+- Uma falha transitória de montagem preserva as abas e a última chave completa em vez de deixar apenas o cabeçalho e as barras de progresso.
+- Corte somente web; sem alterar placares, regras de desempate, dados do torneio ou a tela “No Ar”.
+
 ## 2.6.73 — 13/nov/2026 (cancelar chamada no rodapé do placar pendente)
 
 - O botão de cancelar ou restaurar a chamada do jogo em “Placares pendentes” fica na linha operacional inferior do cartão, sem cobrir as setas e o título do jogo.

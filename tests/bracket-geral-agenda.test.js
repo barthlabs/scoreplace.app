@@ -29,6 +29,8 @@ function trecho(inicio, fim) {
   await page.setContent('<!doctype html><body></body>');
   // A ordem é proposital: _limpar chama _bracketGeneralView, como no arquivo real.
   await page.addScriptTag({ content: trecho('_limparCamadasTransitóriasDaChave', '_pintarEmEtapas') });
+  await page.addScriptTag({ content: src.slice(src.indexOf('function _pintarEmEtapas('),
+    src.indexOf('// ⚠️ NUNCA DEPENDER DE UM ÚNICO AGENDADOR', src.indexOf('function _pintarEmEtapas('))) });
   await page.addScriptTag({ content: trecho('_bracketOperationalCards', '_bracketToggleEmptySourceRounds') });
   await page.addScriptTag({ content: trecho('_bracketToggleEmptySourceRounds', '_bracketGeneralView') });
   await page.addScriptTag({ content: trecho('_bracketFocusOperationalCard', '_bracketGeneralView') });
@@ -694,6 +696,21 @@ function trecho(inicio, fim) {
   if (!tierMount.stillVisible || !tierMount.clicked || !tierMount.oneRoot) console.error('  diagnóstico linhas:', tierMount);
   ok(tierMount.stillVisible && tierMount.clicked && tierMount.oneRoot,
     'Ouro/Prata conserva a navegação fora da linha inativa e sem duplicação');
+  const failedPaint = await page.evaluate(() => {
+    document.body.innerHTML = '<main id="view-container"><nav data-bracket-tabs-root="1">Abas anteriores</nav>' +
+      '<section id="inline-bracket-container"><article>Chave anterior</article></section></main>';
+    const container = document.getElementById('inline-bracket-container');
+    const root = document.querySelector('[data-bracket-tabs-root]');
+    root._bracketTabsScope = container;
+    window._entregarQuandoPronto = (_container, task) => task();
+    window._error = () => {};
+    _pintarEmEtapas(container, '<div>Progresso</div>', () => { throw new Error('falha transitória'); });
+    return { tabs: document.querySelectorAll('[data-bracket-tabs-root]').length,
+      oldKey: container.textContent.includes('Chave anterior'),
+      noPartialProgress: !container.textContent.includes('Progresso') };
+  });
+  ok(failedPaint.tabs === 1 && failedPaint.oldKey && failedPaint.noPartialProgress,
+    'falha de pintura preserva as abas e a última chave completa');
 
   await browser.close();
   console.log('\n' + (fail ? '❌' : '✅') + ' bracket-geral-agenda: ' + pass + ' ok, ' + fail + ' falharam');

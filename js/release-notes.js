@@ -1,3 +1,6 @@
+// 2.6.74 — Navegar pelas setas da simples de desempate mantém a operação e
+// as abas das chaves funcionando. Se uma atualização da chave falhar, a última
+// chave completa permanece na tela até o próximo carregamento.
 // 2.6.73 — O botão para cancelar a chamada de um jogo com placar pendente
 // aparece na linha inferior do cartão, fora das setas de navegação.
 // 2.6.72 — Na operação Rei/Rainha, encerrar o primeiro ou o segundo jogo

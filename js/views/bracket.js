@@ -470,7 +470,6 @@ function _pintarEmEtapas(container, leve, geraPesado, depois) {
   // escrever sobre a chave mais nova nem remontar suas abas.
   var paintEpoch = (Number(container._bracketPaintEpoch) || 0) + 1;
   container._bracketPaintEpoch = paintEpoch;
-  _limparCamadasTransitóriasDaChave(container);
   var aindaEhAPinturaAtual = function () {
     return container && container._bracketPaintEpoch === paintEpoch;
   };
@@ -479,10 +478,19 @@ function _pintarEmEtapas(container, leve, geraPesado, depois) {
     if (!aindaEhAPinturaAtual()) return;
     var _tudo = '';
     try { _tudo = geraPesado() || ''; }
-    catch (e) { if (window._error) window._error('[Bracket] pintura:', e); }
+    catch (e) {
+      if (window._error) window._error('[Bracket] pintura:', e);
+      // O cálculo pode falhar por um retrato incompleto recebido durante um
+      // desempate. Preserve a última chave e suas abas até haver um render válido.
+      if (!container.firstElementChild) {
+        container.innerHTML = '<div role="alert" class="card" style="padding:1rem;color:var(--text-bright);">Não foi possível atualizar as chaves. Recarregue o torneio.</div>';
+      }
+      return;
+    }
     if (!aindaEhAPinturaAtual()) return;
 
     if (!_fatiar) {
+      _limparCamadasTransitóriasDaChave(container);
       container.innerHTML = leve + _tudo;
       if (!aindaEhAPinturaAtual()) return;
       try { window._chaveLigaLotes(container); } catch (eL) {}   // ⭐ 2.0.88: liga os lotes guardados
@@ -2623,9 +2631,28 @@ window._bracketOperationsRefresh = function (t, root) {
   }
   Array.prototype.forEach.call(existing.querySelectorAll('.sp-operations-replica'), function (op) {
     var mid = op.getAttribute('data-operations-match');
+    if (op.hasAttribute('data-tie-decision')) {
+      // Simples de desempate vivem em phaseTieDecisions, fora de state.matches.
+      // As setas recriam a faixa; aqui só restauramos eventual placar digitado.
+      var decisionId = op.getAttribute('data-tie-decision');
+      var tieMatch = _bracketTieMatch(t.id, decisionId, mid);
+      var tieDraft = root._bracketTieDrafts && root._bracketTieDrafts[mid];
+      if (tieDraft && tieMatch && tieDraft.decisionId === decisionId &&
+          tieDraft.fingerprint === _bracketTieScoreFingerprint(tieMatch) && !tieMatch.winnerKey) {
+        var score1 = op.querySelector('[data-tie-score="p1"]');
+        var score2 = op.querySelector('[data-tie-score="p2"]');
+        if (score1 && score2) {
+          score1.value = tieDraft.p1;
+          score2.value = tieDraft.p2;
+          _bracketTieSyncConfirm(op);
+        }
+      }
+      return;
+    }
     var current = state.matches.find(function (m) { return String(m.id) === mid; });
+    if (!current) return;
     var draft = root._bracketOperationsDrafts[mid];
-    if (!current || !draft || draft.fingerprint !== _bracketOperationsFingerprint(current)) {
+    if (!draft || draft.fingerprint !== _bracketOperationsFingerprint(current)) {
       delete root._bracketOperationsDrafts[mid];
       draft = null;
     }
