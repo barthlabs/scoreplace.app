@@ -136,9 +136,10 @@ const { chromium } = require('@playwright/test');
       const doc = frame.contentDocument, win = frame.contentWindow;
       return [win.getComputedStyle(doc.querySelector('.tv-qr-brand')).color,
         win.getComputedStyle(doc.querySelector('.tv-qr-brand')).backgroundColor,
+        win.getComputedStyle(doc.querySelector('.tv-scoreplace-mark')).backgroundColor,
         win.getComputedStyle(doc.querySelector('.tv-qr-code')).backgroundColor];
-    }), ['rgb(255, 255, 255)', 'rgba(0, 0, 0, 0)', 'rgb(255, 255, 255)'],
-    'a marca tem texto branco sem tarja; apenas o QR conserva fundo branco');
+    }), ['rgb(17, 17, 17)', 'rgb(255, 255, 255)', 'rgb(17, 24, 39)', 'rgb(255, 255, 255)'],
+    'legenda preta sobre branco e logo original sobre fundo escuro');
     await page.evaluate(() => {
       window.__savedTvPatch = null;
       window.__tvSaveCalls = 0;

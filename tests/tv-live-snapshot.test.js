@@ -285,7 +285,12 @@ const paletteHtml = window._tvLiveBodyHtml(paletteSnapshot);
 assert.match(paletteHtml, /background:#a12345/, 'fundo acompanha a cor escolhida no torneio');
 assert.match(paletteHtml, /--tv-primary:#a12345;--tv-secondary:#fedcba;--tv-title:#eeddcc/, 'cores do torneio entram na TV');
 assert.match(paletteHtml, /tv-custom-logo.*tv-placed-logo/, 'logo pode ser posicionado independentemente');
-assert.equal((paletteHtml.match(/src="logo\.png"/g) || []).length, 1, 'logo independente não duplica no cabeçalho');
+assert.equal((paletteHtml.match(/src="logo\.png"/g) || []).length, 2,
+  'logo independente permanece na caixa própria e aparece acima do QR');
+assert.match(paletteHtml, /tv-custom-qr[\s\S]*tv-qr-tournament-logo[\s\S]*tv-qr-code/,
+  'a marca do torneio precede o QR na caixa da TV');
+assert.match(window._tvLiveBodyHtml(snapshot), /tv-qr-tournament-logo[\s\S]*tv-qr-code/,
+  'layout padrão também exibe a marca acima do QR');
 const overlayLayout = window.ScoreplaceTvLayout.defaults();
 overlayLayout.sections.results.x = 60; overlayLayout.sections.results.w = 39;
 overlayLayout.sections.qr.x = 90;
@@ -825,6 +830,8 @@ assert(htmlSource.indexOf('js/domain/match-timing.js') < htmlSource.indexOf('js/
   'módulo de fases carrega antes da chave e do NO AR');
 assert.match(fs.readFileSync(path.join(root, 'sw.js'), 'utf8'), /'\/js\/domain\/match-timing\.js'/,
   'relógio compartilhado está no precache para a chave funcionar offline');
+assert.match(popupHtml, /\.tv-theme \.tv-qr-brand\{background:#fff;color:#111;/,
+  'legenda do QR usa texto preto sobre fundo branco mesmo com o tema do torneio');
 if (process.env.SP_TV_CAPTURE) fs.writeFileSync(process.env.SP_TV_CAPTURE,
   popupHtml.replace('<div id="tv-root"></div>', '<div id="tv-root">' + window._tvLiveBodyHtml(snapshot) + '</div>'));
 if (process.env.SP_TV_CAPTURE_CUSTOM) {

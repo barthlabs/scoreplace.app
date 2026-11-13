@@ -1,3 +1,8 @@
+## 2.6.65 — 13/nov/2026 (legenda e logo do QR na TV)
+
+- O convite “Abra no Scoreplace” passa a ter texto preto sobre fundo branco, mesmo quando o tema do torneio define título claro. A marca colorida do Scoreplace ganha um fundo escuro próprio para continuar visível. O logo do torneio fica acima do QR nos layouts padrão e personalizado, usando a imagem já recebida pela janela da TV.
+- Corte somente web; sem alteração de jogos, placares, configuração da tela, Functions ou versões nativas.
+
 ## 2.6.64 — 12/nov/2026 (acesso alternativo durante bloqueio de DNS)
 
 - Quando o app é aberto em `scoreplace-app.firebaseapp.com`, o login Google usa o handler OAuth do próprio Firebase Hosting. `scoreplace.app` e os apps nativos continuam usando `auth.scoreplace.app`.

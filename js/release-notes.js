@@ -1,3 +1,5 @@
+// 2.6.65 — Na TV, a chamada para abrir o Scoreplace aparece em preto sobre
+// branco, com a marca sobre fundo escuro. O logo do torneio fica acima do QR.
 // 2.6.64 — A rota alternativa do Firebase permite entrar com a mesma conta
 // quando a rede bloqueia o domínio principal do Scoreplace.
 // 2.6.63 — No CAMIS, tocar no nome de uma atleta digitada oferece corrigir o

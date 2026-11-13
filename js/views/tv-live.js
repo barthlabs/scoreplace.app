@@ -650,6 +650,9 @@
       '<path d="M 40 0 L 42 6 L 48 6 L 43 10 L 45 16 L 40 12 L 35 16 L 37 10 L 32 6 L 38 6 Z" fill="#F59E0B"/>' +
       '</svg><span>Abra no<br>Scoreplace</span></div>';
   }
+  function qrTournamentLogoHtml(snapshot) {
+    return snapshot.logo ? '<img class="tv-qr-tournament-logo" src="' + esc(snapshot.logo) + '" alt="Logo do torneio">' : '';
+  }
   function bodyHtml(snapshot) {
     var theme = snapshot.theme || { background: '#060d1a', primary: '#0d1b2e', secondary: '#0d1b2e', title: '#ffffff' };
     var logoRadius = /^(?:[0-9]|[1-4][0-9]|50)%$/.test(String(snapshot.logoRadius || '')) ? snapshot.logoRadius : '14%';
@@ -663,7 +666,7 @@
       (snapshot.rankings.length ? snapshot.rankings.map(function (section) { return rankingHtml(section, snapshot.rankings.length > 1); }).join('') : '<p>Classificação em formação</p>') +
       '</section><section class="tv-results"><div class="tv-results-main"><h2>ÚLTIMOS RESULTADOS</h2><div class="tv-results-list" data-result-day="' + esc(snapshot.resultDay) + '">' +
       snapshot.results.map(resultHtml).join('') +
-      '</div></div><div class="tv-qr"><img class="tv-qr-code" src="' + esc(snapshot.qrImage) + '" alt="QR para escolher App Store, Google Play ou versão web">' + qrBrandHtml() + '</div>' +
+      '</div></div><div class="tv-qr">' + qrTournamentLogoHtml(snapshot) + '<img class="tv-qr-code" src="' + esc(snapshot.qrImage) + '" alt="QR para escolher App Store, Google Play ou versão web">' + qrBrandHtml() + '</div>' +
       '</section></aside></main></div>';
   }
   function fullscreenActionHtml() {
@@ -681,7 +684,7 @@
       ? Math.max(0, Math.min(resultBox.x + resultBox.w, qrBox.x + qrBox.w) - Math.max(resultBox.x, qrBox.x)) : 0;
     var qrReserve = qrOverlap ? Math.min(45, Math.ceil(qrOverlap / resultBox.w * 100) + 2) : 0;
     var results = '<section class="tv-results"><div class="tv-results-main"><h2>ÚLTIMOS RESULTADOS</h2><div class="tv-results-list" style="padding-right:' + qrReserve + '%" data-result-day="' + esc(snapshot.resultDay) + '">' + snapshot.results.map(resultHtml).join('') + '</div></div></section>';
-    var qr = '<div class="tv-qr"><img class="tv-qr-code" src="' + esc(snapshot.qrImage) + '" alt="QR para abrir o Scoreplace">' + qrBrandHtml() + '</div>';
+    var qr = '<div class="tv-qr">' + qrTournamentLogoHtml(snapshot) + '<img class="tv-qr-code" src="' + esc(snapshot.qrImage) + '" alt="QR para abrir o Scoreplace">' + qrBrandHtml() + '</div>';
     function liveGame(id) {
       var game = snapshot.selectedMatches && snapshot.selectedMatches[id];
       if (!game) return '<section class="tv-focus-card"><h2>Escolha a partida</h2></section>';
@@ -873,9 +876,10 @@
     '.tv-result-left .tv-result-players span{text-align:left}.tv-result>div.tv-result-match .tv-result-left .tv-result-players span{text-align:left}.tv-result-right .tv-result-players span{text-align:right}' +
     '.tv-result>div.tv-result-match .tv-result-score strong{font-size:clamp(1rem,1.5vw,2rem);font-variant-numeric:tabular-nums}.tv-result>div.tv-result-match .tv-result-score strong.tv-result-win{color:#4ade80}.tv-result>div.tv-result-match .tv-result-score strong.tv-result-loss{color:#f87171}' +
     '.tv-qr{display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:.55vw;width:clamp(112px,9vw,190px)}' +
+    '.tv-qr-tournament-logo{display:block;max-width:100%;max-height:38%;min-height:0;object-fit:contain;border-radius:var(--tv-logo-radius,14%)}' +
     '.tv-qr-code{display:block;width:100%;aspect-ratio:1;background:#fff;padding:.25vw;border-radius:.5vw;object-fit:contain}' +
-    '.tv-qr-brand{display:flex;align-items:center;justify-content:center;gap:.3vw;width:100%;color:#e2e8f0;font-size:clamp(.65rem,.75vw,1rem);font-weight:800;line-height:1.1}' +
-    '.tv-scoreplace-mark{display:block;flex:none;width:2vw;min-width:26px;height:auto;aspect-ratio:4/3}' +
+    '.tv-qr-brand{display:flex;align-items:center;justify-content:center;gap:.3vw;width:100%;background:#fff;color:#111;font-size:clamp(.65rem,.75vw,1rem);font-weight:800;line-height:1.1}' +
+    '.tv-scoreplace-mark{display:block;flex:none;width:2vw;min-width:26px;height:auto;aspect-ratio:4/3;background:#111827;border-radius:.2vw;padding:.12vw;box-sizing:border-box}' +
     '.tv-results-list>h2{margin:0 0 .18vw}.tv-result{padding:.22vw 0 .28vw}.tv-result>small{display:block;margin:0 0 .18vw;line-height:1.15;white-space:nowrap}.tv-result>div.tv-result-match{display:grid;grid-template-columns:minmax(0,1fr) 2.2vw minmax(0,1fr);gap:.3vw;align-items:stretch}.tv-result-side{min-height:4.8vw;padding:.25vw .35vw}.tv-result-players{flex:1;justify-content:center;gap:.1vw}.tv-result-players span{display:block;white-space:normal;overflow-wrap:anywhere;text-overflow:clip;line-height:1.1}.tv-result-left .tv-result-players{text-align:left}.tv-result-right .tv-result-players{text-align:right}.tv-result>div.tv-result-match strong.tv-result-side-score{flex:none;font-size:clamp(1.2rem,1.65vw,2.2rem);font-variant-numeric:tabular-nums}.tv-result>div.tv-result-match strong.tv-result-win{color:#4ade80}.tv-result>div.tv-result-match strong.tv-result-loss{color:#f87171}.tv-result-versus{display:flex;align-items:center;justify-content:center;color:#cbd5e1;font-size:clamp(.7rem,.8vw,1rem);font-weight:900}' +
     '.tv-court.tv-court-latest{border:3px solid #fbbf24;box-shadow:0 0 18px #fbbf2466}' +
     '.tv-left{min-height:0;display:grid;grid-template-rows:minmax(0,1fr) clamp(112px,13vh,170px);gap:.75vw}' +
@@ -920,7 +924,7 @@
     '.tv-theme .tv-court-top,.tv-theme .tv-ranking-head,.tv-theme .tv-ranking-row,.tv-theme .tv-result,.tv-theme .tv-focus-standing-row{border-color:var(--tv-edge)}' +
     '.tv-theme .tv-result.tv-result-latest{background:var(--tv-row-active);border-color:#fbbf24}.tv-theme .tv-series-game.tv-series-latest-update,.tv-theme .tv-series-game.tv-series-latest-result{border:2px solid #fbbf24;outline:0;box-shadow:none}' +
     '.tv-theme .tv-bracket-match-in-court{border-color:#4ade80;box-shadow:none}' +
-    '.tv-theme .tv-qr-brand{background:transparent;color:var(--tv-title,#ffffff);border-radius:0;padding:.18vw .3vw;box-sizing:border-box}' +
+    '.tv-theme .tv-qr-brand{background:#fff;color:#111;border-radius:.3vw;padding:.18vw .3vw;box-sizing:border-box}' +
     '.tv-theme .tv-focus-card h2.tv-focus-third{color:#f59e0b}.tv-theme .tv-focus-card.tv-focus-gold h2.tv-focus-phase{color:#fbbf24;border-left-color:#fbbf24}.tv-theme .tv-focus-card.tv-focus-gold .tv-focus-match{border-left-color:#fbbf24}.tv-theme .tv-focus-standing-gold{border-color:#a16207}.tv-theme .tv-focus-standing-gold h2,.tv-theme .tv-focus-standing-gold .tv-focus-standing-row b{color:#fbbf24}.tv-theme .tv-focus-standing-silver{border-color:#94a3b8}.tv-theme .tv-focus-standing-silver h2,.tv-theme .tv-focus-standing-silver .tv-focus-standing-row b{color:#cbd5e1}' +
     '#tv-fullscreen-action{border-color:#d4d4d4!important;background:#222!important;color:#fff}' +
     '</style>');
