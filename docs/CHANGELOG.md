@@ -1,3 +1,10 @@
+## 2.6.76 — 13/nov/2026 (simples de desempate concluída pelo placar)
+
+- Salvar o placar da última simples conclui automaticamente o desempate e aplica a ordem de classificação na mesma transação. Isso vale para placar digitado, ponto ao vivo e W.O.; triangulares seguem criando o próximo confronto somente quando necessário.
+- Uma correção posterior de placar concluído permanece possível e auditável; se alterar o primeiro confronto de uma triangular, os confrontos dependentes são recriados.
+- O placar Rostanda Meireles 5×1 Ana Laura Verdi do Camis Day já consta como concluído no documento de produção.
+- Corte web e `advanceTournamentPhase`; versões nativas preservadas.
+
 ## 2.6.75 — 13/nov/2026 (quadra chamada estável e TV CAMIS)
 
 - O recálculo da grade preserva quadra, horário e número de jogos já chamados, mesmo antes do primeiro placar. A cópia usada pelo servidor segue a mesma regra.
