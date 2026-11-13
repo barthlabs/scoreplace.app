@@ -1,3 +1,8 @@
+## 2.6.69 — 13/nov/2026 (posição do logo CAMIS preservada)
+
+- Restaura a posição horizontal e vertical do logo CAMIS da 2.6.67. Apenas o QR e a faixa “Abra no Scoreplace” são deslocados para o centro do logo e para o centro do espaço inferior, sem alterar a caixa do logo.
+- Corte somente web; sem alterações em partidas, resultados, Functions ou versões nativas.
+
 ## 2.6.68 — 13/nov/2026 (centralização do QR na TV do CAMIS)
 
 - QR e tarja “Abra no Scoreplace” ficam no mesmo eixo horizontal do logo CAMIS, com a mesma largura, centralizados verticalmente no espaço inferior e com margem da borda direita da TV.
