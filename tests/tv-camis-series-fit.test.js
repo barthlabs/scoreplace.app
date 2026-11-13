@@ -23,7 +23,8 @@ const { chromium } = require('@playwright/test');
     const metrics = await page.evaluate(async () => {
       const layout = window.ScoreplaceTvLayout.defaults();
       Object.assign(layout.sections.courts, { visible: true, x: 0, y: 7, w: 67, h: 89.5 });
-      const series = (number, a, b) => ({ number, a, b, scoreA: '', scoreB: '', status: 'active' });
+      const series = (number, a, b) => ({ number, a, b, scoreA: number % 3 === 1 ? '6' : '',
+        scoreB: number % 3 === 1 ? '4' : '', status: 'active' });
       const pair = ['Adriana Ferreira Leite / Katia de Carvalho Figueiredo', 'Maira Lourenço Cavalcanti / Ana Paula Schmidt'];
       const snapshot = {
         tvLayout: layout, theme: { background: '#000', primary: '#000', secondary: '#fff', title: '#fff' }, name: 'Camis Day',
@@ -38,6 +39,8 @@ const { chromium } = require('@playwright/test');
       return [...frame.contentDocument.querySelectorAll('.tv-series-game')].slice(0, 3).map(row => {
         const bounds = row.getBoundingClientRect();
         return { rowTop: bounds.top, rowBottom: bounds.bottom,
+          scores: [...row.querySelectorAll('.tv-series-side > strong')].map(el => ({ text:el.textContent,
+            top:el.getBoundingClientRect().top, bottom:el.getBoundingClientRect().bottom })),
           names: [...row.querySelectorAll('.tv-series-players > span')].map(el => {
             const rect = el.getBoundingClientRect();
             const avatar = el.querySelector('.tv-player-photo').getBoundingClientRect();
@@ -50,6 +53,10 @@ const { chromium } = require('@playwright/test');
     assert(metrics.every(row => row.names.every(name => name.scroll <= name.height + 1 &&
       name.top >= row.rowTop && name.bottom <= row.rowBottom)), 'nomes cabem na linha do próprio jogo');
     assert(metrics.every(row => row.names.every(name => name.full)), 'nome completo fica disponível no título');
+    assert.deepEqual(metrics.map(row => row.scores.map(score => score.text)), [['6', '4'], ['–', '–'], ['–', '–']],
+      'placares lançados e espaços de placar aparecem nos três jogos');
+    assert(metrics.every(row => row.scores.every(score => score.top >= row.rowTop && score.bottom <= row.rowBottom)),
+      'placares não saem da linha de jogo');
     assert(metrics.some(row => row.names.some(name => name.shown !== name.full)), 'nomes longos são abreviados');
     for (let side = 0; side < 4; side++) {
       const positions = metrics.map(row => row.names[side].avatarX);

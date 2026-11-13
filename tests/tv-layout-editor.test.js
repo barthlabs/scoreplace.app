@@ -422,7 +422,7 @@ const { chromium } = require('@playwright/test');
     await popup.close();
     await page.waitForFunction(() => !window._tvLiveWindow || window._tvLiveWindow.closed);
     await page.evaluate(() => {
-      Object.defineProperty(window.screen, 'isExtended', { configurable:true, value:true });
+      Object.defineProperty(window.screen, 'isExtended', { configurable:true, value:false });
       window.getScreenDetails = async () => ({ screens:[
         { label:'Principal', isPrimary:true, availLeft:0, availTop:0, availWidth:1400, availHeight:1000, width:1400, height:1000 },
         { label:'Projetor', isPrimary:false, availLeft:1400, availTop:0, availWidth:1280, availHeight:720, width:1280, height:720 }
@@ -442,6 +442,9 @@ const { chromium } = require('@playwright/test');
     await page.locator('#open-tv-test').click();
     const secondPopup = await secondPopupPromise;
     await secondPopup.getByRole('dialog', { name:'Onde mostrar a tela No ar?' }).waitFor();
+    assert.equal(await secondPopup.getByRole('button', { name:/Tela principal.*Principal/ }).count(), 1);
+    assert.equal(await secondPopup.getByRole('button', { name:/Tela secundária.*Projetor/ }).count(), 1,
+      'a lista da API prevalece mesmo quando isExtended informa falso');
     await secondPopup.getByRole('button', { name:/Projetor/ }).click();
     assert.deepEqual(await page.evaluate(() => ({move:window.__tvMove,resize:window.__tvResize})),
       { move:{x:1400,y:0}, resize:{width:1268,height:704} },
@@ -459,10 +462,21 @@ const { chromium } = require('@playwright/test');
     await page.locator('#open-tv-test').click();
     await secondClosePromise;
     await page.waitForFunction(() => !window._tvLiveWindow || window._tvLiveWindow.closed);
+    await page.evaluate(() => { window.getScreenDetails = async () => ({ screens:[
+      { label:'Principal', isPrimary:true, availLeft:0, availTop:0, availWidth:1400, availHeight:1000, width:1400, height:1000 }
+    ] }); });
     const repeatPopupPromise = page.waitForEvent('popup');
     await page.locator('#open-tv-test').click();
     const repeatPopup = await repeatPopupPromise;
     await repeatPopup.getByRole('dialog', { name:'Onde mostrar a tela No ar?' }).waitFor();
+    assert.equal(await repeatPopup.getByRole('button', { name:/Tela secundária/ }).count(), 0);
+    await repeatPopup.evaluate(() => { window.getScreenDetails = async () => ({ screens:[
+      { label:'Principal', isPrimary:true, width:1400, height:1000 },
+      { label:'Projetor', isPrimary:false, width:1280, height:720 }
+    ] }); });
+    await repeatPopup.getByRole('button', { name:'Detectar novamente' }).click();
+    assert.equal(await repeatPopup.getByRole('button', { name:/Tela secundária.*Projetor/ }).count(), 1,
+      'a lista pode ser atualizada quando o HDMI aparece depois da primeira leitura');
     await repeatPopup.getByRole('button', { name:'Cancelar' }).click();
     await page.evaluate(() => { window.getScreenDetails = undefined; });
     await page.evaluate(() => {

@@ -642,7 +642,7 @@
       card.series.map(function (game) {
         function side(label, uids, score, direction, outcome) {
           return '<div class="tv-series-side tv-series-' + direction + (outcome ? ' tv-series-' + outcome : '') + '"><div class="tv-series-players">' + playerRows(label, uids, true) + '</div>' +
-            (options.score && score !== '' ? '<strong>' + esc(score) + '</strong>' : '') + '</div>';
+            (options.score ? '<strong>' + esc(score === '' ? '–' : score) + '</strong>' : '') + '</div>';
         }
         var winnerSide = Number(game.winnerSide) || 0;
         if (game.status === 'done' && !winnerSide && !game.wo) {
@@ -1160,18 +1160,21 @@
       var name = String(screen.label || '').trim() || 'Tela ' + (index + 1);
       var width = Number(screen.width || screen.availWidth || 0);
       var height = Number(screen.height || screen.availHeight || 0);
-      return '<button type="button" data-tv-monitor="' + index + '">' + esc(name) +
-        (screen.isPrimary ? ' · principal' : '') + '<small>' + width + ' × ' + height + '</small></button>';
+      return '<button type="button" data-tv-monitor="' + index + '">' +
+        (screen.isPrimary ? 'Tela principal' : 'Tela secundária') +
+        '<small>' + esc(name) + ' · ' + width + ' × ' + height + '</small></button>';
     }).join('');
     return '<div class="tv-monitor-dialog" role="dialog" aria-modal="true" aria-labelledby="tv-monitor-title">' +
       '<h2 id="tv-monitor-title">Onde mostrar a tela No ar?</h2>' +
-      '<p>' + (error ? 'O navegador não liberou a lista de monitores. Mova esta janela para a tela desejada e escolha Abrir janela da TV.' :
-        'Escolha o monitor da apresentação. A TV abrirá nele em tela cheia.') + '</p>' +
-      '<div class="tv-monitor-list">' + (list || '<button type="button" data-tv-monitor="manual">Abrir janela da TV</button>') + '</div>' +
+      '<p>' + (error ? 'O navegador não liberou os monitores. Permita gerenciar janelas para este site e tente novamente.' :
+        screens.length < 2 ? 'A segunda tela não foi detectada. Confira se o HDMI está em modo estendido e tente novamente.' :
+        'Escolha a tela da apresentação. A TV abrirá nela em tela cheia.') + '</p>' +
+      '<div class="tv-monitor-list">' + (list || '<button type="button" data-tv-monitor="manual">Abrir janela da TV</button>') +
+      (screens.length < 2 ? '<button type="button" data-tv-monitor="retry">Detectar novamente</button>' : '') + '</div>' +
       '<button type="button" class="tv-monitor-cancel" data-tv-monitor="cancel">Cancelar</button></div>';
   }
   function chooseMonitor(tournament) {
-    if (typeof window.getScreenDetails !== 'function' || (window.screen && window.screen.isExtended === false)) {
+    if (typeof window.getScreenDetails !== 'function') {
       startTv(tournament, null);
       return;
     }
@@ -1194,25 +1197,33 @@
       if (!choice) return;
       var value = choice.getAttribute('data-tv-monitor');
       if (value === 'cancel') { dismissScreenPicker(); return; }
+      if (value === 'retry') { loadScreens(true); return; }
       var screen = value === 'manual' ? null : picker._screens[Number(value)];
       screenPickerRequest++;
       screenPickerPopup = null;
       startTv(tournament, screen || null, chooser, true);
     });
-    try {
-      Promise.resolve(window.getScreenDetails()).then(function (details) {
-        if (screenPickerPopup !== chooser || chooser.closed || request !== screenPickerRequest) return;
-        picker._screens = Array.from(details.screens || []);
-        picker.innerHTML = screenPickerHtml(picker._screens, false);
-      }).catch(function () {
-        if (screenPickerPopup !== chooser || chooser.closed || request !== screenPickerRequest) return;
+    function loadScreens(fromChooser) {
+      picker.innerHTML = '<div class="tv-monitor-dialog" role="status"><h2>Detectando monitores…</h2></div>';
+      try {
+        var source = fromChooser && typeof chooser.getScreenDetails === 'function' ? chooser : window;
+        Promise.resolve(source.getScreenDetails()).then(function (details) {
+          if (screenPickerPopup !== chooser || chooser.closed || request !== screenPickerRequest) return;
+          picker._screens = Array.from(details.screens || []).sort(function (a, b) {
+            return Number(!!b.isPrimary) - Number(!!a.isPrimary);
+          });
+          picker.innerHTML = screenPickerHtml(picker._screens, false);
+        }).catch(function () {
+          if (screenPickerPopup !== chooser || chooser.closed || request !== screenPickerRequest) return;
+          picker._screens = [];
+          picker.innerHTML = screenPickerHtml([], true);
+        });
+      } catch (error) {
         picker._screens = [];
         picker.innerHTML = screenPickerHtml([], true);
-      });
-    } catch (error) {
-      picker._screens = [];
-      picker.innerHTML = screenPickerHtml([], true);
+      }
     }
+    loadScreens(false);
   }
   window._tvLiveToggle = function () {
     if (screenPickerPopup && screenPickerPopup.closed) screenPickerPopup = null;

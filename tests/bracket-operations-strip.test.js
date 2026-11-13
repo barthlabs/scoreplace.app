@@ -120,6 +120,10 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       let next = strip.querySelector('.sp-operations-next .sp-match-card');
       const ids = [...document.querySelectorAll('[id]')].map(node => node.id);
       const initial = { full: !!next && next.querySelectorAll('.team').length === 2 && !!next.querySelector('.sp-mc-head, .versus, .sp-match-operational'),
+        futureInsideNext: !!strip.querySelector('.sp-operations-next-scroll .sp-operations-future'),
+        futureOutsideNext: !!strip.querySelector('.sp-operations-track > .sp-operations-future'),
+        futureScrollable: (() => { const scroller = strip.querySelector('.sp-operations-next-scroll');
+          return scroller.scrollHeight > scroller.clientHeight; })(),
         stage:strip.querySelector('.sp-operations-next .sp-operations-stage')?.textContent,
         simulateVisible: simulateRect.left >= headingRect.right && simulateRect.right <= stripRect.right && simulateRect.right <= innerWidth,
         names: next.textContent.includes('A / B') && next.textContent.includes('C / D'),
@@ -215,6 +219,8 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
         selectorStayedInStrip, outsiderHidden: !document.querySelector('[data-bracket-operations-strip]') };
     });
     assert(state.initial.full && state.initial.names && state.initial.noCanonical && state.initial.uniqueIds && state.initial.linked && state.initial.noInline);
+    assert(state.initial.futureInsideNext && !state.initial.futureOutsideNext && state.initial.futureScrollable,
+      'outros próximos jogos rolam dentro da primeira coluna, sem painel intermediário');
     assert.equal(state.initial.stage, 'Classificatória', 'o próximo jogo na operação mostra a etapa da rodada');
     assert(state.initial.simulateVisible, 'Simular deve aparecer ao lado de EM QUADRA, sem rolar até a última quadra');
     assert.deepEqual(state.initial.courts, ['Quadra 4', 'Quadra 5']);

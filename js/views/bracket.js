@@ -2614,6 +2614,9 @@ window._bracketOperationsRefresh = function (t, root) {
   root._bracketOperationsDrafts = root._bracketOperationsDrafts || {};
   var previousTrack = existing.querySelector('.sp-operations-track');
   var trackScroll = previousTrack ? previousTrack.scrollLeft : 0;
+  var previousNextScroll = previousTrack && previousTrack.querySelector('.sp-operations-next-scroll');
+  var nextScrollTop = previousNextScroll && String(previousNextScroll.getAttribute('data-next-match') || '') ===
+    String(state.next && state.next.id || '') ? previousNextScroll.scrollTop : 0;
   var pageX = window.scrollX, pageY = window.scrollY;
   var focused = document.activeElement && document.activeElement.closest && document.activeElement.closest('.sp-operations-replica');
   var focusState = focused && { match: focused.getAttribute('data-operations-match'),
@@ -2651,7 +2654,8 @@ window._bracketOperationsRefresh = function (t, root) {
   var nextAvailability = '<div class="sp-operations-availability' + (freeCount ? '' : ' sp-operations-availability--busy') + '"><span>' +
     freeCount + ' ' + (freeCount === 1 ? 'QUADRA LIVRE' : 'QUADRAS LIVRES') + '</span>' +
     (state.next ? '<strong class="sp-operations-stage">' + (window._safeHtml || String)(_bracketOperationsStageLabel(state.next, t, state.matches)) + '</strong>' : '') + '</div>';
-  existing.innerHTML = '<div class="sp-operations-track" data-hscroll="ops:track"><div class="sp-operations-next">' +
+  existing.innerHTML = '<div class="sp-operations-track" data-hscroll="ops:track"><div class="sp-operations-next"><div class="sp-operations-next-scroll" aria-label="Próximos jogos" data-next-match="' +
+    (window._safeHtml || String)(String(state.next && state.next.id || '')) + '">' +
     (state.next ? _bracketOperationsReplica(state.next, t, { canCall: canCall && state.nextCallable !== false, active: false,
       readOnly: state.nextCallable === false,
       postponeReady: canCall && state.nextCallable !== false, postponeBusy: existing._spPostponeBusy || !(window._bracketCourtReleaseCache[String(t.id)] || {}).ready,
@@ -2659,7 +2663,7 @@ window._bracketOperationsRefresh = function (t, root) {
       preferFirstFreeCourt: true, preferredCourt: (root._bracketOperationsManualCourt || {})[String(state.next.id)] || '' }, nextLabel, nextAvailability, root, state.matches, 'next') :
       '<span class="sp-operations-label">' + nextLabel + '</span>' + nextAvailability + '<div class="sp-operations-empty">' +
       (state.waitingForTie ? 'Aguardando a definição do desempate para continuar a fila' : 'Nenhum jogo aguardando chamada') + '</div>') +
-    '</div>' + _bracketOperationsFutureHtml(state, t) + (state.pending.length ? '<div class="sp-operations-pending" aria-label="Placares pendentes"><span class="sp-operations-section-title">PLACARES PENDENTES</span><div class="sp-operations-pending-track">' +
+    _bracketOperationsFutureHtml(state, t) + '</div></div>' + (state.pending.length ? '<div class="sp-operations-pending" aria-label="Placares pendentes"><span class="sp-operations-section-title">PLACARES PENDENTES</span><div class="sp-operations-pending-track">' +
     state.pending.map(function (m) { return _bracketOperationsReplica(m, t, { canCall: canCall, active: false, pending: true }, String(m.court || 'Placar pendente'), '', root, state.matches, 'pending:' + String(m.id)); }).join('') +
     '</div></div>' : '') + '<div class="sp-operations-courts" aria-label="Jogos em quadra"><div class="sp-operations-courts-heading"><span class="sp-operations-section-title">EM QUADRA</span>' +
     (typeof window._isUserOrgOrCoHost === 'function' && window._isUserOrgOrCoHost(t, user) ?
@@ -2707,6 +2711,8 @@ window._bracketOperationsRefresh = function (t, root) {
     operationsTrack.style.setProperty('--sp-operations-card-height',
       (root._bracketOperationsGameHeight || 120) + 'px');
     operationsTrack.scrollLeft = trackScroll;
+    var nextScroll = operationsTrack.querySelector('.sp-operations-next-scroll');
+    if (nextScroll) nextScroll.scrollTop = nextScrollTop;
     _bracketOperationsBindScrollbar(operationsTrack, existing.querySelector('.sp-operations-scrollbar'));
     if (window.scrollY !== pageY || window.scrollX !== pageX) window.scrollTo(pageX, pageY);
   }
