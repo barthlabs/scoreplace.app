@@ -1,3 +1,5 @@
+// 2.6.88 — A tela No Ar mantém “Últimos resultados” e “Próximos jogos”
+// parados enquanto todos os cards couberem; a rolagem começa só com excesso.
 // 2.6.87 — O próximo jogo volta a ser um card completo na operação.
 // A fila posterior permanece rolável dentro da mesma coluna.
 // 2.6.86 — Quando o próximo jogo ainda depende dos placares da Prata,

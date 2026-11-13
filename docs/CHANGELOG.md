@@ -1,3 +1,7 @@
+## 2.6.88 — 13/nov/2026 (rolagem condicional na tela No Ar)
+
+- “Próximos jogos” e “Últimos resultados” permanecem estáticos quando todo o conteúdo cabe no painel. A rolagem automática inicia apenas quando o conteúdo ultrapassa a altura disponível, inclusive após atualizações da tela.
+
 ## 2.6.87 — 13/nov/2026 (card do próximo jogo)
 
 - Mesmo quando o próximo confronto ainda depende de uma vaga da eliminatória, a operação mostra seu card completo na primeira coluna, sem permitir chamada prematura. Os outros jogos seguem na rolagem abaixo do card.
