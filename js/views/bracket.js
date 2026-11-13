@@ -2063,7 +2063,7 @@ function _bracketOperationsReplica(m, t, role, label, availability, root, allMat
     var callCard = document.createElement('template');
     callCard.innerHTML = window.renderMatchCard(selected, canEnter, t.id,
       Number.isInteger(selectedNumber) && selectedNumber > 0 ? selectedNumber : null,
-      false, null, { preferFirstFreeCourt: !!role.preferFirstFreeCourt, preferredCourt: role.preferredCourt || '' });
+      false, null, { readOnly:!!role.readOnly, preferFirstFreeCourt: !!role.preferFirstFreeCourt, preferredCourt: role.preferredCourt || '' });
     var callRow = callCard.content.querySelector('.sp-match-operational');
     var callCategory = callCard.content.querySelector('[data-match-time-status]');
     standingsCategoryLabel = (callCategory && callCategory.textContent.trim()) || String(selected.category || group.roster.category || '');
@@ -2076,7 +2076,7 @@ function _bracketOperationsReplica(m, t, role, label, availability, root, allMat
     ? _bracketScopeReplicaHtml(_bracketOperationsStandingsHtml(group, t, slot, standingsCourtHtml, standingsCategoryLabel), 'operations-standings-' + slot)
     : typeof window.renderMatchCard === 'function'
     ? window.renderMatchCard(selected, canEnter, t.id, Number.isInteger(selectedNumber) && selectedNumber > 0 ? selectedNumber : null,
-      false, null, { idScope: 'operations-' + String(selected.id || ''),
+      false, null, { idScope: 'operations-' + String(selected.id || ''), readOnly:!!role.readOnly,
         preferFirstFreeCourt: !!role.preferFirstFreeCourt, preferredCourt: role.preferredCourt || '' }) : '';
   if (group && index < 3 && html) {
     var host = document.createElement('template');
@@ -2678,21 +2678,22 @@ window._bracketOperationsRefresh = function (t, root) {
     return !state.active.some(function (m) { return String(m.court) === String(court); });
   });
   var freeCount = freeCourts.length;
+  var displayedNext = state.next || state.future[0] || null;
   var nextAvailability = '<div class="sp-operations-availability' + (freeCount ? '' : ' sp-operations-availability--busy') + '"><span>' +
     freeCount + ' ' + (freeCount === 1 ? 'QUADRA LIVRE' : 'QUADRAS LIVRES') + '</span>' +
-    (state.next ? '<strong class="sp-operations-stage">' + (window._safeHtml || String)(_bracketOperationsStageLabel(state.next, t, state.matches)) + '</strong>' : '') + '</div>';
+    (displayedNext ? '<strong class="sp-operations-stage">' + (window._safeHtml || String)(_bracketOperationsStageLabel(displayedNext, t, state.matches)) + '</strong>' : '') + '</div>';
   existing.innerHTML = '<div class="sp-operations-track" data-hscroll="ops:track"><div class="sp-operations-next"><div class="sp-operations-next-scroll' +
-    (!state.next && state.future.length ? ' sp-operations-next-scroll--future-only' : '') + '" aria-label="Próximos jogos" data-next-match="' +
-    (window._safeHtml || String)(String(state.next && state.next.id || '')) + '">' +
-    (state.next ? _bracketOperationsReplica(state.next, t, { canCall: canCall && state.nextCallable !== false, active: false,
-      readOnly: state.nextCallable === false,
-      postponeReady: canCall && state.nextCallable !== false, postponeBusy: existing._spPostponeBusy || !(window._bracketCourtReleaseCache[String(t.id)] || {}).ready,
+    '" aria-label="Próximos jogos" data-next-match="' +
+    (window._safeHtml || String)(String(displayedNext && displayedNext.id || '')) + '">' +
+    (displayedNext ? _bracketOperationsReplica(displayedNext, t, { canCall: canCall && !!state.next && state.nextCallable !== false, active: false,
+      readOnly: !state.next || state.nextCallable === false,
+      postponeReady: canCall && !!state.next && state.nextCallable !== false, postponeBusy: existing._spPostponeBusy || !(window._bracketCourtReleaseCache[String(t.id)] || {}).ready,
       tieCanPostpone: !!state.tieCanPostpone,
-      preferFirstFreeCourt: true, preferredCourt: (root._bracketOperationsManualCourt || {})[String(state.next.id)] || '' }, nextLabel, nextAvailability, root, state.matches, 'next') :
+      preferFirstFreeCourt: true, preferredCourt: (root._bracketOperationsManualCourt || {})[String(displayedNext.id)] || '' }, nextLabel, nextAvailability, root, state.matches, 'next') :
       '<span class="sp-operations-label">' + nextLabel + '</span>' + nextAvailability + '<div class="sp-operations-empty">' +
       (state.waitingForTie ? 'Aguardando a definição do desempate para continuar a fila' :
-        state.future.length ? 'Aguardando definição das duplas; veja a sequência abaixo' : 'Nenhum jogo aguardando chamada') + '</div>') +
-    _bracketOperationsFutureHtml(state, t) + '</div></div>' + (state.pending.length ? '<div class="sp-operations-pending" aria-label="Placares pendentes"><span class="sp-operations-section-title">PLACARES PENDENTES</span><div class="sp-operations-pending-track">' +
+        'Nenhum jogo aguardando chamada') + '</div>') +
+    _bracketOperationsFutureHtml(Object.assign({}, state, { next:displayedNext }), t) + '</div></div>' + (state.pending.length ? '<div class="sp-operations-pending" aria-label="Placares pendentes"><span class="sp-operations-section-title">PLACARES PENDENTES</span><div class="sp-operations-pending-track">' +
     state.pending.map(function (m) { return _bracketOperationsReplica(m, t, { canCall: canCall, active: false, pending: true }, String(m.court || 'Placar pendente'), '', root, state.matches, 'pending:' + String(m.id)); }).join('') +
     '</div></div>' : '') + '<div class="sp-operations-courts" aria-label="Jogos em quadra"><div class="sp-operations-courts-heading"><span class="sp-operations-section-title">EM QUADRA</span>' +
     (typeof window._isUserOrgOrCoHost === 'function' && window._isUserOrgOrCoHost(t, user) ?

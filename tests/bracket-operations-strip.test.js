@@ -357,6 +357,28 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
         Math.abs(geometry.labels[0] - geometry.labels[1]) <= 3 && !geometry.clipped,
       'as três seções e cabeçalhos devem alinhar sem corte em ' + width + 'px: ' + JSON.stringify(geometry));
     }
+    const futureCard = await page.evaluate(() => {
+      const t = window._findTournamentById();
+      const root = document.querySelector('[data-bracket-tabs-root]');
+      const originalRender = window.renderMatchCard;
+      t.matches[1].p2 = 'TBD';
+      window.renderMatchCard = function (m, canEnter, tid, num, compact, pending, opts) {
+        if (m.id === 'm2') window.__futureCardAccess = { canEnter, readOnly:!!(opts && opts.readOnly) };
+        return originalRender.apply(this, arguments);
+      };
+      window._bracketOperationsRefresh(t, root);
+      const strip = root._bracketOperationsStrip;
+      const result = { card:!!strip.querySelector('.sp-operations-next .sp-match-card'),
+        id:strip.querySelector('.sp-operations-next [data-operations-match]')?.getAttribute('data-operations-match'),
+        stage:strip.querySelector('.sp-operations-next .sp-operations-stage')?.textContent,
+        access:window.__futureCardAccess };
+      t.matches[1].p2 = 'G / H';
+      window.renderMatchCard = originalRender;
+      window._bracketOperationsRefresh(t, root);
+      return result;
+    });
+    assert(futureCard.card && futureCard.id === 'm2' && futureCard.access.readOnly && !futureCard.access.canEnter,
+      'jogo futuro com vaga pendente aparece como card completo sem liberar ações: ' + JSON.stringify(futureCard));
     const scrollAfterRefresh = await page.evaluate(() => {
       document.getElementById('view-container').style.paddingTop = '650px';
       document.getElementById('rounds').style.height = '1600px';

@@ -1,3 +1,7 @@
+## 2.6.87 — 13/nov/2026 (card do próximo jogo)
+
+- Mesmo quando o próximo confronto ainda depende de uma vaga da eliminatória, a operação mostra seu card completo na primeira coluna, sem permitir chamada prematura. Os outros jogos seguem na rolagem abaixo do card.
+
 ## 2.6.86 — 13/nov/2026 (próximos jogos visíveis)
 
 - Quando não há partida chamável porque uma vaga da eliminatória ainda depende de placares, a operação mostra a fila futura imediatamente na primeira coluna. O cabeçalho informa quantos confrontos há na sequência, e a lista continua rolável ali. A Prata mantém os jogos 136–144 visíveis com a origem de cada vaga.

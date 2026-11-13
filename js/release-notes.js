@@ -1,3 +1,5 @@
+// 2.6.87 — O próximo jogo volta a ser um card completo na operação.
+// A fila posterior permanece rolável dentro da mesma coluna.
 // 2.6.86 — Quando o próximo jogo ainda depende dos placares da Prata,
 // a operação mostra imediatamente as eliminatórias futuras na primeira coluna,
 // com a quantidade de confrontos e rolagem vertical para ver todos.
