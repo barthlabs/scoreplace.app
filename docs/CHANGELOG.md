@@ -1,3 +1,8 @@
+## 2.6.66 — 13/nov/2026 (alinhamento dos logos na TV)
+
+- O logo do torneio usa toda a faixa disponível acima do QR no layout personalizado, centralizado nos dois eixos e sem máscara que corte a imagem. A tarja branca de “Abra no Scoreplace” tem exatamente a largura do fundo branco do QR. A marca colorida fica sobre um quadrado escuro de cantos arredondados.
+- Corte somente web, sem alterações em partidas, placares ou configuração salva da tela.
+
 ## 2.6.65 — 13/nov/2026 (legenda e logo do QR na TV)
 
 - O convite “Abra no Scoreplace” passa a ter texto preto sobre fundo branco, mesmo quando o tema do torneio define título claro. A marca colorida do Scoreplace ganha um fundo escuro próprio para continuar visível. O logo do torneio fica acima do QR nos layouts padrão e personalizado, usando a imagem já recebida pela janela da TV.

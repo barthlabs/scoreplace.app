@@ -287,7 +287,7 @@ assert.match(paletteHtml, /--tv-primary:#a12345;--tv-secondary:#fedcba;--tv-titl
 assert.match(paletteHtml, /tv-custom-logo.*tv-placed-logo/, 'logo pode ser posicionado independentemente');
 assert.equal((paletteHtml.match(/src="logo\.png"/g) || []).length, 2,
   'logo independente permanece na caixa própria e aparece acima do QR');
-assert.match(paletteHtml, /tv-custom-qr[\s\S]*tv-qr-tournament-logo[\s\S]*tv-qr-code/,
+assert.match(paletteHtml, /tv-custom-qr[\s\S]*tv-qr-has-logo[\s\S]*tv-qr-tournament-logo[\s\S]*tv-qr-code/,
   'a marca do torneio precede o QR na caixa da TV');
 assert.match(window._tvLiveBodyHtml(snapshot), /tv-qr-tournament-logo[\s\S]*tv-qr-code/,
   'layout padrão também exibe a marca acima do QR');

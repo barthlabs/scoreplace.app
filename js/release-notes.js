@@ -1,3 +1,6 @@
+// 2.6.66 — O logo do torneio ocupa, inteiro e centralizado, o espaço acima
+// do QR na TV. A tarja da legenda alinha com o QR e a marca do Scoreplace
+// fica sobre um quadrado escuro de cantos arredondados.
 // 2.6.65 — Na TV, a chamada para abrir o Scoreplace aparece em preto sobre
 // branco, com a marca sobre fundo escuro. O logo do torneio fica acima do QR.
 // 2.6.64 — A rota alternativa do Firebase permite entrar com a mesma conta

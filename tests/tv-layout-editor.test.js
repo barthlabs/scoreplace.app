@@ -19,9 +19,11 @@ const { chromium } = require('@playwright/test');
       window.ScoreplaceNextMatch = { knownSide: () => true, firstAvailable: () => null };
       window._dashboardNextMatchCompare = () => 0;
       window._qrCodeUrl = () => 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"/>';
+      window._tourLogoSrc = t => t.logoUrl || '';
       window._editingTournament = {
         id: 'tour_1790628592058_c342a1e8f5068424887f1702a1633a44',
         name: 'TORNEIO REAL DA PRÉVIA',
+        logoUrl: 'data:image/svg+xml,%3Csvg%20xmlns%3D%22http://www.w3.org/2000/svg%22%20width%3D%22400%22%20height%3D%22400%22/%3E',
         _nJogos: 1,
         courtNames: Array.from({ length:8 }, (_, i) => 'Quadra ' + (i + 1)),
         combinedCategories: ['Fem Diamante', 'Fem Ouro', 'Fem Prata'],
@@ -131,6 +133,32 @@ const { chromium } = require('@playwright/test');
       const box = mark.getBoundingClientRect();
       return box.width >= 26 && box.height >= 19 && box.top >= qr.top && box.bottom <= qr.bottom;
     }), 'logo do Scoreplace aparece dentro da caixa do QR personalizado');
+    assert.ok(await page.evaluate(() => {
+      const doc = document.querySelector('[data-tv-frame]').contentDocument;
+      const slot = doc.querySelector('.tv-custom-qr').getBoundingClientRect();
+      const logo = doc.querySelector('.tv-custom-qr .tv-qr-tournament-logo');
+      const code = doc.querySelector('.tv-custom-qr .tv-qr-code').getBoundingClientRect();
+      if (!logo) return false;
+      const image = logo.getBoundingClientRect();
+      return image.top >= slot.top && image.bottom <= code.top &&
+        Math.abs((image.left + image.right - slot.left - slot.right) / 2) <= 2 &&
+        Math.abs((image.top + image.bottom - slot.top - code.top) / 2) <= 2 &&
+        image.width >= slot.width - 1 && image.height >= code.top - slot.top - 5 &&
+        doc.defaultView.getComputedStyle(logo).objectFit === 'contain' &&
+        doc.defaultView.getComputedStyle(logo).borderRadius === '0px';
+    }), 'logo do torneio fica inteiro e centralizado na área acima do QR');
+    assert.ok(await page.evaluate(() => {
+      const doc = document.querySelector('[data-tv-frame]').contentDocument;
+      const code = doc.querySelector('.tv-custom-qr .tv-qr-code').getBoundingClientRect();
+      const brand = doc.querySelector('.tv-custom-qr .tv-qr-brand').getBoundingClientRect();
+      return Math.abs(code.left - brand.left) <= 1 && Math.abs(code.right - brand.right) <= 1;
+    }), 'tarja branca da legenda coincide com as laterais do QR');
+    assert.ok(await page.evaluate(() => {
+      const doc = document.querySelector('[data-tv-frame]').contentDocument;
+      const mark = doc.querySelector('.tv-custom-qr .tv-scoreplace-mark');
+      const rect = mark.getBoundingClientRect(), radius = parseFloat(doc.defaultView.getComputedStyle(mark).borderTopLeftRadius);
+      return Math.abs(rect.width - rect.height) <= 1 && radius >= 5;
+    }), 'marca do Scoreplace tem fundo quadrado e cantos arredondados');
     assert.deepEqual(await page.evaluate(() => {
       const frame = document.querySelector('[data-tv-frame]');
       const doc = frame.contentDocument, win = frame.contentWindow;
