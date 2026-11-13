@@ -82,6 +82,11 @@ const fullCourts = context.window._bracketOperationsSelect({ id:'tour_full_court
 assert.equal(fullCourts.active.length, 8);
 assert.equal(fullCourts.next.id, 'gold-1', 'mostra o primeiro Ouro mesmo com todas as quadras ocupadas');
 assert.equal(fullCourts.nextCallable, true, 'jogo definido de outra etapa admite chamada ou adiamento manual');
+const scheduledPlan = { id:'tour_interleaved_order', courtCount:8,
+  scheduleWindow:{ interleavedPlan:{ schema:1, editorVersion:2, blocks:[] } }, matches:[firstGold] };
+assert.equal(context.window._bracketOperationsSelect(scheduledPlan).next, null,
+  'agenda intercalada não antecipa a eliminatória enquanto a classificatória anterior está aberta');
+assert.equal(context.window._bracketOperationsSelect(scheduledPlan).nextCallable, false);
 const withTie = { id:'tour_full_courts', courtCount:8, matches:[...activeDiamond, firstGold],
   phaseTieDecisions:{ '0':{ 'group-0:1:2':{ choice:'play', status:'pending', groupName:'Fem Diamante · Grupo A1',
     matches:[{ id:'tie-a', displayGameNumber:'3A', p1:{name:'Ana'}, p2:{name:'Bia'} }] } } } };

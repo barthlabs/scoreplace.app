@@ -1411,9 +1411,10 @@ window._bracketOperationsSelect = function (t) {
   var ordered = window._bracketPostponedOrder(candidates, postponed, ready);
   var next = window.ScoreplaceNextMatch && typeof window.ScoreplaceNextMatch.firstAvailable === 'function'
     ? window.ScoreplaceNextMatch.firstAvailable(ordered, matches, released) : null;
-  // A grade ordena a sugestão; uma fase posterior com duplas definidas pode
-  // ser chamada ou adiada manualmente quando não resta jogo anterior disponível.
-  var preview = !next && window.ScoreplaceNextMatch && typeof window.ScoreplaceNextMatch.firstAvailable === 'function'
+  // Na agenda intercalada publicada, a fila não antecipa uma etapa bloqueada:
+  // a eliminatória Diamante só começa quando terminarem os grupos Ouro.
+  var preview = !next && !(t.scheduleWindow && t.scheduleWindow.interleavedPlan) &&
+    window.ScoreplaceNextMatch && typeof window.ScoreplaceNextMatch.firstAvailable === 'function'
     ? window.ScoreplaceNextMatch.firstAvailable(seriesCandidates, matches, released) : null;
   var nextTie = tieMatches.find(function (m) { return !m.winnerKey && !m.courtCalledAt && !m.postponedAt; }) ||
     tieMatches.find(function (m) { return !m.winnerKey && !m.courtCalledAt; }) ||
