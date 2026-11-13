@@ -6121,6 +6121,22 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     }
     const wasOrganizerOnly = t.organizerOnly === true;
     const antes = _antesDoMotor(t);
+    // No ensaio CAMIS, o reset restaura a fotografia original. Uma correção
+    // do nome deve acompanhá-la na mesma transação, senão o reset desfaz o nome.
+    let camisNameRebase = null;
+    if (tId === require('./camis-name-rebase-core').ID && patch.name !== undefined && patch.name !== t.name) {
+      const baselineRef = db.collection('tournamentRehearsalBaselines').doc(tId);
+      const summaryRef = db.collection('tournaments_summary').doc(tId);
+      const [baselineSnap, summarySnap] = await Promise.all([tx.get(baselineRef), tx.get(summaryRef)]);
+      try {
+        camisNameRebase = require('./camis-name-rebase-core').prepare(t,
+          baselineSnap.exists ? baselineSnap.data() : null,
+          summarySnap.exists ? summarySnap.data() : null, patch.name);
+      } catch (error) { throw new HttpsError('failed-precondition', error.message); }
+      camisNameRebase.baselineRef = baselineRef;
+      camisNameRebase.summaryRef = summaryRef;
+      patch.name = camisNameRebase.root.name;
+    }
     Object.keys(patch).forEach(key => {
       if (key === 'phases' && hasDraw) {
         if (_futurePlan) {
@@ -6141,6 +6157,7 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
         t[key] = patch[key];
       }
     });
+    if (camisNameRebase) t.rehearsal = { ...t.rehearsal, hash:camisNameRebase.hash };
     _writeCategoryRemoval(tx, ref, t, categoryChange && categoryChange.removal,
       categoryChange && categoryChange.reservations);
     if (_futurePlan) {
@@ -6203,6 +6220,12 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
       } });
     }
     const b = _gravaTorneio(tx, ref, t, antes, { agoraIso, extras });
+    if (camisNameRebase) {
+      tx.update(camisNameRebase.baselineRef, {
+        root:camisNameRebase.root, summary:camisNameRebase.summary, hash:camisNameRebase.hash
+      });
+      tx.update(camisNameRebase.summaryRef, { name:t.name });
+    }
     return { ok:true, changed:true, tournament:b.clean, scheduleWindow:b.clean.scheduleWindow || null };
   });
 });

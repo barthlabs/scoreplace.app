@@ -6576,12 +6576,15 @@ window._saveTournamentClickHandler = async function() {
           ? window._readTournamentBrandingPatch(editId) : {};
         var tvDirty = editId && typeof window._tvEditorHasChanges === 'function' && window._tvEditorHasChanges();
         if (editId && (tvDirty || Object.keys(brandingPatch).length)) {
+          var nameForBranding = ((document.getElementById('tourn-name') || {}).value || '').trim();
+          var currentForBranding = window.AppStore.tournaments.find(function (item) { return String(item.id) === String(editId); });
+          if (currentForBranding && nameForBranding && nameForBranding !== currentForBranding.name) brandingPatch.name = nameForBranding;
           if (Object.keys(brandingPatch).length) await window.AppStore.addTournament(Object.assign({ id:editId }, brandingPatch));
           if (tvDirty && typeof window._tvEditorSaveChanges === 'function') await window._tvEditorSaveChanges();
           window._logoRemovalRequested = false;
           window._coverModeChosenByUser = false;
           window._coverRemovalRequested = false;
-          showNotification('Personalização salva', 'Logo, cores e tela No ar foram gravados. Outras alterações da ficha não foram salvas.', 'success');
+          showNotification('Personalização salva', 'Logo, cores, nome e tela No ar foram gravados quando alterados. Outras alterações da ficha não foram salvas.', 'success');
           return;
         }
         var pendingForm = document.getElementById('form-create-tournament');
@@ -7347,6 +7350,24 @@ window._saveTournamentClickHandler = async function() {
           window.location.hash = '#tournaments/' + editId;
         }
       } catch (err) {
+        // A ficha pode trazer valores antigos de quadras/duração junto com um nome
+        // novo. Se a grade já foi publicada, salve só o nome após a recusa do
+        // servidor; a proteção dos jogos continua intacta.
+        var renameId = (document.getElementById('edit-tournament-id') || {}).value;
+        var requestedName = ((document.getElementById('tourn-name') || {}).value || '').trim();
+        var currentTournament = renameId && window.AppStore.tournaments.find(function (item) {
+          return String(item.id) === String(renameId);
+        });
+        if (currentTournament && requestedName && requestedName !== currentTournament.name &&
+            /A grade de jogos publicados não pode mudar depois do sorteio/.test(String(err && err.message || ''))) {
+          try {
+            await window.AppStore.addTournament({ id: renameId, name: requestedName });
+            showNotification('Nome do torneio salvo', 'As demais alterações da ficha não foram salvas.', 'success');
+            closeModal('modal-create-tournament');
+            window.location.hash = '#tournaments/' + renameId;
+            return;
+          } catch (renameError) { err = renameError; }
+        }
         // A ficha ampla pode reenviar insumos da grade publicada ao salvar só a
         // tela No ar. A TV tem uma porta de escrita própria: persiste apenas os
         // campos visuais, sem afrouxar a proteção da grade já sorteada.

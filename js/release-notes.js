@@ -1,7 +1,8 @@
 // 2.6.71 — A tela No ar permite escolher o monitor para a TV. O logo, o QR,
 // a legenda e o relógio cabem na segunda tela sem recorte. Para desligar a TV,
 // use NO AR na operação; a apresentação não mostra botão de saída. A margem
-// direita da TV foi afinada para aproveitar mais espaço no projetor.
+// direita da TV foi afinada para aproveitar mais espaço no projetor. O nome do
+// torneio pode ser corrigido sem alterar a grade publicada.
 // 2.6.70 — No app instalado, NO AR abre a TV na própria janela já em tela cheia.
 // 2.6.69 — Mantém o logo CAMIS no lugar e centraliza somente o QR e a legenda.
 // 2.6.68 — QR e legenda centralizados no eixo do logo CAMIS, com folga vertical e da TV.

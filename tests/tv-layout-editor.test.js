@@ -448,7 +448,8 @@ const { chromium } = require('@playwright/test');
     assert.equal(await page.evaluate(() => document.fullscreenElement), null,
       'desligar NO AR na operação fecha a TV e devolve o aplicativo');
     await page.evaluate(() => {
-      window._editingTournament.name = 'Camis no Beyond';
+      window._editingTournament.id = 'tour_1793804848447_94bfe2282535789667cb35f1080024ee';
+      window._editingTournament.name = 'Camis Day';
       const layout = window.ScoreplaceTvLayout.defaults();
       Object.assign(layout.sections.courts, { x:0, y:9.7, w:67, h:90.3 });
       layout.sections.rankings.visible = false;

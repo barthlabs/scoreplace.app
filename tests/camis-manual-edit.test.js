@@ -38,6 +38,8 @@ const input = { tournament,baseline,registrations,matches,oldName:'Kelly Barth',
 
 assert.equal(core.fingerprint(payload),rehearsal.fingerprint(payload),'hash do reset é idêntico ao motor publicado');
 const renamed = core.plan({...input,action:'rename',newName:'Kelly Bart'});
+assert.equal(core.plan({...input,tournament:{...tournament,name:'Camis Day'},action:'rename',newName:'Kelly Bart'}).nextReg.manualDisplayName,'Kelly Bart',
+  'edição de atletas continua válida após renomear o torneio');
 assert.equal(renamed.nextReg.registrationId,registrations[1].id,'corrigir mantém identidade');
 assert.equal(renamed.liveMatches.length,3);
 assert.equal(renamed.nextRoot.camisOfficialGroups['Fem Prata'][0][1],'Kelly Bart');

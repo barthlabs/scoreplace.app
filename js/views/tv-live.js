@@ -540,7 +540,7 @@
     var secondary = /^#[0-9a-f]{6}$/i.test(String(t.coverGradientColor || '')) ? t.coverGradientColor : primary;
     var title = /^#[0-9a-f]{6}$/i.test(String(t.titleColor || '')) ? t.titleColor : '#ffffff';
     var theme = { background: cover ? cover.css : '#060d1a', primary: primary, secondary: secondary, title: title };
-    return { name: String(t.name || ''), logo: typeof window._tourLogoSrc === 'function' ? window._tourLogoSrc(t) : '',
+    return { id: String(t.id || ''), name: String(t.name || ''), logo: typeof window._tourLogoSrc === 'function' ? window._tourLogoSrc(t) : '',
       logoShape: t.logoShape === 'circle' ? 'circle' : 'square',
       logoRadius: typeof window._tournamentLogoRadius === 'function'
         ? window._tournamentLogoRadius(t) : (t.logoShape === 'circle' ? '50%' : '14%'),
@@ -653,7 +653,7 @@
       '</svg><span>Abra no<br>Scoreplace</span></div>';
   }
   function isCamisTv(snapshot) {
-    return /^camis no beyond$/i.test(String(snapshot.name || '').trim());
+    return String(snapshot.id || '') === 'tour_1793804848447_94bfe2282535789667cb35f1080024ee';
   }
   function qrTournamentLogoHtml(snapshot) {
     return snapshot.logo ? '<img class="tv-qr-tournament-logo' + (isCamisTv(snapshot) ? ' tv-qr-tournament-logo-camis' : '') + '" src="' + esc(snapshot.logo) + '" alt="Logo do torneio">' : '';

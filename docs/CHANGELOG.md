@@ -3,7 +3,8 @@
 - “NO AR” identifica monitores quando o navegador permite e pergunta onde abrir a TV. A janela é posicionada e dimensionada no monitor escolhido; no app instalado, o quadro pede tela cheia nessa tela.
 - O layout personalizado deixa uma margem segura à direita, ajustada após conferir o enquadramento no projetor. No CAMIS, logo, QR e legenda passam a caber sem sobreposição ou corte, inclusive em uma tela de 1280 × 720. O relógio permanece dentro do cabeçalho.
 - A apresentação deixa de exibir “Sair da TV”; o comando “NO AR” na operação desliga a TV.
-- Corte somente web; sem alterar partidas, placares, configuração salva da TV, Functions ou versões nativas.
+- A ficha salva a mudança de nome em separado quando um campo antigo de programação é recusado pela grade publicada. O torneio CAMIS passa a se chamar “Camis Day” no documento, no resumo e na fotografia de restauração; a TV reconhece o evento pelo ID estável. A edição de atletas CAMIS deixa de depender do nome antigo.
+- Corte web e Functions de configuração/edição CAMIS; sem alterar partidas, placares ou versões nativas.
 
 ## 2.6.70 — 13/nov/2026 (TV em tela cheia no app instalado)
 

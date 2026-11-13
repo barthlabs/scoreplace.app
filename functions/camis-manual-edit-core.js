@@ -76,7 +76,7 @@ function plan({ tournament, baseline, registrations, matches, action, oldName, n
   manualParticipantId, newManualParticipantId, now }) {
   const t = tournament || {}, b = baseline || {};
   oldName = text(oldName); newName = text(newName); manualParticipantId = text(manualParticipantId);
-  if (t.id !== ID || t.creatorUid !== OWNER || t.name !== 'Camis no Beyond' ||
+  if (t.id !== ID || t.creatorUid !== OWNER ||
       t.isPublic !== false || t.organizerOnly !== true || t.isSandbox === true)
     fail('ação limitada ao torneio privado CAMIS');
   if (!['rename','replace'].includes(action) || !oldName || !manualParticipantId ||
