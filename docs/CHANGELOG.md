@@ -1,6 +1,6 @@
 ## 2.6.71 — 13/nov/2026 (TV na segunda tela)
 
-- “NO AR” identifica monitores quando o navegador permite e pergunta onde abrir a TV. A janela é posicionada e dimensionada no monitor escolhido; no app instalado, o quadro pede tela cheia nessa tela.
+- “NO AR” identifica monitores quando o navegador permite e pergunta onde abrir a TV na própria janela de apresentação. A escolha move essa janela para o monitor selecionado e ativa tela cheia no mesmo clique, mantendo a operação na tela original. Ao desligar por “NO AR” e ligar novamente, a pergunta reaparece.
 - O layout personalizado deixa uma margem segura à direita, ajustada após conferir o enquadramento no projetor. No CAMIS, logo, QR e legenda passam a caber sem sobreposição ou corte, inclusive em uma tela de 1280 × 720. O relógio permanece dentro do cabeçalho.
 - A apresentação deixa de exibir “Sair da TV”; o comando “NO AR” na operação desliga a TV.
 - A ficha salva a mudança de nome em separado quando um campo antigo de programação é recusado pela grade publicada. O torneio CAMIS passa a se chamar “Camis Day” no documento, no resumo e na fotografia de restauração; a TV reconhece o evento pelo ID estável. A edição de atletas CAMIS deixa de depender do nome antigo.

@@ -1,4 +1,6 @@
-// 2.6.71 — A tela No ar permite escolher o monitor para a TV. O logo, o QR,
+// 2.6.71 — A tela No ar permite escolher o monitor para a TV e abre a
+// apresentação em tela cheia na janela escolhida, mantendo a operação na
+// tela original. O logo, o QR,
 // a legenda e o relógio cabem na segunda tela sem recorte. Para desligar a TV,
 // use NO AR na operação; a apresentação não mostra botão de saída. A margem
 // direita da TV foi afinada para aproveitar mais espaço no projetor. O nome do

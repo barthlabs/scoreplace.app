@@ -413,17 +413,42 @@ const { chromium } = require('@playwright/test');
         { label:'Projetor', isPrimary:false, availLeft:1400, availTop:0, availWidth:1280, availHeight:720, width:1280, height:720 }
       ] });
       const originalOpen = window.open.bind(window);
-      window.open = (...args) => { window.__tvOpenFeatures = args[2]; return originalOpen(...args); };
+      window.open = (...args) => {
+        window.__tvOpenFeatures = args[2];
+        const opened = originalOpen(...args);
+        if (opened) {
+          opened.moveTo = (x,y) => { window.__tvMove = {x,y}; };
+          opened.resizeTo = (width,height) => { window.__tvResize = {width,height}; };
+        }
+        return opened;
+      };
     });
-    await page.locator('#open-tv-test').click();
-    await page.getByRole('dialog', { name:'Onde mostrar a tela No ar?' }).waitFor();
     const secondPopupPromise = page.waitForEvent('popup');
-    await page.getByRole('button', { name:/Projetor/ }).click();
+    await page.locator('#open-tv-test').click();
     const secondPopup = await secondPopupPromise;
-    assert.match(await page.evaluate(() => window.__tvOpenFeatures), /left=1400,top=0,width=1268,height=704/,
-      'TV abre na posição e no tamanho do monitor escolhido');
-    await secondPopup.close();
+    await secondPopup.getByRole('dialog', { name:'Onde mostrar a tela No ar?' }).waitFor();
+    await secondPopup.getByRole('button', { name:/Projetor/ }).click();
+    assert.deepEqual(await page.evaluate(() => ({move:window.__tvMove,resize:window.__tvResize})),
+      { move:{x:1400,y:0}, resize:{width:1268,height:704} },
+      'TV é movida e dimensionada para o monitor escolhido');
+    await secondPopup.waitForFunction(() => document.fullscreenElement === document.documentElement ||
+      !!document.querySelector('#tv-fullscreen-action')?.title);
+    assert.equal(await secondPopup.evaluate(() => ({active:document.fullscreenElement === document.documentElement,
+      reason:document.querySelector('#tv-fullscreen-action')?.title})).then(x => x.active ? '' : x.reason), '',
+      'escolha do monitor ativa tela cheia automaticamente');
+    assert.equal(await page.locator('iframe[title^="TV · "]').count(), 0,
+      'a tela escolhida recebe a TV sem deslocar a operação para o segundo monitor');
+    assert.equal(await secondPopup.locator('#tv-exit-action').count(), 0,
+      'a apresentação externa não mostra Sair da TV');
+    const secondClosePromise = secondPopup.waitForEvent('close');
+    await page.locator('#open-tv-test').click();
+    await secondClosePromise;
     await page.waitForFunction(() => !window._tvLiveWindow || window._tvLiveWindow.closed);
+    const repeatPopupPromise = page.waitForEvent('popup');
+    await page.locator('#open-tv-test').click();
+    const repeatPopup = await repeatPopupPromise;
+    await repeatPopup.getByRole('dialog', { name:'Onde mostrar a tela No ar?' }).waitFor();
+    await repeatPopup.getByRole('button', { name:'Cancelar' }).click();
     await page.evaluate(() => { window.getScreenDetails = undefined; });
     await page.evaluate(() => {
       const actualMatchMedia = window.matchMedia.bind(window);
