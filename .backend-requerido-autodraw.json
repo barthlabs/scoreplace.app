@@ -1,12 +1,9 @@
 {
   "schema": 1,
-  "backendCommit": "ae7ca8f303b341b98fd222bce0c57be10619f8f7",
-  "scopeNote": "Corte 2.6.63: vendor do placar ao vivo sincronizado; cinco callables de resultado republicadas de forma direcionada.",
+  "backendCommit": "a13b8bdfaa6328bebdfe8655018ea3ed0e65cfa3",
+  "scopeNote": "Camis Day: eliminatórias gravam placar sem remontar a classificação; chaves oficiais seguem a planilha.",
   "functions": [
     "applyMatchResult",
-    "applyQueuedResult",
-    "applyTournamentWO",
-    "manageWOClaim",
-    "setTournamentWOAbsence"
+    "applyQueuedResult"
   ]
 }

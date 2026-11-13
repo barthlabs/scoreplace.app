@@ -1,3 +1,6 @@
+// 2.6.79 — O chaveamento do Camis Day volta a abrir após recuperar os jogos
+// da Ouro. Placares de oitavas e semifinais deixam de disparar a remontagem
+// da classificatória. O botão No Ar continua visível ao abrir a operação.
 // 2.6.78 — A operação mostra eliminatórias Ouro já definidas enquanto os
 // demais grupos terminam. Oitavas seguem a planilha por número de grupo;
 // quadras liberadas voltam ao seletor sem precisar recarregar a página.
