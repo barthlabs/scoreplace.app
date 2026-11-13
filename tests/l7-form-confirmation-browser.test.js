@@ -31,10 +31,11 @@ await p.evaluate(()=>{
 });
 await p.evaluate(()=>window._saveTournamentClickHandler());
 assert(await p.evaluate(()=>window._tvSaved),'Salvar do topo publica a tela No ar editada');
-assert.equal(await p.evaluate(()=>window._sent),undefined,'salvar tela não reenvia a grade publicada');
-assert.equal(await p.evaluate(()=>window.AppStore.tournaments[0].name),'Antigo','Salvar da TV não altera a ficha junto');
+assert.deepEqual(await p.evaluate(()=>window._sent),{id:'e',name:'Nome editado'},'salvar tela envia só o nome alterado, sem a grade publicada');
+assert.equal(await p.evaluate(()=>window.AppStore.tournaments[0].name),'Antigo','o stub de persistência não altera a ficha local');
 assert(await p.evaluate(()=>window._notes.some(n=>n[0]==='Personalização salva')));
 await p.evaluate(()=>{
+ document.getElementById('tourn-name').value='Antigo';
  window._tvEditorHasChanges=()=>false;window._sent=undefined;window._notes=[];
  window.AppStore.tournaments[0].logoUrl='https://storage.example/logo-old.png';
  const logo=document.getElementById('tourn-logo-data');logo.value='data:image/png;base64,AAAA';

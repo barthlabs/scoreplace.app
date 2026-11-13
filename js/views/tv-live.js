@@ -1070,7 +1070,7 @@
     }
     screenPickerPopup = chooser;
     chooser.document.open();
-    chooser.document.write('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Escolher tela · TV</title><style>html,body{min-height:100%;margin:0;background:#0d1728;color:#fff;font:18px Arial}#tv-monitor-picker{padding:24px}.tv-monitor-dialog{max-width:520px;margin:auto}.tv-monitor-list{display:grid;gap:12px;margin:20px 0}.tv-monitor-list button,.tv-monitor-cancel{min-height:52px;padding:10px 16px;border:2px solid #88aace;border-radius:10px;background:#193350;color:#fff;font:700 18px Arial;cursor:pointer;text-align:left}.tv-monitor-list button:hover,.tv-monitor-list button:focus-visible{background:#255178}.tv-monitor-list small{display:block;font-size:14px;color:#dbeafe}.tv-monitor-cancel{background:#3b2330;border-color:#e59cad}p{line-height:1.45;color:#e3eaf5}</style></head><body><div id="tv-monitor-picker"><div class="tv-monitor-dialog" role="dialog" aria-modal="true"><h2>Detectando monitores…</h2></div></div></body></html>');
+    chooser.document.write('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Escolher tela · TV</title><style>html,body{min-height:100%;margin:0;background:#0d1728;color:#fff;font:18px Arial}#tv-monitor-picker{padding:24px}.tv-monitor-dialog{max-width:520px;margin:auto}.tv-monitor-list{display:grid;gap:12px;margin:20px 0}.tv-monitor-list button,.tv-monitor-cancel{min-height:52px;padding:10px 16px;border:2px solid #88aace;border-radius:10px;background:#193350;color:#fff;font:700 18px Arial;cursor:pointer;text-align:left}.tv-monitor-list button:hover,.tv-monitor-list button:focus-visible{background:#255178}.tv-monitor-list small{display:block;font-size:14px;color:#dbeafe}.tv-monitor-cancel{background:#3b2330;border-color:#e59cad}p{line-height:1.45;color:#fff}</style></head><body><div id="tv-monitor-picker"><div class="tv-monitor-dialog" role="dialog" aria-modal="true"><h2>Detectando monitores…</h2></div></div></body></html>');
     chooser.document.close();
     var picker = chooser.document.getElementById('tv-monitor-picker');
     chooser.document.addEventListener('click', function (event) {
@@ -1118,7 +1118,7 @@
         tvFrame.name = 'scoreplace-live-tv-' + id;
         tvFrame.setAttribute('allowfullscreen', '');
         tvFrame.title = 'TV · ' + tournament.name;
-        tvFrame.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;border:0;z-index:2147483646;background:#060d1a';
+        tvFrame.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;border:0;z-index:2147483646;background:#060d1a';
         document.body.appendChild(tvFrame);
         nextPopup = tvFrame.contentWindow;
         if (tvFrame.requestFullscreen) {
