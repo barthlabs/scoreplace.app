@@ -1278,6 +1278,15 @@
           if (!one.main || one.main.length !== 1) throw new Error('Grupo sem uma dupla classificada para a chave oficial: ' + String(group.name || ''));
           return one.main[0];
         });
+        var groupOrder = phaseCfg.officialGroupBracketGroupOrder && phaseCfg.officialGroupBracketGroupOrder[cat];
+        if (groupOrder != null) {
+          if (!Array.isArray(groupOrder) || groupOrder.length !== entrants.length ||
+              new Set(groupOrder).size !== entrants.length ||
+              groupOrder.some(function (number) { return !Number.isInteger(number) || number < 1 || number > entrants.length; })) {
+            throw new Error('Ordem de grupos inválida para a chave oficial: ' + cat);
+          }
+          entrants = groupOrder.map(function (number) { return entrants[number - 1]; });
+        }
         cfg._entrantsByDest = { main:entrants };
         cfg.bracketSeeding = 'balanced';
       }
@@ -2484,7 +2493,7 @@
   // cs (computeMonarch/groupTeamStandings) lê g.players + g.matches.
   function _groupsFromTaggedMatches(t, phaseIdx) {
     var pm = (t.matches || []).filter(function (m) {
-      return (m.phaseIndex || 0) === phaseIdx && (m.bracket === 'group' || m.bracket === 'monarch' || m.isMonarch);
+      return m && (m.phaseIndex || 0) === phaseIdx && (m.bracket === 'group' || m.bracket === 'monarch' || m.isMonarch);
     });
     if (!pm.length) return [];
     var byG = {}, order = [];

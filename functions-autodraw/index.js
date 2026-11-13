@@ -3000,7 +3000,8 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
       console.error('Desempate automático pendente após placar confirmado', { tId, matchId,
         error: String(err && err.message || err) });
     }
-    if (t.scheduleWindow && t.scheduleWindow.interleavedPlan) {
+    if (t.scheduleWindow && t.scheduleWindow.interleavedPlan && _courtSourceBefore &&
+        Number(_courtSourceBefore.phaseIndex || 0) === 0) {
       _materializeInterleavedReadyCategories(t, tId, _agoraIsoTx);
     }
     if (t.rulesContractVersion >= 2 && (t.status === 'finished' || t.titleAwards)) {
@@ -6687,9 +6688,15 @@ function _materializeInterleavedReadyCategories(t, tId, nowIso) {
       return matches.length === 3 && matches.every(m => m && (m.winner || m.isBye));
     });
     if (!done) continue;
-    const flow = _phaseTieCore.resolvePhaseTies(t, 0, pools, tieRuntime.nextCfg,
-      tieRuntime.compareForPool, null, 1, false, tieRuntime.numberForPool, nowIso,
-      { autoPlay:true, retainOtherDecisions:true });
+    // A planilha oficial já fixou as duplas desta categoria. Uma simples
+    // automática da classificação não pode voltar a bloquear suas oitavas.
+    const officialBracket = Array.isArray(t.phases && t.phases[1] && t.phases[1].officialGroupBracketOrder) &&
+      t.phases[1].officialGroupBracketOrder.includes(category);
+    const flow = officialBracket
+      ? { status:'ready', orderedPools:pools.map(pool => ({ id:pool.id, rows:standings(pool.group) })) }
+      : _phaseTieCore.resolvePhaseTies(t, 0, pools, tieRuntime.nextCfg,
+        tieRuntime.compareForPool, null, 1, false, tieRuntime.numberForPool, nowIso,
+        { autoPlay:true, retainOtherDecisions:true });
     if (flow.status !== 'ready') continue;
     const byPool = new Map(flow.orderedPools.map(pool => [pool.id, pool.rows]));
     // materializeNextPhase lê os grupos de novo. A identidade do objeto muda,

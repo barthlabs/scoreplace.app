@@ -75,6 +75,14 @@ assert.equal(advance(t, t.id, '2026-11-13T13:00:01Z').length, 0, 'retry não dup
 const earlyCfg = E.projectPhaseCfg(phases[1], t, 1);
 const earlyBuilt = E.buildCategorizedPhaseBrackets(t, groups.filter(g => g.category === 'Fem Ouro'),
   {...earlyCfg, politicaDaChave:'bye'}, g => g.rows, 'ph-' + t.id + '-1-c1', {});
+const officialPhoto = E.buildCategorizedPhaseBrackets(t, groups.filter(g => g.category === 'Fem Ouro'),
+  {...earlyCfg, officialGroupBracketGroupOrder:{ 'Fem Ouro':[1,2,3,4,5,6,7,8,9,10,16,12,13,14,15,11] },
+    politicaDaChave:'bye'}, g => g.rows, 'ph-' + t.id + '-1-c1', {});
+const photoFirst = officialPhoto.matches.filter(m => m.round === 1 && !m.isThirdPlace);
+assert(photoFirst.find(m => m.id.endsWith('VC-R1-P6')).p1.includes('Fem Ouro-15-0'),
+  'posição 11 da foto usa o grupo 16');
+assert(photoFirst.find(m => m.id.endsWith('VC-R1-P8')).p2.includes('Fem Ouro-10-0'),
+  'posição 16 da foto usa o grupo 11');
 const earlyMatch = earlyBuilt.matches.find(m => m.round === 1 && m.id.endsWith('VC-R1-P1'));
 assert(earlyMatch);
 earlyMatch.court = 'Quadra 1';
