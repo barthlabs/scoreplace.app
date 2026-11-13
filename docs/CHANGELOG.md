@@ -1,3 +1,8 @@
+## 2.6.81 — 13/nov/2026 (fila completa de próximos jogos na operação)
+
+- A operação conserva o card do próximo jogo a chamar e mostra, ao lado, os demais confrontos futuros em uma lista rolável. Inclui quartas, semifinais, final e classificatórias, mesmo quando as duplas ainda estão pendentes.
+- Vagas de eliminatórias sem dupla definida usam a origem explícita da chave, como “Vencedor do jogo 91”; a lista é informativa e não libera a chamada de confronto incompleto.
+
 ## 2.6.80 — 13/nov/2026 (fila Prata, quartas Ouro na TV e nomes legíveis)
 
 - A TV inclui em “Próximos jogos” as quartas, semifinais, final e 3º lugar da Ouro e a classificação da Prata. Vagas pendentes mostram a origem real, como “Vencedor do jogo 89” ou “Perdedor do jogo 93”; sem origem conhecida, mostram “A definir”. A lista rola automaticamente e não limita a quatro itens. A chamada de confronto incompleto continua bloqueada.

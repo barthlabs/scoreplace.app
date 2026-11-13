@@ -1,3 +1,5 @@
+// 2.6.81 — A operação lista os próximos jogos da Ouro e da Prata.
+// Semifinais e final mostram “Vencedor do jogo…” até as duplas serem definidas.
 // 2.6.80 — A tela No Ar mostra as quartas, semifinais, final e 3º lugar da Ouro,
 // com “Vencedor do jogo…” nas vagas pendentes, além da classificação da Prata.
 // A fila da Prata continua após a primeira chamada de grupo. Nomes longos nas
