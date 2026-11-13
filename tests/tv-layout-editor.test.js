@@ -405,6 +405,27 @@ const { chromium } = require('@playwright/test');
     assert.equal(fullscreenState.active, true,
       'clique do usuário põe a TV em tela cheia no Chromium: ' + JSON.stringify(fullscreenState));
     await popup.close();
+    await page.waitForFunction(() => !window._tvLiveWindow || window._tvLiveWindow.closed);
+    await page.evaluate(() => {
+      const actualMatchMedia = window.matchMedia.bind(window);
+      window.matchMedia = query => query === '(display-mode: standalone)'
+        ? { matches:true, media:query, addListener(){}, removeListener(){}, addEventListener(){}, removeEventListener(){} }
+        : actualMatchMedia(query);
+    });
+    await page.locator('#open-tv-test').click();
+    await page.waitForFunction(() => document.fullscreenElement?.tagName === 'IFRAME' &&
+      document.fullscreenElement.contentDocument?.querySelector('#tv-root'));
+    await page.waitForFunction(() => window._tvLiveWindow === document.querySelector('iframe[title^="TV · "]')?.contentWindow);
+    assert.equal(await page.locator('iframe[title^="TV · "]').count(), 1,
+      'app instalado abre a TV dentro da mesma janela já em tela cheia');
+    await page.waitForFunction(() => {
+      const action = document.querySelector('iframe[title^="TV · "]')?.contentDocument?.querySelector('#tv-fullscreen-action');
+      return !action || action.hidden;
+    });
+    await page.frameLocator('iframe[title^="TV · "]').locator('#tv-exit-action').click();
+    await page.locator('iframe[title^="TV · "]').waitFor({ state:'detached' });
+    assert.equal(await page.evaluate(() => document.fullscreenElement), null,
+      'fechar a TV devolve o aplicativo ao estado anterior');
     await page.evaluate(() => {
       window._editingTournament.name = 'Camis no Beyond';
       const layout = window.ScoreplaceTvLayout.defaults();

@@ -1,3 +1,4 @@
+// 2.6.70 — No app instalado, NO AR abre a TV na própria janela já em tela cheia.
 // 2.6.69 — Mantém o logo CAMIS no lugar e centraliza somente o QR e a legenda.
 // 2.6.68 — QR e legenda centralizados no eixo do logo CAMIS, com folga vertical e da TV.
 // 2.6.67 — Na TV do CAMIS, o logo maior fica apenas acima do QR, sem cortes.

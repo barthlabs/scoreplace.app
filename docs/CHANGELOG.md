@@ -1,3 +1,9 @@
+## 2.6.70 — 13/nov/2026 (TV em tela cheia no app instalado)
+
+- No aplicativo web instalado, o clique em “NO AR” abre a TV em um quadro sobre a própria janela e pede tela cheia com o mesmo gesto; isso evita a janela adicional que consumia a autorização do navegador e deixava as barras aparentes. “Sair da TV” e Escape devolvem o aplicativo. No navegador comum, permanece a janela separada.
+- O quadro recebe os mesmos dados, relógios e atualizações da TV anterior; o teste Chromium verifica abertura, tela cheia, sinalização, saída e o caminho de janela separada.
+- Corte somente web; sem alterações em partidas, resultados, Functions ou versões nativas.
+
 ## 2.6.69 — 13/nov/2026 (posição do logo CAMIS preservada)
 
 - Restaura a posição horizontal e vertical do logo CAMIS da 2.6.67. Apenas o QR e a faixa “Abra no Scoreplace” são deslocados para o centro do logo e para o centro do espaço inferior, sem alterar a caixa do logo.

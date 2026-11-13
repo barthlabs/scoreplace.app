@@ -1,8 +1,8 @@
-// Saída de TV da chave: uma segunda janela limpa, alimentada pelo torneio já
+// Saída de TV da chave: uma janela limpa (ou quadro no app instalado), alimentada pelo torneio já
 // acompanhado pelo listener canônico do app. Não escreve no torneio.
 (function () {
   'use strict';
-  var popup = null, tick = null, lastMarkup = '', wakeSentinel = null, wakePending = false;
+  var popup = null, tvFrame = null, tvFullscreenHandler = null, tick = null, lastMarkup = '', wakeSentinel = null, wakePending = false;
   var popupTournamentId = '', popupGeneration = 0, lastHeartbeatAt = 0, lastHeartbeatVisible = false;
   var highestGenerationById = Object.create(null);
   var lastCompleteTournament = null, loadingTournament = false, lastLoadAttempt = 0;
@@ -674,7 +674,9 @@
       '</section></aside></main></div>';
   }
   function fullscreenActionHtml() {
-    return '<button id="tv-fullscreen-action" type="button" aria-label="Ativar modo tela cheia">⛶ Tela cheia</button>';
+    return (tvFrame ? '<button id="tv-exit-action" type="button" aria-label="Fechar tela da TV">✕ Sair da TV</button>' : '') +
+      (tvFrame && document.fullscreenElement === tvFrame ? '' :
+        '<button id="tv-fullscreen-action" type="button" aria-label="Ativar modo tela cheia">⛶ Tela cheia</button>');
   }
   function customBodyHtml(snapshot) {
     var layout = snapshot.tvLayout;
@@ -848,9 +850,9 @@
       'if(document.visibilityState==="visible"&&!(window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches))' +
       'Object.keys(boxLoops).forEach(function(key){var loop=boxLoops[key];var speed=key==="upcoming"?.017:.022;loop.position=(loop.position+elapsed*speed)%loop.cycle;loop.node.scrollTop=loop.position;});' +
       'window.requestAnimationFrame(advance);}window.requestAnimationFrame(advance);' +
-      'function signal(type){try{if(window.opener&&!window.opener.closed)window.opener.postMessage({type:type,id:id,gen:gen,visible:document.visibilityState==="visible"},origin);}catch(e){}}' +
+      'function signal(type){try{var owner=window.opener||window.parent;if(owner&&owner!==window&&!owner.closed)owner.postMessage({type:type,id:id,gen:gen,visible:document.visibilityState==="visible"},origin==="null"?"*":origin);}catch(e){}}' +
       'function tick(){if(window.__tvGeneration!==gen){clearInterval(timer);return;}var now=Date.now();' +
-      'if(now-(window.__tvParentBeat||0)>1800){try{var owner=window.opener;' +
+      'if(now-(window.__tvParentBeat||0)>1800){try{var owner=window.opener||window.parent;' +
       'var t=owner&&owner._findTournamentById&&owner._findTournamentById(id);' +
       'if(owner&&owner._tvLiveEnsureFresh&&(!t||!owner._tvLiveIsComplete(t)))owner._tvLiveEnsureFresh(id);' +
       'if(t&&owner._tvLiveIsComplete&&owner._tvLiveIsComplete(t)&&owner._tvLiveBuildSnapshot&&owner._tvLiveBodyHtml){var snap=owner._tvLiveBuildSnapshot(t,now);' +
@@ -1016,6 +1018,8 @@
     syncButton();
   });
   function stop() {
+    if (tvFullscreenHandler) { document.removeEventListener('fullscreenchange', tvFullscreenHandler); tvFullscreenHandler = null; }
+    if (tvFrame) { tvFrame.remove(); tvFrame = null; }
     if (liveMatchesUnsubscribe) liveMatchesUnsubscribe();
     liveMatchesUnsubscribe = null; liveMatches = new Map(); liveMatchTournamentId = '';
     if (liveScoresUnsubscribe) liveScoresUnsubscribe();
@@ -1028,13 +1032,29 @@
     lastMarkup = ''; lastCompleteTournament = null; window._tvLiveRefresh = null; syncButton();
   }
   window._tvLiveToggle = function () {
-    if (isActive()) { popup.close(); stop(); return; }
+    if (isActive()) { if (tvFrame) stop(); else { popup.close(); stop(); } return; }
     var tournament = window._currentBracketTournament;
     if (!tournament) return;
     var id = String(tournament.id || ''), nextPopup;
-    try { nextPopup = window.open('about:blank', 'scoreplace-live-tv-' + id, 'popup,width=1920,height=1080'); }
+    var installed = window.matchMedia && (window.matchMedia('(display-mode: standalone)').matches || window.matchMedia('(display-mode: fullscreen)').matches);
+    try {
+      if (installed) {
+        tvFrame = document.createElement('iframe');
+        tvFrame.name = 'scoreplace-live-tv-' + id;
+        tvFrame.setAttribute('allowfullscreen', '');
+        tvFrame.title = 'TV · ' + tournament.name;
+        tvFrame.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;border:0;z-index:2147483646;background:#060d1a';
+        document.body.appendChild(tvFrame);
+        nextPopup = tvFrame.contentWindow;
+        if (tvFrame.requestFullscreen) {
+          var full = tvFrame.requestFullscreen({ navigationUI:'hide' });
+          if (full && full.catch) full.catch(function () {});
+        }
+      } else nextPopup = window.open('about:blank', 'scoreplace-live-tv-' + id, 'popup,width=1920,height=1080');
+    }
     catch (e) { nextPopup = null; }
     if (!nextPopup) {
+      if (tvFrame) { tvFrame.remove(); tvFrame = null; }
       syncButton();
       if (typeof window.showToast === 'function') window.showToast('Permita abrir uma janela para a TV.');
       return;
@@ -1046,12 +1066,20 @@
     syncButton();
     try {
       popup.document.open();
-      popup.document.write('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TV · ' + esc(tournament.name) + '</title>' + styles + '<script src="' + esc(window.location.origin + '/js/domain/match-timing.js?v=' + (window.SCOREPLACE_VERSION || '')) + '"></script><style>#tv-connection{position:fixed;right:1vw;bottom:1vw;z-index:20;padding:.4em .7em;border-radius:.5em;background:#7f1d1d;color:#fff;font-weight:800}#tv-connection[hidden],#tv-fullscreen-action[hidden]{display:none}#tv-fullscreen-action{flex:none;align-self:center;min-height:36px;padding:.3em .65em;border:2px solid #67e8f9;border-radius:.5em;background:#10263b;color:#fff;font:800 clamp(14px,1.1vw,22px) Arial;white-space:nowrap;cursor:pointer}html:fullscreen #tv-fullscreen-action{display:none}</style></head><body><div id="tv-root"></div><div id="tv-connection">Carregando jogos do servidor…</div>' + childScript(tournament.id, popupGeneration) + '</body></html>');
+      popup.document.write('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TV · ' + esc(tournament.name) + '</title>' + styles + '<script src="' + esc(window.location.origin + '/js/domain/match-timing.js?v=' + (window.SCOREPLACE_VERSION || '')) + '"></script><style>#tv-connection{position:fixed;right:1vw;bottom:1vw;z-index:20;padding:.4em .7em;border-radius:.5em;background:#7f1d1d;color:#fff;font-weight:800}#tv-connection[hidden],#tv-fullscreen-action[hidden]{display:none}#tv-fullscreen-action,#tv-exit-action{flex:none;align-self:center;min-height:36px;padding:.3em .65em;border:2px solid #67e8f9;border-radius:.5em;background:#10263b;color:#fff;font:800 clamp(14px,1.1vw,22px) Arial;white-space:nowrap;cursor:pointer}html:fullscreen #tv-fullscreen-action{display:none}</style></head><body><div id="tv-root"></div><div id="tv-connection">Carregando jogos do servidor…</div>' + childScript(tournament.id, popupGeneration) + '</body></html>');
       popup.document.close();
       // O conteúdo de tv-root é substituído a cada atualização; o listener fica no documento.
       popup.document.addEventListener('click', function (event) {
+        if (tvFrame && event.target.closest && event.target.closest('#tv-exit-action')) { stop(); return; }
         var button = event.target.closest && event.target.closest('#tv-fullscreen-action');
         if (!button) return;
+        if (tvFrame) {
+          if (tvFrame.requestFullscreen) {
+            var frameRequest = tvFrame.requestFullscreen({ navigationUI:'hide' });
+            if (frameRequest && frameRequest.catch) frameRequest.catch(function () {});
+          }
+          return;
+        }
         var doc = popup.document;
         var requestFullscreen = doc.documentElement.requestFullscreen || doc.documentElement.webkitRequestFullscreen;
         if (!requestFullscreen) { button.textContent = 'Tela cheia indisponível neste navegador'; return; }
@@ -1070,6 +1098,16 @@
         var button = popup.document.getElementById('tv-fullscreen-action');
         if (button) button.hidden = !!popup.document.fullscreenElement;
       });
+      if (tvFrame) {
+        popup.document.addEventListener('keydown', function (event) { if (event.key === 'Escape') stop(); });
+        tvFullscreenHandler = function () {
+          if (!tvFrame) return;
+          if (!document.fullscreenElement) { stop(); return; }
+          var action = popup.document.getElementById('tv-fullscreen-action');
+          if (action) action.hidden = true;
+        };
+        document.addEventListener('fullscreenchange', tvFullscreenHandler);
+      }
       try { popup.history.replaceState(null, '', window.location.origin + '/#tv-live/' + encodeURIComponent(id)); }
       catch (urlError) { /* O navegador pode manter about:blank ao bloquear alteração da URL. */ }
     } catch (e) {
