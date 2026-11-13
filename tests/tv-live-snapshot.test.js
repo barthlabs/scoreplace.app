@@ -220,6 +220,23 @@ assert.equal(window._tvLiveBuildSnapshot({ ...t, currentPhaseIndex: 0, tvLayout:
   'organizador troca para outra tela durante a mesma fase');
 const customHtml = window._tvLiveBodyHtml(customSnapshot);
 assert.match(customHtml, /tv-custom-board/);
+const camisLayout = window.ScoreplaceTvLayout.defaults();
+Object.assign(camisLayout.sections.header, {x:0,y:0,w:98.5,h:6.5});
+Object.assign(camisLayout.sections.courts, {x:0,y:7,w:67,h:89.5});
+Object.assign(camisLayout.sections.upcoming, {x:67,y:52,w:23.5,h:44.5});
+Object.assign(camisLayout.sections.results, {x:67,y:7,w:31.5,h:44});
+Object.assign(camisLayout.sections.qr, {x:90.5,y:64,w:8,h:32.5});
+for (const id of Object.keys(camisLayout.sections)) {
+  if (!['header','courts','upcoming','results','qr'].includes(id)) camisLayout.sections[id].visible = false;
+}
+const camisHtml = window._tvLiveBodyHtml(window._tvLiveBuildSnapshot({ ...t,
+  id:'tour_1793804848447_94bfe2282535789667cb35f1080024ee', tvLayout:camisLayout }));
+assert.match(camisHtml, /tv-custom-board tv-custom-board-camis/);
+assert.match(camisHtml, /tv-custom-header" style="left:0%;top:0%;width:100%;/,
+  'cabeçalho CAMIS alcança a borda direita');
+assert.match(camisHtml, /tv-custom-courts" style="left:0%;top:[^"]+%;width:[^"]+%;height:[^"]+%"/);
+assert.match(camisHtml, /tv-qr-tournament-logo-camis[\s\S]*tv-qr-code[\s\S]*tv-qr-brand/,
+  'logo, QR e chamada continuam juntos na coluna CAMIS');
 assert.match(customHtml, /tv-custom-qr/, 'QR permanece mesmo se um layout antigo o ocultou');
 assert.doesNotMatch(customHtml, /class="tv-score"/);
 assert.match(customHtml, /tv-custom-rankings/);
@@ -847,4 +864,6 @@ if (process.env.SP_TV_CAPTURE_CUSTOM) {
   fs.writeFileSync(process.env.SP_TV_CAPTURE_CUSTOM,
     popupHtml.replace('<div id="tv-root"></div>', '<div id="tv-root">' + window._tvLiveBodyHtml(customSnapshot) + '</div>'));
 }
+if (process.env.SP_TV_CAPTURE_CAMIS) fs.writeFileSync(process.env.SP_TV_CAPTURE_CAMIS,
+  popupHtml.replace('<div id="tv-root"></div>', '<div id="tv-root">' + camisHtml + '</div>'));
 console.log('✓ TV: 6 quadras chamadas, relógio, placar ao vivo, 3 resultados e saldo geral por time');

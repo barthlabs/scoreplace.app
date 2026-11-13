@@ -1,3 +1,10 @@
+## 2.6.75 — 13/nov/2026 (quadra chamada estável e TV CAMIS)
+
+- O recálculo da grade preserva quadra, horário e número de jogos já chamados, mesmo antes do primeiro placar. A cópia usada pelo servidor segue a mesma regra.
+- A tela “No Ar” do Camis Day ocupa a margem inferior e direita do desenho salvo, sem alterá-lo. Dois pontos percentuais da largura de “Próximos jogos” ampliam a coluna do logo, QR e chamada do Scoreplace; os três ficam centralizados e a chamada chega à base dos próximos jogos.
+- Na produção, o desempate do grupo H da Diamante foi concluído com Idaliana 5×3 Melissa e Lulys 5×1 Melissa, sem criar o confronto não disputado. O jogo 55 do grupo K2 da Ouro foi chamado para a quadra 3.
+- Corte web e Functions de avanço de fase; versões nativas preservadas.
+
 ## 2.6.74 — 13/nov/2026 (navegação do desempate preserva as chaves)
 
 - A faixa de operação reconhece jogos de simples desempate ao navegar pelas setas e deixa de tentar encontrá-los na lista de partidas comuns, evitando a exceção no navegador.

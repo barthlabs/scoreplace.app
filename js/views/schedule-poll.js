@@ -1885,7 +1885,8 @@ window._spMatchActionButtonHtml = function (kind, labelHtml, onclick, opts) {
 
   window._schPartidaImovel = function (m) {
     if (!m || typeof m !== 'object') return false;
-    if (m.liveScored === true || m.startedAt || m.resultAt || m.completedAt || m.wo === true || m.winner != null ||
+    // Uma chamada já ocupa fisicamente a quadra, mesmo antes de sair o placar.
+    if (m.courtCalledAt || m.liveScored === true || m.startedAt || m.resultAt || m.completedAt || m.wo === true || m.winner != null ||
         (m.pendingResult && m.pendingResult.proposedAt)) return true;
     if (Array.isArray(m.sets) && m.sets.length) return true;
     return (typeof m.scoreP1 === 'number' && m.scoreP1 > 0) || (typeof m.scoreP2 === 'number' && m.scoreP2 > 0);

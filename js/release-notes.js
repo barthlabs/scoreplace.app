@@ -1,3 +1,7 @@
+// 2.6.75 — Jogos já chamados mantêm sua quadra ao recalcular a grade.
+// A tela No ar do Camis Day preenche as bordas disponíveis; logo, QR e
+// chamada recebem mais largura da área de próximos jogos e a chamada alinha
+// ao rodapé.
 // 2.6.74 — Navegar pelas setas da simples de desempate mantém a operação e
 // as abas das chaves funcionando. Se uma atualização da chave falhar, a última
 // chave completa permanece na tela até o próximo carregamento.

@@ -8,9 +8,11 @@ const { chromium } = require('@playwright/test');
 (async () => {
   const capture = path.join(os.tmpdir(), `scoreplace-tv-${process.pid}.html`);
   const customCapture = path.join(os.tmpdir(), `scoreplace-tv-custom-${process.pid}.html`);
+  const camisCapture = path.join(os.tmpdir(), `scoreplace-tv-camis-${process.pid}.html`);
   try {
     execFileSync(process.execPath, [path.join(__dirname, 'tv-live-snapshot.test.js')], {
-      env: { ...process.env, SP_TV_CAPTURE: capture, SP_TV_CAPTURE_CUSTOM: customCapture }, stdio: 'pipe'
+      env: { ...process.env, SP_TV_CAPTURE: capture, SP_TV_CAPTURE_CUSTOM: customCapture,
+        SP_TV_CAPTURE_CAMIS: camisCapture }, stdio: 'pipe'
     });
     const html = fs.readFileSync(capture, 'utf8').replace(/<script src="[^"]*match-timing[^>]*><\/script>/, '');
     const browser = await chromium.launch();
@@ -101,7 +103,42 @@ const { chromium } = require('@playwright/test');
       assert(fill.gap < 15, 'última fileira alcança a borda inferior do box salvo');
       assert(fill.font >= 14, 'título da quadra permanece legível');
       await customPage.close();
+      const camisPage = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+      await camisPage.setContent(fs.readFileSync(camisCapture, 'utf8').replace(/<script src="[^"]*match-timing[^>]*><\/script>/, ''),
+        { waitUntil: 'domcontentloaded' });
+      const camisBounds = await camisPage.evaluate(() => {
+        const rect = selector => document.querySelector(selector).getBoundingClientRect();
+        const board = rect('.tv-custom-board-camis'), header = rect('.tv-custom-header');
+        const courts = rect('.tv-custom-courts'), results = rect('.tv-custom-results');
+        const upcoming = rect('.tv-custom-upcoming'), qrBox = rect('.tv-custom-qr');
+        const logo = rect('.tv-qr-tournament-logo-camis'), qr = rect('.tv-qr-camis .tv-qr-code');
+        const brand = rect('.tv-qr-camis .tv-qr-brand');
+        return { boardRight:board.right, boardBottom:board.bottom, headerRight:header.right,
+          resultsRight:results.right, courtsBottom:courts.bottom, upcomingBottom:upcoming.bottom,
+          qrBottom:qrBox.bottom, brandBottom:brand.bottom, qrWidth:qr.width,
+          logoWidth:logo.width, brandWidth:brand.width, upcomingWidth:upcoming.width,
+          logoCenter:(logo.left+logo.right)/2,
+          qrCenter:(qr.left+qr.right)/2, brandCenter:(brand.left+brand.right)/2,
+          qrBoxCenter:(qrBox.left+qrBox.right)/2 };
+      });
+      assert(Math.abs(camisBounds.headerRight - camisBounds.boardRight) < 2,
+        'cabeçalho CAMIS chega à borda direita');
+      assert(Math.abs(camisBounds.resultsRight - camisBounds.boardRight) < 2,
+        'resultados CAMIS chegam à borda direita');
+      assert(Math.abs(camisBounds.courtsBottom - camisBounds.boardBottom) < 2 &&
+        Math.abs(camisBounds.upcomingBottom - camisBounds.boardBottom) < 2,
+      'quadras e próximos jogos CAMIS chegam à borda inferior');
+      assert(Math.abs(camisBounds.qrBottom - camisBounds.boardBottom) < 2 &&
+        Math.abs(camisBounds.brandBottom - camisBounds.upcomingBottom) < 2,
+      'chamada Scoreplace alinha com a base de próximos jogos');
+      assert(['logoCenter','qrCenter','brandCenter'].every(key =>
+        Math.abs(camisBounds[key] - camisBounds.qrBoxCenter) < 2),
+      `logo, QR e chamada ficam centralizados na coluna: ${JSON.stringify(camisBounds)}`);
+      assert(camisBounds.qrWidth > 185 && camisBounds.logoWidth > 185 &&
+        camisBounds.brandWidth > 185 && camisBounds.upcomingWidth < 430,
+      'a largura retirada de próximos jogos aumenta logo, QR e chamada');
+      await camisPage.close();
     } finally { await browser.close(); }
     console.log('✓ TV: etiquetas, placares e próximo jogo contidos nos boxes');
-  } finally { try { fs.unlinkSync(capture); } catch (_) {} try { fs.unlinkSync(customCapture); } catch (_) {} }
+  } finally { try { fs.unlinkSync(capture); } catch (_) {} try { fs.unlinkSync(customCapture); } catch (_) {} try { fs.unlinkSync(camisCapture); } catch (_) {} }
 })().catch(error => { console.error(error); process.exitCode = 1; });

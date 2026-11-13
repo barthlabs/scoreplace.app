@@ -125,6 +125,14 @@ assert.equal(W._schAplicarGrade(fresh, []), 0, 'reaplicar a mesma grade é idemp
 fresh.matches[0].scheduledGameNumber = 999;
 assert.equal(W._schAplicarGrade(fresh, []), 1, 'número velho é corrigido mesmo quando o horário não muda');
 assert.equal(fresh.matches[0].scheduledGameNumber, 1);
+const called = { ...fresh, matches:fresh.matches.map(m => ({ ...m })) };
+const calledGame = called.matches[0];
+calledGame.courtCalledAt = `${day}T08:10:00-03:00`;
+calledGame.court = 'Quadra 3';
+const calledBefore = [calledGame.court, calledGame.scheduledAt, calledGame.scheduledGameNumber];
+W._schAplicarGrade(called, []);
+assert.deepEqual([calledGame.court, calledGame.scheduledAt, calledGame.scheduledGameNumber], calledBefore,
+  'recalcular a grade não move jogo já chamado nem reescreve seu horário ou número');
 const shortWindow = { ...fullGeneral, scheduleWindow:{ days:[{day,startTime:'08:00',endTime:'08:30'}] }, matches:fullMatches.map(m => ({...m})) };
 const shortPlan = W._schGradeEstimada(shortWindow);
 assert.equal(shortPlan.atomica, true);

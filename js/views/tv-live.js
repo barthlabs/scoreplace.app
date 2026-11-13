@@ -683,9 +683,27 @@
   }
   function customBodyHtml(snapshot) {
     var layout = snapshot.tvLayout;
+    var camis = isCamisTv(snapshot);
+    if (camis && layout.sections.upcoming && layout.sections.qr &&
+        layout.sections.upcoming.visible && layout.sections.qr.visible &&
+        Math.abs(layout.sections.upcoming.x + layout.sections.upcoming.w - layout.sections.qr.x) < .1 &&
+        layout.sections.upcoming.w >= 20 && layout.sections.qr.w <= 10) {
+      var gained = 2;
+      layout = Object.assign({}, layout, { sections:Object.assign({}, layout.sections, {
+        upcoming:Object.assign({}, layout.sections.upcoming, { w:layout.sections.upcoming.w - gained }),
+        qr:Object.assign({}, layout.sections.qr, { x:layout.sections.qr.x - gained, w:layout.sections.qr.w + gained })
+      }) });
+    }
+    var visibleBoxes = Object.keys(layout.sections).map(function (id) { return layout.sections[id]; }).filter(function (b) { return b && b.visible; });
+    var rightEdge = Math.max.apply(null, visibleBoxes.map(function (b) { return b.x + b.w; }));
+    var bottomEdge = Math.max.apply(null, visibleBoxes.map(function (b) { return b.y + b.h; }));
+    // O desenho salvo do CAMIS termina em 98,5% × 96,5%. Preencher só essa
+    // margem residual na TV; manter as proporções e o layout salvo no editor.
+    var fillX = camis && rightEdge >= 96 && rightEdge < 100 ? 100 / rightEdge : 1;
+    var fillY = camis && bottomEdge >= 94 && bottomEdge < 100 ? 100 / bottomEdge : 1;
     function box(id, inner, supplied) {
       var b = supplied || layout.sections[id];
-      return b.visible ? '<div class="tv-custom-box tv-custom-' + id + '" style="left:' + b.x + '%;top:' + b.y + '%;width:' + b.w + '%;height:' + b.h + '%">' + inner + '</div>' : '';
+      return b.visible ? '<div class="tv-custom-box tv-custom-' + id + '" style="left:' + (b.x * fillX) + '%;top:' + (b.y * fillY) + '%;width:' + (b.w * fillX) + '%;height:' + (b.h * fillY) + '%">' + inner + '</div>' : '';
     }
     var ranking = '<section class="tv-rankings"><h2>CLASSIFICAÇÃO</h2>' + (snapshot.rankings.length ? snapshot.rankings.map(function (s) { return rankingHtml(s, snapshot.rankings.length > 1); }).join('') : '<p>Classificação em formação</p>') + '</section>';
     var resultBox = layout.sections.results, qrBox = layout.sections.qr;
@@ -749,7 +767,7 @@
         }).join('') : '<p>Classificação em andamento</p>') + '</div></section>';
     }
     var background = layout.backgroundMode === 'custom' ? layout.background : (snapshot.theme && snapshot.theme.background || '#060d1a');
-    return '<main class="tv-custom-board" style="background:' + esc(background) + '">' +
+    return '<main class="tv-custom-board' + (camis ? ' tv-custom-board-camis' : '') + '" style="background:' + esc(background) + '">' +
       box('header', '<header class="tv-header">' + (snapshot.logo && !isCamisTv(snapshot) && (!layout.sections.logo.visible || layout.sections.logo.y >= layout.sections.header.y + layout.sections.header.h) ? '<img src="' + esc(snapshot.logo) + '" alt="">' : '') + '<h1>' + esc(snapshot.name) + '</h1>' + fullscreenActionHtml() + '<time id="tv-now"></time></header>') +
       box('courts', '<section class="tv-courts" data-tv-autoscroll="courts" style="--tv-court-rows:' + Math.ceil(snapshot.courts.length / 2) + '">' + snapshot.courts.map(function (card) { return cardHtml(card, layout.card); }).join('') + '</section>') +
       box('upcoming', nextGameHtml(snapshot.nextGames || snapshot.nextGame, snapshot.waitingForTie)) +
@@ -959,6 +977,7 @@
     '.tv-results-main>h2{color:#fbbf24;font-size:clamp(.9rem,1.2vw,1.5rem);line-height:normal}' +
     '.tv-results .tv-result-players span{font-size:clamp(.75rem,.95vw,1.3rem)}' +
     '.tv-custom-qr{container-type:inline-size}.tv-custom-qr .tv-qr-brand{gap:2px;font-size:clamp(8px,9cqw,16px);line-height:1.05;white-space:nowrap}.tv-custom-qr .tv-scoreplace-mark{width:clamp(14px,24cqw,32px);min-width:0}.tv-custom-qr .tv-qr{padding-bottom:.55vw}.tv-custom-results .tv-results{padding:.55vw .8vw}.tv-custom-results .tv-results-list{box-sizing:border-box}' +
+    '.tv-custom-board-camis{width:calc(100% - .35vw)}.tv-custom-board-camis .tv-qr-camis{padding-bottom:0}.tv-custom-board-camis .tv-custom-qr .tv-qr-has-logo .tv-qr-tournament-logo-camis{width:100%;max-width:100%;transform:none}.tv-custom-board-camis .tv-qr-camis .tv-qr-code,.tv-custom-board-camis .tv-qr-camis .tv-qr-brand{width:100%;max-width:100%;transform:none;justify-self:center}' +
     '</style>');
   // O editor usa exatamente o HTML e o CSS da janela No ar. O iframe não
   // executa childScript: relógios e hora recebem o valor deste instante.
