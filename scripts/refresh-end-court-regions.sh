@@ -8,14 +8,13 @@ mode="${1:---preflight}"
 node scripts/check-vendor-fresh.js
 source_commit="$(git log -1 --format=%H -- functions-autodraw)"
 [[ "$source_commit" =~ ^[a-f0-9]{40}$ ]] || exit 1
-# Confira a diferença deste corte contra a base publicada. Os SHAs históricos
-# anteriores a esta leva já contêm outras mudanças legítimas do backend e não
-# descrevem o que será enviado agora. As cópias vendor acompanham os arquivos
-# cliente modificados pelo gate de paridade; só endMatchOnCourt é exposta.
+# Confira a diferença deste corte contra a base publicada. Esta leva muda
+# somente a transição da série Rei/Rainha e o cálculo da duração anterior ao
+# relógio individual; a porta exposta aqui continua sendo endMatchOnCourt.
 base_commit="$(git merge-base origin/main HEAD)"
 [[ -n "$base_commit" ]] || exit 1
 diff="$(git diff --name-only "$base_commit" HEAD -- functions functions-autodraw)"
-[[ "$diff" == $'functions-autodraw/index.js\nfunctions-autodraw/vendor/bracket-ui.js\nfunctions-autodraw/vendor/tournaments.js' ]] || {
+[[ "$diff" == $'functions-autodraw/index.js\nfunctions-autodraw/monarch-court-series.js' ]] || {
   echo "backend fora do corte end-court: $diff" >&2; exit 1;
 }
 echo "✓ diff $base_commit → HEAD: $diff"
