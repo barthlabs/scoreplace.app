@@ -2976,6 +2976,10 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
       ? _monarchCourtSeries.advance(t, drawWindow._findMatch(t, matchId),
         drawWindow._collectAllMatches(t), _agoraIsoTx, _courtOccupancy, _matchTiming, _releasedCourts)
       : null;
+    if (res.outcome === 'applied' && typeof drawWindow._collectAllMatches === 'function') {
+      _monarchCourtSeries.estimateAfterFinalResult(t, drawWindow._findMatch(t, matchId),
+        drawWindow._collectAllMatches(t), _agoraIsoTx, _matchTiming, _courtOccupancy);
+    }
     if (_courtAdvance) tx.set(ref.collection('courtState').doc('main'),
       { revision: FieldValue.increment(1) }, { merge: true });
     const _tieBeforeResult = {
@@ -4718,7 +4722,10 @@ exports.assignMatchCourt = onCall({ invoker: 'public' }, async (request) => {
       if (court) m.court = court; else delete m.court;
       // Mudar/remover a quadra desfaz a chamada anterior. Confirmar em outra
       // quadra cria uma chamada nova; repetir na mesma conserva o instante.
-      if (confirmCall && !m.courtCalledAt) m.courtCalledAt = agoraIso;
+      if (confirmCall && !m.courtCalledAt) {
+        m.courtCalledAt = agoraIso;
+        if (m.isMonarch === true && !m.isTieBreak) m.monarchTimingMode = 'perGame';
+      }
       const b = _gravaTorneio(tx, ref, t, antes, { agoraIso: agoraIso });
       let queueReply = {};
       if (confirmCall) {
@@ -4886,6 +4893,7 @@ exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
         throw new HttpsError('failed-precondition', 'O jogo precisa estar em quadra e sem resultado.');
       }
       let nextInSeries = null;
+      let completedSeries = null;
       if (m.isMonarch === true && !m.isTieBreak && Array.isArray(t.scheduleWindow?.days) &&
           t.scheduleWindow.days.length === 1 && m.monarchGroup != null && m.round != null && m.category) {
         const series = all.filter(item => item && item.isMonarch === true && !item.isTieBreak &&
@@ -4911,28 +4919,35 @@ exports.endMatchOnCourt = onCall({ invoker: 'public' }, async (request) => {
             if (competing) throw new HttpsError('failed-precondition', 'Outra partida ocupa esta quadra. Atualize a tela.');
             nextInSeries = next;
           }
+          if (index === 2) completedSeries = series;
         }
       }
       const auditRef = ref.collection('courtReleases').doc();
       const nextReleased = { ...released, [matchId]: agoraIso };
       const courtPatch = { revision: FieldValue.increment(1), released: nextReleased };
+      const before = nextInSeries || completedSeries ? _antesDoMotor(t) : null;
       if (nextInSeries) {
-        const before = _antesDoMotor(t);
         nextInSeries.court = String(m.court);
         nextInSeries.courtCalledAt = agoraIso;
-        nextInSeries.courtClockBaseAt = agoraIso;
+        nextInSeries.startedAt = agoraIso;
+        const timing = _matchTiming.config(t);
+        nextInSeries.courtClockBaseAt = new Date(Date.parse(agoraIso) -
+          (timing.call + timing.warmup) * 60000).toISOString();
         delete nextInSeries.callCancelledAt;
-        _gravaTorneio(tx, ref, t, before, { agoraIso });
         courtPatch.postponed = (Array.isArray(state.postponed) ? state.postponed : []).map(String)
           .filter(id => id !== String(nextInSeries.id));
         courtPatch.postponedReady = (Array.isArray(state.postponedReady) ? state.postponedReady : []).map(String)
           .filter(id => id !== String(nextInSeries.id));
       }
+      const estimatedDurationMs = completedSeries
+        ? _monarchCourtSeries.estimateLegacyDurations(t, completedSeries, agoraIso, _matchTiming) : null;
+      if (before && (nextInSeries || estimatedDurationMs)) _gravaTorneio(tx, ref, t, before, { agoraIso });
       tx.set(stateRef, courtPatch, { merge: true });
       tx.create(auditRef, { matchId, court: String(m.court), releasedAt: agoraIso, releasedBy: uid,
         nextMatchId: nextInSeries ? String(nextInSeries.id) : null });
       return commitReply({ ok: true, changed: true, releasedAt: agoraIso,
-        nextMatchId: nextInSeries ? String(nextInSeries.id) : null, seriesContinues: !!nextInSeries });
+        nextMatchId: nextInSeries ? String(nextInSeries.id) : null, seriesContinues: !!nextInSeries,
+        estimatedDurationMs: estimatedDurationMs || null });
     }
     if (hasScore) {
       throw new HttpsError('failed-precondition', 'Resultado já lançado. Use Editar placar para corrigi-lo.');

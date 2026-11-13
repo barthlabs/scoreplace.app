@@ -2,7 +2,9 @@
 // chama o próximo na mesma quadra e inicia seu relógio. Os placares anteriores
 // continuam no card da série, acessíveis pelas setas. Depois do terceiro
 // encerramento, a quadra fica livre e os placares não lançados aparecem em
-// Placares pendentes.
+// Placares pendentes. Para séries já chamadas antes desta correção, a duração
+// total desde a chamada inicial é dividida igualmente entre os três jogos;
+// a TV identifica essa duração como aproximada.
 // 2.6.71 — A tela No ar permite escolher o monitor para a TV e abre a
 // apresentação em tela cheia na janela escolhida, mantendo a operação na
 // tela original. O logo, o QR,

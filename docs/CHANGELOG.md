@@ -2,6 +2,7 @@
 
 - Encerrar sem placar o jogo 1 ou 2 de um quarteto Rei/Rainha de três jogos chama automaticamente o seguinte na mesma quadra e inicia o relógio dele. O encerramento do jogo 3 libera a quadra.
 - Os placares ainda não lançados dos jogos anteriores permanecem acessíveis pelas setas do card da série. Eles entram em “Placares pendentes” somente depois do terceiro encerramento.
+- Nos grupos já chamados antes da correção, a duração efetiva da série é medida desde o fim da chamada/aquecimento inicial até o terceiro encerramento ou placar e dividida em três partes iguais. A TV mostra essa duração com “≈”; as séries chamadas depois da correção mantêm o relógio de cada jogo.
 - A ordem de chamada do servidor aceita o jogo anterior encerrado sem placar como etapa operacional concluída. A transição e o relógio são gravados na mesma transação; jogos de outros formatos mantêm o fluxo atual.
 - Corte web e portas regionais de `assignMatchCourt` e `endMatchOnCourt`; sem alteração de placares existentes ou versões nativas.
 

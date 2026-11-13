@@ -1,6 +1,6 @@
 'use strict';
 const assert = require('node:assert/strict');
-const { advance } = require('../functions-autodraw/monarch-court-series.js');
+const { advance, estimateLegacyDurations, estimateAfterFinalResult } = require('../functions-autodraw/monarch-court-series.js');
 const occupancy = require('../functions-autodraw/vendor/court-occupancy.js');
 const timing = require('../functions-autodraw/vendor/match-timing.js');
 const resultCore = require('../functions-autodraw/result-core.js');
@@ -71,4 +71,22 @@ for (let i = 0; i < 3; i++) {
     assert.equal(replay.courtAdvance.matchId, 'a2', 'reenvio mantém a transferência no recibo');
   }
 }
-console.log('Série Rei/Rainha: jogos 1→2→3 na mesma quadra e sem nova chamada/aquecimento');
+const legacy = series();
+legacy[0].courtCalledAt = '2026-11-13T11:00:00.000Z';
+assert.equal(estimateLegacyDurations(tournament, legacy, '2026-11-13T12:25:00.000Z', timing), 25 * 60000);
+assert.deepEqual(legacy.map(game => game.estimatedDurationMs), [25 * 60000, 25 * 60000, 25 * 60000],
+  'tempo efetivo total da série anterior à correção é repartido em três partes iguais');
+assert.equal(estimateLegacyDurations(tournament, legacy, '2026-11-13T13:25:00.000Z', timing), null,
+  'lançamento tardio dos placares não aumenta uma duração já fixada no encerramento');
+const current = series();
+current[0].courtCalledAt = legacy[0].courtCalledAt;
+current[0].monarchTimingMode = 'perGame';
+assert.equal(estimateLegacyDurations(tournament, current, '2026-11-13T12:25:00.000Z', timing), null,
+  'série nova preserva os relógios individuais');
+const scoredLegacy = series();
+scoredLegacy[0].courtCalledAt = legacy[0].courtCalledAt;
+scoredLegacy.forEach(game => { game.resultAt = '2026-11-13T12:25:00.000Z'; });
+assert.equal(estimateAfterFinalResult(tournament, scoredLegacy[2], scoredLegacy,
+  '2026-11-13T12:25:00.000Z', timing, occupancy), 25 * 60000,
+  'lançar o terceiro placar também conclui o rateio sem precisar encerrar a quadra');
+console.log('Série Rei/Rainha: jogos 1→2→3 na mesma quadra e tempo legado repartido');

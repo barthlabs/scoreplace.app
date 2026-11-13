@@ -64,6 +64,7 @@ const context = {
   _operationProtocolGuard: async () => {},
   _rehearsal: require('../functions-autodraw/tournament-rehearsal.js'),
   _matchTiming: require('../js/domain/match-timing.js'),
+  _monarchCourtSeries: require('../functions-autodraw/monarch-court-series.js'),
   _agenda: require('../functions-autodraw/agenda-core.js'),
   _phaseTieCourts: require('../functions-autodraw/phase-tie-courts.js'),
   Date: TestDate, Intl, Number, String, Array, Set, console
@@ -377,7 +378,7 @@ const game = (id, court, scheduledAt = '2026-10-22T21:00:00.000Z') => ({ id, cou
     'jogo pulado novamente retorna após outra chamada');
   tournament.matches = [seriesGame('series-1', 1, 0), seriesGame('series-2', 2, 0), seriesGame('series-3', 3, 0)];
   tournament.matches[0].court = 'Quadra 1';
-  tournament.matches[0].courtCalledAt = nowIso;
+  tournament.matches[0].courtCalledAt = '2026-10-20T17:50:00.000Z';
   courtStates.set(statePath, { released:{}, postponed:[], postponedReady:[], revision:0 });
   nowIso = '2026-10-20T18:00:00.000Z';
   const firstEnded = await endOnCourt({ auth:{ uid:'owner' }, data:{
@@ -385,19 +386,30 @@ const game = (id, court, scheduledAt = '2026-10-22T21:00:00.000Z') => ({ id, cou
   } });
   assert.equal(firstEnded.nextMatchId, 'series-2', 'encerrar jogo 1 chama automaticamente jogo 2');
   assert.equal(tournament.matches[1].court, 'Quadra 1');
-  assert.equal(tournament.matches[1].courtClockBaseAt, nowIso, 'relógio do jogo 2 começa no encerramento');
+  assert.equal(tournament.matches[1].startedAt, nowIso, 'jogo 2 começa no encerramento');
+  assert.equal(context._matchTiming.phaseAt(Date.parse(tournament.matches[1].courtClockBaseAt),
+    context._matchTiming.config(tournament), Date.parse(nowIso)).phase, 'game',
+    'relógio do jogo 2 entra diretamente no tempo de jogo, sem repetir aquecimento');
   assert.ok(courtStates.get(statePath).released['series-1'], 'placar do jogo 1 continua pendente');
   nowIso = '2026-10-20T18:10:00.000Z';
   const secondEnded = await endOnCourt({ auth:{ uid:'owner' }, data:{
     tournamentId:'tour_test', sandbox:false, matchId:'series-2'
   } });
   assert.equal(secondEnded.nextMatchId, 'series-3', 'encerrar jogo 2 chama automaticamente jogo 3');
-  assert.equal(tournament.matches[2].courtClockBaseAt, nowIso, 'relógio do jogo 3 inicia independente');
+  assert.equal(tournament.matches[2].startedAt, nowIso, 'relógio do jogo 3 inicia independente');
   nowIso = '2026-10-20T18:20:00.000Z';
   const thirdEnded = await endOnCourt({ auth:{ uid:'owner' }, data:{
     tournamentId:'tour_test', sandbox:false, matchId:'series-3'
   } });
   assert.equal(thirdEnded.seriesContinues, false, 'só o terceiro encerramento libera a quadra');
+  assert.equal(thirdEnded.estimatedDurationMs, 500000,
+    'série chamada antes da correção reparte o tempo efetivo total entre três jogos');
+  assert.deepEqual(tournament.matches.map(game => game.estimatedDurationMs), [500000, 500000, 500000]);
   assert.deepEqual(Object.keys(courtStates.get(statePath).released).sort(), ['series-1','series-2','series-3']);
+  tournament.matches = [seriesGame('fresh-1', 4, 1), seriesGame('fresh-2', 5, 1), seriesGame('fresh-3', 6, 1)];
+  courtStates.set(statePath, { released:{}, postponed:[], postponedReady:[], revision:0 });
+  assert.equal((await callable(request('tour_test', 'fresh-1', 'Quadra 4', true))).changed, true);
+  assert.equal(tournament.matches[0].monarchTimingMode, 'perGame',
+    'uma série chamada após a correção conserva a medição individual');
   console.log('✓ sandbox isolado; dia local, ocupação e troca de quadra validados na callable real');
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -90,6 +90,11 @@ const monarchSnapshot = window._tvLiveBuildSnapshot(monarchTv, Date.parse('2026-
 assert.equal(monarchSnapshot.results[0].seriesPosition, '1 de 3');
 assert.equal(monarchSnapshot.results[0].groupName, 'Grupo A1');
 assert.equal(monarchSnapshot.results[0].duration, '00:04:32');
+const estimatedMonarch = window._tvLiveBuildSnapshot({ ...monarchTv,
+  matches:monarchTv.matches.map((game, index) => index === 0 ? { ...game, estimatedDurationMs:25 * 60000 } : game)
+}, Date.parse('2026-10-22T21:03:00Z'));
+assert.equal(estimatedMonarch.results[0].duration, '≈00:25:00',
+  'o resultado mostra a duração rateada da série antiga, não os segundos do lançamento tardio');
 assert.deepEqual(monarchSnapshot.courts[0].series.map(game => game.status), ['done', 'active', 'waiting'],
   'TV conserva os três jogos do quarteto na quadra');
 assert.equal(monarchSnapshot.courts[0].series[0].scoreA, '6', 'resultado concluído aparece na série');

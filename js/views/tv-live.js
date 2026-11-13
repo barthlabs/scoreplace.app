@@ -410,7 +410,10 @@
       .map(function (m) {
         var ended = timestamp(m.resultAt || m.completedAt);
         var gameStart = timestamp(m.startedAt);
-        var duration = !m.wo && ended > gameStart && gameStart > 0 ? clock.elapsed(gameStart, ended) : '';
+        var estimatedMs = Number(m.estimatedDurationMs);
+        var duration = !m.wo && estimatedMs >= 1000 && Number.isFinite(estimatedMs)
+          ? '≈' + clock.elapsed(0, estimatedMs)
+          : (!m.wo && ended > gameStart && gameStart > 0 ? clock.elapsed(gameStart, ended) : '');
         var series = m.isMonarch && !m.isTieBreak ? matches.filter(function (peer) {
           return peer && peer.isMonarch && !peer.isTieBreak &&
             String(peer.category || '') === String(m.category || '') &&
