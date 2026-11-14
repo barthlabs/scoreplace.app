@@ -1062,7 +1062,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert.equal(tieNavigation.titles.length, 6, 'simples desempate navega por jogo e contexto sem travar: ' + JSON.stringify(tieNavigation));
     assert.equal(tieNavigation.tabs, 1, 'abas permanecem montadas após navegar no desempate');
     assert.equal(tieNavigation.strip, 1, 'faixa de operação permanece montada após navegar no desempate');
-    const laterCall = await page.evaluate(() => {
+    const laterCall = await page.evaluate(async () => {
       const t = window._findTournamentById();
       const root = document.querySelector('[data-bracket-tabs-root]');
       window.AppStore.currentUser = { uid:'org' };
@@ -1103,7 +1103,14 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       const scrollPreserved = afterRefresh.scrollTop >= cards[1].offsetTop;
       const cardFits = [...afterRefresh.querySelectorAll(':scope > .sp-operations-replica .sp-match-card')]
         .map(card => ({ scrollHeight:card.scrollHeight, clientHeight:card.clientHeight }));
-      const later = afterRefresh.querySelector('[data-operations-base-match="later"]');
+      const beforeHidden = afterRefresh.scrollTop;
+      strip.style.display = 'none';
+      window._bracketOperationsRefresh(t, root);
+      strip.style.display = '';
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const afterHidden = strip.querySelector('.sp-operations-next-scroll');
+      const hiddenScrollPreserved = Math.abs(afterHidden.scrollTop - beforeHidden) <= 2;
+      const later = afterHidden.querySelector('[data-operations-base-match="later"]');
       const callButton = later.querySelector('.sp-match-confirm');
       const callDebug = { disabled:callButton.disabled, match:later.getAttribute('data-operations-match'), html:callButton.outerHTML };
       callButton.click();
@@ -1112,7 +1119,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       window._bracketOperationsRefresh(t, root);
       const noCallable = { fullCard:!!strip.querySelector('.sp-operations-next-scroll > .sp-operations-replica .sp-match-card .team'),
         noEmpty:!strip.querySelector('.sp-operations-next-scroll > .sp-operations-empty') };
-      return { ids, cardPhases, stageLabels, scrollPreserved, cardFits, renders, called:window.called,
+      return { ids, cardPhases, stageLabels, scrollPreserved, hiddenScrollPreserved, cardFits, renders, called:window.called,
         callDebug, noCallable, earlyUncalled:!t.matches[0].courtCalledAt, laterCalled };
     });
     assert.deepEqual(laterCall.ids, ['early', 'later', 'unknown']);
@@ -1121,6 +1128,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert.deepEqual(laterCall.stageLabels, ['Eliminatória · Rodada 1', '16 avos de final',
       'Oitavas de final', 'Quartas de final', 'Semifinal', 'Final']);
     assert(laterCall.scrollPreserved, 'atualizar a faixa preserva a posição do jogo escolhido');
+    assert(laterCall.hiddenScrollPreserved, 'a rolagem permanece no jogo escolhido mesmo após atualização com a faixa oculta');
     assert(laterCall.cardFits.every(card => card.scrollHeight <= card.clientHeight + 2),
       'nenhum card seguinte pode cortar o conteúdo: ' + JSON.stringify(laterCall.cardFits));
     assert(laterCall.renders.some(render => render.id === 'later' && render.canEnter && !render.readOnly),

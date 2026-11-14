@@ -20,6 +20,15 @@ for (const cat of categories) {
   assert.deepEqual(drawn.map(group => Array.from(group.players || [])), official[cat],
     'a ordem oficial é aplicada pelo formato, sem ID específico do Camis');
 }
+const secondOrder = official['Categoria A'].map(group => group.slice().reverse());
+const other = { ...t, id:'second-tournament', rounds:[], matches:[],
+  officialGroupsByCategory:{ 'Categoria A':secondOrder } };
+W._generateReiRainhaRoundForPlayers(other, 'Categoria A', 1, {ts:1,rnd:() => .5});
+assert.deepEqual(other.rounds.flatMap(round => round.monarchGroups || []).map(group => Array.from(group.players || [])),
+  secondOrder, 'outro torneio usa apenas a sua própria ordem oficial');
+assert.deepEqual(groups.filter(group => group.matches[0].category === 'Categoria A')
+  .map(group => Array.from(group.players || [])), official['Categoria A'],
+  'gerar outro torneio não altera os grupos do primeiro');
 const invalid = { ...t, rounds:[], matches:[], officialGroupsByCategory:{ ...official,
   'Categoria A':official['Categoria A'].slice(1) } };
 assert.throws(() => W._generateReiRainhaRoundForPlayers(invalid, 'Categoria A', 1, {ts:1,rnd:() => .5}),

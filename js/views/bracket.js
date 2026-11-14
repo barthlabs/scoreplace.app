@@ -2621,8 +2621,10 @@ window._bracketOperationsRefresh = function (t, root) {
   var scrollMemory = window._spOperationsScrollByTournament || (window._spOperationsScrollByTournament = {});
   var trackScroll = previousTrack ? previousTrack.scrollLeft : Number(scrollMemory[String(t.id)] || 0);
   var previousNextScroll = previousTrack && previousTrack.querySelector('.sp-operations-next-scroll');
-  var nextScrollTop = previousNextScroll ? previousNextScroll.scrollTop : 0;
-  var visibleNext = previousNextScroll && Array.prototype.find.call(previousNextScroll.querySelectorAll('.sp-operations-replica'), function (card) {
+  var nextScrollMemory = window._spOperationsNextScrollByTournament || (window._spOperationsNextScrollByTournament = {});
+  var nextScrollTop = previousNextScroll && previousNextScroll.clientHeight ? previousNextScroll.scrollTop :
+    Number(nextScrollMemory[String(t.id)] || 0);
+  var visibleNext = previousNextScroll && previousNextScroll.clientHeight && Array.prototype.find.call(previousNextScroll.querySelectorAll('.sp-operations-replica'), function (card) {
     return card.offsetTop + card.offsetHeight > previousNextScroll.scrollTop;
   });
   var visibleNextId = visibleNext && visibleNext.getAttribute('data-operations-base-match');
@@ -2693,6 +2695,7 @@ window._bracketOperationsRefresh = function (t, root) {
     }, index === 0 ? nextLabel : 'PRÓXIMO JOGO · ' + (index + 1) + '/' + nextCards.length,
     availability, root, state.matches, 'next:' + String(m.id));
   }).join('');
+  if (existing._spNextScrollRestoreObserver) { existing._spNextScrollRestoreObserver.disconnect(); existing._spNextScrollRestoreObserver = null; }
   existing.innerHTML = '<div class="sp-operations-track" data-hscroll="ops:track"><div class="sp-operations-next"><div class="sp-operations-next-scroll" aria-label="Próximos jogos">' +
     (nextCardsHtml || '<span class="sp-operations-label">' + nextLabel + '</span>' + nextAvailability + '<div class="sp-operations-empty">' +
       (state.waitingForTie ? 'Aguardando a definição do desempate para continuar a fila' :
@@ -2753,7 +2756,20 @@ window._bracketOperationsRefresh = function (t, root) {
       var anchor = visibleNextId && Array.prototype.find.call(nextScroll.querySelectorAll('.sp-operations-replica'), function (card) {
         return card.getAttribute('data-operations-base-match') === visibleNextId;
       });
-      nextScroll.scrollTop = anchor ? anchor.offsetTop + visibleNextOffset : nextScrollTop;
+      var restoreNextScroll = function () {
+        if (!nextScroll.isConnected || !nextScroll.clientHeight) return;
+        nextScroll.scrollTop = anchor ? anchor.offsetTop + visibleNextOffset : nextScrollTop;
+        nextScrollMemory[String(t.id)] = nextScroll.scrollTop;
+        if (existing._spNextScrollRestoreObserver) { existing._spNextScrollRestoreObserver.disconnect(); existing._spNextScrollRestoreObserver = null; }
+      };
+      nextScroll.addEventListener('scroll', function () {
+        if (nextScroll.clientHeight) nextScrollMemory[String(t.id)] = nextScroll.scrollTop;
+      }, { passive:true });
+      if (nextScroll.clientHeight) restoreNextScroll();
+      else if (typeof ResizeObserver === 'function') {
+        existing._spNextScrollRestoreObserver = new ResizeObserver(restoreNextScroll);
+        existing._spNextScrollRestoreObserver.observe(nextScroll);
+      }
     }
     _bracketOperationsBindScrollbar(operationsTrack, existing.querySelector('.sp-operations-scrollbar'));
     if (window.scrollY !== pageY || window.scrollX !== pageX) window.scrollTo(pageX, pageY);

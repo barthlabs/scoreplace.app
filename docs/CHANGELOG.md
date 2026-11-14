@@ -1,7 +1,7 @@
 ## 2.6.90 — 14/nov/2026 (cards roláveis dos próximos jogos)
 
 - A coluna de próxima chamada mostra a fila em cards completos com rolagem vertical, como os placares pendentes. Um jogo posterior já definido e liberado pode ser chamado diretamente para uma quadra livre, sem esperar a primeira posição visual. Confrontos com vagas ainda indefinidas continuam visíveis e sem chamada.
-- A fase e o horário estimado aparecem junto de cada card, com “Eliminatória · Rodada N” nas rodadas anteriores aos 16 avos. A fase permanece visível mesmo em telas estreitas. A rolagem permanece no jogo observado após atualizações da operação.
+- A fase e o horário estimado aparecem junto de cada card, com “Eliminatória · Rodada N” nas rodadas anteriores aos 16 avos. A fase permanece visível mesmo em telas estreitas. A rolagem permanece no jogo observado após atualizações da operação, inclusive se a faixa estava oculta.
 
 ## 2.6.89 — 14/nov/2026 (formato reutilizável e seleção de monitor)
 
