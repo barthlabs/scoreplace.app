@@ -1107,9 +1107,18 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       strip.style.display = 'none';
       window._bracketOperationsRefresh(t, root);
       strip.style.display = '';
-      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       const afterHidden = strip.querySelector('.sp-operations-next-scroll');
-      const hiddenScrollPreserved = Math.abs(afterHidden.scrollTop - beforeHidden) <= 2;
+      const hiddenScrollPreserved = await new Promise(resolve => {
+        let frames = 0;
+        function check() {
+          if (Math.abs(afterHidden.scrollTop - beforeHidden) <= 2) return resolve(true);
+          if (++frames >= 60) return resolve(false);
+          requestAnimationFrame(check);
+        }
+        requestAnimationFrame(check);
+      });
+      const hiddenScroll = { before:beforeHidden, after:afterHidden.scrollTop,
+        height:afterHidden.clientHeight, observer:!!strip._spNextScrollRestoreObserver };
       const later = afterHidden.querySelector('[data-operations-base-match="later"]');
       const callButton = later.querySelector('.sp-match-confirm');
       const callDebug = { disabled:callButton.disabled, match:later.getAttribute('data-operations-match'), html:callButton.outerHTML };
@@ -1119,7 +1128,7 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
       window._bracketOperationsRefresh(t, root);
       const noCallable = { fullCard:!!strip.querySelector('.sp-operations-next-scroll > .sp-operations-replica .sp-match-card .team'),
         noEmpty:!strip.querySelector('.sp-operations-next-scroll > .sp-operations-empty') };
-      return { ids, cardPhases, stageLabels, scrollPreserved, hiddenScrollPreserved, cardFits, renders, called:window.called,
+      return { ids, cardPhases, stageLabels, scrollPreserved, hiddenScrollPreserved, hiddenScroll, cardFits, renders, called:window.called,
         callDebug, noCallable, earlyUncalled:!t.matches[0].courtCalledAt, laterCalled };
     });
     assert.deepEqual(laterCall.ids, ['early', 'later', 'unknown']);
@@ -1128,7 +1137,8 @@ assert.equal(visibleDateTime(at, { scheduleWindow: { days: [{ day: '2026-11-13' 
     assert.deepEqual(laterCall.stageLabels, ['Eliminatória · Rodada 1', '16 avos de final',
       'Oitavas de final', 'Quartas de final', 'Semifinal', 'Final']);
     assert(laterCall.scrollPreserved, 'atualizar a faixa preserva a posição do jogo escolhido');
-    assert(laterCall.hiddenScrollPreserved, 'a rolagem permanece no jogo escolhido mesmo após atualização com a faixa oculta');
+    assert(laterCall.hiddenScrollPreserved, 'a rolagem permanece no jogo escolhido mesmo após atualização com a faixa oculta: ' +
+      JSON.stringify(laterCall.hiddenScroll));
     assert(laterCall.cardFits.every(card => card.scrollHeight <= card.clientHeight + 2),
       'nenhum card seguinte pode cortar o conteúdo: ' + JSON.stringify(laterCall.cardFits));
     assert(laterCall.renders.some(render => render.id === 'later' && render.canEnter && !render.readOnly),

@@ -2,7 +2,7 @@
 // na mesma coluna rolável. Jogos já definidos podem ser chamados fora da
 // primeira posição; a fase aparece em cada card, inclusive as primeiras rodadas
 // eliminatórias. A rolagem permanece no card escolhido após atualizações,
-// mesmo se a faixa estava oculta; vagas pendentes ficam informativas.
+// inclusive quando a faixa oculta volta a aparecer; vagas pendentes ficam informativas.
 // 2.6.89 — O botão No Ar escolhe o monitor na própria operação e abre
 // a apresentação diretamente na tela selecionada. O painel Rei/Rainha
 // com duplas eliminatórias vale para outros torneios do mesmo formato.
