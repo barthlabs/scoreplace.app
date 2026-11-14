@@ -110,12 +110,12 @@ const { chromium } = require('@playwright/test');
         { waitUntil: 'domcontentloaded' });
       const camisBounds = await camisPage.evaluate(() => {
         const rect = selector => document.querySelector(selector).getBoundingClientRect();
-        const board = rect('.tv-custom-board-camis'), header = rect('.tv-custom-header');
+        const board = rect('.tv-custom-board-event'), header = rect('.tv-custom-header');
         const courts = rect('.tv-custom-courts'), results = rect('.tv-custom-results');
         const upcoming = rect('.tv-custom-upcoming'), qrBox = rect('.tv-custom-qr');
-        const logo = rect('.tv-qr-tournament-logo-camis'), logoImage = rect('.tv-qr-tournament-logo-camis-image');
-        const qr = rect('.tv-qr-camis .tv-qr-code');
-        const brand = rect('.tv-qr-camis .tv-qr-brand');
+        const logo = rect('.tv-qr-tournament-logo-event'), logoImage = rect('.tv-qr-tournament-logo-event-image');
+        const qr = rect('.tv-qr-event .tv-qr-code');
+        const brand = rect('.tv-qr-event .tv-qr-brand');
         return { boardRight:board.right, boardBottom:board.bottom, headerRight:header.right,
           resultsRight:results.right, courtsBottom:courts.bottom, upcomingBottom:upcoming.bottom,
           qrBottom:qrBox.bottom, brandBottom:brand.bottom, qrWidth:qr.width,

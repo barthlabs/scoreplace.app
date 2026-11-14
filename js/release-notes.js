@@ -1,3 +1,6 @@
+// 2.6.89 — O botão No Ar escolhe o monitor na própria operação e abre
+// a apresentação diretamente na tela selecionada. O painel Rei/Rainha
+// com duplas eliminatórias vale para outros torneios do mesmo formato.
 // 2.6.88 — A tela No Ar mantém “Últimos resultados” e “Próximos jogos”
 // parados enquanto todos os cards couberem; a rolagem começa só com excesso.
 // 2.6.87 — O próximo jogo volta a ser um card completo na operação.

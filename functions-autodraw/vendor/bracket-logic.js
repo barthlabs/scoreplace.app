@@ -6428,12 +6428,14 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
     playingPlayers = _plainShuffle(playingPlayers, det.rnd);
   }
 
-  // Elenco oficial já sorteado fora do app para o torneio de teste CAMIS.
-  // Aceita somente os mesmos atletas da categoria e somente na primeira rodada.
-  var officialGroups = roundNum === 1 && t.id === 'tour_1793804848447_94bfe2282535789667cb35f1080024ee' &&
-    t.camisOfficialGroups && t.camisOfficialGroups[category];
+  // Um elenco oficial informado pela organização vale para qualquer torneio
+  // deste formato. O campo antigo continua legível nos torneios já publicados.
+  var officialGroupsByCategory = t.officialGroupsByCategory || t.camisOfficialGroups;
+  var officialGroups = roundNum === 1 && officialGroupsByCategory && officialGroupsByCategory[category];
   if (officialGroups) {
-    if (!Array.isArray(officialGroups)) throw new Error('Grupos oficiais do CAMIS inválidos.');
+    var officialField = t.officialGroupsByCategory ? 'officialGroupsByCategory' : 'camisOfficialGroups';
+    if (!Array.isArray(officialGroups)) throw new Error('Grupos oficiais inválidos em ' + officialField +
+      ' do torneio ' + String(t.id || '') + '.');
     var officialOrder = officialGroups.flat();
     var identity = function (name) { return String(name || '').trim().normalize('NFKC').toLocaleLowerCase('pt-BR'); };
     var available = new Map(playingPlayers.map(function (name) { return [identity(name), name]; }));
@@ -6442,7 +6444,8 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
         officialOrder.length !== playingPlayers.length || available.size !== playingPlayers.length ||
         new Set(officialOrder.map(identity)).size !== officialOrder.length ||
         officialOrder.some(function (name) { return !available.has(identity(name)); })) {
-      throw new Error('Grupos oficiais do CAMIS divergem das inscrições da categoria ' + category +
+      throw new Error('Grupos oficiais em ' + officialField + ' do torneio ' + String(t.id || '') +
+        ' divergem das inscrições da categoria ' + category +
         ' (' + officialOrder.length + ' planejados, ' + playingPlayers.length + ' disponíveis, ' +
         officialOrder.filter(function (name) { return !available.has(identity(name)); }).length + ' ausentes).');
     }

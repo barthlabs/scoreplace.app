@@ -3,7 +3,7 @@
 (function () {
   'use strict';
   var popup = null, tvFrame = null, tvFullscreenHandler = null, tick = null, lastMarkup = '', wakeSentinel = null, wakePending = false;
-  var screenPicker = null, screenPickerPopup = null, selectedMonitor = null, screenPickerRequest = 0;
+  var screenPicker = null, selectedMonitor = null, screenPickerRequest = 0;
   var popupTournamentId = '', popupGeneration = 0, lastHeartbeatAt = 0, lastHeartbeatVisible = false;
   var highestGenerationById = Object.create(null);
   var lastCompleteTournament = null, loadingTournament = false, lastLoadAttempt = 0;
@@ -221,6 +221,30 @@
           done: occupancy.isFinished(m), third:!!m.isThirdPlace };
       }) };
     });
+  }
+  function isMonarchPairElimination(t) {
+    var phases = t && t.phases;
+    var group = phases && phases[0], elimination = phases && phases[1];
+    var source = elimination && elimination.source;
+    return !!(group && elimination && group.classification && group.classification.pairing &&
+      group.classification.pairing.strategy === 'monarch_groups' &&
+      elimination.kind === 'elimination' && elimination.fixedPairs === true &&
+      source && source.type === 'previous_phase' && source.scope === 'per_group' &&
+      Number(source.qualifyTopN || elimination.gruposClassified) === 2);
+  }
+  function eventDayLayout(core) {
+    var layout = core.defaults();
+    var positions = {
+      header:[0,0,98.5,6.5], courts:[0,7,67,89.5],
+      results:[67,7,31.5,44], upcoming:[67,52,23.5,44.5], qr:[90.5,64,8,32.5]
+    };
+    Object.keys(layout.sections).forEach(function (id) {
+      layout.sections[id].visible = !!positions[id];
+      if (positions[id]) ['x','y','w','h'].forEach(function (key, index) {
+        layout.sections[id][key] = positions[id][index];
+      });
+    });
+    return core.normalize(layout);
   }
   window._tvLiveBuildSnapshot = function (t, nowMs) {
     if (!t || !t.id) return null;
@@ -515,6 +539,9 @@
           screens && t.tvActiveScreen < screens.length) {
         tvLayout = t.tvActiveScreen === 0 ? (fallbackLayout || screens[0].layout) : screens[t.tvActiveScreen].layout;
       } else tvLayout = layoutCore.forPhase(screens, t.currentPhaseIndex || 0, fallbackLayout);
+      // O painel aprovado para classificatória Rei/Rainha seguida de duplas
+      // eliminatórias é um padrão do formato. Um layout salvo sempre prevalece.
+      if (!tvLayout && isMonarchPairElimination(t)) tvLayout = eventDayLayout(layoutCore);
     }
     var matchChoices = matches.filter(function (m) { return m && m.id && !m.isBye && !m.isSitOut; }).map(function (m) {
       return { id: String(m.id), label: 'JOGO ' + (m._gameNum || m.scheduledGameNumber || m.matchNumber || '') +
@@ -612,7 +639,7 @@
       logoShape: t.logoShape === 'circle' ? 'circle' : 'square',
       logoRadius: typeof window._tournamentLogoRadius === 'function'
         ? window._tournamentLogoRadius(t) : (t.logoShape === 'circle' ? '50%' : '14%'),
-      tvLayout: tvLayout, theme: theme,
+      tvLayout: tvLayout, eventBoard: isMonarchPairElimination(t), theme: theme,
       qrUrl: qrUrl, qrImage: typeof window._qrCodeUrl === 'function' ? window._qrCodeUrl(qrUrl, 320, false) :
         'https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=' + encodeURIComponent(qrUrl) + '&bgcolor=ffffff&color=1a1e2e&margin=10',
       courts: courtCards, nextGame: nextGame, nextGames: nextGames, waitingForTie:!!(nextSelection && nextSelection.waitingForTie),
@@ -727,12 +754,19 @@
       '<path d="M 40 0 L 42 6 L 48 6 L 43 10 L 45 16 L 40 12 L 35 16 L 37 10 L 32 6 L 38 6 Z" fill="#F59E0B"/>' +
       '</svg><span>Abra no<br>Scoreplace</span></div>';
   }
-  function isCamisTv(snapshot) {
-    return String(snapshot.id || '') === 'tour_1793804848447_94bfe2282535789667cb35f1080024ee';
+  function isEventBoard(snapshot) {
+    var s = snapshot.tvLayout && snapshot.tvLayout.sections;
+    return !!(snapshot.eventBoard && s && s.header && s.header.visible && s.courts && s.courts.visible &&
+      s.results && s.results.visible && s.upcoming && s.upcoming.visible &&
+      s.qr && s.qr.visible && s.logo && !s.logo.visible &&
+      s.courts.x <= 1 && s.courts.w >= 60 &&
+      s.results.x >= s.courts.x + s.courts.w - .1 &&
+      s.upcoming.x >= s.courts.x + s.courts.w - .1 &&
+      s.qr.x >= s.upcoming.x + s.upcoming.w - .1 && s.qr.w <= 12);
   }
   function qrTournamentLogoHtml(snapshot) {
     if (!snapshot.logo) return '';
-    if (isCamisTv(snapshot) && snapshot.tvLayout) return '<span class="tv-qr-tournament-logo tv-qr-tournament-logo-camis" role="img" aria-label="Logo do torneio"><img class="tv-qr-tournament-logo-camis-image" src="' + esc(snapshot.logo) + '" alt=""></span>';
+    if (isEventBoard(snapshot)) return '<span class="tv-qr-tournament-logo tv-qr-tournament-logo-event" role="img" aria-label="Logo do torneio"><img class="tv-qr-tournament-logo-event-image" src="' + esc(snapshot.logo) + '" alt=""></span>';
     return '<img class="tv-qr-tournament-logo" src="' + esc(snapshot.logo) + '" alt="Logo do torneio">';
   }
   function bodyHtml(snapshot) {
@@ -742,7 +776,7 @@
       '" style="--tv-logo-radius:' + logoRadius + ';--tv-primary:' + esc(theme.primary) + ';--tv-secondary:' + esc(theme.secondary) +
       ';--tv-title:' + esc(theme.title) + ';background:' + esc(theme.background) + '">';
     if (snapshot.tvLayout) return frame + customBodyHtml(snapshot) + '</div>';
-    return frame + '<header class="tv-header">' + (snapshot.logo && !isCamisTv(snapshot) ? '<img src="' + esc(snapshot.logo) + '" alt="">' : '') + '<h1>' + esc(snapshot.name) + '</h1>' + fullscreenActionHtml() + '<time id="tv-now"></time></header>' +
+    return frame + '<header class="tv-header">' + (snapshot.logo ? '<img src="' + esc(snapshot.logo) + '" alt="">' : '') + '<h1>' + esc(snapshot.name) + '</h1>' + fullscreenActionHtml() + '<time id="tv-now"></time></header>' +
       '<main class="tv-board"><div class="tv-left"><section class="tv-courts" style="--tv-court-rows:' + Math.ceil(snapshot.courts.length / 2) + '">' + snapshot.courts.map(cardHtml).join('') + '</section>' + nextGameHtml(snapshot.nextGames || snapshot.nextGame, snapshot.waitingForTie) + '</div>' +
       '<aside class="tv-sidebar"><section class="tv-rankings"><h2>CLASSIFICAÇÃO</h2>' +
       (snapshot.rankings.length ? snapshot.rankings.map(function (section) { return rankingHtml(section, snapshot.rankings.length > 1); }).join('') : '<p>Classificação em formação</p>') +
@@ -757,8 +791,8 @@
   }
   function customBodyHtml(snapshot) {
     var layout = snapshot.tvLayout;
-    var camis = isCamisTv(snapshot);
-    if (camis && layout.sections.upcoming && layout.sections.qr &&
+    var eventBoard = isEventBoard(snapshot);
+    if (eventBoard && layout.sections.upcoming && layout.sections.qr &&
         layout.sections.upcoming.visible && layout.sections.qr.visible &&
         Math.abs(layout.sections.upcoming.x + layout.sections.upcoming.w - layout.sections.qr.x) < .1 &&
         layout.sections.upcoming.w >= 20 && layout.sections.qr.w <= 10) {
@@ -771,10 +805,9 @@
     var visibleBoxes = Object.keys(layout.sections).map(function (id) { return layout.sections[id]; }).filter(function (b) { return b && b.visible; });
     var rightEdge = Math.max.apply(null, visibleBoxes.map(function (b) { return b.x + b.w; }));
     var bottomEdge = Math.max.apply(null, visibleBoxes.map(function (b) { return b.y + b.h; }));
-    // O desenho salvo do CAMIS termina em 98,5% × 96,5%. Preencher só essa
-    // margem residual na TV; manter as proporções e o layout salvo no editor.
-    var fillX = camis && rightEdge >= 96 && rightEdge < 100 ? 100 / rightEdge : 1;
-    var fillY = camis && bottomEdge >= 94 && bottomEdge < 100 ? 100 / bottomEdge : 1;
+    // Um painel de operação com margem residual preenche a área útil na TV.
+    var fillX = eventBoard && rightEdge >= 96 && rightEdge < 100 ? 100 / rightEdge : 1;
+    var fillY = eventBoard && bottomEdge >= 94 && bottomEdge < 100 ? 100 / bottomEdge : 1;
     function box(id, inner, supplied) {
       var b = supplied || layout.sections[id];
       return b.visible ? '<div class="tv-custom-box tv-custom-' + id + '" style="left:' + (b.x * fillX) + '%;top:' + (b.y * fillY) + '%;width:' + (b.w * fillX) + '%;height:' + (b.h * fillY) + '%">' + inner + '</div>' : '';
@@ -798,7 +831,7 @@
       ? Math.max(0, Math.min(resultBox.x + resultBox.w, qrBox.x + qrBox.w) - Math.max(resultBox.x, qrBox.x)) : 0;
     var qrReserve = qrOverlap ? Math.min(45, Math.ceil(qrOverlap / resultBox.w * 100) + 2) : 0;
     var results = '<section class="tv-results"><div class="tv-results-main"><h2>ÚLTIMOS RESULTADOS</h2><div class="tv-results-list" style="padding-right:' + qrReserve + '%" data-result-day="' + esc(snapshot.resultDay) + '">' + snapshot.results.map(resultHtml).join('') + '</div></div></section>';
-    var qr = '<div class="tv-qr' + (snapshot.logo ? ' tv-qr-has-logo' : '') + (isCamisTv(snapshot) ? ' tv-qr-camis' : '') + '">' + qrTournamentLogoHtml(snapshot) + '<img class="tv-qr-code" src="' + esc(snapshot.qrImage) + '" alt="QR para abrir o Scoreplace">' + qrBrandHtml() + '</div>';
+    var qr = '<div class="tv-qr' + (snapshot.logo ? ' tv-qr-has-logo' : '') + (eventBoard ? ' tv-qr-event' : '') + '">' + qrTournamentLogoHtml(snapshot) + '<img class="tv-qr-code" src="' + esc(snapshot.qrImage) + '" alt="QR para abrir o Scoreplace">' + qrBrandHtml() + '</div>';
     function liveGame(id) {
       var game = snapshot.selectedMatches && snapshot.selectedMatches[id];
       if (!game) return '<section class="tv-focus-card"><h2>Escolha a partida</h2></section>';
@@ -841,8 +874,8 @@
         }).join('') : '<p>Classificação em andamento</p>') + '</div></section>';
     }
     var background = layout.backgroundMode === 'custom' ? layout.background : (snapshot.theme && snapshot.theme.background || '#060d1a');
-    return '<main class="tv-custom-board' + (camis ? ' tv-custom-board-camis' : '') + '" style="background:' + esc(background) + '">' +
-      box('header', '<header class="tv-header">' + (snapshot.logo && !isCamisTv(snapshot) && (!layout.sections.logo.visible || layout.sections.logo.y >= layout.sections.header.y + layout.sections.header.h) ? '<img src="' + esc(snapshot.logo) + '" alt="">' : '') + '<h1>' + esc(snapshot.name) + '</h1>' + fullscreenActionHtml() + '<time id="tv-now"></time></header>') +
+    return '<main class="tv-custom-board' + (eventBoard ? ' tv-custom-board-event' : '') + '" style="background:' + esc(background) + '">' +
+      box('header', '<header class="tv-header">' + (snapshot.logo && !eventBoard && (!layout.sections.logo.visible || layout.sections.logo.y >= layout.sections.header.y + layout.sections.header.h) ? '<img src="' + esc(snapshot.logo) + '" alt="">' : '') + '<h1>' + esc(snapshot.name) + '</h1>' + fullscreenActionHtml() + '<time id="tv-now"></time></header>') +
       box('courts', '<section class="tv-courts" data-tv-autoscroll="courts" style="--tv-court-rows:' + Math.ceil(snapshot.courts.length / 2) + '">' + snapshot.courts.map(function (card) { return cardHtml(card, layout.card); }).join('') + '</section>') +
       box('upcoming', nextGameHtml(snapshot.nextGames || snapshot.nextGame, snapshot.waitingForTie)) +
       box('rankings', ranking.replace('class="tv-rankings"', 'class="tv-rankings" data-tv-autoscroll="rankings"')) + box('results', results) +
@@ -853,7 +886,7 @@
       }).join('') +
       ['live1', 'live2', 'live3', 'live4'].map(function (id) { return box(id, liveGame(id)); }).join('') +
       ['standing1', 'standing2', 'standing3', 'standing4'].map(function (id) { return box(id, lineStanding(id)); }).join('') +
-      (isCamisTv(snapshot) ? '' : box('logo', snapshot.logo ? '<img class="tv-placed-logo" src="' + esc(snapshot.logo) + '" alt="Logo do torneio">' : '')) +
+      (eventBoard ? '' : box('logo', snapshot.logo ? '<img class="tv-placed-logo" src="' + esc(snapshot.logo) + '" alt="Logo do torneio">' : '')) +
       box('qr', qr, qrDisplayBox) + '</main>';
   }
   // A janela continua viva durante o reload automático da aba principal. O
@@ -1037,7 +1070,7 @@
     '.tv-result-match,.tv-upcoming .tv-result-match{grid-template-rows:minmax(0,1fr);min-height:0}.tv-result-side{min-height:0;overflow:hidden}.tv-result-team{min-height:0;max-height:100%;overflow:hidden;white-space:nowrap}.tv-result-players{min-height:0;overflow:hidden}.tv-upcoming .tv-result-players span{font-size:clamp(.75rem,.95vw,1.3rem)}' +
     '@media(orientation:portrait){.tv-header time{font-size:clamp(1.2rem,2.8vw,2.4rem)}.tv-sidebar{grid-template-rows:70% 30%}.tv-ranking-head,.tv-ranking-row{grid-template-columns:3vw minmax(0,1fr) 7vw 10vw repeat(3,4vw);gap:.5vw;font-size:clamp(.75rem,1.4vw,1.2rem)}.tv-ranking-row{min-height:2.9vh}.tv-ranking-team{font-size:clamp(.8rem,1.6vw,1.25rem)}.tv-ranking-row b{font-size:clamp(.8rem,1.6vw,1.25rem)}.tv-qr{width:clamp(90px,17vw,180px)}.tv-scoreplace-mark{width:3vw}}' +
     '#tv-root,.tv-theme{width:100%;height:100%}.tv-theme .tv-header{background:color-mix(in srgb,var(--tv-primary) 24%,#07111f)}.tv-theme .tv-header h1{color:var(--tv-title)}.tv-theme .tv-court,.tv-theme .tv-rankings,.tv-theme .tv-results,.tv-theme .tv-upcoming{background:color-mix(in srgb,var(--tv-primary) 18%,#0d1b2e);border-color:color-mix(in srgb,var(--tv-secondary) 30%,#1b3f61)}.tv-theme .tv-side,.tv-theme .tv-result-side{background:color-mix(in srgb,var(--tv-secondary) 12%,#222)}' +
-    '.tv-custom-board{position:relative;margin-left:.35vw;width:calc(100% - .8vw);height:100%;overflow:hidden}.tv-custom-box{position:absolute;min-width:0;min-height:0;overflow:hidden}.tv-custom-box>.tv-header,.tv-custom-box>.tv-courts,.tv-custom-box>.tv-upcoming,.tv-custom-box>.tv-rankings,.tv-custom-box>.tv-brackets,.tv-custom-box>.tv-results,.tv-custom-box>.tv-qr{width:100%;height:100%;min-height:0;overflow:hidden}.tv-custom-box>.tv-header{padding:.35vw .8vw}.tv-custom-box>.tv-courts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(3,minmax(0,1fr))}.tv-custom-results .tv-results{display:flex}.tv-custom-results .tv-results-main{width:100%}.tv-custom-qr .tv-qr{justify-content:flex-end}.tv-custom-qr .tv-qr-code{max-height:75%;width:88%;height:auto;max-width:88%;box-sizing:border-box;transform:translateX(-.6vw)}.tv-custom-qr .tv-qr-brand{width:88%;max-width:88%;margin-inline:auto;transform:translateX(-.6vw)}.tv-custom-qr .tv-qr-camis .tv-qr-code,.tv-custom-qr .tv-qr-camis .tv-qr-brand{transform:translateX(-.6vw)}.tv-custom-qr .tv-qr.tv-qr-has-logo{display:grid;grid-template-rows:minmax(0,1fr) auto auto;justify-content:stretch;justify-items:center;align-items:center;gap:.25vw}.tv-custom-qr .tv-qr-has-logo .tv-qr-tournament-logo{width:100%;height:100%;max-height:100%;max-width:100%;align-self:center;justify-self:center;object-fit:contain}.tv-custom-qr .tv-qr-has-logo .tv-qr-tournament-logo-camis{width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain;transform:translateX(-.6vw)}.tv-custom-qr .tv-qr-has-logo .tv-qr-code{max-height:none;justify-self:center}.tv-custom-logo{display:flex;align-items:center;justify-content:center}.tv-placed-logo{display:block;width:100%;height:100%;object-fit:contain;border-radius:var(--tv-logo-radius,14%)}.tv-logo-circle .tv-header img,.tv-logo-circle .tv-placed-logo{clip-path:circle(closest-side at center)}' +
+    '.tv-custom-board{position:relative;margin-left:.35vw;width:calc(100% - .8vw);height:100%;overflow:hidden}.tv-custom-box{position:absolute;min-width:0;min-height:0;overflow:hidden}.tv-custom-box>.tv-header,.tv-custom-box>.tv-courts,.tv-custom-box>.tv-upcoming,.tv-custom-box>.tv-rankings,.tv-custom-box>.tv-brackets,.tv-custom-box>.tv-results,.tv-custom-box>.tv-qr{width:100%;height:100%;min-height:0;overflow:hidden}.tv-custom-box>.tv-header{padding:.35vw .8vw}.tv-custom-box>.tv-courts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(3,minmax(0,1fr))}.tv-custom-results .tv-results{display:flex}.tv-custom-results .tv-results-main{width:100%}.tv-custom-qr .tv-qr{justify-content:flex-end}.tv-custom-qr .tv-qr-code{max-height:75%;width:88%;height:auto;max-width:88%;box-sizing:border-box;transform:translateX(-.6vw)}.tv-custom-qr .tv-qr-brand{width:88%;max-width:88%;margin-inline:auto;transform:translateX(-.6vw)}.tv-custom-qr .tv-qr-event .tv-qr-code,.tv-custom-qr .tv-qr-event .tv-qr-brand{transform:translateX(-.6vw)}.tv-custom-qr .tv-qr.tv-qr-has-logo{display:grid;grid-template-rows:minmax(0,1fr) auto auto;justify-content:stretch;justify-items:center;align-items:center;gap:.25vw}.tv-custom-qr .tv-qr-has-logo .tv-qr-tournament-logo{width:100%;height:100%;max-height:100%;max-width:100%;align-self:center;justify-self:center;object-fit:contain}.tv-custom-qr .tv-qr-has-logo .tv-qr-tournament-logo-event{width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain;transform:translateX(-.6vw)}.tv-custom-qr .tv-qr-has-logo .tv-qr-code{max-height:none;justify-self:center}.tv-custom-logo{display:flex;align-items:center;justify-content:center}.tv-placed-logo{display:block;width:100%;height:100%;object-fit:contain;border-radius:var(--tv-logo-radius,14%)}.tv-logo-circle .tv-header img,.tv-logo-circle .tv-placed-logo{clip-path:circle(closest-side at center)}' +
     '.tv-brackets{display:flex;flex-direction:column;background:#0d1b2e;border:1px solid #1b3f61;border-radius:.7vw;padding:.55vw;overflow:hidden}.tv-brackets h2{flex:none;color:#fbbf24;font-size:clamp(.9rem,1.15vw,1.5rem);margin:0 0 .4vw}.tv-bracket-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,12vw),1fr));gap:.5vw;min-height:0;overflow:auto}.tv-bracket-category{min-width:0;border:1px solid #315376;border-radius:.5vw;padding:.4vw;background:#10223a}.tv-bracket-category h3{margin:0;color:#7dd3fc;font-size:clamp(.9rem,1vw,1.3rem)}.tv-bracket-category small{display:block;color:#cbd5e1;margin:.15vw 0 .35vw;font-size:clamp(.65rem,.7vw,.9rem)}.tv-bracket-match{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:.2vw;padding:.2vw;border-top:1px solid #315376;align-items:center;font-size:clamp(.65rem,.75vw,1rem)}.tv-bracket-match>span{grid-column:1/-1;color:#7dd3fc;font-size:.8em}.tv-bracket-match strong{overflow-wrap:anywhere;min-width:0}.tv-bracket-match strong:last-child{text-align:right}.tv-bracket-match b{color:#fbbf24}.tv-series-game.tv-series-latest-result{outline:2px solid #fbbf24;box-shadow:0 0 12px #fbbf2466}' +
     '.tv-custom-courts>.tv-courts{grid-template-rows:none;grid-auto-rows:minmax(115px,auto);align-content:start;overflow-y:auto;scrollbar-width:none;width:calc(100% - .3vw)}.tv-custom-results>.tv-results,.tv-custom-upcoming>.tv-upcoming{width:calc(100% - .3vw);margin-left:.3vw}.tv-custom-results h2{margin-top:0}.tv-custom-courts>.tv-courts::-webkit-scrollbar,.tv-bracket-list::-webkit-scrollbar{display:none}.tv-custom-upcoming>.tv-upcoming,.tv-custom-rankings>.tv-rankings{overflow-y:auto;scrollbar-width:none}.tv-custom-rankings .tv-ranking-group{max-height:none;overflow:visible}.tv-brackets>.tv-bracket-rounds{display:flex;align-items:center;gap:.25vw;overflow:hidden;white-space:nowrap;color:#94a3b8;font-size:clamp(.6rem,.7vw,.95rem)}.tv-bracket-rounds span{overflow:hidden;text-overflow:ellipsis}.tv-bracket-rounds .tv-bracket-round-active{color:#fbbf24;font-weight:900}.tv-brackets>small{color:#cbd5e1;font-size:clamp(.65rem,.7vw,.9rem);margin:.2vw 0}.tv-bracket-list{flex:1;min-height:0;overflow-y:auto;scrollbar-width:none}.tv-bracket-match{border:1px solid #315376;border-radius:.3vw;margin-bottom:.25vw;background:#10223a}.tv-bracket-match-in-court{border:2px solid #4ade80;box-shadow:0 0 12px #4ade8066}.tv-series-game.tv-series-latest-result{outline:2px solid #fbbf24;box-shadow:0 0 12px #fbbf2466}' +
     '.tv-courts,.tv-custom-box>.tv-courts{grid-template-rows:repeat(var(--tv-court-rows,3),minmax(0,1fr))}.tv-custom-courts>.tv-courts{grid-template-rows:none;grid-auto-rows:minmax(115px,auto)}' +
@@ -1084,7 +1117,7 @@
     '.tv-results .tv-result-players span{font-size:clamp(.75rem,.95vw,1.3rem)}' +
     '.tv-custom-qr{container-type:inline-size}.tv-custom-qr .tv-qr-brand{gap:2px;font-size:clamp(8px,9cqw,16px);line-height:1.05;white-space:nowrap}.tv-custom-qr .tv-scoreplace-mark{width:clamp(14px,24cqw,32px);min-width:0}.tv-custom-qr .tv-qr{padding-bottom:.55vw}.tv-custom-results .tv-results{padding:.55vw .8vw}.tv-custom-results .tv-results-list{box-sizing:border-box}' +
     '.tv-series-game{grid-template-rows:minmax(0,1fr);overflow:hidden}.tv-series-side,.tv-series-players{height:100%;overflow:hidden}.tv-player-photo{display:block;flex:none;width:clamp(18px,1.5vw,32px);height:clamp(18px,1.5vw,32px);border-radius:50%;object-fit:cover}.tv-players>span{display:flex;align-items:center;gap:.3vw;min-width:0}.tv-series-players{justify-content:center;gap:0}.tv-series-players>span{display:grid;flex:1 1 0;height:50%;max-height:50%;grid-template-columns:clamp(13px,1vw,22px) minmax(0,1fr);align-items:center;gap:.3vw;min-width:0;min-height:0;overflow:hidden;line-height:1.05}.tv-series-player-name{display:block;min-width:0;overflow-wrap:anywhere;white-space:normal;font:inherit;line-height:1.05}.tv-series-right .tv-series-player-name{text-align:right}.tv-series-players .tv-player-photo{width:clamp(13px,1vw,22px);height:clamp(13px,1vw,22px)}' +
-    '.tv-custom-board-camis{width:calc(100% - .35vw)}.tv-custom-board-camis .tv-custom-results .tv-results{padding-right:.35vw}.tv-custom-board-camis .tv-qr-camis{padding-bottom:0}.tv-custom-board-camis .tv-custom-qr .tv-qr-has-logo .tv-qr-tournament-logo-camis{position:relative;display:block;overflow:hidden;width:calc(100% - 1.35vw);max-width:calc(100% - 1.35vw);height:100%;transform:none}.tv-custom-board-camis .tv-qr-camis .tv-qr-tournament-logo-camis-image{position:absolute;left:50%;top:50%;display:block;width:157.5%;height:auto;max-width:none;max-height:none;transform:translate(-50%,-50%)}.tv-custom-board-camis .tv-qr-camis .tv-qr-code,.tv-custom-board-camis .tv-qr-camis .tv-qr-brand{width:calc(100% - 2.6vw);max-width:calc(100% - 2.6vw);transform:none;justify-self:center}' +
+    '.tv-custom-board-event{width:calc(100% - .35vw)}.tv-custom-board-event .tv-custom-results .tv-results{padding-right:.35vw}.tv-custom-board-event .tv-qr-event{padding-bottom:0}.tv-custom-board-event .tv-custom-qr .tv-qr-has-logo .tv-qr-tournament-logo-event{position:relative;display:block;overflow:hidden;width:calc(100% - 1.35vw);max-width:calc(100% - 1.35vw);height:100%;transform:none}.tv-custom-board-event .tv-qr-event .tv-qr-tournament-logo-event-image{position:absolute;left:50%;top:50%;display:block;width:157.5%;height:auto;max-width:none;max-height:none;transform:translate(-50%,-50%)}.tv-custom-board-event .tv-qr-event .tv-qr-code,.tv-custom-board-event .tv-qr-event .tv-qr-brand{width:calc(100% - 2.6vw);max-width:calc(100% - 2.6vw);transform:none;justify-self:center}' +
     '</style>');
   // O editor usa exatamente o HTML e o CSS da janela No ar. O iframe não
   // executa childScript: relógios e hora recebem o valor deste instante.
@@ -1165,8 +1198,6 @@
     screenPickerRequest++;
     if (screenPicker) screenPicker.remove();
     screenPicker = null;
-    if (screenPickerPopup && !screenPickerPopup.closed) screenPickerPopup.close();
-    screenPickerPopup = null;
   }
   function screenPickerHtml(screens, error) {
     var list = screens.map(function (screen, index) {
@@ -1193,54 +1224,57 @@
     }
     dismissScreenPicker();
     var request = screenPickerRequest;
-    // A janela nasce no clique de NO AR. O clique de escolha ocorre DENTRO dela,
-    // conservando a ativação de usuário necessária ao Fullscreen API do Chrome.
-    var chooser = window.open('about:blank', 'scoreplace-live-tv-' + String(tournament.id || ''), 'popup,width=560,height=420');
-    if (!chooser) {
-      if (typeof window.showToast === 'function') window.showToast('Permita abrir uma janela para a TV.');
-      return;
-    }
-    screenPickerPopup = chooser;
-    chooser.document.open();
-    chooser.document.write('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Escolher tela · TV</title><style>html,body{min-height:100%;margin:0;background:#0d1728;color:#fff;font:18px Arial}#tv-monitor-picker{padding:24px}.tv-monitor-dialog{max-width:520px;margin:auto}.tv-monitor-list{display:grid;gap:12px;margin:20px 0}.tv-monitor-list button,.tv-monitor-cancel{min-height:52px;padding:10px 16px;border:2px solid #88aace;border-radius:10px;background:#193350;color:#fff;font:700 18px Arial;cursor:pointer;text-align:left}.tv-monitor-list button:hover,.tv-monitor-list button:focus-visible{background:#255178}.tv-monitor-list small{display:block;font-size:14px;color:#dbeafe}.tv-monitor-cancel{background:#3b2330;border-color:#e59cad}p{line-height:1.45;color:#fff}</style></head><body><div id="tv-monitor-picker"><div class="tv-monitor-dialog" role="dialog" aria-modal="true"><h2>Detectando monitores…</h2></div></div></body></html>');
-    chooser.document.close();
-    var picker = chooser.document.getElementById('tv-monitor-picker');
-    chooser.document.addEventListener('click', function (event) {
+    // A escolha acontece na operação. O clique na tela escolhida abre a TV
+    // diretamente naquele monitor e fornece uma nova ativação para tela cheia.
+    var picker = document.createElement('div');
+    picker.id = 'tv-monitor-picker';
+    picker.style.cssText = 'position:fixed;inset:0;z-index:2147483647;display:grid;place-items:center;padding:20px;background:#000b;color:#fff;font:18px Arial';
+    picker.innerHTML = '<div class="tv-monitor-dialog" role="status"><h2>Detectando monitores…</h2></div>';
+    var css = document.createElement('style');
+    css.textContent = '#tv-monitor-picker .tv-monitor-dialog{width:min(520px,100%);padding:24px;border:2px solid #88aace;border-radius:14px;background:#0d1728;box-shadow:0 20px 80px #000}#tv-monitor-picker .tv-monitor-list{display:grid;gap:12px;margin:20px 0}#tv-monitor-picker button{min-height:52px;padding:10px 16px;border:2px solid #88aace;border-radius:10px;background:#193350;color:#fff;font:700 18px Arial;cursor:pointer;text-align:left}#tv-monitor-picker button:hover,#tv-monitor-picker button:focus-visible{background:#255178}#tv-monitor-picker small{display:block;font-size:14px;color:#dbeafe}#tv-monitor-picker p{line-height:1.45;color:#fff}';
+    picker.appendChild(css);
+    document.body.appendChild(picker);
+    screenPicker = picker;
+    picker.addEventListener('click', function (event) {
       var choice = event.target.closest('[data-tv-monitor]');
       if (!choice) return;
       var value = choice.getAttribute('data-tv-monitor');
       if (value === 'cancel') { dismissScreenPicker(); return; }
-      if (value === 'retry') { loadScreens(true); return; }
+      if (value === 'retry') { loadScreens(); return; }
       var screen = value === 'manual' ? null : picker._screens[Number(value)];
-      screenPickerRequest++;
-      screenPickerPopup = null;
-      startTv(tournament, screen || null, chooser, true);
+      if (value !== 'manual' && !screen) return;
+      dismissScreenPicker();
+      startTv(tournament, screen || null, null, true);
     });
-    function loadScreens(fromChooser) {
+    var loadSequence = 0;
+    function loadScreens() {
+      var sequence = ++loadSequence;
       picker.innerHTML = '<div class="tv-monitor-dialog" role="status"><h2>Detectando monitores…</h2></div>';
+      picker.appendChild(css);
       try {
-        var source = fromChooser && typeof chooser.getScreenDetails === 'function' ? chooser : window;
-        Promise.resolve(source.getScreenDetails()).then(function (details) {
-          if (screenPickerPopup !== chooser || chooser.closed || request !== screenPickerRequest) return;
+        Promise.resolve(window.getScreenDetails()).then(function (details) {
+          if (screenPicker !== picker || request !== screenPickerRequest || sequence !== loadSequence) return;
           picker._screens = Array.from(details.screens || []).sort(function (a, b) {
             return Number(!!b.isPrimary) - Number(!!a.isPrimary);
           });
           picker.innerHTML = screenPickerHtml(picker._screens, false);
+          picker.appendChild(css);
         }).catch(function () {
-          if (screenPickerPopup !== chooser || chooser.closed || request !== screenPickerRequest) return;
+          if (screenPicker !== picker || request !== screenPickerRequest || sequence !== loadSequence) return;
           picker._screens = [];
           picker.innerHTML = screenPickerHtml([], true);
+          picker.appendChild(css);
         });
       } catch (error) {
         picker._screens = [];
         picker.innerHTML = screenPickerHtml([], true);
+        picker.appendChild(css);
       }
     }
-    loadScreens(false);
+    loadScreens();
   }
   window._tvLiveToggle = function () {
-    if (screenPickerPopup && screenPickerPopup.closed) screenPickerPopup = null;
-    if (screenPicker || screenPickerPopup) { dismissScreenPicker(); return; }
+    if (screenPicker) { dismissScreenPicker(); return; }
     if (isActive()) { if (tvFrame) stop(); else { popup.close(); stop(); } return; }
     var tournament = window._currentBracketTournament;
     if (!tournament) return;
@@ -1269,10 +1303,11 @@
         // Sem permissão para identificar monitores, uma janela menor pode ser
         // arrastada inteira para a segunda tela antes de entrar em tela cheia.
         var features = 'popup,width=1024,height=640';
-        if (screen) features = 'popup,left=' + Number(screen.availLeft || screen.left || 0) +
-          ',top=' + Number(screen.availTop || screen.top || 0) +
-          ',width=' + Math.max(400, Number(screen.availWidth || screen.width || 1920) - 12) +
-          ',height=' + Math.max(300, Number(screen.availHeight || screen.height || 1080) - 16);
+        if (screen) features = 'popup,left=' + Number(screen.availLeft ?? screen.left ?? 0) +
+          ',top=' + Number(screen.availTop ?? screen.top ?? 0) +
+          ',width=' + Math.max(400, Number(screen.availWidth || screen.width || 1920)) +
+          ',height=' + Math.max(300, Number(screen.availHeight || screen.height || 1080)) +
+          ',fullscreen';
         nextPopup = window.open('about:blank', 'scoreplace-live-tv-' + id, features);
       }
     }
@@ -1283,14 +1318,9 @@
       if (typeof window.showToast === 'function') window.showToast('Permita abrir uma janela para a TV.');
       return;
     }
-    if (screen && !tvFrame) {
-      // Uma janela nomeada pode ser reutilizada com a geometria anterior.
-      try {
-        nextPopup.moveTo(Number(screen.availLeft || screen.left || 0), Number(screen.availTop || screen.top || 0));
-        nextPopup.resizeTo(Math.max(400, Number(screen.availWidth || screen.width || 1920) - 12),
-          Math.max(300, Number(screen.availHeight || screen.height || 1080) - 16));
-      } catch (e) { /* O navegador pode recusar mover janelas; o botão Tela cheia continua disponível. */ }
-    }
+    // Coordenadas e tela cheia já foram pedidas no window.open. Mover ou
+    // redimensionar depois pode fazer o Chrome abandonar o fullscreen.
+    try { nextPopup.focus(); } catch (e) { /* O navegador pode manter o foco na operação. */ }
     popup = nextPopup; popupTournamentId = id;
     popupGeneration = Math.max(Date.now(), Number(highestGenerationById[id] || 0) + 1);
     highestGenerationById[id] = popupGeneration;
