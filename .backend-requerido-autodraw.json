@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "backendCommit": "7675ce5c6bcddd7fa563bc3b5c80fa6cc5fa5760",
+  "backendCommit": "ac0a012082209d401815063d0ad073892e5dce86",
   "scopeNote": "Fila de chamada e transição de fases, resultados sem bloqueio por capacidade da agenda e ocupação de quadras incluindo desempates ativos.",
   "functions": [
     "applyMatchResult",

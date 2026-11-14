@@ -3,7 +3,8 @@
 // ocupação usada no seletor. Uma grade cuja estimativa estourou não desfaz um
 // placar nem impede a geração da eliminatória; os confrontos seguem chamáveis.
 // Jogadoras com o mesmo nome continuam distintas pela identidade cadastrada
-// ao calcular quadras ocupadas em jogos de desempate. Quando a fase exige
+// ao calcular quadras ocupadas. Um desempate também não pode ser chamado
+// se a atleta já estiver em jogo regular noutra quadra. Quando a fase exige
 // avanço manual, o botão aparece também na operação.
 // 2.6.90 — Na operação, todos os próximos jogos aparecem como cards completos
 // na mesma coluna rolável. Jogos já definidos podem ser chamados fora da
