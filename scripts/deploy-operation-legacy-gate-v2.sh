@@ -21,7 +21,7 @@ else
 fi
 [[ -f "$source_manifest" ]] || { echo 'manifesto regional ausente' >&2; exit 1; }
 source_commit="$(SP_MANIFEST="$source_manifest" node -e 'const m=require("./"+process.env.SP_MANIFEST);const legacy=new Set(["sp-op-presence-v2","sp-op-presence-wo-v2"]);const s=[...new Set(m.filter(x=>legacy.has(x.name)).map(x=>x.commit))];if(s.length!==1)process.exit(1);process.stdout.write(s[0])')"
-if [[ "$mode" != '--check-live' ]]; then
+if [[ "$mode" != '--check-live' && "$mode" != '--refresh' ]]; then
   git diff --quiet "$source_commit" HEAD -- functions functions-autodraw || { echo 'codebase mudou após build regional' >&2; exit 1; }
 fi
 retry_read() {
@@ -117,7 +117,13 @@ NODE
       SP_JSON="$(describe_fn "$name")" SP_OLD="$backup" SP_NAME="$name" SP_PRE="$pre_file" node - <<'NODE'
 const fs=require('fs'),f=JSON.parse(process.env.SP_JSON),m=JSON.parse(fs.readFileSync(process.env.SP_OLD));
 const old=m.normal.find(x=>x.name===process.env.SP_NAME);
-if(f.updateTime!==old.updateTime||f.state!=='ACTIVE'||f.buildConfig?.entryPoint!==old.name)throw Error('função normal mudou antes do refresh: '+old.name);
+const alreadyDeployed=new Set(['applyMatchResult','applyQueuedResult','assignMatchCourt']);
+if((f.updateTime!==old.updateTime&&!alreadyDeployed.has(old.name))||f.state!=='ACTIVE'||f.buildConfig?.entryPoint!==old.name)throw Error('função normal mudou antes do refresh: '+old.name);
+if(f.updateTime!==old.updateTime){
+  const receipt=JSON.parse(fs.readFileSync('.backend-publicado-autodraw-funcoes.json'));
+  if(receipt.entries?.[old.name]?.backendCommit!==require('child_process').execFileSync('git',['log','-1','--format=%H','--','functions-autodraw'],{encoding:'utf8'}).trim())
+    throw Error('função normal atualizada sem recibo de publicação: '+old.name);
+}
 const a=JSON.parse(fs.readFileSync(process.env.SP_PRE));a.push({name:old.name,preUpdateTime:old.updateTime});fs.writeFileSync(process.env.SP_PRE,JSON.stringify(a));
 NODE
     done
@@ -175,7 +181,7 @@ NODE
 const fs=require('fs'),m=JSON.parse(fs.readFileSync(process.env.SP_NEXT));
 for(const [key,names] of [['normal',process.env.SP_NORMAL.split(' ')],['recovery',process.env.SP_RECOVERY.split(' ')]])if(m[key].length!==names.length||names.some(n=>!m[key].some(x=>x.name===n)))throw Error('candidato incompleto: '+key);
 NODE
-  SP_GATE_MANIFEST="$candidate" bash "$0" --check
+  SP_GATE_MANIFEST="$candidate" bash "$0" --check-live
   mv "$candidate" "$gate_manifest"
   echo '✓ trava legada sincronizada com malha regional'
 fi

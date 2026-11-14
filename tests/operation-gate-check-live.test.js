@@ -21,9 +21,21 @@ test('--check-live aceita candidato externo e rejeita recovery de placar antiga'
   const regions = JSON.parse(fs.readFileSync(regionsPath, 'utf8'));
   const original = JSON.parse(fs.readFileSync(gatePath, 'utf8'));
   const candidate = structuredClone(original);
-  const score = regions.find(row => row.name === 'sp-op-score-v2' && row.region === 'us-east1');
+  // A prova positiva deve acompanhar todas as portas regionais já promovidas.
+  // Um deploy de court e score na mesma leva deixa ambas as recoveries antigas.
+  const recoveryRegions = {
+    'assignmatchcourt-run-recovery': 'sp-op-court-v2',
+    'applymatchresult-run-recovery': 'sp-op-score-v2',
+    'settournamentpresence-run-recovery': 'sp-op-presence-v2',
+    'presencwo-run-recovery': 'sp-op-presence-wo-v2',
+  };
+  candidate.recovery.forEach(row => {
+    const regionalName = recoveryRegions[row.name];
+    if (!regionalName) return;
+    const regional = regions.find(item => item.name === regionalName && item.region === 'us-east1');
+    if (regional) row.image = regional.image;
+  });
   const saved = candidate.recovery.find(row => row.name === 'applymatchresult-run-recovery');
-  saved.image = score.image;
   saved.revision = 'applymatchresult-run-recovery-new';
   const candidatePath = path.join(dir, 'candidate.json');
   fs.writeFileSync(candidatePath, JSON.stringify(candidate));
