@@ -136,12 +136,12 @@ for (const version of ['v2', 'v3']) {
     // nos manifestos operacionais; o backend central em us-central1 tem recibo
     // separado e mais recente. Usar HEAD aqui atestaria uma implantação
     // regional que ainda não ocorreu.
-    const recordedScoreCommit = '536c8f47db1fd1441fd94b5b46d919b0d1afa227';
+    const recordedScoreCommit = 'e574289309c48a6894708a8c3b9cfdd92e415890';
     const recordedScoreDigest = sourceDigest('applyMatchResult', recordedScoreCommit,
       sourceDescriptor('functions-autodraw', recordedScoreCommit, true));
     const scoreFresh = original.filter(row => row.name === `sp-op-score-${version}`)
       .every(row => row.commit === recordedScoreCommit && row.sourceDigest === recordedScoreDigest);
-    const recordedCourtCommit = '6982eca74abb7cf898fd437a3301b6180c4c8be5';
+    const recordedCourtCommit = 'e574289309c48a6894708a8c3b9cfdd92e415890';
     const courtSources = sourceDescriptor('functions-autodraw', recordedCourtCommit, true);
     const courtFresh = original.filter(row => [`sp-op-court-${version}`, `sp-op-control-${version}`].includes(row.name))
       .every(row => row.commit === recordedCourtCommit && row.sourceDigest === sourceDigest(row.target, recordedCourtCommit, courtSources));
@@ -154,11 +154,11 @@ for (const version of ['v2', 'v3']) {
     assert.notEqual(run(original, true, {}, false, true).status, 0, 'flags incompatíveis são recusadas');
     assert.notEqual(run(original, false, {}, true, true).status, 0, 'dois modos obrigatórios são recusados');
     const wrongOther = structuredClone(original);
-    const scoreCommit = original.find(row => row.name === `sp-op-score-${version}`).commit;
-    const courtDigest = sourceDigest('assignMatchCourt', scoreCommit,
-      sourceDescriptor('functions-autodraw', scoreCommit, true));
+    const staleCourtCommit = recordedEndCourtCommit;
+    const courtDigest = sourceDigest('assignMatchCourt', staleCourtCommit,
+      sourceDescriptor('functions-autodraw', staleCourtCommit, true));
     for (const row of wrongOther.filter(row => row.name === `sp-op-court-${version}`)) {
-      row.commit = scoreCommit;
+      row.commit = staleCourtCommit;
       row.sourceDigest = courtDigest;
     }
     assert.notEqual(run(wrongOther, false, {}, false, false, true).status, 0,
