@@ -1714,6 +1714,7 @@ const SUITES = [
   'tests/monarch-late-roster.test.js',
   'tests/phase-repechage-lines.test.js',
   'tests/reset-tournament.test.js',
+  'tests/torneio-concluido-publico.test.js',
   'tests/dupla-elim-render.test.js',
   'tests/monarch-render.test.js',
   'tests/game-numbering.test.js',

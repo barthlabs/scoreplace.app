@@ -240,6 +240,12 @@ function makeService({ db, HttpsError }) {
       const [live, saved] = await Promise.all([tx.get(ref), tx.get(baseline)]);
       const t = live.exists ? live.data() : null, b = saved.exists ? saved.data() : null;
       authority(uid, id, t);
+      // O ensaio só pode ser restaurado enquanto o torneio continua privado.
+      // Uma marca antiga de ensaio não autoriza apagar jogos depois da publicação.
+      if (t.status === 'finished' || t._finished === true || t.isPublic !== false ||
+          t.organizerOnly !== true) {
+        fail('failed-precondition', 'O torneio já entrou em produção; o reset de teste foi desativado.');
+      }
       const recoverableCapture = b && b.state === 'capturing' && b.step === 'verification-failed' &&
         t.rehearsal?.state === 'capturing' && t.rehearsal?.step === 'verification-failed';
       if (!b || (!['active', 'resetting'].includes(b.state) && !recoverableCapture) || !b.hash || !Array.isArray(b.tree) ||

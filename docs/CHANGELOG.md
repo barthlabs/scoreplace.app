@@ -1,3 +1,7 @@
+## 2.7.1 — 14/nov/2026 (Encerramento e teste seguro)
+
+- Torneios concluídos mostram a classificação final para todas as pessoas e ocultam a operação, o avanço de fase e controles de ensaio. O reset de teste some quando o torneio é público e o servidor recusa sua restauração após a publicação.
+
 ## 2.7.0 — 14/nov/2026 (corte conjunto web, iOS e Android)
 
 - Consolida na versão nativa o código web acumulado desde o último corte 2.6.0, incluindo a fila de cards roláveis, a transição entre fases, a identificação de quadras livres e o registro de placares sem bloqueio pela estimativa da agenda. Os formatos equivalentes de torneio usam as mesmas regras; nenhum dado do Camis Day é alterado por este corte.
